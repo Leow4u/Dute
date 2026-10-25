@@ -17,6 +17,7 @@ import {
   StockList,
   activeCatalogFilters,
   groupInventoryProducts,
+  problemaDoTamanhoDoPedido,
 } from "./estoque";
 import type { InventoryItem } from "./shared";
 
@@ -340,5 +341,12 @@ describe("filtros ativos do estoque", () => {
     expect(html).toContain('aria-label="Tirar o filtro Polo"');
     expect(textosForaDaLista(html, ["Com saldo", "Polo"])).toEqual([]);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+});
+
+describe("o tamanho do pedido", () => {
+  it("até 100 itens de separação vai; acima, o carrinho avisa antes de enviar", () => {
+    expect(problemaDoTamanhoDoPedido(100)).toBeNull();
+    expect(problemaDoTamanhoDoPedido(130)).toBe("Um pedido leva até 100 itens de separação; este tem 130. Divida em mais de um pedido.");
   });
 });

@@ -365,6 +365,9 @@ const DecideOperationalNotificationSchema = z.object({
   idempotency_key: z.string().trim().min(1).optional(),
 });
 
+const MAX_ITENS_DO_PEDIDO = 100;
+const MAX_ANEXOS_DO_PEDIDO = 8;
+
 const CreateCustomerRequestSchema = z.object({
   type: z.string().default("solicitacao"),
   priority: z.string().default("normal"),
@@ -384,11 +387,15 @@ const CreateCustomerRequestSchema = z.object({
         size_bytes: z.number().int().positive().max(30 * 1024 * 1024),
       }),
     )
-    .max(8)
+    .max(MAX_ANEXOS_DO_PEDIDO, `Um pedido leva até ${MAX_ANEXOS_DO_PEDIDO} anexos.`)
     .default([]),
   customer_code: z.string().optional(),
   idempotency_key: z.string().trim().min(1),
-  items: z.array(RequestItemSchema).max(100).default([]),
+  // Cada item é uma linha de separação: um produto em duas posições são dois.
+  items: z
+    .array(RequestItemSchema)
+    .max(MAX_ITENS_DO_PEDIDO, `Um pedido leva até ${MAX_ITENS_DO_PEDIDO} itens de separação. Divida em mais de um pedido.`)
+    .default([]),
   // Pedido enviado pelo cartão do Agent Dute: a mensagem que trouxe o rascunho.
   agent_message_id: z.string().trim().min(1).max(160).nullish(),
 });
@@ -6362,9 +6369,23 @@ export const applyDocumentOperationalAction = onCall(async (request) => {
   });
 });
 
+/**
+ * O pedido fora do formato vira a mensagem que o cliente lê: o limite de itens
+ * e de anexos diz o limite; o resto (que a tela não manda) é genérico. Sem
+ * isso, o erro de validação saía como "Falha interna no servidor".
+ */
+function problemaDoPedido(error: z.ZodError): string {
+  const limite = error.issues.find(
+    (issue) => issue.code === "too_big" && issue.path.length === 1 && (issue.path[0] === "items" || issue.path[0] === "attachments"),
+  );
+  return limite?.message ?? "Pedido inválido: confira os itens e tente de novo.";
+}
+
 export const createCustomerRequest = onCall(async (request) => {
   const profile = await getProfile(request);
-  const { agent_message_id, ...input } = CreateCustomerRequestSchema.parse(request.data ?? {});
+  const parsed = CreateCustomerRequestSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", problemaDoPedido(parsed.error));
+  const { agent_message_id, ...input } = parsed.data;
   const customer_code = requireCustomerScope(profile, input.customer_code);
   if (agent_message_id) {
     const tipo = input.type === "recebimento" ? "envio" : "pedido";
