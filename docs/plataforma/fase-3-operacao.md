@@ -1341,3 +1341,20 @@ Achada em 25/10/2026, numa revisão do código da Operação.
   - o cadastro gravado fora da callable, com o id fora do formato, não
     segura a CNH da Ana nem a revisão da van, e a rotina falha no fim
     citando o que não gravou.
+
+### Correção: a OS se reabria depois do orçamento da execução enviado
+
+Achada em 25/10/2026, numa revisão do código da Operação.
+
+- **O defeito.** A reabertura conferia o orçamento da execução só com a
+  demanda direta em Execução a orçar, mas o Comercial muda a etapa da
+  demanda a cada passo do orçamento (para aprovar, para enviar, aguardando
+  o cliente).
+  - Depois do envio, a OS se reabria: a revisão saía, e o orçamento que o
+    cliente via (e podia validar) seguia com os números da revisão que não
+    existia mais.
+- **A correção.** Com a demanda executada pela Operação, o orçamento da
+  execução recusa a reabertura em qualquer etapa. A volta a Para planejar
+  continua só na Execução a orçar, quando ainda não há orçamento.
+- **Teste** (`revisao.integration.test.ts`): com o orçamento enviado e a
+  demanda aguardando o cliente, a OS não se reabre. Antes, reabria.
