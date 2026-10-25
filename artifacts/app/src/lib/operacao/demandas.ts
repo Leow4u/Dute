@@ -1,6 +1,6 @@
 import { formatarData } from "./cadastro";
 import type { OsDaFila, StatusDaOs } from "./fila";
-import { demandaDoHoje, milesimos, prazoDaDemanda, type DemandaDoHoje, type EntradaDaDemanda, type PrazoDoHoje, type TipoDaDemanda } from "./hoje";
+import { demandaDoHoje, entradaNaTela, milesimos, prazoDaDemanda, type DemandaDoHoje, type EntradaDaDemanda, type PrazoDoHoje, type TipoDaDemanda } from "./hoje";
 
 /**
  * Operação › Demandas e a ficha da Demanda (docs/plataforma/fase-3-operacao.md,
@@ -197,7 +197,7 @@ export function linhasDeDemandas(entrada: {
     .filter(
       (linha) =>
         (!tipo || linha.demanda.tipo === tipo) &&
-        (!porEntrada || linha.demanda.entrada === porEntrada) &&
+        (!porEntrada || entradaNaTela(linha.demanda) === porEntrada) &&
         (!cliente || linha.demanda.customerCode === cliente) &&
         (!etapa || linha.etapa === etapa) &&
         (!termo || [linha.demanda.numero, linha.cliente, linha.demanda.titulo ?? "", ...osDaDemanda(linha.demanda.numero, entrada.ordens).map((os) => os.numero)].some((campo) => normalizar(campo).includes(termo))),
@@ -261,7 +261,7 @@ export function clientesDasDemandas(demandas: readonly DemandaDaOperacao[], nome
     .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
 }
 
-const CANAL_ROTULO: Record<string, string> = { email: "E-mail", telefone: "Telefone", whatsapp: "WhatsApp", portal: "Portal", wms: "Pedido do portal" };
+const CANAL_ROTULO: Record<string, string> = { email: "E-mail", telefone: "Telefone", whatsapp: "WhatsApp", portal: "Portal", wms: "Armazenagem" };
 
 /** "WhatsApp · 20/10/2026 13:05": por onde e quando o pedido chegou. */
 export function chegadaDaDemanda(demanda: Pick<DemandaDaOperacao, "canal" | "recebidaEm">): string | null {
