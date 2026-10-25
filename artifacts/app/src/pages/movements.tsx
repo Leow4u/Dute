@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   type Movement,
   type MovementInput,
@@ -373,6 +373,10 @@ function MovementCard({ movement: mov }: { movement: Movement }) {
 
 export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; trigger?: ReactNode } = {}) {
   const [open, setOpen] = useState(false);
+  // A nova tentativa do mesmo ajuste (a resposta se perdeu) repete a chave, e
+  // o servidor devolve o movimento gravado em vez de lançar o saldo de novo.
+  // O ajuste mudado é outro envio, com outra chave.
+  const tentativa = useRef<{ chave: string; conteudo: string } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const createMovement = useCreateMovement();
@@ -408,10 +412,13 @@ export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; tr
   const isPositiveMovement = POSITIVE_MOVEMENTS.has(tipo_mov);
 
   const onSubmit = (data: MovementFormValues) => {
+    const conteudo = JSON.stringify(payloadDaMovimentacao(data, customerCode, ""));
+    if (tentativa.current?.conteudo !== conteudo) tentativa.current = { chave: crypto.randomUUID(), conteudo };
     createMovement.mutate(
-      { data: payloadDaMovimentacao(data, customerCode, crypto.randomUUID()) },
+      { data: payloadDaMovimentacao(data, customerCode, tentativa.current.chave) },
       {
         onSuccess: () => {
+          tentativa.current = null;
           // Escopado ao que uma movimentação realmente altera: invalidar tudo
           // dispara refetch de todas as telas em cache de uma vez.
           for (const key of [
