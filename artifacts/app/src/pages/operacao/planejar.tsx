@@ -10,13 +10,13 @@ import { chamarOperacao, mensagemDoErro, novaChave } from "@/lib/operacao/api";
 import { colaboradorDaLeitura, veiculoDaLeitura } from "@/lib/operacao/cadastro";
 import { demandaDaOperacao, escopoComSaldo, osDaDemanda } from "@/lib/operacao/demandas";
 import { clienteDaLeitura, hojeIso, nomesPorCodigo, osDaLeitura } from "@/lib/operacao/fila";
-import { milesimos } from "@/lib/operacao/hoje";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { demandaDoPlanoDaBusca, hrefDaDemanda, vistoriaNoPlanoDaBusca } from "@/lib/operacao/navegacao";
 import {
   alertasDoPlano,
   dividir,
   igualarAoSaldo,
+  linhasDoPlano,
   pedidoDaVistoria,
   pedidoDoPlano,
   planoInicial,
@@ -79,7 +79,7 @@ export default function PaginaPlanejar() {
   const hoje = hojeIso();
   const ficha = demanda.item ?? null;
   const daDemanda = ficha ? osDaDemanda(ficha.numero, ordens.itens ?? []) : [];
-  const saldo = ficha && !vistoria ? escopoComSaldo(ficha, daDemanda).filter((linha) => milesimos(linha.saldo) > 0) : [];
+  const saldo = ficha && !vistoria ? linhasDoPlano(escopoComSaldo(ficha, daDemanda), form) : [];
   const carregou = Boolean(ficha && ordens.itens);
   const motivo = ficha && vistoria ? problemaParaAbrirVistoria(ficha, osDaDemanda(ficha.numero, ordens.itens ?? [], true)) : null;
 

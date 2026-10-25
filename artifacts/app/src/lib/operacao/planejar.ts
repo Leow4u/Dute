@@ -50,6 +50,17 @@ function quantidade(valor: string | undefined): number | null {
   return QUANTIDADE.test(limpo) ? milesimos(limpo) : null;
 }
 
+/**
+ * As linhas que o plano mostra, confere e manda: as com saldo e as em que
+ * alguma OS do plano tem quantidade (ou uma fora do formato). A linha que
+ * outro plano zerou com o formulário aberto fica, com o saldo dela, e a
+ * conferência diz que as OS passam do saldo, em vez de a linha sumir do
+ * plano sem aviso.
+ */
+export function linhasDoPlano(escopo: readonly LinhaDoSaldo[], form: Pick<FormularioDoPlano, "ordens"> | null): LinhaDoSaldo[] {
+  return escopo.filter((linha) => milesimos(linha.saldo) > 0 || (form?.ordens.some((os) => quantidade(os.itens[linha.id]) !== 0) ?? false));
+}
+
 /** A OS nova vazia, para o dia pedido. */
 function osVazia(data: string): OsNoPlano {
   return { data, inicio: "07:00", fim: "", itens: {} };

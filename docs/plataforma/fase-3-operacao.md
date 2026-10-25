@@ -1643,3 +1643,20 @@ Achada em 25/10/2026, na mesma revisão. Está na produção desde a parte
 - **Teste:** `revisao.test.tsx`, com a página e as leituras de mentira. A
   OS que chega depois não toma a tela, e "Concluir revisão" revisa a que
   estava nela. Antes, a tela trocava para a que chegou.
+
+### Correção: o Planejar tirava do plano a linha que outro plano zerou
+
+Achada em 25/10/2026, na mesma revisão. Está na produção desde a parte 3.6a.
+
+- **O defeito.** A grade do Planejar mostrava só as linhas com saldo, lido
+  ao vivo, e o pedido e a conferência só percorriam essas linhas.
+  - Se outro plano gastava o saldo de uma linha com o formulário aberto, a
+    linha sumia da grade, e a quantidade digitada para ela sumia junto.
+  - O plano gravava sem ela (as cadeiras sem as mesas), quando o servidor
+    teria recusado o plano inteiro se a linha tivesse ido.
+- **A correção.** A linha em que o plano tem quantidade fica, com o saldo
+  dela (`linhasDoPlano`, em `lib/operacao/planejar.ts`), e a conferência
+  diz que as OS passam do saldo ("Mesa: as OS somam 20 e o saldo é 0.").
+- **Teste:** `planejar.test.tsx`, com a página e as leituras de mentira. A
+  linha zerada por outro plano fica, e o plano não grava. Antes, gravava
+  sem ela.

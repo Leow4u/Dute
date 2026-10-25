@@ -323,6 +323,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     quando o dela sai do segmento. Antes, "Enviar ao cliente" mandava o
     vizinho (`fase-6-comercial.md`, "Correção: a ficha da fila passava
     sozinha ao orçamento vizinho").
+  - o Planejar mantém a linha que outro plano zerou com o formulário aberto
+    e recusa o plano que passa do saldo. Antes, a linha sumia, e o plano
+    gravava sem ela (`fase-3-operacao.md`, "Correção: o Planejar tirava do
+    plano a linha que outro plano zerou").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
