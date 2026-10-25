@@ -310,10 +310,16 @@ Firestore e do Storage rodam antes, em `functions-integration`; os do
 `storage.rules` cobrem cada caminho dele (`produto-fotos`, `operacao-fotos`,
 `operacao-solicitacoes` e `rh-arquivos`, em `functions/wms/src/*.rules.test.ts`).
 
-Os índices novos ficam construindo por alguns minutos depois do job; uma
-consulta que dependa deles falha com "requires an index" até terminarem. Sem
-`--force`, o CI não apaga índice: o que sair do `firestore.indexes.json` continua
-no projeto e o log do job avisa. Para apagar, alguém roda
+O índice novo leva alguns minutos para ser construído depois do deploy, e a
+consulta que depende dele falha com "requires an index" até lá. Por isso o job
+termina esperando cada índice do `firestore.indexes.json` aparecer no projeto
+como pronto (`tools/esperar_indices.py`, pela API do Firestore, com a mesma
+conta). O índice que precisa de reparo, o que não aparece ou os 30 minutos sem
+ficar pronto param a publicação: nada mais sobe. Confira em Firestore › Índices
+e rode a publicação de novo quando terminarem.
+
+Sem `--force`, o CI não apaga índice: o que sair do `firestore.indexes.json`
+continua no projeto e o log do job avisa. Para apagar, alguém roda
 `firebase deploy --only firestore:indexes --force --project <projeto>`.
 
 A conta é a mesma do job de functions (`github-actions-functions@<projeto>`), que

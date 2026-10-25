@@ -242,8 +242,9 @@ documentação de produto e operação está em `docs/`.
   Nenhum passo da publicação depende da máquina de alguém. O fluxo fica em
   `.github/workflows/publicar.yml`: o job `regras` publica `firestore.rules`,
   `firestore.indexes.json` e `storage.rules`
-  (`firebase deploy --only firestore,storage`) e confere as regras servidas
-  (`tools/check_rules_deployed.sh`); só depois sobem as functions e, por último,
+  (`firebase deploy --only firestore,storage`), confere as regras servidas
+  (`tools/check_rules_deployed.sh`) e espera os índices do arquivo ficarem
+  prontos (`tools/esperar_indices.py`); só depois sobem as functions e, por último,
   o frontend (imagem montada no runner e enviada ao Artifact Registry), para a
   tela nova nunca chegar antes da callable que ela chama. Uma publicação por
   ambiente de cada vez, sem cancelar a que está rodando (`cancel-in-progress:
