@@ -156,6 +156,22 @@ export function veiculoDaLeitura(id: string, data: Record<string, unknown>): Vei
   };
 }
 
+/**
+ * A capacidade do veículo como a pessoa digita: os quilos inteiros, com ou
+ * sem o ponto do milhar ("6.000" e "6000" são 6000), e os metros cúbicos com
+ * a vírgula ("12,5"). O que não é número vai null, e a callable recusa com a
+ * mensagem dela ("Informe a capacidade em quilos.").
+ */
+export function capacidadeDigitada(kg: string, m3: string): { capacidade_kg: number | null; capacidade_m3: number | null } {
+  const quilos = kg.trim();
+  const inteiro = /^\d+$/.test(quilos) ? quilos : /^\d{1,3}(\.\d{3})+$/.test(quilos) ? quilos.replace(/\./g, "") : null;
+  const metros = m3.trim().replace(",", ".");
+  return {
+    capacidade_kg: inteiro === null ? null : Number(inteiro),
+    capacidade_m3: metros && Number.isFinite(Number(metros)) ? Number(metros) : null,
+  };
+}
+
 /** O que a linha da lista diz do veículo: modelo e capacidade, a empresa do terceiro e a próxima revisão. */
 export function resumoDoVeiculo(item: VeiculoDaLista): string {
   const dono = item.dono === "terceiro" ? `Terceiro${item.empresa ? ` · ${item.empresa}` : ""}` : null;
