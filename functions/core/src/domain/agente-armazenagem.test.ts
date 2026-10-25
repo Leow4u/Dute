@@ -116,7 +116,8 @@ describe("o que cada uma responde", () => {
     assert.deepEqual(await rodar("ver_pedido", escopo("cliente"), { referencia: "PED-9999" }), { encontrado: false });
   });
 
-  it("as movimentações do período, só do cliente; o período inválido volta como erro", async () => {
+  it("as movimentações do período, só do cliente e só a entrada e a saída de verdade; o período inválido volta como erro", async () => {
+    // A guarda (uma saída e uma entrada de 10) e a contagem de 1 ficam de fora.
     const periodo = await rodar("movimentacoes", escopo("cliente"));
     assert.deepEqual([periodo.pecas_que_entraram, periodo.pecas_que_sairam, periodo.itens_movimentados], [10, 3, 1]);
     assert.match((await rodar("movimentacoes", escopo("cliente"), { de: "2026-10-23", ate: "2026-10-01" })).erro, /Período inválido/);

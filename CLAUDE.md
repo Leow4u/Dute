@@ -165,7 +165,8 @@ documentação de produto e operação está em `docs/`.
     `ai_suggestions`; `findSimilarQuotes` dá a quem orça os orçamentos
     parecidos do cliente da demanda. A mesma rotina guarda em `ai_stock_age` o
     relógio de cada item do estoque, lido do razão, para os dias parado (a
-    regra mora em `lib/dominio/src/parados.ts`, com cópia literal no núcleo)
+    regra mora em `lib/dominio/src/parados.ts`, com cópia literal no núcleo;
+    o WMS copia só o sentido do movimento, em `domain/sentido-do-movimento.ts`)
     e, uma vez por dia, propõe em `ai_stock_alerts` o alerta do item parado
     de cada cliente; `answerStockAlert` é a decisão da coordenação, com o
     evento `estoque_parado.*` (o primeiro evento do núcleo); o aprovado vira

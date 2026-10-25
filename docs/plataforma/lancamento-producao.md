@@ -168,7 +168,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   - os rascunhos de aviso do Agent Dute não citam a BTG nem cumprimentam
     um contato dela; o interno diz o cliente no assunto (PR 374);
   - o prompt da revisão de documento pela IA não diz que todo documento é
-    da BTG (PR 375).
+    da BTG (PR 375);
+  - as movimentações do Agent Dute contam só a entrada e a saída de
+    verdade, sem a guarda e as correções (`fase-5-memoria.md`, "Correção:
+    as movimentações do agente contavam a guarda como entrada e saída").
   A matriz de papéis do WMS (PR 372) é só teste: nenhuma callable muda
   quem passa.
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a

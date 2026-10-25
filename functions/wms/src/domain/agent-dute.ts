@@ -2,6 +2,7 @@ import type { AgentAttachment } from "./agent-attachments.js";
 import type { Firestore, QuerySnapshot } from "firebase-admin/firestore";
 
 import { isPublishedToCustomer, loadKnowledgeContext, type KnowledgeAudience } from "./agent-knowledge.js";
+import { sentidoDoMovimento } from "./sentido-do-movimento.js";
 
 /**
  * Leituras que o Agent Dute pode fazer durante uma conversa.
@@ -359,8 +360,11 @@ export async function movementSummary(
     const code = text(movement.client_item_code) || text(movement.sku_code) || text(movement.cod_sku);
     const name = text(movement.product_name) || text(movement.produto) || code;
     if (terms.length && !terms.every((term) => normalize(`${code} ${name}`).includes(term))) continue;
+    // Só a entrada e a saída de verdade: a guarda muda o lugar, e a contagem corrige o saldo.
+    const sentido = sentidoDoMovimento(movement.source, movement.tipo_mov);
+    if (!sentido) continue;
     const quantity = Math.abs(num(movement.quantity ?? movement.qtde));
-    const incoming = text(movement.tipo_mov) === "ENTRADA" || num(movement.sign ?? movement.sinal) > 0;
+    const incoming = sentido === "entrada";
     const entry = byItem.get(code) ?? { codigo: code, nome: name, entradas: 0, saidas: 0 };
     if (incoming) {
       entry.entradas += quantity;
