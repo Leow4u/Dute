@@ -57,7 +57,6 @@ import { firestore } from "@/lib/firebase";
 import { normalizeProfileRole, type ProfileRole } from "@/lib/modules";
 import { humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { LEGACY_CUSTOMER_CODE } from "@/lib/active-customer";
 
 /**
  * Pessoas e acessos: quem entra no sistema, com que perfil, e como tirar o
@@ -201,10 +200,12 @@ export default function Users() {
     },
   });
   const portalCustomers = customers.data ?? [];
-  const inviteCustomerCode =
-    inviteForm.customer_code || portalCustomers[0]?.code || LEGACY_CUSTOMER_CODE;
+  // Só o cliente escolhido (o do "Convidar" de Clientes ou o da lista): o
+  // link dá o portal dele a quem o recebe.
+  const inviteCustomerCode = inviteForm.customer_code;
   const inviteCustomerName =
     portalCustomers.find((customer) => customer.code === inviteCustomerCode)?.name || inviteCustomerCode;
+  const inviteMissingCustomer = inviteForm.role === "cliente" && !inviteCustomerCode;
   const [removing, setRemoving] = useState<Person | null>(null);
   const [reason, setReason] = useState("");
 
@@ -523,6 +524,7 @@ export default function Users() {
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
+              if (inviteMissingCustomer) return;
               createInvite.mutate();
             }}
           >
@@ -580,7 +582,9 @@ export default function Users() {
                   <SelectContent>
                     {(portalCustomers.length
                       ? portalCustomers
-                      : [{ code: inviteCustomerCode, name: inviteCustomerName }]
+                      : inviteCustomerCode
+                        ? [{ code: inviteCustomerCode, name: inviteCustomerName }]
+                        : []
                     ).map((customer) => (
                       <SelectItem key={customer.code} value={customer.code}>
                         {customer.name || customer.code}
@@ -588,10 +592,12 @@ export default function Users() {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  A pessoa entra no portal de {inviteCustomerName} e vê só a operação desse cliente. Cadastro
-                  em Configurações › Clientes.
-                </p>
+                {inviteCustomerCode ? (
+                  <p className="text-xs text-muted-foreground">
+                    A pessoa entra no portal de {inviteCustomerName} e vê só a operação desse cliente. Cadastro
+                    em Configurações › Clientes.
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </form>
@@ -599,7 +605,7 @@ export default function Users() {
             <Button variant="outline" onClick={() => setInviteOpen(false)}>
               Cancelar
             </Button>
-            <Button type="submit" form="invite-form" disabled={createInvite.isPending}>
+            <Button type="submit" form="invite-form" disabled={createInvite.isPending || inviteMissingCustomer}>
               {createInvite.isPending ? "Criando..." : "Criar convite e copiar link"}
             </Button>
           </DialogFooter>

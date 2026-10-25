@@ -413,6 +413,12 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   pessoa a um cliente sem conferir"). Antes de publicar, conferir em
   Usuários se há alguém com papel cliente e cliente "Dutelog": o acesso
   dela se refaz pelo convite do cliente certo.
+- **O cliente do convite (25/10/2026).** Entra com a `main`, sem liberação
+  própria: o convite de cliente só sai com o cliente escolhido, nunca com o
+  primeiro da lista nem com a BTG por falta de escolha (`fase-2-nucleo.md`,
+  "Correção: o convite de cliente saía com um cliente que ninguém
+  escolheu"). Os convites pendentes já se refazem depois de publicar (seção
+  5).
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
