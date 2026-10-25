@@ -19,7 +19,7 @@ import { PAPEIS_DO_WMS, estagioDoCadastro, isPapel, modulosContratados } from "@
 import { clienteDaChamada, LEGACY_CUSTOMER_CODE } from "./active-customer";
 import { periodBelongsToCustomer } from "./billing-scope";
 import { leiturasDoPortal } from "./operations";
-import { canSeeCatalogPrice, canSeeMerchandiseValue } from "./permissions";
+import { canListUsers, canSeeCatalogPrice, canSeeMerchandiseValue } from "./permissions";
 import { firebaseAuth, firestore } from "./firebase";
 import { callFunctionsApi } from "./functions-api";
 import {
@@ -1976,6 +1976,7 @@ async function getWarehouseOps() {
 }
 
 async function readOperationalFoundationInput() {
+  const viewer = await getCurrentProfile();
   const [
     customers,
     customerAccounts,
@@ -2005,7 +2006,10 @@ async function readOperationalFoundationInput() {
     readLimited(collectionNames.skus, CATALOG_READ_CAP),
     readLimited(collectionNames.movements, RECENT_MOVEMENTS_CAP, "data", "desc"),
     readLimited(collectionNames.orders, OPS_TASK_READ_CAP, "data_solic", "desc"),
-    readLimited(collectionNames.users, 200),
+    // A lista de usuários é de quem administra o acesso (canManageAccess nas
+    // regras). Para o interno e o suporte, a consulta seria negada e levaria a
+    // base inteira: segue sem as contas de cliente derivadas dos logins.
+    canListUsers(viewer.role) ? readLimited(collectionNames.users, 200) : Promise.resolve([] as AnyRecord[]),
   ]);
 
   return {
