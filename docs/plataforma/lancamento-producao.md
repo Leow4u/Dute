@@ -133,6 +133,32 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   da entrega vai ao Comercial para orçar. Até o Leonardo responder como a
   entrega fatura (seção 8), o Comercial não orça a demanda da entrega da
   BTG, para não cobrar duas vezes.
+- **As correções da revisão dos manuais (25/10/2026).** Entram com a `main`,
+  sem liberação própria. Muda o comportamento:
+  - a movimentação manual (Estoque › Histórico e "Ajustar saldo") grava
+    para o cliente ativo, e `createInventoryMovement` recusa o SKU fora do
+    cadastro e o de outro cliente (PR 351);
+  - o Receber pede a "Justificativa da divergência" para concluir a chegada
+    com falta ou sobra, que o servidor já exigia (PR 352);
+  - a solicitação que o cliente cancelou sai da triagem e do Início (PR
+    353), a exceção resolvida deixa de marcar o pedido "com exceção" (PR
+    354), e o contador de Pedidos conta a triagem (PR 355);
+  - o suporte consulta o armazém sem as ações que o servidor recusa e sem
+    a Contagem (PR 359);
+  - os códigos do SKU ficam só para leitura ao editar (PR 358), Estoque ›
+    Alertas só existe onde a memória está liberada, que não é o `dute-prod`
+    (PR 360), e as telas internas trocam textos: "a conferir" (PR 356),
+    "Estoque › Receber" (PR 357) e o cliente ativo onde dizia "BTG" (PR
+    361);
+  - no portal: "Esqueci minha senha" avisa quando falta o e-mail, o pedido
+    acima de 100 itens e o prazo no passado são recusados com o motivo, as
+    faturas seguem o contrato e a NF mostra a armazenagem que entrou nela
+    (PRs 342 a 350).
+- **O painel do sistema.** O e-mail dos avisos que desiste depois de 5
+  tentativas vira erro da `runNotifications` no quadro de erros (PR 362), e o
+  quadro Latência lê o Cloud Monitoring (PR 363). Se a conta de runtime do
+  `dute-prod` não for Editor, ele pede o `roles/monitoring.viewer`
+  (`docs/painel-sistema.md`, seção 2).
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
@@ -173,6 +199,13 @@ contato com os avisos ligados (Comercial › Clientes).
 11. **A BTG.** Com um login da BTG, o portal mostra o estoque, os pedidos e
     as faturas do WMS como antes. Sem a Operação no contrato, Minhas OS não
     aparece.
+12. **As correções de 25/10.** Com o interno, conferir no Receber uma
+    chegada com falta: a ficha pede a justificativa e conclui. Com outro
+    cliente ativo, "Registrar movimentação" de um SKU da BTG é recusado e o
+    de um SKU dele grava no cliente certo.
+13. **Painel do sistema.** Com o owner, Configuração › Sistema mostra o
+    quadro Latência com as functions. "Sem permissão" num quadro pede o papel
+    da seção 2 de `docs/painel-sistema.md`, no projeto em que aparecer.
 
 ## 4. Publicar
 
