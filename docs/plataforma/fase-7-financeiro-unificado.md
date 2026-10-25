@@ -1464,6 +1464,26 @@ Achada em 25/10/2026, numa revisão do faturamento do WMS.
   - `billing-insights.test.ts`: a mesma entrega conta em outubro no portal.
   - Antes, as duas iam para novembro.
 
+### Correção: a foto do uso do mês podia ser trocada por outra prévia
+
+Achada em 25/10/2026, numa revisão do faturamento do WMS.
+
+- **O defeito.** A `ensureFrozenBillingUsage` lia a foto do mês fechado,
+  calculava o uso e gravava fora de uma transação, sem conferir de novo.
+  - Duas primeiras prévias ao mesmo tempo, como duas pessoas às 09:00 de
+    02/11, podiam ler o estoque uma antes e outra depois de um recebimento.
+  - A última gravação valia. A tela da primeira dizia "Mesmo cálculo que
+    será congelado na emissão", e a emissão cobrava outro valor.
+  - Uma prévia lenta também regravava a foto depois da emissão. A fatura
+    continuava congelada, mas a foto deixava de bater com ela.
+- **A correção.** A foto é gravada pela `freezeBillingUsage`
+  (`domain/billing-scope.ts`), numa transação que confere de novo se ela já
+  existe. A prévia que chega depois não troca a que outra prévia ou a
+  emissão gravou, e lê a foto que ficou.
+- **Testes:** `billing-scope.integration.test.ts`: a segunda gravação não
+  troca a primeira, e a foto da virada e a de substituição ficam. Com a
+  gravação sem conferência de antes, os dois testes falham.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.

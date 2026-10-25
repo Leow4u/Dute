@@ -4,7 +4,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
-import { billingDocumentId, readBillingPeriod, resolveBillingDocument } from "./billing-scope.js";
+import { billingDocumentId, freezeBillingUsage, readBillingPeriod, resolveBillingDocument } from "./billing-scope.js";
 
 const PROJECT_ID = "demo-dute-operations";
 
@@ -83,5 +83,29 @@ describe("documento da fatura por cliente", () => {
     assert.deepEqual(await readBillingPeriod(db, "billing_periods", "Banco Safra", "2026-08"), {});
     assert.equal((await readBillingPeriod(db, "billing_periods", "Banco Safra", "2026-07")).status, "pago");
     assert.deepEqual(await readBillingPeriod(db, "billing_periods", "BTG Pactual", "2026-07"), {});
+  });
+});
+
+describe("a foto do uso do mês fechado", () => {
+  const foto = (custo: number) => ({
+    mode: "frozen",
+    customer_code: "BTG Pactual",
+    competencia: "2026-10",
+    usage: { custo_estoque: custo, entradas_pecas: 0, saidas_pecas: 0, movimentacoes: 0 },
+  });
+
+  it("congela uma vez: a prévia que chega depois não troca a foto gravada", async () => {
+    const ref = db.collection("billing_operational_snapshots").doc(billingDocumentId("BTG Pactual", "2026-10"));
+    assert.equal(await freezeBillingUsage(db, ref, foto(1000)), true);
+    // Outra prévia leu o estoque antes de um recebimento e grava depois.
+    assert.equal(await freezeBillingUsage(db, ref, foto(1500)), false);
+    assert.equal((await ref.get()).get("usage.custo_estoque"), 1000);
+  });
+
+  it("a foto da virada e a de substituição ficam como estão", async () => {
+    const virada = db.collection("billing_operational_snapshots").doc(billingDocumentId("BTG Pactual", "2026-09"));
+    await virada.set({ mode: "baseline", usage: { custo_estoque: 7 } });
+    assert.equal(await freezeBillingUsage(db, virada, foto(9)), false);
+    assert.deepEqual([(await virada.get()).get("mode"), (await virada.get()).get("usage.custo_estoque")], ["baseline", 7]);
   });
 });

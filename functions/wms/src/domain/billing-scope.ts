@@ -109,6 +109,25 @@ export function shouldFreezeCompetencia(mode: string, closed: boolean): boolean 
   return closed && !["frozen", "replace", "baseline"].includes(mode);
 }
 
+/**
+ * Grava a foto do uso do mês fechado só se ela ainda não existe, numa
+ * transação. A prévia que chega depois, com outra conta do mesmo mês (o
+ * estoque lido antes ou depois de um recebimento), não troca a foto que
+ * outra prévia ou a emissão já gravou. Devolve se gravou.
+ */
+export async function freezeBillingUsage(
+  db: Pick<Firestore, "runTransaction">,
+  ref: DocumentReference,
+  data: Record<string, unknown>,
+): Promise<boolean> {
+  return db.runTransaction(async (transaction) => {
+    const atual = await transaction.get(ref);
+    if (!shouldFreezeCompetencia(String(atual.data()?.mode ?? ""), true)) return false;
+    transaction.set(ref, data);
+    return true;
+  });
+}
+
 export function billingCustomerCode(profile: {
   role: string;
   customer_code?: string;
