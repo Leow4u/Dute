@@ -2,6 +2,7 @@ import {
   type NormalizedQueue,
   type TaskQueueEntry,
   type WarehouseTask,
+  type WarehouseTaskItem,
   coerceNumber,
   coerceText,
   formatDate,
@@ -56,6 +57,41 @@ export function tarefaPrincipal(board: Pick<ReceivingBoard, "check" | "store">):
 
 export function isUnplannedReceipt(task: WarehouseTask) {
   return String(task.reference || task.id).includes("inb_avulso");
+}
+
+/**
+ * Linhas da chegada com falta, sobra ou divergência na conferência salva. Com
+ * alguma delas, o servidor só conclui a entrada com a justificativa
+ * (advanceWarehouseTaskTransaction). Vale para o Receber e para o painel da
+ * tarefa.
+ */
+export function linhasDivergentesDoRecebimento(task: WarehouseTask): WarehouseTaskItem[] {
+  return (task.items ?? []).filter((item) => {
+    const difference =
+      typeof item.difference_qty === "number"
+        ? item.difference_qty
+        : typeof item.received_qty === "number" || typeof item.picked_quantity === "number"
+          ? coerceNumber(item.received_qty ?? item.picked_quantity) - coerceNumber(item.expected_quantity ?? item.quantity)
+          : 0;
+    return (
+      difference !== 0 ||
+      normalizeStatus(item.status) === "divergence" ||
+      ["short", "over", "divergent"].includes(normalizeStatus(item.conference_status))
+    );
+  });
+}
+
+/** Concluir a chegada em conferência com divergência pede a justificativa. */
+export function pedeJustificativaDoRecebimento(task: WarehouseTask): boolean {
+  return normalizeStatus(task.status) === "checking" && linhasDivergentesDoRecebimento(task).length > 0;
+}
+
+export const MINIMO_DA_JUSTIFICATIVA_DO_RECEBIMENTO = 12;
+
+export function problemaDaJustificativaDoRecebimento(nota: string): string | null {
+  return nota.trim().length < MINIMO_DA_JUSTIFICATIVA_DO_RECEBIMENTO
+    ? "Justifique a divergência física antes de concluir o recebimento."
+    : null;
 }
 
 function unitsText(task: WarehouseTask) {

@@ -107,6 +107,11 @@ import {
   timelineDate,
   toQueueKey,
 } from "@/lib/warehouse-ops/model";
+import {
+  linhasDivergentesDoRecebimento,
+  pedeJustificativaDoRecebimento,
+  problemaDaJustificativaDoRecebimento,
+} from "@/lib/warehouse-ops/receiving";
 import { ReceivingConferenceSection } from "@/features/warehouse-ops/receiving";
 
 function DetailField({
@@ -1583,26 +1588,8 @@ export function TaskDetailPanel({
   );
   const advanceGate = getAdvanceGate(queue, task, lineCounts);
   const status = normalizeStatus(task.status);
-  const receivingDivergenceRows = isReceiving
-    ? (task.items ?? []).filter((item) => {
-        const difference =
-          typeof item.difference_qty === "number"
-            ? item.difference_qty
-            : typeof item.received_qty === "number" ||
-                typeof item.picked_quantity === "number"
-              ? coerceNumber(item.received_qty ?? item.picked_quantity) -
-                coerceNumber(item.expected_quantity ?? item.quantity)
-              : 0;
-        const conferenceStatus = normalizeStatus(item.conference_status);
-        return (
-          difference !== 0 ||
-          normalizeStatus(item.status) === "divergence" ||
-          ["short", "over", "divergent"].includes(conferenceStatus)
-        );
-      })
-    : [];
-  const requiresReceivingJustification =
-    isReceiving && status === "checking" && receivingDivergenceRows.length > 0;
+  const receivingDivergenceRows = isReceiving ? linhasDivergentesDoRecebimento(task) : [];
+  const requiresReceivingJustification = isReceiving && pedeJustificativaDoRecebimento(task);
   const pickingOperation = isPicking
     ? buildPickingOperation(task, lineConfirmations)
     : undefined;
@@ -1666,9 +1653,8 @@ export function TaskDetailPanel({
                   status === "dispatched" &&
                   !coerceText(shippingOperation.delivery_notes)
                 ? "Informe a observação de entrega antes de encerrar o pedido."
-              : requiresReceivingJustification &&
-                  receivingAdvanceNote.trim().length < 12
-                ? "Justifique a divergência física antes de concluir o recebimento."
+              : requiresReceivingJustification
+                ? problemaDaJustificativaDoRecebimento(receivingAdvanceNote) ?? ""
                 : "";
   const canSubmitAdvance = advanceGate.canAdvance && !operationBlockReason;
   const advanceNote = requiresReceivingJustification

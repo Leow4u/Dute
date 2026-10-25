@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import { getAdvanceGate, normalizeQueues, type WarehouseOpsResponse, type WarehouseTask } from "./model";
 import {
   buildReceivingBoard,
+  linhasDivergentesDoRecebimento,
   linkedShipmentNotice,
   noticeLinkChoice,
   openShipmentNotices,
+  pedeJustificativaDoRecebimento,
+  problemaDaJustificativaDoRecebimento,
   putawayRowMeta,
   receivingArrivalMeta,
   receivingRowMeta,
@@ -271,5 +274,31 @@ describe("gate da guarda", () => {
     expect(gate.canAdvance).toBe(true);
     expect(gate.blockedReason).toBeNull();
     expect(gate.label).toBe("Concluir guarda");
+  });
+});
+
+describe("justificativa da divergência na chegada", () => {
+  const items = [
+    { id: "ok", expected_quantity: 10, received_qty: 10, conference_status: "ok" },
+    { id: "falta", expected_quantity: 10, received_qty: 8 },
+    { id: "sobra", difference_qty: 2 },
+    { id: "avaria", expected_quantity: 5, received_qty: 5, conference_status: "short" },
+  ];
+
+  it("as linhas com falta, sobra ou divergência na conferência salva", () => {
+    expect(linhasDivergentesDoRecebimento(task({ id: "r", items })).map((item) => item.id)).toEqual(["falta", "sobra", "avaria"]);
+    expect(linhasDivergentesDoRecebimento(task({ id: "r", items: [items[0]!] }))).toEqual([]);
+  });
+
+  it("pede a justificativa só para concluir a chegada em conferência com divergência", () => {
+    expect(pedeJustificativaDoRecebimento(task({ id: "r", status: "checking", items }))).toBe(true);
+    expect(pedeJustificativaDoRecebimento(task({ id: "r", status: "created", items }))).toBe(false);
+    expect(pedeJustificativaDoRecebimento(task({ id: "r", status: "checking", items: [items[0]!] }))).toBe(false);
+  });
+
+  it("a justificativa tem ao menos 12 caracteres, sem contar os espaços das pontas", () => {
+    expect(problemaDaJustificativaDoRecebimento("")).toBe("Justifique a divergência física antes de concluir o recebimento.");
+    expect(problemaDaJustificativaDoRecebimento("  Falta 2 cx  ")).toBe("Justifique a divergência física antes de concluir o recebimento.");
+    expect(problemaDaJustificativaDoRecebimento("Faltaram 2 caixas")).toBeNull();
   });
 });

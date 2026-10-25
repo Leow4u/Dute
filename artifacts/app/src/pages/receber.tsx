@@ -444,13 +444,14 @@ function TaskPanel({
   if (entry.queue.key === "receiving") {
     return (
       <ReceivingTaskDetailCard
+        key={entry.task.id}
         entry={entry}
         alerts={alerts}
         noticeChoice={noticeChoice}
         linking={linking}
         advancingTaskId={actions.advancingTaskId}
         registeringExceptionId={actions.registeringExceptionId}
-        onAdvance={(id) => actions.advanceTask.mutate({ id })}
+        onAdvance={(id, note) => actions.advanceTask.mutate({ id, note })}
         onOpenException={actions.exception.openFor}
         onLinkNotice={onLinkNotice}
       />
