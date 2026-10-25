@@ -204,11 +204,19 @@ export async function conversarComDute(db: Firestore, caller: CoreProfile, data:
       .map((mensagem) => ({ papel: mensagem.papel === "assistant" ? ("model" as const) : ("user" as const), texto: (mensagem.contexto ? `${mensagem.conteudo}\n\n${mensagem.contexto}` : mensagem.conteudo).slice(0, TAMANHO_DA_MENSAGEM_NO_MODELO) })),
     mensagem: comContexto(rotina ? perguntaDaRotina(rotina, pedido.message, contexto.agora) : pedido.message, nota.contexto),
     ferramentas,
-    aoPedaco: opcoes.aoPedaco,
+    // A nova tentativa (o reserva, depois do modelo que falhou) descarta o
+    // que a anterior pediu: a tela, o que veio pelo pedaço, e aqui as
+    // chamadas, de onde saem o cartão, as ferramentas usadas e os playbooks.
+    aoPedaco: (pedaco) => {
+      if (pedaco.type === "reset") chamadas.length = 0;
+      opcoes.aoPedaco?.(pedaco);
+    },
   });
 
   // A rotina sem modelo não grava a resposta de reserva: falha e tenta de novo em 15 minutos.
   if (rotina && resposta.fonte === FONTE_SEM_MODELO) throw new Error(resposta.erro || "Nenhum modelo respondeu.");
+  // Sem modelo nenhum, a resposta de reserva não leva o que a última tentativa chegou a pedir.
+  if (resposta.fonte === FONTE_SEM_MODELO) chamadas.length = 0;
 
   // A resposta grava depois da pergunta, para a ordem do histórico nunca empatar.
   const respostaEm = new Date(Math.max(agora().getTime(), Date.parse(perguntaEm) + 1)).toISOString();
