@@ -57,6 +57,15 @@ describe("relatório de faturas", () => {
     assert.equal(report.invoices[1]?.lines.length, 2, "linha com quantidade zero não entra");
   });
 
+  it("a entrega entra no mês do horário de Brasília, como a fatura conta as saídas", () => {
+    // 22h30 de 31/10 em São Paulo é 01/11 01:30 em UTC: a fatura de outubro conta as peças.
+    const tarde = [{ id: "ord_d", order_number: "PED-0050", status: "delivered", delivered_at: "2026-11-01T01:30:00.000Z", item_count: 1, quantity_total: 12 }];
+    const outubro = buildBillingReport({ customerCode: "BTG Pactual", from: "2026-10", to: "2026-10", invoices, trackings: tarde });
+    assert.deepEqual(outubro.deliveries.map((item) => [item.competencia, item.number]), [["2026-10", "PED-0050"]]);
+    const novembro = buildBillingReport({ customerCode: "BTG Pactual", from: "2026-11", to: "2026-11", invoices, trackings: tarde });
+    assert.deepEqual(novembro.deliveries, []);
+  });
+
   it("gera a planilha com as cinco abas", async () => {
     const report = buildBillingReport({ customerCode: "BTG Pactual", from: "2026-07", to: "2026-09", invoices, trackings });
     const buffer = await billingReportWorkbook(report, "Leonardo");

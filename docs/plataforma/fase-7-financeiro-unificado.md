@@ -1440,6 +1440,30 @@ desde o ad valorem por saldo × preço.
 - **Teste:** `catalog-prices.test.ts`: o estoque do exemplo vale 13.557, e
   0,1 + 0,2 dá 0,3. Antes, 13.556,999999999998.
 
+### Correção: o extrato do cliente punha a entrega da noite no mês seguinte
+
+Achada em 25/10/2026, numa revisão do faturamento do WMS.
+
+- **O defeito.** O extrato do faturamento (`exportBillingReport`) e a conta
+  de pedidos entregues do portal tiravam o mês da entrega dos sete primeiros
+  caracteres do instante, que é em UTC. A fatura conta as saídas no horário
+  de Brasília.
+  - Um exemplo: o pedido entregue às 22h30 de 31/10 fica gravado como
+    `2026-11-01T01:30Z`.
+  - A fatura de outubro conta as peças dele, mas o extrato de outubro o
+    deixava de fora, e o de novembro o listava como "Entregue em
+    31/10/2026".
+  - Vale para toda entrega entre 21h e 23h59 do último dia do mês.
+- **A correção.** O mês da entrega sai no horário de Brasília. Nas
+  Functions, pela `competenciaOfInstant` da fatura. No portal, pela
+  `competenciaDaEntrega` (`lib/billing-insights.ts`). A data sem fuso
+  (legado) vale como foi escrita.
+- **Testes:**
+  - `billing-report.test.ts`: a entrega das 22h30 de 31/10 entra no
+    extrato de outubro e não no de novembro.
+  - `billing-insights.test.ts`: a mesma entrega conta em outubro no portal.
+  - Antes, as duas iam para novembro.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.

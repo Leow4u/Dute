@@ -260,6 +260,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     perdia um centavo do ad valorem em perto de 1% dos meses
     (`fase-7-financeiro-unificado.md`, "Correção: o valor da mercadoria
     perdia o centavo no ponto flutuante").
+  - O extrato do faturamento e o portal põem a entrega no mês do horário de
+    Brasília, como a fatura. Antes, a entrega das 21h às 23h59 do último dia
+    ia para o mês seguinte (`fase-7-financeiro-unificado.md`, "Correção: o
+    extrato do cliente punha a entrega da noite no mês seguinte").
 - **O app do campo (25/10/2026).** Entra com a `main`, sem liberação
   própria: o app abre sem sinal com o último perfil lido no aparelho, e a
   fila guardada volta e vai quando o sinal voltar. Antes, aberto sem sinal

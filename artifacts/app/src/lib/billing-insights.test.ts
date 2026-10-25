@@ -4,6 +4,7 @@ import {
   billingInsights,
   billingReport,
   closedInvoices,
+  competenciaDaEntrega,
   deliveriesByMonth,
   monthLabel,
   monthRange,
@@ -60,6 +61,15 @@ describe("pedidos entregues", () => {
     ]);
     expect(counts.get("2026-09")).toBe(2);
     expect(counts.get("2026-08")).toBe(1);
+  });
+
+  it("conta no mês do horário de Brasília, como a fatura conta as saídas", () => {
+    // 22h30 de 31/10 em São Paulo é 01/11 01:30 em UTC.
+    const counts = deliveriesByMonth([{ status: "delivered", delivered_at: "2026-11-01T01:30:00.000Z" }]);
+    expect([counts.get("2026-10"), counts.get("2026-11")]).toEqual([1, undefined]);
+    // Sem fuso (legado), vale a data escrita.
+    expect(competenciaDaEntrega("2026-10-31")).toBe("2026-10");
+    expect(competenciaDaEntrega("2026-11-01T03:00:00Z")).toBe("2026-11");
   });
 });
 
