@@ -807,3 +807,87 @@ cliente ou 15 em qualquer cliente; 20, `functions/core`; desenho em
 35. O briefing do dia vira uma rotina pronta ("Resumo do dia", dias úteis
     às 7h) que cada pessoa liga, e o radar do painel mostra as linhas do
     "Precisa de você" dos módulos da pessoa, sem regra própria? Recomendo.
+
+**Revisão dos manuais** (25/10/2026). O que os manuais de cada módulo
+acharam e o código não decide sozinho. Os defeitos viraram PRs (342 a 361);
+estas esperam a resposta, e até ela vale o que está no código, que é o que
+os manuais descrevem.
+
+*Armazenagem*
+36. Devoluções (`/wms/devolucoes`) e Qualidade (`/wms/qualidade`) só abrem
+    pelo endereço: nenhum item de menu, nenhum link, e o retorno a receber
+    não aparece no Início. Recomendo Devoluções como item de Pedidos, com o
+    retorno a receber no "Precisa de você", e Qualidade como item de
+    Estoque, onde a exceção se resolve.
+37. O Histórico de movimentações e os Relatórios mostram todos os clientes,
+    sem seguir o cliente ativo como as outras telas internas. Recomendo
+    seguir o cliente ativo.
+38. O relatório "Itens parados" conta qualquer movimento e oferece 30, 60 e
+    90 dias; a regra dos dias parado (parte 5.4, `lib/dominio/src/parados.ts`)
+    conta só algumas origens, com 90 e 180 dias. São dois números para a
+    mesma pergunta. Recomendo o relatório usar a regra da 5.4.
+39. O custo da mercadoria é valor? As leituras o tiram de quem não é owner,
+    admin ou financeiro, mas a Contagem mostra "Valor controlado" a quem
+    conta, inclusive o `wms`, e a abertura exige custo maior que zero, que o
+    `interno` e o `wms` digitam sem ver o do cadastro. Recomendo tratar como
+    valor: a Contagem não pede custo a quem não vê valor, o custo vem do
+    cadastro do produto (o financeiro ou o admin informa) e a abertura recusa,
+    com o motivo, a linha de produto sem custo cadastrado. O ad valorem da
+    armazenagem sai desse custo.
+40. O "Local" do Receber, o "Endereço contado" da Contagem, o "Endereço de
+    retorno" da devolução e a "Origem" e o "Destino" da movimentação (que
+    vêm com "ESTOQUE_BTG") são texto livre; só a guarda confere a posição no
+    cadastro, e o `CLAUDE.md` diz que a prateleira nunca é digitada.
+    Recomendo escolher a posição do cadastro em todos, como na guarda.
+41. A ficha da chegada no Receber, tela já na v3, tem legendas; o teste de
+    textos cobre só o cartão do aviso. Recomendo tirá-las na próxima rodada
+    de UX do Receber, com o teste cobrindo a ficha.
+42. Na chegada "a conferir", o botão "Concluir entrada" só a passa para "em
+    conferência". Recomendo o botão dizer "Conferir" nesse status e
+    "Concluir entrada" só na conferência.
+43. O suporte e o Faturamento: o servidor deixa o suporte ler a prévia e o
+    desenho da Fase 7 o põe na tela, mas a rota é só de owner, admin e
+    financeiro. Recomendo seguir a regra do preço do `CLAUDE.md` (owner,
+    admin, financeiro e comercial): o suporte fica fora, e o servidor deixa
+    de lhe dar a prévia.
+44. O Mapa difere do desenho: o desenho fala em livre, parcial, cheia, em
+    verificação e bloqueada, e no espaço restante em caixas de referência; a
+    tela mostra "sem caixas registradas", "sem vaga na base" e o volume
+    registrado. Recomendo manter a tela, que mostra o que o sistema mede
+    hoje, e corrigir o desenho.
+45. No Mapa, "Etiquetas das caixas" aparece em qualquer prateleira, mas a
+    tela de etiquetas só imprime as do cliente ativo e, nas de outro, diz que
+    algumas não estão disponíveis. Recomendo o botão só nas prateleiras com
+    caixa do cliente ativo.
+
+*Portal*
+46. O convite do cliente exige a sigla do SKU ("sem armazenagem, ele não tem
+    portal"), mas desde 24/10 o portal atende o cliente só com a Operação:
+    fica sem convite o cliente que nasceu no Comercial e nunca foi salvo em
+    Configurações › Clientes. Recomendo convidar sem a sigla quando o
+    contrato não tem armazenagem.
+47. O número "Agendadas" de Minhas OS soma as OS ainda sem data. Recomendo
+    contar só as com data.
+48. O aviso "Itens parados" leva ao Estoque do portal, que não marca o item
+    parado: os dias parado só existem no Estoque interno. Recomendo o
+    Estoque do portal marcar os itens do aviso, como o plano previa.
+
+*Operação*
+49. Mudar os itens de uma OS (`set_items`) e criar a OS com todo o saldo
+    (`create`) existem no servidor, sem tela. Recomendo as duas na próxima
+    rodada de UX da OS.
+50. O servidor aceita a presença marcada pelo escritório, e o "Registrar
+    andamento" não a oferece. Recomendo oferecer, para quando o líder não
+    marcou no celular.
+51. Na vistoria, o celular só tem "Registrar chegada"; a "Saída do pátio" só
+    se registra pelo escritório. Recomendo o celular registrar as duas.
+52. O cartão de itens do celular mostra "Registre a primeira etapa antes dos
+    itens.", uma legenda. Recomendo mostrar os itens com os botões desligados
+    até a primeira etapa, sem a frase.
+53. O "E-mail do app" aceita login `interno` (`PAPEIS_COM_APP`), mas o
+    `/campo` só abre para `campo`, owner e admin. Recomendo abrir o `/campo`
+    ao `interno` com o app ligado, para a coordenação que vai a campo.
+54. A presença do freelancer e do terceiro "paga a diária" (comentário de
+    `functions/operacao/src/domain/presencas.ts`), mas nenhum módulo lê a
+    presença. Recomendo as presenças do mês por pessoa na exportação do RH
+    para a contabilidade (parte 8.3), numa parte própria.
