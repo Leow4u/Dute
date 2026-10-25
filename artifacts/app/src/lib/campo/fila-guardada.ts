@@ -46,7 +46,12 @@ function armazenamentoLocal(): Armazenamento | null {
 
 function ehFalha(valor: unknown): valor is FalhaDaFila {
   const falha = valor as Partial<FalhaDaFila> | null;
-  return typeof falha?.chave === "string" && typeof falha.rotulo === "string" && typeof falha.mensagem === "string";
+  return (
+    typeof falha?.chave === "string" &&
+    typeof falha.rotulo === "string" &&
+    typeof falha.mensagem === "string" &&
+    (falha.foto === undefined || typeof falha.foto === "string")
+  );
 }
 
 /** As falhas no localStorage do aparelho; sem ele, na memória. */

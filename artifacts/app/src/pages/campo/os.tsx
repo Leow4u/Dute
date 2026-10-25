@@ -43,7 +43,18 @@ export default function PaginaCampoOs() {
   }
 
   if (estado === "pronto" && ficha?.tipo === "vistoria") {
-    return <VistoriaNoCampo key={ficha.numero} ficha={ficha} uid={user?.uid ?? null} pendentes={fila.pendentes} urls={urls} catalogo={catalogo.itens ?? []} enviar={fila.enviar} />;
+    return (
+      <VistoriaNoCampo
+        key={ficha.numero}
+        ficha={ficha}
+        uid={user?.uid ?? null}
+        pendentes={fila.pendentes}
+        fotosRecusadas={fila.falhas.flatMap((falha) => (falha.foto ? [falha.foto] : []))}
+        urls={urls}
+        catalogo={catalogo.itens ?? []}
+        enviar={fila.enviar}
+      />
+    );
   }
 
   return (

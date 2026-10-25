@@ -31,8 +31,18 @@ export type RegistroNaFila = {
 
 export type NovoRegistro = Pick<RegistroNaFila, "callable" | "dados" | "rotulo"> & Partial<Pick<RegistroNaFila, "grupo" | "foto">>;
 
-/** O registro que a callable recusou: fica na lista até a pessoa dispensar. */
-export type FalhaDaFila = { chave: string; rotulo: string; mensagem: string };
+/**
+ * O registro que a callable recusou: fica na lista até a pessoa dispensar. A
+ * foto recusada leva o id dela, que sai da vistoria: lá ela travaria o envio.
+ */
+export type FalhaDaFila = { chave: string; rotulo: string; mensagem: string; foto?: string };
+
+/** O id da foto (o nome do arquivo sem a extensão) do registro attachPhoto, ou null. */
+export function fotoDoRegistro(registro: Pick<RegistroNaFila, "callable" | "dados">): string | null {
+  const arquivo = registro.dados.arquivo;
+  if (registro.callable !== "attachPhoto" || typeof arquivo !== "string") return null;
+  return arquivo.replace(/\.[a-z]+$/, "") || null;
+}
 
 /** Um registro novo, com a chave dentro dos dados (é a idempotency_key da callable). */
 export function registroNovo(novo: NovoRegistro, chave: string, agora: Date): RegistroNaFila {

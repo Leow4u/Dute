@@ -1507,3 +1507,32 @@ a parte 3.8b.
   entra no número (107), o toque seguinte manda 108 e vai depois da
   inclusão, e a inclusão antes do feito não conta duas vezes. Antes, a tela
   mostrava 97.
+
+### Correção: a foto recusada travava o envio da vistoria
+
+Achada em 25/10/2026, numa revisão da fila do campo. Está na produção desde
+a parte 3.11b.
+
+- **O defeito.** O rascunho da vistoria guarda o id de cada foto quando ela
+  entra na fila e nunca conferia se a foto chegou à OS.
+  - Um exemplo: numa vistoria de 25 ambientes, a 201ª foto da OS é recusada
+    ("A OS já tem 200 fotos."). A tela deixa 50 por ambiente, sem conferir o
+    total.
+  - A foto saía da fila, e o id dela ficava no ambiente.
+  - O "Enviar vistoria ao comercial" era recusado ("uma foto não está na OS")
+    a cada envio, e a tela não tem como tirar a foto. Restava cancelar a
+    vistoria e voltar ao cliente.
+- **A correção.** A foto que o servidor recusa sai da vistoria.
+  - A fila tira o id dela do rascunho guardado da OS na hora da recusa, com
+    a tela da vistoria aberta ou não (`tirarFotosRecusadas`).
+  - A falha leva o id da foto, e a tela aberta o tira do rascunho dela
+    (`semFotosRecusadas`), que senão gravaria a foto de volta.
+  - A faixa da falha diz por quê. A foto some do ambiente e não volta ao
+    dispensar a falha.
+- **Testes:**
+  - `fila-do-campo.test.tsx`: a foto recusada leva o id na falha e sai do
+    rascunho guardado. Antes, ficava.
+  - `vistoria.test.tsx` (página): com a tela aberta, o rascunho grava sem a
+    foto recusada. Antes, gravava com ela.
+  - `vistoria.test.ts`: a foto sai de todos os ambientes, e sem ela no
+    rascunho nada se regrava.

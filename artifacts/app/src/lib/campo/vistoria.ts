@@ -117,6 +117,16 @@ export function comFotos(rascunho: RascunhoDaVistoria, ambienteId: string, ids: 
   return noAmbiente(rascunho, ambienteId, (ambiente) => ({ ...ambiente, fotos: [...ambiente.fotos, ...ids.filter((id) => !ambiente.fotos.includes(id))] }));
 }
 
+/**
+ * Sem as fotos que o servidor recusou (a fila desistiu delas): nunca chegam à
+ * OS, e o envio da vistoria com elas é recusado sempre. O mesmo rascunho
+ * quando nenhuma está nele.
+ */
+export function semFotosRecusadas(rascunho: RascunhoDaVistoria, recusadas: ReadonlySet<string>): RascunhoDaVistoria {
+  if (!rascunho.ambientes.some((ambiente) => ambiente.fotos.some((id) => recusadas.has(id)))) return rascunho;
+  return { ...rascunho, ambientes: rascunho.ambientes.map((ambiente) => ({ ...ambiente, fotos: ambiente.fotos.filter((id) => !recusadas.has(id)) })) };
+}
+
 export type SituacaoDoAmbiente = "Feito" | "Em andamento" | "A fazer";
 
 export function situacaoDoAmbiente(ambiente: AmbienteNoRascunho, atual: string | null): SituacaoDoAmbiente {
@@ -325,6 +335,14 @@ export function guardarRascunho(numero: string, rascunho: RascunhoDaVistoria, ar
   } catch {
     // Sem espaço ou bloqueado: o rascunho fica só na tela até a vistoria ir.
   }
+}
+
+/** Tira do rascunho guardado da OS as fotos que o servidor recusou, com a tela da vistoria aberta ou não. */
+export function tirarFotosRecusadas(numero: string, recusadas: ReadonlySet<string>, armazenamento: Armazenamento | null = armazenamentoDoAparelho()): void {
+  const rascunho = lerRascunho(numero, armazenamento);
+  if (!rascunho) return;
+  const semElas = semFotosRecusadas(rascunho, recusadas);
+  if (semElas !== rascunho) guardarRascunho(numero, semElas, armazenamento);
 }
 
 export function apagarRascunho(numero: string, armazenamento: Armazenamento | null = armazenamentoDoAparelho()): void {

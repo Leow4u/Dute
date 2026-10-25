@@ -4,8 +4,9 @@ import { ref, uploadBytes } from "firebase/storage";
 import { useAppUser } from "../auth";
 import { firebaseStorage } from "../firebase";
 import { chamarOperacao, mensagemDoErro, novaChave } from "../operacao/api";
-import { adiado, avisoDaFila, destinoDoErro, enfileirar, faltaParaEnviar, registroNovo, type FalhaDaFila, type NovoRegistro, type RegistroNaFila } from "./fila";
+import { adiado, avisoDaFila, destinoDoErro, enfileirar, faltaParaEnviar, fotoDoRegistro, registroNovo, type FalhaDaFila, type NovoRegistro, type RegistroNaFila } from "./fila";
 import { armazemNoAparelho, type ArmazemDaFila } from "./fila-guardada";
+import { tirarFotosRecusadas } from "./vistoria";
 
 /**
  * A fila do campo no aparelho (partes 3.8b e 3.8c): envia um registro de cada
@@ -116,8 +117,11 @@ export function FilaDoCampoProvider({ children, armazem: armazemDado }: { childr
       .then(() => setFila((atual) => atual.filter((item) => item.chave !== proximo.chave)))
       .catch((error: unknown) => {
         if (destinoDoErro(error) === "desistir") {
+          const foto = fotoDoRegistro(proximo);
+          // A foto recusada nunca chega à OS: sai do rascunho da vistoria, que com ela não se envia.
+          if (foto && typeof proximo.dados.numero === "string") tirarFotosRecusadas(proximo.dados.numero, new Set([foto]));
           setFila((atual) => atual.filter((item) => item.chave !== proximo.chave));
-          setFalhas((atual) => [...atual, { chave: proximo.chave, rotulo: proximo.rotulo, mensagem: mensagemDoErro(error) }]);
+          setFalhas((atual) => [...atual, { chave: proximo.chave, rotulo: proximo.rotulo, mensagem: mensagemDoErro(error), ...(foto ? { foto } : {}) }]);
           return;
         }
         setFila((atual) => atual.map((item) => (item.chave === proximo.chave ? adiado(item, new Date()) : item)));
