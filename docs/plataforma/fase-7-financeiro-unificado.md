@@ -1564,5 +1564,7 @@ Financeiro está ligado só no `dute-homolog`.
   - o a receber já é um só (`faturas`);
   - a NF sai pela integração (7.4) assim que os serviços existirem no
     aplicativo de teste.
-- **Na produção,** tudo depende do lançamento da Fase 4 (parte 4.9b): ligar
-  o Financeiro no `dute-prod` põe o projeto nas três listas.
+- **Na produção,** a fase vale com o Financeiro, que a parte 4.9b ligou no
+  `dute-prod` em 25/10/2026 (PR 466) pondo o projeto nas três listas. A
+  NFS-e pela Omie continua só no `dute-homolog` (`OMIE_AMBIENTES_LIBERADOS`):
+  na produção, a NF segue registrada à mão.

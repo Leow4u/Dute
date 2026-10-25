@@ -260,9 +260,9 @@ describe("listas do Financeiro iguais em todo lugar (Fase 4)", () => {
     expect(tsList(roles, "FINANCEIRO_ROLES")).toEqual([...FINANCE_ROLES]);
   });
 
-  it("liberação por ambiente: a lista das callables é a do app, só a homologação até o lançamento", () => {
+  it("liberação por ambiente: a lista das callables é a do app, homologação e produção desde a parte 4.9b", () => {
     expect(tsList(liberacao, "FINANCEIRO_AMBIENTES_LIBERADOS")).toEqual([...FINANCEIRO_AMBIENTES_LIBERADOS]);
-    expect([...FINANCEIRO_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
+    expect([...FINANCEIRO_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog", "dute-prod"]);
   });
 
   it("onde o Financeiro está ligado, o WMS não marca o pagamento da armazenagem (parte 7.2c)", () => {

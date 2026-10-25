@@ -16,14 +16,16 @@ function refusal(projectId: string | null | undefined): HttpsError {
 }
 
 describe("liberação do Financeiro por ambiente", () => {
-  it("só a homologação, até o lançamento da Fase 4", () => {
-    assert.deepEqual(FINANCEIRO_AMBIENTES_LIBERADOS, ["dute-homolog"]);
-    assert.equal(financeiroLiberado("dute-homolog"), true);
-    assert.doesNotThrow(() => assertLiberado("dute-homolog"));
+  it("homologação e produção, desde o lançamento da Fase 4 (parte 4.9b)", () => {
+    assert.deepEqual(FINANCEIRO_AMBIENTES_LIBERADOS, ["dute-homolog", "dute-prod"]);
+    for (const projectId of ["dute-homolog", "dute-prod"]) {
+      assert.equal(financeiroLiberado(projectId), true, projectId);
+      assert.doesNotThrow(() => assertLiberado(projectId), projectId);
+    }
   });
 
-  it("produção, produção antiga e projeto de teste recusam", () => {
-    for (const projectId of ["dute-prod", "dute-btg", "demo-dute-financeiro", "", null, undefined]) {
+  it("produção antiga e projeto de teste recusam", () => {
+    for (const projectId of ["dute-btg", "demo-dute-financeiro", "", null, undefined]) {
       assert.equal(financeiroLiberado(projectId), false, String(projectId));
       const error = refusal(projectId);
       assert.equal(error.code, "failed-precondition");

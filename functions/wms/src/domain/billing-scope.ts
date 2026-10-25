@@ -59,7 +59,7 @@ export async function resolveBillingDocument(
  * FINANCEIRO_AMBIENTES_LIBERADOS (functions/financeiro/src/domain/liberacao.ts);
  * a trava é artifacts/app/src/lib/platform-lists.test.ts.
  */
-export const FINANCEIRO_PROJECTS = ["dute-homolog"];
+export const FINANCEIRO_PROJECTS = ["dute-homolog", "dute-prod"];
 
 export function billingPaidInFinanceiro(projectId: string | undefined): boolean {
   return !!projectId && FINANCEIRO_PROJECTS.includes(projectId);
