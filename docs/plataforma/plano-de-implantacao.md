@@ -980,6 +980,19 @@ defeito.
     datas no cadastro do colaborador (tela nova, com alinhamento antes) e a
     exportação listar quem tinha vínculo no mês.
 
+64. A medição aprovada pode ter linhas sem demanda, como a equipe fixa do
+    contrato misto (`comercial-cargas.md`), e pode não ter demanda nenhuma.
+    O Comercial diz que "o que se fatura é a medição" e cria a autorização
+    pelo total aprovado. Mas o Financeiro fatura por demanda: a NF leva, de
+    cada demanda, a soma das linhas dela na medição.
+    - As linhas sem demanda nunca entram numa NF.
+    - A medição sem demanda não aparece em A faturar.
+    - A demanda pega o regime só do regime padrão do contrato. Os regimes
+      por serviço abrem a medição, mas não se aplicam às demandas.
+    - Recomendo a medição aprovada entrar em A faturar como um item próprio,
+      como a competência do WMS, pelo total aprovado. A NF dela leva as
+      demandas da medição, que deixam de ser cobradas à parte.
+
 Limitações conhecidas, sem pergunta, para quando houver tempo:
 
 - A OS que a Omie gravou com a resposta perdida, numa emissão que depois
@@ -992,3 +1005,14 @@ Limitações conhecidas, sem pergunta, para quando houver tempo:
   menor que o estoque e pode ficar negativo. É o total de todos os clientes,
   mostrado no cartão com o nome da BTG. Corrigir pede somar nos dois
   caminhos e recalcular o total uma vez na produção, com o OK do Leonardo.
+- O `saveQuote` (`update`) aceita trocar o contrato numa revisão (RV 1 em
+  diante), e a troca reescreve o contrato e a cobrança da demanda. Dois
+  problemas vêm com isso:
+  - o descarte da revisão e a recusa do aditivo voltam as linhas, a tabela
+    e os totais, mas não o contrato e a cobrança da demanda;
+  - o evento `quote.updated` não leva o contrato.
+
+  A tela não manda o contrato ao salvar nem ao revisar, então só se chega
+  lá chamando a callable direto. Se um dia a tela trocar o contrato numa
+  revisão, o descarte precisa voltar os dois campos (a RV congelada já os
+  guarda), e o evento precisa levar o contrato.

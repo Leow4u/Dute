@@ -432,3 +432,5 @@ Um PR pequeno, depois da conferência da seção 5:
 - As perguntas 61 a 63 do plano, do RH, antes de ligá-lo na produção: o
   vigente no empate da emissão, o admissional que fica vigente depois do
   periódico e a planilha de colaboradores do mês exportado.
+- A pergunta 64 do plano, antes do primeiro contrato com medição mensal: a
+  medição aprovada não tem como entrar numa NF pelo que não é de demanda.
