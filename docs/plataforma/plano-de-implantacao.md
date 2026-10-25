@@ -671,7 +671,9 @@ regras); CNH, exame e treinamento vencendo aparecem no Início certo.
 - **Manual do usuário** em `docs/manual-*.md`, por módulo: é para lá que vai
   toda explicação que a tela não mostra.
 - **Treinamento**: Guilherme (Comercial), coordenação (Operação), líderes
-  (campo), financeiro e cliente (portal), a cada marco de produção.
+  (campo), financeiro e cliente (portal), a cada marco de produção. O roteiro
+  de cada sessão, com os exercícios na homologação e o registro de quem foi
+  treinado, está em `docs/treinamento.md`.
 
 ## 12. Riscos
 
