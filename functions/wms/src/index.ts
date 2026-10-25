@@ -7973,7 +7973,7 @@ export const suggestWarehousePosition = onCall(async (request) => {
   return suggestWarehousePositionFor(db, { ...parsed.data, customer_code }, profile);
 });
 
-/** Cria a caixa guardada na posição confirmada; recusa marca a prateleira em verificação. */
+/** Cria a caixa guardada na posição confirmada; a recusa vale só para a caixa e fica no evento. */
 export const createWarehouseBox = onCall(async (request) => {
   const profile = await getProfile(request);
   requireWarehouseWrite(profile);

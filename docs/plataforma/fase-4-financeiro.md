@@ -197,7 +197,7 @@ continuam no Faturamento do WMS, e as rotas `/financeiro` não existem
 | 4.5a | WMS: a entrega do pedido de saída (`setOrderDelivery`, `orders.entrega`), pela Dutelog ou retirada pelo cliente, e `expedicao.delivery_set` | A entrega não muda depois da saída nem depois da demanda; o evento não leva texto livre |
 | 4.5b | Operação: a entrega pela Dutelog vira demanda e OS (a ida e, com retorno, a volta), com o número de volta no pedido | Retirada pelo cliente não gera OS |
 | 4.5c | WMS: a entrega na tela do pedido (`WmsExpedicao`), com a demanda e as OS na Operação e a retirada na saída | Textos listados; `axe` |
-| 4.5d | O retorno ao armazém: a OS de volta revisada abre o recebimento do retorno no WMS | O retorno gera recebimento uma vez |
+| 4.5d | O retorno ao armazém: a OS de volta concluída abre o recebimento do retorno no WMS | O retorno gera recebimento uma vez |
 | 4.6a | A rotina dos avisos: os eventos viram o aviso no sino (`client_notifications`) e o e-mail na fila (`email_outbox`), enviado pelo Resend ou só auditado; regras, índice e zeragem | Rodar de novo não duplica; o e-mail só vai a quem ligou o modelo; a NF por e-mail só a quem lê valor; o cliente sem o módulo não recebe |
 | 4.6b | Comercial: os avisos que cada contato recebe por e-mail, no cadastro do cliente | A NF não se liga para a gerenciadora; textos listados; `axe` |
 | 4.6c | Portal: o sino com os avisos do cliente, marcados como vistos ao abrir | O cliente só vê os próprios; textos listados; `axe` |

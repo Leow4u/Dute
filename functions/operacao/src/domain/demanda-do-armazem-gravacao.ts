@@ -160,7 +160,7 @@ export async function openStorageDemandFor(
             locais: { origem: local(entrega.destino, contatoNoDestino), destino: local(ARMAZEM) },
             janela: { data: entrega.retorno.data, inicio: entrega.retorno.hora, fim: null },
           }),
-          // A volta revisada abre o recebimento do retorno no WMS (parte 4.5d).
+          // A volta concluída abre o recebimento do retorno no WMS (parte 4.5d).
           retorno_ao_armazem: { order_id: doWms.id, order_number: doWms.numero },
         });
       }
