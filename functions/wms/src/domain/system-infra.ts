@@ -8,9 +8,10 @@ import { assertOwner } from "./system-dashboard.js";
  * Painel do sistema, parte 2 (Configuração > Sistema, só owner): erros de
  * qualquer function (Cloud Logging), functions publicadas e com acesso
  * público, de todas as codebases (Cloud Functions + Cloud Run, o mesmo que o
- * tools/check_functions_invoker.ps1 confere) e o custo real do Google Cloud
- * (exportação do faturamento para o BigQuery). Só leitura: nada aqui corrige
- * permissão nem publica function; o painel mostra o comando.
+ * tools/check_functions_invoker.ps1 confere), a latência de cada uma (Cloud
+ * Monitoring) e o custo real do Google Cloud (exportação do faturamento para
+ * o BigQuery). Só leitura: nada aqui corrige permissão nem publica function;
+ * o painel mostra o comando.
  *
  * Cada parte responde sozinha: se uma API negar acesso, as outras aparecem e
  * a que falhou mostra o motivo.
@@ -348,6 +349,57 @@ export function parseBillingResponse(json: unknown): BillingRow[] {
 
 // ----------------------------------------------------------- leitura geral
 
+// ------------------------------------------------------------------ latência
+
+export type LatencyRow = { service: string; p50_ms: number; p95_ms: number };
+const LATENCY_LIMIT = 15;
+
+/**
+ * Percentil das requisições de cada serviço do Cloud Run (as functions e o
+ * site) nas últimas 24 h: as revisões de um serviço somam numa série só.
+ */
+export function latencyUrl(project: string, now: Date, percentile: 50 | 95) {
+  const params: Record<string, string> = {
+    filter: 'metric.type="run.googleapis.com/request_latencies" AND resource.type="cloud_run_revision"',
+    "interval.startTime": new Date(now.getTime() - DAY_MS).toISOString(),
+    "interval.endTime": now.toISOString(),
+    "aggregation.alignmentPeriod": `${DAY_MS / 1000}s`,
+    "aggregation.perSeriesAligner": "ALIGN_DELTA",
+    "aggregation.crossSeriesReducer": `REDUCE_PERCENTILE_${percentile}`,
+    "aggregation.groupByFields": "resource.labels.service_name",
+  };
+  const query = Object.entries(params)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join("&");
+  return `https://monitoring.googleapis.com/v3/projects/${project}/timeSeries?${query}`;
+}
+
+type MonitoringSeries = {
+  resource?: { labels?: { service_name?: string } };
+  points?: Array<{ value?: { doubleValue?: number; int64Value?: string } }>;
+};
+
+/** Milissegundos por serviço, do ponto mais recente de cada série. */
+export function percentileByService(json: unknown): Map<string, number> {
+  const series = (json as { timeSeries?: MonitoringSeries[] } | null)?.timeSeries ?? [];
+  const result = new Map<string, number>();
+  for (const item of series) {
+    const service = item.resource?.labels?.service_name;
+    const value = item.points?.[0]?.value;
+    const ms = typeof value?.doubleValue === "number" ? value.doubleValue : Number(value?.int64Value);
+    if (service && Number.isFinite(ms)) result.set(service, ms);
+  }
+  return result;
+}
+
+/** Os serviços mais lentos pelo p95, com o p50 ao lado; o resto só conta. */
+export function summarizeLatency(p50: Map<string, number>, p95: Map<string, number>) {
+  const rows: LatencyRow[] = [...p95.entries()]
+    .map(([service, p95Ms]) => ({ service, p50_ms: Math.round(p50.get(service) ?? 0), p95_ms: Math.round(p95Ms) }))
+    .sort((left, right) => right.p95_ms - left.p95_ms || left.service.localeCompare(right.service));
+  return { total: rows.length, services: rows.slice(0, LATENCY_LIMIT) };
+}
+
 function apiError(what: string, status: number, json: unknown) {
   const detail = (json as { error?: { message?: string } } | null)?.error?.message ?? "";
   if (status === 403) return `Sem permissão para ${what}. ${detail}`.trim();
@@ -375,6 +427,14 @@ async function readErrors(gcp: GcpFetch, project: string, now: Date): Promise<Se
     if (!pageToken) break;
   }
   return { status: "ok", ...groupErrors(entries) };
+}
+
+async function readLatency(gcp: GcpFetch, project: string, now: Date): Promise<Section<ReturnType<typeof summarizeLatency>>> {
+  const [p50, p95] = await Promise.all([gcp(latencyUrl(project, now, 50)), gcp(latencyUrl(project, now, 95))]);
+  for (const response of [p50, p95]) {
+    if (response.status !== 200) return { status: "error", message: apiError("ler a latência no Cloud Monitoring", response.status, response.json) };
+  }
+  return { status: "ok", ...summarizeLatency(percentileByService(p50.json), percentileByService(p95.json)) };
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>) {
@@ -460,7 +520,7 @@ export async function saveInfraSettings(db: Firestore, actor: { uid: string; rol
   return settings;
 }
 
-/** Erros de 24 h, functions publicadas e custo real do mês. Só owner. */
+/** Erros e latência de 24 h, functions publicadas e custo real do mês. Só owner. */
 export async function readSystemInfra(
   db: Firestore,
   actor: { role: string },
@@ -476,10 +536,11 @@ export async function readSystemInfra(
       return { status: "error", message: `Falha ao ${what}: ${error instanceof Error ? error.message : String(error)}` };
     }
   };
-  const [errors, functions, billing] = await Promise.all([
+  const [errors, functions, latency, billing] = await Promise.all([
     guard("ler os logs", () => readErrors(options.gcp, options.project, now)),
     guard("listar as functions", () => readFunctions(options.gcp, options.code, options.project, options.region)),
+    guard("ler a latência", () => readLatency(options.gcp, options.project, now)),
     guard("consultar o faturamento", () => readBilling(options.gcp, settings.billing_table, options.project, now)),
   ]);
-  return { checked_at: now.toISOString(), settings, errors, functions, billing };
+  return { checked_at: now.toISOString(), settings, errors, functions, latency, billing };
 }

@@ -28,7 +28,7 @@ after(async () => {
 });
 
 /** Google Cloud de mentira: responde por URL e guarda o que foi pedido. */
-function fakeGcp(overrides: Partial<Record<"logging" | "functions" | "run" | "bigquery", { status: number; json: unknown }>> = {}) {
+function fakeGcp(overrides: Partial<Record<"logging" | "functions" | "run" | "bigquery" | "monitoring", { status: number; json: unknown }>> = {}) {
   const calls: Array<{ url: string; body: unknown }> = [];
   const gcp: GcpFetch = async (url, init) => {
     calls.push({ url, body: init?.body ? JSON.parse(init.body) : null });
@@ -53,6 +53,16 @@ function fakeGcp(overrides: Partial<Record<"logging" | "functions" | "run" | "bi
       if (overrides.run) return overrides.run;
       const open = url.includes("/getsysteminfra:");
       return { status: 200, json: open ? { bindings: [{ role: "roles/run.invoker", members: ["allUsers"] }] } : { etag: "ACAB" } };
+    }
+    if (url.startsWith("https://monitoring.googleapis.com/")) {
+      if (overrides.monitoring) return overrides.monitoring;
+      // O p50 e o p95 de cada serviço, como o Monitoring devolve agrupado por serviço.
+      const p95 = url.includes("REDUCE_PERCENTILE_95");
+      const serie = (service: string, ms: number) => ({ resource: { labels: { service_name: service } }, points: [{ value: { doubleValue: ms } }] });
+      return {
+        status: 200,
+        json: { timeSeries: p95 ? [serie("getsysteminfra", 2412.6), serie("readshipmentinvoice", 980)] : [serie("getsysteminfra", 640.2), serie("readshipmentinvoice", 310)] },
+      };
     }
     if (url.startsWith("https://bigquery.googleapis.com/")) {
       return overrides.bigquery ?? { status: 200, json: { jobComplete: true, rows: [{ f: [{ v: "Cloud Run" }, { v: "9.1" }, { v: "-9" }, { v: "BRL" }, { v: null }] }] } };
@@ -146,6 +156,38 @@ describe("painel do sistema: infraestrutura", () => {
     const policies = calls.filter((call) => call.url.startsWith("https://run.googleapis.com/")).map((call) => call.url.split("/services/")[1]).sort();
     // A política só das callables: a agendada não precisa de invoker público.
     assert.deepEqual(policies, ["advancequote:getIamPolicy", "getsysteminfra:getIamPolicy", "savesysteminfrasettings:getIamPolicy"]);
+  });
+
+  it("a latência de 24 h: o p50 e o p95 de cada serviço, o mais lento primeiro", async () => {
+    const { gcp, calls } = fakeGcp();
+    const infra = await readSystemInfra(db, { role: "owner" }, options(gcp));
+    assert.equal(infra.latency.status, "ok");
+    if (infra.latency.status === "ok") {
+      assert.equal(infra.latency.total, 2);
+      assert.deepEqual(infra.latency.services, [
+        { service: "getsysteminfra", p50_ms: 640, p95_ms: 2413 },
+        { service: "readshipmentinvoice", p50_ms: 310, p95_ms: 980 },
+      ]);
+    }
+    const consultas = calls.filter((call) => call.url.startsWith("https://monitoring.googleapis.com/v3/projects/dute-btg/timeSeries?"));
+    assert.equal(consultas.length, 2);
+    const params = new URL(consultas[0]!.url).searchParams;
+    assert.equal(params.get("filter"), 'metric.type="run.googleapis.com/request_latencies" AND resource.type="cloud_run_revision"');
+    assert.equal(params.get("interval.startTime"), "2026-10-02T15:00:00.000Z");
+    assert.equal(params.get("interval.endTime"), "2026-10-03T15:00:00.000Z");
+    assert.equal(params.get("aggregation.alignmentPeriod"), "86400s");
+    assert.equal(params.get("aggregation.perSeriesAligner"), "ALIGN_DELTA");
+    assert.equal(params.get("aggregation.groupByFields"), "resource.labels.service_name");
+    assert.deepEqual(consultas.map((call) => new URL(call.url).searchParams.get("aggregation.crossSeriesReducer")).sort(), ["REDUCE_PERCENTILE_50", "REDUCE_PERCENTILE_95"]);
+  });
+
+  it("sem permissão no Monitoring, só a latência mostra o motivo", async () => {
+    const { gcp } = fakeGcp({ monitoring: { status: 403, json: { error: { message: "Permission monitoring.timeSeries.list denied" } } } });
+    const infra = await readSystemInfra(db, { role: "owner" }, options(gcp));
+    assert.equal(infra.latency.status, "error");
+    if (infra.latency.status === "error") assert.match(infra.latency.message, /Sem permissão para ler a latência no Cloud Monitoring.*monitoring.timeSeries.list/);
+    assert.equal(infra.errors.status, "ok");
+    assert.equal(infra.functions.status, "ok");
   });
 
   it("uma API sem permissão não derruba as outras", async () => {
