@@ -73,6 +73,24 @@ describe("conteúdo da exportação", () => {
     assert.deepEqual(conteudo.colaboradores.map((linha) => [linha.nome, linha.ativo]), [["Ana Souza", true], ["Bruno Lima", false]]);
   });
 
+  it("o exame lançado de novo para corrigir, com a mesma data do ASO, entra uma vez: o vigente do empate", () => {
+    const linhas = (registros: RegistroGravado[]) => conteudoDaExportacao("2026-10", [ANA], registros).exames.map((linha) => [linha.data_do_aso, linha.tipo, linha.resultado]);
+    // O periódico lançado apto e lançado de novo, inapto, com as mesmas datas: o novo fica vigente (ficha.ts).
+    const corrigido = exame(ANA.id, "periodico", "2026-10-05", { vence_em: "2027-10-05", resultado: "inapto", criado_em: "2026-10-06T11:00:00.000Z" });
+    const errado = exame(ANA.id, "periodico", "2026-10-05", { vence_em: "2027-10-05", situacao: "substituido", substituido_por: corrigido.id, criado_em: "2026-10-06T10:00:00.000Z" });
+    // Antes, as duas linhas iam, e a contabilidade transmitia dois S-2220 do mesmo ASO.
+    assert.deepEqual(linhas([errado, corrigido]), [["2026-10-05", "periodico", "inapto"]]);
+    assert.deepEqual(linhas([corrigido, errado]), [["2026-10-05", "periodico", "inapto"]]);
+    // Com um periódico mais novo, os dois ficam substituídos por ele, e o de outubro continua uma vez.
+    const depois = { ...corrigido, situacao: "substituido" as const, substituido_por: "reg_novo" };
+    assert.deepEqual(linhas([{ ...errado, substituido_por: "reg_novo" }, depois]), [["2026-10-05", "periodico", "inapto"]]);
+    // Outra data no mês é outro exame, e o "outro" é um exame por registro.
+    const outraData = exame(ANA.id, "periodico", "2026-10-20");
+    const audiometria = exame(ANA.id, "outro", "2026-10-05", { descricao: "Audiometria" });
+    const espirometria = exame(ANA.id, "outro", "2026-10-05", { descricao: "Espirometria" });
+    assert.equal(conteudoDaExportacao("2026-10", [ANA], [errado, corrigido, outraData, audiometria, espirometria]).exames.length, 4);
+  });
+
   it("todo tipo de exame e todo resultado tem o código do S-2220", () => {
     assert.deepEqual(Object.keys(EXAME_NO_ESOCIAL).sort(), [...TIPOS_POR_CATEGORIA.exame].sort());
     assert.deepEqual(EXAME_NO_ESOCIAL, { admissional: 0, periodico: 1, retorno_ao_trabalho: 2, mudanca_de_funcao: 3, outro: 4, demissional: 9 });

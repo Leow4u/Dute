@@ -468,6 +468,9 @@ competência.
   - os colaboradores próprios ativos, e os inativos com exame no mês (o
     demissional);
   - o arquivado não entra; o substituído entra, porque o exame aconteceu;
+  - o mesmo exame lançado de novo para corrigir (o mesmo tipo e a mesma
+    data do ASO) entra uma vez, o que a ficha deixa vigente no empate (ver
+    "Correção: o exame corrigido saía duas vezes na exportação");
   - o terceiro e o freelancer não entram: o eSocial deles é de quem os
     emprega.
 - **O CPF** entra porque a contabilidade identifica o empregado por ele. É a
@@ -543,3 +546,27 @@ pelo workflow `Banco rh` (seção "Como o banco `dute-rh` nasce").
   app servindo o build. A produção recebe o código com o lançamento
   (`lancamento-producao.md`), e o RH continua desligado lá até outro OK
   (`RH_AMBIENTES_LIBERADOS`).
+
+### Correção: o exame corrigido saía duas vezes na exportação
+
+Feita em 25/10/2026, da revisão do código do RH.
+
+- **O defeito.** Corrigir um exame lançando de novo com as mesmas datas é o
+  caminho que "o vigente no empate das datas" prevê: o novo fica vigente, e
+  o anterior, substituído.
+  - A exportação leva o substituído, porque o exame aconteceu. Então o
+    mesmo ASO ia duas vezes, com o resultado errado e o corrigido.
+  - Exemplo: "Periódico; 05/10/2026; Apto" e "Periódico; 05/10/2026;
+    Inapto". Cada linha vira um S-2220 na contabilidade.
+- **A correção.** Na exportação, o mesmo colaborador, o mesmo tipo e a
+  mesma data do ASO são um exame só: entra o que a ficha deixa vigente no
+  empate (`maisRecentePrimeiro`).
+  - Outra data no mês continua outro exame.
+  - O "outro" continua um exame por registro: duas monitorações no mesmo
+    dia são exames diferentes.
+- **Testes:** `exportacao.test.ts`, com o periódico lançado apto e de novo
+  inapto: uma linha, inapto.
+  - O mesmo vale com um periódico mais novo que substitui os dois.
+  - A outra data e os dois "outro" do mesmo dia continuam.
+  - Antes, as duas linhas iam.
+

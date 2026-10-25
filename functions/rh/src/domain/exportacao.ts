@@ -1,7 +1,7 @@
 import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
-import { PRIMEIRO_DIA, TIPOS_POR_CATEGORIA, parseEntrada, type RegistroGravado, type ResultadoDoExame } from "./ficha.js";
+import { PRIMEIRO_DIA, TIPOS_POR_CATEGORIA, grupoDoRegistro, maisRecentePrimeiro, parseEntrada, type RegistroGravado, type ResultadoDoExame } from "./ficha.js";
 import { digest } from "./operations.js";
 
 /**
@@ -128,6 +128,9 @@ function porNome<T extends { nome: string; colaborador_id: string }>(a: T, b: T)
  * O conteúdo da competência, na ordem da planilha: os exames pela data do
  * ASO e pelo nome, os colaboradores pelo nome. O registro arquivado não
  * entra (saiu da ficha); o substituído entra, porque o exame aconteceu.
+ * O mesmo exame lançado de novo para corrigir o anterior (o mesmo
+ * colaborador, o mesmo tipo e a mesma data do ASO) entra uma vez, o que a
+ * ficha deixa vigente no empate: cada linha vira um S-2220.
  */
 export function conteudoDaExportacao(
   competencia: string,
@@ -135,10 +138,17 @@ export function conteudoDaExportacao(
   registros: readonly RegistroGravado[],
 ): ConteudoDaExportacao {
   const porId = new Map(colaboradores.map((colaborador) => [colaborador.id, colaborador]));
-  const exames: LinhaDoExame[] = [];
+  // Um por exame: o grupo da ficha (o "outro" é um grupo por registro) e a data do ASO.
+  const porExame = new Map<string, RegistroGravado & { resultado: ResultadoDoExame }>();
   for (const registro of registros) {
     if (registro.categoria !== "exame" || registro.situacao === "arquivado" || !registro.resultado) continue;
     if (registro.emitido_em.slice(0, 7) !== competencia) continue;
+    const chave = `${grupoDoRegistro(registro)}/${registro.emitido_em}`;
+    const anterior = porExame.get(chave);
+    if (!anterior || maisRecentePrimeiro(registro, anterior) < 0) porExame.set(chave, { ...registro, resultado: registro.resultado });
+  }
+  const exames: LinhaDoExame[] = [];
+  for (const registro of porExame.values()) {
     const colaborador = porId.get(registro.colaborador_id);
     if (!colaborador) continue;
     const tipo = registro.tipo as TipoDeExame;
