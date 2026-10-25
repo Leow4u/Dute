@@ -1632,6 +1632,26 @@ Achada em 25/10/2026, na mesma revisão. Está na produção.
   rotas sem o financeiro. Antes, falhava. Em `lib/home-inbox.test.ts`, o
   financeiro não vê o aviso do agente.
 
+### Correção: a base operacional do painel não abria para o interno e o suporte
+
+Achada em 25/10/2026, na mesma revisão. Está na produção.
+
+- **O defeito.** A base operacional do painel (`/api/operational/foundation`,
+  no roteador do navegador) lia a lista de usuários junto com o resto, para
+  montar as contas de cliente a partir dos logins. As regras deixam listar
+  `users` só a quem administra o acesso (owner e admin). Para o interno e o
+  suporte, que abrem o painel, a consulta era negada e levava a base
+  inteira: o painel perdia, sem aviso, as prioridades que saem dela (os
+  locais e os saldos derivados contra os gravados).
+- **A correção.** Os usuários só são lidos para o owner e o admin
+  (`canListUsers`, o critério do `canManageAccess` das regras). Para os
+  outros, a base segue sem as contas derivadas dos logins, que trazem nome e
+  e-mail de quem entra pelo portal.
+- **Teste:** `lib/painel-leituras.test.ts`, com o Firestore falso negando a
+  lista de usuários como a regra. O interno e o suporte abrem a base sem
+  pedir os usuários, e o owner e o admin ainda os leem. Antes, a base
+  respondia 500 para os dois.
+
 ## Lançamento na produção
 
 Espera o OK do Leonardo. Até lá, a memória e o Agent Dute do núcleo só

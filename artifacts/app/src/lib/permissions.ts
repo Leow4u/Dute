@@ -5,7 +5,7 @@
  * decidimos o que EXIBIR: botão que o papel não pode executar não aparece,
  * em vez de falhar depois do formulário preenchido.
  */
-import { WMS_OPERATOR_ROLES, type ProfileRole } from "./modules";
+import { ACCESS_ADMIN_ROLES, WMS_OPERATOR_ROLES, type ProfileRole } from "./modules";
 
 /** requireCatalogWrite: criar/editar/arquivar produtos e SKUs. */
 const CATALOG_WRITE_ROLES: ReadonlySet<ProfileRole> = new Set([
@@ -52,6 +52,11 @@ export function canSeeMerchandiseValue(role: string | null | undefined) {
 
 export function canDecideRequests(role: ProfileRole | null | undefined) {
   return Boolean(role && REQUEST_DECISION_ROLES.has(role));
+}
+
+/** A lista de usuários (users): quem administra o acesso, como canManageAccess nas regras. */
+export function canListUsers(role: string | null | undefined) {
+  return (ACCESS_ADMIN_ROLES as readonly string[]).includes(String(role ?? ""));
 }
 
 /**

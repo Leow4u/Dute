@@ -294,7 +294,11 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     financeiro, que só recebia o erro da tela: as regras deixam ler a
     memória e o conhecimento do agente só à coordenação (`fase-5-memoria.md`,
     "Correção: o painel e o conhecimento do agente abriam para o
-    financeiro").
+    financeiro");
+  - a base operacional do painel volta a abrir para o interno e o suporte:
+    os usuários só são lidos para quem administra o acesso, como as regras
+    pedem (`fase-5-memoria.md`, "Correção: a base operacional do painel não
+    abria para o interno e o suporte").
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a
   `main`, sem liberação própria. As entradas, as saídas e os movimentos
   passam a cobrar só o recebimento e a expedição, cada movimento uma vez
