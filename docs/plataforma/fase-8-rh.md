@@ -635,3 +635,40 @@ Decidida pelo Leonardo em 25/10/2026, antes de ligar o RH na produção.
     admissional, com o evento da mudança.
   - `exportacao.test.ts`: o admissional e o periódico do mesmo dia são duas
     linhas.
+
+### Decisão: a exportação lista quem tinha vínculo no mês (pergunta 63)
+
+Decidida pelo Leonardo em 25/10/2026: guardar a data de admissão e a de
+desligamento do colaborador, e a exportação listar quem tinha vínculo no
+mês. O RH liga na produção sem esperar por elas.
+
+- **Hoje.** A planilha de colaboradores sai do cadastro de hoje, não do mês
+  exportado. Quem entrou em 01/10 aparece ativo na exportação de setembro
+  gerada em outubro. Qualquer mudança de nome ou de função depois cria uma
+  versão nova de um mês passado. O manual (`docs/manual-rh.md`) diz isso.
+- **A parte 8.4** (no plano) guarda as duas datas e filtra a planilha por
+  elas. É tela nova, então o alinhamento de UX vem antes, como em toda tela.
+  O alinhamento também decide se as datas ficam no cadastro da Operação
+  (`collaborators`) ou no banco `dute-rh`.
+
+### Lançamento na produção
+
+Feito em 25/10/2026, com o OK do Leonardo ("Pode fazer então, vamos
+seguir") e as perguntas 61 a 63 respondidas. A 61 e a 62 entraram antes, em
+PRs próprios, para a produção começar com as regras novas.
+
+- **A lista.** `RH_AMBIENTES_LIBERADOS` ganha o `dute-prod`, no app e em
+  `functions/rh`. O `platform-lists.test.ts` trava as duas iguais.
+- **O que muda na produção**, a partir da publicação seguinte ao merge:
+  - o shell do RH aparece para owner, admin e rh;
+  - as dez callables respondem;
+  - a `runRhAlerts` passa a rodar às 06:10.
+  - O banco `dute-rh` da produção já existia, com PITR e backup diário, e
+    estava vazio. O arquivo do registro sobe e abre por URL assinada, como
+    na homologação.
+- **Os testes.** `liberacao.test.ts` e `profile.integration.test.ts` do RH
+  e `platform-lists.test.ts` do app passam a esperar a liberação na
+  produção. O `dute-btg` continua recusando.
+- **Como desfazer.** Tirar o `dute-prod` das duas listas e publicar de novo.
+  As telas somem, as callables recusam, e o que foi gravado fica no
+  `dute-rh`.

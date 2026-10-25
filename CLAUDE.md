@@ -197,7 +197,7 @@ documentação de produto e operação está em `docs/`.
     publicação das regras falha e nada sobe). As telas do RH ligam com o
     `RH_PUBLICADO` do app, travado contra o `firebase.json`.
     Toda callable entra por `requireRhCaller` (liberação
-    `RH_AMBIENTES_LIBERADOS`, só o `dute-homolog`; owner, admin e rh leem, só rh
+    `RH_AMBIENTES_LIBERADOS`, o `dute-homolog` e, desde 25/10/2026, o `dute-prod`; owner, admin e rh leem, só rh
     grava). O banco `dute-rh` é fechado ao navegador (`firestore-rh.rules`): as
     regras de um banco nomeado não leem o `users` do banco padrão. Hoje a ficha
     do colaborador (parte 8.2a): `saveRhRecord` e `archiveRhRecord` gravam o

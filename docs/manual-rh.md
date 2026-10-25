@@ -56,7 +56,10 @@ competência, duas planilhas CSV que abrem no Excel em português:
   arquivados, com nome, CPF, função, o exame, o código `tpExameOcup` do
   S-2220, a data do ASO, o resultado, o código `resAso` e o vencimento.
 - **Colaboradores:** as pessoas com vínculo próprio ativas ou com exame no
-  mês, com nome, CPF, função e situação.
+  mês, com nome, CPF, função e situação. A lista sai do cadastro de hoje,
+  não do mês exportado: quem entrou depois aparece na exportação de um mês
+  passado gerada agora. As datas de admissão e de desligamento entram na
+  parte 8.4.
 
 Os códigos do S-2220:
 

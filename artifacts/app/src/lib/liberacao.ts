@@ -131,14 +131,15 @@ export const AGENTE_LIBERADO = agenteLiberado(import.meta.env.VITE_FIREBASE_PROJ
  * Liberação própria do RH (docs/plataforma/fase-8-rh.md). As callables de
  * functions/rh recusam fora de RH_AMBIENTES_LIBERADOS
  * (functions/rh/src/domain/liberacao.ts, travada igual a esta por
- * platform-lists.test.ts). Só a homologação atende até o lançamento da fase.
+ * platform-lists.test.ts). Homologação e produção atendem: o dute-prod entrou
+ * no lançamento da fase, com o OK do Leonardo em 25/10/2026.
  *
  * O RH só existe no app quando a codebase `rh` e o banco `dute-rh` estão na
  * publicação (parte 8.1b, depois de o Leonardo criar o banco): RH_PUBLICADO
  * acompanha o firebase.json, e o platform-lists.test.ts trava os dois juntos.
  * Antes disso, as telas não aparecem em ambiente nenhum.
  */
-export const RH_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+export const RH_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog", "dute-prod"];
 
 /** A codebase `rh` está no firebase.json (parte 8.1b). */
 export const RH_PUBLICADO = true;

@@ -3,11 +3,11 @@ import { HttpsError } from "firebase-functions/https";
 /**
  * Liberação do RH por ambiente (docs/plataforma/fase-8-rh.md).
  *
- * Só a homologação atende, e só depois de o banco `dute-rh` existir nela
- * (parte 8.1b). A produção entra no lançamento da fase, com o OK do
- * Leonardo. O dute-btg fica de fora.
+ * Homologação e produção atendem, com o banco `dute-rh` nas duas (parte
+ * 8.1b). A produção entrou no lançamento da fase, com o OK do Leonardo em
+ * 25/10/2026. O dute-btg fica de fora.
  */
-export const RH_AMBIENTES_LIBERADOS = ["dute-homolog"] as const;
+export const RH_AMBIENTES_LIBERADOS = ["dute-homolog", "dute-prod"] as const;
 
 export function rhLiberado(projectId: string | null | undefined): boolean {
   const id = String(projectId ?? "").trim();
