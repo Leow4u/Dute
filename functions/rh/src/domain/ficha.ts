@@ -239,7 +239,8 @@ export function grupoDoRegistro(registro: Pick<RegistroGravado, "id" | "colabora
   return `${registro.colaborador_id}/${registro.categoria}/${tipo}`;
 }
 
-function maisRecentePrimeiro(a: RegistroGravado, b: RegistroGravado): number {
+/** A ordem do grupo: o vigente primeiro (situacoesDoGrupo). */
+export function maisRecentePrimeiro(a: RegistroGravado, b: RegistroGravado): number {
   return (
     b.emitido_em.localeCompare(a.emitido_em) ||
     (b.vence_em ?? "").localeCompare(a.vence_em ?? "") ||
