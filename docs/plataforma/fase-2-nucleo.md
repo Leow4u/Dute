@@ -535,3 +535,22 @@ produção.
 - **Teste:** `pages/users-convite.test.tsx`, com a tela de verdade: sem
   escolha e com a lista falhando, o convite não sai; o cliente do
   "Convidar" vale como escolhido. Antes, os dois primeiros falhavam.
+
+### Correção: dois owners podiam se tirar ao mesmo tempo
+
+Achada em 25/10/2026, na mesma revisão da administração de acesso. Está na
+produção, e é rara: pede dois owners mexendo um no outro no mesmo instante.
+
+- **O defeito.** O papel de quem age era lido antes da transação, e a
+  transação lia só a pessoa alterada. Dois owners que se removessem ou se
+  rebaixassem ao mesmo tempo passavam os dois, e o sistema ficava sem
+  nenhum owner, sem como devolver pelo próprio app.
+- **A correção.** Remover ou devolver o acesso, trocar o papel e criar ou
+  cancelar o convite releem quem age dentro da transação
+  (`domain/access.ts`, `assertAccessActorCurrent`): com o acesso removido
+  ou o papel mudado, a alteração para em "Seu acesso mudou: entre de novo
+  para administrar acessos.". As duas transações leem o perfil que a outra
+  muda, então a segunda recomeça e para.
+- **Teste:** `domain/access.integration.test.ts`: o owner que perdeu o
+  acesso ou foi rebaixado no meio do caminho não tira o acesso de outro
+  owner. Antes, os dois testes falhavam.

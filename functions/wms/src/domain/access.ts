@@ -1,4 +1,4 @@
-import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import { FieldValue, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
 /**
@@ -30,6 +30,25 @@ export type SetUserAccessResult = {
 
 const PRIVILEGED = ["owner", "admin"];
 
+/**
+ * Quem administra o acesso, relido na transação: a decisão vale com o perfil
+ * de agora, não com o lido antes dela. Duas pessoas que mexem uma na outra ao
+ * mesmo tempo não passam as duas: a transação da segunda relê o perfil que a
+ * primeira mudou e recomeça. Senão dois owners que se tiram ao mesmo tempo
+ * deixariam o sistema sem nenhum.
+ */
+export async function assertAccessActorCurrent(
+  transaction: Transaction,
+  db: Firestore,
+  actor: AccessActor,
+): Promise<void> {
+  const snapshot = await transaction.get(db.collection("users").doc(actor.uid));
+  const current = snapshot.data() ?? {};
+  if (!snapshot.exists || current.access_disabled === true || String(current.role) !== actor.role) {
+    throw new HttpsError("permission-denied", "Seu acesso mudou: entre de novo para administrar acessos.");
+  }
+}
+
 export async function setUserAccessTransaction(
   db: Firestore,
   input: SetUserAccessInput,
@@ -50,7 +69,10 @@ export async function setUserAccessTransaction(
 
   const userRef = db.collection("users").doc(input.user_id);
   return db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(userRef);
+    const [snapshot] = await Promise.all([
+      transaction.get(userRef),
+      assertAccessActorCurrent(transaction, db, actor),
+    ]);
     if (!snapshot.exists) {
       throw new HttpsError("not-found", "Pessoa não encontrada.");
     }
