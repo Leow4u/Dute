@@ -296,6 +296,12 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   A fila guardada não se apaga mais ao gravar: nem quando a leitura do
   aparelho falha, nem com o app aberto em duas cópias (`fase-3-operacao.md`,
   "Correção: a fila guardada se apagava ao gravar").
+- **As telas do escritório (25/10/2026).** Entram com a `main`, sem
+  liberação própria:
+  - o painel Escalar/Reagendar grava com a edição de quando abriu: se outra
+    tela mudou a OS nesse meio-tempo, o servidor recusa em vez de o
+    formulário velho apagar a mudança (`fase-3-operacao.md`, "Correção: o
+    Reagendar gravava o formulário velho por cima da mudança").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.

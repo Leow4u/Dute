@@ -9,6 +9,11 @@ import { agendaDaOs, pedidoDeAgenda, type AgendaEmEdicao, type OsDaFila } from "
  * Escalar, reagendar e cancelar a OS pelo painel lateral (parte 3.5a), no
  * Hoje e na Agenda (parte 3.6b): a OS escolhida, o formulário e a gravação
  * pela callable, com a chave de idempotência por tentativa.
+ *
+ * O formulário é o da OS como estava quando o painel abriu, e a edição que
+ * vai para a callable é a dessa abertura, nunca a da lista ao vivo: se outra
+ * tela mudou a OS nesse meio-tempo, o servidor recusa ("A OS foi
+ * atualizada") em vez de o formulário velho apagar a mudança.
  */
 export function useEscala({
   lista,
@@ -23,12 +28,12 @@ export function useEscala({
   nomesClientes: Readonly<Record<string, string>>;
   hoje: string;
 }): { escalar: (os: OsDaFila) => void; escala: EscalaAberta | null; erro: string | null } {
-  const [selecionada, setSelecionada] = useState<string | null>(null);
+  const [aberta, setAberta] = useState<{ numero: string; edicao: number } | null>(null);
   const [agenda, setAgenda] = useState<AgendaEmEdicao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const chaves = useRef(new Map<string, string>());
-  const os = lista.find((item) => item.numero === selecionada) ?? null;
+  const os = lista.find((item) => item.numero === aberta?.numero) ?? null;
 
   function chaveDe(escopo: string): string {
     const atual = chaves.current.get(escopo);
@@ -54,17 +59,17 @@ export function useEscala({
 
   function escalar(item: OsDaFila) {
     setErro(null);
-    setSelecionada(item.numero);
+    setAberta({ numero: item.numero, edicao: item.edicao });
     setAgenda(agendaDaOs(item, hoje));
   }
 
   function fechar() {
     setErro(null);
-    setSelecionada(null);
+    setAberta(null);
     setAgenda(null);
   }
 
-  if (!os || !agenda) return { escalar, escala: null, erro };
+  if (!os || !agenda || !aberta) return { escalar, escala: null, erro };
   return {
     escalar,
     erro,
@@ -87,18 +92,18 @@ export function useEscala({
           erro={erro}
           onSalvar={() => {
             if (os.demandaFora) return;
-            void gravar(`schedule:${os.numero}:${os.edicao}:${agenda.data}:${agenda.hora.trim()}:${agenda.equipe.join(",")}:${agenda.veiculoId}`, {
+            void gravar(`schedule:${os.numero}:${aberta.edicao}:${agenda.data}:${agenda.hora.trim()}:${agenda.equipe.join(",")}:${agenda.veiculoId}`, {
               action: "schedule",
               numero: os.numero,
-              expected_edicao: os.edicao,
+              expected_edicao: aberta.edicao,
               ...pedidoDeAgenda(agenda),
             });
           }}
           onCancelar={() => {
-            void gravar(`cancel:${os.numero}:${os.edicao}:${agenda.motivo.trim()}`, {
+            void gravar(`cancel:${os.numero}:${aberta.edicao}:${agenda.motivo.trim()}`, {
               action: "cancel",
               numero: os.numero,
-              expected_edicao: os.edicao,
+              expected_edicao: aberta.edicao,
               motivo: agenda.motivo.trim(),
             });
           }}
