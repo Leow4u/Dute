@@ -304,6 +304,9 @@ export const APP_MODULES: AppModule[] = [
         id: "orders-queue",
         label: "Pedidos",
         href: "/pedidos",
+        // A triagem das solicitações dos clientes é de Pedidos: o menu acende
+        // nela e o contador conta a linha "para aprovar" do Início.
+        tambem: ["/solicitacoes"],
         icon: Truck,
         roles: WMS_ROLES,
       }),
@@ -1364,7 +1367,6 @@ export function isNavRouteActive(
 
 /** Telas fora do menu que pertencem a um item dele. */
 const ACTIVE_ALIASES: Record<string, string> = {
-  "/solicitacoes": "/pedidos",
   "/orders": "/pedidos",
   "/wms/pedidos": "/pedidos",
   "/wms": "/estoque",

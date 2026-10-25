@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { pendenciasDoComercial } from "./comercial/pendencias";
-import { menuDoComercial, menuDoOperacao } from "./modules";
+import { buildHomeInbox } from "./home-inbox";
+import { getNavigationForProfileRole, menuDoComercial, menuDoOperacao } from "./modules";
 import { pendenciasDaOperacao, type EntradaDoInicio } from "./operacao/pendencias";
 import { contadoresDoMenu, resumoDoModulo } from "./resumo-do-modulo";
 
@@ -77,6 +78,15 @@ describe("contadores do menu do módulo", () => {
       "operacao-inicio": { n: 3, alerta: true },
       "operacao-hoje": { n: 2, alerta: false },
       "operacao-colaboradores": { n: 1, alerta: true },
+    });
+  });
+
+  it("Armazenagem: a solicitação para aprovar conta em Pedidos, onde se aprova", () => {
+    const { items } = buildHomeInbox({ role: "admin", requests: [{ id: "req_1", status: "open", title: "Pedido de camisas" }] });
+    expect(items.map((item) => item.href)).toEqual(["/solicitacoes"]);
+    expect(contadoresDoMenu(items, getNavigationForProfileRole("admin"), "home")).toEqual({
+      home: { n: 1, alerta: false },
+      orders: { n: 1, alerta: false },
     });
   });
 
