@@ -161,7 +161,7 @@ Como se garante, em cada PR de tela:
 | 6 Comercial | v1 (partes 1 a 19) na `main` e ligado no `dute-prod` desde 21/10, sem dado carregado; do fechamento, 6.20 a 6.22 e 6.25 feitas, e 6.23 e 6.24 (as cargas e o contador na produção, a semana em paralelo) com o Leonardo |
 | 7 Financeiro unificado | Partes 7.1 a 7.5c na `main`, só no `dute-homolog`. A NFS-e e a baixa pela Omie (7.4) estão no código, e as chaves de um aplicativo de teste da Omie estão no `dute-homolog` desde 24/10; a primeira emissão espera os serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` cadastrados nele. O cancelamento da NFS-e autorizada espera a resposta da Omie (`fase-7-financeiro-unificado.md`) |
 | 8 RH | Partes 8.1a a 8.3 na `main` e ligadas no `dute-homolog` desde 24/10: a 8.1b pôs no `firebase.json` o banco `dute-rh`, que existe nos dois ambientes (na produção, com PITR e backup diário). A produção recebe o código com o lançamento; a liberação do RH lá é outro OK (`fase-8-rh.md`) |
-| Contínuo | PITR e backup diário desde 20/10 (no `dute-rh`, desde 24/10). O teste de restauração é o workflow `Teste de restauração`, que espera o OK do Leonardo para rodar (`backup-e-recuperacao.md`). Manuais em `docs/manual-comercial.md`, `docs/manual-operacao.md`, `docs/manual-financeiro.md` e `docs/manual-rh.md` |
+| Contínuo | PITR e backup diário desde 20/10 (no `dute-rh`, desde 24/10). O teste de restauração é o workflow `Teste de restauração`, que espera o OK do Leonardo para rodar (`backup-e-recuperacao.md`). Manuais em `docs/manual-comercial.md`, `docs/manual-operacao.md`, `docs/manual-financeiro.md`, `docs/manual-rh.md` e `docs/manual-portal.md` (o portal do cliente) |
 
 ## 3. Ordem de implantação
 
