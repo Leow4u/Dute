@@ -307,6 +307,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     voltava ao saldo cheio, e o pagamento parcial ia como o total
     (`fase-4-financeiro.md`, "Correção: o pagamento digitado voltava ao
     saldo cheio").
+  - a Nova demanda aberta por "Atender" leva a solicitação do portal mesmo
+    depois de outra pessoa a resolver, e o servidor recusa. Antes, abria
+    uma segunda demanda solta (`fase-4-financeiro.md`, "Correção: a
+    solicitação resolvida em outra tela virava uma segunda demanda").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.

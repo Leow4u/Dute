@@ -96,8 +96,13 @@ export default function PaginaDemandaNova() {
     if (problemas.length) return;
     setOcupado(true);
     chave.current ??= novaChave();
+    // A solicitação de que o formulário saiu vai junto mesmo depois de
+    // resolvida em outra tela: o servidor recusa ("já virou a demanda",
+    // "recusada") em vez de abrir uma segunda demanda solta, e a nova
+    // tentativa leva o mesmo pedido, que a chave repete.
+    const solicitacaoDoFormulario = pedidaId && preenchida.current === pedidaId ? pedidaId : null;
     try {
-      const resultado = await chamarOperacao<{ numero: string }>("openDirectDemand", pedidoDaDemanda(form, chave.current, ativa?.id ?? null));
+      const resultado = await chamarOperacao<{ numero: string }>("openDirectDemand", pedidoDaDemanda(form, chave.current, solicitacaoDoFormulario));
       chave.current = null;
       navegar(hrefDaDemanda(resultado.numero));
     } catch (error) {
