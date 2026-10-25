@@ -426,3 +426,6 @@ Um PR pequeno, depois da conferência da seção 5:
   (`fase-4-financeiro.md`, decisões).
 - A receita por serviço (pergunta 26 do plano).
 - As perguntas 12 a 14 da Fase 3, em `operacao-producao.md`, seção 7.
+- As perguntas 58 a 60 do plano (seção 13, "Revisão de defeitos"): a
+  vistoria iniciada sem saída, o pedido aprovado que não se cancela nem se
+  separa a menos, e a data de emissão da fatura da NFS-e da Omie.

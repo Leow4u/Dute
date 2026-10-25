@@ -923,3 +923,46 @@ em `billing_operational_snapshots` (`ensureFrozenBillingUsage`, de
     do estoque do dia 5, não do último dia do mês. Recomendo uma rotina
     congelar o uso de cada cliente logo depois da virada, às 00:05 do dia 1
     no horário de Brasília; a prévia e a emissão seguem lendo a foto.
+
+**Revisão de defeitos** (25/10/2026). Achados confirmados no código que
+pedem ação ou tela nova; os que eram só código entraram em PR, um por
+defeito.
+
+58. A vistoria iniciada que não deu certo (o cliente não recebeu a equipe,
+    o local estava fechado) não tem saída. Só a OS aberta ou agendada se
+    cancela, e o envio ao Comercial pede foto e itens levantados. Enquanto
+    ela existe, a demanda recusa outra vistoria ("A demanda já tem a vistoria
+    … em aberto"). Recomendo a coordenação poder cancelar a vistoria em
+    execução, com motivo, com o evento, liberando a demanda para outra
+    vistoria. A OS de serviço continua sem cancelar depois de iniciada.
+59. Depois de aprovado, o pedido de retirada não se cancela nem se separa a
+    menos. "Encerrar" muda só o status: a reserva fica presa, e as tarefas de
+    separação e expedição continuam abertas. Na separação, o item faltando
+    ou avariado não tem como sair. Recomendo duas ações da coordenação, com
+    motivo e evento:
+    - "Cancelar pedido", que solta a reserva, cancela as tarefas abertas e,
+      se já foi separado, pede a volta do item à posição;
+    - "Separar a menos", na conclusão da separação, que solta a diferença e
+      segue com o que foi separado.
+    "Encerrar" passaria a valer só depois da entrega.
+60. A fatura que nasce da NFS-e autorizada pela Omie leva como emissão o dia
+    em que a rotina viu a autorização, não o da nota. Na rotina em dia, a
+    diferença é de minutos. Quando a emissão parou e foi retomada dias
+    depois, a fatura fica com a data da retomada, e o pagamento recebido
+    antes dela é recusado ("vem antes da emissão da NF"). O `StatusOS` da
+    Omie não traz a data da NFS-e, só a do faturamento da OS (`dDtFat`).
+    Recomendo usar o `dDtFat` quando a autorização é vista depois de uma
+    parada ou retomada, e o dia da rotina no resto.
+
+Limitações conhecidas, sem pergunta, para quando houver tempo:
+
+- A OS que a Omie gravou com a resposta perdida, numa emissão que depois
+  parou e foi desistida, fica órfã na Omie: sem nota e sem conta a receber.
+  Exige várias falhas seguidas e uma desistência; quem usa a Omie a
+  reconhece pelo código de integração (o id da emissão na Dute).
+- O "peças em acompanhamento" do Painel do Agent Dute lê o total do
+  `ops_aggregates/dashboard`. A abertura do inventário e o recebimento de
+  produto novo não somam nesse total, e a entrega desconta, então ele fica
+  menor que o estoque e pode ficar negativo. É o total de todos os clientes,
+  mostrado no cartão com o nome da BTG. Corrigir pede somar nos dois
+  caminhos e recalcular o total uma vez na produção, com o OK do Leonardo.
