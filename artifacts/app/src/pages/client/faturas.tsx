@@ -12,6 +12,7 @@ import {
   closedInvoices,
   deliveriesByMonth,
   monthLabel,
+  semNadaParaCobrar,
   shiftCompetencia,
   type ClosedInvoice,
 } from "@/lib/billing-insights";
@@ -84,9 +85,11 @@ export function ClienteFaturas() {
               <NfsDosServicos nfs={nfs ?? []} hoje={hoje} />
 
               {!latest ? (
-                <p className="rounded-lg border border-dashed border-border bg-card px-5 py-8 text-sm text-muted-foreground">
-                  Nenhuma fatura fechada ainda. Quando a Dutelog emitir a fatura do mês, ela aparece aqui com o detalhamento.
-                </p>
+                semNadaParaCobrar(insights, nfs?.length ?? 0) ? (
+                  <p className="rounded-lg border border-dashed border-border bg-card px-5 py-8 text-sm text-muted-foreground">
+                    Nenhuma fatura fechada ainda. Quando a Dutelog emitir a fatura do mês, ela aparece aqui com o detalhamento.
+                  </p>
+                ) : null
               ) : (
                 <>
                   <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
