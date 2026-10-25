@@ -14,11 +14,12 @@ import { AGENTE_ROLES, agenteProblem, contractedModulesFrom, leValor, PLATFORM_R
  */
 
 describe("a liberação do Agent Dute do núcleo", () => {
-  it("só a homologação, separada da memória", () => {
-    assert.deepEqual([...AGENTE_AMBIENTES_LIBERADOS], ["dute-homolog"]);
+  it("homologação e produção, separada da memória", () => {
+    assert.deepEqual([...AGENTE_AMBIENTES_LIBERADOS], ["dute-homolog", "dute-prod"]);
     assert.equal(agenteLiberado(" dute-homolog "), true);
-    for (const projeto of ["dute-prod", "dute-btg", "", null, undefined]) assert.equal(agenteLiberado(projeto), false, String(projeto));
-    assert.throws(() => assertAgenteLiberado("dute-prod"), (erro: unknown) => erro instanceof HttpsError && erro.code === "failed-precondition" && /Agent Dute.*dute-prod/.test(erro.message));
+    assert.equal(agenteLiberado("dute-prod"), true);
+    for (const projeto of ["dute-btg", "", null, undefined]) assert.equal(agenteLiberado(projeto), false, String(projeto));
+    assert.throws(() => assertAgenteLiberado("dute-btg"), (erro: unknown) => erro instanceof HttpsError && erro.code === "failed-precondition" && /Agent Dute.*dute-btg/.test(erro.message));
   });
 });
 

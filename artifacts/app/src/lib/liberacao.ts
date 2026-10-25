@@ -97,10 +97,11 @@ export const OMIE_LIBERADA = omieLiberada(import.meta.env.VITE_FIREBASE_PROJECT_
  * Liberação própria da memória da Dute (docs/plataforma/fase-5-memoria.md).
  * A rotina e as callables de functions/core recusam fora de
  * MEMORIA_AMBIENTES_LIBERADOS (functions/core/src/domain/liberacao.ts,
- * travada igual a esta por platform-lists.test.ts). Só a homologação atende
- * até o fim da Fase 5, com o OK do Leonardo.
+ * travada igual a esta por platform-lists.test.ts). Homologação e produção
+ * atendem: o dute-prod entrou no lançamento da Fase 5, com o OK do Leonardo
+ * em 25/10/2026. O dute-btg continua de fora.
  */
-export const MEMORIA_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+export const MEMORIA_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog", "dute-prod"];
 
 export function memoriaLiberada(projectId: string | null | undefined): boolean {
   return MEMORIA_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());
@@ -114,10 +115,10 @@ export const MEMORIA_LIBERADA = memoriaLiberada(import.meta.env.VITE_FIREBASE_PR
  * parte 5.5). As callables do agente em functions/core recusam fora de
  * AGENTE_AMBIENTES_LIBERADOS (functions/core/src/domain/liberacao.ts, travada
  * igual a esta por platform-lists.test.ts). Fora dela, o app segue com o
- * agente do WMS. Só a homologação atende até o lançamento da Fase 5, com o OK
- * do Leonardo.
+ * agente do WMS. Homologação e produção atendem: o dute-prod entrou no
+ * lançamento da Fase 5, com o OK do Leonardo em 25/10/2026.
  */
-export const AGENTE_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+export const AGENTE_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog", "dute-prod"];
 
 export function agenteLiberado(projectId: string | null | undefined): boolean {
   return AGENTE_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());

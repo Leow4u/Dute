@@ -59,9 +59,9 @@ describe("sugestão de rotina no chat", () => {
 });
 
 describe("quem roda as rotinas agendadas", () => {
-  it("onde o agente do núcleo está liberado, o WMS não roda; na produção, roda", () => {
+  it("onde o agente do núcleo está liberado, o WMS não roda; na produção antiga, roda", () => {
     assert.equal(routinesRunInCore("dute-homolog"), true);
-    assert.equal(routinesRunInCore("dute-prod"), false);
+    assert.equal(routinesRunInCore("dute-prod"), true);
     assert.equal(routinesRunInCore("dute-btg"), false);
     assert.equal(routinesRunInCore(undefined), false);
   });

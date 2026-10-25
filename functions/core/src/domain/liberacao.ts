@@ -3,12 +3,12 @@ import { HttpsError } from "firebase-functions/https";
 /**
  * Liberação da memória da Dute por ambiente (docs/plataforma/fase-5-memoria.md).
  *
- * Só a homologação atende. A produção entra no fim da Fase 5, com o OK do
- * Leonardo. O dute-btg fica de fora. A lista é a mesma de
+ * Homologação e produção atendem: a produção entrou no lançamento da Fase 5,
+ * com o OK do Leonardo em 25/10/2026. O dute-btg fica de fora. A lista é a mesma de
  * artifacts/app/src/lib/liberacao.ts; o teste
  * artifacts/app/src/lib/platform-lists.test.ts trava as duas.
  */
-export const MEMORIA_AMBIENTES_LIBERADOS = ["dute-homolog"] as const;
+export const MEMORIA_AMBIENTES_LIBERADOS = ["dute-homolog", "dute-prod"] as const;
 
 export function memoriaLiberada(projectId: string | null | undefined): boolean {
   const id = String(projectId ?? "").trim();
@@ -28,7 +28,7 @@ export function assertLiberado(projectId: string | null | undefined): void {
  * do WMS. A lista é a mesma de AGENTE_AMBIENTES_LIBERADOS do app, travada por
  * platform-lists.test.ts.
  */
-export const AGENTE_AMBIENTES_LIBERADOS = ["dute-homolog"] as const;
+export const AGENTE_AMBIENTES_LIBERADOS = ["dute-homolog", "dute-prod"] as const;
 
 export function agenteLiberado(projectId: string | null | undefined): boolean {
   const id = String(projectId ?? "").trim();

@@ -6,14 +6,16 @@ import { HttpsError } from "firebase-functions/https";
 import { MEMORIA_AMBIENTES_LIBERADOS, assertLiberado, memoriaLiberada } from "./liberacao.js";
 
 describe("liberação da memória", () => {
-  it("só a homologação, até o fim da Fase 5", () => {
-    assert.deepEqual([...MEMORIA_AMBIENTES_LIBERADOS], ["dute-homolog"]);
+  it("homologação e produção, desde o lançamento da Fase 5", () => {
+    assert.deepEqual([...MEMORIA_AMBIENTES_LIBERADOS], ["dute-homolog", "dute-prod"]);
     assert.equal(memoriaLiberada(" dute-homolog "), true);
-    for (const projeto of ["dute-prod", "dute-btg", "", null, undefined]) assert.equal(memoriaLiberada(projeto), false, String(projeto));
+    assert.equal(memoriaLiberada("dute-prod"), true);
+    for (const projeto of ["dute-btg", "", null, undefined]) assert.equal(memoriaLiberada(projeto), false, String(projeto));
   });
 
   it("fora da lista, a callable recusa antes de tudo", () => {
     assert.doesNotThrow(() => assertLiberado("dute-homolog"));
-    assert.throws(() => assertLiberado("dute-prod"), (error: unknown) => error instanceof HttpsError && error.code === "failed-precondition" && /dute-prod/.test(error.message));
+    assert.doesNotThrow(() => assertLiberado("dute-prod"));
+    assert.throws(() => assertLiberado("dute-btg"), (error: unknown) => error instanceof HttpsError && error.code === "failed-precondition" && /dute-btg/.test(error.message));
   });
 });

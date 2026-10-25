@@ -21,7 +21,7 @@ export const MAX_ROUTINES_PER_USER = 5;
  * artifacts/app/src/lib/platform-lists.test.ts. Ali a rotina agendada do
  * WMS não roda, para uma rotina rodar por um só.
  */
-export const CORE_AGENT_PROJECTS = ["dute-homolog"];
+export const CORE_AGENT_PROJECTS = ["dute-homolog", "dute-prod"];
 
 export function routinesRunInCore(projectId: string | undefined) {
   return !!projectId && CORE_AGENT_PROJECTS.includes(projectId);
