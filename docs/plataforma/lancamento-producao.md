@@ -276,7 +276,15 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     campo que o servidor descarta, e a conclusão pelo painel sempre parava
     em "Informe a conferência física das linhas"; só o "Separar" da fila
     concluía (teste em
-    `features/warehouse-ops/task-detail-conferencia.test.tsx`).
+    `features/warehouse-ops/task-detail-conferencia.test.tsx`);
+  - o Estoque › Histórico com um tipo escolhido (Entrada, Saída, Ajuste + ou
+    Ajuste −) e a busca acha a movimentação antiga do código. Faltava o
+    índice de `movements` por tipo e código: a consulta caía na leitura das
+    500 movimentações mais novas, filtradas na tela, e a mais antiga sumia
+    sem aviso, com o total estimado. O índice novo sobe com as regras e leva
+    alguns minutos para ficar pronto (teste em
+    `lib/cloud-api-indices.test.ts`, que confere o índice de cada consulta
+    das telas).
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a
   `main`, sem liberação própria. As entradas, as saídas e os movimentos
   passam a cobrar só o recebimento e a expedição, cada movimento uma vez

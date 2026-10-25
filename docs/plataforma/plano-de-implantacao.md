@@ -1051,6 +1051,21 @@ usuário do convite, com o papel dele.
 
 Limitações conhecidas, sem pergunta, para quando houver tempo:
 
+- Algumas listas do roteador do navegador (`lib/cloud-api.ts`) aceitam
+  filtros que nenhuma tela manda e que não têm o índice da consulta:
+  - `/api/products` por categoria, `/api/skus` por código do cliente,
+    `/api/locations` (que nada chama) e `/api/stock-balances` e
+    `/api/order-items` por cliente ou situação ordenam do maior para o
+    menor, e os índices vão do menor para o maior. A lista cairia na leitura
+    das mais recentes, filtrada na tela;
+  - as posições do armazém por rua, cliente ou situação e as caixas por
+    posição ou situação, sem o cliente, não têm índice, e ali a consulta
+    falha em vez de cair nessa leitura;
+  - a leitura de reserva da conversa do Agent Dute, quando a principal
+    falha, também não tem.
+
+  A tela nova que mandar um desses filtros entra em
+  `lib/cloud-api-indices.test.ts`, que pede o índice.
 - A OS que a Omie gravou com a resposta perdida, numa emissão que depois
   parou e foi desistida, fica órfã na Omie: sem nota e sem conta a receber.
   Exige várias falhas seguidas e uma desistência; quem usa a Omie a

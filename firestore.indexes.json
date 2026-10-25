@@ -233,6 +233,20 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "tipo_mov",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "cod_sku",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "movements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "customer_code",
           "order": "ASCENDING"
         },
