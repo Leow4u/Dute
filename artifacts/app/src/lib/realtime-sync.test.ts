@@ -175,6 +175,25 @@ describe("tempo real da equipe interna", () => {
     expect(listenerOf("ai_agent_inbox")).toHaveLength(1);
   });
 
+  it("a conversa com o agente vai pelo dono e pelo cliente que o chat lê, como a regra exige", () => {
+    for (const [perfil, cliente] of [
+      [{ role: "wms", customer_code: "Dutelog" }, "Dutelog"],
+      [{ role: "interno" }, "BTG Pactual"],
+    ] as const) {
+      listeners.length = 0;
+      appUser.current = { uid: "wms-a", publicMetadata: perfil };
+      RealtimeSyncBridge();
+
+      for (const colecao of ["agent_conversations", "agent_messages"]) {
+        expect(listenerOf(colecao), `${perfil.role} ${colecao}`).toHaveLength(1);
+        expect(listenerOf(colecao)[0].filters).toEqual([
+          { field: "customer_code", op: "==", value: cliente },
+          { field: "user_id", op: "==", value: "wms-a" },
+        ]);
+      }
+    }
+  });
+
   it("o financeiro só assina o que a regra deixa ele ler: nem a caixa do agente, nem as coleções da operação", () => {
     appUser.current = { uid: "finance-a", publicMetadata: { role: "financeiro" } };
     RealtimeSyncBridge();

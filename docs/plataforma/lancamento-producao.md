@@ -284,7 +284,12 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     sem aviso, com o total estimado. O índice novo sobe com as regras e leva
     alguns minutos para ficar pronto (teste em
     `lib/cloud-api-indices.test.ts`, que confere o índice de cada consulta
-    das telas).
+    das telas);
+  - o chat do Agent Dute da área interna volta a se atualizar sozinho. O
+    ouvinte em tempo real ia só pelo dono, e a regra recusava a consulta
+    inteira: a resposta que o servidor grava depois só aparecia ao abrir a
+    tela de novo (`fase-5-memoria.md`, "Correção: o chat do agente do WMS
+    não se atualizava sozinho na área interna").
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a
   `main`, sem liberação própria. As entradas, as saídas e os movimentos
   passam a cobrar só o recebimento e a expedição, cada movimento uma vez

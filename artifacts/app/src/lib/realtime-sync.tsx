@@ -157,9 +157,11 @@ function internalHotCollectionsForRole(role: string) {
   return INTERNAL_HOT_COLLECTIONS.filter((name) => !blocked.has(name));
 }
 
+// A conversa com o agente do WMS, no cliente que o chat lê (o do perfil). A
+// regra exige o cliente da conversa: só pelo dono, a consulta inteira é negada.
 const INTERNAL_USER_SCOPED_TARGETS: readonly RealtimeTarget[] = [
-  { collectionName: "agent_conversations", userField: "user_id" },
-  { collectionName: "agent_messages", userField: "user_id" },
+  { collectionName: "agent_conversations", customerField: "customer_code", userField: "user_id" },
+  { collectionName: "agent_messages", customerField: "customer_code", userField: "user_id" },
 ];
 
 const ACCESS_ADMIN_COLLECTIONS = ["invites", "users"] as const;
