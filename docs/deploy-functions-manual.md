@@ -306,8 +306,9 @@ Storage)` roda `firebase deploy --only firestore,storage --project <projeto>
 `tools/check_rules_deployed.sh` se o Firestore e o bucket padrão do Storage
 passaram a servir as regras do commit. As functions têm `needs: regras` e o
 frontend vem depois delas: se as regras não sobem, nada mais sobe. Os testes de regras do
-Firestore rodam antes, em `functions-integration`; o `storage.rules` ainda não
-tem teste.
+Firestore e do Storage rodam antes, em `functions-integration`; os do
+`storage.rules` cobrem cada caminho dele (`produto-fotos`, `operacao-fotos`,
+`operacao-solicitacoes` e `rh-arquivos`, em `functions/wms/src/*.rules.test.ts`).
 
 Os índices novos ficam construindo por alguns minutos depois do job; uma
 consulta que dependa deles falha com "requires an index" até terminarem. Sem
