@@ -1458,6 +1458,35 @@ Achada em 25/10/2026.
     150 minutos, sem o erro. Antes, a parcial gravava 25%.
   - `acerto.test.ts`: a parcial fica fora dos dois erros.
 
+### Correção: a rotina do alerta do item parado desfazia a decisão do mesmo instante
+
+Achada em 25/10/2026.
+
+- **O defeito.** A rotina do dia lê as propostas abertas fora de uma
+  transação e depois grava num lote:
+  - refaz a proposta com `set` (merge, `status: "proposta"`);
+  - ou a apaga, quando o cliente não tem mais item.
+  - A aprovação ou o descarte que entrasse entre a leitura e a gravação era
+    desfeito: o alerta voltava a "proposta" ou sumia.
+  - O aprovado que voltou a proposta não vira aviso
+    (`runNotifications`). Aprová-lo de novo dá erro, porque o evento da
+    decisão já existe. Restava só descartar, e o cliente nunca era avisado.
+  - A janela é curta: um segundo, na primeira passada depois da meia-noite.
+- **A correção.** A rotina guarda o instante em que leu cada proposta
+  aberta e só a refaz (`update`) ou apaga com essa pré-condição
+  (`lastUpdateTime`).
+  - Se a proposta mudou depois da leitura, o lote falha inteiro, sem marcar
+    o dia.
+  - A passada seguinte, 15 minutos depois, refaz o dia já com a decisão
+    lida.
+- **Testes:** `alertas-parados.integration.test.ts`, com a decisão entrando
+  entre a leitura e a gravação da rotina (o `commit` do lote espera a
+  decisão):
+  - a aprovação e o descarte ficam;
+  - o dia não fica marcado;
+  - a passada seguinte não propõe de novo o que foi decidido.
+  - Antes, a rotina gravava por cima.
+
 ## Lançamento na produção
 
 Espera o OK do Leonardo. Até lá, a memória e o Agent Dute do núcleo só

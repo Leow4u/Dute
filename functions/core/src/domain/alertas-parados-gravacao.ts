@@ -1,4 +1,4 @@
-import type { Firestore, Transaction } from "firebase-admin/firestore";
+import type { Firestore, Timestamp, Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
 import {
@@ -104,11 +104,12 @@ export async function runStockAlertsFor(db: Firestore, opcoes: { agora?: () => D
     if (customerCode && item) itensPorCliente.set(customerCode, [...(itensPorCliente.get(customerCode) ?? []), item]);
   }
   const decididos = new Map<string, Set<string>>();
-  const abertas = new Map<string, { id: string; itens: ItemDoAlerta[] }>();
+  // A proposta aberta leva o instante em que foi lida: a rotina só a grava ou tira se ela não mudou desde então.
+  const abertas = new Map<string, { id: string; itens: ItemDoAlerta[]; lida: Timestamp }>();
   for (const doc of alertas.docs) {
     const customerCode = texto(doc.get("customer_code"));
     const itens = itensGravados(doc.get("itens"));
-    if (doc.get("status") === "proposta") abertas.set(customerCode, { id: doc.id, itens });
+    if (doc.get("status") === "proposta") abertas.set(customerCode, { id: doc.id, itens, lida: doc.updateTime });
     else decididos.set(customerCode, new Set([...(decididos.get(customerCode) ?? []), ...itens.map(chaveDoItemDecidido)]));
   }
 
@@ -124,28 +125,22 @@ export async function runStockAlertsFor(db: Firestore, opcoes: { agora?: () => D
     const aberta = abertas.get(customerCode);
     if (!itens.length) {
       if (aberta) {
-        batch.delete(db.collection(AI_STOCK_ALERTS_COLLECTION).doc(aberta.id));
+        batch.delete(db.collection(AI_STOCK_ALERTS_COLLECTION).doc(aberta.id), { lastUpdateTime: aberta.lida });
         removidas += 1;
       }
       continue;
     }
     if (aberta && estavel(aberta.itens) === estavel(itens)) continue;
     const id = aberta?.id ?? idDoAlerta(customerCode, hoje);
-    batch.set(
-      db.collection(AI_STOCK_ALERTS_COLLECTION).doc(id),
-      {
-        id,
-        customer_code: customerCode,
-        status: "proposta",
-        regra,
-        itens,
-        ...(aberta ? {} : { proposta_em: instante.toISOString() }),
-        atualizada_em: instante.toISOString(),
-      },
-      { merge: true },
-    );
+    const ref = db.collection(AI_STOCK_ALERTS_COLLECTION).doc(id);
+    const proposta = { id, customer_code: customerCode, status: "proposta", regra, itens, atualizada_em: instante.toISOString() };
+    if (aberta) batch.update(ref, proposta, { lastUpdateTime: aberta.lida });
+    else batch.set(ref, { ...proposta, proposta_em: instante.toISOString() }, { merge: true });
     propostas += 1;
   }
+  // A decisão que entrou depois da leitura faz o lote falhar inteiro, sem
+  // marcar o dia: a rodada seguinte refaz com ela lida, em vez de voltar o
+  // alerta decidido para proposta ou apagá-lo.
   batch.set(cursor, { dia: hoje, atualizado_em: instante.toISOString() });
   await batch.commit();
   return { dia: hoje, rodou: true, clientes: clientes.length, propostas, removidas };
