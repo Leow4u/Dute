@@ -1332,6 +1332,9 @@ a tela é a dos Relatórios da Operação (`/operacao/relatorios?relatorio=acert
     planejamento.
   - O erro é o desvio absoluto em porcentagem do previsto. Sem o tempo
     real, fica em traço.
+  - Os dois erros e o "Com o tempo real" contam só a sugestão completa
+    (todos os itens com base), a mesma base para os dois (ver "Correção: o
+    erro da sugestão parcial contava a OS inteira").
 - **A tabela** tem uma linha por cliente, da que tem mais sugestões, e o
   total. Exporta para Excel e PDF como os outros relatórios.
 - **Testes.**
@@ -1430,6 +1433,30 @@ Achada em 25/10/2026.
   - O cliente com tabela vencida na variante fica sem preço nela, nunca
     com o da Padrão.
   - Antes, dava "Tabela Itaú 2027" e R$ 990,00 em vez de R$ 850,00.
+
+### Correção: o erro da sugestão parcial contava a OS inteira
+
+Achada em 25/10/2026.
+
+- **O defeito.** A duração sugerida soma só os itens com base (5 execuções
+  do cliente ou 15 na geral) e marca `completa: false` quando falta algum.
+  - A rotina das medidas gravava o `erro_pct` dessa sugestão contra o
+    tempo de trabalho da OS inteira.
+  - O painel de acerto fazia a mesma conta no "Erro da sugestão".
+  - Exemplo: 12 mesas com base, 120 minutos sugeridos, e 40 cadeiras sem
+    base. A OS levava 150 minutos e o erro saía +25%, com as cadeiras que a
+    sugestão nem estimou.
+  - No começo, com poucos itens na base, quase toda sugestão é parcial, e o
+    painel mostrava a memória errando mais que o planejamento.
+- **A correção:**
+  - A sugestão parcial guarda o tempo real, sem o erro (`erro_pct` null).
+  - No painel, os dois erros (o da sugestão e o do planejado) e o "Com o
+    tempo real" contam só a sugestão completa. É a mesma base para comparar
+    a memória com o planejamento.
+- **Testes:**
+  - `sugestao.integration.test.ts`: a completa grava 25%; a parcial guarda
+    150 minutos, sem o erro. Antes, a parcial gravava 25%.
+  - `acerto.test.ts`: a parcial fica fora dos dois erros.
 
 ## Lançamento na produção
 

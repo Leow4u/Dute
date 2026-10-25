@@ -13,7 +13,7 @@ const doc = (extra: Record<string, unknown> = {}) => ({
   customer_code: "ITAU",
   criada_em: "2026-10-10T12:00:00.000Z",
   decisao: "aceitou",
-  sugestao: { minutos_total: 180 },
+  sugestao: { minutos_total: 180, completa: true },
   minutos_escolhidos: 180,
   valor_real: null,
   ...extra,
@@ -21,7 +21,8 @@ const doc = (extra: Record<string, unknown> = {}) => ({
 
 describe("a sugestão lida", () => {
   it("só a duração da OS, com o sugerido, o cliente e a decisão", () => {
-    expect(sugestaoDoAcerto("sug_1", doc({ valor_real: 210 }))).toEqual({ id: "sug_1", customerCode: "ITAU", criadaEm: "2026-10-10T12:00:00.000Z", decisao: "aceitou", sugeridos: 180, planejados: 180, reais: 210 });
+    expect(sugestaoDoAcerto("sug_1", doc({ valor_real: 210 }))).toEqual({ id: "sug_1", customerCode: "ITAU", criadaEm: "2026-10-10T12:00:00.000Z", decisao: "aceitou", sugeridos: 180, completa: true, planejados: 180, reais: 210 });
+    expect(sugestaoDoAcerto("sug_7", doc({ sugestao: { minutos_total: 120, completa: false } }))?.completa).toBe(false);
     expect(sugestaoDoAcerto("sug_2", doc({ tipo: "outro" }))).toBeNull();
     expect(sugestaoDoAcerto("sug_3", doc({ decisao: "talvez" }))).toBeNull();
     expect(sugestaoDoAcerto("sug_4", doc({ sugestao: { minutos_total: 0 } }))).toBeNull();
@@ -35,14 +36,21 @@ describe("os números", () => {
   // Safra: aceitou 60 (real 60: 0% e 0%).
   const sugestoes: SugestaoDoAcerto[] = [
     sugestaoDoAcerto("a", doc({ valor_real: 210 }))!,
-    sugestaoDoAcerto("b", doc({ decisao: "mudou", sugestao: { minutos_total: 120 }, minutos_escolhidos: 240, valor_real: 240 }))!,
+    sugestaoDoAcerto("b", doc({ decisao: "mudou", sugestao: { minutos_total: 120, completa: true }, minutos_escolhidos: 240, valor_real: 240 }))!,
     sugestaoDoAcerto("c", doc({ decisao: "recusou" }))!,
-    sugestaoDoAcerto("d", doc({ customer_code: "SAFRA", sugestao: { minutos_total: 60 }, minutos_escolhidos: 60, valor_real: 60 }))!,
+    sugestaoDoAcerto("d", doc({ customer_code: "SAFRA", sugestao: { minutos_total: 60, completa: true }, minutos_escolhidos: 60, valor_real: 60 }))!,
   ];
 
   it("o aceite e o erro médio absoluto da sugestão e do planejado, só onde há o tempo real", () => {
     expect(numerosDoAcerto(sugestoes)).toEqual({ sugestoes: 4, aceitas: 2, mudadas: 1, recusadas: 1, aceite: 50, comReal: 3, erroDaSugestao: 39, erroDoPlanejado: 6 });
     expect(numerosDoAcerto([])).toEqual({ sugestoes: 0, aceitas: 0, mudadas: 0, recusadas: 0, aceite: null, comReal: 0, erroDaSugestao: null, erroDoPlanejado: null });
+  });
+
+  it("a sugestão parcial não entra nos erros: o sugerido soma só os itens com base, e o real é o da OS inteira", () => {
+    // 120 minutos só das mesas, numa OS de 240 com as cadeiras: seriam 100% de erro da sugestão e 20% do planejado.
+    const parcial = sugestaoDoAcerto("e", doc({ sugestao: { minutos_total: 120, completa: false }, minutos_escolhidos: 200, valor_real: 240 }))!;
+    expect(numerosDoAcerto([sugestoes[0]!, parcial])).toEqual({ sugestoes: 2, aceitas: 2, mudadas: 0, recusadas: 0, aceite: 100, comReal: 1, erroDaSugestao: 17, erroDoPlanejado: 17 });
+    expect(numerosDoAcerto([parcial])).toMatchObject({ sugestoes: 1, comReal: 0, erroDaSugestao: null, erroDoPlanejado: null });
   });
 
   it("uma linha por cliente, da que tem mais sugestões, e o total", () => {

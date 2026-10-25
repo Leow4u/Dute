@@ -10,7 +10,10 @@ import type { TabelaDoRelatorio, ValorDaCelula } from "../operacao/relatorios";
  * (as regras abrem a lista inteira só a eles), onde a memória roda.
  *
  * O erro é o desvio absoluto contra o real, em porcentagem do previsto: 30
- * minutos a mais ou a menos numa OS de 3 horas contam 17%.
+ * minutos a mais ou a menos numa OS de 3 horas contam 17%. Os dois erros
+ * contam só a sugestão completa (todos os itens com base), a mesma base para
+ * comparar a memória com o planejamento: a parcial soma só os itens com
+ * base, e o real é o da OS inteira.
  */
 
 /** Quem vê o painel: as regras de `ai_suggestions` abrem a lista inteira só a owner e admin. */
@@ -32,6 +35,8 @@ export type SugestaoDoAcerto = {
   decisao: Decisao;
   /** Os minutos sugeridos. */
   sugeridos: number;
+  /** Todos os itens tinham base: o sugerido cobre a OS inteira. */
+  completa: boolean;
   /** Os minutos que a pessoa planejou; null sem o número. */
   planejados: number | null;
   /** O tempo de trabalho da OS revisada; null até a revisão. */
@@ -63,6 +68,7 @@ export function sugestaoDoAcerto(id: string, dados: Registro): SugestaoDoAcerto 
     criadaEm: texto(dados.criada_em),
     decisao,
     sugeridos,
+    completa: sugestao.completa === true,
     planejados: positivo(dados.minutos_escolhidos),
     reais: typeof dados.valor_real === "number" && Number.isFinite(dados.valor_real) && dados.valor_real >= 0 ? dados.valor_real : null,
   };
@@ -84,13 +90,15 @@ export type NumerosDoAcerto = {
   mudadas: number;
   recusadas: number;
   aceite: number | null;
+  /** As completas com o tempo real: a base dos dois erros. */
   comReal: number;
   erroDaSugestao: number | null;
   erroDoPlanejado: number | null;
 };
 
 export function numerosDoAcerto(sugestoes: readonly SugestaoDoAcerto[]): NumerosDoAcerto {
-  const comReal = sugestoes.filter((sugestao): sugestao is SugestaoDoAcerto & { reais: number } => sugestao.reais !== null);
+  // A base dos dois erros: a sugestão completa com o tempo real (ver o topo).
+  const comReal = sugestoes.filter((sugestao): sugestao is SugestaoDoAcerto & { reais: number } => sugestao.completa && sugestao.reais !== null);
   const aceitas = sugestoes.filter((sugestao) => sugestao.decisao === "aceitou").length;
   return {
     sugestoes: sugestoes.length,

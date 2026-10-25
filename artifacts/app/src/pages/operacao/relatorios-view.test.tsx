@@ -133,8 +133,8 @@ describe("Relatórios da Operação", () => {
 
 describe("o acerto da memória (parte 5.6)", () => {
   const sugestoes = [
-    sugestaoDoAcerto("a", { tipo: "duracao_os", customer_code: "ITAU", criada_em: "2026-10-10T12:00:00.000Z", decisao: "aceitou", sugestao: { minutos_total: 180 }, minutos_escolhidos: 180, valor_real: 210 })!,
-    sugestaoDoAcerto("b", { tipo: "duracao_os", customer_code: "ITAU", criada_em: "2026-10-12T12:00:00.000Z", decisao: "mudou", sugestao: { minutos_total: 120 }, minutos_escolhidos: 240, valor_real: 240 })!,
+    sugestaoDoAcerto("a", { tipo: "duracao_os", customer_code: "ITAU", criada_em: "2026-10-10T12:00:00.000Z", decisao: "aceitou", sugestao: { minutos_total: 180, completa: true }, minutos_escolhidos: 180, valor_real: 210 })!,
+    sugestaoDoAcerto("b", { tipo: "duracao_os", customer_code: "ITAU", criada_em: "2026-10-12T12:00:00.000Z", decisao: "mudou", sugestao: { minutos_total: 120, completa: true }, minutos_escolhidos: 240, valor_real: 240 })!,
   ];
   const html = () =>
     render({

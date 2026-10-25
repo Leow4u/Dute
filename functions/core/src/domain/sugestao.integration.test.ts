@@ -134,10 +134,9 @@ describe("a resposta à sugestão", () => {
     assert.equal((await db.collection(AI_SUGGESTIONS_COLLECTION).get()).size, 0);
   });
 
-  it("revisada a OS, a rotina grava o valor real e o erro contra o sugerido", async () => {
-    const { sugestao_id } = await answerSuggestionFor(db, interno, resposta(), AGORA);
+  /** A OS revisada com 150 minutos de trabalho e a rotina das medidas depois dela; devolve a sugestão gravada. */
+  async function revisarERodar(sugestaoId: string) {
     await db.collection(AI_CURSORS_COLLECTION).doc(CURSOR_DAS_MEDIDAS).set({ created_at: Timestamp.fromDate(new Date("2026-10-23T12:00:00.000Z")), evento_id: "" });
-    // A OS levou 150 minutos de trabalho: 25% a mais que os 120 sugeridos.
     await db.doc("service_orders/10045-01").update({
       status: "revisada",
       etapas: [
@@ -149,7 +148,21 @@ describe("a resposta à sugestão", () => {
     await db.collection(EVENTS_COLLECTION).doc("evt_revisada").set({ id: "evt_revisada", type: "os.reviewed", source: "functions_operacao", customer_code: "ITAU", payload: { id: "10045-01" }, created_at: Timestamp.fromDate(new Date("2026-10-24T18:00:00.000Z")) });
     const rodada = await runMeasuresFor(db, { agora: () => new Date("2026-10-24T18:05:00.000Z") });
     assert.deepEqual([rodada.recalculou, rodada.reais], [true, 1]);
-    const doc = (await db.collection(AI_SUGGESTIONS_COLLECTION).doc(sugestao_id!).get()).data() ?? {};
-    assert.deepEqual([doc.valor_real, doc.erro_pct, doc.real_em], [150, 25, "2026-10-24T18:05:00.000Z"]);
+    return (await db.collection(AI_SUGGESTIONS_COLLECTION).doc(sugestaoId).get()).data() ?? {};
+  }
+
+  it("revisada a OS, a rotina grava o valor real e o erro contra o sugerido", async () => {
+    // Só as mesas, com base: a sugestão completa, de 120 minutos.
+    const { sugestao_id } = await answerSuggestionFor(db, interno, resposta({ itens: [PEDIDO.itens[0]] }), AGORA);
+    const doc = await revisarERodar(sugestao_id!);
+    // A OS levou 150 minutos de trabalho: 25% a mais que os 120 sugeridos.
+    assert.deepEqual([doc.sugestao?.completa, doc.valor_real, doc.erro_pct, doc.real_em], [true, 150, 25, "2026-10-24T18:05:00.000Z"]);
+  });
+
+  it("a sugestão parcial guarda o real, sem o erro: os 120 minutos não estimaram as cadeiras", async () => {
+    const { sugestao_id } = await answerSuggestionFor(db, interno, resposta(), AGORA);
+    const doc = await revisarERodar(sugestao_id!);
+    // Antes, 25% de erro: os 150 minutos da OS inteira contra o sugerido só para as mesas.
+    assert.deepEqual([doc.sugestao?.completa, doc.valor_real, doc.erro_pct], [false, 150, null]);
   });
 });
