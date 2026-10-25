@@ -83,7 +83,9 @@ Para o Leonardo, depois do deploy: abrir Configurações › Clientes, editar a 
 e salvar com a sigla `BTG`. Isso publica o `client_profiles` da BTG e prepara o
 PR 2 (SKU por cliente). Sem isso nada muda para a BTG: o padrão é o modelo dela.
 
-Deploy deste PR (ver `docs/deploy-functions-manual.md`):
+Deploy deste PR (ver `docs/deploy-functions-manual.md`). Os comandos de
+publicação desta página são o registro de 19/10/2026, antes do corte da Fase 1:
+hoje a publicação é pelo GitHub Actions, e o `dute-btg` está congelado.
 
 ```powershell
 cd C:\DEV\Dute

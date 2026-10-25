@@ -330,7 +330,7 @@ function BillingTableDialog({ current, onClose }: { current: string | null; onCl
             value={table}
             onChange={(event) => setTable(event.target.value)}
             className={cn(field, "font-mono text-xs")}
-            placeholder="dute-btg.billing_export.gcp_billing_export_v1_XXXXXX_XXXXXX_XXXXXX"
+            placeholder="dute-prod.billing_export.gcp_billing_export_v1_XXXXXX_XXXXXX_XXXXXX"
             spellCheck={false}
           />
           <span className="text-xs font-normal text-muted-foreground">Deixe em branco para esconder o custo real.</span>

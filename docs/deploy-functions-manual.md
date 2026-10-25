@@ -129,20 +129,25 @@ chega até o código. Ver invariante 5 do `CLAUDE.md`.
 
 ### 5. Permissões da conta das Functions no Storage
 
-As Functions rodam com a conta `912453685006-compute@developer.gserviceaccount.com`,
-que **não** é Editor do projeto. No bucket `dute-btg.firebasestorage.app` ela
-precisa de dois papéis:
+As Functions rodam com a conta de runtime do projeto
+(`<número do projeto>-compute@developer.gserviceaccount.com`; no `dute-prod`,
+`974421124970-compute@`), que **não** é Editor. No bucket padrão
+(`<projeto>.firebasestorage.app`) ela precisa de dois papéis:
 
 | Papel | Para quê |
 | --- | --- |
 | `roles/storage.objectCreator` | gravar o anexo do aviso de envio (`uploadShipmentAttachment`) |
 | `roles/storage.objectViewer` | ler a nota para o Agent Dute (`readShipmentInvoice`) |
 
-Em projeto novo, ou se alguém refizer a política do bucket:
+No `dute-prod` e no `dute-homolog` os dois foram dados no corte da Fase 1
+(`docs/plataforma/fase-1-corte.md`). Em projeto novo, ou se alguém refizer a
+política do bucket:
 
 ```powershell
-gcloud storage buckets add-iam-policy-binding gs://dute-btg.firebasestorage.app --member="serviceAccount:912453685006-compute@developer.gserviceaccount.com" --role="roles/storage.objectCreator" --project dute-btg
-gcloud storage buckets add-iam-policy-binding gs://dute-btg.firebasestorage.app --member="serviceAccount:912453685006-compute@developer.gserviceaccount.com" --role="roles/storage.objectViewer" --project dute-btg
+$p = "dute-prod"
+$sa = "$(gcloud projects describe $p --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
+gcloud storage buckets add-iam-policy-binding "gs://$p.firebasestorage.app" --member="serviceAccount:$sa" --role="roles/storage.objectCreator" --project $p
+gcloud storage buckets add-iam-policy-binding "gs://$p.firebasestorage.app" --member="serviceAccount:$sa" --role="roles/storage.objectViewer" --project $p
 ```
 
 Só no bucket, não no projeto, e sem apagar/sobrescrever. Sem esses papéis o
@@ -390,6 +395,11 @@ foreach ($segredo in @("OMIE_APP_KEY", "OMIE_APP_SECRET")) {
   produção, que só publica com o OK do Leonardo.
 
 ### Pré-requisito: criar a identidade do job (manual, uma vez)
+
+Feito no `dute-btg` antes do primeiro deploy automático (16/10/2026), como
+está abaixo; no `dute-prod` e no `dute-homolog`, no corte da Fase 1
+(`docs/plataforma/fase-1-corte.md`). Para um projeto novo, troque `dute-btg`
+e o número `912453685006` pelos dele.
 
 O classificador do Claude Code bloqueia IaC apply (criar service account/IAM)
 mesmo com o usuário pedindo — por isso isso nunca roda sozinho. Rode uma vez,
