@@ -224,6 +224,7 @@ import {
 } from "./lib/modules";
 import { queryClient } from "./lib/queryClient";
 import { RealtimeSyncBridge } from "./lib/realtime-sync";
+import { MENSAGEM_DA_RECUPERACAO, problemaDaRecuperacao } from "./lib/recuperar-senha";
 import { layoutDaRota, type LayoutDaRota } from "./lib/ambientes";
 import { LEGACY_SETTINGS_REDIRECTS } from "./lib/settings-nav";
 import { INTERNAL_CUSTOMER_CODE, LEGACY_CUSTOMER_CODE } from "./lib/active-customer";
@@ -486,12 +487,18 @@ function SignInPage() {
   }
 
   async function resetPassword() {
-    if (!firebaseAuth || !form.email.trim()) return;
-    await sendPasswordResetEmail(firebaseAuth, form.email.trim());
-    setForm((current) => ({
-      ...current,
-      error: "E-mail de recuperação enviado.",
-    }));
+    if (!firebaseAuth) return;
+    const problema = problemaDaRecuperacao(form.email);
+    if (problema) {
+      setForm((current) => ({ ...current, error: problema }));
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(firebaseAuth, form.email.trim());
+      setForm((current) => ({ ...current, error: MENSAGEM_DA_RECUPERACAO.enviada }));
+    } catch {
+      setForm((current) => ({ ...current, error: MENSAGEM_DA_RECUPERACAO.falhou }));
+    }
   }
 
   return (
