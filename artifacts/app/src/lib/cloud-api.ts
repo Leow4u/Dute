@@ -2044,6 +2044,13 @@ function laneTask(input: {
   };
 }
 
+const OPEN_QUALITY_EXCEPTION_STATUSES = new Set(["open", "in_review"]);
+
+/** Exceção em aberto, como o servidor lê na resolução: sem status é "open". */
+export function isOpenQualityException(exception: { status?: unknown }): boolean {
+  return OPEN_QUALITY_EXCEPTION_STATUSES.has(String(exception.status ?? "open"));
+}
+
 async function getWarehouseOps() {
   const [
     skus,
@@ -2128,10 +2135,13 @@ async function getWarehouseOps() {
   const isHistoricalLocationPutaway = (task: AnyRecord) =>
     String(task.source ?? "").toLowerCase() === "derived_from_locations";
 
+  // Só a exceção em aberto conta: resolver ou cancelar em Qualidade tira a
+  // tarefa e o pedido de "com exceção", como o servidor baixa a contagem.
+  const openExceptions = qualityExceptions.filter(isOpenQualityException);
   const exceptionCountFor = (...ids: Array<string | undefined>) => {
     const idSet = new Set(ids.filter(Boolean).map(String));
     if (!idSet.size) return 0;
-    return qualityExceptions.filter((exception) =>
+    return openExceptions.filter((exception) =>
       [
         exception.id,
         exception.entity_id,

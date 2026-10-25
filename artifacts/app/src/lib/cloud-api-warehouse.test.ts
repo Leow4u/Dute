@@ -111,3 +111,31 @@ describe("leitura de um registro operacional", () => {
     expect(missing.status).toBe(404);
   });
 });
+
+describe("exceção resolvida não deixa a tarefa com exceção", () => {
+  it("as filas contam só a exceção em aberto, como o servidor", async () => {
+    const porColecao: Record<string, ReturnType<typeof document>[]> = {
+      pick_tasks: [
+        document("pick_1", { id: "pick_1", order_id: "ord_1", order_number: "PED-1", status: "planned", customer_code: "Itaú" }),
+      ],
+      quality_exceptions: [
+        document("exc_1", { id: "exc_1", pick_task_id: "pick_1", status: "resolved" }),
+        document("exc_2", { id: "exc_2", order_id: "ord_1", status: "cancelled" }),
+      ],
+    };
+    readDocs.mockImplementation(async (alvo: { target?: { path?: string }; path?: string }) => ({
+      docs: porColecao[alvo.target?.path ?? alvo.path ?? ""] ?? [],
+    }));
+
+    const separacao = async () => (await (await window.fetch("/api/warehouse/ops")).json()).queues.picking.tasks[0];
+    const semAberta = await separacao();
+    expect(semAberta.exception_count).toBe(0);
+    expect(semAberta.blocked_reason).toBeUndefined();
+
+    porColecao.quality_exceptions!.push(
+      document("exc_3", { id: "exc_3", order_id: "ord_1", status: "in_review" }),
+      document("exc_4", { id: "exc_4", pick_task_id: "pick_1" }),
+    );
+    expect(await separacao()).toMatchObject({ exception_count: 2, blocked_reason: "Há exceção aberta para este picking." });
+  });
+});
