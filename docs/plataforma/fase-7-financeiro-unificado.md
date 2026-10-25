@@ -1318,6 +1318,25 @@ Achada em 25/10/2026, numa revisão das regras de acesso.
   o total da prévia": o evento da emissão tem o payload vazio. Antes, levava
   o total.
 
+### Correção: o complemento entrava na demanda reservada pela emissão da Omie
+
+Achada em 25/10/2026, numa revisão do código do Comercial.
+
+- **O defeito.** Enquanto a emissão da NFS-e reserva a demanda
+  (`emissao_nf`), o Comercial não a muda: o `advanceDemand` e o cancelamento
+  da autorização recusam. O registro de autorização não recusava.
+  - Um complemento registrado durante a emissão entrava em
+    `autorizacao_ids`.
+  - Se ele citava outra RV, a fatura da NFS-e autorizada não nascia
+    ("a autorização cita a RV ..."), e nada desfazia: a emissão autorizada
+    não se desiste, e a autorização da demanda reservada não se cancela.
+- **A correção.** O `recordAuthorization` recusa a demanda reservada:
+  "A demanda N está na emissão da NFS-e pela Omie: a autorização dela
+  espera a emissão terminar."
+- **Teste.** `autorizacoes.integration.test.ts`, "a demanda reservada por
+  uma emissão da NFS-e pela Omie não recebe complemento": recusa, e a
+  demanda fica só com a autorização de antes. Antes, o complemento entrava.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.
