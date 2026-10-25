@@ -46,7 +46,11 @@ service firebase.storage {
     // superficie sem habilitar nenhum fluxo real.
     match /product-photos/{allPaths=**} {
       allow read: if isInternal();
-      allow create: if canWritePhotos()
+      // No Storage, regravar um arquivo que já existe é create, não update:
+      // resource == null é o que impede a troca de uma foto que já está no
+      // cadastro (o caminho leva o horário do envio, e nenhum fluxo regrava).
+      allow create: if resource == null
+        && canWritePhotos()
         && request.resource.size < 15 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       // write inclui delete: nenhum fluxo do produto apaga ou sobrescreve foto.
