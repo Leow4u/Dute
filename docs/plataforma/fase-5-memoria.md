@@ -903,7 +903,8 @@ Feita em 23/10/2026. As ferramentas estão em
     - o homem-minuto por unidade, com a mesma base da duração sugerida: 5
       execuções do cliente, ou 15 na média geral; abaixo disso, "ainda sem
       base";
-    - o aviso de plano otimista;
+    - o aviso de plano otimista, com o mesmo mínimo do aviso da duração
+      sugerida: 5 OS revisadas do cliente; abaixo disso, "ainda sem base";
     - a medida geral não mostra as OS de origem, que são de outros
       clientes.
 - **Comercial**, para quem orça (`ORCAMENTO_ROLES`), com o preço:
