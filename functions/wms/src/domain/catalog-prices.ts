@@ -6,6 +6,8 @@ import {
   type Transaction,
 } from "firebase-admin/firestore";
 
+import { LEGACY_CUSTOMER_CODE } from "./customer-scope.js";
+
 /**
  * Valor de mercadoria fora das coleções que a operação lê
  * (products, skus, stock_balances, client_inventory).
@@ -188,7 +190,7 @@ export async function splitCatalogPriceBatch(
         if (!hasPublishedMoney(data)) continue;
         const unit = unitPriceOf(data);
         const customerCode =
-          String(data.customer_code ?? "BTG Pactual").trim() || "BTG Pactual";
+          String(data.customer_code ?? LEGACY_CUSTOMER_CODE).trim() || LEGACY_CUSTOMER_CODE;
         const skuCode = String(
           data.sku_code ?? data.cod_btg ?? data.cod_cliente ?? document.id,
         ).trim();

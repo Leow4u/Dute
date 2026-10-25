@@ -1,5 +1,7 @@
 import { FieldValue, type DocumentReference, type Firestore, type Transaction } from "firebase-admin/firestore";
 
+import { LEGACY_CUSTOMER_CODE } from "./customer-scope.js";
+
 /**
  * Número que as pessoas leem: PED-0043 para pedido do estoque, ENV-0012 para
  * aviso de envio. Sequencial por cliente e por tipo, gerado no backend na
@@ -103,7 +105,7 @@ export async function assignMissingRequestNumbers(db: Firestore, options: { dryR
       const counters = new Map<string, { ref: DocumentReference; last: number; customer: string; prefix: RequestNumberPrefix }>();
       const fresh = await Promise.all(chunk.map((row) => transaction.get(row.ref)));
       for (const row of chunk) {
-        const customer = text(row.data.customer_code) || "BTG Pactual";
+        const customer = text(row.data.customer_code) || LEGACY_CUSTOMER_CODE;
         const prefix = requestNumberPrefix(row.data.type);
         const key = `${customer}|${prefix}`;
         if (!counters.has(key)) {
@@ -116,7 +118,7 @@ export async function assignMissingRequestNumbers(db: Firestore, options: { dryR
       chunk.forEach((row, index) => {
         const current = fresh[index]?.data() ?? {};
         if (text(current.request_number)) return;
-        const customer = text(current.customer_code) || "BTG Pactual";
+        const customer = text(current.customer_code) || LEGACY_CUSTOMER_CODE;
         const prefix = requestNumberPrefix(current.type);
         const counter = counters.get(`${customer}|${prefix}`)!;
         counter.last += 1;

@@ -78,6 +78,7 @@ import {
 } from "./domain/platform-roles.js";
 import {
   defaultNotificationRecipients,
+  LEGACY_CUSTOMER_CODE,
   openingInventoryBlocksOutbound,
   openingUsesGlobalControl,
 } from "./domain/customer-scope.js";
@@ -235,7 +236,7 @@ const ai = genkit({
   ],
 });
 
-const DEFAULT_CUSTOMER = "BTG Pactual";
+const DEFAULT_CUSTOMER = LEGACY_CUSTOMER_CODE;
 // O Agent Dute roda no Gemini via Genkit, com ferramentas de leitura
 // (domain/agent-dute.ts). O Agent Engine em us-west1 não é mais usado.
 // O Gemini 2.5 Flash foi aposentado pelo Google em 20/10/2026 e a chamada
@@ -2899,7 +2900,7 @@ const reviewOperationalDocumentFlow = ai.defineFlow(
       size_bytes: document.size_bytes,
     };
     const prompt = `
-Voce e o Agent Dute revisando documentos operacionais do contrato BTG Pactual.
+Voce e o Agent Dute revisando documentos operacionais de um cliente da Dutelog (o customer_code dos metadados).
 Use somente os metadados fornecidos. Nao invente conteudo do arquivo.
 Classifique o documento para auditoria operacional, indique se ha falta de vinculo/evidencia e gere uma resposta JSON estrita com:
 summary, tags, confidence, extracted_fields, risk_flags, recommended_action.
@@ -4225,7 +4226,7 @@ function managedWritePayload(
       if (!String(data.produto ?? "").trim()) {
         throw new HttpsError(
           "invalid-argument",
-          "Código BTG, código do cliente e produto são obrigatórios.",
+          "SKU, código do cliente e produto são obrigatórios.",
         );
       }
       if (

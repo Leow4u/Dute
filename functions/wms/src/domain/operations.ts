@@ -5074,7 +5074,7 @@ export async function decideCustomerRequestTransaction(
       );
     }
 
-    const customerCode = text(request.customer_code) || "BTG Pactual";
+    const customerCode = text(request.customer_code) || LEGACY_CUSTOMER_CODE;
     const items = normalizeStoredItems(request);
     const total = items.reduce((sum, item) => sum + item.quantity, 0);
     const kind = requestType(request.type);
@@ -6135,7 +6135,7 @@ export async function advanceWarehouseTaskTransaction(
       );
     }
     let targetStatus = nextStatus(type, currentStatus);
-    const customerCode = text(task.customer_code) || "BTG Pactual";
+    const customerCode = text(task.customer_code) || LEGACY_CUSTOMER_CODE;
     const orderId = text(task.order_id);
     const requestId = text(task.customer_request_id);
     const operation = input.operation ?? {};
@@ -7861,7 +7861,7 @@ export async function addCatalogPhotosTransaction(
 ) {
   const skuCode = text(input.sku_code);
   const clientItemCode = text(input.client_item_code) || undefined;
-  const customerCode = text(input.customer_code) || "BTG Pactual";
+  const customerCode = text(input.customer_code) || LEGACY_CUSTOMER_CODE;
   const newPhotos = stringList(input.photo_urls);
   const newPaths = stringList(input.photo_storage_paths);
   const removedPhotos = stringList(input.remove_photo_urls);

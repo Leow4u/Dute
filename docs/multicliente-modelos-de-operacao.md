@@ -120,7 +120,10 @@ O frontend sobe pelo GitHub Actions no merge em `main`.
 - **Registro sem `customer_code` é da BTG** em todo lugar (`recordCustomerCode`,
   `customerRows` no app; `recordOwner` nas Functions). O nome literal "BTG
   Pactual" só existe no pacote `btg`; `customer-literals.test.ts` trava a volta
-  do literal no app.
+  do literal no app. Nas Functions do WMS, o literal só existe nas constantes
+  do cliente legado (`LEGACY_CUSTOMER_CODE` e a do faturamento), e nenhum
+  texto que vai para a tela, para o e-mail ou para a IA cita a BTG
+  (`functions/wms/src/customer-literals.test.ts`).
 
 Isolamento entre clientes nas Functions (`functions/wms/src/domain/customer-scope.ts`,
 testes em `customer-scope.test.ts` e `customer-isolation.integration.test.ts`):
