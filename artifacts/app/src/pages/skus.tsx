@@ -420,14 +420,16 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Identificadores</h3>
             <div className="grid grid-cols-2 gap-4">
+              {/* Os dois códigos são a identidade do cadastro: o servidor recusa a
+                  troca (catalogCodeForMutation), então a edição só os mostra. */}
               <div className="space-y-2">
                 <Label htmlFor="cod_btg">Cod. BTG *</Label>
-                <Input id="cod_btg" {...register("cod_btg")} />
+                <Input id="cod_btg" readOnly={isEdit} className="read-only:bg-muted read-only:text-muted-foreground" {...register("cod_btg")} />
                 {errors.cod_btg && <span className="text-xs text-destructive">{errors.cod_btg.message}</span>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="cod_cliente">Cod. Cliente *</Label>
-                <Input id="cod_cliente" {...register("cod_cliente")} />
+                <Input id="cod_cliente" readOnly={isEdit} className="read-only:bg-muted read-only:text-muted-foreground" {...register("cod_cliente")} />
                 {errors.cod_cliente && <span className="text-xs text-destructive">{errors.cod_cliente.message}</span>}
               </div>
               <div className="space-y-2 col-span-2">
