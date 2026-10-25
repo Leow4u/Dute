@@ -1,23 +1,16 @@
 import {
   Timestamp,
   collection,
-  deleteDoc,
   doc,
   documentId,
   getCountFromServer,
   getDoc,
   getDocs,
-  increment,
   limit as fsLimit,
   orderBy,
   query,
-  runTransaction,
-  serverTimestamp,
-  setDoc,
   startAfter,
-  updateDoc,
   where,
-  writeBatch,
   type DocumentSnapshot,
   type QueryConstraint,
 } from "firebase/firestore";
@@ -41,10 +34,8 @@ import {
 } from "./list-pagination";
 import {
   DEFAULT_CUSTOMER,
-  buildDerivedCustomerAccounts,
   buildDerivedInboundReceipts,
   buildDerivedLocations,
-  buildDerivedOrderItems,
   buildDerivedPackTasks,
   buildDerivedPickTasks,
   buildDerivedStockBalances,
@@ -203,33 +194,6 @@ const PORTAL_READ_CAP = 500;
 /** Teto do histórico de chat carregado de uma vez. */
 const CHAT_HISTORY_CAP = 100;
 
-type EventSeverity = "info" | "attention" | "critical";
-type EventInput = {
-  type: string;
-  title: string;
-  description?: string;
-  severity?: EventSeverity;
-  entity_type?: string;
-  entity_id?: string | number;
-  customer_code?: string;
-  customer_name?: string;
-  payload?: AnyRecord;
-  occurred_at?: string;
-  dedupe_key?: string;
-  source?: string;
-};
-
-type EntityMeta = {
-  entity_type: string;
-  entity_id: string | number;
-  title: string;
-  description?: string;
-  customer_code?: string;
-  customer_name?: string;
-  payload?: AnyRecord;
-  severity?: EventSeverity;
-};
-
 const OPEN_ORDER_STATUSES = new Set([
   "PENDENTE",
   "SEPARACAO",
@@ -247,12 +211,6 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: { "content-type": "application/json" },
   });
-}
-
-async function readBody(init?: RequestInit): Promise<AnyRecord> {
-  if (!init?.body) return {};
-  if (typeof init.body === "string") return JSON.parse(init.body);
-  return JSON.parse(await new Response(init.body).text());
 }
 
 function toIso(value: unknown): string {
@@ -289,222 +247,14 @@ function normalizeDoc(snapshot: any): AnyRecord {
   };
 }
 
-function newDocId(prefix: string) {
-  const suffix = Math.random().toString(36).slice(2, 8);
-  return `${prefix}_${Date.now()}_${suffix}`;
-}
-
 function safeDocId(value: string) {
   return value.replace(/[^\w.-]/g, "_").slice(0, 900);
-}
-
-function currentActor() {
-  const user = firebaseAuth?.currentUser;
-  return {
-    uid: user?.uid ?? null,
-    name: user?.displayName || user?.email || "Sistema",
-    email: user?.email ?? null,
-  };
 }
 
 function compactPayload(payload: AnyRecord = {}) {
   return Object.fromEntries(
     Object.entries(payload).filter(([, value]) => value !== undefined),
   );
-}
-
-function positiveNumber(value: unknown, fallback = 0) {
-  const number = Number(value);
-  return Number.isFinite(number) && number > 0 ? number : fallback;
-}
-
-function optionalString(value: unknown) {
-  const text = String(value ?? "").trim();
-  return text || undefined;
-}
-
-function normalizeRequestItems(data: AnyRecord, fallbackDescription = "") {
-  const rawItems = Array.isArray(data.items) ? data.items : [];
-  const fallbackQuantity = positiveNumber(
-    data.quantity ??
-      data.qty ??
-      data.qtd_solic ??
-      data.expected_qty ??
-      data.total_units,
-  );
-  const fallbackItems =
-    rawItems.length || (!fallbackQuantity && !data.sku_code && !data.cod_sku)
-      ? []
-      : [data];
-
-  return [...rawItems, ...fallbackItems]
-    .map((item: AnyRecord, index) => {
-      const quantity = positiveNumber(
-        item.quantity ??
-          item.qty ??
-          item.requested_qty ??
-          item.expected_qty ??
-          item.qty_expected ??
-          fallbackQuantity,
-      );
-      const skuCode = optionalString(
-        item.sku_code ?? item.cod_sku ?? item.cod_btg,
-      );
-      const clientItemCode = optionalString(
-        item.client_item_code ?? item.cod_cliente ?? item.product_code,
-      );
-      const productName = optionalString(
-        item.product_name ?? item.produto ?? item.name ?? fallbackDescription,
-      );
-      return {
-        line_number: Number(item.line_number ?? index + 1),
-        sku_code: skuCode,
-        client_item_code: clientItemCode,
-        product_name: productName,
-        location_id: optionalString(
-          item.location_id ?? item.location ?? item.endereco,
-        ),
-        condition: optionalString(item.condition ?? item.estado),
-        unit_cost: Number(
-          item.unit_cost ?? item.preco_unit ?? item.custo_unit ?? 0,
-        ),
-        quantity,
-        notes: optionalString(item.notes ?? item.observacao),
-      };
-    })
-    .filter((item) => item.quantity > 0 || item.sku_code || item.product_name);
-}
-
-function itemQuantityTotal(items: AnyRecord[]) {
-  return items.reduce((sum, item) => sum + Number(item.quantity ?? 0), 0);
-}
-
-function requestItemSummary(items: AnyRecord[], fallback: string) {
-  if (!items.length) return fallback;
-  const summary = items
-    .slice(0, 3)
-    .map((item) =>
-      `${Number(item.quantity ?? 0) || "-"}x ${item.product_name || item.sku_code || "item"}`.trim(),
-    )
-    .join(", ");
-  return items.length > 3
-    ? `${summary} +${items.length - 3} item(ns)`
-    : summary;
-}
-
-function findBalanceForRequestItem(
-  balances: AnyRecord[],
-  item: AnyRecord,
-  customerCode: string,
-) {
-  return balances.find((balance) => {
-    const sameCustomer =
-      String(balance.customer_code ?? DEFAULT_CUSTOMER.code) === customerCode;
-    const sameSku =
-      item.sku_code &&
-      String(balance.sku_code ?? balance.cod_sku ?? "") === item.sku_code;
-    const sameClientItem =
-      item.client_item_code &&
-      String(balance.client_item_code ?? balance.cod_cliente ?? "") ===
-        item.client_item_code;
-    const sameLocation =
-      !item.location_id ||
-      String(balance.location_id ?? "") === item.location_id;
-    return sameCustomer && sameLocation && (sameSku || sameClientItem);
-  });
-}
-
-function stockBalanceKey(row: AnyRecord) {
-  return [
-    String(row.customer_code ?? row.cod_cliente ?? DEFAULT_CUSTOMER.code),
-    String(
-      row.sku_code ??
-        row.cod_sku ??
-        row.cod_btg ??
-        row.client_item_code ??
-        "sku",
-    ),
-    String(row.location_id ?? row.location ?? "RECEBIMENTO"),
-  ]
-    .map(safeDocId)
-    .join("__");
-}
-
-function stockBalanceDocId(customerCode: string, item: AnyRecord) {
-  return `bal_${stockBalanceKey({
-    customer_code: customerCode,
-    sku_code: item.sku_code,
-    client_item_code: item.client_item_code,
-    location_id: item.location_id,
-  })}`;
-}
-
-function buildMovementPayload({
-  type,
-  sign,
-  quantity,
-  item,
-  customerCode,
-  productName,
-  beforeQty,
-  afterQty,
-  source,
-  entity,
-}: {
-  type: string;
-  sign: 1 | -1;
-  quantity: number;
-  item: AnyRecord;
-  customerCode: string;
-  productName?: string;
-  beforeQty: number;
-  afterQty: number;
-  source: string;
-  entity: AnyRecord;
-}) {
-  const id = newDocId("mov");
-  const now = new Date().toISOString();
-  return compactPayload({
-    id,
-    data: now,
-    tipo_mov: type,
-    sinal: sign,
-    cod_sku: item.sku_code ?? item.cod_sku ?? item.cod_btg,
-    cod_cliente: customerCode,
-    produto: productName ?? item.product_name ?? item.produto ?? item.sku_code,
-    qtde: quantity,
-    location_id: item.location_id ?? item.location,
-    estoque_anterior: beforeQty,
-    estoque_resultante: afterQty,
-    saldo_delta: sign * quantity,
-    source,
-    ...entity,
-    created_at: serverTimestamp(),
-    updated_at: serverTimestamp(),
-  });
-}
-
-function warehouseTaskCollection(type: string) {
-  const collectionByType: Record<string, string> = {
-    receiving: collectionNames.inboundReceipts,
-    putaway: collectionNames.putawayTasks,
-    picking: collectionNames.pickTasks,
-    packing: collectionNames.packTasks,
-    shipping: collectionNames.shipments,
-  };
-  return collectionByType[type];
-}
-
-function isTerminalWarehouseTask(type: string, status: unknown) {
-  const normalized = String(status ?? "").toLowerCase();
-  const terminalByType: Record<string, string[]> = {
-    receiving: ["received"],
-    putaway: ["completed"],
-    picking: ["completed"],
-    packing: ["completed"],
-    shipping: ["delivered"],
-  };
-  return (terminalByType[type] ?? ["completed"]).includes(normalized);
 }
 
 function groupByField(rows: AnyRecord[], field: string) {
@@ -515,270 +265,6 @@ function groupByField(rows: AnyRecord[], field: string) {
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
   return groups;
-}
-
-function collectionLabel(name: string) {
-  if (name === collectionNames.customers) return "cliente";
-  if (name === collectionNames.customerAccounts) return "conta_cliente";
-  if (name === collectionNames.customerRequests) return "solicitacao_cliente";
-  if (name === collectionNames.products) return "produto";
-  if (name === collectionNames.skus) return "sku";
-  if (name === collectionNames.locations) return "localizacao";
-  if (name === collectionNames.stockBalances) return "saldo_estoque";
-  if (name === collectionNames.movements) return "movimentacao";
-  if (name === collectionNames.inboundReceipts) return "recebimento";
-  if (name === collectionNames.inboundItems) return "item_recebimento";
-  if (name === collectionNames.putawayTasks) return "tarefa_putaway";
-  if (name === collectionNames.qualityExceptions) return "excecao_qualidade";
-  if (name === collectionNames.orders) return "pedido";
-  if (name === collectionNames.orderItems) return "item_pedido";
-  if (name === collectionNames.stockReservations) return "reserva_estoque";
-  if (name === collectionNames.pickTasks) return "tarefa_picking";
-  if (name === collectionNames.pickLines) return "linha_picking";
-  if (name === collectionNames.packTasks) return "tarefa_packing";
-  if (name === collectionNames.packages) return "volume";
-  if (name === collectionNames.packageItems) return "item_volume";
-  if (name === collectionNames.shipments) return "expedicao";
-  if (name === collectionNames.shipmentItems) return "item_expedicao";
-  if (name === collectionNames.deliveryProofs) return "comprovante_entrega";
-  if (name === collectionNames.documents) return "documento";
-  if (name === collectionNames.documentLinks) return "vinculo_documento";
-  if (name === collectionNames.priceList) return "preco";
-  if (name === collectionNames.periods) return "fatura";
-  if (name === collectionNames.users) return "usuario";
-  return name;
-}
-
-function entityMetaForWrite(
-  name: string,
-  action: "created" | "updated" | "deleted",
-  data: AnyRecord,
-  id: string | number,
-  before?: AnyRecord,
-): EntityMeta {
-  const entityType = collectionLabel(name);
-  const common = {
-    entity_type: entityType,
-    entity_id: id,
-    customer_code: String(
-      data.customer_code ??
-        before?.customer_code ??
-        data.cod_cliente ??
-        before?.cod_cliente ??
-        "",
-    ).trim(),
-    payload: compactPayload({
-      before_status: before?.status,
-      after_status: data.status,
-      changed_fields:
-        action === "updated"
-          ? Object.keys(data).filter((key) => key !== "updated_at")
-          : undefined,
-    }),
-  };
-
-  if (name === collectionNames.products) {
-    return {
-      ...common,
-      title:
-        action === "created"
-          ? "Produto criado"
-          : action === "deleted"
-            ? "Produto removido"
-            : "Produto atualizado",
-      description: String(
-        data.produto ?? before?.produto ?? data.cod_cliente ?? id,
-      ),
-    };
-  }
-
-  if (name === collectionNames.skus) {
-    return {
-      ...common,
-      title:
-        action === "created"
-          ? "SKU criado"
-          : action === "deleted"
-            ? "SKU removido"
-            : "SKU atualizado",
-      description:
-        `${data.cod_btg ?? before?.cod_btg ?? id} - ${data.produto ?? before?.produto ?? ""}`.trim(),
-    };
-  }
-
-  if (name === collectionNames.orders) {
-    const statusChanged =
-      before?.status && data.status && before.status !== data.status;
-    const status = String(data.status ?? before?.status ?? "").toUpperCase();
-    return {
-      ...common,
-      title: statusChanged
-        ? "Status de pedido atualizado"
-        : "Pedido atualizado",
-      description: `${data.num_pedido ?? before?.num_pedido ?? id}${status ? ` - ${status}` : ""}`,
-      severity: OPEN_ORDER_STATUSES.has(status) ? "attention" : "info",
-      payload: compactPayload({
-        ...common.payload,
-        qtd_solic: data.qtd_solic ?? before?.qtd_solic,
-        qtd_sep: data.qtd_sep ?? before?.qtd_sep,
-        produto: data.produto ?? before?.produto,
-      }),
-    };
-  }
-
-  if (name === collectionNames.priceList) {
-    return {
-      ...common,
-      title:
-        action === "created"
-          ? "Item de preço criado"
-          : action === "deleted"
-            ? "Item de preço removido"
-            : "Item de preço atualizado",
-      description: String(data.item ?? before?.item ?? id),
-    };
-  }
-
-  if (name === collectionNames.users) {
-    return {
-      ...common,
-      title:
-        action === "updated"
-          ? "Perfil de acesso atualizado"
-          : "Usuário atualizado",
-      description: String(data.email ?? before?.email ?? id),
-      severity: "attention",
-      payload: compactPayload({
-        role: data.role ?? before?.role,
-        nome: data.nome ?? before?.nome,
-      }),
-    };
-  }
-
-  return {
-    ...common,
-    title: `${entityType} ${action}`,
-    description: String(id),
-  };
-}
-
-function agentInsightForEvent(event: AnyRecord) {
-  const type = String(event.type ?? "");
-  const severity = String(event.severity ?? "info") as EventSeverity;
-  if (severity === "info" && !type.startsWith("order.")) return null;
-
-  const priority =
-    severity === "critical"
-      ? "critical"
-      : severity === "attention"
-        ? "high"
-        : "normal";
-
-  return {
-    id: `insight_${event.id}`,
-    event_id: event.id,
-    title:
-      severity === "critical"
-        ? "Intervenção necessária"
-        : type.startsWith("order.")
-          ? "Pedido precisa de acompanhamento"
-          : "Atenção operacional",
-    message: event.description || event.title,
-    priority,
-    status: "open",
-    entity_type: event.entity_type ?? null,
-    entity_id: event.entity_id ?? null,
-    customer_code: event.customer_code ?? null,
-    created_at: serverTimestamp(),
-    updated_at: serverTimestamp(),
-  };
-}
-
-async function updateAgentMemory(event: AnyRecord) {
-  if (!firestore) return;
-  const db = firestore;
-
-  const memories = [
-    event.entity_type && event.entity_id
-      ? {
-          id: `${event.entity_type}_${event.entity_id}`,
-          scope_type: event.entity_type,
-          scope_id: String(event.entity_id),
-          title: event.description || event.title,
-        }
-      : null,
-    event.customer_code
-      ? {
-          id: `cliente_${event.customer_code}`,
-          scope_type: "cliente",
-          scope_id: String(event.customer_code),
-          title: event.customer_name || event.customer_code,
-        }
-      : null,
-  ].filter(Boolean) as Array<{
-    id: string;
-    scope_type: string;
-    scope_id: string;
-    title: string;
-  }>;
-
-  await Promise.all(
-    memories.map((memory) =>
-      setDoc(
-        doc(db, collectionNames.agentMemory, safeDocId(memory.id)),
-        {
-          ...memory,
-          last_event_id: event.id,
-          last_event_type: event.type,
-          last_event_title: event.title,
-          last_event_at: event.occurred_at,
-          last_payload: compactPayload(event.payload ?? {}),
-          event_count: increment(1),
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      ),
-    ),
-  );
-}
-
-async function emitEvent(input: EventInput) {
-  if (!firestore) return null;
-
-  const id = input.dedupe_key ? safeDocId(input.dedupe_key) : newDocId("evt");
-  const event = {
-    id,
-    type: input.type,
-    title: input.title,
-    description: input.description ?? "",
-    severity: input.severity ?? "info",
-    entity_type: input.entity_type ?? null,
-    entity_id: input.entity_id != null ? String(input.entity_id) : null,
-    customer_code: input.customer_code || null,
-    customer_name: input.customer_name || null,
-    payload: compactPayload(input.payload ?? {}),
-    source: input.source ?? "app",
-    actor: currentActor(),
-    occurred_at: input.occurred_at || new Date().toISOString(),
-    created_at: serverTimestamp(),
-  };
-
-  await setDoc(doc(firestore, collectionNames.events, id), event, {
-    merge: Boolean(input.dedupe_key),
-  });
-
-  const insight = agentInsightForEvent(event);
-  if (insight) {
-    await setDoc(
-      doc(firestore, collectionNames.agentInbox, insight.id),
-      insight,
-      {
-        merge: true,
-      },
-    ).catch(() => undefined);
-  }
-  await updateAgentMemory(event).catch(() => undefined);
-  return event;
 }
 
 
@@ -1162,21 +648,6 @@ async function readOptionalWhereEqual(
   }
 }
 
-async function findDocRef(name: string, id: string | number) {
-  if (!firestore) throw new Error("Firestore não configurado.");
-
-  const direct = doc(firestore, name, String(id));
-  const directSnapshot = await getDoc(direct);
-  if (directSnapshot.exists()) return direct;
-
-  const byId = await getDocs(
-    query(collection(firestore, name), where("id", "==", Number(id))),
-  );
-  if (!byId.empty) return byId.docs[0].ref;
-
-  throw new Error(`Registro não encontrado: ${name}/${id}`);
-}
-
 function includes(value: unknown, needle: string): boolean {
   return String(value ?? "")
     .toLowerCase()
@@ -1216,97 +687,11 @@ function filterAndPage(
   return { items: result.slice(offset, offset + limit), total };
 }
 
-async function createItem(
-  name: string,
-  data: AnyRecord,
-  options: { silent?: boolean } = {},
-) {
-  if (!firestore) throw new Error("Firestore não configurado.");
-  const id = data.id ?? Date.now();
-  const payload: AnyRecord = {
-    ...data,
-    id,
-    created_at: serverTimestamp(),
-    updated_at: serverTimestamp(),
-  };
-  await setDoc(doc(firestore, name, String(id)), payload);
-  if (!options.silent) {
-    const meta = entityMetaForWrite(name, "created", payload, id);
-    await emitEvent({
-      type: `${meta.entity_type}.created`,
-      title: meta.title,
-      description: meta.description,
-      severity: meta.severity,
-      entity_type: meta.entity_type,
-      entity_id: meta.entity_id,
-      customer_code: meta.customer_code,
-      customer_name: meta.customer_name,
-      payload: meta.payload,
-    });
-  }
-  return { ...payload, created_at: undefined, updated_at: undefined };
-}
-
 async function readItem(name: string, id: string) {
   if (!firestore) throw new Error("Firestore não configurado.");
   const snapshot = await getDoc(doc(firestore, name, id));
   if (!snapshot.exists()) throw new RouteError("Registro não encontrado.", 404);
   return normalizeDoc(snapshot);
-}
-
-async function updateItem(name: string, id: string | number, data: AnyRecord) {
-  const ref = await findDocRef(name, id);
-  const beforeSnapshot = await getDoc(ref);
-  const before = beforeSnapshot.exists()
-    ? (beforeSnapshot.data() as AnyRecord)
-    : {};
-  await updateDoc(ref, { ...data, updated_at: serverTimestamp() });
-  const snapshot = await getDoc(ref);
-  const updated = normalizeDoc(snapshot);
-  const meta = entityMetaForWrite(name, "updated", updated, id, before);
-  await emitEvent({
-    type:
-      name === collectionNames.orders && before.status !== updated.status
-        ? "order.status_changed"
-        : `${meta.entity_type}.updated`,
-    title: meta.title,
-    description: meta.description,
-    severity: meta.severity,
-    entity_type: meta.entity_type,
-    entity_id: meta.entity_id,
-    customer_code: meta.customer_code,
-    customer_name: meta.customer_name,
-    payload: meta.payload,
-  });
-  return updated;
-}
-
-async function deleteItem(name: string, id: string | number) {
-  const ref = await findDocRef(name, id);
-  const beforeSnapshot = await getDoc(ref);
-  const before = beforeSnapshot.exists()
-    ? normalizeDoc(beforeSnapshot)
-    : { id };
-  await deleteDoc(ref);
-  const meta = entityMetaForWrite(name, "deleted", before, id, before);
-  await emitEvent({
-    type: `${meta.entity_type}.deleted`,
-    title: meta.title,
-    description: meta.description,
-    severity: "attention",
-    entity_type: meta.entity_type,
-    entity_id: meta.entity_id,
-    customer_code: meta.customer_code,
-    customer_name: meta.customer_name,
-    payload: meta.payload,
-  });
-}
-
-function movementSign(tipo: unknown, fallback: unknown): 1 | -1 {
-  const normalized = String(tipo ?? "").toUpperCase();
-  if (["ENTRADA", "DEVOLUCAO", "AJUSTE_ENTRADA"].includes(normalized)) return 1;
-  if (["SAIDA", "EXPEDICAO", "AJUSTE_SAIDA"].includes(normalized)) return -1;
-  return Number(fallback ?? 0) >= 0 ? 1 : -1;
 }
 
 
@@ -2607,104 +1992,6 @@ async function getOperationalFoundation() {
   );
 }
 
-async function commitOperationalRecords(name: string, records: AnyRecord[]) {
-  if (!firestore) throw new Error("Firestore não configurado.");
-  if (records.length === 0) return { collection: name, count: 0, batches: 0 };
-
-  let batch = writeBatch(firestore);
-  let pendingWrites = 0;
-  let batches = 0;
-
-  for (const record of records) {
-    const id = safeDocId(
-      String(record._docId ?? record.id ?? newDocId("sync")),
-    );
-    batch.set(
-      doc(firestore, name, id),
-      {
-        ...record,
-        id: record.id ?? id,
-        updated_at: serverTimestamp(),
-        synced_at: serverTimestamp(),
-      },
-      { merge: true },
-    );
-    pendingWrites += 1;
-
-    if (pendingWrites >= 450) {
-      await batch.commit();
-      batches += 1;
-      batch = writeBatch(firestore);
-      pendingWrites = 0;
-    }
-  }
-
-  if (pendingWrites > 0) {
-    await batch.commit();
-    batches += 1;
-  }
-
-  return { collection: name, count: records.length, batches };
-}
-
-async function syncRealOperationalFoundation() {
-  const input = await readOperationalFoundationInput();
-  const customer = {
-    id: DEFAULT_CUSTOMER.id,
-    code: DEFAULT_CUSTOMER.code,
-    name: DEFAULT_CUSTOMER.name,
-    status: "active",
-    source: "derived_from_real_btg_operation",
-  };
-  const customerAccounts = buildDerivedCustomerAccounts(input.users);
-  const locations = buildDerivedLocations(input.skus);
-  const stockBalances = buildDerivedStockBalances(input.skus);
-  const inboundReceipts = buildDerivedInboundReceipts(input.movements);
-  const orderItems = buildDerivedOrderItems(input.orders);
-  const pickTasks = buildDerivedPickTasks(input.orders);
-  const packTasks = buildDerivedPackTasks(input.orders);
-
-  const writes = await Promise.all([
-    commitOperationalRecords(collectionNames.customers, [customer]),
-    commitOperationalRecords(
-      collectionNames.customerAccounts,
-      customerAccounts,
-    ),
-    commitOperationalRecords(collectionNames.locations, locations),
-    commitOperationalRecords(collectionNames.stockBalances, stockBalances),
-    commitOperationalRecords(collectionNames.inboundReceipts, inboundReceipts),
-    commitOperationalRecords(collectionNames.orderItems, orderItems),
-    commitOperationalRecords(collectionNames.pickTasks, pickTasks),
-    commitOperationalRecords(collectionNames.packTasks, packTasks),
-  ]);
-
-  const inserted = writes.reduce((sum, item) => sum + item.count, 0);
-  await emitEvent({
-    type: "foundation.real_data_synced",
-    title: "Coleções operacionais preparadas",
-    description: `${inserted.toLocaleString("pt-BR")} registro(s) derivados da operação ${LEGACY_CUSTOMER_CODE} foram sincronizados para a fundação operacional.`,
-    severity: "attention",
-    entity_type: "fundacao_operacional",
-    entity_id: DEFAULT_CUSTOMER.id,
-    customer_code: DEFAULT_CUSTOMER.code,
-    payload: compactPayload({
-      customer_accounts: customerAccounts.length,
-      locations: locations.length,
-      stock_balances: stockBalances.length,
-      inbound_receipts: inboundReceipts.length,
-      order_items: orderItems.length,
-      pick_tasks: pickTasks.length,
-      pack_tasks: packTasks.length,
-    }),
-  });
-
-  return {
-    ok: true,
-    writes,
-    snapshot: await getOperationalFoundation(),
-  };
-}
-
 async function getBillingConfig() {
   if (!firestore) throw new Error("Firestore não configurado.");
   const ref = doc(firestore, "billing_config", "default");
@@ -3530,12 +2817,6 @@ async function route(
   if (pathname === "/api/operational/foundation" && method === "GET") {
     return json(await getOperationalFoundation());
   }
-  if (
-    pathname === "/api/operational/sync-real-foundation" &&
-    method === "POST"
-  ) {
-    return json(await syncRealOperationalFoundation(), 201);
-  }
   if (pathname === "/api/client/overview" && method === "GET") {
     return json(await getClientOverview());
   }
@@ -4064,41 +3345,8 @@ async function route(
     });
   }
 
-  if (pathname === "/api/import" && method === "POST") {
-    const body = await readBody(init);
-    const batches = [
-      [collectionNames.products, body.products ?? []],
-      [collectionNames.skus, body.skus ?? []],
-      [collectionNames.movements, body.movements ?? []],
-      [collectionNames.orders, body.orders ?? []],
-    ] as const;
-    let inserted = 0;
-    for (const [name, items] of batches) {
-      for (const item of items) {
-        await createItem(name, item, { silent: true });
-        inserted += 1;
-      }
-    }
-    await emitEvent({
-      type: "data.imported",
-      title: "Importação de dados concluída",
-      description: `${inserted.toLocaleString("pt-BR")} registro(s) importado(s) para o sistema.`,
-      severity: "attention",
-      entity_type: "importacao",
-      entity_id: Date.now(),
-      customer_code: LEGACY_CUSTOMER_CODE,
-      payload: compactPayload({
-        products: body.products?.length,
-        skus: body.skus?.length,
-        movements: body.movements?.length,
-        orders: body.orders?.length,
-      }),
-    });
-    return json({ ok: true, inserted, errors: [] });
-  }
-
-  // customers, customer-accounts, documents, products, skus e price-list são
-  // mutados exclusivamente via Cloud Functions (mutateManagedEntity).
+  // Leitura de um registro operacional pelo id. Este roteador só lê: toda
+  // gravação passa pelas Cloud Functions (functions-api.ts).
   const operationalEntityCollections: Record<string, string> = {
     "customer-requests": collectionNames.customerRequests,
     locations: collectionNames.locations,
@@ -4118,35 +3366,6 @@ async function route(
     const id = operationalEntityMatch[2];
 
     if (id && method === "GET") return json(await readItem(name, decodeURIComponent(id)));
-    if (method === "POST")
-      return json(await createItem(name, await readBody(init)), 201);
-    if (id && (method === "PATCH" || method === "PUT"))
-      return json(await updateItem(name, id, await readBody(init)));
-    if (id && method === "DELETE") {
-      await deleteItem(name, id);
-      return json(null, 204);
-    }
-  }
-
-  const entityMatch = pathname.match(
-    /^\/api\/(orders|billing\/users)(?:\/([^/]+))?$/,
-  );
-  if (entityMatch) {
-    const segment = entityMatch[1];
-    const id = entityMatch[2];
-    const name =
-      segment === "billing/users"
-        ? collectionNames.users
-        : collectionNames.orders;
-
-    if (method === "POST")
-      return json(await createItem(name, await readBody(init)), 201);
-    if (id && (method === "PATCH" || method === "PUT"))
-      return json(await updateItem(name, id, await readBody(init)));
-    if (id && method === "DELETE") {
-      await deleteItem(name, id);
-      return json(null, 204);
-    }
   }
 
   return json({ message: "Rota Firebase não implementada", pathname }, 404);

@@ -59,14 +59,16 @@ Resumo executivo:
 
 ## Fundação Firestore
 
-A fundação operacional já tem duas rotas internas:
+A fundação operacional tem uma rota interna, só de leitura:
 
 - `GET /api/operational/foundation`: lê as coleções operacionais, calcula o que
   ainda pode ser derivado da base atual e devolve métricas para a tela do
   Agente IA.
-- `POST /api/operational/sync-real-foundation`: cria/atualiza, em lotes, os documentos
-  iniciais de `customers`, `customer_accounts`, `locations`, `stock_balances`,
-  `inbound_receipts`, `order_items`, `pick_tasks` e `pack_tasks`.
+
+A antiga `POST /api/operational/sync-real-foundation`, que gravava pelo
+navegador os documentos derivados, saiu em 25/10/2026: o roteador do
+navegador (`artifacts/app/src/lib/cloud-api.ts`) só lê, e toda gravação passa
+pelas Cloud Functions (`cloud-api-read-only.test.ts` trava).
 
 O primeiro cliente real está normalizado como `BTG Pactual`. O campo antigo
 `cod_cliente` da planilha permanece como código de item/produto do cliente; ele
