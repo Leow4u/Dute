@@ -4,6 +4,7 @@ import type { EscopoDoAgente } from "./agente-escopo.js";
 import { bate, ferramenta, numero, texto, type FerramentaDoAgente } from "./agente-ferramentas.js";
 import type { LeitorDoAgente, RegistroLido } from "./agente-leitor.js";
 import { milesimos } from "./medidas.js";
+import { diaEmSaoPaulo } from "./parados.js";
 import { casoDoRegistro } from "./parecidos-gravacao.js";
 import { CASOS_POR_PEDIDO, parecidosDoPedido, SEMELHANCA_MINIMA_PCT, type CasoLido } from "./parecidos.js";
 import { ORCAMENTO_ROLES } from "./platform-roles.js";
@@ -87,17 +88,54 @@ export async function verOrcamento(leitor: LeitorDoAgente, numeroDoOrcamento: st
   };
 }
 
-/** A tabela ativa do cliente; sem ela, a Padrão Dutelog. */
-async function tabelaDoCliente(leitor: LeitorDoAgente): Promise<RegistroLido | null> {
-  const doCliente = await leitor.doCliente("price_tables", { onde: [["status", "==", "ativa"]], limite: 5 });
-  if (doCliente.length) return doCliente[0];
-  const padrao = await leitor.geral("price_tables", { onde: [["status", "==", "ativa"]], limite: 5 });
-  return padrao[0] ?? null;
+/** A vigência contém o dia (AAAA-MM-DD): de `vigente_de` até `vigente_ate`, ou em aberto. */
+function valeNoDia(tabela: RegistroLido, dia: string): boolean {
+  const de = texto(tabela.vigente_de);
+  const ate = texto(tabela.vigente_ate);
+  return de !== "" && de <= dia && (ate === "" || dia <= ate);
 }
 
-export async function lpu(leitor: LeitorDoAgente, busca: string) {
-  const [itens, tabela] = await Promise.all([leitor.geral("lpu_items", { limite: 3000 }), tabelaDoCliente(leitor)]);
-  const precos = tabela && tabela.precos && typeof tabela.precos === "object" ? (tabela.precos as Record<string, Record<string, unknown>>) : {};
+/** A variante normalizada, que a carga grava junto (`variante_chave`). */
+function varianteDa(tabela: RegistroLido): string {
+  return texto(tabela.variante_chave) || texto(tabela.variante).toLowerCase();
+}
+
+/**
+ * As tabelas que valem no dia, pela regra do orçamento (functions/comercial,
+ * tabelas.ts, "Escolha da tabela no orçamento"): a vigência contém o dia,
+ * ativa ou já encerrada. "Ativa" não quer dizer vigente: a tabela carregada
+ * com início no futuro entra ativa e encerra a anterior na véspera. Em cada
+ * variante, o cliente que tem tabela nela fica com as dele (uma por contrato,
+ * e a sem contrato), mesmo sem nenhuma que valha no dia; só a variante em que
+ * ele não tem tabela cai na Padrão Dutelog.
+ */
+async function tabelasDoDia(leitor: LeitorDoAgente, dia: string): Promise<RegistroLido[]> {
+  const [doCliente, padrao] = await Promise.all([
+    leitor.doCliente("price_tables", { limite: 500 }),
+    leitor.geral("price_tables", { limite: 500 }),
+  ]);
+  const variantesDoCliente = new Set(doCliente.map(varianteDa));
+  const doDia = [
+    ...doCliente.filter((tabela) => valeNoDia(tabela, dia)),
+    ...padrao.filter((tabela) => !variantesDoCliente.has(varianteDa(tabela)) && valeNoDia(tabela, dia)),
+  ];
+  return doDia.sort((a, b) => varianteDa(a).localeCompare(varianteDa(b)) || texto(a.contract_id).localeCompare(texto(b.contract_id)));
+}
+
+/** "Tabela Itaú 2026 · Noturna · contrato CT-7": o nome, a variante e o contrato, quando há. */
+function rotuloDaTabela(tabela: RegistroLido): string {
+  const contrato = texto(tabela.contract_id);
+  return [texto(tabela.nome) || tabela.id, texto(tabela.variante), contrato ? `contrato ${contrato}` : ""].filter(Boolean).join(" · ");
+}
+
+function precosDa(tabela: RegistroLido): Record<string, Record<string, unknown>> {
+  return tabela.precos && typeof tabela.precos === "object" ? (tabela.precos as Record<string, Record<string, unknown>>) : {};
+}
+
+export async function lpu(leitor: LeitorDoAgente, busca: string, agora: Date) {
+  const dia = diaEmSaoPaulo(agora.toISOString()) ?? agora.toISOString().slice(0, 10);
+  const [itens, tabelas] = await Promise.all([leitor.geral("lpu_items", { limite: 3000 }), tabelasDoDia(leitor, dia)]);
+  const comPrecos = tabelas.map((tabela) => ({ rotulo: rotuloDaTabela(tabela), precos: precosDa(tabela) }));
   const achados = itens
     .filter((item) => item.orcavel !== false)
     .filter((item) => bate(busca, item.item, item.servico, item.categoria, item.descricao))
@@ -106,14 +144,23 @@ export async function lpu(leitor: LeitorDoAgente, busca: string) {
       servico: texto(item.servico) || undefined,
       unidade: texto(item.unidade) || undefined,
       categoria: texto(item.categoria) || undefined,
-      preco: precoEmReais(precos[item.id]?.preco),
+      precos: comPrecos.flatMap(({ rotulo, precos }) => {
+        const preco = precoEmReais(precos[item.id]?.preco);
+        return preco ? [{ tabela: rotulo, preco }] : [];
+      }),
     }))
     .sort((a, b) => a.item.localeCompare(b.item) || (a.servico ?? "").localeCompare(b.servico ?? ""));
   return {
-    tabela: tabela ? { nome: texto(tabela.nome) || undefined, vigente_de: texto(tabela.vigente_de) || undefined, do_cliente: tabela.customer_code !== null } : undefined,
+    dia,
+    tabelas: tabelas.map((tabela) => ({
+      tabela: rotuloDaTabela(tabela),
+      vigente_de: texto(tabela.vigente_de) || undefined,
+      vigente_ate: texto(tabela.vigente_ate) || undefined,
+      do_cliente: tabela.customer_code !== null,
+    })),
     encontrados: achados.length,
     itens: achados.slice(0, 30),
-    observacao: tabela ? undefined : "Sem tabela de preço ativa para este cliente.",
+    observacao: tabelas.length ? undefined : "Nenhuma tabela de preço vale hoje para este cliente: o orçamento fica sem preço da tabela.",
   };
 }
 
@@ -173,11 +220,12 @@ export const FERRAMENTAS_DO_COMERCIAL: readonly FerramentaDoAgente[] = [
   }),
   ferramenta({
     nome: "lpu",
-    descricao: "Itens da LPU (lista de preços unitários) com o preço da tabela ativa do cliente, ou da Padrão Dutelog quando ele não tem a dele.",
+    descricao:
+      "Itens da LPU (lista de preços unitários) com o preço de cada tabela que vale hoje para o cliente (uma por variante e contrato), ou da Padrão Dutelog na variante em que ele não tem tabela.",
     modulo: "comercial",
     entrada: z.object({ texto: z.string().max(200).describe("Palavras do item ou do serviço, ex.: 'mesa montagem'") }),
     para: quemOrca,
-    executar: ({ leitor }, { texto: busca }) => lpu(leitor, busca),
+    executar: ({ leitor, agora }, { texto: busca }) => lpu(leitor, busca, agora),
   }),
   ferramenta({
     nome: "orcamentos_parecidos",

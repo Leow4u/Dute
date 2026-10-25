@@ -909,7 +909,10 @@ Feita em 23/10/2026. As ferramentas estão em
 - **Comercial**, para quem orça (`ORCAMENTO_ROLES`), com o preço:
   - `orcamentos` e `ver_orcamento`, com as linhas, os ajustes, as condições
     e a validade;
-  - `lpu`, com o preço da tabela ativa do cliente, ou da Padrão Dutelog;
+  - `lpu`, com o preço de cada tabela que vale hoje para o cliente, uma
+    por variante e contrato, ou da Padrão Dutelog na variante em que ele
+    não tem tabela (a regra do orçamento; ver "Correção: a LPU do agente
+    citava a tabela ativa, não a que vale");
   - `orcamentos_parecidos` (memória da parte 5.3), com a mesma conta da
     `findSimilarQuotes`, o orçado e o realizado de cada caso.
 - **Financeiro**, com valor:
@@ -1397,6 +1400,36 @@ Achada em 25/10/2026.
     começo fecha a conta.
   - Antes, somava 10 das 20 entradas e devolvia o período inteiro.
   - O núcleo testa também o erro do último dia cheio.
+
+### Correção: a LPU do agente citava a tabela ativa, não a que vale
+
+Achada em 25/10/2026.
+
+- **O defeito.** A ferramenta `lpu` pegava a primeira tabela `ativa` do
+  cliente, sem ordem, e a apresentava como a tabela dele. Mas no Comercial
+  "ativa" não quer dizer vigente:
+  - a tabela carregada com início no futuro já entra ativa e encerra a
+    anterior na véspera (`cargas/tabela.ts`);
+  - o cliente pode ter uma tabela por variante e por contrato.
+  - O orçamento usa a tabela cuja vigência contém a data-base, ativa ou
+    encerrada (`tabelas.ts`, "Escolha da tabela no orçamento").
+  - Com a tabela de 2027 carregada em outubro, o agente dava os preços de
+    2027, e o orçamento salvo no mesmo dia saía com os de 2026.
+  - Com duas variantes, a resposta usava a que viesse primeiro.
+- **A correção.** A ferramenta mostra cada tabela que vale no dia de São
+  Paulo, pela regra do orçamento:
+  - em cada variante, o cliente que tem tabela nela fica com as dele, uma
+    por contrato, mesmo sem nenhuma que valha hoje;
+  - só a variante em que ele não tem tabela cai na Padrão Dutelog.
+  - Cada item traz o preço de cada tabela, com o nome, a variante e o
+    contrato.
+- **Testes:** `agente-modulos.test.ts`, com a tabela de 2026 encerrada em
+  31/12 e a de 2027 ativa.
+  - O agente dá o preço de 2026, uma tabela por variante, e a Padrão só na
+    variante sem tabela do cliente.
+  - O cliente com tabela vencida na variante fica sem preço nela, nunca
+    com o da Padrão.
+  - Antes, dava "Tabela Itaú 2027" e R$ 990,00 em vez de R$ 850,00.
 
 ## Lançamento na produção
 
