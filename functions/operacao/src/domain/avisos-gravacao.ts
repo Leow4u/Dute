@@ -56,6 +56,8 @@ export type ResultadoDosAvisos = {
   enviados: number;
   auditados: number;
   falhas: number;
+  /** Os e-mails que chegaram à última tentativa nesta rodada, com o erro dela. */
+  desistidos: Array<{ id: string; erro: string }>;
 };
 
 type Cursor = { createdAt: Timestamp; eventoId: string };
@@ -174,11 +176,16 @@ export async function gerarAvisos(
 }
 
 /** Envia a fila: o pendente sai (ou fica auditado, com o envio desligado); a falha tenta de novo até 5 vezes. */
-export async function enviarFila(db: Firestore, enviar: EnviarEmail, remetente: string): Promise<Pick<ResultadoDosAvisos, "enviados" | "auditados" | "falhas">> {
+export async function enviarFila(
+  db: Firestore,
+  enviar: EnviarEmail,
+  remetente: string,
+): Promise<Pick<ResultadoDosAvisos, "enviados" | "auditados" | "falhas" | "desistidos">> {
   const pendentes = await db.collection(EMAIL_OUTBOX_COLLECTION).where("status", "==", "pending").limit(LOTE_DE_EMAILS).get();
   let enviados = 0;
   let auditados = 0;
   let falhas = 0;
+  const desistidos: ResultadoDosAvisos["desistidos"] = [];
   for (const doc of pendentes.docs) {
     const dados = doc.data();
     const para = Array.isArray(dados.to) ? dados.to.filter((item): item is string => typeof item === "string") : [];
@@ -195,16 +202,32 @@ export async function enviarFila(db: Firestore, enviar: EnviarEmail, remetente: 
       else auditados += 1;
     } catch (error) {
       const tentativas = (typeof dados.tentativas === "number" ? dados.tentativas : 0) + 1;
+      const erro = (error instanceof Error ? error.message : String(error)).slice(0, 300);
       await doc.ref.update({
         status: tentativas >= TENTATIVAS_DO_EMAIL ? "failed" : "pending",
         tentativas,
-        erro: (error instanceof Error ? error.message : String(error)).slice(0, 300),
+        erro,
         updated_at: FieldValue.serverTimestamp(),
       });
       falhas += 1;
+      if (tentativas >= TENTATIVAS_DO_EMAIL) desistidos.push({ id: doc.id, erro });
     }
   }
-  return { enviados, auditados, falhas };
+  return { enviados, auditados, falhas, desistidos };
+}
+
+/**
+ * O relato do e-mail que desistiu, para o log de erro: o painel do sistema
+ * agrupa os erros pela primeira linha, que é sempre a mesma; o id e o erro de
+ * cada e-mail vêm depois, com o endereço mascarado (LGPD).
+ */
+export function relatoDosDesistidos(desistidos: ResultadoDosAvisos["desistidos"]): string | null {
+  if (!desistidos.length) return null;
+  const mascarar = (erro: string) => erro.replace(/[^\s@<>"'(),;:]+@[^\s@<>"'(),;:]+/g, "<e-mail>");
+  return [
+    `E-mail sem envio depois de ${TENTATIVAS_DO_EMAIL} tentativas (runNotifications)`,
+    ...desistidos.map(({ id, erro }) => `${id}: ${mascarar(erro)}`),
+  ].join("\n");
 }
 
 export async function runNotificationsFor(

@@ -659,9 +659,10 @@ regras); CNH, exame e treinamento vencendo aparecem no Início certo.
   latência das callables, falhas de envio de e-mail; um painel só. O painel
   do sistema (Configuração › Sistema, `docs/painel-sistema.md`) mostra os
   erros de todas as functions e, desde 24/10/2026, o estado e o acesso das
-  callables de todas as codebases. A latência e as falhas de e-mail (que a
-  `runNotifications` conta e guarda em cada e-mail, sem log de erro) ainda
-  não.
+  callables de todas as codebases. Desde 25/10/2026, o e-mail dos avisos que
+  desiste depois de 5 tentativas vira erro da `runNotifications`, com o id
+  e o erro de cada um, e aparece no mesmo quadro. A latência das callables
+  ainda não.
 - **LGPD**: retenção e exclusão de fotos, assinaturas e dados de campo;
   CPF só onde o papel precisa; registro de quem acessou o que. O inventário
   dos dados pessoais, o que falta e as 12 decisões do Leonardo, cada uma com
