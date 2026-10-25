@@ -904,3 +904,12 @@ cada callable do WMS; onde o código diverge da tabela de
     executa depois da aprovação, o financeiro e o suporte acompanham.
     Recomendo o servidor aceitar só o cliente, no próprio contrato, e owner,
     admin e interno.
+
+**Auditoria de 24/07** (25/10/2026). Achados da auditoria
+(`docs/auditoria-codigo-2026-07-24.md`) ainda abertos que são tela e
+esperam o alinhamento.
+
+56. O Painel do Agent Dute (`/agente/painel`) mostra "Nenhuma mensagem
+    pendente" quando a lista de notificações não carrega: o erro parece fila
+    vazia (achado 66 da auditoria de 24/07, ainda aberto). Recomendo a tela
+    dizer que não carregou, com "Tentar de novo", como as telas da v3.
