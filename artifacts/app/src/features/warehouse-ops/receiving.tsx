@@ -74,7 +74,11 @@ import {
   fetchJson,
   TERMINAL_STATUSES,
 } from "@/lib/warehouse-ops/model";
-import { type NoticeLinkChoice } from "@/lib/warehouse-ops/receiving";
+import {
+  type NoticeLinkChoice,
+  pedeJustificativaDoRecebimento,
+  problemaDaJustificativaDoRecebimento,
+} from "@/lib/warehouse-ops/receiving";
 import {
   type ProductLookupItem,
   type ProductPhoto,
@@ -287,10 +291,13 @@ export function ReceivingTaskDetailCard({
   registeringExceptionId?: string;
   noticeChoice?: NoticeLinkChoice | null;
   linking?: boolean;
-  onAdvance: (id: string) => void;
+  onAdvance: (id: string, note?: string) => void;
   onOpenException: (task: WarehouseTask, suggestedNote?: string) => void;
   onLinkNotice?: (requestId: string | null) => void;
 }) {
+  const { toast } = useToast();
+  // A justificativa é da chegada aberta: quem renderiza troca a `key` com a tarefa.
+  const [justificativa, setJustificativa] = useState("");
   if (!entry) {
     return (
       <Empty className="min-h-[520px] rounded-lg border border-dashed border-border bg-card">
@@ -311,6 +318,20 @@ export function ReceivingTaskDetailCard({
   const canAdvance = canAdvanceTask(task);
   const canRegister = canRegisterException(task);
   const taskAlerts = alerts.filter((alert) => alert.task_id === task.id);
+  // Com divergência na conferência salva, o servidor só conclui com a justificativa.
+  const pedeJustificativa = pedeJustificativaDoRecebimento(task);
+  const concluir = () => {
+    if (!pedeJustificativa) {
+      onAdvance(task.id);
+      return;
+    }
+    const problema = problemaDaJustificativaDoRecebimento(justificativa);
+    if (problema) {
+      toast({ title: "Justificativa da divergência", description: problema, variant: "destructive" });
+      return;
+    }
+    onAdvance(task.id, justificativa.trim());
+  };
 
   return (
     <Card className="min-w-0 overflow-hidden border-border bg-card">
@@ -351,7 +372,7 @@ export function ReceivingTaskDetailCard({
             {canAdvance ? (
               <Button
                 type="button"
-                onClick={() => onAdvance(task.id)}
+                onClick={concluir}
                 disabled={advancingTaskId === task.id}
               >
                 {advancingTaskId === task.id ? (
@@ -397,6 +418,18 @@ export function ReceivingTaskDetailCard({
         ) : null}
 
         <ReceivingConferenceSection task={task} />
+
+        {pedeJustificativa && canAdvance ? (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`justificativa-${task.id}`}>Justificativa da divergência</Label>
+            <Textarea
+              id={`justificativa-${task.id}`}
+              className="min-h-20"
+              value={justificativa}
+              onChange={(event) => setJustificativa(event.target.value)}
+            />
+          </div>
+        ) : null}
 
         {taskAlerts.length > 0 ? (
           <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
