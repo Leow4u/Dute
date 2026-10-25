@@ -893,7 +893,7 @@ export function ReturnWorkspace() {
                           <AlertTitle>Não crie SKU duplicado</AlertTitle>
                           <AlertDescription>
                             Devolução aceita apenas produto já cadastrado. Se for
-                            mercadoria nova, registre por Recebimento.
+                            mercadoria nova, registre em Estoque › Receber.
                           </AlertDescription>
                         </Alert>
                       ) : null}

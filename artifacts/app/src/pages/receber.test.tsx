@@ -21,6 +21,16 @@ import { NoticeCard } from "./receber";
 const TELA = readFileSync(new URL("./receber.tsx", import.meta.url), "utf8");
 const AVULSA = readFileSync(new URL("../features/warehouse-ops/receiving.tsx", import.meta.url), "utf8");
 
+describe("o caminho do Receber nas outras telas", () => {
+  it("a Contagem e a devolução mandam para Estoque › Receber, não para o antigo Recebimento", () => {
+    for (const arquivo of ["../features/warehouse-ops/inventory.tsx", "../features/warehouse-ops/exceptions.tsx"]) {
+      const fonte = readFileSync(new URL(arquivo, import.meta.url), "utf8");
+      expect(fonte, arquivo).not.toMatch(/WMS &gt; Recebimento|fluxo de Recebimento|por Recebimento\./);
+      expect(fonte, arquivo).toContain("Estoque › Receber");
+    }
+  });
+});
+
 describe("Receber na v3", () => {
   it("a tela está na lista da v3", () => {
     expect(telaDoWmsNaV3("/wms/receber")).toBe(true);

@@ -1115,7 +1115,7 @@ export function OpeningInventoryWorkspace() {
                 </EmptyTitle>
                 <EmptyDescription>
                   {session?.status === "completed"
-                    ? "Novas entradas agora devem ser feitas pelo fluxo de Recebimento."
+                    ? "Novas entradas agora entram por Estoque › Receber."
                     : "A sessão cria a trilha de auditoria para todas as contagens iniciais."}
                 </EmptyDescription>
               </EmptyHeader>
@@ -1946,7 +1946,7 @@ export function OpeningInventoryWorkspace() {
             <DialogDescription>
               Confirme somente depois que todos os produtos físicos tiverem sido
               contados. Esta sessão será encerrada e as próximas entradas deverão
-              ser feitas em WMS &gt; Recebimento.
+              ser feitas em Estoque › Receber.
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-3 gap-3 py-2">
