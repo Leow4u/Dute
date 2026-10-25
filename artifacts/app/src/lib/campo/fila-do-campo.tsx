@@ -4,7 +4,7 @@ import { ref, uploadBytes } from "firebase/storage";
 import { useAppUser } from "../auth";
 import { firebaseStorage } from "../firebase";
 import { chamarOperacao, mensagemDoErro, novaChave } from "../operacao/api";
-import { adiado, avisoDaFila, destinoDoErro, enfileirar, faltaParaEnviar, registroNovo, type NovoRegistro, type RegistroNaFila } from "./fila";
+import { adiado, avisoDaFila, destinoDoErro, enfileirar, faltaParaEnviar, registroNovo, type FalhaDaFila, type NovoRegistro, type RegistroNaFila } from "./fila";
 import { armazemNoAparelho, type ArmazemDaFila } from "./fila-guardada";
 
 /**
@@ -13,9 +13,10 @@ import { armazemNoAparelho, type ArmazemDaFila } from "./fila-guardada";
  * sai da fila e aparece como falha. A fila fica guardada no IndexedDB (por
  * pessoa): fechar o app sem sinal não perde nada, e ela volta ao abrir. Nada
  * sai antes de a fila guardada carregar, para a ordem continuar a dos toques.
+ * A falha também fica guardada, até a pessoa dispensar.
  */
 
-export type FalhaDaFila = { chave: string; rotulo: string; mensagem: string };
+export type { FalhaDaFila };
 
 type ContextoDaFila = {
   pendentes: readonly RegistroNaFila[];
@@ -65,19 +66,21 @@ export function FilaDoCampoProvider({ children, armazem: armazemDado }: { childr
   const [relogio, setRelogio] = useState(0);
   const enviando = useRef<string | null>(null);
 
-  // Ao abrir: a fila guardada da pessoa vem antes do que já foi tocado agora.
+  // Ao abrir: a fila guardada da pessoa vem antes do que já foi tocado agora,
+  // e as falhas que ela não dispensou voltam.
   useEffect(() => {
     if (!uid) return undefined;
     let vivo = true;
     setCarregada(false);
-    void armazem
-      .carregar(uid)
-      .catch(() => [] as RegistroNaFila[])
-      .then((guardada) => {
-        if (!vivo) return;
-        setFila((atual) => [...guardada, ...atual.filter((registro) => !guardada.some((outro) => outro.chave === registro.chave))]);
-        setCarregada(true);
-      });
+    void Promise.all([
+      armazem.carregar(uid).catch(() => [] as RegistroNaFila[]),
+      armazem.carregarFalhas(uid).catch(() => [] as FalhaDaFila[]),
+    ]).then(([guardada, falhasGuardadas]) => {
+      if (!vivo) return;
+      setFila((atual) => [...guardada, ...atual.filter((registro) => !guardada.some((outro) => outro.chave === registro.chave))]);
+      setFalhas((atual) => [...falhasGuardadas, ...atual.filter((falha) => !falhasGuardadas.some((outra) => outra.chave === falha.chave))]);
+      setCarregada(true);
+    });
     return () => {
       vivo = false;
     };
@@ -88,6 +91,12 @@ export function FilaDoCampoProvider({ children, armazem: armazemDado }: { childr
     if (!uid || !carregada) return;
     void armazem.guardar(uid, fila).catch(() => undefined);
   }, [armazem, uid, carregada, fila]);
+
+  // As falhas também: trocar de tela ou fechar o app não as apaga.
+  useEffect(() => {
+    if (!uid || !carregada) return;
+    void armazem.guardarFalhas(uid, falhas).catch(() => undefined);
+  }, [armazem, uid, carregada, falhas]);
 
   const enviar = useCallback((novo: NovoRegistro) => {
     setFila((atual) => enfileirar(atual, registroNovo(novo, novaChave(), new Date()), enviando.current));

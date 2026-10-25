@@ -79,6 +79,7 @@ async function esperar(condicao: () => boolean | Promise<boolean>) {
 beforeEach(() => {
   rede.chamadas.length = 0;
   rede.falhar = null;
+  window.localStorage.clear();
   sinal(true);
 });
 
@@ -132,5 +133,29 @@ describe("fila do campo no aparelho", () => {
     await act(async () => sinal(true));
     await esperar(() => fila!.pendentes.length === 0);
     expect(fila!.falhas.map((falha) => [falha.rotulo, falha.mensagem])).toEqual([["Saída da origem", "Saída da origem já foi registrada."]]);
+  });
+
+  it("a recusa fica na lista até a pessoa dispensar, mesmo trocando de tela ou fechando o app", async () => {
+    const armazem = armazemNoAparelho(new IDBFactory());
+    await abrirApp(armazem);
+    rede.falhar = { code: "failed-precondition", message: "A OS já foi concluída." };
+    await act(async () => fila!.enviar(registroDeEtapa({ numero: "10211-01" }, "saida_origem", TOQUE)));
+    await esperar(() => fila!.falhas.length === 1);
+    await esperar(async () => (await armazem.carregarFalhas("uid-carlos")).length === 1);
+
+    // Cada tela do /campo monta a fila de novo, e fechar o app também.
+    await fecharApp();
+    await abrirApp(armazem);
+    await esperar(() => fila!.falhas.length === 1);
+    expect(fila!.falhas.map((falha) => [falha.rotulo, falha.mensagem])).toEqual([["Saída da origem", "A OS já foi concluída."]]);
+
+    await act(async () => fila!.dispensarFalha(fila!.falhas[0].chave));
+    await esperar(async () => (await armazem.carregarFalhas("uid-carlos")).length === 0);
+    await fecharApp();
+    await abrirApp(armazem);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(fila!.falhas).toEqual([]);
   });
 });

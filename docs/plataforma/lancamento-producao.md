@@ -261,6 +261,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   fila guardada volta e vai quando o sinal voltar. Antes, aberto sem sinal
   depois de fechado, o app ficava em branco
   (`fase-3-operacao.md`, "Correção: o app não abria sem sinal").
+  A recusa da callable fica no topo até a pessoa dispensar, mesmo trocando
+  de tela ou fechando o app. Antes, a recusa da conclusão sumia na primeira
+  troca de tela (`fase-3-operacao.md`, "Correção: a recusa da conclusão
+  sumia na troca de tela").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.

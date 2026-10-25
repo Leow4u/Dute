@@ -31,6 +31,9 @@ export type RegistroNaFila = {
 
 export type NovoRegistro = Pick<RegistroNaFila, "callable" | "dados" | "rotulo"> & Partial<Pick<RegistroNaFila, "grupo" | "foto">>;
 
+/** O registro que a callable recusou: fica na lista até a pessoa dispensar. */
+export type FalhaDaFila = { chave: string; rotulo: string; mensagem: string };
+
 /** Um registro novo, com a chave dentro dos dados (é a idempotency_key da callable). */
 export function registroNovo(novo: NovoRegistro, chave: string, agora: Date): RegistroNaFila {
   return {

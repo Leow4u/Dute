@@ -1442,3 +1442,27 @@ a parte 3.8c.
     em "carregando".
   - `perfil-guardado.test.ts`: o que não é perfil ativo não vale, e sem
     storage nada quebra.
+
+### Correção: a recusa da conclusão sumia na troca de tela
+
+Achada em 25/10/2026, numa revisão da fila do campo. Está na produção desde
+a parte 3.8b.
+
+- **O defeito.** O registro que a callable recusa sai da fila e vira uma
+  falha no topo, com o botão Dispensar. A falha ficava só no estado da
+  tela, e cada tela do `/campo` monta a fila de novo.
+  - Um exemplo: às 17:20, sem sinal, o líder colhe a assinatura do cliente
+    e a tela diz "concluída". O escritório, avisado por telefone, registra
+    a montagem às 17:40.
+  - Às 18:00 o sinal volta. A assinatura sobe, e o `completeServiceOrder`
+    recusa ("A hora vem antes de Montagem").
+  - A faixa vermelha sumia no primeiro toque em "Minhas OS", sem ninguém
+    ver. A OS ficava sem a conclusão, e o cliente já tinha ido embora.
+- **A correção.** As falhas ficam guardadas no aparelho, por pessoa
+  (`localStorage`, `dute.campo.falhas.<uid>`), até a pessoa dispensar.
+  Trocar de tela ou fechar o app não as apaga mais.
+- **Testes:**
+  - `fila-do-campo.test.tsx`: a recusa continua na lista depois de trocar de
+    tela e de fechar o app, e sai só quando dispensada. Antes, sumia.
+  - `fila-guardada.test.ts`: as falhas ficam por pessoa e sobrevivem a
+    fechar o app, e o que não é falha não volta.

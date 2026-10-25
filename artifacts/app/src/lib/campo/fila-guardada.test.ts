@@ -66,9 +66,31 @@ describe("fila guardada no aparelho", () => {
   });
 
   it("sem IndexedDB, fica na memória", async () => {
-    const armazem = armazemNoAparelho(null);
+    const armazem = armazemNoAparelho(null, null);
     await armazem.guardar("uid-carlos", [etapa("k-1", "saida_origem", "2026-10-20T13:20:00.000Z")]);
     expect((await armazem.carregar("uid-carlos")).map((registro) => registro.chave)).toEqual(["k-1"]);
     expect(await armazemNaMemoria().carregar("uid-carlos")).toEqual([]);
+  });
+
+  it("as falhas ficam por pessoa, sobrevivem a fechar o app e saem quando dispensadas", async () => {
+    const local = new Map<string, string>();
+    const armazenamento = {
+      getItem: (chave: string) => local.get(chave) ?? null,
+      setItem: (chave: string, valor: string) => void local.set(chave, valor),
+      removeItem: (chave: string) => void local.delete(chave),
+    };
+    const fabrica = new IDBFactory();
+    const recusa = { chave: "k-c", rotulo: "Conclusão", mensagem: "A OS já foi concluída." };
+    await armazemNoAparelho(fabrica, armazenamento).guardarFalhas("uid-carlos", [recusa]);
+    // O app fechou e abriu de novo.
+    expect(await armazemNoAparelho(fabrica, armazenamento).carregarFalhas("uid-carlos")).toEqual([recusa]);
+    expect(await armazemNoAparelho(fabrica, armazenamento).carregarFalhas("uid-ana")).toEqual([]);
+
+    await armazemNoAparelho(fabrica, armazenamento).guardarFalhas("uid-carlos", []);
+    expect(local.size).toBe(0);
+
+    // O que não é falha não volta.
+    local.set("dute.campo.falhas.uid-carlos", JSON.stringify([recusa, { chave: 1 }, "texto"]));
+    expect(await armazemNoAparelho(fabrica, armazenamento).carregarFalhas("uid-carlos")).toEqual([recusa]);
   });
 });
