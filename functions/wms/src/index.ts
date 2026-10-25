@@ -93,6 +93,7 @@ import {
 import {
   billingMovementDirection,
   billingPaidInFinanceiro,
+  freezeBillingUsage,
   readBillingPeriod,
   resolveBillingDocument,
   shouldFreezeCompetencia,
@@ -3601,7 +3602,7 @@ async function ensureFrozenBillingUsage(
     saidas_pecas: 0,
     movimentacoes: 0,
   };
-  await resolved.ref.set({
+  await freezeBillingUsage(db, resolved.ref, {
     mode: "frozen",
     customer_code: customerCode,
     competencia,

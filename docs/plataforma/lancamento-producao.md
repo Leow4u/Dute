@@ -264,6 +264,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     Brasília, como a fatura. Antes, a entrega das 21h às 23h59 do último dia
     ia para o mês seguinte (`fase-7-financeiro-unificado.md`, "Correção: o
     extrato do cliente punha a entrega da noite no mês seguinte").
+  - A foto do uso do mês congela uma vez de verdade: a prévia que chega
+    depois não troca a que outra prévia ou a emissão gravou
+    (`fase-7-financeiro-unificado.md`, "Correção: a foto do uso do mês podia
+    ser trocada por outra prévia").
 - **O app do campo (25/10/2026).** Entra com a `main`, sem liberação
   própria: o app abre sem sinal com o último perfil lido no aparelho, e a
   fila guardada volta e vai quando o sinal voltar. Antes, aberto sem sinal
