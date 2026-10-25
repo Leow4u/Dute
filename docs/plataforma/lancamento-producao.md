@@ -521,7 +521,10 @@ contato com os avisos ligados (Comercial › Clientes).
    `firebase-schedule-runRhAlerts-southamerica-east1`. A `runDuteRoutines`,
    a `runOmieSync` e a `runRhAlerts` não fazem nada no `dute-prod`, fora das
    liberações delas.
-2. **Os índices ficaram prontos.** Os três novos aparecem com `READY`:
+2. **Os índices ficaram prontos.** O job `regras` só deixa subir as
+   functions e o frontend com cada índice do `firestore.indexes.json` pronto
+   (`tools/esperar_indices.py`); se a publicação parou nesse passo, o log
+   diz qual faltou. Aqui todos aparecem com `READY`:
 
    ```powershell
    cd C:\DEV\Dute

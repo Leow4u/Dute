@@ -129,6 +129,14 @@ jobs:
           ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: bash tools/check_rules_deployed.sh "${PROJECT_ID}"
 
+      # As functions e a tela que usam um índice novo só sobem com ele pronto:
+      # antes, a consulta falha com "requires an index", e a lista da tela cai
+      # na leitura das mais recentes sem avisar.
+      - name: Esperar os índices ficarem prontos
+        env:
+          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: python3 tools/esperar_indices.py "${PROJECT_ID}"
+
   functions:
     name: Cloud Functions
     needs: regras
