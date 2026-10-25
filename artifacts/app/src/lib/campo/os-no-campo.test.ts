@@ -217,6 +217,9 @@ describe("a fila", () => {
     expect(destinoDoErro(new Error("Failed to fetch"))).toBe("tentar_de_novo");
     expect(destinoDoErro({ code: "failed-precondition" })).toBe("desistir");
     expect(destinoDoErro({ code: "functions/permission-denied" })).toBe("desistir");
+    // Logada, a chamada sem o token é renovação que falhou por rede: espera.
+    expect(destinoDoErro({ code: "functions/unauthenticated" })).toBe("tentar_de_novo");
+    expect(destinoDoErro({ code: "unauthenticated" })).toBe("tentar_de_novo");
     expect([1, 2, 3, 10].map(esperaDaTentativa)).toEqual([2_000, 4_000, 8_000, 60_000]);
     const registro = adiado(naFila(registroDeEtapa(EM_EXECUCAO, "saida_origem", AGORA), "k-d"), AGORA);
     expect(registro.tentativas).toBe(1);
