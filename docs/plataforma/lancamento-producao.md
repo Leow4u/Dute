@@ -428,6 +428,12 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   própria: o convite só nasce com o token longo que a tela de Usuários gera,
   e a tela já o manda (`fase-2-nucleo.md`, "Correção: o convite sem token
   nascia com a hora como id").
+- **O login ao tirar ou devolver o acesso (25/10/2026).** Entra com a
+  `main`, sem liberação própria: a falha no Firebase Auth volta como erro na
+  tela, e a nova tentativa refaz o passo (`fase-2-nucleo.md`, "Correção: a
+  falha no login ao tirar ou devolver o acesso ficava escondida"). Quem
+  ficou com o acesso devolvido e o login bloqueado volta a entrar, depois de
+  publicar, com "Remover acesso" e "Devolver acesso" em Usuários.
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.

@@ -147,3 +147,45 @@ export function accessChangeFromTo(
   }
   return fromTo;
 }
+
+/** O Firebase Auth que o acesso usa: o getAuth() no callable, um falso nos testes. */
+export type AccessAuth = {
+  updateUser(uid: string, properties: { disabled: boolean }): Promise<unknown>;
+  revokeRefreshTokens(uid: string): Promise<void>;
+};
+
+/**
+ * Remove ou devolve o acesso: o perfil na transação e, a cada chamada, o
+ * login no Firebase Auth acompanhando o perfil, mesmo quando o perfil já
+ * estava assim. A falha no Auth volta como erro, e a nova tentativa refaz o
+ * passo. O bloqueio pelo perfil (Rules e getProfile) já vale sem o Auth; o
+ * login liberado, não.
+ */
+export async function setUserAccessFor(
+  db: Firestore,
+  auth: AccessAuth,
+  input: SetUserAccessInput,
+  actor: AccessActor,
+): Promise<SetUserAccessResult & { auth_updated: true }> {
+  const result = await setUserAccessTransaction(db, input, actor);
+  try {
+    await auth.updateUser(input.user_id, { disabled: !input.active });
+    if (!input.active) await auth.revokeRefreshTokens(input.user_id);
+  } catch (error) {
+    const semConta = (error as { code?: unknown } | null)?.code === "auth/user-not-found";
+    // Sem a conta no Auth, não há login para bloquear.
+    if (semConta && !input.active) return { ...result, auth_updated: true };
+    // Nem para liberar: outra tentativa não adianta.
+    if (semConta) {
+      throw new HttpsError("failed-precondition", "O acesso voltou no sistema, mas a pessoa não tem login. Convide-a de novo.");
+    }
+    console.error("[setUserAccess] Firebase Auth não atualizado", error);
+    throw new HttpsError(
+      "unavailable",
+      input.active
+        ? "O acesso voltou no sistema, mas o login da pessoa não foi liberado. Tente de novo."
+        : "O acesso saiu do sistema, mas o login da pessoa não foi bloqueado. Tente de novo.",
+    );
+  }
+  return { ...result, auth_updated: true };
+}

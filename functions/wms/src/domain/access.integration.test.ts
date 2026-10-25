@@ -4,7 +4,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
-import { setUserAccessTransaction } from "./access.js";
+import { setUserAccessFor, setUserAccessTransaction, type AccessAuth } from "./access.js";
 
 const PROJECT_ID = "demo-dute-operations";
 let db: Firestore;
@@ -121,5 +121,64 @@ describe("quem administra o acesso, relido na transação", () => {
       /Seu acesso mudou/,
     );
     assert.equal((await eventsFor("owner-2")).length, 0);
+  });
+});
+
+/** O Auth de mentira: grava cada chamada e falha nas que o teste pede. */
+function authDeMentira(falhas: Array<Error & { code?: string }> = []) {
+  const chamadas: string[] = [];
+  const auth: AccessAuth = {
+    async updateUser(uid, properties) {
+      chamadas.push(`updateUser ${uid} ${properties.disabled ? "bloqueia" : "libera"}`);
+      const falha = falhas.shift();
+      if (falha) throw falha;
+      return {};
+    },
+    async revokeRefreshTokens(uid) {
+      chamadas.push(`revokeRefreshTokens ${uid}`);
+    },
+  };
+  return { auth, chamadas };
+}
+
+describe("o login no Firebase Auth acompanha o acesso", () => {
+  it("o login que não foi liberado volta como erro, e a nova tentativa o libera", async () => {
+    await db.collection("users").doc("wms-1").set({ access_disabled: true }, { merge: true });
+    const quebrado = authDeMentira([new Error("Auth fora do ar")]);
+    await assert.rejects(
+      setUserAccessFor(db, quebrado.auth, { user_id: "wms-1", active: true }, owner),
+      /login da pessoa não foi liberado/,
+    );
+    // O perfil já voltou; o que faltou foi o login.
+    assert.equal((await db.collection("users").doc("wms-1").get()).get("access_disabled"), false);
+
+    const deNovo = authDeMentira();
+    const result = await setUserAccessFor(db, deNovo.auth, { user_id: "wms-1", active: true }, owner);
+    assert.equal(result.changed, false);
+    assert.deepEqual(deNovo.chamadas, ["updateUser wms-1 libera"]);
+  });
+
+  it("remover bloqueia o login e derruba as sessões", async () => {
+    const { auth, chamadas } = authDeMentira();
+    await setUserAccessFor(db, auth, { user_id: "wms-1", active: false }, owner);
+    assert.deepEqual(chamadas, ["updateUser wms-1 bloqueia", "revokeRefreshTokens wms-1"]);
+  });
+
+  it("sem a conta no Auth, remover vale: não há login para bloquear", async () => {
+    const semConta = Object.assign(new Error("There is no user record"), { code: "auth/user-not-found" });
+    const { auth } = authDeMentira([semConta]);
+    const result = await setUserAccessFor(db, auth, { user_id: "wms-1", active: false }, owner);
+    assert.equal(result.changed, true);
+  });
+
+  it("sem a conta no Auth, devolver diz que a pessoa não tem login, em vez de pedir outra tentativa", async () => {
+    await db.collection("users").doc("wms-1").set({ access_disabled: true }, { merge: true });
+    const semConta = Object.assign(new Error("There is no user record"), { code: "auth/user-not-found" });
+    const { auth } = authDeMentira([semConta]);
+    await assert.rejects(
+      setUserAccessFor(db, auth, { user_id: "wms-1", active: true }, owner),
+      (error: { code?: string; message?: string }) =>
+        error.code === "failed-precondition" && /não tem login\. Convide-a de novo/.test(error.message ?? ""),
+    );
   });
 });

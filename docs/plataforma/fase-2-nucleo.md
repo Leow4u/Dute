@@ -571,3 +571,29 @@ ou admin.
 - **Teste:** `acessos.integration.test.ts`, a callable de verdade no
   emulador: sem token, com token curto e com id curto, o convite não nasce;
   com o token da tela, ele vira o id. Antes, os dois primeiros falhavam.
+
+### Correção: a falha no login ao tirar ou devolver o acesso ficava escondida
+
+Achada em 25/10/2026, na mesma revisão da administração de acesso. Está na
+produção.
+
+- **O defeito.** Remover ou devolver o acesso grava o perfil e depois acerta
+  o login no Firebase Auth. A falha no Auth ficava só no log, e a tela dizia
+  "Acesso devolvido" com o login ainda bloqueado. A nova tentativa achava o
+  perfil já mudado (`changed: false`) e pulava o Auth, então não havia como
+  liberar o login pelo app.
+  - Na remoção, o perfil já bloqueia (Rules e `getProfile`); o que sobrava
+    era a conta do Auth ativa.
+- **A correção.** A cada chamada, mudando o perfil ou não, o login acompanha
+  o perfil (`domain/access.ts`, `setUserAccessFor`). A falha volta como
+  erro na tela ("O acesso voltou no sistema, mas o login da pessoa não foi
+  liberado. Tente de novo."), e a nova tentativa refaz o passo. Sem a conta
+  no Auth, remover vale, porque não há login para bloquear. Devolver avisa
+  que a pessoa não tem login e pede um convite novo, em vez de outra
+  tentativa: nenhuma rotina apaga a conta, só o console do Firebase.
+- **Teste:** `domain/access.integration.test.ts`, com o Auth de mentira:
+  - o login que não foi liberado volta como erro, e a nova tentativa o libera;
+  - remover bloqueia o login e derruba as sessões;
+  - sem a conta, remover vale, e devolver pede o convite.
+
+  Com o comportamento anterior, o primeiro falha.
