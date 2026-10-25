@@ -4,6 +4,7 @@ import type { ItemDoCatalogo } from "./demanda-direta.js";
 import {
   chave,
   falha,
+  horaEmSaoPaulo,
   informadoPor,
   instante,
   instanteDoRegistro,
@@ -119,17 +120,24 @@ export type FeitoNaOs = {
   registro: Pick<RegistroDaExecucao, "instante" | "canal" | "informado_por">;
 };
 
-/** O feito da linha, em número absoluto, até o previsto. Passar dele pede a inclusão. */
+/**
+ * O feito da linha, em número absoluto, até o previsto. Passar dele pede a
+ * inclusão. O feito com a hora de antes do último registrado na linha (o
+ * celular que ficou sem sinal e enviou depois) não vale mais: é recusado.
+ */
 export function registrarFeito(os: OsGravada, itens: readonly ItemEmExecucao[], pedido: PedidoDeFeito, contexto: ContextoDoRegistro): FeitoNaOs {
   exigirEmExecucao(os);
   const atual = itens.find((item) => item.id === pedido.linha);
   if (!atual) invalid("O item não está na OS.");
+  const quando = instanteDoRegistro(pedido.instante, os, contexto.agora);
+  if (atual.executado_em && quando < atual.executado_em) {
+    falha(`${nomeDa(atual)}: o feito das ${horaEmSaoPaulo(quando)} é de antes do último registrado (${atual.executado ?? "0"}, às ${horaEmSaoPaulo(atual.executado_em)}).`);
+  }
   const feito = emMilesimos(pedido.executado) ?? 0;
   const limite = previsto(atual);
   if (feito > limite) {
     falha(`${nomeDa(atual)}: o feito (${pedido.executado}) passa do previsto (${deMilesimos(limite)}). Inclua o que foi além do planejado.`);
   }
-  const quando = instanteDoRegistro(pedido.instante, os, contexto.agora);
   const { informado_por } = origemDoRegistro(os, pedido, contexto);
   const item: ItemEmExecucao = { ...atual, executado: deMilesimos(feito), executado_em: quando };
   return {
@@ -186,7 +194,8 @@ export function registrarInclusao(
       ...atual,
       incluidos: [...atual.incluidos, inclusao],
       executado: deMilesimos((emMilesimos(atual.executado ?? "0") ?? 0) + quantidadeIncluida),
-      executado_em: quando,
+      // A inclusão soma; a que chega atrasada não volta a hora do último feito.
+      executado_em: atual.executado_em && atual.executado_em > quando ? atual.executado_em : quando,
     };
     return { itens: itens.map((existente) => (existente.id === item.id ? item : existente)), item, inclusao, nova: false };
   }

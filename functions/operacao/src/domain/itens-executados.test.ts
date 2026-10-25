@@ -125,6 +125,18 @@ describe("o feito", () => {
     recusa(() => registrarFeito(OS, ITENS, feito("ln_9", "1"), ESCRITORIO), "invalid-argument", "O item não está na OS.");
   });
 
+  it("o que chega com a hora de antes do último registrado é recusado; a mesma hora corrige", () => {
+    // O celular sem sinal guardou o feito das 14:20; o escritório registrou outro às 14:30.
+    const comFeitoMaisNovo = itensEmExecucao({ itens: [{ ...CADEIRA, executado: "120", executado_em: "2026-10-22T17:30:00.000Z" }, MESA] });
+    recusa(
+      () => registrarFeito(OS, comFeitoMaisNovo, feito("ln_1", "96"), ESCRITORIO),
+      "failed-precondition",
+      "Cadeira Flexform: o feito das 14:20 é de antes do último registrado (120, às 14:30).",
+    );
+    const mesmaHora = itensEmExecucao({ itens: [{ ...CADEIRA, executado: "120", executado_em: "2026-10-22T17:20:00.000Z" }, MESA] });
+    assert.equal(registrarFeito(OS, mesmaHora, feito("ln_1", "96"), ESCRITORIO).item.executado, "96");
+  });
+
   it("só com a OS em execução", () => {
     recusa(() => registrarFeito({ ...OS, status: "agendada" }, ITENS, feito("ln_1", "1"), ESCRITORIO), "failed-precondition", "Registre a primeira etapa antes dos itens.");
     recusa(() => registrarFeito({ ...OS, status: "em_revisao" }, ITENS, feito("ln_1", "1"), ESCRITORIO), "failed-precondition", "A OS já foi concluída.");
@@ -174,6 +186,18 @@ describe("a inclusão em campo", () => {
       () => registrarInclusao(OS, ITENS, inclusao({ lpu_item_id: "lpu_sumiu" }), ESCRITORIO, { catalogo: null, idDaLinhaNova: "cp_x" }),
       "failed-precondition",
       "O item lpu_sumiu não está no catálogo.",
+    );
+  });
+
+  it("a que chega atrasada soma ao feito sem voltar a hora do último registrado", () => {
+    const comFeitoMaisNovo = itensEmExecucao({ itens: [{ ...CADEIRA, executado: "120", executado_em: "2026-10-22T17:30:00.000Z" }, MESA] });
+    const resultado = registrarInclusao(OS, comFeitoMaisNovo, inclusao({ linha: "ln_1" }), ESCRITORIO, { catalogo: null, idDaLinhaNova: "cp_x" });
+    assert.deepEqual([resultado.item.executado, resultado.item.executado_em], ["130", "2026-10-22T17:30:00.000Z"]);
+    // O feito das 14:20 continua de antes do último registrado.
+    recusa(
+      () => registrarFeito(OS, resultado.itens, feito("ln_1", "96"), ESCRITORIO),
+      "failed-precondition",
+      "Cadeira Flexform: o feito das 14:20 é de antes do último registrado (130, às 14:30).",
     );
   });
 

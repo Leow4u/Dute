@@ -1381,3 +1381,30 @@ Achada em 25/10/2026, numa revisão do código da Operação.
   conclusão de outubro, a OS se revisa sem o tempo real, o evento leva
   `minutos_reais: null` e a demanda vai à Execução a orçar. Antes, a revisão
   falhava com "payload inválido".
+
+### Correção: o feito atrasado do celular sobrescrevia um mais novo
+
+Achada em 25/10/2026, numa revisão do código da Operação.
+
+- **O defeito.** O feito da linha é absoluto e guarda a hora em que
+  aconteceu (`executado_em`). O registro não olhava essa hora.
+  - Um exemplo: o celular da Ana, sem sinal, guardou 96 cadeiras às 11:20, e
+    às 11:30 o escritório registrou 120.
+  - Quando o sinal voltou, a fila enviou o 96 e a OS voltou para 96, com a
+    hora das 11:20. A revisão e a cobrança partiam do número velho.
+  - As etapas já recusavam a hora de antes da última.
+- **A correção.** O feito com a hora de antes do último registrado na linha
+  é recusado: "Cadeira: o feito das 11:20 é de antes do último registrado
+  (120, às 11:30)."
+  - A fila do celular desiste da recusa e mostra a mensagem na lista do que
+    não foi enviado.
+  - A mesma hora continua corrigindo. O escritório registra com a hora de
+    agora, então só o registro atrasado é recusado.
+  - A inclusão em campo continua somando, mas a que chega atrasada não volta
+    a hora do último feito.
+- **Testes:**
+  - `itens-executados.test.ts`: o feito de antes do último é recusado, o da
+    mesma hora corrige, e a inclusão atrasada soma sem voltar a hora;
+  - `execucao.integration.test.ts`: o feito guardado no celular chega
+    depois do registrado pelo escritório e é recusado, e a OS fica com 120 e
+    um evento só. Antes, a OS voltava para 96.
