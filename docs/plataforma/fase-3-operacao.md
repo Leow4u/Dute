@@ -1287,3 +1287,32 @@ Feita em 23/10/2026, até onde não depende do Leonardo.
   - como desligar a Operação ou só a rotina.
 - **Falta.** O OK do Leonardo para publicar (marco 3 do plano de implantação) e a conferência na homologação, que é de uma pessoa.
 
+
+### Correção: a OS cancelada depois da revisão deixava a demanda direta parada
+
+Achada em 25/10/2026, numa revisão do código da Operação.
+
+- **O defeito.** Só a revisão recontava o resumo da demanda
+  (`demands/{numero}.operacao`) e levava a demanda direta à Execução a
+  orçar. O cancelamento gravava só a OS.
+  - Um exemplo: a demanda direta tinha duas OS, a primeira foi revisada com
+    a segunda ainda agendada, e depois a segunda foi cancelada.
+  - A demanda ficava em Para planejar para sempre, com a cancelada em
+    `os_em_aberto`.
+  - O Comercial não orçava a execução, e o que foi feito não chegava à
+    cobrança. A mesma situação com a ordem trocada (cancelar e depois
+    revisar) já dava certo.
+- **A correção.** Quando a demanda já tem OS revisada, cancelar reconta o
+  resumo sem a cancelada.
+  - Se a direta fica sem OS em aberto, ela vai à Execução a orçar com o
+    mesmo `executado_de`, `executado_ate`, `registro_execucao` e marco da
+    revisão, e grava o evento `demand.execution_reviewed`.
+  - O fechamento e a lista das OS para o resumo saíram de
+    `revisao-gravacao.ts` para `revisao.ts` (`fechamentoDaDireta` e
+    `paraResumo`), e a revisão e o cancelamento usam os mesmos.
+  - Sem OS revisada, cancelar continua sem gravar o resumo.
+- **Testes** (`revisao.integration.test.ts`):
+  - com a primeira OS revisada e a segunda cancelada depois, a demanda vai à
+    Execução a orçar, com o evento. Antes, ficava em Para planejar com a
+    cancelada em aberto;
+  - cancelar antes de qualquer revisão não grava o resumo nem muda a etapa.

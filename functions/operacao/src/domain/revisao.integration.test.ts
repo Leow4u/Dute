@@ -6,6 +6,7 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
 import { EVENTS_COLLECTION } from "./events.js";
+import { saveServiceOrderFor } from "./os-gravacao.js";
 import { SERVICE_ORDERS_COLLECTION } from "./os.js";
 import type { OperacaoProfile } from "./profile.js";
 import { reopenServiceOrderFor, reviewServiceOrderFor } from "./revisao-gravacao.js";
@@ -177,6 +178,32 @@ describe("revisar a OS da demanda direta", () => {
       "O Comercial já abriu o orçamento da execução desta demanda.",
     );
     assert.equal((await lerOs("10301-01")).status, "revisada");
+  });
+
+  it("a outra OS cancelada depois da revisão: sem OS em aberto, a demanda vai à Execução a orçar", async () => {
+    // A segunda viagem ficou agendada; a primeira OS é revisada antes de ela ser cancelada.
+    await db.collection("demands").doc("10301").update({ itens_pedidos: [{ ...PEDIDA, quantidade: "50" }], os_numeros: ["10301-01", "10301-02"] });
+    await db.collection(SERVICE_ORDERS_COLLECTION).doc("10301-02").set(osEmRevisao("10301-02", "10301", [{ ...PEDIDA, planejado: "10" }], { status: "agendada", edicao: 2, etapas: [], conclusao: null }));
+    await reviewServiceOrderFor(db, interno, revisar(), AGORA);
+    const antes = await lerDemanda("10301");
+    assert.deepEqual([antes.etapa, antes.operacao.os_em_aberto], ["para_planejar", ["10301-02"]]);
+
+    await saveServiceOrderFor(db, interno, { action: "cancel", idempotency_key: "c-1", numero: "10301-02", expected_edicao: 2, motivo: "O cliente desistiu da volta" });
+    const demanda = await lerDemanda("10301");
+    assert.deepEqual(demanda.operacao.os_revisadas, ["10301-01"]);
+    assert.deepEqual(demanda.operacao.os_em_aberto, []);
+    assert.deepEqual([demanda.etapa, demanda.executado_de, demanda.executado_ate, demanda.registro_execucao.origem], ["execucao_a_orcar", "2026-10-22", "2026-10-22", "operacao"]);
+    assert.equal(demanda.marcos.at(-1).etapa, "execucao_a_orcar");
+    const [executada] = await eventos("demand.execution_reviewed");
+    assert.deepEqual(executada.payload, { id: "10301", de: "2026-10-22", ate: "2026-10-22", os: 1 });
+  });
+
+  it("cancelar uma OS antes de qualquer revisão não grava o resumo nem mexe na etapa", async () => {
+    await db.collection(SERVICE_ORDERS_COLLECTION).doc("10301-02").set(osEmRevisao("10301-02", "10301", [{ ...PEDIDA, planejado: "10" }], { status: "agendada", edicao: 2, etapas: [], conclusao: null }));
+    await saveServiceOrderFor(db, interno, { action: "cancel", idempotency_key: "c-2", numero: "10301-02", expected_edicao: 2, motivo: "Ficou para outro dia" });
+    const demanda = await lerDemanda("10301");
+    assert.deepEqual([demanda.etapa, demanda.operacao], ["para_planejar", undefined]);
+    assert.equal((await eventos("demand.execution_reviewed")).length, 0);
   });
 });
 

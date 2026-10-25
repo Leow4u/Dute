@@ -15,11 +15,12 @@ import {
   DECISOES,
   diretaExecutada,
   exigirQuemReabre,
+  fechamentoDaDireta,
   interpretarReabertura,
   interpretarRevisao,
+  paraResumo,
   resumoDaOperacao,
   revisarOs,
-  type OsParaResumo,
   type ResumoDaOperacao,
 } from "./revisao.js";
 
@@ -40,13 +41,6 @@ function dataDe(snapshot: { exists: boolean; data: () => DocumentData | undefine
 
 function marcos(demanda: DocumentData): unknown[] {
   return Array.isArray(demanda.marcos) ? demanda.marcos : [];
-}
-
-/** As OS de serviço da demanda para o resumo: a vistoria (parte 3.11a) não executa o escopo e fica de fora. */
-function paraResumo(ordens: ReturnType<typeof osLida>[], brutos: Map<string, DocumentData>, numero: string, status: StatusDaOs, dados: DocumentData): OsParaResumo[] {
-  return ordens.filter((os) => os.tipo !== "vistoria").map((os) =>
-    os.numero === numero ? { numero, status, janela: os.janela, data: dados } : { numero: os.numero, status: os.status, janela: os.janela, data: brutos.get(os.numero) ?? {} },
-  );
 }
 
 export async function reviewServiceOrderFor(
@@ -93,16 +87,7 @@ export async function reviewServiceOrderFor(
       // Escritas.
       transaction.update(ref, { itens, revisao, status, edicao, ...autoria(caller) });
       const patch: Record<string, unknown> = { operacao: resumo, updated_at: FieldValue.serverTimestamp(), updated_by: caller.uid };
-      if (executada && resumo.periodo) {
-        Object.assign(patch, {
-          executado_de: resumo.periodo.de,
-          executado_ate: resumo.periodo.ate,
-          registro_execucao: { etapa_antes: "para_planejar", rv: null, em: iso, por_uid: caller.uid, origem: "operacao" },
-          etapa: "execucao_a_orcar",
-          etapa_desde: iso,
-          marcos: [...marcos(demanda), { etapa: "execucao_a_orcar", em: iso, por_uid: caller.uid }],
-        });
-      }
+      if (executada && resumo.periodo) Object.assign(patch, fechamentoDaDireta(demanda, resumo.periodo, iso, caller.uid));
       transaction.update(demandaRef, patch);
 
       const comum = { operation_id: operationId, customer_code: os.customer_code, actor: ator(caller), occurred_at: iso };
