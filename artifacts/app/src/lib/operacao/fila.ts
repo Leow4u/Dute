@@ -1,4 +1,4 @@
-import { formatarData, formatarPlaca } from "./cadastro";
+import { PAPEIS_DE_CAMPO, formatarData, formatarPlaca, type PapelDeCampo } from "./cadastro";
 
 /** A fila do dia (docs/plataforma/fase-3-operacao.md, parte 3). Sem preço. */
 
@@ -38,6 +38,8 @@ export type OsDaFila = {
   pessoas?: PessoaNaOs[];
   /** As placas copiadas na OS. */
   placas?: string[];
+  /** Os ids do cadastro dos veículos copiados na OS, com ou sem janela (o rascunho do Planejar OS). */
+  veiculoIds?: string[];
   /** Os serviços derivados dos itens (transporte, montagem...). */
   servicos?: string[];
   /** Serviço ou vistoria (parte 3.11a); a OS de antes é de serviço. */
@@ -62,6 +64,15 @@ export type AgendaEmEdicao = {
   equipe: string[];
   veiculoId: string;
   motivo: string;
+  /**
+   * O que o painel não mostra e a OS já tem (o Planejar OS grava): o papel de
+   * quem está na equipe, os veículos além do primeiro e o fim da janela, como
+   * duração a partir do início. Voltam no salvar, porque a callable troca a
+   * janela, a equipe e os veículos inteiros.
+   */
+  papeis: Readonly<Record<string, PapelDeCampo>>;
+  outrosVeiculos: string[];
+  duracaoMin: number | null;
 };
 
 export function hojeIso(agora = new Date()): string {
@@ -175,6 +186,7 @@ export function osDaLeitura(id: string, data: Record<string, unknown>): OsDaFila
     agenda,
     pessoas: pessoasDaOs(data.equipe),
     placas: placasDaOs(data.veiculos),
+    veiculoIds: idsDe(data.veiculos, "veiculo_id"),
     servicos: Array.isArray(data.servicos) ? data.servicos.filter((servico): servico is string => typeof servico === "string") : [],
     rota: rotaDaOs(data.locais),
     tipo: data.tipo === "vistoria" ? "vistoria" : "servico",
@@ -230,13 +242,49 @@ export function rotuloDaDemandaFora(fora: DemandaFora): string {
   return fora === "perdida" ? "Demanda perdida" : "Demanda cancelada";
 }
 
+const ULTIMO_MINUTO_DO_DIA = 23 * 60 + 59;
+
+function minutosDe(hora: string | null | undefined): number | null {
+  const achado = /^(\d{2}):(\d{2})/.exec(hora ?? "");
+  return achado ? Number(achado[1]) * 60 + Number(achado[2]) : null;
+}
+
+/** O fim da janela como duração a partir do início, ou null sem os dois. */
+function duracaoDaJanela(inicio: string | null | undefined, fim: string | null | undefined): number | null {
+  const de = minutosDe(inicio);
+  const ate = minutosDe(fim);
+  return de !== null && ate !== null && ate > de ? ate - de : null;
+}
+
+/** O fim com a mesma duração a partir do início; sem início, ou passando do dia, a janela fica sem fim. */
+function fimDaJanela(inicio: string | null, duracaoMin: number | null | undefined): string | null {
+  const de = minutosDe(inicio);
+  if (de === null || !duracaoMin) return null;
+  const ate = de + duracaoMin;
+  if (ate > ULTIMO_MINUTO_DO_DIA) return null;
+  return `${String(Math.floor(ate / 60)).padStart(2, "0")}:${String(ate % 60).padStart(2, "0")}`;
+}
+
+/**
+ * O formulário do painel a partir da OS. A OS salva como rascunho no
+ * Planejar OS não tem janela, mas tem a equipe e os veículos do plano.
+ */
 export function agendaDaOs(os: OsDaFila, hoje: string): AgendaEmEdicao {
+  const equipe = os.agenda?.equipe ?? (os.pessoas ?? []).map((pessoa) => pessoa.id);
+  const veiculos = os.agenda?.veiculos ?? os.veiculoIds ?? [];
+  const papeis: Record<string, PapelDeCampo> = {};
+  for (const pessoa of os.pessoas ?? []) {
+    if (pessoa.papel && (PAPEIS_DE_CAMPO as readonly string[]).includes(pessoa.papel)) papeis[pessoa.id] = pessoa.papel as PapelDeCampo;
+  }
   return {
     data: os.agenda?.data || hoje,
     hora: os.agenda?.hora ?? "",
-    equipe: [...(os.agenda?.equipe ?? [])],
-    veiculoId: os.agenda?.veiculos[0] ?? "",
+    equipe: [...equipe],
+    veiculoId: veiculos[0] ?? "",
     motivo: "",
+    papeis,
+    outrosVeiculos: veiculos.slice(1),
+    duracaoMin: duracaoDaJanela(os.agenda?.hora, os.agenda?.fim),
   };
 }
 
@@ -277,12 +325,24 @@ export function placasDe(ids: readonly string[], placas: Readonly<Record<string,
   return ids.map((id) => placaDe(id, placas)).join(", ");
 }
 
-/** O que o agendamento manda à callable (parte 3.4b): janela, equipe e veículos. */
-export function pedidoDeAgenda(agenda: Pick<AgendaEmEdicao, "data" | "hora" | "equipe" | "veiculoId">) {
+/**
+ * O que o agendamento manda à callable (parte 3.4b): janela, equipe e
+ * veículos. A callable troca os três inteiros, então o que o painel não
+ * mostra volta como estava: o papel de quem já estava na OS (quem entra pelo
+ * painel vai sem papel, e vale o primeiro do cadastro), os veículos além do
+ * do painel e o fim da janela, com a mesma duração a partir do novo início.
+ */
+export function pedidoDeAgenda(
+  agenda: Pick<AgendaEmEdicao, "data" | "hora" | "equipe" | "veiculoId"> & Partial<Pick<AgendaEmEdicao, "papeis" | "outrosVeiculos" | "duracaoMin">>,
+) {
+  // O campo de hora do navegador pode trazer segundos (HH:MM:SS); a callable aceita HH:MM.
+  const inicio = agenda.hora.trim().slice(0, 5) || null;
   return {
-    // O campo de hora do navegador pode trazer segundos (HH:MM:SS); a callable aceita HH:MM.
-    janela: { data: agenda.data, inicio: agenda.hora.trim().slice(0, 5) || null },
-    equipe: agenda.equipe.map((colaborador_id) => ({ colaborador_id })),
-    veiculos: agenda.veiculoId ? [agenda.veiculoId] : [],
+    janela: { data: agenda.data, inicio, fim: fimDaJanela(inicio, agenda.duracaoMin) },
+    equipe: agenda.equipe.map((colaborador_id) => {
+      const papel = agenda.papeis?.[colaborador_id];
+      return papel ? { colaborador_id, papel } : { colaborador_id };
+    }),
+    veiculos: [...new Set([agenda.veiculoId, ...(agenda.outrosVeiculos ?? [])].filter(Boolean))],
   };
 }
