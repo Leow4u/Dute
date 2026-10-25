@@ -7405,6 +7405,13 @@ export const emitBillingInvoice = onCall(async (request) => {
           emittedBy: profile.email ?? profile.uid,
           customerCode,
           firestoreTimestamp: FieldValue.serverTimestamp(),
+          // Sem as quantidades manuais salvas, a competência não tem
+          // documento: nasce aqui, como a prévia a mostra, aberta.
+          openPeriod: () => ({
+            ...createOpenBillingPeriod(input.competencia, { now: issuedAt, customerCode }),
+            created_by: profile.uid,
+            created_at: FieldValue.serverTimestamp(),
+          }),
         },
       );
       transaction.set(

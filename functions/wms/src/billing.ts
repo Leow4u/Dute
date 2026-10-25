@@ -157,6 +157,13 @@ export interface InvoiceEmissionOptions {
   customerCode?: string;
   /** Value used for Firestore audit fields, e.g. FieldValue.serverTimestamp(). */
   firestoreTimestamp?: unknown;
+  /**
+   * O período aberto da competência que ainda não tem documento (ninguém
+   * salvou as quantidades manuais): a prévia já a mostra aberta, e ela nasce
+   * na emissão. Sem ele, a competência sem documento recusa com
+   * PERIOD_NOT_FOUND.
+   */
+  openPeriod?: () => Readonly<Record<string, unknown>>;
 }
 
 export interface PreparedInvoiceEmission {
@@ -934,13 +941,18 @@ export async function emitInvoiceInTransaction(
   options: InvoiceEmissionOptions,
 ): Promise<Readonly<InvoiceSnapshot>> {
   const periodSnapshot = await transaction.get(periodRef);
+  const opened = !periodSnapshot.exists && options.openPeriod ? options.openPeriod() : null;
   const prepared = prepareInvoiceEmission(
-    periodSnapshot.exists ? (periodSnapshot.data() ?? null) : null,
+    periodSnapshot.exists ? (periodSnapshot.data() ?? null) : opened,
     input,
     options,
   );
   if (prepared.periodUpdate) {
-    transaction.set(periodRef, prepared.periodUpdate, { merge: true });
+    transaction.set(
+      periodRef,
+      opened ? { ...opened, ...prepared.periodUpdate } : prepared.periodUpdate,
+      { merge: true },
+    );
   }
   return prepared.snapshot;
 }
