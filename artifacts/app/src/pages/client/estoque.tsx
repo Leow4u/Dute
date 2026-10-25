@@ -619,6 +619,12 @@ export function ClienteEstoque() {
             return;
           }
 
+          const prazo = problemaDoPrazoDoPedido(fields.dueAt, new Date());
+          if (prazo) {
+            toast({ title: "Prazo no passado", description: prazo, variant: "destructive" });
+            return;
+          }
+
           if (!fields.destination.trim()) {
             toast({
               title: "Informe onde entregar",
@@ -1712,6 +1718,21 @@ const CART_SEARCH_FROM = 8;
  */
 export const MAX_ITENS_DO_PEDIDO = 100;
 
+/** O agora no formato do campo datetime-local (hora local, sem segundos): o menor prazo que o campo oferece. */
+function inicioDoPrazo(agora: Date): string {
+  const local = new Date(agora.getTime() - agora.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+/** O aviso do carrinho quando o prazo ("Para quando", hora local) já passou; sem prazo, nada. */
+export function problemaDoPrazoDoPedido(dueAt: string, agora: Date): string | null {
+  if (!dueAt) return null;
+  const prazo = new Date(dueAt).getTime();
+  return Number.isFinite(prazo) && prazo < agora.getTime()
+    ? "O prazo já passou. Escolha quando o pedido precisa chegar, de agora em diante."
+    : null;
+}
+
 /** O aviso do carrinho quando o pedido passa do limite, antes de enviar; ou null. */
 export function problemaDoTamanhoDoPedido(itens: number): string | null {
   return itens > MAX_ITENS_DO_PEDIDO
@@ -1889,6 +1910,7 @@ export function CartPanel({
         <Input
           id="cart-due-at"
           type="datetime-local"
+          min={inicioDoPrazo(new Date())}
           value={dueAt}
           onChange={(event) => setDueAt(event.target.value)}
         />
@@ -2099,7 +2121,7 @@ function ProductDetailPanel({
           />
           {draftQuantity > 0 ? (
             <StockFact
-              label="Sobra apos este pedido"
+              label="Sobra após este pedido"
               value={formatNumber(remaining)}
             />
           ) : (
