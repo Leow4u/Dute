@@ -1484,6 +1484,33 @@ Achada em 25/10/2026, numa revisão do faturamento do WMS.
   troca a primeira, e a foto da virada e a de substituição ficam. Com a
   gravação sem conferência de antes, os dois testes falham.
 
+### Correção: o Faturamento gravava no cliente guardado no aparelho
+
+Achada em 25/10/2026, numa revisão do que as telas do WMS mandam ao
+servidor. Está na produção.
+
+- **O defeito.** A Armazenagem › Faturamento era a única tela interna que
+  não lia o cliente ativo da aba (`useActiveCustomer`).
+  - A leitura do mês ficava guardada só pela competência.
+  - A prévia, "Salvar quantidades", "Emitir" e "Marcar como paga" levavam o
+    cliente guardado no aparelho na hora do clique (`lib/functions-api.ts`).
+  - Trocar o cliente no seletor deixava na tela o mês do anterior. Trocar em
+    outra aba mudava o guardado sem esta saber.
+  - Nos dois casos, "Emitir" confirmava o total do cliente da tela e
+    congelava e publicava o mês de outro.
+  - A lista de meses (`lib/cloud-api.ts`) lia o mesmo guardado.
+- **A correção.** A tela diz o cliente de cada leitura e gravação, no
+  cabeçalho `x-dute-cliente` (`CABECALHO_DO_CLIENTE`, em
+  `lib/active-customer.ts`). A chave da leitura leva o cliente, e trocar o
+  cliente lê o mês do novo. Sem o cabeçalho, o roteador não chama a
+  callable. A fatura em PDF (`pages/billing-invoice.tsx`) lê do mesmo jeito.
+  As callables não mudam.
+- **Testes:** `pages/billing.test.tsx` (a tela com as leituras de mentira:
+  emite para o cliente ativo, mesmo com outro guardado por outra aba, e
+  trocar o cliente troca o mês na tela) e `lib/functions-api.test.ts` (as
+  quatro rotas levam o cliente do cabeçalho, não o guardado, e sem ele nada
+  sai). Antes, os dois testes da tela falhavam.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.

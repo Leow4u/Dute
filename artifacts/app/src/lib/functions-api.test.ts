@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { CABECALHO_DO_CLIENTE } from "./active-customer";
 import { functionRoute } from "./functions-api";
 
 describe("fotos profissionais do produto", () => {
@@ -26,13 +27,48 @@ describe("fotos profissionais do produto", () => {
 });
 
 describe("rotas de faturamento", () => {
+  const daTela = (cliente: string, body?: unknown): RequestInit => ({
+    headers: new Headers({ [CABECALHO_DO_CLIENTE]: cliente }),
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
   it("prévia da competência vem do servidor, com o cálculo da emissão", async () => {
     const route = functionRoute("/api/billing/periods/2026-09", "GET");
     expect(route?.name).toBe("getBillingPreview");
-    expect(await route?.payload("/api/billing/periods/2026-09")).toEqual({
+    expect(await route?.payload("/api/billing/periods/2026-09", daTela("BTG Pactual"))).toEqual({
       competencia: "2026-09",
       customer_code: "BTG Pactual",
     });
+  });
+
+  it("lê e grava no cliente que a tela disse, não no que outra aba guardou no aparelho", async () => {
+    // Outra aba trocou o cliente ativo guardado; esta aba continua no Itaú.
+    vi.stubGlobal("localStorage", { getItem: () => "BTG Pactual", setItem: () => undefined });
+    const chamadas: Array<[string, string, unknown?]> = [
+      ["/api/billing/periods/2026-09", "GET"],
+      ["/api/billing/periods/2026-09/emit", "POST"],
+      ["/api/billing/periods/2026-09/pay", "POST"],
+      ["/api/billing/periods/2026-09/manual", "PUT", { items: [], customer_code: "BTG Pactual" }],
+    ];
+    for (const [pathname, method, body] of chamadas) {
+      const payload = await functionRoute(pathname, method)?.payload(pathname, daTela("Itaú", body));
+      expect(payload, `${method} ${pathname}`).toMatchObject({ competencia: "2026-09", customer_code: "Itaú" });
+    }
+  });
+
+  it("sem o cliente da tela, nada sai", async () => {
+    for (const [pathname, method] of [
+      ["/api/billing/periods/2026-09", "GET"],
+      ["/api/billing/periods/2026-09/emit", "POST"],
+      ["/api/billing/periods/2026-09/pay", "POST"],
+      ["/api/billing/periods/2026-09/manual", "PUT"],
+    ]) {
+      await expect(functionRoute(pathname, method)?.payload(pathname, {})).rejects.toThrow(
+        "A tela não disse o cliente do faturamento.",
+      );
+    }
   });
 
   it("lista e evidências continuam fora da prévia", () => {

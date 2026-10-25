@@ -1,20 +1,18 @@
 import { httpsCallable } from "firebase/functions";
 import { functionsDoApp } from "./firebase-functions";
 
-import { activeCustomerStorageKey, LEGACY_CUSTOMER_CODE } from "./active-customer";
-import { firebaseApp, firebaseAuth } from "./firebase";
+import { clienteDaChamada } from "./active-customer";
+import { firebaseApp } from "./firebase";
 
-function billingCustomerCode() {
-  try {
-    const stored = globalThis.localStorage?.getItem(
-      activeCustomerStorageKey(firebaseAuth?.currentUser?.uid),
-    );
-    const code = stored?.trim();
-    if (code) return code;
-  } catch {
-    // O teste da rota roda sem navegador.
-  }
-  return LEGACY_CUSTOMER_CODE;
+/**
+ * O cliente do Faturamento vem da tela, no cabeçalho de cada chamada: o mês
+ * que ela mostra e o que ela grava são do mesmo cliente. O guardado no
+ * aparelho não serve, porque outra aba o troca sem esta saber.
+ */
+function billingCustomerCode(init?: RequestInit) {
+  const code = clienteDaChamada(init);
+  if (!code) throw new Error("A tela não disse o cliente do faturamento.");
+  return code;
 }
 
 type FunctionRoute = {
@@ -885,9 +883,9 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     const competencia = billingPreviewMatch[1];
     return {
       name: "getBillingPreview",
-      payload: async () => ({
+      payload: async (_pathname, init) => ({
         competencia,
-        customer_code: billingCustomerCode(),
+        customer_code: billingCustomerCode(init),
       }),
     };
   }
@@ -904,9 +902,9 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
         payload: async (_pathname, init) => {
           const body = await readJsonBody(init);
           return {
-            competencia,
-            customer_code: billingCustomerCode(),
             ...body,
+            competencia,
+            customer_code: billingCustomerCode(init),
             idempotency_key: body.idempotency_key ?? crypto.randomUUID(),
           };
         },
@@ -915,18 +913,18 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     if (method === "POST" && action === "emit") {
       return {
         name: "emitBillingInvoice",
-        payload: async () => ({
+        payload: async (_pathname, init) => ({
           competencia,
-          customer_code: billingCustomerCode(),
+          customer_code: billingCustomerCode(init),
         }),
       };
     }
     if (method === "POST" && action === "pay") {
       return {
         name: "payBillingInvoice",
-        payload: async () => ({
+        payload: async (_pathname, init) => ({
           competencia,
-          customer_code: billingCustomerCode(),
+          customer_code: billingCustomerCode(init),
         }),
       };
     }

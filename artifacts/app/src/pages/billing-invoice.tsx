@@ -1,8 +1,10 @@
-import { useGetBillingPeriod } from "@workspace/api-client-react";
+import { getGetBillingPeriodQueryKey, useGetBillingPeriod } from "@workspace/api-client-react";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
 
 import { InvoiceDocument } from "@/components/billing/invoice-document";
+import { CABECALHO_DO_CLIENTE } from "@/lib/active-customer";
+import { useActiveCustomer } from "@/lib/active-customer-context";
 import { currentCompetencia } from "@/lib/billing-format";
 import { buildInvoiceView } from "@/lib/invoice-view";
 import { humanApiError } from "@/lib/permissions";
@@ -19,7 +21,12 @@ function competenciaFromUrl() {
  */
 export default function BillingInvoice() {
   const competencia = competenciaFromUrl();
-  const { data, isLoading, error } = useGetBillingPeriod(competencia);
+  // A fatura do cliente ativo, como no Fechamento do mês (pages/billing.tsx).
+  const { code: cliente, isLoading: carregandoCliente } = useActiveCustomer();
+  const { data, isLoading, error } = useGetBillingPeriod(competencia, {
+    query: { queryKey: [...getGetBillingPeriodQueryKey(competencia), cliente], enabled: !carregandoCliente },
+    request: { headers: { [CABECALHO_DO_CLIENTE]: cliente } },
+  });
   const period = data as unknown as
     | { status?: string; emitido_em?: string | null }
     | undefined;
