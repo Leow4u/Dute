@@ -7,7 +7,10 @@ evento estruturado, com entidade, cliente e payload minimo para auditoria.
 
 - Automatico: rotinas do portal, aprovacao de solicitacao, WMS, faturamento,
   acesso e importacao.
-- Manual: `POST /api/ai/events`.
+- Manual: `POST /api/ai/events` (`recordOperationalEvent`), so pela equipe e
+  so nos tipos que as telas registram a mao (lista em
+  `functions/wms/src/domain/manual-events.ts`). Tipo de transicao nunca entra
+  a mao, e a hora e sempre a da gravacao.
 - Colecoes alimentadas: `events`, `ai_agent_inbox` e `ai_agent_memory`.
 
 ## Campos do evento

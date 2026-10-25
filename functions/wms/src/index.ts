@@ -171,6 +171,7 @@ import { searchPastConversations } from "./domain/agent-history.js";
 import { buildOrderDraft, buildShipmentDraft, draftFromToolResponses, sendAgentDraft } from "./domain/agent-drafts.js";
 import { AgentAttachmentSchema, attachmentsForDraft, invoiceContext, READABLE_INVOICE_TYPES, type AgentAttachment } from "./domain/agent-attachments.js";
 import { activeNotesForPrompt, decideNote, DecideNoteSchema, listNotes, NOTE_REVIEWER_ROLES, suggestNote } from "./domain/agent-notes.js";
+import { isManualEventType } from "./domain/manual-events.js";
 import {
   CreateWarehouseAisleSchema,
   DeleteWarehousePositionSchema,
@@ -6730,27 +6731,19 @@ export const resolveWarehouseException = onCall(async (request) => {
   );
 });
 
+/**
+ * O evento que a tela registra à mão (domain/manual-events.ts): só a equipe,
+ * só os tipos que as telas mandam, e com a hora da gravação, que quem
+ * registra não escolhe. As transições gravam o próprio evento.
+ */
 export const recordOperationalEvent = onCall(async (request) => {
   const profile = await getProfile(request);
+  requireInternal(profile);
   const input = EventInputSchema.parse(request.data ?? {});
-  if (profile.role === "cliente") {
-    const customerCode = requireCustomerScope(profile, input.customer_code);
-    if (
-      !["customer.message_sent", "portal.request_created"].includes(input.type)
-    ) {
-      throw new HttpsError(
-        "permission-denied",
-        "Cliente não pode emitir esse evento.",
-      );
-    }
-    return {
-      event: await emitEvent(
-        { ...input, customer_code: customerCode },
-        profile,
-      ),
-    };
+  if (!isManualEventType(input.type)) {
+    throw new HttpsError("permission-denied", "Esse evento é gravado pelo próprio fluxo, não à mão.");
   }
-  return { event: await emitEvent(input, profile) };
+  return { event: await emitEvent({ ...input, occurred_at: undefined }, profile) };
 });
 
 export const syncOperationalNotifications = onCall(async (request) => {
