@@ -419,6 +419,11 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   "Correção: o convite de cliente saía com um cliente que ninguém
   escolheu"). Os convites pendentes já se refazem depois de publicar (seção
   5).
+- **Quem administra o acesso (25/10/2026).** Entra com a `main`, sem
+  liberação própria: remover ou devolver o acesso, trocar o papel e criar ou
+  cancelar o convite releem na transação quem age, e dois owners que se tiram
+  ao mesmo tempo não deixam o sistema sem nenhum (`fase-2-nucleo.md`,
+  "Correção: dois owners podiam se tirar ao mesmo tempo").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.

@@ -57,7 +57,7 @@ import {
   type LpuItem,
 } from "./billing.js";
 import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
-import { accessChangeFromTo, setUserAccessTransaction } from "./domain/access.js";
+import { accessChangeFromTo, assertAccessActorCurrent, setUserAccessTransaction } from "./domain/access.js";
 import {
   CLIENT_ACCESS_COLLECTION,
   CLIENT_PROFILES_COLLECTION,
@@ -4818,6 +4818,11 @@ export const mutateManagedEntity = onCall(async (request) => {
     }
     if (input.action !== "create" && !targetSnapshot.exists && !configUpsert) {
       throw new HttpsError("not-found", "Registro não encontrado.");
+    }
+
+    // Papel e convite: quem administra o acesso, relido na transação.
+    if (input.resource === "users" || input.resource === "invites") {
+      await assertAccessActorCurrent(transaction, db, profile);
     }
 
     const before = (targetSnapshot.data() ?? {}) as Record<string, unknown>;

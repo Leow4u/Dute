@@ -17,6 +17,8 @@ async function seed() {
   await db.collection("users").doc("wms-1").set({ nome: "Rafael", email: "r@x", role: "wms" });
   await db.collection("users").doc("admin-2").set({ nome: "Outro admin", email: "a@x", role: "admin" });
   await db.collection("users").doc("admin-1").set({ nome: "Admin", email: "admin@x", role: "admin" });
+  await db.collection("users").doc("owner-1").set({ nome: "Owner", email: "owner@x", role: "owner" });
+  await db.collection("users").doc("owner-2").set({ nome: "Outro owner", email: "o2@x", role: "owner" });
 }
 
 async function eventsFor(userId: string) {
@@ -96,5 +98,28 @@ describe("remover e devolver acesso", () => {
       setUserAccessTransaction(db, { user_id: "wms-1", active: false }, { uid: "ops-1", role: "interno" }),
       /administradores de acesso/,
     );
+  });
+});
+
+// Quem age chega com o perfil lido antes da transação. Dois owners que se
+// tiram ao mesmo tempo deixariam o sistema sem nenhum: a transação relê quem
+// age, e a segunda para com o perfil de agora.
+describe("quem administra o acesso, relido na transação", () => {
+  it("o owner que perdeu o acesso no meio do caminho não tira o de ninguém", async () => {
+    await db.collection("users").doc("owner-1").set({ access_disabled: true }, { merge: true });
+    await assert.rejects(
+      setUserAccessTransaction(db, { user_id: "owner-2", active: false }, owner),
+      /Seu acesso mudou/,
+    );
+    assert.notEqual((await db.collection("users").doc("owner-2").get()).get("access_disabled"), true);
+  });
+
+  it("o owner rebaixado no meio do caminho não tira o acesso de outro owner", async () => {
+    await db.collection("users").doc("owner-1").set({ role: "admin" }, { merge: true });
+    await assert.rejects(
+      setUserAccessTransaction(db, { user_id: "owner-2", active: false }, owner),
+      /Seu acesso mudou/,
+    );
+    assert.equal((await eventsFor("owner-2")).length, 0);
   });
 });
