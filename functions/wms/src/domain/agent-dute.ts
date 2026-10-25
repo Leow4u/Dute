@@ -72,8 +72,9 @@ const COORDINATION_TOOLS: AgentToolName[] = ["fila_solicitacoes", ...FLOOR_TOOLS
  * - cliente: só o que o portal mostra;
  * - WMS: o chão do armazém, sem faturas nem valores;
  * - financeiro: o portal e a prévia do mês (mesmo acesso de getBillingPreview);
- * - coordenação (interno, suporte, admin, owner): a operação inteira; a prévia
- *   do mês só para quem lê faturamento.
+ * - coordenação (interno, suporte, admin, owner): a operação inteira; as
+ *   faturas e a prévia do mês só para quem lê faturamento (canReadBilling nas
+ *   regras e requireBillingRead): o interno não acompanha faturamento.
  */
 export function agentToolsForRole(role: string, contractedModules?: readonly string[]): AgentToolName[] {
   const allowed = new Set<AgentToolName>();
@@ -87,8 +88,9 @@ export function agentToolsForRole(role: string, contractedModules?: readonly str
   else if (role === "wms") add([...PORTAL_TOOLS.filter((name) => name !== "faturas"), ...FLOOR_TOOLS]);
   else if (role === "financeiro") add([...PORTAL_TOOLS, "previa_faturamento"]);
   else if (["owner", "admin", "interno", "suporte"].includes(role)) {
-    add([...PORTAL_TOOLS, ...COORDINATION_TOOLS]);
-    if (role !== "interno") add(["previa_faturamento"]);
+    const leFaturamento = role !== "interno";
+    add([...PORTAL_TOOLS.filter((name) => leFaturamento || name !== "faturas"), ...COORDINATION_TOOLS]);
+    if (leFaturamento) add(["previa_faturamento"]);
   }
   return AGENT_TOOL_NAMES.filter((name) => allowed.has(name));
 }

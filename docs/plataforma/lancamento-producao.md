@@ -190,7 +190,11 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     do Agent Dute do WMS somam só os dias que couberam inteiros e dizem o
     começo que ficou para outra consulta (`fase-5-memoria.md`, "Correção:
     o resumo das movimentações cortava o período sem avisar"). Antes,
-    somavam os 5.000 mais recentes como se fossem o período todo.
+    somavam os 5.000 mais recentes como se fossem o período todo;
+  - o interno não consulta as faturas pelo Agent Dute do WMS, como já não
+    as lê pelas telas (`canReadBilling`). Antes, o agente dizia a ele o
+    valor de cada fatura (`fase-5-memoria.md`, "Correção: o interno via o
+    valor das faturas pelo agente do WMS").
   A matriz de papéis do WMS (PR 372) é só teste: nenhuma callable muda
   quem passa.
 - **O estoque, o aviso de envio e a tela Documentos do WMS (25/10/2026).**

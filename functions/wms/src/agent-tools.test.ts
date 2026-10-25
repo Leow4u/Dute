@@ -46,12 +46,14 @@ describe("consultas do Agent Dute por papel", () => {
     assert.deepEqual(agentToolsForRole("financeiro"), [...PORTAL, "previa_faturamento"]);
   });
 
-  it("coordenação tem a operação; prévia só para quem lê faturamento", () => {
+  it("coordenação tem a operação; as faturas e a prévia só para quem lê faturamento", () => {
     for (const role of ["owner", "admin", "suporte", "interno"]) {
       const tools = agentToolsForRole(role);
       for (const name of ["fila_solicitacoes", "recebimentos", "tarefas_armazem", "enderecos", "eventos"]) {
         assert.ok(tools.includes(name as never), `${role}: ${name}`);
       }
+      // O interno não lê faturamento (canReadBilling nas regras): o valor das faturas não chega a ele pelo agente.
+      assert.equal(tools.includes("faturas"), role !== "interno", `${role}: faturas`);
       assert.equal(tools.includes("previa_faturamento"), role !== "interno", role);
     }
   });
