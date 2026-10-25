@@ -110,14 +110,19 @@ OPERACAO_COLLECTIONS = (
     "client_notification_reads",
 )
 # Financeiro (docs/plataforma/fase-4-financeiro.md, partes 4.1a, 4.2a e
-# 4.3a): a fatura da demanda, os pagamentos dela, a projeção do portal e os
-# recibos. É dinheiro da Operação, não dado do WMS: nunca apagados, nem com
-# --include-setup.
+# 4.3a, e fase-7-financeiro-unificado.md, parte 7.4): a fatura da demanda, os
+# pagamentos dela, a projeção do portal, os recibos e as filas da Omie, a da
+# emissão da NFS-e e a da baixa. É dinheiro da Operação, não dado do WMS: nunca
+# apagados, nem com --include-setup. A emissão reserva a demanda (`emissao_nf`)
+# e guarda a nota que a prefeitura autorizou: sem ela, a demanda preservada
+# ficaria reservada por uma emissão que não existe, fora de A faturar.
 FINANCEIRO_COLLECTIONS = (
     "faturas",
     "pagamentos",
     "client_faturas",
     "financeiro_operations",
+    "nf_emissoes",
+    "nf_baixas",
 )
 # A memória da Dute (docs/plataforma/fase-5-memoria.md, partes 5.1a, 5.2a e
 # 5.3a): as medidas, os cursores das rotinas, as sugestões com a decisão e o
