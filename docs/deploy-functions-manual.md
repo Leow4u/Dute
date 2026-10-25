@@ -326,6 +326,19 @@ Sem `--force`, o CI não apaga índice: o que sair do `firestore.indexes.json`
 continua no projeto e o log do job avisa. Para apagar, alguém roda
 `firebase deploy --only firestore:indexes --force --project <projeto>`.
 
+O índice que falta só aparece na nuvem: o emulador não exige índice composto, e
+a consulta sem ele passa nos testes e falha na homologação ou na produção com
+"requires an index". Cada job de integração do CI carrega
+`tools/registrar_consultas.cjs` (`NODE_OPTIONS=--require`), que grava em
+`CONSULTAS_SAIDA` cada consulta que as Functions fazem nos testes, com o banco e
+a linha de `lib/` de onde veio. O passo seguinte,
+`tools/indices_das_consultas.py`, confere cada uma contra o arquivo de índices
+do banco no `firebase.json` (o `dute-rh` não tem arquivo, então lá nenhuma
+consulta pode pedir índice composto) e reprova a que não tem, com o índice
+escrito como entra no arquivo. Só confere o que os testes exercitam: consulta
+nova entra com o teste que a usa. As consultas das telas têm a trava em
+`artifacts/app/src/lib/cloud-api-indices.test.ts`.
+
 A conta é a mesma do job de functions (`github-actions-functions@<projeto>`), que
 já tinha `firebase.viewer` (acha o banco e o bucket padrão) e
 `serviceusage.serviceUsageConsumer`. Ela publica functions que leem e gravam o

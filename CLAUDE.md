@@ -265,7 +265,11 @@ documentação de produto e operação está em `docs/`.
   em "Missing or insufficient permissions" depois do deploy de functions, até as
   regras subirem. Se o job `regras` falha, nada mais sobe. O CI não apaga
   índice: o que sair do `firestore.indexes.json` continua no projeto (o log
-  avisa) até alguém apagar com `--force`.
+  avisa) até alguém apagar com `--force`. O emulador não exige índice
+  composto: as consultas das telas têm o índice travado em
+  `lib/cloud-api-indices.test.ts`, e as das Functions, nos jobs de integração
+  (`tools/registrar_consultas.cjs` grava cada consulta dos testes e
+  `tools/indices_das_consultas.py` reprova a que não tem índice).
 - **Depois de qualquer deploy de functions, rode
   `tools/check_functions_invoker.ps1 -ProjectId <projeto>`** (padrão `dute-prod`).
   Ele confere as callables de todas as codebases do `firebase.json`.

@@ -152,8 +152,18 @@ jobs:
         run: npm ci
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
+      # As consultas que as Functions fazem nos testes vão para um arquivo
+      # (tools/registrar_consultas.cjs), e o passo seguinte confere o índice de
+      # cada uma: o emulador não exige índice composto, a produção exige. Igual
+      # nos outros jobs de integração.
       - name: Integration + rules tests
+        env:
+          NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs
+          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas.jsonl
         run: npm run test:integration
+      - name: Índice de cada consulta das Functions
+        working-directory: .
+        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas.jsonl"
 
   # Functions do Comercial (codebase "comercial", docs/plataforma/fase-6-comercial.md):
   # pacote npm próprio, como o WMS.
@@ -196,7 +206,13 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
       - name: Integration tests
+        env:
+          NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs
+          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas.jsonl
         run: npm run test:integration
+      - name: Índice de cada consulta das Functions
+        working-directory: .
+        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas.jsonl"
 
   # Functions da Operação (codebase "operacao", docs/plataforma/fase-3-operacao.md).
   operacao-unit:
@@ -238,7 +254,13 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
       - name: Integration tests
+        env:
+          NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs
+          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas.jsonl
         run: npm run test:integration
+      - name: Índice de cada consulta das Functions
+        working-directory: .
+        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas.jsonl"
 
   # Functions do Financeiro (codebase "financeiro", docs/plataforma/fase-4-financeiro.md).
   financeiro-unit:
@@ -280,7 +302,13 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
       - name: Integration tests
+        env:
+          NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs
+          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas.jsonl
         run: npm run test:integration
+      - name: Índice de cada consulta das Functions
+        working-directory: .
+        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas.jsonl"
 
   # Functions do núcleo (codebase "core", docs/plataforma/fase-5-memoria.md).
   core-unit:
@@ -322,7 +350,13 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
       - name: Integration tests
+        env:
+          NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs
+          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas.jsonl
         run: npm run test:integration
+      - name: Índice de cada consulta das Functions
+        working-directory: .
+        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas.jsonl"
 
   # O RH (docs/plataforma/fase-8-rh.md): os testes rodam desde a parte 8.1a; a
   # codebase entra na publicação só na 8.1b, depois de o banco dute-rh
@@ -366,7 +400,13 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
       - name: Integration tests
+        env:
+          NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs
+          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas.jsonl
         run: npm run test:integration
+      - name: Índice de cada consulta das Functions
+        working-directory: .
+        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas.jsonl"
 
   # A homologação (dute-homolog) recebe cada push na main pelo homologacao.yml,
   # que espera este workflow terminar verde no mesmo commit. Aqui ela não entra:
