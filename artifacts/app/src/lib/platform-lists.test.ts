@@ -315,10 +315,10 @@ describe("a liberação da memória igual em todo lugar (Fase 5)", () => {
     expect(tsList(papeis, "ALERTA_ROLES")).toEqual([...ALERTA_PARADO_ROLES]);
   });
 
-  it("a lista da rotina e das callables do núcleo é a do app, só a homologação até o fim da fase", () => {
+  it("a lista da rotina e das callables do núcleo é a do app, homologação e produção desde o lançamento da fase", () => {
     expect(tsList(liberacao, "MEMORIA_AMBIENTES_LIBERADOS")).toEqual([...MEMORIA_AMBIENTES_LIBERADOS]);
-    expect([...MEMORIA_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
-    expect([memoriaLiberada("dute-homolog"), memoriaLiberada("dute-prod"), memoriaLiberada("dute-btg"), memoriaLiberada(undefined)]).toEqual([true, false, false, false]);
+    expect([...MEMORIA_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog", "dute-prod"]);
+    expect([memoriaLiberada("dute-homolog"), memoriaLiberada("dute-prod"), memoriaLiberada("dute-btg"), memoriaLiberada(undefined)]).toEqual([true, true, false, false]);
   });
 });
 
@@ -327,10 +327,10 @@ describe("o Agent Dute do núcleo igual em todo lugar (parte 5.5)", () => {
   const papeis = read("functions/core/src/domain/platform-roles.ts");
   const rules = read("firestore.rules");
 
-  it("a liberação própria do agente é a do app, só a homologação até o lançamento da fase", () => {
+  it("a liberação própria do agente é a do app, homologação e produção desde o lançamento da fase", () => {
     expect(tsList(liberacao, "AGENTE_AMBIENTES_LIBERADOS")).toEqual([...AGENTE_AMBIENTES_LIBERADOS]);
-    expect([...AGENTE_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
-    expect([agenteLiberado("dute-homolog"), agenteLiberado("dute-prod"), agenteLiberado("dute-btg"), agenteLiberado(undefined)]).toEqual([true, false, false, false]);
+    expect([...AGENTE_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog", "dute-prod"]);
+    expect([agenteLiberado("dute-homolog"), agenteLiberado("dute-prod"), agenteLiberado("dute-btg"), agenteLiberado(undefined)]).toEqual([true, true, false, false]);
   });
 
   it("onde o núcleo roda as rotinas, a rotina agendada do WMS não roda (parte 5.5g)", () => {

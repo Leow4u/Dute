@@ -59,13 +59,13 @@ documentação de produto e operação está em `docs/`.
   até a Fase 7. Roteiro do lançamento (marcos 2, 3 e 4 juntos, e a parte
   4.9b, que liga o Financeiro): `docs/plataforma/lancamento-producao.md`.
   Desenho e registro: `docs/plataforma/fase-4-financeiro.md`.
-- **Fase 5 (memória da Dute) na `main`, partes 5.1a a 5.6, só no
-  `dute-homolog`**: `docs/plataforma/fase-5-memoria.md` (23/10/2026). A
-  codebase é `functions/core`, com as liberações próprias
-  `MEMORIA_AMBIENTES_LIBERADOS` e `AGENTE_AMBIENTES_LIBERADOS` (só o
-  `dute-homolog`); as medidas saem das OS revisadas e a sugestão nunca grava
-  sem a pessoa. A produção espera o OK do Leonardo ("Lançamento na produção",
-  no runbook).
+- **Fase 5 (memória da Dute) na `main`, partes 5.1a a 5.6, ligada no
+  `dute-homolog` e no `dute-prod`** (OK do Leonardo em 25/10/2026,
+  "Lançamento na produção" no runbook): `docs/plataforma/fase-5-memoria.md`
+  (23/10/2026). A codebase é `functions/core`, com as liberações próprias
+  `MEMORIA_AMBIENTES_LIBERADOS` e `AGENTE_AMBIENTES_LIBERADOS` (as duas com
+  o `dute-homolog` e o `dute-prod`); as medidas saem das OS revisadas e a
+  sugestão nunca grava sem a pessoa.
 - **Fase 7 (financeiro unificado) na `main` até a 7.5c, ligada com o
   Financeiro** (no `dute-homolog` e, desde a parte 4.9b, no `dute-prod`; a
   NFS-e pela Omie só no `dute-homolog`):
@@ -179,7 +179,7 @@ documentação de produto e operação está em `docs/`.
     Toda callable entra por `requireCoreCaller`, no
     formato de uma linha do `src/index.ts` (trava em `src/callables.test.ts`).
     Liberação própria
-    `MEMORIA_AMBIENTES_LIBERADOS` (só o `dute-homolog`). O Agent Dute muda
+    `MEMORIA_AMBIENTES_LIBERADOS` (`dute-homolog` e `dute-prod`). O Agent Dute muda
     para cá na parte 5.5, com a liberação própria `AGENTE_AMBIENTES_LIBERADOS`
     e as ferramentas só de leitura, pelo leitor por cliente (desenho em
     `docs/plataforma/fase-5-memoria.md`). Onde o agente do núcleo está

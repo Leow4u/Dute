@@ -97,7 +97,7 @@ describe("a entrada das callables do agente", () => {
   const pedido = (uid: string) => ({ auth: { uid, token: {} }, data: {} }) as unknown as CallableRequest<unknown>;
 
   it("a liberação própria antes de tudo, depois o login e o papel", async () => {
-    await assert.rejects(requireDuteCaller(db, pedido("ops-1"), "dute-prod"), negado(/não está liberado/, "failed-precondition"));
+    await assert.rejects(requireDuteCaller(db, pedido("ops-1"), "dute-btg"), negado(/não está liberado/, "failed-precondition"));
     await assert.rejects(requireDuteCaller(db, { data: {} } as CallableRequest<unknown>, "dute-homolog"), negado(/Faça login/, "unauthenticated"));
     await assert.rejects(requireDuteCaller(db, pedido("campo-1"), "dute-homolog"), negado(/não usa o Agent Dute/));
     assert.deepEqual(await requireDuteCaller(db, pedido("cli-itau"), "dute-homolog"), { uid: "cli-itau", role: "cliente", name: "Renata", customerCode: "ITAU" });

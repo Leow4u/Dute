@@ -1654,8 +1654,18 @@ Achada em 25/10/2026, na mesma revisão. Está na produção.
 
 ## Lançamento na produção
 
-Espera o OK do Leonardo. Até lá, a memória e o Agent Dute do núcleo só
-valem no `dute-homolog`, e a produção segue com o agente do WMS.
+Feito em 25/10/2026, com o OK do Leonardo ("Pode fazer então, vamos
+seguir"), depois da publicação dos marcos 2, 3 e 4 e da parte 4.9b do
+Financeiro (`lancamento-producao.md`). O PR liga as três listas abaixo, e
+os testes que esperavam a recusa no `dute-prod` passam a esperar a
+liberação, com o `dute-btg` recusando:
+
+- `liberacao.test.ts` e `agente-escopo.test.ts` do núcleo;
+- a entrada das callables do agente em `agente-escopo.integration.test.ts`;
+- `agent-routines.test.ts` do WMS;
+- `platform-lists.test.ts` do app.
+
+Na produção, vale a partir da publicação seguinte ao merge. O roteiro:
 
 1. **Um PR liga as listas:**
    - `MEMORIA_AMBIENTES_LIBERADOS` e `AGENTE_AMBIENTES_LIBERADOS` ganham o
