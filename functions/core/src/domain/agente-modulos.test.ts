@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { bancoFalso } from "./agente-banco-falso.test.js";
+import { bancoFalso, type ColecoesFalsas } from "./agente-banco-falso.test.js";
 import { FERRAMENTAS_DO_AGENTE } from "./agente-catalogo.js";
-import { DADOS_DA_ARMAZENAGEM, DADOS_DOS_MODULOS } from "./agente-dados.test.js";
+import { DADOS_DA_ARMAZENAGEM, DADOS_DOS_MODULOS, porId } from "./agente-dados.test.js";
 import { modulosDoEscopo, type EscopoDoAgente } from "./agente-escopo.js";
 import { executarFerramenta, ferramentasDoEscopo, type FerramentaDoAgente } from "./agente-ferramentas.js";
 import { leitorDoAgente } from "./agente-leitor.js";
@@ -54,9 +54,13 @@ function ferramentaChamada(nome: string): FerramentaDoAgente {
   return item;
 }
 
-async function rodar(nome: string, alvo: EscopoDoAgente, entrada: unknown = ENTRADAS[nome] ?? {}) {
-  const { db } = bancoFalso(DADOS);
+async function rodarCom(dados: ColecoesFalsas, nome: string, alvo: EscopoDoAgente, entrada: unknown = ENTRADAS[nome] ?? {}) {
+  const { db } = bancoFalso(dados);
   return executarFerramenta(ferramentaChamada(nome), { leitor: leitorDoAgente(db, alvo), escopo: alvo, agora: AGORA }, entrada) as Promise<Record<string, any>>;
+}
+
+function rodar(nome: string, alvo: EscopoDoAgente, entrada: unknown = ENTRADAS[nome] ?? {}) {
+  return rodarCom(DADOS, nome, alvo, entrada);
 }
 
 const nomes = (lista: readonly FerramentaDoAgente[]) => lista.map((item) => item.nome);
@@ -175,10 +179,58 @@ describe("o Comercial, para quem orça", () => {
 
   it("a LPU com o preço da tabela do cliente; o item que não se orça e o inativo ficam de fora", async () => {
     const itens = await rodar("lpu", escopo("comercial"));
-    assert.deepEqual(itens.tabela, { nome: "Tabela Itaú 2026", vigente_de: "2026-01-01", do_cliente: true });
-    assert.deepEqual(itens.itens.map((linha: Record<string, unknown>) => [linha.item, linha.preco]), [["Mesa", "R$ 850,00"]]);
+    assert.deepEqual(itens.tabelas.map((tabela: Record<string, unknown>) => [tabela.tabela, tabela.vigente_de, tabela.do_cliente]), [["Tabela Itaú 2026", "2026-01-01", true]]);
+    assert.deepEqual(itens.itens.map((linha: Record<string, unknown>) => [linha.item, linha.precos]), [["Mesa", [{ tabela: "Tabela Itaú 2026", preco: "R$ 850,00" }]]]);
     const semTabela = await rodar("lpu", escopo("comercial", "NOVO"), { texto: "montagem" });
-    assert.deepEqual([semTabela.tabela.nome, semTabela.itens.map((linha: Record<string, unknown>) => linha.preco)], ["Padrão Dutelog", ["R$ 1.200,00", "R$ 900,00"]]);
+    assert.deepEqual(semTabela.tabelas.map((tabela: Record<string, unknown>) => [tabela.tabela, tabela.do_cliente]), [["Padrão Dutelog", false]]);
+    assert.deepEqual(semTabela.itens.map((linha: { precos: Array<{ preco: string }> }) => linha.precos.map((preco) => preco.preco)), [["R$ 1.200,00"], ["R$ 900,00"]]);
+  });
+
+  it("a LPU usa a tabela que vale hoje, como o orçamento: a ativa do ano que vem fica de fora, a encerrada que ainda vale entra", async () => {
+    // A carga da tabela de 2027 deixou a de 2026 encerrada, com fim em 31/12 (functions/comercial, cargas/tabela.ts).
+    const tabela = (id: string, customer_code: string | null, nome: string, variante: string, status: string, vigente_de: string, vigente_ate: string | null, mesa: string) => ({
+      id,
+      customer_code,
+      contract_id: null,
+      nome,
+      variante,
+      variante_chave: variante.toLowerCase().replace(/\s+/gu, "_"),
+      status,
+      vigente_de,
+      vigente_ate,
+      precos: { lpu_mesa: { preco: mesa } },
+    });
+    const dados = {
+      ...DADOS,
+      price_tables: porId(
+        tabela("pt_itau_2025", "ITAU", "Tabela Itaú 2025", "Comercial", "encerrada", "2025-01-01", "2025-12-31", "700"),
+        tabela("pt_itau_2026", "ITAU", "Tabela Itaú 2026", "Comercial", "encerrada", "2026-01-01", "2026-12-31", "850"),
+        tabela("pt_itau_2027", "ITAU", "Tabela Itaú 2027", "Comercial", "ativa", "2027-01-01", null, "990"),
+        tabela("pt_itau_noite", "ITAU", "Tabela Itaú Noturna", "Noturna", "ativa", "2026-03-01", null, "1100"),
+        tabela("pt_brad_2025", "BRAD", "Tabela Brad 2025", "Comercial", "encerrada", "2025-01-01", "2025-12-31", "600"),
+        tabela("pt_padrao", null, "Padrão Dutelog", "Comercial", "ativa", "2026-01-01", null, "900"),
+        tabela("pt_padrao_fds", null, "Padrão Fim de semana", "Fim de semana", "ativa", "2026-01-01", null, "1300"),
+      ),
+    };
+    const precos = (resposta: Record<string, any>) => resposta.itens.find((linha: Record<string, unknown>) => linha.item === "Mesa")?.precos;
+
+    const itau = await rodarCom(dados, "lpu", escopo("comercial"));
+    assert.equal(itau.dia, "2026-10-23");
+    // Uma por variante: a Comercial e a Noturna do cliente; a Padrão só na variante em que ele não tem tabela.
+    assert.deepEqual(precos(itau), [
+      { tabela: "Tabela Itaú 2026 · Comercial", preco: "R$ 850,00" },
+      { tabela: "Padrão Fim de semana · Fim de semana", preco: "R$ 1.300,00" },
+      { tabela: "Tabela Itaú Noturna · Noturna", preco: "R$ 1.100,00" },
+    ]);
+    assert.deepEqual(itau.tabelas[0], { tabela: "Tabela Itaú 2026 · Comercial", vigente_de: "2026-01-01", vigente_ate: "2026-12-31", do_cliente: true });
+
+    // O cliente que tem tabela na variante, mas nenhuma que valha hoje, fica sem preço nela: nunca a Padrão por engano.
+    const brad = await rodarCom(dados, "lpu", escopo("comercial", "BRAD"));
+    assert.deepEqual(precos(brad), [{ tabela: "Padrão Fim de semana · Fim de semana", preco: "R$ 1.300,00" }]);
+
+    const semNenhuma = await rodarCom({ ...dados, price_tables: porId(tabela("pt_brad_2025", "BRAD", "Tabela Brad 2025", "Comercial", "encerrada", "2025-01-01", "2025-12-31", "600")) }, "lpu", escopo("comercial", "BRAD"));
+    assert.deepEqual([semNenhuma.tabelas, precos(semNenhuma)], [[], []]);
+    assert.match(semNenhuma.observacao, /Nenhuma tabela de preço vale hoje/);
   });
 
   it("os parecidos só do cliente, com o orçado e o realizado", async () => {

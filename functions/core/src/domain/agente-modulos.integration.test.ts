@@ -87,7 +87,7 @@ describe("as ferramentas dos módulos no banco", () => {
 
   it("a tabela Padrão é a sem cliente, e a medida geral só a geral", async () => {
     const semTabela = await rodar("lpu", escopo("comercial", "NOVO"));
-    assert.equal(semTabela.tabela.nome, "Padrão Dutelog");
+    assert.deepEqual(semTabela.tabelas.map((tabela: Record<string, unknown>) => [tabela.tabela, tabela.do_cliente]), [["Padrão Dutelog", false]]);
     const tempos = await rodar("tempo_dos_itens", escopo("interno"));
     assert.deepEqual(tempos.itens.map((item: Record<string, unknown>) => [item.item, item.base]), [
       ["Armário", "média de todos os clientes"],
