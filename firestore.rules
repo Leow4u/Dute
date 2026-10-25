@@ -779,12 +779,15 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // O aviso interno (exceção, divergência, atenção) fica com a equipe, mesmo
+    // aprovado: leva a nota interna e os e-mails de quem aprovou e enviou.
     match /operational_notifications/{notificationId} {
       allow read: if canReadObservability()
         || (
           isOwnProjection()
-          && resource.data.keys().hasAll(['status'])
+          && resource.data.keys().hasAll(['status', 'audience'])
           && resource.data.status in ['approved', 'sent']
+          && resource.data.audience == 'client'
         );
       allow create, update, delete: if false;
     }
