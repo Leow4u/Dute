@@ -16,7 +16,7 @@ import {
 } from "firebase/firestore";
 
 import { PAPEIS_DO_WMS, estagioDoCadastro, isPapel, modulosContratados } from "@workspace/dominio";
-import { activeCustomerStorageKey, LEGACY_CUSTOMER_CODE } from "./active-customer";
+import { clienteDaChamada, LEGACY_CUSTOMER_CODE } from "./active-customer";
 import { periodBelongsToCustomer } from "./billing-scope";
 import { leiturasDoPortal } from "./operations";
 import { canSeeCatalogPrice, canSeeMerchandiseValue } from "./permissions";
@@ -2808,11 +2808,10 @@ async function route(
 
   if (pathname === "/api/billing/periods" && method === "GET") {
     const profile = await getCurrentProfile();
+    // Os meses do cliente que a tela do Faturamento mostra (lib/active-customer.ts).
     const customer =
-      profile.role === "cliente"
-        ? String(profile.customer_code)
-        : (globalThis.localStorage?.getItem(activeCustomerStorageKey(profile.uid))?.trim() ||
-          LEGACY_CUSTOMER_CODE);
+      profile.role === "cliente" ? String(profile.customer_code) : clienteDaChamada(init);
+    if (!customer) throw new RouteError("A tela não disse o cliente do faturamento.", 400);
     const periods = await readLimited(
       collectionNames.periods,
       120,

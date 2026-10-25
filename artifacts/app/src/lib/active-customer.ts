@@ -113,3 +113,16 @@ export function resolveActiveCustomerCode(
 export function activeCustomerStorageKey(uid: string | null | undefined): string {
   return `dute.active-customer.${text(uid) || "anon"}`;
 }
+
+/**
+ * O Faturamento do WMS diz o cliente de cada leitura e gravação neste
+ * cabeçalho (lib/functions-api.ts e lib/cloud-api.ts): o mês que a tela
+ * mostra e o que ela emite são do cliente que ela tinha ao montar, nunca do
+ * que outra aba guardou no aparelho.
+ */
+export const CABECALHO_DO_CLIENTE = "x-dute-cliente";
+
+/** O cliente que a chamada levou no cabeçalho, ou null. */
+export function clienteDaChamada(init?: RequestInit): string | null {
+  return text(new Headers(init?.headers).get(CABECALHO_DO_CLIENTE)) || null;
+}

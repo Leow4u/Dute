@@ -26,6 +26,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { CABECALHO_DO_CLIENTE } from "@/lib/active-customer";
+import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
 import { acaoDaArmazenagem } from "@/lib/financeiro/armazenagem";
 import { humanApiError } from "@/lib/permissions";
@@ -109,10 +111,20 @@ export default function Billing() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { user } = useAppUser();
+  // O mês na tela e o que se grava são do cliente ativo desta aba: a chave
+  // da leitura leva o cliente, e cada chamada o diz no cabeçalho.
+  const { code: cliente, isLoading: carregandoCliente } = useActiveCustomer();
+  const doCliente = useMemo(() => ({ headers: { [CABECALHO_DO_CLIENTE]: cliente } }), [cliente]);
 
-  const { data: raw, isLoading, error } = useGetBillingPeriod(competencia);
+  const { data: raw, isLoading, error } = useGetBillingPeriod(competencia, {
+    query: { queryKey: [...getGetBillingPeriodQueryKey(competencia), cliente], enabled: !carregandoCliente },
+    request: doCliente,
+  });
   const data = raw as unknown as Period | undefined;
-  const { data: periodsData } = useListBillingPeriods();
+  const { data: periodsData } = useListBillingPeriods({
+    query: { queryKey: [...getListBillingPeriodsQueryKey(), cliente], enabled: !carregandoCliente },
+    request: doCliente,
+  });
 
   const [qty, setQty] = useState<Record<string, string>>({});
   const [obs, setObs] = useState<Record<string, string>>({});
@@ -167,9 +179,9 @@ export default function Billing() {
       }));
   }, [periodsData, competencia]);
 
-  const save = useSaveBillingManual();
-  const emit = useEmitBillingInvoice();
-  const pay = usePayBillingInvoice();
+  const save = useSaveBillingManual({ request: doCliente });
+  const emit = useEmitBillingInvoice({ request: doCliente });
+  const pay = usePayBillingInvoice({ request: doCliente });
 
   const refetch = () => {
     qc.invalidateQueries({ queryKey: getGetBillingPeriodQueryKey(competencia) });

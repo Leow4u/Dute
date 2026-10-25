@@ -277,6 +277,12 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     depois não troca a que outra prévia ou a emissão gravou
     (`fase-7-financeiro-unificado.md`, "Correção: a foto do uso do mês podia
     ser trocada por outra prévia").
+  - O Fechamento do mês mostra e grava no cliente ativo da aba. Antes, a
+    tela guardava o mês só pela competência, e "Emitir", "Marcar como paga"
+    e "Salvar quantidades" iam para o cliente guardado no aparelho: trocar o
+    cliente, ali ou em outra aba, emitia o mês de outro cliente
+    (`fase-7-financeiro-unificado.md`, "Correção: o Faturamento gravava no
+    cliente guardado no aparelho").
 - **O app do campo (25/10/2026).** Entra com a `main`, sem liberação
   própria: o app abre sem sinal com o último perfil lido no aparelho, e a
   fila guardada volta e vai quando o sinal voltar. Antes, aberto sem sinal
