@@ -197,7 +197,7 @@ import { useRole } from "./hooks/use-role";
 import { AuthProvider, useAppUser } from "./lib/auth";
 import { ActiveCustomerProvider } from "./lib/active-customer-context";
 import { useOperationProfile } from "./lib/operation-profile";
-import { PLATAFORMA_LIBERADA } from "./lib/liberacao";
+import { MEMORIA_LIBERADA, PLATAFORMA_LIBERADA } from "./lib/liberacao";
 import { soComComercialLiberado } from "./lib/comercial/navegacao";
 import { soComOperacaoLiberada } from "./lib/operacao/navegacao";
 import { soComFinanceiroLiberado } from "./lib/financeiro/navegacao";
@@ -1080,7 +1080,9 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/wms", WmsStockRedirect),
   protectedRoute("/estoque/posicoes", WarehousePositionsPage),
   protectedRoute("/estoque/etiquetas", WarehouseLabelsPage),
-  protectedRoute("/estoque/alertas", EstoqueAlertas),
+  // O alerta do item parado (parte 5.4e) só existe onde a memória roda: fora
+  // dela a tela diria "Nenhum alerta" sem a rotina que propõe os alertas.
+  ...(MEMORIA_LIBERADA ? [protectedRoute("/estoque/alertas", EstoqueAlertas)] : []),
   protectedRoute("/estoque/mapa", WarehouseMapPage),
   protectedRoute("/estoque", Estoque),
   protectedRoute("/catalogo", Catalog),

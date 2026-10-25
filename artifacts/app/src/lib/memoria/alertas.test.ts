@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import { buildHomeInbox } from "../home-inbox";
@@ -76,5 +78,13 @@ describe("o Precisa de você da Armazenagem", () => {
     for (const role of ["wms", "suporte", "financeiro"] as const) {
       expect(buildHomeInbox({ role, stockAlerts: alertas }).items.some((item) => item.id === "stock-alerts")).toBe(false);
     }
+  });
+});
+
+describe("a rota de Estoque › Alertas", () => {
+  it("só existe com a liberação da memória, como a rotina que propõe os alertas", () => {
+    const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
+    expect(app).toContain('...(MEMORIA_LIBERADA ? [protectedRoute("/estoque/alertas", EstoqueAlertas)] : []),');
+    expect(app.match(/protectedRoute\("\/estoque\/alertas"/g)).toHaveLength(1);
   });
 });
