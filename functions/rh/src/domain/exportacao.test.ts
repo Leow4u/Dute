@@ -91,6 +91,14 @@ describe("conteúdo da exportação", () => {
     assert.equal(conteudoDaExportacao("2026-10", [ANA], [errado, corrigido, outraData, audiometria, espirometria]).exames.length, 4);
   });
 
+  it("o admissional e o periódico do mesmo dia são dois exames, mesmo no grupo ocupacional da ficha (pergunta 62)", () => {
+    // Na ficha, o periódico substitui o admissional; na exportação, cada ASO é um S-2220.
+    const periodico = exame(ANA.id, "periodico", "2026-10-05", { criado_em: "2026-10-06T11:00:00.000Z" });
+    const admissional = exame(ANA.id, "admissional", "2026-10-05", { situacao: "substituido", substituido_por: periodico.id, criado_em: "2026-10-06T10:00:00.000Z" });
+    const linhas = conteudoDaExportacao("2026-10", [ANA], [admissional, periodico]).exames.map((linha) => [linha.tipo, linha.tp_exame_ocup]);
+    assert.deepEqual(linhas.sort(), [["admissional", 0], ["periodico", 1]]);
+  });
+
   it("todo tipo de exame e todo resultado tem o código do S-2220", () => {
     assert.deepEqual(Object.keys(EXAME_NO_ESOCIAL).sort(), [...TIPOS_POR_CATEGORIA.exame].sort());
     assert.deepEqual(EXAME_NO_ESOCIAL, { admissional: 0, periodico: 1, retorno_ao_trabalho: 2, mudanca_de_funcao: 3, outro: 4, demissional: 9 });
