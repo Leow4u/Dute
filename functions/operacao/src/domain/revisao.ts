@@ -25,6 +25,9 @@ import { deMilesimos, emMilesimos, type OsGravada } from "./os.js";
  * Divergência sem decisão não conclui a revisão. Nenhum campo de valor.
  */
 
+/** O tempo real que ainda é de uma ida a campo, em minutos (cerca de 69 dias); acima disso, a revisão não grava o tempo. */
+export const MINUTOS_REAIS_PLAUSIVEIS = 100_000;
+
 export const DECISOES_A_MAIS = ["cobrar", "aditivo", "absorver"] as const;
 export const DECISOES_A_MENOS = ["proxima_os", "encerrar"] as const;
 export const DECISOES = [...DECISOES_A_MAIS, ...DECISOES_A_MENOS] as const;
@@ -232,7 +235,11 @@ export function revisarOs(
 
   const primeira = entrada.etapas[0]?.instante ?? null;
   const fim = entrada.conclusao?.instante ?? entrada.etapas.at(-1)?.instante ?? null;
-  const minutosReais = primeira && fim ? Math.max(0, Math.round((Date.parse(fim) - Date.parse(primeira)) / 60_000)) : null;
+  const decorridos = primeira && fim ? Math.max(0, Math.round((Date.parse(fim) - Date.parse(primeira)) / 60_000)) : null;
+  // A OS é uma ida a campo. Mais que MINUTOS_REAIS_PLAUSIVEIS é a OS reaberta
+  // meses depois (as etapas ficam) ou esquecida aberta: sem tempo real, e a
+  // memória (o erro do planejamento) não conta a OS.
+  const minutosReais = decorridos !== null && decorridos <= MINUTOS_REAIS_PLAUSIVEIS ? decorridos : null;
   return {
     revisao: {
       instante: contexto.agora.toISOString(),

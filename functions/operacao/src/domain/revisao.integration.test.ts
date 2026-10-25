@@ -146,6 +146,21 @@ describe("revisar a OS da demanda direta", () => {
     assert.equal((await eventos("os.reviewed")).length, 1);
   });
 
+  it("a OS com meses entre a primeira etapa e a conclusão se revisa, sem o tempo real", async () => {
+    // Reaberta em outubro, a OS guarda as etapas de julho: a conta passa de 100 mil minutos.
+    await db.collection(SERVICE_ORDERS_COLLECTION).doc("10301-01").update({
+      etapas: [
+        { ...REGISTRO, etapa: "saida_patio", instante: "2026-07-01T10:05:00.000Z" },
+        { ...REGISTRO, etapa: "fim", instante: "2026-10-22T20:20:00.000Z" },
+      ],
+    });
+    assert.equal((await reviewServiceOrderFor(db, interno, revisar(), AGORA)).status, "revisada");
+    assert.equal((await lerOs("10301-01")).revisao.minutos_reais, null);
+    const [revisada] = await eventos("os.reviewed");
+    assert.deepEqual([revisada.payload.minutos_planejados, revisada.payload.minutos_reais], [630, null]);
+    assert.equal((await lerDemanda("10301")).etapa, "execucao_a_orcar");
+  });
+
   it("divergência sem decisão não revisa nada; o campo não revisa", async () => {
     await recusa(reviewServiceOrderFor(db, interno, revisar({ linhas: [] }), AGORA), "invalid-argument", "Cadeira: decida a divergência (+4).");
     await recusa(reviewServiceOrderFor(db, { uid: "uid-ana", role: "campo", name: "Ana" }, revisar(), AGORA), "permission-denied", "Seu perfil não grava o cadastro da Operação.");

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { actorPayload, compactValue, digest, type OperacaoActor } from "./operations.js";
 import { MAX_OS_DO_LOGIN } from "./os.js";
+import { MINUTOS_REAIS_PLAUSIVEIS } from "./revisao.js";
 
 /**
  * Eventos do cadastro da Operação em `events` (invariante 2). Gravados na
@@ -207,7 +208,7 @@ const osRevisada = z
     corrigidas: contagem,
     decisoes: z.object({ cobrar: contagem, aditivo: contagem, absorver: contagem, proxima_os: contagem, encerrar: contagem }).strict(),
     minutos_planejados: z.number().int().min(0).max(100_000).nullable(),
-    minutos_reais: z.number().int().min(0).max(100_000).nullable(),
+    minutos_reais: z.number().int().min(0).max(MINUTOS_REAIS_PLAUSIVEIS).nullable(),
     pessoas: z.number().int().min(0).max(20),
   })
   .strict();
