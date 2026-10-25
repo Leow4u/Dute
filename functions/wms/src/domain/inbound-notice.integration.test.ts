@@ -257,6 +257,49 @@ describe("um código novo, um SKU", () => {
   });
 });
 
+describe("linha existente do aviso", () => {
+  /** Aviso de envio do portal com uma linha de produto já cadastrado. */
+  async function existingNotice(key: string, skuCode: string, clientCode: string) {
+    const created = await createCustomerRequestTransaction(
+      db,
+      {
+        type: "recebimento",
+        priority: "normal",
+        title: "Entrega de camisas",
+        customer_code: BTG,
+        supplier: "Camisaria Alfa",
+        invoice_number: key,
+        idempotency_key: key,
+        items: [
+          { line_number: 1, sku_code: skuCode, client_item_code: clientCode, product_name: "CAMISA", product_registration: "existing", location_id: "RECEBIMENTO", quantity: 3 },
+        ],
+      },
+      { uid: "cli-1", role: "cliente", customer_code: BTG, name: "Cristiane" },
+    );
+    return String((created as { id: unknown }).id);
+  }
+
+  it("o SKU de outro cliente não entra: a aprovação recusa e nada vira recebimento", async () => {
+    await db.collection("skus").doc("OUTRO-000001").set({
+      id: "OUTRO-000001",
+      customer_code: OUTRO,
+      cod_cliente: "OUT-1",
+      cod_btg: "OUTRO-000001",
+      sku_code: "OUTRO-000001",
+      produto: "Cadeira do outro cliente",
+      status: "active",
+    });
+    const foreign = await existingNotice("env-alheio", "OUTRO-000001", "OUT-1");
+    await assert.rejects(approve(foreign), /O SKU OUTRO-000001 já está cadastrado para o cliente Outro Cliente/);
+    assert.equal((await db.collection("customer_requests").doc(foreign).get()).get("status"), "open");
+    assert.equal((await db.collection("inbound_items").where("customer_request_id", "==", foreign).get()).size, 0);
+
+    // O SKU do próprio cliente segue para o recebimento.
+    const own = await existingNotice("env-proprio", "BTG-TEST-1", "ITEM-1");
+    assert.equal((await approve(own)).status, "approved");
+  });
+});
+
 describe("aviso de envio vinculado à chegada avulsa", () => {
   it("a aprovação usa a chegada vinculada: um recebimento só, sem linhas nem SKU novos", async () => {
     const receiptId = await arrival("avulsa-1", { supplier: "Fornecedor da portaria" });

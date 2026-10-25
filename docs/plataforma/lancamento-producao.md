@@ -202,6 +202,11 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     cadastro do produto novo só nasce na conclusão do recebimento, e cada
     linha gerava o seu: a conclusão cadastrava dois SKUs para o mesmo
     código, e o código passava a ser recusado ("ligado a mais de um SKU");
+  - a aprovação do aviso de envio recusa a linha de produto existente com
+    o SKU de outro cliente. Antes, o SKU vindo do portal ia direto para o
+    recebimento: a conclusão criava saldo com o código do outro cliente e
+    subia o estoque do cadastro dele. Recebimento avulso, conferência,
+    devolução e produto novo do aviso já conferiam o dono;
   A matriz de papéis do WMS (PR 372) é só teste: nenhuma callable muda
   quem passa.
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a
