@@ -49,10 +49,12 @@ import { useAppUser } from "@/lib/auth";
 import {
   browserCartStorage,
   cartStorageKey,
+  envioDoPedido,
   isStoredCartSaved,
   patchStoredCart,
   readStoredCart,
   watchStoredCart,
+  type EnvioDoPedido,
   type StoredCart,
 } from "@/lib/client-cart";
 import { cartFromEvent, eventDateFromDueAt, eventDestination, eventDueAt, eventNotes } from "@/lib/client-events";
@@ -192,6 +194,8 @@ export function ClienteEstoque() {
     }
   };
   const [cartExpanded, setCartExpanded] = useState(false);
+  // Sem storage, o envio em andamento vale enquanto a tela estiver aberta.
+  const envioDaVisita = useRef<EnvioDoPedido | null>(null);
   useEffect(() => {
     if (!cartKey || cartLoadedKey === cartKey) return;
     setCart(readStoredCart(browserCartStorage(), cartKey).cart);
@@ -293,6 +297,7 @@ export function ClienteEstoque() {
         description:
           "Acompanhe a separação e a entrega em Pedidos.",
       });
+      envioDaVisita.current = null;
       setCart({});
       setCartOpen(false);
       if (cartKey) {
@@ -655,8 +660,9 @@ export function ClienteEstoque() {
 
           // O pedido que saiu de um cartão do Agent Dute vai ligado a ele: o
           // servidor o cria uma vez só por mensagem e marca o cartão enviado.
-          const mensagemDoAgente = cartKey ? readStoredCart(browserCartStorage(), cartKey).mensagemDoAgente : undefined;
-          requestMutation.mutate({
+          const guardado = cartKey ? readStoredCart(browserCartStorage(), cartKey) : null;
+          const mensagemDoAgente = guardado?.mensagemDoAgente;
+          const pedido: CreateClientRequestPayload = {
             ...(mensagemDoAgente ? { agent_message_id: mensagemDoAgente } : {}),
             type: "retirada",
             priority: "normal",
@@ -671,7 +677,18 @@ export function ClienteEstoque() {
             destination: fields.destination.trim(),
             due_at: fields.dueAt ? new Date(fields.dueAt).toISOString() : undefined,
             items: requestItems,
-          });
+          };
+          // A nova tentativa do mesmo pedido, depois da resposta perdida ou de
+          // recarregar a tela, repete a chave do envio: o servidor devolve o
+          // pedido que já gravou em vez de criar outro e reservar de novo.
+          const envio = envioDoPedido(
+            guardado?.envio ?? envioDaVisita.current,
+            JSON.stringify(pedido),
+            () => crypto.randomUUID(),
+          );
+          envioDaVisita.current = envio;
+          if (cartKey) patchStoredCart(browserCartStorage(), cartKey, { envio });
+          requestMutation.mutate({ ...pedido, idempotency_key: envio.chave });
         }
 
         return (

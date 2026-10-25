@@ -10,7 +10,17 @@ export type StoredCart = {
    * cartão da conversa, que deixa de oferecer o próprio envio.
    */
   mensagemDoAgente?: string;
+  /** O envio deste pedido que ainda não deu certo na tela (envioDoPedido). */
+  envio?: EnvioDoPedido;
 };
+
+/**
+ * A chave com que o pedido foi enviado e o conteúdo que ela levou. A nova
+ * tentativa do mesmo pedido repete a chave: se a resposta se perdeu depois de
+ * o servidor gravar, ele devolve o pedido gravado em vez de criar outro e
+ * reservar o estoque de novo. O pedido mudado é outro envio, com outra chave.
+ */
+export type EnvioDoPedido = { chave: string; conteudo: string };
 
 export type CartStorage = Pick<Storage, "getItem" | "setItem">;
 
@@ -55,6 +65,8 @@ function parseStoredCart(raw: string | null | undefined): StoredCart {
   try {
     const parsed = JSON.parse(raw) as Partial<StoredCart>;
     const mensagem = text(parsed.mensagemDoAgente);
+    const chave = text(parsed.envio?.chave);
+    const conteudo = text(parsed.envio?.conteudo);
     return {
       cart: quantities(parsed.cart),
       orderName: text(parsed.orderName),
@@ -62,6 +74,7 @@ function parseStoredCart(raw: string | null | undefined): StoredCart {
       dueAt: text(parsed.dueAt),
       notes: text(parsed.notes),
       ...(mensagem ? { mensagemDoAgente: mensagem } : {}),
+      ...(chave && conteudo ? { envio: { chave, conteudo } } : {}),
     };
   } catch {
     return emptyStoredCart();
@@ -97,10 +110,23 @@ export function writeStoredCart(storage: Pick<Storage, "setItem"> | null, key: s
 
 export function patchStoredCart(storage: CartStorage | null, key: string, patch: Partial<StoredCart>): StoredCart {
   const next = { ...readStoredCart(storage, key), ...patch };
-  // O pedido vazio (enviado ou esvaziado) não fica ligado ao cartão do agente: o próximo é outro pedido.
-  if (!Object.keys(next.cart).length) delete next.mensagemDoAgente;
+  // O pedido vazio (enviado ou esvaziado) não fica ligado ao cartão do agente
+  // nem ao envio de antes: o próximo é outro pedido.
+  if (!Object.keys(next.cart).length) {
+    delete next.mensagemDoAgente;
+    delete next.envio;
+  }
   writeStoredCart(storage, key, next);
   return next;
+}
+
+/** O envio guardado, se o pedido é o mesmo; senão, um envio novo com outra chave. */
+export function envioDoPedido(
+  guardado: EnvioDoPedido | null | undefined,
+  conteudo: string,
+  novaChave: () => string,
+): EnvioDoPedido {
+  return guardado?.conteudo === conteudo ? guardado : { chave: novaChave(), conteudo };
 }
 
 type CartStorageEvent = Pick<StorageEvent, "key" | "newValue" | "storageArea">;

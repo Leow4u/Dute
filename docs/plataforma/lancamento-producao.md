@@ -224,6 +224,15 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     pedem só os documentos de faturamento (`entity_type` "fatura"), que é o
     que a regra deixa ele ler. Antes, iam sem o filtro, e o Firestore negava
     a lista inteira e o acompanhamento.
+- **O pedido do portal enviado de novo (25/10/2026).** Entra com a `main`,
+  sem liberação própria: o pedido do Estoque do portal leva a chave do
+  envio, guardada com o pedido no aparelho, e a nova tentativa do mesmo
+  pedido a repete, inclusive depois de recarregar a tela. O pedido mudado é
+  outro envio. Antes, cada toque em "Enviar pedido" saía com uma chave nova:
+  com a resposta perdida depois de o servidor gravar (o sinal que cai no
+  celular), o segundo toque criava outro pedido e reservava o mesmo estoque
+  de novo, ou recusava por "Saldo insuficiente" e escondia o primeiro
+  (teste em `pages/client/estoque-envio.test.tsx`).
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a
   `main`, sem liberação própria. As entradas, as saídas e os movimentos
   passam a cobrar só o recebimento e a expedição, cada movimento uma vez

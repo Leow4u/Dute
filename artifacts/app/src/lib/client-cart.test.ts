@@ -4,6 +4,7 @@ import {
   browserCartStorage,
   cartStorageKey,
   emptyStoredCart,
+  envioDoPedido,
   isStoredCartSaved,
   patchStoredCart,
   readStoredCart,
@@ -273,3 +274,22 @@ describe("o pedido que saiu de um cartão do Agent Dute", () => {
   });
 });
 
+
+describe("o envio do pedido que ainda não deu certo", () => {
+  it("o mesmo pedido repete a chave; o pedido mudado ganha outra", () => {
+    const guardado = { chave: "k-1", conteudo: '{"items":[1]}' };
+    expect(envioDoPedido(guardado, '{"items":[1]}', () => "k-2")).toBe(guardado);
+    expect(envioDoPedido(guardado, '{"items":[2]}', () => "k-2")).toEqual({ chave: "k-2", conteudo: '{"items":[2]}' });
+    expect(envioDoPedido(undefined, '{"items":[1]}', () => "k-3")).toEqual({ chave: "k-3", conteudo: '{"items":[1]}' });
+  });
+
+  it("fica guardado com o pedido e sai quando ele é enviado ou esvaziado", () => {
+    const storage = memory();
+    const key = cartStorageKey("BTG Pactual", "uid-ana");
+    patchStoredCart(storage, key, { ...draft, envio: { chave: "k-1", conteudo: "{}" } });
+    patchStoredCart(storage, key, { destination: "Agência Faria Lima" });
+    expect(readStoredCart(storage, key).envio).toEqual({ chave: "k-1", conteudo: "{}" });
+    patchStoredCart(storage, key, { cart: {} });
+    expect(readStoredCart(storage, key)).not.toHaveProperty("envio");
+  });
+});
