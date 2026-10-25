@@ -31,6 +31,14 @@ plano ordena as partes. Escrito em 23/10/2026.
 | 23 | `owner` e `admin` leem o RH; só `rh` grava (a recomendação). |
 | 24 | A folha e o eSocial ficam com a contabilidade: a Dute exporta, por competência, os colaboradores e os exames, com os dados do S-2220, e quem faz a folha transmite (Leonardo, 24/10/2026). A Dute não assina XML nem guarda certificado digital. |
 
+Esperam o Leonardo, da revisão de 25/10/2026 (plano, seção 13):
+
+- 61: o vigente quando dois registros têm a mesma data de emissão;
+- 62: os exames ocupacionais num grupo só, para o admissional não ficar
+  vigente depois do periódico;
+- 63: a planilha de colaboradores do mês exportado, com as datas de
+  admissão e desligamento.
+
 - **O banco `dute-rh` é um banco Firestore à parte**, no mesmo projeto, com as
   regras dele (`firestore-rh.rules`). Guarda os documentos, os exames e os
   treinamentos ligados ao id do colaborador e, na parte 8.3, as versões da
