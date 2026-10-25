@@ -39,14 +39,16 @@ documentação de produto e operação está em `docs/`.
   Comercial, vistoria como OS, TV da sala (`/tv`, papel `painel`, que só lê o
   quadro da callable `getRoomBoard`) e a rotina diária `runDailyAlerts`
   (Cloud Scheduler, 06:00, CNH e revisão do veículo viram evento uma vez por
-  dia por item). A produção serve o que foi publicado até `fde9ba0` (23/10,
-  02:16 UTC); publicar a Fase 3 completa é o marco 3 e espera o OK do
-  Leonardo: roteiro em `docs/plataforma/operacao-producao.md`. O `dute-btg`
+  dia por item). A Fase 3 completa (marco 3) subiu no `dute-prod` em
+  25/10/2026, com os marcos 2 e 4 (`e6a43ed`, roteiro em
+  `docs/plataforma/lancamento-producao.md`). O `dute-btg`
   fica de fora das duas listas `OPERACAO_AMBIENTES_LIBERADOS`. Desenho,
   registro de cada parte e como desligar: `docs/plataforma/fase-3-operacao.md`.
-- **Fase 4 (lançamento) na `main`, à espera do OK do Leonardo para a
-  produção.** O Financeiro fica ligado só no `dute-homolog`
-  (`FINANCEIRO_AMBIENTES_LIBERADOS`, no app e nas callables): `registerNf`
+- **Fase 4 (lançamento) na `main` e no `dute-prod`**: os marcos 2, 3 e 4
+  subiram juntos em 25/10/2026 (`e6a43ed`), com o OK do Leonardo. O
+  Financeiro está ligado no `dute-homolog` e, desde a parte 4.9b (PR 466,
+  25/10/2026), no `dute-prod` (`FINANCEIRO_AMBIENTES_LIBERADOS`, no app e
+  nas callables): `registerNf`
   registra a NF da demanda A faturar, `advanceFatura` envia, recebe, estorna
   e cancela, e o shell `/financeiro` tem Início, A faturar, a cobrança, a via
   comercial e os Relatórios. O portal com as OS, o comprovante, o Solicitar
@@ -64,8 +66,10 @@ documentação de produto e operação está em `docs/`.
   `dute-homolog`); as medidas saem das OS revisadas e a sugestão nunca grava
   sem a pessoa. A produção espera o OK do Leonardo ("Lançamento na produção",
   no runbook).
-- **Fase 7 (financeiro unificado) na `main` até a 7.5c, só no
-  `dute-homolog`**: `docs/plataforma/fase-7-financeiro-unificado.md`
+- **Fase 7 (financeiro unificado) na `main` até a 7.5c, ligada com o
+  Financeiro** (no `dute-homolog` e, desde a parte 4.9b, no `dute-prod`; a
+  NFS-e pela Omie só no `dute-homolog`):
+  `docs/plataforma/fase-7-financeiro-unificado.md`
   (23/10/2026). A 7.4 (a NFS-e pela Omie e a baixa, pergunta 21 decidida em
   24/10/2026) está no código, nas partes 7.4a a 7.4i, e as chaves de um
   aplicativo de teste da Omie estão no `dute-homolog` desde 24/10/2026; a

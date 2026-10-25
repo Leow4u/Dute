@@ -19,16 +19,30 @@ disparado sem ele. Sem dado real neste arquivo.
     Estoque e Receber;
   - os relatórios da Operação e do Financeiro.
 - **Liberação.**
-  - `FINANCEIRO_AMBIENTES_LIBERADOS` tem só o `dute-homolog`, no app e nas
-    Functions. O Financeiro entra no `dute-prod` pela parte 4.9b, com o OK
-    (seção 6).
+  - `FINANCEIRO_AMBIENTES_LIBERADOS` tem o `dute-homolog` e, desde a parte
+    4.9b (PR 466, OK do Leonardo em 25/10/2026), o `dute-prod`, no app e nas
+    Functions (seção 6). Na produção, vale a partir da publicação seguinte
+    ao merge.
   - A Operação e o Comercial já estão liberados no `dute-prod`. Por isso o
     portal com as OS, a solicitação, a entrega do WMS e os avisos entram na
     produção só por publicar a `main`.
   - O `dute-btg` recusa tudo.
-- **Última publicação de produção.** Foi o commit `fde9ba0` (PR 177), em
-  23/10 às 02:16 UTC. O roteiro da Operação (`operacao-producao.md`, marco
-  3) não foi disparado. A próxima publicação leva juntos os marcos 2, 3 e 4:
+- **A publicação dos marcos 2, 3 e 4 (25/10/2026).** Com o OK do Leonardo,
+  o commit `e6a43ed` (PR 465) subiu no `dute-prod` pelo disparo manual do
+  CI (run 1078), das 19:22 às 19:43 UTC. O instante de antes do deploy,
+  para o PITR, é 19:22:20 UTC.
+  - As regras subiram e foram conferidas, e os índices ficaram prontos às
+    19:30.
+  - As functions das seis codebases subiram, com as seis rotinas novas:
+    `runDailyAlerts`, `runNotifications`, `runOmieSync`, `runMeasures`,
+    `runDuteRoutines` e `runRhAlerts`.
+  - O invoker conferiu as 145 callables. O Cloud Run passou a servir o
+    build, e o login abriu no Chromium.
+  - Antes, a produção servia o `fde9ba0` (PR 177), de 23/10 às 02:16 UTC.
+    O roteiro da Operação (`operacao-producao.md`, marco 3) não tinha sido
+    disparado.
+
+  A publicação levou juntos:
   - a Fase 2 inteira, com o shell e o Início por módulo;
   - a Fase 3 da parte 3.4a à 3.14;
   - a Fase 4;
@@ -582,7 +596,9 @@ contato com os avisos ligados (Comercial › Clientes).
 
 ## 6. Ligar o Financeiro no `dute-prod` (parte 4.9b, com o OK)
 
-Um PR pequeno, depois da conferência da seção 5:
+Feita em 25/10/2026, com o OK do Leonardo, no PR 466, depois da publicação
+dos marcos 2, 3 e 4. O registro está em `fase-4-financeiro.md`, "Parte
+4.9b". Um PR pequeno, depois da conferência da seção 5:
 
 1. Pôr `dute-prod` nas duas listas `FINANCEIRO_AMBIENTES_LIBERADOS`, em
    `artifacts/app/src/lib/liberacao.ts` e em
@@ -633,10 +649,9 @@ Um PR pequeno, depois da conferência da seção 5:
 
 ## 8. O que espera o Leonardo
 
-- O OK para a publicação, que leva os marcos 2, 3 e 4. De preferência
-  antes de 01/11, por causa do uso de outubro no faturamento do WMS
-  (seção 2, "O faturamento do WMS no mês sem foto").
-- O OK para ligar o Financeiro no `dute-prod` (parte 4.9b).
+- Dados em 25/10/2026: o OK para a publicação dos marcos 2, 3 e 4, que subiu
+  antes de 01/11 (seção 1), e o OK para ligar o Financeiro no `dute-prod`
+  (parte 4.9b, seção 6).
 - A conta no Resend, o domínio verificado na Hostinger e a chave, para o
   e-mail sair (`fase-4-financeiro.md`, parte 4.6a).
 - Os serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` no aplicativo de teste da Omie,

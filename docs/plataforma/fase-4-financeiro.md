@@ -747,6 +747,34 @@ conferir na homologação, a publicação, a conferência de produção, a parte
   - Nenhum aviso ou e-mail de OS leva valor, endereço ou o que o cliente escreveu. Rodar de novo não repete nada.
 - **Ficou registrado no teste.** A OS que nasce de item livre do portal não tem serviço da tabela, e o aviso diz só o dia e o horário (pergunta 12 do plano, o tipo da OS).
 
+### Parte 4.9b: o Financeiro ligado no `dute-prod`
+
+Feita em 25/10/2026 (PR 466), com o OK do Leonardo ("Pode fazer então,
+vamos seguir"). Veio depois da publicação dos marcos 2, 3 e 4 na produção
+(`lancamento-producao.md`, seção 1).
+
+- **As três listas ganham o `dute-prod`.** O `platform-lists.test.ts` trava
+  as três iguais:
+  - `FINANCEIRO_AMBIENTES_LIBERADOS`, no app (`lib/liberacao.ts`) e nas
+    callables (`functions/financeiro/src/domain/liberacao.ts`);
+  - `FINANCEIRO_PROJECTS`, no WMS (`domain/billing-scope.ts`).
+- **O que muda na produção**, a partir da publicação seguinte ao merge:
+  - `/financeiro` abre para owner, admin e financeiro, e o card leva a ele;
+  - `registerNf` e `advanceFatura` respondem;
+  - a competência emitida da armazenagem se fatura e se recebe no
+    Financeiro, e o WMS deixa de marcar o pagamento (parte 7.2c);
+  - o primeiro registro de NF dá o aviso "NF emitida" a quem lê valor.
+- **A NFS-e pela Omie fica de fora.** `OMIE_AMBIENTES_LIBERADOS` continua só
+  com o `dute-homolog`. Na produção, a NF segue registrada à mão ("Emitida
+  fora").
+- **Os testes.**
+  - Os que esperavam a recusa na produção passam a esperar a liberação:
+    `liberacao.test.ts` e `profile.integration.test.ts` do Financeiro e
+    `billing-scope.test.ts` do WMS. O `dute-btg` continua recusando.
+  - Os da Omie continuam esperando a recusa no `dute-prod`.
+- **Como desfazer.** Tirar o `dute-prod` das três listas e publicar de novo
+  (`lancamento-producao.md`, seção 7).
+
 ### Correção: o cliente só com a Operação entra no portal
 
 Feita em 24/10/2026. O desenho da Fase 2 deixava o cliente só com a Operação
