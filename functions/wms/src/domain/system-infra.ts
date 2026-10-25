@@ -260,7 +260,7 @@ export function functionsStatus(
 
 // ------------------------------------------------------------ faturamento
 
-// projeto.dataset.tabela, como o BigQuery mostra (ex.: dute-btg.billing_export.gcp_billing_export_v1_0123AB_CDEF45_6789AB).
+// projeto.dataset.tabela, como o BigQuery mostra (ex.: dute-prod.billing_export.gcp_billing_export_v1_0123AB_CDEF45_6789AB).
 const BILLING_TABLE = /^[a-z][a-z0-9-]{4,29}\.[A-Za-z0-9_]{1,1024}\.[A-Za-z0-9_]{1,1024}$/;
 
 export const InfraSettingsSchema = z.object({
