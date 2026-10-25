@@ -195,6 +195,16 @@ describe("registrar a NF", () => {
     assert.deepEqual(fatura.demandas, [{ numero: "10050", rv: null, medicao_id: "ctr_safra_2026-10", autorizacao_ids: ["aut_ctr_safra_2026-10"], valor_cents: 42_500 }]);
   });
 
+  it("a demanda por demanda num contrato que autoriza pela medição fatura pela RV, sem autorização: ela não entra em medição", async () => {
+    // A validação (comercial, destinoDaValidacao) a levou direto a A faturar e guardou o tipo do contrato.
+    await db.doc("demands/10047").set(demanda("10047", { validacao: { rv: 0, etapa: "a_faturar", autorizacao: "medicao_aprovada" }, autorizacao_ids: [] }));
+    await db.doc("quotes/10047/revisoes/0").set({ total_cents: 90_000 });
+    // Antes: "A demanda 10047 não tem autorização de faturamento registrada.", e nada no Comercial a destravava.
+    const resultado = await registerNfFor(db, financeiro, pedido({ idempotency_key: "nf-medicao", demandas: ["10047"], nf: { numero: "88", emitida_em: "2026-10-23" } }), AGORA);
+    assert.equal(resultado.valor_cents, 90_000);
+    assert.equal((await db.doc("demands/10047").get()).get("etapa"), "faturada");
+  });
+
   it("sem autorização registrada, fora de A faturar, de clientes diferentes ou com emissão no futuro, nada se grava", async () => {
     await db.doc("client_authorizations/aut_itau").update({ status: "cancelada" });
     await recusa(registerNfFor(db, financeiro, pedido(), AGORA), "failed-precondition", "A demanda 10045 não tem autorização de faturamento registrada.");
