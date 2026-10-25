@@ -289,6 +289,9 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   O toque duplo na etapa ou na entrada não registra mais a ação seguinte
   (`fase-3-operacao.md`, "Correção: o toque duplo registrava a ação
   seguinte").
+  A fila guardada não se apaga mais ao gravar: nem quando a leitura do
+  aparelho falha, nem com o app aberto em duas cópias (`fase-3-operacao.md`,
+  "Correção: a fila guardada se apagava ao gravar").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.

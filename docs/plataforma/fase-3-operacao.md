@@ -1556,3 +1556,29 @@ a parte 3.8b.
 - **Teste:** `os-view.test.tsx`: o segundo toque logo depois não registra a
   etapa seguinte nem a saída, e um segundo depois a etapa seguinte vai.
   Antes, as duas iam.
+
+### Correção: a fila guardada se apagava ao gravar
+
+Achada em 25/10/2026, numa revisão da fila do campo. Está na produção desde
+a parte 3.8c.
+
+- **O defeito.** Cada mudança da fila apagava a fila guardada inteira da
+  pessoa e regravava a da tela.
+  - Se a leitura do aparelho falhasse ao abrir, a fila da tela começava
+    vazia, e a primeira gravação apagava o que estava guardado: etapas,
+    fotos e a conclusão assinada.
+  - Com o app aberto em duas cópias, o instalado e um link do WhatsApp no
+    navegador, cada gravação apagava os registros da outra. Quando o
+    Android fechava a que ficou atrás, o que ela não tinha enviado se
+    perdia.
+- **A correção.** Cada registro é gravado por si, e só sai do aparelho o
+  que essa tela viu sair da fila (`lib/campo/fila-guardada.ts` e
+  `fila-do-campo.tsx`): o que chegou, foi recusado ou foi substituído. O
+  que a tela não conhece fica. A fila guardada volta na ordem dos toques,
+  pelo instante de cada registro.
+- **Testes:**
+  - `fila-do-campo.test.tsx`: com a leitura falhando ao abrir, o registro
+    novo se junta ao guardado e não o apaga.
+  - `fila-guardada.test.ts`: duas cópias gravando não se apagam, e a fila
+    volta na ordem dos toques.
+  - Antes, o guardado sumia.
