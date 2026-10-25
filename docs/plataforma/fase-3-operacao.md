@@ -1358,3 +1358,26 @@ Achada em 25/10/2026, numa revisão do código da Operação.
   continua só na Execução a orçar, quando ainda não há orçamento.
 - **Teste** (`revisao.integration.test.ts`): com o orçamento enviado e a
   demanda aguardando o cliente, a OS não se reabre. Antes, reabria.
+
+### Correção: a revisão travava com a OS de meses
+
+Achada em 25/10/2026, numa revisão do código da Operação.
+
+- **O defeito.** A revisão conta o tempo real da primeira etapa à conclusão,
+  e o evento `os.reviewed` aceita até 100 mil minutos (cerca de 69 dias).
+  - A OS reaberta meses depois guarda as etapas da primeira ida, e a OS
+    esquecida aberta acumula o mesmo tempo.
+  - Nos dois casos a conta passava do limite, o evento recusava o payload e a
+    revisão parava com erro, sem gravar nada. A demanda direta não chegava à
+    Execução a orçar.
+- **A correção.** Acima de `MINUTOS_REAIS_PLAUSIVEIS` (100 mil minutos, em
+  `revisao.ts`), a revisão grava `minutos_reais` vazio e segue.
+  - O limite do evento é a mesma constante, então os dois não se desencontram.
+  - A memória da Dute já ignora a OS sem tempo real, então o erro do
+    planejamento não conta a ida de meses como uma só.
+  - Alargar o limite do evento, em vez disso, levaria esse tempo para a
+    medida do núcleo.
+- **Teste** (`revisao.integration.test.ts`): com as etapas de julho e a
+  conclusão de outubro, a OS se revisa sem o tempo real, o evento leva
+  `minutos_reais: null` e a demanda vai à Execução a orçar. Antes, a revisão
+  falhava com "payload inválido".
