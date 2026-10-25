@@ -451,6 +451,8 @@ export type CreateClientRequestPayload = {
   items: CreateClientRequestItem[];
   /** Pedido enviado pelo cartão do Agent Dute (a mensagem que trouxe o rascunho). */
   agent_message_id?: string;
+  /** A mesma na nova tentativa do mesmo pedido: o servidor devolve o que já gravou. */
+  idempotency_key?: string;
 };
 
 export function createClientRequest(payload: CreateClientRequestPayload) {
