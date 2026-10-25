@@ -18,7 +18,7 @@ import {
 } from "@/lib/portal-documents";
 import { cn } from "@/lib/utils";
 
-import { ClientDataBoundary, getInvoices, getRequests } from "./shared";
+import { ClientDataBoundary, getInvoiceHistory, getRequests } from "./shared";
 
 /**
  * Documentos do portal: o que a Dutelog publicou para a BTG, as notas fiscais
@@ -41,7 +41,7 @@ export function ClienteDocumentos() {
         const rows = portalDocuments(
           overview.document_history ?? [],
           (overview.request_history ?? getRequests(overview)) as Record<string, unknown>[],
-          closedInvoices((overview.invoice_history ?? getInvoices(overview)) as Record<string, unknown>[]),
+          closedInvoices(getInvoiceHistory(overview)),
         );
         const counts = countByKind(rows);
         const visible = filterPortalDocuments(rows, { search, kind });

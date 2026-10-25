@@ -944,6 +944,20 @@ export function getInvoices(overview: ClientOverview) {
   );
 }
 
+/**
+ * As faturas do histórico inteiro. `invoices` é o recorte do Início (as 6
+ * mais recentes); a lista de Faturas, Documentos e a fatura aberta pelo
+ * endereço olham tudo.
+ */
+export function getInvoiceHistory(overview: ClientOverview): Record<string, unknown>[] {
+  return (overview.invoice_history ?? getInvoices(overview)) as Record<string, unknown>[];
+}
+
+/** A fatura da competência, no histórico inteiro. */
+export function findInvoice(overview: ClientOverview, competencia: string): Record<string, unknown> | undefined {
+  return getInvoiceHistory(overview).find((item) => firstText(item.competencia, item.id, item.month) === competencia);
+}
+
 export function getOrders(overview: ClientOverview) {
   return uniqueBy(
     [

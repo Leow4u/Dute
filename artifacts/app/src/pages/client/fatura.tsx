@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { InvoiceDocument } from "@/components/billing/invoice-document";
 import { buildInvoiceView } from "@/lib/invoice-view";
 
-import { ClientDataBoundary, EmptyModuleState, firstText, getInvoices } from "./shared";
+import { ClientDataBoundary, EmptyModuleState, findInvoice, firstText } from "./shared";
 import { FileX } from "lucide-react";
 import { LEGACY_CUSTOMER_CODE } from "@/lib/active-customer";
 
@@ -19,9 +19,7 @@ export function ClienteFatura() {
   return (
     <ClientDataBoundary>
       {(overview) => {
-        const invoice = getInvoices(overview).find(
-          (item) => firstText(item.competencia, item.id, item.month) === competencia,
-        ) as Record<string, unknown> | undefined;
+        const invoice = findInvoice(overview, competencia);
         return (
           <div className="space-y-4">
             <Link href="/portal/faturas" className="no-print inline-flex items-center gap-2 text-sm text-primary">
