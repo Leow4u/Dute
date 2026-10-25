@@ -3,7 +3,7 @@
 Este documento consolida a arquitetura modular Dutelog/Cliente, a matriz de
 permissoes alvo e a forma como o Agente IA/Genkit fica por tras de cada modulo.
 Ele complementa `docs/ai-native-operational-blueprint.md`,
-`docs/manual-producao.md`, `docs/wms-operacao.md` e
+`docs/manual-producao.md`, `docs/manual-armazenagem.md` e
 `docs/contrato-eventos-ai-native.md`.
 
 ## Objetivo

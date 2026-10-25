@@ -155,10 +155,10 @@ Entrada: uma caixa com cliente, tipo ou medidas, peso e conteúdo.
    texto ("mesmo SKU em R02-P03", "mais próxima de R02-P03", "primeira livre da
    zona"), gravados na tarefa e no evento.
 5. **Recusa:** o operador não escolhe outra posição; ele recusa com motivo
-   (ocupada fisicamente, danificada, não coube, outro). A prateleira entra em
-   verificação, o motor recalcula sem ela e o evento guarda a recusa, o
-   motivo e o endereço efetivo. Quem tira a prateleira da verificação é
-   coordenação ou admin.
+   (ocupada fisicamente, danificada, não coube, outro). O motor recalcula sem
+   a prateleira para esta caixa e o evento guarda a recusa, o motivo e o
+   endereço efetivo. A prateleira não entra em verificação (ver "Recusa",
+   adiante): quem a põe em verificação é a coordenação, em Posições.
 6. **Zona cheia:** o sistema não transborda sozinho para prateleira de outro
    cliente nem para prateleira livre. Bloqueia a guarda com "zona do cliente X
    cheia" e avisa coordenação/admin, que ampliam a zona atribuindo
