@@ -23,7 +23,7 @@ export type AcoesDosAlertas = {
 export type AlertasParadosViewProps = {
   estado: "carregando" | "erro" | "pronto";
   alertas: readonly AlertaProposto[];
-  /** O alerta aberto: o escolhido, ou o primeiro. */
+  /** O alerta aberto: o escolhido ou o que já estava na tela, mesmo fora da lista; senão o primeiro. */
   alerta: AlertaProposto | null;
   nomeDoCliente: (customerCode: string) => string;
   marcados: ReadonlySet<string>;
@@ -113,7 +113,7 @@ export function AlertasParadosView({ estado, alertas, alerta, nomeDoCliente, mar
         <p className="rounded-lg border border-border bg-card px-5 py-6 text-sm text-muted-foreground">Nenhum alerta para aprovar.</p>
       ) : (
         <>
-          {alertas.length > 1 ? (
+          {alertas.some((opcao) => opcao.id !== alerta.id) ? (
             <div role="group" aria-label="Clientes" className="flex flex-wrap gap-2">
               {alertas.map((opcao) => (
                 <FilterChip key={opcao.id} selected={opcao.id === alerta.id} count={opcao.itens.length} onClick={() => acoes.escolher(opcao.id)}>
