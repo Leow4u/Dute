@@ -1536,3 +1536,23 @@ a parte 3.11b.
     foto recusada. Antes, gravava com ela.
   - `vistoria.test.ts`: a foto sai de todos os ambientes, e sem ela no
     rascunho nada se regrava.
+
+### Correção: o toque duplo registrava a ação seguinte
+
+Achada em 25/10/2026, numa revisão da fila do campo. Está na produção desde
+a parte 3.8b.
+
+- **O defeito.** Registrado o toque, o botão vira na hora a próxima ação:
+  "Entrada" vira "Saída", e a etapa vira a seguinte.
+  - O toque duplo em "Entrada" às 07:30 marcava também a saída às 07:30. A
+    primeira saída vale, e a presença é o que paga a diária do freelancer
+    (parte 3.8a).
+  - O toque duplo numa etapa registrava a seguinte no mesmo segundo. A de
+    verdade, depois, era recusada como já registrada.
+- **A correção.** O segundo toque do mesmo botão dentro de um segundo é
+  ignorado (`lib/campo/toque-unico.ts`): nas etapas, pela OS, e na
+  presença, por pessoa. O "+" e o "−" dos itens continuam livres, porque o
+  toque rápido ali é contar.
+- **Teste:** `os-view.test.tsx`: o segundo toque logo depois não registra a
+  etapa seguinte nem a saída, e um segundo depois a etapa seguinte vai.
+  Antes, as duas iam.

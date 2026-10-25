@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { conclusaoGuardada, problemaParaConcluir } from "@/lib/campo/concluir";
 import type { NovoRegistro, RegistroNaFila } from "@/lib/campo/fila";
 import { ROTA_CAMPO, hrefDaConclusaoNoCampo } from "@/lib/campo/navegacao";
+import { useToqueUnico } from "@/lib/campo/toque-unico";
 import {
   acaoDaEtapa,
   duracaoDesde,
@@ -84,6 +85,7 @@ export function BotaoDeFoto({ rotulo, onFotos, variante = "outline" }: { rotulo:
 
 function Etapas({ ficha, pendentes, recebe, onRegistrar, agora }: { ficha: FichaDaOs; pendentes: readonly RegistroNaFila[]; recebe: boolean; onRegistrar: (novo: NovoRegistro) => void; agora: () => Date }) {
   const [outras, setOutras] = useState(false);
+  const tocar = useToqueUnico(agora);
   const { etapas, proxima, outras: restantes } = etapasNoCampo(ficha, pendentes);
   return (
     <Cartao titulo="Etapas">
@@ -119,7 +121,7 @@ function Etapas({ ficha, pendentes, recebe, onRegistrar, agora }: { ficha: Ficha
       </ol>
       {recebe && proxima ? (
         <div className="flex flex-col gap-2">
-          <Button type="button" size="lg" className="w-full" onClick={() => onRegistrar(registroDeEtapa(ficha, proxima, agora()))}>
+          <Button type="button" size="lg" className="w-full" onClick={() => tocar("etapa", () => onRegistrar(registroDeEtapa(ficha, proxima, agora())))}>
             {acaoDaEtapa(proxima)}
           </Button>
           {restantes.length ? (
@@ -135,10 +137,12 @@ function Etapas({ ficha, pendentes, recebe, onRegistrar, agora }: { ficha: Ficha
                       key={etapa}
                       type="button"
                       variant="outline"
-                      onClick={() => {
-                        setOutras(false);
-                        onRegistrar(registroDeEtapa(ficha, etapa, agora()));
-                      }}
+                      onClick={() =>
+                        tocar("etapa", () => {
+                          setOutras(false);
+                          onRegistrar(registroDeEtapa(ficha, etapa, agora()));
+                        })
+                      }
                     >
                       {acaoDaEtapa(etapa)}
                     </Button>
@@ -235,6 +239,7 @@ function Itens({
 
 function Equipe({ ficha, pendentes, uid, recebe, onRegistrar, agora }: { ficha: FichaDaOs; pendentes: readonly RegistroNaFila[]; uid: string | null; recebe: boolean; onRegistrar: (novo: NovoRegistro) => void; agora: () => Date }) {
   const equipe = equipeNoCampo(ficha, pendentes, uid);
+  const tocar = useToqueUnico(agora);
   return (
     <Cartao titulo={`Equipe no local · ${equipe.length}`}>
       <ul className="flex flex-col gap-3">
@@ -246,12 +251,12 @@ function Equipe({ ficha, pendentes, uid, recebe, onRegistrar, agora }: { ficha: 
               <span className="truncate text-xs text-muted-foreground">{[pessoa.detalhe, pessoa.entrada ? (pessoa.saida ? `${pessoa.entrada}–${pessoa.saida}` : `desde ${pessoa.entrada}`) : null].filter(Boolean).join(" · ")}</span>
             </span>
             {recebe && pessoa.podeMarcar && !pessoa.entrada ? (
-              <Button type="button" size="sm" variant="outline" onClick={() => onRegistrar(registroDePresenca(ficha, pessoa, "entrada", agora()))}>
+              <Button type="button" size="sm" variant="outline" onClick={() => tocar(`presenca:${pessoa.id}`, () => onRegistrar(registroDePresenca(ficha, pessoa, "entrada", agora())))}>
                 Entrada<span className="sr-only"> de {pessoa.nome}</span>
               </Button>
             ) : null}
             {recebe && pessoa.podeMarcar && pessoa.entrada && !pessoa.saida ? (
-              <Button type="button" size="sm" variant="ghost" onClick={() => onRegistrar(registroDePresenca(ficha, pessoa, "saida", agora()))}>
+              <Button type="button" size="sm" variant="ghost" onClick={() => tocar(`presenca:${pessoa.id}`, () => onRegistrar(registroDePresenca(ficha, pessoa, "saida", agora())))}>
                 Saída<span className="sr-only"> de {pessoa.nome}</span>
               </Button>
             ) : null}

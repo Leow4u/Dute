@@ -274,6 +274,9 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   A foto que o servidor recusa sai da vistoria, que antes não se enviava
   mais (`fase-3-operacao.md`, "Correção: a foto recusada travava o envio da
   vistoria").
+  O toque duplo na etapa ou na entrada não registra mais a ação seguinte
+  (`fase-3-operacao.md`, "Correção: o toque duplo registrava a ação
+  seguinte").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
