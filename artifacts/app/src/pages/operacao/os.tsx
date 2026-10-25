@@ -57,6 +57,10 @@ export default function PaginaOs() {
   const [erroDasFotos, setErroDasFotos] = useState<string | null>(null);
   const [enviandoFotos, setEnviandoFotos] = useState(false);
   const chave = useRef<string>("");
+  // O instante da ocorrência e da inclusão, o mesmo em cada nova tentativa do
+  // painel: a chamada que já gravou se repete igual (a chave devolve o mesmo
+  // resultado), em vez de voltar recusada como outro conteúdo.
+  const instanteDaTentativa = useRef<Date | null>(null);
   const { user } = useAppUser();
   const podeReabrir = user?.publicMetadata.role === "owner" || user?.publicMetadata.role === "admin";
   const [reabrir, setReabrir] = useState<{ motivo: string; tentou: boolean; chave: string } | null>(null);
@@ -79,6 +83,7 @@ export default function PaginaOs() {
   function abrir() {
     if (!ficha) return;
     chave.current = novaChave();
+    instanteDaTentativa.current = null;
     setForm(andamentoInicial(ficha, new Date()));
     setTentou(false);
     setFotos([]);
@@ -102,6 +107,8 @@ export default function PaginaOs() {
     setTentou(true);
     const agora = new Date();
     if (problemasDoAndamento(form, ficha, agora, anexos).length) return;
+    instanteDaTentativa.current ??= agora;
+    const instante = instanteDaTentativa.current;
     setOcupado(true);
     setErro(null);
     try {
@@ -111,7 +118,7 @@ export default function PaginaOs() {
         if (form.aceite === "assinatura" && assinatura) await enviarAssinatura(ficha.numero, { arquivo: assinatura.arquivo, nome: assinatura.nome, contentType: assinatura.arquivo.type });
       }
       let ocorrencia: string | null = null;
-      for (const pedido of pedidosDoAndamento(form, ficha, chave.current, agora, assinatura?.nome ?? null)) {
+      for (const pedido of pedidosDoAndamento(form, ficha, chave.current, instante, assinatura?.nome ?? null)) {
         const resultado = await chamarOperacao<{ ocorrencia?: string }>(pedido.callable, pedido.dados);
         ocorrencia = resultado.ocorrencia ?? ocorrencia;
       }

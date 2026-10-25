@@ -1601,3 +1601,25 @@ servidor. Está na produção desde a parte 3.5a.
 - **Teste:** `use-escala.test.tsx`. Com a OS reagendada por outra tela,
   reagendar e cancelar levam a edição da abertura. Antes, levavam a da lista
   ao vivo.
+
+### Correção: tentar de novo o andamento do escritório era recusado
+
+Achada em 25/10/2026, na mesma revisão. Está na produção desde a parte 3.7e.
+
+- **O defeito.** O painel Registrar andamento da ficha da OS cria a chave
+  de idempotência quando abre, mas a ocorrência e a inclusão de item
+  levavam o instante de cada clique.
+  - Depois de um sucesso pela metade (a ocorrência gravou e a foto 2 não
+    subiu, ou a resposta se perdeu), a nova tentativa ia com a mesma chave
+    e outro instante, e voltava recusada: "A chave de idempotência já foi
+    usada com outro conteúdo". As fotos nunca se ligavam à ocorrência.
+  - A saída era fechar e abrir o painel, que gravava uma segunda
+    ocorrência.
+- **A correção.** O instante é o da primeira tentativa do painel
+  (`pages/operacao/os.tsx`): a nova tentativa repete a chamada igual, e a
+  callable devolve o resultado gravado. A etapa e a conclusão já iam com a
+  data e a hora do formulário.
+- **Teste:** `os.test.tsx`, com a página e a callable de mentira que recusa
+  a mesma chave com outro conteúdo, como o servidor. A ocorrência com a
+  resposta perdida se repete igual, e o painel fecha. Antes, a segunda
+  levava o instante do novo clique.
