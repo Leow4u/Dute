@@ -201,6 +201,23 @@ describe("movimentações", () => {
     assert.ok("erro" in (await movementSummary(db, cliente, { de: "2026-09-30", ate: "2026-09-01" })));
     assert.ok("erro" in (await movementSummary(db, cliente, { de: "2026-01-01", ate: "2026-09-30" })));
   });
+
+  it("o volume de outro cliente no período não esconde os movimentos deste", async () => {
+    // 5.500 saídas de outro cliente no fim de setembro, mais recentes que todas as da BTG.
+    for (let lote = 0; lote < 11; lote += 1) {
+      const batch = db.batch();
+      for (let i = 0; i < 500; i += 1) {
+        batch.set(db.collection("movements").doc(`volume_${lote}_${i}`), {
+          data: "2026-09-29T13:00:00.000Z", tipo_mov: "SAIDA", sign: -1, quantity: 1,
+          customer_code: "Outro", source: "wms_shipping", client_item_code: "X2", product_name: "segredo",
+        });
+      }
+      await batch.commit();
+    }
+    const result = await movementSummary(db, cliente, { de: "2026-09-01", ate: "2026-09-30" });
+    assert.deepEqual([result.pecas_que_entraram, result.pecas_que_sairam], [200, 71]);
+    assert.ok(!JSON.stringify(result).includes("segredo"));
+  });
 });
 
 describe("faturas e documentos", () => {
