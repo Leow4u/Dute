@@ -7436,10 +7436,8 @@ export const emitBillingInvoice = onCall(async (request) => {
             competencia: input.competencia,
             customerCode,
             actor: profile,
-            payload: {
-              total_cents: snapshot.total_cents,
-              total: snapshot.total,
-            },
+            // Sem o total: interno, wms e suporte leem os eventos e não o
+            // faturamento. O valor fica no período e na fatura do portal.
           }),
         );
       }

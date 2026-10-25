@@ -191,6 +191,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     como entrada de peças, e cada guarda como uma entrada e uma saída.
   - O dinheiro só muda onde a Tabela de preços cobra por "Entradas
     (peças)", "Saídas (peças)" ou "Nº de movimentações".
+  - O evento da fatura emitida (`billing.invoice_emitted`) deixa de levar
+    o total, que interno e wms liam pelos eventos sem ler o faturamento
+    (`fase-7-financeiro-unificado.md`, "Correção: o evento da fatura
+    emitida do WMS levava o total").
   - O ad valorem passa a sair do saldo de cada SKU vezes o preço unitário
     dele. Na produção de hoje, o pedido zera o valor do SKU e a entrega não
     o baixa (`fase-7-financeiro-unificado.md`, "Correção: o valor da

@@ -333,7 +333,8 @@ describe("a emissão", () => {
     assert.equal(evento.size, 1);
     assert.equal(evento.docs[0].get("customer_code"), BTG);
     assert.equal(evento.docs[0].get("entity_id"), SETEMBRO);
-    assert.deepEqual(evento.docs[0].get("payload"), { total_cents: TOTAL_BTG, total: 75.08 });
+    // Sem valor: o evento é lido por papéis que não veem o faturamento (interno, wms, suporte).
+    assert.deepEqual(evento.docs[0].get("payload"), {});
 
     const deNovo = await emitir({ competencia: SETEMBRO });
     assert.equal(deNovo.invoice.issued_at, emitida.invoice.issued_at);
