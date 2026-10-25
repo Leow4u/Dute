@@ -914,10 +914,12 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   // Triagem detalhada e histórico, abertos a partir da fila de Pedidos.
   { path: "/solicitacoes", roles: COORDINATION_NAV_ROLES },
   { path: "/orders", roles: COORDINATION_NAV_ROLES },
-  // Painel do Agent Dute (notificações, riscos, memória), aberto pela tela
-  // do agente e pelo Início.
-  { path: "/agente/painel", roles: TOWER_NAV_ROLES },
-  { path: "/agente/conhecimento", roles: TOWER_NAV_ROLES },
+  // Painel do Agent Dute (notificações, riscos, memória) e a base de
+  // conhecimento, abertos pela tela do agente e pelo Início. Só para quem as
+  // regras deixam ler a memória e o conhecimento do agente: o financeiro abria
+  // as duas e recebia o erro da tela.
+  { path: "/agente/painel", roles: COORDINATION_NAV_ROLES },
+  { path: "/agente/conhecimento", roles: COORDINATION_NAV_ROLES },
   { path: "/catalogo/saldos", roles: WMS_ROLES },
   { path: "/catalogo/mapa", roles: WMS_ROLES },
   { path: "/products", roles: WMS_ROLES },

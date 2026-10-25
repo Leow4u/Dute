@@ -89,8 +89,9 @@ describe("buildHomeInbox", () => {
   });
 
   it("só mostra itens cuja tela o papel consegue abrir", () => {
+    // Nem os avisos do agente: o painel é da coordenação, como a memória dele nas regras.
     const financeiro = buildHomeInbox({ role: "financeiro", ops: busyOps, requests });
-    expect(financeiro.items.map((item) => item.id)).toEqual(["agent"]);
+    expect(financeiro.items.map((item) => item.id)).toEqual([]);
 
     const wms = buildHomeInbox({ role: "wms", ops: busyOps, requests });
     expect(wms.items.map((item) => item.id)).toEqual([

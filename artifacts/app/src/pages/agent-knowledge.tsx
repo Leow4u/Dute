@@ -301,7 +301,7 @@ export default function AgentKnowledge() {
   const { toast } = useToast();
   const { user } = useAppUser();
   const { code: activeCustomerCode } = useActiveCustomer();
-  // Mesmo critério do backend (NOTE_REVIEWER_ROLES); o financeiro vê só os documentos.
+  // Mesmo critério do backend (NOTE_REVIEWER_ROLES).
   const canReviewNotes = ["owner", "admin", "interno", "suporte"].includes(String(user?.publicMetadata.role ?? ""));
   // Com o agente do núcleo (parte 5.5k), as anotações e os playbooks são os do cliente ativo, pelo núcleo.
   const doNucleo = abreAgenteDoNucleo(user?.publicMetadata.role);

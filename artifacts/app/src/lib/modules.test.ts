@@ -69,10 +69,11 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/faturamento/tabela", ["owner", "admin", "financeiro"]],
   ["/faturamento/fatura", ["owner", "admin", "financeiro"]],
   ["/tabela-precos", ["owner", "admin", "financeiro"]],
-  // A conversa com o agente é de toda a equipe; o painel segue com a torre.
+  // A conversa com o agente é de toda a equipe; o painel e o conhecimento são
+  // da coordenação, como a memória e a base do agente nas regras.
   ["/agente", ["owner", "admin", "interno", "wms", "financeiro", "suporte"]],
-  ["/agente/painel", ["owner", "admin", "interno", "financeiro", "suporte"]],
-  ["/agente/conhecimento", ["owner", "admin", "interno", "financeiro", "suporte"]],
+  ["/agente/painel", ["owner", "admin", "interno", "suporte"]],
+  ["/agente/conhecimento", ["owner", "admin", "interno", "suporte"]],
   ["/suporte", ["owner", "admin", "suporte"]],
   ["/documentos", ["owner", "admin", "interno", "wms", "financeiro", "suporte"]],
   ["/clientes", ["owner", "admin"]],
@@ -180,6 +181,21 @@ describe("permissões por rota", () => {
     const fixed = new Set(ROUTE_ACCESS.map(([path]) => path));
     expect(PROTECTED_PATHS.filter((path) => !hasRouteRoles(path))).toEqual([]);
     expect(PROTECTED_PATHS.filter((path) => !fixed.has(path))).toEqual([]);
+  });
+
+  // O painel e o conhecimento leem a memória e a base do agente direto do
+  // Firestore: quem abre a tela é quem as regras deixam ler, nem mais nem menos.
+  it.each<[string, string[]]>([
+    ["/agente/painel", ["ai_agent_memory", "ai_agent_knowledge"]],
+    ["/agente/conhecimento", ["ai_agent_knowledge", "ai_agent_knowledge_files"]],
+  ])("%s abre para quem as regras deixam ler o que a tela mostra", (path, colecoes) => {
+    const regras = readFileSync(new URL("../../../../firestore.rules", import.meta.url), "utf8");
+    for (const colecao of colecoes) {
+      const leitura = regras.match(new RegExp(`match /${colecao}/\\{[^}]+\\} \\{\\s*allow read: if hasAnyRole\\(\\[([^\\]]*)\\]\\);`));
+      expect(leitura, colecao).not.toBeNull();
+      const papeis = [...leitura![1].matchAll(/'([^']+)'/g)].map(([, papel]) => papel);
+      expect([...getRouteProfileRoles(path)].sort(), colecao).toEqual(papeis.sort());
+    }
   });
 
   it.each(ROUTE_ACCESS.filter(([, roles]) => roles.join() === "cliente"))(

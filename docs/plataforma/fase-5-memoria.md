@@ -1609,6 +1609,29 @@ Está na produção.
     conversas nem as mensagens só pelo dono, e lista com o cliente. É a
     trava da regra que o ouvinte segue.
 
+### Correção: o painel e o conhecimento do agente abriam para o financeiro
+
+Achada em 25/10/2026, na mesma revisão. Está na produção.
+
+- **O defeito.** As rotas `/agente/painel` e `/agente/conhecimento` abriam
+  para os papéis do Início, com o financeiro. As duas telas leem direto do
+  Firestore o que as regras deixam só para owner, admin, interno e suporte:
+  - a memória e a base de conhecimento do agente (`ai_agent_memory`,
+    `ai_agent_knowledge` e os arquivos dela);
+  - no painel, também os SKUs e os pedidos, que são da operação.
+  - O financeiro via os botões "Painel" e "Conhecimento" na tela do Agent
+    Dute. O painel parava em "Não consegui carregar a central da IA agora.",
+    e o conhecimento dizia "Sem documentos na base", como se a base
+    estivesse vazia.
+- **A correção.** As duas rotas ficam com a coordenação (owner, admin,
+  interno e suporte), os papéis das regras. Os botões e o aviso do Início
+  já filtram pela rota: somem para o financeiro.
+- **Teste:** `lib/modules.test.ts`. Quem abre o painel e o conhecimento é
+  quem as regras deixam ler a memória, o conhecimento e os arquivos dele (lê
+  o `firestore.rules`), e a tabela de papéis por rota passa a ter as duas
+  rotas sem o financeiro. Antes, falhava. Em `lib/home-inbox.test.ts`, o
+  financeiro não vê o aviso do agente.
+
 ## Lançamento na produção
 
 Espera o OK do Leonardo. Até lá, a memória e o Agent Dute do núcleo só
