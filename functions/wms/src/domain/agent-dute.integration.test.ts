@@ -218,6 +218,31 @@ describe("movimentações", () => {
     assert.deepEqual([result.pecas_que_entraram, result.pecas_que_sairam], [200, 71]);
     assert.ok(!JSON.stringify(result).includes("segredo"));
   });
+
+  it("o período com mais movimentos do que o resumo lê soma só os dias inteiros e diz o que ficou de fora", async () => {
+    // 4.990 saídas no dia 28/09 e 20 entradas no dia 27: a consulta lê 5.000, e o dia 27 fica pela metade.
+    const volume = [
+      ...Array.from({ length: 4990 }, (_, i) => [`dia28_${i}`, "2026-09-28T15:00:00.000Z", "SAIDA", 1] as const),
+      ...Array.from({ length: 20 }, (_, i) => [`dia27_${i}`, "2026-09-27T15:00:00.000Z", "ENTRADA", 2] as const),
+    ];
+    for (let inicio = 0; inicio < volume.length; inicio += 500) {
+      const batch = db.batch();
+      for (const [id, data, tipo, quantity] of volume.slice(inicio, inicio + 500)) {
+        batch.set(db.collection("movements").doc(id), {
+          data, tipo_mov: tipo, sign: tipo === "ENTRADA" ? 1 : -1, quantity, customer_code: BTG,
+          source: tipo === "ENTRADA" ? "wms_receiving" : "wms_shipping", client_item_code: "A.01.0594.005.M", product_name: "POLO PIQUET MESCLA",
+        });
+      }
+      await batch.commit();
+    }
+    const fim = await movementSummary(db, cliente, { de: "2026-09-01", ate: "2026-09-30" });
+    assert.deepEqual(fim.periodo, { de: "2026-09-28", ate: "2026-09-30" });
+    assert.deepEqual([fim.pecas_que_entraram, fim.pecas_que_sairam], [0, 4990]);
+    assert.match(fim.observacao ?? "", /de 2026-09-01 a 2026-09-27/);
+    // O começo, noutra consulta, fecha a conta do mês.
+    const comeco = await movementSummary(db, cliente, { de: "2026-09-01", ate: "2026-09-27" });
+    assert.deepEqual([comeco.pecas_que_entraram, comeco.pecas_que_sairam, comeco.observacao], [240, 71, undefined]);
+  });
 });
 
 describe("faturas e documentos", () => {

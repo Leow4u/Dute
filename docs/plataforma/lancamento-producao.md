@@ -174,7 +174,12 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     as movimentações do agente contavam a guarda como entrada e saída");
   - as movimentações do Agent Dute do WMS leem só os movimentos do
     cliente da conversa. Antes, liam os de todos os clientes no período,
-    com teto de 5.000, e o volume de outro cliente podia esconder os dele.
+    com teto de 5.000, e o volume de outro cliente podia esconder os dele;
+  - num período com mais de 5.000 movimentos do cliente, as movimentações
+    do Agent Dute do WMS somam só os dias que couberam inteiros e dizem o
+    começo que ficou para outra consulta (`fase-5-memoria.md`, "Correção:
+    o resumo das movimentações cortava o período sem avisar"). Antes,
+    somavam os 5.000 mais recentes como se fossem o período todo.
   A matriz de papéis do WMS (PR 372) é só teste: nenhuma callable muda
   quem passa.
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a

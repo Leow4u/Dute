@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { FERRAMENTAS_DA_ARMAZENAGEM } from "./agente-armazenagem.js";
 import { bancoFalso } from "./agente-banco-falso.test.js";
-import { DADOS_DA_ARMAZENAGEM as DADOS } from "./agente-dados.test.js";
+import { DADOS_DA_ARMAZENAGEM as DADOS, porId } from "./agente-dados.test.js";
 import { modulosDoEscopo, type EscopoDoAgente } from "./agente-escopo.js";
 import { executarFerramenta, ferramentasDoEscopo, type FerramentaDoAgente } from "./agente-ferramentas.js";
 import { leitorDoAgente } from "./agente-leitor.js";
@@ -41,8 +41,8 @@ const ENTRADAS: Record<string, unknown> = {
   enderecos: { texto: "polo" },
 };
 
-async function rodar(nome: string, alvo: EscopoDoAgente, entrada: unknown = ENTRADAS[nome] ?? {}) {
-  const { db } = bancoFalso(DADOS);
+async function rodar(nome: string, alvo: EscopoDoAgente, entrada: unknown = ENTRADAS[nome] ?? {}, dados = DADOS) {
+  const { db } = bancoFalso(dados);
   const item = FERRAMENTAS_DA_ARMAZENAGEM.find((ferramenta) => ferramenta.nome === nome);
   assert.ok(item, nome);
   return executarFerramenta(item, { leitor: leitorDoAgente(db, alvo), escopo: alvo, agora: AGORA }, entrada) as Promise<Record<string, any>>;
@@ -122,6 +122,30 @@ describe("o que cada uma responde", () => {
     assert.deepEqual([periodo.pecas_que_entraram, periodo.pecas_que_sairam, periodo.itens_movimentados], [10, 3, 1]);
     assert.match((await rodar("movimentacoes", escopo("cliente"), { de: "2026-10-23", ate: "2026-10-01" })).erro, /Período inválido/);
     assert.match((await rodar("movimentacoes", escopo("cliente"), { de: "2026-01-01", ate: "2026-10-01" })).erro, /longo demais/);
+  });
+
+  it("o período com mais movimentos do que o leitor devolve soma só os dias inteiros e diz o que ficou de fora", async () => {
+    // 4.990 saídas no dia 20/10 e 20 entradas no dia 19: o leitor devolve 5.000, e o dia 19 fica pela metade.
+    const movimento = (id: string, data: string, tipo: "ENTRADA" | "SAIDA", quantity: number) =>
+      ({ id, customer_code: "ITAU", client_item_code: "POLO-G", product_name: "Camisa polo", source: tipo === "ENTRADA" ? "wms_receiving" : "wms_shipping", tipo_mov: tipo, quantity, data });
+    const volume = [
+      ...Array.from({ length: 4990 }, (_, i) => movimento(`dia20_${i}`, "2026-10-20T15:00:00.000Z", "SAIDA", 1)),
+      ...Array.from({ length: 20 }, (_, i) => movimento(`dia19_${i}`, "2026-10-19T15:00:00.000Z", "ENTRADA", 2)),
+    ];
+    const dados = { ...DADOS, movements: { ...DADOS.movements, ...porId(...volume) } };
+    const fim = await rodar("movimentacoes", escopo("cliente"), undefined, dados);
+    assert.deepEqual(fim.periodo, { de: "2026-10-20", ate: "2026-10-23" });
+    assert.deepEqual([fim.pecas_que_entraram, fim.pecas_que_sairam], [0, 4990]);
+    assert.match(fim.observacao, /de 2026-10-01 a 2026-10-19/);
+    // O começo, noutra consulta, fecha a conta do período.
+    const comeco = await rodar("movimentacoes", escopo("cliente"), { de: "2026-10-01", ate: "2026-10-19" }, dados);
+    assert.deepEqual([comeco.pecas_que_entraram, comeco.pecas_que_sairam, comeco.observacao], [50, 3, undefined]);
+  });
+
+  it("o último dia sozinho com mais movimentos do que o leitor devolve volta como erro", async () => {
+    const volume = Array.from({ length: 5000 }, (_, i) => ({ id: `dia23_${i}`, customer_code: "ITAU", client_item_code: "POLO-G", source: "wms_shipping", tipo_mov: "SAIDA", quantity: 1, data: "2026-10-23T15:00:00.000Z" }));
+    const dados = { ...DADOS, movements: { ...DADOS.movements, ...porId(...volume) } };
+    assert.match((await rodar("movimentacoes", escopo("cliente"), undefined, dados)).erro, /movimentos demais/);
   });
 
   it("os documentos: o cliente só vê o publicado, e o conhecimento só do publicado; a equipe vê tudo do cliente", async () => {

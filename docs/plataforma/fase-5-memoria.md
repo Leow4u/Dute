@@ -1370,6 +1370,34 @@ Achada em 25/10/2026.
     peças. Antes, davam 200 de entrada e 232 de saída.
   - `sentido-do-movimento.test.ts` (WMS): a trava do trecho e os casos.
 
+### Correção: o resumo das movimentações cortava o período sem avisar
+
+Achada em 25/10/2026.
+
+- **O defeito.** As duas ferramentas `movimentacoes` (a do núcleo e a do
+  WMS) leem no máximo 5.000 movimentos do período, do mais recente para o
+  mais antigo. A guarda e as correções entram nessa conta, mesmo sem entrar
+  na soma.
+  - Num período com mais movimentos que isso, somavam só os mais recentes e
+    devolviam o total como o do período pedido, sem aviso.
+  - Em seis meses de um cliente com muito movimento, o teto chega.
+- **A correção.** Quando a consulta volta cheia, o dia do movimento mais
+  antigo lido pode ter ficado pela metade.
+  - O resumo soma só os dias seguintes, inteiros, e devolve em `periodo` o
+    trecho que somou.
+  - A `observacao` diz o começo do período que ficou para outra consulta,
+    com as datas.
+  - Os números valem sempre para o período que a resposta mostra.
+  - Se o último dia sozinho passa do teto, a resposta é um erro.
+  - O núcleo usa o teto do leitor (`LIMITE_DA_CONSULTA`); o WMS, 5.000.
+- **Testes:** `agente-armazenagem.test.ts` (núcleo) e
+  `agent-dute.integration.test.ts` (WMS), com 4.990 saídas num dia e 20
+  entradas no dia anterior.
+  - O resumo soma só o último dia, diz o começo que faltou, e a consulta do
+    começo fecha a conta.
+  - Antes, somava 10 das 20 entradas e devolvia o período inteiro.
+  - O núcleo testa também o erro do último dia cheio.
+
 ## Lançamento na produção
 
 Espera o OK do Leonardo. Até lá, a memória e o Agent Dute do núcleo só
