@@ -210,7 +210,8 @@ Anote o ID do backup `READY` mais recente e o `snapshotTime` dele.
    Só o `(default)` e o `dute-rh` podem sobrar na lista.
 
 À mão, o `dute-rh` usa um backup dele no passo 1 e `--banco dute-rh` no
-inventário do minuto cheio do passo 2. Os manifestos dele têm CPF e exames:
+inventário do minuto cheio do passo 2. Os manifestos guardam só o caminho, o
+hash dos campos e a data de cada documento, sem o conteúdo; mesmo assim,
 apague-os de `tmp\backup\` depois de comparar.
 
 ### Registro dos testes

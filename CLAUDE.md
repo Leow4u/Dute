@@ -388,6 +388,9 @@ removidas justamente por induzirem a erro.
   nunca incluí-los em imagem de container.
 - O deploy monta um diretório de staging com apenas `Dockerfile`, `nginx.conf` e
   `dist/public` — mantenha assim.
+- Onde cada dado pessoal fica, quem lê e o que falta para a LGPD:
+  `docs/plataforma/lgpd.md` (25/10/2026, com as decisões que esperam o
+  Leonardo).
 
 ## A auditoria de código está parcialmente vencida
 
