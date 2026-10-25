@@ -638,6 +638,11 @@ export function ClienteEstoque() {
             });
             return;
           }
+          const tamanho = problemaDoTamanhoDoPedido(requestItems.length);
+          if (tamanho) {
+            toast({ title: "Pedido grande demais", description: tamanho, variant: "destructive" });
+            return;
+          }
 
           requestMutation.mutate({
             type: "retirada",
@@ -1700,6 +1705,19 @@ export function FamilyCard({
 }
 
 const CART_SEARCH_FROM = 8;
+
+/**
+ * O pedido vai ao servidor em itens de separação (um produto em duas posições
+ * são dois), e createCustomerRequest aceita até 100.
+ */
+export const MAX_ITENS_DO_PEDIDO = 100;
+
+/** O aviso do carrinho quando o pedido passa do limite, antes de enviar; ou null. */
+export function problemaDoTamanhoDoPedido(itens: number): string | null {
+  return itens > MAX_ITENS_DO_PEDIDO
+    ? `Um pedido leva até ${MAX_ITENS_DO_PEDIDO} itens de separação; este tem ${itens}. Divida em mais de um pedido.`
+    : null;
+}
 
 /**
  * Pedido em montagem. Linhas compactas e busca para pedidos grandes (já
