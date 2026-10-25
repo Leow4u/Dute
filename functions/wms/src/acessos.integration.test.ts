@@ -108,3 +108,37 @@ describe("a troca de papel para cliente", () => {
     assert.equal(await papelDe("bia"), "cliente");
   });
 });
+
+describe("o token do convite", () => {
+  const convite = (extra: Record<string, unknown>, chave: string) =>
+    comoOwner({
+      resource: "invites",
+      action: "create",
+      data: { nome: "Pessoa", email: `${chave}@exemplo.com`, role: "wms", customer_code: "Dutelog" },
+      idempotency_key: chave,
+      ...extra,
+    });
+
+  it("sem token, o convite não nasce com um id adivinhável", async () => {
+    await assert.rejects(convite({}, "sem-token"), /token gerado pela tela de Usuários/);
+    const convites = await getFirestore().collection("invites").get();
+    assert.deepEqual(convites.docs.map((doc) => doc.id), []);
+  });
+
+  it("o token curto, pelo dado ou pelo id, também não serve", async () => {
+    await assert.rejects(
+      comoOwner({ resource: "invites", action: "create", data: { token: "1234567890123", nome: "P", email: "curto@exemplo.com", role: "wms", customer_code: "Dutelog" }, idempotency_key: "token-curto" }),
+      /token gerado pela tela de Usuários/,
+    );
+    await assert.rejects(
+      comoOwner({ resource: "invites", action: "create", id: "convite-1", data: { nome: "P", email: "id@exemplo.com", role: "wms", customer_code: "Dutelog" }, idempotency_key: "id-curto" }),
+      /token gerado pela tela de Usuários/,
+    );
+  });
+
+  it("o token da tela de Usuários vira o id do convite", async () => {
+    const token = "0123456789abcdef0123456789abcdef0123";
+    await comoOwner({ resource: "invites", action: "create", data: { token, nome: "P", email: "ok@exemplo.com", role: "wms", customer_code: "Dutelog" }, idempotency_key: "token-bom" });
+    assert.equal((await getFirestore().collection("invites").doc(token).get()).get("email"), "ok@exemplo.com");
+  });
+});

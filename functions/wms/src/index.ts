@@ -4002,13 +4002,19 @@ function managedDocumentId(input: z.infer<typeof ManagedEntityMutationSchema>) {
     return documentId;
   }
   if (input.resource === "billing_config") return "default";
+  if (input.resource === "invites" && input.action === "create") {
+    // O id do convite é o token do link, que dá o convite a quem o tem: só
+    // o token longo e aleatório da tela de Usuários (18 bytes em
+    // hexadecimal), nunca um id curto ou a hora.
+    const token = String(input.id ?? input.data.token ?? "").trim();
+    if (!/^[0-9a-f]{32,128}$/.test(token)) {
+      throw new HttpsError("invalid-argument", "O convite precisa do token gerado pela tela de Usuários.");
+    }
+    return token;
+  }
   if (input.id) return safeDocId(input.id);
   if (input.action !== "create") {
     throw new HttpsError("invalid-argument", "Informe o registro a alterar.");
-  }
-  if (input.resource === "invites") {
-    const token = String(input.data.token ?? "").trim();
-    if (token) return safeDocId(token);
   }
   if (input.resource === "customers") {
     const code = String(input.data.code ?? "").trim();
