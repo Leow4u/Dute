@@ -37,23 +37,33 @@ export async function runDailyAlertsFor(db: Firestore, agora: Date = new Date())
   const alertas = alertasDoDia(dia, lidos<ColaboradorGravado>(colaboradores.docs, colaboradorLido), lidos<VeiculoGravado>(veiculos.docs, veiculoLido));
   const operationId = `rotina:${dia}`;
   let criados = 0;
+  // Um alerta que não grava não segura os outros; a rotina falha no fim, com a lista.
+  const falhas: string[] = [];
   for (const alerta of alertas) {
     const suffix = `${alerta.tipo}:${alerta.id}`;
-    const criou = await db.runTransaction(async (transaction) => {
-      const ref = db.collection(EVENTS_COLLECTION).doc(operacaoEventId(operationId, suffix));
-      if ((await transaction.get(ref)).exists) return false;
-      createOperacaoEvent(transaction, db, {
-        operation_id: operationId,
-        suffix,
-        type: alerta.tipo,
-        entity_id: alerta.id,
-        payload: { id: alerta.id, dia, dias: alerta.dias },
-        actor: ROTINA_ACTOR,
-        occurred_at: agora.toISOString(),
+    try {
+      const criou = await db.runTransaction(async (transaction) => {
+        const ref = db.collection(EVENTS_COLLECTION).doc(operacaoEventId(operationId, suffix));
+        if ((await transaction.get(ref)).exists) return false;
+        createOperacaoEvent(transaction, db, {
+          operation_id: operationId,
+          suffix,
+          type: alerta.tipo,
+          entity_id: alerta.id,
+          payload: { id: alerta.id, dia, dias: alerta.dias },
+          actor: ROTINA_ACTOR,
+          occurred_at: agora.toISOString(),
+        });
+        return true;
       });
-      return true;
-    });
-    if (criou) criados += 1;
+      if (criou) criados += 1;
+    } catch (error) {
+      console.error("runDailyAlerts: alerta não gravado", suffix, error);
+      falhas.push(suffix);
+    }
+  }
+  if (falhas.length) {
+    throw new Error(`runDailyAlerts: ${falhas.length} ${falhas.length === 1 ? "alerta não gravado" : "alertas não gravados"}: ${falhas.join(", ")}.`);
   }
   return { dia, alertas: alertas.length, criados };
 }

@@ -1316,3 +1316,28 @@ Achada em 25/10/2026, numa revisão do código da Operação.
     Execução a orçar, com o evento. Antes, ficava em Para planejar com a
     cancelada em aberto;
   - cancelar antes de qualquer revisão não grava o resumo nem muda a etapa.
+
+### Correção: a rotina diária parava inteira por uma data antiga
+
+Achada em 25/10/2026, numa revisão do código da Operação.
+
+- **O defeito.** O evento do alerta (`collaborator.cnh_expiring` e
+  `vehicle.maintenance_due`) aceitava `dias` só entre -3.650 e 3.650, mas o
+  cadastro aceita a validade da CNH e a revisão desde 1980.
+  - Uma CNH vencida há mais de 10 anos (ou um ano digitado errado) fazia o
+    evento falhar.
+  - O mais vencido vem primeiro, e cada alerta é uma transação sem
+    tratamento de erro: a rotina parava ali, e nenhum alerta do dia era
+    gravado, todos os dias, até alguém corrigir a data.
+- **A correção.**
+  - O evento aceita ±50 mil dias, o intervalo inteiro do cadastro (1980 a
+    2100).
+  - Um alerta que não grava não segura os outros: a rotina grava os demais
+    e falha no fim, com a lista dos que não gravaram, para o erro aparecer
+    no painel do sistema.
+- **Testes** (`rotina.integration.test.ts`):
+  - a CNH vencida em 2015 vira alerta (-4.162 dias), junto com os outros.
+    Antes, a rotina falhava sem gravar nenhum;
+  - o cadastro gravado fora da callable, com o id fora do formato, não
+    segura a CNH da Ana nem a revisão da van, e a rotina falha no fim
+    citando o que não gravou.

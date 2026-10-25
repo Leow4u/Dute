@@ -239,7 +239,8 @@ const vistoriaEnviada = z
  * O alerta da rotina diária (parte 3.13a): o dia da rotina e quantos dias
  * faltam (negativo: já passou). Sem a validade, a categoria nem a placa.
  */
-const alertaDoDia = z.object({ id, dia: data, dias: z.number().int().min(-3650).max(3650) }).strict();
+// O cadastro aceita a validade e a revisão de 1980 a 2100: ±50 mil dias cobrem o intervalo inteiro.
+const alertaDoDia = z.object({ id, dia: data, dias: z.number().int().min(-50_000).max(50_000) }).strict();
 /** A demanda direta foi executada e revisada: vai ao Comercial orçar a execução. */
 const execucaoRevisada = z.object({ id: demandaNumero, de: data, ate: data, os: z.number().int().min(1).max(99) }).strict();
 
