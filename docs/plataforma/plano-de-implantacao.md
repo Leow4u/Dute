@@ -1066,6 +1066,16 @@ Limitações conhecidas, sem pergunta, para quando houver tempo:
 
   A tela nova que mandar um desses filtros entra em
   `lib/cloud-api-indices.test.ts`, que pede o índice.
+- Em Financeiro › Contratos (só leitura, onde o Financeiro está liberado), o
+  financeiro vê o código do cliente no lugar do nome. O nome vem do cadastro
+  (`customers`), que as regras deixam ler à operação e ao Comercial, e o
+  contrato não guarda o nome; a tela funciona com o código. Em Financeiro ›
+  Autorizações não acontece: a linha usa o nome gravado na demanda.
+  - Corrigir sem mexer em permissão pede o nome do cliente no contrato,
+    gravado pelo `saveContract`, com o código como reserva nos contratos
+    antigos.
+  - Abrir o cadastro ao financeiro é mudança de permissão e fica com o
+    Leonardo.
 - A OS que a Omie gravou com a resposta perdida, numa emissão que depois
   parou e foi desistida, fica órfã na Omie: sem nota e sem conta a receber.
   Exige várias falhas seguidas e uma desistência; quem usa a Omie a
