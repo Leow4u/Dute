@@ -22,6 +22,12 @@ describe("consultas do Agent Dute por papel", () => {
     assert.deepEqual(agentToolsForRole("cliente"), [...PORTAL, "rascunho_pedido", "rascunho_envio"]);
   });
 
+  it("o cliente sem as faturas no contrato não consulta faturas; com elas, consulta", () => {
+    assert.equal(agentToolsForRole("cliente", ["wms"]).includes("faturas"), false);
+    assert.equal(agentToolsForRole("cliente", ["wms", "financeiro"]).includes("faturas"), true);
+    assert.deepEqual(agentToolsForRole("cliente", ["wms"]), [...PORTAL.filter((name) => name !== "faturas"), "rascunho_pedido", "rascunho_envio"]);
+  });
+
   it("rascunhos são só do cliente", () => {
     for (const role of ["owner", "admin", "interno", "suporte", "wms", "financeiro"]) {
       assert.equal(agentToolsForRole(role).some((name) => name.startsWith("rascunho_")), false, role);

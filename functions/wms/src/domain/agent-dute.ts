@@ -74,10 +74,15 @@ const COORDINATION_TOOLS: AgentToolName[] = ["fila_solicitacoes", ...FLOOR_TOOLS
  * - coordenação (interno, suporte, admin, owner): a operação inteira; a prévia
  *   do mês só para quem lê faturamento.
  */
-export function agentToolsForRole(role: string): AgentToolName[] {
+export function agentToolsForRole(role: string, contractedModules?: readonly string[]): AgentToolName[] {
   const allowed = new Set<AgentToolName>();
   const add = (names: AgentToolName[]) => names.forEach((name) => allowed.add(name));
-  if (role === "cliente") add([...PORTAL_TOOLS, "rascunho_pedido", "rascunho_envio"]);
+  if (role === "cliente") {
+    // As faturas seguem o contrato, como a regra de client_invoices
+    // (isOwnProjectionWith('financeiro')). Sem a lista, vale o portal inteiro.
+    const semFaturas = contractedModules !== undefined && !contractedModules.includes("financeiro");
+    add([...PORTAL_TOOLS.filter((name) => !(semFaturas && name === "faturas")), "rascunho_pedido", "rascunho_envio"]);
+  }
   else if (role === "wms") add([...PORTAL_TOOLS.filter((name) => name !== "faturas"), ...FLOOR_TOOLS]);
   else if (role === "financeiro") add([...PORTAL_TOOLS, "previa_faturamento"]);
   else if (["owner", "admin", "interno", "suporte"].includes(role)) {

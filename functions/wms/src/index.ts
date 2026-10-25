@@ -2070,8 +2070,9 @@ function agentDuteTools(
   scope: AgentScope,
   role: string,
   asker: { userId: string; conversationId: string; name?: string; email?: string },
+  contractedModules?: readonly string[],
 ) {
-  const allowed = new Set<string>(agentToolsForRole(role));
+  const allowed = new Set<string>(agentToolsForRole(role, contractedModules));
   return [
     tool(
       {
@@ -2421,7 +2422,9 @@ async function generateAgentDuteReply(input: {
       role: item.role === "assistant" ? ("model" as const) : ("user" as const),
       content: [{ text: (item.context ? `${item.content}\n\n${item.context}` : item.content).slice(0, 9000) }],
     }));
-  const tools = agentDuteTools(input.scope, input.role, input.asker);
+  // O cliente consulta só o que o contrato abre (as faturas pedem o módulo financeiro).
+  const contractedModules = input.role === "cliente" ? await readContractedModules(db, input.scope.customerCode) : undefined;
+  const tools = agentDuteTools(input.scope, input.role, input.asker, contractedModules);
   const errors: string[] = [];
   for (const modelName of [AGENT_DUTE_MODEL, AGENT_DUTE_FALLBACK_MODEL]) {
     const started = Date.now();
@@ -7044,8 +7047,13 @@ export const exportBillingReport = onCall({ timeoutSeconds: 60 }, async (request
   const profile = await getProfile(request);
   const input = ExportBillingReportSchema.parse(request.data ?? {});
   let customerCode: string;
-  if (profile.role === "cliente") customerCode = requireCustomerScope(profile, input.customer_code);
-  else {
+  if (profile.role === "cliente") {
+    customerCode = requireCustomerScope(profile, input.customer_code);
+    // As faturas mensais seguem o contrato, como a regra de client_invoices.
+    if (!(await readContractedModules(db, customerCode)).includes("financeiro")) {
+      throw new HttpsError("permission-denied", "As faturas não estão no contrato deste cliente.");
+    }
+  } else {
     requireBillingRead(profile);
     customerCode = requireCustomerScope(profile, input.customer_code);
   }
