@@ -34,8 +34,10 @@ function Campo({ id, rotulo, children }: { id: string; rotulo: string; children:
 
 /**
  * Escalar a OS: data, hora, equipe e veículo. Sem equipe ou sem veículo, a OS
- * agenda e o Início avisa (parte 3.4b); a tela de Planejar OS, com o papel de
- * cada pessoa e vários veículos, é da parte 3.6. Cancelar pede o motivo.
+ * agenda e o Início avisa (parte 3.4b). O papel de cada pessoa, os outros
+ * veículos e o fim da janela são do Planejar OS (parte 3.6): o painel não os
+ * mostra, e o salvar os devolve como estavam (pedidoDeAgenda). Cancelar pede
+ * o motivo.
  */
 export function EscalaDaOs({
   os,

@@ -141,12 +141,12 @@ describe("OS do modelo da parte 3.4b", () => {
 
   it("o agendamento manda janela, equipe e veículos no formato da callable", () => {
     expect(pedidoDeAgenda({ data: "2026-10-27", hora: "07:30:00", equipe: ["col_a", "col_b"], veiculoId: "vei_a" })).toEqual({
-      janela: { data: "2026-10-27", inicio: "07:30" },
+      janela: { data: "2026-10-27", inicio: "07:30", fim: null },
       equipe: [{ colaborador_id: "col_a" }, { colaborador_id: "col_b" }],
       veiculos: ["vei_a"],
     });
     expect(pedidoDeAgenda({ data: "2026-10-27", hora: " ", equipe: [], veiculoId: "" })).toEqual({
-      janela: { data: "2026-10-27", inicio: null },
+      janela: { data: "2026-10-27", inicio: null, fim: null },
       equipe: [],
       veiculos: [],
     });
@@ -154,5 +154,86 @@ describe("OS do modelo da parte 3.4b", () => {
 
   it("as placas dos veículos da OS, na ordem", () => {
     expect(placasDe(["vei_a", "vei_x"], { vei_a: "DEF4G56" })).toBe("DEF-4G56, vei_x");
+  });
+});
+
+describe("o painel de escalar devolve o que não mostra", () => {
+  // O Planejar OS grava o papel de cada um, vários veículos e o fim da
+  // janela; o painel do Hoje e da Agenda mostra só data, hora, equipe e um
+  // veículo, e a callable troca a janela, a equipe e os veículos inteiros.
+  const planejada: OsDaFila = {
+    ...aberta,
+    status: "agendada",
+    agenda: { data: "2026-10-27", hora: "08:00", fim: "12:30", equipe: ["col_a", "col_b"], veiculos: ["vei_a", "vei_b"] },
+    pessoas: [
+      { id: "col_a", nome: "Ana Souza", papel: "lider" },
+      { id: "col_b", nome: "Valter Moreira", papel: "motorista" },
+    ],
+  };
+
+  it("reagendar mantém o papel de cada um, os outros veículos e a duração da janela", () => {
+    const agenda = { ...agendaDaOs(planejada, "2026-10-22"), data: "2026-10-28", hora: "09:00" };
+    expect(pedidoDeAgenda(agenda)).toEqual({
+      janela: { data: "2026-10-28", inicio: "09:00", fim: "13:30" },
+      equipe: [
+        { colaborador_id: "col_a", papel: "lider" },
+        { colaborador_id: "col_b", papel: "motorista" },
+      ],
+      veiculos: ["vei_a", "vei_b"],
+    });
+  });
+
+  it("sem mexer na hora, o fim fica; quem entra pelo painel vai sem papel (vale o do cadastro)", () => {
+    const agenda = agendaDaOs(planejada, "2026-10-22");
+    expect(pedidoDeAgenda({ ...agenda, equipe: [...agenda.equipe, "col_c"] })).toMatchObject({
+      janela: { data: "2026-10-27", inicio: "08:00", fim: "12:30" },
+      equipe: [
+        { colaborador_id: "col_a", papel: "lider" },
+        { colaborador_id: "col_b", papel: "motorista" },
+        { colaborador_id: "col_c" },
+      ],
+    });
+    expect(pedidoDeAgenda({ ...agenda, equipe: ["col_b"] }).equipe).toEqual([{ colaborador_id: "col_b", papel: "motorista" }]);
+  });
+
+  it("o veículo do painel é o primeiro: trocar ou tirar mexe só nele", () => {
+    const agenda = agendaDaOs(planejada, "2026-10-22");
+    expect(agenda.veiculoId).toBe("vei_a");
+    expect(pedidoDeAgenda({ ...agenda, veiculoId: "vei_c" }).veiculos).toEqual(["vei_c", "vei_b"]);
+    expect(pedidoDeAgenda({ ...agenda, veiculoId: "" }).veiculos).toEqual(["vei_b"]);
+    expect(pedidoDeAgenda({ ...agenda, veiculoId: "vei_b" }).veiculos).toEqual(["vei_b"]);
+  });
+
+  it("sem hora não há fim, e o fim que passaria do dia sai", () => {
+    const agenda = agendaDaOs(planejada, "2026-10-22");
+    expect(pedidoDeAgenda({ ...agenda, hora: "" }).janela).toEqual({ data: "2026-10-27", inicio: null, fim: null });
+    expect(pedidoDeAgenda({ ...agenda, hora: "21:00" }).janela).toEqual({ data: "2026-10-27", inicio: "21:00", fim: null });
+    expect(pedidoDeAgenda({ ...agenda, hora: "19:29" }).janela).toEqual({ data: "2026-10-27", inicio: "19:29", fim: "23:59" });
+  });
+
+  it("a OS salva como rascunho no Planejar abre com a equipe e os veículos do plano", () => {
+    const rascunho = osDaLeitura("10045-03", {
+      demanda: "10045",
+      customer_code: "ITAU",
+      edicao: 1,
+      status: "aberta",
+      itens: [],
+      equipe: [{ colaborador_id: "col_a", nome: "Ana Souza", papel: "lider" }],
+      veiculos: [{ veiculo_id: "vei_a", placa: "DEF4G56" }, { veiculo_id: "vei_b", placa: "FGH2B34" }],
+    });
+    if (!rascunho) throw new Error("rascunho não lido");
+    expect(rascunho.agenda).toBeNull();
+    const agenda = agendaDaOs(rascunho, "2026-10-22");
+    expect(agenda).toMatchObject({ data: "2026-10-22", hora: "", equipe: ["col_a"], veiculoId: "vei_a" });
+    expect(pedidoDeAgenda(agenda)).toEqual({
+      janela: { data: "2026-10-22", inicio: null, fim: null },
+      equipe: [{ colaborador_id: "col_a", papel: "lider" }],
+      veiculos: ["vei_a", "vei_b"],
+    });
+  });
+
+  it("o papel fora da lista do campo não vai à callable", () => {
+    const antiga: OsDaFila = { ...planejada, pessoas: [{ id: "col_a", nome: "Ana Souza", papel: "supervisor" }] };
+    expect(pedidoDeAgenda(agendaDaOs(antiga, "2026-10-22")).equipe).toEqual([{ colaborador_id: "col_a" }, { colaborador_id: "col_b" }]);
   });
 });

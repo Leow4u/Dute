@@ -186,7 +186,7 @@ describe("Hoje", () => {
 });
 
 describe("escalar a OS", () => {
-  const agenda = { data: HOJE, hora: "15:00", equipe: ["col_jp"], veiculoId: "", motivo: "" };
+  const agenda = { data: HOJE, hora: "15:00", equipe: ["col_jp"], veiculoId: "", motivo: "", papeis: {}, outrosVeiculos: [], duracaoMin: null };
   const formulario = (extra: Partial<Parameters<typeof EscalaDaOs>[0]> = {}) =>
     renderToStaticMarkup(
       <EscalaDaOs
