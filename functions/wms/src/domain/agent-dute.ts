@@ -344,8 +344,11 @@ export async function movementSummary(
   if (to.getTime() - from.getTime() > 186 * 24 * 3_600_000) {
     return { erro: "Período longo demais. Consulte até 6 meses por vez." };
   }
+  // Só os do cliente, na consulta: filtrar depois do limite deixava o volume
+  // de outro cliente no período esconder os movimentos deste.
   const snapshot = await db
     .collection("movements")
+    .where("customer_code", "==", scope.customerCode)
     .where("data", ">=", from.toISOString())
     .where("data", "<", to.toISOString())
     .orderBy("data", "desc")

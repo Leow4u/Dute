@@ -8,6 +8,7 @@ out-tsc
 __pycache__/
 *.pyc
 firestore-debug.log
+firebase-debug.log
 functions/*/lib
 .expo
 .expo-shared
