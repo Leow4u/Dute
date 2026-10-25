@@ -913,3 +913,13 @@ esperam o alinhamento.
     pendente" quando a lista de notificações não carrega: o erro parece fila
     vazia (achado 66 da auditoria de 24/07, ainda aberto). Recomendo a tela
     dizer que não carregou, com "Tentar de novo", como as telas da v3.
+
+**Faturamento do WMS** (25/10/2026). O uso do mês fechado congela uma vez
+em `billing_operational_snapshots` (`ensureFrozenBillingUsage`, de
+21/10/2026).
+
+57. O uso congela na primeira prévia ou emissão depois da virada: se a
+    Armazenagem › Faturamento abre só no dia 5, o ad valorem sai do valor
+    do estoque do dia 5, não do último dia do mês. Recomendo uma rotina
+    congelar o uso de cada cliente logo depois da virada, às 00:05 do dia 1
+    no horário de Brasília; a prévia e a emissão seguem lendo a foto.
