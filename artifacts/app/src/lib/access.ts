@@ -24,7 +24,7 @@ export const ROLE_INFO: Array<{ role: ProfileRole; label: string; description: s
   { role: "wms", label: "Operação WMS", description: "Separa e entrega pedidos, recebe, conta e fotografa itens." },
   { role: "financeiro", label: "Financeiro", description: "Fecha o mês, emite e acompanha faturas." },
   { role: "suporte", label: "Suporte", description: "Acompanha a saúde do sistema e os incidentes." },
-  { role: "cliente", label: "Cliente", description: "Portal da BTG: estoque, pedidos e faturas." },
+  { role: "cliente", label: "Cliente", description: "Portal da própria empresa: estoque, pedidos, OS e faturas do contrato." },
   // Papéis da plataforma (Fase 2). Aparecem no convite e neste quadro só onde
   // a plataforma está liberada (lib/liberacao.ts).
   { role: "campo", label: "Campo", description: "Executa pelo celular as OS em que está escalado." },
