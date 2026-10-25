@@ -481,3 +481,6 @@ Um PR pequeno, depois da conferência da seção 5:
   periódico e a planilha de colaboradores do mês exportado.
 - A pergunta 64 do plano, antes do primeiro contrato com medição mensal: a
   medição aprovada não tem como entrar numa NF pelo que não é de demanda.
+- As perguntas 65 e 66 do plano, do app do campo, com o alinhamento de tela:
+  a inclusão guardada de item novo, que não aparece até chegar, e a
+  assinatura da conclusão recusada, que fica sem a OS.

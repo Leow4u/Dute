@@ -993,6 +993,28 @@ defeito.
       como a competência do WMS, pelo total aprovado. A NF dela leva as
       demandas da medição, que deixam de ser cobradas à parte.
 
+65. A inclusão guardada de um item que a OS não tem, do catálogo ou
+    avulso, não aparece na tela do celular até chegar. A equipe pode
+    incluí-la de novo.
+    - O do catálogo soma na mesma linha (4 viram 8).
+    - O avulso vira duas linhas.
+    - A revisão vê as duas coisas como divergência, que se cobra ou vira
+      aditivo.
+    - Recomendo a lista mostrar a inclusão guardada como linha nova, com o
+      relógio de guardada e sem + e −, até ela chegar. É tela: precisa do
+      alinhamento antes.
+
+66. A conclusão do celular recusada depois de a assinatura subir deixa a
+    assinatura no Storage sem a OS apontar para ela. Isso acontece quando o
+    escritório já concluiu a OS, ou quando a hora vem antes da última
+    etapa.
+    - A falha agora fica no topo até a pessoa dispensar (correção da fila de
+      25/10/2026).
+    - Mesmo assim, a assinatura do cliente se perde para a OS.
+    - Recomendo a ficha da OS no escritório mostrar a conclusão recusada do
+      campo, com a assinatura, para a coordenação anexá-la à conclusão. É
+      tela nova.
+
 Limitações conhecidas, sem pergunta, para quando houver tempo:
 
 - A OS que a Omie gravou com a resposta perdida, numa emissão que depois
@@ -1016,3 +1038,8 @@ Limitações conhecidas, sem pergunta, para quando houver tempo:
   lá chamando a callable direto. Se um dia a tela trocar o contrato numa
   revisão, o descarte precisa voltar os dois campos (a RV congelada já os
   guarda), e o evento precisa levar o contrato.
+- O rascunho da vistoria fica no aparelho por OS, sem a pessoa. No celular
+  de duas pessoas, quem entra depois vê o rascunho da outra, mas as fotos
+  dele estão na fila guardada de quem as tirou, que só anda com essa pessoa
+  logada. O envio da vistoria é recusado ("uma foto não está na OS") até as
+  fotos chegarem, e então se envia de novo.
