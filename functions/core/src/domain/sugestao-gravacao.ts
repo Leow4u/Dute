@@ -152,7 +152,9 @@ export async function answerSuggestionFor(db: Firestore, caller: CoreProfile, da
 /**
  * O valor real das sugestões das OS revisadas: o tempo de trabalho da OS,
  * com a mesma conta das medidas, e o erro contra o sugerido. Revisada de
- * novo (depois de reaberta), vale a última revisão.
+ * novo (depois de reaberta), vale a última revisão. A sugestão parcial (algum
+ * item sem base) soma só parte da OS: guarda o real, sem o erro, que mediria
+ * os itens que ela não estimou.
  */
 export async function registrarValoresReais(db: Firestore, numeros: readonly string[], agora: Date): Promise<number> {
   let registrados = 0;
@@ -165,7 +167,8 @@ export async function registrarValoresReais(db: Firestore, numeros: readonly str
     for (const sugestao of sugestoes.docs) {
       const sugeridos = sugestao.get("sugestao.minutos_total");
       if (typeof sugeridos !== "number" || sugeridos <= 0) continue;
-      await sugestao.ref.update({ valor_real: reais, real_em: agora.toISOString(), erro_pct: erroDaSugestao(sugeridos, reais) });
+      const completa = sugestao.get("sugestao.completa") === true;
+      await sugestao.ref.update({ valor_real: reais, real_em: agora.toISOString(), erro_pct: completa ? erroDaSugestao(sugeridos, reais) : null });
       registrados += 1;
     }
   }
