@@ -277,7 +277,9 @@ Seis problemas a resolver na mudança:
     e financeiro (`canReadPrices` das regras). O cliente vê o das próprias
     faturas.
   - A ferramenta com valor só entra para esses papéis.
-  - Hoje o suporte vê a prévia do faturamento. No núcleo, não.
+  - Hoje, no agente do WMS, o suporte vê as faturas e a prévia do
+    faturamento, como nas telas (`canReadBilling`). No núcleo, não. O
+    interno não vê nenhuma das duas.
 - **Quem tem o Agent Dute.** owner, admin, interno, wms, comercial,
   financeiro e suporte, e o cliente.
   - O campo não tem: usa o app de campo, que funciona sem sinal.
@@ -1511,6 +1513,25 @@ Achada em 25/10/2026.
   - o reserva grava a resposta sem o rascunho, sem ferramentas usadas e com
     0 chamadas no uso;
   - a resposta sem modelo grava sem o cartão.
+
+### Correção: o interno via o valor das faturas pelo agente do WMS
+
+Achada em 25/10/2026.
+
+- **O defeito.** O agente do WMS dava ao interno a ferramenta `faturas`,
+  com o total de cada fatura do cliente. As telas, as regras
+  (`canReadBilling`) e o servidor (`requireBillingRead`) fecham o
+  faturamento ao interno desde 30/07/2026; o agente segurava só a prévia
+  do mês.
+  - Na produção, o `/agente` do interno é o agente do WMS. Perguntado "qual
+    foi o valor da fatura de setembro?", ele respondia com o total.
+  - O agente do núcleo já não dava, porque `client_invoices` é coleção com
+    valor no leitor dele.
+- **A correção.** `agentToolsForRole` tira do interno as faturas junto com
+  a prévia. O suporte, o owner e o admin seguem com as duas, como nas
+  telas.
+- **Teste:** `agent-tools.test.ts` (as faturas e a prévia só para quem lê
+  faturamento). Antes, o interno tinha as faturas.
 
 ## Lançamento na produção
 
