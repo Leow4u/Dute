@@ -5,7 +5,7 @@
  * decidimos o que EXIBIR: botão que o papel não pode executar não aparece,
  * em vez de falhar depois do formulário preenchido.
  */
-import type { ProfileRole } from "./modules";
+import { WMS_OPERATOR_ROLES, type ProfileRole } from "./modules";
 
 /** requireCatalogWrite: criar/editar/arquivar produtos e SKUs. */
 const CATALOG_WRITE_ROLES: ReadonlySet<ProfileRole> = new Set([
@@ -21,16 +21,19 @@ const REQUEST_DECISION_ROLES: ReadonlySet<ProfileRole> = new Set([
   "interno",
 ]);
 
-/** requireWarehouseWrite: foto em item já cadastrado (addCatalogPhotos). */
-const ITEM_PHOTO_ROLES: ReadonlySet<ProfileRole> = new Set([
-  "owner",
-  "admin",
-  "interno",
-  "wms",
-]);
+/**
+ * requireWarehouseWrite: receber, conferir, guardar, separar, entregar,
+ * contar, movimentar, devolver e fotografar o item. O suporte consulta.
+ */
+const WAREHOUSE_WRITE_ROLES: ReadonlySet<ProfileRole> = new Set(WMS_OPERATOR_ROLES);
 
+export function canOperateWarehouse(role: ProfileRole | null | undefined) {
+  return Boolean(role && WAREHOUSE_WRITE_ROLES.has(role));
+}
+
+/** Foto em item já cadastrado (addCatalogPhotos): quem opera o armazém. */
 export function canAddItemPhotos(role: ProfileRole | null | undefined) {
-  return Boolean(role && ITEM_PHOTO_ROLES.has(role));
+  return canOperateWarehouse(role);
 }
 
 export function canWriteCatalog(role: ProfileRole | null | undefined) {

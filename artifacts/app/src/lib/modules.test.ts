@@ -37,7 +37,9 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/solicitacoes", ["owner", "admin", "interno", "suporte"]],
   ["/wms/receber", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/wms/pedidos", ["owner", "admin", "interno", "wms", "suporte"]],
-  ["/wms/contagem", ["owner", "admin", "interno", "wms", "suporte"]],
+  // A Contagem é de quem opera o armazém: o servidor nem lê a sessão de
+  // abertura para o suporte (requireWarehouseWrite).
+  ["/wms/contagem", ["owner", "admin", "interno", "wms"]],
   ["/wms/recebimento", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/wms/inventario", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/wms/qualidade", ["owner", "admin", "interno", "wms", "suporte"]],

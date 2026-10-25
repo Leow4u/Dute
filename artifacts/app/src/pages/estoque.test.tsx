@@ -87,6 +87,15 @@ describe("Estoque na v3", () => {
     expect(barra).toMatch(/<label[^>]*><span class="sr-only">Buscar por SKU interno da movimentação<\/span>/);
   });
 
+  it("quem só consulta (o suporte) não vê a Contagem, Registrar movimentação nem as ações da ficha", () => {
+    const fonte = readFileSync(new URL("./estoque.tsx", import.meta.url), "utf8");
+    expect(fonte.match(/href="\/wms\/contagem"/g)).toHaveLength(3);
+    expect(fonte).toMatch(/\{warehouseWriter \? \(\s*<Button asChild variant="outline">\s*<Link href="\/wms\/contagem">/);
+    expect(fonte).toMatch(/warehouseWriter \? \(\s*<Button asChild variant="outline" size="sm">\s*<Link href="\/wms\/contagem">/);
+    expect(fonte).toMatch(/\{warehouseWriter \? \(\s*<div className="mt-auto flex/);
+    expect(fonte).toContain('{tab === "history" && warehouseWriter ? (');
+  });
+
   it("sem exemplo no motivo da movimentação", () => {
     expect(readFileSync(new URL("./movements.tsx", import.meta.url), "utf8")).not.toContain("Ex.:");
   });

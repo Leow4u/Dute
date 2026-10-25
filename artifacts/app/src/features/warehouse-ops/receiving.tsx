@@ -1324,21 +1324,25 @@ export function ReceivingConferenceSection({
             Salve a quantidade física contada antes de concluir a entrada no estoque.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => saveConference.mutate()}
-            disabled={saveConference.isPending || hasInvalidLine}
-          >
-            {saveConference.isPending ? (
-              <RefreshCw data-icon="inline-start" className="animate-spin" />
-            ) : (
-              <ClipboardCheck data-icon="inline-start" />
-            )}
-            Salvar conferência
-          </Button>
-        </div>
+        {/* A conferência se salva na chegada aberta (o servidor só aceita
+            "created" e "checking") e por quem opera o armazém. */}
+        {canAdvanceTask(task) ? (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => saveConference.mutate()}
+              disabled={saveConference.isPending || hasInvalidLine}
+            >
+              {saveConference.isPending ? (
+                <RefreshCw data-icon="inline-start" className="animate-spin" />
+              ) : (
+                <ClipboardCheck data-icon="inline-start" />
+              )}
+              Salvar conferência
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 @xl:grid-cols-4">

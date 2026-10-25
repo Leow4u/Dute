@@ -22,6 +22,10 @@ describe("os retornos da Operação", () => {
     expect(render({ retornos: [] })).toBe("");
   });
 
+  it("quem só consulta vê o retorno sem Receber retorno", () => {
+    expect(textosDaTela(render({ somenteConsulta: true }))).toEqual(["Retornos da Operação", "a receber · 1", "PED-0118", "OS 10050-02 · chegou Sex 30/10 18:40"]);
+  });
+
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
   });

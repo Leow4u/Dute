@@ -28,6 +28,14 @@ describe("Pedidos na v3", () => {
     expect(FONTE).toMatch(/<SheetContent [^>]*aria-describedby=\{undefined\}/);
   });
 
+  it("quem só consulta (o suporte) não vê Separado, Entregue, Tratar nem a ação da entrega", () => {
+    expect(FONTE).toContain("const operador = canOperateWarehouse(user?.publicMetadata.role);");
+    expect(FONTE.match(/onTreat=\{operador \? \(\) => setTreating\(order\) : undefined\}/g)).toHaveLength(2);
+    expect(FONTE).toMatch(/operador \? \(\s*<Button[\s\S]*?Separado\s*<\/Button>\s*\) : undefined/);
+    expect(FONTE).toMatch(/operador \? \(\s*<Button[\s\S]*?Entregue\s*<\/Button>\s*\) : undefined/);
+    expect(FONTE).toMatch(/secondary: operador \? \(/);
+  });
+
   it("o motivo da recusa tem rótulo", () => {
     expect(FONTE).toMatch(/<Label htmlFor="motivo-da-recusa">Motivo<\/Label>\s*<Textarea\s+id="motivo-da-recusa"/);
   });

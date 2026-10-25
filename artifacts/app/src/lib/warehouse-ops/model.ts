@@ -607,6 +607,14 @@ export function canAdvanceTask(task?: WarehouseTask) {
   return Boolean(task.id) && !task.blocked_reason && !isTerminalTask(task);
 }
 
+/**
+ * A tarefa só para consulta (quem não opera o armazém): sem avançar, sem
+ * registrar exceção e sem salvar a conferência, que seguem estas duas regras.
+ */
+export function somenteConsulta(entry: TaskQueueEntry): TaskQueueEntry {
+  return { ...entry, task: { ...entry.task, can_advance: false, can_register_exception: false } };
+}
+
 export function canRegisterException(task?: WarehouseTask) {
   if (!task) return false;
   if (typeof task.can_register_exception === "boolean") {

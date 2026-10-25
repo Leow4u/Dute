@@ -32,6 +32,7 @@ import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
+import { canOperateWarehouse } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import {
   StockFilterChip,
@@ -98,6 +99,7 @@ export function payloadDaMovimentacao(
  * da página. Em /movements (rota antiga) ganha cabeçalho e ação próprios.
  */
 export default function Movements({ embedded = false }: { embedded?: boolean } = {}) {
+  const { user } = useAppUser();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("todos");
@@ -300,7 +302,10 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
 
   if (embedded) return <div className="flex flex-col gap-4">{content}</div>;
   return (
-    <StockPageShell title="Histórico de movimentos" actions={<MovementModal />}>
+    <StockPageShell
+      title="Histórico de movimentos"
+      actions={canOperateWarehouse(user?.publicMetadata.role) ? <MovementModal /> : undefined}
+    >
       {content}
     </StockPageShell>
   );
