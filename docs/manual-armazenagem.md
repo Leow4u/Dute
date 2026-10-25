@@ -257,8 +257,8 @@ precisa dela.
 
 ## Os dias parado e os alertas
 
-Onde a memória roda (hoje, só a homologação), uma rotina lê o razão a cada 15
-minutos; a regra é a do modelo do cliente (hoje, a mesma nos três).
+Onde a memória roda (hoje, a homologação e a produção), uma rotina lê o razão
+a cada 15 minutos; a regra é a do modelo do cliente (hoje, a mesma nos três).
 
 - **"Parado 90+ dias":** sem entrada nem saída há 90 dias. **"Sem giro":** sem
   saída há 180 dias, ou desde a primeira entrada se nunca saiu. Sem saldo, nada
@@ -294,9 +294,10 @@ no mês anterior; "Cobrado automaticamente" é calculado, e os "Serviços do mê
 pedem "Qtde" e "Observação" ("Salvar quantidades"). "Emitir e publicar para a
 cliente" vale a partir do dia 1º do mês seguinte, com as quantidades salvas:
 congela os valores e publica em Faturas, no portal. Fora do Financeiro,
-"Marcar como paga". Onde o Financeiro está ligado (hoje, só a homologação), a
-competência emitida vira um "A faturar" de lá: a tela leva a "Faturar no
-Financeiro" ou "Ver a NF no Financeiro", e o WMS recusa o pagamento.
+"Marcar como paga". Onde o Financeiro está ligado (hoje, a homologação e a
+produção), a competência emitida vira um "A faturar" de lá: a tela leva a
+"Faturar no Financeiro" ou "Ver a NF no Financeiro", e o WMS recusa o
+pagamento.
 
 ## Agent Dute
 
@@ -306,8 +307,9 @@ recebimentos, tarefas e endereços; para a coordenação, também as faturas, as
 solicitações e os eventos; para `owner`, `admin` e `suporte`, também a prévia
 do faturamento. Propõe a anotação sobre o cliente, pendente até `owner`,
 `admin`, `interno` ou `suporte` aprovar, e a rotina, que a pessoa confirma no
-cartão. Onde o agente do núcleo está ligado (hoje, só a homologação), a
-conversa é com ele, sobre o cliente ativo, sem a prévia e com os itens parados.
+cartão. Onde o agente do núcleo está ligado (hoje, a homologação e a
+produção), a conversa é com ele, sobre o cliente ativo, sem a prévia e com os
+itens parados.
 
 ## Quem vê valor
 
@@ -322,6 +324,6 @@ custo da mercadoria se digita na Contagem, no Receber e nas Devoluções.
 | O que | Onde está ligado (o `dute-btg` não tem nenhum) |
 |---|---|
 | A entrega do pedido e os "Retornos da Operação" | Homologação e produção |
-| Os dias parado, os filtros "Parados" e "Sem giro", Estoque › Alertas e a linha do Início | Só a homologação |
-| O Agent Dute do núcleo em `/agente`; fora dele, o do WMS | Só a homologação |
-| A armazenagem faturada e recebida no Financeiro | Só a homologação |
+| Os dias parado, os filtros "Parados" e "Sem giro", Estoque › Alertas e a linha do Início | Homologação e produção |
+| O Agent Dute do núcleo em `/agente`; fora dele, o do WMS | Homologação e produção |
+| A armazenagem faturada e recebida no Financeiro | Homologação e produção |

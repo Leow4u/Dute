@@ -659,7 +659,8 @@ PRs próprios, para a produção começar com as regras novas.
 
 - **A lista.** `RH_AMBIENTES_LIBERADOS` ganha o `dute-prod`, no app e em
   `functions/rh`. O `platform-lists.test.ts` trava as duas iguais.
-- **O que muda na produção**, a partir da publicação seguinte ao merge:
+- **O que mudou na produção**, desde a segunda publicação do mesmo dia
+  (`59d78bc`, run 1090, `lancamento-producao.md`, seção 1):
   - o shell do RH aparece para owner, admin e rh;
   - as dez callables respondem;
   - a `runRhAlerts` passa a rodar às 06:10.

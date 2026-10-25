@@ -22,7 +22,7 @@ faturas.
 | Revisão | As OS concluídas no local que esperam a revisão. |
 | Relatórios | As OS por período, cliente, tipo, pessoa e veículo, e as solicitações do portal. |
 | Colaboradores, Veículos | O cadastro da equipe e da frota. |
-| Agent Dute | O assistente, só onde ele está ligado (hoje, só a homologação). |
+| Agent Dute | O assistente, só onde ele está ligado (hoje, a homologação e a produção). |
 
 O número ao lado do Início conta as linhas do "Precisa de você"; o de outra
 tela, as que levam a ela. Fica vermelho quando alguma é crítica.
@@ -137,10 +137,10 @@ agendar, agendada e em execução): ligar dá à pessoa as OS em que ela está, 
 tirar ou trocar tira delas o login antigo. A OS concluída fica com quem estava
 ligado quando foi a campo.
 
-**A duração sugerida** (onde a memória da Dute está ligada; hoje, só a
-homologação) aparece na OS com equipe e item do catálogo, com "Usar",
-"Ignorar" e a base de cada item: a do cliente, com 5 execuções, ou a média
-interna, com 15. É o tempo de trabalho, sem o trajeto: "Usar" só preenche o
+**A duração sugerida** (onde a memória da Dute está ligada; hoje, a
+homologação e a produção) aparece na OS com equipe e item do catálogo, com
+"Usar", "Ignorar" e a base de cada item: a do cliente, com 5 execuções, ou a
+média interna, com 15. É o tempo de trabalho, sem o trajeto: "Usar" só preenche o
 fim a partir do início (sem início, das 08:00), e quem planeja soma o resto.
 
 ## Agenda

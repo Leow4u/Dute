@@ -295,10 +295,12 @@ sistema) e "Sair". "Aplicativo no celular" instala o portal como aplicativo.
 
 | Recurso | `dute-homolog` | `dute-prod` |
 |---|---|---|
-| O menu por módulo contratado, Minhas OS, o comprovante, "Solicitar OS" e o sino | Sim | Liberados, mas a produção serve o build de 23/10 (`fde9ba0`), de antes deles: entram com a próxima publicação da `main`, que espera o OK do Leonardo. |
-| NFs dos serviços e o aviso "NF emitida" | Sim | Não: o Financeiro só na homologação. |
-| Aviso "Itens parados" | Sim | Não: a memória só na homologação. |
-| Agent Dute | O do núcleo: lê a Armazenagem, a Operação (sem valor) e as faturas do contrato. | O do WMS: estoque, pedidos, documentos e, com as faturas no contrato, as faturas mensais. |
+| O menu por módulo contratado, Minhas OS, o comprovante, "Solicitar OS" e o sino | Sim | Sim |
+| NFs dos serviços e o aviso "NF emitida" | Sim | Sim |
+| Aviso "Itens parados" | Sim | Sim |
+| Agent Dute | O do núcleo: lê a Armazenagem, a Operação (sem valor) e as faturas do contrato. | O mesmo |
 | E-mail dos avisos | Só registrado | Só registrado |
 
-O `dute-btg`, parado desde o corte da Fase 1, fica de fora de todas as listas.
+A produção recebeu os quatro primeiros em 25/10/2026
+(`docs/plataforma/lancamento-producao.md`, seção 1). O `dute-btg`, parado
+desde o corte da Fase 1, fica de fora de todas as listas.

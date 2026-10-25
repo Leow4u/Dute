@@ -47,8 +47,9 @@ documentação de produto e operação está em `docs/`.
 - **Fase 4 (lançamento) na `main` e no `dute-prod`**: os marcos 2, 3 e 4
   subiram juntos em 25/10/2026 (`e6a43ed`), com o OK do Leonardo. O
   Financeiro está ligado no `dute-homolog` e, desde a parte 4.9b (PR 466,
-  25/10/2026), no `dute-prod` (`FINANCEIRO_AMBIENTES_LIBERADOS`, no app e
-  nas callables): `registerNf`
+  publicada em 25/10/2026 com o `59d78bc`, que ligou também a memória, o
+  agente do núcleo e o RH), no `dute-prod` (`FINANCEIRO_AMBIENTES_LIBERADOS`,
+  no app e nas callables): `registerNf`
   registra a NF da demanda A faturar, `advanceFatura` envia, recebe, estorna
   e cancela, e o shell `/financeiro` tem Início, A faturar, a cobrança, a via
   comercial e os Relatórios. O portal com as OS, o comprovante, o Solicitar
@@ -144,8 +145,8 @@ documentação de produto e operação está em `docs/`.
     `src/callables.test.ts`).
   - `functions/financeiro`: Functions do Financeiro (Fase 4), codebase
     `financeiro`, no molde da Operação: toda callable entra por
-    `requireFinanceiroCaller` (liberação em `domain/liberacao.ts`, só o
-    `dute-homolog` até o lançamento da Fase 4; papéis owner, admin e
+    `requireFinanceiroCaller` (liberação em `domain/liberacao.ts`, o
+    `dute-homolog` e, desde a parte 4.9b, o `dute-prod`; papéis owner, admin e
     financeiro) e grava por `runIdempotent` (recibo em
     `financeiro_operations`) com o evento `nf.*` sem valor. Desenho e registro:
     `docs/plataforma/fase-4-financeiro.md`. A NFS-e pela Omie (parte 7.4):
