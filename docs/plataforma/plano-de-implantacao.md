@@ -891,3 +891,16 @@ os manuais descrevem.
     `functions/operacao/src/domain/presencas.ts`), mas nenhum módulo lê a
     presença. Recomendo as presenças do mês por pessoa na exportação do RH
     para a contabilidade (parte 8.3), numa parte própria.
+
+**Matriz de papéis do WMS** (25/10/2026). O teste
+`functions/wms/src/callables-papeis.integration.test.ts` trava quem passa em
+cada callable do WMS; onde o código diverge da tabela de
+`docs/modulos-e-permissoes.md`, vale o código até a resposta.
+
+55. Qualquer papel do WMS abre solicitação (`createCustomerRequest`),
+    inclusive o pedido de retirada, que já reserva o estoque. Nenhuma tela da
+    equipe abre solicitação (só o portal e os cartões do Agent Dute do
+    cliente), e a tabela dá a criação ao cliente e à coordenação: o wms
+    executa depois da aprovação, o financeiro e o suporte acompanham.
+    Recomendo o servidor aceitar só o cliente, no próprio contrato, e owner,
+    admin e interno.
