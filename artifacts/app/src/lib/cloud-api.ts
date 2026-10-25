@@ -2682,7 +2682,7 @@ async function syncRealOperationalFoundation() {
   await emitEvent({
     type: "foundation.real_data_synced",
     title: "Coleções operacionais preparadas",
-    description: `${inserted.toLocaleString("pt-BR")} registro(s) derivados da operação BTG foram sincronizados para a fundação operacional.`,
+    description: `${inserted.toLocaleString("pt-BR")} registro(s) derivados da operação ${LEGACY_CUSTOMER_CODE} foram sincronizados para a fundação operacional.`,
     severity: "attention",
     entity_type: "fundacao_operacional",
     entity_id: DEFAULT_CUSTOMER.id,
@@ -3462,8 +3462,8 @@ async function getAiOverview() {
     {
       id: "derived_inventory",
       scope_type: "estoque",
-      scope_id: "BTG",
-      title: "Estoque BTG",
+      scope_id: LEGACY_CUSTOMER_CODE,
+      title: `Estoque ${LEGACY_CUSTOMER_CODE}`,
       event_count:
         movements.length +
         events.filter((event) => String(event.type).startsWith("inventory."))

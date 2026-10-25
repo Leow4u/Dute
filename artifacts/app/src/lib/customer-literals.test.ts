@@ -75,3 +75,29 @@ describe("o portal não fala da BTG", () => {
     expect(found).toEqual([]);
   });
 });
+
+/**
+ * A área interna opera o cliente ativo: tela, rótulo, exemplo e texto
+ * gravado não chamam o cliente de BTG. Fica a regra do cliente legado, que
+ * passa por LEGACY_CUSTOMER_CODE, e o pacote da BTG. Comentário pode citar.
+ */
+const DO_PORTAL = new Set(DO_CLIENTE);
+
+describe("a área interna não fala da BTG fixa", () => {
+  it('nenhum texto interno diz "BTG" fora da regra do cliente legado', () => {
+    const found: string[] = [];
+    for (const raiz of ["pages", "features", "components", "lib", "hooks"]) {
+      for (const file of sourceFiles(join(SRC, raiz))) {
+        const rel = relative(SRC, file).split("\\").join("/");
+        if (ALLOWED.has(rel) || [...DO_PORTAL].some((portal) => rel === portal || rel.startsWith(`${portal}/`))) continue;
+        readFileSync(file, "utf8")
+          .split("\n")
+          .forEach((line, index) => {
+            const code = semComentario(line);
+            if (/\bBTG\b/.test(code) && !code.includes("LEGACY_CUSTOMER_CODE")) found.push(`${rel}:${index + 1}: ${line.trim()}`);
+          });
+      }
+    }
+    expect(found).toEqual([]);
+  });
+});

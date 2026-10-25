@@ -634,7 +634,7 @@ export function ReturnWorkspace() {
               ? Number(line.unitCost)
               : existing.unitCost || 0,
             status: "pending_disposition" as const,
-            source: source.trim() || "Loja BTG",
+            source: source.trim() || defaultSource,
             reference: reference.trim() || undefined,
             receivedAt,
           });
@@ -761,7 +761,7 @@ export function ReturnWorkspace() {
                   id="return-source"
                   value={source}
                   onChange={(event) => setSource(event.target.value)}
-                  placeholder="Loja BTG, unidade, cliente..."
+                  placeholder="Loja, unidade, cliente..."
                 />
               </div>
               <div className="space-y-2">

@@ -134,7 +134,8 @@ export function buildDocumentRows(documents: AnyRecord[], requests: AnyRecord[])
     const attachments = Array.isArray(request.attachments) ? (request.attachments as AnyRecord[]) : [];
     if (!attachments.length) continue;
     const by = (request.requested_by ?? {}) as AnyRecord;
-    const who = text(by.name) || text(by.email) || "BTG";
+    // Sem nome nem e-mail de quem enviou, o cliente da solicitação.
+    const who = text(by.name) || text(by.email) || text(request.customer_code) || "Cliente";
     const invoice = text(request.invoice_number);
     const supplier = text(request.supplier);
     const linkedTo = ["Aviso de chegada", supplier, invoice && `NF ${invoice}`].filter(Boolean).join(" · ");

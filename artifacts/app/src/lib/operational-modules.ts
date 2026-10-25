@@ -88,7 +88,7 @@ export const OPERATIONAL_MODULES: OperationalModule[] = [
     collections: ["customers", "customer_accounts", "customer_requests", "documents", "billing_periods"],
     eventTypes: ["portal.request_created", "document.uploaded", "customer.message_sent"],
     aiFlows: ["customerPortalAssistantFlow", "customerAccessSummaryFlow"],
-    mvp: "Home do cliente BTG com estoque, solicitações, faturas e chat contextual.",
+    mvp: "Home do cliente com estoque, solicitações, faturas e chat contextual.",
   },
   {
     id: "catalog",
@@ -102,7 +102,7 @@ export const OPERATIONAL_MODULES: OperationalModule[] = [
     collections: ["products", "skus"],
     eventTypes: ["produto.created", "produto.updated", "sku.created", "sku.updated"],
     aiFlows: ["inventoryQuestionFlow", "missingCostDetectionFlow"],
-    mvp: "Base real BTG importada e consultável por produto/SKU.",
+    mvp: "Base real importada e consultável por produto/SKU.",
   },
   {
     id: "inventory-ledger",

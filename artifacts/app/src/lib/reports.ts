@@ -83,7 +83,7 @@ export function positionReport(items: StockItem[]): ReportResult {
   const total = withStock.reduce((sum, item) => sum + (itemValue(item) ?? 0), 0);
   return {
     columns: [
-      { key: "code", label: "Código BTG" },
+      { key: "code", label: "SKU" },
       { key: "sku", label: "SKU" },
       { key: "name", label: "Item" },
       { key: "locations", label: "Endereços" },
@@ -119,7 +119,7 @@ export function belowMinimumReport(items: StockItem[]): ReportResult {
     .sort((a, b) => b.missing - a.missing || a.item.name.localeCompare(b.item.name, "pt-BR"));
   return {
     columns: [
-      { key: "code", label: "Código BTG" },
+      { key: "code", label: "SKU" },
       { key: "name", label: "Item" },
       { key: "locations", label: "Endereços" },
       { key: "onHand", label: "Saldo", kind: "number" },
@@ -182,7 +182,7 @@ export function idleReport(
   const value = idle.reduce((sum, { item }) => sum + (itemValue(item) ?? 0), 0);
   return {
     columns: [
-      { key: "code", label: "Código BTG" },
+      { key: "code", label: "SKU" },
       { key: "name", label: "Item" },
       { key: "locations", label: "Endereços" },
       { key: "onHand", label: "Saldo", kind: "number" },
@@ -274,7 +274,7 @@ export function movementsReport(movements: AnyRecord[]): ReportResult {
     columns: [
       { key: "date", label: "Data", kind: "date" },
       { key: "kind", label: "Tipo" },
-      { key: "code", label: "Código BTG" },
+      { key: "code", label: "SKU" },
       { key: "sku", label: "SKU" },
       { key: "name", label: "Item" },
       { key: "location", label: "Endereço" },
