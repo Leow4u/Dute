@@ -261,7 +261,15 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   - o mesmo "Registrar movimentação" enviado de novo depois da resposta
     perdida repete a chave, e o servidor devolve o movimento gravado. Antes,
     cada clique saía com uma chave nova, e o segundo lançava o saldo de novo
-    (teste em `pages/movements-envio.test.tsx`).
+    (teste em `pages/movements-envio.test.tsx`);
+  - Pedidos, Receber e o Início do WMS mostram toda tarefa aberta. Antes, a
+    fila de cada etapa levava só as 12 tarefas atualizadas por último,
+    concluídas no meio: o pedido, o recebimento ou a guarda abertos mais
+    antigos sumiam da tela e da contagem do "Precisa de você" (depois de
+    guardar 12 itens de uma nota, os outros não apareciam em "Para
+    guardar"). O pedido encerrado agora entra com todas as etapas ou não
+    entra; antes, o entregue podia voltar em "Para separar" só com a
+    separação (teste em `lib/cloud-api-warehouse.test.ts`).
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a
   `main`, sem liberação própria. As entradas, as saídas e os movimentos
   passam a cobrar só o recebimento e a expedição, cada movimento uma vez

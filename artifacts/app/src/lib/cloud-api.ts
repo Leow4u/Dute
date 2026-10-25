@@ -183,6 +183,9 @@ const CUSTOMER_SCAN_MAX_DOCS = 5000;
 const CUSTOMER_SCAN_MIN_PAGE = 100;
 const CATALOG_READ_CAP = 2000;
 const OPS_TASK_READ_CAP = 500;
+/** As encerradas de cada fila do armazém; as abertas entram todas. */
+const OPS_CLOSED_TASKS_IN_QUEUE = 12;
+const OPS_CLOSED_TASK_STATUSES = new Set(["completed", "delivered", "received", "closed", "cancelled", "canceled"]);
 const RECENT_MOVEMENTS_CAP = 300;
 const RECENT_EVENTS_CAP = 80;
 const EXPORT_HARD_CAP = 5000;
@@ -1814,6 +1817,44 @@ async function getWarehouseOps() {
     (sum, item) => sum + Number(item.qty_on_hand ?? 0),
     0,
   );
+  // Pedidos, Receber e o Início leem estas filas: toda tarefa aberta entra,
+  // por mais antiga que seja. O pedido entra com todas as etapas ou não
+  // entra (o que ainda não saiu e os encerrados mais recentes, pela última
+  // etapa), para a linha do pedido entregue não ficar só com a separação e
+  // aparecer em "Para separar". Das outras filas, as encerradas mais recentes.
+  const isClosedTask = (task: AnyRecord) => OPS_CLOSED_TASK_STATUSES.has(String(task.status));
+  const orderLanes = new Set(["picking", "packing", "shipping"]);
+  const orderTasks = lanes
+    .filter((lane) => orderLanes.has(lane.id))
+    .flatMap((lane) => lane.items)
+    .filter((task) => task.order_id);
+  const openOrderIds = new Set(
+    orderTasks.filter((task) => !isClosedTask(task)).map((task) => String(task.order_id)),
+  );
+  const closedOrderUpdates = new Map<string, string>();
+  for (const task of orderTasks) {
+    const orderId = String(task.order_id);
+    if (openOrderIds.has(orderId)) continue;
+    const updatedAt = String(task.updated_at ?? "");
+    const latest = closedOrderUpdates.get(orderId);
+    if (latest === undefined || updatedAt > latest) closedOrderUpdates.set(orderId, updatedAt);
+  }
+  const queuedOrderIds = new Set([
+    ...openOrderIds,
+    ...[...closedOrderUpdates]
+      .sort(([, left], [, right]) => right.localeCompare(left))
+      .slice(0, OPS_CLOSED_TASKS_IN_QUEUE)
+      .map(([orderId]) => orderId),
+  ]);
+  const queueItems = (laneId: string, items: AnyRecord[]) => {
+    let closed = 0;
+    return items.filter((task) => {
+      if (orderLanes.has(laneId) && task.order_id) return queuedOrderIds.has(String(task.order_id));
+      if (!isClosedTask(task)) return true;
+      closed += 1;
+      return closed <= OPS_CLOSED_TASKS_IN_QUEUE;
+    });
+  };
 
   return {
     generated_at: new Date().toISOString(),
@@ -1838,7 +1879,7 @@ async function getWarehouseOps() {
     queues: Object.fromEntries(
       lanes.map((lane) => {
         const queueKey = lane.id === "shipping" ? "expedition" : lane.id;
-        const tasks = lane.items.slice(0, 12).map((task) => ({
+        const tasks = queueItems(lane.id, lane.items).map((task) => ({
           id: task.task_uid,
           title: task.title,
           reference: task.id,
