@@ -925,7 +925,7 @@ em `billing_operational_snapshots` (`ensureFrozenBillingUsage`, de
     no horário de Brasília; a prévia e a emissão seguem lendo a foto.
 
 **Revisão de defeitos** (25/10/2026). Achados confirmados no código que
-pedem ação ou tela nova; os que eram só código entraram em PR, um por
+pedem ação, regra ou tela nova; os que eram só código entraram em PR, um por
 defeito.
 
 58. A vistoria iniciada que não deu certo (o cliente não recebeu a equipe,
@@ -953,6 +953,32 @@ defeito.
     Omie não traz a data da NFS-e, só a do faturamento da OS (`dDtFat`).
     Recomendo usar o `dDtFat` quando a autorização é vista depois de uma
     parada ou retomada, e o dia da rotina no resto.
+
+61. Na ficha do RH, quando dois registros do mesmo tipo têm a mesma data de
+    emissão, vale o que vence depois e, só no empate do vencimento, o
+    lançado por último. Corrigir um vencimento digitado a mais (2027 em vez
+    de 2026) lançando de novo não funciona: a correção nasce substituída, o
+    vencimento errado fica vigente e o aviso do vencimento real não sai. A
+    regra de hoje protege o caso contrário: o mesmo registro lançado de novo
+    sem vencimento não apaga o aviso. Recomendo que, no empate da emissão,
+    valha o lançado por último, como o registro da Fase 8 descreve a
+    correção ("o vigente no empate das datas"); "Alterar" continua sendo o
+    jeito limpo de corrigir.
+62. Na ficha, cada tipo de exame é um grupo: depois do periódico, o
+    admissional continua vigente para sempre. Com vencimento, ele aparece
+    vencido no Início do RH, e a rotina grava o `rh.record_expired` dele.
+    Arquivá-lo para calar o aviso o tira da exportação do mês dele, se ela
+    for gerada de novo. Recomendo que os exames ocupacionais (admissional,
+    periódico, retorno ao trabalho e mudança de função) formem um grupo só:
+    o ASO mais recente é o vigente, como na NR-7. O demissional e o "outro"
+    ficam como estão.
+63. A planilha de colaboradores da exportação para a contabilidade sai do
+    cadastro de hoje, não do mês exportado. Quem entrou em 01/10 aparece
+    ativo na exportação de setembro gerada em outubro, e qualquer mudança de
+    nome ou função depois cria uma versão nova de um mês passado. O cadastro
+    não tem data de admissão nem de desligamento. Recomendo guardar as duas
+    datas no cadastro do colaborador (tela nova, com alinhamento antes) e a
+    exportação listar quem tinha vínculo no mês.
 
 Limitações conhecidas, sem pergunta, para quando houver tempo:
 
