@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { buildDocumentRows, matchesDocumentFilters, type DocumentRow } from "./document-rows";
+import { buildDocumentRows, documentsListUrl, matchesDocumentFilters, type DocumentRow } from "./document-rows";
+
+describe("a lista de documentos por papel", () => {
+  it("o financeiro pede só os de faturamento; a regra nega a lista sem o filtro", () => {
+    expect(documentsListUrl("financeiro")).toBe("/api/documents?entity_type=fatura&limit=500");
+    for (const role of ["owner", "admin", "interno", "wms", "suporte", undefined]) {
+      expect(documentsListUrl(role)).toBe("/api/documents?limit=500");
+    }
+  });
+});
 
 const documents = [
   {

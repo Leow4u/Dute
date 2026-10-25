@@ -6,6 +6,23 @@
 
 type AnyRecord = Record<string, unknown>;
 
+/**
+ * O documento de faturamento, o único que o financeiro lê (firestore.rules,
+ * isBillingDocument). O financeiro o grava com esse `entity_type`, como a
+ * emissão da fatura.
+ */
+export const FINANCE_DOCUMENT_ENTITY_TYPE = "fatura";
+
+/**
+ * A lista que o papel pode pedir. Regra não é filtro: sem dizer o
+ * `entity_type`, o Firestore nega ao financeiro a lista inteira.
+ */
+export function documentsListUrl(role: string | null | undefined): string {
+  return role === "financeiro"
+    ? `/api/documents?entity_type=${FINANCE_DOCUMENT_ENTITY_TYPE}&limit=500`
+    : "/api/documents?limit=500";
+}
+
 export type DocumentKind = "nf" | "comprovante" | "contrato" | "outros";
 export type DocumentAudience = "btg" | "internal" | "archived";
 /** Situação na base do Agent Dute (Conhecimento). */

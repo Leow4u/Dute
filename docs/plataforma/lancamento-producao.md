@@ -191,6 +191,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     começo que ficou para outra consulta (`fase-5-memoria.md`, "Correção:
     o resumo das movimentações cortava o período sem avisar"). Antes,
     somavam os 5.000 mais recentes como se fossem o período todo.
+  A matriz de papéis do WMS (PR 372) é só teste: nenhuma callable muda
+  quem passa.
+- **O estoque, o aviso de envio e a tela Documentos do WMS (25/10/2026).**
+  Entram com a `main`, sem liberação própria:
   - a contagem cíclica recusa o endereço com itens separados esperando a
     entrega, com o número do pedido (`manual-armazenagem.md`). O separado
     já saiu da prateleira e só sai do saldo na entrega. Antes, a contagem
@@ -207,8 +211,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     recebimento: a conclusão criava saldo com o código do outro cliente e
     subia o estoque do cadastro dele. Recebimento avulso, conferência,
     devolução e produto novo do aviso já conferiam o dono;
-  A matriz de papéis do WMS (PR 372) é só teste: nenhuma callable muda
-  quem passa.
+  - a tela Documentos abre para o financeiro: a lista e o tempo real dele
+    pedem só os documentos de faturamento (`entity_type` "fatura"), que é o
+    que a regra deixa ele ler. Antes, iam sem o filtro, e o Firestore negava
+    a lista inteira e o acompanhamento.
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a
   `main`, sem liberação própria. As entradas, as saídas e os movimentos
   passam a cobrar só o recebimento e a expedição, cada movimento uma vez
