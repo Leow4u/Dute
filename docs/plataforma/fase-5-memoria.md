@@ -1563,6 +1563,29 @@ Achada em 25/10/2026, na revisão do Agent Dute do WMS.
     abrir a tela e fica com o pedido enquanto ele tem itens.
   - Antes, os quatro testes falhavam.
 
+### Correção: o detalhe dos alertas passava sozinho ao de outro cliente
+
+Achada em 25/10/2026, numa revisão das telas do WMS. Está no
+`dute-homolog` desde a parte 5.4e.
+
+- **O defeito.** Estoque › Alertas mostrava o alerta escolhido enquanto ele
+  estava na lista; fora dela, o primeiro da lista, de outro cliente.
+  - Se outra pessoa decidisse o alerta na tela, o detalhe passava ao
+    vizinho com todos os itens marcados, e "Enviar ao cliente" avisava um
+    cliente cujo alerta ninguém tinha conferido.
+  - O mesmo acontecia sem escolher nenhum, quando chegava um alerta novo
+    que ficava antes na ordem dos clientes.
+- **A correção.** O alerta na tela continua nela até a pessoa escolher
+  outro (`pages/estoque-alertas.tsx`, `alertaDoDetalhe`). O que outra
+  pessoa decidiu fica na tela, e a decisão daqui para em "O alerta já foi
+  decidido."; os outros clientes seguem nos chips. Depois da própria
+  decisão, o detalhe passa ao primeiro da lista, como antes, sem esperar a
+  leitura nova.
+- **Teste:** `pages/estoque-alertas-detalhe.test.tsx`, com a tela de
+  verdade: o escolhido que outra pessoa decidiu e o alerta novo que fica
+  antes na ordem não tiram da tela o que está nela, e a decisão vai para
+  ele. Antes, os dois testes falhavam.
+
 ## Lançamento na produção
 
 Espera o OK do Leonardo. Até lá, a memória e o Agent Dute do núcleo só
