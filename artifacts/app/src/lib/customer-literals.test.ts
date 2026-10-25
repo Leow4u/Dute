@@ -44,3 +44,34 @@ describe("cliente fixo no código", () => {
     expect(found).toEqual([]);
   });
 });
+
+/**
+ * O portal atende qualquer cliente: tela, componente e texto que o cliente lê
+ * não falam da BTG (o texto que grava também não). Comentário pode citar.
+ */
+const DO_CLIENTE = ["pages/client", "components/portal", "lib/portal", "lib/access.ts"];
+
+function semComentario(line: string): string {
+  const trimmed = line.trim();
+  if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) return "";
+  return line.replace(/\/\/.*$/, "");
+}
+
+describe("o portal não fala da BTG", () => {
+  it('nenhum texto do portal nem a descrição do papel cliente dizem "BTG"', () => {
+    const found: string[] = [];
+    for (const raiz of DO_CLIENTE) {
+      const caminho = join(SRC, raiz);
+      const arquivos = statSync(caminho).isDirectory() ? sourceFiles(caminho) : [caminho];
+      for (const file of arquivos) {
+        const rel = relative(SRC, file).split("\\").join("/");
+        readFileSync(file, "utf8")
+          .split("\n")
+          .forEach((line, index) => {
+            if (/BTG/.test(semComentario(line))) found.push(`${rel}:${index + 1}: ${line.trim()}`);
+          });
+      }
+    }
+    expect(found).toEqual([]);
+  });
+});

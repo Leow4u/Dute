@@ -2736,7 +2736,7 @@ function buildReplenishmentRequest(
     priority: "normal",
     title: `Reposição: ${productTitle(product)} (${product.clientCode})`,
     description: [
-      `A BTG avisa que o item ${product.clientCode} está sem saldo e precisa de reposição.`,
+      `O item ${product.clientCode} está sem saldo e precisa de reposição.`,
       "Quando o fornecedor tiver data, avise a entrega pelo portal.",
     ].join(" "),
     items: [],

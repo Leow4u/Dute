@@ -895,7 +895,7 @@ function InvoiceReview({
           </DialogTitle>
           <DialogDescription>
             {title ? `${title} · ` : ""}
-            {draft.length} {draft.length === 1 ? "item" : "itens"}. Confira a quantidade e, se souber, o código da BTG. Sem código, a Dutelog define na conferência pela etiqueta. A leitura automática pode errar.
+            {draft.length} {draft.length === 1 ? "item" : "itens"}. Confira a quantidade e, se souber, o código do item. Sem código, a Dutelog define na conferência pela etiqueta. A leitura automática pode errar.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[52vh] overflow-y-auto rounded-xl border border-border">
@@ -904,7 +904,7 @@ function InvoiceReview({
               <tr>
                 <th className="w-8 px-2 py-2" />
                 <th className="px-2 py-2 text-left font-semibold">Na nota</th>
-                <th className="px-2 py-2 text-left font-semibold">Código da BTG</th>
+                <th className="px-2 py-2 text-left font-semibold">Código</th>
                 <th className="w-24 px-2 py-2 text-right font-semibold">Peças</th>
               </tr>
             </thead>
