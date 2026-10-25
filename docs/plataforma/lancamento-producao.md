@@ -315,6 +315,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     e a inclusão iguais. Antes, voltava recusado, e fechar e abrir o painel
     gravava a ocorrência duas vezes (`fase-3-operacao.md`, "Correção:
     tentar de novo o andamento do escritório era recusado").
+  - a Revisão não troca sozinha de OS quando chega outra com a conclusão de
+    antes. Antes, a revisão começada sumia, e "Concluir revisão" podia
+    fechar a OS que ninguém tinha olhado (`fase-3-operacao.md`, "Correção:
+    a Revisão trocava sozinha de OS").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.

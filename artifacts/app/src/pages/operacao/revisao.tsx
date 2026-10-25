@@ -9,7 +9,7 @@ import { clienteDaLeitura, hojeIso, nomesPorCodigo, osDaLeitura } from "@/lib/op
 import { demandaDoHoje } from "@/lib/operacao/hoje";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { ROTA_REVISAO, osDaBusca } from "@/lib/operacao/navegacao";
-import { linhasParaRevisar, paraRevisar, pedidoDaRevisao, problemasDaRevisao, revisaoInicial, type FormularioDaRevisao } from "@/lib/operacao/revisao";
+import { linhasParaRevisar, osDaVezNaRevisao, paraRevisar, pedidoDaRevisao, problemasDaRevisao, revisaoInicial, type FormularioDaRevisao } from "@/lib/operacao/revisao";
 import { useUrlsDasFotos } from "@/lib/operacao/use-urls-das-fotos";
 
 import { RevisaoView, type EstadoDaRevisao } from "./revisao-view";
@@ -27,7 +27,12 @@ export default function PaginaRevisao() {
   const clientes = useLeitura("customers", (db) => collection(db, "customers"), clienteDaLeitura);
   const nomes = useMemo(() => nomesPorCodigo(clientes.itens ?? []), [clientes.itens]);
   const cartoes = useMemo(() => paraRevisar(emRevisao.itens ?? [], nomes, servicosEmTexto), [emRevisao.itens, nomes]);
-  const numero = pedida && cartoes.some((cartao) => cartao.numero === pedida) ? pedida : (cartoes[0]?.numero ?? null);
+  // A OS da vez não troca sozinha quando chega outra que espera há mais tempo.
+  const [naTela, setNaTela] = useState<string | null>(null);
+  const numero = osDaVezNaRevisao(cartoes, pedida, naTela);
+  useEffect(() => {
+    if (numero !== naTela) setNaTela(numero);
+  }, [numero, naTela]);
   const ficha = (emRevisao.itens ?? []).find((item) => item.numero === numero) ?? null;
 
   const demanda = useDocumento(ficha ? `demands/${ficha.demanda}` : null, (db) => doc(db, "demands", ficha?.demanda ?? "-"), demandaDoHoje);

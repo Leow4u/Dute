@@ -1623,3 +1623,23 @@ Achada em 25/10/2026, na mesma revisão. Está na produção desde a parte 3.7e.
   a mesma chave com outro conteúdo, como o servidor. A ocorrência com a
   resposta perdida se repete igual, e o painel fecha. Antes, a segunda
   levava o instante do novo clique.
+
+### Correção: a Revisão trocava sozinha de OS
+
+Achada em 25/10/2026, na mesma revisão. Está na produção desde a parte
+3.10b.
+
+- **O defeito.** Sem `?os=`, a OS da vez era só o primeiro cartão da lista
+  ao vivo, ordenada pela conclusão. Depois de cada revisão, a tela volta
+  sem `?os=`, então o caminho de todo dia nunca fixava a OS.
+  - A OS que chegava depois com a conclusão de antes (registrada no
+    escritório com a hora passada, ou a fila do campo que sincronizou
+    tarde) tomava a tela, e a revisão começada recomeçava.
+  - Se ela não tinha divergência (a irmã da mesma demanda, muitas vezes),
+    "Concluir revisão" a fechava sem ninguém ter olhado.
+- **A correção.** A OS que está na tela fica enquanto espera a revisão
+  (`osDaVezNaRevisao`, em `lib/operacao/revisao.ts`). A que chega entra na
+  lista; revisada a da vez, a próxima é a que espera há mais tempo.
+- **Teste:** `revisao.test.tsx`, com a página e as leituras de mentira. A
+  OS que chega depois não toma a tela, e "Concluir revisão" revisa a que
+  estava nela. Antes, a tela trocava para a que chegou.

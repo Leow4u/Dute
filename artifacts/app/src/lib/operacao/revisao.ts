@@ -63,6 +63,19 @@ export function aceiteCurto(ficha: Pick<FichaDaOs, "conclusao">): string {
   return conclusao.aceite === "assinatura" ? `Assinada ${horaDe(conclusao.instante)} por ${conclusao.responsavel.nome}` : `Sem aceite no local · ${horaDe(conclusao.instante)}`;
 }
 
+/**
+ * A OS da vez: a pedida na URL (?os=); sem ela, a que já está na tela,
+ * enquanto espera a revisão; e só então a que espera há mais tempo. A OS que
+ * chega à lista depois (a conclusão registrada com a hora de antes, a fila
+ * do campo que sincronizou tarde) entra sem tomar o lugar da que está na
+ * tela, nem apagar a revisão começada.
+ */
+export function osDaVezNaRevisao(cartoes: readonly Pick<CartaoParaRevisar, "numero">[], pedida: string | null, naTela: string | null): string | null {
+  if (pedida && cartoes.some((cartao) => cartao.numero === pedida)) return pedida;
+  if (naTela && cartoes.some((cartao) => cartao.numero === naTela)) return naTela;
+  return cartoes[0]?.numero ?? null;
+}
+
 /** As OS em revisão, quem espera há mais tempo primeiro. */
 export function paraRevisar(fichas: readonly FichaDaOs[], nomes: Readonly<Record<string, string>>, servicosEmTexto: (servicos: readonly string[]) => string | null): CartaoParaRevisar[] {
   return fichas
