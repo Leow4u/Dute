@@ -875,6 +875,14 @@ describe("financeiro consegue calcular a fatura", () => {
     );
   });
 
+  it("a caixa do agente: o financeiro lê o item de faturamento, nunca a lista inteira", async () => {
+    const database = signedAs("finance-a");
+    // O alerta de estoque não é dele, e a lista sem o filtro é negada: o tempo real (realtime-sync) não a assina.
+    await assertFails(getDoc(doc(database, "ai_agent_inbox", "alert-a")));
+    await assertFails(getDocs(collection(database, "ai_agent_inbox")));
+    await assertSucceeds(getDocs(query(collection(database, "ai_agent_inbox"), where("entity_type", "==", "fatura"))));
+  });
+
   it("cliente não alcança as fontes internas de faturamento", async () => {
     const database = testEnvironment
       .authenticatedContext("client-a", { email: "client-a@example.com" })

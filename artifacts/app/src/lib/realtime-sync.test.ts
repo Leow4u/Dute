@@ -172,5 +172,17 @@ describe("tempo real da equipe interna", () => {
     const documentos = listenerOf("documents");
     expect(documentos).toHaveLength(1);
     expect(documentos[0].filters).toEqual([]);
+    expect(listenerOf("ai_agent_inbox")).toHaveLength(1);
+  });
+
+  it("o financeiro só assina o que a regra deixa ele ler: nem a caixa do agente, nem as coleções da operação", () => {
+    appUser.current = { uid: "finance-a", publicMetadata: { role: "financeiro" } };
+    RealtimeSyncBridge();
+
+    for (const colecao of ["ai_agent_inbox", "customer_requests", "inbound_receipts", "pick_tasks", "shipments"]) {
+      expect(listenerOf(colecao), colecao).toHaveLength(0);
+    }
+    expect(listenerOf("billing_periods")).toHaveLength(1);
+    expect(listenerOf("ops_aggregates")).toHaveLength(1);
   });
 });

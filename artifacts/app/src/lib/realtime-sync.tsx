@@ -137,10 +137,18 @@ const FINANCE_SCOPED_TARGETS: readonly RealtimeTarget[] = [
   { collectionName: "documents", extraEquals: [{ field: "entity_type", value: FINANCE_DOCUMENT_ENTITY_TYPE }] },
 ];
 
+/**
+ * Da caixa do agente (`ai_agent_inbox`, canReadObservability), o financeiro
+ * lê só o item de faturamento, e nenhuma tela dele mostra a caixa: o sinal
+ * da coleção inteira só daria permission-denied.
+ */
+const FINANCE_UNREAD_COLLECTIONS = new Set<string>(["ai_agent_inbox"]);
+
 function internalHotCollectionsForRole(role: string) {
   const blocked = new Set<string>();
   if (role === "financeiro") {
     for (const name of OPERATIONS_ONLY_COLLECTIONS) blocked.add(name);
+    for (const name of FINANCE_UNREAD_COLLECTIONS) blocked.add(name);
     for (const { collectionName } of FINANCE_SCOPED_TARGETS) blocked.add(collectionName);
   }
   if (!BILLING_REALTIME_ROLES.has(role)) {
