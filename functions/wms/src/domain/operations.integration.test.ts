@@ -1694,6 +1694,56 @@ describe("ledger manual e congelamento", () => {
     assert.equal(events.size, 1);
   });
 
+  it("a contagem cíclica espera a entrega do que já foi separado na posição", async () => {
+    await clearFirestore();
+    // 10 no saldo, 3 separados para um pedido: na prateleira ficaram 7.
+    await db.collection("stock_balances").doc("cycle-balance").set({
+      id: "cycle-balance",
+      customer_code: "BTG Pactual",
+      sku_code: "BTG-CYCLE-1",
+      client_item_code: "ITEM-CYCLE-1",
+      product_name: "Produto de teste inventário cíclico",
+      location_id: "LOC-CYCLE",
+      qty_on_hand: 10,
+      qty_reserved: 3,
+      qty_available: 7,
+      unit_cost: 7,
+    });
+    await db.collection("stock_reservations").doc("res_ped_01").set({
+      id: "res_ped_01",
+      customer_code: "BTG Pactual",
+      sku_code: "BTG-CYCLE-1",
+      location_id: "LOC-CYCLE",
+      order_number: "PED-000042",
+      reserved_qty: 3,
+      status: "picked",
+    });
+    const contagem = (counted_qty: number, idempotency_key: string) =>
+      recordCycleCountTransaction(
+        db,
+        {
+          customer_code: "BTG Pactual",
+          sku_code: "BTG-CYCLE-1",
+          client_item_code: "ITEM-CYCLE-1",
+          location_id: "LOC-CYCLE",
+          counted_qty,
+          unit_cost: 7,
+          reason: "Contagem da prateleira",
+          idempotency_key,
+        },
+        actor,
+      );
+    // Contar os 7 da prateleira baixaria os 3 agora e de novo na entrega.
+    await assert.rejects(contagem(7, "cycle-picked-1"), /BTG-CYCLE-1 no local LOC-CYCLE tem itens separados esperando a entrega \(pedido PED-000042\)\. Conte depois da entrega\./);
+    const intacto = (await db.collection("stock_balances").doc("cycle-balance").get()).data();
+    assert.deepEqual([intacto?.qty_on_hand, intacto?.qty_reserved], [10, 3]);
+    assert.equal((await db.collection("movements").where("sku_code", "==", "BTG-CYCLE-1").get()).size, 0);
+
+    // Só reservado, o item continua na prateleira: a contagem vale.
+    await db.collection("stock_reservations").doc("res_ped_01").update({ status: "reserved" });
+    assert.equal((await contagem(9, "cycle-picked-2")).adjustment_delta, -1);
+  });
+
   it("registra devolução e só lança estoque após disposição disponível", async () => {
     await clearFirestore();
     await db.collection("products").doc("ITEM-RETURN-1").set({

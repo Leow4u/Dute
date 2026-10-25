@@ -249,8 +249,11 @@ do cliente; depois, produto novo só entra pelo Receber.
 **A contagem cíclica** é só para item cadastrado com saldo no endereço:
 "Endereço contado", "Contagem física" (0 ou mais) e "Motivo do ajuste" (3
 caracteres ou mais). "Registrar contagem" vira ajuste com evento; a contagem
-menor que a reserva ativa é recusada. A Contagem abre nesta aba com a abertura
-concluída ou quando o cliente não precisa dela.
+menor que a reserva ativa é recusada. O endereço com itens separados esperando
+a entrega também recusa, com o número do pedido: o separado já saiu da
+prateleira e só sai do saldo na entrega, então a contagem espera a entrega. A
+Contagem abre nesta aba com a abertura concluída ou quando o cliente não
+precisa dela.
 
 ## Os dias parado e os alertas
 
