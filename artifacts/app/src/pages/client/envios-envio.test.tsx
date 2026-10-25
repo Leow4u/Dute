@@ -159,4 +159,10 @@ describe("o aviso de envio enviado de novo", () => {
     expect(segundo.attachments).toEqual(primeiro.attachments);
     expect(estado.anexos).toEqual(["nota.pdf", "romaneio.pdf"]);
   });
+
+  it("\"1.200\" peças vão como mil e duzentas", async () => {
+    await digitar(document.querySelector<HTMLInputElement>('input[aria-label="Peças"]'), "1.200");
+    const aviso = await enviarAviso();
+    expect((aviso.items as Array<{ quantity: number }>)[0]?.quantity).toBe(1200);
+  });
 });
