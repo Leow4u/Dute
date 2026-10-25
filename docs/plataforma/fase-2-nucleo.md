@@ -443,3 +443,33 @@ Início do Comercial e não vê seletor; o interno vê Armazenagem e Operação;
 cliente só com armazenagem não vê nada de OS; as telas novas passam no `axe`
 e no teste de textos; o WMS não mudou além do seletor. A produção recebe com
 o OK do Leonardo, pela publicação manual.
+
+### Correção: o token do convite nos eventos
+
+Achada em 25/10/2026, numa revisão da administração de acesso. Está na
+produção.
+
+- **O defeito.** O id do convite é o token do link (`invites/{token}`), e
+  quem o tem aceita o convite com o e-mail convidado.
+  - O evento `invites.create` (e o `invites.archive`) gravava o token no
+    `entity_id` e na descrição, e os eventos são lidos por interno, wms e
+    suporte, que não administram acesso. O evento do aceite, gravado pelo
+    app, levava o token no `payload`.
+  - Com o token, o `lookupInvite` dá o e-mail convidado. Quem cria no
+    Firebase Auth uma conta com esse e-mail grava o próprio `users` com o
+    papel do convite, porque a regra confere só o e-mail do login, não se
+    ele foi verificado (pergunta 68 do plano).
+- **A correção.** Os eventos do convite levam a referência do token:
+  `convite_` e os 16 primeiros dígitos do SHA-256 dele
+  (`domain/customer-invite.ts`, `inviteEventReference`). Ela liga os eventos
+  do mesmo convite sem abri-lo, e o app manda a mesma no evento do aceite
+  (`lib/convite.ts`). O convite continua abrindo pelo link, e a tela de
+  Usuários continua copiando o link.
+- **O que fica.** Os eventos de antes não se apagam: os convites pendentes
+  criados até a publicação se cancelam e se refazem depois dela (pergunta 67
+  do plano). O aceite sem o e-mail verificado espera a pergunta 68.
+- **Testes:** `convites.integration.test.ts` (a callable de verdade, no
+  emulador: criar e cancelar o convite gravam a referência, o token não
+  aparece no evento, e o convite continua abrindo pelo `lookupInvite`) e
+  `lib/convite.test.ts` (a mesma referência no app). Antes, os dois testes
+  do evento falhavam.

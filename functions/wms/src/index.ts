@@ -69,7 +69,7 @@ import {
   contractedModulesFrom,
   readContractedModules,
 } from "./domain/customer-profile.js";
-import { assertInviteCustomerAllowed } from "./domain/customer-invite.js";
+import { assertInviteCustomerAllowed, inviteEventReference } from "./domain/customer-invite.js";
 import {
   PLATFORM_ROLES,
   isPlatformRole,
@@ -5025,16 +5025,22 @@ export const mutateManagedEntity = onCall(async (request) => {
         "status",
       ]),
     };
+    // O id do convite é o token do link, que abre o convite: o evento, que a
+    // equipe do armazém lê, leva só a referência dele.
+    const eventEntityId =
+      input.resource === "invites"
+        ? inviteEventReference(documentId)
+        : String(publicId);
     transaction.create(eventRef, {
       id: eventRef.id,
       type: eventType,
       title: eventTitle,
-      description: `${input.action} em ${documentId}`,
+      description: `${input.action} em ${eventEntityId}`,
       severity: ["archive", "set_role"].includes(input.action)
         ? "attention"
         : "info",
       entity_type: input.resource,
-      entity_id: String(publicId),
+      entity_id: eventEntityId,
       customer_code: eventCustomerCode,
       payload: {
         action: input.action,

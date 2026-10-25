@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
@@ -73,4 +75,15 @@ export async function assertInviteCustomerAllowed(
   for (const row of [...byCode.docs, ...byCustomerCode.docs]) records.set(row.id, row.data());
   const problem = inviteCustomerProblem({ role, customerCode: code, customers: [...records.values()] });
   if (problem) throw new HttpsError("failed-precondition", problem);
+}
+
+/**
+ * O id do convite é o token do link: `lookupInvite` e o cadastro da pessoa o
+ * usam como chave, e quem o tem aceita o convite. O evento do convite, que a
+ * equipe do armazém lê, leva só esta referência (os 16 primeiros dígitos do
+ * SHA-256 do token), que liga os eventos do mesmo convite sem abri-lo. A tela
+ * de aceite manda a mesma (artifacts/app/src/lib/convite.ts).
+ */
+export function inviteEventReference(token: string): string {
+  return `convite_${createHash("sha256").update(token).digest("hex").slice(0, 16)}`;
 }

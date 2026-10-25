@@ -228,6 +228,7 @@ import { MENSAGEM_DA_RECUPERACAO, problemaDaRecuperacao } from "./lib/recuperar-
 import { layoutDaRota, type LayoutDaRota } from "./lib/ambientes";
 import { LEGACY_SETTINGS_REDIRECTS } from "./lib/settings-nav";
 import { INTERNAL_CUSTOMER_CODE, LEGACY_CUSTOMER_CODE } from "./lib/active-customer";
+import { referenciaDoConvite } from "./lib/convite";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -681,6 +682,8 @@ function SignUpPage() {
         used_at: serverTimestamp(),
       });
       await batch.commit();
+      // O convite já foi aceito: nada do evento desfaz o aceite.
+      const referencia = await referenciaDoConvite(invite.token).catch(() => null);
       await fetch("/api/ai/events", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -702,7 +705,8 @@ function SignUpPage() {
             email: invite.data.email,
             role: invite.data.role,
             customer_code: invite.data.customer_code,
-            invite_id: invite.token,
+            // O token abre o convite: o evento leva só a referência dele.
+            ...(referencia ? { invite_ref: referencia } : {}),
           },
         }),
       }).catch(() => undefined);
