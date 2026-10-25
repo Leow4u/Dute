@@ -29,6 +29,7 @@ vi.mock("@/lib/operacao/api", async (original) => ({
 }));
 
 import { FilaDoCampoProvider, useFilaDoCampo } from "./fila-do-campo";
+import { registroNovo } from "./fila";
 import { armazemNoAparelho, type ArmazemDaFila } from "./fila-guardada";
 import { registroDeEtapa, registroDeFoto } from "./os-no-campo";
 import { comAmbiente, comFotos, guardarRascunho, lerRascunho, rascunhoInicial } from "./vistoria";
@@ -152,6 +153,24 @@ describe("fila do campo no aparelho", () => {
     expect(fila!.falhas[0]).toMatchObject({ rotulo: "Foto", mensagem: "A OS já tem 200 fotos.", foto: "ft_a000000000000002" });
     // A tela da vistoria pode nem estar aberta: o rascunho guardado já sai sem ela.
     expect(lerRascunho("10230-01")?.ambientes[0].fotos).toEqual(["ft_a000000000000001"]);
+  });
+
+  it("a fila que não carregou não apaga a guardada no aparelho", async () => {
+    const aparelho = armazemNoAparelho(new IDBFactory());
+    const antiga = registroNovo(registroDeEtapa({ numero: "10211-01" }, "saida_origem", TOQUE), "k-antiga", TOQUE);
+    await aparelho.guardar("uid-carlos", [antiga], []);
+    // Nesta abertura, a leitura do aparelho falha.
+    const semLeitura: ArmazemDaFila = {
+      ...aparelho,
+      carregar: async () => {
+        throw new Error("leitura recusada");
+      },
+    };
+    sinal(false);
+    await abrirApp(semLeitura);
+    await act(async () => fila!.enviar(registroDeEtapa({ numero: "10211-01" }, "chegada_destino", new Date(TOQUE.getTime() + 60_000))));
+    await esperar(async () => (await aparelho.carregar("uid-carlos")).length === 2);
+    expect((await aparelho.carregar("uid-carlos"))[0].chave).toBe("k-antiga");
   });
 
   it("a recusa fica na lista até a pessoa dispensar, mesmo trocando de tela ou fechando o app", async () => {

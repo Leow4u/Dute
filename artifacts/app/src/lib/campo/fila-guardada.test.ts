@@ -20,7 +20,7 @@ describe("fila guardada no aparelho", () => {
   it("guarda e devolve na ordem, com a chave e o instante do toque", async () => {
     const fabrica = new IDBFactory();
     const fila = [etapa("k-1", "saida_origem", "2026-10-20T13:20:00.000Z"), etapa("k-2", "chegada_destino", "2026-10-20T14:05:00.000Z")];
-    await armazemNoAparelho(fabrica).guardar("uid-carlos", fila);
+    await armazemNoAparelho(fabrica).guardar("uid-carlos", fila, []);
     // O app fechou e abriu de novo: outra conexão ao mesmo banco.
     const reaberta = await armazemNoAparelho(fabrica).carregar("uid-carlos");
     expect(reaberta.map((registro) => [registro.chave, registro.dados.instante, registro.dados.idempotency_key])).toEqual([
@@ -30,22 +30,38 @@ describe("fila guardada no aparelho", () => {
     expect(reaberta[0]).toEqual(fila[0]);
   });
 
-  it("guardar troca a fila da pessoa: o que já chegou sai", async () => {
+  it("guardar grava a fila e tira só o que saiu dela: o que já chegou sai", async () => {
     const fabrica = new IDBFactory();
     const armazem = armazemNoAparelho(fabrica);
     const [um, dois] = [etapa("k-1", "saida_origem", "2026-10-20T13:20:00.000Z"), etapa("k-2", "chegada_destino", "2026-10-20T14:05:00.000Z")];
-    await armazem.guardar("uid-carlos", [um, dois]);
-    await armazem.guardar("uid-carlos", [dois]);
+    await armazem.guardar("uid-carlos", [um, dois], []);
+    await armazem.guardar("uid-carlos", [dois], ["k-1"]);
     expect((await armazem.carregar("uid-carlos")).map((registro) => registro.chave)).toEqual(["k-2"]);
-    await armazem.guardar("uid-carlos", []);
+    await armazem.guardar("uid-carlos", [], ["k-2"]);
     expect(await armazem.carregar("uid-carlos")).toEqual([]);
+  });
+
+  it("o que a fila da tela não conhece fica: a fila que não carregou e a outra aba não apagam", async () => {
+    const fabrica = new IDBFactory();
+    const guardado = registroNovo({ callable: "registerStep", dados: { numero: "10211-01", etapa: "saida_origem" }, rotulo: "Saída" }, "k-antes", new Date("2026-10-20T12:00:00.000Z"));
+    await armazemNoAparelho(fabrica).guardar("uid-carlos", [guardado], []);
+    // Outra aba (ou a tela cuja leitura falhou) grava só o que ela tem.
+    const novo = registroNovo({ callable: "registerStep", dados: { numero: "10211-01", etapa: "chegada_destino" }, rotulo: "Chegada" }, "k-depois", new Date("2026-10-20T12:30:00.000Z"));
+    await armazemNoAparelho(fabrica).guardar("uid-carlos", [novo], []);
+    // Os dois ficam, na ordem dos toques.
+    expect((await armazemNoAparelho(fabrica).carregar("uid-carlos")).map((registro) => registro.chave)).toEqual(["k-antes", "k-depois"]);
+    // Na memória, o mesmo.
+    const memoria = armazemNaMemoria();
+    await memoria.guardar("uid-carlos", [guardado], []);
+    await memoria.guardar("uid-carlos", [novo], []);
+    expect((await memoria.carregar("uid-carlos")).map((registro) => registro.chave)).toEqual(["k-antes", "k-depois"]);
   });
 
   it("cada pessoa só vê o dela", async () => {
     const fabrica = new IDBFactory();
     const armazem = armazemNoAparelho(fabrica);
-    await armazem.guardar("uid-carlos", [etapa("k-c", "saida_origem", "2026-10-20T13:20:00.000Z")]);
-    await armazem.guardar("uid-ana", [etapa("k-a", "carregamento", "2026-10-20T11:00:00.000Z")]);
+    await armazem.guardar("uid-carlos", [etapa("k-c", "saida_origem", "2026-10-20T13:20:00.000Z")], []);
+    await armazem.guardar("uid-ana", [etapa("k-a", "carregamento", "2026-10-20T11:00:00.000Z")], []);
     expect((await armazem.carregar("uid-carlos")).map((registro) => registro.chave)).toEqual(["k-c"]);
     expect((await armazem.carregar("uid-ana")).map((registro) => registro.chave)).toEqual(["k-a"]);
     expect(await armazem.carregar("uid-outro")).toEqual([]);
@@ -59,7 +75,7 @@ describe("fila guardada no aparelho", () => {
       "k-f",
       TOQUE,
     );
-    await armazemNoAparelho(fabrica).guardar("uid-carlos", [foto]);
+    await armazemNoAparelho(fabrica).guardar("uid-carlos", [foto], []);
     const [lida] = await armazemNoAparelho(fabrica).carregar("uid-carlos");
     expect(lida.foto?.caminho).toBe("os/10211-01/fotos/ft_0123456789abcdef.jpg");
     expect(lida.foto?.arquivo.size).toBe(4);
@@ -67,7 +83,7 @@ describe("fila guardada no aparelho", () => {
 
   it("sem IndexedDB, fica na memória", async () => {
     const armazem = armazemNoAparelho(null, null);
-    await armazem.guardar("uid-carlos", [etapa("k-1", "saida_origem", "2026-10-20T13:20:00.000Z")]);
+    await armazem.guardar("uid-carlos", [etapa("k-1", "saida_origem", "2026-10-20T13:20:00.000Z")], []);
     expect((await armazem.carregar("uid-carlos")).map((registro) => registro.chave)).toEqual(["k-1"]);
     expect(await armazemNaMemoria().carregar("uid-carlos")).toEqual([]);
   });

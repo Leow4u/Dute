@@ -10,6 +10,12 @@ import type { FalhaDaFila, RegistroNaFila } from "./fila";
  * Cada pessoa vê só os registros dela (o celular pode ser de mais de um). Sem
  * IndexedDB (aba privada, navegador antigo), a fila fica só na memória.
  *
+ * Gravar não apaga o que a fila da tela não conhece: cada registro é gravado
+ * por si, e só sai o que essa tela viu sair (chegou, foi recusado ou foi
+ * substituído). Antes, cada gravação trocava a fila guardada inteira: a fila
+ * que não carregou apagava a guardada, e o app aberto em duas abas (o
+ * instalado e um link do WhatsApp) apagava os registros da outra.
+ *
  * As falhas (o que a callable recusou) ficam no localStorage, por pessoa, até
  * ela dispensar: cada tela do /campo monta a fila de novo, e a recusa da
  * conclusão sumia na primeira troca de tela, com a assinatura do cliente.
@@ -23,11 +29,16 @@ const FALHAS = "dute.campo.falhas.";
 
 type RegistroGuardado = RegistroNaFila & { uid: string; ordem: number };
 
+/** Na ordem dos toques: o instante do registro, e a posição na fila no empate. */
+function naOrdemDosToques(a: Pick<RegistroGuardado, "criadoEm" | "ordem">, b: Pick<RegistroGuardado, "criadoEm" | "ordem">): number {
+  return a.criadoEm.localeCompare(b.criadoEm) || a.ordem - b.ordem;
+}
+
 export type ArmazemDaFila = {
   /** Os registros da pessoa, na ordem em que entraram na fila. */
   carregar: (uid: string) => Promise<RegistroNaFila[]>;
-  /** Troca os registros guardados da pessoa pela fila atual. */
-  guardar: (uid: string, fila: readonly RegistroNaFila[]) => Promise<void>;
+  /** Grava os registros da fila atual e apaga os que saíram dela; o resto do guardado fica. */
+  guardar: (uid: string, fila: readonly RegistroNaFila[], removidas: readonly string[]) => Promise<void>;
   /** As falhas da pessoa que ela ainda não dispensou. */
   carregarFalhas: (uid: string) => Promise<FalhaDaFila[]>;
   /** Troca as falhas guardadas da pessoa pelas atuais. */
@@ -109,11 +120,14 @@ function semOGuardado({ uid: _uid, ordem: _ordem, ...registro }: RegistroGuardad
 
 /** Na memória: o recuo sem IndexedDB e o que os testes usam para a fila. */
 export function armazemNaMemoria(armazenamento: Armazenamento | null = null): ArmazemDaFila {
-  const guardados = new Map<string, RegistroNaFila[]>();
+  const guardados = new Map<string, Map<string, RegistroGuardado>>();
   return {
-    carregar: async (uid) => [...(guardados.get(uid) ?? [])],
-    guardar: async (uid, fila) => {
-      guardados.set(uid, [...fila]);
+    carregar: async (uid) => [...(guardados.get(uid)?.values() ?? [])].sort(naOrdemDosToques).map(semOGuardado),
+    guardar: async (uid, fila, removidas) => {
+      const daPessoa = guardados.get(uid) ?? new Map<string, RegistroGuardado>();
+      for (const chave of removidas) daPessoa.delete(chave);
+      fila.forEach((registro, ordem) => daPessoa.set(registro.chave, { ...registro, uid, ordem }));
+      guardados.set(uid, daPessoa);
     },
     ...falhasGuardadas(armazenamento),
   };
@@ -133,14 +147,13 @@ export function armazemNoAparelho(
       const db = await conexao();
       const transacao = db.transaction(LOJA, "readonly");
       const guardados = (await pedido(transacao.objectStore(LOJA).index(POR_PESSOA).getAll(uid))) as RegistroGuardado[];
-      return guardados.sort((a, b) => a.ordem - b.ordem).map(semOGuardado);
+      return guardados.sort(naOrdemDosToques).map(semOGuardado);
     },
-    guardar: async (uid, fila) => {
+    guardar: async (uid, fila, removidas) => {
       const db = await conexao();
       const transacao = db.transaction(LOJA, "readwrite");
       const loja = transacao.objectStore(LOJA);
-      const chaves = (await pedido(loja.index(POR_PESSOA).getAllKeys(uid))) as IDBValidKey[];
-      for (const chave of chaves) loja.delete(chave);
+      for (const chave of removidas) loja.delete(chave);
       fila.forEach((registro, ordem) => loja.put({ ...registro, uid, ordem } satisfies RegistroGuardado));
       await concluida(transacao);
     },

@@ -66,6 +66,8 @@ export function FilaDoCampoProvider({ children, armazem: armazemDado }: { childr
   const [falhas, setFalhas] = useState<FalhaDaFila[]>([]);
   const [relogio, setRelogio] = useState(0);
   const enviando = useRef<string | null>(null);
+  // As chaves que esta tela gravou ou carregou: só elas podem sair do aparelho.
+  const conhecidas = useRef<Set<string>>(new Set());
 
   // Ao abrir: a fila guardada da pessoa vem antes do que já foi tocado agora,
   // e as falhas que ela não dispensou voltam.
@@ -78,6 +80,7 @@ export function FilaDoCampoProvider({ children, armazem: armazemDado }: { childr
       armazem.carregarFalhas(uid).catch(() => [] as FalhaDaFila[]),
     ]).then(([guardada, falhasGuardadas]) => {
       if (!vivo) return;
+      conhecidas.current = new Set(guardada.map((registro) => registro.chave));
       setFila((atual) => [...guardada, ...atual.filter((registro) => !guardada.some((outro) => outro.chave === registro.chave))]);
       setFalhas((atual) => [...falhasGuardadas, ...atual.filter((falha) => !falhasGuardadas.some((outra) => outra.chave === falha.chave))]);
       setCarregada(true);
@@ -87,10 +90,14 @@ export function FilaDoCampoProvider({ children, armazem: armazemDado }: { childr
     };
   }, [armazem, uid]);
 
-  // A cada mudança, a fila guardada passa a ser a atual (o que chegou sai).
+  // A cada mudança, grava a fila e tira do aparelho só o que esta tela viu
+  // sair (chegou, foi recusado ou foi substituído).
   useEffect(() => {
     if (!uid || !carregada) return;
-    void armazem.guardar(uid, fila).catch(() => undefined);
+    const atuais = new Set(fila.map((registro) => registro.chave));
+    const removidas = [...conhecidas.current].filter((chave) => !atuais.has(chave));
+    conhecidas.current = atuais;
+    void armazem.guardar(uid, fila, removidas).catch(() => undefined);
   }, [armazem, uid, carregada, fila]);
 
   // As falhas também: trocar de tela ou fechar o app não as apaga.
