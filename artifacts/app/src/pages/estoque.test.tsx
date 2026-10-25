@@ -10,6 +10,7 @@ import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
 
 import { ItemList, SecaoDoGiro } from "./estoque";
+import { payloadDaMovimentacao } from "./movements";
 
 /**
  * O Estoque na v3 (parte 4.7d): a lista de itens com o código, o nome, o
@@ -88,6 +89,30 @@ describe("Estoque na v3", () => {
 
   it("sem exemplo no motivo da movimentação", () => {
     expect(readFileSync(new URL("./movements.tsx", import.meta.url), "utf8")).not.toContain("Ex.:");
+  });
+
+  it("a movimentação vai para o cliente ativo, com o sinal do tipo", () => {
+    const valores = {
+      data: "2026-10-25T10:00",
+      tipo_mov: "AJUSTE_ENTRADA",
+      cod_sku: "ITAU-000001",
+      produto: "Cadeira",
+      qtde: 2,
+      sinal: -1,
+      origem: "",
+      destino: "A-01-02",
+      responsavel: "",
+      doc_nf: "",
+      motivo: "Contagem física",
+    };
+    expect(payloadDaMovimentacao(valores, "Itaú", "chave-1")).toEqual({
+      ...valores,
+      data: new Date("2026-10-25T10:00").toISOString(),
+      sinal: 1,
+      customer_code: "Itaú",
+      idempotency_key: "chave-1",
+    });
+    expect(payloadDaMovimentacao({ ...valores, tipo_mov: "SAIDA" }, "Itaú", "chave-2")).toMatchObject({ sinal: -1, customer_code: "Itaú" });
   });
 
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {

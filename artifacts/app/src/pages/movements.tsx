@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
   type Movement,
+  type MovementInput,
   useListMovements,
   useCreateMovement,
   getListMovementsQueryKey,
@@ -29,6 +30,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
+import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import {
@@ -70,6 +72,25 @@ const movementSchema = z.object({
 });
 
 type MovementFormValues = z.infer<typeof movementSchema>;
+
+/**
+ * O que a movimentação manda ao servidor: o sinal pelo tipo, a data em ISO e
+ * o cliente ativo. A área interna grava para ele; sem o campo, o servidor
+ * gravaria na BTG.
+ */
+export function payloadDaMovimentacao(
+  values: MovementFormValues,
+  customerCode: string,
+  idempotencyKey: string,
+): MovementInput & { customer_code: string } {
+  return {
+    ...values,
+    sinal: POSITIVE_MOVEMENTS.has(values.tipo_mov) ? 1 : -1,
+    data: new Date(values.data).toISOString(),
+    customer_code: customerCode,
+    idempotency_key: idempotencyKey,
+  };
+}
 
 /**
  * Histórico de movimentos. Dentro de Estoque (aba Histórico) vem `embedded`:
@@ -341,6 +362,7 @@ export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; tr
   const queryClient = useQueryClient();
   const createMovement = useCreateMovement();
   const { user } = useAppUser();
+  const { code: customerCode } = useActiveCustomer();
 
   const {
     register,
@@ -371,19 +393,8 @@ export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; tr
   const isPositiveMovement = POSITIVE_MOVEMENTS.has(tipo_mov);
 
   const onSubmit = (data: MovementFormValues) => {
-    // Ensure sinal matches tipo_mov logic
-    data.sinal = POSITIVE_MOVEMENTS.has(data.tipo_mov) ? 1 : -1;
-
-    // Ensure date is properly formatted as ISO
-    data.data = new Date(data.data).toISOString();
-
-    const payload = {
-      ...data,
-      idempotency_key: crypto.randomUUID(),
-    };
-
     createMovement.mutate(
-      { data: payload },
+      { data: payloadDaMovimentacao(data, customerCode, crypto.randomUUID()) },
       {
         onSuccess: () => {
           // Escopado ao que uma movimentação realmente altera: invalidar tudo
