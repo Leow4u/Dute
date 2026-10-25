@@ -630,6 +630,7 @@ Um PR pequeno, depois da conferência da seção 5:
 - As perguntas 65 e 66 do plano, do app do campo, com o alinhamento de tela:
   a inclusão guardada de item novo, que não aparece até chegar, e a
   assinatura da conclusão recusada, que fica sem a OS.
-- As perguntas 67 e 68 do plano (seção 13, "Acesso e convites"): os
-  convites pendentes, que se refazem depois de publicar, e o aceite que não
-  confere se o e-mail foi verificado.
+- As perguntas 67 a 69 do plano (seção 13, "Acesso e convites"): os
+  convites pendentes, que se refazem depois de publicar, o aceite que não
+  confere se o e-mail foi verificado, e o cliente arquivado ou "Sem portal",
+  cujas pessoas seguem entrando.

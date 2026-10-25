@@ -1038,6 +1038,16 @@ usuário do convite, com o papel dele.
       verificado e grava o usuário, o convite usado e o evento numa
       transação.
     - É tela: a pessoa confirma o e-mail antes de entrar.
+69. Arquivar o cliente ou pôr "Portal do cliente: Sem portal"
+    (Configurações › Clientes) não corta as pessoas dele. As portas olham só
+    os módulos do contrato, que o arquivo mantém: o WMS, as Rules, o portal
+    da Operação e o convite. As pessoas do cliente seguem lendo os dados e
+    pedindo pelo portal, e os convites pendentes seguem valendo.
+    - Se arquivar e "Sem portal" devem tirar o portal, recomendo gravar o
+      portal ativo no `client_access` e as portas o conferirem, com o
+      convite. Os logins ficam, como a remoção de acesso de hoje.
+    - Se os logins devem continuar, o rótulo "Sem portal" engana: a troca é
+      de nome na tela.
 
 Limitações conhecidas, sem pergunta, para quando houver tempo:
 
