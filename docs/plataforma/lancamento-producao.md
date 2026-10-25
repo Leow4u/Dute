@@ -256,6 +256,11 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     emitir outubro, salve as quantidades do mês: edite uma, volte ao valor
     dela e salve (`fase-7-financeiro-unificado.md`, "Correção: a competência
     que ninguém salvou não emitia").
+- **O app do campo (25/10/2026).** Entra com a `main`, sem liberação
+  própria: o app abre sem sinal com o último perfil lido no aparelho, e a
+  fila guardada volta e vai quando o sinal voltar. Antes, aberto sem sinal
+  depois de fechado, o app ficava em branco
+  (`fase-3-operacao.md`, "Correção: o app não abria sem sinal").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
