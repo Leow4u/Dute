@@ -44,6 +44,10 @@ before(async () => {
   const db = getFirestore();
   await db.collection("users").doc("owner-a").set({ role: "owner", nome: "Owner", email: "owner@dutelog.com.br" });
   await db.collection("users").doc("ana").set({ role: "interno", nome: "Ana", email: "ana@dutelog.com.br", customer_code: "Dutelog" });
+  // O interno convidado leva "Dutelog" no perfil; a Bia foi cliente do Itaú.
+  await db.collection("users").doc("carlos").set({ role: "interno", nome: "Carlos", email: "carlos@dutelog.com.br", customer_code: "Dutelog" });
+  await db.collection("users").doc("bia").set({ role: "interno", nome: "Bia", email: "bia@itau.com.br", customer_code: "Itau" });
+  await db.collection("users").doc("davi").set({ role: "wms", nome: "Davi", email: "davi@dutelog.com.br" });
   await db.collection("customers").doc("Itau").set({
     code: "Itau",
     customer_code: "Itau",
@@ -77,5 +81,30 @@ describe("o evento da mudança de acesso", () => {
       [evento.payload.status_before, evento.payload.status_after, evento.payload.operation_template_before, evento.payload.operation_template_after, evento.payload.sku_prefix_before, evento.payload.sku_prefix_after],
       ["active", "active", "uniformes", "uniformes", "ITAU", "ITAU"],
     );
+  });
+});
+
+describe("a troca de papel para cliente", () => {
+  const papelDe = async (uid: string) => (await getFirestore().collection("users").doc(uid).get()).get("role");
+
+  it("o interno convidado não vira cliente de Dutelog, que não é cliente", async () => {
+    await assert.rejects(
+      comoOwner({ resource: "users", action: "set_role", id: "carlos", data: { role: "cliente" }, idempotency_key: "carlos-cliente" }),
+      /Dutelog não está cadastrado/,
+    );
+    assert.equal(await papelDe("carlos"), "interno");
+  });
+
+  it("quem não está ligado a um cliente não vira cliente", async () => {
+    await assert.rejects(
+      comoOwner({ resource: "users", action: "set_role", id: "davi", data: { role: "cliente" }, idempotency_key: "davi-cliente" }),
+      /não está ligada a um cliente/,
+    );
+    assert.equal(await papelDe("davi"), "wms");
+  });
+
+  it("quem já é ligado a um cliente cadastrado vira cliente dele", async () => {
+    await comoOwner({ resource: "users", action: "set_role", id: "bia", data: { role: "cliente" }, idempotency_key: "bia-cliente" });
+    assert.equal(await papelDe("bia"), "cliente");
   });
 });

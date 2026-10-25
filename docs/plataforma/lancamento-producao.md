@@ -406,6 +406,13 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   e o depois do papel, da situação, do portal, do modelo e da sigla
   (`fase-2-nucleo.md`, "Correção: o evento da mudança de acesso sem o antes
   e o depois"). Os eventos de antes ficam como estão.
+- **A troca de papel para cliente (25/10/2026).** Entra com a `main`, sem
+  liberação própria: virar cliente passa pela conferência do convite de
+  cliente, e o interno de "Dutelog" não vira cliente dela
+  (`fase-2-nucleo.md`, "Correção: a troca de papel para cliente ligava a
+  pessoa a um cliente sem conferir"). Antes de publicar, conferir em
+  Usuários se há alguém com papel cliente e cliente "Dutelog": o acesso
+  dela se refaz pelo convite do cliente certo.
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.

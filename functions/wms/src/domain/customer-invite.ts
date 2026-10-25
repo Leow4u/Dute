@@ -78,6 +78,26 @@ export async function assertInviteCustomerAllowed(
 }
 
 /**
+ * A troca de papel para cliente, em Usuários: a pessoa vira cliente do
+ * código que já tem no perfil, que passa pela mesma conferência do convite.
+ * O interno convidado leva "Dutelog", que não é cliente; sem a conferência,
+ * ele viraria cliente dela com os módulos padrão.
+ */
+export async function assertClientRoleCustomer(
+  transaction: Transaction,
+  db: Firestore,
+  user: Record<string, unknown>,
+): Promise<void> {
+  if (!text(user.customer_code)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "A pessoa não está ligada a um cliente: para dar o portal, convide-a pelo cliente.",
+    );
+  }
+  await assertInviteCustomerAllowed(transaction, db, { role: "cliente", customer_code: user.customer_code });
+}
+
+/**
  * O id do convite é o token do link: `lookupInvite` e o cadastro da pessoa o
  * usam como chave, e quem o tem aceita o convite. O evento do convite, que a
  * equipe do armazém lê, leva só esta referência (os 16 primeiros dígitos do

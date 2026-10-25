@@ -69,7 +69,7 @@ import {
   contractedModulesFrom,
   readContractedModules,
 } from "./domain/customer-profile.js";
-import { assertInviteCustomerAllowed, inviteEventReference } from "./domain/customer-invite.js";
+import { assertClientRoleCustomer, assertInviteCustomerAllowed, inviteEventReference } from "./domain/customer-invite.js";
 import {
   PLATFORM_ROLES,
   isPlatformRole,
@@ -4854,6 +4854,15 @@ export const mutateManagedEntity = onCall(async (request) => {
     // Convite de cliente: cadastro achado pelo código, cliente com sigla.
     if (input.resource === "invites" && input.action === "create") {
       await assertInviteCustomerAllowed(transaction, db, payload as Record<string, unknown>);
+    }
+    // Papel cliente: o customer_code da pessoa vira a fronteira dela
+    // (invariante 4), com a conferência do convite de cliente.
+    if (
+      input.resource === "users" &&
+      (payload as Record<string, unknown>).role === "cliente" &&
+      before.role !== "cliente"
+    ) {
+      await assertClientRoleCustomer(transaction, db, before);
     }
     // Sigla do SKU única entre clientes ativos: leitura antes das escritas.
     if (input.resource === "customers" && input.action !== "archive") {
