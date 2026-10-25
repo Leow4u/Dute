@@ -8,12 +8,15 @@ Rodar da raiz do repositório:
 from __future__ import annotations
 
 import io
+import json
 import re
 import unittest
 import urllib.error
+import urllib.request
 from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import esperar_indices as e
 
@@ -145,10 +148,72 @@ class MainTest(unittest.TestCase):
         self.assertIn("events (type ASCENDING, created_at ASCENDING): CREATING", saida)
 
     def test_permissao_negada_falha_na_hora(self) -> None:
-        negado = urllib.error.HTTPError("https://firestore.googleapis.com/v1/x", 403, "Forbidden", {}, None)
-        codigo, saida = self.rodar(ApiFalsa([negado]))
+        codigo, saida = self.rodar(ApiFalsa([e.ErroDaApi(403, "PERMISSION_DENIED: The caller does not have permission")]))
         self.assertEqual(codigo, 1)
+        self.assertIn("respondeu 403", saida)
         self.assertIn("datastore.indexes.list", saida)
+
+    def test_pedido_recusado_mostra_a_mensagem_da_api_e_nao_culpa_a_permissao(self) -> None:
+        api = ApiFalsa([e.ErroDaApi(400, "INVALID_ARGUMENT: Request contains an invalid argument.")])
+        codigo, saida = self.rodar(api)
+        self.assertEqual(codigo, 1)
+        self.assertIn("::error::A API do Firestore respondeu 400 ao listar os índices de dute-homolog (INVALID_ARGUMENT: Request contains an invalid argument.)", saida)
+        self.assertNotIn("datastore.indexes.list", saida)
+        self.assertEqual(api.chamadas, 1)
+
+
+def erro_http(codigo: int, corpo: bytes | None) -> urllib.error.HTTPError:
+    return urllib.error.HTTPError("https://firestore.googleapis.com/v1/x", codigo, "Bad Request", {}, io.BytesIO(corpo) if corpo is not None else None)
+
+
+class PedidoTest(unittest.TestCase):
+    """O pedido é o do firebase deploy, que lista os índices pela mesma conta no passo anterior."""
+
+    LISTA = "https://firestore.googleapis.com/v1/projects/dute-homolog/databases/(default)/collectionGroups/-/indexes"
+
+    def responder(self, *respostas: dict[str, Any] | Exception) -> list[urllib.request.Request]:
+        pedidos: list[urllib.request.Request] = []
+        fila = list(respostas)
+
+        def urlopen(pedido: urllib.request.Request, timeout: float) -> io.BytesIO:
+            pedidos.append(pedido)
+            resposta = fila.pop(0)
+            if isinstance(resposta, Exception):
+                raise resposta
+            return io.BytesIO(json.dumps(resposta).encode("utf-8"))
+
+        patch = mock.patch.object(e.urllib.request, "urlopen", urlopen)
+        patch.start()
+        self.addCleanup(patch.stop)
+        return pedidos
+
+    def test_lista_sem_pagesize_nem_x_goog_user_project_e_segue_as_paginas(self) -> None:
+        pedidos = self.responder({"indexes": [da_api(MOVIMENTOS, "READY")], "nextPageToken": "p2"}, {"indexes": [da_api(EVENTOS, "READY")]})
+        lidos = e.Firestore("dute-homolog", "token").indices()
+        self.assertEqual([e.chave_da_api(indice) for indice in lidos], [MOVIMENTOS, EVENTOS])
+        self.assertEqual([pedido.full_url for pedido in pedidos], [self.LISTA, f"{self.LISTA}?pageToken=p2"])
+        for pedido in pedidos:
+            self.assertEqual(pedido.get_header("Authorization"), "Bearer token")
+            self.assertEqual({nome.lower() for nome, _ in pedido.header_items()}, {"authorization"})
+
+    def test_recusa_da_api_traz_o_status_e_a_mensagem(self) -> None:
+        self.responder(erro_http(400, b'{"error": {"code": 400, "status": "INVALID_ARGUMENT", "message": "Request contains an invalid argument."}}'))
+        with self.assertRaises(e.ErroDaApi) as recusa:
+            e.Firestore("dute-homolog", "token").indices()
+        self.assertEqual((recusa.exception.codigo, recusa.exception.mensagem), (400, "INVALID_ARGUMENT: Request contains an invalid argument."))
+
+    def test_recusa_sem_o_json_do_google_fica_com_o_motivo_do_http(self) -> None:
+        self.responder(erro_http(404, b"<html>Not Found</html>"))
+        with self.assertRaises(e.ErroDaApi) as recusa:
+            e.Firestore("dute-homolog", "token").indices()
+        self.assertEqual((recusa.exception.codigo, recusa.exception.mensagem), (404, "Bad Request"))
+
+    def test_5xx_e_429_sao_transitorios(self) -> None:
+        for codigo in (503, 429):
+            with self.subTest(codigo=codigo):
+                self.responder(erro_http(codigo, None))
+                with self.assertRaises(e.ErroTransitorio):
+                    e.Firestore("dute-homolog", "token").indices()
 
 
 class WorkflowTest(unittest.TestCase):
