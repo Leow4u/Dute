@@ -389,6 +389,10 @@ async function registrar(mudanca: Mudanca, input: Registro, entrada: { valor_cen
       problemaDaDemandaParaAutorizar(lida.numero, { ...lida.demanda, etapa: lida.demanda.etapa as EtapaDemanda }, code) ??
       problemaDoTipoDaAutorizacao(input.tipo, lida.numero, lida.demanda);
     if (problema) throw new HttpsError("failed-precondition", problema);
+    // Reservada pela emissão, a demanda não muda no Comercial (demanda.ts): a fatura nasce das autorizações dela.
+    if (emissaoNfDaDemanda(lida.demanda)) {
+      throw new HttpsError("failed-precondition", `A demanda ${lida.numero} está na emissão da NFS-e pela Omie: a autorização dela espera a emissão terminar.`);
+    }
     const validada = validacaoDaDemanda(lida.demanda)?.rv ?? null;
     const rv = input.demandas[indice].rv ?? validada;
     if (rv === null) throw new HttpsError("failed-precondition", `A demanda ${lida.numero} não tem RV validada: informe a RV que o cliente autorizou.`);
