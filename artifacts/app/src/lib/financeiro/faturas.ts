@@ -44,6 +44,9 @@ export const MEIO_ROTULO: Record<MeioDeEnvio, string> = {
 /** A demanda como a fatura guardou: o valor calculado no servidor e de onde ele saiu. */
 export type DemandaDaNf = { numero: string; valorCents: number; rv: number | null; medicaoId: string | null; autorizacaoIds: string[] };
 
+/** A competência de armazenagem do WMS que entrou na NF (Fase 7, parte 7.2a), com o valor que o WMS emitiu. */
+export type ArmazenagemDaNf = { competencia: string; valorCents: number };
+
 export type FaturaDoFinanceiro = {
   id: string;
   customerCode: string;
@@ -57,6 +60,7 @@ export type FaturaDoFinanceiro = {
   forma: FormaDePagamento;
   observacao: string | null;
   demandas: DemandaDaNf[];
+  armazenagem: ArmazenagemDaNf[];
   enviada: { em: string; meio: MeioDeEnvio } | null;
   pagaEm: string | null;
   cancelada: { em: string; motivo: string } | null;
@@ -103,6 +107,11 @@ export function faturaDoFinanceiro(id: string, dados: Registro): FaturaDoFinance
           autorizacaoIds: ids.filter((id): id is string => typeof id === "string" && id.length > 0),
         },
       ];
+    }),
+    armazenagem: (Array.isArray(dados.armazenagem) ? dados.armazenagem : []).flatMap((item) => {
+      const linha = objeto(item);
+      const competencia = texto(linha?.competencia);
+      return /^\d{4}-\d{2}$/.test(competencia) ? [{ competencia, valorCents: centavos(linha?.valor_cents) }] : [];
     }),
     enviada: enviada && (MEIOS_DE_ENVIO as readonly string[]).includes(meio) ? { em: texto(enviada.em), meio: meio as MeioDeEnvio } : null,
     pagaEm: texto(dados.paga_em) || null,

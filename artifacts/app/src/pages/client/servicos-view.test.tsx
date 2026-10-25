@@ -319,6 +319,37 @@ describe("as NFs dos serviços em Faturas", () => {
     expect(renderToStaticMarkup(<NfsDosServicos nfs={[]} hoje={HOJE} />)).toBe("");
   });
 
+  it("a armazenagem na NF aparece com a competência e o valor, junto das demandas ou sozinha (Fase 7)", () => {
+    const comArmazenagem = nfDoPortal("fat_000000000000000000001240", {
+      customer_code: "ITAU",
+      status: "paga",
+      valor_cents: 1_820_000,
+      recebido_cents: 1_820_000,
+      nf: { numero: "1240", serie: "1", emitida_em: "2026-10-02" },
+      vencimento: "2026-10-12",
+      paga_em: "2026-10-10",
+      forma: "boleto",
+      demandas: [{ numero: "10040", valor_cents: 1_500_000, titulo: "Transporte de arquivo" }],
+      armazenagem: [{ competencia: "2026-09", valor_cents: 320_000 }],
+    })!;
+    const soArmazenagem = nfDoPortal("fat_000000000000000000001241", {
+      customer_code: "ITAU",
+      status: "paga",
+      valor_cents: 320_000,
+      recebido_cents: 320_000,
+      nf: { numero: "1241", serie: "1", emitida_em: "2026-10-02" },
+      vencimento: "2026-10-12",
+      paga_em: "2026-10-11",
+      forma: "boleto",
+      demandas: [],
+      armazenagem: [{ competencia: "2026-08", valor_cents: 320_000 }],
+    })!;
+    const textos = textosDaTela(renderToStaticMarkup(<NfsDosServicos nfs={[comArmazenagem, soArmazenagem]} hoje={HOJE} />));
+    expect(textos).toContain("10040 · Transporte de arquivo · R$ 15.000,00");
+    expect(textos).toContain("Armazenagem 09/2026 · R$ 3.200,00");
+    expect(textos).toContain("Armazenagem 08/2026 · R$ 3.200,00");
+  });
+
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(html())).toEqual([]);
   });
