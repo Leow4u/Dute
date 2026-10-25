@@ -663,7 +663,10 @@ regras); CNH, exame e treinamento vencendo aparecem no Início certo.
   `runNotifications` conta e guarda em cada e-mail, sem log de erro) ainda
   não.
 - **LGPD**: retenção e exclusão de fotos, assinaturas e dados de campo;
-  CPF só onde o papel precisa; registro de quem acessou o que.
+  CPF só onde o papel precisa; registro de quem acessou o que. O inventário
+  dos dados pessoais, o que falta e as 12 decisões do Leonardo, cada uma com
+  a recomendação, estão em `lgpd.md` (25/10/2026); as mudanças entram depois
+  das decisões.
 - **Manual do usuário** em `docs/manual-*.md`, por módulo: é para lá que vai
   toda explicação que a tela não mostra.
 - **Treinamento**: Guilherme (Comercial), coordenação (Operação), líderes
