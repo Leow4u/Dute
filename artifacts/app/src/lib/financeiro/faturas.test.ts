@@ -89,6 +89,15 @@ describe("a situação da NF", () => {
   });
 });
 
+describe("a armazenagem na NF (Fase 7)", () => {
+  it("lê a competência e o valor que o WMS emitiu; sem armazenagem, nenhuma; competência inválida fica fora", () => {
+    expect(fatura("1301").armazenagem).toEqual([]);
+    expect(
+      fatura("1302", { armazenagem: [{ periodo_id: "ITAU__2026-09", competencia: "2026-09", valor_cents: 320_000 }, { competencia: "09/2026", valor_cents: 1 }, null] }).armazenagem,
+    ).toEqual([{ competencia: "2026-09", valorCents: 320_000 }]);
+  });
+});
+
 describe("as listas", () => {
   const FATURAS = [
     fatura("1201", { vencimento: "2026-10-30", recebido_cents: 484_500 }),

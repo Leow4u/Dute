@@ -1,5 +1,6 @@
 import { formatarReais } from "@workspace/dominio";
 
+import { rotuloDaCompetencia } from "../financeiro/a-faturar";
 import { faturaDoFinanceiro, rotuloDaNf, situacaoDaCobranca, textoDaSituacao, type FaturaDoFinanceiro, type SituacaoDaCobranca } from "../financeiro/faturas";
 import { ETAPA_ROTULO, horaDe, janelaEmTexto, servicosEmTexto, type FichaDaOs } from "../operacao/ficha-da-os";
 import { temComprovante } from "./comprovante";
@@ -182,6 +183,11 @@ export function ordenarNfs(nfs: readonly NfDoPortal[], hoje: string): NfDoPortal
 /** "10045 · Desmontagem de mobiliário · R$ 10.000,00". */
 export function textoDaDemandaNaNf(nf: NfDoPortal, numero: string, valorCents: number): string {
   return [numero, nf.titulos.get(numero) ?? null, formatarReais(valorCents)].filter(Boolean).join(" · ");
+}
+
+/** "Armazenagem 09/2026 · R$ 3.200,00": a competência do WMS que entrou na NF. */
+export function textoDaArmazenagemNaNf(competencia: string, valorCents: number): string {
+  return `Armazenagem ${rotuloDaCompetencia(competencia)} · ${formatarReais(valorCents)}`;
 }
 
 /** Quanto falta pagar nas NFs abertas. */

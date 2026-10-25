@@ -2,13 +2,14 @@ import { formatarReais } from "@workspace/dominio";
 
 import { dataBr } from "@/lib/comercial/clientes";
 import { rotuloDaNf, situacaoDaCobranca, textoDaSituacao, type SituacaoDaCobranca } from "@/lib/financeiro/faturas";
-import { aPagar, ordenarNfs, textoDaDemandaNaNf, type NfDoPortal } from "@/lib/portal/servicos";
+import { aPagar, ordenarNfs, textoDaArmazenagemNaNf, textoDaDemandaNaNf, type NfDoPortal } from "@/lib/portal/servicos";
 import { cn } from "@/lib/utils";
 
 /**
  * As NFs dos serviços no portal (parte 4.3b): as da Operação, que o
- * Financeiro registra por demanda (`client_faturas`). Ficam em Faturas, junto
- * da fatura mensal da armazenagem. As que esperam pagamento primeiro, pelo
+ * Financeiro registra por demanda (`client_faturas`), com a armazenagem do
+ * WMS que entrou na mesma NF (Fase 7). Ficam em Faturas, junto da fatura
+ * mensal da armazenagem. As que esperam pagamento primeiro, pelo
  * vencimento; cada uma com as demandas, o valor e a situação. Identidade v3,
  * sem legenda.
  */
@@ -42,6 +43,11 @@ export function NfsDosServicos({ nfs, hoje }: { nfs: readonly NfDoPortal[]; hoje
                 {nf.fatura.demandas.map((demanda) => (
                   <span key={demanda.numero} className="text-sm font-semibold">
                     {textoDaDemandaNaNf(nf, demanda.numero, demanda.valorCents)}
+                  </span>
+                ))}
+                {nf.fatura.armazenagem.map((linha) => (
+                  <span key={linha.competencia} className="text-sm font-semibold">
+                    {textoDaArmazenagemNaNf(linha.competencia, linha.valorCents)}
                   </span>
                 ))}
               </div>
