@@ -316,7 +316,11 @@ termina esperando cada índice do `firestore.indexes.json` aparecer no projeto
 como pronto (`tools/esperar_indices.py`, pela API do Firestore, com a mesma
 conta). O índice que precisa de reparo, o que não aparece ou os 30 minutos sem
 ficar pronto param a publicação: nada mais sobe. Confira em Firestore › Índices
-e rode a publicação de novo quando terminarem.
+e rode a publicação de novo quando terminarem. A recusa da API também para, com
+o código e a mensagem dela no log. O pedido é o mesmo que o `firebase deploy` faz
+para listar os índices, sem `pageSize` e sem o cabeçalho `x-goog-user-project`:
+com os dois, a API respondeu 400 e a publicação da homologação parou nesse passo
+em 25/10/2026, até a correção.
 
 Sem `--force`, o CI não apaga índice: o que sair do `firestore.indexes.json`
 continua no projeto e o log do job avisa. Para apagar, alguém roda

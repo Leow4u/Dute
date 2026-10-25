@@ -537,7 +537,8 @@ contato com os avisos ligados (Comercial › Clientes).
 2. **Os índices ficaram prontos.** O job `regras` só deixa subir as
    functions e o frontend com cada índice do `firestore.indexes.json` pronto
    (`tools/esperar_indices.py`); se a publicação parou nesse passo, o log
-   diz qual faltou. Aqui todos aparecem com `READY`:
+   diz qual faltou ou traz a mensagem da API que recusou a leitura. Aqui
+   todos aparecem com `READY`:
 
    ```powershell
    cd C:\DEV\Dute

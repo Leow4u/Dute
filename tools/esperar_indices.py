@@ -11,8 +11,8 @@ nunca depois.
 Lê pela API do Firestore (v1) os índices compostos do banco padrão e espera
 cada um do arquivo existir no projeto com o estado READY. Sai com 0 quando
 estão todos prontos; com 1 se algum precisa de reparo (NEEDS_REPAIR), se algum
-do arquivo não aparece no projeto ou se o prazo (PRAZO_MINUTOS, 30 por padrão)
-acaba.
+do arquivo não aparece no projeto, se o prazo (PRAZO_MINUTOS, 30 por padrão)
+acaba ou se a API recusa o pedido (o log traz a mensagem dela).
 
 Uso, da raiz do repositório: python3 tools/esperar_indices.py <projeto>, com
 ACCESS_TOKEN (no CI, o do google-github-actions/auth).
@@ -37,6 +37,25 @@ Chave = tuple[str, str, tuple[tuple[str, str], ...]]
 
 class ErroTransitorio(Exception):
     """Falha de rede ou 5xx/429 da API: tenta de novo na próxima rodada."""
+
+
+class ErroDaApi(Exception):
+    """A API recusou o pedido (4xx): outra rodada não muda a resposta."""
+
+    def __init__(self, codigo: int, mensagem: str):
+        super().__init__(f"{codigo}: {mensagem}")
+        self.codigo = codigo
+        self.mensagem = mensagem
+
+
+def mensagem_da_api(erro: urllib.error.HTTPError) -> str:
+    """O status e a mensagem do corpo do erro ({"error": {"status", "message"}})."""
+    try:
+        corpo = json.loads(erro.read().decode("utf-8"))["error"]
+        return f"{corpo.get('status', '')}: {corpo.get('message', '')}".strip(": ")
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        # Corpo vazio ou sem o JSON de erro do Google: fica o motivo do HTTP.
+        return str(erro.reason or "")
 
 
 def chave(colecao: str, escopo: str, campos: list[dict[str, Any]]) -> Chave:
@@ -65,33 +84,35 @@ def chave_da_api(indice: dict[str, Any]) -> Chave:
 
 
 class Firestore:
+    """O pedido é o do `firebase deploy` (listIndexes do firebase-tools), que lista
+    os índices pela mesma conta no passo anterior: sem pageSize e sem o cabeçalho
+    x-goog-user-project. Com os dois, a API respondeu 400 na homologação
+    (25/10/2026)."""
+
     def __init__(self, projeto: str, token: str, base: str = "https://firestore.googleapis.com/v1"):
         self.projeto = projeto
         self.token = token
         self.base = base.rstrip("/")
 
     def _get(self, caminho: str) -> Any:
-        pedido = urllib.request.Request(
-            f"{self.base}/{caminho}",
-            headers={"Authorization": f"Bearer {self.token}", "x-goog-user-project": self.projeto},
-        )
+        pedido = urllib.request.Request(f"{self.base}/{caminho}", headers={"Authorization": f"Bearer {self.token}"})
         try:
             with urllib.request.urlopen(pedido, timeout=30) as resposta:
                 return json.load(resposta)
         except urllib.error.HTTPError as erro:
             if erro.code >= 500 or erro.code == 429:
                 raise ErroTransitorio(f"a API do Firestore respondeu {erro.code}") from erro
-            raise
+            raise ErroDaApi(erro.code, mensagem_da_api(erro)) from erro
         except (urllib.error.URLError, TimeoutError, ConnectionError) as erro:
             raise ErroTransitorio(str(erro)) from erro
 
     def indices(self) -> list[dict[str, Any]]:
         """Os índices compostos do banco padrão, de todas as coleções."""
         lidos: list[dict[str, Any]] = []
+        caminho = f"projects/{self.projeto}/databases/(default)/collectionGroups/-/indexes"
         pagina = ""
         while True:
-            consulta = urllib.parse.urlencode({"pageSize": 200, **({"pageToken": pagina} if pagina else {})})
-            resposta = self._get(f"projects/{self.projeto}/databases/(default)/collectionGroups/-/indexes?{consulta}")
+            resposta = self._get(f"{caminho}?{urllib.parse.urlencode({'pageToken': pagina})}" if pagina else caminho)
             lidos.extend(resposta.get("indexes", []))
             pagina = resposta.get("nextPageToken", "")
             if not pagina:
@@ -155,8 +176,9 @@ def main(argv: list[str] | None = None, env: dict[str, str] | None = None, api: 
 
     try:
         decisao, pendentes = esperar(api, esperados, prazo_s=prazo_min * 60, intervalo_s=15, **opcoes)
-    except urllib.error.HTTPError as erro:
-        print(f"::error::A API do Firestore respondeu {erro.code} ao listar os índices de {projeto}. A conta do job precisa de datastore.indexes.list (roles/datastore.indexAdmin).")
+    except ErroDaApi as erro:
+        dica = " A conta do job precisa de datastore.indexes.list (roles/datastore.indexAdmin)." if erro.codigo == 403 else ""
+        print(f"::error::A API do Firestore respondeu {erro.codigo} ao listar os índices de {projeto} ({erro.mensagem}); nada mais sobe.{dica}")
         return 1
 
     if decisao == "pronto":
