@@ -245,6 +245,11 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     um item que saiu da Tabela de preços: antes, a cobrança sumia sem aviso
     (`fase-7-financeiro-unificado.md`, "Correção: a quantidade salva de um
     item que saiu da tabela sumia da fatura").
+  - O pedido de saída deixa de mudar o preço do SKU, base do ad valorem,
+    pelo custo que vier nele. A tela não manda custo, mas a callable aceitava
+    de qualquer um que pede, o cliente inclusive
+    (`fase-7-financeiro-unificado.md`, "Correção: o custo mandado no pedido
+    de saída mudava o preço do SKU").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.

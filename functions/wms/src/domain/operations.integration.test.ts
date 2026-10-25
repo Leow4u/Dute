@@ -2146,6 +2146,78 @@ describe("integridade de reservas e agregados de catálogo", () => {
     assert.deepEqual([(await precoRef.get()).data()?.preco_unit, (await precoRef.get()).data()?.total_cost], [25, 250]);
   });
 
+  it("o custo mandado no pedido de saída não muda o preço do SKU, base do ad valorem", async () => {
+    await db.collection("system_controls").doc("inventory").delete();
+    const precoRef = db.collection("catalog_prices").doc(catalogPriceId("BTG Pactual", "SKU-VALOR-2"));
+    await Promise.all([
+      db.collection("stock_balances").doc("balance-valor-2").set({
+        id: "balance-valor-2",
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-VALOR-2",
+        client_item_code: "ITEM-VALOR-2",
+        product_name: "Produto de teste do custo",
+        location_id: "LOC-VALOR-2",
+        qty_on_hand: 10,
+        qty_reserved: 0,
+        qty_available: 10,
+      }),
+      precoRef.set({ id: precoRef.id, customer_code: "BTG Pactual", sku_code: "SKU-VALOR-2", item_code: "ITEM-VALOR-2", preco_unit: 25, total_cost: 250 }),
+    ]);
+    const cliente = { ...actor, role: "cliente", uid: "client-custo" };
+    const pedido = (chave: string) => ({
+      type: "retirada",
+      priority: "normal",
+      title: "Pedido com custo",
+      customer_code: "BTG Pactual",
+      idempotency_key: chave,
+      items: [{ sku_code: "SKU-VALOR-2", client_item_code: "ITEM-VALOR-2", product_name: "Produto de teste do custo", unit_cost: 0.01, quantity: 2 }],
+    });
+    const preco = async () => {
+      const dados = (await precoRef.get()).data();
+      return [dados?.preco_unit, dados?.total_cost];
+    };
+
+    // A criação, e a recusa, que libera a reserva.
+    const recusado = await createCustomerRequestTransaction(db, pedido("request-custo-1"), cliente);
+    assert.deepEqual(await preco(), [25, 250]);
+    await decideCustomerRequestTransaction(
+      db,
+      { request_id: String(recusado.id), action: "reject", expected_status: "open", reason: "Teste do custo", idempotency_key: "reject-custo-1" },
+      actor,
+    );
+    assert.deepEqual(await preco(), [25, 250]);
+
+    // A aprovação e a entrega.
+    const criado = await createCustomerRequestTransaction(db, pedido("request-custo-2"), cliente);
+    const aprovado = (await decideCustomerRequestTransaction(
+      db,
+      { request_id: String(criado.id), action: "approve", expected_status: "open", idempotency_key: "approve-custo-2" },
+      actor,
+    )) as Record<string, unknown>;
+    assert.deepEqual(await preco(), [25, 250]);
+    const pickTaskId = String(aprovado.pick_task_id);
+    await advance(`picking:${pickTaskId}`, "planned");
+    const pickLines = await db.collection("pick_lines").where("pick_task_id", "==", pickTaskId).get();
+    const picking = (await advance(`picking:${pickTaskId}`, "in_progress", {
+      picking_lines: pickLines.docs.map((document) => ({ pick_line_id: document.id, qty_picked: Number(document.data().qty_to_pick), status: "confirmed" })),
+    })) as Record<string, unknown>;
+    const packTaskId = String(picking.pack_task_id);
+    await advance(`packing:${packTaskId}`, "ready");
+    const orderItems = await db.collection("order_items").where("order_id", "==", String(aprovado.order_id)).get();
+    const packing = (await advance(`packing:${packTaskId}`, "in_progress", {
+      volume_label: "Volume 1",
+      seal_code: "LACRE-CUSTO",
+      package_count: 1,
+      packing_lines: orderItems.docs.map((document) => ({ order_item_id: document.id, qty_packed: Number(document.data().allocated_qty), status: "confirmed" })),
+    })) as Record<string, unknown>;
+    const shipmentId = String(packing.shipment_id);
+    await advance(`shipping:${shipmentId}`, "ready_to_dispatch", { carrier: "Dutelog", driver_name: "Rafael", vehicle_plate: "DUTE-002" });
+    await advance(`shipping:${shipmentId}`, "dispatched", { proof_reference: "PROTOCOLO-CUSTO", delivery_notes: "Entregue" });
+    const saldo = await db.collection("stock_balances").doc("balance-valor-2").get();
+    assert.equal(saldo.data()?.qty_on_hand, 8);
+    assert.deepEqual(await preco(), [25, 250]);
+  });
+
   it("rejeitar solicitação de retirada libera a reserva e restaura o estoque", async () => {
     await db.collection("system_controls").doc("inventory").delete();
     await Promise.all([

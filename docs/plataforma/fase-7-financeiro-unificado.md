@@ -1364,6 +1364,32 @@ Achada em 25/10/2026, numa revisão do código do Financeiro.
   segunda baixa (`baixa.integration.test.ts`) ficam para a passada seguinte
   e andam nela. Antes, a passada chamava as duas.
 
+### Correção: o custo mandado no pedido de saída mudava o preço do SKU
+
+Achada em 25/10/2026, numa revisão do faturamento do WMS. Está na produção
+desde a separação do preço em `catalog_prices` (21/10/2026).
+
+- **O defeito.** O `createCustomerRequest` aceita `unit_cost` em cada item, e
+  o pedido de saída (retirada e ajuste) o levava ao
+  `catalog_prices.preco_unit` do SKU, a base do ad valorem. Isso acontecia
+  em quatro pontos: na criação, na aprovação, na liberação da reserva
+  (recusa e cancelamento) e na entrega.
+  - A tela não manda o custo, mas a callable aceita de quem pede, o cliente
+    inclusive. Quem a chamasse direto com `unit_cost: 0.01` faria o estoque
+    de R$ 100.000 valer R$ 10 no mês seguinte.
+  - Um custo alto inflava o ad valorem do mesmo jeito.
+- **A correção.** `createCustomerRequestTransaction` tira o `unit_cost` dos
+  itens do pedido de saída antes de gravar o pedido e a reserva, e a
+  aprovação, a liberação e a entrega leem dali.
+  - O recebimento continua levando o custo declarado da nota, conferido pela
+    equipe.
+  - O custo continua entrando pela contagem e pelo movimento manual.
+  - O hash da chave de idempotência continua o do pedido como veio.
+- **Teste:** `operations.integration.test.ts`, "o custo mandado no pedido de
+  saída não muda o preço do SKU". Com o preço em 25 e o pedido com 0,01, a
+  criação, a recusa, a aprovação e a entrega mantêm o preço em 25 e o total
+  em 250. Antes, a criação já levava o preço a 0,01.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.
