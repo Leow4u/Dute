@@ -159,6 +159,13 @@ describe("a Operação, sem valor", () => {
     // A medida geral não mostra as OS de origem, que são de outros clientes.
     assert.doesNotMatch(JSON.stringify(tempos), /10090-01/);
   });
+
+  it("o plano otimista só com 5 OS revisadas do cliente, o mínimo do aviso da duração sugerida", async () => {
+    const umaOs = { ...DADOS, ai_measures: { ...DADOS.ai_measures, med_itau_plano: { ...DADOS.ai_measures!.med_itau_plano, erro_medio_pct: 40, execucoes: 1 } } };
+    const tempos = await rodarCom(umaOs, "tempo_dos_itens", escopo("interno"));
+    // Antes, uma OS a +40% já dizia que os planos do cliente costumam ser otimistas.
+    assert.deepEqual(tempos.plano, { erro_medio_pct: 40, os_revisadas: 1, base: "ainda sem base: o erro do planejamento vale a partir de 5 OS revisadas" });
+  });
 });
 
 describe("o Comercial, para quem orça", () => {

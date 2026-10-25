@@ -207,14 +207,19 @@ export async function tempoDosItens(leitor: LeitorDoAgente, busca: string) {
   });
   const erro = planejamento[0];
   const erroPct = erro ? numero(erro.erro_medio_pct) : null;
+  const revisadas = erro ? numero(erro.execucoes) : 0;
+  // O mesmo mínimo do aviso da duração sugerida (historicoQueVale): abaixo dele, o erro ainda não diz como o cliente planeja.
+  const planoComBase = revisadas >= MINIMO_DO_CLIENTE;
   return {
     regra: `A base é a medida do cliente com ${MINIMO_DO_CLIENTE} execuções do item; sem ela, a média de todos os clientes com ${MINIMO_GERAL}. O tempo é em homem-minuto: 2 pessoas fazem na metade do tempo de 1. Não inclui o deslocamento.`,
     itens: itens.sort((a, b) => a.item.localeCompare(b.item)).slice(0, 30),
     plano: erro
       ? {
           erro_medio_pct: erroPct,
-          os_revisadas: numero(erro.execucoes),
-          aviso: erroPct !== null && erroPct >= PLANO_OTIMISTA_PCT ? "Os planos deste cliente costumam ser otimistas: as OS levam mais que o planejado." : undefined,
+          os_revisadas: revisadas,
+          ...(planoComBase
+            ? { aviso: erroPct !== null && erroPct >= PLANO_OTIMISTA_PCT ? "Os planos deste cliente costumam ser otimistas: as OS levam mais que o planejado." : undefined }
+            : { base: `ainda sem base: o erro do planejamento vale a partir de ${MINIMO_DO_CLIENTE} OS revisadas` }),
         }
       : undefined,
     observacao: itens.length ? undefined : "Nenhum item com essas palavras na memória ainda.",
