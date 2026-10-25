@@ -63,16 +63,3 @@ export function pageWindow<T>(items: T[], offset: number, pageSize: number): T[]
   const size = Math.max(0, pageSize);
   return items.slice(start, start + size);
 }
-
-/** Primeiro instante da competência seguinte, para o limite superior da faixa. */
-export function nextCompetencia(competencia: string) {
-  const [yearText, monthText] = String(competencia).split("-");
-  const year = Number(yearText);
-  const month = Number(monthText);
-  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
-    return `${competencia}${PREFIX_RANGE_END}`;
-  }
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextYear = month === 12 ? year + 1 : year;
-  return `${nextYear}-${String(nextMonth).padStart(2, "0")}`;
-}
