@@ -55,7 +55,7 @@ describe("fatura por cliente", () => {
   it("onde o Financeiro está ligado, o WMS não marca pagamento (parte 7.2c)", () => {
     assert.deepEqual(
       ["dute-homolog", "dute-prod", "dute-btg", "demo-dute-operations", undefined].map(billingPaidInFinanceiro),
-      [true, false, false, false, false],
+      [true, true, false, false, false],
     );
   });
 });

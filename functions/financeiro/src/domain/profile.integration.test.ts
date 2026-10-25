@@ -75,11 +75,11 @@ describe("perfil de quem grava no Financeiro", () => {
     assert.match(removido.message, /Acesso removido/);
   });
 
-  it("requireFinanceiroCaller passa na homologação e recusa na produção até o lançamento", async () => {
-    assert.equal((await requireFinanceiroCaller(db, request("financeiro-1"), "dute-homolog")).role, "financeiro");
-    for (const projectId of ["dute-prod", "dute-btg"]) {
-      const recusa = await rejection(requireFinanceiroCaller(db, request("owner-1"), projectId));
-      assert.equal(recusa.code, "failed-precondition", projectId);
+  it("requireFinanceiroCaller passa na homologação e na produção e recusa na produção antiga", async () => {
+    for (const projectId of ["dute-homolog", "dute-prod"]) {
+      assert.equal((await requireFinanceiroCaller(db, request("financeiro-1"), projectId)).role, "financeiro", projectId);
     }
+    const recusa = await rejection(requireFinanceiroCaller(db, request("owner-1"), "dute-btg"));
+    assert.equal(recusa.code, "failed-precondition");
   });
 });

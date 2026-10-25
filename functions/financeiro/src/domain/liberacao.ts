@@ -3,12 +3,12 @@ import { HttpsError } from "firebase-functions/https";
 /**
  * Liberação do Financeiro por ambiente (docs/plataforma/fase-4-financeiro.md).
  *
- * Só a homologação atende. A produção entra no lançamento da Fase 4 (parte
- * 4.9), com o OK do Leonardo. O dute-btg fica de fora. A lista é a mesma de
- * artifacts/app/src/lib/liberacao.ts; o teste
+ * Homologação e produção atendem: a produção entrou no lançamento da Fase 4
+ * (parte 4.9b), com o OK do Leonardo em 25/10/2026. O dute-btg fica de fora.
+ * A lista é a mesma de artifacts/app/src/lib/liberacao.ts; o teste
  * artifacts/app/src/lib/platform-lists.test.ts trava as duas.
  */
-export const FINANCEIRO_AMBIENTES_LIBERADOS = ["dute-homolog"] as const;
+export const FINANCEIRO_AMBIENTES_LIBERADOS = ["dute-homolog", "dute-prod"] as const;
 
 export function financeiroLiberado(projectId: string | null | undefined): boolean {
   const id = String(projectId ?? "").trim();

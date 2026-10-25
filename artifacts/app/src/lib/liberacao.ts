@@ -67,10 +67,11 @@ export const OPERACAO_LIBERADO = operacaoLiberada(import.meta.env.VITE_FIREBASE_
  * Liberação própria do Financeiro (docs/plataforma/fase-4-financeiro.md). As
  * callables de functions/financeiro recusam fora de
  * FINANCEIRO_AMBIENTES_LIBERADOS (functions/financeiro/src/domain/liberacao.ts,
- * travada igual a esta por platform-lists.test.ts). Só a homologação atende
- * até o lançamento da Fase 4 (parte 4.9), com o OK do Leonardo.
+ * travada igual a esta por platform-lists.test.ts). Homologação e produção
+ * atendem: o dute-prod entrou na lista no lançamento da Fase 4 (parte 4.9b),
+ * com o OK do Leonardo em 25/10/2026. O dute-btg continua de fora.
  */
-export const FINANCEIRO_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+export const FINANCEIRO_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog", "dute-prod"];
 
 export function financeiroLiberado(projectId: string | null | undefined): boolean {
   return FINANCEIRO_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());
