@@ -401,6 +401,11 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   (`fase-2-nucleo.md`, "Correção: o token do convite nos eventos"). Os
   eventos de antes continuam com o token, e os convites pendentes se
   refazem depois de publicar (seção 5).
+- **O evento da mudança de acesso (25/10/2026).** Entra com a `main`, sem
+  liberação própria: a troca de papel e o cadastro do cliente gravam o antes
+  e o depois do papel, da situação, do portal, do modelo e da sigla
+  (`fase-2-nucleo.md`, "Correção: o evento da mudança de acesso sem o antes
+  e o depois"). Os eventos de antes ficam como estão.
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.

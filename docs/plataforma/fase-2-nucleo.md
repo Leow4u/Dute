@@ -473,3 +473,24 @@ produção.
   aparece no evento, e o convite continua abrindo pelo `lookupInvite`) e
   `lib/convite.test.ts` (a mesma referência no app). Antes, os dois testes
   do evento falhavam.
+
+### Correção: o evento da mudança de acesso sem o antes e o depois
+
+Achada em 25/10/2026, na mesma revisão da administração de acesso. Está na
+produção.
+
+- **O defeito.** A troca de papel em Usuários gravava o evento
+  `users.set_role` com `changed_fields: ["role"]`, sem o papel de antes nem
+  o de depois. O novo ficava só no recibo da operação, que o navegador não
+  lê, e o antigo se perdia: a linha do tempo não reconstruía quem passou a
+  ver o quê (invariante 2).
+  - O cadastro do cliente tinha o mesmo buraco na situação, no portal, no
+    modelo de operação e na sigla; só os módulos levavam o antes e o
+    depois.
+- **A correção.** O evento leva `role_before` e `role_after` e, no cliente,
+  `status`, `portal_status`, `operation_template` e `sku_prefix` com
+  `_before` e `_after` (`domain/access.ts`, `accessChangeFromTo`). O que a
+  alteração não manda fica com o valor de antes.
+- **Teste:** `acessos.integration.test.ts`, a callable de verdade no
+  emulador: a troca de papel e o cliente sem portal gravam o antes e o
+  depois. Antes, os dois falhavam.
