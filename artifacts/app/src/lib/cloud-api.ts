@@ -1025,8 +1025,10 @@ async function getClientOverview() {
       item.sku_code,
       item.client_item_code ?? item.cod_cliente,
     );
-    if (isClient && point?.total !== undefined) return point.total;
-    if (point?.unit !== undefined) return qty * point.unit;
+    // A conta da fatura (merchandiseValue, nas Functions): o saldo vezes o
+    // preço unitário; o total gravado só para o SKU sem preço unitário.
+    if (point?.unit !== undefined && point.unit > 0) return qty * point.unit;
+    if (point?.total !== undefined) return point.total;
     return Number(item.total_cost ?? 0);
   };
   const inventoryValueFromBalances = balances.reduce<number>(

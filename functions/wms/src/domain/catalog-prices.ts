@@ -123,9 +123,18 @@ type PriceRow = {
   total_cost?: unknown;
 };
 
+/** O preço unitário gravado, só quando positivo. */
+function unitOf(price: PriceRow | undefined): number | null {
+  const unit = Number(price?.preco_unit);
+  return Number.isFinite(unit) && unit > 0 ? unit : null;
+}
+
 /**
- * Soma o total gravado no preço. SKU sem total usa qty × unitário.
- * Sem preço nenhum, usa o total_cost legado do estoque.
+ * O valor da mercadoria: o saldo de cada SKU vezes o preço unitário dele.
+ * O total gravado só vale para o SKU sem preço unitário: quem muda o saldo
+ * nem sempre sabe o custo (o pedido do portal não leva, e o saldo não
+ * guarda), e o total ficava zerado ou velho. Sem preço nenhum, usa o
+ * total_cost legado do estoque.
  */
 export function merchandiseValue(inventory: InventoryRow[], prices: PriceRow[]): number {
   const bySku = new Map<string, PriceRow>();
@@ -139,7 +148,7 @@ export function merchandiseValue(inventory: InventoryRow[], prices: PriceRow[]):
   for (const price of prices) {
     const total = Number(price.total_cost);
     const sku = typeof price.sku_code === "string" ? price.sku_code : "";
-    if (sku && Number.isFinite(total)) {
+    if (sku && unitOf(price) === null && Number.isFinite(total)) {
       sum += total;
       covered.add(sku);
     }
@@ -148,12 +157,10 @@ export function merchandiseValue(inventory: InventoryRow[], prices: PriceRow[]):
     const sku = typeof row.sku_code === "string" ? row.sku_code : "";
     if (sku && covered.has(sku)) continue;
     const item = typeof row.client_item_code === "string" ? row.client_item_code : "";
-    const price = (sku && bySku.get(sku)) || (item && byItem.get(item)) || undefined;
+    const unit = unitOf((sku && bySku.get(sku)) || (item && byItem.get(item)) || undefined);
     const qty = Number(row.qty_on_hand ?? 0);
-    const unit = Number(price?.preco_unit);
-    if (price && Number.isFinite(unit) && Number.isFinite(qty)) {
+    if (unit !== null && Number.isFinite(qty)) {
       sum += qty * unit;
-      if (sku) covered.add(sku);
       continue;
     }
     const legacy = Number(row.total_cost ?? 0);

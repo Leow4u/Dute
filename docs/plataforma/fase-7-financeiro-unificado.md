@@ -1243,6 +1243,42 @@ Achada em 25/10/2026 (achado 30 da auditoria de 24/07).
     que saiu da tabela": a emissão recusa e nada se emite; depois de salvar
     de novo, emite sem a linha. Antes, emitia sem a linha e sem aviso.
 
+### Correção: o valor da mercadoria zerava com o pedido e não baixava com a entrega
+
+Achada em 25/10/2026, numa revisão do estoque do WMS. Está na produção
+desde a separação do preço em `catalog_prices` (21/10/2026).
+
+- **O defeito.** O custo do estoque do ad valorem somava o
+  `catalog_prices.total_cost` de cada SKU, que os fluxos do estoque
+  regravam sem saber o custo. O saldo não guarda o custo desde 21/10, e o
+  pedido do portal não leva.
+  - Pedir, aprovar, recusar ou cancelar um pedido, e a contagem cíclica sem
+    divergência, gravavam `total_cost` = saldo × 0. O SKU saía do ad valorem.
+  - A entrega não baixava o total (o custo da reserva é 0), e o SKU
+    entregue seguia cobrado.
+  - O portal do cliente mostrava o mesmo total.
+- **A correção.**
+  - `merchandiseValue` passa a calcular o valor do SKU que tem preço
+    unitário como saldo × preço unitário. O total gravado só vale para o SKU
+    sem preço unitário, e o legado do estoque continua como último recurso.
+  - `setClientInventorySnapshot` não grava o total quando não sabe o custo.
+  - O portal faz a mesma conta (`cloud-api.ts`). Antes, o cliente via o
+    total gravado e a equipe via saldo × preço.
+  - A contagem e o recebimento exigem o custo unitário do produto novo, e
+    ele fica em `catalog_prices.preco_unit`. Com ele, o total zerado na
+    produção não pesa e não precisa ser corrigido à mão. O SKU sem preço
+    unitário segue como antes, pelo total gravado quando há.
+- **Testes:**
+  - `catalog-prices.test.ts`: o total zerado e o total velho não mudam o
+    valor (saldo × preço); sem preço unitário, vale o total.
+  - `billing-callables.integration.test.ts`, "o valor da mercadoria": com
+    os totais zerado e velho, o custo do estoque continua 1.325. Antes,
+    dava 5.075.
+  - `operations.integration.test.ts`: pedir e recusar sem custo mantêm o
+    preço e o total do SKU. Antes, o total ia a 0.
+  - `portal-valor-da-mercadoria.test.ts` (app): o portal mostra 190 (4 ×
+    25 + 90). Antes, mostrava 340.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.

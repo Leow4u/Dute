@@ -2011,6 +2011,46 @@ describe("ledger manual e congelamento", () => {
 });
 
 describe("integridade de reservas e agregados de catálogo", () => {
+  it("pedir e recusar não zeram o valor da mercadoria do SKU", async () => {
+    await db.collection("system_controls").doc("inventory").delete();
+    const precoRef = db.collection("catalog_prices").doc(catalogPriceId("BTG Pactual", "SKU-VALOR-1"));
+    // O saldo como as callables gravam, sem custo; o valor fica em catalog_prices.
+    await Promise.all([
+      db.collection("stock_balances").doc("balance-valor").set({
+        id: "balance-valor",
+        customer_code: "BTG Pactual",
+        sku_code: "SKU-VALOR-1",
+        client_item_code: "ITEM-VALOR-1",
+        product_name: "Produto de teste do valor",
+        location_id: "LOC-VALOR",
+        qty_on_hand: 10,
+        qty_reserved: 0,
+        qty_available: 10,
+      }),
+      precoRef.set({ id: precoRef.id, customer_code: "BTG Pactual", sku_code: "SKU-VALOR-1", item_code: "ITEM-VALOR-1", preco_unit: 25, total_cost: 250 }),
+    ]);
+    // O pedido do portal não leva custo.
+    const created = await createCustomerRequestTransaction(
+      db,
+      {
+        type: "retirada",
+        priority: "normal",
+        title: "Pedido sem custo",
+        customer_code: "BTG Pactual",
+        idempotency_key: "request-valor-1",
+        items: [{ sku_code: "SKU-VALOR-1", client_item_code: "ITEM-VALOR-1", product_name: "Produto de teste do valor", quantity: 4 }],
+      },
+      { ...actor, role: "cliente", uid: "client-1" },
+    );
+    assert.deepEqual([(await precoRef.get()).data()?.preco_unit, (await precoRef.get()).data()?.total_cost], [25, 250]);
+    await decideCustomerRequestTransaction(
+      db,
+      { request_id: String(created.id), action: "reject", expected_status: "open", reason: "Teste do valor", idempotency_key: "reject-valor-1" },
+      actor,
+    );
+    assert.deepEqual([(await precoRef.get()).data()?.preco_unit, (await precoRef.get()).data()?.total_cost], [25, 250]);
+  });
+
   it("rejeitar solicitação de retirada libera a reserva e restaura o estoque", async () => {
     await db.collection("system_controls").doc("inventory").delete();
     await Promise.all([

@@ -190,8 +190,12 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   - A produção de hoje cobraria em outubro a contagem de abertura inteira
     como entrada de peças, e cada guarda como uma entrada e uma saída.
   - O dinheiro só muda onde a Tabela de preços cobra por "Entradas
-    (peças)", "Saídas (peças)" ou "Nº de movimentações". O ad valorem não
-    muda.
+    (peças)", "Saídas (peças)" ou "Nº de movimentações".
+  - O ad valorem passa a sair do saldo de cada SKU vezes o preço unitário
+    dele. Na produção de hoje, o pedido zera o valor do SKU e a entrega não
+    o baixa (`fase-7-financeiro-unificado.md`, "Correção: o valor da
+    mercadoria zerava com o pedido e não baixava com a entrega"). O valor
+    que o portal mostra ao cliente segue a mesma conta.
   - O uso de outubro congela na primeira prévia ou emissão a partir de
     01/11. A Armazenagem › Faturamento abre no mês anterior, então basta
     abrir a tela. Publicar antes de 01/11 evita o passo abaixo.

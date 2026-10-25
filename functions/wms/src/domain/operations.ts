@@ -815,12 +815,14 @@ function setClientInventorySnapshot(
       ),
     );
   const unitCost = number(input.unitCost);
+  // Sem o custo (o pedido do portal não leva, e o saldo não guarda), o valor
+  // gravado fica como está: qty × 0 zerava o valor da mercadoria do SKU.
   rememberCatalogPrice(transaction, db, {
     customerCode: input.customerCode,
     skuCode: input.skuCode,
     itemCode: input.clientItemCode,
     unitCost,
-    totalCost: input.qtyOnHand * unitCost,
+    totalCost: unitCost > 0 ? input.qtyOnHand * unitCost : undefined,
   });
   transaction.set(
     ref,

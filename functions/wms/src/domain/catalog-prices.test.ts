@@ -53,4 +53,23 @@ describe("preço fora da operação", () => {
     );
     assert.equal(value, 40 + 30);
   });
+
+  it("o valor do SKU com preço unitário é o saldo vezes o preço, mesmo com o total gravado zerado ou velho", () => {
+    const value = merchandiseValue(
+      [
+        // O pedido zerou o total, com as 10 peças ainda no armazém.
+        { sku_code: "SKU-1", qty_on_hand: 10 },
+        // A entrega levou 6 de 10, e o total ficou o de antes.
+        { sku_code: "SKU-2", qty_on_hand: 4 },
+        // Sem preço unitário: vale o total gravado.
+        { sku_code: "SKU-3", qty_on_hand: 2 },
+      ],
+      [
+        { sku_code: "SKU-1", preco_unit: 25, total_cost: 0 },
+        { sku_code: "SKU-2", preco_unit: 25, total_cost: 250 },
+        { sku_code: "SKU-3", total_cost: 90 },
+      ],
+    );
+    assert.equal(value, 10 * 25 + 4 * 25 + 90);
+  });
 });

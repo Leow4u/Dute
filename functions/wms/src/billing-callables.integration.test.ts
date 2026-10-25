@@ -247,6 +247,17 @@ describe("a prévia do mês fechado", () => {
   });
 });
 
+describe("o valor da mercadoria", () => {
+  it("é o saldo vezes o preço unitário, com o total gravado zerado por um pedido ou velho depois da entrega", async () => {
+    await abrirSetembro();
+    // O pedido zerava o total do BTG-000002 (5 peças a 50), e a entrega
+    // deixava no BTG-000001 (10 peças a 100) o total de quando havia 50.
+    await db.collection("catalog_prices").doc("BTG-000002").update({ total_cost: 0 });
+    await db.collection("catalog_prices").doc("BTG-000001").update({ total_cost: 5000 });
+    assert.equal((await previa({ competencia: SETEMBRO })).custo_estoque, 10 * 100 + 5 * 50 + 75);
+  });
+});
+
 describe("o uso congelado", () => {
   it("a primeira prévia grava a foto uma vez; o movimento que chega depois não muda nada", async () => {
     await abrirSetembro();
