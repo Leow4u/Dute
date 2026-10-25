@@ -137,6 +137,15 @@ export function billingInsights(invoices: ClosedInvoice[], deliveries: Map<strin
   };
 }
 
+/**
+ * A tela de Faturas diz que não há fatura só sem a mensal e sem NF dos
+ * serviços: o cliente só com a Operação nunca tem fatura mensal, e com as
+ * NFs à vista o aviso enganava.
+ */
+export function semNadaParaCobrar(insights: Pick<BillingInsights, "latest">, nfs: number): boolean {
+  return !insights.latest && nfs === 0;
+}
+
 export type BillingReport = {
   from: string;
   to: string;

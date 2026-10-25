@@ -7,6 +7,7 @@ import {
   deliveriesByMonth,
   monthLabel,
   monthRange,
+  semNadaParaCobrar,
   shiftCompetencia,
 } from "./billing-insights";
 
@@ -89,5 +90,14 @@ describe("relatório", () => {
     expect(report.monthTotals).toEqual([21400, 23900]);
     expect(report).toMatchObject({ total: 45300, average: 22650, deliveredTotal: 17 });
     expect(report.invoices.map((item) => item.competencia)).toEqual(["2026-08", "2026-09"]);
+  });
+});
+
+describe("Faturas sem nada para cobrar", () => {
+  it("só sem fatura mensal e sem NF dos serviços; com as NFs à vista, não diz que não há fatura", () => {
+    expect(semNadaParaCobrar({ latest: null }, 0)).toBe(true);
+    expect(semNadaParaCobrar({ latest: null }, 2)).toBe(false);
+    const comFatura = billingInsights(closedInvoices([invoice("2026-09", 3200, "emitido", 3000, 200)]), new Map());
+    expect(semNadaParaCobrar(comFatura, 0)).toBe(false);
   });
 });
