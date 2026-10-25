@@ -858,3 +858,21 @@ servidor. Está no `dute-homolog` desde a parte 4.4c.
 - **Teste:** `demanda-nova.test.tsx`, com a página e as leituras de
   mentira: atendida por outra pessoa com o formulário aberto, a demanda
   sai com a solicitação. Antes, saía sem ela.
+
+### Correção: o pedido editado depois da falha ia com a chave do primeiro
+
+Achada em 25/10/2026, numa revisão do que o portal manda ao servidor. Está
+no `dute-homolog` desde a parte 4.4b.
+
+- **O defeito.** O "Enviar solicitação" do Solicitar OS guardava uma chave
+  até a solicitação sair.
+  - Com a resposta perdida depois de o servidor gravar, o cliente que
+    corrigia o pedido e enviava de novo recebia "A chave de idempotência já
+    foi usada com outro conteúdo.", sem saber que a primeira tinha chegado.
+- **A correção.** A chave é do pedido (`pages/client/servicos.tsx`): a nova
+  tentativa do mesmo pedido repete a chave, e o servidor devolve a
+  solicitação gravada; o pedido editado é outro envio, com outra chave,
+  como no aviso de envio e no pedido do Estoque.
+- **Teste:** `pages/client/servicos-envio.test.tsx`: o mesmo pedido repete
+  a chave, o editado sai com outra, e o que volta ao de antes repete a
+  dele. Antes, o editado saía com a chave do primeiro.

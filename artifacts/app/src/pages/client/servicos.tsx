@@ -10,7 +10,7 @@ import { useOperationProfile } from "@/lib/operation-profile";
 import { leiturasDoPortal } from "@/lib/operations";
 import { enviarSolicitacao } from "@/lib/portal/enviar-solicitacao";
 import { aPagar, cobrancaPorDemanda, numerosDasOs, ordenarOs, osDoPortal } from "@/lib/portal/servicos";
-import { escolherAnexos, formularioInicial, problemasDaSolicitacao, solicitacoesEmAberto, type FormularioDaSolicitacao } from "@/lib/portal/solicitacao";
+import { escolherAnexos, formularioInicial, pedidoDaSolicitacao, problemasDaSolicitacao, solicitacoesEmAberto, type FormularioDaSolicitacao } from "@/lib/portal/solicitacao";
 import { useNfsDoCliente, useOsDoCliente, useSolicitacoesDoCliente } from "@/lib/portal/use-servicos";
 
 import { ServicosView } from "./servicos-view";
@@ -18,8 +18,11 @@ import { ServicosView } from "./servicos-view";
 type EstadoDoPedido = {
   aberto: boolean;
   form: FormularioDaSolicitacao;
-  /** A mesma chave até a solicitação sair: repetir a tentativa não cria outra. */
-  chave: string;
+  /**
+   * A chave de cada pedido já tentado, até a solicitação sair: repetir o
+   * mesmo pedido não cria outro, e o pedido editado é outro envio.
+   */
+  chaves: Record<string, string>;
   tentou: boolean;
   enviando: boolean;
   erro: string | null;
@@ -28,7 +31,7 @@ type EstadoDoPedido = {
 };
 
 function pedidoNovo(hoje: string): EstadoDoPedido {
-  return { aberto: false, form: formularioInicial(hoje), chave: novaChave(), tentou: false, enviando: false, erro: null, problemaDoAnexo: null, enviada: false };
+  return { aberto: false, form: formularioInicial(hoje), chaves: {}, tentou: false, enviando: false, erro: null, problemaDoAnexo: null, enviada: false };
 }
 
 /**
@@ -62,9 +65,11 @@ export function ClienteServicos() {
       mudar({ tentou: true });
       return;
     }
-    mudar({ tentou: true, enviando: true, erro: null });
+    const conteudo = JSON.stringify(pedidoDaSolicitacao(pedido.form, ""));
+    const chave = pedido.chaves[conteudo] ?? novaChave();
+    mudar({ tentou: true, enviando: true, erro: null, chaves: { ...pedido.chaves, [conteudo]: chave } });
     try {
-      await enviarSolicitacao(codigo, pedido.form, pedido.chave);
+      await enviarSolicitacao(codigo, pedido.form, chave);
       setPedido({ ...pedidoNovo(hoje), enviada: true });
     } catch (error) {
       mudar({ enviando: false, erro: error instanceof Error ? error.message : "Não foi possível enviar a solicitação." });
