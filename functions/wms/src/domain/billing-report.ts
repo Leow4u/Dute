@@ -1,5 +1,7 @@
 import { HttpsError } from "firebase-functions/https";
 
+import { competenciaOfInstant } from "../billing.js";
+
 /**
  * Portal > Faturas > Gerar relatório: o extrato de serviços logísticos de um
  * período, montado das faturas fechadas (emitidas ou pagas) do próprio
@@ -139,7 +141,9 @@ export function reportDeliveries(trackings: AnyRecord[], months: string[]): Repo
       const timeline = (Array.isArray(tracking.timeline) ? tracking.timeline : []) as AnyRecord[];
       const deliveredAt = text(tracking.delivered_at) || text(timeline.find((entry) => text(entry.status) === "delivered")?.occurred_at);
       return {
-        competencia: deliveredAt.slice(0, 7),
+        // O mês da entrega no horário de Brasília, como a fatura conta as saídas:
+        // a entrega das 22h30 de 31/10 (01/11 em UTC) é de outubro.
+        competencia: competenciaOfInstant(deliveredAt) ?? "",
         number: text(tracking.order_number) || text(tracking.id),
         destination: text(tracking.destination),
         deliveredAt,

@@ -5,6 +5,7 @@
  */
 
 import { buildInvoiceView } from "./invoice-view";
+import { competenciaOf } from "./reports";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -76,6 +77,17 @@ export function closedInvoices(invoices: AnyRecord[]): ClosedInvoice[] {
   return [...byMonth.values()].sort((left, right) => right.competencia.localeCompare(left.competencia));
 }
 
+/**
+ * O mês da entrega no horário de Brasília, como a fatura conta as saídas: a
+ * entrega das 22h30 de 31/10 (01/11 em UTC) é de outubro. Data sem fuso
+ * (legado) vale como foi escrita.
+ */
+export function competenciaDaEntrega(data: string): string {
+  if (!/(Z|[+-]\d{2}:?\d{2})$/i.test(data)) return data.slice(0, 7);
+  const instante = new Date(data);
+  return Number.isNaN(instante.getTime()) ? "" : competenciaOf(instante);
+}
+
 /** Pedidos entregues por mês (pela data de entrega do acompanhamento). */
 export function deliveriesByMonth(trackings: AnyRecord[]) {
   const counts = new Map<string, number>();
@@ -85,7 +97,7 @@ export function deliveriesByMonth(trackings: AnyRecord[]) {
     const timeline = Array.isArray(tracking.timeline) ? (tracking.timeline as AnyRecord[]) : [];
     const fromTimeline = timeline.find((entry) => text(entry.status) === "delivered");
     const date = delivered || text(fromTimeline?.occurred_at);
-    const competencia = date.slice(0, 7);
+    const competencia = competenciaDaEntrega(date);
     if (!isCompetencia(competencia)) continue;
     counts.set(competencia, (counts.get(competencia) ?? 0) + 1);
   }
