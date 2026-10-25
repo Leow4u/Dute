@@ -21,6 +21,7 @@ import {
   type ShipmentView,
 } from "@/lib/shipments";
 import { takeDraft, type ShipmentDraft } from "@/lib/agent-draft";
+import { envioDoPedido, type EnvioDoPedido } from "@/lib/client-cart";
 import { ATTACHMENT_LIMIT_HINT, isAcceptedAttachment, prepareAttachment, uploadAttachment } from "@/lib/shipment-files";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +37,7 @@ import {
   inventoryItemSku,
   type ClientOverview,
   type ClientRequestAttachment,
+  type CreateClientRequestPayload,
   type InventoryItem,
 } from "./shared";
 
@@ -308,8 +310,12 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
   const [preparing, setPreparing] = useState(false);
   // Arquivo que o Agent Dute já leu com sucesso.
   const [readFile, setReadFile] = useState<File | null>(null);
-  // Arquivo já enviado ao ler a nota não sobe de novo ao enviar o aviso.
+  // Arquivo já enviado (ao ler a nota ou numa tentativa do aviso) não sobe de novo.
   const uploaded = useRef(new Map<File, ClientRequestAttachment>());
+  // A nova tentativa do mesmo aviso (a resposta se perdeu) repete a chave, e o
+  // servidor devolve o aviso gravado em vez de abrir outro. O aviso mudado é
+  // outro envio, com outra chave.
+  const tentativa = useRef<EnvioDoPedido | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const draftId = useMemo(() => `envio-${Date.now()}`, []);
@@ -357,11 +363,12 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
       const attachments: ClientRequestAttachment[] = [];
       for (const [index, file] of files.entries()) {
         setProgress(`Enviando anexo ${index + 1} de ${files.length}…`);
-        const cached = uploaded.current.get(file);
-        attachments.push(cached ?? (await uploadAttachment(file, draftId)));
+        const attachment = uploaded.current.get(file) ?? (await uploadAttachment(file, draftId));
+        uploaded.current.set(file, attachment);
+        attachments.push(attachment);
       }
       setProgress("Registrando o aviso…");
-      return createClientRequest({
+      const aviso: CreateClientRequestPayload = {
         // O aviso que saiu de um cartão do Agent Dute vai ligado a ele: uma vez só por mensagem.
         ...(initial?.mensagem ? { agent_message_id: initial.mensagem } : {}),
         type: "recebimento",
@@ -386,7 +393,9 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
                 quantity,
               },
         ),
-      });
+      };
+      tentativa.current = envioDoPedido(tentativa.current, JSON.stringify(aviso), () => crypto.randomUUID());
+      return createClientRequest({ ...aviso, idempotency_key: tentativa.current.chave });
     },
     onSuccess: () => {
       setProgress(null);

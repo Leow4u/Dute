@@ -196,6 +196,9 @@ export function ClienteEstoque() {
   const [cartExpanded, setCartExpanded] = useState(false);
   // Sem storage, o envio em andamento vale enquanto a tela estiver aberta.
   const envioDaVisita = useRef<EnvioDoPedido | null>(null);
+  // O aviso de reposição de cada produto que ainda não deu certo: a nova
+  // tentativa repete a chave, e o servidor não abre um segundo aviso.
+  const reposicoesNaVisita = useRef(new Map<string, EnvioDoPedido>());
   useEffect(() => {
     if (!cartKey || cartLoadedKey === cartKey) return;
     setCart(readStoredCart(browserCartStorage(), cartKey).cart);
@@ -328,7 +331,15 @@ export function ClienteEstoque() {
   const productActionMutation = useMutation({
     mutationFn: async (command: ProductActionCommand) => {
       if (command.action === "restock") {
-        await createClientRequest(buildReplenishmentRequest(command.product));
+        const aviso = buildReplenishmentRequest(command.product);
+        const envio = envioDoPedido(
+          reposicoesNaVisita.current.get(command.product.key),
+          JSON.stringify(aviso),
+          () => crypto.randomUUID(),
+        );
+        reposicoesNaVisita.current.set(command.product.key, envio);
+        await createClientRequest({ ...aviso, idempotency_key: envio.chave });
+        reposicoesNaVisita.current.delete(command.product.key);
         return command;
       }
       // Arquivar é do servidor (setClientItemArchived): valida saldo zero e
