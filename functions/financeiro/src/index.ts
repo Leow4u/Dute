@@ -9,7 +9,7 @@ import { advanceFaturaFor } from "./domain/cobranca-gravacao.js";
 import { actOnNfEmissionFor, emitNfOmieFor, listNfEmissionsFor } from "./domain/emissao-gravacao.js";
 import { omieLiberada, segredosDaOmie } from "./domain/emissao-omie.js";
 import { transportePeloFetch } from "./domain/omie.js";
-import { runOmieBaixasFor, runOmieSyncFor } from "./domain/omie-rotina.js";
+import { PRAZO_DA_PASSADA_MS, runOmieBaixasFor, runOmieSyncFor } from "./domain/omie-rotina.js";
 import { registerNfFor } from "./domain/fatura-gravacao.js";
 import { requireFinanceiroCaller } from "./domain/profile.js";
 import { PROJECT_ID } from "./project.js";
@@ -91,7 +91,9 @@ export const runOmieSync = onSchedule({ schedule: "every 5 minutes", timeZone: "
   if (!omieLiberada(PROJECT_ID)) return;
   const app_key = process.env.OMIE_APP_KEY?.trim() ?? "";
   const app_secret = process.env.OMIE_APP_SECRET?.trim() ?? "";
-  const opcoes = { projectId: PROJECT_ID, chaves: app_key && app_secret ? { app_key, app_secret } : null, transporte: transportePeloFetch() };
+  // Um prazo só para as emissões e as baixas: nenhuma chamada começa perto do fim do tempo da função.
+  const prazo = new Date(Date.now() + PRAZO_DA_PASSADA_MS);
+  const opcoes = { projectId: PROJECT_ID, chaves: app_key && app_secret ? { app_key, app_secret } : null, transporte: transportePeloFetch(), prazo };
   const emissoes = await runOmieSyncFor(db, opcoes);
   // A chave inválida para as baixas também: falhariam igual.
   const baixas = emissoes.parou_pela_chave ? null : await runOmieBaixasFor(db, opcoes);
