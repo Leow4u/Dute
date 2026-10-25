@@ -517,3 +517,21 @@ produção.
   emulador: o interno de "Dutelog" e quem não tem cliente não viram
   cliente; quem é ligado a um cliente cadastrado vira. Antes, as duas
   recusas falhavam.
+
+### Correção: o convite de cliente saía com um cliente que ninguém escolheu
+
+Achada em 25/10/2026, na mesma revisão da administração de acesso. Está na
+produção.
+
+- **O defeito.** No convite do perfil cliente (Usuários › Convidar), sem
+  escolha, ia o primeiro cliente da lista, ou a BTG enquanto a lista
+  carregava ou quando ela falhava. O servidor aceita a BTG sem procurar o
+  cadastro, e quem recebia o link entrava no portal de um cliente que
+  ninguém tinha escolhido.
+- **A correção.** O convite de cliente só sai com o cliente escolhido: o que
+  vem do "Convidar" de Configurações › Clientes ou o que a pessoa escolhe na
+  lista (`pages/users.tsx`). Sem ele, "Criar convite e copiar link" fica
+  desligado.
+- **Teste:** `pages/users-convite.test.tsx`, com a tela de verdade: sem
+  escolha e com a lista falhando, o convite não sai; o cliente do
+  "Convidar" vale como escolhido. Antes, os dois primeiros falhavam.
