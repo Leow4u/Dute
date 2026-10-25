@@ -54,6 +54,15 @@ const ROTA_DO_FILTRO: Record<FiltroDeFaturas, string> = {
 
 type ResultadoDaCobranca = { status?: unknown; saldo_cents?: unknown };
 
+/** O que a gravação desta tela recomeça no painel, com a resposta do servidor. */
+type Recomeco = (resultado: ResultadoDaCobranca) => (atual: PainelDaNfAberta) => PainelDaNfAberta;
+
+/** A NF com o saldo que o servidor devolveu, que o onSnapshot ainda pode não ter trazido. */
+function comSaldoDaResposta(fatura: FaturaDoFinanceiro, resultado: ResultadoDaCobranca): FaturaDoFinanceiro {
+  const saldo = resultado.saldo_cents;
+  return typeof saldo === "number" && Number.isSafeInteger(saldo) && saldo >= 0 ? { ...fatura, saldoCents: saldo } : fatura;
+}
+
 function painelNovo(fatura: FaturaDoFinanceiro | null, hoje: string): PainelDaNfAberta {
   return {
     pagamento: fatura ? formDoPagamento(fatura, hoje) : { valor: "", recebidoEm: hoje, forma: "boleto", observacao: "" },
@@ -86,24 +95,27 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
   const [mes, setMes] = useState(() => hoje.slice(0, 7));
   const doMes = usePagamentosDoMes(user?.publicMetadata.role, mes, filtro === "pagos");
 
-  // NF nova aberta (ou o saldo dela mudou depois de um pagamento): o painel recomeça.
+  // Outra NF aberta: o painel recomeça. A mudança da mesma NF (o envio, o
+  // pagamento de outra pessoa) não apaga o que a pessoa digitou: o servidor
+  // confere o saldo e o status de novo. Depois de cada gravação desta tela,
+  // recomeça só a parte da ação (Recomeco), com o saldo da resposta.
   useEffect(() => {
     setPainel(painelNovo(aberta, hoje));
     setChave(novaChave());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aberta?.id, aberta?.saldoCents, aberta?.status]);
+  }, [aberta?.id]);
 
   const estado = leitura.falhas.length ? "erro" : leitura.faturas ? "pronto" : "carregando";
 
-  async function gravar(pedido: Record<string, unknown>, confirmacao: string) {
+  async function gravar(pedido: Record<string, unknown>, confirmacao: string, recomeco: Recomeco) {
     setOcupado(true);
     setPainel((atual) => ({ ...atual, erro: null }));
     try {
-      await chamarFinanceiro<ResultadoDaCobranca>("advanceFatura", pedido);
+      const resultado = await chamarFinanceiro<ResultadoDaCobranca>("advanceFatura", pedido);
       setResultado(confirmacao);
       toast({ title: confirmacao });
       setChave(novaChave());
-      setPainel((atual) => ({ ...atual, confirmando: null }));
+      setPainel(recomeco(resultado));
     } catch (falha) {
       setPainel((atual) => ({ ...atual, erro: falha instanceof Error ? falha.message : "Não foi possível gravar." }));
     } finally {
@@ -147,12 +159,18 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
         editarPagamento: (campo, valor) => setPainel((atual) => ({ ...atual, erro: null, pagamento: { ...atual.pagamento, [campo]: valor } })),
         registrarPagamento: () => {
           if (!aberta || comProblemas(problemasDoPagamento(painel.pagamento, aberta, hoje))) return;
-          void gravar(pedidoDoPagamento(painel.pagamento, aberta, chave), `Pagamento registrado na ${rotuloDaNf(aberta)}`);
+          // O próximo pagamento já vem com o saldo que sobrou.
+          void gravar(pedidoDoPagamento(painel.pagamento, aberta, chave), `Pagamento registrado na ${rotuloDaNf(aberta)}`, (resultado) => (atual) => ({
+            ...atual,
+            pagamento: formDoPagamento(comSaldoDaResposta(aberta, resultado), hoje),
+            confirmando: null,
+          }));
         },
         editarEnvio: (campo, valor) => setPainel((atual) => ({ ...atual, erro: null, envio: { ...atual.envio, [campo]: valor } })),
         marcarEnviada: () => {
           if (!aberta || comProblemas(problemasDoEnvio(painel.envio, aberta, hoje))) return;
-          void gravar(pedidoDoEnvio(painel.envio, aberta, chave), `${rotuloDaNf(aberta)} enviada ao cliente`);
+          // O envio não mexe no pagamento que a pessoa está digitando.
+          void gravar(pedidoDoEnvio(painel.envio, aberta, chave), `${rotuloDaNf(aberta)} enviada ao cliente`, () => (atual) => ({ ...atual, envio: formDoEnvio(hoje), confirmando: null }));
         },
         pedirEstorno: (pagamentoId) => {
           setChave(novaChave());
@@ -162,7 +180,11 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
         confirmarEstorno: () => {
           const pedido = painel.confirmando;
           if (!aberta || pedido?.tipo !== "estorno" || comProblemas(problemasDoMotivo(pedido.motivo))) return;
-          void gravar(pedidoDoEstorno(aberta, pedido.pagamentoId, pedido.motivo, chave), `Pagamento estornado na ${rotuloDaNf(aberta)}`);
+          void gravar(pedidoDoEstorno(aberta, pedido.pagamentoId, pedido.motivo, chave), `Pagamento estornado na ${rotuloDaNf(aberta)}`, (resultado) => (atual) => ({
+            ...atual,
+            pagamento: formDoPagamento(comSaldoDaResposta(aberta, resultado), hoje),
+            confirmando: null,
+          }));
         },
         pedirCancelamento: () => {
           setChave(novaChave());
@@ -171,7 +193,9 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
         confirmarCancelamento: () => {
           const pedido = painel.confirmando;
           if (!aberta || pedido?.tipo !== "cancelamento" || comProblemas(problemasDoMotivo(pedido.motivo))) return;
-          void gravar(pedidoDoCancelamento(aberta, pedido.motivo, chave), `Registro da ${rotuloDaNf(aberta)} cancelado: as demandas voltaram a A faturar`);
+          void gravar(pedidoDoCancelamento(aberta, pedido.motivo, chave), `Registro da ${rotuloDaNf(aberta)} cancelado: as demandas voltaram a A faturar`, (resultado) => () =>
+            painelNovo(comSaldoDaResposta(aberta, resultado), hoje),
+          );
         },
         desistir: () => setPainel((atual) => ({ ...atual, erro: null, confirmando: null })),
         exportar: () => {

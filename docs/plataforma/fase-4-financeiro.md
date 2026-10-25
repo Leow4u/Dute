@@ -808,3 +808,31 @@ Feita em 25/10/2026, da revisão do código do Comercial.
     autorização".
   - Antes, os três recusavam.
 
+### Correção: o pagamento digitado voltava ao saldo cheio
+
+Achada em 25/10/2026, numa revisão do que as telas do escritório mandam ao
+servidor. Está no `dute-homolog` desde a parte 4.2b.
+
+- **O defeito.** O painel da NF aberta recomeçava inteiro quando o status
+  ou o saldo da NF mudava, e não só quando outra NF abria.
+  - O pagamento digitado (valor, data, forma e observação) virava o saldo
+    cheio, a data de hoje e a forma da NF, sem aviso.
+  - Bastava clicar em "Marcar como enviada", logo acima, com o pagamento
+    digitado, ou outra pessoa registrar o envio ou um pagamento da mesma
+    NF. O pagamento parcial de R$ 4.000,00 ia como o total, e a NF ficava
+    paga (na NF que saiu pela Omie, com a baixa do total na fila).
+  - O painel também só recomeçava quando o onSnapshot trazia o saldo novo:
+    antes disso, o valor que acabou de gravar continuava no campo, pronto
+    para um segundo pagamento igual.
+- **A correção.** O painel recomeça inteiro só quando outra NF abre
+  (`pages/financeiro/faturas.tsx`). Depois de cada gravação desta tela,
+  recomeça a parte da ação, com o saldo que o servidor devolveu: o
+  pagamento e o estorno refazem o pagamento com o saldo que sobrou; o envio
+  refaz só o envio; o cancelamento, tudo. A mudança da NF por outra pessoa
+  não toca no que se digitou: o servidor confere o saldo e o status de
+  novo.
+- **Teste:** `faturas.test.tsx`, com a página e as callables de mentira:
+  - marcar como enviada e o pagamento de outra pessoa mantêm o pagamento
+    digitado, que vai como a pessoa digitou;
+  - depois do pagamento desta tela, o próximo vem com o saldo que sobrou.
+  - Antes, os três falhavam.

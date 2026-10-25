@@ -302,6 +302,11 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     tela mudou a OS nesse meio-tempo, o servidor recusa em vez de o
     formulário velho apagar a mudança (`fase-3-operacao.md`, "Correção: o
     Reagendar gravava o formulário velho por cima da mudança").
+  - o pagamento digitado na NF aberta fica como a pessoa digitou quando a
+    NF muda por outra ação (o envio, o pagamento de outra pessoa). Antes,
+    voltava ao saldo cheio, e o pagamento parcial ia como o total
+    (`fase-4-financeiro.md`, "Correção: o pagamento digitado voltava ao
+    saldo cheio").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
