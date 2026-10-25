@@ -529,7 +529,10 @@ Feita em 23/10/2026.
   e as RVs a quem lê preço, o que inclui o financeiro.
   - O financeiro não lê o cadastro (`customers`). Sem ele, o cliente
     aparece pelo nome gravado na demanda ou pelo código.
-  - Nenhuma escrita: as callables do Comercial recusam o papel financeiro.
+  - Nenhuma escrita pela tela: as callables do Comercial recusam o papel
+    financeiro, menos a `recordAuthorization`, que o aceita desde a parte
+    15a (pergunta 4 do desenho do Comercial) e que a tela do Financeiro
+    não chama.
 - **Testes:**
   - `contratos-view.test.tsx` e `autorizacoes-view.test.tsx`: a leitura sem
     nenhuma ação, com o `axe`;
