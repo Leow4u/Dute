@@ -47,7 +47,7 @@ import { hojeIso } from "@/lib/operacao/fila";
 import { useLeitura } from "@/lib/operacao/leitura";
 import { buildOrderQueue, chaveDaPrincipal, ordersGroupEmpty } from "@/lib/order-queue";
 import { useItemPhotos } from "@/lib/use-item-photos";
-import { canDecideRequests, humanApiError } from "@/lib/permissions";
+import { canDecideRequests, canOperateWarehouse, humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import {
   type LineConfirmationMap,
@@ -132,6 +132,8 @@ const PEDIDOS_EM_ABERTO = ["PENDENTE", "SEPARACAO", "EM_EXPEDICAO"];
 export default function Pedidos() {
   const { user } = useAppUser();
   const decider = canDecideRequests(user?.publicMetadata.role);
+  // O suporte consulta: sem separar, entregar, tratar nem definir a entrega.
+  const operador = canOperateWarehouse(user?.publicMetadata.role);
   const openingSession = useOpeningInventorySession();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -379,11 +381,11 @@ export default function Pedidos() {
     const resumo = entrega ? [resumoDaEntrega(entrega), naOperacao(entrega)].filter(Boolean).join(" · ") : null;
     return {
       detail: resumo,
-      secondary: (
+      secondary: operador ? (
         <Button type="button" variant="outline" disabled={busy} onClick={() => abrirEntrega(order)}>
           {faltaAbrirNaOperacao(entrega) ? "Abrir na Operação" : entrega ? "Alterar entrega" : "Entrega"}
         </Button>
-      ),
+      ) : undefined,
     };
   };
   // Na v3, só a primeira linha da fila tem a ação principal; as outras são secundárias.
@@ -531,21 +533,23 @@ export default function Pedidos() {
                 icon={Package}
                 tone="pick"
                 defaultOpen
-                onTreat={() => setTreating(order)}
+                onTreat={operador ? () => setTreating(order) : undefined}
                 {...daEntrega(order)}
                 action={
-                  <Button
-                    type="button"
-                    variant={variante(`pick:${order.key}`)}
-                    disabled={busy}
-                    onClick={() => {
-                      setSeal("");
-                      setDialog({ kind: "pick", order });
-                    }}
-                  >
-                    <Check className="size-4" />
-                    Separado
-                  </Button>
+                  operador ? (
+                    <Button
+                      type="button"
+                      variant={variante(`pick:${order.key}`)}
+                      disabled={busy}
+                      onClick={() => {
+                        setSeal("");
+                        setDialog({ kind: "pick", order });
+                      }}
+                    >
+                      <Check className="size-4" />
+                      Separado
+                    </Button>
+                  ) : undefined
                 }
               />
             ))}
@@ -562,27 +566,29 @@ export default function Pedidos() {
                 order={order}
                 icon={Truck}
                 tone="deliver"
-                onTreat={() => setTreating(order)}
+                onTreat={operador ? () => setTreating(order) : undefined}
                 {...(order.stage === "enviar" ? daEntrega(order) : {})}
                 action={
-                  <Button
-                    type="button"
-                    variant={variante(`deliver:${order.key}`)}
-                    disabled={busy}
-                    onClick={() => {
-                      setReceivedBy("");
-                      // Na retirada pelo cliente, quem leva e a placa vêm da entrega do pedido.
-                      const saida = saidaPelaEntrega(entregaDe(order));
-                      if (saida) {
-                        setDriver(saida.motorista);
-                        setPlate(saida.placa);
-                      }
-                      setDialog({ kind: "deliver", order });
-                    }}
-                  >
-                    <Check className="size-4" />
-                    Entregue
-                  </Button>
+                  operador ? (
+                    <Button
+                      type="button"
+                      variant={variante(`deliver:${order.key}`)}
+                      disabled={busy}
+                      onClick={() => {
+                        setReceivedBy("");
+                        // Na retirada pelo cliente, quem leva e a placa vêm da entrega do pedido.
+                        const saida = saidaPelaEntrega(entregaDe(order));
+                        if (saida) {
+                          setDriver(saida.motorista);
+                          setPlate(saida.placa);
+                        }
+                        setDialog({ kind: "deliver", order });
+                      }}
+                    >
+                      <Check className="size-4" />
+                      Entregue
+                    </Button>
+                  ) : undefined
                 }
               />
             ))}

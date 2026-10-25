@@ -116,6 +116,11 @@ export const INTERNAL_ROLES: ProfileRole[] = [
 
 export const ACCESS_ADMIN_ROLES: ProfileRole[] = ["owner", "admin"];
 export const WMS_ROLES: ProfileRole[] = ["owner", "admin", "interno", "wms", "suporte"];
+/**
+ * Quem opera o armazém: a mesma lista de requireWarehouseWrite das Functions
+ * (trava em platform-lists.test.ts). O suporte consulta o armazém sem gravar.
+ */
+export const WMS_OPERATOR_ROLES: ProfileRole[] = ["owner", "admin", "interno", "wms"];
 export const FINANCE_ROLES: ProfileRole[] = ["owner", "admin", "financeiro"];
 export const OPERATIONS_ROLES: ProfileRole[] = [
   "owner",
@@ -338,12 +343,14 @@ export const APP_MODULES: AppModule[] = [
         icon: PackagePlus,
         roles: WMS_ROLES,
       }),
+      // A Contagem só grava (e a sessão de abertura só se lê com a mesma
+      // regra): é de quem opera o armazém.
       navRoute({
         id: "inventory-count",
         label: "Contagem",
         href: "/wms/contagem",
         icon: ClipboardCheck,
-        roles: WMS_ROLES,
+        roles: WMS_OPERATOR_ROLES,
       }),
       // Mapa do armazém: prateleiras, ocupação e caixas por zona (só leitura).
       navRoute({

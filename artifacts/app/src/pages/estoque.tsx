@@ -41,6 +41,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import {
   canAddItemPhotos,
+  canOperateWarehouse,
   canWriteCatalog,
   humanApiError,
 } from "@/lib/permissions";
@@ -118,6 +119,8 @@ export default function Estoque() {
   const { user } = useAppUser();
   const role = user?.publicMetadata.role;
   const catalogWriter = canWriteCatalog(role);
+  // O suporte consulta o Histórico sem registrar movimentação.
+  const warehouseWriter = canOperateWarehouse(role);
   const desktop = useIsDesktop();
   // A lista é do cliente ativo; registro sem customer_code é da BTG.
   const { code: customerCode, active: activeCustomer } = useActiveCustomer();
@@ -219,13 +222,15 @@ export default function Estoque() {
         title={`Estoque · ${activeCustomer.name}`}
         actions={
           <>
-            <Button asChild variant="outline">
-              <Link href="/wms/contagem">
-                <ClipboardCheck className="size-4" />
-                Contagem
-              </Link>
-            </Button>
-            {tab === "history" ? (
+            {warehouseWriter ? (
+              <Button asChild variant="outline">
+                <Link href="/wms/contagem">
+                  <ClipboardCheck className="size-4" />
+                  Contagem
+                </Link>
+              </Button>
+            ) : null}
+            {tab === "history" && warehouseWriter ? (
               <MovementModal
                 trigger={
                   <Button>
@@ -254,14 +259,16 @@ export default function Estoque() {
       <OpeningInventoryNotice
         session={openingSession.data}
         actions={
-          <Button asChild variant="outline" size="sm">
-            <Link href="/wms/contagem">
-              <ClipboardCheck className="size-4" />
-              {openingSession.data?.status === "open"
-                ? "Continuar contagem"
-                : "Iniciar contagem"}
-            </Link>
-          </Button>
+          warehouseWriter ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/wms/contagem">
+                <ClipboardCheck className="size-4" />
+                {openingSession.data?.status === "open"
+                  ? "Continuar contagem"
+                  : "Iniciar contagem"}
+              </Link>
+            </Button>
+          ) : undefined
         }
       />
 
@@ -535,6 +542,8 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
   const role = user?.publicMetadata.role;
   const catalogWriter = canWriteCatalog(role);
   const photoWriter = canAddItemPhotos(role);
+  // Contar é de quem opera o armazém; o suporte só consulta a ficha.
+  const warehouseWriter = canOperateWarehouse(role);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -782,48 +791,50 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
         </Section>
       </div>
 
-      <div className="mt-auto flex flex-wrap gap-2 border-t border-border/60 bg-muted/20 p-4">
-        <Button asChild variant={catalogWriter ? "outline" : "default"} className={cn(!catalogWriter && "w-full")}>
-          <Link href="/wms/contagem">
-            <ClipboardCheck className="size-4" />
-            Contar este item
-          </Link>
-        </Button>
-        {catalogWriter ? (
-          <>
-            <SkuModal
-              sku={item.sku}
-              trigger={
-                <Button type="button" variant="outline">
-                  <Pencil className="size-4" />
-                  Editar cadastro
-                </Button>
-              }
-            />
-            <MovementModal
-              defaultSku={item.skuCode}
-              trigger={
-                <Button type="button" variant="outline">
-                  <SlidersHorizontal className="size-4" />
-                  Ajustar saldo
-                </Button>
-              }
-            />
-            {item.id !== undefined ? (
-              <DeleteSkuButton
-                id={item.id as number}
-                cod_btg={item.skuCode}
+      {warehouseWriter ? (
+        <div className="mt-auto flex flex-wrap gap-2 border-t border-border/60 bg-muted/20 p-4">
+          <Button asChild variant={catalogWriter ? "outline" : "default"} className={cn(!catalogWriter && "w-full")}>
+            <Link href="/wms/contagem">
+              <ClipboardCheck className="size-4" />
+              Contar este item
+            </Link>
+          </Button>
+          {catalogWriter ? (
+            <>
+              <SkuModal
+                sku={item.sku}
                 trigger={
-                  <Button type="button" variant="ghost" className="ml-auto text-destructive hover:text-destructive">
-                    <Archive className="size-4" />
-                    Arquivar
+                  <Button type="button" variant="outline">
+                    <Pencil className="size-4" />
+                    Editar cadastro
                   </Button>
                 }
               />
-            ) : null}
-          </>
-        ) : null}
-      </div>
+              <MovementModal
+                defaultSku={item.skuCode}
+                trigger={
+                  <Button type="button" variant="outline">
+                    <SlidersHorizontal className="size-4" />
+                    Ajustar saldo
+                  </Button>
+                }
+              />
+              {item.id !== undefined ? (
+                <DeleteSkuButton
+                  id={item.id as number}
+                  cod_btg={item.skuCode}
+                  trigger={
+                    <Button type="button" variant="ghost" className="ml-auto text-destructive hover:text-destructive">
+                      <Archive className="size-4" />
+                      Arquivar
+                    </Button>
+                  }
+                />
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

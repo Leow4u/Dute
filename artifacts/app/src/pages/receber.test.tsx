@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { ReceivingTaskDetailCard } from "@/features/warehouse-ops/receiving";
-import { normalizeQueues, type WarehouseTask } from "@/lib/warehouse-ops/model";
+import { normalizeQueues, somenteConsulta, type WarehouseTask } from "@/lib/warehouse-ops/model";
 import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
@@ -66,14 +66,15 @@ describe("Receber na v3", () => {
   });
 });
 
-function fichaDaChegada(chegada: WarehouseTask) {
+function fichaDaChegada(chegada: WarehouseTask, consulta = false) {
   const queue = normalizeQueues({ receiving: { key: "receiving", name: "Recebimento", tasks: [chegada] } }).find(
     (entry) => entry.key === "receiving",
   )!;
+  const entry = { task: queue.tasks[0]!, queue };
   return renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>
       <div className="v3">
-        <ReceivingTaskDetailCard entry={{ task: queue.tasks[0]!, queue }} alerts={[]} onAdvance={() => undefined} onOpenException={() => undefined} />
+        <ReceivingTaskDetailCard entry={consulta ? somenteConsulta(entry) : entry} alerts={[]} onAdvance={() => undefined} onOpenException={() => undefined} />
       </div>
     </QueryClientProvider>,
   );
@@ -101,5 +102,34 @@ describe("concluir a chegada com divergência", () => {
   it("sem divergência, ou antes da conferência, não pede a justificativa", () => {
     expect(fichaDaChegada({ ...chegada, items: [chegada.items![1]!] })).not.toContain("Justificativa da divergência");
     expect(fichaDaChegada({ ...chegada, status: "created" })).not.toContain("Justificativa da divergência");
+  });
+});
+
+describe("o Receber para quem só consulta (o suporte)", () => {
+  const chegada: WarehouseTask = {
+    id: "receiving:inb_2",
+    reference: "inb_creq_2",
+    title: "NF 4522",
+    status: "checking",
+    can_advance: true,
+    items: [{ id: "l1", sku_code: "BTG-000001", expected_quantity: 10, received_qty: 8, conference_status: "short" }],
+  };
+
+  it("a ficha mostra a chegada sem Concluir entrada, Divergência, Salvar conferência nem a justificativa", () => {
+    // As ações são botões; "Divergências" e "Divergência física detectada" são dados da conferência.
+    const acoes = ["Concluir entrada</button>", "Divergência</button>", "Salvar conferência</button>", "Justificativa da divergência</label>"];
+    const operador = fichaDaChegada(chegada);
+    for (const acao of acoes) expect(operador).toContain(acao);
+    const consulta = fichaDaChegada(chegada, true);
+    expect(consulta).toContain("Conferência de recebimento");
+    for (const acao of acoes) expect(consulta).not.toContain(acao);
+  });
+
+  it("a tela esconde a chegada avulsa, troca a ação da linha por Ver e não liga o aviso", () => {
+    expect(TELA).toContain("const operador = canOperateWarehouse(user?.publicMetadata.role);");
+    expect(TELA).toMatch(/\{operador \? \(\s*<Button type="button" variant="outline" onClick=\{\(\) => setUnplannedOpen\(true\)\}>/);
+    expect(TELA).toContain('{operador ? label : "Ver"}');
+    expect(TELA).toContain("entry={operador ? selected : somenteConsulta(selected)}");
+    expect(TELA).toContain("operador && noticeChoice?.editable");
   });
 });

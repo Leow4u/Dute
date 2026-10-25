@@ -35,7 +35,8 @@ import {
 import { MODULOS_DO_AGENTE } from "./agente/cliente";
 import { AGENTE_ROLES } from "./agente/navegacao";
 import { OPERACAO_CADASTRO_ROLES } from "./operacao/navegacao";
-import { FINANCE_ROLES, INTERNAL_ROLES } from "./modules";
+import { FINANCE_ROLES, INTERNAL_ROLES, WMS_OPERATOR_ROLES } from "./modules";
+import { canOperateWarehouse } from "./permissions";
 import { PLATFORM_MODULES } from "./platform-modules";
 import { ROTA_MINHAS_OS } from "./portal/navegacao";
 import { CALLABLES_DO_FINANCEIRO } from "./financeiro/api";
@@ -83,6 +84,15 @@ describe("listas da plataforma iguais em todo lugar", () => {
   it("papéis que o WMS atende: lib/dominio, Functions e o app", () => {
     expect(tsList(roles, "WMS_ROLES")).toEqual([...PAPEIS_DO_WMS]);
     expect([...INTERNAL_ROLES, "cliente"].sort()).toEqual([...PAPEIS_DO_WMS].sort());
+  });
+
+  it("quem opera o armazém: a lista de requireWarehouseWrite das Functions e o app", () => {
+    const wms = read("functions/wms/src/index.ts");
+    const gate = wms.match(/function requireWarehouseWrite\(profile: Profile\) \{\s*if \(!\[([^\]]*)\]\.includes\(profile\.role\)\)/);
+    expect(gate).not.toBeNull();
+    expect([...gate![1].matchAll(/"([^"]+)"/g)].map((item) => item[1])).toEqual([...WMS_OPERATOR_ROLES]);
+    expect(WMS_OPERATOR_ROLES.filter(canOperateWarehouse)).toEqual(WMS_OPERATOR_ROLES);
+    expect(canOperateWarehouse("suporte")).toBe(false);
   });
 
   it("módulos contratados e o padrão sem o campo", () => {

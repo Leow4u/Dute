@@ -52,9 +52,11 @@ export type RetornosViewProps = {
     mudarNotas: (notas: string) => void;
     receber: () => void;
   };
+  /** Sem "Receber retorno": quem não opera o armazém só consulta. */
+  somenteConsulta?: boolean;
 };
 
-export function RetornosView({ retornos, aberto, acoes }: RetornosViewProps) {
+export function RetornosView({ retornos, aberto, acoes, somenteConsulta = false }: RetornosViewProps) {
   if (!retornos.length && !aberto) return null;
   return (
     <>
@@ -67,9 +69,11 @@ export function RetornosView({ retornos, aberto, acoes }: RetornosViewProps) {
             title={retorno.numero}
             meta={detalheDoRetorno(retorno) || "—"}
             actions={
-              <Button type="button" onClick={() => acoes.abrir(retorno)}>
-                Receber retorno
-              </Button>
+              somenteConsulta ? undefined : (
+                <Button type="button" onClick={() => acoes.abrir(retorno)}>
+                  Receber retorno
+                </Button>
+              )
             }
           />
         ))}
@@ -141,7 +145,8 @@ async function postJson(url: string, body: unknown): Promise<void> {
 }
 
 /** Os retornos a receber do cliente ativo, ao vivo, com a Operação liberada. */
-export function RetornosDaOperacao() {
+/** `somenteConsulta`: quem não opera o armazém vê os retornos sem recebê-los. */
+export function RetornosDaOperacao({ somenteConsulta = false }: { somenteConsulta?: boolean } = {}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { code: customerCode } = useActiveCustomer();
@@ -180,6 +185,7 @@ export function RetornosDaOperacao() {
 
   return (
     <RetornosView
+      somenteConsulta={somenteConsulta}
       retornos={retornos}
       aberto={aberto ? { retorno: aberto.retorno, linhas: linhasDoAberto, notas: aberto.notas, problema, erro: aberto.erro, enviando: aberto.enviando } : null}
       acoes={{

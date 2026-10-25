@@ -19,6 +19,8 @@ import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
 import { useToast } from "@/hooks/use-toast";
 import { useIsDesktop } from "@/hooks/use-desktop";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { useAppUser } from "@/lib/auth";
+import { canOperateWarehouse } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import {
   type LineConfirmationMap,
@@ -31,6 +33,7 @@ import {
   lineConfirmationKey,
   normalizeQueues,
   queueEntries,
+  somenteConsulta,
 } from "@/lib/warehouse-ops/model";
 import {
   buildReceivingBoard,
@@ -58,6 +61,9 @@ export default function Receber() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { code: customerCode } = useActiveCustomer();
+  // O suporte consulta: sem chegada avulsa, sem conferir, concluir ou guardar.
+  const { user } = useAppUser();
+  const operador = canOperateWarehouse(user?.publicMetadata.role);
   const desktop = useIsDesktop();
   const [view, setView] = useState<"open" | "done">("open");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -158,13 +164,13 @@ export default function Receber() {
     <NoticeCard notice={selectedNotice} />
   ) : selected ? (
     <TaskPanel
-      entry={selected}
+      entry={operador ? selected : somenteConsulta(selected)}
       alerts={alerts}
       actions={actions}
       noticeChoice={noticeChoice}
       linking={linkNotice.isPending}
       onLinkNotice={
-        noticeChoice?.editable
+        operador && noticeChoice?.editable
           ? (requestId) => linkNotice.mutate({ receiptId: selected.task.id, requestId })
           : undefined
       }
@@ -191,7 +197,7 @@ export default function Receber() {
       variant={selected?.task.id === entry.task.id ? "secondary" : principal === entry.task.id ? "default" : "outline"}
       onClick={() => selectEntry(entry)}
     >
-      {label}
+      {operador ? label : "Ver"}
     </Button>
   );
 
@@ -221,10 +227,12 @@ export default function Receber() {
                 { value: "done", label: "Recebidos" },
               ]}
             />
-            <Button type="button" variant="outline" onClick={() => setUnplannedOpen(true)}>
-              <PackageOpen className="size-4" />
-              Chegada avulsa
-            </Button>
+            {operador ? (
+              <Button type="button" variant="outline" onClick={() => setUnplannedOpen(true)}>
+                <PackageOpen className="size-4" />
+                Chegada avulsa
+              </Button>
+            ) : null}
             <Button type="button" variant="outline" size="icon" onClick={refresh} disabled={ops.isFetching}>
               <RefreshCw className={cn("size-4", ops.isFetching && "animate-spin")} />
               <span className="sr-only">Atualizar</span>
