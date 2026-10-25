@@ -136,6 +136,17 @@ describe("a ficha no banco do RH", () => {
     await recusa(archiveRhRecordFor(rh, RH, { idempotency_key: "arquiva-2", id: novo.id, expected_edicao: 2 }), "failed-precondition", /já está arquivado/);
   });
 
+  it("o periódico gravado substitui o admissional, com o evento; o demissional fica à parte (pergunta 62)", async () => {
+    const admissional = await saveRhRecordFor(padrao, rh, RH, exame({ tipo: "admissional", emitido_em: "2025-01-10", vence_em: "2026-01-10" }), AGORA);
+    const periodico = await saveRhRecordFor(padrao, rh, RH, exame({ emitido_em: "2026-01-05", vence_em: "2027-01-05" }), AGORA);
+    const demissional = await saveRhRecordFor(padrao, rh, RH, exame({ tipo: "demissional", emitido_em: "2026-02-01", vence_em: null }), AGORA);
+    assert.deepEqual([periodico.situacao, demissional.situacao], ["vigente", "vigente"]);
+    const substituido = (await rh.doc(`registros/${admissional.id}`).get()).data();
+    assert.deepEqual([substituido?.situacao, substituido?.substituido_por], ["substituido", periodico.id]);
+    const mudancas = (await eventos(rh)).filter((evento) => evento.type === "rh.record_status_changed").map((evento) => [evento.entity_id, evento.payload.antes, evento.payload.depois]);
+    assert.deepEqual(mudancas, [[admissional.id, "vigente", "substituido"]]);
+  });
+
   it("o exame lançado de novo com as mesmas datas vale no lugar do anterior", async () => {
     const primeiro = await saveRhRecordFor(padrao, rh, RH, exame(), new Date("2026-10-23T15:00:00Z"));
     const corrigido = await saveRhRecordFor(padrao, rh, RH, exame(), new Date("2026-10-23T15:05:00Z"));

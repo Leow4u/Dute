@@ -973,7 +973,8 @@ defeito.
     for gerada de novo. Recomendo que os exames ocupacionais (admissional,
     periódico, retorno ao trabalho e mudança de função) formem um grupo só:
     o ASO mais recente é o vigente, como na NR-7. O demissional e o "outro"
-    ficam como estão.
+    ficam como estão. **Decidida em 25/10/2026:** um grupo só (`fase-8-rh.md`,
+    "Decisão: os exames ocupacionais são um grupo só").
 63. A planilha de colaboradores da exportação para a contabilidade sai do
     cadastro de hoje, não do mês exportado. Quem entrou em 01/10 aparece
     ativo na exportação de setembro gerada em outubro, e qualquer mudança de

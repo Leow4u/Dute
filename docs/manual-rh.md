@@ -31,6 +31,10 @@ O que vale saber:
 - **O vigente** é o registro mais novo de cada tipo. No empate da data de
   emissão, vale o lançado por último, mesmo que vença antes: para corrigir um
   registro, lance-o de novo ou use "Alterar".
+- **Os exames ocupacionais** (admissional, periódico, retorno ao trabalho e
+  mudança de função) são um grupo só: vale o ASO mais recente de qualquer
+  deles, como na NR-7. Depois do periódico, o admissional fica substituído e
+  sai do "Precisa de você". O demissional e o "outro" ficam à parte.
 - **O vencimento** entra no "Precisa de você" 30 dias antes e fica até a
   pessoa ter um registro novo. A rotina diária grava o vencido uma vez, como
   evento.

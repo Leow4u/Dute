@@ -191,6 +191,28 @@ describe("o vigente de cada tipo", () => {
     assert.equal(situacoes.get(REG_C)?.situacao, "arquivado");
   });
 
+  it("os exames ocupacionais são um grupo só: o ASO mais recente vale; o demissional e o outro ficam à parte (pergunta 62)", () => {
+    const REG_D = "reg_dddddddddddddddd";
+    const REG_E = "reg_eeeeeeeeeeeeeeee";
+    const admissional = registro(REG_A, { tipo: "admissional", emitido_em: "2025-01-10", vence_em: "2026-01-10" });
+    const periodico = registro(REG_B, { tipo: "periodico", emitido_em: "2026-01-05", vence_em: "2027-01-05" });
+    const mudanca = registro(REG_C, { tipo: "mudanca_de_funcao", emitido_em: "2025-06-01", vence_em: null });
+    const demissional = registro(REG_D, { tipo: "demissional", emitido_em: "2024-01-01", vence_em: null });
+    const outro = registro(REG_E, { tipo: "outro", descricao: "Audiometria", emitido_em: "2024-01-01", vence_em: null });
+    assert.equal(grupoDoRegistro(admissional), grupoDoRegistro(periodico));
+    assert.notEqual(grupoDoRegistro(admissional), grupoDoRegistro(demissional));
+    const todos = [admissional, periodico, mudanca, demissional, outro];
+    const situacoes = situacoesDoGrupo(todos);
+    assert.deepEqual(situacoes.get(REG_B), { situacao: "vigente", substituido_por: null });
+    assert.deepEqual(situacoes.get(REG_A), { situacao: "substituido", substituido_por: REG_B });
+    assert.deepEqual(situacoes.get(REG_C), { situacao: "substituido", substituido_por: REG_B });
+    assert.equal(situacoes.get(REG_D)?.situacao, "vigente");
+    assert.equal(situacoes.get(REG_E)?.situacao, "vigente");
+    // O admissional vencido em 10/01/2026 sai do Início: o vigente é o periódico, que vence em 2027.
+    const ficha = todos.map((item) => ({ ...item, ...situacoes.get(item.id) }));
+    assert.deepEqual(vencimentosDoDia(HOJE, ficha, new Set([COL])), []);
+  });
+
   it("o tipo outro, a outra categoria e a outra pessoa são grupos à parte", () => {
     const outro1 = registro(REG_A, { categoria: "documento", tipo: "outro", resultado: null });
     const outro2 = registro(REG_B, { categoria: "documento", tipo: "outro", resultado: null });

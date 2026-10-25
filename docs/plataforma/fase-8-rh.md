@@ -603,3 +603,35 @@ Decidida pelo Leonardo em 25/10/2026, antes de ligar o RH na produção.
 - **Teste:** `ficha.test.ts`. Com a mesma emissão, o vencimento de 2027
   lançado antes e o de 2026 lançado depois: fica vigente o de 2026. Antes,
   ficava o de 2027.
+
+### Decisão: os exames ocupacionais são um grupo só (pergunta 62)
+
+Decidida pelo Leonardo em 25/10/2026, antes de ligar o RH na produção.
+
+- **Antes.** Cada tipo de exame era um grupo. Depois do periódico, o
+  admissional continuava vigente para sempre. Com vencimento, ele aparecia
+  vencido no Início do RH, e a rotina gravava o `rh.record_expired` dele.
+  Arquivá-lo para calar o aviso o tirava da exportação do mês dele.
+- **Agora.** O admissional, o periódico, o de retorno ao trabalho e o de
+  mudança de função são um grupo só (`EXAMES_OCUPACIONAIS` e
+  `grupoDoRegistro` em `ficha.ts`). O ASO mais recente de qualquer deles é
+  o vigente, como na NR-7, e os outros ficam substituídos por ele, com o
+  evento `rh.record_status_changed`. O demissional e o "outro" ficam como
+  estavam.
+- **A exportação não junta.** Na planilha da contabilidade, cada ASO
+  continua um S-2220. O exame repetido se reconhece pelo tipo e pela data
+  (`chaveDoTipo`), e não pelo grupo: o admissional e o periódico do mesmo
+  dia são duas linhas.
+- **A situação gravada.** Como na pergunta 61, o grupo se recalcula a cada
+  gravação. No `dute-prod`, o banco estava vazio ao ligar o RH. Na
+  homologação, o admissional que já estava vigente ao lado de um periódico
+  só fica substituído na próxima gravação num exame da pessoa.
+- **Testes:**
+  - `ficha.test.ts`: o periódico substitui o admissional e o de mudança de
+    função, e o admissional vencido sai do Início. O demissional e o
+    "outro" continuam vigentes. Antes, o admissional ficava vigente e
+    vencido.
+  - `ficha.integration.test.ts`: o periódico gravado substitui o
+    admissional, com o evento da mudança.
+  - `exportacao.test.ts`: o admissional e o periódico do mesmo dia são duas
+    linhas.

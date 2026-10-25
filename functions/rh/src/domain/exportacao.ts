@@ -1,7 +1,7 @@
 import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
-import { PRIMEIRO_DIA, TIPOS_POR_CATEGORIA, grupoDoRegistro, maisRecentePrimeiro, parseEntrada, type RegistroGravado, type ResultadoDoExame } from "./ficha.js";
+import { PRIMEIRO_DIA, TIPOS_POR_CATEGORIA, chaveDoTipo, maisRecentePrimeiro, parseEntrada, type RegistroGravado, type ResultadoDoExame } from "./ficha.js";
 import { digest } from "./operations.js";
 
 /**
@@ -138,12 +138,13 @@ export function conteudoDaExportacao(
   registros: readonly RegistroGravado[],
 ): ConteudoDaExportacao {
   const porId = new Map(colaboradores.map((colaborador) => [colaborador.id, colaborador]));
-  // Um por exame: o grupo da ficha (o "outro" é um grupo por registro) e a data do ASO.
+  // Um por exame: o tipo (o "outro" é um tipo por registro) e a data do ASO. Não o grupo da
+  // ficha: o admissional e o periódico do mesmo dia são dois exames, cada um com o seu S-2220.
   const porExame = new Map<string, RegistroGravado & { resultado: ResultadoDoExame }>();
   for (const registro of registros) {
     if (registro.categoria !== "exame" || registro.situacao === "arquivado" || !registro.resultado) continue;
     if (registro.emitido_em.slice(0, 7) !== competencia) continue;
-    const chave = `${grupoDoRegistro(registro)}/${registro.emitido_em}`;
+    const chave = `${chaveDoTipo(registro)}/${registro.emitido_em}`;
     const anterior = porExame.get(chave);
     if (!anterior || maisRecentePrimeiro(registro, anterior) < 0) porExame.set(chave, { ...registro, resultado: registro.resultado });
   }

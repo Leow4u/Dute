@@ -15,7 +15,9 @@ import { diaValido, diasAte } from "./dia.js";
  * - O registro tem o tipo do catálogo, o dia em que foi emitido ou feito e,
  *   quando vence, o dia do vencimento. O exame guarda o resultado.
  * - Em cada tipo, o vigente é o mais recente; os outros ficam substituídos,
- *   com o histórico. O tipo "outro" é um registro por si.
+ *   com o histórico. Os exames ocupacionais (admissional, periódico, retorno
+ *   ao trabalho e mudança de função) são um grupo só, como na NR-7. O tipo
+ *   "outro" é um registro por si.
  * - O vencimento do vigente de quem está ativo entra no Início do RH a
  *   DIAS_PARA_O_VENCIMENTO dias, e o vencido também. A CNH segue na Operação.
  *
@@ -233,10 +235,27 @@ export function registroArquivado(atual: RegistroGravado, esperada: number): Reg
   return { ...atual, situacao: "arquivado", substituido_por: null, edicao: atual.edicao + 1 };
 }
 
-/** O mesmo colaborador, a mesma categoria e o mesmo tipo; o "outro" é um grupo por registro. */
-export function grupoDoRegistro(registro: Pick<RegistroGravado, "id" | "colaborador_id" | "categoria" | "tipo">): string {
+/**
+ * Os exames ocupacionais do PCMSO: o ASO mais recente de qualquer deles é o
+ * vigente, como na NR-7 (pergunta 62 do plano). O demissional e o "outro"
+ * ficam à parte.
+ */
+export const EXAMES_OCUPACIONAIS = ["admissional", "periodico", "retorno_ao_trabalho", "mudanca_de_funcao"] as const;
+
+type ChaveDoRegistro = Pick<RegistroGravado, "id" | "colaborador_id" | "categoria" | "tipo">;
+
+/** O mesmo colaborador, a mesma categoria e o mesmo tipo; o "outro" é um tipo por registro. */
+export function chaveDoTipo(registro: ChaveDoRegistro): string {
   const tipo = registro.tipo === "outro" ? `outro:${registro.id}` : registro.tipo;
   return `${registro.colaborador_id}/${registro.categoria}/${tipo}`;
+}
+
+/** O grupo em que um registro substitui o outro: o tipo, e os exames ocupacionais juntos. */
+export function grupoDoRegistro(registro: ChaveDoRegistro): string {
+  if (registro.categoria === "exame" && (EXAMES_OCUPACIONAIS as readonly string[]).includes(registro.tipo)) {
+    return `${registro.colaborador_id}/exame/ocupacional`;
+  }
+  return chaveDoTipo(registro);
 }
 
 /**
