@@ -1878,6 +1878,28 @@ export async function recordCycleCountTransaction(
         `A contagem física (${countedQty}) é menor que a reserva ativa (${beforeReserved}). Resolva as reservas antes de ajustar o saldo.`,
       );
     }
+    // A reserva separada (picked) já saiu da prateleira, mas só sai do saldo
+    // na entrega: contar a prateleira nesse intervalo baixaria o mesmo item
+    // agora e de novo na entrega.
+    if (mode === "cycle" && beforeReserved > 0) {
+      const picked = await readRows(
+        transaction,
+        db
+          .collection(collections.stockReservations)
+          .where("customer_code", "==", customerCode)
+          .where("sku_code", "==", skuCode)
+          .where("location_id", "==", locationId)
+          .where("status", "==", "picked")
+          .limit(1),
+      );
+      if (picked.length) {
+        const order = text(picked[0]!.data.order_number);
+        throw new HttpsError(
+          "failed-precondition",
+          `O SKU ${skuCode} no local ${locationId} tem itens separados esperando a entrega${order ? ` (pedido ${order})` : ""}. Conte depois da entrega.`,
+        );
+      }
+    }
 
     // Leituras adicionais (obrigatoriamente antes de qualquer write):
     // sem divergência, a projeção do cliente precisa dos saldos de TODAS as

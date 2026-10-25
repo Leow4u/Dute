@@ -191,6 +191,11 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     começo que ficou para outra consulta (`fase-5-memoria.md`, "Correção:
     o resumo das movimentações cortava o período sem avisar"). Antes,
     somavam os 5.000 mais recentes como se fossem o período todo.
+  - a contagem cíclica recusa o endereço com itens separados esperando a
+    entrega, com o número do pedido (`manual-armazenagem.md`). O separado
+    já saiu da prateleira e só sai do saldo na entrega. Antes, a contagem
+    da prateleira nesse intervalo baixava o separado, e a entrega baixava
+    de novo;
   A matriz de papéis do WMS (PR 372) é só teste: nenhuma callable muda
   quem passa.
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a
