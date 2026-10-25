@@ -1582,3 +1582,22 @@ a parte 3.8c.
   - `fila-guardada.test.ts`: duas cópias gravando não se apagam, e a fila
     volta na ordem dos toques.
   - Antes, o guardado sumia.
+
+### Correção: o Reagendar gravava o formulário velho por cima da mudança
+
+Achada em 25/10/2026, numa revisão do que as telas do escritório mandam ao
+servidor. Está na produção desde a parte 3.5a.
+
+- **O defeito.** O painel Escalar/Reagendar, no Hoje e na Agenda, copiava a
+  OS quando abria, mas mandava à callable a edição da lista ao vivo.
+  - Se outra pessoa, ou outra aba, reagendasse a OS com o painel aberto, a
+    conferência de edição do servidor passava, e o formulário velho (data,
+    hora, equipe e veículos de antes) apagava a mudança.
+  - A equipe errada recebia a OS no app do campo.
+- **A correção.** A edição que vai para a callable é a de quando o painel
+  abriu (`pages/operacao/use-escala.tsx`), como no Comercial e no cadastro
+  da Operação. Se a OS mudou, o servidor recusa ("A OS foi atualizada.
+  Recarregue e tente de novo."), e a pessoa abre o painel de novo.
+- **Teste:** `use-escala.test.tsx`. Com a OS reagendada por outra tela,
+  reagendar e cancelar levam a edição da abertura. Antes, levavam a da lista
+  ao vivo.
