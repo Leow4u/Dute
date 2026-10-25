@@ -578,3 +578,28 @@ Feita em 25/10/2026, da revisão do código do RH.
   - A outra data e os dois "outro" do mesmo dia continuam.
   - Antes, as duas linhas iam.
 
+
+### Decisão: no empate da emissão, vale o lançado por último (pergunta 61)
+
+Decidida pelo Leonardo em 25/10/2026, antes de ligar o RH na produção.
+
+- **Antes.** No empate da data de emissão, valia o registro que vence
+  depois e, só no empate do vencimento, o lançado por último. Corrigir um
+  vencimento digitado a mais (2027 em vez de 2026) lançando de novo não
+  funcionava: a correção nascia substituída, o vencimento errado ficava
+  vigente, e o aviso do vencimento real não saía.
+- **Agora.** No empate da emissão, vale o lançado por último, vença quando
+  vencer (`maisRecentePrimeiro` em `ficha.ts`). "Alterar" continua sendo o
+  jeito limpo de corrigir.
+  - O que a regra antiga protegia deixa de valer: o mesmo registro lançado
+    de novo sem vencimento fica vigente, e o aviso do anterior sai do
+    Início.
+  - A exportação para a contabilidade usa a mesma ordem no exame do mesmo
+    tipo e da mesma data do ASO: entra o lançado por último.
+- **A situação gravada.** O vigente e o substituído ficam no registro e se
+  recalculam no grupo a cada gravação. O `dute-rh` da produção estava vazio
+  ao ligar o RH, então nada se recalcula lá. Na homologação, o grupo que já
+  tinha um empate por vencimento só se acerta na próxima gravação nele.
+- **Teste:** `ficha.test.ts`. Com a mesma emissão, o vencimento de 2027
+  lançado antes e o de 2026 lançado depois: fica vigente o de 2026. Antes,
+  ficava o de 2027.

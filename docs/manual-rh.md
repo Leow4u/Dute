@@ -28,8 +28,9 @@ Os registros da pessoa, em três categorias:
 
 O que vale saber:
 
-- **O vigente** é o registro mais novo de cada tipo. No empate das datas,
-  vale o lançado por último: para corrigir um registro, lance-o de novo.
+- **O vigente** é o registro mais novo de cada tipo. No empate da data de
+  emissão, vale o lançado por último, mesmo que vença antes: para corrigir um
+  registro, lance-o de novo ou use "Alterar".
 - **O vencimento** entra no "Precisa de você" 30 dias antes e fica até a
   pessoa ter um registro novo. A rotina diária grava o vencido uma vez, como
   evento.

@@ -239,22 +239,20 @@ export function grupoDoRegistro(registro: Pick<RegistroGravado, "id" | "colabora
   return `${registro.colaborador_id}/${registro.categoria}/${tipo}`;
 }
 
-/** A ordem do grupo: o vigente primeiro (situacoesDoGrupo). */
+/**
+ * A ordem do grupo: o vigente primeiro (situacoesDoGrupo). No empate da
+ * emissão, o lançado por último vem antes, vença quando vencer: lançar de
+ * novo corrige o vencimento digitado errado (pergunta 61 do plano).
+ */
 export function maisRecentePrimeiro(a: RegistroGravado, b: RegistroGravado): number {
-  return (
-    b.emitido_em.localeCompare(a.emitido_em) ||
-    (b.vence_em ?? "").localeCompare(a.vence_em ?? "") ||
-    b.criado_em.localeCompare(a.criado_em) ||
-    b.id.localeCompare(a.id)
-  );
+  return b.emitido_em.localeCompare(a.emitido_em) || b.criado_em.localeCompare(a.criado_em) || b.id.localeCompare(a.id);
 }
 
 export type SituacaoNoGrupo = { situacao: Situacao; substituido_por: string | null };
 
 /**
  * A situação de cada registro do mesmo grupo: o mais recente pela data (no
- * empate, o que vence depois e, depois, o lançado por último) é o vigente;
- * os outros, substituídos por ele.
+ * empate, o lançado por último) é o vigente; os outros, substituídos por ele.
  * O arquivado fica de fora e continua arquivado. Lançar o exame antigo
  * depois do novo não tira o novo do lugar; arquivar o vigente devolve o
  * anterior.
