@@ -9,6 +9,7 @@ import { COLLABORATORS_COLLECTION, VEHICLES_COLLECTION } from "./cadastro.js";
 import { EVENTS_COLLECTION, OPERACAO_EVENT_SOURCE } from "./events.js";
 import { saveCollaboratorFor, saveVehicleFor } from "./gravacao.js";
 import { OPERACAO_OPERATIONS_COLLECTION } from "./operations.js";
+import { SERVICE_ORDERS_COLLECTION } from "./os.js";
 import type { OperacaoProfile } from "./profile.js";
 
 const PROJECT_ID = "demo-dute-operacao";
@@ -227,3 +228,85 @@ describe("login do app no colaborador (parte 3.4)", () => {
   });
 });
 
+describe("o login do app nas OS que ainda vão a campo (parte 3.4)", () => {
+  const VALTER = { colaborador_id: "col_cccccccccccccccc", nome: "Valter Moreira", papel: "motorista", vinculo: "terceiro", empresa: "Rota Sul", no_app: true, usuario_uid: "u-valter" };
+
+  async function usuario(uid: string, email: string) {
+    await db.collection("users").doc(uid).set({ email, role: "campo", nome: uid });
+  }
+
+  async function os(numero: string, status: string, equipe: unknown[], equipe_uids: string[], edicao = 2) {
+    await db.collection(SERVICE_ORDERS_COLLECTION).doc(numero).set({ numero, demanda: numero.slice(0, 5), customer_code: "ITAU", status, equipe, equipe_uids, edicao });
+  }
+
+  async function lida(numero: string) {
+    return (await db.collection(SERVICE_ORDERS_COLLECTION).doc(numero).get()).data() ?? {};
+  }
+
+  async function trocar(id: string, edicao: number, chave: string, usuario_email: string | null) {
+    return saveCollaboratorFor(db, interno, { action: "update", idempotency_key: chave, id, expected_edicao: edicao, usuario_email });
+  }
+
+  it("ligar dá o acesso às OS abertas da pessoa; trocar e tirar tiram o do login antigo; a concluída fica", async () => {
+    await usuario("u-ana", "ana@dutelog.com.br");
+    await usuario("u-ana2", "ana.souza@dutelog.com.br");
+    const { id } = await saveCollaboratorFor(db, interno, criar);
+    const ana = { colaborador_id: id, nome: "Ana Souza", papel: "lider", vinculo: "proprio", empresa: null, no_app: false, usuario_uid: null };
+    await os("10045-01", "agendada", [ana, VALTER], ["u-valter"]);
+    await os("10045-02", "em_execucao", [ana], [], 3);
+    await os("10045-03", "aberta", [ana], []);
+    await os("10045-04", "revisada", [ana], []);
+    await os("10046-01", "agendada", [VALTER], ["u-valter"]);
+
+    await trocar(id, 1, "ligar", "ana@dutelog.com.br");
+    let agendada = await lida("10045-01");
+    assert.deepEqual(agendada.equipe_uids, ["u-valter", "u-ana"]);
+    assert.deepEqual(agendada.equipe, [{ ...ana, no_app: true, usuario_uid: "u-ana" }, VALTER]);
+    assert.equal(agendada.edicao, 3);
+    assert.deepEqual(agendada.atualizado_por, { uid: "interno-1", role: "interno" });
+    assert.deepEqual((await lida("10045-02")).equipe_uids, ["u-ana"]);
+    assert.equal((await lida("10045-02")).edicao, 4);
+    assert.deepEqual((await lida("10045-03")).equipe_uids, ["u-ana"]);
+    assert.deepEqual((await lida("10045-04")).equipe_uids, []);
+    assert.equal((await lida("10045-04")).edicao, 2);
+    assert.deepEqual((await lida("10046-01")).equipe_uids, ["u-valter"]);
+    assert.equal((await lida("10046-01")).edicao, 2);
+
+    // Repetir não grava de novo; o evento leva só os números das OS.
+    await trocar(id, 1, "ligar", "ana@dutelog.com.br");
+    assert.equal((await lida("10045-01")).edicao, 3);
+    const eventos = (await db.collection(EVENTS_COLLECTION).where("type", "==", "collaborator.updated").get()).docs.map((doc) => doc.data());
+    assert.equal(eventos.length, 1);
+    assert.deepEqual(eventos[0].payload.os_com_acesso, ["10045-01", "10045-02", "10045-03"]);
+    assert.equal(JSON.stringify(eventos[0]).includes("u-ana"), false);
+
+    await trocar(id, 2, "trocar", "ana.souza@dutelog.com.br");
+    agendada = await lida("10045-01");
+    assert.deepEqual(agendada.equipe_uids, ["u-valter", "u-ana2"]);
+    assert.equal(agendada.equipe[0].usuario_uid, "u-ana2");
+    assert.deepEqual((await lida("10045-02")).equipe_uids, ["u-ana2"]);
+
+    await trocar(id, 3, "tirar", null);
+    agendada = await lida("10045-01");
+    assert.deepEqual(agendada.equipe_uids, ["u-valter"]);
+    assert.deepEqual(agendada.equipe, [ana, VALTER]);
+    assert.deepEqual((await lida("10045-02")).equipe_uids, []);
+    assert.deepEqual((await lida("10045-03")).equipe_uids, []);
+    assert.deepEqual((await lida("10045-04")).equipe_uids, []);
+  });
+
+  it("mudar outro campo, desativar ou criar não mexe nas OS", async () => {
+    await usuario("u-ana", "ana@dutelog.com.br");
+    const { id } = await saveCollaboratorFor(db, interno, { ...criar, usuario_email: "ana@dutelog.com.br" });
+    const ana = { colaborador_id: id, nome: "Ana Souza", papel: null, vinculo: "proprio", empresa: null, no_app: true, usuario_uid: "u-ana" };
+    await os("10045-01", "agendada", [ana], ["u-ana"]);
+    await saveCollaboratorFor(db, interno, { action: "update", idempotency_key: "fone", id, expected_edicao: 1, telefone: "(11) 91234-5678" });
+    await saveCollaboratorFor(db, interno, { action: "update", idempotency_key: "mesmo", id, expected_edicao: 2, usuario_email: "ana@dutelog.com.br" });
+    await saveCollaboratorFor(db, interno, { action: "set_active", idempotency_key: "desativar", id, expected_edicao: 3, ativo: false });
+    const agendada = await lida("10045-01");
+    assert.equal(agendada.edicao, 2);
+    assert.deepEqual(agendada.equipe_uids, ["u-ana"]);
+    const eventos = (await db.collection(EVENTS_COLLECTION).where("type", "==", "collaborator.updated").get()).docs.map((doc) => doc.data());
+    assert.equal(eventos.some((evento) => "os_com_acesso" in evento.payload), false);
+  });
+});

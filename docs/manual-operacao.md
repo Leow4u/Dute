@@ -132,9 +132,10 @@ veículos por OS. O "Contato no local" e as "Instruções" valem para todas.
   em outra OS no mesmo dia.
 - **"Agendar"** cria as OS agendadas; **"Salvar rascunho"**, as para agendar.
 
-Ligue o "E-mail do app" no cadastro antes de escalar: a OS guarda o acesso de
-quem estava ligado quando foi planejada ou agendada. Ligado depois, salve de
-novo o escalar da OS, antes de ela começar.
+O "E-mail do app" do cadastro chega às OS que ainda vão a campo (para
+agendar, agendada e em execução): ligar dá à pessoa as OS em que ela está, e
+tirar ou trocar tira delas o login antigo. A OS concluída fica com quem estava
+ligado quando foi a campo.
 
 **A duração sugerida** (onde a memória da Dute está ligada; hoje, só a
 homologação) aparece na OS com equipe e item do catálogo, com "Usar",

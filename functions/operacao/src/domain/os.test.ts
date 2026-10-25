@@ -12,6 +12,7 @@ import {
   deMilesimos,
   emMilesimos,
   enderecoEmLinha,
+  equipeComLogin,
   equipeDaOs,
   exigirPlanejavel,
   fatiaDoSaldo,
@@ -408,6 +409,54 @@ describe("equipe, veículos e locais copiados do cadastro", () => {
     assert.deepEqual(comContatos(locais, undefined), locais);
     assert.equal(comContatos(locais, { origem: null }).origem?.contato, null);
     assert.deepEqual(comContatos(locais, { destino: { nome: "Paulo", telefone: null } }).destino?.contato, { nome: "Paulo", telefone: null });
+  });
+});
+
+describe("o login do app trocado no cadastro, na OS que ainda vai a campo", () => {
+  const ana = { colaborador_id: ANA.id, nome: "Ana Souza", papel: "lider", vinculo: "proprio", empresa: null, no_app: false, usuario_uid: null };
+  const valter = { colaborador_id: VALTER.id, nome: "Valter Moreira", papel: null, vinculo: "terceiro", empresa: "Rota Sul", no_app: true, usuario_uid: "uid-valter" };
+
+  it("ligar dá o acesso: a pessoa mostra o login, e ele entra em equipe_uids com o dos outros", () => {
+    assert.deepEqual(equipeComLogin({ equipe: [ana, valter], equipe_uids: ["uid-valter"] }, ANA.id, null, "uid-ana"), {
+      equipe: [{ ...ana, no_app: true, usuario_uid: "uid-ana" }, valter],
+      equipe_uids: ["uid-valter", "uid-ana"],
+    });
+  });
+
+  it("trocar tira o login antigo, e tirar deixa só o dos outros", () => {
+    const ligada = { ...ana, no_app: true, usuario_uid: "uid-ana" };
+    assert.deepEqual(equipeComLogin({ equipe: [ligada, valter], equipe_uids: ["uid-ana", "uid-valter"] }, ANA.id, "uid-ana", "uid-novo"), {
+      equipe: [{ ...ana, no_app: true, usuario_uid: "uid-novo" }, valter],
+      equipe_uids: ["uid-valter", "uid-novo"],
+    });
+    assert.deepEqual(equipeComLogin({ equipe: [ligada, valter], equipe_uids: ["uid-ana", "uid-valter"] }, ANA.id, "uid-ana", null), {
+      equipe: [ana, valter],
+      equipe_uids: ["uid-valter"],
+    });
+  });
+
+  it("o login que a OS guardou da pessoa sai também; o de outra pessoa da equipe nunca sai", () => {
+    // A OS guardou um login antigo da Ana, que depois passou ao Valter no cadastro.
+    const antiga = { ...ana, no_app: true, usuario_uid: "uid-velho" };
+    const comOVelho = { ...valter, usuario_uid: "uid-velho" };
+    assert.deepEqual(equipeComLogin({ equipe: [antiga, comOVelho], equipe_uids: ["uid-velho"] }, ANA.id, "uid-ana", null), {
+      equipe: [ana, comOVelho],
+      equipe_uids: ["uid-velho"],
+    });
+    assert.deepEqual(equipeComLogin({ equipe: [antiga], equipe_uids: ["uid-velho", "uid-ana"] }, ANA.id, "uid-ana", null)?.equipe_uids, []);
+  });
+
+  it("sem a pessoa na equipe, sem nada a mudar ou na OS de antes da parte 3.4, nada muda", () => {
+    assert.equal(equipeComLogin({ equipe: [valter], equipe_uids: ["uid-valter"] }, ANA.id, null, "uid-ana"), null);
+    const ligada = { ...ana, no_app: true, usuario_uid: "uid-ana" };
+    assert.equal(equipeComLogin({ equipe: [ligada, valter], equipe_uids: ["uid-ana", "uid-valter"] }, ANA.id, null, "uid-ana"), null);
+    assert.equal(equipeComLogin({ equipe: [ANA.id], equipe_uids: [] }, ANA.id, null, "uid-ana"), null);
+    assert.equal(equipeComLogin({ agenda: { equipe: [ANA.id] } } as { equipe?: unknown }, ANA.id, null, "uid-ana"), null);
+  });
+
+  it("os outros campos de cada pessoa ficam como a OS guardou", () => {
+    const comMais = { ...ana, extra: "fica" };
+    assert.deepEqual(equipeComLogin({ equipe: [comMais], equipe_uids: [] }, ANA.id, null, "uid-ana")?.equipe, [{ ...comMais, no_app: true, usuario_uid: "uid-ana" }]);
   });
 });
 

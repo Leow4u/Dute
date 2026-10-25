@@ -29,6 +29,7 @@ import {
 } from "./cadastro.js";
 import { createOperacaoEvent } from "./events.js";
 import { runIdempotent, type OperacaoActor } from "./operations.js";
+import { MAX_OS_DO_LOGIN, SERVICE_ORDERS_COLLECTION, STATUS_QUE_VAO_A_CAMPO, equipeComLogin } from "./os.js";
 import { operacaoCadastroProblem } from "./platform-roles.js";
 import type { OperacaoProfile } from "./profile.js";
 
@@ -165,9 +166,26 @@ export async function saveCollaboratorFor(
     const usuarioUid = email ? await usuarioDoApp(transaction, db, email, id) : null;
     const efeito = aplicarColaborador(atual, acao, id);
     if (email !== undefined) efeito.documento = { ...efeito.documento, usuario_uid: usuarioUid };
+    const uidAntes = atual?.usuario_uid ?? null;
+    const uidDepois = efeito.documento.usuario_uid ?? null;
+    const acessos = atual && uidDepois !== uidAntes ? await acessosNasOs(transaction, db, id, uidAntes, uidDepois) : [];
     gravar(transaction, db, COLLABORATORS_COLLECTION, efeito.documento, efeito.documento, acao.action === "create", caller);
+    for (const acesso of acessos) {
+      transaction.update(acesso.ref, {
+        equipe: acesso.equipe,
+        equipe_uids: acesso.equipe_uids,
+        edicao: acesso.edicao,
+        atualizado_por: { uid: caller.uid, role: caller.role },
+        updated_at: FieldValue.serverTimestamp(),
+      });
+    }
     const payload = efeito.evento === "collaborator.updated"
-      ? { id: efeito.documento.id, edicao_antes: atual?.edicao ?? efeito.documento.edicao - 1, edicao_depois: efeito.documento.edicao }
+      ? {
+          id: efeito.documento.id,
+          edicao_antes: atual?.edicao ?? efeito.documento.edicao - 1,
+          edicao_depois: efeito.documento.edicao,
+          ...(acessos.length ? { os_com_acesso: acessos.map((acesso) => acesso.numero) } : {}),
+        }
       : { id: efeito.documento.id };
     createOperacaoEvent(transaction, db, {
       operation_id: operationId,
@@ -178,6 +196,28 @@ export async function saveCollaboratorFor(
     });
     return { target_id: efeito.documento.id, result: { id: efeito.documento.id, edicao: efeito.documento.edicao } };
   });
+}
+
+/**
+ * As OS que ainda vão a campo com a pessoa na equipe, com o login do app que
+ * o cadastro ligou, trocou ou tirou: o celular de quem foi ligado passa a
+ * vê-las, e o login que saiu deixa de ler e de registrar nelas (as regras e
+ * quem registra olham `equipe_uids`). A OS concluída fica com quem estava
+ * ligado quando foi a campo. Lê só a equipe e a edição de cada OS.
+ */
+async function acessosNasOs(transaction: Transaction, db: Firestore, colaboradorId: string, uidAntes: string | null, uidDepois: string | null) {
+  const abertas = await transaction.get(
+    db.collection(SERVICE_ORDERS_COLLECTION).where("status", "in", [...STATUS_QUE_VAO_A_CAMPO]).select("equipe", "equipe_uids", "edicao"),
+  );
+  const acessos = abertas.docs.flatMap((snapshot) => {
+    const data = snapshot.data();
+    const troca = equipeComLogin(data, colaboradorId, uidAntes, uidDepois);
+    return troca && typeof data.edicao === "number" ? [{ ref: snapshot.ref, numero: snapshot.id, edicao: data.edicao + 1, ...troca }] : [];
+  });
+  if (acessos.length > MAX_OS_DO_LOGIN) {
+    throw new HttpsError("failed-precondition", `A pessoa está em mais de ${MAX_OS_DO_LOGIN} OS abertas: tire-a de algumas antes de trocar o e-mail do app.`);
+  }
+  return acessos.sort((a, b) => a.numero.localeCompare(b.numero));
 }
 
 /**
