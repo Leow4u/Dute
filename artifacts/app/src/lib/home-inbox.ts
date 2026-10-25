@@ -72,6 +72,10 @@ export function isAwaitingTriage(status: unknown) {
     "encerrado",
     "concluida",
     "concluido",
+    "cancelled",
+    "canceled",
+    "cancelada",
+    "cancelado",
   ].includes(normalized);
 }
 

@@ -122,6 +122,8 @@ describe("isAwaitingTriage", () => {
     ["approved", false],
     ["Encerrada", false],
     ["concluído", false],
+    ["cancelled", false],
+    ["Cancelada", false],
   ])("%s → %s", (status, expected) => {
     expect(isAwaitingTriage(status)).toBe(expected);
   });

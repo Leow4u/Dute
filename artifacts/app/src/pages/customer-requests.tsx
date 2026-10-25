@@ -64,6 +64,8 @@ export type CustomerRequest = {
     email?: string;
   };
   decision_reason?: string | null;
+  /** Motivo de quem cancelou o aviso de envio pelo portal. */
+  cancel_reason?: string | null;
   decided_at?: unknown;
   decided_by?: {
     name?: string;
@@ -170,7 +172,8 @@ type RequestStatus =
   | "pending"
   | "approved"
   | "rejected"
-  | "closed";
+  | "closed"
+  | "cancelled";
 
 
 type ValidationLineStatus =
@@ -261,6 +264,10 @@ export function normalizeStatus(status?: string | null): RequestStatus {
     )
   ) {
     return "closed";
+  }
+  // O cliente cancela antes da aprovação: não volta para a fila de decidir.
+  if (["cancelled", "canceled", "cancelada", "cancelado"].includes(normalized)) {
+    return "cancelled";
   }
   if (["submitted", "enviada", "enviado"].includes(normalized)) {
     return "submitted";
@@ -898,7 +905,8 @@ export type VerdictTone =
   | "checking"
   | "approved"
   | "rejected"
-  | "closed";
+  | "closed"
+  | "cancelled";
 
 export type RequestVerdict = {
   tone: VerdictTone;
@@ -932,6 +940,14 @@ export function buildVerdict(
   }
   if (status === "closed") {
     return { tone: "closed", title: "Encerrada", detail: "Fluxo concluído." };
+  }
+  if (status === "cancelled") {
+    const reason = request.cancel_reason || request.decision_reason;
+    return {
+      tone: "cancelled",
+      title: "Cancelada pelo cliente",
+      detail: reason ? `Motivo: ${reason}` : "Cancelada antes da aprovação.",
+    };
   }
   if (status === "approved") {
     return {
@@ -1080,6 +1096,7 @@ function listChip(request: CustomerRequest, validation: BalanceValidation) {
   if (verdict.tone === "checking") return <Chip tone="muted">Conferindo saldo</Chip>;
   if (verdict.tone === "approved") return <Chip tone="info">Aprovada</Chip>;
   if (verdict.tone === "rejected") return <Chip tone="bad">Recusada</Chip>;
+  if (verdict.tone === "cancelled") return <Chip tone="muted">Cancelada</Chip>;
   return <Chip tone="muted">Encerrada</Chip>;
 }
 
@@ -1466,6 +1483,7 @@ const VERDICT_STYLE: Record<
   approved: { box: "border-info-soft-border bg-info-soft/70", icon: "bg-info-soft-border/50 text-info-soft-foreground", Icon: CheckCircle2 },
   rejected: { box: "border-destructive-soft-border bg-destructive-soft/70", icon: "bg-destructive-soft-border/50 text-destructive-soft-foreground", Icon: XCircle },
   closed: { box: "border-border bg-muted/40", icon: "bg-muted text-muted-foreground", Icon: Archive },
+  cancelled: { box: "border-border bg-muted/40", icon: "bg-muted text-muted-foreground", Icon: Archive },
 };
 
 function RequestDetail({

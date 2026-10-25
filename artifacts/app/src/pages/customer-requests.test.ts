@@ -165,6 +165,18 @@ describe("tela de triagem", () => {
     expect(requestTab("approved")).toBe("approved");
     expect(requestTab("rejected")).toBe("done");
     expect(requestTab("Encerrada")).toBe("done");
+    expect(requestTab("cancelled")).toBe("done");
+  });
+
+  it("a solicitação que o cliente cancelou não volta para decidir", () => {
+    const request = outboundRequest({ status: "cancelled", cancel_reason: "Pedido em duplicidade" });
+    expect(buildVerdict(request, buildBalanceValidation(request, [], false, false))).toEqual({
+      tone: "cancelled",
+      title: "Cancelada pelo cliente",
+      detail: "Motivo: Pedido em duplicidade",
+    });
+    const semMotivo = outboundRequest({ status: "cancelled" });
+    expect(buildVerdict(semMotivo, buildBalanceValidation(semMotivo, [], false, false)).detail).toBe("Cancelada antes da aprovação.");
   });
 
   it("explica em uma frase por que não dá para aprovar", () => {
