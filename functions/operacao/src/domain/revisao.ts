@@ -271,6 +271,19 @@ export type ResumoDaOperacao = {
 
 export type OsParaResumo = { numero: string; status: string; janela: OsGravada["janela"]; data: Record<string, unknown> };
 
+/** As OS de serviço da demanda para o resumo, com a OS `numero` no estado novo: a vistoria (parte 3.11a) não executa o escopo e fica de fora. */
+export function paraResumo(
+  ordens: readonly OsGravada[],
+  brutos: ReadonlyMap<string, Record<string, unknown>>,
+  numero: string,
+  status: string,
+  dados: Record<string, unknown>,
+): OsParaResumo[] {
+  return ordens.filter((os) => os.tipo !== "vistoria").map((os) =>
+    os.numero === numero ? { numero, status, janela: os.janela, data: dados } : { numero: os.numero, status: os.status, janela: os.janela, data: brutos.get(os.numero) ?? {} },
+  );
+}
+
 function dataEmSaoPaulo(instante: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(instante));
 }
@@ -346,4 +359,16 @@ export function resumoDaOperacao(ordens: readonly OsParaResumo[], agora: Date): 
  */
 export function diretaExecutada(demanda: Record<string, unknown>, resumo: ResumoDaOperacao): boolean {
   return demanda.entrada === "direta" && demanda.aberta_pela === "operacao" && demanda.etapa === "para_planejar" && resumo.os_em_aberto.length === 0 && resumo.periodo !== null;
+}
+
+/** O que muda na demanda direta executada: o período, o registro, a etapa e o marco. */
+export function fechamentoDaDireta(demanda: Record<string, unknown>, periodo: { de: string; ate: string }, iso: string, uid: string): Record<string, unknown> {
+  return {
+    executado_de: periodo.de,
+    executado_ate: periodo.ate,
+    registro_execucao: { etapa_antes: "para_planejar", rv: null, em: iso, por_uid: uid, origem: "operacao" },
+    etapa: "execucao_a_orcar",
+    etapa_desde: iso,
+    marcos: [...(Array.isArray(demanda.marcos) ? demanda.marcos : []), { etapa: "execucao_a_orcar", em: iso, por_uid: uid }],
+  };
 }

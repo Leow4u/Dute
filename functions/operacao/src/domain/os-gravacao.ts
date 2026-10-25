@@ -42,6 +42,7 @@ import {
 } from "./os.js";
 import { operacaoCadastroProblem } from "./platform-roles.js";
 import type { OperacaoProfile } from "./profile.js";
+import { diretaExecutada, fechamentoDaDireta, paraResumo, resumoDaOperacao, type ResumoDaOperacao } from "./revisao.js";
 
 /**
  * Abre, planeja, agenda, muda os itens e cancela a OS
@@ -97,7 +98,9 @@ const KIND: Record<AcaoOs["action"], string> = {
 type Efeito =
   | { tipo: "os.created" | "os.planned"; ordens: OsGravada[] }
   | { tipo: "os.survey_opened"; ordens: [OsGravada] }
-  | { tipo: "os.scheduled" | "os.cancelled"; ordens: [OsGravada] }
+  | { tipo: "os.scheduled"; ordens: [OsGravada] }
+  /** `execucao`: a demanda direta que o cancelamento levou à Execução a orçar. */
+  | { tipo: "os.cancelled"; ordens: [OsGravada]; execucao: { id: string; de: string; ate: string; os: number } | null }
   | { tipo: "os.items_changed"; ordens: [OsGravada]; edicaoAntes: number };
 
 export async function saveServiceOrderFor(
@@ -126,6 +129,17 @@ export async function saveServiceOrderFor(
           entity_id: os.numero,
           customer_code: os.customer_code,
           payload: payloadDoEvento(efeito, os),
+          actor: ator(caller),
+        });
+      }
+      if (efeito.tipo === "os.cancelled" && efeito.execucao) {
+        createOperacaoEvent(transaction, db, {
+          operation_id: operationId,
+          suffix: "demand.execution_reviewed",
+          type: "demand.execution_reviewed",
+          entity_id: efeito.execucao.id,
+          customer_code: efeito.ordens[0].customer_code,
+          payload: efeito.execucao,
           actor: ator(caller),
         });
       }
@@ -508,11 +522,28 @@ async function cancelar(
 ): Promise<Efeito> {
   const atual = exigirPlanejavel(await lerOs(transaction, db, acao.numero), acao.numero, acao.expected_edicao, "cancelada");
   const os = cancelada(atual, acao.motivo);
+  // Com OS já revisada, o resumo da demanda se reconta sem a cancelada; sem
+  // outra em aberto, a direta vai à Execução a orçar, como na revisão.
+  const demandaRef = db.collection(DEMANDS).doc(os.demanda);
+  const demanda = (await transaction.get(demandaRef)).data();
+  let resumo: ResumoDaOperacao | null = null;
+  if (demanda?.operacao) {
+    const existentes = await transaction.get(db.collection(SERVICE_ORDERS_COLLECTION).where("demanda", "==", os.demanda));
+    const brutos = new Map(existentes.docs.map((doc) => [doc.id, doc.data()]));
+    const dados = { ...brutos.get(os.numero), status: os.status, cancelamento: os.cancelamento };
+    resumo = resumoDaOperacao(paraResumo(existentes.docs.map((doc) => osLida(doc.id, doc.data())), brutos, os.numero, os.status, dados), new Date());
+  }
+
   transaction.update(db.collection(SERVICE_ORDERS_COLLECTION).doc(os.numero), {
     status: os.status,
     edicao: os.edicao,
     cancelamento: os.cancelamento,
     ...autoria(caller),
   });
-  return { tipo: "os.cancelled", ordens: [os] };
+  if (!demanda || !resumo) return { tipo: "os.cancelled", ordens: [os], execucao: null };
+  const patch: Record<string, unknown> = { operacao: resumo, updated_at: FieldValue.serverTimestamp(), updated_by: caller.uid };
+  const executada = diretaExecutada(demanda, resumo) && resumo.periodo ? resumo.periodo : null;
+  if (executada) Object.assign(patch, fechamentoDaDireta(demanda, executada, resumo.atualizado_em, caller.uid));
+  transaction.update(demandaRef, patch);
+  return { tipo: "os.cancelled", ordens: [os], execucao: executada ? { id: os.demanda, de: executada.de, ate: executada.ate, os: resumo.os_revisadas.length } : null };
 }
