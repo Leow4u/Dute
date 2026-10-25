@@ -17,6 +17,7 @@ import {
   StockList,
   activeCatalogFilters,
   groupInventoryProducts,
+  problemaDoPrazoDoPedido,
   problemaDoTamanhoDoPedido,
 } from "./estoque";
 import type { InventoryItem } from "./shared";
@@ -348,5 +349,15 @@ describe("o tamanho do pedido", () => {
   it("até 100 itens de separação vai; acima, o carrinho avisa antes de enviar", () => {
     expect(problemaDoTamanhoDoPedido(100)).toBeNull();
     expect(problemaDoTamanhoDoPedido(130)).toBe("Um pedido leva até 100 itens de separação; este tem 130. Divida em mais de um pedido.");
+  });
+});
+
+describe("o prazo do pedido", () => {
+  const agora = new Date("2026-10-25T13:00:00-03:00");
+  it("sem prazo vale; de agora em diante vale; no passado, o carrinho avisa", () => {
+    expect(problemaDoPrazoDoPedido("", agora)).toBeNull();
+    expect(problemaDoPrazoDoPedido("2026-10-26T13:00", agora)).toBeNull();
+    expect(problemaDoPrazoDoPedido("2026-10-27T09:30", agora)).toBeNull();
+    expect(problemaDoPrazoDoPedido("2026-10-24T18:00", agora)).toBe("O prazo já passou. Escolha quando o pedido precisa chegar, de agora em diante.");
   });
 });
