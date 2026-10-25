@@ -3,6 +3,7 @@ import { collection } from "firebase/firestore";
 import { useSearch } from "wouter";
 
 import {
+  capacidadeDigitada,
   colaboradorDaLeitura,
   emailDoAppNaAlteracao,
   porNome,
@@ -202,10 +203,7 @@ export function PaginaVeiculos() {
       onSalvar={() => {
         if (!aberta) return;
         const { valores, chave, veiculo } = aberta;
-        const capacidade = {
-          capacidade_kg: Number(valores.capacidadeKg),
-          capacidade_m3: Number(valores.capacidadeM3.replace(",", ".")),
-        };
+        const capacidade = capacidadeDigitada(valores.capacidadeKg, valores.capacidadeM3);
         const dono = {
           dono: valores.dono,
           empresa: valores.dono === "terceiro" ? valores.empresa.trim() || null : null,

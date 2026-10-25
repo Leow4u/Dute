@@ -1660,3 +1660,19 @@ Achada em 25/10/2026, na mesma revisão. Está na produção desde a parte 3.6a.
 - **Teste:** `planejar.test.tsx`, com a página e as leituras de mentira. A
   linha zerada por outro plano fica, e o plano não grava. Antes, gravava
   sem ela.
+
+### Correção: a capacidade "6.000" kg virava 6 kg
+
+Achada em 25/10/2026, na mesma revisão. Está na produção desde a parte
+3.4a.
+
+- **O defeito.** O cadastro do veículo lia a capacidade em quilos com
+  `Number()`: "6.000", como se escreve no Brasil, virava 6, um inteiro
+  maior que zero, e a callable aceitava. "6.500" era recusado com uma
+  mensagem que não ajudava, e o que não era número ia como NaN, que nem
+  chegava à callable.
+- **A correção.** `capacidadeDigitada` (`lib/operacao/cadastro.ts`) lê os
+  quilos com ou sem o ponto do milhar e os metros cúbicos com a vírgula; o
+  que não é número vai vazio, e a callable recusa com a mensagem dela.
+- **Teste:** `pagina.test.tsx`, com a página de veículos e a callable de
+  mentira: "6.000" kg vão como 6000 e "12,5" m³ como 12,5. Antes, 6 kg.
