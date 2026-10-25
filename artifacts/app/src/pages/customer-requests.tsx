@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -854,6 +854,29 @@ export function requestTab(status?: string | null): RequestTab {
 }
 
 /**
+ * A solicitação do detalhe: a escolhida ou a que já está na tela, enquanto
+ * aparecem na aba; senão a primeira dela. A que está na tela e sai da aba
+ * sozinha (o cliente a cancelou, outra pessoa a aprovou) continua nela, com
+ * a situação nova e só as ações que ela ainda tem, até a pessoa escolher
+ * outra ou mudar de aba ou de busca (quem muda limpa `naTela`). Senão o
+ * detalhe passaria à vizinha, e "Aprovar e separar" aprovaria a que ninguém
+ * conferiu.
+ */
+export function solicitacaoDoDetalhe<T extends { id: string }>(
+  todas: readonly T[],
+  visiveis: readonly T[],
+  escolhida: string | null,
+  naTela: string | null,
+): T | null {
+  for (const id of [escolhida, naTela]) {
+    const visivel = id ? visiveis.find((item) => item.id === id) : undefined;
+    if (visivel) return visivel;
+  }
+  const foraDaAba = naTela ? todas.find((item) => item.id === naTela) : undefined;
+  return foraDaAba ?? visiveis[0] ?? null;
+}
+
+/**
  * A lista genérica devolve os campos de data do Firestore como vieram
  * (Timestamp serializado em {seconds, nanoseconds}); new Date() sobre esse
  * objeto dava "Sem data" em toda solicitação.
@@ -1132,6 +1155,8 @@ export default function CustomerRequests() {
     if (typeof window === "undefined") return null;
     return new URLSearchParams(window.location.search).get("id");
   });
+  /** A solicitação que o detalhe mostra: não troca sozinha quando a lista muda (solicitacaoDoDetalhe). */
+  const [naTela, setNaTela] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<CustomerRequest | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [localTransitions, setLocalTransitions] = useState<
@@ -1195,6 +1220,9 @@ export default function CustomerRequests() {
       });
       setRejecting(null);
       setRejectReason("");
+      // Decidida aqui, a solicitação sai da aba, e o detalhe passa à próxima.
+      setNaTela((atual) => (atual === variables.id ? null : atual));
+      setSelectedId((atual) => (atual === variables.id ? null : atual));
       qc.invalidateQueries({ queryKey });
       qc.invalidateQueries({ queryKey: stockBalancesQueryKey });
       qc.invalidateQueries({ queryKey: ["warehouse-ops"] });
@@ -1277,8 +1305,11 @@ export default function CustomerRequests() {
       );
   }, [allRequests, search, tab]);
 
-  const selected =
-    visible.find((item) => item.id === selectedId) ?? visible[0] ?? null;
+  const selected = solicitacaoDoDetalhe(allRequests, visible, selectedId, naTela);
+  const idNaTela = selected?.id ?? null;
+  useEffect(() => {
+    if (idNaTela !== naTela) setNaTela(idNaTela);
+  }, [idNaTela, naTela]);
 
   const validationFor = (item: CustomerRequest) =>
     balanceValidationById.get(item.id) ??
@@ -1329,6 +1360,7 @@ export default function CustomerRequests() {
               onClick={() => {
                 setTab(option.value);
                 setSelectedId(null);
+                setNaTela(null);
               }}
               className={cn(
                 "flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors sm:px-3 sm:text-sm",
@@ -1354,7 +1386,10 @@ export default function CustomerRequests() {
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setNaTela(null);
+              }}
               placeholder="Buscar por título, SKU ou cliente"
               className="pl-9"
             />

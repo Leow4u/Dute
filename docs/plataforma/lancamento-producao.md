@@ -233,6 +233,15 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   celular), o segundo toque criava outro pedido e reservava o mesmo estoque
   de novo, ou recusava por "Saldo insuficiente" e escondia o primeiro
   (teste em `pages/client/estoque-envio.test.tsx`).
+- **As telas do WMS (25/10/2026).** Entram com a `main`, sem liberação
+  própria:
+  - o detalhe da Solicitações não passa sozinho à vizinha. A que sai da aba
+    por outra mão (o cliente a cancelou no portal, outra pessoa a aprovou)
+    continua na tela, com a situação nova e sem as ações que não valem mais;
+    a decidida na própria tela passa à próxima, como antes. Antes, o detalhe
+    mostrava a primeira da aba, e "Aprovar e separar" ou "Encerrar" agia na
+    que ninguém tinha conferido (teste em
+    `pages/customer-requests-detalhe.test.tsx`).
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a
   `main`, sem liberação própria. As entradas, as saídas e os movimentos
   passam a cobrar só o recebimento e a expedição, cada movimento uma vez
