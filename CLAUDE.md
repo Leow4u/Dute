@@ -57,10 +57,13 @@ documentação de produto e operação está em `docs/`.
   até a Fase 7. Roteiro do lançamento (marcos 2, 3 e 4 juntos, e a parte
   4.9b, que liga o Financeiro): `docs/plataforma/lancamento-producao.md`.
   Desenho e registro: `docs/plataforma/fase-4-financeiro.md`.
-- **Fase 5 (memória da Dute) em desenho**: `docs/plataforma/fase-5-memoria.md`
-  (23/10/2026). A codebase nova é `functions/core`, com a liberação própria
-  `MEMORIA_AMBIENTES_LIBERADOS` (só o `dute-homolog`); as medidas saem das
-  OS revisadas e a sugestão nunca grava sem a pessoa.
+- **Fase 5 (memória da Dute) na `main`, partes 5.1a a 5.6, só no
+  `dute-homolog`**: `docs/plataforma/fase-5-memoria.md` (23/10/2026). A
+  codebase é `functions/core`, com as liberações próprias
+  `MEMORIA_AMBIENTES_LIBERADOS` e `AGENTE_AMBIENTES_LIBERADOS` (só o
+  `dute-homolog`); as medidas saem das OS revisadas e a sugestão nunca grava
+  sem a pessoa. A produção espera o OK do Leonardo ("Lançamento na produção",
+  no runbook).
 - **Fase 7 (financeiro unificado) na `main` até a 7.5c, só no
   `dute-homolog`**: `docs/plataforma/fase-7-financeiro-unificado.md`
   (23/10/2026). A 7.4 (a NFS-e pela Omie e a baixa, pergunta 21 decidida em
