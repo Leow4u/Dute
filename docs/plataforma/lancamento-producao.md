@@ -269,7 +269,14 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     guardar 12 itens de uma nota, os outros não apareciam em "Para
     guardar"). O pedido encerrado agora entra com todas as etapas ou não
     entra; antes, o entregue podia voltar em "Para separar" só com a
-    separação (teste em `lib/cloud-api-warehouse.test.ts`).
+    separação (teste em `lib/cloud-api-warehouse.test.ts`);
+  - concluir a separação ou a embalagem pelo painel (Pedidos › Tratar e a
+    bancada do WMS) manda a conferência de cada linha como o servidor lê
+    (`picking_lines` e `packing_lines`, com a quantidade). Antes, ia num
+    campo que o servidor descarta, e a conclusão pelo painel sempre parava
+    em "Informe a conferência física das linhas"; só o "Separar" da fila
+    concluía (teste em
+    `features/warehouse-ops/task-detail-conferencia.test.tsx`).
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a
   `main`, sem liberação própria. As entradas, as saídas e os movimentos
   passam a cobrar só o recebimento e a expedição, cada movimento uma vez
