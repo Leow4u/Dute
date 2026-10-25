@@ -424,6 +424,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   cancelar o convite releem na transação quem age, e dois owners que se tiram
   ao mesmo tempo não deixam o sistema sem nenhum (`fase-2-nucleo.md`,
   "Correção: dois owners podiam se tirar ao mesmo tempo").
+- **O token do convite (25/10/2026).** Entra com a `main`, sem liberação
+  própria: o convite só nasce com o token longo que a tela de Usuários gera,
+  e a tela já o manda (`fase-2-nucleo.md`, "Correção: o convite sem token
+  nascia com a hora como id").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.

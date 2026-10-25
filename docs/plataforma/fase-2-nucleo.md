@@ -554,3 +554,20 @@ produção, e é rara: pede dois owners mexendo um no outro no mesmo instante.
 - **Teste:** `domain/access.integration.test.ts`: o owner que perdeu o
   acesso ou foi rebaixado no meio do caminho não tira o acesso de outro
   owner. Antes, os dois testes falhavam.
+
+### Correção: o convite sem token nascia com a hora como id
+
+Achada em 25/10/2026, na mesma revisão da administração de acesso. Está na
+produção, mas a tela não chega nela: só quem chama a API direto, como owner
+ou admin.
+
+- **O defeito.** O id do convite é o token do link. Sem `token` nem `id`, o
+  convite nascia com `Date.now()` como id, 13 dígitos fáceis de adivinhar,
+  e o `lookupInvite` o abria. Um `id` ou `token` curto também servia.
+- **A correção.** O convite só nasce com o token longo e aleatório que a
+  tela de Usuários gera (18 bytes em hexadecimal): de 32 a 128 dígitos
+  hexadecimais, pelo `token` ou pelo `id`. Fora disso, "O convite precisa
+  do token gerado pela tela de Usuários.".
+- **Teste:** `acessos.integration.test.ts`, a callable de verdade no
+  emulador: sem token, com token curto e com id curto, o convite não nasce;
+  com o token da tela, ele vira o id. Antes, os dois primeiros falhavam.
