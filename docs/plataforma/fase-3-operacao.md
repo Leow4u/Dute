@@ -1466,3 +1466,21 @@ a parte 3.8b.
     tela e de fechar o app, e sai só quando dispensada. Antes, sumia.
   - `fila-guardada.test.ts`: as falhas ficam por pessoa e sobrevivem a
     fechar o app, e o que não é falha não volta.
+
+### Correção: o registro sem o token saía da fila
+
+Achada em 25/10/2026, numa revisão da fila do campo. Está na produção desde
+a parte 3.8b.
+
+- **O defeito.** A fila desistia do registro recusado com `unauthenticated`,
+  como se fosse uma recusa da regra.
+  - A fila só anda com a pessoa logada. Esse erro vem do token vencido
+    depois de mais de uma hora sem sinal, quando a renovação falha numa
+    oscilação do sinal: a chamada sai sem o token.
+  - A etapa, a foto ou a conclusão assinada saíam da fila.
+  - A Operação só responde `unauthenticated` quando a chamada chega sem o
+    token (`domain/profile.ts`), nunca por regra.
+- **A correção.** O `unauthenticated` sai das recusas definitivas
+  (`lib/campo/fila.ts`): o registro espera e tenta de novo, como sem sinal.
+- **Teste:** `os-no-campo.test.ts`: `unauthenticated` tenta de novo, com e
+  sem o prefixo `functions/`. Antes, desistia.

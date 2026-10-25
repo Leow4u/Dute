@@ -61,7 +61,10 @@ export function enfileirar(fila: readonly RegistroNaFila[], registro: RegistroNa
 /** O que fazer com o erro: tentar de novo depois (sem sinal, servidor fora) ou desistir e avisar. */
 export type DestinoDoErro = "tentar_de_novo" | "desistir";
 
-const DEFINITIVOS = new Set(["invalid-argument", "failed-precondition", "permission-denied", "not-found", "already-exists", "unauthenticated", "out-of-range"]);
+// O "unauthenticated" não é definitivo: a fila só anda com a pessoa logada, e
+// ele vem do token vencido cuja renovação falhou por rede (a chamada sai sem
+// o token). Desistir perdia o registro; espera e tenta de novo.
+const DEFINITIVOS = new Set(["invalid-argument", "failed-precondition", "permission-denied", "not-found", "already-exists", "out-of-range"]);
 
 export function destinoDoErro(error: unknown): DestinoDoErro {
   const code = String((error as { code?: unknown })?.code ?? "").replace(/^functions\//, "");

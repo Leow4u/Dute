@@ -265,6 +265,9 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   de tela ou fechando o app. Antes, a recusa da conclusão sumia na primeira
   troca de tela (`fase-3-operacao.md`, "Correção: a recusa da conclusão
   sumia na troca de tela").
+  O registro recusado por falta do token (renovação que falhou por rede)
+  espera e tenta de novo, em vez de sair da fila (`fase-3-operacao.md`,
+  "Correção: o registro sem o token saía da fila").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
