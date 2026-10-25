@@ -1909,6 +1909,14 @@ describe("ledger manual e congelamento", () => {
       qty_available: 5,
       unit_cost: 10,
     });
+    await db.collection("skus").doc("BTG-MANUAL-1").set({
+      id: "BTG-MANUAL-1",
+      customer_code: "BTG Pactual",
+      cod_btg: "BTG-MANUAL-1",
+      sku_code: "BTG-MANUAL-1",
+      sku_code_key: "BTG-MANUAL-1",
+      estoque_atual: 5,
+    });
 
     const input = {
       type: "ENTRADA" as const,
@@ -1951,6 +1959,54 @@ describe("ledger manual e congelamento", () => {
       ),
       /temporariamente bloqueadas/,
     );
+  });
+
+  it("só movimenta item do cadastro do cliente: nem o de outro cliente, nem SKU fora do cadastro", async () => {
+    await clearFirestore();
+    await db.collection("skus").doc("ITAU-000001").set({
+      id: "ITAU-000001",
+      customer_code: "Itaú",
+      cod_btg: "ITAU-000001",
+      sku_code: "ITAU-000001",
+      sku_code_key: "ITAU-000001",
+      estoque_atual: 0,
+    });
+    const entrada = {
+      type: "ENTRADA" as const,
+      quantity: 3,
+      customer_code: "BTG Pactual",
+      sku_code: "ITAU-000001",
+      location_id: "A-01-02",
+      reason: "Ajuste após contagem física",
+      idempotency_key: "manual-owner-1",
+    };
+
+    await assert.rejects(
+      createInventoryMovementTransaction(db, entrada, actor),
+      /O SKU ITAU-000001 já está cadastrado para o cliente Itaú/,
+    );
+    await assert.rejects(
+      createInventoryMovementTransaction(
+        db,
+        { ...entrada, sku_code: "BTG-999999", idempotency_key: "manual-owner-2" },
+        actor,
+      ),
+      /O SKU BTG-999999 não está no cadastro/,
+    );
+    const semEscrita = await Promise.all(
+      ["stock_balances", "movements", "events"].map((name) => db.collection(name).get()),
+    );
+    assert.deepEqual(semEscrita.map((snapshot) => snapshot.size), [0, 0, 0]);
+    assert.equal((await db.collection("skus").doc("ITAU-000001").get()).data()?.estoque_atual, 0);
+
+    const doCliente = await createInventoryMovementTransaction(
+      db,
+      { ...entrada, customer_code: "Itaú", idempotency_key: "manual-owner-3" },
+      actor,
+    );
+    assert.equal(doCliente.qty_after, 3);
+    const saldo = await db.collection("stock_balances").doc(String(doCliente.stock_balance_id)).get();
+    assert.equal(saldo.data()?.customer_code, "Itaú");
   });
 });
 

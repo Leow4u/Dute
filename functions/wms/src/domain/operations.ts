@@ -1120,6 +1120,26 @@ export async function createInventoryMovementTransaction(
         text(balanceRow?.data.client_item_code) ||
         undefined,
     );
+    // A movimentação é de um item do cadastro do cliente: o SKU não se
+    // digita (nasce no Receber ou na Contagem) e o saldo de um cliente não
+    // soma no cadastro de outro.
+    if (!catalogTargets.skuRef && !catalogTargets.productRef) {
+      throw new HttpsError(
+        "failed-precondition",
+        `O SKU ${skuCode} não está no cadastro. Produto novo nasce no Receber ou na Contagem.`,
+      );
+    }
+    const [catalogSku, catalogProduct] = await Promise.all([
+      catalogTargets.skuRef ? transaction.get(catalogTargets.skuRef) : undefined,
+      catalogTargets.productRef
+        ? transaction.get(catalogTargets.productRef)
+        : undefined,
+    ]);
+    assertCatalogOwnedBy(
+      customerCode,
+      [catalogSku?.data(), catalogProduct?.data()],
+      `O SKU ${skuCode}`,
+    );
 
     const delta = input.type === "ENTRADA" ? quantity : -quantity;
     const afterOnHand = beforeOnHand + delta;
