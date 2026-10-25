@@ -21,6 +21,7 @@ import {
 import type { OsDaFila } from "@/lib/operacao/fila";
 import {
   ENTRADA_ROTULO,
+  entradaNaTela,
   equipeCurta,
   milesimos,
   type PrazoDoHoje,
@@ -481,7 +482,7 @@ export function DemandaView({
         <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
           <span className="font-semibold text-foreground">{cliente}</span>
           <span aria-hidden="true">·</span>
-          <span>{ENTRADA_ROTULO[demanda.entrada]}</span>
+          <span>{ENTRADA_ROTULO[entradaNaTela(demanda)]}</span>
         </p>
       </header>
       {erro ? (

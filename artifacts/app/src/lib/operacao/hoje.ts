@@ -38,6 +38,8 @@ export type DemandaDoHoje = {
   titulo: string | null;
   tipo: TipoDaDemanda;
   entrada: EntradaDaDemanda;
+  /** Por onde o pedido chegou (`telefone`, `portal`, `wms`...); na demanda do Comercial, o do pedido. */
+  canal?: string | null;
   etapa: string;
   /** Até quando executar (ISO), na demanda direta. */
   executarAte: string | null;
@@ -75,6 +77,15 @@ function linhasDoEscopo(valor: unknown, campoDoId: "linha_id" | "id"): LinhaDoEs
   });
 }
 
+/**
+ * A entrada que a tela mostra e filtra. A entrega do WMS (parte 4.5b) é uma
+ * demanda direta, com as regras dela (prazo, sem vistoria, orçada depois),
+ * mas chegou pela Armazenagem: o canal `wms`.
+ */
+export function entradaNaTela(demanda: Pick<DemandaDoHoje, "entrada" | "canal">): EntradaDaDemanda {
+  return demanda.canal === "wms" ? "armazenagem" : demanda.entrada;
+}
+
 /** A demanda como o Hoje usa. O escopo é o fechado pelo cliente ou, na direta, os itens pedidos. */
 export function demandaDoHoje(id: string, data: Record<string, unknown>): DemandaDoHoje | null {
   const customerCode = texto(data.customer_code);
@@ -86,6 +97,7 @@ export function demandaDoHoje(id: string, data: Record<string, unknown>): Demand
     titulo: texto(data.titulo) || null,
     tipo: daLista(TIPOS_DA_DEMANDA, data.tipo, "planejada"),
     entrada: daLista(ENTRADAS_DA_DEMANDA, data.entrada, "comercial"),
+    canal: texto(data.canal) || null,
     etapa: texto(data.etapa),
     executarAte: texto(data.executar_ate) || null,
     osNumeros: Array.isArray(data.os_numeros) ? data.os_numeros.filter((numero): numero is string => typeof numero === "string" && Boolean(numero)) : [],
@@ -259,7 +271,7 @@ export function quadroDoHoje(entrada: EntradaDoQuadro): QuadroDoHoje {
   const { tipo, entrada: porEntrada, cliente, pessoa } = entrada.filtros;
   const passaDemanda = (demanda: DemandaDoHoje | null, customerCode: string) =>
     (!tipo || (demanda?.tipo ?? "planejada") === tipo) &&
-    (!porEntrada || (demanda?.entrada ?? "comercial") === porEntrada) &&
+    (!porEntrada || (demanda ? entradaNaTela(demanda) : "comercial") === porEntrada) &&
     (!cliente || customerCode === cliente);
   const busca = (...campos: Array<string | null | undefined>) => !termo || campos.some((campo) => campo && normalizar(campo).includes(termo));
 

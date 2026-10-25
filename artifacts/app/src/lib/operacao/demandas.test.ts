@@ -73,6 +73,8 @@ describe("leitura da demanda", () => {
     });
     expect(chegadaDaDemanda(lida!)).toBe("WhatsApp · 23/10/2026 13:05");
     expect(chegadaDaDemanda({ canal: null, recebidaEm: null })).toBeNull();
+    // A entrega do WMS (parte 4.5b) chega pela Armazenagem, não é o pedido do portal.
+    expect(chegadaDaDemanda({ canal: "wms", recebidaEm: null })).toBe("Armazenagem");
   });
 });
 
@@ -162,6 +164,14 @@ describe("lista de demandas", () => {
     expect(numeros({ busca: "10053-01" })).toEqual(["10053"]);
     expect(numeros({ busca: "safra" })).toEqual(["10053"]);
     expect(numeros({ busca: "instalacao" })).toEqual(["10043"]);
+  });
+
+  it("a entrega do WMS entra pela Armazenagem no filtro, e a Direta não a traz", () => {
+    const comEntrega = [...demandas, demanda("10060", { entrada: "direta", canal: "wms", titulo: "Entrega do pedido PED-0118" })];
+    const numeros = (porEntrada: DemandaDaOperacao["entrada"]) =>
+      linhas({ demandas: comEntrega, filtros: { ...SEM_FILTRO_DE_DEMANDAS, entrada: porEntrada } }).map((linha) => linha.demanda.numero);
+    expect(numeros("armazenagem")).toEqual(["10060"]);
+    expect(numeros("direta")).toEqual(["10053"]);
   });
 
   it("as opções de cliente são os das demandas, por nome", () => {

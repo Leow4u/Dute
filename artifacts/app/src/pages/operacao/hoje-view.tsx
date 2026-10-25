@@ -9,6 +9,7 @@ import { rotuloDaDemandaFora, type OsDaFila } from "@/lib/operacao/fila";
 import {
   ENTRADAS_DA_DEMANDA,
   ENTRADA_ROTULO,
+  entradaNaTela,
   TIPOS_DA_DEMANDA,
   TIPO_ROTULO,
   equipeCurta,
@@ -88,7 +89,7 @@ function CartaoDaDemanda({ cartao }: { cartao: CartaoDeDemanda }) {
         <p className="text-sm text-muted-foreground">Vistoria · {formatarData(cartao.vistoria)}</p>
       ) : (
         <p className="text-sm text-muted-foreground">
-          {[ENTRADA_ROTULO[demanda.entrada], demanda.osNumeros.length ? `${demanda.osNumeros.length} OS` : null, `${cartao.linhasComSaldo} ${cartao.linhasComSaldo === 1 ? "item" : "itens"} com saldo`].filter(Boolean).join(" · ")}
+          {[ENTRADA_ROTULO[entradaNaTela(demanda)], demanda.osNumeros.length ? `${demanda.osNumeros.length} OS` : null, `${cartao.linhasComSaldo} ${cartao.linhasComSaldo === 1 ? "item" : "itens"} com saldo`].filter(Boolean).join(" · ")}
         </p>
       )}
       <div>

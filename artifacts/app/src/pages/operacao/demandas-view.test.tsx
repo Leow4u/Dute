@@ -1,3 +1,4 @@
+import { JSDOM } from "jsdom";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
@@ -102,6 +103,15 @@ describe("Demandas", () => {
     expect(textosDaTela(lista({ estado: "erro" }))).toContain("Não foi possível carregar as demandas.");
   });
 
+  it("a entrega do WMS (a direta do canal wms) diz Armazenagem na tabela e no cartão", () => {
+    const entrega: LinhaDeDemanda = { ...LINHAS[0], demanda: { ...DIRETA, numero: "10060", titulo: "Entrega do pedido PED-0118", canal: "wms" } };
+    const dom = new JSDOM(`<!doctype html><body>${lista({ linhas: [entrega] })}</body>`);
+    const { document } = dom.window;
+    expect(document.querySelector("tbody tr td:nth-child(4)")?.textContent).toBe("Armazenagem");
+    expect(document.querySelector("li")?.textContent).toContain("Armazenagem · 1 OS · para agendar");
+    dom.window.close();
+  });
+
   it("o resumo das OS fora da tabela diz OS", () => {
     expect(osComRotulo("Nenhuma")).toBe("Nenhuma OS");
     expect(osComRotulo("3 · 1 em execução")).toBe("3 OS · 1 em execução");
@@ -196,6 +206,14 @@ describe("Demanda", () => {
     expect(textos).toContain("Orçado");
     expect(textos).not.toContain("Planejar OS");
     expect(textos).not.toContain("Pedido por");
+  });
+
+  it("a entrega do WMS diz Armazenagem e segue com o escopo da direta", () => {
+    const textos = textosDaTela(ficha({ demanda: { ...DIRETA, numero: "10060", titulo: "Entrega do pedido PED-0118", canal: "wms", pedidoPor: null } }));
+    expect(textos).toContain("Armazenagem");
+    expect(textos).toContain("Armazenagem · 23/10/2026 13:05");
+    expect(textos).toContain("Pedido");
+    expect(textos).not.toContain("Direta");
   });
 
   it("não encontrada, carregando e erro", () => {

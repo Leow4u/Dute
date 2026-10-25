@@ -11,7 +11,7 @@ import {
   type FiltrosDeDemandas,
   type LinhaDeDemanda,
 } from "@/lib/operacao/demandas";
-import { ENTRADAS_DA_DEMANDA, ENTRADA_ROTULO, TIPOS_DA_DEMANDA, TIPO_ROTULO } from "@/lib/operacao/hoje";
+import { ENTRADAS_DA_DEMANDA, ENTRADA_ROTULO, TIPOS_DA_DEMANDA, TIPO_ROTULO, entradaNaTela } from "@/lib/operacao/hoje";
 import { ROTA_NOVA_DEMANDA, hrefDaDemanda } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 
@@ -169,7 +169,7 @@ export function DemandasView({
                     <td className="px-3 py-3.5 align-top">
                       <SeloDoTipo tipo={linha.demanda.tipo} />
                     </td>
-                    <td className="px-3 py-3.5 align-top text-sm text-foreground">{ENTRADA_ROTULO[linha.demanda.entrada]}</td>
+                    <td className="px-3 py-3.5 align-top text-sm text-foreground">{ENTRADA_ROTULO[entradaNaTela(linha.demanda)]}</td>
                     <td className="px-3 py-3.5 align-top">
                       <Etapa etapa={linha.etapa} />
                     </td>
@@ -196,7 +196,7 @@ export function DemandasView({
                   <span className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
                     <Etapa etapa={linha.etapa} />
                     <span className="text-sm tabular-nums text-muted-foreground">
-                      {ENTRADA_ROTULO[linha.demanda.entrada]} · {osComRotulo(linha.os)}
+                      {ENTRADA_ROTULO[entradaNaTela(linha.demanda)]} · {osComRotulo(linha.os)}
                     </span>
                   </span>
                   {linha.proximo || linha.prazo ? <Proximo linha={linha} /> : null}

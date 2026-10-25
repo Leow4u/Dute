@@ -4,6 +4,7 @@ import type { OsDaFila } from "./fila";
 import {
   SEM_FILTRO,
   demandaDoHoje,
+  entradaNaTela,
   equipeCurta,
   iniciais,
   linhasComSaldo,
@@ -197,6 +198,28 @@ describe("quadro do Hoje", () => {
     expect(com({ busca: "10053-01" })).toEqual(["10053-01"]);
     expect(com({ busca: "cadeiras" })).toEqual(["10053", "10053-01"]);
     expect(com({ busca: "mudanca da agencia" })).toEqual(["10052", "10052-01"]);
+  });
+
+  it("a entrega do WMS (a direta do canal wms, parte 4.5b) entra pela Armazenagem, e a Direta não a traz", () => {
+    const base = entrada({
+      demandas: [
+        demanda("10060", { tipo: "planejada", entrada: "direta", canal: "wms", titulo: "Entrega do pedido PED-0118", osNumeros: ["10060-01"] }),
+        demanda("10053", { tipo: "paraquedas", entrada: "direta", titulo: "Troca de cadeiras" }),
+        demanda("10052", { tipo: "planejada", entrada: "comercial", titulo: "Mudança da agência" }),
+      ],
+      ordens: [agendada("10060-01", HOJE, "09:00"), os("10053-01"), agendada("10052-01", HOJE, "10:00")],
+    });
+    const com = (porEntrada: DemandaDoHoje["entrada"]) => {
+      const quadro = quadroDoHoje({ ...base, filtros: { ...SEM_FILTRO, entrada: porEntrada } });
+      return [...quadro.paraPlanejar.map((cartao) => cartao.demanda.numero), ...quadro.paraAgendar.map((cartao) => cartao.os.numero), ...quadro.agendadasHoje.map((cartao) => cartao.os.numero)];
+    };
+    expect(com("armazenagem")).toEqual(["10060", "10060-01"]);
+    expect(com("direta")).toEqual(["10053", "10053-01"]);
+    expect(com("comercial")).toEqual(["10052", "10052-01"]);
+    expect(entradaNaTela(demanda("10060", { entrada: "direta", canal: "wms" }))).toBe("armazenagem");
+    expect(entradaNaTela(demanda("10053", { entrada: "direta", canal: "whatsapp" }))).toBe("direta");
+    // O prazo e as regras da direta continuam: a entrega do WMS é uma demanda direta.
+    expect(demandaDoHoje("10060", { customer_code: "ITAU", entrada: "direta", canal: "wms" })).toMatchObject({ entrada: "direta", canal: "wms" });
   });
 
   it("as opções dos filtros são os clientes e as pessoas do quadro, em ordem", () => {
