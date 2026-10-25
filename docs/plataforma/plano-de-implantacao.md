@@ -160,7 +160,7 @@ Como se garante, em cada PR de tela:
 | 5 Memória da Dute | Partes 5.1a a 5.6 na `main`. A memória e o Agent Dute do núcleo ligam no `dute-prod` com o OK do Leonardo de 25/10, a partir da publicação seguinte ao merge (`fase-5-memoria.md`, "Lançamento na produção") |
 | 6 Comercial | v1 (partes 1 a 19) na `main` e ligado no `dute-prod` desde 21/10, sem dado carregado; do fechamento, 6.20 a 6.22 e 6.25 feitas, e 6.23 e 6.24 (as cargas e o contador na produção, a semana em paralelo) com o Leonardo |
 | 7 Financeiro unificado | Partes 7.1 a 7.5c na `main`, ligadas com o Financeiro (no `dute-homolog` e, desde a parte 4.9b, no `dute-prod`). A NFS-e e a baixa pela Omie (7.4) estão no código, só no `dute-homolog`, e as chaves de um aplicativo de teste da Omie estão no `dute-homolog` desde 24/10; a primeira emissão espera os serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` cadastrados nele. O cancelamento da NFS-e autorizada espera a resposta da Omie (`fase-7-financeiro-unificado.md`) |
-| 8 RH | Partes 8.1a a 8.3 na `main` e ligadas no `dute-homolog` desde 24/10: a 8.1b pôs no `firebase.json` o banco `dute-rh`, que existe nos dois ambientes (na produção, com PITR e backup diário). A produção recebe o código com o lançamento; a liberação do RH lá é outro OK (`fase-8-rh.md`) |
+| 8 RH | Partes 8.1a a 8.3 na `main` e ligadas no `dute-homolog` desde 24/10: a 8.1b pôs no `firebase.json` o banco `dute-rh`, que existe nos dois ambientes (na produção, com PITR e backup diário). O código subiu na produção em 25/10, e o RH liga lá com o OK do Leonardo do mesmo dia, depois das perguntas 61 a 63, a partir da publicação seguinte ao merge. A 8.4 (as datas de admissão e desligamento, pergunta 63) espera o alinhamento da tela (`fase-8-rh.md`) |
 | Contínuo | PITR e backup diário desde 20/10 (no `dute-rh`, desde 24/10). O teste de restauração é o workflow `Teste de restauração`, que espera o OK do Leonardo para rodar (`backup-e-recuperacao.md`). O painel do sistema mostra os erros de todas as functions, o estado e o acesso das callables de todas as codebases, a latência e o e-mail que desistiu (`docs/painel-sistema.md`). O inventário da LGPD está em `lgpd.md`, com 12 decisões do Leonardo. Manuais de todos os módulos: `docs/manual-comercial.md`, `docs/manual-operacao.md`, `docs/manual-financeiro.md`, `docs/manual-rh.md`, `docs/manual-portal.md` (o portal do cliente) e `docs/manual-armazenagem.md`; o roteiro do treinamento por marco em `docs/treinamento.md`. A revisão dos manuais virou correções (PRs 342 a 361) e as perguntas 36 a 54 da seção 13. A publicação só sobe as functions e a tela com os índices do arquivo prontos (`tools/esperar_indices.py`), e o CI confere o índice composto de cada consulta das telas (`lib/cloud-api-indices.test.ts`) e das Functions nos testes de integração (`tools/indices_das_consultas.py`), porque o emulador não o exige |
 
 ## 3. Ordem de implantação
@@ -646,6 +646,7 @@ RH e, os de CNH, ao da Operação. Zeragem do WMS nunca toca o banco `dute-rh`.
 | 8.1 | Banco `dute-rh`, `firestore-rh.rules`, codebase `functions/rh`, papel `rh` no shell | Só `rh`, `admin` e `owner` leem; ninguém grava pelo navegador |
 | 8.2 | Ficha do colaborador: documentos (Storage com regra), exames, treinamentos, vencimentos; alertas no Início | Vencimento gera alerta uma vez; documento visível só no RH |
 | 8.3 | Exportação da competência para a contabilidade, que faz a folha e transmite o eSocial (pergunta 24, decidida em 24/10/2026) | Exportação idempotente |
+| 8.4 | As datas de admissão e de desligamento do colaborador, e a exportação com quem tinha vínculo no mês (pergunta 63, decidida em 25/10/2026). Tela nova, com alinhamento de UX antes | Quem entrou depois da competência não aparece na planilha dela; a mudança de nome depois não cria versão nova de mês passado |
 
 **Pronto quando.** Só `rh`, `admin` e `owner` leem o banco `dute-rh` (teste de
 regras); CNH, exame e treinamento vencendo aparecem no Início certo.
@@ -981,7 +982,9 @@ defeito.
     nome ou função depois cria uma versão nova de um mês passado. O cadastro
     não tem data de admissão nem de desligamento. Recomendo guardar as duas
     datas no cadastro do colaborador (tela nova, com alinhamento antes) e a
-    exportação listar quem tinha vínculo no mês.
+    exportação listar quem tinha vínculo no mês. **Decidida em 25/10/2026:**
+    guardar as duas datas (parte 8.4, com o alinhamento da tela antes), e o
+    RH liga na produção já; até a 8.4, a planilha sai do cadastro de hoje.
 
 64. A medição aprovada pode ter linhas sem demanda, como a equipe fixa do
     contrato misto (`comercial-cargas.md`), e pode não ter demanda nenhuma.

@@ -204,9 +204,9 @@ describe("listas do RH iguais em todo lugar (Fase 8)", () => {
     expect([...RH_WRITE_ROLES_DO_APP]).toEqual(["rh"]);
   });
 
-  it("liberação por ambiente: a lista das callables é a do app, só a homologação até o lançamento da fase", () => {
+  it("liberação por ambiente: a lista das callables é a do app, homologação e produção desde o lançamento da fase", () => {
     expect(tsList(liberacao, "RH_AMBIENTES_LIBERADOS")).toEqual([...RH_AMBIENTES_LIBERADOS]);
-    expect([...RH_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
+    expect([...RH_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog", "dute-prod"]);
   });
 
   it("as telas do RH só ligam quando a codebase rh está na publicação (parte 8.1b)", () => {
@@ -215,7 +215,8 @@ describe("listas do RH iguais em todo lugar (Fase 8)", () => {
     expect(RH_PUBLICADO).toBe(publicado);
     expect(rhLiberado("dute-homolog")).toBe(publicado);
     expect(rhLiberado("dute-homolog", true)).toBe(true);
-    expect(rhLiberado("dute-prod", true)).toBe(false);
+    expect(rhLiberado("dute-prod", true)).toBe(true);
+    expect(rhLiberado("dute-btg", true)).toBe(false);
   });
 
   it("o catálogo da ficha é cópia literal do de functions/rh", () => {

@@ -69,7 +69,7 @@ describe("perfil de quem abre o RH", () => {
     await recusa(requireRhCaller(db, pedido(null), "dute-homolog"), "unauthenticated", /Faça login/);
   });
 
-  it("fora da homologação, recusa antes de ler o perfil", async () => {
-    await recusa(requireRhCaller(db, pedido("rh-1"), "dute-prod"), "failed-precondition", /não está liberado neste ambiente \(dute-prod\)/);
+  it("fora da homologação e da produção, recusa antes de ler o perfil", async () => {
+    await recusa(requireRhCaller(db, pedido("rh-1"), "dute-btg"), "failed-precondition", /não está liberado neste ambiente \(dute-btg\)/);
   });
 });
