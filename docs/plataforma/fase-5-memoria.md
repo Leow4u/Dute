@@ -1488,6 +1488,30 @@ Achada em 25/10/2026.
   - a passada seguinte não propõe de novo o que foi decidido.
   - Antes, a rotina gravava por cima.
 
+### Correção: o modelo reserva herdava as chamadas do modelo que falhou
+
+Achada em 25/10/2026.
+
+- **O defeito.** Quando o primeiro modelo falha (por exemplo, chama
+  ferramentas e devolve texto vazio), o `gerarComGenkit` passa ao reserva.
+  - O aviso de "reset" chegava só à tela.
+  - As chamadas anotadas na conversa ficavam: o cartão, as ferramentas
+    usadas e os playbooks da mensagem gravada somavam a tentativa
+    descartada.
+  - Exemplo: o rascunho de pedido montado pelo primeiro modelo ia com a
+    resposta do reserva, que nem falava dele. O cliente podia mandá-lo; uma
+    pessoa ainda decide, mas o cartão não batia com a resposta.
+  - Sem modelo nenhum, a resposta de reserva ("Não consegui consultar os
+    dados agora") podia levar o cartão da última tentativa.
+- **A correção:**
+  - A conversa limpa as chamadas no "reset" da nova tentativa.
+  - A resposta sem modelo não leva chamada nenhuma.
+- **Testes:** `agente-conversa.integration.test.ts`, com o modelo falso
+  fazendo o que o `gerarComGenkit` faz:
+  - o reserva grava a resposta sem o rascunho, sem ferramentas usadas e com
+    0 chamadas no uso;
+  - a resposta sem modelo grava sem o cartão.
+
 ## Lançamento na produção
 
 Espera o OK do Leonardo. Até lá, a memória e o Agent Dute do núcleo só

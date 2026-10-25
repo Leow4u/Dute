@@ -183,6 +183,35 @@ describe("a conversa no núcleo", () => {
     );
   });
 
+  it("o reserva que responde depois do modelo que falhou não herda as chamadas dele: nem o cartão, nem as ferramentas usadas", async () => {
+    // Como o gerarComGenkit: o primeiro modelo monta o rascunho e falha; o "reset" descarta o que veio, e o reserva responde sem ferramenta.
+    const gerar: GerarResposta = async (pedido) => {
+      await pedido.ferramentas.find((item) => item.nome === "rascunho_pedido")!.executar({ itens: [{ item: "POLO-M", quantidade: 3 }], destino: "Faria Lima" });
+      pedido.aoPedaco?.({ type: "reset" });
+      pedido.aoPedaco?.({ type: "text", index: 0, text: "Temos 30 polos M." });
+      return { texto: "Temos 30 polos M.", fonte: "genkit_reserva", modelo: "reserva", erro: "primeiro: Resposta vazia do modelo." };
+    };
+    const pedacos: unknown[] = [];
+    await conversarComDute(db, cliente, { message: "Quantas polos M temos?", conversation_id: "conv_5", modulo: "wms" }, { gerar, aoPedaco: (pedaco) => pedacos.push(pedaco), agora: () => AGORA, novoId });
+    assert.deepEqual(pedacos, [{ type: "reset" }, { type: "text", index: 0, text: "Temos 30 polos M." }]);
+    const resposta = (await todos("agent_messages")).find((mensagem) => mensagem.role === "assistant");
+    // Antes, a resposta ia com o rascunho do pedido da tentativa descartada.
+    assert.deepEqual([resposta?.content, resposta?.tools_used, "draft" in (resposta ?? {})], ["Temos 30 polos M.", [], false]);
+    const [uso] = await todos("agent_usage");
+    assert.deepEqual([uso.tool_calls, uso.error], [0, "primeiro: Resposta vazia do modelo."]);
+  });
+
+  it("sem modelo nenhum, a resposta de reserva não leva o cartão do que a última tentativa pediu", async () => {
+    const gerar: GerarResposta = async (pedido) => {
+      pedido.aoPedaco?.({ type: "reset" });
+      await pedido.ferramentas.find((item) => item.nome === "rascunho_pedido")!.executar({ itens: [{ item: "POLO-M", quantidade: 3 }], destino: "Faria Lima" });
+      return { texto: "Não consegui consultar os dados agora.", fonte: "fallback_indisponivel", erro: "x: falhou | y: falhou" };
+    };
+    await conversarComDute(db, cliente, { message: "Quero 3 polos M", conversation_id: "conv_6", modulo: "wms" }, { gerar, agora: () => AGORA, novoId });
+    const resposta = (await todos("agent_messages")).find((mensagem) => mensagem.role === "assistant");
+    assert.deepEqual([resposta?.source, resposta?.tools_used, "draft" in (resposta ?? {})], ["fallback_indisponivel", [], false]);
+  });
+
   it("sem o modelo, a resposta de reserva também fica registrada", async () => {
     const resposta = await conversarComDute(db, cliente, { message: "Oi", conversation_id: "conv_4", modulo: "wms" }, { gerar: async () => ({ texto: "Não consegui consultar os dados agora.", fonte: "fallback_indisponivel", erro: "x: falhou" }), agora: () => AGORA, novoId });
     assert.equal(resposta.messages[1].source, "fallback_indisponivel");
