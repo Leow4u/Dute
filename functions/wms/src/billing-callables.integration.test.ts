@@ -356,15 +356,24 @@ describe("a emissão", () => {
     assert.equal(linhas(resultado).get("2")?.valor_unit, 1.25);
   });
 
-  it("a competência que ninguém abriu não emite, mas o uso do mês fechado fica congelado", async () => {
-    await recusa(emitir({ competencia: "2026-08" }), "failed-precondition", "PERIOD_NOT_FOUND");
-    const foto = await db
-      .collection("billing_operational_snapshots")
-      .doc(billingDocumentId(BTG, "2026-08"))
-      .get();
-    assert.equal(foto.get("mode"), "frozen");
+  it("a competência que ninguém salvou emite o que a prévia mostrou e nasce na emissão", async () => {
+    const mostrada = await previa({ competencia: SETEMBRO });
+    assert.equal(mostrada.status, "aberto");
+    assert.equal(mostrada.emission.can_emit, true);
     assert.equal((await db.collection("billing_periods").get()).size, 0);
-    assert.equal((await db.collection("client_invoices").get()).size, 0);
+
+    const emitida = await emitir({ competencia: SETEMBRO });
+    // Sem a hora extra (item 7), que ninguém salvou: 75,08 − 8,33.
+    assert.equal(emitida.invoice.total_cents, TOTAL_BTG - 833);
+    assert.equal(emitida.invoice.total_cents, mostrada.total_cents);
+    const periodo = await db.collection("billing_periods").doc(ID_BTG).get();
+    assert.equal(periodo.get("status"), "emitido");
+    assert.equal(periodo.get("customer_code"), BTG);
+    assert.equal(periodo.get("created_by"), "fin");
+    assert.equal(periodo.get("invoice_snapshot.total_cents"), TOTAL_BTG - 833);
+    assert.equal((await db.collection("client_invoices").doc(ID_BTG).get()).get("status"), "emitido");
+    const foto = await db.collection("billing_operational_snapshots").doc(ID_BTG).get();
+    assert.equal(foto.get("mode"), "frozen");
   });
 });
 

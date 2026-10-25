@@ -250,6 +250,12 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     de qualquer um que pede, o cliente inclusive
     (`fase-7-financeiro-unificado.md`, "Correção: o custo mandado no pedido
     de saída mudava o preço do SKU").
+  - A competência que ninguém salvou passa a emitir. Antes, "Emitir"
+    recusava com "Competencia 2026-10 nao encontrada.", e o cliente sem
+    linha manual não emitia nunca pela tela. Na produção de hoje, antes de
+    emitir outubro, salve as quantidades do mês: edite uma, volte ao valor
+    dela e salve (`fase-7-financeiro-unificado.md`, "Correção: a competência
+    que ninguém salvou não emitia").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.

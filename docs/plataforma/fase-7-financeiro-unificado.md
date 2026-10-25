@@ -264,7 +264,8 @@ Feita em 23/10/2026, em
   - **A competência só existe depois de salvar as quantidades manuais.** Quem
     cria o `billing_periods` é o `saveBillingManual`. Sem ele, a emissão
     recusa com `PERIOD_NOT_FOUND`, mas o uso do mês fechado fica congelado.
-    A tela de Faturamento salva antes de emitir.
+    A tela não salva antes de emitir, ao contrário do que esta nota dizia
+    (ver "Correção: a competência que ninguém salvou não emitia").
   - **As linhas saem por grupo**, na ordem em que o grupo aparece na LPU, e
     dentro do grupo pela `ordem`.
   - **A competência antiga da BTG**, no id do mês, é lida e paga no mesmo
@@ -1389,6 +1390,35 @@ desde a separação do preço em `catalog_prices` (21/10/2026).
   saída não muda o preço do SKU". Com o preço em 25 e o pedido com 0,01, a
   criação, a recusa, a aprovação e a entrega mantêm o preço em 25 e o total
   em 250. Antes, a criação já levava o preço a 0,01.
+
+### Correção: a competência que ninguém salvou não emitia
+
+Achada em 25/10/2026, numa revisão do faturamento do WMS. Está na produção
+desde o faturamento por cliente.
+
+- **O defeito.** Só o `saveBillingManual` cria o `billing_periods`.
+  - A prévia trata a competência sem documento como aberta e libera a
+    emissão. A tela mostra "Quantidades salvas" e "Pronto para emitir".
+  - A emissão recusava com "Competencia 2026-10 nao encontrada."
+    (`PERIOD_NOT_FOUND`).
+  - O botão Salvar só aparece depois de editar uma quantidade. O cliente
+    cuja Tabela de preços só tem linhas automáticas (ad valorem, entradas,
+    saídas, movimentos) não tem o que editar e não emitia nunca pela tela.
+- **A correção.** `emitBillingInvoice` passa à emissão o período aberto
+  (`openPeriod`), e `emitInvoiceInTransaction` o usa quando a competência não
+  tem documento.
+  - A competência nasce emitida, na mesma transação, com o cliente, quem a
+    criou e quando.
+  - Sem o período aberto, a função continua recusando com
+    `PERIOD_NOT_FOUND`.
+  - O mês que ainda não fechou continua recusado pela emissão.
+- **Testes:**
+  - `billing.test.ts`: a competência sem documento recusa sem o período
+    aberto e emite com ele.
+  - `billing-callables.integration.test.ts`, "a competência que ninguém
+    salvou emite o que a prévia mostrou": setembro sem quantidades salvas
+    emite R$ 66,75, o total da prévia, e o `billing_periods` nasce emitido.
+    Antes, recusava com `PERIOD_NOT_FOUND`.
 
 ## Onde a Fase 7 está
 

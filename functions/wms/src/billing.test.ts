@@ -388,6 +388,41 @@ describe("snapshot e emissao", () => {
     assert.equal(second.total, first.total);
     assert.equal(persisted.status, "emitido");
   });
+
+  it("a competencia sem documento nasce na emissao com o periodo aberto; sem ele, recusa", async () => {
+    let persisted: Record<string, unknown> | null = null;
+    const transaction = {
+      async get() {
+        return { exists: persisted !== null, data: () => persisted ?? undefined };
+      },
+      set(_ref: unknown, value: Readonly<Record<string, unknown>>) {
+        persisted = { ...(persisted ?? {}), ...value };
+        return this;
+      },
+    };
+    const emitir = (options: Parameters<typeof emitInvoiceInTransaction>[3]) =>
+      emitInvoiceInTransaction(
+        transaction as unknown as Parameters<typeof emitInvoiceInTransaction>[0],
+        {} as Parameters<typeof emitInvoiceInTransaction>[1],
+        calculationInput(),
+        options,
+      );
+
+    await assert.rejects(emitir({ issuedAt: AFTER_CLOSE }), errorWithCode("PERIOD_NOT_FOUND"));
+    assert.equal(persisted, null);
+
+    const emitida = await emitir({
+      issuedAt: AFTER_CLOSE,
+      openPeriod: () => createOpenBillingPeriod("2026-07", { now: AFTER_CLOSE, customerCode: "BTG Pactual" }),
+    });
+    assert.equal(emitida.total, 326.33);
+    const gravado = persisted as Record<string, unknown> | null;
+    assert.equal(gravado?.competencia, "2026-07");
+    assert.equal(gravado?.status, "emitido");
+    assert.equal(gravado?.total, 326.33);
+    assert.equal(gravado?.customer_code, "BTG Pactual");
+    assert.ok(gravado?.opened_at);
+  });
 });
 
 describe("regras de competência", () => {
