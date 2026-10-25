@@ -192,6 +192,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     documento do cliente em `billing_operational_snapshots` (o da BTG é
     `BTG_Pactual__2026-10`), que guarda só o uso; a próxima prévia congela
     de novo, com a conta nova. Depois de emitida, a fatura não muda mais.
+  - A emissão recusa quando uma quantidade salva nos serviços do mês é de
+    um item que saiu da Tabela de preços: antes, a cobrança sumia sem aviso
+    (`fase-7-financeiro-unificado.md`, "Correção: a quantidade salva de um
+    item que saiu da tabela sumia da fatura").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
