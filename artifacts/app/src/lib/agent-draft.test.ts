@@ -184,3 +184,24 @@ describe("aviso de envio enviado pelo cartão", () => {
     ]);
   });
 });
+
+describe("o rascunho levado à tela fica ligado à mensagem do cartão", () => {
+  it("o pedido e o aviso guardam a mensagem, que volta ao abrir a tela", () => {
+    const storage = new Map<string, string>();
+    const sessao = { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => void storage.set(key, value), removeItem: (key: string) => void storage.delete(key) };
+    const pedido = draftFromOrderForm(orderFormFromDraft(parseDraft(order) as OrderDraft), "msg_agent_1");
+    expect(pedido.mensagem).toBe("msg_agent_1");
+    saveDraft(pedido, sessao);
+    expect(takeDraft("pedido", sessao)?.mensagem).toBe("msg_agent_1");
+
+    saveDraft({ tipo: "envio", fornecedor: "Malharia Sul", linhas: [{ codigo: "A.01", nome: "Polo", quantidade: 5, situacao: "no_estoque" }], mensagem: "msg_agent_2" }, sessao);
+    expect(takeDraft("envio", sessao)?.mensagem).toBe("msg_agent_2");
+  });
+
+  it("sem mensagem, ou com um id que o servidor não aceita, o rascunho vai sem ela", () => {
+    expect(draftFromOrderForm(orderFormFromDraft(parseDraft(order) as OrderDraft))).not.toHaveProperty("mensagem");
+    expect(parseDraft({ ...order, mensagem: "../outra/mensagem" })).not.toHaveProperty("mensagem");
+    expect(parseDraft({ ...order, mensagem: "m".repeat(161) })).not.toHaveProperty("mensagem");
+  });
+});
+

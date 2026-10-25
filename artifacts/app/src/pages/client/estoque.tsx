@@ -233,6 +233,8 @@ export function ClienteEstoque() {
       destination: draft.destino ?? "",
       dueAt: dueAtFromDraft(draft.prazo, draft.hora),
       notes: draft.observacoes ?? "",
+      // O pedido fica ligado ao cartão de onde saiu: enviado aqui, o cartão mostra Enviado.
+      mensagemDoAgente: draft.mensagem,
     };
     setCart(draftCart);
     if (cartKey) patchStoredCart(browserCartStorage(), cartKey, next);
@@ -266,6 +268,7 @@ export function ClienteEstoque() {
       destination: eventDestination(event),
       dueAt: due,
       notes: eventNotes(event),
+      mensagemDoAgente: undefined,
     };
     setCart(eventCart);
     if (cartKey) patchStoredCart(browserCartStorage(), cartKey, next);
@@ -650,7 +653,11 @@ export function ClienteEstoque() {
             return;
           }
 
+          // O pedido que saiu de um cartão do Agent Dute vai ligado a ele: o
+          // servidor o cria uma vez só por mensagem e marca o cartão enviado.
+          const mensagemDoAgente = cartKey ? readStoredCart(browserCartStorage(), cartKey).mensagemDoAgente : undefined;
           requestMutation.mutate({
+            ...(mensagemDoAgente ? { agent_message_id: mensagemDoAgente } : {}),
             type: "retirada",
             priority: "normal",
             // Sem nome, o Início mostra "Pedido de dd/mm".

@@ -202,8 +202,10 @@ export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft
         <button
           type="button"
           onClick={() => {
-            saveDraft(draft);
-            navigate(draftHref(draft));
+            // Ligado à mensagem: o aviso enviado pela tela Envios marca este cartão como enviado.
+            const next = messageId ? { ...draft, mensagem: messageId } : draft;
+            saveDraft(next);
+            navigate(draftHref(next));
           }}
           className="text-sm font-medium text-primary hover:underline"
         >
