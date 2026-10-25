@@ -79,6 +79,31 @@ export async function readBillingPeriod(
   return (await ref.get()).data() ?? {};
 }
 
+/**
+ * Para que lado o movimento conta na cobrança, uma vez só: o recebimento
+ * (`wms_receiving`) é entrada e a expedição (`wms_shipping`) é saída. O que o
+ * armazém faz por dentro (abertura do estoque, guarda, contagem, correção,
+ * devolução, ajuste) tem outra origem e não se cobra. O movimento sem origem é
+ * legado: com a foto da virada, ele já está nela; sem a foto, conta pelo
+ * sinal e, sem sinal, pelo tipo.
+ */
+export function billingMovementDirection(
+  movement: Record<string, unknown>,
+  { snapshot }: { snapshot: boolean },
+): "incoming" | "outgoing" | null {
+  const source = String(movement.source ?? "").trim().toLowerCase();
+  if (source === "wms_receiving") return "incoming";
+  if (source === "wms_shipping") return "outgoing";
+  if (source || snapshot) return null;
+  const sign = Number(movement.sinal ?? movement.sign ?? 0);
+  if (sign > 0) return "incoming";
+  if (sign < 0) return "outgoing";
+  const type = String(movement.tipo_mov ?? "").trim().toUpperCase();
+  if (type === "ENTRADA") return "incoming";
+  if (type === "SAIDA") return "outgoing";
+  return null;
+}
+
 /** Mês fechado sem foto ainda: gravar uma vez. Foto, replace e baseline ficam. */
 export function shouldFreezeCompetencia(mode: string, closed: boolean): boolean {
   return closed && !["frozen", "replace", "baseline"].includes(mode);

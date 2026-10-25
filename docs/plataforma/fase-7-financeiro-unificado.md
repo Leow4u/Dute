@@ -29,7 +29,10 @@ plano ordena as partes. Escrito em 23/10/2026.
   - A LPU é a `billing_price_list`. O ad valorem sai do valor da mercadoria
     (`catalog_prices` e `client_inventory`).
   - As entradas, as saídas e os movimentos são os do mês, no horário de São
-    Paulo. Depois da virada, só o recebimento e a expedição do WMS contam.
+    Paulo. Só o recebimento e a expedição do WMS contam, cada movimento uma
+    vez (`billingMovementDirection`, em `domain/billing-scope.ts`). O
+    movimento sem origem é legado e conta pelo sinal só no mês sem a foto
+    da virada.
   - O mês fechado tem o uso congelado uma vez em
     `billing_operational_snapshots` (`ensureFrozenBillingUsage`).
 - **A emissão** congela a fatura em `billing_periods.invoice_snapshot` e
@@ -1177,6 +1180,46 @@ aplicativo de teste estão lá desde 24/10/2026: o Leonardo as guardou pelo
   - O manifesto da publicação, conferido com a function compilada: o
     `dute-homolog` declara as duas chaves, e o `dute-prod` e o `dute-btg`
     nenhuma.
+
+### Correção: o mês sem foto cobrava o que o armazém faz por dentro
+
+Achada em 25/10/2026, ao conferir os achados de faturamento da auditoria de
+24/07.
+
+- **O defeito.** Sem documento em `billing_operational_snapshots`, a conta
+  das entradas, das saídas e dos movimentos voltava à regra de antes da
+  virada: todo movimento de sinal positivo era entrada, todo de sinal
+  negativo era saída, e todos contavam como movimento.
+  - Valia para a abertura do estoque, o estorno dela, a guarda (uma saída e
+    uma entrada para cada peça guardada), a contagem, a devolução e o ajuste
+    manual.
+  - A zeragem de 16/10/2026 apagou as fotos. Por isso todo mês desde então,
+    de todo cliente, caía nessa regra. O de outubro traria a contagem de
+    abertura inteira como entrada de peças.
+  - O mês fechado congela o uso na primeira prévia ou emissão
+    (`ensureFrozenBillingUsage`), e a produção já congela. Desde 01/11, a
+    primeira prévia de outubro congelaria esses números.
+  - O dinheiro só muda onde a Tabela de preços cobra por "Entradas (peças)",
+    "Saídas (peças)" ou "Nº de movimentações". O ad valorem sai do valor da
+    mercadoria e não muda.
+  - Um movimento antigo com sinal e tipo que discordavam contava dos dois
+    lados (achado 28 da auditoria).
+- **A correção.** Cada movimento conta uma vez, para um lado só
+  (`billingMovementDirection`, em `domain/billing-scope.ts`):
+  - o recebimento (`wms_receiving`) é entrada e a expedição
+    (`wms_shipping`) é saída, com ou sem a foto;
+  - um movimento com outra origem é do armazém e não se cobra;
+  - o movimento sem origem é legado: com a foto, ele já está nela; sem a
+    foto, conta pelo sinal e, sem sinal, pelo tipo.
+  - O mês com foto calcula igual.
+- **Na produção,** chega com a próxima publicação da `main`
+  (`lancamento-producao.md`, seção 2).
+- **Testes:**
+  - `billing-scope.test.ts`: o lado de cada origem e o legado.
+  - `billing-callables.integration.test.ts`, "o mês sem foto": um cliente
+    com os movimentos do WMS de hoje cobra só o recebimento e a expedição.
+    Antes, cobrava 528 peças de entrada, 21 de saída e 9 movimentos, no
+    lugar de 10, 4 e 2.
 
 ## Onde a Fase 7 está
 
