@@ -241,7 +241,13 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     a decidida na própria tela passa à próxima, como antes. Antes, o detalhe
     mostrava a primeira da aba, e "Aprovar e separar" ou "Encerrar" agia na
     que ninguém tinha conferido (teste em
-    `pages/customer-requests-detalhe.test.tsx`).
+    `pages/customer-requests-detalhe.test.tsx`);
+  - o "Registrar movimentação" (Estoque › Histórico e "Ajustar saldo") abre
+    com a hora de agora no fuso do aparelho. Antes, abria com a hora de
+    Greenwich lida como local, três horas à frente em São Paulo, e
+    congelada na hora em que a tela montou: às 21h30 do último dia, o
+    ajuste caía no mês seguinte no razão e nos relatórios (teste em
+    `pages/movements-data.test.tsx`).
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a
   `main`, sem liberação própria. As entradas, as saídas e os movimentos
   passam a cobrar só o recebimento e a expedição, cada movimento uma vez
