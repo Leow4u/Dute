@@ -6,6 +6,7 @@ import {
   type Transaction,
 } from "firebase-admin/firestore";
 
+import { exactSum } from "../billing.js";
 import { LEGACY_CUSTOMER_CODE } from "./customer-scope.js";
 
 /**
@@ -134,7 +135,8 @@ function unitOf(price: PriceRow | undefined): number | null {
  * O total gravado só vale para o SKU sem preço unitário: quem muda o saldo
  * nem sempre sabe o custo (o pedido do portal não leva, e o saldo não
  * guarda), e o total ficava zerado ou velho. Sem preço nenhum, usa o
- * total_cost legado do estoque.
+ * total_cost legado do estoque. A soma é exata, em decimal: é a base do ad
+ * valorem, e o ponto flutuante perdia o centavo.
  */
 export function merchandiseValue(inventory: InventoryRow[], prices: PriceRow[]): number {
   const bySku = new Map<string, PriceRow>();
@@ -144,12 +146,12 @@ export function merchandiseValue(inventory: InventoryRow[], prices: PriceRow[]):
     if (typeof price.item_code === "string" && price.item_code) byItem.set(price.item_code, price);
   }
   const covered = new Set<string>();
-  let sum = 0;
+  const terms: Array<number | [number, number]> = [];
   for (const price of prices) {
     const total = Number(price.total_cost);
     const sku = typeof price.sku_code === "string" ? price.sku_code : "";
     if (sku && unitOf(price) === null && Number.isFinite(total)) {
-      sum += total;
+      terms.push(total);
       covered.add(sku);
     }
   }
@@ -160,13 +162,13 @@ export function merchandiseValue(inventory: InventoryRow[], prices: PriceRow[]):
     const unit = unitOf((sku && bySku.get(sku)) || (item && byItem.get(item)) || undefined);
     const qty = Number(row.qty_on_hand ?? 0);
     if (unit !== null && Number.isFinite(qty)) {
-      sum += qty * unit;
+      terms.push([qty, unit]);
       continue;
     }
     const legacy = Number(row.total_cost ?? 0);
-    if (Number.isFinite(legacy)) sum += legacy;
+    if (Number.isFinite(legacy)) terms.push(legacy);
   }
-  return sum;
+  return exactSum(terms);
 }
 
 /**

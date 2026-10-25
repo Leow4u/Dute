@@ -256,6 +256,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     emitir outubro, salve as quantidades do mês: edite uma, volte ao valor
     dela e salve (`fase-7-financeiro-unificado.md`, "Correção: a competência
     que ninguém salvou não emitia").
+  - O valor da mercadoria soma em decimal exato. Antes, o ponto flutuante
+    perdia um centavo do ad valorem em perto de 1% dos meses
+    (`fase-7-financeiro-unificado.md`, "Correção: o valor da mercadoria
+    perdia o centavo no ponto flutuante").
 - **O app do campo (25/10/2026).** Entra com a `main`, sem liberação
   própria: o app abre sem sinal com o último perfil lido no aparelho, e a
   fila guardada volta e vai quando o sinal voltar. Antes, aberto sem sinal
