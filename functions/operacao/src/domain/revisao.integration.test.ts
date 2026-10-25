@@ -180,6 +180,20 @@ describe("revisar a OS da demanda direta", () => {
     assert.equal((await lerOs("10301-01")).status, "revisada");
   });
 
+  it("com o orçamento da execução já enviado (a etapa é do Comercial), a OS também não se reabre", async () => {
+    await reviewServiceOrderFor(db, interno, revisar(), AGORA);
+    // O Comercial orçou e enviou: a etapa da demanda passou a ser a dele.
+    await db.collection("quotes").doc("10301").set({ status: "enviado", rv: 0, tipo_rv: "execucao", customer_code: "ITAU" });
+    await db.collection("demands").doc("10301").update({ etapa: "aguardando_cliente" });
+    await recusa(
+      reopenServiceOrderFor(db, admin, { idempotency_key: "o-3", numero: "10301-01", motivo: "Conferir" }, AGORA),
+      "failed-precondition",
+      "O Comercial já abriu o orçamento da execução desta demanda.",
+    );
+    assert.equal((await lerOs("10301-01")).status, "revisada");
+    assert.equal((await lerDemanda("10301")).etapa, "aguardando_cliente");
+  });
+
   it("a outra OS cancelada depois da revisão: sem OS em aberto, a demanda vai à Execução a orçar", async () => {
     // A segunda viagem ficou agendada; a primeira OS é revisada antes de ela ser cancelada.
     await db.collection("demands").doc("10301").update({ itens_pedidos: [{ ...PEDIDA, quantidade: "50" }], os_numeros: ["10301-01", "10301-02"] });

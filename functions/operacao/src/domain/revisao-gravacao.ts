@@ -160,7 +160,9 @@ export async function reopenServiceOrderFor(
       const demanda = dataDe(await transaction.get(demandaRef), "Demanda da OS não encontrada.");
       if (demanda.validacao) throw new HttpsError("failed-precondition", "O cliente já validou a execução desta demanda: o Comercial reabre antes.");
       const registro = demanda.registro_execucao as { origem?: unknown } | null | undefined;
-      const executadaPelaOperacao = demanda.entrada === "direta" && registro?.origem === "operacao" && demanda.etapa === "execucao_a_orcar";
+      // O orçamento da execução recusa em qualquer etapa: o Comercial muda a
+      // etapa da demanda a cada passo dele (para aprovar, enviada...).
+      const executadaPelaOperacao = demanda.entrada === "direta" && registro?.origem === "operacao";
       if (executadaPelaOperacao && (await transaction.get(db.collection(QUOTES_COLLECTION).doc(os.demanda))).exists) {
         throw new HttpsError("failed-precondition", "O Comercial já abriu o orçamento da execução desta demanda.");
       }
@@ -186,7 +188,8 @@ export async function reopenServiceOrderFor(
         ...autoria(caller),
       });
       const patch: Record<string, unknown> = { operacao: resumo, updated_at: FieldValue.serverTimestamp(), updated_by: caller.uid };
-      if (executadaPelaOperacao) {
+      const voltaAPlanejar = executadaPelaOperacao && demanda.etapa === "execucao_a_orcar";
+      if (voltaAPlanejar) {
         Object.assign(patch, {
           executado_de: null,
           executado_ate: null,
@@ -202,7 +205,7 @@ export async function reopenServiceOrderFor(
         type: "os.reopened",
         entity_id: os.numero,
         customer_code: os.customer_code,
-        payload: { id: os.numero, demanda: os.demanda, demanda_reaberta: executadaPelaOperacao },
+        payload: { id: os.numero, demanda: os.demanda, demanda_reaberta: voltaAPlanejar },
         actor: ator(caller),
         occurred_at: iso,
       });
