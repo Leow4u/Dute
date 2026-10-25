@@ -29,6 +29,7 @@ import {
   filtrarFila,
   hrefDoOrcamento,
   itemDaFila,
+  orcamentoDaFicha,
   segmentoInicial,
   type ItemDaFila,
   type SegmentoDaFila,
@@ -79,6 +80,8 @@ export default function ComercialOrcamentosPage() {
   const [segmento, setSegmento] = useState<SegmentoDaFila | null>(null);
   const [busca, setBusca] = useState("");
   const [selecionadoNumero, setSelecionadoNumero] = useState<string | null>(null);
+  /** O orçamento que está na ficha: não troca sozinho quando a fila muda (orcamentoDaFicha). */
+  const [naFicha, setNaFicha] = useState<string | null>(null);
   const [fichaAberta, setFichaAberta] = useState(false);
   const [dialogo, setDialogo] = useState<Dialogo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -115,7 +118,12 @@ export default function ComercialOrcamentosPage() {
     () => filtrarFila(itens, segmentoAtual, busca).flatMap((grupo) => grupo.itens),
     [itens, segmentoAtual, busca],
   );
-  const selecionado = visiveis.find((item) => item.numero === selecionadoNumero) ?? visiveis[0] ?? null;
+  const selecionado = orcamentoDaFicha(itens, visiveis, selecionadoNumero, naFicha);
+  // Guarda o que a ficha mostra, depois que a fila abriu no segmento do papel.
+  const numeroNaFicha = segmento === null ? null : (selecionado?.numero ?? null);
+  useEffect(() => {
+    if (numeroNaFicha !== naFicha) setNaFicha(numeroNaFicha);
+  }, [numeroNaFicha, naFicha]);
 
   const nomeDe = useNomes(
     selecionado
@@ -229,10 +237,14 @@ export default function ComercialOrcamentosPage() {
         segmento={segmentoAtual}
         onSegmento={(proximo) => {
           setSegmento(proximo);
+          setNaFicha(null);
           setFichaAberta(false);
         }}
         busca={busca}
-        onBusca={setBusca}
+        onBusca={(valor) => {
+          setBusca(valor);
+          setNaFicha(null);
+        }}
         selecionado={selecionado}
         onSelecionar={(numero) => {
           setSelecionadoNumero(numero);
