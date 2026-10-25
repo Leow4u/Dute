@@ -386,6 +386,19 @@ describe("a rotina da Omie", () => {
     assert.deepEqual(paradas, ["na_fila", "parada"]);
   });
 
+  it("perto do fim do tempo da função, a passada não começa chamada nova: a emissão que sobrou anda na próxima", async () => {
+    // Cada chamada leva 5 minutos no relógio da passada, e o prazo é de 4.
+    const omie = omieDeMentira({ aoChamar: async () => void (minutos += 5) });
+    await emitir(ID);
+    await emitir(OUTRA, { demandas: ["10050"], armazenagem: [] });
+    const resumo = await runOmieSyncFor(db, { projectId: LIBERADO, chaves: CHAVES, transporte: omie.transporte, agora, prazo: new Date(INICIO + 4 * 60_000) });
+    assert.deepEqual([resumo.passos, resumo.fora_do_prazo], [1, 1]);
+    assert.deepEqual(omie.chamadas, ["ListarClientes"]);
+    assert.equal((await emissao(OUTRA)).omie.cliente, null);
+    await rodar(omie.transporte);
+    assert.equal((await emissao(OUTRA)).omie.cliente, 5001);
+  });
+
   it("o CT-e registrado à mão com o mesmo número não impede a fatura da NFS-e da Omie", async () => {
     const omie = omieDeMentira();
     await registerNfFor(db, financeiro, { idempotency_key: "nf-safra", demandas: ["10050"], nf: { numero: "815", emitida_em: "2026-10-23" }, vencimento: "2026-11-20", forma: "pix" }, agora);
@@ -446,7 +459,7 @@ describe("a rotina da Omie", () => {
     const omie = omieDeMentira();
     await emitir();
     await emitir(OUTRA, { demandas: ["10050"], armazenagem: [] });
-    assert.deepEqual(await rodar(omie.transporte, 0, LIBERADO, null), { liberada: true, sem_chaves: true, passos: 0, autorizadas: 0, paradas: 2, descartadas: 0, parou_pela_chave: false });
+    assert.deepEqual(await rodar(omie.transporte, 0, LIBERADO, null), { liberada: true, sem_chaves: true, passos: 0, autorizadas: 0, paradas: 2, descartadas: 0, parou_pela_chave: false, fora_do_prazo: 0 });
     assert.deepEqual(omie.chamadas, []);
     const parada = await emissao();
     assert.deepEqual([parada.etapa, parada.etapa_anterior, parada.motivo_da_parada, parada.mensagem], ["parada", "na_fila", "sem_chaves", "As chaves da API da Omie não estão neste ambiente."]);

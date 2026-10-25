@@ -280,6 +280,22 @@ describe("a baixa na Omie", () => {
     assert.deepEqual(omie.chamadas, []);
   });
 
+  it("perto do fim do tempo da função, a passada não começa chamada nova: a baixa que sobrou anda na próxima", async () => {
+    await daOmie();
+    // Cada chamada leva 5 minutos no relógio da passada, e o prazo é de 4.
+    const omie = omieDeMentira({ aoChamar: async () => void (minutos += 5) });
+    const primeiro = (await pagar("pag-1", "3000.00")).pagamento_id!;
+    const segundo = (await pagar("pag-2", "2000.00")).pagamento_id!;
+    const resumo = await runOmieBaixasFor(db, { projectId: LIBERADO, chaves: CHAVES, transporte: omie.transporte, agora, prazo: new Date(INICIO + 4 * 60_000) });
+    assert.deepEqual([resumo.passos, resumo.fora_do_prazo], [1, 1]);
+    assert.deepEqual(omie.chamadas, ["PesquisarLancamentos"]);
+    // A ordem entre as duas sai do id: a que andou confere o título, a outra espera.
+    const [andou, esperou] = (await baixa(primeiro)).conferida ? [primeiro, segundo] : [segundo, primeiro];
+    assert.deepEqual([(await baixa(andou)).conferida, (await baixa(esperou)).conferida], [true, false]);
+    await rodar(omie.transporte);
+    assert.deepEqual([(await baixa(andou)).etapa, (await baixa(esperou)).conferida], ["lancada", true]);
+  });
+
   it("a fatura registrada à mão não tem baixa", async () => {
     const { pagamento_id: pagamentoId } = await pagar("pag-1");
     assert.ok(pagamentoId);

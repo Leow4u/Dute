@@ -62,6 +62,15 @@ export const ATOR_DA_ROTINA: FinanceiroActor = { uid: "rotina-omie", role: "sist
 /** Quantas emissões andam por passada, dentro do tempo da função. */
 export const EMISSOES_POR_PASSADA = 20;
 
+/**
+ * Por quanto tempo a passada começa chamada nova: o tempo da função
+ * (runOmieSync, 300 s) menos a chamada mais longa (o tempo limite do
+ * transporte, 30 s) e uma folga para a gravação. A função cortada entre a
+ * resposta da Omie e a gravação deixaria a passada seguinte repetir a
+ * chamada que grava; o que não coube fica para a próxima passada.
+ */
+export const PRAZO_DA_PASSADA_MS = 240_000;
+
 const DIA_EM_SAO_PAULO = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
 
 export type ResumoDaRotina = {
@@ -72,6 +81,8 @@ export type ResumoDaRotina = {
   paradas: number;
   descartadas: number;
   parou_pela_chave: boolean;
+  /** As que eram hora de andar e ficaram para a próxima passada pelo prazo. */
+  fora_do_prazo: number;
 };
 
 export type OpcoesDaRotina = {
@@ -80,10 +91,17 @@ export type OpcoesDaRotina = {
   transporte: TransporteDaOmie;
   agora?: () => Date;
   limite?: number;
+  /** Até quando começar chamada nova; as emissões e as baixas dividem a passada (PRAZO_DA_PASSADA_MS). */
+  prazo?: Date;
 };
 
 function resumoVazio(liberada: boolean, semChaves: boolean): ResumoDaRotina {
-  return { liberada, sem_chaves: semChaves, passos: 0, autorizadas: 0, paradas: 0, descartadas: 0, parou_pela_chave: false };
+  return { liberada, sem_chaves: semChaves, passos: 0, autorizadas: 0, paradas: 0, descartadas: 0, parou_pela_chave: false, fora_do_prazo: 0 };
+}
+
+/** Passou do prazo da passada: a chamada fica para a próxima. */
+function foraDoPrazo(opcoes: Pick<OpcoesDaRotina, "prazo">, instante: Date): boolean {
+  return opcoes.prazo !== undefined && instante.getTime() >= opcoes.prazo.getTime();
 }
 
 export async function runOmieSyncFor(db: Firestore, opcoes: OpcoesDaRotina): Promise<ResumoDaRotina> {
@@ -120,8 +138,12 @@ export async function runOmieSyncFor(db: Firestore, opcoes: OpcoesDaRotina): Pro
     return resumo;
   }
 
-  for (const emissao of prontas) {
+  for (const [indice, emissao] of prontas.entries()) {
     const instante = agora();
+    if (foraDoPrazo(opcoes, instante)) {
+      resumo.fora_do_prazo = prontas.length - indice;
+      break;
+    }
     const passo = passoDaEmissao(emissao, instante);
     if (!passo) continue;
     const pedido = pedidoDoPasso(passo, emissao, DIA_EM_SAO_PAULO.format(instante), configuracao);
@@ -162,10 +184,11 @@ export type ResumoDasBaixas = {
   paradas: number;
   descartadas: number;
   parou_pela_chave: boolean;
+  fora_do_prazo: number;
 };
 
 function resumoDasBaixasVazio(liberada: boolean, semChaves: boolean): ResumoDasBaixas {
-  return { liberada, sem_chaves: semChaves, passos: 0, lancadas: 0, canceladas: 0, paradas: 0, descartadas: 0, parou_pela_chave: false };
+  return { liberada, sem_chaves: semChaves, passos: 0, lancadas: 0, canceladas: 0, paradas: 0, descartadas: 0, parou_pela_chave: false, fora_do_prazo: 0 };
 }
 
 /**
@@ -197,8 +220,12 @@ export async function runOmieBaixasFor(db: Firestore, opcoes: OpcoesDaRotina): P
     .sort((a, b) => a.proxima_em.localeCompare(b.proxima_em) || a.id.localeCompare(b.id))
     .slice(0, opcoes.limite ?? BAIXAS_POR_PASSADA);
 
-  for (const baixa of prontas) {
+  for (const [indice, baixa] of prontas.entries()) {
     const instante = agora();
+    if (foraDoPrazo(opcoes, instante)) {
+      resumo.fora_do_prazo = prontas.length - indice;
+      break;
+    }
     const passo = passoDaBaixa(baixa, instante);
     if (!passo) continue;
     let nova: Baixa;

@@ -1337,6 +1337,33 @@ Achada em 25/10/2026, numa revisão do código do Comercial.
   uma emissão da NFS-e pela Omie não recebe complemento": recusa, e a
   demanda fica só com a autorização de antes. Antes, o complemento entrava.
 
+### Correção: a passada da Omie podia ser cortada no meio de uma chamada
+
+Achada em 25/10/2026, numa revisão do código do Financeiro.
+
+- **O defeito.** A `runOmieSync` tem 300 segundos e anda até 20 emissões e
+  20 baixas por passada, uma chamada por vez. Cada chamada espera a Omie
+  até 30 segundos.
+  - Com a Omie lenta e fila acumulada, a função era cortada no meio da
+    passada.
+  - O corte entre a resposta da Omie e a gravação deixava a passada seguinte
+    repetir a chamada que grava (`FaturarOS`, `ReenviarOS`, `CancelarOS`,
+    `LancarRecebimento`).
+  - Na maior parte, a repetição se acerta sozinha: a Omie recusa o código de
+    integração repetido e a OS já faturada ou cancelada, e a conferência
+    seguinte acha o que ela gravou. Mas a recusa conta como falha, e o
+    reenvio da RPS não tem essa defesa.
+- **A correção.** A passada só começa chamada nova até 240 segundos
+  (`PRAZO_DA_PASSADA_MS`): o tempo da função menos a chamada mais longa e
+  uma folga para a gravação.
+  - As emissões e as baixas dividem o mesmo prazo.
+  - O que não coube fica para a passada seguinte, e o resumo do log conta em
+    `fora_do_prazo`.
+- **Testes:** com cada chamada levando 5 minutos no relógio da passada e o
+  prazo de 4, a segunda emissão (`omie-rotina.integration.test.ts`) e a
+  segunda baixa (`baixa.integration.test.ts`) ficam para a passada seguinte
+  e andam nela. Antes, a passada chamava as duas.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.
