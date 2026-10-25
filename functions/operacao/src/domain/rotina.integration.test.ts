@@ -106,6 +106,21 @@ describe("a rotina diária da Operação", () => {
     assert.deepEqual(cnh, [10, 9]);
   });
 
+  it("a CNH vencida há mais de 10 anos vira alerta, e os outros saem junto", async () => {
+    // O cadastro aceita a validade desde 1980; o alerta mais vencido vem primeiro.
+    await db.collection("collaborators").doc(BRUNO).update({ cnh: { categoria: "D", validade: "2015-06-01" } });
+    assert.deepEqual(await runDailyAlertsFor(db, HOJE_06H), { dia: "2026-10-23", alertas: 3, criados: 3 });
+    const doBruno = (await eventos()).find((evento) => evento.payload.id === BRUNO);
+    assert.equal(doBruno?.payload.dias, -4162);
+  });
+
+  it("o cadastro que não vira evento não segura os outros alertas, e a rotina avisa no fim", async () => {
+    // Um cadastro gravado fora da callable, com o id fora do formato.
+    await db.collection("collaborators").doc("legado-1").set({ ...pessoa("legado-1", "Legado", "2026-10-25") });
+    await assert.rejects(runDailyAlertsFor(db, HOJE_06H), /1 alerta não gravado: collaborator\.cnh_expiring:legado-1/);
+    assert.deepEqual((await eventos()).map((evento) => evento.payload.id).sort(), [ANA, VAN]);
+  });
+
   it("sem nada na janela, não grava nada", async () => {
     await db.collection("collaborators").doc(ANA).update({ cnh: { categoria: "D", validade: "2027-01-01" } });
     await db.collection("vehicles").doc(VAN).update({ revisao_em: null });
