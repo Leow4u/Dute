@@ -90,6 +90,31 @@ async function recusa(promessa: Promise<unknown>, codigo: string, mensagem?: str
   });
 }
 
+/**
+ * O banco com uma decisão no meio da rotina: a gravação dela (o `commit` do
+ * lote) espera a decisão terminar, depois de a rotina já ter lido as
+ * propostas.
+ */
+function decisaoNoMeio(banco: Firestore, decidir: () => Promise<unknown>): Firestore {
+  return new Proxy(banco, {
+    get(alvo, chave) {
+      if (chave === "batch") {
+        return () => {
+          const lote = alvo.batch();
+          const gravar = lote.commit.bind(lote);
+          lote.commit = async () => {
+            await decidir();
+            return gravar();
+          };
+          return lote;
+        };
+      }
+      const valor = Reflect.get(alvo, chave);
+      return typeof valor === "function" ? valor.bind(alvo) : valor;
+    },
+  });
+}
+
 describe("o alerta do item parado", () => {
   it("uma vez por dia, a proposta de cada cliente com portal, com os parados pela regra, os mais parados primeiro", async () => {
     assert.deepEqual(await runStockAlertsFor(db, { agora: agora(DIA_1) }), { dia: "2026-10-20", rodou: true, clientes: 4, propostas: 2, removidas: 0 });
@@ -152,6 +177,36 @@ describe("o alerta do item parado", () => {
     await db.doc("customers/c_itau").update({ status: "paused" });
     assert.deepEqual((await runStockAlertsFor(db, { agora: agora("2026-10-23T12:00:00.000Z") })).removidas, 1);
     assert.equal((await db.collection(AI_STOCK_ALERTS_COLLECTION).where("status", "==", "proposta").get()).size, 0);
+  });
+
+  it("a decisão que entra entre a leitura e a gravação da rotina não volta a proposta nem some", async () => {
+    await runStockAlertsFor(db, { agora: agora(DIA_1) });
+    const alerta = (await alertas()).ITAU?.id as string;
+    // No dia 2, o SKU-B se mexeu: a rotina refaria a proposta do Itaú só com o SKU-A.
+    await db.doc(`${AI_STOCK_AGE_COLLECTION}/${idDoItemParado("ITAU", "SKU-B")}`).update({ "relogio.ultima_saida": "2026-10-20T15:00:00.000Z" });
+    const aprovar = () => answerStockAlertFor(db, interno, { alerta_id: alerta, decisao: "aprovar", itens: ["SKU-B"] }, agora(DIA_2));
+
+    // A coordenação aprova enquanto a rotina já leu as propostas: a gravação da rotina falha, sem tocar no alerta.
+    await assert.rejects(runStockAlertsFor(decisaoNoMeio(db, aprovar), { agora: agora(DIA_2) }));
+    const aprovado = (await alertas()).ITAU;
+    assert.deepEqual([aprovado?.status, aprovado?.itens_enviados.map((enviado: { sku_code: string }) => enviado.sku_code)], ["aprovada", ["SKU-B"]]);
+    assert.notEqual((await db.collection(AI_CURSORS_COLLECTION).doc("alertas_parados").get()).get("dia"), "2026-10-21");
+
+    // A rodada seguinte refaz o dia com a decisão já lida: os itens decididos do Itaú não voltam.
+    const seguinte = await runStockAlertsFor(db, { agora: agora("2026-10-21T12:15:00.000Z") });
+    assert.deepEqual([seguinte.dia, seguinte.rodou], ["2026-10-21", true]);
+    const doItau = (await db.collection(AI_STOCK_ALERTS_COLLECTION).where("customer_code", "==", "ITAU").get()).docs.map((doc) => [doc.id, doc.get("status")]);
+    assert.deepEqual(doItau, [[alerta, "aprovada"]]);
+  });
+
+  it("a proposta que a rotina tiraria, decidida no meio, também fica", async () => {
+    await runStockAlertsFor(db, { agora: agora(DIA_1) });
+    const alerta = (await alertas()).SAFRA?.id as string;
+    await db.doc("customers/c_safra").update({ status: "paused" });
+    const descartar = () => answerStockAlertFor(db, interno, { alerta_id: alerta, decisao: "descartar" }, agora(DIA_2));
+
+    await assert.rejects(runStockAlertsFor(decisaoNoMeio(db, descartar), { agora: agora(DIA_2) }));
+    assert.equal((await alertas()).SAFRA?.status, "descartada");
   });
 
   it("só a coordenação decide; o alerta que não existe e o item fora dele recusam", async () => {
