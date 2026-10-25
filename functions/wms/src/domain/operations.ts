@@ -5399,7 +5399,31 @@ export async function decideCustomerRequestTransaction(
       // SKU é gasto. Um código novo, um SKU: em duas linhas ou em dois avisos.
       const newSkusHere = new Map<string, string>();
       for (const item of items) {
-        if (linkedReceipt || text(item.product_registration) !== "new") continue;
+        if (linkedReceipt) continue;
+        if (text(item.product_registration) !== "new") {
+          // O SKU da linha existente vem do portal: só entra o do cadastro
+          // deste cliente (domain/customer-scope.ts). O de outro cliente
+          // criaria saldo com o código dele e subiria o estoque do cadastro
+          // dele na conclusão.
+          const existingSku = normalizedIdentity(item.sku_code);
+          if (!existingSku) continue;
+          const targets = await resolveCatalogAggregateTargets(
+            transaction,
+            db,
+            existingSku,
+            normalizedIdentity(item.client_item_code),
+          );
+          const [skuSnapshot, productSnapshot] = await Promise.all([
+            targets.skuRef ? transaction.get(targets.skuRef) : undefined,
+            targets.productRef ? transaction.get(targets.productRef) : undefined,
+          ]);
+          assertCatalogOwnedBy(
+            customerCode,
+            [skuSnapshot?.data(), productSnapshot?.data()],
+            `O SKU ${existingSku}`,
+          );
+          continue;
+        }
         const clientCode = normalizedIdentity(item.client_item_code || item.sku_code);
         const [skuRows, productSnapshot] = await Promise.all([
           readRows(
