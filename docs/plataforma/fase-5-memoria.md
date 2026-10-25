@@ -1665,7 +1665,8 @@ liberação, com o `dute-btg` recusando:
 - `agent-routines.test.ts` do WMS;
 - `platform-lists.test.ts` do app.
 
-Na produção, vale a partir da publicação seguinte ao merge. O roteiro:
+Na produção, vale desde a segunda publicação do mesmo dia (`59d78bc`, run
+1090, `lancamento-producao.md`, seção 1). O roteiro:
 
 1. **Um PR liga as listas:**
    - `MEMORIA_AMBIENTES_LIBERADOS` e `AGENTE_AMBIENTES_LIBERADOS` ganham o

@@ -21,8 +21,8 @@ disparado sem ele. Sem dado real neste arquivo.
 - **Liberação.**
   - `FINANCEIRO_AMBIENTES_LIBERADOS` tem o `dute-homolog` e, desde a parte
     4.9b (PR 466, OK do Leonardo em 25/10/2026), o `dute-prod`, no app e nas
-    Functions (seção 6). Na produção, vale a partir da publicação seguinte
-    ao merge.
+    Functions (seção 6). Na produção, vale desde a segunda publicação do
+    mesmo dia (abaixo).
   - A Operação e o Comercial já estão liberados no `dute-prod`. Por isso o
     portal com as OS, a solicitação, a entrega do WMS e os avisos entram na
     produção só por publicar a `main`.
@@ -49,6 +49,24 @@ disparado sem ele. Sem dado real neste arquivo.
   - o que já entrou da Fase 5 (`fase-5-memoria.md`), desligado na produção
     pela liberação própria.
   - Até a parte 4.3d, foram 80 merges. Confirmar a base antes de disparar.
+- **A segunda publicação (25/10/2026).** Com o OK do Leonardo, o commit
+  `59d78bc` (PR 470) subiu no `dute-prod` pelo disparo manual do CI (run
+  1090), das 23:29 às 23:43 UTC, com a homologação publicada nele desde as
+  23:26. O instante de antes do deploy, para o PITR, é 23:28:51 UTC.
+  - Ela ligou na produção o que os PRs 466 a 470 liberaram:
+    - o Financeiro, com a Fase 7 (parte 4.9b, seção 6);
+    - a memória e o Agent Dute do núcleo (`fase-5-memoria.md`, "Lançamento
+      na produção");
+    - o RH (`fase-8-rh.md`, "Lançamento na produção"), já com as decisões
+      das perguntas 61 e 62 (PRs 468 e 469).
+  - As regras subiram e foram conferidas às 23:33, com os índices prontos.
+  - Subiram 120 functions, do WMS, do Financeiro, do núcleo e do RH; as do
+    Comercial e da Operação não mudaram e ficaram como estavam. O invoker
+    conferiu as 145 callables.
+  - O Cloud Run e o `app.dutelog.com.br` passaram a servir o build às
+    23:43, e o login abriu no Chromium, no computador e no celular. No build
+    servido, a única liberação só da homologação é a da Omie.
+  - A NFS-e pela Omie continua só na homologação (seção 6, item 4).
 - **Ciclos conferidos no emulador.**
   - `functions/operacao/src/domain/ciclo-do-cliente.integration.test.ts`
     (parte 4.9a). O cliente pede a OS pelo portal, a coordenação abre a
@@ -66,6 +84,10 @@ disparado sem ele. Sem dado real neste arquivo.
     `operacao-*.rules.test.ts`).
 
 ## 2. O que muda no `dute-prod` só por publicar a `main`
+
+Escrita para a primeira publicação. O que esta seção diz que recusa ou não
+roda no `dute-prod` (o Financeiro, a memória, o agente do núcleo e o RH)
+passou a valer lá na segunda (seção 1); só a Omie segue de fora.
 
 O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
 
@@ -559,9 +581,10 @@ contato com os avisos ligados (Comercial › Clientes).
    `firebase-schedule-runMeasures-southamerica-east1`,
    `firebase-schedule-runDuteRoutines-southamerica-east1`,
    `firebase-schedule-runOmieSync-southamerica-east1` e
-   `firebase-schedule-runRhAlerts-southamerica-east1`. A `runDuteRoutines`,
-   a `runOmieSync` e a `runRhAlerts` não fazem nada no `dute-prod`, fora das
-   liberações delas.
+   `firebase-schedule-runRhAlerts-southamerica-east1`. Desde a segunda
+   publicação, só a `runOmieSync` não faz nada no `dute-prod`, fora da
+   liberação da Omie; a `runMeasures`, a `runDuteRoutines` e a `runRhAlerts`
+   rodam lá.
 2. **Os índices ficaram prontos.** O job `regras` só deixa subir as
    functions e o frontend com cada índice do `firestore.indexes.json` pronto
    (`tools/esperar_indices.py`); se a publicação parou nesse passo, o log
@@ -581,8 +604,9 @@ contato com os avisos ligados (Comercial › Clientes).
    gcloud functions logs read runNotifications --gen2 --region southamerica-east1 --project dute-prod --limit 20
    ```
 
-4. **O Financeiro continua desligado.** `/financeiro` não abre, e o card do
-   Financeiro leva ao Faturamento do WMS.
+4. **O Financeiro.** Depois da primeira publicação, `/financeiro` não abria,
+   e o card do Financeiro levava ao Faturamento do WMS. Desde a segunda, abre
+   para owner, admin e financeiro (item 8).
 5. **A BTG intacta.** Portal, faturas do WMS e contagem de abertura
    funcionando. Pedidos na v3 com o mesmo fluxo de aprovar, separar e
    entregar.
@@ -593,6 +617,30 @@ contato com os avisos ligados (Comercial › Clientes).
    cancelar cada convite pendente e convidar a pessoa de novo. O token dos
    convites criados antes desta publicação está nos eventos, que interno,
    wms e suporte leem (pergunta 67 do plano).
+8. **Depois da segunda publicação** (seção 1):
+   - **O Financeiro**, como na seção 6, item 3. A competência emitida da
+     armazenagem aparece em A faturar, e o Faturamento do WMS leva a ela,
+     sem "Marcar como paga".
+   - **A memória e o Agent Dute do núcleo**, como em `fase-5-memoria.md`,
+     "Lançamento na produção", item 4. As rotinas do agente passam da
+     `runAgentRoutines` do WMS para a `runDuteRoutines`:
+
+     ```powershell
+     cd C:\DEV\Dute
+     gcloud functions logs read runDuteRoutines --gen2 --region southamerica-east1 --project dute-prod --limit 20
+     gcloud functions logs read runMeasures --gen2 --region southamerica-east1 --project dute-prod --limit 20
+     ```
+
+   - **O RH.** Com um login `rh`, no primeiro uso, a ficha grava o registro
+     e o arquivo dele sobe e abre. O arquivo usa URL assinada, como os
+     anexos do WMS: "Arquivo indisponível" pede a role Service Account Token
+     Creator na conta de serviço das Functions. A `runRhAlerts` roda às
+     06:10:
+
+     ```powershell
+     cd C:\DEV\Dute
+     gcloud functions logs read runRhAlerts --gen2 --region southamerica-east1 --project dute-prod --limit 20
+     ```
 
 ## 6. Ligar o Financeiro no `dute-prod` (parte 4.9b, com o OK)
 
@@ -650,8 +698,10 @@ dos marcos 2, 3 e 4. O registro está em `fase-4-financeiro.md`, "Parte
 ## 8. O que espera o Leonardo
 
 - Dados em 25/10/2026: o OK para a publicação dos marcos 2, 3 e 4, que subiu
-  antes de 01/11 (seção 1), e o OK para ligar o Financeiro no `dute-prod`
-  (parte 4.9b, seção 6).
+  antes de 01/11 (seção 1), o OK para ligar no `dute-prod` o Financeiro
+  (parte 4.9b, seção 6), a memória, o Agent Dute do núcleo e o RH, e as
+  respostas às perguntas 61 a 63 do RH. Os quatro subiram na segunda
+  publicação (seção 1).
 - A conta no Resend, o domínio verificado na Hostinger e a chave, para o
   e-mail sair (`fase-4-financeiro.md`, parte 4.6a).
 - Os serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` no aplicativo de teste da Omie,
@@ -668,9 +718,9 @@ dos marcos 2, 3 e 4. O registro está em `fase-4-financeiro.md`, "Parte
 - As perguntas 58 a 60 do plano (seção 13, "Revisão de defeitos"): a
   vistoria iniciada sem saída, o pedido aprovado que não se cancela nem se
   separa a menos, e a data de emissão da fatura da NFS-e da Omie.
-- As perguntas 61 a 63 do plano, do RH, antes de ligá-lo na produção: o
-  vigente no empate da emissão, o admissional que fica vigente depois do
-  periódico e a planilha de colaboradores do mês exportado.
+- O alinhamento da tela da parte 8.4 do RH (pergunta 63, decidida): as
+  datas de admissão e de desligamento e a planilha de colaboradores com
+  quem tinha vínculo no mês (`fase-8-rh.md`).
 - A pergunta 64 do plano, antes do primeiro contrato com medição mensal: a
   medição aprovada não tem como entrar numa NF pelo que não é de demanda.
 - As perguntas 65 e 66 do plano, do app do campo, com o alinhamento de tela:

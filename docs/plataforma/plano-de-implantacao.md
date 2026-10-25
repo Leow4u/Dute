@@ -156,11 +156,11 @@ Como se garante, em cada PR de tela:
 | 1 Migração do WMS | Feita em 20/10; `dute-btg` congelado até 02/12 |
 | 2 Núcleo e app único | Partes 1 a 2.8 na `main`: o shell v3 por módulo, a entrada com os contadores, os Inícios do Comercial e da Operação e a barreira por módulo contratado (`fase-2-nucleo.md`) |
 | 3 Operação | Partes 3.0 a 3.14 na `main` (23/10), ligada no `dute-homolog` e no `dute-prod`. A fase inteira subiu na produção em 25/10, com a publicação dos marcos 2, 3 e 4 (`e6a43ed`) |
-| 4 Financeiro da operação, portal e lançamento | Partes 4.1a a 4.9b na `main`. Os marcos 2, 3 e 4 subiram juntos no `dute-prod` em 25/10 (`e6a43ed`, run 1078), com o OK do Leonardo. A parte 4.9b (PR 466) liga o Financeiro no `dute-prod` a partir da publicação seguinte (`lancamento-producao.md`) |
-| 5 Memória da Dute | Partes 5.1a a 5.6 na `main`. A memória e o Agent Dute do núcleo ligam no `dute-prod` com o OK do Leonardo de 25/10, a partir da publicação seguinte ao merge (`fase-5-memoria.md`, "Lançamento na produção") |
+| 4 Financeiro da operação, portal e lançamento | Partes 4.1a a 4.9b na `main`. Os marcos 2, 3 e 4 subiram juntos no `dute-prod` em 25/10 (`e6a43ed`, run 1078), com o OK do Leonardo. A parte 4.9b (PR 466) ligou o Financeiro no `dute-prod` na segunda publicação do mesmo dia (`59d78bc`, run 1090, `lancamento-producao.md`) |
+| 5 Memória da Dute | Partes 5.1a a 5.6 na `main`. A memória e o Agent Dute do núcleo estão ligados no `dute-prod` desde a segunda publicação de 25/10 (`59d78bc`), com o OK do Leonardo do mesmo dia (`fase-5-memoria.md`, "Lançamento na produção") |
 | 6 Comercial | v1 (partes 1 a 19) na `main` e ligado no `dute-prod` desde 21/10, sem dado carregado; do fechamento, 6.20 a 6.22 e 6.25 feitas, e 6.23 e 6.24 (as cargas e o contador na produção, a semana em paralelo) com o Leonardo |
 | 7 Financeiro unificado | Partes 7.1 a 7.5c na `main`, ligadas com o Financeiro (no `dute-homolog` e, desde a parte 4.9b, no `dute-prod`). A NFS-e e a baixa pela Omie (7.4) estão no código, só no `dute-homolog`, e as chaves de um aplicativo de teste da Omie estão no `dute-homolog` desde 24/10; a primeira emissão espera os serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` cadastrados nele. O cancelamento da NFS-e autorizada espera a resposta da Omie (`fase-7-financeiro-unificado.md`) |
-| 8 RH | Partes 8.1a a 8.3 na `main` e ligadas no `dute-homolog` desde 24/10: a 8.1b pôs no `firebase.json` o banco `dute-rh`, que existe nos dois ambientes (na produção, com PITR e backup diário). O código subiu na produção em 25/10, e o RH liga lá com o OK do Leonardo do mesmo dia, depois das perguntas 61 a 63, a partir da publicação seguinte ao merge. A 8.4 (as datas de admissão e desligamento, pergunta 63) espera o alinhamento da tela (`fase-8-rh.md`) |
+| 8 RH | Partes 8.1a a 8.3 na `main` e ligadas no `dute-homolog` desde 24/10: a 8.1b pôs no `firebase.json` o banco `dute-rh`, que existe nos dois ambientes (na produção, com PITR e backup diário). O código subiu na produção em 25/10, e o RH está ligado lá desde a segunda publicação do mesmo dia (`59d78bc`), com o OK do Leonardo e as perguntas 61 a 63 respondidas. A 8.4 (as datas de admissão e desligamento, pergunta 63) espera o alinhamento da tela (`fase-8-rh.md`) |
 | Contínuo | PITR e backup diário desde 20/10 (no `dute-rh`, desde 24/10). O teste de restauração é o workflow `Teste de restauração`, que espera o OK do Leonardo para rodar (`backup-e-recuperacao.md`). O painel do sistema mostra os erros de todas as functions, o estado e o acesso das callables de todas as codebases, a latência e o e-mail que desistiu (`docs/painel-sistema.md`). O inventário da LGPD está em `lgpd.md`, com 12 decisões do Leonardo. Manuais de todos os módulos: `docs/manual-comercial.md`, `docs/manual-operacao.md`, `docs/manual-financeiro.md`, `docs/manual-rh.md`, `docs/manual-portal.md` (o portal do cliente) e `docs/manual-armazenagem.md`; o roteiro do treinamento por marco em `docs/treinamento.md`. A revisão dos manuais virou correções (PRs 342 a 361) e as perguntas 36 a 54 da seção 13. A publicação só sobe as functions e a tela com os índices do arquivo prontos (`tools/esperar_indices.py`), e o CI confere o índice composto de cada consulta das telas (`lib/cloud-api-indices.test.ts`) e das Functions nos testes de integração (`tools/indices_das_consultas.py`), porque o emulador não o exige |
 
 ## 3. Ordem de implantação
@@ -206,6 +206,12 @@ Marcos de produção, cada um com OK do Leonardo:
    Fase 4).
 5. Memória da Dute (Fase 5), Financeiro unificado (Fase 7) e RH (Fase 8),
    cada um no próprio fim.
+
+Os marcos 2, 3 e 4 subiram juntos em 25/10/2026 (`e6a43ed`), e o 5, na
+segunda publicação do mesmo dia (`59d78bc`), sem a NFS-e pela Omie e com a
+parte 8.4 por fazer (`lancamento-producao.md`, seção 1). O marco 1 espera as
+partes 6.23 e 6.24 (as cargas e o contador na produção, a semana em
+paralelo), com o Leonardo.
 
 ## 4. Fase 2: núcleo e app único (o que falta)
 

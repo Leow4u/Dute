@@ -17,7 +17,7 @@ o que elas não explicam está aqui. O desenho e o registro das partes ficam em
 | Contratos | Vigência, condições, tabelas de preço, aditivos e documentos. |
 | Autorizações | Os executados à espera do "pode faturar" do cliente e as autorizações a faturar. |
 | Medições | A medição mensal dos contratos que cobram assim. |
-| Agent Dute | Só onde o agente do núcleo está ligado (hoje, a homologação). |
+| Agent Dute | Só onde o agente do núcleo está ligado (hoje, a homologação e a produção). |
 
 ## Início
 
@@ -99,7 +99,8 @@ execução (o orçamento refeito com o que foi feito).
   recalcula. "Duplicar" (salve antes) cria outro, com a data-base de hoje.
 - **"Enviar para aprovação"** pede "Para", título e uma linha; com alteração,
   salva antes e para se o total mudou.
-- **"Orçamentos parecidos"** (só na homologação) mostra até três demandas
+- **"Orçamentos parecidos"** (onde a memória está ligada; hoje, a homologação
+  e a produção) mostra até três demandas
   fechadas do cliente; "Usar as quantidades" só preenche as linhas.
 
 ## Aprovar

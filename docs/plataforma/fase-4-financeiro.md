@@ -758,7 +758,8 @@ vamos seguir"). Veio depois da publicação dos marcos 2, 3 e 4 na produção
   - `FINANCEIRO_AMBIENTES_LIBERADOS`, no app (`lib/liberacao.ts`) e nas
     callables (`functions/financeiro/src/domain/liberacao.ts`);
   - `FINANCEIRO_PROJECTS`, no WMS (`domain/billing-scope.ts`).
-- **O que muda na produção**, a partir da publicação seguinte ao merge:
+- **O que mudou na produção**, desde a segunda publicação do mesmo dia
+  (`59d78bc`, run 1090, `lancamento-producao.md`, seção 1):
   - `/financeiro` abre para owner, admin e financeiro, e o card leva a ele;
   - `registerNf` e `advanceFatura` respondem;
   - a competência emitida da armazenagem se fatura e se recebe no

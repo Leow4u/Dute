@@ -100,7 +100,8 @@ execução da direta até "Validado", sabendo quando o `owner` precisa aprovar.
 
 ## Financeiro (`financeiro`)
 
-**Quando:** marco 4, com a parte 4.9b (o Financeiro ligado na produção).
+**Quando:** marco 4, com a parte 4.9b (o Financeiro ligado na produção desde
+25/10/2026).
 **Ler antes:** `docs/manual-financeiro.md`.
 
 1. **A faturar:** a demanda validada do exercício do Comercial; "Faturar",
@@ -154,7 +155,8 @@ dela.
 
 ## RH (`rh`)
 
-**Quando:** quando o RH for ligado na produção (outro OK, `fase-8-rh.md`).
+**Quando:** antes do primeiro uso: o RH está ligado na produção desde
+25/10/2026 (`fase-8-rh.md`).
 **Ler antes:** `docs/manual-rh.md`.
 
 1. **Pessoas:** abrir a ficha de um colaborador.

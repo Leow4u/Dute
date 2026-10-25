@@ -212,8 +212,8 @@ pesquisa nas páginas da Omie (`developer.omie.com.br`,
   - o contador passa a conta corrente e a categoria de receita das OS.
 
 **Liberação.** As partes de tela seguem `FINANCEIRO_AMBIENTES_LIBERADOS`
-(só o `dute-homolog`, até a parte 4.9b). O faturamento do WMS segue como está
-fora dela.
+(o `dute-homolog` e, desde a parte 4.9b, publicada em 25/10/2026, o
+`dute-prod`). O faturamento do WMS segue como está fora dela.
 
 ## Registro
 
