@@ -173,6 +173,14 @@ describe("eventos do cadastro da Operação", () => {
     }
   });
 
+  it("o colaborador com o login do app trocado leva só os números das OS que ganharam o login novo", () => {
+    const schema = OPERACAO_EVENT_PAYLOADS["collaborator.updated"];
+    const base = EXEMPLOS["collaborator.updated"];
+    assert.equal(schema.safeParse({ ...base, os_com_acesso: ["10045-01", "10045-02"] }).success, true);
+    assert.equal(schema.safeParse({ ...base, os_com_acesso: [] }).success, false);
+    assert.equal(schema.safeParse({ ...base, os_com_acesso: ["u-ana"] }).success, false);
+  });
+
   it("título e descrição são fixos, sem nome, documento ou valor", () => {
     for (const type of OPERACAO_EVENT_TYPES) {
       const event = buildOperacaoEvent({

@@ -3,6 +3,7 @@ import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
 import { actorPayload, compactValue, digest, type OperacaoActor } from "./operations.js";
+import { MAX_OS_DO_LOGIN } from "./os.js";
 
 /**
  * Eventos do cadastro da Operação em `events` (invariante 2). Gravados na
@@ -65,6 +66,8 @@ export type OperacaoEventType = (typeof OPERACAO_EVENT_TYPES)[number];
 
 const criado = z.object({ id }).strict();
 const alterado = z.object({ id, edicao_antes: edicao, edicao_depois: edicao }).strict();
+/** O colaborador alterado; com o login do app trocado, as OS que ainda vão a campo e passaram a ter o login novo. */
+const colaboradorAlterado = alterado.extend({ os_com_acesso: z.array(osId).min(1).max(MAX_OS_DO_LOGIN).optional() }).strict();
 const osCriada = z.object({ id: osId, demanda: demandaNumero, seq: z.number().int().min(1).max(99), linhas: z.number().int().min(1).max(300) }).strict();
 const osCancelada = z.object({ id: osId, demanda: demandaNumero }).strict();
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -263,7 +266,7 @@ const servicoRecusado = z.object({ id: solicitacaoId }).strict();
 
 export const OPERACAO_EVENT_PAYLOADS = {
   "collaborator.created": criado,
-  "collaborator.updated": alterado,
+  "collaborator.updated": colaboradorAlterado,
   "collaborator.deactivated": criado,
   "collaborator.reactivated": criado,
   "vehicle.created": criado,

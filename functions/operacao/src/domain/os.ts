@@ -667,6 +667,48 @@ export function equipeDaOs(
   return { equipe, equipe_uids: [...new Set(uids)] };
 }
 
+/** As situações em que a OS ainda vai a campo: é nelas que o login do app trocado no cadastro chega. */
+export const STATUS_QUE_VAO_A_CAMPO = ["aberta", "agendada", "em_execucao"] as const satisfies readonly StatusDaOs[];
+
+/** Quantas OS o login trocado de uma pessoa atualiza de uma vez (cabe numa transação). */
+export const MAX_OS_DO_LOGIN = 400;
+
+function login(valor: unknown): string | null {
+  return typeof valor === "string" && valor ? valor : null;
+}
+
+/**
+ * O login do app que o cadastro ligou, trocou ou tirou, na OS que ainda vai a
+ * campo: a pessoa passa a mostrar o login novo, e o acesso da equipe
+ * (`equipe_uids`, o mesmo das regras e de quem registra) troca o antigo pelo
+ * novo. Sai também o login que a OS guardou da pessoa; o de outra pessoa da
+ * equipe nunca sai. O resto do que a OS guardou fica. Sem a pessoa na equipe,
+ * na OS de antes da parte 3.4 (só os ids) ou sem nada a mudar, devolve null.
+ */
+export function equipeComLogin(
+  data: { equipe?: unknown; equipe_uids?: unknown },
+  colaboradorId: string,
+  uidAntes: string | null,
+  uidDepois: string | null,
+): { equipe: Record<string, unknown>[]; equipe_uids: string[] } | null {
+  if (!Array.isArray(data.equipe) || !data.equipe.every((pessoa) => pessoa !== null && typeof pessoa === "object")) return null;
+  const equipe = data.equipe as Record<string, unknown>[];
+  const daPessoa = (pessoa: Record<string, unknown>) => pessoa.colaborador_id === colaboradorId;
+  const guardada = equipe.find(daPessoa);
+  if (!guardada) return null;
+  const dosOutros = new Set(equipe.filter((pessoa) => !daPessoa(pessoa)).map((pessoa) => login(pessoa.usuario_uid)).filter((uid) => uid !== null));
+  const saem = new Set([uidAntes, login(guardada.usuario_uid)].filter((uid): uid is string => uid !== null && uid !== uidDepois && !dosOutros.has(uid)));
+  const atuais = Array.isArray(data.equipe_uids) ? data.equipe_uids.filter((uid): uid is string => typeof uid === "string") : [];
+  const equipe_uids = [...new Set([...atuais.filter((uid) => !saem.has(uid)), ...(uidDepois ? [uidDepois] : [])])];
+  const mesmaPessoa = login(guardada.usuario_uid) === uidDepois && guardada.no_app === Boolean(uidDepois);
+  const mesmoAcesso = equipe_uids.length === atuais.length && equipe_uids.every((uid, indice) => uid === atuais[indice]);
+  if (mesmaPessoa && mesmoAcesso) return null;
+  return {
+    equipe: equipe.map((pessoa) => (daPessoa(pessoa) ? { ...pessoa, usuario_uid: uidDepois, no_app: Boolean(uidDepois) } : pessoa)),
+    equipe_uids,
+  };
+}
+
 function placaLegivel(placa: string): string {
   return /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(placa) ? `${placa.slice(0, 3)}-${placa.slice(3)}` : placa;
 }

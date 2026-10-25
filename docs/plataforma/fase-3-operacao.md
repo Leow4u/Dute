@@ -352,6 +352,16 @@ primeiro, porque a equipe da OS copia o nome e o papel de cada pessoa.
   não é `campo` nem `interno`, e quando o login já está em outro colaborador.
   Quem cadastra nunca digita nem vê o uid. Apagar o e-mail desliga o login.
   É esse vínculo que, na parte 3.8, deixa o campo ver só as OS dele.
+  Desde 25/10/2026, ligar, trocar ou tirar o login chega na mesma transação
+  às OS da pessoa que ainda vão a campo (para agendar, agendada e em
+  execução): a pessoa na `equipe` passa a ter o login novo, `equipe_uids`
+  troca o antigo pelo novo (o de outra pessoa da equipe fica) e a edição da
+  OS sobe. Antes, a OS guardava o login de quando foi planejada ou agendada:
+  quem era ligado depois não via a OS, e o login tirado seguia lendo e
+  registrando nela. A OS concluída fica com quem estava ligado quando foi a
+  campo (a leitura do histórico pelo campo é uma decisão da LGPD,
+  `lgpd.md`). O `collaborator.updated` leva os números dessas OS
+  (`os_com_acesso`).
 - **Veículo.** Ganha `dono` (próprio ou terceiro; sem o campo, próprio),
   `empresa` (obrigatória no terceiro) e `revisao_em` (a próxima revisão, que
   alimenta o alerta da parte 3.13).
