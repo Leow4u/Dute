@@ -289,7 +289,12 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     ouvinte em tempo real ia só pelo dono, e a regra recusava a consulta
     inteira: a resposta que o servidor grava depois só aparecia ao abrir a
     tela de novo (`fase-5-memoria.md`, "Correção: o chat do agente do WMS
-    não se atualizava sozinho na área interna").
+    não se atualizava sozinho na área interna");
+  - o painel e o conhecimento do Agent Dute deixam de abrir para o
+    financeiro, que só recebia o erro da tela: as regras deixam ler a
+    memória e o conhecimento do agente só à coordenação (`fase-5-memoria.md`,
+    "Correção: o painel e o conhecimento do agente abriam para o
+    financeiro").
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a
   `main`, sem liberação própria. As entradas, as saídas e os movimentos
   passam a cobrar só o recebimento e a expedição, cada movimento uma vez
