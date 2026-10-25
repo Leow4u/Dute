@@ -22,6 +22,7 @@ import {
 import { firebaseAuth, firestore } from "./firebase";
 import { profileAccess } from "./access";
 import { type ProfileRole } from "./modules";
+import { esquecerPerfis, guardarPerfil, perfilGuardado } from "./perfil-guardado";
 
 export type Role = "interno" | "cliente";
 
@@ -103,13 +104,58 @@ function isRemoved(snapshot: DocumentSnapshot) {
   return snapshot.exists() && profileAccess(snapshot.data()).state === "removed";
 }
 
+/** Sem sinal, o getDoc recusa com "unavailable": o cache do Firestore é só o da memória. */
+function semRede(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === "unavailable";
+}
+
+/** Até a rede voltar, ou 30 segundos: o evento "online" não vem quando o navegador já se acha conectado. */
+function esperarRede(): Promise<void> {
+  return new Promise((resolve) => {
+    const pronto = () => {
+      clearTimeout(prazo);
+      window.removeEventListener("online", pronto);
+      resolve();
+    };
+    const prazo = setTimeout(pronto, 30_000);
+    window.addEventListener("online", pronto);
+  });
+}
+
 async function loadProfile(
   firebaseUser: User,
 ): Promise<{ profile: ProfileData | null; removed: boolean }> {
   if (!firestore) return { profile: null, removed: false };
   const ref = doc(firestore, "users", firebaseUser.uid);
-  const snapshot = await getDoc(ref);
-  return { profile: profileFromSnapshot(snapshot), removed: isRemoved(snapshot) };
+  try {
+    const snapshot = await getDoc(ref);
+    const profile = profileFromSnapshot(snapshot);
+    guardarPerfil(firebaseUser.uid, profile);
+    return { profile, removed: isRemoved(snapshot) };
+  } catch (error) {
+    // Sem sinal, vale o último perfil lido neste aparelho; o onSnapshot do
+    // perfil confirma ou tira o acesso quando a rede voltar.
+    const guardado = semRede(error) ? perfilGuardado(firebaseUser.uid) : null;
+    if (guardado) return { profile: guardado, removed: false };
+    throw error;
+  }
+}
+
+/**
+ * Sem sinal e sem perfil guardado, tenta de novo quando a rede voltar. Null
+ * quando a sessão mudou no meio da espera.
+ */
+async function loadProfileWithNetwork(firebaseUser: User, current: () => boolean) {
+  for (;;) {
+    try {
+      return await loadProfile(firebaseUser);
+    } catch (error) {
+      if (!semRede(error)) throw error;
+      if (!current()) return null;
+      await esperarRede();
+      if (!current()) return null;
+    }
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -123,6 +169,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const auth = firebaseAuth;
     let unsubscribeProfile: Unsubscribe | undefined;
+    // Cada mudança da sessão vira uma geração; a leitura que espera a rede
+    // não grava o estado de uma sessão que já mudou.
+    let generation = 0;
 
     if (!auth) {
       setState({
@@ -137,8 +186,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       unsubscribeProfile?.();
       unsubscribeProfile = undefined;
+      const mine = ++generation;
+      const current = () => mine === generation;
 
       if (!firebaseUser) {
+        esquecerPerfis();
         setState({
           firebaseUser: null,
           user: null,
@@ -148,7 +200,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const { profile: role, removed } = await loadProfile(firebaseUser);
+      const loaded = await loadProfileWithNetwork(firebaseUser, current);
+      if (!loaded || !current()) return;
+      const { profile: role, removed } = loaded;
       if (!role || !firestore) {
         setState({
           firebaseUser,
@@ -169,8 +223,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       unsubscribeProfile = onSnapshot(
         doc(firestore, "users", firebaseUser.uid),
+        { includeMetadataChanges: true },
         (snapshot) => {
+          // Só o servidor muda o acesso: sem sinal, o cache vazio diz que o
+          // perfil não existe, e a pessoa sairia no meio do trabalho.
+          if (snapshot.metadata.fromCache) return;
           const profile = profileFromSnapshot(snapshot);
+          guardarPerfil(firebaseUser.uid, profile);
           if (!profile) {
             // Removido com a sessão aberta: sai na hora.
             setState({
@@ -194,6 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      generation += 1;
       unsubscribeProfile?.();
       unsubscribeAuth();
     };

@@ -1408,3 +1408,37 @@ Achada em 25/10/2026, numa revisão do código da Operação.
   - `execucao.integration.test.ts`: o feito guardado no celular chega
     depois do registrado pelo escritório e é recusado, e a OS fica com 120 e
     um evento só. Antes, a OS voltava para 96.
+
+### Correção: o app não abria sem sinal
+
+Achada em 25/10/2026, numa revisão da fila do campo. Está na produção desde
+a parte 3.8c.
+
+- **O defeito.** Ao abrir, o app lê o perfil da pessoa (`users/{uid}`) antes
+  de mostrar qualquer rota. O cache do Firestore é só o da memória.
+  - Depois de fechar o app, ou de o Android fechá-lo enquanto a câmera do
+    "Tirar foto" estava na frente, a leitura sem sinal recusava
+    ("client is offline").
+  - A tela ficava em branco. A fila guardada (parte 3.8c) só volta com o
+    app aberto, então não aparecia nem ia, e nada se registrava.
+  - Com o sinal de volta, nada tentava de novo: era preciso abrir o app
+    outra vez, com rede.
+- **A correção** (`lib/auth.tsx` e `lib/perfil-guardado.ts`):
+  - O último perfil lido de cada pessoa fica no aparelho: o papel, o
+    cliente e o nome, no `localStorage`.
+  - Sem sinal ("unavailable"), o app abre com esse perfil. Sem perfil
+    guardado, espera a rede (o evento "online" ou 30 segundos) e lê de novo.
+  - Só o servidor muda o acesso. O acompanhamento do perfil ignora o que vem
+    do cache, que, sem sinal, diz que o perfil não existe e tiraria a pessoa
+    do app no meio do trabalho. Com a rede de volta, o perfil removido ou
+    mudado vale na hora, como antes.
+  - O logout esquece os perfis guardados no aparelho.
+  - Outro erro na leitura (sem permissão) continua como antes, sem usar o
+    perfil guardado.
+- **Testes:**
+  - `auth.test.tsx`: sem sinal, o app entra com o perfil guardado, e o cache
+    vazio não tira o acesso; sem perfil guardado, espera a rede e lê de
+    novo; com rede, guarda o perfil; o logout esquece. Antes, a tela ficava
+    em "carregando".
+  - `perfil-guardado.test.ts`: o que não é perfil ativo não vale, e sem
+    storage nada quebra.
