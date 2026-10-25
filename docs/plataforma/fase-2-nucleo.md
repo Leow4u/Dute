@@ -494,3 +494,26 @@ produção.
 - **Teste:** `acessos.integration.test.ts`, a callable de verdade no
   emulador: a troca de papel e o cliente sem portal gravam o antes e o
   depois. Antes, os dois falhavam.
+
+### Correção: a troca de papel para cliente ligava a pessoa a um cliente sem conferir
+
+Achada em 25/10/2026, na mesma revisão da administração de acesso. Está na
+produção.
+
+- **O defeito.** A troca de papel em Usuários gravava só o papel: quem
+  virava cliente ficava com o `customer_code` que já tinha no perfil, sem a
+  conferência do convite de cliente.
+  - O interno convidado leva "Dutelog" no perfil. Trocado para cliente,
+    virava cliente de "Dutelog", que não é cliente: sem `client_access`, com
+    os módulos padrão (armazenagem e faturas), passava pela porta do WMS e
+    abria pedidos em nome de um cliente que não existe.
+- **A correção.** A troca para cliente passa pela mesma conferência do
+  convite, dentro da transação (`domain/customer-invite.ts`,
+  `assertClientRoleCustomer`): o cliente do perfil precisa estar cadastrado,
+  não arquivado, não ser prospect e ter sigla; a BTG passa, como no convite.
+  Quem não tem cliente no perfil é recusado com "A pessoa não está ligada a
+  um cliente: para dar o portal, convide-a pelo cliente."
+- **Teste:** `acessos.integration.test.ts`, a callable de verdade no
+  emulador: o interno de "Dutelog" e quem não tem cliente não viram
+  cliente; quem é ligado a um cliente cadastrado vira. Antes, as duas
+  recusas falhavam.
