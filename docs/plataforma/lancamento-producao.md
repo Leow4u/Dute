@@ -232,7 +232,11 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   com a resposta perdida depois de o servidor gravar (o sinal que cai no
   celular), o segundo toque criava outro pedido e reservava o mesmo estoque
   de novo, ou recusava por "Saldo insuficiente" e escondia o primeiro
-  (teste em `pages/client/estoque-envio.test.tsx`).
+  (teste em `pages/client/estoque-envio.test.tsx`). O aviso de envio e o
+  "Avisar reposição" também repetem a chave na nova tentativa, e o aviso
+  repete os anexos que já subiram; antes, a Dutelog recebia o aviso em
+  dobro (testes em `pages/client/envios-envio.test.tsx` e
+  `pages/client/estoque-reposicao.test.tsx`).
 - **As telas do WMS (25/10/2026).** Entram com a `main`, sem liberação
   própria:
   - o detalhe da Solicitações não passa sozinho à vizinha. A que sai da aba
