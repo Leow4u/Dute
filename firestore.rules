@@ -638,28 +638,6 @@ service cloud.firestore {
         || (isFinance() && isBillingDocument(resource.data));
     }
 
-    function canCreateDocumentInternally() {
-      return canCoordinateOperations()
-        || isWms()
-        || (isFinance() && isBillingDocument(request.resource.data));
-    }
-
-    function canUpdateDocumentInternally() {
-      return isPrivileged()
-        || isOperationsCoordinator()
-        || (
-          isWms()
-          && preservesCustomerCode()
-          && publicationFieldsUntouched()
-        )
-        || (
-          isFinance()
-          && isBillingDocument(resource.data)
-          && isBillingDocument(request.resource.data)
-          && preservesCustomerCode()
-        );
-    }
-
     match /users/{userId} {
       allow get: if signedIn() && (request.auth.uid == userId || canManageAccess());
       allow list: if canManageAccess();
@@ -1190,10 +1168,13 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Só as Functions gravam o documento e o vínculo (mutateManagedEntity),
+    // e a publicação no portal passa por elas. A gravação pelo navegador,
+    // que nenhuma tela usa, deixava o wms e o financeiro publicar no portal
+    // de qualquer cliente: a callable confia no documento gravado.
     match /documents/{documentId} {
       allow read: if canReadDocumentInternally();
-      allow create: if canCreateDocumentInternally();
-      allow update: if canUpdateDocumentInternally();
+      allow create, update: if false;
       allow delete: if isPrivileged()
         || (isFinance() && isBillingDocument(resource.data));
     }
@@ -1217,7 +1198,7 @@ service cloud.firestore {
           && resource.data.keys().hasAll(['entity_type'])
           && resource.data.entity_type in ['fatura', 'billing', 'invoice']
         );
-      allow create, update: if canCoordinateOperations() || isWms();
+      allow create, update: if false;
       allow delete: if isPrivileged();
     }
 
