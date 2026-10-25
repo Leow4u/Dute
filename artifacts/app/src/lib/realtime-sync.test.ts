@@ -148,3 +148,29 @@ describe("tempo real do portal do cliente", () => {
     expect(listenerOf("client_portal_status")).toHaveLength(0);
   });
 });
+
+describe("tempo real da equipe interna", () => {
+  it("o financeiro assina os documentos de faturamento, como a regra exige, e não a coleção inteira", () => {
+    appUser.current = { uid: "finance-a", publicMetadata: { role: "financeiro" } };
+    RealtimeSyncBridge();
+
+    const documentos = listenerOf("documents");
+    expect(documentos).toHaveLength(1);
+    expect(documentos[0].filters).toEqual([{ field: "entity_type", op: "==", value: "fatura" }]);
+
+    // O primeiro retrato é o estado já carregado; o documento novo atualiza a tela Documentos.
+    documentos[0].next({ docChanges: () => [{ type: "added" }] });
+    documentos[0].next({ docChanges: () => [{ type: "added" }] });
+    vi.runAllTimers();
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["operational-documents"] });
+  });
+
+  it("a operação segue com o sinal de mudança da coleção inteira", () => {
+    appUser.current = { uid: "wms-a", publicMetadata: { role: "wms" } };
+    RealtimeSyncBridge();
+
+    const documentos = listenerOf("documents");
+    expect(documentos).toHaveLength(1);
+    expect(documentos[0].filters).toEqual([]);
+  });
+});

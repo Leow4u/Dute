@@ -15,6 +15,7 @@ import {
 import type { ModuloContratavel } from "@workspace/dominio";
 
 import { useAppUser } from "./auth";
+import { FINANCE_DOCUMENT_ENTITY_TYPE } from "./document-rows";
 import { firestore } from "./firebase";
 import { LEGACY_CUSTOMER_CODE } from "./active-customer";
 import { INTERNAL_ROLES } from "./modules";
@@ -126,10 +127,21 @@ const OPERATIONS_ONLY_COLLECTIONS = new Set<string>([
 const BILLING_ONLY_COLLECTIONS = new Set<string>(["billing_periods"]);
 const BILLING_REALTIME_ROLES = new Set(["owner", "admin", "financeiro", "suporte"]);
 
+/**
+ * Em `documents`, o financeiro lê só o de faturamento
+ * (canReadDocumentInternally), e regra não é filtro: o sinal de mudança da
+ * coleção inteira seria negado. Ele assina o que a tela Documentos lista
+ * para ele (documentsListUrl).
+ */
+const FINANCE_SCOPED_TARGETS: readonly RealtimeTarget[] = [
+  { collectionName: "documents", extraEquals: [{ field: "entity_type", value: FINANCE_DOCUMENT_ENTITY_TYPE }] },
+];
+
 function internalHotCollectionsForRole(role: string) {
   const blocked = new Set<string>();
   if (role === "financeiro") {
     for (const name of OPERATIONS_ONLY_COLLECTIONS) blocked.add(name);
+    for (const { collectionName } of FINANCE_SCOPED_TARGETS) blocked.add(collectionName);
   }
   if (!BILLING_REALTIME_ROLES.has(role)) {
     for (const name of BILLING_ONLY_COLLECTIONS) blocked.add(name);
@@ -324,6 +336,7 @@ export function RealtimeSyncBridge() {
             collectionName,
             changeSignalOnly: true,
           })),
+          ...(role === "financeiro" ? FINANCE_SCOPED_TARGETS : []),
           ...INTERNAL_USER_SCOPED_TARGETS,
           ...(isAccessAdmin(role) ? ACCESS_ADMIN_COLLECTIONS : []).map(
             (collectionName) => ({ collectionName }),

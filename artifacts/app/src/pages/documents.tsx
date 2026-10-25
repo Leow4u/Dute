@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 import {
   DOCUMENT_TYPE_LABELS,
   buildDocumentRows,
+  documentsListUrl,
   matchesDocumentFilters,
   type DocumentAudience,
   type DocumentKind,
@@ -120,10 +121,11 @@ export default function Documents() {
   const [file, setFile] = useState<File | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
+  const documentsUrl = documentsListUrl(role);
   const documents = useQuery({
-    queryKey: ["operational-documents"],
+    queryKey: ["operational-documents", documentsUrl],
     queryFn: async () =>
-      (await apiJson<{ items?: Record<string, unknown>[] }>("/api/documents?limit=500")).items ?? [],
+      (await apiJson<{ items?: Record<string, unknown>[] }>(documentsUrl)).items ?? [],
   });
   const requests = useQuery({
     queryKey: ["documents", "request-attachments"],

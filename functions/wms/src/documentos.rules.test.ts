@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { after, before, beforeEach, describe, it } from "node:test";
 
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, setDoc, updateDoc, where } from "firebase/firestore";
 
 /**
  * O documento e o vínculo (`documents` e `document_links`) se gravam só pelas
@@ -92,5 +92,19 @@ describe("documentos e vínculos só pelas Functions", () => {
       await assertSucceeds(getDoc(doc(signedAs(uid), "document_links", "link-1")));
     }
     await assertFails(getDoc(doc(signedAs("client-a"), "documents", "doc-1")));
+  });
+
+  it("o financeiro lista os documentos pedindo os de faturamento; sem o filtro, a lista é negada", async () => {
+    const financeiro = signedAs("finance-a");
+    // A lista da tela Documentos (documentsListUrl, no app): entity_type e a data.
+    await assertSucceeds(getDocs(query(collection(financeiro, "documents"), where("entity_type", "==", "fatura"), orderBy("created_at", "desc"))));
+    await assertFails(getDocs(query(collection(financeiro, "documents"), orderBy("created_at", "desc"))));
+    // O tempo real (realtime-sync, no app): o financeiro assina o mesmo
+    // filtro; o sinal de mudança da coleção inteira, o da operação, é negado.
+    await assertSucceeds(getDocs(query(collection(financeiro, "documents"), where("entity_type", "==", "fatura"))));
+    await assertFails(getDocs(query(collection(financeiro, "documents"), orderBy("updated_at", "desc"), limit(1))));
+    // A operação lista e assina tudo, como antes.
+    await assertSucceeds(getDocs(query(collection(signedAs("ops-a"), "documents"), orderBy("created_at", "desc"))));
+    await assertSucceeds(getDocs(query(collection(signedAs("ops-a"), "documents"), orderBy("updated_at", "desc"), limit(1))));
   });
 });
