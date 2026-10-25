@@ -100,3 +100,28 @@ export async function setUserAccessTransaction(
     return { ok: true, user_id: input.user_id, active: input.active, changed: true };
   });
 }
+
+/** O que, em cada cadastro, decide o que a pessoa ou o cliente passa a ver. */
+const ACCESS_FIELDS: Record<string, readonly string[]> = {
+  users: ["role"],
+  customers: ["status", "portal_status", "operation_template", "sku_prefix"],
+};
+
+/**
+ * O antes e o depois do que muda o acesso, para o evento da alteração
+ * (`role_before`, `role_after`...): sem eles, a linha do tempo não
+ * reconstrói quem passou a ver o quê. O que a alteração não manda fica com o
+ * valor de antes.
+ */
+export function accessChangeFromTo(
+  resource: string,
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): Record<string, unknown> {
+  const fromTo: Record<string, unknown> = {};
+  for (const field of ACCESS_FIELDS[resource] ?? []) {
+    fromTo[`${field}_before`] = before[field] ?? null;
+    fromTo[`${field}_after`] = after[field] ?? before[field] ?? null;
+  }
+  return fromTo;
+}

@@ -57,7 +57,7 @@ import {
   type LpuItem,
 } from "./billing.js";
 import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
-import { setUserAccessTransaction } from "./domain/access.js";
+import { accessChangeFromTo, setUserAccessTransaction } from "./domain/access.js";
 import {
   CLIENT_ACCESS_COLLECTION,
   CLIENT_PROFILES_COLLECTION,
@@ -5046,6 +5046,7 @@ export const mutateManagedEntity = onCall(async (request) => {
         action: input.action,
         changed_fields: Object.keys(input.data).sort(),
         operation_id: operationId,
+        ...accessChangeFromTo(input.resource, before, payload as Record<string, unknown>),
         ...(input.resource === "customers"
           ? {
               modules_before: Array.isArray(before.modules)
