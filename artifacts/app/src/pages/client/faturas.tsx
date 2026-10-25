@@ -22,7 +22,7 @@ import { leiturasDoPortal } from "@/lib/operations";
 import { useNfsDoCliente } from "@/lib/portal/use-servicos";
 import { cn } from "@/lib/utils";
 
-import { ClientDataBoundary, formatMoney, getInvoices, getOrders } from "./shared";
+import { ClientDataBoundary, formatMoney, getInvoiceHistory, getOrders } from "./shared";
 import { MonthlyBars, moneyShort } from "./billing-charts";
 
 /**
@@ -49,7 +49,7 @@ export function ClienteFaturas() {
   return (
     <ClientDataBoundary>
       {(overview) => {
-        const invoices = closedInvoices((overview.invoice_history ?? getInvoices(overview)) as Record<string, unknown>[]);
+        const invoices = closedInvoices(getInvoiceHistory(overview));
         const deliveries = deliveriesByMonth((overview.order_tracking ?? getOrders(overview)) as Record<string, unknown>[]);
         const insights = billingInsights(invoices, deliveries, span);
         const latest = insights.latest;

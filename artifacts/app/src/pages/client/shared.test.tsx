@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
-import { ClientModuleShell, type ClientOverview } from "./shared";
+import { ClientModuleShell, findInvoice, getInvoiceHistory, type ClientOverview } from "./shared";
 
 function renderShell() {
   return renderToStaticMarkup(
@@ -81,5 +81,25 @@ describe("tela do portal com título (Estoque, Eventos)", () => {
 
   it("passa no axe", async () => {
     expect(await violacoesDeAcessibilidade(renderShell())).toEqual([]);
+  });
+});
+
+describe("a fatura de uma competência", () => {
+  const competencias = ["2026-10", "2026-09", "2026-08", "2026-07", "2026-06", "2026-05", "2026-04", "2026-03"];
+  const fatura = (competencia: string) => ({ id: `ITAU__${competencia}`, competencia, status: "emitida" });
+  // O resumo leva as 6 mais recentes em `invoices` e o histórico inteiro em `invoice_history`.
+  const overview = { invoices: competencias.slice(0, 6).map(fatura), invoice_history: competencias.map(fatura) } as ClientOverview;
+
+  it("acha a competência mais antiga do histórico, não só as 6 do Início", () => {
+    expect(findInvoice(overview, "2026-03")?.competencia).toBe("2026-03");
+    expect(findInvoice(overview, "2026-10")?.competencia).toBe("2026-10");
+    expect(findInvoice(overview, "2025-12")).toBeUndefined();
+    expect(getInvoiceHistory(overview)).toHaveLength(8);
+  });
+
+  it("sem o histórico, procura nas recentes", () => {
+    const antigo = { invoices: competencias.slice(0, 6).map(fatura) } as ClientOverview;
+    expect(findInvoice(antigo, "2026-05")?.competencia).toBe("2026-05");
+    expect(findInvoice(antigo, "2026-03")).toBeUndefined();
   });
 });
