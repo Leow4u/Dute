@@ -719,6 +719,21 @@ describe("chat do Agent Dute em tempo real", () => {
     assert.equal(conversas.size, 1);
   });
 
+  // O ouvinte em tempo real da área interna (lib/realtime-sync.tsx) precisa
+  // do cliente da conversa: a regra exige o campo, e sem o filtro dele a
+  // consulta inteira é recusada, mesmo só com as conversas da pessoa.
+  for (const colecao of ["agent_conversations", "agent_messages"]) {
+    it(`a área interna não lista ${colecao} só pelo dono, sem o cliente`, async () => {
+      const database = testEnvironment
+        .authenticatedContext("wms-a", { email: "wms-a@example.com" })
+        .firestore();
+      await assertFails(getDocs(query(collection(database, colecao), where("user_id", "==", "wms-a"))));
+      await assertSucceeds(
+        getDocs(query(collection(database, colecao), where("customer_code", "==", CUSTOMER_A), where("user_id", "==", "wms-a"))),
+      );
+    });
+  }
+
   for (const uid of ["wms-a", "finance-a"]) {
     it(`${uid} lista as próprias conversas com o agente`, async () => {
       const database = testEnvironment

@@ -1586,6 +1586,29 @@ Achada em 25/10/2026, numa revisão das telas do WMS. Está no
   antes na ordem não tiram da tela o que está nela, e a decisão vai para
   ele. Antes, os dois testes falhavam.
 
+### Correção: o chat do agente do WMS não se atualizava sozinho na área interna
+
+Achada em 25/10/2026, numa revisão das consultas das telas contra as regras.
+Está na produção.
+
+- **O defeito.** A ponte do tempo real (`lib/realtime-sync.tsx`) acompanhava
+  as conversas e as mensagens da área interna só pelo dono (`user_id`). A
+  regra (`canReadOwnConversation` e `canReadOwnMessage`) exige o cliente da
+  conversa, e sem o filtro dele o Firestore recusa a consulta inteira.
+  - A ponte roda em toda página. O console avisava "não pôde ser
+    acompanhado", e a resposta que o servidor grava depois (a rotina, a outra
+    aba) só aparecia ao abrir a tela de novo.
+  - Mandar a mensagem não mudava: o envio e a leitura do chat já levam o
+    cliente.
+- **A correção.** O ouvinte vai pelo dono e pelo cliente que o chat do WMS
+  lê, o do perfil (ou o legado), como o do portal.
+- **Teste:**
+  - `lib/realtime-sync.test.ts`: a conversa com o agente vai pelo dono e
+    pelo cliente, com e sem o cliente no perfil. Antes, falhava;
+  - `firestore.rules.test.ts`, no emulador: a área interna não lista as
+    conversas nem as mensagens só pelo dono, e lista com o cliente. É a
+    trava da regra que o ouvinte segue.
+
 ## Lançamento na produção
 
 Espera o OK do Leonardo. Até lá, a memória e o Agent Dute do núcleo só
