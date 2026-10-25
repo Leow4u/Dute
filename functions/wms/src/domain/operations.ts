@@ -3807,13 +3807,20 @@ export async function emitImmutableEvent(
 
 export async function createCustomerRequestTransaction(
   db: Firestore,
-  input: CreateOperationalRequestInput,
+  pedido: CreateOperationalRequestInput,
   actor: OperationalActor,
 ) {
+  const kind = requestType(pedido.type);
+  // O pedido de saída não leva custo: o preço do SKU é a base do ad valorem
+  // do faturamento, e quem pede, o cliente inclusive, não o muda. O custo
+  // entra pelo recebimento, pela contagem e pelo movimento manual.
+  const input: CreateOperationalRequestInput = kind.outbound
+    ? { ...pedido, items: pedido.items.map(({ unit_cost: _custo, ...item }) => item) }
+    : pedido;
   const nonce = input.idempotency_key;
   const requestId = `creq_${digest({ customer: input.customer_code, nonce })}`;
   const operationId = `op_request_${digest({ customer: input.customer_code, nonce })}`;
-  const inputHash = digest(input, 64);
+  const inputHash = digest(pedido, 64);
   const operationRef = db.collection(collections.operations).doc(operationId);
   const requestRef = db.collection(collections.customerRequests).doc(requestId);
   const total = input.items.reduce(
@@ -3821,7 +3828,6 @@ export async function createCustomerRequestTransaction(
     0,
   );
   const description = input.description ?? "";
-  const kind = requestType(input.type);
   const eventId = operationEventId(operationId, "request_created");
 
   return db.runTransaction(async (transaction) => {
