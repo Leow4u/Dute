@@ -638,6 +638,43 @@ function exactBalanceQuery(
     .limit(2);
 }
 
+/**
+ * O SKU já dado a um código novo que ainda não tem cadastro: o de outra linha
+ * desta mesma transação ou o de uma linha de recebimento ainda não concluído
+ * (o cadastro do produto novo só nasce na conclusão). Sem isso, o mesmo
+ * código ganhava um SKU por linha e por aviso, e a conclusão cadastrava os
+ * dois. Só leitura: chamar antes das escritas da transação.
+ */
+async function pendingNewSkuFor(
+  transaction: Transaction,
+  db: Firestore,
+  customerCode: string,
+  clientCode: string,
+  assignedHere: Map<string, string>,
+): Promise<string | undefined> {
+  const here = assignedHere.get(clientCode);
+  if (here) return here;
+  const pending = await readRows(
+    transaction,
+    db
+      .collection(collections.inboundItems)
+      .where("customer_code", "==", customerCode)
+      .where("client_item_code", "==", clientCode)
+      .where("product_registration", "==", "new")
+      .limit(20),
+  );
+  const skuCodes = [
+    ...new Set(pending.map((row) => normalizedIdentity(row.data.sku_code)).filter(Boolean)),
+  ];
+  if (skuCodes.length > 1) {
+    throw new HttpsError(
+      "failed-precondition",
+      `Código ${clientCode} está ligado a mais de um SKU (${skuCodes.join(", ")}). Revise o cadastro antes de seguir.`,
+    );
+  }
+  return skuCodes[0];
+}
+
 function skuBalancesQuery(
   db: Firestore,
   customerCode: string,
@@ -4302,7 +4339,11 @@ export async function createInboundReceiptTransaction(
         items.push(item);
         continue;
       }
-      const generated = await skuAllocator.next();
+      // O código que um aviso aprovado já ligou a um SKU usa o mesmo SKU.
+      const clientCode = normalizedIdentity(item.client_item_code);
+      const generated =
+        (clientCode && (await pendingNewSkuFor(transaction, db, customerCode, clientCode, new Map()))) ||
+        (await skuAllocator.next());
       items.push({
         ...item,
         sku_code: generated,
@@ -4762,6 +4803,7 @@ export async function updateInboundReceiptConferenceTransaction(
     // (domain/catalog-codes.ts), aberto só quando a primeira linha nova aparece.
     const receiptCustomer = text(receipt.customer_code) || LEGACY_CUSTOMER_CODE;
     let skuAllocator: SkuAllocator | undefined;
+    const newSkusHere = new Map<string, string>();
     for (const line of input.lines) {
       const row = rowsById.get(safeDocId(line.inbound_item_id));
       if (!row || text(row.data.sku_code)) continue;
@@ -4813,8 +4855,14 @@ export async function updateInboundReceiptConferenceTransaction(
       const exists = skuCodes.length > 0 || productSnapshot.exists;
       let skuCode = skuCodes[0] || clientCode;
       if (!exists) {
-        skuAllocator ??= await openSkuAllocator(transaction, db, receiptCustomer);
-        skuCode = await skuAllocator.next();
+        const pendingSku = await pendingNewSkuFor(transaction, db, receiptCustomer, clientCode, newSkusHere);
+        if (pendingSku) {
+          skuCode = pendingSku;
+        } else {
+          skuAllocator ??= await openSkuAllocator(transaction, db, receiptCustomer);
+          skuCode = await skuAllocator.next();
+          newSkusHere.set(clientCode, skuCode);
+        }
       }
       codeAssignments.set(row.id, {
         sku_code: skuCode,
@@ -5348,7 +5396,8 @@ export async function decideCustomerRequestTransaction(
       // o SKU. Código já cadastrado para o cliente liga ao SKU dele; senão o
       // SKU é gerado na sigla do cliente (domain/catalog-codes.ts). Com a
       // chegada vinculada, as linhas do aviso não viram recebimento e nenhum
-      // SKU é gasto.
+      // SKU é gasto. Um código novo, um SKU: em duas linhas ou em dois avisos.
+      const newSkusHere = new Map<string, string>();
       for (const item of items) {
         if (linkedReceipt || text(item.product_registration) !== "new") continue;
         const clientCode = normalizedIdentity(item.client_item_code || item.sku_code);
@@ -5386,8 +5435,14 @@ export async function decideCustomerRequestTransaction(
           item.product_registration = "existing";
           continue;
         }
+        const pendingSku = await pendingNewSkuFor(transaction, db, customerCode, clientCode, newSkusHere);
+        if (pendingSku) {
+          item.sku_code = pendingSku;
+          continue;
+        }
         inboundSkuAllocator ??= await openSkuAllocator(transaction, db, customerCode);
         item.sku_code = await inboundSkuAllocator.next();
+        newSkusHere.set(clientCode, item.sku_code);
       }
     }
 

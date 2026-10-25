@@ -148,6 +148,115 @@ after(async () => {
   await deleteApp(app);
 });
 
+describe("um código novo, um SKU", () => {
+  /** Aviso de envio do portal com as linhas dadas, todas de produto novo. */
+  async function noticeWith(key: string, lines: Array<{ code: string; quantity: number }>) {
+    const created = await createCustomerRequestTransaction(
+      db,
+      {
+        type: "recebimento",
+        priority: "normal",
+        title: "Entrega de camisas",
+        customer_code: BTG,
+        supplier: "Camisaria Alfa",
+        invoice_number: key,
+        idempotency_key: key,
+        items: lines.map((line, index) => ({
+          line_number: index + 1,
+          sku_code: line.code,
+          client_item_code: line.code,
+          product_name: "CAMISA NOVA",
+          product_registration: "new",
+          location_id: "RECEBIMENTO",
+          quantity: line.quantity,
+        })),
+      },
+      { uid: "cli-1", role: "cliente", customer_code: BTG, name: "Cristiane" },
+    );
+    return String((created as { id: unknown }).id);
+  }
+
+  async function skusOf(requestId: string) {
+    const rows = await db.collection("inbound_items").where("customer_request_id", "==", requestId).get();
+    return rows.docs.sort((a, b) => Number(a.get("line_number")) - Number(b.get("line_number"))).map((doc) => doc.get("sku_code"));
+  }
+
+  /** Confere e conclui o recebimento do aviso aprovado, com o previsto de cada linha. */
+  async function receive(requestId: string) {
+    const receiptId = `inb_${requestId}`;
+    const advance = (expected: string) =>
+      advanceWarehouseTaskTransaction(db, { task_uid: `receiving:${receiptId}`, expected_status: expected, idempotency_key: `${receiptId}:${expected}` }, operacao);
+    await advance("created");
+    const rows = await db.collection("inbound_items").where("receipt_id", "==", receiptId).get();
+    await updateInboundReceiptConferenceTransaction(
+      db,
+      {
+        receipt_id: receiptId,
+        expected_status: "checking",
+        idempotency_key: `conferencia-${receiptId}`,
+        lines: rows.docs.map((doc) => ({ inbound_item_id: doc.id, received_qty: Number(doc.get("expected_qty")), location_id: "RECEBIMENTO" })),
+      },
+      operacao,
+    );
+    await advance("checking");
+  }
+
+  async function catalogOf(clientCode: string) {
+    const skus = await db.collection("skus").where("cod_cliente_key", "==", clientCode).get();
+    return skus.docs.map((doc) => [doc.id, doc.get("estoque_atual")]);
+  }
+
+  it("o mesmo código novo em duas linhas do aviso ganha um SKU só", async () => {
+    const requestId = await noticeWith("env-dup", [
+      { code: "NOVO-1", quantity: 10 },
+      { code: "NOVO-1", quantity: 5 },
+    ]);
+    await approve(requestId);
+    assert.deepEqual(await skusOf(requestId), ["BTG-000001", "BTG-000001"]);
+    await receive(requestId);
+    assert.deepEqual(await catalogOf("NOVO-1"), [["BTG-000001", 15]]);
+  });
+
+  it("a chegada avulsa do código novo de um aviso aprovado usa o SKU do aviso", async () => {
+    const requestId = await noticeWith("env-c", [{ code: "NOVO-3", quantity: 10 }]);
+    await approve(requestId);
+    const created = await createInboundReceiptTransaction(
+      db,
+      {
+        customer_code: BTG,
+        idempotency_key: "avulsa-novo-3",
+        items: [
+          {
+            line_number: 1,
+            client_item_code: "NOVO-3",
+            product_name: "CAMISA NOVA",
+            product_registration: "new",
+            category: "CAMISAS",
+            unit_cost: 50,
+            photo_urls: ["https://exemplo.com.br/camisa.jpg"],
+            location_id: "RECEBIMENTO",
+            quantity: 3,
+          },
+        ],
+      },
+      operacao,
+    );
+    const rows = await db.collection("inbound_items").where("receipt_id", "==", String(created.receipt_id)).get();
+    assert.deepEqual(rows.docs.map((doc) => doc.get("sku_code")), ["BTG-000001"]);
+  });
+
+  it("o segundo aviso do código novo que ainda não foi recebido usa o SKU do primeiro", async () => {
+    const first = await noticeWith("env-a", [{ code: "NOVO-2", quantity: 10 }]);
+    const second = await noticeWith("env-b", [{ code: "NOVO-2", quantity: 4 }]);
+    await approve(first);
+    await approve(second);
+    assert.deepEqual([...(await skusOf(first)), ...(await skusOf(second))], ["BTG-000001", "BTG-000001"]);
+    await receive(first);
+    await receive(second);
+    assert.deepEqual(await catalogOf("NOVO-2"), [["BTG-000001", 14]]);
+  });
+});
+
 describe("aviso de envio vinculado à chegada avulsa", () => {
   it("a aprovação usa a chegada vinculada: um recebimento só, sem linhas nem SKU novos", async () => {
     const receiptId = await arrival("avulsa-1", { supplier: "Fornecedor da portaria" });

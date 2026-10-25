@@ -708,6 +708,51 @@ describe("fluxo WMS transacional", () => {
     assert.equal(stock77.data()?.qty_on_hand, 20);
   });
 
+  it("aviso sem código: o mesmo código novo em duas linhas da conferência ganha um SKU só", async () => {
+    await clearFirestore();
+    const created = await createCustomerRequestTransaction(
+      db,
+      {
+        type: "recebimento",
+        priority: "normal",
+        title: "Envio de Uniformes Elegância",
+        customer_code: "BTG Pactual",
+        supplier: "Uniformes Elegância",
+        invoice_number: "2472",
+        idempotency_key: "request-sem-codigo-dup",
+        items: [
+          { product_name: "BLUSA MOLETOM P", product_registration: "unknown", quantity: 8 },
+          { product_name: "BLUSA MOLETOM M", product_registration: "unknown", quantity: 6 },
+        ],
+      },
+      { ...actor, role: "cliente", uid: "client-1" },
+    );
+    const approved = (await decideCustomerRequestTransaction(
+      db,
+      { request_id: String(created.id), action: "approve", expected_status: "open", idempotency_key: "approve-sem-codigo-dup" },
+      actor,
+    )) as Record<string, unknown>;
+    const inboundId = String(approved.inbound_id);
+    await advance(`receiving:${inboundId}`, "created");
+    const rows = (await db.collection("inbound_items").where("receipt_id", "==", inboundId).get()).docs;
+    // As duas etiquetas trazem o mesmo código.
+    await updateInboundReceiptConferenceTransaction(
+      db,
+      {
+        receipt_id: inboundId,
+        expected_status: "checking",
+        idempotency_key: "conference-sem-codigo-dup",
+        lines: rows.map((row) => ({ inbound_item_id: row.id, received_qty: Number(row.data().expected_qty), client_item_code: "moletom-1" })),
+      },
+      actor,
+    );
+    const assigned = await Promise.all(rows.map((row) => row.ref.get()));
+    assert.deepEqual(assigned.map((row) => row.data()?.sku_code), ["BTG-000001", "BTG-000001"]);
+    await advance(`receiving:${inboundId}`, "checking");
+    const skus = await db.collection("skus").where("cod_cliente_key", "==", "MOLETOM-1").get();
+    assert.deepEqual(skus.docs.map((doc) => [doc.id, doc.data().estoque_atual]), [["BTG-000001", 14]]);
+  });
+
   it("cadastra produto e SKU novos no recebimento avulso sem antecipar o saldo", async () => {
     await clearFirestore();
 
