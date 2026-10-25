@@ -1533,6 +1533,36 @@ Achada em 25/10/2026.
 - **Teste:** `agent-tools.test.ts` (as faturas e a prévia só para quem lê
   faturamento). Antes, o interno tinha as faturas.
 
+### Correção: o rascunho levado à tela virava um segundo pedido
+
+Achada em 25/10/2026, na revisão do Agent Dute do WMS.
+
+- **O defeito.** O cartão do pedido e o do aviso de envio garantem que uma
+  mensagem nunca vira dois pedidos pelo id dela (`agent_draft_<mensagem>`).
+  Mas o atalho do próprio cartão para a tela ("Abrir no Estoque para
+  adicionar itens", "Abrir na tela Envios") levava o rascunho sem a
+  mensagem.
+  - O pedido enviado pela tela saía com outra chave e não marcava o cartão,
+    que continuava oferecendo "Enviar pedido", em qualquer aparelho.
+  - Um clique nele criava o segundo pedido e reservava o mesmo estoque de
+    novo, até a coordenação recusar um dos dois. O mesmo valia para o
+    aviso de envio.
+- **A correção.** O rascunho levado à tela guarda a mensagem do cartão
+  (`lib/agent-draft.ts`), e o envio pela tela a manda em
+  `agent_message_id`. O servidor já ligava o pedido à mensagem por esse
+  campo: cria uma vez só e marca o cartão enviado; o segundo envio, pelo
+  cartão ou pela tela, é recusado ("Este pedido já foi enviado").
+  - No Estoque, a ligação fica com o pedido guardado no aparelho
+    (`lib/client-cart.ts`) e sai quando ele é enviado ou esvaziado.
+  - O pedido montado pelo evento ("Usar no pedido") não fica ligado a
+    nenhum cartão.
+- **Testes:**
+  - `components/agent/rascunho-na-tela.test.tsx`: os dois atalhos guardam
+    a mensagem do cartão no rascunho;
+  - `agent-draft.test.ts` e `client-cart.test.ts`: a mensagem volta ao
+    abrir a tela e fica com o pedido enquanto ele tem itens.
+  - Antes, os quatro testes falhavam.
+
 ## Lançamento na produção
 
 Espera o OK do Leonardo. Até lá, a memória e o Agent Dute do núcleo só

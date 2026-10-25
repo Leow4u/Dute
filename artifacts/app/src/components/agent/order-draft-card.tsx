@@ -279,7 +279,8 @@ export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: O
         <button
           type="button"
           onClick={() => {
-            const next = draftFromOrderForm(view);
+            // Ligado à mensagem: o pedido enviado pelo Estoque marca este cartão como enviado.
+            const next = draftFromOrderForm(view, messageId);
             saveDraft(next);
             navigate(draftHref(next));
           }}

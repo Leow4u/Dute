@@ -252,3 +252,24 @@ describe("aviso de pedido salvo neste aparelho", () => {
     expect(isStoredCartSaved(storage, key)).toBe(true);
   });
 });
+
+describe("o pedido que saiu de um cartão do Agent Dute", () => {
+  it("fica ligado à mensagem do cartão enquanto tem itens", () => {
+    const storage = memory();
+    const key = cartStorageKey("BTG Pactual", "uid-ana");
+    patchStoredCart(storage, key, { ...draft, mensagemDoAgente: "msg_agent_1" });
+    expect(readStoredCart(storage, key).mensagemDoAgente).toBe("msg_agent_1");
+    // Mais um item: continua o mesmo pedido.
+    patchStoredCart(storage, key, { cart: { "sku-1": 2, "sku-2": 1 } });
+    expect(readStoredCart(storage, key).mensagemDoAgente).toBe("msg_agent_1");
+  });
+
+  it("enviado ou esvaziado, perde a ligação: o próximo pedido é outro", () => {
+    const storage = memory();
+    const key = cartStorageKey("BTG Pactual", "uid-ana");
+    patchStoredCart(storage, key, { ...draft, mensagemDoAgente: "msg_agent_1" });
+    patchStoredCart(storage, key, { cart: {} });
+    expect(readStoredCart(storage, key)).not.toHaveProperty("mensagemDoAgente");
+  });
+});
+

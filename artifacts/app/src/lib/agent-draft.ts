@@ -19,6 +19,12 @@ export type OrderDraft = {
   observacoes?: string;
   linhas: OrderDraftLine[];
   pendencias: DraftPending[];
+  /**
+   * A mensagem do Agent Dute de onde o rascunho saiu ("Abrir no Estoque"): o
+   * envio pela tela leva o id dela, e o servidor liga o pedido ao cartão, que
+   * passa a mostrar Enviado. A mesma mensagem nunca vira dois pedidos.
+   */
+  mensagem?: string;
 };
 
 export type ShipmentDraftLine = {
@@ -40,6 +46,8 @@ export type ShipmentDraft = {
   observacoes?: string;
   linhas: ShipmentDraftLine[];
   anexos?: DraftAttachment[];
+  /** A mensagem do Agent Dute de onde o aviso saiu ("Abrir na tela Envios"), como no pedido. */
+  mensagem?: string;
 };
 
 /** Rotina proposta pelo agente (sugerir_rotina): a pessoa confirma no cartão. */
@@ -82,11 +90,17 @@ export function parseNoteDraft(value: unknown): NoteDraft | null {
   return texto ? { tipo: "anotacao", texto, visibilidade: raw.visibilidade === "todos" ? "todos" : "equipe" } : null;
 }
 
+/** O id da mensagem do agente, como o servidor aceita em agent_message_id; senão, nada. */
+function mensagemDoAgente(value: unknown): { mensagem?: string } {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,160}$/.test(value) ? { mensagem: value } : {};
+}
+
 export function parseDraft(value: unknown): AgentDraft | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as AnyRecord;
   if (raw.tipo === "pedido") {
     return {
+      ...mensagemDoAgente(raw.mensagem),
       tipo: "pedido",
       nome: optional(raw.nome),
       destino: optional(raw.destino),
@@ -117,6 +131,7 @@ export function parseDraft(value: unknown): AgentDraft | null {
   }
   if (raw.tipo === "envio") {
     return {
+      ...mensagemDoAgente(raw.mensagem),
       tipo: "envio",
       fornecedor: optional(raw.fornecedor),
       nota_fiscal: optional(raw.nota_fiscal),
@@ -280,9 +295,10 @@ export function orderPayloadFromForm(form: OrderForm, messageId: string) {
   };
 }
 
-/** Rascunho com o que a pessoa já ajustou, para continuar na tela Estoque. */
-export function draftFromOrderForm(form: OrderForm): OrderDraft {
+/** Rascunho com o que a pessoa já ajustou, para continuar na tela Estoque, ligado à mensagem do cartão. */
+export function draftFromOrderForm(form: OrderForm, mensagem?: string | null): OrderDraft {
   return {
+    ...mensagemDoAgente(mensagem),
     tipo: "pedido",
     nome: form.nome.trim() || undefined,
     destino: form.destino.trim() || undefined,

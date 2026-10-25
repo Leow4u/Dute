@@ -362,6 +362,8 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
       }
       setProgress("Registrando o aviso…");
       return createClientRequest({
+        // O aviso que saiu de um cartão do Agent Dute vai ligado a ele: uma vez só por mensagem.
+        ...(initial?.mensagem ? { agent_message_id: initial.mensagem } : {}),
         type: "recebimento",
         priority: "normal",
         title: `Envio de ${supplier.trim()}`,

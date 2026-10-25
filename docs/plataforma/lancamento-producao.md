@@ -195,6 +195,11 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     as lê pelas telas (`canReadBilling`). Antes, o agente dizia a ele o
     valor de cada fatura (`fase-5-memoria.md`, "Correção: o interno via o
     valor das faturas pelo agente do WMS").
+  - o pedido e o aviso levados do cartão do Agent Dute à tela ("Abrir no
+    Estoque", "Abrir na tela Envios") ficam ligados ao cartão: enviados
+    pela tela, o cartão mostra Enviado, e a mesma mensagem não vira dois
+    pedidos (`fase-5-memoria.md`, "Correção: o rascunho levado à tela
+    virava um segundo pedido").
   A matriz de papéis do WMS (PR 372) é só teste: nenhuma callable muda
   quem passa.
 - **O estoque, o aviso de envio e a tela Documentos do WMS (25/10/2026).**

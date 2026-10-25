@@ -4,6 +4,12 @@ export type StoredCart = {
   destination: string;
   dueAt: string;
   notes: string;
+  /**
+   * A mensagem do Agent Dute de onde o pedido saiu ("Abrir no Estoque"): o
+   * envio leva o id dela (agent_message_id), e o servidor liga o pedido ao
+   * cartão da conversa, que deixa de oferecer o próprio envio.
+   */
+  mensagemDoAgente?: string;
 };
 
 export type CartStorage = Pick<Storage, "getItem" | "setItem">;
@@ -48,12 +54,14 @@ function parseStoredCart(raw: string | null | undefined): StoredCart {
   if (!raw) return emptyStoredCart();
   try {
     const parsed = JSON.parse(raw) as Partial<StoredCart>;
+    const mensagem = text(parsed.mensagemDoAgente);
     return {
       cart: quantities(parsed.cart),
       orderName: text(parsed.orderName),
       destination: text(parsed.destination),
       dueAt: text(parsed.dueAt),
       notes: text(parsed.notes),
+      ...(mensagem ? { mensagemDoAgente: mensagem } : {}),
     };
   } catch {
     return emptyStoredCart();
@@ -89,6 +97,8 @@ export function writeStoredCart(storage: Pick<Storage, "setItem"> | null, key: s
 
 export function patchStoredCart(storage: CartStorage | null, key: string, patch: Partial<StoredCart>): StoredCart {
   const next = { ...readStoredCart(storage, key), ...patch };
+  // O pedido vazio (enviado ou esvaziado) não fica ligado ao cartão do agente: o próximo é outro pedido.
+  if (!Object.keys(next.cart).length) delete next.mensagemDoAgente;
   writeStoredCart(storage, key, next);
   return next;
 }
