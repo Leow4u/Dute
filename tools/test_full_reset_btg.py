@@ -11,6 +11,7 @@ import contextlib
 import copy
 import io
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -58,6 +59,8 @@ FINANCEIRO = (
     "pagamentos",
     "client_faturas",
     "financeiro_operations",
+    "nf_emissoes",
+    "nf_baixas",
 )
 MEMORIA = (
     "ai_measures",
@@ -65,6 +68,46 @@ MEMORIA = (
     "ai_suggestions",
     "ai_case_memory",
 )
+# O que as Functions dos módulos declaram e a zeragem apaga de propósito: o
+# estoque e o faturamento do WMS, que elas leem, e o Agent Dute, cujas
+# conversas e conhecimento recomeçam (docs/novo-go-live-zeragem-total.md).
+APAGADAS_DE_PROPOSITO = {
+    "orders": "pedidos do WMS, que a Operação lê para a entrega",
+    "billing_periods": "competências do faturamento do WMS",
+    "client_invoices": "faturas do WMS no portal",
+    "movements": "razão do estoque",
+    "stock_balances": "saldos do estoque",
+    "ai_stock_age": "dias parado, que saem do estoque",
+    "ai_stock_alerts": "alerta do item parado, que sai do estoque",
+    "agent_conversations": "conversas do Agent Dute",
+    "agent_messages": "conversas do Agent Dute",
+    "agent_usage": "uso do Agent Dute",
+    "agent_routines": "rotinas do Agent Dute",
+    "ai_agent_notes": "conhecimento do Agent Dute, semeado de novo",
+    "ai_agent_playbooks": "conhecimento do Agent Dute, semeado de novo",
+}
+# As subcoleções ficam com o pai.
+SUBCOLECOES = {"aditivos": "contracts", "revisoes": "quotes"}
+FUNCTIONS = Path(__file__).resolve().parent.parent / "functions"
+
+
+def colecoes_dos_modulos() -> dict[str, str]:
+    """As coleções que as Functions do Comercial, da Operação, do Financeiro e do núcleo declaram, com o arquivo."""
+    padroes = (
+        re.compile(r'\b[A-Z0-9_]*COLLECTION[A-Z0-9_]*\s*=\s*"([a-z_]+)"'),
+        re.compile(r'\.collection\(\s*"([a-z_]+)"'),
+    )
+    achadas: dict[str, str] = {}
+    for modulo in ("comercial", "operacao", "financeiro", "core"):
+        pasta = FUNCTIONS / modulo / "src"
+        for arquivo in sorted(pasta.rglob("*.ts")):
+            if ".test." in arquivo.name:
+                continue
+            texto = arquivo.read_text(encoding="utf-8")
+            for padrao in padroes:
+                for nome in padrao.findall(texto):
+                    achadas.setdefault(nome, f"functions/{modulo}/src/{arquivo.relative_to(pasta)}")
+    return achadas
 
 
 def raw_document(
@@ -331,6 +374,28 @@ class PlanTests(unittest.TestCase):
                 control_name=control,
             )
         self.assertIn("Financeiro", str(raised.exception))
+
+    def test_a_fila_da_omie_fica_com_as_faturas(self) -> None:
+        # A emissão reserva a demanda preservada e guarda a nota autorizada.
+        for nome in ("nf_emissoes", "nf_baixas"):
+            for include_setup in (False, True):
+                with self.subTest(colecao=nome, include_setup=include_setup):
+                    self.assertIn(nome, full_reset_btg.preserved_collections(include_setup=include_setup))
+
+    def test_toda_colecao_dos_modulos_tem_lugar_na_zeragem(self) -> None:
+        # Coleção nova de um módulo cairia em "qualquer coleção nova: apagada".
+        preservadas = full_reset_btg.preserved_collections(include_setup=False)
+        soltas = {
+            nome: onde
+            for nome, onde in colecoes_dos_modulos().items()
+            if nome not in preservadas
+            and nome not in APAGADAS_DE_PROPOSITO
+            and nome not in SUBCOLECOES
+            and nome != full_reset_btg.EVENTS_COLLECTION
+        }
+        self.assertEqual(soltas, {})
+        for pai in SUBCOLECOES.values():
+            self.assertIn(pai, full_reset_btg.COMERCIAL_COLLECTIONS)
 
     def test_stock_age_goes_with_the_stock(self) -> None:
         for name in ("ai_stock_age", "ai_stock_alerts"):

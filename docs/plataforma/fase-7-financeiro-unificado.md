@@ -1511,6 +1511,34 @@ servidor. Está na produção.
   quatro rotas levam o cliente do cabeçalho, não o guardado, e sem ele nada
   sai). Antes, os dois testes da tela falhavam.
 
+### Correção: a zeragem apagava a fila da NFS-e pela Omie
+
+Achada em 25/10/2026, numa revisão do que a zeragem total
+(`tools/full_reset_btg.py`) preserva. A zeragem só roda à mão, e o
+Financeiro está ligado só no `dute-homolog`.
+
+- **O defeito.** A zeragem preservava as faturas, os pagamentos e as demandas,
+  mas apagava `nf_emissoes` e `nf_baixas`, que a parte 7.4 criou: elas não
+  estavam na lista do Financeiro e caíam em "qualquer coleção nova".
+  - A emissão reserva a demanda (`emissao_nf.id`). Apagada a emissão, a
+    demanda preservada ficaria reservada por uma emissão que não existe: o
+    `registerNf` recusa ("A demanda … está na emissão da NFS-e pela Omie.")
+    e o Comercial não a tira de A faturar.
+  - A emissão autorizada guarda a nota que a prefeitura emitiu, e a baixa,
+    o recebimento lançado na Omie.
+- **A correção.** As duas filas entram no Financeiro da zeragem, que nunca
+  apaga, nem com `--include-setup`.
+- **Teste:** `tools/test_full_reset_btg.py`:
+  - as duas filas ficam nos dois modos;
+  - uma trava lê as coleções que as Functions do Comercial, da Operação, do
+    Financeiro e do núcleo declaram e exige que cada uma fique na zeragem, seja
+    subcoleção de uma que fica, ou esteja na lista do que vai embora de
+    propósito (o estoque e o faturamento do WMS e o Agent Dute). Coleção nova
+    de um módulo não cai mais em "qualquer coleção nova" sem alguém decidir.
+
+  Com o script anterior, os dois testes falham, e a trava aponta
+  `nf_emissoes` e `nf_baixas`.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.
