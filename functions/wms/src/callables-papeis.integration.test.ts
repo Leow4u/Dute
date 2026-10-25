@@ -75,7 +75,7 @@ const DOCUMENTO_RECUSADO = { file_name: "programa.exe", content_type: "applicati
 
 /**
  * A chave é o nome da callable; `nome:variante` quando o papel depende da
- * entrada (o recurso do cadastro, o tipo do documento, o tipo do evento).
+ * entrada (o recurso do cadastro, o tipo do documento).
  */
 const MATRIZ: Record<string, Linha> = {
   addCatalogPhotos: { passam: ARMAZEM, recusa: SO_ARMAZEM },
@@ -190,14 +190,11 @@ const MATRIZ: Record<string, Linha> = {
   readShipmentInvoice: { passam: CLIENTE, recusa: "Leitura de nota disponível no portal do cliente." },
   receiveOrderReturn: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   recordCycleCount: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  // Os tipos que entram à mão estão em eventos-manuais.integration.test.ts.
   recordOperationalEvent: {
     passam: INTERNOS,
-    recusa: "Cliente não pode emitir esse evento.",
+    recusa: SO_OPERACAO,
     entrada: { type: "operator.note", title: "Anotação do teste de papéis" },
-  },
-  "recordOperationalEvent:mensagem do cliente": {
-    passam: TODOS,
-    entrada: { type: "customer.message_sent", title: "Mensagem do teste de papéis" },
   },
   recordWarehouseException: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   removeOpeningConferenceLine: { passam: ARMAZEM, recusa: SO_ARMAZEM },
