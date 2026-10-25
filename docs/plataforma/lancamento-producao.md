@@ -336,6 +336,12 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     como 6 (`fase-3-operacao.md`, "Correção: a capacidade "6.000" kg virava
     6 kg"). Os veículos já gravados com a capacidade errada se corrigem
     abrindo o cadastro e salvando de novo.
+- **O convite (25/10/2026).** Entra com a `main`, sem liberação própria: os
+  eventos do convite (`invites.create` e `invites.archive`) e o do aceite
+  levam a referência do token, não o token, que abre o convite
+  (`fase-2-nucleo.md`, "Correção: o token do convite nos eventos"). Os
+  eventos de antes continuam com o token, e os convites pendentes se
+  refazem depois de publicar (seção 5).
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
@@ -446,6 +452,10 @@ contato com os avisos ligados (Comercial › Clientes).
 6. **Treinamento**, como o plano pede a cada marco: a coordenação nos
    Relatórios e na entrega do WMS, e o cliente com a Operação no Minhas OS e
    no comprovante.
+7. **Os convites pendentes.** Com o owner, em Configurações › Usuários,
+   cancelar cada convite pendente e convidar a pessoa de novo. O token dos
+   convites criados antes desta publicação está nos eventos, que interno,
+   wms e suporte leem (pergunta 67 do plano).
 
 ## 6. Ligar o Financeiro no `dute-prod` (parte 4.9b, com o OK)
 
@@ -528,3 +538,6 @@ Um PR pequeno, depois da conferência da seção 5:
 - As perguntas 65 e 66 do plano, do app do campo, com o alinhamento de tela:
   a inclusão guardada de item novo, que não aparece até chegar, e a
   assinatura da conclusão recusada, que fica sem a OS.
+- As perguntas 67 e 68 do plano (seção 13, "Acesso e convites"): os
+  convites pendentes, que se refazem depois de publicar, e o aceite que não
+  confere se o e-mail foi verificado.

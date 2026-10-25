@@ -1015,6 +1015,30 @@ defeito.
       campo, com a assinatura, para a coordenação anexá-la à conclusão. É
       tela nova.
 
+**Acesso e convites** (25/10/2026). O id do convite é o token do link
+(`invites/{token}`): quem o tem e entra com o e-mail convidado vira o
+usuário do convite, com o papel dele.
+
+67. Até a correção de 25/10/2026, o evento do convite gravava o token, e os
+    eventos são lidos por interno, wms e suporte. Com o token, quem cria no
+    Firebase Auth uma conta com o e-mail convidado aceita o convite,
+    inclusive o de admin ou owner: o cadastro com e-mail e senha é aberto.
+    - Os eventos de antes não se apagam, e os convites pendentes criados
+      até a publicação continuam expostos neles.
+    - Recomendo, logo depois de publicar a `main` na produção, cancelar em
+      Configurações › Usuários cada convite pendente e convidar de novo. O
+      evento do convite novo leva só a referência do token.
+68. O aceite confere só se o e-mail do login é o do convite, não se ele foi
+    verificado. Quem tiver o link (encaminhado, ou lido em `invites` por um
+    admin) cria a conta com o e-mail convidado e entra com o papel do
+    convite. O admin chega assim a owner.
+    - O aceite hoje é uma gravação do navegador, e o do cliente nem grava
+      evento (`fase-2-nucleo.md`, "Achados fora destas partes").
+    - Recomendo o aceite passar a uma callable que confere o e-mail
+      verificado e grava o usuário, o convite usado e o evento numa
+      transação.
+    - É tela: a pessoa confirma o e-mail antes de entrar.
+
 Limitações conhecidas, sem pergunta, para quando houver tempo:
 
 - A OS que a Omie gravou com a resposta perdida, numa emissão que depois
