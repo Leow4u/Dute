@@ -325,6 +325,11 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     documento do cliente em `billing_operational_snapshots` (o da BTG é
     `BTG_Pactual__2026-10`), que guarda só o uso; a próxima prévia congela
     de novo, com a conta nova. Depois de emitida, a fatura não muda mais.
+  - Se a publicação ficar para depois de 01/11, segure a emissão de outubro
+    até ela. Emitida antes, a fatura sai pela conta antiga, e a quantidade
+    salva à mão não a corrige: os itens com fonte automática (as entradas e
+    as saídas em peças, o número de movimentações e o ad valorem) tiram a
+    quantidade do uso e ignoram a manual (`functions/wms/src/billing.ts`).
   - A emissão recusa quando uma quantidade salva nos serviços do mês é de
     um item que saiu da Tabela de preços: antes, a cobrança sumia sem aviso
     (`fase-7-financeiro-unificado.md`, "Correção: a quantidade salva de um
