@@ -247,7 +247,11 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     Greenwich lida como local, três horas à frente em São Paulo, e
     congelada na hora em que a tela montou: às 21h30 do último dia, o
     ajuste caía no mês seguinte no razão e nos relatórios (teste em
-    `pages/movements-data.test.tsx`).
+    `pages/movements-data.test.tsx`);
+  - o mesmo "Registrar movimentação" enviado de novo depois da resposta
+    perdida repete a chave, e o servidor devolve o movimento gravado. Antes,
+    cada clique saía com uma chave nova, e o segundo lançava o saldo de novo
+    (teste em `pages/movements-envio.test.tsx`).
 - **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a
   `main`, sem liberação própria. As entradas, as saídas e os movimentos
   passam a cobrar só o recebimento e a expedição, cada movimento uma vez
