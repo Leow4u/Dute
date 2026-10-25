@@ -311,6 +311,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     depois de outra pessoa a resolver, e o servidor recusa. Antes, abria
     uma segunda demanda solta (`fase-4-financeiro.md`, "Correção: a
     solicitação resolvida em outra tela virava uma segunda demanda").
+  - tentar de novo o Registrar andamento do escritório repete a ocorrência
+    e a inclusão iguais. Antes, voltava recusado, e fechar e abrir o painel
+    gravava a ocorrência duas vezes (`fase-3-operacao.md`, "Correção:
+    tentar de novo o andamento do escritório era recusado").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
