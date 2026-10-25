@@ -836,3 +836,25 @@ servidor. Está no `dute-homolog` desde a parte 4.2b.
     digitado, que vai como a pessoa digitou;
   - depois do pagamento desta tela, o próximo vem com o saldo que sobrou.
   - Antes, os três falhavam.
+
+### Correção: a solicitação resolvida em outra tela virava uma segunda demanda
+
+Achada em 25/10/2026, numa revisão do que as telas do escritório mandam ao
+servidor. Está no `dute-homolog` desde a parte 4.4c.
+
+- **O defeito.** A Nova demanda aberta por "Atender" mandava a solicitação
+  do portal só enquanto ela esperava a Operação.
+  - Se outra pessoa a atendesse ou recusasse com o formulário aberto, o
+    pedido ia sem a solicitação, pelo canal portal e com a hora dela, e o
+    servidor aceitava: uma segunda demanda solta, com o próprio
+    planejamento, as OS e, depois, a cobrança. Na recusada, uma demanda
+    que o cliente leu como recusada.
+  - A resposta perdida tinha o mesmo fim: a nova tentativa mudava o pedido,
+    a chave era recusada, e a próxima mudança abria a duplicata.
+- **A correção.** O pedido leva a solicitação de que o formulário saiu,
+  mesmo depois de resolvida (`pages/operacao/demanda-nova.tsx`). O servidor
+  recusa a resolvida ("já virou a demanda", "recusada"), e a nova
+  tentativa leva o mesmo pedido, que a chave repete.
+- **Teste:** `demanda-nova.test.tsx`, com a página e as leituras de
+  mentira: atendida por outra pessoa com o formulário aberto, a demanda
+  sai com a solicitação. Antes, saía sem ela.
