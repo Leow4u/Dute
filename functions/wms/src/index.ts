@@ -57,7 +57,7 @@ import {
   type LpuItem,
 } from "./billing.js";
 import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
-import { accessChangeFromTo, assertAccessActorCurrent, setUserAccessTransaction } from "./domain/access.js";
+import { accessChangeFromTo, assertAccessActorCurrent, setUserAccessFor } from "./domain/access.js";
 import {
   CLIENT_ACCESS_COLLECTION,
   CLIENT_PROFILES_COLLECTION,
@@ -6870,27 +6870,14 @@ const SetUserAccessSchema = z.object({
 
 /**
  * Remove ou devolve o acesso de uma pessoa: marca o perfil (Rules e
- * getProfile passam a recusá-lo), registra o evento e bloqueia o login no
- * Firebase Auth, derrubando as sessões abertas.
+ * getProfile passam a recusá-lo), registra o evento e acerta o login no
+ * Firebase Auth, derrubando as sessões abertas (domain/access.ts).
  */
 export const setUserAccess = onCall(async (request) => {
   const profile = await getProfile(request);
   requireAccessWrite(profile);
   const input = SetUserAccessSchema.parse(request.data ?? {});
-  const result = await setUserAccessTransaction(db, input, profile);
-  let authUpdated = false;
-  if (result.changed) {
-    try {
-      await getAuth().updateUser(input.user_id, { disabled: !input.active });
-      if (!input.active) await getAuth().revokeRefreshTokens(input.user_id);
-      authUpdated = true;
-    } catch (error) {
-      // O perfil já está bloqueado pelas Rules/getProfile; o login no Auth é
-      // a segunda camada. Fica no log para corrigir sem desfazer o bloqueio.
-      console.error("[setUserAccess] Firebase Auth não atualizado", error);
-    }
-  }
-  return { ...result, auth_updated: authUpdated };
+  return setUserAccessFor(db, getAuth(), input, profile);
 });
 
 const SetClientItemArchivedSchema = z.object({
