@@ -57,7 +57,8 @@ const nfRegistrada = z
     id: faturaId,
     demandas: z.array(demanda).max(50),
     competencias: z.array(competencia).max(12).default([]),
-    autorizacoes: z.number().int().min(0).max(50),
+    // Cada demanda cita o pedido e os complementos: 50 demandas passam de 50 autorizações.
+    autorizacoes: z.number().int().min(0).max(1000),
     emitida_em: data,
     vencimento: data,
     forma: z.enum(["boleto", "pix", "transferencia", "cartao", "dinheiro"]),

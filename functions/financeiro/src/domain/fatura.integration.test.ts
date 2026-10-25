@@ -172,6 +172,22 @@ describe("registrar a NF", () => {
     await recusa(registerNfFor(db, financeiro, pedido({ idempotency_key: "nf-2", demandas: ["10050"] }), AGORA), "failed-precondition", "A NF 1234 da série 1 já está registrada.");
   });
 
+  it("a NF que cita mais de 50 autorizações se registra, com a contagem no evento", async () => {
+    // O pedido e os complementos: uma demanda pode ter várias autorizações.
+    const ids = Array.from({ length: 51 }, (_, i) => `aut_${String(i).padStart(2, "0")}`);
+    const batch = db.batch();
+    for (const id of ids) {
+      batch.set(db.doc(`client_authorizations/${id}`), { id, customer_code: "ITAU", tipo: "pedido_aceite", status: "registrada", demandas: [{ numero: "10045", rv: 1 }], demanda_numeros: ["10045"], nf_ids: [] });
+    }
+    batch.update(db.doc("demands/10045"), { autorizacao_ids: ids });
+    await batch.commit();
+
+    const resultado = await registerNfFor(db, financeiro, pedido({ demandas: ["10045"] }), AGORA);
+    const [evento] = (await db.collection(EVENTS_COLLECTION).get()).docs.map((doc) => doc.data());
+    assert.equal(evento.payload.autorizacoes, 51);
+    assert.equal((await db.doc(`client_authorizations/${ids[50]}`).get()).get("nf_ids")[0], resultado.id);
+  });
+
   it("a demanda da medição aprovada fatura pela soma das linhas dela", async () => {
     const resultado = await registerNfFor(db, financeiro, pedido({ demandas: ["10050"], nf: { numero: "77", serie: "2", emitida_em: "2026-10-23" } }), AGORA);
     assert.equal(resultado.valor_cents, 42_500);

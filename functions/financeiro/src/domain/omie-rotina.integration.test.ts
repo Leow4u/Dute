@@ -190,6 +190,23 @@ describe("a rotina da Omie", () => {
     assert.equal((await rodar(omie.transporte, 60)).passos, 0);
   });
 
+  it("a NFS-e que cita mais de 50 autorizações vira fatura, e a rotina segue", async () => {
+    const ids = Array.from({ length: 51 }, (_, i) => `aut_${String(i).padStart(2, "0")}`);
+    const batch = db.batch();
+    for (const id of ids) {
+      batch.set(db.doc(`client_authorizations/${id}`), { id, customer_code: "ITAU", tipo: "pedido_aceite", status: "registrada", demandas: [{ numero: "10045", rv: 1 }], demanda_numeros: ["10045"], nf_ids: [] });
+    }
+    batch.update(db.doc("demands/10045"), { autorizacao_ids: ids });
+    await batch.commit();
+    const omie = omieDeMentira({ rps: ["004"] });
+    await emitir();
+    for (let passo = 0; passo < 4; passo += 1) await rodar(omie.transporte);
+    const ultima = await rodar(omie.transporte, 5);
+    assert.equal(ultima.autorizadas, 1);
+    const gravada = await emissao();
+    assert.deepEqual([gravada.etapa, gravada.fatura_id], ["autorizada", faturaIdDaNfse("815")]);
+  });
+
   it("a Omie em produção na homologação para a emissão antes de faturar", async () => {
     const omie = omieDeMentira({ ambiente: "P" });
     await emitir();
