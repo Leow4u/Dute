@@ -1298,6 +1298,26 @@ Achada em 25/10/2026, numa revisão do código do Financeiro.
   autorizada (`omie-rotina.integration.test.ts`). Antes, os dois davam
   "Evento nf.registered com payload inválido".
 
+### Correção: o evento da fatura emitida do WMS levava o total
+
+Achada em 25/10/2026, numa revisão das regras de acesso.
+
+- **O defeito.** A emissão da armazenagem (`emitBillingInvoice`) gravava em
+  `events` o `billing.invoice_emitted` com `total_cents` e `total`.
+  - Os eventos são lidos por owner, admin, interno, wms e suporte
+    (`canReadObservability`).
+  - Interno e wms não leem o faturamento (`canReadBilling`, decisão de
+    30/07), mas viam pelo evento o total de cada fatura de cada cliente.
+  - A regra já dizia que nenhum evento do faturamento leva valor.
+- **A correção.** O evento sai sem o total. O valor continua no período
+  (`billing_periods`) e na fatura do portal (`client_invoices`), que só
+  quem lê o faturamento abre.
+  - Na produção, a primeira fatura emitida depois da zeragem de 16/10 é a de
+    outubro, então ainda não há evento com o total para limpar.
+- **Teste.** `billing-callables.integration.test.ts`, "congela a fatura com
+  o total da prévia": o evento da emissão tem o payload vazio. Antes, levava
+  o total.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.
