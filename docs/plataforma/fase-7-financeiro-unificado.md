@@ -1420,6 +1420,26 @@ desde o faturamento por cliente.
     emite R$ 66,75, o total da prévia, e o `billing_periods` nasce emitido.
     Antes, recusava com `PERIOD_NOT_FOUND`.
 
+### Correção: o valor da mercadoria perdia o centavo no ponto flutuante
+
+Achada em 25/10/2026, numa revisão do faturamento do WMS. Está na produção
+desde o ad valorem por saldo × preço.
+
+- **O defeito.** O `merchandiseValue` somava saldo × preço em ponto
+  flutuante, e o valor era congelado como estava.
+  - O billing lê esse número em decimal exato e arredonda o ad valorem
+    meio para cima, então o erro do binário passava para a fatura.
+  - Um exemplo: 16 × 49,90 + 64 × 12,50 + 235 × 1,10 + 278 × 12,50 +
+    247 × 33,30 são R$ 13.557,00, e a soma dava 13.556,999999999998. O ad
+    valorem de 0,5% saía R$ 67,78 em vez de R$ 67,79.
+  - O erro é sempre para baixo, um centavo, em perto de 1% dos estoques com
+    preços comuns, segundo a revisão.
+- **A correção.** O `merchandiseValue` soma pela `exactSum` do `billing.ts`,
+  em decimal exato, com a mesma leitura decimal que a fatura já usava. O
+  total gravado e o legado entram do mesmo jeito.
+- **Teste:** `catalog-prices.test.ts`: o estoque do exemplo vale 13.557, e
+  0,1 + 0,2 dá 0,3. Antes, 13.556,999999999998.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.

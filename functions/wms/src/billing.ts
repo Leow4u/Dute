@@ -278,14 +278,35 @@ function scaleToCents(value: ParsedDecimal): bigint {
   return quotient;
 }
 
+function multiplyDecimals(left: ParsedDecimal, right: ParsedDecimal): ParsedDecimal {
+  return {
+    coefficient: left.coefficient * right.coefficient,
+    scale: left.scale + right.scale,
+  };
+}
+
 function multiplyToCents(
   quantity: ParsedDecimal,
   unitPrice: ParsedDecimal,
 ): bigint {
-  return scaleToCents({
-    coefficient: quantity.coefficient * unitPrice.coefficient,
-    scale: quantity.scale + unitPrice.scale,
-  });
+  return scaleToCents(multiplyDecimals(quantity, unitPrice));
+}
+
+/**
+ * A soma exata, em decimal, de valores e de produtos (quantidade × preço).
+ * Somados em ponto flutuante, R$ 13.557,00 viravam 13.556,999…, e o ad
+ * valorem de 0,5% perdia um centavo.
+ */
+export function exactSum(terms: ReadonlyArray<number | readonly [number, number]>): number {
+  let total: ParsedDecimal = { coefficient: 0n, scale: 0 };
+  for (const term of terms) {
+    const value =
+      typeof term === "number"
+        ? parseDecimal(term, "valor")
+        : multiplyDecimals(parseDecimal(term[0], "quantidade"), parseDecimal(term[1], "preco"));
+    total = addDecimals(total, value);
+  }
+  return decimalToNumber(total, "valor");
 }
 
 function centsToNumber(cents: bigint, field = "total"): number {

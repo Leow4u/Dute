@@ -72,4 +72,17 @@ describe("preço fora da operação", () => {
     );
     assert.equal(value, 10 * 25 + 4 * 25 + 90);
   });
+
+  it("soma em decimal exato: o centavo do ad valorem não se perde no ponto flutuante", () => {
+    // Em ponto flutuante, 16 × 49,90 + 64 × 12,50 + 235 × 1,10 + 278 × 12,50 + 247 × 33,30 dava
+    // 13.556,999999999998, e o ad valorem de 0,5% saía R$ 67,78 em vez de R$ 67,79.
+    const linhas: Array<[number, number]> = [[16, 49.9], [64, 12.5], [235, 1.1], [278, 12.5], [247, 33.3]];
+    const value = merchandiseValue(
+      linhas.map(([qty], indice) => ({ sku_code: `SKU-${indice}`, qty_on_hand: qty })),
+      linhas.map(([, preco], indice) => ({ sku_code: `SKU-${indice}`, preco_unit: preco })),
+    );
+    assert.equal(value, 13557);
+    // O total gravado e o legado também entram exatos.
+    assert.equal(merchandiseValue([{ sku_code: "A", qty_on_hand: 1, total_cost: 0.1 }], [{ sku_code: "B", total_cost: 0.2 }]), 0.3);
+  });
 });
