@@ -18,6 +18,9 @@ export type FunctionRow = {
   fix: string | null;
 };
 
+/** O p50 e o p95 das requisições de um serviço do Cloud Run em 24 h, em ms. */
+export type LatencyRow = { service: string; p50_ms: number; p95_ms: number };
+
 export type SystemInfra = {
   checked_at: string;
   settings: { billing_table: string | null };
@@ -31,6 +34,8 @@ export type SystemInfra = {
     last_deploy_at: string | null;
     list: FunctionRow[];
   }>;
+  /** Os serviços mais lentos pelo p95; `total` conta todos os que tiveram requisição. */
+  latency: Section<{ total: number; services: LatencyRow[] }>;
   billing: Section<{
     table: string;
     has_data: boolean;
@@ -90,6 +95,18 @@ export function serviceNames(infra: SystemInfra) {
   ]);
   if (infra.functions.status === "ok") for (const row of infra.functions.list) names.set(row.service, row.name);
   return (service: string) => names.get(service) ?? service;
+}
+
+/** A latência em ms até 1 s; acima, em segundos com uma casa. */
+export function latencyText(ms: number) {
+  const rounded = Math.round(ms);
+  if (rounded < 1000) return `${rounded} ms`;
+  return `${(ms / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
+}
+
+/** A nota do quadro Latência: quantos serviços de quantos tiveram requisição. */
+export function latencyNote(shown: number, total: number) {
+  return total > shown ? `últimas 24 h · os ${shown} mais lentos de ${total}` : "últimas 24 h";
 }
 
 /** O nome da codebase como a pasta: a "default" é a do WMS (functions/wms). */

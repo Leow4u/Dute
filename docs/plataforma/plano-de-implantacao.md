@@ -661,8 +661,8 @@ regras); CNH, exame e treinamento vencendo aparecem no Início certo.
   erros de todas as functions e, desde 24/10/2026, o estado e o acesso das
   callables de todas as codebases. Desde 25/10/2026, o e-mail dos avisos que
   desiste depois de 5 tentativas vira erro da `runNotifications`, com o id
-  e o erro de cada um, e aparece no mesmo quadro. A latência das callables
-  ainda não.
+  e o erro de cada um, e aparece no mesmo quadro; o quadro Latência mostra o
+  p50 e o p95 de 24 h de cada function (Cloud Monitoring).
 - **LGPD**: retenção e exclusão de fotos, assinaturas e dados de campo;
   CPF só onde o papel precisa; registro de quem acessou o que. O inventário
   dos dados pessoais, o que falta e as 12 decisões do Leonardo, cada uma com

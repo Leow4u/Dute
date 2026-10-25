@@ -13,6 +13,8 @@ import {
   functionsToShow,
   infraKey,
   infraTiles,
+  latencyNote,
+  latencyText,
   serviceNames,
   vertexComparison,
   type ErrorGroup,
@@ -23,8 +25,9 @@ import { cn } from "@/lib/utils";
 import { dayTime, fetchJson, field, Health, Panel } from "./parts";
 
 /**
- * Infraestrutura do painel do sistema (só owner): erros do servidor em 24 h,
- * functions publicadas e com acesso, custo real do Google Cloud. As consultas
+ * Infraestrutura do painel do sistema (só owner): erros do servidor e
+ * latência em 24 h, functions publicadas e com acesso, custo real do Google
+ * Cloud. As consultas
  * ao Google Cloud levam alguns segundos: carregam ao abrir, valem 5 minutos e
  * têm "Verificar agora". Só leitura: o painel mostra o comando de correção.
  */
@@ -136,6 +139,39 @@ function ErrorsPanel({ infra }: { infra: SystemInfra }) {
         </>
       ) : (
         <p className="px-5 py-4 text-sm text-muted-foreground">Nenhum erro nem chamada bloqueada nas últimas 24 h.</p>
+      )}
+    </Panel>
+  );
+}
+
+export function LatencyPanel({ infra }: { infra: SystemInfra }) {
+  const latency = infra.latency;
+  const name = serviceNames(infra);
+  return (
+    <Panel title="Latência" note={latency.status === "ok" ? latencyNote(latency.services.length, latency.total) : "últimas 24 h"}>
+      {latency.status === "error" ? (
+        <SectionError message={latency.message} />
+      ) : latency.status !== "ok" ? null : latency.services.length ? (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
+              <th className="px-5 py-2 font-semibold">Function</th>
+              <th className="px-3 py-2 text-right font-semibold">p50</th>
+              <th className="px-5 py-2 text-right font-semibold">p95</th>
+            </tr>
+          </thead>
+          <tbody>
+            {latency.services.map((row) => (
+              <tr key={row.service} className="border-b border-border/40 last:border-0">
+                <td className="break-all px-5 py-2.5 font-medium">{name(row.service)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{latencyText(row.p50_ms)}</td>
+                <td className="px-5 py-2.5 text-right font-semibold tabular-nums">{latencyText(row.p95_ms)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="px-5 py-4 text-sm text-muted-foreground">Nenhuma requisição nas últimas 24 h.</p>
       )}
     </Panel>
   );
@@ -345,6 +381,7 @@ export function InfraSection({ agentMonthCost }: { agentMonthCost: number | null
       ) : (
         <div className="space-y-4">
           <ErrorsPanel infra={infra.data} />
+          <LatencyPanel infra={infra.data} />
           <div className="grid items-start gap-4 lg:grid-cols-2">
             <FunctionsPanel infra={infra.data} />
             <BillingPanel infra={infra.data} agentMonthCost={agentMonthCost} onConfigure={() => setEditingTable(true)} />

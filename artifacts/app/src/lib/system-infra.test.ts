@@ -7,6 +7,8 @@ import {
   functionsNote,
   functionsToShow,
   infraTiles,
+  latencyNote,
+  latencyText,
   serviceNames,
   vertexComparison,
   type FunctionRow,
@@ -43,6 +45,7 @@ const infra: SystemInfra = {
     last_deploy_at: null,
     list: [row("getSystemDashboard", "nao_publicada"), row("saveAgentCostSettings", "sem_acesso"), row("readShipmentInvoice", "ok"), row("advanceQuote", "ok", "comercial")],
   },
+  latency: { status: "ok", total: 2, services: [{ service: "readshipmentinvoice", p50_ms: 310, p95_ms: 2413 }, { service: "dute-app", p50_ms: 12, p95_ms: 48 }] },
   billing: { status: "not_configured" },
 };
 
@@ -91,6 +94,12 @@ describe("painel do sistema: infraestrutura", () => {
     expect(functionsNote(52, ["default", "comercial", "operacao", "financeiro", "core", "rh"])).toBe("52 functions em 6 codebases");
     expect(functionsNote(1, ["default"])).toBe("1 function em 1 codebase");
     expect(serviceNames(infra)("advancequote")).toBe("advanceQuote");
+  });
+
+  it("a latência: ms até 1 s, depois segundos; a nota diz quantos de quantos", () => {
+    expect([latencyText(48), latencyText(999.6), latencyText(2413), latencyText(12_050)]).toEqual(["48 ms", "1,0 s", "2,4 s", "12,1 s"]);
+    expect(latencyNote(2, 2)).toBe("últimas 24 h");
+    expect(latencyNote(15, 160)).toBe("últimas 24 h · os 15 mais lentos de 160");
   });
 
   it("erros: os 5 mais recentes, ou todos", () => {
