@@ -226,6 +226,20 @@ describe("itens pela execução", () => {
     );
   });
 
+  it("o feito guardado no celular sem sinal não sobrescreve o que o escritório registrou depois", async () => {
+    await registerStepFor(db, interno, passo("saida_patio", "2026-10-22T07:05-03:00"), AGORA);
+    await registerItemFor(db, interno, { ...feito("120"), instante: "2026-10-22T11:30-03:00" }, AGORA);
+    // O celular da Ana guardou 96 às 11:20 e só teve sinal depois.
+    await recusa(
+      registerItemFor(db, campo, { action: "executed", idempotency_key: "c-feito", numero: "10045-01", linha: "ln_1", executado: "96", instante: "2026-10-22T11:20-03:00" }, AGORA),
+      "failed-precondition",
+      "Cadeira: o feito das 11:20 é de antes do último registrado (120, às 11:30).",
+    );
+    const [item] = (await lerOs()).itens;
+    assert.deepEqual([item.executado, item.executado_em], ["120", "2026-10-22T14:30:00.000Z"]);
+    assert.deepEqual((await eventos("os.item_executed")).map((evento) => evento.payload.quantidade), ["120"]);
+  });
+
   it("a inclusão em campo cria a linha nova uma vez só, soma ao feito e não leva quem pediu ao evento", async () => {
     await db.doc("lpu_items/lpu_giratoria").set({ item: "Cadeira giratória", descricao: "Transporte de cadeira giratória", servico: "Transporte", unidade: "UN", ativo: true, orcavel: true });
     await registerStepFor(db, interno, passo("saida_patio", "2026-10-22T07:05-03:00"), AGORA);

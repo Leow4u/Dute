@@ -149,7 +149,7 @@ function dataEmSaoPaulo(instanteUtc: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(instanteUtc);
 }
 
-function horaEmSaoPaulo(instanteUtc: string): string {
+export function horaEmSaoPaulo(instanteUtc: string): string {
   return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(instanteUtc));
 }
 
