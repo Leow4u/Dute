@@ -12,27 +12,46 @@ import {
   type QueryConstraint,
 } from "firebase/firestore";
 
+import type { ModuloContratavel } from "@workspace/dominio";
+
 import { useAppUser } from "./auth";
 import { firestore } from "./firebase";
 import { LEGACY_CUSTOMER_CODE } from "./active-customer";
 import { INTERNAL_ROLES } from "./modules";
+import { useOperationProfile } from "./operation-profile";
+import { leiturasDoPortal } from "./operations";
 
 // Perfil de cliente sem código (convites antigos) é da BTG.
 const DEFAULT_CUSTOMER_CODE = LEGACY_CUSTOMER_CODE;
 
-const CUSTOMER_AUTHORIZED_COLLECTIONS = [
-  "client_inventory",
-  "client_order_tracking",
-  "client_request_status",
-  "client_invoices",
-  "client_documents",
-  "client_portal_status",
-] as const;
+type LeituraDoPortal = keyof ReturnType<typeof leiturasDoPortal>;
+
+/**
+ * As projeções do portal, cada uma com a leitura que o contrato precisa abrir
+ * (as regras pedem o módulo: `isOwnProjectionWith`). Sem módulo, toda conta de
+ * cliente lê.
+ */
+const CUSTOMER_AUTHORIZED_COLLECTIONS: ReadonlyArray<{
+  collectionName: string;
+  leitura: LeituraDoPortal | null;
+  extraEquals?: RealtimeTarget["extraEquals"];
+}> = [
+  { collectionName: "client_inventory", leitura: "estoque" },
+  { collectionName: "client_order_tracking", leitura: "pedidos" },
+  { collectionName: "client_request_status", leitura: "solicitacoes" },
+  { collectionName: "client_invoices", leitura: "faturas" },
+  // A regra só dá o documento publicado: a consulta precisa pedir isso, ou o
+  // Firestore nega a lista inteira (a mesma condição de cloud-api.ts).
+  { collectionName: "client_documents", leitura: "documentos", extraEquals: [{ field: "customer_visible", value: true }] },
+  { collectionName: "client_portal_status", leitura: null },
+];
 
 type RealtimeTarget = {
   collectionName: string;
   customerField?: "customer_code" | "cod_cliente";
   userField?: "user_id";
+  /** Igualdades que a regra exige na consulta além do cliente. */
+  extraEquals?: ReadonlyArray<{ field: string; value: string | boolean }>;
   /**
    * Sinal de mudança: assina só o documento alterado mais recentemente em vez
    * da coleção inteira. O snapshot inicial passa a custar 1 leitura no lugar
@@ -42,22 +61,29 @@ type RealtimeTarget = {
   changeSignalOnly?: boolean;
 };
 
-const CUSTOMER_REALTIME_TARGETS: readonly RealtimeTarget[] = [
-  ...CUSTOMER_AUTHORIZED_COLLECTIONS.map((collectionName) => ({
-    collectionName,
-    customerField: "customer_code" as const,
-  })),
-  {
-    collectionName: "agent_conversations",
-    customerField: "customer_code",
-    userField: "user_id",
-  },
-  {
-    collectionName: "agent_messages",
-    customerField: "customer_code",
-    userField: "user_id",
-  },
-];
+/** O que a conta do cliente assina: só as projeções que o contrato abre, mais a própria conversa com o agente. */
+function customerRealtimeTargets(modules: readonly ModuloContratavel[]): RealtimeTarget[] {
+  const leituras = leiturasDoPortal(modules);
+  return [
+    ...CUSTOMER_AUTHORIZED_COLLECTIONS.filter((item) => !item.leitura || leituras[item.leitura]).map(
+      ({ collectionName, extraEquals }): RealtimeTarget => ({
+        collectionName,
+        customerField: "customer_code",
+        ...(extraEquals ? { extraEquals } : {}),
+      }),
+    ),
+    {
+      collectionName: "agent_conversations",
+      customerField: "customer_code",
+      userField: "user_id",
+    },
+    {
+      collectionName: "agent_messages",
+      customerField: "customer_code",
+      userField: "user_id",
+    },
+  ];
+}
 
 /** Hot subset only — never subscribe to append-only ledgers (movements/events) or full catalogs. */
 const INTERNAL_HOT_COLLECTIONS = [
@@ -232,6 +258,9 @@ function buildRealtimeQuery(
   if (target.userField) {
     filters.push(where(target.userField, "==", userId));
   }
+  for (const igual of target.extraEquals ?? []) {
+    filters.push(where(igual.field, "==", igual.value));
+  }
 
   // Sem filtros, orderBy de campo único usa o índice automático — não exige
   // índice composto declarado.
@@ -260,6 +289,9 @@ function invalidateForCollections(
 
 export function RealtimeSyncBridge() {
   const { user, isLoaded } = useAppUser();
+  const { profile } = useOperationProfile();
+  const contrato = profile?.modules ?? null;
+  const contratoKey = contrato ? contrato.join(",") : null;
   const queryClient = useQueryClient();
   const timerRef = useRef<number | null>(null);
   const changedCollectionsRef = useRef<Set<string>>(new Set());
@@ -282,8 +314,11 @@ export function RealtimeSyncBridge() {
     const customerCode =
       user.publicMetadata.customer_code || DEFAULT_CUSTOMER_CODE;
     const customer = isCustomer(role);
+    // O cliente espera o contrato: assinar o que ele não abre só daria
+    // permission-denied contínuo.
+    if (customer && !contrato) return;
     const targets = customer
-      ? uniqueTargets(CUSTOMER_REALTIME_TARGETS)
+      ? uniqueTargets(customerRealtimeTargets(contrato ?? []))
       : uniqueTargets([
           ...internalHotCollectionsForRole(role).map((collectionName) => ({
             collectionName,
@@ -348,12 +383,15 @@ export function RealtimeSyncBridge() {
       }
       changedCollectionsRef.current.clear();
     };
+    // `contrato` muda junto com `contratoKey`, que é o que a dependência compara.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isLoaded,
     queryClient,
     user?.publicMetadata.customer_code,
     user?.publicMetadata.role,
     user?.uid,
+    contratoKey,
   ]);
 
   return null;

@@ -6,7 +6,7 @@ type Listener = {
   next: (snapshot: { docChanges: () => unknown[] }) => void;
 };
 
-const { listeners, invalidateQueries, appUser } = vi.hoisted(() => ({
+const { listeners, invalidateQueries, appUser, perfil } = vi.hoisted(() => ({
   listeners: [] as Listener[],
   invalidateQueries: vi.fn(),
   appUser: {
@@ -15,6 +15,8 @@ const { listeners, invalidateQueries, appUser } = vi.hoisted(() => ({
       publicMetadata: { role: string; customer_code?: string };
     },
   },
+  // O contrato do cliente (useOperationProfile); null é o perfil ainda carregando.
+  perfil: { modules: ["wms", "financeiro"] as string[] | null },
 }));
 
 // Sem DOM nos testes: os efeitos rodam na hora em que o componente é chamado.
@@ -35,6 +37,9 @@ vi.mock("./auth", () => ({
   useAppUser: () => ({ user: appUser.current, isLoaded: true }),
 }));
 vi.mock("./firebase", () => ({ firebaseAuth: null, firestore: {} }));
+vi.mock("./operation-profile", () => ({
+  useOperationProfile: () => ({ profile: perfil.modules ? { modules: perfil.modules } : null, isLoading: !perfil.modules }),
+}));
 vi.mock("firebase/firestore", () => ({
   collection: vi.fn((_store: unknown, path: string) => ({ path, filters: [] })),
   where: vi.fn((field: string, op: string, value: unknown) => ({ field, op, value })),
@@ -63,6 +68,7 @@ beforeEach(() => {
   vi.stubGlobal("window", globalThis);
   listeners.length = 0;
   invalidateQueries.mockReset();
+  perfil.modules = ["wms", "financeiro"];
 });
 
 afterEach(() => {
@@ -101,6 +107,37 @@ describe("tempo real do portal do cliente", () => {
     portalStatus.next({ docChanges: () => [{ type: "modified" }] });
     vi.runAllTimers();
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["client-portal-overview"] });
+  });
+
+  it("os documentos pedem só o publicado (customer_visible), como a regra exige", () => {
+    appUser.current = { uid: "client-a", publicMetadata: { role: "cliente", customer_code: "Itaú" } };
+    RealtimeSyncBridge();
+
+    expect(listenerOf("client_documents")).toHaveLength(1);
+    expect(listenerOf("client_documents")[0].filters).toEqual([
+      { field: "customer_code", op: "==", value: "Itaú" },
+      { field: "customer_visible", op: "==", value: true },
+    ]);
+  });
+
+  it("assina só o que o contrato abre: sem armazenagem, nem estoque, pedidos, solicitações e documentos; sem faturas, nem as faturas", () => {
+    appUser.current = { uid: "client-a", publicMetadata: { role: "cliente", customer_code: "Itaú" } };
+    perfil.modules = ["operacao"];
+    RealtimeSyncBridge();
+
+    for (const colecao of ["client_inventory", "client_order_tracking", "client_request_status", "client_documents", "client_invoices"]) {
+      expect(listenerOf(colecao), colecao).toHaveLength(0);
+    }
+    expect(listenerOf("client_portal_status")).toHaveLength(1);
+    expect(listenerOf("agent_conversations")).toHaveLength(1);
+  });
+
+  it("com o perfil ainda carregando, o cliente espera para assinar", () => {
+    appUser.current = { uid: "client-a", publicMetadata: { role: "cliente", customer_code: "Itaú" } };
+    perfil.modules = null;
+    RealtimeSyncBridge();
+
+    expect(listeners).toHaveLength(0);
   });
 
   it("a equipe interna não assina a trava de saída do portal", () => {
