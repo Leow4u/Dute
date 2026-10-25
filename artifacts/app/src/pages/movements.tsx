@@ -75,6 +75,16 @@ const movementSchema = z.object({
 type MovementFormValues = z.infer<typeof movementSchema>;
 
 /**
+ * Agora, no fuso do aparelho, como o campo datetime-local mostra e o envio
+ * lê (`new Date(values.data)` é hora local). O `toISOString()` daria a hora
+ * de Greenwich: três horas à frente em São Paulo.
+ */
+export function agoraNoCampo(agora: Date): string {
+  const local = new Date(agora.getTime() - agora.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+/**
  * O que a movimentação manda ao servidor: o sinal pelo tipo, a data em ISO e
  * o cliente ativo. A área interna grava para ele; sem o campo, o servidor
  * gravaria na BTG.
@@ -380,7 +390,7 @@ export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; tr
   } = useForm<MovementFormValues>({
     resolver: zodResolver(movementSchema),
     defaultValues: {
-      data: new Date().toISOString().slice(0, 16),
+      data: agoraNoCampo(new Date()),
       tipo_mov: "ENTRADA",
       cod_sku: defaultSku ?? "",
       produto: "",
@@ -431,7 +441,14 @@ export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; tr
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(aberto) => {
+        // Cada registro abre com a hora de agora, não a de quando a tela montou.
+        if (aberto) setValue("data", agoraNoCampo(new Date()));
+        setOpen(aberto);
+      }}
+    >
       <DialogTrigger asChild>
         {trigger ?? (
           <Button>
