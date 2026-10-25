@@ -165,14 +165,25 @@ export type ItemNoCampo = {
   guardado: boolean;
 };
 
-/** Os itens com o feito gravado ou, se há, o último guardado; a inclusão guardada soma ao previsto. */
+/**
+ * Os itens com o feito gravado ou, se há, o último guardado; a inclusão
+ * guardada soma ao previsto e ao feito. O feito guardado é absoluto, e a
+ * inclusão guardada depois dele soma por cima, na ordem em que o servidor os
+ * grava: sem ela, o toque seguinte mandava um feito sem a inclusão, que ia
+ * depois dela e a apagava.
+ */
 export function itensNoCampo(ficha: FichaDaOs, pendentes: readonly RegistroNaFila[]): ItemNoCampo[] {
   const meus = pendentesDa(ficha, pendentes).filter((registro) => registro.callable === "registerItem");
+  const quantidadeIncluida = (registros: readonly RegistroNaFila[]) =>
+    registros.reduce((soma, registro) => soma + milesimos(textoDe(registro.dados.quantidade)), 0);
   return ficha.itens.map((item) => {
     const incluidoGravado = item.incluidos.reduce((soma, inclusao) => soma + milesimos(inclusao.quantidade), 0);
-    const inclusoesGuardadas = meus.filter((registro) => registro.dados.action === "added" && registro.dados.linha === item.id);
-    const incluidoGuardado = inclusoesGuardadas.reduce((soma, registro) => soma + milesimos(textoDe(registro.dados.quantidade)), 0);
-    const feitoGuardado = [...meus].reverse().find((registro) => registro.dados.action === "executed" && registro.dados.linha === item.id);
+    const daLinha = meus.filter((registro) => registro.dados.linha === item.id);
+    const inclusoesGuardadas = daLinha.filter((registro) => registro.dados.action === "added");
+    const incluidoGuardado = quantidadeIncluida(inclusoesGuardadas);
+    const ultimoFeito = daLinha.map((registro) => registro.dados.action).lastIndexOf("executed");
+    const feitoGuardado = ultimoFeito >= 0 ? daLinha[ultimoFeito] : undefined;
+    const incluidoDepoisDoFeito = quantidadeIncluida(daLinha.slice(ultimoFeito + 1).filter((registro) => registro.dados.action === "added"));
     const feitoGravado = item.executado ? milesimos(item.executado) : 0;
     return {
       id: item.id,
@@ -180,7 +191,7 @@ export function itensNoCampo(ficha: FichaDaOs, pendentes: readonly RegistroNaFil
       servico: item.servico,
       item: item.item,
       unidade: (item.unidade ?? "").toLocaleLowerCase("pt-BR"),
-      feito: feitoGuardado ? milesimos(textoDe(feitoGuardado.dados.executado)) : feitoGravado + incluidoGuardado,
+      feito: feitoGuardado ? milesimos(textoDe(feitoGuardado.dados.executado)) + incluidoDepoisDoFeito : feitoGravado + incluidoGuardado,
       previsto: milesimos(item.planejado) + incluidoGravado + incluidoGuardado,
       guardado: Boolean(feitoGuardado) || inclusoesGuardadas.length > 0,
     };

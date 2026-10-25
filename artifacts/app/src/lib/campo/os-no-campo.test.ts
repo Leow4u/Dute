@@ -174,6 +174,25 @@ describe("itens no celular", () => {
     expect(registroDeInclusao(EM_EXECUCAO, { tipo: "catalogo", lpuItemId: "lpu_giratoria", nome: "Cadeira giratória" }, "4", "Renata", "Sala 412", AGORA).dados).toMatchObject({ lpu_item_id: "lpu_giratoria" });
     expect(problemasDaInclusao(null, "0", "", "")).toEqual(["Escolha o item.", "Informe a quantidade.", "Informe quem pediu no local.", "Informe o motivo."]);
   });
+
+  it("a inclusão guardada depois do feito guardado entra no número, e o toque seguinte não a apaga", () => {
+    // Cadeira: 150 previstas e 96 gravadas, sem sinal. O + guarda 97, e a inclusão de 10 vem depois.
+    const [cadeira] = itensNoCampo(EM_EXECUCAO, []);
+    const feito = naFila(registroDeFeito(EM_EXECUCAO, cadeira, 97_000, AGORA), "k-f1");
+    const inclusao = naFila(registroDeInclusao(EM_EXECUCAO, { tipo: "linha", linha: "ln_1", nome: "Cadeira Flexform" }, "10", "Renata Campos", "Sala 412", AGORA), "k-i");
+    const [depois] = itensNoCampo(EM_EXECUCAO, [feito, inclusao]);
+    expect([depois.feito, depois.previsto]).toEqual([107_000, 160_000]);
+
+    // O toque seguinte manda 108: substitui o 97 e vai depois da inclusão, e o servidor grava 106 e depois 108.
+    const proximo = feitoDepoisDoToque(depois, 1);
+    expect(proximo).toBe(108_000);
+    const fila = enfileirar([feito, inclusao], naFila(registroDeFeito(EM_EXECUCAO, depois, proximo, AGORA), "k-f2"));
+    expect(fila.map((registro) => registro.chave)).toEqual(["k-i", "k-f2"]);
+    expect(itensNoCampo(EM_EXECUCAO, fila)[0].feito).toBe(108_000);
+
+    // A inclusão guardada antes do feito já está nele, que é absoluto.
+    expect(itensNoCampo(EM_EXECUCAO, [inclusao, naFila(registroDeFeito(EM_EXECUCAO, depois, 107_000, AGORA), "k-f3")])[0].feito).toBe(107_000);
+  });
 });
 
 describe("equipe no celular", () => {
