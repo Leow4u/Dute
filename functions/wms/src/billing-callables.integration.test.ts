@@ -612,6 +612,22 @@ describe("o mês sem foto", () => {
   });
 });
 
+describe("a quantidade salva de um item que saiu da tabela", () => {
+  it("a emissão recusa e nada se emite; salvar as quantidades de novo libera", async () => {
+    await abrirSetembro();
+    // A hora extra (item 7, 2,5 salvas) sai da Tabela de preços antes da emissão.
+    await db.collection("billing_price_list").doc("btg_7").update({ ativo: false });
+    assert.equal((await previa({ competencia: SETEMBRO })).total_cents, TOTAL_BTG - 833);
+    await recusa(emitir({ competencia: SETEMBRO }), "failed-precondition", "MANUAL_ITEM_NOT_BILLED");
+    assert.equal((await db.collection("billing_periods").doc(ID_BTG).get()).get("status"), "aberto");
+    assert.equal((await db.collection("client_invoices").doc(ID_BTG).get()).exists, false);
+
+    // A tela salva só os itens da tabela: salvar de novo tira a quantidade velha.
+    await salvarManual({ competencia: SETEMBRO, idempotency_key: "sem-a-hora-extra", items: [] });
+    assert.equal((await emitir({ competencia: SETEMBRO })).invoice.total_cents, TOTAL_BTG - 833);
+  });
+});
+
 describe("o isolamento", () => {
   it("cada cliente fatura o dele, no documento dele", async () => {
     // Safra: só a entrada de 30 peças × 1,00. O valor da mercadoria entra na

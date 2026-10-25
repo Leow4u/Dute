@@ -331,6 +331,31 @@ describe("snapshot e emissao", () => {
     );
   });
 
+  it("recusa emitir com a quantidade salva de um item que saiu da tabela", () => {
+    const emitir = (input: BillingCalculationInput) =>
+      prepareInvoiceEmission({ competencia: "2026-07", status: "aberto" }, input, { issuedAt: AFTER_CLOSE });
+    const arquivado = {
+      ...calculationInput(),
+      priceList: calculationInput().priceList.map((item) => (item.id === 7 ? { ...item, ativo: false } : item)),
+    };
+    assert.throws(
+      () => emitir(arquivado),
+      (error) =>
+        error instanceof BillingDomainError &&
+        error.code === "MANUAL_ITEM_NOT_BILLED" &&
+        error.message ===
+          "A quantidade salva de Servico manual não entra na fatura: o item saiu da Tabela de preços. Salve as quantidades de novo ou reative o item.",
+    );
+    const apagado = {
+      ...calculationInput(),
+      priceList: calculationInput().priceList.filter((item) => item.id !== 7),
+    };
+    assert.throws(() => emitir(apagado), errorWithCode("MANUAL_ITEM_NOT_BILLED"));
+    // Zerada, a quantidade não cobra nada, e a emissão segue sem a linha.
+    const zerada = { ...arquivado, manualQuantities: [{ price_list_id: 7, qtde: "0", observacao: null }] };
+    assert.equal(emitir(zerada).snapshot.linhas.some((linha) => linha.price_list_id === 7), false);
+  });
+
   it("grava uma vez na transacao e a repeticao e somente leitura", async () => {
     let persisted: Record<string, unknown> = {
       competencia: "2026-07",

@@ -32,6 +32,7 @@ export type BillingErrorCode =
   | "INVALID_NUMBER"
   | "DUPLICATE_LPU_ITEM"
   | "DUPLICATE_MANUAL_QUANTITY"
+  | "MANUAL_ITEM_NOT_BILLED"
   | "PERIOD_NOT_FOUND"
   | "PERIOD_NOT_OPEN"
   | "PERIOD_INVOICED"
@@ -824,6 +825,28 @@ export function buildInvoiceSnapshot(
 }
 
 /**
+ * A quantidade salva nos serviços do mês tem de virar linha. A de um item que
+ * saiu da Tabela de preços (arquivado ou apagado) sumiria da fatura sem aviso:
+ * a emissão recusa e diz o item. Salvar as quantidades de novo tira a
+ * quantidade velha (a tela salva só os itens da tabela), ou o item volta.
+ */
+function assertManualQuantitiesBilled(input: BillingCalculationInput) {
+  const activeItems = new Set(
+    input.priceList.filter((item) => item.ativo !== false).map((item) => itemKey(item.id)),
+  );
+  for (const manual of input.manualQuantities ?? []) {
+    const key = itemKey(manual.price_list_id);
+    if (activeItems.has(key)) continue;
+    if (parseDecimal(manual.qtde ?? 0, `quantidade do item ${key}`).coefficient === 0n) continue;
+    const name = input.priceList.find((item) => itemKey(item.id) === key)?.item ?? key;
+    throw new BillingDomainError(
+      "MANUAL_ITEM_NOT_BILLED",
+      `A quantidade salva de ${name} não entra na fatura: o item saiu da Tabela de preços. Salve as quantidades de novo ou reative o item.`,
+    );
+  }
+}
+
+/**
  * Pure emission decision. An already emitted period returns its persisted
  * snapshot unchanged; no current LPU or usage data is consulted again.
  */
@@ -883,6 +906,7 @@ export function prepareInvoiceEmission(
     now: options.issuedAt,
   });
   assertCompetenciaClosed(input.competencia, options.issuedAt);
+  assertManualQuantitiesBilled(input);
   const snapshot = buildInvoiceSnapshot(input, options);
   const timestamp = options.firestoreTimestamp ?? options.issuedAt;
   const periodUpdate = Object.freeze({

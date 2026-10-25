@@ -1221,6 +1221,28 @@ Achada em 25/10/2026, ao conferir os achados de faturamento da auditoria de
     Antes, cobrava 528 peças de entrada, 21 de saída e 9 movimentos, no
     lugar de 10, 4 e 2.
 
+### Correção: a quantidade salva de um item que saiu da tabela sumia da fatura
+
+Achada em 25/10/2026 (achado 30 da auditoria de 24/07).
+
+- **O defeito.** A conta das linhas lê só os itens ativos da Tabela de
+  preços. Uma quantidade salva nos serviços do mês para um item arquivado ou
+  apagado antes da emissão saía da fatura sem aviso, e a fatura emitida não
+  muda mais.
+- **A correção.** A emissão recusa (`MANUAL_ITEM_NOT_BILLED`, em
+  `prepareInvoiceEmission`) com a mensagem "A quantidade salva de <item>
+  não entra na fatura: o item saiu da Tabela de preços. Salve as quantidades
+  de novo ou reative o item."
+  - A tela salva só os itens da tabela, então salvar de novo tira a
+    quantidade velha. Reativar o item a cobra.
+  - A prévia não muda. A quantidade zerada não recusa.
+- **Testes:**
+  - `billing.test.ts`: o item arquivado e o apagado recusam, e a
+    quantidade zerada passa.
+  - `billing-callables.integration.test.ts`, "a quantidade salva de um item
+    que saiu da tabela": a emissão recusa e nada se emite; depois de salvar
+    de novo, emite sem a linha. Antes, emitia sem a linha e sem aviso.
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.
