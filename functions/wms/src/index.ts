@@ -1515,7 +1515,7 @@ function notificationKindForEvent(eventType: string, severity?: string) {
     return {
       topic: "exception",
       audience: "internal",
-      subject: "Atenção operacional no contrato BTG",
+      subject: "Atenção operacional",
       action: "Revisar a ocorrência no WMS antes de qualquer comunicação ao cliente.",
     };
   }
@@ -1529,15 +1529,15 @@ function notificationKindForEvent(eventType: string, severity?: string) {
     return {
       topic: "inventory",
       audience: "client",
-      subject: "Estoque BTG atualizado pela Dutelog",
-      action: "Validar se a entrada deve ser comunicada à Cristiane e aprovar o envio.",
+      subject: "Estoque atualizado pela Dutelog",
+      action: "Validar se a entrada deve ser comunicada ao cliente e aprovar o envio.",
     };
   }
   if (normalized.includes("order") || normalized.includes("picking")) {
     return {
       topic: "order",
       audience: "client",
-      subject: "Atualização do pedido BTG",
+      subject: "Atualização do pedido",
       action: "Confirmar se o status está pronto para atualização ao cliente.",
     };
   }
@@ -1545,7 +1545,7 @@ function notificationKindForEvent(eventType: string, severity?: string) {
     return {
       topic: "delivery",
       audience: "client",
-      subject: "Entrega BTG atualizada",
+      subject: "Entrega atualizada",
       action: "Conferir tracking e comprovantes antes de marcar como enviado.",
     };
   }
@@ -1553,7 +1553,7 @@ function notificationKindForEvent(eventType: string, severity?: string) {
     return {
       topic: "billing",
       audience: "client",
-      subject: "Faturamento BTG atualizado",
+      subject: "Faturamento atualizado",
       action: "Validar competência e evidências antes de avisar o cliente.",
     };
   }
@@ -1573,6 +1573,7 @@ function notificationDraftFromEvent(event: EventRow) {
   const title = rowText(event, "title") || "Evento operacional";
   const description = rowText(event, "description");
   const customerCode = rowText(event, "customer_code") || DEFAULT_CUSTOMER;
+  const customerName = rowText(event, "customer_name") || customerCode;
   const severity = rowText(event, "severity") || "info";
   const source = rowText(event, "source");
   if (!type || source === "agent_chat") return null;
@@ -1606,17 +1607,19 @@ function notificationDraftFromEvent(event: EventRow) {
     audience: kind.audience,
     topic: kind.topic,
     customer_code: customerCode,
-    customer_name: rowText(event, "customer_name") || customerCode,
+    customer_name: customerName,
     trigger_event_id: event.id,
     trigger_event_type: type,
     entity_type: entityType || null,
     entity_id: entityId ?? null,
     severity,
     title,
-    subject: kind.subject,
+    // O interno diz de que cliente é; o do cliente fala com ele, sem nome de
+    // contato: o rascunho é o mesmo para todo cliente.
+    subject: kind.audience === "client" ? kind.subject : `${kind.subject}: ${customerName}`,
     body:
       kind.audience === "client"
-        ? `Olá, Cristiane.\n\n${title}.${description ? `\n${description}` : ""}${quantityText}${entityText}\n\nEsta mensagem foi preparada pelo Agent Dute a partir do registro operacional da Dutelog e precisa de aprovação humana antes do envio.`
+        ? `Olá.\n\n${title}.${description ? `\n${description}` : ""}${quantityText}${entityText}\n\nEsta mensagem foi preparada pelo Agent Dute a partir do registro operacional da Dutelog e precisa de aprovação humana antes do envio.`
         : `${title}.${description ? `\n${description}` : ""}${quantityText}${entityText}\n\nAção recomendada: ${kind.action}`,
     recommended_action: kind.action,
     created_from: "event_sync",
