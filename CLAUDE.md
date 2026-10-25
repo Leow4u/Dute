@@ -419,8 +419,10 @@ reorganização de 19/10/2026 (`artifacts/btg-inventory` hoje é `artifacts/app`
   `functions-integration`, `comercial-unit`, `comercial-integration`).
 - Não refatorar os arquivos grandes (`functions/wms/src/domain/operations.ts` e
   `functions/wms/src/index.ts`, ~6.700 linhas cada) antes de haver teste nas trilhas
-  de dinheiro e estoque. A camada de autorização dos callables ainda tem cobertura
-  fraca.
+  de dinheiro e estoque. A porta das callables do WMS (login, perfil ativo,
+  papel que o WMS atende e cliente com armazenagem) está travada para todas por
+  `functions/wms/src/callables-auth.integration.test.ts`; a autorização por
+  papel dentro do WMS ainda tem cobertura fraca.
 - Publicar só a partir de `main` limpa e atualizada. Pelo CI a tag da imagem é o
   commit; pelo roteiro manual é timestamp — aí a rastreabilidade depende dessa
   disciplina.
