@@ -6,7 +6,6 @@ import {
   decodeOrderValue,
   encodeOrderValue,
   fromBase64,
-  nextCompetencia,
   pageWindow,
   prefixRangeEnd,
   toBase64,
@@ -71,38 +70,6 @@ describe("pageWindow: janela aplicada uma única vez", () => {
     expect(pageWindow(rows, -10, 50)[0]).toBe(0);
     expect(pageWindow(rows, 0, 0)).toEqual([]);
     expect(pageWindow([], 100, 50)).toEqual([]);
-  });
-});
-
-describe("nextCompetencia: limite superior da faixa de faturamento", () => {
-  it("avança dentro do mesmo ano", () => {
-    expect(nextCompetencia("2026-07")).toBe("2026-08");
-    expect(nextCompetencia("2026-01")).toBe("2026-02");
-  });
-
-  it("vira o ano em dezembro", () => {
-    expect(nextCompetencia("2026-12")).toBe("2027-01");
-  });
-
-  it("mantém dois dígitos no mês para a comparação lexicográfica funcionar", () => {
-    expect(nextCompetencia("2026-08")).toBe("2026-09");
-    expect(nextCompetencia("2025-09")).toBe("2025-10");
-  });
-
-  it("delimita a faixa de forma que só o mês pedido entre", () => {
-    const start = "2026-07";
-    const end = nextCompetencia(start);
-    const dentro = ["2026-07-01T00:00:00.000Z", "2026-07-31T23:59:59.999Z"];
-    const fora = ["2026-06-30T23:59:59.999Z", "2026-08-01T00:00:00.000Z"];
-    for (const iso of dentro) expect(iso >= start && iso < end).toBe(true);
-    for (const iso of fora) expect(iso >= start && iso < end).toBe(false);
-  });
-
-  it("não estoura com entrada malformada", () => {
-    for (const bad of ["", "2026", "2026-13", "2026-00", "abc"]) {
-      expect(() => nextCompetencia(bad)).not.toThrow();
-      expect(typeof nextCompetencia(bad)).toBe("string");
-    }
   });
 });
 

@@ -3,6 +3,12 @@
 Este runbook define como revisar cobrancas mensais com base em eventos,
 movimentacoes, documentos e snapshots imutaveis.
 
+Atualizado em 25/10/2026: o bloco `Evidencias da competencia` ja tinha saido
+da tela, e a rota do navegador que o alimentava (`/evidence`) saiu tambem. A
+previa e a emissao sao das Cloud Functions (`getBillingPreview` e
+`emitBillingInvoice`); a conta mora em `loadBillingCalculation`, em
+`functions/wms/src/index.ts` (ver `docs/plataforma/fase-7-financeiro-unificado.md`).
+
 ## Objetivo
 
 - Amarrar cada competencia a evidencias operacionais reais.
@@ -16,7 +22,6 @@ movimentacoes, documentos e snapshots imutaveis.
 | Acao | Tela | Perfil |
 | --- | --- | --- |
 | Revisar competencia | Faturamento | owner/admin/financeiro |
-| Ver evidencias | Faturamento > Evidencias da competencia | owner/admin/financeiro |
 | Salvar quantidades manuais | Faturamento | owner/admin/financeiro |
 | Emitir fatura | Faturamento | owner/admin/financeiro |
 | Marcar como paga | Faturamento | owner/admin/financeiro |
@@ -38,12 +43,11 @@ movimentacoes, documentos e snapshots imutaveis.
 
 1. Abrir `Faturamento`.
 2. Selecionar a competencia.
-3. Conferir o bloco `Evidencias da competencia`.
-4. Resolver alertas de evidencias antes de emitir.
-5. Salvar quantidades manuais quando a LPU exigir lancamento manual.
-6. Abrir a previa PDF.
-7. Emitir a fatura apenas depois da conferencia.
-8. Validar no portal do cliente se a composicao foi publicada.
+3. Conferir a previa: o que e cobrado automaticamente e os servicos do mes.
+4. Salvar quantidades manuais quando a LPU exigir lancamento manual.
+5. Abrir a previa PDF.
+6. Emitir a fatura apenas depois da conferencia.
+7. Validar no portal do cliente se a composicao foi publicada.
 
 ## Regras de seguranca
 
@@ -58,7 +62,6 @@ movimentacoes, documentos e snapshots imutaveis.
 ## Smoke test apos deploy
 
 - `https://app.dutelog.com.br/faturamento` abre para perfil financeiro.
-- O bloco `Evidencias da competencia` aparece e carrega metricas.
-- `/api/billing/periods/YYYY-MM/evidence` retorna JSON.
+- A previa da competencia carrega, vinda da `getBillingPreview`.
 - `Portal > Faturas` mostra a composicao quando a fatura possui linhas/grupos.
 - Emissao e pagamento continuam passando por Cloud Functions.
