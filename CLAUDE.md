@@ -421,8 +421,10 @@ reorganização de 19/10/2026 (`artifacts/btg-inventory` hoje é `artifacts/app`
   `functions/wms/src/index.ts`, ~6.700 linhas cada) antes de haver teste nas trilhas
   de dinheiro e estoque. A porta das callables do WMS (login, perfil ativo,
   papel que o WMS atende e cliente com armazenagem) está travada para todas por
-  `functions/wms/src/callables-auth.integration.test.ts`; a autorização por
-  papel dentro do WMS ainda tem cobertura fraca.
+  `functions/wms/src/callables-auth.integration.test.ts`, e quem passa da
+  checagem de papel em cada uma (com a frase que recusa os outros), por
+  `functions/wms/src/callables-papeis.integration.test.ts`: mudar quem passa
+  numa callable é mudar a linha dela ali, e callable nova sem linha reprova.
 - Publicar só a partir de `main` limpa e atualizada. Pelo CI a tag da imagem é o
   commit; pelo roteiro manual é timestamp — aí a rastreabilidade depende dessa
   disciplina.

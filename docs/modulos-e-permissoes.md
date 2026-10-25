@@ -86,6 +86,9 @@ O espaco do cliente e uma visao filtrada por `customer_code`:
 
 - Permissao real deve ser aplicada por claims/perfis, Firestore Rules e Cloud
   Functions; a interface apenas reflete a permissao.
+- Quem passa em cada callable do WMS, e com que frase os outros sao recusados,
+  esta em `functions/wms/src/callables-papeis.integration.test.ts`, que roda
+  as callables de verdade no emulador.
 - Toda escrita critica deve registrar evento em `events` com `actor`,
   `source`, `entity_type`, `entity_id` e `customer_code` quando existir.
 - Cliente sempre le e escreve somente dentro do proprio `customer_code`.
