@@ -778,3 +778,33 @@ do armazém, ficaria vazio para ele.
 - **Fica como está** o cliente só com `financeiro`: "Nenhum módulo
   liberado", porque sem armazenagem nem Operação não há serviço que gere
   fatura.
+
+### Correção: a demanda por demanda num contrato que autoriza pela medição
+
+Feita em 25/10/2026, da revisão do código do Comercial.
+
+- **O defeito.** O contrato com a autorização pela medição aprovada
+  (`autorizacao.tipo = "medicao_aprovada"`) e o regime padrão por demanda é
+  fácil de montar: o app começa o regime em por demanda, e o contrato misto
+  (equipe fixa mensal, o resto por demanda) é assim.
+  - A validação do cliente (`destinoDaValidacao`, no Comercial) leva a
+    demanda por demanda direto a A faturar, sem autorização a esperar.
+  - Mas ela guarda em `validacao.autorizacao` o tipo do contrato.
+  - O `registerNf` e a emissão pela Omie exigiam, por esse tipo, a
+    autorização registrada: "não tem autorização de faturamento
+    registrada". A tela A faturar mostrava "Sem autorização registrada".
+  - Não havia saída. A autorização da medição só nasce com a medição, a
+    medição recusa a demanda por demanda, e o Comercial não registra outra
+    autorização para a demanda em A faturar.
+- **A correção.** A autorização da medição só se exige da demanda que está
+  numa medição (`autorizacaoExigida`, em `fatura.ts`, com o espelho em
+  `a-faturar.ts` do app). O pedido e aceite e o portal se exigem como antes.
+  - Vale também para as demandas já validadas assim na produção, onde o
+    Comercial está ligado desde 21/10.
+- **Testes:**
+  - `fatura.test.ts`: a regra;
+  - `fatura.integration.test.ts`: a demanda fatura pela RV, no emulador;
+  - `a-faturar.test.ts`: a linha fica pronta, "Sem exigência de
+    autorização".
+  - Antes, os três recusavam.
+

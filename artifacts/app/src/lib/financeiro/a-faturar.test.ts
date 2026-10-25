@@ -99,6 +99,12 @@ describe("a demanda na fila do Financeiro", () => {
     expect([linha.situacao, linha.autorizacaoTexto, rotuloDaLinha(linha)]).toEqual(["pronta", "Sem exigência de autorização", "10060"]);
   });
 
+  it("a demanda por demanda num contrato que autoriza pela medição fica pronta sem autorização: ela não entra em medição", () => {
+    const linha = linhaAFaturar(demanda("10061", { validacao: { rv: 0, etapa: "a_faturar", autorizacao: "medicao_aprovada" }, autorizacao_ids: [] }), new Map(), 50_000);
+    // Antes, "Sem autorização registrada", como o servidor recusava, e nada no Comercial a destravava.
+    expect([linha.situacao, linha.autorizacaoTexto]).toEqual(["pronta", "Sem exigência de autorização"]);
+  });
+
   it("o valor sai da RV validada ou da soma das linhas da demanda na medição aprovada", () => {
     const daRv = demanda("10045");
     expect(fonteDoValor(daRv)).toBe("quotes/10045/revisoes/2");

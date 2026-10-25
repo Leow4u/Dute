@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { HttpsError } from "firebase-functions/https";
 
 import {
+  autorizacaoExigida,
   autorizacaoLida,
   autorizacoesDaFatura,
   demandaLida,
@@ -103,6 +104,20 @@ describe("a demanda e a autorização", () => {
     assert.match(recusa(() => autorizacoesDaFatura(demanda(), new Map([["aut_1", deOutro]]))).message, /não tem autorização/);
     // O contrato sem exigência fatura sem autorização.
     assert.deepEqual(autorizacoesDaFatura(demanda({ validacao: { rv: 2, autorizacao: "nenhuma" }, autorizacao_ids: [] }), new Map()), []);
+  });
+
+  it("a autorização da medição só se exige da demanda que está numa medição", () => {
+    // A demanda por demanda num contrato que autoriza pela medição: a validação a leva direto a A faturar (comercial, destinoDaValidacao).
+    const porDemanda = demanda({ validacao: { rv: 2, etapa: "a_faturar", autorizacao: "medicao_aprovada" }, autorizacao_ids: [] });
+    assert.equal(autorizacaoExigida(porDemanda), false);
+    // Antes, recusava: "não tem autorização de faturamento registrada", e nada no Comercial a destravava.
+    assert.deepEqual(autorizacoesDaFatura(porDemanda, new Map()), []);
+    // Na medição, a autorização da medição aprovada continua exigida.
+    const naMedicao = demanda({ validacao: { etapa: "a_faturar", autorizacao: "medicao_aprovada", medicao_id: "ctr_1_2026-10" }, autorizacao_ids: [] });
+    assert.equal(autorizacaoExigida(naMedicao), true);
+    assert.match(recusa(() => autorizacoesDaFatura(naMedicao, new Map())).message, /não tem autorização de faturamento registrada/);
+    // O pedido e aceite e o portal se exigem sempre.
+    assert.equal(autorizacaoExigida(demanda()), true);
   });
 
   it("a autorização que cita outra RV da demanda não fatura", () => {

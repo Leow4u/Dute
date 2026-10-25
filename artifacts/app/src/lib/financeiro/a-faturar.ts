@@ -188,8 +188,10 @@ function rotuloDaMedicao(medicaoId: string): string {
   return competencia ? `Medição ${competencia[2]}/${competencia[1]}` : "Medição";
 }
 
+/** Como autorizacaoExigida (functions/financeiro, fatura.ts): a autorização da medição só se exige da demanda que tem medição. */
 function exigeAutorizacao(demanda: DemandaDoFinanceiro): boolean {
-  return (AUTORIZACOES_EXIGIDAS as readonly string[]).includes(demanda.autorizacao ?? "");
+  if (!(AUTORIZACOES_EXIGIDAS as readonly string[]).includes(demanda.autorizacao ?? "")) return false;
+  return demanda.autorizacao !== "medicao_aprovada" || demanda.medicaoId !== null;
 }
 
 /** Uma autorização válida cita outra RV da demanda (registerNf recusa). */

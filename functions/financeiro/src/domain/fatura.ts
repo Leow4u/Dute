@@ -216,9 +216,20 @@ export function problemaParaFaturar(demanda: DemandaParaFaturar, emissao: string
 }
 
 /**
+ * A demanda espera a autorização registrada: o tipo que a validação guardou é
+ * um dos que o contrato exige. A da medição vem com a medição aprovada: a
+ * demanda por demanda, num contrato que autoriza pela medição, nunca entra em
+ * medição, e a validação a leva direto a A faturar, sem autorização a esperar.
+ */
+export function autorizacaoExigida(demanda: Pick<DemandaParaFaturar, "autorizacao" | "medicao_id">): boolean {
+  if (!(AUTORIZACOES_EXIGIDAS as readonly string[]).includes(demanda.autorizacao ?? "")) return false;
+  return demanda.autorizacao !== "medicao_aprovada" || demanda.medicao_id !== null;
+}
+
+/**
  * As autorizações que a fatura cita para a demanda: as registradas, do mesmo
- * cliente. Recusa a demanda que o contrato manda autorizar e não tem
- * autorização registrada, e a autorização que cita outra RV da demanda.
+ * cliente. Recusa a demanda que espera autorização (autorizacaoExigida) e não
+ * tem autorização registrada, e a autorização que cita outra RV da demanda.
  */
 export function autorizacoesDaFatura(demanda: DemandaParaFaturar, lidas: ReadonlyMap<string, AutorizacaoLida>): string[] {
   const validas = demanda.autorizacao_ids.flatMap((id) => {
@@ -226,7 +237,7 @@ export function autorizacoesDaFatura(demanda: DemandaParaFaturar, lidas: Readonl
     if (!autorizacao || !autorizacao.registrada || autorizacao.customer_code !== demanda.customer_code) return [];
     return [autorizacao];
   });
-  if ((AUTORIZACOES_EXIGIDAS as readonly string[]).includes(demanda.autorizacao ?? "") && validas.length === 0) {
+  if (autorizacaoExigida(demanda) && validas.length === 0) {
     falha(`A demanda ${demanda.numero} não tem autorização de faturamento registrada.`);
   }
   if (!demanda.medicao_id && demanda.rv !== null) {
