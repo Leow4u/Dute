@@ -963,7 +963,9 @@ defeito.
     sem vencimento não apaga o aviso. Recomendo que, no empate da emissão,
     valha o lançado por último, como o registro da Fase 8 descreve a
     correção ("o vigente no empate das datas"); "Alterar" continua sendo o
-    jeito limpo de corrigir.
+    jeito limpo de corrigir. **Decidida em 25/10/2026:** vale o lançado por
+    último (`fase-8-rh.md`, "Decisão: no empate da emissão, vale o lançado
+    por último").
 62. Na ficha, cada tipo de exame é um grupo: depois do periódico, o
     admissional continua vigente para sempre. Com vencimento, ele aparece
     vencido no Início do RH, e a rotina grava o `rh.record_expired` dele.

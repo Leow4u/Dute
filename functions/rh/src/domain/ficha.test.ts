@@ -179,14 +179,15 @@ describe("o vigente de cada tipo", () => {
     assert.equal(situacoes.get(REG_C)?.substituido_por, REG_A);
   });
 
-  it("no empate da data, vale o que vence depois; o arquivado fica de fora", () => {
+  it("no empate da data, vale o lançado por último, mesmo vencendo antes; o arquivado fica de fora (pergunta 61)", () => {
+    // O vencimento digitado a mais (2027) se corrige lançando de novo: o novo fica vigente e o aviso real sai.
     const situacoes = situacoesDoGrupo([
-      registro(REG_A, { vence_em: "2026-12-01" }),
-      registro(REG_B, { vence_em: "2026-11-15" }),
+      registro(REG_A, { vence_em: "2027-11-15", criado_em: "2026-01-01T12:00:00.000Z" }),
+      registro(REG_B, { vence_em: "2026-11-15", criado_em: "2026-03-01T12:00:00.000Z" }),
       registro(REG_C, { emitido_em: "2026-01-01", situacao: "arquivado" }),
     ]);
-    assert.equal(situacoes.get(REG_A)?.situacao, "vigente");
-    assert.equal(situacoes.get(REG_B)?.substituido_por, REG_A);
+    assert.equal(situacoes.get(REG_B)?.situacao, "vigente");
+    assert.equal(situacoes.get(REG_A)?.substituido_por, REG_B);
     assert.equal(situacoes.get(REG_C)?.situacao, "arquivado");
   });
 
