@@ -16,7 +16,9 @@ const rede = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth", () => ({ useAppUser: () => ({ user: { uid: "uid-carlos", fullName: "Carlos Silva" }, isLoaded: true }) }));
-vi.mock("@/lib/firebase", () => ({ firebaseStorage: null }));
+// A foto sobe ao Storage antes da callable: aqui, sempre sobe.
+vi.mock("@/lib/firebase", () => ({ firebaseStorage: {} }));
+vi.mock("firebase/storage", () => ({ ref: () => ({}), uploadBytes: async () => ({}) }));
 vi.mock("@/lib/operacao/api", async (original) => ({
   ...(await original<typeof import("@/lib/operacao/api")>()),
   chamarOperacao: async (nome: string, dados: Record<string, unknown>) => {
@@ -28,7 +30,8 @@ vi.mock("@/lib/operacao/api", async (original) => ({
 
 import { FilaDoCampoProvider, useFilaDoCampo } from "./fila-do-campo";
 import { armazemNoAparelho, type ArmazemDaFila } from "./fila-guardada";
-import { registroDeEtapa } from "./os-no-campo";
+import { registroDeEtapa, registroDeFoto } from "./os-no-campo";
+import { comAmbiente, comFotos, guardarRascunho, lerRascunho, rascunhoInicial } from "./vistoria";
 
 let raiz: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -133,6 +136,22 @@ describe("fila do campo no aparelho", () => {
     await act(async () => sinal(true));
     await esperar(() => fila!.pendentes.length === 0);
     expect(fila!.falhas.map((falha) => [falha.rotulo, falha.mensagem])).toEqual([["Saída da origem", "Saída da origem já foi registrada."]]);
+  });
+
+  it("a foto recusada sai do rascunho guardado da vistoria e leva o id dela na falha", async () => {
+    const vistoria = comFotos(comAmbiente(rascunhoInicial(), "Recepção", "amb_1"), "amb_1", ["ft_a000000000000001", "ft_a000000000000002"]);
+    guardarRascunho("10230-01", vistoria);
+    const armazem = armazemNoAparelho(new IDBFactory());
+    await abrirApp(armazem);
+    rede.falhar = { code: "failed-precondition", message: "A OS já tem 200 fotos." };
+    const arquivo = new Blob(["x"], { type: "image/jpeg" });
+    await act(async () =>
+      fila!.enviar(registroDeFoto({ numero: "10230-01" }, { arquivo, nome: "ft_a000000000000002.jpg", contentType: "image/jpeg", instante: TOQUE.toISOString() }, { legenda: "Recepção" })),
+    );
+    await esperar(() => fila!.falhas.length === 1);
+    expect(fila!.falhas[0]).toMatchObject({ rotulo: "Foto", mensagem: "A OS já tem 200 fotos.", foto: "ft_a000000000000002" });
+    // A tela da vistoria pode nem estar aberta: o rascunho guardado já sai sem ela.
+    expect(lerRascunho("10230-01")?.ambientes[0].fotos).toEqual(["ft_a000000000000001"]);
   });
 
   it("a recusa fica na lista até a pessoa dispensar, mesmo trocando de tela ou fechando o app", async () => {

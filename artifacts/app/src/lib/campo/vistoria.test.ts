@@ -28,8 +28,10 @@ import {
   rascunhoInicial,
   rascunhoLido,
   registroDaVistoria,
+  semFotosRecusadas,
   semMedida,
   situacaoDoAmbiente,
+  tirarFotosRecusadas,
   vistoriaGuardada,
   type RascunhoDaVistoria,
 } from "./vistoria";
@@ -242,6 +244,22 @@ describe("o rascunho no aparelho", () => {
       removeItem: (chave: string) => void dados.delete(chave),
     };
   }
+
+  it("a foto que o servidor recusou sai do rascunho, aberto na tela ou guardado", () => {
+    const r = levantado();
+    const recusada = new Set(["ft_a000000000000002"]);
+    expect(semFotosRecusadas(r, recusada).ambientes.map((ambiente) => ambiente.fotos)).toEqual([["ft_a000000000000001"], []]);
+    // Sem nenhuma delas no rascunho, o mesmo rascunho: a tela não regrava.
+    expect(semFotosRecusadas(r, new Set(["ft_ffffffffffffffff"]))).toBe(r);
+
+    const aparelho = armazenamento();
+    guardarRascunho("10045-01", r, aparelho);
+    tirarFotosRecusadas("10045-01", recusada, aparelho);
+    expect(lerRascunho("10045-01", aparelho)?.ambientes.map((ambiente) => ambiente.fotos)).toEqual([["ft_a000000000000001"], []]);
+    // Sem rascunho da OS, nada se grava.
+    tirarFotosRecusadas("10045-02", recusada, aparelho);
+    expect([...aparelho.dados.keys()]).toEqual(["dute:campo:vistoria:10045-01"]);
+  });
 
   it("guarda por OS, lê de volta e apaga", () => {
     const aparelho = armazenamento();

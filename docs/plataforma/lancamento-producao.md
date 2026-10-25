@@ -271,6 +271,9 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   O toque em + ou − depois de uma inclusão guardada não apaga mais a
   inclusão (`fase-3-operacao.md`, "Correção: o toque depois da inclusão
   guardada apagava a inclusão").
+  A foto que o servidor recusa sai da vistoria, que antes não se enviava
+  mais (`fase-3-operacao.md`, "Correção: a foto recusada travava o envio da
+  vistoria").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
