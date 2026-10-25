@@ -1231,24 +1231,30 @@ export function getAdvanceGate(
   };
 }
 
+/**
+ * A conferência de cada linha como o advanceWarehouseTask lê: o id da linha,
+ * a quantidade esperada e a marcação do operador como status. O servidor só
+ * conclui com todas "confirmed" e na quantidade da linha; falta e avaria vão
+ * como estão, e a conclusão para pedindo a exceção.
+ */
+function lineChecks(task: WarehouseTask, confirmations: LineConfirmationMap) {
+  return getPhysicalLineRows(task).flatMap((row) =>
+    typeof row.expectedQuantity === "number" && row.expectedQuantity > 0
+      ? [{ id: row.id, quantity: row.expectedQuantity, status: getLineResolution(task.id, row, confirmations) }]
+      : [],
+  );
+}
+
 export function buildPickingOperation(
   task: WarehouseTask,
   confirmations: LineConfirmationMap,
 ): AdvanceOperationPayload {
-  const rows = getPhysicalLineRows(task);
   return {
-    lines: rows.map((row) => {
-      const resolution = getLineResolution(task.id, row, confirmations);
-      return {
-        line_id: row.id,
-        sku_code: row.code ?? row.title,
-        resolution,
-        label:
-          resolution === "confirmed"
-            ? "ok"
-            : LINE_RESOLUTION_COPY[resolution]?.shortLabel ?? resolution,
-      };
-    }),
+    picking_lines: lineChecks(task, confirmations).map((line) => ({
+      pick_line_id: line.id,
+      qty_picked: line.quantity,
+      status: line.status,
+    })),
   };
 }
 
@@ -1257,20 +1263,12 @@ export function buildPackingOperation(
   confirmations: LineConfirmationMap,
   packingOperation: AdvanceOperationPayload,
 ): AdvanceOperationPayload {
-  const rows = getPhysicalLineRows(task);
   return {
     ...packingOperation,
-    lines: rows.map((row) => {
-      const resolution = getLineResolution(task.id, row, confirmations);
-      return {
-        line_id: row.id,
-        sku_code: row.code ?? row.title,
-        resolution,
-        label:
-          resolution === "confirmed"
-            ? "ok"
-            : LINE_RESOLUTION_COPY[resolution]?.shortLabel ?? resolution,
-      };
-    }),
+    packing_lines: lineChecks(task, confirmations).map((line) => ({
+      order_item_id: line.id,
+      qty_packed: line.quantity,
+      status: line.status,
+    })),
   };
 }
