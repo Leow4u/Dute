@@ -74,6 +74,12 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     `mutateManagedEntity`. Antes, o wms e o financeiro podiam gravar um
     documento já publicado para qualquer cliente, e a callable seguinte o
     levava ao portal dele (teste em `functions/wms/src/documentos.rules.test.ts`).
+  - O cliente lê só os avisos do Agent Dute do WMS para o cliente
+    (`operational_notifications` com `audience: "client"`), aprovados ou
+    enviados (25/10/2026). Antes, lia também o aviso interno do próprio
+    contrato, com a nota interna e os e-mails da equipe. Nenhuma tela do
+    portal lia essa coleção (teste em
+    `functions/wms/src/agente-avisos.rules.test.ts`).
 - **Regras do Storage.**
   - O anexo da solicitação do portal (`portal/{code}/solicitacoes/`).
   - O cliente da OS concluída lê a assinatura e as fotos do final (parte
