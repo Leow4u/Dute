@@ -1279,6 +1279,25 @@ desde a separação do preço em `catalog_prices` (21/10/2026).
   - `portal-valor-da-mercadoria.test.ts` (app): o portal mostra 190 (4 ×
     25 + 90). Antes, mostrava 340.
 
+### Correção: a NF com mais de 50 autorizações não se registrava e travava a rotina da Omie
+
+Achada em 25/10/2026, numa revisão do código do Financeiro.
+
+- **O defeito.** O evento `nf.registered` aceitava até 50 autorizações
+  citadas. A NF fecha até 50 demandas, e cada demanda pode citar o pedido e
+  os complementos, então a conta passa de 50 antes do limite de demandas.
+  - À mão, o `registerNf` falhava com erro interno, e a NF nunca se
+    registrava: o número não se repete.
+  - Pela Omie, a NFS-e saía na prefeitura, e a fatura falhava na rotina. O
+    erro escapava da `runOmieSync`, que parava na mesma emissão a cada 5
+    minutos (a mais antiga vem primeiro). As outras emissões e todas as
+    baixas ficavam paradas.
+- **A correção.** O evento aceita até 1.000 autorizações.
+- **Testes:** com 51 autorizações numa demanda, o `registerNf` registra
+  (`fatura.integration.test.ts`) e a rotina faz a fatura da NFS-e
+  autorizada (`omie-rotina.integration.test.ts`). Antes, os dois davam
+  "Evento nf.registered com payload inválido".
+
 ## Onde a Fase 7 está
 
 - Feitas: 7.0 a 7.3c, 7.4a a 7.4i e 7.5a a 7.5c.
