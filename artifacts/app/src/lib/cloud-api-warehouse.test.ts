@@ -22,6 +22,8 @@ vi.mock("firebase/firestore", async (importOriginal) => {
 });
 
 import { installCloudApi } from "./cloud-api";
+import { buildOrderQueue } from "./order-queue";
+import type { WarehouseOpsResponse } from "./warehouse-ops/model";
 
 function document(id: string, data: Record<string, unknown>) {
   return { id, data: () => data, get: (field: string) => data[field] };
@@ -137,5 +139,94 @@ describe("exceção resolvida não deixa a tarefa com exceção", () => {
       document("exc_4", { id: "exc_4", pick_task_id: "pick_1" }),
     );
     expect(await separacao()).toMatchObject({ exception_count: 2, blocked_reason: "Há exceção aberta para este picking." });
+  });
+});
+
+describe("a fila leva toda tarefa aberta", () => {
+  type Fila = { pending: number; tasks: Array<{ reference: string }> };
+  type Etapa = [status: string, updatedAt: string];
+  const lerAsFilas = async () =>
+    (await (await window.fetch("/api/warehouse/ops")).json()) as WarehouseOpsResponse & { queues: Record<string, Fila> };
+  // O Firestore devolve cada fila da atualização mais recente para a mais antiga.
+  const servir = (porColecao: Record<string, ReturnType<typeof document>[]>) =>
+    readDocs.mockImplementation(async (alvo: { target?: { path?: string }; path?: string }) => ({
+      docs: [...(porColecao[alvo.target?.path ?? alvo.path ?? ""] ?? [])].sort((esquerda, direita) =>
+        String(direita.get("updated_at") ?? "").localeCompare(String(esquerda.get("updated_at") ?? "")),
+      ),
+    }));
+  const tarefa = (id: string, dados: Record<string, unknown>) => document(id, { id, customer_code: "BTG Pactual", ...dados });
+  /** As etapas do pedido que existem, com o status e a hora de cada uma. */
+  const pedido = (nome: string, etapas: { pick: Etapa; pack?: Etapa; ship?: Etapa }) => {
+    const doPedido = (prefixo: string, [status, updatedAt]: Etapa) =>
+      tarefa(`${prefixo}_ord_${nome}`, { order_id: `ord_${nome}`, order_number: `PED-${nome}`, status, updated_at: updatedAt });
+    return {
+      pick_tasks: [doPedido("pick", etapas.pick)],
+      pack_tasks: etapas.pack ? [doPedido("pack", etapas.pack)] : [],
+      shipments: etapas.ship ? [doPedido("ship", etapas.ship)] : [],
+    };
+  };
+  const juntar = (...partes: Array<Record<string, ReturnType<typeof document>[]>>) => {
+    const colecoes: Record<string, ReturnType<typeof document>[]> = {};
+    for (const parte of partes) {
+      for (const [nome, docs] of Object.entries(parte)) colecoes[nome] = [...(colecoes[nome] ?? []), ...docs];
+    }
+    return colecoes;
+  };
+  const hora = (minuto: number) => `2026-10-24T${String(10 + Math.floor(minuto / 60)).padStart(2, "0")}:${String(minuto % 60).padStart(2, "0")}:00.000Z`;
+  /** Doze pedidos entregues, todos mais recentes que os do teste. */
+  const entregues = () =>
+    Array.from({ length: 12 }, (_, i) =>
+      pedido(`E${i}`, { pick: ["completed", hora(100 + i)], pack: ["completed", hora(120 + i)], ship: ["delivered", hora(140 + i)] }),
+    );
+  const referencias = (fila: Fila) => fila.tasks.map((tarefa) => tarefa.reference);
+
+  it("o pedido e a guarda antigos em aberto aparecem depois de doze pedidos entregues mais recentes", async () => {
+    servir(
+      juntar(...entregues(), pedido("ANTIGO", { pick: ["planned", hora(0)] }), {
+        putaway_tasks: [
+          ...Array.from({ length: 12 }, (_, i) =>
+            tarefa(`put_${i}`, { sku_code: `BTG-0001${String(i).padStart(2, "0")}`, quantity: 5, status: "completed", updated_at: hora(100 + i) }),
+          ),
+          tarefa("put_antigo", { sku_code: "BTG-000200", quantity: 3, status: "planned", updated_at: hora(0) }),
+        ],
+      }),
+    );
+
+    const ops = await lerAsFilas();
+    expect(referencias(ops.queues.picking!)).toContain("pick_ord_ANTIGO");
+    expect(ops.queues.picking!.pending).toBe(1);
+    expect(referencias(ops.queues.putaway!)).toContain("put_antigo");
+    expect(ops.queues.putaway!.pending).toBe(1);
+    // Em Pedidos, é o pedido para separar.
+    const fila = buildOrderQueue({ ops });
+    expect(fila.pick.map((item) => item.orderNumber)).toEqual(["PED-ANTIGO"]);
+    expect(fila.delivered).toHaveLength(12);
+  });
+
+  it("as etapas encerradas do pedido que ainda não saiu ficam com ele", async () => {
+    // Separado e embalado há tempo; a entrega ainda espera.
+    servir(
+      juntar(...entregues(), pedido("ESPERA", { pick: ["completed", hora(1)], pack: ["completed", hora(2)], ship: ["ready_to_dispatch", hora(3)] })),
+    );
+
+    const ops = await lerAsFilas();
+    const paraEntregar = buildOrderQueue({ ops }).deliver;
+    expect(paraEntregar.map((item) => item.orderNumber)).toEqual(["PED-ESPERA"]);
+    expect(paraEntregar[0]!.pick?.reference).toBe("pick_ord_ESPERA");
+  });
+
+  it("o pedido encerrado entra inteiro ou não entra: o entregue não volta para Para separar", async () => {
+    // Separado depois dos outros, mas entregue antes deles.
+    servir(
+      juntar(...entregues(), pedido("RAPIDO", { pick: ["completed", hora(133)], pack: ["completed", hora(134)], ship: ["delivered", hora(135)] })),
+    );
+
+    const ops = await lerAsFilas();
+    const fila = buildOrderQueue({ ops });
+    expect(fila.pick).toEqual([]);
+    expect(fila.delivered.map((item) => item.orderNumber).sort()).toEqual(
+      Array.from({ length: 12 }, (_, i) => `PED-E${i}`).sort(),
+    );
+    expect(fila.delivered.every((item) => item.pick && item.pack && item.ship)).toBe(true);
   });
 });
