@@ -14,6 +14,8 @@ import {
   shipmentLineProblem,
   fillIfEmpty,
   parsePastedItems,
+  quantidadeEscrita,
+  quantidadeParaEscrever,
   splitShipments,
   stageIndex,
   type InvoiceDraftLine,
@@ -300,7 +302,7 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
   const [files, setFiles] = useState<File[]>([]);
   const [lines, setLines] = useState<Line[]>(() =>
     initial?.linhas.length
-      ? initial.linhas.map((line) => ({ ...newLine(line.codigo ?? "", String(line.quantidade)), name: line.nome ?? "" }))
+      ? initial.linhas.map((line) => ({ ...newLine(line.codigo ?? "", quantidadeParaEscrever(line.quantidade)), name: line.nome ?? "" }))
       : [newLine()],
   );
   const [pasting, setPasting] = useState(false);
@@ -333,7 +335,7 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
 
   const resolved = lines.map((line) => {
     const match = catalog.get(normalized(line.code));
-    return { line, match, quantity: Number(line.quantity.replace(",", ".")) || 0 };
+    return { line, match, quantity: quantidadeEscrita(line.quantity) || 0 };
   });
   const filled = resolved.filter(({ line }) => line.code.trim() || line.name.trim() || line.quantity.trim());
   const pieces = filled.reduce((sum, entry) => sum + Math.max(0, entry.quantity), 0);
@@ -462,8 +464,8 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
       const next = kept.map((line) => ({ ...line }));
       for (const item of incoming) {
         const existing = item.code ? next.find((line) => normalized(line.code) === normalized(item.code)) : undefined;
-        if (existing) existing.quantity = String((Number(existing.quantity) || 0) + item.quantity);
-        else next.push({ ...newLine(item.code, String(item.quantity)), name: item.name ?? "", supplierCode: item.supplierCode });
+        if (existing) existing.quantity = quantidadeParaEscrever((quantidadeEscrita(existing.quantity) || 0) + item.quantity);
+        else next.push({ ...newLine(item.code, quantidadeParaEscrever(item.quantity)), name: item.name ?? "", supplierCode: item.supplierCode });
       }
       return next.length ? next : [newLine()];
     });
@@ -515,7 +517,7 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
       selected.map((line) => ({
         code: line.code.trim(),
         name: line.name.trim(),
-        quantity: Number(line.quantity.replace(",", ".")) || 0,
+        quantity: quantidadeEscrita(line.quantity) || 0,
         supplierCode: line.supplierCode,
       })),
     );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parsePastedItems, shipmentStage, shipmentView, splitShipments } from "./shipments";
+import { invoiceDraft, parsePastedItems, quantidadeEscrita, shipmentStage, shipmentView, splitShipments } from "./shipments";
 
 const base = { type: "recebimento", supplier: "Gráfica Alfa", invoice_number: "48213", item_count: 4, quantity_total: 1200 };
 
@@ -67,6 +67,36 @@ describe("colar da planilha", () => {
       { code: "K.0220.001.U", quantity: 1500 },
     ]);
     expect(ignored).toBe(2);
+  });
+});
+
+describe("a quantidade escrita", () => {
+  it("o ponto separa o milhar e a vírgula, a fração, como no resto do portal", () => {
+    expect(quantidadeEscrita("1.200")).toBe(1200);
+    expect(quantidadeEscrita(" 50 ")).toBe(50);
+    expect(quantidadeEscrita("12,5")).toBe(12.5);
+    expect(quantidadeEscrita("1.200,5")).toBe(1200.5);
+  });
+
+  it("o que não se lê sem dúvida não vale, em vez de virar outra quantidade", () => {
+    for (const texto of ["", "1.5", "1,500.00", "1.20", "abc", "1,2,3"]) expect(quantidadeEscrita(texto), texto).toBeNaN();
+  });
+
+  it("colado, o 1.5 fica de fora em vez de virar 15", () => {
+    const { lines, ignored } = parsePastedItems("K.0220.001.U\t1.5\nK.0220.002.U\t1.200");
+    expect(lines).toEqual([{ code: "K.0220.002.U", quantity: 1200 }]);
+    expect(ignored).toBe(1);
+  });
+
+  it("a nota lida escreve a fração com vírgula, e a leitura volta ao mesmo número", () => {
+    const [linha] = invoiceDraft({
+      supplier: "Gráfica Alfa",
+      invoice_number: "48213",
+      issue_date: "2026-09-28",
+      items: [{ supplier_code: "T1", description: "Tecido", quantity: 12.345, unit: "KG", match: null }],
+    });
+    expect(linha!.quantity).toBe("12,345");
+    expect(quantidadeEscrita(linha!.quantity)).toBe(12.345);
   });
 });
 

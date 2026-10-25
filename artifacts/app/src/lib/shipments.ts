@@ -149,6 +149,23 @@ export function splitShipments(requests: AnyRecord[]) {
 export type PastedLine = { code: string; quantity: number };
 
 /**
+ * A quantidade como se escreve no Brasil, digitada, colada ou lida da nota:
+ * o ponto separa o milhar em grupos de três ("1.200" são mil e duzentas) e a
+ * vírgula, a fração ("12,5"). O que não segue isso ("1.5", "1,500.00") é NaN,
+ * e o aviso pede a quantidade em vez de mandar outra.
+ */
+export function quantidadeEscrita(texto: string): number {
+  const limpo = texto.trim();
+  if (!/^(\d+|\d{1,3}(\.\d{3})+)(,\d+)?$/.test(limpo)) return Number.NaN;
+  return Number(limpo.replace(/\./g, "").replace(",", "."));
+}
+
+/** A quantidade no campo, escrita como a pessoa escreveria: a fração com vírgula. */
+export function quantidadeParaEscrever(quantidade: number): string {
+  return String(quantidade).replace(".", ",");
+}
+
+/**
  * Linhas copiadas do Excel ou da nota: código e quantidade, separados por
  * tab, ponto e vírgula ou espaços. Cabeçalho e linhas sem quantidade são
  * ignorados; o mesmo código repetido soma.
@@ -161,8 +178,7 @@ export function parsePastedItems(source: string): { lines: PastedLine[]; ignored
     if (!row) continue;
     const parts = row.split(/\t|;|\s{2,}|\s+(?=[\d.,]+\s*$)/).map((part) => part.trim()).filter(Boolean);
     const code = parts[0] ?? "";
-    const quantityText = (parts[parts.length - 1] ?? "").replace(/\./g, "").replace(",", ".");
-    const quantity = Number(quantityText);
+    const quantity = quantidadeEscrita(parts[parts.length - 1] ?? "");
     if (parts.length < 2 || !code || !Number.isFinite(quantity) || quantity <= 0) {
       ignored += 1;
       continue;
@@ -217,7 +233,7 @@ export function invoiceDraft(reading: InvoiceReading): InvoiceDraftLine[] {
     invoiceText: [item.supplier_code, item.description].filter(Boolean).join(" · "),
     code: item.match?.client_item_code ?? "",
     name: item.match ? item.match.product_name : item.description,
-    quantity: String(item.quantity),
+    quantity: quantidadeParaEscrever(item.quantity),
     matchedBy: item.match?.by ?? null,
     supplierCode: item.supplier_code,
   }));
