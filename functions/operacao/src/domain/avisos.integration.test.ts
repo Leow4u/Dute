@@ -14,6 +14,7 @@ import {
   enviarFila,
   enviarSoAuditoria,
   markNotificationsReadFor,
+  relatoDosDesistidos,
   runNotificationsFor,
   type EnviarEmail,
 } from "./avisos-gravacao.js";
@@ -109,7 +110,7 @@ describe("a rotina dos avisos", () => {
     await evento("evt_os", "os.scheduled", { id: "10050-01" }, minutos(AS_10H, 1));
     await evento("evt_nf", "nf.registered", { id: "fat_itau" }, minutos(AS_10H, 2));
     const resultado = await rodar(minutos(AS_10H, 5));
-    assert.deepEqual(resultado, { iniciou: false, eventos: 2, avisos: 2, emails: 2, enviados: 0, auditados: 2, falhas: 0 });
+    assert.deepEqual(resultado, { iniciou: false, eventos: 2, avisos: 2, emails: 2, enviados: 0, auditados: 2, falhas: 0, desistidos: [] });
 
     const [daNf, daOs] = await avisos();
     assert.equal(daOs.id, "ntf_evt_os");
@@ -209,12 +210,12 @@ describe("a fila de e-mail", () => {
       assert.equal(email.id, "mail_a");
       return { status: "sent", provider_id: "re_1" };
     };
-    assert.deepEqual(await enviarFila(db, enviar, REMETENTE), { enviados: 1, auditados: 0, falhas: 0 });
+    assert.deepEqual(await enviarFila(db, enviar, REMETENTE), { enviados: 1, auditados: 0, falhas: 0, desistidos: [] });
     const enviado = (await db.collection(EMAIL_OUTBOX_COLLECTION).doc("mail_a").get()).data()!;
     assert.equal(enviado.status, "sent");
     assert.equal(enviado.provider_id, "re_1");
     assert.ok(enviado.enviado_em);
-    assert.deepEqual(await enviarFila(db, enviar, REMETENTE), { enviados: 0, auditados: 0, falhas: 0 });
+    assert.deepEqual(await enviarFila(db, enviar, REMETENTE), { enviados: 0, auditados: 0, falhas: 0, desistidos: [] });
     assert.equal(chamadas, 1);
   });
 
@@ -223,15 +224,33 @@ describe("a fila de e-mail", () => {
     const falhar: EnviarEmail = async () => {
       throw new Error("Resend recusou o envio (500): fora do ar");
     };
-    assert.equal((await enviarFila(db, falhar, REMETENTE)).falhas, 1);
+    const primeira = await enviarFila(db, falhar, REMETENTE);
+    assert.equal(primeira.falhas, 1);
+    assert.deepEqual(primeira.desistidos, []);
     let lido = (await db.collection(EMAIL_OUTBOX_COLLECTION).doc("mail_b").get()).data()!;
     assert.equal(lido.status, "pending");
     assert.equal(lido.tentativas, TENTATIVAS_DO_EMAIL - 1);
     assert.match(lido.erro, /fora do ar/);
-    await enviarFila(db, falhar, REMETENTE);
+    const quinta = await enviarFila(db, falhar, REMETENTE);
     lido = (await db.collection(EMAIL_OUTBOX_COLLECTION).doc("mail_b").get()).data()!;
     assert.equal(lido.status, "failed");
     assert.equal(lido.tentativas, TENTATIVAS_DO_EMAIL);
+    assert.deepEqual(quinta.desistidos, [{ id: "mail_b", erro: "Resend recusou o envio (500): fora do ar" }]);
+  });
+
+  it("o e-mail que desistiu vira uma linha de erro com a primeira linha fixa e sem o endereço", () => {
+    assert.equal(relatoDosDesistidos([]), null);
+    assert.equal(
+      relatoDosDesistidos([
+        { id: "mail_b", erro: "Resend recusou o envio (422): gestora@itau.com não existe" },
+        { id: "mail_c", erro: "Resend recusou o envio (500): fora do ar" },
+      ]),
+      [
+        `E-mail sem envio depois de ${TENTATIVAS_DO_EMAIL} tentativas (runNotifications)`,
+        "mail_b: Resend recusou o envio (422): <e-mail> não existe",
+        "mail_c: Resend recusou o envio (500): fora do ar",
+      ].join("\n"),
+    );
   });
 });
 

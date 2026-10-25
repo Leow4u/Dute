@@ -6,7 +6,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { REMETENTE_DOS_AVISOS, enderecoDoApp } from "./domain/avisos.js";
-import { enviarPeloResend, enviarSoAuditoria, markNotificationsReadFor, runNotificationsFor } from "./domain/avisos-gravacao.js";
+import { enviarPeloResend, enviarSoAuditoria, markNotificationsReadFor, relatoDosDesistidos, runNotificationsFor } from "./domain/avisos-gravacao.js";
 import { completeServiceOrderFor } from "./domain/conclusao-gravacao.js";
 import { openStorageDemandFor } from "./domain/demanda-do-armazem-gravacao.js";
 import { openDirectDemandFor } from "./domain/demanda-direta-gravacao.js";
@@ -183,5 +183,8 @@ export const runNotifications = onSchedule({ schedule: "every 5 minutes", timeZo
   if (!origem) return;
   const chave = process.env.RESEND_API_KEY?.trim();
   const resultado = await runNotificationsFor(db, { origem, remetente: REMETENTE_DOS_AVISOS, enviar: chave ? enviarPeloResend(chave) : enviarSoAuditoria });
-  console.info("runNotifications", resultado);
+  console.info("runNotifications", { ...resultado, desistidos: resultado.desistidos.length });
+  // A falha definitiva vai para o log de erro, que o painel do sistema mostra.
+  const relato = relatoDosDesistidos(resultado.desistidos);
+  if (relato) console.error(relato);
 });
