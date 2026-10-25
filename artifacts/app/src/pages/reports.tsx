@@ -96,7 +96,7 @@ const REPORTS: Array<{
     title: "Itens parados",
     hint: "Sem entrada nem saída",
     description:
-      "Itens com saldo que não entram nem saem há muito tempo. Ocupam posição e pesam no Ad Valorem: bom assunto para conversar com a BTG.",
+      "Itens com saldo que não entram nem saem há muito tempo. Ocupam posição e pesam no Ad Valorem: bom assunto para conversar com o cliente.",
     icon: Clock3,
     roles: OPERATIONS_READERS,
     preview: ["code", "name", "onHand", "value", "lastMove", "idleDays"],
@@ -118,7 +118,7 @@ const REPORTS: Array<{
     group: "Operação",
     title: "Pedidos",
     hint: "Pedidos e avisos",
-    description: "O que a BTG pediu no período: quem pediu, o que aconteceu e quem decidiu.",
+    description: "O que os clientes pediram no período: quem pediu, o que aconteceu e quem decidiu.",
     icon: Truck,
     roles: OPERATIONS_READERS,
     preview: ["created", "type", "requestedBy", "lines", "units", "status", "decidedBy"],

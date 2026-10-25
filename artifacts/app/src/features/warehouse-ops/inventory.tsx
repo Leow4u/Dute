@@ -2268,7 +2268,7 @@ export function ExistingCycleCountWorkspace() {
                   id="cycle-sku-code"
                   value={skuCode}
                   onChange={(event) => setSkuCode(event.target.value)}
-                  placeholder="Ex.: BTG-000123"
+                  placeholder="Ex.: ABC-000123"
                 />
               </div>
               <div className="space-y-2">

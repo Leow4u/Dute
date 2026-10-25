@@ -346,7 +346,7 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
       cod_btg: "",
       cod_cliente: "",
       produto: "",
-      estoque_tipo: "BTG",
+      estoque_tipo: "",
       genero: "",
       categoria: "",
       cor: "",
@@ -423,7 +423,7 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
               {/* Os dois códigos são a identidade do cadastro: o servidor recusa a
                   troca (catalogCodeForMutation), então a edição só os mostra. */}
               <div className="space-y-2">
-                <Label htmlFor="cod_btg">Cod. BTG *</Label>
+                <Label htmlFor="cod_btg">SKU *</Label>
                 <Input id="cod_btg" readOnly={isEdit} className="read-only:bg-muted read-only:text-muted-foreground" {...register("cod_btg")} />
                 {errors.cod_btg && <span className="text-xs text-destructive">{errors.cod_btg.message}</span>}
               </div>
@@ -457,7 +457,7 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="estoque_tipo">Tipo de Estoque</Label>
-                <Input id="estoque_tipo" placeholder="BTG" {...register("estoque_tipo")} />
+                <Input id="estoque_tipo" {...register("estoque_tipo")} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="estado">Condição</Label>

@@ -1126,7 +1126,7 @@ function ExpeditionReadinessSection({
               onChange={(event) =>
                 updateOperation({ delivery_notes: event.target.value })
               }
-              placeholder="Ex.: entregue na loja BTG"
+              placeholder="Ex.: entregue na loja do cliente"
             />
           </div>
         </div>

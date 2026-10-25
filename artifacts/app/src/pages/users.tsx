@@ -69,6 +69,7 @@ type Invite = {
   nome?: string;
   email: string;
   role: ProfileRole;
+  customer_code?: string;
   status: "pending" | "used" | "revoked";
 };
 
@@ -97,6 +98,8 @@ type Person = {
   name: string;
   email: string;
   role: unknown;
+  /** O cliente do login de portal; os internos são da Dutelog. */
+  customerCode: string;
   state: "active" | "removed" | "pending";
 };
 
@@ -235,6 +238,7 @@ export default function Users() {
       name: String(item.nome || item.email || "Sem nome"),
       email: String(item.email ?? ""),
       role: item.role,
+      customerCode: String(item.customer_code ?? ""),
       state: item.access_disabled === true ? ("removed" as const) : ("active" as const),
     }));
     const pending = (invites.data ?? [])
@@ -246,6 +250,7 @@ export default function Users() {
         name: invite.nome || invite.email,
         email: invite.email,
         role: invite.role,
+        customerCode: invite.customer_code ?? "",
         state: "pending" as const,
       }));
     const stateOrder = { active: 0, pending: 1, removed: 2 };
@@ -396,7 +401,7 @@ export default function Users() {
                             )}
                           >
                             {roleLabel(person.role)}
-                            {normalizeProfileRole(person.role) === "cliente" ? " · BTG" : ""}
+                            {normalizeProfileRole(person.role) === "cliente" && person.customerCode ? ` · ${person.customerCode}` : ""}
                           </span>
                         </td>
                         <td className="whitespace-nowrap px-3 py-3">

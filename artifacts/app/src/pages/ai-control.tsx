@@ -2220,7 +2220,7 @@ export default function AiControl() {
                   id="ai-note"
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
-                  placeholder="Ex.: BTG avisou que amanhã chegará remessa urgente para conferência..."
+                  placeholder="Ex.: o cliente avisou que amanhã chegará remessa urgente para conferência..."
                   rows={4}
                 />
               </div>

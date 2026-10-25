@@ -49,8 +49,8 @@ import { fileToBase64 } from "@/lib/file-base64";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 
 /**
- * Documentos da operação BTG. Uma lista só: o que a Dutelog adicionou e as
- * NFs que a BTG anexou no aviso de chegada. É o arquivo da operação; a base
+ * Documentos do cliente ativo. Uma lista só: o que a Dutelog adicionou e as
+ * NFs que o cliente anexou no aviso de chegada. É o arquivo da operação; a base
  * que o Agent Dute consulta é outra tela (Conhecimento), e um documento só
  * vai para lá por "Enviar para o Conhecimento".
  */
@@ -63,7 +63,7 @@ type UploadedFile = {
   size_bytes: number;
 };
 
-// Espelha o backend (mutateManagedEntity): só estes publicam para a BTG.
+// Espelha o backend (mutateManagedEntity): só estes publicam para o cliente.
 const PUBLISHERS: ProfileRole[] = ["owner", "admin", "interno"];
 // Espelha extractOperationalDocumentContent e approveDocumentKnowledge.
 const KNOWLEDGE_SENDERS: ProfileRole[] = ["owner", "admin", "interno", "wms", "financeiro"];
@@ -81,7 +81,7 @@ const KIND_FILTERS: Array<{ value: DocumentKind | "all"; label: string }> = [
 
 const AUDIENCE_FILTERS: Array<{ value: DocumentAudience | "all"; label: string }> = [
   { value: "all", label: "Todos" },
-  { value: "btg", label: "BTG vê" },
+  { value: "btg", label: "Cliente vê" },
   { value: "internal", label: "Só Dutelog" },
   { value: "archived", label: "Arquivados" },
 ];
@@ -213,7 +213,7 @@ export default function Documents() {
       }),
     onSuccess: async (_result, input) => {
       await refresh();
-      toast({ title: input.shared ? "A BTG agora vê o documento" : "Documento só para a Dutelog" });
+      toast({ title: input.shared ? "O cliente agora vê o documento" : "Documento só para a Dutelog" });
     },
     onError: failure("Visibilidade não alterada"),
   });
@@ -282,7 +282,7 @@ export default function Documents() {
     <div className="space-y-4">
       <PageHeader
         title="Documentos"
-        description="NFs, comprovantes e contratos da operação BTG"
+        description="NFs, comprovantes e contratos do cliente ativo"
         actions={
           <Button onClick={() => setAdding(true)}>
             <Plus className="mr-2 h-4 w-4" />
@@ -374,7 +374,7 @@ export default function Documents() {
           </>
         ) : (
           <p className="p-6 text-sm text-muted-foreground">
-            {rows.length ? "Nenhum documento neste filtro." : "Nenhum documento ainda. As NFs anexadas pela BTG no aviso de chegada aparecem aqui."}
+            {rows.length ? "Nenhum documento neste filtro." : "Nenhum documento ainda. As NFs anexadas pelo cliente no aviso de chegada aparecem aqui."}
           </p>
         )}
       </section>
@@ -468,7 +468,7 @@ export default function Documents() {
             {canPublish ? (
               <label className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5">
                 <span>
-                  <span className="block text-sm font-semibold">A BTG pode ver</span>
+                  <span className="block text-sm font-semibold">O cliente pode ver</span>
                   <span className="block text-xs text-muted-foreground">Aparece em Documentos no portal do cliente</span>
                 </span>
                 <Switch
@@ -477,7 +477,7 @@ export default function Documents() {
                 />
               </label>
             ) : (
-              <p className="text-xs text-muted-foreground">Fica só para a Dutelog. Publicar para a BTG é com a coordenação.</p>
+              <p className="text-xs text-muted-foreground">Fica só para a Dutelog. Publicar para o cliente é com a coordenação.</p>
             )}
           </form>
           <DialogFooter>
@@ -516,7 +516,7 @@ type DocumentLineProps = {
 function audienceOf(row: DocumentRow) {
   if (row.audience === "archived") return { label: "Arquivado", tone: "bg-muted text-muted-foreground" };
   if (row.audience === "btg") {
-    return { label: row.source === "request" ? "Enviado pela BTG" : "BTG vê", tone: "bg-info-soft text-info-soft-foreground" };
+    return { label: row.source === "request" ? "Enviado pelo cliente" : "Cliente vê", tone: "bg-info-soft text-info-soft-foreground" };
   }
   return { label: "Só Dutelog", tone: "bg-muted text-foreground" };
 }
@@ -555,7 +555,7 @@ function DocumentActions({ row, canPublish, canSend, canApprove, onSend, onDecid
         ) : null}
         {manageable && canPublish ? (
           <DropdownMenuItem onSelect={() => onShare(row.audience !== "btg")}>
-            {row.audience === "btg" ? "Ocultar da BTG" : "Mostrar para a BTG"}
+            {row.audience === "btg" ? "Ocultar do cliente" : "Mostrar para o cliente"}
           </DropdownMenuItem>
         ) : null}
         {manageable ? (

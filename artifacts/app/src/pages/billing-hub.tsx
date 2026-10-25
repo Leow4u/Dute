@@ -29,7 +29,7 @@ export default function BillingHub() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Faturamento" description="Fechamento do mês e tabela de preços da operação BTG">
+      <PageHeader title="Faturamento" description="Fechamento do mês e tabela de preços do cliente ativo">
         <Tabs
           value={tab}
           onValueChange={(value) => {
