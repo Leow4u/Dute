@@ -555,6 +555,63 @@ describe("a virada", () => {
   });
 });
 
+describe("o mês sem foto", () => {
+  /**
+   * Um cliente que só tem os movimentos do WMS de hoje, cada um com a origem
+   * que o `createMovement` grava, e nenhuma foto da virada (a zeragem de
+   * 16/10/2026 apagou todas). Só o recebimento é entrada e só a expedição é
+   * saída; a abertura do estoque, o estorno dela, a guarda, a contagem, a
+   * devolução e o ajuste manual são do armazém. Entradas 10 × 1,00; saídas
+   * 4 × 2,00; movimentos 2 × 0,50: 19,00.
+   */
+  it("só o recebimento e a expedição se cobram; o que o armazém faz por dentro, não", async () => {
+    const NOVO = "Cliente Novo";
+    const lote = db.batch();
+    const lpu: Array<[string, Record<string, unknown>]> = [
+      ["novo_1", { id: 1, customer_code: NOVO, grupo: "Movimentação", item: "Entrada por peça", valor_unit: 1, auto_source: "mov_entrada_pecas", ordem: 1 }],
+      ["novo_2", { id: 2, customer_code: NOVO, grupo: "Movimentação", item: "Saída por peça", valor_unit: 2, auto_source: "mov_saida_pecas", ordem: 2 }],
+      ["novo_3", { id: 3, customer_code: NOVO, grupo: "Movimentação", item: "Movimento", valor_unit: 0.5, auto_source: "mov_count", ordem: 3 }],
+    ];
+    for (const [doc, item] of lpu) lote.set(db.collection("billing_price_list").doc(doc), item);
+    const movimento = (source: string, sinal: 1 | -1, qtde: number, dia: number) => ({
+      customer_code: NOVO,
+      occurred_at: `2026-09-${String(dia).padStart(2, "0")}T13:00:00.000Z`,
+      tipo_mov: sinal > 0 ? "ENTRADA" : "SAIDA",
+      sinal,
+      qtde,
+      source,
+    });
+    const movimentos: Array<[string, Record<string, unknown>]> = [
+      ["n_abertura", movimento("functions_opening_inventory", 1, 500, 2)],
+      ["n_estorno", movimento("functions_opening_inventory_reversal", -1, 5, 3)],
+      ["n_recebe", movimento("wms_receiving", 1, 10, 4)],
+      ["n_guarda_sai", movimento("wms_putaway", -1, 10, 5)],
+      ["n_guarda_entra", movimento("wms_putaway", 1, 10, 5)],
+      ["n_contagem", movimento("functions_cycle_count", -1, 2, 6)],
+      ["n_devolucao", movimento("functions_return_disposition", 1, 1, 7)],
+      ["n_ajuste", movimento("functions_manual_inventory", 1, 7, 8)],
+      ["n_expede", movimento("wms_shipping", -1, 4, 9)],
+    ];
+    for (const [id, dado] of movimentos) lote.set(db.collection("movements").doc(id), dado);
+    await lote.commit();
+
+    const resultado = await previa({ competencia: SETEMBRO, customer_code: NOVO });
+    const porItem = linhas(resultado);
+    assert.deepEqual(["1", "2", "3"].map((id) => porItem.get(id)?.qtde), [10, 4, 2]);
+    assert.equal(resultado.total_cents, 1900);
+    const foto = await db
+      .collection("billing_operational_snapshots")
+      .doc(billingDocumentId(NOVO, SETEMBRO))
+      .get();
+    assert.deepEqual(foto.get("usage"), {
+      custo_estoque: 0,
+      entradas_pecas: 10,
+      saidas_pecas: 4,
+      movimentacoes: 2,
+    });
+  });
+});
+
 describe("o isolamento", () => {
   it("cada cliente fatura o dele, no documento dele", async () => {
     // Safra: só a entrada de 30 peças × 1,00. O valor da mercadoria entra na

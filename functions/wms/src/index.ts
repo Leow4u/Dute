@@ -91,6 +91,7 @@ import {
   tabelaDoComercialLida,
 } from "./domain/billing-price-tables.js";
 import {
+  billingMovementDirection,
   billingPaidInFinanceiro,
   readBillingPeriod,
   resolveBillingDocument,
@@ -3331,16 +3332,6 @@ function billingUsageNumber(value: unknown) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
-function isBillablePostCutoverMovement(
-  movement: Record<string, unknown>,
-  direction: "incoming" | "outgoing",
-) {
-  const source = String(movement.source ?? "").trim().toLowerCase();
-  return direction === "incoming"
-    ? source === "wms_receiving"
-    : source === "wms_shipping";
-}
-
 function billingError(error: unknown): never {
   if (error instanceof BillingDomainError) {
     throw new HttpsError("failed-precondition", error.message, {
@@ -3520,45 +3511,26 @@ async function loadBillingCalculation(
     operationalData.usage && typeof operationalData.usage === "object"
       ? (operationalData.usage as Record<string, unknown>)
       : {};
-  const movements = operationalSnapshot.exists
-    ? allMovements.filter(
-        (movement) =>
-          isBillablePostCutoverMovement(movement, "incoming") ||
-          isBillablePostCutoverMovement(movement, "outgoing"),
-      )
-    : allMovements;
-  const incomingPieces = movements
-    .filter(
-      (movement) =>
-        operationalSnapshot.exists
-          ? isBillablePostCutoverMovement(movement, "incoming")
-          : Number(movement.sinal ?? movement.sign ?? 0) > 0 ||
-            String(movement.tipo_mov ?? "").toUpperCase() === "ENTRADA",
-    )
-    .reduce(
-      (sum, movement) =>
-        sum + Math.abs(Number(movement.qtde ?? movement.quantity ?? 0)),
-      0,
-    );
-  const outgoingPieces = movements
-    .filter(
-      (movement) =>
-        operationalSnapshot.exists
-          ? isBillablePostCutoverMovement(movement, "outgoing")
-          : Number(movement.sinal ?? movement.sign ?? 0) < 0 ||
-            String(movement.tipo_mov ?? "").toUpperCase() === "SAIDA",
-    )
-    .reduce(
-      (sum, movement) =>
-        sum + Math.abs(Number(movement.qtde ?? movement.quantity ?? 0)),
-      0,
-    );
+  // Cada movimento conta uma vez, para um lado só; o que o armazém faz por
+  // dentro não se cobra, com ou sem a foto da virada.
+  const billedMovements = allMovements.flatMap((movement) => {
+    const direction = billingMovementDirection(movement, {
+      snapshot: operationalSnapshot.exists,
+    });
+    return direction
+      ? [{ direction, pieces: Math.abs(Number(movement.qtde ?? movement.quantity ?? 0)) }]
+      : [];
+  });
+  const billedPieces = (direction: "incoming" | "outgoing") =>
+    billedMovements
+      .filter((movement) => movement.direction === direction)
+      .reduce((sum, movement) => sum + movement.pieces, 0);
 
   const currentUsage = {
     custo_estoque: inventoryValue,
-    entradas_pecas: incomingPieces,
-    saidas_pecas: outgoingPieces,
-    movimentacoes: movements.length,
+    entradas_pecas: billedPieces("incoming"),
+    saidas_pecas: billedPieces("outgoing"),
+    movimentacoes: billedMovements.length,
   };
   const inventoryControl = inventoryControlSnapshot?.data() ?? {};
   const openingInventoryInProgress =

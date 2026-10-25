@@ -171,6 +171,24 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     da BTG (PR 375).
   A matriz de papéis do WMS (PR 372) é só teste: nenhuma callable muda
   quem passa.
+- **O faturamento do WMS no mês sem foto (25/10/2026).** Entra com a
+  `main`, sem liberação própria. As entradas, as saídas e os movimentos
+  passam a cobrar só o recebimento e a expedição, cada movimento uma vez
+  (`fase-7-financeiro-unificado.md`, "Correção: o mês sem foto cobrava o
+  que o armazém faz por dentro").
+  - A produção de hoje cobraria em outubro a contagem de abertura inteira
+    como entrada de peças, e cada guarda como uma entrada e uma saída.
+  - O dinheiro só muda onde a Tabela de preços cobra por "Entradas
+    (peças)", "Saídas (peças)" ou "Nº de movimentações". O ad valorem não
+    muda.
+  - O uso de outubro congela na primeira prévia ou emissão a partir de
+    01/11. A Armazenagem › Faturamento abre no mês anterior, então basta
+    abrir a tela. Publicar antes de 01/11 evita o passo abaixo.
+  - Se a prévia de outubro abrir na produção antes da publicação, o uso
+    fica congelado com a conta antiga. Antes de emitir outubro, apagar o
+    documento do cliente em `billing_operational_snapshots` (o da BTG é
+    `BTG_Pactual__2026-10`), que guarda só o uso; a próxima prévia congela
+    de novo, com a conta nova. Depois de emitida, a fatura não muda mais.
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
@@ -335,7 +353,9 @@ Um PR pequeno, depois da conferência da seção 5:
 
 ## 8. O que espera o Leonardo
 
-- O OK para a publicação, que leva os marcos 2, 3 e 4.
+- O OK para a publicação, que leva os marcos 2, 3 e 4. De preferência
+  antes de 01/11, por causa do uso de outubro no faturamento do WMS
+  (seção 2, "O faturamento do WMS no mês sem foto").
 - O OK para ligar o Financeiro no `dute-prod` (parte 4.9b).
 - A conta no Resend, o domínio verificado na Hostinger e a chave, para o
   e-mail sair (`fase-4-financeiro.md`, parte 4.6a).
