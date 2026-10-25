@@ -58,6 +58,10 @@ describe("quadro do Receber", () => {
     expect(receivingRowMeta({ ...checking, items: [{ id: "i1", quantity: 1000 }], quantity: 1000 })).toBe(
       "Prevista · em conferência · 1 linha · 1.000 un.",
     );
+    // A chegada aprovada nasce "created": a situação sai em português.
+    expect(receivingRowMeta({ ...checking, status: "created", items: [{ id: "i1", quantity: 1000 }], quantity: 1000 })).toBe(
+      "Prevista · a conferir · 1 linha · 1.000 un.",
+    );
     const unplanned = board.check.find(({ task }) => task.id === "r4")!.task;
     expect(receivingRowMeta(unplanned)).toBe("Avulsa · qtde aberta");
   });

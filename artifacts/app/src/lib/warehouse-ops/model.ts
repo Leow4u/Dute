@@ -751,6 +751,8 @@ export function statusLabel(status?: string | null) {
   if (normalized === "completed") return "concluída";
   if (normalized === "delivered") return "entregue";
   if (normalized === "received") return "recebida";
+  // A chegada nasce "created" (conferência ainda não salva).
+  if (normalized === "created") return "a conferir";
   if (normalized === "checking") return "em conferência";
   if (normalized === "planned") return "planejada";
   if (normalized === "ready") return "pronta";
