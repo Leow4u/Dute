@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { EscopoDoAgente } from "./agente-escopo.js";
 import { bate, diasDesde, ferramenta, instante, normalizado, numero, texto, type FerramentaDoAgente } from "./agente-ferramentas.js";
 import type { LeitorDoAgente, RegistroLido } from "./agente-leitor.js";
-import { diaEmSaoPaulo, idadeDoItem, RELOGIO_VAZIO, regraDoModelo, rotuloDaEtiqueta, type RelogioDoItem } from "./parados.js";
+import { diaEmSaoPaulo, idadeDoItem, RELOGIO_VAZIO, regraDoModelo, rotuloDaEtiqueta, sentidoDoMovimento, type RelogioDoItem } from "./parados.js";
 
 /**
  * As ferramentas da Armazenagem no Agent Dute do núcleo (parte 5.5c), as do
@@ -210,8 +210,11 @@ export async function movimentacoes(leitor: LeitorDoAgente, entrada: { de: strin
     const codigo = texto(movimento.client_item_code) || texto(movimento.sku_code) || texto(movimento.cod_sku);
     const nome = texto(movimento.product_name) || texto(movimento.produto) || codigo;
     if (!bate(entrada.texto, codigo, nome)) continue;
+    // Só a entrada e a saída de verdade: a guarda muda o lugar, e a contagem corrige o saldo.
+    const sentido = sentidoDoMovimento(movimento.source, movimento.tipo_mov);
+    if (!sentido) continue;
     const quantidade = Math.abs(numero(movimento.quantity ?? movimento.qtde));
-    const entrou = texto(movimento.tipo_mov) === "ENTRADA" || numero(movimento.sign ?? movimento.sinal) > 0;
+    const entrou = sentido === "entrada";
     const linha = porItem.get(codigo) ?? { codigo, nome, entradas: 0, saidas: 0 };
     if (entrou) {
       linha.entradas += quantidade;

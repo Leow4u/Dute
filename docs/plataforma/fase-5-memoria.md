@@ -1343,6 +1343,33 @@ a tela é a dos Relatórios da Operação (`/operacao/relatorios?relatorio=acert
 
 Com a 5.6, as partes da Fase 5 estão completas no `dute-homolog`.
 
+### Correção: as movimentações do agente contavam a guarda como entrada e saída
+
+Achada em 25/10/2026.
+
+- **O defeito.** A ferramenta `movimentacoes` do agente do núcleo e a do
+  agente do WMS (`movementSummary`) somavam todo movimento de entrada nas
+  peças que entraram e todo de saída nas que saíram.
+  - A guarda (`wms_putaway`) aparecia como uma saída e uma entrada de cada
+    peça guardada. A troca de caixa da abertura, a contagem cíclica e o
+    estorno da abertura também contavam.
+  - Quem perguntasse quantas peças saíram no mês recebia a soma com o que
+    só mudou de lugar.
+- **A correção.** As duas contam pelo sentido do movimento dos dias parado
+  (`sentidoDoMovimento`, parte 5.4a): só a entrada e a saída de verdade.
+  - O núcleo já tinha a regra (`domain/parados.ts`).
+  - O WMS ganha o trecho literal dela
+    (`functions/wms/src/domain/sentido-do-movimento.ts`), travado contra
+    `lib/dominio/src/parados.ts` e com os casos de `parados.casos.json`.
+- **Testes:**
+  - `agente-armazenagem.test.ts` e `agente-armazenagem.integration.test.ts`
+    (núcleo): a guarda e a contagem nos dados sintéticos não mudam o
+    resumo. Antes, davam 20 peças de entrada e 14 de saída, no lugar de 10
+    e 3.
+  - `agent-dute.integration.test.ts` (WMS): de 11 a 20/09, só a saída de 30
+    peças. Antes, davam 200 de entrada e 232 de saída.
+  - `sentido-do-movimento.test.ts` (WMS): a trava do trecho e os casos.
+
 ## Lançamento na produção
 
 Espera o OK do Leonardo. Até lá, a memória e o Agent Dute do núcleo só

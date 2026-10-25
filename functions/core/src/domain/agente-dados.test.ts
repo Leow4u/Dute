@@ -28,10 +28,14 @@ export const DADOS_DA_ARMAZENAGEM: ColecoesFalsas = {
     { id: "r9", customer_code: "SAFRA", request_number: "PED-9999", status: "pending", items: [{ product_name: "SAFRA item" }], created_at: "2026-10-01T12:00:00.000Z" },
   ),
   movements: porId(
-    { id: "m1", customer_code: "ITAU", client_item_code: "POLO-M", product_name: "Camisa polo", tipo_mov: "SAIDA", quantity: 3, data: "2026-10-10T12:00:00.000Z" },
-    { id: "m2", customer_code: "ITAU", client_item_code: "POLO-M", product_name: "Camisa polo", tipo_mov: "ENTRADA", quantity: 10, data: "2026-10-05T12:00:00.000Z" },
-    { id: "m3", customer_code: "ITAU", client_item_code: "POLO-M", tipo_mov: "SAIDA", quantity: 99, data: "2026-08-01T12:00:00.000Z" },
-    { id: "m9", customer_code: "SAFRA", client_item_code: "SAFRA-POLO", tipo_mov: "SAIDA", quantity: 500, data: "2026-10-10T12:00:00.000Z" },
+    { id: "m1", customer_code: "ITAU", client_item_code: "POLO-M", product_name: "Camisa polo", source: "wms_shipping", tipo_mov: "SAIDA", quantity: 3, data: "2026-10-10T12:00:00.000Z" },
+    { id: "m2", customer_code: "ITAU", client_item_code: "POLO-M", product_name: "Camisa polo", source: "wms_receiving", tipo_mov: "ENTRADA", quantity: 10, data: "2026-10-05T12:00:00.000Z" },
+    { id: "m3", customer_code: "ITAU", client_item_code: "POLO-M", source: "wms_shipping", tipo_mov: "SAIDA", quantity: 99, data: "2026-08-01T12:00:00.000Z" },
+    // A guarda só muda o lugar e a contagem corrige o saldo: nenhuma entra nem sai.
+    { id: "m4", customer_code: "ITAU", client_item_code: "POLO-M", product_name: "Camisa polo", source: "wms_putaway", tipo_mov: "SAIDA", quantity: 10, data: "2026-10-06T12:00:00.000Z" },
+    { id: "m5", customer_code: "ITAU", client_item_code: "POLO-M", product_name: "Camisa polo", source: "wms_putaway", tipo_mov: "ENTRADA", quantity: 10, data: "2026-10-06T12:00:00.000Z" },
+    { id: "m6", customer_code: "ITAU", client_item_code: "POLO-M", product_name: "Camisa polo", source: "functions_cycle_count", tipo_mov: "SAIDA", quantity: 1, data: "2026-10-12T12:00:00.000Z" },
+    { id: "m9", customer_code: "SAFRA", client_item_code: "SAFRA-POLO", source: "wms_shipping", tipo_mov: "SAIDA", quantity: 500, data: "2026-10-10T12:00:00.000Z" },
   ),
   client_documents: porId(
     { id: "d1", customer_code: "ITAU", title: "Contrato de armazenagem", document_type: "contrato", customer_visible: true, created_at: "2026-09-01T12:00:00.000Z" },

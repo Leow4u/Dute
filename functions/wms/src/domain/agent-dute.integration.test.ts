@@ -73,9 +73,17 @@ async function seed() {
   });
 
   const movements = db.collection("movements");
-  const movement = (id: string, data: string, tipo: "ENTRADA" | "SAIDA", qty: number, code: string, customer = BTG) =>
+  const movement = (
+    id: string,
+    data: string,
+    tipo: "ENTRADA" | "SAIDA",
+    qty: number,
+    code: string,
+    customer = BTG,
+    source = tipo === "ENTRADA" ? "wms_receiving" : "wms_shipping",
+  ) =>
     movements.doc(id).set({
-      data, tipo_mov: tipo, sign: tipo === "ENTRADA" ? 1 : -1, quantity: qty, customer_code: customer,
+      data, tipo_mov: tipo, sign: tipo === "ENTRADA" ? 1 : -1, quantity: qty, customer_code: customer, source,
       client_item_code: code, product_name: "POLO PIQUET MESCLA", actor: { name: "Operador interno" }, location_id: "R1-A",
     });
   await movement("m1", "2026-09-02T13:00:00.000Z", "SAIDA", 41, "A.01.0594.005.P");
@@ -84,6 +92,10 @@ async function seed() {
   // 01/10 00:30 em São Paulo = fora de setembro.
   await movement("m4", "2026-10-01T03:30:00.000Z", "SAIDA", 7, "A.01.0594.005.P");
   await movement("m5", "2026-09-05T13:00:00.000Z", "SAIDA", 500, "X1", "Outro");
+  // A guarda só muda o lugar e a contagem corrige o saldo: nenhuma entra nem sai.
+  await movement("m6", "2026-09-11T13:00:00.000Z", "SAIDA", 200, "A.01.0594.005.P", BTG, "wms_putaway");
+  await movement("m7", "2026-09-11T13:00:00.000Z", "ENTRADA", 200, "A.01.0594.005.P", BTG, "wms_putaway");
+  await movement("m8", "2026-09-20T13:00:00.000Z", "SAIDA", 2, "A.01.0594.005.P", BTG, "functions_cycle_count");
 
   await db.collection("client_invoices").doc("BTG_2026-08").set({ customer_code: BTG, competencia: "2026-08", total: 18420, status: "emitida" });
   await db.collection("client_invoices").doc("BTG_2026-07").set({ customer_code: BTG, competencia: "2026-07", total: 17000, status: "pago" });
@@ -177,6 +189,12 @@ describe("movimentações", () => {
     assert.deepEqual(result.por_item?.[0], { codigo: "A.01.0594.005.P", nome: "POLO PIQUET MESCLA", entradas: 200, saidas: 41 });
     assert.ok(!JSON.stringify(result).includes("Operador interno"));
     assert.ok(!JSON.stringify(result).includes("R1-A"));
+  });
+
+  it("a guarda e a contagem não contam como entrada nem saída", async () => {
+    // De 11 a 20/09: só a saída de 30 do dia 15. A guarda do dia 11 e a contagem do dia 20 ficam de fora.
+    const result = await movementSummary(db, cliente, { de: "2026-09-11", ate: "2026-09-20" });
+    assert.deepEqual([result.pecas_que_entraram, result.pecas_que_sairam, result.itens_movimentados], [0, 30, 1]);
   });
 
   it("recusa período inválido", async () => {
