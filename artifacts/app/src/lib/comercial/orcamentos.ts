@@ -419,6 +419,23 @@ function instante(value: string | null): number {
 }
 
 /**
+ * O orçamento da ficha ao lado da fila: o escolhido ou o que já está na
+ * ficha, enquanto aparecem na fila; senão o primeiro dela. O que está na
+ * ficha e sai do segmento sozinho (outra pessoa o enviou, o autor clicou em
+ * Editar) continua nela, como está agora, até a pessoa escolher outro ou
+ * mudar o filtro (quem muda o filtro limpa `naFicha`): senão a ficha
+ * passaria ao vizinho, e "Enviar ao cliente" mandaria o vizinho.
+ */
+export function orcamentoDaFicha<T extends { numero: string }>(todos: readonly T[], visiveis: readonly T[], escolhido: string | null, naFicha: string | null): T | null {
+  for (const numero of [escolhido, naFicha]) {
+    const visivel = numero ? visiveis.find((item) => item.numero === numero) : undefined;
+    if (visivel) return visivel;
+  }
+  const foraDaFila = naFicha ? todos.find((item) => item.numero === naFicha) : undefined;
+  return foraDaFila ?? visiveis[0] ?? null;
+}
+
+/**
  * Os grupos da fila, na ordem das etapas, só os que têm orçamento. Dentro do
  * grupo, quem espera há mais tempo vem primeiro; nas perdidas, a mais recente.
  */

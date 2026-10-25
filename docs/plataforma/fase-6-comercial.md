@@ -744,3 +744,25 @@ Storage.
 - **6.23 e 6.24** dependem do Leonardo: o go-live das cargas e do contador na
   produção (roteiro em `comercial-producao.md`; as cargas ainda não gravam no
   `dute-prod`) e a semana em paralelo com o Excel.
+
+## Correções depois da produção
+
+### Correção: a ficha da fila passava sozinha ao orçamento vizinho
+
+Achada em 25/10/2026, numa revisão do que as telas do escritório mandam ao
+servidor. Está na produção desde a parte 11.
+
+- **O defeito.** A ficha ao lado da fila mostrava o orçamento escolhido
+  enquanto ele estava no segmento; senão, o primeiro da fila.
+  - Se o orçamento da ficha saía do segmento sozinho (outra pessoa o
+    enviou, o owner aprovou e enviou, o autor clicou em Editar), a ficha
+    passava ao vizinho sem aviso.
+  - "Enviar ao cliente", de um clique, mandava o vizinho, com a situação e
+    a edição dele: a RV congelava e o envio não se desfaz.
+- **A correção.** O orçamento da ficha fica nela, como está agora, até a
+  pessoa escolher outro ou mudar o segmento ou a busca (`orcamentoDaFicha`,
+  em `lib/comercial/orcamentos.ts`). O enviado por outra pessoa aparece
+  enviado, sem "Enviar ao cliente".
+- **Teste:** `pages/comercial/orcamentos.test.tsx`, com a página e as
+  leituras de mentira. O orçamento enviado por outra pessoa fica na ficha,
+  e não há envio para o vizinho. Antes, a ficha passava ao vizinho.

@@ -319,6 +319,10 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     antes. Antes, a revisão começada sumia, e "Concluir revisão" podia
     fechar a OS que ninguém tinha olhado (`fase-3-operacao.md`, "Correção:
     a Revisão trocava sozinha de OS").
+  - a ficha da fila do Comercial não passa sozinha ao orçamento vizinho
+    quando o dela sai do segmento. Antes, "Enviar ao cliente" mandava o
+    vizinho (`fase-6-comercial.md`, "Correção: a ficha da fila passava
+    sozinha ao orçamento vizinho").
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
