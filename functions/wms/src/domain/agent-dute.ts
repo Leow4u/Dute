@@ -323,6 +323,9 @@ export async function orderDetails(db: Firestore, scope: AgentScope, reference: 
 
 // --------------------------------------------------------- movimentações
 
+const MOVEMENTS_READ = 5000;
+const DAY_MS = 24 * 3_600_000;
+
 /** "YYYY-MM-DD" no horário de São Paulo → instante UTC do início do dia. */
 function saoPauloDayStart(day: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return undefined;
@@ -340,25 +343,40 @@ export async function movementSummary(
   if (!from || !toDay || toDay < from) {
     return { erro: "Período inválido. Use datas no formato AAAA-MM-DD, com início antes do fim." };
   }
-  const to = new Date(toDay.getTime() + 24 * 3_600_000);
-  if (to.getTime() - from.getTime() > 186 * 24 * 3_600_000) {
+  const to = new Date(toDay.getTime() + DAY_MS);
+  if (to.getTime() - from.getTime() > 186 * DAY_MS) {
     return { erro: "Período longo demais. Consulte até 6 meses por vez." };
   }
   // Só os do cliente, na consulta: filtrar depois do limite deixava o volume
   // de outro cliente no período esconder os movimentos deste.
-  const snapshot = await db
-    .collection("movements")
-    .where("customer_code", "==", scope.customerCode)
-    .where("data", ">=", from.toISOString())
-    .where("data", "<", to.toISOString())
-    .orderBy("data", "desc")
-    .limit(5000)
-    .get();
+  let movements = rows(
+    await db
+      .collection("movements")
+      .where("customer_code", "==", scope.customerCode)
+      .where("data", ">=", from.toISOString())
+      .where("data", "<", to.toISOString())
+      .orderBy("data", "desc")
+      .limit(MOVEMENTS_READ)
+      .get(),
+  );
+  let summedFrom = input.de;
+  let cutNote: string | undefined;
+  if (movements.length === MOVEMENTS_READ) {
+    // O limite cortou o período: o dia do movimento mais antigo lido pode ter
+    // ficado pela metade, então o resumo soma só os dias seguintes, inteiros.
+    const oldest = Date.parse(text(movements[movements.length - 1]!.data));
+    const start = new Date(from.getTime() + (Math.floor((oldest - from.getTime()) / DAY_MS) + 1) * DAY_MS);
+    if (start >= to) return { erro: "O último dia do período tem movimentos demais para um resumo." };
+    movements = movements.filter((movement) => text(movement.data) >= start.toISOString());
+    summedFrom = start.toISOString().slice(0, 10);
+    const dayBefore = new Date(start.getTime() - DAY_MS).toISOString().slice(0, 10);
+    cutNote = `Movimentos demais para um resumo só: os números vão de ${summedFrom} a ${input.ate}. O começo, de ${input.de} a ${dayBefore}, fica para outra consulta.`;
+  }
   const terms = normalize(input.texto).split(/\s+/).filter(Boolean);
   const byItem = new Map<string, { codigo: string; nome: string; entradas: number; saidas: number }>();
   let entradas = 0;
   let saidas = 0;
-  for (const movement of rows(snapshot)) {
+  for (const movement of movements) {
     if (movement.customer_code !== scope.customerCode) continue;
     const code = text(movement.client_item_code) || text(movement.sku_code) || text(movement.cod_sku);
     const name = text(movement.product_name) || text(movement.produto) || code;
@@ -379,13 +397,14 @@ export async function movementSummary(
     byItem.set(code, entry);
   }
   const items = [...byItem.values()].sort((left, right) => right.saidas - left.saidas || right.entradas - left.entradas);
+  const notes = [cutNote, items.length > 40 ? `Mostrando os 40 itens com mais saídas de ${items.length}.` : undefined].filter(Boolean);
   return {
-    periodo: { de: input.de, ate: input.ate },
+    periodo: { de: summedFrom, ate: input.ate },
     pecas_que_entraram: entradas,
     pecas_que_sairam: saidas,
     itens_movimentados: items.length,
     por_item: items.slice(0, 40),
-    observacao: items.length > 40 ? `Mostrando os 40 itens com mais saídas de ${items.length}.` : undefined,
+    observacao: notes.length ? notes.join(" ") : undefined,
   };
 }
 

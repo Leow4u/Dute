@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { EscopoDoAgente } from "./agente-escopo.js";
 import { bate, diasDesde, ferramenta, instante, normalizado, numero, texto, type FerramentaDoAgente } from "./agente-ferramentas.js";
-import type { LeitorDoAgente, RegistroLido } from "./agente-leitor.js";
+import { LIMITE_DA_CONSULTA, type LeitorDoAgente, type RegistroLido } from "./agente-leitor.js";
 import { diaEmSaoPaulo, idadeDoItem, RELOGIO_VAZIO, regraDoModelo, rotuloDaEtiqueta, sentidoDoMovimento, type RelogioDoItem } from "./parados.js";
 
 /**
@@ -12,8 +12,7 @@ import { diaEmSaoPaulo, idadeDoItem, RELOGIO_VAZIO, regraDoModelo, rotuloDaEtiqu
  * usam as mesmas projeções do portal, para o agente não contradizer a tela.
  * A prévia do faturamento fica de fora até a Fase 7 (pergunta 33).
  *
- * Diferenças do WMS: o razão é consultado já pelo cliente, e a ferramenta
- * não alcança o banco.
+ * Diferença do WMS: a ferramenta não alcança o banco.
  */
 
 const COORDENACAO = ["owner", "admin", "interno", "suporte"];
@@ -182,6 +181,8 @@ export async function verPedido(leitor: LeitorDoAgente, referencia: string) {
 
 // --- Movimentações ----------------------------------------------------------------------------
 
+const DIA_MS = 86_400_000;
+
 /** "AAAA-MM-DD" de São Paulo: o instante UTC do começo do dia. */
 function comecoDoDia(dia: string): Date | undefined {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return undefined;
@@ -193,16 +194,29 @@ export async function movimentacoes(leitor: LeitorDoAgente, entrada: { de: strin
   const de = comecoDoDia(entrada.de);
   const ateODia = comecoDoDia(entrada.ate);
   if (!de || !ateODia || ateODia < de) return { erro: "Período inválido. Use datas no formato AAAA-MM-DD, com início antes do fim." };
-  const ate = new Date(ateODia.getTime() + 86_400_000);
-  if (ate.getTime() - de.getTime() > 186 * 86_400_000) return { erro: "Período longo demais. Consulte até 6 meses por vez." };
-  const lidos = await leitor.doCliente("movements", {
+  const ate = new Date(ateODia.getTime() + DIA_MS);
+  if (ate.getTime() - de.getTime() > 186 * DIA_MS) return { erro: "Período longo demais. Consulte até 6 meses por vez." };
+  let lidos = await leitor.doCliente("movements", {
     onde: [
       ["data", ">=", de.toISOString()],
       ["data", "<", ate.toISOString()],
     ],
     ordem: [["data", "desc"]],
-    limite: 5000,
+    limite: LIMITE_DA_CONSULTA,
   });
+  let somadoDe = entrada.de;
+  let corte: string | undefined;
+  if (lidos.length === LIMITE_DA_CONSULTA) {
+    // O limite cortou o período: o dia do movimento mais antigo lido pode ter
+    // ficado pela metade, então o resumo soma só os dias seguintes, inteiros.
+    const maisAntigo = Date.parse(texto(lidos[lidos.length - 1]!.data));
+    const inicio = new Date(de.getTime() + (Math.floor((maisAntigo - de.getTime()) / DIA_MS) + 1) * DIA_MS);
+    if (inicio >= ate) return { erro: "O último dia do período tem movimentos demais para um resumo." };
+    lidos = lidos.filter((movimento) => texto(movimento.data) >= inicio.toISOString());
+    somadoDe = inicio.toISOString().slice(0, 10);
+    const vespera = new Date(inicio.getTime() - DIA_MS).toISOString().slice(0, 10);
+    corte = `Movimentos demais para um resumo só: os números vão de ${somadoDe} a ${entrada.ate}. O começo, de ${entrada.de} a ${vespera}, fica para outra consulta.`;
+  }
   const porItem = new Map<string, { codigo: string; nome: string; entradas: number; saidas: number }>();
   let entradas = 0;
   let saidas = 0;
@@ -226,13 +240,14 @@ export async function movimentacoes(leitor: LeitorDoAgente, entrada: { de: strin
     porItem.set(codigo, linha);
   }
   const itens = [...porItem.values()].sort((a, b) => b.saidas - a.saidas || b.entradas - a.entradas);
+  const notas = [corte, itens.length > 40 ? `Mostrando os 40 itens com mais saídas de ${itens.length}.` : undefined].filter(Boolean);
   return {
-    periodo: { de: entrada.de, ate: entrada.ate },
+    periodo: { de: somadoDe, ate: entrada.ate },
     pecas_que_entraram: entradas,
     pecas_que_sairam: saidas,
     itens_movimentados: itens.length,
     por_item: itens.slice(0, 40),
-    observacao: itens.length > 40 ? `Mostrando os 40 itens com mais saídas de ${itens.length}.` : undefined,
+    observacao: notas.length ? notas.join(" ") : undefined,
   };
 }
 
