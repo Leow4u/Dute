@@ -51,6 +51,17 @@ export function celulaEmTexto(celula: CelulaDoRelatorio, coluna: string): string
   return typeof celula === "number" ? new Intl.NumberFormat("pt-BR").format(celula) : celula;
 }
 
+/** A coluna que leva a barra ao lado do número (a receita por serviço do Financeiro). */
+export const COLUNA_DE_PARTICIPACAO = "Participação (%)";
+
+function Barra({ percentual }: { percentual: number }) {
+  return (
+    <span aria-hidden="true" className="mr-2 inline-block h-2 w-24 overflow-hidden rounded-full bg-muted align-middle">
+      <span className="block h-full rounded-full bg-primary" style={{ width: `${Math.min(100, Math.max(0, percentual))}%` }} />
+    </span>
+  );
+}
+
 function Linha({ celulas, colunas, total = false }: { celulas: readonly CelulaDoRelatorio[]; colunas: readonly string[]; total?: boolean }) {
   return (
     <tr className={total ? "border-t-2 border-border font-bold" : "border-t border-border first:border-t-0"}>
@@ -61,6 +72,7 @@ function Linha({ celulas, colunas, total = false }: { celulas: readonly CelulaDo
           </th>
         ) : (
           <td key={indice} className="whitespace-nowrap px-5 py-3 text-right tabular-nums">
+            {colunas[indice] === COLUNA_DE_PARTICIPACAO && typeof celula === "number" && !total ? <Barra percentual={celula} /> : null}
             {celulaEmTexto(celula, colunas[indice])}
           </td>
         ),

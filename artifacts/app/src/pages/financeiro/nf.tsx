@@ -1,12 +1,12 @@
 import { useEffect } from "react";
 import { useQueries } from "@tanstack/react-query";
-import { doc, getDoc, type DocumentData } from "firebase/firestore";
+import { doc, type DocumentData } from "firebase/firestore";
 import { useSearch } from "wouter";
 
 import { faturaDoFinanceiro, type FaturaDoFinanceiro } from "@/lib/financeiro/faturas";
+import { lerDocumento } from "@/lib/financeiro/ler-documento";
 import { ROTA_FATURAS, hrefDaNf, nfDaBusca } from "@/lib/financeiro/navegacao";
 import { chaveDaRevisao, demonstrativoDaNf, type FontesDoDemonstrativo } from "@/lib/financeiro/nf-documento";
-import { firestore } from "@/lib/firebase";
 import { useDocumento } from "@/lib/operacao/leitura";
 
 import { NfView, type EstadoDaVia } from "./nf-view";
@@ -29,12 +29,6 @@ function fontesDaNf(fatura: FaturaDoFinanceiro): Fonte[] {
     for (const id of demanda.autorizacaoIds) fontes.push({ chave: id, caminho: `client_authorizations/${id}`, tipo: "autorizacoes" });
   }
   return [...new Map(fontes.map((fonte) => [fonte.caminho, fonte])).values()];
-}
-
-async function lerDocumento(caminho: string): Promise<DocumentData | null> {
-  if (!firestore) throw new Error("Firebase não configurado.");
-  const snapshot = await getDoc(doc(firestore, caminho));
-  return snapshot.exists() ? snapshot.data() : null;
 }
 
 export default function FinanceiroNfPage() {

@@ -717,7 +717,7 @@ Feita em 23/10/2026. As regras estão em `artifacts/app/src/lib/financeiro/relat
   - **Receita por cliente**: os pagamentos recebidos no período, pelo dia do recebimento, sem os estornados. Os números são o recebido, os pagamentos, os clientes e os estornos.
   - **NFs emitidas por mês**: as NFs do período pela emissão, sem as canceladas, com o emitido, o recebido e o saldo de cada mês.
   - **Contas a receber**: a posição de hoje, sem período. As NFs com saldo entram por cliente e pela idade: a vencer até o dia do vencimento, depois de 1 a 30, de 31 a 60, de 61 a 90 e mais de 90 dias.
-  - A receita por serviço do mockup ficou de fora: a NF não guarda o valor de cada serviço (pergunta 26 do plano).
+  - A receita por serviço do mockup ficou de fora: a NF não guarda o valor de cada serviço (pergunta 26 do plano). Entrou em 26/10/2026, com o rateio pelas linhas do orçamento ("Pergunta 26: a receita por serviço", abaixo).
 - **A tela comum.** A Operação e o Financeiro usam a mesma tela (`components/relatorios/tela-de-relatorios.tsx`).
   - No alto vêm a lista dos relatórios numa linha, os filtros e os números do período. A tabela vem abaixo, com a largura toda.
   - A célula é texto, número ou reais; o PDF e o Excel saem da mesma tabela. Na planilha, o valor sai em reais com duas casas, como número.
@@ -928,3 +928,41 @@ conclusão sem o número do documento").
   ele), `entrega.test.ts` (a retirada antiga não traz o número; o pedido
   sem ele) e `order-delivery.test.tsx` (os textos, sem "Documento", e o
   `axe`).
+
+### Pergunta 26: a receita por serviço
+
+Feita em 26/10/2026, com o canvas "Telas das decisões de 26/10" (item 8).
+É a aba "Receita por serviço" dos Relatórios do Financeiro
+(`?relatorio=servico`), entre a receita por cliente e as NFs emitidas por
+mês. Como a receita por cliente, conta o recebido no período: os pagamentos
+pelo dia do recebimento, sem os estornados.
+
+- **O rateio** (`lib/financeiro/relatorios.ts`): cada pagamento se reparte
+  pelos serviços da NF dele.
+  - A competência de armazenagem do WMS que está na NF vai para
+    "Armazenagem".
+  - Cada demanda da NF entra pelo valor dela na NF, repartido pelas linhas
+    da RV faturada (`quotes/{numero}/revisoes/{rv}`), pelo serviço de cada
+    linha. O ajuste (desconto) fica de fora da base: o valor da demanda já o
+    desconta, e o rateio o espalha pelas outras linhas.
+  - A demanda faturada pela medição se reparte pelos itens das linhas dela
+    na medição, com o serviço do item do catálogo; o item sem catálogo fica
+    "Sem serviço".
+  - A demanda sem RV, e a NF que não se leu, vão para "Sem orçamento".
+  - Os centavos fecham: o que sobra do arredondamento vai aos maiores
+    restos.
+- **A tela:**
+  - os números: "Recebido", "Serviços", "Pagamentos" e "Sem orçamento";
+  - a tabela: "Serviço", "Pagamentos" (os que tocaram o serviço; o total
+    conta cada pagamento uma vez), "Recebido" e "Participação (%)", com a
+    barra.
+  - A barra é da tela comum (`components/relatorios/tela-de-relatorios.tsx`)
+    e só aparece na coluna "Participação (%)"; o Excel e o PDF levam o
+    número.
+- **A leitura** (`pages/financeiro/relatorios.tsx`): as RVs e as medições
+  das NFs pagas no período, uma vez cada (a mesma leitura da via comercial
+  da NF, `lib/financeiro/ler-documento.ts`), e o serviço dos itens do
+  catálogo só quando há medição. As regras abrem tudo isso a quem lê preço.
+- **Testes:** `relatorios.test.ts` (as fontes, o peso de cada serviço, o
+  rateio em centavos, a receita, a tabela e os números) e
+  `relatorios-view.test.tsx` (a aba, os textos, a barra e o `axe`).

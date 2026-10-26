@@ -12,8 +12,9 @@ import type { NumeroDoResumo, TabelaDeRelatorio } from "@/lib/relatorios";
 
 /**
  * Relatórios do Financeiro (parte 4.8b; docs/mockups/Relatorios.dc.html): a
- * receita por cliente, as NFs emitidas por mês e as contas a receber por
- * idade, com Excel e PDF. Têm valor: só quem lê preço abre a tela.
+ * receita por cliente e por serviço (pergunta 26), as NFs emitidas por mês e
+ * as contas a receber por idade, com Excel e PDF. Têm valor: só quem lê
+ * preço abre a tela.
  */
 
 export function hrefDoRelatorioDoFinanceiro(relatorio: RelatorioDoFinanceiro): string {
@@ -77,7 +78,7 @@ export function RelatoriosDoFinanceiroView({ relatorio, filtro, hoje, clientes, 
       problema={problema}
       resumo={resumo}
       tabela={tabela}
-      vazio={relatorio === "receita" ? "Nenhum pagamento no período." : relatorio === "faturamento" ? "Nenhuma NF emitida no período." : "Nenhuma NF em aberto."}
+      vazio={relatorio === "receita" || relatorio === "servico" ? "Nenhum pagamento no período." : relatorio === "faturamento" ? "Nenhuma NF emitida no período." : "Nenhuma NF em aberto."}
       acoes={acoes}
     />
   );

@@ -4,7 +4,7 @@ import { Router } from "wouter";
 
 import { colunasDoResumo } from "@/components/relatorios/tela-de-relatorios";
 import { faturaDoFinanceiro } from "@/lib/financeiro/faturas";
-import { nfsEmAberto, resumoAReceber, tabelaAReceber } from "@/lib/financeiro/relatorios";
+import { nfsEmAberto, resumoAReceber, resumoDaReceitaPorServico, tabelaAReceber, tabelaDaReceitaPorServico } from "@/lib/financeiro/relatorios";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
 
@@ -41,7 +41,7 @@ function render(props: Partial<RelatoriosDoFinanceiroViewProps> = {}) {
 describe("Relatórios do Financeiro", () => {
   it("as contas a receber: a posição de hoje, sem período, com a idade em reais", () => {
     const textos = textosDaTela(render()).map((texto) => texto.replace(/\u00a0/g, " "));
-    expect(textos.slice(0, 6)).toEqual(["Relatórios", "Excel", "PDF", "Receita por cliente", "NFs emitidas por mês", "Contas a receber"]);
+    expect(textos.slice(0, 7)).toEqual(["Relatórios", "Excel", "PDF", "Receita por cliente", "Receita por serviço", "NFs emitidas por mês", "Contas a receber"]);
     expect(textos).not.toContain("De");
     expect(textos).toContain("Posição em 23/10/2026");
     expect(textos).toContain("1 a 30 dias");
@@ -53,6 +53,23 @@ describe("Relatórios do Financeiro", () => {
     expect(textos).toContain("De");
     expect(textos).toContain("01/08/2026 a 23/10/2026");
     expect(textos).toContain("Nenhum pagamento no período.");
+  });
+
+  it("a receita por serviço: o recebido, os serviços, os pagamentos e o sem orçamento; a participação com a barra (pergunta 26)", async () => {
+    const linhas = [
+      { servico: "Transporte", cents: 6_230_000, pagamentos: 14 },
+      { servico: "Montagem", cents: 4_188_000, pagamentos: 9 },
+      { servico: "Sem orçamento", cents: 210_000, pagamentos: 1 },
+    ];
+    const html = render({ relatorio: "servico", resumo: resumoDaReceitaPorServico(linhas, 23), tabela: tabelaDaReceitaPorServico(linhas, 23) });
+    const textos = textosDaTela(html).map((texto) => texto.replace(/\u00a0/g, " "));
+    for (const texto of ["Receita por serviço", "Recebido", "R$ 106.280,00", "Serviços", "2", "Pagamentos", "23", "Sem orçamento", "R$ 2.100,00", "Serviço", "Participação (%)", "Transporte", "14", "R$ 62.300,00", "59%", "Total", "100%"]) {
+      expect(textos, texto).toContain(texto);
+    }
+    expect(html).toContain('<a aria-current="page" href="/financeiro/relatorios?relatorio=servico"');
+    // A barra é decoração: o leitor de tela lê o número.
+    expect(html).toMatch(/<span aria-hidden="true" class="[^"]*"><span class="[^"]*" style="width:59%"><\/span><\/span>59%/);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
   it("cada relatório tem o link dele", () => {

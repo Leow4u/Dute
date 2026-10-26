@@ -1,24 +1,31 @@
 import { formatarReais } from "@workspace/dominio";
 
+import { linhasGravadas } from "../comercial/documento";
+import { medicaoDoRegistro } from "../comercial/medicoes";
 import { problemaDoFiltro } from "../operacao/relatorios";
 import type { Celula } from "../planilha-xlsx";
 import type { CelulaDoRelatorio, NumeroDoResumo, TabelaDeRelatorio } from "../relatorios";
-import type { FaturaDoFinanceiro, PagamentoDaNf } from "./faturas";
+import type { DemandaDaNf, FaturaDoFinanceiro, PagamentoDaNf } from "./faturas";
+import { chaveDaRevisao } from "./nf-documento";
+
+type Registro = Record<string, unknown>;
 
 /**
  * Os relatórios do Financeiro (docs/plataforma/fase-4-financeiro.md, parte
- * 4.8b; docs/mockups/Relatorios.dc.html): a receita por cliente (os
- * pagamentos do período, sem os estornados), as NFs emitidas por mês e as
- * contas a receber por idade. Têm valor: a tela é só de quem lê preço
- * (owner, admin e financeiro), e as regras de `faturas` e `pagamentos` são
- * as mesmas.
+ * 4.8b; docs/mockups/Relatorios.dc.html): a receita por cliente e por serviço
+ * (os pagamentos do período, sem os estornados; por serviço, cada pagamento
+ * rateado pelas linhas do orçamento das demandas da NF, pergunta 26), as NFs
+ * emitidas por mês e as contas a receber por idade. Têm valor: a tela é só
+ * de quem lê preço (owner, admin e financeiro), e as regras de `faturas`,
+ * `pagamentos` e das RVs são as mesmas.
  */
 
-export const RELATORIOS_DO_FINANCEIRO = ["receita", "faturamento", "a_receber"] as const;
+export const RELATORIOS_DO_FINANCEIRO = ["receita", "servico", "faturamento", "a_receber"] as const;
 export type RelatorioDoFinanceiro = (typeof RELATORIOS_DO_FINANCEIRO)[number];
 
 export const RELATORIO_DO_FINANCEIRO_ROTULO: Record<RelatorioDoFinanceiro, string> = {
   receita: "Receita por cliente",
+  servico: "Receita por serviço",
   faturamento: "NFs emitidas por mês",
   a_receber: "Contas a receber",
 };
@@ -85,6 +92,133 @@ export function resumoDaReceita(validos: readonly PagamentoDaNf[], estornados: n
     { rotulo: "Pagamentos", valor: String(validos.length) },
     { rotulo: "Clientes", valor: String(new Set(validos.map((pagamento) => pagamento.customerCode)).size) },
     { rotulo: "Estornos", valor: String(estornados) },
+  ];
+}
+
+// --- Receita por serviço ------------------------------------------------------------------
+
+export const SEM_ORCAMENTO = "Sem orçamento";
+export const SEM_SERVICO = "Sem serviço";
+export const ARMAZENAGEM = "Armazenagem";
+
+/** O que o rateio lê: a RV de cada demanda, a medição e o serviço de cada item do catálogo. */
+export type FontesDoRateio = {
+  /** `quotes/{numero}/revisoes/{rv}`, pela chave `${numero}:${rv}`. */
+  revisoes: ReadonlyMap<string, Registro | null>;
+  /** `medicoes/{id}`. */
+  medicoes: ReadonlyMap<string, Registro | null>;
+  /** O serviço de cada item do catálogo (`lpu_items`), pelo id. */
+  servicoDoItem: ReadonlyMap<string, string>;
+};
+
+export type FonteDoRateio = { chave: string; caminho: string; tipo: "revisoes" | "medicoes" };
+
+/** Os documentos que o rateio lê: a medição da demanda que veio dela; senão, a RV faturada. */
+export function fontesDoRateio(faturas: readonly FaturaDoFinanceiro[]): FonteDoRateio[] {
+  const fontes = faturas.flatMap((fatura) =>
+    fatura.demandas.flatMap((demanda): FonteDoRateio[] => {
+      if (demanda.medicaoId) return [{ chave: demanda.medicaoId, caminho: `medicoes/${demanda.medicaoId}`, tipo: "medicoes" }];
+      if (demanda.rv !== null) return [{ chave: chaveDaRevisao(demanda.numero, demanda.rv), caminho: `quotes/${demanda.numero}/revisoes/${demanda.rv}`, tipo: "revisoes" }];
+      return [];
+    }),
+  );
+  return [...new Map(fontes.map((fonte) => [fonte.caminho, fonte])).values()];
+}
+
+/**
+ * As linhas da demanda com o serviço e o valor: as da RV faturada ou, na
+ * demanda da medição, os itens das linhas dela, com o serviço do catálogo. O
+ * ajuste (desconto) fica de fora: o valor da demanda na NF já o desconta, e o
+ * rateio o espalha pelas outras linhas.
+ */
+function linhasComServico(demanda: DemandaDaNf, fontes: FontesDoRateio): Array<{ servico: string; cents: number }> {
+  if (demanda.medicaoId) {
+    const dados = fontes.medicoes.get(demanda.medicaoId);
+    const medicao = dados ? medicaoDoRegistro(demanda.medicaoId, dados) : null;
+    return (medicao?.linhas ?? [])
+      .filter((linha) => linha.demanda_numero === demanda.numero)
+      .flatMap((linha) => linha.itens)
+      .map((item) => ({ servico: (item.lpu_item_id && fontes.servicoDoItem.get(item.lpu_item_id)) || SEM_SERVICO, cents: item.total_cents }))
+      .filter((linha) => linha.cents > 0);
+  }
+  if (demanda.rv === null) return [];
+  return linhasGravadas(fontes.revisoes.get(chaveDaRevisao(demanda.numero, demanda.rv))?.linhas)
+    .map((linha) => ({ servico: linha.servico ?? SEM_SERVICO, cents: linha.totalCents }))
+    .filter((linha) => linha.cents > 0);
+}
+
+/**
+ * O peso de cada serviço na NF: a armazenagem do WMS e, de cada demanda, o
+ * valor dela na NF repartido pelas linhas. A demanda sem orçamento lido vai
+ * inteira para "Sem orçamento".
+ */
+export function servicosDaNf(fatura: FaturaDoFinanceiro, fontes: FontesDoRateio): Map<string, number> {
+  const pesos = new Map<string, number>();
+  const somar = (servico: string, valor: number) => pesos.set(servico, (pesos.get(servico) ?? 0) + valor);
+  for (const armazenagem of fatura.armazenagem) somar(ARMAZENAGEM, armazenagem.valorCents);
+  for (const demanda of fatura.demandas) {
+    const linhas = linhasComServico(demanda, fontes);
+    const base = linhas.reduce((soma, linha) => soma + linha.cents, 0);
+    if (base <= 0) {
+      somar(SEM_ORCAMENTO, demanda.valorCents);
+      continue;
+    }
+    for (const linha of linhas) somar(linha.servico, (demanda.valorCents * linha.cents) / base);
+  }
+  return pesos;
+}
+
+/** O valor repartido pelos pesos em centavos inteiros: os que sobram do arredondamento vão aos maiores restos. */
+export function ratear(totalCents: number, pesos: ReadonlyMap<string, number>): Map<string, number> {
+  const soma = [...pesos.values()].reduce((total, peso) => total + Math.max(0, peso), 0);
+  if (soma <= 0) return new Map([[SEM_ORCAMENTO, totalCents]]);
+  const partes = [...pesos.entries()].map(([servico, peso]) => {
+    const exato = (totalCents * Math.max(0, peso)) / soma;
+    return { servico, cents: Math.floor(exato), resto: exato - Math.floor(exato) };
+  });
+  let falta = totalCents - partes.reduce((total, parte) => total + parte.cents, 0);
+  for (const parte of [...partes].sort((a, b) => b.resto - a.resto || a.servico.localeCompare(b.servico, "pt-BR"))) {
+    if (falta <= 0) break;
+    parte.cents += 1;
+    falta -= 1;
+  }
+  return new Map(partes.filter((parte) => parte.cents > 0).map((parte) => [parte.servico, parte.cents]));
+}
+
+export type ReceitaDoServico = { servico: string; cents: number; pagamentos: number };
+
+/** Cada pagamento rateado pelos serviços da NF dele (a NF que não se leu vai para "Sem orçamento"). */
+export function receitaPorServico(pagamentos: readonly PagamentoDaNf[], faturas: readonly FaturaDoFinanceiro[], fontes: FontesDoRateio): ReceitaDoServico[] {
+  const porId = new Map(faturas.map((fatura) => [fatura.id, fatura]));
+  const porServico = new Map<string, ReceitaDoServico>();
+  for (const pagamento of pagamentos) {
+    const fatura = porId.get(pagamento.faturaId);
+    const partes = ratear(pagamento.valorCents, fatura ? servicosDaNf(fatura, fontes) : new Map());
+    for (const [servico, cents] of partes) {
+      const atual = porServico.get(servico) ?? { servico, cents: 0, pagamentos: 0 };
+      porServico.set(servico, { servico, cents: atual.cents + cents, pagamentos: atual.pagamentos + 1 });
+    }
+  }
+  const noFim = (servico: string) => (servico === SEM_ORCAMENTO || servico === SEM_SERVICO ? 1 : 0);
+  return [...porServico.values()].sort((a, b) => noFim(a.servico) - noFim(b.servico) || b.cents - a.cents || a.servico.localeCompare(b.servico, "pt-BR"));
+}
+
+export function tabelaDaReceitaPorServico(linhas: readonly ReceitaDoServico[], pagamentos: number): TabelaDeRelatorio {
+  const total = linhas.reduce((soma, linha) => soma + linha.cents, 0);
+  return {
+    colunas: ["Serviço", "Pagamentos", "Recebido", "Participação (%)"],
+    linhas: linhas.map((linha) => ({ chave: linha.servico, celulas: [linha.servico, linha.pagamentos, reais(linha.cents), total ? Math.round((linha.cents * 100) / total) : 0] })),
+    total: linhas.length ? ["Total", pagamentos, reais(total), 100] : null,
+  };
+}
+
+export function resumoDaReceitaPorServico(linhas: readonly ReceitaDoServico[], pagamentos: number): NumeroDoResumo[] {
+  const servicos = linhas.filter((linha) => linha.servico !== SEM_ORCAMENTO && linha.servico !== SEM_SERVICO);
+  return [
+    { rotulo: "Recebido", valor: formatarReais(linhas.reduce((soma, linha) => soma + linha.cents, 0)) },
+    { rotulo: "Serviços", valor: String(servicos.length) },
+    { rotulo: "Pagamentos", valor: String(pagamentos) },
+    { rotulo: SEM_ORCAMENTO, valor: formatarReais(linhas.find((linha) => linha.servico === SEM_ORCAMENTO)?.cents ?? 0) },
   ];
 }
 
