@@ -194,6 +194,36 @@ describe("a conclusão recusada do campo", () => {
     assert.deepEqual((await eventos("os.refused_completion_dismissed")).map((evento) => evento.payload), [{ id: "10045-01", demanda: "10045" }]);
   });
 
+  it("a coordenação conclui a OS em execução com estes dados: a assinatura do celular vai na conclusão e a recusa fica anexada", async () => {
+    await recusa(
+      completeServiceOrderFor(db, lider, doCelular({ instante: "2026-10-22T07:30-03:00" }), conferir, AGORA),
+      "failed-precondition",
+      "A hora vem antes de Chegada na origem (08:00).",
+    );
+    await completeServiceOrderFor(
+      db,
+      interno,
+      {
+        idempotency_key: "c-com-dados",
+        numero: "10045-01",
+        instante: "2026-10-22T17:52-03:00",
+        aceite: "assinatura",
+        responsavel: { nome: "Renata Campos", cargo: "Facilities" },
+        assinatura: "as_0123456789abcdef.png",
+        informado_por: ANA,
+        meio: "telefone",
+      },
+      conferir,
+      AGORA,
+    );
+    const os = await lerOs();
+    assert.equal(os.status, "em_revisao");
+    assert.equal(os.conclusao.aceite, "assinatura");
+    assert.equal(os.conclusao.assinatura, CAMINHO);
+    assert.equal(os.conclusao.canal, "escritorio");
+    assert.deepEqual(os.conclusao_recusada.anexada, { instante: "2026-10-22T21:00:00.000Z", por: { uid: "interno-1", nome: "Mariana Lopes" } });
+  });
+
   it("a recusa sem assinatura não guarda nada", async () => {
     await peloEscritorio();
     await recusa(

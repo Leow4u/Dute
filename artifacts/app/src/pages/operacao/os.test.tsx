@@ -75,6 +75,18 @@ vi.mock("@/lib/operacao/leitura", () => ({
 
 vi.mock("@/lib/operacao/use-urls-das-fotos", () => ({ useUrlsDasFotos: () => ({}) }));
 
+// O envio ao Storage: a assinatura do celular já está lá e não sobe de novo.
+const envios = vi.hoisted(() => ({ assinaturas: 0, fotos: 0 }));
+vi.mock("@/lib/operacao/enviar-foto", async (original) => ({
+  ...(await original<typeof import("@/lib/operacao/enviar-foto")>()),
+  enviarAssinatura: async () => {
+    envios.assinaturas += 1;
+  },
+  enviarFoto: async () => {
+    envios.fotos += 1;
+  },
+}));
+
 import PaginaOs from "./os";
 
 let raiz: Root | null = null;
@@ -103,6 +115,8 @@ beforeEach(() => {
   estado.perderResposta = false;
   estado.os = {};
   estado.papel = "interno";
+  envios.assinaturas = 0;
+  envios.fotos = 0;
   container = document.createElement("div");
   document.body.appendChild(container);
   raiz = createRoot(container);
@@ -191,5 +205,74 @@ describe("cancelar a vistoria (pergunta 58)", () => {
     estado.papel = "financeiro";
     await act(async () => raiz!.render(<PaginaOs key="financeiro" />));
     expect(botoes()).not.toContain("Cancelar vistoria");
+  });
+});
+
+describe("a conclusão recusada do campo (pergunta 66)", () => {
+  const RECUSA = {
+    chave: "c-celular",
+    recusada_em: "2026-10-25T14:58:00.000Z",
+    instante: "2026-10-25T14:52:00.000Z",
+    informado_por: "col_cccccccccccccccc",
+    registrado_por: { uid: "uid-carlos", role: "campo" },
+    responsavel: { nome: "Renata Campos", cargo: "Facilities" },
+    assinatura: `os/${NUMERO}/assinatura/as_0123456789abcdef.png`,
+    motivo: "A OS já foi concluída.",
+    anexada: null,
+    dispensada: null,
+  };
+  const SEM_ACEITE = {
+    instante: "2026-10-25T14:50:00.000Z",
+    canal: "escritorio",
+    meio: "telefone",
+    informado_por: "col_cccccccccccccccc",
+    aceite: "sem_aceite",
+    responsavel: { nome: "Portaria" },
+    assinatura: null,
+    diferencas: [],
+  };
+
+  it("na OS concluída sem aceite, Anexar à conclusão e Dispensar chamam a callable com a chave da recusa", async () => {
+    estado.os = { status: "em_revisao", conclusao: SEM_ACEITE, conclusao_recusada: RECUSA };
+    await act(async () => raiz!.render(<PaginaOs />));
+    expect(container!.textContent).toContain("Conclusão recusada do campo");
+    await clicar("Anexar à conclusão");
+    await clicar("Dispensar");
+    expect(estado.chamadas).toEqual([
+      { nome: "resolveFieldCompletion", dados: { idempotency_key: "recusa:anexar:2026-10-25T14:58:00.000Z", numero: NUMERO, acao: "anexar", recusada_em: "2026-10-25T14:58:00.000Z" } },
+      { nome: "resolveFieldCompletion", dados: { idempotency_key: "recusa:dispensar:2026-10-25T14:58:00.000Z", numero: NUMERO, acao: "dispensar", recusada_em: "2026-10-25T14:58:00.000Z" } },
+    ]);
+  });
+
+  it("na OS em execução, Concluir com estes dados abre a conclusão com a hora, quem concluiu, quem recebeu e a assinatura do celular, que não sobe de novo", async () => {
+    estado.os = {
+      conclusao_recusada: { ...RECUSA, motivo: "A hora vem antes de Saída do pátio (07:05)." },
+      fotos: [{ id: "ft_0000000000000001", caminho: `os/${NUMERO}/fotos/ft_0000000000000001.jpg`, etapa: "fim", instante: "2026-10-25T14:40:00.000Z", canal: "celular" }],
+    };
+    await act(async () => raiz!.render(<PaginaOs />));
+    expect([...container!.querySelectorAll("button")].map((botao) => botao.textContent?.trim())).not.toContain("Anexar à conclusão");
+    await clicar("Concluir com estes dados");
+    const campos = [...container!.querySelectorAll<HTMLInputElement>("input")];
+    expect(campos.map((campo) => campo.value)).toEqual(expect.arrayContaining(["Renata Campos", "Facilities"]));
+    expect(container!.textContent).toContain("Assinatura do celular");
+
+    await clicar("Concluir OS");
+    const conclusao = estado.chamadas.find((chamada) => chamada.nome === "completeServiceOrder");
+    // A hora do celular (11:52 em São Paulo), não a do clique (12:00), e quem concluiu lá.
+    expect(conclusao?.dados).toMatchObject({
+      instante: "2026-10-25T11:52-03:00",
+      informado_por: "col_cccccccccccccccc",
+      aceite: "assinatura",
+      responsavel: { nome: "Renata Campos", cargo: "Facilities" },
+      assinatura: "as_0123456789abcdef.png",
+    });
+    expect(envios.assinaturas).toBe(0);
+  });
+
+  it("quem não coordena não vê as ações da recusa", async () => {
+    estado.os = { status: "em_revisao", conclusao: SEM_ACEITE, conclusao_recusada: RECUSA };
+    estado.papel = "financeiro";
+    await act(async () => raiz!.render(<PaginaOs />));
+    expect(container!.textContent).not.toContain("Conclusão recusada do campo");
   });
 });

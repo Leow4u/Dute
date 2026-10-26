@@ -16,7 +16,7 @@ import {
 } from "@/lib/operacao/andamento";
 import { chamarOperacao, mensagemDoErro, novaChave } from "@/lib/operacao/api";
 import { enviarAssinatura, enviarFoto, escolherFotos, type FotoEscolhida } from "@/lib/operacao/enviar-foto";
-import { fichaDaLeitura } from "@/lib/operacao/ficha-da-os";
+import { acoesDaRecusa, fichaDaLeitura, recusaPendente } from "@/lib/operacao/ficha-da-os";
 import { clienteDaLeitura, hojeIso, nomesPorCodigo } from "@/lib/operacao/fila";
 import { demandaDoHoje } from "@/lib/operacao/hoje";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
@@ -35,12 +35,19 @@ import { OsView, type EstadoDaFicha } from "./os-view";
  * ocorrência. Na conclusão, sobem antes as fotos do final (etapa Fim) e a
  * foto da via assinada; completeServiceOrder vem por último. Na vistoria
  * aberta, agendada ou em execução, a coordenação tem Cancelar vistoria, com
- * o motivo (pergunta 58).
+ * o motivo (pergunta 58). Na conclusão do celular recusada, anexa a
+ * assinatura à conclusão, conclui com estes dados ou dispensa (pergunta 66).
  */
 
 /** A vistoria que se cancela: a mesma regra do servidor (exigirCancelavel). */
 const STATUS_DA_VISTORIA_QUE_CANCELA = ["aberta", "agendada", "em_execucao"] as const;
-const PAPEIS_QUE_CANCELAM = ["owner", "admin", "interno"] as const;
+/** Quem cancela a vistoria e resolve a conclusão recusada: os papéis das callables da coordenação. */
+const PAPEIS_DA_COORDENACAO = ["owner", "admin", "interno"] as const;
+
+/** O nome da assinatura no fim do caminho ("os/10045-01/assinatura/as_….png" dá "as_….png"). */
+function arquivoDoCaminho(caminho: string): string {
+  return caminho.slice(caminho.lastIndexOf("/") + 1);
+}
 
 export default function PaginaOs() {
   const numero = fichaDaBusca(useSearch()) ?? "";
@@ -49,7 +56,11 @@ export default function PaginaOs() {
   const demanda = useDocumento(demandaNumero ? `demands/${demandaNumero}` : null, (db) => doc(db, "demands", demandaNumero ?? "-"), demandaDoHoje);
   const clientes = useLeitura("customers", (db) => collection(db, "customers"), clienteDaLeitura);
   // As fotos e a assinatura da conclusão (as regras liberam a leitura a quem coordena).
-  const urls = useUrlsDasFotos([...(os.item?.fotos ?? []).map((foto) => foto.caminho), ...(os.item?.conclusao?.assinatura ? [os.item.conclusao.assinatura] : [])]);
+  const urls = useUrlsDasFotos([
+    ...(os.item?.fotos ?? []).map((foto) => foto.caminho),
+    ...(os.item?.conclusao?.assinatura ? [os.item.conclusao.assinatura] : []),
+    ...(os.item?.recusaDoCampo ? [os.item.recusaDoCampo.assinatura] : []),
+  ]);
 
   const estado: EstadoDaFicha = !numero || os.item === null ? "nao_encontrada" : os.erro ? "erro" : os.item === undefined ? "carregando" : "pronto";
   const ficha = os.item ?? null;
@@ -58,7 +69,8 @@ export default function PaginaOs() {
   const [tentou, setTentou] = useState(false);
   const [fotos, setFotos] = useState<FotoEscolhida[]>([]);
   const [fotosDoFinal, setFotosDoFinal] = useState<FotoEscolhida[]>([]);
-  const [assinatura, setAssinatura] = useState<{ arquivo: File; nome: string } | null>(null);
+  // A assinatura da conclusão: o arquivo escolhido, que sobe antes, ou a do celular que já está no Storage (arquivo null).
+  const [assinatura, setAssinatura] = useState<{ arquivo: File | null; nome: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [erroDasFotos, setErroDasFotos] = useState<string | null>(null);
@@ -71,8 +83,9 @@ export default function PaginaOs() {
   const { user } = useAppUser();
   const podeReabrir = user?.publicMetadata.role === "owner" || user?.publicMetadata.role === "admin";
   const [reabrir, setReabrir] = useState<{ motivo: string; tentou: boolean; chave: string } | null>(null);
+  const coordena = (PAPEIS_DA_COORDENACAO as readonly string[]).includes(user?.publicMetadata.role ?? "");
   const podeCancelar =
-    (PAPEIS_QUE_CANCELAM as readonly string[]).includes(user?.publicMetadata.role ?? "") &&
+    coordena &&
     ficha?.tipo === "vistoria" &&
     (STATUS_DA_VISTORIA_QUE_CANCELA as readonly string[]).includes(ficha.status);
   const [cancelar, setCancelar] = useState<{ motivo: string; tentou: boolean; chave: string } | null>(null);
@@ -113,6 +126,36 @@ export default function PaginaOs() {
     }
   }
 
+  const recusa = ficha && coordena ? recusaPendente(ficha) : null;
+  const [erroDaRecusa, setErroDaRecusa] = useState<string | null>(null);
+
+  async function resolver(acao: "anexar" | "dispensar") {
+    if (!ficha || !recusa) return;
+    setOcupado(true);
+    setErroDaRecusa(null);
+    try {
+      // A chave é da recusa: repetir depois de perder a resposta devolve o mesmo resultado.
+      await chamarOperacao("resolveFieldCompletion", { idempotency_key: `recusa:${acao}:${recusa.recusadaEm}`, numero: ficha.numero, acao, recusada_em: recusa.recusadaEm });
+    } catch (error) {
+      setErroDaRecusa(mensagemDoErro(error));
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  /**
+   * Concluir com estes dados: a conclusão do escritório já com a hora, quem
+   * concluiu (se ainda está na equipe), quem recebeu e a assinatura do celular.
+   */
+  function concluirComDados() {
+    if (!ficha || !recusa) return;
+    abrir();
+    const doCelular = andamentoInicial(ficha, new Date(recusa.instante));
+    const informadoPor = ficha.equipe.find((pessoa) => pessoa.id === recusa.informadoPor)?.id ?? doCelular.informadoPor;
+    setForm({ ...doCelular, tipo: "conclusao", informadoPor, aceite: "assinatura", nome: recusa.nome, cargo: recusa.cargo ?? "" });
+    setAssinatura({ arquivo: null, nome: arquivoDoCaminho(recusa.assinatura) });
+  }
+
   function abrir() {
     if (!ficha) return;
     chave.current = novaChave();
@@ -148,7 +191,7 @@ export default function PaginaOs() {
       if (form.tipo === "conclusao") {
         // A conclusão confere as fotos do final e a assinatura: elas sobem antes.
         for (const foto of fotosDoFinal) await enviarFoto(ficha.numero, foto, { chave: `${chave.current}:fim:${foto.nome}`, etapa: "fim" });
-        if (form.aceite === "assinatura" && assinatura) await enviarAssinatura(ficha.numero, { arquivo: assinatura.arquivo, nome: assinatura.nome, contentType: assinatura.arquivo.type });
+        if (form.aceite === "assinatura" && assinatura?.arquivo) await enviarAssinatura(ficha.numero, { arquivo: assinatura.arquivo, nome: assinatura.nome, contentType: assinatura.arquivo.type });
       }
       let ocorrencia: string | null = null;
       for (const pedido of pedidosDoAndamento(form, ficha, chave.current, instante, assinatura?.nome ?? null)) {
@@ -284,7 +327,7 @@ export default function PaginaOs() {
             onTirarFoto={(indice) => setFotos(fotos.filter((_, atual) => atual !== indice))}
             anexos={{
               fotosDoFinal: fotosDoFinal.map((foto) => foto.arquivo.name),
-              assinatura: assinatura?.arquivo.name ?? null,
+              assinatura: assinatura ? (assinatura.arquivo?.name ?? "Assinatura do celular") : null,
               onFotosDoFinal: (arquivos) => {
                 const escolha = escolherFotos(arquivos, ficha.janela?.data ?? null);
                 setErro(escolha.problema);
@@ -302,6 +345,30 @@ export default function PaginaOs() {
             onCancelar={fechar}
             onRegistrar={() => void registrar()}
           />
+        ) : null
+      }
+      acoesDaRecusa={
+        ficha && recusa ? (
+          <>
+            {acoesDaRecusa(ficha).includes("anexar") ? (
+              <Button type="button" onClick={() => void resolver("anexar")} disabled={ocupado}>
+                Anexar à conclusão
+              </Button>
+            ) : null}
+            {acoesDaRecusa(ficha).includes("concluir") && !form ? (
+              <Button type="button" onClick={concluirComDados} disabled={ocupado}>
+                Concluir com estes dados
+              </Button>
+            ) : null}
+            <Button type="button" variant="ghost" onClick={() => void resolver("dispensar")} disabled={ocupado}>
+              Dispensar
+            </Button>
+            {erroDaRecusa ? (
+              <span role="alert" className="text-sm text-destructive">
+                {erroDaRecusa}
+              </span>
+            ) : null}
+          </>
         ) : null
       }
       anexarFotos={

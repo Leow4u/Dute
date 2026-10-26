@@ -1768,3 +1768,38 @@ de 26/10" (item 2). A tela da ficha da OS vem no PR seguinte.
   - `events.test.ts` e `callables.test.ts`: os três eventos e a callable
     nova.
 
+### Pergunta 66: a tela da conclusão recusada
+
+Feita em 26/10/2026, com o canvas "Telas das decisões de 26/10" (item 2),
+sobre o servidor da seção anterior.
+
+- **O cartão** (`pages/operacao/os-view.tsx`): "Conclusão recusada do campo",
+  no alto da coluna da ficha, com "Recusada" e a hora, "Concluída no
+  celular" (a hora e quem concluiu), o "Motivo da recusa", "Recebido por" e a
+  assinatura. Só para owner, admin e interno: a página entrega as ações só a
+  eles, e sem as ações o cartão não aparece.
+- **As ações** (`pages/operacao/os.tsx`, `acoesDaRecusa` em
+  `lib/operacao/ficha-da-os.ts`):
+  - "Anexar à conclusão", na OS concluída (em revisão ou revisada) sem
+    aceite;
+  - "Concluir com estes dados", na OS de serviço em execução: abre a
+    conclusão do Registrar andamento com a hora e quem concluiu no celular
+    (quem concluiu, se ainda está na equipe), quem recebeu, o cargo e a
+    assinatura, que não sobe de novo. A conclusão que usa a assinatura da
+    recusa a marca como anexada, no servidor;
+  - "Dispensar", sempre;
+  - a chave do pedido é da recusa (`recusa:<ação>:<hora>`): repetir depois
+    de perder a resposta devolve o mesmo resultado.
+- **A conclusão** mostra "Assinatura anexada", com a hora e quem anexou. O
+  histórico ganha "Conclusão do campo recusada", "Assinatura anexada à
+  conclusão" e "Conclusão do campo dispensada", com quem e quando.
+- **Testes:**
+  - `conclusao-recusada.integration.test.ts`: concluir com estes dados leva
+    a assinatura do celular na conclusão do escritório e marca a recusa
+    como anexada;
+  - no app, `ficha-da-os.test.ts` (o cartão, as ações por status, o
+    histórico e a conclusão com a assinatura anexada), `os-view.test.tsx`
+    (os textos e o `axe`) e `os.test.tsx` (anexar e dispensar com a chave
+    da recusa, concluir com estes dados com a hora e quem concluiu no
+    celular, sem subir a assinatura de novo, quem não coordena não vê o
+    cartão).
