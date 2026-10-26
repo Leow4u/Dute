@@ -1,6 +1,6 @@
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
-import { z } from "zod";
+import { z } from "genkit";
 
 import { CUSTOMERS_COLLECTION } from "./customer-profile.js";
 import { assertInviteCustomerAllowed, inviteEventReference } from "./customer-invite.js";
