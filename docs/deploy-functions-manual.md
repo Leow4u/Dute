@@ -152,7 +152,20 @@ gcloud storage buckets add-iam-policy-binding "gs://$p.firebasestorage.app" --me
 
 Só no bucket, não no projeto, e sem apagar/sobrescrever. Sem esses papéis o
 portal mostra "O servidor não tem permissão para gravar (ou ler) arquivos no
-Storage", com o papel que falta. Até 01/10/2026 aparecia só "Falha interna no
+Storage", com o papel que falta.
+
+**Apagar.** Os dois papéis não apagam (`storage.objects.delete`). Quem apaga
+no bucket padrão é a retenção das fotos da OS (`runOperacaoRetention`, LGPD,
+decisão 2, `docs/plataforma/lgpd.md`, seção 6). O RH também apaga ali o
+arquivo que o anexo recusa (parte 8.2b). Sem a permissão, a retenção para na
+primeira recusa e o log mostra `sem_permissao: true`. Dar o papel é decisão
+do Leonardo, no bucket e não no projeto, em cada ambiente:
+
+```powershell
+$p = "dute-homolog"
+$sa = "$(gcloud projects describe $p --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
+gcloud storage buckets add-iam-policy-binding "gs://$p.firebasestorage.app" --member="serviceAccount:$sa" --role="roles/storage.objectUser" --project $p
+``` Até 01/10/2026 aparecia só "Falha interna no
 servidor", e a causa (403 `storage.objects.create`) estava apenas no log:
 
 ```powershell

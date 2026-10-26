@@ -18,6 +18,7 @@ import { saveServiceOrderFor } from "./domain/os-gravacao.js";
 import { reopenServiceOrderFor, reviewServiceOrderFor } from "./domain/revisao-gravacao.js";
 import { requireOperacaoCaller } from "./domain/profile.js";
 import { runRetentionFor } from "./domain/retencao-gravacao.js";
+import { runPhotoRetentionFor, type ApagarArquivo } from "./domain/retencao-das-fotos-gravacao.js";
 import { runDailyAlertsFor } from "./domain/rotina-gravacao.js";
 import { declineServiceRequestFor, requestServiceFor } from "./domain/solicitacao-gravacao.js";
 import { getRoomBoardFor } from "./domain/tv-leitura.js";
@@ -51,6 +52,11 @@ const conferirArquivo: ConferirArquivo = async (caminho) => {
   if (!existe) return null;
   const [metadados] = await arquivo.getMetadata();
   return { contentType: String(metadados.contentType ?? ""), size: Number(metadados.size ?? 0) };
+};
+
+/** Apaga o arquivo do bucket padrão (a retenção das fotos da OS); o que já não existe conta como apagado. */
+const apagarDoBucket: ApagarArquivo = async (caminho) => {
+  await getStorage().bucket().file(caminho).delete({ ignoreNotFound: true });
 };
 
 /** Cria, atualiza, desativa ou reativa um colaborador. */
@@ -173,14 +179,22 @@ export const runDailyAlerts = onSchedule({ schedule: "every day 06:00", timeZone
 });
 
 /**
- * Todo dia às 03:20 de São Paulo: o aviso do sino e o e-mail que já saiu da
- * fila com mais de 90 dias saem (LGPD, decisão 8); o evento guarda as
- * contagens por cliente. Uma instância de cada vez. Só com a liberação da
- * retenção.
+ * Todo dia às 03:20 de São Paulo, a retenção da Operação (LGPD): o aviso do
+ * sino e o e-mail que já saiu da fila com mais de 90 dias saem (decisão 8),
+ * com o evento das contagens por cliente; e as fotos das etapas, das
+ * ocorrências e da vistoria da OS revisada há mais de 12 meses (decisão 2),
+ * com o evento de cada OS. Uma parte não segura a outra. Uma instância de
+ * cada vez. Só com a liberação da retenção.
  */
 export const runOperacaoRetention = onSchedule({ schedule: "every day 03:20", timeZone: "America/Sao_Paulo", timeoutSeconds: 540, maxInstances: 1 }, async () => {
   if (!retencaoLiberada(PROJECT_ID)) return;
-  console.info("runOperacaoRetention", await runRetentionFor(db));
+  const [avisos, fotos] = await Promise.allSettled([runRetentionFor(db), runPhotoRetentionFor(db, apagarDoBucket)]);
+  console.info("runOperacaoRetention", {
+    avisos: avisos.status === "fulfilled" ? avisos.value : "falhou",
+    fotos: fotos.status === "fulfilled" ? fotos.value : "falhou",
+  });
+  const falha = [avisos, fotos].find((resultado): resultado is PromiseRejectedResult => resultado.status === "rejected");
+  if (falha) throw falha.reason;
 });
 
 /**
