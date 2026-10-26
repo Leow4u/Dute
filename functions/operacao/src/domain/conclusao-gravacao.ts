@@ -1,6 +1,8 @@
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import { HttpsError } from "firebase-functions/https";
 
 import { caminhoDaAssinatura, concluirOs, interpretarConclusao } from "./conclusao.js";
+import { guardarConclusaoRecusada } from "./conclusao-recusada-gravacao.js";
 import { ORDERS_COLLECTION, retornoAoArmazem, retornoNoPedido } from "./demanda-do-armazem.js";
 import { createOperacaoEvent } from "./events.js";
 import { exigirQuemExecuta, lerParaRegistrar, type ResultadoDoRegistro } from "./execucao-gravacao.js";
@@ -22,6 +24,10 @@ import type { OperacaoProfile } from "./profile.js";
  * A OS de volta da entrega do WMS (`retorno_ao_armazem`, parte 4.5d) marca,
  * na mesma transação, o retorno a receber no pedido de saída: o caminhão
  * chegou ao armazém e o WMS confere e recebe o que voltou (`os.warehouse_return_due`).
+ *
+ * A conclusão do celular recusada com a assinatura conferida fica guardada na
+ * OS para a coordenação (pergunta 66, domain/conclusao-recusada.ts), e a
+ * recusa chega ao celular como antes.
  */
 export async function completeServiceOrderFor(
   db: Firestore,
@@ -33,6 +39,27 @@ export async function completeServiceOrderFor(
   exigirQuemExecuta(caller);
   const pedido = interpretarConclusao(data);
   const assinatura = pedido.assinatura ? await conferir(caminhoDaAssinatura(pedido.numero, pedido.assinatura)) : null;
+  try {
+    return await concluir(db, caller, pedido, assinatura, agora);
+  } catch (error) {
+    if (caller.role === "campo" && assinatura && pedido.assinatura && error instanceof HttpsError && error.code === "failed-precondition") {
+      const caminho = caminhoDaAssinatura(pedido.numero, pedido.assinatura);
+      // Guardar não esconde a recusa: sem conseguir, o log registra e a recusa segue.
+      await guardarConclusaoRecusada(db, caller, pedido, caminho, error.message, agora()).catch((erro: unknown) =>
+        console.error("[completeServiceOrder] conclusão recusada não guardada", { numero: pedido.numero, erro }),
+      );
+    }
+    throw error;
+  }
+}
+
+function concluir(
+  db: Firestore,
+  caller: OperacaoProfile,
+  pedido: ReturnType<typeof interpretarConclusao>,
+  assinatura: Awaited<ReturnType<ConferirArquivo>>,
+  agora: () => Date,
+): Promise<ResultadoDoRegistro & { replayed?: true }> {
   return runIdempotent(
     db,
     { kind: "os_complete", scope: { numero: pedido.numero }, idempotency_key: pedido.idempotency_key, input: pedido, actor: ator(caller) },

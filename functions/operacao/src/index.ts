@@ -8,6 +8,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { REMETENTE_DOS_AVISOS, emailParaQualquerContato, enderecoDoApp, segredosDoResend } from "./domain/avisos.js";
 import { enviarPeloResend, enviarSoAuditoria, markNotificationsReadFor, relatoDosDesistidos, runNotificationsFor, soParaADutelog } from "./domain/avisos-gravacao.js";
 import { completeServiceOrderFor } from "./domain/conclusao-gravacao.js";
+import { resolveFieldCompletionFor } from "./domain/conclusao-recusada-gravacao.js";
 import { openStorageDemandFor } from "./domain/demanda-do-armazem-gravacao.js";
 import { openDirectDemandFor } from "./domain/demanda-direta-gravacao.js";
 import { registerItemFor, registerOccurrenceFor, registerPresenceFor, registerStepFor } from "./domain/execucao-gravacao.js";
@@ -123,6 +124,12 @@ export const registerPresence = onCall(async (request) => {
 export const completeServiceOrder = onCall(async (request) => {
   const caller = await requireOperacaoCaller(db, request, PROJECT_ID, { campo: true });
   return completeServiceOrderFor(db, caller, request.data, conferirArquivo);
+});
+
+/** Anexa à conclusão a assinatura da conclusão recusada do celular, ou a dispensa (pergunta 66). */
+export const resolveFieldCompletion = onCall(async (request) => {
+  const caller = await requireOperacaoCaller(db, request, PROJECT_ID);
+  return resolveFieldCompletionFor(db, caller, request.data);
 });
 
 /** Revisa a OS concluída: decide cada divergência; a OS vai para Revisada e a demanda recebe o resumo da Operação. */

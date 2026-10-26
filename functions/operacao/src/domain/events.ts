@@ -48,6 +48,9 @@ export const OPERACAO_EVENT_TYPES = [
   "os.completed",
   "os.signed",
   "os.completed_without_acceptance",
+  "os.completion_refused",
+  "os.signature_attached",
+  "os.refused_completion_dismissed",
   "os.reviewed",
   "os.addendum_requested",
   "os.reopened",
@@ -196,6 +199,15 @@ const osConcluida = z
 const aceiteNoLocal = z.object({ id: osId, demanda: demandaNumero, instante, canal }).strict();
 
 /**
+ * A conclusão do celular recusada com a assinatura guardada na OS, e o que a
+ * coordenação fez com ela (pergunta 66): a hora da conclusão no celular, sem
+ * o nome de quem assinou (fica só na OS).
+ */
+const conclusaoRecusada = z.object({ id: osId, demanda: demandaNumero, instante, canal: z.literal("celular") }).strict();
+const assinaturaAnexada = z.object({ id: osId, demanda: demandaNumero, instante }).strict();
+const recusaDispensada = z.object({ id: osId, demanda: demandaNumero }).strict();
+
+/**
  * A revisão (parte 3.10a): quantas linhas, quantas divergiam e a decisão de
  * cada uma, quantas foram corrigidas, as horas planejadas e reais e o tamanho
  * da equipe. É a matéria do erro do planejamento (Fase 5). Sem motivo nem nota.
@@ -319,6 +331,9 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "os.completed": osConcluida,
   "os.signed": aceiteNoLocal,
   "os.completed_without_acceptance": aceiteNoLocal,
+  "os.completion_refused": conclusaoRecusada,
+  "os.signature_attached": assinaturaAnexada,
+  "os.refused_completion_dismissed": recusaDispensada,
   "os.reviewed": osRevisada,
   "os.addendum_requested": aditivoPedido,
   "os.reopened": osReaberta,
@@ -364,6 +379,12 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
     title: "OS concluída sem aceite no local",
     description: "Não havia responsável para assinar; o aceite vem pela validação do cliente no Comercial.",
   },
+  "os.completion_refused": {
+    title: "Conclusão do campo recusada",
+    description: "A conclusão do celular foi recusada depois de a assinatura subir; ela ficou guardada na OS para a coordenação.",
+  },
+  "os.signature_attached": { title: "Assinatura anexada à conclusão", description: "A coordenação anexou à conclusão a assinatura colhida no celular." },
+  "os.refused_completion_dismissed": { title: "Conclusão do campo dispensada", description: "A coordenação dispensou a conclusão recusada do celular." },
   "os.reviewed": { title: "OS revisada", description: "A coordenação revisou a OS e decidiu cada divergência entre o planejado e o executado." },
   "os.addendum_requested": { title: "Aditivo pedido ao Comercial", description: "A revisão da OS pediu ao Comercial o aditivo do que passou do orçado." },
   "os.reopened": { title: "OS reaberta", description: "A OS revisada voltou à execução." },
