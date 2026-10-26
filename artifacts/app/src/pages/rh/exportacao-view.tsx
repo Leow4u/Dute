@@ -1,4 +1,5 @@
 import type { FormEvent } from "react";
+import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,13 +13,15 @@ import {
   type ArquivoDaExportacao,
   type ExportacaoNaLista,
 } from "@/lib/rh/exportacao";
+import { hrefDaFicha } from "@/lib/rh/navegacao";
 import { cn } from "@/lib/utils";
 
 import { Contador, Vazio } from "./pecas";
 
 /**
- * Exportação (parte 8.3): a planilha da competência para a contabilidade,
- * que transmite o eSocial. O rh gera; owner, admin e rh baixam. Cada geração
+ * Exportação (partes 8.3 e 8.4b): a planilha da competência para a
+ * contabilidade, que transmite o eSocial. O rh gera e vê quem está sem a data
+ * de admissão, com o link da ficha; owner, admin e rh baixam. Cada geração
  * sem mudança devolve a versão de antes. Sem legenda: só rótulos, dados e
  * ações.
  */
@@ -31,10 +34,14 @@ export type AcoesDaExportacao = {
   baixar: (id: string, arquivo: ArquivoDaExportacao) => void;
 };
 
+export type PessoaSemAdmissao = { id: string; nome: string };
+
 export type PropsDaExportacao = {
   estado: EstadoDaLista;
   exportacoes: readonly ExportacaoNaLista[];
   grava: boolean;
+  /** Os próprios ativos sem a data de admissão (parte 8.4), que entram na planilha pela regra do cadastro. */
+  semAdmissao: readonly PessoaSemAdmissao[];
   hoje: string;
   competencia: string;
   ocupado: boolean;
@@ -73,6 +80,27 @@ function Gerar({ hoje, competencia, ocupado, acoes }: Pick<PropsDaExportacao, "h
   );
 }
 
+function SemAdmissao({ pessoas }: { pessoas: readonly PessoaSemAdmissao[] }) {
+  if (!pessoas.length) return null;
+  return (
+    <div className="flex flex-col gap-2.5 border-t border-border px-5 pb-4 pt-3.5">
+      <h3 id="sem-admissao" className="flex items-center gap-2.5 text-sm font-extrabold">
+        Sem data de admissão
+        <Contador>{pessoas.length}</Contador>
+      </h3>
+      <ul aria-labelledby="sem-admissao" className="flex flex-wrap gap-x-4 gap-y-2">
+        {pessoas.map((pessoa) => (
+          <li key={pessoa.id}>
+            <Link href={hrefDaFicha(pessoa.id)} className="rounded text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              {pessoa.nome}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function Versao({ exportacao, primeira, ocupado, acoes }: { exportacao: ExportacaoNaLista; primeira: boolean; ocupado: boolean; acoes: AcoesDaExportacao }) {
   const titulo = `${textoDaCompetencia(exportacao.competencia)} · versão ${exportacao.versao}`;
   const autoria = [`Gerada em ${dataDaGeracao(exportacao.gerada_em)}`, exportacao.gerada_por].filter(Boolean).join(" por ");
@@ -104,7 +132,7 @@ function Versao({ exportacao, primeira, ocupado, acoes }: { exportacao: Exportac
   );
 }
 
-export function ExportacaoView({ estado, exportacoes, grava, hoje, competencia, ocupado, aviso, falha, acoes }: PropsDaExportacao) {
+export function ExportacaoView({ estado, exportacoes, grava, semAdmissao, hoje, competencia, ocupado, aviso, falha, acoes }: PropsDaExportacao) {
   let lista;
   if (estado === "carregando") lista = <Vazio>Carregando...</Vazio>;
   else if (estado === "erro") lista = <Vazio>Não foi possível carregar as exportações.</Vazio>;
@@ -130,6 +158,7 @@ export function ExportacaoView({ estado, exportacoes, grava, hoje, competencia, 
             </h2>
           </div>
           <Gerar hoje={hoje} competencia={competencia} ocupado={ocupado} acoes={acoes} />
+          <SemAdmissao pessoas={semAdmissao} />
         </section>
       ) : null}
       {aviso ? (

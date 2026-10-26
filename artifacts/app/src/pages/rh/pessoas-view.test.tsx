@@ -8,14 +8,15 @@ import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import { PessoasView, type EstadoDaTela } from "./pessoas-view";
 
-/** Pessoas (parte 8.2c): quem está ativo, com a ficha resumida. Sem legenda. Dados sintéticos. */
+/** Pessoas (partes 8.2c e 8.4b): quem está ativo, com a ficha resumida e as datas do vínculo. Sem legenda. Dados sintéticos. */
 
 const PAINEL = painelLido({
   hoje: "2026-10-23",
   colaboradores: [
-    { id: "col_aaaaaaaaaaaaaaaa", nome: "Ana Souza", funcao: "Montadora", vinculo: "proprio", ativo: true, registros: 3, vencendo: 1, vencidos: 1, proximo_vencimento: "2026-11-01" },
-    { id: "col_bbbbbbbbbbbbbbbb", nome: "Bruno Lima", funcao: "Motorista", vinculo: "terceiro", ativo: true, registros: 1, vencendo: 2, vencidos: 0, proximo_vencimento: "2026-10-28" },
-    { id: "col_cccccccccccccccc", nome: "Carla Dias", funcao: "Ajudante", vinculo: "freelancer", ativo: true, registros: 0, vencendo: 0, vencidos: 0, proximo_vencimento: null },
+    { id: "col_aaaaaaaaaaaaaaaa", nome: "Ana Souza", funcao: "Montadora", vinculo: "proprio", ativo: true, registros: 3, vencendo: 1, vencidos: 1, proximo_vencimento: "2026-11-01", admissao: "2025-02-03", desligamento: "2026-10-31" },
+    { id: "col_bbbbbbbbbbbbbbbb", nome: "Bruno Lima", funcao: "Motorista", vinculo: "terceiro", ativo: true, registros: 1, vencendo: 2, vencidos: 0, proximo_vencimento: "2026-10-28", admissao: null, desligamento: null },
+    { id: "col_cccccccccccccccc", nome: "Carla Dias", funcao: "Ajudante", vinculo: "freelancer", ativo: true, registros: 0, vencendo: 0, vencidos: 0, proximo_vencimento: null, admissao: null, desligamento: null },
+    { id: "col_dddddddddddddddd", nome: "Daniela Reis", funcao: "Conferente", vinculo: "proprio", ativo: true, registros: 2, vencendo: 0, vencidos: 0, proximo_vencimento: null, admissao: null, desligamento: null },
   ],
   vencimentos: [],
 })!;
@@ -29,13 +30,13 @@ function render(estado: EstadoDaTela = "pronto", busca = "", colaboradores = PAI
 }
 
 describe("Pessoas do RH", () => {
-  it("cada pessoa ativa com a função, o vínculo, o próximo vencimento e as marcas da ficha", () => {
+  it("cada pessoa ativa com a função, o vínculo, as datas do próprio, o próximo vencimento e as marcas da ficha", () => {
     expect(textosDaTela(render())).toEqual([
       "Pessoas",
       "Ativas",
-      "3",
+      "4",
       "Ana Souza",
-      "Montadora · Própria",
+      "Montadora · Própria · Admissão 03/02/2025 · Desligamento 31/10/2026",
       "Próximo vencimento 01/11/2026",
       "1 vencido",
       "1 vencendo",
@@ -46,6 +47,9 @@ describe("Pessoas do RH", () => {
       "Carla Dias",
       "Ajudante · Freelancer",
       "Sem registro",
+      "Daniela Reis",
+      "Conferente · Própria",
+      "Sem admissão",
     ]);
     expect(render()).toContain('href="/rh/ficha?colaborador=col_aaaaaaaaaaaaaaaa"');
   });
@@ -66,9 +70,11 @@ describe("Pessoas do RH", () => {
       "Ana Souza",
       "Bruno Lima",
       "Carla Dias",
-      /^[^·]+ · (Própria|Terceiro|Freelancer)$/,
+      "Daniela Reis",
+      /^[^·]+ · (Própria|Terceiro|Freelancer)( · Admissão \d{2}\/\d{2}\/\d{4})?( · Desligamento \d{2}\/\d{2}\/\d{4})?$/,
       /^Próximo vencimento \d{2}\/\d{2}\/\d{4}$/,
       /^\d+ (vencidos?|vencendo)$/,
+      "Sem admissão",
       "Sem registro",
       "Carregando...",
       "Nenhuma pessoa ativa",

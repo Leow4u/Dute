@@ -5,7 +5,16 @@ import { useSearch } from "wouter";
 import { useAppUser } from "@/lib/auth";
 import { chamarRh, novaChave } from "@/lib/rh/api";
 import type { RegistroDoRh } from "@/lib/rh/ficha";
-import { formularioDoRegistro, formularioNovo, pedidoDoFormulario, problemaDoArquivo, type FormularioDoRegistro } from "@/lib/rh/formulario";
+import {
+  formularioDoRegistro,
+  formularioDoVinculo,
+  formularioNovo,
+  pedidoDoFormulario,
+  pedidoDoVinculo,
+  problemaDoArquivo,
+  type FormularioDoRegistro,
+  type FormularioDoVinculo,
+} from "@/lib/rh/formulario";
 import { colaboradorDaBusca, gravaNoRh } from "@/lib/rh/navegacao";
 import { CHAVE_DO_PAINEL, chaveDaFicha, useFichaDoRh } from "@/lib/rh/use-rh";
 
@@ -19,7 +28,8 @@ type Abertura = { url: string };
  * Cada gravação passa pela callable e, depois, a ficha e o painel do RH são
  * lidos de novo. O arquivo sobe pela URL assinada que requestRhUpload dá e só
  * vale na ficha depois de attachRhFile; abre pela URL de openRhFile, que
- * registra a abertura.
+ * registra a abertura. As datas do vínculo (parte 8.4b) gravam por
+ * saveRhVinculo, com a edição que a ficha leu.
  */
 export default function RhFicha() {
   const { user } = useAppUser();
@@ -28,6 +38,7 @@ export default function RhFicha() {
   const leitura = useFichaDoRh(role, colaboradorId);
   const queryClient = useQueryClient();
   const [formulario, setFormulario] = useState<FormularioDoRegistro | null>(null);
+  const [vinculo, setVinculo] = useState<FormularioDoVinculo | null>(null);
   const [arquivando, setArquivando] = useState<{ id: string; chave: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
@@ -55,11 +66,13 @@ export default function RhFicha() {
     novo: () => {
       setFalha(null);
       setArquivando(null);
+      setVinculo(null);
       setFormulario(formularioNovo(novaChave()));
     },
     alterar: (registro: RegistroDoRh) => {
       setFalha(null);
       setArquivando(null);
+      setVinculo(null);
       setFormulario(formularioDoRegistro(novaChave(), registro));
     },
     editar: setFormulario,
@@ -74,6 +87,7 @@ export default function RhFicha() {
     pedirArquivamento: (registroId: string) => {
       setFalha(null);
       setFormulario(null);
+      setVinculo(null);
       setArquivando({ id: registroId, chave: novaChave() });
     },
     confirmarArquivamento: () => {
@@ -119,6 +133,21 @@ export default function RhFicha() {
           setFalha(error instanceof Error ? error.message : "Falha ao abrir o arquivo.");
         });
     },
+    abrirVinculo: () => {
+      setFalha(null);
+      setArquivando(null);
+      setFormulario(null);
+      setVinculo(formularioDoVinculo(novaChave(), leitura.ficha?.datas_do_vinculo ?? null));
+    },
+    editarVinculo: setVinculo,
+    salvarVinculo: () => {
+      if (!vinculo || !colaboradorId) return;
+      void gravar(() => chamarRh("saveRhVinculo", pedidoDoVinculo(vinculo, colaboradorId)), () => setVinculo(null));
+    },
+    fecharVinculo: () => {
+      setFalha(null);
+      setVinculo(null);
+    },
   };
 
   const estado: EstadoDaFicha = !colaboradorId || leitura.erro ? "erro" : leitura.ficha ? "pronto" : "carregando";
@@ -129,6 +158,7 @@ export default function RhFicha() {
       erro={colaboradorId ? leitura.erro : "Pessoa não encontrada."}
       grava={gravaNoRh(role)}
       formulario={formulario}
+      vinculo={vinculo}
       arquivando={arquivando?.id ?? null}
       ocupado={ocupado}
       falha={falha}

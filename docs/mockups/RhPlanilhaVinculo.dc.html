@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Planilha de colaboradores de setembro de 2026</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p,ul{margin:0}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sheet{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.sheet th{background:#F0F0ED;color:#161616;font-weight:800;text-align:left;padding:10px 14px;border:1px solid #D4D4CF;white-space:nowrap}
+.sheet td{padding:10px 14px;border:1px solid #E5E5E1;white-space:nowrap;font-weight:600}
+.sheet td.n{color:#5F6368;background:#FAFAF8;text-align:right;width:44px;font-weight:700}
+.sheet th.n{width:44px}
+.tag{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;font-size:12.5px;font-weight:700;border:1px solid transparent}
+.t-adm{background:#E3ECFB;border-color:#C5D6F5;color:#1E4E9C}
+.t-desl{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+</style>
+</helmet>
+<div style="min-height: 100%; padding: 40px 48px; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; align-items: center; gap: 12px">
+<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2"/></svg>
+<h1 style="font-size: 18px; font-weight: 800">dute-rh-colaboradores-2026-09-v2.csv</h1>
+</div>
+<div style="background: #fff; border: 1px solid #E5E5E1; border-radius: 12px; overflow-x: auto">
+<table class="sheet">
+<thead>
+<tr><th class="n" scope="col"></th><th scope="col">Nome</th><th scope="col">CPF</th><th scope="col">Função</th><th scope="col">Admissão</th><th scope="col">Desligamento</th><th scope="col">Situação no mês</th></tr>
+</thead>
+<tbody>
+<tr><td class="n">2</td><td>Bianca Souza</td><td>XXX.XXX.XXX-XX</td><td>Auxiliar administrativa</td><td>08/09/2026</td><td></td><td><span class="tag t-adm">Admissão no mês</span></td></tr>
+<tr><td class="n">3</td><td>Bruno Sales</td><td>XXX.XXX.XXX-XX</td><td>Ajudante</td><td></td><td></td><td>Ativo</td></tr>
+<tr><td class="n">4</td><td>Joana Prado</td><td>XXX.XXX.XXX-XX</td><td>Motorista</td><td>10/06/2024</td><td>31/10/2026</td><td>Ativo</td></tr>
+<tr><td class="n">5</td><td>Lucas Freitas</td><td>XXX.XXX.XXX-XX</td><td>Líder de equipe</td><td>15/01/2023</td><td></td><td>Ativo</td></tr>
+<tr><td class="n">6</td><td>Marina Lopes</td><td>XXX.XXX.XXX-XX</td><td>Auxiliar de montagem</td><td>03/02/2025</td><td></td><td>Ativo</td></tr>
+<tr><td class="n">7</td><td>Rafael Teixeira</td><td>XXX.XXX.XXX-XX</td><td>Montador</td><td></td><td></td><td>Ativo</td></tr>
+<tr><td class="n">8</td><td>Tiago Rocha</td><td>XXX.XXX.XXX-XX</td><td>Montador</td><td>02/03/2024</td><td>19/09/2026</td><td><span class="tag t-desl">Desligamento no mês</span></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

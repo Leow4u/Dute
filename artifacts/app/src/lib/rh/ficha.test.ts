@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { fichaLida, nomeDoRegistro, painelLido, textoDoPrazo, type VencimentoDoRh } from "./ficha";
+import { fichaLida, nomeDoRegistro, painelLido, semAdmissao, textoDoPrazo, textosDoVinculo, type VencimentoDoRh } from "./ficha";
 import { itensDoInicioDoRh, numerosDoRh } from "./inicio";
 
 /**
- * A ficha e o Início do RH na tela (parte 8.2c): a leitura do que as
- * callables devolvem, o nome de cada registro, o prazo como dado e o
- * "Precisa de você", uma linha por pessoa, o vencido primeiro.
+ * A ficha e o Início do RH na tela (partes 8.2c e 8.4b): a leitura do que as
+ * callables devolvem, com as datas do vínculo, o nome de cada registro, o
+ * prazo como dado e o "Precisa de você", uma linha por pessoa, o vencido
+ * primeiro.
  */
 
 const ANA = "col_aaaaaaaaaaaaaaaa";
@@ -42,6 +43,34 @@ describe("a leitura das callables do RH", () => {
     expect(ficha?.registros).toHaveLength(1);
     expect(ficha?.registros[0].arquivo).toEqual({ id: "arq_1", content_type: "application/pdf", tamanho: 2048 });
     expect(fichaLida({ hoje: "2026-10-23", registros: [] })).toBeNull();
+  });
+
+  it("as datas do vínculo: no painel e na ficha, só as legíveis; a ficha leva a edição", () => {
+    const painel = painelLido({
+      hoje: "2026-10-23",
+      colaboradores: [
+        { id: ANA, nome: "Ana Souza", funcao: "Montadora", vinculo: "proprio", ativo: true, admissao: "2025-02-03", desligamento: "2026-10-31" },
+        { id: BRUNO, nome: "Bruno Lima", funcao: "Motorista", vinculo: "proprio", ativo: true, admissao: "03/02/2025" },
+      ],
+      vencimentos: [],
+    })!;
+    expect(painel.colaboradores.map((colaborador) => [colaborador.admissao, colaborador.desligamento])).toEqual([["2025-02-03", "2026-10-31"], [null, null]]);
+
+    const base = { hoje: "2026-10-23", colaborador: { id: ANA, nome: "Ana Souza", funcao: "Montadora", vinculo: "proprio", ativo: true }, registros: [] };
+    expect(fichaLida({ ...base, datas_do_vinculo: { admissao: "2025-02-03", desligamento: null, edicao: 2 } })?.datas_do_vinculo).toEqual({ admissao: "2025-02-03", desligamento: null, edicao: 2 });
+    for (const datas of [null, undefined, { admissao: "2025-02-03", edicao: 0 }, { admissao: "", edicao: 1 }, "lixo"]) {
+      expect(fichaLida({ ...base, datas_do_vinculo: datas })?.datas_do_vinculo).toBeNull();
+    }
+  });
+
+  it("sem admissão é só o próprio; as datas viram os dados da linha", () => {
+    expect(semAdmissao({ vinculo: "proprio", admissao: null })).toBe(true);
+    expect(semAdmissao({ vinculo: "proprio", admissao: "2025-02-03" })).toBe(false);
+    expect(semAdmissao({ vinculo: "terceiro", admissao: null })).toBe(false);
+    expect(semAdmissao({ vinculo: "freelancer", admissao: null })).toBe(false);
+    expect(textosDoVinculo({ admissao: "2025-02-03", desligamento: "2026-10-31" })).toEqual(["Admissão 03/02/2025", "Desligamento 31/10/2026"]);
+    expect(textosDoVinculo({ admissao: "2025-02-03", desligamento: null })).toEqual(["Admissão 03/02/2025"]);
+    expect(textosDoVinculo(null)).toEqual([]);
   });
 
   it("o nome do registro e o prazo como dado", () => {

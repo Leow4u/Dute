@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>RH · Ficha com as datas do vínculo</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+button{font:inherit;color:inherit}
+.ic{width:20px;height:20px;flex:0 0 auto}
+.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:26px 14px 18px;gap:4px;position:relative}
+.sw{display:flex;align-items:center;gap:10px;width:100%;height:44px;margin:0 0 10px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font:800 15px Manrope,sans-serif;cursor:pointer;text-align:left}
+.sw:hover{background:rgba(255,255,255,.11)}
+.sw .ch{margin-left:auto;opacity:.75}
+.swp{position:absolute;left:14px;right:14px;top:150px;background:#fff;color:#161616;border:1px solid #E5E5E1;border-radius:12px;padding:6px;box-shadow:0 14px 36px rgba(0,0,0,.3);z-index:5;display:flex;flex-direction:column;gap:2px}
+.swp a{display:flex;align-items:center;gap:10px;height:42px;padding:0 10px;border-radius:8px;color:#161616;font-weight:700;font-size:14px}
+.swp a:hover{background:#F0F0ED;color:#161616}
+.swp a.on{background:#F0F0ED}
+.swp a.on::after{content:"";width:8px;height:8px;border-radius:50%;background:#E71C23;margin-left:auto}
+.swp .sep{height:1px;background:#E5E5E1;margin:4px 6px}
+.swp a.all{color:#0054CE}.swp a.all:hover{color:#004496}
+.nav{display:flex;align-items:center;gap:12px;height:48px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.72);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.nav .cnt.red{background:#E71C23;color:#fff}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;padding:34px 44px;gap:20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-g{background:transparent;color:#161616}.btn-g:hover{background:#F0F0ED;color:#161616}
+.btn-sm{height:32px;padding:0 12px;font-size:13px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px;overflow:hidden}
+.ch2{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid #E5E5E1}
+.ch2 h2{font-size:15px;font-weight:800}
+.qt{min-width:24px;height:24px;border-radius:999px;background:#F0F0ED;color:#161616;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 8px}
+.muted{color:#5F6368}
+.reg{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 14px;padding:14px 20px;border-top:1px solid #F0F0ED}
+.reg:first-child{border-top:0}
+.reg b{display:block;font-size:15px;font-weight:800}
+.reg span.sub{display:block;font-size:13.5px;font-weight:600;color:#5F6368}
+.acts{grid-column:1 / span 2;display:flex;flex-wrap:wrap;gap:6px}
+.pills{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:flex-start}
+.pill{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;font-size:12.5px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.t-ok{background:#DDF5E4;border-color:#B6E4C4;color:#14602F}
+.t-vencendo{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.t-vencido{background:#FBE3E4;border-color:#F3C2C4;color:#8E1016}
+.t-neutro{background:#F0F0ED;border-color:#E5E5E1;color:#5F6368}
+.hist{display:block;padding:12px 20px;border-top:1px solid #E5E5E1;font-size:13.5px;font-weight:700;color:#5F6368}
+.lbl{display:block;font-size:12px;font-weight:700;color:#5F6368;margin-bottom:6px}
+.inp{display:block;width:100%;height:40px;border:1px solid #D4D4CF;border-radius:8px;background:#fff;padding:0 12px;font:600 14px Manrope,sans-serif;color:#161616}
+.inp:focus{outline:2px solid rgba(0,84,206,.25);border-color:#0054CE}
+.av2{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+</style>
+</helmet>
+<div style="min-height: 100%; display: flex; flex-wrap: wrap">
+<aside class="sb">
+<a href="#" style="display: block; padding: 4px 14px 20px"><img src="/_blob/f2b42f11d4755d20d37b1ba8f3f7b948" alt="Dutelog Soluções Logísticas" style="width: 148px; height: auto; display: block"></a>
+<button type="button" class="sw" aria-haspopup="menu" aria-expanded="{{ openTxt }}" onClick="{{ toggle }}"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M16 10h2M16 14h2M6.2 15a3 3 0 0 1 5.6 0"/></svg>RH<svg class="ic-s ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+<sc-if value="{{ open }}" hint-placeholder-val="{{ false }}">
+<div class="swp" role="menu">
+<a href="#" role="menuitem"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Armazenagem</a>
+<a href="#" role="menuitem"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Comercial</a>
+<a href="#" role="menuitem"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Operação</a>
+<a href="#" role="menuitem"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 17.5v-11"/></svg>Financeiro</a>
+<a class="on" href="#" role="menuitem"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M16 10h2M16 14h2M6.2 15a3 3 0 0 1 5.6 0"/></svg>RH</a>
+<div class="sep"></div>
+<a class="all" href="#" role="menuitem"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Todos os módulos</a>
+</div>
+</sc-if>
+<a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início<span class="cnt red">2</span></a>
+<a class="nav on" href="RhPessoasVinculo.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Pessoas</a>
+<a class="nav" href="RhExportacaoVinculo.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15l3 3 3-3"/></svg>Exportação</a>
+<div style="margin-top: auto; padding: 14px 10px 0; border-top: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 12px"><span class="av2">CD</span><div style="min-width: 0"><div style="font-weight: 700; font-size: 14.5px">Camila Duarte</div><div style="font-size: 12.5px; color: rgba(255,255,255,.55)">RH</div></div></div>
+</aside>
+<div class="main">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px">
+<h1 style="font-size: 30px; font-weight: 800; letter-spacing: -.02em">Marina Lopes</h1>
+<sc-if value="{{ closed }}" hint-placeholder-val="{{ false }}">
+<div style="margin-left: auto; display: flex; gap: 10px"><button type="button" class="btn btn-s" onClick="{{ openForm }}">Datas do vínculo</button><button type="button" class="btn btn-p">Novo registro</button></div>
+</sc-if>
+<p style="width: 100%; font-size: 16px; font-weight: 600; color: #5F6368">Auxiliar de montagem · Própria</p>
+<p style="width: 100%; font-size: 14.5px; font-weight: 700">Admissão 03/02/2025</p>
+</header>
+<div style="display: flex; flex-wrap: wrap-reverse; gap: 20px; align-items: flex-start">
+<div style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<section class="card" aria-labelledby="cat-doc">
+<div class="ch2"><h2 id="cat-doc">Documentos</h2><span class="qt">3</span></div>
+<ul>
+<li class="reg"><span><b>Contrato de trabalho</b><span class="sub">Emitido em 03/02/2025 · sem vencimento</span></span><span class="pills"></span><span class="acts"><button type="button" class="btn btn-s btn-sm">Abrir arquivo</button><button type="button" class="btn btn-g btn-sm">Alterar</button><button type="button" class="btn btn-g btn-sm">Trocar arquivo</button><button type="button" class="btn btn-g btn-sm">Arquivar</button></span></li>
+<li class="reg"><span><b>CTPS</b><span class="sub">Emitido em 03/02/2025 · sem vencimento</span></span><span class="pills"></span><span class="acts"><button type="button" class="btn btn-g btn-sm">Alterar</button><button type="button" class="btn btn-g btn-sm">Anexar arquivo</button><button type="button" class="btn btn-g btn-sm">Arquivar</button></span></li>
+<li class="reg"><span><b>RG</b><span class="sub">Emitido em 14/08/2016 · sem vencimento</span></span><span class="pills"></span><span class="acts"><button type="button" class="btn btn-g btn-sm">Alterar</button><button type="button" class="btn btn-g btn-sm">Anexar arquivo</button><button type="button" class="btn btn-g btn-sm">Arquivar</button></span></li>
+</ul>
+</section>
+<section class="card" aria-labelledby="cat-exa">
+<div class="ch2"><h2 id="cat-exa">Exames</h2><span class="qt">1</span></div>
+<ul>
+<li class="reg"><span><b>ASO periódico</b><span class="sub">Feito em 05/11/2025 · vence em 05/11/2026</span></span><span class="pills"><span class="pill t-ok">Apto</span><span class="pill t-vencendo">Vence em 10 dias</span></span><span class="acts"><button type="button" class="btn btn-s btn-sm">Abrir arquivo</button><button type="button" class="btn btn-g btn-sm">Alterar</button><button type="button" class="btn btn-g btn-sm">Trocar arquivo</button><button type="button" class="btn btn-g btn-sm">Arquivar</button></span></li>
+</ul>
+<span class="hist">Histórico · 1</span>
+</section>
+<section class="card" aria-labelledby="cat-tre">
+<div class="ch2"><h2 id="cat-tre">Treinamentos</h2><span class="qt">2</span></div>
+<ul>
+<li class="reg"><span><b>NR-35 (trabalho em altura)</b><span class="sub">Feito em 20/04/2025 · vence em 20/04/2027</span></span><span class="pills"></span><span class="acts"><button type="button" class="btn btn-g btn-sm">Alterar</button><button type="button" class="btn btn-g btn-sm">Anexar arquivo</button><button type="button" class="btn btn-g btn-sm">Arquivar</button></span></li>
+<li class="reg"><span><b>Integração</b><span class="sub">Feito em 03/02/2025 · sem vencimento</span></span><span class="pills"></span><span class="acts"><button type="button" class="btn btn-g btn-sm">Alterar</button><button type="button" class="btn btn-g btn-sm">Anexar arquivo</button><button type="button" class="btn btn-g btn-sm">Arquivar</button></span></li>
+</ul>
+</section>
+</div>
+<sc-if value="{{ form }}" hint-placeholder-val="{{ true }}">
+<form class="card" aria-labelledby="form-vinculo" style="flex: 1 1 340px; max-width: 384px; padding: 20px; display: flex; flex-direction: column; gap: 16px; overflow: visible">
+<h2 id="form-vinculo" style="font-size: 15px; font-weight: 800">Datas do vínculo</h2>
+<div><label class="lbl" for="vinculo-admissao">Admissão</label><input id="vinculo-admissao" class="inp" type="date" value="2025-02-03" min="1900-01-01" max="2100-12-31"></div>
+<div><label class="lbl" for="vinculo-desligamento">Desligamento</label><input id="vinculo-desligamento" class="inp" type="date" min="1900-01-01" max="2100-12-31"></div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px"><button type="button" class="btn btn-p" onClick="{{ closeForm }}">Salvar</button><button type="button" class="btn btn-s" onClick="{{ closeForm }}">Cancelar</button></div>
+</form>
+</sc-if>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const open = !!(this.state && this.state.open);
+    const form = !(this.state && this.state.closed);
+    return {
+      open,
+      openTxt: open ? 'true' : 'false',
+      toggle: () => this.setState({ open: !open }),
+      form,
+      closed: !form,
+      openForm: () => this.setState({ closed: false }),
+      closeForm: () => this.setState({ closed: true })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { Router } from "wouter";
 
 import { exportacoesLidas } from "@/lib/rh/exportacao";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
@@ -7,7 +8,16 @@ import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import { ExportacaoView, type EstadoDaLista, type PropsDaExportacao } from "./exportacao-view";
 
-/** Exportação do RH (parte 8.3): gerar e baixar a planilha da competência. Sem legenda. Dados sintéticos. */
+/**
+ * Exportação do RH (partes 8.3 e 8.4b): gerar e baixar a planilha da
+ * competência, e quem está sem a data de admissão. Sem legenda. Dados
+ * sintéticos.
+ */
+
+const SEM_ADMISSAO = [
+  { id: "col_bbbbbbbbbbbbbbbb", nome: "Bruno Sales" },
+  { id: "col_cccccccccccccccc", nome: "Rafael Teixeira" },
+];
 
 const EXPORTACOES = exportacoesLidas({
   exportacoes: [
@@ -20,18 +30,21 @@ const ACOES = { mudarCompetencia: () => undefined, gerar: () => undefined, baixa
 
 function render(extra: Partial<PropsDaExportacao> = {}, estado: EstadoDaLista = "pronto") {
   return renderToStaticMarkup(
-    <ExportacaoView
-      estado={estado}
-      exportacoes={EXPORTACOES}
-      grava
-      hoje="2026-10-24"
-      competencia="2026-09"
-      ocupado={false}
-      aviso={null}
-      falha={null}
-      acoes={ACOES}
-      {...extra}
-    />,
+    <Router ssrPath="/rh/exportacao">
+      <ExportacaoView
+        estado={estado}
+        exportacoes={EXPORTACOES}
+        grava
+        semAdmissao={[]}
+        hoje="2026-10-24"
+        competencia="2026-09"
+        ocupado={false}
+        aviso={null}
+        falha={null}
+        acoes={ACOES}
+        {...extra}
+      />
+    </Router>,
   );
 }
 
@@ -58,6 +71,16 @@ describe("Exportação do RH", () => {
     expect(html).toContain('type="month"');
     expect(html).toContain('max="2026-10"');
     expect(html).toContain('aria-label="Baixar exames, Outubro de 2026 · versão 2"');
+  });
+
+  it("o rh vê quem está sem a data de admissão, com o link da ficha, abaixo do Gerar", () => {
+    const html = render({ semAdmissao: SEM_ADMISSAO });
+    expect(textosDaTela(html).slice(0, 8)).toEqual(["Exportação", "Gerar", "Competência", "Gerar exportação", "Sem data de admissão", "2", "Bruno Sales", "Rafael Teixeira"]);
+    expect(html).toContain('href="/rh/ficha?colaborador=col_bbbbbbbbbbbbbbbb"');
+    expect(html).toMatch(/<ul aria-labelledby="sem-admissao"/);
+    // Sem ninguém, a lista não aparece; owner e admin não veem o Gerar nem a lista.
+    expect(textosDaTela(render())).not.toContain("Sem data de admissão");
+    expect(textosDaTela(render({ grava: false, semAdmissao: SEM_ADMISSAO }))).not.toContain("Sem data de admissão");
   });
 
   it("owner e admin só baixam: sem o Gerar", () => {
@@ -103,9 +126,13 @@ describe("Exportação do RH", () => {
       "Carregando...",
       "Nenhuma exportação",
       "Não foi possível carregar as exportações.",
+      "Sem data de admissão",
+      "Bruno Sales",
+      "Rafael Teixeira",
     ];
     for (const html of [
       render(),
+      render({ semAdmissao: SEM_ADMISSAO }),
       render({ grava: false }),
       render({ aviso: "Outubro de 2026: nada mudou desde a versão 2", falha: "Só o RH grava no RH." }),
       render({ exportacoes: [] }),
@@ -119,5 +146,6 @@ describe("Exportação do RH", () => {
   it("acessibilidade: WCAG 2.1 A e AA", async () => {
     expect(await violacoesDeAcessibilidade(render({ aviso: "Setembro de 2026: versão 1 gerada" }))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ grava: false }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ semAdmissao: SEM_ADMISSAO }))).toEqual([]);
   });
 });

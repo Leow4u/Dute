@@ -3,15 +3,16 @@ import { Link } from "wouter";
 
 import { Input } from "@/components/ui/input";
 import { dataBr } from "@/lib/comercial/clientes";
-import { ROTULO_DO_VINCULO, type ColaboradorNoPainel } from "@/lib/rh/ficha";
+import { ROTULO_DO_VINCULO, semAdmissao, temDatasDoVinculo, textosDoVinculo, type ColaboradorNoPainel } from "@/lib/rh/ficha";
 import { hrefDaFicha } from "@/lib/rh/navegacao";
 import { cn } from "@/lib/utils";
 
 import { Contador, Pill, TOM_NEUTRO, TOM_VENCENDO, TOM_VENCIDO, Vazio } from "./pecas";
 
 /**
- * Pessoas (parte 8.2c): quem está ativo no cadastro da Operação, com a ficha
- * resumida, e a ficha de cada um. Sem legenda: só rótulos, dados e ações.
+ * Pessoas (partes 8.2c e 8.4b): quem está ativo no cadastro da Operação, com
+ * a ficha resumida, as datas do vínculo próprio e a ficha de cada um. Sem
+ * legenda: só rótulos, dados e ações.
  */
 
 export type EstadoDaTela = "carregando" | "erro" | "pronto";
@@ -26,6 +27,7 @@ function plural(n: number, um: string, varios: string): string {
 }
 
 function Linha({ colaborador, primeira }: { colaborador: ColaboradorNoPainel; primeira: boolean }) {
+  const datas = temDatasDoVinculo(colaborador) ? textosDoVinculo(colaborador) : [];
   return (
     <li className={cn(!primeira && "border-t border-muted")}>
       <Link
@@ -35,7 +37,7 @@ function Linha({ colaborador, primeira }: { colaborador: ColaboradorNoPainel; pr
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="text-base font-extrabold">{colaborador.nome}</span>
           <span className="text-sm font-semibold text-muted-foreground">
-            {[colaborador.funcao, ROTULO_DO_VINCULO[colaborador.vinculo]].filter(Boolean).join(" · ")}
+            {[colaborador.funcao, ROTULO_DO_VINCULO[colaborador.vinculo], ...datas].filter(Boolean).join(" · ")}
           </span>
           {colaborador.proximo_vencimento ? (
             <span className="text-xs font-semibold text-muted-foreground">Próximo vencimento {dataBr(colaborador.proximo_vencimento)}</span>
@@ -44,6 +46,7 @@ function Linha({ colaborador, primeira }: { colaborador: ColaboradorNoPainel; pr
         <span className="flex flex-wrap items-start justify-end gap-1.5">
           {colaborador.vencidos ? <Pill className={TOM_VENCIDO}>{plural(colaborador.vencidos, "vencido", "vencidos")}</Pill> : null}
           {colaborador.vencendo ? <Pill className={TOM_VENCENDO}>{plural(colaborador.vencendo, "vencendo", "vencendo")}</Pill> : null}
+          {semAdmissao(colaborador) ? <Pill className={TOM_NEUTRO}>Sem admissão</Pill> : null}
           {colaborador.registros ? null : <Pill className={TOM_NEUTRO}>Sem registro</Pill>}
         </span>
       </Link>

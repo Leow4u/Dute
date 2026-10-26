@@ -9,7 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * tentativa depois da falha leva a mesma chave (se a primeira gravou, o
  * servidor repete o resultado); a geração que deu certo e a troca da
  * competência pedem chave nova; a lista é lida de novo depois de gerar; o
- * download baixa a planilha que o servidor montou.
+ * download baixa a planilha que o servidor montou. Quem está sem a data de
+ * admissão sai do painel do RH (parte 8.4b).
  */
 
 const estado = vi.hoisted(() => ({
@@ -50,6 +51,17 @@ vi.mock("@/lib/rh/api", () => ({
       return {
         exportacoes: [
           { id: "exp_2026-09_v1", competencia: "2026-09", versao: 1, exames: 1, colaboradores: 4, gerada_em: "2026-10-05T12:00:00.000Z", gerada_por: "Pessoa rh" },
+        ],
+      };
+    }
+    if (nome === "getRhPanel") {
+      return {
+        hoje: "2026-10-24",
+        vencimentos: [],
+        colaboradores: [
+          { id: "col_aaaaaaaaaaaaaaaa", nome: "Ana Souza", funcao: "Montadora", vinculo: "proprio", ativo: true, registros: 1, vencendo: 0, vencidos: 0, proximo_vencimento: null, admissao: "2025-02-03", desligamento: null },
+          { id: "col_bbbbbbbbbbbbbbbb", nome: "Bruno Sales", funcao: "Ajudante", vinculo: "proprio", ativo: true, registros: 0, vencendo: 0, vencidos: 0, proximo_vencimento: null, admissao: null, desligamento: null },
+          { id: "col_cccccccccccccccc", nome: "Paulo Arantes", funcao: "Montador", vinculo: "freelancer", ativo: true, registros: 0, vencendo: 0, vencidos: 0, proximo_vencimento: null, admissao: null, desligamento: null },
         ],
       };
     }
@@ -157,5 +169,11 @@ describe("a exportação do RH com as callables", () => {
     await clicar("Baixar exames");
     expect(estado.chamadas.filter((chamada) => chamada.nome === "downloadRhExport").map((chamada) => chamada.dados)).toEqual([{ id: "exp_2026-09_v1", arquivo: "exames" }]);
     expect(estado.baixados).toEqual([{ nome: "dute-rh-exames-2026-09-v1.csv", conteudo: "﻿Nome;CPF\r\n" }]);
+  });
+
+  it("quem está sem a data de admissão: só o próprio do painel, com o link da ficha", async () => {
+    await montar();
+    const links = [...container!.querySelectorAll<HTMLAnchorElement>('ul[aria-labelledby="sem-admissao"] a')];
+    expect(links.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([["Bruno Sales", "/rh/ficha?colaborador=col_bbbbbbbbbbbbbbbb"]]);
   });
 });

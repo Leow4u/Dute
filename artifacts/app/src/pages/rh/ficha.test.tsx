@@ -9,7 +9,8 @@ import { Router } from "wouter";
  * A ficha do RH com as callables de mentira (parte 8.2d e a correção da
  * revisão): depois de uma gravação que falha, a ficha é lida de novo, e a
  * próxima tentativa leva a edição nova; com o formulário aberto, as ações das
- * linhas ficam travadas.
+ * linhas ficam travadas. As datas do vínculo (parte 8.4b) gravam com a edição
+ * que a ficha leu, e o formulário fecha depois de gravar.
  */
 
 const COL = "col_aaaaaaaaaaaaaaaa";
@@ -19,6 +20,7 @@ const estado = vi.hoisted(() => ({
   leiturasDaFicha: 0,
   edicao: 1,
   falhar: false,
+  datas: null as null | { admissao: string; desligamento: string | null; edicao: number },
 }));
 
 vi.mock("@/lib/liberacao", async (original) => ({
@@ -60,7 +62,13 @@ vi.mock("@/lib/rh/api", () => ({
             edicao: estado.edicao,
           },
         ],
+        datas_do_vinculo: estado.datas,
       };
+    }
+    if (nome === "saveRhVinculo") {
+      const edicao = (estado.datas?.edicao ?? 0) + 1;
+      estado.datas = { admissao: String(dados.admissao), desligamento: (dados.desligamento as string | null) ?? null, edicao };
+      return { colaborador_id: COL, edicao };
     }
     if (estado.falhar) {
       // Outra pessoa alterou o registro: a edição dele subiu.
@@ -81,6 +89,7 @@ beforeEach(() => {
   estado.leiturasDaFicha = 0;
   estado.edicao = 1;
   estado.falhar = false;
+  estado.datas = null;
   container = document.createElement("div");
   document.body.appendChild(container);
   raiz = createRoot(container);
@@ -150,4 +159,38 @@ describe("a ficha do RH com as callables", () => {
     expect(container!.querySelector<HTMLInputElement>("#registro-data")?.min).toBe("1900-01-01");
     expect(container!.querySelector<HTMLInputElement>("#registro-vencimento")?.max).toBe("2100-12-31");
   });
+
+  it("as datas do vínculo: a primeira gravação vai sem edição, a seguinte com a lida, e o formulário fecha", async () => {
+    await montar();
+    await clicar("Datas do vínculo");
+    const admissao = container!.querySelector<HTMLInputElement>("#vinculo-admissao")!;
+    expect(admissao.value).toBe("");
+    await act(async () => {
+      digitar(admissao, "2025-02-03");
+    });
+    await clicar("Salvar");
+    expect(container!.querySelector("#vinculo-admissao")).toBeNull();
+    expect(container!.textContent).toContain("Admissão 03/02/2025");
+
+    await clicar("Datas do vínculo");
+    expect(container!.querySelector<HTMLInputElement>("#vinculo-admissao")?.value).toBe("2025-02-03");
+    await act(async () => {
+      digitar(container!.querySelector<HTMLInputElement>("#vinculo-desligamento")!, "2026-10-31");
+    });
+    await clicar("Salvar");
+    expect(container!.textContent).toContain("Admissão 03/02/2025 · Desligamento 31/10/2026");
+    const gravacoes = estado.chamadas.filter((chamada) => chamada.nome === "saveRhVinculo").map((chamada) => chamada.dados);
+    expect(gravacoes).toEqual([
+      { idempotency_key: expect.any(String), colaborador_id: COL, expected_edicao: null, admissao: "2025-02-03", desligamento: null },
+      { idempotency_key: expect.any(String), colaborador_id: COL, expected_edicao: 1, admissao: "2025-02-03", desligamento: "2026-10-31" },
+    ]);
+    expect(gravacoes[0].idempotency_key).not.toBe(gravacoes[1].idempotency_key);
+  });
 });
+
+/** O valor no campo controlado do React: o setter nativo e o evento de input. */
+function digitar(campo: HTMLInputElement, valor: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  setter?.call(campo, valor);
+  campo.dispatchEvent(new Event("input", { bubbles: true }));
+}

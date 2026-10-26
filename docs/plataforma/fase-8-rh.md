@@ -756,3 +756,37 @@ Feita em 26/10/2026.
   coordenação desativa antes de o RH gravar o desligamento continua na
   planilha como ativo, e a ficha dele só abre pelo endereço. A pergunta 70
   (plano, seção 13) propõe mostrar essas pessoas em Pessoas.
+
+### Parte 8.4b: as datas do vínculo nas telas
+
+Feita em 26/10/2026, nas telas aprovadas no alinhamento (as fontes em
+`docs/mockups/Rh*Vinculo.dc.html`).
+
+- **A ficha** (`pages/rh/ficha-view.tsx`):
+  - abaixo da função e do vínculo, a linha "Admissão dd/mm/aaaa ·
+    Desligamento dd/mm/aaaa", para quem lê o RH;
+  - o rh vê "Datas do vínculo" ao lado de "Novo registro", só no vínculo
+    próprio. O formulário ao lado abre com as datas lidas e a edição, e
+    grava por `saveRhVinculo`. Com ele aberto, os botões do topo somem e as
+    ações das linhas esperam, como no formulário do registro;
+  - a ficha e o painel são lidos de novo depois de gravar e depois da
+    falha, e a mensagem do servidor aparece como veio. Com a edição velha,
+    o servidor pede para recarregar: fechar e abrir o formulário traz as
+    datas novas, como no registro.
+- **Pessoas:** as datas entram na linha de cada próprio, e "Sem admissão"
+  marca o próprio que ainda não tem a data.
+- **Exportação:** abaixo do Gerar, só para o rh, "Sem data de admissão" com
+  o link da ficha de cada um. A lista sai do painel do RH, o mesmo de Pessoas
+  (os ativos). O "Precisa de você" do Início não muda.
+- **No app, os links** da lista seguem os das outras telas v3 (sublinhados,
+  na cor do texto), não o azul do mockup.
+- **Testes:**
+  - `lib/rh/ficha.test.ts`: as datas legíveis no painel e na ficha, o "Sem
+    admissão" só do próprio e as datas como dados da linha;
+  - `lib/rh/formulario.test.ts`: o pedido da primeira gravação sem edição,
+    a seguinte com a lida e o desligamento vazio como null;
+  - `ficha-view.test.tsx`, `pessoas-view.test.tsx` e
+    `exportacao-view.test.tsx`: os textos, uma só ação primária e o `axe`,
+    com o formulário das datas e a lista "Sem data de admissão";
+  - `ficha.test.tsx` e `exportacao.test.tsx`, com as callables de mentira:
+    as duas gravações das datas, com a edição, e a lista que sai do painel.

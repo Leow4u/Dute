@@ -3,17 +3,18 @@ import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
 import { fichaLida, type FichaDoRh } from "@/lib/rh/ficha";
-import { comCategoria, formularioDoRegistro, formularioNovo } from "@/lib/rh/formulario";
+import { comCategoria, formularioDoRegistro, formularioDoVinculo, formularioNovo } from "@/lib/rh/formulario";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import { FichaView, type AcoesDaFicha, type FichaViewProps } from "./ficha-view";
 
 /**
- * A ficha da pessoa no RH (partes 8.2c e 8.2d): os vigentes de cada
- * categoria, com o resultado do exame e o prazo dentro da janela, e o
- * histórico. Owner e admin só leem e abrem o arquivo; o rh inclui, altera,
- * arquiva e anexa. Sem legenda. Dados sintéticos.
+ * A ficha da pessoa no RH (partes 8.2c, 8.2d e 8.4b): os vigentes de cada
+ * categoria, com o resultado do exame e o prazo dentro da janela, o
+ * histórico e as datas do vínculo. Owner e admin só leem e abrem o arquivo;
+ * o rh inclui, altera, arquiva, anexa e grava as datas. Sem legenda. Dados
+ * sintéticos.
  */
 
 const ANA = "col_aaaaaaaaaaaaaaaa";
@@ -32,6 +33,7 @@ const FICHA = fichaLida({
     registro("reg_4", { categoria: "exame", tipo: "periodico", emitido_em: "2024-11-01", vence_em: "2025-11-01", resultado: "apto_com_restricao", situacao: "substituido", substituido_por: "reg_3" }),
     registro("reg_5", { categoria: "treinamento", tipo: "nr35", emitido_em: "2024-10-01", vence_em: "2026-10-01" }),
   ],
+  datas_do_vinculo: { admissao: "2025-02-03", desligamento: null, edicao: 1 },
 })!;
 
 const NADA: AcoesDaFicha = {
@@ -45,10 +47,14 @@ const NADA: AcoesDaFicha = {
   desistir: () => undefined,
   anexar: () => undefined,
   abrirArquivo: () => undefined,
+  abrirVinculo: () => undefined,
+  editarVinculo: () => undefined,
+  salvarVinculo: () => undefined,
+  fecharVinculo: () => undefined,
 };
 
 function render(extra: Partial<FichaViewProps> = {}, ficha: FichaDoRh | undefined = FICHA) {
-  const props: FichaViewProps = { estado: "pronto", ficha, erro: null, grava: false, formulario: null, arquivando: null, ocupado: false, falha: null, acoes: NADA, ...extra };
+  const props: FichaViewProps = { estado: "pronto", ficha, erro: null, grava: false, formulario: null, vinculo: null, arquivando: null, ocupado: false, falha: null, acoes: NADA, ...extra };
   return renderToStaticMarkup(
     <Router ssrPath="/rh/ficha">
       <FichaView {...props} />
@@ -60,6 +66,7 @@ const PERMITIDOS = [
   "Ficha",
   "Ana Souza",
   "Montadora · Própria",
+  /^Admissão \d{2}\/\d{2}\/\d{4}( · Desligamento \d{2}\/\d{2}\/\d{4})?$/,
   "Inativo",
   "Documentos",
   "Exames",
@@ -102,6 +109,9 @@ const PERMITIDOS = [
   "Salvar",
   "Cancelar",
   "O vencimento vem depois da data do registro.",
+  "Datas do vínculo",
+  "Admissão",
+  "Desligamento",
 ];
 
 describe("a ficha da pessoa no RH", () => {
@@ -109,6 +119,7 @@ describe("a ficha da pessoa no RH", () => {
     expect(textosDaTela(render())).toEqual([
       "Ana Souza",
       "Montadora · Própria",
+      "Admissão 03/02/2025",
       "Documentos",
       "2",
       "RG",
@@ -153,6 +164,33 @@ describe("a ficha da pessoa no RH", () => {
     expect(textosDaTela(render({ grava: false, formulario: formularioNovo("k") }))).not.toContain("Salvar");
   });
 
+  it("as datas do vínculo: o rh abre o formulário ao lado de Novo registro; owner e admin só leem a linha", () => {
+    const html = render({ grava: true });
+    expect(textosDaTela(html).slice(0, 5)).toEqual(["Ana Souza", "Datas do vínculo", "Novo registro", "Montadora · Própria", "Admissão 03/02/2025"]);
+    expect(html.match(/bg-primary text-primary-foreground/g)?.length).toBe(1);
+    expect(textosDaTela(render())).not.toContain("Datas do vínculo");
+
+    const aberto = render({ grava: true, vinculo: formularioDoVinculo("k", { admissao: "2025-02-03", desligamento: "2026-10-31", edicao: 1 }) });
+    expect(textosDaTela(aberto)).toEqual(expect.arrayContaining(["Datas do vínculo", "Admissão", "Desligamento", "Salvar", "Cancelar"]));
+    expect(aberto).not.toMatch(/<button[^>]*>(Novo registro|Datas do vínculo)<\/button>/);
+    expect(aberto).toMatch(/<input[^>]*id="vinculo-admissao"[^>]*value="2025-02-03"/);
+    expect(aberto).toMatch(/<input[^>]*id="vinculo-desligamento"[^>]*min="2025-02-03"[^>]*value="2026-10-31"/);
+    // Com o formulário das datas aberto, as gravações das linhas esperam.
+    expect(aberto).toMatch(/<button[^>]*disabled=""[^>]*>Arquivar<\/button>/);
+    expect(textosDaTela(render({ grava: false, vinculo: formularioDoVinculo("k", null) }))).not.toContain("Desligamento");
+  });
+
+  it("com o desligamento, a linha leva as duas datas; sem as datas, nada; o freelancer e o terceiro não têm as datas", () => {
+    const desligada = { ...FICHA, datas_do_vinculo: { admissao: "2025-02-03", desligamento: "2026-10-31", edicao: 2 } };
+    expect(textosDaTela(render({}, desligada))).toContain("Admissão 03/02/2025 · Desligamento 31/10/2026");
+    expect(textosDaTela(render({ grava: true }, { ...FICHA, datas_do_vinculo: null })).slice(0, 4)).toEqual(["Ana Souza", "Datas do vínculo", "Novo registro", "Montadora · Própria"]);
+    for (const vinculo of ["freelancer", "terceiro"]) {
+      const textos = textosDaTela(render({ grava: true }, { ...desligada, colaborador: { ...FICHA.colaborador, vinculo } }));
+      expect(textos).not.toContain("Datas do vínculo");
+      expect(textos.some((texto) => texto.startsWith("Admissão"))).toBe(false);
+    }
+  });
+
   it("arquivar pede a confirmação na linha; a falha do servidor aparece como veio", () => {
     const html = render({ grava: true, arquivando: "reg_3", falha: "O vencimento vem depois da data do registro." });
     expect(textosDaTela(html)).toEqual(expect.arrayContaining(["Confirmar arquivamento", "Voltar", "O vencimento vem depois da data do registro."]));
@@ -175,6 +213,8 @@ describe("a ficha da pessoa no RH", () => {
       render({ grava: true, formulario: comCategoria(formularioNovo("k"), "exame") }),
       render({ grava: true, formulario: { ...formularioNovo("k"), tipo: "outro" } }),
       render({ grava: true, arquivando: "reg_3" }),
+      render({ grava: true, vinculo: formularioDoVinculo("k", FICHA.datas_do_vinculo) }),
+      render({}, { ...FICHA, datas_do_vinculo: { admissao: "2025-02-03", desligamento: "2026-10-31", edicao: 2 } }),
       render({ estado: "carregando" }, undefined),
     ]) {
       expect(textosForaDaLista(html, PERMITIDOS)).toEqual([]);
@@ -186,5 +226,6 @@ describe("a ficha da pessoa no RH", () => {
     expect(await violacoesDeAcessibilidade(render({ grava: true }))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ grava: true, formulario: comCategoria(formularioNovo("k"), "exame") }))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ grava: true, arquivando: "reg_3" }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ grava: true, vinculo: formularioDoVinculo("k", FICHA.datas_do_vinculo) }))).toEqual([]);
   });
 });
