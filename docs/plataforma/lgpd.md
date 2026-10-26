@@ -492,9 +492,9 @@ muda o sistema: cada mudança entra num PR próprio, depois da decisão.
    saiu:** como recomendado. E-mail e aviso, 90 dias; conversa e uso do
    agente, 12 meses; solicitação e anexo seguem a demanda; conta removida
    há mais de 12 meses: apagar a conta do Auth e anonimizar o perfil.
-   **Os avisos e os e-mails entraram em 26/10/2026** (seção 6, parte 8a), e
-   **a conversa e o uso do agente**, também (parte 8b), ligados só na
-   homologação.
+   **Os avisos e os e-mails entraram em 26/10/2026** (seção 6, parte 8a),
+   **a conversa e o uso do agente** (parte 8b) e **as contas removidas**
+   (parte 8c), também, ligados só na homologação.
 9. **Registro de leitura:** como recomendado, com a tela só para o owner.
    O Cloud Audit Logs de leitura fica para decidir à parte.
 10. **Cópias:** como recomendado. O `dute-btg` e os exports dele até
@@ -522,6 +522,7 @@ guarda só as contagens.
 |---|---|---|---|---|
 | 8a | Aviso do sino (`client_notifications`) e e-mail que já saiu da fila (`email_outbox`: enviado, auditado ou desistido) | 90 dias depois de criados | `runOperacaoRetention` (Operação, 03:20) | homologação |
 | 8b | Mensagem e registro de uso do Agent Dute (`agent_messages`, `agent_usage`) e conversa parada (`agent_conversations`); da conversa em uso, o título e o resumo das mensagens que saíram | 12 meses depois de criados; a conversa, 12 meses depois da última mensagem | `runAgentRetention` (núcleo, 03:40) | homologação |
+| 8c | Conta do Firebase Auth de quem teve o acesso removido; do perfil (`users`), o nome, o e-mail e o motivo; do convite usado, o nome e o e-mail; as rotinas do Agent Dute da pessoa | 12 meses depois de o acesso sair | `runAccountRetention` (WMS, 03:50) | homologação |
 
 ### Parte 8a: os avisos e os e-mails (decisão 8)
 
@@ -615,6 +616,71 @@ do WMS, então a rotina do núcleo cuida das duas conversas.
     - o que não coube na rodada fica para a próxima.
 - **Para desligar:** tirar o projeto da lista e publicar. O que já saiu volta
   só pelo backup, para um banco novo.
+
+### Parte 8c: as contas removidas (decisão 8)
+
+Feita em 26/10/2026. O WMS é dono do acesso (`setUserAccess`), então a rotina
+fica nele.
+
+- **Quando:** 12 meses depois de o acesso sair, pelo `access_changed_at` que o
+  `setUserAccess` grava. O acesso que voltou fica, mesmo com a data antiga; o
+  perfil removido sem a data fica e entra na contagem `sem_data` do log.
+- **O que sai:**
+  - a conta do Firebase Auth (o login);
+  - do perfil (`users/{uid}`), o nome, o e-mail e o motivo da remoção;
+  - do convite que a conta usou (`invites`, com `used_by` igual ao uid), o
+    nome e o e-mail;
+  - as rotinas do Agent Dute da pessoa (`agent_routines`), paradas desde que o
+    acesso saiu. A conversa delas sai pela parte 8b.
+- **O que fica no perfil:** o papel, o cliente, o convite, as datas e quem
+  removeu o acesso, com `anonymized_at`. Os eventos e os registros dos
+  módulos apontam para o uid.
+  - Sem e-mail, o perfil sai da lista de Pessoas e acessos, que ordena pelo
+    e-mail.
+  - O "devolver acesso" do perfil anonimizado é recusado: a pessoa volta só
+    por convite novo, com outro login.
+- **O que fica fora do perfil:**
+  - os eventos ficam como foram gravados. O `user.access_revoked` guarda o
+    nome ou o e-mail e o motivo; os eventos e os recibos do que a pessoa fez
+    guardam o nome e o e-mail dela como autor. São a trilha de quem fez o quê
+    (invariante 2);
+  - os registros dos módulos com o nome de quem fez cada coisa (decisão 4);
+  - `customer_accounts`, o cadastro das contas do cliente, que tem o próprio
+    arquivamento.
+- **O evento:** `user.account_anonymized`, um por conta, com o papel, o dia em
+  que o acesso saiu, se o convite foi limpo e quantas rotinas saíram. Fica
+  sem nome, e-mail nem motivo, e quem grava é a rotina (autor `sistema`).
+- **A ordem:** o login sai primeiro, e o perfil, o convite, as rotinas e o
+  evento, depois, numa transação que relê o perfil.
+  - A falha no Auth deixa a conta para o dia seguinte.
+  - A conta que já não está no Auth conta como apagada.
+  - A conta já anonimizada não volta à rotina.
+- **A rotina:** `runAccountRetention`, todo dia às 03:50 de São Paulo, uma
+  instância por vez, até 100 contas por rodada.
+- **A permissão:** quem apaga o login é a conta de runtime das Functions. O
+  `setUserAccess` já atualiza e revoga com ela, mas o repositório não
+  registra se o papel dela no Auth também apaga. Sem a permissão, o log
+  mostra "login não apagado", a contagem `falhas` sobe e o perfil fica como
+  está.
+- **A liberação:** `ACCOUNT_RETENTION_PROJECTS` em
+  `functions/wms/src/domain/account-retention.ts`, só o `dute-homolog`.
+- **Testes:**
+  - `account-retention.test.ts`: o prazo, a data da remoção (texto ou data do
+    Firestore), quem sai e quem fica, a liberação e a trava da rotina (todo
+    dia, uma instância, a liberação antes de tudo).
+  - `account-retention.integration.test.ts`, no emulador:
+    - o login sai, o perfil e o convite ficam sem nome e e-mail, as rotinas
+      da pessoa saem e o evento não leva nada dela;
+    - o evento da remoção fica como foi gravado;
+    - o removido há menos de 12 meses, o devolvido e o sem data ficam;
+    - a conta fora do Auth também fica anônima, e a falha no Auth deixa o
+      perfil para o dia seguinte;
+    - rodar de novo não apaga nem grava mais nada;
+    - o convite usado por outra conta fica, e o que não coube na rodada fica
+      para a próxima;
+    - o "devolver acesso" da conta anonimizada é recusado.
+- **Para desligar:** tirar o projeto da lista e publicar. O login apagado não
+  volta: a pessoa entra de novo por convite.
 
 ## Dúvidas
 
