@@ -492,8 +492,9 @@ muda o sistema: cada mudança entra num PR próprio, depois da decisão.
    saiu:** como recomendado. E-mail e aviso, 90 dias; conversa e uso do
    agente, 12 meses; solicitação e anexo seguem a demanda; conta removida
    há mais de 12 meses: apagar a conta do Auth e anonimizar o perfil.
-   **Os avisos e os e-mails entraram em 26/10/2026** (seção 6, parte 8a),
-   ligados só na homologação.
+   **Os avisos e os e-mails entraram em 26/10/2026** (seção 6, parte 8a), e
+   **a conversa e o uso do agente**, também (parte 8b), ligados só na
+   homologação.
 9. **Registro de leitura:** como recomendado, com a tela só para o owner.
    O Cloud Audit Logs de leitura fica para decidir à parte.
 10. **Cópias:** como recomendado. O `dute-btg` e os exports dele até
@@ -520,6 +521,7 @@ guarda só as contagens.
 | Parte | O que sai | Prazo | Rotina | Ligada em |
 |---|---|---|---|---|
 | 8a | Aviso do sino (`client_notifications`) e e-mail que já saiu da fila (`email_outbox`: enviado, auditado ou desistido) | 90 dias depois de criados | `runOperacaoRetention` (Operação, 03:20) | homologação |
+| 8b | Mensagem e registro de uso do Agent Dute (`agent_messages`, `agent_usage`) e conversa parada (`agent_conversations`); da conversa em uso, o título e o resumo das mensagens que saíram | 12 meses depois de criados; a conversa, 12 meses depois da última mensagem | `runAgentRetention` (núcleo, 03:40) | homologação |
 
 ### Parte 8a: os avisos e os e-mails (decisão 8)
 
@@ -561,6 +563,58 @@ Feita em 26/10/2026.
 - **Para desligar:** tirar o projeto da lista e publicar. O que já saiu volta
   só pelo backup (PITR de 7 dias e backup diário de 14), para um banco novo
   (`backup-e-recuperacao.md`).
+
+### Parte 8b: o Agent Dute (decisão 8)
+
+Feita em 26/10/2026. As coleções são as mesmas para o agente do núcleo e o
+do WMS, então a rotina do núcleo cuida das duas conversas.
+
+- **O que sai:**
+  - a mensagem (`agent_messages`) e o registro de uso (`agent_usage`) com
+    mais de 12 meses, pelo `created_at`;
+  - a conversa (`agent_conversations`) parada há mais de 12 meses, pelo
+    `updated_at`, que os dois agentes mudam a cada mensagem.
+- **A conversa que continua em uso** perde o que guardava das mensagens que
+  saíram:
+  - o título, que é a primeira pergunta (o app mostra "Conversa" no lugar);
+  - o resumo das mensagens antigas, que o agente refaz com as que ficaram.
+  - O título da conversa da rotina é o nome dela e fica.
+  - A limpeza vem antes de apagar as mensagens: a rodada que parar no meio
+    limpa de novo no dia seguinte.
+- **O que fica:** o evento `agente.retencao_aplicada`, do núcleo, um por
+  cliente, com quantas mensagens, conversas e registros de uso saíram, de
+  antes de qual dia, e quantas conversas em uso foram limpas.
+  - Fica sem texto, título nem e-mail.
+  - Quem grava é a rotina (autor `sistema`), e ela não grava nenhum outro
+    evento do núcleo.
+  - O registro sem `customer_code` sai, mas fica só na contagem do log.
+- **O anexo do chat não sai com a mensagem:** o arquivo sobe na pasta dos
+  anexos das solicitações do cliente e pode ir junto no aviso de envio, então
+  segue a solicitação ("solicitação e anexo seguem a demanda", ainda sem
+  parte).
+- **A rotina:**
+  - `runAgentRetention`, todo dia às 03:40 de São Paulo, uma instância por
+    vez;
+  - lê até 400 de cada coleção por vez, até 10 vezes por rodada, e o resto
+    fica para o dia seguinte.
+- **A liberação:** `RETENCAO_AMBIENTES_LIBERADOS` em
+  `functions/core/src/domain/liberacao.ts`, só o `dute-homolog`, separada da
+  liberação do agente.
+  - A trava das rotinas agendadas (`callables.test.ts`) exige que esta
+    confira a liberação dela antes de tudo.
+- **Testes:**
+  - `retencao-do-agente.test.ts`: o prazo, o id da rodada, a contagem por
+    cliente, o payload só com contagens e o autor do evento (só a rotina).
+  - `retencao-do-agente.integration.test.ts`, no emulador:
+    - sai o velho e fica o recente;
+    - a conversa em uso perde o título e o resumo, e o resto dela fica;
+    - a conversa da rotina fica com o título, e a sem mensagem velha não
+      muda;
+    - o evento de cada cliente tem as contagens, sem texto nem e-mail;
+    - rodar de novo não apaga nem grava mais nada;
+    - o que não coube na rodada fica para a próxima.
+- **Para desligar:** tirar o projeto da lista e publicar. O que já saiu volta
+  só pelo backup, para um banco novo.
 
 ## Dúvidas
 

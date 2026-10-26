@@ -21,6 +21,10 @@ import type { CoreProfile } from "./profile.js";
  * só com o id (e, no playbook, quantos passos e para quem): o texto da
  * anotação pode ter o nome de um contato e fica no documento dela. A anotação
  * é o único evento que o cliente grava: ele a envia pelo cartão da conversa.
+ *
+ * A retenção do agente (LGPD, decisão 8) grava `agente.retencao_aplicada`,
+ * por cliente, só com as contagens. É o único evento sem pessoa: quem grava
+ * é a rotina.
  */
 
 export const CORE_EVENT_SOURCE = "functions_core";
@@ -38,6 +42,7 @@ export const CORE_EVENT_TYPES = [
   "agente.playbook_recusado",
   "agente.playbook_arquivado",
   "agente.playbooks_carregados",
+  "agente.retencao_aplicada",
 ] as const;
 export type CoreEventType = (typeof CORE_EVENT_TYPES)[number];
 
@@ -50,6 +55,21 @@ const decisaoDoAlerta = z.object({ id: alertaId, itens: z.number().int().min(0).
 const decisaoDaAnotacao = z.object({ id: anotacaoId }).strict();
 const conteudoDoPlaybook = z.object({ id: playbookId, passos: z.number().int().min(1).max(20), publico: z.enum(["equipe", "todos"]) }).strict();
 const decisaoDoPlaybook = z.object({ id: playbookId }).strict();
+const quantos = z.number().int().min(0).max(1_000_000);
+/**
+ * Quantas mensagens, conversas e registros de uso do cliente saíram, de antes
+ * de qual dia, e quantas conversas em uso perderam o título e o resumo.
+ */
+const retencaoDoAgente = z
+  .object({
+    id: z.string().regex(/^ret_\d{8}T\d{6}$/, "Retenção inválida."),
+    antes_de: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    mensagens: quantos,
+    conversas: quantos,
+    usos: quantos,
+    conversas_limpas: quantos,
+  })
+  .strict();
 
 export const CORE_EVENT_PAYLOADS = {
   "estoque_parado.aprovado": decisaoDoAlerta,
@@ -64,6 +84,7 @@ export const CORE_EVENT_PAYLOADS = {
   "agente.playbook_recusado": decisaoDoPlaybook,
   "agente.playbook_arquivado": decisaoDoPlaybook,
   "agente.playbooks_carregados": z.object({ id: playbookId, ids: z.array(playbookId).min(1).max(20) }).strict(),
+  "agente.retencao_aplicada": retencaoDoAgente,
 } as const satisfies Record<CoreEventType, z.ZodTypeAny>;
 
 const TEXTO: Record<CoreEventType, { title: string; description: string }> = {
@@ -79,6 +100,7 @@ const TEXTO: Record<CoreEventType, { title: string; description: string }> = {
   "agente.playbook_recusado": { title: "Playbook do Agent Dute recusado", description: "O playbook não vale." },
   "agente.playbook_arquivado": { title: "Playbook do Agent Dute arquivado", description: "O playbook deixa de valer." },
   "agente.playbooks_carregados": { title: "Playbooks iniciais do Agent Dute carregados", description: "Os playbooks iniciais aguardam a aprovação da coordenação." },
+  "agente.retencao_aplicada": { title: "Retenção do Agent Dute", description: "As conversas, as mensagens e o uso do agente com mais de 12 meses saíram, e a conversa em uso perdeu o título e o resumo delas; ficam as contagens." },
 };
 
 const TIPO_DA_ENTIDADE: Record<CoreEventType, string> = {
@@ -94,16 +116,23 @@ const TIPO_DA_ENTIDADE: Record<CoreEventType, string> = {
   "agente.playbook_recusado": "playbook_do_agente",
   "agente.playbook_arquivado": "playbook_do_agente",
   "agente.playbooks_carregados": "playbook_do_agente",
+  "agente.retencao_aplicada": "retencao_do_agente",
 };
 
 /** O único evento que o cliente grava: a anotação que ele envia pelo cartão. */
 const EVENTOS_DO_CLIENTE: readonly CoreEventType[] = ["agente.anotacao_sugerida"];
 
+/** O único evento que a rotina grava, sem pessoa: a retenção do agente. */
+const EVENTOS_DA_ROTINA: readonly CoreEventType[] = ["agente.retencao_aplicada"];
+
+/** Quem grava o evento da rotina. */
+export type CoreSystemActor = { uid: string; role: "sistema"; name: string };
+
 export type CoreEventInput<T extends CoreEventType> = {
   type: T;
   payload: z.input<(typeof CORE_EVENT_PAYLOADS)[T]>;
   customer_code: string;
-  actor: CoreProfile;
+  actor: CoreProfile | CoreSystemActor;
   occurred_at: string;
   /** O que distingue dois eventos do mesmo tipo e da mesma entidade (a edição do playbook). */
   chave?: string;
@@ -117,6 +146,7 @@ export function coreEventId(type: CoreEventType, entityId: string, chave?: strin
 export function buildCoreEvent<T extends CoreEventType>(input: CoreEventInput<T>) {
   if (!(CORE_EVENT_TYPES as readonly string[]).includes(input.type)) throw new HttpsError("internal", `Tipo de evento desconhecido: ${String(input.type)}.`);
   if (input.actor.role === "cliente" && !EVENTOS_DO_CLIENTE.includes(input.type)) throw new HttpsError("permission-denied", "Evento do núcleo é sempre de alguém da equipe.");
+  if ((input.actor.role === "sistema") !== EVENTOS_DA_ROTINA.includes(input.type)) throw new HttpsError("internal", `Evento ${input.type} com o autor errado.`);
   const payload = CORE_EVENT_PAYLOADS[input.type].safeParse(input.payload);
   if (!payload.success) throw new HttpsError("internal", `Evento ${input.type} com payload inválido.`);
   const customerCode = String(input.customer_code ?? "").trim();

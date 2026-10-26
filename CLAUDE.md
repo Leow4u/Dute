@@ -413,7 +413,8 @@ removidas justamente por induzirem a erro.
   26/10). A retenção roda por codebase, cada uma no que é dela, com a
   liberação própria (`RETENCAO_AMBIENTES_LIBERADOS`), primeiro na
   homologação; hoje, a dos avisos e e-mails da Operação
-  (`runOperacaoRetention`, seção 6 do mesmo documento).
+  (`runOperacaoRetention`) e a do Agent Dute, no núcleo
+  (`runAgentRetention`), na seção 6 do mesmo documento.
 
 ## A auditoria de código está parcialmente vencida
 
