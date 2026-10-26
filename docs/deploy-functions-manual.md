@@ -163,7 +163,8 @@ gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.serv
 no bucket padrão é a retenção das fotos da OS (`runOperacaoRetention`, LGPD,
 decisão 2, `docs/plataforma/lgpd.md`, seção 6). O RH também apaga ali o
 arquivo que o anexo recusa (parte 8.2b). Sem a permissão, a retenção para na
-primeira recusa e o log mostra `sem_permissao: true`. Dar o papel é decisão
+primeira recusa e o log mostra `sem_permissao: true`; o arquivo recusado do
+RH fica no bucket, fechado ao navegador, e a recusa mostra o motivo. Dar o papel é decisão
 do Leonardo, no bucket e não no projeto, em cada ambiente:
 
 ```powershell

@@ -813,3 +813,19 @@ commit `9bbd247`, run 1097, das 01:55 às 02:07 UTC.
   Reverter também o PR 472 volta a planilha de antes; a versão gerada com
   as colunas novas precisa ser gerada de novo depois. As datas gravadas
   ficam em `vinculos`, no `dute-rh`.
+
+### Correção: o anexo recusado mostra o motivo
+
+Feita em 26/10/2026. O anexo que recusa o arquivo (outro tipo, vazio ou
+grande demais) apaga o arquivo do bucket antes de recusar. Sem a permissão
+de apagar no bucket (`storage.objects.delete`, que a conta de runtime da
+produção não tem; a da homologação tem desde 26/10/2026), o erro da limpeza
+tomava o lugar da recusa: a pessoa via um erro genérico em vez do motivo.
+
+- **A correção:** a limpeza não trava a recusa (`attachRhFileFor`). Se não
+  apagar, o arquivo fica no caminho do registro, fechado ao navegador como
+  todo `rh/**` (`storage.rules`), o log da function registra, e a recusa
+  mostra o motivo.
+- **Teste:** `arquivos.integration.test.ts`, com um armazém que não
+  consegue apagar: a recusa sai com o motivo, o arquivo fica e o registro
+  não muda.
