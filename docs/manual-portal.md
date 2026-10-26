@@ -194,7 +194,7 @@ Abre pelo "Comprovante" da OS concluída ou pelo aviso "OS … concluída". É o
 papel A4 "Comprovante de execução", sem valor: o número, o serviço e
 "Concluída em"; "Cliente" e "Demanda"; "Data e janela" e "Motorista e
 veículo"; "Origem" e "Destino"; os "Itens" com o "Feito"; o "Recebimento",
-com a assinatura, o nome, o cargo e o documento, ou "Sem aceite no local"; as
+com a assinatura, o nome e o cargo, ou "Sem aceite no local"; as
 "Fotos do final". "Baixar PDF" usa a impressão do navegador e leva só o
 papel. A OS concluída antes de a conclusão listar as fotos do final sai sem
 elas; a não concluída diz "A OS … ainda não tem comprovante."

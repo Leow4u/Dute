@@ -85,7 +85,6 @@ export function CampoConcluirView({
   const [aceite, setAceite] = useState<AceiteNoCampo>("assinatura");
   const [nome, setNome] = useState(() => (ficha ? responsavelSugerido(ficha) : ""));
   const [cargo, setCargo] = useState("");
-  const [documento, setDocumento] = useState("");
   const [motivos, setMotivos] = useState<Record<string, string>>({});
   const [assinatura, setAssinatura] = useState<Blob | null>(null);
   const [limpar, setLimpar] = useState(0);
@@ -166,7 +165,7 @@ export function CampoConcluirView({
   const destino = ficha.locais.destino ?? ficha.locais.origem;
   const ondeTermina = destino ? [destino.endereco ?? destino.nome, destino.complemento].filter(Boolean).join(" · ") : null;
   const totalDoFinal = final.gravadas.length + final.guardadas.length;
-  const formulario: FormularioDaConclusao = { aceite, nome, cargo, documento, motivos };
+  const formulario: FormularioDaConclusao = { aceite, nome, cargo, motivos };
   const problemas = problemasDaConclusao(formulario, itens, totalDoFinal, Boolean(assinatura));
   const semResponsavel = aceite === "sem_aceite";
 
@@ -311,15 +310,9 @@ export function CampoConcluirView({
         </div>
         {semResponsavel ? null : (
           <>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor={`${id}-cargo`}>Cargo</Label>
-                <Input id={`${id}-cargo`} className="h-11 text-base" autoComplete="off" value={cargo} onChange={(event) => setCargo(event.target.value)} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor={`${id}-documento`}>CPF ou RG</Label>
-                <Input id={`${id}-documento`} className="h-11 text-base" autoComplete="off" inputMode="numeric" value={documento} onChange={(event) => setDocumento(event.target.value)} />
-              </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={`${id}-cargo`}>Cargo</Label>
+              <Input id={`${id}-cargo`} className="h-11 text-base" autoComplete="off" value={cargo} onChange={(event) => setCargo(event.target.value)} />
             </div>
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">

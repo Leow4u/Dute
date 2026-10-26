@@ -267,7 +267,7 @@ describe("OS", () => {
       "Em revisão",
       "Conclusão",
       "Assinada 17:52 por Renata Campos",
-      "Facilities · doc. 12.345.678-9",
+      "Facilities",
       "Carlos Silva · celular",
       "Montagem de mesa de trabalho · 58 de 60",
       "2 mesas com pé quebrado",
@@ -277,10 +277,12 @@ describe("OS", () => {
     }
     expect(html).toContain('src="https://example.test/assinatura.png"');
     expect(html).not.toContain("R$");
+    // O documento que a OS antiga gravou não aparece (decisão 3 da LGPD).
+    expect(html).not.toContain("12.345.678-9");
   });
 
   it("concluída sem aceite no local: quem recebeu, sem assinatura", () => {
-    const sem = { ...CONCLUIDA, conclusao: { ...CONCLUIDA.conclusao!, aceite: "sem_aceite" as const, assinatura: null, responsavel: { nome: "Sr. Almeida", cargo: null, documento: null } } };
+    const sem = { ...CONCLUIDA, conclusao: { ...CONCLUIDA.conclusao!, aceite: "sem_aceite" as const, assinatura: null, responsavel: { nome: "Sr. Almeida", cargo: null } } };
     const textos = textosDaTela(render({ ficha: sem }));
     expect(textos).toContain("Sem aceite no local · 17:52 · recebido por Sr. Almeida");
     expect(textos).toContain("OS concluída sem aceite no local");

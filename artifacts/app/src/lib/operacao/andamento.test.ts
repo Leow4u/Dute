@@ -65,7 +65,6 @@ describe("o formulário", () => {
       aceite: "assinatura",
       nome: "",
       cargo: "",
-      documento: "",
       motivos: {},
     });
     expect(etapasPossiveis(FICHA)).toEqual(["saida_origem", "chegada_destino", "montagem", "fim"]);
@@ -174,7 +173,6 @@ describe("a conclusão pelo escritório (parte 3.9c)", () => {
     hora: "14:10",
     nome: " Renata Campos ",
     cargo: "Facilities",
-    documento: "12.345.678-9",
     motivos: { ln_1: " Cadeiras do 5º andar ", ln_2: "Mesas para a próxima OS" },
   };
 
@@ -192,7 +190,8 @@ describe("a conclusão pelo escritório (parte 3.9c)", () => {
           numero: "10045-01",
           instante: "2026-10-22T14:10-03:00",
           aceite: "assinatura",
-          responsavel: { nome: "Renata Campos", cargo: "Facilities", documento: "12.345.678-9" },
+          // Sem o número do documento (decisão 3 da LGPD).
+          responsavel: { nome: "Renata Campos", cargo: "Facilities" },
           assinatura: "as_0123456789abcdef.jpg",
           diferencas: [
             { linha: "ln_1", motivo: "Cadeiras do 5º andar" },

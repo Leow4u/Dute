@@ -66,7 +66,6 @@ const FORMULARIO: FormularioDaConclusao = {
   aceite: "assinatura",
   nome: " Renata Campos ",
   cargo: "Facilities",
-  documento: "12.345.678-9",
   motivos: { ln_2: " 2 mesas com pé quebrado " },
 };
 
@@ -156,7 +155,8 @@ describe("o registro da conclusão", () => {
         numero: "10211-01",
         instante: "2026-10-20T20:50:00.000Z",
         aceite: "assinatura",
-        responsavel: { nome: "Renata Campos", cargo: "Facilities", documento: "12.345.678-9" },
+        // Sem o número do documento (decisão 3 da LGPD).
+        responsavel: { nome: "Renata Campos", cargo: "Facilities" },
         assinatura: "as_0123456789abcdef.png",
         diferencas: [{ linha: "ln_2", motivo: "2 mesas com pé quebrado" }],
       },

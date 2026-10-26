@@ -115,7 +115,9 @@ describe("OS impressa", () => {
     const html = render(CONCLUIDA, "Em revisão", "https://example.test/assinatura.png");
     const textos = textosDaTela(html);
     expect(textos).toContain("58");
-    expect(textos).toContain("Renata Campos · Facilities · doc. 12.345.678-9 · 17:52");
+    // O documento que a OS antiga gravou não aparece (decisão 3 da LGPD).
+    expect(textos).toContain("Renata Campos · Facilities · 17:52");
+    expect(textos.join(" ")).not.toContain("12.345.678-9");
     expect(html).toContain('src="https://example.test/assinatura.png"');
     expect(html).toContain('alt="Assinatura de Renata Campos"');
   });

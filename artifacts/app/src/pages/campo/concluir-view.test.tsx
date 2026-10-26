@@ -131,7 +131,6 @@ describe("Concluir OS no celular", () => {
       "Sem responsável no local",
       "Nome",
       "Cargo",
-      "CPF ou RG",
       "Aceite dos itens executados",
       "Limpar",
       "Assinar aqui",
@@ -149,7 +148,7 @@ describe("Concluir OS no celular", () => {
         /^(OS 10211-01|Concluir OS 10211-01|Itaú Unibanco · Demanda 10211|Destino|Torre B · 12º andar|Montagem|13:00)$/,
         /^(Itens executados|Corrigir|Cadeira Flexform|Mesa de trabalho|\d\.\d{2} · un|\d+|de \d+|−2|completo|\+10 incluídas em campo · Carlos Silva · 09:32|Motivo da diferença)$/,
         /^(Fotos do final · 1|1 na OS|17:46|Tirar foto)$/,
-        /^(Responsável do cliente|Sem responsável no local|Nome|Cargo|CPF ou RG|Aceite dos itens executados|Limpar|Assinar aqui|Concluir com assinatura)$/,
+        /^(Responsável do cliente|Sem responsável no local|Nome|Cargo|Aceite dos itens executados|Limpar|Assinar aqui|Concluir com assinatura)$/,
       ]),
     ).toEqual([]);
   });

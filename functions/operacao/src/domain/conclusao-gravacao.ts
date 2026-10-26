@@ -19,7 +19,7 @@ import type { OperacaoProfile } from "./profile.js";
  * transação; a OS, as etapas, os itens e as fotos, dentro dela. A OS vai
  * para Em revisão com a conclusão e, quando faltava, a etapa Fim. Eventos:
  * `os.step_recorded` (o Fim registrado aqui), `os.completed` e o aceite,
- * `os.signed` ou `os.completed_without_acceptance`. O nome e o documento do
+ * `os.signed` ou `os.completed_without_acceptance`. O nome e o cargo do
  * responsável ficam só na OS.
  *
  * A OS de volta da entrega do WMS (`retorno_ao_armazem`, parte 4.5d) marca,

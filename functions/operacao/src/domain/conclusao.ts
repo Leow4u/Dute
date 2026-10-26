@@ -26,7 +26,8 @@ import { deMilesimos, emMilesimos, type OsGravada } from "./os.js";
 /**
  * A conclusão da OS (docs/plataforma/fase-3-operacao.md, parte 3.9a): o fim
  * no local, com o aceite do cliente. Com assinatura, o responsável do cliente
- * (nome, cargo e documento) assina no celular e a imagem sobe ao Storage em
+ * (nome e cargo; o número do documento não se pede nem se grava desde a
+ * decisão 3 da LGPD) assina no celular e a imagem sobe ao Storage em
  * `os/{numero}/assinatura/as_<16 hex>.png` antes da conclusão. Sem
  * responsável, a OS conclui "sem aceite no local", com o nome de quem
  * recebeu, e o aceite vem pela validação do cliente no Comercial (resposta 4).
@@ -46,7 +47,7 @@ export const MAX_MOTIVO_DA_DIFERENCA = 300;
 
 const ARQUIVO_DA_ASSINATURA = /^as_[a-f0-9]{16}\.(jpg|png|webp)$/;
 
-export type ResponsavelDoCliente = { nome: string; cargo: string | null; documento: string | null };
+export type ResponsavelDoCliente = { nome: string; cargo: string | null };
 
 /** O item feito a menos que o previsto, com o motivo dito no local. */
 export type DiferencaNaConclusao = { linha: string; previsto: string; executado: string; motivo: string };
@@ -84,9 +85,11 @@ const Concluir = z
       .object({
         nome: z.string().trim().min(2, "Informe o nome do responsável.").max(120, "Use até 120 caracteres no nome."),
         cargo: opcional(z.string().trim().min(1).max(80, "Use até 80 caracteres no cargo.")),
-        documento: opcional(z.string().trim().min(3, "Documento inválido.").max(30, "Use até 30 caracteres no documento.")),
+        // O app de antes da decisão 3 da LGPD, e a fila do celular, ainda podem mandar o documento: aceito e não gravado.
+        documento: z.unknown().optional(),
       })
-      .strict(),
+      .strict()
+      .transform(({ nome, cargo }): ResponsavelDoCliente => ({ nome, cargo })),
     assinatura: opcional(z.string().trim().regex(ARQUIVO_DA_ASSINATURA, "Arquivo da assinatura inválido.")),
     diferencas: z
       .array(
@@ -235,7 +238,7 @@ export function concluirOs(
   const conclusao: ConclusaoDaOs = {
     ...registro,
     aceite: pedido.aceite,
-    responsavel: { nome: pedido.responsavel.nome, cargo: pedido.responsavel.cargo, documento: pedido.responsavel.documento },
+    responsavel: { nome: pedido.responsavel.nome, cargo: pedido.responsavel.cargo },
     assinatura,
     diferencas,
     arquivos_do_final: doFinal.map((foto) => arquivoDaFoto(foto.caminho)),
@@ -262,7 +265,8 @@ export function conclusaoLida(data: Record<string, unknown>): ConclusaoDaOs | nu
   return {
     ...registro,
     aceite: aceite as AceiteDaConclusao,
-    responsavel: { nome: texto(responsavel.nome), cargo: texto(responsavel.cargo) || null, documento: texto(responsavel.documento) || null },
+    // O documento que a OS concluída antes da decisão 3 da LGPD gravou não se lê.
+    responsavel: { nome: texto(responsavel.nome), cargo: texto(responsavel.cargo) || null },
     assinatura: texto(conclusao.assinatura) || null,
     diferencas: diferencas.flatMap((cru): DiferencaNaConclusao[] => {
       if (!cru || typeof cru !== "object") return [];

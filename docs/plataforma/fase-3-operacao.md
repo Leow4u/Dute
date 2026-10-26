@@ -1849,3 +1849,29 @@ agendamento).
     endereço e o link de ligar;
   - `campo-view.test.tsx`: os textos, o `tel:` e o Maps, o local antes das
     etapas, a trava contra legenda e o `axe`.
+
+### Decisão 3 da LGPD: a conclusão sem o número do documento
+
+Feita em 26/10/2026, com o canvas "Telas das decisões de 26/10" (item 5).
+O responsável do cliente que assina é o nome, o cargo e a assinatura; o
+"CPF ou RG" sai da conclusão.
+
+- **Os formulários:** a conclusão no celular (`pages/campo/concluir-view.tsx`,
+  `lib/campo/concluir.ts`) e a do Registrar andamento no escritório
+  (`pages/operacao/andamento-view.tsx`, `lib/operacao/andamento.ts`) não têm
+  mais o campo, e o pedido não leva o número.
+- **O servidor** (`domain/conclusao.ts`): o pedido ainda aceita o
+  `responsavel.documento`, que o app antigo e a fila do celular podem
+  mandar, e não o grava; a leitura da conclusão também não o traz.
+- **O que já estava gravado** fica no documento da OS e não aparece: a ficha
+  da OS (`conclusaoNaFicha`), a OS impressa (`os-documento.ts`) e o
+  comprovante do portal, com o PDF (`lib/portal/comprovante.ts`), mostram o
+  nome e o cargo.
+- **Testes:**
+  - `conclusao.test.ts` e `conclusao.integration.test.ts`: o pedido com o
+    documento conclui e grava só o nome e o cargo;
+  - no app, `concluir.test.ts` e `andamento.test.ts` (o pedido sem o
+    número), `concluir-view.test.tsx` e `andamento-view.test.tsx` (os
+    textos, sem "CPF ou RG") e, com a OS antiga que gravou o número,
+    `os-view.test.tsx`, `os-impressao-view.test.tsx`, `comprovante.test.ts`
+    e `comprovante-view.test.tsx` (o número não aparece).

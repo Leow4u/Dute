@@ -94,14 +94,15 @@ describe("o comprovante da OS no portal", () => {
       "160",
       "Recebimento",
       "Renata Campos",
-      "Facilities · doc. 12.345.678-9",
+      "Facilities",
       "Fotos do final",
       "app.dutelog.com.br",
       "OS 10045-01 · via do cliente",
     ]);
     expect(html).toMatch(/<img src="https:\/\/exemplo.invalid\/assinatura.png" alt="Assinatura de Renata Campos"/);
     expect(html).toMatch(/<img src="https:\/\/exemplo.invalid\/foto.jpg" alt="Foto do final 1"/);
-    expect(html).not.toMatch(/Conferido|Ana Lima|Previsto|R\$|valor|preço/);
+    // Sem o documento que a OS antiga gravou (decisão 3 da LGPD).
+    expect(html).not.toMatch(/Conferido|Ana Lima|Previsto|R\$|valor|preço|12\.345\.678-9/);
     // A barra não sai no PDF; o papel é a área impressa.
     expect(html).toMatch(/<div class="no-print [^"]*"><a [^>]*href="\/portal\/servicos\?os=10045-01"/);
     expect(html).toMatch(/<article aria-label="Comprovante da OS 10045-01" class="print-area /);

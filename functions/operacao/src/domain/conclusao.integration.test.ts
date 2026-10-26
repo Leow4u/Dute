@@ -135,7 +135,8 @@ describe("concluir a OS", () => {
       registrado_por: { uid: "uid-ana", role: "campo" },
       registrado_em: "2026-10-22T21:00:00.000Z",
       aceite: "assinatura",
-      responsavel: { nome: "Renata Campos", cargo: "Facilities", documento: "12.345.678-9" },
+      // O documento que o app antigo manda não se grava (decisão 3 da LGPD).
+      responsavel: { nome: "Renata Campos", cargo: "Facilities" },
       assinatura: "os/10045-01/assinatura/as_0123456789abcdef.png",
       diferencas: [{ linha: "ln_2", previsto: "60", executado: "58", motivo: "2 mesas com pé quebrado" }],
       arquivos_do_final: ["ft_f000000000000001.jpg"],

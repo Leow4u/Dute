@@ -72,7 +72,7 @@ export function comprovanteDaOs(ficha: FichaDaOs, cliente: string): ComprovanteD
     ? [dataBr(ficha.janela.data), ficha.janela.inicio ? (ficha.janela.fim ? `${ficha.janela.inicio}–${ficha.janela.fim}` : ficha.janela.inicio) : null].filter(Boolean).join(" · ")
     : null;
   const assinada = conclusao.aceite === "assinatura";
-  const { cargo, documento } = conclusao.responsavel;
+  const { cargo } = conclusao.responsavel;
   return {
     numero: ficha.numero,
     demanda: ficha.demanda,
@@ -91,7 +91,7 @@ export function comprovanteDaOs(ficha: FichaDaOs, cliente: string): ComprovanteD
     })),
     aceite: {
       nome: conclusao.responsavel.nome || null,
-      detalhe: assinada ? [cargo, documento ? `doc. ${documento}` : null].filter(Boolean).join(" · ") || null : "Sem aceite no local",
+      detalhe: assinada ? cargo : "Sem aceite no local",
       assinatura: assinada ? conclusao.assinatura : null,
     },
     fotos: conclusao.arquivosDoFinal.map((arquivo) => `os/${ficha.numero}/fotos/${arquivo}`),

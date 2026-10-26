@@ -105,7 +105,6 @@ export type FormularioDaConclusao = {
   aceite: AceiteNoCampo;
   nome: string;
   cargo: string;
-  documento: string;
   /** O motivo por linha a menos. */
   motivos: Readonly<Record<string, string>>;
 };
@@ -143,7 +142,6 @@ export function registroDeConclusao(
   agora: Date,
 ): NovoRegistro {
   const cargo = formulario.cargo.trim();
-  const documento = formulario.documento.trim();
   const comAssinatura = formulario.aceite === "assinatura" && assinatura;
   return {
     callable: "completeServiceOrder",
@@ -154,7 +152,6 @@ export function registroDeConclusao(
       responsavel: {
         nome: formulario.nome.trim(),
         ...(formulario.aceite === "assinatura" && cargo ? { cargo } : {}),
-        ...(formulario.aceite === "assinatura" && documento ? { documento } : {}),
       },
       ...(comAssinatura ? { assinatura: assinatura.nome } : {}),
       diferencas: itens.filter((item) => item.falta > 0).map((item) => ({ linha: item.id, motivo: (formulario.motivos[item.id] ?? "").trim() })),
