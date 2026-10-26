@@ -190,6 +190,11 @@ export function textoDaArmazenagemNaNf(competencia: string, valorCents: number):
   return `Armazenagem ${rotuloDaCompetencia(competencia)} · ${formatarReais(valorCents)}`;
 }
 
+/** "Equipe fixa · Medição 10/2026 · R$ 12.000,00": as linhas sem demanda da medição que entrou na NF (pergunta 64). */
+export function textoDaMedicaoNaNf(servico: string, competencia: string, valorCents: number): string {
+  return `${servico} · Medição ${rotuloDaCompetencia(competencia)} · ${formatarReais(valorCents)}`;
+}
+
 /** Quanto falta pagar nas NFs abertas. */
 export function aPagar(nfs: readonly NfDoPortal[], hoje: string): number {
   return nfs.filter((nf) => situacaoDaCobranca(nf.fatura, hoje) !== "paga").reduce((soma, nf) => soma + nf.fatura.saldoCents, 0);

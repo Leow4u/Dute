@@ -47,6 +47,19 @@ export type DemandaDaNf = { numero: string; valorCents: number; rv: number | nul
 /** A competência de armazenagem do WMS que entrou na NF (Fase 7, parte 7.2a), com o valor que o WMS emitiu. */
 export type ArmazenagemDaNf = { competencia: string; valorCents: number };
 
+/**
+ * A medição aprovada que entrou na NF (pergunta 64): o total aprovado, as
+ * demandas dela (que estão em `demandas`) e as linhas sem demanda pelo
+ * serviço. O portal não leva o id (`medicaoId` null).
+ */
+export type MedicaoDaNf = {
+  medicaoId: string | null;
+  competencia: string;
+  valorCents: number;
+  demandas: string[];
+  semDemanda: Array<{ servico: string; valorCents: number }>;
+};
+
 export type FaturaDoFinanceiro = {
   id: string;
   customerCode: string;
@@ -61,6 +74,7 @@ export type FaturaDoFinanceiro = {
   observacao: string | null;
   demandas: DemandaDaNf[];
   armazenagem: ArmazenagemDaNf[];
+  medicoes: MedicaoDaNf[];
   enviada: { em: string; meio: MeioDeEnvio } | null;
   pagaEm: string | null;
   cancelada: { em: string; motivo: string } | null;
@@ -112,6 +126,23 @@ export function faturaDoFinanceiro(id: string, dados: Registro): FaturaDoFinance
       const linha = objeto(item);
       const competencia = texto(linha?.competencia);
       return /^\d{4}-\d{2}$/.test(competencia) ? [{ competencia, valorCents: centavos(linha?.valor_cents) }] : [];
+    }),
+    medicoes: (Array.isArray(dados.medicoes) ? dados.medicoes : []).flatMap((item) => {
+      const medicao = objeto(item);
+      const competencia = texto(medicao?.competencia);
+      if (!/^\d{4}-\d{2}$/.test(competencia)) return [];
+      return [
+        {
+          medicaoId: texto(medicao?.medicao_id) || null,
+          competencia,
+          valorCents: centavos(medicao?.valor_cents),
+          demandas: (Array.isArray(medicao?.demandas) ? medicao.demandas : []).filter((numero): numero is string => typeof numero === "string" && numero.length > 0),
+          semDemanda: (Array.isArray(medicao?.sem_demanda) ? medicao.sem_demanda : []).flatMap((linha) => {
+            const servico = texto(objeto(linha)?.servico);
+            return servico ? [{ servico, valorCents: centavos(objeto(linha)?.valor_cents) }] : [];
+          }),
+        },
+      ];
     }),
     enviada: enviada && (MEIOS_DE_ENVIO as readonly string[]).includes(meio) ? { em: texto(enviada.em), meio: meio as MeioDeEnvio } : null,
     pagaEm: texto(dados.paga_em) || null,

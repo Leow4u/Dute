@@ -9,6 +9,8 @@ import {
   formInicial,
   linhaAFaturar,
   linhaDaArmazenagem,
+  linhaDaMedicao,
+  medicaoDoFinanceiro,
   type LinhaAFaturar,
 } from "@/lib/financeiro/a-faturar";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
@@ -48,7 +50,8 @@ const LINHAS: LinhaAFaturar[] = [
   linha("10046", { validacao: { rv: 0, autorizacao: "pedido_aceite" }, etapa_desde: "2026-10-01T12:00:00.000Z" }, 250_000),
   linha("10060", { customer_code: "SAFRA", customer_name: "Banco Safra", validacao: { rv: 0, autorizacao: "nenhuma" }, autorizacao_ids: [], titulo: null }, 50_000),
   linha("10047", { etapa: "aguardando_autorizacao", titulo: "Transporte de arquivo deslizante" }, 90_000),
-  linha("10050", { customer_code: "SAFRA", customer_name: "Banco Safra", medicao_pendente: true, validacao: { autorizacao: "medicao_aprovada", medicao_id: "ctr_safra_2026-10" }, autorizacao_ids: [], titulo: "Medição de outubro" }, null),
+  // A demanda do contrato por medição validada antes de entrar numa medição: espera a medição.
+  linha("10050", { customer_code: "SAFRA", customer_name: "Banco Safra", medicao_pendente: true, validacao: { autorizacao: "medicao_aprovada" }, autorizacao_ids: [], titulo: "Medição de outubro" }, null),
 ];
 
 const noop = () => undefined;
@@ -123,7 +126,7 @@ const ESPERANDO = [
   "Esperando",
   "10050",
   "Medição de outubro",
-  "Banco Safra · Medição 10/2026 · Sem autorização registrada",
+  "Banco Safra · Sem RV validada · Sem exigência de autorização",
   "—",
   "Medição pendente",
   "10047 – RV02",
@@ -159,7 +162,7 @@ describe("A faturar", () => {
       /^\d+( – RV\d{2})?$/,
       /^(Serviço \d+|Desmontagem e transporte de mobiliário|Transporte de arquivo deslizante|Medição de outubro)$/,
       /^(Itaú Unibanco|Banco Safra)$/,
-      /^((Itaú Unibanco|Banco Safra) · )?(RV \d+|Medição \d{2}\/\d{4}) · (Pedido \d+ · aceite [\w-]+|Sem exigência de autorização|Sem autorização registrada)$/,
+      /^((Itaú Unibanco|Banco Safra) · )?(RV \d+|Sem RV validada) · (Pedido \d+ · aceite [\w-]+|Sem exigência de autorização|Sem autorização registrada)$/,
       /^\d+ dias?$/,
       "Medição pendente",
       "Aguardando autorização",
@@ -289,7 +292,7 @@ describe("A faturar com a NFS-e pela Omie (parte 7.4e)", () => {
       /^\d+( – RV\d{2})?$/,
       /^(Serviço \d+|Desmontagem e transporte de mobiliário|Transporte de arquivo deslizante|Medição de outubro|Mudança do 3º andar)$/,
       /^(Itaú Unibanco|Banco Safra)$/,
-      /^((Itaú Unibanco|Banco Safra) · )?(RV \d+|Medição \d{2}\/\d{4}) · (Pedido \d+ · aceite [\w-]+|Sem exigência de autorização|Sem autorização registrada)$/,
+      /^((Itaú Unibanco|Banco Safra) · )?(RV \d+|Sem RV validada) · (Pedido \d+ · aceite [\w-]+|Sem exigência de autorização|Sem autorização registrada)$/,
       /^\d+ dias?$/,
       "Medição pendente",
       "Aguardando autorização",
@@ -299,6 +302,126 @@ describe("A faturar com a NFS-e pela Omie (parte 7.4e)", () => {
       expect(textosForaDaLista(html, permitidos)).toEqual([]);
       expect(await violacoesDeAcessibilidade(html)).toEqual([]);
     }
+  });
+});
+
+describe("a medição aprovada em A faturar (pergunta 64)", () => {
+  const demandaDaMedicao = (numero: string, titulo: string, medicao = "ctr_safra_2026-10") =>
+    demandaDoFinanceiro(numero, {
+      customer_code: "SAFRA",
+      customer_name: "Banco Safra",
+      titulo,
+      etapa: "a_faturar",
+      etapa_desde: "2026-10-21T14:00:00.000Z",
+      medicao_id: medicao,
+      validacao: { autorizacao: "medicao_aprovada", medicao_id: medicao },
+      autorizacao_ids: [`aut_${medicao}`],
+    })!;
+  const fila = new Map(
+    [demandaDaMedicao("10061", "Mudança do 5º andar"), demandaDaMedicao("10062", "Vistoria e mudança"), demandaDaMedicao("10063", "Montagem de estações")].map((demanda) => [demanda.numero, demanda]),
+  );
+  const autorizacoes = new Map(
+    ["aut_ctr_safra_2026-10", "aut_ctr_safra_2026-09"].map((id) => [id, autorizacaoDoFinanceiro(id, { customer_code: "SAFRA", status: "registrada", tipo: "medicao_aprovada" })]),
+  );
+  const medicao = (id: string, extra: Record<string, unknown>) =>
+    medicaoDoFinanceiro(id, { customer_code: "SAFRA", contrato_id: "ctr_safra", status: "aprovada", ...extra })!;
+  const OUTUBRO = linhaDaMedicao(
+    medicao("ctr_safra_2026-10", {
+      competencia: "2026-10",
+      aprovada_em: "2026-10-21T14:00:00.000Z",
+      total_cents: 4_120_000,
+      linhas: [
+        { demanda_numero: "10061", total_cents: 1_240_000 },
+        { demanda_numero: "10062", total_cents: 980_000 },
+        { demanda_numero: "10063", total_cents: 700_000 },
+        { demanda_numero: null, total_cents: 1_200_000, itens: [{ servico: "Equipe fixa", total_cents: 1_200_000 }] },
+      ],
+    }),
+    fila,
+    autorizacoes,
+    "CT-2026-007",
+  );
+  // A de setembro espera a demanda 10064, que o Comercial ainda não validou.
+  const SETEMBRO = linhaDaMedicao(
+    medicao("ctr_safra_2026-09", {
+      competencia: "2026-09",
+      aprovada_em: "2026-10-05T14:00:00.000Z",
+      total_cents: 1_500_000,
+      linhas: [
+        { demanda_numero: "10064", total_cents: 300_000 },
+        { demanda_numero: null, total_cents: 1_200_000, itens: [{ servico: "Equipe fixa", total_cents: 1_200_000 }] },
+      ],
+    }),
+    fila,
+    autorizacoes,
+    "CT-2026-007",
+  );
+  const comMedicao = (marcadas: string[]) =>
+    render({ linhas: [OUTUBRO, SETEMBRO], painel: { aberto: true, marcadas, form: { ...formInicial(HOJE, null), numero: "2318", vencimento: "2026-11-20" }, resultado: null, erro: null } });
+
+  it("a medição é uma linha pelo total aprovado; no painel, a NF linha por linha; a que espera diz a demanda pendente", async () => {
+    const html = comMedicao(["ctr_safra_2026-10"]);
+    // Sem repetir: o total do grupo e o da linha são o mesmo texto.
+    expect(textosDaTela(secao(html, "Prontas para faturar"))).toEqual([
+      "Prontas para faturar",
+      "1",
+      "R$ 41.200,00",
+      "Banco Safra",
+      "Medição 10/2026",
+      "Contrato CT-2026-007 · Medição aprovada 21/10",
+      "3 demandas e equipe fixa",
+      "2 dias",
+    ]);
+    const painel = textosDaTela(secao(html, "Registrar NF"));
+    expect(painel.slice(painel.indexOf("Na NF"))).toEqual([
+      "Na NF",
+      "1",
+      "Medição 10/2026",
+      "R$ 41.200,00",
+      "Demanda 10061",
+      "Mudança do 5º andar",
+      "R$ 12.400,00",
+      "Demanda 10062",
+      "Vistoria e mudança",
+      "R$ 9.800,00",
+      "Demanda 10063",
+      "Montagem de estações",
+      "R$ 7.000,00",
+      "Equipe fixa",
+      "Outubro de 2026",
+      "R$ 12.000,00",
+      "Total da NF",
+      "Cancelar",
+    ]);
+    expect(textosDaTela(secao(html, "Esperando"))).toEqual([
+      "Esperando",
+      "1",
+      "Medição 09/2026",
+      "Banco Safra · Contrato CT-2026-007 · Medição aprovada 05/10",
+      "1 demanda e equipe fixa · pendente: 10064",
+      "R$ 15.000,00",
+      "Demanda pendente",
+    ]);
+    const permitidos = [
+      "A faturar",
+      "Prontas para faturar",
+      "Esperando",
+      ...PAINEL,
+      /^\d+$/,
+      /^R\$ [\d.]+,\d{2}$/,
+      /^\d+ dias?$/,
+      /^Medição \d{2}\/\d{4}$/,
+      /^(Banco Safra · )?Contrato CT-2026-007 · Medição aprovada \d{2}\/\d{2}$/,
+      /^\d+ demandas? e equipe fixa( · pendente: \d+)?$/,
+      /^Demanda \d+$/,
+      /^(Mudança do 5º andar|Vistoria e mudança|Montagem de estações)$/,
+      "Banco Safra",
+      "Equipe fixa",
+      "Outubro de 2026",
+      "Demanda pendente",
+    ];
+    expect(textosForaDaLista(html, permitidos)).toEqual([]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });
 

@@ -109,4 +109,36 @@ describe("a via comercial da NF", () => {
     const comSerie = faturaDoFinanceiro("fat_x", { customer_name: "A/B: Cia", nf: { numero: "77", serie: "2", emitida_em: "2026-10-20" }, vencimento: "2026-11-20", demandas: [] })!;
     expect(demonstrativoDaNf(comSerie, fontes()).nomeDoArquivo).toBe("NF 77 série 2 - A B  Cia");
   });
+
+  it("a NF da medição traz as linhas sem demanda num bloco da medição, que confere com a fatura (pergunta 64)", () => {
+    const daMedicao = faturaDoFinanceiro("fat_000000000000000000002318", {
+      customer_code: "ITAU",
+      customer_name: "Itaú Unibanco",
+      status: "emitida",
+      valor_cents: 254_500,
+      nf: { numero: "2318", serie: "1", emitida_em: "2026-11-06" },
+      vencimento: "2026-12-06",
+      forma: "boleto",
+      demandas: [{ numero: "10050", rv: null, medicao_id: "ctr_itau_2026-10", autorizacao_ids: [], valor_cents: 42_500 }],
+      medicoes: [
+        {
+          medicao_id: "ctr_itau_2026-10",
+          competencia: "2026-10",
+          valor_cents: 254_500,
+          demandas: ["10050"],
+          sem_demanda: [{ servico: "Equipe fixa", valor_cents: 212_000 }],
+        },
+      ],
+    })!;
+    const comEquipe = fontes();
+    const medicao = comEquipe.medicoes.get("ctr_itau_2026-10") as Record<string, unknown>;
+    const linhas = [...(medicao.linhas as Array<Record<string, unknown>>), { id: "m4", demanda_numero: null, os: "EF-10", executada_em: "2026-10-31", itens: [], total_cents: 212_000 }];
+    const documento = demonstrativoDaNf(daMedicao, { ...comEquipe, medicoes: new Map([["ctr_itau_2026-10", { ...medicao, linhas }]]) });
+    const bloco = documento.demandas.at(-1)!;
+    expect([bloco.numero, bloco.rotulo, bloco.titulo, bloco.total, bloco.confere]).toEqual(["ctr_itau_2026-10", "Medição 10/2026", "Equipe fixa", reais("R$ 2.120,00"), true]);
+    expect(bloco.linhas.map((linha) => [linha.item, linha.total])).toEqual([["OS EF-10 · executada em 31/10/2026", "2.120,00"]]);
+    expect(documento.demandas.map((demanda) => demanda.rotulo)).toEqual(["10050 · Medição 10/2026", "Medição 10/2026"]);
+    expect(documento.total).toBe(reais("R$ 2.545,00"));
+  });
 });
+

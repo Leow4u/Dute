@@ -127,6 +127,15 @@ describe("a receita por serviço (pergunta 26)", () => {
     expect(servicosDaNf(NF_B, FONTES)).toEqual(new Map([["Içamento", 150_000], ["Sem serviço", 50_000]]));
   });
 
+  it("as linhas sem demanda da medição entram pelo serviço que a fatura guardou (pergunta 64)", () => {
+    const comEquipe = nf("2003", {
+      valor_cents: 330_000,
+      demandas: [{ numero: "10050", valor_cents: 200_000, rv: null, medicao_id: "ct_1_2026-10" }],
+      medicoes: [{ medicao_id: "ct_1_2026-10", competencia: "2026-10", valor_cents: 330_000, demandas: ["10050"], sem_demanda: [{ servico: "Equipe fixa", valor_cents: 130_000 }] }],
+    });
+    expect(servicosDaNf(comEquipe, FONTES)).toEqual(new Map([["Equipe fixa", 130_000], ["Içamento", 150_000], ["Sem serviço", 50_000]]));
+  });
+
   it("o rateio em centavos fecha o valor: o que sobra do arredondamento vai aos maiores restos", () => {
     expect(ratear(100, new Map([["A", 1], ["B", 1], ["C", 1]]))).toEqual(new Map([["A", 34], ["B", 33], ["C", 33]]));
     expect(ratear(100, new Map())).toEqual(new Map([["Sem orçamento", 100]]));

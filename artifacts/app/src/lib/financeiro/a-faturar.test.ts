@@ -15,6 +15,9 @@ import {
   gruposPorCliente,
   linhaAFaturar,
   linhaDaArmazenagem,
+  linhaDaMedicao,
+  medicaoDoFinanceiro,
+  mesPorExtenso,
   numerosDaFila,
   pagamentoDoContrato,
   pedidoDaEmissao,
@@ -25,7 +28,7 @@ import {
   rotuloDaLinha,
   textoDaEmissao,
   textoDoRegistro,
-  valorDaFonte,
+  valorDaRv,
   type AutorizacaoDoFinanceiro,
   type DemandaDoFinanceiro,
   type FormDaNf,
@@ -105,24 +108,11 @@ describe("a demanda na fila do Financeiro", () => {
     expect([linha.situacao, linha.autorizacaoTexto]).toEqual(["pronta", "Sem exigência de autorização"]);
   });
 
-  it("o valor sai da RV validada ou da soma das linhas da demanda na medição aprovada", () => {
+  it("o valor sai da RV validada; a demanda sem RV não tem de onde ler", () => {
     const daRv = demanda("10045");
     expect(fonteDoValor(daRv)).toBe("quotes/10045/revisoes/2");
-    expect(valorDaFonte(daRv, { total_cents: 1_234_500 })).toBe(1_234_500);
-    expect(valorDaFonte(daRv, { total_cents: "1234" })).toBeNull();
-    const daMedicao = demanda("10050", { validacao: { autorizacao: "medicao_aprovada", medicao_id: "ctr_safra_2026-10" } });
-    expect(fonteDoValor(daMedicao)).toBe("medicoes/ctr_safra_2026-10");
-    const medicao = { status: "aprovada", linhas: [{ demanda_numero: "10050", total_cents: 30_000 }, { demanda_numero: "10051", total_cents: 99_000 }, { demanda_numero: "10050", total_cents: 12_500 }] };
-    expect(valorDaFonte(daMedicao, medicao)).toBe(42_500);
-    expect(valorDaFonte(daMedicao, { ...medicao, status: "enviada" })).toBeNull();
-    const comAprovacao = linhaAFaturar(
-      demanda("10050", { validacao: { autorizacao: "medicao_aprovada", medicao_id: "ctr_safra_2026-10" }, autorizacao_ids: ["aut_ctr_safra_2026-10"] }),
-      autorizacoes(["aut_ctr_safra_2026-10", { customer_code: "ITAU", status: "registrada", tipo: "medicao_aprovada" }]),
-      42_500,
-    );
-    expect([comAprovacao.situacao, comAprovacao.origem, comAprovacao.autorizacaoTexto, rotuloDaLinha(comAprovacao)]).toEqual(["pronta", "Medição 10/2026", "Medição aprovada", "10050"]);
-    // Sem a aprovação registrada, a medição não fatura e a tela não diz que ela foi aprovada.
-    expect(linhaAFaturar(daMedicao, new Map(), 42_500).autorizacaoTexto).toBe("Sem autorização registrada");
+    expect(valorDaRv({ total_cents: 1_234_500 })).toBe(1_234_500);
+    expect(valorDaRv({ total_cents: "1234" })).toBeNull();
     expect(fonteDoValor(demanda("10070", { validacao: { autorizacao: "pedido_aceite" } }))).toBeNull();
   });
 });
@@ -326,6 +316,117 @@ describe("a NFS-e pela Omie na fila (parte 7.4e)", () => {
     });
     expect(textoDaEmissao([pronta, armazenagem])).toBe("NFS-e pedida à Omie: 1 demanda e a armazenagem de 09/2026");
     expect(textoDaEmissao([pronta])).toBe("NFS-e pedida à Omie: 1 demanda");
+  });
+});
+
+describe("a medição aprovada na fila (pergunta 64)", () => {
+  const ID = "ctr_safra_2026-10";
+  const MEDICAO = {
+    customer_code: "SAFRA",
+    contrato_id: "ctr_safra",
+    competencia: "2026-10",
+    status: "aprovada",
+    aprovada_em: "2026-10-21T14:00:00.000Z",
+    autorizacao_id: `aut_${ID}`,
+    total_cents: 266_500,
+    linhas: [
+      { demanda_numero: "10051", total_cents: 99_000 },
+      { demanda_numero: "10050", total_cents: 30_000 },
+      { demanda_numero: "10050", total_cents: 12_500 },
+      { demanda_numero: null, total_cents: 80_000, itens: [{ servico: "Equipe fixa", total_cents: 80_000 }] },
+      { total_cents: 45_000, itens: [{ servico: "Equipe fixa", total_cents: 40_000 }, { total_cents: 5_000 }] },
+    ],
+  };
+  const daMedicao = (numero: string, extra: Record<string, unknown> = {}) =>
+    demanda(numero, {
+      customer_code: "SAFRA",
+      customer_name: "Banco Safra",
+      medicao_id: ID,
+      validacao: { autorizacao: "medicao_aprovada", medicao_id: ID },
+      autorizacao_ids: [`aut_${ID}`],
+      ...extra,
+    });
+  const fila = (...lista: DemandaDoFinanceiro[]) => new Map(lista.map((item) => [item.numero, item]));
+  const DEMANDAS = fila(daMedicao("10050"), daMedicao("10051"));
+  const AUTORIZADA = autorizacoes([`aut_${ID}`, { customer_code: "SAFRA", status: "registrada", tipo: "medicao_aprovada" }]);
+  const lida = medicaoDoFinanceiro(ID, MEDICAO)!;
+
+  it("lê a enviada e a aprovada fora de NF; o total das linhas, as demandas na ordem e as linhas sem demanda pelo serviço", () => {
+    expect([lida.totalCents, lida.demandas, lida.semDemanda, lida.desde, lida.autorizacaoId]).toEqual([
+      266_500,
+      [
+        { numero: "10051", valorCents: 99_000 },
+        { numero: "10050", valorCents: 42_500 },
+      ],
+      [
+        { servico: "Equipe fixa", valorCents: 120_000 },
+        { servico: "Sem serviço", valorCents: 5_000 },
+      ],
+      "2026-10-21T14:00:00.000Z",
+      `aut_${ID}`,
+    ]);
+    expect(medicaoDoFinanceiro(ID, { ...MEDICAO, status: "rascunho" })).toBeNull();
+    expect(medicaoDoFinanceiro(ID, { ...MEDICAO, faturamento: { fatura_id: "fat_1" } })).toBeNull();
+    expect(medicaoDoFinanceiro(ID, { ...MEDICAO, total_cents: 266_501 })?.totalCents).toBeNull();
+    expect(medicaoDoFinanceiro(ID, { ...MEDICAO, status: "enviada", enviada_em: "2026-11-02T12:00:00.000Z" })?.desde).toBe("2026-11-02T12:00:00.000Z");
+    expect(mesPorExtenso("2026-10")).toBe("Outubro de 2026");
+  });
+
+  it("vira uma linha pelo total aprovado, com a NF linha por linha; pronta como o servidor fatura", () => {
+    const linha = linhaDaMedicao(lida, DEMANDAS, AUTORIZADA, "CT-2026-007");
+    expect([linha.situacao, linha.valorCents, linha.medicaoId, rotuloDaLinha(linha), linha.origem, linha.autorizacaoTexto, linha.resumo, linha.demanda.cliente]).toEqual([
+      "pronta",
+      266_500,
+      ID,
+      "Medição 10/2026",
+      "Contrato CT-2026-007",
+      "Medição aprovada 21/10",
+      "2 demandas, equipe fixa e sem serviço",
+      "Banco Safra",
+    ]);
+    expect(linha.composicao.map((item) => [item.rotulo, item.detalhe, item.valorCents])).toEqual([
+      ["Demanda 10051", "Serviço 10051", 99_000],
+      ["Demanda 10050", "Serviço 10050", 42_500],
+      ["Equipe fixa", "Outubro de 2026", 120_000],
+      ["Sem serviço", "Outubro de 2026", 5_000],
+    ]);
+    expect(linhaDaMedicao(lida, DEMANDAS, AUTORIZADA).origem).toBe("Medição mensal");
+    // A busca acha a medição pelas demandas dela.
+    expect(filtrarLinhas([linha], "10051")).toEqual([linha]);
+    expect(filtrarLinhas([linha], "ct-2026")).toEqual([linha]);
+  });
+
+  it("espera pelos mesmos motivos que o servidor recusa, na mesma ordem", () => {
+    const situacao = (medicao = lida, demandas = DEMANDAS, autorizadas = AUTORIZADA) => linhaDaMedicao(medicao, demandas, autorizadas).situacao;
+    expect(situacao(medicaoDoFinanceiro(ID, { ...MEDICAO, emissao_nf: { id: "nfe_1" } })!)).toBe("na_emissao");
+    expect(situacao(medicaoDoFinanceiro(ID, { ...MEDICAO, status: "enviada" })!)).toBe("medicao_pendente");
+    expect(situacao(medicaoDoFinanceiro(ID, { ...MEDICAO, total_cents: 1 })!)).toBe("sem_valor");
+    // A demanda que não está na fila A faturar, a que espera a medição, a de outra medição e a reservada por outra emissão.
+    expect(situacao(lida, fila(daMedicao("10050")))).toBe("demanda_pendente");
+    expect(situacao(lida, fila(daMedicao("10050"), daMedicao("10051", { etapa: "aguardando_autorizacao" })))).toBe("demanda_pendente");
+    expect(situacao(lida, fila(daMedicao("10050"), daMedicao("10051", { medicao_pendente: true })))).toBe("demanda_pendente");
+    expect(situacao(lida, fila(daMedicao("10050"), daMedicao("10051", { medicao_id: "ctr_safra_2026-09", validacao: { medicao_id: "ctr_safra_2026-09" } })))).toBe("demanda_pendente");
+    expect(situacao(lida, fila(daMedicao("10050"), daMedicao("10051", { emissao_nf: { id: "nfe_2" } })))).toBe("demanda_pendente");
+    expect(linhaDaMedicao(lida, fila(daMedicao("10050")), AUTORIZADA).resumo).toBe("2 demandas, equipe fixa e sem serviço · pendente: 10051");
+    expect(situacao(lida, DEMANDAS, new Map())).toBe("sem_autorizacao");
+    expect(situacao(lida, DEMANDAS, autorizacoes([`aut_${ID}`, { customer_code: "SAFRA", status: "cancelada" }]))).toBe("sem_autorizacao");
+  });
+
+  it("o pedido leva a medição à parte; a confirmação e o Início dizem a medição", () => {
+    const linha = linhaDaMedicao(lida, DEMANDAS, AUTORIZADA);
+    const form: FormDaNf = { ...formInicial(HOJE, null), numero: "2318", vencimento: "2026-11-20" };
+    expect(pedidoDaNf(form, [linha], "k")).toMatchObject({ demandas: [], medicoes: [ID] });
+    expect(pedidoDaNf(form, [linha], "k")).not.toHaveProperty("armazenagem");
+    expect(pedidoDaEmissao({ ...form, via: "omie" }, [linha], "k")).toEqual({ idempotency_key: "k", demandas: [], medicoes: [ID], vencimento: "2026-11-20", forma: "boleto" });
+    expect(textoDoRegistro(form, { valor_cents: 266_500, demandas: [], armazenagem: [], medicoes: [ID] })).toBe(reais("NF 2318 registrada: a medição de 10/2026 faturada · R$ 2.665,00"));
+    expect(textoDoRegistro(form, { valor_cents: 1, demandas: ["10060"], armazenagem: ["ITAU__2026-09"], medicoes: [ID] })).toBe(
+      reais("NF 2318 registrada: 1 demanda, a armazenagem de 09/2026 e a medição de 10/2026 faturadas · R$ 0,01"),
+    );
+    expect(textoDoRegistro(form, { demandas: [], medicoes: [ID, "ctr_safra_2026-09"] })).toBe("NF 2318 registrada: as medições de 10/2026 e 09/2026 faturadas");
+    expect(textoDaEmissao([linha])).toBe("NFS-e pedida à Omie: a medição de 10/2026");
+    expect(pendenciasDoFinanceiro([linha], AGORA, "/x")[0]?.title).toBe("1 medição a faturar");
+    const pendente = linhaDaMedicao(lida, fila(daMedicao("10050")), AUTORIZADA);
+    expect(pendenciasDoFinanceiro([pendente], AGORA, "/x").map((item) => [item.title, item.detail])).toEqual([["1 medição aguardando autorização", "Banco Safra"]]);
   });
 });
 

@@ -10,13 +10,16 @@ import type { ItemDoInicio } from "../inicio-do-modulo";
  * parte 4.1b): as demandas A faturar e as que esperam (autorização ou
  * medição), o valor de cada uma e o formulário da NF. O valor aqui é para
  * ler e conferir: o servidor (registerNf) lê de novo e decide. A regra é a
- * mesma: a RV validada (que as autorizações citam) ou, na medição mensal, a
- * soma das linhas da demanda na medição aprovada.
+ * mesma: a RV validada, que as autorizações citam.
  *
  * Desde a parte 7.2b (docs/plataforma/fase-7-financeiro-unificado.md), a fila
  * também traz a armazenagem que o WMS emitiu e ainda não está numa NF, pelo
  * total congelado na emissão. Ela vira uma linha como a da demanda, com o
  * `periodoId`; o servidor (registerNf, parte 7.2a) confere de novo.
+ *
+ * A medição aprovada (pergunta 64) também vira uma linha só, pelo total
+ * aprovado, com o `medicaoId` e o que vai na NF linha por linha: as demandas
+ * dela e as linhas sem demanda. A demanda da medição não aparece à parte.
  */
 
 type Registro = Record<string, unknown>;
@@ -124,22 +127,6 @@ export function autorizacoesValidas(demanda: DemandaDoFinanceiro, autorizacoes: 
   });
 }
 
-/** O valor da demanda em centavos: a soma das linhas dela na medição aprovada, ou null. */
-export function valorNaMedicao(numero: string, medicao: Registro | null | undefined): number | null {
-  if (!medicao || texto(medicao.status) !== "aprovada") return null;
-  const linhas = (Array.isArray(medicao.linhas) ? medicao.linhas : []).filter(
-    (linha): linha is Registro => Boolean(linha) && typeof linha === "object" && texto((linha as Registro).demanda_numero) === numero,
-  );
-  if (!linhas.length) return null;
-  let soma = 0;
-  for (const linha of linhas) {
-    const total = inteiro(linha.total_cents);
-    if (total === null || total < 0) return null;
-    soma += total;
-  }
-  return soma;
-}
-
 /** O total da RV validada em centavos, ou null. */
 export function valorDaRv(revisao: Registro | null | undefined): number | null {
   const total = inteiro(revisao?.total_cents);
@@ -148,42 +135,61 @@ export function valorDaRv(revisao: Registro | null | undefined): number | null {
 
 // --- A fila -------------------------------------------------------------------------------
 
-export type SituacaoNaFila = "pronta" | "na_emissao" | "aguardando_autorizacao" | "medicao_pendente" | "sem_autorizacao" | "rv_diferente" | "sem_valor";
+export type SituacaoNaFila =
+  | "pronta"
+  | "na_emissao"
+  | "aguardando_autorizacao"
+  | "medicao_pendente"
+  | "demanda_pendente"
+  | "sem_autorizacao"
+  | "rv_diferente"
+  | "sem_valor";
 
 export const SITUACAO_ROTULO: Record<Exclude<SituacaoNaFila, "pronta">, string> = {
   na_emissao: "Na emissão da NFS-e",
   aguardando_autorizacao: "Aguardando autorização",
   medicao_pendente: "Medição pendente",
+  demanda_pendente: "Demanda pendente",
   sem_autorizacao: "Sem autorização registrada",
   rv_diferente: "A autorização cita outra RV",
   sem_valor: "Sem o valor para faturar",
 };
 
+/** Uma linha do que vai na NF da medição: uma demanda dela ou as linhas sem demanda de um serviço. */
+export type ItemDaComposicao = { chave: string; rotulo: string; detalhe: string | null; valorCents: number };
+
 export type LinhaAFaturar = {
   /**
-   * O item da linha. Na armazenagem, `numero` é o id do período no WMS (nunca
-   * só dígitos, então não colide com a demanda) e o resto vem do período.
+   * O item da linha. Na armazenagem, `numero` é o id do período no WMS, e na
+   * medição, o id da medição (nunca só dígitos, então não colidem com a
+   * demanda); o resto vem do período ou da medição.
    */
   demanda: DemandaDoFinanceiro;
   /** O id de `billing_periods` na armazenagem; null na demanda. */
   periodoId: string | null;
+  /** O id da medição na linha da medição (pergunta 64); null nas outras. */
+  medicaoId: string | null;
   situacao: SituacaoNaFila;
   valorCents: number | null;
-  /** "RV 2" ou "Medição 10/2026". */
+  /** "RV 2", "Fatura do WMS" ou "Contrato CT-2026-007". */
   origem: string;
-  /** "Pedido 4500000009 · aceite ACE-1", "Medição aprovada", "Sem exigência de autorização". */
+  /** "Pedido 4500000009 · aceite ACE-1", "Medição aprovada 05/11", "Sem exigência de autorização". */
   autorizacaoTexto: string;
+  /** Na medição, "3 demandas e equipe fixa"; null nas outras. */
+  resumo: string | null;
+  /** Na medição, o que vai na NF linha por linha; vazio nas outras. */
+  composicao: ItemDaComposicao[];
 };
 
 function textoDaAutorizacao(demanda: DemandaDoFinanceiro, validas: readonly AutorizacaoDoFinanceiro[]): string {
   const comPedido = validas.find((item) => item.pedido);
   if (comPedido) return [`Pedido ${comPedido.pedido}`, comPedido.aceite ? `aceite ${comPedido.aceite}` : null].filter(Boolean).join(" · ");
-  if (validas.length) return demanda.medicaoId ? "Medição aprovada" : "Autorização registrada";
+  if (validas.length) return "Autorização registrada";
   return exigeAutorizacao(demanda) ? "Sem autorização registrada" : "Sem exigência de autorização";
 }
 
 /** "Medição 10/2026" pela competência no fim do id da medição (`{contrato}_{AAAA-MM}`), ou "Medição". */
-function rotuloDaMedicao(medicaoId: string): string {
+export function rotuloDaMedicao(medicaoId: string): string {
   const competencia = /_(\d{4})-(\d{2})$/.exec(medicaoId);
   return competencia ? `Medição ${competencia[2]}/${competencia[1]}` : "Medição";
 }
@@ -204,8 +210,11 @@ function citaOutraRv(demanda: DemandaDoFinanceiro, validas: readonly Autorizacao
 }
 
 /**
- * A linha da fila e por que ela ainda não fatura, na ordem em que o
- * servidor confere: etapa, medição, autorização, RV citada e valor.
+ * A linha da demanda fora de medição e por que ela ainda não fatura, na
+ * ordem em que o servidor confere: etapa, medição, autorização, RV citada e
+ * valor. A demanda presa a uma medição vai na linha da medição
+ * (linhaDaMedicao); a pendência da medição aqui é a da demanda que ainda não
+ * entrou numa.
  */
 export function linhaAFaturar(
   demanda: DemandaDoFinanceiro,
@@ -230,10 +239,13 @@ export function linhaAFaturar(
   return {
     demanda,
     periodoId: null,
+    medicaoId: null,
     situacao,
     valorCents,
-    origem: demanda.medicaoId ? rotuloDaMedicao(demanda.medicaoId) : demanda.rv !== null ? `RV ${demanda.rv}` : "Sem RV validada",
+    origem: demanda.rv !== null ? `RV ${demanda.rv}` : "Sem RV validada",
     autorizacaoTexto: textoDaAutorizacao(demanda, validas),
+    resumo: null,
+    composicao: [],
   };
 }
 
@@ -304,10 +316,187 @@ export function linhaDaArmazenagem(competencia: CompetenciaDoFinanceiro): LinhaA
       emissaoNf: competencia.emissaoNf,
     },
     periodoId: competencia.periodoId,
+    medicaoId: null,
     situacao: competencia.emissaoNf ? "na_emissao" : competencia.valorCents === null ? "sem_valor" : "pronta",
     valorCents: competencia.valorCents,
     origem: "Fatura do WMS",
     autorizacaoTexto: "Emitida na Armazenagem",
+    resumo: null,
+    composicao: [],
+  };
+}
+
+// --- A medição aprovada (pergunta 64) -----------------------------------------------------
+
+/** O serviço da linha sem demanda cujo item não tem serviço (functions/financeiro, SEM_SERVICO). */
+export const SEM_SERVICO = "Sem serviço";
+
+export type MedicaoDoFinanceiro = {
+  id: string;
+  customerCode: string;
+  contratoId: string | null;
+  competencia: string;
+  /** A enviada espera o cliente; a aprovada fatura. */
+  status: "enviada" | "aprovada";
+  /** Quando o cliente aprovou, ou quando foi enviada (ISO); null sem a data. */
+  desde: string | null;
+  /** O total aprovado; null quando as linhas não fecham (o servidor recusa). */
+  totalCents: number | null;
+  /** As demandas das linhas, na ordem, cada uma com a soma das linhas dela. */
+  demandas: Array<{ numero: string; valorCents: number }>;
+  /** As linhas sem demanda, somadas pelo serviço dos itens. */
+  semDemanda: Array<{ servico: string; valorCents: number }>;
+  autorizacaoId: string;
+  emissaoNf: string | null;
+};
+
+function centavosDe(valor: unknown): number | null {
+  const lido = inteiro(valor);
+  return lido !== null && lido >= 0 && Number.isSafeInteger(lido) ? lido : null;
+}
+
+/**
+ * A medição como o Financeiro lê de `medicoes`: só a enviada e a aprovada,
+ * fora de NF. As contas são as de functions/financeiro (medicaoLida): o total
+ * é a soma das linhas e confere com o gravado, e cada linha sem demanda soma
+ * os itens dela; fora disso, o total fica null.
+ */
+export function medicaoDoFinanceiro(id: string, dados: Registro): MedicaoDoFinanceiro | null {
+  const status = texto(dados.status);
+  if (status !== "enviada" && status !== "aprovada") return null;
+  const faturamento = dados.faturamento && typeof dados.faturamento === "object" ? (dados.faturamento as Registro) : {};
+  const customerCode = texto(dados.customer_code);
+  if (texto(faturamento.fatura_id) || !customerCode || !/_\d{4}-\d{2}$/.test(id)) return null;
+  const linhas = (Array.isArray(dados.linhas) ? dados.linhas : []).map((linha): Registro => (linha && typeof linha === "object" ? (linha as Registro) : {}));
+  const porDemanda = new Map<string, number>();
+  const porServico = new Map<string, number>();
+  let soma: number | null = 0;
+  for (const linha of linhas) {
+    const total = centavosDe(linha.total_cents);
+    if (total === null || soma === null) {
+      soma = null;
+      continue;
+    }
+    soma += total;
+    const numero = texto(linha.demanda_numero);
+    if (numero) {
+      porDemanda.set(numero, (porDemanda.get(numero) ?? 0) + total);
+      continue;
+    }
+    const itens = (Array.isArray(linha.itens) ? linha.itens : []).map((item): Registro => (item && typeof item === "object" ? (item as Registro) : {}));
+    const valores = itens.map((item) => centavosDe(item.total_cents));
+    if (!itens.length || valores.some((valor) => valor === null) || valores.reduce<number>((total_, valor) => total_ + (valor ?? 0), 0) !== total) {
+      soma = null;
+      continue;
+    }
+    itens.forEach((item, indice) => {
+      const servico = texto(item.servico) || SEM_SERVICO;
+      porServico.set(servico, (porServico.get(servico) ?? 0) + (valores[indice] ?? 0));
+    });
+  }
+  const gravado = centavosDe(dados.total_cents);
+  return {
+    id,
+    customerCode,
+    contratoId: texto(dados.contrato_id) || null,
+    competencia: texto(dados.competencia) || id.slice(-7),
+    status,
+    desde: (status === "aprovada" ? texto(dados.aprovada_em) : texto(dados.enviada_em)) || null,
+    totalCents: soma !== null && linhas.length > 0 && gravado === soma ? soma : null,
+    demandas: [...porDemanda.entries()].map(([numero, valorCents]) => ({ numero, valorCents })),
+    semDemanda: [...porServico.entries()].filter(([, valor]) => valor > 0).map(([servico, valorCents]) => ({ servico, valorCents })),
+    autorizacaoId: texto(dados.autorizacao_id) || `aut_${id}`,
+    emissaoNf: emissaoReservada(dados),
+  };
+}
+
+const MES_POR_EXTENSO = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
+
+/** "Outubro de 2026". */
+export function mesPorExtenso(competencia: string): string {
+  const data = new Date(`${competencia}-01T12:00:00Z`);
+  if (Number.isNaN(data.getTime())) return competencia;
+  const texto_ = MES_POR_EXTENSO.format(data);
+  return texto_.charAt(0).toUpperCase() + texto_.slice(1);
+}
+
+/** "equipe fixa" no meio da frase; a sigla fica como está ("VUC"). */
+function noMeioDaFrase(servico: string): string {
+  return /^\p{Lu}{2}/u.test(servico) ? servico : servico.charAt(0).toLowerCase() + servico.slice(1);
+}
+
+/** "dd/mm" da data ISO, em São Paulo. */
+function diaEMes(iso: string | null): string | null {
+  if (!iso) return null;
+  const data = new Date(iso);
+  if (Number.isNaN(data.getTime())) return null;
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" }).format(data);
+}
+
+/**
+ * A medição como uma linha da fila, pelo total aprovado, e por que ela ainda
+ * não fatura, na ordem em que o servidor confere: a reserva da emissão, a
+ * aprovação, o total, as demandas (todas A faturar, presas a ela) e a
+ * autorização que a aprovação criou. `demandas` são as da fila, pelo
+ * número (o nome do cliente também sai delas); `contrato`, o rótulo do
+ * contrato ("CT-2026-007"), quando já se leu.
+ */
+export function linhaDaMedicao(
+  medicao: MedicaoDoFinanceiro,
+  demandas: ReadonlyMap<string, DemandaDoFinanceiro>,
+  autorizacoes: ReadonlyMap<string, AutorizacaoDoFinanceiro>,
+  contrato: string | null = null,
+): LinhaAFaturar {
+  const pendentes = medicao.demandas.filter(({ numero }) => {
+    const demanda = demandas.get(numero);
+    return !demanda || demanda.etapa !== "a_faturar" || demanda.medicaoPendente || demanda.medicaoId !== medicao.id || (demanda.emissaoNf !== null && demanda.emissaoNf !== medicao.emissaoNf);
+  });
+  const autorizacao = autorizacoes.get(medicao.autorizacaoId);
+  const situacao: SituacaoNaFila = medicao.emissaoNf
+    ? "na_emissao"
+    : medicao.status !== "aprovada"
+      ? "medicao_pendente"
+      : medicao.totalCents === null
+        ? "sem_valor"
+        : pendentes.length
+          ? "demanda_pendente"
+          : !autorizacao?.registrada || autorizacao.customerCode !== medicao.customerCode
+            ? "sem_autorizacao"
+            : "pronta";
+  // A medição só tem o código do cliente: o nome vem de uma demanda dele na fila.
+  const comNome = [...demandas.values()].find((demanda) => demanda.customerCode === medicao.customerCode && demanda.cliente !== demanda.customerCode);
+  const resumo = [
+    medicao.demandas.length ? plural(medicao.demandas.length, "demanda", "demandas") : null,
+    ...medicao.semDemanda.map(({ servico }) => noMeioDaFrase(servico)),
+  ].filter((parte): parte is string => Boolean(parte));
+  const dia = diaEMes(medicao.desde);
+  return {
+    demanda: {
+      numero: medicao.id,
+      customerCode: medicao.customerCode,
+      cliente: comNome?.cliente ?? medicao.customerCode,
+      titulo: null,
+      etapa: "a_faturar",
+      desde: medicao.desde,
+      contratoId: medicao.contratoId,
+      rv: null,
+      autorizacao: "medicao_aprovada",
+      medicaoId: medicao.id,
+      medicaoPendente: false,
+      autorizacaoIds: [medicao.autorizacaoId],
+      emissaoNf: medicao.emissaoNf,
+    },
+    periodoId: null,
+    medicaoId: medicao.id,
+    situacao,
+    valorCents: medicao.totalCents,
+    origem: contrato ? `Contrato ${contrato}` : "Medição mensal",
+    autorizacaoTexto: [medicao.status === "aprovada" ? "Medição aprovada" : "Medição enviada", dia].filter(Boolean).join(" "),
+    resumo: [juntar(resumo), pendentes.length ? `pendente: ${pendentes.map(({ numero }) => numero).join(", ")}` : null].filter(Boolean).join(" · ") || null,
+    composicao: [
+      ...medicao.demandas.map(({ numero, valorCents }) => ({ chave: numero, rotulo: `Demanda ${numero}`, detalhe: demandas.get(numero)?.titulo ?? null, valorCents })),
+      ...medicao.semDemanda.map(({ servico, valorCents }) => ({ chave: `servico:${servico}`, rotulo: servico, detalhe: mesPorExtenso(medicao.competencia), valorCents })),
+    ],
   };
 }
 
@@ -316,36 +505,37 @@ function competenciaDaLinha(linha: LinhaAFaturar): string | null {
   return linha.periodoId ? (PERIODO_ID.exec(linha.periodoId)?.[2] ?? null) : null;
 }
 
-/** De onde sai o valor da demanda: a RV validada ou a medição aprovada. O caminho do documento, ou null. */
+/** De onde sai o valor da demanda: a RV validada. O caminho do documento, ou null. */
 export function fonteDoValor(demanda: DemandaDoFinanceiro): string | null {
-  if (demanda.medicaoId) return `medicoes/${demanda.medicaoId}`;
-  if (demanda.rv !== null) return `quotes/${demanda.numero}/revisoes/${demanda.rv}`;
-  return null;
+  return demanda.rv !== null ? `quotes/${demanda.numero}/revisoes/${demanda.rv}` : null;
 }
 
-/** O valor da demanda a partir do documento da fonte (fonteDoValor). */
-export function valorDaFonte(demanda: DemandaDoFinanceiro, documento: Registro | null | undefined): number | null {
-  if (!documento) return null;
-  return demanda.medicaoId ? valorNaMedicao(demanda.numero, documento) : valorDaRv(documento);
-}
-
-/** "10045 – RV02" como o cliente cita; na medição, só o número; na armazenagem, "Armazenagem 09/2026". */
+/** "10045 – RV02" como o cliente cita; na armazenagem, "Armazenagem 09/2026"; na medição, "Medição 10/2026". */
 export function rotuloDaLinha(linha: LinhaAFaturar): string {
+  if (linha.medicaoId) return rotuloDaMedicao(linha.medicaoId);
   const competencia = competenciaDaLinha(linha);
   if (competencia) return `Armazenagem ${rotuloDaCompetencia(competencia)}`;
-  return linha.demanda.medicaoId ? linha.demanda.numero : rotuloDaRv(linha.demanda.numero, linha.demanda.rv);
+  return rotuloDaRv(linha.demanda.numero, linha.demanda.rv);
 }
 
 function semAcento(valor: string): string {
   return valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-/** A busca da tela: número, cliente, título, pedido ou aceite. */
+/** A busca da tela: número, cliente, título, pedido ou aceite; na medição, também as demandas dela. */
 export function filtrarLinhas(linhas: readonly LinhaAFaturar[], busca: string): LinhaAFaturar[] {
   const termo = semAcento(busca.trim());
   if (!termo) return [...linhas];
   return linhas.filter((linha) =>
-    [rotuloDaLinha(linha), linha.demanda.numero, linha.demanda.cliente, linha.demanda.titulo ?? "", linha.autorizacaoTexto].some((campo) => semAcento(campo).includes(termo)),
+    [
+      rotuloDaLinha(linha),
+      linha.demanda.numero,
+      linha.demanda.cliente,
+      linha.demanda.titulo ?? "",
+      linha.autorizacaoTexto,
+      linha.origem,
+      ...linha.composicao.flatMap((item) => [item.rotulo, item.detalhe ?? ""]),
+    ].some((campo) => semAcento(campo).includes(termo)),
   );
 }
 
@@ -462,13 +652,15 @@ export function problemasDaNf(form: FormDaNf, marcadas: readonly LinhaAFaturar[]
   return problemas;
 }
 
-/** O pedido para `registerNf`. Sem valor: o servidor calcula. A armazenagem vai em `armazenagem`, só quando há. */
+/** O pedido para `registerNf`. Sem valor: o servidor calcula. A armazenagem e a medição vão à parte, só quando há. */
 export function pedidoDaNf(form: FormDaNf, marcadas: readonly LinhaAFaturar[], chave: string): Record<string, unknown> {
   const armazenagem = marcadas.flatMap((linha) => (linha.periodoId ? [linha.periodoId] : []));
+  const medicoes = marcadas.flatMap((linha) => (linha.medicaoId ? [linha.medicaoId] : []));
   return {
     idempotency_key: chave,
-    demandas: marcadas.filter((linha) => !linha.periodoId).map((linha) => linha.demanda.numero),
+    demandas: marcadas.filter((linha) => !linha.periodoId && !linha.medicaoId).map((linha) => linha.demanda.numero),
     ...(armazenagem.length ? { armazenagem } : {}),
+    ...(medicoes.length ? { medicoes } : {}),
     nf: { numero: form.numero.trim(), serie: form.serie.trim().toUpperCase(), emitida_em: form.emissao },
     vencimento: form.vencimento,
     forma: form.forma,
@@ -482,31 +674,43 @@ export function pedidoDaEmissao(form: FormDaNf, marcadas: readonly LinhaAFaturar
   return pedido;
 }
 
+/** "a medição de 10/2026", "as medições de 09/2026 e 10/2026". */
+function textoDasMedicoes(ids: readonly string[]): string | null {
+  if (!ids.length) return null;
+  const meses = ids.map((id) => rotuloDaMedicao(id).replace(/^Medição /, ""));
+  return ids.length === 1 ? `a medição de ${meses[0]}` : `as medições de ${juntar(meses)}`;
+}
+
 /** A confirmação depois de emitNfOmie: a NFS-e vai pela rotina, que a tela de emissões acompanha. */
 export function textoDaEmissao(marcadas: readonly LinhaAFaturar[]): string {
   const meses = marcadas.flatMap((linha) => {
     const competencia = competenciaDaLinha(linha);
     return competencia ? [rotuloDaCompetencia(competencia)] : [];
   });
-  const quantas = marcadas.filter((linha) => !linha.periodoId).length;
-  const partes = [quantas ? plural(quantas, "demanda", "demandas") : null, meses.length ? `a armazenagem de ${juntar(meses)}` : null].filter(Boolean);
-  return `NFS-e pedida à Omie: ${partes.join(" e ")}`;
+  const quantas = marcadas.filter((linha) => !linha.periodoId && !linha.medicaoId).length;
+  const medicoes = textoDasMedicoes(marcadas.flatMap((linha) => (linha.medicaoId ? [linha.medicaoId] : [])));
+  const partes = [quantas ? plural(quantas, "demanda", "demandas") : null, meses.length ? `a armazenagem de ${juntar(meses)}` : null, medicoes].filter(
+    (parte): parte is string => Boolean(parte),
+  );
+  return `NFS-e pedida à Omie: ${juntar(partes)}`;
 }
 
-/** A confirmação depois de registerNf: a NF, quantas demandas, as competências de armazenagem e o total que o servidor calculou. */
-export function textoDoRegistro(form: FormDaNf, resultado: { valor_cents?: unknown; demandas?: unknown; armazenagem?: unknown }): string {
+/** A confirmação depois de registerNf: a NF, quantas demandas, as competências de armazenagem, as medições e o total que o servidor calculou. */
+export function textoDoRegistro(form: FormDaNf, resultado: { valor_cents?: unknown; demandas?: unknown; armazenagem?: unknown; medicoes?: unknown }): string {
   const quantas = Array.isArray(resultado.demandas) ? resultado.demandas.length : 0;
   const meses = (Array.isArray(resultado.armazenagem) ? resultado.armazenagem : []).flatMap((id) => {
     const competencia = typeof id === "string" ? PERIODO_ID.exec(id)?.[2] : undefined;
     return competencia ? [rotuloDaCompetencia(competencia)] : [];
   });
+  const medicoes = textoDasMedicoes((Array.isArray(resultado.medicoes) ? resultado.medicoes : []).filter((id): id is string => typeof id === "string"));
   const valor = typeof resultado.valor_cents === "number" ? ` · ${formatarReais(resultado.valor_cents)}` : "";
-  const armazenagem = meses.length ? `a armazenagem de ${juntar(meses)}` : "";
-  const itens = !meses.length
-    ? plural(quantas, "demanda faturada", "demandas faturadas")
-    : quantas
-      ? `${plural(quantas, "demanda", "demandas")} e ${armazenagem} faturadas`
-      : `${armazenagem} faturada`;
+  const outras = [meses.length ? `a armazenagem de ${juntar(meses)}` : null, medicoes].filter((parte): parte is string => Boolean(parte));
+  let itens: string;
+  if (!outras.length) itens = plural(quantas, "demanda faturada", "demandas faturadas");
+  else {
+    const partes = [quantas ? plural(quantas, "demanda", "demandas") : null, ...outras].filter((parte): parte is string => Boolean(parte));
+    itens = `${juntar(partes)} ${partes.length > 1 || medicoes?.startsWith("as ") ? "faturadas" : "faturada"}`;
+  }
   return `NF ${form.numero.trim()} registrada: ${itens}${valor}`;
 }
 
@@ -524,7 +728,7 @@ export function totalDasMarcadas(marcadas: readonly LinhaAFaturar[]): number {
 /** Os números da fila para o Início: as prontas (e o total delas), as que esperam autorização e as sem valor. */
 export type NumerosDaFila = { prontas: number; prontasCents: number; aguardando: number; semValor: number };
 
-const ESPERAM_AUTORIZACAO: readonly SituacaoNaFila[] = ["aguardando_autorizacao", "sem_autorizacao", "rv_diferente"];
+const ESPERAM_AUTORIZACAO: readonly SituacaoNaFila[] = ["aguardando_autorizacao", "sem_autorizacao", "rv_diferente", "demanda_pendente"];
 const SEM_VALOR: readonly SituacaoNaFila[] = ["medicao_pendente", "sem_valor"];
 
 export function numerosDaFila(linhas: readonly LinhaAFaturar[]): NumerosDaFila {
@@ -550,11 +754,18 @@ function plural(quantos: number, singular: string, pluralForm: string) {
   return `${quantos} ${quantos === 1 ? singular : pluralForm}`;
 }
 
-/** "2 demandas", "1 armazenagem" ou "2 demandas e 1 armazenagem". */
+/** "2 demandas", "1 armazenagem", "2 demandas e 1 armazenagem" ou "1 medição". */
 function contagemDaFila(linhas: readonly LinhaAFaturar[]): string {
   const armazenagem = linhas.filter((linha) => linha.periodoId).length;
-  const demandas = linhas.length - armazenagem;
-  return [demandas ? plural(demandas, "demanda", "demandas") : null, armazenagem ? plural(armazenagem, "armazenagem", "armazenagens") : null].filter(Boolean).join(" e ");
+  const medicoes = linhas.filter((linha) => linha.medicaoId).length;
+  const demandas = linhas.length - armazenagem - medicoes;
+  return juntar(
+    [
+      demandas ? plural(demandas, "demanda", "demandas") : null,
+      armazenagem ? plural(armazenagem, "armazenagem", "armazenagens") : null,
+      medicoes ? plural(medicoes, "medição", "medições") : null,
+    ].filter((parte): parte is string => Boolean(parte)),
+  );
 }
 
 /** O "Precisa de você" do Financeiro: a faturar (crítico depois de DIAS_PARA_FATURAR) e o que espera. */
@@ -579,7 +790,7 @@ export function pendenciasDoFinanceiro(linhas: readonly LinhaAFaturar[], agora: 
       id: "financeiro-aguardando",
       tone: "info",
       icon: ClipboardCheck,
-      title: `${plural(aguardando.length, "demanda", "demandas")} aguardando autorização`,
+      title: `${contagemDaFila(aguardando)} aguardando autorização`,
       detail: previa(aguardando.map((linha) => linha.demanda.cliente)),
       href: rota,
       actionLabel: "Ver",

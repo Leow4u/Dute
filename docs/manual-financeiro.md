@@ -10,7 +10,7 @@ registro das partes ficam em `docs/plataforma/fase-4-financeiro.md` e
 | Item | O que tem |
 |---|---|
 | Início | O "Precisa de você": as NFs vencidas, as NFS-e rejeitadas ou paradas, as baixas paradas na Omie, a fila A faturar e as NFs para enviar. Cada item leva à tela que resolve. |
-| A faturar | As demandas validadas e autorizadas e as competências de armazenagem emitidas, por cliente. |
+| A faturar | As demandas validadas e autorizadas, as competências de armazenagem emitidas e as medições aprovadas, por cliente. |
 | A receber, Vencidos, Pagos, Faturas | A cobrança das NFs registradas: enviar, registrar pagamento, estornar e cancelar o registro. |
 | Contratos, Autorizações | Os do Comercial, só leitura. |
 | Emissões | As NFS-e pela Omie e as baixas dos pagamentos lá. Só onde a Omie está ligada. |
@@ -27,6 +27,25 @@ O painel "Faturar" de A faturar pergunta como a NF sai:
   não se registram à mão nem se emitem de novo.
 - **Emitida fora.** O CT-e, que a Omie não emite, ou qualquer NF emitida
   fora do sistema: informe o número, a série e a emissão, e "Registrar NF".
+
+## A medição aprovada
+
+A medição mensal aprovada pelo cliente é uma linha só em A faturar, "Medição
+MM/AAAA", pelo total aprovado, com o contrato e o dia da aprovação. Marcada,
+o painel mostra o que vai na NF, linha por linha: cada demanda da medição,
+com o título e a soma das linhas dela, e as linhas sem demanda (a equipe
+fixa do contrato misto), pelo serviço e pelo mês.
+
+- As demandas da medição não aparecem à parte: faturam com ela e ficam
+  faturadas juntas.
+- A medição espera em "Esperando" quando:
+  - ainda não foi aprovada ("Medição pendente");
+  - alguma demanda dela não está A faturar ("Demanda pendente", com o
+    número). O Comercial valida a demanda, e a medição fica pronta.
+  - o Comercial cancelou a autorização da medição ("Sem autorização
+    registrada").
+- Pela Omie, a medição vai como um item só da NFS-e, "Medição de MM/AAAA".
+- Cancelado o registro da NF, a medição volta a A faturar com as demandas.
 
 ## A NFS-e pela Omie (tela Emissões)
 

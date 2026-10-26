@@ -30,9 +30,10 @@ import { cn } from "@/lib/utils";
 /**
  * Financeiro › A faturar (parte 4.1b, no molde de docs/mockups/Financeiro.dc.html
  * e ComAutorizacoes.dc.html), só a apresentação: os dados e as ações chegam
- * por props (pages/financeiro/a-faturar.tsx). As demandas prontas e a
- * armazenagem emitida no WMS (parte 7.2b), por cliente, as que esperam e o
- * painel de registrar a NF. Onde a NFS-e sai pela Omie (parte 7.4e), o
+ * por props (pages/financeiro/a-faturar.tsx). As demandas prontas, a
+ * armazenagem emitida no WMS (parte 7.2b) e a medição aprovada (pergunta 64,
+ * o canvas "Telas das decisões de 26/10", item 7), por cliente, as que
+ * esperam e o painel de registrar a NF, com a medição linha por linha. Onde a NFS-e sai pela Omie (parte 7.4e), o
  * painel escolhe a via: pela Omie, que numera e emite, ou emitida fora (o
  * CT-e), registrada como antes. Sem legenda: rótulos, dados e ações; uma
  * ação principal, "Emitir pela Omie" ou "Registrar NF".
@@ -139,7 +140,26 @@ function Descricao({ linha, cliente }: { linha: LinhaAFaturar; cliente: boolean 
       <span className="text-base font-extrabold tabular-nums">{rotuloDaLinha(linha)}</span>
       {linha.demanda.titulo ? <span className="text-sm font-bold">{linha.demanda.titulo}</span> : null}
       <span className="text-xs font-semibold text-muted-foreground">{detalhe}</span>
+      {linha.resumo ? <span className="text-xs font-semibold text-muted-foreground">{linha.resumo}</span> : null}
     </div>
+  );
+}
+
+/** A medição no painel: as demandas dela e as linhas sem demanda, cada uma com o valor. */
+function Composicao({ linha }: { linha: LinhaAFaturar }) {
+  if (!linha.composicao.length) return null;
+  return (
+    <ul aria-label={`Na NF da ${rotuloDaLinha(linha)}`} className="ml-3 border-l border-border pl-3">
+      {linha.composicao.map((item) => (
+        <li key={item.chave} className="flex items-baseline justify-between gap-3 border-t border-muted py-1.5 first:border-t-0">
+          <span className="flex min-w-0 flex-col">
+            <span className="text-sm font-bold tabular-nums">{item.rotulo}</span>
+            {item.detalhe ? <span className="truncate text-xs font-semibold text-muted-foreground">{item.detalhe}</span> : null}
+          </span>
+          <span className="text-sm font-bold tabular-nums">{formatarReais(item.valorCents)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -335,23 +355,26 @@ function Painel({ linhas, painel, hoje, ocupado, omie = false, acoes }: AFaturar
         <Pill>{marcadas.length}</Pill>
       </div>
       {marcadas.map((linha) => (
-        <div key={linha.demanda.numero} className="flex items-center gap-2.5 rounded-md border border-border py-2 pl-3 pr-1.5">
-          <div className="flex min-w-0 flex-1 flex-col">
-            <b className="text-sm font-extrabold tabular-nums">{rotuloDaLinha(linha)}</b>
-            {linha.demanda.titulo ? <span className="truncate text-xs font-semibold text-muted-foreground">{linha.demanda.titulo}</span> : null}
+        <div key={linha.demanda.numero} className="flex flex-col gap-1 rounded-md border border-border py-2 pl-3 pr-1.5">
+          <div className="flex items-center gap-2.5">
+            <div className="flex min-w-0 flex-1 flex-col">
+              <b className="text-sm font-extrabold tabular-nums">{rotuloDaLinha(linha)}</b>
+              {linha.demanda.titulo ? <span className="truncate text-xs font-semibold text-muted-foreground">{linha.demanda.titulo}</span> : null}
+            </div>
+            <span className="text-sm font-extrabold tabular-nums">{reais(linha.valorCents)}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`Tirar ${rotuloDaLinha(linha)}`}
+              className="size-8"
+              onClick={() => acoes.marcar(linha.demanda.numero)}
+              disabled={ocupado}
+            >
+              <X aria-hidden="true" />
+            </Button>
           </div>
-          <span className="text-sm font-extrabold tabular-nums">{reais(linha.valorCents)}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={`Tirar ${rotuloDaLinha(linha)}`}
-            className="size-8"
-            onClick={() => acoes.marcar(linha.demanda.numero)}
-            disabled={ocupado}
-          >
-            <X aria-hidden="true" />
-          </Button>
+          <Composicao linha={linha} />
         </div>
       ))}
       <div className="flex items-baseline justify-between gap-3 text-sm">

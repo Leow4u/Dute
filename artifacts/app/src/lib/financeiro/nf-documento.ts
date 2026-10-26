@@ -13,7 +13,9 @@ import { rotuloDaNf, type FaturaDoFinanceiro } from "./faturas";
  * RV validada pelo cliente (a cópia congelada no envio) ou, na medição
  * mensal, as linhas da demanda na medição aprovada, com a autorização que o
  * cliente deu (pedido e aceite). O valor de cada demanda e o total são os da
- * fatura, que o servidor calculou; as linhas mostram de onde ele saiu.
+ * fatura, que o servidor calculou; as linhas mostram de onde ele saiu. A
+ * medição aprovada (pergunta 64) traz também as linhas sem demanda dela,
+ * num bloco da medição.
  *
  * Só quem lê preço chega aqui: owner, admin e financeiro, pela rota, e as
  * regras de `faturas`, `quotes` e `medicoes`.
@@ -99,9 +101,10 @@ function linhasDaRv(revisao: Registro | null | undefined): { linhas: LinhaDoDemo
   };
 }
 
-function linhasDaMedicao(numero: string, medicaoId: string, dados: Registro | null | undefined): { linhas: LinhaDoDemonstrativo[]; cents: number } {
+/** As linhas da medição da demanda (`numero`), ou as sem demanda (`null`). */
+function linhasDaMedicao(numero: string | null, medicaoId: string, dados: Registro | null | undefined): { linhas: LinhaDoDemonstrativo[]; cents: number } {
   const medicao = dados ? medicaoDoRegistro(medicaoId, dados) : null;
-  const daDemanda = (medicao?.linhas ?? []).filter((linha) => linha.demanda_numero === numero);
+  const daDemanda = (medicao?.linhas ?? []).filter((linha) => (linha.demanda_numero ?? null) === numero);
   return {
     linhas: daDemanda.map((linha) => ({
       chave: linha.id,
@@ -133,6 +136,24 @@ export function demonstrativoDaNf(fatura: FaturaDoFinanceiro, fontes: FontesDoDe
       confere: origem.linhas.length > 0 && origem.cents === demanda.valorCents,
     };
   });
+  // A medição aprovada: as linhas sem demanda, no bloco dela (as demandas dela já vieram acima).
+  const daMedicao = fatura.medicoes.flatMap((medicao): DemandaDoDemonstrativo[] => {
+    const cents = medicao.semDemanda.reduce((soma, linha) => soma + linha.valorCents, 0);
+    if (!medicao.medicaoId || cents <= 0) return [];
+    const origem = linhasDaMedicao(null, medicao.medicaoId, fontes.medicoes.get(medicao.medicaoId));
+    return [
+      {
+        numero: medicao.medicaoId,
+        rotulo: rotuloDaCompetencia(medicao.medicaoId),
+        titulo: medicao.semDemanda.map((linha) => linha.servico).join(" · "),
+        refCliente: null,
+        autorizacao: null,
+        linhas: origem.linhas,
+        total: formatarReais(cents),
+        confere: origem.linhas.length > 0 && origem.cents === cents,
+      },
+    ];
+  });
   const titulo = rotuloDaNf(fatura);
   return {
     titulo,
@@ -143,7 +164,7 @@ export function demonstrativoDaNf(fatura: FaturaDoFinanceiro, fontes: FontesDoDe
       { rotulo: "Vencimento", valor: dataBr(fatura.vencimento) },
       { rotulo: "Forma de pagamento", valor: FORMA_ROTULO[fatura.forma] },
     ],
-    demandas,
+    demandas: [...demandas, ...daMedicao],
     total: formatarReais(fatura.valorCents),
     observacao: fatura.observacao,
   };
