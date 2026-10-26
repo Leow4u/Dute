@@ -1679,3 +1679,43 @@ Achada em 25/10/2026, na mesma revisão. Está na produção desde a parte
   que não é número vai vazio, e a callable recusa com a mensagem dela.
 - **Teste:** `pagina.test.tsx`, com a página de veículos e a callable de
   mentira: "6.000" kg vão como 6000 e "12,5" m³ como 12,5. Antes, 6 kg.
+
+### Pergunta 58: cancelar a vistoria em execução
+
+Feita em 26/10/2026, com a decisão do Leonardo e a tela do canvas "Telas das
+decisões de 26/10" (item 1).
+
+- **O problema.** A vistoria iniciada que não deu certo (o cliente não
+  recebeu a equipe, o local fechado) não tinha saída: só a OS aberta ou
+  agendada se cancelava, e o envio ao Comercial pede foto e itens. Enquanto
+  ela existia, a demanda recusava outra vistoria.
+- **O servidor** (`saveServiceOrder`, ação `cancel`): a vistoria também se
+  cancela em execução (`exigirCancelavel`, em `domain/os.ts`), com a edição
+  vista e o motivo de 3 a 200 caracteres, como as outras. A OS de serviço
+  iniciada continua sem cancelar ("Só uma OS aberta ou agendada pode ser
+  cancelada.").
+  - O cancelamento grava, além do motivo, o instante e quem cancelou
+    (`cancelamento.instante` e `cancelamento.por`, com o uid e o nome), em
+    toda OS cancelada daqui em diante. A cancelada antes tem só o motivo.
+  - O evento `os.cancelled` grava quem cancelou (o ator), sem o motivo, que
+    é texto livre e fica na OS.
+  - As etapas e as fotos da vistoria ficam na OS. Cancelada, a demanda pode
+    ter outra vistoria, e o celular a mostra como "OS cancelada", como a
+    cancelada agendada.
+- **A tela** (`pages/operacao/os.tsx`): "Cancelar vistoria" no alto da OS da
+  vistoria aberta, agendada ou em execução, para owner, admin e interno.
+  Abre o painel com o "Motivo" (obrigatório), "Voltar" e "Cancelar
+  vistoria" (`cancelar-vistoria-view.tsx`). O histórico da OS ganha a linha
+  "Cancelada", com quem cancelou, o motivo e a hora.
+- **Testes:**
+  - `os.test.ts`: a vistoria em execução se cancela, com a edição vista; a
+    OS de serviço iniciada e a vistoria em revisão ou revisada, não; a
+    leitura do cancelamento de antes e o de agora;
+  - `vistoria.integration.test.ts`, no emulador: a coordenação cancela a
+    vistoria em execução com o motivo, a OS guarda quem e quando, o evento
+    grava o ator sem o motivo, o campo não registra mais nela e a demanda
+    recebe outra vistoria; a OS de serviço iniciada continua sem cancelar;
+  - no app, `os.test.tsx` (o pedido com a edição e o motivo, o motivo que
+    falta, Voltar, quem não vê o botão), `cancelar-vistoria-view.test.tsx`
+    (os textos e o `axe`) e `os-view.test.tsx` (a linha do histórico).
+

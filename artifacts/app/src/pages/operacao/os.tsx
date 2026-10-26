@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ClipboardCheck, ClipboardPen, ImagePlus, Printer, RotateCcw } from "lucide-react";
+import { Ban, ClipboardCheck, ClipboardPen, ImagePlus, Printer, RotateCcw } from "lucide-react";
 import { collection, doc } from "firebase/firestore";
 import { Link, useSearch } from "wouter";
 
@@ -24,6 +24,7 @@ import { useUrlsDasFotos } from "@/lib/operacao/use-urls-das-fotos";
 import { fichaDaBusca, hrefDaImpressaoDaOs, hrefDaRevisao } from "@/lib/operacao/navegacao";
 
 import { AndamentoView } from "./andamento-view";
+import { CancelarVistoriaView } from "./cancelar-vistoria-view";
 import { ReabrirView } from "./reabrir-view";
 import { OsView, type EstadoDaFicha } from "./os-view";
 
@@ -32,8 +33,14 @@ import { OsView, type EstadoDaFicha } from "./os-view";
  * demanda, o cliente e as fotos sobre OsView, e o painel de Registrar
  * andamento, que chama as callables em ordem e depois sobe as fotos da
  * ocorrência. Na conclusão, sobem antes as fotos do final (etapa Fim) e a
- * foto da via assinada; completeServiceOrder vem por último.
+ * foto da via assinada; completeServiceOrder vem por último. Na vistoria
+ * aberta, agendada ou em execução, a coordenação tem Cancelar vistoria, com
+ * o motivo (pergunta 58).
  */
+
+/** A vistoria que se cancela: a mesma regra do servidor (exigirCancelavel). */
+const STATUS_DA_VISTORIA_QUE_CANCELA = ["aberta", "agendada", "em_execucao"] as const;
+const PAPEIS_QUE_CANCELAM = ["owner", "admin", "interno"] as const;
 
 export default function PaginaOs() {
   const numero = fichaDaBusca(useSearch()) ?? "";
@@ -64,6 +71,32 @@ export default function PaginaOs() {
   const { user } = useAppUser();
   const podeReabrir = user?.publicMetadata.role === "owner" || user?.publicMetadata.role === "admin";
   const [reabrir, setReabrir] = useState<{ motivo: string; tentou: boolean; chave: string } | null>(null);
+  const podeCancelar =
+    (PAPEIS_QUE_CANCELAM as readonly string[]).includes(user?.publicMetadata.role ?? "") &&
+    ficha?.tipo === "vistoria" &&
+    (STATUS_DA_VISTORIA_QUE_CANCELA as readonly string[]).includes(ficha.status);
+  const [cancelar, setCancelar] = useState<{ motivo: string; tentou: boolean; chave: string } | null>(null);
+
+  async function confirmarCancelamento() {
+    if (!ficha || !cancelar) return;
+    if (cancelar.motivo.trim().length < 3) return setCancelar({ ...cancelar, tentou: true });
+    setOcupado(true);
+    setErro(null);
+    try {
+      await chamarOperacao("saveServiceOrder", {
+        action: "cancel",
+        idempotency_key: cancelar.chave,
+        numero: ficha.numero,
+        expected_edicao: ficha.edicao,
+        motivo: cancelar.motivo.trim(),
+      });
+      setCancelar(null);
+    } catch (error) {
+      setErro(mensagemDoErro(error));
+    } finally {
+      setOcupado(false);
+    }
+  }
 
   async function confirmarReabertura() {
     if (!ficha || !reabrir) return;
@@ -170,10 +203,23 @@ export default function PaginaOs() {
                 Imprimir
               </Link>
             </Button>
-            {recebeAndamento && !form ? (
+            {recebeAndamento && !form && !cancelar ? (
               <Button type="button" onClick={abrir}>
                 <ClipboardPen aria-hidden="true" className="size-4" />
                 Registrar andamento
+              </Button>
+            ) : null}
+            {podeCancelar && !form && !cancelar ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setErro(null);
+                  setCancelar({ motivo: "", tentou: false, chave: novaChave() });
+                }}
+              >
+                <Ban aria-hidden="true" className="size-4" />
+                Cancelar vistoria
               </Button>
             ) : null}
             {ficha.status === "em_revisao" ? (
@@ -201,7 +247,17 @@ export default function PaginaOs() {
         ) : null
       }
       painel={
-        ficha && reabrir ? (
+        ficha && cancelar ? (
+          <CancelarVistoriaView
+            motivo={cancelar.motivo}
+            onMotivo={(motivo) => setCancelar({ ...cancelar, motivo })}
+            problema={cancelar.tentou && cancelar.motivo.trim().length < 3 ? "Informe o motivo do cancelamento." : null}
+            erro={erro}
+            ocupado={ocupado}
+            onVoltar={() => setCancelar(null)}
+            onCancelar={() => void confirmarCancelamento()}
+          />
+        ) : ficha && reabrir ? (
           <ReabrirView
             motivo={reabrir.motivo}
             onMotivo={(motivo) => setReabrir({ ...reabrir, motivo })}

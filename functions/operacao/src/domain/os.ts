@@ -107,6 +107,12 @@ export type VeiculoDaOs = {
   empresa: string | null;
 };
 
+/**
+ * O cancelamento da OS: o motivo e, desde a pergunta 58, quando e quem
+ * cancelou (o histórico da OS mostra). O de antes tem só o motivo.
+ */
+export type CancelamentoDaOs = { motivo: string; instante?: string; por?: { uid: string; nome: string | null } };
+
 export type OsGravada = {
   numero: string;
   demanda: string;
@@ -129,7 +135,7 @@ export type OsGravada = {
   veiculos: VeiculoDaOs[];
   instrucoes: string | null;
   edicao: number;
-  cancelamento: { motivo: string } | null;
+  cancelamento: CancelamentoDaOs | null;
 };
 
 // --- Entrada ------------------------------------------------------------------------------
@@ -808,6 +814,18 @@ export function exigirPlanejavel(atual: OsGravada | null, numeroVisto: string, e
   return atual;
 }
 
+/**
+ * A OS que se cancela: aberta ou agendada; a vistoria também em execução,
+ * quando não deu certo no local (o cliente não recebeu a equipe, o local
+ * fechado; pergunta 58). A OS de serviço iniciada não se cancela.
+ */
+export function exigirCancelavel(atual: OsGravada | null, numeroVisto: string, edicao: number): OsGravada {
+  if (atual?.tipo !== "vistoria" || atual.status !== "em_execucao") return exigirPlanejavel(atual, numeroVisto, edicao, "cancelada");
+  if (atual.numero !== numeroVisto) throw new HttpsError("internal", "O número da OS não confere.");
+  if (atual.edicao !== edicao) falha("A OS foi atualizada. Recarregue e tente de novo.");
+  return atual;
+}
+
 export type AgendaResolvida = {
   janela: JanelaDaOs;
   equipe: PessoaDaOs[];
@@ -837,8 +855,9 @@ export function comItens(atual: OsGravada, itens: ItemDaOs[], escopoRv: number |
   return { ...atual, itens, servicos: servicosDosItens(itens), escopo_rv: escopoRv, edicao: atual.edicao + 1 };
 }
 
-export function cancelada(atual: OsGravada, motivoDoCancelamento: string): OsGravada {
-  return { ...atual, status: "cancelada", edicao: atual.edicao + 1, cancelamento: { motivo: motivoDoCancelamento } };
+/** Cancelada, com o motivo, o instante e quem cancelou. */
+export function cancelada(atual: OsGravada, motivoDoCancelamento: string, por: { uid: string; nome: string | null }, instante: string): OsGravada {
+  return { ...atual, status: "cancelada", edicao: atual.edicao + 1, cancelamento: { motivo: motivoDoCancelamento, instante, por } };
 }
 
 // --- Leitura ------------------------------------------------------------------------------
@@ -948,7 +967,6 @@ export function osLida(numeroDaLeitura: string, data: Record<string, unknown>): 
       ? [agendaAntiga.veiculo_id]
       : [];
   const itens = Array.isArray(data.itens) ? data.itens.map(itemLido) : [];
-  const cancelamento = data.cancelamento as { motivo?: unknown } | null | undefined;
   return {
     numero: numeroDaLeitura,
     demanda: data.demanda,
@@ -972,6 +990,18 @@ export function osLida(numeroDaLeitura: string, data: Record<string, unknown>): 
     veiculos: veiculosBrutos.map(veiculoLidoDaOs),
     instrucoes: textoOuNull(data.instrucoes),
     edicao: data.edicao,
-    cancelamento: cancelamento && typeof cancelamento === "object" && typeof cancelamento.motivo === "string" ? { motivo: cancelamento.motivo } : null,
+    cancelamento: cancelamentoLido(data.cancelamento),
+  };
+}
+
+function cancelamentoLido(bruto: unknown): CancelamentoDaOs | null {
+  if (!bruto || typeof bruto !== "object") return null;
+  const dados = bruto as Record<string, unknown>;
+  if (typeof dados.motivo !== "string") return null;
+  const por = dados.por && typeof dados.por === "object" ? (dados.por as Record<string, unknown>) : null;
+  return {
+    motivo: dados.motivo,
+    ...(typeof dados.instante === "string" ? { instante: dados.instante } : {}),
+    ...(por && typeof por.uid === "string" ? { por: { uid: por.uid, nome: typeof por.nome === "string" ? por.nome : null } } : {}),
   };
 }

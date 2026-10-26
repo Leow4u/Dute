@@ -14,6 +14,7 @@ import {
   enderecoEmLinha,
   equipeComLogin,
   equipeDaOs,
+  exigirCancelavel,
   exigirPlanejavel,
   fatiaDoSaldo,
   interpretarOs,
@@ -501,14 +502,34 @@ describe("documento da OS", () => {
   });
 
   it("cancelar pede a edição vista e não repete; só aberta ou agendada se planeja", () => {
-    const efeito = cancelada(exigirPlanejavel(os(), "10045-01", 1, "cancelada"), "Cliente adiou");
+    const por = { uid: "interno-1", nome: "Paula" };
+    const efeito = cancelada(exigirCancelavel(os(), "10045-01", 1), "Cliente adiou", por, "2026-10-26T17:31:00.000Z");
     assert.equal(efeito.status, "cancelada");
     assert.equal(efeito.edicao, 2);
-    assert.deepEqual(efeito.cancelamento, { motivo: "Cliente adiou" });
-    assert.match(rejeita(() => exigirPlanejavel(efeito, "10045-01", 2, "cancelada")).message, /já está cancelada/);
+    assert.deepEqual(efeito.cancelamento, { motivo: "Cliente adiou", instante: "2026-10-26T17:31:00.000Z", por });
+    assert.match(rejeita(() => exigirCancelavel(efeito, "10045-01", 2)).message, /já está cancelada/);
     assert.equal(rejeita(() => exigirPlanejavel(os(), "10045-01", 9, "agendada")).code, "failed-precondition");
     assert.match(rejeita(() => exigirPlanejavel(os({ status: "em_execucao" }), "10045-01", 1, "agendada")).message, /Só uma OS aberta ou agendada/);
     assert.equal(rejeita(() => exigirPlanejavel(null, "10045-01", 1, "agendada")).code, "not-found");
+  });
+
+  it("a vistoria em execução se cancela, com a edição vista; a OS de serviço iniciada, não (pergunta 58)", () => {
+    const vistoria = os({ tipo: "vistoria", status: "em_execucao", edicao: 3 });
+    assert.equal(exigirCancelavel(vistoria, "10045-01", 3), vistoria);
+    assert.match(rejeita(() => exigirCancelavel(vistoria, "10045-01", 2)).message, /foi atualizada/);
+    assert.match(rejeita(() => exigirCancelavel(os({ status: "em_execucao" }), "10045-01", 1)).message, /^Só uma OS aberta ou agendada pode ser cancelada\.$/);
+    for (const status of ["em_revisao", "revisada"] as const) {
+      assert.match(rejeita(() => exigirCancelavel(os({ tipo: "vistoria", status }), "10045-01", 1)).message, /^Só uma OS aberta ou agendada pode ser cancelada\.$/);
+    }
+  });
+
+  it("a OS cancelada antes da pergunta 58 tem só o motivo; a de agora, o instante e quem cancelou", () => {
+    const base = { status: "cancelada", edicao: 2, demanda: "10045", customer_code: "ITAU" };
+    assert.deepEqual(osLida("10045-01", { ...base, cancelamento: { motivo: "Cliente adiou" } }).cancelamento, { motivo: "Cliente adiou" });
+    assert.deepEqual(
+      osLida("10045-01", { ...base, cancelamento: { motivo: "Local fechado", instante: "2026-10-26T17:31:00.000Z", por: { uid: "interno-1", nome: "Paula" } } }).cancelamento,
+      { motivo: "Local fechado", instante: "2026-10-26T17:31:00.000Z", por: { uid: "interno-1", nome: "Paula" } },
+    );
   });
 
   it("recusa data que já passou ou que não existe", () => {

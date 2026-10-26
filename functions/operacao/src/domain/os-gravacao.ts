@@ -14,6 +14,7 @@ import {
   comItens,
   demandaDiretaSemEscopo,
   equipeDaOs,
+  exigirCancelavel,
   exigirPlanejavel,
   fatiaDoSaldo,
   interpretarOs,
@@ -520,8 +521,8 @@ async function cancelar(
   acao: Extract<AcaoOs, { action: "cancel" }>,
   caller: OperacaoProfile,
 ): Promise<Efeito> {
-  const atual = exigirPlanejavel(await lerOs(transaction, db, acao.numero), acao.numero, acao.expected_edicao, "cancelada");
-  const os = cancelada(atual, acao.motivo);
+  const atual = exigirCancelavel(await lerOs(transaction, db, acao.numero), acao.numero, acao.expected_edicao);
+  const os = cancelada(atual, acao.motivo, { uid: caller.uid, nome: caller.name ?? null }, new Date().toISOString());
   // Com OS já revisada, o resumo da demanda se reconta sem a cancelada; sem
   // outra em aberto, a direta vai à Execução a orçar, como na revisão.
   const demandaRef = db.collection(DEMANDS).doc(os.demanda);

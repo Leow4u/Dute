@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
-import { fichaDaLeitura, type FichaDaOs } from "@/lib/operacao/ficha-da-os";
+import { fichaDaLeitura, historicoDaOs, type FichaDaOs } from "@/lib/operacao/ficha-da-os";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
@@ -163,9 +163,30 @@ describe("OS", () => {
   });
 
   it("cancelada mostra o motivo no lugar dos passos", () => {
-    const textos = textosDaTela(render({ ficha: { ...FICHA, status: "cancelada", cancelamento: "Cliente desistiu" } }));
+    const textos = textosDaTela(render({ ficha: { ...FICHA, status: "cancelada", cancelamento: { motivo: "Cliente desistiu", instante: null, nome: null } } }));
     expect(textos).toContain("Cancelada · Cliente desistiu");
     expect(textos).not.toContain("Revisar");
+    // Cancelada antes da pergunta 58: sem o instante, o histórico não ganha a linha.
+    expect(textos.filter((texto) => texto.includes("Cliente desistiu"))).toEqual(["Cancelada · Cliente desistiu"]);
+  });
+
+  it("a vistoria cancelada em execução: o histórico mostra quem cancelou, o motivo e a hora (pergunta 58)", () => {
+    const cancelada = fichaDaLeitura("10045-01", {
+      status: "cancelada",
+      tipo: "vistoria",
+      edicao: 4,
+      demanda: "10045",
+      customer_code: "ITAU",
+      etapas: [{ etapa: "chegada_origem", ...registro("2026-10-22T17:05:00.000Z", CARLOS) }],
+      equipe: [{ colaborador_id: CARLOS, nome: "Carlos Silva", papel: "lider", vinculo: "proprio", no_app: true }],
+      cancelamento: { motivo: "O local estava fechado; o cliente não recebeu a equipe.", instante: "2026-10-22T17:31:00.000Z", por: { uid: "interno-1", nome: "Mariana Lopes" } },
+    }) as FichaDaOs;
+    const textos = textosDaTela(render({ ficha: cancelada }));
+    expect(textos).toContain("Cancelada · O local estava fechado; o cliente não recebeu a equipe.");
+    expect(textos).toContain("Cancelada");
+    expect(textos).toContain("Mariana Lopes · O local estava fechado; o cliente não recebeu a equipe. · 14:31");
+    // A mais nova primeiro: o cancelamento acima da chegada.
+    expect(historicoDaOs(cancelada, HOJE).map((entrada) => entrada.titulo)).toEqual(["Cancelada", "Chegada na origem"]);
   });
 
   it("sem legenda: só rótulos, dados e ações", () => {

@@ -959,6 +959,7 @@ defeito.
     **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item 1):
     "Cancelar vistoria" no alto da OS da vistoria agendada ou em
     execução, para owner, admin e interno, com o motivo obrigatório.
+    **Feita no mesmo dia** (`fase-3-operacao.md`, "Pergunta 58").
 59. Depois de aprovado, o pedido de retirada não se cancela nem se separa a
     menos. "Encerrar" muda só o status: a reserva fica presa, e as tarefas de
     separação e expedição continuam abertas. Na separação, o item faltando
