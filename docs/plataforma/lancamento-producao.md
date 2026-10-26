@@ -733,20 +733,16 @@ dos marcos 2, 3 e 4. O registro está em `fase-4-financeiro.md`, "Parte
   (`docs/deploy-functions-manual.md`, "Function com segredo").
 - A entrega do WMS fatura pela demanda ou na fatura mensal do WMS?
   (`fase-4-financeiro.md`, decisões).
-- A receita por serviço (pergunta 26 do plano).
 - As perguntas 12 a 14 da Fase 3, em `operacao-producao.md`, seção 7.
-- As perguntas 58 a 60 do plano (seção 13, "Revisão de defeitos"): a
-  vistoria iniciada sem saída, o pedido aprovado que não se cancela nem se
-  separa a menos, e a data de emissão da fatura da NFS-e da Omie.
 - A pergunta 70 do plano, da parte 8.4 do RH: Pessoas mostrar também quem
   está inativo na Operação com a admissão sem desligamento, para o RH
   gravar o desligamento (`fase-8-rh.md`).
-- A pergunta 64 do plano, antes do primeiro contrato com medição mensal: a
-  medição aprovada não tem como entrar numa NF pelo que não é de demanda.
-- As perguntas 65 e 66 do plano, do app do campo, com o alinhamento de tela:
-  a inclusão guardada de item novo, que não aparece até chegar, e a
-  assinatura da conclusão recusada, que fica sem a OS.
-- As perguntas 67 a 69 do plano (seção 13, "Acesso e convites"): os
-  convites pendentes, que se refazem depois de publicar, o aceite que não
-  confere se o e-mail foi verificado, e o cliente arquivado ou "Sem portal",
-  cujas pessoas seguem entrando.
+- Cancelar e convidar de novo cada convite pendente, com o owner, em
+  Configurações › Usuários (pergunta 67 do plano, decidida em 26/10/2026;
+  seção 5, item 7).
+- O prazo de guarda das fotos do final e da assinatura da OS (decisão 1 da
+  LGPD, `lgpd.md`, seção 5).
+
+As perguntas 26, 58 a 60 e 64 a 69 do plano e as 12 da LGPD foram
+respondidas em 26/10/2026 (plano, seção 13; `lgpd.md`, seção 5). O que elas
+pedem entra em partes próprias, as de tela com o alinhamento antes.

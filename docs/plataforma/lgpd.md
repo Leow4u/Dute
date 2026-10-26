@@ -466,6 +466,44 @@ muda o sistema: cada mudança entra num PR próprio, depois da decisão.
     Recomendação: se a região importa para a Dutelog, fixar uma onde os
     modelos usados existam e registrar a decisão no runbook da Fase 5.
 
+### Decisões do Leonardo (26/10/2026)
+
+1. **Fotos do final e assinatura da OS:** não apagar depois do pagamento.
+   O cliente pode pedir uma consulta meses depois, então ficam guardadas
+   por um prazo maior, que o Leonardo ainda fixa. A sugestão é 5 anos, o
+   prazo de guarda dos documentos fiscais da NF.
+2. **Fotos das etapas, das ocorrências e da vistoria:** como recomendado,
+   12 meses depois de a OS ficar revisada. A foto ligada a divergência
+   cobrada ou a aditivo segue o item 1.
+3. **Documento do responsável e de quem retira:** como recomendado. Deixa
+   de pedir o número: na conclusão, nome, cargo e assinatura; na retirada,
+   nome e placa. A mudança no formulário vem com o alinhamento da tela.
+4. **Dados de campo identificáveis:** ficam como estão, com o nome.
+5. **RH depois que a pessoa sai:** 2 anos depois do desligamento, com todo
+   o histórico do colaborador nesse tempo. Depois, apagar os arquivos e os
+   registros e deixar o nome e o id, com o rh disparando e o evento. Antes
+   de apagar exame, confirmar com a medicina do trabalho: a NR-7 pede um
+   prazo maior para o prontuário médico.
+6. **CPF de freelancer e terceiro:** continua obrigatório.
+7. **Versões da exportação do RH:** como recomendado, a última de cada
+   competência; das substituídas, só o hash e as contagens depois de um
+   prazo curto.
+8. **Avisos, fila de e-mail, solicitações, conversas e contas de quem
+   saiu:** como recomendado. E-mail e aviso, 90 dias; conversa e uso do
+   agente, 12 meses; solicitação e anexo seguem a demanda; conta removida
+   há mais de 12 meses: apagar a conta do Auth e anonimizar o perfil.
+9. **Registro de leitura:** como recomendado, com a tela só para o owner.
+   O Cloud Audit Logs de leitura fica para decidir à parte.
+10. **Cópias:** como recomendado. O `dute-btg` e os exports dele até
+    02/12/2026, os exports do Auth e os manifestos da Fase 1 quando o corte
+    não precisar mais de volta, e ciclo de vida nos buckets de export.
+11. **Contato principal do cliente:** fica onde está. A equipe de campo
+    precisa ver o contato do responsável por acompanhar a atividade: o app
+    do campo passa a mostrar o contato do local da OS (nome e telefone),
+    com o alinhamento da tela.
+12. **Região do Vertex AI:** como recomendado, fixar uma região onde os
+    modelos usados existam e registrar no runbook da Fase 5.
+
 ## Dúvidas
 
 - **EXIF das fotos.** O app sobe o arquivo escolhido sem regravar
