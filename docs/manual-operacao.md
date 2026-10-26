@@ -273,7 +273,9 @@ dias).
 - **Etapas:** a próxima num botão grande; "Outra etapa" para pular.
 - **Itens:** + e − até o previsto, depois da primeira etapa; no previsto,
   "Além do planejado · Incluir". "Incluir item executado" aceita também item
-  do catálogo, sem preço.
+  do catálogo, sem preço. Sem sinal, o item que a OS não tem aparece como
+  linha nova, com o relógio, a quantidade e "guardada" com a hora, sem + e −,
+  até chegar; a inclusão do mesmo item do catálogo soma nela.
 - **"Equipe no local":** "Entrada" e "Saída". O líder marca as de todos,
   inclusive de quem não tem app; os outros, só a própria. Vale a primeira
   marca, e a saída pede a entrada.

@@ -1,4 +1,5 @@
 import { PAPEL_ROTULO } from "../operacao/cadastro";
+import type { ItemDoCatalogo } from "../operacao/demanda-direta";
 import { ETAPAS_DA_OS, ETAPA_ROTULO, horaDe, servicosEmTexto, type EtapaDaOs, type FichaDaOs, type PessoaLida } from "../operacao/ficha-da-os";
 import { milesimos } from "../operacao/hoje";
 import type { NovoRegistro, RegistroNaFila } from "./fila";
@@ -170,7 +171,8 @@ export type ItemNoCampo = {
  * guardada soma ao previsto e ao feito. O feito guardado é absoluto, e a
  * inclusão guardada depois dele soma por cima, na ordem em que o servidor os
  * grava: sem ela, o toque seguinte mandava um feito sem a inclusão, que ia
- * depois dela e a apagava.
+ * depois dela e a apagava. A inclusão do item do catálogo que a linha já
+ * tem soma nela, como o servidor grava.
  */
 export function itensNoCampo(ficha: FichaDaOs, pendentes: readonly RegistroNaFila[]): ItemNoCampo[] {
   const meus = pendentesDa(ficha, pendentes).filter((registro) => registro.callable === "registerItem");
@@ -178,7 +180,7 @@ export function itensNoCampo(ficha: FichaDaOs, pendentes: readonly RegistroNaFil
     registros.reduce((soma, registro) => soma + milesimos(textoDe(registro.dados.quantidade)), 0);
   return ficha.itens.map((item) => {
     const incluidoGravado = item.incluidos.reduce((soma, inclusao) => soma + milesimos(inclusao.quantidade), 0);
-    const daLinha = meus.filter((registro) => registro.dados.linha === item.id);
+    const daLinha = meus.filter((registro) => registro.dados.linha === item.id || (item.lpuItemId !== null && registro.dados.lpu_item_id === item.lpuItemId));
     const inclusoesGuardadas = daLinha.filter((registro) => registro.dados.action === "added");
     const incluidoGuardado = quantidadeIncluida(inclusoesGuardadas);
     const ultimoFeito = daLinha.map((registro) => registro.dados.action).lastIndexOf("executed");
@@ -196,6 +198,58 @@ export function itensNoCampo(ficha: FichaDaOs, pendentes: readonly RegistroNaFil
       guardado: Boolean(feitoGuardado) || inclusoesGuardadas.length > 0,
     };
   });
+}
+
+/**
+ * A inclusão guardada de um item que a OS não tem (pergunta 65; canvas de
+ * 26/10/2026, item 3): aparece como linha nova até chegar, com a quantidade
+ * e a hora em que foi guardada, sem + e − (a linha ainda não existe no
+ * servidor). As do mesmo item do catálogo somam numa linha, e cada avulso é
+ * uma linha, como o servidor grava.
+ */
+export type InclusaoGuardada = {
+  chave: string;
+  item: string;
+  /** O serviço do item do catálogo, ou "Item avulso". */
+  detalhe: string | null;
+  /** Em milésimos. */
+  quantidade: number;
+  unidade: string;
+  /** "10:42": a hora da última inclusão guardada da linha. */
+  hora: string;
+};
+
+export function inclusoesGuardadas(ficha: FichaDaOs, pendentes: readonly RegistroNaFila[], catalogo: readonly ItemDoCatalogo[]): InclusaoGuardada[] {
+  const naOs = new Set(ficha.itens.flatMap((item) => (item.lpuItemId ? [item.lpuItemId] : [])));
+  const linhas: InclusaoGuardada[] = [];
+  const linhaDoItem = new Map<string, number>();
+  for (const registro of pendentesDa(ficha, pendentes)) {
+    const { dados } = registro;
+    if (registro.callable !== "registerItem" || dados.action !== "added" || dados.linha) continue;
+    const lpu = textoDe(dados.lpu_item_id);
+    // O item do catálogo que a OS já tem soma na linha dela (itensNoCampo).
+    if (lpu && naOs.has(lpu)) continue;
+    const quantidade = milesimos(textoDe(dados.quantidade));
+    const hora = horaDe(textoDe(dados.instante) || registro.criadoEm);
+    const indice = lpu ? linhaDoItem.get(lpu) : undefined;
+    if (indice !== undefined) {
+      linhas[indice] = { ...linhas[indice], quantidade: linhas[indice].quantidade + quantidade, hora };
+    } else if (lpu) {
+      const doCatalogo = catalogo.find((item) => item.id === lpu);
+      linhaDoItem.set(lpu, linhas.length);
+      linhas.push({
+        chave: registro.chave,
+        item: doCatalogo?.item ?? "Item do catálogo",
+        detalhe: doCatalogo?.servico ?? null,
+        quantidade,
+        unidade: (doCatalogo?.unidade ?? "").toLocaleLowerCase("pt-BR"),
+        hora,
+      });
+    } else {
+      linhas.push({ chave: registro.chave, item: textoDe(dados.item), detalhe: "Item avulso", quantidade, unidade: textoDe(dados.unidade).toLocaleLowerCase("pt-BR"), hora });
+    }
+  }
+  return linhas;
 }
 
 /** O feito depois de um toque em + ou −: inteiro, entre zero e o previsto. */

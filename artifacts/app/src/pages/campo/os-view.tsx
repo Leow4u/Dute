@@ -17,6 +17,7 @@ import {
   equipeNoCampo,
   etapasNoCampo,
   feitoDepoisDoToque,
+  inclusoesGuardadas,
   itensNoCampo,
   problemasDaInclusao,
   quantidadeEmTexto,
@@ -25,6 +26,7 @@ import {
   registroDeInclusao,
   registroDeOcorrencia,
   registroDePresenca,
+  type InclusaoGuardada,
   type InclusaoNoCampo,
   type ItemNoCampo,
 } from "@/lib/campo/os-no-campo";
@@ -37,8 +39,9 @@ import { cn } from "@/lib/utils";
  * Campo2IncluirItem.dc.html): as etapas com a próxima em destaque, os itens
  * com + e −, a inclusão além do planejado, a presença da equipe, as fotos e a
  * ocorrência. Cada toque vira um registro na fila (onRegistrar), com o
- * instante do toque; o que ainda está na fila aparece como guardado. Sem
- * legenda e sem valor.
+ * instante do toque; o que ainda está na fila aparece como guardado, e a
+ * inclusão guardada de um item que a OS não tem, como linha nova com o
+ * relógio, sem + e − (pergunta 65). Sem legenda e sem valor.
  */
 
 export type EstadoDaOsNoCampo = "carregando" | "erro" | "nao_encontrada" | "pronto";
@@ -160,6 +163,7 @@ function Etapas({ ficha, pendentes, recebe, onRegistrar, agora }: { ficha: Ficha
 function Itens({
   ficha,
   itens,
+  guardadas,
   emExecucao,
   onRegistrar,
   onIncluir,
@@ -167,13 +171,14 @@ function Itens({
 }: {
   ficha: FichaDaOs;
   itens: readonly ItemNoCampo[];
+  guardadas: readonly InclusaoGuardada[];
   emExecucao: boolean;
   onRegistrar: (novo: NovoRegistro) => void;
   onIncluir: (linha: string | null) => void;
   agora: () => Date;
 }) {
   return (
-    <Cartao titulo={`Itens · ${itens.length}`}>
+    <Cartao titulo={`Itens · ${itens.length + guardadas.length}`}>
       {!emExecucao ? <p className="text-sm text-muted-foreground">Registre a primeira etapa antes dos itens.</p> : null}
       <ul className="flex flex-col divide-y divide-border">
         {itens.map((item) => {
@@ -226,6 +231,24 @@ function Itens({
             </li>
           );
         })}
+        {guardadas.map((linha) => (
+          <li key={linha.chave} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+            <span className="flex min-w-0 flex-1 flex-col">
+              {linha.detalhe ? <span className="text-xs text-muted-foreground">{linha.detalhe}</span> : null}
+              <span className="text-sm font-semibold text-foreground">{linha.item}</span>
+            </span>
+            <span className="flex h-12 shrink-0 items-center gap-2 rounded-lg border border-dashed border-amber-soft-border bg-amber-soft px-3 text-amber-soft-foreground">
+              <Clock aria-hidden="true" className="size-4" />
+              <span className="flex flex-col leading-tight">
+                <span className="text-base font-bold tabular-nums text-foreground">
+                  {quantidadeEmTexto(linha.quantidade)}
+                  {linha.unidade ? ` ${linha.unidade}` : ""}
+                </span>
+                <span className="text-xs font-semibold">guardada {linha.hora}</span>
+              </span>
+            </span>
+          </li>
+        ))}
       </ul>
       {emExecucao ? (
         <Button type="button" variant="outline" onClick={() => onIncluir(null)}>
@@ -557,6 +580,7 @@ export function CampoOsView({
   const etapas = etapasNoCampo(ficha, pendentes);
   const emExecucao = ficha.status === "em_execucao" || etapas.etapas.some((etapa) => etapa.estado === "guardada");
   const itens = itensNoCampo(ficha, pendentes);
+  const guardadas = inclusoesGuardadas(ficha, pendentes, catalogo);
   const primeira = etapas.desde;
   const janela = ficha.janela?.inicio ? (ficha.janela.fim ? `${ficha.janela.inicio}–${ficha.janela.fim}` : ficha.janela.inicio) : null;
   const etapaEmCurso = [...etapas.etapas].reverse().find((etapa) => etapa.estado === "feita" || etapa.estado === "guardada")?.etapa ?? null;
@@ -595,7 +619,7 @@ export function CampoOsView({
       ) : null}
 
       <Etapas ficha={ficha} pendentes={pendentes} recebe={recebe} onRegistrar={onRegistrar} agora={agora} />
-      <Itens ficha={ficha} itens={itens} emExecucao={recebe && emExecucao} onRegistrar={onRegistrar} onIncluir={(linha) => setIncluir({ linha })} agora={agora} />
+      <Itens ficha={ficha} itens={itens} guardadas={guardadas} emExecucao={recebe && emExecucao} onRegistrar={onRegistrar} onIncluir={(linha) => setIncluir({ linha })} agora={agora} />
       <Equipe ficha={ficha} pendentes={pendentes} uid={uid} recebe={recebe} onRegistrar={onRegistrar} agora={agora} />
       <Fotos ficha={ficha} urls={urls} pendentes={pendentes} recebe={recebe} onFotos={(arquivos) => onFotos(arquivos, { etapa: etapaEmCurso })} />
       {erroDasFotos ? (

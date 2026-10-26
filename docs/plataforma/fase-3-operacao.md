@@ -1803,3 +1803,26 @@ sobre o servidor da seção anterior.
     da recusa, concluir com estes dados com a hora e quem concluiu no
     celular, sem subir a assinatura de novo, quem não coordena não vê o
     cartão).
+
+### Pergunta 65: a inclusão guardada no celular
+
+Feita em 26/10/2026, com o canvas "Telas das decisões de 26/10" (item 3).
+Antes, a inclusão guardada de um item que a OS não tem (do catálogo ou
+avulso) só aparecia no celular depois de chegar, e a equipe podia incluí-la
+de novo.
+
+- **A linha guardada** (`inclusoesGuardadas` em `lib/campo/os-no-campo.ts`,
+  `pages/campo/os-view.tsx`): o cartão Itens mostra a inclusão guardada como
+  linha nova, depois das linhas da OS, com o serviço do item do catálogo (ou
+  "Item avulso"), o nome, o relógio, a quantidade com a unidade e "guardada"
+  com a hora. Sem + e −: a linha ainda não existe no servidor. O título conta
+  as linhas guardadas.
+- **Como o servidor grava:** as do mesmo item do catálogo somam numa linha,
+  com a hora da última; cada avulso é uma linha. A do item do catálogo que a
+  OS já tem soma na linha dela (`itensNoCampo`, pelo `lpu_item_id` que a
+  leitura da linha passou a trazer, `lpuItemId` em
+  `lib/operacao/ficha-da-os.ts`).
+- **Testes:** `os-no-campo.test.ts` (a linha nova, a soma do mesmo item, o
+  avulso, o item que a OS já tem, a outra OS e o catálogo sem o item) e
+  `campo-view.test.tsx` (os textos, sem + e −, a trava contra legenda e o
+  `axe`).

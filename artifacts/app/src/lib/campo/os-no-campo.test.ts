@@ -8,6 +8,7 @@ import {
   equipeNoCampo,
   etapasNoCampo,
   feitoDepoisDoToque,
+  inclusoesGuardadas,
   itensNoCampo,
   minhasOs,
   problemasDaInclusao,
@@ -192,6 +193,51 @@ describe("itens no celular", () => {
 
     // A inclusão guardada antes do feito já está nele, que é absoluto.
     expect(itensNoCampo(EM_EXECUCAO, [inclusao, naFila(registroDeFeito(EM_EXECUCAO, depois, 107_000, AGORA), "k-f3")])[0].feito).toBe(107_000);
+  });
+});
+
+describe("a inclusão guardada de um item que a OS não tem (pergunta 65)", () => {
+  const CATALOGO = [{ id: "lpu_divisoria", item: "Divisória", servico: "Montagem", unidade: "UN" }];
+  const incluir = (inclusao: Parameters<typeof registroDeInclusao>[1], quantidade: string, chave: string, quando = AGORA) =>
+    registroNovo(registroDeInclusao(EM_EXECUCAO, inclusao, quantidade, "Renata Campos", "Sala 412", quando), chave, quando);
+  const DIVISORIA = { tipo: "catalogo", lpuItemId: "lpu_divisoria", nome: "Divisória" } as const;
+  const SUPORTE = { tipo: "avulso", nome: "Suporte de monitor", unidade: "un" } as const;
+
+  it("vira linha nova com a quantidade e a hora em que foi guardada; não mexe nas linhas da OS", () => {
+    const pendentes = [incluir(DIVISORIA, "4", "k-1"), incluir(SUPORTE, "2", "k-2")];
+    expect(inclusoesGuardadas(EM_EXECUCAO, pendentes, CATALOGO)).toEqual([
+      { chave: "k-1", item: "Divisória", detalhe: "Montagem", quantidade: 4_000, unidade: "un", hora: "09:28" },
+      { chave: "k-2", item: "Suporte de monitor", detalhe: "Item avulso", quantidade: 2_000, unidade: "un", hora: "09:28" },
+    ]);
+    expect(itensNoCampo(EM_EXECUCAO, pendentes)).toEqual(itensNoCampo(EM_EXECUCAO, []));
+  });
+
+  it("as do mesmo item do catálogo somam numa linha, com a hora da última; cada avulso é uma linha", () => {
+    const depois = new Date("2026-10-20T12:40:00.000Z"); // 09:40
+    const pendentes = [incluir(DIVISORIA, "4", "k-1"), incluir(SUPORTE, "2", "k-2"), incluir(DIVISORIA, "4", "k-3", depois), incluir(SUPORTE, "1", "k-4", depois)];
+    expect(inclusoesGuardadas(EM_EXECUCAO, pendentes, CATALOGO).map((linha) => [linha.item, linha.quantidade, linha.hora])).toEqual([
+      ["Divisória", 8_000, "09:40"],
+      ["Suporte de monitor", 2_000, "09:28"],
+      ["Suporte de monitor", 1_000, "09:40"],
+    ]);
+  });
+
+  it("a do item que a OS já tem soma na linha dela; a de linha da OS e a de outra OS não viram linha", () => {
+    const comDivisoria = ficha("10211-01", {
+      status: "em_execucao",
+      itens: [{ id: "ln_3", lpu_item_id: "lpu_divisoria", item: "Divisória", servico: "Montagem", unidade: "UN", planejado: "10", executado: "6" }],
+    });
+    const pendentes = [incluir(DIVISORIA, "4", "k-1"), incluir({ tipo: "linha", linha: "ln_1", nome: "Cadeira Flexform" }, "2", "k-2")];
+    expect(inclusoesGuardadas(comDivisoria, pendentes, CATALOGO)).toEqual([]);
+    const [divisoria] = itensNoCampo(comDivisoria, pendentes);
+    expect([divisoria.feito, divisoria.previsto, divisoria.guardado]).toEqual([10_000, 14_000, true]);
+    expect(inclusoesGuardadas(ficha("10212-01", { status: "em_execucao" }), pendentes, CATALOGO)).toEqual([]);
+  });
+
+  it("sem o item no catálogo carregado, a linha aparece mesmo assim", () => {
+    expect(inclusoesGuardadas(EM_EXECUCAO, [incluir(DIVISORIA, "4", "k-1")], [])).toEqual([
+      { chave: "k-1", item: "Item do catálogo", detalhe: null, quantidade: 4_000, unidade: "", hora: "09:28" },
+    ]);
   });
 });
 
