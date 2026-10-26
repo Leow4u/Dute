@@ -24,7 +24,7 @@ O módulo Operação, especificado em detalhe neste plano, é o primeiro módulo
 | App | Um app só em `app.dutelog.com.br`, menu por papel e por perfil do cliente; TV em `/tv`, portal em `/portal`, campo em `/campo` |
 | Identidade | v3: menu preto, vermelho da marca nas ações e alertas, conteúdo claro, Manrope, cores por status, Agent Dute em violeta. O WMS adota a v3 no lançamento da Operação |
 | Stack | A do WMS: React + Vite + Tailwind, Firebase Auth, Firestore, Cloud Functions v2 (Node 22), Cloud Run com nginx atrás de Load Balancer, GitHub Actions |
-| IA | Genkit + Gemini no Vertex AI (`global`); embeddings do Vertex AI com busca vetorial do Firestore; BigQuery para medidas e relatórios longos. A IA recomenda, uma pessoa decide |
+| IA | Genkit + Gemini no Vertex AI (multirregião `us` desde 26/10/2026, LGPD decisão 12; a geração da foto do catálogo no `global`, o único local do modelo); embeddings do Vertex AI com busca vetorial do Firestore; BigQuery para medidas e relatórios longos. A IA recomenda, uma pessoa decide |
 | Cliente | Perfil de operação do WMS (modelo + pacote do cliente + `client_profiles`) ampliado: módulos contratados, telas do portal, regras de alerta, etiquetas e o que o Agent Dute pode contar |
 | Valores | Só `owner`, `admin`, `financeiro` e `comercial` veem preço; o cliente vê os das próprias OS e faturas; operação e campo nunca veem |
 | Login | Firebase Auth com e-mail e senha, contas por convite; os usuários do WMS migram com a mesma senha |
@@ -239,7 +239,7 @@ Cada transição confere papel e status atual na transação, grava evento e not
 
 ## Infraestrutura
 
-Região `southamerica-east1`; Vertex AI em `global`.
+Região `southamerica-east1`; Vertex AI na multirregião `us` (a geração da foto do catálogo no `global`; `fase-5-memoria.md`, "LGPD, decisão 12").
 
 | Recurso | Configuração |
 |---|---|

@@ -98,7 +98,10 @@ describe("apresentação comercial e conferência visual", () => {
   it("confere original e proposta juntos antes de aprovar, incluindo logos e enquadramento", async () => {
     let sent: Record<string, any> = {};
     const review = await reviewProductPhoto(input, async (url, init) => {
-      assert.match(String(url), /gemini-3.5-flash:generateContent$/);
+      assert.equal(
+        String(url),
+        "https://aiplatform.us.rep.googleapis.com/v1/projects/demo/locations/us/publishers/google/models/gemini-3.5-flash:generateContent",
+      );
       sent = JSON.parse(String(init?.body));
       return result(approved);
     });
@@ -389,9 +392,9 @@ describe("fotos profissionais do catálogo", () => {
   it("envia a imagem original e obtém a imagem mesmo quando a resposta contém texto", async () => {
     let sent: Record<string, any> = {};
     const mock: typeof fetch = async (url, init) => {
-      assert.match(
+      assert.equal(
         String(url),
-        /locations\/global\/publishers\/google\/models\/gemini-3-pro-image:generateContent$/,
+        "https://aiplatform.googleapis.com/v1/projects/demo/locations/global/publishers/google/models/gemini-3-pro-image:generateContent",
       );
       sent = JSON.parse(String(init?.body));
       return new Response(

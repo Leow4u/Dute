@@ -1652,6 +1652,52 @@ Achada em 25/10/2026, na mesma revisão. Está na produção.
   pedir os usuários, e o owner e o admin ainda os leem. Antes, a base
   respondia 500 para os dois.
 
+### LGPD, decisão 12: o local do Vertex AI
+
+Decidido pelo Leonardo em 26/10/2026 (`lgpd.md`, decisão 12): fixar uma
+região onde os modelos usados existam e registrar aqui.
+
+- **Onde cada modelo existe**, pela página do modelo na documentação do
+  Google, lida em 26/10/2026:
+  - `gemini-3.5-flash`: `global`, as multirregiões `us` e `eu` e algumas
+    regiões fora do Brasil (Montreal, Londres, Frankfurt e Ásia);
+  - `gemini-3.8-flash`: `global`, `us` e `eu`;
+  - `gemini-3-pro-image`: só `global`.
+  - Nenhum dos três existe em `southamerica-east1`.
+- **A escolha: a multirregião `us`.** Os dois modelos de texto só existem
+  juntos no `global`, na `us` e na `eu`. Na `us`, o Google garante o
+  processamento nos Estados Unidos; no `global`, não diz onde processa. A
+  `eu` é a outra opção, mais longe de São Paulo.
+  - Vão para a `us`: o Agent Dute do núcleo e do WMS, o resumo da conversa,
+    a leitura da NF e dos documentos, a revisão de documento e a conferência
+    da foto do catálogo.
+  - A geração da foto do catálogo fica no `global`, o único local do
+    `gemini-3-pro-image`. Vão a foto e o cadastro do produto (nome,
+    categoria, cor, marca), sem dado de pessoa.
+- **No código:**
+  - `LOCAL_DO_VERTEX` no núcleo (`domain/agente-modelo.ts`) e
+    `VERTEX_LOCATION` no WMS (`domain/vertex-location.ts`), os dois `us`;
+  - a geração da foto usa `PRODUCT_PHOTO_LOCATION` (`global`);
+  - o endereço da `us` é `aiplatform.us.rep.googleapis.com`. O plugin do
+    Genkit, travado em 1.40.1 nos dois `package-lock.json`, já conhece as
+    multirregiões.
+- **O custo:** desde 01/07/2026, o Gemini 3 fora do `global` custa cerca de
+  10% a mais por token.
+- **Testes:**
+  - `agente-modelo.test.ts` (núcleo): o pedido sai do plugin de verdade, com
+    o token e a rede falsos, para `aiplatform.us.rep.googleapis.com`, nos dois
+    modelos, e o local é o mesmo do WMS. Antes, ia para
+    `aiplatform.googleapis.com`, em `global`.
+  - `vertex-location.test.ts` (WMS): o mesmo para o Genkit do WMS, e o
+    endereço da conferência e da geração da foto.
+  - `product-photo.test.ts`: o endereço inteiro de cada pedido da foto.
+- **Para conferir na homologação:** uma pergunta ao Agent Dute, a leitura de
+  uma NF anexada e uma foto do catálogo. Se o agente responder "Não consegui
+  consultar os dados agora", o erro do modelo fica no `error` do
+  `agent_usage`.
+- **Para mudar o local:** trocar as duas constantes juntas (o teste do
+  núcleo exige as duas iguais) e publicar.
+
 ## Lançamento na produção
 
 Feito em 25/10/2026, com o OK do Leonardo ("Pode fazer então, vamos

@@ -1,6 +1,8 @@
 import { HttpsError } from "firebase-functions/https";
 import { z } from "genkit";
 
+import { PRODUCT_PHOTO_LOCATION, VERTEX_LOCATION, vertexGenerateContentUrl } from "./vertex-location.js";
+
 export const PRODUCT_PHOTO_DEFAULT_MODEL = "gemini-3-pro-image";
 export const PRODUCT_PHOTO_IMAGE_SIZE = "2K";
 export const PRODUCT_PHOTO_INPUT_MAX_BYTES = 7 * 1024 * 1024;
@@ -214,7 +216,7 @@ export async function generateProductPhoto(
     );
   }
   const response = await fetcher(
-    `https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(input.project)}/locations/global/publishers/google/models/${encodeURIComponent(model)}:generateContent`,
+    vertexGenerateContentUrl(input.project, PRODUCT_PHOTO_LOCATION, model),
     {
       method: "POST",
       signal: AbortSignal.timeout(120_000),
@@ -379,7 +381,7 @@ export async function reviewProductPhoto(
     const remaining = deadline - Date.now();
     if (remaining <= 0) break;
     const response = await fetcher(
-      `https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(input.project)}/locations/global/publishers/google/models/${encodeURIComponent(model)}:generateContent`,
+      vertexGenerateContentUrl(input.project, VERTEX_LOCATION, model),
       {
         method: "POST",
         signal: AbortSignal.timeout(remaining),

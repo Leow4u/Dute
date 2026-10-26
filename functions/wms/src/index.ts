@@ -220,6 +220,7 @@ import {
 } from "./domain/agent-routines.js";
 import { PROJECT_ID } from "./project.js";
 import { PRODUCT_PHOTO_DEFAULT_MODEL, PRODUCT_PHOTO_IMAGE_SIZE, PRODUCT_PHOTO_INPUT_MAX_BYTES, ProductPhotoInput, originalProductPhoto, productPhotoPrompt, generateProductPhoto, reviewProductPhoto } from "./domain/product-photo.js";
+import { vertexPlugin } from "./domain/vertex-location.js";
 
 const adminApp = initializeApp();
 setGlobalOptions({
@@ -230,14 +231,8 @@ setGlobalOptions({
 
 const db = getFirestore();
 
-const ai = genkit({
-  plugins: [
-    vertexAI({
-      projectId: PROJECT_ID,
-      location: "global",
-    }),
-  ],
-});
+// O local do Vertex AI é fixo (LGPD, decisão 12): domain/vertex-location.ts.
+const ai = genkit({ plugins: [vertexPlugin(PROJECT_ID)] });
 
 const DEFAULT_CUSTOMER = LEGACY_CUSTOMER_CODE;
 // O Agent Dute roda no Gemini via Genkit, com ferramentas de leitura
