@@ -58,6 +58,7 @@ import {
 } from "./billing.js";
 import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
 import { accessChangeFromTo, assertAccessActorCurrent, setUserAccessFor } from "./domain/access.js";
+import { accountRetentionEnabled, anonymizeRemovedAccounts } from "./domain/account-retention.js";
 import {
   CLIENT_ACCESS_COLLECTION,
   CLIENT_PROFILES_COLLECTION,
@@ -7741,6 +7742,19 @@ export const runAgentRoutines = onSchedule(
         console.error("runAgentRoutines: rotina falhou", { id: routine.id, error });
       }
     }
+  },
+);
+
+/**
+ * Todo dia às 03:50 de São Paulo: a conta com o acesso removido há mais de
+ * 12 meses sai do Firebase Auth e o perfil fica anônimo (LGPD, decisão 8,
+ * parte 8c). Uma instância de cada vez. Só com a liberação da retenção.
+ */
+export const runAccountRetention = onSchedule(
+  { schedule: "every day 03:50", timeZone: "America/Sao_Paulo", timeoutSeconds: 540, maxInstances: 1 },
+  async () => {
+    if (!accountRetentionEnabled(PROJECT_ID)) return;
+    console.info("runAccountRetention", await anonymizeRemovedAccounts(db, getAuth()));
   },
 );
 

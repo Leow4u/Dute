@@ -77,6 +77,13 @@ export async function setUserAccessTransaction(
       throw new HttpsError("not-found", "Pessoa não encontrada.");
     }
     const user = snapshot.data() ?? {};
+    // A conta anonimizada (LGPD, decisão 8, parte 8c) não tem login, nome nem e-mail: volta só por convite novo.
+    if (input.active && user.anonymized_at) {
+      throw new HttpsError(
+        "failed-precondition",
+        "O acesso desta conta saiu há mais de 12 meses e ela ficou anônima. Convide a pessoa de novo.",
+      );
+    }
     if (actor.role === "admin" && PRIVILEGED.includes(String(user.role))) {
       throw new HttpsError(
         "permission-denied",
