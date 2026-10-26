@@ -80,6 +80,35 @@ disparado sem ele. Sem dado real neste arquivo.
     functions do RH foram atualizadas. O invoker conferiu as 146 callables.
   - O Cloud Run e o `app.dutelog.com.br` passaram a servir o build às
     02:07, e o login abriu no Chromium, no computador e no celular.
+- **A quarta publicação (26/10/2026).** Com o OK do Leonardo ("publicar
+  agora, e-mail ligado"), o commit `ff2b6b2` (PR 487) subiu no `dute-prod`
+  pelo disparo manual do CI (run 1127), das 20:27 às 20:44 UTC, com a
+  homologação publicada nele às 20:27. O disparo foi às 20:27:05 UTC, e a
+  primeira gravação, a das regras, às 20:30:38: o instante para o PITR é
+  qualquer um entre os dois.
+  - Ela levou os PRs 474 a 487. Ligaram na hora:
+    - o e-mail dos avisos aos contatos dos clientes, pelo Resend (PR 486;
+      `fase-4-financeiro.md`, parte 4.6a). Só os avisos novos saem: os de
+      antes ficaram como `audit` na fila e não voltam;
+    - o corte do portal do cliente arquivado ou "Sem portal" (pergunta 69,
+      PR 479). A tela que explica o corte à pessoa do cliente vem com o
+      alinhamento de 26/10;
+    - o Gemini de texto na multirregião `us` (LGPD, decisão 12, PR 480).
+  - Foram junto, desligadas pela liberação própria (só a homologação): as
+    rotinas de retenção da LGPD (PRs 481 a 485; `lgpd.md`, seção 6) e a
+    pergunta 60 da Omie (PR 478), que só roda onde a Omie está liberada.
+  - As regras, com o corte do portal, subiram e foram conferidas às 20:30,
+    com os 66 índices prontos.
+  - Subiram todas as functions: 153 atualizadas e 4 criadas, as rotinas de
+    retenção (`runAccountRetention`, `runOperacaoRetention`,
+    `runAgentRetention` e `runRhRetention`). A conta de runtime ganhou o
+    acesso ao segredo `RESEND_API_KEY`, e a `runNotifications` foi
+    atualizada com ele. O invoker conferiu as 146 callables.
+  - O passo que garante a API do Cloud Scheduler avisou que a conta do CI
+    não liga APIs e seguiu: a API já está ligada, e as quatro rotinas novas
+    nasceram.
+  - O Cloud Run e o `app.dutelog.com.br` passaram a servir o build às
+    20:43, e o login abriu no Chromium.
 - **Ciclos conferidos no emulador.**
   - `functions/operacao/src/domain/ciclo-do-cliente.integration.test.ts`
     (parte 4.9a). O cliente pede a OS pelo portal, a coordenação abre a
@@ -660,6 +689,11 @@ contato com os avisos ligados (Comercial › Clientes).
    Exportação. A primeira exportação de um mês já exportado nasce numa
    versão nova, porque a planilha de colaboradores ganhou colunas
    (`docs/manual-rh.md`).
+10. **Depois da quarta publicação** (seção 1): o primeiro aviso de OS ou de
+    NF de um cliente com contato marcado em "Avisos por e-mail" sai de
+    `avisos@dutelog.com.br` em até 5 minutos. No painel do Resend, a aba
+    Emails mostra cada envio e se foi entregue; o e-mail que desiste
+    aparece no painel do sistema, no quadro dos e-mails.
 
 ## 6. Ligar o Financeiro no `dute-prod` (parte 4.9b, com o OK)
 
@@ -721,9 +755,9 @@ dos marcos 2, 3 e 4. O registro está em `fase-4-financeiro.md`, "Parte
   (parte 4.9b, seção 6), a memória, o Agent Dute do núcleo e o RH, e as
   respostas às perguntas 61 a 63 do RH. Os quatro subiram na segunda
   publicação (seção 1). Em 26/10/2026, o OK para a parte 8.4 do RH, que
-  subiu na terceira.
-- A conta no Resend, o domínio verificado na Hostinger e a chave, para o
-  e-mail sair (`fase-4-financeiro.md`, parte 4.6a).
+  subiu na terceira, e o OK para a quarta, com o e-mail ligado. A conta no
+  Resend, o domínio verificado na Hostinger e a chave estão nos dois
+  ambientes desde 26/10/2026 (`fase-4-financeiro.md`, parte 4.6a).
 - Os serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` no aplicativo de teste da Omie,
   para a NFS-e sair pela Omie na homologação: as chaves dele estão no
   `dute-homolog` desde 24/10/2026 (`fase-7-financeiro-unificado.md`, "Onde
