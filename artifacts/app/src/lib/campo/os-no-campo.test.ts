@@ -10,6 +10,8 @@ import {
   feitoDepoisDoToque,
   inclusoesGuardadas,
   itensNoCampo,
+  linkDeLigar,
+  locaisNoCampo,
   minhasOs,
   problemasDaInclusao,
   registroDeEtapa,
@@ -137,6 +139,44 @@ describe("etapas no celular", () => {
       dados: { numero: "10211-01", etapa: "saida_origem", instante: "2026-10-20T12:28:00.000Z" },
       rotulo: "Saída da origem",
     });
+  });
+});
+
+describe("o local no celular (decisão 11 da LGPD)", () => {
+  it("a origem e o destino com o endereço, o complemento, o Maps e quem acompanha no local, com o telefone para ligar", () => {
+    const comContato = ficha("10211-01", {
+      locais: {
+        origem: { endereco: "Av. Brig. Faria Lima, 3500", complemento: "4º andar · doca pelo subsolo 2", contato: { nome: "Renata Campos", telefone: "11987654321" } },
+        destino: { nome: "Centro Empresarial", endereco: "Torre B", complemento: "12º andar", contato: { nome: "Paulo Mendes" } },
+      },
+    });
+    expect(locaisNoCampo(comContato)).toEqual([
+      {
+        rotulo: "Origem",
+        endereco: "Av. Brig. Faria Lima, 3500",
+        complemento: "4º andar · doca pelo subsolo 2",
+        mapa: "https://www.google.com/maps/search/?api=1&query=Av.%20Brig.%20Faria%20Lima%2C%203500",
+        contato: { nome: "Renata Campos", telefone: "(11) 98765-4321", ligar: "tel:+5511987654321" },
+      },
+      {
+        rotulo: "Destino",
+        endereco: "Centro Empresarial · Torre B",
+        complemento: "12º andar",
+        mapa: "https://www.google.com/maps/search/?api=1&query=Torre%20B",
+        contato: { nome: "Paulo Mendes", telefone: null, ligar: null },
+      },
+    ]);
+    // Sem destino, só a origem; sem endereço, sem o Maps.
+    expect(locaisNoCampo(ficha("10211-01", { locais: { origem: { nome: "Galpão" }, destino: null } }))).toEqual([
+      { rotulo: "Origem", endereco: "Galpão", complemento: null, mapa: null, contato: null },
+    ]);
+  });
+
+  it("ligar: com DDD e sem o país, pelo +55; com o país ou sem o DDD, como está", () => {
+    expect(linkDeLigar("11987654321")).toBe("tel:+5511987654321");
+    expect(linkDeLigar("1134567890")).toBe("tel:+551134567890");
+    expect(linkDeLigar("+5511987654321")).toBe("tel:+5511987654321");
+    expect(linkDeLigar("34567890")).toBe("tel:34567890");
   });
 });
 

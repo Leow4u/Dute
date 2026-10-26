@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, Camera, Check, ChevronDown, Clock, Minus, Plus, Search } from "lucide-react";
+import { ArrowLeft, Camera, Check, ChevronDown, Clock, Minus, Phone, Plus, Search } from "lucide-react";
 
 import { Avatar, COR_DO_STATUS, ROTULO_DO_STATUS, selo, seloAlerta } from "@/components/operacao/partes";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
   feitoDepoisDoToque,
   inclusoesGuardadas,
   itensNoCampo,
+  locaisNoCampo,
   problemasDaInclusao,
   quantidadeEmTexto,
   registroDeEtapa,
@@ -36,7 +37,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * Campo › OS em execução (parte 3.8b; docs/mockups/Campo2Execucao.dc.html e
- * Campo2IncluirItem.dc.html): as etapas com a próxima em destaque, os itens
+ * Campo2IncluirItem.dc.html): o local com o Maps e quem acompanha no local,
+ * com Ligar (decisão 11 da LGPD), as etapas com a próxima em destaque, os itens
  * com + e −, a inclusão além do planejado, a presença da equipe, as fotos e a
  * ocorrência. Cada toque vira um registro na fila (onRegistrar), com o
  * instante do toque; o que ainda está na fila aparece como guardado, e a
@@ -83,6 +85,56 @@ export function BotaoDeFoto({ rotulo, onFotos, variante = "outline" }: { rotulo:
         }}
       />
     </label>
+  );
+}
+
+/** A origem e o destino, com "Abrir no Maps" e o contato do local com "Ligar" (canvas de 26/10/2026, item 4). */
+function Local({ ficha }: { ficha: FichaDaOs }) {
+  const locais = locaisNoCampo(ficha);
+  if (!locais.length) return null;
+  return (
+    <Cartao titulo="Local">
+      <ul className="flex flex-col gap-3">
+        {locais.map((local) => (
+          <li key={local.rotulo} className="flex flex-col gap-3 rounded-lg bg-muted p-3">
+            <div className="flex items-start justify-between gap-3">
+              <span className="flex min-w-0 flex-col">
+                <span className="text-xs font-semibold text-muted-foreground">{local.rotulo}</span>
+                {local.endereco ? <span className="text-sm font-semibold text-foreground">{local.endereco}</span> : null}
+                {local.complemento ? <span className="text-xs text-muted-foreground">{local.complemento}</span> : null}
+              </span>
+              {local.mapa ? (
+                <a
+                  href={local.mapa}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Abrir no Maps: ${local.rotulo}`}
+                  className="inline-flex min-h-11 shrink-0 items-center rounded text-sm font-semibold text-primary underline-offset-4 hover:underline"
+                >
+                  Abrir no Maps
+                </a>
+              ) : null}
+            </div>
+            {local.contato ? (
+              <div className="flex items-center gap-3">
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-sm font-semibold text-foreground">{local.contato.nome}</span>
+                  {local.contato.telefone ? <span className="text-xs text-muted-foreground">{local.contato.telefone}</span> : null}
+                </span>
+                {local.contato.ligar ? (
+                  <Button asChild variant="outline" className="h-11 shrink-0">
+                    <a href={local.contato.ligar} aria-label={`Ligar para ${local.contato.nome}`}>
+                      <Phone aria-hidden="true" className="size-4" />
+                      Ligar
+                    </a>
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </Cartao>
   );
 }
 
@@ -618,6 +670,7 @@ export function CampoOsView({
         <p className={cn(selo, seloAlerta, "h-auto self-start py-1.5 text-sm")}>{ficha.status === "cancelada" ? "OS cancelada" : concluidaNaFila ? "OS concluída · guardada" : "OS concluída"}</p>
       ) : null}
 
+      <Local ficha={ficha} />
       <Etapas ficha={ficha} pendentes={pendentes} recebe={recebe} onRegistrar={onRegistrar} agora={agora} />
       <Itens ficha={ficha} itens={itens} guardadas={guardadas} emExecucao={recebe && emExecucao} onRegistrar={onRegistrar} onIncluir={(linha) => setIncluir({ linha })} agora={agora} />
       <Equipe ficha={ficha} pendentes={pendentes} uid={uid} recebe={recebe} onRegistrar={onRegistrar} agora={agora} />

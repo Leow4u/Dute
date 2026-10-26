@@ -270,6 +270,9 @@ e-mail em "E-mail do app", no cadastro. "Minhas OS" tem "Agora" (em execução e
 agendadas até hoje), "Depois" e "Feito" (as concluídas com data nos últimos 7
 dias).
 
+- **Local:** a origem e o destino, com o complemento, "Abrir no Maps" e quem
+  acompanha a atividade no local (o contato que o escritório pôs no
+  agendamento), com o telefone e "Ligar".
 - **Etapas:** a próxima num botão grande; "Outra etapa" para pular.
 - **Itens:** + e − até o previsto, depois da primeira etapa; no previsto,
   "Além do planejado · Incluir". "Incluir item executado" aceita também item

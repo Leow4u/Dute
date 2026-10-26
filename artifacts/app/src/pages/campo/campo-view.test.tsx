@@ -26,7 +26,7 @@ const FICHA = fichaDaLeitura("10211-01", {
   cliente_nome: "Itaú Unibanco",
   servicos: ["transporte", "montagem"],
   janela: { data: HOJE, inicio: "07:30", fim: "18:00" },
-  locais: { origem: { endereco: "Faria Lima 3500", complemento: "4º andar", contato: { nome: "Renata Campos" } }, destino: { endereco: "Torre B", complemento: "12º andar" } },
+  locais: { origem: { endereco: "Faria Lima 3500", complemento: "4º andar", contato: { nome: "Renata Campos", telefone: "11987654321" } }, destino: { endereco: "Torre B", complemento: "12º andar" } },
   equipe: [
     { colaborador_id: CARLOS, nome: "Carlos Silva", papel: "lider", vinculo: "proprio", no_app: true, usuario_uid: "uid-carlos" },
     { colaborador_id: "col_dddddddddddddddd", nome: "Diego Alves", papel: "montador", vinculo: "freelancer" },
@@ -97,6 +97,7 @@ const TEXTOS_DA_OS = [
   /^(3\.05 · Transporte|2\.02 · Montagem|Cadeira Flexform|Mesa de trabalho|\d+|de \d+ un|Além do planejado · Incluir|Incluir item executado)$/,
   /^(Equipe no local · 2|Carlos Silva|Diego Alves|Líder · desde 07:30|Freelancer · Montador|Entrada|Saída|de .+|[A-Z]{2})$/,
   /^(Fotos · 0|Tirar foto|Registrar ocorrência|Concluir OS)$/,
+  /^(Local|Origem|Destino|Faria Lima 3500|Torre B|4º andar|12º andar|Abrir no Maps|Renata Campos|\(11\) 98765-4321|Ligar)$/,
 ];
 
 describe("OS em execução no celular", () => {
@@ -137,6 +138,19 @@ describe("OS em execução no celular", () => {
     }
     expect(html).toContain('aria-label="Mais um: Mesa de trabalho"');
     expect(html).not.toContain("R$");
+  });
+
+  it("o local com o Maps e quem acompanha no local, com Ligar (decisão 11 da LGPD)", () => {
+    const html = renderOs();
+    const textos = textosDaTela(html);
+    for (const texto of ["Local", "Origem", "Faria Lima 3500", "4º andar", "Abrir no Maps", "Renata Campos", "(11) 98765-4321", "Ligar", "Destino", "Torre B", "12º andar"]) {
+      expect(textos, texto).toContain(texto);
+    }
+    expect(html).toContain('href="tel:+5511987654321"');
+    expect(html).toContain('aria-label="Ligar para Renata Campos"');
+    expect(html).toContain('href="https://www.google.com/maps/search/?api=1&amp;query=Faria%20Lima%203500"');
+    // O local vem antes das etapas.
+    expect(html.indexOf(">Local<")).toBeLessThan(html.indexOf(">Etapas<"));
   });
 
   it("a etapa guardada na fila aparece como guardada e a próxima anda", () => {
