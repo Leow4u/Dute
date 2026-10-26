@@ -21,6 +21,8 @@ export const CALLABLES_DA_OPERACAO = [
   "attachPhoto",
   "registerPresence",
   "completeServiceOrder",
+  // A conclusão do celular recusada (pergunta 66): a coordenação anexa a assinatura à conclusão ou dispensa.
+  "resolveFieldCompletion",
   "reviewServiceOrder",
   "reopenServiceOrder",
   "sendSurveyToCommercial",
