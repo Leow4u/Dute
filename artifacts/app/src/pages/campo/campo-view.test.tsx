@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
 import { registroNovo } from "@/lib/campo/fila";
-import { minhasOs, registroDeEtapa, saudacao } from "@/lib/campo/os-no-campo";
+import { minhasOs, registroDeEtapa, registroDeInclusao, saudacao } from "@/lib/campo/os-no-campo";
 import { fichaDaLeitura, type FichaDaOs } from "@/lib/operacao/ficha-da-os";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
@@ -90,6 +90,15 @@ describe("Minhas OS", () => {
   });
 });
 
+/** Os textos da OS em execução: rótulos, dados e ações (a trava contra legenda). */
+const TEXTOS_DA_OS = [
+  /^(Minhas OS|OS 10211-01|Em execução|Itaú Unibanco · Demanda 10211|Saída do pátio 07:05|2h 23min|Janela|07:30–18:00)$/,
+  /^(Etapas|Saída do pátio|Chegada na origem|Carregamento|Saída da origem|Chegada no destino|Montagem|Fim|\d|\d{2}:\d{2}|Registrar carregamento|Outra etapa)$/,
+  /^(3\.05 · Transporte|2\.02 · Montagem|Cadeira Flexform|Mesa de trabalho|\d+|de \d+ un|Além do planejado · Incluir|Incluir item executado)$/,
+  /^(Equipe no local · 2|Carlos Silva|Diego Alves|Líder · desde 07:30|Freelancer · Montador|Entrada|Saída|de .+|[A-Z]{2})$/,
+  /^(Fotos · 0|Tirar foto|Registrar ocorrência|Concluir OS)$/,
+];
+
 describe("OS em execução no celular", () => {
   it("tem as etapas com a próxima em destaque, os itens com + e −, a equipe, as fotos e a ocorrência", () => {
     const html = renderOs();
@@ -137,6 +146,22 @@ describe("OS em execução no celular", () => {
     expect(textos).toContain("Registrar saída da origem");
   });
 
+  it("a inclusão guardada de um item que a OS não tem: linha nova com o relógio, a quantidade e a hora, sem + e − (pergunta 65)", async () => {
+    const pendentes = [
+      registroNovo(registroDeInclusao(FICHA, { tipo: "catalogo", lpuItemId: "lpu_divisoria", nome: "Divisória" }, "4", "Renata Campos", "Sala 412", AGORA), "k1", AGORA),
+      registroNovo(registroDeInclusao(FICHA, { tipo: "avulso", nome: "Suporte de monitor", unidade: "un" }, "2", "Renata Campos", "Sala 412", AGORA), "k2", AGORA),
+    ];
+    const html = renderOs({ pendentes, catalogo: [{ id: "lpu_divisoria", item: "Divisória", servico: "Montagem", unidade: "UN" }] });
+    const textos = textosDaTela(html);
+    for (const texto of ["Itens · 4", "Montagem", "Divisória", "4 un", "Item avulso", "Suporte de monitor", "2 un", "guardada 09:28"]) {
+      expect(textos, texto).toContain(texto);
+    }
+    expect(html).not.toContain("Mais um: Divisória");
+    expect(html).not.toContain("Menos um: Suporte de monitor");
+    expect(textosForaDaLista(html, [...TEXTOS_DA_OS, /^(Itens · 4|Divisória|Suporte de monitor|Item avulso|\d+ un|guardada \d{2}:\d{2})$/])).toEqual([]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
   it("concluída não recebe registro; carregando e não encontrada", () => {
     const textos = textosDaTela(renderOs({ ficha: { ...FICHA, status: "em_revisao" } }));
     expect(textos).toContain("OS concluída");
@@ -146,15 +171,7 @@ describe("OS em execução no celular", () => {
   });
 
   it("sem legenda: só rótulos, dados e ações", () => {
-    expect(
-      textosForaDaLista(renderOs(), [
-        /^(Minhas OS|OS 10211-01|Em execução|Itaú Unibanco · Demanda 10211|Saída do pátio 07:05|2h 23min|Janela|07:30–18:00)$/,
-        /^(Etapas|Saída do pátio|Chegada na origem|Carregamento|Saída da origem|Chegada no destino|Montagem|Fim|\d|\d{2}:\d{2}|Registrar carregamento|Outra etapa)$/,
-        /^(Itens · 2|3\.05 · Transporte|2\.02 · Montagem|Cadeira Flexform|Mesa de trabalho|\d+|de \d+ un|Além do planejado · Incluir|Incluir item executado)$/,
-        /^(Equipe no local · 2|Carlos Silva|Diego Alves|Líder · desde 07:30|Freelancer · Montador|Entrada|Saída|de .+|[A-Z]{2})$/,
-        /^(Fotos · 0|Tirar foto|Registrar ocorrência|Concluir OS)$/,
-      ]),
-    ).toEqual([]);
+    expect(textosForaDaLista(renderOs(), [...TEXTOS_DA_OS, /^Itens · 2$/])).toEqual([]);
   });
 
   it("não tem problema de acessibilidade", async () => {

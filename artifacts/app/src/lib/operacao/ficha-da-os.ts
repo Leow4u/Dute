@@ -35,6 +35,8 @@ export type FotoLida = RegistroLido & { id: string; caminho: string; etapa: Etap
 
 export type ItemLido = {
   id: string;
+  /** O item do catálogo da linha: a inclusão do mesmo item soma nela (pergunta 65). */
+  lpuItemId: string | null;
   codigo: string | null;
   item: string;
   unidade: string | null;
@@ -233,6 +235,7 @@ export function fichaDaLeitura(id: string, data: Record<string, unknown>): Ficha
       return [
         {
           id: idDaLinha,
+          lpuItemId: textoOuNull(item.lpu_item_id),
           codigo: textoOuNull(item.codigo),
           item: texto(item.item) || texto(item.descricao),
           unidade: textoOuNull(item.unidade),

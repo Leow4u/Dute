@@ -1049,6 +1049,8 @@ defeito.
     - **Decidida em 26/10/2026:** como recomendado, com o alinhamento
       antes.
     - **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item 3).
+    - **Feita em 26/10/2026** (`fase-3-operacao.md`, "Pergunta 65: a
+      inclusão guardada no celular").
 
 66. A conclusão do celular recusada depois de a assinatura subir deixa a
     assinatura no Storage sem a OS apontar para ela. Isso acontece quando o
