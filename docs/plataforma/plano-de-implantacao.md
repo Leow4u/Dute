@@ -1106,6 +1106,8 @@ usuário do convite, com o papel dele.
     - **Decidida em 26/10/2026:** como recomendado, com o alinhamento da
       tela antes.
     - **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item 9).
+    - **Servidor feito em 26/10/2026** (`fase-2-nucleo.md`, "Pergunta 68: o
+      aceite do convite pelo servidor"). A tela e as regras entram em seguida.
 69. Arquivar o cliente ou pôr "Portal do cliente: Sem portal"
     (Configurações › Clientes) não corta as pessoas dele. As portas olham só
     os módulos do contrato, que o arquivo mantém: o WMS, as Rules, o portal

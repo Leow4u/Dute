@@ -78,6 +78,8 @@ const DOCUMENTO_RECUSADO = { file_name: "programa.exe", content_type: "applicati
  * entrada (o recurso do cadastro, o tipo do documento).
  */
 const MATRIZ: Record<string, Linha> = {
+  // Só o login: quem aceita o convite ainda não tem perfil, e o e-mail confirmado é a conferência (callables-auth.integration.test.ts).
+  acceptInvite: { passam: TODOS },
   addCatalogPhotos: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   advanceWarehouseTask: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   analyzeEvent: { passam: INTERNOS, recusa: SO_OPERACAO },

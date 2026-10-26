@@ -72,6 +72,7 @@ import {
   readContractedModules,
 } from "./domain/customer-profile.js";
 import { assertClientRoleCustomer, assertInviteCustomerAllowed, inviteEventReference } from "./domain/customer-invite.js";
+import { acceptInviteFor, lookupInviteFor } from "./domain/invite-acceptance.js";
 import {
   PLATFORM_ROLES,
   isPlatformRole,
@@ -630,10 +631,6 @@ const CreateProductPhotoUploadTargetSchema = z.object({
   file_name: z.string().trim().min(1).max(240),
   content_type: z.string().trim().min(1).max(120),
   size_bytes: z.number().int().positive().max(10 * 1024 * 1024),
-});
-
-const InviteLookupSchema = z.object({
-  token: z.string().trim().min(12).max(180),
 });
 
 const OperationalActorSchema = z.object({
@@ -3072,27 +3069,11 @@ const generateDailyBriefingFlow = ai.defineFlow(
 
 // Invite validation is the only unauthenticated callable. The token is the
 // capability; no invite list or other account data is exposed.
-export const lookupInvite = onCall(async (request) => {
-  const { token } = InviteLookupSchema.parse(request.data ?? {});
-  const snapshot = await db
-    .collection(collectionNames.invites)
-    .doc(safeDocId(token))
-    .get();
-  if (!snapshot.exists || snapshot.data()?.status !== "pending") {
-    throw new HttpsError("not-found", "Convite inválido ou não encontrado.");
-  }
-  const data = snapshot.data() ?? {};
-  return {
-    email: String(data.email ?? "")
-      .trim()
-      .toLowerCase(),
-    nome: typeof data.nome === "string" ? data.nome : undefined,
-    role: String(data.role ?? ""),
-    customer_code:
-      typeof data.customer_code === "string" ? data.customer_code : undefined,
-    status: "pending",
-  };
-});
+export const lookupInvite = onCall(async (request) => lookupInviteFor(db, request.data));
+
+// O aceite do convite (pergunta 68) pede o login com o e-mail confirmado, mas
+// não o perfil: quem aceita ainda não tem (domain/invite-acceptance.ts).
+export const acceptInvite = onCall(async (request) => acceptInviteFor(db, request.auth, request.data));
 
 const chatWithAgentDuteFlow = ai.defineFlow(
   {
