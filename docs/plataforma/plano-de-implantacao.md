@@ -161,7 +161,7 @@ Como se garante, em cada PR de tela:
 | 6 Comercial | v1 (partes 1 a 19) na `main` e ligado no `dute-prod` desde 21/10, sem dado carregado; do fechamento, 6.20 a 6.22 e 6.25 feitas, e 6.23 e 6.24 (as cargas e o contador na produção, a semana em paralelo) com o Leonardo |
 | 7 Financeiro unificado | Partes 7.1 a 7.5c na `main`, ligadas com o Financeiro (no `dute-homolog` e, desde a parte 4.9b, no `dute-prod`). A NFS-e e a baixa pela Omie (7.4) estão no código, só no `dute-homolog`, e as chaves de um aplicativo de teste da Omie estão no `dute-homolog` desde 24/10; a primeira emissão espera os serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` cadastrados nele. O cancelamento da NFS-e autorizada espera a resposta da Omie (`fase-7-financeiro-unificado.md`) |
 | 8 RH | Partes 8.1a a 8.3 na `main` e ligadas no `dute-homolog` desde 24/10: a 8.1b pôs no `firebase.json` o banco `dute-rh`, que existe nos dois ambientes (na produção, com PITR e backup diário). O código subiu na produção em 25/10, e o RH está ligado lá desde a segunda publicação do mesmo dia (`59d78bc`), com o OK do Leonardo e as perguntas 61 a 63 respondidas. A 8.4 (as datas de admissão e desligamento, pergunta 63) teve a tela alinhada em 26/10, e as partes 8.4a (o servidor) e 8.4b (as telas) subiram no `dute-prod` na terceira publicação, no mesmo dia (`9bbd247`, `fase-8-rh.md`) |
-| Contínuo | PITR e backup diário desde 20/10 (no `dute-rh`, desde 24/10). O teste de restauração é o workflow `Teste de restauração`, que espera o OK do Leonardo para rodar (`backup-e-recuperacao.md`). O painel do sistema mostra os erros de todas as functions, o estado e o acesso das callables de todas as codebases, a latência e o e-mail que desistiu (`docs/painel-sistema.md`). O inventário da LGPD está em `lgpd.md`, com 12 decisões do Leonardo. Manuais de todos os módulos: `docs/manual-comercial.md`, `docs/manual-operacao.md`, `docs/manual-financeiro.md`, `docs/manual-rh.md`, `docs/manual-portal.md` (o portal do cliente) e `docs/manual-armazenagem.md`; o roteiro do treinamento por marco em `docs/treinamento.md`. A revisão dos manuais virou correções (PRs 342 a 361) e as perguntas 36 a 54 da seção 13. A publicação só sobe as functions e a tela com os índices do arquivo prontos (`tools/esperar_indices.py`), e o CI confere o índice composto de cada consulta das telas (`lib/cloud-api-indices.test.ts`) e das Functions nos testes de integração (`tools/indices_das_consultas.py`), porque o emulador não o exige |
+| Contínuo | PITR e backup diário desde 20/10 (no `dute-rh`, desde 24/10). O teste de restauração é o workflow `Teste de restauração`, que espera o OK do Leonardo para rodar (`backup-e-recuperacao.md`). O painel do sistema mostra os erros de todas as functions, o estado e o acesso das callables de todas as codebases, a latência e o e-mail que desistiu (`docs/painel-sistema.md`). O inventário da LGPD está em `lgpd.md`, com as 12 decisões do Leonardo de 26/10, a implementar em partes próprias. Manuais de todos os módulos: `docs/manual-comercial.md`, `docs/manual-operacao.md`, `docs/manual-financeiro.md`, `docs/manual-rh.md`, `docs/manual-portal.md` (o portal do cliente) e `docs/manual-armazenagem.md`; o roteiro do treinamento por marco em `docs/treinamento.md`. A revisão dos manuais virou correções (PRs 342 a 361) e as perguntas 36 a 54 da seção 13. A publicação só sobe as functions e a tela com os índices do arquivo prontos (`tools/esperar_indices.py`), e o CI confere o índice composto de cada consulta das telas (`lib/cloud-api-indices.test.ts`) e das Functions nos testes de integração (`tools/indices_das_consultas.py`), porque o emulador não o exige |
 
 ## 3. Ordem de implantação
 
@@ -788,6 +788,8 @@ cliente ou 15 em qualquer cliente; 20, `functions/core`; desenho em
 26. Receita por serviço (parte 4.8b): a NF registrada guarda só o total. O
     relatório vale o rateio da NF pelas linhas do orçamento de cada demanda?
     Até a resposta, o Financeiro mostra as NFs emitidas por mês no lugar.
+    **Decidida em 26/10/2026:** vale o rateio pelas linhas do orçamento de
+    cada demanda (parte a fazer no relatório do Financeiro).
 27. O tempo por item (parte 5.1) é em homem-minuto: 2 pessoas fazem na
     metade do tempo de 1. Vale para montagem e carga?
 28. O tempo de trabalho deixa o deslocamento de fora, e quem planeja soma o
@@ -944,6 +946,8 @@ defeito.
     … em aberto"). Recomendo a coordenação poder cancelar a vistoria em
     execução, com motivo, com o evento, liberando a demanda para outra
     vistoria. A OS de serviço continua sem cancelar depois de iniciada.
+    **Decidida em 26/10/2026:** como recomendado. A ação na tela vem com o
+    alinhamento.
 59. Depois de aprovado, o pedido de retirada não se cancela nem se separa a
     menos. "Encerrar" muda só o status: a reserva fica presa, e as tarefas de
     separação e expedição continuam abertas. Na separação, o item faltando
@@ -954,6 +958,8 @@ defeito.
     - "Separar a menos", na conclusão da separação, que solta a diferença e
       segue com o que foi separado.
     "Encerrar" passaria a valer só depois da entrega.
+    **Decidida em 26/10/2026:** como recomendado. As ações na tela vêm com
+    o alinhamento.
 60. A fatura que nasce da NFS-e autorizada pela Omie leva como emissão o dia
     em que a rotina viu a autorização, não o da nota. Na rotina em dia, a
     diferença é de minutos. Quando a emissão parou e foi retomada dias
@@ -962,6 +968,7 @@ defeito.
     Omie não traz a data da NFS-e, só a do faturamento da OS (`dDtFat`).
     Recomendo usar o `dDtFat` quando a autorização é vista depois de uma
     parada ou retomada, e o dia da rotina no resto.
+    **Decidida em 26/10/2026:** como recomendado.
 
 61. Na ficha do RH, quando dois registros do mesmo tipo têm a mesma data de
     emissão, vale o que vence depois e, só no empate do vencimento, o
@@ -1009,6 +1016,8 @@ defeito.
     - Recomendo a medição aprovada entrar em A faturar como um item próprio,
       como a competência do WMS, pelo total aprovado. A NF dela leva as
       demandas da medição, que deixam de ser cobradas à parte.
+    - **Decidida em 26/10/2026:** como recomendado, antes do primeiro
+      contrato com medição mensal.
 
 65. A inclusão guardada de um item que a OS não tem, do catálogo ou
     avulso, não aparece na tela do celular até chegar. A equipe pode
@@ -1020,6 +1029,8 @@ defeito.
     - Recomendo a lista mostrar a inclusão guardada como linha nova, com o
       relógio de guardada e sem + e −, até ela chegar. É tela: precisa do
       alinhamento antes.
+    - **Decidida em 26/10/2026:** como recomendado, com o alinhamento
+      antes.
 
 66. A conclusão do celular recusada depois de a assinatura subir deixa a
     assinatura no Storage sem a OS apontar para ela. Isso acontece quando o
@@ -1031,6 +1042,8 @@ defeito.
     - Recomendo a ficha da OS no escritório mostrar a conclusão recusada do
       campo, com a assinatura, para a coordenação anexá-la à conclusão. É
       tela nova.
+    - **Decidida em 26/10/2026:** como recomendado, com o alinhamento
+      antes.
 
 **Acesso e convites** (25/10/2026). O id do convite é o token do link
 (`invites/{token}`): quem o tem e entra com o e-mail convidado vira o
@@ -1045,6 +1058,9 @@ usuário do convite, com o papel dele.
     - Recomendo, logo depois de publicar a `main` na produção, cancelar em
       Configurações › Usuários cada convite pendente e convidar de novo. O
       evento do convite novo leva só a referência do token.
+    - **Decidida em 26/10/2026:** como recomendado. É ação do owner na
+      produção, que já tem a correção (`lancamento-producao.md`, seção 5,
+      item 7).
 68. O aceite confere só se o e-mail do login é o do convite, não se ele foi
     verificado. Quem tiver o link (encaminhado, ou lido em `invites` por um
     admin) cria a conta com o e-mail convidado e entra com o papel do
@@ -1055,6 +1071,8 @@ usuário do convite, com o papel dele.
       verificado e grava o usuário, o convite usado e o evento numa
       transação.
     - É tela: a pessoa confirma o e-mail antes de entrar.
+    - **Decidida em 26/10/2026:** como recomendado, com o alinhamento da
+      tela antes.
 69. Arquivar o cliente ou pôr "Portal do cliente: Sem portal"
     (Configurações › Clientes) não corta as pessoas dele. As portas olham só
     os módulos do contrato, que o arquivo mantém: o WMS, as Rules, o portal
@@ -1065,6 +1083,9 @@ usuário do convite, com o papel dele.
       convite. Os logins ficam, como a remoção de acesso de hoje.
     - Se os logins devem continuar, o rótulo "Sem portal" engana: a troca é
       de nome na tela.
+    - **Decidida em 26/10/2026:** arquivar e "Sem portal" cortam o portal:
+      o portal ativo fica gravado no `client_access`, e as portas e o
+      convite o conferem. Os logins ficam.
 
 **Datas do vínculo** (26/10/2026). Da parte 8.4a do RH.
 70. Pessoas, no RH, lista só quem está ativo no cadastro da Operação. Com as
