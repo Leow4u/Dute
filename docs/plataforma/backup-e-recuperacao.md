@@ -227,8 +227,8 @@ apague-os de `tmp\backup\` depois de comparar.
 
 | Data | Banco | Backup (`snapshotTime`) | Resultado |
 |---|---|---|---|
-| 26/10/2026 | `(default)` | 2026-10-25T23:46:47.420101Z | OK: o backup restaurou os 4940 documentos do (default), em 11 min 36 s. O banco de teste não foi apagado: nasceu com a proteção contra exclusão (ver o histórico) |
-| — | `dute-rh` | — | pendente: o banco nasceu em 24/10/2026 22:34 UTC |
+| 26/10/2026 | `(default)` | 2026-10-25T23:46:47.420101Z | OK: o backup restaurou os 4940 documentos do (default), em 11 min 36 s. O banco de teste nasceu com a proteção contra exclusão e só saiu no teste seguinte (ver o histórico) |
+| 26/10/2026 | `dute-rh` | 2026-10-26T05:56:05.521759Z | OK: o backup restaurou os 0 documentos do dute-rh, em 17 s. O banco ainda estava vazio na produção: o teste prova a restauração, não os dados. Repetir quando o RH tiver registros |
 
 ## Histórico
 
@@ -237,3 +237,4 @@ apague-os de `tmp\backup\` depois de comparar.
 | 20/10/2026 14:28 UTC | PITR de 7 dias e backup diário com retenção de 14 dias ligados no `dute-prod`, com o OK do Leonardo. Leitura no passado conferida: o inventário de 13:30:00 UTC deu 679 documentos, e as leituras fora do minuto cheio ou anteriores a 13:28 foram recusadas |
 | 24/10/2026 22:34 UTC | O banco `dute-rh` criado no `dute-prod` pelo workflow `Banco rh`, com o OK do Leonardo: proteção contra exclusão, PITR de 7 dias e backup diário de 14 dias desde a criação (`fase-8-rh.md`) |
 | 26/10/2026 17:04 UTC | Primeiro teste de restauração do `(default)`, com o OK do Leonardo (workflow `Teste de restauração`, run 40365137550): o backup restaurou os 4940 documentos. O banco de teste `teste-restauracao-default-20261026t170444` nasceu com a proteção contra exclusão, e a exclusão foi recusada (`FAILED_PRECONDITION`). Ele ficou no projeto, com a cópia dos dados, até o teste seguinte. A ferramenta passou a tirar a proteção do banco de teste antes de apagar |
+| 26/10/2026 17:31 UTC | Teste de restauração do `dute-rh`, com o OK do Leonardo (run 40369269656): antes, a ferramenta apagou o `teste-restauracao-default-20261026t170444`, que tinha sobrado. O backup das 05:56 restaurou o banco vazio, e o banco de teste foi apagado. No fim, os bancos do `dute-prod` eram só o `(default)` e o `dute-rh` |
