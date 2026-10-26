@@ -16,13 +16,22 @@ import { INVOICE_PROMPT } from "./invoice-reading.js";
 export const MODELO_DO_AGENTE = process.env.AGENT_DUTE_MODEL ?? "gemini-3.5-flash";
 export const MODELO_RESERVA = "gemini-3.8-flash";
 
+/**
+ * Onde o Vertex AI processa as conversas, os resumos e a leitura da nota
+ * (LGPD, decisão 12 do Leonardo, 26/10/2026): a multirregião `us`, onde os
+ * dois modelos existem e o processamento fica nos Estados Unidos. O Brasil
+ * não tem nenhum dos dois; o `global` não diz onde processa. É o mesmo local
+ * do WMS (`VERTEX_LOCATION`), travado em agente-modelo.test.ts.
+ */
+export const LOCAL_DO_VERTEX = "us";
+
 export const TEXTO_SEM_MODELO =
   "Não consegui consultar os dados agora. Tente de novo em alguns instantes. Se precisar com urgência, as telas do módulo mostram as mesmas informações.";
 
 /** O Genkit do agente, criado na primeira conversa: a rotina da memória não paga essa partida. */
 export function genkitDoAgente(projectId: string): () => Genkit {
   let ai: Genkit | null = null;
-  return () => (ai ??= genkit({ plugins: [vertexAI({ projectId, location: "global" })] }));
+  return () => (ai ??= genkit({ plugins: [vertexAI({ projectId, location: LOCAL_DO_VERTEX })] }));
 }
 
 export function gerarComGenkit(ai: () => Genkit): GerarResposta {
