@@ -170,6 +170,56 @@ describe("OS", () => {
     expect(textos.filter((texto) => texto.includes("Cliente desistiu"))).toEqual(["Cancelada · Cliente desistiu"]);
   });
 
+  it("a conclusão recusada do campo: o cartão com a recusa, quem recebeu, a assinatura e as ações; no axe (pergunta 66)", async () => {
+    const ASSINATURA = "os/10045-01/assinatura/as_0123456789abcdef.png";
+    const ficha: FichaDaOs = {
+      ...FICHA,
+      recusaDoCampo: {
+        recusadaEm: "2026-10-22T21:04:00.000Z",
+        instante: "2026-10-22T20:52:00.000Z",
+        informadoPor: CARLOS,
+        nome: "Renata Campos",
+        cargo: "Facilities",
+        assinatura: ASSINATURA,
+        motivo: "A hora vem antes de Montagem (11:20).",
+        anexada: null,
+        dispensada: null,
+      },
+    };
+    const html = render({
+      ficha,
+      urls: { [ASSINATURA]: "https://example.test/assinatura.png" },
+      acoesDaRecusa: (
+        <>
+          <button type="button">Concluir com estes dados</button>
+          <button type="button">Dispensar</button>
+        </>
+      ),
+    });
+    const textos = textosDaTela(html);
+    for (const texto of [
+      "Conclusão recusada do campo",
+      "Recusada 18:04",
+      "Concluída no celular",
+      "17:52 · Carlos Silva",
+      "Motivo da recusa",
+      "A hora vem antes de Montagem (11:20).",
+      "Recebido por",
+      "Renata Campos · Facilities",
+      "Assinatura",
+      "Concluir com estes dados",
+      "Dispensar",
+    ]) {
+      expect(textos).toContain(texto);
+    }
+    expect(html).toContain('alt="Assinatura de Renata Campos · Facilities"');
+    // O cartão vem antes da conclusão e dos locais.
+    expect(html.indexOf("Conclusão recusada do campo")).toBeLessThan(html.indexOf("Locais"));
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    // Resolvida, o cartão sai.
+    expect(render({ ficha: { ...ficha, recusaDoCampo: { ...ficha.recusaDoCampo!, dispensada: { instante: "2026-10-22T21:10:00.000Z", nome: "Mariana Lopes" } } } })).not.toContain("Conclusão recusada do campo");
+  });
+
   it("a vistoria cancelada em execução: o histórico mostra quem cancelou, o motivo e a hora (pergunta 58)", () => {
     const cancelada = fichaDaLeitura("10045-01", {
       status: "cancelada",

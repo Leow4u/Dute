@@ -2,6 +2,7 @@ import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
 import { caminhoDaAssinatura, concluirOs, interpretarConclusao } from "./conclusao.js";
+import { conclusaoRecusadaLida } from "./conclusao-recusada.js";
 import { guardarConclusaoRecusada } from "./conclusao-recusada-gravacao.js";
 import { ORDERS_COLLECTION, retornoAoArmazem, retornoNoPedido } from "./demanda-do-armazem.js";
 import { createOperacaoEvent } from "./events.js";
@@ -27,7 +28,8 @@ import type { OperacaoProfile } from "./profile.js";
  *
  * A conclusão do celular recusada com a assinatura conferida fica guardada na
  * OS para a coordenação (pergunta 66, domain/conclusao-recusada.ts), e a
- * recusa chega ao celular como antes.
+ * recusa chega ao celular como antes. A conclusão que usa a assinatura da
+ * recusa ("Concluir com estes dados") a marca como anexada.
  */
 export async function completeServiceOrderFor(
   db: Firestore,
@@ -71,7 +73,10 @@ function concluir(
       const { conclusao, etapas, fim, fotosDoFinal } = concluirOs(os, { etapas: execucao.etapas, itens, fotos: fotosLidas(bruto), assinatura }, pedido, contexto);
       const status: StatusDaOs = "em_revisao";
       const edicao = os.edicao + 1;
-      transaction.update(ref, { conclusao, etapas, status, edicao, ...autoria(caller) });
+      const recusa = conclusaoRecusadaLida(bruto.conclusao_recusada);
+      const usaARecusa = recusa && !recusa.anexada && !recusa.dispensada && conclusao.assinatura === recusa.assinatura;
+      const anexada = usaARecusa ? { conclusao_recusada: { ...recusa, anexada: { instante: contexto.agora.toISOString(), por: { uid: caller.uid, nome: caller.name ?? null } } } } : {};
+      transaction.update(ref, { conclusao, etapas, status, edicao, ...anexada, ...autoria(caller) });
       const base = { id: os.numero, demanda: os.demanda, instante: conclusao.instante, canal: conclusao.canal };
       const comum = { entity_id: os.numero, customer_code: os.customer_code, actor: ator(caller), occurred_at: conclusao.instante, operation_id: operationId };
       if (fim) {

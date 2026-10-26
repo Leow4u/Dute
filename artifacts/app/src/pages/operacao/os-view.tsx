@@ -17,6 +17,7 @@ import {
   itensDaFicha,
   janelaEmTexto,
   passosDaOs,
+  recusaNaFicha,
   revisaoNaFicha,
   servicosEmTexto,
   type FichaDaOs,
@@ -32,8 +33,9 @@ import { cn } from "@/lib/utils";
  * saída e da chegada, as etapas, os itens com o feito e o incluído em campo,
  * as fotos, a equipe, os veículos e o histórico; concluída, o aceite, quem
  * assinou ou recebeu, a assinatura e o motivo de cada item a menos (parte
- * 3.9c). Só apresentação: os dados chegam por props (pages/operacao/os.tsx).
- * Sem legenda e sem valor.
+ * 3.9c); a conclusão do celular recusada, com a assinatura e as ações da
+ * coordenação (pergunta 66). Só apresentação: os dados chegam por props
+ * (pages/operacao/os.tsx). Sem legenda e sem valor.
  */
 
 export type EstadoDaFicha = "carregando" | "erro" | "nao_encontrada" | "pronto";
@@ -232,8 +234,39 @@ function Itens({ ficha }: { ficha: FichaDaOs }) {
   );
 }
 
-function Conclusao({ ficha, urls }: { ficha: FichaDaOs; urls: Readonly<Record<string, string>> }) {
-  const conclusao = conclusaoNaFicha(ficha);
+/** O cartão é de quem coordena (owner, admin e interno): a página só entrega as ações a eles. */
+function RecusaDoCampo({ ficha, hoje, urls, acoes }: { ficha: FichaDaOs; hoje: string; urls: Readonly<Record<string, string>>; acoes?: ReactNode }) {
+  const recusa = recusaNaFicha(ficha, hoje);
+  if (!recusa || !acoes) return null;
+  const assinatura = urls[recusa.assinatura];
+  const linhas: Array<[string, string]> = [
+    ["Concluída no celular", recusa.concluida],
+    ["Motivo da recusa", recusa.motivo],
+    ["Recebido por", recusa.recebidoPor],
+  ];
+  return (
+    <Cartao titulo="Conclusão recusada do campo" acao={<span className={cn(selo, seloAlerta)}>{recusa.recusada}</span>} className="border-destructive/40">
+      <dl className="flex flex-col divide-y divide-border">
+        {linhas.map(([rotulo, valor]) => (
+          <div key={rotulo} className="flex flex-col gap-0.5 px-5 py-3 sm:flex-row sm:gap-4">
+            <dt className="text-sm text-muted-foreground sm:w-44 sm:shrink-0">{rotulo}</dt>
+            <dd className="text-sm font-semibold text-foreground">{valor}</dd>
+          </div>
+        ))}
+        <div className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:items-center sm:gap-4">
+          <dt className="text-sm text-muted-foreground sm:w-44 sm:shrink-0">Assinatura</dt>
+          <dd className="flex h-24 w-full max-w-64 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
+            {assinatura ? <img src={assinatura} alt={`Assinatura de ${recusa.recebidoPor}`} className="size-full object-contain" /> : <ImageIcon aria-hidden="true" className="size-5 text-muted-foreground" />}
+          </dd>
+        </div>
+      </dl>
+      <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">{acoes}</div>
+    </Cartao>
+  );
+}
+
+function Conclusao({ ficha, hoje, urls }: { ficha: FichaDaOs; hoje: string; urls: Readonly<Record<string, string>> }) {
+  const conclusao = conclusaoNaFicha(ficha, hoje);
   if (!conclusao) return null;
   const assinatura = conclusao.assinatura ? urls[conclusao.assinatura] : null;
   return (
@@ -243,6 +276,7 @@ function Conclusao({ ficha, urls }: { ficha: FichaDaOs; urls: Readonly<Record<st
           <span className="text-sm font-semibold text-foreground">{conclusao.aceite}</span>
           {conclusao.responsavel ? <span className="text-sm text-muted-foreground">{conclusao.responsavel}</span> : null}
           <span className="text-xs text-muted-foreground">{conclusao.origem}</span>
+          {conclusao.anexada ? <span className="text-xs text-muted-foreground">Assinatura anexada · {conclusao.anexada}</span> : null}
         </div>
         {conclusao.assinatura ? (
           <figure className="flex w-full max-w-64 flex-col gap-1 sm:w-64">
@@ -415,6 +449,7 @@ export function OsView({
   acoes,
   painel,
   anexarFotos,
+  acoesDaRecusa,
 }: {
   estado: EstadoDaFicha;
   numero: string;
@@ -429,6 +464,8 @@ export function OsView({
   painel?: ReactNode;
   /** Anexar fotos à OS, no cartão das fotos (parte 3.7e). */
   anexarFotos?: ReactNode;
+  /** As ações da coordenação na conclusão recusada do celular (pergunta 66); sem elas, o cartão não aparece. */
+  acoesDaRecusa?: ReactNode;
 }) {
   const voltar = (
     <Link href={ROTA_HOJE} className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-muted-foreground hover:text-foreground">
@@ -489,6 +526,7 @@ export function OsView({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-w-0 flex-col gap-6">
+          <RecusaDoCampo ficha={ficha} hoje={hoje} urls={urls} acoes={acoesDaRecusa} />
           {ficha.vistoria ? (
             <Cartao titulo="Vistoria">
               <div className="px-5 py-4">
@@ -497,7 +535,7 @@ export function OsView({
             </Cartao>
           ) : null}
           <Revisao ficha={ficha} />
-          <Conclusao ficha={ficha} urls={urls} />
+          <Conclusao ficha={ficha} hoje={hoje} urls={urls} />
           <Locais ficha={ficha} />
           <Etapas ficha={ficha} />
           {ficha.tipo === "vistoria" ? null : <Itens ficha={ficha} />}

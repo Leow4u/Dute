@@ -226,6 +226,23 @@ conclusão no histórico, e a direta em Execução a orçar volta a Para planeja
 Não reabre a vistoria, nem com a execução validada pelo cliente ou o orçamento
 da execução já aberto no Comercial.
 
+**"Conclusão recusada do campo"**: quando o celular conclui a OS que o
+escritório já concluiu, ou com a hora antes da última etapa, o servidor recusa
+e guarda o que chegou. A ficha da OS mostra o cartão (só para `owner`, `admin`
+e `interno`), com a hora no celular, quem concluiu, o motivo da recusa, quem
+recebeu e a assinatura:
+
+- "Anexar à conclusão", na OS concluída sem aceite (também revisada): a
+  conclusão passa a ter a assinatura e quem assinou, e a ficha mostra
+  "Assinatura anexada" com a hora e quem anexou;
+- "Concluir com estes dados", na OS de serviço em execução: abre a conclusão
+  do Registrar andamento já com a hora e quem concluiu no celular, quem
+  recebeu, o cargo e a assinatura, que não sobe de novo. Quando o motivo é a
+  hora, corrija a hora antes de concluir;
+- "Dispensar": tira o cartão.
+
+O histórico guarda a recusa e quem anexou ou dispensou.
+
 ## Vistoria
 
 A vistoria é uma OS sem itens que vai ao local antes do escopo fechado e

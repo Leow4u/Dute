@@ -73,6 +73,27 @@ export type ConclusaoLida = RegistroLido & {
   arquivosDoFinal: string[];
 };
 
+/** Quem resolveu a conclusão recusada do celular, e quando. */
+export type MarcaLida = { instante: string; nome: string | null };
+
+/**
+ * A conclusão do celular recusada com a assinatura guardada na OS (pergunta
+ * 66): a hora no celular, quem concluiu, quem recebeu, a assinatura, o
+ * motivo e, resolvida, quem anexou à conclusão ou dispensou.
+ */
+export type RecusaDoCampoLida = {
+  recusadaEm: string;
+  instante: string;
+  informadoPor: string | null;
+  nome: string;
+  cargo: string | null;
+  /** O caminho da assinatura no Storage. */
+  assinatura: string;
+  motivo: string;
+  anexada: MarcaLida | null;
+  dispensada: MarcaLida | null;
+};
+
 /** A revisão interna (parte 3.10a): quando, e a decisão de cada linha que divergiu. */
 export type RevisaoLida = {
   instante: string;
@@ -116,6 +137,8 @@ export type FichaDaOs = {
   conclusao: ConclusaoLida | null;
   revisao: RevisaoLida | null;
   vistoria: VistoriaLida | null;
+  /** A conclusão do celular recusada com a assinatura (pergunta 66). */
+  recusaDoCampo: RecusaDoCampoLida | null;
   /** O motivo e, desde a pergunta 58, quando e quem cancelou (null na OS cancelada antes). */
   cancelamento: { motivo: string; instante: string | null; nome: string | null } | null;
 };
@@ -260,8 +283,26 @@ export function fichaDaLeitura(id: string, data: Record<string, unknown>): Ficha
     conclusao: conclusaoLida(data.conclusao),
     revisao: revisaoLida(data.revisao),
     vistoria: vistoriaLida(data.vistoria),
+    recusaDoCampo: recusaDoCampoLida(data.conclusao_recusada),
     cancelamento: cancelamentoLido(data.cancelamento),
   };
+}
+
+function marcaLida(valor: unknown): MarcaLida | null {
+  if (!valor || typeof valor !== "object") return null;
+  const bruto = valor as Record<string, unknown>;
+  const por = bruto.por && typeof bruto.por === "object" ? (bruto.por as Record<string, unknown>) : {};
+  const instante = texto(bruto.instante);
+  return instante ? { instante, nome: textoOuNull(por.nome) } : null;
+}
+
+function recusaDoCampoLida(valor: unknown): RecusaDoCampoLida | null {
+  if (!valor || typeof valor !== "object") return null;
+  const bruto = valor as Record<string, unknown>;
+  const responsavel = bruto.responsavel && typeof bruto.responsavel === "object" ? (bruto.responsavel as Record<string, unknown>) : {};
+  const lida = { recusadaEm: texto(bruto.recusada_em), instante: texto(bruto.instante), nome: texto(responsavel.nome), assinatura: texto(bruto.assinatura), motivo: texto(bruto.motivo) };
+  if (Object.values(lida).some((campo) => !campo)) return null;
+  return { ...lida, informadoPor: textoOuNull(bruto.informado_por), cargo: textoOuNull(responsavel.cargo), anexada: marcaLida(bruto.anexada), dispensada: marcaLida(bruto.dispensada) };
 }
 
 function cancelamentoLido(valor: unknown): FichaDaOs["cancelamento"] {
@@ -494,26 +535,64 @@ export type ConclusaoNaFicha = {
   /** "Carlos Silva · celular". */
   origem: string;
   assinatura: string | null;
+  /** A assinatura do celular anexada pela coordenação (pergunta 66): "18:10 · Mariana Lopes". */
+  anexada: string | null;
   /** O item a menos com o motivo: "Mesa de trabalho · 58 de 60 · 2 mesas com pé quebrado". */
   diferencas: Array<{ linha: string; item: string; quantidade: string; motivo: string }>;
 };
 
 /** O que a ficha mostra da conclusão, ou null antes de concluir. */
-export function conclusaoNaFicha(ficha: FichaDaOs): ConclusaoNaFicha | null {
+export function conclusaoNaFicha(ficha: FichaDaOs, hoje = ""): ConclusaoNaFicha | null {
   const conclusao = ficha.conclusao;
   if (!conclusao) return null;
   const { cargo, documento } = conclusao.responsavel;
+  const anexada = ficha.recusaDoCampo?.anexada && ficha.recusaDoCampo.assinatura === conclusao.assinatura ? ficha.recusaDoCampo.anexada : null;
   return {
     aceite: aceiteEmTexto(conclusao),
     responsavel: conclusao.aceite === "assinatura" ? [cargo, documento ? `doc. ${documento}` : null].filter(Boolean).join(" · ") || null : null,
     origem: origemEmTexto(ficha, conclusao),
     assinatura: conclusao.assinatura,
+    anexada: anexada ? [quandoNaFicha(anexada.instante, hoje), anexada.nome].filter(Boolean).join(" · ") : null,
     diferencas: conclusao.diferencas.map((diferenca) => ({
       linha: diferenca.linha,
       item: ficha.itens.find((item) => item.id === diferenca.linha)?.item ?? diferenca.linha,
       quantidade: `${diferenca.executado} de ${diferenca.previsto}`,
       motivo: diferenca.motivo,
     })),
+  };
+}
+
+/** A recusa que espera a coordenação: nem anexada nem dispensada. */
+export function recusaPendente(ficha: Pick<FichaDaOs, "recusaDoCampo">): RecusaDoCampoLida | null {
+  const recusa = ficha.recusaDoCampo;
+  return recusa && !recusa.anexada && !recusa.dispensada ? recusa : null;
+}
+
+/**
+ * O que a coordenação faz com a recusa: anexar à conclusão sem aceite (a OS
+ * concluída, também a revisada), concluir com estes dados a OS de serviço em
+ * execução, e dispensar, sempre.
+ */
+export type AcaoDaRecusa = "anexar" | "concluir" | "dispensar";
+
+export function acoesDaRecusa(ficha: Pick<FichaDaOs, "status" | "tipo" | "conclusao">): AcaoDaRecusa[] {
+  if ((ficha.status === "em_revisao" || ficha.status === "revisada") && ficha.conclusao?.aceite === "sem_aceite") return ["anexar", "dispensar"];
+  if (ficha.status === "em_execucao" && ficha.tipo !== "vistoria") return ["concluir", "dispensar"];
+  return ["dispensar"];
+}
+
+/** O cartão da recusa: "Recusada 18:04", "17:52 · Carlos Silva", o motivo, "Renata Campos · Facilities" e a assinatura. */
+export type RecusaNaFicha = { recusada: string; concluida: string; motivo: string; recebidoPor: string; assinatura: string };
+
+export function recusaNaFicha(ficha: FichaDaOs, hoje: string): RecusaNaFicha | null {
+  const recusa = recusaPendente(ficha);
+  if (!recusa) return null;
+  return {
+    recusada: `Recusada ${quandoNaFicha(recusa.recusadaEm, hoje)}`,
+    concluida: [quandoNaFicha(recusa.instante, hoje), nomeDe(ficha, recusa.informadoPor)].filter(Boolean).join(" · "),
+    motivo: recusa.motivo,
+    recebidoPor: [recusa.nome, recusa.cargo].filter(Boolean).join(" · "),
+    assinatura: recusa.assinatura,
   };
 }
 
@@ -642,9 +721,15 @@ export function feitoEm(ficha: FichaDaOs): string | null {
 
 export type EntradaDoHistorico = { chave: string; titulo: string; detalhe: string; instante: string };
 
-/** As etapas, as inclusões, as ocorrências e o cancelamento, da mais nova para a mais antiga. */
+/** "14:31" hoje; "25/10 14:31" em outro dia. */
+function quandoNaFicha(instante: string, hoje: string): string {
+  return dataDe(instante) === hoje ? horaDe(instante) : `${formatarData(dataDe(instante)).slice(0, 5)} ${horaDe(instante)}`;
+}
+
+/** As etapas, as inclusões, as ocorrências, a conclusão recusada do celular e o cancelamento, da mais nova para a mais antiga. */
 export function historicoDaOs(ficha: FichaDaOs, hoje: string): EntradaDoHistorico[] {
-  const quando = (instante: string) => (dataDe(instante) === hoje ? horaDe(instante) : `${formatarData(dataDe(instante)).slice(0, 5)} ${horaDe(instante)}`);
+  const quando = (instante: string) => quandoNaFicha(instante, hoje);
+  const recusa = ficha.recusaDoCampo;
   const entradas: EntradaDoHistorico[] = [
     ...ficha.etapas.map((etapa) => ({
       chave: `etapa:${etapa.etapa}`,
@@ -674,6 +759,22 @@ export function historicoDaOs(ficha: FichaDaOs, hoje: string): EntradaDoHistoric
             detalhe: [`${ficha.revisao.linhas.filter((linha) => linha.decisao).length} ${ficha.revisao.linhas.filter((linha) => linha.decisao).length === 1 ? "divergência decidida" : "divergências decididas"}`, quando(ficha.revisao.instante)].join(" · "),
             instante: ficha.revisao.instante,
           },
+        ]
+      : []),
+    ...(recusa
+      ? [
+          {
+            chave: "recusa",
+            titulo: "Conclusão do campo recusada",
+            detalhe: [nomeDe(ficha, recusa.informadoPor), recusa.motivo, quando(recusa.recusadaEm)].filter(Boolean).join(" · "),
+            instante: recusa.recusadaEm,
+          },
+          ...(recusa.anexada
+            ? [{ chave: "recusa-anexada", titulo: "Assinatura anexada à conclusão", detalhe: [recusa.anexada.nome, quando(recusa.anexada.instante)].filter(Boolean).join(" · "), instante: recusa.anexada.instante }]
+            : []),
+          ...(recusa.dispensada
+            ? [{ chave: "recusa-dispensada", titulo: "Conclusão do campo dispensada", detalhe: [recusa.dispensada.nome, quando(recusa.dispensada.instante)].filter(Boolean).join(" · "), instante: recusa.dispensada.instante }]
+            : []),
         ]
       : []),
     ...(ficha.cancelamento?.instante

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  acoesDaRecusa,
   conclusaoNaFicha,
   ETAPAS_DA_OS,
   ETAPA_ROTULO,
@@ -17,6 +18,8 @@ import {
   itensDaFicha,
   janelaEmTexto,
   passosDaOs,
+  recusaNaFicha,
+  recusaPendente,
   servicosEmTexto,
   type FichaDaOs,
 } from "./ficha-da-os";
@@ -226,6 +229,7 @@ describe("conclusão (parte 3.9c)", () => {
       responsavel: null,
       origem: "escritório · whatsapp",
       assinatura: null,
+      anexada: null,
       diferencas: [{ linha: "ln_2", item: "Mesa", quantidade: "58 de 60", motivo: "Quebrada" }],
     });
   });
@@ -234,5 +238,78 @@ describe("conclusão (parte 3.9c)", () => {
     expect(conclusaoNaFicha(fichaDaLeitura("10045-01", base)!)).toBeNull();
     expect(fichaDaLeitura("10045-01", { ...base, conclusao: { ...conclusao, aceite: "talvez" } })!.conclusao).toBeNull();
     expect(fichaDaLeitura("10045-01", { ...base, conclusao: { ...conclusao, instante: "ontem" } })!.conclusao).toBeNull();
+  });
+});
+
+describe("a conclusão recusada do campo (pergunta 66)", () => {
+  const ASSINATURA = "os/10045-01/assinatura/as_0123456789abcdef.png";
+  const recusa = {
+    chave: "c-celular",
+    recusada_em: "2026-10-22T21:04:00.000Z",
+    instante: "2026-10-22T20:52:00.000Z",
+    informado_por: CARLOS,
+    registrado_por: { uid: "uid-carlos", role: "campo" },
+    responsavel: { nome: "Renata Campos", cargo: "Facilities" },
+    assinatura: ASSINATURA,
+    motivo: "A OS já foi concluída.",
+    anexada: null,
+    dispensada: null,
+  };
+  const semAceite = {
+    instante: "2026-10-22T20:50:00.000Z",
+    canal: "escritorio",
+    meio: "telefone",
+    informado_por: CARLOS,
+    aceite: "sem_aceite",
+    responsavel: { nome: "Portaria" },
+    assinatura: null,
+    diferencas: [],
+  };
+  const ficha = (extra: Record<string, unknown>) => fichaDaLeitura("10045-01", { ...DOC, ...extra }) as FichaDaOs;
+
+  it("o cartão: quando foi recusada, a hora no celular com quem concluiu, o motivo, quem recebeu e a assinatura", () => {
+    expect(recusaNaFicha(ficha({ status: "em_revisao", conclusao: semAceite, conclusao_recusada: recusa }), HOJE)).toEqual({
+      recusada: "Recusada 18:04",
+      concluida: "17:52 · Carlos Silva",
+      motivo: "A OS já foi concluída.",
+      recebidoPor: "Renata Campos · Facilities",
+      assinatura: ASSINATURA,
+    });
+    // De outro dia, com a data.
+    expect(recusaNaFicha(ficha({ status: "em_revisao", conclusao: semAceite, conclusao_recusada: recusa }), "2026-10-23")?.recusada).toBe("Recusada 22/10 18:04");
+  });
+
+  it("as ações: anexar na concluída sem aceite (também revisada), concluir com os dados na OS de serviço em execução, dispensar sempre", () => {
+    expect(acoesDaRecusa(ficha({ status: "em_revisao", conclusao: semAceite }))).toEqual(["anexar", "dispensar"]);
+    expect(acoesDaRecusa(ficha({ status: "revisada", conclusao: semAceite }))).toEqual(["anexar", "dispensar"]);
+    expect(acoesDaRecusa(ficha({ status: "em_revisao", conclusao: { ...semAceite, aceite: "assinatura", assinatura: "os/10045-01/assinatura/as_ffffffffffffffff.png" } }))).toEqual(["dispensar"]);
+    expect(acoesDaRecusa(ficha({ status: "em_execucao" }))).toEqual(["concluir", "dispensar"]);
+    expect(acoesDaRecusa(ficha({ status: "cancelada" }))).toEqual(["dispensar"]);
+  });
+
+  it("resolvida, o cartão sai; o histórico guarda a recusa e quem anexou ou dispensou, e a conclusão mostra a assinatura anexada", () => {
+    const anexada = { instante: "2026-10-22T21:10:00.000Z", por: { uid: "interno-1", nome: "Mariana Lopes" } };
+    const assinada = ficha({
+      status: "em_revisao",
+      conclusao: { ...semAceite, aceite: "assinatura", responsavel: { nome: "Renata Campos", cargo: "Facilities" }, assinatura: ASSINATURA },
+      conclusao_recusada: { ...recusa, anexada },
+    });
+    expect(recusaPendente(assinada)).toBeNull();
+    expect(recusaNaFicha(assinada, HOJE)).toBeNull();
+    expect(conclusaoNaFicha(assinada, HOJE)?.anexada).toBe("18:10 · Mariana Lopes");
+    const historico = historicoDaOs(assinada, HOJE);
+    expect(historico.slice(0, 2).map((entrada) => [entrada.titulo, entrada.detalhe])).toEqual([
+      ["Assinatura anexada à conclusão", "Mariana Lopes · 18:10"],
+      ["Conclusão do campo recusada", "Carlos Silva · A OS já foi concluída. · 18:04"],
+    ]);
+
+    const dispensada = ficha({ status: "em_revisao", conclusao: semAceite, conclusao_recusada: { ...recusa, dispensada: anexada } });
+    expect(historicoDaOs(dispensada, HOJE)[0]).toMatchObject({ titulo: "Conclusão do campo dispensada", detalhe: "Mariana Lopes · 18:10" });
+    expect(conclusaoNaFicha(dispensada, HOJE)?.anexada).toBeNull();
+  });
+
+  it("a recusa incompleta não se lê", () => {
+    expect(ficha({ conclusao_recusada: { ...recusa, assinatura: "" } }).recusaDoCampo).toBeNull();
+    expect(ficha({}).recusaDoCampo).toBeNull();
   });
 });
