@@ -55,7 +55,9 @@ documentação de produto e operação está em `docs/`.
   comercial e os Relatórios. O portal com as OS, o comprovante, o Solicitar
   OS, os avisos (`runNotifications`, a cada 5 minutos; a chave do Resend
   vem do Secret Manager nos dois ambientes; sem ela, o e-mail fica
-  auditado, e fora da produção só sai para endereços `@dutelog.com.br`), a
+  auditado, e fora da produção só sai para endereços `@dutelog.com.br`;
+  na produção, sai para os contatos dos clientes desde a quarta
+  publicação, em 26/10/2026, `lancamento-producao.md`), a
   entrega do WMS e as quatro telas do WMS
   na v3 dependem da liberação da Operação e entram no `dute-prod` só por
   publicar a `main`. O Faturamento do WMS continua no shell da Armazenagem

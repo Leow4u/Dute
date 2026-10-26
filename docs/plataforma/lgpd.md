@@ -512,7 +512,8 @@ muda o sistema: cada mudança entra num PR próprio, depois da decisão.
     **Feito em 26/10/2026:** nenhum dos modelos existe no Brasil. Os de texto
     foram para a multirregião `us`, que processa nos Estados Unidos; a
     geração da foto do catálogo fica no `global`, o único local do modelo,
-    sem dado de pessoa (`fase-5-memoria.md`, "LGPD, decisão 12").
+    sem dado de pessoa (`fase-5-memoria.md`, "LGPD, decisão 12"). Na
+    produção desde a quarta publicação, no mesmo dia.
 
 ## 6. A retenção no código
 

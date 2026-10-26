@@ -1215,8 +1215,8 @@ Achada em 25/10/2026, ao conferir os achados de faturamento da auditoria de
   - o movimento sem origem é legado: com a foto, ele já está nela; sem a
     foto, conta pelo sinal e, sem sinal, pelo tipo.
   - O mês com foto calcula igual.
-- **Na produção,** chega com a próxima publicação da `main`
-  (`lancamento-producao.md`, seção 2).
+- **Na produção** desde a publicação dos marcos 2, 3 e 4, em 25/10/2026
+  (`e6a43ed`, `lancamento-producao.md`, seção 1).
 - **Testes:**
   - `billing-scope.test.ts`: o lado de cada origem e o legado.
   - `billing-callables.integration.test.ts`, "o mês sem foto": um cliente
