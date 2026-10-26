@@ -693,3 +693,65 @@ Leonardo (item 10).
     "Sair"; sem legenda; o axe;
   - `lib/operations/operations.test.ts`: o corte do perfil, como no
     servidor.
+
+### Pergunta 68: o aceite do convite pelo servidor
+
+Decidida pelo Leonardo em 26/10/2026, com a tela alinhada no canvas "Telas
+das decisões de 26/10" (item 9). Entra em duas partes, para o aceite nunca
+quebrar no meio do caminho: a 9a põe o servidor ao lado do aceite de hoje, e
+a 9b, com a tela e as regras, passa o app para o servidor e fecha o caminho
+do navegador.
+
+- **O problema.** O aceite era uma gravação do navegador.
+  - A regra do `users` conferia só se o e-mail do login era o do convite,
+    não se ele foi confirmado. Quem tivesse o link criava no Firebase Auth
+    uma conta com o e-mail convidado e entrava com o papel do convite.
+  - O evento do aceite saía do navegador, pela rota manual. O do cliente
+    nem saía: a rota é da equipe.
+- **A decisão.** O aceite passa a uma callable, que confere o e-mail
+  confirmado e grava o perfil, o convite usado e o evento numa transação. A
+  pessoa confirma o e-mail antes de entrar.
+- **9a, o servidor** (`functions/wms/src/domain/invite-acceptance.ts`):
+  - `acceptInvite` pede o login, mas não o perfil, porque quem aceita ainda
+    não tem. É a única callable do WMS assim (a lista `SO_LOGIN` em
+    `callables-auth.integration.test.ts`).
+  - Antes da transação, recusa nesta ordem:
+    - sem login;
+    - o pedido com outro campo além do token e do nome (o perfil vem do
+      convite, nunca do pedido);
+    - a conta sem e-mail;
+    - o e-mail não confirmado ("Confirme seu e-mail antes de aceitar o
+      convite.").
+  - Na transação, recusa:
+    - o convite que não existe;
+    - o convite de outro e-mail;
+    - o convite já usado e o revogado;
+    - a conta que já tem perfil ("Esta conta já tem acesso. Para mudar o
+      perfil, fale com quem administra os acessos.");
+    - o cliente arquivado ou sem portal (a mesma conferência do convite,
+      pergunta 69).
+  - Grava, na mesma transação:
+    - o perfil (`users/{uid}`, com o nome, o e-mail, o perfil e o cliente
+      do convite, e o `invite_id`);
+    - o convite usado;
+    - o evento `access.invite_accepted`. O id e o `payload` levam a
+      referência do token, nunca o token.
+  - O cliente do perfil é o do convite. Sem ele, fica a BTG para o cliente
+    antigo e a Dutelog para a equipe, como a tela fazia.
+  - Repetir o aceite feito pela mesma conta devolve o mesmo resultado, sem
+    gravar de novo.
+  - `lookupInvite` saiu do `index.ts` para o mesmo arquivo. No convite de
+    cliente, passa a dar também o nome do cliente, para a tela mostrar
+    "Cliente · Itaú Unibanco".
+- **O que a 9a não muda.** Até a 9b, o app segue aceitando pelo navegador,
+  e a regra do `users` e a rota manual do evento continuam.
+- **Testes:**
+  - `invite-acceptance.integration.test.ts`, no emulador:
+    - o aceite com o e-mail confirmado e a repetição;
+    - cada recusa, sem nada gravado;
+    - o cliente do perfil sem o código no convite;
+    - o pedido com outro campo;
+    - a consulta pelo link, com o nome do cliente.
+  - `callables-auth.integration.test.ts`: o `acceptInvite` sem login e sem
+    o e-mail confirmado.
+  - `callables-papeis.integration.test.ts`: a linha do `acceptInvite`.

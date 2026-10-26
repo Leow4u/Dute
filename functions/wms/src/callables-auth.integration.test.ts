@@ -28,6 +28,9 @@ type Callable = {
 /** As que respondem sem login. lookupInvite: o token do convite é a credencial. */
 const PUBLICAS = ["lookupInvite"];
 
+/** As que pedem o login, mas não o perfil. acceptInvite: quem aceita o convite ainda não tem perfil (pergunta 68). */
+const SO_LOGIN = ["acceptInvite"];
+
 /** Os papéis da plataforma que o WMS não atende: um papel novo entra sozinho. */
 const FORA_DO_WMS = PLATFORM_ROLES.filter((role) => !(WMS_ROLES as readonly string[]).includes(role));
 
@@ -126,12 +129,24 @@ describe("a porta das callables do WMS", () => {
       const erradas: string[] = [];
       for (const [name, callable] of callables) {
         if (PUBLICAS.includes(name)) continue;
+        if (SO_LOGIN.includes(name) && uid !== null) continue;
         const got = await recusa(callable, uid);
         if (got.code !== code || got.message !== message) erradas.push(`${name}: ${String(got.code)} ${String(got.message)}`);
       }
       assert.deepEqual(erradas, []);
     });
   }
+
+  it("acceptInvite pede o login, não o perfil: a conta nova sem o e-mail confirmado para antes do convite", async () => {
+    const acceptInvite = callables.get("acceptInvite");
+    assert.ok(acceptInvite);
+    const aceitar = (auth: unknown) => acceptInvite.run({ auth, data: { token: "0123456789abcdef0123456789abcdef", nome: "Ana" }, rawRequest: { headers: {} } } as never);
+    await assert.rejects(aceitar(undefined), { code: "unauthenticated", message: "Faça login para continuar." });
+    await assert.rejects(aceitar({ uid: "sem-perfil", token: { email: "ana@cliente.com.br" } }), {
+      code: "failed-precondition",
+      message: "Confirme seu e-mail antes de aceitar o convite.",
+    });
+  });
 
   it("lookupInvite responde sem login, só com o token", async () => {
     const lookupInvite = callables.get("lookupInvite");
