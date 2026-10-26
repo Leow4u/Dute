@@ -152,7 +152,12 @@ gcloud storage buckets add-iam-policy-binding "gs://$p.firebasestorage.app" --me
 
 Só no bucket, não no projeto, e sem apagar/sobrescrever. Sem esses papéis o
 portal mostra "O servidor não tem permissão para gravar (ou ler) arquivos no
-Storage", com o papel que falta.
+Storage", com o papel que falta. Até 01/10/2026 aparecia só "Falha interna no
+servidor", e a causa (403 `storage.objects.create`) estava apenas no log:
+
+```powershell
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="uploadshipmentattachment" AND severity>=WARNING' --project dute-prod --freshness=1h --limit 5
+```
 
 **Apagar.** Os dois papéis não apagam (`storage.objects.delete`). Quem apaga
 no bucket padrão é a retenção das fotos da OS (`runOperacaoRetention`, LGPD,
@@ -165,11 +170,6 @@ do Leonardo, no bucket e não no projeto, em cada ambiente:
 $p = "dute-homolog"
 $sa = "$(gcloud projects describe $p --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
 gcloud storage buckets add-iam-policy-binding "gs://$p.firebasestorage.app" --member="serviceAccount:$sa" --role="roles/storage.objectUser" --project $p
-``` Até 01/10/2026 aparecia só "Falha interna no
-servidor", e a causa (403 `storage.objects.create`) estava apenas no log:
-
-```powershell
-gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="uploadshipmentattachment" AND severity>=WARNING' --project dute-prod --freshness=1h --limit 5
 ```
 
 ### Deploy lento: "User code failed to load … Timeout after 10000"
