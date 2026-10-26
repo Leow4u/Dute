@@ -53,8 +53,10 @@ documentação de produto e operação está em `docs/`.
   registra a NF da demanda A faturar, `advanceFatura` envia, recebe, estorna
   e cancela, e o shell `/financeiro` tem Início, A faturar, a cobrança, a via
   comercial e os Relatórios. O portal com as OS, o comprovante, o Solicitar
-  OS, os avisos (`runNotifications`, a cada 5 minutos; o e-mail fica
-  auditado sem `RESEND_API_KEY`), a entrega do WMS e as quatro telas do WMS
+  OS, os avisos (`runNotifications`, a cada 5 minutos; a chave do Resend
+  vem do Secret Manager nos dois ambientes; sem ela, o e-mail fica
+  auditado, e fora da produção só sai para endereços `@dutelog.com.br`), a
+  entrega do WMS e as quatro telas do WMS
   na v3 dependem da liberação da Operação e entram no `dute-prod` só por
   publicar a `main`. O Faturamento do WMS continua no shell da Armazenagem
   até a Fase 7. Roteiro do lançamento (marcos 2, 3 e 4 juntos, e a parte

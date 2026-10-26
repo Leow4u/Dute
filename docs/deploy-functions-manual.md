@@ -386,8 +386,10 @@ existe no projeto. São duas:
   Omie está liberada (`segredosDaOmie`, pela `OMIE_AMBIENTES_LIBERADOS`), hoje
   só o `dute-homolog`. Na homologação vão as chaves de um aplicativo de teste
   da Omie, e na produção, quando a Omie for liberada lá, as da empresa real.
-- A `runNotifications` (parte 4.6a da Fase 4), quando declarar a do Resend,
-  nos dois projetos.
+- A `runNotifications` (parte 4.6a da Fase 4) declara a do Resend só onde o
+  segredo existe (`segredosDoResend`, pela `RESEND_AMBIENTES`): o
+  `dute-homolog` e o `dute-prod`, com o segredo criado nos dois em
+  26/10/2026.
 
 Na publicação, o `firebase deploy`:
 
