@@ -14,7 +14,7 @@ registro das partes ficam em `docs/plataforma/fase-4-financeiro.md` e
 | A receber, Vencidos, Pagos, Faturas | A cobrança das NFs registradas: enviar, registrar pagamento, estornar e cancelar o registro. |
 | Contratos, Autorizações | Os do Comercial, só leitura. |
 | Emissões | As NFS-e pela Omie e as baixas dos pagamentos lá. Só onde a Omie está ligada. |
-| Relatórios | A receita, as NFs emitidas e as contas a receber. |
+| Relatórios | A receita por cliente e por serviço, as NFs emitidas e as contas a receber. |
 | Armazenagem | O Faturamento do WMS. |
 
 ## Faturar

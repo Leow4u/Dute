@@ -5,18 +5,25 @@ import {
   clientesDasFaturas,
   faixaDeAtraso,
   filtroInicialDoFinanceiro,
+  fontesDoRateio,
   linhasDaPlanilhaDoFinanceiro,
   nfsDoPeriodo,
   nfsEmAberto,
   pagamentosDoPeriodo,
   problemaDoFiltroDoFinanceiro,
+  ratear,
+  receitaPorServico,
   relatorioDoFinanceiroDaBusca,
   resumoAReceber,
   resumoDaReceita,
+  resumoDaReceitaPorServico,
   resumoDoFaturamento,
+  servicosDaNf,
   tabelaAReceber,
   tabelaDaReceita,
+  tabelaDaReceitaPorServico,
   tabelaDoFaturamento,
+  type FontesDoRateio,
 } from "./relatorios";
 
 /** Os relatórios do Financeiro (parte 4.8b): a receita, as NFs por mês e as contas a receber. Dados sintéticos. */
@@ -55,6 +62,105 @@ const PAGAMENTOS = [
   pagamento("3", { customer_code: "SAFRA", valor_cents: 50_000, recebido_em: "2026-10-15", status: "estornado", estornado: { motivo: "Duplicado" } }),
   pagamento("4", { customer_code: "SAFRA", valor_cents: 90_000, recebido_em: "2026-07-15" }),
 ];
+
+describe("a receita por serviço (pergunta 26)", () => {
+  // A NF A: a demanda 10045 (RV 2: transporte, montagem e um desconto), a 10046 sem orçamento e a armazenagem de setembro.
+  const NF_A = nf("2001", {
+    valor_cents: 1_000_000,
+    demandas: [
+      { numero: "10045", valor_cents: 600_000, rv: 2 },
+      { numero: "10046", valor_cents: 100_000, rv: null },
+    ],
+    armazenagem: [{ competencia: "2026-09", valor_cents: 300_000 }],
+  });
+  // A NF B: a demanda 10050, faturada pela medição de outubro.
+  const NF_B = nf("2002", { valor_cents: 200_000, demandas: [{ numero: "10050", valor_cents: 200_000, rv: null, medicao_id: "ct_1_2026-10" }] });
+  const FONTES: FontesDoRateio = {
+    revisoes: new Map([
+      [
+        "10045:2",
+        {
+          linhas: [
+            { id: "l1", origem: "tabela", item: "Cadeira", servico: "Transporte", total_cents: 400_000 },
+            { id: "l2", origem: "tabela", item: "Mesa", servico: "Montagem", total_cents: 300_000 },
+            { id: "l3", origem: "ajuste", item: "Desconto", servico: null, total_cents: -100_000 },
+          ],
+        },
+      ],
+    ]),
+    medicoes: new Map([
+      [
+        "ct_1_2026-10",
+        {
+          contrato_id: "ct_1",
+          competencia: "2026-10",
+          status: "aprovada",
+          linhas: [
+            { id: "m1", demanda_numero: "10050", total_cents: 200_000, itens: [{ lpu_item_id: "lpu_icamento", item: "Içamento", total_cents: 150_000 }, { lpu_item_id: null, item: "Avulso", total_cents: 50_000 }] },
+            { id: "m2", demanda_numero: "10051", total_cents: 90_000, itens: [{ lpu_item_id: "lpu_icamento", item: "Içamento", total_cents: 90_000 }] },
+          ],
+        },
+      ],
+    ]),
+    servicoDoItem: new Map([["lpu_icamento", "Içamento"]]),
+  };
+  const PAGOS = [
+    pagamento("21", { fatura_id: NF_A.id, customer_code: "ITAU", valor_cents: 1_000_000, recebido_em: "2026-10-05" }),
+    pagamento("22", { fatura_id: NF_A.id, customer_code: "ITAU", valor_cents: 500_000, recebido_em: "2026-10-06" }),
+    pagamento("23", { fatura_id: NF_B.id, customer_code: "ITAU", valor_cents: 200_000, recebido_em: "2026-10-07" }),
+  ];
+
+  it("lê a RV faturada de cada demanda, ou a medição dela; a demanda sem RV não pede nada", () => {
+    expect(fontesDoRateio([NF_A, NF_B, NF_A])).toEqual([
+      { chave: "10045:2", caminho: "quotes/10045/revisoes/2", tipo: "revisoes" },
+      { chave: "ct_1_2026-10", caminho: "medicoes/ct_1_2026-10", tipo: "medicoes" },
+    ]);
+  });
+
+  it("o peso de cada serviço na NF: a armazenagem, as linhas do orçamento (o desconto espalhado) e o que não tem orçamento", () => {
+    const pesos = servicosDaNf(NF_A, FONTES);
+    expect([...pesos.keys()]).toEqual(["Armazenagem", "Transporte", "Montagem", "Sem orçamento"]);
+    expect(pesos.get("Armazenagem")).toBe(300_000);
+    expect(pesos.get("Sem orçamento")).toBe(100_000);
+    expect(Math.round(pesos.get("Transporte")! + pesos.get("Montagem")!)).toBe(600_000);
+    // Na medição, o serviço do item do catálogo; o item sem catálogo fica "Sem serviço"; a outra demanda da medição, de fora.
+    expect(servicosDaNf(NF_B, FONTES)).toEqual(new Map([["Içamento", 150_000], ["Sem serviço", 50_000]]));
+  });
+
+  it("o rateio em centavos fecha o valor: o que sobra do arredondamento vai aos maiores restos", () => {
+    expect(ratear(100, new Map([["A", 1], ["B", 1], ["C", 1]]))).toEqual(new Map([["A", 34], ["B", 33], ["C", 33]]));
+    expect(ratear(100, new Map())).toEqual(new Map([["Sem orçamento", 100]]));
+  });
+
+  it("cada pagamento rateado pelos serviços da NF dele; a tabela, a participação e os números", () => {
+    const linhas = receitaPorServico(PAGOS, [NF_A, NF_B], FONTES);
+    expect(linhas.map((linha) => [linha.servico, linha.cents, linha.pagamentos])).toEqual([
+      ["Transporte", 514_286, 2],
+      ["Armazenagem", 450_000, 2],
+      ["Montagem", 385_714, 2],
+      ["Içamento", 150_000, 1],
+      ["Sem orçamento", 150_000, 2],
+      ["Sem serviço", 50_000, 1],
+    ]);
+    expect(linhas.reduce((soma, linha) => soma + linha.cents, 0)).toBe(1_700_000);
+    const tabela = tabelaDaReceitaPorServico(linhas, PAGOS.length);
+    expect(tabela.colunas).toEqual(["Serviço", "Pagamentos", "Recebido", "Participação (%)"]);
+    expect(tabela.linhas[0].celulas).toEqual(["Transporte", 2, { reais: 514_286 }, 30]);
+    expect(tabela.total).toEqual(["Total", 3, { reais: 1_700_000 }, 100]);
+    expect(resumoDaReceitaPorServico(linhas, PAGOS.length).map((numero) => [numero.rotulo, sem(numero.valor)])).toEqual([
+      ["Recebido", "R$ 17.000,00"],
+      ["Serviços", "4"],
+      ["Pagamentos", "3"],
+      ["Sem orçamento", "R$ 1.500,00"],
+    ]);
+    expect(relatorioDoFinanceiroDaBusca("?relatorio=servico")).toBe("servico");
+  });
+
+  it("a NF que não se leu vai inteira para Sem orçamento; sem pagamento, a tabela fica vazia", () => {
+    expect(receitaPorServico([PAGOS[0]], [], FONTES).map((linha) => [linha.servico, linha.cents])).toEqual([["Sem orçamento", 1_000_000]]);
+    expect(tabelaDaReceitaPorServico([], 0)).toEqual({ colunas: ["Serviço", "Pagamentos", "Recebido", "Participação (%)"], linhas: [], total: null });
+  });
+});
 
 describe("a receita por cliente", () => {
   it("os pagamentos do período, sem os estornados, por cliente, com o total em reais", () => {

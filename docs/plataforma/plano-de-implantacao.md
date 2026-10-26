@@ -797,7 +797,8 @@ cliente ou 15 em qualquer cliente; 20, `functions/core`; desenho em
     cada demanda (parte a fazer no relatório do Financeiro).
     **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item 8):
     "Receita por serviço" conta o recebido no período, como a Receita por
-    cliente.
+    cliente. **Feita em 26/10/2026** (`fase-4-financeiro.md`, "Pergunta 26:
+    a receita por serviço").
 27. O tempo por item (parte 5.1) é em homem-minuto: 2 pessoas fazem na
     metade do tempo de 1. Vale para montagem e carga?
 28. O tempo de trabalho deixa o deslocamento de fora, e quem planeja soma o
