@@ -148,6 +148,7 @@ const EXEMPLOS: Record<OperacaoEventType, Record<string, unknown>> = {
   "portal.service_requested": { id: "sol_aaaaaaaaaaaaaaaa", tipo_servico: "transporte", data: "2026-10-24", anexos: 1 },
   "portal.service_accepted": { id: "sol_aaaaaaaaaaaaaaaa", demanda: "10053" },
   "portal.service_declined": { id: "sol_aaaaaaaaaaaaaaaa" },
+  "retention.applied": { id: "ret_20261026T062000", antes_de: "2026-07-28", avisos: 3, emails: 2, por_cliente: [{ cliente: "ITAU", avisos: 3, emails: 2 }] },
 };
 
 const doCliente = (type: OperacaoEventType) => type.startsWith("os.") || type.startsWith("demand.") || type.startsWith("portal.");

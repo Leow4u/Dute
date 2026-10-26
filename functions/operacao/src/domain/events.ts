@@ -62,6 +62,7 @@ export const OPERACAO_EVENT_TYPES = [
   "portal.service_requested",
   "portal.service_accepted",
   "portal.service_declined",
+  "retention.applied",
 ] as const;
 export type OperacaoEventType = (typeof OPERACAO_EVENT_TYPES)[number];
 
@@ -266,6 +267,24 @@ const demandaDoArmazem = z
   .strict();
 const servicoRecusado = z.object({ id: solicitacaoId }).strict();
 
+/**
+ * A retenção dos avisos (LGPD, decisão 8): quantos avisos do sino e e-mails
+ * da fila saíram, de antes de qual dia, e por cliente. Só contagens: o aviso
+ * e o e-mail apagados não deixam o texto nem o destinatário no evento.
+ */
+const quantos = z.number().int().min(0).max(1_000_000);
+const retencaoAplicada = z
+  .object({
+    id: z.string().regex(/^ret_\d{8}T\d{6}$/, "Retenção inválida."),
+    antes_de: data,
+    avisos: quantos,
+    emails: quantos,
+    por_cliente: z
+      .array(z.object({ cliente: z.string().trim().min(1).max(150), avisos: quantos, emails: quantos }).strict())
+      .max(500),
+  })
+  .strict();
+
 export const OPERACAO_EVENT_PAYLOADS = {
   "collaborator.created": criado,
   "collaborator.updated": colaboradorAlterado,
@@ -304,6 +323,7 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "portal.service_requested": servicoPedido,
   "portal.service_accepted": servicoAceito,
   "portal.service_declined": servicoRecusado,
+  "retention.applied": retencaoAplicada,
 } as const;
 
 const TEXTO: Record<OperacaoEventType, { title: string; description: string }> = {
@@ -356,6 +376,7 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
   "portal.service_requested": { title: "OS pedida pelo portal", description: "O cliente pediu uma OS pelo portal; a solicitação está em Para planejar." },
   "portal.service_accepted": { title: "Solicitação do portal atendida", description: "A coordenação abriu a demanda direta a partir da solicitação do portal." },
   "portal.service_declined": { title: "Solicitação do portal recusada", description: "A coordenação recusou a solicitação do portal com o motivo, que o cliente lê." },
+  "retention.applied": { title: "Retenção dos avisos", description: "Os avisos do sino e os e-mails da fila com mais de 90 dias saíram; ficam as contagens." },
 };
 
 /** O único evento da Operação gravado pelo cliente: a solicitação dele pelo portal. */
@@ -383,7 +404,7 @@ export type OperacaoEventRecord = {
   title: string;
   description: string;
   severity: "info";
-  entity_type: "collaborator" | "vehicle" | "os" | "demand" | "service_request";
+  entity_type: "collaborator" | "vehicle" | "os" | "demand" | "service_request" | "retention";
   entity_id: string;
   customer_code: string | null;
   payload: Record<string, unknown>;
@@ -437,7 +458,9 @@ export function buildOperacaoEvent<T extends OperacaoEventType>(input: OperacaoE
           ? "demand"
           : input.type.startsWith("portal.")
             ? "service_request"
-            : "collaborator",
+            : input.type.startsWith("retention.")
+              ? "retention"
+              : "collaborator",
     entity_id: input.entity_id,
     customer_code: doCliente ? customerCode : null,
     payload: compactValue(payload.data) as Record<string, unknown>,

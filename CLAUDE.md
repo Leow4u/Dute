@@ -409,8 +409,11 @@ removidas justamente por induzirem a erro.
 - O deploy monta um diretório de staging com apenas `Dockerfile`, `nginx.conf` e
   `dist/public` — mantenha assim.
 - Onde cada dado pessoal fica, quem lê e o que falta para a LGPD:
-  `docs/plataforma/lgpd.md` (25/10/2026, com as decisões que esperam o
-  Leonardo).
+  `docs/plataforma/lgpd.md` (25/10/2026, com as decisões do Leonardo de
+  26/10). A retenção roda por codebase, cada uma no que é dela, com a
+  liberação própria (`RETENCAO_AMBIENTES_LIBERADOS`), primeiro na
+  homologação; hoje, a dos avisos e e-mails da Operação
+  (`runOperacaoRetention`, seção 6 do mesmo documento).
 
 ## A auditoria de código está parcialmente vencida
 
