@@ -488,6 +488,8 @@ competência.
   - a mesma competência sem mudança devolve a versão de antes (`nova:
     false`), sem evento novo;
   - com mudança, nasce a versão seguinte, e a anterior continua;
+  - a anterior perde as linhas 30 dias depois e fica com o hash e as
+    contagens (LGPD, decisão 7: `docs/plataforma/lgpd.md`, seção 6, parte 7);
   - o recibo fica em `rh_operations`, como as outras gravações.
 - **A planilha** é montada no servidor, da versão guardada: CSV com BOM,
   ponto e vírgula e CRLF, que a planilha em português abre; datas em

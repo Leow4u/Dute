@@ -12,8 +12,8 @@
     "build:test": "tsc -p tsconfig.test.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run test:unit",
-    "test:unit": "npm run build:test && node --test lib/callables.test.js lib/domain/banco.test.js lib/domain/platform-roles.test.js lib/domain/liberacao.test.js lib/domain/ficha.test.js lib/domain/events.test.js lib/domain/arquivos.test.js lib/domain/exportacao.test.js lib/domain/vinculo.test.js",
-    "test:integration": "npm run build:test && firebase emulators:exec --project demo-dute-rh --only firestore,storage \"node --test --test-concurrency=1 lib/domain/profile.integration.test.js lib/domain/ficha.integration.test.js lib/domain/rotina.integration.test.js lib/domain/arquivos.integration.test.js lib/domain/exportacao.integration.test.js lib/domain/vinculo.integration.test.js\"",
+    "test:unit": "npm run build:test && node --test lib/callables.test.js lib/domain/banco.test.js lib/domain/platform-roles.test.js lib/domain/liberacao.test.js lib/domain/retencao.test.js lib/domain/ficha.test.js lib/domain/events.test.js lib/domain/arquivos.test.js lib/domain/exportacao.test.js lib/domain/vinculo.test.js",
+    "test:integration": "npm run build:test && firebase emulators:exec --project demo-dute-rh --only firestore,storage \"node --test --test-concurrency=1 lib/domain/profile.integration.test.js lib/domain/ficha.integration.test.js lib/domain/rotina.integration.test.js lib/domain/arquivos.integration.test.js lib/domain/exportacao.integration.test.js lib/domain/retencao.integration.test.js lib/domain/vinculo.integration.test.js\"",
     "test:critical": "npm run test:unit && npm run test:integration"
   },
   "dependencies": {

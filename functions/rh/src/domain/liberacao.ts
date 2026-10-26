@@ -20,3 +20,16 @@ export function assertLiberado(projectId: string | null | undefined): void {
   const id = String(projectId ?? "").trim() || "projeto não identificado";
   throw new HttpsError("failed-precondition", `O RH ainda não está liberado neste ambiente (${id}).`);
 }
+
+/**
+ * Liberação própria da retenção do RH (LGPD, decisão 7,
+ * docs/plataforma/lgpd.md, seção 6): a rotina apaga as linhas da versão
+ * substituída da exportação, então liga por ambiente, separada do RH. Só a
+ * homologação até o OK do Leonardo para a produção.
+ */
+export const RETENCAO_AMBIENTES_LIBERADOS = ["dute-homolog"] as const;
+
+export function retencaoLiberada(projectId: string | null | undefined): boolean {
+  const id = String(projectId ?? "").trim();
+  return (RETENCAO_AMBIENTES_LIBERADOS as readonly string[]).includes(id);
+}
