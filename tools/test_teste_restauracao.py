@@ -47,7 +47,11 @@ class Relogio:
 
 
 class GcloudFalso:
-    """Backups, bancos e operações de um projeto, com a restauração assíncrona."""
+    """Backups, bancos e operações de um projeto, com a restauração assíncrona.
+
+    Como no dute-prod, os bancos de verdade têm a proteção contra exclusão, e
+    o banco restaurado nasce com ela (o teste de 26/10/2026 não o apagou).
+    """
 
     def __init__(
         self,
@@ -59,6 +63,7 @@ class GcloudFalso:
         erro_da_restauracao: dict[str, Any] | None = None,
         nunca_termina: bool = False,
         falhar: dict[str, str] | None = None,
+        protegidos: list[str] | None = None,
     ):
         self.backups = backups
         self.conteudo_do_backup = conteudo_do_backup or {}
@@ -67,6 +72,7 @@ class GcloudFalso:
         self.erro_da_restauracao = erro_da_restauracao
         self.nunca_termina = nunca_termina
         self.falhar = falhar or {}
+        self.protegidos: set[str] = set(protegidos if protegidos is not None else ["(default)", "dute-rh"])
         self.chamadas: list[list[str]] = []
         self.operacoes: dict[str, dict[str, Any]] = {}
 
@@ -86,6 +92,7 @@ class GcloudFalso:
             if destino in self.bancos:
                 raise t.erro_do_gcloud(argumentos, "ALREADY_EXISTS: database exists")
             self.bancos[destino] = set()
+            self.protegidos.add(destino)
             nome = f"projects/{PROJETO}/databases/{destino}/operations/op-1"
             self.operacoes[nome] = {"backup": opcoes["source-backup"], "destino": destino, "consultas": 0}
             return {"name": nome, "metadata": {"operationState": "PROCESSING"}}
@@ -99,17 +106,37 @@ class GcloudFalso:
                 return {"name": argumentos[3], "done": True, "error": self.erro_da_restauracao}
             self.bancos[operacao["destino"]] = set(self.conteudo_do_backup[operacao["backup"]])
             return {"name": argumentos[3], "done": True, "response": {}}
+        if comando == "firestore databases update":
+            banco = opcoes["database"]
+            # A proteção só sai do banco de teste, e o update não muda mais nada.
+            assert t.NOME_DO_TESTE.match(banco), argumentos
+            assert argumentos[3:] == [f"--database={banco}", "--no-delete-protection", f"--project={PROJETO}"], argumentos
+            self.protegidos.discard(banco)
+            return {"name": f"projects/{PROJETO}/databases/{banco}", "deleteProtectionState": "DELETE_PROTECTION_DISABLED"}
         if comando == "firestore databases delete":
             assert "--quiet" in argumentos
-            del self.bancos[opcoes["database"]]
+            banco = opcoes["database"]
+            if banco in self.protegidos:
+                raise t.erro_do_gcloud(
+                    argumentos,
+                    "ERROR: (gcloud.firestore.databases.delete) FAILED_PRECONDITION: Cannot delete the database"
+                    " because delete protection state is set to DELETE_PROTECTION_ENABLED.",
+                )
+            del self.bancos[banco]
             return {}
         raise AssertionError(f"comando inesperado: {argumentos}")
 
     def apagados(self) -> list[str]:
+        return self.bancos_do_comando("delete")
+
+    def desprotegidos(self) -> list[str]:
+        return self.bancos_do_comando("update")
+
+    def bancos_do_comando(self, verbo: str) -> list[str]:
         return [
             argumento.split("=", 1)[1]
             for chamada in self.chamadas
-            if chamada[:3] == ["firestore", "databases", "delete"]
+            if chamada[:3] == ["firestore", "databases", verbo]
             for argumento in chamada
             if argumento.startswith("--database=")
         ]
@@ -258,8 +285,10 @@ class RestauracaoTest(unittest.TestCase):
                 ]
             ],
         )
+        self.assertEqual(gcloud.desprotegidos(), [TESTE])
         self.assertEqual(gcloud.apagados(), [TESTE])
         self.assertEqual(sorted(gcloud.bancos), ["(default)", "dute-rh"])
+        self.assertIn(f"Banco de teste {TESTE} apagado.", saida)
         self.assertIn("OK: o backup restaurou os 3 documentos do (default).", saida)
         self.assertIn("quotes/*/revisoes", saida)
         self.assertIn("OK: o backup restaurou os 3 documentos do (default).", texto_do_resumo)
@@ -371,6 +400,27 @@ class TravaTest(unittest.TestCase):
         self.assertEqual(codigo, 0, saida)
         self.assertEqual(gcloud.apagados(), [sobra, TESTE])
         self.assertEqual(sorted(gcloud.bancos), ["(default)", "dute-rh", "recuperacao-20261021", "restauracao-teste"])
+
+    def test_a_protecao_contra_exclusao_sai_so_do_banco_de_teste_antes_de_apagar(self) -> None:
+        # Como em 26/10/2026: o restaurado nasce protegido, e a sobra do teste anterior ficou protegida.
+        sobra = "teste-restauracao-default-20261024t101500"
+        gcloud, firestore, relogio = cenario(
+            no_minuto=DOCUMENTOS,
+            bancos=["(default)", "dute-rh", sobra],
+            protegidos=["(default)", "dute-rh", sobra],
+        )
+        codigo, saida = rodar(gcloud, firestore, relogio)
+        self.assertEqual(codigo, 0, saida)
+        passos = [
+            (chamada[2], argumento.split("=", 1)[1])
+            for chamada in gcloud.chamadas
+            if chamada[:3] in (["firestore", "databases", "update"], ["firestore", "databases", "delete"])
+            for argumento in chamada
+            if argumento.startswith("--database=")
+        ]
+        self.assertEqual(passos, [("update", sobra), ("delete", sobra), ("update", TESTE), ("delete", TESTE)])
+        self.assertEqual(sorted(gcloud.bancos), ["(default)", "dute-rh"])
+        self.assertEqual(sorted(gcloud.protegidos), ["(default)", "dute-rh"])
 
     def test_so_o_banco_de_teste_passa_na_trava(self) -> None:
         for nome in (TESTE, "teste-restauracao-dute-rh-20261025t101500"):

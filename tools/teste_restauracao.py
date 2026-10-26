@@ -13,7 +13,8 @@ registro: docs/plataforma/backup-e-recuperacao.md, "Teste de restauração".
 - O banco de origem só é lido, no minuto do backup e no seguinte, pelo PITR.
 - O banco de teste tem nome reservado (teste-restauracao-<banco>-<instante>)
   e é o único que a ferramenta apaga, inclusive o que sobrou de um teste
-  anterior.
+  anterior. Ele nasce com a proteção contra exclusão, que a ferramenta tira
+  antes de apagar, também só nele.
 
 Roda pelo workflow .github/workflows/teste-restauracao.yml, com a conta
 github-actions-functions@dute-prod (roles/datastore.owner).
@@ -220,7 +221,10 @@ def comparar(no_minuto: set[str], no_minuto_seguinte: set[str], restaurado: set[
 
 
 def apagar(gcloud: Gcloud, projeto: str, teste: str) -> None:
+    """O banco restaurado nasce com a proteção contra exclusão (o de 26/10/2026
+    nasceu, e a exclusão foi recusada): ela sai antes, só no banco de teste."""
     exigir_banco_de_teste(teste)
+    gcloud(["firestore", "databases", "update", f"--database={teste}", "--no-delete-protection", f"--project={projeto}"])
     gcloud(["firestore", "databases", "delete", f"--database={teste}", f"--project={projeto}", "--quiet"])
 
 
