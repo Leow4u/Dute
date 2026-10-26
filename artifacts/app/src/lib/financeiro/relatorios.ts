@@ -148,14 +148,16 @@ function linhasComServico(demanda: DemandaDaNf, fontes: FontesDoRateio): Array<{
 }
 
 /**
- * O peso de cada serviço na NF: a armazenagem do WMS e, de cada demanda, o
- * valor dela na NF repartido pelas linhas. A demanda sem orçamento lido vai
- * inteira para "Sem orçamento".
+ * O peso de cada serviço na NF: a armazenagem do WMS, as linhas sem demanda
+ * da medição pelo serviço que a fatura guardou (pergunta 64) e, de cada
+ * demanda, o valor dela na NF repartido pelas linhas. A demanda sem
+ * orçamento lido vai inteira para "Sem orçamento".
  */
 export function servicosDaNf(fatura: FaturaDoFinanceiro, fontes: FontesDoRateio): Map<string, number> {
   const pesos = new Map<string, number>();
   const somar = (servico: string, valor: number) => pesos.set(servico, (pesos.get(servico) ?? 0) + valor);
   for (const armazenagem of fatura.armazenagem) somar(ARMAZENAGEM, armazenagem.valorCents);
+  for (const medicao of fatura.medicoes) for (const linha of medicao.semDemanda) somar(linha.servico, linha.valorCents);
   for (const demanda of fatura.demandas) {
     const linhas = linhasComServico(demanda, fontes);
     const base = linhas.reduce((soma, linha) => soma + linha.cents, 0);

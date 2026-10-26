@@ -1035,3 +1035,48 @@ entravam numa NF.
   - `functions/comercial`, `medicoes.integration.test.ts`: a autorização da
     medição reservada.
 
+### Pergunta 64: a medição em A faturar (a tela)
+
+A tela da medição aprovada, no canvas "Telas das decisões de 26/10" (item
+7), sobre o servidor da seção anterior.
+
+- **A leitura** (`lib/financeiro/use-a-faturar.ts`):
+  - as medições enviadas e aprovadas fora de NF, ao vivo (`medicoes` com
+    `status` em enviada ou aprovada: um campo só, sem índice composto);
+  - a autorização de cada uma (`aut_{medicao}`), lida pelo id como as das
+    demandas;
+  - o contrato, que dá o número para a linha. A leitura não espera o
+    contrato: sem ele, a linha diz "Medição mensal".
+  - A demanda presa a uma medição sai da fila: vai na linha da medição. A
+    demanda do contrato por medição que ainda não entrou numa medição
+    continua à parte, "Medição pendente".
+- **A linha** (`medicaoDoFinanceiro` e `linhaDaMedicao`, em
+  `lib/financeiro/a-faturar.ts`):
+  - "Medição MM/AAAA" pelo total aprovado (as mesmas contas do servidor);
+  - "Contrato CT-…" e "Medição aprovada dd/mm";
+  - o resumo ("3 demandas e equipe fixa");
+  - o que vai na NF, linha por linha: cada demanda com o título e a soma
+    das linhas dela, e as linhas sem demanda pelo serviço e pelo mês.
+  - A situação segue a ordem do servidor: na emissão da NFS-e, medição
+    pendente (a enviada), sem o valor, demanda pendente (com os números) e
+    sem autorização registrada.
+  - No Início, a medição conta como medição ("1 medição a faturar"); a da
+    demanda pendente entra em "aguardando autorização".
+- **O pedido**: `medicoes`, à parte das demandas e da armazenagem, só
+  quando há, no `registerNf` e no `emitNfOmie`. A confirmação diz "a
+  medição de MM/AAAA".
+- **Onde a NF da medição aparece**:
+  - a via comercial ganha o bloco da medição com as linhas sem demanda;
+  - o portal mostra as linhas sem demanda ("Equipe fixa · Medição 10/2026
+    · R$ …");
+  - a receita por serviço soma as linhas sem demanda pelo serviço que a
+    fatura guardou;
+  - a tela Emissões diz "Medição MM/AAAA".
+- **Testes:**
+  - `a-faturar.test.ts`: a leitura, a linha, as situações, o pedido, as
+    confirmações e o Início;
+  - `a-faturar-view.test.tsx`: a linha pronta, o painel linha por linha, a
+    que espera, os textos e o `axe`;
+  - `nf-documento.test.ts`, `relatorios.test.ts`, `emissoes.test.ts` e
+    `servicos-view.test.tsx` (o portal).
+

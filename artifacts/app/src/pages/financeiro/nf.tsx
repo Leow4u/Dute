@@ -28,6 +28,10 @@ function fontesDaNf(fatura: FaturaDoFinanceiro): Fonte[] {
     else if (demanda.rv !== null) fontes.push({ chave: chaveDaRevisao(demanda.numero, demanda.rv), caminho: `quotes/${demanda.numero}/revisoes/${demanda.rv}`, tipo: "revisoes" });
     for (const id of demanda.autorizacaoIds) fontes.push({ chave: id, caminho: `client_authorizations/${id}`, tipo: "autorizacoes" });
   }
+  // A medição sem demanda também tem linhas a mostrar (pergunta 64).
+  for (const medicao of fatura.medicoes) {
+    if (medicao.medicaoId) fontes.push({ chave: medicao.medicaoId, caminho: `medicoes/${medicao.medicaoId}`, tipo: "medicoes" });
+  }
   return [...new Map(fontes.map((fonte) => [fonte.caminho, fonte])).values()];
 }
 

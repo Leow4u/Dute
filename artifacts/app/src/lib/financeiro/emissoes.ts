@@ -80,6 +80,8 @@ export type EmissaoDoFinanceiro = {
   mensagens: MensagemDaPrefeitura[];
   demandas: string[];
   armazenagem: string[];
+  /** As medições da emissão (pergunta 64). */
+  medicoes: string[];
   totalCents: number;
   vencimento: string;
   nfse: string | null;
@@ -119,6 +121,7 @@ function emissaoLida(valor: unknown): EmissaoDoFinanceiro | null {
     mensagens: mensagens.map((mensagem) => ({ codigo: texto(mensagem?.codigo), descricao: texto(mensagem?.descricao), correcao: texto(mensagem?.correcao) })),
     demandas: lista(item.demandas),
     armazenagem: lista(item.armazenagem),
+    medicoes: lista(item.medicoes),
     totalCents: item.total_cents,
     vencimento: texto(item.vencimento),
     nfse: texto(item.nfse) || null,
@@ -135,16 +138,19 @@ export function emissoesLidas(valor: unknown): EmissaoDoFinanceiro[] | null {
   return ((valor as Registro).emissoes as unknown[]).map(emissaoLida).filter((item): item is EmissaoDoFinanceiro => item !== null);
 }
 
-/** "Demandas 10045 e 10046 · Armazenagem 09/2026". */
-export function itensDaEmissao(emissao: Pick<EmissaoDoFinanceiro, "demandas" | "armazenagem">): string {
+/** "Demandas 10045 e 10046 · Armazenagem 09/2026 · Medição 10/2026". */
+export function itensDaEmissao(emissao: Pick<EmissaoDoFinanceiro, "demandas" | "armazenagem"> & { medicoes?: readonly string[] }): string {
   const juntar = (valores: readonly string[]) => (valores.length < 2 ? (valores[0] ?? "") : `${valores.slice(0, -1).join(", ")} e ${valores.at(-1)}`);
-  const meses = emissao.armazenagem.map((periodo) => {
-    const competencia = /(\d{4})-(\d{2})$/.exec(periodo);
-    return competencia ? `${competencia[2]}/${competencia[1]}` : periodo;
-  });
+  const mes = (id: string) => {
+    const competencia = /(\d{4})-(\d{2})$/.exec(id);
+    return competencia ? `${competencia[2]}/${competencia[1]}` : id;
+  };
+  const meses = emissao.armazenagem.map(mes);
+  const medicoes = (emissao.medicoes ?? []).map(mes);
   return [
     emissao.demandas.length ? `${emissao.demandas.length === 1 ? "Demanda" : "Demandas"} ${juntar(emissao.demandas)}` : null,
     meses.length ? `Armazenagem ${juntar(meses)}` : null,
+    medicoes.length ? `${medicoes.length === 1 ? "Medição" : "Medições"} ${juntar(medicoes)}` : null,
   ]
     .filter(Boolean)
     .join(" · ");

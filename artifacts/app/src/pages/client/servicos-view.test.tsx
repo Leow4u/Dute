@@ -350,6 +350,27 @@ describe("as NFs dos serviços em Faturas", () => {
     expect(textos).toContain("Armazenagem 08/2026 · R$ 3.200,00");
   });
 
+  it("a NF da medição mostra as demandas dela e as linhas sem demanda pelo serviço (pergunta 64)", async () => {
+    const daMedicao = nfDoPortal("fat_000000000000000000002318", {
+      customer_code: "SAFRA",
+      status: "emitida",
+      valor_cents: 2_200_000,
+      recebido_cents: 0,
+      nf: { numero: "2318", serie: "1", emitida_em: "2026-11-06" },
+      vencimento: "2026-12-06",
+      forma: "boleto",
+      demandas: [{ numero: "10061", valor_cents: 1_000_000, titulo: "Mudança do 5º andar" }],
+      armazenagem: [],
+      medicoes: [{ competencia: "2026-10", valor_cents: 2_200_000, demandas: ["10061"], sem_demanda: [{ servico: "Equipe fixa", valor_cents: 1_200_000 }] }],
+    })!;
+    const html = renderToStaticMarkup(<NfsDosServicos nfs={[daMedicao]} hoje={HOJE} />);
+    const textos = textosDaTela(html);
+    expect(textos).toContain("10061 · Mudança do 5º andar · R$ 10.000,00");
+    expect(textos).toContain("Equipe fixa · Medição 10/2026 · R$ 12.000,00");
+    expect(textos).toContain("R$ 22.000,00");
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(html())).toEqual([]);
   });

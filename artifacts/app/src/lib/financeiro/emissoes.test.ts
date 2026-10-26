@@ -101,6 +101,7 @@ describe("as emissões da NFS-e pela Omie", () => {
       ],
       demandas: ["10045", "10046"],
       armazenagem: ["ITAU__2026-09"],
+      medicoes: [],
       totalCents: 1_484_500,
       vencimento: "2026-11-20",
       nfse: "00001234",
@@ -141,6 +142,10 @@ describe("as emissões da NFS-e pela Omie", () => {
     expect(itensDaEmissao({ demandas: [], armazenagem: ["ITAU__2026-08", "ITAU__2026-09"] })).toBe("Armazenagem 08/2026 e 09/2026");
     // A referência sem a competência no fim aparece como veio.
     expect(itensDaEmissao({ demandas: [], armazenagem: ["periodo-antigo"] })).toBe("Armazenagem periodo-antigo");
+    // A medição aprovada (pergunta 64), pelo mês.
+    expect(itensDaEmissao({ demandas: [], armazenagem: [], medicoes: ["ctr_safra_2026-10"] })).toBe("Medição 10/2026");
+    expect(itensDaEmissao({ demandas: ["10045"], armazenagem: [], medicoes: ["ctr_a_2026-09", "ctr_b_2026-10"] })).toBe("Demanda 10045 · Medições 09/2026 e 10/2026");
+    expect(emissao({ medicoes: ["ctr_safra_2026-10"] }).medicoes).toEqual(["ctr_safra_2026-10"]);
   });
 
   it("só a rejeitada e a parada têm ação; a OS cancelada na Omie só se desiste; a NFS-e autorizada não se desiste", () => {

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { collection, doc, getDoc, query, where, type DocumentData } from "firebase/firestore";
 
+import { contratoDoDocumento } from "../comercial/clientes";
 import { firestore } from "../firebase";
 import type { ItemDoInicio } from "../inicio-do-modulo";
 import type { ProfileRole } from "../modules";
@@ -14,7 +15,9 @@ import {
   fonteDoValor,
   linhaAFaturar,
   linhaDaArmazenagem,
-  valorDaFonte,
+  linhaDaMedicao,
+  medicaoDoFinanceiro,
+  valorDaRv,
   type AutorizacaoDoFinanceiro,
   type LinhaAFaturar,
 } from "./a-faturar";
@@ -35,11 +38,15 @@ import { useFaturas } from "./use-faturas";
  * - As demandas A faturar e Aguardando autorização, ao vivo.
  * - Cada autorização citada pelas demandas, lida pelo id (a fila do Comercial
  *   lê só as mais recentes; aqui cada demanda precisa da dela).
- * - O valor de cada demanda: a RV validada (congelada no envio) ou a medição
- *   aprovada, lidas uma vez por minuto no máximo.
+ * - O valor de cada demanda: a RV validada (congelada no envio), lida uma
+ *   vez por minuto no máximo.
  * - A armazenagem emitida no WMS e fora de NF (parte 7.2b), ao vivo, com o
  *   total da foto da emissão. As regras abrem `billing_periods` a quem lê o
  *   faturamento, que inclui os papéis do Financeiro.
+ * - A medição enviada ou aprovada e fora de NF (pergunta 64), ao vivo, com a
+ *   autorização dela e o contrato, que dá o número para a linha (sem esperar:
+ *   sem ele, a linha diz "Medição mensal"). A demanda presa a uma medição vai
+ *   na linha da medição, nunca à parte.
  */
 
 export type FilaDoFinanceiro = {
@@ -72,15 +79,27 @@ export function useFilaDoFinanceiro(role: ProfileRole | null | undefined, ligado
     (db) => query(collection(db, "billing_periods"), where("status", "==", "emitido")),
     competenciaDoFinanceiro,
   );
+  const medicoes = useLeitura(
+    abre ? "financeiro:medicoes" : null,
+    (db) => query(collection(db, "medicoes"), where("status", "in", ["enviada", "aprovada"])),
+    medicaoDoFinanceiro,
+  );
   const lidas = demandas.itens;
-  const ids = useMemo(() => unicos((lidas ?? []).flatMap((demanda) => demanda.autorizacaoIds)), [lidas]);
+  const daMedicao = medicoes.itens;
+  // A demanda presa a uma medição fatura com ela: só a de fora entra sozinha na fila.
+  const avulsas = useMemo(() => (lidas ?? []).filter((demanda) => demanda.medicaoId === null), [lidas]);
+  const ids = useMemo(
+    () => unicos([...avulsas.flatMap((demanda) => demanda.autorizacaoIds), ...(daMedicao ?? []).map((medicao) => medicao.autorizacaoId)]),
+    [avulsas, daMedicao],
+  );
   const fontes = useMemo(
-    () => unicos((lidas ?? []).flatMap((demanda) => {
+    () => unicos(avulsas.flatMap((demanda) => {
       const fonte = fonteDoValor(demanda);
       return fonte ? [fonte] : [];
     })),
-    [lidas],
+    [avulsas],
   );
+  const contratoIds = useMemo(() => unicos((daMedicao ?? []).flatMap((medicao) => (medicao.contratoId ? [medicao.contratoId] : []))), [daMedicao]);
   const autorizacoes = useQueries({
     queries: ids.map((id) => ({
       queryKey: ["financeiro", "autorizacao", id],
@@ -99,17 +118,28 @@ export function useFilaDoFinanceiro(role: ProfileRole | null | undefined, ligado
       enabled: abre,
     })),
   });
+  const contratos = useQueries({
+    queries: contratoIds.map((id) => ({
+      queryKey: ["financeiro", "contrato-da-medicao", id],
+      queryFn: () => lerDocumento(`contracts/${id}`),
+      staleTime: 300_000,
+      retry: 1,
+      enabled: abre,
+    })),
+  });
 
   if (!abre) return { linhas: undefined, carregando: false, falhas: [] };
 
   const falhas = [
     demandas.erro ? "demandas" : null,
     periodos.erro ? "armazenagem" : null,
+    medicoes.erro ? "medições" : null,
     autorizacoes.some((leitura) => leitura.isError) ? "autorizações" : null,
     documentos.some((leitura) => leitura.isError) ? "valores" : null,
   ].filter((falha): falha is string => falha !== null);
-  const pendente = lidas === null || periodos.itens === null || autorizacoes.some((leitura) => leitura.isPending) || documentos.some((leitura) => leitura.isPending);
-  if (falhas.length || pendente || !lidas || !periodos.itens) return { linhas: undefined, carregando: !falhas.length && pendente, falhas };
+  const pendente =
+    lidas === null || periodos.itens === null || daMedicao === null || autorizacoes.some((leitura) => leitura.isPending) || documentos.some((leitura) => leitura.isPending);
+  if (falhas.length || pendente || !lidas || !periodos.itens || !daMedicao) return { linhas: undefined, carregando: !falhas.length && pendente, falhas };
 
   const porId = new Map<string, AutorizacaoDoFinanceiro>();
   ids.forEach((id, indice) => {
@@ -117,12 +147,21 @@ export function useFilaDoFinanceiro(role: ProfileRole | null | undefined, ligado
     if (dados) porId.set(id, autorizacaoDoFinanceiro(id, dados));
   });
   const porFonte = new Map(fontes.map((caminho, indice) => [caminho, documentos[indice]?.data ?? null]));
+  const porNumero = new Map(lidas.map((demanda) => [demanda.numero, demanda]));
+  const rotuloDoContrato = new Map(
+    contratoIds.flatMap((id, indice) => {
+      const dados = contratos[indice]?.data;
+      const contrato = dados ? contratoDoDocumento(id, dados) : null;
+      return contrato ? [[id, contrato.numeros[0] ?? contrato.nome] as const] : [];
+    }),
+  );
   const linhas = [
-    ...lidas.map((demanda) => {
+    ...avulsas.map((demanda) => {
       const fonte = fonteDoValor(demanda);
-      return linhaAFaturar(demanda, porId, fonte ? valorDaFonte(demanda, porFonte.get(fonte)) : null);
+      return linhaAFaturar(demanda, porId, fonte ? valorDaRv(porFonte.get(fonte)) : null);
     }),
     ...periodos.itens.map(linhaDaArmazenagem),
+    ...daMedicao.map((medicao) => linhaDaMedicao(medicao, porNumero, porId, medicao.contratoId ? (rotuloDoContrato.get(medicao.contratoId) ?? null) : null)),
   ];
   return { linhas, carregando: false, falhas: [] };
 }
