@@ -30,13 +30,13 @@ describe("callables do RH", () => {
   it("toda linha com onCall está no formato que a conferência do invoker lê, inclusive comentário", () => {
     const pattern = invokerPattern();
     const used = rawIndex.split(/\r?\n/).filter((line) => ON_CALL_USE.test(line));
-    assert.deepEqual(used.map((line) => line.match(pattern)?.[1]), ["getRhPanel", "getRhFicha", "saveRhRecord", "archiveRhRecord", "requestRhUpload", "attachRhFile", "openRhFile", "exportRhMonth", "listRhExports", "downloadRhExport"]);
+    assert.deepEqual(used.map((line) => line.match(pattern)?.[1]), ["getRhPanel", "getRhFicha", "saveRhRecord", "archiveRhRecord", "saveRhVinculo", "requestRhUpload", "attachRhFile", "openRhFile", "exportRhMonth", "listRhExports", "downloadRhExport"]);
   });
 
   it("as callables começam pela liberação e pelo perfil, e nada é reexportado", () => {
     assert.doesNotMatch(index, /^export\s*\{/m);
     const blocks = index.split(/^(?=export const )/m).filter((block) => /^export const \w+ = onCall/.test(block));
-    assert.equal(blocks.length, 10);
+    assert.equal(blocks.length, 11);
     for (const block of blocks) assert.match(block, ENTRADA);
   });
 });

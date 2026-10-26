@@ -211,7 +211,10 @@ documentação de produto e operação está em `docs/`.
     (pergunta 24, parte 8.3): `exportRhMonth` gera a exportação da competência
     (os exames com os códigos do S-2220 e os colaboradores próprios, com o CPF),
     por versão e idempotente; `listRhExports` e `downloadRhExport` listam e
-    baixam, com o evento. Desenho: `docs/plataforma/fase-8-rh.md`. Usa **npm**.
+    baixam, com o evento. As datas do vínculo (parte 8.4a): `saveRhVinculo`
+    grava a admissão e o desligamento do próprio em `vinculos`, sem mexer no
+    cadastro da Operação, e a planilha de colaboradores lista quem teve
+    vínculo no mês. Desenho: `docs/plataforma/fase-8-rh.md`. Usa **npm**.
   - `lib/dominio`: tipos e regras que o app e as Functions precisam ter iguais.
 - **IA native.** Todo módulo novo grava desde o primeiro dia o que a IA precisa
   (eventos em `events`, tempos e medidas) e respeita o isolamento por cliente. A

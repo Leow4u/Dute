@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  CABECALHO_DOS_COLABORADORES,
+  CABECALHO_DOS_COLABORADORES_ANTIGO,
   CABECALHO_DOS_EXAMES,
   EXAME_NO_ESOCIAL,
   RESULTADO_NO_ESOCIAL,
@@ -24,9 +26,10 @@ import { TIPOS_POR_CATEGORIA, type RegistroGravado } from "./ficha.js";
  * sintéticos.
  */
 
-const ANA: ColaboradorDaExportacao = { id: "col_aaaaaaaaaaaaaaaa", nome: "Ana Souza", cpf: "52998224725", funcao: "Montadora", ativo: true };
-const BRUNO: ColaboradorDaExportacao = { id: "col_bbbbbbbbbbbbbbbb", nome: "Bruno Lima", cpf: "11144477735", funcao: "Motorista", ativo: false };
-const CARLA: ColaboradorDaExportacao = { id: "col_cccccccccccccccc", nome: "Carla Dias", cpf: "", funcao: "Ajudante", ativo: false };
+const SEM_DATAS = { admissao: null, desligamento: null };
+const ANA: ColaboradorDaExportacao = { id: "col_aaaaaaaaaaaaaaaa", nome: "Ana Souza", cpf: "52998224725", funcao: "Montadora", ativo: true, ...SEM_DATAS };
+const BRUNO: ColaboradorDaExportacao = { id: "col_bbbbbbbbbbbbbbbb", nome: "Bruno Lima", cpf: "11144477735", funcao: "Motorista", ativo: false, ...SEM_DATAS };
+const CARLA: ColaboradorDaExportacao = { id: "col_cccccccccccccccc", nome: "Carla Dias", cpf: "", funcao: "Ajudante", ativo: false, ...SEM_DATAS };
 
 let sequencia = 0;
 function exame(colaborador: string, tipo: string, emitido_em: string, extra: Partial<RegistroGravado> = {}): RegistroGravado {
@@ -69,8 +72,9 @@ describe("conteúdo da exportação", () => {
         ["2026-10-05", "Ana Souza", "periodico", 1, 1, null],
       ],
     );
-    // A Ana está ativa; o Bruno, inativo, entra pelo demissional do mês; a Carla, inativa e sem exame, não.
-    assert.deepEqual(conteudo.colaboradores.map((linha) => [linha.nome, linha.ativo]), [["Ana Souza", true], ["Bruno Lima", false]]);
+    // Sem as datas do vínculo, vale a regra de antes da parte 8.4: a Ana está ativa; o Bruno, inativo,
+    // entra pelo demissional do mês; a Carla, inativa e sem exame, não.
+    assert.deepEqual(conteudo.colaboradores.map((linha) => [linha.nome, linha.situacao_no_mes]), [["Ana Souza", "ativo"], ["Bruno Lima", "inativo"]]);
   });
 
   it("o exame lançado de novo para corrigir, com a mesma data do ASO, entra uma vez: o vigente do empate", () => {
@@ -114,6 +118,61 @@ describe("conteúdo da exportação", () => {
     const mudou = conteudoDaExportacao("2026-10", [ANA, BRUNO], [a, { ...b, resultado: "apto_com_restricao" }]);
     assert.notEqual(hashDoConteudo(um), hashDoConteudo(mudou));
   });
+
+  it("o nome e a função sozinhos não mudam o hash; o CPF, as datas e os exames mudam (parte 8.4)", () => {
+    const a = exame(ANA.id, "periodico", "2026-10-05");
+    const hash = (colaboradores: ColaboradorDaExportacao[]) => hashDoConteudo(conteudoDaExportacao("2026-10", colaboradores, [a]));
+    const antes = hash([ANA, BRUNO]);
+    // A Ana renomeada passa para o fim da planilha, e o hash continua o mesmo.
+    assert.equal(hash([{ ...ANA, nome: "Zélia Souza", funcao: "Líder de equipe" }, BRUNO]), antes);
+    assert.notEqual(hash([{ ...ANA, cpf: "16899535009" }, BRUNO]), antes);
+    assert.notEqual(hash([{ ...ANA, admissao: "2025-02-03" }, BRUNO]), antes);
+    assert.notEqual(hashDoConteudo(conteudoDaExportacao("2026-10", [ANA, BRUNO], [{ ...a, vence_em: "2027-10-05" }])), antes);
+  });
+
+  it("com as datas do vínculo, entra quem tinha vínculo no mês, com a situação no mês (parte 8.4)", () => {
+    const pessoa = (id: string, nome: string, ativo: boolean, admissao: string | null, desligamento: string | null = null): ColaboradorDaExportacao => ({
+      id,
+      nome,
+      cpf: "",
+      funcao: "Montador",
+      ativo,
+      admissao,
+      desligamento,
+    });
+    const colaboradores = [
+      pessoa("col_0000000000000001", "Admitida em setembro", true, "2026-09-08"),
+      pessoa("col_0000000000000002", "Admitido em outubro", true, "2026-10-01"),
+      pessoa("col_0000000000000003", "Desligado em setembro", false, "2024-03-02", "2026-09-19"),
+      pessoa("col_0000000000000004", "Desligado em agosto", false, "2024-03-02", "2026-08-31"),
+      pessoa("col_0000000000000005", "Desligamento marcado", true, "2024-06-10", "2026-10-31"),
+      pessoa("col_0000000000000006", "Entrou e saiu", false, "2026-09-02", "2026-09-25"),
+      pessoa("col_0000000000000007", "Sem admissão", true, null),
+      // O cadastro inativo não tira do mês quem tinha vínculo nele: valem as datas.
+      pessoa("col_0000000000000008", "Inativo com vínculo", false, "2020-01-15"),
+      pessoa("col_0000000000000009", "Desligado no primeiro dia", false, "2020-01-15", "2026-09-01"),
+    ];
+    // O exame do mês não põe na planilha de colaboradores quem não tinha vínculo nele.
+    const conteudo = conteudoDaExportacao("2026-09", colaboradores, [exame("col_0000000000000004", "demissional", "2026-09-03")]);
+    assert.deepEqual(
+      conteudo.colaboradores.map((linha) => [linha.nome, linha.admissao, linha.desligamento, linha.situacao_no_mes]),
+      [
+        ["Admitida em setembro", "2026-09-08", null, "admissao"],
+        ["Desligado em setembro", "2024-03-02", "2026-09-19", "desligamento"],
+        ["Desligado no primeiro dia", "2020-01-15", "2026-09-01", "desligamento"],
+        ["Desligamento marcado", "2024-06-10", "2026-10-31", "ativo"],
+        ["Entrou e saiu", "2026-09-02", "2026-09-25", "admissao_e_desligamento"],
+        ["Inativo com vínculo", "2020-01-15", null, "ativo"],
+        ["Sem admissão", null, null, "ativo"],
+      ],
+    );
+    assert.deepEqual(conteudo.exames.map((linha) => linha.nome), ["Desligado em agosto"]);
+    const arquivo = arquivoDaExportacao(conteudo, 2, "colaboradores");
+    assert.deepEqual(arquivo.conteudo.slice(1).split("\r\n").slice(1, 3), [
+      "Admitida em setembro;;Montador;08/09/2026;;Admissão no mês",
+      "Desligado em setembro;;Montador;02/03/2024;19/09/2026;Desligamento no mês",
+    ]);
+  });
 });
 
 describe("entrada da exportação", () => {
@@ -152,11 +211,31 @@ describe("planilhas", () => {
     ]);
   });
 
-  it("os colaboradores com a situação", () => {
+  it("os colaboradores com as datas do vínculo e a situação no mês", () => {
     const arquivo = arquivoDaExportacao(conteudo, 1, "colaboradores");
     assert.equal(arquivo.nome, "dute-rh-colaboradores-2026-10-v1.csv");
     assert.deepEqual(arquivo.conteudo.slice(1).split("\r\n"), [
-      "Nome;CPF;Função;Situação",
+      "Nome;CPF;Função;Admissão;Desligamento;Situação no mês",
+      "Ana Souza;529.982.247-25;Montadora;;;Ativo",
+      "Bruno Lima;111.444.777-35;Motorista;;;Inativo",
+      "",
+    ]);
+    assert.equal(CABECALHO_DOS_COLABORADORES.join(";"), "Nome;CPF;Função;Admissão;Desligamento;Situação no mês");
+  });
+
+  it("a versão de antes da parte 8.4 sai como foi gerada, com a situação do cadastro", () => {
+    const antiga = {
+      competencia: "2026-09",
+      formato: 1 as const,
+      exames: [],
+      colaboradores: [
+        { colaborador_id: ANA.id, nome: "Ana Souza", cpf: "52998224725", funcao: "Montadora", ativo: true },
+        { colaborador_id: BRUNO.id, nome: "Bruno Lima", cpf: "11144477735", funcao: "Motorista", ativo: false },
+      ],
+    };
+    const arquivo = arquivoDaExportacao(antiga, 1, "colaboradores");
+    assert.deepEqual(arquivo.conteudo.slice(1).split("\r\n"), [
+      CABECALHO_DOS_COLABORADORES_ANTIGO.join(";"),
       "Ana Souza;529.982.247-25;Montadora;Ativo",
       "Bruno Lima;111.444.777-35;Motorista;Inativo",
       "",

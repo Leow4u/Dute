@@ -17,19 +17,21 @@ import {
   idDaExportacao,
   type ArquivoGerado,
   type ColaboradorDaExportacao,
-  type ConteudoDaExportacao,
+  type ConteudoGuardado,
 } from "./exportacao.js";
 import { COLLABORATORS_COLLECTION, REGISTROS_COLLECTION } from "./ficha.js";
 import { atorDoRh, exigeQuemGrava, registroLido } from "./ficha-gravacao.js";
 import { actorPayload, runIdempotent } from "./operations.js";
 import type { RhProfile } from "./profile.js";
+import { VINCULOS_COLLECTION, vinculosPorColaborador } from "./vinculo.js";
 
 /**
  * A exportação no Firestore (parte 8.3). Do banco padrão, lê os colaboradores
- * de vínculo próprio, com o CPF; no banco `dute-rh`, a versão da
- * competência guarda as linhas que foram para a contabilidade, o hash, quem
- * gerou e o evento. Baixar não muda nada: monta a planilha da versão
- * guardada e registra o evento de quem baixou.
+ * de vínculo próprio, com o CPF; no banco `dute-rh`, as datas do vínculo
+ * (parte 8.4), e a versão da competência guarda as linhas que foram para a
+ * contabilidade, o hash, quem gerou e o evento. Baixar não muda nada: monta a
+ * planilha da versão guardada, no formato em que foi gerada, e registra o
+ * evento de quem baixou.
  */
 
 function texto(data: DocumentData, campo: string): string {
@@ -41,8 +43,10 @@ function ilegivel(): never {
   throw new HttpsError("failed-precondition", "Exportação ilegível.");
 }
 
+type ColaboradorDoCadastro = Omit<ColaboradorDaExportacao, "admissao" | "desligamento">;
+
 /** Os de vínculo próprio, ativos ou não; o cadastro sem vínculo é próprio, como na ficha. */
-async function colaboradoresDaExportacao(padrao: Firestore): Promise<ColaboradorDaExportacao[]> {
+async function colaboradoresDaExportacao(padrao: Firestore): Promise<ColaboradorDoCadastro[]> {
   const snapshot = await padrao.collection(COLLABORATORS_COLLECTION).get();
   return snapshot.docs
     .filter((doc) => (doc.data().vinculo ?? "proprio") === "proprio")
@@ -76,13 +80,18 @@ export async function exportRhMonthFor(padrao: Firestore, rh: Firestore, caller:
     rh,
     { kind: "exportacao_rh", scope: { competencia: entrada.competencia }, idempotency_key, input, actor },
     async (transaction, { operationId }) => {
-      const [versoes, exames] = await Promise.all([
+      const [versoes, exames, gravados] = await Promise.all([
         transaction.get(rh.collection(EXPORTACOES_COLLECTION).where("competencia", "==", entrada.competencia)),
         transaction.get(rh.collection(REGISTROS_COLLECTION).where("categoria", "==", "exame")),
+        transaction.get(rh.collection(VINCULOS_COLLECTION)),
       ]);
+      const vinculos = vinculosPorColaborador(gravados.docs);
       const conteudo = conteudoDaExportacao(
         entrada.competencia,
-        colaboradores,
+        colaboradores.map((colaborador) => {
+          const datas = vinculos.get(colaborador.id);
+          return { ...colaborador, admissao: datas?.admissao ?? null, desligamento: datas?.desligamento ?? null };
+        }),
         exames.docs.map((doc) => registroLido(doc.id, doc.data())),
       );
       const hash = hashDoConteudo(conteudo);
@@ -95,6 +104,7 @@ export async function exportRhMonthFor(padrao: Firestore, rh: Firestore, caller:
         competencia: entrada.competencia,
         versao,
         hash,
+        formato: conteudo.formato,
         exames: conteudo.exames,
         colaboradores: conteudo.colaboradores,
         totais: { exames: conteudo.exames.length, colaboradores: conteudo.colaboradores.length },
@@ -162,11 +172,13 @@ export async function downloadRhExportFor(rh: Firestore, caller: RhProfile, data
   if (!snapshot.exists) throw new HttpsError("not-found", "Exportação não encontrada.");
   const gravada = snapshot.data() ?? {};
   const versao = versaoLida(snapshot.id, gravada);
-  const conteudo: ConteudoDaExportacao = {
+  // As versões de antes da parte 8.4 não têm o formato: saem com as colunas de então.
+  const conteudo = {
     competencia: versao.competencia,
+    formato: gravada.formato === 2 ? 2 : 1,
     exames: linhas(gravada.exames),
     colaboradores: linhas(gravada.colaboradores),
-  };
+  } as ConteudoGuardado;
   const arquivo = arquivoDaExportacao(conteudo, versao.versao, entrada.arquivo);
   await rh.runTransaction(async (transaction) => {
     createRhEvent(transaction, rh, {

@@ -30,6 +30,7 @@ import {
 import { actorPayload, runIdempotent, type RhActor } from "./operations.js";
 import { rhWriteProblem } from "./platform-roles.js";
 import type { RhProfile } from "./profile.js";
+import { VINCULOS_COLLECTION, vinculoLido, vinculosPorColaborador, type VinculoGravado } from "./vinculo.js";
 
 /**
  * A ficha no Firestore (parte 8.2a). `padrao` é o banco padrão, onde moram o
@@ -130,7 +131,7 @@ export function exigeQuemGrava(caller: RhProfile): void {
   if (problema) throw new HttpsError("permission-denied", problema);
 }
 
-async function lerColaborador(padrao: Firestore, id: string): Promise<ColaboradorDoRh> {
+export async function lerColaborador(padrao: Firestore, id: string): Promise<ColaboradorDoRh> {
   const snapshot = await padrao.collection(COLLABORATORS_COLLECTION).doc(id).get();
   if (!snapshot.exists) throw new HttpsError("not-found", "Colaborador não encontrado.");
   return colaboradorDoRh(snapshot.id, snapshot.data() ?? {});
@@ -311,6 +312,9 @@ export type ColaboradorNoPainel = ColaboradorDoRh & {
   vencidos: number;
   /** O vencimento mais próximo entre os vigentes que ainda não venceram, ou null. */
   proximo_vencimento: string | null;
+  /** As datas do vínculo (parte 8.4), só no vínculo próprio; null enquanto o RH não grava. */
+  admissao: string | null;
+  desligamento: string | null;
 };
 
 export type VencimentoNoPainel = Vencimento & { nome: string };
@@ -326,12 +330,14 @@ const POR_NOME = new Intl.Collator("pt-BR", { sensitivity: "base" });
  */
 export async function getRhPanelFor(padrao: Firestore, rh: Firestore, agora: Date = new Date()): Promise<PainelDoRh> {
   const hoje = diaEmSaoPaulo(agora);
-  const [cadastro, vigentes] = await Promise.all([
+  const [cadastro, vigentes, gravados] = await Promise.all([
     padrao.collection(COLLABORATORS_COLLECTION).where("ativo", "==", true).get(),
     rh.collection(REGISTROS_COLLECTION).where("situacao", "==", "vigente").get(),
+    rh.collection(VINCULOS_COLLECTION).get(),
   ]);
   const ativos = cadastro.docs.map((doc) => colaboradorDoRh(doc.id, doc.data()));
   const registros = legiveis(vigentes.docs);
+  const vinculos = vinculosPorColaborador(gravados.docs);
   const vencimentos = vencimentosDoDia(hoje, registros, new Set(ativos.map((colaborador) => colaborador.id)));
   const nomes = new Map(ativos.map((colaborador) => [colaborador.id, colaborador.nome]));
   const colaboradores = ativos
@@ -340,12 +346,15 @@ export async function getRhPanelFor(padrao: Firestore, rh: Firestore, agora: Dat
       const seus = vencimentos.filter((vencimento) => vencimento.colaborador_id === colaborador.id);
       // O próximo é o que ainda não venceu; o vencido já conta em `vencidos`.
       const datas = daFicha.flatMap((registro) => (registro.vence_em && registro.vence_em >= hoje ? [registro.vence_em] : [])).sort();
+      const doVinculo = datasDoProprio(colaborador, vinculos.get(colaborador.id) ?? null);
       return {
         ...colaborador,
         registros: daFicha.length,
         vencendo: seus.filter((vencimento) => vencimento.dias >= 0).length,
         vencidos: seus.filter((vencimento) => vencimento.dias < 0).length,
         proximo_vencimento: datas[0] ?? null,
+        admissao: doVinculo?.admissao ?? null,
+        desligamento: doVinculo?.desligamento ?? null,
       };
     })
     .sort((a, b) => POR_NOME.compare(a.nome, b.nome) || a.id.localeCompare(b.id));
@@ -359,7 +368,21 @@ export async function getRhPanelFor(padrao: Firestore, rh: Firestore, agora: Dat
 /** O registro na tela: o arquivo sem o caminho no bucket, que só a callable usa. */
 export type RegistroNaFicha = Omit<RegistroGravado, "arquivo"> & { arquivo: Omit<ArquivoDoRegistro, "caminho" | "geracao"> | null };
 
-export type FichaDoColaborador = { hoje: string; colaborador: ColaboradorDoRh; registros: RegistroNaFicha[] };
+/** As datas do vínculo na ficha, com a edição que a tela devolve ao gravar. */
+export type DatasDoVinculoNaFicha = { admissao: string; desligamento: string | null; edicao: number };
+
+export type FichaDoColaborador = {
+  hoje: string;
+  colaborador: ColaboradorDoRh;
+  registros: RegistroNaFicha[];
+  /** Só no vínculo próprio; null enquanto o RH não grava (parte 8.4). */
+  datas_do_vinculo: DatasDoVinculoNaFicha | null;
+};
+
+/** As datas valem só no vínculo próprio: o freelancer e o terceiro não estão na folha da Dutelog. */
+function datasDoProprio(colaborador: ColaboradorDoRh, vinculo: VinculoGravado | null): VinculoGravado | null {
+  return colaborador.vinculo === "proprio" ? vinculo : null;
+}
 
 function registroNaFicha(registro: RegistroGravado): RegistroNaFicha {
   const { arquivo, ...resto } = registro;
@@ -372,7 +395,11 @@ const ORDEM_DA_SITUACAO: Record<Situacao, number> = { vigente: 0, substituido: 1
 export async function getRhFichaFor(padrao: Firestore, rh: Firestore, data: unknown, agora: Date = new Date()): Promise<FichaDoColaborador> {
   const { colaborador_id } = entradaDaFicha(data);
   const colaborador = await lerColaborador(padrao, colaborador_id);
-  const snapshot = await rh.collection(REGISTROS_COLLECTION).where("colaborador_id", "==", colaborador_id).get();
+  const [snapshot, datas] = await Promise.all([
+    rh.collection(REGISTROS_COLLECTION).where("colaborador_id", "==", colaborador_id).get(),
+    rh.collection(VINCULOS_COLLECTION).doc(colaborador_id).get(),
+  ]);
+  const vinculo = datasDoProprio(colaborador, datas.exists ? vinculoLido(datas.id, datas.data() ?? {}) : null);
   const registros = legiveis(snapshot.docs).sort(
     (a, b) =>
       CATEGORIAS.indexOf(a.categoria) - CATEGORIAS.indexOf(b.categoria) ||
@@ -380,5 +407,10 @@ export async function getRhFichaFor(padrao: Firestore, rh: Firestore, data: unkn
       b.emitido_em.localeCompare(a.emitido_em) ||
       a.id.localeCompare(b.id),
   );
-  return { hoje: diaEmSaoPaulo(agora), colaborador, registros: registros.map(registroNaFicha) };
+  return {
+    hoje: diaEmSaoPaulo(agora),
+    colaborador,
+    registros: registros.map(registroNaFicha),
+    datas_do_vinculo: vinculo ? { admissao: vinculo.admissao, desligamento: vinculo.desligamento, edicao: vinculo.edicao } : null,
+  };
 }

@@ -12,6 +12,7 @@ import { archiveRhRecordFor, getRhFichaFor, getRhPanelFor, saveRhRecordFor } fro
 import { rhLiberado } from "./domain/liberacao.js";
 import { requireRhCaller } from "./domain/profile.js";
 import { runRhAlertsFor } from "./domain/rotina-gravacao.js";
+import { saveRhVinculoFor } from "./domain/vinculo-gravacao.js";
 import { PROJECT_ID } from "./project.js";
 
 /**
@@ -57,6 +58,12 @@ export const saveRhRecord = onCall(async (request) => {
 export const archiveRhRecord = onCall(async (request) => {
   const caller = await requireRhCaller(db, request, PROJECT_ID);
   return archiveRhRecordFor(rh, caller, request.data);
+});
+
+/** Grava a admissão e o desligamento do colaborador de vínculo próprio (parte 8.4). Só o rh grava. */
+export const saveRhVinculo = onCall(async (request) => {
+  const caller = await requireRhCaller(db, request, PROJECT_ID);
+  return saveRhVinculoFor(db, rh, caller, request.data);
 });
 
 /** A URL para subir o arquivo escaneado do registro (parte 8.2b). Só o rh. */

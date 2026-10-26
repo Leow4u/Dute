@@ -160,7 +160,7 @@ Como se garante, em cada PR de tela:
 | 5 Memória da Dute | Partes 5.1a a 5.6 na `main`. A memória e o Agent Dute do núcleo estão ligados no `dute-prod` desde a segunda publicação de 25/10 (`59d78bc`), com o OK do Leonardo do mesmo dia (`fase-5-memoria.md`, "Lançamento na produção") |
 | 6 Comercial | v1 (partes 1 a 19) na `main` e ligado no `dute-prod` desde 21/10, sem dado carregado; do fechamento, 6.20 a 6.22 e 6.25 feitas, e 6.23 e 6.24 (as cargas e o contador na produção, a semana em paralelo) com o Leonardo |
 | 7 Financeiro unificado | Partes 7.1 a 7.5c na `main`, ligadas com o Financeiro (no `dute-homolog` e, desde a parte 4.9b, no `dute-prod`). A NFS-e e a baixa pela Omie (7.4) estão no código, só no `dute-homolog`, e as chaves de um aplicativo de teste da Omie estão no `dute-homolog` desde 24/10; a primeira emissão espera os serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` cadastrados nele. O cancelamento da NFS-e autorizada espera a resposta da Omie (`fase-7-financeiro-unificado.md`) |
-| 8 RH | Partes 8.1a a 8.3 na `main` e ligadas no `dute-homolog` desde 24/10: a 8.1b pôs no `firebase.json` o banco `dute-rh`, que existe nos dois ambientes (na produção, com PITR e backup diário). O código subiu na produção em 25/10, e o RH está ligado lá desde a segunda publicação do mesmo dia (`59d78bc`), com o OK do Leonardo e as perguntas 61 a 63 respondidas. A 8.4 (as datas de admissão e desligamento, pergunta 63) espera o alinhamento da tela (`fase-8-rh.md`) |
+| 8 RH | Partes 8.1a a 8.3 na `main` e ligadas no `dute-homolog` desde 24/10: a 8.1b pôs no `firebase.json` o banco `dute-rh`, que existe nos dois ambientes (na produção, com PITR e backup diário). O código subiu na produção em 25/10, e o RH está ligado lá desde a segunda publicação do mesmo dia (`59d78bc`), com o OK do Leonardo e as perguntas 61 a 63 respondidas. A 8.4 (as datas de admissão e desligamento, pergunta 63) teve a tela alinhada em 26/10; a 8.4a (o servidor) está na `main`, e a 8.4b (as telas) vem a seguir (`fase-8-rh.md`) |
 | Contínuo | PITR e backup diário desde 20/10 (no `dute-rh`, desde 24/10). O teste de restauração é o workflow `Teste de restauração`, que espera o OK do Leonardo para rodar (`backup-e-recuperacao.md`). O painel do sistema mostra os erros de todas as functions, o estado e o acesso das callables de todas as codebases, a latência e o e-mail que desistiu (`docs/painel-sistema.md`). O inventário da LGPD está em `lgpd.md`, com 12 decisões do Leonardo. Manuais de todos os módulos: `docs/manual-comercial.md`, `docs/manual-operacao.md`, `docs/manual-financeiro.md`, `docs/manual-rh.md`, `docs/manual-portal.md` (o portal do cliente) e `docs/manual-armazenagem.md`; o roteiro do treinamento por marco em `docs/treinamento.md`. A revisão dos manuais virou correções (PRs 342 a 361) e as perguntas 36 a 54 da seção 13. A publicação só sobe as functions e a tela com os índices do arquivo prontos (`tools/esperar_indices.py`), e o CI confere o índice composto de cada consulta das telas (`lib/cloud-api-indices.test.ts`) e das Functions nos testes de integração (`tools/indices_das_consultas.py`), porque o emulador não o exige |
 
 ## 3. Ordem de implantação
@@ -652,7 +652,8 @@ RH e, os de CNH, ao da Operação. Zeragem do WMS nunca toca o banco `dute-rh`.
 | 8.1 | Banco `dute-rh`, `firestore-rh.rules`, codebase `functions/rh`, papel `rh` no shell | Só `rh`, `admin` e `owner` leem; ninguém grava pelo navegador |
 | 8.2 | Ficha do colaborador: documentos (Storage com regra), exames, treinamentos, vencimentos; alertas no Início | Vencimento gera alerta uma vez; documento visível só no RH |
 | 8.3 | Exportação da competência para a contabilidade, que faz a folha e transmite o eSocial (pergunta 24, decidida em 24/10/2026) | Exportação idempotente |
-| 8.4 | As datas de admissão e de desligamento do colaborador, e a exportação com quem tinha vínculo no mês (pergunta 63, decidida em 25/10/2026). Tela nova, com alinhamento de UX antes | Quem entrou depois da competência não aparece na planilha dela; a mudança de nome depois não cria versão nova de mês passado |
+| 8.4a | As datas de admissão e de desligamento do próprio no banco `dute-rh`, gravadas só pelo `rh`, e a exportação com quem teve vínculo no mês (pergunta 63, decidida em 25/10/2026; tela alinhada em 26/10/2026) | Quem entrou depois da competência não aparece na planilha dela; a mudança de nome depois não cria versão nova de mês passado |
+| 8.4b | As datas na tela: o formulário da ficha, as datas e o "Sem admissão" em Pessoas e a lista "Sem data de admissão" na Exportação | Os textos e o `axe` de cada tela; owner e admin não veem o botão de gravar |
 
 **Pronto quando.** Só `rh`, `admin` e `owner` leem o banco `dute-rh` (teste de
 regras); CNH, exame e treinamento vencendo aparecem no Início certo.
@@ -991,6 +992,9 @@ defeito.
     exportação listar quem tinha vínculo no mês. **Decidida em 25/10/2026:**
     guardar as duas datas (parte 8.4, com o alinhamento da tela antes), e o
     RH liga na produção já; até a 8.4, a planilha sai do cadastro de hoje.
+    **Tela alinhada em 26/10/2026:** as datas ficam no banco `dute-rh`,
+    gravadas só pelo `rh`, independentes do cadastro da Operação
+    (`fase-8-rh.md`, "Alinhamento da parte 8.4").
 
 64. A medição aprovada pode ter linhas sem demanda, como a equipe fixa do
     contrato misto (`comercial-cargas.md`), e pode não ter demanda nenhuma.
@@ -1060,6 +1064,16 @@ usuário do convite, com o papel dele.
       convite. Os logins ficam, como a remoção de acesso de hoje.
     - Se os logins devem continuar, o rótulo "Sem portal" engana: a troca é
       de nome na tela.
+
+**Datas do vínculo** (26/10/2026). Da parte 8.4a do RH.
+70. Pessoas, no RH, lista só quem está ativo no cadastro da Operação. Com as
+    datas do vínculo (parte 8.4), o desligamento é do RH e a inativação, da
+    coordenação, independentes. Quem a coordenação desativa antes de o RH
+    gravar o desligamento some de Pessoas e continua na planilha da
+    contabilidade como ativo, todo mês. A ficha dele só abre pelo endereço.
+    Recomendo que Pessoas mostre também quem está inativo na Operação com a
+    admissão sem desligamento, com a marca "Inativo na Operação", para o RH
+    gravar o desligamento. É tela, então vem com alinhamento.
 
 Limitações conhecidas, sem pergunta, para quando houver tempo:
 
