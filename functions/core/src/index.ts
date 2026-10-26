@@ -19,7 +19,8 @@ import {
 import { deleteDuteRoutineFor, listDuteRoutinesFor, rodarRotinasVencidas, runDuteRoutineNowFor, saveDuteRoutineFor } from "./domain/agente-rotinas.js";
 import { answerStockAlertFor, runStockFor } from "./domain/alertas-parados-gravacao.js";
 import { runCasesFor } from "./domain/lembrancas-gravacao.js";
-import { agenteLiberado, memoriaLiberada } from "./domain/liberacao.js";
+import { agenteLiberado, memoriaLiberada, retencaoLiberada } from "./domain/liberacao.js";
+import { runAgentRetentionFor } from "./domain/retencao-do-agente-gravacao.js";
 import { runMeasuresFor } from "./domain/medidas-gravacao.js";
 import { findSimilarQuotesFor } from "./domain/parecidos-gravacao.js";
 import { requireCoreCaller, requireDuteCaller } from "./domain/profile.js";
@@ -183,4 +184,16 @@ export const runDuteRoutineNow = onCall({ timeoutSeconds: 180, memory: "512MiB" 
 export const runDuteRoutines = onSchedule({ schedule: "every 15 minutes", timeZone: "America/Sao_Paulo", timeoutSeconds: 540, memory: "512MiB", maxInstances: 1 }, async () => {
   if (!agenteLiberado(PROJECT_ID)) return;
   console.info("runDuteRoutines", await rodarRotinasVencidas(db, { gerar: gerarComGenkit(ai) }));
+});
+
+/**
+ * Todo dia às 03:40 de São Paulo: a mensagem e o uso do Agent Dute com mais
+ * de 12 meses, e a conversa parada há mais de 12 meses, saem (LGPD, decisão
+ * 8); a conversa em uso perde o título e o resumo das mensagens que saíram;
+ * o evento de cada cliente guarda as contagens. Uma instância de cada vez.
+ * Só com a liberação da retenção.
+ */
+export const runAgentRetention = onSchedule({ schedule: "every day 03:40", timeZone: "America/Sao_Paulo", timeoutSeconds: 540, maxInstances: 1 }, async () => {
+  if (!retencaoLiberada(PROJECT_ID)) return;
+  console.info("runAgentRetention", await runAgentRetentionFor(db));
 });

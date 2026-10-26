@@ -64,10 +64,17 @@ describe("functions do núcleo", () => {
 
   it("a rotina da memória (partes 5.1a, 5.3a, 5.4a e 5.4d), a cada 15 minutos, uma instância, confere a liberação antes de tudo e roda as medidas, as lembranças e o estoque (o relógio e a proposta do alerta)", () => {
     const agendadas = [...index.matchAll(/^export const (\w+) = onSchedule\(/gm)].map((match) => match[1]);
-    assert.deepEqual(agendadas, ["runMeasures", "runDuteRoutines"]);
+    assert.deepEqual(agendadas, ["runMeasures", "runDuteRoutines", "runAgentRetention"]);
     assert.match(
       index,
       /export const runMeasures = onSchedule\(\{[^}]*schedule: "every 15 minutes"[^}]*timeZone: "America\/Sao_Paulo"[^}]*maxInstances: 1[^}]*\}, async \(\) => \{\s*if \(!memoriaLiberada\(PROJECT_ID\)\) return;\s*const \[medidas, lembrancas, estoque\] = await Promise\.allSettled\(\[runMeasuresFor\(db\), runCasesFor\(db\), runStockFor\(db\)\]\);/,
+    );
+  });
+
+  it("a retenção do Agent Dute (LGPD, decisão 8), todo dia, uma instância, confere a liberação da retenção antes de tudo", () => {
+    assert.match(
+      index,
+      /export const runAgentRetention = onSchedule\(\{[^}]*schedule: "every day 03:40"[^}]*timeZone: "America\/Sao_Paulo"[^}]*maxInstances: 1[^}]*\}, async \(\) => \{\s*if \(!retencaoLiberada\(PROJECT_ID\)\) return;\s*console\.info\("runAgentRetention", await runAgentRetentionFor\(db\)\);/,
     );
   });
 
