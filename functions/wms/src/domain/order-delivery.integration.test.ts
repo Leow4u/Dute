@@ -69,8 +69,10 @@ describe("a entrega do pedido", () => {
 
   it("troca para retirada enquanto a Operação não abriu a demanda; depois, recusa", async () => {
     await setOrderDeliveryTransaction(db, DUTELOG, wms, AGORA);
-    await setOrderDeliveryTransaction(db, { order_id: "ord_118", entrega: { modo: "retirada", data: "2026-10-24", hora: "09:00", quem_retira: "Carlos Lima", placa: "ABC1D23" } }, wms, AGORA);
+    // O app antigo ainda manda o documento de quem retira: não se grava (decisão 3 da LGPD).
+    await setOrderDeliveryTransaction(db, { order_id: "ord_118", entrega: { modo: "retirada", data: "2026-10-24", hora: "09:00", quem_retira: "Carlos Lima", documento: "RG 12.345.678-9", placa: "ABC1D23" } }, wms, AGORA);
     assert.equal((await db.doc("orders/ord_118").get()).get("entrega.modo"), "retirada");
+    assert.equal((await db.doc("orders/ord_118").get()).get("entrega.documento"), undefined);
     await db.doc("orders/ord_118").update({ "entrega.demanda": "10050" });
     const depois = await rejection(setOrderDeliveryTransaction(db, DUTELOG, wms, AGORA));
     assert.equal(depois.message, "A entrega já virou a demanda 10050 na Operação: mude por lá.");

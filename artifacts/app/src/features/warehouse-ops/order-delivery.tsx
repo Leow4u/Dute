@@ -124,12 +124,9 @@ export function FormularioDaEntregaView({
         </>
       ) : (
         <>
-          <Campo id="entrega-quem" rotulo="Quem retira" problema={problemas.quemRetira}>
-            <Input id="entrega-quem" value={form.quemRetira} onChange={(event) => set("quemRetira", event.target.value)} {...invalido(problemas.quemRetira, "entrega-quem")} />
-          </Campo>
           <div className="grid grid-cols-2 gap-3">
-            <Campo id="entrega-documento" rotulo="Documento">
-              <Input id="entrega-documento" value={form.documento} onChange={(event) => set("documento", event.target.value)} />
+            <Campo id="entrega-quem" rotulo="Quem retira" problema={problemas.quemRetira}>
+              <Input id="entrega-quem" value={form.quemRetira} onChange={(event) => set("quemRetira", event.target.value)} {...invalido(problemas.quemRetira, "entrega-quem")} />
             </Campo>
             <Campo id="entrega-placa" rotulo="Placa do veículo" problema={problemas.placa}>
               <Input id="entrega-placa" value={form.placa} onChange={(event) => set("placa", event.target.value)} {...invalido(problemas.placa, "entrega-placa")} />
