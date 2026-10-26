@@ -68,8 +68,9 @@ describe("callables da Operação", () => {
     }
   });
 
-  it("a rotina da retenção roda uma instância de cada vez", () => {
+  it("a rotina da retenção roda uma instância de cada vez, com os avisos e as fotos da OS, uma parte sem segurar a outra", () => {
     assert.match(index, /export const runOperacaoRetention = onSchedule\(\{[^}]*maxInstances: 1[^}]*\}/);
+    assert.match(index, /await Promise\.allSettled\(\[runRetentionFor\(db\), runPhotoRetentionFor\(db, apagarDoBucket\)\]\)/);
   });
 
   it("a rotina dos avisos roda uma instância de cada vez e só envia de verdade com a chave do Resend", () => {

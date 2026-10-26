@@ -412,7 +412,7 @@ removidas justamente por induzirem a erro.
   `docs/plataforma/lgpd.md` (25/10/2026, com as decisões do Leonardo de
   26/10). A retenção roda por codebase, cada uma no que é dela, com a
   liberação própria (`RETENCAO_AMBIENTES_LIBERADOS`), primeiro na
-  homologação; hoje, a dos avisos e e-mails da Operação
+  homologação; hoje, a dos avisos e e-mails e a das fotos da OS, na Operação
   (`runOperacaoRetention`), a do Agent Dute, no núcleo
   (`runAgentRetention`), a das contas removidas, no WMS
   (`runAccountRetention`, com a lista `ACCOUNT_RETENTION_PROJECTS`), e a das

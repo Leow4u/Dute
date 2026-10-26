@@ -474,7 +474,9 @@ muda o sistema: cada mudança entra num PR próprio, depois da decisão.
    prazo de guarda dos documentos fiscais da NF.
 2. **Fotos das etapas, das ocorrências e da vistoria:** como recomendado,
    12 meses depois de a OS ficar revisada. A foto ligada a divergência
-   cobrada ou a aditivo segue o item 1.
+   cobrada ou a aditivo segue o item 1. **Entrou em 26/10/2026** (seção 6,
+   parte 2), ligada só na homologação; apaga quando a conta das Functions
+   puder apagar no bucket.
 3. **Documento do responsável e de quem retira:** como recomendado. Deixa
    de pedir o número: na conclusão, nome, cargo e assinatura; na retirada,
    nome e placa. A mudança no formulário vem com o alinhamento da tela.
@@ -525,6 +527,7 @@ guarda só as contagens.
 | 8b | Mensagem e registro de uso do Agent Dute (`agent_messages`, `agent_usage`) e conversa parada (`agent_conversations`); da conversa em uso, o título e o resumo das mensagens que saíram | 12 meses depois de criados; a conversa, 12 meses depois da última mensagem | `runAgentRetention` (núcleo, 03:40) | homologação |
 | 8c | Conta do Firebase Auth de quem teve o acesso removido; do perfil (`users`), o nome, o e-mail e o motivo; do convite usado, o nome e o e-mail; as rotinas do Agent Dute da pessoa | 12 meses depois de o acesso sair | `runAccountRetention` (WMS, 03:50) | homologação |
 | 7 | Da versão substituída da exportação do RH (`exportacoes`, banco `dute-rh`), as linhas: nome e CPF de cada colaborador, e os exames | 30 dias depois de a versão seguinte da competência ser gerada | `runRhRetention` (RH, 04:00) | homologação |
+| 2 | As fotos das etapas, das ocorrências e da vistoria (`os/{numero}/fotos/`, e a entrada delas na OS); ficam as do final e a assinatura da OS de serviço, e todas na OS com divergência cobrada ou aditivo | 12 meses depois de a OS ficar revisada | `runOperacaoRetention` (Operação, 03:20, com a 8a) | homologação, sem apagar até a conta das Functions ter permissão de apagar no bucket |
 
 ### Parte 8a: os avisos e os e-mails (decisão 8)
 
@@ -725,8 +728,82 @@ Feita em 26/10/2026, no RH, dono da exportação (parte 8.3).
 - **Para desligar:** tirar o projeto da lista e publicar. As linhas que saíram
   voltam só pelo backup do `dute-rh`, para um banco novo.
 
+### Parte 2: as fotos das etapas, das ocorrências e da vistoria (decisão 2)
+
+Feita em 26/10/2026, na Operação, dona das fotos da OS (parte 3.7c).
+
+- **Quando:** 12 meses depois de a OS ficar revisada. A OS não guarda o dia
+  em que ficou revisada; a rotina usa o da revisão (`revisao.instante`) na
+  OS de serviço e o do envio ao Comercial (`vistoria.registrado_em`) na
+  vistoria. A OS reaberta e revisada de novo conta da última revisão.
+- **O que sai:** o arquivo no Storage (`os/{numero}/fotos/ft_…`) e a entrada
+  da foto na OS, com a legenda.
+  - Na vistoria, sai também o id da foto nos ambientes.
+  - Só sai o arquivo da própria OS, no caminho das fotos.
+- **O que fica:**
+  - na OS de serviço, as fotos do final (etapa `fim`, as do comprovante) e a
+    assinatura, pela decisão 1;
+  - na OS com divergência cobrada ou aditivo (`cobrar` ou `aditivo` numa
+    linha da revisão, inclusive numa revisão de antes da reabertura), todas
+    as fotos. A foto não aponta para a linha da revisão: nenhuma tela grava
+    o item da foto, e a do campo grava a ocorrência só na legenda. Qualquer
+    foto pode ser a prova da cobrança, então a OS inteira segue a decisão 1;
+  - o evento `os.photo_attached` de cada foto, que tem o id, sem o caminho
+    nem a legenda.
+- **A marca:** a OS ganha `retencao_das_fotos` (quando, quantas saíram,
+  quantas ficaram e, na OS com cobrança, o motivo) e não volta à rotina.
+- **O evento:** `os.photos_removed`, um por OS que perdeu fotos, com quantas
+  saíram, quantas ficaram e o dia da revisão. Sem o arquivo nem a legenda.
+  Quem grava é a rotina (autor `sistema`).
+- **Nas telas:**
+  - a foto que saiu some da ficha da OS e do app do campo, e a contagem cai;
+  - a tela do orçamento lê as fotos da vistoria do resumo da demanda, que
+    continua com os caminhos: depois dos 12 meses, o quadro da foto fica
+    vazio.
+  - Nenhuma tela muda.
+- **A ordem:** o arquivo sai primeiro, e a OS, depois, numa transação que a
+  relê.
+  - A falha do bucket deixa a OS como estava para o dia seguinte.
+  - A gravação não mexe no `updated_at` da OS, que puxaria a OS antiga para
+    a leitura do dia da TV.
+- **A rotina:**
+  - a mesma `runOperacaoRetention` da parte 8a, às 03:20, uma instância por
+    vez, com as duas partes em paralelo: uma não segura a outra;
+  - até 50 OS por rodada, e o resto fica para o dia seguinte.
+- **A permissão:** apagar no bucket pede `storage.objects.delete`, e os dois
+  papéis que a conta de runtime das Functions tem no bucket padrão
+  (`docs/deploy-functions-manual.md`, seção 5) não apagam.
+  - Sem a permissão, a rotina para na primeira recusa, o log mostra
+    `sem_permissao: true` e nenhuma OS muda.
+  - Quem dá o papel é o Leonardo.
+- **A liberação:** a mesma `RETENCAO_AMBIENTES_LIBERADOS` da Operação, só o
+  `dute-homolog`.
+- **Testes:**
+  - `retencao-das-fotos.test.ts`: o prazo, o relógio de cada tipo, a
+    cobrança (também na revisão anterior), o que sai e o que fica na OS de
+    serviço e na vistoria;
+  - `retencao-das-fotos.integration.test.ts`, no emulador, com o bucket
+    falso:
+    - saem as fotos das etapas e das ocorrências, ficam as do final e a
+      assinatura, e o `updated_at` não muda;
+    - a revisada há menos tempo, a em revisão e a com cobrança ficam com as
+      fotos;
+    - o evento só com as contagens;
+    - a vistoria perde todas, também nos ambientes;
+    - rodar de novo não apaga nem grava mais nada;
+    - a falha do bucket deixa a OS para o dia seguinte, e a recusa por
+      permissão para a rodada;
+    - a leitura em páginas chega a todas as OS, pelos dois relógios;
+    - o que não coube na rodada fica para a próxima;
+  - `events.test.ts` e `callables.test.ts`, com o tipo novo e a rotina que
+    roda as duas partes.
+- **Para desligar:** tirar o projeto da lista e publicar. A foto apagada não
+  volta: o backup do Firestore não guarda o Storage.
+
 ## Dúvidas
 
+- **A OS cancelada com fotos.** A decisão 2 conta da OS revisada; a OS
+  cancelada depois de começar a execução fica com as fotos, sem prazo.
 - **EXIF das fotos.** O app sobe o arquivo escolhido sem regravar
   (`artifacts/app/src/lib/operacao/enviar-foto.ts:34`). Se a foto da câmera
   traz GPS nos metadados depende do aparelho e do navegador; não dá para saber

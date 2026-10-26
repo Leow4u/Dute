@@ -54,6 +54,7 @@ export const OPERACAO_EVENT_TYPES = [
   "os.survey_opened",
   "os.survey_sent",
   "os.warehouse_return_due",
+  "os.photos_removed",
   "demand.direct_opened",
   "demand.storage_opened",
   "demand.execution_reviewed",
@@ -285,6 +286,15 @@ const retencaoAplicada = z
   })
   .strict();
 
+/**
+ * As fotos das etapas, das ocorrências e da vistoria que saíram 12 meses
+ * depois de a OS ficar revisada (LGPD, decisão 2): quantas saíram, quantas
+ * ficaram (as do final) e o dia da revisão. Sem o arquivo nem a legenda.
+ */
+const fotosApagadas = z
+  .object({ id: osId, demanda: demandaNumero, fotos: quantos.min(1), ficaram: quantos, revisada_em: data })
+  .strict();
+
 export const OPERACAO_EVENT_PAYLOADS = {
   "collaborator.created": criado,
   "collaborator.updated": colaboradorAlterado,
@@ -315,6 +325,7 @@ export const OPERACAO_EVENT_PAYLOADS = {
   "os.survey_opened": vistoriaAberta,
   "os.survey_sent": vistoriaEnviada,
   "os.warehouse_return_due": retornoAoArmazem,
+  "os.photos_removed": fotosApagadas,
   "demand.direct_opened": demandaDireta,
   "demand.storage_opened": demandaDoArmazem,
   "demand.execution_reviewed": execucaoRevisada,
@@ -364,6 +375,10 @@ const TEXTO: Record<OperacaoEventType, { title: string; description: string }> =
   "os.warehouse_return_due": {
     title: "Retorno ao armazém",
     description: "A OS de volta da entrega do WMS terminou: o WMS confere e recebe o que voltou.",
+  },
+  "os.photos_removed": {
+    title: "Fotos da OS apagadas",
+    description: "Doze meses depois da revisão, as fotos das etapas, das ocorrências e da vistoria saíram; as do final e a assinatura ficam.",
   },
   "demand.direct_opened": { title: "Demanda direta aberta", description: "A demanda chegou direto na Operação e se orça depois da execução." },
   "demand.storage_opened": {

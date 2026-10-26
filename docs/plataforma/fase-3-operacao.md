@@ -677,7 +677,10 @@ OS. Regras em `domain/fotos.ts`, gravação em `domain/fotos-gravacao.ts`.
   8 MB, só imagem. Sobe quem coordena a Operação (owner, admin, interno) ou
   quem está escalado na OS (`equipe_uids`, o mesmo critério do
   `firestore.rules`), com a OS agendada ou em execução. Lê também o suporte.
-  Nada se sobrescreve nem apaga. As regras têm teste no emulador
+  Nada se sobrescreve nem apaga pelo navegador; a retenção (LGPD, decisão 2)
+  apaga as fotos das etapas, das ocorrências e da vistoria 12 meses depois de
+  a OS ficar revisada (`docs/plataforma/lgpd.md`, seção 6, parte 2). As
+  regras têm teste no emulador
   (`functions/wms/src/operacao-fotos.rules.test.ts`); a integração do WMS
   sobe agora o Firestore e o Storage.
 - **`attachPhoto`.** Confere no Storage que o arquivo chegou e é imagem e
