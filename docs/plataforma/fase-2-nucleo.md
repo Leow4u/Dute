@@ -597,3 +597,71 @@ produção.
   - sem a conta, remover vale, e devolver pede o convite.
 
   Com o comportamento anterior, o primeiro falha.
+
+### Pergunta 69: arquivar e "Sem portal" cortam o portal
+
+Decidida pelo Leonardo e feita no servidor em 26/10/2026. A tela que explica
+o corte à pessoa do cliente vem com o alinhamento.
+
+- **O problema.** Arquivar o cliente ou pôr "Portal do cliente: Sem portal"
+  (Configurações › Clientes) não cortava as pessoas dele. As portas olhavam
+  só os módulos do contrato, que o arquivo mantém. As pessoas do cliente
+  seguiam lendo os dados e pedindo pelo portal, e os convites pendentes
+  seguiam valendo.
+- **A decisão.** Arquivar e "Sem portal" cortam o portal. O portal ativo fica
+  gravado no `client_access`, e as portas e o convite o conferem. Os logins
+  ficam.
+- **A correção:**
+  - `client_access/{customer_code}` ganha `portal_ativo`, gravado na mesma
+    transação do cadastro (`clientAccessProjection`, com
+    `portalAtivoDoCadastro`). É falso no arquivado e no "Sem portal"; o
+    modelo sem portal já grava "Sem portal". Sem o documento, ou sem o
+    campo, o portal segue ligado, como antes.
+  - As portas recusam com a mesma frase, "O portal do seu cliente está
+    desligado.":
+    - as callables do WMS e a rotina do agente do WMS
+      (`wmsAccessProblem`, antes do contrato);
+    - o pedido de OS pelo portal e o sino da Operação (`domain/profile.ts`);
+    - o Agent Dute do núcleo para o cliente (`escopoDoAgente`).
+  - As regras do Firestore: `isOwnProjection()` passa a conferir o portal
+    (estoque, pedidos, solicitações, documentos, faturas, OS, avisos e
+    valores), e também o `client_portal_status` e o chat do agente. O
+    perfil (`client_profiles`) segue legível: é por ele que o app vai saber
+    que o portal está desligado.
+  - O Storage: o anexo da solicitação de OS.
+  - O convite: o convite novo para o cliente "Sem portal" é recusado ("O
+    cliente X está sem portal."; o do arquivado já era). O aceite do convite
+    pendente do cliente com o portal desligado não cria o perfil (a regra do
+    `users`).
+  - A equipe não depende do portal do cliente.
+- **O que fica de fora:**
+  - a tela: a pessoa do cliente com o portal desligado vê as recusas, sem a
+    explicação, até o alinhamento;
+  - os avisos por e-mail aos contatos continuam saindo, com o link do portal
+    (pergunta 71 do plano);
+  - o cadastro arquivado ou "Sem portal" antes desta parte não tem o campo,
+    e o portal dele segue ligado:
+    - o "Sem portal" se corta gravando o cadastro de novo;
+    - o arquivado, removendo o acesso das pessoas dele em Pessoas e acessos;
+    - na produção, em 26/10, o `client_access` não tinha nenhum documento
+      (o teste de restauração listou as coleções);
+  - a BTG continua recebendo convite sem a conferência do cadastro (a trava
+    antiga, `customer-invite.ts`); o aceite confere o portal.
+- **Testes:**
+  - WMS:
+    - `customer-profile.test.ts`: a projeção leva o portal, desligado no
+      arquivado, no "Sem portal" e no modelo sem portal, e religado no
+      "Ativo"; a leitura do campo;
+    - `platform-roles.test.ts` e `customer-invite.test.ts`: a porta e o
+      convite;
+    - `customer-profile.integration.test.ts`: a leitura no emulador, com e
+      sem o campo;
+    - `callables-auth.integration.test.ts`: toda callable recusa o cliente
+      com o portal desligado, na porta;
+    - `firestore.rules.test.ts`: cada leitura e gravação do cliente passa
+      com o portal ligado e é recusada com ele desligado; o perfil segue
+      legível; o aceite do convite; o outro cliente e a equipe;
+    - `operacao-solicitacoes.rules.test.ts`: as solicitações e o anexo no
+      Storage.
+  - Operação: `profile.integration.test.ts`, o pedido pelo portal e o sino.
+  - Núcleo: `agente-escopo.integration.test.ts`.

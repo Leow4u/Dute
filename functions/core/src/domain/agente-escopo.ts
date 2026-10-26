@@ -85,9 +85,17 @@ export async function cadastroDoClienteAtivo(db: Firestore, customerCode: string
   throw new HttpsError("failed-precondition", `O cliente ${customerCode} está arquivado.`);
 }
 
-async function modulosContratados(db: Firestore, customerCode: string): Promise<ContractedModule[]> {
+/**
+ * Os módulos contratados e o portal do cliente (`client_access`). Sem o
+ * documento valem armazenagem e faturas, com o portal ligado; sem o campo
+ * `portal_ativo` (a projeção de antes da pergunta 69), também ligado.
+ */
+async function acessoDoCliente(db: Firestore, customerCode: string): Promise<{ modulos: ContractedModule[]; portalAtivo: boolean }> {
   const acesso = await db.collection(CLIENT_ACCESS_COLLECTION).doc(customerCode).get();
-  return contractedModulesFrom(acesso.exists ? acesso.get("modules") : undefined);
+  return {
+    modulos: contractedModulesFrom(acesso.exists ? acesso.get("modules") : undefined),
+    portalAtivo: !acesso.exists || acesso.get("portal_ativo") !== false,
+  };
 }
 
 /** O escopo da conversa: o cliente, o módulo e os módulos da pessoa. Recusa o que não vale. */
@@ -106,7 +114,10 @@ export async function escopoDoAgente(db: Firestore, caller: CoreProfile, data: u
     customerCode = pedido.customer_code;
     cadastro = await cadastroDoClienteAtivo(db, customerCode);
   }
-  const modulos = modulosDoEscopo(caller.role, await modulosContratados(db, customerCode));
+  const acesso = await acessoDoCliente(db, customerCode);
+  // Arquivar o cliente ou pôr "Sem portal" corta o portal, e o agente é do portal (pergunta 69).
+  if (caller.role === "cliente" && !acesso.portalAtivo) throw new HttpsError("permission-denied", "O portal do seu cliente está desligado.");
+  const modulos = modulosDoEscopo(caller.role, acesso.modulos);
   if (!modulos.length) throw new HttpsError("permission-denied", "O Agent Dute não tem módulo para você neste cliente.");
   if (!modulos.includes(pedido.modulo)) throw new HttpsError("permission-denied", "O Agent Dute não atende esse módulo para você neste cliente.");
   return {

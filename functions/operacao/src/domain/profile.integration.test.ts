@@ -129,6 +129,15 @@ describe("o cliente no portal (parte 4.4a)", () => {
     }
   });
 
+  it("com o portal desligado (arquivado ou \"Sem portal\"), recusa antes do contrato (pergunta 69)", async () => {
+    await db.doc("client_access/ITAU").set({ customer_code: "ITAU", modules: ["wms", "operacao", "financeiro"], portal_ativo: false });
+    const error = await rejection(getProfile(db, request("cli-itau"), { portal: true }));
+    assert.deepEqual([error.code, error.message], ["permission-denied", "O portal do seu cliente está desligado."]);
+    // Sem o campo (a projeção de antes), o portal segue ligado.
+    await db.doc("client_access/ITAU").set({ customer_code: "ITAU", modules: ["wms", "operacao", "financeiro"] });
+    assert.equal((await getProfile(db, request("cli-itau"), { portal: true })).customer_code, "ITAU");
+  });
+
   it("nenhuma outra callable atende o cliente, nem com a Operação no contrato", async () => {
     for (const opcoes of [{}, { campo: true as const }, { painel: true as const }]) {
       const error = await rejection(getProfile(db, request("cli-itau"), opcoes));
@@ -143,6 +152,13 @@ describe("o cliente no sino do portal (parte 4.6c)", () => {
       const cliente = await requireOperacaoCaller(db, request(uid), "dute-homolog", { sino: true });
       assert.deepEqual([cliente.role, cliente.customer_code], ["cliente", codigo], uid);
     }
+  });
+
+  it("com o portal desligado (arquivado ou \"Sem portal\"), recusa (pergunta 69)", async () => {
+    await db.doc("client_access/SAFRA").set({ customer_code: "SAFRA", modules: ["wms", "financeiro"], portal_ativo: false });
+    const error = await rejection(getProfile(db, request("cli-safra"), { sino: true }));
+    assert.deepEqual([error.code, error.message], ["permission-denied", "O portal do seu cliente está desligado."]);
+    assert.equal((await getProfile(db, request("cli-itau"), { sino: true })).customer_code, "ITAU");
   });
 
   it("sem código ou da equipe, recusa; fora da liberação, também", async () => {

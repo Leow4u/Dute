@@ -99,6 +99,16 @@ describe("service_requests no Firestore", () => {
     await assertFails(getDoc(doc(testEnvironment.unauthenticatedContext().firestore(), "service_requests", SOL_ITAU)));
   });
 
+  it("com o portal desligado (arquivado ou \"Sem portal\"), o cliente não lê as próprias; quem coordena continua lendo (pergunta 69)", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "client_access", "ITAU"), { customer_code: "ITAU", modules: ["wms", "operacao", "financeiro"], portal_ativo: false });
+    });
+    await assertFails(getDoc(doc(firestore("client-itau"), "service_requests", SOL_ITAU)));
+    await assertFails(getDocs(query(collection(firestore("client-itau"), "service_requests"), where("customer_code", "==", "ITAU"))));
+    await assertSucceeds(getDoc(doc(firestore("ops-a"), "service_requests", SOL_ITAU)));
+    await assertSucceeds(getDoc(doc(firestore("client-safra"), "service_requests", SOL_SAFRA)));
+  });
+
   it("ninguém grava pelo navegador, nem o cliente na própria solicitação", async () => {
     for (const uid of ["owner-a", "ops-a", "client-itau"]) {
       await assertFails(setDoc(doc(firestore(uid), "service_requests", "sol_aaaaaaaaaaaaaaaa"), { customer_code: "ITAU", status: "recebida" }));
@@ -137,6 +147,17 @@ describe("anexo da solicitação no Storage", () => {
     await assertSucceeds(subir("client-itau", "ITAU", "an_2222222222222224.pdf"));
     await assertFails(subir("client-itau", "ITAU", "an_2222222222222224.pdf"));
     await assertFails(storage("client-itau").ref("portal/ITAU/solicitacoes/an_2222222222222224.pdf").delete());
+  });
+
+  it("com o portal desligado (arquivado ou \"Sem portal\"), o cliente não sobe nem lê o anexo; quem coordena continua lendo (pergunta 69)", async () => {
+    await assertSucceeds(subir("client-itau", "ITAU", "an_4444444444444441.pdf"));
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "client_access", "ITAU"), { customer_code: "ITAU", modules: ["wms", "operacao", "financeiro"], portal_ativo: false });
+    });
+    await assertFails(subir("client-itau", "ITAU", "an_4444444444444442.pdf"));
+    const caminho = "portal/ITAU/solicitacoes/an_4444444444444441.pdf";
+    await assertFails(storage("client-itau").ref(caminho).getMetadata());
+    await assertSucceeds(storage("ops-a").ref(caminho).getMetadata());
   });
 
   it("quem coordena, o suporte e o próprio cliente leem; o outro cliente e o resto da equipe, não", async () => {

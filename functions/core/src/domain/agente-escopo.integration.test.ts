@@ -74,6 +74,13 @@ describe("o escopo da conversa", () => {
     await assert.rejects(escopoDoAgente(db, { ...cliente, customerCode: undefined }, { modulo: "wms" }), negado(/sem cliente/));
   });
 
+  it("o cliente com o portal desligado (arquivado ou \"Sem portal\") não fala com o agente; a equipe fala do cliente (pergunta 69)", async () => {
+    await db.collection("client_access").doc("ITAU").set({ customer_code: "ITAU", modules: ["wms", "operacao", "financeiro"], portal_ativo: false });
+    await assert.rejects(escopoDoAgente(db, cliente, { modulo: "wms" }), negado(/^O portal do seu cliente está desligado\.$/));
+    const daEquipe = await escopoDoAgente(db, interno, { modulo: "wms", customer_code: "ITAU" });
+    assert.deepEqual([daEquipe.audiencia, daEquipe.customerCode], ["equipe", "ITAU"]);
+  });
+
   it("a equipe fala do cliente ativo, que precisa estar no cadastro, ativo e não prospect", async () => {
     const escopo = await escopoDoAgente(db, interno, { modulo: "wms", customer_code: "SAFRA" });
     assert.deepEqual([escopo.audiencia, escopo.customerCode, escopo.modulos, escopo.leValor, escopo.modeloDeOperacao], ["equipe", "SAFRA", ["wms"], false, null]);

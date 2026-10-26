@@ -14,6 +14,8 @@ import {
   contractedModulesFrom,
   customerCodeProblem,
   normalizeSkuPrefix,
+  portalAtivoDoCadastro,
+  portalAtivoFrom,
   resolveContractedModules,
   resolveOperationTemplate,
 } from "./customer-profile.js";
@@ -296,5 +298,35 @@ describe("projeção client_access", () => {
 
   it("cadastro antigo com código que não serve de id fica sem projeção", () => {
     assert.equal(clientAccessProjection("BTG_SP", { code: "BTG/SP" }, {}), null);
+  });
+
+  it("leva o portal ligado; arquivar e \"Sem portal\" o desligam, e voltar a \"Ativo\" o religa (pergunta 69)", () => {
+    const ativo = create({ code: "Itaú", name: "Itaú", sku_prefix: "ITAU" });
+    assert.equal(clientAccessProjection("Itau", ativo, {})?.data.portal_ativo, true);
+    const before = { code: "Itaú", name: "Itaú", sku_prefix: "ITAU", status: "active", portal_status: "active", modules: ["wms"] };
+    const archived = buildCustomerPayload({ action: "archive", data: {}, before, documentId: "Itau", actorUid: actor });
+    assert.equal(clientAccessProjection("Itau", archived, before)?.data.portal_ativo, false);
+    const update = (data: Record<string, unknown>, anterior: Record<string, unknown>) =>
+      buildCustomerPayload({ action: "update", data, before: anterior, documentId: "Itau", actorUid: actor });
+    const semPortal = update({ portal_status: "inactive" }, before);
+    assert.equal(clientAccessProjection("Itau", semPortal, before)?.data.portal_ativo, false);
+    const religado = update({ portal_status: "active" }, { ...before, portal_status: "inactive" });
+    assert.equal(clientAccessProjection("Itau", religado, { ...before, portal_status: "inactive" })?.data.portal_ativo, true);
+    // O modelo sem portal grava "Sem portal", e a projeção acompanha.
+    const insumos = create({ code: "Dutelog", name: "Dutelog", sku_prefix: "DUT", operation_template: "insumos" });
+    assert.equal(clientAccessProjection("Dutelog", insumos, {})?.data.portal_ativo, false);
+  });
+
+  it("o portal do cadastro: arquivado ou \"Sem portal\" está desligado; sem o campo, ligado", () => {
+    assert.equal(portalAtivoDoCadastro({}), true);
+    assert.equal(portalAtivoDoCadastro({ portal_status: "active", status: "active" }), true);
+    assert.equal(portalAtivoDoCadastro({ portal_status: "inactive" }), false);
+    assert.equal(portalAtivoDoCadastro({ archived: true, portal_status: "active" }), false);
+    assert.equal(portalAtivoDoCadastro({ status: "archived" }), false);
+  });
+
+  it("a leitura: só o false desliga; sem o campo (projeção antiga) o portal segue ligado", () => {
+    assert.equal(portalAtivoFrom(false), false);
+    for (const valor of [true, undefined, null, "false", 0]) assert.equal(portalAtivoFrom(valor), true, String(valor));
   });
 });

@@ -153,11 +153,20 @@ service firebase.storage {
         : ['wms', 'financeiro'];
     }
 
+    // Arquivar o cliente ou pôr "Sem portal" corta o portal (pergunta 69, o
+    // mesmo critério do firestore.rules). Sem o documento, ou sem o campo, o
+    // portal segue ligado.
+    function portalDoClienteAtivo(code) {
+      return !firestore.exists(/databases/(default)/documents/client_access/$(code))
+        || firestore.get(/databases/(default)/documents/client_access/$(code)).data.get('portal_ativo', true) != false;
+    }
+
     function clienteComOperacao(code) {
       return hasProfile()
         && profileRole() == 'cliente'
         && firestore.get(userDoc()).data.get('customer_code', '') == code
-        && 'operacao' in modulosDoCliente(code);
+        && 'operacao' in modulosDoCliente(code)
+        && portalDoClienteAtivo(code);
     }
 
     match /portal/{code}/solicitacoes/{arquivo} {

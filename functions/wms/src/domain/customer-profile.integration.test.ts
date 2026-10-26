@@ -4,7 +4,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
-import { assertCustomerIdentityAvailable, assertSkuPrefixAvailable, readContractedModules } from "./customer-profile.js";
+import { assertCustomerIdentityAvailable, assertSkuPrefixAvailable, readClientAccess, readContractedModules } from "./customer-profile.js";
 
 const PROJECT_ID = "demo-dute-operations";
 
@@ -106,5 +106,14 @@ describe("módulos contratados pelo código (client_access)", () => {
   it("código que não serve de id não quebra a leitura", async () => {
     assert.deepEqual(await readContractedModules(db, "BTG/SP"), ["wms", "financeiro"]);
     assert.deepEqual(await readContractedModules(db, ""), ["wms", "financeiro"]);
+  });
+
+  it("o portal: desligado só com portal_ativo false; sem o documento ou sem o campo, ligado", async () => {
+    assert.deepEqual(await readClientAccess(db, "BTG Pactual"), { modules: ["wms", "financeiro"], portalAtivo: true });
+    await db.collection("client_access").doc("Antigo").set({ customer_code: "Antigo", modules: ["wms"] });
+    assert.deepEqual(await readClientAccess(db, "Antigo"), { modules: ["wms"], portalAtivo: true });
+    await db.collection("client_access").doc("Antigo").set({ customer_code: "Antigo", modules: ["wms"], portal_ativo: false });
+    assert.deepEqual(await readClientAccess(db, "Antigo"), { modules: ["wms"], portalAtivo: false });
+    assert.deepEqual(await readClientAccess(db, "BTG/SP"), { modules: ["wms", "financeiro"], portalAtivo: true });
   });
 });

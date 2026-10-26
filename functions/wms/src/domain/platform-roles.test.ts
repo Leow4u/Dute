@@ -45,4 +45,12 @@ describe("acesso às callables do WMS", () => {
     assert.match(wmsAccessProblem("cliente", ["financeiro"]) ?? "", /não inclui armazenagem/);
     assert.match(wmsAccessProblem("cliente", null) ?? "", /não inclui armazenagem/);
   });
+
+  it("cliente com o portal desligado (arquivado ou \"Sem portal\") é recusado antes do contrato", () => {
+    assert.equal(wmsAccessProblem("cliente", ["wms"], false), "O portal do seu cliente está desligado.");
+    assert.equal(wmsAccessProblem("cliente", ["operacao"], false), "O portal do seu cliente está desligado.");
+    assert.equal(wmsAccessProblem("cliente", ["wms"], true), null);
+    // O portal é do cliente: a equipe não depende dele.
+    assert.equal(wmsAccessProblem("interno", null, false), null);
+  });
 });

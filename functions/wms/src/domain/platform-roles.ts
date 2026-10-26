@@ -46,15 +46,21 @@ export function isPlatformRole(value: unknown): value is PlatformRole {
 
 /**
  * Por que a pessoa não pode usar as callables do WMS, ou null quando pode.
- * Nega por padrão: papel da plataforma que o WMS não atende, e cliente cujo
- * contrato não tem armazenagem. `modules` só importa para o cliente.
+ * Nega por padrão: papel da plataforma que o WMS não atende, cliente com o
+ * portal desligado (arquivado ou "Sem portal", pergunta 69) e cliente cujo
+ * contrato não tem armazenagem. `modules` e `portalAtivo` só importam para o
+ * cliente.
  */
 export function wmsAccessProblem(
   role: PlatformRole,
   modules: readonly ContractedModule[] | null,
+  portalAtivo = true,
 ): string | null {
   if (!(WMS_ROLES as readonly string[]).includes(role)) {
     return "Seu perfil ainda não tem acesso a esta ação.";
+  }
+  if (role === "cliente" && !portalAtivo) {
+    return "O portal do seu cliente está desligado.";
   }
   if (role === "cliente" && !(modules ?? []).includes("wms")) {
     return "O contrato do seu cliente não inclui armazenagem.";

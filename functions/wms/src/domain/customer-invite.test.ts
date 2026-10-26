@@ -29,6 +29,11 @@ describe("convite de usuário cliente", () => {
     assert.match(problem("Itaú", [{ ...comSigla, status: "archived" }]) ?? "", /arquivado/);
   });
 
+  it("cliente \"Sem portal\" não recebe convite (pergunta 69)", () => {
+    assert.equal(problem("Itaú", [{ ...comSigla, portal_status: "inactive" }]), "O cliente Itaú está sem portal.");
+    assert.equal(problem("Itaú", [{ ...comSigla, portal_status: "active" }]), null);
+  });
+
   it("código sem cadastro não recebe convite", () => {
     assert.match(problem("Inexistente", []) ?? "", /não está cadastrado/);
     assert.match(problem("itaú", [comSigla]) ?? "", /não está cadastrado/);

@@ -45,9 +45,16 @@ const CASOS: Array<{ caso: string; uid: string | null; code: string; message: st
     code: "permission-denied",
     message: "O contrato do seu cliente não inclui armazenagem.",
   },
+  {
+    caso: "cliente com o portal desligado (arquivado ou \"Sem portal\")",
+    uid: "cliente-sem-portal",
+    code: "permission-denied",
+    message: "O portal do seu cliente está desligado.",
+  },
 ];
 
 const CLIENTE_SO_OPERACAO = "Cliente da Operação";
+const CLIENTE_SEM_PORTAL = "Cliente arquivado";
 
 let callables: Map<string, Callable>;
 
@@ -99,6 +106,9 @@ before(async () => {
   for (const role of FORA_DO_WMS) await users.doc(role).set({ role, nome: role });
   await users.doc("cliente-operacao").set({ role: "cliente", nome: "Cliente", customer_code: CLIENTE_SO_OPERACAO });
   await db.collection(CLIENT_ACCESS_COLLECTION).doc(CLIENTE_SO_OPERACAO).set({ customer_code: CLIENTE_SO_OPERACAO, modules: ["operacao"] });
+  // Com armazenagem no contrato: o que recusa é o portal desligado.
+  await users.doc("cliente-sem-portal").set({ role: "cliente", nome: "Cliente", customer_code: CLIENTE_SEM_PORTAL });
+  await db.collection(CLIENT_ACCESS_COLLECTION).doc(CLIENTE_SEM_PORTAL).set({ customer_code: CLIENTE_SEM_PORTAL, modules: ["wms", "financeiro"], portal_ativo: false });
 });
 
 describe("a porta das callables do WMS", () => {

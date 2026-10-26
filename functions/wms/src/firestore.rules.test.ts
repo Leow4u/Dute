@@ -17,6 +17,7 @@ import {
   getDoc,
   getDocs,
   query,
+  serverTimestamp,
   setDoc,
   updateDoc,
   where,
@@ -1126,6 +1127,83 @@ describe("módulos contratados do cliente (Fase 2)", () => {
     await assertFails(getDoc(doc(signedAs("client-b"), "ops_aggregates", "dashboard")));
     await assertSucceeds(getDoc(doc(signedAs("ops-a"), "ops_aggregates", "dashboard")));
     await assertSucceeds(getDoc(doc(signedAs("finance-a"), "ops_aggregates", "dashboard")));
+  });
+});
+
+describe("portal desligado: cliente arquivado ou \"Sem portal\" (pergunta 69)", () => {
+  async function portal(customerCode: string, ativo: boolean) {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "client_access", customerCode), {
+        customer_code: customerCode,
+        modules: ["wms", "operacao", "financeiro"],
+        portal_ativo: ativo,
+      });
+    });
+  }
+
+  const LEITURAS = [
+    ["client_inventory", "inventory-a"],
+    ["client_order_tracking", "order-a"],
+    ["client_request_status", "request-a"],
+    ["client_documents", "doc-visivel"],
+    ["client_invoices", "invoice-a"],
+    ["client_portal_status", CUSTOMER_A],
+    ["agent_conversations", "conv-a"],
+    ["agent_messages", "msg-a"],
+  ] as const;
+
+  function conversaNova(id: string) {
+    return setDoc(doc(signedAs("client-a"), "agent_conversations", id), {
+      id,
+      customer_code: CUSTOMER_A,
+      user_id: "client-a",
+      title: "Onde está meu pedido?",
+      status: "active",
+      created_at: serverTimestamp(),
+      updated_at: serverTimestamp(),
+    });
+  }
+
+  it("o cliente lê o portal com ele ligado e nada, nem em lista, com ele desligado; o perfil continua legível", async () => {
+    await portal(CUSTOMER_A, true);
+    const database = signedAs("client-a");
+    for (const [colecao, id] of LEITURAS) await assertSucceeds(getDoc(doc(database, colecao, id)));
+    await portal(CUSTOMER_A, false);
+    for (const [colecao, id] of LEITURAS) await assertFails(getDoc(doc(database, colecao, id)));
+    await assertFails(getDocs(query(collection(database, "client_inventory"), where("customer_code", "==", CUSTOMER_A))));
+    await assertFails(
+      getDocs(query(collection(database, "agent_messages"), where("customer_code", "==", CUSTOMER_A), where("user_id", "==", "client-a"))),
+    );
+    await assertSucceeds(getDoc(doc(database, "client_profiles", "profile-a")));
+  });
+
+  it("o cliente não abre conversa com o agente com o portal desligado", async () => {
+    await portal(CUSTOMER_A, true);
+    await assertSucceeds(conversaNova("conv-portal-ligado"));
+    await portal(CUSTOMER_A, false);
+    await assertFails(conversaNova("conv-portal-desligado"));
+  });
+
+  it("o convite do cliente com o portal desligado não cria o perfil", async () => {
+    const aceite = (uid: string) =>
+      setDoc(doc(testEnvironment.authenticatedContext(uid, { email: "invited@example.com" }).firestore(), "users", uid), {
+        nome: "Convidada",
+        email: "invited@example.com",
+        role: "cliente",
+        customer_code: CUSTOMER_A,
+        invite_id: "invite-a",
+      });
+    await portal(CUSTOMER_A, false);
+    await assertFails(aceite("convidada-sem-portal"));
+    await portal(CUSTOMER_A, true);
+    await assertSucceeds(aceite("convidada-com-portal"));
+  });
+
+  it("o portal desligado de um cliente não muda o outro cliente nem a equipe", async () => {
+    await portal(CUSTOMER_A, false);
+    await assertSucceeds(getDoc(doc(signedAs("client-b"), "client_portal_status", CUSTOMER_B)));
+    await assertSucceeds(getDoc(doc(signedAs("ops-a"), "client_inventory", "inventory-a")));
+    await assertSucceeds(getDoc(doc(signedAs("finance-a"), "client_invoices", "invoice-a")));
   });
 });
 
