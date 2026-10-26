@@ -1,7 +1,7 @@
 import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 
-import { FORMAS_DE_PAGAMENTO, data, falha } from "./fatura.js";
+import { FORMAS_DE_PAGAMENTO, data, falha, rotuloDaMedicao } from "./fatura.js";
 import { digest } from "./operations.js";
 
 /**
@@ -14,9 +14,9 @@ import { digest } from "./operations.js";
  *   saldo; quitado, a fatura fica paga e as demandas dela também.
  * - Vencida não é status gravado: é a fatura com saldo e vencimento antes de
  *   hoje (a tela calcula).
- * - Cancelar devolve as demandas a A faturar, a armazenagem à fila (parte
- *   7.2a) e libera as autorizações (tira a NF de `nf_ids`). A mesma NF pode
- *   ser registrada de novo depois.
+ * - Cancelar devolve as demandas a A faturar, a armazenagem e a medição à
+ *   fila (parte 7.2a, pergunta 64) e libera as autorizações (tira a NF de
+ *   `nf_ids`). A mesma NF pode ser registrada de novo depois.
  */
 
 export const PAGAMENTOS_COLLECTION = "pagamentos";
@@ -121,6 +121,8 @@ export type FaturaLida = {
   demanda_numeros: string[];
   /** As competências de armazenagem da NF (o id de `billing_periods`, parte 7.2a). */
   periodo_ids: string[];
+  /** As medições aprovadas da NF (pergunta 64). */
+  medicao_ids: string[];
   autorizacao_ids: string[];
   enviada: boolean;
   /** A NF que saiu pela Omie (parte 7.4d): a fatura nasceu da NFS-e autorizada. */
@@ -141,6 +143,7 @@ export function faturaLida(id: string, dados: Registro): FaturaLida {
     vencimento: texto(dados.vencimento),
     demanda_numeros: lista(dados.demanda_numeros),
     periodo_ids: lista(dados.periodo_ids),
+    medicao_ids: lista(dados.medicao_ids),
     autorizacao_ids: lista(dados.autorizacao_ids),
     enviada: Boolean(dados.enviada),
     origem_nf: dados.origem_nf === "omie" ? "omie" : null,
@@ -219,6 +222,13 @@ export function conferirCancelamento(fatura: FaturaLida): void {
   if (fatura.status === "cancelada") falha("A NF já está cancelada.");
   if (fatura.origem_nf === "omie") falha("A NF saiu pela Omie: o registro só se desfaz com a NFS-e cancelada na Omie.");
   if (fatura.recebido_cents > 0 || fatura.status === "paga") falha("A NF tem pagamento registrado: estorne os pagamentos antes de cancelar.");
+}
+
+/** A medição desta fatura (pergunta 64): o `faturamento` dela cita esta NF. */
+export function conferirMedicaoDaFatura(id: string, dados: Registro | null, faturaId: string): void {
+  if (!dados) throw new HttpsError("not-found", `Medição ${id} não encontrada.`);
+  const faturamento = dados.faturamento && typeof dados.faturamento === "object" ? (dados.faturamento as Registro) : {};
+  if (texto(faturamento.fatura_id) !== faturaId) falha(`A medição de ${rotuloDaMedicao(id)} não está nesta NF.`);
 }
 
 /** A demanda desta fatura, na etapa em que a cobrança espera encontrá-la. */

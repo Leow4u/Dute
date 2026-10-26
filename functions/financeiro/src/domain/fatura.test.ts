@@ -12,6 +12,9 @@ import {
   faturaIdDaNf,
   faturaIdDaNfse,
   interpretarRegistro,
+  medicaoLida,
+  medicaoNaFatura,
+  problemaDaMedicao,
   problemaParaFaturar,
   valorDaRv,
   valorNaMedicao,
@@ -64,6 +67,16 @@ describe("a entrada da NF", () => {
     assert.equal(recusa(() => interpretarRegistro({ ...PEDIDO, demandas: [] })).message, "Informe ao menos uma demanda.");
     assert.equal(recusa(() => interpretarRegistro({ ...PEDIDO, armazenagem: ["BTG Pactual__2026-09"] })).message, "Competência de armazenagem inválida.");
     assert.match(recusa(() => interpretarRegistro({ ...PEDIDO, armazenagem: ["2026-08", "2026-08"] })).message, /duas vezes/);
+  });
+
+  it("aceita a medição sozinha ou com as demandas; sem medição, o pedido fica como antes (pergunta 64)", () => {
+    // Sem a chave: o recibo de idempotência gravado antes da medição continua valendo.
+    assert.equal("medicoes" in interpretarRegistro(PEDIDO), false);
+    assert.deepEqual(interpretarRegistro({ ...PEDIDO, demandas: [], medicoes: ["ctr_safra_2026-10"] }).medicoes, ["ctr_safra_2026-10"]);
+    assert.equal(recusa(() => interpretarRegistro({ ...PEDIDO, demandas: [], medicoes: [] })).message, "Informe ao menos uma demanda.");
+    assert.equal(recusa(() => interpretarRegistro({ ...PEDIDO, medicoes: ["ctr_safra"] })).message, "Medição inválida.");
+    assert.match(recusa(() => interpretarRegistro({ ...PEDIDO, medicoes: ["a_2026-10", "a_2026-10"] })).message, /duas vezes/);
+    assert.equal(recusa(() => interpretarRegistro({ ...PEDIDO, medicoes: ["a_2026-01", "a_2026-02", "a_2026-03", "a_2026-04", "a_2026-05"] })).message, "Uma NF fecha até 4 medições.");
   });
 
   it("o id da fatura é o da NF: série e número, com ou sem zero à esquerda", () => {
@@ -155,6 +168,62 @@ describe("o valor da demanda", () => {
     assert.equal(recusa(() => valorNaMedicao("10052", medicao)).message, "A medição aprovada não tem linha da demanda 10052.");
   });
 
+  it("a medição aprovada: o total das linhas, as demandas na ordem e as linhas sem demanda pelo serviço (pergunta 64)", () => {
+    const dados = {
+      customer_code: "SAFRA",
+      contrato_id: "ctr_safra",
+      competencia: "2026-10",
+      status: "aprovada",
+      autorizacao_id: "aut_ctr_safra_2026-10",
+      total_cents: 266_500,
+      linhas: [
+        { demanda_numero: "10051", total_cents: 99_000, itens: [{ servico: "Montagem", total_cents: 99_000 }] },
+        { demanda_numero: "10050", total_cents: 30_000, itens: [] },
+        { demanda_numero: "10051", total_cents: 12_500, itens: [{ total_cents: 12_500 }] },
+        { demanda_numero: null, total_cents: 80_000, itens: [{ servico: "Equipe fixa", total_cents: 80_000 }] },
+        { total_cents: 45_000, itens: [{ servico: " Equipe fixa ", total_cents: 40_000 }, { servico: "", total_cents: 5_000 }] },
+      ],
+    };
+    const medicao = medicaoLida("ctr_safra_2026-10", dados);
+    assert.deepEqual([medicao.total_cents, medicao.demandas, medicao.sem_demanda, medicao.autorizacao_id], [
+      266_500,
+      ["10051", "10050"],
+      [
+        { servico: "Equipe fixa", valor_cents: 120_000 },
+        { servico: "Sem serviço", valor_cents: 5_000 },
+      ],
+      "aut_ctr_safra_2026-10",
+    ]);
+    assert.equal(problemaDaMedicao(medicao), null);
+    assert.deepEqual(medicaoNaFatura(medicao), {
+      medicao_id: "ctr_safra_2026-10",
+      contrato_id: "ctr_safra",
+      competencia: "2026-10",
+      autorizacao_id: "aut_ctr_safra_2026-10",
+      valor_cents: 266_500,
+      demandas: ["10051", "10050"],
+      sem_demanda: medicao.sem_demanda,
+    });
+
+    // O total gravado que não bate com as linhas, a linha sem valor e os itens que não somam a linha deixam a medição sem total.
+    for (const quebrada of [
+      { ...dados, total_cents: 266_501 },
+      { ...dados, linhas: [...dados.linhas, { total_cents: -1 }] },
+      { ...dados, total_cents: 81_000, linhas: [{ total_cents: 81_000, itens: [{ servico: "Equipe fixa", total_cents: 80_000 }] }] },
+      { ...dados, total_cents: 0, linhas: [] },
+    ]) {
+      assert.equal(problemaDaMedicao(medicaoLida("ctr_safra_2026-10", quebrada)), "A medição de 10/2026 tem linha sem valor ou fora do total.", JSON.stringify(quebrada.linhas));
+    }
+    assert.equal(problemaDaMedicao(medicaoLida("ctr_safra_2026-10", { ...dados, status: "enviada" })), "A medição de 10/2026 não está aprovada.");
+    assert.equal(problemaDaMedicao(medicaoLida("ctr_safra_2026-10", { ...dados, faturamento: { fatura_id: "fat_1" } })), "A medição de 10/2026 já está numa NF.");
+    const reservada = medicaoLida("ctr_safra_2026-10", { ...dados, emissao_nf: { id: "nfe_1" } });
+    assert.equal(problemaDaMedicao(reservada), "A medição de 10/2026 está na emissão da NFS-e pela Omie.");
+    assert.equal(problemaDaMedicao(reservada, "nfe_1"), null);
+    assert.equal(problemaDaMedicao(medicaoLida("ctr_safra_2026-10", { ...dados, customer_code: "" })), "A medição de 10/2026 não tem cliente.");
+    // Sem o id da autorização gravado, vale o que a aprovação cria.
+    assert.equal(medicaoLida("ctr_safra_2026-10", { ...dados, autorizacao_id: null }).autorizacao_id, "aut_ctr_safra_2026-10");
+  });
+
   it("o documento da fatura soma as demandas e a armazenagem e junta as autorizações sem repetir", () => {
     const documento = documentoDaFatura({
       id: "fat_000000000000000000000001",
@@ -179,5 +248,51 @@ describe("o valor da demanda", () => {
     assert.deepEqual(documento.demanda_numeros, ["10045", "10046"]);
     assert.equal(documento.status, "emitida");
     assert.equal(documento.nf_chave, "1:1234");
+  });
+
+  it("a medição soma ao documento só as linhas sem demanda: as demandas dela já estão em demandas (pergunta 64)", () => {
+    const base = {
+      id: "fat_000000000000000000000002",
+      customer_code: "SAFRA",
+      customer_name: "Banco Safra",
+      armazenagem: [],
+      nf: { numero: "2318", serie: "1", emitida_em: "2026-10-23" },
+      vencimento: "2026-11-20",
+      forma: "boleto" as const,
+      observacao: null,
+      registrada_por: { uid: "fin-1", role: "financeiro" },
+      registrada_em: "2026-10-23T15:00:00.000Z",
+      operation_id: "op_y",
+    };
+    const documento = documentoDaFatura({
+      ...base,
+      demandas: [
+        { numero: "10050", rv: null, medicao_id: "ctr_safra_2026-10", autorizacao_ids: ["aut_ctr_safra_2026-10"], valor_cents: 42_500 },
+        { numero: "10051", rv: null, medicao_id: "ctr_safra_2026-10", autorizacao_ids: ["aut_ctr_safra_2026-10"], valor_cents: 99_000 },
+      ],
+      medicoes: [
+        {
+          medicao_id: "ctr_safra_2026-10",
+          contrato_id: "ctr_safra",
+          competencia: "2026-10",
+          autorizacao_id: "aut_ctr_safra_2026-10",
+          valor_cents: 266_500,
+          demandas: ["10050", "10051"],
+          sem_demanda: [{ servico: "Equipe fixa", valor_cents: 125_000 }],
+        },
+      ],
+    });
+    assert.equal(documento.valor_cents, 266_500);
+    assert.deepEqual([documento.medicao_ids, documento.autorizacao_ids], [["ctr_safra_2026-10"], ["aut_ctr_safra_2026-10"]]);
+    // A medição só com a equipe fixa cita a autorização dela, sem demanda nenhuma.
+    const soEquipe = documentoDaFatura({
+      ...base,
+      demandas: [],
+      medicoes: [{ medicao_id: "ctr_safra_2026-09", contrato_id: "ctr_safra", competencia: "2026-09", autorizacao_id: "aut_ctr_safra_2026-09", valor_cents: 80_000, demandas: [], sem_demanda: [{ servico: "Equipe fixa", valor_cents: 80_000 }] }],
+    });
+    assert.deepEqual([soEquipe.valor_cents, soEquipe.autorizacao_ids, soEquipe.demanda_numeros], [80_000, ["aut_ctr_safra_2026-09"], []]);
+    // A NF sem medição não ganha os campos.
+    const semMedicao = documentoDaFatura({ ...base, demandas: [{ numero: "10045", rv: 1, medicao_id: null, autorizacao_ids: [], valor_cents: 1 }] });
+    assert.equal("medicoes" in semMedicao || "medicao_ids" in semMedicao, false);
   });
 });

@@ -24,6 +24,18 @@ const demanda = z.string().regex(/^\d{5,8}$/, "Demanda inválida.");
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 /** A competência da armazenagem (parte 7.2a), só o mês: o cliente já está no evento. */
 const competencia = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+/** As demandas de uma NF: as pedidas e as das medições (fatura.ts, MAX_DEMANDAS_NA_NF). */
+const demandas = z.array(demanda).max(200);
+/**
+ * As medições aprovadas da NF (pergunta 64), pelo id (o contrato e a
+ * competência, sem valor). Só vem quando há: o payload da NF sem medição
+ * continua como antes.
+ */
+const medicoes = z
+  .array(z.string().regex(/^[A-Za-z0-9_-]{1,120}_\d{4}-(0[1-9]|1[0-2])$/))
+  .min(1)
+  .max(4)
+  .optional();
 
 export const FINANCEIRO_EVENT_TYPES = [
   "nf.registered",
@@ -47,16 +59,17 @@ export const FINANCEIRO_EVENT_TYPES = [
 export type FinanceiroEventType = (typeof FINANCEIRO_EVENT_TYPES)[number];
 
 /**
- * A NF registrada (parte 4.1a): a fatura, as demandas e as competências de
- * armazenagem que ela fecha (parte 7.2a), quantas autorizações cita, a
- * emissão, o vencimento e a forma de pagamento. Sem valor e sem o número da
- * NF.
+ * A NF registrada (parte 4.1a): a fatura, as demandas, as competências de
+ * armazenagem (parte 7.2a) e as medições (pergunta 64) que ela fecha, quantas
+ * autorizações cita, a emissão, o vencimento e a forma de pagamento. Sem
+ * valor e sem o número da NF.
  */
 const nfRegistrada = z
   .object({
     id: faturaId,
-    demandas: z.array(demanda).max(50),
+    demandas,
     competencias: z.array(competencia).max(12).default([]),
+    medicoes,
     // Cada demanda cita o pedido e os complementos: 50 demandas passam de 50 autorizações.
     autorizacoes: z.number().int().min(0).max(1000),
     emitida_em: data,
@@ -72,9 +85,9 @@ const nfEnviada = z
   .object({ id: faturaId, enviada_em: data, meio: z.enum(["email", "portal_do_cliente", "correio", "em_maos"]) })
   .strict();
 
-/** O registro da NF cancelado: as demandas voltam a A faturar e as competências, à fila. Sem o motivo, que é texto livre. */
+/** O registro da NF cancelado: as demandas voltam a A faturar e as competências e as medições, à fila. Sem o motivo, que é texto livre. */
 const nfCancelada = z
-  .object({ id: faturaId, demandas: z.array(demanda).max(50), competencias: z.array(competencia).max(12).default([]) })
+  .object({ id: faturaId, demandas, competencias: z.array(competencia).max(12).default([]), medicoes })
   .strict();
 
 /** Um pagamento da fatura (parcial ou o que quita), sem o valor; `competencias`, a armazenagem que ficou paga no WMS (parte 7.2c). */
@@ -99,7 +112,7 @@ const forma = z.enum(["boleto", "pix", "transferencia", "cartao", "dinheiro"]);
 
 /** A emissão da NFS-e pela Omie pedida (parte 7.4c): o que ela reserva, o vencimento e a forma. Sem valor. */
 const emissaoPedida = z
-  .object({ id: emissaoId, demandas: z.array(demanda).max(50), competencias: z.array(competencia).max(12).default([]), vencimento: data, forma })
+  .object({ id: emissaoId, demandas, competencias: z.array(competencia).max(12).default([]), medicoes, vencimento: data, forma })
   .strict();
 
 /** A emissão parada ou rejeitada que uma pessoa retomou, e a etapa em que ela volta. */
@@ -109,7 +122,7 @@ const emissaoRetomada = z
 
 /** A desistência da emissão: as reservas que voltam a A faturar e se a OS ainda vai ser cancelada na Omie. */
 const emissaoDesistida = z
-  .object({ id: emissaoId, demandas: z.array(demanda).max(50), competencias: z.array(competencia).max(12).default([]), cancela_na_omie: z.boolean() })
+  .object({ id: emissaoId, demandas, competencias: z.array(competencia).max(12).default([]), medicoes, cancela_na_omie: z.boolean() })
   .strict();
 
 /** A NFS-e autorizada pela prefeitura, e a fatura que nasceu dela (parte 7.4d). Sem o número da nota. */
@@ -139,7 +152,7 @@ const emissaoParada = z
 
 /** A OS cancelada na Omie depois da desistência: as reservas voltaram a A faturar. */
 const emissaoSolta = z
-  .object({ id: emissaoId, demandas: z.array(demanda).max(50), competencias: z.array(competencia).max(12).default([]) })
+  .object({ id: emissaoId, demandas, competencias: z.array(competencia).max(12).default([]), medicoes })
   .strict();
 
 const baixaId = z.string().regex(/^bxa_[a-f0-9]{24}$/, "Baixa inválida.");

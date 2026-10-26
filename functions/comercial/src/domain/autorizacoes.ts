@@ -39,6 +39,7 @@ import {
 } from "./demanda.js";
 import { centavosDaLinha, somarCentavos } from "./dinheiro.js";
 import { createComercialEvent } from "./events.js";
+import { MEDICOES_COLLECTION } from "./medicao.js";
 import { digest, runIdempotent, type ComercialActor } from "./operations.js";
 import { comercialAccessProblem } from "./platform-roles.js";
 import type { ComercialProfile } from "./profile.js";
@@ -549,6 +550,9 @@ async function cancelar(mudanca: Mudanca, input: Cancelamento): Promise<Trabalho
         citadas.map((citada) => citada.numero),
       )
     : [];
+  // A medição faturada como um item próprio (pergunta 64): a emissão pela Omie reserva a própria medição.
+  const medicaoId = daMedicao ? textoOuNull(autorizacao.medicao_id) : null;
+  const medicao = medicaoId ? ((await transaction.get(db.collection(MEDICOES_COLLECTION).doc(medicaoId))).data() ?? null) : null;
   if (status === "cancelada") {
     return resultado("cancelada", lidas.map((lida) => lida.demanda.etapa as EtapaDemanda), [], true);
   }
@@ -557,6 +561,9 @@ async function cancelar(mudanca: Mudanca, input: Cancelamento): Promise<Trabalho
     (Array.isArray(autorizacao.nf_ids) && autorizacao.nf_ids.length > 0) || Boolean(autorizacao.enviada_portal_em) || Boolean(autorizacao.omie_lancada_em);
   if (usada) {
     throw new HttpsError("failed-precondition", "Esta autorização já foi usada no faturamento (NF, portal ou Omie): não se cancela.");
+  }
+  if (medicao && emissaoNfDaDemanda(medicao)) {
+    throw new HttpsError("failed-precondition", "A medição está na emissão da NFS-e pela Omie: a autorização dela não se cancela.");
   }
   for (const lida of lidas) {
     const etapa = lida.demanda.etapa as EtapaDemanda;

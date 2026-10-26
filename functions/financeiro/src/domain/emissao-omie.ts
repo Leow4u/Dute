@@ -117,8 +117,9 @@ export const CONFIGURACAO_DA_OMIE: Readonly<Record<string, ConfiguracaoDaOmie>> 
 };
 
 export type ItemDaEmissao = {
-  origem: "demanda" | "armazenagem";
-  /** O número da demanda ou o id da competência. */
+  /** A medição aprovada (pergunta 64) é um item só, pelo total aprovado: as demandas dela não viram itens. */
+  origem: "demanda" | "armazenagem" | "medicao";
+  /** O número da demanda, o id da competência ou o id da medição. */
   referencia: string;
   descricao: string;
   valor_cents: number;
@@ -235,7 +236,7 @@ export function emissaoLida(id: string, dados: Record<string, unknown>): Emissao
   lida(Array.isArray(dados.itens) && dados.itens.length > 0);
   const itens = (dados.itens as unknown[]).map((item) => {
     const registro = (item ?? {}) as Record<string, unknown>;
-    lida(registro.origem === "demanda" || registro.origem === "armazenagem");
+    lida(registro.origem === "demanda" || registro.origem === "armazenagem" || registro.origem === "medicao");
     lida(typeof registro.referencia === "string" && typeof registro.descricao === "string");
     lida(typeof registro.valor_cents === "number" && Number.isSafeInteger(registro.valor_cents) && registro.valor_cents >= 0);
     return { origem: registro.origem as ItemDaEmissao["origem"], referencia: registro.referencia as string, descricao: registro.descricao as string, valor_cents: registro.valor_cents as number };
@@ -330,7 +331,7 @@ function reais(cents: number): number {
   return Number((cents / 100).toFixed(2));
 }
 
-/** A OS da fatura: um item por demanda e por competência, com o serviço do contador e uma parcela. */
+/** A OS da fatura: um item por demanda, por competência e por medição, com o serviço do contador e uma parcela. */
 export function osDaEmissao(emissao: Emissao, hoje: string, configuracao: ConfiguracaoDaOmie): Record<string, unknown> {
   if (emissao.omie.cliente === null) throw new Error("A OS precisa do cliente da Omie.");
   const adicionais: Record<string, unknown> = {

@@ -621,7 +621,9 @@ Storage.
   inclusive a medição sem demanda. O evento `client_authorization.cancelled`
   aceita `demandas` vazio e leva o `medicao_id` (pergunta 17 sobre reabrir a
   medição). A validação de uma demanda presa a uma medição só usa a
-  autorização dela se estiver registrada.
+  autorização dela se estiver registrada. A autorização da medição que está
+  numa emissão da NFS-e pela Omie (a medição reservada, pergunta 64) não se
+  cancela: a nota pode sair a qualquer momento.
 - Rota `/comercial/autorizacoes` (aba e item de menu Autorizações), só com a
   liberação do Comercial, para owner, admin e comercial. O financeiro segue
   sem a tela: registra pela callable e lê pelas regras, e a tela dele é da

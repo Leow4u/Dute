@@ -326,7 +326,7 @@ async function gravarPasso(db: Firestore, lida: Emissao, avanco: Avanco, instant
         type: "nf.emission_released",
         entity_id: nova.id,
         customer_code: nova.customer_code,
-        payload: { id: nova.id, demandas: reservas.demandas, competencias: reservas.competencias },
+        payload: { id: nova.id, demandas: reservas.demandas, competencias: reservas.competencias, ...(reservas.medicoes.length ? { medicoes: reservas.medicoes } : {}) },
         actor: ATOR_DA_ROTINA,
         occurred_at: iso,
       });
@@ -380,6 +380,7 @@ async function prepararFatura(transaction: Transaction, db: Firestore, emissao: 
   const pedido = {
     demandas: emissao.itens.filter((item) => item.origem === "demanda").map((item) => item.referencia),
     armazenagem: emissao.itens.filter((item) => item.origem === "armazenagem").map((item) => item.referencia),
+    medicoes: emissao.itens.filter((item) => item.origem === "medicao").map((item) => item.referencia),
   };
   let lido: Awaited<ReturnType<typeof lerParaFaturar>>;
   try {

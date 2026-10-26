@@ -1036,6 +1036,10 @@ defeito.
     - **Decidida em 26/10/2026:** como recomendado, antes do primeiro
       contrato com medição mensal.
     - **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item 7).
+    - **O servidor feito em 26/10/2026:** o `registerNf` e a emissão pela
+      Omie faturam a medição aprovada como um item próprio, e a demanda dela
+      não fatura sozinha (`fase-4-financeiro.md`, "Pergunta 64"). A tela de A
+      faturar vem em seguida.
 
 65. A inclusão guardada de um item que a OS não tem, do catálogo ou
     avulso, não aparece na tela do celular até chegar. A equipe pode

@@ -167,6 +167,79 @@ describe("pedir a NFS-e à Omie", () => {
   });
 });
 
+describe("a medição aprovada pela Omie (pergunta 64)", () => {
+  const MEDICAO = "ctr_safra_2026-10";
+  beforeEach(async () => {
+    const batch = db.batch();
+    const daMedicao = (numero: string) =>
+      demanda(numero, {
+        customer_code: "SAFRA",
+        customer_name: "Banco Safra",
+        cobranca: "medicao_mensal",
+        medicao_id: MEDICAO,
+        validacao: { etapa: "a_faturar", autorizacao: "medicao_aprovada", medicao_id: MEDICAO },
+        autorizacao_ids: [`aut_${MEDICAO}`],
+      });
+    batch.update(db.doc("customers/safra"), { document: "58.160.789/0001-28" });
+    batch.set(db.doc("demands/10051"), daMedicao("10051"));
+    batch.set(db.doc("demands/10052"), daMedicao("10052"));
+    batch.set(db.doc(`medicoes/${MEDICAO}`), {
+      id: MEDICAO,
+      customer_code: "SAFRA",
+      contrato_id: "ctr_safra",
+      competencia: "2026-10",
+      status: "aprovada",
+      autorizacao_id: `aut_${MEDICAO}`,
+      total_cents: 150_000,
+      linhas: [
+        { id: "l1", demanda_numero: "10051", total_cents: 40_000, itens: [{ servico: "Transporte", total_cents: 40_000 }] },
+        { id: "l2", demanda_numero: "10052", total_cents: 30_000, itens: [{ servico: "Montagem", total_cents: 30_000 }] },
+        { id: "l3", demanda_numero: null, total_cents: 80_000, itens: [{ servico: "Equipe fixa", total_cents: 80_000 }] },
+      ],
+    });
+    batch.set(db.doc(`client_authorizations/aut_${MEDICAO}`), { id: `aut_${MEDICAO}`, customer_code: "SAFRA", tipo: "medicao_aprovada", status: "registrada", demandas: [], demanda_numeros: ["10051", "10052"], nf_ids: [] });
+    await batch.commit();
+  });
+
+  const daMedicao = (extra: Record<string, unknown> = {}) =>
+    emitNfOmieFor(db, financeiro, { idempotency_key: "em-m", demandas: [], armazenagem: [], medicoes: [MEDICAO], vencimento: "2026-11-20", forma: "boleto", ...extra }, { projectId: LIBERADO, agora: AGORA, novoId: () => ID });
+
+  it("vai na OS como um item só, pelo total aprovado, e reserva a medição e as demandas dela; desistir solta tudo", async () => {
+    assert.deepEqual(await daMedicao(), { id: ID, etapa: "na_fila" });
+    const gravada = (await db.doc(`${EMISSOES_COLLECTION}/${ID}`).get()).data() ?? {};
+    assert.equal(gravada.total_cents, 150_000);
+    assert.deepEqual(
+      (gravada.itens as Array<Record<string, unknown>>).map((item) => [item.origem, item.referencia, item.descricao, item.valor_cents]),
+      [["medicao", MEDICAO, "Medição de 10/2026", 150_000]],
+    );
+    for (const caminho of [`medicoes/${MEDICAO}`, "demands/10051", "demands/10052"]) {
+      assert.deepEqual(await reserva(caminho), { id: ID, desde: "2026-10-23T15:00:00.000Z" }, caminho);
+    }
+    const [pedida] = await eventos();
+    assert.deepEqual(pedida.payload, { id: ID, demandas: ["10051", "10052"], competencias: [], medicoes: [MEDICAO], vencimento: "2026-11-20", forma: "boleto" });
+    const { emissoes } = await listNfEmissionsFor(db, financeiro);
+    assert.deepEqual([emissoes[0].demandas, emissoes[0].medicoes, emissoes[0].total_cents], [[], [MEDICAO], 150_000]);
+
+    // Reservada, a medição não se registra à mão.
+    await recusa(
+      registerNfFor(db, financeiro, { idempotency_key: "nf-m", demandas: [], medicoes: [MEDICAO], nf: { numero: "5", emitida_em: "2026-10-23" }, vencimento: "2026-11-20", forma: "boleto" }, AGORA),
+      "failed-precondition",
+      /A medição de 10\/2026 está na emissão da NFS-e pela Omie/,
+    );
+
+    await db.doc(`${EMISSOES_COLLECTION}/${ID}`).update({ etapa: "parada", etapa_anterior: "na_fila", motivo_da_parada: "cliente_nao_achado", edicao: 2 });
+    await actOnNfEmissionFor(db, financeiro, { idempotency_key: "a-m", id: ID, acao: "desistir", expected_edicao: 2 }, { projectId: LIBERADO, agora: AGORA });
+    for (const caminho of [`medicoes/${MEDICAO}`, "demands/10051", "demands/10052"]) assert.equal(await reserva(caminho), undefined, caminho);
+    const desistida = (await eventos()).find((item) => item.type === "nf.emission_abandoned");
+    assert.deepEqual(desistida?.payload, { id: ID, demandas: ["10051", "10052"], competencias: [], medicoes: [MEDICAO], cancela_na_omie: false });
+  });
+
+  it("a demanda da medição não vai à Omie sozinha", async () => {
+    await recusa(daMedicao({ medicoes: undefined, demandas: ["10051"] }), "failed-precondition", /A demanda 10051 é da medição de 10\/2026: ela fatura com a medição/);
+    assert.equal((await db.collection(EMISSOES_COLLECTION).get()).size, 0);
+  });
+});
+
 describe("retomar e desistir", () => {
   it("desistir da parada sem a OS solta as reservas na hora; a demanda volta a se registrar à mão", async () => {
     await emitir();

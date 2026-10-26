@@ -23,7 +23,7 @@ import {
   type MotivoDaParada,
 } from "./emissao-omie.js";
 import { createFinanceiroEvent } from "./events.js";
-import { DEMANDS_COLLECTION, interpretarEmissao } from "./fatura.js";
+import { DEMANDS_COLLECTION, MEDICOES_COLLECTION, interpretarEmissao, medicaoLida, rotuloDaMedicao } from "./fatura.js";
 import { lerParaFaturar } from "./fatura-gravacao.js";
 import { runIdempotent, type FinanceiroActor } from "./operations.js";
 import { financeiroProblem } from "./platform-roles.js";
@@ -35,7 +35,8 @@ import type { FinanceiroProfile } from "./profile.js";
  *
  * - `emitNfOmie` confere como o `registerNf` (a mesma lerParaFaturar), acha
  *   o CNPJ no cadastro do cliente, grava a emissão na fila, reserva as
- *   demandas e as competências (`emissao_nf`, parte 7.4b) e grava o evento.
+ *   demandas, as competências e a medição com as demandas dela
+ *   (`emissao_nf`, parte 7.4b e pergunta 64) e grava o evento.
  * - `actOnNfEmission` é a pessoa retomando ou desistindo da emissão parada
  *   ou rejeitada; desistir sem a OS na Omie solta as reservas na hora.
  * - `listNfEmissions` dá as emissões à tela.
@@ -77,7 +78,7 @@ async function cnpjDoCliente(transaction: Transaction, db: Firestore, codigo: st
 
 export type ResultadoDaEmissao = { id: string; etapa: EtapaDaEmissao };
 
-/** emitNfOmie: a NFS-e pedida à Omie para as demandas e as competências de um cliente. */
+/** emitNfOmie: a NFS-e pedida à Omie para as demandas, as competências e as medições de um cliente. */
 export async function emitNfOmieFor(
   db: Firestore,
   caller: FinanceiroProfile,
@@ -91,19 +92,35 @@ export async function emitNfOmieFor(
   const ator = atorDe(caller);
   return runIdempotent<ResultadoDaEmissao>(
     db,
-    { kind: "nf_emissao_omie", scope: { demandas: pedido.demandas, armazenagem: pedido.armazenagem }, idempotency_key: pedido.idempotency_key, input: pedido, actor: ator },
+    {
+      kind: "nf_emissao_omie",
+      // A medição só entra no escopo quando há: o recibo do pedido sem medição continua o mesmo.
+      scope: { demandas: pedido.demandas, armazenagem: pedido.armazenagem, ...(pedido.medicoes?.length ? { medicoes: pedido.medicoes } : {}) },
+      idempotency_key: pedido.idempotency_key,
+      input: pedido,
+      actor: ator,
+    },
     async (transaction, { operationId }) => {
       const lido = await lerParaFaturar(transaction, db, pedido);
       const cnpj = await cnpjDoCliente(transaction, db, lido.cliente);
       const id = (opcoes.novoId ?? novoIdDeEmissao)();
       const iso = instante.toISOString();
+      // A demanda da medição vai na OS dentro da medição, pelo total aprovado: não é um item à parte.
       const itens: ItemDaEmissao[] = [
-        ...lido.naFatura.map((demanda) => ({ origem: "demanda" as const, referencia: demanda.numero, descricao: `Demanda ${demanda.numero}`, valor_cents: demanda.valor_cents })),
+        ...lido.naFatura
+          .filter((demanda) => demanda.medicao_id === null)
+          .map((demanda) => ({ origem: "demanda" as const, referencia: demanda.numero, descricao: `Demanda ${demanda.numero}`, valor_cents: demanda.valor_cents })),
         ...lido.periodos.map((periodo) => ({
           origem: "armazenagem" as const,
           referencia: periodo.id,
           descricao: `Armazenagem de ${rotuloDaCompetencia(periodo.competencia)}`,
           valor_cents: periodo.valor_cents ?? 0,
+        })),
+        ...lido.medicoes.map((medicao) => ({
+          origem: "medicao" as const,
+          referencia: medicao.medicao_id,
+          descricao: `Medição de ${rotuloDaMedicao(medicao.medicao_id)}`,
+          valor_cents: medicao.valor_cents,
         })),
       ];
       const emissao: Emissao = {
@@ -140,7 +157,7 @@ export async function emitNfOmieFor(
       });
       const reserva = { [CAMPO_DA_RESERVA]: { id, desde: iso } };
       for (const ref of lido.demandaRefs) transaction.update(ref, { ...reserva, updated_at: FieldValue.serverTimestamp(), updated_by: caller.uid });
-      for (const ref of lido.periodoRefs) transaction.update(ref, { ...reserva, updated_at: FieldValue.serverTimestamp() });
+      for (const ref of [...lido.periodoRefs, ...lido.medicaoRefs]) transaction.update(ref, { ...reserva, updated_at: FieldValue.serverTimestamp() });
       createFinanceiroEvent(transaction, db, {
         operation_id: operationId,
         type: "nf.emission_requested",
@@ -150,6 +167,7 @@ export async function emitNfOmieFor(
           id,
           demandas: lido.naFatura.map((demanda) => demanda.numero),
           competencias: lido.periodos.map((periodo) => periodo.competencia),
+          ...(lido.medicoes.length ? { medicoes: lido.medicoes.map((medicao) => medicao.medicao_id) } : {}),
           vencimento: pedido.vencimento,
           forma: pedido.forma,
         },
@@ -163,25 +181,40 @@ export async function emitNfOmieFor(
 
 // --- As reservas -----------------------------------------------------------------------------
 
-export type ReservasLidas = { refs: DocumentReference[]; demandas: string[]; competencias: string[] };
+export type ReservasLidas = { refs: DocumentReference[]; demandas: string[]; competencias: string[]; medicoes: string[] };
 
 function refDoItem(db: Firestore, item: ItemDaEmissao): DocumentReference {
-  return item.origem === "demanda" ? db.collection(DEMANDS_COLLECTION).doc(item.referencia) : db.collection(BILLING_PERIODS_COLLECTION).doc(item.referencia);
+  if (item.origem === "demanda") return db.collection(DEMANDS_COLLECTION).doc(item.referencia);
+  if (item.origem === "medicao") return db.collection(MEDICOES_COLLECTION).doc(item.referencia);
+  return db.collection(BILLING_PERIODS_COLLECTION).doc(item.referencia);
 }
 
-/** As demandas e as competências que ainda estão reservadas por esta emissão (leitura, antes das escritas). */
+/**
+ * As demandas, as competências e as medições que ainda estão reservadas por
+ * esta emissão (leitura, antes das escritas). A medição reservou também as
+ * demandas dela, que não são itens da emissão: saem das linhas da medição.
+ */
 export async function lerReservas(transaction: Transaction, db: Firestore, emissao: Emissao): Promise<ReservasLidas> {
   const refs = emissao.itens.map((item) => refDoItem(db, item));
   const snaps = await transaction.getAll(...refs);
   const presas = emissao.itens.flatMap((item, indice) => (snaps[indice].exists && emissaoReservada(snaps[indice].data() ?? {}) === emissao.id ? [{ item, ref: refs[indice], dados: snaps[indice].data() ?? {} }] : []));
+  const daMedicao = [
+    ...new Set(
+      emissao.itens.flatMap((item, indice) => (item.origem === "medicao" && snaps[indice].exists ? medicaoLida(item.referencia, snaps[indice].data() ?? {}).demandas : [])),
+    ),
+  ];
+  const daMedicaoRefs = daMedicao.map((numero) => db.collection(DEMANDS_COLLECTION).doc(numero));
+  const daMedicaoSnaps = daMedicaoRefs.length ? await transaction.getAll(...daMedicaoRefs) : [];
+  const presasDaMedicao = daMedicaoSnaps.flatMap((snap, indice) => (snap.exists && emissaoReservada(snap.data() ?? {}) === emissao.id ? [{ numero: daMedicao[indice], ref: daMedicaoRefs[indice] }] : []));
   return {
-    refs: presas.map((presa) => presa.ref),
-    demandas: presas.filter((presa) => presa.item.origem === "demanda").map((presa) => presa.item.referencia),
+    refs: [...presas.map((presa) => presa.ref), ...presasDaMedicao.map((presa) => presa.ref)],
+    demandas: [...presas.filter((presa) => presa.item.origem === "demanda").map((presa) => presa.item.referencia), ...presasDaMedicao.map((presa) => presa.numero)],
     competencias: presas.filter((presa) => presa.item.origem === "armazenagem").map((presa) => String(presa.dados.competencia ?? presa.item.referencia.slice(-7))),
+    medicoes: presas.filter((presa) => presa.item.origem === "medicao").map((presa) => presa.item.referencia),
   };
 }
 
-/** Solta as reservas lidas: a demanda e a competência voltam a A faturar. */
+/** Solta as reservas lidas: a demanda, a competência e a medição voltam a A faturar. */
 export function soltarReservas(transaction: Transaction, reservas: ReservasLidas): void {
   for (const ref of reservas.refs) transaction.update(ref, { [CAMPO_DA_RESERVA]: FieldValue.delete(), updated_at: FieldValue.serverTimestamp() });
 }
@@ -250,7 +283,12 @@ export async function actOnNfEmissionFor(
           occurred_at: iso,
         });
       } else {
-        const itens = { demandas: atual.itens.filter((item) => item.origem === "demanda").map((item) => item.referencia), competencias: reservas?.competencias ?? [] };
+        const medicoes = atual.itens.filter((item) => item.origem === "medicao").map((item) => item.referencia);
+        const itens = {
+          demandas: [...atual.itens.filter((item) => item.origem === "demanda").map((item) => item.referencia), ...(reservas?.demandas ?? []).filter((numero) => !atual.itens.some((item) => item.referencia === numero))],
+          competencias: reservas?.competencias ?? [],
+          ...(medicoes.length ? { medicoes } : {}),
+        };
         if (avanco.efeito === "liberar_reservas" && reservas) soltarReservas(transaction, reservas);
         createFinanceiroEvent(transaction, db, {
           operation_id: operationId,
@@ -279,6 +317,8 @@ export type EmissaoNaLista = {
   mensagens_da_prefeitura: MensagemDaPrefeitura[];
   demandas: string[];
   armazenagem: string[];
+  /** As medições da emissão (pergunta 64); só quando há. */
+  medicoes?: string[];
   total_cents: number;
   vencimento: string;
   nfse: string | null;
@@ -327,6 +367,7 @@ export async function listNfEmissionsFor(db: Firestore, caller: FinanceiroProfil
         mensagens_da_prefeitura: emissao.mensagens_da_prefeitura,
         demandas: emissao.itens.filter((item) => item.origem === "demanda").map((item) => item.referencia),
         armazenagem: emissao.itens.filter((item) => item.origem === "armazenagem").map((item) => item.referencia),
+        ...(emissao.itens.some((item) => item.origem === "medicao") ? { medicoes: emissao.itens.filter((item) => item.origem === "medicao").map((item) => item.referencia) } : {}),
         total_cents: totalDaEmissao(emissao),
         vencimento: emissao.vencimento,
         nfse: emissao.omie.nfse,

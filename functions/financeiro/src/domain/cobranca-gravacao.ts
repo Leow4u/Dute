@@ -9,6 +9,7 @@ import {
   conferirCancelamento,
   conferirDemandaDaFatura,
   conferirEnvio,
+  conferirMedicaoDaFatura,
   faturaLida,
   interpretarAvanco,
   pagamentoIdDaOperacao,
@@ -20,7 +21,7 @@ import {
 import { BILLING_PERIODS_COLLECTION, CLIENT_INVOICES_COLLECTION, idsDoPortal, periodoLido, problemaDoPeriodoNaFatura } from "./armazenagem.js";
 import { estornarBaixa, lerBaixaDoPagamento, porNaFila } from "./baixa-gravacao.js";
 import { createFinanceiroEvent } from "./events.js";
-import { AUTHORIZATIONS_COLLECTION, DEMANDS_COLLECTION, FATURAS_COLLECTION } from "./fatura.js";
+import { AUTHORIZATIONS_COLLECTION, DEMANDS_COLLECTION, FATURAS_COLLECTION, MEDICOES_COLLECTION } from "./fatura.js";
 import { runIdempotent, type FinanceiroActor } from "./operations.js";
 import { CLIENT_FATURAS_COLLECTION, projecaoDaFatura } from "./projecao.js";
 import { financeiroProblem } from "./platform-roles.js";
@@ -31,15 +32,16 @@ import type { FinanceiroProfile } from "./profile.js";
  * idempotência e o evento sem valor:
  *
  * - send: a NF enviada ao cliente (o dia e o meio).
- * - pay: um pagamento; quitada, a fatura fica paga e as demandas também, e a
- *   armazenagem dela fica paga no WMS (parte 7.2c). Na fatura que saiu pela
- *   Omie, a baixa do pagamento entra na fila da Omie (parte 7.4g).
+ * - pay: um pagamento; quitada, a fatura fica paga e as demandas também, a
+ *   armazenagem dela fica paga no WMS (parte 7.2c) e a medição ganha o dia
+ *   do pagamento no `faturamento`. Na fatura que saiu pela Omie, a baixa do
+ *   pagamento entra na fila da Omie (parte 7.4g).
  * - reverse_payment: estorna um pagamento; a paga volta a enviada (ou
  *   emitida), as demandas, a faturada, e a armazenagem, a emitida no WMS. A
  *   baixa na Omie do pagamento vai a cancelar.
  * - cancel: cancela o registro sem pagamento; as demandas voltam a A
- *   faturar, a armazenagem volta à fila (parte 7.2a) e as autorizações
- *   perdem a NF.
+ *   faturar, a armazenagem e a medição voltam à fila (parte 7.2a, pergunta
+ *   64) e as autorizações perdem a NF.
  *
  * Cada ação regrava a projeção do portal (`client_faturas`, parte 4.3a) a
  * partir da fatura como ela fica; o cancelamento a apaga.
@@ -97,6 +99,15 @@ async function periodosDaFatura({ db, transaction, fatura }: Contexto, status: "
   const portais = await transaction.getAll(...lidos.flatMap((lido) => lido.candidatos));
   const existe = new Set(portais.filter((snap) => snap.exists).map((snap) => snap.ref.path));
   return lidos.map(({ ref, competencia, candidatos }) => ({ ref, competencia, portal: candidatos.find((candidato) => existe.has(candidato.path)) ?? candidatos[0] }));
+}
+
+/** Lê as medições da fatura (pergunta 64) e confere que cada uma está nesta NF, antes de qualquer escrita. */
+async function medicoesDaFatura({ db, transaction, fatura }: Contexto): Promise<DocumentReference[]> {
+  const refs = fatura.medicao_ids.map((id) => db.collection(MEDICOES_COLLECTION).doc(id));
+  if (!refs.length) return refs;
+  const snaps = await transaction.getAll(...refs);
+  snaps.forEach((snap, indice) => conferirMedicaoDaFatura(fatura.medicao_ids[indice], snap.exists ? (snap.data() ?? {}) : null, fatura.id));
+  return refs;
 }
 
 /** A competência paga (ou de volta a emitida) no WMS e no portal, como o payBillingInvoice do WMS grava. */
@@ -179,6 +190,7 @@ export async function advanceFaturaFor(
         const resultado = aplicarPagamento(fatura, valorCents, pedido.recebido_em, hoje);
         const demandas = resultado.quitada ? await demandasDaFatura(contexto, "faturada") : [];
         const periodos = resultado.quitada ? await periodosDaFatura(contexto, "emitido") : [];
+        const medicoes = resultado.quitada ? await medicoesDaFatura(contexto) : [];
         const pagamentoId = pagamentoIdDaOperacao(fatura.id, operationId);
         porNaFila(transaction, db, dadosAtuais, {
           pagamento_id: pagamentoId,
@@ -213,6 +225,7 @@ export async function advanceFaturaFor(
         projetar({ status: resultado.status, recebido_cents: resultado.recebido_cents, ...(resultado.quitada ? { paga_em: pedido.recebido_em } : {}) });
         if (resultado.quitada) moverDemandas(contexto, demandas, "paga", { "faturamento.paga_em": pedido.recebido_em });
         marcarArmazenagem(contexto, periodos, { recebidoEm: pedido.recebido_em });
+        for (const ref of medicoes) transaction.update(ref, { "faturamento.paga_em": pedido.recebido_em, updated_at: FieldValue.serverTimestamp() });
         createFinanceiroEvent(transaction, db, {
           ...evento,
           type: "cobranca.payment_registered",
@@ -234,6 +247,7 @@ export async function advanceFaturaFor(
         const resultado = aplicarEstorno(fatura, pagamentoSnap.exists ? pagamentoLido(pagamentoSnap.id, pagamentoSnap.data() ?? {}) : null);
         const demandas = resultado.reaberta ? await demandasDaFatura(contexto, "paga") : [];
         const periodos = resultado.reaberta ? await periodosDaFatura(contexto, "pago") : [];
+        const medicoes = resultado.reaberta ? await medicoesDaFatura(contexto) : [];
         const baixa = await lerBaixaDoPagamento(transaction, db, dadosAtuais, pedido.pagamento_id);
         transaction.update(pagamentoRef, { status: "estornado", estornado: { em: iso, por_uid: caller.uid, motivo: pedido.motivo }, updated_at: FieldValue.serverTimestamp() });
         transaction.update(faturaRef, {
@@ -245,6 +259,7 @@ export async function advanceFaturaFor(
         projetar({ status: resultado.status, recebido_cents: resultado.recebido_cents, ...(resultado.reaberta ? { paga_em: null } : {}) });
         if (resultado.reaberta) moverDemandas(contexto, demandas, "faturada", { "faturamento.paga_em": FieldValue.delete() });
         marcarArmazenagem(contexto, periodos, null);
+        for (const ref of medicoes) transaction.update(ref, { "faturamento.paga_em": FieldValue.delete(), updated_at: FieldValue.serverTimestamp() });
         estornarBaixa(transaction, db, baixa, { instante, iso, operationId, ator });
         createFinanceiroEvent(transaction, db, {
           ...evento,
@@ -258,10 +273,11 @@ export async function advanceFaturaFor(
       conferirCancelamento(fatura);
       const demandas = await demandasDaFatura(contexto, "faturada");
       const periodos = await periodosDaFatura(contexto, "emitido");
+      const medicoes = await medicoesDaFatura(contexto);
       transaction.update(faturaRef, { status: "cancelada", cancelada: { em: iso, por_uid: caller.uid, motivo: pedido.motivo }, ...atualizado });
       moverDemandas(contexto, demandas, "a_faturar", { faturamento: FieldValue.delete() });
-      for (const periodo of periodos) {
-        transaction.update(periodo.ref, { faturamento: FieldValue.delete(), updated_at: FieldValue.serverTimestamp() });
+      for (const ref of [...periodos.map((periodo) => periodo.ref), ...medicoes]) {
+        transaction.update(ref, { faturamento: FieldValue.delete(), updated_at: FieldValue.serverTimestamp() });
       }
       // O registro cancelado era um erro: some do portal.
       transaction.delete(projecaoRef);
@@ -271,7 +287,12 @@ export async function advanceFaturaFor(
       createFinanceiroEvent(transaction, db, {
         ...evento,
         type: "nf.cancelled",
-        payload: { id: fatura.id, demandas: fatura.demanda_numeros, competencias: periodos.map((periodo) => periodo.competencia) },
+        payload: {
+          id: fatura.id,
+          demandas: fatura.demanda_numeros,
+          competencias: periodos.map((periodo) => periodo.competencia),
+          ...(fatura.medicao_ids.length ? { medicoes: fatura.medicao_ids } : {}),
+        },
       });
       return { target_id: fatura.id, result: { id: fatura.id, acao: pedido.acao, status: "cancelada", recebido_cents: 0, saldo_cents: fatura.valor_cents } };
     },
