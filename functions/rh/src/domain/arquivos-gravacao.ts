@@ -29,7 +29,8 @@ import type { RhProfile } from "./profile.js";
  * - attachRhFile (só o rh) confere no bucket o arquivo que subiu e o liga
  *   ao registro, com a geração conferida, o recibo e o evento, numa
  *   transação do banco `dute-rh`. O arquivo que o anexo recusa (outro tipo,
- *   vazio ou grande demais) sai do bucket.
+ *   vazio ou grande demais) sai do bucket; se não sair, a recusa mostra o
+ *   motivo do mesmo jeito.
  * - openRhFile (owner, admin e rh) dá a URL assinada para abrir só a
  *   geração conferida, válida por MINUTOS_PARA_ABRIR, e grava o evento da
  *   abertura antes de devolvê-la.
@@ -133,7 +134,8 @@ export async function attachRhFileFor(rh: Firestore, caller: RhProfile, data: un
   const noBucket = await armazem.conferir(caminho);
   // O arquivo recusado não fica no bucket; o que já está no registro nunca sai por aqui.
   if (noBucket && problemaDoArquivoNoBucket(noBucket, entrada.content_type) && registro.arquivo?.caminho !== caminho && noBucket.generation) {
-    await armazem.apagar(caminho, noBucket.generation);
+    // A limpeza não esconde a recusa: sem conseguir apagar (a conta sem o delete no bucket), o arquivo fica.
+    await armazem.apagar(caminho, noBucket.generation).catch((erro: unknown) => console.warn("[attachRhFile] arquivo recusado não apagado", { caminho, erro }));
   }
   const { tamanho, geracao } = conferirArquivoNoBucket(noBucket, entrada.content_type);
   const actor = atorDoRh(caller);

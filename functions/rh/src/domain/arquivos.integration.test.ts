@@ -149,6 +149,22 @@ describe("os arquivos da ficha", () => {
     assert.equal((await rh.doc(`registros/${registro.id}`).get()).data()?.arquivo, null);
   });
 
+  it("sem poder apagar o arquivo recusado, o anexo recusa com o motivo do mesmo jeito", async () => {
+    const registro = await exame();
+    const { envio, caminho } = await subir(registro.id);
+    await getStorage(app).bucket().file(caminho).save(Buffer.from("<html>"), { contentType: "text/html" });
+    const semApagar: ArmazemDoRh = {
+      ...armazem,
+      async apagar() {
+        throw new Error("storage.objects.delete negado");
+      },
+    };
+    const anexo = { idempotency_key: "p-1", registro_id: registro.id, arquivo_id: envio.arquivo_id, content_type: "application/pdf", expected_edicao: 1 };
+    await recusa(attachRhFileFor(rh, RH, anexo, semApagar), "failed-precondition", /não é do tipo informado/);
+    assert.equal(await existe(caminho), true);
+    assert.equal((await rh.doc(`registros/${registro.id}`).get()).data()?.arquivo, null);
+  });
+
   it("trocar o arquivo guarda o anterior; owner e admin não sobem nem anexam", async () => {
     const registro = await exame();
     const primeiro = await subir(registro.id);
