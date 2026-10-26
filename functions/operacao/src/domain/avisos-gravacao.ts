@@ -12,6 +12,7 @@ import {
   idDoAviso,
   idDoEmail,
   modeloDoEvento,
+  soDaDutelog,
 } from "./avisos.js";
 import { EVENTS_COLLECTION } from "./events.js";
 import { contractedModulesFrom } from "./platform-roles.js";
@@ -241,6 +242,11 @@ export async function runNotificationsFor(
 
 /** O envio desligado: o e-mail fica na fila como auditado, sem sair. */
 export const enviarSoAuditoria: EnviarEmail = async () => ({ status: "audit" });
+
+/** Fora da produção: só sai o e-mail cujos destinatários são todos da Dutelog; o outro fica auditado na fila. */
+export function soParaADutelog(enviar: EnviarEmail): EnviarEmail {
+  return async (email) => (soDaDutelog(email.to) ? enviar(email) : enviarSoAuditoria(email));
+}
 
 /**
  * O envio pelo Resend (https://resend.com/docs/api-reference/emails/send-email),

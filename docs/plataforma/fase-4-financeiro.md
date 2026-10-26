@@ -523,12 +523,13 @@ Feita em 23/10/2026. Os modelos estão em `functions/operacao/src/domain/avisos.
   - A NF vai só ao gestor e ao financeiro do cliente, nunca à gerenciadora.
   - Sem contato com o modelo ligado, só o sino recebe.
 - **O envio.** A fila envia 20 por rodada e tenta de novo até 5 vezes, com o erro guardado.
-  - Sem `RESEND_API_KEY` no ambiente, o e-mail fica auditado na fila (`audit`) e não sai. É o estado de hoje nos dois ambientes.
+  - Sem `RESEND_API_KEY` no ambiente, o e-mail fica auditado na fila (`audit`) e não sai.
   - Com a chave, sai pelo Resend com o id do e-mail como chave de idempotência, de `Dutelog <avisos@dutelog.com.br>`. O link aponta para o app do ambiente.
+  - Fora da produção (`EMAIL_PARA_QUALQUER_CONTATO`, só o `dute-prod`), só sai o e-mail cujos destinatários são todos `@dutelog.com.br`; o outro fica auditado. O contato de teste da homologação com o endereço de um cliente de verdade nunca recebe.
 - **Para ligar o envio** (precisa do Leonardo):
-  1. Criar a conta no Resend e verificar o domínio `dutelog.com.br`, com os registros de DNS que ele pede na Hostinger. Os CNAMEs `_acme-challenge_*` não podem sair.
-  2. Guardar a chave no Secret Manager dos dois projetos e dar à conta do CI a administração só desse segredo, pelo comando de `docs/deploy-functions-manual.md`, "Function com segredo", com `RESEND_API_KEY` na lista. Sem o papel no segredo, a publicação falha ao dar acesso à conta de runtime.
-  3. Declarar o segredo na `runNotifications` (`secrets: ["RESEND_API_KEY"]`), num PR, e conferir na homologação antes da produção.
+  1. Criar a conta no Resend e verificar o domínio `dutelog.com.br`, com os registros de DNS que ele pede na Hostinger. Os CNAMEs `_acme-challenge_*` não podem sair. A conta existe desde 26/10/2026; o domínio ainda não está verificado. Sem o domínio, o Resend recusa o envio, e cada e-mail desiste na quinta tentativa, cerca de 25 minutos depois.
+  2. Guardar a chave no Secret Manager dos dois projetos e dar à conta do CI a administração só desse segredo, pelo comando de `docs/deploy-functions-manual.md`, "Function com segredo", com `RESEND_API_KEY` na lista. Sem o papel no segredo, a publicação falha ao dar acesso à conta de runtime. Feito nos dois projetos em 26/10/2026.
+  3. Declarar o segredo na `runNotifications`, num PR, e conferir na homologação antes da produção. A rotina o declara só onde ele existe (`segredosDoResend`, pela `RESEND_AMBIENTES`: o `dute-homolog` e o `dute-prod`). O PR entra depois do passo 1.
 - **Regras.** O cliente lê só os próprios avisos. A equipe interna não lê, porque o aviso da NF leva o valor; owner e admin leem. A fila de e-mail é só de owner e admin. O cursor não abre pelo navegador. Ninguém grava pelo navegador.
 - **Índice.** `events` por `type` e `created_at`.
 - **Zeragem.** `tools/full_reset_btg.py` preserva `client_notifications`, `email_outbox` e `notification_cursors`, como os eventos de que eles saem.
@@ -536,7 +537,7 @@ Feita em 23/10/2026. Os modelos estão em `functions/operacao/src/domain/avisos.
   - `avisos.test.ts` cobre o evento que vira aviso, o texto de cada modelo (nenhum da OS com valor), quem recebe e o envio pelo Resend.
   - `avisos.integration.test.ts` cobre a primeira rodada, a repetição sem duplicar, o evento do último minuto, o cliente sem o módulo e a fila.
   - `operacao-avisos.rules.test.ts` cobre as regras.
-  - `callables.test.ts` trava a function agendada.
+  - `callables.test.ts` trava a function agendada, com o segredo declarado só onde existe e o envio só para a Dutelog fora da produção.
 
 ### Parte 4.6b: os avisos de cada contato no cadastro
 

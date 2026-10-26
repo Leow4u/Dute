@@ -325,3 +325,33 @@ export function enderecoDoApp(projectId: string | null | undefined): string | nu
 
 /** O remetente dos avisos; o domínio precisa estar verificado no provedor. */
 export const REMETENTE_DOS_AVISOS = "Dutelog <avisos@dutelog.com.br>";
+
+/**
+ * Onde o segredo RESEND_API_KEY existe no Secret Manager, com a conta do CI
+ * administradora dele (docs/deploy-functions-manual.md, "Function com
+ * segredo"): a rotina dos avisos o declara só ali, porque o projeto que
+ * declara um segredo que não tem não publica.
+ */
+export const RESEND_AMBIENTES = ["dute-homolog", "dute-prod"] as const;
+
+export function segredosDoResend(projectId: string | null | undefined): string[] {
+  return (RESEND_AMBIENTES as readonly string[]).includes(String(projectId ?? "").trim()) ? ["RESEND_API_KEY"] : [];
+}
+
+/**
+ * Onde o e-mail vai a qualquer contato. Fora daqui (a homologação), só sai o
+ * e-mail cujos destinatários são todos da Dutelog: o contato de teste com o
+ * endereço de um cliente de verdade nunca recebe.
+ */
+export const EMAIL_PARA_QUALQUER_CONTATO = ["dute-prod"] as const;
+
+export const DOMINIO_DA_DUTELOG = "dutelog.com.br";
+
+export function emailParaQualquerContato(projectId: string | null | undefined): boolean {
+  return (EMAIL_PARA_QUALQUER_CONTATO as readonly string[]).includes(String(projectId ?? "").trim());
+}
+
+/** Todos os destinatários são endereços da Dutelog. */
+export function soDaDutelog(para: readonly string[]): boolean {
+  return para.length > 0 && para.every((endereco) => endereco.trim().toLowerCase().endsWith(`@${DOMINIO_DA_DUTELOG}`));
+}

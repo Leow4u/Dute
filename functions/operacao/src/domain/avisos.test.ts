@@ -4,8 +4,10 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  EMAIL_PARA_QUALQUER_CONTATO,
   ENDERECO_DO_APP,
   EVENTOS_DE_AVISO,
+  RESEND_AMBIENTES,
   FONTE_DO_EVENTO,
   MODELOS_DE_AVISO,
   avisoDoEvento,
@@ -14,14 +16,17 @@ import {
   destinatariosDoModelo,
   documentoDoModelo,
   emailDoAviso,
+  emailParaQualquerContato,
   enderecoDoApp,
   eventoLido,
   idDoAviso,
   idDoEmail,
   modeloDoEvento,
+  segredosDoResend,
+  soDaDutelog,
   type EventoLido,
 } from "./avisos.js";
-import { enviarPeloResend } from "./avisos-gravacao.js";
+import { enviarPeloResend, soParaADutelog, type EnviarEmail } from "./avisos-gravacao.js";
 import { OPERACAO_EVENT_TYPES } from "./events.js";
 
 /**
@@ -282,5 +287,29 @@ describe("o envio pelo Resend", () => {
   it("a recusa do provedor vira erro, para a fila tentar de novo", async () => {
     const buscar = (async () => new Response(JSON.stringify({ message: "Domínio não verificado" }), { status: 403 })) as unknown as typeof fetch;
     await assert.rejects(enviarPeloResend("re_chave", buscar)(email), /Resend recusou o envio \(403\): Domínio não verificado/);
+  });
+
+  it("a chave é declarada só onde o segredo existe", () => {
+    assert.deepEqual([...RESEND_AMBIENTES], ["dute-homolog", "dute-prod"]);
+    for (const projeto of RESEND_AMBIENTES) assert.deepEqual(segredosDoResend(projeto), ["RESEND_API_KEY"]);
+    for (const projeto of ["dute-btg", "demo-dute-operacao", "", null, undefined]) assert.deepEqual(segredosDoResend(projeto), [], String(projeto));
+  });
+
+  it("só a produção manda para qualquer contato; a homologação, só para a Dutelog, e o resto fica auditado", async () => {
+    assert.deepEqual([...EMAIL_PARA_QUALQUER_CONTATO], ["dute-prod"]);
+    assert.equal(emailParaQualquerContato("dute-prod"), true);
+    for (const projeto of ["dute-homolog", "dute-btg", "", undefined]) assert.equal(emailParaQualquerContato(projeto), false, String(projeto));
+    assert.equal(soDaDutelog(["ana@dutelog.com.br", " Leo@Dutelog.com.br "]), true);
+    for (const para of [["gestora@itau.com"], ["ana@dutelog.com.br", "gestora@itau.com"], ["ana@dutelog.com.br.itau.com"], []]) {
+      assert.equal(soDaDutelog(para), false, para.join(","));
+    }
+    const enviados: string[][] = [];
+    const enviar: EnviarEmail = async (mensagem) => {
+      enviados.push(mensagem.to);
+      return { status: "sent", provider_id: "re_1" };
+    };
+    assert.deepEqual(await soParaADutelog(enviar)({ ...email, to: ["ana@dutelog.com.br"] }), { status: "sent", provider_id: "re_1" });
+    assert.deepEqual(await soParaADutelog(enviar)(email), { status: "audit" });
+    assert.deepEqual(enviados, [["ana@dutelog.com.br"]]);
   });
 });

@@ -73,8 +73,9 @@ describe("callables da Operação", () => {
     assert.match(index, /await Promise\.allSettled\(\[runRetentionFor\(db\), runPhotoRetentionFor\(db, apagarDoBucket\)\]\)/);
   });
 
-  it("a rotina dos avisos roda uma instância de cada vez e só envia de verdade com a chave do Resend", () => {
-    assert.match(index, /export const runNotifications = onSchedule\(\{[^}]*maxInstances: 1[^}]*\}/);
-    assert.match(index, /enviar: chave \? enviarPeloResend\(chave\) : enviarSoAuditoria/);
+  it("a rotina dos avisos roda uma instância de cada vez, declara a chave do Resend só onde ela existe e, fora da produção, só envia para a Dutelog", () => {
+    assert.match(index, /export const runNotifications = onSchedule\(\{[^}]*maxInstances: 1[^}]*secrets: segredosDoResend\(PROJECT_ID\)[^}]*\}/);
+    assert.match(index, /const pelaApi = chave \? enviarPeloResend\(chave\) : enviarSoAuditoria;/);
+    assert.match(index, /const enviar = emailParaQualquerContato\(PROJECT_ID\) \? pelaApi : soParaADutelog\(pelaApi\);/);
   });
 });
