@@ -126,6 +126,17 @@ describe("perfil de operação", () => {
     expect(resolveOperationProfile({ customer_code: "X", archived: true }).portalStatus).toBe("inactive");
     expect(portalModulesFor(null)).toBeNull();
   });
+
+  it("o portal desligado é o corte do cadastro (pergunta 69), como no servidor; o modelo sem portal não corta", () => {
+    expect(resolveOperationProfile(null).portalDesligado).toBe(false);
+    expect(resolveOperationProfile({ customer_code: "Itaú", portal_status: "active" }).portalDesligado).toBe(false);
+    expect(resolveOperationProfile({ customer_code: "Itaú" }).portalDesligado).toBe(false);
+    expect(resolveOperationProfile({ customer_code: "Itaú", portal_status: "inactive" }).portalDesligado).toBe(true);
+    expect(resolveOperationProfile({ customer_code: "Itaú", archived: true, portal_status: "active" }).portalDesligado).toBe(true);
+    expect(resolveOperationProfile({ customer_code: "Itaú", status: "archived" }).portalDesligado).toBe(true);
+    const semPortal = resolveOperationProfile({ customer_code: "Dutelog", operation_template: "insumos", portal_status: "active" });
+    expect([semPortal.portalStatus, semPortal.portalDesligado]).toEqual(["inactive", false]);
+  });
 });
 
 describe("telas do portal pelos módulos contratados (parte 2.7)", () => {

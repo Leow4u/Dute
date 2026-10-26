@@ -79,6 +79,12 @@ export type OperationProfile = {
   pack: OperationPack | null;
   skuPrefix: string | null;
   portalStatus: PortalStatus;
+  /**
+   * O portal cortado no cadastro, como no servidor: o cliente arquivado ou
+   * "Sem portal" em Configurações › Clientes (pergunta 69). O modelo sem
+   * portal não corta: o portal dele só tem o Início. Sem registro, ligado.
+   */
+  portalDesligado: boolean;
   /** "published": veio do registro publicado; "fallback": sem registro, modelo padrão. */
   source: "published" | "fallback";
   /** Módulos contratados. Sem registro, ou sem o campo, armazenagem e faturas. */
@@ -105,6 +111,10 @@ export function resolveOperationProfile(
     pack: pack && pack.template === template.key ? pack : null,
     skuPrefix,
     portalStatus,
+    portalDesligado:
+      record?.archived === true ||
+      record?.status === "archived" ||
+      (String(record?.portal_status ?? "").trim() || "active") !== "active",
     source: record ? "published" : "fallback",
     modules: modulosContratados(record?.modules),
   };

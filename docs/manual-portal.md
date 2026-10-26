@@ -23,10 +23,11 @@ valor de custo do próprio estoque, base do seguro.
   sempre. "Aceitar convite" pede o "Nome" e a "Senha" (6 caracteres ou mais);
   o e-mail vem do convite.
 - **O cliente arquivado ou "Sem portal"** (Configurações › Clientes) tem o
-  portal desligado. A pessoa continua com o login, mas as telas não trazem
-  os dados, e os pedidos, o Agent Dute e o "Solicitar OS" respondem "O
-  portal do seu cliente está desligado.". O convite pendente desse cliente
-  também não vale mais.
+  portal desligado. A pessoa continua com o login, mas, ao entrar, vê só a
+  tela "Portal desligado", com o nome do cliente, o e-mail dela e "Sair".
+  Os pedidos, o Agent Dute e o "Solicitar OS" respondem "O portal do seu
+  cliente está desligado.". O convite pendente desse cliente também não vale
+  mais. O portal volta quando o cadastro volta a ter portal.
 - **"Entrar"** pede o e-mail e a senha. "Esqueci minha senha" manda o e-mail
   de recuperação ao endereço digitado no campo; sem ele, a tela pede o
   e-mail.

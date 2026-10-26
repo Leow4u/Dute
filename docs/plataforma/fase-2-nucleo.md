@@ -601,7 +601,8 @@ produção.
 ### Pergunta 69: arquivar e "Sem portal" cortam o portal
 
 Decidida pelo Leonardo e feita no servidor em 26/10/2026. A tela que explica
-o corte à pessoa do cliente vem com o alinhamento.
+o corte à pessoa do cliente entrou no mesmo dia, com o canvas aprovado
+("A tela do portal desligado", abaixo).
 
 - **O problema.** Arquivar o cliente ou pôr "Portal do cliente: Sem portal"
   (Configurações › Clientes) não cortava as pessoas dele. As portas olhavam
@@ -665,3 +666,28 @@ o corte à pessoa do cliente vem com o alinhamento.
       Storage.
   - Operação: `profile.integration.test.ts`, o pedido pelo portal e o sino.
   - Núcleo: `agente-escopo.integration.test.ts`.
+
+### A tela do portal desligado
+
+Feita em 26/10/2026, com o canvas "Telas das decisões de 26/10" aprovado pelo
+Leonardo (item 10).
+
+- **A tela.** A pessoa do cliente com o portal desligado entra e vê só
+  "Portal desligado", com o nome do cliente, o e-mail dela e "Sair", na capa
+  do login (`components/auth-shell.tsx`, que saiu do `App.tsx` para a tela
+  usar). Vale para qualquer endereço do portal: a porta de cada rota do
+  cliente (`RoleGate`) mostra a tela no lugar do portal inteiro.
+- **Quem está desligado** é o mesmo corte do servidor: o perfil do cliente
+  (`client_profiles`, legível com o portal desligado) arquivado ou com o
+  portal diferente de "Ativo" (o campo `portalDesligado` do perfil de
+  operação, em `lib/operations`). Sem a
+  leitura do perfil, o portal fica ligado, como antes; as regras e as
+  Functions recusam do mesmo jeito.
+- **O cadastro arquivado antes da pergunta 69**, que não tem o campo no
+  `client_access` e ainda passa no servidor, já vê a tela: o perfil dele
+  está arquivado.
+- **Testes:**
+  - `pages/portal-desligado.test.tsx`: o título, o cliente, o e-mail e
+    "Sair"; sem legenda; o axe;
+  - `lib/operations/operations.test.ts`: o corte do perfil, como no
+    servidor.
