@@ -81,6 +81,17 @@ async function eventos(): Promise<Array<Record<string, unknown>>> {
   return (await db.collection("events").get()).docs.map((row) => row.data());
 }
 
+/**
+ * O evento sem o ator e sem os relógios, para conferir que ele não leva dado do
+ * cliente: o carimbo do servidor e o instante mudam a cada execução e podem
+ * conter qualquer sequência de dígitos (em 26/10/2026, o `created_at` de
+ * 1793043440 segundos continha o "04344" do CEP).
+ */
+function conteudoDoEvento(evento: Record<string, unknown>): string {
+  const { actor: _ator, created_at: _carimbo, occurred_at: _instante, ...conteudo } = evento;
+  return JSON.stringify(conteudo);
+}
+
 /** Cadastro como o WMS grava (Configurações › Clientes), com sigla e projeções. */
 async function cadastroDoWms(id: string, data: Record<string, unknown>, projecao = true): Promise<void> {
   const code = String(data.code);
@@ -137,8 +148,7 @@ describe("prospect novo", () => {
     assert.equal(evento.severity, "info");
     assert.deepEqual(evento.payload, { stage: "prospect" });
     assert.deepEqual(result.events, [evento.id]);
-    const texto = JSON.stringify({ ...evento, actor: null });
-    assert.doesNotMatch(texto, /Itaú|98765432|São Paulo/);
+    assert.doesNotMatch(conteudoDoEvento(evento), /Itaú|98765432|São Paulo/);
   });
 
   it("o código informado vale; o responsável é da equipe do Comercial", async () => {
@@ -542,7 +552,7 @@ describe("locais do cliente", () => {
     );
     for (const evento of salvos) {
       assert.equal(evento.customer_code, "Itaú");
-      assert.doesNotMatch(JSON.stringify({ ...evento, actor: null }), /CEIC|Praça|04344/);
+      assert.doesNotMatch(conteudoDoEvento(evento), /CEIC|Praça|04344/);
     }
   });
 
@@ -633,7 +643,7 @@ describe("contatos do cliente", () => {
     for (const evento of salvos) {
       assert.equal(evento.customer_code, "CONSTRUTORA-OMEGA");
       assert.equal(evento.entity_type, "customer_contact");
-      assert.doesNotMatch(JSON.stringify({ ...evento, actor: null }), /Fulano|gerenciadora\.com|98765|Gerenciadora X/i);
+      assert.doesNotMatch(conteudoDoEvento(evento), /Fulano|gerenciadora\.com|98765|Gerenciadora X/i);
     }
   });
 
@@ -686,7 +696,7 @@ describe("contatos do cliente", () => {
 
     // O evento não leva os avisos nem o e-mail.
     for (const evento of (await eventos()).filter((row) => row.type === "customer_contact.saved")) {
-      assert.doesNotMatch(JSON.stringify({ ...evento, actor: null }), /os_agendada|nf_emitida|omega\.com/);
+      assert.doesNotMatch(conteudoDoEvento(evento), /os_agendada|nf_emitida|omega\.com/);
     }
   });
 

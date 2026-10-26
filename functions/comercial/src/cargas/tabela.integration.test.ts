@@ -167,7 +167,9 @@ describe("carga de tabela: --executar", () => {
       contrato_id: null,
       substitui: null,
     });
-    assert.doesNotMatch(JSON.stringify(evento), /45\.5|R\$/);
+    // Sem os relógios: o instante "…:45.5…Z" ou o carimbo do servidor dariam um falso preço.
+    const { created_at: _carimbo, occurred_at: _instante, ...conteudo } = evento;
+    assert.doesNotMatch(JSON.stringify(conteudo), /45\.5|R\$/);
   });
 
   it("o mesmo arquivo de novo não duplica nada", async () => {
