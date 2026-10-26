@@ -172,6 +172,35 @@ $sa = "$(gcloud projects describe $p --format='value(projectNumber)')-compute@de
 gcloud storage buckets add-iam-policy-binding "gs://$p.firebasestorage.app" --member="serviceAccount:$sa" --role="roles/storage.objectUser" --project $p
 ```
 
+No `dute-homolog`, o papel foi dado em 26/10/2026. Na produção, não precisa
+enquanto a retenção das fotos estiver desligada lá (`docs/plataforma/lgpd.md`,
+"A operação primeiro").
+
+### Firebase Auth
+
+O `setUserAccess` (Configurações › Usuários, "Remover acesso" e "Devolver
+acesso") bloqueia e libera o login no Firebase Auth com a conta de runtime das
+Functions, e a retenção das contas removidas (`runAccountRetention`) apaga o
+login com ela. A conta precisa do `roles/firebaseauth.admin` no projeto. Em
+26/10/2026, a do `dute-homolog` não tinha nenhum papel do Auth: o perfil
+bloqueava a pessoa, mas a tela dizia "O acesso saiu do sistema, mas o login da
+pessoa não foi bloqueado. Tente de novo." Para conferir os papéis da conta:
+
+```powershell
+$p = "dute-homolog"
+$sa = "$(gcloud projects describe $p --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
+gcloud projects get-iam-policy $p --flatten="bindings[].members" --filter="bindings.members:serviceAccount:$sa" --format="value(bindings.role)"
+```
+
+Para dar o papel, nos dois ambientes (decisão do Leonardo):
+
+```powershell
+foreach ($p in "dute-homolog","dute-prod") {
+  $sa = "$(gcloud projects describe $p --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
+  gcloud projects add-iam-policy-binding $p --member="serviceAccount:$sa" --role="roles/firebaseauth.admin" --condition=None
+}
+```
+
 ### Deploy lento: "User code failed to load … Timeout after 10000"
 
 O Firebase carrega o código para descobrir as functions e espera 10 s; com o

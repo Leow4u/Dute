@@ -751,6 +751,9 @@ revisão")
 13. Vistoria e demanda direta podem nascer pelo celular do líder, ou só
     pela coordenação? Recomendo só pela coordenação no v1.
 14. A TV fica em `/tv` com o papel `painel` e sessão longa, como no plano?
+    **Decididas em 26/10/2026 (12 a 14):** ficam como estão: o tipo da OS
+    sai dos itens; a vistoria e a demanda direta nascem só pela
+    coordenação; a TV fica em `/tv`, com o papel `painel`.
 
 **Fase 4**
 15. Emissão da NF fora do sistema com registro, até a integração da Fase 7:
@@ -792,6 +795,9 @@ cliente ou 15 em qualquer cliente; 20, `functions/core`; desenho em
     Até a resposta, o Financeiro mostra as NFs emitidas por mês no lugar.
     **Decidida em 26/10/2026:** vale o rateio pelas linhas do orçamento de
     cada demanda (parte a fazer no relatório do Financeiro).
+    **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item 8):
+    "Receita por serviço" conta o recebido no período, como a Receita por
+    cliente.
 27. O tempo por item (parte 5.1) é em homem-minuto: 2 pessoas fazem na
     metade do tempo de 1. Vale para montagem e carga?
 28. O tempo de trabalho deixa o deslocamento de fora, e quem planeja soma o
@@ -950,6 +956,9 @@ defeito.
     vistoria. A OS de serviço continua sem cancelar depois de iniciada.
     **Decidida em 26/10/2026:** como recomendado. A ação na tela vem com o
     alinhamento.
+    **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item 1):
+    "Cancelar vistoria" no alto da OS da vistoria agendada ou em
+    execução, para owner, admin e interno, com o motivo obrigatório.
 59. Depois de aprovado, o pedido de retirada não se cancela nem se separa a
     menos. "Encerrar" muda só o status: a reserva fica presa, e as tarefas de
     separação e expedição continuam abertas. Na separação, o item faltando
@@ -962,6 +971,8 @@ defeito.
     "Encerrar" passaria a valer só depois da entrega.
     **Decidida em 26/10/2026:** como recomendado. As ações na tela vêm com
     o alinhamento.
+    **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item 6): o
+    cliente vê no portal "Cancelado pela Dutelog" e a data, sem o motivo.
 60. A fatura que nasce da NFS-e autorizada pela Omie leva como emissão o dia
     em que a rotina viu a autorização, não o da nota. Na rotina em dia, a
     diferença é de minutos. Quando a emissão parou e foi retomada dias
@@ -1022,6 +1033,7 @@ defeito.
       demandas da medição, que deixam de ser cobradas à parte.
     - **Decidida em 26/10/2026:** como recomendado, antes do primeiro
       contrato com medição mensal.
+    - **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item 7).
 
 65. A inclusão guardada de um item que a OS não tem, do catálogo ou
     avulso, não aparece na tela do celular até chegar. A equipe pode
@@ -1035,6 +1047,7 @@ defeito.
       alinhamento antes.
     - **Decidida em 26/10/2026:** como recomendado, com o alinhamento
       antes.
+    - **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item 3).
 
 66. A conclusão do celular recusada depois de a assinatura subir deixa a
     assinatura no Storage sem a OS apontar para ela. Isso acontece quando o
@@ -1048,6 +1061,9 @@ defeito.
       tela nova.
     - **Decidida em 26/10/2026:** como recomendado, com o alinhamento
       antes.
+    - **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item 2):
+      "Anexar à conclusão" vale também na OS revisada, porque só junta o
+      aceite, sem mexer em itens nem em valores.
 
 **Acesso e convites** (25/10/2026). O id do convite é o token do link
 (`invites/{token}`): quem o tem e entra com o e-mail convidado vira o
@@ -1077,6 +1093,7 @@ usuário do convite, com o papel dele.
     - É tela: a pessoa confirma o e-mail antes de entrar.
     - **Decidida em 26/10/2026:** como recomendado, com o alinhamento da
       tela antes.
+    - **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item 9).
 69. Arquivar o cliente ou pôr "Portal do cliente: Sem portal"
     (Configurações › Clientes) não corta as pessoas dele. As portas olham só
     os módulos do contrato, que o arquivo mantém: o WMS, as Rules, o portal
@@ -1104,6 +1121,9 @@ usuário do convite, com o papel dele.
     Recomendo que Pessoas mostre também quem está inativo na Operação com a
     admissão sem desligamento, com a marca "Inativo na Operação", para o RH
     gravar o desligamento. É tela, então vem com alinhamento.
+    **Decidida em 26/10/2026:** como recomendado, com a marca "Inativo na
+    Operação" (o Leonardo deixou a forma para a melhor que não trave a
+    operação).
 
 **O portal desligado** (26/10/2026). Da pergunta 69.
 71. Com o portal desligado (o cliente arquivado ou "Sem portal"), a pessoa
@@ -1114,6 +1134,9 @@ usuário do convite, com o papel dele.
     lê. Recomendo que a rotina dos avisos (`runNotifications`) não gere
     aviso para o cliente com o portal desligado, nem no sino nem por
     e-mail. O e-mail da NFS-e que a prefeitura ou a Omie mandam não muda.
+    **Decidida em 26/10/2026:** como recomendado (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item
+    10): os avisos param, no sino e no e-mail, e a pessoa do cliente vê só
+    a tela "Portal desligado", com Sair.
 
 Limitações conhecidas, sem pergunta, para quando houver tempo:
 

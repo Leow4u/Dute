@@ -140,6 +140,7 @@ e-mail do app) e um login `painel`:
 ## 7. O que espera o Leonardo
 
 - O OK para a publicação (marco 3).
+- Perguntas 12 a 14 decididas em 26/10/2026: ficam como estão, nos três itens abaixo.
 - Pergunta 12: o tipo da OS fica derivado dos itens.
 - Pergunta 13: a vistoria e a demanda direta nascem só pela coordenação. Enviar a vistoria pelo escritório, para a equipe sem ninguém no app, também está fora.
 - Pergunta 14: a TV seguiu a proposta, com `/tv`, o papel `painel` e a sessão do navegador.

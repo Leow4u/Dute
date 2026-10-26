@@ -757,7 +757,8 @@ Feita em 26/10/2026.
 - **Limitação:** Pessoas lista só quem está ativo na Operação. Quem a
   coordenação desativa antes de o RH gravar o desligamento continua na
   planilha como ativo, e a ficha dele só abre pelo endereço. A pergunta 70
-  (plano, seção 13) propõe mostrar essas pessoas em Pessoas.
+  (plano, seção 13) propõe mostrar essas pessoas em Pessoas. **Decidida em
+  26/10/2026:** como recomendado, com a marca "Inativo na Operação".
 
 ### Parte 8.4b: as datas do vínculo nas telas
 
