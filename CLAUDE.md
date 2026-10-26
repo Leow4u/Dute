@@ -422,6 +422,11 @@ removidas justamente por induzirem a erro.
   (`runAccountRetention`, com a lista `ACCOUNT_RETENTION_PROJECTS`), e a das
   versões substituídas da exportação do RH (`runRhRetention`), na seção 6 do
   mesmo documento.
+- **A operação primeiro** (Leonardo, 26/10/2026): a operação é pequena e
+  interna, e nenhuma regra de LGPD entra se não servir a ela ou se puder
+  travá-la. As rotinas de retenção ficam desligadas na produção; fotos do
+  final e assinatura não têm prazo; o registro de leitura e a exclusão do RH
+  não entram (`lgpd.md`, "A operação primeiro").
 
 ## A auditoria de código está parcialmente vencida
 

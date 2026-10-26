@@ -767,16 +767,16 @@ dos marcos 2, 3 e 4. O registro está em `fase-4-financeiro.md`, "Parte
   (`docs/deploy-functions-manual.md`, "Function com segredo").
 - A entrega do WMS fatura pela demanda ou na fatura mensal do WMS?
   (`fase-4-financeiro.md`, decisões).
-- As perguntas 12 a 14 da Fase 3, em `operacao-producao.md`, seção 7.
-- A pergunta 70 do plano, da parte 8.4 do RH: Pessoas mostrar também quem
-  está inativo na Operação com a admissão sem desligamento, para o RH
-  gravar o desligamento (`fase-8-rh.md`).
-- Cancelar e convidar de novo cada convite pendente, com o owner, em
-  Configurações › Usuários (pergunta 67 do plano, decidida em 26/10/2026;
-  seção 5, item 7).
-- O prazo de guarda das fotos do final e da assinatura da OS (decisão 1 da
-  LGPD, `lgpd.md`, seção 5).
+- O papel `roles/firebaseauth.admin` na conta de runtime das Functions,
+  no `dute-homolog` e no `dute-prod` (`docs/deploy-functions-manual.md`,
+  "Firebase Auth"). Sem ele, "Remover acesso" não bloqueia o login: a tela
+  pede para tentar de novo, e só o perfil bloqueia a pessoa.
+- Se houver convite pendente criado até a primeira publicação (25/10/2026),
+  cancelar e convidar de novo, com o owner, em Configurações › Usuários (pergunta 67
+  do plano; seção 5, item 7). Sem convite antigo pendente, nada a fazer.
 
-As perguntas 26, 58 a 60 e 64 a 69 do plano e as 12 da LGPD foram
-respondidas em 26/10/2026 (plano, seção 13; `lgpd.md`, seção 5). O que elas
-pedem entra em partes próprias, as de tela com o alinhamento antes.
+As perguntas 26, 58 a 60 e 64 a 71 do plano, as 12 a 14 da Fase 3 e as 12
+da LGPD foram respondidas em 26/10/2026 (plano, seção 13; `lgpd.md`, seção
+5, com "A operação primeiro"). As telas foram alinhadas no mesmo dia (o
+canvas "Telas das decisões de 26/10", aprovado pelo Leonardo) e entram em
+partes próprias.

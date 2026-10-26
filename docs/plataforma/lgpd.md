@@ -284,6 +284,9 @@ muda o sistema: cada mudança entra num PR próprio, depois da decisão.
 
 ## 4. O que falta para o item do plano
 
+Desde 26/10/2026, à noite, só entra o que servir à operação (seção 5, "A
+operação primeiro"). Esta seção fica como o mapa do que existe.
+
 ### 4.1 Retenção e exclusão de fotos, assinaturas e dados de campo
 
 1. **Fotos e assinaturas da OS não têm prazo nem rotina de exclusão.** As
@@ -480,6 +483,9 @@ muda o sistema: cada mudança entra num PR próprio, depois da decisão.
 3. **Documento do responsável e de quem retira:** como recomendado. Deixa
    de pedir o número: na conclusão, nome, cargo e assinatura; na retirada,
    nome e placa. A mudança no formulário vem com o alinhamento da tela.
+   **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de
+   26/10", item 5): os números já gravados somem das telas e do
+   comprovante.
 4. **Dados de campo identificáveis:** ficam como estão, com o nome.
 5. **RH depois que a pessoa sai:** 2 anos depois do desligamento, com todo
    o histórico do colaborador nesse tempo. Depois, apagar os arquivos e os
@@ -506,7 +512,8 @@ muda o sistema: cada mudança entra num PR próprio, depois da decisão.
 11. **Contato principal do cliente:** fica onde está. A equipe de campo
     precisa ver o contato do responsável por acompanhar a atividade: o app
     do campo passa a mostrar o contato do local da OS (nome e telefone),
-    com o alinhamento da tela.
+    com o alinhamento da tela. **Tela alinhada em 26/10/2026** (o canvas,
+    item 4).
 12. **Região do Vertex AI:** como recomendado, fixar uma região onde os
     modelos usados existam e registrar no runbook da Fase 5.
     **Feito em 26/10/2026:** nenhum dos modelos existe no Brasil. Os de texto
@@ -514,6 +521,25 @@ muda o sistema: cada mudança entra num PR próprio, depois da decisão.
     geração da foto do catálogo fica no `global`, o único local do modelo,
     sem dado de pessoa (`fase-5-memoria.md`, "LGPD, decisão 12"). Na
     produção desde a quarta publicação, no mesmo dia.
+
+### A operação primeiro (Leonardo, 26/10/2026, à noite)
+
+A operação da Dutelog é pequena e interna: nenhuma regra de LGPD entra se
+não servir à operação ou se puder travá-la. Ficou assim:
+
+- **Decisão 1:** as fotos do final e a assinatura da OS ficam guardadas,
+  sem prazo e sem rotina de exclusão.
+- **Decisão 5:** o RH depois do desligamento fica como está, sem rotina de
+  exclusão.
+- **Decisão 9:** o registro de leitura não entra (o item 11 do canvas
+  sai).
+- **As rotinas de retenção já feitas** (decisões 2, 7 e 8, seção 6) ficam
+  desligadas na produção e só ligam se o Leonardo pedir.
+- **As decisões 3 e 11** entram com as telas do canvas (itens 5 e 4),
+  porque simplificam o trabalho: o aceite sem o número do documento e o
+  contato do local no celular.
+- O que a seção 4 lista e ainda não foi feito só entra se servir à
+  operação.
 
 ## 6. A retenção no código
 
