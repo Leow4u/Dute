@@ -122,9 +122,11 @@ O primeiro export guarda o estado atual. O import sobrescreve cada documento que
 tem o mesmo caminho e não apaga os outros: o que foi criado depois do momento
 escolhido continua lá. O import não grava em `events`. Por isso, registre no
 histórico abaixo o momento escolhido, as coleções, o motivo e quem decidiu.
-Depois, apague o banco de recuperação:
+Depois, apague o banco de recuperação. Ele nasce com a proteção contra
+exclusão, como o de origem, e ela sai antes, só nele:
 
 ```powershell
+gcloud firestore databases update --database=recuperacao-20261021 --no-delete-protection --project dute-prod
 gcloud firestore databases delete --database=recuperacao-20261021 --project dute-prod
 ```
 
@@ -148,6 +150,11 @@ Leonardo: Actions > Teste de restauração > Run workflow, com o banco.
   3. lê os caminhos dos documentos do banco restaurado e os do banco de
      origem no minuto cheio do backup e no seguinte, pelo PITR;
   4. apaga o banco de teste, mesmo quando a conferência falha.
+
+  O banco restaurado nasce com a proteção contra exclusão, como o de origem.
+  Para apagar o de teste (no passo 1 e no 4), a ferramenta tira a proteção
+  antes, só dele: a trava do nome `teste-restauracao-*` vale para os dois
+  comandos.
 - **O esperado** é "OK: o backup restaurou os N documentos". A diferença só
   vale para o documento criado ou apagado dentro do minuto do backup, que a
   leitura em minutos cheios não alcança. Qualquer outra reprova o teste.
@@ -200,9 +207,11 @@ Anote o ID do backup `READY` mais recente e o `snapshotTime` dele.
    `snapshotTime`. Confira esses documentos no manifesto. Diferença em qualquer
    outro documento é falha do teste.
 
-3. **Apagar o banco de teste** (OK do Leonardo):
+3. **Apagar o banco de teste** (OK do Leonardo). Ele nasce com a proteção
+   contra exclusão, que sai antes, só nele:
 
    ```powershell
+   gcloud firestore databases update --database=restauracao-teste --no-delete-protection --project dute-prod
    gcloud firestore databases delete --database=restauracao-teste --project dute-prod
    gcloud firestore databases list --project dute-prod
    ```
@@ -218,7 +227,7 @@ apague-os de `tmp\backup\` depois de comparar.
 
 | Data | Banco | Backup (`snapshotTime`) | Resultado |
 |---|---|---|---|
-| — | `(default)` | — | pendente: o primeiro backup ainda não existia em 20/10/2026 14:31 UTC |
+| 26/10/2026 | `(default)` | 2026-10-25T23:46:47.420101Z | OK: o backup restaurou os 4940 documentos do (default), em 11 min 36 s. O banco de teste não foi apagado: nasceu com a proteção contra exclusão (ver o histórico) |
 | — | `dute-rh` | — | pendente: o banco nasceu em 24/10/2026 22:34 UTC |
 
 ## Histórico
@@ -227,3 +236,4 @@ apague-os de `tmp\backup\` depois de comparar.
 |---|---|
 | 20/10/2026 14:28 UTC | PITR de 7 dias e backup diário com retenção de 14 dias ligados no `dute-prod`, com o OK do Leonardo. Leitura no passado conferida: o inventário de 13:30:00 UTC deu 679 documentos, e as leituras fora do minuto cheio ou anteriores a 13:28 foram recusadas |
 | 24/10/2026 22:34 UTC | O banco `dute-rh` criado no `dute-prod` pelo workflow `Banco rh`, com o OK do Leonardo: proteção contra exclusão, PITR de 7 dias e backup diário de 14 dias desde a criação (`fase-8-rh.md`) |
+| 26/10/2026 17:04 UTC | Primeiro teste de restauração do `(default)`, com o OK do Leonardo (workflow `Teste de restauração`, run 40365137550): o backup restaurou os 4940 documentos. O banco de teste `teste-restauracao-default-20261026t170444` nasceu com a proteção contra exclusão, e a exclusão foi recusada (`FAILED_PRECONDITION`). Ele ficou no projeto, com a cópia dos dados, até o teste seguinte. A ferramenta passou a tirar a proteção do banco de teste antes de apagar |
