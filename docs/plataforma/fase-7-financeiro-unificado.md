@@ -684,7 +684,9 @@ não chama a Omie sem as chaves.
   `lerParaFaturar` e pela `gravarFatura`. As duas saíram do `registerNf`,
   que segue igual.
   - O número é o da NFS-e, a série é 1 (a do registro à mão) e a emissão é
-    o dia da autorização.
+    o dia em que a rotina viu a autorização; na emissão retomada depois de
+    uma parada, o dia do faturamento da OS na Omie ("A data da fatura da
+    NFS-e vista depois da retomada").
   - A fatura guarda `origem_nf: omie`, a emissão e o código de verificação.
   - A reserva sai, e o evento é `nf.registered` com o
     `nf.emission_authorized`.
@@ -1538,6 +1540,49 @@ Financeiro está ligado só no `dute-homolog`.
 
   Com o script anterior, os dois testes falham, e a trava aponta
   `nf_emissoes` e `nf_baixas`.
+
+### A data da fatura da NFS-e vista depois da retomada (pergunta 60)
+
+Decidida pelo Leonardo e feita em 26/10/2026.
+
+- **O problema.** A fatura que nasce da NFS-e autorizada levava como emissão
+  o dia em que a rotina viu a autorização. Na rotina em dia, a diferença é
+  de minutos. Na emissão que parou (a prefeitura sem resposta, as falhas
+  seguidas, as chaves) e foi retomada dias depois, a fatura ficava com o dia
+  da retomada, e o pagamento recebido antes dele era recusado ("vem antes
+  da emissão da NF").
+- **A decisão.** Usar o dia do faturamento da OS na Omie (`dDtFat`) quando a
+  autorização é vista depois de uma retomada, e o dia da rotina no resto. O
+  `StatusOS` não traz a data da NFS-e.
+- **A correção** (`domain/emissao-omie.ts`, `diaDaFatura`):
+  - a emissão guarda o `dDtFat` da resposta que traz a nota autorizada
+    (`omie.dia_do_faturamento`);
+  - retomar a emissão parada marca `retomada_desde_a_rps`. A RPS que a
+    rotina manda de novo (o `FaturarOS` ou o `ReenviarOS`) zera a marca,
+    porque dali a rotina acompanha a nota. Retomar a rejeitada não marca: o
+    reenvio vem logo depois;
+  - com a marca, a fatura leva o dia do faturamento, nunca depois de hoje.
+    Sem a marca, ou sem o `dDtFat` na resposta, leva o dia da rotina.
+- **O que fica de fora:**
+  - o faturamento vem antes da nota: quando a prefeitura leva dias, a
+    fatura fica com uma data anterior à da NFS-e;
+  - na RPS recusada, reenviada e depois parada, o `dDtFat` pode ser o do
+    primeiro faturamento, se a Omie não o muda no reenvio;
+  - a rotina que fica sem rodar sem a emissão parar (o Cloud Scheduler fora
+    do ar) continua com o dia em que voltou e viu a nota.
+- **Na produção,** nada muda por enquanto: a NFS-e pela Omie segue só no
+  `dute-homolog` (`OMIE_AMBIENTES_LIBERADOS`).
+- **Testes:**
+  - `emissao-omie.test.ts`: o `dDtFat` lido com a nota autorizada, a marca
+    da retomada (posta, zerada pela RPS nova e mantida na conferência), o dia
+    da fatura em cada caso e a emissão gravada antes da mudança;
+  - `omie-rotina.integration.test.ts`: a emissão retomada três dias depois
+    da demora fatura com 23/10, e o pagamento de 27/10 entra; a nota que
+    saiu durante a desistência também fica com 23/10; na rotina em dia, a
+    OS faturada às 23:58 e vista à 00:05 fica com o dia seguinte.
+
+  Com o código anterior, os dois primeiros testes de integração falham: a
+  fatura sai com 29/10 e com 26/10.
 
 ## Onde a Fase 7 está
 

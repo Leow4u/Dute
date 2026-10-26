@@ -968,7 +968,9 @@ defeito.
     Omie não traz a data da NFS-e, só a do faturamento da OS (`dDtFat`).
     Recomendo usar o `dDtFat` quando a autorização é vista depois de uma
     parada ou retomada, e o dia da rotina no resto.
-    **Decidida em 26/10/2026:** como recomendado.
+    **Decidida em 26/10/2026:** como recomendado, e feita no mesmo dia
+    (`fase-7-financeiro-unificado.md`, "A data da fatura da NFS-e vista
+    depois da retomada").
 
 61. Na ficha do RH, quando dois registros do mesmo tipo têm a mesma data de
     emissão, vale o que vence depois e, só no empate do vencimento, o

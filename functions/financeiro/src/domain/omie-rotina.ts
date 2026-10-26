@@ -8,6 +8,7 @@ import {
   ETAPAS_DA_ROTINA,
   comFalha,
   comResposta,
+  diaDaFatura,
   emissaoLida,
   omieLiberada,
   paradaSemChaves,
@@ -364,9 +365,10 @@ type FaturaPreparada = { id: string; gravar: (operationId: string) => void } | {
 
 /**
  * As leituras da fatura da NFS-e autorizada, e a gravação para depois. O
- * número é o da NFS-e, a série é 1 e a emissão é o dia da autorização em São
- * Paulo. O id é o da NFS-e: o CT-e registrado à mão com o mesmo número não é
- * a mesma nota.
+ * número é o da NFS-e, a série é 1 e a emissão é o dia em São Paulo em que a
+ * rotina viu a autorização ou, na emissão retomada depois de uma parada, o
+ * dia do faturamento da OS na Omie (diaDaFatura). O id é o da NFS-e: o CT-e
+ * registrado à mão com o mesmo número não é a mesma nota.
  */
 async function prepararFatura(transaction: Transaction, db: Firestore, emissao: Emissao, iso: string): Promise<FaturaPreparada> {
   const numero = (emissao.omie.nfse ?? "").replace(/^0+(?=\d)/, "");
@@ -392,7 +394,7 @@ async function prepararFatura(transaction: Transaction, db: Firestore, emissao: 
       gravarFatura(transaction, db, {
         id,
         lido,
-        nf: { numero, serie: "1", emitida_em: DIA_EM_SAO_PAULO.format(new Date(iso)) },
+        nf: { numero, serie: "1", emitida_em: diaDaFatura(emissao, DIA_EM_SAO_PAULO.format(new Date(iso))) },
         vencimento: emissao.vencimento,
         forma: emissao.forma,
         observacao: emissao.observacao,
