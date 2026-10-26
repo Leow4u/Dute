@@ -635,11 +635,13 @@ o corte à pessoa do cliente entrou no mesmo dia, com o canvas aprovado
     pendente do cliente com o portal desligado não cria o perfil (a regra do
     `users`).
   - A equipe não depende do portal do cliente.
+- **O que ficou para depois, e entrou no mesmo dia:**
+  - a tela: a pessoa do cliente com o portal desligado via as recusas, sem
+    a explicação ("A tela do portal desligado", abaixo);
+  - os avisos aos contatos, no sino e por e-mail, continuavam saindo, com o
+    link do portal (pergunta 71 do plano; `fase-4-financeiro.md`, parte
+    4.6a).
 - **O que fica de fora:**
-  - a tela: a pessoa do cliente com o portal desligado vê as recusas, sem a
-    explicação, até o alinhamento;
-  - os avisos por e-mail aos contatos continuam saindo, com o link do portal
-    (pergunta 71 do plano);
   - o cadastro arquivado ou "Sem portal" antes desta parte não tem o campo,
     e o portal dele segue ligado:
     - o "Sem portal" se corta gravando o cadastro de novo;

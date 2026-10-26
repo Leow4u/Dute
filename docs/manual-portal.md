@@ -275,6 +275,9 @@ documento" filtra quando há mais de um.
   A "NF emitida", que leva valor, vai só ao "Gestor do cliente" e ao
   "Financeiro", nunca à "Gerenciadora". Sai de "Dutelog
   <avisos@dutelog.com.br>", com o assunto "… · Dutelog" e o link da tela.
+- **Com o portal desligado** (o cliente arquivado ou "Sem portal"), não sai
+  aviso, nem no sino nem por e-mail. O que aconteceu nesse tempo não vira
+  aviso quando o portal volta.
 - **Sem a chave de envio (`RESEND_API_KEY`) no ambiente**, o e-mail fica só
   registrado na fila e não sai; só o sino recebe.
 

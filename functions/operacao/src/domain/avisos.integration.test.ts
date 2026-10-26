@@ -24,9 +24,9 @@ import { EVENTS_COLLECTION } from "./events.js";
  * A rotina dos avisos no emulador (parte 4.6a): a primeira rodada só marca o
  * cursor; depois, cada evento novo vira um aviso no sino e, para quem ligou
  * o modelo, um e-mail na fila, uma vez só, mesmo rodando de novo; o evento
- * do último minuto espera a próxima rodada; o cliente sem o módulo e o
- * evento de outra codebase não dão aviso; a fila envia, audita ou tenta de
- * novo. Dados sintéticos.
+ * do último minuto espera a próxima rodada; o cliente sem o módulo, o com o
+ * portal desligado e o evento de outra codebase não dão aviso; a fila envia,
+ * audita ou tenta de novo. Dados sintéticos.
  */
 
 const PROJECT_ID = "demo-dute-operacao";
@@ -156,6 +156,22 @@ describe("a rotina dos avisos", () => {
     assert.equal(resultado.avisos, 0);
     assert.deepEqual(await avisos(), []);
     assert.deepEqual(await emails(), []);
+  });
+
+  it("o cliente com o portal desligado não recebe aviso, nem no sino nem por e-mail; o portal religado volta a receber os novos (pergunta 71)", async () => {
+    await rodar(AS_10H);
+    await db.collection("client_access").doc("ITAU").set({ portal_ativo: false }, { merge: true });
+    await evento("evt_cortado", "os.scheduled", { id: "10050-01" }, minutos(AS_10H, 1));
+    const cortado = await rodar(minutos(AS_10H, 5));
+    assert.deepEqual([cortado.eventos, cortado.avisos, cortado.emails], [1, 0, 0]);
+    assert.deepEqual([await avisos(), await emails()], [[], []]);
+
+    // Religado, o evento novo dá aviso; o de quando estava desligado não volta.
+    await db.collection("client_access").doc("ITAU").set({ portal_ativo: true }, { merge: true });
+    await evento("evt_religado", "os.scheduled", { id: "10050-01" }, minutos(AS_10H, 6));
+    const religado = await rodar(minutos(AS_10H, 10));
+    assert.deepEqual([religado.eventos, religado.avisos, religado.emails], [1, 1, 1]);
+    assert.deepEqual((await avisos()).map((aviso) => aviso.id), ["ntf_evt_religado"]);
   });
 
   it("o alerta de itens parados aprovado no núcleo vira aviso; o proposto e o do cliente sem armazenagem, não (parte 5.4f)", async () => {

@@ -186,6 +186,7 @@ execução (o orçamento refeito com o que foi feito).
   cliente", "Gerenciadora", "Financeiro" ou "Outro"; a gerenciadora é a
   "Empresa" do contato, não um cadastro, e a ficha agrupa por empresa. Nos
   "Avisos por e-mail", "NF emitida" é só do gestor e do financeiro do cliente.
+  O cliente arquivado ou "Sem portal" não recebe aviso.
 
 ## Contratos
 
