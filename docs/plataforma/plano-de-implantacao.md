@@ -1123,7 +1123,8 @@ usuário do convite, com o papel dele.
     gravar o desligamento. É tela, então vem com alinhamento.
     **Decidida em 26/10/2026:** como recomendado, com a marca "Inativo na
     Operação" (o Leonardo deixou a forma para a melhor que não trave a
-    operação).
+    operação). **Feita no mesmo dia** (`fase-8-rh.md`, "Pergunta 70"): a
+    marca é a seção "Inativas na Operação" de Pessoas.
 
 **O portal desligado** (26/10/2026). Da pergunta 69.
 71. Com o portal desligado (o cliente arquivado ou "Sem portal"), a pessoa

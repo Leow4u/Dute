@@ -6,7 +6,7 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
 import { RH_DATABASE } from "./banco.js";
-import { getRhFichaFor, getRhPanelFor } from "./ficha-gravacao.js";
+import { getRhFichaFor, getRhPanelFor, saveRhRecordFor } from "./ficha-gravacao.js";
 import type { RhProfile } from "./profile.js";
 import { saveRhVinculoFor } from "./vinculo-gravacao.js";
 
@@ -14,7 +14,8 @@ import { saveRhVinculoFor } from "./vinculo-gravacao.js";
  * As datas do vínculo no emulador (parte 8.4), com os dois bancos: o cadastro
  * da Operação no padrão, que não muda, e as datas, o recibo e o evento no
  * `dute-rh`, nunca no padrão. Só o rh grava, e só no vínculo próprio. A ficha
- * e o painel mostram as datas. Dados sintéticos.
+ * e o painel mostram as datas; o painel mantém quem está inativo na Operação
+ * com o vínculo aberto (pergunta 70). Dados sintéticos.
  */
 
 const PROJECT_ID = "demo-dute-rh";
@@ -157,5 +158,41 @@ describe("as datas do vínculo no banco do RH", () => {
     assert.equal((await getRhFichaFor(padrao, rh, { colaborador_id: ANA }, AGORA)).datas_do_vinculo, null);
     const painel = await getRhPanelFor(padrao, rh, AGORA);
     assert.deepEqual(painel.colaboradores.find((colaborador) => colaborador.id === ANA)?.admissao, null);
+  });
+
+  it("quem a coordenação desativou com a admissão sem o desligamento segue no painel, inativo e sem vencimento, até o RH gravar o desligamento (pergunta 70)", async () => {
+    const EVA = "col_eeeeeeeeeeeeeeee";
+    const FABIO = "col_ffffffffffffffff";
+    const GABI = "col_gggggggggggggggg";
+    await padrao.doc(`collaborators/${EVA}`).set({ nome: "Eva Melo", funcao: "Ajudante", vinculo: "proprio", ativo: true, edicao: 1 });
+    await padrao.doc(`collaborators/${FABIO}`).set({ nome: "Fábio Neves", funcao: "Montador", vinculo: "proprio", ativo: false, edicao: 1 });
+    // O exame vencido da Ana conta enquanto ela está ativa.
+    await saveRhRecordFor(padrao, rh, RH, { idempotency_key: "exame-ana", colaborador_id: ANA, categoria: "exame", tipo: "periodico", emitido_em: "2025-09-01", vence_em: "2026-09-01", resultado: "apto" }, AGORA);
+    await saveRhVinculoFor(padrao, rh, RH, datas());
+    await saveRhVinculoFor(padrao, rh, RH, datas({ colaborador_id: DANI, desligamento: "2026-10-20" }));
+    await saveRhVinculoFor(padrao, rh, RH, datas({ colaborador_id: EVA }));
+    // As datas sem o cadastro (a pessoa apagada da Operação) não entram.
+    await rh.doc(`vinculos/${GABI}`).set({ colaborador_id: GABI, admissao: "2024-01-02", desligamento: null, edicao: 1 });
+    assert.equal((await getRhPanelFor(padrao, rh, AGORA)).vencimentos.length, 1);
+
+    // A coordenação desativa a Ana (vínculo aberto), a Daniela (já desligada) e a Eva, que passa a terceiro.
+    await padrao.doc(`collaborators/${ANA}`).update({ ativo: false });
+    await padrao.doc(`collaborators/${DANI}`).update({ ativo: false });
+    await padrao.doc(`collaborators/${EVA}`).update({ ativo: false, vinculo: "terceiro" });
+    const painel = await getRhPanelFor(padrao, rh, AGORA);
+    assert.deepEqual(
+      painel.colaboradores.map((colaborador) => [colaborador.id, colaborador.ativo]),
+      [[ANA, false], [BRUNO, true], [CARLA, true]],
+    );
+    const ana = painel.colaboradores[0];
+    assert.deepEqual(
+      [ana.nome, ana.admissao, ana.desligamento, ana.registros, ana.vencidos, ana.vencendo],
+      ["Ana Souza", "2025-02-03", null, 1, 0, 0],
+    );
+    assert.deepEqual(painel.vencimentos, []);
+
+    // Com o desligamento, ela sai do painel.
+    await saveRhVinculoFor(padrao, rh, RH, datas({ desligamento: "2026-10-24", expected_edicao: 1 }));
+    assert.deepEqual((await getRhPanelFor(padrao, rh, AGORA)).colaboradores.map((colaborador) => colaborador.id), [BRUNO, CARLA]);
   });
 });

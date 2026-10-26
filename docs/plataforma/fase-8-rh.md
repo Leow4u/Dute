@@ -758,7 +758,9 @@ Feita em 26/10/2026.
   coordenação desativa antes de o RH gravar o desligamento continua na
   planilha como ativo, e a ficha dele só abre pelo endereço. A pergunta 70
   (plano, seção 13) propõe mostrar essas pessoas em Pessoas. **Decidida em
-  26/10/2026:** como recomendado, com a marca "Inativo na Operação".
+  26/10/2026:** como recomendado, com a marca "Inativo na Operação". **Feita
+  no mesmo dia** ("Pergunta 70: quem está inativo na Operação com o vínculo
+  aberto", abaixo).
 
 ### Parte 8.4b: as datas do vínculo nas telas
 
@@ -829,3 +831,33 @@ tomava o lugar da recusa: a pessoa via um erro genérico em vez do motivo.
 - **Teste:** `arquivos.integration.test.ts`, com um armazém que não
   consegue apagar: a recusa sai com o motivo, o arquivo fica e o registro
   não muda.
+
+### Pergunta 70: quem está inativo na Operação com o vínculo aberto
+
+Feita em 26/10/2026, com a decisão do Leonardo (como recomendado, com a
+marca "Inativo na Operação", na forma que não trave a operação).
+
+- **O problema.** Pessoas listava só quem está ativo no cadastro da
+  Operação. Quem a coordenação desativava antes de o RH gravar o
+  desligamento sumia da lista e seguia na planilha da contabilidade como
+  ativo, todo mês; a ficha só abria pelo endereço.
+- **O painel** (`getRhPanel`) traz também quem está inativo na Operação com
+  o vínculo próprio aberto: a admissão gravada, sem o desligamento. Vem com
+  `ativo` falso, a ficha resumida e as datas. Os vencimentos dele não
+  contam: o "Precisa de você" e os números do Início seguem só com os
+  ativos.
+- **Pessoas** mostra essas pessoas à parte, na seção "Inativas na
+  Operação", com o total e a ficha de cada uma. A marca virou o título da
+  seção, para o total de "Ativas" seguir certo. A seção só aparece quando
+  há alguém nela (também na busca). Gravado o desligamento na ficha, a
+  pessoa sai da lista.
+- **Fica de fora:** o freelancer e o terceiro (as datas valem só no
+  próprio), quem já tem o desligamento e o cadastro apagado da Operação.
+- **Testes:**
+  - `vinculo.integration.test.ts`, no emulador: a desativada com o vínculo
+    aberto fica no painel, inativa e sem vencimento; a já desligada, a que
+    passou a terceiro e as datas sem cadastro, não; gravado o desligamento,
+    ela sai;
+  - no app, `lib/rh/ficha.test.ts` (os números só com os ativos),
+    `pessoas-view.test.tsx` (a seção, a busca, os textos e o `axe`) e
+    `inicio-view.test.tsx` (a inativa fora dos números).

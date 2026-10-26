@@ -35,11 +35,13 @@ export function itensDoInicioDoRh(vencimentos: readonly VencimentoDoRh[]): ItemD
 
 export type NumerosDoRh = { pessoas: number; vencidos: number; vencendo: number; semRegistro: number };
 
-export function numerosDoRh(painel: { colaboradores: ReadonlyArray<{ registros: number }>; vencimentos: ReadonlyArray<{ dias: number }> }): NumerosDoRh {
+/** Os números das pessoas ativas: quem está inativo na Operação com o vínculo aberto (pergunta 70) fica só em Pessoas. */
+export function numerosDoRh(painel: { colaboradores: ReadonlyArray<{ ativo: boolean; registros: number }>; vencimentos: ReadonlyArray<{ dias: number }> }): NumerosDoRh {
+  const ativas = painel.colaboradores.filter((colaborador) => colaborador.ativo);
   return {
-    pessoas: painel.colaboradores.length,
+    pessoas: ativas.length,
     vencidos: painel.vencimentos.filter((vencimento) => vencimento.dias < 0).length,
     vencendo: painel.vencimentos.filter((vencimento) => vencimento.dias >= 0).length,
-    semRegistro: painel.colaboradores.filter((colaborador) => colaborador.registros === 0).length,
+    semRegistro: ativas.filter((colaborador) => colaborador.registros === 0).length,
   };
 }

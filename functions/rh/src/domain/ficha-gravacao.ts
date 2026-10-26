@@ -324,9 +324,27 @@ export type PainelDoRh = { hoje: string; colaboradores: ColaboradorNoPainel[]; v
 const POR_NOME = new Intl.Collator("pt-BR", { sensitivity: "base" });
 
 /**
+ * Quem a coordenação desativou com o vínculo próprio aberto, a admissão
+ * gravada sem o desligamento (pergunta 70): segue na planilha da
+ * contabilidade até o RH gravar o desligamento.
+ */
+async function inativosComVinculoAberto(padrao: Firestore, vinculos: ReadonlyMap<string, VinculoGravado>, ativos: ReadonlySet<string>): Promise<ColaboradorDoRh[]> {
+  const abertos = [...vinculos.values()].filter((vinculo) => vinculo.desligamento === null && !ativos.has(vinculo.colaborador_id));
+  if (!abertos.length) return [];
+  const cadastro = await padrao.getAll(...abertos.map((vinculo) => padrao.collection(COLLABORATORS_COLLECTION).doc(vinculo.colaborador_id)));
+  return cadastro.flatMap((doc) => {
+    if (!doc.exists) return [];
+    const colaborador = colaboradorDoRh(doc.id, doc.data() ?? {});
+    return !colaborador.ativo && colaborador.vinculo === "proprio" ? [colaborador] : [];
+  });
+}
+
+/**
  * getRhPanel: o Início e a lista do RH. Quem está ativo no cadastro da
  * Operação, com a contagem da ficha, e os vencimentos (vencimentosDoDia),
- * que são o "Precisa de você" do RH.
+ * que são o "Precisa de você" do RH. Também quem está inativo na Operação
+ * com o vínculo aberto (`ativo` falso), para o RH gravar o desligamento; os
+ * vencimentos dele não contam.
  */
 export async function getRhPanelFor(padrao: Firestore, rh: Firestore, agora: Date = new Date()): Promise<PainelDoRh> {
   const hoje = diaEmSaoPaulo(agora);
@@ -338,9 +356,11 @@ export async function getRhPanelFor(padrao: Firestore, rh: Firestore, agora: Dat
   const ativos = cadastro.docs.map((doc) => colaboradorDoRh(doc.id, doc.data()));
   const registros = legiveis(vigentes.docs);
   const vinculos = vinculosPorColaborador(gravados.docs);
-  const vencimentos = vencimentosDoDia(hoje, registros, new Set(ativos.map((colaborador) => colaborador.id)));
+  const idsAtivos = new Set(ativos.map((colaborador) => colaborador.id));
+  const inativos = await inativosComVinculoAberto(padrao, vinculos, idsAtivos);
+  const vencimentos = vencimentosDoDia(hoje, registros, idsAtivos);
   const nomes = new Map(ativos.map((colaborador) => [colaborador.id, colaborador.nome]));
-  const colaboradores = ativos
+  const colaboradores = [...ativos, ...inativos]
     .map((colaborador): ColaboradorNoPainel => {
       const daFicha = registros.filter((registro) => registro.colaborador_id === colaborador.id);
       const seus = vencimentos.filter((vencimento) => vencimento.colaborador_id === colaborador.id);

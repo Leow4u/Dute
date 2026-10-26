@@ -1,4 +1,5 @@
 import { Search } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "wouter";
 
 import { Input } from "@/components/ui/input";
@@ -11,8 +12,10 @@ import { Contador, Pill, TOM_NEUTRO, TOM_VENCENDO, TOM_VENCIDO, Vazio } from "./
 
 /**
  * Pessoas (partes 8.2c e 8.4b): quem está ativo no cadastro da Operação, com
- * a ficha resumida, as datas do vínculo próprio e a ficha de cada um. Sem
- * legenda: só rótulos, dados e ações.
+ * a ficha resumida, as datas do vínculo próprio e a ficha de cada um. À
+ * parte, em "Inativas na Operação", quem a coordenação desativou com a
+ * admissão sem o desligamento (pergunta 70): o RH grava o desligamento na
+ * ficha, e a pessoa sai da lista. Sem legenda: só rótulos, dados e ações.
  */
 
 export type EstadoDaTela = "carregando" | "erro" | "pronto";
@@ -54,21 +57,41 @@ function Linha({ colaborador, primeira }: { colaborador: ColaboradorNoPainel; pr
   );
 }
 
+function Lista({ colaboradores }: { colaboradores: readonly ColaboradorNoPainel[] }) {
+  return (
+    <ul>
+      {colaboradores.map((colaborador, indice) => (
+        <Linha key={colaborador.id} colaborador={colaborador} primeira={indice === 0} />
+      ))}
+    </ul>
+  );
+}
+
+function Secao({ id, titulo, total, children }: { id: string; titulo: string; total: number; children: ReactNode }) {
+  return (
+    <section aria-labelledby={id} className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex items-center gap-3.5 border-b border-border px-5 py-3.5">
+        <h2 id={id} className="text-base font-extrabold">
+          {titulo}
+        </h2>
+        <Contador>{total}</Contador>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export function PessoasView({ estado, colaboradores, busca, onBusca }: { estado: EstadoDaTela; colaboradores: readonly ColaboradorNoPainel[]; busca: string; onBusca: (valor: string) => void }) {
-  const lista = colaboradores.filter((colaborador) => buscaInclui(colaborador, busca));
+  const ativas = colaboradores.filter((colaborador) => colaborador.ativo);
+  const inativas = colaboradores.filter((colaborador) => !colaborador.ativo);
+  const lista = ativas.filter((colaborador) => buscaInclui(colaborador, busca));
+  const listaDasInativas = estado === "pronto" ? inativas.filter((colaborador) => buscaInclui(colaborador, busca)) : [];
   let conteudo;
   if (estado === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
   else if (estado === "erro") conteudo = <Vazio>Não foi possível carregar as pessoas.</Vazio>;
-  else if (!colaboradores.length) conteudo = <Vazio>Nenhuma pessoa ativa</Vazio>;
+  else if (!ativas.length) conteudo = <Vazio>Nenhuma pessoa ativa</Vazio>;
   else if (!lista.length) conteudo = <Vazio>Nenhuma pessoa encontrada</Vazio>;
-  else
-    conteudo = (
-      <ul>
-        {lista.map((colaborador, indice) => (
-          <Linha key={colaborador.id} colaborador={colaborador} primeira={indice === 0} />
-        ))}
-      </ul>
-    );
+  else conteudo = <Lista colaboradores={lista} />;
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <header className="flex flex-wrap items-center gap-4">
@@ -78,13 +101,14 @@ export function PessoasView({ estado, colaboradores, busca, onBusca }: { estado:
           <Input type="search" aria-label="Buscar" placeholder="Buscar nome ou função" value={busca} onChange={(evento) => onBusca(evento.target.value)} className="pl-9" />
         </label>
       </header>
-      <section aria-labelledby="ativas" className="overflow-hidden rounded-lg border border-border bg-card">
-        <div className="flex items-center gap-3.5 border-b border-border px-5 py-3.5">
-          <h2 id="ativas" className="text-base font-extrabold">Ativas</h2>
-          <Contador>{colaboradores.length}</Contador>
-        </div>
+      <Secao id="ativas" titulo="Ativas" total={ativas.length}>
         {conteudo}
-      </section>
+      </Secao>
+      {listaDasInativas.length ? (
+        <Secao id="inativas-na-operacao" titulo="Inativas na Operação" total={inativas.length}>
+          <Lista colaboradores={listaDasInativas} />
+        </Secao>
+      ) : null}
     </div>
   );
 }
