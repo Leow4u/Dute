@@ -15,15 +15,16 @@ import {
   soDaDutelog,
 } from "./avisos.js";
 import { EVENTS_COLLECTION } from "./events.js";
-import { contractedModulesFrom } from "./platform-roles.js";
-import { CLIENT_ACCESS_COLLECTION, type OperacaoProfile } from "./profile.js";
+import { acessoDoCliente, type OperacaoProfile } from "./profile.js";
 
 /**
  * A rotina dos avisos (parte 4.6a): a cada poucos minutos, lê os eventos
  * novos que dão aviso, a partir do cursor, e grava o aviso no sino do
  * cliente (`client_notifications`) e, para os contatos que ligaram o modelo,
  * o e-mail na fila (`email_outbox`), na mesma transação, com o id do
- * evento: rodar de novo não duplica. Depois envia a fila.
+ * evento: rodar de novo não duplica. Depois envia a fila. O cliente com o
+ * portal desligado (arquivado ou "Sem portal") não recebe aviso, nem no sino
+ * nem por e-mail (pergunta 71).
  *
  * O cursor guarda o instante gravado (`created_at`) e o id do último evento
  * lido. Só entra o evento gravado há mais de um minuto, para o que foi
@@ -77,19 +78,14 @@ async function lerCursor(db: Firestore, agora: Date): Promise<Cursor | null> {
   return null;
 }
 
-/** Os módulos e os contatos de cada cliente, lidos uma vez por rodada. */
+/** O acesso (módulos e portal) e os contatos de cada cliente, lidos uma vez por rodada. */
 function leiturasDoCliente(db: Firestore) {
-  const modulos = new Map<string, Promise<string[]>>();
+  const acessos = new Map<string, ReturnType<typeof acessoDoCliente>>();
   const contatos = new Map<string, Promise<Array<Record<string, unknown>>>>();
   return {
-    modulos(code: string) {
-      if (!modulos.has(code)) {
-        modulos.set(
-          code,
-          db.collection(CLIENT_ACCESS_COLLECTION).doc(code).get().then((acesso) => contractedModulesFrom(acesso.exists ? acesso.get("modules") : undefined)),
-        );
-      }
-      return modulos.get(code)!;
+    acesso(code: string) {
+      if (!acessos.has(code)) acessos.set(code, acessoDoCliente(db, code));
+      return acessos.get(code)!;
     },
     contatos(code: string) {
       if (!contatos.has(code)) {
@@ -128,7 +124,9 @@ export async function gerarAvisos(
     const modelo = modeloDoEvento(evento);
     const alvo = modelo ? documentoDoModelo(modelo, evento) : null;
     if (!modelo || !alvo || !evento.customer_code) continue;
-    if (!clienteRecebeOModelo(modelo, await cliente.modulos(evento.customer_code))) continue;
+    const acesso = await cliente.acesso(evento.customer_code);
+    // O cliente arquivado ou "Sem portal" não recebe aviso, nem no sino nem por e-mail (pergunta 71).
+    if (!acesso.portalAtivo || !clienteRecebeOModelo(modelo, acesso.modulos)) continue;
     const documento = await db.collection(alvo.colecao).doc(alvo.id).get();
     const aviso = avisoDoEvento(evento, documento.exists ? (documento.data() ?? {}) : null);
     if (!aviso) continue;

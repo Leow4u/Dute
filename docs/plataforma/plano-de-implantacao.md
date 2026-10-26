@@ -1109,8 +1109,8 @@ usuário do convite, com o papel dele.
       convite o conferem. Os logins ficam.
     - **Feita no servidor em 26/10/2026** (`fase-2-nucleo.md`, "Pergunta 69:
       arquivar e "Sem portal" cortam o portal"). A tela que explica o corte
-      à pessoa do cliente vem com o alinhamento; os avisos por e-mail são a
-      pergunta 71.
+      à pessoa do cliente entrou no mesmo dia ("A tela do portal
+      desligado"), e os avisos param pela pergunta 71.
 
 **Datas do vínculo** (26/10/2026). Da parte 8.4a do RH.
 70. Pessoas, no RH, lista só quem está ativo no cadastro da Operação. Com as
@@ -1136,7 +1136,9 @@ usuário do convite, com o papel dele.
     e-mail. O e-mail da NFS-e que a prefeitura ou a Omie mandam não muda.
     **Decidida em 26/10/2026:** como recomendado (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item
     10): os avisos param, no sino e no e-mail, e a pessoa do cliente vê só
-    a tela "Portal desligado", com Sair.
+    a tela "Portal desligado", com Sair. **Feita em 26/10/2026:** a tela
+    (`fase-2-nucleo.md`, "A tela do portal desligado") e os avisos parados
+    (`fase-4-financeiro.md`, parte 4.6a).
 
 Limitações conhecidas, sem pergunta, para quando houver tempo:
 

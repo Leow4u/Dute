@@ -56,7 +56,7 @@ export const PORTAL_DESLIGADO = "O portal do seu cliente está desligado.";
  * (armazenagem e faturas) e o portal ligado; sem o campo `portal_ativo` (a
  * projeção de antes da pergunta 69), também ligado.
  */
-async function acessoDoCliente(db: Firestore, code: string): Promise<{ modulos: ReturnType<typeof contractedModulesFrom>; portalAtivo: boolean }> {
+export async function acessoDoCliente(db: Firestore, code: string): Promise<{ modulos: ReturnType<typeof contractedModulesFrom>; portalAtivo: boolean }> {
   const acesso = await db.collection(CLIENT_ACCESS_COLLECTION).doc(code).get();
   return {
     modulos: contractedModulesFrom(acesso.exists ? acesso.get("modules") : undefined),
