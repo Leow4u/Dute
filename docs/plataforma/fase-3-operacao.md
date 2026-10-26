@@ -1826,3 +1826,26 @@ de novo.
   avulso, o item que a OS já tem, a outra OS e o catálogo sem o item) e
   `campo-view.test.tsx` (os textos, sem + e −, a trava contra legenda e o
   `axe`).
+
+### Decisão 11 da LGPD: o contato do local no celular
+
+Feita em 26/10/2026, com o canvas "Telas das decisões de 26/10" (item 4). O
+contato principal do cliente fica onde está; a equipe de campo precisa de
+quem acompanha a atividade no local, e a OS já guarda esse contato em cada
+local (`locais.{origem,destino}.contato`, nome e telefone, gravados no
+agendamento).
+
+- **O cartão "Local"** (`locaisNoCampo` em `lib/campo/os-no-campo.ts`,
+  `pages/campo/os-view.tsx`), no alto da OS no celular:
+  - a origem e o destino, com o nome e o endereço, o complemento e "Abrir
+    no Maps" (`linkDoMaps`, o mesmo link do escritório);
+  - o contato de cada local, com o telefone com a máscara e "Ligar". O
+    `tel:` vai com o +55 quando o número tem DDD e não tem o país
+    (`linkDeLigar`).
+- A vistoria no celular segue com o endereço no topo; o mesmo cartão entra
+  nela com um alinhamento.
+- **Testes:**
+  - `os-no-campo.test.ts`: os locais com o Maps e o contato, o local sem
+    endereço e o link de ligar;
+  - `campo-view.test.tsx`: os textos, o `tel:` e o Maps, o local antes das
+    etapas, a trava contra legenda e o `axe`.

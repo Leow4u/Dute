@@ -1,6 +1,7 @@
+import { formatarTelefone } from "../comercial/clientes";
 import { PAPEL_ROTULO } from "../operacao/cadastro";
 import type { ItemDoCatalogo } from "../operacao/demanda-direta";
-import { ETAPAS_DA_OS, ETAPA_ROTULO, horaDe, servicosEmTexto, type EtapaDaOs, type FichaDaOs, type PessoaLida } from "../operacao/ficha-da-os";
+import { ETAPAS_DA_OS, ETAPA_ROTULO, horaDe, linkDoMaps, servicosEmTexto, type EtapaDaOs, type FichaDaOs, type LocalLido, type PessoaLida } from "../operacao/ficha-da-os";
 import { milesimos } from "../operacao/hoje";
 import type { NovoRegistro, RegistroNaFila } from "./fila";
 
@@ -119,6 +120,49 @@ function pendentesDa(ficha: Pick<FichaDaOs, "numero">, pendentes: readonly Regis
 
 function textoDe(valor: unknown): string {
   return typeof valor === "string" ? valor : "";
+}
+
+// --- O local da OS ------------------------------------------------------------------------
+
+/**
+ * A origem e o destino no celular (decisão 11 da LGPD; canvas de 26/10/2026,
+ * item 4): o endereço, o complemento, o link do Maps e quem acompanha a
+ * atividade no local, com o telefone para ligar.
+ */
+export type LocalNoCampo = {
+  rotulo: "Origem" | "Destino";
+  /** "Centro Empresarial · Torre B". */
+  endereco: string | null;
+  complemento: string | null;
+  mapa: string | null;
+  /** O telefone com a máscara, "(11) 98765-4321", e o link de "Ligar". */
+  contato: { nome: string; telefone: string | null; ligar: string | null } | null;
+};
+
+/** O link de "Ligar": o número como o servidor grava; com DDD e sem o país, pelo +55. */
+export function linkDeLigar(telefone: string): string {
+  const numero = telefone.replace(/[^\d+]/g, "");
+  return `tel:${/^\d{10,11}$/.test(numero) ? `+55${numero}` : numero}`;
+}
+
+export function locaisNoCampo(ficha: Pick<FichaDaOs, "locais">): LocalNoCampo[] {
+  const locais: Array<[LocalNoCampo["rotulo"], LocalLido | null]> = [
+    ["Origem", ficha.locais.origem],
+    ["Destino", ficha.locais.destino],
+  ];
+  return locais.flatMap(([rotulo, local]): LocalNoCampo[] => {
+    if (!local) return [];
+    const telefone = local.contato?.telefone ?? null;
+    return [
+      {
+        rotulo,
+        endereco: [local.nome, local.endereco].filter(Boolean).join(" · ") || null,
+        complemento: local.complemento,
+        mapa: local.endereco ? linkDoMaps(local.endereco) : null,
+        contato: local.contato ? { nome: local.contato.nome, telefone: telefone ? formatarTelefone(telefone) : null, ligar: telefone ? linkDeLigar(telefone) : null } : null,
+      },
+    ];
+  });
 }
 
 export type EtapaNoCampo = { etapa: EtapaDaOs; rotulo: string; hora: string | null; estado: "feita" | "guardada" | "pulada" | "pendente" };

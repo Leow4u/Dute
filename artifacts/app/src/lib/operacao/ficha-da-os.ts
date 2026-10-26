@@ -804,11 +804,15 @@ export function historicoDaOs(ficha: FichaDaOs, hoje: string): EntradaDoHistoric
   return entradas.sort((a, b) => b.instante.localeCompare(a.instante) || a.chave.localeCompare(b.chave));
 }
 
+/** O link do Google Maps para o endereço. */
+export function linkDoMaps(endereco: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(endereco)}`;
+}
+
 /** O endereço para "Abrir no Maps": o do destino, ou o da origem. */
 export function enderecoNoMaps(ficha: FichaDaOs): string | null {
   const local = ficha.locais.destino?.endereco ? ficha.locais.destino : ficha.locais.origem;
-  if (!local?.endereco) return null;
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(local.endereco)}`;
+  return local?.endereco ? linkDoMaps(local.endereco) : null;
 }
 
 /** "Líder", "Motorista · no app", "Freelancer · Montador", "Terceiro · Motorista · Rota Sul". */
