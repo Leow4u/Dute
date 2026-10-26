@@ -30,14 +30,10 @@ plano ordena as partes. Escrito em 23/10/2026.
 |---|---|
 | 23 | `owner` e `admin` leem o RH; só `rh` grava (a recomendação). |
 | 24 | A folha e o eSocial ficam com a contabilidade: a Dute exporta, por competência, os colaboradores e os exames, com os dados do S-2220, e quem faz a folha transmite (Leonardo, 24/10/2026). A Dute não assina XML nem guarda certificado digital. |
-
-Esperam o Leonardo, da revisão de 25/10/2026 (plano, seção 13):
-
-- 61: o vigente quando dois registros têm a mesma data de emissão;
-- 62: os exames ocupacionais num grupo só, para o admissional não ficar
-  vigente depois do periódico;
-- 63: a planilha de colaboradores do mês exportado, com as datas de
-  admissão e desligamento.
+| 61 | No empate da data de emissão, vale o registro lançado por último (25/10/2026; registro abaixo). |
+| 62 | Os exames ocupacionais são um grupo só: vale o ASO mais recente (25/10/2026). |
+| 63 | Guardar a data de admissão e a de desligamento, e a planilha de colaboradores listar quem teve vínculo no mês (25/10/2026; parte 8.4). |
+| Tela da 8.4 | Alinhada em 26/10/2026: as datas ficam no banco `dute-rh`, gravadas só pelo `rh`; o desligamento não mexe no cadastro da Operação; o próprio sem admissão entra na planilha se está ativo; "Sem admissão" aparece em Pessoas e na Exportação, fora do "Precisa de você". |
 
 - **O banco `dute-rh` é um banco Firestore à parte**, no mesmo projeto, com as
   regras dele (`firestore-rh.rules`). Guarda os documentos, os exames e os
@@ -154,6 +150,8 @@ banco, e para isso bastam os papéis que a conta já tinha.
 | 8.2c | As telas de leitura, desligadas até a 8.1b: o shell do RH, o Início com os vencimentos, Pessoas e a ficha | Os textos e o `axe` de cada tela; as rotas só existem com a liberação; só owner, admin e rh abrem |
 | 8.2d | As ações na ficha: incluir, alterar e arquivar o registro, subir e abrir o arquivo | Owner e admin não veem as ações de gravar; o arquivo abre pela callable |
 | 8.3 | A exportação da competência para a contabilidade: os exames do mês com os códigos do S-2220 e os colaboradores próprios, em CSV, por versão; a tela Exportação | A mesma competência sem mudança devolve a mesma versão, sem evento novo; só o rh gera; cada download fica registrado |
+| 8.4a | As datas do vínculo no servidor: a admissão e o desligamento do próprio no banco `dute-rh` (`saveRhVinculo`, só o rh), na ficha e no painel; a planilha de colaboradores com quem teve vínculo no mês | Quem entra depois da competência não aparece nela; o nome mudado depois não cria versão nova do mês; o cadastro da Operação não muda |
+| 8.4b | As datas na tela: o formulário da ficha, as datas e o "Sem admissão" em Pessoas, a lista "Sem data de admissão" na Exportação | Os textos e o `axe` de cada tela; owner e admin não veem o botão de gravar |
 
 **Pronto quando** só `rh`, `admin` e `owner` leem o RH, pela callable, e o
 exame, o treinamento e o documento vencendo aparecem no Início do RH (a CNH,
@@ -474,7 +472,8 @@ competência.
     S-2220 (o "outro" da ficha é a monitoração pontual; o apto com restrição
     é apto);
   - os colaboradores próprios ativos, e os inativos com exame no mês (o
-    demissional);
+    demissional); desde a parte 8.4a, quem teve vínculo no mês, pelas datas
+    de admissão e desligamento;
   - o arquivado não entra; o substituído entra, porque o exame aconteceu;
   - o mesmo exame lançado de novo para corrigir (o mesmo tipo e a mesma
     data do ASO) entra uma vez, o que a ficha deixa vigente no empate (ver
@@ -649,7 +648,8 @@ mês. O RH liga na produção sem esperar por elas.
 - **A parte 8.4** (no plano) guarda as duas datas e filtra a planilha por
   elas. É tela nova, então o alinhamento de UX vem antes, como em toda tela.
   O alinhamento também decide se as datas ficam no cadastro da Operação
-  (`collaborators`) ou no banco `dute-rh`.
+  (`collaborators`) ou no banco `dute-rh`: ficam no `dute-rh` ("Alinhamento
+  da parte 8.4", abaixo).
 
 ### Lançamento na produção
 
@@ -673,3 +673,86 @@ PRs próprios, para a produção começar com as regras novas.
 - **Como desfazer.** Tirar o `dute-prod` das duas listas e publicar de novo.
   As telas somem, as callables recusam, e o que foi gravado fica no
   `dute-rh`.
+
+### Alinhamento da parte 8.4
+
+Feito em 26/10/2026, com o canvas das telas
+(`https://claude.ai/artifact/P3dXT4G48unzy3tCK3whM1`: a ficha, Pessoas, a
+Exportação e a planilha de setembro). O Leonardo aprovou as telas ("Sim,
+aprovado, pode fazer") e as quatro recomendações:
+
+1. **Onde ficam as datas:** no banco `dute-rh`, em `vinculos`, gravadas só
+   pelo `rh`, com o recibo e o evento `rh.*`, como o resto da ficha. A
+   Operação não lê. Só o vínculo próprio tem as datas: o freelancer e o
+   terceiro não estão na folha da Dutelog.
+2. **O desligamento e a Operação ficam independentes:** gravar o
+   desligamento não tira a pessoa da escala. Quem a inativa na Operação é a
+   coordenação, como hoje.
+3. **O próprio sem data de admissão** entra na planilha se está ativo, como
+   antes, ou inativo com exame no mês.
+4. **"Sem admissão"** aparece em Pessoas e na Exportação, com o link da
+   ficha. O "Precisa de você" do Início continua só com os vencimentos.
+
+A parte saiu em dois PRs: o servidor (8.4a) e as telas (8.4b).
+
+### Parte 8.4a: as datas do vínculo no servidor
+
+Feita em 26/10/2026.
+
+- **As datas** (`domain/vinculo.ts`, puro): um documento por colaborador
+  em `vinculos/{col_…}` no banco `dute-rh`, com a admissão, o desligamento
+  (ou null) e a edição.
+  - A admissão é obrigatória, e o desligamento pode ser no mesmo dia, nunca
+    antes. As datas vão de 1900 a 2100, como na ficha.
+  - A tela manda a edição que leu (`expected_edicao`, null quando ainda não
+    há datas). A edição velha, ou a tela que leu sem datas quando outra
+    pessoa já gravou, recarrega.
+- **A gravação** (`domain/vinculo-gravacao.ts`, callable `saveRhVinculo`):
+  - só o `rh`; owner e admin recebem "Só o RH grava no RH.";
+  - confere o colaborador no cadastro da Operação e recusa o freelancer e o
+    terceiro ("Só o vínculo próprio tem admissão e desligamento.");
+  - grava as datas, o recibo (`rh_operations`) e o evento
+    `rh.vinculo_saved` numa transação do banco `dute-rh`. O cadastro da
+    Operação não muda;
+  - o evento leva o id do colaborador, as duas datas e as edições, nunca o
+    nome nem o CPF; a entidade é `rh_vinculo`.
+- **A leitura:** a ficha (`getRhFicha`) traz `datas_do_vinculo`, com a
+  edição, e o painel (`getRhPanel`), a admissão e o desligamento de cada
+  próprio. Se o cadastro da Operação muda o vínculo para terceiro ou
+  freelancer, as datas gravadas antes deixam de aparecer e de contar.
+- **A planilha de colaboradores** (`domain/exportacao.ts`):
+  - com a admissão, entra quem teve vínculo no mês: admitido até o último
+    dia e, se desligado, desligado a partir do primeiro. Quem entra depois
+    não aparece, e quem saiu antes também não, mesmo ativo na Operação;
+  - sem a admissão, vale a regra de antes: ativo, ou inativo com exame no
+    mês;
+  - as colunas são Nome, CPF, Função, Admissão, Desligamento e Situação no
+    mês: Ativo, Inativo (só sem as datas), Admissão no mês, Desligamento no
+    mês, ou Admissão e desligamento no mês;
+  - o hash da versão não conta o nome nem a função, e a ordem dele é a do
+    id: o nome ou a função mudados depois não criam versão nova de um mês já
+    exportado. O CPF, as datas, a situação e os exames criam. A versão nova
+    leva o cadastro de hoje inteiro.
+- **As versões guardadas** levam `formato: 2`. A de antes da parte não tem
+  o campo e baixa com as colunas de então (Nome, CPF, Função, Situação). A
+  primeira exportação de um mês já exportado, depois desta parte, nasce
+  numa versão nova, porque a planilha mudou.
+- **Testes:**
+  - `vinculo.test.ts`: a entrada (a admissão obrigatória, o desligamento no
+    dia e antes, as datas, o campo a mais), a edição, a leitura conferida, o
+    vínculo no mês com o fevereiro bissexto e a situação no mês;
+  - `vinculo.integration.test.ts`, no emulador: a gravação com o recibo e o
+    evento só no `dute-rh`, o cadastro da Operação intacto, a repetição, a
+    edição velha, owner, admin, freelancer, terceiro e o colaborador que
+    não existe recusados, e a ficha e o painel com as datas;
+  - `exportacao.test.ts` e `exportacao.integration.test.ts`: quem é admitido
+    depois do mês fica de fora, a desligada no mês entra, o hash sem o nome
+    e a função, o nome mudado que não cria versão e o CPF mudado que cria, e
+    a versão antiga que baixa com as colunas de então;
+  - `events.test.ts`: o payload estrito e só o rh grava;
+  - no app, `platform-lists.test.ts` exige a callable nova em
+    `CALLABLES_DO_RH`.
+- **Limitação:** Pessoas lista só quem está ativo na Operação. Quem a
+  coordenação desativa antes de o RH gravar o desligamento continua na
+  planilha como ativo, e a ficha dele só abre pelo endereço. A pergunta 70
+  (plano, seção 13) propõe mostrar essas pessoas em Pessoas.

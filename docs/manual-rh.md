@@ -55,11 +55,19 @@ competência, duas planilhas CSV que abrem no Excel em português:
 - **Exames:** os ASO do mês das pessoas com vínculo próprio, fora os
   arquivados, com nome, CPF, função, o exame, o código `tpExameOcup` do
   S-2220, a data do ASO, o resultado, o código `resAso` e o vencimento.
-- **Colaboradores:** as pessoas com vínculo próprio ativas ou com exame no
-  mês, com nome, CPF, função e situação. A lista sai do cadastro de hoje,
-  não do mês exportado: quem entrou depois aparece na exportação de um mês
-  passado gerada agora. As datas de admissão e de desligamento entram na
-  parte 8.4.
+- **Colaboradores:** as pessoas com vínculo próprio que tiveram vínculo no
+  mês, com nome, CPF, função, admissão, desligamento e a situação no mês.
+  - Com a data de admissão, entra quem foi admitido até o último dia do mês
+    e, se desligado, desligado a partir do primeiro. Quem entrou depois não
+    aparece num mês passado.
+  - A situação no mês é Ativo, Admissão no mês, Desligamento no mês, ou
+    Admissão e desligamento no mês.
+  - Quem ainda está sem a data de admissão entra como antes: se está ativo
+    no cadastro da Operação, como Ativo; se está inativo, só com exame no
+    mês, como Inativo.
+  - O desligamento é do RH, e a inativação, da coordenação: quem a
+    coordenação desativou na Operação continua na planilha até o RH gravar
+    o desligamento.
 
 Os códigos do S-2220:
 
@@ -80,5 +88,12 @@ Os códigos do S-2220:
 - **"Gerar exportação"** é só do `rh`. A competência começa no mês anterior.
   Gerar de novo sem nada mudado devolve a versão de antes; com mudança, nasce
   a versão seguinte (v2, v3), e as anteriores continuam na lista.
+  - O nome e a função saem do cadastro de hoje, mas sozinhos não criam
+    versão nova: um mês já exportado não muda porque o nome mudou depois.
+    Uma versão nova, por outra mudança, leva o nome de hoje.
+  - As versões geradas antes das colunas de admissão e de desligamento
+    baixam com as colunas de então (nome, CPF, função e situação). A
+    primeira exportação de um mês já exportado, depois delas, nasce numa
+    versão nova.
 - **Baixar** é de `owner`, `admin` e `rh`. A planilha sai da versão
   guardada, e cada download fica registrado.

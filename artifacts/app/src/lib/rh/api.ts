@@ -15,6 +15,7 @@ export const CALLABLES_DO_RH = [
   "getRhFicha",
   "saveRhRecord",
   "archiveRhRecord",
+  "saveRhVinculo",
   "requestRhUpload",
   "attachRhFile",
   "openRhFile",

@@ -9,13 +9,16 @@ import { RH_DATABASE } from "./banco.js";
 import { downloadRhExportFor, exportRhMonthFor, listRhExportsFor } from "./exportacao-gravacao.js";
 import { saveRhRecordFor } from "./ficha-gravacao.js";
 import type { RhProfile } from "./profile.js";
+import { saveRhVinculoFor } from "./vinculo-gravacao.js";
 
 /**
  * A exportação para a contabilidade no emulador (parte 8.3), com os dois
  * bancos: o cadastro no padrão, a versão, o recibo e o evento no `rh`, nunca
  * no padrão. A mesma competência sem mudança devolve a mesma versão, sem
  * evento novo; com mudança, nasce a seguinte. Só o rh gera; owner, admin e rh
- * baixam, e cada download fica registrado. Dados sintéticos.
+ * baixam, e cada download fica registrado. Com as datas do vínculo (parte
+ * 8.4), a planilha de colaboradores lista quem teve vínculo no mês. Dados
+ * sintéticos.
  */
 
 const PROJECT_ID = "demo-dute-rh";
@@ -148,5 +151,64 @@ describe("a exportação no banco do RH", () => {
       ["rh.export_downloaded", "exp_2026-10_v1", "rh"],
     ]);
     await recusa(downloadRhExportFor(rh, RH, { id: "exp_2026-09_v1", arquivo: "exames" }, AGORA), "not-found", /não encontrada/);
+  });
+
+  it("com as datas do vínculo, entra quem teve vínculo no mês, e a versão guarda o formato 2", async () => {
+    await padrao.doc("collaborators/col_eeeeeeeeeeeeeeee").set({ nome: "Eduardo Paz", funcao: "Ajudante", vinculo: "proprio", cpf: "16899535009", ativo: true, edicao: 1 });
+    // A Ana, ativa, só é admitida em novembro; a Carla, inativa e sem exame no mês, foi desligada nele.
+    await saveRhVinculoFor(padrao, rh, RH, { idempotency_key: "v-ana", colaborador_id: ANA, admissao: "2026-11-03" });
+    await saveRhVinculoFor(padrao, rh, RH, { idempotency_key: "v-carla", colaborador_id: CARLA, admissao: "2024-01-10", desligamento: "2026-10-15" });
+
+    await exportRhMonthFor(padrao, rh, RH, { idempotency_key: "exp-1", competencia: "2026-10" }, AGORA);
+    const gravada = (await rh.doc("exportacoes/exp_2026-10_v1").get()).data() ?? {};
+    assert.equal(gravada.formato, 2);
+    assert.deepEqual(
+      (gravada.colaboradores as { nome: string; admissao: string | null; desligamento: string | null; situacao_no_mes: string }[]).map((linha) => [linha.nome, linha.admissao, linha.desligamento, linha.situacao_no_mes]),
+      [["Carla Dias", "2024-01-10", "2026-10-15", "desligamento"], ["Eduardo Paz", null, null, "ativo"]],
+    );
+    const arquivo = await downloadRhExportFor(rh, RH, { id: "exp_2026-10_v1", arquivo: "colaboradores" }, AGORA);
+    assert.deepEqual(arquivo.conteudo.slice(1).split("\r\n"), [
+      "Nome;CPF;Função;Admissão;Desligamento;Situação no mês",
+      "Carla Dias;390.533.447-05;Ajudante;10/01/2024;15/10/2026;Desligamento no mês",
+      "Eduardo Paz;168.995.350-09;Ajudante;;;Ativo",
+      "",
+    ]);
+
+    // Em novembro, a Ana entra pela admissão, e a Carla, desligada em outubro, sai.
+    const novembro = new Date("2026-11-10T15:00:00Z");
+    await exportRhMonthFor(padrao, rh, RH, { idempotency_key: "exp-2", competencia: "2026-11" }, novembro);
+    const deNovembro = (await rh.doc("exportacoes/exp_2026-11_v1").get()).data() ?? {};
+    assert.deepEqual((deNovembro.colaboradores as { nome: string; situacao_no_mes: string }[]).map((linha) => [linha.nome, linha.situacao_no_mes]), [
+      ["Ana Souza", "admissao"],
+      ["Eduardo Paz", "ativo"],
+    ]);
+  });
+
+  it("o nome ou a função mudados depois não criam versão nova do mês; o CPF mudado cria", async () => {
+    await exame(ANA, "periodico", "2026-10-05");
+    await exportRhMonthFor(padrao, rh, RH, { idempotency_key: "exp-1", competencia: "2026-10" }, AGORA);
+    await padrao.doc(`collaborators/${ANA}`).update({ nome: "Ana Souza Lima", funcao: "Líder de equipe" });
+    const igual = await exportRhMonthFor(padrao, rh, RH, { idempotency_key: "exp-2", competencia: "2026-10" }, AGORA);
+    assert.deepEqual(igual, { id: "exp_2026-10_v1", versao: 1, nova: false });
+    await padrao.doc(`collaborators/${ANA}`).update({ cpf: "168.995.350-09" });
+    const outra = await exportRhMonthFor(padrao, rh, RH, { idempotency_key: "exp-3", competencia: "2026-10" }, AGORA);
+    assert.deepEqual(outra, { id: "exp_2026-10_v2", versao: 2, nova: true });
+    // A versão nova leva o cadastro de hoje inteiro, com o nome novo.
+    const gravada = (await rh.doc("exportacoes/exp_2026-10_v2").get()).data() ?? {};
+    assert.deepEqual((gravada.colaboradores as { nome: string; cpf: string }[]).map((linha) => [linha.nome, linha.cpf]), [["Ana Souza Lima", "16899535009"]]);
+  });
+
+  it("a versão gerada antes das datas do vínculo baixa com as colunas de então", async () => {
+    await rh.doc("exportacoes/exp_2026-09_v1").set({
+      competencia: "2026-09",
+      versao: 1,
+      hash: "a".repeat(32),
+      exames: [],
+      colaboradores: [{ colaborador_id: ANA, nome: "Ana Souza", cpf: "52998224725", funcao: "Montadora", ativo: true }],
+      totais: { exames: 0, colaboradores: 1 },
+      gerada_em: "2026-10-01T12:00:00.000Z",
+    });
+    const arquivo = await downloadRhExportFor(rh, RH, { id: "exp_2026-09_v1", arquivo: "colaboradores" }, AGORA);
+    assert.deepEqual(arquivo.conteudo.slice(1).split("\r\n"), ["Nome;CPF;Função;Situação", "Ana Souza;529.982.247-25;Montadora;Ativo", ""]);
   });
 });

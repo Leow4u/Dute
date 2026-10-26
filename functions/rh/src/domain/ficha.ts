@@ -120,6 +120,9 @@ const dia = z
 const colaboradorId = z.string().regex(ID_COLABORADOR, "Colaborador inválido.");
 const registroId = z.string().regex(ID_REGISTRO, "Registro inválido.");
 
+/** Os campos que as outras entradas do RH repetem (as datas do vínculo, parte 8.4). */
+export const camposDaEntrada = { chave, edicao, dia, colaboradorId } as const;
+
 const salvarSchema = z
   .object({
     idempotency_key: chave,

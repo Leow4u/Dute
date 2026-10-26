@@ -72,4 +72,19 @@ describe("eventos do RH", () => {
     }
     assert.throws(() => buildRhEvent({ operation_id: "op", type: "rh.export_downloaded", entity_id: EXPORTACAO.id, payload: baixada, actor: { uid: "op-1", role: "operacao" } }), /quem grava no RH/);
   });
+
+  it("as datas do vínculo: o colaborador, as duas datas e as edições; só o rh grava, e a entidade é o vínculo", () => {
+    const gravado = { id: REGISTRO.colaborador_id, admissao: "2025-02-03", desligamento: null, edicao_antes: null, edicao_depois: 1 };
+    assert.equal(RH_EVENT_PAYLOADS["rh.vinculo_saved"].safeParse(gravado).success, true);
+    assert.equal(RH_EVENT_PAYLOADS["rh.vinculo_saved"].safeParse({ ...gravado, id: REGISTRO.id }).success, false);
+    for (const extra of [{ nome: "Ana" }, { cpf: "52998224725" }, { salario: 3000 }]) {
+      assert.equal(RH_EVENT_PAYLOADS["rh.vinculo_saved"].safeParse({ ...gravado, ...extra }).success, false);
+    }
+    const evento = buildRhEvent({ operation_id: "op", type: "rh.vinculo_saved", entity_id: gravado.id, payload: gravado, actor: RH });
+    assert.equal(evento.entity_type, "rh_vinculo");
+    assert.equal(evento.title, "Datas do vínculo gravadas");
+    for (const actor of [ROTINA, { uid: "admin-1", role: "admin" }]) {
+      assert.throws(() => buildRhEvent({ operation_id: "op", type: "rh.vinculo_saved", entity_id: gravado.id, payload: gravado, actor }), /quem grava no RH/);
+    }
+  });
 });

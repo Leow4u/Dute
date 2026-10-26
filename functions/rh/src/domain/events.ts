@@ -16,7 +16,8 @@ import { RH_ROLES } from "./platform-roles.js";
  * O payload leva o id do colaborador, a categoria, o tipo e as datas, nunca
  * o nome do registro "outro", o resultado do exame nem o arquivo; o da
  * exportação (parte 8.3), a competência, a versão e as contagens, nunca nome
- * nem CPF. Os eventos de vencimento são da rotina diária; a abertura do
+ * nem CPF; o das datas do vínculo (parte 8.4), o colaborador, as duas datas e
+ * as edições. Os eventos de vencimento são da rotina diária; a abertura do
  * arquivo e o download da exportação, de quem lê o RH (owner, admin e rh:
  * cada um fica registrado); os outros, de quem grava no RH.
  */
@@ -35,6 +36,7 @@ export const RH_EVENT_TYPES = [
   "rh.file_opened",
   "rh.export_created",
   "rh.export_downloaded",
+  "rh.vinculo_saved",
 ] as const;
 export type RhEventType = (typeof RH_EVENT_TYPES)[number];
 
@@ -78,6 +80,10 @@ export const RH_EVENT_PAYLOADS = {
   "rh.file_opened": z.object(doRegistro).strict(),
   "rh.export_created": z.object({ ...daExportacao, exames: contagem, colaboradores: contagem }).strict(),
   "rh.export_downloaded": z.object({ ...daExportacao, arquivo: z.enum(ARQUIVOS) }).strict(),
+  /** As datas do vínculo gravadas: o id é o do colaborador; `edicao_antes` é null na primeira vez. */
+  "rh.vinculo_saved": z
+    .object({ id: colaboradorId, admissao: dia, desligamento: dia.nullable(), edicao_antes: edicao.nullable(), edicao_depois: edicao })
+    .strict(),
 } as const satisfies Record<RhEventType, z.ZodObject<z.ZodRawShape>>;
 
 const TEXTO: Record<RhEventType, { title: string; description: string }> = {
@@ -91,10 +97,14 @@ const TEXTO: Record<RhEventType, { title: string; description: string }> = {
   "rh.file_opened": { title: "Arquivo do registro aberto", description: "Alguém do RH abriu o arquivo do registro." },
   "rh.export_created": { title: "Exportação para a contabilidade gerada", description: "Uma versão nova da exportação da competência foi gerada." },
   "rh.export_downloaded": { title: "Exportação para a contabilidade baixada", description: "Alguém do RH baixou uma planilha da exportação." },
+  "rh.vinculo_saved": { title: "Datas do vínculo gravadas", description: "A admissão ou o desligamento do colaborador foi gravado." },
 };
 
-/** A entidade do evento: o registro da ficha ou a exportação. */
-export function entidadeDoEvento(type: RhEventType): "rh_record" | "rh_export" {
+export type EntidadeDoEvento = "rh_record" | "rh_export" | "rh_vinculo";
+
+/** A entidade do evento: o registro da ficha, a exportação ou as datas do vínculo do colaborador. */
+export function entidadeDoEvento(type: RhEventType): EntidadeDoEvento {
+  if (type === "rh.vinculo_saved") return "rh_vinculo";
   return type.startsWith("rh.export_") ? "rh_export" : "rh_record";
 }
 
@@ -118,7 +128,7 @@ export type RhEventRecord = {
   title: string;
   description: string;
   severity: "info";
-  entity_type: "rh_record" | "rh_export";
+  entity_type: EntidadeDoEvento;
   entity_id: string;
   payload: Record<string, unknown>;
   occurred_at: string;

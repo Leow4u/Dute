@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { PRIMEIRO_DIA, TIPOS_POR_CATEGORIA, chaveDoTipo, maisRecentePrimeiro, parseEntrada, type RegistroGravado, type ResultadoDoExame } from "./ficha.js";
 import { digest } from "./operations.js";
+import { situacaoNoMes, temVinculoNoMes, type SituacaoNoMes } from "./vinculo.js";
 
 /**
  * A exportação do RH para a contabilidade (parte 8.3; pergunta 24: quem faz a
@@ -11,8 +12,9 @@ import { digest } from "./operations.js";
  *
  * - os exames ocupacionais cujo ASO é da competência, com os códigos do
  *   S-2220 (tpExameOcup e resAso);
- * - os colaboradores próprios ativos, e os inativos com exame no mês (o
- *   demissional).
+ * - os colaboradores próprios com vínculo no mês, pelas datas de admissão e
+ *   de desligamento (parte 8.4); quem ainda está sem a admissão entra pela
+ *   regra de antes: ativo, ou inativo com exame no mês (o demissional).
  *
  * Só o vínculo próprio entra: o terceiro e o freelancer não são empregados da
  * Dutelog, e o eSocial deles é de quem os emprega. O CPF entra porque a
@@ -59,8 +61,17 @@ const ROTULO_DO_EXAME: Record<TipoDeExame, string> = {
 
 const ROTULO_DO_RESULTADO: Record<ResultadoDoExame, string> = { apto: "Apto", apto_com_restricao: "Apto com restrição", inapto: "Inapto" };
 
-/** O que a exportação lê do cadastro da Operação: só os de vínculo próprio. */
-export type ColaboradorDaExportacao = { id: string; nome: string; cpf: string; funcao: string; ativo: boolean };
+/** O que a exportação lê do cadastro da Operação (só os de vínculo próprio), com as datas do vínculo do RH. */
+export type ColaboradorDaExportacao = {
+  id: string;
+  nome: string;
+  cpf: string;
+  funcao: string;
+  ativo: boolean;
+  /** As datas do vínculo (parte 8.4); null enquanto o RH não grava. */
+  admissao: string | null;
+  desligamento: string | null;
+};
 
 export type LinhaDoExame = {
   registro_id: string;
@@ -78,9 +89,28 @@ export type LinhaDoExame = {
   vence_em: string | null;
 };
 
-export type LinhaDoColaborador = { colaborador_id: string; nome: string; cpf: string; funcao: string; ativo: boolean };
+export type LinhaDoColaborador = {
+  colaborador_id: string;
+  nome: string;
+  cpf: string;
+  funcao: string;
+  admissao: string | null;
+  desligamento: string | null;
+  situacao_no_mes: SituacaoNoMes;
+};
 
-export type ConteudoDaExportacao = { competencia: string; exames: LinhaDoExame[]; colaboradores: LinhaDoColaborador[] };
+/** A linha das versões de antes da parte 8.4 (formato 1): a situação do cadastro na hora de gerar. */
+export type LinhaDoColaboradorAntiga = { colaborador_id: string; nome: string; cpf: string; funcao: string; ativo: boolean };
+
+/** O formato das linhas de colaboradores: 1 até a parte 8.4; 2 com as datas do vínculo. */
+export const FORMATO_DA_EXPORTACAO = 2;
+
+export type ConteudoDaExportacao = { competencia: string; formato: typeof FORMATO_DA_EXPORTACAO; exames: LinhaDoExame[]; colaboradores: LinhaDoColaborador[] };
+
+/** A versão guardada, de qualquer formato: a planilha sai como foi gerada. */
+export type ConteudoGuardado =
+  | { competencia: string; formato: 1; exames: LinhaDoExame[]; colaboradores: LinhaDoColaboradorAntiga[] }
+  | ConteudoDaExportacao;
 
 export type EntradaDaExportacao = { idempotency_key: string; competencia: string };
 
@@ -171,15 +201,47 @@ export function conteudoDaExportacao(
   exames.sort((a, b) => a.data_do_aso.localeCompare(b.data_do_aso) || porNome(a, b) || a.registro_id.localeCompare(b.registro_id));
   const comExame = new Set(exames.map((linha) => linha.colaborador_id));
   const linhas = colaboradores
-    .filter((colaborador) => colaborador.ativo || comExame.has(colaborador.id))
-    .map((colaborador) => ({ colaborador_id: colaborador.id, nome: colaborador.nome, cpf: colaborador.cpf, funcao: colaborador.funcao, ativo: colaborador.ativo }));
-  linhas.sort(porNome);
-  return { competencia, exames, colaboradores: linhas };
+    .flatMap((colaborador): LinhaDoColaborador[] => {
+      const datas = colaborador.admissao ? { admissao: colaborador.admissao, desligamento: colaborador.desligamento } : null;
+      const entra = datas ? temVinculoNoMes(datas, competencia) : colaborador.ativo || comExame.has(colaborador.id);
+      if (!entra) return [];
+      return [{
+        colaborador_id: colaborador.id,
+        nome: colaborador.nome,
+        cpf: colaborador.cpf,
+        funcao: colaborador.funcao,
+        admissao: datas?.admissao ?? null,
+        desligamento: datas?.desligamento ?? null,
+        situacao_no_mes: situacaoNoMes(datas, colaborador.ativo, competencia),
+      }];
+    })
+    .sort(porNome);
+  return { competencia, formato: FORMATO_DA_EXPORTACAO, exames, colaboradores: linhas };
 }
 
-/** O hash do conteúdo: a mesma competência sem mudança tem o mesmo. */
+/** A linha sem o nome e a função, que o hash não conta. */
+function semRotulo<T extends { nome: string; funcao: string }>(linha: T): Omit<T, "nome" | "funcao"> {
+  const { nome, funcao, ...resto } = linha;
+  return resto;
+}
+
+/**
+ * O hash do conteúdo: a mesma competência sem mudança tem o mesmo. Conta o
+ * que a contabilidade usa: quem está na planilha, o CPF, as datas do vínculo,
+ * a situação no mês e os exames. O nome e a função vão na planilha, mas
+ * sozinhos não criam versão nova (parte 8.4): o mês passado não muda porque o
+ * cadastro mudou depois. Por isso a ordem aqui é a do id, e não a do nome.
+ */
 export function hashDoConteudo(conteudo: ConteudoDaExportacao): string {
-  return digest(conteudo, 32);
+  return digest(
+    {
+      competencia: conteudo.competencia,
+      formato: conteudo.formato,
+      exames: conteudo.exames.map(semRotulo).sort((a, b) => a.registro_id.localeCompare(b.registro_id)),
+      colaboradores: conteudo.colaboradores.map(semRotulo).sort((a, b) => a.colaborador_id.localeCompare(b.colaborador_id)),
+    },
+    32,
+  );
 }
 
 // --- O arquivo -----------------------------------------------------------------------------
@@ -221,15 +283,22 @@ export const CABECALHO_DOS_EXAMES = [
   "Vence em",
 ] as const;
 
-export const CABECALHO_DOS_COLABORADORES = ["Nome", "CPF", "Função", "Situação"] as const;
+export const CABECALHO_DOS_COLABORADORES = ["Nome", "CPF", "Função", "Admissão", "Desligamento", "Situação no mês"] as const;
+
+/** O cabeçalho das versões de antes da parte 8.4 (formato 1). */
+export const CABECALHO_DOS_COLABORADORES_ANTIGO = ["Nome", "CPF", "Função", "Situação"] as const;
+
+const ROTULO_DA_SITUACAO_NO_MES: Record<SituacaoNoMes, string> = {
+  ativo: "Ativo",
+  inativo: "Inativo",
+  admissao: "Admissão no mês",
+  desligamento: "Desligamento no mês",
+  admissao_e_desligamento: "Admissão e desligamento no mês",
+};
 
 export type ArquivoGerado = { nome: string; conteudo: string };
 
-export function arquivoDaExportacao(
-  conteudo: Pick<ConteudoDaExportacao, "competencia" | "exames" | "colaboradores">,
-  versao: number,
-  arquivo: ArquivoDaExportacao,
-): ArquivoGerado {
+export function arquivoDaExportacao(conteudo: ConteudoGuardado, versao: number, arquivo: ArquivoDaExportacao): ArquivoGerado {
   const nome = `dute-rh-${arquivo}-${conteudo.competencia}-v${versao}.csv`;
   if (arquivo === "exames") {
     return {
@@ -250,11 +319,27 @@ export function arquivoDaExportacao(
       ),
     };
   }
+  if (conteudo.formato === 1) {
+    return {
+      nome,
+      conteudo: csv(
+        CABECALHO_DOS_COLABORADORES_ANTIGO,
+        conteudo.colaboradores.map((linha) => [linha.nome, cpfBr(linha.cpf), linha.funcao, linha.ativo ? "Ativo" : "Inativo"]),
+      ),
+    };
+  }
   return {
     nome,
     conteudo: csv(
       CABECALHO_DOS_COLABORADORES,
-      conteudo.colaboradores.map((linha) => [linha.nome, cpfBr(linha.cpf), linha.funcao, linha.ativo ? "Ativo" : "Inativo"]),
+      conteudo.colaboradores.map((linha) => [
+        linha.nome,
+        cpfBr(linha.cpf),
+        linha.funcao,
+        diaBr(linha.admissao),
+        diaBr(linha.desligamento),
+        ROTULO_DA_SITUACAO_NO_MES[linha.situacao_no_mes],
+      ]),
     ),
   };
 }
