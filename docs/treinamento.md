@@ -162,8 +162,11 @@ dela.
 1. **Pessoas:** abrir a ficha de um colaborador.
 2. **A ficha:** lançar um documento, um exame com o resultado e um
    treinamento com o vencimento; subir o arquivo e abri-lo.
-3. **Início:** ver o vencimento em 30 dias aparecer no "Precisa de você".
-4. **Exportação:** gerar a do mês e baixar.
+3. **As datas do vínculo:** na ficha de um próprio, gravar a admissão; ver
+   a data em Pessoas e a pessoa sair de "Sem data de admissão" na
+   Exportação.
+4. **Início:** ver o vencimento em 30 dias aparecer no "Precisa de você".
+5. **Exportação:** gerar a do mês e baixar.
 
 **Pronto quando** a pessoa mantém a ficha em dia e gera a exportação para a
 contabilidade.
