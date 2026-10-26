@@ -11,7 +11,7 @@ O desenho e o registro das partes ficam em `docs/plataforma/fase-8-rh.md`.
 | Item | O que tem |
 |---|---|
 | Início | O "Precisa de você": uma linha por pessoa com registro vencido ou vencendo em até 30 dias. "Abrir a ficha" leva à ficha dela. |
-| Pessoas | Os colaboradores ativos no cadastro da Operação, com quantos registros, quantos vencendo, quantos vencidos, o próximo vencimento e, no vínculo próprio, a admissão e o desligamento. "Sem admissão" marca o próprio que ainda não tem a data. |
+| Pessoas | Os colaboradores ativos no cadastro da Operação, com quantos registros, quantos vencendo, quantos vencidos, o próximo vencimento e, no vínculo próprio, a admissão e o desligamento. "Sem admissão" marca o próprio que ainda não tem a data. Em "Inativas na Operação", à parte, quem a coordenação desativou com a admissão sem o desligamento: grave o desligamento na ficha, e a pessoa sai da lista. |
 | Exportação | As planilhas do mês para a contabilidade. |
 
 ## A ficha

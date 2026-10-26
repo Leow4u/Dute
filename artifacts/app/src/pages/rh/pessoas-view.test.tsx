@@ -8,7 +8,11 @@ import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import { PessoasView, type EstadoDaTela } from "./pessoas-view";
 
-/** Pessoas (partes 8.2c e 8.4b): quem está ativo, com a ficha resumida e as datas do vínculo. Sem legenda. Dados sintéticos. */
+/**
+ * Pessoas (partes 8.2c e 8.4b): quem está ativo, com a ficha resumida e as
+ * datas do vínculo, e, à parte, quem está inativo na Operação com o vínculo
+ * aberto (pergunta 70). Sem legenda. Dados sintéticos.
+ */
 
 const PAINEL = painelLido({
   hoje: "2026-10-23",
@@ -17,6 +21,7 @@ const PAINEL = painelLido({
     { id: "col_bbbbbbbbbbbbbbbb", nome: "Bruno Lima", funcao: "Motorista", vinculo: "terceiro", ativo: true, registros: 1, vencendo: 2, vencidos: 0, proximo_vencimento: "2026-10-28", admissao: null, desligamento: null },
     { id: "col_cccccccccccccccc", nome: "Carla Dias", funcao: "Ajudante", vinculo: "freelancer", ativo: true, registros: 0, vencendo: 0, vencidos: 0, proximo_vencimento: null, admissao: null, desligamento: null },
     { id: "col_dddddddddddddddd", nome: "Daniela Reis", funcao: "Conferente", vinculo: "proprio", ativo: true, registros: 2, vencendo: 0, vencidos: 0, proximo_vencimento: null, admissao: null, desligamento: null },
+    { id: "col_eeeeeeeeeeeeeeee", nome: "Eva Melo", funcao: "Ajudante", vinculo: "proprio", ativo: false, registros: 0, vencendo: 0, vencidos: 0, proximo_vencimento: null, admissao: "2024-03-10", desligamento: null },
   ],
   vencimentos: [],
 })!;
@@ -50,8 +55,23 @@ describe("Pessoas do RH", () => {
       "Daniela Reis",
       "Conferente · Própria",
       "Sem admissão",
+      "Inativas na Operação",
+      "1",
+      "Eva Melo",
+      "Ajudante · Própria · Admissão 10/03/2024",
     ]);
     expect(render()).toContain('href="/rh/ficha?colaborador=col_aaaaaaaaaaaaaaaa"');
+  });
+
+  it("quem está inativo na Operação com a admissão sem o desligamento fica à parte, com a ficha para gravar o desligamento (pergunta 70)", () => {
+    const html = render();
+    expect(html).toContain('href="/rh/ficha?colaborador=col_eeeeeeeeeeeeeeee"');
+    expect(html.indexOf("Eva Melo")).toBeGreaterThan(html.indexOf("Inativas na Operação"));
+    // A busca filtra as duas listas; sem ninguém inativo, a seção some.
+    expect(textosDaTela(render("pronto", "eva"))).toEqual(["Pessoas", "Ativas", "4", "Nenhuma pessoa encontrada", "Inativas na Operação", "1", "Eva Melo", "Ajudante · Própria · Admissão 10/03/2024", "Sem registro"]);
+    expect(textosDaTela(render("pronto", "motor"))).not.toContain("Inativas na Operação");
+    expect(textosDaTela(render("pronto", "", PAINEL.colaboradores.filter((colaborador) => colaborador.ativo)))).not.toContain("Inativas na Operação");
+    expect(textosDaTela(render("carregando"))).not.toContain("Inativas na Operação");
   });
 
   it("a busca filtra por nome ou função; o vazio é uma frase de dados", () => {
@@ -71,6 +91,8 @@ describe("Pessoas do RH", () => {
       "Bruno Lima",
       "Carla Dias",
       "Daniela Reis",
+      "Inativas na Operação",
+      "Eva Melo",
       /^[^·]+ · (Própria|Terceiro|Freelancer)( · Admissão \d{2}\/\d{2}\/\d{4})?( · Desligamento \d{2}\/\d{2}\/\d{4})?$/,
       /^Próximo vencimento \d{2}\/\d{2}\/\d{4}$/,
       /^\d+ (vencidos?|vencendo)$/,
@@ -81,7 +103,7 @@ describe("Pessoas do RH", () => {
       "Nenhuma pessoa encontrada",
       "Não foi possível carregar as pessoas.",
     ];
-    for (const html of [render(), render("carregando"), render("erro"), render("pronto", "zzz")]) expect(textosForaDaLista(html, permitidos)).toEqual([]);
+    for (const html of [render(), render("carregando"), render("erro"), render("pronto", "zzz"), render("pronto", "eva")]) expect(textosForaDaLista(html, permitidos)).toEqual([]);
   });
 
   it("acessibilidade: WCAG 2.1 A e AA", async () => {

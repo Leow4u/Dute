@@ -94,10 +94,14 @@ describe("o Início do RH", () => {
     expect(itensDoInicioDoRh([])).toEqual([]);
   });
 
-  it("os números: pessoas ativas, vencidos, vencendo e sem registro", () => {
+  it("os números: pessoas ativas, vencidos, vencendo e sem registro; quem está inativo na Operação não conta (pergunta 70)", () => {
     expect(
       numerosDoRh({
-        colaboradores: [{ registros: 3 }, { registros: 0 }],
+        colaboradores: [
+          { ativo: true, registros: 3 },
+          { ativo: true, registros: 0 },
+          { ativo: false, registros: 0 },
+        ],
         vencimentos: [{ dias: -22 }, { dias: 9 }, { dias: 0 }],
       }),
     ).toEqual({ pessoas: 2, vencidos: 1, vencendo: 2, semRegistro: 1 });

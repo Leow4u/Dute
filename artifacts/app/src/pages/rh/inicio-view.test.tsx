@@ -24,6 +24,8 @@ const PAINEL = painelLido({
     { id: "col_aaaaaaaaaaaaaaaa", nome: "Ana Souza", funcao: "Montadora", vinculo: "proprio", ativo: true, registros: 3, vencendo: 1, vencidos: 1, proximo_vencimento: "2026-11-01" },
     { id: "col_bbbbbbbbbbbbbbbb", nome: "Bruno Lima", funcao: "Motorista", vinculo: "terceiro", ativo: true, registros: 1, vencendo: 1, vencidos: 0, proximo_vencimento: "2026-10-28" },
     { id: "col_cccccccccccccccc", nome: "Carla Dias", funcao: "Ajudante", vinculo: "freelancer", ativo: true, registros: 0, vencendo: 0, vencidos: 0, proximo_vencimento: null },
+    // Inativa na Operação com o vínculo aberto (pergunta 70): fica em Pessoas, fora dos números.
+    { id: "col_eeeeeeeeeeeeeeee", nome: "Eva Melo", funcao: "Ajudante", vinculo: "proprio", ativo: false, registros: 0, vencendo: 0, vencidos: 0, proximo_vencimento: null, admissao: "2024-03-10" },
   ],
   vencimentos: [
     { registro_id: "reg_aaaaaaaaaaaaaaa1", colaborador_id: "col_aaaaaaaaaaaaaaaa", nome: "Ana Souza", categoria: "treinamento", tipo: "nr35", descricao: null, vence_em: "2026-10-01", dias: -22 },
