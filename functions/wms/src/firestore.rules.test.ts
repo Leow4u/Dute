@@ -441,17 +441,19 @@ describe("ledger e mutações críticas", () => {
     );
   });
 
-  it("mantém somente a aceitação do próprio convite disponível antes do perfil", async () => {
+  it("o convidado não lê nem usa o convite pelo navegador: o aceite é do servidor (pergunta 68)", async () => {
     const database = testEnvironment
-      .authenticatedContext("invited-user", { email: "invited@example.com" })
+      .authenticatedContext("invited-user", { email: "invited@example.com", email_verified: true })
       .firestore();
-    await assertSucceeds(
+    await assertFails(getDoc(doc(database, "invites", "invite-a")));
+    await assertFails(
       updateDoc(doc(database, "invites", "invite-a"), {
         status: "used",
         used_by: "invited-user",
         used_at: new Date(),
       }),
     );
+    await assertSucceeds(getDoc(doc(signedAs("owner-a"), "invites", "invite-a")));
   });
 });
 
@@ -955,11 +957,11 @@ async function setClientAccess(customerCode: string, modules: string[]) {
 
 describe("papéis da plataforma (Fase 2)", () => {
   for (const role of NEW_PLATFORM_ROLES) {
-    it(`aceite de convite cria o próprio perfil com o papel ${role}`, async () => {
+    it(`o convidado ${role} não cria o próprio perfil pelo navegador, nem com o e-mail confirmado (pergunta 68)`, async () => {
       const database = testEnvironment
-        .authenticatedContext(`novo-${role}`, { email: `${role}-novo@example.com` })
+        .authenticatedContext(`novo-${role}`, { email: `${role}-novo@example.com`, email_verified: true })
         .firestore();
-      await assertSucceeds(
+      await assertFails(
         setDoc(doc(database, "users", `novo-${role}`), {
           nome: `Novo ${role}`,
           email: `${role}-novo@example.com`,
@@ -1184,9 +1186,9 @@ describe("portal desligado: cliente arquivado ou \"Sem portal\" (pergunta 69)", 
     await assertFails(conversaNova("conv-portal-desligado"));
   });
 
-  it("o convite do cliente com o portal desligado não cria o perfil", async () => {
+  it("o convite do cliente não cria o perfil pelo navegador, com o portal ligado ou não (o servidor confere)", async () => {
     const aceite = (uid: string) =>
-      setDoc(doc(testEnvironment.authenticatedContext(uid, { email: "invited@example.com" }).firestore(), "users", uid), {
+      setDoc(doc(testEnvironment.authenticatedContext(uid, { email: "invited@example.com", email_verified: true }).firestore(), "users", uid), {
         nome: "Convidada",
         email: "invited@example.com",
         role: "cliente",
@@ -1196,7 +1198,7 @@ describe("portal desligado: cliente arquivado ou \"Sem portal\" (pergunta 69)", 
     await portal(CUSTOMER_A, false);
     await assertFails(aceite("convidada-sem-portal"));
     await portal(CUSTOMER_A, true);
-    await assertSucceeds(aceite("convidada-com-portal"));
+    await assertFails(aceite("convidada-com-portal"));
   });
 
   it("o portal desligado de um cliente não muda o outro cliente nem a equipe", async () => {

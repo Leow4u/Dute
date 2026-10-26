@@ -80,8 +80,8 @@ describe("o evento do convite", () => {
     assert.ok(!JSON.stringify(evento).includes(TOKEN), `o evento leva o token: ${JSON.stringify(evento)}`);
   });
 
-  it("a referência é a mesma do aceite no app e não se repete entre convites", () => {
-    // A mesma conta do artifacts/app/src/lib/convite.ts (teste espelho em convite.test.ts).
+  it("a referência não se repete entre convites", () => {
+    // O aceite grava a mesma (domain/invite-acceptance.integration.test.ts).
     assert.equal(inviteEventReference(TOKEN), "convite_c626df7ef6491777");
     assert.notEqual(inviteEventReference(TOKEN), inviteEventReference(`${TOKEN.slice(0, -1)}b`));
   });

@@ -1,14 +1,4 @@
-import {
-  createUserWithEmailAndPassword,
-  deleteUser,
-  sendPasswordResetEmail,
-  signOut,
-  signInWithEmailAndPassword,
-  updateProfile,
-} from "firebase/auth";
-import { httpsCallable } from "firebase/functions";
-import { functionsDoApp } from "@/lib/firebase-functions";
-import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
 import {
   Switch,
   Route,
@@ -35,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AuthShell } from "@/components/auth-shell";
 import PortalDesligadoPage from "@/pages/portal-desligado";
+import ConvitePage from "@/pages/convite";
 
 import { DocumentTitle } from "./components/document-title";
 import AppLayout from "./components/layout/app-layout";
@@ -206,12 +197,7 @@ import { soComFinanceiroLiberado } from "./lib/financeiro/navegacao";
 import { soComRhLiberado } from "./lib/rh/navegacao";
 import { entrada } from "./lib/platform-modules";
 import { portalModulesFor } from "./lib/operations";
-import {
-  firebaseApp,
-  firebaseAuth,
-  firebaseConfigError,
-  firestore,
-} from "./lib/firebase";
+import { firebaseAuth, firebaseConfigError } from "./lib/firebase";
 import {
   canAccessModule,
   getHomePathForAppRole,
@@ -219,7 +205,6 @@ import {
   getRouteAppRoles,
   getRouteProfileRoles,
   inicioDoPortal,
-  normalizeProfileRole,
   portalModuleForPath,
   type CurrentAppRole as AppRole,
   type ProfileRole,
@@ -229,147 +214,22 @@ import { RealtimeSyncBridge } from "./lib/realtime-sync";
 import { MENSAGEM_DA_RECUPERACAO, problemaDaRecuperacao } from "./lib/recuperar-senha";
 import { layoutDaRota, type LayoutDaRota } from "./lib/ambientes";
 import { LEGACY_SETTINGS_REDIRECTS } from "./lib/settings-nav";
-import { INTERNAL_CUSTOMER_CODE, LEGACY_CUSTOMER_CODE } from "./lib/active-customer";
-import { referenciaDoConvite } from "./lib/convite";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 type AuthFormState = {
-  nome: string;
   email: string;
   senha: string;
   error: string | null;
   loading: boolean;
 };
 
-type InviteState =
-  | { status: "loading" }
-  | { status: "missing" | "invalid" | "used" }
-  | {
-      status: "ready";
-      token: string;
-      data: {
-        email: string;
-        nome?: string;
-        role: ProfileRole;
-        customer_code?: string;
-      };
-    };
-
-type InviteData = {
-  email?: string;
-  nome?: string;
-  role?: string;
-  status?: string;
-  customer_code?: string;
-};
-
 const initialAuthState: AuthFormState = {
-  nome: "",
   email: "",
   senha: "",
   error: null,
   loading: false,
 };
-
-function normalizeInviteRole(role: unknown): ProfileRole | null {
-  return normalizeProfileRole(role);
-}
-
-function appRole(role: ProfileRole): AppRole {
-  return role === "cliente" ? "cliente" : "interno";
-}
-
-// Como o papel aparece na frase do convite ("ativou acesso como ...").
-const INVITE_ROLE_LABEL: Record<ProfileRole, string> = {
-  owner: "owner Dutelog",
-  admin: "admin Dutelog",
-  interno: "interno Dutelog",
-  wms: "operação WMS",
-  campo: "campo",
-  comercial: "comercial",
-  financeiro: "financeiro",
-  rh: "RH",
-  suporte: "suporte",
-  painel: "painel",
-  cliente: "cliente",
-};
-
-function roleLabel(role: ProfileRole) {
-  return INVITE_ROLE_LABEL[role];
-}
-
-function getRestString(
-  fields: Record<string, { stringValue?: string }> | undefined,
-  key: string,
-) {
-  const value = fields?.[key]?.stringValue;
-  return typeof value === "string" ? value : undefined;
-}
-
-async function fetchInviteViaRest(token: string): Promise<InviteData | null> {
-  const projectId = firebaseApp?.options.projectId;
-  const apiKey = firebaseApp?.options.apiKey;
-  if (!projectId || !apiKey) throw new Error("Firebase config unavailable");
-
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 10000);
-
-  try {
-    const response = await fetch(
-      `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
-        projectId,
-      )}/databases/(default)/documents/invites/${encodeURIComponent(
-        token,
-      )}?key=${encodeURIComponent(apiKey)}`,
-      { signal: controller.signal },
-    );
-
-    if (response.status === 404) return null;
-    if (!response.ok)
-      throw new Error(`Invite lookup failed: ${response.status}`);
-
-    const payload = (await response.json()) as {
-      fields?: Record<string, { stringValue?: string }>;
-    };
-
-    return {
-      email: getRestString(payload.fields, "email"),
-      nome: getRestString(payload.fields, "nome"),
-      role: getRestString(payload.fields, "role"),
-      status: getRestString(payload.fields, "status"),
-      customer_code: getRestString(payload.fields, "customer_code"),
-    };
-  } finally {
-    window.clearTimeout(timeout);
-  }
-}
-
-async function fetchInviteViaSdk(token: string): Promise<InviteData | null> {
-  if (!firestore) return null;
-  const snapshot = await getDoc(doc(firestore, "invites", token));
-  return snapshot.exists() ? (snapshot.data() as InviteData) : null;
-}
-
-async function fetchInvite(token: string): Promise<InviteData | null> {
-  try {
-    if (firebaseApp) {
-      const lookup = httpsCallable<{ token: string }, InviteData>(
-        functionsDoApp(firebaseApp),
-        "lookupInvite",
-      );
-      const result = await lookup({ token });
-      return result.data;
-    }
-  } catch {
-    // Keep the REST/SDK fallback for an older deployment during rollout.
-  }
-  try {
-    return await fetchInviteViaRest(token);
-  } catch {
-    return fetchInviteViaSdk(token);
-  }
-}
 
 function SignInPage() {
   const [, setLocation] = useLocation();
@@ -482,328 +342,6 @@ function SignInPage() {
           Acesso por convite
         </span>
       </div>
-    </AuthShell>
-  );
-}
-
-function SignUpPage() {
-  const [, setLocation] = useLocation();
-  const { user, isLoaded } = useAppUser();
-  const [form, setForm] = useState<AuthFormState>(initialAuthState);
-  const [invite, setInvite] = useState<InviteState>({ status: "loading" });
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadInvite() {
-      const token = new URLSearchParams(window.location.search).get("invite");
-      if (!token) {
-        if (active) setInvite({ status: "missing" });
-        return;
-      }
-
-      const data = await fetchInvite(token);
-      if (!data) {
-        if (active) setInvite({ status: "invalid" });
-        return;
-      }
-
-      if (data.status !== "pending") {
-        if (active) setInvite({ status: "used" });
-        return;
-      }
-
-      const role = normalizeInviteRole(data.role);
-      const email = String(data.email ?? "")
-        .trim()
-        .toLowerCase();
-      const customerCode =
-        data.customer_code ?? (role === "cliente" ? LEGACY_CUSTOMER_CODE : INTERNAL_CUSTOMER_CODE);
-      if (!email || !role) {
-        if (active) setInvite({ status: "invalid" });
-        return;
-      }
-
-      if (active) {
-        setInvite({
-          status: "ready",
-          token,
-          data: {
-            email,
-            nome: data.nome,
-            role,
-            customer_code: customerCode,
-          },
-        });
-        setForm((current) => ({
-          ...current,
-          nome: String(data.nome ?? ""),
-          email,
-        }));
-      }
-    }
-
-    loadInvite().catch(() => {
-      if (active) setInvite({ status: "invalid" });
-    });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!firebaseAuth || !firestore || invite.status !== "ready") return;
-
-    setForm((current) => ({ ...current, loading: true, error: null }));
-    let createdNewUser = false;
-    try {
-      let credential;
-      try {
-        credential = await createUserWithEmailAndPassword(
-          firebaseAuth,
-          invite.data.email,
-          form.senha,
-        );
-        createdNewUser = true;
-        await updateProfile(credential.user, { displayName: form.nome.trim() });
-      } catch (error) {
-        if ((error as { code?: string }).code !== "auth/email-already-in-use") {
-          throw error;
-        }
-        credential = await signInWithEmailAndPassword(
-          firebaseAuth,
-          invite.data.email,
-          form.senha,
-        );
-      }
-
-      const batch = writeBatch(firestore);
-      batch.set(doc(firestore, "users", credential.user.uid), {
-        nome: form.nome.trim(),
-        email: invite.data.email,
-        role: invite.data.role,
-        customer_code: invite.data.customer_code,
-        invite_id: invite.token,
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp(),
-      });
-      batch.update(doc(firestore, "invites", invite.token), {
-        status: "used",
-        used_by: credential.user.uid,
-        used_at: serverTimestamp(),
-      });
-      await batch.commit();
-      // O convite já foi aceito: nada do evento desfaz o aceite.
-      const referencia = await referenciaDoConvite(invite.token).catch(() => null);
-      await fetch("/api/ai/events", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          type: "access.invite_accepted",
-          title: "Convite aceito",
-          description: `${form.nome.trim()} ativou acesso como ${roleLabel(
-            invite.data.role,
-          )}.`,
-          severity: "info",
-          entity_type: "usuario",
-          entity_id: credential.user.uid,
-          customer_code:
-            invite.data.customer_code ??
-            (appRole(invite.data.role) === "cliente"
-              ? LEGACY_CUSTOMER_CODE
-              : INTERNAL_CUSTOMER_CODE),
-          payload: {
-            email: invite.data.email,
-            role: invite.data.role,
-            customer_code: invite.data.customer_code,
-            // O token abre o convite: o evento leva só a referência dele.
-            ...(referencia ? { invite_ref: referencia } : {}),
-          },
-        }),
-      }).catch(() => undefined);
-
-      setLocation("/");
-    } catch (error) {
-      if (createdNewUser && firebaseAuth.currentUser) {
-        await deleteUser(firebaseAuth.currentUser).catch(() => undefined);
-      }
-      setForm((current) => ({
-        ...current,
-        loading: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Não foi possível criar a conta.",
-      }));
-    }
-  }
-
-  if (isLoaded && user) {
-    return (
-      <AuthShell
-        title="Você já está conectado"
-        subtitle="Saia da conta atual para aceitar este convite"
-      >
-        <Alert>
-          <AlertDescription>
-            Esta janela está conectada como{" "}
-            <span className="font-medium text-foreground">
-              {user.primaryEmailAddress.emailAddress || "usuário autenticado"}
-            </span>
-            . O convite deve ser aceito pela conta da pessoa convidada.
-          </AlertDescription>
-        </Alert>
-        {form.error ? (
-          <Alert variant="destructive" className="mt-4">
-            <AlertDescription>{form.error}</AlertDescription>
-          </Alert>
-        ) : null}
-        <div className="mt-4 grid gap-3">
-          <Button
-            type="button"
-            disabled={form.loading || !firebaseAuth}
-            onClick={async () => {
-              if (!firebaseAuth) return;
-              setForm((current) => ({
-                ...current,
-                loading: true,
-                error: null,
-              }));
-              try {
-                await signOut(firebaseAuth);
-                setForm((current) => ({ ...current, loading: false }));
-              } catch (error) {
-                setForm((current) => ({
-                  ...current,
-                  loading: false,
-                  error:
-                    error instanceof Error
-                      ? error.message
-                      : "Não foi possível sair da conta atual.",
-                }));
-              }
-            }}
-          >
-            {form.loading ? "Saindo..." : "Sair e continuar com o convite"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setLocation("/")}
-          >
-            Voltar ao sistema
-          </Button>
-        </div>
-      </AuthShell>
-    );
-  }
-
-  if (invite.status === "loading") {
-    return (
-      <AuthShell title="Validando convite" subtitle="Aguarde um instante">
-        <div className="text-center text-sm text-muted-foreground">
-          Conferindo seu convite...
-        </div>
-      </AuthShell>
-    );
-  }
-
-  if (invite.status !== "ready") {
-    const message =
-      invite.status === "used"
-        ? "Este convite já foi usado."
-        : invite.status === "missing"
-          ? "Este cadastro só funciona por link de convite."
-          : "Convite inválido ou não encontrado.";
-
-    return (
-      <AuthShell
-        title="Convite necessário"
-        subtitle="Acesso controlado pela Dute"
-      >
-        <Alert variant="destructive">
-          <AlertDescription>{message}</AlertDescription>
-        </Alert>
-        <Button
-          type="button"
-          variant="outline"
-          className="mt-4 w-full"
-          onClick={() => setLocation("/sign-in")}
-        >
-          Voltar para login
-        </Button>
-      </AuthShell>
-    );
-  }
-
-  return (
-    <AuthShell title="Aceitar convite" subtitle="Crie sua senha para acessar">
-      <form onSubmit={submit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="nome">Nome</Label>
-          <Input
-            id="nome"
-            autoComplete="name"
-            value={form.nome}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, nome: event.target.value }))
-            }
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="email-signup">E-mail</Label>
-          <Input
-            id="email-signup"
-            type="email"
-            autoComplete="email"
-            value={form.email}
-            readOnly
-            required
-          />
-        </div>
-        <div className="soft-panel rounded-md px-4 py-3 text-sm text-muted-foreground">
-          Perfil do convite:{" "}
-          <span className="font-medium text-foreground">
-            {roleLabel(invite.data.role)}
-          </span>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="senha-signup">Senha</Label>
-          <Input
-            id="senha-signup"
-            type="password"
-            autoComplete="new-password"
-            minLength={6}
-            value={form.senha}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, senha: event.target.value }))
-            }
-            required
-          />
-        </div>
-        {form.error ? (
-          <Alert variant="destructive">
-            <AlertDescription>{form.error}</AlertDescription>
-          </Alert>
-        ) : null}
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={form.loading || Boolean(firebaseConfigError)}
-        >
-          {form.loading ? "Criando..." : "Aceitar convite"}
-        </Button>
-      </form>
-      <button
-        type="button"
-        className="mt-4 w-full text-sm font-medium text-primary hover:underline"
-        onClick={() => setLocation("/sign-in")}
-      >
-        Já tenho conta
-      </button>
     </AuthShell>
   );
 }
@@ -1173,8 +711,8 @@ function AppRoutes() {
                 <Switch>
                   <Route path="/" component={HomeRedirect} />
                   <Route path="/sign-in/*?" component={SignInPage} />
-                  <Route path="/convite/*?" component={SignUpPage} />
-                  <Route path="/sign-up/*?" component={SignUpPage} />
+                  <Route path="/convite/*?" component={ConvitePage} />
+                  <Route path="/sign-up/*?" component={ConvitePage} />
 
                   {PROTECTED_ROUTES.map((route) => (
                     <ProtectedRoute key={route.path} {...route} />

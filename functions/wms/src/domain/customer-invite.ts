@@ -104,8 +104,8 @@ export async function assertClientRoleCustomer(
  * O id do convite é o token do link: `lookupInvite` e o cadastro da pessoa o
  * usam como chave, e quem o tem aceita o convite. O evento do convite, que a
  * equipe do armazém lê, leva só esta referência (os 16 primeiros dígitos do
- * SHA-256 do token), que liga os eventos do mesmo convite sem abri-lo. A tela
- * de aceite manda a mesma (artifacts/app/src/lib/convite.ts).
+ * SHA-256 do token), que liga os eventos do mesmo convite sem abri-lo. O
+ * aceite (`invite-acceptance.ts`) grava a mesma no evento dele.
  */
 export function inviteEventReference(token: string): string {
   return `convite_${createHash("sha256").update(token).digest("hex").slice(0, 16)}`;
