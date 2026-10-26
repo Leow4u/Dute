@@ -106,7 +106,7 @@ Operação".
 | Modo | Campos | Botão |
 |---|---|---|
 | "Entrega pela Dutelog" | "Destino" (3 a 160 caracteres), "Data", "Hora", "Contato" e "Telefone" (opcionais), "Montagem" e "Desmontagem e retorno" ("Retorno em" e "Hora") | "Salvar e abrir na Operação" |
-| "Retirada pelo cliente" | "Retirada em", "Hora", "Quem retira" (2 a 80), "Documento" (até 30) e "Placa do veículo" (ABC1D23 ou ABC1234) | "Salvar entrega" |
+| "Retirada pelo cliente" | "Retirada em", "Hora", "Quem retira" (2 a 80) e "Placa do veículo" (ABC1D23 ou ABC1234) | "Salvar entrega" |
 
 - A data é de hoje em diante (São Paulo); começa hoje às 13:00, e o retorno às
   18:00, sempre depois da entrega. O telefone tem DDD e pede o nome.

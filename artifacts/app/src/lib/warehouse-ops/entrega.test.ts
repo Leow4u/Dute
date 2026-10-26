@@ -39,7 +39,8 @@ const DUTELOG = {
     os_numeros: ["10050-01", "10050-02"],
   },
 };
-const RETIRADA = { entrega: { modo: "retirada", data: "2026-10-24", hora: "09:00", quem_retira: "Carlos Lima", documento: null, placa: "ABC1D23" } };
+// A retirada gravada antes da decisão 3 da LGPD, com o documento: ele não se lê.
+const RETIRADA = { entrega: { modo: "retirada", data: "2026-10-24", hora: "09:00", quem_retira: "Carlos Lima", documento: "RG 12.345.678-9", placa: "ABC1D23" } };
 
 describe("a entrega gravada no pedido", () => {
   it("os modos são os do WMS", () => {
@@ -55,6 +56,7 @@ describe("a entrega gravada no pedido", () => {
     const semDemanda = entregaDoPedido({ entrega: { ...DUTELOG.entrega, demanda: null, os_numeros: [] } })!;
     expect([naOperacao(semDemanda), faltaAbrirNaOperacao(semDemanda)]).toEqual([null, true]);
     const retirada = entregaDoPedido(RETIRADA)!;
+    expect(retirada).toEqual({ modo: "retirada", data: "2026-10-24", hora: "09:00", quemRetira: "Carlos Lima", placa: "ABC1D23" });
     expect(resumoDaEntrega(retirada)).toBe("Retirada pelo cliente · Sáb 24/10 09:00 · Carlos Lima");
     expect([naOperacao(retirada), faltaAbrirNaOperacao(retirada)]).toEqual([null, false]);
     expect(entregaDoPedido({})).toBeNull();
@@ -100,7 +102,8 @@ describe("o formulário da entrega", () => {
     expect(pedidoDaEntrega({ ...form, modo: "retirada", quemRetira: "Carlos Lima", placa: "abc1d23" }, "ord_118", "k1")).toEqual({
       idempotency_key: "k1",
       order_id: "ord_118",
-      entrega: { modo: "retirada", data: "2026-10-23", hora: "13:00", quem_retira: "Carlos Lima", documento: null, placa: "abc1d23" },
+      // Sem o documento de quem retira (decisão 3 da LGPD).
+      entrega: { modo: "retirada", data: "2026-10-23", hora: "13:00", quem_retira: "Carlos Lima", placa: "abc1d23" },
     });
   });
 });

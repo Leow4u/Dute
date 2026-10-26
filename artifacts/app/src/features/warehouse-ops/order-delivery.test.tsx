@@ -22,8 +22,8 @@ describe("a entrega do pedido", () => {
     expect(textosDaTela(render({ ...vazio, comRetorno: true }))).toEqual(expect.arrayContaining(["Retorno em"]));
   });
 
-  it("retirada pelo cliente: retirada em, a hora, quem retira, o documento e a placa", () => {
-    expect(textosDaTela(render({ ...vazio, modo: "retirada" }))).toEqual(["Entrega pela Dutelog", "Retirada pelo cliente", "Retirada em", "Hora", "Quem retira", "Documento", "Placa do veículo"]);
+  it("retirada pelo cliente: retirada em, a hora, quem retira e a placa, sem o documento (decisão 3 da LGPD)", () => {
+    expect(textosDaTela(render({ ...vazio, modo: "retirada" }))).toEqual(["Entrega pela Dutelog", "Retirada pelo cliente", "Retirada em", "Hora", "Quem retira", "Placa do veículo"]);
   });
 
   it("o que falta aparece no campo", () => {

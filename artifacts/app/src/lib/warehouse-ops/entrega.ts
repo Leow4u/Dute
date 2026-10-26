@@ -24,7 +24,7 @@ export type EntregaDoPedido =
       demanda: string | null;
       osNumeros: string[];
     }
-  | { modo: "retirada"; data: string; hora: string; quemRetira: string; documento: string | null; placa: string | null };
+  | { modo: "retirada"; data: string; hora: string; quemRetira: string; placa: string | null };
 
 function texto(valor: unknown): string {
   return typeof valor === "string" || typeof valor === "number" ? String(valor).trim() : "";
@@ -42,7 +42,8 @@ export function entregaDoPedido(dados: Record<string, unknown> | null | undefine
   const hora = texto(entrega.hora);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || !/^\d{2}:\d{2}$/.test(hora)) return null;
   if (entrega.modo === "retirada") {
-    return { modo: "retirada", data, hora, quemRetira: texto(entrega.quem_retira), documento: texto(entrega.documento) || null, placa: texto(entrega.placa) || null };
+    // O documento que a retirada antiga gravou não se lê (decisão 3 da LGPD).
+    return { modo: "retirada", data, hora, quemRetira: texto(entrega.quem_retira), placa: texto(entrega.placa) || null };
   }
   if (entrega.modo !== "dutelog") return null;
   const contato = registro(entrega.contato);
@@ -109,7 +110,6 @@ export type FormularioDaEntrega = {
   retornoData: string;
   retornoHora: string;
   quemRetira: string;
-  documento: string;
   placa: string;
 };
 
@@ -127,12 +127,11 @@ export function formularioDaEntrega(entrega: EntregaDoPedido | null, hoje: strin
     retornoData: hoje,
     retornoHora: "18:00",
     quemRetira: "",
-    documento: "",
     placa: "",
   };
   if (!entrega) return vazio;
   if (entrega.modo === "retirada") {
-    return { ...vazio, modo: "retirada", data: entrega.data, hora: entrega.hora, quemRetira: entrega.quemRetira, documento: entrega.documento ?? "", placa: entrega.placa ?? "" };
+    return { ...vazio, modo: "retirada", data: entrega.data, hora: entrega.hora, quemRetira: entrega.quemRetira, placa: entrega.placa ?? "" };
   }
   return {
     ...vazio,
@@ -193,7 +192,6 @@ export function pedidoDaEntrega(form: FormularioDaEntrega, orderId: string, chav
         data: form.data,
         hora: form.hora,
         quem_retira: form.quemRetira.trim(),
-        documento: form.documento.trim() || null,
         placa: form.placa.trim() || null,
       },
     };

@@ -66,7 +66,7 @@ Seguem a recomendação do plano até a resposta do Leonardo:
 | `financeiro_operations` | Financeiro | O recibo de idempotência. Ninguém lê. |
 | `demands` | Comercial | O Financeiro escreve `etapa: "faturada"`, `etapa_desde`, o marco em `marcos` e `faturamento`: a fatura, a NF e o vencimento, sem valor. |
 | `client_authorizations` | Comercial | O Financeiro escreve só `nf_ids`. |
-| `orders` | WMS | O pedido de saída ganha `entrega` (parte 4.5a). Pela Dutelog guarda o destino, a data e a hora, o contato, a montagem e o retorno ao armazém. Na retirada pelo cliente guarda a data e a hora, quem retira, o documento e a placa. Também guarda quem definiu e quando, e `demanda` e `os_numeros`, que a Operação grava ao abrir a demanda (parte 4.5b). E `retorno` (parte 4.5d): a OS de volta concluída grava a OS, a demanda, quando chegou e o status a receber. O WMS recebe e grava recebido, a devolução, quando e quem. |
+| `orders` | WMS | O pedido de saída ganha `entrega` (parte 4.5a). Pela Dutelog guarda o destino, a data e a hora, o contato, a montagem e o retorno ao armazém. Na retirada pelo cliente guarda a data e a hora, quem retira e a placa (o número do documento saiu com a decisão 3 da LGPD). Também guarda quem definiu e quando, e `demanda` e `os_numeros`, que a Operação grava ao abrir a demanda (parte 4.5b). E `retorno` (parte 4.5d): a OS de volta concluída grava a OS, a demanda, quando chegou e o status a receber. O WMS recebe e grava recebido, a devolução, quando e quem. |
 | `service_requests` | Operação | A solicitação de OS pelo portal (parte 4.4a). Guarda o tipo de serviço (transporte, armazenagem, serviço em campo ou mudança), a data e o horário pedidos, a origem, o destino e o que será feito, os anexos (o caminho no Storage, o nome, o tipo e o tamanho) e o contato (o login de quem pediu). Também o status (recebida, aceita ou recusada), a demanda aberta com ela e a recusa com o motivo. Sem preço. |
 
 Preço só em `faturas`, `pagamentos` e `client_faturas`, lidos por
@@ -907,3 +907,24 @@ no `dute-homolog` desde a parte 4.4b.
 - **Teste:** `pages/client/servicos-envio.test.tsx`: o mesmo pedido repete
   a chave, o editado sai com outra, e o que volta ao de antes repete a
   dele. Antes, o editado saía com a chave do primeiro.
+
+### Decisão 3 da LGPD: a retirada sem o número do documento
+
+Feita em 26/10/2026, com o canvas "Telas das decisões de 26/10" (item 5),
+junto com a conclusão da OS (`fase-3-operacao.md`, "Decisão 3 da LGPD: a
+conclusão sem o número do documento").
+
+- **O formulário** (`features/warehouse-ops/order-delivery.tsx`,
+  `lib/warehouse-ops/entrega.ts`): a retirada pelo cliente pede "Retirada
+  em", "Hora", "Quem retira" e "Placa do veículo"; o "Documento" saiu, e o
+  pedido não o leva.
+- **O servidor** (`functions/wms/src/domain/order-delivery.ts`): o pedido
+  ainda aceita o `documento` que o app antigo pode mandar, e
+  `interpretarEntrega` o tira antes de gravar. A retirada que já tinha o
+  número o perde na próxima vez que a entrega for salva; até lá, a leitura
+  do app não o traz.
+- **Testes:** `order-delivery.test.ts` e
+  `order-delivery.integration.test.ts` (o pedido com o documento grava sem
+  ele), `entrega.test.ts` (a retirada antiga não traz o número; o pedido
+  sem ele) e `order-delivery.test.tsx` (os textos, sem "Documento", e o
+  `axe`).

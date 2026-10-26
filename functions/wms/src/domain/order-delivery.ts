@@ -10,7 +10,8 @@ import { createEvent, type OperationalActor } from "./operations.js";
  * A entrega do pedido de saída (docs/plataforma/fase-4-financeiro.md, parte
  * 4.5a; docs/mockups/WmsExpedicao.dc.html): pela Dutelog (o destino, a data
  * e a hora, o contato, a montagem e o retorno ao armazém) ou retirada pelo
- * cliente (a data e a hora, quem retira, o documento e a placa). Fica em
+ * cliente (a data e a hora, quem retira e a placa; o número do documento não
+ * se pede nem se grava desde a decisão 3 da LGPD). Fica em
  * `orders/{id}.entrega`, gravada só por esta callable, antes da saída.
  *
  * A entrega pela Dutelog vira demanda e OS na Operação (parte 4.5b,
@@ -70,15 +71,6 @@ const linha = (min: number, max: number, rotulo: string) =>
     .max(max, `Use até ${max} caracteres em ${rotulo}.`)
     .transform((valor) => valor.replace(/\s+/g, " "));
 
-const opcional = (max: number, rotulo: string) =>
-  z
-    .string()
-    .trim()
-    .max(max, `Use até ${max} caracteres em ${rotulo}.`)
-    .nullable()
-    .optional()
-    .transform((valor) => (valor ? valor.replace(/\s+/g, " ") : null));
-
 const data = z.string().trim().refine(dataValida, "Data inválida: use aaaa-mm-dd.");
 const hora = z.string().trim().regex(HORA, "Hora inválida: use hh:mm.");
 const telefone = z
@@ -125,7 +117,8 @@ const PeloCliente = z
     data,
     hora,
     quem_retira: linha(2, 80, "quem retira"),
-    documento: opcional(30, "o documento"),
+    // O app de antes da decisão 3 da LGPD ainda pode mandar o documento: aceito e não gravado (interpretarEntrega).
+    documento: z.unknown().optional(),
     placa,
   })
   .strict();
@@ -139,13 +132,17 @@ const DefinirEntrega = z
   })
   .strict();
 
-export type PedidoDeEntrega = z.infer<typeof DefinirEntrega>;
-export type Entrega = PedidoDeEntrega["entrega"];
+type EntregaPedida = z.infer<typeof DefinirEntrega>["entrega"];
+/** A escolha, sem o documento de quem retira. */
+export type Entrega = Exclude<EntregaPedida, { modo: "retirada" }> | Omit<Extract<EntregaPedida, { modo: "retirada" }>, "documento">;
+export type PedidoDeEntrega = Omit<z.infer<typeof DefinirEntrega>, "entrega"> & { entrega: Entrega };
 
 export function interpretarEntrega(input: unknown): PedidoDeEntrega {
   const parsed = DefinirEntrega.safeParse(input ?? {}, { errorMap: mensagens });
   if (!parsed.success) throw new HttpsError("invalid-argument", parsed.error.issues[0]?.message ?? "Dados inválidos.");
-  return parsed.data;
+  if (parsed.data.entrega.modo !== "retirada") return parsed.data;
+  const { documento: _documento, ...retirada } = parsed.data.entrega;
+  return { ...parsed.data, entrega: retirada };
 }
 
 /** A data e a hora em São Paulo (sem horário de verão desde 2019), como instante. */
@@ -236,7 +233,7 @@ export async function setOrderDeliveryTransaction(
         entity_type: "pedido",
         entity_id: ref.id,
         customer_code: customerCode,
-        // Sem o destino, o contato, quem retira, o documento nem a placa: ficam só no pedido.
+        // Sem o destino, o contato, quem retira nem a placa: ficam só no pedido.
         payload: {
           order_id: ref.id,
           modo: pedido.entrega.modo,

@@ -52,8 +52,10 @@ describe("a escolha da entrega", () => {
     assert.deepEqual(simples, { modo: "dutelog", destino: "Av. Paulista, 1000", data: "2026-10-28", hora: "13:00", contato: null, montagem: false, retorno: null });
   });
 
-  it("retirada pelo cliente: quem retira, o documento e a placa normalizada", () => {
-    assert.deepEqual(interpretarEntrega(RETIRADA).entrega, { modo: "retirada", data: "2026-10-24", hora: "09:00", quem_retira: "Carlos Lima", documento: "RG 12.345.678-9", placa: "ABC1D23" });
+  it("retirada pelo cliente: quem retira e a placa normalizada; o documento que o app antigo manda não fica (decisão 3 da LGPD)", () => {
+    assert.deepEqual(interpretarEntrega(RETIRADA).entrega, { modo: "retirada", data: "2026-10-24", hora: "09:00", quem_retira: "Carlos Lima", placa: "ABC1D23" });
+    const { documento: _documento, ...semDocumento } = RETIRADA.entrega;
+    assert.deepEqual(interpretarEntrega({ ...RETIRADA, entrega: semDocumento }).entrega, interpretarEntrega(RETIRADA).entrega);
   });
 
   it("recusa modo desconhecido, campo de outro modo, data, hora, placa e telefone fora do formato", () => {
