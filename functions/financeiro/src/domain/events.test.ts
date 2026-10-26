@@ -62,6 +62,17 @@ describe("eventos do Financeiro", () => {
     }
   });
 
+  it("a NF, a emissão e as reservas soltas levam a medição pelo id, só quando há, e as demandas dela (pergunta 64)", () => {
+    for (const type of ["nf.registered", "nf.cancelled", "nf.emission_requested", "nf.emission_abandoned", "nf.emission_released"] as const) {
+      const schema = FINANCEIRO_EVENT_PAYLOADS[type];
+      const muitas = Array.from({ length: 150 }, (_, indice) => String(10_000 + indice));
+      assert.equal(schema.safeParse({ ...EXEMPLOS[type], demandas: muitas, medicoes: ["ctr_safra_2026-10"] }).success, true, type);
+      assert.equal(schema.safeParse({ ...EXEMPLOS[type], medicoes: [] }).success, false, `${type} vazia`);
+      assert.equal(schema.safeParse({ ...EXEMPLOS[type], medicoes: ["ctr_safra"] }).success, false, `${type} sem a competência`);
+      assert.equal(schema.safeParse({ ...EXEMPLOS[type], demandas: [...muitas, ...muitas] }).success, false, `${type} demais`);
+    }
+  });
+
   it("título e descrição fixos; o evento é da fatura, com o cliente", () => {
     const event = buildFinanceiroEvent({
       operation_id: "op_teste",

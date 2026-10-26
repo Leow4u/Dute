@@ -60,12 +60,13 @@ Seguem a recomendação do plano até a resposta do Leonardo:
 
 | Coleção | Dono | O que guarda |
 |---|---|---|
-| `faturas` | Financeiro | A NF registrada. Guarda as demandas, cada uma com a RV ou a medição, as autorizações citadas e o valor em centavos, e o total. Também a NF (número, série, emissão), `nf_chave` (série e número), o vencimento, a forma de pagamento, a observação, o status (emitida, enviada, paga ou cancelada) e quem registrou. A cobrança (parte 4.2a) acrescenta `recebido_cents`, `pagamento_ids`, `enviada` (dia e meio), `paga_em`, `cancelada` (quando, quem e o motivo) e `anteriores` (os registros cancelados da mesma NF). O id sai da série e do número da NF, então a mesma NF não fica registrada duas vezes. |
+| `faturas` | Financeiro | A NF registrada. Guarda as demandas, cada uma com a RV ou a medição, as autorizações citadas e o valor em centavos, e o total. Também a NF (número, série, emissão), `nf_chave` (série e número), o vencimento, a forma de pagamento, a observação, o status (emitida, enviada, paga ou cancelada) e quem registrou. A cobrança (parte 4.2a) acrescenta `recebido_cents`, `pagamento_ids`, `enviada` (dia e meio), `paga_em`, `cancelada` (quando, quem e o motivo) e `anteriores` (os registros cancelados da mesma NF). A NF da medição aprovada (pergunta 64) guarda também `medicoes` (o total aprovado, as demandas e as linhas sem demanda pelo serviço) e `medicao_ids`. O id sai da série e do número da NF, então a mesma NF não fica registrada duas vezes. |
 | `pagamentos` | Financeiro | Um pagamento da fatura: o valor em centavos, o dia, a forma, a observação, o status (registrado ou estornado, com o motivo) e quem registrou. |
-| `client_faturas` | Financeiro | A NF como o cliente vê no portal (parte 4.3a): a NF, o vencimento, a forma, o valor, o recebido, o saldo, a situação, o envio e as demandas com o valor, o título e a referência. Não guarda quem registrou, a observação, as autorizações, os registros anteriores nem o motivo do cancelamento. Cada gravação do Financeiro a regrava na mesma transação, e o cancelamento a apaga. |
+| `client_faturas` | Financeiro | A NF como o cliente vê no portal (parte 4.3a): a NF, o vencimento, a forma, o valor, o recebido, o saldo, a situação, o envio e as demandas com o valor, o título e a referência. Na NF da medição, também a competência, o total e as linhas sem demanda pelo serviço (pergunta 64). Não guarda quem registrou, a observação, as autorizações, os registros anteriores nem o motivo do cancelamento. Cada gravação do Financeiro a regrava na mesma transação, e o cancelamento a apaga. |
 | `financeiro_operations` | Financeiro | O recibo de idempotência. Ninguém lê. |
 | `demands` | Comercial | O Financeiro escreve `etapa: "faturada"`, `etapa_desde`, o marco em `marcos` e `faturamento`: a fatura, a NF e o vencimento, sem valor. |
 | `client_authorizations` | Comercial | O Financeiro escreve só `nf_ids`. |
+| `medicoes` | Comercial | O Financeiro escreve na medição aprovada o mesmo `faturamento` da demanda (a fatura, a NF e o vencimento, sem valor, e `paga_em` quando a NF quita) e a reserva da emissão pela Omie (`emissao_nf`), pergunta 64. |
 | `orders` | WMS | O pedido de saída ganha `entrega` (parte 4.5a). Pela Dutelog guarda o destino, a data e a hora, o contato, a montagem e o retorno ao armazém. Na retirada pelo cliente guarda a data e a hora, quem retira e a placa (o número do documento saiu com a decisão 3 da LGPD). Também guarda quem definiu e quando, e `demanda` e `os_numeros`, que a Operação grava ao abrir a demanda (parte 4.5b). E `retorno` (parte 4.5d): a OS de volta concluída grava a OS, a demanda, quando chegou e o status a receber. O WMS recebe e grava recebido, a devolução, quando e quem. |
 | `service_requests` | Operação | A solicitação de OS pelo portal (parte 4.4a). Guarda o tipo de serviço (transporte, armazenagem, serviço em campo ou mudança), a data e o horário pedidos, a origem, o destino e o que será feito, os anexos (o caminho no Storage, o nome, o tipo e o tamanho) e o contato (o login de quem pediu). Também o status (recebida, aceita ou recusada), a demanda aberta com ela e a recusa com o motivo. Sem preço. |
 
@@ -966,3 +967,71 @@ pelo dia do recebimento, sem os estornados.
 - **Testes:** `relatorios.test.ts` (as fontes, o peso de cada serviço, o
   rateio em centavos, a receita, a tabela e os números) e
   `relatorios-view.test.tsx` (a aba, os textos, a barra e o `axe`).
+
+### Pergunta 64: a medição aprovada como um item próprio (o servidor)
+
+Decidida em 26/10/2026, com a tela alinhada no canvas "Telas das decisões de
+26/10" (item 7). Esta parte é a do servidor; a tela de A faturar vem na
+seguinte. Antes, a NF levava, de cada demanda da medição, a soma das linhas
+dela, e as linhas sem demanda (a equipe fixa do contrato misto) nunca
+entravam numa NF.
+
+- **O pedido.** O `registerNf` e o `emitNfOmie` aceitam `medicoes`, os ids
+  das medições aprovadas (até 4 por NF). O campo é opcional e sem padrão: o
+  pedido sem medição tem o mesmo conteúdo de antes, e o recibo de
+  idempotência gravado antes continua valendo.
+- **O que a medição precisa** (`medicaoLida` e `problemaDaMedicao`, em
+  `domain/fatura.ts`):
+  - aprovada, fora de NF e sem a reserva de outra emissão;
+  - o total gravado igual à soma das linhas, e cada linha sem demanda igual
+    à soma dos itens dela;
+  - a autorização que a aprovação criou (`aut_{medicao}`) registrada, do
+    mesmo cliente;
+  - todas as demandas das linhas A faturar, sem a pendência da medição,
+    presas a ela e do mesmo cliente. A demanda pendente (que o Comercial
+    ainda não validou) segura a medição até ser validada. A que se perdeu
+    depois de entrar na linha também segura: o Comercial a reabre e a
+    valida, e a medição fatura.
+- **A demanda da medição não fatura sozinha.** Pedida em `demandas`, ela é
+  recusada: "A demanda X é da medição de MM/AAAA: ela fatura com a medição."
+- **A fatura** (`documentoDaFatura`):
+  - as demandas da medição entram em `demandas`, cada uma com a medição e a
+    soma das linhas dela, e ficam Faturadas como as outras;
+  - `medicoes` guarda o id, o contrato, a competência, a autorização, o
+    total aprovado, as demandas e as linhas sem demanda somadas pelo serviço
+    dos itens ("Sem serviço" quando o item não tem);
+  - o total da NF soma as demandas, a armazenagem e as linhas sem demanda;
+  - a autorização da medição entra em `autorizacao_ids` mesmo sem demanda, e
+    ganha a NF em `nf_ids`.
+- **A medição** ganha o mesmo `faturamento` da demanda. A NF que quita
+  acrescenta `paga_em`, e o estorno o tira. Cancelar o registro o apaga, e a
+  medição volta a A faturar com as demandas dela.
+- **O portal** (`client_faturas`) recebe `medicoes` só na NF que tem: a
+  competência, o total, as demandas e as linhas sem demanda pelo serviço.
+  O contrato, a autorização e o id da medição ficam de fora.
+- **A Omie.**
+  - A medição é um item só da OS, "Medição de MM/AAAA", pelo total aprovado
+    e com o serviço das OS (`DUTE-OS`); as demandas dela não viram itens.
+  - A emissão reserva a medição e as demandas dela, e desistir ou soltar
+    libera as duas.
+  - Autorizada a NFS-e, a fatura nasce com a medição pela mesma
+    `lerParaFaturar`.
+- **Os eventos** `nf.registered`, `nf.cancelled`, `nf.emission_requested`,
+  `nf.emission_abandoned` e `nf.emission_released` levam `medicoes` (só o
+  id) quando há. A lista de demandas vai até 200, com as das medições, que é
+  também o limite da NF.
+- **O Comercial** não cancela a autorização da medição que está numa emissão
+  pela Omie (`recordAuthorization`, `cancel`): a nota pode sair a qualquer
+  momento.
+- **Testes:**
+  - `fatura.test.ts`: o pedido, a medição lida, as recusas e o documento;
+  - `projecao.test.ts`: o portal;
+  - `events.test.ts`: os payloads;
+  - `emissao-omie.test.ts`: o item da OS;
+  - `fatura.integration.test.ts`: a NF da medição, a medição só com a
+    equipe fixa, as recusas, o cancelamento e o pagamento;
+  - `emissao.integration.test.ts`: a reserva e a desistência;
+  - `omie-rotina.integration.test.ts`: a fatura que nasce da NFS-e;
+  - `functions/comercial`, `medicoes.integration.test.ts`: a autorização da
+    medição reservada.
+

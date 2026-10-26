@@ -890,6 +890,20 @@ describe("cancelar a autorização da medição aprovada (o mesmo recordAuthoriz
     assert.equal((await doc(`client_authorizations/${id}`)).status, "cancelada");
   });
 
+  it("a medição na emissão da NFS-e pela Omie não perde a autorização; sem a reserva, cancela (pergunta 64)", async () => {
+    await abrir();
+    await salvar({});
+    await avancar("send");
+    await avancar("approve");
+    const id = `aut_${MEDICAO}`;
+    // O Financeiro reserva a própria medição quando ela vai à Omie como um item da NF.
+    await db.doc(`medicoes/${MEDICAO}`).update({ emissao_nf: { id: "nfe_0123456789abcdef0123", desde: "2026-11-03T14:00:00.000Z" } });
+    await rejeita(cancelar(id), "failed-precondition", /A medição está na emissão da NFS-e pela Omie: a autorização dela não se cancela/);
+    assert.equal((await doc(`client_authorizations/${id}`)).status, "registrada");
+    await db.doc(`medicoes/${MEDICAO}`).update({ emissao_nf: null });
+    assert.equal((await cancelar(id)).status, "cancelada");
+  });
+
   it("lê a autorização no formato antigo da medição (status a_faturar, demandas como números, autorizacao_id na demanda)", async () => {
     const d1 = await fechada();
     await demanda("register_execution", d1, { executado_de: "2026-10-05", executado_ate: "2026-10-05" }, OUT_06);

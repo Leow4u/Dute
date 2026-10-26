@@ -72,6 +72,25 @@ describe("a NF do portal", () => {
     assert.doesNotMatch(JSON.stringify(projecao), /BTG_Pactual__/);
   });
 
+  it("leva a medição com o total aprovado e as linhas sem demanda; a NF sem medição não ganha o campo (pergunta 64)", () => {
+    const medicoes = [
+      {
+        medicao_id: "ctr_safra_2026-10",
+        contrato_id: "ctr_safra",
+        competencia: "2026-10",
+        autorizacao_id: "aut_ctr_safra_2026-10",
+        valor_cents: 266_500,
+        demandas: ["10050", "10051"],
+        sem_demanda: [{ servico: "Equipe fixa", valor_cents: 125_000 }],
+      },
+    ];
+    const projecao = projecaoDaFatura({ ...FATURA, medicoes, medicao_ids: ["ctr_safra_2026-10"] }, { atualizadaEm: "2026-10-23T15:00:00.000Z" });
+    assert.deepEqual(projecao.medicoes, [{ competencia: "2026-10", valor_cents: 266_500, demandas: ["10050", "10051"], sem_demanda: [{ servico: "Equipe fixa", valor_cents: 125_000 }] }]);
+    // O contrato, a autorização e o id da medição são internos.
+    assert.doesNotMatch(JSON.stringify(projecao), /ctr_safra|aut_ctr/);
+    assert.equal("medicoes" in projecaoDaFatura(FATURA, { atualizadaEm: "2026-10-23T15:00:00.000Z" }), false);
+  });
+
   it("nas mudanças seguintes, o título vem da projeção anterior", () => {
     const anterior = { demandas: [{ numero: "10045", titulo: "Desmontagem", ref_cliente: "CE0045" }] };
     const projecao = projecaoDaFatura({ ...FATURA, status: "paga", recebido_cents: 1_484_500, paga_em: "2026-10-22" }, { anterior, atualizadaEm: "2026-10-23T15:00:00.000Z" });

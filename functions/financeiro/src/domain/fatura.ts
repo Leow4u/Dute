@@ -17,6 +17,11 @@ import { digest } from "./operations.js";
  *
  * Desde a parte 7.2a, a NF também fecha a armazenagem que o WMS emitiu
  * (armazenagem.ts), sozinha ou com as demandas do mesmo cliente.
+ *
+ * A medição aprovada (pergunta 64) entra como um item próprio, pelo total
+ * aprovado: a NF dela leva as demandas da medição, cada uma pela soma das
+ * linhas dela, e as linhas sem demanda (a equipe fixa do contrato misto),
+ * somadas pelo serviço. A demanda da medição não fatura à parte.
  */
 
 export const FATURAS_COLLECTION = "faturas";
@@ -32,6 +37,18 @@ export const AUTORIZACOES_EXIGIDAS = ["pedido_aceite", "portal", "medicao_aprova
 
 /** Quantas demandas uma NF fecha de uma vez. */
 export const MAX_DEMANDAS_POR_NF = 50;
+
+/** Quantas medições uma NF fecha de uma vez. */
+export const MAX_MEDICOES_POR_NF = 4;
+
+/** Quantas demandas uma NF fecha ao todo, com as das medições (a medição tem até 100). */
+export const MAX_DEMANDAS_NA_NF = 200;
+
+/** O id da medição: o contrato e a competência (functions/comercial, medicaoId). */
+export const MEDICAO_ID = /^[A-Za-z0-9_-]{1,120}_\d{4}-(?:0[1-9]|1[0-2])$/;
+
+/** O serviço da linha sem demanda cujo item não tem serviço no catálogo. */
+export const SEM_SERVICO = "Sem serviço";
 
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -67,6 +84,16 @@ const RegistrarNf = z
       .max(MAX_COMPETENCIAS_POR_NF, `Uma NF fecha até ${MAX_COMPETENCIAS_POR_NF} competências de armazenagem.`)
       .refine((lista) => new Set(lista).size === lista.length, "A mesma competência aparece duas vezes.")
       .default([]),
+    /**
+     * As medições aprovadas (`medicoes`, pergunta 64). Opcional e sem padrão:
+     * o pedido sem medição tem o mesmo conteúdo de antes, e o recibo de
+     * idempotência gravado antes continua valendo.
+     */
+    medicoes: z
+      .array(z.string().trim().regex(MEDICAO_ID, "Medição inválida."))
+      .max(MAX_MEDICOES_POR_NF, `Uma NF fecha até ${MAX_MEDICOES_POR_NF} medições.`)
+      .refine((lista) => new Set(lista).size === lista.length, "A mesma medição aparece duas vezes.")
+      .optional(),
     nf: z
       .object({
         numero: z.string().trim().regex(/^\d{1,15}$/, "Número da NF: só dígitos, até 15."),
@@ -90,7 +117,7 @@ export function interpretarRegistro(dados: unknown): PedidoDeNf {
     invalid(issue?.message ?? "Pedido inválido.");
   }
   const pedido = lido.data;
-  if (!pedido.demandas.length && !pedido.armazenagem.length) invalid("Informe ao menos uma demanda.");
+  if (!pedido.demandas.length && !pedido.armazenagem.length && !pedido.medicoes?.length) invalid("Informe ao menos uma demanda.");
   if (pedido.vencimento < pedido.nf.emitida_em) invalid("O vencimento vem depois da emissão.");
   return { ...pedido, nf: { ...pedido.nf, numero: pedido.nf.numero.replace(/^0+(?=\d)/, ""), serie: (pedido.nf.serie ?? "1").toUpperCase() } };
 }
@@ -112,7 +139,7 @@ export function interpretarEmissao(dados: unknown, hoje: string): PedidoDeEmissa
     invalid(issue?.message ?? "Pedido inválido.");
   }
   const pedido = lido.data;
-  if (!pedido.demandas.length && !pedido.armazenagem.length) invalid("Informe ao menos uma demanda.");
+  if (!pedido.demandas.length && !pedido.armazenagem.length && !pedido.medicoes?.length) invalid("Informe ao menos uma demanda.");
   if (pedido.vencimento < hoje) invalid("O vencimento vem de hoje em diante: a NFS-e sai hoje.");
   return pedido;
 }
@@ -265,6 +292,131 @@ export function valorNaMedicao(numero: string, medicao: Registro | null): number
   }, 0);
 }
 
+// --- A medição aprovada (pergunta 64) ------------------------------------------------------
+
+/** "10/2026", pela competência no fim do id da medição (`{contrato}_{AAAA-MM}`). */
+export function rotuloDaMedicao(medicaoId: string): string {
+  const competencia = /_(\d{4})-(\d{2})$/.exec(medicaoId);
+  return competencia ? `${competencia[2]}/${competencia[1]}` : medicaoId;
+}
+
+/** As linhas sem demanda, somadas pelo serviço dos itens (functions/comercial, ItemDaMedicao.servico). */
+export type SemDemandaNaFatura = { servico: string; valor_cents: number };
+
+export type MedicaoParaFaturar = {
+  id: string;
+  customer_code: string;
+  contrato_id: string | null;
+  competencia: string;
+  status: string;
+  /** A autorização que a aprovação criou (`aut_{medicao}`). */
+  autorizacao_id: string;
+  /** O total aprovado; null quando uma linha não tem valor ou os itens não somam a linha. */
+  total_cents: number | null;
+  /** As demandas das linhas, na ordem em que aparecem. */
+  demandas: string[];
+  sem_demanda: SemDemandaNaFatura[];
+  /** A NF em que a medição já está; null fora de NF. */
+  fatura_id: string | null;
+  /** A emissão da NFS-e pela Omie que reservou a medição; null sem reserva. */
+  emissao_nf_id: string | null;
+};
+
+function centavosDe(valor: unknown): number | null {
+  const lido = inteiro(valor);
+  return lido !== null && lido >= 0 && Number.isSafeInteger(lido) ? lido : null;
+}
+
+/**
+ * A medição como o Financeiro lê de `medicoes/{id}`. As linhas são as que o
+ * cliente aprovou: o total é a soma delas e confere com o gravado, e cada
+ * linha sem demanda soma os itens dela. Qualquer valor fora disso deixa o
+ * total null, e a medição não fatura.
+ */
+export function medicaoLida(id: string, dados: Registro): MedicaoParaFaturar {
+  const linhas = (Array.isArray(dados.linhas) ? dados.linhas : []).map((linha): Registro => (linha && typeof linha === "object" ? (linha as Registro) : {}));
+  const demandas: string[] = [];
+  const porServico = new Map<string, number>();
+  let soma: number | null = 0;
+  for (const linha of linhas) {
+    const total = centavosDe(linha.total_cents);
+    if (total === null || soma === null) {
+      soma = null;
+      continue;
+    }
+    soma += total;
+    const numero = texto(linha.demanda_numero);
+    if (numero) {
+      if (!demandas.includes(numero)) demandas.push(numero);
+      continue;
+    }
+    const itens = (Array.isArray(linha.itens) ? linha.itens : []).map((item): Registro => (item && typeof item === "object" ? (item as Registro) : {}));
+    const valores = itens.map((item) => centavosDe(item.total_cents));
+    if (!itens.length || valores.some((valor) => valor === null) || valores.reduce<number>((total_, valor) => total_ + (valor ?? 0), 0) !== total) {
+      soma = null;
+      continue;
+    }
+    itens.forEach((item, indice) => {
+      const servico = texto(item.servico) || SEM_SERVICO;
+      porServico.set(servico, (porServico.get(servico) ?? 0) + (valores[indice] ?? 0));
+    });
+  }
+  const gravado = centavosDe(dados.total_cents);
+  const faturamento = dados.faturamento && typeof dados.faturamento === "object" ? (dados.faturamento as Registro) : {};
+  return {
+    id,
+    customer_code: texto(dados.customer_code),
+    contrato_id: texto(dados.contrato_id) || null,
+    competencia: texto(dados.competencia) || id.slice(-7),
+    status: texto(dados.status),
+    autorizacao_id: texto(dados.autorizacao_id) || `aut_${id}`,
+    total_cents: soma !== null && linhas.length > 0 && gravado === soma ? soma : null,
+    demandas,
+    sem_demanda: [...porServico.entries()].filter(([, valor]) => valor > 0).map(([servico, valor_cents]) => ({ servico, valor_cents })),
+    fatura_id: texto(faturamento.fatura_id) || null,
+    emissao_nf_id: emissaoReservada(dados),
+  };
+}
+
+/** Por que a medição não entra na NF agora, ou null. `emissao` é a emissão da Omie que está faturando. */
+export function problemaDaMedicao(medicao: MedicaoParaFaturar, emissao: string | null = null): string | null {
+  const rotulo = `A medição de ${rotuloDaMedicao(medicao.id)}`;
+  if (medicao.fatura_id) return `${rotulo} já está numa NF.`;
+  if (medicao.emissao_nf_id && medicao.emissao_nf_id !== emissao) return `${rotulo} está na emissão da NFS-e pela Omie.`;
+  if (medicao.status !== "aprovada") return `${rotulo} não está aprovada.`;
+  if (medicao.total_cents === null) return `${rotulo} tem linha sem valor ou fora do total.`;
+  if (!medicao.customer_code) return `${rotulo} não tem cliente.`;
+  return null;
+}
+
+/** A medição como a fatura guarda: o total aprovado, as demandas dela (que estão em `demandas` da fatura) e as linhas sem demanda. */
+export type MedicaoNaFatura = {
+  medicao_id: string;
+  contrato_id: string | null;
+  competencia: string;
+  autorizacao_id: string;
+  valor_cents: number;
+  demandas: string[];
+  sem_demanda: SemDemandaNaFatura[];
+};
+
+export function medicaoNaFatura(medicao: MedicaoParaFaturar): MedicaoNaFatura {
+  return {
+    medicao_id: medicao.id,
+    contrato_id: medicao.contrato_id,
+    competencia: medicao.competencia,
+    autorizacao_id: medicao.autorizacao_id,
+    valor_cents: medicao.total_cents ?? 0,
+    demandas: medicao.demandas,
+    sem_demanda: medicao.sem_demanda,
+  };
+}
+
+/** O que a medição soma à fatura além das demandas dela: as linhas sem demanda. */
+export function valorSemDemanda(medicao: Pick<MedicaoNaFatura, "sem_demanda">): number {
+  return medicao.sem_demanda.reduce((soma, linha) => soma + linha.valor_cents, 0);
+}
+
 /** O total da RV validada, em centavos. */
 export function valorDaRv(demanda: Pick<DemandaParaFaturar, "numero" | "rv">, revisao: Registro | null): number {
   if (demanda.rv === null) falha(`A demanda ${demanda.numero} não tem a RV validada pelo cliente.`);
@@ -287,6 +439,8 @@ export type FaturaNova = {
   customer_name: string | null;
   demandas: DemandaNaFatura[];
   armazenagem: ArmazenagemNaFatura[];
+  /** As medições aprovadas (pergunta 64); as demandas delas estão em `demandas`. */
+  medicoes?: MedicaoNaFatura[];
   nf: { numero: string; serie: string; emitida_em: string };
   vencimento: string;
   forma: FormaDePagamento;
@@ -298,9 +452,15 @@ export type FaturaNova = {
 
 export const FATURA_SCHEMA_VERSION = 1;
 
-/** O documento de `faturas/{id}`: emitida, com o valor de cada demanda, de cada competência e o total. */
+/**
+ * O documento de `faturas/{id}`: emitida, com o valor de cada demanda, de
+ * cada competência e o total. A medição soma ao total só as linhas sem
+ * demanda: as demandas dela já estão em `demandas`, cada uma pelo valor dela.
+ * Só a NF com medição ganha `medicoes` e `medicao_ids`.
+ */
 export function documentoDaFatura(entrada: FaturaNova): Record<string, unknown> {
-  const autorizacoes = [...new Set(entrada.demandas.flatMap((demanda) => demanda.autorizacao_ids))];
+  const medicoes = entrada.medicoes ?? [];
+  const autorizacoes = [...new Set([...entrada.demandas.flatMap((demanda) => demanda.autorizacao_ids), ...medicoes.map((medicao) => medicao.autorizacao_id)])];
   const soma = (linhas: ReadonlyArray<{ valor_cents: number }>) => linhas.reduce((total, linha) => total + linha.valor_cents, 0);
   return {
     id: entrada.id,
@@ -311,8 +471,9 @@ export function documentoDaFatura(entrada: FaturaNova): Record<string, unknown> 
     demanda_numeros: entrada.demandas.map((demanda) => demanda.numero),
     armazenagem: entrada.armazenagem,
     periodo_ids: entrada.armazenagem.map((linha) => linha.periodo_id),
+    ...(medicoes.length ? { medicoes, medicao_ids: medicoes.map((medicao) => medicao.medicao_id) } : {}),
     autorizacao_ids: autorizacoes,
-    valor_cents: soma(entrada.demandas) + soma(entrada.armazenagem),
+    valor_cents: soma(entrada.demandas) + soma(entrada.armazenagem) + medicoes.reduce((total, medicao) => total + valorSemDemanda(medicao), 0),
     nf: entrada.nf,
     nf_chave: `${entrada.nf.serie}:${entrada.nf.numero}`,
     vencimento: entrada.vencimento,

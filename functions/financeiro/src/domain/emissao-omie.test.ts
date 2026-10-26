@@ -128,6 +128,18 @@ describe("a OS da fatura", () => {
     assert.deepEqual(os.InformacoesAdicionais, { cDadosAdicNF: "Emissão Dute nfe_0123456789abcdef0123 · Pedido 42" });
   });
 
+  it("a medição aprovada é um item só, com o serviço das OS, e a emissão gravada com ela se lê (pergunta 64)", () => {
+    const itens = [{ origem: "medicao" as const, referencia: "ctr_safra_2026-10", descricao: "Medição de 10/2026", valor_cents: 266_500 }];
+    const os = osDaEmissao(emissao({ omie: COM_CLIENTE, itens }), "2026-10-24", SEM_CONFIGURACAO) as Record<string, any>;
+    assert.deepEqual(
+      os.ServicosPrestados.map((item: Record<string, unknown>) => [item.cCodIntServico, item.cDescServ, item.nValUnit]),
+      [[SERVICO_DAS_OS, "Medição de 10/2026", 2665]],
+    );
+    assert.deepEqual(os.Parcelas[0].nValor, 2665);
+    const gravada = emissao({ itens });
+    assert.deepEqual(emissaoLida(gravada.id, gravada as unknown as Record<string, unknown>).itens, itens);
+  });
+
   it("a categoria e a conta corrente entram só quando o contador passou", () => {
     const os = osDaEmissao(emissao({ omie: COM_CLIENTE }), "2026-10-24", { categoria: "1.01.02", conta_corrente: 777 }) as Record<string, any>;
     assert.equal(os.InformacoesAdicionais.cCodCateg, "1.01.02");

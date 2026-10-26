@@ -153,7 +153,8 @@ pesquisa nas páginas da Omie (`developer.omie.com.br`,
   Esse é o código de idempotência: a Omie recusa o segundo com o mesmo código,
   e a Dute então consulta a OS que já existe.
   - Um item por demanda e um por competência da armazenagem, com o valor do
-    servidor (o mesmo do `registerNf`).
+    servidor (o mesmo do `registerNf`). A medição aprovada (pergunta 64) é
+    um item só, pelo total aprovado, sem as demandas dela à parte.
   - O serviço do item é o que o contador cadastrou na Omie, pelo código de
     integração (`cCodIntServico`): um para as OS e um para a armazenagem.
   - Uma parcela, com o vencimento escolhido.
@@ -564,8 +565,8 @@ Feita em 24/10/2026. Puro, sem Firestore nem rede: a 7.4c grava, e a 7.4d chama.
   - as etapas;
   - o passo de cada etapa;
   - a OS montada da emissão: o `cCodIntOS`, o cliente, a etapa 50, um item
-    por demanda e por competência com o serviço do contador (`DUTE-OS` e
-    `DUTE-ARMAZENAGEM`) e uma parcela;
+    por demanda, por competência e por medição com o serviço do contador
+    (`DUTE-OS` e `DUTE-ARMAZENAGEM`) e uma parcela;
   - o pedido de cada passo;
   - o que a resposta e a falha fazem com a emissão;
   - as ações de retomar e desistir.

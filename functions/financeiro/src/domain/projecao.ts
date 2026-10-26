@@ -4,8 +4,10 @@
  * pelo Financeiro na mesma transação de cada mudança, como o WMS faz com
  * `client_invoices`. Leva só o que é do cliente: a NF, o vencimento, a forma,
  * o valor, o recebido e o saldo, a situação, as demandas com o valor e o
- * título e a armazenagem de cada competência (parte 7.2a). Fica de fora o que é interno: quem registrou, a observação, as
- * autorizações, os registros anteriores e o motivo de cancelamento.
+ * título, a armazenagem de cada competência (parte 7.2a) e a medição
+ * aprovada com as linhas sem demanda (pergunta 64). Fica de fora o que é
+ * interno: quem registrou, a observação, as autorizações, os registros
+ * anteriores e o motivo de cancelamento.
  *
  * A NF cancelada some do portal: o cancelamento é a correção de um registro
  * errado, e a projeção é apagada.
@@ -71,8 +73,31 @@ export function projecaoDaFatura(fatura: Registro, contexto: { demandas?: Readon
       const competencia = texto(linha.competencia);
       return competencia ? [{ competencia, valor_cents: centavos(linha.valor_cents) }] : [];
     }),
+    ...medicoesParaOCliente(fatura.medicoes),
     atualizada_em: contexto.atualizadaEm,
   };
+}
+
+/**
+ * A medição aprovada da NF (pergunta 64): o total aprovado, as demandas dela
+ * (que estão em `demandas`) e as linhas sem demanda pelo serviço. Só a NF
+ * com medição ganha o campo.
+ */
+function medicoesParaOCliente(lista: unknown): { medicoes?: Registro[] } {
+  const medicoes = (Array.isArray(lista) ? lista : []).flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const medicao = item as Registro;
+    const competencia = texto(medicao.competencia);
+    if (!competencia) return [];
+    const demandas = (Array.isArray(medicao.demandas) ? medicao.demandas : []).filter((numero): numero is string => typeof numero === "string" && numero.length > 0);
+    const semDemanda = (Array.isArray(medicao.sem_demanda) ? medicao.sem_demanda : []).flatMap((linha) => {
+      if (!linha || typeof linha !== "object") return [];
+      const servico = texto((linha as Registro).servico);
+      return servico ? [{ servico, valor_cents: centavos((linha as Registro).valor_cents) }] : [];
+    });
+    return [{ competencia, valor_cents: centavos(medicao.valor_cents), demandas, sem_demanda: semDemanda }];
+  });
+  return medicoes.length ? { medicoes } : {};
 }
 
 /** O título e a referência da demanda como `demands/{numero}` guarda. */

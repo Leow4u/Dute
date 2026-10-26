@@ -15,12 +15,13 @@ import type { FinanceiroProfile } from "./profile.js";
 
 /**
  * Registrar a NF no emulador (parte 4.1a): a demanda A faturar com a
- * autorização registrada fatura pelo total da RV validada; a da medição
- * aprovada, pela soma das linhas dela; a fatura nasce emitida, as demandas
- * ficam Faturadas com o marco, as autorizações ganham a NF e o evento sai sem
- * valor; repetir não duplica. Sem autorização, fora de A faturar, de clientes
- * diferentes ou com a NF já registrada, nada se grava. A competência que o
- * WMS emitiu entra pelo total congelado (parte 7.2a). Dados sintéticos.
+ * autorização registrada fatura pelo total da RV validada; a fatura nasce
+ * emitida, as demandas ficam Faturadas com o marco, as autorizações ganham a
+ * NF e o evento sai sem valor; repetir não duplica. Sem autorização, fora de
+ * A faturar, de clientes diferentes ou com a NF já registrada, nada se grava.
+ * A competência que o WMS emitiu entra pelo total congelado (parte 7.2a). A
+ * medição aprovada entra como um item próprio, pelo total aprovado, com as
+ * demandas dela e as linhas sem demanda (pergunta 64). Dados sintéticos.
  */
 
 const PROJECT_ID = "demo-dute-financeiro";
@@ -78,23 +79,31 @@ beforeEach(async () => {
     demanda_numeros: ["10045", "10046"],
     nf_ids: [],
   });
-  // A medição mensal do Safra: a demanda vem da medição aprovada, sem RV.
-  set("demands/10050", demanda("10050", {
+  // A medição mensal do Safra: as demandas vêm da medição aprovada, sem RV, e a equipe fixa entra sem demanda.
+  const daMedicao = (numero: string) =>
+    demanda(numero, {
+      customer_code: "SAFRA",
+      customer_name: "Banco Safra",
+      cobranca: "medicao_mensal",
+      medicao_id: "ctr_safra_2026-10",
+      validacao: { etapa: "a_faturar", autorizacao: "medicao_aprovada", medicao_id: "ctr_safra_2026-10" },
+      autorizacao_ids: ["aut_ctr_safra_2026-10"],
+    });
+  set("demands/10050", daMedicao("10050"));
+  set("demands/10051", daMedicao("10051"));
+  set("medicoes/ctr_safra_2026-10", MEDICAO);
+  set("client_authorizations/aut_ctr_safra_2026-10", {
+    id: "aut_ctr_safra_2026-10",
     customer_code: "SAFRA",
-    customer_name: "Banco Safra",
-    cobranca: "medicao_mensal",
-    validacao: { etapa: "a_faturar", autorizacao: "medicao_aprovada", medicao_id: "ctr_safra_2026-10" },
-    autorizacao_ids: ["aut_ctr_safra_2026-10"],
-  }));
-  set("medicoes/ctr_safra_2026-10", {
-    status: "aprovada",
-    linhas: [
-      { id: "l1", demanda_numero: "10050", total_cents: 30_000 },
-      { id: "l2", demanda_numero: "10051", total_cents: 99_000 },
-      { id: "l3", demanda_numero: "10050", total_cents: 12_500 },
-    ],
+    tipo: "medicao_aprovada",
+    origem: "medicao",
+    status: "registrada",
+    demandas: [],
+    demanda_numeros: ["10050", "10051"],
+    medicao_id: "ctr_safra_2026-10",
+    valor_cents: 266_500,
+    nf_ids: [],
   });
-  set("client_authorizations/aut_ctr_safra_2026-10", { id: "aut_ctr_safra_2026-10", customer_code: "SAFRA", tipo: "medicao_aprovada", status: "registrada", demandas: [], demanda_numeros: ["10050"], nf_ids: [] });
   // A armazenagem como o WMS emite: o total da NF é o da foto, não o do período.
   const periodo = (customer: string | null, competencia: string, status: string, centavos: number) => ({
     ...(customer ? { customer_code: customer } : {}),
@@ -113,6 +122,39 @@ beforeEach(async () => {
   set(`${CLIENT_INVOICES_COLLECTION}/2026-07`, { competencia: "2026-07", status: "emitido", payment_status: "issued", total_cents: 1_234 });
   await batch.commit();
 });
+
+/** A medição aprovada de outubro do Safra: duas demandas, a equipe fixa e um item avulso sem serviço. Total R$ 2.665,00. */
+const MEDICAO = {
+  id: "ctr_safra_2026-10",
+  customer_code: "SAFRA",
+  contrato_id: "ctr_safra",
+  competencia: "2026-10",
+  status: "aprovada",
+  autorizacao_id: "aut_ctr_safra_2026-10",
+  total_cents: 266_500,
+  linhas: [
+    { id: "l1", demanda_numero: "10050", total_cents: 30_000, itens: [{ servico: "Transporte", total_cents: 30_000 }] },
+    { id: "l2", demanda_numero: "10051", total_cents: 99_000, itens: [{ servico: "Montagem", total_cents: 99_000 }] },
+    { id: "l3", demanda_numero: "10050", total_cents: 12_500, itens: [{ servico: "Transporte", total_cents: 12_500 }] },
+    { id: "l4", demanda_numero: null, total_cents: 80_000, itens: [{ servico: "Equipe fixa", total_cents: 80_000 }] },
+    { id: "l5", demanda_numero: null, total_cents: 45_000, itens: [{ servico: "Equipe fixa", total_cents: 40_000 }, { servico: null, total_cents: 5_000 }] },
+  ],
+};
+
+/** A demanda 10051 da medição como o beforeEach a grava, para voltar depois de mexer nela. */
+const MEDICAO_10051 = {
+  numero: "10051",
+  customer_code: "SAFRA",
+  customer_name: "Banco Safra",
+  entrada: "comercial",
+  cobranca: "medicao_mensal",
+  etapa: "a_faturar",
+  etapa_desde: "2026-10-20T12:00:00.000Z",
+  marcos: [{ etapa: "a_faturar", em: "2026-10-20T12:00:00.000Z", por_uid: "com-1" }],
+  medicao_id: "ctr_safra_2026-10",
+  validacao: { etapa: "a_faturar", autorizacao: "medicao_aprovada", medicao_id: "ctr_safra_2026-10" },
+  autorizacao_ids: ["aut_ctr_safra_2026-10"],
+};
 
 const pedido = (extra: Record<string, unknown> = {}) => ({
   idempotency_key: "nf-1",
@@ -188,11 +230,14 @@ describe("registrar a NF", () => {
     assert.equal((await db.doc(`client_authorizations/${ids[50]}`).get()).get("nf_ids")[0], resultado.id);
   });
 
-  it("a demanda da medição aprovada fatura pela soma das linhas dela", async () => {
-    const resultado = await registerNfFor(db, financeiro, pedido({ demandas: ["10050"], nf: { numero: "77", serie: "2", emitida_em: "2026-10-23" } }), AGORA);
-    assert.equal(resultado.valor_cents, 42_500);
-    const fatura = (await db.collection(FATURAS_COLLECTION).doc(resultado.id).get()).data() ?? {};
-    assert.deepEqual(fatura.demandas, [{ numero: "10050", rv: null, medicao_id: "ctr_safra_2026-10", autorizacao_ids: ["aut_ctr_safra_2026-10"], valor_cents: 42_500 }]);
+  it("a demanda da medição não fatura sozinha: ela vai na NF da medição (pergunta 64)", async () => {
+    // Antes: a demanda 10050 faturava sozinha pela soma das linhas dela, e a equipe fixa nunca entrava numa NF.
+    await recusa(
+      registerNfFor(db, financeiro, pedido({ demandas: ["10050"], nf: { numero: "77", serie: "2", emitida_em: "2026-10-23" } }), AGORA),
+      "failed-precondition",
+      "A demanda 10050 é da medição de 10/2026: ela fatura com a medição.",
+    );
+    await nadaGravado();
   });
 
   it("a demanda por demanda num contrato que autoriza pela medição fatura pela RV, sem autorização: ela não entra em medição", async () => {
@@ -370,5 +415,152 @@ describe("a armazenagem na NF (parte 7.2a)", () => {
     const fatura = (await db.collection(FATURAS_COLLECTION).doc(registro.id).get()).data() ?? {};
     assert.deepEqual([fatura.status, fatura.recebido_cents], ["emitida", undefined]);
     assert.equal((await db.collection("pagamentos").get()).size, 0);
+  });
+});
+
+describe("a medição aprovada na NF (pergunta 64)", () => {
+  const medicaoAgora = async () => (await db.doc("medicoes/ctr_safra_2026-10").get()).data() ?? {};
+  const daMedicao = (extra: Record<string, unknown> = {}) => pedido({ idempotency_key: "nf-medicao-1", demandas: [], medicoes: ["ctr_safra_2026-10"], nf: { numero: "2318", emitida_em: "2026-10-23" }, ...extra });
+
+  it("fatura pelo total aprovado: as demandas pela soma das linhas delas e as linhas sem demanda pelo serviço; repetir não duplica", async () => {
+    const resultado = await registerNfFor(db, financeiro, daMedicao(), AGORA);
+    const id = faturaIdDaNf("1", "2318");
+    assert.deepEqual(resultado, { id, valor_cents: 266_500, demandas: [], armazenagem: [], medicoes: ["ctr_safra_2026-10"] });
+
+    const fatura = (await db.collection(FATURAS_COLLECTION).doc(id).get()).data() ?? {};
+    assert.equal(fatura.valor_cents, 266_500);
+    assert.deepEqual([fatura.customer_code, fatura.customer_name], ["SAFRA", "Banco Safra"]);
+    assert.deepEqual(fatura.demandas, [
+      { numero: "10050", rv: null, medicao_id: "ctr_safra_2026-10", autorizacao_ids: ["aut_ctr_safra_2026-10"], valor_cents: 42_500 },
+      { numero: "10051", rv: null, medicao_id: "ctr_safra_2026-10", autorizacao_ids: ["aut_ctr_safra_2026-10"], valor_cents: 99_000 },
+    ]);
+    assert.deepEqual(fatura.medicoes, [
+      {
+        medicao_id: "ctr_safra_2026-10",
+        contrato_id: "ctr_safra",
+        competencia: "2026-10",
+        autorizacao_id: "aut_ctr_safra_2026-10",
+        valor_cents: 266_500,
+        demandas: ["10050", "10051"],
+        sem_demanda: [
+          { servico: "Equipe fixa", valor_cents: 120_000 },
+          { servico: "Sem serviço", valor_cents: 5_000 },
+        ],
+      },
+    ]);
+    assert.deepEqual([fatura.medicao_ids, fatura.demanda_numeros, fatura.autorizacao_ids], [["ctr_safra_2026-10"], ["10050", "10051"], ["aut_ctr_safra_2026-10"]]);
+
+    // As demandas ficam Faturadas; a medição ganha o mesmo resumo; a autorização, a NF.
+    for (const numero of ["10050", "10051"]) assert.equal((await db.doc(`demands/${numero}`).get()).get("etapa"), "faturada", numero);
+    const medicao = await medicaoAgora();
+    assert.deepEqual(medicao.faturamento, (await db.doc("demands/10050").get()).get("faturamento"));
+    assert.equal(medicao.faturamento.fatura_id, id);
+    assert.equal(medicao.status, "aprovada");
+    assert.deepEqual((await db.doc("client_authorizations/aut_ctr_safra_2026-10").get()).get("nf_ids"), [id]);
+
+    const [evento] = (await db.collection(EVENTS_COLLECTION).get()).docs.map((doc) => doc.data());
+    assert.deepEqual(evento.payload, { id, demandas: ["10050", "10051"], competencias: [], medicoes: ["ctr_safra_2026-10"], autorizacoes: 1, emitida_em: "2026-10-23", vencimento: "2026-11-20", forma: "boleto" });
+    const portal = (await db.collection(CLIENT_FATURAS_COLLECTION).doc(id).get()).data() ?? {};
+    assert.equal(portal.valor_cents, 266_500);
+    assert.deepEqual(portal.medicoes, [
+      {
+        competencia: "2026-10",
+        valor_cents: 266_500,
+        demandas: ["10050", "10051"],
+        sem_demanda: [
+          { servico: "Equipe fixa", valor_cents: 120_000 },
+          { servico: "Sem serviço", valor_cents: 5_000 },
+        ],
+      },
+    ]);
+
+    assert.equal((await registerNfFor(db, financeiro, daMedicao(), AGORA)).replayed, true);
+    assert.equal((await db.collection(EVENTS_COLLECTION).get()).size, 1);
+    await recusa(registerNfFor(db, financeiro, daMedicao({ idempotency_key: "nf-medicao-2", nf: { numero: "2319", emitida_em: "2026-10-23" } }), AGORA), "failed-precondition", "A medição de 10/2026 já está numa NF.");
+  });
+
+  it("a medição só com as linhas sem demanda (a equipe fixa) fatura sozinha", async () => {
+    await db.doc("medicoes/ctr_safra_2026-09").set({
+      ...MEDICAO,
+      id: "ctr_safra_2026-09",
+      competencia: "2026-09",
+      autorizacao_id: "aut_ctr_safra_2026-09",
+      total_cents: 80_000,
+      linhas: [MEDICAO.linhas[3]],
+    });
+    await db.doc("client_authorizations/aut_ctr_safra_2026-09").set({ id: "aut_ctr_safra_2026-09", customer_code: "SAFRA", tipo: "medicao_aprovada", status: "registrada", demandas: [], demanda_numeros: [], nf_ids: [] });
+    const resultado = await registerNfFor(db, financeiro, daMedicao({ medicoes: ["ctr_safra_2026-09"] }), AGORA);
+    assert.equal(resultado.valor_cents, 80_000);
+    const fatura = (await db.collection(FATURAS_COLLECTION).doc(resultado.id).get()).data() ?? {};
+    assert.deepEqual([fatura.demandas, fatura.demanda_numeros, fatura.customer_code, fatura.autorizacao_ids], [[], [], "SAFRA", ["aut_ctr_safra_2026-09"]]);
+    assert.deepEqual(fatura.medicoes[0].sem_demanda, [{ servico: "Equipe fixa", valor_cents: 80_000 }]);
+    assert.deepEqual((await db.doc("client_authorizations/aut_ctr_safra_2026-09").get()).get("nf_ids"), [resultado.id]);
+  });
+
+  it("a demanda da medição fora de A faturar, a autorização cancelada, a medição sem aprovação, reservada ou de outro cliente não faturam, e nada se grava", async () => {
+    await db.doc("demands/10051").update({ etapa: "para_planejar" });
+    await recusa(registerNfFor(db, financeiro, daMedicao(), AGORA), "failed-precondition", "A demanda 10051 não está A faturar. Ela é da medição de 10/2026.");
+    await db.doc("demands/10051").update({ etapa: "a_faturar", medicao_id: "ctr_safra_2026-11", "validacao.medicao_id": "ctr_safra_2026-11" });
+    await recusa(registerNfFor(db, financeiro, daMedicao({ idempotency_key: "m-2" }), AGORA), "failed-precondition", "A demanda 10051 não está presa a esta medição. Ela é da medição de 10/2026.");
+    await db.doc("demands/10051").set(MEDICAO_10051);
+
+    await db.doc("client_authorizations/aut_ctr_safra_2026-10").update({ status: "cancelada" });
+    await recusa(registerNfFor(db, financeiro, daMedicao({ idempotency_key: "m-3" }), AGORA), "failed-precondition", "A medição de 10/2026 não tem a autorização de faturamento registrada.");
+    await db.doc("client_authorizations/aut_ctr_safra_2026-10").update({ status: "registrada" });
+
+    await db.doc("medicoes/ctr_safra_2026-10").update({ status: "enviada" });
+    await recusa(registerNfFor(db, financeiro, daMedicao({ idempotency_key: "m-4" }), AGORA), "failed-precondition", "A medição de 10/2026 não está aprovada.");
+    await db.doc("medicoes/ctr_safra_2026-10").update({ status: "aprovada", total_cents: 266_501 });
+    await recusa(registerNfFor(db, financeiro, daMedicao({ idempotency_key: "m-5" }), AGORA), "failed-precondition", "A medição de 10/2026 tem linha sem valor ou fora do total.");
+    await db.doc("medicoes/ctr_safra_2026-10").update({ total_cents: 266_500, emissao_nf: { id: "nfe_0123456789abcdef0123", desde: "2026-10-23T14:00:00.000Z" } });
+    await recusa(registerNfFor(db, financeiro, daMedicao({ idempotency_key: "m-6" }), AGORA), "failed-precondition", "A medição de 10/2026 está na emissão da NFS-e pela Omie.");
+    await db.doc("medicoes/ctr_safra_2026-10").update({ emissao_nf: null });
+
+    await recusa(
+      registerNfFor(db, financeiro, daMedicao({ idempotency_key: "m-7", demandas: ["10045"] }), AGORA),
+      "invalid-argument",
+      "A medição de 10/2026 é de outro cliente: uma NF é de um cliente só.",
+    );
+    await recusa(registerNfFor(db, financeiro, daMedicao({ idempotency_key: "m-8", medicoes: ["ctr_safra_2026-12"] }), AGORA), "not-found", "Medição ctr_safra_2026-12 não encontrada.");
+    await nadaGravado();
+    for (const numero of ["10050", "10051"]) assert.equal((await db.doc(`demands/${numero}`).get()).get("etapa"), "a_faturar", numero);
+    assert.equal((await medicaoAgora()).faturamento, undefined);
+  });
+
+  it("cancelar o registro devolve a medição e as demandas dela a A faturar, e a medição entra em outra NF", async () => {
+    const registro = await registerNfFor(db, financeiro, daMedicao(), AGORA);
+    await advanceFaturaFor(db, financeiro, { acao: "cancel", idempotency_key: "c-m-1", fatura_id: registro.id, motivo: "NF errada" }, AGORA);
+    assert.equal((await medicaoAgora()).faturamento, undefined);
+    for (const numero of ["10050", "10051"]) assert.equal((await db.doc(`demands/${numero}`).get()).get("etapa"), "a_faturar", numero);
+    assert.deepEqual((await db.doc("client_authorizations/aut_ctr_safra_2026-10").get()).get("nf_ids"), []);
+    const cancelada = (await db.collection(EVENTS_COLLECTION).where("type", "==", "nf.cancelled").get()).docs[0]?.data();
+    assert.deepEqual(cancelada?.payload, { id: registro.id, demandas: ["10050", "10051"], competencias: [], medicoes: ["ctr_safra_2026-10"] });
+
+    const outra = await registerNfFor(db, financeiro, daMedicao({ idempotency_key: "nf-medicao-3", nf: { numero: "2320", emitida_em: "2026-10-23" } }), AGORA);
+    assert.equal(outra.valor_cents, 266_500);
+    assert.equal((await medicaoAgora()).faturamento.fatura_id, outra.id);
+  });
+
+  it("o cancelamento recusa a medição que saiu desta NF, e nada muda", async () => {
+    const registro = await registerNfFor(db, financeiro, daMedicao(), AGORA);
+    await db.doc("medicoes/ctr_safra_2026-10").update({ "faturamento.fatura_id": "fat_outra" });
+    await recusa(
+      advanceFaturaFor(db, financeiro, { acao: "cancel", idempotency_key: "c-m-2", fatura_id: registro.id, motivo: "NF errada" }, AGORA),
+      "failed-precondition",
+      "A medição de 10/2026 não está nesta NF.",
+    );
+    assert.equal((await db.collection(FATURAS_COLLECTION).doc(registro.id).get()).get("status"), "emitida");
+  });
+
+  it("o pagamento que quita marca o dia na medição e as demandas pagas; o estorno tira", async () => {
+    const registro = await registerNfFor(db, financeiro, daMedicao({ nf: { numero: "2321", emitida_em: "2026-10-20" } }), AGORA);
+    const quitou = await advanceFaturaFor(db, financeiro, { acao: "pay", idempotency_key: "p-m-1", fatura_id: registro.id, valor: "2665.00", recebido_em: "2026-10-22", forma: "pix" }, AGORA);
+    assert.equal(quitou.status, "paga");
+    assert.deepEqual([(await medicaoAgora()).faturamento.paga_em, (await medicaoAgora()).faturamento.fatura_id], ["2026-10-22", registro.id]);
+    for (const numero of ["10050", "10051"]) assert.equal((await db.doc(`demands/${numero}`).get()).get("etapa"), "paga", numero);
+
+    await advanceFaturaFor(db, financeiro, { acao: "reverse_payment", idempotency_key: "e-m-1", fatura_id: registro.id, pagamento_id: quitou.pagamento_id, motivo: "Pix devolvido" }, AGORA);
+    assert.deepEqual([(await medicaoAgora()).faturamento.paga_em, (await medicaoAgora()).faturamento.fatura_id], [undefined, registro.id]);
+    for (const numero of ["10050", "10051"]) assert.equal((await db.doc(`demands/${numero}`).get()).get("etapa"), "faturada", numero);
   });
 });

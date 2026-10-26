@@ -193,6 +193,51 @@ describe("a rotina da Omie", () => {
     assert.equal((await rodar(omie.transporte, 60)).passos, 0);
   });
 
+  it("a medição autorizada vira a fatura da medição: as demandas dela Faturadas, a medição com o faturamento e sem a reserva (pergunta 64)", async () => {
+    const medicaoId = "ctr_safra_2026-10";
+    const batch = db.batch();
+    const daMedicao = (numero: string) =>
+      demanda(numero, {
+        customer_code: "SAFRA",
+        customer_name: "Banco Safra",
+        cobranca: "medicao_mensal",
+        medicao_id: medicaoId,
+        validacao: { etapa: "a_faturar", autorizacao: "medicao_aprovada", medicao_id: medicaoId },
+        autorizacao_ids: [`aut_${medicaoId}`],
+      });
+    batch.set(db.doc("demands/10051"), daMedicao("10051"));
+    batch.set(db.doc(`medicoes/${medicaoId}`), {
+      id: medicaoId,
+      customer_code: "SAFRA",
+      contrato_id: "ctr_safra",
+      competencia: "2026-10",
+      status: "aprovada",
+      autorizacao_id: `aut_${medicaoId}`,
+      total_cents: 120_000,
+      linhas: [
+        { id: "l1", demanda_numero: "10051", total_cents: 40_000, itens: [{ servico: "Transporte", total_cents: 40_000 }] },
+        { id: "l2", demanda_numero: null, total_cents: 80_000, itens: [{ servico: "Equipe fixa", total_cents: 80_000 }] },
+      ],
+    });
+    batch.set(db.doc(`client_authorizations/aut_${medicaoId}`), { id: `aut_${medicaoId}`, customer_code: "SAFRA", tipo: "medicao_aprovada", status: "registrada", demandas: [], demanda_numeros: ["10051"], nf_ids: [] });
+    await batch.commit();
+
+    const omie = omieDeMentira();
+    await emitir(ID, { demandas: [], armazenagem: [], medicoes: [medicaoId] });
+    // Como no caminho completo: cliente, OS, ambiente, faturar, a prefeitura cedo, 002 e 004.
+    for (const depois of [0, 0, 0, 0, 1, 1, 5]) await rodar(omie.transporte, depois);
+
+    const faturaId = faturaIdDaNfse("815");
+    assert.equal((await emissao()).fatura_id, faturaId);
+    const fatura = (await db.doc(`${FATURAS_COLLECTION}/${faturaId}`).get()).data() ?? {};
+    assert.deepEqual([fatura.customer_code, fatura.valor_cents, fatura.medicao_ids, fatura.demanda_numeros], ["SAFRA", 120_000, [medicaoId], ["10051"]]);
+    assert.deepEqual((fatura.medicoes as Array<Record<string, unknown>>)[0].sem_demanda, [{ servico: "Equipe fixa", valor_cents: 80_000 }]);
+    const medicao = (await db.doc(`medicoes/${medicaoId}`).get()).data() ?? {};
+    assert.deepEqual([(medicao.faturamento as Record<string, unknown>).fatura_id, medicao.emissao_nf], [faturaId, undefined]);
+    const faturada = (await db.doc("demands/10051").get()).data() ?? {};
+    assert.deepEqual([faturada.etapa, faturada.emissao_nf], ["faturada", undefined]);
+  });
+
   it("a NFS-e que cita mais de 50 autorizações vira fatura, e a rotina segue", async () => {
     const ids = Array.from({ length: 51 }, (_, i) => `aut_${String(i).padStart(2, "0")}`);
     const batch = db.batch();
