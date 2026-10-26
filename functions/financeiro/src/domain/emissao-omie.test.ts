@@ -12,6 +12,8 @@ import {
   comAcao,
   comFalha,
   comResposta,
+  diaDaFatura,
+  diaDaOmie,
   emissaoLida,
   novoIdDeEmissao,
   omieLiberada,
@@ -53,18 +55,19 @@ function emissao(extra: Partial<Emissao> = {}): Emissao {
     motivo_da_parada: null,
     mensagem: null,
     mensagens_da_prefeitura: [],
-    omie: { cliente: null, os: null, numero_os: null, ambiente: null, nfse: null, codigo_verificacao: null, url_nfse: null, url_pdf: null },
+    omie: { cliente: null, os: null, numero_os: null, ambiente: null, nfse: null, codigo_verificacao: null, url_nfse: null, url_pdf: null, dia_do_faturamento: null },
     tentativas: 0,
     consultas: 0,
     proxima_em: "2026-10-24T11:00:00.000Z",
     na_prefeitura_desde: null,
     conferir: false,
+    retomada_desde_a_rps: false,
     edicao: 1,
     ...extra,
   };
 }
 
-const COM_CLIENTE = { cliente: 5001, os: null, numero_os: null, ambiente: null, nfse: null, codigo_verificacao: null, url_nfse: null, url_pdf: null };
+const COM_CLIENTE = { cliente: 5001, os: null, numero_os: null, ambiente: null, nfse: null, codigo_verificacao: null, url_nfse: null, url_pdf: null, dia_do_faturamento: null };
 const COM_OS = { ...COM_CLIENTE, os: 9001, numero_os: "000123", ambiente: "H" as const };
 
 describe("liberação e ambiente", () => {
@@ -403,6 +406,55 @@ describe("o relógio da prefeitura", () => {
   });
 });
 
+describe("o dia da fatura da NFS-e (pergunta 60)", () => {
+  const autorizada = { nCodOS: 9001, cFaturada: "S", cCancelada: "N", dDtFat: "20/10/2026", ListaRpsNfse: [{ cStatusRps: "004", nNfse: "00000815", cCodVerif: "AB12" }] };
+
+  it("lê o dia das datas da Omie e recusa o que não é um dia do calendário", () => {
+    assert.equal(diaDaOmie("20/10/2026"), "2026-10-20");
+    assert.equal(diaDaOmie(" 29/02/2028 "), "2028-02-29");
+    for (const valor of ["31/02/2026", "29/02/2027", "2026-10-20", "20/10/26", "", null, undefined, 20102026]) assert.equal(diaDaOmie(valor), null, String(valor));
+  });
+
+  it("a autorização guarda o dia do faturamento da OS; sem ele na resposta, fica o que já tinha", () => {
+    const naPrefeitura = emissao({ etapa: "na_prefeitura", omie: COM_OS });
+    assert.equal(comResposta(naPrefeitura, "acompanhar", autorizada, CONTEXTO).emissao.omie.dia_do_faturamento, "2026-10-20");
+    const { dDtFat: _semDia, ...semDia } = autorizada;
+    assert.equal(comResposta(naPrefeitura, "acompanhar", semDia, CONTEXTO).emissao.omie.dia_do_faturamento, null);
+    const jaLido = emissao({ etapa: "na_prefeitura", omie: { ...COM_OS, dia_do_faturamento: "2026-10-19" } });
+    assert.equal(comResposta(jaLido, "acompanhar", semDia, CONTEXTO).emissao.omie.dia_do_faturamento, "2026-10-19");
+    // A conferência do cancelamento que acha a nota autorizada também guarda.
+    const cancelando = emissao({ etapa: "cancelando", omie: COM_OS, conferir: true });
+    assert.equal(comResposta(cancelando, "conferir_os", autorizada, CONTEXTO).emissao.omie.dia_do_faturamento, "2026-10-20");
+  });
+
+  it("retomar a parada marca a retomada; a RPS que a rotina manda de novo zera; retomar a rejeitada não marca", () => {
+    for (const motivo of ["prefeitura_demorou", "falhas_seguidas", "sem_chaves", "chave", "fatura_recusada", "nfse_autorizada"] as const) {
+      const retomada = comAcao(emissao({ etapa: "parada", etapa_anterior: "na_prefeitura", motivo_da_parada: motivo, omie: COM_OS }), "retomar", AGORA);
+      assert.ok("emissao" in retomada);
+      assert.deepEqual([retomada.emissao.etapa, retomada.emissao.retomada_desde_a_rps], ["na_prefeitura", true], motivo);
+    }
+    const reenvio = comAcao(emissao({ etapa: "rejeitada", omie: COM_OS }), "retomar", AGORA);
+    assert.ok("emissao" in reenvio);
+    assert.equal(reenvio.emissao.retomada_desde_a_rps, false);
+    for (const [etapa, passo] of [["os_incluida", "faturar_os"], ["reenviando", "reenviar_os"]] as const) {
+      const enviada = comResposta(emissao({ etapa, omie: COM_OS, retomada_desde_a_rps: true }), passo, { cCodStatus: "0" }, CONTEXTO).emissao;
+      assert.deepEqual([enviada.etapa, enviada.retomada_desde_a_rps], ["na_prefeitura", false], passo);
+    }
+    // A conferência que acha a RPS já enviada antes da parada mantém a marca: a nota pode ter saído na parada.
+    const paraConferir = emissao({ etapa: "os_incluida", omie: COM_OS, conferir: true, retomada_desde_a_rps: true });
+    const conferida = comResposta(paraConferir, "conferir_os", { nCodOS: 9001, cFaturada: "S", cCancelada: "N", ListaRpsNfse: [{ cStatusRps: "002" }] }, CONTEXTO).emissao;
+    assert.deepEqual([conferida.etapa, conferida.retomada_desde_a_rps], ["na_prefeitura", true]);
+  });
+
+  it("na rotina em dia, o dia em que ela viu a autorização; depois da retomada, o do faturamento na Omie, nunca depois de hoje", () => {
+    const comFaturamento = { ...COM_OS, nfse: "00000815", dia_do_faturamento: "2026-10-20" };
+    assert.equal(diaDaFatura(emissao({ omie: comFaturamento }), "2026-10-24"), "2026-10-24");
+    assert.equal(diaDaFatura(emissao({ omie: comFaturamento, retomada_desde_a_rps: true }), "2026-10-24"), "2026-10-20");
+    assert.equal(diaDaFatura(emissao({ omie: { ...comFaturamento, dia_do_faturamento: null }, retomada_desde_a_rps: true }), "2026-10-24"), "2026-10-24");
+    assert.equal(diaDaFatura(emissao({ omie: { ...comFaturamento, dia_do_faturamento: "2026-10-25" }, retomada_desde_a_rps: true }), "2026-10-24"), "2026-10-24");
+  });
+});
+
 describe("as ações de uma pessoa", () => {
   it("retomar a parada volta à etapa de onde parou; a rejeitada reenvia", () => {
     const parada = comFalha(emissao({ etapa: "os_incluida", omie: COM_OS, tentativas: 5 }), "faturar_os", { tipo: "recusa", mensagem: "x", esperar_ms: 0 }, AGORA);
@@ -457,6 +509,14 @@ describe("a emissão gravada (parte 7.4c)", () => {
     const { conferir: _semConferir, ...antiga } = gravada;
     assert.equal(emissaoLida(gravada.id, antiga as unknown as Record<string, unknown>).conferir, false);
     assert.equal(emissaoLida(gravada.id, { ...gravada, conferir: true } as unknown as Record<string, unknown>).conferir, true);
+    // A gravada antes da pergunta 60 lê sem a marca da retomada e sem o dia do faturamento.
+    const { retomada_desde_a_rps: _semMarca, ...semMarca } = gravada;
+    const { dia_do_faturamento: _semDia, ...omieSemDia } = gravada.omie;
+    const anterior = emissaoLida(gravada.id, { ...semMarca, omie: omieSemDia } as unknown as Record<string, unknown>);
+    assert.deepEqual([anterior.retomada_desde_a_rps, anterior.omie.dia_do_faturamento], [false, null]);
+    const marcada = emissaoLida(gravada.id, { ...gravada, retomada_desde_a_rps: true, omie: { ...gravada.omie, dia_do_faturamento: "2026-10-20" } } as unknown as Record<string, unknown>);
+    assert.deepEqual([marcada.retomada_desde_a_rps, marcada.omie.dia_do_faturamento], [true, "2026-10-20"]);
+    assert.equal(emissaoLida(gravada.id, { ...gravada, omie: { ...gravada.omie, dia_do_faturamento: "20/10/2026" } } as unknown as Record<string, unknown>).omie.dia_do_faturamento, null);
     for (const quebra of [{ etapa: "inventada" }, { cnpj: "123" }, { itens: [] }, { forma: "cheque" }, { edicao: 0 }, { itens: [{ origem: "demanda", referencia: "1", descricao: "x", valor_cents: -1 }] }]) {
       assert.throws(() => emissaoLida(gravada.id, { ...gravada, ...quebra } as unknown as Record<string, unknown>), /ilegível/, JSON.stringify(quebra));
     }

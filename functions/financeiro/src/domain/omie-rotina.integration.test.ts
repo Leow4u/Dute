@@ -5,8 +5,9 @@ import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
 import { BILLING_PERIODS_COLLECTION } from "./armazenagem.js";
+import { advanceFaturaFor } from "./cobranca-gravacao.js";
 import { actOnNfEmissionFor, emitNfOmieFor } from "./emissao-gravacao.js";
-import { EMISSOES_COLLECTION } from "./emissao-omie.js";
+import { EMISSOES_COLLECTION, dataDaOmie } from "./emissao-omie.js";
 import { EVENTS_COLLECTION } from "./events.js";
 import { registerNfFor } from "./fatura-gravacao.js";
 import { FATURAS_COLLECTION, faturaIdDaNf, faturaIdDaNfse } from "./fatura.js";
@@ -28,6 +29,7 @@ const financeiro: FinanceiroProfile = { uid: "fin-1", role: "financeiro", name: 
 const ID = "nfe_0123456789abcdef0123";
 const OUTRA = "nfe_ffffffffffffffffffff";
 const INICIO = Date.parse("2026-10-23T15:00:00.000Z");
+const DIA_EM_SAO_PAULO = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
 
 let db: Firestore;
 let app: ReturnType<typeof initializeApp>;
@@ -82,7 +84,7 @@ type Resposta = { status: number; corpo: unknown };
  */
 function omieDeMentira(roteiro: { ambiente?: "H" | "P"; rps?: string[]; falhas?: Record<string, Resposta[]>; perder?: Record<string, number>; aoChamar?: (call: string) => Promise<void> } = {}) {
   const chamadas: string[] = [];
-  const oss = new Map<string, { nCodOS: number; faturada: boolean; cancelada: boolean }>();
+  const oss = new Map<string, { nCodOS: number; faturada: boolean; cancelada: boolean; dDtFat?: string }>();
   const rps = [...(roteiro.rps ?? ["002", "004"])];
   // Como na Omie, a RPS fica na última situação do roteiro (a recusada continua recusada).
   let ultima = "002";
@@ -119,12 +121,13 @@ function omieDeMentira(roteiro: { ambiente?: "H" | "P"; rps?: string[]; falhas?:
         const status = rps[0] ?? ultima;
         const lista = os.faturada ? [{ cStatusRps: status, nNfse: status === "004" ? "00000815" : "", cCodVerif: "AB12", cUrlNfse: "https://nfse.exemplo/815", cUrlPdfDest: "https://omie.exemplo/815.pdf", mensagens: status === "003" ? [{ cCodigo: "E160", cDescricao: "Inscrição municipal do tomador inválida.", cCorrecao: "Corrija o cliente na Omie." }] : [] }] : [];
         if (os.faturada && p.lMsg) ultima = rps.shift() ?? ultima;
-        return { status: 200, corpo: { cCodIntOS: codigo, nCodOS: os.nCodOS, cNumOS: "000123", cAmbiente: roteiro.ambiente ?? "H", cFaturada: os.faturada ? "S" : "N", cCancelada: os.cancelada ? "S" : "N", ListaRpsNfse: lista } };
+        return { status: 200, corpo: { cCodIntOS: codigo, nCodOS: os.nCodOS, cNumOS: "000123", cAmbiente: roteiro.ambiente ?? "H", cFaturada: os.faturada ? "S" : "N", cCancelada: os.cancelada ? "S" : "N", dDtFat: os.faturada ? (os.dDtFat ?? "") : "", ListaRpsNfse: lista } };
       }
       case "FaturarOS":
         assert.ok(url.endsWith("/servicos/osp/"));
         if (os!.faturada) return { status: 500, corpo: { faultstring: "ERROR: A Ordem de Serviço já está faturada." } };
         os!.faturada = true;
+        os!.dDtFat = dataDaOmie(DIA_EM_SAO_PAULO.format(agora()));
         return { status: 200, corpo: { cCodIntOS: codigo, nCodOS: os!.nCodOS, cCodStatus: "0" } };
       case "ReenviarOS":
         return { status: 200, corpo: { cCodIntOS: codigo, cCodStatus: "0" } };
@@ -341,6 +344,40 @@ describe("a rotina da Omie", () => {
     await rodar(omie.transporte); // StatusOS: 004, a fatura nasce
     assert.equal((await emissao()).etapa, "autorizada");
     assert.equal((await db.doc("demands/10045").get()).get("etapa"), "faturada");
+    // Vista três dias depois do faturamento, a nota leva o dia dele na Omie (pergunta 60).
+    assert.equal((await db.doc(`${FATURAS_COLLECTION}/${faturaIdDaNfse("815")}`).get()).get("nf.emitida_em"), "2026-10-23");
+  });
+
+  it("a autorização vista depois da retomada leva o dia do faturamento da OS na Omie, e o pagamento de antes da retomada entra (pergunta 60)", async () => {
+    const omie = omieDeMentira({ rps: ["002", "002", "004"] });
+    await emitir();
+    for (let passo = 0; passo < 4; passo += 1) await rodar(omie.transporte); // o FaturarOS em 23/10
+    await rodar(omie.transporte, 2); // 002
+    await rodar(omie.transporte, 73 * 60); // 002 depois de 72 horas: para
+    const demorou = await emissao();
+    assert.equal(demorou.motivo_da_parada, "prefeitura_demorou");
+    minutos += 3 * 24 * 60; // a pessoa retoma três dias depois, em 29/10
+    await actOnNfEmissionFor(db, financeiro, { idempotency_key: "r-dias-depois", id: ID, acao: "retomar", expected_edicao: demorou.edicao as number }, { projectId: LIBERADO, agora });
+    await rodar(omie.transporte); // 004
+    const autorizada = await emissao();
+    assert.deepEqual([autorizada.etapa, autorizada.retomada_desde_a_rps, (autorizada.omie as Record<string, unknown>).dia_do_faturamento], ["autorizada", true, "2026-10-23"]);
+    const faturaId = faturaIdDaNfse("815");
+    assert.equal((await db.doc(`${FATURAS_COLLECTION}/${faturaId}`).get()).get("nf.emitida_em"), "2026-10-23");
+    // O cliente pagou em 27/10, antes da retomada: o pagamento entra.
+    await advanceFaturaFor(db, financeiro, { acao: "pay", idempotency_key: "pago-antes-da-retomada", fatura_id: faturaId, valor: "100.00", recebido_em: "2026-10-27", forma: "pix" }, agora);
+    assert.equal((await db.doc(`${FATURAS_COLLECTION}/${faturaId}`).get()).get("recebido_cents"), 10_000);
+  });
+
+  it("na rotina em dia, a fatura leva o dia em que a rotina viu a autorização, mesmo com a OS faturada na véspera (pergunta 60)", async () => {
+    const omie = omieDeMentira();
+    await emitir();
+    for (let passo = 0; passo < 3; passo += 1) await rodar(omie.transporte); // o cliente, a OS e o ambiente
+    await rodar(omie.transporte, 11 * 60 + 58); // o FaturarOS às 23:58 de 23/10, em São Paulo
+    await rodar(omie.transporte, 2); // 002, já em 24/10
+    await rodar(omie.transporte, 5); // 004
+    const autorizada = await emissao();
+    assert.deepEqual([autorizada.etapa, autorizada.retomada_desde_a_rps, (autorizada.omie as Record<string, unknown>).dia_do_faturamento], ["autorizada", false, "2026-10-23"]);
+    assert.equal((await db.doc(`${FATURAS_COLLECTION}/${faturaIdDaNfse("815")}`).get()).get("nf.emitida_em"), "2026-10-24");
   });
 
   it("o reenvio recomeça o relógio da prefeitura: a RPS corrigida dias depois espera de novo, em vez de parar", async () => {

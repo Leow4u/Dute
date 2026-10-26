@@ -133,6 +133,8 @@ export type DadosDaOmie = {
   codigo_verificacao: string | null;
   url_nfse: string | null;
   url_pdf: string | null;
+  /** O dia do faturamento da OS na Omie (o `dDtFat` do StatusOS), lido com a NFS-e autorizada. */
+  dia_do_faturamento: string | null;
 };
 
 export type MensagemDaPrefeitura = { codigo: string; descricao: string; correcao: string };
@@ -173,6 +175,14 @@ export type Emissao = {
    * Omie pode ter gravado com a resposta perdida.
    */
   conferir: boolean;
+  /**
+   * Uma pessoa retomou a emissão parada depois que a rotina mandou a RPS à
+   * prefeitura pela última vez. A nota pode ter saído durante a parada, e a
+   * fatura leva o dia do faturamento da OS na Omie, não o dia em que a
+   * rotina viu a autorização (pergunta 60). A RPS que a rotina manda de novo
+   * (o FaturarOS ou o ReenviarOS) zera a marca.
+   */
+  retomada_desde_a_rps: boolean;
   edicao: number;
 };
 
@@ -195,6 +205,7 @@ export const DADOS_DA_OMIE_VAZIOS: DadosDaOmie = {
   codigo_verificacao: null,
   url_nfse: null,
   url_pdf: null,
+  dia_do_faturamento: null,
 };
 
 const FORMAS = ["boleto", "pix", "transferencia", "cartao", "dinheiro"] as const;
@@ -209,6 +220,10 @@ function textoOuNull(valor: unknown): string | null {
 
 function numeroOuNull(valor: unknown): number | null {
   return typeof valor === "number" && Number.isInteger(valor) && valor > 0 ? valor : null;
+}
+
+function diaOuNull(valor: unknown): string | null {
+  return typeof valor === "string" && /^\d{4}-\d{2}-\d{2}$/.test(valor) ? valor : null;
 }
 
 /** A emissão gravada, conferida campo a campo: a rotina e as ações só trabalham com a emissão inteira. */
@@ -257,12 +272,14 @@ export function emissaoLida(id: string, dados: Record<string, unknown>): Emissao
       codigo_verificacao: textoOuNull(omie.codigo_verificacao),
       url_nfse: textoOuNull(omie.url_nfse),
       url_pdf: textoOuNull(omie.url_pdf),
+      dia_do_faturamento: diaOuNull(omie.dia_do_faturamento),
     },
     tentativas: Number.isInteger(dados.tentativas) ? (dados.tentativas as number) : 0,
     consultas: Number.isInteger(dados.consultas) ? (dados.consultas as number) : 0,
     proxima_em: dados.proxima_em as string,
     na_prefeitura_desde: textoOuNull(dados.na_prefeitura_desde),
     conferir: dados.conferir === true,
+    retomada_desde_a_rps: dados.retomada_desde_a_rps === true,
     edicao: dados.edicao as number,
   };
 }
@@ -393,6 +410,15 @@ function soDigitos(valor: unknown): string {
   return texto(valor).replace(/\D/g, "");
 }
 
+/** "24/10/2026" → "2026-10-24", o contrário de dataDaOmie; null quando não é um dia do calendário. */
+export function diaDaOmie(valor: unknown): string | null {
+  const partes = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(texto(valor));
+  if (!partes) return null;
+  const dia = `${partes[3]}-${partes[2]}-${partes[1]}`;
+  const data = new Date(`${dia}T00:00:00.000Z`);
+  return !Number.isNaN(data.getTime()) && data.toISOString().slice(0, 10) === dia ? dia : null;
+}
+
 function andou(emissao: Emissao, mudanca: Partial<Emissao>, agora: Date): Emissao {
   const mudouDeEtapa = mudanca.etapa !== undefined && mudanca.etapa !== emissao.etapa;
   return {
@@ -430,15 +456,29 @@ function rpsMaisRecente(corpo: Record<string, unknown>): Record<string, unknown>
   return validas.length ? validas[validas.length - 1] : null;
 }
 
-/** O número, o código de verificação e os links da NFS-e autorizada (004). */
-function dadosDaNfse(emissao: Emissao, rps: Record<string, unknown>): DadosDaOmie {
+/** O número, o código de verificação e os links da NFS-e autorizada (004), e o dia do faturamento da OS. */
+function dadosDaNfse(emissao: Emissao, rps: Record<string, unknown>, corpo: Record<string, unknown>): DadosDaOmie {
   return {
     ...emissao.omie,
     nfse: soDigitos(rps.nNfse) || texto(rps.nNfse),
     codigo_verificacao: texto(rps.cCodVerif) || null,
     url_nfse: texto(rps.cUrlNfse) || null,
     url_pdf: texto(rps.cUrlPdfDest) || texto(rps.cUrlPdfDemo) || null,
+    dia_do_faturamento: diaDaOmie(corpo.dDtFat) ?? emissao.omie.dia_do_faturamento,
   };
+}
+
+/**
+ * O dia da emissão da fatura da NFS-e autorizada (pergunta 60, decidida em
+ * 26/10/2026). Na rotina em dia, o dia em que ela viu a autorização, minutos
+ * depois da nota. Na emissão retomada depois de uma parada, a nota pode ter
+ * saído durante a parada: vale o dia do faturamento da OS na Omie, porque o
+ * StatusOS não traz a data da NFS-e. Nunca depois de hoje.
+ */
+export function diaDaFatura(emissao: Pick<Emissao, "omie" | "retomada_desde_a_rps">, hoje: string): string {
+  const faturamento = emissao.omie.dia_do_faturamento;
+  if (!emissao.retomada_desde_a_rps || faturamento === null || faturamento > hoje) return hoje;
+  return faturamento;
 }
 
 /** A prefeitura passou do prazo de resposta desde que a Dute começou a esperar. */
@@ -508,9 +548,14 @@ export function comResposta(
     }
     case "faturar_os":
     case "reenviar_os":
-      // A RPS foi à prefeitura agora: o relógio recomeça, também no reenvio da corrigida.
+      // A RPS foi à prefeitura agora: o relógio recomeça, também no reenvio da
+      // corrigida, e a rotina acompanha a nota desde aqui.
       return {
-        emissao: andou(emissao, { etapa: "na_prefeitura", mensagem: null, mensagens_da_prefeitura: [], na_prefeitura_desde: agora.toISOString(), proxima_em: depois(agora, esperaNaPrefeitura(0) * MINUTO) }, agora),
+        emissao: andou(
+          emissao,
+          { etapa: "na_prefeitura", mensagem: null, mensagens_da_prefeitura: [], na_prefeitura_desde: agora.toISOString(), retomada_desde_a_rps: false, proxima_em: depois(agora, esperaNaPrefeitura(0) * MINUTO) },
+          agora,
+        ),
         efeito: "nenhum",
       };
     case "acompanhar": {
@@ -520,7 +565,7 @@ export function comResposta(
         return { emissao: parou(emissao, "cancelada_na_omie", "A OS foi cancelada na Omie.", agora), efeito: "nenhum" };
       }
       if (status === "004" && rps && texto(rps.nNfse)) {
-        return { emissao: andou(emissao, { etapa: "autorizada", mensagem: null, mensagens_da_prefeitura: [], omie: dadosDaNfse(emissao, rps) }, agora), efeito: "registrar_fatura" };
+        return { emissao: andou(emissao, { etapa: "autorizada", mensagem: null, mensagens_da_prefeitura: [], omie: dadosDaNfse(emissao, rps, corpo) }, agora), efeito: "registrar_fatura" };
       }
       if (status === "003" && rps) {
         const mensagens = mensagensDaRps(rps);
@@ -575,7 +620,7 @@ function conferida(emissao: Emissao, corpo: Record<string, unknown>, agora: Date
     if (cancelada) return { emissao: andou(emissao, { etapa: "desistida", conferir: false, mensagem: null }, agora), efeito: "liberar_reservas" };
     if (!faturada || status === "003") return deNovo;
     if (status === "004" && rps && texto(rps.nNfse)) {
-      const omie = dadosDaNfse(emissao, rps);
+      const omie = dadosDaNfse(emissao, rps, corpo);
       const mensagem = `A NFS-e ${numeroDaNfse(omie.nfse ?? "")} foi autorizada na prefeitura, e a Dute não cancela nota autorizada.`;
       return { emissao: andou(emissao, { etapa: "parada", etapa_anterior: "na_prefeitura", motivo_da_parada: "nfse_autorizada", mensagem, conferir: false, omie }, agora), efeito: "nenhum" };
     }
@@ -620,8 +665,9 @@ export type AcaoNaEmissao = "retomar" | "desistir";
 
 /**
  * Retomar: a parada volta à etapa de onde parou, do zero nas falhas (e a
- * parada pela demora da prefeitura, com outras 72 horas); a rejeitada
- * reenvia a RPS (a pessoa corrigiu na Omie). Desistir: sem a OS na
+ * parada pela demora da prefeitura, com outras 72 horas), com a marca da
+ * retomada para o dia da fatura (diaDaFatura); a rejeitada reenvia a RPS (a
+ * pessoa corrigiu na Omie). Desistir: sem a OS na
  * Omie, ou com ela cancelada lá, libera na hora; com a NFS-e autorizada, a
  * nota vale na prefeitura e se cancela na Omie antes; com a OS, a rotina
  * confere a OS e só cancela a que não tem nota autorizada.
@@ -633,7 +679,7 @@ export function comAcao(emissao: Emissao, acao: AcaoNaEmissao, agora: Date): Ava
       if (emissao.motivo_da_parada === "cancelada_na_omie") return { problema: "A OS foi cancelada na Omie: desista e emita de novo." };
       const volta = emissao.etapa_anterior && ETAPAS_DA_ROTINA.includes(emissao.etapa_anterior) ? emissao.etapa_anterior : "na_fila";
       const relogio = emissao.motivo_da_parada === "prefeitura_demorou" ? { na_prefeitura_desde: agora.toISOString() } : {};
-      return { emissao: andou(emissao, { etapa: volta, etapa_anterior: null, motivo_da_parada: null, mensagem: null, ...relogio }, agora), efeito: "nenhum" };
+      return { emissao: andou(emissao, { etapa: volta, etapa_anterior: null, motivo_da_parada: null, mensagem: null, retomada_desde_a_rps: true, ...relogio }, agora), efeito: "nenhum" };
     }
     return { problema: "Só a emissão parada ou rejeitada se retoma." };
   }
