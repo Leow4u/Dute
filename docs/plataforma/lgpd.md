@@ -492,6 +492,8 @@ muda o sistema: cada mudança entra num PR próprio, depois da decisão.
    saiu:** como recomendado. E-mail e aviso, 90 dias; conversa e uso do
    agente, 12 meses; solicitação e anexo seguem a demanda; conta removida
    há mais de 12 meses: apagar a conta do Auth e anonimizar o perfil.
+   **Os avisos e os e-mails entraram em 26/10/2026** (seção 6, parte 8a),
+   ligados só na homologação.
 9. **Registro de leitura:** como recomendado, com a tela só para o owner.
    O Cloud Audit Logs de leitura fica para decidir à parte.
 10. **Cópias:** como recomendado. O `dute-btg` e os exports dele até
@@ -507,6 +509,58 @@ muda o sistema: cada mudança entra num PR próprio, depois da decisão.
     foram para a multirregião `us`, que processa nos Estados Unidos; a
     geração da foto do catálogo fica no `global`, o único local do modelo,
     sem dado de pessoa (`fase-5-memoria.md`, "LGPD, decisão 12").
+
+## 6. A retenção no código
+
+Cada codebase apaga o que é dela, numa rotina diária com a liberação própria
+da retenção: liga primeiro na homologação, e a produção só com o OK do
+Leonardo, num PR que põe o `dute-prod` na lista. O evento de cada rodada
+guarda só as contagens.
+
+| Parte | O que sai | Prazo | Rotina | Ligada em |
+|---|---|---|---|---|
+| 8a | Aviso do sino (`client_notifications`) e e-mail que já saiu da fila (`email_outbox`: enviado, auditado ou desistido) | 90 dias depois de criados | `runOperacaoRetention` (Operação, 03:20) | homologação |
+
+### Parte 8a: os avisos e os e-mails (decisão 8)
+
+Feita em 26/10/2026.
+
+- **O que sai:** o aviso do sino e o e-mail da fila com mais de 90 dias,
+  pelo `created_at`.
+  - O e-mail pendente fica: a fila o tenta até enviar ou desistir.
+  - O evento que deu o aviso continua em `events`, sem dado pessoal.
+- **O que fica:** o evento `retention.applied`, da Operação, com quantos
+  avisos e e-mails saíram, de antes de qual dia e por cliente.
+  - Fica sem destinatário, assunto nem texto, e sem `customer_code`, porque
+    a contagem é de todos os clientes.
+  - A zeragem o preserva, como os outros eventos da Operação.
+- **Apagar não refaz o aviso:** a rotina dos avisos anda só para a frente,
+  pelo cursor. O sino do portal lista os mais recentes, e o
+  `client_notification_reads` (até quando cada login leu) não muda.
+- **A rotina:**
+  - `runOperacaoRetention`, todo dia às 03:20 de São Paulo, uma instância por
+    vez;
+  - lê até 400 de cada coleção por vez, até 10 vezes por rodada, e o resto
+    fica para o dia seguinte;
+  - a leitura dos e-mails segue depois do último lido, para o pendente antigo
+    não segurar os outros.
+- **A liberação:** `RETENCAO_AMBIENTES_LIBERADOS` em
+  `functions/operacao/src/domain/liberacao.ts`, só o `dute-homolog`.
+  - A trava das rotinas agendadas (`callables.test.ts`) exige que esta
+    confira a liberação dela antes de tudo.
+- **Testes:**
+  - `retencao.test.ts`: o prazo, o status que sai, o id da rodada e a
+    contagem por cliente; o payload recusa e-mail, texto e contagem negativa.
+  - `retencao.integration.test.ts`, no emulador:
+    - sai o velho, ficam o recente e o pendente;
+    - o evento tem as contagens por cliente e nenhum e-mail;
+    - rodar de novo não apaga nem grava mais nada;
+    - o pendente no começo da fila não segura os outros;
+    - o que não coube na rodada fica para a próxima.
+  - `events.test.ts` e `liberacao.test.ts`, com o tipo e a lista novos.
+- **Para desligar:** tirar o projeto da lista e publicar. O que já saiu volta
+  só pelo backup (PITR de 7 dias e backup diário de 14), para um banco novo
+  (`backup-e-recuperacao.md`).
 
 ## Dúvidas
 

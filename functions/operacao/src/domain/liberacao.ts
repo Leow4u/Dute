@@ -21,3 +21,15 @@ export function assertLiberado(projectId: string | null | undefined): void {
   const id = String(projectId ?? "").trim() || "projeto não identificado";
   throw new HttpsError("failed-precondition", `A Operação ainda não está liberada neste ambiente (${id}).`);
 }
+
+/**
+ * Liberação própria da retenção (LGPD, decisão 8, docs/plataforma/lgpd.md):
+ * a rotina apaga o que passou do prazo, então liga por ambiente, separada da
+ * Operação. Só a homologação até o OK do Leonardo para a produção.
+ */
+export const RETENCAO_AMBIENTES_LIBERADOS = ["dute-homolog"] as const;
+
+export function retencaoLiberada(projectId: string | null | undefined): boolean {
+  const id = String(projectId ?? "").trim();
+  return (RETENCAO_AMBIENTES_LIBERADOS as readonly string[]).includes(id);
+}

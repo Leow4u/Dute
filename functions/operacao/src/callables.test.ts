@@ -58,12 +58,18 @@ describe("callables da Operação", () => {
     }
   });
 
-  it("as functions agendadas são a rotina diária (parte 3.13a) e a dos avisos (parte 4.6a), e conferem a liberação antes de tudo", () => {
+  it("as functions agendadas são a rotina diária (parte 3.13a), a da retenção (LGPD, decisão 8) e a dos avisos (parte 4.6a), e conferem a liberação antes de tudo", () => {
     const agendadas = [...index.matchAll(/^export const (\w+) = onSchedule\(/gm)].map((match) => match[1]);
-    assert.deepEqual(agendadas, ["runDailyAlerts", "runNotifications"]);
+    assert.deepEqual(agendadas, ["runDailyAlerts", "runOperacaoRetention", "runNotifications"]);
+    // A retenção apaga o que passou do prazo: confere a liberação própria dela, não a da Operação.
+    const liberacao: Record<string, string> = { runDailyAlerts: "operacaoLiberada", runOperacaoRetention: "retencaoLiberada", runNotifications: "operacaoLiberada" };
     for (const nome of agendadas) {
-      assert.match(index, new RegExp(`export const ${nome} = onSchedule\\(\\{[^}]*timeZone: "America\\/Sao_Paulo"[^}]*\\}, async \\(\\) => \\{\\s*if \\(!operacaoLiberada\\(PROJECT_ID\\)\\) return;`), nome);
+      assert.match(index, new RegExp(`export const ${nome} = onSchedule\\(\\{[^}]*timeZone: "America\\/Sao_Paulo"[^}]*\\}, async \\(\\) => \\{\\s*if \\(!${liberacao[nome]}\\(PROJECT_ID\\)\\) return;`), nome);
     }
+  });
+
+  it("a rotina da retenção roda uma instância de cada vez", () => {
+    assert.match(index, /export const runOperacaoRetention = onSchedule\(\{[^}]*maxInstances: 1[^}]*\}/);
   });
 
   it("a rotina dos avisos roda uma instância de cada vez e só envia de verdade com a chave do Resend", () => {

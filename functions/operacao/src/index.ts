@@ -13,10 +13,11 @@ import { openDirectDemandFor } from "./domain/demanda-direta-gravacao.js";
 import { registerItemFor, registerOccurrenceFor, registerPresenceFor, registerStepFor } from "./domain/execucao-gravacao.js";
 import { attachPhotoFor, type ConferirArquivo } from "./domain/fotos-gravacao.js";
 import { saveCollaboratorFor, saveVehicleFor } from "./domain/gravacao.js";
-import { operacaoLiberada } from "./domain/liberacao.js";
+import { operacaoLiberada, retencaoLiberada } from "./domain/liberacao.js";
 import { saveServiceOrderFor } from "./domain/os-gravacao.js";
 import { reopenServiceOrderFor, reviewServiceOrderFor } from "./domain/revisao-gravacao.js";
 import { requireOperacaoCaller } from "./domain/profile.js";
+import { runRetentionFor } from "./domain/retencao-gravacao.js";
 import { runDailyAlertsFor } from "./domain/rotina-gravacao.js";
 import { declineServiceRequestFor, requestServiceFor } from "./domain/solicitacao-gravacao.js";
 import { getRoomBoardFor } from "./domain/tv-leitura.js";
@@ -169,6 +170,17 @@ export const runDailyAlerts = onSchedule({ schedule: "every day 06:00", timeZone
   if (!operacaoLiberada(PROJECT_ID)) return;
   const resultado = await runDailyAlertsFor(db);
   console.info("runDailyAlerts", resultado);
+});
+
+/**
+ * Todo dia às 03:20 de São Paulo: o aviso do sino e o e-mail que já saiu da
+ * fila com mais de 90 dias saem (LGPD, decisão 8); o evento guarda as
+ * contagens por cliente. Uma instância de cada vez. Só com a liberação da
+ * retenção.
+ */
+export const runOperacaoRetention = onSchedule({ schedule: "every day 03:20", timeZone: "America/Sao_Paulo", timeoutSeconds: 540, maxInstances: 1 }, async () => {
+  if (!retencaoLiberada(PROJECT_ID)) return;
+  console.info("runOperacaoRetention", await runRetentionFor(db));
 });
 
 /**

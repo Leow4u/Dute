@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { HttpsError } from "firebase-functions/https";
 
-import { OPERACAO_AMBIENTES_LIBERADOS, assertLiberado, operacaoLiberada } from "./liberacao.js";
+import { OPERACAO_AMBIENTES_LIBERADOS, RETENCAO_AMBIENTES_LIBERADOS, assertLiberado, operacaoLiberada, retencaoLiberada } from "./liberacao.js";
 
 function refusal(projectId: string | null | undefined): HttpsError {
   try {
@@ -30,6 +30,16 @@ describe("liberação da Operação por ambiente", () => {
       const error = refusal(projectId);
       assert.equal(error.code, "failed-precondition");
       assert.match(error.message, /Operação ainda não está liberada/);
+    }
+  });
+});
+
+describe("liberação da retenção (LGPD, decisão 8)", () => {
+  it("só a homologação apaga, até o OK do Leonardo para a produção", () => {
+    assert.deepEqual(RETENCAO_AMBIENTES_LIBERADOS, ["dute-homolog"]);
+    assert.equal(retencaoLiberada("dute-homolog"), true);
+    for (const projectId of ["dute-prod", "dute-btg", "demo-dute-operacao", "", null, undefined]) {
+      assert.equal(retencaoLiberada(projectId), false, String(projectId));
     }
   });
 });
