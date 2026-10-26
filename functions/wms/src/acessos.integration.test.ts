@@ -103,7 +103,17 @@ describe("a troca de papel para cliente", () => {
     assert.equal(await papelDe("davi"), "wms");
   });
 
-  it("quem já é ligado a um cliente cadastrado vira cliente dele", async () => {
+  it("quem já é ligado a um cliente \"Sem portal\" não vira cliente dele (pergunta 69)", async () => {
+    await comoOwner({ resource: "customers", action: "update", id: "Itau", data: { portal_status: "inactive" }, idempotency_key: "itau-sem-portal" });
+    await assert.rejects(
+      comoOwner({ resource: "users", action: "set_role", id: "bia", data: { role: "cliente" }, idempotency_key: "bia-cliente-sem-portal" }),
+      /O cliente Itau está sem portal/,
+    );
+    assert.equal(await papelDe("bia"), "interno");
+  });
+
+  it("quem já é ligado a um cliente cadastrado, com o portal ligado, vira cliente dele", async () => {
+    await comoOwner({ resource: "customers", action: "update", id: "Itau", data: { portal_status: "active" }, idempotency_key: "itau-com-portal" });
     await comoOwner({ resource: "users", action: "set_role", id: "bia", data: { role: "cliente" }, idempotency_key: "bia-cliente" });
     assert.equal(await papelDe("bia"), "cliente");
   });

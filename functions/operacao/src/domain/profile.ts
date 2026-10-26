@@ -48,29 +48,48 @@ function codigoServeDeId(code: string): boolean {
   return Boolean(code) && !code.includes("/") && code !== "." && code !== ".." && !/^__.*__$/.test(code) && Buffer.byteLength(code, "utf8") <= 1500;
 }
 
+/** O portal do cliente desligado: arquivar ou pôr "Sem portal" corta o portal (pergunta 69). */
+export const PORTAL_DESLIGADO = "O portal do seu cliente está desligado.";
+
+/**
+ * O `client_access` do cliente. Sem o documento valem os módulos padrão
+ * (armazenagem e faturas) e o portal ligado; sem o campo `portal_ativo` (a
+ * projeção de antes da pergunta 69), também ligado.
+ */
+async function acessoDoCliente(db: Firestore, code: string): Promise<{ modulos: ReturnType<typeof contractedModulesFrom>; portalAtivo: boolean }> {
+  const acesso = await db.collection(CLIENT_ACCESS_COLLECTION).doc(code).get();
+  return {
+    modulos: contractedModulesFrom(acesso.exists ? acesso.get("modules") : undefined),
+    portalAtivo: !acesso.exists || acesso.get("portal_ativo") !== false,
+  };
+}
+
 /**
  * O cliente que pede OS pelo portal (parte 4.4a): o papel `cliente`, com o
- * código no perfil e a Operação no contrato. Sem `client_access` valem os
- * módulos padrão (armazenagem e faturas), que não incluem a Operação.
+ * código no perfil, o portal ligado e a Operação no contrato. Sem
+ * `client_access` valem os módulos padrão (armazenagem e faturas), que não
+ * incluem a Operação.
  */
 async function conferirClienteDoPortal(db: Firestore, profile: OperacaoProfile): Promise<OperacaoProfile> {
   if (profile.role !== "cliente") throw new HttpsError("permission-denied", "Só o cliente pede OS pelo portal.");
   const code = profile.customer_code ?? "";
   if (!codigoServeDeId(code)) throw new HttpsError("permission-denied", "Seu acesso não está ligado a um cliente.");
-  const acesso = await db.collection(CLIENT_ACCESS_COLLECTION).doc(code).get();
-  const modulos = contractedModulesFrom(acesso.exists ? acesso.get("modules") : undefined);
-  if (!modulos.includes("operacao")) throw new HttpsError("permission-denied", "A Operação não está no contrato do seu acesso.");
+  const acesso = await acessoDoCliente(db, code);
+  if (!acesso.portalAtivo) throw new HttpsError("permission-denied", PORTAL_DESLIGADO);
+  if (!acesso.modulos.includes("operacao")) throw new HttpsError("permission-denied", "A Operação não está no contrato do seu acesso.");
   return profile;
 }
 
 /**
  * O cliente do sino do portal (parte 4.6c): o papel `cliente` com o código no
- * perfil, qualquer que seja o módulo no contrato (o aviso da NF vai a quem
- * tem só as faturas).
+ * perfil e o portal ligado, qualquer que seja o módulo no contrato (o aviso
+ * da NF vai a quem tem só as faturas).
  */
-function conferirClienteDoSino(profile: OperacaoProfile): OperacaoProfile {
+async function conferirClienteDoSino(db: Firestore, profile: OperacaoProfile): Promise<OperacaoProfile> {
   if (profile.role !== "cliente") throw new HttpsError("permission-denied", "Só o cliente marca os avisos do portal.");
-  if (!codigoServeDeId(profile.customer_code ?? "")) throw new HttpsError("permission-denied", "Seu acesso não está ligado a um cliente.");
+  const code = profile.customer_code ?? "";
+  if (!codigoServeDeId(code)) throw new HttpsError("permission-denied", "Seu acesso não está ligado a um cliente.");
+  if (!(await acessoDoCliente(db, code)).portalAtivo) throw new HttpsError("permission-denied", PORTAL_DESLIGADO);
   return profile;
 }
 
@@ -90,7 +109,7 @@ export async function getProfile(db: Firestore, request: CallableRequest<unknown
   const auth = assertAuth(request);
   const profile = await loadProfile(db, auth.uid, auth.token.email, auth.token.name);
   if (opcoes.portal) return conferirClienteDoPortal(db, profile);
-  if (opcoes.sino) return conferirClienteDoSino(profile);
+  if (opcoes.sino) return conferirClienteDoSino(db, profile);
   if (opcoes.campo && profile.role === "campo") return profile;
   if (opcoes.wms && profile.role === "wms") return profile;
   const problem = opcoes.painel ? tvProblem(profile.role) : operacaoCadastroProblem(profile.role);

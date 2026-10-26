@@ -67,6 +67,7 @@ import {
   clientAccessProjection,
   clientProfileProjection,
   contractedModulesFrom,
+  readClientAccess,
   readContractedModules,
 } from "./domain/customer-profile.js";
 import { assertClientRoleCustomer, assertInviteCustomerAllowed, inviteEventReference } from "./domain/customer-invite.js";
@@ -1352,18 +1353,19 @@ async function getProfile(request: CallableRequest<unknown>): Promise<Profile> {
 
 /**
  * Toda callable de hoje é do WMS. Nega por padrão o papel da plataforma que o
- * WMS não atende e o cliente sem armazenagem no contrato (client_access; sem
- * o documento vale o padrão, que inclui armazenagem). Só o cliente paga a
- * leitura extra.
+ * WMS não atende, o cliente com o portal desligado (arquivado ou "Sem
+ * portal") e o cliente sem armazenagem no contrato (client_access; sem o
+ * documento vale o padrão, que inclui armazenagem, com o portal ligado). Só
+ * o cliente paga a leitura extra.
  */
 async function assertWmsAccess(profile: Profile): Promise<void> {
   // Cliente sem código (convite antigo) cai no padrão sem ler nada; quem o
   // recusa é requireCustomerScope, com a mensagem certa.
-  const modules =
+  const access =
     profile.role === "cliente"
-      ? await readContractedModules(db, profile.customer_code ?? "")
+      ? await readClientAccess(db, profile.customer_code ?? "")
       : null;
-  const problem = wmsAccessProblem(profile.role, modules);
+  const problem = wmsAccessProblem(profile.role, access?.modules ?? null, access?.portalAtivo ?? true);
   if (problem) throw new HttpsError("permission-denied", problem);
 }
 

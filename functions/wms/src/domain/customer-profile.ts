@@ -320,11 +320,29 @@ export function clientProfileProjection(
 }
 
 /**
- * Projeção `client_access/{customer_code}`: os módulos contratados, achados
- * pelo código sem consulta (regras do Firestore e Functions). Calculada de
- * `{...before, ...payload}`, então o arquivamento mantém os módulos. Código
- * que não serve de id (cadastro antigo com barra) fica sem projeção e vale o
- * padrão.
+ * O portal do cliente ligado: o cadastro não está arquivado nem "Sem portal"
+ * (o modelo sem portal já grava "Sem portal"). Arquivar e "Sem portal"
+ * cortam o portal; os logins ficam (pergunta 69, decidida em 26/10/2026).
+ */
+export function portalAtivoDoCadastro(record: Record<string, unknown>): boolean {
+  if (record.archived === true || text(record.status) === "archived") return false;
+  return (text(record.portal_status) || "active") === "active";
+}
+
+/**
+ * Leitura de `client_access.portal_ativo`. Sem o documento, ou sem o campo (a
+ * projeção gravada antes da pergunta 69), o portal segue ligado, como antes.
+ */
+export function portalAtivoFrom(value: unknown): boolean {
+  return value !== false;
+}
+
+/**
+ * Projeção `client_access/{customer_code}`: os módulos contratados e o portal
+ * ligado, achados pelo código sem consulta (regras do Firestore e
+ * Functions). Calculada de `{...before, ...payload}`, então o arquivamento
+ * mantém os módulos e desliga o portal. Código que não serve de id (cadastro
+ * antigo com barra) fica sem projeção e vale o padrão.
  */
 export function clientAccessProjection(
   documentId: string,
@@ -340,8 +358,22 @@ export function clientAccessProjection(
       customer_code: customerCode,
       customer_id: documentId,
       modules: contractedModulesFrom(merged.modules),
+      portal_ativo: portalAtivoDoCadastro(merged),
       updated_at: FieldValue.serverTimestamp(),
     },
+  };
+}
+
+export type ClientAccess = { modules: ContractedModule[]; portalAtivo: boolean };
+
+/** Módulos contratados e portal do cliente, pelo código. Sem projeção vale o padrão, com o portal ligado. */
+export async function readClientAccess(db: Firestore, customerCode: string): Promise<ClientAccess> {
+  const code = text(customerCode);
+  if (customerCodeProblem(code)) return { modules: [...DEFAULT_CONTRACTED_MODULES], portalAtivo: true };
+  const snapshot = await db.collection(CLIENT_ACCESS_COLLECTION).doc(code).get();
+  return {
+    modules: contractedModulesFrom(snapshot.exists ? snapshot.get("modules") : undefined),
+    portalAtivo: portalAtivoFrom(snapshot.exists ? snapshot.get("portal_ativo") : undefined),
   };
 }
 
@@ -350,10 +382,7 @@ export async function readContractedModules(
   db: Firestore,
   customerCode: string,
 ): Promise<ContractedModule[]> {
-  const code = text(customerCode);
-  if (customerCodeProblem(code)) return [...DEFAULT_CONTRACTED_MODULES];
-  const snapshot = await db.collection(CLIENT_ACCESS_COLLECTION).doc(code).get();
-  return contractedModulesFrom(snapshot.exists ? snapshot.get("modules") : undefined);
+  return (await readClientAccess(db, customerCode)).modules;
 }
 
 /**

@@ -11,7 +11,8 @@ import { LEGACY_CUSTOMER_CODE } from "./customer-scope.js";
  * convite vira a fronteira de isolamento da pessoa (invariante 4), e sem
  * `client_access` ela recebe os módulos padrão (wms e financeiro). Por isso
  * o convite exige um cadastro achado pelo código, não arquivado, que não seja
- * prospect do Comercial e que tenha sigla do SKU (tem armazenagem).
+ * prospect do Comercial, com o portal ligado (não "Sem portal") e que tenha
+ * sigla do SKU (tem armazenagem).
  *
  * A BTG passa sempre: o cadastro dela pode nunca ter sido salvo com sigla nem
  * ter projeção (docs/multicliente-modelos-de-operacao.md), e o portal dela
@@ -45,6 +46,8 @@ export function inviteCustomerProblem(input: {
   const problems = matches.map((record): string | null => {
     if (isArchived(record)) return `O cliente ${code} está arquivado.`;
     if (isProspect(record)) return `${code} é um prospect do Comercial: o convite só vale para cliente.`;
+    // "Sem portal" corta o portal (pergunta 69): convite novo não entra.
+    if (text(record.portal_status) === "inactive") return `O cliente ${code} está sem portal.`;
     if (!canonicalSkuPrefix(record.sku_prefix)) {
       return `O cliente ${code} não tem sigla do SKU: sem armazenagem, ele não tem portal.`;
     }

@@ -184,17 +184,41 @@ service cloud.firestore {
         && customerCode == profileCustomerCode();
     }
 
-    function isOwnProjection() {
+    // A projeção do próprio cliente, sem olhar o portal. Só o perfil do
+    // cliente (client_profiles) usa direto: é por ele que o app sabe que o
+    // portal está desligado.
+    function isOwnCustomerProjection() {
       return resource.data.keys().hasAll(['customer_code'])
         && isOwnCustomerCode(resource.data.customer_code);
     }
 
-    // Módulos contratados do cliente (client_access/{customer_code}), gravados
-    // só pelas Functions na transação do cadastro. Sem o documento vale o que
-    // a BTG tem hoje: armazenagem e faturas. Só é avaliado depois de
-    // isOwnProjection(), quando o código do perfil já é texto.
+    function isOwnProjection() {
+      return isOwnCustomerProjection() && portalAtivo();
+    }
+
+    // Módulos contratados e portal do cliente (client_access/{customer_code}),
+    // gravados só pelas Functions na transação do cadastro. Sem o documento
+    // vale o que a BTG tem hoje: armazenagem e faturas, com o portal ligado.
+    // O do perfil só é avaliado depois de conferir que o código do perfil é
+    // texto (isOwnCustomerCode).
+    function clientAccessDocDe(customerCode) {
+      return /databases/$(database)/documents/client_access/$(customerCode);
+    }
+
     function clientAccessDoc() {
-      return /databases/$(database)/documents/client_access/$(profileCustomerCode());
+      return clientAccessDocDe(profileCustomerCode());
+    }
+
+    // Arquivar o cliente ou pôr "Sem portal" grava portal_ativo false e corta
+    // o portal; os logins ficam (pergunta 69). Sem o documento, ou sem o
+    // campo, o portal segue ligado.
+    function portalAtivoDe(customerCode) {
+      return !exists(clientAccessDocDe(customerCode))
+        || get(clientAccessDocDe(customerCode)).data.get('portal_ativo', true) != false;
+    }
+
+    function portalAtivo() {
+      return portalAtivoDe(profileCustomerCode());
     }
 
     function contractedModules() {
@@ -338,6 +362,7 @@ service cloud.firestore {
         && get(inviteDoc(inviteId)).data.email == request.auth.token.email;
     }
 
+    // O convite do cliente com o portal desligado não vale mais (pergunta 69).
     function invitedCustomerScopeIsValid(inviteId) {
       return (
           request.resource.data.role == 'cliente'
@@ -345,6 +370,7 @@ service cloud.firestore {
           && get(inviteDoc(inviteId)).data.customer_code is string
           && request.resource.data.keys().hasAll(['customer_code'])
           && request.resource.data.customer_code == get(inviteDoc(inviteId)).data.customer_code
+          && portalAtivoDe(get(inviteDoc(inviteId)).data.customer_code)
         )
         || (
           request.resource.data.role != 'cliente'
@@ -444,7 +470,7 @@ service cloud.firestore {
     }
 
     function hasOwnChatCustomerScope(data) {
-      return !isCustomer() || isOwnCustomerCode(data.customer_code);
+      return !isCustomer() || (isOwnCustomerCode(data.customer_code) && portalAtivo());
     }
 
     // Mesmo motivo de canReadOwnMessage(): checagem de formato na leitura
@@ -1026,8 +1052,10 @@ service cloud.firestore {
     // navegador não lê nem grava. As regras acima a leem por get(), que não
     // depende de permissão; o portal lê os módulos em client_profiles.
 
+    // O perfil segue legível com o portal desligado: é por ele que o app
+    // sabe que o portal está desligado (pergunta 69).
     match /client_profiles/{profileId} {
-      allow read: if canReadForBilling() || isOwnProjection();
+      allow read: if canReadForBilling() || isOwnCustomerProjection();
       allow create, update, delete: if false;
     }
 
@@ -1146,7 +1174,7 @@ service cloud.firestore {
     // O tempo real do portal consulta por customer_code (list), que não enxerga
     // o id do documento; as Functions gravam customer_code igual ao id.
     match /client_portal_status/{customerCode} {
-      allow get: if canReadOperations() || (isCustomer() && isOwnCustomerCode(customerCode));
+      allow get: if canReadOperations() || (isCustomer() && isOwnCustomerCode(customerCode) && portalAtivo());
       allow list: if canReadOperations() || isOwnProjection();
       allow create, update, delete: if false;
     }

@@ -1090,6 +1090,10 @@ usuário do convite, com o papel dele.
     - **Decidida em 26/10/2026:** arquivar e "Sem portal" cortam o portal:
       o portal ativo fica gravado no `client_access`, e as portas e o
       convite o conferem. Os logins ficam.
+    - **Feita no servidor em 26/10/2026** (`fase-2-nucleo.md`, "Pergunta 69:
+      arquivar e "Sem portal" cortam o portal"). A tela que explica o corte
+      à pessoa do cliente vem com o alinhamento; os avisos por e-mail são a
+      pergunta 71.
 
 **Datas do vínculo** (26/10/2026). Da parte 8.4a do RH.
 70. Pessoas, no RH, lista só quem está ativo no cadastro da Operação. Com as
@@ -1100,6 +1104,16 @@ usuário do convite, com o papel dele.
     Recomendo que Pessoas mostre também quem está inativo na Operação com a
     admissão sem desligamento, com a marca "Inativo na Operação", para o RH
     gravar o desligamento. É tela, então vem com alinhamento.
+
+**O portal desligado** (26/10/2026). Da pergunta 69.
+71. Com o portal desligado (o cliente arquivado ou "Sem portal"), a pessoa
+    do cliente não entra mais no portal, mas os avisos por e-mail aos
+    contatos do cliente (OS agendada, iniciada e concluída, NF emitida,
+    solicitação recebida e itens parados) continuam saindo, com o link do
+    portal que ela não abre. O aviso do sino também é gravado, e ninguém o
+    lê. Recomendo que a rotina dos avisos (`runNotifications`) não gere
+    aviso para o cliente com o portal desligado, nem no sino nem por
+    e-mail. O e-mail da NFS-e que a prefeitura ou a Omie mandam não muda.
 
 Limitações conhecidas, sem pergunta, para quando houver tempo:
 
