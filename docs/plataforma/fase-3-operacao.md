@@ -1719,3 +1719,52 @@ decisões de 26/10" (item 1).
     falta, Voltar, quem não vê o botão), `cancelar-vistoria-view.test.tsx`
     (os textos e o `axe`) e `os-view.test.tsx` (a linha do histórico).
 
+### Pergunta 66: a conclusão recusada do campo, no servidor
+
+Feita em 26/10/2026, com a decisão do Leonardo e o canvas "Telas das decisões
+de 26/10" (item 2). A tela da ficha da OS vem no PR seguinte.
+
+- **O problema.** A conclusão do celular recusada depois de a assinatura
+  subir deixava a assinatura no Storage sem a OS apontar para ela: quando o
+  escritório já tinha concluído a OS, ou quando a hora vinha antes da última
+  etapa. A recusa ficava no topo do celular, mas a assinatura do cliente se
+  perdia para a OS.
+- **O que o servidor guarda** (`domain/conclusao-recusada.ts`): quando
+  `completeServiceOrder` recusa (`failed-precondition`) a conclusão do
+  celular com a assinatura conferida no Storage, a OS ganha
+  `conclusao_recusada`: a hora da conclusão no celular, quem concluiu (o id
+  do cadastro e o login), quem recebeu (nome e cargo, sem o documento, pela
+  decisão 3 da LGPD), o caminho da assinatura, o motivo da recusa e quando
+  foi recusada, com o evento `os.completion_refused` (sem o nome).
+  - Guardar roda depois da recusa, fora da transação dela; se falhar, o log
+    registra e a recusa chega ao celular do mesmo jeito.
+  - O mesmo pedido repetido pela fila do celular recusa de novo, sem gravar
+    outra vez (a chave do pedido fica na recusa).
+  - Sem assinatura (sem aceite no local), ou de quem não está na equipe,
+    nada é guardado.
+- **A coordenação resolve** (callable `resolveFieldCompletion`, owner, admin
+  e interno, com o recibo em `operacao_operations`):
+  - "anexar": na OS concluída (em revisão ou revisada) com a conclusão sem
+    aceite, a conclusão passa a ter a assinatura e quem assinou (nome e
+    cargo); a hora, quem informou, os itens e as fotos não mudam. Evento
+    `os.signature_attached`. A conclusão já assinada recusa ("A conclusão
+    já tem a assinatura."), e a OS ainda em execução também ("Só a OS
+    concluída recebe a assinatura do campo: conclua a OS com estes dados.");
+  - "dispensar", em qualquer OS. Evento `os.refused_completion_dismissed`;
+  - a recusa fica na OS nos dois casos, com quem resolveu e quando
+    (`anexada` ou `dispensada`), como histórico. O pedido leva a hora da
+    recusa que a tela mostrou: outra, mais nova, recusa ("A conclusão
+    recusada mudou. Recarregue e tente de novo.").
+- **O cliente** passa a ver a assinatura anexada no comprovante: a regra do
+  Storage abre a ele a assinatura que a conclusão aponta.
+- **Testes:**
+  - `conclusao-recusada.test.ts`: o que se guarda e de quem, anexar (também
+    na revisada) e dispensar, as recusas e a leitura;
+  - `conclusao-recusada.integration.test.ts`, no emulador: o celular conclui
+    a OS que o escritório concluiu, a recusa chega e a OS guarda o que
+    chegou, uma vez só; a coordenação anexa (o campo não), repetir não
+    duplica; a hora antes da última etapa guarda e só se dispensa; a recusa
+    sem assinatura não guarda nada;
+  - `events.test.ts` e `callables.test.ts`: os três eventos e a callable
+    nova.
+

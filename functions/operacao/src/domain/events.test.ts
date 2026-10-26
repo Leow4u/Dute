@@ -125,6 +125,9 @@ const EXEMPLOS: Record<OperacaoEventType, Record<string, unknown>> = {
   },
   "os.signed": { id: "10045-01", demanda: "10045", instante: "2026-10-22T20:50:00.000Z", canal: "celular" },
   "os.completed_without_acceptance": { id: "10045-01", demanda: "10045", instante: "2026-10-22T20:50:00.000Z", canal: "escritorio" },
+  "os.completion_refused": { id: "10045-01", demanda: "10045", instante: "2026-10-22T20:52:00.000Z", canal: "celular" },
+  "os.signature_attached": { id: "10045-01", demanda: "10045", instante: "2026-10-22T20:52:00.000Z" },
+  "os.refused_completion_dismissed": { id: "10045-01", demanda: "10045" },
   "os.reviewed": {
     id: "10045-01",
     demanda: "10045",

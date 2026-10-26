@@ -1065,6 +1065,9 @@ defeito.
     - **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item 2):
       "Anexar à conclusão" vale também na OS revisada, porque só junta o
       aceite, sem mexer em itens nem em valores.
+    - **O servidor guarda a recusa desde 26/10/2026** (`fase-3-operacao.md`,
+      "Pergunta 66: a conclusão recusada do campo, no servidor"); a tela
+      vem no PR seguinte.
 
 **Acesso e convites** (25/10/2026). O id do convite é o token do link
 (`invites/{token}`): quem o tem e entra com o e-mail convidado vira o
