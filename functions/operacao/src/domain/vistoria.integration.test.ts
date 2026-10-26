@@ -219,6 +219,48 @@ describe("abrir a vistoria", () => {
   });
 });
 
+describe("cancelar a vistoria em execução (pergunta 58)", () => {
+  it("a coordenação cancela com o motivo; a OS guarda quem e quando, o evento grava quem; a demanda recebe outra vistoria", async () => {
+    await vistoriaNoLocal();
+    const antes = await lerOs();
+    assert.equal(antes.status, "em_execucao");
+    const pedido = { action: "cancel", idempotency_key: "v-cancela-exec", numero: "10045-01", expected_edicao: antes.edicao, motivo: "O local estava fechado; o cliente não recebeu a equipe." };
+    await recusa(saveServiceOrderFor(db, lider, pedido), "permission-denied", "Seu perfil não grava o cadastro da Operação.");
+    await recusa(saveServiceOrderFor(db, interno, { ...pedido, idempotency_key: "v-curto", motivo: "x" }), "invalid-argument", "Informe o motivo do cancelamento.");
+
+    await saveServiceOrderFor(db, interno, pedido);
+    const depois = await lerOs();
+    assert.equal(depois.status, "cancelada");
+    assert.equal(depois.edicao, antes.edicao + 1);
+    assert.equal(depois.cancelamento.motivo, "O local estava fechado; o cliente não recebeu a equipe.");
+    assert.deepEqual(depois.cancelamento.por, { uid: "interno-1", nome: "Paula" });
+    assert.match(depois.cancelamento.instante, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    // As etapas e as fotos da vistoria ficam na OS.
+    assert.equal(depois.etapas.length, antes.etapas.length);
+    assert.equal(depois.fotos.length, 2);
+    const [evento] = (await eventos()).filter((item) => item.type === "os.cancelled");
+    assert.deepEqual(evento.payload, { id: "10045-01", demanda: "10045" });
+    assert.equal(evento.actor.uid, "interno-1");
+    assert.equal(JSON.stringify(evento).includes("fechado"), false);
+
+    // Repetir devolve o mesmo; o campo não registra mais nada nela; a demanda recebe outra vistoria.
+    assert.equal((await saveServiceOrderFor(db, interno, pedido)).replayed, true);
+    await assert.rejects(registerStepFor(db, lider, { idempotency_key: "e-depois", numero: "10045-01", etapa: "fim", instante: "2026-10-22T15:00-03:00" }, AGORA));
+    assert.equal((await abrir("10045", "v-outra")).numero, "10045-02");
+  });
+
+  it("a OS de serviço iniciada continua sem cancelar", async () => {
+    await vistoriaNoLocal();
+    await db.collection(SERVICE_ORDERS_COLLECTION).doc("10045-01").update({ tipo: "servico" });
+    const { edicao } = await lerOs();
+    await recusa(
+      saveServiceOrderFor(db, interno, { action: "cancel", idempotency_key: "s-cancela", numero: "10045-01", expected_edicao: edicao, motivo: "Não deu certo" }),
+      "failed-precondition",
+      "Só uma OS aberta ou agendada pode ser cancelada.",
+    );
+  });
+});
+
 describe("enviar a vistoria ao Comercial", () => {
   it("a OS vai para Revisada com a vistoria e o Fim; a demanda recebe o resumo; os eventos só contam; repetir não duplica", async () => {
     await vistoriaNoLocal();

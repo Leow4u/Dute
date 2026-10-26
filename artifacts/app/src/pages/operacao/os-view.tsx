@@ -482,7 +482,7 @@ export function OsView({
       {painel}
 
       {ficha.status === "cancelada" ? (
-        <p className={cn(selo, seloNeutro, "h-auto self-start py-1.5 text-sm")}>Cancelada{ficha.cancelamento ? ` · ${ficha.cancelamento}` : ""}</p>
+        <p className={cn(selo, seloNeutro, "h-auto self-start py-1.5 text-sm")}>Cancelada{ficha.cancelamento ? ` · ${ficha.cancelamento.motivo}` : ""}</p>
       ) : (
         <Passos ficha={ficha} />
       )}

@@ -116,7 +116,8 @@ export type FichaDaOs = {
   conclusao: ConclusaoLida | null;
   revisao: RevisaoLida | null;
   vistoria: VistoriaLida | null;
-  cancelamento: string | null;
+  /** O motivo e, desde a pergunta 58, quando e quem cancelou (null na OS cancelada antes). */
+  cancelamento: { motivo: string; instante: string | null; nome: string | null } | null;
 };
 
 // --- Leitura ------------------------------------------------------------------------------
@@ -167,7 +168,6 @@ export function fichaDaLeitura(id: string, data: Record<string, unknown>): Ficha
   if (typeof data.edicao !== "number" || !texto(data.demanda) || !texto(data.customer_code)) return null;
   const janela = data.janela && typeof data.janela === "object" ? (data.janela as Record<string, unknown>) : null;
   const locais = data.locais && typeof data.locais === "object" ? (data.locais as Record<string, unknown>) : {};
-  const cancelamento = data.cancelamento && typeof data.cancelamento === "object" ? texto((data.cancelamento as Record<string, unknown>).motivo) : "";
   return {
     numero: id,
     demanda: texto(data.demanda),
@@ -260,8 +260,17 @@ export function fichaDaLeitura(id: string, data: Record<string, unknown>): Ficha
     conclusao: conclusaoLida(data.conclusao),
     revisao: revisaoLida(data.revisao),
     vistoria: vistoriaLida(data.vistoria),
-    cancelamento: cancelamento || null,
+    cancelamento: cancelamentoLido(data.cancelamento),
   };
+}
+
+function cancelamentoLido(valor: unknown): FichaDaOs["cancelamento"] {
+  if (!valor || typeof valor !== "object") return null;
+  const bruto = valor as Record<string, unknown>;
+  const motivo = texto(bruto.motivo);
+  if (!motivo) return null;
+  const por = bruto.por && typeof bruto.por === "object" ? (bruto.por as Record<string, unknown>) : null;
+  return { motivo, instante: textoOuNull(bruto.instante), nome: textoOuNull(por?.nome) };
 }
 
 function vistoriaLida(valor: unknown): VistoriaLida | null {
@@ -633,7 +642,7 @@ export function feitoEm(ficha: FichaDaOs): string | null {
 
 export type EntradaDoHistorico = { chave: string; titulo: string; detalhe: string; instante: string };
 
-/** As etapas, as inclusões e as ocorrências, da mais nova para a mais antiga. */
+/** As etapas, as inclusões, as ocorrências e o cancelamento, da mais nova para a mais antiga. */
 export function historicoDaOs(ficha: FichaDaOs, hoje: string): EntradaDoHistorico[] {
   const quando = (instante: string) => (dataDe(instante) === hoje ? horaDe(instante) : `${formatarData(dataDe(instante)).slice(0, 5)} ${horaDe(instante)}`);
   const entradas: EntradaDoHistorico[] = [
@@ -664,6 +673,16 @@ export function historicoDaOs(ficha: FichaDaOs, hoje: string): EntradaDoHistoric
             titulo: "OS revisada",
             detalhe: [`${ficha.revisao.linhas.filter((linha) => linha.decisao).length} ${ficha.revisao.linhas.filter((linha) => linha.decisao).length === 1 ? "divergência decidida" : "divergências decididas"}`, quando(ficha.revisao.instante)].join(" · "),
             instante: ficha.revisao.instante,
+          },
+        ]
+      : []),
+    ...(ficha.cancelamento?.instante
+      ? [
+          {
+            chave: "cancelamento",
+            titulo: "Cancelada",
+            detalhe: [ficha.cancelamento.nome, ficha.cancelamento.motivo, quando(ficha.cancelamento.instante)].filter(Boolean).join(" · "),
+            instante: ficha.cancelamento.instante,
           },
         ]
       : []),

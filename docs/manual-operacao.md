@@ -238,6 +238,13 @@ ocorrência, e não envia: quem envia é o líder, pelo celular (sem líder,
 qualquer um da equipe). Enviada, fica "Enviada ao Comercial" e não se reabre
 (abre-se outra); o Comercial carrega os itens no orçamento.
 
+**"Cancelar vistoria"**, no alto da OS da vistoria aberta, agendada ou em
+execução (`owner`, `admin` e `interno`), é para a que não deu certo no local
+(o cliente não recebeu a equipe, o local fechado). Pede o "Motivo" (3 a 200
+caracteres); a OS fica Cancelada, com o motivo, o histórico mostra quem
+cancelou, e a demanda pode ter outra vistoria. A OS de serviço iniciada
+continua sem cancelar.
+
 ## O app do campo
 
 Em `/campo`. A pessoa vê só as OS em que está escalada: precisa do papel
