@@ -14,22 +14,34 @@ import {
   ROTULO_DO_VINCULO,
   diasAte,
   nomeDoRegistro,
+  temDatasDoVinculo,
   textoDoPrazo,
+  textosDoVinculo,
   type Categoria,
   type FichaDoRh,
   type RegistroDoRh,
   type ResultadoDoExame,
 } from "@/lib/rh/ficha";
-import { PRIMEIRO_DIA, TIPOS_DE_ARQUIVO, ULTIMO_DIA, comCategoria, rotuloDaData, tiposDaCategoria, type FormularioDoRegistro } from "@/lib/rh/formulario";
+import {
+  PRIMEIRO_DIA,
+  TIPOS_DE_ARQUIVO,
+  ULTIMO_DIA,
+  comCategoria,
+  rotuloDaData,
+  tiposDaCategoria,
+  type FormularioDoRegistro,
+  type FormularioDoVinculo,
+} from "@/lib/rh/formulario";
 import { cn } from "@/lib/utils";
 
 import { Contador, Pill, TOM_NEUTRO, TOM_OK, TOM_VENCENDO, TOM_VENCIDO, Vazio } from "./pecas";
 
 /**
- * A ficha da pessoa no RH (partes 8.2c e 8.2d): os documentos, os exames e
- * os treinamentos vigentes, com o prazo do vencimento, e o histórico de cada
- * categoria. Quem abre o RH abre o arquivo; só o rh inclui, altera, arquiva
- * e anexa. Sem legenda: só rótulos, dados e ações.
+ * A ficha da pessoa no RH (partes 8.2c, 8.2d e 8.4b): os documentos, os
+ * exames e os treinamentos vigentes, com o prazo do vencimento, o histórico
+ * de cada categoria e, no vínculo próprio, as datas de admissão e de
+ * desligamento. Quem abre o RH abre o arquivo; só o rh inclui, altera,
+ * arquiva, anexa e grava as datas. Sem legenda: só rótulos, dados e ações.
  */
 
 export type EstadoDaFicha = "carregando" | "erro" | "pronto";
@@ -45,15 +57,21 @@ export type AcoesDaFicha = {
   desistir: () => void;
   anexar: (registro: RegistroDoRh, arquivo: File) => void;
   abrirArquivo: (registro: RegistroDoRh) => void;
+  abrirVinculo: () => void;
+  editarVinculo: (formulario: FormularioDoVinculo) => void;
+  salvarVinculo: () => void;
+  fecharVinculo: () => void;
 };
 
 export type FichaViewProps = {
   estado: EstadoDaFicha;
   ficha: FichaDoRh | undefined;
   erro: string | null;
-  /** Quem grava no RH (só o rh): vê as ações de incluir, alterar, arquivar e anexar. */
+  /** Quem grava no RH (só o rh): vê as ações de incluir, alterar, arquivar, anexar e gravar as datas do vínculo. */
   grava: boolean;
   formulario: FormularioDoRegistro | null;
+  /** O formulário das datas do vínculo, aberto. */
+  vinculo: FormularioDoVinculo | null;
   /** O registro com o arquivamento por confirmar. */
   arquivando: string | null;
   ocupado: boolean;
@@ -95,10 +113,10 @@ function Campo({ id, rotulo, children }: { id: string; rotulo: string; children:
 }
 
 function AcoesDoRegistro({ registro, props }: { registro: RegistroDoRh; props: FichaViewProps }) {
-  const { grava, arquivando, ocupado, formulario, acoes } = props;
+  const { grava, arquivando, ocupado, formulario, vinculo, acoes } = props;
   const editavel = grava && registro.situacao !== "arquivado";
-  // Com o formulário aberto, as gravações das linhas esperam: a edição que ele leva não muda por baixo dele.
-  const travado = ocupado || formulario !== null;
+  // Com um formulário aberto, as gravações das linhas esperam: a edição que ele leva não muda por baixo dele.
+  const travado = ocupado || formulario !== null || vinculo !== null;
   if (arquivando === registro.id) {
     return (
       <div className="col-span-2 flex flex-wrap gap-2">
@@ -288,8 +306,48 @@ function Formulario({ formulario, ocupado, acoes }: { formulario: FormularioDoRe
   );
 }
 
+function FormularioDasDatas({ vinculo, ocupado, acoes }: { vinculo: FormularioDoVinculo; ocupado: boolean; acoes: AcoesDaFicha }) {
+  const editar = (mudanca: Partial<FormularioDoVinculo>) => acoes.editarVinculo({ ...vinculo, ...mudanca });
+  return (
+    <form
+      aria-labelledby="formulario-do-vinculo"
+      className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5 xl:w-96 xl:shrink-0"
+      onSubmit={(evento: FormEvent) => {
+        evento.preventDefault();
+        acoes.salvarVinculo();
+      }}
+    >
+      <h2 id="formulario-do-vinculo" className="text-base font-extrabold">
+        Datas do vínculo
+      </h2>
+      <Campo id="vinculo-admissao" rotulo="Admissão">
+        <Input id="vinculo-admissao" type="date" min={PRIMEIRO_DIA} max={ULTIMO_DIA} value={vinculo.admissao} disabled={ocupado} onChange={(evento) => editar({ admissao: evento.target.value })} />
+      </Campo>
+      <Campo id="vinculo-desligamento" rotulo="Desligamento">
+        <Input
+          id="vinculo-desligamento"
+          type="date"
+          min={vinculo.admissao || PRIMEIRO_DIA}
+          max={ULTIMO_DIA}
+          value={vinculo.desligamento}
+          disabled={ocupado}
+          onChange={(evento) => editar({ desligamento: evento.target.value })}
+        />
+      </Campo>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" disabled={ocupado}>
+          Salvar
+        </Button>
+        <Button type="button" variant="outline" onClick={acoes.fecharVinculo} disabled={ocupado}>
+          Cancelar
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export function FichaView(props: FichaViewProps) {
-  const { estado, ficha, erro, grava, formulario, ocupado, falha, acoes } = props;
+  const { estado, ficha, erro, grava, formulario, vinculo, ocupado, falha, acoes } = props;
   if (estado !== "pronto" || !ficha) {
     return (
       <div className="v3 flex flex-col gap-5 text-foreground">
@@ -301,19 +359,29 @@ export function FichaView(props: FichaViewProps) {
     );
   }
   const { colaborador } = ficha;
+  const comDatas = temDatasDoVinculo(colaborador);
+  const datas = comDatas ? textosDoVinculo(ficha.datas_do_vinculo) : [];
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
         <h1 className="text-3xl font-extrabold tracking-tight">{colaborador.nome}</h1>
         {colaborador.ativo ? null : <Pill className={TOM_NEUTRO}>Inativo</Pill>}
-        {grava && !formulario ? (
-          <Button type="button" className="ml-auto" onClick={acoes.novo} disabled={ocupado}>
-            Novo registro
-          </Button>
+        {grava && !formulario && !vinculo ? (
+          <div className="ml-auto flex flex-wrap gap-2.5">
+            {comDatas ? (
+              <Button type="button" variant="outline" onClick={acoes.abrirVinculo} disabled={ocupado}>
+                Datas do vínculo
+              </Button>
+            ) : null}
+            <Button type="button" onClick={acoes.novo} disabled={ocupado}>
+              Novo registro
+            </Button>
+          </div>
         ) : null}
         <p className="w-full text-base font-semibold text-muted-foreground">
           {[colaborador.funcao, ROTULO_DO_VINCULO[colaborador.vinculo]].filter(Boolean).join(" · ")}
         </p>
+        {datas.length ? <p className="w-full text-sm font-bold">{datas.join(" · ")}</p> : null}
       </header>
       {falha ? (
         <p role="alert" className="text-sm font-bold text-destructive-soft-foreground">
@@ -327,6 +395,7 @@ export function FichaView(props: FichaViewProps) {
           ))}
         </div>
         {grava && formulario ? <Formulario formulario={formulario} ocupado={ocupado} acoes={acoes} /> : null}
+        {grava && comDatas && vinculo ? <FormularioDasDatas vinculo={vinculo} ocupado={ocupado} acoes={acoes} /> : null}
       </div>
     </div>
   );

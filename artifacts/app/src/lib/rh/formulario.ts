@@ -1,4 +1,4 @@
-import { TIPOS_POR_CATEGORIA, type Categoria, type RegistroDoRh, type ResultadoDoExame } from "./ficha";
+import { TIPOS_POR_CATEGORIA, type Categoria, type DatasDoVinculo, type RegistroDoRh, type ResultadoDoExame } from "./ficha";
 
 /**
  * O formulário do registro da ficha (parte 8.2d): incluir e alterar. A tela
@@ -65,6 +65,28 @@ export function pedidoDoFormulario(formulario: FormularioDoRegistro, colaborador
     emitido_em: formulario.emitido_em,
     vence_em: formulario.vence_em || null,
     ...(formulario.categoria === "exame" ? { resultado: formulario.resultado || null } : {}),
+  };
+}
+
+/**
+ * O formulário das datas do vínculo (parte 8.4): a admissão, o desligamento
+ * e a edição que a tela leu (null quando ainda não há datas). Como no
+ * registro, a tela só monta o pedido, e a callable saveRhVinculo confere.
+ */
+export type FormularioDoVinculo = { chave: string; edicao: number | null; admissao: string; desligamento: string };
+
+export function formularioDoVinculo(chave: string, datas: DatasDoVinculo | null): FormularioDoVinculo {
+  return { chave, edicao: datas?.edicao ?? null, admissao: datas?.admissao ?? "", desligamento: datas?.desligamento ?? "" };
+}
+
+/** O pedido de saveRhVinculo: o desligamento vazio vai como null. */
+export function pedidoDoVinculo(formulario: FormularioDoVinculo, colaboradorId: string): Record<string, unknown> {
+  return {
+    idempotency_key: formulario.chave,
+    colaborador_id: colaboradorId,
+    expected_edicao: formulario.edicao,
+    admissao: formulario.admissao,
+    desligamento: formulario.desligamento || null,
   };
 }
 

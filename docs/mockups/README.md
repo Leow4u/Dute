@@ -121,6 +121,23 @@ usam o `Chip` do sistema (selecionado em tinta), não o azul do mockup.
 | Proposta rolando a lista | `PortalEstoqueCelularRolando.dc.html` |
 | Proposta com o painel Filtros aberto | `PortalEstoqueCelularFiltros.dc.html` |
 
+A parte 8.4 do RH (as datas de admissão e de desligamento) tem canvas próprio
+(privado, https://claude.ai/artifact/P3dXT4G48unzy3tCK3whM1), aprovado pelo
+Leonardo em 26/10/2026 com as quatro recomendações: as datas no banco
+`dute-rh`, gravadas só pelo `rh`; o desligamento independente do cadastro da
+Operação; o próprio sem admissão na planilha se está ativo; "Sem admissão" em
+Pessoas e na Exportação, fora do "Precisa de você"
+(`docs/plataforma/fase-8-rh.md`, "Alinhamento da parte 8.4"). No app, os links
+da lista "Sem data de admissão" seguem os das outras telas v3 (sublinhados, na
+cor do texto), não o azul do mockup.
+
+| Tela | Arquivo |
+|---|---|
+| RH · ficha com as datas do vínculo (interativa: o formulário abre e fecha) | `RhFichaVinculo.dc.html` |
+| RH · Pessoas com as datas e o "Sem admissão" | `RhPessoasVinculo.dc.html` |
+| RH · Exportação com quem está sem admissão | `RhExportacaoVinculo.dc.html` |
+| RH · planilha de colaboradores de setembro de 2026 | `RhPlanilhaVinculo.dc.html` |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador

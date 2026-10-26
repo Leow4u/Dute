@@ -1,9 +1,12 @@
+import { dataBr } from "../comercial/clientes";
+
 /**
  * A ficha do colaborador na tela (docs/plataforma/fase-8-rh.md, parte 8.2).
  *
  * O catálogo é cópia literal do de functions/rh/src/domain/ficha.ts, travada
  * pelo platform-lists.test.ts: mudou um, muda o outro. Aqui ficam também os
- * rótulos e a leitura do que as callables getRhPanel e getRhFicha devolvem.
+ * rótulos e a leitura do que as callables getRhPanel e getRhFicha devolvem,
+ * com as datas do vínculo (parte 8.4).
  */
 
 export const CATEGORIAS = ["documento", "exame", "treinamento"] as const;
@@ -86,11 +89,18 @@ export type VencimentoDoRh = {
   dias: number;
 };
 
-export type ColaboradorNoPainel = ColaboradorDoRh & { registros: number; vencendo: number; vencidos: number; proximo_vencimento: string | null };
+/** A admissão e o desligamento do vínculo próprio (parte 8.4); null enquanto o RH não grava. */
+export type DatasNoPainel = { admissao: string | null; desligamento: string | null };
+
+export type ColaboradorNoPainel = ColaboradorDoRh &
+  DatasNoPainel & { registros: number; vencendo: number; vencidos: number; proximo_vencimento: string | null };
 
 export type PainelDoRh = { hoje: string; colaboradores: ColaboradorNoPainel[]; vencimentos: VencimentoDoRh[] };
 
-export type FichaDoRh = { hoje: string; colaborador: ColaboradorDoRh; registros: RegistroDoRh[] };
+/** As datas do vínculo na ficha, com a edição que saveRhVinculo confere. */
+export type DatasDoVinculo = { admissao: string; desligamento: string | null; edicao: number };
+
+export type FichaDoRh = { hoje: string; colaborador: ColaboradorDoRh; registros: RegistroDoRh[]; datas_do_vinculo: DatasDoVinculo | null };
 
 const DIA = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -108,6 +118,10 @@ function textoOuNull(valor: unknown): string | null {
 
 function inteiro(valor: unknown): number {
   return typeof valor === "number" && Number.isFinite(valor) ? Math.trunc(valor) : 0;
+}
+
+function diaOuNull(valor: unknown): string | null {
+  return typeof valor === "string" && DIA.test(valor) ? valor : null;
 }
 
 function categoria(valor: unknown): Categoria | null {
@@ -169,13 +183,31 @@ export function painelLido(valor: unknown): PainelDoRh | null {
     const colaborador = colaboradorLido(item);
     const extra = objeto(item);
     if (!colaborador || !extra) return [];
-    return [{ ...colaborador, registros: inteiro(extra.registros), vencendo: inteiro(extra.vencendo), vencidos: inteiro(extra.vencidos), proximo_vencimento: textoOuNull(extra.proximo_vencimento) }];
+    return [
+      {
+        ...colaborador,
+        registros: inteiro(extra.registros),
+        vencendo: inteiro(extra.vencendo),
+        vencidos: inteiro(extra.vencidos),
+        proximo_vencimento: textoOuNull(extra.proximo_vencimento),
+        admissao: diaOuNull(extra.admissao),
+        desligamento: diaOuNull(extra.desligamento),
+      },
+    ];
   });
   const vencimentos = dados.vencimentos.flatMap((item) => {
     const vencimento = vencimentoLido(item);
     return vencimento ? [vencimento] : [];
   });
   return { hoje: texto(dados.hoje), colaboradores, vencimentos };
+}
+
+function datasDoVinculoLidas(valor: unknown): DatasDoVinculo | null {
+  const dados = objeto(valor);
+  const admissao = diaOuNull(dados?.admissao);
+  const edicao = inteiro(dados?.edicao);
+  if (!dados || !admissao || edicao < 1) return null;
+  return { admissao, desligamento: diaOuNull(dados.desligamento), edicao };
 }
 
 /** O que getRhFicha devolve; null quando não é a ficha. */
@@ -187,7 +219,25 @@ export function fichaLida(valor: unknown): FichaDoRh | null {
     const registro = registroLido(item);
     return registro ? [registro] : [];
   });
-  return { hoje: texto(dados.hoje), colaborador, registros };
+  return { hoje: texto(dados.hoje), colaborador, registros, datas_do_vinculo: datasDoVinculoLidas(dados.datas_do_vinculo) };
+}
+
+/** Só o vínculo próprio tem as datas (parte 8.4): o freelancer e o terceiro não estão na folha da Dutelog. */
+export function temDatasDoVinculo(colaborador: Pick<ColaboradorDoRh, "vinculo">): boolean {
+  return colaborador.vinculo === "proprio";
+}
+
+/** O próprio sem a data de admissão: entra na planilha da contabilidade pela regra do cadastro. */
+export function semAdmissao(colaborador: Pick<ColaboradorDoRh, "vinculo"> & Pick<DatasNoPainel, "admissao">): boolean {
+  return temDatasDoVinculo(colaborador) && !colaborador.admissao;
+}
+
+/** "Admissão 03/02/2025", "Desligamento 31/10/2026": as datas do vínculo como dados da linha. */
+export function textosDoVinculo(datas: DatasNoPainel | null): string[] {
+  if (!datas) return [];
+  return [datas.admissao ? `Admissão ${dataBr(datas.admissao)}` : null, datas.desligamento ? `Desligamento ${dataBr(datas.desligamento)}` : null].filter(
+    (texto): texto is string => texto !== null,
+  );
 }
 
 /** O nome do registro: o rótulo do tipo, ou o nome que o "outro" leva. */

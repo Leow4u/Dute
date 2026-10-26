@@ -5,8 +5,9 @@ import { useAppUser } from "@/lib/auth";
 import { baixarCsv } from "@/lib/comercial/diario";
 import { chamarRh, novaChave } from "@/lib/rh/api";
 import { arquivoLido, competenciaPadrao, diaEmSaoPaulo, resultadoLido, textoDoResultado, type ArquivoDaExportacao } from "@/lib/rh/exportacao";
+import { semAdmissao } from "@/lib/rh/ficha";
 import { gravaNoRh } from "@/lib/rh/navegacao";
-import { CHAVE_DAS_EXPORTACOES, useExportacoesDoRh } from "@/lib/rh/use-rh";
+import { CHAVE_DAS_EXPORTACOES, usePainelDoRh, useExportacoesDoRh } from "@/lib/rh/use-rh";
 
 import { ExportacaoView, type AcoesDaExportacao, type EstadoDaLista } from "./exportacao-view";
 
@@ -16,12 +17,15 @@ import { ExportacaoView, type AcoesDaExportacao, type EstadoDaLista } from "./ex
  * listRhExports e downloadRhExport (a planilha da versão guardada, com o
  * download registrado). A chave de idempotência é uma por intenção: troca
  * com a competência e depois de cada geração; a falha mantém a chave, e a
- * nova tentativa repete o resultado se a primeira chegou a gravar.
+ * nova tentativa repete o resultado se a primeira chegou a gravar. Quem está
+ * sem a data de admissão sai do painel do RH (getRhPanel, só para o rh).
  */
 export default function RhExportacao() {
   const { user } = useAppUser();
   const role = user?.publicMetadata.role;
   const leitura = useExportacoesDoRh(role);
+  const grava = gravaNoRh(role);
+  const painel = usePainelDoRh(role, grava);
   const queryClient = useQueryClient();
   const [hoje] = useState(() => diaEmSaoPaulo());
   const [competencia, setCompetencia] = useState(() => competenciaPadrao(hoje));
@@ -74,7 +78,8 @@ export default function RhExportacao() {
     <ExportacaoView
       estado={estado}
       exportacoes={leitura.exportacoes ?? []}
-      grava={gravaNoRh(role)}
+      grava={grava}
+      semAdmissao={(painel.painel?.colaboradores ?? []).filter(semAdmissao).map(({ id, nome }) => ({ id, nome }))}
       hoje={hoje}
       competencia={competencia}
       ocupado={ocupado}

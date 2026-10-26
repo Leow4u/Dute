@@ -11,7 +11,7 @@ O desenho e o registro das partes ficam em `docs/plataforma/fase-8-rh.md`.
 | Item | O que tem |
 |---|---|
 | Início | O "Precisa de você": uma linha por pessoa com registro vencido ou vencendo em até 30 dias. "Abrir a ficha" leva à ficha dela. |
-| Pessoas | Os colaboradores do cadastro da Operação, com quantos registros, quantos vencendo, quantos vencidos e o próximo vencimento. |
+| Pessoas | Os colaboradores ativos no cadastro da Operação, com quantos registros, quantos vencendo, quantos vencidos, o próximo vencimento e, no vínculo próprio, a admissão e o desligamento. "Sem admissão" marca o próprio que ainda não tem a data. |
 | Exportação | As planilhas do mês para a contabilidade. |
 
 ## A ficha
@@ -46,6 +46,13 @@ O que vale saber:
   Cada abertura fica registrada: quem abriu e quando.
 - **A CNH** fica no cadastro do colaborador, na Operação, com o aviso no
   Início da Operação.
+- **As datas do vínculo**, só no vínculo próprio: "Datas do vínculo" abre a
+  admissão e o desligamento, e só o `rh` grava.
+  - A admissão é obrigatória. O desligamento pode ficar vazio e não pode vir
+    antes dela.
+  - Gravar o desligamento não tira a pessoa da escala: quem a inativa na
+    Operação é a coordenação.
+  - As datas decidem quem entra na planilha de colaboradores de cada mês.
 
 ## A exportação para a contabilidade
 
@@ -95,5 +102,8 @@ Os códigos do S-2220:
     baixam com as colunas de então (nome, CPF, função e situação). A
     primeira exportação de um mês já exportado, depois delas, nasce numa
     versão nova.
+- **Sem data de admissão:** abaixo do Gerar, o `rh` vê quem é próprio, está
+  ativo e ainda não tem a data de admissão, com o link da ficha. Até a data
+  ser gravada, a pessoa entra na planilha pela regra do cadastro.
 - **Baixar** é de `owner`, `admin` e `rh`. A planilha sai da versão
   guardada, e cada download fica registrado.

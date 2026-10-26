@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { fichaLida } from "./ficha";
-import { comCategoria, formularioDoRegistro, formularioNovo, pedidoDoFormulario, problemaDoArquivo, rotuloDaData } from "./formulario";
+import { comCategoria, formularioDoRegistro, formularioDoVinculo, formularioNovo, pedidoDoFormulario, pedidoDoVinculo, problemaDoArquivo, rotuloDaData } from "./formulario";
 
 /**
  * O formulário do registro (parte 8.2d): o pedido leva só o que o tipo
@@ -45,6 +45,20 @@ describe("o formulário do registro da ficha", () => {
     expect(pedidoDoFormulario(formulario, COL)).toMatchObject({ id: "reg_aaaaaaaaaaaaaaaa", expected_edicao: 3, resultado: "apto" });
     expect(rotuloDaData("documento")).toBe("Emitido em");
     expect(rotuloDaData("exame")).toBe("Feito em");
+  });
+
+  it("as datas do vínculo: a primeira vai sem edição; depois, com a lida; o desligamento vazio vai como null", () => {
+    expect(pedidoDoVinculo({ ...formularioDoVinculo("k-5", null), admissao: "2025-02-03" }, COL)).toEqual({
+      idempotency_key: "k-5",
+      colaborador_id: COL,
+      expected_edicao: null,
+      admissao: "2025-02-03",
+      desligamento: null,
+    });
+    const aberto = formularioDoVinculo("k-6", { admissao: "2025-02-03", desligamento: "2026-10-31", edicao: 2 });
+    expect(aberto).toEqual({ chave: "k-6", edicao: 2, admissao: "2025-02-03", desligamento: "2026-10-31" });
+    expect(pedidoDoVinculo(aberto, COL)).toMatchObject({ expected_edicao: 2, desligamento: "2026-10-31" });
+    expect(pedidoDoVinculo({ ...aberto, desligamento: "" }, COL)).toMatchObject({ desligamento: null });
   });
 
   it("o arquivo: PDF ou imagem, até 10 MB", () => {
