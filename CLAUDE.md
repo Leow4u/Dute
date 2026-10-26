@@ -414,9 +414,10 @@ removidas justamente por induzirem a erro.
   liberação própria (`RETENCAO_AMBIENTES_LIBERADOS`), primeiro na
   homologação; hoje, a dos avisos e e-mails da Operação
   (`runOperacaoRetention`), a do Agent Dute, no núcleo
-  (`runAgentRetention`), e a das contas removidas, no WMS
-  (`runAccountRetention`, com a lista `ACCOUNT_RETENTION_PROJECTS`), na
-  seção 6 do mesmo documento.
+  (`runAgentRetention`), a das contas removidas, no WMS
+  (`runAccountRetention`, com a lista `ACCOUNT_RETENTION_PROJECTS`), e a das
+  versões substituídas da exportação do RH (`runRhRetention`), na seção 6 do
+  mesmo documento.
 
 ## A auditoria de código está parcialmente vencida
 

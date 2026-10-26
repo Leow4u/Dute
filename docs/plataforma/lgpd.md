@@ -487,7 +487,8 @@ muda o sistema: cada mudança entra num PR próprio, depois da decisão.
 6. **CPF de freelancer e terceiro:** continua obrigatório.
 7. **Versões da exportação do RH:** como recomendado, a última de cada
    competência; das substituídas, só o hash e as contagens depois de um
-   prazo curto.
+   prazo curto. **Entrou em 26/10/2026** (seção 6, parte 7), com 30 dias,
+   ligada só na homologação.
 8. **Avisos, fila de e-mail, solicitações, conversas e contas de quem
    saiu:** como recomendado. E-mail e aviso, 90 dias; conversa e uso do
    agente, 12 meses; solicitação e anexo seguem a demanda; conta removida
@@ -523,6 +524,7 @@ guarda só as contagens.
 | 8a | Aviso do sino (`client_notifications`) e e-mail que já saiu da fila (`email_outbox`: enviado, auditado ou desistido) | 90 dias depois de criados | `runOperacaoRetention` (Operação, 03:20) | homologação |
 | 8b | Mensagem e registro de uso do Agent Dute (`agent_messages`, `agent_usage`) e conversa parada (`agent_conversations`); da conversa em uso, o título e o resumo das mensagens que saíram | 12 meses depois de criados; a conversa, 12 meses depois da última mensagem | `runAgentRetention` (núcleo, 03:40) | homologação |
 | 8c | Conta do Firebase Auth de quem teve o acesso removido; do perfil (`users`), o nome, o e-mail e o motivo; do convite usado, o nome e o e-mail; as rotinas do Agent Dute da pessoa | 12 meses depois de o acesso sair | `runAccountRetention` (WMS, 03:50) | homologação |
+| 7 | Da versão substituída da exportação do RH (`exportacoes`, banco `dute-rh`), as linhas: nome e CPF de cada colaborador, e os exames | 30 dias depois de a versão seguinte da competência ser gerada | `runRhRetention` (RH, 04:00) | homologação |
 
 ### Parte 8a: os avisos e os e-mails (decisão 8)
 
@@ -681,6 +683,47 @@ fica nele.
     - o "devolver acesso" da conta anonimizada é recusado.
 - **Para desligar:** tirar o projeto da lista e publicar. O login apagado não
   volta: a pessoa entra de novo por convite.
+
+### Parte 7: as versões substituídas da exportação do RH (decisão 7)
+
+Feita em 26/10/2026, no RH, dono da exportação (parte 8.3).
+
+- **O prazo curto:** 30 dias depois de a versão seguinte da competência ser
+  gerada. É o tempo de a contabilidade conferir a diferença entre as duas
+  versões; o Leonardo pode trocar o número.
+- **O que sai:** da versão substituída, as linhas das duas planilhas, com o
+  nome e o CPF de cada colaborador e os exames.
+- **O que fica:** a última versão de cada competência, inteira; da
+  substituída, o hash, as contagens, quem gerou, quando e
+  `linhas_apagadas_em`.
+  - A lista da tela Exportação continua mostrando a versão, com as
+    contagens.
+  - O download dela é recusado com o motivo: "Esta versão foi substituída e
+    as linhas dela saíram (LGPD). Baixe a versão mais nova da competência."
+- **O evento:** `rh.export_lines_removed`, no `events` do banco `dute-rh`, com
+  a versão e a que a substituiu, sem nome nem CPF. Quem grava é a rotina
+  (autor `sistema`), como o vencimento.
+- **A rotina:**
+  - `runRhRetention`, todo dia às 04:00 de São Paulo, uma instância por vez;
+  - lê só a competência, a versão e as datas, sem as linhas;
+  - limpa cada versão numa transação que relê o documento: rodar de novo não
+    apaga nem grava mais nada.
+- **A liberação:** `RETENCAO_AMBIENTES_LIBERADOS` em
+  `functions/rh/src/domain/liberacao.ts`, só o `dute-homolog`, separada da
+  liberação do RH.
+- **Testes:**
+  - `retencao.test.ts`: os 30 dias contados da versão seguinte, a última e a
+    já limpa que ficam, o evento só com a versão (e só da rotina), a
+    liberação e a trava da rotina;
+  - `retencao.integration.test.ts`, no emulador:
+    - antes dos 30 dias, nada muda;
+    - depois, a substituída perde as linhas e fica com o hash e as contagens,
+      e a última fica inteira;
+    - o evento não leva nome nem CPF, e a lista continua com as duas;
+    - o download da limpa é recusado com o motivo, e o da última, não;
+    - rodar de novo não apaga nem grava mais nada.
+- **Para desligar:** tirar o projeto da lista e publicar. As linhas que saíram
+  voltam só pelo backup do `dute-rh`, para um banco novo.
 
 ## Dúvidas
 

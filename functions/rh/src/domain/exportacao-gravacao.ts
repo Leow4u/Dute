@@ -172,6 +172,10 @@ export async function downloadRhExportFor(rh: Firestore, caller: RhProfile, data
   if (!snapshot.exists) throw new HttpsError("not-found", "Exportação não encontrada.");
   const gravada = snapshot.data() ?? {};
   const versao = versaoLida(snapshot.id, gravada);
+  // A versão substituída perde as linhas 30 dias depois (LGPD, decisão 7): ficam o hash e as contagens.
+  if (typeof gravada.linhas_apagadas_em === "string") {
+    throw new HttpsError("failed-precondition", "Esta versão foi substituída e as linhas dela saíram (LGPD). Baixe a versão mais nova da competência.");
+  }
   // As versões de antes da parte 8.4 não têm o formato: saem com as colunas de então.
   const conteudo = {
     competencia: versao.competencia,

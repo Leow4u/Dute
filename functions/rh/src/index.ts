@@ -9,7 +9,8 @@ import { armazemDoBucket, attachRhFileFor, openRhFileFor, requestRhUploadFor } f
 import { RH_DATABASE } from "./domain/banco.js";
 import { downloadRhExportFor, exportRhMonthFor, listRhExportsFor } from "./domain/exportacao-gravacao.js";
 import { archiveRhRecordFor, getRhFichaFor, getRhPanelFor, saveRhRecordFor } from "./domain/ficha-gravacao.js";
-import { rhLiberado } from "./domain/liberacao.js";
+import { retencaoLiberada, rhLiberado } from "./domain/liberacao.js";
+import { runRhRetentionFor } from "./domain/retencao-gravacao.js";
 import { requireRhCaller } from "./domain/profile.js";
 import { runRhAlertsFor } from "./domain/rotina-gravacao.js";
 import { saveRhVinculoFor } from "./domain/vinculo-gravacao.js";
@@ -111,4 +112,15 @@ export const runRhAlerts = onSchedule({ schedule: "every day 06:10", timeZone: "
   if (!rhLiberado(PROJECT_ID)) return;
   const resultado = await runRhAlertsFor(db, rh);
   console.info("runRhAlerts", resultado);
+});
+
+/**
+ * Todo dia às 04:00 de São Paulo: a versão da exportação substituída há mais
+ * de 30 dias perde as linhas, com nome e CPF, e fica com o hash e as
+ * contagens (LGPD, decisão 7). Uma instância de cada vez. Só com a liberação
+ * da retenção.
+ */
+export const runRhRetention = onSchedule({ schedule: "every day 04:00", timeZone: "America/Sao_Paulo", timeoutSeconds: 300, maxInstances: 1 }, async () => {
+  if (!retencaoLiberada(PROJECT_ID)) return;
+  console.info("runRhRetention", await runRhRetentionFor(rh));
 });
