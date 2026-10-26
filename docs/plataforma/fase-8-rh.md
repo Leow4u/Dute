@@ -790,3 +790,23 @@ Feita em 26/10/2026, nas telas aprovadas no alinhamento (as fontes em
     com o formulário das datas e a lista "Sem data de admissão";
   - `ficha.test.tsx` e `exportacao.test.tsx`, com as callables de mentira:
     as duas gravações das datas, com a edição, e a lista que sai do painel.
+
+### A parte 8.4 na produção
+
+Feita em 26/10/2026, com o OK do Leonardo ("pode publicar a 8.4 na
+produção"), na terceira publicação (`lancamento-producao.md`, seção 1): o
+commit `9bbd247`, run 1097, das 01:55 às 02:07 UTC.
+
+- **O que mudou na produção:**
+  - a callable `saveRhVinculo` nasceu, e as outras dez callables do RH e a
+    `runRhAlerts` foram atualizadas. O invoker conferiu as 146 callables;
+  - a ficha, Pessoas e a Exportação mostram as datas do vínculo;
+  - a planilha de colaboradores tem as colunas Admissão, Desligamento e
+    Situação no mês.
+- **As exportações de antes** baixam com as colunas de então. A primeira
+  exportação de um mês já exportado nasce numa versão nova, porque a
+  planilha mudou.
+- **Como desfazer:** reverter o PR 473 tira as telas e mantém o servidor.
+  Reverter também o PR 472 volta a planilha de antes; a versão gerada com
+  as colunas novas precisa ser gerada de novo depois. As datas gravadas
+  ficam em `vinculos`, no `dute-rh`.

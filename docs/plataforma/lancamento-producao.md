@@ -67,6 +67,19 @@ disparado sem ele. Sem dado real neste arquivo.
     23:43, e o login abriu no Chromium, no computador e no celular. No build
     servido, a única liberação só da homologação é a da Omie.
   - A NFS-e pela Omie continua só na homologação (seção 6, item 4).
+- **A terceira publicação (26/10/2026).** Com o OK do Leonardo ("pode
+  publicar a 8.4 na produção"), o commit `9bbd247` (PR 473) subiu no
+  `dute-prod` pelo disparo manual do CI (run 1097), das 01:55 às 02:07 UTC,
+  com a homologação publicada nele desde as 01:53. O instante de antes do
+  deploy, para o PITR, é 01:55:01 UTC.
+  - Ela levou a parte 8.4 do RH, as datas de admissão e de desligamento
+    (PRs 472 e 473; `fase-8-rh.md`, "A parte 8.4 na produção").
+  - As regras e os índices, sem mudança, subiram e foram conferidos às
+    01:59.
+  - Só a codebase do RH mudou: a `saveRhVinculo` nasceu, e as outras 11
+    functions do RH foram atualizadas. O invoker conferiu as 146 callables.
+  - O Cloud Run e o `app.dutelog.com.br` passaram a servir o build às
+    02:07, e o login abriu no Chromium, no computador e no celular.
 - **Ciclos conferidos no emulador.**
   - `functions/operacao/src/domain/ciclo-do-cliente.integration.test.ts`
     (parte 4.9a). O cliente pede a OS pelo portal, a coordenação abre a
@@ -563,7 +576,7 @@ contato com os avisos ligados (Comercial › Clientes).
 5. **Disparo.** Actions > CI > Run workflow, com `publicar_producao`
    marcado, do HEAD. O job só vale verde com as conferências do fim:
    - `check_rules_deployed.sh`;
-   - o invoker das 145 callables;
+   - o invoker das 146 callables (145 até a parte 8.4);
    - `check_frontend_deployed.sh`;
    - o smoke.
 
@@ -641,6 +654,12 @@ contato com os avisos ligados (Comercial › Clientes).
      cd C:\DEV\Dute
      gcloud functions logs read runRhAlerts --gen2 --region southamerica-east1 --project dute-prod --limit 20
      ```
+9. **Depois da terceira publicação** (seção 1): com um login `rh`, gravar
+   as datas do vínculo de um próprio na ficha ("Datas do vínculo"). Pessoas
+   mostra as datas, e a pessoa sai da lista "Sem data de admissão" da
+   Exportação. A primeira exportação de um mês já exportado nasce numa
+   versão nova, porque a planilha de colaboradores ganhou colunas
+   (`docs/manual-rh.md`).
 
 ## 6. Ligar o Financeiro no `dute-prod` (parte 4.9b, com o OK)
 
@@ -701,7 +720,8 @@ dos marcos 2, 3 e 4. O registro está em `fase-4-financeiro.md`, "Parte
   antes de 01/11 (seção 1), o OK para ligar no `dute-prod` o Financeiro
   (parte 4.9b, seção 6), a memória, o Agent Dute do núcleo e o RH, e as
   respostas às perguntas 61 a 63 do RH. Os quatro subiram na segunda
-  publicação (seção 1).
+  publicação (seção 1). Em 26/10/2026, o OK para a parte 8.4 do RH, que
+  subiu na terceira.
 - A conta no Resend, o domínio verificado na Hostinger e a chave, para o
   e-mail sair (`fase-4-financeiro.md`, parte 4.6a).
 - Os serviços `DUTE-OS` e `DUTE-ARMAZENAGEM` no aplicativo de teste da Omie,
@@ -718,9 +738,9 @@ dos marcos 2, 3 e 4. O registro está em `fase-4-financeiro.md`, "Parte
 - As perguntas 58 a 60 do plano (seção 13, "Revisão de defeitos"): a
   vistoria iniciada sem saída, o pedido aprovado que não se cancela nem se
   separa a menos, e a data de emissão da fatura da NFS-e da Omie.
-- O alinhamento da tela da parte 8.4 do RH (pergunta 63, decidida): as
-  datas de admissão e de desligamento e a planilha de colaboradores com
-  quem tinha vínculo no mês (`fase-8-rh.md`).
+- A pergunta 70 do plano, da parte 8.4 do RH: Pessoas mostrar também quem
+  está inativo na Operação com a admissão sem desligamento, para o RH
+  gravar o desligamento (`fase-8-rh.md`).
 - A pergunta 64 do plano, antes do primeiro contrato com medição mensal: a
   medição aprovada não tem como entrar numa NF pelo que não é de demanda.
 - As perguntas 65 e 66 do plano, do app do campo, com o alinhamento de tela:
