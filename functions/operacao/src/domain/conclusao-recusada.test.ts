@@ -21,7 +21,7 @@ const PEDIDO: PedidoDeConclusao = {
   numero: "10045-01",
   instante: "2026-10-22T17:52-03:00",
   aceite: "assinatura",
-  responsavel: { nome: "Renata Campos", cargo: "Facilities", documento: "12.345.678-9" },
+  responsavel: { nome: "Renata Campos", cargo: "Facilities" },
   assinatura: "as_0123456789abcdef.png",
   diferencas: [],
   informado_por: null,
@@ -90,7 +90,7 @@ describe("a conclusão recusada do campo", () => {
       assert.deepEqual(resolvida.anexada, MARCA);
       assert.equal(resolvida.dispensada, null);
       assert.equal(conclusao?.aceite, "assinatura");
-      assert.deepEqual(conclusao?.responsavel, { nome: "Renata Campos", cargo: "Facilities", documento: null });
+      assert.deepEqual(conclusao?.responsavel, { nome: "Renata Campos", cargo: "Facilities" });
       assert.equal(conclusao?.assinatura, CAMINHO);
       // O resto da conclusão não muda: hora, quem informou, itens e fotos.
       assert.equal(conclusao?.instante, "2026-10-22T20:50:00.000Z");

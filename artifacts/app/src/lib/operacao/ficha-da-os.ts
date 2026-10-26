@@ -67,7 +67,8 @@ export type PresencaLida = { colaboradorId: string; entrada: string | null; said
 /** A conclusão no local (parte 3.9a): o aceite, quem assinou ou recebeu, a assinatura e o motivo de cada item a menos. */
 export type ConclusaoLida = RegistroLido & {
   aceite: "assinatura" | "sem_aceite";
-  responsavel: { nome: string; cargo: string | null; documento: string | null };
+  /** Sem o número do documento: o que a OS concluída antes da decisão 3 da LGPD gravou não se lê. */
+  responsavel: { nome: string; cargo: string | null };
   /** O caminho da assinatura no Storage, ou null sem aceite. */
   assinatura: string | null;
   diferencas: Array<{ linha: string; previsto: string; executado: string; motivo: string }>;
@@ -373,7 +374,7 @@ function conclusaoLida(valor: unknown): ConclusaoLida | null {
   return {
     ...base,
     aceite,
-    responsavel: { nome: texto(responsavel.nome), cargo: textoOuNull(responsavel.cargo), documento: textoOuNull(responsavel.documento) },
+    responsavel: { nome: texto(responsavel.nome), cargo: textoOuNull(responsavel.cargo) },
     assinatura: textoOuNull(bruto.assinatura),
     diferencas: objetos(bruto.diferencas).flatMap((diferenca) =>
       texto(diferenca.linha)
@@ -548,11 +549,11 @@ export type ConclusaoNaFicha = {
 export function conclusaoNaFicha(ficha: FichaDaOs, hoje = ""): ConclusaoNaFicha | null {
   const conclusao = ficha.conclusao;
   if (!conclusao) return null;
-  const { cargo, documento } = conclusao.responsavel;
+  const { cargo } = conclusao.responsavel;
   const anexada = ficha.recusaDoCampo?.anexada && ficha.recusaDoCampo.assinatura === conclusao.assinatura ? ficha.recusaDoCampo.anexada : null;
   return {
     aceite: aceiteEmTexto(conclusao),
-    responsavel: conclusao.aceite === "assinatura" ? [cargo, documento ? `doc. ${documento}` : null].filter(Boolean).join(" · ") || null : null,
+    responsavel: conclusao.aceite === "assinatura" ? cargo : null,
     origem: origemEmTexto(ficha, conclusao),
     assinatura: conclusao.assinatura,
     anexada: anexada ? [quandoNaFicha(anexada.instante, hoje), anexada.nome].filter(Boolean).join(" · ") : null,

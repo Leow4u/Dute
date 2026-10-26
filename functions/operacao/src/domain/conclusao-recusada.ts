@@ -112,7 +112,7 @@ export function recusaResolvida(
     conclusao: {
       ...conclusao,
       aceite: "assinatura",
-      responsavel: { nome: recusa.responsavel.nome, cargo: recusa.responsavel.cargo, documento: null },
+      responsavel: { nome: recusa.responsavel.nome, cargo: recusa.responsavel.cargo },
       assinatura: recusa.assinatura,
     },
   };

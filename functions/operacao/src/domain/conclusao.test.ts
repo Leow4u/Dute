@@ -110,7 +110,8 @@ describe("conclusão da OS", () => {
       registrado_por: { uid: "uid-ana", role: "campo" },
       registrado_em: "2026-10-22T21:00:00.000Z",
       aceite: "assinatura",
-      responsavel: { nome: "Renata Campos", cargo: "Facilities", documento: "12.345.678-9" },
+      // O documento que o app antigo manda não se grava (decisão 3 da LGPD).
+      responsavel: { nome: "Renata Campos", cargo: "Facilities" },
       assinatura: "os/10045-01/assinatura/as_0123456789abcdef.png",
       diferencas: [{ linha: "ln_2", previsto: "60", executado: "58", motivo: "2 mesas com pé quebrado; ficam para o 5º andar" }],
       // As fotos do final vão ao comprovante do cliente (parte 4.3c); a do carregamento, não.
@@ -165,7 +166,7 @@ describe("conclusão da OS", () => {
     const sem = pedido({ aceite: "sem_aceite", assinatura: null, responsavel: { nome: "Sr. Almeida (portaria)" } });
     const { conclusao } = concluirOs(OS, { ...ENTRADA, assinatura: null }, sem, LIDER);
     assert.equal(conclusao.aceite, "sem_aceite");
-    assert.deepEqual(conclusao.responsavel, { nome: "Sr. Almeida (portaria)", cargo: null, documento: null });
+    assert.deepEqual(conclusao.responsavel, { nome: "Sr. Almeida (portaria)", cargo: null });
     assert.equal(conclusao.assinatura, null);
     recusa(() => pedido({ aceite: "sem_aceite" }), "invalid-argument", "Sem aceite no local não leva assinatura.");
     recusa(() => pedido({ assinatura: null }), "invalid-argument", "Colha a assinatura do responsável.");

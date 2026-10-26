@@ -219,19 +219,14 @@ function Conclusao({ ficha, form, onForm, anexos, prefixo }: { ficha: FichaDaOs;
             </label>
           ))}
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Campo id={`${prefixo}-nome`} rotulo={comAssinatura ? "Responsável do cliente" : "Quem recebeu"}>
             <Input id={`${prefixo}-nome`} autoComplete="off" value={form.nome} onChange={(event) => onForm({ ...form, nome: event.target.value })} />
           </Campo>
           {comAssinatura ? (
-            <>
-              <Campo id={`${prefixo}-cargo`} rotulo="Cargo">
-                <Input id={`${prefixo}-cargo`} autoComplete="off" value={form.cargo} onChange={(event) => onForm({ ...form, cargo: event.target.value })} />
-              </Campo>
-              <Campo id={`${prefixo}-documento`} rotulo="CPF ou RG">
-                <Input id={`${prefixo}-documento`} autoComplete="off" value={form.documento} onChange={(event) => onForm({ ...form, documento: event.target.value })} />
-              </Campo>
-            </>
+            <Campo id={`${prefixo}-cargo`} rotulo="Cargo">
+              <Input id={`${prefixo}-cargo`} autoComplete="off" value={form.cargo} onChange={(event) => onForm({ ...form, cargo: event.target.value })} />
+            </Campo>
           ) : null}
         </div>
         {comAssinatura ? (

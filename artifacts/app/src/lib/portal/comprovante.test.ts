@@ -72,7 +72,8 @@ describe("o comprovante da OS no portal", () => {
         { id: "ln_2", item: "Mesa de trabalho", unidade: "un", feito: "58" },
         { id: "ln_3", item: "Gaveteiro", unidade: "un", feito: "0" },
       ],
-      aceite: { nome: "Renata Campos", detalhe: "Facilities · doc. 12.345.678-9", assinatura: "os/10045-01/assinatura/as_0123456789abcdef.png" },
+      // O documento que a OS antiga gravou não aparece (decisão 3 da LGPD).
+      aceite: { nome: "Renata Campos", detalhe: "Facilities", assinatura: "os/10045-01/assinatura/as_0123456789abcdef.png" },
       // Só as do final, e só nome de arquivo válido.
       fotos: ["os/10045-01/fotos/ft_f000000000000001.jpg", "os/10045-01/fotos/ft_f000000000000002.jpg"],
     });

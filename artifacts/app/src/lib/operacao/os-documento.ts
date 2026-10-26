@@ -126,7 +126,6 @@ export function documentoDaOs(ficha: FichaDaOs, contexto: { cliente: string; tit
           nome: conclusao.responsavel.nome,
           detalhe: [
             conclusao.aceite === "assinatura" ? conclusao.responsavel.cargo : "Recebeu",
-            conclusao.aceite === "assinatura" && conclusao.responsavel.documento ? `doc. ${conclusao.responsavel.documento}` : null,
             horaDe(conclusao.instante),
           ]
             .filter(Boolean)

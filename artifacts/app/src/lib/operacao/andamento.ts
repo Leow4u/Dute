@@ -47,7 +47,6 @@ export type FormularioDeAndamento = {
   aceite: AceiteDoEscritorio;
   nome: string;
   cargo: string;
-  documento: string;
   /** O motivo por linha a menos. */
   motivos: Record<string, string>;
 };
@@ -86,7 +85,6 @@ export function andamentoInicial(ficha: FichaDaOs, agora: Date): FormularioDeAnd
     aceite: "assinatura",
     nome: ficha.locais.destino?.contato?.nome ?? ficha.locais.origem?.contato?.nome ?? "",
     cargo: "",
-    documento: "",
     motivos: {},
   };
 }
@@ -200,7 +198,6 @@ export function pedidosDoAndamento(form: FormularioDeAndamento, ficha: FichaDaOs
   if (form.tipo === "conclusao") {
     const comAssinatura = form.aceite === "assinatura";
     const cargo = form.cargo.trim();
-    const documento = form.documento.trim();
     return [
       {
         callable: "completeServiceOrder",
@@ -209,7 +206,7 @@ export function pedidosDoAndamento(form: FormularioDeAndamento, ficha: FichaDaOs
           numero,
           instante: instanteDeSaoPaulo(form.data, form.hora),
           aceite: form.aceite,
-          responsavel: { nome: form.nome.trim(), ...(comAssinatura && cargo ? { cargo } : {}), ...(comAssinatura && documento ? { documento } : {}) },
+          responsavel: { nome: form.nome.trim(), ...(comAssinatura && cargo ? { cargo } : {}) },
           ...(comAssinatura && assinatura ? { assinatura } : {}),
           diferencas: itensAMenos(ficha).map((item) => ({ linha: item.id, motivo: (form.motivos[item.id] ?? "").trim() })),
           ...origem(form),

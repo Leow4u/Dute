@@ -165,7 +165,7 @@ describe("a conclusão recusada do campo", () => {
     const os = await lerOs();
     assert.equal(os.status, "revisada");
     assert.equal(os.conclusao.aceite, "assinatura");
-    assert.deepEqual(os.conclusao.responsavel, { nome: "Renata Campos", cargo: "Facilities", documento: null });
+    assert.deepEqual(os.conclusao.responsavel, { nome: "Renata Campos", cargo: "Facilities" });
     assert.equal(os.conclusao.assinatura, CAMINHO);
     assert.equal(os.conclusao.instante, antes.conclusao.instante);
     assert.deepEqual(os.conclusao_recusada.anexada, { instante: "2026-10-22T21:00:00.000Z", por: { uid: "interno-1", nome: "Mariana Lopes" } });

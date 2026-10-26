@@ -98,7 +98,6 @@ describe("Registrar andamento", () => {
       "Sem aceite no local",
       "Responsável do cliente",
       "Cargo",
-      "CPF ou RG",
       "Via assinada",
       "via-assinada.jpg",
       "Concluir OS",
@@ -134,7 +133,7 @@ describe("Registrar andamento", () => {
       textosForaDaLista(render({ ...INICIAL, tipo: "conclusao" }), [
         /^(Registrar andamento|escritório|Etapa|Itens|Ocorrência|Conclusão)$/,
         /^(Data do fim|Hora do fim|Motivo dos itens a menos|Cadeira Flexform · 96 de 160|Mesa de trabalho · 0 de 60|Fotos do final|Anexar)$/,
-        /^(Aceite|Via assinada no papel|Sem aceite no local|Responsável do cliente|Cargo|CPF ou RG|Via assinada)$/,
+        /^(Aceite|Via assinada no papel|Sem aceite no local|Responsável do cliente|Cargo|Via assinada)$/,
         /^(Informado por|Ninguém da equipe|Carlos Silva · Líder|João Pereira · Motorista|Meio|Sem meio|Telefone|WhatsApp|Presencial)$/,
         /^(Cancelar|Concluir OS)$/,
       ]),
