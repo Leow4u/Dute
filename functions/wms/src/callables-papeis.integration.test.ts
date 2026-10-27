@@ -103,6 +103,7 @@ const MATRIZ: Record<string, Linha> = {
     recusa: "Só quem avisou o envio pode cancelar o aviso.",
     entrada: { request_id: "aviso-que-nao-existe" },
   },
+  cancelWarehouseOrder: { passam: COORDENACAO, recusa: SO_COORDENACAO },
   // A entrada válida chamaria o Gemini; a conversa é de todos, sem checagem de papel.
   chatWithAgentDute: { passam: TODOS },
   completeOpeningInventorySession: { passam: ARMAZEM, recusa: SO_ARMAZEM },

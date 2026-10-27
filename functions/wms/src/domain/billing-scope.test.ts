@@ -81,6 +81,8 @@ describe("o lado de cada movimento na cobrança", () => {
       "functions_manual_inventory",
       "functions_return_disposition",
       "wms_putaway",
+      // O separado do pedido cancelado volta para a EXPEDICAO (pergunta 59).
+      "wms_order_cancel",
     ];
     for (const source of internas) {
       for (const [sinal, tipo] of [[1, "ENTRADA"], [-1, "SAIDA"]] as const) {

@@ -1080,3 +1080,65 @@ A tela da medição aprovada, no canvas "Telas das decisões de 26/10" (item
   - `nf-documento.test.ts`, `relatorios.test.ts`, `emissoes.test.ts` e
     `servicos-view.test.tsx` (o portal).
 
+
+### Pergunta 59: Cancelar pedido e Encerrar só depois da entrega (o servidor)
+
+Decidida pelo Leonardo em 26/10/2026, com a tela alinhada no canvas "Telas
+das decisões de 26/10" (item 6). Esta parte é o servidor do "Cancelar
+pedido" e do "Encerrar". O "Separar a menos" e as telas entram em seguida.
+
+- **O problema.** Depois de aprovado, o pedido de saída não se cancelava.
+  "Encerrar" mudava só o status da solicitação: a reserva ficava presa, as
+  tarefas de separação e de expedição continuavam abertas, e o portal
+  mostrava "Entregue".
+- **Cancelar pedido** (`cancelWarehouseOrder`, só `owner`, `admin` e
+  `interno`, com o motivo de 3 a 500 caracteres; as regras em
+  `domain/order-cancel.ts` e a transação `cancelWarehouseOrderTransaction` em
+  `domain/operations.ts`):
+  - Cancela o pedido que ainda está no armazém: aprovado, separado ou
+    embalado. O que já saiu (expedido ou entregue) recusa com "O pedido já
+    saiu do armazém: não se cancela mais.". Cancelar de novo devolve o mesmo
+    resultado, sem gravar.
+  - A reserva do pedido sai inteira, como na recusa: o saldo da posição, o
+    estoque do portal e o catálogo.
+  - O que já foi separado está fisicamente fora da prateleira. No razão, ele
+    passa da posição para a `EXPEDICAO`, e a guarda de volta abre sozinha
+    (`putaway_tasks`). O destino é a prateleira de onde o item saiu, se ela
+    ainda recebe guarda. O que saiu de uma área (o `RECEBIMENTO`, a
+    `EXPEDICAO`) ou de uma prateleira bloqueada fica sem destino, e quem
+    guarda escolhe a posição. A guarda é a de sempre: move da `EXPEDICAO`
+    para a posição bipada.
+  - O movimento da volta tem a origem `wms_order_cancel`: não conta na
+    cobrança nem no relógio do estoque, como a guarda.
+  - As tarefas que não terminaram (a separação, a embalagem, a remessa)
+    ficam canceladas, com os itens do pedido, os volumes e os itens da
+    remessa. A separação e a embalagem concluídas ficam como histórico.
+    Avançar a tarefa cancelada recusa com "Tarefa cancelada com o pedido.".
+  - O motivo fica no pedido, na solicitação e no `payload` do evento
+    `order.cancelled`, que são da equipe. O portal vê "Cancelado pela
+    Dutelog" e a data (`client_request_status` e `client_order_tracking`,
+    com `cancel_origin: dutelog`). A descrição do evento, que vai ao
+    rascunho de aviso ao cliente, é só o número do pedido.
+  - A entrega pela Dutelog que já virou demanda continua na Operação: o
+    evento de atenção `expedicao.demand_left_open` vai à caixa da equipe,
+    para a coordenação cancelar a demanda lá.
+- **Encerrar** (`decideCustomerRequest`, ação `close`): a solicitação de
+  saída só se encerra depois da entrega. Antes dela, recusa com "O pedido
+  ainda não foi entregue: encerre depois da entrega. Para desistir dele, use
+  Cancelar pedido.". A de entrada não muda.
+- **Testes:**
+  - `order-cancel.test.ts`: o pedido de cancelamento, quando o pedido se
+    cancela, as tarefas abertas e o "Encerrar".
+  - `order-cancel.integration.test.ts`, no emulador:
+    - o pedido aprovado: a reserva, a separação e o portal sem o motivo;
+    - a repetição;
+    - o estoque que volta a atender;
+    - o pedido separado e embalado: a `EXPEDICAO`, a guarda de volta (e a
+      guarda concluída), nada disso na cobrança, a remessa cancelada;
+    - o separado que saiu do `RECEBIMENTO` ou que já estava na `EXPEDICAO`:
+      a guarda sem destino, concluída na posição escolhida;
+    - o pedido que já saiu e o que não existe;
+    - a demanda na Operação;
+    - o "Encerrar" antes e depois da entrega.
+  - `callables-papeis.integration.test.ts`: a linha do `cancelWarehouseOrder`.
+  - `billing-scope.test.ts`: a origem `wms_order_cancel` não se cobra.

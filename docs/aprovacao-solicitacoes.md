@@ -31,7 +31,9 @@ Use este guia para transformar uma demanda do portal em operacao WMS.
   tipo permite.
 - `Rejeitar`: muda status para `rejected`; nao cria operacao WMS.
 - `Encerrar`: fecha uma solicitacao aprovada quando o fluxo terminou para o
-  cliente.
+  cliente. A de saida so se encerra depois da entrega; para desistir do pedido
+  antes dela, `Cancelar pedido` (solta a reserva, cancela as tarefas abertas e
+  devolve o separado a posicao pela guarda).
 
 ## O que a aprovacao cria
 
