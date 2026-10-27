@@ -40,6 +40,7 @@ export type AcoesDosContratos = {
   novoContrato: () => void;
   editar: () => void;
   registrarAditivo: () => void;
+  adicionarTabela: () => void;
 };
 
 export type ContratosViewProps = {
@@ -365,14 +366,21 @@ function Condicoes({ contrato, hoje }: { contrato: Contrato; hoje: string }) {
   );
 }
 
-function Tabelas({ tabelas, hoje }: { tabelas: Carga<TabelaDoContrato>; hoje: string }) {
+function Tabelas({ tabelas, hoje, ocupado, onAdicionar }: { tabelas: Carga<TabelaDoContrato>; hoje: string; ocupado: boolean; onAdicionar?: () => void }) {
   return (
     <section aria-label="Tabelas de preço" className="overflow-hidden rounded-lg border border-border bg-card">
       <CabecalhoDoCartao
         icone={<Table2 className="size-4" />}
         titulo="Tabelas de preço"
         contagem={Array.isArray(tabelas) ? tabelas.length : undefined}
-      />
+      >
+        {onAdicionar ? (
+          <Button type="button" variant="outline" size="sm" onClick={onAdicionar} disabled={ocupado}>
+            <Plus aria-hidden="true" />
+            Adicionar tabela
+          </Button>
+        ) : null}
+      </CabecalhoDoCartao>
       {!Array.isArray(tabelas) ? (
         <SemLeitura carga={tabelas} />
       ) : tabelas.length === 0 ? (
@@ -395,7 +403,10 @@ function Tabelas({ tabelas, hoje }: { tabelas: Carga<TabelaDoContrato>; hoje: st
                 const encerrada = situacao.tom === "neutro";
                 return (
                   <tr key={tabela.id} className="border-b border-muted last:border-b-0">
-                    <td className={cn("whitespace-nowrap px-5 py-3 font-extrabold", encerrada && "text-muted-foreground")}>{tabela.nome}</td>
+                    <td className={cn("whitespace-nowrap px-5 py-3 font-extrabold", encerrada && "text-muted-foreground")}>
+                      {tabela.nome}
+                      {tabela.codigo ? <span className="mt-0.5 block text-xs font-semibold text-muted-foreground">{tabela.codigo}</span> : null}
+                    </td>
                     <td className="whitespace-nowrap px-3 py-3 font-semibold">{tabela.variante || "—"}</td>
                     <td className="whitespace-nowrap px-3 py-3">
                       <Selo selo={situacao} />
@@ -518,7 +529,7 @@ function Ficha(props: ContratosViewProps & { selecionado: Contrato }) {
       <Cabecalho contrato={contrato} cliente={cliente} aditivos={aditivos} hoje={hoje} ocupado={ocupado} acoes={acoes} somenteLeitura={somenteLeitura} />
       <Alertas contrato={contrato} hoje={hoje} />
       <Condicoes contrato={contrato} hoje={hoje} />
-      <Tabelas tabelas={tabelas} hoje={hoje} />
+      <Tabelas tabelas={tabelas} hoje={hoje} ocupado={ocupado} onAdicionar={somenteLeitura ? undefined : acoes.adicionarTabela} />
       <div className="flex flex-wrap items-start gap-5">
         <Aditivos aditivos={aditivos} />
         <Documentos contrato={contrato} />

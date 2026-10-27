@@ -1,10 +1,11 @@
 import type { ComercialProfile } from "../domain/profile.js";
 import { authorizePersonalRoute } from "./shared/principal.js";
-import type { Firestore, Transaction } from "firebase-admin/firestore";
+import { FieldPath, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 import { saveCommercialCustomerFor, saveCustomerLocationFor, saveCustomerContactFor, parseEntrada } from "../domain/cadastro.js";
 import { codigoDoNovoCadastro } from "../domain/customer-identity.js";
 import { salvarContrato, registrarAditivo, SAVE_CONTRACT_INPUT, RECORD_ADITIVO_INPUT } from "../domain/contratos.js";
+import { saveContractPriceTableFor, SAVE_CONTRACT_PRICE_TABLE_INPUT } from "../domain/contract-price-tables.js";
 import { saveQuoteFor, SaveQuoteInput } from "../domain/quotes.js";
 import { saveMedicaoFor, SaveMedicaoInput } from "../domain/medicoes.js";
 import { comercialLiberado } from "../domain/liberacao.js";
@@ -23,7 +24,7 @@ const shapes: Record<string, Shape> = {
   contatos: { customer_code: true, nome: true, email: true, telefone: true, empresa: true, papel: true, avisos: true, ativo: true },
   contratos: contract,
   aditivos: { numero: true, tipo: true, assinado_em: true, vigente_de: true, vigente_ate: true, tabela_ids: true, observacao: true },
-  tabelas: { customer_code: true, contract_id: true, nome: true, name: true, status: true, vigente_de: true, vigente_ate: true, variante: true, precos: { "*": { codigo: true, descricao_cliente: true, preco: true } } },
+  tabelas: { customer_code: true, contract_id: true, nome: true, name: true, codigo: true, status: true, vigente_de: true, vigente_ate: true, variante: true, precos: { "*": { codigo: true, descricao_cliente: true, preco: true } } },
   demandas: { numero: true, customer_code: true, contrato_id: true, titulo: true, etapa: true, tipo: true, canal: true, ref_cliente: true, contato_id: true, solicitante: { contato_id: true, empresa: true }, origem: { local_id: true, complemento: true }, destino: { local_id: true, complemento: true }, execucao: { datas: true, de: true, ate: true, a_definir: true, visita_tecnica: true } },
   orcamentos: quote, revisoes: quote,
   medicoes: { customer_code: true, contrato_id: true, competencia: true, variante: true, status: true, edicao: true, total_cents: true, linhas: { id: true, demanda_numero: true, os: true, solicitada_em: true, area_solicitante: true, executada_em: true, dia_tipo: true, janela: true, origem: true, destino: true, mercadoria: true, itens: line, total_cents: true } },
@@ -142,6 +143,30 @@ for (const method of ["POST", "PATCH"] as const) routes.push(route(method, "cont
   if (data.contrato.status !== "vigente") denied("A API grava somente contratos vigentes.");
   return salvarContrato(guardedDb(ctx, async tx => { if (method === "PATCH") await target(ctx, "contracts", params.id, data.contrato.customer_code, tx); }), caller(ctx), data);
 }));
+routes.push(route("GET", "contratos/{id}/tabelas", "comercial:ler", "Listar tabelas do contrato", async (ctx, params, request) => {
+  const contract = await target(ctx, "contracts", params.id);
+  if (Object.keys(request.query).some(key => !["customer_code", "limit", "cursor"].includes(key))) invalid("Filtros disponíveis: customer_code, limit e cursor.");
+  if (request.query.customer_code !== undefined && request.query.customer_code !== contract.code) denied("O contrato pertence a outro cliente.");
+  const limit = request.query.limit === undefined ? 50 : Number(request.query.limit);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) invalid("limit deve ser de 1 a 100.");
+  const cursor = request.query.cursor;
+  if (cursor !== undefined && (typeof cursor !== "string" || !/^[A-Za-z0-9_-]{1,200}$/.test(cursor))) invalid("Cursor inválido.");
+  let query = ctx.db.collection("price_tables").where("contract_id", "==", params.id).orderBy(FieldPath.documentId());
+  if (typeof cursor === "string") query = query.startAfter(cursor);
+  const result = await query.limit(limit + 1).get();
+  const page = result.docs.slice(0, limit);
+  for (const row of page) if (row.get("customer_code") !== contract.code) denied("Tabela de outro cliente.");
+  return { data: page.map(row => ({ id: row.id, ...projectComercial(row.data(), shapes.tabelas) })), next_cursor: result.size > limit ? page.at(-1)!.id : null };
+}));
+const createContractTable = route("POST", "contratos/{id}/tabelas", "comercial:contratos:gravar", "Criar tabela do contrato", async (ctx, params, request) => {
+  const input = body(request, ["nome", "codigo", "variante", "vigente_de", "vigente_ate", "itens"]);
+  const data = parseEntrada(SAVE_CONTRACT_PRICE_TABLE_INPUT, { ...input, contrato_id: id(params.id), idempotency_key: ctx.idempotencyKey });
+  const contract = await target(ctx, "contracts", params.id);
+  return saveContractPriceTableFor(guardedDb(ctx, async tx => { await target(ctx, "contracts", params.id, contract.code, tx); }), caller(ctx), data);
+});
+// Revalida o recurso da conta pessoal antes do replay do recibo HTTP.
+createContractTable.authorize = async (ctx, params) => { await target(ctx, "contracts", params.id); };
+routes.push(createContractTable);
 routes.push(route("POST", "contratos/{id}/aditivos", "comercial:contratos:gravar", "Registrar aditivo", async (ctx, params, request) => {
   const input = body(request, ["aditivo"]);
   const data = parseEntrada(RECORD_ADITIVO_INPUT, { ...input, contrato_id: id(params.id), idempotency_key: ctx.idempotencyKey });
@@ -169,7 +194,7 @@ async function quoteLinks(ctx: ApiContext, data: Record<string, unknown>, code: 
   }
 }
 for (const method of ["POST", "PATCH"] as const) routes.push(route(method, "orcamentos" + (method === "PATCH" ? "/{id}" : ""), "comercial:orcamentos:gravar", `${method === "POST" ? "Criar" : "Alterar"} orçamento em rascunho`, async (ctx, params, request) => {
-  const input = body(request, [...demandFields, ...quoteFields, ...(method === "POST" ? ["customer_code", "entrada"] : ["expected_edicao", "vistoria_os"])]);
+  const input = body(request, [...demandFields, ...quoteFields, ...(method === "POST" ? ["customer_code", "entrada"] : ["expected_edicao", "vistoria_os", "atualizar_tabela"])]);
   const data = parseEntrada(SaveQuoteInput, { ...input, action: method === "POST" ? "create" : "update", ...(method === "PATCH" ? { numero: id(params.id) } : {}), request_id: ctx.idempotencyKey });
   let code: string;
   if (data.action === "create") { requireCustomer(ctx, data.customer_code); code = data.customer_code; }

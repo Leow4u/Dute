@@ -22,9 +22,11 @@ import {
 } from "@/lib/comercial/contratos";
 import { carga, useLeitura } from "@/lib/comercial/leitura";
 import { ROTA_CONTRATOS, contratoDaBusca, hrefDoContrato } from "@/lib/comercial/navegacao";
+import { payloadDaTabela } from "@/lib/comercial/tabela-do-contrato";
 
 import { ContratoDialog, RegistrarAditivoDialog } from "./contratos-dialogos";
 import { ContratosView } from "./contratos-view";
+import { TabelaDoContratoDialog } from "./tabela-do-contrato-dialog";
 
 /**
  * Comercial › Contratos (docs/mockups/ComContrato.dc.html; parte 14 de
@@ -40,6 +42,7 @@ type Dialogo =
   | { tipo: "novo"; chave: string }
   // O contrato e o histórico de quando o diálogo abriu: o formulário não se refaz a cada snapshot.
   | { tipo: "editar"; chave: string; contrato: Contrato }
+  | { tipo: "tabela"; chave: string; contrato: Contrato }
   | { tipo: "aditivo"; chave: string; contrato: Contrato; aditivos: Aditivo[] };
 
 /** Abaixo do xl a ficha fica embaixo da lista (contratos-view.tsx). */
@@ -162,6 +165,9 @@ export default function ComercialContratosPage({ somenteLeitura = false }: { som
           editar: () => {
             if (selecionado) abrir({ tipo: "editar", chave: novaChave(), contrato: selecionado });
           },
+          adicionarTabela: () => {
+            if (selecionado && !somenteLeitura) abrir({ tipo: "tabela", chave: novaChave(), contrato: selecionado });
+          },
           registrarAditivo: () => {
             // Com o histórico lido: o número sugerido é o seguinte ao último.
             if (selecionado && aditivos.itens) {
@@ -201,6 +207,18 @@ export default function ComercialContratosPage({ somenteLeitura = false }: { som
         onSalvar={(aditivo) => {
           if (dialogo?.tipo !== "aditivo") return;
           void gravar("recordAditivo", payloadAditivo(dialogo.contrato.id, aditivo, dialogo.chave), "Aditivo registrado");
+        }}
+      />
+      <TabelaDoContratoDialog
+        aberto={dialogo?.tipo === "tabela"}
+        contratoNome={dialogo?.tipo === "tabela" ? dialogo.contrato.dados.nome : ""}
+        inicioDoContrato={dialogo?.tipo === "tabela" ? dialogo.contrato.dados.vigente_de : ""}
+        ocupado={ocupado}
+        erro={erro}
+        onCancelar={fechar}
+        onSalvar={(form) => {
+          if (dialogo?.tipo !== "tabela" || somenteLeitura) return;
+          void gravar("saveContractPriceTable", payloadDaTabela(dialogo.contrato.id, form, dialogo.chave), "Tabela adicionada");
         }}
       />
     </>

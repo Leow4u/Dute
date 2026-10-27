@@ -2,7 +2,7 @@
 
 O fluxo normal de **Chaves de API por usuário** está em [api-chaves-pessoais.md](api-chaves-pessoais.md). Abaixo permanece a referência de integrações administradas por owner/admin e das rotas de negócio. A nova família `/api-keys` não amplia nem converte as credenciais legadas.
 
-O contrato mantém a API de Operação e acrescenta 75 rotas de Armazenagem,
+O contrato mantém a API de Operação e acrescenta 77 rotas de Armazenagem,
 Comercial, Financeiro, RH e Agent Dute. A cobertura exata e os limites desta
 versão estão em [api-cobertura.md](api-cobertura.md). Uma chave pode acessar
 vários módulos, com escopos específicos e clientes autorizados. O app continua
@@ -10,6 +10,67 @@ usando suas callables atuais; o consumidor externo usa HTTPS/JSON.
 
 A ampliação está em revisão: este documento descreve o código desta versão,
 não comprova que os novos endpoints já foram publicados em algum ambiente.
+
+## Tabelas de preço do contrato (LPU)
+
+`POST <base>/comercial/contratos/<contrato_id>/tabelas` cadastra uma tabela
+vinculada ao cliente do contrato. Use o **ID** retornado pela consulta de
+contratos; o número comercial (por exemplo, 4900030161) pode ser diferente
+do ID. Requer `comercial:contratos:gravar`, Bearer e `Idempotency-Key`,
+conforme a política de escrita da chave.
+
+```json
+{
+  "nome": "LPU Itaú — horário comercial",
+  "codigo": "LPU-4900030161",
+  "variante": "Comercial",
+  "itens": [
+    {
+      "codigo": "DTL-0001-D",
+      "descricao": "Desmontagem de mobiliário",
+      "unidade": "UN",
+      "preco": "125.5000"
+    }
+  ]
+}
+```
+
+`codigo` da tabela e datas `vigente_de`/`vigente_ate` são opcionais.
+Sem início, usa-se o início do contrato; sem fim, a vigência fica aberta.
+`variante` assume `Comercial`. Os itens exigem código, descrição, unidade
+e preço como texto decimal com ponto, sem separador de milhar, não negativo
+e com até quatro casas. O limite lógico é 480 itens por tabela; o corpo REST
+também precisa caber no limite de 64 KiB da API. Os campos opcionais
+`categoria`, `item` e `servico` permitem relacionar o catálogo já existente.
+Sem esses campos, descrição e código compõem o nome do item do catálogo,
+mantendo distintos os códigos terminados em D/T/M mesmo quando a descrição
+é igual.
+
+`GET <base>/comercial/contratos/<contrato_id>/tabelas` lista as tabelas do
+contrato, com `comercial:ler`, paginação `limit`/`cursor` e projeção de preços
+indexada por `lpu_item_id`. A resposta de criação inclui `tabela_id`.
+Os GETs gerais de tabelas continuam disponíveis.
+
+Para orçar, envie nas linhas de `POST <base>/comercial/orcamentos` ou
+`PATCH <base>/comercial/orcamentos/<numero>`:
+
+```json
+{ "origem": "tabela", "lpu_item_id": "ID_DO_ITEM_RETORNADO_NA_TABELA", "quantidade": "2" }
+```
+
+O contrato e a variante do orçamento selecionam a tabela vigente na sua
+data-base; código LPU, descrição, unidade e preço são resolvidos pelo backend.
+A linha de tabela com preço herdado dispensa `motivo`.
+No PATCH de um rascunho com contrato e ainda sem tabela, envie
+`atualizar_tabela: true` junto de `expected_edicao` para buscar uma LPU
+cadastrada depois da criação do rascunho.
+
+Preços publicados são imutáveis. Uma alteração de preços exige cadastrar
+nova vigência, que encerra a anterior pelas regras existentes. PATCH de
+preços e DELETE não são expostos para preservar as referências históricas
+dos orçamentos e das cobranças. O app oferece edição manual no formulário
+**Contratos → Tabelas de preço → Adicionar tabela**; esta versão não importa
+arquivos XLSX diretamente.
 
 ## Endereços após publicação
 

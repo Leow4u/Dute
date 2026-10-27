@@ -5,6 +5,13 @@ import { comercialApi, projectComercial } from "./module.js";
 import type { ApiContext } from "./shared/core.js";
 
 const context = { integration: { scopes: ["comercial:clientes:gravar"], customers: ["ACME"] } } as ApiContext;
+test("Comercial API oferece criação e leitura das tabelas vinculadas ao contrato", () => {
+  for (const method of ["GET", "POST"]) {
+    const route = comercialApi.routes.find(r => r.method === method && r.path === "/api/v1/comercial/contratos/{id}/tabelas");
+    assert.ok(route, `${method} das tabelas do contrato não declarado`);
+    assert.equal(route.scope, method === "GET" ? "comercial:ler" : "comercial:contratos:gravar");
+  }
+});
 test("Comercial API recusa action injetada antes de acessar o banco", async () => {
   const route = comercialApi.routes.find(r => r.method === "POST" && r.path === "/api/v1/comercial/clientes")!;
   await assert.rejects(route.run(context, {}, { method: "POST", path: route.path, query: {}, headers: {}, body: { code: "ACME", name: "Acme", action: "archive" } }), /não aceito/);

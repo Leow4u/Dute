@@ -450,7 +450,7 @@ describe("tabelas de preço ligadas", () => {
 
   it("nome, variante, vigência, situação e quantidade de itens, sem os preços", () => {
     const lida = TABELAS.find((item) => item.id === "comercial")!;
-    expect(lida).toEqual({ id: "comercial", nome: "LPU v2.0", variante: "Comercial", vigenteDe: "2026-07-01", vigenteAte: null, encerrada: false, itens: 3 });
+    expect(lida).toEqual({ id: "comercial", nome: "LPU v2.0", codigo: "", variante: "Comercial", vigenteDe: "2026-07-01", vigenteAte: null, encerrada: false, itens: 3 });
     expect(Object.keys(lida)).not.toContain("precos");
   });
 

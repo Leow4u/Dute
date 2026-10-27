@@ -110,7 +110,7 @@ function props(overrides: Partial<ContratosViewProps> = {}): ContratosViewProps 
     tabelas: TABELAS,
     aditivos: ADITIVOS,
     ocupado: false,
-    acoes: { novoContrato: noop, editar: noop, registrarAditivo: noop },
+    acoes: { novoContrato: noop, editar: noop, registrarAditivo: noop, adicionarTabela: noop },
     telas: TELAS_DO_COMERCIAL,
     ...overrides,
   };
@@ -196,6 +196,7 @@ describe("tela de contratos", () => {
       // Tabelas
       "Tabelas de preço",
       "2",
+      "Adicionar tabela",
       "Tabela",
       "Variante",
       "Situação",
@@ -327,6 +328,14 @@ describe("tela de contratos", () => {
     expect(vazio).toEqual(expect.arrayContaining(["Nenhuma tabela", "Nenhum aditivo", "Nenhum documento"]));
   });
 
+  it("adicionar tabela fica no cartão de preços e espera a gravação em andamento", () => {
+    const html = render({ tabelas: [] });
+    const card = html.match(/<section aria-label="Tabelas de preço"[\s\S]*?<\/section>/)?.[0] ?? "";
+    expect(texts(card)).toEqual(["Tabelas de preço", "0", "Adicionar tabela", "Nenhuma tabela"]);
+    const ocupado = render({ ocupado: true }).match(/<section aria-label="Tabelas de preço"[\s\S]*?<\/section>/)?.[0] ?? "";
+    expect(ocupado).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?Adicionar tabela/);
+  });
+
   it("sem contrato nenhum, a lista diz que não há e a ficha não aparece", () => {
     const tela = texts(render({ contratos: [], selecionado: null }));
     expect(tela).toEqual(["Contratos", "Vigentes", "0", "Novo contrato", "Nenhum contrato vigente", "Encerrados", "0"]);
@@ -340,7 +349,7 @@ describe("tela de contratos", () => {
   it("no Financeiro, só leitura: a ficha inteira sem Novo contrato, Editar nem Registrar aditivo (parte 7.5c)", async () => {
     const html = render({ somenteLeitura: true, selecionado: BTG });
     const textos = texts(html);
-    for (const acao of ["Novo contrato", "Editar", "Registrar aditivo"]) expect(textos).not.toContain(acao);
+    for (const acao of ["Novo contrato", "Editar", "Registrar aditivo", "Adicionar tabela"]) expect(textos).not.toContain(acao);
     expect(textos).toContain(BTG.dados.nome);
     expect(html).toContain('aria-label="Ficha do contrato"');
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);

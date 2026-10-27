@@ -275,6 +275,7 @@ export function aditivoDoRegistro(id: string, data: Registro): Aditivo | null {
 export type TabelaDoContrato = {
   id: string;
   nome: string;
+  codigo: string;
   variante: string;
   vigenteDe: string;
   vigenteAte: string | null;
@@ -289,6 +290,7 @@ export function tabelaDoRegistro(id: string, data: Registro): TabelaDoContrato |
   return {
     id,
     nome: texto(data.nome) || id,
+    codigo: texto(data.codigo),
     variante: texto(data.variante),
     vigenteDe,
     vigenteAte: dataValida(vigenteAte) ? vigenteAte : null,

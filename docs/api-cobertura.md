@@ -1,6 +1,6 @@
 # Cobertura da API externa nesta versão
 
-Este inventário descreve o código proposto, não confirma publicação. A API de Operação existente é mantida; as tabelas abaixo registram as 75 novas rotas implementadas. Consulte OpenAPI para schemas completos.
+Este inventário descreve o código proposto, não confirma publicação. A API de Operação existente é mantida; as tabelas abaixo registram as 77 novas rotas implementadas. Consulte OpenAPI para schemas completos.
 
 ## Cobertura e limites
 
@@ -8,7 +8,7 @@ Este inventário descreve o código proposto, não confirma publicação. A API 
 |---|---|---|
 | Operação | Demandas, OS, agenda, recursos; demanda direta, abertura, planejamento e agendamento já existentes | Novos endpoints de execução/revisão e escrita de equipe/veículos |
 | Armazenagem | Catálogo/posições/estoque/pedidos/recebimentos/movimentos; criar, aprovar e encerrar pedido; criar/conferir/concluir recebimento; movimentar pelo ledger | Escrita de catálogo/posições; anexos/custos; cancelar/rejeitar/estornar; picking/packing/shipping/putaway e devoluções |
-| Comercial | Cadastro de clientes/locais/contatos, contratos/aditivos, orçamento rascunho, medição/linhas, consultas/revisões/tabelas | Aprovações/transições de orçamento e medição; excluir/arquivar; alterar tabelas imutáveis; documentos/anexos |
+| Comercial | Cadastro de clientes/locais/contatos, contratos/aditivos, cadastro e listagem de LPU do contrato, orçamento rascunho com itens da tabela, medição/linhas, consultas/revisões | Aprovações/transições de orçamento e medição; excluir/arquivar; alterar preços de tabelas imutáveis; documentos/anexos; importação direta de XLSX |
 | Financeiro | A faturar por demanda/armazenagem/medição, faturas/pagamentos; registrar NF externa, documentar envio e recebido | Emitir NF ou baixa Omie; operação bancária; cancelar/estornar; acima de 250 vínculos/pagamentos por fatura é recusado |
 | RH | Colaboradores, pessoais separados, registros/vínculos, arquivo com abertura auditada; criar/alterar registros e vínculos | Upload/anexo/exportações, resultados clínicos e CRUD do cadastro operacional de colaboradores |
 | Agent Dute | Playbooks/rotinas da própria integração; criar/alterar com versão e autoria; rotinas obrigatoriamente pausadas e de Armazenagem/Operação com leitura concedida | Conversas/notas/contexto de IA, modelos/geração, execução/agendamento ativo e rotinas de Comercial/Financeiro/RH |
@@ -42,7 +42,7 @@ Este inventário descreve o código proposto, não confirma publicação. A API 
 | POST | `/api/v1/armazenagem/recebimentos/{id}/avancar` | `armazenagem:recebimentos:gravar` |
 | POST | `/api/v1/armazenagem/movimentacoes` | `armazenagem:estoque:movimentar` |
 
-### Comercial — 32 rotas
+### Comercial — 34 rotas
 
 | Método | Caminho | Escopo |
 |---|---|---|
@@ -63,6 +63,8 @@ Este inventário descreve o código proposto, não confirma publicação. A API 
 | GET | `/api/v1/comercial/medicoes` | `comercial:ler` |
 | GET | `/api/v1/comercial/medicoes/{id}` | `comercial:ler` |
 | GET | `/api/v1/comercial/contratos/{id}/aditivos` | `comercial:ler` |
+| GET | `/api/v1/comercial/contratos/{id}/tabelas` | `comercial:ler` |
+| POST | `/api/v1/comercial/contratos/{id}/tabelas` | `comercial:contratos:gravar` |
 | GET | `/api/v1/comercial/orcamentos/{id}/revisoes` | `comercial:ler` |
 | POST | `/api/v1/comercial/clientes` | `comercial:clientes:gravar` |
 | PATCH | `/api/v1/comercial/clientes/{id}` | `comercial:clientes:gravar` |

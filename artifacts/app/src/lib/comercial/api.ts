@@ -16,7 +16,7 @@ export const CALLABLES_DO_CADASTRO = ["saveCommercialCustomer", "saveCustomerLoc
 export type CallableDoCadastro = (typeof CALLABLES_DO_CADASTRO)[number];
 
 /** Contratos (parte 8): saveContract confere a edição lida; recordAditivo recusa número que já está no histórico. */
-export const CALLABLES_DO_CONTRATO = ["saveContract", "recordAditivo"] as const;
+export const CALLABLES_DO_CONTRATO = ["saveContract", "recordAditivo", "saveContractPriceTable"] as const;
 export type CallableDoContrato = (typeof CALLABLES_DO_CONTRATO)[number];
 
 /** Demanda e orçamento (parte 9, domain/quotes.ts): a chave vai em `request_id`. */
