@@ -1188,3 +1188,40 @@ servidor. A tela entra em seguida, com as do "Cancelar pedido" e do
     - as recusas, sem mudar nada;
     - a exceção do Tratar resolvida;
     - o cancelamento depois da separação a menos.
+
+### Pergunta 59: as telas do Cancelar pedido e do Encerrar
+
+As telas do canvas "Telas das decisões de 26/10" (item 6) para o servidor do
+"Cancelar pedido" e do "Encerrar". O "Separado" com a separação a menos entra
+em seguida.
+
+- **Pedidos** (`pages/pedidos.tsx`; o diálogo em
+  `features/warehouse-ops/cancel-order.tsx`):
+  - O "⋯" ("Mais ações do pedido PED-0047") com "Cancelar pedido" fica nas
+    linhas de "Para separar" e de "Para entregar" do pedido que ainda não saiu
+    (o pronto para envio), só para `owner`, `admin` e `interno`.
+  - O diálogo "Cancelar pedido PED-0047" tem o cliente e o resumo do pedido, o
+    "Motivo" (3 a 500 caracteres) e, no pedido já separado, "Voltam à posição"
+    (item, quantidade e posição de cada linha separada). Depois, "Voltar" e
+    "Cancelar pedido".
+  - A rota `POST /api/orders/{id}/cancel` chama a `cancelWarehouseOrder`, com
+    uma chave por tentativa (trocar o motivo troca a chave).
+- **A fila do armazém:** a tarefa cancelada não avança (`can_advance`), e o
+  pedido com tarefa cancelada sai das filas de Pedidos e do Início. Sem isso,
+  o pedido cancelado voltava a "Para separar".
+- **Solicitações:**
+  - "Encerrar" só aparece na saída aprovada depois da entrega
+    (`canCloseRequest`). A entrada aprovada encerra como antes.
+  - O pedido cancelado pela Dutelog mostra "Cancelada pela Dutelog" e o motivo,
+    para a equipe.
+- **Portal:** o pedido cancelado pela Dutelog mostra "cancelado pela Dutelog em
+  26/10" e "Cancelado pela Dutelog" nas atualizações, sem o motivo. O cancelado
+  pelo cliente continua "cancelado por você".
+- **Testes:**
+  - `cancel-order.test.tsx`: os textos e o axe do diálogo, o que volta à
+    posição e quando o pedido se cancela.
+  - `order-queue.test.ts`: o pedido cancelado sai das filas.
+  - `functions-api.test.ts`: a rota.
+  - `customer-requests.test.ts`: o "Encerrar" e o cancelado pela Dutelog.
+  - `orders.test.ts`: o portal.
+  - `pedidos.test.ts`: o "⋯" só para quem decide.

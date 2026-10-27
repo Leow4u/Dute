@@ -64,8 +64,12 @@ export type CustomerRequest = {
     email?: string;
   };
   decision_reason?: string | null;
-  /** Motivo de quem cancelou o aviso de envio pelo portal. */
+  /** Motivo de quem cancelou: o aviso de envio pelo portal ou o pedido pela Dutelog. */
   cancel_reason?: string | null;
+  /** "dutelog" no pedido que a coordenação cancelou (pergunta 59). */
+  cancel_origin?: string | null;
+  operational_status?: string | null;
+  fulfillment_status?: string | null;
   decided_at?: unknown;
   decided_by?: {
     name?: string;
@@ -308,6 +312,19 @@ function isOutboundRequest(request: CustomerRequest) {
 function isInboundRequest(request: CustomerRequest) {
   const normalized = normalizeSlug(request.type);
   return normalized.includes("receb") || normalized.includes("inbound");
+}
+
+/**
+ * Encerrar (pergunta 59): a solicitação aprovada de saída só se encerra
+ * depois da entrega; antes dela, é Cancelar pedido, em Pedidos.
+ */
+export function canCloseRequest(request: CustomerRequest) {
+  if (normalizeStatus(request.status) !== "approved") return false;
+  if (!isOutboundRequest(request)) return true;
+  return (
+    normalizeSlug(request.operational_status) === "delivered" ||
+    normalizeSlug(request.fulfillment_status) === "completed"
+  );
 }
 
 
@@ -966,6 +983,13 @@ export function buildVerdict(
   }
   if (status === "cancelled") {
     const reason = request.cancel_reason || request.decision_reason;
+    if (normalizeSlug(request.cancel_origin) === "dutelog") {
+      return {
+        tone: "cancelled",
+        title: "Cancelada pela Dutelog",
+        detail: reason ? `Motivo: ${reason}` : "Pedido cancelado antes da saída.",
+      };
+    }
     return {
       tone: "cancelled",
       title: "Cancelada pelo cliente",
@@ -1726,7 +1750,7 @@ function RequestDetail({
         </div>
       </div>
 
-      {canDecide && (openStatuses.has(status) || status === "approved") ? (
+      {canDecide && (openStatuses.has(status) || canCloseRequest(request)) ? (
         <footer className="mt-4 flex flex-col gap-3 border-t border-border/70 bg-muted/20 px-5 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
           <p className="text-sm text-foreground/60">
             {status === "approved"

@@ -89,6 +89,37 @@ describe("como o pedido aparece", () => {
     expect(view.detail).toBe("pedido por Leonardo em 01/10 · aguardando a Dutelog confirmar");
   });
 
+  it("cancelado pela Dutelog: quem cancelou e a data, sem o motivo (pergunta 59)", () => {
+    const cancelado = { ...request, status: "cancelled", operational_status: "cancelled", cancel_origin: "dutelog", cancelled_at: "2026-10-26T13:30:00Z" };
+    const acompanhamento = {
+      ...tracking,
+      status: "cancelled",
+      status_label: "Cancelado pela Dutelog",
+      cancel_origin: "dutelog",
+      cancelled_at: "2026-10-26T13:30:00Z",
+      timeline: [
+        ...tracking.timeline.slice(0, 2),
+        { status: "cancelled", label: "Cancelado pela Dutelog", occurred_at: "2026-10-26T13:30:00Z" },
+      ],
+    };
+    const view = orderView(cancelado, acompanhamento);
+    expect(view.stage).toBe("cancelled");
+    expect(view.detail).toBe("cancelado pela Dutelog em 26/10");
+    expect(view.timeline.map((event) => event.label)).toEqual([
+      "Cancelado pela Dutelog",
+      "Em separação",
+      "Pedido confirmado pela Dutelog",
+      "Pedido feito no portal",
+    ]);
+    expect(view.canCancel).toBe(false);
+    // Sem o acompanhamento, a solicitação basta.
+    const semAcompanhamento = orderView(cancelado);
+    expect(semAcompanhamento.detail).toBe("cancelado pela Dutelog em 26/10");
+    expect(semAcompanhamento.timeline[0]?.label).toBe("Cancelado pela Dutelog");
+    // O cancelado pelo cliente continua como antes.
+    expect(orderView({ ...request, status: "cancelled", updated_at: "2026-10-02T12:00:00Z" }).detail).toBe("cancelado por você em 02/10");
+  });
+
   it("separa em andamento e histórico e ignora avisos de envio", () => {
     const { active, history } = splitOrders(
       [

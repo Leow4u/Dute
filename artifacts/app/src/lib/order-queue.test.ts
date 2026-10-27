@@ -57,6 +57,32 @@ describe("fila de pedidos", () => {
     expect(buildOrderQueue({})).toEqual({ approve: [], pick: [], deliver: [], delivered: [] });
   });
 
+  it("o pedido cancelado sai das filas, antes ou depois da separação (pergunta 59)", () => {
+    const cancelados = {
+      queues: {
+        picking: {
+          key: "picking",
+          tasks: [
+            task({ id: "p6", reference: "pick_ord_6", title: "PED-6", status: "cancelled" }),
+            task({ id: "p7", reference: "pick_ord_7", title: "PED-7", status: "completed" }),
+            task({ id: "p8", reference: "pick_ord_8", title: "PED-8" }),
+          ],
+        },
+        packing: {
+          key: "packing",
+          tasks: [task({ id: "k7", reference: "pack_ord_7", title: "PED-7", status: "completed" })],
+        },
+        expedition: {
+          key: "expedition",
+          tasks: [task({ id: "s7", reference: "ship_ord_7", title: "PED-7", status: "cancelled" })],
+        },
+      },
+    } as unknown as WarehouseOpsResponse;
+    const queue = buildOrderQueue({ ops: cancelados });
+    expect(queue.pick.map((order) => order.orderNumber)).toEqual(["PED-8"]);
+    expect([...queue.deliver, ...queue.delivered]).toEqual([]);
+  });
+
   it.each([
     [undefined, true],
     ["Enviada", true],

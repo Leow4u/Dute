@@ -214,6 +214,22 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  // Pedidos › Cancelar pedido (pergunta 59): a coordenação, com o motivo, no pedido que ainda não saiu.
+  const warehouseOrderCancelMatch = pathname.match(/^\/api\/orders\/([^/]+)\/cancel$/);
+  if (method === "POST" && warehouseOrderCancelMatch) {
+    return {
+      name: "cancelWarehouseOrder",
+      payload: async (_pathname, init) => {
+        const body = await readJsonBody(init);
+        return {
+          order_id: decodeURIComponent(warehouseOrderCancelMatch[1]),
+          reason: typeof body.reason === "string" ? body.reason : "",
+          idempotency_key: typeof body.idempotency_key === "string" ? body.idempotency_key : crypto.randomUUID(),
+        };
+      },
+    };
+  }
+
   const orderCancelMatch = pathname.match(/^\/api\/client\/orders\/([^/]+)\/cancel$/);
   if (method === "POST" && orderCancelMatch) {
     return {
