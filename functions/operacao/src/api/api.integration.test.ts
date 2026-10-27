@@ -64,6 +64,41 @@ async function integration(
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 
 describe("API de integração no emulador", () => {
+  it("lista metadados paginados sem segredo, incluindo revogadas e expiradas", async () => {
+    const first = await integration();
+    const second = await integration();
+    await request("DELETE", `/integrations/${first.id}`, human);
+    await db.doc(`api_integrations/${second.id}`).update({ expires_at_ms: Date.now() - 1000 });
+    const page = await request("GET", "/integrations", human, undefined, { limit: "1" });
+    assert.equal(page.status, 200, JSON.stringify(page));
+    assert.equal(page.body.data.length, 1);
+    assert.ok(page.body.next_cursor);
+    const next = await request("GET", "/integrations", human, undefined, { limit: "1", cursor: page.body.next_cursor });
+    assert.equal(next.status, 200);
+    assert.equal(next.body.data.length, 1);
+    assert.equal(next.body.next_cursor, null);
+    assert.notEqual(page.body.data[0].id, next.body.data[0].id);
+    const rows = [...page.body.data, ...next.body.data];
+    assert.deepEqual(rows.map((row: any) => row.id).sort(), [first.id, second.id].sort());
+    assert.equal(rows.find((row: any) => row.id === first.id).revoked, true);
+    assert.ok(Date.parse(rows.find((row: any) => row.id === second.id).expires_at) < Date.now());
+    assert.doesNotMatch(JSON.stringify(rows), /token|hash|rate_count|rate_window/);
+    assert.equal(rows[0].name, "Grok Bot");
+    assert.deepEqual(rows[0].customers, ["A"]);
+    assert.equal((await request("GET", "/integrations", human, undefined, { limit: "101" })).status, 400);
+    assert.equal((await request("GET", "/integrations", human, undefined, { cursor: "../bad" })).status, 400);
+  });
+  it("listagem exige humano owner/admin ativo, nunca a chave da integração", async () => {
+    const key = await integration();
+    assert.equal((await request("GET", "/integrations")).status, 401);
+    assert.equal((await request("GET", "/integrations", bearer(key.token))).status, 401);
+    await db.doc("users/owner").update({ role: "interno" });
+    assert.equal((await request("GET", "/integrations", human)).status, 403);
+    await db.doc("users/owner").update({ role: "admin" });
+    assert.equal((await request("GET", "/integrations", human)).status, 200);
+    await db.doc("users/owner").update({ access_disabled: true });
+    assert.equal((await request("GET", "/integrations", human)).status, 403);
+  });
   it("Rules reais negam leitura e escrita das credenciais/aprovações/auditoria até ao owner", async () => {
     const host = process.env.FIRESTORE_EMULATOR_HOST;
     const rules = readFileSync(

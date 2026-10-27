@@ -35,3 +35,38 @@ A fonte mostra a vitrine anterior. A diferenca visual intencional e a solicitaca
 O navegador registra avisos de permissoes para listeners de tempo real em colecoes operacionais que este perfil nao pode ler. Eles nao impedem a vitrine, os filtros ou o carrinho, mas devem ser tratados na proxima rodada de blindagem de regras e assinaturas em tempo real.
 
 final result: passed
+
+---
+
+# Integrações na Configuração — 26/10/2026
+
+## Evidências
+
+- Fonte: primeira imagem exibida e aprovada no chat, `/workspace/generated_images/exec-067f5cb5-2313-4a6c-b6e9-7171f53fba4a.png` (1487 × 1058 px).
+- Desktop: `/tmp/dute-integracoes-desktop.png`, viewport 1440 × 1024 CSS px, deviceScaleFactor 1.
+- Celular: `/tmp/dute-integracoes-mobile.png` e `/tmp/dute-integracoes-chave-mobile.png`, 390 × 844 CSS px, deviceScaleFactor 1.
+- Comparação conjunta: `/tmp/dute-integracoes-comparison.png`; cada fonte redimensionada proporcionalmente para 1000 px de largura. Estado: Nova integração, nome e cliente fictícios preenchidos, primeira permissão selecionada.
+- Implementação: prévia local em `http://127.0.0.1:5173/.preview-tmp/index.html`, com a página, os componentes, o cliente HTTP e o shell reais; somente a sessão e as respostas da API são simuladas. Nenhuma credencial real foi criada.
+
+## Achados e histórico
+
+1. [P2, corrigido] A captura inicial herdava o azul e a tipografia do tema anterior. Aplicada a classe `v3` do sistema ao shell quando a seção ativa é Integrações. A captura posterior mostra as ações e os checkboxes vermelhos, sem alterar as demais seções.
+2. A comparação posterior não contém achados P0/P1/P2 pendentes. O formulário em página, a coluna de orientação, a sequência dos campos e a hierarquia correspondem à opção escolhida. O menu preserva o shell Dute existente, conforme o briefing; a marca Acme e as permissões genéricas inventadas pela imagem foram substituídas pelos elementos e pelo contrato reais, como combinado no chat.
+
+## Superfícies conferidas
+
+- Tipografia: tokens e família Manrope da v3, título e pesos próprios do PageHeader existente. Os rótulos permanecem legíveis e os campos usam 16 px no celular. Fontes remotas dependem do carregamento habitual do app.
+- Espaçamento: uma coluna de formulário e orientação lateral no desktop, orientação abaixo no celular; conteúdo rola dentro do shell e o botão de gerar permanece alcançável. Sem overflow horizontal nos dois viewports.
+- Cores: tokens de superfície, bordas, textos e estados; nenhuma cor fixa introduzida. Botão principal vermelho na identidade v3 clara.
+- Imagens: esta tela usa apenas os ícones da biblioteca já instalada. Não há imagens novas a produzir. A marca do mockup não pertence ao Dute e não foi reproduzida.
+- Conteúdo: quatro permissões efetivas da Operação, validade de 30 dias com máximo de 90, clientes explícitos e texto de exibição única. Aprovação humana por escrita preservada.
+- Região focada: rótulos, permissões, validade e ações também foram inspecionados na captura móvel em tamanho nativo; não dependem da miniatura da comparação geral.
+
+## Interações e limites
+
+- Browser Chromium: selecionar cliente, gerar uma chave fictícia uma única vez, copiar para clipboard, concluir, abrir e cancelar a revogação, confirmar revogação e atualizar o status. Nenhum erro de execução JavaScript.
+- Limite da prévia: a rede do ambiente bloqueia o carregamento remoto das fontes (`ERR_TUNNEL_CONNECTION_FAILED`). Foi conferido o fallback legível do próprio sistema; a renderização exata da fonte remota depende do ambiente de uso. Este erro de recurso não ocorreu na API nem nos scripts da tela.
+- Vitest: formulário inválido, cancelamento, duplo submit, falha de criação, falha de clipboard, descarte do segredo, ausência de cache de mutations e bloqueio por perfil; axe WCAG 2.1 A/AA e lista dos textos.
+- Emulador Firestore: listagem paginada sem credenciais/hashes, autenticação humana, admin ativo, revogadas e expiradas. Não houve validação autenticada em produção.
+
+final result: passed

@@ -27,6 +27,7 @@ import { getRoomBoardFor } from "./domain/tv-leitura.js";
 import { sendSurveyToCommercialFor } from "./domain/vistoria-gravacao.js";
 import { PROJECT_ID } from "./project.js";
 import { createApiHandler } from "./api/handler.js";
+import { apiBrowserOrigins } from "./api/browser.js";
 
 /**
  * Functions da Operação (codebase `operacao` no firebase.json; desenho em
@@ -50,7 +51,7 @@ const db = getFirestore();
 const api = createApiHandler(db, PROJECT_ID, (token) => getAuth().verifyIdToken(token, true));
 
 /** API REST externa. IAM permite chegar ao gateway; a aplicação autentica cada ação. */
-export const duteApi = onRequest({ cors: false, invoker: "public", timeoutSeconds: 60 }, async (request, response) => {
+export const duteApi = onRequest({ cors: apiBrowserOrigins(PROJECT_ID), invoker: "public", timeoutSeconds: 60 }, async (request, response) => {
   response.set("Cache-Control", "no-store");
   response.set("X-Content-Type-Options", "nosniff");
   if (request.rawBody?.byteLength > 65536) {

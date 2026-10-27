@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 import { loadProfile, type OperacaoProfile } from "../domain/profile.js";
@@ -195,4 +195,37 @@ export async function createIntegration(
       created_at: FieldValue.serverTimestamp(),
     });
   return { id, token, expires_at: new Date(expires_at_ms).toISOString() };
+}
+
+const List = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().regex(/^[a-f0-9]{32}$/).optional(),
+}).strict();
+
+/** Somente metadados; credenciais e contadores não saem do servidor. */
+export async function listIntegrations(db: Firestore, input: unknown) {
+  const parsed = List.safeParse(input);
+  if (!parsed.success) invalid("Informe limit (1 a 100) e cursor válido.");
+  const { limit, cursor } = parsed.data;
+  let query = db.collection(API_INTEGRATIONS_COLLECTION)
+    .select("name", "scopes", "customers", "delegated_by", "expires_at_ms", "revoked")
+    .orderBy(FieldPath.documentId()).limit(limit + 1);
+  if (cursor) query = query.startAfter(cursor);
+  const snapshot = await query.get();
+  const docs = snapshot.docs.slice(0, limit);
+  return {
+    data: docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: String(data.name ?? "Integração"),
+        scopes: Array.isArray(data.scopes) ? data.scopes.filter((scope: unknown) => SCOPES.includes(scope as Scope)) : [],
+        customers: Array.isArray(data.customers) ? data.customers.filter((code: unknown) => typeof code === "string") : [],
+        delegated_by: String(data.delegated_by ?? ""),
+        expires_at: new Date(data.expires_at_ms).toISOString(),
+        revoked: data.revoked === true,
+      };
+    }),
+    next_cursor: snapshot.docs.length > limit ? docs[docs.length - 1].id : null,
+  };
 }

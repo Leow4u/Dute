@@ -13,6 +13,7 @@ import {
   createIntegration,
   delegatedProfile,
   humanCaller,
+  listIntegrations,
   loadIntegration,
   type Integration,
   type VerifyHuman,
@@ -79,6 +80,11 @@ export function createApiHandler(
           status: 0,
           created_at: FieldValue.serverTimestamp(),
         });
+        if (request.path === `${PREFIX}/integrations` && request.method === "GET") {
+          const result = await listIntegrations(db, request.query);
+          status = 200;
+          return { status, body: { ...result, request_id } };
+        }
         if (
           request.path === `${PREFIX}/integrations` &&
           request.method === "POST"

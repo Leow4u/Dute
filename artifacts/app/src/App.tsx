@@ -83,6 +83,7 @@ const BillingHub = lazy(() => import("./pages/billing-hub"));
 const BillingInvoice = lazy(() => import("./pages/billing-invoice"));
 const Users = lazy(() => import("./pages/users"));
 const SettingsCustomers = lazy(() => import("./pages/settings-customers"));
+const SettingsIntegrations = lazy(() => import("./pages/settings-integrations"));
 const Documents = lazy(() => import("./pages/documents"));
 const Settings = lazy(() => import("./pages/settings"));
 const SettingsAccount = lazy(() =>
@@ -568,6 +569,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/configuracoes/aplicativo", SettingsApp),
   protectedRoute("/configuracoes/pessoas", Users),
   protectedRoute("/configuracoes/clientes", SettingsCustomers),
+  protectedRoute("/configuracoes/integracoes", SettingsIntegrations),
   protectedRoute("/configuracoes/cliente", legacySettingsRedirect("/configuracoes/cliente")),
   protectedRoute("/configuracoes/sistema", SettingsSystem),
   protectedRoute("/portal", ClienteInicio),

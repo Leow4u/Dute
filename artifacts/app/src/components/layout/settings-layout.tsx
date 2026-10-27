@@ -88,7 +88,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   const returnPath = useMemo(() => getReturnPath(role), [role]);
 
   return (
-    <div className="app-atmosphere flex h-[100dvh] min-h-0 w-full overflow-hidden font-sans text-foreground">
+    <div className={cn("app-atmosphere flex h-[100dvh] min-h-0 w-full overflow-hidden font-sans text-foreground", activeId === "integracoes" && "v3")}>
       <aside className="hidden w-[264px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-3 py-4 md:flex">
         <div>
           <BackLink href={returnPath} label="Voltar" />

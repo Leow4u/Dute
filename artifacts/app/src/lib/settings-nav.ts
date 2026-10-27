@@ -1,6 +1,7 @@
 import {
   Activity,
   Building2,
+  Plug,
   Smartphone,
   UserRound,
   Users,
@@ -70,6 +71,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: "Clientes",
     href: "/configuracoes/clientes",
     icon: Building2,
+    group: "administracao",
+    roles: ACCESS_ADMIN_ROLES,
+  },
+  {
+    id: "integracoes",
+    label: "Integrações",
+    href: "/configuracoes/integracoes",
+    icon: Plug,
     group: "administracao",
     roles: ACCESS_ADMIN_ROLES,
   },
