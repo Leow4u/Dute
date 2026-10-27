@@ -185,9 +185,12 @@ Functions, e a retenção das contas removidas (`runAccountRetention`) apaga o
 login com ela. A conta precisa do `roles/firebaseauth.admin` no projeto. Em
 26/10/2026, a do `dute-homolog` não tinha nenhum papel do Auth: o perfil
 bloqueava a pessoa, mas a tela dizia "O acesso saiu do sistema, mas o login da
-pessoa não foi bloqueado. Tente de novo." Para conferir os papéis da conta:
+pessoa não foi bloqueado. Tente de novo." Desde 27/10/2026, as contas de
+runtime dos dois ambientes têm o papel (conferido na política de cada
+projeto). Para conferir os papéis da conta:
 
 ```powershell
+cd C:\DEV\Dute
 $p = "dute-homolog"
 $sa = "$(gcloud projects describe $p --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
 gcloud projects get-iam-policy $p --flatten="bindings[].members" --filter="bindings.members:serviceAccount:$sa" --format="value(bindings.role)"
@@ -196,6 +199,7 @@ gcloud projects get-iam-policy $p --flatten="bindings[].members" --filter="bindi
 Para dar o papel, nos dois ambientes (decisão do Leonardo):
 
 ```powershell
+cd C:\DEV\Dute
 foreach ($p in "dute-homolog","dute-prod") {
   $sa = "$(gcloud projects describe $p --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
   gcloud projects add-iam-policy-binding $p --member="serviceAccount:$sa" --role="roles/firebaseauth.admin" --condition=None

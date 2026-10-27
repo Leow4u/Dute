@@ -904,11 +904,6 @@ dos marcos 2, 3 e 4. O registro está em `fase-4-financeiro.md`, "Parte
   (`docs/deploy-functions-manual.md`, "Function com segredo").
 - A entrega do WMS fatura pela demanda ou na fatura mensal do WMS?
   (`fase-4-financeiro.md`, decisões).
-- O papel `roles/firebaseauth.admin` na conta de runtime das Functions,
-  no `dute-homolog` (`docs/deploy-functions-manual.md`, "Firebase Auth").
-  Sem ele, "Remover acesso" não bloqueia o login: a tela pede para tentar de
-  novo, e só o perfil bloqueia a pessoa. No `dute-prod`, a política de
-  27/10/2026 já mostra o papel na `974421124970-compute@`.
 - Se houver convite pendente criado até a primeira publicação (25/10/2026),
   cancelar e convidar de novo, com o owner, em Configurações › Usuários (pergunta 67
   do plano; seção 5, item 7). Sem convite antigo pendente, nada a fazer.

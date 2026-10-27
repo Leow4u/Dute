@@ -700,11 +700,12 @@ fica nele.
   - A conta já anonimizada não volta à rotina.
 - **A rotina:** `runAccountRetention`, todo dia às 03:50 de São Paulo, uma
   instância por vez, até 100 contas por rodada.
-- **A permissão:** quem apaga o login é a conta de runtime das Functions. O
-  `setUserAccess` já atualiza e revoga com ela, mas o repositório não
-  registra se o papel dela no Auth também apaga. Sem a permissão, o log
-  mostra "login não apagado", a contagem `falhas` sobe e o perfil fica como
-  está.
+- **A permissão:** quem apaga o login é a conta de runtime das Functions,
+  a mesma com que o `setUserAccess` atualiza e revoga. Desde 27/10/2026, ela
+  tem nos dois ambientes o `roles/firebaseauth.admin`, que também apaga
+  (`docs/deploy-functions-manual.md`, "Firebase Auth"). Sem a permissão, o
+  log mostra "login não apagado", a contagem `falhas` sobe e o perfil fica
+  como está.
 - **A liberação:** `ACCOUNT_RETENTION_PROJECTS` em
   `functions/wms/src/domain/account-retention.ts`, só o `dute-homolog`.
 - **Testes:**
