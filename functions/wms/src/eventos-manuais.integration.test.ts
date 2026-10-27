@@ -15,7 +15,7 @@ import { getFirestore } from "firebase-admin/firestore";
 const PROJECT_ID = "demo-dute-operations";
 
 /** Os tipos que as telas da equipe registram à mão: um tipo novo entra aqui e na lista do domínio. */
-const TIPOS_DAS_TELAS = ["access.invite_accepted", "knowledge.uploaded", "operator.note", "support.incident"];
+const TIPOS_DAS_TELAS = ["knowledge.uploaded", "operator.note", "support.incident"];
 
 type Callable = { run: (request: never) => Promise<unknown> };
 
@@ -62,7 +62,8 @@ describe("o registro manual de evento", () => {
 
   it("um tipo de transição não entra à mão, nem pelo owner", async () => {
     const total = await totalDeEventos();
-    for (const type of ["inventory.adjusted", "order.status_changed", "billing.invoice_paid", "portal.request_created", "customer.message_sent"]) {
+    // O aceite do convite também: o acceptInvite grava o evento junto do perfil (pergunta 68).
+    for (const type of ["inventory.adjusted", "order.status_changed", "billing.invoice_paid", "portal.request_created", "customer.message_sent", "access.invite_accepted"]) {
       await assert.rejects(registrar("owner-a", { type, title: "Forjado" }), {
         code: "permission-denied",
         message: "Esse evento é gravado pelo próprio fluxo, não à mão.",

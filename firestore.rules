@@ -270,20 +270,6 @@ service cloud.firestore {
         || (isOwner() && role in ['owner', 'admin']);
     }
 
-    function safeUserCreateFields() {
-      return request.resource.data.keys().hasOnly([
-          'nome',
-          'email',
-          'role',
-          'customer_code',
-          'invite_id',
-          'created_at',
-          'updated_at'
-        ])
-        && request.resource.data.nome is string
-        && request.resource.data.email is string;
-    }
-
     function safeUserRoleUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'role',
@@ -335,53 +321,6 @@ service cloud.firestore {
           'updated_at'
         ])
         && request.resource.data.status == 'revoked';
-    }
-
-    function safeInviteAcceptUpdate() {
-      return signedIn()
-        && resource.data.status == 'pending'
-        && resource.data.email == request.auth.token.email
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status',
-          'used_by',
-          'used_at'
-        ])
-        && request.resource.data.status == 'used'
-        && request.resource.data.used_by == request.auth.uid;
-    }
-
-    function inviteDoc(inviteId) {
-      return /databases/$(database)/documents/invites/$(inviteId);
-    }
-
-    function inviteIsPendingForUser(inviteId) {
-      return signedIn()
-        && inviteId is string
-        && exists(inviteDoc(inviteId))
-        && get(inviteDoc(inviteId)).data.status == 'pending'
-        && get(inviteDoc(inviteId)).data.email == request.auth.token.email;
-    }
-
-    // O convite do cliente com o portal desligado não vale mais (pergunta 69).
-    function invitedCustomerScopeIsValid(inviteId) {
-      return (
-          request.resource.data.role == 'cliente'
-          && get(inviteDoc(inviteId)).data.keys().hasAll(['customer_code'])
-          && get(inviteDoc(inviteId)).data.customer_code is string
-          && request.resource.data.keys().hasAll(['customer_code'])
-          && request.resource.data.customer_code == get(inviteDoc(inviteId)).data.customer_code
-          && portalAtivoDe(get(inviteDoc(inviteId)).data.customer_code)
-        )
-        || (
-          request.resource.data.role != 'cliente'
-          && (
-            !request.resource.data.keys().hasAny(['customer_code'])
-            || (
-              get(inviteDoc(inviteId)).data.keys().hasAll(['customer_code'])
-              && request.resource.data.customer_code == get(inviteDoc(inviteId)).data.customer_code
-            )
-          )
-        );
     }
 
     function validEventCreate(eventId) {
@@ -664,29 +603,19 @@ service cloud.firestore {
         || (isFinance() && isBillingDocument(resource.data));
     }
 
+    // O perfil nasce do aceite do convite, no servidor (acceptInvite, pergunta
+    // 68): ele confere o e-mail confirmado e grava o perfil, o convite usado e
+    // o evento numa transação. O navegador só lê.
     match /users/{userId} {
       allow get: if signedIn() && (request.auth.uid == userId || canManageAccess());
       allow list: if canManageAccess();
-      allow create: if signedIn()
-        && request.auth.uid == userId
-        && safeUserCreateFields()
-        && inviteIsPendingForUser(request.resource.data.invite_id)
-        && request.resource.data.email == request.auth.token.email
-        && request.resource.data.role == get(inviteDoc(request.resource.data.invite_id)).data.role
-        && validProfileRole(request.resource.data.role)
-        && invitedCustomerScopeIsValid(request.resource.data.invite_id);
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
+    // O convite abre pelo link, no lookupInvite; só quem administra os acessos o lê aqui.
     match /invites/{inviteId} {
-      allow get: if canManageAccess()
-        || (
-          signedIn()
-          && resource.data.email == request.auth.token.email
-        );
-      allow list: if canManageAccess();
-      allow create, delete: if false;
-      allow update: if safeInviteAcceptUpdate();
+      allow read: if canManageAccess();
+      allow create, update, delete: if false;
     }
 
     match /billing_periods/{periodId} {

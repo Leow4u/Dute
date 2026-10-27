@@ -8,8 +8,6 @@
  * (syncOperationalNotifications) o leriam como verdadeiro.
  */
 export const MANUAL_EVENT_TYPES = [
-  // artifacts/app/src/App.tsx: quem acaba de aceitar o convite.
-  "access.invite_accepted",
   // artifacts/app/src/pages/agent-knowledge.tsx: o arquivo anexado à base.
   "knowledge.uploaded",
   // artifacts/app/src/pages/ai-control.tsx: a anotação operacional.

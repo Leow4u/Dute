@@ -743,8 +743,38 @@ do navegador.
   - `lookupInvite` saiu do `index.ts` para o mesmo arquivo. No convite de
     cliente, passa a dar também o nome do cliente, para a tela mostrar
     "Cliente · Itaú Unibanco".
-- **O que a 9a não muda.** Até a 9b, o app segue aceitando pelo navegador,
-  e a regra do `users` e a rota manual do evento continuam.
+- **O que a 9a não mudou.** Até a 9b, o app seguiu aceitando pelo navegador,
+  e a regra do `users` e a rota manual do evento continuaram.
+- **9b, a tela e as regras.**
+  - A tela `pages/convite.tsx`, em três passos, como no canvas:
+    1. "Aceitar convite", com o nome, o e-mail do convite (só leitura), o
+       perfil ("Perfil do convite: Cliente · Itaú Unibanco") e a senha. Cria
+       a conta; se o e-mail já tem conta, entra com a senha dela.
+    2. "Confirme seu e-mail". O Firebase manda o link de confirmação, em
+       português, com a volta para o próprio convite.
+       - "Já confirmei" confere o e-mail e chama o `acceptInvite`.
+       - "Reenviar e-mail" manda o link de novo.
+       - "Sair" volta ao primeiro passo.
+       - Enquanto o e-mail não é confirmado, o convite continua valendo.
+    3. "E-mail confirmado", com o perfil, e "Entrar". "Entrar" carrega o app
+       de novo, e a porta já lê o perfil criado.
+  - Quem volta pelo link do e-mail com a conta do convite ainda na janela
+    segue de onde parou. Com o e-mail confirmado, o aceite sai na hora.
+  - O app não grava mais nada do aceite. O perfil, o convite usado e o
+    evento são do servidor, e o convite se lê só pelo `lookupInvite`.
+  - As regras fecham o caminho do navegador:
+    - o `users` não se cria pelo navegador;
+    - o `invites` só abre para quem administra os acessos;
+    - o `access.invite_accepted` sai da lista dos eventos manuais
+      (`domain/manual-events.ts`), e a rota manual o recusa.
+  - O endereço de volta do e-mail precisa estar nos domínios autorizados do
+    Firebase Auth do projeto: `app.dutelog.com.br` na produção e o endereço
+    `run.app` na homologação. Fora da lista, o e-mail sai sem a volta. O
+    link confirma do mesmo jeito, e a pessoa volta à aba do convite e clica
+    "Já confirmei".
+  - Na publicação, as regras sobem antes do app. Nos minutos entre as duas,
+    o app antigo não aceita convite (a gravação do navegador é recusada).
+    Quem estiver no meio do aceite recarrega a página.
 - **Testes:**
   - `invite-acceptance.integration.test.ts`, no emulador:
     - o aceite com o e-mail confirmado e a repetição;
@@ -755,3 +785,11 @@ do navegador.
   - `callables-auth.integration.test.ts`: o `acceptInvite` sem login e sem
     o e-mail confirmado.
   - `callables-papeis.integration.test.ts`: a linha do `acceptInvite`.
+  - `pages/convite.test.tsx`: os três passos como no canvas, a recusa, o
+    "ocupado", a lista de textos e o axe em cada tela.
+  - `lib/convite.test.ts`: a leitura do convite, o perfil, o nome do
+    aceite, o endereço de volta e as mensagens.
+  - `firestore.rules.test.ts`: o navegador não cria o perfil, nem com o
+    e-mail confirmado, e não lê nem marca o convite; quem administra lê.
+  - `eventos-manuais.integration.test.ts`: o `access.invite_accepted` não
+    entra à mão.

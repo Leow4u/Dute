@@ -21,7 +21,10 @@ valor de custo do próprio estoque, base do seguro.
   (`owner` e `admin`), para o cliente cadastrado (não prospect), sem arquivo,
   com o portal ligado (não "Sem portal") e com a sigla do SKU; a BTG passa
   sempre. "Aceitar convite" pede o "Nome" e a "Senha" (6 caracteres ou mais);
-  o e-mail vem do convite.
+  o e-mail vem do convite. Depois, a pessoa confirma o e-mail pelo link que
+  chega na caixa dela e clica "Já confirmei"; só então entra, com "Entrar".
+  "Reenviar e-mail" manda o link de novo, e o convite continua valendo
+  enquanto o e-mail não é confirmado.
 - **O cliente arquivado ou "Sem portal"** (Configurações › Clientes) tem o
   portal desligado. A pessoa continua com o login, mas, ao entrar, vê só a
   tela "Portal desligado", com o nome do cliente, o e-mail dela e "Sair".
