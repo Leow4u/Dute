@@ -16,6 +16,10 @@ describe("a retenção dos avisos", () => {
     assert.deepEqual(["sent", "audit", "failed", "pending", undefined, "outro"].map(emailForaDaFila), [true, true, true, false, false, false]);
   });
 
+  it("o convite cancelado também sai na retenção", () => {
+    assert.equal(emailForaDaFila("cancelled"), true);
+  });
+
   it("o id da rodada sai do instante e passa no evento", () => {
     const id = idDaRetencao(new Date("2026-10-26T06:20:05.123Z"));
     assert.equal(id, "ret_20261026T062005");

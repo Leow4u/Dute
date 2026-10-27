@@ -235,7 +235,8 @@ export const runOperacaoRetention = onSchedule({ schedule: "every day 03:20", ti
 
 /**
  * A cada 5 minutos: os eventos novos que dão aviso viram o aviso no sino do
- * portal e, para os contatos que ligaram o modelo, o e-mail (parte 4.6a). A
+ * portal e, para os contatos que ligaram o modelo, o e-mail (parte 4.6a).
+ * Também envia os convites de acesso agendados em Pessoas e acessos. A
  * chave do Resend vem do Secret Manager (RESEND_API_KEY), declarada só onde o
  * segredo existe (segredosDoResend); sem ela, o e-mail fica só auditado na
  * fila. Fora da produção, só sai o e-mail para endereços da Dutelog. Uma

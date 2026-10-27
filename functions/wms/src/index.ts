@@ -4099,7 +4099,7 @@ function assertManagedAction(
   }
   if (
     input.resource === "invites" &&
-    !["create", "archive"].includes(input.action)
+    !["create", "update", "archive"].includes(input.action)
   ) {
     throw new HttpsError("invalid-argument", "Ação de convite inválida.");
   }
@@ -4613,10 +4613,33 @@ function managedWritePayload(
       updated_at: FieldValue.serverTimestamp(),
     };
   }
+  // `update` é exclusivamente reenvio: nunca altera destinatário ou acesso.
+  if (input.action === "update") {
+    if (Object.keys(input.data).length) {
+      throw new HttpsError("invalid-argument", "O reenvio não aceita campos para alterar o convite.");
+    }
+    if (before.status !== "pending") {
+      throw new HttpsError("failed-precondition", "Somente convites pendentes podem ser reenviados.");
+    }
+    if (profile.role === "admin" && ["owner", "admin"].includes(String(before.role))) {
+      throw new HttpsError("permission-denied", "Somente o owner pode convidar administradores.");
+    }
+    if (before.email_status === "pending") {
+      throw new HttpsError("failed-precondition", "O envio deste convite já está agendado.");
+    }
+    const requestedAt = before.email_requested_at as { toMillis?: () => number } | undefined;
+    if (requestedAt?.toMillis && Date.now() - requestedAt.toMillis() < 60_000) {
+      throw new HttpsError("failed-precondition", "Aguarde um minuto antes de reenviar o convite.");
+    }
+    if (!z.string().email().safeParse(before.email).success || !VALID_ROLES.includes(before.role as Role)) {
+      throw new HttpsError("failed-precondition", "E-mail ou perfil do convite inválido.");
+    }
+    return { updated_at: FieldValue.serverTimestamp() };
+  }
   const email = String(input.data.email ?? "")
     .trim()
     .toLowerCase();
-  if (!email || !email.includes("@") || !VALID_ROLES.includes(inviteRole)) {
+  if (!z.string().email().safeParse(email).success || !VALID_ROLES.includes(inviteRole)) {
     throw new HttpsError(
       "invalid-argument",
       "E-mail ou perfil do convite inválido.",
@@ -4850,8 +4873,14 @@ export const mutateManagedEntity = onCall(async (request) => {
       });
     }
     // Convite de cliente: cadastro achado pelo código, cliente com sigla.
-    if (input.resource === "invites" && input.action === "create") {
-      await assertInviteCustomerAllowed(transaction, db, payload as Record<string, unknown>);
+    const queueInviteEmail = input.resource === "invites" && ["create", "update"].includes(input.action);
+    if (queueInviteEmail) {
+      await assertInviteCustomerAllowed(transaction, db, { ...before, ...payload });
+      Object.assign(payload, {
+        email_status: "pending",
+        email_delivery_id: `mail_${inviteEventReference(documentId)}_${operationId}`,
+        email_requested_at: FieldValue.serverTimestamp(),
+      });
     }
     // Papel cliente: o customer_code da pessoa vira a fronteira dela
     // (invariante 4), com a conferência do convite de cliente.
@@ -4875,6 +4904,22 @@ export const mutateManagedEntity = onCall(async (request) => {
       transaction.create(targetRef, payload);
     } else {
       transaction.set(targetRef, payload, { merge: true });
+    }
+    if (queueInviteEmail) {
+      const emailId = String((payload as Record<string, unknown>).email_delivery_id);
+      transaction.create(db.collection("email_outbox").doc(emailId), {
+        id: emailId,
+        kind: "access_invite",
+        invite_id: documentId,
+        customer_code: String((payload as Record<string, unknown>).customer_code ?? before.customer_code ?? "Dutelog"),
+        status: "pending",
+        tentativas: 0,
+        erro: null,
+        enviado_em: null,
+        provider_id: null,
+        created_at: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
+      });
     }
     if (
       input.resource === "products" &&

@@ -15,9 +15,9 @@ export function limiteDosAvisos(agora: Date): Date {
   return new Date(agora.getTime() - DIAS_DOS_AVISOS * DIA_MS);
 }
 
-/** O e-mail que já saiu da fila: enviado, só auditado (sem a chave do provedor) ou desistido. */
+/** O e-mail que já saiu da fila: enviado, só auditado, desistido ou cancelado. */
 export function emailForaDaFila(status: unknown): boolean {
-  return status === "sent" || status === "audit" || status === "failed";
+  return status === "sent" || status === "audit" || status === "failed" || status === "cancelled";
 }
 
 /** O id da rodada, do instante em UTC: `ret_20261026T062000`. */

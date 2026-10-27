@@ -64,7 +64,7 @@ describe("o convite passa pela regra no backend", () => {
     const start = source.indexOf("export const mutateManagedEntity = onCall(");
     assert.ok(start > 0, "mutateManagedEntity não encontrado");
     const body = source.slice(start, source.indexOf("\nexport const ", start + 1));
-    const check = body.indexOf("await assertInviteCustomerAllowed(transaction, db, payload");
+    const check = body.indexOf("await assertInviteCustomerAllowed(transaction, db,");
     assert.ok(check > 0, "o convite não chama assertInviteCustomerAllowed");
     assert.ok(check < body.indexOf("transaction.create(targetRef, payload)"), "a conferência vem antes da escrita");
   });

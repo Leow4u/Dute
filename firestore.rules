@@ -915,8 +915,8 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    // A fila de e-mail dos avisos (parte 4.6a), com os endereços dos contatos
-    // e o texto: só owner e admin leem. Só a rotina grava.
+    // A fila de e-mail dos avisos e convites, com os endereços dos contatos
+    // e referências privadas: só owner e admin leem. Só o servidor grava.
     match /email_outbox/{emailId} {
       allow read: if isPrivileged();
       allow create, update, delete: if false;
