@@ -43,6 +43,13 @@ describe("Pedidos na v3", () => {
     expect(FONTE).toMatch(/disabled=\{!motivoValido\(cancelReason\) \|\| busy\}/);
   });
 
+  it("no Separado, só a coordenação confere o separado de cada linha; o item zerado não vai no volume (pergunta 59)", () => {
+    expect(FONTE).toContain('decider && String(order.pick?.status ?? "") !== "completed" && linhasSeparadas.length > 0');
+    expect(FONTE).toContain("linhas={conferindoLinhas(dialog.order) ? linhasSeparadas : undefined}");
+    expect(FONTE).toContain(".filter((line) => line.qty_packed > 0)");
+    expect(FONTE).toContain('"Confirmar separação"');
+  });
+
   it("o motivo da recusa tem rótulo", () => {
     expect(FONTE).toMatch(/<Label htmlFor="motivo-da-recusa">Motivo<\/Label>\s*<Textarea\s+id="motivo-da-recusa"/);
   });

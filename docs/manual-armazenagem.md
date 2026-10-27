@@ -85,8 +85,14 @@ antes, em vermelho, com "Tratar": a tarefa abre num painel, com o avanço e
 - **"Para aprovar"** (só `owner`, `admin` e `interno`): a crítica ou urgente
   primeiro, depois a alta e a mais antiga. Com saldo, "Aprovar" (vai para a
   separação) e "Recusar" ("Motivo", 3 caracteres ou mais); sem, "Ver itens".
-- **"Para separar":** "Separado" pede o "Número do lacre" e confirma cada linha
-  na quantidade pedida, num volume só.
+- **"Para separar":** "Separado" pede o "Número do lacre" e, com "Confirmar
+  separação", confirma cada linha na quantidade pedida, num volume só. Para a
+  coordenação (`owner`, `admin` e `interno`), o diálogo lista cada linha com
+  "Pedido" e "Separado" (com − e +). A linha a menos mostra a diferença e pede
+  "Motivo da diferença em …" ("Falta" ou "Avaria") e "Detalhe". O pedido segue
+  com o separado: a diferença volta a ficar disponível, e o item zerado não vai
+  no volume. Quem opera registra a falta pelo "Tratar", e a exceção fica
+  resolvida quando a coordenação separa a menos.
 - **"Para entregar":** "Entregue" pede "Quem levou" e "Placa" (no pronto para
   envio; o aparelho lembra os últimos) e "Quem recebeu (opcional)". "Confirmar
   entrega" registra a saída e a entrega, e o estoque baixa. Na retirada pelo
