@@ -94,4 +94,6 @@ Resultado: fluxo e responsividade conferidos com mocks; publicação e validaç�
 - [P2 corrigido] Dialog/AlertDialog renderizam em portal fora do shell; receberam `v3` para conservar o vermelho e os tokens do Dute. Conferido visualmente após o ajuste.
 - Recursos remotos de fonte bloqueados pela rede; fallback legível. Runtime Browser indisponível nas ferramentas; Playwright local autorizado para esta prévia com mocks. Não foi usada sessão real do usuário.
 - Evidências: `/workspace/dute-personal-keys-preview/desktop-lista.png`, `desktop-criar.png`, `desktop-conta-comum.png`, `mobile-criar.png`, `mobile-lista.png`, `mobile-revelacao.png`.
-- Suíte frontend completa:2.855 testes; seis testes de página/diálogo/a11y repetidos após ajuste visual, typecheck/build passaram. Nova gestão e autorização validadas separadamente nos emuladores; não se afirma validação autenticada no ambiente publicado.
+- Suíte frontend completa:2.856 testes; sete testes de página/diálogo/a11y repetidos após ajuste visual, typecheck/build passaram. Nova gestão e autorização validadas separadamente nos emuladores; não se afirma validação autenticada no ambiente publicado.
+
+- Revisão independente: corrigida descrição de full/read_only na lista, que agora acompanha o acesso atual da conta em vez de tratar scopes vazio como ausência de operações. Teste de regressão capturou o caso antes da correção.

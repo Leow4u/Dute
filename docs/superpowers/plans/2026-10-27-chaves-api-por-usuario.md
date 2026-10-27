@@ -61,5 +61,5 @@ Interfaces: endpoint pessoal da Task 2; página no caminho existente `/configura
 Files: documentação `docs/api*.md`, registro de validação e plano/ledger.
 - [x] Atualizar OpenAPI, exemplos e limites do modelo pessoal; manter documentação legada.
 - [x] Executar checks completos: seis suítes unit/integration/typecheck, frontend completo/typecheck/build, Python, índices e empacotamento.
-- [ ] Revisão independente do diff, corrigir achados relevantes com testes, registrar resultados exatos.
+- [x] Revisão independente do diff, corrigir achados relevantes com testes, registrar resultados exatos.
 - [ ] Push de branch própria, PR novo em draft e anexo; acompanhar CI. Sem novo merge/deploy.

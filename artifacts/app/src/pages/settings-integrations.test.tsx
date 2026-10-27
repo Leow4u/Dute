@@ -29,3 +29,15 @@ it('diálogo pessoal e revelação preservam acessibilidade', async () => {
   await click('Criar chave');
   expect(await violacoesDeAcessibilidade(document.body.innerHTML)).toEqual([]);
 });
+
+it('lista descreve full e somente leitura como acesso da conta mesmo sem escopos fixos', async () => {
+  mocks.list.mockResolvedValue({ data: ['full', 'read_only'].map((permission, i) => ({
+    id: String(i + 1).repeat(32), name: `Chave ${permission}`, token_prefix: `dute_${i}…`,
+    permission, kind: 'personal', scopes: [], created_at: null, last_used_at: null,
+    expires_at: '2099-01-01', revoked: false, write_policy: 'scoped',
+  })), next_cursor: null });
+  await act(async () => root.render(<QueryClientProvider client={client}><SettingsIntegrations /></QueryClientProvider>));
+  await wait(() => expect(container.textContent).toContain('Acompanha as permissões atuais da conta'));
+  expect(container.textContent).toContain('Somente as leituras permitidas pela conta');
+  expect(container.textContent).not.toContain('Sem operações selecionadas');
+});

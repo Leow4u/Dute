@@ -16,7 +16,7 @@ Branch `codex/chaves-api-por-usuario`, base da main `440f1a0` (PR #517). Esta va
 
 Comandos: `npm --prefix functions/<pacote> run test:unit`, `run test:integration` e `run typecheck` para cada um dos seis pacotes. Os scripts oficiais de integração iniciam Firestore/Storage locais com o projeto correto de cada pacote. Todas as suítes e os seis typechecks passaram; nenhum teste pulado. A rodada final das integrações rodou sequencialmente para não disputar a porta do emulador.
 
-- Frontend: 248 arquivos, **2.855 testes** em `npm --prefix artifacts/app test`; `tsc --build`, typecheck do app e build Vite/PWA passaram. Os seis testes da página/diálogo/a11y foram reexecutados após o ajuste visual final.
+- Frontend: 248 arquivos, **2.856 testes** em `npm --prefix artifacts/app test`; `tsc --build`, typecheck do app e build Vite/PWA passaram. Os sete testes da página/diálogo/a11y foram reexecutados após o ajuste visual final.
 - Python: `python -m unittest discover -s tools -p 'test_*.py'`, **164 testes** passaram.
 - Índices: `python tools/indices_das_consultas.py /tmp/personal-final-queries.jsonl`, **5.915 consultas, 240 formas, 16 com índice composto**, sem falta de índice.
 - Swagger Parser validou OpenAPI 3.0.3: **65 caminhos, 95 operações**. Os quatro métodos novos são de gestão pessoal; não foram acrescentadas novas ações de negócio aos módulos.
@@ -40,6 +40,6 @@ O runtime do plugin Browser não estava disponível nas ferramentas da sessão; 
 
 ## Entrega e limites
 
-Revisão independente final e CI do PR devem ser registrados no momento da entrega. Regras de acesso e limites das rotas estão em [api-chaves-pessoais.md](api-chaves-pessoais.md) e [api-personal-adapters.md](api-personal-adapters.md).
+Revisão independente do diff completo: zero achados críticos/importantes. O único achado menor, descrição indevida de full/read_only como sem operações, foi reproduzido em teste e corrigido por permissão. O CI do PR deve ser conferido no momento da entrega. Regras de acesso e limites das rotas estão em [api-chaves-pessoais.md](api-chaves-pessoais.md) e [api-personal-adapters.md](api-personal-adapters.md).
 
 Não foram geradas chaves reais, executadas operações com dados reais, alterados IAM ou configurados acessos de terceiros. Não houve novo merge/deploy. Validação autenticada em homologação continua sendo uma etapa posterior à revisão e autorização de liberação.
