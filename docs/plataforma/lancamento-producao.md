@@ -109,6 +109,14 @@ disparado sem ele. Sem dado real neste arquivo.
     nasceram.
   - O Cloud Run e o `app.dutelog.com.br` passaram a servir o build às
     20:43, e o login abriu no Chromium.
+- **Na `main`, para a quinta publicação (27/10/2026).** Os PRs 488 a 512
+  estão publicados na homologação no `65a8d2a` (run 338). Esperam o OK do
+  Leonardo e, antes do disparo, o papel da seção 4, item 5. Levam:
+  - as decisões de 26/10, com as telas do canvas "Telas das decisões de
+    26/10" (seção 2, "As decisões de 26/10 e a API");
+  - a API Dute v1 (PR 508, `docs/api.md`) e o "mostrar senha" do login
+    (PR 509);
+  - o registro da quarta publicação e das decisões (PRs 488 a 490).
 - **Ciclos conferidos no emulador.**
   - `functions/operacao/src/domain/ciclo-do-cliente.integration.test.ts`
     (parte 4.9a). O cliente pede a OS pelo portal, a coordenação abre a
@@ -539,11 +547,61 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   falha no login ao tirar ou devolver o acesso ficava escondida"). Quem
   ficou com o acesso devolvido e o login bloqueado volta a entrar, depois de
   publicar, com "Remover acesso" e "Devolver acesso" em Usuários.
+- **As decisões de 26/10 e a API (quinta publicação).** Entram com a
+  `main`, sem liberação própria:
+  - **Regras do Firestore.** O perfil (`users`) não se cria pelo navegador,
+    e o convite (`invites`) só abre para quem administra os acessos. O
+    aceite passa à callable `acceptInvite`, com o e-mail confirmado
+    (pergunta 68, `fase-2-nucleo.md`). As regras sobem antes do app: nos
+    minutos entre as duas, o app antigo não aceita convite, e quem estiver no
+    meio do aceite recarrega a página.
+  - **Functions.** São 149 callables:
+    - 84 do WMS, com `acceptInvite` e `cancelWarehouseOrder`;
+    - 12 do Comercial;
+    - 19 da Operação, com `resolveFieldCompletion`;
+    - 7 do Financeiro, 16 do núcleo e 11 do RH.
+
+    Entra também a primeira function HTTP, a `duteApi` da Operação (abaixo).
+  - **Armazenagem** (pergunta 59, `fase-4-financeiro.md`):
+    - Cancelar pedido, no ⋯ de Pedidos;
+    - o Encerrar só depois da entrega;
+    - a separação a menos pela coordenação;
+    - no portal, o pedido "Cancelado pela Dutelog".
+
+    A retirada pelo cliente deixa de pedir o documento (LGPD, decisão 3).
+  - **Operação** (`fase-3-operacao.md`):
+    - cancelar a vistoria em execução (pergunta 58);
+    - a conclusão do celular recusada, com a assinatura guardada (66);
+    - a inclusão guardada de um item que a OS não tem (65);
+    - a conclusão sem o número do documento (LGPD, decisão 3);
+    - no campo, o local com o Maps e o contato com Ligar (LGPD, decisão 11).
+  - **Financeiro** (`fase-4-financeiro.md`):
+    - a medição aprovada como linha própria de A faturar (pergunta 64);
+    - a receita por serviço rateada pelas linhas do orçamento (26).
+  - **Portal** (`fase-2-nucleo.md`):
+    - a tela "Portal desligado" do cliente arquivado ou "Sem portal" (69);
+    - os avisos que param com o portal desligado (71).
+  - **RH** (`fase-8-rh.md`):
+    - Pessoas com quem está inativo na Operação (pergunta 70);
+    - o motivo do anexo recusado.
+  - **A API Dute v1** (PR 508, `docs/api.md`).
+    - A `duteApi` responde em
+      `https://southamerica-east1-dute-prod.cloudfunctions.net/duteApi/api/v1`.
+    - Vale onde a Operação está liberada, então liga na produção só por
+      publicar.
+    - Nenhuma credencial nasce na publicação: um owner ou admin cria a
+      integração, e cada escrita espera a aprovação de uma pessoa.
+    - `api_integrations`, `api_approvals` e `api_audit` ficam fechadas ao
+      navegador.
+    - Publicar pede um papel a mais na conta do CI (seção 4, item 5).
+  - **O login** mostra e oculta a senha (PR 509).
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
 - **Conferência do invoker.** Passa a conferir 145 callables, das seis
-  codebases.
+  codebases, e 149 desde a quinta publicação. Desde a quinta, a publicação
+  confere também a API (`tools/check_api_deployed.mjs`): o contrato do
+  commit e a consulta sem credencial recusada com 401.
 
 ## 3. Antes de publicar (conferir na homologação)
 
@@ -589,6 +647,16 @@ contato com os avisos ligados (Comercial › Clientes).
 14. **Eventos manuais.** Com o suporte, Configuração › Sistema registra um
     incidente; com o interno, o Agent Dute › Painel grava a anotação
     operacional. Os dois aparecem na timeline com a hora do registro.
+15. **As decisões de 26/10 (quinta publicação).**
+    - Com o interno, em Pedidos:
+      - cancelar um pedido já separado. O diálogo mostra o que volta à
+        posição, e a guarda entra na fila;
+      - num pedido em separação, abrir "Separado" e separar uma linha a
+        menos, com "Falta". O pedido segue com o separado.
+    - Com o owner, convidar um e-mail de teste e aceitar o convite em outra
+      janela, com a confirmação do e-mail.
+    - Com o financeiro, a medição aprovada aparece como linha própria em A
+      faturar.
 
 ## 4. Publicar
 
@@ -602,10 +670,24 @@ contato com os avisos ligados (Comercial › Clientes).
 4. **Janela.** Combinar com a contagem de abertura da BTG, que roda no
    `dute-prod`. O deploy de functions leva de 11 a 15 minutos, agora com
    seis codebases.
-5. **Disparo.** Actions > CI > Run workflow, com `publicar_producao`
+5. **O papel que publica a API** (desde a quinta publicação).
+   - A `duteApi` é uma function HTTP pública. Publicá-la pede
+     `cloudfunctions.functions.setIamPolicy` à conta do CI, e o
+     `roles/cloudfunctions.developer` não dá essa permissão.
+   - Na homologação, a publicação falhou por isso em 27/10 (run 335) e
+     passou depois de a conta ganhar o papel (run 336).
+   - No `dute-prod`, dar o papel antes do disparo:
+
+   ```powershell
+   cd C:\DEV\Dute
+   gcloud projects add-iam-policy-binding dute-prod --member="serviceAccount:github-actions-functions@dute-prod.iam.gserviceaccount.com" --role=roles/cloudfunctions.admin --condition=None
+   ```
+
+6. **Disparo.** Actions > CI > Run workflow, com `publicar_producao`
    marcado, do HEAD. O job só vale verde com as conferências do fim:
    - `check_rules_deployed.sh`;
-   - o invoker das 146 callables (145 até a parte 8.4);
+   - o invoker das 149 callables (146 até a quarta publicação);
+   - `check_api_deployed.mjs`, desde a quinta;
    - `check_frontend_deployed.sh`;
    - o smoke.
 
@@ -694,6 +776,14 @@ contato com os avisos ligados (Comercial › Clientes).
     `avisos@dutelog.com.br` em até 5 minutos. No painel do Resend, a aba
     Emails mostra cada envio e se foi entregue; o e-mail que desiste
     aparece no painel do sistema, no quadro dos e-mails.
+11. **Depois da quinta publicação** (seção 1):
+    - Os convites pendentes continuam valendo. O aceite passa a pedir a
+      confirmação do e-mail, e a volta do e-mail leva a
+      `app.dutelog.com.br`, que já está nos domínios autorizados do login
+      (`fase-1-corte.md`).
+    - Nenhuma integração da API nasce com a publicação. Para usar, um owner
+      cria a credencial como em `docs/api.md`, "Credenciais". Não criar
+      demanda nem OS reais como teste.
 
 ## 6. Ligar o Financeiro no `dute-prod` (parte 4.9b, com o OK)
 
@@ -746,7 +836,13 @@ dos marcos 2, 3 e 4. O registro está em `fase-4-financeiro.md`, "Parte
   (`artifacts/app/src/lib/wms-v3.ts`) e publicar. A tela volta ao visual de
   antes; o shell continua o v3.
 - **Tudo da Operação**, como em `operacao-producao.md`, seção 6. Os avisos
-  param junto.
+  param junto, e a API também, porque vale onde a Operação está liberada.
+- **Só a API.** Revogar cada credencial (`DELETE <base>/integrations/<id>`,
+  com o login de um owner ou admin; `docs/api.md`). Sem credencial de
+  integração válida, a API só responde ao contrato (`openapi.json`) e à
+  gestão das integrações, que pede o login de um owner ou admin. Tirar a
+  function pede publicar a `main` sem ela e confirmar a exclusão no
+  Firebase.
 
 ## 8. O que espera o Leonardo
 
@@ -774,9 +870,13 @@ dos marcos 2, 3 e 4. O registro está em `fase-4-financeiro.md`, "Parte
 - Se houver convite pendente criado até a primeira publicação (25/10/2026),
   cancelar e convidar de novo, com o owner, em Configurações › Usuários (pergunta 67
   do plano; seção 5, item 7). Sem convite antigo pendente, nada a fazer.
+- O OK para a quinta publicação (seção 1). Antes do disparo, o papel da
+  seção 4, item 5, na conta do CI do `dute-prod`: sem ele, a publicação das
+  functions para na `duteApi`, como parou na homologação.
 
 As perguntas 26, 58 a 60 e 64 a 71 do plano, as 12 a 14 da Fase 3 e as 12
 da LGPD foram respondidas em 26/10/2026 (plano, seção 13; `lgpd.md`, seção
 5, com "A operação primeiro"). As telas foram alinhadas no mesmo dia (o
-canvas "Telas das decisões de 26/10", aprovado pelo Leonardo) e entram em
-partes próprias.
+canvas "Telas das decisões de 26/10", aprovado pelo Leonardo), entraram na
+`main` de 26 a 27/10, em partes próprias (plano, seção 13), e vão à
+produção na quinta publicação.

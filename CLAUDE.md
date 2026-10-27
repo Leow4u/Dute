@@ -44,6 +44,15 @@ documentação de produto e operação está em `docs/`.
   `docs/plataforma/lancamento-producao.md`). O `dute-btg`
   fica de fora das duas listas `OPERACAO_AMBIENTES_LIBERADOS`. Desenho,
   registro de cada parte e como desligar: `docs/plataforma/fase-3-operacao.md`.
+  A API REST v1 (`duteApi`, PR 508, `docs/api.md`) abre a Operação a
+  integrações externas, com a mesma liberação: a credencial é por
+  integração, criada por owner ou admin, e cada escrita espera a aprovação de
+  uma pessoa (invariante 3). As escritas dela passam pelas mesmas funções do
+  domínio das callables (`openDirectDemandFor`, `saveServiceOrderFor`), com
+  o ator `api:<id>` e o papel `interno`: mudou uma, confira
+  `functions/operacao/src/api/api.integration.test.ts`. É a primeira
+  function HTTP pública, e publicá-la pede
+  `cloudfunctions.functions.setIamPolicy` na conta do CI.
 - **Fase 4 (lançamento) na `main` e no `dute-prod`**: os marcos 2, 3 e 4
   subiram juntos em 25/10/2026 (`e6a43ed`), com o OK do Leonardo. O
   Financeiro está ligado no `dute-homolog` e, desde a parte 4.9b (PR 466,
