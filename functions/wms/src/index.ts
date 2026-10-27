@@ -427,9 +427,12 @@ const AdvanceWarehouseTaskSchema = z.object({
         .array(
           z.object({
             pick_line_id: z.string().trim().min(1),
-            qty_picked: z.number().positive(),
+            // Zero e o motivo: a linha que a coordenação separou a menos (pergunta 59).
+            qty_picked: z.number().nonnegative(),
             status: z.string().trim().optional(),
             notes: z.string().trim().optional(),
+            shortage_reason: z.string().trim().optional(),
+            shortage_detail: z.string().trim().optional(),
           }),
         )
         .optional(),

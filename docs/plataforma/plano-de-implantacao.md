@@ -975,9 +975,9 @@ defeito.
     o alinhamento.
     **Tela alinhada em 26/10/2026** (o canvas "Telas das decisões de 26/10", aprovado pelo Leonardo, item 6): o
     cliente vê no portal "Cancelado pela Dutelog" e a data, sem o motivo.
-    **Servidor do Cancelar pedido e do Encerrar feito em 26/10/2026**
-    (`fase-4-financeiro.md`, "Pergunta 59"). O "Separar a menos" e as telas
-    entram em seguida.
+    **Servidor do Cancelar pedido, do Encerrar e do Separar a menos feito em
+    26/10/2026** (`fase-4-financeiro.md`, as duas seções "Pergunta 59"). As
+    telas entram em seguida.
 60. A fatura que nasce da NFS-e autorizada pela Omie leva como emissão o dia
     em que a rotina viu a autorização, não o da nota. Na rotina em dia, a
     diferença é de minutos. Quando a emissão parou e foi retomada dias
