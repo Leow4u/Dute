@@ -18,22 +18,35 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: Root;
 let container: HTMLDivElement;
 let client: QueryClient;
-const tick = () => new Promise((resolve) => setTimeout(resolve, 20));
+async function waitForUi(assertion: () => void) {
+  await vi.waitFor(async () => {
+    // Libera notificações assíncronas do React Query antes de conferir o DOM.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    assertion();
+  }, { timeout: 5000, interval: 10 });
+}
 const click = async (label: string) => {
-  const button = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((b) => b.textContent?.trim() === label);
-  expect(button, label).toBeTruthy();
-  await act(async () => { button!.click(); await tick(); });
+  let button: HTMLButtonElement | undefined;
+  await waitForUi(() => {
+    button = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((b) => b.textContent?.trim() === label);
+    expect(button, label).toBeTruthy();
+  });
+  await act(async () => { button!.click(); });
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 };
 async function render() {
   await act(async () => {
     root.render(<QueryClientProvider client={client}><SettingsIntegrations /></QueryClientProvider>);
-    await tick();
   });
-  await act(async () => { await tick(); });
+  await waitForUi(() => expect(container.textContent).not.toContain("Carregando integrações…"));
 }
 async function openForm() {
   await render();
   await click("Nova integração");
+  await waitForUi(() => {
+    expect(container.querySelector("#integration-name")).not.toBeNull();
+    expect(container.querySelector('[aria-label="Autorizar Cliente Exemplo"]')).not.toBeNull();
+  });
   await act(async () => {
     const input = container.querySelector<HTMLInputElement>("#integration-name")!;
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Parceiro externo");
@@ -48,7 +61,11 @@ beforeEach(() => {
   mocks.create.mockReset().mockResolvedValue({ id: "a".repeat(32), token: "dute_TEST_ONLY", expires_at: "2026-11-25T00:00:00Z" });
   mocks.revoke.mockReset().mockResolvedValue(undefined);
   mocks.list.mockReset().mockResolvedValue({ data: [], next_cursor: null });
-  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [{ code: "A", name: "Cliente Exemplo" }] }))));
+  // A resposta pode chegar depois do primeiro render do formulário, como no CI.
+  vi.stubGlobal("fetch", vi.fn(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    return new Response(JSON.stringify({ items: [{ code: "A", name: "Cliente Exemplo" }] }));
+  }));
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn(async () => undefined) } });
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
