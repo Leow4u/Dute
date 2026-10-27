@@ -5,6 +5,14 @@ import { describe, it } from "node:test";
 const api = () => import(new URL("./contract.js", import.meta.url).href);
 
 describe("API pública v1", () => {
+  it("CORS separa os endereços de produção, homologação e desenvolvimento", async () => {
+    const { apiBrowserOrigins } = await import(new URL("./browser.js", import.meta.url).href);
+    assert.deepEqual(apiBrowserOrigins("dute-prod"), ["https://app.dutelog.com.br"]);
+    assert.ok(apiBrowserOrigins("dute-homolog").includes("https://dute-app-368642218894.southamerica-east1.run.app"));
+    assert.ok(!apiBrowserOrigins("dute-prod").some((origin: string) => /localhost|127\.0\.0\.1|homolog/.test(origin)));
+    assert.deepEqual(apiBrowserOrigins("unknown"), []);
+    assert.ok(apiBrowserOrigins("demo-dute-operacao").includes("http://localhost:5173"));
+  });
   it("reconhece somente ações publicadas, sem permitir cancelar/reabrir por campos extras", async () => {
     const { writeRoute } = await api();
     assert.deepEqual(

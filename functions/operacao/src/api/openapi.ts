@@ -192,6 +192,12 @@ export const openapi: Record<string, any> = {
       },
     },
     [`${PREFIX}/integrations`]: {
+      get: {
+        summary: "Listar metadados de integrações, sem tokens ou hashes (owner/admin humano)",
+        security: humanAuth,
+        parameters: page,
+        responses: { "200": response("Metadados paginados; inclui revogadas e expiradas"), ...errors },
+      },
       post: {
         summary:
           "Criar credencial (owner/admin humano). Token exibido uma vez.",
@@ -563,6 +569,15 @@ for (const [path, operations] of Object.entries(openapi.paths) as [
       "Indisponível; repetir escrita com a mesma chave",
       ref("Error"),
     );
+    if (method === "get" && path === `${PREFIX}/integrations`) {
+      operation.responses["200"] = response("Metadados sem credenciais", envelope({
+        type: "array",
+        items: object({
+          id: str, name: str, customers: array(str, 50), scopes: array(str, 4),
+          delegated_by: str, expires_at: { type: "string", format: "date-time" }, revoked: { type: "boolean" },
+        }, ["id", "name", "customers", "scopes", "delegated_by", "expires_at", "revoked"]),
+      }, true));
+    }
     if (method === "get" && path.includes("/operacao/")) {
       const kind = path.split("/")[4];
       const schema =

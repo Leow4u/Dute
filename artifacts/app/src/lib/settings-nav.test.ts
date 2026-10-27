@@ -20,6 +20,7 @@ describe("seções da Configuração por perfil", () => {
       "Aplicativo no celular",
       "Pessoas e acessos",
       "Clientes",
+      "Integrações",
       "Sistema",
     ]);
   });

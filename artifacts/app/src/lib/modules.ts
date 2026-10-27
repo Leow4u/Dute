@@ -950,6 +950,7 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   // Clientes (cadastro, modelo de operação, sigla do SKU). O endereço antigo
   // da tela "Cliente BTG" redireciona.
   { path: "/configuracoes/clientes", roles: ACCESS_ADMIN_ROLES },
+  { path: "/configuracoes/integracoes", roles: ACCESS_ADMIN_ROLES },
   { path: "/configuracoes/cliente", roles: ACCESS_ADMIN_ROLES },
   { path: "/configuracoes/sistema", roles: SUPPORT_ROLES },
   { path: "/usuarios", roles: ACCESS_ADMIN_ROLES },

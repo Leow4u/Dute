@@ -19,6 +19,20 @@ lote inteiro de Functions pelo workflow oficial.
 
 ## Credenciais
 
+### Pelo app (owner/admin)
+
+Em **Configuração → Integrações**, escolha **Nova integração**. Informe o nome,
+selecione os clientes, as permissões da Operação e a validade da chave. Clique
+em **Gerar chave**, copie a credencial e guarde no cofre do integrador antes de
+concluir: ela aparece uma única vez e não pode ser recuperada depois.
+
+A lista mostra os metadados das integrações, inclusive expiradas e revogadas.
+**Revogar** pede confirmação e corta o acesso imediatamente. Uma chave perdida
+deve ser revogada e substituída. As escritas da integração continuam exigindo
+aprovação humana por ação, conforme o contrato abaixo.
+
+### Pela API
+
 Um owner/admin humano usa seu **ID token Firebase** (não o access token do
 Google Cloud, nem a chave web Firebase) em `Authorization: Bearer <ID_TOKEN>`.
 Esse token pode ser obtido pelo SDK Firebase Authentication da sessão humana
@@ -50,6 +64,13 @@ papel operacional mínimo; o agente nunca herda o papel owner/admin.
 Para revogar: `DELETE <base>/integrations/<id>`, com token humano owner/admin.
 Para rotacionar: criar outra credencial, configurar o consumidor e revogar a
 antiga. Homologação e produção não compartilham credenciais.
+
+Para listar: `GET <base>/integrations?limit=50&cursor=<id>`, com o mesmo login
+humano owner/admin. Retorna `data` com `id`, `name`, `customers`, `scopes`,
+`delegated_by`, `expires_at` e `revoked`, e `next_cursor` (continue até `null`).
+O limite é de 1 a 100. Nunca retorna token, hash ou contadores internos.
+O CORS da API permite o domínio do app de produção e, na homologação, os dois
+endereços do Cloud Run desse ambiente; isso não substitui a autenticação.
 
 | Escopo | Permite |
 |---|---|
