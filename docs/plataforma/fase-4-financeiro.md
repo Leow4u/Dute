@@ -1142,3 +1142,49 @@ pedido" e do "Encerrar". O "Separar a menos" e as telas entram em seguida.
     - o "Encerrar" antes e depois da entrega.
   - `callables-papeis.integration.test.ts`: a linha do `cancelWarehouseOrder`.
   - `billing-scope.test.ts`: a origem `wms_order_cancel` não se cobra.
+
+### Pergunta 59: Separar a menos (o servidor)
+
+O "Separar a menos" do canvas "Telas das decisões de 26/10" (item 6), no
+servidor. A tela entra em seguida, com as do "Cancelar pedido" e do
+"Encerrar".
+
+- **O problema.** A separação só concluía com o separado igual ao pedido.
+  Faltando item na posição, o pedido parava: quem operava registrava a falta
+  pelo Tratar, e a coordenação não tinha como seguir com o que foi achado.
+- **Separar a menos** (`advanceWarehouseTask`, na conclusão da separação; a
+  regra em `domain/short-pick.ts`):
+  - Cada linha leva o separado, de 0 ao pedido. Separado a mais recusa,
+    como antes.
+  - A linha a menos é só da coordenação (`owner`, `admin` e `interno`) e
+    pede o motivo, falta ou avaria, e um detalhe opcional de até 300
+    caracteres. Quem opera o armazém recebe "Só a coordenação separa a
+    menos. Registre a falta pelo Tratar.".
+  - Sem nada separado, o pedido não segue: "Nada foi separado. Para desistir
+    do pedido, use Cancelar pedido.".
+  - A reserva da linha fica com o separado, e a diferença volta a ficar
+    disponível: no saldo da posição, no estoque do portal e no catálogo. A
+    linha zerada solta a reserva inteira (`released`, com `release_reason:
+    short_pick`), e o item dela fica `short`.
+  - O saldo físico da posição não muda. A falta ou a avaria se acerta pela
+    contagem da posição (Estoque › Contagem), depois da entrega do pedido.
+  - A embalagem passa pelo item `short`, e a entrega consome só a reserva
+    separada: a remessa e a baixa saem com o separado.
+  - A exceção que quem opera abriu pelo Tratar na separação fica resolvida
+    com a decisão, e a tarefa deixa de aparecer bloqueada.
+  - O pedido grava o separado (`qtd_sep`) e a falta (`qtd_falta`). A linha
+    grava o motivo e o detalhe.
+  - O evento de atenção `picking.short_picked` tem a descrição "PED-0049
+    seguiu com 28 de 30 un.", que é o que pode ir ao rascunho de aviso ao
+    cliente. O motivo, o detalhe e a posição ficam no `payload`. A diferença
+    solta grava `stock.reservation_released`.
+  - Cancelar o pedido depois disso devolve à posição só o separado.
+- **Testes:**
+  - `short-pick.test.ts`: as linhas, o motivo, quem separa a menos e o
+    pedido sem nada separado.
+  - `short-pick.integration.test.ts`, no emulador:
+    - a linha a menos até a entrega;
+    - a linha zerada;
+    - as recusas, sem mudar nada;
+    - a exceção do Tratar resolvida;
+    - o cancelamento depois da separação a menos.

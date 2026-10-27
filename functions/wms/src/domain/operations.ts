@@ -7,6 +7,7 @@ import {
 } from "./request-numbers.js";
 
 import { receivedSummary } from "./client-shipments.js";
+import { conferirSeparacao, type LinhaSeparada } from "./short-pick.js";
 import {
   LOCAL_DO_CANCELADO,
   ROTULO_DO_CANCELADO,
@@ -87,6 +88,7 @@ const collections = {
   clientRequestStatus: "client_request_status",
   systemControls: "system_controls",
   opsAggregates: "ops_aggregates",
+  qualityExceptions: "quality_exceptions",
 } as const;
 
 export type OperationalActor = {
@@ -205,6 +207,9 @@ export type AdvanceOperationalTaskInput = {
       qty_picked: number;
       status?: string;
       notes?: string;
+      /** A linha separada a menos (pergunta 59): falta ou avaria. */
+      shortage_reason?: string;
+      shortage_detail?: string;
     }>;
     packing_lines?: Array<{
       order_item_id: string;
@@ -6805,8 +6810,29 @@ export async function advanceWarehouseTaskTransaction(
     let pickLines: Row[] = [];
     let pickingConfirmationsById = new Map<
       string,
-      { qty_picked?: number; status?: string; notes?: string }
+      {
+        qty_picked?: number;
+        status?: string;
+        notes?: string;
+        shortage_reason?: string;
+        shortage_detail?: string;
+      }
     >();
+    // Separar a menos (pergunta 59): cada linha conferida e, na que veio a
+    // menos, o item, a reserva e o saldo de onde a diferença se solta.
+    let separatedLines: LinhaSeparada[] = [];
+    const shortLines: Array<{
+      line: LinhaSeparada;
+      lineNumber: number;
+      orderItem: Row;
+      reservation: Row;
+      skuCode: string;
+      locationId: string;
+      clientItemCode?: string;
+      productName?: string;
+    }> = [];
+    const shortBalances = new Map<string, BalanceState & { released: number }>();
+    let openPickExceptions: Row[] = [];
     let packingConfirmationsById = new Map<
       string,
       { qty_packed?: number; status?: string; notes?: string }
@@ -6998,35 +7024,109 @@ export async function advanceWarehouseTaskTransaction(
       pickingConfirmationsById = new Map(
         pickingConfirmations.map((line) => [text(line.pick_line_id), line]),
       );
-      for (const row of pickLines) {
-        const confirmation = pickingConfirmationsById.get(row.id);
-        if (!confirmation) {
-          throw new HttpsError(
-            "failed-precondition",
-            `Linha ${row.id} não foi conferida fisicamente.`,
-          );
+      separatedLines = conferirSeparacao(
+        pickLines.map((row) => ({
+          id: row.id,
+          produto: text(row.data.product_name) || text(row.data.sku_code) || row.id,
+          pedido: requiredPositive(row.data.qty_to_pick, `Quantidade de ${row.id}`),
+        })),
+        pickingConfirmationsById,
+        actor.role,
+      );
+      if (separatedLines.some((line) => line.diferenca > 0)) {
+        // A linha, o item do pedido e a reserva andam pelo número da linha
+        // (a aprovação cria os três juntos).
+        const byLineNumber = (rows: Row[]) =>
+          new Map(rows.map((row) => [number(row.data.line_number), row]));
+        const pickLinesById = new Map(pickLines.map((row) => [row.id, row]));
+        const itemsByLine = byLineNumber(orderItems);
+        const reservationsByLine = byLineNumber(reservations);
+        for (const line of separatedLines) {
+          if (line.diferenca === 0) continue;
+          const pickLine = pickLinesById.get(line.id)!;
+          const lineNumber = number(pickLine.data.line_number);
+          const orderItem = itemsByLine.get(lineNumber);
+          const reservation = reservationsByLine.get(lineNumber);
+          const skuCode = text(pickLine.data.sku_code);
+          const locationId = text(pickLine.data.location_id);
+          if (
+            !lineNumber ||
+            !orderItem ||
+            !reservation ||
+            !skuCode ||
+            !locationId ||
+            text(reservation.data.sku_code) !== skuCode ||
+            text(reservation.data.location_id) !== locationId ||
+            number(reservation.data.reserved_qty || reservation.data.requested_qty) !== line.pedido
+          ) {
+            throw new HttpsError(
+              "failed-precondition",
+              `A linha ${line.id} não confere com o item e a reserva do pedido. Separe completo ou cancele o pedido.`,
+            );
+          }
+          shortLines.push({
+            line,
+            lineNumber,
+            orderItem,
+            reservation,
+            skuCode,
+            locationId,
+            clientItemCode: text(reservation.data.client_item_code) || undefined,
+            productName: text(reservation.data.product_name || pickLine.data.product_name) || undefined,
+          });
         }
-        const expectedQty = requiredPositive(
-          row.data.qty_to_pick,
-          `Quantidade de ${row.id}`,
+        // A diferença sai da reserva do saldo da posição.
+        for (const short of shortLines) {
+          const key = balanceKey(customerCode, short.skuCode, short.locationId);
+          const known = shortBalances.get(key);
+          if (known) {
+            known.released += short.line.diferenca;
+            continue;
+          }
+          const row = assertSingleBalance(
+            await readRows(
+              transaction,
+              exactBalanceQuery(db, customerCode, short.skuCode, short.locationId),
+            ),
+            short.skuCode,
+            short.locationId,
+          );
+          shortBalances.set(key, {
+            row,
+            skuCode: short.skuCode,
+            locationId: short.locationId,
+            qtyOnHand: number(row.data.qty_on_hand),
+            qtyReserved: number(row.data.qty_reserved),
+            released: short.line.diferenca,
+          });
+        }
+        for (const balance of shortBalances.values()) {
+          if (balance.qtyReserved < balance.released) {
+            throw new HttpsError(
+              "failed-precondition",
+              `O saldo de ${balance.skuCode} no local ${balance.locationId} não tem a reserva do pedido. Faça uma reconciliação antes de separar.`,
+            );
+          }
+        }
+        for (const short of shortLines) {
+          if (!taskCatalogTargets.has(short.skuCode)) {
+            taskCatalogTargets.set(
+              short.skuCode,
+              await resolveCatalogAggregateTargets(transaction, db, short.skuCode, short.clientItemCode),
+            );
+          }
+        }
+        // A falta que quem opera registrou pelo Tratar fica resolvida com a decisão.
+        openPickExceptions = (
+          await readRows(
+            transaction,
+            db.collection(collections.qualityExceptions).where("task_id", "==", id),
+          )
+        ).filter(
+          (row) =>
+            text(row.data.task_type) === "picking" &&
+            ["open", "in_review"].includes(text(row.data.status) || "open"),
         );
-        const pickedQty = requiredPositive(
-          confirmation.qty_picked,
-          `Quantidade física de ${row.id}`,
-        );
-        const confirmationStatus = text(confirmation.status || "confirmed");
-        if (!["confirmed", "ok", "picked", "completed"].includes(confirmationStatus)) {
-          throw new HttpsError(
-            "failed-precondition",
-            `Linha ${row.id} não está OK para concluir o picking.`,
-          );
-        }
-        if (pickedQty !== expectedQty) {
-          throw new HttpsError(
-            "failed-precondition",
-            `Linha ${row.id} tem ${pickedQty} unidade(s) físicas, mas esperava ${expectedQty}. Registre exceção antes de concluir.`,
-          );
-        }
       }
     }
 
@@ -7037,10 +7137,13 @@ export async function advanceWarehouseTaskTransaction(
           "Packing sem pedido válido.",
         );
       }
-      orderItems = await readRows(
-        transaction,
-        db.collection(collections.orderItems).where("order_id", "==", orderId),
-      );
+      // O item que a separação a menos zerou não se embala (pergunta 59).
+      orderItems = (
+        await readRows(
+          transaction,
+          db.collection(collections.orderItems).where("order_id", "==", orderId),
+        )
+      ).filter((row) => text(row.data.status) !== "short");
       if (!orderItems.length) {
         throw new HttpsError(
           "failed-precondition",
@@ -7199,12 +7302,15 @@ export async function advanceWarehouseTaskTransaction(
     }
 
     if (type === "shipping" && targetStatus === "delivered") {
-      reservations = await readRows(
-        transaction,
-        db
-          .collection(collections.stockReservations)
-          .where("order_id", "==", orderId),
-      );
+      // A reserva que a separação a menos soltou inteira não se consome (pergunta 59).
+      reservations = (
+        await readRows(
+          transaction,
+          db
+            .collection(collections.stockReservations)
+            .where("order_id", "==", orderId),
+        )
+      ).filter((row) => text(row.data.status) !== "released");
       if (!reservations.length) {
         throw new HttpsError(
           "failed-precondition",
@@ -7813,7 +7919,7 @@ export async function advanceWarehouseTaskTransaction(
     }
 
     if (type === "picking" && targetStatus === "completed") {
-      const pickedUnits = pickLines.reduce(
+      const expectedUnits = pickLines.reduce(
         (sum, row) =>
           sum +
           requiredPositive(row.data.qty_to_pick, `Quantidade de ${row.id}`),
@@ -7828,34 +7934,58 @@ export async function advanceWarehouseTaskTransaction(
           ),
         0,
       );
-      if (pickedUnits !== reservedUnits) {
+      if (expectedUnits !== reservedUnits) {
         throw new HttpsError(
           "failed-precondition",
-          `Picking (${pickedUnits}) diverge das reservas (${reservedUnits}).`,
+          `Picking (${expectedUnits}) diverge das reservas (${reservedUnits}).`,
         );
       }
+      // O separado de verdade: na linha a menos, o que a coordenação informou.
+      const separatedById = new Map(separatedLines.map((line) => [line.id, line]));
+      const pickedUnits = separatedLines.reduce((sum, line) => sum + line.separado, 0);
+      const shortUnits = expectedUnits - pickedUnits;
       for (const row of pickLines) {
         const confirmation = pickingConfirmationsById.get(row.id);
-        const pickedQty = number(confirmation?.qty_picked || row.data.qty_to_pick);
+        const line = separatedById.get(row.id);
         transaction.update(
           row.ref,
           compact({
-            qty_picked: pickedQty,
+            qty_picked: line ? line.separado : number(row.data.qty_to_pick),
             status: "completed",
-            physical_status: "confirmed",
+            physical_status: line?.diferenca ? "short" : "confirmed",
             physical_notes: text(confirmation?.notes) || undefined,
+            short_qty: line?.diferenca || undefined,
+            shortage_reason: line?.motivo,
+            shortage_detail: line?.detalhe,
             picked_at: FieldValue.serverTimestamp(),
             updated_at: FieldValue.serverTimestamp(),
           }),
         );
       }
+      const shortByItem = new Map(shortLines.map((short) => [short.orderItem.id, short]));
       for (const row of orderItems) {
-        transaction.update(row.ref, {
-          picked_qty: number(row.data.allocated_qty || row.data.requested_qty),
-          status: "picked",
-          updated_at: FieldValue.serverTimestamp(),
-        });
+        const short = shortByItem.get(row.id);
+        if (!short) {
+          transaction.update(row.ref, {
+            picked_qty: number(row.data.allocated_qty || row.data.requested_qty),
+            status: "picked",
+            updated_at: FieldValue.serverTimestamp(),
+          });
+          continue;
+        }
+        // O item que não se separou fica "short": a embalagem passa por ele.
+        transaction.update(
+          row.ref,
+          compact({
+            picked_qty: short.line.separado,
+            status: short.line.separado > 0 ? "picked" : "short",
+            short_qty: short.line.diferenca,
+            shortage_reason: short.line.motivo,
+            updated_at: FieldValue.serverTimestamp(),
+          }),
+        );
       }
+      const shortByReservation = new Map(shortLines.map((short) => [short.reservation.id, short]));
       for (const row of reservations) {
         if (text(row.data.status) !== "reserved") {
           throw new HttpsError(
@@ -7863,10 +7993,71 @@ export async function advanceWarehouseTaskTransaction(
             `Reserva ${row.id} não está disponível para picking.`,
           );
         }
+        const short = shortByReservation.get(row.id);
+        if (!short) {
+          transaction.update(row.ref, {
+            status: "picked",
+            picked_qty: number(row.data.reserved_qty || row.data.requested_qty),
+            picked_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp(),
+          });
+          continue;
+        }
+        // A reserva fica com o separado; a diferença volta a ficar disponível.
+        transaction.update(
+          row.ref,
+          compact({
+            status: short.line.separado > 0 ? "picked" : "released",
+            reserved_qty: short.line.separado,
+            picked_qty: short.line.separado,
+            released_qty: short.line.diferenca,
+            release_reason: "short_pick",
+            shortage_reason: short.line.motivo,
+            released_by: actorPayload(actor),
+            picked_at: short.line.separado > 0 ? FieldValue.serverTimestamp() : undefined,
+            released_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp(),
+          }),
+        );
+      }
+      for (const balance of shortBalances.values()) {
+        const nextReserved = balance.qtyReserved - balance.released;
+        transaction.update(balance.row.ref, {
+          qty_reserved: nextReserved,
+          qty_available: balance.qtyOnHand - nextReserved,
+          updated_at: FieldValue.serverTimestamp(),
+        });
+      }
+      const releasedBySku = new Map<string, { released: number; clientItemCode?: string; productName?: string }>();
+      for (const short of shortLines) {
+        const key = `${short.skuCode}\u0000${short.clientItemCode ?? ""}`;
+        const entry = releasedBySku.get(key) ?? {
+          released: 0,
+          clientItemCode: short.clientItemCode,
+          productName: short.productName,
+        };
+        entry.released += short.line.diferenca;
+        releasedBySku.set(key, entry);
+      }
+      for (const [key, entry] of releasedBySku) {
+        const skuCode = key.split("\u0000")[0]!;
+        updateClientInventory(transaction, db, {
+          customerCode,
+          skuCode,
+          clientItemCode: entry.clientItemCode,
+          productName: entry.productName,
+          reservedDelta: -entry.released,
+        });
+        applyCatalogStockAggregates(transaction, taskCatalogTargets.get(skuCode) ?? {}, {
+          reserved: -entry.released,
+        });
+      }
+      for (const row of openPickExceptions) {
         transaction.update(row.ref, {
-          status: "picked",
-          picked_qty: number(row.data.reserved_qty || row.data.requested_qty),
-          picked_at: FieldValue.serverTimestamp(),
+          status: "resolved",
+          resolution: `Separado a menos pela coordenação: ${pickedUnits} de ${expectedUnits} un.`,
+          resolved_by: actorPayload(actor),
+          resolved_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
         });
       }
@@ -7886,11 +8077,15 @@ export async function advanceWarehouseTaskTransaction(
         updated_at: FieldValue.serverTimestamp(),
       });
       if (orderRow) {
-        transaction.update(orderRow.ref, {
-          status: "SEPARACAO",
-          qtd_sep: pickedUnits,
-          updated_at: FieldValue.serverTimestamp(),
-        });
+        transaction.update(
+          orderRow.ref,
+          compact({
+            status: "SEPARACAO",
+            qtd_sep: pickedUnits,
+            qtd_falta: shortUnits || undefined,
+            updated_at: FieldValue.serverTimestamp(),
+          }),
+        );
       }
       if (requestRow) {
         transaction.update(requestRow.ref, {
@@ -7906,6 +8101,83 @@ export async function advanceWarehouseTaskTransaction(
       effects.picked_lines = pickLines.length;
       effects.physical_lines_confirmed = pickLines.length;
       effects.picked_units = pickedUnits;
+      if (shortUnits > 0) {
+        taskUpdate.short_units = shortUnits;
+        effects.short_units = shortUnits;
+        if (openPickExceptions.length) {
+          taskUpdate.exception_count = 0;
+          taskUpdate.blocked_reason = null;
+        }
+        const orderNumber = text(task.order_number || orderRow?.data.order_number) || orderId;
+        // A descrição vai ao rascunho de aviso ao cliente: o motivo e a posição ficam no payload.
+        events.push(
+          createEvent(
+            transaction,
+            db,
+            operationEventId(operationId, "short_picked"),
+            {
+              type: "picking.short_picked",
+              title: "Separado a menos",
+              description: `${orderNumber} seguiu com ${pickedUnits} de ${expectedUnits} un.`,
+              severity: "attention",
+              entity_type: "pedido",
+              entity_id: orderId,
+              customer_code: customerCode,
+              payload: {
+                order_id: orderId,
+                order_number: orderNumber,
+                pick_task_id: id,
+                customer_request_id: requestId || undefined,
+                expected_units: expectedUnits,
+                picked_units: pickedUnits,
+                short_units: shortUnits,
+                lines: shortLines.map((short) =>
+                  compact({
+                    line_number: short.lineNumber,
+                    sku_code: short.skuCode,
+                    client_item_code: short.clientItemCode,
+                    product_name: short.productName,
+                    location_id: short.locationId,
+                    expected_qty: short.line.pedido,
+                    picked_qty: short.line.separado,
+                    short_qty: short.line.diferenca,
+                    reason: short.line.motivo,
+                    detail: short.line.detalhe,
+                  }),
+                ),
+                resolved_exception_ids: openPickExceptions.map((row) => row.id),
+              },
+              occurred_at: occurredAt,
+            },
+            actor,
+          ),
+        );
+        events.push(
+          createEvent(
+            transaction,
+            db,
+            operationEventId(operationId, "short_released"),
+            {
+              type: "stock.reservation_released",
+              title: "Reserva de estoque liberada",
+              description: `${shortUnits} unidade(s) liberada(s) na separação a menos.`,
+              severity: "info",
+              entity_type: "reserva_estoque",
+              entity_id: orderId,
+              customer_code: customerCode,
+              payload: {
+                order_id: orderId,
+                customer_request_id: requestId || undefined,
+                release_reason: "short_pick",
+                released_qty_total: shortUnits,
+                reservation_count: shortLines.length,
+              },
+              occurred_at: occurredAt,
+            },
+            actor,
+          ),
+        );
+      }
       events.push(
         createEvent(
           transaction,
