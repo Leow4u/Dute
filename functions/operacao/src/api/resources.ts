@@ -16,6 +16,7 @@ import {
 import { lerEscopo, saveServiceOrderFor } from "../domain/os-gravacao.js";
 import type { OperacaoProfile } from "../domain/profile.js";
 import { requireCustomer, requireScope, type Integration } from "./auth.js";
+import { customerFilter } from "./shared/core.js";
 import {
   PREFIX,
   invalid,
@@ -105,13 +106,18 @@ export async function readResource(
     const snap = await collection.doc(match[2]).get();
     if (!snap.exists)
       throw new HttpsError("not-found", "Registro não encontrado.");
+    const team = snap.get("equipe_uids");
+    if (integration.principal?.role === "campo" && (!Array.isArray(team) || !team.includes(integration.principal.uid)))
+      throw new HttpsError("permission-denied", "A OS não está vinculada à sua equipe.");
     requireCustomer(integration, snap.get("customer_code"));
     return { data: projectDocument(kind, snap.id, snap.data()!) };
   }
-  if (!resources) requireCustomer(integration, filters.customer_code);
   let selection: Query = collection.orderBy(FieldPath.documentId());
-  if (!resources)
-    selection = selection.where("customer_code", "==", filters.customer_code);
+  if (!resources) {
+    const customer = customerFilter({ integration }, filters.customer_code);
+    if (customer !== undefined) selection = selection.where("customer_code", "==", customer);
+  }
+  if (integration.principal?.role === "campo") selection = selection.where("equipe_uids", "array-contains", integration.principal.uid);
   if (filters.cursor) selection = selection.startAfter(filters.cursor);
   // Filter one bounded page in memory: no compound index or unbounded scan.
   // An empty filtered page may still have next_cursor, which consumers follow.

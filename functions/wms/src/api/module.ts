@@ -2,6 +2,7 @@ import { type Firestore, type Transaction } from "firebase-admin/firestore";
 import { z } from "genkit";
 import { HttpsError } from "firebase-functions/https";
 import { advanceWarehouseTaskTransaction, createCustomerRequestTransaction, decideCustomerRequestTransaction, createInboundReceiptTransaction, updateInboundReceiptConferenceTransaction, createInventoryMovementTransaction } from "../domain/operations.js";
+import { authorizePersonalRoute } from "./shared/principal.js";
 import { denied, digest, invalid, object, projectFields, readPage, requireCustomer, requireScope, type ApiContext, type ModuleDefinition, type ModuleRoute } from "./shared/core.js";
 
 const base = "/api/v1/armazenagem";
@@ -90,7 +91,7 @@ async function validateItems(ctx: ReadContext, customer: string, items: z.infer<
   }
 }
 function route(method: ModuleRoute["method"], path: string, scope: ModuleRoute["scope"], summary: string, run: ModuleRoute["run"]): ModuleRoute {
-  return { method, path: base + path, scope, role: "wms", summary, run: async (ctx, params, request) => { requireScope(ctx, scope); return run(ctx, params, request); } };
+  return { method, path: base + path, scope, role: "wms", summary, run: async (ctx, params, request) => { requireScope(ctx, scope); if (ctx.integration.kind === "personal") { if (!ctx.integration.principal) denied(); authorizePersonalRoute(ctx.integration.principal, method, base + path, scope, request.body); if (request.query.customer_code !== undefined) requireCustomer(ctx, request.query.customer_code); } return run(ctx, params, request); } };
 }
 const reads = [
   ["catalogo", "skus"], ["posicoes", "warehouse_positions"], ["estoque", "stock_balances"],
@@ -100,15 +101,16 @@ export const armazenagemApi: ModuleDefinition = {
   module: "armazenagem",
   released: (project) => ["dute-prod", "dute-homolog", "demo-dute-api-wms"].includes(project),
   routes: [
-    ...reads.map(([name, collection]) => route("GET", `/${name}`, "armazenagem:ler", `Consultar ${name}`, (ctx, _params, request) => readPage(ctx, collection, fields[name], request, { customerField: "customer_code" }))),
-    route("GET", "/pedidos/{id}", "armazenagem:ler", "Consultar pedido", async (ctx, params) => ({ data: projectFields(params.id!, await target(ctx, "customer_requests", params.id!), fields.pedidos) })),
+    ...reads.map(([name, collection]) => route("GET", `/${name}`, "armazenagem:ler", `Consultar ${name}`, (ctx, _params, request) => readPage(ctx, ctx.integration.kind === "personal" && (ctx.actor.role === "cliente" || ctx.actor.role === "financeiro") && name === "estoque" ? "client_inventory" : ctx.integration.kind === "personal" && ctx.actor.role === "cliente" && name === "pedidos" ? "client_request_status" : collection, fields[name], request, { customerField: "customer_code" }))),
+    route("GET", "/pedidos/{id}", "armazenagem:ler", "Consultar pedido", async (ctx, params) => ({ data: projectFields(params.id!, await target(ctx, ctx.integration.kind === "personal" && ctx.actor.role === "cliente" ? "client_request_status" : "customer_requests", params.id!), fields.pedidos) })),
     route("GET", "/recebimentos/{id}", "armazenagem:ler", "Consultar recebimento", async (ctx, params) => ({ data: projectFields(params.id!, await target(ctx, "inbound_receipts", params.id!), [...fields.recebimentos, "expected_version"]) })),
     route("GET", "/recebimentos/{id}/itens", "armazenagem:ler", "Consultar linhas do recebimento", async (ctx, params, request) => {
       const receipt = await target(ctx, "inbound_receipts", params.id!);
       const page = await readPage(ctx, "inbound_items", fields.itens, request, { customerField: "customer_code" });
       // Filtro por relação sem expor linhas de outro recebimento. A paginação
       // permanece pelo cliente; páginas vazias podem ter next_cursor.
-      if (request.query.customer_code !== receipt.customer_code) denied();
+      if (request.query.customer_code !== undefined && request.query.customer_code !== receipt.customer_code) denied();
+      if (ctx.integration.kind !== "personal" && request.query.customer_code === undefined) denied();
       return { ...page, data: page.data.filter((line) => object(line).receipt_id === params.id) };
     }),
     route("POST", "/pedidos", "armazenagem:pedidos:gravar", "Criar pedido", async (ctx, _params, request) => {

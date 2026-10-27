@@ -51,3 +51,19 @@ it("perda de conexão não repete criação e orienta conferir/revogar uma chave
   await expect(criarIntegracao({ name: "Parceiro", scopes: ["operacao:ler"], customers: ["A"], expires_in_days: 30, write_policy: "scoped" as const })).rejects.toThrow("Confira a lista antes de tentar novamente");
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
+
+it('usa endpoints pessoais e nunca inclui clientes na criação pessoal', async () => {
+  const { criarChavePessoal, listarChavesPessoais, obterCapabilities, revogarChavePessoal } = await import('./api');
+  const fetcher = vi.fn(async () => new Response(JSON.stringify({ data: { id: 'a', token: 'one-time', expires_at: '2099-01-01' }, next_cursor: null })));
+  vi.stubGlobal('fetch', fetcher);
+  await obterCapabilities();
+  await listarChavesPessoais('cursor');
+  await criarChavePessoal({ name: 'Pessoal', permission: 'read_only', expires_in_days: 90 });
+  await revogarChavePessoal('a'.repeat(32));
+  const calls = fetcher.mock.calls as unknown as [string, RequestInit][];
+  expect(calls[0][0]).toContain('/api-keys/capabilities');
+  expect(calls[1][0]).toContain('/api-keys?limit=50&cursor=cursor');
+  expect(JSON.parse(String(calls[2][1].body))).toEqual({ name: 'Pessoal', permission: 'read_only', expires_in_days: 90 });
+  expect(calls[2][1]).toMatchObject({ cache: 'no-store', method: 'POST' });
+  expect(calls[3][0]).toContain(`/api-keys/${'a'.repeat(32)}`);
+});

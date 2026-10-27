@@ -5,18 +5,14 @@ import { z } from "zod";
 import { loadProfile, type OperacaoProfile } from "../domain/profile.js";
 import { SCOPES, denied, invalid, type Scope } from "./contract.js";
 import { scopesNeedCustomers, type WritePolicy } from "./shared/permissions.js";
+import { personalKeyDetails, personalCustomerAllowed } from "./shared/principal.js";
+import type { ApiIntegration } from "./shared/core.js";
 import { policyOf } from "./shared/handler.js";
 
 export const API_INTEGRATIONS_COLLECTION = "api_integrations";
 export const API_APPROVALS_COLLECTION = "api_approvals";
 export const API_AUDIT_COLLECTION = "api_audit";
-export type Integration = {
-  id: string;
-  delegated_by: string;
-  scopes: Scope[];
-  customers: string[];
-  write_policy: WritePolicy;
-};
+export type Integration = Omit<ApiIntegration, "scopes"> & { scopes: Scope[] };
 export type VerifyHuman = (token: string) => Promise<{ uid: string }>;
 const KEY = /^dute_([a-f0-9]{32})\.([A-Za-z0-9_-]{43})$/;
 const hash = (token: string) =>
@@ -55,6 +51,7 @@ export async function delegatedProfile(
   db: Firestore,
   integration: Integration,
 ): Promise<OperacaoProfile> {
+  if (integration.principal) return { uid: `api:${integration.id}`, role: integration.principal.role, name: integration.principal.name ?? `Chave ${integration.id}`, ...(integration.principal.customer_code ? { customer_code: integration.principal.customer_code } : {}) };
   const profile = await loadProfile(db, integration.delegated_by);
   if (profile.role !== "owner" && profile.role !== "admin")
     denied("O responsável pela integração perdeu a permissão.");
@@ -92,6 +89,8 @@ export async function loadIntegration(
     data.customers.some((code: unknown) => typeof code !== "string" || !code)
   )
     denied("Configuração da integração inválida.");
+  if (data.kind !== undefined && data.kind !== "personal") denied("Tipo de chave inválido.");
+  if (data.kind === "personal") return { id, delegated_by: data.delegated_by, write_policy: "scoped", ...await personalKeyDetails(db, data) };
   return {
     id,
     delegated_by: data.delegated_by,
@@ -140,7 +139,7 @@ export async function authenticate(
         "resource-exhausted",
         "Limite de 60 chamadas por minuto. Tente novamente no próximo minuto.",
       );
-    tx.update(ref, { rate_window: window, rate_count: count + 1 });
+    tx.update(ref, { rate_window: window, rate_count: count + 1, ...(data.kind === "personal" ? { last_used_at_ms: Date.now() } : {}) });
   });
   const integration = await loadIntegration(db, match[1]);
   await delegatedProfile(db, integration);
@@ -153,7 +152,7 @@ export function requireCustomer(
   integration: Integration,
   code: unknown,
 ): asserts code is string {
-  if (typeof code !== "string" || !integration.customers.includes(code))
+  if (integration.kind === "personal" ? !integration.principal || !personalCustomerAllowed(integration.principal, code) : typeof code !== "string" || !integration.customers.includes(code))
     denied("Cliente fora do acesso desta integração.");
 }
 const Create = z
@@ -215,13 +214,13 @@ export async function listIntegrations(db: Firestore, input: unknown) {
   if (!parsed.success) invalid("Informe limit (1 a 100) e cursor válido.");
   const { limit, cursor } = parsed.data;
   let query = db.collection(API_INTEGRATIONS_COLLECTION)
-    .select("name", "scopes", "customers", "delegated_by", "expires_at_ms", "revoked", "write_policy")
+    .select("name", "scopes", "customers", "delegated_by", "expires_at_ms", "revoked", "write_policy", "kind")
     .orderBy(FieldPath.documentId()).limit(limit + 1);
   if (cursor) query = query.startAfter(cursor);
   const snapshot = await query.get();
   const docs = snapshot.docs.slice(0, limit);
   return {
-    data: docs.map((doc) => {
+    data: docs.filter(doc => doc.get("kind") !== "personal").map((doc) => {
       const data = doc.data();
       return {
         id: doc.id,

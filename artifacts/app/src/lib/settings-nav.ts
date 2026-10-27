@@ -76,11 +76,11 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   },
   {
     id: "integracoes",
-    label: "Integrações",
+    label: "Chaves de API",
     href: "/configuracoes/integracoes",
     icon: Plug,
-    group: "administracao",
-    roles: ACCESS_ADMIN_ROLES,
+    group: "conta",
+    roles: EVERYONE,
   },
   {
     id: "sistema",

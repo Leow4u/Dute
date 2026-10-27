@@ -29,3 +29,8 @@ export function integrationStatus(row: Pick<IntegrationRow, "revoked" | "expires
   if (row.revoked) return "Revogada";
   return Date.parse(row.expires_at) > now ? "Ativa" : "Expirada";
 }
+
+export type PersonalPermission = 'full' | 'read_only' | 'custom';
+export type PersonalKeyInput = { name: string; permission: PersonalPermission; scopes?: string[]; expires_in_days?: number };
+export type PersonalKeyCapabilities = { scopes: string[]; role: string; customer_code?: string; customer_access: 'all' | 'own' | 'none' };
+export type PersonalKeyRow = { id: string; name: string; token_prefix: string; permission: PersonalPermission | 'legacy'; scopes: string[]; created_at: string | null; expires_at: string; last_used_at: string | null; revoked: boolean; kind: 'personal' | 'legacy'; write_policy?: 'scoped' | 'approval_required' };

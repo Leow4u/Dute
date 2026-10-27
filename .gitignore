@@ -70,3 +70,6 @@ artifacts/app/.preview-tmp/
 
 # API portátil gerada pelo build de cada codebase
 functions/*/src/api/shared/
+
+# Execução e relatórios locais das skills
+.superpowers/

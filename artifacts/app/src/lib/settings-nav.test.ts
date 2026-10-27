@@ -20,19 +20,19 @@ describe("seções da Configuração por perfil", () => {
       "Aplicativo no celular",
       "Pessoas e acessos",
       "Clientes",
-      "Integrações",
+      "Chaves de API",
       "Sistema",
     ]);
   });
 
   it("suporte vê Sistema, mas não pessoas nem cliente", () => {
-    expect(labels("suporte")).toEqual(["Minha conta", "Aplicativo no celular", "Sistema"]);
+    expect(labels("suporte")).toEqual(["Minha conta", "Aplicativo no celular", "Chaves de API", "Sistema"]);
   });
 
   it.each<ProfileRole>(["wms", "interno", "financeiro", "cliente"])(
     "%s vê só a própria conta",
     (role) => {
-      expect(labels(role)).toEqual(["Minha conta", "Aplicativo no celular"]);
+      expect(labels(role)).toEqual(["Minha conta", "Aplicativo no celular", "Chaves de API"]);
     },
   );
 
@@ -113,4 +113,10 @@ describe("Voltar", () => {
     expect(getReturnPath("wms", true)).toBe("/");
     expect(getReturnPath("campo", true)).toBe("/");
   });
+});
+
+it.each<ProfileRole>(['owner', 'admin', 'suporte', 'interno', 'wms', 'financeiro', 'comercial', 'rh', 'campo', 'cliente', 'painel'])('%s encontra Chaves de API em Sua conta', role => {
+  const section = getSettingsSections(role).find(section => section.id === 'integracoes');
+  expect(section).toMatchObject({ label: 'Chaves de API', group: 'conta', href: '/configuracoes/integracoes' });
+  expect(getRouteProfileRoles('/configuracoes/integracoes')).toContain(role);
 });

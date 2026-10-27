@@ -125,3 +125,75 @@ test("lista paginada mantém projeção, versão e isolamento em cada página", 
   assert.equal(second.data.length, 1); assert.equal(second.next_cursor, null);
   assert.notEqual(first.data[0].id, second.data[0].id);
 });
+
+test("pessoal wms conserva rotina própria mas perde leitura quando contrato é removido", async () => {
+  const ctx = context();
+  ctx.integration = { ...ctx.integration, kind: "personal", permission: "full", principal: { uid: "human", role: "wms", modules: [], portal_active: true } };
+  ctx.actor = { ...ctx.actor, role: "wms" };
+  const created = await call("rotinas", "POST", routine, undefined, ctx);
+  assert.equal((await call("rotinas", "GET", undefined, created.id, ctx)).data.name, routine.name);
+  await db.doc("client_access/A").set({ modules: [] });
+  await assert.rejects(call("rotinas", "GET", undefined, created.id, ctx), { code: "permission-denied" });
+  assert.deepEqual((await call("rotinas", "GET", undefined, undefined, ctx)).data, []);
+  await assert.rejects(call("rotinas", "POST", routine, undefined, ctx), { code: "permission-denied" });
+});
+
+test("handler pessoal core: projeção, papel atual, cliente atual e bloqueio", async () => {
+  const keyId = "a".repeat(32), token = `dute_${keyId}.${"s".repeat(43)}`;
+  await db.doc("users/personal-human").set({ role: "owner", customer_code: "PERSONAL", nome: "Pessoa" });
+  await db.doc("client_access/PERSONAL").set({ modules: ["wms", "financeiro"] });
+  await db.doc(`api_integrations/${keyId}`).set({ kind: "personal", permission: "full", delegated_by: "personal-human", scopes: [], customers: [], write_policy: "scoped", expires_at_ms: Date.now() + 600000, token_hash: createHash("sha256").update(token).digest("hex") });
+  await db.doc("ai_agent_playbooks/personal-row").set({ customer_code: "PERSONAL", name: "Pessoal", status: "open", secret: "never", created_by: { uid: `api:${keyId}` } });
+  const handler = createModuleHandler(db, "dute-homolog", async () => ({ uid: "unused" }), agenteApi);
+  const request = { method: "GET", path: "/api/v1/agente/playbooks", headers: { authorization: `Bearer ${token}` }, query: {} };
+  const first = await handler(request);
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.ok((first.body.data as any[]).some(row => row.id === "personal-row"));
+  assert.ok((first.body.data as any[]).every(row => row.secret === undefined));
+
+  await db.doc("users/personal-human").update({ role: "painel" });
+  assert.equal((await handler(request)).status, 403);
+  await db.doc("users/personal-human").update({ role: "owner", access_disabled: true });
+  assert.equal((await handler(request)).status, 403);
+});
+
+test("handler pessoal core: grava com papel real e recibo de replay sem duplicar", async () => {
+  const keyId = "b".repeat(32), token = `dute_${keyId}.${"s".repeat(43)}`;
+  await db.doc("users/personal-writer").set({ role: "owner", nome: "Pessoa" });
+  await db.doc(`api_integrations/${keyId}`).set({ kind: "personal", permission: "full", delegated_by: "personal-writer", scopes: [], customers: [], write_policy: "scoped", expires_at_ms: Date.now() + 600000, token_hash: createHash("sha256").update(token).digest("hex") });
+  const handler = createModuleHandler(db, "dute-homolog", async () => ({ uid: "unused" }), agenteApi);
+  const request = { method: "POST", path: "/api/v1/agente/playbooks", headers: { authorization: `Bearer ${token}`, "idempotency-key": "personal-write" }, query: {}, body: playbook };
+  const first = await handler(request);
+  assert.equal(first.status, 201, JSON.stringify(first.body));
+  const replay = await handler(request);
+  assert.equal(replay.status, 200, JSON.stringify(replay.body));
+  assert.equal(replay.body.replayed, true);
+  const events = await db.collection("events").get();
+  const event = events.docs.find(doc => doc.get("actor.uid") === `api:${keyId}`);
+  assert.ok(event, "evento com identidade da chave");
+  assert.equal(event.get("actor.role"), "owner");
+  const count = events.size;
+  await db.doc("users/personal-writer").update({ role: "painel" });
+  assert.equal((await handler(request)).status, 403);
+  assert.equal((await db.collection("events").get()).size, count);
+});
+
+test("handler pessoal rotina revalida contrato antes de devolver recibo e preserva replay PATCH de versão antiga", async () => {
+  const keyId = "d".repeat(32), token = `dute_${keyId}.${"s".repeat(43)}`;
+  await db.doc("users/personal-routine-writer").set({ role: "wms", nome: "Pessoa" });
+  await db.doc(`api_integrations/${keyId}`).set({ kind: "personal", permission: "full", delegated_by: "personal-routine-writer", scopes: [], customers: [], write_policy: "scoped", expires_at_ms: Date.now() + 600000, token_hash: createHash("sha256").update(token).digest("hex") });
+  const handler = createModuleHandler(db, "dute-homolog", async () => ({ uid: "unused" }), agenteApi);
+  const request = { method: "POST", path: "/api/v1/agente/rotinas", headers: { authorization: `Bearer ${token}`, "idempotency-key": "personal-routine" }, query: {}, body: routine };
+  const created = await handler(request);
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  assert.equal((await handler(request)).body.replayed, true);
+  const id = (created.body.data as any).id;
+  const detail = await handler({ method: "GET", path: `/api/v1/agente/rotinas/${id}`, headers: { authorization: `Bearer ${token}` }, query: {} });
+  assert.equal(detail.status, 200);
+  const patch = { ...request, method: "PATCH", path: `/api/v1/agente/rotinas/${id}`, headers: { ...request.headers, "idempotency-key": "personal-routine-patch" }, body: { ...routine, name: "Nome novo", expected_version: (detail.body.data as any).version } };
+  assert.equal((await handler(patch)).status, 200);
+  assert.equal((await handler(patch)).body.replayed, true, "versão antiga não impede replay autorizado");
+  await db.doc("client_access/A").set({ modules: [] });
+  assert.equal((await handler(request)).status, 403, "POST concluído perde autorização pelo contrato atual");
+  assert.equal((await handler(patch)).status, 403, "PATCH concluído perde autorização pelo contrato atual");
+});

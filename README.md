@@ -37,12 +37,12 @@ pnpm --filter @workspace/app run build
 
 ## API de integração
 
-A API REST v1 tem credenciais por integração e escopos por módulo, ação e
-cliente, com recursos globais explícitos. Novas chaves `scoped` autorizam as
-gravações concedidas; chaves antigas preservam aprovação por ação. Gestão,
-inventário de cobertura, exemplos e publicação:
-[docs/api.md](docs/api.md). Este código precisa ser publicado pelo fluxo abaixo
-para os endpoints ficarem disponíveis em cada ambiente.
+A API REST v1 oferece chaves pessoais em **Configuração → Chaves de API**:
+crie com nome e permissão, copie uma vez e gerencie suas próprias chaves na lista.
+O acesso acompanha as permissões atuais da conta. Integrações legadas preservam
+clientes e políticas originais. Uso e limites em [docs/api-chaves-pessoais.md](docs/api-chaves-pessoais.md),
+[docs/api.md](docs/api.md) e [docs/api-cobertura.md](docs/api-cobertura.md).
+
 
 ## Deploy
 

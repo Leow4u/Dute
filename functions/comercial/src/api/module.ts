@@ -1,3 +1,5 @@
+import type { ComercialProfile } from "../domain/profile.js";
+import { authorizePersonalRoute } from "./shared/principal.js";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 import { saveCommercialCustomerFor, saveCustomerLocationFor, saveCustomerContactFor, parseEntrada } from "../domain/cadastro.js";
@@ -7,6 +9,8 @@ import { saveQuoteFor, SaveQuoteInput } from "../domain/quotes.js";
 import { saveMedicaoFor, SaveMedicaoInput } from "../domain/medicoes.js";
 import { comercialLiberado } from "../domain/liberacao.js";
 import { object, invalid, denied, requireCustomer, requireScope, readPage, type ApiContext, type ApiRequest, type ModuleDefinition, type ModuleRoute } from "./shared/core.js";
+
+function caller(ctx: ApiContext): ComercialProfile { return ctx.integration.kind === "personal" ? ctx.actor : { ...ctx.actor, role: "comercial" }; }
 
 type Shape = { [key: string]: true | Shape };
 const address: Shape = { logradouro: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, cep: true };
@@ -75,7 +79,7 @@ function body(request: ApiRequest, keys: readonly string[]) {
   return value;
 }
 function route(method: ModuleRoute["method"], path: string, scope: ModuleRoute["scope"], summary: string, run: ModuleRoute["run"]): ModuleRoute {
-  return { method, path: `/api/v1/comercial/${path}`, scope, role: "comercial", summary, run: async (ctx, params, request) => { requireScope(ctx, scope); return run(ctx, params, request); } };
+  return { method, path: `/api/v1/comercial/${path}`, scope, role: "comercial", summary, run: async (ctx, params, request) => { requireScope(ctx, scope); if (ctx.integration.kind === "personal") { if (!ctx.integration.principal) denied(); authorizePersonalRoute(ctx.integration.principal, method, `/api/v1/comercial/${path}`, scope, request.body); } return run(ctx, params, request); } };
 }
 const routes: ModuleRoute[] = [];
 for (const [resource, collection] of Object.entries(collections)) {
@@ -106,17 +110,17 @@ routes.push(route("POST", "clientes", "comercial:clientes:gravar", "Criar prospe
   const code = codigoDoNovoCadastro(input.code, input.name);
   requireCustomer(ctx, code);
   const commercial = input.comercial === undefined ? {} : object(input.comercial);
-  return saveCommercialCustomerFor(ctx.db, { ...ctx.actor, role: "comercial" }, { ...input, comercial: { ...commercial, responsavel_uid: commercial.responsavel_uid === undefined ? ctx.integration.delegated_by : commercial.responsavel_uid }, code, action: "create", idempotency_key: ctx.idempotencyKey });
+  return saveCommercialCustomerFor(ctx.db, caller(ctx), { ...input, comercial: { ...commercial, responsavel_uid: commercial.responsavel_uid === undefined ? ctx.integration.delegated_by : commercial.responsavel_uid }, code, action: "create", idempotency_key: ctx.idempotencyKey });
 }));
 routes.push(route("PATCH", "clientes/{id}", "comercial:clientes:gravar", "Alterar cadastro comercial", async (ctx, params, request) => {
   const input = body(request, customerFields);
   const row = await target(ctx, "customers", params.id);
-  return saveCommercialCustomerFor(guardedDb(ctx, async tx => { await target(ctx, "customers", params.id, row.code, tx); }), { ...ctx.actor, role: "comercial" }, { ...input, customer_code: row.code, action: "update", idempotency_key: ctx.idempotencyKey });
+  return saveCommercialCustomerFor(guardedDb(ctx, async tx => { await target(ctx, "customers", params.id, row.code, tx); }), caller(ctx), { ...input, customer_code: row.code, action: "update", idempotency_key: ctx.idempotencyKey });
 }));
 routes.push(route("POST", "clientes/{id}/marcar-cliente", "comercial:clientes:gravar", "Marcar prospect como cliente", async (ctx, params, request) => {
   body(request, []);
   const row = await target(ctx, "customers", params.id);
-  return saveCommercialCustomerFor(guardedDb(ctx, async tx => { await target(ctx, "customers", params.id, row.code, tx); }), { ...ctx.actor, role: "comercial" }, { action: "mark_client", customer_code: row.code, idempotency_key: ctx.idempotencyKey });
+  return saveCommercialCustomerFor(guardedDb(ctx, async tx => { await target(ctx, "customers", params.id, row.code, tx); }), caller(ctx), { action: "mark_client", customer_code: row.code, idempotency_key: ctx.idempotencyKey });
 }));
 for (const [resource, collection, key, fields, save] of [
   ["locais", "customer_locations", "local_id", ["nome", "sigla", "endereco", "ativo"], saveCustomerLocationFor],
@@ -126,7 +130,7 @@ for (const [resource, collection, key, fields, save] of [
     const input = body(request, ["customer_code", ...fields]);
     requireCustomer(ctx, input.customer_code);
     if (method === "PATCH") await target(ctx, collection, params.id, input.customer_code);
-    return save(guardedDb(ctx, async tx => { if (method === "PATCH") await target(ctx, collection, params.id, input.customer_code as string, tx); }), { ...ctx.actor, role: "comercial" }, { ...input, ...(method === "PATCH" ? { [key]: id(params.id) } : {}), idempotency_key: ctx.idempotencyKey });
+    return save(guardedDb(ctx, async tx => { if (method === "PATCH") await target(ctx, collection, params.id, input.customer_code as string, tx); }), caller(ctx), { ...input, ...(method === "PATCH" ? { [key]: id(params.id) } : {}), idempotency_key: ctx.idempotencyKey });
   }));
 }
 for (const method of ["POST", "PATCH"] as const) routes.push(route(method, "contratos" + (method === "PATCH" ? "/{id}" : ""), "comercial:contratos:gravar", `${method === "POST" ? "Criar" : "Alterar"} contrato`, async (ctx, params, request) => {
@@ -136,7 +140,7 @@ for (const method of ["POST", "PATCH"] as const) routes.push(route(method, "cont
   if (method === "PATCH") await target(ctx, "contracts", params.id, data.contrato.customer_code);
   // Ending contracts is deliberately outside the integration's create/update contract.
   if (data.contrato.status !== "vigente") denied("A API grava somente contratos vigentes.");
-  return salvarContrato(guardedDb(ctx, async tx => { if (method === "PATCH") await target(ctx, "contracts", params.id, data.contrato.customer_code, tx); }), { ...ctx.actor, role: "comercial" }, data);
+  return salvarContrato(guardedDb(ctx, async tx => { if (method === "PATCH") await target(ctx, "contracts", params.id, data.contrato.customer_code, tx); }), caller(ctx), data);
 }));
 routes.push(route("POST", "contratos/{id}/aditivos", "comercial:contratos:gravar", "Registrar aditivo", async (ctx, params, request) => {
   const input = body(request, ["aditivo"]);
@@ -152,7 +156,7 @@ routes.push(route("POST", "contratos/{id}/aditivos", "comercial:contratos:gravar
       const linked = await target(ctx, "price_tables", table, row.code, tx);
       if (linked.data.contract_id !== params.id) denied("Tabela de outro contrato.");
     }
-  }), { ...ctx.actor, role: "comercial" }, data);
+  }), caller(ctx), data);
 }));
 const demandFields = ["contrato_id", "canal", "tipo", "titulo", "ref_cliente", "contato_id", "recebida_em", "email_assunto", "email_link", "origem", "destino", "execucao", "numero_legado"];
 const quoteFields = ["variante", "linhas", "condicoes", "validade_dias", "observacoes_internas"];
@@ -194,14 +198,14 @@ for (const method of ["POST", "PATCH"] as const) routes.push(route(method, "orca
       if (data.vistoria_os) await target(ctx, "service_orders", data.vistoria_os, code, tx);
     }
     await quoteLinks(ctx, data, code, tx);
-  }), { ...ctx.actor, role: "comercial" }, data);
+  }), caller(ctx), data);
 }));
 routes.push(route("POST", "medicoes", "comercial:medicoes:gravar", "Abrir medição mensal", async (ctx, _, request) => {
   const input = body(request, ["contrato_id", "competencia", "variante"]);
   const data = parseEntrada(SaveMedicaoInput, { ...input, action: "create", request_id: ctx.idempotencyKey });
   if (data.action !== "create") invalid("Ação inválida.");
   const contract = await target(ctx, "contracts", data.contrato_id);
-  return saveMedicaoFor(guardedDb(ctx, async tx => { await target(ctx, "contracts", data.contrato_id, contract.code, tx); }), { ...ctx.actor, role: "comercial" }, data);
+  return saveMedicaoFor(guardedDb(ctx, async tx => { await target(ctx, "contracts", data.contrato_id, contract.code, tx); }), caller(ctx), data);
 }));
 routes.push(route("PATCH", "medicoes/{id}/linhas", "comercial:medicoes:gravar", "Incluir ou alterar linha de medição em rascunho", async (ctx, params, request) => {
   const input = body(request, ["expected_edicao", "linha"]);
@@ -227,7 +231,7 @@ routes.push(route("PATCH", "medicoes/{id}/linhas", "comercial:medicoes:gravar", 
       const demand = await target(ctx, "demands", number, row.code, tx);
       if (demand.data.contrato_id !== current.data.contrato_id) denied("Demanda de outro contrato.");
     }
-  }), { ...ctx.actor, role: "comercial" }, data);
+  }), caller(ctx), data);
 }));
 
 export const comercialApi: ModuleDefinition = { module: "comercial", released: comercialLiberado, routes };

@@ -32,3 +32,28 @@ test("PATCH exige versão da consulta antes de qualquer efeito", async () => {
   const route = agenteApi.routes.find((r) => r.method === "PATCH" && r.path.includes("playbooks"))!;
   await assert.rejects(route.run(context, { id: "pb_synthetic" }, { method: "PATCH", path: route.path, headers: {}, query: {}, body: { customer_code: "A" } }), { code: "invalid-argument" });
 });
+
+// Personal API adapters: the domain actor and the portal collection are observable boundaries.
+
+test("pessoal owner lê sem papel sintético e usa projeção autorizada", async () => {
+  const collections: string[] = [];
+  const query = { orderBy() { return this; }, where() { return this; }, limit() { return this; }, async get() { return { docs: [], size: 0 }; } };
+  const personal = { db: { collection(name: string) { collections.push(name); return query; } }, integration: { id: "personal", delegated_by: "human", kind: "personal", permission: "full", customers: [], scopes: ["agente:ler"], write_policy: "scoped", principal: { uid: "human", role: "owner", customer_code: "A", modules: ["wms", "financeiro"], portal_active: true } }, actor: { uid: "api:personal", role: "owner", name: "Pessoa" } } as unknown as ApiContext;
+  const route = agenteApi.routes.find(r => r.method === "GET" && r.path.endsWith("/playbooks"))!;
+  await route.run(personal, {}, { method: "GET", path: route.path, headers: {}, query: {} });
+  assert.deepEqual(collections, ["ai_agent_playbooks"]);
+});
+
+test("matriz pessoal dos onze papéis aplica guardas do adaptador", async () => {
+  const allowed: Record<string, string[]> = {"playbooks": ["owner", "admin", "interno", "suporte"]};
+  for (const role of ["owner", "admin", "interno", "wms", "campo", "comercial", "financeiro", "rh", "suporte", "painel", "cliente"]) {
+    for (const [path, roles] of Object.entries(allowed)) {
+      const route = agenteApi.routes.find(r => r.method === "GET" && r.path.endsWith("/" + path))!;
+      const query = { orderBy() { return this; }, where() { return this; }, limit() { return this; }, async get() { return { docs: [], size: 0 }; } };
+      const ctx = { db: { collection() { return query; } }, integration: { id: "matrix", kind: "personal", scopes: [route.scope], principal: { uid: "human", role, customer_code: "A", modules: ["wms", "financeiro", "operacao"], portal_active: true } }, actor: { uid: "api:matrix", role } } as unknown as ApiContext;
+      const execute = () => route.run(ctx, {}, { method: "GET", path: route.path, headers: {}, query: {} });
+      if (roles.includes(role)) assert.deepEqual(await execute(), { data: [], next_cursor: null }, `${role} ${path}`);
+      else await assert.rejects(execute(), { code: "permission-denied" }, `${role} ${path}`);
+    }
+  }
+});

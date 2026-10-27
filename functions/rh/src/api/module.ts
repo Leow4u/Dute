@@ -1,3 +1,4 @@
+import { authorizePersonalRoute } from "./shared/principal.js";
 import { getApps } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
@@ -27,7 +28,7 @@ function firebaseApp(ctx: ApiContext) {
 }
 function rhDb(ctx: ApiContext): Firestore { return getFirestore(firebaseApp(ctx), RH_DATABASE); }
 function caller(ctx: ApiContext) {
-  if (ctx.actor.role !== "rh" || ctx.actor.uid !== `api:${ctx.integration.id}`) denied();
+  if ((ctx.integration.kind === "personal" ? !["owner", "admin", "rh"].includes(ctx.actor.role) : ctx.actor.role !== "rh") || ctx.actor.uid !== `api:${ctx.integration.id}`) denied();
   return ctx.actor;
 }
 function id(value: string, pattern: RegExp): string {
@@ -49,6 +50,7 @@ function globalPage(ctx: ApiContext, collection: string, fields: readonly string
 function route(method: ModuleRoute["method"], path: string, scope: ModuleRoute["scope"], summary: string, run: ModuleRoute["run"]): ModuleRoute {
   return { method, path: `/api/v1/rh/${path}`, scope, role: "rh", summary, async run(ctx, params, request) {
     requireScope(ctx, scope);
+    if (ctx.integration.kind === "personal") { if (!ctx.integration.principal) denied(); authorizePersonalRoute(ctx.integration.principal, method, `/api/v1/rh/${path}`, scope, request.body); }
     caller(ctx);
     return run(ctx, params, request);
   } };

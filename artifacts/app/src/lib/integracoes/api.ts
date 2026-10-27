@@ -1,6 +1,6 @@
 import { firebaseAuth } from "../firebase";
 import { EMULADORES, EMULADORES_LIGADOS } from "../emuladores";
-import type { CreatedIntegration, IntegrationInput, IntegrationRow } from "./model";
+import type { CreatedIntegration, IntegrationInput, IntegrationRow, PersonalKeyInput, PersonalKeyRow, PersonalKeyCapabilities } from "./model";
 
 export function apiBase(project: string, emulator = false): string {
   if (!/^[a-z][a-z0-9-]+$/.test(project)) throw new Error("Projeto Firebase não configurado.");
@@ -11,7 +11,7 @@ export function apiBase(project: string, emulator = false): string {
 
 export const INTEGRACOES_API_BASE = apiBase(import.meta.env.VITE_FIREBASE_PROJECT_ID || "nao-configurado", EMULADORES_LIGADOS);
 
-async function request<T>(path: string, method = "GET", body?: IntegrationInput, signal?: AbortSignal): Promise<T> {
+async function request<T>(path: string, method = "GET", body?: IntegrationInput | PersonalKeyInput, signal?: AbortSignal): Promise<T> {
   const user = firebaseAuth?.currentUser;
   if (!user) throw new Error("Entre novamente para gerenciar integrações.");
   const token = await user.getIdToken();
@@ -46,4 +46,19 @@ export async function criarIntegracao(input: IntegrationInput): Promise<CreatedI
 export async function revogarIntegracao(id: string): Promise<void> {
   if (!/^[a-f0-9]{32}$/.test(id)) throw new Error("Integração inválida.");
   await request(`/integrations/${id}`, "DELETE");
+}
+
+export async function obterCapabilities(signal?: AbortSignal) {
+  return (await request<{ data: PersonalKeyCapabilities }>("/api-keys/capabilities", "GET", undefined, signal)).data;
+}
+export function listarChavesPessoais(cursor?: string, signal?: AbortSignal) {
+  const query = new URLSearchParams({ limit: "50", ...(cursor ? { cursor } : {}) });
+  return request<{ data: PersonalKeyRow[]; next_cursor: string | null }>(`/api-keys?${query}`, "GET", undefined, signal);
+}
+export async function criarChavePessoal(input: PersonalKeyInput): Promise<CreatedIntegration> {
+  return (await request<{ data: CreatedIntegration }>("/api-keys", "POST", input)).data;
+}
+export async function revogarChavePessoal(id: string): Promise<void> {
+  if (!/^[a-f0-9]{32}$/.test(id)) throw new Error("Chave inválida.");
+  await request(`/api-keys/${id}`, "DELETE");
 }

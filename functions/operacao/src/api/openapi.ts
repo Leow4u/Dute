@@ -41,7 +41,7 @@ const page = [
   }),
   parameter("cursor", "query", { type: "string" }),
 ];
-const customer = parameter("customer_code", "query", { type: "string" }, true);
+const customer = parameter("customer_code", "query", { type: "string", description: "Integração legada exige cliente explícito. Chave pessoal pode omitir para usar a abrangência atual da conta; cliente usa sempre seu próprio código." }, false);
 const filters = [
   parameter("status", "query", { type: "string" }),
   ...["from", "to"].map((name) =>
@@ -171,9 +171,9 @@ export const openapi: Record<string, any> = {
   openapi: "3.0.3",
   info: {
     title: "API Dute",
-    version: "1.0.0",
+    version: "1.1.0",
     description:
-      "API oficial de integração. v1 inicial: Operação. Bearer individual, 60 chamadas/minuto por integração, corpo até 64 KiB. Escritas exigem aprovação humana exata, válida por 15 minutos. Os demais módulos ainda não estão expostos. Credenciais são independentes em cada ambiente.",
+      "API dos seis módulos. Chaves pessoais acompanham as permissões atuais da conta e são gerenciadas pelo titular em api-keys. Integrações legadas mantêm clientes, escopos e política original; approval_required exige aprovação humana exata de15min. Bearer individual,60 chamadas/minuto, corpo até64KiB. Credenciais independentes por ambiente.",
   },
   servers: [
     {
@@ -312,14 +312,14 @@ export const openapi: Record<string, any> = {
         type: "http",
         scheme: "bearer",
         description:
-          "Token dute_ID.SEGREDO, criado por owner/admin. Não é token Firebase nem chave web Firebase.",
+          "Chave pessoal ou de integração legada no formato dute_ID.SEGREDO. Permissões e abrangência conferidas a cada chamada; não é token Firebase nem chave web Firebase.",
       },
       FirebaseHuman: {
         type: "http",
         scheme: "bearer",
         bearerFormat: "JWT",
         description:
-          "ID token Firebase de owner/admin humano, verificado com revogação. Nunca entregar ao agente.",
+          "ID token Firebase de usuário humano ativo, verificado com revogação. Gestão de api-keys exige o próprio titular; integrations/approvals legados exigem owner/admin. Nunca entregar este token ao integrador.",
       },
     },
     schemas: {
@@ -558,6 +558,47 @@ const envelope = (data: unknown, paged = false) =>
     ["data", "request_id"],
   );
 
+// Gestão pessoal usa a sessão humana; segredo não aparece nas listagens.
+Object.assign(openapi.components.schemas, {
+  CreatePersonalKey: object({
+    name: { type: "string", minLength: 2, maxLength: 80 },
+    permission: { type: "string", enum: ["full", "read_only", "custom"], description: "full/read_only seguem a conta atual; custom intersecta os escopos escolhidos com o acesso atual." },
+    scopes: { ...array({ type: "string", enum: API_SCOPES }, API_SCOPES.length), description: "Somente custom aceita escopos não vazios; full/read_only omitem este campo ou enviam lista vazia." },
+    expires_in_days: { type: "integer", minimum: 1, maximum: 90, default: 90 },
+  }, ["name", "permission"]),
+  PersonalKey: object({
+    id: str, name: str, token_prefix: { type: "string", description: "Identificador público mascarado; não contém segredo recuperável." },
+    permission: { type: "string", enum: ["full", "read_only", "custom", "legacy"] },
+    kind: { type: "string", enum: ["personal", "legacy"] },
+    scopes: array({ type: "string", enum: API_SCOPES }, API_SCOPES.length),
+    created_at: { type: "string", format: "date-time", nullable: true },
+    expires_at: { type: "string", format: "date-time" },
+    last_used_at: { type: "string", format: "date-time", nullable: true },
+    revoked: { type: "boolean" },
+    write_policy: { type: "string", enum: ["scoped", "approval_required"] },
+  }, ["id", "name", "token_prefix", "permission", "kind", "scopes", "created_at", "expires_at", "last_used_at", "revoked"]),
+  PersonalKeyCapabilities: object({
+    scopes: array({ type: "string", enum: API_SCOPES }, API_SCOPES.length),
+    role: str, customer_code: str, customer_access: { type: "string", enum: ["all", "own", "none"] },
+  }, ["scopes", "role", "customer_access"]),
+});
+Object.assign(openapi.paths, {
+  [`${PREFIX}/api-keys/capabilities`]: { get: {
+    summary: "Permissões atuais da própria conta para criar chaves pessoais", security: humanAuth,
+    responses: { "200": response("Escopos elegíveis; cada rota ainda confere restrições por recurso", envelope(ref("PersonalKeyCapabilities"))), ...errors },
+  } },
+  [`${PREFIX}/api-keys`]: {
+    get: { summary: "Listar apenas suas chaves, incluindo legadas próprias identificadas", security: humanAuth, parameters: page,
+      responses: { "200": response("Metadados paginados; nunca token/hash", envelope({ type: "array", items: ref("PersonalKey") }, true)), ...errors } },
+    post: { summary: "Criar chave pessoal; segredo exibido uma vez", security: humanAuth,
+      requestBody: { required: true, ...json(ref("CreatePersonalKey")) },
+      responses: { "201": response("Guarde o token antes de fechar; somente o hash é salvo", envelope(object({ id: str, token: str, expires_at: { type: "string", format: "date-time" } }, ["id", "token", "expires_at"]))), ...errors } },
+  },
+  [`${PREFIX}/api-keys/{id}`]: { delete: { summary: "Revogar somente uma chave da própria conta", security: humanAuth,
+    parameters: [parameter("id", "path", { type: "string", pattern: "^[a-f0-9]{32}$" }, true)],
+    responses: { "200": response("Chave própria revogada", envelope(object({ id: str, revoked: { type: "boolean" } }, ["id", "revoked"]))), ...errors } } },
+});
+
 /** Converte o subconjunto de JSON Schema emitido pelos parsers para OpenAPI 3.0. */
 export function openapiSchema(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(openapiSchema);
@@ -595,7 +636,7 @@ for (const entry of PLATFORM_ROUTES) {
   const resultSchema = entry.method === "GET" ? envelope(list ? { type: "array", items: projected } : projected, list) : ref("Result");
   const operation = {
     summary: entry.summary,
-    description: `Escopo: ${entry.scope}. ${entry.method === "GET" ? "Leitura autorizada e projetada." : "Chave scoped executa com seus escopos. Chave legada/approval_required exige aprovação exata. Não há repetição automática com uma chave de idempotência nova."}`,
+    description: `Escopo: ${entry.scope}. ${entry.description ?? ""} Chave pessoal também exige as permissões atuais da conta para esta rota/recurso. ${entry.method === "GET" ? "Leitura autorizada e projetada." : "Chave scoped executa com seus escopos. Chave legada/approval_required exige aprovação exata. Não há repetição automática com uma chave de idempotência nova."}`,
     security: integrationAuth, parameters,
     ...(entry.requestSchema ? { requestBody: { required: true, ...json(openapiSchema(entry.requestSchema)) } } : {}),
     responses: { [entry.method === "POST" ? "201" : "200"]: response(`Campos de resposta: ${(entry.responseFields ?? []).join(", ") || "recibo da operação"}`, resultSchema), ...(entry.method === "POST" ? { "200": response("Recibo da repetição idempotente", resultSchema) } : {}), ...errors },

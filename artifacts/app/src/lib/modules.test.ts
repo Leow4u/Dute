@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  ALL_ROLES,
   getActiveModule,
   getHomePathForProfile,
   getMobileNavigation,
@@ -84,7 +85,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/configuracoes/aplicativo", ["owner", "admin", "interno", "wms", "campo", "comercial", "financeiro", "rh", "suporte", "painel", "cliente"]],
   ["/configuracoes/pessoas", ["owner", "admin"]],
   ["/configuracoes/clientes", ["owner", "admin"]],
-  ["/configuracoes/integracoes", ["owner", "admin"]],
+  ["/configuracoes/integracoes", ALL_ROLES],
   ["/configuracoes/cliente", ["owner", "admin"]],
   ["/configuracoes/sistema", ["owner", "admin", "suporte"]],
   ["/portal", ["cliente"]],
