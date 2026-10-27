@@ -1912,9 +1912,10 @@ async function getWarehouseOps() {
           items: task.items,
           timeline: task.timeline,
           customer_request_id: task.customer_request_id,
+          // A tarefa cancelada com o pedido (pergunta 59) também não avança.
           can_advance:
             !String(task.source ?? "").startsWith("derived_from_") &&
-            !["completed", "delivered", "received"].includes(
+            !["completed", "delivered", "received", "cancelled", "canceled"].includes(
               String(task.status),
             ),
           progress:

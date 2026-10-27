@@ -121,6 +121,9 @@ saldo", "Menor saldo" e "Nome: A-Z"; a exibição em "Cards" ou "Lista".
   confirmação ("Cancelar PED-0001?", "Cancelar pedido" ou "Manter") e devolve
   as peças reservadas ao estoque. Confirmado, só falando com a Dutelog.
 - **"Recusado"**: as peças voltam, e o motivo aparece quando a Dutelog informa.
+- **"Cancelado"** pela Dutelog: o pedido aprovado que a Dutelog cancelou mostra
+  "cancelado pela Dutelog" e a data, e "Cancelado pela Dutelog" nas
+  atualizações, sem o motivo.
 - **"Ver itens"** abre o pedido: "Itens" ("Código", "Produto", "Peças"; sem
   código, "código a definir") e "Atualizações da Dutelog", a mais recente antes.
 

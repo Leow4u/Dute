@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildBalanceValidation,
   buildVerdict,
+  canCloseRequest,
   formatRequestAge,
   lineSituation,
   parseRequestDate,
@@ -177,6 +178,25 @@ describe("tela de triagem", () => {
     });
     const semMotivo = outboundRequest({ status: "cancelled" });
     expect(buildVerdict(semMotivo, buildBalanceValidation(semMotivo, [], false, false)).detail).toBe("Cancelada antes da aprovação.");
+  });
+
+  it("o pedido que a Dutelog cancelou diz quem cancelou, com o motivo para a equipe (pergunta 59)", () => {
+    const request = outboundRequest({ status: "cancelled", cancel_origin: "dutelog", cancel_reason: "O cliente desistiu do evento." });
+    expect(buildVerdict(request, buildBalanceValidation(request, [], false, false))).toEqual({
+      tone: "cancelled",
+      title: "Cancelada pela Dutelog",
+      detail: "Motivo: O cliente desistiu do evento.",
+    });
+  });
+
+  it("a saída aprovada só se encerra depois da entrega; a entrada, quando quiser (pergunta 59)", () => {
+    expect(canCloseRequest(outboundRequest({ status: "approved", operational_status: "packing_ready" }))).toBe(false);
+    expect(canCloseRequest(outboundRequest({ status: "approved", operational_status: "dispatched" }))).toBe(false);
+    expect(canCloseRequest(outboundRequest({ status: "approved", operational_status: "delivered" }))).toBe(true);
+    expect(canCloseRequest(outboundRequest({ status: "approved", fulfillment_status: "completed" }))).toBe(true);
+    expect(canCloseRequest(outboundRequest({ status: "approved", type: "recebimento" }))).toBe(true);
+    expect(canCloseRequest(outboundRequest({ status: "open" }))).toBe(false);
+    expect(canCloseRequest(outboundRequest({ status: "closed", operational_status: "delivered" }))).toBe(false);
   });
 
   it("explica em uma frase por que não dá para aprovar", () => {

@@ -59,6 +59,15 @@ export function orderStage(request: AnyRecord, tracking?: AnyRecord): OrderStage
   return "placed";
 }
 
+/** O pedido que a Dutelog cancelou (pergunta 59): o cliente vê quem cancelou e a data, sem o motivo. */
+function cancelledByDutelog(request: AnyRecord, tracking?: AnyRecord) {
+  return slug(request.cancel_origin) === "dutelog" || slug(tracking?.cancel_origin) === "dutelog";
+}
+
+function cancelledAt(request: AnyRecord, tracking?: AnyRecord) {
+  return parseDate(request.cancelled_at) ?? parseDate(tracking?.cancelled_at) ?? parseDate(request.updated_at);
+}
+
 export function orderStepIndex(stage: OrderStage) {
   if (stage === "delivered") return 3;
   if (stage === "dispatched") return 2;
@@ -108,7 +117,13 @@ export function orderTimeline(request: AnyRecord, tracking?: AnyRecord): OrderEv
     events.push({ label: label === "Pedido recebido" ? "Pedido confirmado pela Dutelog" : label, date: parseDate(entry.occurred_at) });
   }
   const stage = orderStage(request, tracking);
-  if (stage === "cancelled") events.push({ label: "Cancelado por você", date: parseDate(request.updated_at) });
+  if (stage === "cancelled" && !cancelledByDutelog(request, tracking)) {
+    events.push({ label: "Cancelado por você", date: parseDate(request.updated_at) });
+  }
+  // A linha do acompanhamento já traz o cancelamento pela Dutelog; sem ela, entra aqui.
+  if (stage === "cancelled" && cancelledByDutelog(request, tracking) && !timeline.some((entry) => slug(entry.status) === "cancelled")) {
+    events.push({ label: "Cancelado pela Dutelog", date: cancelledAt(request, tracking) });
+  }
   if (stage === "rejected") {
     const reason = text(request.decision_reason);
     events.push({ label: `Recusado pela Dutelog${reason ? `: ${reason}` : ""}`, date: parseDate(request.updated_at) });
@@ -157,9 +172,12 @@ export function orderView(request: AnyRecord, tracking?: AnyRecord): OrderView {
   const delivery = [carrier, plate ? `placa ${plate}` : "", text(tracking?.proof_reference) ? `comprovante ${text(tracking?.proof_reference)}` : ""]
     .filter(Boolean)
     .join(" · ");
+  const cancelled = stage === "cancelled" ? cancelledAt(request, tracking) : undefined;
   const detail =
     stage === "cancelled"
-      ? `cancelado por você${updated ? ` em ${shortDate.format(updated)}` : ""}`
+      ? cancelledByDutelog(request, tracking)
+        ? `cancelado pela Dutelog${cancelled ? ` em ${shortDate.format(cancelled)}` : ""}`
+        : `cancelado por você${updated ? ` em ${shortDate.format(updated)}` : ""}`
       : stage === "rejected"
         ? `recusado${updated ? ` em ${shortDate.format(updated)}` : ""}${text(request.decision_reason) ? `: ${text(request.decision_reason)}` : ""}`
         : stage === "placed"

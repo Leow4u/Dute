@@ -5,14 +5,22 @@ import {
   AlertTriangle,
   Check,
   ClipboardCheck,
+  MoreHorizontal,
   Package,
   RefreshCw,
   Truck,
+  XCircle,
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { PageHeader } from "@/components/ui/page-header";
 import { QueueGroup, QueueRow, type QueueTone } from "@/components/ui/queue-list";
 import { Segmented } from "@/components/ui/segmented";
@@ -26,6 +34,12 @@ import {
   OpeningInventoryNotice,
   useOpeningInventorySession,
 } from "@/features/warehouse-ops/opening-inventory-status";
+import {
+  CancelarPedidoView,
+  motivoValido,
+  pedidoCancelavel,
+  voltasDoPedido,
+} from "@/features/warehouse-ops/cancel-order";
 import { FormularioDaEntregaView } from "@/features/warehouse-ops/order-delivery";
 import { ExceptionDialog, useWarehouseTaskActions } from "@/features/warehouse-ops/task-actions";
 import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
@@ -40,6 +54,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
 import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { chamarOperacao, novaChave } from "@/lib/operacao/api";
@@ -119,11 +134,26 @@ function orderItems(order: OrderGroup) {
   return order.pick?.items ?? order.pack?.items ?? order.ship?.items ?? [];
 }
 
+/** "3 itens · 120 un. · lacre L-0098": a linha do pedido e o diálogo de cancelar. */
+function orderMeta(order: OrderGroup) {
+  const items = orderItems(order);
+  const units = orderUnits(order);
+  const seal = order.pack?.seal_code ?? order.ship?.seal_code;
+  return [
+    items.length ? `${items.length} ${items.length === 1 ? "item" : "itens"}` : null,
+    units ? `${numberFormatter.format(units)} un.` : null,
+    seal ? `lacre ${seal}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 type DialogState =
   | { kind: "reject"; request: CustomerRequest }
   | { kind: "pick"; order: OrderGroup }
   | { kind: "deliver"; order: OrderGroup }
   | { kind: "entrega"; order: OrderGroup; orderId: string }
+  | { kind: "cancel"; order: OrderGroup; orderId: string }
   | null;
 
 /** Os pedidos de saída que ainda não saíram: a entrega de cada um (parte 4.5c). */
@@ -135,6 +165,7 @@ export default function Pedidos() {
   // O suporte consulta: sem separar, entregar, tratar nem definir a entrega.
   const operador = canOperateWarehouse(user?.publicMetadata.role);
   const openingSession = useOpeningInventorySession();
+  const { active: cliente } = useActiveCustomer();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [view, setView] = useState<"open" | "delivered">("open");
@@ -152,6 +183,9 @@ export default function Pedidos() {
   const [entregaTentou, setEntregaTentou] = useState(false);
   const [entregaErro, setEntregaErro] = useState<string | null>(null);
   const chaveDaEntrega = useRef<string | null>(null);
+  // Cancelar pedido (pergunta 59): a coordenação, com o motivo.
+  const [cancelReason, setCancelReason] = useState("");
+  const chaveDoCancelamento = useRef<string | null>(null);
   const entregas = useLeitura(
     OPERACAO_LIBERADO ? "orders:em_aberto" : null,
     (db) => query(collection(db, "orders"), where("status", "in", PEDIDOS_EM_ABERTO)),
@@ -288,6 +322,37 @@ export default function Pedidos() {
     onError: (error: Error) => setEntregaErro(humanApiError(error, "Tente novamente em instantes.")),
   });
 
+  const cancelar = useMutation({
+    mutationFn: ({ orderId, reason }: { orderId: string; reason: string }) => {
+      chaveDoCancelamento.current ??= novaChave();
+      return fetchJson(`/api/orders/${encodeURIComponent(orderId)}/cancel`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason, idempotency_key: chaveDoCancelamento.current }),
+      });
+    },
+    onSuccess: () => {
+      chaveDoCancelamento.current = null;
+      toast({ title: "Pedido cancelado" });
+      setDialog(null);
+      setCancelReason("");
+      refreshAll();
+    },
+    onError,
+  });
+
+  const abrirCancelamento = (order: OrderGroup) => {
+    if (!order.orderId) return;
+    chaveDoCancelamento.current = null;
+    setCancelReason("");
+    setDialog({ kind: "cancel", order, orderId: order.orderId });
+  };
+  // O "⋯" do pedido ainda no armazém, só para quem decide (owner, admin e interno).
+  const menuDo = (order: OrderGroup) =>
+    decider && pedidoCancelavel(order) ? (
+      <MenuDoPedido order={order} disabled={busy} onCancelar={() => abrirCancelamento(order)} />
+    ) : undefined;
+
   const abrirEntrega = (order: OrderGroup) => {
     if (!order.orderId) return;
     chaveDaEntrega.current = null;
@@ -372,7 +437,7 @@ export default function Pedidos() {
     onError,
   });
 
-  const busy = decide.isPending || pick.isPending || deliver.isPending || salvarEntrega.isPending;
+  const busy = decide.isPending || pick.isPending || deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
 
   /** A entrega do pedido na linha e a ação de definir (ou abrir na Operação), com a Operação liberada. */
   const daEntrega = (order: OrderGroup) => {
@@ -535,6 +600,7 @@ export default function Pedidos() {
                 defaultOpen
                 onTreat={operador ? () => setTreating(order) : undefined}
                 {...daEntrega(order)}
+                menu={menuDo(order)}
                 action={
                   operador ? (
                     <Button
@@ -568,6 +634,7 @@ export default function Pedidos() {
                 tone="deliver"
                 onTreat={operador ? () => setTreating(order) : undefined}
                 {...(order.stage === "enviar" ? daEntrega(order) : {})}
+                menu={menuDo(order)}
                 action={
                   operador ? (
                     <Button
@@ -597,7 +664,7 @@ export default function Pedidos() {
       )}
 
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="sm:max-w-[440px]" aria-describedby={undefined}>
+        <DialogContent className={cn("sm:max-w-[440px]", dialog?.kind === "cancel" && "sm:max-w-[560px]")} aria-describedby={undefined}>
           {dialog?.kind === "reject" ? (
             <>
               <DialogHeader>
@@ -710,6 +777,36 @@ export default function Pedidos() {
                 </Button>
               </DialogFooter>
             </>
+          ) : dialog?.kind === "cancel" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Cancelar pedido {dialog.order.orderNumber}</DialogTitle>
+                <p className="text-sm font-medium text-muted-foreground">
+                  {[cliente.name, orderMeta(dialog.order)].filter(Boolean).join(" · ")}
+                </p>
+              </DialogHeader>
+              <CancelarPedidoView
+                motivo={cancelReason}
+                voltas={voltasDoPedido(dialog.order)}
+                onMotivo={(motivo) => {
+                  setCancelReason(motivo);
+                  chaveDoCancelamento.current = null;
+                }}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
+                  Voltar
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={!motivoValido(cancelReason) || busy}
+                  onClick={() => cancelar.mutate({ orderId: dialog.orderId, reason: cancelReason.trim() })}
+                >
+                  {cancelar.isPending ? "Cancelando..." : "Cancelar pedido"}
+                </Button>
+              </DialogFooter>
+            </>
           ) : dialog?.kind === "entrega" && entregaForm ? (
             <>
               <DialogHeader>
@@ -796,6 +893,7 @@ function OrderRow({
   tone,
   action,
   secondary,
+  menu,
   detail,
   defaultOpen = false,
   onTreat,
@@ -806,6 +904,8 @@ function OrderRow({
   action?: ReactNode;
   /** A ação de definir a entrega (parte 4.5c), ao lado da principal. */
   secondary?: ReactNode;
+  /** O "⋯" do pedido (Cancelar pedido, pergunta 59), depois das ações. */
+  menu?: ReactNode;
   /** A entrega do pedido em uma linha. */
   detail?: ReactNode;
   defaultOpen?: boolean;
@@ -819,16 +919,8 @@ function OrderRow({
   ) : null;
   const [open, setOpen] = useState(defaultOpen);
   const items = orderItems(order);
-  const units = orderUnits(order);
-  const seal = order.pack?.seal_code ?? order.ship?.seal_code;
   const blocked = Boolean(order.blockedReason || order.exceptionCount);
-  const meta = [
-    items.length ? `${items.length} ${items.length === 1 ? "item" : "itens"}` : null,
-    units ? `${numberFormatter.format(units)} un.` : null,
-    seal ? `lacre ${seal}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const meta = orderMeta(order);
 
   return (
     <div className={cn(blocked && "bg-destructive-soft/40")}>
@@ -854,15 +946,51 @@ function OrderRow({
         detail={detail}
         onToggle={items.length ? () => setOpen((value) => !value) : undefined}
         open={open}
-        actions={acoes}
+        actions={
+          acoes || menu ? (
+            <>
+              {acoes}
+              {menu}
+            </>
+          ) : null
+        }
         actionsClassName="hidden sm:flex"
       />
       {open && items.length ? <ItemList items={items} /> : null}
       {/* No celular os botões vêm depois da lista do que separar. */}
-      {acoes ? (
-        <div className="flex gap-2 px-4 pb-4 pt-3 sm:hidden [&>*]:flex-1">{acoes}</div>
+      {acoes || menu ? (
+        <div className="flex gap-2 px-4 pb-4 pt-3 sm:hidden">
+          {acoes ? <div className="flex flex-1 gap-2 [&>*]:flex-1">{acoes}</div> : null}
+          {menu}
+        </div>
       ) : null}
     </div>
+  );
+}
+
+function MenuDoPedido({
+  order,
+  disabled,
+  onCancelar,
+}: {
+  order: OrderGroup;
+  disabled: boolean;
+  onCancelar: () => void;
+}) {
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="ghost" size="icon" disabled={disabled} aria-label={`Mais ações do pedido ${order.orderNumber}`}>
+          <MoreHorizontal className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onCancelar}>
+          <XCircle className="size-4" />
+          Cancelar pedido
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

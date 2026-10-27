@@ -52,16 +52,24 @@ function stageForGroup(group: Omit<OrderGroup, "stage">): OrderStage {
   return "separar";
 }
 
+/** A tarefa do pedido cancelado (pergunta 59): o pedido inteiro sai das filas. */
+const CANCELLED_TASK_STATUSES = new Set(["cancelled", "canceled"]);
+
 export function groupWarehouseOrders(
   ops: WarehouseOpsResponse | undefined,
 ): OrderGroup[] {
   const groups = new Map<string, Omit<OrderGroup, "stage">>();
+  const cancelled = new Set<string>();
   const attach = (task: WarehouseTask, slot: "pick" | "pack" | "ship") => {
+    const key = orderKeyForTask(task);
+    if (CANCELLED_TASK_STATUSES.has(String(task.status))) {
+      cancelled.add(key);
+      return;
+    }
     // Tarefas derivadas de dados legados não podem avançar (can_advance
     // false com status inicial); ficam fora da fila simples.
     if (task.can_advance === false && String(task.status) !== "completed"
       && String(task.status) !== "delivered") return;
-    const key = orderKeyForTask(task);
     const group = groups.get(key) ?? {
       key,
       orderNumber: String(task.title ?? key),
@@ -93,6 +101,7 @@ export function groupWarehouseOrders(
     entregue: 3,
   };
   return [...groups.values()]
+    .filter((group) => !cancelled.has(group.key))
     .map((group) => ({ ...group, stage: stageForGroup(group) }))
     .sort((left, right) => weight[left.stage] - weight[right.stage]);
 }

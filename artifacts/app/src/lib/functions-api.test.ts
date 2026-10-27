@@ -273,6 +273,21 @@ describe("a entrega do pedido de saída (parte 4.5a)", () => {
   });
 });
 
+describe("cancelar o pedido de saída (pergunta 59)", () => {
+  it("o pedido vem do caminho, o motivo e a chave do corpo, para cancelWarehouseOrder", async () => {
+    const route = functionRoute("/api/orders/ord_118/cancel", "POST");
+    expect(route?.name).toBe("cancelWarehouseOrder");
+    expect(
+      await route?.payload("/api/orders/ord_118/cancel", {
+        body: JSON.stringify({ reason: "O cliente desistiu.", idempotency_key: "cancelar-1234", order_id: "outro", customer_code: "Outro" }),
+      }),
+    ).toEqual({ order_id: "ord_118", reason: "O cliente desistiu.", idempotency_key: "cancelar-1234" });
+    expect(functionRoute("/api/orders/ord_118/cancel", "GET")).toBeNull();
+    // O cancelamento do portal, antes da aprovação, segue com a callable do cliente.
+    expect(functionRoute("/api/client/orders/req_1/cancel", "POST")?.name).toBe("cancelCustomerOrder");
+  });
+});
+
 describe("o retorno do pedido de saída (parte 4.5d)", () => {
   it("o pedido vem do caminho e o que voltou do corpo, para receiveOrderReturn", async () => {
     const route = functionRoute("/api/orders/ord_118/return", "POST");

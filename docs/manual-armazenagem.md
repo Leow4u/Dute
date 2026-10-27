@@ -91,6 +91,13 @@ antes, em vermelho, com "Tratar": a tarefa abre num painel, com o avanço e
   envio; o aparelho lembra os últimos) e "Quem recebeu (opcional)". "Confirmar
   entrega" registra a saída e a entrega, e o estoque baixa. Na retirada pelo
   cliente, quem levou e a placa vêm da entrega.
+- **"Cancelar pedido"** (só `owner`, `admin` e `interno`): fica no "⋯" do
+  pedido que ainda não saiu, em "Para separar" e "Para entregar". O diálogo
+  pede o "Motivo" (3 caracteres ou mais). No pedido já separado, a tabela
+  "Voltam à posição" lista o item, a quantidade e a posição. "Cancelar pedido"
+  solta a reserva, cancela o que estava aberto e abre a guarda de volta (em
+  Receber, como a guarda da entrada). O pedido sai das filas. O cliente vê
+  "Cancelado pela Dutelog" e a data, sem o motivo.
 
 Com a abertura do cliente ativo pendente ou em andamento, a faixa do inventário
 aparece com "Continuar contagem", e os pedidos de saída do cliente ficam

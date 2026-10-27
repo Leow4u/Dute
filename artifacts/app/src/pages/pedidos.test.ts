@@ -36,6 +36,13 @@ describe("Pedidos na v3", () => {
     expect(FONTE).toMatch(/secondary: operador \? \(/);
   });
 
+  it("Cancelar pedido fica no ⋯ do pedido ainda no armazém, só para quem decide (pergunta 59)", () => {
+    expect(FONTE).toContain("decider && pedidoCancelavel(order) ? (");
+    expect(FONTE.match(/menu=\{menuDo\(order\)\}/g)).toHaveLength(2);
+    expect(FONTE).toContain("aria-label={`Mais ações do pedido ${order.orderNumber}`}");
+    expect(FONTE).toMatch(/disabled=\{!motivoValido\(cancelReason\) \|\| busy\}/);
+  });
+
   it("o motivo da recusa tem rótulo", () => {
     expect(FONTE).toMatch(/<Label htmlFor="motivo-da-recusa">Motivo<\/Label>\s*<Textarea\s+id="motivo-da-recusa"/);
   });
