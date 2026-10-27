@@ -315,7 +315,7 @@ falha antes de conferir qualquer callable; e `allUsers` só vale com o papel
 `roles/run.invoker`, no mesmo binding. 429, 5xx e falha de rede são repetidos
 até 3 vezes. A conta precisa de `run.services.list`, `run.services.getIamPolicy`
 e `cloudfunctions.functions.list`, que a `github-actions-functions` já tem
-(`roles/run.admin` e o papel do Cloud Functions). Continua rodando no
+(`roles/run.admin` e `roles/cloudfunctions.developer`). Continua rodando no
 Windows PowerShell 5.1, pelo mesmo comando.
 
 ## Deploy automático pelo GitHub Actions
@@ -485,11 +485,9 @@ gcloud iam service-accounts create github-actions-functions `
 # 2. Papéis no projeto. Espelha a SA do frontend (artifactregistry.writer,
 #    cloudbuild.builds.editor, serviceusage.serviceUsageConsumer) e acrescenta
 #    o que function/scheduler precisam que o frontend não precisa.
-#    cloudfunctions.admin, não developer: a duteApi (function HTTP pública,
-#    desde 27/10/2026) pede cloudfunctions.functions.setIamPolicy.
 $SA = "github-actions-functions@dute-btg.iam.gserviceaccount.com"
 foreach ($role in @(
-  "roles/cloudfunctions.admin",
+  "roles/cloudfunctions.developer",
   "roles/run.admin",
   "roles/artifactregistry.writer",
   "roles/cloudbuild.builds.editor",
@@ -498,6 +496,16 @@ foreach ($role in @(
 )) {
   gcloud projects add-iam-policy-binding dute-btg --member="serviceAccount:$SA" --role=$role
 }
+
+# 2b. A duteApi (function HTTP pública, desde 27/10/2026) pede
+#     cloudfunctions.functions.setIamPolicy, que o developer não dá. Um papel
+#     próprio só com essa permissão, como o do dute-prod, em vez do
+#     cloudfunctions.admin.
+gcloud iam roles create dute_api_https_publisher --project dute-btg `
+  --title="Dute HTTPS publisher" `
+  --permissions=cloudfunctions.functions.setIamPolicy --stage=GA
+gcloud projects add-iam-policy-binding dute-btg --member="serviceAccount:$SA" `
+  --role=projects/dute-btg/roles/dute_api_https_publisher --condition=None
 
 # 3. iam.serviceAccountUser só na SA de runtime das functions (mais estreito
 #    que dar esse papel no projeto inteiro, que é o que a SA do frontend tem).

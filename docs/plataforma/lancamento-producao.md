@@ -134,8 +134,10 @@ disparado sem ele. Sem dado real neste arquivo.
   publicada nele às 01:13. O disparo foi às 01:17:40 UTC, e a primeira
   gravação, a das regras, às 01:21:53: o instante para o PITR é qualquer um
   entre os dois.
-  - Antes do disparo, a conta do CI ganhou o `roles/cloudfunctions.admin`
-    (seção 4, item 5).
+  - Antes do disparo, a conta do CI ganhou também o
+    `roles/cloudfunctions.admin`, que sobrava: o papel próprio
+    `dute_api_https_publisher`, que ela já tinha, dá a única permissão que
+    a `duteApi` pede (seção 4, item 5; seção 8).
   - Ela levou os PRs 506 a 513 (seção 2, "As decisões de 26/10 e a API"):
     - o aceite do convite pela tela, com o e-mail confirmado, e as regras
       que fecham o caminho do navegador (pergunta 68, parte 9b);
@@ -713,15 +715,13 @@ contato com os avisos ligados (Comercial › Clientes).
    - A `duteApi` é uma function HTTP pública. Publicá-la pede
      `cloudfunctions.functions.setIamPolicy` à conta do CI, e o
      `roles/cloudfunctions.developer` não dá essa permissão.
-   - Na homologação, a publicação falhou por isso em 27/10 (run 335) e
-     passou depois de a conta ganhar o papel (run 336).
-   - No `dute-prod`, o Leonardo deu o papel em 27/10, antes da sexta
-     publicação:
-
-   ```powershell
-   cd C:\DEV\Dute
-   gcloud projects add-iam-policy-binding dute-prod --member="serviceAccount:github-actions-functions@dute-prod.iam.gserviceaccount.com" --role=roles/cloudfunctions.admin --condition=None
-   ```
+   - Quem dá é o papel próprio `dute_api_https_publisher`, só com essa
+     permissão. No `dute-prod`, a conta do CI já o tem (conferido em
+     27/10/2026 com `gcloud iam roles describe dute_api_https_publisher
+     --project dute-prod`). Para um projeto novo, o papel e a concessão
+     estão em `docs/deploy-functions-manual.md`.
+   - Na homologação, a publicação falhou por falta da permissão em 27/10
+     (run 335) e passou depois de a conta ganhar o papel (run 336).
 
 6. **Disparo.** Actions > CI > Run workflow, com `publicar_producao`
    marcado, do HEAD. O job só vale verde com as conferências do fim:
@@ -912,24 +912,17 @@ dos marcos 2, 3 e 4. O registro está em `fase-4-financeiro.md`, "Parte
 - Se houver convite pendente criado até a primeira publicação (25/10/2026),
   cancelar e convidar de novo, com o owner, em Configurações › Usuários (pergunta 67
   do plano; seção 5, item 7). Sem convite antigo pendente, nada a fazer.
-- Tirar a conta do CI da homologação do Firestore da produção. A política
-  do `dute-prod` de 27/10/2026 ainda dá `roles/datastore.owner` à
-  `github-actions-functions@dute-homolog`: é o papel que foi para a conta
-  errada na criação do `dute-rh` (`fase-8-rh.md`, parte 8.1b). Nenhum
-  workflow usa a conta da homologação no `dute-prod`, e ela publica a cada
-  push na `main`:
+- Tirar, quando quiser, o `roles/cloudfunctions.admin` da conta do CI do
+  `dute-prod`, dado em 27/10/2026 antes da sexta publicação. Com o
+  `roles/cloudfunctions.developer` e o papel próprio
+  `dute_api_https_publisher` (seção 4, item 5), ele não acrescenta nada de
+  que a publicação precise, e a conta fica igual ao que este roteiro e o
+  `docs/deploy-functions-manual.md` descrevem:
 
   ```powershell
   cd C:\DEV\Dute
-  gcloud projects remove-iam-policy-binding dute-prod --member="serviceAccount:github-actions-functions@dute-homolog.iam.gserviceaccount.com" --role=roles/datastore.owner --condition=None
+  gcloud projects remove-iam-policy-binding dute-prod --member="serviceAccount:github-actions-functions@dute-prod.iam.gserviceaccount.com" --role=roles/cloudfunctions.admin --condition=None
   ```
-
-- A conta do CI do `dute-prod` tem, além do `roles/cloudfunctions.admin`
-  dado em 27/10/2026 (seção 4, item 5), um papel próprio,
-  `projects/dute-prod/roles/dute_api_https_publisher`, criado fora deste
-  repositório. Se ele já dá a `cloudfunctions.functions.setIamPolicy`
-  (`gcloud iam roles describe dute_api_https_publisher --project
-  dute-prod`), um dos dois sobra.
 
 As perguntas 26, 58 a 60 e 64 a 71 do plano, as 12 a 14 da Fase 3 e as 12
 da LGPD foram respondidas em 26/10/2026 (plano, seção 13; `lgpd.md`, seção

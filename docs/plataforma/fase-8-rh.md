@@ -531,7 +531,9 @@ pelo workflow `Banco rh` (seção "Como o banco `dute-rh` nasce").
   tinha ido para outra conta. Com o `roles/datastore.owner` na
   `github-actions-functions@dute-prod`, a execução das 22:34 UTC criou o
   banco já com o PITR e agendou o backup logo em seguida, sem o `ABORTED`
-  (a correção do PITR na criação).
+  (a correção do PITR na criação). O papel que tinha ido para a conta da
+  homologação (`github-actions-functions@dute-homolog`, no `dute-prod`)
+  saiu em 27/10/2026.
 
 - **O `firebase.json`** passa o `firestore` a uma lista: o banco padrão,
   com as regras e os índices de sempre, e o `dute-rh`, com o
