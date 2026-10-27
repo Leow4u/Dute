@@ -1,7 +1,10 @@
+import { rhApi } from "./api/module.js";
+import { createModuleHandler, httpModuleHandler } from "./api/shared/handler.js";
+import { getAuth } from "firebase-admin/auth";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { onCall } from "firebase-functions/https";
+import { onCall, onRequest } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
@@ -124,3 +127,6 @@ export const runRhRetention = onSchedule({ schedule: "every day 04:00", timeZone
   if (!retencaoLiberada(PROJECT_ID)) return;
   console.info("runRhRetention", await runRhRetentionFor(rh));
 });
+
+/** Adaptador externo autenticado; só o gateway é documentado para consumidores. */
+export const duteRhApi = onRequest({ cors: false, invoker: "public", timeoutSeconds: 60 }, httpModuleHandler(createModuleHandler(db, PROJECT_ID, (token) => getAuth().verifyIdToken(token, true), rhApi)));

@@ -58,7 +58,7 @@ export const duteApi = onRequest({ cors: apiBrowserOrigins(PROJECT_ID), invoker:
     response.status(413).json({ error: { code: "invalid-argument", message: "O corpo passa de 64 KiB." } });
     return;
   }
-  if (request.method === "POST" && !request.is("application/json")) {
+  if (["POST", "PATCH"].includes(request.method) && !request.is("application/json")) {
     response.status(415).json({ error: { code: "invalid-argument", message: "Use Content-Type: application/json." } });
     return;
   }

@@ -1,0 +1,504 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/v1/agente/playbooks",
+    "scope": "agente:ler",
+    "summary": "Listar playbooks da integração",
+    "customerRequired": true,
+    "responseFields": [
+      "id",
+      "customer_code",
+      "title",
+      "when",
+      "steps",
+      "open_points",
+      "audience",
+      "status",
+      "version"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/agente/playbooks/{id}",
+    "scope": "agente:ler",
+    "summary": "Consultar playbooks da integração",
+    "customerRequired": true,
+    "responseFields": [
+      "id",
+      "customer_code",
+      "title",
+      "when",
+      "steps",
+      "open_points",
+      "audience",
+      "status",
+      "version"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/agente/playbooks",
+    "scope": "agente:playbooks:gravar",
+    "summary": "Criar playbooks da integração",
+    "customerRequired": true,
+    "responseFields": [
+      "id",
+      "customer_code",
+      "title",
+      "when",
+      "steps",
+      "open_points",
+      "audience",
+      "status",
+      "version"
+    ],
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "customer_code",
+        "title",
+        "when",
+        "steps",
+        "audience"
+      ],
+      "properties": {
+        "customer_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "when": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 400
+          }
+        },
+        "open_points": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "audience": {
+          "type": "string",
+          "enum": [
+            "equipe",
+            "todos"
+          ]
+        }
+      },
+      "description": "PATCH substitui o conteúdo editável completo. "
+    }
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/agente/playbooks/{id}",
+    "scope": "agente:playbooks:gravar",
+    "summary": "Alterar playbooks da integração",
+    "customerRequired": true,
+    "responseFields": [
+      "id",
+      "customer_code",
+      "title",
+      "when",
+      "steps",
+      "open_points",
+      "audience",
+      "status",
+      "version"
+    ],
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "customer_code",
+        "title",
+        "when",
+        "steps",
+        "audience",
+        "expected_version"
+      ],
+      "properties": {
+        "customer_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "when": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 400
+          }
+        },
+        "open_points": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "audience": {
+          "type": "string",
+          "enum": [
+            "equipe",
+            "todos"
+          ]
+        },
+        "expected_version": {
+          "type": "string",
+          "pattern": "^\\d+:\\d+$",
+          "description": "version retornada na consulta anterior; conflito de edição retorna 409."
+        }
+      },
+      "description": "PATCH substitui o conteúdo editável completo. "
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/agente/rotinas",
+    "scope": "agente:ler",
+    "summary": "Listar rotinas da integração (somente pausadas)",
+    "customerRequired": true,
+    "responseFields": [
+      "id",
+      "customer_code",
+      "modulo",
+      "name",
+      "prompt",
+      "frequency",
+      "days",
+      "day_of_month",
+      "time",
+      "active",
+      "version"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/agente/rotinas/{id}",
+    "scope": "agente:ler",
+    "summary": "Consultar rotinas da integração (somente pausadas)",
+    "customerRequired": true,
+    "responseFields": [
+      "id",
+      "customer_code",
+      "modulo",
+      "name",
+      "prompt",
+      "frequency",
+      "days",
+      "day_of_month",
+      "time",
+      "active",
+      "version"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/agente/rotinas",
+    "scope": "agente:rotinas:gravar",
+    "summary": "Criar rotinas da integração (somente pausadas)",
+    "customerRequired": true,
+    "responseFields": [
+      "id",
+      "customer_code",
+      "modulo",
+      "name",
+      "prompt",
+      "frequency",
+      "days",
+      "day_of_month",
+      "time",
+      "active",
+      "version"
+    ],
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "customer_code",
+        "modulo",
+        "name",
+        "prompt",
+        "frequency",
+        "time",
+        "active"
+      ],
+      "properties": {
+        "customer_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "modulo": {
+          "type": "string",
+          "enum": [
+            "wms",
+            "operacao"
+          ],
+          "description": "Exige também armazenagem:ler ou operacao:ler."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 600
+        },
+        "frequency": {
+          "type": "string",
+          "enum": [
+            "daily",
+            "weekdays",
+            "weekly",
+            "monthly"
+          ]
+        },
+        "days": {
+          "type": "array",
+          "maxItems": 7,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6
+          }
+        },
+        "day_of_month": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 28
+        },
+        "time": {
+          "type": "string",
+          "pattern": "^([01]\\d|2[0-3]):(00|15|30|45)$"
+        },
+        "active": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "description": "Cadastro pausado; execução não é autorizada por esta API."
+        }
+      },
+      "description": "PATCH substitui o conteúdo editável completo. weekly exige days; monthly exige day_of_month.",
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "frequency": {
+                  "enum": [
+                    "daily",
+                    "weekdays"
+                  ]
+                }
+              }
+            },
+            {
+              "properties": {
+                "frequency": {
+                  "enum": [
+                    "weekly"
+                  ]
+                },
+                "days": {
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "days"
+              ]
+            },
+            {
+              "properties": {
+                "frequency": {
+                  "enum": [
+                    "monthly"
+                  ]
+                }
+              },
+              "required": [
+                "day_of_month"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/agente/rotinas/{id}",
+    "scope": "agente:rotinas:gravar",
+    "summary": "Alterar rotinas da integração (somente pausadas)",
+    "customerRequired": true,
+    "responseFields": [
+      "id",
+      "customer_code",
+      "modulo",
+      "name",
+      "prompt",
+      "frequency",
+      "days",
+      "day_of_month",
+      "time",
+      "active",
+      "version"
+    ],
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "customer_code",
+        "modulo",
+        "name",
+        "prompt",
+        "frequency",
+        "time",
+        "active",
+        "expected_version"
+      ],
+      "properties": {
+        "customer_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "modulo": {
+          "type": "string",
+          "enum": [
+            "wms",
+            "operacao"
+          ],
+          "description": "Exige também armazenagem:ler ou operacao:ler."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 600
+        },
+        "frequency": {
+          "type": "string",
+          "enum": [
+            "daily",
+            "weekdays",
+            "weekly",
+            "monthly"
+          ]
+        },
+        "days": {
+          "type": "array",
+          "maxItems": 7,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6
+          }
+        },
+        "day_of_month": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 28
+        },
+        "time": {
+          "type": "string",
+          "pattern": "^([01]\\d|2[0-3]):(00|15|30|45)$"
+        },
+        "active": {
+          "type": "boolean",
+          "enum": [
+            false
+          ],
+          "description": "Cadastro pausado; execução não é autorizada por esta API."
+        },
+        "expected_version": {
+          "type": "string",
+          "pattern": "^\\d+:\\d+$",
+          "description": "version retornada na consulta anterior; conflito de edição retorna 409."
+        }
+      },
+      "description": "PATCH substitui o conteúdo editável completo. weekly exige days; monthly exige day_of_month.",
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "frequency": {
+                  "enum": [
+                    "daily",
+                    "weekdays"
+                  ]
+                }
+              }
+            },
+            {
+              "properties": {
+                "frequency": {
+                  "enum": [
+                    "weekly"
+                  ]
+                },
+                "days": {
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "days"
+              ]
+            },
+            {
+              "properties": {
+                "frequency": {
+                  "enum": [
+                    "monthly"
+                  ]
+                }
+              },
+              "required": [
+                "day_of_month"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

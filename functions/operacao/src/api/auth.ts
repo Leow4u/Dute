@@ -4,6 +4,8 @@ import { HttpsError } from "firebase-functions/https";
 import { z } from "zod";
 import { loadProfile, type OperacaoProfile } from "../domain/profile.js";
 import { SCOPES, denied, invalid, type Scope } from "./contract.js";
+import { scopesNeedCustomers, type WritePolicy } from "./shared/permissions.js";
+import { policyOf } from "./shared/handler.js";
 
 export const API_INTEGRATIONS_COLLECTION = "api_integrations";
 export const API_APPROVALS_COLLECTION = "api_approvals";
@@ -13,6 +15,7 @@ export type Integration = {
   delegated_by: string;
   scopes: Scope[];
   customers: string[];
+  write_policy: WritePolicy;
 };
 export type VerifyHuman = (token: string) => Promise<{ uid: string }>;
 const KEY = /^dute_([a-f0-9]{32})\.([A-Za-z0-9_-]{43})$/;
@@ -94,6 +97,7 @@ export async function loadIntegration(
     delegated_by: data.delegated_by,
     scopes: data.scopes,
     customers: data.customers,
+    write_policy: policyOf(data.write_policy),
   };
 }
 export async function authenticate(
@@ -163,11 +167,12 @@ const Create = z
           .trim()
           .min(1)
           .max(80)
-          .refine((code) => !code.includes("/") && code !== "*"),
+          .refine((code) => !/[\\/*]/.test(code)),
       )
-      .min(1)
+      .min(0)
       .max(50),
     expires_in_days: z.number().int().min(1).max(90).default(30),
+    write_policy: z.enum(["scoped", "approval_required"]).default("approval_required"),
   })
   .strict();
 export async function createIntegration(
@@ -178,6 +183,7 @@ export async function createIntegration(
   const parsed = Create.safeParse(input);
   if (!parsed.success)
     invalid("Informe name, scopes, customers e expires_in_days (1 a 90 dias).");
+  if (scopesNeedCustomers(parsed.data.scopes) && !parsed.data.customers.length) invalid("Selecione clientes autorizados para esses escopos.");
   const id = randomBytes(16).toString("hex");
   const token = `dute_${id}.${randomBytes(32).toString("base64url")}`;
   const expires_at_ms = Date.now() + parsed.data.expires_in_days * 86400000;
@@ -192,6 +198,7 @@ export async function createIntegration(
       token_hash: hash(token),
       expires_at_ms,
       revoked: false,
+      write_policy: parsed.data.write_policy,
       created_at: FieldValue.serverTimestamp(),
     });
   return { id, token, expires_at: new Date(expires_at_ms).toISOString() };
@@ -208,7 +215,7 @@ export async function listIntegrations(db: Firestore, input: unknown) {
   if (!parsed.success) invalid("Informe limit (1 a 100) e cursor válido.");
   const { limit, cursor } = parsed.data;
   let query = db.collection(API_INTEGRATIONS_COLLECTION)
-    .select("name", "scopes", "customers", "delegated_by", "expires_at_ms", "revoked")
+    .select("name", "scopes", "customers", "delegated_by", "expires_at_ms", "revoked", "write_policy")
     .orderBy(FieldPath.documentId()).limit(limit + 1);
   if (cursor) query = query.startAfter(cursor);
   const snapshot = await query.get();
@@ -224,6 +231,7 @@ export async function listIntegrations(db: Firestore, input: unknown) {
         delegated_by: String(data.delegated_by ?? ""),
         expires_at: new Date(data.expires_at_ms).toISOString(),
         revoked: data.revoked === true,
+        write_policy: policyOf(data.write_policy),
       };
     }),
     next_cursor: snapshot.docs.length > limit ? docs[docs.length - 1].id : null,

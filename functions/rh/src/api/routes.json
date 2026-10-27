@@ -1,0 +1,360 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/v1/rh/colaboradores",
+    "scope": "rh:ler",
+    "summary": "Listar colaboradores (limit 1–100 e cursor; recurso global)",
+    "responseFields": [
+      "id",
+      "nome",
+      "funcao",
+      "vinculo",
+      "ativo",
+      "edicao"
+    ],
+    "customerRequired": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/rh/colaboradores/{id}",
+    "scope": "rh:ler",
+    "summary": "Consultar colaboradores pelo identificador",
+    "responseFields": [
+      "id",
+      "nome",
+      "funcao",
+      "vinculo",
+      "ativo",
+      "edicao"
+    ],
+    "customerRequired": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/rh/registros",
+    "scope": "rh:ler",
+    "summary": "Listar registros (limit 1–100 e cursor; recurso global)",
+    "responseFields": [
+      "id",
+      "colaborador_id",
+      "categoria",
+      "tipo",
+      "emitido_em",
+      "vence_em",
+      "situacao",
+      "substituido_por",
+      "edicao"
+    ],
+    "customerRequired": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/rh/registros/{id}",
+    "scope": "rh:ler",
+    "summary": "Consultar registros pelo identificador",
+    "responseFields": [
+      "id",
+      "colaborador_id",
+      "categoria",
+      "tipo",
+      "emitido_em",
+      "vence_em",
+      "situacao",
+      "substituido_por",
+      "edicao"
+    ],
+    "customerRequired": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/rh/vinculos",
+    "scope": "rh:ler",
+    "summary": "Listar vinculos (limit 1–100 e cursor; recurso global)",
+    "responseFields": [
+      "id",
+      "colaborador_id",
+      "admissao",
+      "desligamento",
+      "edicao"
+    ],
+    "customerRequired": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/rh/vinculos/{id}",
+    "scope": "rh:ler",
+    "summary": "Consultar vinculos pelo identificador",
+    "responseFields": [
+      "id",
+      "colaborador_id",
+      "admissao",
+      "desligamento",
+      "edicao"
+    ],
+    "customerRequired": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/rh/colaboradores/{id}/pessoais",
+    "scope": "rh:pessoais:ler",
+    "summary": "Consultar CPF e telefone do colaborador",
+    "responseFields": [
+      "id",
+      "nome",
+      "cpf",
+      "telefone"
+    ],
+    "customerRequired": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/rh/registros/{id}/arquivo",
+    "scope": "rh:documentos:ler",
+    "summary": "Abrir arquivo: URL de cinco minutos; registra evento antes da resposta",
+    "responseFields": [
+      "url",
+      "content_type",
+      "expira_em"
+    ],
+    "customerRequired": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/rh/registros",
+    "scope": "rh:registros:gravar",
+    "summary": "Criar registros",
+    "responseFields": [
+      "id",
+      "edicao",
+      "situacao",
+      "replayed"
+    ],
+    "customerRequired": false,
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "colaborador_id": {
+          "type": "string",
+          "pattern": "^col_[a-f0-9]{16}$"
+        },
+        "categoria": {
+          "type": "string",
+          "enum": [
+            "documento",
+            "exame",
+            "treinamento"
+          ]
+        },
+        "tipo": {
+          "type": "string",
+          "description": "Tipo do catálogo da categoria; outro exige descricao."
+        },
+        "descricao": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        },
+        "emitido_em": {
+          "type": "string",
+          "format": "date"
+        },
+        "vence_em": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resultado": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "apto",
+            "apto_com_restricao",
+            "inapto",
+            null
+          ]
+        }
+      },
+      "required": [
+        "colaborador_id",
+        "categoria",
+        "tipo",
+        "emitido_em"
+      ]
+    }
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/rh/registros/{id}",
+    "scope": "rh:registros:gravar",
+    "summary": "Alterar pela edição esperada: registros",
+    "responseFields": [
+      "id",
+      "edicao",
+      "situacao",
+      "replayed"
+    ],
+    "customerRequired": false,
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "colaborador_id": {
+          "type": "string",
+          "pattern": "^col_[a-f0-9]{16}$"
+        },
+        "categoria": {
+          "type": "string",
+          "enum": [
+            "documento",
+            "exame",
+            "treinamento"
+          ]
+        },
+        "tipo": {
+          "type": "string",
+          "description": "Tipo do catálogo da categoria; outro exige descricao."
+        },
+        "descricao": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        },
+        "emitido_em": {
+          "type": "string",
+          "format": "date"
+        },
+        "vence_em": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resultado": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "apto",
+            "apto_com_restricao",
+            "inapto",
+            null
+          ]
+        },
+        "expected_edicao": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "colaborador_id",
+        "categoria",
+        "tipo",
+        "emitido_em",
+        "expected_edicao"
+      ]
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/rh/vinculos",
+    "scope": "rh:vinculos:gravar",
+    "summary": "Criar vinculos",
+    "responseFields": [
+      "colaborador_id",
+      "edicao",
+      "replayed"
+    ],
+    "customerRequired": false,
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "colaborador_id": {
+          "type": "string",
+          "pattern": "^col_[a-f0-9]{16}$"
+        },
+        "admissao": {
+          "type": "string",
+          "format": "date"
+        },
+        "desligamento": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "colaborador_id",
+        "admissao"
+      ]
+    }
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/rh/vinculos/{id}",
+    "scope": "rh:vinculos:gravar",
+    "summary": "Alterar pela edição esperada: vinculos",
+    "responseFields": [
+      "colaborador_id",
+      "edicao",
+      "replayed"
+    ],
+    "customerRequired": false,
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "admissao": {
+          "type": "string",
+          "format": "date"
+        },
+        "desligamento": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected_edicao": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "admissao",
+        "expected_edicao"
+      ]
+    }
+  }
+]

@@ -28,6 +28,7 @@ import {
 } from "./contract.js";
 import { executeWrite, prepareWrite, readResource } from "./resources.js";
 import { openapi } from "./openapi.js";
+import { forwardPlatform, platformModule } from "./platform.js";
 
 export type ApiRequest = {
   method: string;
@@ -50,6 +51,7 @@ export function createApiHandler(
   db: Firestore,
   project: string,
   verify: VerifyHuman,
+  forward = forwardPlatform,
 ) {
   return async (request: ApiRequest): Promise<ApiResponse> => {
     const request_id = randomUUID();
@@ -58,7 +60,10 @@ export function createApiHandler(
     let auditId: string | undefined;
     let status = 500;
     try {
-      assertLiberado(project);
+      if (!["dute-prod", "dute-homolog"].includes(project)) throw new HttpsError("failed-precondition", "API indisponível neste ambiente.");
+      const module = platformModule(request);
+      if (Buffer.byteLength(JSON.stringify(request.body ?? null)) > 65536) invalid("O corpo passa de 64 KiB.");
+      if (module) return await forward(project, module, request);
       if (request.path === `${PREFIX}/openapi.json` && request.method === "GET")
         return { status: 200, body: openapi };
       if (!request.path.startsWith(`${PREFIX}/`))
@@ -161,6 +166,7 @@ export function createApiHandler(
         }
         throw new HttpsError("not-found", "Endpoint não encontrado.");
       }
+      assertLiberado(project);
       integration = await authenticate(db, token);
       auditId = request_id;
       await db.collection(API_AUDIT_COLLECTION).doc(auditId).create({
@@ -196,6 +202,7 @@ export function createApiHandler(
         key,
       );
       const approvalId = request.headers["x-approval-id"] ?? "";
+      if (integration.write_policy === "approval_required") {
       if (!/^[a-f0-9-]{36}$/.test(approvalId))
         denied("Esta ação exige aprovação humana em X-Approval-Id.");
       const approval = (
@@ -227,6 +234,9 @@ export function createApiHandler(
         customer_code: prepared.customer,
         route: request.path,
       });
+      } else {
+        await db.collection(API_AUDIT_COLLECTION).doc(auditId).update({ authorized_by: integration.delegated_by, write_policy: "scoped", customer_code: prepared.customer, route: request.path });
+      }
       const actor = await delegatedProfile(db, integration);
       const data = await executeWrite(
         db,

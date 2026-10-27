@@ -113,3 +113,5 @@ export type EstagioCadastro = (typeof ESTAGIOS_CADASTRO)[number];
 export function estagioDoCadastro(value: unknown): EstagioCadastro {
   return typeof value === "string" && value.trim().toLowerCase() === "prospect" ? "prospect" : "cliente";
 }
+
+export { API_PERMISSIONS, API_SCOPES, scopesNeedCustomers, type ApiScope, type WritePolicy } from "./api-permissions.js";
