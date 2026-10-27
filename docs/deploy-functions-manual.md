@@ -315,7 +315,7 @@ falha antes de conferir qualquer callable; e `allUsers` só vale com o papel
 `roles/run.invoker`, no mesmo binding. 429, 5xx e falha de rede são repetidos
 até 3 vezes. A conta precisa de `run.services.list`, `run.services.getIamPolicy`
 e `cloudfunctions.functions.list`, que a `github-actions-functions` já tem
-(`roles/run.admin` e `roles/cloudfunctions.developer`). Continua rodando no
+(`roles/run.admin` e o papel do Cloud Functions). Continua rodando no
 Windows PowerShell 5.1, pelo mesmo comando.
 
 ## Deploy automático pelo GitHub Actions
@@ -485,9 +485,11 @@ gcloud iam service-accounts create github-actions-functions `
 # 2. Papéis no projeto. Espelha a SA do frontend (artifactregistry.writer,
 #    cloudbuild.builds.editor, serviceusage.serviceUsageConsumer) e acrescenta
 #    o que function/scheduler precisam que o frontend não precisa.
+#    cloudfunctions.admin, não developer: a duteApi (function HTTP pública,
+#    desde 27/10/2026) pede cloudfunctions.functions.setIamPolicy.
 $SA = "github-actions-functions@dute-btg.iam.gserviceaccount.com"
 foreach ($role in @(
-  "roles/cloudfunctions.developer",
+  "roles/cloudfunctions.admin",
   "roles/run.admin",
   "roles/artifactregistry.writer",
   "roles/cloudbuild.builds.editor",
