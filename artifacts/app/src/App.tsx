@@ -21,6 +21,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/password-input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AuthShell } from "@/components/auth-shell";
@@ -293,9 +294,8 @@ function SignInPage() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="senha">Senha</Label>
-          <Input
+          <PasswordInput
             id="senha"
-            type="password"
             autoComplete="current-password"
             value={form.senha}
             onChange={(event) =>
