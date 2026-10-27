@@ -248,6 +248,9 @@ def seeded_production() -> FakeFirestore:
     fake.seed("client_profiles", "btg", {"customer_code": "BTG Pactual", "operation_template": "uniformes"})
     # Módulos contratados, pelo código do cliente (Fase 2 da plataforma).
     fake.seed("client_access", "BTG Pactual", {"customer_code": "BTG Pactual", "modules": ["wms", "financeiro"]})
+    fake.seed("api_integrations", "integracao", {"token_hash": "hash", "revoked": False})
+    fake.seed("api_approvals", "aprovacao", {"approved_by": "owner"})
+    fake.seed("api_audit", "requisicao", {"status": 200})
     fake.seed("locations", "l1", {"rua": "A"})
     fake.seed("warehouse_positions", "A-01", {"code": "A-01", "aisle": "A", "shelf": 1})
     fake.seed("billing_price_list", "p1", {"valor_unit": 10})

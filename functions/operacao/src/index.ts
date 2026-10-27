@@ -1,7 +1,8 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { onCall } from "firebase-functions/https";
+import { getAuth } from "firebase-admin/auth";
+import { onCall, onRequest } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
@@ -25,6 +26,7 @@ import { declineServiceRequestFor, requestServiceFor } from "./domain/solicitaca
 import { getRoomBoardFor } from "./domain/tv-leitura.js";
 import { sendSurveyToCommercialFor } from "./domain/vistoria-gravacao.js";
 import { PROJECT_ID } from "./project.js";
+import { createApiHandler } from "./api/handler.js";
 
 /**
  * Functions da Operação (codebase `operacao` no firebase.json; desenho em
@@ -45,6 +47,32 @@ setGlobalOptions({
 });
 
 const db = getFirestore();
+const api = createApiHandler(db, PROJECT_ID, (token) => getAuth().verifyIdToken(token, true));
+
+/** API REST externa. IAM permite chegar ao gateway; a aplicação autentica cada ação. */
+export const duteApi = onRequest({ cors: false, invoker: "public", timeoutSeconds: 60 }, async (request, response) => {
+  response.set("Cache-Control", "no-store");
+  response.set("X-Content-Type-Options", "nosniff");
+  if (request.rawBody?.byteLength > 65536) {
+    response.status(413).json({ error: { code: "invalid-argument", message: "O corpo passa de 64 KiB." } });
+    return;
+  }
+  if (request.method === "POST" && !request.is("application/json")) {
+    response.status(415).json({ error: { code: "invalid-argument", message: "Use Content-Type: application/json." } });
+    return;
+  }
+  try {
+    const result = await api({ method: request.method, path: request.path, query: request.query, body: request.body, headers: {
+      authorization: request.get("authorization"), "idempotency-key": request.get("idempotency-key"), "x-approval-id": request.get("x-approval-id"),
+    } });
+    if (typeof result.body.request_id === "string") response.set("X-Request-Id", result.body.request_id);
+    if (result.status === 429) response.set("Retry-After", "60");
+    response.status(result.status).json(result.body);
+  } catch {
+    // A storage/audit outage must not leak credentials or claim success.
+    response.status(503).json({ error: { code: "unavailable", message: "API indisponível. Repita com a mesma Idempotency-Key." } });
+  }
+});
 
 /** O tipo e o tamanho do arquivo no bucket padrão do projeto, ou null quando ele não existe. */
 const conferirArquivo: ConferirArquivo = async (caminho) => {

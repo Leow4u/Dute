@@ -35,6 +35,13 @@ Para gerar o build de produção:
 pnpm --filter @workspace/app run build
 ```
 
+## API de integração
+
+A API REST v1 começa pelo módulo Operação, com credenciais por integração,
+permissões por cliente e documentação OpenAPI. Gestão, exemplos e publicação:
+[docs/api.md](docs/api.md). Este código precisa ser publicado pelo fluxo abaixo
+para os endpoints ficarem disponíveis em cada ambiente.
+
 ## Deploy
 
 O projeto Google Cloud padrão é `dute-prod` (desde o corte da Fase 1, 20/10/2026; antes, `dute-btg`).

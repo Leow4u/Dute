@@ -108,6 +108,7 @@ export async function saveServiceOrderFor(
   db: Firestore,
   caller: OperacaoProfile,
   data: unknown,
+  authorizedCustomer?: string,
 ): Promise<ResultadoDaOs & { replayed?: true }> {
   exigirPapel(caller);
   const acao = interpretarOs(data);
@@ -123,6 +124,10 @@ export async function saveServiceOrderFor(
     async (transaction, { operationId }) => {
       const efeito = await executar(transaction, db, acao, caller);
       for (const os of efeito.ordens) {
+        // REST checks the same boundary again in the transaction that writes.
+        if (authorizedCustomer !== undefined && os.customer_code !== authorizedCustomer) {
+          throw new HttpsError("permission-denied", "Cliente da OS mudou; solicite nova aprovação.");
+        }
         createOperacaoEvent(transaction, db, {
           operation_id: operationId,
           suffix: efeito.ordens.length > 1 ? `${efeito.tipo}:${os.numero}` : efeito.tipo,
