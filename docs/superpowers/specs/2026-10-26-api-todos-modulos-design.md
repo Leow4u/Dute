@@ -41,7 +41,7 @@ Transições operacionais usam ações nomeadas, e não edição livre de status
 Exclusão de dados, administração de usuários, alteração de papéis, configurações
 de infraestrutura e poderes exclusivos do owner não são concedidos por
 "criar e alterar registros". Cancelamentos e estornos, quando oferecidos,
-continuam ações específicas com permissão e aprovação próprias.
+continuam ações específicas com permissão própria e validações do domínio.
 
 ## Credencial e permissões na interface
 
