@@ -135,9 +135,9 @@ disparado sem ele. Sem dado real neste arquivo.
   gravação, a das regras, às 01:21:53: o instante para o PITR é qualquer um
   entre os dois.
   - Antes do disparo, a conta do CI ganhou também o
-    `roles/cloudfunctions.admin`, que sobrava: o papel próprio
-    `dute_api_https_publisher`, que ela já tinha, dá a única permissão que
-    a `duteApi` pede (seção 4, item 5; seção 8).
+    `roles/cloudfunctions.admin`, que sobrava e saiu logo depois da
+    publicação: o papel próprio `dute_api_https_publisher`, que ela já
+    tinha, dá a única permissão que a `duteApi` pede (seção 4, item 5).
   - Ela levou os PRs 506 a 513 (seção 2, "As decisões de 26/10 e a API"):
     - o aceite do convite pela tela, com o e-mail confirmado, e as regras
       que fecham o caminho do navegador (pergunta 68, parte 9b);
@@ -912,17 +912,6 @@ dos marcos 2, 3 e 4. O registro está em `fase-4-financeiro.md`, "Parte
 - Se houver convite pendente criado até a primeira publicação (25/10/2026),
   cancelar e convidar de novo, com o owner, em Configurações › Usuários (pergunta 67
   do plano; seção 5, item 7). Sem convite antigo pendente, nada a fazer.
-- Tirar, quando quiser, o `roles/cloudfunctions.admin` da conta do CI do
-  `dute-prod`, dado em 27/10/2026 antes da sexta publicação. Com o
-  `roles/cloudfunctions.developer` e o papel próprio
-  `dute_api_https_publisher` (seção 4, item 5), ele não acrescenta nada de
-  que a publicação precise, e a conta fica igual ao que este roteiro e o
-  `docs/deploy-functions-manual.md` descrevem:
-
-  ```powershell
-  cd C:\DEV\Dute
-  gcloud projects remove-iam-policy-binding dute-prod --member="serviceAccount:github-actions-functions@dute-prod.iam.gserviceaccount.com" --role=roles/cloudfunctions.admin --condition=None
-  ```
 
 As perguntas 26, 58 a 60 e 64 a 71 do plano, as 12 a 14 da Fase 3 e as 12
 da LGPD foram respondidas em 26/10/2026 (plano, seção 13; `lgpd.md`, seção
