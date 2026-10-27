@@ -1,9 +1,13 @@
 # API Dute v1 — integração externa
 
-Este incremento entrega a estrutura da API e o módulo Operação. Armazenagem,
-Comercial, Financeiro e RH ainda não têm endpoints REST neste contrato. O app
-continua usando suas callables atuais. Não é necessário criar outro agente nem
-usar MCP para integrar: o consumidor precisa enviar HTTPS/JSON com headers.
+O contrato mantém a API de Operação e acrescenta 75 rotas de Armazenagem,
+Comercial, Financeiro, RH e Agent Dute. A cobertura exata e os limites desta
+versão estão em [api-cobertura.md](api-cobertura.md). Uma chave pode acessar
+vários módulos, com escopos específicos e clientes autorizados. O app continua
+usando suas callables atuais; o consumidor externo usa HTTPS/JSON.
+
+A ampliação está em revisão: este documento descreve o código desta versão,
+não comprova que os novos endpoints já foram publicados em algum ambiente.
 
 ## Endereços após publicação
 
@@ -22,14 +26,20 @@ lote inteiro de Functions pelo workflow oficial.
 ### Pelo app (owner/admin)
 
 Em **Configuração → Integrações**, escolha **Nova integração**. Informe o nome,
-selecione os clientes, as permissões da Operação e a validade da chave. Clique
+selecione os módulos, as permissões e a validade da chave. Para recursos de
+cliente, autorize códigos explícitos. É possível autorizar um código futuro
+para cadastrar esse cliente pelo Comercial; isso não libera os demais clientes.
+Recursos globais de RH/equipe são identificados no formulário e não exigem
+cliente fictício. Clique
 em **Gerar chave**, copie a credencial e guarde no cofre do integrador antes de
 concluir: ela aparece uma única vez e não pode ser recuperada depois.
 
 A lista mostra os metadados das integrações, inclusive expiradas e revogadas.
 **Revogar** pede confirmação e corta o acesso imediatamente. Uma chave perdida
-deve ser revogada e substituída. As escritas da integração continuam exigindo
-aprovação humana por ação, conforme o contrato abaixo.
+deve ser revogada e substituída. As novas chaves do formulário usam
+`write_policy: scoped`: a própria chave autoriza as gravações dos escopos
+selecionados. Chaves antigas e chamadas de criação que omitem a política
+continuam em `approval_required`; não houve ampliação silenciosa de acesso.
 
 ### Pela API
 
@@ -46,7 +56,8 @@ tokens revogados e pessoas sem papel owner/admin não gerenciam integrações.
   "name": "Grok Bot — Operação",
   "scopes": ["operacao:ler"],
   "customers": ["CODIGO_DO_CLIENTE"],
-  "expires_in_days": 30
+  "expires_in_days": 30,
+  "write_policy": "scoped"
 }
 ```
 
@@ -65,9 +76,15 @@ Para revogar: `DELETE <base>/integrations/<id>`, com token humano owner/admin.
 Para rotacionar: criar outra credencial, configurar o consumidor e revogar a
 antiga. Homologação e produção não compartilham credenciais.
 
+O corpo de criação aceita de 1 a 25 escopos conhecidos, até 50 códigos de
+cliente e política `scoped` ou `approval_required`. Clientes podem ser `[]`
+somente quando todos os escopos escolhidos são globais. Omitir `write_policy`
+preserva o padrão `approval_required`. Nenhuma rota permite trocar os
+escopos/política de uma credencial existente; emita outra e revogue a antiga.
+
 Para listar: `GET <base>/integrations?limit=50&cursor=<id>`, com o mesmo login
 humano owner/admin. Retorna `data` com `id`, `name`, `customers`, `scopes`,
-`delegated_by`, `expires_at` e `revoked`, e `next_cursor` (continue até `null`).
+`delegated_by`, `expires_at`, `revoked` e `write_policy`, e `next_cursor` (continue até `null`).
 O limite é de 1 a 100. Nunca retorna token, hash ou contadores internos.
 O CORS da API permite o domínio do app de produção e, na homologação, os dois
 endereços do Cloud Run desse ambiente; isso não substitui a autenticação.
@@ -76,8 +93,8 @@ endereços do Cloud Run desse ambiente; isso não substitui a autenticação.
 |---|---|
 | `operacao:ler` | Demandas, OS e agenda dos códigos de cliente autorizados |
 | `operacao:recursos:ler` | Colaboradores e veículos, recursos compartilhados entre clientes |
-| `operacao:demanda:criar` | Criar demanda direta, com aprovação humana |
-| `operacao:os:gravar` | Abrir, planejar e agendar OS, com aprovação humana |
+| `operacao:demanda:criar` | Criar demanda direta, conforme a política da chave |
+| `operacao:os:gravar` | Abrir, planejar e agendar OS, conforme a política da chave |
 
 ## Consultar
 
@@ -95,11 +112,33 @@ limitada: uma página pode estar vazia e ainda ter `next_cursor`; ela não indic
 fim da listagem. Ordenação por ID do documento, não por data. A agenda ignora
 OS sem janela. Não há varredura ilimitada nem consulta que exija índice novo.
 
-## Escrever
+## Escrever com autorização pela chave
 
-A regra do produto continua: o agente pode preparar, mas o impacto real exige
-aprovação humana. A aprovação precisa indicar o método, caminho, corpo e chave
-exatos; não é uma autorização genérica de escrita.
+Para `write_policy: scoped`, envie a chave da integração e uma
+`Idempotency-Key` única para cada ação. Não envie `X-Approval-Id`.
+
+```text
+Authorization: Bearer <TOKEN_DA_INTEGRACAO>
+Content-Type: application/json
+Idempotency-Key: parceiro-acao-0001
+```
+
+Use POST para criar e PATCH para alterar nas rotas publicadas. Os schemas do
+OpenAPI definem os campos reais: `expected_edicao`, `expected_status` ou
+`expected_version`, conforme o recurso. Recebimentos e registros do Agent Dute
+expõem versão para conferir alterações concorrentes; uma edição vencida dá
+409. Nunca altere saldos, status ou customer_code genericamente.
+
+Valores financeiros exigem escopos do Financeiro/Comercial; dados pessoais e
+arquivos do RH têm permissões próprias. A identidade auditável é `api:<id>`;
+a chave não herda owner/admin. As ferramentas do Agent Dute interno não ganham
+as permissões da integração externa.
+
+## Escrever com aprovação por ação (legado/opcional)
+
+Para `write_policy: approval_required`, obtenha uma aprovação humana do método,
+caminho, corpo e chave exatos. POST e PATCH dos novos módulos também aceitam
+esse fluxo, inclusive recursos globais sem customer_code fictício.
 
 1. O humano owner/admin envia `POST <base>/integrations/<id>/approvals`:
 
@@ -148,11 +187,21 @@ integração, compartilhado entre instâncias. Em 429 respeitar Retry-After; em
 falha de rede ou 5xx, repetir escrita com a **mesma** chave. Não trocar a chave
 porque a resposta se perdeu: a operação pode ter sido concluída.
 
+Nos novos módulos, o recibo da API impede executores concorrentes com a mesma
+chave. Repetição concluída retorna 200 com `replayed: true`; conteúdo diferente
+retorna 409. Se houver falha após um efeito possivelmente confirmado, o recibo
+fica pendente/incerto e a repetição falha fechada com 409: confira os dados e
+procure suporte com o request_id. Não crie outra chave para executar às cegas.
+Os recibos não expiram automaticamente nesta versão e são preservados pela
+zeragem para que um retry antigo não produza outra gravação.
+
 Auditoria em `api_audit`: request ID, integração, status, instante e, nas
-escritas aprovadas, cliente, aprovação e aprovador. O registro de tentativa
-precede a alteração; os eventos de negócio e os recibos continuam na mesma
-transação da alteração. Sem tokens ou corpo completo nos logs. As coleções
-`api_integrations`, `api_approvals` e `api_audit` são fechadas pelas regras do
+escritas, responsável pela autorização e política; nas chaves legadas,
+aprovação e aprovador. Clientes e alvos vêm das ações validadas no domínio. O registro de tentativa
+precede a alteração. Os eventos e recibos do domínio mantêm suas transações;
+o recibo adicional da API reserva a execução antes do domínio e salva o resultado
+depois, conservando o estado incerto se houver interrupção. Sem tokens ou corpo completo nos logs. As coleções
+`api_integrations`, `api_approvals`, `api_audit` e `api_receipts` são fechadas pelas regras do
 Firestore e preservadas pela ferramenta de zeragem.
 
 ## Testar e publicar
@@ -164,11 +213,11 @@ npm --prefix functions/operacao ci
 npm --prefix functions/operacao run test:critical
 ```
 
-O CI já inclui os testes novos nas suites da Operação. Após merge na main, o
-fluxo existente publica na homologação. Conferir a criação de uma credencial
-de teste, consultas e uma ação humana aprovada com dados de teste. Só depois
-disparar CI na main com `publicar_producao` (autorizado pelo usuário nesta
-tarefa). A publicação confere o contrato exato e a recusa de consulta anônima
+Os scripts e o CI incluem os testes dos seis pacotes. Após merge na main, o
+fluxo existente publica na homologação. Conferir com dados de teste leituras,
+gravações scoped e o fluxo legado de aprovação. A ampliação proposta nesta
+versão deve passar por revisão e homologação antes da autorização específica
+para publicar em produção pelo fluxo `publicar_producao`. A publicação confere o contrato exato e a recusa de consulta anônima
 com `node tools/check_api_deployed.mjs <projeto>`. Isso prova disponibilidade do
 gateway e proteção anônima, não substitui validação autenticada com usuário.
 Não criar demandas ou OS reais como smoke de produção.
@@ -177,3 +226,24 @@ Para interromper uma integração: revogar sua chave. Para voltar o código:
 publicar o commit anterior pelo fluxo oficial, observando que remover uma
 Function pode exigir confirmação manual do Firebase. Revogar credenciais
 primeiro; rollback do frontend sozinho não desliga esta API.
+
+
+## Implantação dos novos módulos
+
+O endereço externo continua sendo `duteApi`. O gateway encaminha somente para
+nomes fixos de adaptadores do mesmo projeto: `duteArmazenagemApi`,
+`duteComercialApi`, `duteFinanceiroApi`, `duteRhApi` e `duteAgenteApi`. Cada
+adaptador verifica novamente chave, escopo, validade, responsável e política;
+não existe entrada que dispense autenticação. Caminhos de travessia são
+recusados antes de encaminhar a credencial.
+
+As codebases têm build independente: `tools/sync_api_shared.mjs` copia o kernel
+portátil e os manifests antes do TypeScript, e o deploy inclui o JS compilado.
+`gcp-build` vazio evita uma recompilação remota que dependeria do monorepo.
+Não publicar somente o frontend/gateway sem os adaptadores correspondentes.
+Os módulos preservam suas liberações de ambiente; desligar Operação não
+precisa desligar o RH ou Financeiro. A versão ainda não publica NFS-e pela Omie,
+não executa operação bancária e não roda rotinas do Agent Dute.
+
+Este trabalho não executou alterações reais de IAM, emissão de credenciais,
+merge ou deploy. A entrega é um PR em draft, para revisão antes de publicação.

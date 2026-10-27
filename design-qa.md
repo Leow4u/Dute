@@ -43,9 +43,9 @@ final result: passed
 ## Evidências
 
 - Fonte: primeira imagem exibida e aprovada no chat, `/workspace/generated_images/exec-067f5cb5-2313-4a6c-b6e9-7171f53fba4a.png` (1487 × 1058 px).
-- Desktop: `/tmp/dute-integracoes-desktop.png`, viewport 1440 × 1024 CSS px, deviceScaleFactor 1.
-- Celular: `/tmp/dute-integracoes-mobile.png` e `/tmp/dute-integracoes-chave-mobile.png`, 390 × 844 CSS px, deviceScaleFactor 1.
-- Comparação conjunta: `/tmp/dute-integracoes-comparison.png`; cada fonte redimensionada proporcionalmente para 1000 px de largura. Estado: Nova integração, nome e cliente fictícios preenchidos, primeira permissão selecionada.
+- Desktop: `/workspace/dute-integracoes-preview/dute-integracoes-desktop.png`, viewport 1440 × 1024 CSS px, deviceScaleFactor 1.
+- Celular: `/workspace/dute-integracoes-preview/dute-integracoes-mobile.png` e `/workspace/dute-integracoes-preview/dute-integracoes-chave-mobile.png`, 390 × 844 CSS px, deviceScaleFactor 1.
+- Comparação conjunta: `/workspace/dute-integracoes-preview/dute-integracoes-comparison.png`; cada fonte redimensionada proporcionalmente para 1000 px de largura. Estado: Nova integração, nome e cliente fictícios preenchidos, primeira permissão selecionada.
 - Implementação: prévia local em `http://127.0.0.1:5173/.preview-tmp/index.html`, com a página, os componentes, o cliente HTTP e o shell reais; somente a sessão e as respostas da API são simuladas. Nenhuma credencial real foi criada.
 
 ## Achados e histórico
@@ -70,3 +70,17 @@ final result: passed
 - Emulador Firestore: listagem paginada sem credenciais/hashes, autenticação humana, admin ativo, revogadas e expiradas. Não houve validação autenticada em produção.
 
 final result: passed
+
+
+---
+
+# Integrações nos seis módulos — 27/10/2026
+
+- Tela real e transporte HTTP real com sessão e respostas simuladas no navegador. Nenhuma credencial real emitida.
+- 25 permissões em seis grupos, identificação de recursos globais e códigos exatos de clientes. O POST foi verificado com `write_policy: scoped`.
+- Chromium em 1440 × 1024 e 390 × 844: criar, copiar, concluir, cancelar revogação e confirmar revogação. Sem exceção JavaScript ou overflow horizontal; rolagem até RH/Agent Dute e botão final alcançáveis.
+- Evidências locais: `/workspace/dute-api-todos-modulos-preview/dute-integracoes-desktop.png`, `dute-integracoes-mobile.png`, `dute-integracoes-escopos-mobile.png` e `dute-integracoes-chave-mobile.png`.
+- Fontes remotas bloqueadas pela rede (`ERR_TUNNEL_CONNECTION_FAILED`); fallback legível inspecionado. Este limite não valida a fonte remota nem uma sessão autenticada em ambiente publicado.
+- Suíte completa do frontend: 248 arquivos, 2.844 testes; typecheck e build Vite/PWA passaram.
+
+Resultado: fluxo e responsividade conferidos com mocks; publicação e validação autenticada em homologação continuam pendentes.

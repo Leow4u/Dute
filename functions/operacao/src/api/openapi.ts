@@ -1,4 +1,6 @@
 import { PREFIX } from "./contract.js";
+import { API_SCOPES } from "./shared/permissions.js";
+import { PLATFORM_ROUTES } from "./shared/manifests.js";
 
 const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
 const json = (schema: unknown) => ({
@@ -58,8 +60,8 @@ const writeHeaders = [
   parameter(
     "X-Approval-Id",
     "header",
-    { type: "string", format: "uuid" },
-    true,
+    { type: "string", format: "uuid", description: "Obrigatório somente para write_policy approval_required; chaves scoped usam seus escopos." },
+    false,
   ),
 ];
 function read(summary: string, parameters: unknown[]) {
@@ -348,20 +350,15 @@ export const openapi: Record<string, any> = {
             ...array(
               {
                 type: "string",
-                enum: [
-                  "operacao:ler",
-                  "operacao:recursos:ler",
-                  "operacao:demanda:criar",
-                  "operacao:os:gravar",
-                ],
+                enum: API_SCOPES,
               },
-              4,
+              API_SCOPES.length,
             ),
             minItems: 1,
           },
           customers: {
             ...array({ type: "string", maxLength: 80 }, 50),
-            minItems: 1,
+            minItems: 0,
           },
           expires_in_days: {
             type: "integer",
@@ -369,12 +366,13 @@ export const openapi: Record<string, any> = {
             maximum: 90,
             default: 30,
           },
+          write_policy: { type: "string", enum: ["scoped", "approval_required"], default: "approval_required", description: "scoped autoriza pelas permissões da chave. Omitir preserva aprovação humana por escrita; não amplia chaves já emitidas." },
         },
         ["name", "scopes", "customers"],
       ),
       Approval: object(
         {
-          method: { type: "string", enum: ["POST"] },
+          method: { type: "string", enum: ["POST", "PATCH"] },
           path: {
             type: "string",
             description: "Caminho exato, incluindo /api/v1",
@@ -559,6 +557,54 @@ const envelope = (data: unknown, paged = false) =>
     },
     ["data", "request_id"],
   );
+
+/** Converte o subconjunto de JSON Schema emitido pelos parsers para OpenAPI 3.0. */
+export function openapiSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(openapiSchema);
+  if (!value || typeof value !== "object") return value;
+  const source = value as Record<string, unknown>;
+  if (Array.isArray(source.anyOf) && source.anyOf.some((item) => item && typeof item === "object" && item.type === "null")) {
+    const alternatives = source.anyOf.filter((item) => !(item && typeof item === "object" && item.type === "null"));
+    if (alternatives.length === 1) {
+      const { anyOf: _anyOf, ...rest } = source;
+      return openapiSchema({ ...rest, ...alternatives[0], nullable: true });
+    }
+  }
+  const result: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (key === "required" && Array.isArray(child) && child.length === 0) continue;
+    if (key === "type" && Array.isArray(child) && child.includes("null")) {
+      const nonNull = child.filter((type) => type !== "null");
+      if (nonNull.length === 1) { result.type = nonNull[0]; result.nullable = true; continue; }
+    }
+    if (["exclusiveMinimum", "exclusiveMaximum"].includes(key) && typeof child === "number") {
+      result[key === "exclusiveMinimum" ? "minimum" : "maximum"] = child; result[key] = true; continue;
+    }
+    result[key] = openapiSchema(child);
+  }
+  return result;
+}
+for (const entry of PLATFORM_ROUTES) {
+  const list = entry.method === "GET" && (!entry.path.includes("{") || /\/(itens|aditivos|revisoes)$/.test(entry.path));
+  const parameters: unknown[] = [...entry.path.matchAll(/\{([a-z_]+)\}/g)].map((match: RegExpMatchArray) => parameter(match[1], "path", { type: "string", maxLength: 200 }, true));
+  if (list) parameters.push(...page);
+  if (entry.customerRequired && entry.method === "GET") parameters.push(customer);
+  if (entry.method !== "GET") parameters.push(parameter("Idempotency-Key", "header", { type: "string", minLength: 1, maxLength: 200 }, true), parameter("X-Approval-Id", "header", { type: "string", format: "uuid", description: "Obrigatório somente para chaves com write_policy approval_required." }));
+  const fields = [...new Set(["id", ...(entry.responseFields ?? [])])] as string[];
+  const projected = object(Object.fromEntries(fields.map((field) => [field, {}])));
+  const resultSchema = entry.method === "GET" ? envelope(list ? { type: "array", items: projected } : projected, list) : ref("Result");
+  const operation = {
+    summary: entry.summary,
+    description: `Escopo: ${entry.scope}. ${entry.method === "GET" ? "Leitura autorizada e projetada." : "Chave scoped executa com seus escopos. Chave legada/approval_required exige aprovação exata. Não há repetição automática com uma chave de idempotência nova."}`,
+    security: integrationAuth, parameters,
+    ...(entry.requestSchema ? { requestBody: { required: true, ...json(openapiSchema(entry.requestSchema)) } } : {}),
+    responses: { [entry.method === "POST" ? "201" : "200"]: response(`Campos de resposta: ${(entry.responseFields ?? []).join(", ") || "recibo da operação"}`, resultSchema), ...(entry.method === "POST" ? { "200": response("Recibo da repetição idempotente", resultSchema) } : {}), ...errors },
+    "x-required-scope": entry.scope,
+  };
+  openapi.paths[entry.path] ??= {};
+  openapi.paths[entry.path][String(entry.method).toLowerCase()] = operation;
+}
+
 for (const [path, operations] of Object.entries(openapi.paths) as [
   string,
   Record<string, any>,
@@ -573,7 +619,7 @@ for (const [path, operations] of Object.entries(openapi.paths) as [
       operation.responses["200"] = response("Metadados sem credenciais", envelope({
         type: "array",
         items: object({
-          id: str, name: str, customers: array(str, 50), scopes: array(str, 4),
+          id: str, name: str, customers: array(str, 50), scopes: array(str, API_SCOPES.length), write_policy: { type: "string", enum: ["scoped", "approval_required"] },
           delegated_by: str, expires_at: { type: "string", format: "date-time" }, revoked: { type: "boolean" },
         }, ["id", "name", "customers", "scopes", "delegated_by", "expires_at", "revoked"]),
       }, true));

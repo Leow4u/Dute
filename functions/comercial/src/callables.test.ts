@@ -81,9 +81,12 @@ describe("callables do Comercial", () => {
     assert.doesNotMatch(index, /^export\s*\*/m, "reexportação passa sem conferência do invoker");
   });
 
-  it("só há callables: nenhum outro gatilho (HTTP, agenda, documento, fila)", () => {
+  it("só há callables e o adaptador HTTP autenticado declarado", () => {
     const triggers = new Set([...index.matchAll(/\bon[A-Z]\w*/g)].map((match) => match[0]));
-    assert.deepEqual([...triggers], ["onCall"], "gatilho que não é callable fica fora da liberação e da conferência do invoker");
+    assert.deepEqual([...triggers].sort(), ["onCall", "onRequest"], "nenhum gatilho extra fora da liberação");
+    const http = [...index.matchAll(/^export const (\w+) = onRequest/gm)].map((match) => match[1]);
+    assert.deepEqual(http, ["duteComercialApi"]);
+    assert.match(index, /httpModuleHandler\(createModuleHandler\(db, PROJECT_ID, \(token\) => getAuth\(\).verifyIdToken\(token, true\), comercialApi\)\)/);
     assert.doesNotMatch(index, /firebase-functions\/v1|from "firebase-functions"/, "use só firebase-functions/https e /v2");
   });
 

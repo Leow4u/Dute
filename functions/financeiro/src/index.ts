@@ -1,6 +1,9 @@
+import { financeiroApi } from "./api/module.js";
+import { createModuleHandler, httpModuleHandler } from "./api/shared/handler.js";
+import { getAuth } from "firebase-admin/auth";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { onCall } from "firebase-functions/https";
+import { onCall, onRequest } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
@@ -99,3 +102,6 @@ export const runOmieSync = onSchedule({ schedule: "every 5 minutes", timeZone: "
   const baixas = emissoes.parou_pela_chave ? null : await runOmieBaixasFor(db, opcoes);
   console.info("runOmieSync", { emissoes, baixas });
 });
+
+/** Adaptador externo autenticado; só o gateway é documentado para consumidores. */
+export const duteFinanceiroApi = onRequest({ cors: false, invoker: "public", timeoutSeconds: 60 }, httpModuleHandler(createModuleHandler(db, PROJECT_ID, (token) => getAuth().verifyIdToken(token, true), financeiroApi)));

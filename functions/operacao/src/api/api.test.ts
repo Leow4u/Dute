@@ -117,7 +117,7 @@ describe("API pública v1", () => {
         );
         assert.ok(
           item.post.parameters.some(
-            (p: any) => p.name === "X-Approval-Id" && p.required,
+            (p: any) => p.name === "X-Approval-Id" && !p.required && p.schema.description.includes("approval_required"),
           ),
         );
       }

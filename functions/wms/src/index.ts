@@ -1,3 +1,5 @@
+import { armazenagemApi } from "./api/module.js";
+import { createModuleHandler, httpModuleHandler } from "./api/shared/handler.js";
 import { applicationDefault, initializeApp } from "firebase-admin/app";
 import {
   getFirestore,
@@ -9,6 +11,7 @@ import { getStorage } from "firebase-admin/storage";
 import {
   HttpsError,
   onCall,
+  onRequest,
   type CallableRequest,
 } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
@@ -8044,3 +8047,6 @@ export const resumeOpeningConferenceBox = onCall({ timeoutSeconds: 300 }, async 
   const customer_code = requireCustomerScope(profile, typeof data.customer_code === "string" ? data.customer_code : undefined);
   return resumeOpeningConferenceBoxFor(db, { ...data, customer_code }, profile);
 });
+
+/** Adaptador externo autenticado; só o gateway é documentado para consumidores. */
+export const duteArmazenagemApi = onRequest({ cors: false, invoker: "public", timeoutSeconds: 60 }, httpModuleHandler(createModuleHandler(db, PROJECT_ID, (token) => getAuth().verifyIdToken(token, true), armazenagemApi)));

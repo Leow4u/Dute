@@ -64,6 +64,40 @@ async function integration(
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 
 describe("API de integração no emulador", () => {
+  it("cria chave global scoped, preserva padrão legado e recusa política ou clientes inválidos", async () => {
+    const input = { name: "Integração RH", scopes: ["rh:ler", "rh:registros:gravar"], customers: [], write_policy: "scoped" };
+    const response = await request("POST", "/integrations", human, input);
+    assert.equal(response.status, 201, JSON.stringify(response));
+    const stored = (await db.doc(`api_integrations/${response.body.data.id}`).get()).data()!;
+    assert.equal(stored.write_policy, "scoped");
+    assert.deepEqual(stored.customers, []);
+    const legacy = await integration();
+    assert.equal((await db.doc(`api_integrations/${legacy.id}`).get()).data()!.write_policy, "approval_required");
+    for (const invalid of [
+      { ...input, write_policy: "admin" },
+      { ...input, scopes: ["rh:ler", "operacao:ler"] },
+      { ...input, customers: ["*"] },
+    ]) assert.equal((await request("POST", "/integrations", human, invalid)).status, 400);
+  });
+  it("chave scoped cria demanda sem aprovação por ação e preserva idempotência", async () => {
+    const created = await request("POST", "/integrations", human, {
+      name: "Integração Operação", scopes: ["operacao:demanda:criar"], customers: ["A"], write_policy: "scoped",
+    });
+    assert.equal(created.status, 201);
+    const key = created.body.data;
+    const body = {
+      customer_code: "A", titulo: "Mudança", canal: "telefone",
+      recebida_em: new Date().toISOString(), executar_ate: new Date(Date.now() + 86400000).toISOString(),
+      itens: [{ item: "Mesa", unidade: "UN", quantidade: "1" }],
+    };
+    const headers = { ...bearer(key.token), "idempotency-key": "scoped-demand-1" };
+    const result = await request("POST", "/operacao/demandas", headers, body);
+    assert.equal(result.status, 201, JSON.stringify(result));
+    assert.equal((await request("POST", "/operacao/demandas", headers, body)).body.data.replayed, true);
+    assert.equal((await db.collection("demands").get()).size, 1);
+    assert.equal((await db.collection("api_approvals").get()).size, 0);
+    assert.equal((await request("POST", "/operacao/demandas", { ...headers, "idempotency-key": "outside-1" }, { ...body, customer_code: "B" })).status, 403);
+  });
   it("lista metadados paginados sem segredo, incluindo revogadas e expiradas", async () => {
     const first = await integration();
     const second = await integration();
@@ -134,6 +168,7 @@ describe("API de integração no emulador", () => {
       "api_integrations",
       "api_approvals",
       "api_audit",
+      "api_receipts",
     ]) {
       await db.doc(`${collection}/private`).set({ secret: "test-only" });
       assert.equal(

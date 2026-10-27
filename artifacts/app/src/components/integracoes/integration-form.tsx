@@ -5,14 +5,15 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { criarIntegracao } from "@/lib/integracoes/api";
-import { integrationProblem, PERMISSOES, type CreatedIntegration, type IntegrationInput } from "@/lib/integracoes/model";
+import { integrationProblem, MODULOS, PERMISSOES, type CreatedIntegration, type IntegrationInput } from "@/lib/integracoes/model";
 
 export type IntegrationCustomer = { code: string; name: string };
 
 export function IntegrationForm({ customers, onCreated, onCancel, onPendingChange }: {
   customers: IntegrationCustomer[]; onCreated: (key: CreatedIntegration) => void; onCancel: () => void; onPendingChange: (pending: boolean) => void;
 }) {
-  const [input, setInput] = useState<IntegrationInput>({ name: "", customers: [], scopes: ["operacao:ler"], expires_in_days: 30 });
+  const [input, setInput] = useState<IntegrationInput>({ name: "", customers: [], scopes: ["operacao:ler"], expires_in_days: 30, write_policy: "scoped" });
+  const [customerCode, setCustomerCode] = useState("");
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -26,6 +27,14 @@ export function IntegrationForm({ customers, onCreated, onCancel, onPendingChang
     try { onCreated(await criarIntegracao({ ...input, name: input.name.trim() })); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível gerar a chave."); }
     finally { sending.current = false; setPending(false); onPendingChange(false); }
+  }
+  function addCustomerCode() {
+    const code = customerCode.trim();
+    if (!code || code.length > 80 || /[*/\\]/.test(code)) { setError("Informe um código exato, sem asteriscos ou barras."); return; }
+    if (input.customers.includes(code)) { setCustomerCode(""); return; }
+    if (input.customers.length >= 50) { setError("Autorize no máximo 50 clientes."); return; }
+    setInput({ ...input, customers: [...input.customers, code] });
+    setCustomerCode(""); setError(null);
   }
   const visible = customers.filter((c) => `${c.name} ${c.code}`.toLocaleLowerCase("pt-BR").includes(search.toLocaleLowerCase("pt-BR")));
   return (
@@ -56,17 +65,30 @@ export function IntegrationForm({ customers, onCreated, onCancel, onPendingChang
               </div>
             </div>
           </details>
-          {input.customers.length > 0 && <p className="text-xs text-muted-foreground">{input.customers.map((code) => customers.find((c) => c.code === code)?.name ?? code).join(", ")}</p>}
+          <div className="space-y-2 pt-2">
+            <Label htmlFor="integration-customer-code">Código de cliente a autorizar</Label>
+            <div className="flex flex-wrap gap-2">
+              <Input id="integration-customer-code" value={customerCode} maxLength={80} autoComplete="off" aria-describedby="integration-customer-code-hint" className="min-w-0 flex-1" onChange={(e) => setCustomerCode(e.target.value)} />
+              <Button type="button" variant="outline" onClick={addCustomerCode}>Autorizar código</Button>
+            </div>
+            <p id="integration-customer-code-hint" className="text-xs text-muted-foreground">Autorize um código exato, inclusive para cadastrar um novo cliente no Comercial. Sem asteriscos ou barras.</p>
+          </div>
+          {input.customers.length > 0 && <ul className="flex flex-wrap gap-2" aria-label="Clientes selecionados">{input.customers.map((code) => <li key={code} className="flex items-center gap-2 rounded-md bg-muted px-2 py-1 text-xs"><span>{customers.find((c) => c.code === code)?.name ?? code}</span><Button type="button" variant="ghost" size="sm" aria-label={`Remover cliente ${code}`} onClick={() => setInput({ ...input, customers: input.customers.filter((item) => item !== code) })}>Remover</Button></li>)}</ul>}
+
         </div>
         <fieldset className="space-y-4 border-y border-border py-6">
-          <legend className="sr-only">Permissões da Operação</legend>
+          <legend className="sr-only">Permissões da integração</legend>
           <h2 className="text-base font-semibold">O que a integração pode fazer</h2>
-          {PERMISSOES.map((permission) => (
-            <label key={permission.value} className="flex cursor-pointer items-start gap-3 py-1">
-              <Checkbox className="mt-0.5" checked={input.scopes.includes(permission.value)} onCheckedChange={(checked) => setInput({ ...input, scopes: checked ? [...input.scopes, permission.value] : input.scopes.filter((s) => s !== permission.value) })} />
-              <span className="text-sm"><span className="font-medium">{permission.label}</span>{"hint" in permission && <span className="mt-1 block text-xs leading-5 text-muted-foreground">{permission.hint}</span>}</span>
-            </label>
-          ))}
+          <p className="text-sm text-muted-foreground">A chave autoriza criar e alterar dentro das permissões selecionadas.</p>
+          {MODULOS.map((module) => <fieldset key={module.value} className="space-y-3 rounded-lg border border-border p-4">
+            <legend className="px-1 text-sm font-semibold">{module.label}</legend>
+            {PERMISSOES.filter((permission) => permission.module === module.value).map((permission) => (
+              <label key={permission.value} className="flex cursor-pointer items-start gap-3 py-1">
+                <Checkbox className="mt-0.5" aria-label={permission.label} checked={input.scopes.includes(permission.value)} onCheckedChange={(checked) => setInput({ ...input, scopes: checked ? [...input.scopes, permission.value] : input.scopes.filter((s) => s !== permission.value) })} />
+                <span className="text-sm"><span className="font-medium">{permission.label}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{permission.customer ? "Somente clientes autorizados." : "Recurso global: independe dos clientes selecionados."}</span></span>
+              </label>
+            ))}
+          </fieldset>)}
         </fieldset>
         <div className="max-w-xs space-y-2">
           <Label htmlFor="integration-expiry">Validade da chave</Label>
@@ -78,7 +100,7 @@ export function IntegrationForm({ customers, onCreated, onCancel, onPendingChang
       </fieldset>
       {error && <p role="alert" className="mt-5 text-sm text-destructive">{error}</p>}
       <div className="mt-7 flex flex-wrap gap-3">
-        <Button type="submit" disabled={pending || !customers.length}>{pending ? "Gerando chave…" : "Gerar chave"}</Button>
+        <Button type="submit" disabled={pending}>{pending ? "Gerando chave…" : "Gerar chave"}</Button>
         <Button type="button" variant="outline" disabled={pending} onClick={onCancel}>Cancelar</Button>
       </div>
     </form>

@@ -58,7 +58,7 @@ CUSTOMER_CODE = "BTG Pactual"
 # Sem estas coleções ninguém entra no sistema: o login é fechado por convite e
 # o papel de cada pessoa vem de `users`; `customer_accounts` liga usuário a
 # cliente e `system_settings` guarda a configuração do painel. Nunca apagadas.
-ACCESS_COLLECTIONS = ("users", "invites", "customer_accounts", "system_settings", "api_integrations", "api_approvals", "api_audit")
+ACCESS_COLLECTIONS = ("users", "invites", "customer_accounts", "system_settings", "api_integrations", "api_approvals", "api_audit", "api_receipts")
 # Estrutura, não histórico: clientes (com o perfil de operação publicado para o
 # portal e os módulos contratados em client_access), endereços do armazém,
 # lista de preços e configuração de cobrança. Só são apagadas com

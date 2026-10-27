@@ -16,7 +16,7 @@ it("resolve a base por projeto e só usa emulador explicitamente", () => {
 it("envia token humano atual sem cookies, cache, redirects ou repetição", async () => {
   const fetcher = vi.fn(async () => new Response(JSON.stringify({ data: { id: "a", token: "one-time", expires_at: "2026-11-25T00:00:00Z" } }), { status: 201 }));
   vi.stubGlobal("fetch", fetcher);
-  const input = { name: "Parceiro", scopes: ["operacao:ler"] as const, customers: ["A"], expires_in_days: 30 };
+  const input = { name: "Parceiro", scopes: ["operacao:ler"] as const, customers: ["A"], expires_in_days: 30, write_policy: "scoped" as const };
   expect((await criarIntegracao({ ...input, scopes: [...input.scopes] })).token).toBe("one-time");
   expect(fetcher).toHaveBeenCalledTimes(1);
   const options = fetcher.mock.calls[0] as unknown as [string, RequestInit];
@@ -41,13 +41,13 @@ it("não chama a API sem sessão e não repete uma criação que falha", async (
   await expect(listarIntegracoes()).rejects.toThrow("Entre novamente");
   expect(fetcher).not.toHaveBeenCalled();
   session.currentUser = { getIdToken: vi.fn(async () => "human-id-token") };
-  await expect(criarIntegracao({ name: "Parceiro", scopes: ["operacao:ler"], customers: ["A"], expires_in_days: 30 })).rejects.toThrow("Somente owner/admin.");
+  await expect(criarIntegracao({ name: "Parceiro", scopes: ["operacao:ler"], customers: ["A"], expires_in_days: 30, write_policy: "scoped" as const })).rejects.toThrow("Somente owner/admin.");
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
 
 it("perda de conexão não repete criação e orienta conferir/revogar uma chave sem recibo", async () => {
   const fetcher = vi.fn(async () => { throw new TypeError("network"); });
   vi.stubGlobal("fetch", fetcher);
-  await expect(criarIntegracao({ name: "Parceiro", scopes: ["operacao:ler"], customers: ["A"], expires_in_days: 30 })).rejects.toThrow("Confira a lista antes de tentar novamente");
+  await expect(criarIntegracao({ name: "Parceiro", scopes: ["operacao:ler"], customers: ["A"], expires_in_days: 30, write_policy: "scoped" as const })).rejects.toThrow("Confira a lista antes de tentar novamente");
   expect(fetcher).toHaveBeenCalledTimes(1);
 });

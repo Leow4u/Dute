@@ -8,7 +8,10 @@ REST/JSON, OpenAPI e uma chave por integração, administrada por owner/admin em
 Configuração → Integrações. Não basta acrescentar opções na tela: cada opção
 deve corresponder a endpoints implementados, documentados e testados.
 
-Esta proposta ainda não foi aprovada como desenho de implementação.
+O escopo e a política de gravação foram autorizados por Leonardo no chat; a
+coordenação determinou continuar a implementação na mesma tarefa. Novos PRs
+são draft; não há autorização nesta etapa para merge, deploy ou mudanças reais
+de IAM/credenciais.
 
 ## Abordagens
 

@@ -2,12 +2,8 @@ import { HttpsError } from "firebase-functions/https";
 import { digest } from "../domain/operations.js";
 
 export const PREFIX = "/api/v1";
-export const SCOPES = [
-  "operacao:ler",
-  "operacao:recursos:ler",
-  "operacao:demanda:criar",
-  "operacao:os:gravar",
-] as const;
+import { API_SCOPES } from "./shared/permissions.js";
+export const SCOPES = API_SCOPES;
 export type Scope = (typeof SCOPES)[number];
 export type WriteRoute = {
   kind: "demand" | "create" | "plan" | "schedule";

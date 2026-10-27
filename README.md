@@ -37,8 +37,10 @@ pnpm --filter @workspace/app run build
 
 ## API de integração
 
-A API REST v1 começa pelo módulo Operação, com credenciais por integração,
-permissões por cliente e documentação OpenAPI. Gestão, exemplos e publicação:
+A API REST v1 tem credenciais por integração e escopos por módulo, ação e
+cliente, com recursos globais explícitos. Novas chaves `scoped` autorizam as
+gravações concedidas; chaves antigas preservam aprovação por ação. Gestão,
+inventário de cobertura, exemplos e publicação:
 [docs/api.md](docs/api.md). Este código precisa ser publicado pelo fluxo abaixo
 para os endpoints ficarem disponíveis em cada ambiente.
 

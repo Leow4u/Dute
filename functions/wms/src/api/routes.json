@@ -1,0 +1,657 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/v1/armazenagem/catalogo",
+    "scope": "armazenagem:ler",
+    "summary": "Consultar catalogo",
+    "responseFields": [
+      "customer_code",
+      "sku_code",
+      "cod_btg",
+      "cod_cliente",
+      "produto",
+      "status",
+      "category",
+      "brand",
+      "size",
+      "color",
+      "barcode"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/armazenagem/posicoes",
+    "scope": "armazenagem:ler",
+    "summary": "Consultar posicoes",
+    "responseFields": [
+      "customer_code",
+      "code",
+      "aisle",
+      "shelf",
+      "status",
+      "length_m",
+      "depth_m",
+      "height_m",
+      "sequence"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/armazenagem/estoque",
+    "scope": "armazenagem:ler",
+    "summary": "Consultar estoque",
+    "responseFields": [
+      "customer_code",
+      "sku_code",
+      "client_item_code",
+      "product_name",
+      "location_id",
+      "qty_on_hand",
+      "qty_reserved",
+      "qty_available",
+      "status"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/armazenagem/pedidos",
+    "scope": "armazenagem:ler",
+    "summary": "Consultar pedidos",
+    "responseFields": [
+      "customer_code",
+      "request_number",
+      "type",
+      "status",
+      "priority",
+      "title",
+      "description",
+      "destination",
+      "due_at",
+      "quantity_total",
+      "created_at",
+      "updated_at"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/armazenagem/recebimentos",
+    "scope": "armazenagem:ler",
+    "summary": "Consultar recebimentos",
+    "responseFields": [
+      "customer_code",
+      "receipt_number",
+      "supplier",
+      "invoice_number",
+      "reference",
+      "status",
+      "priority",
+      "qty_expected",
+      "qty_received",
+      "item_count",
+      "created_at",
+      "updated_at"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/armazenagem/movimentacoes",
+    "scope": "armazenagem:ler",
+    "summary": "Consultar movimentacoes",
+    "responseFields": [
+      "customer_code",
+      "sku_code",
+      "client_item_code",
+      "product_name",
+      "location_id",
+      "tipo_mov",
+      "qtde",
+      "type",
+      "quantity",
+      "saldo_delta",
+      "estoque_resultante",
+      "occurred_at",
+      "created_at"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/armazenagem/pedidos/{id}",
+    "scope": "armazenagem:ler",
+    "summary": "Consultar pedidos",
+    "responseFields": [
+      "customer_code",
+      "request_number",
+      "type",
+      "status",
+      "priority",
+      "title",
+      "description",
+      "destination",
+      "due_at",
+      "quantity_total",
+      "created_at",
+      "updated_at"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/armazenagem/recebimentos/{id}",
+    "scope": "armazenagem:ler",
+    "summary": "Consultar recebimentos",
+    "responseFields": [
+      "customer_code",
+      "receipt_number",
+      "supplier",
+      "invoice_number",
+      "reference",
+      "status",
+      "priority",
+      "qty_expected",
+      "qty_received",
+      "item_count",
+      "created_at",
+      "updated_at",
+      "expected_version"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/armazenagem/recebimentos/{id}/itens",
+    "scope": "armazenagem:ler",
+    "summary": "Consultar linhas; paginação pelo cliente, páginas podem estar vazias e ter next_cursor",
+    "responseFields": [
+      "customer_code",
+      "receipt_id",
+      "line_number",
+      "sku_code",
+      "client_item_code",
+      "product_name",
+      "expected_qty",
+      "received_qty",
+      "location_id",
+      "status"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/armazenagem/pedidos",
+    "scope": "armazenagem:pedidos:gravar",
+    "summary": "Criar pedido (sem anexos nem valores); produto existente exige SKU",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "customer_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "client_item_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "product_name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "notes": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "category": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "barcode": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "brand": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "size": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "color": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "condition": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "sku_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[A-Za-z0-9_.-]+$"
+              },
+              "location_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[A-Za-z0-9_.-]+$"
+              },
+              "product_registration": {
+                "type": "string",
+                "enum": [
+                  "existing",
+                  "new"
+                ]
+              },
+              "quantity": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "quantity"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 100
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "normal",
+            "high",
+            "urgent"
+          ],
+          "default": "normal"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "destination": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "due_at": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "supplier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "invoice_number": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "recebimento",
+            "retirada",
+            "solicitacao"
+          ]
+        }
+      },
+      "required": [
+        "customer_code",
+        "type",
+        "items"
+      ]
+    }
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/armazenagem/pedidos/{id}",
+    "scope": "armazenagem:pedidos:gravar",
+    "summary": "Aprovar ou encerrar pedido; sem cancelamento ou rejeição",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "approve",
+            "close"
+          ]
+        },
+        "expected_status": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "action",
+        "expected_status"
+      ]
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/armazenagem/recebimentos",
+    "scope": "armazenagem:recebimentos:gravar",
+    "summary": "Criar recebimento; produto existente exige SKU, produto novo recebe SKU do domínio",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "customer_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "client_item_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "product_name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "notes": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "category": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "barcode": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "brand": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "size": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "color": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "condition": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "sku_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[A-Za-z0-9_.-]+$"
+              },
+              "location_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[A-Za-z0-9_.-]+$"
+              },
+              "product_registration": {
+                "type": "string",
+                "enum": [
+                  "existing",
+                  "new"
+                ]
+              },
+              "quantity": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "quantity"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 100
+        },
+        "priority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "supplier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "invoice_number": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "received_at": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "customer_code",
+        "items"
+      ]
+    }
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/armazenagem/recebimentos/{id}",
+    "scope": "armazenagem:recebimentos:gravar",
+    "summary": "Conferir linhas do recebimento",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "expected_status": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "inbound_item_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[A-Za-z0-9_.-]+$"
+              },
+              "received_qty": {
+                "type": "number",
+                "minimum": 0
+              },
+              "location_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[A-Za-z0-9_.-]+$"
+              },
+              "notes": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "client_item_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": [
+              "inbound_item_id",
+              "received_qty"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 100
+        },
+        "expected_version": {
+          "type": "string",
+          "pattern": "^[0-9]+:[0-9]{1,9}$",
+          "description": "Versão updateTime seconds:nanoseconds retornada por GET /recebimentos/{id}; edição concorrente retorna 409."
+        }
+      },
+      "required": [
+        "expected_status",
+        "lines",
+        "expected_version"
+      ]
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/armazenagem/recebimentos/{id}/avancar",
+    "scope": "armazenagem:recebimentos:gravar",
+    "summary": "Iniciar ou concluir conferência (guarda física posterior fora desta versão)",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "expected_status": {
+          "type": "string",
+          "enum": [
+            "created",
+            "checking"
+          ]
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "expected_status"
+      ]
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/armazenagem/movimentacoes",
+    "scope": "armazenagem:estoque:movimentar",
+    "summary": "Registrar ENTRADA ou SAIDA no razão; local ativo da zona e SKU do cliente obrigatórios",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "customer_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "ENTRADA",
+            "SAIDA"
+          ]
+        },
+        "quantity": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "sku_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "location_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "occurred_at": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "customer_code",
+        "type",
+        "quantity",
+        "sku_code",
+        "location_id",
+        "reason"
+      ]
+    }
+  }
+]

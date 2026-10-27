@@ -67,3 +67,6 @@ write_landing.js
 
 # Harness local de fotos das telas (tools/ui)
 artifacts/app/.preview-tmp/
+
+# API portátil gerada pelo build de cada codebase
+functions/*/src/api/shared/

@@ -1,0 +1,2310 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/clientes",
+    "scope": "comercial:ler",
+    "summary": "Listar clientes",
+    "responseFields": [
+      "id",
+      "code",
+      "customer_code",
+      "name",
+      "legal_name",
+      "document",
+      "stage",
+      "status",
+      "archived",
+      "comercial.responsavel_uid",
+      "comercial.cidade",
+      "comercial.uf"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/clientes/{id}",
+    "scope": "comercial:ler",
+    "summary": "Consultar clientes",
+    "responseFields": [
+      "id",
+      "code",
+      "customer_code",
+      "name",
+      "legal_name",
+      "document",
+      "stage",
+      "status",
+      "archived",
+      "comercial.responsavel_uid",
+      "comercial.cidade",
+      "comercial.uf"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/locais",
+    "scope": "comercial:ler",
+    "summary": "Listar locais",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "nome",
+      "sigla",
+      "endereco.logradouro",
+      "endereco.numero",
+      "endereco.complemento",
+      "endereco.bairro",
+      "endereco.cidade",
+      "endereco.uf",
+      "endereco.cep",
+      "ativo"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/locais/{id}",
+    "scope": "comercial:ler",
+    "summary": "Consultar locais",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "nome",
+      "sigla",
+      "endereco.logradouro",
+      "endereco.numero",
+      "endereco.complemento",
+      "endereco.bairro",
+      "endereco.cidade",
+      "endereco.uf",
+      "endereco.cep",
+      "ativo"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/contatos",
+    "scope": "comercial:ler",
+    "summary": "Listar contatos",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "nome",
+      "email",
+      "telefone",
+      "empresa",
+      "papel",
+      "avisos",
+      "ativo"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/contatos/{id}",
+    "scope": "comercial:ler",
+    "summary": "Consultar contatos",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "nome",
+      "email",
+      "telefone",
+      "empresa",
+      "papel",
+      "avisos",
+      "ativo"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/contratos",
+    "scope": "comercial:ler",
+    "summary": "Listar contratos",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "nome",
+      "objeto",
+      "status",
+      "edicao",
+      "vigente_de",
+      "vigente_ate",
+      "numeros.tipo",
+      "numeros.numero",
+      "renovacao.tipo",
+      "renovacao.aviso_dias",
+      "renovacao.oposicao_ate_dias",
+      "reajuste.tipo",
+      "reajuste.indice",
+      "reajuste.data_base",
+      "regimes.servico",
+      "regimes.regime",
+      "regime_padrao",
+      "autorizacao.tipo",
+      "autorizacao.prazo_perda_dias",
+      "pagamento.tipo",
+      "pagamento.dias",
+      "pagamento.texto",
+      "pagamento.faixas.de",
+      "pagamento.faixas.ate",
+      "pagamento.faixas.dia",
+      "pagamento.faixas.mes",
+      "impostos.inclusos",
+      "impostos.texto",
+      "codigo_servico"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/contratos/{id}",
+    "scope": "comercial:ler",
+    "summary": "Consultar contratos",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "nome",
+      "objeto",
+      "status",
+      "edicao",
+      "vigente_de",
+      "vigente_ate",
+      "numeros.tipo",
+      "numeros.numero",
+      "renovacao.tipo",
+      "renovacao.aviso_dias",
+      "renovacao.oposicao_ate_dias",
+      "reajuste.tipo",
+      "reajuste.indice",
+      "reajuste.data_base",
+      "regimes.servico",
+      "regimes.regime",
+      "regime_padrao",
+      "autorizacao.tipo",
+      "autorizacao.prazo_perda_dias",
+      "pagamento.tipo",
+      "pagamento.dias",
+      "pagamento.texto",
+      "pagamento.faixas.de",
+      "pagamento.faixas.ate",
+      "pagamento.faixas.dia",
+      "pagamento.faixas.mes",
+      "impostos.inclusos",
+      "impostos.texto",
+      "codigo_servico"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/tabelas",
+    "scope": "comercial:ler",
+    "summary": "Listar tabelas",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "contract_id",
+      "nome",
+      "name",
+      "status",
+      "vigente_de",
+      "vigente_ate",
+      "variante",
+      "precos.*.codigo",
+      "precos.*.descricao_cliente",
+      "precos.*.preco"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/tabelas/{id}",
+    "scope": "comercial:ler",
+    "summary": "Consultar tabelas",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "contract_id",
+      "nome",
+      "name",
+      "status",
+      "vigente_de",
+      "vigente_ate",
+      "variante",
+      "precos.*.codigo",
+      "precos.*.descricao_cliente",
+      "precos.*.preco"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/demandas",
+    "scope": "comercial:ler",
+    "summary": "Listar demandas",
+    "responseFields": [
+      "id",
+      "numero",
+      "customer_code",
+      "contrato_id",
+      "titulo",
+      "etapa",
+      "tipo",
+      "canal",
+      "ref_cliente",
+      "contato_id",
+      "solicitante.contato_id",
+      "solicitante.empresa",
+      "origem.local_id",
+      "origem.complemento",
+      "destino.local_id",
+      "destino.complemento",
+      "execucao.datas",
+      "execucao.de",
+      "execucao.ate",
+      "execucao.a_definir",
+      "execucao.visita_tecnica"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/demandas/{id}",
+    "scope": "comercial:ler",
+    "summary": "Consultar demandas",
+    "responseFields": [
+      "id",
+      "numero",
+      "customer_code",
+      "contrato_id",
+      "titulo",
+      "etapa",
+      "tipo",
+      "canal",
+      "ref_cliente",
+      "contato_id",
+      "solicitante.contato_id",
+      "solicitante.empresa",
+      "origem.local_id",
+      "origem.complemento",
+      "destino.local_id",
+      "destino.complemento",
+      "execucao.datas",
+      "execucao.de",
+      "execucao.ate",
+      "execucao.a_definir",
+      "execucao.visita_tecnica"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/orcamentos",
+    "scope": "comercial:ler",
+    "summary": "Listar orcamentos",
+    "responseFields": [
+      "id",
+      "numero",
+      "customer_code",
+      "contrato_id",
+      "status",
+      "edicao",
+      "rv",
+      "tipo_rv",
+      "data_base",
+      "tabela_id",
+      "variante",
+      "linhas.id",
+      "linhas.origem",
+      "linhas.lpu_item_id",
+      "linhas.quantidade",
+      "linhas.preco",
+      "linhas.preco_tabela",
+      "linhas.codigo",
+      "linhas.origem_local",
+      "linhas.destino_local",
+      "linhas.total_cents",
+      "linhas.descricao",
+      "linhas.item",
+      "linhas.servico",
+      "linhas.unidade",
+      "linhas.motivo",
+      "total_cents",
+      "condicoes",
+      "validade_dias"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/orcamentos/{id}",
+    "scope": "comercial:ler",
+    "summary": "Consultar orcamentos",
+    "responseFields": [
+      "id",
+      "numero",
+      "customer_code",
+      "contrato_id",
+      "status",
+      "edicao",
+      "rv",
+      "tipo_rv",
+      "data_base",
+      "tabela_id",
+      "variante",
+      "linhas.id",
+      "linhas.origem",
+      "linhas.lpu_item_id",
+      "linhas.quantidade",
+      "linhas.preco",
+      "linhas.preco_tabela",
+      "linhas.codigo",
+      "linhas.origem_local",
+      "linhas.destino_local",
+      "linhas.total_cents",
+      "linhas.descricao",
+      "linhas.item",
+      "linhas.servico",
+      "linhas.unidade",
+      "linhas.motivo",
+      "total_cents",
+      "condicoes",
+      "validade_dias"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/medicoes",
+    "scope": "comercial:ler",
+    "summary": "Listar medicoes",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "contrato_id",
+      "competencia",
+      "variante",
+      "status",
+      "edicao",
+      "total_cents",
+      "linhas.id",
+      "linhas.demanda_numero",
+      "linhas.os",
+      "linhas.solicitada_em",
+      "linhas.area_solicitante",
+      "linhas.executada_em",
+      "linhas.dia_tipo",
+      "linhas.janela",
+      "linhas.origem",
+      "linhas.destino",
+      "linhas.mercadoria",
+      "linhas.itens.id",
+      "linhas.itens.origem",
+      "linhas.itens.lpu_item_id",
+      "linhas.itens.quantidade",
+      "linhas.itens.preco",
+      "linhas.itens.preco_tabela",
+      "linhas.itens.codigo",
+      "linhas.itens.origem_local",
+      "linhas.itens.destino_local",
+      "linhas.itens.total_cents",
+      "linhas.itens.descricao",
+      "linhas.itens.item",
+      "linhas.itens.servico",
+      "linhas.itens.unidade",
+      "linhas.itens.motivo",
+      "linhas.total_cents"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/medicoes/{id}",
+    "scope": "comercial:ler",
+    "summary": "Consultar medicoes",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "contrato_id",
+      "competencia",
+      "variante",
+      "status",
+      "edicao",
+      "total_cents",
+      "linhas.id",
+      "linhas.demanda_numero",
+      "linhas.os",
+      "linhas.solicitada_em",
+      "linhas.area_solicitante",
+      "linhas.executada_em",
+      "linhas.dia_tipo",
+      "linhas.janela",
+      "linhas.origem",
+      "linhas.destino",
+      "linhas.mercadoria",
+      "linhas.itens.id",
+      "linhas.itens.origem",
+      "linhas.itens.lpu_item_id",
+      "linhas.itens.quantidade",
+      "linhas.itens.preco",
+      "linhas.itens.preco_tabela",
+      "linhas.itens.codigo",
+      "linhas.itens.origem_local",
+      "linhas.itens.destino_local",
+      "linhas.itens.total_cents",
+      "linhas.itens.descricao",
+      "linhas.itens.item",
+      "linhas.itens.servico",
+      "linhas.itens.unidade",
+      "linhas.itens.motivo",
+      "linhas.total_cents"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/contratos/{id}/aditivos",
+    "scope": "comercial:ler",
+    "summary": "Listar aditivos",
+    "responseFields": [
+      "id",
+      "numero",
+      "tipo",
+      "assinado_em",
+      "vigente_de",
+      "vigente_ate",
+      "tabela_ids",
+      "observacao"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/comercial/orcamentos/{id}/revisoes",
+    "scope": "comercial:ler",
+    "summary": "Listar revisoes",
+    "responseFields": [
+      "id",
+      "numero",
+      "customer_code",
+      "contrato_id",
+      "status",
+      "edicao",
+      "rv",
+      "tipo_rv",
+      "data_base",
+      "tabela_id",
+      "variante",
+      "linhas.id",
+      "linhas.origem",
+      "linhas.lpu_item_id",
+      "linhas.quantidade",
+      "linhas.preco",
+      "linhas.preco_tabela",
+      "linhas.codigo",
+      "linhas.origem_local",
+      "linhas.destino_local",
+      "linhas.total_cents",
+      "linhas.descricao",
+      "linhas.item",
+      "linhas.servico",
+      "linhas.unidade",
+      "linhas.motivo",
+      "total_cents",
+      "condicoes",
+      "validade_dias"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/comercial/clientes",
+    "scope": "comercial:clientes:gravar",
+    "summary": "Criar prospect",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 20,
+          "minLength": 2,
+          "pattern": "^[A-Z0-9][A-Z0-9-]{1,19}$"
+        },
+        "legal_name": {
+          "type": "string",
+          "maxLength": 160,
+          "nullable": true
+        },
+        "document": {
+          "type": "string",
+          "maxLength": 40,
+          "nullable": true
+        },
+        "comercial": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "responsavel_uid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "nullable": true
+            },
+            "cidade": {
+              "type": "string",
+              "maxLength": 80,
+              "nullable": true
+            },
+            "uf": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        }
+      },
+      "required": [
+        "name",
+        "code"
+      ]
+    }
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/comercial/clientes/{id}",
+    "scope": "comercial:clientes:gravar",
+    "summary": "Alterar cadastro comercial",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "legal_name": {
+          "type": "string",
+          "maxLength": 160,
+          "nullable": true
+        },
+        "document": {
+          "type": "string",
+          "maxLength": 40,
+          "nullable": true
+        },
+        "comercial": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "responsavel_uid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "nullable": true
+            },
+            "cidade": {
+              "type": "string",
+              "maxLength": 80,
+              "nullable": true
+            },
+            "uf": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/comercial/locais",
+    "scope": "comercial:clientes:gravar",
+    "summary": "Criar locais",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "customer_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "nome": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "sigla": {
+          "type": "string",
+          "nullable": true
+        },
+        "endereco": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "logradouro": {
+              "type": "string",
+              "maxLength": 160,
+              "nullable": true
+            },
+            "numero": {
+              "type": "string",
+              "maxLength": 20,
+              "nullable": true
+            },
+            "complemento": {
+              "type": "string",
+              "maxLength": 80,
+              "nullable": true
+            },
+            "bairro": {
+              "type": "string",
+              "maxLength": 80,
+              "nullable": true
+            },
+            "cidade": {
+              "type": "string",
+              "maxLength": 80,
+              "nullable": true
+            },
+            "uf": {
+              "type": "string",
+              "nullable": true
+            },
+            "cep": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "nullable": true
+        },
+        "ativo": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "customer_code",
+        "nome"
+      ]
+    }
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/comercial/locais/{id}",
+    "scope": "comercial:clientes:gravar",
+    "summary": "Alterar locais",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "customer_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "nome": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "sigla": {
+          "type": "string",
+          "nullable": true
+        },
+        "endereco": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "logradouro": {
+              "type": "string",
+              "maxLength": 160,
+              "nullable": true
+            },
+            "numero": {
+              "type": "string",
+              "maxLength": 20,
+              "nullable": true
+            },
+            "complemento": {
+              "type": "string",
+              "maxLength": 80,
+              "nullable": true
+            },
+            "bairro": {
+              "type": "string",
+              "maxLength": 80,
+              "nullable": true
+            },
+            "cidade": {
+              "type": "string",
+              "maxLength": 80,
+              "nullable": true
+            },
+            "uf": {
+              "type": "string",
+              "nullable": true
+            },
+            "cep": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "nullable": true
+        },
+        "ativo": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "customer_code",
+        "nome"
+      ]
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/comercial/contatos",
+    "scope": "comercial:clientes:gravar",
+    "summary": "Criar contatos",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "customer_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "nome": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "nullable": true
+        },
+        "telefone": {
+          "type": "string",
+          "nullable": true
+        },
+        "empresa": {
+          "type": "string",
+          "maxLength": 120,
+          "nullable": true
+        },
+        "papel": {
+          "type": "string",
+          "enum": [
+            "gestor_cliente",
+            "gerenciadora",
+            "financeiro",
+            "outro"
+          ]
+        },
+        "avisos": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "os_agendada",
+              "os_iniciada",
+              "os_concluida",
+              "nf_emitida",
+              "pedido_do_portal",
+              "estoque_parado"
+            ]
+          },
+          "maxItems": 6
+        },
+        "ativo": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "customer_code",
+        "nome"
+      ]
+    }
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/comercial/contatos/{id}",
+    "scope": "comercial:clientes:gravar",
+    "summary": "Alterar contatos",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "customer_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "nome": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "nullable": true
+        },
+        "telefone": {
+          "type": "string",
+          "nullable": true
+        },
+        "empresa": {
+          "type": "string",
+          "maxLength": 120,
+          "nullable": true
+        },
+        "papel": {
+          "type": "string",
+          "enum": [
+            "gestor_cliente",
+            "gerenciadora",
+            "financeiro",
+            "outro"
+          ]
+        },
+        "avisos": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "os_agendada",
+              "os_iniciada",
+              "os_concluida",
+              "nf_emitida",
+              "pedido_do_portal",
+              "estoque_parado"
+            ]
+          },
+          "maxItems": 6
+        },
+        "ativo": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "customer_code",
+        "nome"
+      ]
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/comercial/contratos",
+    "scope": "comercial:contratos:gravar",
+    "summary": "Criar contrato",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contrato": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "customer_code": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "nome": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "numeros": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "tipo": {
+                    "type": "string",
+                    "enum": [
+                      "contrato",
+                      "sistema_cliente",
+                      "outro"
+                    ]
+                  },
+                  "numero": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  }
+                },
+                "required": [
+                  "tipo",
+                  "numero"
+                ]
+              },
+              "maxItems": 20
+            },
+            "objeto": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "vigente_de": {
+              "type": "string",
+              "format": "date"
+            },
+            "vigente_ate": {
+              "type": "string",
+              "nullable": true,
+              "format": "date"
+            },
+            "renovacao": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tipo": {
+                  "type": "string",
+                  "enum": [
+                    "aditivo",
+                    "automatica",
+                    "novo_documento",
+                    "indeterminado"
+                  ]
+                },
+                "aviso_dias": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3650,
+                  "nullable": true
+                },
+                "oposicao_ate_dias": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3650,
+                  "nullable": true
+                }
+              },
+              "required": [
+                "tipo"
+              ]
+            },
+            "reajuste": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tipo": {
+                  "type": "string",
+                  "enum": [
+                    "negociado",
+                    "indice",
+                    "nenhum"
+                  ]
+                },
+                "indice": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "nullable": true
+                },
+                "data_base": {
+                  "type": "string",
+                  "nullable": true,
+                  "pattern": "^\\d{2}-\\d{2}$"
+                }
+              },
+              "required": [
+                "tipo"
+              ]
+            },
+            "regimes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "servico": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "regime": {
+                    "type": "string",
+                    "enum": [
+                      "por_demanda",
+                      "medicao_mensal",
+                      "wms"
+                    ]
+                  }
+                },
+                "required": [
+                  "servico",
+                  "regime"
+                ]
+              },
+              "maxItems": 30
+            },
+            "regime_padrao": {
+              "type": "string",
+              "enum": [
+                "por_demanda",
+                "medicao_mensal",
+                "wms"
+              ]
+            },
+            "autorizacao": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tipo": {
+                  "type": "string",
+                  "enum": [
+                    "pedido_aceite",
+                    "medicao_aprovada",
+                    "portal",
+                    "nenhuma"
+                  ]
+                },
+                "prazo_perda_dias": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3650,
+                  "nullable": true
+                }
+              },
+              "required": [
+                "tipo"
+              ]
+            },
+            "pagamento": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tipo": {
+                  "type": "string",
+                  "enum": [
+                    "faixas_do_dia_da_nf",
+                    "dias_apos_nf",
+                    "texto"
+                  ]
+                },
+                "faixas": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "de": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 31
+                      },
+                      "ate": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 31
+                      },
+                      "dia": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 31
+                      },
+                      "mes": {
+                        "type": "string",
+                        "enum": [
+                          "mesmo",
+                          "seguinte"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "de",
+                      "ate",
+                      "dia",
+                      "mes"
+                    ]
+                  },
+                  "maxItems": 31
+                },
+                "dias": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3650,
+                  "nullable": true
+                },
+                "texto": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "nullable": true
+                }
+              },
+              "required": [
+                "tipo"
+              ]
+            },
+            "impostos": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "inclusos": {
+                  "type": "boolean",
+                  "nullable": true
+                },
+                "texto": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "nullable": true
+                }
+              }
+            },
+            "codigo_servico": {
+              "type": "string",
+              "pattern": "^\\d{3,5}$",
+              "nullable": true
+            },
+            "documentos": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "nome": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "referencia": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "nome",
+                  "referencia"
+                ]
+              },
+              "maxItems": 50
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "vigente"
+              ]
+            }
+          },
+          "required": [
+            "customer_code",
+            "nome",
+            "vigente_de",
+            "vigente_ate",
+            "renovacao",
+            "reajuste",
+            "regime_padrao",
+            "autorizacao",
+            "pagamento",
+            "status"
+          ]
+        }
+      },
+      "required": [
+        "contrato"
+      ]
+    }
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/comercial/contratos/{id}",
+    "scope": "comercial:contratos:gravar",
+    "summary": "Alterar contrato",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "edicao": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "contrato": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "customer_code": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "nome": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "numeros": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "tipo": {
+                    "type": "string",
+                    "enum": [
+                      "contrato",
+                      "sistema_cliente",
+                      "outro"
+                    ]
+                  },
+                  "numero": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  }
+                },
+                "required": [
+                  "tipo",
+                  "numero"
+                ]
+              },
+              "maxItems": 20
+            },
+            "objeto": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "vigente_de": {
+              "type": "string",
+              "format": "date"
+            },
+            "vigente_ate": {
+              "type": "string",
+              "nullable": true,
+              "format": "date"
+            },
+            "renovacao": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tipo": {
+                  "type": "string",
+                  "enum": [
+                    "aditivo",
+                    "automatica",
+                    "novo_documento",
+                    "indeterminado"
+                  ]
+                },
+                "aviso_dias": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3650,
+                  "nullable": true
+                },
+                "oposicao_ate_dias": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3650,
+                  "nullable": true
+                }
+              },
+              "required": [
+                "tipo"
+              ]
+            },
+            "reajuste": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tipo": {
+                  "type": "string",
+                  "enum": [
+                    "negociado",
+                    "indice",
+                    "nenhum"
+                  ]
+                },
+                "indice": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "nullable": true
+                },
+                "data_base": {
+                  "type": "string",
+                  "nullable": true,
+                  "pattern": "^\\d{2}-\\d{2}$"
+                }
+              },
+              "required": [
+                "tipo"
+              ]
+            },
+            "regimes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "servico": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "regime": {
+                    "type": "string",
+                    "enum": [
+                      "por_demanda",
+                      "medicao_mensal",
+                      "wms"
+                    ]
+                  }
+                },
+                "required": [
+                  "servico",
+                  "regime"
+                ]
+              },
+              "maxItems": 30
+            },
+            "regime_padrao": {
+              "type": "string",
+              "enum": [
+                "por_demanda",
+                "medicao_mensal",
+                "wms"
+              ]
+            },
+            "autorizacao": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tipo": {
+                  "type": "string",
+                  "enum": [
+                    "pedido_aceite",
+                    "medicao_aprovada",
+                    "portal",
+                    "nenhuma"
+                  ]
+                },
+                "prazo_perda_dias": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3650,
+                  "nullable": true
+                }
+              },
+              "required": [
+                "tipo"
+              ]
+            },
+            "pagamento": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tipo": {
+                  "type": "string",
+                  "enum": [
+                    "faixas_do_dia_da_nf",
+                    "dias_apos_nf",
+                    "texto"
+                  ]
+                },
+                "faixas": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "de": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 31
+                      },
+                      "ate": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 31
+                      },
+                      "dia": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 31
+                      },
+                      "mes": {
+                        "type": "string",
+                        "enum": [
+                          "mesmo",
+                          "seguinte"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "de",
+                      "ate",
+                      "dia",
+                      "mes"
+                    ]
+                  },
+                  "maxItems": 31
+                },
+                "dias": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3650,
+                  "nullable": true
+                },
+                "texto": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "nullable": true
+                }
+              },
+              "required": [
+                "tipo"
+              ]
+            },
+            "impostos": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "inclusos": {
+                  "type": "boolean",
+                  "nullable": true
+                },
+                "texto": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "nullable": true
+                }
+              }
+            },
+            "codigo_servico": {
+              "type": "string",
+              "pattern": "^\\d{3,5}$",
+              "nullable": true
+            },
+            "documentos": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "nome": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "referencia": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "nome",
+                  "referencia"
+                ]
+              },
+              "maxItems": 50
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "vigente"
+              ]
+            }
+          },
+          "required": [
+            "customer_code",
+            "nome",
+            "vigente_de",
+            "vigente_ate",
+            "renovacao",
+            "reajuste",
+            "regime_padrao",
+            "autorizacao",
+            "pagamento",
+            "status"
+          ]
+        }
+      },
+      "required": [
+        "contrato",
+        "edicao"
+      ]
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/comercial/contratos/{id}/aditivos",
+    "scope": "comercial:contratos:gravar",
+    "summary": "Registrar aditivo",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aditivo": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "numero": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 999
+            },
+            "assinado_em": {
+              "type": "string",
+              "nullable": true,
+              "format": "date"
+            },
+            "tipo": {
+              "type": "string",
+              "enum": [
+                "formalizacao",
+                "prorrogacao",
+                "preco",
+                "escopo",
+                "outro"
+              ]
+            },
+            "vigente_de": {
+              "type": "string",
+              "nullable": true,
+              "format": "date"
+            },
+            "vigente_ate": {
+              "type": "string",
+              "nullable": true,
+              "format": "date"
+            },
+            "tabela_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$"
+              },
+              "maxItems": 10
+            },
+            "documento": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "nome": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "referencia": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              },
+              "required": [
+                "nome",
+                "referencia"
+              ],
+              "nullable": true
+            },
+            "observacao": {
+              "type": "string",
+              "maxLength": 2000
+            }
+          },
+          "required": [
+            "numero",
+            "tipo"
+          ]
+        }
+      },
+      "required": [
+        "aditivo"
+      ]
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/comercial/orcamentos",
+    "scope": "comercial:orcamentos:gravar",
+    "summary": "Criar orçamento em rascunho",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "customer_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "entrada": {
+          "type": "string",
+          "enum": [
+            "comercial",
+            "direta"
+          ]
+        },
+        "contrato_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,120}$",
+          "nullable": true
+        },
+        "canal": {
+          "type": "string",
+          "enum": [
+            "email",
+            "telefone",
+            "whatsapp",
+            "portal",
+            "wms"
+          ]
+        },
+        "tipo": {
+          "type": "string",
+          "enum": [
+            "planejada",
+            "emergencial",
+            "paraquedas"
+          ]
+        },
+        "titulo": {
+          "type": "string",
+          "maxLength": 160,
+          "nullable": true
+        },
+        "ref_cliente": {
+          "type": "string",
+          "maxLength": 80,
+          "nullable": true
+        },
+        "contato_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,120}$",
+          "nullable": true
+        },
+        "recebida_em": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "email_assunto": {
+          "type": "string",
+          "maxLength": 300,
+          "nullable": true
+        },
+        "email_link": {
+          "type": "string",
+          "maxLength": 2000,
+          "nullable": true
+        },
+        "origem": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "local_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,120}$",
+              "nullable": true
+            },
+            "complemento": {
+              "type": "string",
+              "maxLength": 200,
+              "nullable": true
+            }
+          },
+          "nullable": true
+        },
+        "destino": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "local_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,120}$",
+              "nullable": true
+            },
+            "complemento": {
+              "type": "string",
+              "maxLength": 200,
+              "nullable": true
+            }
+          },
+          "nullable": true
+        },
+        "execucao": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "datas": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 60
+            },
+            "de": {
+              "type": "string",
+              "nullable": true,
+              "format": "date"
+            },
+            "ate": {
+              "type": "string",
+              "nullable": true,
+              "format": "date"
+            },
+            "a_definir": {
+              "type": "boolean"
+            },
+            "visita_tecnica": {
+              "type": "string",
+              "nullable": true,
+              "format": "date"
+            }
+          }
+        },
+        "numero_legado": {
+          "type": "string",
+          "maxLength": 40,
+          "nullable": true
+        },
+        "variante": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "linhas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,120}$"
+              },
+              "origem": {
+                "type": "string",
+                "enum": [
+                  "tabela",
+                  "alterado",
+                  "avulso",
+                  "ajuste"
+                ]
+              },
+              "lpu_item_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,120}$",
+                "nullable": true
+              },
+              "quantidade": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "preco": {
+                "type": "string",
+                "maxLength": 40,
+                "nullable": true
+              },
+              "motivo": {
+                "type": "string",
+                "maxLength": 300,
+                "nullable": true
+              },
+              "descricao": {
+                "type": "string",
+                "maxLength": 300,
+                "nullable": true
+              },
+              "item": {
+                "type": "string",
+                "maxLength": 200,
+                "nullable": true
+              },
+              "servico": {
+                "type": "string",
+                "maxLength": 120,
+                "nullable": true
+              },
+              "unidade": {
+                "type": "string",
+                "maxLength": 20,
+                "nullable": true
+              },
+              "origem_local": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,120}$",
+                "nullable": true
+              },
+              "destino_local": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,120}$",
+                "nullable": true
+              }
+            },
+            "required": [
+              "origem",
+              "quantidade"
+            ]
+          },
+          "maxItems": 300
+        },
+        "condicoes": {
+          "type": "string",
+          "maxLength": 4000,
+          "nullable": true
+        },
+        "validade_dias": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "nullable": true
+        },
+        "observacoes_internas": {
+          "type": "string",
+          "maxLength": 4000,
+          "nullable": true
+        }
+      },
+      "required": [
+        "customer_code"
+      ]
+    }
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/comercial/orcamentos/{id}",
+    "scope": "comercial:orcamentos:gravar",
+    "summary": "Alterar orçamento em rascunho",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "expected_edicao": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "vistoria_os": {
+          "type": "string",
+          "pattern": "^\\d{5,8}-\\d{2}$"
+        },
+        "contrato_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,120}$",
+          "nullable": true
+        },
+        "canal": {
+          "type": "string",
+          "enum": [
+            "email",
+            "telefone",
+            "whatsapp",
+            "portal",
+            "wms"
+          ]
+        },
+        "tipo": {
+          "type": "string",
+          "enum": [
+            "planejada",
+            "emergencial",
+            "paraquedas"
+          ]
+        },
+        "titulo": {
+          "type": "string",
+          "maxLength": 160,
+          "nullable": true
+        },
+        "ref_cliente": {
+          "type": "string",
+          "maxLength": 80,
+          "nullable": true
+        },
+        "contato_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,120}$",
+          "nullable": true
+        },
+        "recebida_em": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "email_assunto": {
+          "type": "string",
+          "maxLength": 300,
+          "nullable": true
+        },
+        "email_link": {
+          "type": "string",
+          "maxLength": 2000,
+          "nullable": true
+        },
+        "origem": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "local_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,120}$",
+              "nullable": true
+            },
+            "complemento": {
+              "type": "string",
+              "maxLength": 200,
+              "nullable": true
+            }
+          },
+          "nullable": true
+        },
+        "destino": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "local_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,120}$",
+              "nullable": true
+            },
+            "complemento": {
+              "type": "string",
+              "maxLength": 200,
+              "nullable": true
+            }
+          },
+          "nullable": true
+        },
+        "execucao": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "datas": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 60
+            },
+            "de": {
+              "type": "string",
+              "nullable": true,
+              "format": "date"
+            },
+            "ate": {
+              "type": "string",
+              "nullable": true,
+              "format": "date"
+            },
+            "a_definir": {
+              "type": "boolean"
+            },
+            "visita_tecnica": {
+              "type": "string",
+              "nullable": true,
+              "format": "date"
+            }
+          }
+        },
+        "numero_legado": {
+          "type": "string",
+          "maxLength": 40,
+          "nullable": true
+        },
+        "variante": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "linhas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,120}$"
+              },
+              "origem": {
+                "type": "string",
+                "enum": [
+                  "tabela",
+                  "alterado",
+                  "avulso",
+                  "ajuste"
+                ]
+              },
+              "lpu_item_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,120}$",
+                "nullable": true
+              },
+              "quantidade": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "preco": {
+                "type": "string",
+                "maxLength": 40,
+                "nullable": true
+              },
+              "motivo": {
+                "type": "string",
+                "maxLength": 300,
+                "nullable": true
+              },
+              "descricao": {
+                "type": "string",
+                "maxLength": 300,
+                "nullable": true
+              },
+              "item": {
+                "type": "string",
+                "maxLength": 200,
+                "nullable": true
+              },
+              "servico": {
+                "type": "string",
+                "maxLength": 120,
+                "nullable": true
+              },
+              "unidade": {
+                "type": "string",
+                "maxLength": 20,
+                "nullable": true
+              },
+              "origem_local": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,120}$",
+                "nullable": true
+              },
+              "destino_local": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,120}$",
+                "nullable": true
+              }
+            },
+            "required": [
+              "origem",
+              "quantidade"
+            ]
+          },
+          "maxItems": 300
+        },
+        "condicoes": {
+          "type": "string",
+          "maxLength": 4000,
+          "nullable": true
+        },
+        "validade_dias": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "nullable": true
+        },
+        "observacoes_internas": {
+          "type": "string",
+          "maxLength": 4000,
+          "nullable": true
+        }
+      },
+      "required": [
+        "expected_edicao"
+      ]
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/comercial/medicoes",
+    "scope": "comercial:medicoes:gravar",
+    "summary": "Abrir medição mensal",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contrato_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,120}$"
+        },
+        "competencia": {
+          "type": "string",
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+        },
+        "variante": {
+          "type": "string",
+          "maxLength": 60
+        }
+      },
+      "required": [
+        "contrato_id",
+        "competencia"
+      ]
+    }
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/comercial/medicoes/{id}/linhas",
+    "scope": "comercial:medicoes:gravar",
+    "summary": "Incluir ou alterar linha de medição em rascunho",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "expected_edicao": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "linha": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,120}$"
+            },
+            "demanda_numero": {
+              "type": "string",
+              "pattern": "^\\d{5,8}$",
+              "nullable": true
+            },
+            "os": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "solicitada_em": {
+              "type": "string",
+              "format": "date"
+            },
+            "area_solicitante": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "executada_em": {
+              "type": "string",
+              "format": "date"
+            },
+            "dia_tipo": {
+              "type": "string",
+              "enum": [
+                "util",
+                "sabado",
+                "domingo_feriado"
+              ]
+            },
+            "janela": {
+              "type": "string",
+              "enum": [
+                "diurna",
+                "noturna"
+              ]
+            },
+            "origem": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "destino": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "mercadoria": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "itens": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "lpu_item_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,120}$",
+                    "nullable": true
+                  },
+                  "quantidade": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "origem": {
+                    "type": "string",
+                    "enum": [
+                      "tabela",
+                      "alterado",
+                      "avulso"
+                    ]
+                  },
+                  "preco": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "nullable": true
+                  },
+                  "motivo": {
+                    "type": "string",
+                    "maxLength": 300,
+                    "nullable": true
+                  },
+                  "descricao": {
+                    "type": "string",
+                    "maxLength": 300,
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "quantidade",
+                  "origem"
+                ]
+              },
+              "minItems": 1,
+              "maxItems": 20
+            },
+            "anexo": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "nome": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "referencia": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              },
+              "required": [
+                "nome",
+                "referencia"
+              ],
+              "nullable": true
+            }
+          },
+          "required": [
+            "os",
+            "solicitada_em",
+            "area_solicitante",
+            "executada_em",
+            "origem",
+            "destino",
+            "mercadoria",
+            "itens"
+          ]
+        }
+      },
+      "required": [
+        "expected_edicao",
+        "linha"
+      ]
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/comercial/clientes/{id}/marcar-cliente",
+    "scope": "comercial:clientes:gravar",
+    "summary": "Marcar prospect como cliente",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    }
+  }
+]

@@ -1,0 +1,270 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/v1/financeiro/a-faturar",
+    "scope": "financeiro:ler",
+    "summary": "Consultar demandas A faturar",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "numero",
+      "etapa",
+      "customer_name",
+      "cobranca",
+      "medicao_id"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/financeiro/a-faturar/armazenagem",
+    "scope": "financeiro:ler",
+    "summary": "Consultar competências de armazenagem A faturar",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "competencia",
+      "status",
+      "total_cents"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/financeiro/a-faturar/medicoes",
+    "scope": "financeiro:ler",
+    "summary": "Consultar medições aprovadas A faturar",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "contrato_id",
+      "competencia",
+      "status",
+      "total_cents"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/financeiro/faturas",
+    "scope": "financeiro:ler",
+    "summary": "Consultar faturas",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "status",
+      "valor_cents",
+      "recebido_cents",
+      "vencimento",
+      "forma",
+      "demanda_numeros",
+      "periodo_ids",
+      "medicao_ids",
+      "registrada_em"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/financeiro/pagamentos",
+    "scope": "financeiro:ler",
+    "summary": "Consultar pagamentos registrados",
+    "responseFields": [
+      "id",
+      "customer_code",
+      "fatura_id",
+      "status",
+      "valor_cents",
+      "recebido_em",
+      "forma"
+    ],
+    "customerRequired": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/financeiro/faturas",
+    "scope": "financeiro:faturas:gravar",
+    "summary": "Registrar NF emitida fora do sistema",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "demandas": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^\\d{5,8}$"
+          },
+          "maxItems": 50,
+          "uniqueItems": true
+        },
+        "armazenagem": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:([\\w.-]{1,200})__)?(\\d{4}-(?:0[1-9]|1[0-2]))$"
+          },
+          "maxItems": 12,
+          "uniqueItems": true
+        },
+        "medicoes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,120}_\\d{4}-(?:0[1-9]|1[0-2])$"
+          },
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "nf": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "numero": {
+              "type": "string",
+              "pattern": "^\\d{1,15}$"
+            },
+            "serie": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9]{1,5}$"
+            },
+            "emitida_em": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          "required": [
+            "numero",
+            "emitida_em"
+          ]
+        },
+        "vencimento": {
+          "type": "string",
+          "format": "date"
+        },
+        "forma": {
+          "type": "string",
+          "enum": [
+            "boleto",
+            "pix",
+            "transferencia",
+            "cartao",
+            "dinheiro"
+          ]
+        },
+        "observacao": {
+          "type": "string",
+          "maxLength": 300
+        }
+      },
+      "required": [
+        "nf",
+        "vencimento",
+        "forma"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "demandas"
+          ],
+          "properties": {
+            "demandas": {
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": [
+            "armazenagem"
+          ],
+          "properties": {
+            "armazenagem": {
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": [
+            "medicoes"
+          ],
+          "properties": {
+            "medicoes": {
+              "minItems": 1
+            }
+          }
+        }
+      ]
+    },
+    "customerRequired": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/financeiro/faturas/{id}/cobranca",
+    "scope": "financeiro:cobrancas:gravar",
+    "summary": "Documentar envio da cobrança",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enviada_em": {
+          "type": "string",
+          "format": "date"
+        },
+        "meio": {
+          "type": "string",
+          "enum": [
+            "email",
+            "portal_do_cliente",
+            "correio",
+            "em_maos"
+          ]
+        }
+      },
+      "required": [
+        "enviada_em",
+        "meio"
+      ]
+    },
+    "customerRequired": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/financeiro/faturas/{id}/pagamentos",
+    "scope": "financeiro:pagamentos:registrar",
+    "summary": "Registrar pagamento recebido",
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "valor": {
+          "type": "string",
+          "pattern": "^\\d{1,13}(?:\\.\\d{1,2})?$"
+        },
+        "recebido_em": {
+          "type": "string",
+          "format": "date"
+        },
+        "forma": {
+          "type": "string",
+          "enum": [
+            "boleto",
+            "pix",
+            "transferencia",
+            "cartao",
+            "dinheiro"
+          ]
+        },
+        "observacao": {
+          "type": "string",
+          "maxLength": 300
+        }
+      },
+      "required": [
+        "valor",
+        "recebido_em",
+        "forma"
+      ]
+    },
+    "customerRequired": false
+  }
+]

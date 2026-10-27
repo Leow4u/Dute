@@ -1,6 +1,9 @@
+import { agenteApi } from "./api/module.js";
+import { createModuleHandler, httpModuleHandler } from "./api/shared/handler.js";
+import { getAuth } from "firebase-admin/auth";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { onCall } from "firebase-functions/https";
+import { onCall, onRequest } from "firebase-functions/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { setGlobalOptions } from "firebase-functions/v2";
 
@@ -197,3 +200,6 @@ export const runAgentRetention = onSchedule({ schedule: "every day 03:40", timeZ
   if (!retencaoLiberada(PROJECT_ID)) return;
   console.info("runAgentRetention", await runAgentRetentionFor(db));
 });
+
+/** Adaptador externo autenticado; só o gateway é documentado para consumidores. */
+export const duteAgenteApi = onRequest({ cors: false, invoker: "public", timeoutSeconds: 60 }, httpModuleHandler(createModuleHandler(db, PROJECT_ID, (token) => getAuth().verifyIdToken(token, true), agenteApi)));

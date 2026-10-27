@@ -46,14 +46,24 @@ documentação de produto e operação está em `docs/`.
   registro de cada parte e como desligar: `docs/plataforma/fase-3-operacao.md`.
   A API REST v1 (`duteApi`, PR 508, `docs/api.md`) abre a Operação a
   integrações externas, com a mesma liberação: a credencial é por
-  integração, criada por owner ou admin, e cada escrita espera a aprovação de
-  uma pessoa (invariante 3). As escritas dela passam pelas mesmas funções do
+  integração, criada por owner ou admin. As chaves antigas continuam exigindo
+  aprovação por ação; novas chaves podem usar `write_policy: scoped`, conforme
+  decisão explícita do Leonardo para a integração externa em 26/10/2026.
+  Isso não amplia as ferramentas do Agent Dute interno. As escritas passam pelas mesmas funções do
   domínio das callables (`openDirectDemandFor`, `saveServiceOrderFor`), com
   o ator `api:<id>` e o papel `interno`: mudou uma, confira
   `functions/operacao/src/api/api.integration.test.ts`. É a primeira
   function HTTP pública, e publicá-la pede
   `cloudfunctions.functions.setIamPolicy` na conta do CI (o papel próprio
   `dute_api_https_publisher`, em `docs/deploy-functions-manual.md`).
+  A ampliação aos demais módulos usa adaptadores locais e o kernel portátil
+  de `functions/api-shared`, sincronizado por `tools/sync_api_shared.mjs` antes
+  de cada build. Escopos/UI/contrato em `docs/api.md` e inventário em
+  `docs/api-cobertura.md`. Gerados `src/api/shared` são ignorados; o predeploy
+  inclui o JS compilado e `gcp-build` vazio evita recompilar sem o monorepo.
+  As coleções `api_integrations`, `api_approvals`, `api_audit` e `api_receipts`
+  são privadas e preservadas pela zeragem; não apagar recibos para repetir
+  uma operação com efeito incerto.
 - **Fase 4 (lançamento) na `main` e no `dute-prod`**: os marcos 2, 3 e 4
   subiram juntos em 25/10/2026 (`e6a43ed`), com o OK do Leonardo. O
   Financeiro está ligado no `dute-homolog` e, desde a parte 4.9b (PR 466,
