@@ -130,6 +130,7 @@ function props(overrides: Partial<MontarViewProps> & { form?: FormOrcamento } = 
       enviarDispensado: noop,
       descartarRv: noop,
       trocarVariante: noop,
+      atualizarTabela: noop,
       novoContato: noop,
     },
     ...overrides,
@@ -398,6 +399,30 @@ describe("montar orçamento", () => {
     const html = render({ catalogo: [], dados: { ...DADOS, tabelaNome: null } });
     expect(texts(html)).toEqual(expect.arrayContaining(["Sem tabela"]));
     expect(html).toMatch(/<input[^>]*role="combobox"[^>]*disabled=""/);
+  });
+
+  it("rascunho sem tabela com contrato oferece Atualizar tabela; somente leitura não oferece", async () => {
+    const semTabela = { ...DADOS, tabelaNome: null };
+    const html = render({ dados: semTabela, catalogo: [], podeAtualizarTabela: true });
+    expect(texts(html)).toContain("Atualizar tabela");
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    expect(render({ dados: semTabela, catalogo: [], podeAtualizarTabela: false })).not.toContain("Atualizar tabela");
+    expect(render()).not.toContain("Atualizar tabela");
+    expect(render({
+      dados: { ...semTabela, status: "para_aprovar" },
+      podeAtualizarTabela: true,
+      acoes: acoesDoOrcamento({ status: "para_aprovar", role: "owner", uid: "u-leo", autorUid: "u-gui" }),
+    })).not.toContain("Atualizar tabela");
+    expect(render({ dados: semTabela, podeAtualizarTabela: true, ocupado: true }))
+      .toMatch(/<button[^>]*disabled=""[^>]*>(?:<svg[\s\S]*?<\/svg>)?Atualizar tabela<\/button>/);
+  });
+
+  it("item cadastrado na tabela herda código e preço sem pedir motivo", () => {
+    const adicionada = adicionarDaTabela([], CATALOGO[0], "nova");
+    const html = render({ form: { ...FORM, linhas: adicionada.linhas } });
+    expect(texts(html)).toContain("3.02");
+    expect(html).toContain('value="21,00"');
+    expect(html).not.toContain('aria-label="Motivo ·');
   });
 
   it("mudança não salva: o cabeçalho diz; salvo, mostra a hora", () => {

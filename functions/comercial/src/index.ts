@@ -9,6 +9,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { recordAuthorizationFor } from "./domain/autorizacoes.js";
 import { saveCommercialCustomerFor, saveCustomerContactFor, saveCustomerLocationFor } from "./domain/cadastro.js";
 import { registrarAditivo, salvarContrato } from "./domain/contratos.js";
+import { saveContractPriceTableFor } from "./domain/contract-price-tables.js";
 import { advanceDemandFor } from "./domain/demandas.js";
 import { advanceMedicaoFor, saveMedicaoFor } from "./domain/medicoes.js";
 import { assertAuth, comercialStatusDaChamada, loadProfile, requireComercialCaller } from "./domain/profile.js";
@@ -86,6 +87,12 @@ export const saveCustomerContact = onCall(async (request) => {
 export const saveContract = onCall(async (request) => {
   const caller = await requireComercialCaller(db, request, PROJECT_ID);
   return salvarContrato(db, caller, request.data);
+});
+
+/** LPU do contrato: uma versão imutável, com catálogo e vigência transacionais. */
+export const saveContractPriceTable = onCall(async (request) => {
+  const caller = await requireComercialCaller(db, request, PROJECT_ID);
+  return saveContractPriceTableFor(db, caller, request.data);
 });
 
 /**

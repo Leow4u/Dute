@@ -249,6 +249,8 @@ const AtualizarOrcamento = z
     request_id: requestId,
     numero: numeroServico,
     expected_edicao: z.number().int().min(1),
+    /** Vincula a tabela cadastrada depois da criação de um rascunho sem tabela. */
+    atualizar_tabela: z.boolean().optional(),
     /**
      * A vistoria da Operação cujos itens a montagem carregou (parte 3.11e): a
      * enviada para esta demanda. Fica no orçamento, para saber de onde vieram
@@ -1135,6 +1137,14 @@ async function atualizar(db: Firestore, caller: ComercialProfile, input: Atualiz
       const contratoAntes = textoOuNull(demanda.contrato_id);
       const contratoId = input.contrato_id !== undefined ? input.contrato_id : contratoAntes;
       const contratoMudou = contratoId !== contratoAntes;
+      const recuperarTabela = input.atualizar_tabela === true;
+      const tabelaAntes = (quote.tabela ?? {}) as { id?: string | null; variante?: string };
+      if (recuperarTabela && tabelaAntes.id) {
+        throw new HttpsError("failed-precondition", "O orçamento já tem tabela vinculada. A tabela original é preservada.");
+      }
+      if (recuperarTabela && !contratoId) {
+        throw new HttpsError("failed-precondition", "Vincule um contrato ao orçamento antes de atualizar a tabela.");
+      }
       // A demanda presa a uma medição (parte 16a) é cobrada por ela: trocar o contrato a cobraria duas vezes.
       const medicaoDaDemanda = textoOuNull(demanda.medicao_id);
       if (contratoMudou && medicaoDaDemanda) {
@@ -1143,7 +1153,7 @@ async function atualizar(db: Firestore, caller: ComercialProfile, input: Atualiz
           `A demanda ${numero} está na medição ${medicaoDaDemanda}: retire a linha dela da medição antes de trocar o contrato.`,
         );
       }
-      const contrato = contratoMudou ? await lerContrato(transaction, db, contratoId, code) : null;
+      const contrato = contratoMudou || recuperarTabela ? await lerContrato(transaction, db, contratoId, code) : null;
       const solicitante =
         input.contato_id !== undefined ? await lerContato(transaction, db, input.contato_id, code) : undefined;
 
@@ -1158,28 +1168,40 @@ async function atualizar(db: Firestore, caller: ComercialProfile, input: Atualiz
       }
       await conferirLocais(transaction, db, idsDeLocais([input.origem, input.destino], input.linhas ?? []), code);
 
-      const tabelaAntes = (quote.tabela ?? {}) as { id?: string | null; variante?: string };
       const varianteAntes = String(tabelaAntes.variante ?? VARIANTE_PADRAO);
       const variante = variantePedida ?? varianteAntes;
       const varianteMudou = normalizarVariante(variante) !== normalizarVariante(varianteAntes);
       const trocouTabela = contratoMudou || varianteMudou;
       let tabela: TabelaLida | null;
-      if (trocouTabela) {
+      if (trocouTabela || recuperarTabela) {
         const tabelas = await lerTabelas(transaction, db, code);
         tabela = escolherTabela(tabelas, { customer_code: code, contrato_id: contratoId, variante, data_base: dataBase });
       } else {
         tabela = tabelaAntes.id ? await lerTabelaPorId(transaction, db, tabelaAntes.id) : null;
       }
+      if (recuperarTabela && !tabela) {
+        throw new HttpsError("failed-precondition", `Nenhuma tabela ${variante} cobre a data-base ${dataBase} deste contrato.`);
+      }
       const itens = await lerItens(transaction, db, input.linhas ?? linhasAntes);
       // As linhas que o app manda valem como vieram; as gravadas, numa tabela trocada, seguem a tabela nova sem recusar.
-      const entradas: LinhaEntrada[] =
+      let entradas: LinhaEntrada[] =
         input.linhas ??
-        (trocouTabela
+        (trocouTabela && !recuperarTabela
           ? entradasNaTabelaNova(linhasAntes, { tabela, itens }, {
               comId: true,
               motivo: (causa) => motivoDoAvulso(causa, { data_base: dataBase, preco: "preço anterior da linha" }),
             })
           : linhasAntes.map((linha) => entradaDaLinha(linha, true)));
+      if (recuperarTabela && tabela) {
+        const precos = tabela.precos;
+        // O avulso já negociado passa a citar a LPU sem trocar seu preço pelo cadastrado.
+        // As linhas livres e os ajustes conservam sua origem e seus valores.
+        entradas = entradas.map((linha) =>
+          linha.origem === "avulso" && linha.lpu_item_id && Object.prototype.hasOwnProperty.call(precos, linha.lpu_item_id)
+            ? { ...linha, origem: "alterado" }
+            : linha,
+        );
+      }
 
       // A RV de execução compara com a RV fechada: a tela sabe se o envio dispensa a aprovação.
       const escopoRv = rvFechada(demanda);

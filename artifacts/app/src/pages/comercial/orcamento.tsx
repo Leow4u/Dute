@@ -289,9 +289,12 @@ function MontarOrcamento({ numero }: { numero: string }) {
     }
   }
 
-  async function salvar(variante?: string): Promise<{ edicao: number; recalculo: string | null } | null> {
+  async function salvar(variante?: string, atualizarTabela = false): Promise<{ edicao: number; recalculo: string | null } | null> {
     if (!form || !base) return null;
-    const payload = payloadSalvar({ original: base.original, form, numero, edicao: base.edicao, chave: "", variante });
+    const payload = {
+      ...payloadSalvar({ original: base.original, form, numero, edicao: base.edicao, chave: "", variante }),
+      ...(atualizarTabela ? { atualizar_tabela: true } : {}),
+    };
     if (Object.keys(payload).length <= 4) {
       toast({ title: "Sem alterações para salvar" });
       return { edicao: base.edicao, recalculo: null };
@@ -312,7 +315,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
       // Trocar a tabela muda o preço de propósito; no salvamento comum, a diferença é recálculo do servidor.
       const recalculo = variante ? null : avisoDeRecalculo(previa.completa ? previa.totalCents : null, resultado.total_cents);
       if (recalculo) setAviso({ tipo: "info", texto: recalculo });
-      toast({ title: variante ? `Tabela ${variante}` : "Orçamento salvo" });
+      toast({ title: atualizarTabela ? "Tabela atualizada" : variante ? `Tabela ${variante}` : "Orçamento salvo" });
       return { edicao: resultado.edicao, recalculo };
     } catch (error) {
       tratarErro(error);
@@ -545,6 +548,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
         documentoHref={hrefDoDocumento(numero, item.rv)}
         posEnvio={{ acoes: posEnvio, onAcao: (acao) => depois.abrir(acao, item) }}
         parecidos={parecidos}
+        podeAtualizarTabela={Boolean(contratoId && !tabelaId)}
         handlers={{
           salvar: () => void salvar(),
           previaSalva: () => void previaSalva(),
@@ -565,6 +569,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
           enviarDispensado: () => void enviarDispensado(),
           descartarRv: () => depois.abrir("descartar_rv", item),
           trocarVariante: (variante) => void salvar(variante),
+          atualizarTabela: () => void salvar(undefined, true),
           novoContato: () => {
             setErroDoDialogo(null);
             setDialogo({ tipo: "contato", chave: novaChave() });

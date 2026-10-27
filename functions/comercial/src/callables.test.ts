@@ -198,6 +198,13 @@ describe("callables do Comercial", () => {
     }
   });
 
+  it("a tabela do contrato grava pelo domínio e começa pela autorização comercial", () => {
+    const block = callableBlocks().get("saveContractPriceTable");
+    assert.ok(block, "saveContractPriceTable não declarada");
+    assert.match(block, ENTRADA_DE_NEGOCIO);
+    assert.match(block, /return saveContractPriceTableFor\(db, caller, request\.data\);/);
+  });
+
   it("a região é a do app", () => {
     assert.match(index, /setGlobalOptions\(\{[\s\S]*?region: "southamerica-east1"/);
   });

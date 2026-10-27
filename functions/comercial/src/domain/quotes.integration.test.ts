@@ -556,6 +556,103 @@ describe("editar o rascunho", () => {
 });
 
 describe("data-base", () => {
+  it("vincula explicitamente a tabela cadastrada depois e preserva preço manual antes de incluir item sem motivo", async () => {
+    const tabela = await doc("price_tables/pt_itau_v1");
+    await db.doc("price_tables/pt_itau_v1").delete();
+    await db.doc("price_tables/pt_padrao").delete();
+    const { numero } = await saveQuoteFor(db, comercial, criar({ linhas: [
+      { origem: "avulso", lpu_item_id: "lpu_mesa", quantidade: "1", preco: "30.00", motivo: "Valor combinado", descricao: "Mesa combinada" },
+      { origem: "avulso", quantidade: "1", preco: "7.00", motivo: "Fora da LPU", descricao: "Serviço combinado" },
+    ] }), { agora: JUNHO });
+    const antes = await doc(`quotes/${numero}`);
+    assert.equal((antes.tabela as Record<string, unknown>).id, null);
+    await db.doc("price_tables/pt_itau_v1").set(tabela);
+
+    // O salvamento comum não muda a base de preço do orçamento.
+    await saveQuoteFor(db, comercial, { action: "update", request_id: key(), numero, expected_edicao: 1, observacoes_internas: "Mesa negociada" }, { agora: JULHO });
+    assert.equal(((await doc(`quotes/${numero}`)).tabela as Record<string, unknown>).id, null);
+    await rejeita(saveQuoteFor(db, comercial, {
+      action: "update", request_id: key(), numero, expected_edicao: 1, atualizar_tabela: true,
+    }, { agora: JULHO }), "failed-precondition", /edição/);
+    const pedido = { action: "update", request_id: key(), numero, expected_edicao: 2, atualizar_tabela: true };
+    const resultado = await saveQuoteFor(db, comercial, pedido, { agora: JULHO });
+    assert.equal(resultado.total_cents, antes.total_cents);
+    const atualizada = await doc(`quotes/${numero}`);
+    assert.equal(atualizada.data_base, antes.data_base);
+    assert.deepEqual(atualizada.tabela, { id: "pt_itau_v1", nome: "LPU Itaú v1", variante: "Comercial" });
+    assert.deepEqual(linhasDe(atualizada).map((linha) => [linha.id, linha.preco, linha.preco_tabela, linha.origem, linha.motivo]), [
+      [linhasDe(antes)[0].id, "30.00", "40.00", "alterado", "Valor combinado"],
+      [linhasDe(antes)[1].id, "7.00", null, "avulso", "Fora da LPU"],
+    ]);
+    assert.deepEqual(await saveQuoteFor(db, comercial, pedido, { agora: JULHO }), { ...resultado, replayed: true });
+    assert.deepEqual(await doc(`quotes/${numero}`), atualizada);
+
+    // Depois de vincular, o preço e código de um item novo vêm da LPU.
+    await saveQuoteFor(db, comercial, { action: "update", request_id: key(), numero, expected_edicao: 3, linhas: [
+      { id: linhasDe(atualizada)[0].id, origem: "alterado", lpu_item_id: "lpu_mesa", quantidade: "1", preco: "30.00", motivo: "Valor combinado" },
+      { id: linhasDe(atualizada)[1].id, origem: "avulso", quantidade: "1", preco: "7.00", motivo: "Fora da LPU", descricao: "Serviço combinado" },
+      { origem: "tabela", lpu_item_id: "lpu_cadeira", quantidade: "2" },
+    ] }, { agora: JULHO });
+    const comItem = await doc(`quotes/${numero}`);
+    assert.deepEqual(linhasDe(comItem).map((linha) => [linha.codigo, linha.preco, linha.motivo]), [
+      ["DTL-0001-T", "30.00", "Valor combinado"], [null, "7.00", "Fora da LPU"], ["DTL-0002-T", "18.50", null],
+    ]);
+    assert.equal(comItem.total_cents, 7400);
+  });
+
+  it("Atualizar tabela não substitui vínculo existente nem tabela histórica", async () => {
+    const { numero } = await saveQuoteFor(db, comercial, criar(), { agora: JUNHO });
+    const antes = await doc(`quotes/${numero}`);
+    await carregarV2();
+    await rejeita(saveQuoteFor(db, comercial, {
+      action: "update", request_id: key(), numero, expected_edicao: 1, atualizar_tabela: true,
+    }, { agora: JULHO }), "failed-precondition", /já tem tabela/);
+    assert.deepEqual(await doc(`quotes/${numero}`), antes);
+  });
+
+  it("Atualizar tabela preserva o preço manual mesmo quando a variante também muda", async () => {
+    await db.doc("price_tables/pt_itau_v1").delete();
+    await db.doc("price_tables/pt_padrao").delete();
+    const { numero } = await saveQuoteFor(db, comercial, criar({ linhas: [
+      { origem: "avulso", lpu_item_id: "lpu_mesa", quantidade: "1", preco: "30.00", motivo: "Valor combinado", descricao: "Mesa combinada" },
+    ] }), { agora: JUNHO });
+    await saveQuoteFor(db, comercial, {
+      action: "update", request_id: key(), numero, expected_edicao: 1, atualizar_tabela: true, variante: "Noturna",
+    }, { agora: JULHO });
+    const quote = await doc(`quotes/${numero}`);
+    assert.equal((quote.tabela as Record<string, unknown>).id, "pt_itau_noturna");
+    assert.equal(quote.total_cents, 3000);
+    assert.deepEqual(linhasDe(quote).map((linha) => [linha.preco, linha.preco_tabela, linha.origem, linha.motivo]), [
+      ["30.00", "60.00", "alterado", "Valor combinado"],
+    ]);
+  });
+
+  it("Atualizar tabela confere o cliente e situação atual do contrato na transação", async () => {
+    await db.doc("price_tables/pt_itau_v1").delete();
+    await db.doc("price_tables/pt_padrao").delete();
+    const { numero } = await saveQuoteFor(db, comercial, criar({ linhas: [] }), { agora: JUNHO });
+    const antes = await doc(`quotes/${numero}`);
+    const atualizar = () => saveQuoteFor(db, comercial, {
+      action: "update", request_id: key(), numero, expected_edicao: 1, atualizar_tabela: true,
+    }, { agora: JULHO });
+    await db.doc("contracts/itau-2026").update({ customer_code: "SAFRA" });
+    await rejeita(atualizar(), "failed-precondition", /outro cliente/);
+    await db.doc("contracts/itau-2026").update({ customer_code: "ITAU", status: "encerrado" });
+    await rejeita(atualizar(), "failed-precondition", /encerrado/);
+    assert.deepEqual(await doc(`quotes/${numero}`), antes);
+  });
+
+  it("Atualizar tabela sem tabela que cubra a data-base não grava vínculo nem edição", async () => {
+    await db.doc("price_tables/pt_itau_v1").delete();
+    await db.doc("price_tables/pt_padrao").delete();
+    const { numero } = await saveQuoteFor(db, comercial, criar({ linhas: [] }), { agora: JUNHO });
+    const antes = await doc(`quotes/${numero}`);
+    await rejeita(saveQuoteFor(db, comercial, {
+      action: "update", request_id: key(), numero, expected_edicao: 1, atualizar_tabela: true,
+    }, { agora: JULHO }), "failed-precondition", /tabela.*data-base/);
+    assert.deepEqual(await doc(`quotes/${numero}`), antes);
+  });
+
   it("o orçamento criado antes da troca de tabela continua na tabela antiga quando editado depois", async () => {
     const { numero } = await saveQuoteFor(db, comercial, criar(), { agora: JUNHO });
     await carregarV2();

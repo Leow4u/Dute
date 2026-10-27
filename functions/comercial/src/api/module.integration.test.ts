@@ -38,6 +38,120 @@ function contract(customer_code = "ACME") {
   return { customer_code, nome: "Contrato mensal", vigente_de: "2026-01-01", vigente_ate: "2027-12-31", renovacao: { tipo: "aditivo" }, reajuste: { tipo: "negociado" }, regime_padrao: "medicao_mensal", autorizacao: { tipo: "medicao_aprovada" }, pagamento: { tipo: "dias_apos_nf", dias: 30 }, status: "vigente" };
 }
 
+const tableItems = () => [
+  { codigo: "DTL-001-D", descricao: "Mesa", unidade: "UN", preco: "15.1250" },
+  { codigo: "DTL-001-T", descricao: "Mesa", unidade: "UN", preco: "20.00" },
+  { codigo: "DTL-001-M", descricao: "Mesa", unidade: "UN", preco: "0" },
+];
+
+test("Comercial REST cria LPU do contrato com itens distintos, preços exatos e recibo", async () => {
+  const created = await call("POST", "contratos", { contrato: contract() });
+  const params = { id: created.contrato_id };
+  const payload = { nome: "LPU inicial", codigo: "LPU-2026", itens: tableItems() };
+  const saved = await call("POST", "contratos/{id}/tabelas", payload, params, "table-create");
+  assert.equal(saved.ok, true);
+  assert.equal(saved.itens, 3);
+  assert.equal((await call("POST", "contratos/{id}/tabelas", payload, params, "table-create")).replayed, true);
+  const table = (await db.doc(`price_tables/${saved.tabela_id}`).get()).data()!;
+  assert.equal(table.customer_code, "ACME");
+  assert.equal(table.contract_id, created.contrato_id);
+  assert.equal(table.codigo, "LPU-2026");
+  assert.equal(table.variante, "Comercial");
+  assert.equal(table.vigente_de, "2026-01-01");
+  assert.equal(table.vigente_ate, null);
+  assert.deepEqual(Object.values(table.precos).map((v: any) => v.preco).sort(), ["0", "15.1250", "20.00"]);
+  const items = await db.collection("lpu_items").get();
+  assert.equal(items.size, 3);
+  assert.deepEqual(items.docs.map(d => d.get("item")).sort(), ["Mesa (DTL-001-D)", "Mesa (DTL-001-M)", "Mesa (DTL-001-T)"]);
+  for (const item of items.docs) assert.equal(item.get("unidade"), "UN");
+  const events = await db.collection("events").where("entity_id", "==", saved.tabela_id).get();
+  assert.equal(events.size, 1);
+  assert.equal(events.docs[0].get("actor.uid"), "api:commercial-test");
+  assert.doesNotMatch(JSON.stringify(events.docs[0].get("payload")), /preco|preço|15\.1250|20\.00/);
+  const got = await call("GET", "contratos/{id}/tabelas", undefined, params);
+  assert.equal(got.data.length, 1);
+  assert.equal(got.data[0].id, saved.tabela_id);
+  assert.equal(got.data[0].codigo, "LPU-2026");
+  assert.equal(Object.keys(got.data[0].precos).length, 3);
+  const byCode = new Map(Object.entries(got.data[0].precos).map(([id, p]: [string, any]) => [p.codigo, id]));
+  const quote = await call("POST", "orcamentos", {
+    customer_code: "ACME", contrato_id: created.contrato_id, titulo: "Mudança com LPU",
+    linhas: tableItems().map((item, index) => ({ origem: "tabela", lpu_item_id: byCode.get(item.codigo), quantidade: ["2", "3", "1"][index] })),
+  });
+  const savedQuote = await call("GET", "orcamentos/{id}", undefined, { id: quote.numero });
+  assert.equal(savedQuote.data.total_cents, 9025);
+  for (let index = 0; index < tableItems().length; index++) {
+    const line = savedQuote.data.linhas[index];
+    assert.equal(line.codigo, tableItems()[index].codigo);
+    assert.equal(line.preco, tableItems()[index].preco);
+    assert.equal(line.preco_tabela, tableItems()[index].preco);
+    assert.equal(line.descricao, "Mesa");
+    assert.equal(line.unidade, "UN");
+    assert.equal(line.motivo, null);
+  }
+});
+
+test("Comercial REST tabela recusa dados inválidos, sobreposição e vínculos de outro cliente", async () => {
+  const created = await call("POST", "contratos", { contrato: contract() });
+  const params = { id: created.contrato_id };
+  const payload = { nome: "LPU", itens: tableItems() };
+  for (const preco of ["1,25", "-1", "0.12345", 1.25]) {
+    await fail(call("POST", "contratos/{id}/tabelas", { ...payload, itens: [{ ...tableItems()[0], preco }] }, params), "invalid-argument");
+  }
+  await fail(call("POST", "contratos/{id}/tabelas", { ...payload, itens: [] }, params), "invalid-argument");
+  await fail(call("POST", "contratos/{id}/tabelas", { ...payload, action: "delete" }, params), "invalid-argument");
+  await fail(call("POST", "contratos/{id}/tabelas", { ...payload, vigente_de: "2026-02-30" }, params), "invalid-argument");
+  await fail(call("POST", "contratos/{id}/tabelas", { ...payload, vigente_de: "2026-06-01", vigente_ate: "2026-05-01" }, params), "invalid-argument");
+  await db.doc("contracts/other-contract").set({ ...contract("OTHER") });
+  await fail(call("POST", "contratos/{id}/tabelas", payload, { id: "other-contract" }), "permission-denied");
+  await fail(call("GET", "contratos/{id}/tabelas", undefined, { id: "other-contract" }), "permission-denied");
+  assert.equal((await db.collection("price_tables").get()).size, 0);
+  const first = await call("POST", "contratos/{id}/tabelas", payload, params);
+  await fail(call("POST", "contratos/{id}/tabelas", { ...payload, nome: "Outro nome" }, params), "already-exists");
+  await fail(call("POST", "contratos/{id}/tabelas", { ...payload, vigente_de: "2025-12-01" }, params), "failed-precondition");
+  const second = await call("POST", "contratos/{id}/tabelas", { ...payload, nome: "LPU nova", vigente_de: "2026-06-01", itens: [{ ...tableItems()[0], item: "Mesa (DTL-001-D)", descricao: "Mesa revisada", preco: "100" }] }, params);
+  const old = await db.doc(`price_tables/${first.tabela_id}`).get();
+  assert.equal(old.get("vigente_ate"), "2026-05-31");
+  assert.equal(old.get("status"), "encerrada");
+  assert.equal(Object.values(old.get("precos")).some((v: any) => v.preco === "15.1250"), true);
+  assert.equal((await db.doc(`price_tables/${second.tabela_id}`).get()).get("substitui"), first.tabela_id);
+  const catalog = await db.collection("lpu_items").get();
+  assert.equal(catalog.size, 3);
+  assert.ok(catalog.docs.every(item => item.get("descricao") === "Mesa"));
+  const page = await call("GET", "contratos/{id}/tabelas", undefined, params, undefined, { limit: 1 });
+  assert.equal(page.data.length, 1);
+  assert.ok(page.next_cursor);
+  const next = await call("GET", "contratos/{id}/tabelas", undefined, params, undefined, { limit: 1, cursor: page.next_cursor });
+  assert.equal(next.data.length, 1);
+  assert.notEqual(next.data[0].id, page.data[0].id);
+  assert.equal(next.next_cursor, null);
+});
+
+test("Comercial REST LPU limita itens e bytes sem deixar catálogo ou tabela parcial", async () => {
+  const created = await call("POST", "contratos", { contrato: contract() });
+  const params = { id: created.contrato_id };
+  await fail(call("POST", "contratos/{id}/tabelas", {
+    nome: "Itens demais", itens: Array.from({ length: 481 }, (_, i) => ({ ...tableItems()[0], codigo: `DTL-${i}` })),
+  }, params), "invalid-argument");
+  await fail(call("POST", "contratos/{id}/tabelas", {
+    nome: "Documento grande", itens: Array.from({ length: 480 }, (_, i) => ({ ...tableItems()[0], codigo: `DTL-${i}`, descricao: "😀".repeat(500) })),
+  }, params), "invalid-argument");
+  await fail(call("POST", "contratos/{id}/tabelas", { nome: "Repetida", itens: [tableItems()[0], tableItems()[0]] }, params), "invalid-argument");
+  assert.equal((await db.collection("price_tables").get()).size, 0);
+  assert.equal((await db.collection("lpu_items").get()).size, 0);
+});
+
+test("Comercial REST LPU guarda nome legível e mantém armazenagem fora do orçamento", async () => {
+  const created = await call("POST", "contratos", { contrato: contract() });
+  const saved = await call("POST", "contratos/{id}/tabelas", { nome: "Armazenagem", itens: [
+    { codigo: "DTL-ARM-01", descricao: "Armazenagem de móveis", unidade: "M²", preco: "1.50" },
+  ] }, { id: created.contrato_id });
+  const table = await db.doc(`price_tables/${saved.tabela_id}`).get();
+  const catalog = await db.doc(`lpu_items/${Object.keys(table.get("precos"))[0]}`).get();
+  assert.equal(catalog.get("item"), "Armazenagem de móveis (DTL-ARM-01)");
+  assert.equal(catalog.get("orcavel"), false);
+});
+
 test("Comercial REST clientes cria consulta altera e repete sem duplicar eventos", async () => {
   const created = await call("POST", "clientes", { code: "NOVO", name: "Novo cliente" }, {}, "customer-create");
   const replay = await call("POST", "clientes", { code: "NOVO", name: "Novo cliente" }, {}, "customer-create");
@@ -132,14 +246,17 @@ test("Comercial REST paginação projeção escopos e ações injetadas falham f
   assert.equal((await db.collection("comercial_operations").get()).size, 0);
 });
 
-test("Comercial REST corrida entre preflight e transação recusa troca de tenant em aditivo e medição", async () => {
-  for (const kind of ["aditivo", "medicao", "vinculo-medicao"] as const) {
+test("Comercial REST corrida entre preflight e transação recusa troca de tenant em aditivo, LPU e medição", async () => {
+  for (const kind of ["aditivo", "tabela", "medicao", "vinculo-medicao"] as const) {
     const created = await call("POST", "contratos", { contrato: contract() });
     const contractId = created.contrato_id as string;
     let template: string, method: "POST" | "PATCH", payload: Record<string, unknown>, params: Record<string, string>;
     if (kind === "aditivo") {
       method = "POST"; template = "contratos/{id}/aditivos"; params = { id: contractId };
       payload = { aditivo: { numero: 9, tipo: "prorrogacao", vigente_de: "2028-01-01", vigente_ate: "2028-12-31" } };
+    } else if (kind === "tabela") {
+      method = "POST"; template = "contratos/{id}/tabelas"; params = { id: contractId };
+      payload = { nome: "LPU", itens: tableItems() };
     } else if (kind === "medicao") {
       method = "POST"; template = "medicoes"; params = {};
       payload = { contrato_id: contractId, competencia: "2026-10" };
@@ -179,7 +296,43 @@ test("Comercial REST corrida entre preflight e transação recusa troca de tenan
     assert.equal((await db.doc(`contracts/${contractId}`).get()).get("vigente_ate"), "2027-12-31");
     assert.equal((await db.doc(`contracts/${contractId}/aditivos/9`).get()).exists, false);
     if (kind === "medicao") assert.equal((await db.doc(`medicoes/${contractId}_2026-10`).get()).exists, false);
+    if (kind === "tabela") {
+      assert.equal((await db.collection("price_tables").get()).size, 0);
+      assert.equal((await db.collection("lpu_items").get()).size, 0);
+    }
   }
+});
+
+test("handler pessoal LPU reautoriza contrato e papel antes do replay HTTP", async () => {
+  const created = await call("POST", "contratos", { contrato: contract() });
+  const keyId = "c".repeat(32), token = `dute_${keyId}.${"s".repeat(43)}`;
+  await db.doc("users/table-writer").set({ role: "comercial", nome: "Pessoa comercial" });
+  await db.doc(`api_integrations/${keyId}`).set({ kind: "personal", permission: "full", delegated_by: "table-writer", scopes: [], customers: [], write_policy: "scoped", expires_at_ms: Date.now() + 600000, token_hash: createHash("sha256").update(token).digest("hex") });
+  const handler = createModuleHandler(db, "dute-homolog", async () => ({ uid: "unused" }), comercialApi);
+  const request = { method: "POST", path: `/api/v1/comercial/contratos/${created.contrato_id}/tabelas`,
+    headers: { authorization: `Bearer ${token}`, "idempotency-key": "personal-table" }, query: {},
+    body: { nome: "LPU pessoal", itens: tableItems() } };
+  const first = await handler(request);
+  assert.equal(first.status, 201, JSON.stringify(first.body));
+  const replay = await handler(request);
+  assert.equal(replay.status, 200);
+  assert.equal(replay.body.replayed, true);
+  const eventsBefore = (await db.collection("events").get()).size;
+  const receiptsBefore = (await db.collection("comercial_operations").get()).size;
+  // Um vínculo sem tenant válido já não é um recurso autorizado da conta.
+  // A validação precisa ocorrer mesmo quando api_receipts tem o resultado.
+  await db.doc(`contracts/${created.contrato_id}`).update({ customer_code: null });
+  const outside = await handler(request);
+  assert.equal(outside.status, 403, JSON.stringify(outside.body));
+  assert.equal(outside.body.replayed, undefined);
+  await db.doc(`contracts/${created.contrato_id}`).delete();
+  assert.equal((await handler(request)).status, 404);
+  await db.doc(`contracts/${created.contrato_id}`).set(contract());
+  await db.doc("users/table-writer").update({ role: "financeiro" });
+  assert.equal((await handler(request)).status, 403);
+  assert.equal((await db.collection("events").get()).size, eventsBefore);
+  assert.equal((await db.collection("comercial_operations").get()).size, receiptsBefore);
+  assert.equal((await db.collection("price_tables").get()).size, 1);
 });
 
 test("handler pessoal comercial: projeção, papel atual, cliente atual e bloqueio", async () => {

@@ -154,6 +154,8 @@ export type MontarViewProps = {
   posEnvio: { acoes: AcoesDaEtapa; onAcao: (acao: AcaoDepoisDoEnvio) => void };
   /** Os orçamentos parecidos do mesmo cliente (parte 5.3c), na montagem; fora da liberação da memória, nada. */
   parecidos?: Parecidos | null;
+  /** Rascunho com contrato, criado antes do cadastro da tabela. */
+  podeAtualizarTabela?: boolean;
   handlers: {
     salvar: () => void;
     /** "Prévia do PDF" com alteração não salva: salva e só então leva a aba nova ao documento. */
@@ -172,6 +174,7 @@ export type MontarViewProps = {
     /** Descartar a RV seguinte ainda não enviada (abre a confirmação). */
     descartarRv: () => void;
     trocarVariante: (variante: string) => void;
+    atualizarTabela: () => void;
     novoContato: () => void;
   };
 };
@@ -370,6 +373,11 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
             <Pill className="h-9 rounded-lg px-3 text-sm">{dados.variante}</Pill>
           )}
           <Pill className="h-9 rounded-lg px-3 text-sm">{`Data-base ${dados.dataBase ? dataBr(dados.dataBase) : "—"}`}</Pill>
+          {props.acoes.editavel && props.podeAtualizarTabela ? (
+            <Button type="button" variant="outline" size="sm" disabled={ocupado} onClick={handlers.atualizarTabela}>
+              Atualizar tabela
+            </Button>
+          ) : null}
         </div>
       </div>
       <div className="flex flex-col items-end gap-3">
