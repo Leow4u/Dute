@@ -109,14 +109,51 @@ disparado sem ele. Sem dado real neste arquivo.
     nasceram.
   - O Cloud Run e o `app.dutelog.com.br` passaram a servir o build às
     20:43, e o login abriu no Chromium.
-- **Na `main`, para a quinta publicação (27/10/2026).** Os PRs 488 a 512
-  estão publicados na homologação no `65a8d2a` (run 338). Esperam o OK do
-  Leonardo e, antes do disparo, o papel da seção 4, item 5. Levam:
-  - as decisões de 26/10, com as telas do canvas "Telas das decisões de
-    26/10" (seção 2, "As decisões de 26/10 e a API");
-  - a API Dute v1 (PR 508, `docs/api.md`) e o "mostrar senha" do login
-    (PR 509);
-  - o registro da quarta publicação e das decisões (PRs 488 a 490).
+- **A quinta publicação (26 e 27/10/2026).** Pelo disparo manual do CI,
+  da conta do Leonardo (run 1167), o commit `bcb919a` (PR 505) subiu no
+  `dute-prod` das 23:52 de 26/10 às 00:04 UTC de 27/10. O disparo foi às
+  23:48:37 UTC, e a primeira gravação, a das regras, às 23:52:52: o instante
+  para o PITR é qualquer um entre os dois.
+  - Ela levou os PRs 488 a 505, com as decisões de 26/10 que já estavam na
+    `main` (seção 2, "As decisões de 26/10 e a API"):
+    - na Operação, as perguntas 58, 65 e 66 e as decisões 3 e 11 da LGPD;
+    - no Financeiro, as perguntas 26 e 64;
+    - no portal, as perguntas 69 (a tela) e 71;
+    - no RH, a pergunta 70 e o motivo do anexo recusado;
+    - o servidor do aceite do convite (pergunta 68, parte 9a). O app seguiu
+      aceitando pelo navegador até a sexta.
+  - As regras e os índices, sem mudança, subiram e foram conferidos às
+    23:53.
+  - Subiram as functions, com `acceptInvite` e `resolveFieldCompletion`
+    novas. O invoker conferiu as 148 callables.
+  - O Cloud Run e o `app.dutelog.com.br` passaram a servir o build às
+    00:04, e o login abriu no Chromium.
+- **A sexta publicação (27/10/2026).** Com o OK do Leonardo ("Publicar
+  agora"), o commit `fce46ab` (PR 513) subiu no `dute-prod` pelo disparo
+  manual do CI (run 1183), das 01:21 às 01:32 UTC, com a homologação
+  publicada nele às 01:13. O disparo foi às 01:17:40 UTC, e a primeira
+  gravação, a das regras, às 01:21:53: o instante para o PITR é qualquer um
+  entre os dois.
+  - Antes do disparo, a conta do CI ganhou também o
+    `roles/cloudfunctions.admin`, que sobrava e saiu logo depois da
+    publicação: o papel próprio `dute_api_https_publisher`, que ela já
+    tinha, dá a única permissão que a `duteApi` pede (seção 4, item 5).
+  - Ela levou os PRs 506 a 513 (seção 2, "As decisões de 26/10 e a API"):
+    - o aceite do convite pela tela, com o e-mail confirmado, e as regras
+      que fecham o caminho do navegador (pergunta 68, parte 9b);
+    - Cancelar pedido, o Encerrar só depois da entrega e a separação a
+      menos (pergunta 59);
+    - a API Dute v1 (PR 508, `docs/api.md`) e o "mostrar senha" do login
+      (PR 509).
+  - As regras do convite subiram e foram conferidas às 01:22, com os
+    índices prontos.
+  - Nasceram a `cancelWarehouseOrder` e a `duteApi`, e 107 functions foram
+    atualizadas. O invoker conferiu as 149 callables, e a API respondeu com
+    o contrato do commit e recusou a consulta sem credencial (401).
+  - O passo que garante a API do Cloud Scheduler avisou, como na quarta,
+    que a conta do CI não liga APIs, e seguiu.
+  - O Cloud Run e o `app.dutelog.com.br` passaram a servir o build às
+    01:32, e o login abriu no Chromium.
 - **Ciclos conferidos no emulador.**
   - `functions/operacao/src/domain/ciclo-do-cliente.integration.test.ts`
     (parte 4.9a). O cliente pede a OS pelo portal, a coordenação abre a
@@ -547,44 +584,48 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
   falha no login ao tirar ou devolver o acesso ficava escondida"). Quem
   ficou com o acesso devolvido e o login bloqueado volta a entrar, depois de
   publicar, com "Remover acesso" e "Devolver acesso" em Usuários.
-- **As decisões de 26/10 e a API (quinta publicação).** Entram com a
-  `main`, sem liberação própria:
-  - **Regras do Firestore.** O perfil (`users`) não se cria pelo navegador,
-    e o convite (`invites`) só abre para quem administra os acessos. O
-    aceite passa à callable `acceptInvite`, com o e-mail confirmado
-    (pergunta 68, `fase-2-nucleo.md`). As regras sobem antes do app: nos
-    minutos entre as duas, o app antigo não aceita convite, e quem estiver no
-    meio do aceite recarrega a página.
-  - **Functions.** São 149 callables:
-    - 84 do WMS, com `acceptInvite` e `cancelWarehouseOrder`;
+- **As decisões de 26/10 e a API (quinta e sexta publicações).** Entram com
+  a `main`, sem liberação própria. A quinta (`bcb919a`) levou os PRs até o
+  505; a sexta (`fce46ab`), do 506 ao 513 (seção 1):
+  - **Regras do Firestore** (sexta). O perfil (`users`) não se cria pelo
+    navegador, e o convite (`invites`) só abre para quem administra os
+    acessos. O aceite passa à callable `acceptInvite`, com o e-mail
+    confirmado (pergunta 68, `fase-2-nucleo.md`). As regras sobem antes do
+    app: nos minutos entre as duas, o app antigo não aceita convite, e quem
+    estiver no meio do aceite recarrega a página.
+  - **Functions.** São 149 callables desde a sexta:
+    - 84 do WMS, com `acceptInvite` (quinta) e `cancelWarehouseOrder`
+      (sexta);
     - 12 do Comercial;
-    - 19 da Operação, com `resolveFieldCompletion`;
+    - 19 da Operação, com `resolveFieldCompletion` (quinta);
     - 7 do Financeiro, 16 do núcleo e 11 do RH.
 
-    Entra também a primeira function HTTP, a `duteApi` da Operação (abaixo).
-  - **Armazenagem** (pergunta 59, `fase-4-financeiro.md`):
+    A sexta trouxe também a primeira function HTTP, a `duteApi` da Operação
+    (abaixo).
+  - **Armazenagem** (pergunta 59, sexta, `fase-4-financeiro.md`):
     - Cancelar pedido, no ⋯ de Pedidos;
     - o Encerrar só depois da entrega;
     - a separação a menos pela coordenação;
     - no portal, o pedido "Cancelado pela Dutelog".
 
-    A retirada pelo cliente deixa de pedir o documento (LGPD, decisão 3).
-  - **Operação** (`fase-3-operacao.md`):
+    A retirada pelo cliente deixou de pedir o documento na quinta (LGPD,
+    decisão 3).
+  - **Operação** (quinta, `fase-3-operacao.md`):
     - cancelar a vistoria em execução (pergunta 58);
     - a conclusão do celular recusada, com a assinatura guardada (66);
     - a inclusão guardada de um item que a OS não tem (65);
     - a conclusão sem o número do documento (LGPD, decisão 3);
     - no campo, o local com o Maps e o contato com Ligar (LGPD, decisão 11).
-  - **Financeiro** (`fase-4-financeiro.md`):
+  - **Financeiro** (quinta, `fase-4-financeiro.md`):
     - a medição aprovada como linha própria de A faturar (pergunta 64);
     - a receita por serviço rateada pelas linhas do orçamento (26).
-  - **Portal** (`fase-2-nucleo.md`):
+  - **Portal** (quinta, `fase-2-nucleo.md`):
     - a tela "Portal desligado" do cliente arquivado ou "Sem portal" (69);
     - os avisos que param com o portal desligado (71).
-  - **RH** (`fase-8-rh.md`):
+  - **RH** (quinta, `fase-8-rh.md`):
     - Pessoas com quem está inativo na Operação (pergunta 70);
     - o motivo do anexo recusado.
-  - **A API Dute v1** (PR 508, `docs/api.md`).
+  - **A API Dute v1** (sexta, PR 508, `docs/api.md`).
     - A `duteApi` responde em
       `https://southamerica-east1-dute-prod.cloudfunctions.net/duteApi/api/v1`.
     - Vale onde a Operação está liberada, então liga na produção só por
@@ -594,14 +635,14 @@ O que veio da Fase 3 está em `operacao-producao.md`, seção 2. Da Fase 4:
     - `api_integrations`, `api_approvals` e `api_audit` ficam fechadas ao
       navegador.
     - Publicar pede um papel a mais na conta do CI (seção 4, item 5).
-  - **O login** mostra e oculta a senha (PR 509).
+  - **O login** mostra e oculta a senha (sexta, PR 509).
 - **Dados.** Nada é migrado. A OS concluída antes da parte 4.3c tem o
   comprovante sem as fotos.
 - **Papéis.** Nenhum novo.
 - **Conferência do invoker.** Passa a conferir 145 callables, das seis
-  codebases, e 149 desde a quinta publicação. Desde a quinta, a publicação
-  confere também a API (`tools/check_api_deployed.mjs`): o contrato do
-  commit e a consulta sem credencial recusada com 401.
+  codebases; 148 na quinta publicação e 149 desde a sexta. Desde a sexta, a
+  publicação confere também a API (`tools/check_api_deployed.mjs`): o
+  contrato do commit e a consulta sem credencial recusada com 401.
 
 ## 3. Antes de publicar (conferir na homologação)
 
@@ -647,7 +688,7 @@ contato com os avisos ligados (Comercial › Clientes).
 14. **Eventos manuais.** Com o suporte, Configuração › Sistema registra um
     incidente; com o interno, o Agent Dute › Painel grava a anotação
     operacional. Os dois aparecem na timeline com a hora do registro.
-15. **As decisões de 26/10 (quinta publicação).**
+15. **As decisões de 26/10 (quinta e sexta publicações).**
     - Com o interno, em Pedidos:
       - cancelar um pedido já separado. O diálogo mostra o que volta à
         posição, e a guarda entra na fila;
@@ -670,24 +711,24 @@ contato com os avisos ligados (Comercial › Clientes).
 4. **Janela.** Combinar com a contagem de abertura da BTG, que roda no
    `dute-prod`. O deploy de functions leva de 11 a 15 minutos, agora com
    seis codebases.
-5. **O papel que publica a API** (desde a quinta publicação).
+5. **O papel que publica a API** (desde a sexta publicação).
    - A `duteApi` é uma function HTTP pública. Publicá-la pede
      `cloudfunctions.functions.setIamPolicy` à conta do CI, e o
      `roles/cloudfunctions.developer` não dá essa permissão.
-   - Na homologação, a publicação falhou por isso em 27/10 (run 335) e
-     passou depois de a conta ganhar o papel (run 336).
-   - No `dute-prod`, dar o papel antes do disparo:
-
-   ```powershell
-   cd C:\DEV\Dute
-   gcloud projects add-iam-policy-binding dute-prod --member="serviceAccount:github-actions-functions@dute-prod.iam.gserviceaccount.com" --role=roles/cloudfunctions.admin --condition=None
-   ```
+   - Quem dá é o papel próprio `dute_api_https_publisher`, só com essa
+     permissão. No `dute-prod`, a conta do CI já o tem (conferido em
+     27/10/2026 com `gcloud iam roles describe dute_api_https_publisher
+     --project dute-prod`). Para um projeto novo, o papel e a concessão
+     estão em `docs/deploy-functions-manual.md`.
+   - Na homologação, a publicação falhou por falta da permissão em 27/10
+     (run 335) e passou depois de a conta ganhar o papel (run 336).
 
 6. **Disparo.** Actions > CI > Run workflow, com `publicar_producao`
    marcado, do HEAD. O job só vale verde com as conferências do fim:
    - `check_rules_deployed.sh`;
-   - o invoker das 149 callables (146 até a quarta publicação);
-   - `check_api_deployed.mjs`, desde a quinta;
+   - o invoker das 149 callables (146 até a quarta publicação e 148 na
+     quinta);
+   - `check_api_deployed.mjs`, desde a sexta;
    - `check_frontend_deployed.sh`;
    - o smoke.
 
@@ -776,7 +817,7 @@ contato com os avisos ligados (Comercial › Clientes).
     `avisos@dutelog.com.br` em até 5 minutos. No painel do Resend, a aba
     Emails mostra cada envio e se foi entregue; o e-mail que desiste
     aparece no painel do sistema, no quadro dos e-mails.
-11. **Depois da quinta publicação** (seção 1):
+11. **Depois da sexta publicação** (seção 1):
     - Os convites pendentes continuam valendo. O aceite passa a pedir a
       confirmação do e-mail, e a volta do e-mail leva a
       `app.dutelog.com.br`, que já está nos domínios autorizados do login
@@ -863,20 +904,13 @@ dos marcos 2, 3 e 4. O registro está em `fase-4-financeiro.md`, "Parte
   (`docs/deploy-functions-manual.md`, "Function com segredo").
 - A entrega do WMS fatura pela demanda ou na fatura mensal do WMS?
   (`fase-4-financeiro.md`, decisões).
-- O papel `roles/firebaseauth.admin` na conta de runtime das Functions,
-  no `dute-homolog` e no `dute-prod` (`docs/deploy-functions-manual.md`,
-  "Firebase Auth"). Sem ele, "Remover acesso" não bloqueia o login: a tela
-  pede para tentar de novo, e só o perfil bloqueia a pessoa.
 - Se houver convite pendente criado até a primeira publicação (25/10/2026),
   cancelar e convidar de novo, com o owner, em Configurações › Usuários (pergunta 67
   do plano; seção 5, item 7). Sem convite antigo pendente, nada a fazer.
-- O OK para a quinta publicação (seção 1). Antes do disparo, o papel da
-  seção 4, item 5, na conta do CI do `dute-prod`: sem ele, a publicação das
-  functions para na `duteApi`, como parou na homologação.
 
 As perguntas 26, 58 a 60 e 64 a 71 do plano, as 12 a 14 da Fase 3 e as 12
 da LGPD foram respondidas em 26/10/2026 (plano, seção 13; `lgpd.md`, seção
 5, com "A operação primeiro"). As telas foram alinhadas no mesmo dia (o
 canvas "Telas das decisões de 26/10", aprovado pelo Leonardo), entraram na
-`main` de 26 a 27/10, em partes próprias (plano, seção 13), e vão à
-produção na quinta publicação.
+`main` de 26 a 27/10, em partes próprias (plano, seção 13), e subiram na
+produção na quinta e na sexta publicações (seção 1).

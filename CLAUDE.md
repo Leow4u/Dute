@@ -52,7 +52,8 @@ documentação de produto e operação está em `docs/`.
   o ator `api:<id>` e o papel `interno`: mudou uma, confira
   `functions/operacao/src/api/api.integration.test.ts`. É a primeira
   function HTTP pública, e publicá-la pede
-  `cloudfunctions.functions.setIamPolicy` na conta do CI.
+  `cloudfunctions.functions.setIamPolicy` na conta do CI (o papel próprio
+  `dute_api_https_publisher`, em `docs/deploy-functions-manual.md`).
 - **Fase 4 (lançamento) na `main` e no `dute-prod`**: os marcos 2, 3 e 4
   subiram juntos em 25/10/2026 (`e6a43ed`), com o OK do Leonardo. O
   Financeiro está ligado no `dute-homolog` e, desde a parte 4.9b (PR 466,

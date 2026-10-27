@@ -211,10 +211,11 @@ Os marcos 2, 3 e 4 subiram juntos em 25/10/2026 (`e6a43ed`), e o 5, na
 segunda publicação do mesmo dia (`59d78bc`), sem a NFS-e pela Omie. A parte
 8.4 do RH subiu na terceira, em 26/10 (`9bbd247`, `lancamento-producao.md`,
 seção 1). As decisões de 26/10 (seção 13), com as telas do canvas
-aprovado, entraram na `main` de 26 a 27/10 e estão na homologação. Vão à
-produção na quinta publicação, com o OK do Leonardo, junto com a API Dute v1
-(`docs/api.md`) e o "mostrar senha" do login (`lancamento-producao.md`,
-seções 1 e 2). O marco 1 espera as
+aprovado, entraram na `main` de 26 a 27/10 e subiram no `dute-prod` na
+quinta publicação (26/10, `bcb919a`) e na sexta (27/10, `fce46ab`, com o
+OK do Leonardo). A sexta levou também a API Dute v1 (`docs/api.md`) e o
+"mostrar senha" do login (`lancamento-producao.md`, seções 1 e 2). O marco
+1 espera as
 partes 6.23 e 6.24 (as cargas e o contador na produção, a semana em
 paralelo), com o Leonardo.
 
