@@ -234,6 +234,9 @@ jobs:
         shell: pwsh
         run: ./tools/check_functions_invoker.ps1 -ProjectId "${env:PROJECT_ID}"
 
+      - name: Verificar contrato e autenticação da API REST
+        run: node tools/check_api_deployed.mjs "${PROJECT_ID}"
+
   # Por último: até 20/10/2026 o frontend subia junto com as functions e ficava
   # uns 5 minutos no ar chamando as functions antigas. Se as functions ou a
   # conferência do invoker falham, o frontend não sobe.

@@ -144,6 +144,12 @@ describe("abrir a OS com todo o saldo", () => {
     assert.equal((await db.collection(SERVICE_ORDER_COUNTERS_COLLECTION).doc(NUMERO).get()).data()?.ultimo, 1);
   });
 
+  it("API confere o cliente autorizado dentro da transação, sem gravar OS nem evento se mudou", async () => {
+    await assert.rejects((saveServiceOrderFor as Function)(db, interno, { action: "create", idempotency_key: "api-cliente", demanda: NUMERO }, "OUTRO"), (error: unknown) => error instanceof HttpsError && error.code === "permission-denied");
+    assert.equal((await db.collection(SERVICE_ORDERS_COLLECTION).get()).size, 0);
+    assert.equal((await db.collection(EVENTS_COLLECTION).get()).size, 0);
+  });
+
   it("sem saldo não abre outra; campo não abre", async () => {
     await saveServiceOrderFor(db, interno, { action: "create", idempotency_key: "um", demanda: NUMERO });
     const segunda = await rejection(saveServiceOrderFor(db, interno, { action: "create", idempotency_key: "dois", demanda: NUMERO }));
