@@ -1225,3 +1225,29 @@ em seguida.
   - `customer-requests.test.ts`: o "Encerrar" e o cancelado pela Dutelog.
   - `orders.test.ts`: o portal.
   - `pedidos.test.ts`: o "⋯" só para quem decide.
+
+### Pergunta 59: a tela do Separado a menos
+
+A tela do canvas "Telas das decisões de 26/10" (item 6) para o servidor do
+"Separar a menos".
+
+- **O Separado de Pedidos** (`pages/pedidos.tsx`; a vista em
+  `features/warehouse-ops/separado.tsx`):
+  - O diálogo "PED-0049: separado" tem o cliente, o resumo e a entrega do
+    pedido, e o "Número do lacre".
+  - Para quem opera o armazém, o diálogo segue como antes: o lacre e
+    "Confirmar separação", com o separado completo.
+  - Para `owner`, `admin` e `interno`, enquanto a separação não terminou, há
+    uma linha por item com "Pedido" e "Separado" ("Menos um: …", "Separado de
+    …" e "Mais um: …"), de 0 ao pedido.
+  - A linha a menos mostra a diferença ("−2") e o grupo "Motivo da diferença
+    em …", com "Falta" (marcada) ou "Avaria" e o "Detalhe" (até 300
+    caracteres).
+  - Sem nada separado, "Confirmar separação" fica desligado.
+  - A linha a menos vai com `shortage_reason` e `shortage_detail`, e a embalagem
+    não manda o item zerado.
+- **Testes:**
+  - `separado.test.tsx`: os textos e o axe com e sem a linha a menos, o
+    separado de cada linha e o que vai ao servidor.
+  - `pedidos.test.ts`: as linhas só para a coordenação e a embalagem sem o
+    item zerado.
