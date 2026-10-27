@@ -128,6 +128,30 @@ disparado sem ele. Sem dado real neste arquivo.
     novas. O invoker conferiu as 148 callables.
   - O Cloud Run e o `app.dutelog.com.br` passaram a servir o build às
     00:04, e o login abriu no Chromium.
+- **A sexta publicação (27/10/2026).** Com o OK do Leonardo ("Publicar
+  agora"), o commit `fce46ab` (PR 513) subiu no `dute-prod` pelo disparo
+  manual do CI (run 1183), das 01:21 às 01:32 UTC, com a homologação
+  publicada nele às 01:13. O disparo foi às 01:17:40 UTC, e a primeira
+  gravação, a das regras, às 01:21:53: o instante para o PITR é qualquer um
+  entre os dois.
+  - Antes do disparo, a conta do CI ganhou o `roles/cloudfunctions.admin`
+    (seção 4, item 5).
+  - Ela levou os PRs 506 a 513 (seção 2, "As decisões de 26/10 e a API"):
+    - o aceite do convite pela tela, com o e-mail confirmado, e as regras
+      que fecham o caminho do navegador (pergunta 68, parte 9b);
+    - Cancelar pedido, o Encerrar só depois da entrega e a separação a
+      menos (pergunta 59);
+    - a API Dute v1 (PR 508, `docs/api.md`) e o "mostrar senha" do login
+      (PR 509).
+  - As regras do convite subiram e foram conferidas às 01:22, com os
+    índices prontos.
+  - Nasceram a `cancelWarehouseOrder` e a `duteApi`, e 107 functions foram
+    atualizadas. O invoker conferiu as 149 callables, e a API respondeu com
+    o contrato do commit e recusou a consulta sem credencial (401).
+  - O passo que garante a API do Cloud Scheduler avisou, como na quarta,
+    que a conta do CI não liga APIs, e seguiu.
+  - O Cloud Run e o `app.dutelog.com.br` passaram a servir o build às
+    01:32, e o login abriu no Chromium.
 - **Ciclos conferidos no emulador.**
   - `functions/operacao/src/domain/ciclo-do-cliente.integration.test.ts`
     (parte 4.9a). O cliente pede a OS pelo portal, a coordenação abre a
