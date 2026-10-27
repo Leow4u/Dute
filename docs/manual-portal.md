@@ -20,7 +20,17 @@ valor de custo do próprio estoque, base do seguro.
 - **O acesso é por convite**, feito em Configuração › Pessoas e acessos
   (`owner` e `admin`), para o cliente cadastrado (não prospect), sem arquivo,
   com o portal ligado (não "Sem portal") e com a sigla do SKU; a BTG passa
-  sempre. "Aceitar convite" pede o "Nome" e a "Senha" (6 caracteres ou mais);
+  sempre. **"Criar convite e enviar e-mail"** agenda o envio automático,
+  normalmente na próxima rodada da fila (a cada 5 minutos), e também copia
+  o link para compartilhar. A situação do e-mail aparece em Pessoas e
+  acessos; pelas ações do convite, é possível copiar o link ou **"Reenviar
+  convite por e-mail"** (enquanto não houver outro envio agendado). Falhas
+  temporárias têm novas tentativas automáticas. Convites revogados ou já
+  aceitos não são enviados. Na homologação, só endereços `@dutelog.com.br`
+  recebem; os demais ficam como "E-mail não enviado".
+  "E-mail enviado" indica que o provedor aceitou o envio; não confirma a
+  entrega na caixa do destinatário. O reenvio respeita intervalo de um minuto.
+  "Aceitar convite" pede o "Nome" e a "Senha" (6 caracteres ou mais);
   o e-mail vem do convite. Depois, a pessoa confirma o e-mail pelo link que
   chega na caixa dela e clica "Já confirmei"; só então entra, com "Entrar".
   "Reenviar e-mail" manda o link de novo, e o convite continua valendo

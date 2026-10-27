@@ -877,6 +877,15 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  const inviteResendMatch = pathname.match(/^\/api\/invites\/([^/]+)\/resend$/);
+  if (inviteResendMatch && method === "POST") {
+    return {
+      name: "mutateManagedEntity",
+      payload: async (_pathname, init) =>
+        mutationPayload("invites", "update", await readJsonBody(init), decodeURIComponent(inviteResendMatch[1])),
+    };
+  }
+
   const inviteMatch = pathname.match(/^\/api\/invites\/([^/]+)$/);
   if (inviteMatch && method === "DELETE") {
     return {

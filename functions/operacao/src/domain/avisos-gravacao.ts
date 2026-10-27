@@ -16,6 +16,7 @@ import {
 } from "./avisos.js";
 import { EVENTS_COLLECTION } from "./events.js";
 import { acessoDoCliente, type OperacaoProfile } from "./profile.js";
+import { ACCESS_INVITE_EMAIL_KIND, emailDoConvitePendente, registrarEmailDoConvite } from "./convite-email.js";
 
 /**
  * A rotina dos avisos (parte 4.6a): a cada poucos minutos, lê os eventos
@@ -179,6 +180,7 @@ export async function enviarFila(
   db: Firestore,
   enviar: EnviarEmail,
   remetente: string,
+  origem?: string,
 ): Promise<Pick<ResultadoDosAvisos, "enviados" | "auditados" | "falhas" | "desistidos">> {
   const pendentes = await db.collection(EMAIL_OUTBOX_COLLECTION).where("status", "==", "pending").limit(LOTE_DE_EMAILS).get();
   let enviados = 0;
@@ -187,27 +189,40 @@ export async function enviarFila(
   const desistidos: ResultadoDosAvisos["desistidos"] = [];
   for (const doc of pendentes.docs) {
     const dados = doc.data();
-    const para = Array.isArray(dados.to) ? dados.to.filter((item): item is string => typeof item === "string") : [];
+    const convite = dados.kind === ACCESS_INVITE_EMAIL_KIND;
     try {
-      const resposta = await enviar({ id: doc.id, from: remetente, to: para, subject: texto(dados.subject), text: texto(dados.text) });
-      await doc.ref.update({
+      const corpo = convite
+        ? await emailDoConvitePendente(db, doc.id, dados.invite_id, origem)
+        : { to: Array.isArray(dados.to) ? dados.to.filter((item): item is string => typeof item === "string") : [], subject: texto(dados.subject), text: texto(dados.text) };
+      if (!corpo) {
+        await registrarEmailDoConvite(db, doc.id, dados.invite_id, { status: "cancelled", erro: null, updated_at: FieldValue.serverTimestamp() });
+        continue;
+      }
+      const resposta = await enviar({ id: doc.id, from: remetente, ...corpo });
+      const resultado = {
         status: resposta.status,
         provider_id: resposta.provider_id ?? null,
         enviado_em: resposta.status === "sent" ? new Date().toISOString() : null,
         erro: null,
         updated_at: FieldValue.serverTimestamp(),
-      });
+      };
+      if (convite) await registrarEmailDoConvite(db, doc.id, dados.invite_id, resultado);
+      else await doc.ref.update(resultado);
       if (resposta.status === "sent") enviados += 1;
       else auditados += 1;
     } catch (error) {
       const tentativas = (typeof dados.tentativas === "number" ? dados.tentativas : 0) + 1;
-      const erro = (error instanceof Error ? error.message : String(error)).slice(0, 300);
-      await doc.ref.update({
+      // O provedor pode repetir o corpo recusado no erro. O link do convite
+      // é uma credencial: nem ele nem o destinatário vão para erro ou log.
+      const erro = convite ? "Não foi possível enviar o e-mail do convite." : (error instanceof Error ? error.message : String(error)).slice(0, 300);
+      const resultado = {
         status: tentativas >= TENTATIVAS_DO_EMAIL ? "failed" : "pending",
         tentativas,
         erro,
         updated_at: FieldValue.serverTimestamp(),
-      });
+      };
+      if (convite) await registrarEmailDoConvite(db, doc.id, dados.invite_id, resultado);
+      else await doc.ref.update(resultado);
       falhas += 1;
       if (tentativas >= TENTATIVAS_DO_EMAIL) desistidos.push({ id: doc.id, erro });
     }
@@ -234,7 +249,7 @@ export async function runNotificationsFor(
   opcoes: { origem: string; remetente: string; enviar: EnviarEmail; agora?: () => Date },
 ): Promise<ResultadoDosAvisos> {
   const gerados = await gerarAvisos(db, opcoes.origem, opcoes.agora);
-  const envio = await enviarFila(db, opcoes.enviar, opcoes.remetente);
+  const envio = await enviarFila(db, opcoes.enviar, opcoes.remetente, opcoes.origem);
   return { ...gerados, ...envio };
 }
 

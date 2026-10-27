@@ -3,7 +3,7 @@ import {
   getListBillingUsersQueryKey,
   useUpdateUserRole,
 } from "@workspace/api-client-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { collection, getDocs } from "firebase/firestore";
 import { MoreHorizontal, Plus } from "lucide-react";
@@ -23,6 +23,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -70,6 +71,7 @@ type Invite = {
   role: ProfileRole;
   customer_code?: string;
   status: "pending" | "used" | "revoked";
+  email_status?: "pending" | "sent" | "audit" | "failed" | "cancelled";
 };
 
 type InviteForm = {
@@ -100,6 +102,15 @@ type Person = {
   /** O cliente do login de portal; os internos são da Dutelog. */
   customerCode: string;
   state: "active" | "removed" | "pending";
+  emailStatus?: Invite["email_status"];
+};
+
+const INVITE_EMAIL_LABEL: Record<NonNullable<Invite["email_status"]>, string> = {
+  pending: "E-mail agendado",
+  sent: "E-mail enviado",
+  audit: "E-mail não enviado",
+  failed: "Falha no envio do e-mail",
+  cancelled: "Envio cancelado",
 };
 
 const ROLE_ORDER: Record<ProfileRole, number> = {
@@ -161,6 +172,15 @@ function inviteLink(token: string) {
   return `${window.location.origin}/convite?invite=${token}`;
 }
 
+async function copyInviteLink(token: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(inviteLink(token));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function jsonOrThrow(response: Response, fallback: string) {
   const payload = (await response.json().catch(() => ({}))) as { message?: string };
   if (!response.ok) throw new Error(payload.message || fallback);
@@ -211,12 +231,21 @@ export default function Users() {
 
   const invites = useQuery({
     queryKey: ["invites"],
+    refetchInterval: (query) => query.state.data?.some((invite) => invite.status === "pending") ? 30_000 : false,
     queryFn: async (): Promise<Invite[]> => {
       if (!firestore) return [];
       const snapshot = await getDocs(collection(firestore, "invites"));
       return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Invite);
     },
   });
+
+  const pendingInviteIds = useRef(new Set<string>());
+  useEffect(() => {
+    if (!invites.data) return;
+    const accepted = invites.data.some((invite) => invite.status === "used" && pendingInviteIds.current.has(invite.id));
+    pendingInviteIds.current = new Set(invites.data.filter((invite) => invite.status === "pending").map((invite) => invite.id));
+    if (accepted) void qc.invalidateQueries({ queryKey: getListBillingUsersQueryKey() });
+  }, [invites.data, qc]);
 
   const refresh = async () => {
     await Promise.all([
@@ -253,6 +282,7 @@ export default function Users() {
         role: invite.role,
         customerCode: invite.customer_code ?? "",
         state: "pending" as const,
+        emailStatus: invite.email_status,
       }));
     const stateOrder = { active: 0, pending: 1, removed: 2 };
     return [...users, ...pending].sort(
@@ -285,13 +315,32 @@ export default function Users() {
       setInviteOpen(false);
       setInviteForm({ nome: "", email: "", role: "cliente", customer_code: "" });
       await refresh();
-      await navigator.clipboard.writeText(inviteLink(token)).catch(() => undefined);
+      const copied = await copyInviteLink(token);
       toast({
         title: "Convite criado",
-        description: "O link foi copiado. Envie para a pessoa entrar com o e-mail convidado.",
+        description: copied
+          ? "O envio por e-mail foi agendado. O link também foi copiado."
+          : "O envio por e-mail foi agendado. Você pode copiar o link nas ações do convite.",
       });
     },
     onError: failure("Convite não criado"),
+  });
+
+  const resendInvite = useMutation({
+    mutationFn: async (token: string) =>
+      jsonOrThrow(
+        await fetch(`/api/invites/${encodeURIComponent(token)}/resend`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        }),
+        "Não foi possível reenviar o convite.",
+      ),
+    onSuccess: async () => {
+      await refresh();
+      toast({ title: "Reenvio agendado", description: "O convite será enviado por e-mail em alguns minutos." });
+    },
+    onError: failure("Convite não reenviado"),
   });
 
   const cancelInvite = useMutation({
@@ -421,6 +470,11 @@ export default function Users() {
                             : person.state === "pending"
                               ? "Convite pendente"
                               : "Acesso removido"}
+                          {person.kind === "invite" && person.emailStatus ? (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {INVITE_EMAIL_LABEL[person.emailStatus]}
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-3 py-3 text-right">
                           {person.kind === "invite" ? (
@@ -432,9 +486,17 @@ export default function Users() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem
+                                  disabled={person.emailStatus === "pending" || resendInvite.isPending}
+                                  onSelect={() => resendInvite.mutate(person.id)}
+                                >
+                                  Reenviar convite por e-mail
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
                                   onSelect={async () => {
-                                    await navigator.clipboard.writeText(inviteLink(person.id)).catch(() => undefined);
-                                    toast({ title: "Link do convite copiado" });
+                                    const copied = await copyInviteLink(person.id);
+                                    toast(copied
+                                      ? { title: "Link do convite copiado" }
+                                      : { title: "Não foi possível copiar o link", description: "Permita a cópia no navegador e tente novamente.", variant: "destructive" });
                                   }}
                                 >
                                   Copiar link do convite
@@ -518,6 +580,9 @@ export default function Users() {
         <DialogContent className="sm:max-w-[460px]">
           <DialogHeader>
             <DialogTitle>Convidar pessoa</DialogTitle>
+            <DialogDescription>
+              O convite chega por e-mail em alguns minutos. A pessoa define a própria senha ao aceitar.
+            </DialogDescription>
           </DialogHeader>
           <form
             id="invite-form"
@@ -606,7 +671,7 @@ export default function Users() {
               Cancelar
             </Button>
             <Button type="submit" form="invite-form" disabled={createInvite.isPending || inviteMissingCustomer}>
-              {createInvite.isPending ? "Criando..." : "Criar convite e copiar link"}
+              {createInvite.isPending ? "Criando..." : "Criar convite e enviar e-mail"}
             </Button>
           </DialogFooter>
         </DialogContent>

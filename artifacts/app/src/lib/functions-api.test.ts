@@ -3,6 +3,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CABECALHO_DO_CLIENTE } from "./active-customer";
 import { functionRoute } from "./functions-api";
 
+describe("reenvio de convite", () => {
+  it("agenda pelo acesso administrado com recibo e sem campos de acesso alteráveis", async () => {
+    const path = "/api/invites/token-do-convite/resend";
+    const route = functionRoute(path, "POST");
+    expect(route?.name).toBe("mutateManagedEntity");
+    expect(await route?.payload(path, { body: JSON.stringify({}) })).toMatchObject({ resource: "invites", action: "update", id: "token-do-convite", data: {}, idempotency_key: expect.any(String) });
+    expect(functionRoute(path, "GET")).toBeNull();
+  });
+});
+
 describe("fotos profissionais do produto", () => {
   it("gerencia remoção e principal em callable autenticada com recibo idempotente", async () => {
     const route = functionRoute("/api/catalog/photos/manage", "POST");

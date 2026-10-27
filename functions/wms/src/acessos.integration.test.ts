@@ -84,6 +84,80 @@ describe("o evento da mudança de acesso", () => {
   });
 });
 
+describe("o e-mail do convite", () => {
+  const token = "a".repeat(36);
+  const pedido = { resource: "invites", action: "create", data: { token, nome: "Cliente", email: "cliente@exemplo.test", role: "cliente", customer_code: "BTG Pactual" }, idempotency_key: "convite-com-email" };
+
+  it("cria convite e fila atomicamente, sem duplicar ao repetir", async () => {
+    await comoOwner(pedido);
+    await comoOwner(pedido);
+    const db = getFirestore();
+    const convite = await db.collection("invites").doc(token).get();
+    const fila = await db.collection("email_outbox").where("invite_id", "==", token).get();
+    assert.equal(fila.size, 1);
+    assert.equal(fila.docs[0]!.get("kind"), "access_invite");
+    assert.equal(fila.docs[0]!.get("status"), "pending");
+    assert.equal(convite.get("email_status"), "pending");
+    assert.equal(convite.get("email_delivery_id"), fila.docs[0]!.id);
+    assert.equal(fila.docs[0]!.id.includes(token), false);
+    const events = await db.collection("events").where("type", "==", "invites.create").get();
+    assert.equal(JSON.stringify(events.docs.map((row) => row.data())).includes(token), false);
+  });
+
+  it("não duplica envio já pendente nem permite trocar destinatário no reenvio", async () => {
+    await assert.rejects(comoOwner({ resource: "invites", action: "update", id: token, data: {}, idempotency_key: "reenvio-pendente" }), /agendado/);
+    await assert.rejects(comoOwner({ resource: "invites", action: "update", id: token, data: { email: "outra@exemplo.test" }, idempotency_key: "reenvio-malicioso" }), /campos|alterar/i);
+  });
+
+  it("reenvia após falha com outra chave, preserva o convite e repete sem duplicar", async () => {
+    const db = getFirestore();
+    await db.collection("invites").doc(token).update({ email_status: "failed", email_requested_at: new Date(0) });
+    const reenvio = { resource: "invites", action: "update", id: token, data: {}, idempotency_key: "reenvio-apos-falha" };
+    await comoOwner(reenvio);
+    await comoOwner(reenvio);
+    const convite = await db.collection("invites").doc(token).get();
+    const fila = await db.collection("email_outbox").where("invite_id", "==", token).get();
+    assert.equal(fila.size, 2);
+    assert.equal(convite.get("email_status"), "pending");
+    assert.equal(convite.get("email"), "cliente@exemplo.test");
+    assert.equal(convite.get("role"), "cliente");
+    assert.equal(convite.get("customer_code"), "BTG Pactual");
+    assert.equal(convite.get("status"), "pending");
+  });
+
+  it("recusa reenvio revogado, sem permissão e criação inválida sem agendar e-mail", async () => {
+    const db = getFirestore();
+    await db.collection("invites").doc(token).update({ status: "revoked" });
+    await assert.rejects(comoOwner({ resource: "invites", action: "update", id: token, data: {}, idempotency_key: "revogado" }), /pendentes/);
+    await assert.rejects(mutateManagedEntity.run({ auth: { uid: "davi", token: { email: "davi@dutelog.com.br" } }, data: { resource: "invites", action: "update", id: token, data: {}, idempotency_key: "sem-permissao" }, rawRequest: { headers: {} } } as never), /permiss|acesso/i);
+    const antes = (await db.collection("email_outbox").get()).size;
+    await assert.rejects(comoOwner({ ...pedido, data: { ...pedido.data, token: "b".repeat(36), email: "inválido@" }, idempotency_key: "email-invalido" }), /inválido/);
+    assert.equal((await db.collection("email_outbox").get()).size, antes);
+  });
+
+  it("reenvio respeita intervalo mínimo e o portal atual do cliente", async () => {
+    const db = getFirestore();
+    const outro = "c".repeat(36);
+    await comoOwner({ ...pedido, data: { ...pedido.data, token: outro }, idempotency_key: "convite-intervalo" });
+    await db.collection("invites").doc(outro).update({ email_status: "sent" });
+    await assert.rejects(comoOwner({ resource: "invites", action: "update", id: outro, data: {}, idempotency_key: "muito-cedo" }), /minuto/);
+    // O cadastro Itau teve o portal desligado no teste anterior.
+    await db.collection("invites").doc(outro).update({ email_requested_at: new Date(0), customer_code: "Itau" });
+    await assert.rejects(comoOwner({ resource: "invites", action: "update", id: outro, data: {}, idempotency_key: "portal-desligado" }), /sem portal/);
+  });
+
+  it("admin não reenvia convite de administrador e convite usado não reenvia", async () => {
+    const db = getFirestore();
+    const outro = "d".repeat(36);
+    await db.collection("users").doc("admin-email").set({ role: "admin", email: "admin@dutelog.com.br" });
+    await comoOwner({ ...pedido, data: { ...pedido.data, token: outro, role: "admin", customer_code: "Dutelog" }, idempotency_key: "convite-admin-email" });
+    await db.collection("invites").doc(outro).update({ email_status: "failed", email_requested_at: new Date(0) });
+    await assert.rejects(mutateManagedEntity.run({ auth: { uid: "admin-email", token: { email: "admin@dutelog.com.br" } }, data: { resource: "invites", action: "update", id: outro, data: {}, idempotency_key: "admin-reenvia-admin" }, rawRequest: { headers: {} } } as never), /Somente o owner/);
+    await db.collection("invites").doc(outro).update({ status: "used" });
+    await assert.rejects(comoOwner({ resource: "invites", action: "update", id: outro, data: {}, idempotency_key: "reenvio-usado" }), /pendentes/);
+  });
+});
+
 describe("a troca de papel para cliente", () => {
   const papelDe = async (uid: string) => (await getFirestore().collection("users").doc(uid).get()).get("role");
 
@@ -130,9 +204,10 @@ describe("o token do convite", () => {
     });
 
   it("sem token, o convite não nasce com um id adivinhável", async () => {
+    const antes = (await getFirestore().collection("invites").get()).docs.map((doc) => doc.id);
     await assert.rejects(convite({}, "sem-token"), /token gerado pela tela de Usuários/);
     const convites = await getFirestore().collection("invites").get();
-    assert.deepEqual(convites.docs.map((doc) => doc.id), []);
+    assert.deepEqual(convites.docs.map((doc) => doc.id), antes);
   });
 
   it("o token curto, pelo dado ou pelo id, também não serve", async () => {
