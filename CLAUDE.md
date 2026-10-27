@@ -44,6 +44,12 @@ documentação de produto e operação está em `docs/`.
   `docs/plataforma/lancamento-producao.md`). O `dute-btg`
   fica de fora das duas listas `OPERACAO_AMBIENTES_LIBERADOS`. Desenho,
   registro de cada parte e como desligar: `docs/plataforma/fase-3-operacao.md`.
+  As chaves pessoais (`kind: personal`, `/api-keys`, `docs/api-chaves-pessoais.md`)
+  pertencem ao próprio usuário: full/read_only/custom intersectam permissões atuais,
+  papel real, vínculo/contrato/portal por chamada. Gestão só pelo titular, com sessão
+  humana; chave não gerencia outras. Kernel `principal.ts`; autorização pessoal antes
+  de recibos e hook por recurso sem revalidar CAS de negócio. Não converter legado.
+  A descrição seguinte é a política das integrações **legadas**, sem kind:
   A API REST v1 (`duteApi`, PR 508, `docs/api.md`) abre a Operação a
   integrações externas, com a mesma liberação: a credencial é por
   integração, criada por owner ou admin. As chaves antigas continuam exigindo

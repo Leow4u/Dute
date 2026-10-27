@@ -1,3 +1,5 @@
+import { createModuleHandler } from "./shared/handler.js";
+import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { before, after, test } from "node:test";
 import { initializeApp, deleteApp } from "firebase-admin/app";
@@ -105,4 +107,66 @@ test("troca do cliente entre preflight e transação é recusada antes de qualqu
   await assert.rejects(run("PATCH", "/recebimentos/{id}", { expected_status: "checking", expected_version: detail.data.expected_version, lines: [{ inbound_item_id: rows.data[0].id, received_qty: 2 }] }, { id: receiptId }, "race-edit", { ...ctx, db: racingDb }), { code: "permission-denied" });
   assert.equal(changed, true);
   assert.deepEqual((await lineRef.get()).data(), before);
+});
+
+test("handler pessoal wms: projeção, papel atual, cliente atual e bloqueio", async () => {
+  const keyId = "a".repeat(32), token = `dute_${keyId}.${"s".repeat(43)}`;
+  await db.doc("users/personal-human").set({ role: "cliente", customer_code: "PERSONAL", nome: "Pessoa" });
+  await db.doc("client_access/PERSONAL").set({ modules: ["wms", "financeiro"] });
+  await db.doc(`api_integrations/${keyId}`).set({ kind: "personal", permission: "full", delegated_by: "personal-human", scopes: [], customers: [], write_policy: "scoped", expires_at_ms: Date.now() + 600000, token_hash: createHash("sha256").update(token).digest("hex") });
+  await db.doc("client_inventory/personal-row").set({ customer_code: "PERSONAL", name: "Pessoal", status: "open", secret: "never", created_by: { uid: `api:${keyId}` } });
+  const handler = createModuleHandler(db, "dute-homolog", async () => ({ uid: "unused" }), armazenagemApi);
+  const request = { method: "GET", path: "/api/v1/armazenagem/estoque", headers: { authorization: `Bearer ${token}` }, query: {} };
+  const first = await handler(request);
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.ok((first.body.data as any[]).some(row => row.id === "personal-row"));
+  assert.ok((first.body.data as any[]).every(row => row.secret === undefined));
+  assert.equal((await handler({ ...request, query: { customer_code: "OTHER" } })).status, 403);
+  await db.doc("users/personal-human").update({ customer_code: "OTHER" });
+  assert.equal(((await handler(request)).body.data as any[]).some(row => row.id === "personal-row"), false);
+  await db.doc("users/personal-human").update({ customer_code: "PERSONAL" });
+  await db.doc("client_access/PERSONAL").update({ modules: [] });
+  assert.equal((await handler(request)).status, 403);
+  await db.doc("client_access/PERSONAL").update({ modules: ["wms", "financeiro"] });
+  await db.doc("users/personal-human").update({ role: "painel" });
+  assert.equal((await handler(request)).status, 403);
+  await db.doc("users/personal-human").update({ role: "cliente", access_disabled: true });
+  assert.equal((await handler(request)).status, 403);
+});
+
+test("handler pessoal wms: grava com papel real e recibo de replay sem duplicar", async () => {
+  const keyId = "b".repeat(32), token = `dute_${keyId}.${"s".repeat(43)}`;
+  await db.doc("users/personal-writer").set({ role: "financeiro", nome: "Pessoa" });
+  await db.doc(`api_integrations/${keyId}`).set({ kind: "personal", permission: "full", delegated_by: "personal-writer", scopes: [], customers: [], write_policy: "scoped", expires_at_ms: Date.now() + 600000, token_hash: createHash("sha256").update(token).digest("hex") });
+  const handler = createModuleHandler(db, "dute-homolog", async () => ({ uid: "unused" }), armazenagemApi);
+  const request = { method: "POST", path: "/api/v1/armazenagem/pedidos", headers: { authorization: `Bearer ${token}`, "idempotency-key": "personal-write" }, query: {}, body: { customer_code: "A", type: "solicitacao", title: "Pessoal", items: [{ sku_code: "SKU-A", quantity: 1 }] } };
+  const first = await handler(request);
+  assert.equal(first.status, 201, JSON.stringify(first.body));
+  const replay = await handler(request);
+  assert.equal(replay.status, 200, JSON.stringify(replay.body));
+  assert.equal(replay.body.replayed, true);
+  const events = await db.collection("events").get();
+  const event = events.docs.find(doc => doc.get("actor.uid") === `api:${keyId}`);
+  assert.ok(event, "evento com identidade da chave");
+  assert.equal(event.get("actor.role"), "financeiro");
+  const count = events.size;
+  await db.doc("users/personal-writer").update({ role: "painel" });
+  assert.equal((await handler(request)).status, 403);
+  assert.equal((await db.collection("events").get()).size, count);
+});
+
+test("handler cliente pessoal: pedido valida tenant na transação e replay após troca de cliente", async () => {
+  const keyId = "c".repeat(32), token = `dute_${keyId}.${"s".repeat(43)}`;
+  await db.doc("users/personal-client-writer").set({ role: "cliente", customer_code: "A", nome: "Cliente" });
+  for (const code of ["A", "B"]) await db.doc(`client_access/${code}`).set({ modules: ["wms"] });
+  await db.doc(`api_integrations/${keyId}`).set({ kind: "personal", permission: "full", delegated_by: "personal-client-writer", scopes: [], customers: [], write_policy: "scoped", expires_at_ms: Date.now() + 600000, token_hash: createHash("sha256").update(token).digest("hex") });
+  const handler = createModuleHandler(db, "dute-homolog", async () => ({ uid: "unused" }), armazenagemApi);
+  const body = { customer_code: "A", type: "solicitacao", title: "Cliente pessoal", items: [{ sku_code: "SKU-A", quantity: 1 }] };
+  const request = { method: "POST", path: "/api/v1/armazenagem/pedidos", headers: { authorization: `Bearer ${token}`, "idempotency-key": "client-personal-write" }, query: {}, body };
+  assert.equal((await handler(request)).status, 201);
+  assert.equal((await handler(request)).body.replayed, true);
+  const badSku = await handler({ ...request, headers: { ...request.headers, "idempotency-key": "client-wrong-sku" }, body: { ...body, items: [{ sku_code: "SKU-B", quantity: 1 }] } });
+  assert.equal(badSku.status, 403);
+  await db.doc("users/personal-client-writer").update({ customer_code: "B" });
+  assert.equal((await handler(request)).status, 403, "recibo antigo não abre cliente anterior");
 });

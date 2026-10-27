@@ -1,5 +1,7 @@
 # API Dute v1 — integração externa
 
+O fluxo normal de **Chaves de API por usuário** está em [api-chaves-pessoais.md](api-chaves-pessoais.md). Abaixo permanece a referência de integrações administradas por owner/admin e das rotas de negócio. A nova família `/api-keys` não amplia nem converte as credenciais legadas.
+
 O contrato mantém a API de Operação e acrescenta 75 rotas de Armazenagem,
 Comercial, Financeiro, RH e Agent Dute. A cobertura exata e os limites desta
 versão estão em [api-cobertura.md](api-cobertura.md). Uma chave pode acessar

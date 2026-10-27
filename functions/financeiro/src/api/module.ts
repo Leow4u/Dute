@@ -1,3 +1,5 @@
+import type { FinanceiroProfile } from "../domain/profile.js";
+import { authorizePersonalRoute } from "./shared/principal.js";
 import { FieldPath, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 import { registerNfFor } from "../domain/fatura-gravacao.js";
@@ -6,15 +8,16 @@ import { interpretarRegistro, faturaIdDaNf, demandaLida, medicaoLida, problemaPa
 import { interpretarAvanco } from "../domain/cobranca.js";
 import { periodoLido, problemaDaArmazenagem } from "../domain/armazenagem.js";
 import { financeiroLiberado } from "../domain/liberacao.js";
-import { type ApiContext, type ApiRequest, type ModuleDefinition, type ModuleRoute, denied, invalid, object, projectFields, readPage, requireCustomer, requireScope } from "./shared/core.js";
+import { type ApiContext, type ApiRequest, type ModuleDefinition, type ModuleRoute, customerFilter, denied, invalid, object, projectFields, readPage, requireCustomer, requireScope } from "./shared/core.js";
 
 const FATURA = ["customer_code", "status", "valor_cents", "recebido_cents", "vencimento", "forma", "demanda_numeros", "periodo_ids", "medicao_ids", "registrada_em"] as const;
+const PORTAL_FATURA = ["customer_code", "customer_name", "status", "valor_cents", "recebido_cents", "saldo_cents", "vencimento", "forma", "enviada_em", "paga_em", "atualizada_em", "demanda_numeros", "nf"] as const;
 const PAGAMENTO = ["customer_code", "fatura_id", "status", "valor_cents", "recebido_em", "forma"] as const;
 const DEMANDA = ["customer_code", "numero", "etapa", "customer_name", "cobranca", "medicao_id"] as const;
 const PERIODO = ["customer_code", "competencia", "status", "total_cents"] as const;
 const MEDICAO = ["customer_code", "contrato_id", "competencia", "status", "total_cents"] as const;
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
-const profile = (ctx: ApiContext) => ({ uid: ctx.actor.uid, role: "financeiro" as const, name: ctx.actor.name });
+const profile = (ctx: ApiContext): FinanceiroProfile => ctx.integration.kind === "personal" ? ctx.actor : ({ uid: ctx.actor.uid, role: "financeiro", name: ctx.actor.name });
 
 /** Guardas e escritas compartilham a transação: troca de tenant força retry. */
 function guardedDb(ctx: ApiContext, guard: (tx: Transaction) => Promise<void>): Firestore {
@@ -106,11 +109,12 @@ async function toInvoice(ctx: ApiContext, request: ApiRequest, collection: strin
   requireScope(ctx, "financeiro:ler");
   const query = request.query;
   if (Object.keys(query).some(key => !["customer_code", "limit", "cursor"].includes(key))) invalid("Filtros disponíveis: customer_code, limit e cursor.");
-  requireCustomer(ctx, query.customer_code);
+  const customer = customerFilter(ctx, query.customer_code);
   const limit = query.limit === undefined ? 50 : Number(query.limit);
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) invalid("limit deve ser de 1 a 100.");
   if (query.cursor !== undefined && (typeof query.cursor !== "string" || !/^[A-Za-z0-9_-]{1,200}$/.test(query.cursor))) invalid("Cursor inválido.");
-  let selection = ctx.db.collection(collection).where("customer_code", "==", query.customer_code).where(statusField, "==", status).orderBy(FieldPath.documentId());
+  let selection = ctx.db.collection(collection).where(statusField, "==", status).orderBy(FieldPath.documentId());
+  if (customer !== undefined) selection = selection.where("customer_code", "==", customer);
   if (typeof query.cursor === "string") selection = selection.startAfter(query.cursor);
   const found = await selection.limit(limit + 1).get();
   const page = found.docs.slice(0, limit);
@@ -126,15 +130,32 @@ async function toInvoice(ctx: ApiContext, request: ApiRequest, collection: strin
   return { data: eligible.map(doc => projectFields(doc.id, collection === "billing_periods" ? { ...doc.data(), total_cents: periodoLido(doc.id, doc.data()).valor_cents } : doc.data(), fields)), next_cursor: found.size > limit ? page.at(-1)!.id : null };
 }
 
-const route = (method: ModuleRoute["method"], path: string, scope: ModuleRoute["scope"], summary: string, run: ModuleRoute["run"]): ModuleRoute => ({ method, path: `/api/v1/financeiro${path}`, scope, role: "financeiro", summary, run });
+async function invoices(ctx: ApiContext, request: ApiRequest) {
+  if (ctx.integration.kind !== "personal" || ctx.actor.role !== "cliente") return readPage(ctx, "faturas", FATURA, request, { customerField: "customer_code" });
+  const page = await readPage(ctx, "client_faturas", PORTAL_FATURA, request, { customerField: "customer_code" });
+  return { ...page, data: page.data.map(row => {
+    const data = row as Record<string, unknown>;
+    const result: Record<string, unknown> = { id: row.id };
+    for (const field of PORTAL_FATURA) {
+      const value = data[field];
+      if (field === "demanda_numeros" && Array.isArray(value)) result[field] = strings(value);
+      else if (field === "nf" && value && typeof value === "object" && !Array.isArray(value)) {
+        result.nf = Object.fromEntries(["numero", "serie", "emitida_em"].filter(key => typeof (value as Record<string, unknown>)[key] === "string" || (value as Record<string, unknown>)[key] === null).map(key => [key, (value as Record<string, unknown>)[key]]));
+      } else if (value === null || ["string", "number", "boolean"].includes(typeof value)) result[field] = value;
+    }
+    return result;
+  }) };
+}
+
+const route = (method: ModuleRoute["method"], path: string, scope: ModuleRoute["scope"], summary: string, run: ModuleRoute["run"]): ModuleRoute => ({ method, path: `/api/v1/financeiro${path}`, scope, role: "financeiro", summary, async run(ctx, params, request) { requireScope(ctx, scope); if (ctx.integration.kind === "personal") { if (!ctx.integration.principal) denied(); authorizePersonalRoute(ctx.integration.principal, method, `/api/v1/financeiro${path}`, scope, request.body); } return run(ctx, params, request); } });
 export const financeiroApi: ModuleDefinition = {
   module: "financeiro", released: financeiroLiberado,
   routes: [
     route("GET", "/a-faturar", "financeiro:ler", "Consultar demandas A faturar", (ctx, _, req) => toInvoice(ctx, req, "demands", DEMANDA, "etapa", "a_faturar")),
     route("GET", "/a-faturar/armazenagem", "financeiro:ler", "Consultar competências de armazenagem A faturar", (ctx, _, req) => toInvoice(ctx, req, "billing_periods", PERIODO, "status", "emitido")),
     route("GET", "/a-faturar/medicoes", "financeiro:ler", "Consultar medições aprovadas A faturar", (ctx, _, req) => toInvoice(ctx, req, "medicoes", MEDICAO, "status", "aprovada")),
-    route("GET", "/faturas", "financeiro:ler", "Consultar faturas", (ctx, _, req) => { requireScope(ctx, "financeiro:ler"); requireCustomer(ctx, req.query.customer_code); return readPage(ctx, "faturas", FATURA, req, { customerField: "customer_code" }); }),
-    route("GET", "/pagamentos", "financeiro:ler", "Consultar pagamentos registrados", (ctx, _, req) => { requireScope(ctx, "financeiro:ler"); requireCustomer(ctx, req.query.customer_code); return readPage(ctx, "pagamentos", PAGAMENTO, req, { customerField: "customer_code" }); }),
+    route("GET", "/faturas", "financeiro:ler", "Consultar faturas", (ctx, _, req) => { requireScope(ctx, "financeiro:ler"); customerFilter(ctx, req.query.customer_code); return invoices(ctx, req); }),
+    route("GET", "/pagamentos", "financeiro:ler", "Consultar pagamentos registrados", (ctx, _, req) => { requireScope(ctx, "financeiro:ler"); customerFilter(ctx, req.query.customer_code); return readPage(ctx, "pagamentos", PAGAMENTO, req, { customerField: "customer_code" }); }),
     route("POST", "/faturas", "financeiro:faturas:gravar", "Registrar NF emitida fora do sistema", (ctx, _, req) => register(ctx, req)),
     route("PATCH", "/faturas/{id}/cobranca", "financeiro:cobrancas:gravar", "Documentar envio da cobrança", (ctx, params, req) => advance(ctx, params.id, req, "send")),
     route("POST", "/faturas/{id}/pagamentos", "financeiro:pagamentos:registrar", "Registrar pagamento recebido", (ctx, params, req) => advance(ctx, params.id, req, "pay")),

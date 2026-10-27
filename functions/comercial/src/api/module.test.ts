@@ -38,3 +38,28 @@ test("Comercial API manifesto corresponde exatamente às rotas e schemas fechado
 test("Comercial API projeta objetos e mapas aninhados sem campos extras", () => {
   assert.deepEqual(projectComercial({ name: "Acme", secret: "x", comercial: { cidade: "SP", omie_ids: ["secret"] }, avisos: ["os_agendada", { secret: "x" }], precos: { sku: { preco: "1.00", secret: "x" } } }, { name: true, comercial: { cidade: true }, avisos: true, precos: { "*": { preco: true } } }), { name: "Acme", comercial: { cidade: "SP" }, avisos: ["os_agendada"], precos: { sku: { preco: "1.00" } } });
 });
+
+// Personal API adapters: the domain actor and the portal collection are observable boundaries.
+
+test("pessoal owner lê sem papel sintético e usa projeção autorizada", async () => {
+  const collections: string[] = [];
+  const query = { orderBy() { return this; }, where() { return this; }, limit() { return this; }, async get() { return { docs: [], size: 0 }; } };
+  const personal = { db: { collection(name: string) { collections.push(name); return query; } }, integration: { id: "personal", delegated_by: "human", kind: "personal", permission: "full", customers: [], scopes: ["comercial:ler"], write_policy: "scoped", principal: { uid: "human", role: "owner", customer_code: "A", modules: ["wms", "financeiro"], portal_active: true } }, actor: { uid: "api:personal", role: "owner", name: "Pessoa" } } as unknown as ApiContext;
+  const route = comercialApi.routes.find(r => r.method === "GET" && r.path.endsWith("/contratos"))!;
+  await route.run(personal, {}, { method: "GET", path: route.path, headers: {}, query: {} });
+  assert.deepEqual(collections, ["contracts"]);
+});
+
+test("matriz pessoal dos onze papéis aplica guardas do adaptador", async () => {
+  const allowed: Record<string, string[]> = {"clientes": ["owner", "admin", "comercial"], "contratos": ["owner", "admin", "comercial", "financeiro"], "demandas": ["owner", "admin", "interno", "comercial", "financeiro"], "locais": ["owner", "admin", "interno", "comercial"]};
+  for (const role of ["owner", "admin", "interno", "wms", "campo", "comercial", "financeiro", "rh", "suporte", "painel", "cliente"]) {
+    for (const [path, roles] of Object.entries(allowed)) {
+      const route = comercialApi.routes.find(r => r.method === "GET" && r.path.endsWith("/" + path))!;
+      const query = { orderBy() { return this; }, where() { return this; }, limit() { return this; }, async get() { return { docs: [], size: 0 }; } };
+      const ctx = { db: { collection() { return query; } }, integration: { id: "matrix", kind: "personal", scopes: [route.scope], principal: { uid: "human", role, customer_code: "A", modules: ["wms", "financeiro", "operacao"], portal_active: true } }, actor: { uid: "api:matrix", role } } as unknown as ApiContext;
+      const execute = () => route.run(ctx, {}, { method: "GET", path: route.path, headers: {}, query: {} });
+      if (roles.includes(role)) assert.deepEqual(await execute(), { data: [], next_cursor: null }, `${role} ${path}`);
+      else await assert.rejects(execute(), { code: "permission-denied" }, `${role} ${path}`);
+    }
+  }
+});

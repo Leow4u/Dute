@@ -60,9 +60,16 @@
       "demanda_numeros",
       "periodo_ids",
       "medicao_ids",
-      "registrada_em"
+      "registrada_em",
+      "customer_name",
+      "saldo_cents",
+      "enviada_em",
+      "paga_em",
+      "atualizada_em",
+      "nf"
     ],
-    "customerRequired": true
+    "customerRequired": true,
+    "description": "Campos opcionais conforme o perfil. Cliente pessoal lê client_faturas: customer_code, customer_name, status, valor_cents, recebido_cents, saldo_cents, vencimento, forma, enviada_em, paga_em, atualizada_em, demanda_numeros (strings) e nf (somente numero, serie, emitida_em). periodo_ids, medicao_ids e registrada_em pertencem somente à variante interna/legada. Leituras pessoais podem omitir customer_code; para cliente aplica-se o vínculo atual, para equipe sua abrangência atual. Legado exige customer_code."
   },
   {
     "method": "GET",

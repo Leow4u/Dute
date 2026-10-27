@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
+import { personalKeyDetails, authorizePersonalRoute } from "./principal.js";
 import { API_SCOPES, type WritePolicy } from "./permissions.js";
 import { digest, denied, invalid, object, requireScope, type ApiContext, type ApiIntegration, type ApiRequest, type ApiResponse, type ModuleDefinition, type ModuleRoute, type VerifyHuman } from "./core.js";
 
@@ -22,6 +23,8 @@ async function load(db: Firestore, id: string): Promise<ApiIntegration> {
   const data = (await db.collection("api_integrations").doc(id).get()).data();
   if (!data || data.revoked === true || typeof data.expires_at_ms !== "number" || data.expires_at_ms <= Date.now()) throw new HttpsError("unauthenticated", "Credencial revogada ou expirada.");
   if (!Array.isArray(data.scopes) || data.scopes.some((scope: unknown) => !API_SCOPES.includes(scope as typeof API_SCOPES[number])) || !Array.isArray(data.customers) || data.customers.some((code: unknown) => typeof code !== "string" || !code || code.includes("/") || code === "*")) denied("Configuração da integração inválida.");
+  if (data.kind !== undefined && data.kind !== "personal") denied("Tipo de chave inválido.");
+  if (data.kind === "personal") return { id, delegated_by: data.delegated_by, write_policy: "scoped", ...await personalKeyDetails(db, data) };
   await responsible(db, data.delegated_by);
   return { id, delegated_by: data.delegated_by, scopes: data.scopes, customers: data.customers, write_policy: policyOf(data.write_policy) };
 }
@@ -40,7 +43,7 @@ async function authenticate(db: Firestore, token: string): Promise<ApiIntegratio
     const window = Math.floor(Date.now() / 60000);
     const count = data.rate_window === window ? Number(data.rate_count) || 0 : 0;
     if (count >= 60) throw new HttpsError("resource-exhausted", "Limite de 60 chamadas por minuto.");
-    tx.update(ref, { rate_window: window, rate_count: count + 1 });
+    tx.update(ref, { rate_window: window, rate_count: count + 1, ...(data.kind === "personal" ? { last_used_at_ms: Date.now() } : {}) });
   });
   return load(db, match[1]);
 }
@@ -105,6 +108,7 @@ export function createModuleHandler(db: Firestore, project: string, verify: Veri
         const match = matchRoute(definition, String(input.method), input.path);
         if (!match) invalid("Ação indisponível neste módulo.");
         const integration = await load(db, approvalRoute[1]);
+        if (integration.kind === "personal") denied("Chaves pessoais não usam aprovações de integração.");
         requireScope({ integration }, match.route.scope);
         await audit.create({ request_id, actor_uid: uid, integration_id: integration.id, action: "integration_approval", module: definition.module, status: 0, created_at: FieldValue.serverTimestamp() });
         audited = true;
@@ -116,10 +120,11 @@ export function createModuleHandler(db: Firestore, project: string, verify: Veri
       const match = matchRoute(definition, request.method, request.path);
       if (!match) throw new HttpsError("not-found", "Endpoint não encontrado.");
       const integration = await authenticate(db, bearer[1]);
-      const context: ApiContext = { db, project, integration, actor: { uid: `api:${integration.id}`, role: match.route.role, name: `Integração ${integration.id}` }, idempotencyKey: "" };
-      await audit.create({ request_id, integration_id: integration.id, actor_uid: context.actor.uid, authorized_by: integration.delegated_by, write_policy: integration.write_policy, module: definition.module, route: match.route.path, method: request.method, status: 0, created_at: FieldValue.serverTimestamp() });
+      const context: ApiContext = { db, project, integration, actor: { uid: `api:${integration.id}`, role: integration.principal?.role ?? match.route.role, name: integration.principal?.name ?? `Integração ${integration.id}`, ...(integration.principal?.customer_code ? { customer_code: integration.principal.customer_code, customerCode: integration.principal.customer_code } : {}) }, idempotencyKey: "" };
+      await audit.create({ request_id, integration_id: integration.id, actor_uid: context.actor.uid, authorized_by: integration.delegated_by, ...(integration.kind === "personal" ? { user_uid: integration.delegated_by } : {}), write_policy: integration.write_policy, module: definition.module, route: match.route.path, method: request.method, status: 0, created_at: FieldValue.serverTimestamp() });
       audited = true;
       requireScope({ integration }, match.route.scope);
+      if (integration.principal) authorizePersonalRoute(integration.principal, request.method, request.path, match.route.scope, request.body);
       if (request.method === "GET") {
         const result = object(await match.route.run(context, match.params, request));
         status = 200; return { status, body: { ...result, request_id } };
@@ -134,6 +139,7 @@ export function createModuleHandler(db: Firestore, project: string, verify: Veri
         await audit.update({ approved_by: approval.approved_by, approval_id: id });
       }
       context.idempotencyKey = `api_${digest({ integration: integration.id, method: request.method, path: request.path, key })}`;
+      if (integration.principal && match.route.authorize) await match.route.authorize(context, match.params, request);
       const ref = db.collection("api_receipts").doc(context.idempotencyKey);
       const fingerprint = digest({ body: request.body ?? null, query: request.query });
       const replay = await db.runTransaction(async (tx) => {

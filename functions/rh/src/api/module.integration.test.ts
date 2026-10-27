@@ -1,5 +1,7 @@
+import { createModuleHandler } from "./shared/handler.js";
+import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
-import { after, before, beforeEach, describe, it } from "node:test";
+import { after, before, beforeEach, describe, it, test } from "node:test";
 import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { rhApi } from "./module.js";
@@ -116,4 +118,44 @@ describe("REST RH no banco separado e serviços reais", () => {
     assert.notEqual(next.data[0].id, first.data[0].id);
     assert.equal(next.next_cursor, null);
   });
+});
+
+test("handler pessoal rh: projeção, papel atual, cliente atual e bloqueio", async () => {
+  const keyId = "a".repeat(32), token = `dute_${keyId}.${"s".repeat(43)}`;
+  await db.doc("users/personal-human").set({ role: "owner", customer_code: "PERSONAL", nome: "Pessoa" });
+  await db.doc("client_access/PERSONAL").set({ modules: ["wms", "financeiro"] });
+  await db.doc(`api_integrations/${keyId}`).set({ kind: "personal", permission: "full", delegated_by: "personal-human", scopes: [], customers: [], write_policy: "scoped", expires_at_ms: Date.now() + 600000, token_hash: createHash("sha256").update(token).digest("hex") });
+  await db.doc("collaborators/personal-row").set({ customer_code: "PERSONAL", name: "Pessoal", status: "open", secret: "never", created_by: { uid: `api:${keyId}` } });
+  const handler = createModuleHandler(db, "dute-homolog", async () => ({ uid: "unused" }), rhApi);
+  const request = { method: "GET", path: "/api/v1/rh/colaboradores", headers: { authorization: `Bearer ${token}` }, query: {} };
+  const first = await handler(request);
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.ok((first.body.data as any[]).some(row => row.id === "personal-row"));
+  assert.ok((first.body.data as any[]).every(row => row.secret === undefined));
+
+  await db.doc("users/personal-human").update({ role: "painel" });
+  assert.equal((await handler(request)).status, 403);
+  await db.doc("users/personal-human").update({ role: "owner", access_disabled: true });
+  assert.equal((await handler(request)).status, 403);
+});
+
+test("handler pessoal rh: grava com papel real e recibo de replay sem duplicar", async () => {
+  const keyId = "b".repeat(32), token = `dute_${keyId}.${"s".repeat(43)}`;
+  await db.doc("users/personal-writer").set({ role: "rh", nome: "Pessoa" });
+  await db.doc(`api_integrations/${keyId}`).set({ kind: "personal", permission: "full", delegated_by: "personal-writer", scopes: [], customers: [], write_policy: "scoped", expires_at_ms: Date.now() + 600000, token_hash: createHash("sha256").update(token).digest("hex") });
+  const handler = createModuleHandler(db, "dute-homolog", async () => ({ uid: "unused" }), rhApi);
+  const request = { method: "POST", path: "/api/v1/rh/registros", headers: { authorization: `Bearer ${token}`, "idempotency-key": "personal-write" }, query: {}, body: record };
+  const first = await handler(request);
+  assert.equal(first.status, 201, JSON.stringify(first.body));
+  const replay = await handler(request);
+  assert.equal(replay.status, 200, JSON.stringify(replay.body));
+  assert.equal(replay.body.replayed, true);
+  const events = await rh.collection("events").get();
+  const event = events.docs.find(doc => doc.get("actor.uid") === `api:${keyId}`);
+  assert.ok(event, "evento com identidade da chave");
+  assert.equal(event.get("actor.role"), "rh");
+  const count = events.size;
+  await db.doc("users/personal-writer").update({ role: "painel" });
+  assert.equal((await handler(request)).status, 403);
+  assert.equal((await rh.collection("events").get()).size, count);
 });

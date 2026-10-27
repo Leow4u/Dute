@@ -1,5 +1,7 @@
+import { createModuleHandler } from "./shared/handler.js";
+import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
-import { after, before, beforeEach, describe, it } from "node:test";
+import { after, before, beforeEach, describe, it, test } from "node:test";
 import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { financeiroApi } from "./module.js";
@@ -103,4 +105,50 @@ describe("Financeiro REST no emulador: domínio real", () => {
     assert.equal((await db.collection("pagamentos").get()).size, 0);
     assert.equal((await db.collection("events").get()).size, 1);
   });
+});
+
+test("handler pessoal financeiro: projeção, papel atual, cliente atual e bloqueio", async () => {
+  const keyId = "a".repeat(32), token = `dute_${keyId}.${"s".repeat(43)}`;
+  await db.doc("users/personal-human").set({ role: "cliente", customer_code: "PERSONAL", nome: "Pessoa" });
+  await db.doc("client_access/PERSONAL").set({ modules: ["wms", "financeiro"] });
+  await db.doc(`api_integrations/${keyId}`).set({ kind: "personal", permission: "full", delegated_by: "personal-human", scopes: [], customers: [], write_policy: "scoped", expires_at_ms: Date.now() + 600000, token_hash: createHash("sha256").update(token).digest("hex") });
+  await db.doc("client_faturas/personal-row").set({ customer_code: "PERSONAL", name: "Pessoal", status: "open", secret: "never", created_by: { uid: `api:${keyId}` } });
+  const handler = createModuleHandler(db, "dute-homolog", async () => ({ uid: "unused" }), financeiroApi);
+  const request = { method: "GET", path: "/api/v1/financeiro/faturas", headers: { authorization: `Bearer ${token}` }, query: {} };
+  const first = await handler(request);
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.ok((first.body.data as any[]).some(row => row.id === "personal-row"));
+  assert.ok((first.body.data as any[]).every(row => row.secret === undefined));
+  assert.equal((await handler({ ...request, query: { customer_code: "OTHER" } })).status, 403);
+  await db.doc("users/personal-human").update({ customer_code: "OTHER" });
+  assert.equal(((await handler(request)).body.data as any[]).some(row => row.id === "personal-row"), false);
+  await db.doc("users/personal-human").update({ customer_code: "PERSONAL" });
+  await db.doc("client_access/PERSONAL").update({ modules: [] });
+  assert.equal((await handler(request)).status, 403);
+  await db.doc("client_access/PERSONAL").update({ modules: ["wms", "financeiro"] });
+  await db.doc("users/personal-human").update({ role: "painel" });
+  assert.equal((await handler(request)).status, 403);
+  await db.doc("users/personal-human").update({ role: "cliente", access_disabled: true });
+  assert.equal((await handler(request)).status, 403);
+});
+
+test("handler pessoal financeiro: grava com papel real e recibo de replay sem duplicar", async () => {
+  const keyId = "b".repeat(32), token = `dute_${keyId}.${"s".repeat(43)}`;
+  await db.doc("users/personal-writer").set({ role: "owner", nome: "Pessoa" });
+  await db.doc(`api_integrations/${keyId}`).set({ kind: "personal", permission: "full", delegated_by: "personal-writer", scopes: [], customers: [], write_policy: "scoped", expires_at_ms: Date.now() + 600000, token_hash: createHash("sha256").update(token).digest("hex") });
+  const handler = createModuleHandler(db, "dute-homolog", async () => ({ uid: "unused" }), financeiroApi);
+  const request = { method: "POST", path: "/api/v1/financeiro/faturas", headers: { authorization: `Bearer ${token}`, "idempotency-key": "personal-write" }, query: {}, body: payload };
+  const first = await handler(request);
+  assert.equal(first.status, 201, JSON.stringify(first.body));
+  const replay = await handler(request);
+  assert.equal(replay.status, 200, JSON.stringify(replay.body));
+  assert.equal(replay.body.replayed, true);
+  const events = await db.collection("events").get();
+  const event = events.docs.find(doc => doc.get("actor.uid") === `api:${keyId}`);
+  assert.ok(event, "evento com identidade da chave");
+  assert.equal(event.get("actor.role"), "owner");
+  const count = events.size;
+  await db.doc("users/personal-writer").update({ role: "painel" });
+  assert.equal((await handler(request)).status, 403);
+  assert.equal((await db.collection("events").get()).size, count);
 });

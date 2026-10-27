@@ -28,6 +28,8 @@ import {
 } from "./contract.js";
 import { executeWrite, prepareWrite, readResource } from "./resources.js";
 import { openapi } from "./openapi.js";
+import { personalKeyManagement } from "./personal-keys.js";
+import { authorizePersonalRoute } from "./shared/principal.js";
 import { forwardPlatform, platformModule } from "./platform.js";
 
 export type ApiRequest = {
@@ -70,6 +72,7 @@ export function createApiHandler(
         throw new HttpsError("not-found", "Endpoint não encontrado.");
       if (Buffer.byteLength(JSON.stringify(request.body ?? null)) > 65536)
         invalid("O corpo passa de 64 KiB.");
+      if (request.path === `${PREFIX}/api-keys` || request.path.startsWith(`${PREFIX}/api-keys/`)) return await personalKeyManagement(db, verify, request, request_id);
       const token = bearer(request.headers);
       if (
         request.path === `${PREFIX}/integrations` ||
@@ -105,7 +108,9 @@ export function createApiHandler(
           throw new HttpsError("not-found", "Endpoint não encontrado.");
         if (request.method === "DELETE" && !match[2]) {
           const ref = db.collection(API_INTEGRATIONS_COLLECTION).doc(match[1]);
-          if (!(await ref.get()).exists)
+          const existing = await ref.get();
+          if (existing.get("kind") === "personal") denied("Gerencie chaves pessoais pelo próprio titular em api-keys.");
+          if (!existing.exists)
             throw new HttpsError("not-found", "Integração não encontrada.");
           await ref.update({
             revoked: true,
@@ -128,6 +133,7 @@ export function createApiHandler(
           const route = writeRoute(approval.method, approval.path);
           if (!route) invalid("Ação não disponível nesta versão da API.");
           const target = await loadIntegration(db, match[1]);
+          if (target.kind === "personal") denied("Chaves pessoais não usam aprovações de integração.");
           await delegatedProfile(db, target);
           const prepared = await prepareWrite(
             db,
@@ -172,11 +178,13 @@ export function createApiHandler(
       await db.collection(API_AUDIT_COLLECTION).doc(auditId).create({
         request_id,
         integration_id: integration.id,
+        ...(integration.kind === "personal" ? { user_uid: integration.delegated_by } : {}),
         method: request.method,
         action: "operations_request",
         status: 0,
         created_at: FieldValue.serverTimestamp(),
       });
+      if (integration.principal && request.method === "GET") authorizePersonalRoute(integration.principal, request.method, request.path, request.path.includes("/colaboradores") || request.path.includes("/veiculos") ? "operacao:recursos:ler" : "operacao:ler");
       if (request.method === "GET") {
         const result = await readResource(
           db,
@@ -193,6 +201,7 @@ export function createApiHandler(
       }
       const route = writeRoute(request.method, request.path);
       if (!route) throw new HttpsError("not-found", "Endpoint não encontrado.");
+      if (integration.principal) authorizePersonalRoute(integration.principal, request.method, request.path, route.scope, request.body);
       const key = request.headers["idempotency-key"] ?? "";
       const prepared = await prepareWrite(
         db,

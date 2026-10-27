@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 import { FieldPath, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
+import type { PersonalPrincipal, PersonalPermission, PersonalRole } from "./principal.js";
+import { personalCustomerAllowed } from "./principal.js";
 import type { ApiScope, WritePolicy } from "./permissions.js";
 
 export type ApiRequest = { method: string; path: string; headers: Record<string, string | undefined>; query: Record<string, unknown>; body?: unknown };
 export type ApiResponse = { status: number; body: Record<string, unknown> };
-export type ApiIntegration = { id: string; delegated_by: string; scopes: string[]; customers: string[]; write_policy: WritePolicy };
-export type ApiActor = { uid: string; role: "wms" | "comercial" | "financeiro" | "rh" | "interno"; name: string };
+export type ApiIntegration = { id: string; delegated_by: string; scopes: string[]; customers: string[]; write_policy: WritePolicy; kind?: "personal"; permission?: PersonalPermission; principal?: PersonalPrincipal };
+export type ApiActor = { uid: string; role: PersonalRole; name: string; customer_code?: string; customerCode?: string };
 export type ApiContext = {
   db: Firestore; project: string; integration: ApiIntegration; actor: ApiActor;
   /** Chave já isolada por integração e rota. Passar ao serviço de domínio. */
@@ -16,6 +18,8 @@ export type ModuleRoute = {
   method: "GET" | "POST" | "PATCH";
   /** Template completo, por exemplo /api/v1/comercial/clientes/{id}. */
   path: string; scope: ApiScope; role: ApiActor["role"]; summary: string;
+  /** Autorização pessoal atual, sem efeitos nem CAS de negócio; também antes de replay. */
+  authorize?: (context: ApiContext, params: Record<string, string>, request: ApiRequest) => Promise<void>;
   run: (context: ApiContext, params: Record<string, string>, request: ApiRequest) => Promise<unknown>;
 };
 export type ModuleDefinition = { module: string; released: (project: string) => boolean; routes: ModuleRoute[] };
@@ -31,7 +35,19 @@ export function requireScope(context: Pick<ApiContext, "integration">, scope: st
   if (!context.integration.scopes.includes(scope)) denied();
 }
 export function requireCustomer(context: Pick<ApiContext, "integration">, code: unknown): asserts code is string {
-  if (typeof code !== "string" || !context.integration.customers.includes(code)) denied("Cliente fora do acesso desta integração.");
+  if (context.integration.kind === "personal" ? !context.integration.principal || !personalCustomerAllowed(context.integration.principal, code) : typeof code !== "string" || !context.integration.customers.includes(code)) denied("Cliente fora do acesso desta integração.");
+}
+/** Omissão significa abrangência da conta pessoal; legado sempre exige código explícito. */
+export function customerFilter(context: Pick<ApiContext, "integration">, code: unknown): string | undefined {
+  if (code === undefined && context.integration.principal) {
+    if (context.integration.principal.role === "cliente") {
+      requireCustomer(context, context.integration.principal.customer_code);
+      return context.integration.principal.customer_code;
+    }
+    return undefined;
+  }
+  requireCustomer(context, code);
+  return code;
 }
 export function digest(value: unknown): string {
   function stable(input: unknown): unknown {
@@ -54,8 +70,8 @@ export async function readPage(context: ApiContext, collection: string, fields: 
   if (cursor !== undefined && (typeof cursor !== "string" || !/^[A-Za-z0-9_-]{1,200}$/.test(cursor))) invalid("Cursor inválido.");
   let selection = (options.db ?? context.db).collection(collection).orderBy(FieldPath.documentId());
   if (options.customerField) {
-    requireCustomer(context, query.customer_code);
-    selection = selection.where(options.customerField, "==", query.customer_code);
+    const customer = customerFilter(context, query.customer_code);
+    if (customer !== undefined) selection = selection.where(options.customerField, "==", customer);
   }
   if (options.ownerField) selection = selection.where(options.ownerField, "==", context.actor.uid);
   if (typeof cursor === "string") selection = selection.startAfter(cursor);
