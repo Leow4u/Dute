@@ -71,4 +71,4 @@ Files: `artifacts/app/src/lib/integracoes/*`, componentes/tela/testes, `docs/api
 - [x] Agrupar permissões por módulo; nova chave envia política scoped explicitamente; chave global não exige cliente fictício e código futuro de cliente pode ser autorizado explicitamente.
 - [x] OpenAPI consistente com endpoints reais, exemplos por recurso e política legada; nunca só checkboxes.
 - [x] Unitários de todos os pacotes, integrações da API no emulador, trilhas existentes aplicáveis de WMS/Financeiro/RH, suíte frontend completa, typecheck/build e revisão independente.
-- [ ] Criar PR draft com resultados exatos e pendências; não fazer merge/deploy sem autorização específica.
+- [x] Criar PR draft com resultados exatos e pendências; não fazer merge/deploy sem autorização específica. PR #517: https://github.com/Leow4u/Dute/pull/517
