@@ -8,6 +8,15 @@ import {
 
 import { receivedSummary } from "./client-shipments.js";
 import {
+  LOCAL_DO_CANCELADO,
+  ROTULO_DO_CANCELADO,
+  pedidoJaCancelado,
+  problemaDoCancelamento,
+  problemaDoEncerramento,
+  tarefaAberta,
+  type PedidoDeCancelamento,
+} from "./order-cancel.js";
+import {
   LEGACY_CUSTOMER_CODE,
   assertCatalogOwnedBy,
   openingInventoryBlocksOutbound,
@@ -5156,6 +5165,10 @@ export async function decideCustomerRequestTransaction(
     const items = normalizeStoredItems(request);
     const total = items.reduce((sum, item) => sum + item.quantity, 0);
     const kind = requestType(request.type);
+    if (input.action === "close" && kind.outbound) {
+      const closeProblem = problemaDoEncerramento(request);
+      if (closeProblem) throw new HttpsError("failed-precondition", closeProblem);
+    }
     const description = text(request.description || request.title || requestId);
     const created: Record<string, unknown> = {};
     const reservedBalances = new Map<
@@ -6144,6 +6157,536 @@ export async function decideCustomerRequestTransaction(
   });
 }
 
+/**
+ * Cancelar pedido (pergunta 59; as regras sem banco em domain/order-cancel.ts).
+ * A coordenação cancela, com o motivo, o pedido de saída que ainda não saiu
+ * do armazém:
+ * - a reserva do pedido sai inteira;
+ * - o que já foi separado passa, no razão, da posição para a EXPEDICAO, onde
+ *   o item está de fato, e ganha a guarda de volta à posição (a origem do
+ *   movimento é interna: não conta na cobrança nem no relógio do estoque);
+ * - as tarefas abertas, os volumes e a remessa ficam cancelados.
+ * O motivo fica no pedido, na solicitação e no evento, que são da equipe; o
+ * portal mostra "Cancelado pela Dutelog" e a data.
+ */
+export async function cancelWarehouseOrderTransaction(
+  db: Firestore,
+  input: PedidoDeCancelamento,
+  actor: OperationalActor,
+): Promise<Record<string, unknown>> {
+  const orderId = safeDocId(input.order_id);
+  const operationId = `op_order_cancel_${digest({ orderId, nonce: input.idempotency_key })}`;
+  const inputHash = digest({ ...input, order_id: orderId }, 64);
+  const operationRef = db.collection(collections.operations).doc(operationId);
+  const orderRef = db.collection(collections.orders).doc(orderId);
+  const pickTaskId = `pick_${orderId}`;
+  const packTaskId = `pack_${orderId}`;
+  const shipmentId = `ship_${orderId}`;
+  const occurredAt = new Date().toISOString();
+
+  return db.runTransaction(async (transaction) => {
+    const previous = operationResult<Record<string, unknown>>(
+      await transaction.get(operationRef),
+      inputHash,
+    );
+    if (previous) return previous;
+    await assertInventoryOperationsEnabled(transaction, db);
+
+    const orderSnapshot = await transaction.get(orderRef);
+    if (!orderSnapshot.exists) {
+      throw new HttpsError("not-found", "Pedido não encontrado.");
+    }
+    const order = asRecord(orderSnapshot.data());
+    const statusBefore = text(order.status).toUpperCase();
+    const orderNumber = text(order.order_number || order.num_pedido) || orderId;
+    if (pedidoJaCancelado(statusBefore)) {
+      const result = { ok: true, order_id: orderId, order_number: orderNumber, status: "CANCELADO", already_cancelled: true };
+      createOperationReceipt(transaction, operationRef, inputHash, "order.cancel", orderId, actor, result);
+      return result;
+    }
+    const problem = problemaDoCancelamento(statusBefore);
+    if (problem) throw new HttpsError("failed-precondition", problem);
+
+    const customerCode = text(order.customer_code) || LEGACY_CUSTOMER_CODE;
+    const requestId = text(order.customer_request_id);
+    const requestRef = requestId
+      ? db.collection(collections.customerRequests).doc(requestId)
+      : undefined;
+    const [requestSnapshot, pickTaskSnapshot, packTaskSnapshot, shipmentSnapshot] = await Promise.all([
+      requestRef ? transaction.get(requestRef) : Promise.resolve(undefined),
+      transaction.get(db.collection(collections.pickTasks).doc(pickTaskId)),
+      transaction.get(db.collection(collections.packTasks).doc(packTaskId)),
+      transaction.get(db.collection(collections.shipments).doc(shipmentId)),
+    ]);
+    if (shipmentSnapshot.exists && !tarefaAberta("shipping", shipmentSnapshot.get("status"))) {
+      throw new HttpsError("failed-precondition", "O pedido já saiu do armazém: não se cancela mais.");
+    }
+    const [pickLines, orderItems, reservations, packages, packageItems, shipmentItems] = await Promise.all([
+      readRows(transaction, db.collection(collections.pickLines).where("pick_task_id", "==", pickTaskId)),
+      readRows(transaction, db.collection(collections.orderItems).where("order_id", "==", orderId)),
+      readRows(transaction, db.collection(collections.stockReservations).where("order_id", "==", orderId)),
+      readRows(transaction, db.collection(collections.packages).where("order_id", "==", orderId)),
+      readRows(transaction, db.collection(collections.packageItems).where("shipment_id", "==", shipmentId)),
+      readRows(transaction, db.collection(collections.shipmentItems).where("shipment_id", "==", shipmentId)),
+    ]);
+
+    // A reserva ainda presa ao pedido: a separada volta à posição pela guarda.
+    const releaseRows = reservations.filter((row) =>
+      ["reserved", "picked"].includes(text(row.data.status)),
+    );
+    // As prateleiras: o separado volta à dele, se ela ainda recebe guarda.
+    const positions = releaseRows.some((row) => text(row.data.status) === "picked")
+      ? (await transaction.get(db.collection(WAREHOUSE_POSITIONS_COLLECTION))).docs.map((document) => document.data())
+      : [];
+    const balancesBySku = new Map<string, Row[]>();
+    const catalogTargets = new Map<string, CatalogAggregateTarget>();
+    for (const skuCode of [...new Set(releaseRows.map((row) => text(row.data.sku_code)).filter(Boolean))]) {
+      balancesBySku.set(skuCode, await readRows(transaction, skuBalancesQuery(db, customerCode, skuCode)));
+      const sourceRow = releaseRows.find((row) => text(row.data.sku_code) === skuCode);
+      catalogTargets.set(
+        skuCode,
+        await resolveCatalogAggregateTargets(
+          transaction,
+          db,
+          skuCode,
+          text(sourceRow?.data.client_item_code) || undefined,
+        ),
+      );
+    }
+
+    type Item = { skuCode: string; locationId: string; clientItemCode?: string; productName?: string; unitCost?: number };
+    // Cada saldo mexido, com o antes e o que muda: um saldo pode soltar
+    // reserva e receber o separado na mesma transação, e grava uma vez só.
+    type Ledger = Item & {
+      ref: DocumentReference<DocumentData>;
+      id: string;
+      exists: boolean;
+      qtyOnHand: number;
+      qtyReserved: number;
+      onHandDelta: number;
+      reservedDelta: number;
+    };
+    const ledger = new Map<string, Ledger>();
+    const ledgerFor = (row: Row | undefined, item: Item, newId?: string): Ledger => {
+      const key = row ? row.ref.path : `${collections.stockBalances}/${newId}`;
+      const existing = ledger.get(key);
+      if (existing) return existing;
+      const entry: Ledger = {
+        ...item,
+        ref: row?.ref ?? db.collection(collections.stockBalances).doc(newId!),
+        id: row?.id ?? newId!,
+        exists: Boolean(row),
+        qtyOnHand: number(row?.data.qty_on_hand),
+        qtyReserved: number(row?.data.qty_reserved),
+        onHandDelta: 0,
+        reservedDelta: 0,
+      };
+      ledger.set(key, entry);
+      return entry;
+    };
+    const bySku = new Map<string, Item & { released: number }>();
+    // O separado de cada posição: volta à prateleira pela guarda.
+    const toGuard = new Map<string, Item & { quantity: number; moves: boolean; source?: Ledger; staging?: Ledger }>();
+    let releasedTotal = 0;
+    let returnedTotal = 0;
+    for (const reservation of releaseRows) {
+      const skuCode = text(reservation.data.sku_code);
+      const locationId = text(reservation.data.location_id);
+      const quantity = number(reservation.data.reserved_qty || reservation.data.requested_qty);
+      if (!skuCode || !locationId || quantity <= 0) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Reserva ${reservation.id} não possui SKU, localização e quantidade válidos para liberação.`,
+        );
+      }
+      const balanceRow = (balancesBySku.get(skuCode) ?? []).find(
+        (row) => text(row.data.location_id) === locationId,
+      );
+      if (!balanceRow) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Saldo físico da reserva ${reservation.id} não foi encontrado para liberação.`,
+        );
+      }
+      const picked = text(reservation.data.status) === "picked";
+      // O separado que já está na EXPEDICAO (de um cancelamento de antes) não se move no razão.
+      const moves = picked && locationId.toUpperCase() !== LOCAL_DO_CANCELADO;
+      const item: Item = {
+        skuCode,
+        locationId,
+        clientItemCode: text(reservation.data.client_item_code) || undefined,
+        productName: text(reservation.data.product_name) || undefined,
+        unitCost: number(reservation.data.unit_cost) || undefined,
+      };
+      const source = ledgerFor(balanceRow, item);
+      source.reservedDelta -= quantity;
+      let staging: Ledger | undefined;
+      if (moves) {
+        source.onHandDelta -= quantity;
+        const stagingRow = (balancesBySku.get(skuCode) ?? []).find(
+          (row) => text(row.data.location_id).toUpperCase() === LOCAL_DO_CANCELADO,
+        );
+        staging = ledgerFor(
+          stagingRow,
+          { ...item, locationId: LOCAL_DO_CANCELADO },
+          `bal_${digest({ customerCode, skuCode, locationId: LOCAL_DO_CANCELADO })}`,
+        );
+        staging.onHandDelta += quantity;
+      }
+      const skuEntry = bySku.get(skuCode) ?? { ...item, released: 0 };
+      skuEntry.released += quantity;
+      bySku.set(skuCode, skuEntry);
+      releasedTotal += quantity;
+      if (picked) {
+        returnedTotal += quantity;
+        const guardKey = balanceKey(customerCode, skuCode, locationId);
+        const guard = toGuard.get(guardKey) ?? { ...item, quantity: 0, moves, source: moves ? source : undefined, staging };
+        guard.quantity += quantity;
+        toGuard.set(guardKey, guard);
+      }
+      transaction.update(
+        reservation.ref,
+        compact({
+          status: "released",
+          released_qty: quantity,
+          release_reason: "order_cancelled",
+          returned_to_location_id: picked ? LOCAL_DO_CANCELADO : undefined,
+          released_by: actorPayload(actor),
+          released_at: FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
+        }),
+      );
+    }
+
+    // O razão: a posição perde a reserva e, do separado, o saldo; a EXPEDICAO o recebe.
+    for (const entry of ledger.values()) {
+      const nextOnHand = entry.qtyOnHand + entry.onHandDelta;
+      const nextReserved = entry.qtyReserved + entry.reservedDelta;
+      if (nextReserved < 0 || nextOnHand < nextReserved) {
+        throw new HttpsError(
+          "failed-precondition",
+          `O saldo ${entry.id} não comporta o cancelamento (${entry.qtyOnHand} un., ${entry.qtyReserved} reservadas). Faça uma reconciliação antes de cancelar.`,
+        );
+      }
+      const payload = compact({
+        qty_on_hand: nextOnHand,
+        qty_reserved: nextReserved,
+        qty_available: nextOnHand - nextReserved,
+        status: entry.onHandDelta !== 0 ? (nextOnHand > 0 ? "available" : "empty") : undefined,
+        updated_at: FieldValue.serverTimestamp(),
+      });
+      if (entry.exists) {
+        transaction.update(entry.ref, payload);
+      } else {
+        transaction.create(
+          entry.ref,
+          compact({
+            id: entry.id,
+            customer_code: customerCode,
+            sku_code: entry.skuCode,
+            client_item_code: entry.clientItemCode,
+            product_name: entry.productName,
+            location_id: LOCAL_DO_CANCELADO,
+            ...payload,
+            source: "wms_order_cancel",
+            created_at: FieldValue.serverTimestamp(),
+          }),
+        );
+      }
+    }
+
+    // A volta de cada posição: o movimento interno e a guarda, que abre sozinha.
+    const running = new Map<string, number>();
+    const onHandBefore = (entry: Ledger) => running.get(entry.ref.path) ?? entry.qtyOnHand;
+    const returns: Array<Item & { quantity: number; putawayTaskId: string; destination?: string }> = [];
+    [...toGuard.values()].forEach((guard, index) => {
+      const putawayTaskId = `put_${digest({ orderId, skuCode: guard.skuCode, locationId: guard.locationId, motivo: "order_cancel" })}`;
+      // O destino é a prateleira de onde o item saiu. O que saiu de uma área
+      // (RECEBIMENTO, EXPEDICAO) ou de uma prateleira que não recebe mais
+      // guarda fica sem destino: quem guarda escolhe a posição.
+      const back = resolveGuardDestination(guard.locationId, positions, customerCode);
+      const destination = "code" in back ? back.code : undefined;
+      returns.push({ ...guard, putawayTaskId, destination });
+      if (guard.moves && guard.source && guard.staging) {
+        const entity = {
+          order_id: orderId,
+          order_number: orderNumber,
+          putaway_task_id: putawayTaskId,
+          origem: guard.locationId,
+          destino: LOCAL_DO_CANCELADO,
+        };
+        for (const [entry, type, sign, suffix, kind] of [
+          [guard.source, "SAIDA", -1, "out", "order_cancel_out"],
+          [guard.staging, "ENTRADA", 1, "in", "order_cancel_in"],
+        ] as const) {
+          const before = onHandBefore(entry);
+          const after = before + sign * guard.quantity;
+          running.set(entry.ref.path, after);
+          createMovement(
+            transaction,
+            db,
+            movementId(operationId, `return_${suffix}_${index}`),
+            {
+              type,
+              quantity: guard.quantity,
+              customerCode,
+              skuCode: guard.skuCode,
+              clientItemCode: guard.clientItemCode,
+              productName: guard.productName,
+              locationId: entry.locationId,
+              beforeQty: before,
+              afterQty: after,
+              source: "wms_order_cancel",
+              occurredAt,
+              entity: { ...entity, movement_kind: kind },
+            },
+            actor,
+          );
+        }
+      }
+      transaction.create(
+        db.collection(collections.putawayTasks).doc(putawayTaskId),
+        compact({
+          id: putawayTaskId,
+          customer_code: customerCode,
+          order_id: orderId,
+          order_number: orderNumber,
+          customer_request_id: requestId || undefined,
+          sku_code: guard.skuCode,
+          client_item_code: guard.clientItemCode,
+          product_name: guard.productName,
+          source_location_id: LOCAL_DO_CANCELADO,
+          location_id: destination,
+          destination_location_id: destination,
+          quantity: guard.quantity,
+          total_units: guard.quantity,
+          status: "planned",
+          priority: "normal",
+          title: `Guardar ${guard.productName || guard.skuCode}`,
+          next_action: "Devolver à posição o item do pedido cancelado.",
+          source: "wms_order_cancel",
+          created_from_operation_id: operationId,
+          created_at: FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
+        }),
+      );
+    });
+
+    // O portal e o catálogo: o SKU fica com o mesmo saldo e sem a reserva do pedido.
+    for (const [skuCode, released] of bySku) {
+      const skuRows = variantScopedBalanceRows(
+        balancesBySku.get(skuCode) ?? [],
+        skuCode,
+        released.clientItemCode,
+      );
+      const source = skuRows[0]?.data ?? {};
+      setClientInventorySnapshot(transaction, db, {
+        customerCode,
+        skuCode,
+        clientItemCode: released.clientItemCode ?? (text(source.client_item_code) || undefined),
+        productName: released.productName ?? (text(source.product_name) || undefined),
+        category: text(source.category) || undefined,
+        unitCost: released.unitCost || number(source.unit_cost),
+        qtyOnHand: skuRows.reduce((sum, row) => sum + number(row.data.qty_on_hand), 0),
+        qtyReserved: Math.max(
+          0,
+          skuRows.reduce((sum, row) => sum + number(row.data.qty_reserved), 0) - released.released,
+        ),
+      });
+      applyCatalogStockAggregates(transaction, catalogTargets.get(skuCode) ?? {}, {
+        reserved: -released.released,
+      });
+    }
+
+    // As tarefas, linhas, volumes e a remessa que não terminaram ficam canceladas.
+    const cancelled = {
+      status: "cancelled",
+      cancelled_at: occurredAt,
+      cancelled_by: actorPayload(actor),
+      updated_at: FieldValue.serverTimestamp(),
+    };
+    const cancelledTasks: string[] = [];
+    if (pickTaskSnapshot.exists && tarefaAberta("picking", pickTaskSnapshot.get("status"))) {
+      transaction.update(pickTaskSnapshot.ref, cancelled);
+      cancelledTasks.push(`picking:${pickTaskId}`);
+    }
+    if (packTaskSnapshot.exists && tarefaAberta("packing", packTaskSnapshot.get("status"))) {
+      transaction.update(packTaskSnapshot.ref, cancelled);
+      cancelledTasks.push(`packing:${packTaskId}`);
+    }
+    if (shipmentSnapshot.exists) {
+      transaction.update(shipmentSnapshot.ref, cancelled);
+      cancelledTasks.push(`shipping:${shipmentId}`);
+    }
+    // A linha já separada fica como histórico; o item do pedido, o volume e a remessa não saem mais.
+    for (const row of pickLines) {
+      if (!["completed", "cancelled"].includes(text(row.data.status))) transaction.update(row.ref, cancelled);
+    }
+    for (const row of [...orderItems, ...packages, ...packageItems, ...shipmentItems]) {
+      if (text(row.data.status) !== "cancelled") transaction.update(row.ref, cancelled);
+    }
+
+    transaction.update(orderRef, {
+      status: "CANCELADO",
+      status_before_cancel: statusBefore,
+      cancel_reason: input.reason,
+      cancel_origin: "dutelog",
+      cancelled_at: occurredAt,
+      cancelled_by: actorPayload(actor),
+      updated_at: FieldValue.serverTimestamp(),
+    });
+    if (requestRef && requestSnapshot?.exists) {
+      transaction.update(
+        requestRef,
+        compact({
+          status: "cancelled",
+          operational_status: "cancelled",
+          cancel_origin: "dutelog",
+          cancel_reason: input.reason,
+          cancelled_at: occurredAt,
+          cancelled_by: actorPayload(actor),
+          stock_reservation_status: releasedTotal > 0 ? "released" : undefined,
+          released_quantity_total: releasedTotal || undefined,
+          updated_at: FieldValue.serverTimestamp(),
+        }),
+      );
+      // O portal: cancelado pela Dutelog e a data, sem o motivo.
+      transaction.set(
+        db.collection(collections.clientRequestStatus).doc(requestId),
+        {
+          customer_code: customerCode,
+          status: "cancelled",
+          operational_status: "cancelled",
+          cancel_origin: "dutelog",
+          cancelled_at: occurredAt,
+          published_at: FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+    updateClientTracking(transaction, db, orderId, {
+      customer_code: customerCode,
+      order_number: orderNumber,
+      status: "cancelled",
+      status_label: ROTULO_DO_CANCELADO,
+      cancel_origin: "dutelog",
+      cancelled_at: occurredAt,
+      timeline: FieldValue.arrayUnion(
+        clientTimelineEntry("cancelled", ROTULO_DO_CANCELADO, actor, occurredAt),
+      ),
+    });
+
+    const events: OperationalEventSummary[] = [];
+    // A descrição vai ao rascunho de aviso ao cliente: só o número do pedido.
+    events.push(
+      createEvent(
+        transaction,
+        db,
+        operationEventId(operationId, "order_cancelled"),
+        {
+          type: "order.cancelled",
+          title: "Pedido cancelado pela Dutelog",
+          description: orderNumber,
+          severity: "info",
+          entity_type: "pedido",
+          entity_id: orderId,
+          customer_code: customerCode,
+          payload: {
+            order_id: orderId,
+            order_number: orderNumber,
+            customer_request_id: requestId || undefined,
+            status_before: statusBefore,
+            reason: input.reason,
+            released_qty_total: releasedTotal,
+            returned_qty_total: returnedTotal,
+            putaway_task_ids: returns.map((item) => item.putawayTaskId),
+            cancelled_tasks: cancelledTasks,
+          },
+          occurred_at: occurredAt,
+        },
+        actor,
+      ),
+    );
+    if (releasedTotal > 0) {
+      events.push(
+        createEvent(
+          transaction,
+          db,
+          operationEventId(operationId, "stock_released"),
+          {
+            type: "stock.reservation_released",
+            title: "Reserva de estoque liberada",
+            description: `${releasedTotal} unidade(s) liberada(s) com o cancelamento do pedido.`,
+            severity: "info",
+            entity_type: "reserva_estoque",
+            entity_id: orderId,
+            customer_code: customerCode,
+            payload: {
+              order_id: orderId,
+              customer_request_id: requestId || undefined,
+              release_reason: "order_cancelled",
+              released_qty_total: releasedTotal,
+              returned_qty_total: returnedTotal,
+              reservation_count: releaseRows.length,
+            },
+            occurred_at: occurredAt,
+          },
+          actor,
+        ),
+      );
+    }
+    // A entrega pela Dutelog que já virou demanda continua na Operação: quem cancela lá é a coordenação.
+    const demanda = text(asRecord(order.entrega).demanda);
+    if (demanda) {
+      events.push(
+        createEvent(
+          transaction,
+          db,
+          operationEventId(operationId, "delivery_demand"),
+          {
+            type: "expedicao.demand_left_open",
+            title: "A entrega do pedido cancelado continua na Operação",
+            description: `${orderNumber}: cancele a demanda ${demanda} na Operação.`,
+            severity: "attention",
+            entity_type: "pedido",
+            entity_id: orderId,
+            customer_code: customerCode,
+            payload: { order_id: orderId, order_number: orderNumber, demanda },
+            occurred_at: occurredAt,
+          },
+          actor,
+        ),
+      );
+    }
+
+    // Sem os campos vazios: a repetição devolve o recibo, que os perde.
+    const result = compactValue({
+      ok: true,
+      order_id: orderId,
+      order_number: orderNumber,
+      status: "CANCELADO",
+      status_before: statusBefore,
+      released_qty: releasedTotal,
+      returned_qty: returnedTotal,
+      returns: returns.map((item) => ({
+        sku_code: item.skuCode,
+        client_item_code: item.clientItemCode,
+        product_name: item.productName,
+        quantity: item.quantity,
+        location_id: item.locationId,
+        destination_location_id: item.destination,
+        putaway_task_id: item.putawayTaskId,
+      })),
+      cancelled_tasks: cancelledTasks,
+      demanda: demanda || undefined,
+      events,
+    }) as Record<string, unknown>;
+    createOperationReceipt(transaction, operationRef, inputHash, "order.cancel", orderId, actor, result);
+    return result;
+  });
+}
+
 const taskCollections: Record<string, string> = {
   receiving: collections.inboundReceipts,
   putaway: collections.putawayTasks,
@@ -6161,6 +6704,9 @@ const taskFlows: Record<string, string[]> = {
 };
 
 function nextStatus(type: string, currentStatus: string) {
+  if (currentStatus === "cancelled") {
+    throw new HttpsError("failed-precondition", "Tarefa cancelada com o pedido.");
+  }
   const flow = taskFlows[type];
   const index = flow?.indexOf(currentStatus);
   if (!flow || index == null || index < 0) {

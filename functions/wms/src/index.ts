@@ -27,6 +27,7 @@ import {
   createInventoryMovementTransaction,
   createCustomerRequestTransaction,
   createReturnReceiptTransaction,
+  cancelWarehouseOrderTransaction,
   decideCustomerRequestTransaction,
   emitImmutableEvent,
   openingInventorySessionDocumentId,
@@ -73,6 +74,7 @@ import {
 } from "./domain/customer-profile.js";
 import { assertClientRoleCustomer, assertInviteCustomerAllowed, inviteEventReference } from "./domain/customer-invite.js";
 import { acceptInviteFor, lookupInviteFor } from "./domain/invite-acceptance.js";
+import { interpretarCancelamento } from "./domain/order-cancel.js";
 import {
   PLATFORM_ROLES,
   isPlatformRole,
@@ -6392,6 +6394,14 @@ export const decideCustomerRequest = onCall(async (request) => {
     DecideCustomerRequestSchema.parse(request.data ?? {}),
     profile,
   );
+});
+
+// Cancelar pedido (pergunta 59): a coordenação, com o motivo, no pedido que
+// ainda não saiu do armazém (domain/order-cancel.ts).
+export const cancelWarehouseOrder = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireOperationsCoordinator(profile);
+  return cancelWarehouseOrderTransaction(db, interpretarCancelamento(request.data), profile);
 });
 
 export const advanceWarehouseTask = onCall(async (request) => {
