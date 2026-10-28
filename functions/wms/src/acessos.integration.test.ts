@@ -32,8 +32,8 @@ async function eventoDoTipo(type: string) {
 }
 
 before(async () => {
-  if (!process.env.FIRESTORE_EMULATOR_HOST) {
-    throw new Error("FIRESTORE_EMULATOR_HOST não definido.");
+  if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+    throw new Error("Os emuladores Firestore e Auth precisam estar definidos para testar acessos.");
   }
   const index = await import("./index.js");
   mutateManagedEntity = index.mutateManagedEntity as unknown as Callable;

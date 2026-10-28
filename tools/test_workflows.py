@@ -104,5 +104,20 @@ class TesteRestauracaoTest(unittest.TestCase):
         self.assertIn("service_account: github-actions-functions@${{ env.PROJECT_ID }}.iam.gserviceaccount.com", self.texto)
 
 
+class WmsIntegrationEmulatorsTest(unittest.TestCase):
+    def test_reconvite_inicia_auth_local_sem_credenciais_reais(self) -> None:
+        import json
+        root = WORKFLOWS.parent.parent
+        config = json.loads((root / "firebase.json").read_text(encoding="utf-8"))
+        auth = config["emulators"].get("auth")
+        self.assertIsNotNone(auth, "O reconvite exige o emulador Auth declarado, não só --only auth.")
+        self.assertEqual(auth["host"], "127.0.0.1")
+        self.assertNotEqual(auth["port"], config["emulators"]["storage"]["port"])
+        script = json.loads((root / "functions/wms/package.json").read_text(encoding="utf-8"))["scripts"]["test:integration"]
+        emuladores = re.search(r"--only ([^ ]+)", script)
+        self.assertIsNotNone(emuladores)
+        self.assertIn("auth", emuladores.group(1).split(","))
+
+
 if __name__ == "__main__":
     unittest.main()
