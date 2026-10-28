@@ -843,6 +843,14 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  const archiveUserMatch = pathname.match(/^\/api\/billing\/users\/([^/]+)\/archive$/);
+  if (archiveUserMatch && method === "POST") {
+    return {
+      name: "mutateManagedEntity",
+      payload: async () => mutationPayload("users", "archive", {}, decodeURIComponent(archiveUserMatch[1])),
+    };
+  }
+
   const accessMatch = pathname.match(/^\/api\/billing\/users\/([^/]+)\/access$/);
   if (accessMatch && method === "POST") {
     return {
@@ -872,8 +880,10 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     return {
       name: "mutateManagedEntity",
       status: 201,
-      payload: async (_pathname, init) =>
-        mutationPayload("invites", "create", await readJsonBody(init)),
+      payload: async (_pathname, init) => {
+        const { idempotency_key, ...data } = await readJsonBody(init);
+        return { ...mutationPayload("invites", "create", data), ...(typeof idempotency_key === "string" ? { idempotency_key } : {}) };
+      },
     };
   }
 
@@ -881,8 +891,10 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
   if (inviteResendMatch && method === "POST") {
     return {
       name: "mutateManagedEntity",
-      payload: async (_pathname, init) =>
-        mutationPayload("invites", "update", await readJsonBody(init), decodeURIComponent(inviteResendMatch[1])),
+      payload: async (_pathname, init) => {
+        const { idempotency_key, ...data } = await readJsonBody(init);
+        return { ...mutationPayload("invites", "update", data, decodeURIComponent(inviteResendMatch[1])), ...(typeof idempotency_key === "string" ? { idempotency_key } : {}) };
+      },
     };
   }
 

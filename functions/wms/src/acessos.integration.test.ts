@@ -32,8 +32,8 @@ async function eventoDoTipo(type: string) {
 }
 
 before(async () => {
-  if (!process.env.FIRESTORE_EMULATOR_HOST) {
-    throw new Error("FIRESTORE_EMULATOR_HOST não definido.");
+  if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+    throw new Error("Os emuladores Firestore e Auth precisam estar definidos para testar acessos.");
   }
   const index = await import("./index.js");
   mutateManagedEntity = index.mutateManagedEntity as unknown as Callable;
@@ -150,7 +150,7 @@ describe("o e-mail do convite", () => {
     const db = getFirestore();
     const outro = "d".repeat(36);
     await db.collection("users").doc("admin-email").set({ role: "admin", email: "admin@dutelog.com.br" });
-    await comoOwner({ ...pedido, data: { ...pedido.data, token: outro, role: "admin", customer_code: "Dutelog" }, idempotency_key: "convite-admin-email" });
+    await comoOwner({ ...pedido, data: { ...pedido.data, token: outro, email: "convite-admin@dutelog.com.br", role: "admin", customer_code: "Dutelog" }, idempotency_key: "convite-admin-email" });
     await db.collection("invites").doc(outro).update({ email_status: "failed", email_requested_at: new Date(0) });
     await assert.rejects(mutateManagedEntity.run({ auth: { uid: "admin-email", token: { email: "admin@dutelog.com.br" } }, data: { resource: "invites", action: "update", id: outro, data: {}, idempotency_key: "admin-reenvia-admin" }, rawRequest: { headers: {} } } as never), /Somente o owner/);
     await db.collection("invites").doc(outro).update({ status: "used" });
@@ -225,5 +225,91 @@ describe("o token do convite", () => {
     const token = "0123456789abcdef0123456789abcdef0123";
     await comoOwner({ resource: "invites", action: "create", data: { token, nome: "P", email: "ok@exemplo.com", role: "wms", customer_code: "Dutelog" }, idempotency_key: "token-bom" });
     assert.equal((await getFirestore().collection("invites").doc(token).get()).get("email"), "ok@exemplo.com");
+  });
+});
+
+describe("remover pessoas da lista", () => {
+  it("recusa ativos; oculta o perfil removido sem apagar identidade nem eventos", async () => {
+    await assert.rejects(comoOwner({ resource: "users", action: "archive", id: "ana", data: {}, idempotency_key: "arquivar-ana-ativa" }), /Revogue/);
+    const db = getFirestore();
+    await db.collection("users").doc("removida").set({ nome: "Removida", email: "removida@dutelog.com.br", role: "wms", access_disabled: true });
+    const input = { resource: "users", action: "archive", id: "removida", data: {}, idempotency_key: "arquivar-removida" };
+    await comoOwner(input);
+    await comoOwner(input);
+    const profile = (await db.collection("users").doc("removida").get()).data()!;
+    assert.equal(profile.directory_hidden, true);
+    assert.equal(profile.email, "removida@dutelog.com.br");
+    assert.equal(profile.access_disabled, true);
+    const events = await db.collection("events").where("type", "==", "users.archive").get();
+    assert.equal(events.size, 1);
+  });
+  it("não deixa admin remover outro administrador nem convidá-lo com papel menor", async () => {
+    const db = getFirestore();
+    await db.collection("users").doc("admin-diretorio").set({ role: "admin", email: "admin-diretorio@dutelog.com.br" });
+    await db.collection("users").doc("owner-removido").set({ role: "owner", email: "owner-removido@dutelog.com.br", access_disabled: true });
+    const run = (data: Record<string, unknown>) => mutateManagedEntity.run({ auth: { uid: "admin-diretorio", token: { email: "admin-diretorio@dutelog.com.br" } }, data, rawRequest: { headers: {} } } as never);
+    await assert.rejects(run({ resource: "users", action: "archive", id: "owner-removido", data: {}, idempotency_key: "admin-arquiva-owner" }), /Somente o owner/);
+    await assert.rejects(run({ resource: "invites", action: "create", data: { token: "da".repeat(18), email: "owner-removido@dutelog.com.br", role: "wms" }, idempotency_key: "admin-reconvida-owner" }), /Somente o owner/);
+  });
+});
+
+describe("reconvite completo pelo servidor", () => {
+  it("cria o convite depois de remover da lista e só restaura o perfil no aceite", async () => {
+    const { getAuth } = await import("firebase-admin/auth");
+    const { acceptInviteFor } = await import("./domain/invite-acceptance.js");
+    const auth = getAuth();
+    const uid = "reconvidada";
+    const email = "reconvidada@dutelog.com.br";
+    await auth.deleteUser(uid).catch((error: { code?: string }) => { if (error.code !== "auth/user-not-found") throw error; });
+    await auth.createUser({ uid, email, disabled: true, emailVerified: true });
+    const ref = getFirestore().collection("users").doc(uid);
+    await ref.set({ nome: "Reconvidada", email, role: "wms", customer_code: "Dutelog", access_disabled: true, created_at: "original" });
+    await comoOwner({ resource: "users", action: "archive", id: uid, data: {}, idempotency_key: "remove-antes-do-reconvite" });
+    const token = "ef".repeat(18);
+    const input = { resource: "invites", action: "create", data: { token, nome: "Reconvidada", email, role: "wms", customer_code: "Dutelog" }, idempotency_key: "reconvite-completo" };
+    await comoOwner(input);
+    await comoOwner(input);
+    assert.equal((await auth.getUser(uid)).disabled, false);
+    assert.equal((await ref.get()).get("access_disabled"), true);
+    assert.equal((await ref.get()).get("directory_hidden"), true);
+    assert.equal((await getFirestore().collection("invites").doc(token).get()).get("reinvite_user_id"), uid);
+    await acceptInviteFor(getFirestore(), { uid, token: { email, email_verified: true } }, { token, nome: "Reconvidada" });
+    const profile = (await ref.get()).data()!;
+    assert.equal(profile.access_disabled, false);
+    assert.equal(profile.directory_hidden, false);
+    assert.equal(profile.created_at, "original");
+    assert.equal(profile.pending_invite_id, undefined);
+    await auth.deleteUser(uid);
+  });
+});
+
+describe("proteção do reconvite após a criação", () => {
+  it("admin não reenvia nem cancela reconvite de owner com papel proposto menor", async () => {
+    const db = getFirestore();
+    await db.collection("users").doc("admin-diretorio").set({ role: "admin", email: "admin-diretorio@dutelog.com.br" });
+    await db.collection("users").doc("owner-protegido").set({ role: "owner", email: "owner-protegido@dutelog.com.br", access_disabled: true });
+    const token = "ad".repeat(18);
+    await comoOwner({ resource: "invites", action: "create", data: { token, email: "owner-protegido@dutelog.com.br", role: "wms" }, idempotency_key: "owner-convida-papel-menor" });
+    await db.collection("invites").doc(token).update({ email_status: "failed", email_requested_at: new Date(0) });
+    for (const action of ["update", "archive"]) {
+      await assert.rejects(mutateManagedEntity.run({ auth: { uid: "admin-diretorio", token: { email: "admin-diretorio@dutelog.com.br" } }, data: { resource: "invites", action, id: token, data: {}, idempotency_key: `admin-nao-${action}-owner` }, rawRequest: { headers: {} } } as never), /Somente o owner/);
+    }
+  });
+  it("uma falha no Auth é recuperável imediatamente sem outro convite nem outro e-mail", async (t) => {
+    const { getAuth } = await import("firebase-admin/auth");
+    const db = getFirestore();
+    await db.collection("users").doc("falha-login").set({ role: "wms", email: "falha-login@dutelog.com.br", access_disabled: true });
+    const auth = getAuth();
+    let failing = true;
+    t.mock.method(auth, "updateUser", async () => { if (failing) throw new Error("Auth indisponível"); return {}; });
+    const token = "fa".repeat(18);
+    await assert.rejects(comoOwner({ resource: "invites", action: "create", data: { token, email: "falha-login@dutelog.com.br", role: "wms" }, idempotency_key: "cria-com-falha-login" }), /login não ficou pronto/);
+    const mailsBefore = await db.collection("email_outbox").where("invite_id", "==", token).get();
+    failing = false;
+    await comoOwner({ resource: "invites", action: "update", id: token, data: {}, idempotency_key: "recupera-login-sem-email-duplicado" });
+    const mailsAfter = await db.collection("email_outbox").where("invite_id", "==", token).get();
+    assert.equal(mailsAfter.size, mailsBefore.size);
+    assert.equal((await db.collection("invites").doc(token).get()).get("login_preparation_pending"), false);
+    assert.equal((await db.collection("users").doc("falha-login").get()).get("access_disabled"), true);
   });
 });

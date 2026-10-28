@@ -1,3 +1,50 @@
+# Pessoas e acessos — QA de design, 28/10/2026
+
+- Fonte aprovada: `/workspace/generated_images/exec-35ec9708-5cc0-4065-8a2c-73ddac835757.png` (primeira imagem apresentada no chat).
+- Implementação: `/tmp/dute-people-qa/desktop-menu.png`; tela sem menu em `/tmp/dute-people-qa/desktop.png`.
+- Viewport: desktop 1526×876, celular 390×844, deviceScaleFactor 1.
+- Densidade: fonte 1656×950, normalizada para 1526×876 com Lanczos; implementação capturada em 1526×876 CSS/pixels. Ambos sem moldura de navegador.
+- Estado comparado: tema claro, aba Pessoas, 7 ativos e 1 convite pendente, menu do convite aberto.
+- Comparação conjunta: `/tmp/dute-people-qa/comparison.png`.
+- Recortes conjuntos: `/tmp/dute-people-qa/comparison-header.png` e `/tmp/dute-people-qa/comparison-rows.png`.
+- Evidências adicionais: `resend.png`, `archive.png`, `profiles.png`, `mobile.png`, `mobile-profiles.png`, `dark.png`, em `/tmp/dute-people-qa/`.
+- Navegador: ferramentas do Browser não foram expostas nesta sessão; Chromium local por Playwright. URL `http://127.0.0.1:5174/configuracoes/pessoas`. Firebase emulado; callables `.run` reais chamadas pelo adaptador de teste, sem produção.
+
+## Comparação das superfícies
+
+- Tipografia: Plus Jakarta Sans, texto 14px e título 24px pelos tokens existentes. Fonte disponível no fixture local da família já usada pelo app. A escala do produto foi mantida, sem valores arbitrários para imitar o raster.
+- Espaçamento: tabela ocupa a área útil, papéis em uma linha no desktop, ações com espaço próprio e sem barra horizontal. A aba de arquivados tira acessos removidos da lista principal. No celular a tabela vira linhas empilhadas, sem cortar identidade ou ações.
+- Cores: tokens semânticos nos dois temas, incluindo cabeçalho com contraste corrigido; nenhuma cor fixa nova.
+- Assets: ícones da biblioteca e avatares de iniciais são controles do sistema, como no mockup; não há imagens fotográficas/ilustrações a substituir.
+- Conteúdo: nomes/e-mails/perfis legíveis, reenvio explícito, cancelamento separado de remoção. As mensagens distinguem agendamento de entrega do e-mail e preservação do histórico.
+
+## Histórico da comparação e correções
+
+1. [P2, corrigido] A largura máxima do layout antigo limitava a tabela: a tela Pessoas agora usa toda a área útil, com margens laterais de 48px no desktop amplo. Evidência posterior: `desktop.png` e `comparison.png`.
+2. [P2, corrigido] Cabeçalhos herdavam texto com opacidade insuficiente: alterados para `text-muted-foreground`; axe com contraste passou na captura posterior.
+3. Evidências finais capturadas com as animações concluídas. Diálogos permanecem centralizados e legíveis. Não restam achados P0/P1/P2.
+
+## Diferenças intencionais
+
+- Ajuda dos perfis na área de ações do PageHeader, respeitando o componente existente.
+- A própria conta não oferece ações de acesso. O papel owner mantém seu rótulo real.
+- Menu abre para cima quando há pouco espaço abaixo, conforme prevenção de colisão do Radix.
+- Status de envio e data da solicitação permanecem separados para não confundir agendamento com entrega.
+
+## Verificações
+
+- Identidade da página, conteúdo não vazio, ausência de overlay de erro e ausência de erros JavaScript/console: aprovados.
+- Busca sem distinção de maiúsculas, filtro de pendentes, ajuda sob demanda, confirmação/reenvio, bloqueio de novo envio agendado, remoção confirmada persistida, abas, celular e tema escuro: aprovados.
+- Axe WCAG 2.1 A/AA no conteúdo, incluindo contraste: aprovado. Não se afirma auditoria completa de acessibilidade de todo o app.
+- Revisão independente e testes de segurança detalhados no plano da implementação.
+- Não houve publicação nem envio real de convites.
+
+final result: passed
+
+---
+
+# Relatório anterior preservado
+
 # Estoque Marketplace: QA de Design
 
 - Fonte visual: `C:\Users\leona\AppData\Local\Temp\codex-clipboard-6aa08852-527a-4d6d-9211-d344e1a84b46.png`
