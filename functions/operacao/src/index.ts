@@ -2,20 +2,21 @@ import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { getAuth } from "firebase-admin/auth";
-import { onCall, onRequest } from "firebase-functions/https";
+import { HttpsError, onCall, onRequest } from "firebase-functions/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { REMETENTE_DOS_AVISOS, emailParaQualquerContato, enderecoDoApp, segredosDoResend } from "./domain/avisos.js";
 import { enviarPeloResend, enviarSoAuditoria, markNotificationsReadFor, relatoDosDesistidos, runNotificationsFor, soParaADutelog } from "./domain/avisos-gravacao.js";
 import { completeServiceOrderFor } from "./domain/conclusao-gravacao.js";
+import { sendInviteEmailVerificationFor } from "./domain/confirmacao-email.js";
 import { resolveFieldCompletionFor } from "./domain/conclusao-recusada-gravacao.js";
 import { openStorageDemandFor } from "./domain/demanda-do-armazem-gravacao.js";
 import { openDirectDemandFor } from "./domain/demanda-direta-gravacao.js";
 import { registerItemFor, registerOccurrenceFor, registerPresenceFor, registerStepFor } from "./domain/execucao-gravacao.js";
 import { attachPhotoFor, type ConferirArquivo } from "./domain/fotos-gravacao.js";
 import { saveCollaboratorFor, saveVehicleFor } from "./domain/gravacao.js";
-import { operacaoLiberada, retencaoLiberada } from "./domain/liberacao.js";
+import { assertLiberado, operacaoLiberada, retencaoLiberada } from "./domain/liberacao.js";
 import { saveServiceOrderFor } from "./domain/os-gravacao.js";
 import { reopenServiceOrderFor, reviewServiceOrderFor } from "./domain/revisao-gravacao.js";
 import { requireOperacaoCaller } from "./domain/profile.js";
@@ -37,7 +38,8 @@ import { apiBrowserOrigins } from "./api/browser.js";
  * conferência do invoker (tools/check_functions_invoker.ps1) lê; o teste
  * callables.test.ts trava o formato. Toda callable começa por
  * `await requireOperacaoCaller(db, request, PROJECT_ID)`; a do portal, com
- * `{ portal: true }`, só atende o cliente.
+ * `{ portal: true }`, só atende o cliente. A confirmação de e-mail é a única
+ * exceção: a pessoa ainda não tem perfil, e a sessão + convite autorizam o envio.
  */
 
 initializeApp();
@@ -254,4 +256,19 @@ export const runNotifications = onSchedule({ schedule: "every 5 minutes", timeZo
   // A falha definitiva vai para o log de erro, que o painel do sistema mostra.
   const relato = relatoDosDesistidos(resultado.desistidos);
   if (relato) console.error(relato);
+});
+
+/** Confirmação imediata da própria conta durante o aceite do convite, antes do perfil. */
+export const sendInviteEmailVerification = onCall({ timeoutSeconds: 60, secrets: segredosDoResend(PROJECT_ID) }, async (request) => {
+  assertLiberado(PROJECT_ID);
+  try {
+    const chave = process.env.RESEND_API_KEY?.trim();
+    return await sendInviteEmailVerificationFor(db, request.auth, request.data, {
+      projectId: PROJECT_ID, auth: getAuth(), enviar: chave ? enviarPeloResend(chave) : null,
+    });
+  } catch (erro) {
+    if (erro instanceof HttpsError) throw erro;
+    // Erros de infraestrutura também não podem registrar o caminho privado do convite.
+    throw new HttpsError("unavailable", "Não foi possível enviar a confirmação. Aguarde um minuto e tente reenviar.");
+  }
 });

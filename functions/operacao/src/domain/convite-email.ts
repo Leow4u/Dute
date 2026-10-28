@@ -1,9 +1,8 @@
-import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import { FieldValue, type Firestore, type Transaction } from "firebase-admin/firestore";
 
 import { ENDERECO_DO_APP, type EmailDoAviso } from "./avisos.js";
 import { isPlatformRole } from "./platform-roles.js";
 import { conviteHtml } from "./convite-email-template.js";
-import { acessoDoCliente } from "./profile.js";
 
 /** A criação do convite no WMS põe só a referência na fila privada de e-mail. */
 export const ACCESS_INVITE_EMAIL_KIND = "access_invite";
@@ -13,6 +12,24 @@ const CLIENTE_LEGADO = "BTG Pactual";
 
 function texto(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/** A mesma elegibilidade de cliente vale para convite e confirmação do endereço. */
+export async function clienteDoConviteDisponivel(db: Firestore, convite: Record<string, unknown>, transaction?: Transaction): Promise<boolean> {
+  if (convite.role !== "cliente") return true;
+  const code = texto(convite.customer_code);
+  if (!code || code.includes("/") || code === "." || code === ".." || /^__.*__$/.test(code) || Buffer.byteLength(code, "utf8") > 1500) return false;
+  const acessoRef = db.collection("client_access").doc(code);
+  const acesso = transaction ? await transaction.get(acessoRef) : await acessoRef.get();
+  if (acesso.get("portal_ativo") === false) return false;
+  if (code === CLIENTE_LEGADO) return true;
+  const queries = [db.collection("customers").where("code", "==", code), db.collection("customers").where("customer_code", "==", code)];
+  const resultados = await Promise.all(queries.map(query => transaction ? transaction.get(query) : query.get()));
+  return resultados.flatMap(resultado => resultado.docs).some(doc => {
+    const cliente = doc.data();
+    return cliente.archived !== true && cliente.status !== "archived" && cliente.stage !== "prospect"
+      && cliente.portal_status !== "inactive" && Boolean(texto(cliente.sku_prefix));
+  });
 }
 
 /**
@@ -33,25 +50,7 @@ export async function emailDoConvitePendente(
   if (!convite || convite.status !== "pending" || convite.archived === true || convite.email_delivery_id !== emailId) return null;
   const email = texto(convite.email).toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !isPlatformRole(convite.role)) return null;
-  if (convite.role === "cliente") {
-    const code = texto(convite.customer_code);
-    if (!code || code.includes("/") || code === "." || code === ".." || /^__.*__$/.test(code) || Buffer.byteLength(code, "utf8") > 1500) return null;
-    if (!(await acessoDoCliente(db, code)).portalAtivo) return null;
-    // O cadastro também pode ter mudado desde o convite. O aceite continua
-    // sendo a autoridade final; aqui evitamos enviar link que já não serve.
-    if (code !== CLIENTE_LEGADO) {
-      const [porCodigo, porCustomerCode] = await Promise.all([
-        db.collection("customers").where("code", "==", code).get(),
-        db.collection("customers").where("customer_code", "==", code).get(),
-      ]);
-      const disponivel = [...porCodigo.docs, ...porCustomerCode.docs].some((doc) => {
-        const cliente = doc.data();
-        return cliente.archived !== true && cliente.status !== "archived" && cliente.stage !== "prospect"
-          && cliente.portal_status !== "inactive" && Boolean(texto(cliente.sku_prefix));
-      });
-      if (!disponivel) return null;
-    }
-  }
+  if (!(await clienteDoConviteDisponivel(db, convite))) return null;
   const nome = texto(convite.nome).replace(/[\r\n]/g, " ").slice(0, 120);
   return {
     to: [email],
