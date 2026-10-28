@@ -100,6 +100,8 @@ export async function setUserAccessTransaction(
     const reason = input.reason?.trim() || null;
     transaction.update(userRef, {
       access_disabled: !input.active,
+      pending_invite_id: FieldValue.delete(),
+      ...(input.active ? { directory_hidden: false, directory_hidden_by: FieldValue.delete(), directory_hidden_at: FieldValue.delete() } : {}),
       access_changed_at: now,
       access_changed_by: actor.uid,
       access_change_reason: reason,

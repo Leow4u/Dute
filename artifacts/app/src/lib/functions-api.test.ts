@@ -312,3 +312,25 @@ describe("o retorno do pedido de saída (parte 4.5d)", () => {
   });
 });
 
+
+
+describe("remoção de pessoa da lista", () => {
+  it("arquiva pelo servidor com recibo sem excluir o perfil nem alterar o acesso", async () => {
+    const path = "/api/billing/users/uid-123/archive";
+    const route = functionRoute(path, "POST");
+    expect(route?.name).toBe("mutateManagedEntity");
+    expect(await route?.payload(path, { body: JSON.stringify({ role: "owner" }) })).toMatchObject({ resource: "users", action: "archive", id: "uid-123", data: {}, idempotency_key: expect.any(String) });
+    expect(functionRoute(path, "DELETE")).toBeNull();
+  });
+});
+
+describe("identidade da tentativa de convite", () => {
+  it("preserva a chave de repetição sem passá-la como campo alterável do convite", async () => {
+    for (const path of ["/api/invites", "/api/invites/token-do-convite/resend"]) {
+      const data = path === "/api/invites" ? { email: "pessoa@example.test" } : {};
+      const result = await functionRoute(path, "POST")!.payload(path, { body: JSON.stringify({ ...data, idempotency_key: "mesma-tentativa" }) });
+      expect(result.idempotency_key).toBe("mesma-tentativa");
+      expect(result.data).toEqual(data);
+    }
+  });
+});

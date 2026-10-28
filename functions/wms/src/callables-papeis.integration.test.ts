@@ -186,6 +186,7 @@ const MATRIZ: Record<string, Linha> = {
     entrada: cadastro("documents", "update"),
   },
   "mutateManagedEntity:users": { passam: ACESSO, recusa: SO_ACESSO, entrada: cadastro("users", "set_role") },
+  "mutateManagedEntity:users.archive": { passam: ACESSO, recusa: SO_ACESSO, entrada: cadastro("users", "archive") },
   "mutateManagedEntity:invites": { passam: ACESSO, recusa: SO_ACESSO, entrada: cadastro("invites", "archive") },
   "mutateManagedEntity:customers": { passam: ACESSO, recusa: SO_ACESSO, entrada: cadastro("customers", "update") },
   "mutateManagedEntity:customer_accounts": { passam: ACESSO, recusa: SO_ACESSO, entrada: cadastro("customer_accounts", "update") },

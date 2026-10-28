@@ -62,6 +62,7 @@ import {
 } from "./billing.js";
 import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
 import { accessChangeFromTo, assertAccessActorCurrent, setUserAccessFor } from "./domain/access.js";
+import { assertDirectoryPersonManageable, enableReinvitedLoginFor, readReinvitedUser, userDirectoryArchivePayload } from "./domain/user-directory.js";
 import { accountRetentionEnabled, anonymizeRemovedAccounts } from "./domain/account-retention.js";
 import {
   CLIENT_ACCESS_COLLECTION,
@@ -4094,7 +4095,7 @@ function assertManagedAction(
     return;
   }
   requireAccessWrite(profile);
-  if (input.resource === "users" && input.action !== "set_role") {
+  if (input.resource === "users" && !["set_role", "archive"].includes(input.action)) {
     throw new HttpsError("invalid-argument", "Ação de usuário inválida.");
   }
   if (
@@ -4512,6 +4513,7 @@ function managedWritePayload(
   }
 
   if (input.resource === "users") {
+    if (input.action === "archive") return userDirectoryArchivePayload(documentId, before, profile);
     const nextRole = String(input.data.role ?? "") as Role;
     if (!VALID_ROLES.includes(nextRole)) {
       throw new HttpsError("invalid-argument", "Perfil de acesso inválido.");
@@ -4624,11 +4626,11 @@ function managedWritePayload(
     if (profile.role === "admin" && ["owner", "admin"].includes(String(before.role))) {
       throw new HttpsError("permission-denied", "Somente o owner pode convidar administradores.");
     }
-    if (before.email_status === "pending") {
+    if (before.email_status === "pending" && before.login_preparation_pending !== true) {
       throw new HttpsError("failed-precondition", "O envio deste convite já está agendado.");
     }
     const requestedAt = before.email_requested_at as { toMillis?: () => number } | undefined;
-    if (requestedAt?.toMillis && Date.now() - requestedAt.toMillis() < 60_000) {
+    if (before.login_preparation_pending !== true && requestedAt?.toMillis && Date.now() - requestedAt.toMillis() < 60_000) {
       throw new HttpsError("failed-precondition", "Aguarde um minuto antes de reenviar o convite.");
     }
     if (!z.string().email().safeParse(before.email).success || !VALID_ROLES.includes(before.role as Role)) {
@@ -4787,7 +4789,7 @@ export const mutateManagedEntity = onCall(async (request) => {
     .doc(`evt_${operationId}`);
   const inventoryControlRef = db.collection("system_controls").doc("inventory");
 
-  return db.runTransaction(async (transaction) => {
+  const result = await db.runTransaction(async (transaction) => {
     const [operationSnapshot, targetSnapshot, inventoryControlSnapshot] =
       await Promise.all([
         transaction.get(operationRef),
@@ -4856,6 +4858,14 @@ export const mutateManagedEntity = onCall(async (request) => {
     const minimumProjectionRefs = minimumChanged
       ? await readClientInventoryForSkuRecord(transaction, db, before, documentId)
       : [];
+    if (input.resource === "invites" && typeof before.reinvite_user_id === "string") {
+      const linked = await transaction.get(db.collection("users").doc(before.reinvite_user_id));
+      if (!linked.exists) throw new HttpsError("failed-precondition", "O perfil deste convite não existe mais.");
+      assertDirectoryPersonManageable(linked.id, linked.data() ?? {}, profile);
+      if (input.action === "update" && linked.get("pending_invite_id") !== documentId) {
+        throw new HttpsError("failed-precondition", "Este convite foi substituído. Use o convite mais recente.");
+      }
+    }
     const payload = managedWritePayload(
       input,
       profile,
@@ -4873,7 +4883,8 @@ export const mutateManagedEntity = onCall(async (request) => {
       });
     }
     // Convite de cliente: cadastro achado pelo código, cliente com sigla.
-    const queueInviteEmail = input.resource === "invites" && ["create", "update"].includes(input.action);
+    const recoveringLogin = input.resource === "invites" && input.action === "update" && before.login_preparation_pending === true && before.email_status === "pending";
+    const queueInviteEmail = input.resource === "invites" && ["create", "update"].includes(input.action) && !recoveringLogin;
     if (queueInviteEmail) {
       await assertInviteCustomerAllowed(transaction, db, { ...before, ...payload });
       Object.assign(payload, {
@@ -4881,6 +4892,18 @@ export const mutateManagedEntity = onCall(async (request) => {
         email_delivery_id: `mail_${inviteEventReference(documentId)}_${operationId}`,
         email_requested_at: FieldValue.serverTimestamp(),
       });
+    }
+    // Todas as leituras do reconvite vêm antes das escritas. O vínculo só
+    // permite restaurar o perfil depois do aceite com e-mail confirmado.
+    const reinvited = input.resource === "invites" && input.action === "create"
+      ? await readReinvitedUser(transaction, db, String((payload as Record<string, unknown>).email), profile)
+      : undefined;
+    if (reinvited) Object.assign(payload, { reinvite_user_id: reinvited.id, login_preparation_pending: true });
+    if (input.resource === "users" && input.action === "archive" && typeof before.pending_invite_id === "string") {
+      const pending = await transaction.get(db.collection("invites").doc(before.pending_invite_id));
+      if (pending.get("status") === "pending" && pending.get("reinvite_user_id") === documentId) {
+        throw new HttpsError("failed-precondition", "Cancele o convite pendente antes de remover a pessoa da lista.");
+      }
     }
     // Papel cliente: o customer_code da pessoa vira a fronteira dela
     // (invariante 4), com a conferência do convite de cliente.
@@ -4904,6 +4927,9 @@ export const mutateManagedEntity = onCall(async (request) => {
       transaction.create(targetRef, payload);
     } else {
       transaction.set(targetRef, payload, { merge: true });
+    }
+    if (reinvited) {
+      transaction.update(reinvited.ref, { pending_invite_id: documentId, updated_at: FieldValue.serverTimestamp() });
     }
     if (queueInviteEmail) {
       const emailId = String((payload as Record<string, unknown>).email_delivery_id);
@@ -5136,6 +5162,11 @@ export const mutateManagedEntity = onCall(async (request) => {
     });
     return result;
   });
+  // Também nas repetições do recibo: uma falha anterior no Auth pode ser retomada.
+  if (input.resource === "invites" && ["create", "update"].includes(input.action)) {
+    await enableReinvitedLoginFor(db, getAuth(), documentId, profile);
+  }
+  return result;
 });
 
 export const createProductPhotoUploadTarget = onCall(async (request) => {

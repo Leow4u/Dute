@@ -148,7 +148,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
           </div>
         ) : null}
         <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
-          <div className="mx-auto w-full max-w-[1040px] p-4 md:px-10 md:py-10">
+          <div className={cn("mx-auto w-full p-4 md:px-10 md:py-10", activeId === "pessoas" ? "xl:px-12" : "max-w-[1040px]")}>
             {atRoot ? (
               <h1 className="mb-4 text-2xl font-semibold tracking-tight md:hidden">
                 Configuração

@@ -147,21 +147,37 @@ export async function acceptInviteFor(db: Firestore, auth: Login, dados: unknown
     }
     if (texto(convite.status) === "used") throw new HttpsError("failed-precondition", "Este convite já foi usado.");
     if (texto(convite.status) !== "pending") throw new HttpsError("failed-precondition", "Este convite não vale mais.");
-    if (perfilSnap.exists) {
+    const perfil = perfilSnap.data() ?? {};
+    const reconvite = perfilSnap.exists && perfil.access_disabled === true &&
+      convite.reinvite_user_id === auth.uid && perfil.pending_invite_id === token &&
+      texto(perfil.email).toLowerCase() === email;
+    if (perfilSnap.exists && !reconvite) {
       throw new HttpsError("failed-precondition", "Esta conta já tem acesso. Para mudar o perfil, fale com quem administra os acessos.");
     }
     // O cliente do convite ainda vale: cadastrado, não arquivado e com o portal ligado (pergunta 69).
     await assertInviteCustomerAllowed(transaction, db, { role, customer_code: customerCode });
 
-    transaction.create(perfilRef, {
+    const novoPerfil = {
       nome,
       email,
       role,
       customer_code: customerCode,
       invite_id: token,
-      created_at: FieldValue.serverTimestamp(),
+      ...(!perfilSnap.exists ? { created_at: FieldValue.serverTimestamp() } : {}),
+      ...(reconvite ? {
+        access_disabled: false,
+        directory_hidden: false,
+        directory_hidden_by: FieldValue.delete(),
+        directory_hidden_at: FieldValue.delete(),
+        pending_invite_id: FieldValue.delete(),
+        access_changed_at: agora().toISOString(),
+        access_changed_by: convite.created_by ?? null,
+        access_change_reason: "Novo convite aceito",
+      } : {}),
       updated_at: FieldValue.serverTimestamp(),
-    });
+    };
+    if (reconvite) transaction.update(perfilRef, novoPerfil);
+    else transaction.create(perfilRef, novoPerfil);
     transaction.update(conviteRef, { status: "used", used_by: auth.uid, used_at: FieldValue.serverTimestamp() });
     // O token abre o convite: o evento leva só a referência dele, também no id.
     const referencia = inviteEventReference(token);
@@ -176,7 +192,7 @@ export async function acceptInviteFor(db: Firestore, auth: Login, dados: unknown
         entity_type: "usuario",
         entity_id: auth.uid,
         customer_code: customerCode,
-        payload: { role, customer_code: customerCode, invite_ref: referencia },
+        payload: { role, customer_code: customerCode, invite_ref: referencia, ...(reconvite ? { reinvited: true, role_before: perfil.role ?? null, customer_code_before: perfil.customer_code ?? null } : {}) },
         occurred_at: agora().toISOString(),
         source: "functions_access",
       },

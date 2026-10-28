@@ -231,3 +231,41 @@ describe("a consulta do convite pelo link", () => {
     await assert.rejects(lookupInviteFor(db, { token: "../users/u-ana" }), { code: "not-found", message: "Convite inválido ou não encontrado." });
   });
 });
+
+describe("aceitar novamente preservando identidade e histórico", () => {
+  it("reativa só no aceite do convite atual, remove a ocultação e mantém o mesmo UID", async () => {
+    await cliente();
+    await convite({ reinvite_user_id: "u-ana" });
+    await db.collection("users").doc("u-ana").set({
+      nome: "Ana antiga", email: "ana@cliente.com.br", role: "wms", customer_code: "Dutelog",
+      access_disabled: true, directory_hidden: true, pending_invite_id: TOKEN,
+      created_at: "data-original", access_change_reason: "Saiu da empresa",
+    });
+    await acceptInviteFor(db, ANA, { token: TOKEN, nome: "Ana Souza" }, AGORA);
+    const profile = (await db.collection("users").doc("u-ana").get()).data()!;
+    assert.equal(profile.access_disabled, false);
+    assert.equal(profile.directory_hidden, false);
+    assert.equal(profile.pending_invite_id, undefined);
+    assert.equal(profile.created_at, "data-original");
+    assert.equal(profile.role, "cliente");
+    assert.equal(profile.customer_code, "ITAU");
+    assert.equal((await eventosDe("u-ana")).length, 1);
+    const again = await acceptInviteFor(db, ANA, { token: TOKEN, nome: "Ana Souza" }, AGORA);
+    assert.equal(again.replayed, true);
+  });
+  it("não restaura por convite antigo, sem vínculo, cancelado ou para outro e-mail", async () => {
+    await cliente();
+    await convite({ reinvite_user_id: "u-ana" });
+    await db.collection("users").doc("u-ana").set({ email: "ana@cliente.com.br", role: "wms", access_disabled: true, pending_invite_id: "mais-recente" });
+    await assert.rejects(acceptInviteFor(db, ANA, { token: TOKEN, nome: "Ana" }), /convite|acesso/);
+    await db.collection("users").doc("u-ana").update({ pending_invite_id: TOKEN });
+    await convite({});
+    await assert.rejects(acceptInviteFor(db, ANA, { token: TOKEN, nome: "Ana" }), /convite|acesso/);
+    await convite({ reinvite_user_id: "u-ana", status: "revoked" });
+    await assert.rejects(acceptInviteFor(db, ANA, { token: TOKEN, nome: "Ana" }), /não vale mais/);
+    await convite({ reinvite_user_id: "u-ana" });
+    await assert.rejects(acceptInviteFor(db, { uid: "u-ana", token: { email: "outra@cliente.com.br", email_verified: true } }, { token: TOKEN, nome: "Ana" }), /outro e-mail/);
+    assert.equal((await db.collection("users").doc("u-ana").get()).get("access_disabled"), true);
+    assert.equal((await eventosDe("u-ana")).length, 0);
+  });
+});
