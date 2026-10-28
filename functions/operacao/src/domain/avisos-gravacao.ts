@@ -47,7 +47,7 @@ export const TENTATIVAS_DO_EMAIL = 5;
 /** Quanto o evento espera antes de virar aviso. */
 export const ESPERA_DO_EVENTO_MS = 60_000;
 
-export type EmailParaEnviar = { id: string; from: string; to: string[]; subject: string; text: string };
+export type EmailParaEnviar = { id: string; from: string; to: string[]; subject: string; text: string; html?: string };
 /** Envia o e-mail; "audit" quando o envio está desligado (sem a chave do provedor): fica registrado e não sai. */
 export type EnviarEmail = (email: EmailParaEnviar) => Promise<{ status: "sent" | "audit"; provider_id?: string | null }>;
 
@@ -271,7 +271,7 @@ export function enviarPeloResend(chave: string, buscar: typeof fetch = fetch): E
     const resposta = await buscar("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${chave}`, "Content-Type": "application/json", "Idempotency-Key": email.id },
-      body: JSON.stringify({ from: email.from, to: email.to, subject: email.subject, text: email.text }),
+      body: JSON.stringify({ from: email.from, to: email.to, subject: email.subject, text: email.text, ...(email.html ? { html: email.html } : {}) }),
     });
     const corpo = (await resposta.json().catch(() => ({}))) as { id?: unknown; message?: unknown };
     if (!resposta.ok) throw new Error(`Resend recusou o envio (${resposta.status}): ${texto(corpo.message) || "sem mensagem"}`);

@@ -27,6 +27,7 @@ import {
   type EventoLido,
 } from "./avisos.js";
 import { enviarPeloResend, soParaADutelog, type EnviarEmail } from "./avisos-gravacao.js";
+import { conviteHtml } from "./convite-email-template.js";
 import { OPERACAO_EVENT_TYPES } from "./events.js";
 
 /**
@@ -311,5 +312,27 @@ describe("o envio pelo Resend", () => {
     assert.deepEqual(await soParaADutelog(enviar)({ ...email, to: ["ana@dutelog.com.br"] }), { status: "sent", provider_id: "re_1" });
     assert.deepEqual(await soParaADutelog(enviar)(email), { status: "audit" });
     assert.deepEqual(enviados, [["ana@dutelog.com.br"]]);
+  });
+});
+
+describe("template do convite", () => {
+  it("destaca o aceite, mantém link alternativo e escapa dados da pessoa", () => {
+    const html = conviteHtml({ nome: '<Maria & Ana>', email: 'maria@example.com', link: 'https://app.dutelog.com.br/convite?invite=teste' });
+    assert.match(html, /Aceitar convite/);
+    assert.match(html, /&lt;Maria &amp; Ana&gt;/);
+    assert.ok(!html.includes('<Maria & Ana>'));
+    assert.match(html, /maria@example.com/);
+    assert.match(html, /role="presentation"/);
+    assert.equal(html.match(/href="https:\/\/app.dutelog.com.br\/convite\?invite=teste"/g)?.length, 2);
+  });
+  it("envia HTML junto com a alternativa em texto para o provedor", async () => {
+    let body: Record<string, unknown> = {};
+    const enviar = enviarPeloResend("chave-de-teste", (async (_url, init) => {
+      body = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({ id: "email-teste" }), { status: 200 });
+    }) as typeof fetch);
+    await enviar({ id: "id-teste", from: "Dutelog <avisos@dutelog.com.br>", to: ["maria@example.com"], subject: "Convite", text: "Alternativa em texto", html: "<h1>Convite</h1>" });
+    assert.equal(body.html, "<h1>Convite</h1>");
+    assert.equal(body.text, "Alternativa em texto");
   });
 });

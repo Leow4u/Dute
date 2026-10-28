@@ -2,6 +2,7 @@ import { FieldValue, type Firestore } from "firebase-admin/firestore";
 
 import { ENDERECO_DO_APP, type EmailDoAviso } from "./avisos.js";
 import { isPlatformRole } from "./platform-roles.js";
+import { conviteHtml } from "./convite-email-template.js";
 import { acessoDoCliente } from "./profile.js";
 
 /** A criação do convite no WMS põe só a referência na fila privada de e-mail. */
@@ -54,7 +55,8 @@ export async function emailDoConvitePendente(
   const nome = texto(convite.nome).replace(/[\r\n]/g, " ").slice(0, 120);
   return {
     to: [email],
-    subject: "Convite para acessar o Dute App · Dutelog",
+    subject: "Seu convite para o Dute App · Dutelog",
+    html: conviteHtml({ nome, email, link: `${endereco}/convite?invite=${encodeURIComponent(token)}` }),
     text: [
       nome ? `Olá, ${nome}.` : "Olá.",
       "", "Você recebeu um convite para acessar o Dute App.",
