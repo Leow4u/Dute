@@ -51,6 +51,10 @@ describe("o e-mail do convite de acesso", () => {
     assert.equal(enviados[0]!.from, REMETENTE_DOS_AVISOS);
     assert.match(enviados[0]!.text, new RegExp(`https://app\\.dutelog\\.com\\.br/convite\\?invite=${TOKEN}`));
     assert.match(enviados[0]!.text, /defin.*senha/i);
+    assert.ok(enviados[0]!.html, "o HTML chega ao envio junto com a alternativa em texto");
+    assert.match(enviados[0]!.html, /Aceitar convite/);
+    assert.ok(enviados[0]!.html.includes(`href="${ORIGEM}/convite?invite=${TOKEN}"`));
+    assert.match(enviados[0]!.html, /<img src="https:\/\/app\.dutelog\.com\.br\/dutelog-logo\.png"/);
     assert.ok(!enviados[0]!.subject.includes(TOKEN));
     assert.equal((await email()).status, "sent");
     assert.equal((await email()).provider_id, "re_convite");
@@ -69,6 +73,7 @@ describe("o e-mail do convite de acesso", () => {
     await db.collection("email_outbox").doc(MAIL_ID).update({ status: "pending" });
     await rodar(async (dados) => {
       assert.ok(dados.text.includes(`${ENDERECO_DO_APP["dute-homolog"]}/convite?invite=${TOKEN}`));
+      assert.ok(dados.html?.includes(`href="${ENDERECO_DO_APP["dute-homolog"]}/convite?invite=${TOKEN}"`));
       return { status: "sent" };
     }, ENDERECO_DO_APP["dute-homolog"]!);
     assert.equal((await convite()).email_status, "sent");

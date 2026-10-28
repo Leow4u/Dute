@@ -282,7 +282,7 @@ export function destinatariosDoModelo(modelo: ModeloDeAviso, contatos: ReadonlyA
   return [...new Set(emails)].sort();
 }
 
-export type EmailDoAviso = { to: string[]; subject: string; text: string };
+export type EmailDoAviso = { to: string[]; subject: string; text: string; html?: string };
 
 /** O que o link do e-mail abre, quando não é só a tela do portal. */
 const CHAMADA_DO_LINK: Partial<Record<ModeloDeAviso, string>> = {
