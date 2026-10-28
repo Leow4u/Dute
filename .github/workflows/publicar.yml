@@ -243,7 +243,8 @@ jobs:
   frontend:
     name: Frontend (Cloud Run)
     needs: [regras, functions]
-    runs-on: ubuntu-latest
+    # Mesmo ambiente do smoke test no CI: Playwright 1.56.1 não suporta 26.04.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write
