@@ -1,7 +1,6 @@
 import {
   createUserWithEmailAndPassword,
   reload,
-  sendEmailVerification,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
@@ -21,11 +20,10 @@ import { useAppUser } from "@/lib/auth";
 import {
   MENSAGENS_DO_CONVITE,
   conviteLido,
-  enderecoDeVolta,
   mensagemDoConvite,
+  mensagemDoEnvioDeConfirmacao,
   nomeDoAceite,
   perfilDoConvite,
-  semEnderecoDeVolta,
   type ConviteLido,
 } from "@/lib/convite";
 import { firebaseApp, firebaseAuth, firebaseConfigError } from "@/lib/firebase";
@@ -46,7 +44,7 @@ export type TelaDoConvite =
   | { tela: "sem_convite"; motivo: "sem_link" | "invalido" }
   | { tela: "outra_conta"; email: string }
   | { tela: "formulario"; convite: ConviteLido }
-  | { tela: "confirmar"; convite: ConviteLido; reenviado: boolean }
+  | { tela: "confirmar"; convite: ConviteLido; reenviado: boolean; enviado: boolean }
   | { tela: "confirmado"; convite: ConviteLido };
 
 export type AcoesDoConvite = {
@@ -137,7 +135,7 @@ export function ConviteView({
             <Mail className="h-7 w-7" />
           </span>
           <p className="font-semibold">
-            Enviamos um link para <strong className="break-all">{estado.convite.email}</strong>.
+            {estado.enviado ? "Enviamos um link para " : "Confirme o endereço "}<strong className="break-all">{estado.convite.email}</strong>.
           </p>
           {estado.reenviado ? (
             <p role="status" className="font-semibold text-success-soft-foreground">
@@ -237,15 +235,14 @@ async function aceitarNoServidor(token: string, nome: string): Promise<void> {
   await aceitar({ token, nome });
 }
 
-async function enviarConfirmacao(usuario: User, token: string): Promise<void> {
-  // O e-mail do Firebase sai em português.
-  if (firebaseAuth) firebaseAuth.languageCode = "pt-BR";
-  try {
-    await sendEmailVerification(usuario, { url: enderecoDeVolta(window.location.origin, basePath, token) });
-  } catch (erro) {
-    if (!semEnderecoDeVolta(erro)) throw erro;
-    await sendEmailVerification(usuario);
-  }
+type ResultadoDoEnvio = { ok: true; status: "sent" | "already_verified" };
+
+async function enviarConfirmacao(token: string): Promise<ResultadoDoEnvio> {
+  if (!firebaseApp) throw new Error("Firebase não configurado.");
+  const enviar = httpsCallable<{ token: string }, ResultadoDoEnvio>(functionsDoApp(firebaseApp), "sendInviteEmailVerification");
+  const { data } = await enviar({ token });
+  if (data?.ok !== true || !["sent", "already_verified"].includes(data.status)) throw new Error("Resposta de envio inválida.");
+  return data;
 }
 
 export default function ConvitePage() {
@@ -259,6 +256,7 @@ export default function ConvitePage() {
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [reenviado, setReenviado] = useState(false);
+  const [enviado, setEnviado] = useState(false);
   // O "Aceitar convite" cria a conta, e a conta nova muda a sessão no meio dele.
   const emAndamento = useRef(false);
   const convite = typeof leitura === "object" ? leitura : null;
@@ -288,6 +286,29 @@ export default function ConvitePage() {
     setPasso("confirmado");
   }
 
+  async function solicitarConfirmacao(usuario: User, reenvio = false) {
+    if (!convite) return;
+    // A conta já existe mesmo se o provedor falhar. Mantém o reenvio disponível.
+    setPasso("confirmar");
+    setEnviado(false);
+    setReenviado(false);
+    let resultado: ResultadoDoEnvio;
+    try {
+      resultado = await enviarConfirmacao(convite.token);
+    } catch (falha) {
+      setErro(mensagemDoEnvioDeConfirmacao(falha));
+      return;
+    }
+    if (resultado.status === "already_verified") {
+      await reload(usuario);
+      if (usuario.emailVerified) await aceitarConfirmado(usuario);
+      else setErro(MENSAGENS_DO_CONVITE.semConfirmacao);
+      return;
+    }
+    setEnviado(true);
+    setReenviado(reenvio);
+  }
+
   /** Com a conta do convite na janela: aceita se o e-mail já está confirmado, ou pede a confirmação. */
   async function seguir(usuario: User, enviar: boolean) {
     if (!convite) return;
@@ -296,8 +317,8 @@ export default function ConvitePage() {
       await aceitarConfirmado(usuario);
       return;
     }
-    if (enviar) await enviarConfirmacao(usuario, convite.token);
     setPasso("confirmar");
+    if (enviar) await solicitarConfirmacao(usuario);
   }
 
   async function executar(acao: () => Promise<void>) {
@@ -356,14 +377,13 @@ export default function ConvitePage() {
       void executar(async () => {
         const usuario = firebaseAuth?.currentUser;
         if (!usuario || !convite) return;
-        setReenviado(false);
-        await enviarConfirmacao(usuario, convite.token);
-        setReenviado(true);
+        await solicitarConfirmacao(usuario, true);
       }),
     sair: () =>
       void executar(async () => {
         if (firebaseAuth) await signOut(firebaseAuth);
         setSenha("");
+        setEnviado(false);
         setReenviado(false);
         setPasso("formulario");
       }),
@@ -387,7 +407,7 @@ export default function ConvitePage() {
           : leitura === "sem_link" || leitura === "invalido"
             ? { tela: "sem_convite", motivo: leitura }
             : passo === "confirmar"
-              ? { tela: "confirmar", convite: leitura, reenviado }
+              ? { tela: "confirmar", convite: leitura, reenviado, enviado }
               : { tela: "formulario", convite: leitura };
 
   return <ConviteView estado={estado} nome={nome} senha={senha} erro={erro} ocupado={ocupado} acoes={acoes} />;

@@ -250,7 +250,8 @@ describe("as callables", () => {
   it("toda callable que o app chama existe em functions/operacao", () => {
     const fonte = readFileSync(new URL("../../../../../functions/operacao/src/index.ts", import.meta.url), "utf8");
     const exportadas = Array.from(fonte.matchAll(/^export const (\w+) = onCall\(/gm), (match) => match[1]);
-    expect([...CALLABLES_DA_OPERACAO].sort()).toEqual([...exportadas].sort());
+    // O envio de confirmação pertence ao acesso inicial, sem perfil de Operação.
+    expect([...CALLABLES_DA_OPERACAO, "sendInviteEmailVerification"].sort()).toEqual([...exportadas].sort());
   });
 });
 

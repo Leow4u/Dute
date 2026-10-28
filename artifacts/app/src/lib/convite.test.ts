@@ -2,11 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   conviteLido,
-  enderecoDeVolta,
   mensagemDoConvite,
+  mensagemDoEnvioDeConfirmacao,
   nomeDoAceite,
   perfilDoConvite,
-  semEnderecoDeVolta,
 } from "./convite";
 
 const TOKEN = "3f9c2a7be1d04c58a6f1e2d3c4b5a69788aa";
@@ -55,12 +54,7 @@ describe("o convite lido pelo link (pergunta 68)", () => {
     expect(nomeDoAceite("", undefined, { nome: "", email: "ana.ribeiro@itau.com.br" })).toBe("ana.ribeiro");
   });
 
-  it("o link do e-mail volta ao próprio convite", () => {
-    expect(enderecoDeVolta("https://app.dutelog.com.br", "", TOKEN)).toBe(`https://app.dutelog.com.br/convite?invite=${TOKEN}`);
-    expect(enderecoDeVolta("http://localhost:5173", "/app", "a b")).toBe("http://localhost:5173/app/convite?invite=a%20b");
-    expect(semEnderecoDeVolta({ code: "auth/unauthorized-continue-uri" })).toBe(true);
-    expect(semEnderecoDeVolta({ code: "auth/network-request-failed" })).toBe(false);
-  });
+
 });
 
 describe("as mensagens da tela do convite", () => {
@@ -75,6 +69,15 @@ describe("as mensagens da tela do convite", () => {
     expect(mensagemDoConvite(erro("auth/weak-password"))).toBe("Use uma senha com pelo menos 6 caracteres.");
     expect(mensagemDoConvite(erro("auth/too-many-requests"))).toBe("Muitas tentativas. Espere alguns minutos e tente de novo.");
     expect(mensagemDoConvite(erro("auth/network-request-failed"))).toBe("Sem conexão. Confira a internet e tente de novo.");
+  });
+
+  it("o envio mostra cooldown e falha recuperável sem expor erro do provedor", () => {
+    expect(mensagemDoEnvioDeConfirmacao(erro("functions/resource-exhausted", "Aguarde um minuto antes de reenviar."))).toBe("Aguarde um minuto antes de reenviar.");
+    for (const code of ["functions/unavailable", "functions/internal", "functions/deadline-exceeded"]) {
+      expect(mensagemDoEnvioDeConfirmacao(erro(code, "provider secret raw error"))).toBe(
+        "Não foi possível enviar o e-mail de confirmação. Use Reenviar e-mail para tentar novamente.",
+      );
+    }
   });
 
   it("a recusa do servidor chega como ele escreveu; o erro interno, não", () => {

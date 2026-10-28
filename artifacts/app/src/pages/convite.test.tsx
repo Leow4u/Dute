@@ -65,7 +65,7 @@ describe("aceitar convite com o e-mail confirmado (pergunta 68)", () => {
   });
 
   it("passo 2: o link enviado para o e-mail, Já confirmei, Reenviar e-mail e Sair", () => {
-    const html = render({ tela: "confirmar", convite: CONVITE, reenviado: false });
+    const html = render({ tela: "confirmar", convite: CONVITE, reenviado: false, enviado: true });
     expect(html).toContain("Confirme seu e-mail");
     expect(html).not.toContain("Link reenviado.");
     expect(
@@ -81,12 +81,21 @@ describe("aceitar convite com o e-mail confirmado (pergunta 68)", () => {
       ]),
     ).toEqual([]);
 
-    const reenviado = render({ tela: "confirmar", convite: CONVITE, reenviado: true });
+    const reenviado = render({ tela: "confirmar", convite: CONVITE, reenviado: true, enviado: true });
     expect(reenviado).toMatch(/<p role="status"[^>]*>Link reenviado\.<\/p>/);
 
-    const semConfirmar = render({ tela: "confirmar", convite: CONVITE, reenviado: false }, { erro: "Seu e-mail ainda não foi confirmado. Abra o link que enviamos." });
+    const semConfirmar = render({ tela: "confirmar", convite: CONVITE, reenviado: false, enviado: true }, { erro: "Seu e-mail ainda não foi confirmado. Abra o link que enviamos." });
     expect(semConfirmar).toContain('role="alert"');
     expect(semConfirmar).toContain("Seu e-mail ainda não foi confirmado. Abra o link que enviamos.");
+  });
+
+  it("envio ainda não confirmado mantém reenvio sem afirmar que enviou", () => {
+    const html = render({ tela: "confirmar", convite: CONVITE, reenviado: false, enviado: false }, { erro: "Não foi possível enviar o e-mail de confirmação." });
+    expect(html).toContain("Confirme o endereço");
+    expect(html).not.toContain("Enviamos um link");
+    expect(html).toContain("Reenviar e-mail");
+    expect(html).toContain('role="alert"');
+    expect(textosForaDaLista(html, ["Confirme seu e-mail", "Confirme o endereço", "ana.ribeiro@itau.com.br", ".", "Não foi possível enviar o e-mail de confirmação.", "Já confirmei", "Reenviar e-mail", "Sair", RODAPE])).toEqual([]);
   });
 
   it("passo 3: e-mail confirmado, o perfil e Entrar, um link que recarrega o app", () => {
@@ -117,13 +126,14 @@ describe("aceitar convite com o e-mail confirmado (pergunta 68)", () => {
 
   it("ocupado, o botão diz o que está fazendo e não aceita outro clique", () => {
     expect(render({ tela: "formulario", convite: CONVITE }, { ocupado: true })).toMatch(/<button[^>]*type="submit"[^>]*disabled=""[^>]*>Aceitando...<\/button>/);
-    expect(render({ tela: "confirmar", convite: CONVITE, reenviado: false }, { ocupado: true })).toContain("Conferindo...");
+    expect(render({ tela: "confirmar", convite: CONVITE, reenviado: false, enviado: true }, { ocupado: true })).toContain("Conferindo...");
   });
 
   it("passa no axe (WCAG 2.1 A e AA) em cada passo", async () => {
     const telas: TelaDoConvite[] = [
       { tela: "formulario", convite: CONVITE },
-      { tela: "confirmar", convite: CONVITE, reenviado: true },
+      { tela: "confirmar", convite: CONVITE, reenviado: true, enviado: true },
+      { tela: "confirmar", convite: CONVITE, reenviado: false, enviado: false },
       { tela: "confirmado", convite: CONVITE },
       { tela: "sem_convite", motivo: "invalido" },
       { tela: "outra_conta", email: "joao@dutelog.com.br" },

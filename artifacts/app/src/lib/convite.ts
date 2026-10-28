@@ -43,17 +43,6 @@ export function nomeDoAceite(digitado: string, daConta: string | null | undefine
   return texto(digitado) || texto(daConta) || convite.nome || convite.email.split("@")[0];
 }
 
-/** Para onde o link do e-mail de confirmação volta: o próprio convite. */
-export function enderecoDeVolta(origem: string, basePath: string, token: string): string {
-  return `${origem}${basePath}/convite?invite=${encodeURIComponent(token)}`;
-}
-
-/** O endereço de volta fora da lista autorizada do Firebase Auth: o link confirma do mesmo jeito, sem voltar ao convite. */
-export function semEnderecoDeVolta(erro: unknown): boolean {
-  const codigo = (erro as { code?: unknown } | null)?.code;
-  return codigo === "auth/unauthorized-continue-uri" || codigo === "auth/invalid-continue-uri" || codigo === "auth/missing-continue-uri";
-}
-
 export const MENSAGENS_DO_CONVITE = {
   semConfirmacao: "Seu e-mail ainda não foi confirmado. Abra o link que enviamos.",
   reenviado: "Link reenviado.",
@@ -66,6 +55,7 @@ const RECUSAS_DO_SERVIDOR = new Set([
   "functions/failed-precondition",
   "functions/permission-denied",
   "functions/not-found",
+  "functions/resource-exhausted",
 ]);
 
 /** O erro do Firebase como a tela do convite mostra. */
@@ -87,4 +77,11 @@ export function mensagemDoConvite(erro: unknown): string {
   }
   if (typeof codigo === "string" && RECUSAS_DO_SERVIDOR.has(codigo) && erro instanceof Error && erro.message) return erro.message;
   return "Não foi possível aceitar o convite. Tente de novo.";
+}
+
+/** Falha no envio da confirmação: não confundir indisponibilidade do provedor com conexão do navegador. */
+export function mensagemDoEnvioDeConfirmacao(erro: unknown): string {
+  const codigo = (erro as { code?: unknown } | null)?.code;
+  if (typeof codigo === "string" && RECUSAS_DO_SERVIDOR.has(codigo) && erro instanceof Error && erro.message) return erro.message;
+  return "Não foi possível enviar o e-mail de confirmação. Use Reenviar e-mail para tentar novamente.";
 }
