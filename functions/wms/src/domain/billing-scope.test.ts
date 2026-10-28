@@ -52,10 +52,10 @@ describe("fatura por cliente", () => {
     );
   });
 
-  it("onde o Financeiro está ligado, o WMS não marca pagamento (parte 7.2c)", () => {
+  it("a produção focada na armazenagem recebe no WMS; homologação mantém o Financeiro", () => {
     assert.deepEqual(
       ["dute-homolog", "dute-prod", "dute-btg", "demo-dute-operations", undefined].map(billingPaidInFinanceiro),
-      [true, true, false, false, false],
+      [true, false, false, false, false],
     );
   });
 });

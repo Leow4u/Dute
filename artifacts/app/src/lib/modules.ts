@@ -1,6 +1,7 @@
 import { CAMPO_ROLES, ROTA_CAMPO, ROTA_CAMPO_CONCLUIR, ROTA_CAMPO_OS } from "./campo/navegacao";
 import { ROTA_TV, TV_ROLES } from "./tv/navegacao";
 import { ALERTA_PARADO_ROLES } from "./memoria/alertas";
+import { rotaDisponivelNaArmazenagem } from "./somente-armazenagem";
 import {
   AlarmClock,
   Banknote,
@@ -929,6 +930,9 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   // O alerta do item parado para aprovar, aberto pelo Início (parte 5.4e): só a coordenação decide.
   { path: "/estoque/alertas", roles: ALERTA_PARADO_ROLES },
   { path: "/faturamento/tabela", roles: FINANCE_ROLES },
+  // Manutenção das tabelas vinculadas à cobrança no modo só Armazenagem.
+  // Não amplia os papéis autorizados a gravar contratos no backend.
+  { path: "/faturamento/contratos", roles: ["owner", "admin"] },
   // Fatura (prévia ou emitida) para imprimir/salvar PDF.
   { path: "/faturamento/fatura", roles: FINANCE_ROLES },
   { path: "/portal/faturas/fatura", roles: CLIENT_ROLES },
@@ -1113,7 +1117,7 @@ function navigationForAmbiente(
   )
     .map((module) => {
       const routes = module.routes.filter((route) =>
-        canAccessModule(role, route.roles) && (route.liberacao !== "agente" || agente) && (route.liberacao !== "omie" || omie),
+        canAccessModule(role, route.roles) && rotaDisponivelNaArmazenagem(route.href ?? "") && (route.liberacao !== "agente" || agente) && (route.liberacao !== "omie" || omie),
       );
       // Um grupo que o papel reduziu a uma tela só vira o link dessa tela:
       // o operador WMS vê "Documentos", não um "Mais" com um item dentro.

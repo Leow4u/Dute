@@ -21,7 +21,7 @@ import {
   type TabelaDoContrato,
 } from "@/lib/comercial/contratos";
 import { carga, useLeitura } from "@/lib/comercial/leitura";
-import { ROTA_CONTRATOS, contratoDaBusca, hrefDoContrato } from "@/lib/comercial/navegacao";
+import { ROTA_CONTRATOS, contratoDaBusca } from "@/lib/comercial/navegacao";
 import { payloadDaTabela } from "@/lib/comercial/tabela-do-contrato";
 
 import { ContratoDialog, RegistrarAditivoDialog } from "./contratos-dialogos";
@@ -57,7 +57,12 @@ function rolarAteAFicha() {
 }
 
 /** `somenteLeitura`: a mesma tela no shell do Financeiro (Fase 7, parte 7.5c), sem gravar nada. */
-export default function ComercialContratosPage({ somenteLeitura = false }: { somenteLeitura?: boolean } = {}) {
+export default function ComercialContratosPage({ somenteLeitura = false, rotaBase = ROTA_CONTRATOS, clienteCodigo }: {
+  somenteLeitura?: boolean;
+  /** Reutiliza a manutenção das tabelas no faturamento, sem abrir o Comercial. */
+  rotaBase?: string;
+  clienteCodigo?: string;
+} = {}) {
   const { toast } = useToast();
   const busca = useSearch();
   const [, navigate] = useLocation();
@@ -70,8 +75,13 @@ export default function ComercialContratosPage({ somenteLeitura = false }: { som
   const contratos = useLeitura("contracts", (db) => collection(db, "contracts"), contratoDoRegistro);
   const cadastros = useLeitura("customers", (db) => collection(db, "customers"), cadastroDoDocumento);
 
-  const lista = contratos.itens ?? [];
-  const clientes = cadastros.itens ?? [];
+  const lista = useMemo(() => (contratos.itens ?? []).filter(
+    (contrato) => !clienteCodigo || contrato.dados.customer_code === clienteCodigo,
+  ), [contratos.itens, clienteCodigo]);
+  const clientes = useMemo(() => (cadastros.itens ?? []).filter(
+    (cliente) => !clienteCodigo || cliente.code === clienteCodigo,
+  ), [cadastros.itens, clienteCodigo]);
+  const hrefDoContrato = (contratoId: string) => `${rotaBase}?id=${encodeURIComponent(contratoId)}`;
   const itens = useMemo(
     () => listaDeContratos(lista, nomesDosClientes(clientes), filtro, hoje),
     [lista, clientes, filtro, hoje],
@@ -153,7 +163,7 @@ export default function ComercialContratosPage({ somenteLeitura = false }: { som
         onFiltro={(proximo) => {
           setFiltro(proximo);
           // A ficha passa para o primeiro contrato do filtro.
-          navigate(ROTA_CONTRATOS, { replace: true });
+          navigate(rotaBase, { replace: true });
         }}
         selecionado={selecionado}
         onSelecionar={selecionar}

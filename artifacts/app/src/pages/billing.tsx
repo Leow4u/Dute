@@ -527,6 +527,11 @@ export default function Billing() {
                     </Link>
                   </Button>
                 ) : null}
+                {acao?.tipo === "nf_vinculada" ? (
+                  <p className="text-sm text-muted-foreground">
+                    Esta competência já está vinculada a uma nota fiscal. O pagamento precisa ser conciliado com essa nota antes de registrar a baixa.
+                  </p>
+                ) : null}
               </div>
             </div>
           </aside>
