@@ -67,6 +67,34 @@ function campo(id: string, valor: string) {
 }
 
 describe("tabela criada na ficha do contrato", () => {
+  it("na Armazenagem seleciona o contrato sem sair do faturamento", async () => {
+    window.history.replaceState({}, "", "/faturamento/contratos");
+    await act(async () => raiz.render(<ComercialContratosPage rotaBase="/faturamento/contratos" clienteCodigo="ITAU" />));
+    const contrato = container.querySelector<HTMLButtonElement>('button[aria-pressed="true"]');
+    expect(contrato).not.toBeNull();
+    await act(async () => contrato!.click());
+    expect(window.location.pathname).toBe("/faturamento/contratos");
+    expect(window.location.search).toBe("?id=ct_itau");
+    await clicar("Adicionar tabela");
+    campo("tabela-nome", "Armazenagem 2026");
+    campo("tabela-codigo", "ARM-26");
+    campo("tabela-item-1-codigo", "3.05");
+    campo("tabela-item-1-descricao", "Armazenagem");
+    campo("tabela-item-1-unidade", "UN");
+    campo("tabela-item-1-preco", "12,50");
+    estado.falhar = false;
+    await clicar("Salvar tabela");
+    expect(estado.chamadas[0]).toMatchObject({ nome: "saveContractPriceTable", dados: { contrato_id: "ct_itau", itens: [{ codigo: "3.05", descricao: "Armazenagem", unidade: "UN", preco: "12.50" }] } });
+    expect(container.querySelector('[aria-label="Tabelas de preço"]')?.textContent).toContain("Armazenagem 2026");
+    expect(window.location.pathname).toBe("/faturamento/contratos");
+  });
+
+  it("na Armazenagem não mostra o contrato de outro cliente ativo", async () => {
+    await act(async () => raiz.render(<ComercialContratosPage rotaBase="/faturamento/contratos" clienteCodigo="SAFRA" />));
+    expect(container.textContent).not.toContain("Serviços Itaú");
+    expect(container.textContent).toContain("Nenhum contrato vigente");
+  });
+
   it("grava pela callable, repete a mesma intenção após erro e mostra a tabela recebida pela leitura", async () => {
     await act(async () => raiz.render(<ComercialContratosPage />));
     await clicar("Adicionar tabela");

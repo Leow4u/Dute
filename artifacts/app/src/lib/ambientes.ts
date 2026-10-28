@@ -5,6 +5,7 @@ import { normalizePath } from "./modules";
 import type { OperationProfile } from "./operations";
 import { entrada } from "./platform-modules";
 import { isSettingsPath } from "./settings-nav";
+import { SOMENTE_ARMAZENAGEM } from "./somente-armazenagem";
 
 /**
  * Ambientes da plataforma dentro do app único. O caminho da URL escolhe o
@@ -53,7 +54,7 @@ export function moduloDaRota(path: string): Modulo | null {
   if (ambiente === "financeiro") return "financeiro";
   if (ambiente === "rh") return "rh";
   const normalized = normalizePath(path);
-  if (normalized === "/faturamento" || normalized.startsWith("/faturamento/")) return "financeiro";
+  if (normalized === "/faturamento" || normalized.startsWith("/faturamento/")) return SOMENTE_ARMAZENAGEM ? "wms" : "financeiro";
   return "wms";
 }
 

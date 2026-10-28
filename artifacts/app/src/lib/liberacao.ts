@@ -11,6 +11,8 @@
  * Configurações › Clientes e a tela de entrada por módulo (/).
  */
 
+import { SOMENTE_ARMAZENAGEM } from "./somente-armazenagem";
+
 export const AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog", "dute-prod"];
 
 /** Projetos com dado real: nunca liberados por estar em desenvolvimento. */
@@ -45,7 +47,7 @@ export function comercialLiberado(projectId: string | null | undefined): boolean
 }
 
 /** Valor deste build, para as telas do Comercial. */
-export const COMERCIAL_LIBERADO = comercialLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+export const COMERCIAL_LIBERADO = !SOMENTE_ARMAZENAGEM && comercialLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
 
 /**
  * Liberação própria da Operação (docs/plataforma/fase-3-operacao.md). As
@@ -61,7 +63,7 @@ export function operacaoLiberada(projectId: string | null | undefined): boolean 
 }
 
 /** Valor deste build, para as telas da Operação. */
-export const OPERACAO_LIBERADO = operacaoLiberada(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+export const OPERACAO_LIBERADO = !SOMENTE_ARMAZENAGEM && operacaoLiberada(import.meta.env.VITE_FIREBASE_PROJECT_ID);
 
 /**
  * Liberação própria do Financeiro (docs/plataforma/fase-4-financeiro.md). As
@@ -78,7 +80,7 @@ export function financeiroLiberado(projectId: string | null | undefined): boolea
 }
 
 /** Valor deste build, para as telas do Financeiro. */
-export const FINANCEIRO_LIBERADO = financeiroLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+export const FINANCEIRO_LIBERADO = !SOMENTE_ARMAZENAGEM && financeiroLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
 
 /**
  * A NFS-e pela Omie (Fase 7, parte 7.4e): a mesma lista de
@@ -91,7 +93,7 @@ export function omieLiberada(projectId: string | null | undefined): boolean {
   return financeiroLiberado(projectId) && OMIE_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());
 }
 
-export const OMIE_LIBERADA = omieLiberada(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+export const OMIE_LIBERADA = !SOMENTE_ARMAZENAGEM && omieLiberada(import.meta.env.VITE_FIREBASE_PROJECT_ID);
 
 /**
  * Liberação própria da memória da Dute (docs/plataforma/fase-5-memoria.md).
@@ -149,4 +151,4 @@ export function rhLiberado(projectId: string | null | undefined, publicado: bool
 }
 
 /** Valor deste build, para as telas do RH. */
-export const RH_LIBERADO = rhLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+export const RH_LIBERADO = !SOMENTE_ARMAZENAGEM && rhLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);

@@ -16,6 +16,7 @@ import { ROTA_MINHAS_OS } from "./portal/navegacao";
 import { RH_ROLES, ROTA_RH, abreRh } from "./rh/navegacao";
 import { ROTA_TV, abreTv } from "./tv/navegacao";
 import type { OperationProfile } from "./operations";
+import { SOMENTE_ARMAZENAGEM } from "./somente-armazenagem";
 
 /**
  * Módulos da plataforma no app e a tela de entrada (docs/plataforma/fase-2-nucleo.md,
@@ -113,6 +114,14 @@ export function modulesForPerson(
   rh: boolean = RH_LIBERADO,
 ): ModuleEntry[] {
   if (!role) return [];
+  if (SOMENTE_ARMAZENAGEM) {
+    const wms = PLATFORM_MODULES.find((module) => module.key === "wms")!;
+    // O papel financeiro conserva apenas a tela que já podia acessar no WMS.
+    // Não se altera o contrato do cliente nem se concedem novos papéis.
+    if (role === "cliente" && !(profile?.modules ?? MODULOS_PADRAO_CLIENTE).includes("wms")) return [];
+    const href = role === "financeiro" ? "/faturamento" : wms.home[role];
+    return href ? [{ module: wms, href }] : [];
+  }
   const wanted: readonly Modulo[] =
     role === "cliente" ? (profile?.modules ?? MODULOS_PADRAO_CLIENTE) : MODULOS_POR_PAPEL[role];
   return PLATFORM_MODULES.flatMap((module) => {

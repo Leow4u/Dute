@@ -68,6 +68,7 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/orders", ["owner", "admin", "interno", "suporte"]],
   ["/faturamento", ["owner", "admin", "financeiro"]],
   ["/faturamento/tabela", ["owner", "admin", "financeiro"]],
+  ["/faturamento/contratos", ["owner", "admin"]],
   ["/faturamento/fatura", ["owner", "admin", "financeiro"]],
   ["/tabela-precos", ["owner", "admin", "financeiro"]],
   // A conversa com o agente é de toda a equipe; o painel e o conhecimento são

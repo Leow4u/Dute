@@ -61,8 +61,11 @@ export async function resolveBillingDocument(
  */
 export const FINANCEIRO_PROJECTS = ["dute-homolog", "dute-prod"];
 
+/** Mesma política de artifacts/app/src/lib/somente-armazenagem.ts. */
+export const ARMAZENAGEM_EXCLUSIVA_AMBIENTES = ["dute-prod"];
+
 export function billingPaidInFinanceiro(projectId: string | undefined): boolean {
-  return !!projectId && FINANCEIRO_PROJECTS.includes(projectId);
+  return !!projectId && FINANCEIRO_PROJECTS.includes(projectId) && !ARMAZENAGEM_EXCLUSIVA_AMBIENTES.includes(projectId);
 }
 
 /**

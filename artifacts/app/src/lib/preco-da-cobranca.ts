@@ -6,6 +6,8 @@
  * se edita aqui (mutateManagedEntity recusa).
  */
 
+import { SOMENTE_ARMAZENAGEM } from "./somente-armazenagem";
+
 export type FonteDoPreco = { tipo: "comercial" } | { tipo: "wms"; valor: number };
 
 export function ligadoAoComercial(item: { lpu_item_id?: unknown }): boolean {
@@ -19,7 +21,7 @@ export function fonteDoPreco(item: { valor_unit?: unknown; lpu_item_id?: unknown
   return { tipo: "wms", valor: Number.isFinite(valor) ? valor : 0 };
 }
 
-export const ROTULO_DO_COMERCIAL = "Tabela do Comercial";
+export const ROTULO_DO_COMERCIAL = SOMENTE_ARMAZENAGEM ? "Tabela do contrato" : "Tabela do Comercial";
 
 /** O que o formulário grava: o item ligado não manda o valor unitário. */
 export function payloadDoItem<T extends { valor_unit: number }>(payload: T, ligado: boolean): Omit<T, "valor_unit"> | T {

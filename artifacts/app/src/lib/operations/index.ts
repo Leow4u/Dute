@@ -1,4 +1,5 @@
 import { modulosContratados, type ModuloContratavel } from "@workspace/dominio";
+import { SOMENTE_ARMAZENAGEM } from "../somente-armazenagem";
 
 import { btg } from "./packs/btg";
 import { insumos } from "./templates/insumos";
@@ -156,7 +157,7 @@ export function leiturasDoPortal(modules: readonly ModuloContratavel[]) {
     pedidos: armazenagem,
     solicitacoes: armazenagem,
     documentos: armazenagem,
-    servicos: modules.includes("operacao"),
+    servicos: !SOMENTE_ARMAZENAGEM && modules.includes("operacao"),
     faturas: modules.includes("financeiro"),
   };
 }
@@ -173,7 +174,9 @@ export function leiturasDoPortal(modules: readonly ModuloContratavel[]) {
  */
 export function portalModulesFor(profile: OperationProfile | null | undefined): readonly PortalModuleKey[] | null {
   if (!profile) return null;
-  const telas = (profile.template.portal ?? ["home"]).filter((tela) => telaNoContrato(tela, profile.modules));
+  const telas = (profile.template.portal ?? ["home"]).filter(
+    (tela) => telaNoContrato(tela, profile.modules) && (!SOMENTE_ARMAZENAGEM || tela !== "services"),
+  );
   const semOInicio = telas.filter((tela) => tela !== "home");
   return profile.modules.includes("wms") || !semOInicio.length ? telas : semOInicio;
 }

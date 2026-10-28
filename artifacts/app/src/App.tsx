@@ -193,6 +193,7 @@ import { AuthProvider, useAppUser } from "./lib/auth";
 import { ActiveCustomerProvider } from "./lib/active-customer-context";
 import { useOperationProfile } from "./lib/operation-profile";
 import { MEMORIA_LIBERADA, PLATAFORMA_LIBERADA } from "./lib/liberacao";
+import { SOMENTE_ARMAZENAGEM, rotaDisponivelNaArmazenagem } from "./lib/somente-armazenagem";
 import { soComComercialLiberado } from "./lib/comercial/navegacao";
 import { soComOperacaoLiberada } from "./lib/operacao/navegacao";
 import { soComFinanceiroLiberado } from "./lib/financeiro/navegacao";
@@ -556,6 +557,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/faturamento/fatura", BillingInvoice),
   protectedRoute("/faturamento", BillingHub),
   protectedRoute("/faturamento/tabela", BillingHub),
+  ...(SOMENTE_ARMAZENAGEM ? [protectedRoute("/faturamento/contratos", BillingHub)] : []),
   protectedRoute("/tabela-precos", PriceListRedirect),
   protectedRoute("/agente", AgentePage),
   protectedRoute("/agente/painel", AiControl),
@@ -716,7 +718,7 @@ function AppRoutes() {
                   <Route path="/convite/*?" component={ConvitePage} />
                   <Route path="/sign-up/*?" component={ConvitePage} />
 
-                  {PROTECTED_ROUTES.map((route) => (
+                  {PROTECTED_ROUTES.filter((route) => rotaDisponivelNaArmazenagem(route.path)).map((route) => (
                     <ProtectedRoute key={route.path} {...route} />
                   ))}
 
