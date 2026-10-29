@@ -1,0 +1,50 @@
+name: Massa TESTE UX (só homologação)
+
+# Disparo manual. Grava 200 produtos da BTG no dute-homolog e em nenhum outro
+# projeto. O script recusa dute-prod e dute-btg mesmo se este arquivo mudar.
+on:
+  workflow_dispatch:
+
+jobs:
+  semear:
+    name: Semear no dute-homolog
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: dute-homolog
+      GCP_SERVICE_ACCOUNT: github-actions-functions@dute-homolog.iam.gserviceaccount.com
+      WORKLOAD_IDENTITY_PROVIDER: projects/368642218894/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+      SEED_CONFIRM: HOMOLOG-BTG-TESTE-UX
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Travar o projeto
+        run: |
+          set -euo pipefail
+          test "${PROJECT_ID}" = "dute-homolog"
+          test "${GCP_SERVICE_ACCOUNT}" = "github-actions-functions@dute-homolog.iam.gserviceaccount.com"
+          echo "${WORKLOAD_IDENTITY_PROVIDER}" | grep -q "projects/368642218894/"
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - name: Gravar a massa
+        env:
+          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          SEED_SUMMARY_PATH: ${{ runner.temp }}/teste-ux-summary.json
+        run: python3 tools/seed_teste_ux_homolog.py
+
+      - name: Publicar o resumo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teste-ux-summary
+          path: ${{ runner.temp }}/teste-ux-summary.json
+          if-no-files-found: warn
