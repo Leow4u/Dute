@@ -86,4 +86,17 @@ describe("aviso do SKU gerado", () => {
     expect(generatedSkuNote([{ sku_code: "BTG-000001", product_registration: "existing" }])).toBeNull();
     expect(generatedSkuNote(undefined)).toBeNull();
   });
+
+  it("o cadastro arquivado que voltou é reativado, não gerado", () => {
+    expect(
+      generatedSkuNote([{ sku_code: "BTG-000090", product_registration: "new", catalog_reactivated: true }]),
+    ).toBe("SKU reativado: BTG-000090.");
+    expect(
+      generatedSkuNote([
+        { sku_code: "BTG-000120", product_registration: "new" },
+        { sku_code: "BTG-000090", product_registration: "new", catalog_reactivated: true },
+        { sku_code: "BTG-000091", product_registration: "new", catalog_reactivated: true },
+      ]),
+    ).toBe("SKU gerado: BTG-000120. SKUs reativados: BTG-000090, BTG-000091.");
+  });
 });

@@ -143,7 +143,9 @@ SKU ou barras" acha o cadastro do cliente ativo; o "SKU" só se lê. Sem
 cadastro, "Cadastrar como novo" pede "Categoria *", o "Custo unitário" (maior
 que zero) e uma foto ("Fotografar ou anexar", até 8). O mesmo produto não entra
 em duas linhas; "Local" vem "RECEBIMENTO". "Criar conferência" cria a chegada
-sem lançar estoque e mostra o SKU gerado.
+sem lançar estoque e mostra o SKU gerado. Produto excluído em Estoque › Itens
+não aparece na busca: "Cadastrar como novo" o traz de volta com o SKU que já
+tinha, e o aviso diz "SKU reativado".
 
 **A ficha da chegada:**
 
