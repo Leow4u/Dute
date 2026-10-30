@@ -9,16 +9,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * A chegada avulsa acha o produto pelo código em todo o catálogo do cliente
  * ativo. A lista da API devolve a página padrão (50 linhas,
- * DEFAULT_LIST_LIMIT em lib/cloud-api.ts) quando a tela não pede um limite,
- * e a busca lia só essa página: em 30/10/2026 o A.01.0806.005.GG
- * (BTG-000090) não aparecia, a pessoa cadastrava como novo e as Functions
- * recusavam com "já existe no cadastro com SKU BTG-000090". A Contagem e as
- * devoluções já pediam o catálogo inteiro.
+ * DEFAULT_LIST_LIMIT em lib/cloud-api.ts, os maiores códigos primeiro)
+ * quando a tela não pede um limite, e a busca lia só essa página: em
+ * 30/10/2026 o A.01.0806.005.GG (BTG-000090) ficou fora dela, a pessoa
+ * cadastrou como novo e as Functions recusaram com "já existe no cadastro
+ * com SKU BTG-000090". A Contagem e as devoluções já pediam o catálogo
+ * inteiro.
  */
 
 const estado = vi.hoisted(() => {
   const PAGINA_PADRAO = 50;
-  const catalogo = Array.from({ length: 120 }, (_, indice) => {
+  // 200 SKUs: a página padrão são os 50 maiores (BTG-000151 a 200), e o BTG-000090 fica fora dela.
+  const catalogo = Array.from({ length: 200 }, (_, indice) => {
     const numero = String(indice + 1).padStart(3, "0");
     const sku = `BTG-000${numero}`;
     const codigo = `A.01.0806.${numero}.GG`;
@@ -34,16 +36,18 @@ vi.mock("@/lib/warehouse-ops/model", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/warehouse-ops/model")>();
   return {
     ...original,
-    // A lista da API: a página pedida em `limit`, ou a padrão.
+    // A lista da API: a página pedida em `limit`, ou a padrão, em ordem
+    // decrescente de código (como a rota de lib/cloud-api.ts).
     fetchJson: async (url: string) => {
       estado.chamadas.push(url);
       const { pathname, searchParams } = new URL(url, "http://dute.local");
       const limite = Number(searchParams.get("limit")) || estado.PAGINA_PADRAO;
+      const decrescente = [...estado.catalogo].reverse();
       if (pathname === "/api/skus") {
-        return { items: estado.catalogo.map((item) => item.sku).slice(0, limite), total: estado.catalogo.length };
+        return { items: decrescente.map((item) => item.sku).slice(0, limite), total: estado.catalogo.length };
       }
       if (pathname === "/api/products") {
-        return { items: estado.catalogo.map((item) => item.produto).slice(0, limite), total: estado.catalogo.length };
+        return { items: decrescente.map((item) => item.produto).slice(0, limite), total: estado.catalogo.length };
       }
       throw new Error(`Chamada inesperada: ${url}`);
     },
@@ -122,7 +126,7 @@ describe("a busca de produto da chegada avulsa", () => {
     for (const limite of limites) expect(limite).toBeGreaterThanOrEqual(2000);
   });
 
-  it("acha pelo código do cliente um produto além da 50ª linha e mostra o SKU dele", async () => {
+  it("acha pelo código do cliente um produto fora da página de 50 e mostra o SKU dele", async () => {
     await digitar("Código do produto da linha 1", "A.01.0806.090.GG");
     await esperar(() => campo("SKU da linha 1").value === "BTG-000090", "o cadastro encontrado");
     expect(document.body.textContent).toContain("Cadastro encontrado");
