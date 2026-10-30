@@ -276,6 +276,18 @@ async function cinv(skuCode) {
 async function reciboExiste(id) {
   return (await db.collection("operational_operations").doc(id).get()).exists;
 }
+/** Quantidade e posição de um movimento já gravado, pelo recibo dele e pelo razão (movements). */
+async function movimentoDoRecibo(id) {
+  const snap = await db.collection("operational_operations").doc(id).get();
+  if (!snap.exists) throw new Erro(`recibo ${id} não encontrado`);
+  const r = snap.data().result ?? {};
+  const qtde = Math.abs(num(r.qty_after) - num(r.qty_before));
+  if (!qtde) throw new Erro(`recibo ${id} sem quantidade (qty_before/qty_after)`);
+  const movimento = text(r.movement_id) ? await db.collection("movements").doc(text(r.movement_id)).get() : null;
+  const posicao = text(movimento?.exists ? movimento.data().location_id : "").toUpperCase() || text(r.stock_balance_id).split("__").pop().toUpperCase();
+  if (!posicao) throw new Erro(`recibo ${id} sem posição`);
+  return { qtde, posicao };
+}
 const idReciboDireto = (op, parte) => `op_acerto_${digest({ plano: PLANO.id, op: op.id, parte: parte ?? null })}`;
 const idReciboMovimento = (nonce) => `op_inventory_${digest({ customer: CLIENTE, nonce })}`;
 const idReciboFotos = (skuCode, nonce) => `op_photos_${digest({ skuCode, nonce })}`;
@@ -580,7 +592,7 @@ const OPS = {
       const fotos = lista(irmao.data.photo_urls);
       return {
         estado: [`${op.codigo} não existe · referência ${op.copiar_de} = ${irmao.id} · "${irmao.nome}" · ${text(irmao.data.categoria || irmao.data.category) || "sem categoria"} · ${text(irmao.data.genero) || "sem gênero"} · ${fotos.length} fotos`],
-        previsto: [`cria products e skus ${op.codigo} · "${nome}" · tamanho ${op.tamanho} · SKU ${proximo} (previsto) · saldo 0`],
+        previsto: [`cria products, skus e client_inventory ${op.codigo} · "${nome}" · tamanho ${op.tamanho} · SKU ${proximo} (previsto) · saldo 0`],
         dados: { irmao, nome },
       };
     },
@@ -631,6 +643,32 @@ const OPS = {
           estoque_reservado: 0,
           estoque_disponivel: 0,
         });
+        // A projeção do portal nasce junto, como no Receber: a ENTRADA da transferência só soma
+        // quantidade e não leva categoria nem foto, e sem elas o card cai em "Outros" e sem imagem.
+        tx.set(
+          cinvRef(skuCode),
+          compact({
+            id: cinvRef(skuCode).id,
+            customer_code: CLIENTE,
+            sku_code: skuCode,
+            client_item_code: op.codigo,
+            product_name: nome,
+            category: catalogo.category,
+            brand: catalogo.brand,
+            size: op.tamanho,
+            color: catalogo.color,
+            photo_urls: catalogo.photo_urls,
+            primary_photo_url: catalogo.primary_photo_url,
+            qty_on_hand: 0,
+            qty_reserved: 0,
+            qty_available: 0,
+            status: "active",
+            source: FONTE,
+            published_at: ts(),
+            updated_at: ts(),
+          }),
+          { merge: true },
+        );
         alocador.commit();
         catalogoCache = null;
         evento(tx, op, "catalog.created_by_acerto", `SKU ${skuCode} criado para ${op.codigo}`, `"${nome}", copiado de ${irmao.id} (${op.copiar_de})`, "sku", skuCode, {
@@ -653,12 +691,15 @@ const OPS = {
       const de = await skuPorCodigo(op.de, { incluirArquivados: saiu });
       if (!de) throw new Erro(await naoEncontrado("SKU de origem", op.de));
       const para = await destino(op.para);
-      const posSaida = await resolverPosicao(op.posicao, de);
+      // Saída já gravada e entrada não: quantidade e posição vêm do recibo da saída (com "tudo",
+      // o saldo de hoje já é outro, e a origem pode ter ficado sem saldo em qualquer posição).
+      const saida = saiu ? await movimentoDoRecibo(idReciboMovimento(chave(op, "saida"))) : null;
+      const posSaida = saida ? saida.posicao : await resolverPosicao(op.posicao, de);
       const posEntrada = op.posicao_entrada ? await resolverPosicao(op.posicao_entrada, null) : posSaida;
       const saldos = await saldosDoSku(de.id);
       const origem = saldos.find((r) => r.posicao === posSaida);
       const disponivel = origem ? num(origem.data.qty_on_hand) - num(origem.data.qty_reserved) : 0;
-      const qtde = op.qtde === "tudo" ? disponivel : num(op.qtde);
+      const qtde = saida ? saida.qtde : op.qtde === "tudo" ? disponivel : num(op.qtde);
       if (!jaAplicado && qtde <= 0) throw new Erro(`nada a transferir: ${de.codCliente || de.id} em ${posSaida} tem ${fmt(disponivel)} disponível`);
       if (!jaAplicado && !saiu && disponivel < qtde) throw new Erro(`${de.codCliente || de.id} em ${posSaida} tem ${fmt(disponivel)} disponível, precisa de ${fmt(qtde)}`);
       const outras = saiu ? { soma: 0, ops: [] } : (await saidasPrevistasNoPlano(op.de, de, { exceto: op.id })).em(posSaida);
@@ -682,6 +723,7 @@ const OPS = {
         compact({ ...base, type: "SAIDA", quantity: qtde, sku_code: de.id, client_item_code: de.codCliente || undefined, product_name: de.nome || undefined, location_id: posSaida, idempotency_key: chave(op, "saida") }),
         ATOR,
       );
+      if (emulador && process.env.ACERTO_TESTE_FALHA_APOS_SAIDA === op.id) throw new Error("falha simulada depois da saída (teste da retomada, só no emulador)");
       await operations.createInventoryMovementTransaction(
         db,
         compact({ ...base, type: "ENTRADA", quantity: qtde, sku_code: paraSku.id, client_item_code: paraSku.codCliente || undefined, product_name: paraSku.nome || undefined, location_id: posEntrada, idempotency_key: chave(op, "entrada") }),

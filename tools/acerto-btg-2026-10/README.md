@@ -35,7 +35,7 @@ BTG-000088. O plano usa essas formas.
 | Bloco | O que grava | Itens do e-mail |
 |---|---|---|
 | `cadastro` | Renomeia os sete SKUs da A.01.0805.002 para masculina e troca as fotos entre as famílias A.01.0805.002 e A.02.0805.002 | 1 |
-| `skus-novos` | Cria os SKUs que faltam, copiando categoria, gênero e fotos de um irmão da família, sem saldo; o que já existe fica "sem mudança" | 2, 5, 7, 11, 12, 13 |
+| `skus-novos` | Cria os SKUs que faltam (products, skus e a projeção do portal, com categoria e fotos), copiando de um irmão da família, sem saldo; o que já existe fica "sem mudança" | 2, 5, 7, 11, 12, 13 |
 | `transferencias` | Saída do SKU errado e entrada no certo, na mesma posição, mesma quantidade | 2, 5, 6, 7, 11, 12, 13 |
 | `quantidades` | Ajuste + e Ajuste − pelas contagens do Guilherme; `delta: "zerar"` tira o que sobrar na posição depois das transferências (a sobra da CX-000150 além das 58 contadas) | 4, 5, 7, 9 |
 | `saldao` | Saída de tudo que estava nas caixas 5, 32 e 130, e do que saiu da 4 | 8, 10 |
@@ -134,7 +134,10 @@ node tools/acerto-btg-2026-10/acerto.mjs --projeto dute-prod --aplicar --confirm
 
 Grava na ordem dos blocos. Se uma operação falhar, para ali; o que já foi
 gravado fica, e rodar de novo continua de onde parou, porque cada operação
-tem chave de idempotência fixa. Depois, rode o dry-run de novo: tudo deve
+tem chave de idempotência fixa. Uma transferência é duas gravações (saída e
+entrada): se parar entre as duas, o dry-run seguinte mostra "saída já
+gravada; falta a entrada", com a quantidade e a posição lidas do recibo da
+saída, e a aplicação seguinte grava só a entrada. Depois, rode o dry-run de novo: tudo deve
 aparecer como "já aplicado". `--bloco <id>` e `--op <id>` limitam a execução.
 
 Depois de aplicar: conferir no portal da BTG os cards 0805, 0809, 0808, 0811,
@@ -163,7 +166,12 @@ node tools/acerto-btg-2026-10/cenario-emulador.mjs --projeto demo-acerto --confe
 O cenário grava os códigos errados como a produção os tem (com o tamanho e o
 SKU fixo: BTG-000109, -045, -169, -087, -088), a 0808 com 59 para exercitar o
 `zerar`, a sacola N6 em duas caixas (72 e 75), e o tricot `A.01.0534.005.M` já
-existente, para o `criar-0534-M` ficar "sem mudança". No fim: A.02.0809.002.M com 75 em A-13 e o masculino M com 207
+existente, para o `criar-0534-M` ficar "sem mudança". Dois ciclos a mais
+valem a pena: a 0808 com 58 (o `zerar` fica "sem mudança" e a aplicação grava
+39), e a retomada, com `ACERTO_TESTE_FALHA_APOS_SAIDA=transf-sacola-N6` na
+aplicação (só funciona no emulador): ela para depois da saída da sacola, o
+dry-run mostra "saída já gravada; falta a entrada" e a aplicação seguinte
+termina com o mesmo resultado. No fim: A.02.0809.002.M com 75 em A-13 e o masculino M com 207
 (140 em A-13, 67 em B-11); arpoador P 66, G 57, GG 19; oceano G 198 e
 BTG-000165 arquivado; mescla preto M 54 e G 22, BTG-000109 arquivado; tricot
 42 e BTG-000045 arquivado; sacola N6 147 e BTG-000169 arquivada; jaqueta 12;

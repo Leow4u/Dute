@@ -203,7 +203,7 @@ async function conferir() {
       const saldos = await db.collection("stock_balances").where("sku_code", "==", d.id).get();
       const porPos = saldos.docs.map((b) => `${b.data().location_id} ${b.data().qty_on_hand}`).join(", ") || "sem saldo";
       const cinv = await db.collection("client_inventory").doc(safeDocId(`cinv_${CLIENTE}__${d.id}`)).get();
-      console.log(`  ${codigo.padEnd(18)} ${d.id} · "${s.produto}"${s.genero ? ` · ${s.genero}` : ""}${s.archived ? " · ARQUIVADO" : ""} · saldo ${porPos} · estoque_atual ${s.estoque_atual}${cinv.exists ? ` · portal ${cinv.data().qty_on_hand}${cinv.data().client_archived ? " (arquivado)" : ""}` : " · sem client_inventory"}${s.primary_photo_url ? ` · foto ${s.primary_photo_url}` : ""}`);
+      console.log(`  ${codigo.padEnd(18)} ${d.id} · "${s.produto}"${s.genero ? ` · ${s.genero}` : ""}${s.archived ? " · ARQUIVADO" : ""} · saldo ${porPos} · estoque_atual ${s.estoque_atual}${cinv.exists ? ` · portal ${cinv.data().qty_on_hand}${cinv.data().category ? ` ${cinv.data().category}` : " sem categoria"}${cinv.data().primary_photo_url ? " com foto" : ""}${cinv.data().client_archived ? " (arquivado)" : ""}` : " · sem client_inventory"}${s.primary_photo_url ? ` · foto ${s.primary_photo_url}` : ""}`);
     }
   }
   const oceano = await db.collection("skus").doc("BTG-000165").get();
