@@ -478,9 +478,13 @@ export function UnplannedReceiptDialog({
     enabled: open,
     staleTime: 60_000,
     queryFn: async () => {
+      // O catálogo inteiro do cliente, como na Contagem: sem `limit`, a API
+      // devolve a página padrão (50 linhas) e o produto além dela não era
+      // achado; a pessoa cadastrava como novo e as Functions recusavam
+      // ("já existe no cadastro com SKU BTG-000090", 30/10/2026).
       const [skusPayload, productsPayload] = await Promise.all([
-        fetchJson<unknown>("/api/skus"),
-        fetchJson<unknown>("/api/products"),
+        fetchJson<unknown>("/api/skus?limit=5000"),
+        fetchJson<unknown>("/api/products?limit=5000"),
       ]);
       const skus = customerRows(normalizeApiRows(skusPayload), customerCode).map(productLookupFromRecord);
       const products = customerRows(normalizeApiRows(productsPayload), customerCode).map(productLookupFromRecord);
