@@ -222,7 +222,9 @@ async function conferir() {
   const movimentos = await db.collection("movements").where("customer_code", "==", CLIENTE).get();
   const eventos = await db.collection("events").where("customer_code", "==", CLIENTE).get();
   const recibos = await db.collection("operational_operations").get();
-  console.log(`\nMovimentos: ${movimentos.size} · eventos: ${eventos.size} · recibos: ${recibos.size}`);
+  const avisos = await db.collection("ai_agent_inbox").get();
+  const abertos = avisos.docs.filter((a) => String(a.data().status ?? "") === "open").length;
+  console.log(`\nMovimentos: ${movimentos.size} · eventos: ${eventos.size} · recibos: ${recibos.size} · avisos do agente: ${avisos.size} (${abertos} abertos)`);
   const cobrados = movimentos.docs.filter((m) => ["wms_receiving", "wms_shipping"].includes(String(m.data().source ?? "")));
   console.log(`Movimentos com origem cobrada (wms_receiving/wms_shipping): ${cobrados.length}`);
 }

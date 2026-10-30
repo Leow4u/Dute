@@ -38,7 +38,7 @@ BTG-000088. O plano usa essas formas.
 | `skus-novos` | Cria os SKUs que faltam (products, skus e a projeção do portal, com categoria e fotos), copiando de um irmão da família, sem saldo; o que já existe fica "sem mudança" | 2, 5, 7, 11, 12, 13 |
 | `transferencias` | Saída do SKU errado e entrada no certo, na mesma posição, mesma quantidade | 2, 5, 6, 7, 11, 12, 13 |
 | `quantidades` | Ajuste + e Ajuste − pelas contagens do Guilherme; `delta: "zerar"` tira o que sobrar na posição depois das transferências (a sobra da CX-000150 além das 58 contadas) | 4, 5, 7, 9 |
-| `saldao` | Saída de tudo que estava nas caixas 5, 32 e 130, e do que saiu da 4 | 8, 10 |
+| `saldao` | Saída de tudo que estava nas caixas 5, 32 e 130, e do que saiu da 4; a linha da abertura dessas caixas sai do registro (o Mapa e as Etiquetas montam o conteúdo pelas linhas), com o que ela tinha guardado no evento | 8, 10 |
 | `caixas` | Remove as caixas 5, 19, 32 e 130 e corrige SKU e quantidade das linhas da abertura das outras, para o Mapa e as Etiquetas | 4 a 13 |
 | `arquivar` | Arquiva os SKUs errados já em zero, inclusive no portal | 2, 6, 7, 11, 12 |
 
@@ -47,12 +47,17 @@ cobrança (`billingMovementDirection` só conta `wms_receiving` e
 `wms_shipping`). Transferência não muda o total da posição.
 
 Pendentes no plano, à espera do Guilherme: o código A.01.0605.003.P e se o PP
-de 9 peças (BTG-000088, `A.01.0719.004.PP`) é o mesmo caso (item 12); a
-recontagem da azul A.02.0814.002 depois de separar as pretas (item 13); a
-A.01.0805.002 por tamanho (item 14); se a sacola N6 tem 147 ou 148; qual SKU
-e quantas peças saíram da CX-000004; e se a CX-000036 está em cima da
-CX-000018, para remover a CX-000019 (item 9; o Ajuste − das 12 jaquetas
-duplicadas não espera).
+de 9 peças (BTG-000088, `A.01.0719.004.PP`) é o mesmo caso (item 12; antes de
+ligar, `--buscar A.01.0605.003` mostra se a família já existe com outros
+tamanhos, para copiar nome e fotos dela em vez do SKU errado); a recontagem
+da azul A.02.0814.002 depois de separar as pretas (item 13); a A.01.0805.002
+caixa por caixa, com o tamanho e a quantidade da etiqueta do fornecedor, já
+que as caixas são lacradas (item 14); se a sacola N6 tem 148 (73 na caixa de
+72; o `aj-sacola-N6-mais-1` está pronto, falta a linha da caixa); qual SKU e
+quantas peças saíram da CX-000004; e se a CX-000036 está em cima da
+CX-000018, para remover a CX-000019 (item 9). O Ajuste − das 12 jaquetas
+duplicadas não espera: até a CX-000019 sair, o Mapa mostra em A-05 duas
+caixas de 12 para um saldo de 12.
 
 O dry-run mostra, em cada transferência e ajuste, o que as outras operações do
 plano tiram da mesma posição antes ("também tira(m)", "depois de ..."), porque
@@ -93,6 +98,9 @@ Erros comuns do dry-run e o que fazer:
   operação de linha com `qtde` ou `caixa` só serve para uma linha; sem os dois,
   `corrigir_linha` corrige todas as linhas do SKU errado (uma por caixa), cada
   uma com a própria quantidade e o próprio recibo.
+- "Com FIRESTORE_EMULATOR_HOST o projeto precisa ser demo-*": a variável do
+  emulador ficou no shell; limpe-a (`Remove-Item Env:FIRESTORE_EMULATOR_HOST`)
+  antes de rodar contra a nuvem.
 - "serve de apoio para CX-...": a caixa tem outra em cima. Ou ela fica como
   caixa vazia de apoio, com `se_apoia: "esvaziar"`, ou a de cima passa para
   outra caixa da mesma posição, com `transferir_apoio_para: "CX-..."`, e a
@@ -122,8 +130,10 @@ Dry-runs na produção em 30/10/2026:
    30 em A-06), então o `criar-0534-M` fica sem mudança e as 12 entram nele em
    A-02, onde a caixa está. O erro: a sacola N6 tem duas linhas da abertura
    (duas caixas em B-12) e a correção de linha pedia uma só; `corrigir_linha`
-   passou a corrigir todas as linhas do SKU errado. O quinto dry-run deve
-   ficar sem erro fora dos pendentes.
+   passou a corrigir todas as linhas do SKU errado. Ficou para conferir: a
+   CX-000032 tem 24 na linha e a camiseta BTG-000034 tem 25 em A-01
+   (`--buscar A.01.0219.004.M` mostra se outra caixa tem a 1 que sobra). O
+   quinto dry-run deve ficar sem erro fora dos pendentes.
 
 Aplicar, só depois do dry-run limpo:
 
@@ -144,6 +154,13 @@ Depois de aplicar: conferir no portal da BTG os cards 0805, 0809, 0808, 0811,
 0534 e a sacola; reimprimir em Estoque › Etiquetas as caixas 76, 79, 83, 90,
 91, 92, 150, 198, a caixa que recebeu as 4 G da mescla preto, a do tricot e a
 da sacola N6 (a 4 e a 180 quando os pendentes entrarem); responder à Cristiane.
+Cada movimento do acerto abre um aviso na caixa de entrada do agente (evento
+"attention"), e o script já o deixa resolvido, com o ator do acerto, para o
+Início não listar vinte e tantos "avisos para revisar". Os movimentos têm a
+origem `functions_manual_inventory`, que conta como entrada de verdade para
+o relógio de parados (`lib/dominio/src/parados.ts`): a oceano G, a mescla
+preto, a arpoador e a sacola N6 recomeçam a contar os dias parados na data
+do acerto, não na da abertura.
 A produção tem PITR de 7 dias e backup diário
 (`docs/plataforma/backup-e-recuperacao.md`); restaurar é sempre para um banco
 novo, com o OK do Leonardo.
@@ -168,10 +185,12 @@ SKU fixo: BTG-000109, -045, -169, -087, -088), a 0808 com 59 para exercitar o
 `zerar`, a sacola N6 em duas caixas (72 e 75), e o tricot `A.01.0534.005.M` já
 existente, para o `criar-0534-M` ficar "sem mudança". Dois ciclos a mais
 valem a pena: a 0808 com 58 (o `zerar` fica "sem mudança" e a aplicação grava
-39), e a retomada, com `ACERTO_TESTE_FALHA_APOS_SAIDA=transf-sacola-N6` na
-aplicação (só funciona no emulador): ela para depois da saída da sacola, o
-dry-run mostra "saída já gravada; falta a entrada" e a aplicação seguinte
-termina com o mesmo resultado. No fim: A.02.0809.002.M com 75 em A-13 e o masculino M com 207
+39), e a retomada, com `ACERTO_TESTE_FALHA_APOS_FOTOS=3` e depois
+`ACERTO_TESTE_FALHA_APOS_SAIDA=transf-sacola-N6` na aplicação (só funcionam
+no emulador): a primeira para no meio da troca de fotos, a segunda depois da
+saída da sacola; cada dry-run seguinte mostra o que falta ("3 SKU(s) já
+trocado(s)", "saída já gravada; falta a entrada") e a aplicação seguinte
+termina com o mesmo resultado do ciclo sem falha. No fim: A.02.0809.002.M com 75 em A-13 e o masculino M com 207
 (140 em A-13, 67 em B-11); arpoador P 66, G 57, GG 19; oceano G 198 e
 BTG-000165 arquivado; mescla preto M 54 e G 22, BTG-000109 arquivado; tricot
 42 e BTG-000045 arquivado; sacola N6 147 e BTG-000169 arquivada; jaqueta 12;

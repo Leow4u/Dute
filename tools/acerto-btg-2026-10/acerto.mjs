@@ -59,6 +59,9 @@ if (emulador && !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(emuladorHost)) {
   abortar(`FIRESTORE_EMULATOR_HOST precisa apontar para 127.0.0.1 ou localhost (está ${emuladorHost}).`);
 }
 const PROJETO = args.projeto;
+if (emulador && !/^demo-/.test(PROJETO)) {
+  abortar(`Com FIRESTORE_EMULATOR_HOST o projeto precisa ser demo-* (está ${PROJETO}). Para a nuvem, limpe a variável antes de rodar.`);
+}
 if (args.aplicar && !emulador && args.confirmo !== `ACERTO BTG ${PROJETO}`) {
   abortar(`Para gravar na nuvem, passe --confirmo "ACERTO BTG ${PROJETO}". Sem isso o script só faz o dry-run.`);
 }
@@ -421,6 +424,36 @@ async function transacaoDireta(op, tipo, alvo, corpo, parte) {
   });
 }
 
+/**
+ * Movimento pelo domínio (mesma função da callable). O evento dele é "attention" e abre um
+ * aviso na caixa de entrada do agente (ai_agent_inbox), que apareceria no Início como "avisos
+ * para revisar": o acerto é a própria revisão, então o aviso já nasce resolvido, com o ator.
+ */
+async function movimento(_db, input, ator) {
+  const resultado = await operations.createInventoryMovementTransaction(db, input, ator);
+  for (const ev of Array.isArray(resultado?.events) ? resultado.events : []) {
+    const id = text(ev?.id);
+    if (!id) continue;
+    const ref = db.collection("ai_agent_inbox").doc(`inbox_${safeDocId(id)}`);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists || text(snap.data().status) !== "open") return;
+      tx.update(ref, {
+        status: "resolved",
+        resolved_by: { uid: ator.uid, email: ator.email ?? null, name: ator.name ?? null, role: ator.role },
+        resolved_at: ts(),
+        updated_at: ts(),
+        resolution: `${PLANO.id}: movimento do acerto, revisado no plano`,
+      });
+    });
+  }
+  return resultado;
+}
+async function reciboResultado(id) {
+  const snap = await db.collection("operational_operations").doc(id).get();
+  return snap.exists ? snap.data().result ?? {} : null;
+}
+
 function evento(tx, op, tipo, titulo, descricao, entityType, entityId, payload = {}) {
   const ref = db.collection("events").doc(`evt_acerto_${digest({ plano: PLANO.id, op: op.id, tipo, entityId })}`);
   tx.create(ref, {
@@ -497,54 +530,79 @@ const OPS = {
   },
 
   trocar_fotos: {
+    // Fonte de cada família: o primeiro SKU com foto na ordem de tamanho, a foto que o card do
+    // portal mostra. Os dois conjuntos (e as fotos próprias de cada SKU, a remover) são
+    // congelados num recibo antes da primeira gravação: a retomada lê de lá, porque o cadastro
+    // já mudou, e pula os SKUs que já têm recibo, com o mesmo conteúdo de antes.
     async ler(op) {
       const familia = async (prefixo) => {
         const key = normalizedIdentity(prefixo);
-        const snap = await db.collection("skus").where("cod_cliente_key", ">=", key).where("cod_cliente_key", "<=", `${key}`).get();
+        const snap = await db.collection("skus").where("cod_cliente_key", ">=", key).where("cod_cliente_key", "<=", `${key}\uf8ff`).get();
         const ordem = ["PP", "P", "M", "G", "GG", "XG", "XGG", "EG", "EGG", "U"];
         const tamanho = (sku) => ordem.indexOf(text(sku.codCliente).split(".").pop().toUpperCase());
-        const skus = snap.docs.filter((d) => !arquivado(d.data()) && doCliente(d.data())).map(linhaSku).sort((a, b) => tamanho(a) - tamanho(b));
-        // As fotos que o card mostra: as do primeiro SKU com foto, na ordem de tamanho.
+        const skus = snap.docs
+          .filter((d) => !arquivado(d.data()) && doCliente(d.data()) && normalizedIdentity(d.data().cod_cliente).startsWith(key))
+          .map(linhaSku)
+          .sort((a, b) => tamanho(a) - tamanho(b));
         const fonte = skus.find((sku) => text(sku.data.primary_photo_url) || lista(sku.data.photo_urls).length);
         const fotos = [];
-        const caminhos = new Map();
+        const caminhos = [];
         if (fonte) {
           const urls = lista(fonte.data.photo_urls);
           const paths = lista(fonte.data.photo_storage_paths);
           for (const url of [text(fonte.data.primary_photo_url), ...urls].filter(Boolean)) if (!fotos.includes(url)) fotos.push(url);
           urls.forEach((url, i) => {
-            if (paths[i]) caminhos.set(url, paths[i]);
+            if (paths[i]) caminhos.push({ url, path: paths[i] });
           });
         }
-        return { prefixo, skus, fonte, fotos: fotos.slice(0, 8), caminhos };
+        return {
+          prefixo,
+          fonteCod: fonte ? fonte.codCliente || fonte.id : "",
+          fotos: fotos.slice(0, 8),
+          caminhos,
+          skus: skus.map((sku) => ({ id: sku.id, codCliente: sku.codCliente, proprias: [...new Set([text(sku.data.primary_photo_url), ...lista(sku.data.photo_urls)].filter(Boolean))] })),
+        };
       };
-      const [A, B] = await Promise.all([familia(op.familia_a), familia(op.familia_b)]);
-      if (!A.skus.length || !B.skus.length) throw new Erro(`família sem SKU ativo: ${A.prefixo} (${A.skus.length}), ${B.prefixo} (${B.skus.length})`);
-      if (!A.fotos.length || !B.fotos.length) throw new Erro(`família sem foto: ${A.prefixo} (${A.fotos.length}), ${B.prefixo} (${B.fotos.length}); nada a trocar`);
-      const recibos = await Promise.all(
-        [...A.skus, ...B.skus].map((sku) => reciboExiste(idReciboFotos(sku.id, chave(op, sku.id)))),
-      );
+      const congelado = await reciboResultado(idReciboDireto(op, "fonte"));
+      let A;
+      let B;
+      if (congelado?.A && congelado?.B) {
+        A = congelado.A;
+        B = congelado.B;
+      } else {
+        [A, B] = await Promise.all([familia(op.familia_a), familia(op.familia_b)]);
+        if (!A.skus.length || !B.skus.length) throw new Erro(`família sem SKU ativo: ${A.prefixo} (${A.skus.length}), ${B.prefixo} (${B.skus.length})`);
+        if (!A.fotos.length || !B.fotos.length) throw new Erro(`família sem foto: ${A.prefixo} (${A.fotos.length}), ${B.prefixo} (${B.fotos.length}); nada a trocar`);
+      }
+      const todos = [...A.skus, ...B.skus];
+      const feitos = await Promise.all(todos.map((sku) => reciboExiste(idReciboFotos(sku.id, chave(op, sku.id)))));
+      const faltam = todos.filter((_, i) => !feitos[i]);
+      const estado = [
+        `${A.prefixo}* · ${A.skus.length} SKUs · fotos do ${A.fonteCod}: ${A.fotos.length} · principal ${curto(A.fotos[0])}${congelado ? " (conjunto congelado no recibo)" : ""}`,
+        `${B.prefixo}* · ${B.skus.length} SKUs · fotos do ${B.fonteCod}: ${B.fotos.length} · principal ${curto(B.fotos[0])}`,
+      ];
+      if (!faltam.length) return { jaAplicado: true, estado, previsto: [] };
       return {
-        jaAplicado: recibos.every(Boolean),
-        estado: [
-          `${A.prefixo}* · ${A.skus.length} SKUs · fotos do ${A.fonte.codCliente}: ${A.fotos.length} · principal ${curto(A.fotos[0])}`,
-          `${B.prefixo}* · ${B.skus.length} SKUs · fotos do ${B.fonte.codCliente}: ${B.fotos.length} · principal ${curto(B.fotos[0])}`,
-        ],
+        estado,
         previsto: [
-          `${A.skus.length} SKUs de ${A.prefixo}* recebem as ${B.fotos.length} fotos de ${B.fonte.codCliente} e perdem as próprias`,
-          `${B.skus.length} SKUs de ${B.prefixo}* recebem as ${A.fotos.length} fotos de ${A.fonte.codCliente} e perdem as próprias`,
+          `${A.skus.length} SKUs de ${A.prefixo}* recebem as ${B.fotos.length} fotos de ${B.fonteCod} e perdem as próprias`,
+          `${B.skus.length} SKUs de ${B.prefixo}* recebem as ${A.fotos.length} fotos de ${A.fonteCod} e perdem as próprias`,
+          ...(faltam.length !== todos.length ? [`${todos.length - faltam.length} SKU(s) já trocado(s); faltam ${faltam.map((s) => s.id).join(", ")}`] : []),
         ],
-        dados: { A, B },
+        dados: { A, B, congelado: Boolean(congelado) },
       };
     },
     async gravar(op, L) {
       const { A, B } = L.dados;
+      if (!L.dados.congelado) await transacaoDireta(op, "fotos_fonte", `${op.familia_a}|${op.familia_b}`, async () => ({ A, B }), "fonte");
+      let gravadas = 0;
       const aplicar = async (alvo, fonte) => {
-        const paths = fonte.fotos.map((url) => fonte.caminhos.get(url));
+        const caminhoDe = new Map((fonte.caminhos ?? []).map((c) => [c.url, c.path]));
+        const paths = fonte.fotos.map((url) => caminhoDe.get(url));
         const comCaminho = paths.every(Boolean);
         for (const sku of alvo.skus) {
-          const proprias = [...new Set([text(sku.data.primary_photo_url), ...lista(sku.data.photo_urls)].filter(Boolean))];
-          const remover = proprias.filter((url) => !fonte.fotos.includes(url));
+          if (await reciboExiste(idReciboFotos(sku.id, chave(op, sku.id)))) continue;
+          const remover = sku.proprias.filter((url) => !fonte.fotos.includes(url));
           await operations.addCatalogPhotosTransaction(
             db,
             compact({
@@ -559,11 +617,15 @@ const OPS = {
             }),
             ATOR,
           );
+          gravadas += 1;
+          if (emulador && num(process.env.ACERTO_TESTE_FALHA_APOS_FOTOS) && gravadas >= num(process.env.ACERTO_TESTE_FALHA_APOS_FOTOS)) {
+            throw new Error(`falha simulada depois de ${gravadas} SKU(s) com foto (teste da retomada, só no emulador)`);
+          }
         }
       };
       await aplicar(A, B);
       await aplicar(B, A);
-      return { trocados: A.skus.length + B.skus.length };
+      return { trocados: gravadas };
     },
   },
 
@@ -718,13 +780,13 @@ const OPS = {
       const paraSku = (await skuPorCodigo(op.para)) ?? null;
       if (!paraSku) throw new Erro(`SKU de destino ${op.para} ainda não existe`);
       const base = { customer_code: CLIENTE, reason: op.motivo, reference: PLANO.referencia };
-      await operations.createInventoryMovementTransaction(
+      await movimento(
         db,
         compact({ ...base, type: "SAIDA", quantity: qtde, sku_code: de.id, client_item_code: de.codCliente || undefined, product_name: de.nome || undefined, location_id: posSaida, idempotency_key: chave(op, "saida") }),
         ATOR,
       );
       if (emulador && process.env.ACERTO_TESTE_FALHA_APOS_SAIDA === op.id) throw new Error("falha simulada depois da saída (teste da retomada, só no emulador)");
-      await operations.createInventoryMovementTransaction(
+      await movimento(
         db,
         compact({ ...base, type: "ENTRADA", quantity: qtde, sku_code: paraSku.id, client_item_code: paraSku.codCliente || undefined, product_name: paraSku.nome || undefined, location_id: posEntrada, idempotency_key: chave(op, "entrada") }),
         ATOR,
@@ -767,7 +829,7 @@ const OPS = {
     },
     async gravar(op, L) {
       const { sku, posicao, delta } = L.dados;
-      await operations.createInventoryMovementTransaction(
+      await movimento(
         db,
         compact({
           type: delta > 0 ? "ENTRADA" : "SAIDA",
@@ -788,14 +850,19 @@ const OPS = {
   },
 
   baixar_caixa: {
+    // Por linha da abertura da caixa: SAIDA do saldo (recibo do movimento) e, depois, a linha sai
+    // do registro (recibo direto), como a remoção de lançamento do WMS faz, porque o Mapa e as
+    // Etiquetas montam o conteúdo da caixa pelas linhas, sem olhar status. O que a linha tinha
+    // fica no evento. O recibo da operação inteira sai no fim.
     async ler(op) {
+      if (await reciboExiste(idReciboDireto(op))) return { jaAplicado: true, estado: [`caixa ${op.caixa} já baixada por este acerto`], previsto: [] };
       const box = await caixa(op.caixa);
       const linhas = await linhasAbertura({ caixa: op.caixa });
       if (!box && !linhas.length) return { jaAplicado: true, estado: [`caixa ${op.caixa} não existe mais e não tem linhas`], previsto: [] };
-      if (!linhas.length) throw new Erro(`caixa ${op.caixa} sem linhas da abertura; nada a baixar`);
+      if (!linhas.length) return { semMudanca: true, estado: [`caixa ${op.caixa} sem linhas da abertura; nada a baixar`], previsto: [] };
       const itens = [];
       const estado = [`caixa ${op.caixa}${box ? ` em ${box.posicao} · ${num(box.data.line_count)} produto(s), ${fmt(num(box.data.unit_count))} unidade(s) no registro` : " (registro já removido)"}`];
-      let pendentes = 0;
+      const previsto = [];
       for (const linha of linhas) {
         const skuCode = text(linha.data.sku_code);
         const posicao = text(linha.data.location_id || box?.data.location_id).toUpperCase();
@@ -803,39 +870,56 @@ const OPS = {
         const saldos = await saldosDoSku(skuCode);
         const alvo = saldos.find((r) => r.posicao === posicao);
         const disponivel = alvo ? num(alvo.data.qty_on_hand) - num(alvo.data.qty_reserved) : 0;
-        const feito = await reciboExiste(idReciboMovimento(chave(op, linha.id)));
-        if (!feito) pendentes += 1;
-        if (!feito && disponivel < qtde) throw new Erro(`${skuCode} em ${posicao} tem ${fmt(disponivel)} disponível, a linha da caixa tem ${fmt(qtde)}`);
-        estado.push(`  ${skuCode} · ${text(linha.data.client_item_code)} · "${text(linha.data.product_name)}" · ${fmt(qtde)} em ${posicao} · saldo ${descreverSaldos(saldos)}${feito ? " · baixa já gravada" : ""}`);
-        itens.push({ linha, skuCode, posicao, qtde, feito });
+        const saida = await reciboExiste(idReciboMovimento(chave(op, linha.id)));
+        if (!saida && disponivel < qtde) throw new Erro(`${skuCode} em ${posicao} tem ${fmt(disponivel)} disponível, a linha da caixa tem ${fmt(qtde)}`);
+        estado.push(`  ${skuCode} · ${text(linha.data.client_item_code)} · "${text(linha.data.product_name)}" · ${fmt(qtde)} em ${posicao} · saldo ${descreverSaldos(saldos)}${saida ? " · baixa já gravada" : ""}`);
+        if (!saida) previsto.push(`SAIDA ${fmt(qtde)} de ${skuCode} em ${posicao}`);
+        previsto.push(`linha de ${skuCode} (${fmt(qtde)}) sai do registro da abertura da caixa ${op.caixa}`);
+        itens.push({ linha, skuCode, posicao, qtde, saida });
       }
-      return {
-        jaAplicado: pendentes === 0,
-        estado,
-        previsto: itens.filter((i) => !i.feito).map((i) => `SAIDA ${fmt(i.qtde)} de ${i.skuCode} em ${i.posicao}`),
-        dados: { itens },
-      };
+      return { estado, previsto, dados: { itens } };
     },
     async gravar(op, L) {
       for (const item of L.dados.itens) {
-        if (item.feito) continue;
-        await operations.createInventoryMovementTransaction(
-          db,
-          compact({
-            type: "SAIDA",
-            quantity: item.qtde,
-            customer_code: CLIENTE,
-            sku_code: item.skuCode,
-            client_item_code: text(item.linha.data.client_item_code) || undefined,
-            product_name: text(item.linha.data.product_name) || undefined,
-            location_id: item.posicao,
-            reason: `${op.motivo} (caixa ${op.caixa})`,
-            reference: PLANO.referencia,
-            idempotency_key: chave(op, item.linha.id),
-          }),
-          ATOR,
-        );
+        if (!item.saida) {
+          await movimento(
+            db,
+            compact({
+              type: "SAIDA",
+              quantity: item.qtde,
+              customer_code: CLIENTE,
+              sku_code: item.skuCode,
+              client_item_code: text(item.linha.data.client_item_code) || undefined,
+              product_name: text(item.linha.data.product_name) || undefined,
+              location_id: item.posicao,
+              reason: `${op.motivo} (caixa ${op.caixa})`,
+              reference: PLANO.referencia,
+              idempotency_key: chave(op, item.linha.id),
+            }),
+            ATOR,
+          );
+        }
+        await transacaoDireta(op, "retirar_linha", item.linha.id, async (tx) => {
+          const snap = await tx.get(item.linha.ref);
+          if (!snap.exists) return { jaRetirada: true };
+          const antes = snap.data();
+          tx.delete(item.linha.ref);
+          evento(tx, op, "opening_line.removed_by_acerto", `Linha da caixa ${op.caixa} retirada da abertura`, `${item.skuCode} · ${text(antes.client_item_code)} · ${fmt(item.qtde)} un. · o conteúdo foi para o saldão`, "opening_inventory_line", item.linha.id, {
+            caixa: op.caixa,
+            antes: {
+              sku_code: text(antes.sku_code),
+              client_item_code: text(antes.client_item_code),
+              product_name: text(antes.product_name),
+              counted_qty: num(antes.counted_qty),
+              location_id: text(antes.location_id),
+              session_id: text(antes.session_id),
+              status: text(antes.status),
+            },
+          });
+          return { linha: item.linha.id };
+        }, item.linha.id);
       }
+      await transacaoDireta(op, "baixar_caixa", op.caixa, async () => ({ linhas: L.dados.itens.length }));
       return { linhas: L.dados.itens.length };
     },
   },
@@ -855,7 +939,7 @@ const OPS = {
       return { jaAplicado, estado: [`${op.codigo} = ${sku.id} · saldo ${descreverSaldos(saldos)}`], previsto: [`SAIDA ${fmt(num(op.qtde))} em ${posicao}`], dados: { sku, posicao } };
     },
     async gravar(op, L) {
-      await operations.createInventoryMovementTransaction(
+      await movimento(
         db,
         compact({ type: "SAIDA", quantity: num(op.qtde), customer_code: CLIENTE, sku_code: L.dados.sku.id, client_item_code: L.dados.sku.codCliente || undefined, product_name: L.dados.sku.nome || undefined, location_id: L.dados.posicao, reason: op.motivo, reference: PLANO.referencia, idempotency_key: chave(op) }),
         ATOR,
