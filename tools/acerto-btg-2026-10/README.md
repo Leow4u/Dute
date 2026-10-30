@@ -77,6 +77,19 @@ Erros comuns do dry-run e o que fazer:
   (`BTG-000xxx`) no lugar do código do cliente naquela operação.
 - "N linha(s) da abertura ... precisa ser exatamente 1": informe `caixa` na
   operação de linha.
+- "serve de apoio para CX-...": a caixa tem outra em cima. Ou ela fica como
+  caixa vazia de apoio, com `se_apoia: "esvaziar"`, ou a de cima passa para
+  outra caixa da mesma posição, com `transferir_apoio_para: "CX-..."`, e a
+  vazia é removida.
+- "SKU ... não encontrado": a busca tenta `cod_cliente_key`, `cod_cliente`,
+  o `client_item_code` do saldo e o da linha da abertura. Se mesmo assim não
+  acha, o código no cadastro é outro; ponha o SKU (`BTG-000xxx`) no plano.
+
+Primeiro dry-run na produção, 30/10/2026: 27 a gravar, 6 sem mudança, 14
+pendentes e 13 erros. Os erros eram quatro cadastros que não respondiam pela
+chave de busca, as caixas 5 e 19 servindo de apoio para a 33 e a 36, e o
+nome do PP da 0805, o único dos sete ainda como "feminina". Tudo isso entrou
+nesta versão; a segunda rodada deve ficar sem erro fora dos pendentes.
 
 Aplicar, só depois do dry-run limpo:
 

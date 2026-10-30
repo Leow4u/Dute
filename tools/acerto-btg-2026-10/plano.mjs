@@ -37,14 +37,22 @@ export const BLOCOS = [
     id: "cadastro",
     titulo: "Cadastro: nome e fotos da polo azul-marinho",
     ops: [
+      // Só o PP estava como feminina na produção; os outros seis já eram "MASCULINO".
       ...["PP", "P", "M", "G", "GG", "XG", "XGG"].map((tam) => ({
         id: `renomear-0805-${tam}`,
         tipo: "renomear",
         codigo: `A.01.0805.002.${tam}`,
-        trocar: ["feminin[ao]", "masculina"],
+        nome: `POLO MASCULINO PIQUET AZUL MARINHO ${tam}`,
         genero: "Masculino",
         motivo: ITEM(1, "A.01.0805.002 é a polo masculina, não feminina"),
       })),
+      {
+        id: "renomear-0809-masc-M",
+        tipo: "renomear",
+        codigo: "A.01.0809.002.M",
+        nome: "POLO MASCULINO PIQUET ARPOADOR M",
+        motivo: ITEM(5, "nome com erro de digitação, ARPOARDOR"),
+      },
       {
         id: "fotos-0805",
         tipo: "trocar_fotos",
@@ -255,10 +263,17 @@ export const BLOCOS = [
     id: "caixas",
     titulo: "Caixas e linhas da abertura, para o Mapa e as Etiquetas",
     ops: [
-      { id: "cx-remover-5", tipo: "remover_caixa", caixa: "CX-000005", motivo: ITEM(8, "caixa vazia, conteúdo no saldão") },
+      { id: "cx-remover-5", tipo: "remover_caixa", caixa: "CX-000005", se_apoia: "esvaziar", motivo: ITEM(8, "caixa vazia, conteúdo no saldão; fica como apoio da CX-000033") },
       { id: "cx-remover-32", tipo: "remover_caixa", caixa: "CX-000032", motivo: ITEM(8, "caixa vazia, conteúdo no saldão") },
       { id: "cx-remover-130", tipo: "remover_caixa", caixa: "CX-000130", motivo: ITEM(10, "caixa inteira no saldão") },
-      { id: "cx-remover-19", tipo: "remover_caixa", caixa: "CX-000019", motivo: ITEM(9, "leitura duplicada da CX-000018") },
+      {
+        id: "cx-remover-19",
+        tipo: "remover_caixa",
+        caixa: "CX-000019",
+        transferir_apoio_para: "CX-000018",
+        motivo: ITEM(9, "leitura duplicada da CX-000018; a CX-000036 passa a apoiar na CX-000018"),
+        pendente: "Guilherme confirma que a CX-000036 está em cima da CX-000018",
+      },
       { id: "cx-linha-91", tipo: "corrigir_linha", caixa: "CX-000091", de: "A.01.0809.002.M", para: "A.02.0809.002.M", qtde: 50, motivo: ITEM(5, "CX-000091: 50 femininas M") },
       { id: "cx-linha-92", tipo: "corrigir_linha", caixa: "CX-000092", de: "A.01.0809.002.M", para: "A.02.0809.002.M", qtde: 25, motivo: ITEM(5, "CX-000092: 25 femininas M") },
       { id: "cx-linha-90", tipo: "ajustar_linha", caixa: "CX-000090", codigo: "A.01.0809.002.M", qtde: 42, motivo: ITEM(5, "CX-000090 tem 42") },

@@ -149,15 +149,37 @@ async function skuPorCodigo(codigo, { incluirArquivados = false } = {}) {
   const valor = text(codigo);
   if (!valor) return null;
   const aceita = (data) => doCliente(data) && (incluirArquivados || !arquivado(data));
+  const achados = new Map();
+  const guardar = (snap) => {
+    if (snap?.exists && aceita(snap.data()) && !achados.has(snap.id)) achados.set(snap.id, linhaSku(snap));
+  };
   if (ehSku(valor)) {
-    const snap = await db.collection("skus").doc(valor.toUpperCase()).get();
-    if (!snap.exists || !aceita(snap.data())) return null;
-    return linhaSku(snap);
+    guardar(await db.collection("skus").doc(valor.toUpperCase()).get());
+  } else {
+    const key = normalizedIdentity(valor);
+    const porCampo = async (campo, v) => (await db.collection("skus").where(campo, "==", v).get()).docs.forEach(guardar);
+    await porCampo("cod_cliente_key", key);
+    if (!achados.size) {
+      await porCampo("cod_cliente", valor);
+      if (valor !== key) await porCampo("cod_cliente", key);
+      await porCampo("client_item_code", valor);
+    }
+    if (!achados.size) {
+      // Cadastro sem o campo de busca: chega pelo saldo ou pela linha da abertura.
+      const ids = new Set();
+      for (const colecao of ["stock_balances", "opening_inventory_lines"]) {
+        for (const v of new Set([valor, key])) {
+          (await db.collection(colecao).where("client_item_code", "==", v).get()).docs.forEach((d) => {
+            if (doCliente(d.data()) && text(d.data().sku_code)) ids.add(text(d.data().sku_code));
+          });
+        }
+      }
+      for (const id of ids) guardar(await db.collection("skus").doc(id).get());
+    }
   }
-  const snap = await db.collection("skus").where("cod_cliente_key", "==", normalizedIdentity(valor)).get();
-  const rows = snap.docs.filter((d) => aceita(d.data()));
-  if (rows.length > 1) throw new Erro(`Mais de um SKU ativo com o código ${valor}: ${rows.map((r) => r.id).join(", ")}`);
-  return rows[0] ? linhaSku(rows[0]) : null;
+  const rows = [...achados.values()];
+  if (rows.length > 1) throw new Erro(`Mais de um SKU ${incluirArquivados ? "" : "ativo "}com o código ${valor}: ${rows.map((r) => r.id).join(", ")}; use o SKU no plano`);
+  return rows[0] ?? null;
 }
 function linhaSku(snap) {
   const data = snap.data();
@@ -171,8 +193,16 @@ function linhaSku(snap) {
 }
 async function produtosPorCodigo(codCliente) {
   if (!codCliente) return [];
-  const snap = await db.collection("products").where("cod_cliente_key", "==", normalizedIdentity(codCliente)).get();
-  return snap.docs.filter((d) => doCliente(d.data())).map((d) => ({ id: d.id, ref: d.ref, data: d.data() }));
+  const vistos = new Map();
+  for (const [campo, v] of [["cod_cliente_key", normalizedIdentity(codCliente)], ["cod_cliente", text(codCliente)]]) {
+    (await db.collection("products").where(campo, "==", v).get()).docs.forEach((d) => {
+      if (doCliente(d.data()) && !vistos.has(d.id)) vistos.set(d.id, { id: d.id, ref: d.ref, data: d.data() });
+    });
+    if (vistos.size) break;
+  }
+  const direto = await db.collection("products").doc(safeDocId(text(codCliente))).get();
+  if (direto.exists && doCliente(direto.data()) && !vistos.has(direto.id)) vistos.set(direto.id, { id: direto.id, ref: direto.ref, data: direto.data() });
+  return [...vistos.values()];
 }
 async function saldosDoSku(skuCode) {
   const snap = await db.collection("stock_balances").where("sku_code", "==", skuCode).get();
@@ -340,7 +370,7 @@ const OPS = {
       const sku = await skuPorCodigo(op.codigo);
       if (!sku) throw new Erro(`SKU ${op.codigo} não encontrado`);
       const atual = sku.nome;
-      const novo = op.nome ?? (op.trocar ? atual.replace(new RegExp(op.trocar[0], "i"), op.trocar[1]) : "");
+      const novo = op.nome ?? (op.trocar ? atual.replace(new RegExp(op.trocar[0], "i"), (m) => (m === m.toUpperCase() ? op.trocar[1].toUpperCase() : op.trocar[1])) : "");
       if (!novo) throw new Erro("informe nome ou trocar");
       const generoAtual = text(sku.data.genero);
       const semMudanca = novo === atual && (!op.genero || generoAtual === op.genero);
@@ -385,19 +415,22 @@ const OPS = {
       const familia = async (prefixo) => {
         const key = normalizedIdentity(prefixo);
         const snap = await db.collection("skus").where("cod_cliente_key", ">=", key).where("cod_cliente_key", "<=", `${key}`).get();
-        const skus = snap.docs.filter((d) => !arquivado(d.data()) && doCliente(d.data())).map(linhaSku);
+        const ordem = ["PP", "P", "M", "G", "GG", "XG", "XGG", "EG", "EGG", "U"];
+        const tamanho = (sku) => ordem.indexOf(text(sku.codCliente).split(".").pop().toUpperCase());
+        const skus = snap.docs.filter((d) => !arquivado(d.data()) && doCliente(d.data())).map(linhaSku).sort((a, b) => tamanho(a) - tamanho(b));
+        // As fotos que o card mostra: as do primeiro SKU com foto, na ordem de tamanho.
+        const fonte = skus.find((sku) => text(sku.data.primary_photo_url) || lista(sku.data.photo_urls).length);
         const fotos = [];
         const caminhos = new Map();
-        for (const sku of skus) {
-          const urls = lista(sku.data.photo_urls);
-          const paths = lista(sku.data.photo_storage_paths);
-          const primaria = text(sku.data.primary_photo_url);
-          for (const url of [primaria, ...urls].filter(Boolean)) if (!fotos.includes(url)) fotos.push(url);
+        if (fonte) {
+          const urls = lista(fonte.data.photo_urls);
+          const paths = lista(fonte.data.photo_storage_paths);
+          for (const url of [text(fonte.data.primary_photo_url), ...urls].filter(Boolean)) if (!fotos.includes(url)) fotos.push(url);
           urls.forEach((url, i) => {
             if (paths[i]) caminhos.set(url, paths[i]);
           });
         }
-        return { prefixo, skus, fotos: fotos.slice(0, 8), caminhos };
+        return { prefixo, skus, fonte, fotos: fotos.slice(0, 8), caminhos };
       };
       const [A, B] = await Promise.all([familia(op.familia_a), familia(op.familia_b)]);
       if (!A.skus.length || !B.skus.length) throw new Erro(`família sem SKU ativo: ${A.prefixo} (${A.skus.length}), ${B.prefixo} (${B.skus.length})`);
@@ -408,12 +441,12 @@ const OPS = {
       return {
         jaAplicado: recibos.every(Boolean),
         estado: [
-          `${A.prefixo}* · ${A.skus.length} SKUs · ${A.fotos.length} fotos · principal ${curto(A.fotos[0])}`,
-          `${B.prefixo}* · ${B.skus.length} SKUs · ${B.fotos.length} fotos · principal ${curto(B.fotos[0])}`,
+          `${A.prefixo}* · ${A.skus.length} SKUs · fotos do ${A.fonte.codCliente}: ${A.fotos.length} · principal ${curto(A.fotos[0])}`,
+          `${B.prefixo}* · ${B.skus.length} SKUs · fotos do ${B.fonte.codCliente}: ${B.fotos.length} · principal ${curto(B.fotos[0])}`,
         ],
         previsto: [
-          `${A.skus.length} SKUs de ${A.prefixo}* recebem as ${B.fotos.length} fotos de ${B.prefixo}* e perdem as próprias`,
-          `${B.skus.length} SKUs de ${B.prefixo}* recebem as ${A.fotos.length} fotos de ${A.prefixo}* e perdem as próprias`,
+          `${A.skus.length} SKUs de ${A.prefixo}* recebem as ${B.fotos.length} fotos de ${B.fonte.codCliente} e perdem as próprias`,
+          `${B.skus.length} SKUs de ${B.prefixo}* recebem as ${A.fotos.length} fotos de ${A.fonte.codCliente} e perdem as próprias`,
         ],
         dados: { A, B },
       };
@@ -741,19 +774,53 @@ const OPS = {
     async ler(op) {
       const box = await caixa(op.caixa);
       if (!box) return { jaAplicado: true, estado: [`caixa ${op.caixa} não existe mais`], previsto: [] };
+      if (op.se_apoia === "esvaziar" && (await reciboExiste(idReciboDireto(op)))) return { jaAplicado: true, estado: [`caixa ${op.caixa} já esvaziada`], previsto: [] };
       const linhas = await linhasAbertura({ caixa: op.caixa });
       if (text(box.data.status) === "committing") throw new Erro(`caixa ${op.caixa} está em guarda`);
-      const apoiadas = await db.collection("warehouse_boxes").where("support_box_code", "==", box.id).get();
-      if (apoiadas.docs.some((d) => ["stored", "committing"].includes(text(d.data().status)))) throw new Erro(`caixa ${op.caixa} serve de apoio para ${apoiadas.docs.map((d) => d.id).join(", ")}`);
+      const apoiadas = (await db.collection("warehouse_boxes").where("support_box_code", "==", box.id).get()).docs
+        .filter((d) => ["stored", "committing"].includes(text(d.data().status)))
+        .map((d) => ({ id: d.id, ref: d.ref, data: d.data() }));
+      const estado = [`caixa ${op.caixa} em ${box.posicao} · status ${text(box.data.status)} · ${num(box.data.line_count)} produto(s), ${fmt(num(box.data.unit_count))} unidade(s) · ${linhas.length} linha(s) da abertura${apoiadas.length ? ` · apoio de ${apoiadas.map((a) => a.id).join(", ")}` : ""}`];
+      if (apoiadas.length && op.se_apoia === "esvaziar") {
+        return { estado, previsto: [`zera os contadores e mantém a caixa vazia como apoio de ${apoiadas.map((a) => a.id).join(", ")}`], dados: { box, apoiadas, modo: "esvaziar" } };
+      }
+      if (apoiadas.length && op.transferir_apoio_para) {
+        const destino = await caixa(op.transferir_apoio_para);
+        if (!destino) throw new Erro(`caixa de apoio ${op.transferir_apoio_para} não encontrada`);
+        if (destino.id === box.id) throw new Erro("a caixa de apoio não pode ser ela mesma");
+        if (text(destino.data.status) !== "stored") throw new Erro(`caixa de apoio ${destino.id} não está guardada`);
+        if (destino.posicao !== box.posicao) throw new Erro(`caixa de apoio ${destino.id} está em ${destino.posicao}, e a ${box.id} em ${box.posicao}`);
+        if (text(destino.data.support_box_code).toUpperCase() === box.id) throw new Erro(`${destino.id} está apoiada na ${box.id}; escolha outra caixa de apoio`);
+        return {
+          estado,
+          previsto: [`muda o apoio de ${apoiadas.map((a) => a.id).join(", ")} para ${destino.id}`, `zera os contadores, apaga warehouse_boxes/${op.caixa} e libera a ocupação de ${box.posicao}; as linhas da abertura ficam como histórico`],
+          dados: { box, apoiadas, destino, modo: "remover" },
+        };
+      }
+      if (apoiadas.length) throw new Erro(`caixa ${op.caixa} serve de apoio para ${apoiadas.map((a) => a.id).join(", ")}; no plano, use se_apoia: "esvaziar" ou transferir_apoio_para`);
       return {
-        estado: [`caixa ${op.caixa} em ${box.posicao} · status ${text(box.data.status)} · ${num(box.data.line_count)} produto(s), ${fmt(num(box.data.unit_count))} unidade(s) · ${linhas.length} linha(s) da abertura`],
+        estado,
         previsto: [`zera os contadores, apaga warehouse_boxes/${op.caixa} e libera a ocupação de ${box.posicao}; as linhas da abertura ficam como histórico`],
-        dados: { box },
+        dados: { box, apoiadas, modo: "remover" },
       };
     },
     async gravar(op, L) {
-      const { box } = L.dados;
-      await transacaoDireta(op, "remover_caixa", box.id, async (tx) => {
+      const { box, apoiadas, destino, modo } = L.dados;
+      if (destino && apoiadas.length) {
+        await transacaoDireta(op, "transferir_apoio", box.id, async (tx) => {
+          const atuais = await Promise.all(apoiadas.map((a) => tx.get(a.ref)));
+          for (const [i, a] of apoiadas.entries()) {
+            if (atuais[i].exists && text(atuais[i].data().support_box_code).toUpperCase() === box.id) tx.update(a.ref, { support_box_code: destino.id, updated_at: ts() });
+          }
+          evento(tx, op, "warehouse.box_support_moved_by_acerto", `Apoio de ${apoiadas.map((a) => a.id).join(", ")} movido para ${destino.id}`, `A caixa ${box.id} vai ser removida`, "warehouse_box", destino.id, {
+            de: box.id,
+            para: destino.id,
+            caixas: apoiadas.map((a) => a.id),
+          });
+          return { de: box.id, para: destino.id };
+        }, "apoio");
+      }
+      await transacaoDireta(op, modo === "esvaziar" ? "esvaziar_caixa" : "remover_caixa", box.id, async (tx) => {
         const atual = await tx.get(box.ref);
         if (!atual.exists) return { jaRemovida: true };
         tx.update(box.ref, { line_count: 0, unit_count: 0, draft_line_count: 0, draft_unit_count: 0, total_cost: 0, sku_codes: [], updated_at: ts() });
@@ -762,10 +829,10 @@ const OPS = {
         });
         return { caixa: box.id };
       });
-      if ((await caixa(box.id)) !== null) {
+      if (modo !== "esvaziar" && (await caixa(box.id)) !== null) {
         await warehouseBoxes.removeWarehouseBox(db, { code: box.id, customer_code: CLIENTE }, ATOR);
       }
-      return { caixa: box.id };
+      return { caixa: box.id, modo };
     },
   },
 

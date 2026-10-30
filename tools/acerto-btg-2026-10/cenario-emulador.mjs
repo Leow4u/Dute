@@ -40,25 +40,26 @@ const norm = (v) => text(v).toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "
 const safeDocId = (v) => String(v).replace(/[^\w.-]/g, "_").slice(0, 900);
 
 // cod_cliente, nome, gênero, [caixa, posição, qtde]..., fotos?, sku fixo?
-const FEM_AZUL = { fotos: ["https://fotos.teste/0805-feminina.jpg"], paths: ["fotos/0805-feminina.jpg"] };
-const MASC_AZUL = { fotos: ["https://fotos.teste/0805-masculina.jpg"], paths: ["fotos/0805-masculina.jpg"] };
+const FEM_AZUL = (t) => ({ fotos: [`https://fotos.teste/0805-feminina-${t}-1.jpg`, `https://fotos.teste/0805-feminina-${t}-2.jpg`], paths: [`fotos/0805-feminina-${t}-1.jpg`, `fotos/0805-feminina-${t}-2.jpg`] });
+const MASC_AZUL = (t) => ({ fotos: [`https://fotos.teste/0805-masculina-${t}-1.jpg`, `https://fotos.teste/0805-masculina-${t}-2.jpg`], paths: [`fotos/0805-masculina-${t}-1.jpg`, `fotos/0805-masculina-${t}-2.jpg`] });
 const ITENS = [
-  ["A.01.0805.002.PP", "Polo feminina piquet azul marinho PP", "Feminino", [["CX-000301", "A-01", 12]], FEM_AZUL],
-  ["A.01.0805.002.P", "Polo feminina piquet azul marinho P", "Feminino", [["CX-000302", "A-01", 78]], FEM_AZUL],
-  ["A.01.0805.002.M", "Polo feminina piquet azul marinho M", "Feminino", [["CX-000303", "A-01", 248]], FEM_AZUL],
-  ["A.01.0805.002.G", "Polo feminina piquet azul marinho G", "Feminino", [["CX-000304", "A-01", 229]], FEM_AZUL],
-  ["A.01.0805.002.GG", "Polo feminina piquet azul marinho GG", "Feminino", [["CX-000305", "A-01", 100]], FEM_AZUL],
-  ["A.01.0805.002.XG", "Polo feminina piquet azul marinho XG", "Feminino", [["CX-000306", "A-01", 64]], FEM_AZUL],
-  ["A.01.0805.002.XGG", "Polo feminina piquet azul marinho XGG", "Feminino", [["CX-000307", "A-01", 13]], FEM_AZUL],
-  ["A.02.0805.002.P", "Polo masculina piquet azul marinho P", "Masculino", [["CX-000311", "A-02", 10]], MASC_AZUL],
-  ["A.02.0805.002.M", "Polo masculina piquet azul marinho M", "Masculino", [["CX-000312", "A-02", 20]], MASC_AZUL],
-  ["A.02.0805.002.G", "Polo masculina piquet azul marinho G", "Masculino", [["CX-000313", "A-02", 30]], MASC_AZUL],
+  ["A.01.0805.002.PP", "POLO FEMININA PIQUET AZUL MARINHO PP", "Masculino", [["CX-000301", "B-05", 12]], FEM_AZUL("PP")],
+  ["A.01.0805.002.P", "POLO MASCULINO PIQUET AZUL MARINHO P", "Masculino", [["CX-000302", "B-05", 44], ["CX-000322", "B-10", 34]], FEM_AZUL("P")],
+  ["A.01.0805.002.M", "POLO MASCULINO PIQUET AZUL MARINHO M", "Masculino", [["CX-000303", "B-05", 176], ["CX-000323", "B-10", 72]], FEM_AZUL("M")],
+  ["A.01.0805.002.G", "POLO MASCULINO PIQUET AZUL MARINHO G", "Masculino", [["CX-000304", "B-05", 157], ["CX-000324", "B-10", 72]], FEM_AZUL("G")],
+  ["A.01.0805.002.GG", "POLO MASCULINO PIQUET AZUL MARINHO GG", "Masculino", [["CX-000305", "B-05", 59], ["CX-000325", "B-10", 41]], FEM_AZUL("GG")],
+  ["A.01.0805.002.XG", "POLO MASCULINO PIQUET AZUL MARINHO XG", "Masculino", [["CX-000306", "B-05", 42], ["CX-000326", "B-10", 22]], FEM_AZUL("XG")],
+  ["A.01.0805.002.XGG", "POLO MASCULINO PIQUET AZUL MARINHO XGG", "Masculino", [["CX-000307", "B-05", 13]], FEM_AZUL("XGG")],
+  ["A.02.0805.002.PP", "POLO FEMININA PIQUET AZUL MARINHO PP", "Feminino", [["CX-000310", "A-02", 5]], MASC_AZUL("PP")],
+  ["A.02.0805.002.P", "POLO FEMININA PIQUET AZUL MARINHO P", "Feminino", [["CX-000311", "A-02", 10]], MASC_AZUL("P")],
+  ["A.02.0805.002.M", "POLO FEMININA PIQUET AZUL MARINHO M", "Feminino", [["CX-000312", "A-02", 20]], MASC_AZUL("M")],
+  ["A.02.0805.002.G", "POLO FEMININA PIQUET AZUL MARINHO G", "Feminino", [["CX-000313", "A-02", 30]], MASC_AZUL("G")],
   ["A.02.0809.002.PP", "Polo feminina piquet arpoador – PP", "Feminino", [["CX-000078", "A-10", 32]]],
   ["A.02.0809.002.P", "Polo feminina piquet arpoador – P", "Feminino", [["CX-000076", "A-10", 70]]],
   ["A.02.0809.002.G", "Polo feminina piquet arpoador – G", "Feminino", [["CX-000079", "A-10", 56]]],
   ["A.02.0809.002.GG", "Polo feminina piquet arpoador – GG", "Feminino", [["CX-000083", "A-11", 18]]],
   ["A.02.0809.002.XG", "Polo feminina piquet arpoador – XG", "Feminino", [["CX-000080", "A-11", 10]]],
-  ["A.01.0809.002.M", "Polo masculino piquet arpoador M", "Masculino", [["CX-000085", "A-13", 67], ["CX-000086", "A-13", 48], ["CX-000089", "A-13", 50], ["CX-000090", "A-13", 44], ["CX-000091", "A-13", 50], ["CX-000092", "A-13", 25]]],
+  ["A.01.0809.002.M", "POLO MASCULINO PIQUET ARPOARDOR M", "Masculino", [["CX-000085", "B-11", 67], ["CX-000086", "A-13", 48], ["CX-000089", "A-13", 50], ["CX-000090", "A-13", 44], ["CX-000091", "A-13", 50], ["CX-000092", "A-13", 25]]],
   ["POLO MASCULINO PIQUET OCEANO G", "Polo masculino piquet oceano g", "Masculino", [["CX-000198", "B-07", 70]], null, "BTG-000165"],
   ["A.01.0811.002.G", "Polo masculino piquet oceano G", "Masculino", [["CX-000197", "B-07", 128]]],
   ["A.01.0808.002", "Polo feminino piquet mescla preto m", "Feminino", [["CX-000150", "A-12", 59]]],
@@ -85,7 +86,13 @@ const ITENS = [
   ["A.01.0690.004.P", "Polo masculino piquet rosa OUT rosa p", "Masculino", [["CX-000130", "E-03", 24]]],
   ["A.01.0690.004.G", "Polo masculino piquet rosa OUT rosa G", "Masculino", [["CX-000130", "E-03", 9]]],
   ["A.01.0609.003.P", "Polo masculino piquet branca p", "Masculino", [["CX-000004", "E-04", 3]]],
+  ["A.01.0709.004.P", "Polo masculino piquet cinza p", "Masculino", [["CX-000033", "E-01", 3]]],
+  ["A.01.0705.017.P", "Polo masculino piquet indigo p", "Masculino", [["CX-000036", "B-02", 2]]],
 ];
+/** Caixas apoiadas em outra, como na produção (CX-000033 sobre a CX-000005, CX-000036 sobre a CX-000019). */
+const APOIOS = { "CX-000033": "CX-000005", "CX-000036": "CX-000019" };
+/** Cadastros que na produção não respondem pela busca por cod_cliente_key. */
+const SEM_CHAVE = new Set(["A.01.0808.002", "A.01.05334.005", "J.0562.003"]);
 
 const categoriaDe = (nome) => (/^sacola/i.test(nome) ? "Sacola" : /^jaqueta/i.test(nome) ? "Jaqueta" : /^tricot/i.test(nome) ? "Tricot" : /^camiseta/i.test(nome) ? "Camiseta" : "Polo");
 const tamanhoDe = (codigo) => {
@@ -134,6 +141,8 @@ async function semear() {
       source: "cenario_emulador",
     };
     const limpo = Object.fromEntries(Object.entries(catalogo).filter(([, v]) => v !== undefined));
+    if (SEM_CHAVE.has(codigo)) delete limpo.cod_cliente_key;
+    if (codigo === "A.01.05334.005") delete limpo.cod_cliente;
     set(db.collection("products").doc(safeDocId(codigo)), { id: codigo, ...limpo, estoque_btg: total, num_skus: 1 });
     set(db.collection("skus").doc(sku), { id: sku, ...limpo, cod_btg: sku, sku_code: sku, sku_code_key: norm(sku), estoque_atual: total, estoque_reservado: 0, estoque_disponivel: total });
     set(db.collection("client_inventory").doc(safeDocId(`cinv_${CLIENTE}__${sku}`)), {
@@ -164,7 +173,7 @@ async function semear() {
     }
   }
   for (const cx of caixas.values()) {
-    set(db.collection("warehouse_boxes").doc(cx.code), { ...cx, customer_code: CLIENTE, status: "stored", opening_closed: true, origin: { session_id: SESSAO }, created_at: FieldValue.serverTimestamp() });
+    set(db.collection("warehouse_boxes").doc(cx.code), { ...cx, customer_code: CLIENTE, status: "stored", opening_closed: true, origin: { session_id: SESSAO }, support_box_code: APOIOS[cx.code] ?? null, created_at: FieldValue.serverTimestamp() });
   }
   for (const posicao of posicoes) {
     set(db.collection("warehouse_positions").doc(posicao), { code: posicao, status: "active", occupancy_revision: 1 });
@@ -197,7 +206,7 @@ async function conferir() {
   const oceano = await db.collection("skus").doc("BTG-000165").get();
   console.log(`  ${"BTG-000165".padEnd(18)} ${oceano.exists ? `"${oceano.data().produto}"${oceano.data().archived ? " · ARQUIVADO" : ""} · estoque_atual ${oceano.data().estoque_atual}` : "—"}`);
   console.log("\nCaixas:");
-  for (const code of ["CX-000004", "CX-000005", "CX-000018", "CX-000019", "CX-000032", "CX-000076", "CX-000090", "CX-000091", "CX-000092", "CX-000120", "CX-000130", "CX-000150", "CX-000152", "CX-000180", "CX-000198", "CX-000212"]) {
+  for (const code of ["CX-000004", "CX-000005", "CX-000033", "CX-000018", "CX-000019", "CX-000036", "CX-000032", "CX-000076", "CX-000090", "CX-000091", "CX-000092", "CX-000120", "CX-000130", "CX-000150", "CX-000152", "CX-000180", "CX-000198", "CX-000212"]) {
     const snap = await db.collection("warehouse_boxes").doc(code).get();
     if (!snap.exists) {
       console.log(`  ${code} removida`);
@@ -205,7 +214,7 @@ async function conferir() {
     }
     const linhas = await db.collection("opening_inventory_lines").where("box_code", "==", code).get();
     const conteudo = linhas.docs.map((l) => `${l.data().client_item_code} ${l.data().counted_qty}${l.data().acerto ? "*" : ""}`).join(", ");
-    console.log(`  ${code} ${snap.data().location_id} · ${snap.data().line_count} produto(s) · ${snap.data().unit_count} un. · ${conteudo}`);
+    console.log(`  ${code} ${snap.data().location_id} · ${snap.data().line_count} produto(s) · ${snap.data().unit_count} un. · ${conteudo}${snap.data().support_box_code ? ` · apoiada na ${snap.data().support_box_code}` : ""}`);
   }
   const movimentos = await db.collection("movements").where("customer_code", "==", CLIENTE).get();
   const eventos = await db.collection("events").where("customer_code", "==", CLIENTE).get();
