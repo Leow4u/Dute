@@ -31,7 +31,7 @@ import { BLOCOS, PLANO } from "./plano.mjs";
 // --- Linha de comando ---------------------------------------------------------------
 
 const args = (() => {
-  const out = { aplicar: false, projeto: "dute-prod", confirmo: "", blocos: [], ops: [] };
+  const out = { aplicar: false, projeto: "dute-prod", confirmo: "", blocos: [], ops: [], buscar: [] };
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -42,6 +42,7 @@ const args = (() => {
     else if (a === "--confirmo") out.confirmo = proximo();
     else if (a === "--bloco") out.blocos.push(proximo());
     else if (a === "--op") out.ops.push(proximo());
+    else if (a === "--buscar") out.buscar.push(proximo());
     else abortar(`Argumento desconhecido: ${a}`);
   }
   return out;
@@ -145,6 +146,14 @@ const linhaViva = (data) => !["removed", "transferred", "reversed", "cancelled"]
 
 const ehSku = (codigo) => /^[A-Z]{2,6}-\d{4,8}$/i.test(text(codigo));
 
+/** Forma comparável de um código do cliente: maiúsculas, sem pontuação, letra O vale zero. */
+const canon = (v) => normalizedIdentity(v).replace(/[^A-Z0-9]/g, "").replace(/O/g, "0");
+let catalogoCache = null;
+async function catalogoTodo() {
+  if (!catalogoCache) catalogoCache = (await db.collection("skus").limit(10000).get()).docs;
+  return catalogoCache;
+}
+
 async function skuPorCodigo(codigo, { incluirArquivados = false } = {}) {
   const valor = text(codigo);
   if (!valor) return null;
@@ -176,10 +185,26 @@ async function skuPorCodigo(codigo, { incluirArquivados = false } = {}) {
       }
       for (const id of ids) guardar(await db.collection("skus").doc(id).get());
     }
+    if (!achados.size) {
+      // Código digitado diferente do plano (letra O por zero, espaço, ponto a mais): compara a forma canônica.
+      const alvo = canon(valor);
+      const parecidos = (await catalogoTodo()).filter((d) => canon(d.data().cod_cliente || d.data().client_item_code) === alvo);
+      const proprios = parecidos.filter((d) => aceita(d.data()));
+      if (!proprios.length && parecidos.length) {
+        const motivo = parecidos.map((d) => `${d.id} "${text(d.data().cod_cliente)}"${arquivado(d.data()) ? " arquivado" : ""}${!doCliente(d.data()) ? ` de ${text(d.data().customer_code) || "sem cliente"}` : ""}`).join(", ");
+        throw new Erro(`${valor} só existe como ${motivo}`);
+      }
+      proprios.forEach(guardar);
+    }
   }
   const rows = [...achados.values()];
   if (rows.length > 1) throw new Erro(`Mais de um SKU ${incluirArquivados ? "" : "ativo "}com o código ${valor}: ${rows.map((r) => r.id).join(", ")}; use o SKU no plano`);
   return rows[0] ?? null;
+}
+/** "A.01.0808.002 = BTG-000120", com o código gravado quando difere do plano. */
+function rotulo(codigoPlano, sku) {
+  const gravado = text(sku.codCliente);
+  return `${codigoPlano} = ${sku.id}${gravado && gravado !== text(codigoPlano) && !ehSku(codigoPlano) ? ` · no cadastro "${gravado}"` : ""}`;
 }
 function linhaSku(snap) {
   const data = snap.data();
@@ -383,7 +408,7 @@ const OPS = {
       return {
         jaAplicado: await reciboExiste(idReciboDireto(op)),
         semMudanca,
-        estado: [`${sku.id} · "${atual}"${generoAtual ? ` · gênero ${generoAtual}` : ""} · saldo ${descreverSaldos(saldos)}`],
+        estado: [`${rotulo(op.codigo, sku)} · "${atual}"${generoAtual ? ` · gênero ${generoAtual}` : ""} · saldo ${descreverSaldos(saldos)}`],
         previsto: [
           `nome → "${novo}"${op.genero ? ` · gênero → ${op.genero}` : ""} em skus, ${produtos.length} products, ${saldos.length} saldos, ${linhas.length} linhas da abertura${projecao ? ", client_inventory" : ""}`,
         ],
@@ -556,6 +581,7 @@ const OPS = {
           estoque_disponivel: 0,
         });
         alocador.commit();
+        catalogoCache = null;
         evento(tx, op, "catalog.created_by_acerto", `SKU ${skuCode} criado para ${op.codigo}`, `"${nome}", copiado de ${irmao.id} (${op.copiar_de})`, "sku", skuCode, {
           cod_cliente: op.codigo,
           copiado_de: irmao.id,
@@ -586,7 +612,7 @@ const OPS = {
       if (!jaAplicado && !saiu && disponivel < qtde) throw new Erro(`${de.codCliente || de.id} em ${posSaida} tem ${fmt(disponivel)} disponível, precisa de ${fmt(qtde)}`);
       return {
         jaAplicado,
-        estado: [`${op.de} = ${de.id} · "${de.nome}" · saldo ${descreverSaldos(saldos)} · destino ${para.texto}`],
+        estado: [`${rotulo(op.de, de)} · "${de.nome}" · saldo ${descreverSaldos(saldos)} · destino ${para.texto}`],
         previsto: [`SAIDA ${fmt(qtde)} de ${de.id} em ${posSaida} → ENTRADA ${fmt(qtde)} em ${op.para} em ${posEntrada}${saiu && !entrou ? " (saída já gravada; falta a entrada)" : ""}`],
         dados: { de, para, posSaida, posEntrada, qtde, saiu, entrou },
       };
@@ -627,7 +653,7 @@ const OPS = {
       if (!jaAplicado && delta > 0 && !alvo) throw new Erro(`${op.codigo} não tem saldo em ${posicao}; um Ajuste + criaria saldo numa posição nova`);
       return {
         jaAplicado,
-        estado: [`${op.codigo} = ${sku.id} · saldo ${descreverSaldos(saldos)}`],
+        estado: [`${rotulo(op.codigo, sku)} · saldo ${descreverSaldos(saldos)}`],
         previsto: [`${delta > 0 ? "ENTRADA" : "SAIDA"} ${fmt(Math.abs(delta))} em ${posicao}: ${fmt(atual)} → ${fmt(atual + delta)}`],
         dados: { sku, posicao, delta },
       };
@@ -733,12 +759,10 @@ const OPS = {
 
   arquivar: {
     async ler(op) {
-      const sku = await skuPorCodigo(op.codigo);
-      if (!sku) {
-        const recibo = await reciboExiste(idReciboDireto(op));
-        if (recibo) return { jaAplicado: true, estado: [`${op.codigo} já está arquivado`], previsto: [] };
-        throw new Erro(`SKU ${op.codigo} não encontrado`);
-      }
+      if (await reciboExiste(idReciboDireto(op))) return { jaAplicado: true, estado: [`${op.codigo} já arquivado por este acerto`], previsto: [] };
+      const sku = await skuPorCodigo(op.codigo, { incluirArquivados: true });
+      if (!sku) throw new Erro(`SKU ${op.codigo} não encontrado`);
+      if (arquivado(sku.data)) return { jaAplicado: true, estado: [`${rotulo(op.codigo, sku)} já está arquivado`], previsto: [] };
       const saldos = await saldosDoSku(sku.id);
       const total = saldos.reduce((s, r) => s + num(r.data.qty_on_hand), 0);
       const reservado = saldos.reduce((s, r) => s + num(r.data.qty_reserved), 0);
@@ -748,7 +772,7 @@ const OPS = {
       if (total > 0 && projetado > 0) throw new Erro(`${op.codigo} ainda tem saldo ${fmt(total)} e o plano só tira ${fmt(previsto.tudo ? total : previsto.soma)}; arquivar só com saldo zero`);
       const [produtos, projecao] = await Promise.all([produtosPorCodigo(sku.codCliente), cinv(sku.id)]);
       return {
-        estado: [`${op.codigo} = ${sku.id} · "${sku.nome}" · saldo ${fmt(total)}${total > 0 ? ` hoje, zero depois das transferências do plano` : ""}`],
+        estado: [`${rotulo(op.codigo, sku)} · "${sku.nome}" · saldo ${fmt(total)}${total > 0 ? ` hoje, zero depois das transferências do plano` : ""}`],
         previsto: [`arquiva skus${produtos.length ? ` e ${produtos.length} products` : ""}${projecao ? " e some do portal (client_inventory)" : ""}`],
         dados: { sku, produtos, projecao },
       };
@@ -969,6 +993,26 @@ function imprimir(bloco, op, L) {
   else if (L.jaAplicado) console.log(`   feito   : já aplicado`);
   else if (L.semMudanca) console.log(`   feito   : sem mudança`);
   else for (const linha of L.previsto ?? []) console.log(`   grava   : ${linha}`);
+}
+
+if (args.buscar.length) {
+  for (const codigo of args.buscar) {
+    console.log(`\n== ${codigo} (forma comparável ${canon(codigo)})`);
+    const alvo = canon(codigo);
+    const skus = (await catalogoTodo()).filter((d) => canon(d.data().cod_cliente || d.data().client_item_code) === alvo || d.id === text(codigo).toUpperCase());
+    for (const d of skus) {
+      const x = d.data();
+      console.log(`  skus/${d.id} · cod_cliente "${text(x.cod_cliente)}" · key "${text(x.cod_cliente_key)}" · "${text(x.produto)}" · cliente ${text(x.customer_code) || "(vazio)"}${arquivado(x) ? " · ARQUIVADO" : ""} · estoque_atual ${num(x.estoque_atual)}`);
+      for (const r of await saldosDoSku(d.id)) console.log(`     saldo ${r.posicao} ${fmt(num(r.data.qty_on_hand))} · client_item_code "${text(r.data.client_item_code)}"`);
+      for (const l of await linhasAbertura({ sku: d.id })) console.log(`     linha ${text(l.data.box_code)} ${fmt(num(l.data.counted_qty))} · client_item_code "${text(l.data.client_item_code)}"`);
+    }
+    if (!skus.length) {
+      const parecidos = (await catalogoTodo()).filter((d) => canon(d.data().cod_cliente).startsWith(alvo.slice(0, 7)));
+      console.log(`  nenhum SKU com esse código. Parecidos: ${parecidos.slice(0, 12).map((d) => `${d.id} "${text(d.data().cod_cliente)}"`).join(", ") || "nenhum"}`);
+    }
+  }
+  console.log("");
+  process.exit(0);
 }
 
 const controle = await db.collection("system_controls").doc("inventory").get();

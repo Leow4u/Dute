@@ -82,8 +82,12 @@ Erros comuns do dry-run e o que fazer:
   outra caixa da mesma posição, com `transferir_apoio_para: "CX-..."`, e a
   vazia é removida.
 - "SKU ... não encontrado": a busca tenta `cod_cliente_key`, `cod_cliente`,
-  o `client_item_code` do saldo e o da linha da abertura. Se mesmo assim não
-  acha, o código no cadastro é outro; ponha o SKU (`BTG-000xxx`) no plano.
+  o `client_item_code` do saldo e o da linha da abertura e, por fim, a forma
+  comparável do código, sem pontuação e com letra O valendo zero. Quando acha
+  por essa forma, o dry-run mostra `no cadastro "..."` ao lado do código. Se
+  mesmo assim não acha, veja o que o banco tem com
+  `node tools/acerto-btg-2026-10/acerto.mjs --projeto dute-prod --buscar A.01.0808.002`
+  e ponha o SKU (`BTG-000xxx`) no plano.
 
 Primeiro dry-run na produção, 30/10/2026: 27 a gravar, 6 sem mudança, 14
 pendentes e 13 erros. Os erros eram quatro cadastros que não respondiam pela

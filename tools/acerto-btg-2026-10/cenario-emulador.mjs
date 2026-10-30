@@ -93,6 +93,8 @@ const ITENS = [
 const APOIOS = { "CX-000033": "CX-000005", "CX-000036": "CX-000019" };
 /** Cadastros que na produção não respondem pela busca por cod_cliente_key. */
 const SEM_CHAVE = new Set(["A.01.0808.002", "A.01.05334.005", "J.0562.003"]);
+/** Como o código foi digitado na abertura: letra O por zero, espaço, ponto a mais. */
+const DIGITADO = { "A.01.0808.002": "A.01.O808.002", "A.01.05334.005": "A.01.05334.005 ", "J.0562.003": "J.0562.003." };
 
 const categoriaDe = (nome) => (/^sacola/i.test(nome) ? "Sacola" : /^jaqueta/i.test(nome) ? "Jaqueta" : /^tricot/i.test(nome) ? "Tricot" : /^camiseta/i.test(nome) ? "Camiseta" : "Polo");
 const tamanhoDe = (codigo) => {
@@ -122,10 +124,11 @@ async function semear() {
     seq += 1;
     const sku = skuFixo ?? `BTG-${String(seq).padStart(6, "0")}`;
     const total = lugares.reduce((s, [, , q]) => s + q, 0);
+    const gravado = DIGITADO[codigo] ?? codigo;
     const catalogo = {
       customer_code: CLIENTE,
-      cod_cliente: codigo,
-      cod_cliente_key: norm(codigo),
+      cod_cliente: gravado,
+      cod_cliente_key: norm(gravado),
       produto: nome,
       category: categoriaDe(nome),
       categoria: categoriaDe(nome),
@@ -142,7 +145,6 @@ async function semear() {
     };
     const limpo = Object.fromEntries(Object.entries(catalogo).filter(([, v]) => v !== undefined));
     if (SEM_CHAVE.has(codigo)) delete limpo.cod_cliente_key;
-    if (codigo === "A.01.05334.005") delete limpo.cod_cliente;
     set(db.collection("products").doc(safeDocId(codigo)), { id: codigo, ...limpo, estoque_btg: total, num_skus: 1 });
     set(db.collection("skus").doc(sku), { id: sku, ...limpo, cod_btg: sku, sku_code: sku, sku_code_key: norm(sku), estoque_atual: total, estoque_reservado: 0, estoque_disponivel: total });
     set(db.collection("client_inventory").doc(safeDocId(`cinv_${CLIENTE}__${sku}`)), {
@@ -159,14 +161,14 @@ async function semear() {
       cx.sku_codes.push(sku);
       caixas.set(caixa, cx);
       set(db.collection("opening_inventory_lines").doc(`line_${caixa}_${sku}`), {
-        id: `line_${caixa}_${sku}`, session_id: SESSAO, customer_code: CLIENTE, sku_code: sku, client_item_code: codigo, product_name: nome,
+        id: `line_${caixa}_${sku}`, session_id: SESSAO, customer_code: CLIENTE, sku_code: sku, client_item_code: gravado, product_name: nome,
         product_registration: "existing", category: limpo.category, location_id: posicao, box_code: caixa, counted_qty: qtde, unit_cost: 0, total_cost: 0,
         status: "counted", occurred_at: "2026-10-21T12:00:00.000Z",
       });
     }
     for (const [posicao, qtde] of porPosicao) {
       set(db.collection("stock_balances").doc(safeDocId(`bal_${CLIENTE}__${sku}__${posicao}`)), {
-        id: safeDocId(`bal_${CLIENTE}__${sku}__${posicao}`), customer_code: CLIENTE, sku_code: sku, client_item_code: codigo, product_name: nome,
+        id: safeDocId(`bal_${CLIENTE}__${sku}__${posicao}`), customer_code: CLIENTE, sku_code: sku, client_item_code: gravado, product_name: nome,
         location_id: posicao, category: limpo.category, size: limpo.size ?? null, qty_on_hand: qtde, qty_reserved: 0, qty_available: qtde,
         status: "available", source: "cenario_emulador", opening_inventory_session_id: SESSAO, photo_urls: fotos?.fotos ?? [], primary_photo_url: fotos?.fotos?.[0] ?? null,
       });
