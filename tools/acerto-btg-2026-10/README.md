@@ -38,7 +38,7 @@ BTG-000088. O plano usa essas formas.
 | `skus-novos` | Cria os SKUs que faltam (products, skus e a projeção do portal, com categoria e fotos), copiando de um irmão da família, sem saldo; o que já existe fica "sem mudança" | 2, 5, 7, 11, 12, 13 |
 | `transferencias` | Saída do SKU errado e entrada no certo, na mesma posição, mesma quantidade | 2, 5, 6, 7, 11, 12, 13 |
 | `quantidades` | Ajuste + e Ajuste − pelas contagens do Guilherme; `delta: "zerar"` tira o que sobrar na posição depois das transferências (a sobra da CX-000150 além das 58 contadas) | 4, 5, 7, 9 |
-| `saldao` | Saída de tudo que estava nas caixas 5, 32 e 130, e do que saiu da 4; a linha da abertura dessas caixas sai do registro (o Mapa e as Etiquetas montam o conteúdo pelas linhas), com o que ela tinha guardado no evento | 8, 10 |
+| `saldao` | Saída de tudo que estava nas caixas 5, 32 e 130, e do que saiu da 4; a linha da abertura dessas caixas sai do registro (o Mapa e as Etiquetas montam o conteúdo pelas linhas), com o que ela tinha guardado no evento. Com `itens` ([{ codigo, qtde }]), a baixa é parcial: a linha diminui, ou sai se zerar, e a caixa continua | 8, 10 |
 | `caixas` | Remove as caixas 5, 19, 32 e 130 e corrige SKU e quantidade das linhas da abertura das outras, para o Mapa e as Etiquetas | 4 a 13 |
 | `arquivar` | Arquiva os SKUs errados já em zero, inclusive no portal | 2, 6, 7, 11, 12 |
 
@@ -101,10 +101,16 @@ Erros comuns do dry-run e o que fazer:
 - "Com FIRESTORE_EMULATOR_HOST o projeto precisa ser demo-*": a variável do
   emulador ficou no shell; limpe-a (`Remove-Item Env:FIRESTORE_EMULATOR_HOST`)
   antes de rodar contra a nuvem.
-- "serve de apoio para CX-...": a caixa tem outra em cima. Ou ela fica como
-  caixa vazia de apoio, com `se_apoia: "esvaziar"`, ou a de cima passa para
-  outra caixa da mesma posição, com `transferir_apoio_para: "CX-..."`, e a
-  vazia é removida.
+- "serve de apoio para CX-...": a caixa tem outra em cima no registro. Ou ela
+  fica como caixa vazia de apoio, com `se_apoia: "esvaziar"`, ou a de cima
+  passa para outra caixa da mesma posição, com `transferir_apoio_para:
+  "CX-..."`, ou passa a apoiar direto na prateleira, com `apoio:
+  "prateleira"`, e a vazia é removida.
+- Para ver uma caixa como o banco a tem (posição, apoio, contadores e cada
+  linha da abertura com o saldo do SKU na posição):
+  `node tools/acerto-btg-2026-10/acerto.mjs --projeto dute-prod --caixa CX-000004`.
+  O `--buscar` com a base e o ponto no fim (`--buscar A.01.0805.002.`) lista a
+  família inteira, com saldos e linhas por caixa.
 - "SKU ... não encontrado · parecidos: ...": a busca tenta `cod_cliente_key`,
   `cod_cliente`, o `client_item_code` do saldo e o da linha da abertura e, por
   fim, a forma comparável do código, sem pontuação e com letra O valendo zero.
@@ -197,6 +203,35 @@ Os 15 pendentes continuam no plano. Para ligar um, apague o campo `pendente`
 na operação, rode o dry-run (as operações já gravadas aparecem como "já
 aplicado") e aplique de novo: só o que faltar é gravado.
 
+## Segunda rodada: respostas do Guilherme (30/10/2026)
+
+1. Sacola N6: a CX-000208 tem 73 (não 72), total 148. Ligados o
+   `aj-sacola-N6-mais-1` (+1 em B-12) e o `cx-linha-sacola-mais-1` (linha da
+   CX-000208 para 73).
+2. CX-000019 não existe; a CX-000036 está em A-05 direto na prateleira, não
+   em cima de caixa nenhuma. O `cx-remover-19` ganhou `apoio: "prateleira"`
+   (a CX-000036 deixa de depender da CX-000019 no registro) e foi ligado.
+3. CX-000004: saíram 12 peças para o saldão (rosa OUT rosa G, GG e XG, 1 cada;
+   PAN rosa P, 3; camiseta fio egípcio M, 1; mescla black P, M, G, GG e XG, 1
+   cada) e ficaram 12. O `saldao-cx4` virou `baixar_caixa` com `itens`,
+   pendente até casar a lista com as linhas da caixa (`--caixa CX-000004`).
+4. Polo PAN cinza P: a etiqueta da peça diz `A.01.0719.004.P` (o cadastro
+   tinha letra O no lugar do zero), e o PP já está certo. As quatro operações
+   do item 12 passaram a criar `A.01.0719.004.P`, mover as 15, corrigir a
+   linha e arquivar o `A.01.O719.004.P`; ligadas.
+5. Pima preta GG e XG: a CX-000180 só tem pretas, 15 GG e 15 XG; as azuis GG
+   e XG são 15 e 15. As quantidades do plano passaram de 25/15 para 15/15;
+   ficam pendentes até ver as linhas da CX-000180 e os saldos da azul
+   (`--caixa CX-000180`, `--buscar A.02.0814.002.`).
+6. Azul-marinho: fotos das etiquetas das caixas, todas em B-05 segundo o
+   Guilherme; falta cruzar com as linhas do sistema (`--buscar
+   A.01.0805.002.`), inclusive as registradas em B-10.
+
+Com isso o plano tem 62 operações: 47 já gravadas ou a gravar, 7 sem mudança
+e 8 pendentes. No emulador: dry-run com 47 a gravar, aplicação com 47, dry-run
+seguinte com 47 já aplicadas; a baixa parcial da CX-000004 tem teste próprio
+(`ACERTO_PLANO`, só no emulador: um plano alternativo com `itens`).
+
 ## Validação no emulador (30/10/2026)
 
 Feita no ambiente de desenvolvimento, sem credencial da nuvem, com o
@@ -214,8 +249,10 @@ node tools/acerto-btg-2026-10/cenario-emulador.mjs --projeto demo-acerto --confe
 
 O cenário grava os códigos errados como a produção os tem (com o tamanho e o
 SKU fixo: BTG-000109, -045, -169, -087, -088), a 0808 com 59 para exercitar o
-`zerar`, a sacola N6 em duas caixas (72 e 75), e o tricot `A.01.0534.005.M` já
-existente, para o `criar-0534-M` ficar "sem mudança". Dois ciclos a mais
+`zerar`, a sacola N6 nas caixas CX-000207 (75) e CX-000208 (72), o tricot
+`A.01.0534.005.M` já existente, para o `criar-0534-M` ficar "sem mudança", e
+a CX-000004 com quatro linhas para o teste da baixa parcial. Na segunda
+rodada os números são 62 operações, 47 a gravar, 7 sem mudança, 8 pendentes. Dois ciclos a mais
 valem a pena: a 0808 com 58 (o `zerar` fica "sem mudança" e a aplicação grava
 39), e a retomada, com `ACERTO_TESTE_FALHA_APOS_FOTOS=3` e depois
 `ACERTO_TESTE_FALHA_APOS_SAIDA=transf-sacola-N6` na aplicação (só funcionam

@@ -26,12 +26,17 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { BLOCOS, PLANO } from "./plano.mjs";
+// ACERTO_PLANO aponta outro arquivo de plano, só com o emulador (teste de operações que o plano real não liga).
+const { BLOCOS, PLANO } = await import(
+  process.env.ACERTO_PLANO && process.env.FIRESTORE_EMULATOR_HOST
+    ? pathToFileURL(path.resolve(process.env.ACERTO_PLANO)).href
+    : "./plano.mjs"
+);
 
 // --- Linha de comando ---------------------------------------------------------------
 
 const args = (() => {
-  const out = { aplicar: false, projeto: "dute-prod", confirmo: "", blocos: [], ops: [], buscar: [] };
+  const out = { aplicar: false, projeto: "dute-prod", confirmo: "", blocos: [], ops: [], buscar: [], caixas: [] };
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -43,6 +48,7 @@ const args = (() => {
     else if (a === "--bloco") out.blocos.push(proximo());
     else if (a === "--op") out.ops.push(proximo());
     else if (a === "--buscar") out.buscar.push(proximo());
+    else if (a === "--caixa") out.caixas.push(proximo());
     else abortar(`Argumento desconhecido: ${a}`);
   }
   return out;
@@ -157,7 +163,7 @@ async function catalogoTodo() {
   return catalogoCache;
 }
 
-async function skuPorCodigo(codigo, { incluirArquivados = false } = {}) {
+async function skuPorCodigo(codigo, { incluirArquivados = false, estrito = false } = {}) {
   const valor = text(codigo);
   if (!valor) return null;
   const aceita = (data) => doCliente(data) && (incluirArquivados || !arquivado(data));
@@ -188,8 +194,10 @@ async function skuPorCodigo(codigo, { incluirArquivados = false } = {}) {
       }
       for (const id of ids) guardar(await db.collection("skus").doc(id).get());
     }
-    if (!achados.size) {
+    if (!achados.size && !estrito) {
       // Código digitado diferente do plano (letra O por zero, espaço, ponto a mais): compara a forma canônica.
+      // `estrito` desliga isto: quem cria um código, ou transfere para ele, quer o código exato (A.01.0719.004.P
+      // não pode cair no A.01.O719.004.P, com letra O, que é justamente o errado).
       const alvo = canon(valor);
       const parecidos = (await catalogoTodo()).filter((d) => canon(d.data().cod_cliente || d.data().client_item_code) === alvo);
       const proprios = parecidos.filter((d) => aceita(d.data()));
@@ -211,13 +219,16 @@ function rotulo(codigoPlano, sku) {
   return `${codigoPlano} = ${sku.id}${gravado && gravado !== text(codigoPlano) ? ` · no cadastro "${gravado}"` : ""}`;
 }
 /** Códigos do cadastro que começam como o pedido (forma comparável), para o "não encontrado" bastar como diagnóstico. */
-async function parecidos(codigo, limite = 8) {
+const codigoDoDoc = (d) => text(d.data().cod_cliente || d.data().client_item_code);
+async function parecidosDocs(codigo, limite = 8) {
   const alvo = canon(codigo);
   const todos = await catalogoTodo();
-  const codigoDe = (d) => text(d.data().cod_cliente || d.data().client_item_code);
-  let achados = todos.filter((d) => alvo && canon(codigoDe(d)).startsWith(alvo));
-  if (!achados.length) achados = todos.filter((d) => canon(codigoDe(d)).startsWith(alvo.slice(0, 7)));
-  return achados.slice(0, limite).map((d) => `${d.id} "${codigoDe(d)}"${arquivado(d.data()) ? " (arquivado)" : ""}${!doCliente(d.data()) ? ` (de ${text(d.data().customer_code) || "sem cliente"})` : ""}`);
+  let achados = todos.filter((d) => alvo && canon(codigoDoDoc(d)).startsWith(alvo));
+  if (!achados.length) achados = todos.filter((d) => canon(codigoDoDoc(d)).startsWith(alvo.slice(0, 7)));
+  return achados.slice(0, limite);
+}
+async function parecidos(codigo, limite = 8) {
+  return (await parecidosDocs(codigo, limite)).map((d) => `${d.id} "${codigoDoDoc(d)}"${arquivado(d.data()) ? " (arquivado)" : ""}${!doCliente(d.data()) ? ` (de ${text(d.data().customer_code) || "sem cliente"})` : ""}`);
 }
 async function naoEncontrado(papel, codigo) {
   const dica = await parecidos(codigo);
@@ -373,6 +384,35 @@ async function saidasPrevistasNoPlano(codigo, sku, { exceto } = {}) {
   };
 }
 
+/** ENTRADAs que as transferências do plano ainda vão fazer num SKU, por posição (sem recibo de entrada). */
+async function entradasPrevistasNoPlano(codigo, sku) {
+  const mesmo = (c) => normalizedIdentity(c) === normalizedIdentity(codigo) || normalizedIdentity(c) === normalizedIdentity(sku.id);
+  const porPosicao = new Map();
+  for (const bloco of BLOCOS) {
+    for (const op of bloco.ops) {
+      if (op.pendente || op.tipo !== "transferir" || !mesmo(op.para)) continue;
+      if (await reciboExiste(idReciboMovimento(chave(op, "entrada")))) continue;
+      let onde;
+      let qtde = op.qtde === "tudo" ? null : num(op.qtde);
+      try {
+        // Saída já gravada e entrada não: posição e quantidade vêm do recibo da saída, como em transferir.ler.
+        const saida = (await reciboExiste(idReciboMovimento(chave(op, "saida")))) ? await movimentoDoRecibo(idReciboMovimento(chave(op, "saida"))) : null;
+        if (saida) qtde = saida.qtde;
+        const de = saida ? null : await skuPorCodigo(op.de, { incluirArquivados: true });
+        onde = op.posicao_entrada ? await resolverPosicao(op.posicao_entrada, null) : saida ? saida.posicao : await resolverPosicao(op.posicao, de);
+      } catch {
+        continue;
+      }
+      const r = porPosicao.get(onde) ?? { soma: 0, ops: [] };
+      r.ops.push(op.id);
+      if (qtde == null) r.tudo = true;
+      else r.soma += qtde;
+      porPosicao.set(onde, r);
+    }
+  }
+  return { em: (posicao) => porPosicao.get(posicao) ?? { soma: 0, ops: [] } };
+}
+
 function criaSkuNoPlano(codigo) {
   for (const bloco of BLOCOS) {
     for (const op of bloco.ops) {
@@ -383,7 +423,7 @@ function criaSkuNoPlano(codigo) {
 }
 
 async function destino(codigo) {
-  const sku = await skuPorCodigo(codigo);
+  const sku = await skuPorCodigo(codigo, { estrito: true });
   if (sku) return { sku, texto: `${codigo} = ${sku.id}` };
   const criacao = criaSkuNoPlano(codigo);
   if (criacao && !criacao.pendente) return { sku: null, texto: `${codigo} (será criado por ${criacao.id})`, seraCriado: true };
@@ -631,7 +671,7 @@ const OPS = {
 
   criar_sku: {
     async ler(op) {
-      const existente = await skuPorCodigo(op.codigo);
+      const existente = await skuPorCodigo(op.codigo, { estrito: true });
       if (existente && (await reciboExiste(idReciboDireto(op)))) {
         return { jaAplicado: true, estado: [`${op.codigo} criado por este acerto: ${existente.id} · "${existente.nome}"`], previsto: [] };
       }
@@ -777,7 +817,7 @@ const OPS = {
     },
     async gravar(op, L) {
       const { de, posSaida, posEntrada, qtde } = L.dados;
-      const paraSku = (await skuPorCodigo(op.para)) ?? null;
+      const paraSku = (await skuPorCodigo(op.para, { estrito: true })) ?? null;
       if (!paraSku) throw new Erro(`SKU de destino ${op.para} ainda não existe`);
       const base = { customer_code: CLIENTE, reason: op.motivo, reference: PLANO.referencia };
       await movimento(
@@ -804,7 +844,18 @@ const OPS = {
       const zerar = op.delta === "zerar";
       // "zerar" que não teve o que tirar não deixa recibo; depois de o plano arquivar o SKU, continua "sem mudança".
       const sku = await skuPorCodigo(op.codigo, { incluirArquivados: zerar });
-      if (!sku) throw new Erro(await naoEncontrado("SKU", op.codigo));
+      if (!sku) {
+        const criacao = criaSkuNoPlano(op.codigo);
+        const posicaoSemSku = typeof op.posicao === "string" || op.posicao?.caixa ? await resolverPosicao(op.posicao, null) : null;
+        if (criacao && !criacao.pendente && num(op.delta) > 0 && posicaoSemSku) {
+          return {
+            estado: [`${op.codigo} será criado por ${criacao.id}; o ajuste é lido de novo na aplicação, depois das transferências`],
+            previsto: [`ENTRADA ${fmt(num(op.delta))} em ${posicaoSemSku}`],
+            dados: null,
+          };
+        }
+        throw new Erro(await naoEncontrado("SKU", op.codigo));
+      }
       if (zerar && arquivado(sku.data)) return { semMudanca: true, estado: [`${rotulo(op.codigo, sku)} já está arquivado, sem saldo; nada a tirar`], previsto: [] };
       const posicao = await resolverPosicao(op.posicao, sku);
       const saldos = await saldosDoSku(sku.id);
@@ -819,8 +870,13 @@ const OPS = {
       const estado = [`${rotulo(op.codigo, sku)} · saldo ${descreverSaldos(saldos)}${outras.todas.length ? ` · ${outras.todas.join(", ")} tira(m) ${outras.tudo ? "tudo" : fmt(outras.soma)} de ${posicao} antes` : ""}`];
       if (zerar && delta === 0) return { semMudanca: true, estado: [...estado, `depois disso não sobra nada em ${posicao}; nada a tirar`], previsto: [] };
       if (delta < 0 && projetado < -delta) throw new Erro(`${op.codigo} em ${posicao} tem ${fmt(atual - reservado)} disponível${outras.todas.length ? `, ${fmt(projetado)} depois de ${outras.todas.join(", ")}` : ""}; não dá para tirar ${fmt(-delta)}`);
-      if (delta > 0 && !alvo) throw new Erro(`${op.codigo} não tem saldo em ${posicao}; um Ajuste + criaria saldo numa posição nova`);
-      const contas = outras.todas.length ? ` (hoje ${fmt(atual)}; depois de ${outras.todas.join(", ")} ${fmt(projetado)} → ${fmt(projetado + delta)})` : `: ${fmt(atual)} → ${fmt(atual + delta)}`;
+      const entradas = delta > 0 ? (await entradasPrevistasNoPlano(op.codigo, sku)).em(posicao) : { soma: 0, ops: [] };
+      if (delta > 0 && !alvo && !entradas.ops.length) throw new Erro(`${op.codigo} não tem saldo em ${posicao}; um Ajuste + criaria saldo numa posição nova`);
+      const contas = outras.todas.length
+        ? ` (hoje ${fmt(atual)}; depois de ${outras.todas.join(", ")} ${fmt(projetado)} → ${fmt(projetado + delta)})`
+        : entradas.ops.length
+          ? ` (hoje ${fmt(atual)}; depois de ${entradas.ops.join(", ")} ${fmt(atual + entradas.soma)} → ${fmt(atual + entradas.soma + delta)})`
+          : `: ${fmt(atual)} → ${fmt(atual + delta)}`;
       return {
         estado,
         previsto: [`${delta > 0 ? "ENTRADA" : "SAIDA"} ${fmt(Math.abs(delta))} em ${posicao}${contas}${zerar ? " · sobra além do contado" : ""}`],
@@ -828,6 +884,7 @@ const OPS = {
       };
     },
     async gravar(op, L) {
+      if (!L.dados?.sku) throw new Erro(`${op.codigo} ainda não existe; a criação não aconteceu`);
       const { sku, posicao, delta } = L.dados;
       await movimento(
         db,
@@ -850,32 +907,49 @@ const OPS = {
   },
 
   baixar_caixa: {
-    // Por linha da abertura da caixa: SAIDA do saldo (recibo do movimento) e, depois, a linha sai
-    // do registro (recibo direto), como a remoção de lançamento do WMS faz, porque o Mapa e as
+    // Por linha da abertura da caixa: SAIDA do saldo (recibo do movimento) e, depois, a linha sai do
+    // registro (recibo direto), como a remoção de lançamento do WMS faz, porque o Mapa e as
     // Etiquetas montam o conteúdo da caixa pelas linhas, sem olhar status. O que a linha tinha
-    // fica no evento. O recibo da operação inteira sai no fim.
+    // fica no evento, e os contadores da caixa acompanham. O recibo da operação inteira sai no fim.
+    // Com `itens` ([{ codigo, qtde }]), baixa só esses, na quantidade dada: a linha diminui, ou sai
+    // se zerar, e a caixa continua.
     async ler(op) {
       if (await reciboExiste(idReciboDireto(op))) return { jaAplicado: true, estado: [`caixa ${op.caixa} já baixada por este acerto`], previsto: [] };
       const box = await caixa(op.caixa);
       const linhas = await linhasAbertura({ caixa: op.caixa });
       if (!box && !linhas.length) return { jaAplicado: true, estado: [`caixa ${op.caixa} não existe mais e não tem linhas`], previsto: [] };
       if (!linhas.length) return { semMudanca: true, estado: [`caixa ${op.caixa} sem linhas da abertura; nada a baixar`], previsto: [] };
+      const parcial = Array.isArray(op.itens) && op.itens.length > 0;
+      let alvos = linhas.map((linha) => ({ linha, qtde: num(linha.data.counted_qty) }));
+      if (parcial) {
+        alvos = [];
+        for (const item of op.itens) {
+          const sku = await skuPorCodigo(item.codigo, { incluirArquivados: true });
+          if (!sku) throw new Erro(await naoEncontrado("SKU", item.codigo));
+          const dessa = linhas.filter((l) => text(l.data.sku_code) === sku.id);
+          if (dessa.length !== 1) throw new Erro(`${dessa.length} linha(s) de ${item.codigo} na caixa ${op.caixa}; precisa ser exatamente 1`);
+          const qtde = num(item.qtde);
+          const naLinha = num(dessa[0].data.counted_qty);
+          if (qtde <= 0 || qtde > naLinha) throw new Erro(`${item.codigo}: ${fmt(qtde)} não cabe na linha da caixa ${op.caixa}, que tem ${fmt(naLinha)}`);
+          alvos.push({ linha: dessa[0], qtde });
+        }
+      }
       const itens = [];
-      const estado = [`caixa ${op.caixa}${box ? ` em ${box.posicao} · ${num(box.data.line_count)} produto(s), ${fmt(num(box.data.unit_count))} unidade(s) no registro` : " (registro já removido)"}`];
+      const estado = [`caixa ${op.caixa}${box ? ` em ${box.posicao} · ${num(box.data.line_count)} produto(s), ${fmt(num(box.data.unit_count))} unidade(s) no registro` : " (registro já removido)"}${parcial ? ` · baixa parcial de ${alvos.length} item(ns)` : ""}`];
       const previsto = [];
-      for (const linha of linhas) {
+      for (const { linha, qtde } of alvos) {
         const skuCode = text(linha.data.sku_code);
         const posicao = text(linha.data.location_id || box?.data.location_id).toUpperCase();
-        const qtde = num(linha.data.counted_qty);
+        const naLinha = num(linha.data.counted_qty);
         const saldos = await saldosDoSku(skuCode);
         const alvo = saldos.find((r) => r.posicao === posicao);
         const disponivel = alvo ? num(alvo.data.qty_on_hand) - num(alvo.data.qty_reserved) : 0;
         const saida = await reciboExiste(idReciboMovimento(chave(op, linha.id)));
-        if (!saida && disponivel < qtde) throw new Erro(`${skuCode} em ${posicao} tem ${fmt(disponivel)} disponível, a linha da caixa tem ${fmt(qtde)}`);
-        estado.push(`  ${skuCode} · ${text(linha.data.client_item_code)} · "${text(linha.data.product_name)}" · ${fmt(qtde)} em ${posicao} · saldo ${descreverSaldos(saldos)}${saida ? " · baixa já gravada" : ""}`);
+        if (!saida && disponivel < qtde) throw new Erro(`${skuCode} em ${posicao} tem ${fmt(disponivel)} disponível, a baixa pede ${fmt(qtde)}`);
+        estado.push(`  ${skuCode} · ${text(linha.data.client_item_code)} · "${text(linha.data.product_name)}" · ${fmt(naLinha)} em ${posicao} · saldo ${descreverSaldos(saldos)}${saida ? " · baixa já gravada" : ""}`);
         if (!saida) previsto.push(`SAIDA ${fmt(qtde)} de ${skuCode} em ${posicao}`);
-        previsto.push(`linha de ${skuCode} (${fmt(qtde)}) sai do registro da abertura da caixa ${op.caixa}`);
-        itens.push({ linha, skuCode, posicao, qtde, saida });
+        previsto.push(qtde >= naLinha ? `linha de ${skuCode} (${fmt(naLinha)}) sai do registro da abertura da caixa ${op.caixa}` : `linha de ${skuCode} na caixa ${op.caixa}: ${fmt(naLinha)} → ${fmt(naLinha - qtde)}`);
+        itens.push({ linha, skuCode, posicao, qtde, saida, box });
       }
       return { estado, previsto, dados: { itens } };
     },
@@ -900,23 +974,45 @@ const OPS = {
           );
         }
         await transacaoDireta(op, "retirar_linha", item.linha.id, async (tx) => {
-          const snap = await tx.get(item.linha.ref);
+          const boxRef = item.box ? item.box.ref : null;
+          const [snap, boxSnap, irmas] = await Promise.all([
+            tx.get(item.linha.ref),
+            boxRef ? tx.get(boxRef) : Promise.resolve(null),
+            boxRef ? tx.get(db.collection("opening_inventory_lines").where("box_code", "==", text(item.linha.data.box_code))) : Promise.resolve(null),
+          ]);
           if (!snap.exists) return { jaRetirada: true };
           const antes = snap.data();
-          tx.delete(item.linha.ref);
-          evento(tx, op, "opening_line.removed_by_acerto", `Linha da caixa ${op.caixa} retirada da abertura`, `${item.skuCode} · ${text(antes.client_item_code)} · ${fmt(item.qtde)} un. · o conteúdo foi para o saldão`, "opening_inventory_line", item.linha.id, {
+          const restante = Math.max(0, num(antes.counted_qty) - item.qtde);
+          const registro = {
+            sku_code: text(antes.sku_code),
+            client_item_code: text(antes.client_item_code),
+            product_name: text(antes.product_name),
+            counted_qty: num(antes.counted_qty),
+            location_id: text(antes.location_id),
+            session_id: text(antes.session_id),
+            status: text(antes.status),
+          };
+          if (restante > 0) {
+            tx.update(item.linha.ref, { counted_qty: restante, acerto: { op: op.id, antes: { counted_qty: num(antes.counted_qty) }, at: new Date().toISOString() }, updated_at: ts() });
+          } else {
+            tx.delete(item.linha.ref);
+          }
+          if (boxSnap?.exists) {
+            const dados = boxSnap.data();
+            const mudanca = { unit_count: Math.max(0, num(dados.unit_count) - item.qtde), updated_at: ts() };
+            if (restante <= 0) {
+              mudanca.line_count = Math.max(0, num(dados.line_count) - 1);
+              const outraComSku = irmas.docs.some((d) => d.id !== item.linha.id && linhaViva(d.data()) && text(d.data().sku_code) === item.skuCode);
+              if (!outraComSku) mudanca.sku_codes = lista(dados.sku_codes, 100).filter((c) => c !== item.skuCode);
+            }
+            tx.update(boxRef, mudanca);
+          }
+          evento(tx, op, restante > 0 ? "opening_line.reduced_by_acerto" : "opening_line.removed_by_acerto", restante > 0 ? `Linha da caixa ${op.caixa} reduzida` : `Linha da caixa ${op.caixa} retirada da abertura`, `${item.skuCode} · ${registro.client_item_code} · ${fmt(item.qtde)} un. saíram para o saldão${restante > 0 ? `; ficam ${fmt(restante)}` : ""}`, "opening_inventory_line", item.linha.id, {
             caixa: op.caixa,
-            antes: {
-              sku_code: text(antes.sku_code),
-              client_item_code: text(antes.client_item_code),
-              product_name: text(antes.product_name),
-              counted_qty: num(antes.counted_qty),
-              location_id: text(antes.location_id),
-              session_id: text(antes.session_id),
-              status: text(antes.status),
-            },
+            antes: registro,
+            depois: { counted_qty: restante },
           });
-          return { linha: item.linha.id };
+          return { linha: item.linha.id, restante };
         }, item.linha.id);
       }
       await transacaoDireta(op, "baixar_caixa", op.caixa, async () => ({ linhas: L.dados.itens.length }));
@@ -999,6 +1095,13 @@ const OPS = {
       if (apoiadas.length && op.se_apoia === "esvaziar") {
         return { estado, previsto: [`zera os contadores e mantém a caixa vazia como apoio de ${apoiadas.map((a) => a.id).join(", ")}`], dados: { box, apoiadas, modo: "esvaziar" } };
       }
+      if (apoiadas.length && op.apoio === "prateleira") {
+        return {
+          estado,
+          previsto: [`${apoiadas.map((a) => a.id).join(", ")} passa(m) a apoiar direto na prateleira ${box.posicao}, sem caixa embaixo`, `zera os contadores, apaga warehouse_boxes/${op.caixa} e libera a ocupação de ${box.posicao}; as linhas da abertura ficam como histórico`],
+          dados: { box, apoiadas, modo: "remover", prateleira: true },
+        };
+      }
       if (apoiadas.length && op.transferir_apoio_para) {
         const destino = await caixa(op.transferir_apoio_para);
         if (!destino) throw new Erro(`caixa de apoio ${op.transferir_apoio_para} não encontrada`);
@@ -1012,7 +1115,7 @@ const OPS = {
           dados: { box, apoiadas, destino, modo: "remover" },
         };
       }
-      if (apoiadas.length) throw new Erro(`caixa ${op.caixa} serve de apoio para ${apoiadas.map((a) => a.id).join(", ")}; no plano, use se_apoia: "esvaziar" ou transferir_apoio_para`);
+      if (apoiadas.length) throw new Erro(`caixa ${op.caixa} serve de apoio para ${apoiadas.map((a) => a.id).join(", ")}; no plano, use se_apoia: "esvaziar", transferir_apoio_para ou apoio: "prateleira"`);
       return {
         estado,
         previsto: [`zera os contadores, apaga warehouse_boxes/${op.caixa} e libera a ocupação de ${box.posicao}; as linhas da abertura ficam como histórico`],
@@ -1020,7 +1123,23 @@ const OPS = {
       };
     },
     async gravar(op, L) {
-      const { box, apoiadas, destino, modo } = L.dados;
+      const { box, apoiadas, destino, modo, prateleira } = L.dados;
+      if (prateleira && apoiadas.length) {
+        await transacaoDireta(op, "apoio_prateleira", box.id, async (tx) => {
+          const posRef = db.collection("warehouse_positions").doc(box.posicao);
+          const [atuais, pos] = await Promise.all([Promise.all(apoiadas.map((a) => tx.get(a.ref))), tx.get(posRef)]);
+          for (const [i, a] of apoiadas.entries()) {
+            if (atuais[i].exists && text(atuais[i].data().support_box_code).toUpperCase() === box.id) tx.update(a.ref, { support_box_code: null, base_height_m: 0, updated_at: ts() });
+          }
+          if (pos.exists) tx.update(posRef, { occupancy_revision: FieldValue.increment(1) });
+          evento(tx, op, "warehouse.box_support_moved_by_acerto", `${apoiadas.map((a) => a.id).join(", ")} passa(m) a apoiar na prateleira ${box.posicao}`, `A caixa ${box.id} vai ser removida; a de cima está direto na prateleira`, "warehouse_box", box.posicao, {
+            de: box.id,
+            para: null,
+            caixas: apoiadas.map((a) => a.id),
+          });
+          return { de: box.id, para: null };
+        }, "apoio");
+      }
       if (destino && apoiadas.length) {
         await transacaoDireta(op, "transferir_apoio", box.id, async (tx) => {
           const atuais = await Promise.all(apoiadas.map((a) => tx.get(a.ref)));
@@ -1081,7 +1200,7 @@ const OPS = {
     },
     async gravar(op, L) {
       const { itens, deSku } = L.dados;
-      const para = await skuPorCodigo(op.para);
+      const para = await skuPorCodigo(op.para, { estrito: true });
       if (!para) throw new Erro(`SKU de destino ${op.para} ainda não existe`);
       const feitas = [];
       for (const { linha, box, antes, depois, feito } of itens) {
@@ -1122,13 +1241,21 @@ const OPS = {
   },
 
   ajustar_linha: {
+    // `ou_codigo`: enquanto a correção de linha do plano não rodou, a linha ainda está no código antigo.
     async ler(op) {
       if (!op.codigo) throw new Erro("informe codigo");
-      const sku = await skuPorCodigo(op.codigo);
-      if (!sku) throw new Erro(await naoEncontrado("SKU", op.codigo));
       if (await reciboExiste(idReciboDireto(op))) return { jaAplicado: true, estado: [`linha já ajustada`], previsto: [] };
-      const linhas = await linhasAbertura(op.caixa ? { caixa: op.caixa, sku: sku.id } : { sku: sku.id });
-      if (linhas.length !== 1) throw new Erro(`${linhas.length} linha(s) da abertura de ${op.codigo}${op.caixa ? ` na caixa ${op.caixa}` : ""}; precisa ser exatamente 1`);
+      let sku = await skuPorCodigo(op.codigo);
+      let linhas = sku ? await linhasAbertura(op.caixa ? { caixa: op.caixa, sku: sku.id } : { sku: sku.id }) : [];
+      if (!linhas.length && op.ou_codigo) {
+        const antigo = await skuPorCodigo(op.ou_codigo, { incluirArquivados: true });
+        if (antigo) {
+          linhas = await linhasAbertura(op.caixa ? { caixa: op.caixa, sku: antigo.id } : { sku: antigo.id });
+          if (linhas.length) sku = antigo;
+        }
+      }
+      if (!sku) throw new Erro(await naoEncontrado("SKU", op.codigo));
+      if (linhas.length !== 1) throw new Erro(`${linhas.length} linha(s) da abertura de ${op.codigo}${op.ou_codigo ? ` (ou ${op.ou_codigo})` : ""}${op.caixa ? ` na caixa ${op.caixa}` : ""}; precisa ser exatamente 1`);
       const linha = linhas[0];
       const antes = num(linha.data.counted_qty);
       const depois = op.qtde != null ? num(op.qtde) : antes + num(op.delta);
@@ -1202,24 +1329,47 @@ function imprimir(bloco, op, L) {
   else for (const linha of L.previsto ?? []) console.log(`   grava   : ${linha}`);
 }
 
+async function imprimirSku(d) {
+  const x = d.data();
+  console.log(`  skus/${d.id} · cod_cliente "${text(x.cod_cliente)}" · key "${text(x.cod_cliente_key)}" · "${text(x.produto)}" · cliente ${text(x.customer_code) || "(vazio)"}${arquivado(x) ? " · ARQUIVADO" : ""} · estoque_atual ${num(x.estoque_atual)}`);
+  for (const r of await saldosDoSku(d.id)) console.log(`     saldo ${r.posicao} ${fmt(num(r.data.qty_on_hand))} · client_item_code "${text(r.data.client_item_code)}"`);
+  for (const l of await linhasAbertura({ sku: d.id })) console.log(`     linha ${text(l.data.box_code)} ${fmt(num(l.data.counted_qty))} · client_item_code "${text(l.data.client_item_code)}"`);
+}
 if (args.buscar.length) {
   for (const codigo of args.buscar) {
     console.log(`\n== ${codigo} (forma comparável ${canon(codigo)})`);
     const alvo = canon(codigo);
-    const skus = (await catalogoTodo()).filter((d) => canon(d.data().cod_cliente || d.data().client_item_code) === alvo || d.id === text(codigo).toUpperCase());
-    for (const d of skus) {
-      const x = d.data();
-      console.log(`  skus/${d.id} · cod_cliente "${text(x.cod_cliente)}" · key "${text(x.cod_cliente_key)}" · "${text(x.produto)}" · cliente ${text(x.customer_code) || "(vazio)"}${arquivado(x) ? " · ARQUIVADO" : ""} · estoque_atual ${num(x.estoque_atual)}`);
-      for (const r of await saldosDoSku(d.id)) console.log(`     saldo ${r.posicao} ${fmt(num(r.data.qty_on_hand))} · client_item_code "${text(r.data.client_item_code)}"`);
-      for (const l of await linhasAbertura({ sku: d.id })) console.log(`     linha ${text(l.data.box_code)} ${fmt(num(l.data.counted_qty))} · client_item_code "${text(l.data.client_item_code)}"`);
-    }
+    const skus = (await catalogoTodo()).filter((d) => canon(codigoDoDoc(d)) === alvo || d.id === text(codigo).toUpperCase());
+    for (const d of skus) await imprimirSku(d);
     if (!skus.length) {
-      const dica = await parecidos(codigo, 12);
-      console.log(`  nenhum SKU com esse código. Parecidos: ${dica.join(", ") || "nenhum"}`);
-      for (const item of dica) {
-        const id = item.split(" ")[0];
-        for (const r of await saldosDoSku(id)) console.log(`     ${id} saldo ${r.posicao} ${fmt(num(r.data.qty_on_hand))}`);
-      }
+      const docs = await parecidosDocs(codigo, 20);
+      console.log(`  nenhum SKU com esse código exato. ${docs.length ? `Parecidos (${docs.length}):` : "Nenhum parecido."}`);
+      for (const d of docs) await imprimirSku(d);
+    }
+  }
+  console.log("");
+  process.exit(0);
+}
+if (args.caixas.length) {
+  for (const code of args.caixas) {
+    const id = text(code).toUpperCase();
+    console.log(`\n== ${id}`);
+    const box = await caixa(id);
+    if (!box) console.log("  não existe em warehouse_boxes");
+    else {
+      const x = box.data;
+      console.log(`  posição ${box.posicao} · status ${text(x.status)} · ${num(x.line_count)} produto(s), ${fmt(num(x.unit_count))} un. · sku_codes ${lista(x.sku_codes, 100).join(", ") || "(vazio)"}${text(x.support_box_code) ? ` · apoiada na ${text(x.support_box_code)}` : " · apoiada na prateleira"}`);
+      const apoiadas = (await db.collection("warehouse_boxes").where("support_box_code", "==", id).get()).docs;
+      if (apoiadas.length) console.log(`  apoio de: ${apoiadas.map((d) => `${d.id} (${text(d.data().status)})`).join(", ")}`);
+    }
+    const linhas = (await db.collection("opening_inventory_lines").where("box_code", "==", id).get()).docs;
+    if (!linhas.length) console.log("  sem linhas da abertura");
+    for (const l of linhas) {
+      const d = l.data();
+      const skuCode = text(d.sku_code);
+      const posicao = text(d.location_id || box?.data.location_id).toUpperCase();
+      const saldo = (await saldosDoSku(skuCode)).find((r) => r.posicao === posicao);
+      console.log(`  linha ${l.id} · ${skuCode} · "${text(d.client_item_code)}" · "${text(d.product_name)}" · ${fmt(num(d.counted_qty))} un. · ${text(d.status) || "sem status"} · saldo do SKU em ${posicao}: ${saldo ? fmt(num(saldo.data.qty_on_hand)) : "0"}`);
     }
   }
   console.log("");

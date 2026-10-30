@@ -79,7 +79,7 @@ const ITENS = [
   ["A.01.0798.002.P", "Jaqueta RIP stop militar p", "Masculino", [["CX-000018", "B-02", 12], ["CX-000019", "B-02", 12]]],
   ["J.0149.003.N1", "Sacola quadrada – BTG", "", [["CX-000210", "D-01", 585]]],
   ["J.0149.003.N3", "Sacola quadrada – BTG", "", [["CX-000211", "D-01", 120]]],
-  ["J.0562.003.N6", "Sacola quadrada – BTG", "", [["CX-000212", "D-02", 72], ["CX-000213", "D-02", 75]], null, "BTG-000169"],
+  ["J.0562.003.N6", "Sacola quadrada – BTG", "", [["CX-000207", "D-02", 75], ["CX-000208", "D-02", 72]], null, "BTG-000169"],
   ["A.01.0219.004", "Camiseta masculina FIO egípcio cinza", "Masculino", [["CX-000005", "E-01", 25]]],
   ["A.01.0594.005.PP", "Polo masculina basica preta PP", "Masculino", [["CX-000032", "E-02", 1]]],
   ["A.01.0594.005.P", "Polo masculina basica preta P", "Masculino", [["CX-000032", "E-02", 20]]],
@@ -87,6 +87,10 @@ const ITENS = [
   ["A.01.0690.004.P", "Polo masculino piquet rosa OUT rosa p", "Masculino", [["CX-000130", "E-03", 24]]],
   ["A.01.0690.004.G", "Polo masculino piquet rosa OUT rosa G", "Masculino", [["CX-000130", "E-03", 9]]],
   ["A.01.0609.003.P", "Polo masculino piquet branca p", "Masculino", [["CX-000004", "E-04", 3]]],
+  // CX-000004 com mais linhas, para o teste da baixa parcial (plano-teste-cx4.mjs, só no emulador).
+  ["A.02.0697.016.GG", "Polo feminina piquet mescla black GG", "Feminino", [["CX-000004", "E-04", 3]]],
+  ["A.02.0697.016.XG", "Polo feminina piquet mescla black XG", "Feminino", [["CX-000004", "E-04", 1]]],
+  ["A.02.0689.013.G", "Polo feminino piquet rosa OUT rosa G", "Feminino", [["CX-000004", "E-04", 1]]],
   ["A.01.0709.004.P", "Polo masculino piquet cinza p", "Masculino", [["CX-000033", "E-01", 3]]],
   ["A.01.0705.017.P", "Polo masculino piquet indigo p", "Masculino", [["CX-000036", "B-02", 2]]],
 ];
@@ -209,7 +213,7 @@ async function conferir() {
   const oceano = await db.collection("skus").doc("BTG-000165").get();
   console.log(`  ${"BTG-000165".padEnd(18)} ${oceano.exists ? `"${oceano.data().produto}"${oceano.data().archived ? " · ARQUIVADO" : ""} · estoque_atual ${oceano.data().estoque_atual}` : "—"}`);
   console.log("\nCaixas:");
-  for (const code of ["CX-000004", "CX-000005", "CX-000033", "CX-000018", "CX-000019", "CX-000036", "CX-000032", "CX-000076", "CX-000090", "CX-000091", "CX-000092", "CX-000120", "CX-000130", "CX-000150", "CX-000152", "CX-000180", "CX-000198", "CX-000212", "CX-000213"]) {
+  for (const code of ["CX-000004", "CX-000005", "CX-000033", "CX-000018", "CX-000019", "CX-000036", "CX-000032", "CX-000076", "CX-000090", "CX-000091", "CX-000092", "CX-000120", "CX-000130", "CX-000150", "CX-000152", "CX-000180", "CX-000198", "CX-000207", "CX-000208"]) {
     const snap = await db.collection("warehouse_boxes").doc(code).get();
     if (!snap.exists) {
       console.log(`  ${code} removida`);
