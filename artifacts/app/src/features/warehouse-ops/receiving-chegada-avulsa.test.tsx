@@ -122,7 +122,9 @@ describe("a busca de produto da chegada avulsa", () => {
   it("pede o catálogo inteiro do cliente, não a página padrão da API", () => {
     const limites = estado.chamadas.map((url) => Number(new URL(url, "http://dute.local").searchParams.get("limit")));
     expect(limites).toHaveLength(2);
-    // CATALOG_READ_CAP (lib/cloud-api.ts) corta em 2000; pedir menos esconde produto.
+    // O shim corta em 2000 (CATALOG_READ_CAP, lib/cloud-api.ts) mesmo pedindo
+    // mais, e conta a coleção inteira, de todos os clientes; pedir menos que
+    // isso esconde produto.
     for (const limite of limites) expect(limite).toBeGreaterThanOrEqual(2000);
   });
 
@@ -138,9 +140,14 @@ describe("as buscas de catálogo das telas do WMS", () => {
   it("toda leitura de /api/skus e /api/products de um formulário pede o limite", () => {
     for (const arquivo of ["./receiving.tsx", "./inventory.tsx", "./exceptions.tsx"]) {
       const fonte = readFileSync(new URL(arquivo, import.meta.url), "utf8");
-      const leituras = [...fonte.matchAll(/fetchJson<unknown>\("\/api\/(?:skus|products)([^"]*)"\)/g)];
+      // Qualquer forma da chamada (genérico, aspas); um hook compartilhado de
+      // busca de catálogo terá de entrar nesta lista.
+      const leituras = [...fonte.matchAll(/fetchJson(?:<[^>]*>)?\(\s*["'`]\/api\/(?:skus|products)([^"'`]*)["'`]/g)];
       expect(leituras.length, arquivo).toBeGreaterThan(0);
-      for (const leitura of leituras) expect(leitura[1], `${arquivo}: ${leitura[0]}`).toMatch(/^\?limit=\d+$/);
+      for (const leitura of leituras) {
+        expect(leitura[1], `${arquivo}: ${leitura[0]}`).toMatch(/^\?limit=\d+$/);
+        expect(Number(leitura[1]!.slice("?limit=".length)), `${arquivo}: ${leitura[0]}`).toBeGreaterThanOrEqual(2000);
+      }
     }
   });
 });
