@@ -35,6 +35,7 @@ import {
   catalogSkuCode,
   clientCodeRelease,
   clientCodeStillHasStockMessage,
+  isArchivedCatalogRecord,
   normalizeBarcode,
   openSkuAllocator,
   readCatalogQuantities,
@@ -687,6 +688,33 @@ async function pendingNewSkuFor(
     );
   }
   return skuCodes[0];
+}
+
+/**
+ * O SKU arquivado deste código do cliente, quando todo o cadastro dele é
+ * arquivado e do próprio cliente: o "Excluir" do Estoque › Itens só arquiva,
+ * e a busca da chegada avulsa esconde arquivados, então cadastrar o código
+ * como novo reativa esse SKU em vez de parar em "já existe no cadastro"
+ * (a Contagem faz o mesmo em recordCycleCountTransaction).
+ */
+async function archivedOwnSkuFor(
+  transaction: Transaction,
+  db: Firestore,
+  customerCode: string,
+  clientCode: string,
+): Promise<string> {
+  const rows = await readRows(
+    transaction,
+    db.collection(collections.skus).where("cod_cliente_key", "==", clientCode),
+  );
+  const archivedOwn =
+    rows.length > 0 &&
+    rows.every(
+      (row) =>
+        isArchivedCatalogRecord(row.data) &&
+        (text(row.data.customer_code) || LEGACY_CUSTOMER_CODE) === customerCode,
+    );
+  return archivedOwn ? normalizedIdentity(catalogSkuCode(rows[0]!.data)) : "";
 }
 
 function skuBalancesQuery(
@@ -4347,23 +4375,32 @@ export async function createInboundReceiptTransaction(
 
     // SKU gerado para cada linha nova, na ordem das linhas, e duplicidade por
     // código de barras dentro do cliente. Tudo leitura, antes das escritas.
+    // Código cujo cadastro inteiro está arquivado (e é do cliente) reativa o
+    // SKU arquivado, sem gastar número; o contador só abre se alguma linha
+    // precisar de SKU novo.
     const customerCode = text(input.customer_code);
-    const skuAllocator: SkuAllocator | undefined = normalizedItems.some(
-      (item) => item.product_registration === "new",
-    )
-      ? await openSkuAllocator(transaction, db, customerCode)
-      : undefined;
+    let skuAllocator: SkuAllocator | undefined;
+    const reactivatedSkuByLine = new Map<number, string>();
     const items: typeof normalizedItems = [];
     for (const item of normalizedItems) {
-      if (item.product_registration !== "new" || !skuAllocator) {
+      if (item.product_registration !== "new") {
         items.push(item);
         continue;
       }
-      // O código que um aviso aprovado já ligou a um SKU usa o mesmo SKU.
       const clientCode = normalizedIdentity(item.client_item_code);
-      const generated =
+      const reactivated = clientCode
+        ? await archivedOwnSkuFor(transaction, db, customerCode, clientCode)
+        : "";
+      // O código que um aviso aprovado já ligou a um SKU usa o mesmo SKU.
+      let generated =
+        reactivated ||
         (clientCode && (await pendingNewSkuFor(transaction, db, customerCode, clientCode, new Map()))) ||
-        (await skuAllocator.next());
+        "";
+      if (!generated) {
+        skuAllocator ??= await openSkuAllocator(transaction, db, customerCode);
+        generated = await skuAllocator.next();
+      }
+      if (reactivated) reactivatedSkuByLine.set(items.length, reactivated);
       items.push({
         ...item,
         sku_code: generated,
@@ -4373,9 +4410,10 @@ export async function createInboundReceiptTransaction(
     }
 
     const catalogChecks = await Promise.all(
-      items.map(async (item) => {
+      items.map(async (item, index) => {
         const clientCode = normalizedIdentity(item.client_item_code);
         const declaredSku = normalizedIdentity(item.sku_code);
+        const reactivatedSku = reactivatedSkuByLine.get(index) ?? "";
         const productRef = db
           .collection(collections.products)
           .doc(safeDocId(clientCode));
@@ -4410,6 +4448,7 @@ export async function createInboundReceiptTransaction(
           productCodeSnapshot,
           skuCodeSnapshot,
           wantsNewProduct: text(item.product_registration) === "new",
+          reactivatedSku,
         };
       }),
     );
@@ -4441,6 +4480,23 @@ export async function createInboundReceiptTransaction(
         [skuCodeSnapshot.exists ? skuCodeSnapshot.data() : undefined],
         `O SKU ${declaredSku}`,
       );
+      // Cadastro arquivado não conta como duplicidade (o "Excluir" do
+      // Estoque › Itens só arquiva, e a busca da tela esconde arquivados):
+      // produto novo sobre um código todo arquivado é reativação.
+      const catalogExists =
+        productRows.length > 0 ||
+        skuRows.length > 0 ||
+        productCodeSnapshot.exists ||
+        skuCodeSnapshot.exists;
+      const catalogActiveExists =
+        productRows.some((row) => !isArchivedCatalogRecord(row.data)) ||
+        skuRows.some((row) => !isArchivedCatalogRecord(row.data)) ||
+        (productCodeSnapshot.exists &&
+          !isArchivedCatalogRecord(productCodeSnapshot.data())) ||
+        (skuCodeSnapshot.exists &&
+          !isArchivedCatalogRecord(skuCodeSnapshot.data()));
+      const reactivatesArchived =
+        wantsNewProduct && catalogExists && !catalogActiveExists;
       const existingSkuCodes = new Set(
         [
           ...skuRows.map((row) =>
@@ -4497,13 +4553,7 @@ export async function createInboundReceiptTransaction(
         }
       }
 
-      if (
-        wantsNewProduct &&
-        (productRows.length > 0 ||
-          skuRows.length > 0 ||
-          productCodeSnapshot.exists ||
-          skuCodeSnapshot.exists)
-      ) {
+      if (wantsNewProduct && catalogActiveExists) {
         throw new HttpsError(
           "failed-precondition",
           `Cod. cliente ${clientCode} já existe no cadastro. Use o produto existente para evitar SKU duplicado.`,
@@ -4524,6 +4574,7 @@ export async function createInboundReceiptTransaction(
       }
 
       if (
+        !reactivatesArchived &&
         (productRows.length > 0 || productCodeSnapshot.exists) &&
         existingSkuCodes.size === 0
       ) {
@@ -4570,48 +4621,57 @@ export async function createInboundReceiptTransaction(
         productCodeSnapshot,
         skuCodeSnapshot,
         wantsNewProduct,
+        reactivatedSku,
       } = check;
-      if (
-        wantsNewProduct &&
-        productRows.length === 0 &&
-        skuRows.length === 0 &&
-        !productCodeSnapshot.exists &&
-        !skuCodeSnapshot.exists
-      ) {
-        const baseCatalogPayload = compact({
-          customer_code: input.customer_code,
-          cod_cliente: clientCode,
-          cod_cliente_key: normalizedIdentity(clientCode),
-          produto: item.product_name,
-          category: item.category,
-          categoria: item.category,
-          barcode: item.barcode,
-          barcode_key: normalizeBarcode(item.barcode) || undefined,
-          brand: item.brand,
-          marca: item.brand,
-          size: item.size,
-          tamanho: item.size,
-          color: item.color,
-          cor: item.color,
-          photo_urls: item.photo_urls?.length ? item.photo_urls : undefined,
-          primary_photo_url: item.photo_urls?.[0],
-          photo_storage_paths: item.photo_storage_paths?.length
-            ? item.photo_storage_paths
-            : undefined,
-          status: "active",
-          archived: false,
+      if (!wantsNewProduct) continue;
+      const catalogExists =
+        productRows.length > 0 ||
+        skuRows.length > 0 ||
+        productCodeSnapshot.exists ||
+        skuCodeSnapshot.exists;
+      const catalogFields = compact({
+        customer_code: input.customer_code,
+        cod_cliente: clientCode,
+        cod_cliente_key: normalizedIdentity(clientCode),
+        produto: item.product_name,
+        category: item.category,
+        categoria: item.category,
+        barcode: item.barcode,
+        barcode_key: normalizeBarcode(item.barcode) || undefined,
+        brand: item.brand,
+        marca: item.brand,
+        size: item.size,
+        tamanho: item.size,
+        color: item.color,
+        cor: item.color,
+        photo_urls: item.photo_urls?.length ? item.photo_urls : undefined,
+        primary_photo_url: item.photo_urls?.[0],
+        photo_storage_paths: item.photo_storage_paths?.length
+          ? item.photo_storage_paths
+          : undefined,
+        status: "active",
+        archived: false,
+        updated_at: FieldValue.serverTimestamp(),
+      });
+      const skuFields = {
+        cod_btg: declaredSku,
+        sku_code: declaredSku,
+        sku_code_key: normalizedIdentity(declaredSku),
+      };
+      rememberCatalogPrice(transaction, db, {
+        customerCode: input.customer_code,
+        skuCode: declaredSku,
+        itemCode: clientCode,
+        unitCost: number(item.unit_cost),
+      });
+      if (!catalogExists) {
+        const baseCatalogPayload = {
+          ...catalogFields,
           source: "wms_unplanned_receipt",
           source_receipt_id: receiptId,
           created_by: actorPayload(actor),
           created_at: FieldValue.serverTimestamp(),
-          updated_at: FieldValue.serverTimestamp(),
-        });
-        rememberCatalogPrice(transaction, db, {
-          customerCode: input.customer_code,
-          skuCode: declaredSku,
-          itemCode: clientCode,
-          unitCost: number(item.unit_cost),
-        });
+        };
         transaction.create(productRef, {
           id: clientCode,
           ...baseCatalogPayload,
@@ -4621,9 +4681,60 @@ export async function createInboundReceiptTransaction(
         transaction.create(skuRef, {
           id: declaredSku,
           ...baseCatalogPayload,
-          cod_btg: declaredSku,
-          sku_code: declaredSku,
-          sku_code_key: normalizedIdentity(declaredSku),
+          ...skuFields,
+          estoque_atual: 0,
+          estoque_reservado: 0,
+          estoque_disponivel: 0,
+        });
+        continue;
+      }
+      // Todo o cadastro do código está arquivado (a checagem acima só deixa
+      // chegar aqui assim): reativa os cartões achados com os dados da linha,
+      // sem mexer em saldo nem na criação original; sem cartão de produto,
+      // cria um; o SKU arquivado volta com o mesmo código.
+      const reactivation = {
+        ...catalogFields,
+        active: true,
+        reactivated_by: actorPayload(actor),
+        reactivated_at: FieldValue.serverTimestamp(),
+        reactivated_receipt_id: receiptId,
+      };
+      const productRefs = productRows.map((row) => row.ref);
+      if (
+        productCodeSnapshot.exists &&
+        !productRefs.some((ref) => ref.path === productRef.path)
+      ) {
+        productRefs.push(productRef);
+      }
+      if (productRefs.length === 0) {
+        transaction.create(productRef, {
+          id: clientCode,
+          ...reactivation,
+          estoque_btg: 0,
+          num_skus: 1,
+        });
+      }
+      for (const ref of productRefs) {
+        transaction.set(ref, reactivation, { merge: true });
+      }
+      const archivedSkuRow = reactivatedSku
+        ? skuRows.find(
+            (row) => normalizedIdentity(catalogSkuCode(row.data)) === reactivatedSku,
+          )
+        : undefined;
+      if (archivedSkuRow) {
+        transaction.set(
+          archivedSkuRow.ref,
+          { ...reactivation, ...skuFields },
+          { merge: true },
+        );
+      } else if (skuCodeSnapshot.exists) {
+        transaction.set(skuRef, { ...reactivation, ...skuFields }, { merge: true });
+      } else {
+        transaction.create(skuRef, {
+          id: declaredSku,
+          ...reactivation,
+          ...skuFields,
           estoque_atual: 0,
           estoque_reservado: 0,
           estoque_disponivel: 0,
@@ -4680,6 +4791,7 @@ export async function createInboundReceiptTransaction(
           location_id: item.location_id,
           unit_cost: item.unit_cost,
           product_registration: item.product_registration,
+          catalog_reactivated: reactivatedSkuByLine.has(index) || undefined,
           expected_qty: item.quantity,
           received_qty: 0,
           status: "expected",
@@ -4711,6 +4823,9 @@ export async function createInboundReceiptTransaction(
           invoice_number: input.invoice_number,
           quantity_total: quantityTotal,
           source: "wms_unplanned_receipt",
+          reactivated_skus: reactivatedSkuByLine.size
+            ? [...reactivatedSkuByLine.values()]
+            : undefined,
         },
       },
       actor,
@@ -4724,12 +4839,15 @@ export async function createInboundReceiptTransaction(
       status: "created",
       item_count: items.length,
       quantity_total: quantityTotal,
-      // Códigos de cada linha, com o SKU gerado das linhas novas.
-      items: items.map((item) => ({
+      // Códigos de cada linha, com o SKU gerado (ou reativado) das linhas novas.
+      items: items.map((item, index) => ({
         line_number: item.line_number,
         sku_code: item.sku_code,
         client_item_code: item.client_item_code,
         product_registration: item.product_registration || undefined,
+        // Só quando houve: o recibo guardado não tem chave com undefined, e
+        // a repetição da mesma chave devolve exatamente o recibo.
+        ...(reactivatedSkuByLine.has(index) ? { catalog_reactivated: true } : {}),
       })),
       events: [event],
     };

@@ -68,13 +68,26 @@ export const CODE_MATCH_LABEL: Record<CodeMatchField, string> = {
 export type SavedLineCodes = {
   sku_code?: string | null;
   product_registration?: string | null;
+  /** Linha nova cujo código estava arquivado: voltou com o SKU que já tinha. */
+  catalog_reactivated?: boolean | null;
 };
 
-/** O aviso depois de salvar: "SKU gerado: BTG-000010." (null quando nenhuma linha era nova). */
+/**
+ * O aviso depois de salvar: "SKU gerado: BTG-000010." e, para o cadastro
+ * arquivado que voltou, "SKU reativado: BTG-000090." (null quando nenhuma
+ * linha era nova).
+ */
 export function generatedSkuNote(items: SavedLineCodes[] | null | undefined): string | null {
-  const codes = (items ?? [])
-    .filter((item) => item.product_registration === "new" && item.sku_code)
-    .map((item) => String(item.sku_code));
-  if (!codes.length) return null;
-  return codes.length === 1 ? `SKU gerado: ${codes[0]}.` : `SKUs gerados: ${codes.join(", ")}.`;
+  const novas = (items ?? []).filter((item) => item.product_registration === "new" && item.sku_code);
+  const gerados = novas.filter((item) => !item.catalog_reactivated).map((item) => String(item.sku_code));
+  const reativados = novas.filter((item) => item.catalog_reactivated).map((item) => String(item.sku_code));
+  const partes = [
+    gerados.length === 1 ? `SKU gerado: ${gerados[0]}.` : gerados.length ? `SKUs gerados: ${gerados.join(", ")}.` : "",
+    reativados.length === 1
+      ? `SKU reativado: ${reativados[0]}.`
+      : reativados.length
+        ? `SKUs reativados: ${reativados.join(", ")}.`
+        : "",
+  ].filter(Boolean);
+  return partes.length ? partes.join(" ") : null;
 }

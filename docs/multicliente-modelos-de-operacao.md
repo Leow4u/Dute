@@ -176,7 +176,13 @@ testes em `catalog-codes.test.ts` e `catalog-codes.integration.test.ts`).
   catálogo é pulado. **Número não volta**: remover uma linha da abertura apaga
   o cadastro que ela criou, e a recontagem recebe o próximo número.
 - **Reativação**: recontar como novo um produto arquivado do mesmo cliente
-  reaproveita o SKU dele, sem gerar outro número para o mesmo produto.
+  reaproveita o SKU dele, sem gerar outro número para o mesmo produto. A
+  chegada avulsa do Receber faz o mesmo (30/10/2026): o "Excluir" do Estoque
+  › Itens só arquiva e a busca da tela esconde arquivados, então o código
+  todo arquivado, cadastrado como novo, volta com o SKU que já tinha
+  (`catalog_reactivated` na linha e na resposta; o aviso diz "SKU
+  reativado"), sem mexer no saldo. Código com SKU ativo continua recusado
+  ("já existe no cadastro com SKU").
 - **Sem sigla, sem produto novo**: as Functions recusam com "Cadastre a sigla
   do SKU de X em Configurações › Clientes"; a Contagem avisa antes e trava o
   "Cadastrar como novo".

@@ -175,6 +175,88 @@ describe("SKU gerado na sigla do cliente", () => {
     assert.equal((await db.collection("skus").doc("BTG-000001").get()).data()?.cod_cliente, "D.01");
     assert.equal((await db.collection("skus").doc("QUALQUER").get()).exists, false);
   });
+
+  it("a chegada avulsa de um código arquivado reativa o SKU dele em vez de recusar", async () => {
+    await reset();
+    // O "Excluir" do Estoque › Itens só arquiva, e a busca da chegada avulsa
+    // esconde arquivados: a pessoa só consegue "Cadastrar como novo". Antes,
+    // as Functions paravam em "já existe no cadastro com SKU BTG-000090".
+    const arquivado = {
+      customer_code: BTG,
+      cod_cliente: "A.01.0806.005.GG",
+      cod_cliente_key: "A.01.0806.005.GG",
+      produto: "Camisa GG",
+      archived: true,
+      status: "archived",
+      active: false,
+    };
+    await db.collection("products").doc("A.01.0806.005.GG").set({ id: "A.01.0806.005.GG", ...arquivado, estoque_btg: 0, num_skus: 1 });
+    await db.collection("skus").doc("BTG-000090").set({
+      id: "BTG-000090",
+      ...arquivado,
+      cod_btg: "BTG-000090",
+      sku_code: "BTG-000090",
+      sku_code_key: "BTG-000090",
+      estoque_atual: 0,
+      estoque_reservado: 0,
+      estoque_disponivel: 0,
+    });
+    await db.collection("sku_counters").doc("BTG").set({ last: 90, last_code: "BTG-000090" });
+
+    const created = await receipt(BTG, "btg-receipt-arquivado", [
+      { client_item_code: "A.01.0806.005.GG", product_name: "Camisa GG", barcode: "7891000000906" },
+    ]);
+    const [linha] = created.items as Array<Record<string, unknown>>;
+    assert.equal(linha?.sku_code, "BTG-000090");
+    assert.equal(linha?.product_registration, "new");
+    assert.equal(linha?.catalog_reactivated, true);
+    // Sem gastar número novo nem criar segundo SKU para o mesmo código.
+    assert.equal((await db.collection("sku_counters").doc("BTG").get()).data()?.last, 90);
+    assert.equal((await db.collection("skus").get()).size, 1);
+
+    const sku = (await db.collection("skus").doc("BTG-000090").get()).data();
+    assert.equal(sku?.archived, false);
+    assert.equal(sku?.status, "active");
+    assert.equal(sku?.active, true);
+    assert.equal(sku?.barcode_key, "7891000000906");
+    assert.equal(sku?.estoque_atual, 0);
+    const produto = (await db.collection("products").doc("A.01.0806.005.GG").get()).data();
+    assert.equal(produto?.archived, false);
+    assert.equal(produto?.status, "active");
+
+    const lines = await db.collection("inbound_items").where("receipt_id", "==", created.receipt_id).get();
+    assert.deepEqual(
+      lines.docs.map((row) => [row.data().sku_code, row.data().catalog_reactivated]),
+      [["BTG-000090", true]],
+    );
+
+    // Reativado, o cadastro volta a ser ativo: cadastrar de novo como novo é
+    // recusado como antes (a linha da chegada já liga o código ao SKU, então
+    // a recusa é a de produto existente).
+    await assert.rejects(
+      receipt(BTG, "btg-receipt-arquivado-de-novo", [{ client_item_code: "A.01.0806.005.GG", product_name: "Camisa GG" }]),
+      /já existe no cadastro/,
+    );
+    assert.equal((await db.collection("skus").get()).size, 1);
+  });
+
+  it("código arquivado de outro cliente continua sendo de outro cliente", async () => {
+    await reset();
+    await db.collection("skus").doc("ITAU-000003").set({
+      customer_code: ITAU,
+      cod_cliente: "7781-09",
+      cod_cliente_key: "7781-09",
+      cod_btg: "ITAU-000003",
+      sku_code: "ITAU-000003",
+      archived: true,
+      status: "archived",
+    });
+    await assert.rejects(
+      receipt(BTG, "btg-receipt-arquivado-itau", [{ client_item_code: "7781-09", product_name: "Cadeira" }]),
+      /já está cadastrado para o cliente Itaú/,
+    );
+    assert.equal((await db.collection("sku_counters").doc("BTG").get()).exists, false);
+  });
 });
 
 describe("código de barras único dentro do cliente", () => {
