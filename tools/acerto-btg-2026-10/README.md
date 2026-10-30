@@ -14,6 +14,13 @@ tem a mesma base das outras (J.0149.003.N6); o que foi para as caixas de
 saldão sai do sistema e fica só na planilha; as caixas no físico estão como o
 Guilherme descreveu.
 
+Os códigos errados estão gravados **com o tamanho no fim**, e o portal mostra
+só a base, por isso o e-mail cita `A.01.0808.002` e `J.0562.003`. O `--buscar`
+na produção (30/10/2026) achou `A.01.0808.002.M` = BTG-000109,
+`A.01.05334.005.M` = BTG-000045, `J.0562.003.N6` = BTG-000169,
+`A.01.O719.004.P` = BTG-000087 (com letra O) e `A.01.0719.004.PP` =
+BTG-000088. O plano usa essas formas.
+
 ## Arquivos
 
 - `plano.mjs`: a lista do que gravar, em blocos, com o motivo de cada
@@ -28,9 +35,9 @@ Guilherme descreveu.
 | Bloco | O que grava | Itens do e-mail |
 |---|---|---|
 | `cadastro` | Renomeia os sete SKUs da A.01.0805.002 para masculina e troca as fotos entre as famílias A.01.0805.002 e A.02.0805.002 | 1 |
-| `skus-novos` | Cria os SKUs que faltam, copiando categoria, gênero e fotos de um irmão da família, sem saldo | 2, 5, 7, 12, 13 |
+| `skus-novos` | Cria os SKUs que faltam, copiando categoria, gênero e fotos de um irmão da família, sem saldo; o que já existe fica "sem mudança" | 2, 5, 7, 11, 12, 13 |
 | `transferencias` | Saída do SKU errado e entrada no certo, na mesma posição, mesma quantidade | 2, 5, 6, 7, 11, 12, 13 |
-| `quantidades` | Ajuste + e Ajuste − pelas contagens do Guilherme | 4, 5, 7, 9 |
+| `quantidades` | Ajuste + e Ajuste − pelas contagens do Guilherme; `delta: "zerar"` tira o que sobrar na posição depois das transferências (a sobra da CX-000150 além das 58 contadas) | 4, 5, 7, 9 |
 | `saldao` | Saída de tudo que estava nas caixas 5, 32 e 130, e do que saiu da 4 | 8, 10 |
 | `caixas` | Remove as caixas 5, 19, 32 e 130 e corrige SKU e quantidade das linhas da abertura das outras, para o Mapa e as Etiquetas | 4 a 13 |
 | `arquivar` | Arquiva os SKUs errados já em zero, inclusive no portal | 2, 6, 7, 11, 12 |
@@ -39,10 +46,17 @@ Movimentos saem com origem `functions_inventory_movement` e não entram na
 cobrança (`billingMovementDirection` só conta `wms_receiving` e
 `wms_shipping`). Transferência não muda o total da posição.
 
-Pendentes no plano, à espera do Guilherme: o código A.01.0605.003.P e o PP
-de 9 peças (item 12); a recontagem da azul A.02.0814.002 depois de separar as
-pretas (item 13); a A.01.0805.002 por tamanho (item 14); se a sacola N6 tem
-147 ou 148; e qual SKU e quantas peças saíram da CX-000004.
+Pendentes no plano, à espera do Guilherme: o código A.01.0605.003.P e se o PP
+de 9 peças (BTG-000088, `A.01.0719.004.PP`) é o mesmo caso (item 12); a
+recontagem da azul A.02.0814.002 depois de separar as pretas (item 13); a
+A.01.0805.002 por tamanho (item 14); se a sacola N6 tem 147 ou 148; qual SKU
+e quantas peças saíram da CX-000004; e se a CX-000036 está em cima da
+CX-000018, para remover a CX-000019 (item 9; o Ajuste − das 12 jaquetas
+duplicadas não espera).
+
+O dry-run mostra, em cada transferência e ajuste, o que as outras operações do
+plano tiram da mesma posição antes ("também tira(m)", "depois de ..."), porque
+cada operação é lida do banco de hoje e a aplicação segue a ordem dos blocos.
 
 ## Como rodar, na máquina do Leonardo
 
@@ -81,19 +95,28 @@ Erros comuns do dry-run e o que fazer:
   caixa vazia de apoio, com `se_apoia: "esvaziar"`, ou a de cima passa para
   outra caixa da mesma posição, com `transferir_apoio_para: "CX-..."`, e a
   vazia é removida.
-- "SKU ... não encontrado": a busca tenta `cod_cliente_key`, `cod_cliente`,
-  o `client_item_code` do saldo e o da linha da abertura e, por fim, a forma
-  comparável do código, sem pontuação e com letra O valendo zero. Quando acha
-  por essa forma, o dry-run mostra `no cadastro "..."` ao lado do código. Se
-  mesmo assim não acha, veja o que o banco tem com
-  `node tools/acerto-btg-2026-10/acerto.mjs --projeto dute-prod --buscar A.01.0808.002`
-  e ponha o SKU (`BTG-000xxx`) no plano.
+- "SKU ... não encontrado · parecidos: ...": a busca tenta `cod_cliente_key`,
+  `cod_cliente`, o `client_item_code` do saldo e o da linha da abertura e, por
+  fim, a forma comparável do código, sem pontuação e com letra O valendo zero.
+  Quando acha por essa forma, o dry-run mostra `no cadastro "..."` ao lado do
+  código. Quando não acha, lista os códigos do cadastro que começam igual
+  (quase sempre o mesmo código com o tamanho no fim): ponha no plano o código
+  como está gravado ou o SKU (`BTG-000xxx`). Para ver saldo e linhas de um
+  código: `node tools/acerto-btg-2026-10/acerto.mjs --projeto dute-prod --buscar A.01.0534.005`.
 
-Primeiro dry-run na produção, 30/10/2026: 27 a gravar, 6 sem mudança, 14
-pendentes e 13 erros. Os erros eram quatro cadastros que não respondiam pela
-chave de busca, as caixas 5 e 19 servindo de apoio para a 33 e a 36, e o
-nome do PP da 0805, o único dos sete ainda como "feminina". Tudo isso entrou
-nesta versão; a segunda rodada deve ficar sem erro fora dos pendentes.
+Dry-runs na produção em 30/10/2026:
+
+1. 27 a gravar, 6 sem mudança, 14 pendentes, 13 erros: quatro cadastros que
+   não respondiam pela chave de busca, as caixas 5 e 19 servindo de apoio para
+   a 33 e a 36, e o nome do PP da 0805, o único dos sete ainda como "feminina".
+2. 29 a gravar, 6 sem mudança, 15 pendentes, 11 erros: só os quatro cadastros.
+3. Igual ao 2. O `--buscar` mostrou a causa: os códigos estão gravados com o
+   tamanho no fim (`A.01.0808.002.M`, `A.01.05334.005.M`, `J.0562.003.N6`,
+   `A.01.O719.004.P`), e o plano pedia a base. O plano passou a usar as formas
+   gravadas, ganhou o `criar-0534-M` (o tricot M certo pode não existir) e a
+   sobra da 0808 virou `zerar`. O quarto dry-run deve ficar sem erro fora dos
+   pendentes; conferir nele o saldo real de BTG-000109 (o Guilherme contou 58
+   na CX-000150) e se `A.01.0534.005.M` existe.
 
 Aplicar, só depois do dry-run limpo:
 
@@ -107,9 +130,10 @@ gravado fica, e rodar de novo continua de onde parou, porque cada operação
 tem chave de idempotência fixa. Depois, rode o dry-run de novo: tudo deve
 aparecer como "já aplicado". `--bloco <id>` e `--op <id>` limitam a execução.
 
-Depois de aplicar: conferir no portal da BTG os cards 0805, 0809, 0808, 0811
-e a sacola; reimprimir em Estoque › Etiquetas as caixas 4, 76, 79, 83, 90,
-91, 92, 150, 152, 198, a do tricot e a da sacola N6; responder à Cristiane.
+Depois de aplicar: conferir no portal da BTG os cards 0805, 0809, 0808, 0811,
+0534 e a sacola; reimprimir em Estoque › Etiquetas as caixas 76, 79, 83, 90,
+91, 92, 150, 198, a caixa que recebeu as 4 G da mescla preto, a do tricot e a
+da sacola N6 (a 4 e a 180 quando os pendentes entrarem); responder à Cristiane.
 A produção tem PITR de 7 dias e backup diário
 (`docs/plataforma/backup-e-recuperacao.md`); restaurar é sempre para um banco
 novo, com o OK do Leonardo.
@@ -122,15 +146,21 @@ Feita no ambiente de desenvolvimento, sem credencial da nuvem, com o
 ```bash
 export FIRESTORE_EMULATOR_HOST=127.0.0.1:8399
 node tools/acerto-btg-2026-10/cenario-emulador.mjs --projeto demo-acerto --refazer
-node tools/acerto-btg-2026-10/acerto.mjs --projeto demo-acerto              # dry-run: 46 a gravar, 14 pendentes, 0 erros
-node tools/acerto-btg-2026-10/acerto.mjs --projeto demo-acerto --aplicar    # 46 gravadas
-node tools/acerto-btg-2026-10/acerto.mjs --projeto demo-acerto              # 46 já aplicadas, 0 a gravar
+node tools/acerto-btg-2026-10/acerto.mjs --projeto demo-acerto --buscar A.01.0808.002 --buscar A.01.0534.005
+node tools/acerto-btg-2026-10/acerto.mjs --projeto demo-acerto              # dry-run: 62 operações, 40 a gravar, 7 sem mudança, 15 pendentes, 0 erros
+node tools/acerto-btg-2026-10/acerto.mjs --projeto demo-acerto --aplicar    # 40 gravadas
+node tools/acerto-btg-2026-10/acerto.mjs --projeto demo-acerto              # 40 já aplicadas, 0 a gravar
 node tools/acerto-btg-2026-10/cenario-emulador.mjs --projeto demo-acerto --conferir
 ```
 
-No fim: A.02.0809.002.M com 75 em A-13 e o masculino M com 207; arpoador P
-66, G 57, GG 19; oceano G 198 e BTG-000165 arquivado; mescla preto M 54 e G
-22, A.01.0808.002 arquivado; tricot 42; sacola N6 147 e J.0562.003 arquivada;
-jaqueta 12; caixas 5, 19, 32 e 130 removidas; 26 movimentos, nenhum com
-origem cobrada; os pendentes intocados. O emulador precisa de Java 21 e do
-`firebase-tools` (`npx firebase-tools emulators:exec --only firestore --project demo-acerto "..."`).
+O cenário grava os códigos errados como a produção os tem (com o tamanho e o
+SKU fixo: BTG-000109, -045, -169, -087, -088), a 0808 com 59 para exercitar o
+`zerar`, e o tricot `A.01.0534.005.M` já existente, para o `criar-0534-M` ficar
+"sem mudança". No fim: A.02.0809.002.M com 75 em A-13 e o masculino M com 207
+(140 em A-13, 67 em B-11); arpoador P 66, G 57, GG 19; oceano G 198 e
+BTG-000165 arquivado; mescla preto M 54 e G 22, BTG-000109 arquivado; tricot
+42 e BTG-000045 arquivado; sacola N6 147 e BTG-000169 arquivada; jaqueta 12;
+caixas 32 e 130 removidas, a 5 vazia como apoio da 33, a 19 à espera; 26
+movimentos, nenhum com origem cobrada; os pendentes intocados. O emulador
+precisa de Java 21 e do `firebase-tools`
+(`npx firebase-tools emulators:exec --only firestore --project demo-acerto "..."`).

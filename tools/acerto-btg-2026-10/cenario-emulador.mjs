@@ -62,13 +62,14 @@ const ITENS = [
   ["A.01.0809.002.M", "POLO MASCULINO PIQUET ARPOARDOR M", "Masculino", [["CX-000085", "B-11", 67], ["CX-000086", "A-13", 48], ["CX-000089", "A-13", 50], ["CX-000090", "A-13", 44], ["CX-000091", "A-13", 50], ["CX-000092", "A-13", 25]]],
   ["POLO MASCULINO PIQUET OCEANO G", "Polo masculino piquet oceano g", "Masculino", [["CX-000198", "B-07", 70]], null, "BTG-000165"],
   ["A.01.0811.002.G", "Polo masculino piquet oceano G", "Masculino", [["CX-000197", "B-07", 128]]],
-  ["A.01.0808.002", "Polo feminino piquet mescla preto m", "Feminino", [["CX-000150", "A-12", 59]]],
+  // Códigos errados como estão na produção (--buscar de 30/10/2026): com o tamanho no fim e o SKU fixo.
+  ["A.01.0808.002.M", "Polo feminino piquet mescla preto m", "Feminino", [["CX-000150", "A-12", 59]], null, "BTG-000109"],
   ["A.02.0808.002.P", "Polo feminina piquet mescla preto p", "Feminino", [["CX-000151", "A-12", 51]]],
   ["A.02.0808.002.G", "Polo feminina piquet mescla preto G", "Feminino", [["CX-000152", "A-12", 18]]],
-  ["A.01.05334.005", "Tricot meio zíper preto m", "Masculino", [["CX-000120", "A-05", 12]]],
+  ["A.01.05334.005.M", "Tricot meio zíper preto m", "Masculino", [["CX-000120", "A-05", 12]], null, "BTG-000045"],
   ["A.01.0534.005.M", "Tricot meio zíper preto M", "Masculino", [["CX-000121", "A-05", 30]]],
-  ["A.01.O719.004", "Polo masculina piquet PAN cinza p", "Masculino", [["CX-000140", "C-03", 15]]],
-  ["A.01.0719.004", "Polo masculino piquet PAN cinza PP", "Masculino", [["CX-000141", "C-03", 9]]],
+  ["A.01.O719.004.P", "Polo masculina piquet PAN cinza p", "Masculino", [["CX-000140", "C-03", 15]], null, "BTG-000087"],
+  ["A.01.0719.004.PP", "Polo masculino piquet PAN cinza PP", "Masculino", [["CX-000141", "C-03", 9]], null, "BTG-000088"],
   ["A.02.0813.005.PP", "Polo feminina pima preto PP", "Feminino", [["CX-000169", "C-10", 20]]],
   ["A.02.0813.005.P", "Polo feminina pima preto P", "Feminino", [["CX-000169", "C-10", 30]]],
   ["A.02.0813.005.M", "Polo feminina pima preto M", "Feminino", [["CX-000177", "C-10", 30]]],
@@ -78,7 +79,7 @@ const ITENS = [
   ["A.01.0798.002.P", "Jaqueta RIP stop militar p", "Masculino", [["CX-000018", "B-02", 12], ["CX-000019", "B-02", 12]]],
   ["J.0149.003.N1", "Sacola quadrada – BTG", "", [["CX-000210", "D-01", 585]]],
   ["J.0149.003.N3", "Sacola quadrada – BTG", "", [["CX-000211", "D-01", 120]]],
-  ["J.0562.003", "Sacola quadrada – BTG", "", [["CX-000212", "D-02", 147]]],
+  ["J.0562.003.N6", "Sacola quadrada – BTG", "", [["CX-000212", "D-02", 147]], null, "BTG-000169"],
   ["A.01.0219.004", "Camiseta masculina FIO egípcio cinza", "Masculino", [["CX-000005", "E-01", 25]]],
   ["A.01.0594.005.PP", "Polo masculina basica preta PP", "Masculino", [["CX-000032", "E-02", 1]]],
   ["A.01.0594.005.P", "Polo masculina basica preta P", "Masculino", [["CX-000032", "E-02", 20]]],
@@ -92,9 +93,9 @@ const ITENS = [
 /** Caixas apoiadas em outra, como na produção (CX-000033 sobre a CX-000005, CX-000036 sobre a CX-000019). */
 const APOIOS = { "CX-000033": "CX-000005", "CX-000036": "CX-000019" };
 /** Cadastros que na produção não respondem pela busca por cod_cliente_key. */
-const SEM_CHAVE = new Set(["A.01.0808.002", "A.01.05334.005", "J.0562.003"]);
+const SEM_CHAVE = new Set(["A.01.0808.002.M", "A.01.05334.005.M", "J.0562.003.N6"]);
 /** Como o código foi digitado na abertura: letra O por zero, espaço, ponto a mais. */
-const DIGITADO = { "A.01.0808.002": "A.01.O808.002", "A.01.05334.005": "A.01.05334.005 ", "J.0562.003": "J.0562.003." };
+const DIGITADO = { "A.01.0808.002.M": "A.01.O808.002.M", "A.01.05334.005.M": "A.01.05334.005.M ", "J.0562.003.N6": "J.0562.003.N6." };
 
 const categoriaDe = (nome) => (/^sacola/i.test(nome) ? "Sacola" : /^jaqueta/i.test(nome) ? "Jaqueta" : /^tricot/i.test(nome) ? "Tricot" : /^camiseta/i.test(nome) ? "Camiseta" : "Polo");
 const tamanhoDe = (codigo) => {
@@ -119,7 +120,7 @@ async function semear() {
   set(db.collection("opening_inventory_sessions").doc(SESSAO), { id: SESSAO, customer_code: CLIENTE, status: "completed", line_count: 0, unit_count: 0 });
   const caixas = new Map();
   const posicoes = new Set();
-  let seq = 100;
+  let seq = 200; // os SKUs fixos (BTG-000045, -087, -088, -109, -165, -169) ficam abaixo
   for (const [codigo, nome, genero, lugares, fotos, skuFixo] of ITENS) {
     seq += 1;
     const sku = skuFixo ?? `BTG-${String(seq).padStart(6, "0")}`;
@@ -187,8 +188,8 @@ async function semear() {
 async function conferir() {
   const codigos = [
     "A.01.0805.002.PP", "A.02.0809.002.M", "A.01.0809.002.M", "A.02.0809.002.P", "A.02.0809.002.G", "A.02.0809.002.GG",
-    "A.01.0811.002.G", "A.02.0808.002.M", "A.02.0808.002.G", "A.01.0808.002", "A.01.0534.005.M", "A.01.05334.005",
-    "J.0149.003.N6", "J.0562.003", "A.01.0798.002.P", "A.01.0219.004", "A.01.0690.004.P", "A.01.O719.004", "A.02.0814.002.GG",
+    "A.01.0811.002.G", "A.02.0808.002.M", "A.02.0808.002.G", "A.01.0808.002.M", "A.01.0534.005.M", "A.01.05334.005.M",
+    "J.0149.003.N6", "J.0562.003.N6", "A.01.0798.002.P", "A.01.0219.004", "A.01.0690.004.P", "A.01.O719.004.P", "A.02.0814.002.GG",
   ];
   console.log("\nSKU por código do cliente (inclui arquivados):");
   for (const codigo of codigos) {

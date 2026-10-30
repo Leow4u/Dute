@@ -16,6 +16,12 @@
  * para a posição onde a caixa está guardada, `{ sku: "A.02.0808.002.G" }` para a
  * única posição com saldo desse SKU. Sem nada, o motor usa a única posição com
  * saldo do SKU de origem e reclama se houver mais de uma.
+ *
+ * Os códigos de cliente aqui são os gravados no cadastro, com o tamanho no fim
+ * (o `--buscar` na produção em 30/10/2026 mostrou `A.01.0808.002.M` =
+ * BTG-000109, `A.01.05334.005.M` = BTG-000045, `J.0562.003.N6` = BTG-000169,
+ * `A.01.O719.004.P` = BTG-000087 e `A.01.0719.004.PP` = BTG-000088). O portal
+ * mostra só a base, por isso o e-mail cita `A.01.0808.002` e `J.0562.003`.
  */
 
 export const PLANO = {
@@ -89,16 +95,24 @@ export const BLOCOS = [
         copiar_de: "J.0149.003.N1",
         tamanho: "N6",
         manter_nome: true,
-        motivo: ITEM(2, "a sacola grande N6 tem a mesma base das outras; J.0562.003 é erro de cadastro"),
+        motivo: ITEM(2, "a sacola grande N6 tem a mesma base das outras; J.0562.003.N6 é erro de cadastro"),
+      },
+      {
+        id: "criar-0534-M",
+        tipo: "criar_sku",
+        codigo: "A.01.0534.005.M",
+        copiar_de: "A.01.05334.005.M",
+        tamanho: "M",
+        motivo: ITEM(11, "código correto do tricot M; se já existir no cadastro, nada a fazer"),
       },
       {
         id: "criar-0605-P",
         tipo: "criar_sku",
         codigo: "A.01.0605.003.P",
-        copiar_de: "A.01.O719.004",
+        copiar_de: "A.01.O719.004.P",
         tamanho: "P",
         motivo: ITEM(12, "código lido na peça pelo Guilherme"),
-        pendente: "Guilherme confirma o código A.01.0605.003.P e se o PP de 9 peças (A.01.0719.004) é o mesmo caso",
+        pendente: "Guilherme confirma o código A.01.0605.003.P e se o PP de 9 peças (A.01.0719.004.PP, BTG-000088) é o mesmo caso",
       },
       {
         id: "criar-0813-GG",
@@ -151,10 +165,11 @@ export const BLOCOS = [
         posicao: { caixa: "CX-000198" },
         motivo: ITEM(6, "CX-000198 lacrada, mesmo código das outras, A.01.0811.002.G"),
       },
+      // No cadastro o código errado é "A.01.0808.002.M" (BTG-000109); o e-mail cita a base A.01.0808.002.
       {
         id: "transf-0808-M",
         tipo: "transferir",
-        de: "A.01.0808.002",
+        de: "A.01.0808.002.M",
         para: "A.02.0808.002.M",
         qtde: 54,
         posicao: { caixa: "CX-000150" },
@@ -163,7 +178,7 @@ export const BLOCOS = [
       {
         id: "transf-0808-G",
         tipo: "transferir",
-        de: "A.01.0808.002",
+        de: "A.01.0808.002.M",
         para: "A.02.0808.002.G",
         qtde: 4,
         posicao: { caixa: "CX-000150" },
@@ -173,7 +188,7 @@ export const BLOCOS = [
       {
         id: "transf-tricot",
         tipo: "transferir",
-        de: "A.01.05334.005",
+        de: "A.01.05334.005.M",
         para: "A.01.0534.005.M",
         qtde: "tudo",
         motivo: ITEM(11, "código com um 3 a mais; correto A.01.0534.005"),
@@ -181,7 +196,7 @@ export const BLOCOS = [
       {
         id: "transf-sacola-N6",
         tipo: "transferir",
-        de: "J.0562.003",
+        de: "J.0562.003.N6",
         para: "J.0149.003.N6",
         qtde: "tudo",
         motivo: ITEM(2, "sacola N6 com base de código errada"),
@@ -189,7 +204,7 @@ export const BLOCOS = [
       {
         id: "transf-0719-P",
         tipo: "transferir",
-        de: "A.01.O719.004",
+        de: "A.01.O719.004.P",
         para: "A.01.0605.003.P",
         qtde: "tudo",
         motivo: ITEM(12, "código com letra O e número errado; correto A.01.0605.003.P"),
@@ -225,7 +240,9 @@ export const BLOCOS = [
       { id: "aj-0809-G", tipo: "ajuste", codigo: "A.02.0809.002.G", delta: 1, posicao: "A-10", motivo: ITEM(4, "CX-000079 tem 57 polos G, não 56") },
       { id: "aj-0809-GG", tipo: "ajuste", codigo: "A.02.0809.002.GG", delta: 1, posicao: "A-11", motivo: ITEM(4, "CX-000083 tem 19 polos GG, não 18") },
       { id: "aj-0809-masc-M", tipo: "ajuste", codigo: "A.01.0809.002.M", delta: -2, posicao: { caixa: "CX-000090" }, motivo: ITEM(5, "CX-000090 tem 42 polos masculinas M, não 44") },
-      { id: "aj-0808-sobra", tipo: "ajuste", codigo: "A.01.0808.002", delta: -1, posicao: { caixa: "CX-000150" }, motivo: ITEM(7, "CX-000150 tem 58 peças, o sistema tinha 59") },
+      // O Guilherme contou 58 na CX-000150 (54 M + 4 G), que as transferências acima tiram do código errado.
+      // O que o sistema tiver além disso não existe no físico: "zerar" tira o que sobrar depois delas (0 se o sistema tinha 58).
+      { id: "aj-0808-sobra", tipo: "ajuste", codigo: "A.01.0808.002.M", delta: "zerar", posicao: { caixa: "CX-000150" }, motivo: ITEM(7, "CX-000150 tem 58 peças (54 M + 4 G); o que o sistema tiver a mais não existe") },
       { id: "aj-jaqueta-dup", tipo: "ajuste", codigo: "A.01.0798.002.P", delta: -12, posicao: { caixa: "CX-000019" }, motivo: ITEM(9, "CX-000019 é leitura duplicada da CX-000018; só há 12 jaquetas P") },
       {
         id: "aj-0805-por-tamanho",
@@ -281,11 +298,11 @@ export const BLOCOS = [
       { id: "cx-linha-79", tipo: "ajustar_linha", caixa: "CX-000079", codigo: "A.02.0809.002.G", qtde: 57, motivo: ITEM(4, "CX-000079 tem 57") },
       { id: "cx-linha-83", tipo: "ajustar_linha", caixa: "CX-000083", codigo: "A.02.0809.002.GG", qtde: 19, motivo: ITEM(4, "CX-000083 tem 19") },
       { id: "cx-linha-198", tipo: "corrigir_linha", caixa: "CX-000198", de: "BTG-000165", para: "A.01.0811.002.G", motivo: ITEM(6, "CX-000198 é A.01.0811.002.G") },
-      { id: "cx-linha-150", tipo: "corrigir_linha", caixa: "CX-000150", de: "A.01.0808.002", para: "A.02.0808.002.M", qtde: 54, motivo: ITEM(7, "CX-000150: 54 femininas M") },
+      { id: "cx-linha-150", tipo: "corrigir_linha", caixa: "CX-000150", de: "A.01.0808.002.M", para: "A.02.0808.002.M", qtde: 54, motivo: ITEM(7, "CX-000150: 54 femininas M") },
       { id: "cx-linha-0808-G", tipo: "ajustar_linha", codigo: "A.02.0808.002.G", delta: 4, motivo: ITEM(7, "4 femininas G juntadas à caixa do mesmo modelo e tamanho") },
-      { id: "cx-linha-tricot", tipo: "corrigir_linha", de: "A.01.05334.005", para: "A.01.0534.005.M", motivo: ITEM(11, "código com um 3 a mais") },
-      { id: "cx-linha-sacola", tipo: "corrigir_linha", de: "J.0562.003", para: "J.0149.003.N6", motivo: ITEM(2, "sacola N6") },
-      { id: "cx-linha-0719", tipo: "corrigir_linha", de: "A.01.O719.004", para: "A.01.0605.003.P", motivo: ITEM(12, "código lido na peça"), pendente: "Guilherme confirma o código A.01.0605.003.P" },
+      { id: "cx-linha-tricot", tipo: "corrigir_linha", de: "A.01.05334.005.M", para: "A.01.0534.005.M", motivo: ITEM(11, "código com um 3 a mais") },
+      { id: "cx-linha-sacola", tipo: "corrigir_linha", de: "J.0562.003.N6", para: "J.0149.003.N6", motivo: ITEM(2, "sacola N6") },
+      { id: "cx-linha-0719", tipo: "corrigir_linha", de: "A.01.O719.004.P", para: "A.01.0605.003.P", motivo: ITEM(12, "código lido na peça"), pendente: "Guilherme confirma o código A.01.0605.003.P" },
       { id: "cx-linha-180-GG", tipo: "corrigir_linha", caixa: "CX-000180", de: "A.02.0814.002.GG", para: "A.02.0813.005.GG", qtde: 25, motivo: ITEM(13, "CX-000180: 25 pretas GG"), pendente: "Guilherme reconta a azul A.02.0814.002" },
       { id: "cx-linha-180-XG", tipo: "corrigir_linha", caixa: "CX-000180", de: "A.02.0814.002.XG", para: "A.02.0813.005.XG", qtde: 15, motivo: ITEM(13, "CX-000180: 15 pretas XG"), pendente: "Guilherme reconta a azul A.02.0814.002" },
       { id: "cx-linha-4", tipo: "ajustar_linha", caixa: "CX-000004", codigo: null, qtde: null, motivo: ITEM(10, "o que sobrou na CX-000004"), pendente: "Guilherme informa qual SKU e quantas peças saíram da CX-000004" },
@@ -296,10 +313,10 @@ export const BLOCOS = [
     titulo: "SKUs errados, esvaziados",
     ops: [
       { id: "arq-oceano", tipo: "arquivar", codigo: "BTG-000165", motivo: ITEM(6, "SKU solto da polo oceano G") },
-      { id: "arq-0808", tipo: "arquivar", codigo: "A.01.0808.002", motivo: ITEM(7, "código errado da polo feminina mescla preto M") },
-      { id: "arq-tricot", tipo: "arquivar", codigo: "A.01.05334.005", motivo: ITEM(11, "código com um 3 a mais") },
-      { id: "arq-sacola", tipo: "arquivar", codigo: "J.0562.003", motivo: ITEM(2, "base de código errada da sacola N6") },
-      { id: "arq-0719", tipo: "arquivar", codigo: "A.01.O719.004", motivo: ITEM(12, "código com letra O"), pendente: "Guilherme confirma o código A.01.0605.003.P" },
+      { id: "arq-0808", tipo: "arquivar", codigo: "A.01.0808.002.M", motivo: ITEM(7, "código errado da polo feminina mescla preto M") },
+      { id: "arq-tricot", tipo: "arquivar", codigo: "A.01.05334.005.M", motivo: ITEM(11, "código com um 3 a mais") },
+      { id: "arq-sacola", tipo: "arquivar", codigo: "J.0562.003.N6", motivo: ITEM(2, "base de código errada da sacola N6") },
+      { id: "arq-0719", tipo: "arquivar", codigo: "A.01.O719.004.P", motivo: ITEM(12, "código com letra O"), pendente: "Guilherme confirma o código A.01.0605.003.P" },
     ],
   },
 ];

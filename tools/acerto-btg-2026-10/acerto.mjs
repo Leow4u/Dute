@@ -201,10 +201,24 @@ async function skuPorCodigo(codigo, { incluirArquivados = false } = {}) {
   if (rows.length > 1) throw new Erro(`Mais de um SKU ${incluirArquivados ? "" : "ativo "}com o código ${valor}: ${rows.map((r) => r.id).join(", ")}; use o SKU no plano`);
   return rows[0] ?? null;
 }
-/** "A.01.0808.002 = BTG-000120", com o código gravado quando difere do plano. */
+/** "A.01.0808.002.M = BTG-000109", com o código gravado quando difere do plano; com o SKU no plano, mostra o código. */
 function rotulo(codigoPlano, sku) {
   const gravado = text(sku.codCliente);
-  return `${codigoPlano} = ${sku.id}${gravado && gravado !== text(codigoPlano) && !ehSku(codigoPlano) ? ` · no cadastro "${gravado}"` : ""}`;
+  if (ehSku(codigoPlano)) return `${sku.id}${gravado ? ` · código "${gravado}"` : ""}`;
+  return `${codigoPlano} = ${sku.id}${gravado && gravado !== text(codigoPlano) ? ` · no cadastro "${gravado}"` : ""}`;
+}
+/** Códigos do cadastro que começam como o pedido (forma comparável), para o "não encontrado" bastar como diagnóstico. */
+async function parecidos(codigo, limite = 8) {
+  const alvo = canon(codigo);
+  const todos = await catalogoTodo();
+  const codigoDe = (d) => text(d.data().cod_cliente || d.data().client_item_code);
+  let achados = todos.filter((d) => alvo && canon(codigoDe(d)).startsWith(alvo));
+  if (!achados.length) achados = todos.filter((d) => canon(codigoDe(d)).startsWith(alvo.slice(0, 7)));
+  return achados.slice(0, limite).map((d) => `${d.id} "${codigoDe(d)}"${arquivado(d.data()) ? " (arquivado)" : ""}${!doCliente(d.data()) ? ` (de ${text(d.data().customer_code) || "sem cliente"})` : ""}`);
+}
+async function naoEncontrado(papel, codigo) {
+  const dica = await parecidos(codigo);
+  return `${papel} ${codigo} não encontrado${dica.length ? ` · parecidos: ${dica.join(", ")}` : ""}`;
 }
 function linhaSku(snap) {
   const data = snap.data();
@@ -276,7 +290,7 @@ async function resolverPosicao(spec, origem) {
   }
   if (spec && typeof spec === "object" && spec.sku) {
     const sku = await skuPorCodigo(spec.sku);
-    if (!sku) throw new Erro(`SKU ${spec.sku} não encontrado para resolver a posição`);
+    if (!sku) throw new Erro(`${await naoEncontrado("SKU", spec.sku)}; não dá para resolver a posição`);
     const rows = (await saldosDoSku(sku.id)).filter((r) => num(r.data.qty_on_hand) > 0);
     if (rows.length !== 1) throw new Erro(`${spec.sku} tem saldo em ${rows.length} posições (${descreverSaldos(rows)}); informe a posição`);
     return rows[0].posicao;
@@ -290,23 +304,58 @@ async function resolverPosicao(spec, origem) {
 
 const previstos = { contagem: 0 };
 
-/** Saldo que o plano ainda vai tirar de um SKU (transferências e ajustes não pendentes). */
-function saidasPrevistasNoPlano(codigo, skuId) {
-  const mesmo = (c) => normalizedIdentity(c) === normalizedIdentity(codigo) || normalizedIdentity(c) === normalizedIdentity(skuId);
-  let tudo = false;
-  let soma = 0;
+/**
+ * O que as outras operações do plano ainda vão tirar de um SKU, por posição:
+ * transferências, ajustes negativos e saídas não pendentes e ainda sem recibo
+ * (`exceto` deixa de fora a própria operação). Por posição: `soma` é a
+ * quantidade certa, `ops` quem a tira, `tudo` uma transferência de tudo, `zerar`
+ * um ajuste que tira o que sobrar, `todas` os ids de todas elas.
+ */
+async function saidasPrevistasNoPlano(codigo, sku, { exceto } = {}) {
+  const mesmo = (c) => normalizedIdentity(c) === normalizedIdentity(codigo) || normalizedIdentity(c) === normalizedIdentity(sku.id);
+  const nada = () => ({ soma: 0, tudo: false, zerar: false, ops: [], todas: [] });
+  const porPosicao = new Map();
   for (const bloco of BLOCOS) {
     for (const op of bloco.ops) {
-      if (op.pendente) continue;
-      if (op.tipo === "transferir" && mesmo(op.de)) {
-        if (op.qtde === "tudo") tudo = true;
-        else soma += num(op.qtde);
+      if (op.pendente || op.id === exceto) continue;
+      const tira =
+        (op.tipo === "transferir" && mesmo(op.de)) ||
+        (op.tipo === "ajuste" && mesmo(op.codigo) && (op.delta === "zerar" || num(op.delta) < 0)) ||
+        (op.tipo === "saida" && op.codigo && mesmo(op.codigo));
+      if (!tira) continue;
+      if (await reciboExiste(idReciboMovimento(chave(op, op.tipo === "transferir" ? "saida" : undefined)))) continue;
+      let onde;
+      try {
+        onde = await resolverPosicao(op.posicao, sku);
+      } catch {
+        continue; // a própria operação vai acusar o erro dela
       }
-      if (op.tipo === "ajuste" && mesmo(op.codigo) && num(op.delta) < 0) soma += -num(op.delta);
-      if (op.tipo === "saida" && op.codigo && mesmo(op.codigo)) soma += num(op.qtde);
+      if (!porPosicao.has(onde)) porPosicao.set(onde, nada());
+      const r = porPosicao.get(onde);
+      r.todas.push(op.id);
+      if (op.tipo === "transferir" && op.qtde === "tudo") r.tudo = true;
+      else if (op.tipo === "ajuste" && op.delta === "zerar") r.zerar = true;
+      else {
+        r.ops.push(op.id);
+        r.soma += op.tipo === "ajuste" ? -num(op.delta) : num(op.qtde);
+      }
     }
   }
-  return { tudo, soma };
+  const tudoDe = [...porPosicao.values()];
+  return {
+    em: (posicao) => porPosicao.get(posicao) ?? nada(),
+    soma: tudoDe.reduce((s, r) => s + r.soma, 0),
+    todas: tudoDe.flatMap((r) => r.todas),
+    /** Saldo que sobra depois de tudo isso, somando as posições. */
+    restante: (saldos) =>
+      saldos.reduce((s, row) => {
+        const r = porPosicao.get(row.posicao);
+        const qtde = num(row.data.qty_on_hand);
+        if (!r) return s + qtde;
+        if (r.tudo || r.zerar) return s;
+        return s + Math.max(0, qtde - r.soma);
+      }, 0),
+  };
 }
 
 function criaSkuNoPlano(codigo) {
@@ -324,7 +373,7 @@ async function destino(codigo) {
   const criacao = criaSkuNoPlano(codigo);
   if (criacao && !criacao.pendente) return { sku: null, texto: `${codigo} (será criado por ${criacao.id})`, seraCriado: true };
   if (criacao) throw new Erro(`SKU ${codigo} não existe e a criação (${criacao.id}) está pendente`);
-  throw new Erro(`SKU ${codigo} não encontrado`);
+  throw new Erro(await naoEncontrado("SKU de destino", codigo));
 }
 
 const TAMANHOS = "PP|P|M|G|GG|XG|XGG|EG|EGG|U|N1|N2|N3|N4|N5|N6";
@@ -393,7 +442,7 @@ const OPS = {
   renomear: {
     async ler(op) {
       const sku = await skuPorCodigo(op.codigo);
-      if (!sku) throw new Erro(`SKU ${op.codigo} não encontrado`);
+      if (!sku) throw new Erro(await naoEncontrado("SKU", op.codigo));
       const atual = sku.nome;
       const novo = op.nome ?? (op.trocar ? atual.replace(new RegExp(op.trocar[0], "i"), (m) => (m === m.toUpperCase() ? op.trocar[1].toUpperCase() : op.trocar[1])) : "");
       if (!novo) throw new Erro("informe nome ou trocar");
@@ -509,16 +558,18 @@ const OPS = {
   criar_sku: {
     async ler(op) {
       const existente = await skuPorCodigo(op.codigo);
+      if (existente && (await reciboExiste(idReciboDireto(op)))) {
+        return { jaAplicado: true, estado: [`${op.codigo} criado por este acerto: ${existente.id} · "${existente.nome}"`], previsto: [] };
+      }
       if (existente) {
         return {
-          jaAplicado: true,
-          estado: [`${op.codigo} já existe: ${existente.id} · "${existente.nome}"`],
+          semMudanca: true,
+          estado: [`${op.codigo} já existe no cadastro: ${existente.id} · "${existente.nome}" · saldo ${descreverSaldos(await saldosDoSku(existente.id))}`],
           previsto: [],
-          dados: { existente },
         };
       }
       const irmao = await skuPorCodigo(op.copiar_de);
-      if (!irmao) throw new Erro(`SKU de referência ${op.copiar_de} não encontrado`);
+      if (!irmao) throw new Erro(await naoEncontrado("SKU de referência", op.copiar_de));
       const tamIrmao = text(irmao.data.size || irmao.data.tamanho) || text(op.copiar_de).split(".").pop();
       const nome = op.nome ?? (op.manter_nome ? irmao.nome : derivarNome(irmao.nome, tamIrmao, op.tamanho));
       const clientes = await db.collection("customers").where("code", "==", CLIENTE).get();
@@ -600,7 +651,7 @@ const OPS = {
       const jaAplicado = saiu && entrou;
       if (jaAplicado) return { jaAplicado, estado: [`saída e entrada já gravadas`], previsto: [] };
       const de = await skuPorCodigo(op.de, { incluirArquivados: saiu });
-      if (!de) throw new Erro(`SKU de origem ${op.de} não encontrado`);
+      if (!de) throw new Erro(await naoEncontrado("SKU de origem", op.de));
       const para = await destino(op.para);
       const posSaida = await resolverPosicao(op.posicao, de);
       const posEntrada = op.posicao_entrada ? await resolverPosicao(op.posicao_entrada, null) : posSaida;
@@ -610,9 +661,13 @@ const OPS = {
       const qtde = op.qtde === "tudo" ? disponivel : num(op.qtde);
       if (!jaAplicado && qtde <= 0) throw new Erro(`nada a transferir: ${de.codCliente || de.id} em ${posSaida} tem ${fmt(disponivel)} disponível`);
       if (!jaAplicado && !saiu && disponivel < qtde) throw new Erro(`${de.codCliente || de.id} em ${posSaida} tem ${fmt(disponivel)} disponível, precisa de ${fmt(qtde)}`);
+      const outras = saiu ? { soma: 0, ops: [] } : (await saidasPrevistasNoPlano(op.de, de, { exceto: op.id })).em(posSaida);
+      if (outras.soma > 0 && disponivel < qtde + outras.soma) {
+        throw new Erro(`${de.codCliente || de.id} em ${posSaida} tem ${fmt(disponivel)} disponível, e o plano tira ${fmt(qtde + outras.soma)} daí (${fmt(qtde)} aqui, ${fmt(outras.soma)} em ${outras.ops.join(", ")})`);
+      }
       return {
         jaAplicado,
-        estado: [`${rotulo(op.de, de)} · "${de.nome}" · saldo ${descreverSaldos(saldos)} · destino ${para.texto}`],
+        estado: [`${rotulo(op.de, de)} · "${de.nome}" · saldo ${descreverSaldos(saldos)}${outras.soma > 0 ? ` · ${outras.ops.join(", ")} também tira(m) ${fmt(outras.soma)} de ${posSaida}` : ""} · destino ${para.texto}`],
         previsto: [`SAIDA ${fmt(qtde)} de ${de.id} em ${posSaida} → ENTRADA ${fmt(qtde)} em ${op.para} em ${posEntrada}${saiu && !entrou ? " (saída já gravada; falta a entrada)" : ""}`],
         dados: { de, para, posSaida, posEntrada, qtde, saiu, entrou },
       };
@@ -637,24 +692,34 @@ const OPS = {
   },
 
   ajuste: {
+    // delta: número (Ajuste + ou −) ou "zerar": tira o que sobrar na posição depois das
+    // outras operações do plano (0 se não sobrar nada). Na aplicação, a leitura é refeita
+    // depois dos blocos anteriores, então "zerar" vê o saldo que de fato sobrou.
     async ler(op) {
       if (await reciboExiste(idReciboMovimento(chave(op)))) return { jaAplicado: true, estado: [`ajuste já gravado`], previsto: [] };
-      const sku = await skuPorCodigo(op.codigo);
-      if (!sku) throw new Erro(`SKU ${op.codigo} não encontrado`);
+      const zerar = op.delta === "zerar";
+      // "zerar" que não teve o que tirar não deixa recibo; depois de o plano arquivar o SKU, continua "sem mudança".
+      const sku = await skuPorCodigo(op.codigo, { incluirArquivados: zerar });
+      if (!sku) throw new Erro(await naoEncontrado("SKU", op.codigo));
+      if (zerar && arquivado(sku.data)) return { semMudanca: true, estado: [`${rotulo(op.codigo, sku)} já está arquivado, sem saldo; nada a tirar`], previsto: [] };
       const posicao = await resolverPosicao(op.posicao, sku);
       const saldos = await saldosDoSku(sku.id);
       const alvo = saldos.find((r) => r.posicao === posicao);
       const atual = alvo ? num(alvo.data.qty_on_hand) : 0;
       const reservado = alvo ? num(alvo.data.qty_reserved) : 0;
-      const delta = num(op.delta);
-      if (!delta) throw new Erro("delta zero");
-      const jaAplicado = await reciboExiste(idReciboMovimento(chave(op)));
-      if (!jaAplicado && delta < 0 && atual - reservado < -delta) throw new Erro(`${op.codigo} em ${posicao} tem ${fmt(atual - reservado)} disponível; não dá para tirar ${fmt(-delta)}`);
-      if (!jaAplicado && delta > 0 && !alvo) throw new Erro(`${op.codigo} não tem saldo em ${posicao}; um Ajuste + criaria saldo numa posição nova`);
+      const outras = (await saidasPrevistasNoPlano(op.codigo, sku, { exceto: op.id })).em(posicao);
+      const projetado = outras.tudo ? 0 : atual - reservado - outras.soma;
+      const delta = zerar ? -Math.max(0, projetado) : num(op.delta);
+      if (!zerar && !delta) throw new Erro("delta zero");
+      if (zerar && reservado > 0) throw new Erro(`${op.codigo} em ${posicao} tem ${fmt(reservado)} reservado; "zerar" só sem reserva`);
+      const estado = [`${rotulo(op.codigo, sku)} · saldo ${descreverSaldos(saldos)}${outras.todas.length ? ` · ${outras.todas.join(", ")} tira(m) ${outras.tudo ? "tudo" : fmt(outras.soma)} de ${posicao} antes` : ""}`];
+      if (zerar && delta === 0) return { semMudanca: true, estado: [...estado, `depois disso não sobra nada em ${posicao}; nada a tirar`], previsto: [] };
+      if (delta < 0 && projetado < -delta) throw new Erro(`${op.codigo} em ${posicao} tem ${fmt(atual - reservado)} disponível${outras.todas.length ? `, ${fmt(projetado)} depois de ${outras.todas.join(", ")}` : ""}; não dá para tirar ${fmt(-delta)}`);
+      if (delta > 0 && !alvo) throw new Erro(`${op.codigo} não tem saldo em ${posicao}; um Ajuste + criaria saldo numa posição nova`);
+      const contas = outras.todas.length ? ` (hoje ${fmt(atual)}; depois de ${outras.todas.join(", ")} ${fmt(projetado)} → ${fmt(projetado + delta)})` : `: ${fmt(atual)} → ${fmt(atual + delta)}`;
       return {
-        jaAplicado,
-        estado: [`${rotulo(op.codigo, sku)} · saldo ${descreverSaldos(saldos)}`],
-        previsto: [`${delta > 0 ? "ENTRADA" : "SAIDA"} ${fmt(Math.abs(delta))} em ${posicao}: ${fmt(atual)} → ${fmt(atual + delta)}`],
+        estado,
+        previsto: [`${delta > 0 ? "ENTRADA" : "SAIDA"} ${fmt(Math.abs(delta))} em ${posicao}${contas}${zerar ? " · sobra além do contado" : ""}`],
         dados: { sku, posicao, delta },
       };
     },
@@ -738,7 +803,7 @@ const OPS = {
       if (await reciboExiste(idReciboMovimento(chave(op)))) return { jaAplicado: true, estado: [`saída já gravada`], previsto: [] };
       if (!op.codigo || !op.qtde) throw new Erro("informe codigo e qtde");
       const sku = await skuPorCodigo(op.codigo);
-      if (!sku) throw new Erro(`SKU ${op.codigo} não encontrado`);
+      if (!sku) throw new Erro(await naoEncontrado("SKU", op.codigo));
       const posicao = await resolverPosicao(op.posicao, sku);
       const saldos = await saldosDoSku(sku.id);
       const alvo = saldos.find((r) => r.posicao === posicao);
@@ -761,18 +826,18 @@ const OPS = {
     async ler(op) {
       if (await reciboExiste(idReciboDireto(op))) return { jaAplicado: true, estado: [`${op.codigo} já arquivado por este acerto`], previsto: [] };
       const sku = await skuPorCodigo(op.codigo, { incluirArquivados: true });
-      if (!sku) throw new Erro(`SKU ${op.codigo} não encontrado`);
+      if (!sku) throw new Erro(await naoEncontrado("SKU", op.codigo));
       if (arquivado(sku.data)) return { jaAplicado: true, estado: [`${rotulo(op.codigo, sku)} já está arquivado`], previsto: [] };
       const saldos = await saldosDoSku(sku.id);
       const total = saldos.reduce((s, r) => s + num(r.data.qty_on_hand), 0);
       const reservado = saldos.reduce((s, r) => s + num(r.data.qty_reserved), 0);
-      const previsto = saidasPrevistasNoPlano(op.codigo, sku.id);
-      const projetado = previsto.tudo ? 0 : total - previsto.soma;
+      const previsto = await saidasPrevistasNoPlano(op.codigo, sku);
+      const projetado = previsto.restante(saldos);
       if (reservado > 0) throw new Erro(`${op.codigo} tem ${fmt(reservado)} reservado; resolva a reserva antes de arquivar`);
-      if (total > 0 && projetado > 0) throw new Erro(`${op.codigo} ainda tem saldo ${fmt(total)} e o plano só tira ${fmt(previsto.tudo ? total : previsto.soma)}; arquivar só com saldo zero`);
+      if (total > 0 && projetado > 0) throw new Erro(`${op.codigo} ainda tem saldo ${fmt(total)} e o plano só tira ${fmt(previsto.soma)}; arquivar só com saldo zero`);
       const [produtos, projecao] = await Promise.all([produtosPorCodigo(sku.codCliente), cinv(sku.id)]);
       return {
-        estado: [`${rotulo(op.codigo, sku)} · "${sku.nome}" · saldo ${fmt(total)}${total > 0 ? ` hoje, zero depois das transferências do plano` : ""}`],
+        estado: [`${rotulo(op.codigo, sku)} · "${sku.nome}" · saldo ${fmt(total)}${total > 0 ? ` hoje, zero depois de ${previsto.todas.join(", ")}` : ""}`],
         previsto: [`arquiva skus${produtos.length ? ` e ${produtos.length} products` : ""}${projecao ? " e some do portal (client_inventory)" : ""}`],
         dados: { sku, produtos, projecao },
       };
@@ -865,7 +930,7 @@ const OPS = {
       if (await reciboExiste(idReciboDireto(op))) return { jaAplicado: true, estado: [`linha já corrigida`], previsto: [] };
       const de = await skuPorCodigo(op.de, { incluirArquivados: true });
       const deSku = de?.id ?? (ehSku(op.de) ? text(op.de).toUpperCase() : null);
-      if (!deSku) throw new Erro(`SKU de origem ${op.de} não encontrado`);
+      if (!deSku) throw new Erro(await naoEncontrado("SKU de origem", op.de));
       const linhas = await linhasAbertura(op.caixa ? { caixa: op.caixa, sku: deSku } : { sku: deSku });
       if (linhas.length !== 1) throw new Erro(`${linhas.length} linha(s) da abertura de ${op.de}${op.caixa ? ` na caixa ${op.caixa}` : ""}; precisa ser exatamente 1`);
       const linha = linhas[0];
@@ -918,7 +983,7 @@ const OPS = {
     async ler(op) {
       if (!op.codigo) throw new Erro("informe codigo");
       const sku = await skuPorCodigo(op.codigo);
-      if (!sku) throw new Erro(`SKU ${op.codigo} não encontrado`);
+      if (!sku) throw new Erro(await naoEncontrado("SKU", op.codigo));
       if (await reciboExiste(idReciboDireto(op))) return { jaAplicado: true, estado: [`linha já ajustada`], previsto: [] };
       const linhas = await linhasAbertura(op.caixa ? { caixa: op.caixa, sku: sku.id } : { sku: sku.id });
       if (linhas.length !== 1) throw new Erro(`${linhas.length} linha(s) da abertura de ${op.codigo}${op.caixa ? ` na caixa ${op.caixa}` : ""}; precisa ser exatamente 1`);
@@ -961,7 +1026,7 @@ function descrever(op) {
     case "trocar_fotos": return `trocar fotos ${op.familia_a}* ↔ ${op.familia_b}*`;
     case "criar_sku": return `criar SKU ${op.codigo}`;
     case "transferir": return `transferir ${op.qtde === "tudo" ? "tudo" : fmt(num(op.qtde))} de ${op.de} para ${op.para}`;
-    case "ajuste": return `ajuste ${num(op.delta) > 0 ? "+" : ""}${fmt(num(op.delta))} em ${op.codigo}`;
+    case "ajuste": return `ajuste ${op.delta === "zerar" ? "zerar a sobra" : `${num(op.delta) > 0 ? "+" : ""}${fmt(num(op.delta))}`} em ${op.codigo}`;
     case "baixar_caixa": return `baixar o conteúdo da caixa ${op.caixa}`;
     case "saida": return `saída de ${op.qtde ?? "?"} de ${op.codigo ?? "?"}`;
     case "arquivar": return `arquivar ${op.codigo}`;
@@ -1007,8 +1072,12 @@ if (args.buscar.length) {
       for (const l of await linhasAbertura({ sku: d.id })) console.log(`     linha ${text(l.data.box_code)} ${fmt(num(l.data.counted_qty))} · client_item_code "${text(l.data.client_item_code)}"`);
     }
     if (!skus.length) {
-      const parecidos = (await catalogoTodo()).filter((d) => canon(d.data().cod_cliente).startsWith(alvo.slice(0, 7)));
-      console.log(`  nenhum SKU com esse código. Parecidos: ${parecidos.slice(0, 12).map((d) => `${d.id} "${text(d.data().cod_cliente)}"`).join(", ") || "nenhum"}`);
+      const dica = await parecidos(codigo, 12);
+      console.log(`  nenhum SKU com esse código. Parecidos: ${dica.join(", ") || "nenhum"}`);
+      for (const item of dica) {
+        const id = item.split(" ")[0];
+        for (const r of await saldosDoSku(id)) console.log(`     ${id} saldo ${r.posicao} ${fmt(num(r.data.qty_on_hand))}`);
+      }
     }
   }
   console.log("");
