@@ -89,8 +89,10 @@ Erros comuns do dry-run e o que fazer:
   operação do plano, literal ("A-13") ou `{ caixa: "CX-000091" }`.
 - "Mais de um SKU ativo com o código": o cadastro tem duplicata; ponha o SKU
   (`BTG-000xxx`) no lugar do código do cliente naquela operação.
-- "N linha(s) da abertura ... precisa ser exatamente 1": informe `caixa` na
-  operação de linha.
+- "N linha(s) da abertura ... com qtde ou caixa precisa ser exatamente 1": a
+  operação de linha com `qtde` ou `caixa` só serve para uma linha; sem os dois,
+  `corrigir_linha` corrige todas as linhas do SKU errado (uma por caixa), cada
+  uma com a própria quantidade e o próprio recibo.
 - "serve de apoio para CX-...": a caixa tem outra em cima. Ou ela fica como
   caixa vazia de apoio, com `se_apoia: "esvaziar"`, ou a de cima passa para
   outra caixa da mesma posição, com `transferir_apoio_para: "CX-..."`, e a
@@ -114,9 +116,14 @@ Dry-runs na produção em 30/10/2026:
    tamanho no fim (`A.01.0808.002.M`, `A.01.05334.005.M`, `J.0562.003.N6`,
    `A.01.O719.004.P`), e o plano pedia a base. O plano passou a usar as formas
    gravadas, ganhou o `criar-0534-M` (o tricot M certo pode não existir) e a
-   sobra da 0808 virou `zerar`. O quarto dry-run deve ficar sem erro fora dos
-   pendentes; conferir nele o saldo real de BTG-000109 (o Guilherme contou 58
-   na CX-000150) e se `A.01.0534.005.M` existe.
+   sobra da 0808 virou `zerar`.
+4. 39 a gravar, 7 sem mudança, 15 pendentes, 1 erro. BTG-000109 tem 59 em
+   A-11 (o `zerar` tira 1); o tricot certo existe (BTG-000044, `A.01.0534.005.M`,
+   30 em A-06), então o `criar-0534-M` fica sem mudança e as 12 entram nele em
+   A-02, onde a caixa está. O erro: a sacola N6 tem duas linhas da abertura
+   (duas caixas em B-12) e a correção de linha pedia uma só; `corrigir_linha`
+   passou a corrigir todas as linhas do SKU errado. O quinto dry-run deve
+   ficar sem erro fora dos pendentes.
 
 Aplicar, só depois do dry-run limpo:
 
@@ -155,8 +162,8 @@ node tools/acerto-btg-2026-10/cenario-emulador.mjs --projeto demo-acerto --confe
 
 O cenário grava os códigos errados como a produção os tem (com o tamanho e o
 SKU fixo: BTG-000109, -045, -169, -087, -088), a 0808 com 59 para exercitar o
-`zerar`, e o tricot `A.01.0534.005.M` já existente, para o `criar-0534-M` ficar
-"sem mudança". No fim: A.02.0809.002.M com 75 em A-13 e o masculino M com 207
+`zerar`, a sacola N6 em duas caixas (72 e 75), e o tricot `A.01.0534.005.M` já
+existente, para o `criar-0534-M` ficar "sem mudança". No fim: A.02.0809.002.M com 75 em A-13 e o masculino M com 207
 (140 em A-13, 67 em B-11); arpoador P 66, G 57, GG 19; oceano G 198 e
 BTG-000165 arquivado; mescla preto M 54 e G 22, BTG-000109 arquivado; tricot
 42 e BTG-000045 arquivado; sacola N6 147 e BTG-000169 arquivada; jaqueta 12;

@@ -79,7 +79,7 @@ const ITENS = [
   ["A.01.0798.002.P", "Jaqueta RIP stop militar p", "Masculino", [["CX-000018", "B-02", 12], ["CX-000019", "B-02", 12]]],
   ["J.0149.003.N1", "Sacola quadrada – BTG", "", [["CX-000210", "D-01", 585]]],
   ["J.0149.003.N3", "Sacola quadrada – BTG", "", [["CX-000211", "D-01", 120]]],
-  ["J.0562.003.N6", "Sacola quadrada – BTG", "", [["CX-000212", "D-02", 147]], null, "BTG-000169"],
+  ["J.0562.003.N6", "Sacola quadrada – BTG", "", [["CX-000212", "D-02", 72], ["CX-000213", "D-02", 75]], null, "BTG-000169"],
   ["A.01.0219.004", "Camiseta masculina FIO egípcio cinza", "Masculino", [["CX-000005", "E-01", 25]]],
   ["A.01.0594.005.PP", "Polo masculina basica preta PP", "Masculino", [["CX-000032", "E-02", 1]]],
   ["A.01.0594.005.P", "Polo masculina basica preta P", "Masculino", [["CX-000032", "E-02", 20]]],
@@ -209,7 +209,7 @@ async function conferir() {
   const oceano = await db.collection("skus").doc("BTG-000165").get();
   console.log(`  ${"BTG-000165".padEnd(18)} ${oceano.exists ? `"${oceano.data().produto}"${oceano.data().archived ? " · ARQUIVADO" : ""} · estoque_atual ${oceano.data().estoque_atual}` : "—"}`);
   console.log("\nCaixas:");
-  for (const code of ["CX-000004", "CX-000005", "CX-000033", "CX-000018", "CX-000019", "CX-000036", "CX-000032", "CX-000076", "CX-000090", "CX-000091", "CX-000092", "CX-000120", "CX-000130", "CX-000150", "CX-000152", "CX-000180", "CX-000198", "CX-000212"]) {
+  for (const code of ["CX-000004", "CX-000005", "CX-000033", "CX-000018", "CX-000019", "CX-000036", "CX-000032", "CX-000076", "CX-000090", "CX-000091", "CX-000092", "CX-000120", "CX-000130", "CX-000150", "CX-000152", "CX-000180", "CX-000198", "CX-000212", "CX-000213"]) {
     const snap = await db.collection("warehouse_boxes").doc(code).get();
     if (!snap.exists) {
       console.log(`  ${code} removida`);

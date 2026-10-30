@@ -926,56 +926,72 @@ const OPS = {
   },
 
   corrigir_linha: {
+    // Sem `caixa` nem `qtde`, corrige todas as linhas da abertura do SKU errado (uma por caixa),
+    // cada uma com a própria quantidade e o próprio recibo; com `qtde` ou `caixa`, uma linha só.
+    // O recibo da operação inteira sai no fim: depois dele, as linhas já apontam para o SKU certo.
     async ler(op) {
-      if (await reciboExiste(idReciboDireto(op))) return { jaAplicado: true, estado: [`linha já corrigida`], previsto: [] };
+      if (await reciboExiste(idReciboDireto(op))) return { jaAplicado: true, estado: [`linha(s) já corrigida(s)`], previsto: [] };
       const de = await skuPorCodigo(op.de, { incluirArquivados: true });
       const deSku = de?.id ?? (ehSku(op.de) ? text(op.de).toUpperCase() : null);
       if (!deSku) throw new Erro(await naoEncontrado("SKU de origem", op.de));
       const linhas = await linhasAbertura(op.caixa ? { caixa: op.caixa, sku: deSku } : { sku: deSku });
-      if (linhas.length !== 1) throw new Erro(`${linhas.length} linha(s) da abertura de ${op.de}${op.caixa ? ` na caixa ${op.caixa}` : ""}; precisa ser exatamente 1`);
-      const linha = linhas[0];
+      const itens = [];
+      for (const linha of linhas) itens.push({ linha, feito: await reciboExiste(idReciboDireto(op, linha.id)) });
+      if (!itens.length) throw new Erro(`nenhuma linha da abertura de ${op.de}${op.caixa ? ` na caixa ${op.caixa}` : ""}`);
+      if ((op.caixa || op.qtde != null) && itens.length !== 1) throw new Erro(`${itens.length} linha(s) da abertura de ${op.de}${op.caixa ? ` na caixa ${op.caixa}` : ""}; com qtde ou caixa precisa ser exatamente 1`);
       const para = await destino(op.para);
-      const box = await caixa(text(linha.data.box_code));
-      const antes = num(linha.data.counted_qty);
-      const depois = op.qtde == null ? antes : num(op.qtde);
-      return {
-        estado: [`linha ${linha.id} · caixa ${text(linha.data.box_code)}${box ? ` em ${box.posicao}` : ""} · ${deSku} · ${text(linha.data.client_item_code)} · "${text(linha.data.product_name)}" · ${fmt(antes)} un.`],
-        previsto: [`linha → ${para.texto} · ${fmt(depois)} un.${depois !== antes ? ` (caixa ${fmt(antes)} → ${fmt(depois)})` : ""}`],
-        dados: { linha, box, deSku, antes, depois },
-      };
+      const estado = [];
+      const previsto = [];
+      for (const item of itens) {
+        const { linha } = item;
+        item.box = await caixa(text(linha.data.box_code));
+        item.antes = num(linha.data.counted_qty);
+        item.depois = op.qtde == null ? item.antes : num(op.qtde);
+        estado.push(`linha ${linha.id} · caixa ${text(linha.data.box_code)}${item.box ? ` em ${item.box.posicao}` : ""} · ${deSku} · ${text(linha.data.client_item_code)} · "${text(linha.data.product_name)}" · ${fmt(item.antes)} un.${item.feito ? " · já corrigida" : ""}`);
+        if (!item.feito) previsto.push(`linha da caixa ${text(linha.data.box_code)} → ${para.texto} · ${fmt(item.depois)} un.${item.depois !== item.antes ? ` (caixa ${fmt(item.antes)} → ${fmt(item.depois)})` : ""}`);
+      }
+      if (itens.every((i) => i.feito)) return { jaAplicado: true, estado, previsto: [] };
+      return { estado, previsto, dados: { itens, deSku } };
     },
     async gravar(op, L) {
-      const { linha, box, deSku, antes, depois } = L.dados;
+      const { itens, deSku } = L.dados;
       const para = await skuPorCodigo(op.para);
       if (!para) throw new Erro(`SKU de destino ${op.para} ainda não existe`);
-      return transacaoDireta(op, "corrigir_linha", linha.id, async (tx) => {
-        const [linhaSnap, boxSnap, irmas] = await Promise.all([
-          tx.get(linha.ref),
-          box ? tx.get(box.ref) : Promise.resolve(null),
-          tx.get(db.collection("opening_inventory_lines").where("box_code", "==", text(linha.data.box_code))),
-        ]);
-        const dados = linhaSnap.data();
-        tx.update(linha.ref, {
-          sku_code: para.id,
-          client_item_code: para.codCliente || para.id,
-          product_name: para.nome,
-          counted_qty: depois,
-          acerto: { op: op.id, antes: { sku_code: text(dados.sku_code), client_item_code: text(dados.client_item_code), product_name: text(dados.product_name), counted_qty: num(dados.counted_qty) }, at: new Date().toISOString() },
-          updated_at: ts(),
-        });
-        if (boxSnap?.exists) {
-          const outraComDe = irmas.docs.some((d) => d.id !== linha.id && linhaViva(d.data()) && text(d.data().sku_code) === deSku);
-          const codigos = lista(boxSnap.data().sku_codes, 100).filter((c) => c !== deSku || outraComDe);
-          if (!codigos.includes(para.id)) codigos.push(para.id);
-          tx.update(box.ref, compact({ sku_codes: codigos, unit_count: depois !== antes ? FieldValue.increment(depois - antes) : undefined, updated_at: ts() }));
-        }
-        evento(tx, op, "opening_line.corrected_by_acerto", `Linha da caixa ${text(linha.data.box_code)} corrigida`, `${deSku} ${fmt(antes)} → ${para.id} ${fmt(depois)}`, "opening_inventory_line", linha.id, {
-          caixa: text(linha.data.box_code),
-          antes: { sku_code: deSku, counted_qty: antes },
-          depois: { sku_code: para.id, cod_cliente: para.codCliente, counted_qty: depois },
-        });
-        return { linha: linha.id, para: para.id, qtde: depois };
-      });
+      const feitas = [];
+      for (const { linha, box, antes, depois, feito } of itens) {
+        if (feito) continue;
+        await transacaoDireta(op, "corrigir_linha", linha.id, async (tx) => {
+          const [linhaSnap, boxSnap, irmas] = await Promise.all([
+            tx.get(linha.ref),
+            box ? tx.get(box.ref) : Promise.resolve(null),
+            tx.get(db.collection("opening_inventory_lines").where("box_code", "==", text(linha.data.box_code))),
+          ]);
+          const dados = linhaSnap.data();
+          tx.update(linha.ref, {
+            sku_code: para.id,
+            client_item_code: para.codCliente || para.id,
+            product_name: para.nome,
+            counted_qty: depois,
+            acerto: { op: op.id, antes: { sku_code: text(dados.sku_code), client_item_code: text(dados.client_item_code), product_name: text(dados.product_name), counted_qty: num(dados.counted_qty) }, at: new Date().toISOString() },
+            updated_at: ts(),
+          });
+          if (boxSnap?.exists) {
+            const outraComDe = irmas.docs.some((d) => d.id !== linha.id && linhaViva(d.data()) && text(d.data().sku_code) === deSku);
+            const codigos = lista(boxSnap.data().sku_codes, 100).filter((c) => c !== deSku || outraComDe);
+            if (!codigos.includes(para.id)) codigos.push(para.id);
+            tx.update(box.ref, compact({ sku_codes: codigos, unit_count: depois !== antes ? FieldValue.increment(depois - antes) : undefined, updated_at: ts() }));
+          }
+          evento(tx, op, "opening_line.corrected_by_acerto", `Linha da caixa ${text(linha.data.box_code)} corrigida`, `${deSku} ${fmt(antes)} → ${para.id} ${fmt(depois)}`, "opening_inventory_line", linha.id, {
+            caixa: text(linha.data.box_code),
+            antes: { sku_code: deSku, counted_qty: antes },
+            depois: { sku_code: para.id, cod_cliente: para.codCliente, counted_qty: depois },
+          });
+          return { linha: linha.id, para: para.id, qtde: depois };
+        }, linha.id);
+        feitas.push(linha.id);
+      }
+      await transacaoDireta(op, "corrigir_linha", deSku, async () => ({ linhas: feitas.length }));
+      return { linhas: feitas, para: para.id };
     },
   },
 

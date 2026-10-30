@@ -301,7 +301,8 @@ export const BLOCOS = [
       { id: "cx-linha-150", tipo: "corrigir_linha", caixa: "CX-000150", de: "A.01.0808.002.M", para: "A.02.0808.002.M", qtde: 54, motivo: ITEM(7, "CX-000150: 54 femininas M") },
       { id: "cx-linha-0808-G", tipo: "ajustar_linha", codigo: "A.02.0808.002.G", delta: 4, motivo: ITEM(7, "4 femininas G juntadas à caixa do mesmo modelo e tamanho") },
       { id: "cx-linha-tricot", tipo: "corrigir_linha", de: "A.01.05334.005.M", para: "A.01.0534.005.M", motivo: ITEM(11, "código com um 3 a mais") },
-      { id: "cx-linha-sacola", tipo: "corrigir_linha", de: "J.0562.003.N6", para: "J.0149.003.N6", motivo: ITEM(2, "sacola N6") },
+      // Sem caixa: corrige as linhas das duas caixas da sacola N6 (147 no total), cada uma com a própria quantidade.
+      { id: "cx-linha-sacola", tipo: "corrigir_linha", de: "J.0562.003.N6", para: "J.0149.003.N6", motivo: ITEM(2, "sacola N6, nas duas caixas") },
       { id: "cx-linha-0719", tipo: "corrigir_linha", de: "A.01.O719.004.P", para: "A.01.0605.003.P", motivo: ITEM(12, "código lido na peça"), pendente: "Guilherme confirma o código A.01.0605.003.P" },
       { id: "cx-linha-180-GG", tipo: "corrigir_linha", caixa: "CX-000180", de: "A.02.0814.002.GG", para: "A.02.0813.005.GG", qtde: 25, motivo: ITEM(13, "CX-000180: 25 pretas GG"), pendente: "Guilherme reconta a azul A.02.0814.002" },
       { id: "cx-linha-180-XG", tipo: "corrigir_linha", caixa: "CX-000180", de: "A.02.0814.002.XG", para: "A.02.0813.005.XG", qtde: 15, motivo: ITEM(13, "CX-000180: 15 pretas XG"), pendente: "Guilherme reconta a azul A.02.0814.002" },
