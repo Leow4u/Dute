@@ -172,6 +172,31 @@ A produção tem PITR de 7 dias e backup diário
 (`docs/plataforma/backup-e-recuperacao.md`); restaurar é sempre para um banco
 novo, com o OK do Leonardo.
 
+## Aplicação na produção (30/10/2026)
+
+Aplicado pelo Leonardo, da máquina dele, depois do sexto dry-run limpo, com o
+código do `18abb70`: 40 operações gravadas, nenhuma falha, e o sétimo dry-run
+em seguida com 40 "já aplicado", 7 sem mudança, 15 pendentes e 0 erros.
+
+O que ficou no banco:
+
+- SKUs criados: BTG-000174 (`A.02.0809.002.M`, 75 em A-13), BTG-000175
+  (`A.02.0808.002.M`, 54 em A-11) e BTG-000176 (`J.0149.003.N6`, 147 em B-12).
+- Arquivados, com saldo zero: BTG-000165 (oceano G solto), BTG-000109
+  (`A.01.0808.002.M`), BTG-000045 (`A.01.05334.005.M`) e BTG-000169
+  (`J.0562.003.N6`).
+- O masculino arpoador M (BTG-000075) ficou com 140 em A-13 e 67 em B-11; a
+  oceano G (BTG-000160) com 198; o tricot M (BTG-000044) com 12 em A-02 e 30
+  em A-06; a mescla preto G (BTG-000062) com 22; a jaqueta P (BTG-000024) com
+  12; as caixas 32 e 130 saíram do registro e a 5 ficou vazia como apoio da 33.
+- Os sete SKUs da A.01.0805.002 têm as fotos que eram da feminina, e os
+  quatro da A.02.0805.002 as que eram da masculina; o PP da masculina ficou
+  "POLO MASCULINO PIQUET AZUL MARINHO PP".
+
+Os 15 pendentes continuam no plano. Para ligar um, apague o campo `pendente`
+na operação, rode o dry-run (as operações já gravadas aparecem como "já
+aplicado") e aplique de novo: só o que faltar é gravado.
+
 ## Validação no emulador (30/10/2026)
 
 Feita no ambiente de desenvolvimento, sem credencial da nuvem, com o
