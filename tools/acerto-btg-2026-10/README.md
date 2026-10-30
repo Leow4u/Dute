@@ -132,8 +132,15 @@ Dry-runs na produção em 30/10/2026:
    (duas caixas em B-12) e a correção de linha pedia uma só; `corrigir_linha`
    passou a corrigir todas as linhas do SKU errado. Ficou para conferir: a
    CX-000032 tem 24 na linha e a camiseta BTG-000034 tem 25 em A-01
-   (`--buscar A.01.0219.004.M` mostra se outra caixa tem a 1 que sobra). O
-   quinto dry-run deve ficar sem erro fora dos pendentes.
+   (`--buscar A.01.0219.004.M` mostra se outra caixa tem a 1 que sobra).
+5. Rodado no `28fb51a`, antes das correções da revisão adversarial; serviu só
+   para confirmar a sacola em duas caixas.
+6. No `18abb70`: 40 a gravar, 7 sem mudança, 15 pendentes, 0 erros. A sacola
+   N6 está nas caixas CX-000207 (75) e CX-000208 (72, a que o Guilherme
+   contou 73), as duas em B-12; o `ajustar_linha` do +1 pendente é na
+   CX-000208. A camiseta BTG-000034 tem 25 em A-01 porque a CX-000004 tem 1
+   além das 24 da CX-000032: nada sobra sem caixa, e a CX-000004 entra no
+   pendente do item 10. Dry-run limpo: pronto para aplicar.
 
 Aplicar, só depois do dry-run limpo:
 
