@@ -57,7 +57,11 @@ test("pedido cria consulta aprova e controla edição", async () => {
 test("recebimento cria consulta inicia e altera conferência com filhos isolados", async () => {
   const created = await run("POST", "/recebimentos", { customer_code: "A", items: [{ sku_code: "SKU-A", client_item_code: "ITEM-A", product_name: "Produto A", quantity: 3 }] }, {}, "receipt-one");
   const receiptId = String(created.id || created.receipt_id);
-  assert.equal((await run("GET", "/recebimentos/{id}", undefined, { id: receiptId })).data.status, "created");
+  const consulted = (await run("GET", "/recebimentos/{id}", undefined, { id: receiptId })).data;
+  assert.equal(consulted.status, "created");
+  // A integração cria por linha e o contrato da consulta não muda (recebimento com caixas, 4.10).
+  assert.equal((await db.collection("inbound_receipts").doc(receiptId).get()).get("conference_mode"), "per_line");
+  assert.equal("conference_mode" in consulted, false);
   await run("POST", "/recebimentos/{id}/avancar", { expected_status: "created" }, { id: receiptId }, "start-one");
   const rows = await run("GET", "/recebimentos/{id}/itens", undefined, { id: receiptId });
   assert.equal(rows.data.length, 1);

@@ -335,6 +335,16 @@ documentação de produto e operação está em `docs/`.
   Rascunhos não são estoque; fechamento/reabertura são persistidos.
   Correção de caixa preserva cadastro e saldo global; não usar estorno para
   trocar só o vínculo. Ver `docs/wms-abertura-correcoes.md`.
+- **Recebimento por caixa (fase 1 do mapa, em partes):** desenho, decisões
+  e telas em `docs/plataforma/recebimento-com-caixas.md`. A chegada guarda o
+  modo (`conference_mode`, `per_line` ou `per_box`; sem o campo, por linha).
+  Por caixa só nasce pela callable `createInboundReceipt`, no ambiente de
+  `RECEBIMENTO_POR_CAIXA_PROJECTS` (`functions/wms/src/domain/inbound-mode.ts`,
+  cópia travada da lista do app em `lib/liberacao.ts`; só o `dute-homolog`)
+  e para o modelo que confere por caixa (`TEMPLATES_WITH_BOX_RECEIVING`,
+  uniformes). A liberação rege só a criação; quem trata a chegada lê o modo
+  gravado. A API REST v1, o aviso do portal e o Documentos criam por linha, e
+  a conferência e a entrada por linha recusam a chegada por caixa.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os
   modelos (`uniformes` pronto, `mobiliario` e `insumos` em construção) e os

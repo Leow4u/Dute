@@ -25,6 +25,11 @@ import {
   recordOwner,
 } from "./customer-scope.js";
 import {
+  assertLineConference,
+  assertNewReceiptMode,
+  requestedConferenceMode,
+} from "./inbound-mode.js";
+import {
   WAREHOUSE_POSITIONS_COLLECTION,
   putawayAdvanceStatus,
   resolveGuardDestination,
@@ -149,8 +154,16 @@ export type CreateInboundReceiptInput = {
   notes?: string;
   priority?: string;
   received_at?: string;
+  /** Por linha (sem o campo) ou por caixa: domain/inbound-mode.ts. */
+  conference_mode?: string;
   idempotency_key: string;
   items: OperationalRequestItem[];
+};
+
+/** O que a porta da chegada sabe do ambiente (domain/inbound-mode.ts). */
+export type CreateInboundReceiptOptions = {
+  /** `boxReceivingEnabled(PROJECT_ID)`: só a callable da tela passa. */
+  boxReceivingEnabled?: boolean;
 };
 
 export type UpdateInboundReceiptConferenceInput = {
@@ -4252,6 +4265,7 @@ export async function createInboundReceiptTransaction(
   db: Firestore,
   input: CreateInboundReceiptInput,
   actor: OperationalActor,
+  options: CreateInboundReceiptOptions = {},
 ) {
   if (!input.items.length) {
     throw new HttpsError(
@@ -4344,6 +4358,11 @@ export async function createInboundReceiptTransaction(
     barcodeSeen.set(barcodeKey, item.line_number);
   }
 
+  // Por linha sem o campo; por caixa só com a liberação e o modelo do
+  // cliente, conferidos na transação depois da repetição da mesma chave
+  // (domain/inbound-mode.ts). O hash é o do input como veio.
+  const conferenceMode = requestedConferenceMode(input.conference_mode);
+
   const nonce = input.idempotency_key;
   const receiptId = `inb_avulso_${digest({
     customer: input.customer_code,
@@ -4372,6 +4391,11 @@ export async function createInboundReceiptTransaction(
     if (previous) return previous;
 
     await assertInventoryOperationsEnabled(transaction, db);
+    await assertNewReceiptMode(transaction, db, {
+      customerCode: text(input.customer_code),
+      mode: conferenceMode,
+      boxReceivingEnabled: options.boxReceivingEnabled === true,
+    });
 
     // SKU gerado para cada linha nova, na ordem das linhas, e duplicidade por
     // código de barras dentro do cliente. Tudo leitura, antes das escritas.
@@ -4757,6 +4781,7 @@ export async function createInboundReceiptTransaction(
         item_count: items.length,
         qty_expected: quantityTotal,
         qty_received: 0,
+        conference_mode: conferenceMode,
         source: "wms_unplanned_receipt",
         received_at: occurredAt,
         created_by: actorPayload(actor),
@@ -4823,6 +4848,7 @@ export async function createInboundReceiptTransaction(
           invoice_number: input.invoice_number,
           quantity_total: quantityTotal,
           source: "wms_unplanned_receipt",
+          conference_mode: conferenceMode,
           reactivated_skus: reactivatedSkuByLine.size
             ? [...reactivatedSkuByLine.values()]
             : undefined,
@@ -4837,6 +4863,7 @@ export async function createInboundReceiptTransaction(
       receipt_id: receiptId,
       receipt_number: receiptNumber,
       status: "created",
+      conference_mode: conferenceMode,
       item_count: items.length,
       quantity_total: quantityTotal,
       // Códigos de cada linha, com o SKU gerado (ou reativado) das linhas novas.
@@ -4912,6 +4939,7 @@ export async function updateInboundReceiptConferenceTransaction(
         `Recebimento em ${currentStatus} não aceita nova conferência.`,
       );
     }
+    assertLineConference(receipt, "conferir");
 
     const rows = await readRows(
       transaction,
@@ -5963,6 +5991,7 @@ export async function decideCustomerRequestTransaction(
           item_count: items.length,
           qty_expected: total,
           qty_received: 0,
+          conference_mode: "per_line",
           customer_request_id: requestId,
           source: "customer_request",
           created_at: FieldValue.serverTimestamp(),
@@ -6031,6 +6060,7 @@ export async function decideCustomerRequestTransaction(
               supplier: request.supplier,
               invoice_number: request.invoice_number,
               attachment_count: number(request.attachment_count),
+              conference_mode: "per_line",
             },
           },
           actor,
@@ -6990,6 +7020,7 @@ export async function advanceWarehouseTaskTransaction(
     }
 
     if (type === "receiving" && targetStatus === "received") {
+      assertLineConference(task, "concluir");
       inboundItems = await readRows(
         transaction,
         db.collection(collections.inboundItems).where("receipt_id", "==", id),

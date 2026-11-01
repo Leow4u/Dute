@@ -152,3 +152,21 @@ export function rhLiberado(projectId: string | null | undefined, publicado: bool
 
 /** Valor deste build, para as telas do RH. */
 export const RH_LIBERADO = !SOMENTE_ARMAZENAGEM && rhLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+
+/**
+ * Recebimento por caixa (docs/plataforma/recebimento-com-caixas.md, seção 4.1).
+ * A callable createInboundReceipt do WMS recusa a chegada por caixa fora de
+ * RECEBIMENTO_POR_CAIXA_PROJECTS (functions/wms/src/domain/inbound-mode.ts,
+ * travada igual a esta por platform-lists.test.ts). Começa só na
+ * homologação; a produção entra com o OK do Leonardo. É do WMS, então não
+ * depende de SOMENTE_ARMAZENAGEM. Desligada, a chegada nova nasce por linha,
+ * e as que já nasceram por caixa seguem por caixa até o fim.
+ */
+export const RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+
+export function recebimentoPorCaixaLiberado(projectId: string | null | undefined): boolean {
+  return RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());
+}
+
+/** Valor deste build: a chegada avulsa do modelo que confere por caixa nasce por caixa (parte 5). */
+export const RECEBIMENTO_POR_CAIXA_LIBERADO = recebimentoPorCaixaLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);

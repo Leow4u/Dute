@@ -203,11 +203,17 @@ decisão 1); a API REST v1 e o aviso do portal criam por linha, como hoje. O
 modo fica gravado na chegada e não muda depois da primeira caixa. A chegada
 por linha continua exatamente como está.
 
-A funcionalidade entra atrás de uma liberação própria do WMS
-(`RECEBIMENTO_POR_CAIXA_AMBIENTES`, primeiro o `dute-homolog`), travada por
-teste como as das outras fases, com o desligamento descrito: desligada, a
-tela volta a criar por linha e as chegadas por caixa já abertas seguem até o
-fim.
+A funcionalidade entra atrás de uma liberação própria do WMS, primeiro só o
+`dute-homolog`: `RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS` no app
+(`lib/liberacao.ts`) e a cópia `RECEBIMENTO_POR_CAIXA_PROJECTS` nas Functions
+(`domain/inbound-mode.ts`), travadas iguais pelo `platform-lists.test.ts`. A
+liberação rege só a criação: desligada, a callable recusa a chegada nova por
+caixa e a tela volta a criar por linha; as chegadas por caixa já abertas
+seguem por caixa até o fim, porque quem as trata lê o modo gravado
+(`conference_mode`), nunca a liberação. O modelo que confere por caixa também
+é código: `inboundConference` em cada modelo do app e a cópia
+`TEMPLATES_WITH_BOX_RECEIVING` em `customer-profile.ts`, travadas pelo
+`operations.test.ts`.
 
 ### 4.2 Chegada e NF
 
@@ -396,9 +402,22 @@ desenhada e aprovada antes do PR de tela.
    rótulos, dados e ações). Feito: a versão 2 foi aprovada pelo Leonardo em
    01/11/2026 e as onze fontes estão em `docs/mockups` (a lista e o que cada
    tela muda estão no `README.md` da pasta).
-2. **Liberação e modo da chegada:** `RECEBIMENTO_POR_CAIXA_AMBIENTES`,
-   `conference_mode` na chegada, o desligamento descrito; a tela ainda cria
-   por linha.
+2. **Liberação e modo da chegada:** feita em 01/11/2026. A chegada grava
+   `conference_mode` (`per_line` ou `per_box`) no documento, no evento
+   `inbound.created` e no resultado; sem o campo, por linha, e a chegada
+   anterior ao campo vale por linha. A callable `createInboundReceipt` aceita
+   o campo e passa `boxReceivingEnabled(PROJECT_ID)` ao domínio; por caixa
+   exige a liberação e o modelo que confere por caixa, conferidos na
+   transação depois da repetição da mesma chave, então repetir a chave
+   devolve a chegada gravada mesmo com a liberação desligada. A API REST v1
+   (corpo `.strict()`, sem o campo), o aviso do portal e o Documentos criam
+   por linha. A conferência e a entrada por linha recusam a chegada por
+   caixa, pelo modo gravado. A tela ainda cria por linha: a constante
+   `RECEBIMENTO_POR_CAIXA_LIBERADO` do app entra em uso na parte 5. Testes:
+   `inbound-mode.test.ts` e `inbound-mode.integration.test.ts` no WMS,
+   `api/module.test.ts` e `api/module.integration.test.ts` na API, e
+   `liberacao.test.ts`, `platform-lists.test.ts` e `operations.test.ts` no
+   app. Desligar é tirar o ambiente das duas listas no mesmo PR.
 3. **Domínio: a caixa do recebimento**, em módulo próprio
    (`functions/wms/src/domain/inbound-boxes.ts`), sem parametrizar a contagem
    de abertura nem crescer `operations.ts`: iniciar, lançar linha, fechar,
@@ -406,7 +425,7 @@ desenhada e aprovada antes do PR de tela.
    embutido; eventos. Testes de integração: cabe e não cabe, mesmo produto,
    recusa, repetir a mesma chave, outro cliente, zona cheia, congelamento.
 4. **Concluir entrada e guarda por caixa:** barreira por linhas cobertas e
-   caixas confirmadas, `ENTRADA` como hoje, uma guarda por caixa com destino,
+   caixas confirmadas (no lugar da recusa da parte 2), `ENTRADA` como hoje, uma guarda por caixa com destino,
    a guarda que move todas as linhas da caixa e fecha a caixa `stored`, a
    chegada em aberto até a última guarda, API inalterada
    (`api.integration.test.ts`), o Agent Dute com os status novos.

@@ -14,6 +14,8 @@ export const uniformes: OperationTemplate = {
   status: "ready",
   control: "quantity",
   portal: ["assistant", "home", "inventory", "events", "requests", "orders", "services", "invoices", "documents"],
+  // A caixa do fornecedor é conferida, medida e guardada inteira (decisão 1, 01/11/2026).
+  inboundConference: "per_box",
   defines: [
     {
       label: "Portal",

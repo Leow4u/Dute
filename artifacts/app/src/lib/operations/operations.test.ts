@@ -26,6 +26,7 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const functionsDomain = resolve(here, "../../../../../functions/wms/src/domain/customer-profile.ts");
+const inboundMode = resolve(here, "../../../../../functions/wms/src/domain/inbound-mode.ts");
 
 function listFrom(source: string, name: string): string[] {
   const match = source.match(new RegExp(`${name}[^=]*=\\s*\\[([^\\]]*)\\]`));
@@ -59,6 +60,20 @@ describe("registro de modelos", () => {
     );
     expect(source).toContain(`DEFAULT_OPERATION_TEMPLATE: OperationTemplateKey = "${DEFAULT_OPERATION_TEMPLATE}"`);
     expect(source).toContain(`SKU_PREFIX_PATTERN = ${SKU_PREFIX_PATTERN.toString()}`);
+    expect(listFrom(source, "TEMPLATES_WITH_BOX_RECEIVING")).toEqual(
+      OPERATION_TEMPLATES.filter((template) => template.inboundConference === "per_box").map((template) => template.key),
+    );
+  });
+
+  it("a chegada do modelo de uniformes é conferida por caixa; mobiliário e insumos, por linha até decidirem (decisão 1)", () => {
+    expect(OPERATION_TEMPLATES.map((template) => [template.key, template.inboundConference])).toEqual([
+      ["uniformes", "per_box"],
+      ["mobiliario", "per_line"],
+      ["insumos", "per_line"],
+    ]);
+    const modos = listFrom(readFileSync(inboundMode, "utf8"), "INBOUND_CONFERENCE_MODES");
+    expect(modos).toEqual(["per_line", "per_box"]);
+    for (const template of OPERATION_TEMPLATES) expect(modos).toContain(template.inboundConference);
   });
 
   it("o modelo da BTG está pronto; os outros, em construção", () => {
