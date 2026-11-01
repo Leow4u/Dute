@@ -1,7 +1,7 @@
 # Recebimento com caixas: avaliação do fluxo e desenho da fase 1 do mapa
 
-**Situação:** desenho para decisão do Leonardo, 01/11/2026. Nada aqui está
-construído. Motivo: em 30/10/2026 a equipe recebeu uma NF da BTG pela chegada
+**Situação:** desenho aprovado nas decisões pelo Leonardo em 01/11/2026
+(seção 6); as telas ainda esperam o mockup e nada está construído. Motivo: em 30/10/2026 a equipe recebeu uma NF da BTG pela chegada
 avulsa, guardou as 71 peças em B-02 e o sistema não deu etiqueta nem mostrou
 caixa no Mapa, porque o recebimento de hoje não conhece caixa. O fluxo real do
 galpão é por caixa; o sistema só tem caixa na contagem de abertura. O desenho
@@ -133,8 +133,8 @@ Na ficha da chegada, no lugar de "Físico" por linha:
    sobra; produto novo segue a regra de hoje (foto, categoria, custo, SKU
    gerado). Caixa do fornecedor com vários tamanhos é normal.
 3. **"Fechar caixa":** comprimento, largura, altura e peso (balança); "pode
-   virar de lado" e "pode empilhar". Tamanhos padrão entram quando a P2 for
-   decidida.
+   virar de lado" e "pode empilhar". A caixa é a do fornecedor, como chegou,
+   medida na hora (decisão 2); tamanhos padrão (P2) não são pré-requisito.
 4. **"Onde guardar?":** a sugestão do motor (mesmo produto, perto do produto,
    primeira livre da zona) ou "Escolher prateleira", com o encaixe conferido.
    Fora da abertura, o encaixe bloqueia, como já previsto.
@@ -148,12 +148,20 @@ como hoje.
 
 ### 4.3 Concluir entrada
 
-"Concluir entrada" fecha a chegada quando todas as caixas estão guardadas e
-toda linha da NF foi tratada (conferida em caixa, ou marcada como falta). Não
-nasce mais tarefa de guarda por linha para o que foi em caixa. A tarefa de
-guarda solta continua existindo só para o que não entra em caixa: devolução e
-cancelamento de pedido (que também guardam a partir de `RECEBIMENTO`) ficam
-como estão até a fase da movimentação de caixa.
+"Concluir entrada" fecha a chegada só quando todas as caixas estão guardadas e
+toda linha da NF foi tratada (conferida em caixa, ou marcada como falta); não
+há chegada concluída com caixa por guardar (decisão 5). Não nasce mais tarefa
+de guarda por linha para o que foi em caixa. A tarefa de guarda solta continua
+existindo só para o que não entra em caixa: devolução e cancelamento de pedido
+(que também guardam a partir de `RECEBIMENTO`) ficam por linha (decisão 8),
+até a fase da movimentação de caixa.
+
+Ao concluir, o cliente é avisado de que chegou produto novo, com a descrição
+dos itens e as quantidades, sem valor (decisão 7): um modelo novo na lista de
+avisos da Operação (`functions/operacao/src/domain/avisos.ts`, a mesma rotina
+`runNotifications` que manda "Itens parados"), por e-mail aos contatos do
+cliente e no sino do portal (`client_notifications`). O portal não mostra as
+caixas nem a posição.
 
 ### 4.4 Etiqueta
 
@@ -191,7 +199,8 @@ Os endpoints de recebimento continuam valendo: criar, conferir por linha e
 avançar. A integração que confere por linha, sem caixa, continua funcionando
 (a chegada fica como hoje, com guarda por linha). Caixas pela API ficam para
 depois, se alguma integração precisar. O portal do cliente segue vendo a
-chegada e o saldo; mostrar as caixas da chegada é pergunta aberta.
+chegada e o saldo e recebe o aviso de produto novo; não vê caixa nem posição
+(decisão 7).
 
 ## 5. Partes, em ordem
 
@@ -213,31 +222,29 @@ e aprovada antes do PR de tela.
    por linha fica só para o que não foi em caixa; API inalterada
    (`api.integration.test.ts`).
 5. **Etiquetas da chegada** na tela de Etiquetas e o atalho na ficha.
-6. **Volumes na portaria** (declarados e recebidos) e o aviso de diferença.
-7. **Confirmação por leitura** (bipar posição e caixa) e, depois, ZPL para a
+6. **Aviso ao cliente de produto novo:** modelo na lista de avisos da
+   Operação, disparado pelo evento de entrada concluída, com a descrição dos
+   itens e as quantidades, sem valor; e-mail e sino do portal. Teste de
+   integração como os dos outros modelos (`avisos.integration.test.ts`).
+7. **Volumes na portaria** (declarados e recebidos) e o aviso de diferença.
+8. **Confirmação por leitura** (bipar posição e caixa) e, depois, ZPL para a
    Zebra, como já previsto na fase 1 e 2 do mapa.
 
 Manual, treinamento e a seção 5.3 do desenho do mapa são atualizados junto
 com cada parte.
 
-## 6. Perguntas para o Leonardo
+## 6. Decisões do Leonardo (01/11/2026)
 
-1. **Caixa obrigatória em toda chegada?** Para uniformes, sim parece o caso.
-   Mobiliário e insumos (modelos de operação em construção) podem precisar de
-   "sem caixa" (item grande vai direto para a prateleira ou o piso).
-2. **A caixa do fornecedor fica como chegou ou a equipe reembala** em caixas
-   padrão? Define se a P2 (tamanhos padrão) precisa ser decidida antes.
-3. **Vários tamanhos na mesma caixa** continua normal, como na abertura?
-4. **Como a NF entra:** digitada na chegada avulsa (hoje), lida pelo
-   Documentos (IA, com revisão) ou pelo XML? Vale conferir volumes da NF?
-5. **Concluir entrada só com tudo guardado**, ou pode fechar a chegada com
-   caixas por guardar e guardar depois?
-6. **Impressora no recebimento:** a etiqueta sai antes de levar a caixa à
-   prateleira; precisa de impressora perto da bancada (comum agora, Zebra
-   depois).
-7. **Portal do cliente:** mostrar as caixas da chegada e a posição delas?
-8. **Devolução e cancelamento de pedido:** também em caixa agora, ou ficam na
-   guarda por linha até a movimentação de caixa?
+| # | Pergunta | Decisão |
+|---|---|---|
+| 1 | Caixa obrigatória em toda chegada? | Sim, no modelo de uniformes; mobiliário e insumos decidem no modelo de operação de cada um. |
+| 2 | A caixa do fornecedor fica como chegou ou a equipe reembala em caixa padrão? | Fica como chegou do fornecedor; a equipe mede a caixa dele. Tamanhos padrão (P2) não são pré-requisito. |
+| 3 | Vários tamanhos na mesma caixa? | Sim; os fornecedores entregam mais de um tamanho na mesma caixa. |
+| 4 | Como a NF entra? | Digitada na chegada avulsa e pelo Documentos (leitura com revisão) agora; XML depois. |
+| 5 | Concluir entrada só com tudo guardado? | Sim: a chegada não se conclui com caixa por guardar. |
+| 6 | Impressora no recebimento? | Sim: a etiqueta sai antes de levar a caixa à prateleira; impressora comum agora, Zebra depois. |
+| 7 | Portal do cliente mostra as caixas? | Não. O cliente só é avisado de que chegou produto novo, com a descrição dos itens; pode ser por e-mail. |
+| 8 | Devolução e cancelamento de pedido em caixa? | Não; continuam na guarda por linha. |
 
 ## 7. O que não muda
 
