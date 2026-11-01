@@ -138,6 +138,30 @@ cor do texto), não o azul do mockup.
 | RH · Exportação com quem está sem admissão | `RhExportacaoVinculo.dc.html` |
 | RH · planilha de colaboradores de setembro de 2026 | `RhPlanilhaVinculo.dc.html` |
 
+A página "Recebimento com caixas" não tem canvas: as onze telas foram
+enviadas na conversa em duas versões, e a versão 2 foi aprovada pelo Leonardo
+em 01/11/2026, junto com as treze decisões de
+`docs/plataforma/recebimento-com-caixas.md` (seção 6). As telas da Armazenagem
+seguem o shell v3 (menu da Armazenagem, cliente ativo BTG, Guilherme, Operação
+WMS); a do portal segue a identidade do portal; o e-mail segue o molde dos
+e-mails de convite e de confirmação (`convite-email-template.ts`). As fontes
+são estáticas (sem interação). O que cada tela muda em relação ao app de hoje,
+pelas decisões:
+
+| Tela | Arquivo | O que muda |
+|---|---|---|
+| Armazenagem · Registrar chegada avulsa | `WmsChegadaAvulsa.dc.html` | Volumes na NF e volumes recebidos; "Ler itens da nota" pré-preenche as linhas, com revisão (decisão 4); custo unitário da NF por linha, informado pela operação (decisão 12); o selo "Conferência por caixa" para o cliente cujo modelo pede caixa (decisão 1). |
+| Armazenagem · Ficha da chegada por caixa | `WmsRecebimentoCaixa.dc.html` | Conferência por caixa no computador da bancada (decisão 11): "Iniciar caixa", as linhas da NF dentro da caixa, vários tamanhos na mesma caixa (decisão 3), a coluna "Custo NF", "Marcar falta" e "Concluir entrada" só com toda linha tratada e toda caixa com destino. |
+| Armazenagem · Fechar caixa e onde guardar | `WmsRecebimentoFecharCaixa.dc.html` | Medidas e peso da caixa do fornecedor, como chegou (decisão 2); "pode virar de lado" e "pode empilhar"; a prateleira sugerida pelo motor, com as alternativas; "Confirmar destino", "Não cabe aqui" e "Imprimir etiqueta" antes de levar a caixa (decisão 6). |
+| Armazenagem · Receber, a fila | `WmsReceberFila.dc.html` | A chegada fica em "Recebidas, por guardar" até a última guarda ("1 de 3 caixas guardadas", decisão 5); "Para guardar" lista uma guarda por caixa, com o destino. |
+| Armazenagem · Guarda da caixa | `WmsGuardaCaixa.dc.html` | A guarda é da caixa inteira: destino, conteúdo, "Concluir guarda em B-02", "Não cabe aqui" e a timeline (caixa fechada, destino confirmado, etiqueta impressa). |
+| Armazenagem · Guarda da caixa no celular | `WmsGuardaCaixaCelular.dc.html` | A mesma guarda no celular, que é onde a equipe guarda (decisão 11). |
+| Etiqueta da caixa do recebimento | `WmsEtiquetaCaixaRecebimento.dc.html` | A etiqueta de caixa de hoje com a origem "Recebimento · NF 48.230" e o conteúdo da caixa. |
+| Armazenagem · Mapa | `WmsMapaRecebimento.dc.html` | A prateleira mostra a caixa do recebimento guardada e a reservada (destino confirmado, por guardar), com a origem e o conteúdo. |
+| Portal · Estoque | `PortalEstoqueRecebimento.dc.html` | "Disponível para pedido" só do que está na prateleira e "Em recebimento" separado, sem pedido (decisão 10); o sino com "Chegou produto novo", itens e quantidades, sem caixa nem posição (decisão 7). |
+| E-mail ao cliente · Chegou produto novo | `EmailProdutoNovo.dc.html` | HTML na identidade da Dutelog (decisão 13), enviado quando a última caixa da chegada é guardada; itens, quantidades e total, sem valor; botão "Ver estoque no portal". |
+| Armazenagem · Posições, encaixotar o saldo sem caixa | `WmsEncaixotarSaldo.dc.html` | Correção pontual (decisão 9), para owner, admin e coordenação: pelo painel da prateleira com saldo sem caixa, "Registrar caixa com o saldo" com medidas, motivo e etiqueta; a ação some quando esse saldo acaba. |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador
