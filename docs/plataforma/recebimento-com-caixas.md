@@ -392,10 +392,10 @@ mudou), `customer-isolation` (cliente da caixa vem da chegada) e, no app,
 Um problema por PR, com teste que falha antes e passa depois, e tela
 desenhada e aprovada antes do PR de tela.
 
-1. **Mockup** da ficha da chegada por caixa (computador e celular), no canvas
-   v3, com os textos finais (sem legenda; rótulos, dados e ações): iniciar
-   caixa, linhas da NF dentro da caixa, fechar com medidas, onde guardar,
-   confirmar destino, etiqueta, a fila com "2 de 3 caixas guardadas".
+1. **Mockup** das telas que mudam, com os textos finais (sem legenda;
+   rótulos, dados e ações). Feito: a versão 2 foi aprovada pelo Leonardo em
+   01/11/2026 e as onze fontes estão em `docs/mockups` (a lista e o que cada
+   tela muda estão no `README.md` da pasta).
 2. **Liberação e modo da chegada:** `RECEBIMENTO_POR_CAIXA_AMBIENTES`,
    `conference_mode` na chegada, o desligamento descrito; a tela ainda cria
    por linha.
@@ -458,8 +458,13 @@ não resolve caixa, etiqueta nem Mapa, e por isso não entra como etapa.
 Os mockups das telas que mudam (chegada avulsa, ficha da chegada por caixa,
 fechar caixa e onde guardar, fila do Receber, guarda da caixa no computador e
 no celular, etiqueta, painel do Mapa, portal, e-mail e a correção pontual)
-foram enviados ao Leonardo em 01/11/2026, na versão 2, para validação antes do
-primeiro PR de tela; depois de validados, entram em `docs/mockups`.
+foram enviados ao Leonardo em 01/11/2026 em duas versões, e a versão 2 foi
+aprovada no mesmo dia. As fontes estão em `docs/mockups` (`WmsChegadaAvulsa`,
+`WmsRecebimentoCaixa`, `WmsRecebimentoFecharCaixa`, `WmsReceberFila`,
+`WmsGuardaCaixa`, `WmsGuardaCaixaCelular`, `WmsEtiquetaCaixaRecebimento`,
+`WmsMapaRecebimento`, `PortalEstoqueRecebimento`, `EmailProdutoNovo` e
+`WmsEncaixotarSaldo`, todos `.dc.html`), com o que cada tela muda no
+`README.md` da pasta.
 
 ## 7. Riscos técnicos e como o desenho os trata
 
