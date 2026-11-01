@@ -1,9 +1,10 @@
 # Recebimento com caixas: avaliação do fluxo e desenho da fase 1 do mapa
 
-**Situação:** desenho para decisão do Leonardo. As oito perguntas da primeira
-versão foram decididas em 01/11/2026 (seção 6) e o texto foi revisado no
-mesmo dia com o levantamento do código (seções 2.5, 4 e 7). Nada está
-construído; a tela espera o mockup. Motivo: em 30/10/2026 a equipe recebeu
+**Situação:** desenho aprovado, em construção por partes. As treze perguntas
+foram decididas pelo Leonardo em 01/11/2026 (seção 6), o texto foi revisado no
+mesmo dia com o levantamento do código (seções 2.5, 4 e 7) e as telas foram
+aprovadas (parte 1, em `docs/mockups`). A parte 2 (liberação e modo da
+chegada) está feita; a tela continua criando por linha até a parte 5. Motivo: em 30/10/2026 a equipe recebeu
 uma NF da BTG pela chegada avulsa, guardou as 71 peças em B-02 e o sistema não
 deu etiqueta nem mostrou caixa no Mapa, porque o recebimento de hoje não
 conhece caixa. O fluxo real do galpão é por caixa; o sistema só tem caixa na
@@ -147,9 +148,10 @@ obrigatório e sem conteúdo.
   `warehouse_boxes` e o contador `CX` (`warehouse_counters`); só estrutura
   (`warehouse_positions`) é preservada. Coleção nova de fluxo do WMS não
   precisa de lugar na zeragem; cadastro (tipos de caixa, P2) precisaria.
-- **O WMS não tem chave de liberação por funcionalidade** (`lib/liberacao.ts`
-  é da plataforma): o que entra na `main` vai à homologação em cada push e à
-  produção no próximo disparo manual, junto com qualquer correção do WMS.
+- **O WMS não tinha chave de liberação por funcionalidade** antes da parte 2
+  (`lib/liberacao.ts` era da plataforma; a seção 4.1 cria a do recebimento por
+  caixa): o que entra na `main` vai à homologação em cada push e à produção no
+  próximo disparo manual, junto com qualquer correção do WMS.
 - **Concorrência:** cada guarda de caixa incrementa a `occupancy_revision` da
   prateleira; a guarda por linha e o cancelamento leem as posições inteiras
   na transação e são abortados por isso; o contador `CX` é um documento único
@@ -407,13 +409,16 @@ desenhada e aprovada antes do PR de tela.
    `inbound.created` e no resultado; sem o campo, por linha, e a chegada
    anterior ao campo vale por linha. A callable `createInboundReceipt` aceita
    o campo e passa `boxReceivingEnabled(PROJECT_ID)` ao domínio; por caixa
-   exige a liberação e o modelo que confere por caixa, conferidos na
+   exige a liberação e o modelo que confere por caixa (o do cadastro ativo;
+   sem ele, o do arquivado; sem cadastro nenhum, o padrão), conferidos na
    transação depois da repetição da mesma chave, então repetir a chave
    devolve a chegada gravada mesmo com a liberação desligada. A API REST v1
    (corpo `.strict()`, sem o campo), o aviso do portal e o Documentos criam
    por linha. A conferência e a entrada por linha recusam a chegada por
    caixa, pelo modo gravado. A tela ainda cria por linha: a constante
-   `RECEBIMENTO_POR_CAIXA_LIBERADO` do app entra em uso na parte 5. Testes:
+   `RECEBIMENTO_POR_CAIXA_LIBERADO` do app entra em uso na parte 5. Até as
+   partes 3 e 4, nenhuma tela cria chegada por caixa, e a que nascer por
+   chamada direta na homologação fica esperando as caixas. Testes:
    `inbound-mode.test.ts` e `inbound-mode.integration.test.ts` no WMS,
    `api/module.test.ts` e `api/module.integration.test.ts` na API, e
    `liberacao.test.ts`, `platform-lists.test.ts` e `operations.test.ts` no

@@ -63,8 +63,10 @@ export function requestedConferenceMode(value: unknown): InboundConferenceMode {
 /**
  * O modelo de operação do cliente, do cadastro em Configurações › Clientes,
  * lido na transação. O cadastro grava `code` e `customer_code` iguais; os
- * dois valem para um cadastro antigo que só tenha um deles. Sem cadastro
- * ativo ou sem o campo vale o padrão, como no resto do sistema.
+ * dois valem para um cadastro antigo que só tenha um deles. Vale o cadastro
+ * ativo; sem ele, o arquivado, porque arquivar não apaga o modelo (a projeção
+ * client_profiles e o app também o usam). Sem cadastro nenhum, ou sem o
+ * campo, vale o padrão, como no app (resolveOperationProfile).
  */
 export async function readCustomerOperationTemplate(
   transaction: Transaction,
@@ -77,10 +79,10 @@ export async function readCustomerOperationTemplate(
       db.collection(CUSTOMERS_COLLECTION).where("customer_code", "==", customerCode).limit(5),
     ),
   ]);
-  const active = [...byCode.docs, ...byCustomerCode.docs].find(
-    (row) => row.get("archived") !== true && row.get("status") !== "archived",
-  );
-  return resolveOperationTemplate(active?.get("operation_template"));
+  const rows = [...byCode.docs, ...byCustomerCode.docs];
+  const record =
+    rows.find((row) => row.get("archived") !== true && row.get("status") !== "archived") ?? rows[0];
+  return resolveOperationTemplate(record?.get("operation_template"));
 }
 
 /**

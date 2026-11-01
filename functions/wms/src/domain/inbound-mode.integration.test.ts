@@ -26,15 +26,22 @@ const PROJECT_ID = "demo-dute-operations";
 const UNIFORMES = "Uniformes Alfa";
 const MOVEIS = "Moveis Beta";
 const SEM_MODELO = "Cadastro Antigo";
+const MOVEIS_ARQUIVADO = "Moveis Gama";
+const SEM_CADASTRO = "Sem Cadastro";
 const operacao: OperationalActor = { uid: "op-1", role: "wms", name: "Operação" };
 const coordenacao: OperationalActor = { uid: "coord-1", role: "admin", name: "Coordenação" };
 const LIBERADO: CreateInboundReceiptOptions = { boxReceivingEnabled: true };
 const DESLIGADO: CreateInboundReceiptOptions = { boxReceivingEnabled: false };
-const CLIENTES = [
+type Cliente = { code: string; id: string; prefix: string; template?: string; archived?: true; semCadastro?: true };
+const CLIENTES: Cliente[] = [
   { code: UNIFORMES, id: "uniformes_alfa", prefix: "UNI", template: "uniformes" },
   { code: MOVEIS, id: "moveis_beta", prefix: "MOV", template: "mobiliario" },
   // Cadastro anterior ao campo: vale o modelo padrão (uniformes).
-  { code: SEM_MODELO, id: "cadastro_antigo", prefix: "ANT", template: undefined },
+  { code: SEM_MODELO, id: "cadastro_antigo", prefix: "ANT" },
+  // Arquivar não apaga o modelo: o cadastro arquivado continua de mobiliário.
+  { code: MOVEIS_ARQUIVADO, id: "moveis_gama", prefix: "MOG", template: "mobiliario", archived: true },
+  // Código sem cadastro nenhum: vale o padrão, como no app (resolveOperationProfile).
+  { code: SEM_CADASTRO, id: "", prefix: "SCA", semCadastro: true },
 ];
 let db: Firestore;
 let app: ReturnType<typeof initializeApp>;
@@ -48,14 +55,17 @@ const itemOf = (customer: string) => `${prefixOf(customer)}-ITEM-1`;
 async function seed() {
   await Promise.all(
     CLIENTES.flatMap((cliente) => [
-      db.collection("customers").doc(cliente.id).set({
-        code: cliente.code,
-        customer_code: cliente.code,
-        name: cliente.code,
-        sku_prefix: cliente.prefix,
-        status: "active",
-        ...(cliente.template ? { operation_template: cliente.template } : {}),
-      }),
+      cliente.semCadastro
+        ? Promise.resolve()
+        : db.collection("customers").doc(cliente.id).set({
+            code: cliente.code,
+            customer_code: cliente.code,
+            name: cliente.code,
+            sku_prefix: cliente.prefix,
+            status: cliente.archived ? "archived" : "active",
+            ...(cliente.archived ? { archived: true } : {}),
+            ...(cliente.template ? { operation_template: cliente.template } : {}),
+          }),
       db.collection("products").doc(itemOf(cliente.code)).set({
         id: itemOf(cliente.code),
         customer_code: cliente.code,
@@ -172,10 +182,11 @@ describe("o modo da chegada (recebimento com caixas, parte 2)", () => {
     assert.equal((await createdEvent(receiptId)).payload.conference_mode, "per_line");
   });
 
-  it("com a liberação, o cliente de uniformes recebe por caixa; o cadastro sem modelo vale uniformes", async () => {
+  it("com a liberação, o cliente de uniformes recebe por caixa; o cadastro sem modelo e o código sem cadastro valem uniformes", async () => {
     for (const [customer, key] of [
       [UNIFORMES, "caixa-1"],
       [SEM_MODELO, "caixa-2"],
+      [SEM_CADASTRO, "caixa-2b"],
     ] as const) {
       const created = await arrival(customer, key, "per_box", LIBERADO);
       const receiptId = String(created.receipt_id);
@@ -198,11 +209,13 @@ describe("o modo da chegada (recebimento com caixas, parte 2)", () => {
     assert.equal((await arrival(UNIFORMES, "linha-2", "per_line", DESLIGADO)).conference_mode, "per_line");
   });
 
-  it("o cliente de outro modelo recebe por linha, mesmo com a liberação", async () => {
-    await assert.rejects(arrival(MOVEIS, "caixa-4", "per_box", LIBERADO), {
-      code: "failed-precondition",
-      message: `${MOVEIS} usa o modelo de operação mobiliario, que confere a chegada por linha.`,
-    });
+  it("o cliente de outro modelo recebe por linha, mesmo com a liberação e mesmo com o cadastro arquivado", async () => {
+    for (const customer of [MOVEIS, MOVEIS_ARQUIVADO]) {
+      await assert.rejects(arrival(customer, `caixa-4-${customer}`, "per_box", LIBERADO), {
+        code: "failed-precondition",
+        message: `${customer} usa o modelo de operação mobiliario, que confere a chegada por linha.`,
+      });
+    }
     assert.equal(await sizeOf("inbound_receipts"), 0);
     assert.equal((await arrival(MOVEIS, "linha-3", undefined, LIBERADO)).conference_mode, "per_line");
   });
@@ -291,5 +304,45 @@ describe("o modo da chegada (recebimento com caixas, parte 2)", () => {
     const receiptId = `inb_${requestId}`;
     assert.equal((await receiptOf(receiptId)).conference_mode, "per_line");
     assert.equal((await createdEvent(receiptId)).payload.conference_mode, "per_line");
+  });
+});
+
+type Callable = { run: (request: never) => Promise<unknown> };
+
+describe("a callable da chegada (createInboundReceipt.run)", () => {
+  /** A callable de verdade, com o zod e a liberação do ambiente: aqui o projeto é o demo, fora da lista. */
+  async function viaCallable(key: string, extra: Record<string, unknown> = {}) {
+    const { createInboundReceipt } = (await import("../index.js")) as unknown as { createInboundReceipt: Callable };
+    await db.collection("users").doc("op-callable").set({ role: "wms", nome: "Operação" });
+    return (await createInboundReceipt.run({
+      auth: { uid: "op-callable", token: { email: "op-callable@dutelog.com.br" } },
+      data: {
+        customer_code: UNIFORMES,
+        idempotency_key: key,
+        items: [{ sku_code: skuOf(UNIFORMES), client_item_code: itemOf(UNIFORMES), product_name: "Camisa polo", product_registration: "existing", location_id: "RECEBIMENTO", quantity: 10 }],
+        ...extra,
+      },
+      rawRequest: { headers: {} },
+    } as never)) as Record<string, unknown>;
+  }
+
+  it("o modo chega ao domínio: por caixa é recusado no projeto fora da liberação e o modo desconhecido, pela validação", async () => {
+    await assert.rejects(viaCallable("callable-caixa", { conference_mode: "per_box" }), {
+      code: "failed-precondition",
+      message: "A conferência por caixa ainda não está liberada neste ambiente.",
+    });
+    await assert.rejects(viaCallable("callable-desconhecido", { conference_mode: "caixa" }), { code: "invalid-argument" });
+    assert.equal(await sizeOf("inbound_receipts"), 0);
+  });
+
+  it("sem o campo, ou por linha, a callable cria por linha", async () => {
+    for (const [key, extra] of [
+      ["callable-sem-campo", {}],
+      ["callable-linha", { conference_mode: "per_line" }],
+    ] as const) {
+      const created = await viaCallable(key, extra);
+      assert.equal(created.conference_mode, "per_line", key);
+      assert.equal((await receiptOf(String(created.receipt_id))).conference_mode, "per_line", key);
+    }
   });
 });
