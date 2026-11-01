@@ -626,7 +626,7 @@ async function readRows(
   }));
 }
 
-async function assertInventoryOperationsEnabled(
+export async function assertInventoryOperationsEnabled(
   transaction: Transaction,
   db: Firestore,
 ) {
