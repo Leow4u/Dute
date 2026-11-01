@@ -231,8 +231,12 @@ Na ficha da chegada por caixa, no lugar de "Físico" por linha:
    quantidade física contada; a busca acha pelo código do cliente, SKU ou
    código de barras no catálogo inteiro; produto que não está na NF entra
    como sobra; produto novo segue a regra de hoje (foto, categoria, custo, SKU
-   gerado ou reativado). Caixa do fornecedor com vários tamanhos é normal
-   (decisão 3); até 100 linhas por caixa, como na abertura.
+   gerado ou reativado). O custo unitário é o da NF e quem o informa é a
+   operação, na chegada, como hoje (decisão 12); é custo de entrada, não
+   preço, e a tabela de preços continua restrita. Caixa do fornecedor com
+   vários tamanhos é normal (decisão 3); até 100 linhas por caixa, como na
+   abertura. A conferência por caixa é feita no computador da bancada do
+   recebimento; a guarda tem a tela de celular (decisão 11).
 3. **"Fechar caixa"** (`reviewed`): comprimento, largura, altura e peso na
    balança; "pode virar de lado" e "pode empilhar". A caixa é a do
    fornecedor, como chegou, medida na hora (decisão 2).
@@ -263,8 +267,11 @@ com `box_code` e o destino já preenchido, no lugar de uma por linha.
 
 A chegada só sai de "Em aberto" quando todas as guardas das caixas estiverem
 concluídas (decisão 5): a fila mostra "recebida · 2 de 3 caixas guardadas".
-Ao concluir a entrada, o cliente é avisado de que chegou produto novo, com a
-descrição dos itens e as quantidades, sem valor (decisão 7, seção 4.8).
+O cliente é avisado de que chegou produto novo quando a última caixa da
+chegada é guardada, que é quando as peças ficam disponíveis para pedido
+(decisão 10), com a descrição dos itens e as quantidades, sem valor, sem
+caixa e sem posição (decisão 7, seção 4.8). Concluir a entrada não avisa
+ninguém.
 
 ### 4.5 Guarda por caixa
 
@@ -310,15 +317,26 @@ entrou em cada caixa; o saldo por prateleira continua sendo o ledger. Dizer de
 qual caixa a separação tira e baixar o conteúdo é a regra 8 do mapa, fora
 deste desenho.
 
-### 4.8 Aviso ao cliente
+### 4.8 Aviso ao cliente e o que o cliente pode pedir
 
 Um modelo novo na lista de avisos da Operação
 (`functions/operacao/src/domain/avisos.ts`, a mesma rotina `runNotifications`
-que manda "Itens parados"), disparado pelo evento de entrada concluída, por
-e-mail aos contatos do cliente e no sino do portal (`client_notifications`),
-com a descrição dos itens e as quantidades, sem valor. O portal não mostra
-caixa nem posição (decisão 7): o portal lê só `client_inventory`, que não tem
-local, e as caixas são fechadas ao cliente nas regras.
+que manda "Itens parados"), disparado pelo evento da última guarda da chegada,
+por e-mail aos contatos do cliente e no sino do portal
+(`client_notifications`), com a descrição dos itens e as quantidades, sem
+valor, sem caixa e sem posição (decisão 7). O e-mail sai em HTML com a
+identidade da Dutelog, no molde dos e-mails de convite e de confirmação
+(`convite-email-template.ts`), e o mesmo molde passa a valer para os outros
+modelos de aviso (decisão 13). O portal não mostra caixa nem posição: ele lê
+só `client_inventory`, que não tem local, e as caixas são fechadas ao cliente
+nas regras.
+
+Para o cliente, só existe o que está na prateleira (decisão 10): o
+"Disponível" do portal passa a contar só o saldo das prateleiras, o que está
+em `RECEBIMENTO` aparece como "Em recebimento" e não pode ser pedido, e a
+reserva do pedido deixa de cair nas áreas de passagem (`RECEBIMENTO` e
+`EXPEDICAO`). Hoje a entrada já conta como disponível e a aprovação do pedido
+pode reservar da área de recebimento (seção 2.5).
 
 ### 4.9 Dados
 
@@ -397,15 +415,20 @@ desenhada e aprovada antes do PR de tela.
 6. **Etiquetas:** caixa `committing` com destino, origem "Recebimento", o
    conteúdo da caixa do recebimento na etiqueta e no Mapa, "Etiquetas da
    chegada", reimpressão com evento.
-7. **Aviso ao cliente de produto novo:** modelo na lista de avisos da
-   Operação, disparado pelo evento de entrada concluída; e-mail e sino.
-   Teste de integração como os dos outros modelos
-   (`avisos.integration.test.ts`).
-8. **Encaixotar o que já está na prateleira sem caixa** (se a pergunta 9 for
-   sim): criar a caixa guardada a partir do saldo de uma prateleira, com
-   medidas e etiqueta, para o Mapa e a referência da fatura ficarem certos.
-9. **Volumes na portaria** (declarados e recebidos) e o aviso de diferença.
-10. **Confirmação por leitura** (bipar caixa e posição) e, depois, ZPL para a
+7. **Só prateleira para o cliente:** "Disponível" e "Em recebimento" no
+   portal e a reserva do pedido só de prateleira (decisão 10), em PR próprio,
+   antes ou junto da parte 4; testes da alocação e do portal.
+8. **Aviso ao cliente de produto novo:** modelo na lista de avisos da
+   Operação, disparado pela última guarda da chegada; e-mail em HTML com a
+   identidade da Dutelog (molde dos e-mails de convite e confirmação, que
+   passa a valer para todos os avisos) e sino. Teste de integração como os
+   dos outros modelos (`avisos.integration.test.ts`) e teste do modelo HTML.
+9. **Encaixotar o que já está na prateleira sem caixa**, correção pontual,
+   feita uma vez (decisão 9): pelo painel da prateleira com saldo sem caixa,
+   para owner, admin e coordenação, com medidas, motivo e etiqueta; a ação
+   some quando esse saldo acaba.
+10. **Volumes na portaria** (declarados e recebidos) e o aviso de diferença.
+11. **Confirmação por leitura** (bipar caixa e posição) e, depois, ZPL para a
     Zebra, como já previsto na fase 1 e 2 do mapa. Até lá, a confirmação é
     por toque.
 
@@ -424,19 +447,19 @@ não resolve caixa, etiqueta nem Mapa, e por isso não entra como etapa.
 | 4 | Como a NF entra? | Digitada na chegada avulsa e pela leitura da nota com revisão; XML depois. |
 | 5 | Concluir entrada só com tudo guardado? | Sim: a chegada não se conclui com caixa por guardar. |
 | 6 | Impressora no recebimento? | Sim: a etiqueta sai antes de levar a caixa à prateleira; impressora comum agora, Zebra depois. |
-| 7 | Portal do cliente mostra as caixas? | Não. O cliente só é avisado de que chegou produto novo, com a descrição dos itens; pode ser por e-mail. |
+| 7 | Portal do cliente mostra as caixas? | Não. O cliente só é avisado de que chegou produto novo, com a descrição dos itens, por e-mail e no sino. Ajuste do mesmo dia: o aviso sai quando a chegada termina de ser guardada, que é quando as peças ficam disponíveis para pedido; sem caixa nem posição. |
 | 8 | Devolução e cancelamento de pedido em caixa? | Não; continuam na guarda por linha. |
+| 9 | O que já está na prateleira sem caixa (as 71 peças de B-02 e o que mais entrou pelo Receber antes)? | Encaixotar, uma vez: é correção pontual, porque o procedimento não existia; não vira caminho permanente. |
+| 10 | O cliente pode pedir o que está na área de recebimento? | Não. Para o cliente só existe o que está na prateleira: "Disponível" só de prateleira, "Em recebimento" separado e sem pedido, reserva só de prateleira. |
+| 11 | A conferência por caixa é no computador ou no celular? | No computador da bancada; o celular fica para a guarda. |
+| 12 | Quem informa o custo do produto? | A operação, na chegada, com o custo unitário da NF, como hoje. |
+| 13 | E-mail do aviso em texto ou HTML? | HTML com a identidade da Dutelog, no molde dos e-mails de convite e confirmação. |
 
-Faltam, novas depois do levantamento:
-
-9. **O que já está na prateleira sem caixa** (as 71 peças de B-02 e o que
-   mais entrou pelo Receber desde o go-live): a equipe encaixota depois, com
-   a parte 8, ou só o que entrar daqui em diante ganha caixa? Sugestão:
-   encaixotar, uma vez, para o Mapa e a referência da fatura ficarem certos.
-10. **`RECEBIMENTO` fora da reserva do portal:** hoje a aprovação de um
-    pedido pode reservar saldo que ainda está na área de recebimento, e a
-    separação manda o operador buscar lá. Sugestão: tirar `RECEBIMENTO` e
-    `EXPEDICAO` da alocação, em PR próprio, antes ou junto da parte 4.
+Os mockups das telas que mudam (chegada avulsa, ficha da chegada por caixa,
+fechar caixa e onde guardar, fila do Receber, guarda da caixa no computador e
+no celular, etiqueta, painel do Mapa, portal, e-mail e a correção pontual)
+foram enviados ao Leonardo em 01/11/2026, na versão 2, para validação antes do
+primeiro PR de tela; depois de validados, entram em `docs/mockups`.
 
 ## 7. Riscos técnicos e como o desenho os trata
 
