@@ -36,7 +36,7 @@ const { BLOCOS, PLANO } = await import(
 // --- Linha de comando ---------------------------------------------------------------
 
 const args = (() => {
-  const out = { aplicar: false, projeto: "dute-prod", confirmo: "", blocos: [], ops: [], buscar: [], caixas: [] };
+  const out = { aplicar: false, projeto: "dute-prod", confirmo: "", blocos: [], ops: [], buscar: [], caixas: [], nomes: [] };
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -49,6 +49,7 @@ const args = (() => {
     else if (a === "--op") out.ops.push(proximo());
     else if (a === "--buscar") out.buscar.push(proximo());
     else if (a === "--caixa") out.caixas.push(proximo());
+    else if (a === "--nome") out.nomes.push(proximo());
     else abortar(`Argumento desconhecido: ${a}`);
   }
   return out;
@@ -882,7 +883,7 @@ const OPS = {
       if (zerar && delta === 0) return { semMudanca: true, estado: [...estado, `depois disso não sobra nada em ${posicao}; nada a tirar`], previsto: [] };
       if (delta < 0 && projetado < -delta) throw new Erro(`${op.codigo} em ${posicao} tem ${fmt(atual - reservado)} disponível${outras.todas.length ? `, ${fmt(projetado)} depois de ${outras.todas.join(", ")}` : ""}; não dá para tirar ${fmt(-delta)}`);
       const entradas = delta > 0 ? (await entradasPrevistasNoPlano(op.codigo, sku)).em(posicao) : { soma: 0, ops: [] };
-      if (delta > 0 && !alvo && !entradas.ops.length) throw new Erro(`${op.codigo} não tem saldo em ${posicao}; um Ajuste + criaria saldo numa posição nova`);
+      if (delta > 0 && !alvo && !entradas.ops.length && op.posicao_nova !== true) throw new Erro(`${op.codigo} não tem saldo em ${posicao}; um Ajuste + criaria saldo numa posição nova (no plano, posicao_nova: true)`);
       const contas = outras.todas.length
         ? ` (hoje ${fmt(atual)}; depois de ${outras.todas.join(", ")} ${fmt(projetado)} → ${fmt(projetado + delta)})`
         : entradas.ops.length
@@ -1359,8 +1360,6 @@ if (args.buscar.length) {
       for (const d of docs) await imprimirSku(d);
     }
   }
-  console.log("");
-  process.exit(0);
 }
 if (args.caixas.length) {
   for (const code of args.caixas) {
@@ -1384,6 +1383,19 @@ if (args.caixas.length) {
       console.log(`  linha ${l.id} · ${skuCode} · "${text(d.client_item_code)}" · "${text(d.product_name)}" · ${fmt(num(d.counted_qty))} un. · ${text(d.status) || "sem status"} · saldo do SKU em ${posicao}: ${saldo ? fmt(num(saldo.data.qty_on_hand)) : "0"}`);
     }
   }
+}
+if (args.nomes.length) {
+  // Busca pelo nome do produto (sem acento, maiúsculas), para achar o código de uma peça que só se conhece pelo nome.
+  for (const termo of args.nomes) {
+    const alvo = normalizedIdentity(termo);
+    console.log(`\n== nome contém "${termo}"`);
+    const docs = (await catalogoTodo()).filter((d) => doCliente(d.data()) && normalizedIdentity(d.data().produto || d.data().name || d.data().product_name).includes(alvo));
+    if (!docs.length) console.log("  nenhum SKU do cliente com esse nome");
+    for (const d of docs.slice(0, 40)) await imprimirSku(d);
+    if (docs.length > 40) console.log(`  ... e mais ${docs.length - 40}`);
+  }
+}
+if (args.buscar.length || args.caixas.length || args.nomes.length) {
   console.log("");
   process.exit(0);
 }

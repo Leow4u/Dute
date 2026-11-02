@@ -70,28 +70,43 @@ const ITENS = [
   ["A.01.0534.005.M", "Tricot meio zíper preto M", "Masculino", [["CX-000121", "A-05", 30]]],
   ["A.01.O719.004.P", "Polo masculina piquet PAN cinza p", "Masculino", [["CX-000140", "C-03", 15]], null, "BTG-000087"],
   ["A.01.0719.004.PP", "Polo masculino piquet PAN cinza PP", "Masculino", [["CX-000141", "C-03", 9]], null, "BTG-000088"],
-  ["A.02.0813.005.PP", "Polo feminina pima preto PP", "Feminino", [["CX-000169", "C-10", 20]]],
-  ["A.02.0813.005.P", "Polo feminina pima preto P", "Feminino", [["CX-000169", "C-10", 30]]],
-  ["A.02.0813.005.M", "Polo feminina pima preto M", "Feminino", [["CX-000177", "C-10", 30]]],
-  ["A.02.0813.005.G", "Polo feminina pima preto G", "Feminino", [["CX-000177", "C-10", 30]]],
-  ["A.02.0814.002.GG", "Polo feminina pima azul GG", "Feminino", [["CX-000180", "C-11", 30]]],
-  ["A.02.0814.002.XG", "Polo feminina pima azul XG", "Feminino", [["CX-000180", "C-11", 30]]],
+  // Pima preta e azul como na produção (--caixa e --buscar de 02/11/2026): a azul GG e XG em duas caixas de 15 em A-03.
+  ["A.02.0813.005.PP", "POLO FEMININA PIMA PRETO PP", "Feminino", [["CX-000169", "A-01", 20]]],
+  ["A.02.0813.005.P", "POLO FEMININA PIMA PRETO P", "Feminino", [["CX-000169", "A-01", 30]]],
+  ["A.02.0813.005.M", "POLO FEMININA PIMA PRETO M", "Feminino", [["CX-000177", "A-03", 30]]],
+  ["A.02.0813.005.G", "POLO FEMININA PIMA PRETO G", "Feminino", [["CX-000177", "A-03", 30]]],
+  ["A.02.0814.002.PP", "POLO FEMININA PIMA AZUL MARINHO PP", "Feminino", [["CX-000178", "A-03", 20]]],
+  ["A.02.0814.002.P", "POLO FEMININA PIMA AZUL MARINHO P", "Feminino", [["CX-000178", "A-03", 30]]],
+  ["A.02.0814.002.GG", "POLO FEMININA PIMA AZUL MARINHO GG", "Feminino", [["CX-000179", "A-03", 15], ["CX-000180", "A-03", 15]]],
+  ["A.02.0814.002.XG", "POLO FEMININA PIMA AZUL MARINHO XG", "Feminino", [["CX-000179", "A-03", 15], ["CX-000180", "A-03", 15]]],
   ["A.01.0798.002.P", "Jaqueta RIP stop militar p", "Masculino", [["CX-000018", "B-02", 12], ["CX-000019", "B-02", 12]]],
   ["J.0149.003.N1", "Sacola quadrada – BTG", "", [["CX-000210", "D-01", 585]]],
   ["J.0149.003.N3", "Sacola quadrada – BTG", "", [["CX-000211", "D-01", 120]]],
   ["J.0562.003.N6", "Sacola quadrada – BTG", "", [["CX-000207", "D-02", 75], ["CX-000208", "D-02", 72]], null, "BTG-000169"],
-  ["A.01.0219.004", "Camiseta masculina FIO egípcio cinza", "Masculino", [["CX-000005", "E-01", 25]]],
-  ["A.01.0594.005.PP", "Polo masculina basica preta PP", "Masculino", [["CX-000032", "E-02", 1]]],
-  ["A.01.0594.005.P", "Polo masculina basica preta P", "Masculino", [["CX-000032", "E-02", 20]]],
-  ["A.01.0601.001.P", "Polo masculino piquet azul p", "Masculino", [["CX-000032", "E-02", 13]]],
+  // Caixas 4, 5, 32 e 33 em A-01, como na produção: a camiseta tem 24 na CX-000032 e 1 na CX-000004.
+  ["A.01.0219.004.M", "CAMISETA MASCULINA FIO EGIPCIO CINZA", "Masculino", [["CX-000032", "A-01", 24], ["CX-000004", "A-01", 1]]],
+  ["A.01.0594.005.PP", "POLO MASCULINA BASICA PRETA PP", "Masculino", [["CX-000005", "A-01", 1]]],
+  ["A.01.0594.005.P", "POLO MASCULINO BÁSICA PRETA", "Masculino", [["CX-000005", "A-01", 20]]],
   ["A.01.0690.004.P", "Polo masculino piquet rosa OUT rosa p", "Masculino", [["CX-000130", "E-03", 24]]],
   ["A.01.0690.004.G", "Polo masculino piquet rosa OUT rosa G", "Masculino", [["CX-000130", "E-03", 9]]],
-  ["A.01.0609.003.P", "Polo masculino piquet branca p", "Masculino", [["CX-000004", "E-04", 3]]],
-  // CX-000004 com mais linhas, para o teste da baixa parcial (plano-teste-cx4.mjs, só no emulador).
-  ["A.02.0697.016.GG", "Polo feminina piquet mescla black GG", "Feminino", [["CX-000004", "E-04", 3]]],
-  ["A.02.0697.016.XG", "Polo feminina piquet mescla black XG", "Feminino", [["CX-000004", "E-04", 1]]],
-  ["A.02.0689.013.G", "Polo feminino piquet rosa OUT rosa G", "Feminino", [["CX-000004", "E-04", 1]]],
-  ["A.01.0709.004.P", "Polo masculino piquet cinza p", "Masculino", [["CX-000033", "E-01", 3]]],
+  // CX-000004 com as 16 linhas da produção (19 peças).
+  ["A.01.0695.005.PP", "POLO MASCULINO PRIMA PRETA SW", "Masculino", [["CX-000004", "A-01", 1]]],
+  ["A.01.0695.005.P", "POLO MASCULINO PIMA PRETA SW", "Masculino", [["CX-000004", "A-01", 1]]],
+  ["A.01.0695.005.M", "POLO MASCULINO PIMA PRETA SW", "Masculino", [["CX-000004", "A-01", 1]]],
+  ["A.01.0695.005.G", "POLO MASCULINA PIMA PRETA SW", "Masculino", [["CX-000004", "A-01", 2]]],
+  ["A.01.0695.005.GG", "POLO MASCULINO PIMA PRETA SW", "Masculino", [["CX-000004", "A-01", 1]]],
+  ["A.01.0695.005.XG", "POLO MASCULINO PIMA PRETO SW", "Masculino", [["CX-000004", "A-01", 1]]],
+  ["A.02.0697.016.P", "POLO FEMININA PIQUET MESCLA BLACK P", "Feminino", [["CX-000004", "A-01", 1]]],
+  ["A.02.0697.016.M", "POLO FEMININA PIQUET MESCLA BLACK M", "Feminino", [["CX-000004", "A-01", 1]]],
+  ["A.02.0697.016.G", "POLO FEMININA PIQUET MESCLA BLACK G", "Feminino", [["CX-000004", "A-01", 1]]],
+  ["A.02.0697.016.GG", "POLO FEMININA PIQUET MESCLA BLACK GG", "Feminino", [["CX-000004", "A-01", 1]]],
+  ["A.02.0697.016.XG", "POLO FEMININA PIQUET MESCLA BLACK XG", "Feminino", [["CX-000004", "A-01", 1]]],
+  ["A.02.0689.013.G", "POLO FEMININO PIQUET ROSA OUT ROSA", "Feminino", [["CX-000004", "A-01", 1]]],
+  ["A.02.0689.013.GG", "POLO FEMININA PIQUET ROSA OUT ROSA", "Feminino", [["CX-000004", "A-01", 1]]],
+  ["A.02.0689.013.XG", "POLO FEMININA PIQUET ROSA OUT ROSA", "Feminino", [["CX-000004", "A-01", 1]]],
+  ["A.02.0714.013.P", "POLO FEMININO PIQUET PAN ROSA P", "Feminino", [["CX-000004", "A-01", 3]]],
+  ["A.02.0716.005.G", "POLO FEMININA MANDARIM ALGODAO PRETO G", "Feminino", [["CX-000215", "C-05", 4]]],
+  ["A.01.0709.004.P", "Polo masculino piquet cinza p", "Masculino", [["CX-000033", "A-01", 3]]],
   ["A.01.0705.017.P", "Polo masculino piquet indigo p", "Masculino", [["CX-000036", "B-02", 2]]],
 ];
 /** Caixas apoiadas em outra, como na produção (CX-000033 sobre a CX-000005, CX-000036 sobre a CX-000019). */
@@ -193,7 +208,10 @@ async function conferir() {
   const codigos = [
     "A.01.0805.002.PP", "A.02.0809.002.M", "A.01.0809.002.M", "A.02.0809.002.P", "A.02.0809.002.G", "A.02.0809.002.GG",
     "A.01.0811.002.G", "A.02.0808.002.M", "A.02.0808.002.G", "A.01.0808.002.M", "A.01.0534.005.M", "A.01.05334.005.M",
-    "J.0149.003.N6", "J.0562.003.N6", "A.01.0798.002.P", "A.01.0219.004", "A.01.0690.004.P", "A.01.O719.004.P", "A.02.0814.002.GG",
+    "J.0149.003.N6", "J.0562.003.N6", "A.01.0798.002.P", "A.01.0219.004.M", "A.01.0690.004.P", "A.01.O719.004.P", "A.01.0719.004.P",
+    "A.02.0814.002.GG", "A.02.0814.002.XG", "A.02.0813.005.GG", "A.02.0813.005.XG", "A.02.0697.016.GG", "A.02.0697.016.XG", "A.01.0695.005.G",
+    "A.02.0689.013.G", "A.02.0714.013.P", "A.01.0805.002.PP", "A.01.0805.002.P", "A.01.0805.002.M", "A.01.0805.002.G", "A.01.0805.002.GG",
+    "A.01.0805.002.XG",
   ];
   console.log("\nSKU por código do cliente (inclui arquivados):");
   for (const codigo of codigos) {
@@ -213,7 +231,7 @@ async function conferir() {
   const oceano = await db.collection("skus").doc("BTG-000165").get();
   console.log(`  ${"BTG-000165".padEnd(18)} ${oceano.exists ? `"${oceano.data().produto}"${oceano.data().archived ? " · ARQUIVADO" : ""} · estoque_atual ${oceano.data().estoque_atual}` : "—"}`);
   console.log("\nCaixas:");
-  for (const code of ["CX-000004", "CX-000005", "CX-000033", "CX-000018", "CX-000019", "CX-000036", "CX-000032", "CX-000076", "CX-000090", "CX-000091", "CX-000092", "CX-000120", "CX-000130", "CX-000150", "CX-000152", "CX-000180", "CX-000198", "CX-000207", "CX-000208"]) {
+  for (const code of ["CX-000004", "CX-000005", "CX-000033", "CX-000018", "CX-000019", "CX-000036", "CX-000032", "CX-000076", "CX-000090", "CX-000091", "CX-000092", "CX-000120", "CX-000130", "CX-000150", "CX-000152", "CX-000179", "CX-000180", "CX-000198", "CX-000207", "CX-000208"]) {
     const snap = await db.collection("warehouse_boxes").doc(code).get();
     if (!snap.exists) {
       console.log(`  ${code} removida`);

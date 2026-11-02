@@ -121,8 +121,7 @@ export const BLOCOS = [
         codigo: "A.02.0813.005.GG",
         copiar_de: "A.02.0813.005.G",
         tamanho: "GG",
-        motivo: ITEM(13, "15 polos pima preto GG lançadas como azul A.02.0814.002"),
-        pendente: "Guilherme (30/10): a CX-000180 só tem pretas, 15 GG e 15 XG; as azuis GG e XG são 15 e 15. Falta ver as linhas da CX-000180 e os saldos da azul no sistema (--caixa CX-000180, --buscar A.02.0814.002.)",
+        motivo: ITEM(13, "15 polos pima preto GG lançadas como azul A.02.0814.002 na CX-000180"),
       },
       {
         id: "criar-0813-XG",
@@ -130,8 +129,7 @@ export const BLOCOS = [
         codigo: "A.02.0813.005.XG",
         copiar_de: "A.02.0813.005.G",
         tamanho: "XG",
-        motivo: ITEM(13, "15 polos pima preto XG lançadas como azul A.02.0814.002"),
-        pendente: "Guilherme (30/10): a CX-000180 só tem pretas, 15 GG e 15 XG; as azuis GG e XG são 15 e 15. Falta ver as linhas da CX-000180 e os saldos da azul no sistema (--caixa CX-000180, --buscar A.02.0814.002.)",
+        motivo: ITEM(13, "15 polos pima preto XG lançadas como azul A.02.0814.002 na CX-000180"),
       },
     ],
   },
@@ -217,8 +215,8 @@ export const BLOCOS = [
         para: "A.02.0813.005.GG",
         qtde: 15,
         posicao: { caixa: "CX-000180" },
-        motivo: ITEM(13, "CX-000180 tem 15 polos pima preto GG lançadas como azul"),
-        pendente: "conferir as linhas da CX-000180 e os saldos da azul antes de ligar (--caixa CX-000180, --buscar A.02.0814.002.)",
+        // A azul GG e XG está registrada em duas caixas de 15 em A-03: a CX-000179 (azul de verdade) e a CX-000180 (as pretas).
+        motivo: ITEM(13, "CX-000180 tem 15 polos pima preto GG lançadas como azul; a azul fica com as 15 da CX-000179"),
       },
       {
         id: "transf-0813-XG",
@@ -227,8 +225,7 @@ export const BLOCOS = [
         para: "A.02.0813.005.XG",
         qtde: 15,
         posicao: { caixa: "CX-000180" },
-        motivo: ITEM(13, "CX-000180 tem 15 polos pima preto XG lançadas como azul"),
-        pendente: "conferir as linhas da CX-000180 e os saldos da azul antes de ligar (--caixa CX-000180, --buscar A.02.0814.002.)",
+        motivo: ITEM(13, "CX-000180 tem 15 polos pima preto XG lançadas como azul; a azul fica com as 15 da CX-000179"),
       },
     ],
   },
@@ -244,11 +241,47 @@ export const BLOCOS = [
       // O que o sistema tiver além disso não existe no físico: "zerar" tira o que sobrar depois delas (0 se o sistema tinha 58).
       { id: "aj-0808-sobra", tipo: "ajuste", codigo: "A.01.0808.002.M", delta: "zerar", posicao: { caixa: "CX-000150" }, motivo: ITEM(7, "CX-000150 tem 58 peças (54 M + 4 G); o que o sistema tiver a mais não existe") },
       { id: "aj-jaqueta-dup", tipo: "ajuste", codigo: "A.01.0798.002.P", delta: -12, posicao: { caixa: "CX-000019" }, motivo: ITEM(9, "CX-000019 é leitura duplicada da CX-000018; só há 12 jaquetas P") },
+      // Item 14. As caixas da A.01.0805.002 são lacradas do fornecedor; o Guilherme somou as etiquetas no PDF:
+      // PP 12+22, P 44+44+50, M 50+40+48+20+88, G 38+20+13+86+20, GG 57+15+2, XG 42+15, XGG 13 (739 peças).
+      // As 6 caixas registradas em B-05 batem uma a uma com essas etiquetas: CX-000160 (PP 12, P 44, M 40), CX-000159
+      // (M 88, GG 2), CX-000157 (M 48, G 38), CX-000156 (G 20, GG 57), CX-000154 (G 86), CX-000158 (G 13, XG 42, XGG 13).
+      // A diferença inteira está nas 5 registradas em B-10 (CX-000136 G 72, CX-000137 P 34, CX-000138 GG 41, CX-000139
+      // XG 22, CX-000140 M 72: 241 peças), que pelas etiquetas são PP 22, P 44 e 50, M 50 e 20, G 20, GG 15 e XG 15
+      // (236 peças). Os ajustes abaixo acertam os totais por tamanho em B-10; o conteúdo de cada uma das 5 caixas espera
+      // as fotos das etiquetas.
+      ...[
+        ["PP", 22],
+        ["P", 60],
+        ["M", -2],
+        ["G", -52],
+        ["GG", -26],
+        ["XG", -7],
+      ].map(([tam, delta]) => ({
+        id: `aj-0805-${tam}`,
+        tipo: "ajuste",
+        codigo: `A.01.0805.002.${tam}`,
+        delta,
+        posicao: "B-10",
+        ...(tam === "PP" ? { posicao_nova: true } : {}),
+        motivo: ITEM(14, "total por tamanho pelas etiquetas do fornecedor; a diferença está nas caixas registradas em B-10"),
+        pendente: "Leonardo decide: acertar já os totais por tamanho pelas somas das etiquetas (PDF do Guilherme) ou esperar as fotos para acertar caixa por caixa",
+      })),
       {
         id: "aj-0805-por-tamanho",
         tipo: "nota",
-        motivo: ITEM(14, "as caixas da A.01.0805.002 são lacradas do fornecedor e a soma por tamanho do e-mail (PP 34, P 138, M 246, G 177, GG 74, XG 57, XGG 13) difere do sistema (12, 78, 248, 229, 100, 64, 13)"),
-        pendente: "Guilherme mandou as fotos das etiquetas das caixas (30/10) e diz que todas estão em B-05; falta cruzar com as linhas do sistema (--buscar A.01.0805.002.), inclusive as registradas em B-10, e escrever as correções por caixa",
+        motivo: ITEM(14, "conteúdo das 5 caixas da A.01.0805.002 registradas em B-10 (CX-000136 a CX-000140)"),
+        pendente: "fotos das etiquetas do fornecedor das caixas CX-000136, 137, 138, 139 e 140, uma por caixa; aí vira corrigir_linha por caixa",
+      },
+      // CX-000004 (item 10). As duas listas do Guilherme (30/10) somam 24 peças na caixa; o sistema tinha 19. A mescla
+      // black tinha uma a mais de P, M e G e duas a mais de GG: o que foi para o saldão era o excedente. Por SKU, além da
+      // baixa do saldão: a mescla black GG fica com 2 (tinha 1) e a pima preta SW G com 1 (tinha 2); P, M e G ficam iguais.
+      { id: "aj-cx4-black-GG", tipo: "ajuste", codigo: "A.02.0697.016.GG", delta: 1, posicao: { caixa: "CX-000004" }, motivo: ITEM(10, "CX-000004 tem 2 mescla black GG depois da saída para o saldão; o sistema tinha 1") },
+      { id: "aj-cx4-pima-G", tipo: "ajuste", codigo: "A.01.0695.005.G", delta: -1, posicao: { caixa: "CX-000004" }, motivo: ITEM(10, "CX-000004 tem 1 pima preta SW G; o sistema tinha 2") },
+      {
+        id: "aj-cx4-mand-G",
+        tipo: "nota",
+        motivo: ITEM(10, "1 polo feminina mand algodão preto G na CX-000004, que o sistema não tem nessa caixa"),
+        pendente: "achar o código da polo feminina mand algodão preto G (--nome MAND); com ele, vira um Ajuste + na CX-000004",
       },
       // O Guilherme contou 73 na CX-000208, que tinha 72 (item 3; confirmado em 30/10): +1 no SKU novo, em B-12, depois da transferência.
       {
@@ -269,15 +302,22 @@ export const BLOCOS = [
       { id: "saldao-cx32", tipo: "baixar_caixa", caixa: "CX-000032", motivo: ITEM(8, "conteúdo passou para as caixas de saldão, fora do sistema") },
       { id: "saldao-cx130", tipo: "baixar_caixa", caixa: "CX-000130", motivo: ITEM(10, "caixa inteira passou para o saldão") },
       // Guilherme (30/10): saíram da CX-000004 para o saldão 12 peças (rosa OUT rosa G, GG e XG, 1 cada; PAN rosa P, 3;
-      // camiseta fio egípcio M, 1; mescla black P, M, G, GG e XG, 1 cada) e ficaram 12 (mescla black GG 2, M, G e P 1;
-      // mand algodão preto G 1; pima preto SW PP a XG, 1 cada). Os `itens` entram quando as linhas da caixa forem vistas.
+      // camiseta fio egípcio M, 1; mescla black P, M, G, GG e XG, 1 cada) e ficaram 12. Sai do sistema o que ele tem e
+      // a caixa não tem mais; a mescla black P, M, G e GG que foi para o saldão era peça a mais, fora do sistema (ver os
+      // ajustes da CX-000004 no bloco quantidades).
       {
         id: "saldao-cx4",
         tipo: "baixar_caixa",
         caixa: "CX-000004",
-        itens: [],
+        itens: [
+          { codigo: "A.02.0689.013.G", qtde: 1 },
+          { codigo: "A.02.0689.013.GG", qtde: 1 },
+          { codigo: "A.02.0689.013.XG", qtde: 1 },
+          { codigo: "A.02.0714.013.P", qtde: 3 },
+          { codigo: "A.01.0219.004.M", qtde: 1 },
+          { codigo: "A.02.0697.016.XG", qtde: 1 },
+        ],
         motivo: ITEM(10, "polos retiradas da CX-000004 para o saldão"),
-        pendente: "casar a lista do Guilherme com as linhas da CX-000004 no sistema (--caixa CX-000004) e preencher os itens",
       },
     ],
   },
@@ -311,8 +351,11 @@ export const BLOCOS = [
       { id: "cx-linha-sacola", tipo: "corrigir_linha", de: "J.0562.003.N6", para: "J.0149.003.N6", motivo: ITEM(2, "sacola N6, nas duas caixas") },
       { id: "cx-linha-sacola-mais-1", tipo: "ajustar_linha", caixa: "CX-000208", codigo: "J.0149.003.N6", ou_codigo: "J.0562.003.N6", qtde: 73, motivo: ITEM(3, "CX-000208 tem 73, não 72") },
       { id: "cx-linha-0719", tipo: "corrigir_linha", de: "A.01.O719.004.P", para: "A.01.0719.004.P", motivo: ITEM(12, "código da etiqueta da peça") },
-      { id: "cx-linha-180-GG", tipo: "corrigir_linha", caixa: "CX-000180", de: "A.02.0814.002.GG", para: "A.02.0813.005.GG", qtde: 15, motivo: ITEM(13, "CX-000180: 15 pretas GG"), pendente: "conferir as linhas da CX-000180 antes de ligar (--caixa CX-000180)" },
-      { id: "cx-linha-180-XG", tipo: "corrigir_linha", caixa: "CX-000180", de: "A.02.0814.002.XG", para: "A.02.0813.005.XG", qtde: 15, motivo: ITEM(13, "CX-000180: 15 pretas XG"), pendente: "conferir as linhas da CX-000180 antes de ligar (--caixa CX-000180)" },
+      { id: "cx-linha-180-GG", tipo: "corrigir_linha", caixa: "CX-000180", de: "A.02.0814.002.GG", para: "A.02.0813.005.GG", qtde: 15, motivo: ITEM(13, "CX-000180: 15 pretas GG") },
+      { id: "cx-linha-180-XG", tipo: "corrigir_linha", caixa: "CX-000180", de: "A.02.0814.002.XG", para: "A.02.0813.005.XG", qtde: 15, motivo: ITEM(13, "CX-000180: 15 pretas XG") },
+      // CX-000004 (item 10): as linhas da mescla black GG e da pima preta SW G acompanham a recontagem.
+      { id: "cx-linha-4-black-GG", tipo: "ajustar_linha", caixa: "CX-000004", codigo: "A.02.0697.016.GG", qtde: 2, motivo: ITEM(10, "CX-000004 tem 2 mescla black GG") },
+      { id: "cx-linha-4-pima-G", tipo: "ajustar_linha", caixa: "CX-000004", codigo: "A.01.0695.005.G", qtde: 1, motivo: ITEM(10, "CX-000004 tem 1 pima preta SW G") },
       // As linhas da CX-000004 são ajustadas pelo próprio saldao-cx4 (baixa parcial): nada a fazer aqui.
     ],
   },

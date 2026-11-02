@@ -110,7 +110,10 @@ Erros comuns do dry-run e o que fazer:
   linha da abertura com o saldo do SKU na posição):
   `node tools/acerto-btg-2026-10/acerto.mjs --projeto dute-prod --caixa CX-000004`.
   O `--buscar` com a base e o ponto no fim (`--buscar A.01.0805.002.`) lista a
-  família inteira, com saldos e linhas por caixa.
+  família inteira, com saldos e linhas por caixa, e o `--nome` acha o código
+  pelo nome do produto (`--nome MAND`).
+- "não tem saldo em ...; um Ajuste + criaria saldo numa posição nova": se a
+  posição nova é a certa, ponha `posicao_nova: true` no ajuste.
 - "SKU ... não encontrado · parecidos: ...": a busca tenta `cod_cliente_key`,
   `cod_cliente`, o `client_item_code` do saldo e o da linha da abertura e, por
   fim, a forma comparável do código, sem pontuação e com letra O valendo zero.
@@ -238,6 +241,44 @@ Com isso o plano tem 62 operações: 47 já gravadas ou a gravar, 7 sem mudança
 e 8 pendentes. No emulador: dry-run com 47 a gravar, aplicação com 47, dry-run
 seguinte com 47 já aplicadas; a baixa parcial da CX-000004 tem teste próprio
 (`ACERTO_PLANO`, só no emulador: um plano alternativo com `itens`).
+
+## Terceira rodada: diagnósticos na produção (02/11/2026)
+
+O oitavo dry-run deu 40 já aplicadas, 7 a gravar, 7 sem mudança, 8 pendentes
+e 0 erros (a PAN cinza P está em B-09, na CX-000131). Com o `--caixa` e o
+`--buscar`:
+
+1. **Pima preta GG e XG (item 13).** A azul `A.02.0814.002` GG e XG está
+   registrada em duas caixas de 15 em A-03: a CX-000179, que é a azul, e a
+   CX-000180, que é a das pretas. As seis operações do item 13 foram ligadas:
+   criam `A.02.0813.005.GG` e `.XG`, passam 15 de cada da azul para a preta em
+   A-03 e corrigem as duas linhas da CX-000180. A azul fica com 15 e 15.
+2. **CX-000004 (item 10).** O sistema tem 16 linhas e 19 peças em A-01; as
+   duas listas do Guilherme somam 24 (12 saíram para o saldão, 12 ficaram). Por
+   SKU: saem para o saldão as 8 peças que o sistema tem e a caixa não tem mais
+   (rosa OUT rosa G, GG e XG, 1 cada; PAN rosa P, 3; camiseta fio egípcio M, 1;
+   mescla black XG, 1), com o `saldao-cx4` em baixa parcial; a mescla black P,
+   M e G que foi para o saldão era peça a mais, fora do sistema, e o sistema já
+   mostra a 1 de cada que ficou; a mescla black GG sobe de 1 para 2 e a pima
+   preta SW G desce de 2 para 1 (`aj-cx4-*` e `cx-linha-4-*`). Falta a polo
+   feminina mand algodão preto G que ficou na caixa: o sistema não a tem ali, e
+   o código sai do `--nome MAND`.
+3. **Azul-marinho por tamanho (item 14).** As 6 caixas registradas em B-05
+   (CX-000154, 156, 157, 158, 159 e 160) batem uma a uma com as etiquetas que o
+   Guilherme somou no PDF. A diferença inteira está nas 5 registradas em B-10
+   (CX-000136 a CX-000140: G 72, P 34, GG 41, XG 22, M 72, 241 peças), que pelas
+   etiquetas são PP 22, P 44 e 50, M 50 e 20, G 20, GG 15 e XG 15 (236 peças).
+   Os ajustes `aj-0805-*` acertam os totais em B-10 (PP +22, P +60, M −2,
+   G −52, GG −26, XG −7) e deixam o portal com PP 34, P 138, M 246, G 177,
+   GG 74, XG 57 e XGG 13; estão pendentes até o Leonardo decidir se corrige os
+   totais já ou espera as fotos para corrigir caixa por caixa. O conteúdo das 5
+   caixas espera as fotos das etiquetas.
+
+Plano com 73 operações. Na produção, o nono dry-run deve dar 40 já aplicadas,
+18 a gravar, 7 sem mudança, 8 pendentes e 0 erros. No emulador, com o cenário
+espelhando a CX-000004, a CX-000179 e a CX-000180 da produção: 58 a gravar,
+58 aplicadas e 58 já aplicadas em seguida; com os `aj-0805-*` ligados, 64, e os
+totais da azul-marinho ficam como as etiquetas.
 
 ## Validação no emulador (30/10/2026)
 
