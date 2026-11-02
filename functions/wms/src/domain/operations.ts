@@ -367,7 +367,7 @@ export type OperationalEventSummary = {
   customer_code?: string;
 };
 
-type Row = {
+export type Row = {
   id: string;
   ref: DocumentReference<DocumentData>;
   data: Record<string, unknown>;
@@ -596,7 +596,7 @@ function operationEventId(operationId: string, suffix: string) {
   return `evt_${digest({ operationId, suffix })}`;
 }
 
-function movementId(operationId: string, suffix: string) {
+export function movementId(operationId: string, suffix: string) {
   return `mov_${digest({ operationId, suffix })}`;
 }
 
@@ -643,7 +643,7 @@ function createOperationReceipt(
   });
 }
 
-async function readRows(
+export async function readRows(
   transaction: Transaction,
   query: Query<DocumentData>,
 ): Promise<Row[]> {
@@ -759,7 +759,7 @@ async function archivedOwnSkuFor(
   return archivedOwn ? normalizedIdentity(catalogSkuCode(rows[0]!.data)) : "";
 }
 
-function skuBalancesQuery(
+export function skuBalancesQuery(
   db: Firestore,
   customerCode: string,
   skuCode: string,
@@ -770,7 +770,7 @@ function skuBalancesQuery(
     .where("sku_code", "==", skuCode);
 }
 
-function assertSingleBalance(rows: Row[], skuCode: string, locationId: string) {
+export function assertSingleBalance(rows: Row[], skuCode: string, locationId: string) {
   if (rows.length === 0) {
     throw new HttpsError(
       "failed-precondition",
@@ -792,7 +792,7 @@ function balanceKey(customerCode: string, skuCode: string, locationId: string) {
 
 const CLIENT_SCOPED_SKUS = new Set(["BTG-1043"]);
 
-function clientScopedInventoryId(
+export function clientScopedInventoryId(
   customerCode: string,
   skuCode: string,
   clientItemCode?: string,
@@ -823,7 +823,7 @@ function variantScopedBalanceRows(
 }
 
 /** O que a transação grava num saldo do SKU; null quando apaga o saldo. */
-type BalanceWrite = {
+export type BalanceWrite = {
   ref: DocumentReference<DocumentData>;
   data: Record<string, unknown> | null;
 };
@@ -834,7 +834,7 @@ type BalanceWrite = {
  * o em recebimento (clientSplit), então quem grava a projeção precisa ter lido
  * todos os saldos do SKU antes da primeira escrita.
  */
-function balancesAfter(rows: Row[], writes: BalanceWrite[]): Row[] {
+export function balancesAfter(rows: Row[], writes: BalanceWrite[]): Row[] {
   const byPath = new Map(rows.map((row) => [row.ref.path, row]));
   for (const write of writes) {
     if (write.data === null) {
@@ -859,7 +859,7 @@ function balancesAfter(rows: Row[], writes: BalanceWrite[]): Row[] {
  */
 type ClientSplit = { qty_available: number; qty_receiving: number };
 
-function clientSplit(
+export function clientSplit(
   rows: Row[],
   skuCode: string,
   clientItemCode?: string,
@@ -1136,7 +1136,7 @@ function setClientInventorySnapshot(
  * lugar sem mudar o total (a guarda): o total, a reserva e o valor da
  * mercadoria ficam como estão. A projeção que não existe não é criada aqui.
  */
-function setClientInventorySplit(
+export function setClientInventorySplit(
   transaction: Transaction,
   projection: DocumentSnapshot<DocumentData>,
   split: ClientSplit,
@@ -1340,7 +1340,7 @@ function updateClientTracking(
   );
 }
 
-function createMovement(
+export function createMovement(
   transaction: Transaction,
   db: Firestore,
   id: string,

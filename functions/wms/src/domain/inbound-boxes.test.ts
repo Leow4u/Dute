@@ -89,7 +89,7 @@ describe("as travas de fonte", () => {
   });
 
   it("as callables entram pelo papel do armazém e passam o pedido cru: o cliente vem da chegada", () => {
-    const nomes = ["startInboundBox", "saveInboundBoxLine", "setInboundBoxState", "suggestInboundBoxPosition", "refuseInboundBoxPosition", "confirmInboundBoxDestination", "removeInboundBox", "markInboundBoxShortage", "completeInboundBoxReceipt"];
+    const nomes = ["startInboundBox", "saveInboundBoxLine", "setInboundBoxState", "suggestInboundBoxPosition", "refuseInboundBoxPosition", "confirmInboundBoxDestination", "removeInboundBox", "markInboundBoxShortage", "completeInboundBoxReceipt", "storeInboundBox"];
     for (const nome of nomes) {
       assert.match(
         index,

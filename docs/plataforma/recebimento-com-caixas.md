@@ -527,15 +527,29 @@ desenhada e aprovada antes do PR de tela.
      guarda. Testes: `inbound-box-entry.test.ts`,
      `inbound-boxes.integration.test.ts` e uma linha em
      `callables-papeis.integration.test.ts`.
-   - **4f, a guarda da caixa:** numa transação, move todas as linhas da
-     caixa do `RECEBIMENTO` para a prateleira reservada, revalida a
-     prateleira (apagada, bloqueada ou de outra zona), põe a caixa em
-     `stored` e regrava o disponível do portal. Na última guarda, grava o
-     evento que a parte 8 usa e só então o aviso de envio vinculado aparece
-     como recebido no portal (decisão 20). Se o `RECEBIMENTO` ficou menor que
-     a caixa, a guarda é recusada com o produto e quanto falta, e a
-     coordenação acerta o saldo (decisão 24). A régua `billing-callables`
-     ganha um caso que roda a conclusão e a guarda de verdade.
+   - **4f, a guarda da caixa:** feita em 02/11/2026. A callable
+     `storeInboundBox` (papel do armazém), numa transação: a chegada
+     `received` com a caixa nela, a caixa `committing` com a revisão, a
+     tarefa da caixa aberta e a prateleira pedida igual à reservada ("guarde
+     lá ou use \"Não cabe aqui\""), conferida pelo documento dela (apagada,
+     bloqueada ou de outra zona recusa e manda para o "Não cabe aqui"). Para
+     cada SKU da caixa, o `RECEBIMENTO` precisa ter o livre do conteúdo: sem
+     guarda parcial, a recusa diz o produto, quanto há e quanto a caixa tem,
+     e a coordenação acerta o saldo (decisão 24). Move com o par SAIDA/ENTRADA
+     `wms_putaway` da guarda por linha (não cobra), no mesmo saldo da
+     prateleira, regrava o disponível e o em recebimento do portal, põe a
+     caixa em `stored` (`stored_at`, `line_count`, `unit_count`,
+     `sku_codes`), sobe a revisão da prateleira, conclui a tarefa e soma
+     `boxes_stored` na chegada. Na última guarda, `putaway_status`
+     `completed`, o evento `inventory.arrival_stored` (com `payload.id` e os
+     itens com as quantidades, sem valor, caixa nem posição; dele sai o
+     aviso de produto novo da parte 8 e o rascunho "Estoque atualizado") e o
+     aviso de envio vinculado vira recebido no portal (decisão 20). Testes:
+     `inbound-boxes.integration.test.ts` (guarda, recusas sem efeito, a
+     corrida das duas últimas guardas e a paridade com a guarda por linha) e
+     um caso novo na régua `billing-callables.integration.test.ts`, com a
+     conclusão e a guarda de verdade: a entrada cobra as peças uma vez, na
+     competência da conclusão, e a guarda não cobra.
    - **4g, o destino depois da conclusão:** a caixa sem prateleira ganha o
      destino com a chegada `received` (sugerir, recusar a sugestão,
      confirmar); o conteúdo da caixa continua fechado.
