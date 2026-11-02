@@ -87,7 +87,7 @@ async function seed() {
 }
 
 /** Chegada avulsa com uma linha de produto existente, pela porta da tela. */
-function arrival(customer: string, key: string, mode?: string, options?: CreateInboundReceiptOptions) {
+function arrival(customer: string, key: string, mode?: string, options?: CreateInboundReceiptOptions, location = "RECEBIMENTO") {
   return createInboundReceiptTransaction(
     db,
     {
@@ -103,7 +103,7 @@ function arrival(customer: string, key: string, mode?: string, options?: CreateI
           client_item_code: itemOf(customer),
           product_name: "Camisa polo",
           product_registration: "existing",
-          location_id: "RECEBIMENTO",
+          location_id: location,
           quantity: 10,
         },
       ],
@@ -218,6 +218,23 @@ describe("o modo da chegada (recebimento com caixas, parte 2)", () => {
     }
     assert.equal(await sizeOf("inbound_receipts"), 0);
     assert.equal((await arrival(MOVEIS, "linha-3", undefined, LIBERADO)).conference_mode, "per_line");
+  });
+
+  it("a chegada por caixa só leva linha da área de recebimento, gravada como RECEBIMENTO (parte 4a)", async () => {
+    await assert.rejects(arrival(UNIFORMES, "caixa-prateleira", "per_box", LIBERADO, "A-02"), {
+      code: "failed-precondition",
+      message: "A linha 1 vai direto para A-02: na chegada por caixa, toda linha passa pela área de recebimento.",
+    });
+    for (const collection of ["inbound_receipts", "inbound_items", "operational_operations", "events"]) {
+      assert.equal(await sizeOf(collection), 0, collection);
+    }
+    const minuscula = await arrival(UNIFORMES, "caixa-minuscula", "per_box", LIBERADO, " recebimento ");
+    const [linha] = (await db.collection("inbound_items").where("receipt_id", "==", String(minuscula.receipt_id)).get()).docs;
+    assert.equal(linha!.get("location_id"), "RECEBIMENTO");
+    // Por linha, o local segue como veio.
+    const porLinha = await arrival(UNIFORMES, "linha-prateleira", "per_line", LIBERADO, "A-02");
+    const [direta] = (await db.collection("inbound_items").where("receipt_id", "==", String(porLinha.receipt_id)).get()).docs;
+    assert.equal(direta!.get("location_id"), "A-02");
   });
 
   it("modo fora da lista é recusado antes de gravar", async () => {

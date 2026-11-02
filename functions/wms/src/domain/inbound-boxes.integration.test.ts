@@ -587,8 +587,14 @@ describe("a caixa do recebimento (recebimento com caixas, parte 3)", () => {
     });
     await assert.rejects(line(r, full, "XG", 1), { code: "failed-precondition", message: "Limite de 100 produtos por caixa. Inicie outra caixa." });
 
-    // A linha que vai direto para uma prateleira não passa pela caixa.
-    const direct = await receipt(ALFA, "per_box", "A-02");
+    // A linha que vai direto para uma prateleira não passa pela caixa. A criação
+    // por caixa já recusa essa linha (parte 4a): ela só existe gravada à mão.
+    await assert.rejects(receipt(ALFA, "per_box", "A-02"), {
+      code: "failed-precondition",
+      message: "A linha 1 vai direto para A-02: na chegada por caixa, toda linha passa pela área de recebimento.",
+    });
+    const direct = await receipt(ALFA, "per_box");
+    await db.collection("inbound_items").doc(direct.items.XG).update({ location_id: "A-02" });
     const directBox = String((await start(direct)).box.code);
     await assert.rejects(line(direct, directBox, "XG", 1), {
       code: "failed-precondition",

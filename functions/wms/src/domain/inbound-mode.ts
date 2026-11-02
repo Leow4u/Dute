@@ -1,6 +1,7 @@
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 
+import { areaDePassagem } from "./areas-de-passagem.js";
 import {
   CUSTOMERS_COLLECTION,
   TEMPLATES_WITH_BOX_RECEIVING,
@@ -112,6 +113,28 @@ export async function assertNewReceiptMode(
       { code: "TEMPLATE_RECEIVES_PER_LINE", template },
     );
   }
+}
+
+/**
+ * O local de uma linha da chegada nova (parte 4a). Por linha, fica como veio.
+ * Por caixa, toda linha passa pela área de recebimento: a caixa só leva linha
+ * do RECEBIMENTO (inbound-boxes.ts), e a entrada e a guarda da caixa acham o
+ * saldo pelo local exato, então ele é gravado como "RECEBIMENTO" mesmo que
+ * venha em minúsculas; outro local é recusado com a frase da caixa.
+ */
+export function boxReceiptLineLocation(
+  mode: InboundConferenceMode,
+  lineNumber: number,
+  location: unknown,
+): string {
+  const local = typeof location === "string" ? location.trim() : "";
+  if (mode !== "per_box") return local;
+  if (!local || areaDePassagem(local) === "RECEBIMENTO") return "RECEBIMENTO";
+  throw new HttpsError(
+    "failed-precondition",
+    `A linha ${lineNumber} vai direto para ${local.toUpperCase()}: na chegada por caixa, toda linha passa pela área de recebimento.`,
+    { code: "BOX_RECEIPT_LINE_OUTSIDE_RECEIVING" },
+  );
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   INBOUND_CONFERENCE_MODES,
   RECEBIMENTO_POR_CAIXA_PROJECTS,
   assertLineConference,
+  boxReceiptLineLocation,
   boxReceivingEnabled,
   conferenceModeOf,
   requestedConferenceMode,
@@ -56,6 +57,29 @@ describe("o modo da chegada", () => {
       assert.doesNotThrow(() => assertLineConference(receipt, "conferir"));
       assert.doesNotThrow(() => assertLineConference(receipt, "concluir"));
     }
+  });
+});
+
+describe("as linhas da chegada por caixa (parte 4a)", () => {
+  it("toda linha passa pela área de recebimento, gravada como RECEBIMENTO", () => {
+    for (const local of ["RECEBIMENTO", "recebimento", " Recebimento ", "", undefined]) {
+      assert.equal(boxReceiptLineLocation("per_box", 1, local), "RECEBIMENTO", String(local));
+    }
+  });
+
+  it("a linha que vai direto para outro local é recusada, com o número e o local", () => {
+    for (const [local, mostrado] of [["A-02", "A-02"], ["a-02", "A-02"], ["EXPEDICAO", "EXPEDICAO"], ["DEVOLUCAO", "DEVOLUCAO"]]) {
+      assert.throws(() => boxReceiptLineLocation("per_box", 3, local), {
+        code: "failed-precondition",
+        message: `A linha 3 vai direto para ${mostrado}: na chegada por caixa, toda linha passa pela área de recebimento.`,
+        details: { code: "BOX_RECEIPT_LINE_OUTSIDE_RECEIVING" },
+      }, local);
+    }
+  });
+
+  it("a chegada por linha guarda o local como veio", () => {
+    assert.equal(boxReceiptLineLocation("per_line", 1, "A-02"), "A-02");
+    assert.equal(boxReceiptLineLocation("per_line", 1, "recebimento"), "recebimento");
   });
 });
 
