@@ -172,7 +172,11 @@ Entrada: uma caixa com cliente, tipo ou medidas, peso e conteúdo.
 8. **Retirada na separação (fase 1):** o sistema diz de qual caixa tirar.
    Padrão: a caixa de entrada mais antiga (FIFO). Alternativa a decidir:
    esvaziar primeiro a caixa com menos unidades, porque libera posição e
-   reduz a cobrança do cliente (pendência P8).
+   reduz a cobrança do cliente (pendência P8). **Decidido em 02/11/2026:**
+   FIFO pela data de guarda, por prateleira e data. O pedido vai primeiro à
+   prateleira com as peças mais antigas, e a pessoa tira da caixa mais antiga
+   dela; o sistema não diz a caixa nem baixa o conteúdo dela. Desenho em
+   `docs/plataforma/fifo-por-data.md`.
 
 O motor roda no backend, dentro da mesma Cloud Function que cria a tarefa, e
 tem teste unitário por cenário: cabe/não cabe em cada medida, mesmo SKU,
@@ -364,7 +368,7 @@ app (`lib/code128.ts`, conjunto B, com teste do dígito verificador da norma).
 | P5 | Modo da contagem de abertura. | **Decidido:** direcionada, reorganizando todas as posições. |
 | P6 | Etiqueta. | **Decidido:** impressa em A4, mas menor: 10 por folha, 101,6 × 50,8 mm. |
 | P7 | "Unidades por caixa" por SKU: cadastrar ou declarar na hora. | Declarar na hora no go-live; cadastrar depois para os SKUs de giro. |
-| P8 | De qual caixa a separação retira. | FIFO por data de entrada. Alternativa: esvaziar primeiro a caixa com menos unidades. |
+| P8 | De qual caixa a separação retira. | **Decidido em 02/11/2026:** FIFO pela data de guarda, por prateleira e data; o sistema não diz a caixa nem baixa o conteúdo dela, e o cliente vê só a data e a quantidade. Desenho em `docs/plataforma/fifo-por-data.md`. |
 | P9 | Zonas iniciais: quais prateleiras pertencem a cada cliente. | Atribuir pela tela de Posições ("Zona da rua") antes da contagem. |
 | P10 | Balança disponível para o peso bruto por caixa? | Sim, no recebimento e na contagem. |
 
