@@ -344,7 +344,9 @@ documentação de produto e operação está em `docs/`.
   e para o modelo que confere por caixa (`TEMPLATES_WITH_BOX_RECEIVING`,
   uniformes). A liberação rege só a criação; quem trata a chegada lê o modo
   gravado. Por caixa, toda linha nasce no `RECEBIMENTO`, gravado sempre
-  assim (parte 4a, `boxReceiptLineLocation`). A API REST v1, o aviso do portal e o Documentos criam por linha, e
+  assim (parte 4a, `boxReceiptLineLocation`). A tarefa de guarda da caixa
+  (`box_code`) não anda pelo avanço genérico, e a guarda por linha move no
+  máximo a quantidade da tarefa (parte 4b). A API REST v1, o aviso do portal e o Documentos criam por linha, e
   a conferência e a entrada por linha recusam a chegada por caixa. A caixa do
   recebimento mora em `functions/wms/src/domain/inbound-boxes.ts` (parte 3):
   iniciar, lançar, fechar ou reabrir, sugerir, recusar, confirmar o destino

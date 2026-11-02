@@ -26,8 +26,10 @@ import {
 } from "./customer-scope.js";
 import {
   assertLineConference,
+  assertLinePutaway,
   assertNewReceiptMode,
   boxReceiptLineLocation,
+  putawayQuantityWithinTask,
   requestedConferenceMode,
 } from "./inbound-mode.js";
 import {
@@ -7207,6 +7209,8 @@ export async function advanceWarehouseTaskTransaction(
     const requestId = text(task.customer_request_id);
     const operation = input.operation ?? {};
     if (type === "putaway") {
+      // A guarda da caixa tem porta própria (parte 4b).
+      assertLinePutaway(task);
       targetStatus = putawayAdvanceStatus(
         currentStatus,
         text(operation.destination_location_id || operation.location_id),
@@ -7847,6 +7851,7 @@ export async function advanceWarehouseTaskTransaction(
         operation.quantity || task.quantity || task.total_units,
         "Quantidade da guarda",
       );
+      putawayQuantityWithinTask(task, quantity);
       if (!skuCode) {
         throw new HttpsError(
           "failed-precondition",
