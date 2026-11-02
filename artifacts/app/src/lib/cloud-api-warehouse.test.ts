@@ -15,6 +15,12 @@ vi.mock("firebase/firestore", async (importOriginal) => {
     collection: vi.fn((_store: unknown, path: string) => ({ path })),
     query: vi.fn((target: unknown, ...constraints: unknown[]) => ({ target, constraints })),
     doc: vi.fn((_store: unknown, path: string, id: string) => ({ path, id })),
+    // Legíveis, para o Firestore de mentira das linhas filtrar, ordenar e cortar.
+    where: (campo: unknown, op: string, valor: unknown) => ({ tipo: "where", campo: String(campo), op, valor }),
+    orderBy: (campo: unknown, direcao: "asc" | "desc" = "asc") => ({ tipo: "orderBy", campo: String(campo), direcao }),
+    limit: (n: number) => ({ tipo: "limit", n }),
+    startAfter: () => ({ tipo: "outra" }),
+    documentId: () => "__name__",
     getDoc: readDoc,
     getDocs: readDocs,
     getCountFromServer: countDocs,
@@ -228,5 +234,210 @@ describe("a fila leva toda tarefa aberta", () => {
       Array.from({ length: 12 }, (_, i) => `PED-E${i}`).sort(),
     );
     expect(fila.delivered.every((item) => item.pick && item.pack && item.ship)).toBe(true);
+  });
+});
+
+describe("as linhas das tarefas da fila chegam inteiras", () => {
+  type Documento = ReturnType<typeof document>;
+  type Colecoes = Record<string, Documento[]>;
+  type Restricao =
+    | { tipo: "where"; campo: string; op: string; valor: unknown }
+    | { tipo: "orderBy"; campo: string; direcao: "asc" | "desc" }
+    | { tipo: "limit"; n: number }
+    | { tipo: "outra" };
+  type Item = { id: string; quantity?: number; expected_quantity?: number; picked_quantity?: number; location?: string };
+  type Fila = { tasks: Array<{ reference: string; items?: Item[] }> };
+
+  /** O que as consultas devolveram, por coleção. */
+  let devolvidos: Colecoes = {};
+  const valorDe = (documento: Documento, campo: string) => (campo === "__name__" ? documento.id : documento.get(campo));
+  /** Texto ASCII, na ordem dos bytes, como o Firestore compara. */
+  const comparar = (esquerda: unknown, direita: unknown) => {
+    const [a, b] = [String(esquerda), String(direita)];
+    return a < b ? -1 : a > b ? 1 : 0;
+  };
+  /**
+   * Responde como o Firestore: filtra (`==` e `in`, este com até 30 valores),
+   * só devolve quem tem o campo da ordem, ordena (sem orderBy, pelo id) e
+   * corta no limite.
+   */
+  const comoOFirestore = (colecoes: Colecoes) => {
+    devolvidos = {};
+    readDocs.mockImplementation(async ({ target, constraints }: { target: { path: string }; constraints: Restricao[] }) => {
+      const filtros = constraints.flatMap((restricao) => (restricao.tipo === "where" ? [restricao] : []));
+      const ordens = constraints.flatMap((restricao) => (restricao.tipo === "orderBy" ? [restricao] : []));
+      const limite = constraints.flatMap((restricao) => (restricao.tipo === "limit" ? [restricao.n] : []))[0];
+      const aceita = (documento: Documento) =>
+        filtros.every(({ campo, op, valor }) => {
+          if (op === "==") return valorDe(documento, campo) === valor;
+          if (op !== "in") throw new Error(`O filtro ${op} não está no Firestore de mentira.`);
+          if (!Array.isArray(valor) || valor.length > 30) throw new Error("O filtro in aceita até 30 valores.");
+          return valor.includes(valorDe(documento, campo));
+        });
+      const docs = (colecoes[target.path] ?? [])
+        .filter(aceita)
+        .filter((documento) => ordens.every(({ campo }) => valorDe(documento, campo) !== undefined))
+        .sort((esquerdo, direito) => {
+          for (const { campo, direcao } of ordens) {
+            const diferenca = comparar(valorDe(esquerdo, campo), valorDe(direito, campo));
+            if (diferenca) return direcao === "desc" ? -diferenca : diferenca;
+          }
+          return (ordens.at(-1)?.direcao === "desc" ? -1 : 1) * comparar(esquerdo.id, direito.id);
+        })
+        .slice(0, limite);
+      devolvidos[target.path] = [...(devolvidos[target.path] ?? []), ...docs];
+      return { docs };
+    });
+  };
+
+  const hora = (minuto: number) => new Date(Date.UTC(2026, 9, 1, 8) + minuto * 60_000).toISOString();
+  const numeros = (quantos: number) => Array.from({ length: quantos }, (_, indice) => indice + 1);
+  const dois = (numero: number) => String(numero).padStart(2, "0");
+  const juntar = (...partes: Colecoes[]) => {
+    const colecoes: Colecoes = {};
+    for (const parte of partes) {
+      for (const [nome, docs] of Object.entries(parte)) colecoes[nome] = [...(colecoes[nome] ?? []), ...docs];
+    }
+    return colecoes;
+  };
+  /** O registro com o id dentro, como as Functions gravam. */
+  const registro = (id: string, dados: Record<string, unknown>) => document(id, { id, customer_code: "BTG Pactual", ...dados });
+  /**
+   * O pedido do portal como a aprovação o cria (`ord_creq_<hash>`): uma
+   * tarefa por etapa e, por linha, a da separação, o item do pedido e a reserva.
+   */
+  const pedido = (hash: string, etapas: { pick: string; pack?: string; ship?: string }, linhas: number, minuto: number): Colecoes => {
+    const orderId = `ord_creq_${hash}`;
+    const doPedido = { order_id: orderId, order_number: `PED-${hash}` };
+    const tarefa = (prefixo: string, status: string, depois: number) =>
+      registro(`${prefixo}_${orderId}`, { ...doPedido, status, updated_at: hora(minuto + depois) });
+    const porLinha = (prefixo: string, dados: (numero: number) => Record<string, unknown>) =>
+      numeros(linhas).map((numero) =>
+        registro(`${prefixo}_${orderId}_${dois(numero)}`, {
+          ...doPedido,
+          line_number: numero,
+          sku_code: `BTG-${hash}-${dois(numero)}`,
+          product_name: `Camisa ${numero}`,
+          location_id: "A-01-01",
+          ...dados(numero),
+        }),
+      );
+    return {
+      pick_tasks: [tarefa("pick", etapas.pick, 0)],
+      pack_tasks: etapas.pack ? [tarefa("pack", etapas.pack, 1)] : [],
+      shipments: etapas.ship ? [tarefa("ship", etapas.ship, 2)] : [],
+      pick_lines: porLinha("pli", (numero) => ({ pick_task_id: `pick_${orderId}`, qty_to_pick: numero, qty_picked: 0, status: "open" })),
+      order_items: porLinha("oit", (numero) => ({ requested_qty: numero, picked_qty: etapas.pick === "completed" ? numero : 0, status: "open" })),
+      stock_reservations: porLinha("res", (numero) => ({ reserved_qty: numero, status: "reserved" })),
+    };
+  };
+  /** A chegada (`inb_creq_<hash>`) com os itens a conferir. */
+  const chegada = (hash: string, status: string, itens: number, minuto: number): Colecoes => {
+    const receiptId = `inb_creq_${hash}`;
+    return {
+      inbound_receipts: [registro(receiptId, { receipt_number: `NF-${hash}`, status, created_at: hora(minuto), updated_at: hora(minuto) })],
+      inbound_items: numeros(itens).map((numero) =>
+        registro(`inbi_${receiptId}_${dois(numero)}`, {
+          receipt_id: receiptId,
+          line_number: numero,
+          sku_code: `BTG-${hash}-${dois(numero)}`,
+          product_name: `Calça ${numero}`,
+          expected_qty: numero,
+          received_qty: 0,
+          status: "expected",
+        }),
+      ),
+    };
+  };
+  /**
+   * Sessenta pedidos entregues e sessenta chegadas recebidas, de dez linhas:
+   * 600 linhas de separação, itens, reservas e itens de chegada, todos antes
+   * dos novos na ordem do id (o hash deles começa por 0).
+   */
+  const historico = () =>
+    numeros(60).flatMap((numero) => {
+      const hash = `0${numero.toString(16).padStart(3, "0")}`;
+      return [
+        pedido(hash, { pick: "completed", pack: "completed", ship: "delivered" }, 10, numero * 3),
+        chegada(hash, "received", 10, numero * 3),
+      ];
+    });
+  const lerAsFilas = async () =>
+    (await (await window.fetch("/api/warehouse/ops")).json()) as WarehouseOpsResponse & { queues: Record<string, Fila> };
+
+  it("a separação do pedido novo chega com as linhas, depois de 600 linhas antigas na ordem do id", async () => {
+    comoOFirestore(juntar(...historico(), pedido("f3c9e1", { pick: "planned" }, 2, 1000)));
+
+    const paraSeparar = buildOrderQueue({ ops: await lerAsFilas() }).pick;
+    expect(paraSeparar.map((item) => item.orderNumber)).toEqual(["PED-f3c9e1"]);
+    // O "Separado" manda estas linhas (picking_lines); sem elas, o servidor recusa.
+    expect(paraSeparar[0]!.pick!.items).toEqual([
+      expect.objectContaining({ id: "pli_ord_creq_f3c9e1_01", quantity: 1, location: "A-01-01" }),
+      expect.objectContaining({ id: "pli_ord_creq_f3c9e1_02", quantity: 2, location: "A-01-01" }),
+    ]);
+  });
+
+  it("a embalagem do pedido separado chega com os itens do pedido", async () => {
+    comoOFirestore(juntar(...historico(), pedido("e7a2b4", { pick: "completed", pack: "ready" }, 3, 1000)));
+
+    const [separado] = buildOrderQueue({ ops: await lerAsFilas() }).pick;
+    expect(separado?.orderNumber).toBe("PED-e7a2b4");
+    // O "Separado" embala com estes itens (packing_lines, um por item do pedido).
+    expect(separado!.pack!.items!.map((item) => [item.id, item.picked_quantity])).toEqual([
+      ["oit_ord_creq_e7a2b4_01", 1],
+      ["oit_ord_creq_e7a2b4_02", 2],
+      ["oit_ord_creq_e7a2b4_03", 3],
+    ]);
+  });
+
+  it("a chegada nova chega com os itens para conferir", async () => {
+    comoOFirestore(juntar(...historico(), chegada("d4b8a0", "created", 2, 1000)));
+
+    const ops = await lerAsFilas();
+    const nova = ops.queues.receiving!.tasks.find((tarefa) => tarefa.reference === "inb_creq_d4b8a0");
+    expect(nova?.items?.map((item) => [item.id, item.expected_quantity])).toEqual([
+      ["inbi_inb_creq_d4b8a0_01", 1],
+      ["inbi_inb_creq_d4b8a0_02", 2],
+    ]);
+  });
+
+  it("o pedido sem linha de separação mostra a reserva que ficou", async () => {
+    const semLinha = pedido("c1d2e3", { pick: "planned" }, 2, 1000);
+    comoOFirestore(juntar(...historico(), { ...semLinha, pick_lines: [], order_items: [] }));
+
+    const [paraSeparar] = buildOrderQueue({ ops: await lerAsFilas() }).pick;
+    expect(paraSeparar).toMatchObject({
+      orderNumber: "PED-c1d2e3",
+      blockedReason: "Reserva existe, mas nenhuma linha de picking foi criada.",
+    });
+  });
+
+  it("com mais de 30 pedidos abertos, as linhas de todos chegam", async () => {
+    const abertos = numeros(45).map((numero) => pedido(`f${numero.toString(16).padStart(3, "0")}`, { pick: "planned" }, 2, 1000 + numero));
+    comoOFirestore(juntar(...historico(), ...abertos));
+
+    const paraSeparar = buildOrderQueue({ ops: await lerAsFilas() }).pick;
+    expect(paraSeparar).toHaveLength(45);
+    expect(paraSeparar.filter((item) => item.pick?.items?.length !== 2).map((item) => item.orderNumber)).toEqual([]);
+  });
+
+  it("lê só as linhas das tarefas da fila: as abertas e as dos doze pedidos encerrados mais recentes", async () => {
+    comoOFirestore(juntar(...historico(), pedido("f3c9e1", { pick: "planned" }, 2, 1000), chegada("d4b8a0", "created", 2, 1000)));
+
+    const ops = await lerAsFilas();
+    // Os entregues que a fila mostra seguem com as linhas.
+    const entregues = buildOrderQueue({ ops }).delivered;
+    expect(entregues).toHaveLength(12);
+    expect(entregues.filter((item) => item.pick?.items?.length !== 10 || item.pack?.items?.length !== 10)).toEqual([]);
+
+    const lidos = (colecao: string, campo: string) => new Set((devolvidos[colecao] ?? []).map((documento) => documento.get(campo)));
+    const naFila = (fila: string) => new Set(ops.queues[fila]!.tasks.map((tarefa) => tarefa.reference));
+    const pedidosDaSeparacao = new Set([...naFila("picking")].map((id) => id.replace(/^pick_/, "")));
+    expect(naFila("picking").size).toBe(13);
+    expect(lidos("pick_lines", "pick_task_id")).toEqual(naFila("picking"));
+    expect(lidos("order_items", "order_id")).toEqual(pedidosDaSeparacao);
+    expect(lidos("stock_reservations", "order_id")).toEqual(pedidosDaSeparacao);
+    expect(naFila("receiving").size).toBe(13);
+    expect(lidos("inbound_items", "receipt_id")).toEqual(naFila("receiving"));
   });
 });

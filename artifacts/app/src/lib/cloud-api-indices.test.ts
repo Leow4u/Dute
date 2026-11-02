@@ -17,7 +17,13 @@ type Restricao =
   | { tipo: "outra" };
 type Consulta = { colecao: string; restricoes: Restricao[] };
 
-const { lidas } = vi.hoisted(() => ({ lidas: [] as Consulta[] }));
+type Servido = { id: string; data: () => Record<string, unknown> };
+
+const { lidas, servidos } = vi.hoisted(() => ({
+  lidas: [] as Consulta[],
+  /** O que cada coleção devolve; sem entrada, nada. */
+  servidos: {} as Record<string, Servido[]>,
+}));
 
 vi.mock("./firebase", () => ({ firebaseAuth: null, firestore: {} }));
 vi.mock("./functions-api", () => ({ callFunctionsApi: vi.fn(async () => null) }));
@@ -34,7 +40,7 @@ vi.mock("firebase/firestore", async (importOriginal) => {
     query: (alvo: { caminho: string }, ...restricoes: Restricao[]) => ({ colecao: alvo.caminho, restricoes }),
     getDocs: async (consulta: Consulta) => {
       lidas.push(consulta);
-      return { docs: [] };
+      return { docs: servidos[consulta.colecao] ?? [] };
     },
     getCountFromServer: async (consulta: Consulta) => {
       lidas.push(consulta);
@@ -119,6 +125,7 @@ const CONSULTAS_DAS_TELAS: Array<[tela: string, caminho: string]> = [
 
 beforeEach(() => {
   lidas.length = 0;
+  for (const colecao of Object.keys(servidos)) delete servidos[colecao];
   vi.stubGlobal("window", { fetch: vi.fn(), location: { origin: "https://dute.test" } });
   installCloudApi();
 });
@@ -132,6 +139,23 @@ describe("o índice de cada consulta das telas", () => {
     const resposta = await window.fetch(caminho);
     expect(resposta.status).toBe(200);
     expect(lidas.length).toBeGreaterThan(0);
+    expect(lidas.map(indiceQueFalta).filter(Boolean)).toEqual([]);
+  });
+
+  // A rota das filas não cai em outra leitura quando falta índice: faltou um,
+  // Pedidos, Receber e o Início param. Sem tarefa, as linhas nem são lidas;
+  // estas três tarefas fazem as quatro leituras.
+  it("Pedidos, Receber e o Início: as linhas, os itens e as reservas das tarefas das filas", async () => {
+    const registro = (id: string, dados: Record<string, unknown>): Servido => ({ id, data: () => ({ id, ...dados }) });
+    servidos.inbound_receipts = [registro("inb_creq_1", { status: "created", created_at: "2026-11-02T10:00:00.000Z" })];
+    servidos.pick_tasks = [registro("pick_ord_creq_1", { order_id: "ord_creq_1", status: "planned" })];
+    servidos.pack_tasks = [registro("pack_ord_creq_2", { order_id: "ord_creq_2", status: "ready" })];
+
+    const resposta = await window.fetch("/api/warehouse/ops");
+    expect(resposta.status).toBe(200);
+    expect(lidas.map((consulta) => consulta.colecao)).toEqual(
+      expect.arrayContaining(["inbound_items", "pick_lines", "order_items", "stock_reservations"]),
+    );
     expect(lidas.map(indiceQueFalta).filter(Boolean)).toEqual([]);
   });
 
