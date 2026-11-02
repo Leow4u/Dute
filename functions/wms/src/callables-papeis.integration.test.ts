@@ -107,6 +107,7 @@ const MATRIZ: Record<string, Linha> = {
   // A entrada válida chamaria o Gemini; a conversa é de todos, sem checagem de papel.
   chatWithAgentDute: { passam: TODOS },
   completeOpeningInventorySession: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  confirmInboundBoxDestination: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   // Qualquer papel do WMS abre solicitação (pergunta 55 do plano de implantação).
   createCustomerRequest: {
     passam: TODOS,
@@ -201,6 +202,8 @@ const MATRIZ: Record<string, Linha> = {
     entrada: { type: "operator.note", title: "Anotação do teste de papéis" },
   },
   recordWarehouseException: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  refuseInboundBoxPosition: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  removeInboundBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   removeOpeningConferenceLine: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   removeOpeningInventoryLine: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   removeWarehouseBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
@@ -225,6 +228,7 @@ const MATRIZ: Record<string, Linha> = {
     recusa: SO_EVENTOS_DO_CLIENTE,
     entrada: { name: "Feira", venue: "Galpão", items: [{ sku_code: "BTG-000001", product_name: "Camisa", quantity: 1 }] },
   },
+  saveInboundBoxLine: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   saveOpeningConferenceLine: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   saveSystemInfraSettings: { passam: OWNER, recusa: SO_PAINEL },
   saveWarehousePositions: {
@@ -239,12 +243,15 @@ const MATRIZ: Record<string, Linha> = {
     recusa: "Perfil sem permissão para arquivar itens do cliente.",
     entrada: { inventory_id: "item-que-nao-existe", archived: true },
   },
+  setInboundBoxState: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   setOpeningConferenceBoxState: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   setOrderDelivery: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   setReturnDisposition: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   setUserAccess: { passam: ACESSO, recusa: SO_ACESSO },
   splitCatalogPrices: { passam: ACESSO, recusa: "Só a administração separa o preço do catálogo." },
+  startInboundBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   storeOpeningConferenceBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  suggestInboundBoxPosition: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   suggestWarehousePosition: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   syncOperationalNotifications: { passam: INTERNOS, recusa: SO_OPERACAO },
   updateInboundReceiptConference: { passam: ARMAZEM, recusa: SO_ARMAZEM },

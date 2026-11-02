@@ -362,11 +362,16 @@ pode reservar da área de recebimento (seção 2.5).
 - `inbound_items`: `boxed_qty` (soma das caixas) e `box_codes`; `received_qty`
   derivada no modo por caixa.
 - `putaway_tasks`: `box_code` e `destination_location_id` na criação.
-- Eventos nos nomes e fontes que já existem (`warehouse.box_stored`,
-  `warehouse.position_refused`, `putaway.completed`, `inventory.received`),
-  com `inbox: false` nos eventos por caixa para não inundar a caixa de
-  entrada do agente; evento novo só para "caixa fechada" e "etiqueta
-  reimpressa".
+- Eventos da conferência por caixa (parte 3), todos `info` e fora da caixa
+  de entrada do agente, com nomes que não viram rascunho de aviso ao
+  cliente: `warehouse.box_started`, `warehouse.box_line_saved` e
+  `warehouse.box_line_removed` (um por lançamento, como os
+  `inventory.opening_draft_*` da abertura), `warehouse.box_closed`,
+  `warehouse.box_reopened`, `warehouse.box_destination_confirmed`,
+  `warehouse.position_refused` e `warehouse.box_removed`. Na guarda e na
+  entrada (parte 4), os que já existem (`warehouse.box_stored`,
+  `putaway.completed`, `inventory.received`); na etiqueta (parte 6),
+  "etiqueta reimpressa".
 - Leitura "caixas desta chegada" pela rota `/api/warehouse/boxes` com filtro
   por `receipt_id` e o índice travado em `lib/cloud-api-indices.test.ts`.
 - Idempotência e recibos como hoje (`operational_operations`), com replay
@@ -429,11 +434,40 @@ desenhada e aprovada antes do PR de tela.
    confirmar destino com reserva, recusar; cliente da chegada; conteúdo
    embutido; eventos. Testes de integração: cabe e não cabe, mesmo produto,
    recusa, repetir a mesma chave, outro cliente, zona cheia, congelamento.
+   Feita em 01/11/2026, com as callables (a tela da parte 5 só chama):
+   `startInboundBox`, `saveInboundBoxLine` (0 tira o produto),
+   `setInboundBoxState` (fechar com medidas e peso, ou reabrir),
+   `suggestInboundBoxPosition` (só lê), `refuseInboundBoxPosition`,
+   `confirmInboundBoxDestination` (reserva com a caixa em `committing`,
+   `location_id` igual ao `destination_location_id`, e a
+   `occupancy_revision` da prateleira) e `removeInboundBox` (antes do
+   destino; as linhas voltam a faltar caixa). O cliente vem da chegada, e o
+   código enviado só recusa a de outro cliente. A chegada é lida em toda
+   escrita e nunca escrita; a linha da NF ganha `boxed_qty` e `box_codes`. A
+   caixa guarda `lines[]` e os contadores de rascunho (`draft_line_count`,
+   `draft_unit_count`); `line_count`, `unit_count` e `sku_codes` só sobem na
+   guarda, como na abertura. O encaixe é o estrito do motor, sem a tolerância
+   da abertura. "Mesmo produto" também vê a caixa do recebimento já
+   reservada numa prateleira. Peso obrigatório no fechar. Fora da área de
+   recebimento, a linha não entra em caixa. Testes:
+   `inbound-boxes.test.ts`, `inbound-boxes.integration.test.ts` e sete
+   linhas em `callables-papeis.integration.test.ts`; as suítes do motor e da
+   abertura passam sem mudança.
+3b. **Sobra e produto novo dentro da caixa** (passo 2 da seção 4.3): o
+   produto que não está na NF entra como linha nova da chegada, marcada como
+   sobra, na transação do lançamento, com o SKU gerado ou reativado e o
+   custo da NF, como na chegada de hoje; a parte 4 recalcula as quantidades
+   da chegada na conclusão. A parte 3 lança só as linhas da NF.
 4. **Concluir entrada e guarda por caixa:** barreira por linhas cobertas e
    caixas confirmadas (no lugar da recusa da parte 2), `ENTRADA` como hoje, uma guarda por caixa com destino,
    a guarda que move todas as linhas da caixa e fecha a caixa `stored`, a
    chegada em aberto até a última guarda, API inalterada
-   (`api.integration.test.ts`), o Agent Dute com os status novos.
+   (`api/module.integration.test.ts`), o Agent Dute com os status novos.
+   Também: revalidar o destino na guarda (a prateleira reservada pode ter
+   sido apagada, bloqueada ou mudado de zona), o "Não cabe aqui" na
+   prateleira que troca a reserva, o aviso à coordenação quando a zona do
+   cliente está cheia, e a regra da caixa vazia iniciada no mesmo instante
+   da conclusão.
 5. **Ficha da chegada por caixa (tela)** e a fila do Receber; "Físico"
    derivado; divergência automática. Testes de textos e `axe`.
 6. **Etiquetas:** caixa `committing` com destino, origem "Recebimento", o
@@ -478,6 +512,17 @@ não resolve caixa, etiqueta nem Mapa, e por isso não entra como etapa.
 | 11 | A conferência por caixa é no computador ou no celular? | No computador da bancada; o celular fica para a guarda. |
 | 12 | Quem informa o custo do produto? | A operação, na chegada, com o custo unitário da NF, como hoje. |
 | 13 | E-mail do aviso em texto ou HTML? | HTML com a identidade da Dutelog, no molde dos e-mails de convite e confirmação. |
+
+Faltam, para as partes 4 e 5 (não travam a parte 3):
+
+14. **Zona cheia na conclusão:** com a zona do cliente cheia, a caixa fica
+    fechada e sem destino. A entrada pode ser concluída com essa caixa (ela
+    ganha o destino na guarda), ou a chegada espera a coordenação ampliar a
+    zona? A seção 4.4 pede toda caixa com destino; a 4.5 diz que zona cheia
+    não trava a NF.
+15. **Trocar o destino na bancada:** depois de confirmar o destino, e antes
+    de levar a caixa, a troca é só pelo "Não cabe aqui" na prateleira (parte
+    4), ou a bancada também libera o destino, como a abertura faz?
 
 Os mockups das telas que mudam (chegada avulsa, ficha da chegada por caixa,
 fechar caixa e onde guardar, fila do Receber, guarda da caixa no computador e

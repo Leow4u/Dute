@@ -125,6 +125,15 @@ import {
   storeOpeningConferenceBox as storeOpeningConferenceBoxFor,
   resumeOpeningConferenceBox as resumeOpeningConferenceBoxFor,
 } from "./domain/opening-inventory-conference.js";
+import {
+  startInboundBox as startInboundBoxFor,
+  saveInboundBoxLine as saveInboundBoxLineFor,
+  setInboundBoxState as setInboundBoxStateFor,
+  suggestInboundBoxPosition as suggestInboundBoxPositionFor,
+  refuseInboundBoxPosition as refuseInboundBoxPositionFor,
+  confirmInboundBoxDestination as confirmInboundBoxDestinationFor,
+  removeInboundBox as removeInboundBoxFor,
+} from "./domain/inbound-boxes.js";
 import { readSystemHealth } from "./domain/system-health.js";
 import { CostSettingsSchema, readSystemDashboard, saveCostSettings } from "./domain/system-dashboard.js";
 import { codeFunctions, InfraSettingsSchema, readSystemInfra, saveInfraSettings, type GcpFetch } from "./domain/system-infra.js";
@@ -8126,6 +8135,51 @@ export const resumeOpeningConferenceBox = onCall({ timeoutSeconds: 300 }, async 
   const data = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
   const customer_code = requireCustomerScope(profile, typeof data.customer_code === "string" ? data.customer_code : undefined);
   return resumeOpeningConferenceBoxFor(db, { ...data, customer_code }, profile);
+});
+
+// A caixa do recebimento (domain/inbound-boxes.ts, parte 3 do recebimento com
+// caixas). O cliente vem da chegada, não do seletor: o código enviado só
+// recusa a chegada de outro cliente.
+export const startInboundBox = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return startInboundBoxFor(db, request.data, profile);
+});
+
+export const saveInboundBoxLine = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return saveInboundBoxLineFor(db, request.data, profile);
+});
+
+export const setInboundBoxState = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return setInboundBoxStateFor(db, request.data, profile);
+});
+
+export const suggestInboundBoxPosition = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return suggestInboundBoxPositionFor(db, request.data, profile);
+});
+
+export const refuseInboundBoxPosition = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return refuseInboundBoxPositionFor(db, request.data, profile);
+});
+
+export const confirmInboundBoxDestination = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return confirmInboundBoxDestinationFor(db, request.data, profile);
+});
+
+export const removeInboundBox = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return removeInboundBoxFor(db, request.data, profile);
 });
 
 /** Adaptador externo autenticado; só o gateway é documentado para consumidores. */
