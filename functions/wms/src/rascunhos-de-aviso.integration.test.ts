@@ -50,6 +50,19 @@ before(async () => {
       source: "functions",
     });
   }
+  // A conclusão da chegada por caixa: o aviso sai na última guarda (decisão 20).
+  for (const [id, type] of [["evt_caixa_entrada", "inventory.received"], ["evt_caixa_concluida", "inbound.checked"]]) {
+    await db.collection("events").doc(id).set({
+      type,
+      severity: "info",
+      title: `Título ${id}`,
+      customer_code: CLIENTE,
+      customer_name: CLIENTE,
+      occurred_at: new Date().toISOString(),
+      source: "functions",
+      payload: { client_notice: "after_putaway" },
+    });
+  }
   await sync.run({
     auth: { uid: "interno-a", token: { email: "interno-a@dutelog.com.br" } },
     data: { customer_code: CLIENTE },
@@ -66,6 +79,11 @@ describe("os rascunhos de aviso do Agent Dute", () => {
       const texto = [rascunho.subject, rascunho.body, rascunho.recommended_action].join("\n");
       assert.doesNotMatch(texto, /BTG|Cristiane/, `${evento}: ${texto}`);
     }
+  });
+
+  it("a conclusão da chegada por caixa não vira rascunho: o aviso sai na última guarda", () => {
+    assert.equal(rascunhos.has("evt_caixa_entrada"), false);
+    assert.equal(rascunhos.has("evt_caixa_concluida"), false);
   });
 
   it("o do cliente cumprimenta sem nome; o interno diz de que cliente é", () => {

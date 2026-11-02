@@ -53,7 +53,7 @@ describe("o modo da chegada", () => {
     });
     assert.throws(() => assertLineConference(porCaixa, "concluir"), {
       code: "failed-precondition",
-      message: "A chegada AVL-0D0E620B é conferida por caixa: concluir a entrada pede as caixas fechadas e com destino.",
+      message: "A chegada AVL-0D0E620B é conferida por caixa: a entrada é concluída pelas caixas, na ficha da chegada.",
     });
     for (const receipt of [{ conference_mode: "per_line" }, { receipt_number: "AVL-1" }, {}]) {
       assert.doesNotThrow(() => assertLineConference(receipt, "conferir"));

@@ -347,7 +347,12 @@ documentação de produto e operação está em `docs/`.
   assim (parte 4a, `boxReceiptLineLocation`). A tarefa de guarda da caixa
   (`box_code`) não anda pelo avanço genérico, e a guarda por linha move no
   máximo a quantidade da tarefa (parte 4b). A falta da linha da NF por caixa
-  é marcada pela operação, com motivo (`markInboundBoxShortage`, parte 4c). A API REST v1, o aviso do portal e o Documentos criam por linha, e
+  é marcada pela operação, com motivo (`markInboundBoxShortage`, parte 4c).
+  A entrada da chegada por caixa tem porta própria
+  (`completeInboundBoxReceipt`, regras em `domain/inbound-box-entry.ts`,
+  parte 4d): ENTRADA como a por linha, uma guarda por caixa, a chegada
+  `received` e em aberto até a última guarda, e o aviso ao cliente só na
+  última guarda. A API REST v1, o aviso do portal e o Documentos criam por linha, e
   a conferência e a entrada por linha recusam a chegada por caixa. A caixa do
   recebimento mora em `functions/wms/src/domain/inbound-boxes.ts` (parte 3):
   iniciar, lançar, fechar ou reabrir, sugerir, recusar, confirmar o destino

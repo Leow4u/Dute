@@ -139,8 +139,8 @@ export function boxReceiptLineLocation(
 
 /**
  * A conferência e a entrada por linha não valem para a chegada por caixa: a
- * quantidade de cada linha vem das caixas (seção 4.3) e a entrada pede as
- * caixas fechadas e com destino (seção 4.4). Lê o modo gravado, nunca a
+ * quantidade de cada linha vem das caixas (seção 4.3), e a entrada tem porta
+ * própria (completeInboundBoxReceipt, parte 4d). Lê o modo gravado, nunca a
  * liberação.
  */
 export function assertLineConference(
@@ -152,7 +152,7 @@ export function assertLineConference(
   const reason =
     action === "conferir"
       ? "a quantidade de cada linha vem das caixas"
-      : "concluir a entrada pede as caixas fechadas e com destino";
+      : "a entrada é concluída pelas caixas, na ficha da chegada";
   throw new HttpsError(
     "failed-precondition",
     `A chegada ${receiptNumber} é conferida por caixa: ${reason}.`,
