@@ -357,7 +357,12 @@ documentação de produto e operação está em `docs/`.
   `client_inventory` grava `qty_available` (livre das prateleiras) e
   `qty_receiving` (livre do `RECEBIMENTO`) a partir dos saldos do SKU depois
   da escrita; escrita nova da projeção lê todos os saldos do SKU antes da
-  primeira escrita. O total, a reserva e o valor da mercadoria não mudam.
+  primeira escrita. O total, a reserva e o valor da mercadoria não mudam. A
+  rotina `runPortalAvailability` refaz uma vez as projeções antigas
+  (`domain/disponivel-do-portal.ts`, controle em
+  `system_controls/client_inventory_split`; mudou a conta, suba a versão),
+  não grava nada com o estoque congelado e só conclui com uma passada limpa
+  que começou uma hora depois da primeira rodada.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os
   modelos (`uniformes` pronto, `mobiliario` e `insumos` em construção) e os

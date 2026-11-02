@@ -64,6 +64,7 @@ import { MinimumStockError, normalizeMinimumStock } from "./catalog-minimum.js";
 import { accessChangeFromTo, assertAccessActorCurrent, setUserAccessFor } from "./domain/access.js";
 import { assertDirectoryPersonManageable, enableReinvitedLoginFor, readReinvitedUser, userDirectoryArchivePayload } from "./domain/user-directory.js";
 import { accountRetentionEnabled, anonymizeRemovedAccounts } from "./domain/account-retention.js";
+import { recalcularDisponivelDoPortal } from "./domain/disponivel-do-portal.js";
 import {
   CLIENT_ACCESS_COLLECTION,
   CLIENT_PROFILES_COLLECTION,
@@ -7828,6 +7829,18 @@ export const runAgentRoutines = onSchedule(
         console.error("runAgentRoutines: rotina falhou", { id: routine.id, error });
       }
     }
+  },
+);
+
+/**
+ * De 15 em 15 minutos, até terminar: refaz o disponível e o em recebimento das
+ * projeções do portal pelos saldos (recebimento com caixas, parte 7c). Feito o
+ * recálculo, a rodada só lê o controle. Uma instância de cada vez.
+ */
+export const runPortalAvailability = onSchedule(
+  { schedule: "every 15 minutes", timeZone: "America/Sao_Paulo", timeoutSeconds: 540, maxInstances: 1 },
+  async () => {
+    console.info("runPortalAvailability", await recalcularDisponivelDoPortal(db));
   },
 );
 
