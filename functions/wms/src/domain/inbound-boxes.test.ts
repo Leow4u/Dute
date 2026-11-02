@@ -69,6 +69,15 @@ describe("a chegada que aceita caixa", () => {
     }
   });
 
+  it("depois da entrada, só o destino da caixa muda; o conteúdo, não (parte 4g)", () => {
+    const recebida = { ...porCaixa, status: "received" };
+    assert.equal(assertReceiptTakesBoxes(recebida, undefined, "destination"), "Uniformes Alfa");
+    assert.throws(() => assertReceiptTakesBoxes(recebida, undefined, "content"), { details: { code: "RECEIPT_NOT_OPEN" } });
+    for (const status of ["completed", "cancelled"]) {
+      assert.throws(() => assertReceiptTakesBoxes({ ...porCaixa, status }, undefined, "destination"), { details: { code: "RECEIPT_NOT_OPEN" } });
+    }
+  });
+
   it("o cliente ativo diferente é recusado; a chegada sem cliente é do cliente legado", () => {
     assert.throws(() => assertReceiptTakesBoxes(porCaixa, "Uniformes Beta"), {
       code: "permission-denied",
