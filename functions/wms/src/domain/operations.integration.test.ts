@@ -1740,6 +1740,13 @@ describe("ledger manual e congelamento", () => {
       .where("type", "==", "inventory.adjusted")
       .get();
     assert.equal(events.size, 1);
+    // O evento vira rascunho de aviso ao cliente, que nunca vê prateleira
+    // (P8, 02/11/2026): a descrição não diz o local; o payload, sim.
+    assert.equal(
+      events.docs[0]?.data().description,
+      "BTG-CYCLE-1 ajustado em -2 unidade(s).",
+    );
+    assert.equal(events.docs[0]?.data().payload?.location_id, "LOC-CYCLE");
   });
 
   it("a contagem cíclica espera a entrega do que já foi separado na posição", async () => {
@@ -2553,6 +2560,17 @@ describe("integridade de reservas e agregados de catálogo", () => {
     assert.equal(projection.size, 1);
     assert.equal(projection.docs[0].data().qty_on_hand, 15);
     assert.equal(projection.docs[0].data().qty_available, 15);
+
+    // Sem diferença, o evento também não diz o local ao cliente.
+    const events = await db
+      .collection("events")
+      .where("type", "==", "inventory.adjusted")
+      .get();
+    const evento = events.docs
+      .map((doc) => doc.data())
+      .find((data) => data.payload?.sku_code === "SKU-CYC-1");
+    assert.equal(evento?.description, "SKU-CYC-1 conferido sem diferença.");
+    assert.equal(evento?.payload?.location_id, "LOC-CYC-A");
   });
 
   it("movimentos manuais e ajustes cíclicos mantêm os agregados de skus/products", async () => {
