@@ -30,6 +30,11 @@ import {
   requestedConferenceMode,
 } from "./inbound-mode.js";
 import {
+  areaDePassagem,
+  livreParaOCliente,
+  problemaDoLocalDoPedido,
+} from "./areas-de-passagem.js";
+import {
   WAREHOUSE_POSITIONS_COLLECTION,
   putawayAdvanceStatus,
   resolveGuardDestination,
@@ -793,6 +798,84 @@ function variantScopedBalanceRows(
   );
 }
 
+/** O que a transação grava num saldo do SKU; null quando apaga o saldo. */
+type BalanceWrite = {
+  ref: DocumentReference<DocumentData>;
+  data: Record<string, unknown> | null;
+};
+
+/**
+ * Os saldos do SKU como ficam depois da transação: os lidos na fase de
+ * leitura, com o que ela grava por cima. O portal tira deles o disponível e
+ * o em recebimento (clientSplit), então quem grava a projeção precisa ter lido
+ * todos os saldos do SKU antes da primeira escrita.
+ */
+function balancesAfter(rows: Row[], writes: BalanceWrite[]): Row[] {
+  const byPath = new Map(rows.map((row) => [row.ref.path, row]));
+  for (const write of writes) {
+    if (write.data === null) {
+      byPath.delete(write.ref.path);
+      continue;
+    }
+    const current = byPath.get(write.ref.path);
+    byPath.set(write.ref.path, {
+      id: write.ref.id,
+      ref: write.ref,
+      data: { ...(current?.data ?? {}), ...write.data },
+    });
+  }
+  return [...byPath.values()];
+}
+
+/**
+ * O livre do cliente no SKU (recebimento com caixas, decisão 10 e parte 7):
+ * o das prateleiras é o disponível do portal, e o do RECEBIMENTO, o em
+ * recebimento; a EXPEDICAO só conta no total. Para o SKU escopado, só os
+ * saldos da variante, como o doc da projeção.
+ */
+type ClientSplit = { qty_available: number; qty_receiving: number };
+
+function clientSplit(
+  rows: Row[],
+  skuCode: string,
+  clientItemCode?: string,
+): ClientSplit {
+  return livreParaOCliente(
+    variantScopedBalanceRows(rows, skuCode, clientItemCode).map(
+      (row) => row.data,
+    ),
+  );
+}
+
+/**
+ * Os saldos de onde o pedido do cliente reserva o item: só os de prateleira
+ * (decisão 10), e só o do local pedido, quando o item traz um. O local pedido
+ * numa área de passagem é recusado.
+ */
+function orderableBalanceRows(rows: Row[], requestedLocation: string): Row[] {
+  const problem = problemaDoLocalDoPedido(requestedLocation);
+  if (problem) throw new HttpsError("failed-precondition", problem);
+  return rows.filter(
+    (row) =>
+      areaDePassagem(row.data.location_id) === null &&
+      (!requestedLocation || text(row.data.location_id) === requestedLocation),
+  );
+}
+
+/** A reserva que a transação grava em cada saldo, só nos do SKU (rows). */
+function reservationWrites(
+  rows: Row[],
+  entries: Array<{ row: Row; reservedAfter: number }>,
+): BalanceWrite[] {
+  const paths = new Set(rows.map((row) => row.ref.path));
+  return entries
+    .filter((entry) => paths.has(entry.row.ref.path))
+    .map((entry) => ({
+      ref: entry.row.ref,
+      data: { qty_reserved: entry.reservedAfter },
+    }));
+}
+
 function clientTimelineEntry(
   status: string,
   label: string,
@@ -824,6 +907,8 @@ function updateClientInventory(
     unitCost?: number;
     onHandDelta?: number;
     reservedDelta?: number;
+    /** Dos saldos do SKU depois da escrita (clientSplit). */
+    split: ClientSplit;
   },
 ) {
   const onHandDelta = number(input.onHandDelta);
@@ -864,10 +949,10 @@ function updateClientInventory(
       qty_reserved: reservedDelta
         ? FieldValue.increment(reservedDelta)
         : undefined,
-      qty_available:
-        onHandDelta || reservedDelta
-          ? FieldValue.increment(onHandDelta - reservedDelta)
-          : undefined,
+      // O disponível e o em recebimento saem dos saldos, não de incremento:
+      // um saldo que muda de lugar muda o disponível sem mudar o total.
+      qty_available: input.split.qty_available,
+      qty_receiving: input.split.qty_receiving,
       status: "active",
       source: "operational_projection",
       published_at: FieldValue.serverTimestamp(),
@@ -895,6 +980,8 @@ function setClientInventorySnapshot(
     unitCost?: number;
     qtyOnHand: number;
     qtyReserved: number;
+    /** Dos saldos do SKU depois da escrita (clientSplit). */
+    split: ClientSplit;
   },
 ) {
   const ref = db
@@ -933,7 +1020,8 @@ function setClientInventorySnapshot(
       primary_photo_url: input.photoUrls?.[0],
       qty_on_hand: input.qtyOnHand,
       qty_reserved: input.qtyReserved,
-      qty_available: input.qtyOnHand - input.qtyReserved,
+      qty_available: input.split.qty_available,
+      qty_receiving: input.split.qty_receiving,
       status: input.qtyOnHand > 0 ? "active" : "empty",
       source: "operational_projection",
       published_at: FieldValue.serverTimestamp(),
@@ -942,6 +1030,24 @@ function setClientInventorySnapshot(
     }),
     { merge: true },
   );
+}
+
+/**
+ * Só o disponível e o em recebimento da projeção, quando o saldo muda de
+ * lugar sem mudar o total (a guarda): o total, a reserva e o valor da
+ * mercadoria ficam como estão. A projeção que não existe não é criada aqui.
+ */
+function setClientInventorySplit(
+  transaction: Transaction,
+  projection: DocumentSnapshot<DocumentData>,
+  split: ClientSplit,
+) {
+  if (!projection.exists) return;
+  transaction.update(projection.ref, {
+    qty_available: split.qty_available,
+    qty_receiving: split.qty_receiving,
+    updated_at: FieldValue.serverTimestamp(),
+  });
 }
 
 type CatalogAggregateTarget = {
@@ -1194,6 +1300,11 @@ export async function createInventoryMovementTransaction(
         `Mais de um saldo existe para SKU ${skuCode} no local ${locationId}.`,
       );
     }
+    // Os outros locais do SKU: o portal conta o disponível de todos eles.
+    const skuRows = await readRows(
+      transaction,
+      skuBalancesQuery(db, customerCode, skuCode),
+    );
 
     const balanceRow = balanceRows[0];
     const beforeOnHand = number(balanceRow?.data.qty_on_hand);
@@ -1261,6 +1372,8 @@ export async function createInventoryMovementTransaction(
       updated_at: FieldValue.serverTimestamp(),
     });
 
+    const balanceRef =
+      balanceRow?.ref ?? db.collection(collections.stockBalances).doc(balanceId);
     if (balanceRow) {
       transaction.update(balanceRow.ref, {
         ...balancePayload,
@@ -1273,14 +1386,11 @@ export async function createInventoryMovementTransaction(
           `Saldo não encontrado para SKU ${skuCode} no local ${locationId}.`,
         );
       }
-      transaction.create(
-        db.collection(collections.stockBalances).doc(balanceId),
-        {
-          ...balancePayload,
-          id: balanceId,
-          created_at: FieldValue.serverTimestamp(),
-        },
-      );
+      transaction.create(balanceRef, {
+        ...balancePayload,
+        id: balanceId,
+        created_at: FieldValue.serverTimestamp(),
+      });
     }
 
     const ledgerId = movementId(operationId, "manual");
@@ -1316,6 +1426,11 @@ export async function createInventoryMovementTransaction(
       productName: text(input.product_name) || undefined,
       unitCost: number(input.unit_cost || balanceRow?.data.unit_cost),
       onHandDelta: delta,
+      split: clientSplit(
+        balancesAfter(skuRows, [{ ref: balanceRef, data: balancePayload }]),
+        skuCode,
+        text(input.client_item_code) || undefined,
+      ),
     });
     applyCatalogStockAggregates(transaction, catalogTargets, {
       onHand: delta,
@@ -1993,19 +2108,18 @@ export async function recordCycleCountTransaction(
       }
     }
 
-    // Leituras adicionais (obrigatoriamente antes de qualquer write):
-    // sem divergência, a projeção do cliente precisa dos saldos de TODAS as
-    // localizações do SKU; com ajuste em modo cíclico, os agregados de
-    // catálogo precisam ser localizados.
+    // Leituras adicionais (obrigatoriamente antes de qualquer write): a
+    // projeção do cliente precisa dos saldos de TODAS as localizações do SKU
+    // (o total sem divergência, e o disponível e o em recebimento sempre);
+    // com ajuste em modo cíclico, os agregados de catálogo precisam ser
+    // localizados.
     const projectedDelta = nextOnHand - beforeOnHand;
     let cycleCatalogTargets: CatalogAggregateTarget = {};
-    let aggregateBalanceRows: Row[] = [];
-    if (projectedDelta === 0) {
-      aggregateBalanceRows = await readRows(
-        transaction,
-        skuBalancesQuery(db, customerCode, skuCode),
-      );
-    } else if (mode === "cycle") {
+    const aggregateBalanceRows = await readRows(
+      transaction,
+      skuBalancesQuery(db, customerCode, skuCode),
+    );
+    if (projectedDelta !== 0 && mode === "cycle") {
       cycleCatalogTargets = await resolveCatalogAggregateTargets(
         transaction,
         db,
@@ -2596,6 +2710,13 @@ export async function recordCycleCountTransaction(
         photoUrls,
         unitCost,
         onHandDelta: delta,
+        split: clientSplit(
+          balancesAfter(aggregateBalanceRows, [
+            { ref: balanceRow.ref, data: balancePayload },
+          ]),
+          skuCode,
+          clientItemCode,
+        ),
       });
       if (mode === "cycle") {
         applyCatalogStockAggregates(transaction, cycleCatalogTargets, {
@@ -2634,6 +2755,13 @@ export async function recordCycleCountTransaction(
         unitCost,
         qtyOnHand: aggregateOnHand,
         qtyReserved: aggregateReserved,
+        split: clientSplit(
+          balancesAfter(aggregateBalanceRows, [
+            { ref: balanceRow.ref, data: balancePayload },
+          ]),
+          skuCode,
+          clientItemCode,
+        ),
       });
     }
 
@@ -3145,6 +3273,10 @@ export async function removeOpeningInventoryLineTransaction(
     }
 
     const remainingAtLocation = balanceOnHand - countedQty;
+    const balanceWrite: BalanceWrite = {
+      ref: balance.ref,
+      data: remainingAtLocation > 0 ? { qty_on_hand: remainingAtLocation } : null,
+    };
     if (remainingAtLocation > 0) {
       transaction.update(balance.ref, {
         qty_on_hand: remainingAtLocation,
@@ -3258,6 +3390,11 @@ export async function removeOpeningInventoryLineTransaction(
         unitCost,
         qtyOnHand: nextOnHand,
         qtyReserved: aggregateReserved,
+        split: clientSplit(
+          balancesAfter(balanceRows, [balanceWrite]),
+          skuCode,
+          clientItemCode,
+        ),
       });
     }
 
@@ -3658,6 +3795,11 @@ export async function setReturnDispositionTransaction(
         );
       }
       const balanceRow = balanceRows[0];
+      // Os outros locais do SKU: o portal conta o disponível de todos eles.
+      const skuRows = await readRows(
+        transaction,
+        skuBalancesQuery(db, customerCode, skuCode),
+      );
       const returnCatalogTargets = await resolveCatalogAggregateTargets(
         transaction,
         db,
@@ -3683,13 +3825,16 @@ export async function setReturnDispositionTransaction(
         source: "functions_return_disposition",
         updated_at: FieldValue.serverTimestamp(),
       });
+      const balanceRef =
+        balanceRow?.ref ??
+        db.collection(collections.stockBalances).doc(stockBalanceId);
       if (balanceRow) {
         transaction.update(balanceRow.ref, {
           ...balancePayload,
           ...publishedMoneyDeletes(),
         });
       } else {
-        transaction.create(db.collection(collections.stockBalances).doc(stockBalanceId), {
+        transaction.create(balanceRef, {
           ...balancePayload,
           created_at: FieldValue.serverTimestamp(),
         });
@@ -3728,6 +3873,11 @@ export async function setReturnDispositionTransaction(
         productName,
         unitCost,
         onHandDelta: quantity,
+        split: clientSplit(
+          balancesAfter(skuRows, [{ ref: balanceRef, data: balancePayload }]),
+          skuCode,
+          clientItemCode,
+        ),
       });
       applyCatalogStockAggregates(transaction, returnCatalogTargets, {
         onHand: quantity,
@@ -4000,10 +4150,9 @@ export async function createCustomerRequestTransaction(
       input.items.forEach((item, itemIndex) => {
         const skuCode = text(item.sku_code);
         const requestedLocation = text(item.location_id);
-        const candidateRows = (balanceRowsBySku.get(skuCode) ?? []).filter(
-          (row) =>
-            !requestedLocation ||
-            text(row.data.location_id) === requestedLocation,
+        const candidateRows = orderableBalanceRows(
+          balanceRowsBySku.get(skuCode) ?? [],
+          requestedLocation,
         );
         let remaining = number(item.quantity);
         let availableTotal = 0;
@@ -4087,6 +4236,10 @@ export async function createCustomerRequestTransaction(
           updated_at: FieldValue.serverTimestamp(),
         });
       }
+      const reservedAfter = [...reservedBalances.values()].map((balance) => ({
+        row: balance.row,
+        reservedAfter: balance.qtyReserved + balance.quantity,
+      }));
 
       const reservedBySku = new Map<
         string,
@@ -4125,6 +4278,14 @@ export async function createCustomerRequestTransaction(
           unitCost: number(item.unit_cost) || number(source.unit_cost),
           qtyOnHand,
           qtyReserved,
+          split: clientSplit(
+            balancesAfter(
+              balanceRowsBySku.get(skuCode) ?? [],
+              reservationWrites(balanceRowsBySku.get(skuCode) ?? [], reservedAfter),
+            ),
+            skuCode,
+            text(item.client_item_code) || undefined,
+          ),
         });
         applyCatalogStockAggregates(
           transaction,
@@ -5473,10 +5634,9 @@ export async function decideCustomerRequestTransaction(
         items.forEach((item, itemIndex) => {
           const skuCode = text(item.sku_code);
           const requestedLocation = text(item.location_id);
-          const candidateRows = (balanceRowsBySku.get(skuCode) ?? []).filter(
-            (row) =>
-              !requestedLocation ||
-              text(row.data.location_id) === requestedLocation,
+          const candidateRows = orderableBalanceRows(
+            balanceRowsBySku.get(skuCode) ?? [],
+            requestedLocation,
           );
           let remaining = item.quantity;
           let availableTotal = 0;
@@ -5704,6 +5864,10 @@ export async function decideCustomerRequestTransaction(
           updated_at: FieldValue.serverTimestamp(),
         });
       }
+      const reservedAfter = [...reservedBalances.values()].map((balance) => ({
+        row: balance.row,
+        reservedAfter: balance.qtyReserved + balance.quantity,
+      }));
       const reservedBySku = new Map<
         string,
         OperationalRequestItem & { quantity: number }
@@ -5741,6 +5905,14 @@ export async function decideCustomerRequestTransaction(
           unitCost: number(item.unit_cost) || number(source.unit_cost),
           qtyOnHand,
           qtyReserved,
+          split: clientSplit(
+            balancesAfter(
+              balanceRowsBySku.get(skuCode) ?? [],
+              reservationWrites(balanceRowsBySku.get(skuCode) ?? [], reservedAfter),
+            ),
+            skuCode,
+            text(item.client_item_code) || undefined,
+          ),
         });
         if (!preReservedRows.length) {
           applyCatalogStockAggregates(
@@ -6148,6 +6320,10 @@ export async function decideCustomerRequestTransaction(
           updated_at: FieldValue.serverTimestamp(),
         });
       }
+      const releasedAfter = [...releaseByBalance.values()].map((entry) => ({
+        row: entry.row,
+        reservedAfter: number(entry.row.data.qty_reserved) - entry.quantity,
+      }));
       for (const [skuCode, released] of releasedBySku) {
         const skuRows = variantScopedBalanceRows(
           releaseBalancesBySku.get(skuCode) ?? [],
@@ -6178,6 +6354,14 @@ export async function decideCustomerRequestTransaction(
           unitCost: released.unitCost || number(source.unit_cost),
           qtyOnHand,
           qtyReserved: qtyReservedAfter,
+          split: clientSplit(
+            balancesAfter(
+              releaseBalancesBySku.get(skuCode) ?? [],
+              reservationWrites(releaseBalancesBySku.get(skuCode) ?? [], releasedAfter),
+            ),
+            skuCode,
+            released.clientItemCode,
+          ),
         });
         applyCatalogStockAggregates(
           transaction,
@@ -6625,7 +6809,8 @@ export async function cancelWarehouseOrderTransaction(
       );
     });
 
-    // O portal e o catálogo: o SKU fica com o mesmo saldo e sem a reserva do pedido.
+    // O portal e o catálogo: o SKU fica com o mesmo saldo e sem a reserva do
+    // pedido; o separado que foi para a EXPEDICAO sai do disponível.
     for (const [skuCode, released] of bySku) {
       const skuRows = variantScopedBalanceRows(
         balancesBySku.get(skuCode) ?? [],
@@ -6633,6 +6818,19 @@ export async function cancelWarehouseOrderTransaction(
         released.clientItemCode,
       );
       const source = skuRows[0]?.data ?? {};
+      // Cada saldo mexido como fica: o novo (a EXPEDICAO que ainda não
+      // existia) com o local e a variante com que é criado.
+      const ledgerWrites: BalanceWrite[] = [...ledger.values()]
+        .filter((entry) => entry.skuCode === skuCode)
+        .map((entry) => ({
+          ref: entry.ref,
+          data: compact({
+            client_item_code: entry.exists ? undefined : entry.clientItemCode,
+            location_id: entry.exists ? undefined : entry.locationId,
+            qty_on_hand: entry.qtyOnHand + entry.onHandDelta,
+            qty_reserved: entry.qtyReserved + entry.reservedDelta,
+          }),
+        }));
       setClientInventorySnapshot(transaction, db, {
         customerCode,
         skuCode,
@@ -6644,6 +6842,11 @@ export async function cancelWarehouseOrderTransaction(
         qtyReserved: Math.max(
           0,
           skuRows.reduce((sum, row) => sum + number(row.data.qty_reserved), 0) - released.released,
+        ),
+        split: clientSplit(
+          balancesAfter(balancesBySku.get(skuCode) ?? [], ledgerWrites),
+          skuCode,
+          released.clientItemCode,
         ),
       });
       applyCatalogStockAggregates(transaction, catalogTargets.get(skuCode) ?? {}, {
@@ -6993,6 +7196,27 @@ export async function advanceWarehouseTaskTransaction(
     let requestRow: Row | undefined;
     const balanceStates = new Map<string, BalanceState>();
     const taskCatalogTargets = new Map<string, CatalogAggregateTarget>();
+    // Os saldos de todos os locais de cada SKU que a tarefa mexe, lidos antes
+    // da primeira escrita: o portal conta o disponível e o em recebimento deles.
+    const skuBalanceRows = new Map<string, Row[]>();
+    const loadSkuBalances = async (skuCode: string) => {
+      if (!skuBalanceRows.has(skuCode)) {
+        skuBalanceRows.set(
+          skuCode,
+          await readRows(transaction, skuBalancesQuery(db, customerCode, skuCode)),
+        );
+      }
+      return skuBalanceRows.get(skuCode)!;
+    };
+    /** O saldo de BalanceState como a tarefa grava. */
+    const stateWrite = (state: BalanceState): BalanceWrite => ({
+      ref: state.row.ref,
+      data: {
+        location_id: text(state.row.data.location_id) || state.locationId,
+        qty_on_hand: state.qtyOnHand,
+        qty_reserved: state.qtyReserved,
+      },
+    });
 
     if (requestId) {
       const snapshot = await transaction.get(
@@ -7110,6 +7334,7 @@ export async function advanceWarehouseTaskTransaction(
           qtyOnHand,
           qtyReserved,
         });
+        await loadSkuBalances(value.skuCode);
       }
       const receivingCatalogSkus = new Map<string, string | undefined>();
       for (const row of inboundItems) {
@@ -7248,6 +7473,7 @@ export async function advanceWarehouseTaskTransaction(
             qtyReserved: number(row.data.qty_reserved),
             released: short.line.diferenca,
           });
+          await loadSkuBalances(short.skuCode);
         }
         for (const balance of shortBalances.values()) {
           if (balance.qtyReserved < balance.released) {
@@ -7508,6 +7734,7 @@ export async function advanceWarehouseTaskTransaction(
           qtyOnHand: number(row.data.qty_on_hand),
           qtyReserved: number(row.data.qty_reserved),
         });
+        await loadSkuBalances(value.skuCode);
       }
       const consumedCatalogSkus = new Map<string, string | undefined>();
       for (const reservation of reservations) {
@@ -7646,6 +7873,16 @@ export async function advanceWarehouseTaskTransaction(
       const productName =
         text(task.product_name || sourceBalance.data.product_name) || skuCode;
       const unitCost = number(task.unit_cost || sourceBalance.data.unit_cost);
+      // A guarda tira do RECEBIMENTO (ou da EXPEDICAO) e põe na prateleira:
+      // o total do portal fica, e o disponível e o em recebimento mudam.
+      const [putawaySkuRows, projectionSnapshot] = await Promise.all([
+        loadSkuBalances(skuCode),
+        transaction.get(
+          db
+            .collection(collections.clientInventory)
+            .doc(clientScopedInventoryId(customerCode, skuCode, clientItemCode)),
+        ),
+      ]);
 
       transaction.update(sourceBalance.ref, {
         qty_on_hand: sourceAfter,
@@ -7688,6 +7925,18 @@ export async function advanceWarehouseTaskTransaction(
           }),
         );
       }
+      setClientInventorySplit(
+        transaction,
+        projectionSnapshot,
+        clientSplit(
+          balancesAfter(putawaySkuRows, [
+            { ref: sourceBalance.ref, data: { qty_on_hand: sourceAfter } },
+            { ref: destinationBalance.ref, data: destinationPayload },
+          ]),
+          skuCode,
+          clientItemCode,
+        ),
+      );
       createMovement(
         transaction,
         db,
@@ -7888,6 +8137,7 @@ export async function advanceWarehouseTaskTransaction(
           actor,
         );
       }
+      const receivingWrites: Array<BalanceWrite & { skuCode: string }> = [];
       for (const state of balanceStates.values()) {
         const sourceItem = inboundItems.find(
           (row) =>
@@ -7924,6 +8174,11 @@ export async function advanceWarehouseTaskTransaction(
           source: "wms_receiving",
           updated_at: FieldValue.serverTimestamp(),
         });
+        receivingWrites.push({
+          skuCode: state.skuCode,
+          ref: state.row.ref,
+          data: balancePayload,
+        });
         if (Object.keys(state.row.data).length) {
           transaction.update(state.row.ref, {
             ...balancePayload,
@@ -7941,6 +8196,9 @@ export async function advanceWarehouseTaskTransaction(
         }
       }
       for (const [skuCode, projected] of receivedBySku) {
+        const writes = receivingWrites
+          .filter((write) => write.skuCode === skuCode)
+          .map(({ ref, data }) => ({ ref, data }));
         updateClientInventory(transaction, db, {
           customerCode,
           skuCode,
@@ -7954,6 +8212,11 @@ export async function advanceWarehouseTaskTransaction(
           photoUrls: projected.photoUrls,
           unitCost: projected.unitCost,
           onHandDelta: projected.quantity,
+          split: clientSplit(
+            balancesAfter(skuBalanceRows.get(skuCode) ?? [], writes),
+            skuCode,
+            projected.clientItemCode,
+          ),
         });
         if (
           projected.productRegistration === "new" &&
@@ -8190,12 +8453,23 @@ export async function advanceWarehouseTaskTransaction(
       }
       for (const [key, entry] of releasedBySku) {
         const skuCode = key.split("\u0000")[0]!;
+        const writes = [...shortBalances.values()]
+          .filter((balance) => balance.skuCode === skuCode)
+          .map((balance) => ({
+            ref: balance.row.ref,
+            data: { qty_reserved: balance.qtyReserved - balance.released },
+          }));
         updateClientInventory(transaction, db, {
           customerCode,
           skuCode,
           clientItemCode: entry.clientItemCode,
           productName: entry.productName,
           reservedDelta: -entry.released,
+          split: clientSplit(
+            balancesAfter(skuBalanceRows.get(skuCode) ?? [], writes),
+            skuCode,
+            entry.clientItemCode,
+          ),
         });
         applyCatalogStockAggregates(transaction, taskCatalogTargets.get(skuCode) ?? {}, {
           reserved: -entry.released,
@@ -8681,6 +8955,16 @@ export async function advanceWarehouseTaskTransaction(
           unitCost: projected.unitCost,
           onHandDelta: -projected.quantity,
           reservedDelta: -projected.quantity,
+          split: clientSplit(
+            balancesAfter(
+              skuBalanceRows.get(skuCode) ?? [],
+              [...balanceStates.values()]
+                .filter((state) => state.skuCode === skuCode)
+                .map(stateWrite),
+            ),
+            skuCode,
+            projected.clientItemCode,
+          ),
         });
         applyCatalogStockAggregates(
           transaction,

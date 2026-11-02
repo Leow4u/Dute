@@ -2,6 +2,7 @@ import { type Firestore, type Transaction } from "firebase-admin/firestore";
 import { z } from "genkit";
 import { HttpsError } from "firebase-functions/https";
 import { advanceWarehouseTaskTransaction, createCustomerRequestTransaction, decideCustomerRequestTransaction, createInboundReceiptTransaction, updateInboundReceiptConferenceTransaction, createInventoryMovementTransaction } from "../domain/operations.js";
+import { areaDePassagem } from "../domain/areas-de-passagem.js";
 import { authorizePersonalRoute } from "./shared/principal.js";
 import { denied, digest, invalid, object, projectFields, readPage, requireCustomer, requireScope, type ApiContext, type ModuleDefinition, type ModuleRoute } from "./shared/core.js";
 
@@ -95,12 +96,13 @@ async function stockLocations(ctx: ReadContext, customer: string, code: string, 
   for (const row of rows.docs) {
     const balance = row.data(), place = String(balance.location_id ?? "").trim();
     // Só o saldo que a alocação pode usar, com disponível: o zerado (a doca
-    // depois da guarda) e o todo reservado ficam de fora.
-    if ((wanted && place !== wanted) || available(balance) <= 0) continue;
-    // O alocador usa o saldo livre de qualquer local. A prateleira (pelo código
-    // da etiqueta, como na guarda) precisa ser da zona ativa do cliente; a área
-    // sem posição (RECEBIMENTO, EXPEDICAO, DEVOLUCAO, uma doca digitada no
-    // Receber) passa, como no pedido do portal: o saldo já é do cliente. O
+    // depois da guarda), o todo reservado e o das áreas de passagem
+    // (RECEBIMENTO e EXPEDICAO, que o pedido do cliente não reserva) ficam
+    // de fora.
+    if ((wanted && place !== wanted) || available(balance) <= 0 || areaDePassagem(place)) continue;
+    // A prateleira (pelo código da etiqueta, como na guarda) precisa ser da
+    // zona ativa do cliente; o local sem posição (DEVOLUCAO, uma doca digitada
+    // no Receber) passa, como no pedido do portal: o saldo já é do cliente. O
     // saldo sem local também passa daqui, e o próprio alocador o recusa.
     const shelf = place.toUpperCase();
     const data = id.safeParse(shelf).success ? await position(ctx, shelf) : undefined;

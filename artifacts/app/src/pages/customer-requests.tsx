@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "wouter";
+import { areaDePassagem, problemaDoLocalDoPedido } from "@workspace/dominio";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -528,9 +529,10 @@ function getStockBalanceAvailable(balance: StockBalance) {
 
 /**
  * Um SKU pode ter saldo em mais de uma localização — a reserva de verdade
- * (createCustomerRequestTransaction) soma todas ao alocar. Retornar só a
- * primeira linha encontrada subestima o disponível sempre que o estoque do
- * SKU está fragmentado entre localizações.
+ * (createCustomerRequestTransaction) soma todas as de prateleira ao alocar;
+ * o RECEBIMENTO e a EXPEDICAO ficam de fora (recebimento com caixas, parte 7).
+ * Retornar só a primeira linha encontrada subestima o disponível sempre que o
+ * estoque do SKU está fragmentado entre localizações.
  */
 function findStockBalancesForLine(
   balances: StockBalance[],
@@ -548,8 +550,11 @@ function findStockBalancesForLine(
       getStockBalanceClientCode(balance) === line.clientItemCode;
     const sameLocation =
       !line.locationId || getStockBalanceLocation(balance) === line.locationId;
+    const shelf = areaDePassagem(getStockBalanceLocation(balance)) === null;
 
-    return sameCustomer && sameLocation && Boolean(sameSku || sameClientItem);
+    return (
+      sameCustomer && sameLocation && shelf && Boolean(sameSku || sameClientItem)
+    );
   });
 }
 
@@ -691,6 +696,16 @@ export function buildBalanceValidation(
   }
 
   const validationLines = lines.map<BalanceValidationLine>((line) => {
+    // O item que pede o local de uma área de passagem é recusado na aprovação.
+    const locationProblem = problemaDoLocalDoPedido(line.locationId);
+    if (locationProblem) {
+      return {
+        ...line,
+        status: "insufficient",
+        available: 0,
+        message: locationProblem,
+      };
+    }
     const matches = findStockBalancesForLine(
       balances,
       line,

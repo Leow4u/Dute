@@ -87,7 +87,9 @@ Cada seção só aparece com a tela dela no contrato.
 - **"Pedidos em andamento"**: até 4, com a etapa; o recusado fica 7 dias, com
   o motivo. **"Envios a caminho"**: até 3, com o dia da chegada.
 - **"Seu estoque"**: "Valor do estoque" (custo, base do seguro ad valorem),
-  "Disponível", "Reservado em pedidos" e "Abaixo do mínimo".
+  "Disponível", "Reservado em pedidos" e "Abaixo do mínimo". O disponível é só
+  o que já está na prateleira: o que acabou de chegar, ou voltou de um pedido
+  cancelado, entra depois que a Dutelog guarda, e só então pode ser pedido.
 - **"Faturas"**: o mês anterior ("Em fechamento" até a Dutelog emitir) e a
   fatura mais recente antes dele.
 

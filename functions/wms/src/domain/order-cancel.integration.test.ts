@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
 
 import { deleteApp, initializeApp } from "firebase-admin/app";
-import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, type Firestore } from "firebase-admin/firestore";
 
 import { billingMovementDirection } from "./billing-scope.js";
 import {
@@ -90,6 +90,48 @@ async function pedidoAprovado(chave = "pedido-1") {
     coordenacao,
   )) as Record<string, unknown>;
   return { requestId, orderId: String(aprovado.order_id), pickTaskId: String(aprovado.pick_task_id) };
+}
+
+/**
+ * A solicitação reservada antes da regra só de prateleira (recebimento com
+ * caixas, parte 7), quando a criação também reservava das áreas: hoje o pedido
+ * novo não reserva do RECEBIMENTO nem da EXPEDICAO, e a reserva antiga vale.
+ */
+async function solicitacaoReservadaAntes(requestId: string, reservas: Array<[saldo: string, local: string, quantidade: number]>) {
+  const total = reservas.reduce((soma, [, , quantidade]) => soma + quantidade, 0);
+  await db.collection("customer_requests").doc(requestId).set({
+    id: requestId,
+    type: "retirada",
+    status: "open",
+    priority: "normal",
+    customer_code: BTG,
+    title: "Tudo",
+    items: [{ line_number: 1, sku_code: SKU, client_item_code: "POLO-P", product_name: "Camiseta polo P", quantity: total }],
+  });
+  await Promise.all(
+    reservas.flatMap(([saldo, local, quantidade], index) => [
+      db.collection("stock_reservations").doc(`res_${requestId}_${index + 1}`).set({
+        id: `res_${requestId}_${index + 1}`,
+        customer_code: BTG,
+        customer_request_id: requestId,
+        line_number: index + 1,
+        client_line_number: 1,
+        sku_code: SKU,
+        client_item_code: "POLO-P",
+        product_name: "Camiseta polo P",
+        location_id: local,
+        requested_qty: quantidade,
+        allocated_qty: quantidade,
+        reserved_qty: quantidade,
+        status: "reserved",
+        source: "customer_request",
+      }),
+      db.collection("stock_balances").doc(saldo).update({
+        qty_reserved: FieldValue.increment(quantidade),
+        qty_available: FieldValue.increment(-quantidade),
+      }),
+    ]),
+  );
 }
 
 function avancar(taskUid: string, expectedStatus: string, operation?: Record<string, unknown>) {
@@ -295,14 +337,24 @@ describe("Cancelar pedido (pergunta 59)", () => {
         qty_available: quantity,
       });
     await Promise.all([area("bal-expedicao", "EXPEDICAO", 2), area("bal-recebimento", "RECEBIMENTO", 1)]);
-    const criado = await createCustomerRequestTransaction(
-      db,
-      { type: "retirada", priority: "normal", title: "Tudo", customer_code: BTG, idempotency_key: "pedido-tudo", items: [{ sku_code: SKU, quantity: 10 }] },
-      cliente,
+    // Hoje o pedido de 10 nem se cria (a prateleira tem 7): a reserva nas áreas é de antes da parte 7.
+    await assert.rejects(
+      createCustomerRequestTransaction(
+        db,
+        { type: "retirada", priority: "normal", title: "Tudo", customer_code: BTG, idempotency_key: "pedido-tudo", items: [{ sku_code: SKU, quantity: 10 }] },
+        cliente,
+      ),
+      { code: "failed-precondition", message: `Saldo insuficiente para o SKU ${SKU}. Disponível: 7; solicitado: 10.` },
     );
+    await solicitacaoReservadaAntes("sol-tudo", [
+      ["bal-a01", "A-01", 3],
+      ["bal-a02", "A-02", 4],
+      ["bal-expedicao", "EXPEDICAO", 2],
+      ["bal-recebimento", "RECEBIMENTO", 1],
+    ]);
     const aprovado = (await decideCustomerRequestTransaction(
       db,
-      { request_id: String(criado.id), action: "approve", expected_status: "open", idempotency_key: "aprovar-tudo" },
+      { request_id: "sol-tudo", action: "approve", expected_status: "open", idempotency_key: "aprovar-tudo" },
       coordenacao,
     )) as Record<string, unknown>;
     const orderId = String(aprovado.order_id);
@@ -322,6 +374,12 @@ describe("Cancelar pedido (pergunta 59)", () => {
       Object.fromEntries(Object.entries(porPosicao).map(([local, saldo]) => [local, [saldo.qty_on_hand, saldo.qty_reserved, saldo.qty_available]])),
       { "A-01": [0, 0, 0], "A-02": [0, 0, 0], EXPEDICAO: [10, 0, 10], RECEBIMENTO: [0, 0, 0] },
     );
+    // Para o cliente, tudo está na EXPEDICAO: no total, fora do disponível e do em recebimento.
+    const portal = async () => {
+      const dados = (await db.collection("client_inventory").doc(`cinv_BTG_Pactual__${SKU}`).get()).data() ?? {};
+      return [dados.qty_on_hand, dados.qty_reserved, dados.qty_available, dados.qty_receiving];
+    };
+    assert.deepEqual(await portal(), [10, 0, 0, 0]);
     const guardas = (await db.collection("putaway_tasks").where("order_id", "==", orderId).get()).docs.map((doc) => doc.data());
     assert.deepEqual(
       guardas.map((guarda) => [guarda.destination_location_id ?? "sem destino", guarda.quantity]).sort(),
@@ -342,6 +400,8 @@ describe("Cancelar pedido (pergunta 59)", () => {
     const depois = await saldos();
     assert.equal(depois["A-02"].qty_on_hand, 1);
     assert.equal(depois.EXPEDICAO.qty_on_hand, 9);
+    // A guarda devolve à prateleira, e o cliente volta a poder pedir.
+    assert.deepEqual(await portal(), [10, 0, 1, 0]);
   });
 
   it("não cancela o pedido que já saiu do armazém, e não muda nada", async () => {

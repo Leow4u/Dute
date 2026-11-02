@@ -137,6 +137,48 @@ describe("buildBalanceValidation: soma saldo entre localizacoes", () => {
   });
 });
 
+describe("buildBalanceValidation: só a prateleira atende o pedido (recebimento com caixas, parte 7)", () => {
+  const saldo = (location_id: string, qty_on_hand: number): StockBalance => ({
+    sku_code: "SKU-A",
+    customer_code: "BTG Pactual",
+    location_id,
+    qty_on_hand,
+    qty_reserved: 0,
+  });
+
+  it("o saldo do RECEBIMENTO e da EXPEDICAO não conta, como na reserva do servidor", () => {
+    const request = outboundRequest({ items: [{ sku_code: "SKU-A", quantity: 6 }] });
+    const balances = [saldo("A-01", 3), saldo("EXPEDICAO", 2), saldo("Recebimento", 5)];
+
+    const validation = buildBalanceValidation(request, balances, false, false);
+
+    expect(validation.status).toBe("insufficient");
+    expect(validation.canApprove).toBe(false);
+    expect(validation.lines[0]?.available).toBe(3);
+    expect(validation.lines[0]?.message).toBe("Disponível: 3.");
+  });
+
+  it("o item que pede o local de uma área é recusado com a frase do servidor", () => {
+    const request = outboundRequest({ items: [{ sku_code: "SKU-A", quantity: 1, location_id: "RECEBIMENTO" }] });
+
+    const validation = buildBalanceValidation(request, [saldo("RECEBIMENTO", 5)], false, false);
+
+    expect(validation.canApprove).toBe(false);
+    expect(validation.lines[0]?.message).toBe(
+      "O local RECEBIMENTO não atende pedido: o pedido só reserva o que está na prateleira.",
+    );
+  });
+
+  it("só com saldo nas áreas, a linha fica sem saldo", () => {
+    const request = outboundRequest({ items: [{ sku_code: "SKU-A", quantity: 1 }] });
+
+    const validation = buildBalanceValidation(request, [saldo("EXPEDICAO", 2)], false, false);
+
+    expect(validation.status).toBe("missing-balance");
+    expect(validation.canApprove).toBe(false);
+  });
+});
+
 describe("tela de triagem", () => {
   it("lê a data no formato em que a lista do Firestore entrega", () => {
     const expected = new Date("2026-09-29T19:12:00.000Z");

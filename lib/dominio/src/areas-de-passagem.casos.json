@@ -1,0 +1,58 @@
+{
+  "_leia": "Casos de referência das áreas de passagem (lib/dominio/src/areas-de-passagem.ts, recebimento com caixas, parte 7). Rodam no vitest do app e no node --test de functions/wms, contra a cópia de lá. area: null quando o local é prateleira; problema: null quando o local pode atender pedido.",
+  "areas": [
+    { "caso": "o RECEBIMENTO", "local": "RECEBIMENTO", "area": "RECEBIMENTO" },
+    { "caso": "o RECEBIMENTO com espaço e em minúscula", "local": " recebimento ", "area": "RECEBIMENTO" },
+    { "caso": "o Recebimento como o Receber escreve", "local": "Recebimento", "area": "RECEBIMENTO" },
+    { "caso": "a EXPEDICAO", "local": "EXPEDICAO", "area": "EXPEDICAO" },
+    { "caso": "a expedicao em minúscula", "local": "expedicao", "area": "EXPEDICAO" },
+    { "caso": "a EXPEDIÇÃO com acento", "local": "EXPEDIÇÃO", "area": "EXPEDICAO" },
+    { "caso": "a Expedição com acento e minúscula", "local": "Expedição", "area": "EXPEDICAO" },
+    { "caso": "a prateleira cadastrada", "local": "A-01", "area": null },
+    { "caso": "outra prateleira", "local": "S-01", "area": null },
+    { "caso": "o local LOC-*", "local": "LOC-12", "area": null },
+    { "caso": "a DEVOLUCAO atende pedido", "local": "DEVOLUCAO", "area": null },
+    { "caso": "o endereço antigo da abertura", "local": "RUA-A/PRAT-01/CX-001", "area": null },
+    { "caso": "o nome que só começa como a área", "local": "RECEBIMENTO-2", "area": null },
+    { "caso": "a doca digitada no Receber", "local": "DOCA 2", "area": null },
+    { "caso": "o local vazio", "local": "", "area": null },
+    { "caso": "sem local", "local": null, "area": null },
+    { "caso": "o local que não é texto", "local": 7, "area": null }
+  ],
+  "problemas": [
+    { "caso": "o local RECEBIMENTO", "local": "RECEBIMENTO", "problema": "O local RECEBIMENTO não atende pedido: o pedido só reserva o que está na prateleira." },
+    { "caso": "a frase repete o local como veio, sem o espaço", "local": " expedição ", "problema": "O local expedição não atende pedido: o pedido só reserva o que está na prateleira." },
+    { "caso": "a prateleira", "local": "A-01", "problema": null },
+    { "caso": "a DEVOLUCAO", "local": "DEVOLUCAO", "problema": null },
+    { "caso": "sem local", "local": "", "problema": null }
+  ],
+  "livres": [
+    {
+      "caso": "o livre de cada saldo vai para a prateleira ou para o recebimento; a EXPEDICAO só conta no total",
+      "saldos": [
+        { "location_id": "A-01", "qty_on_hand": 3, "qty_reserved": 1 },
+        { "location_id": "S-01", "qty_on_hand": 4 },
+        { "location_id": "DEVOLUCAO", "qty_on_hand": 1 },
+        { "location_id": "RECEBIMENTO", "qty_on_hand": 5, "qty_reserved": 2 },
+        { "location_id": "recebimento", "qty_on_hand": 1 },
+        { "location_id": "EXPEDICAO", "qty_on_hand": 2 }
+      ],
+      "livre": { "qty_available": 7, "qty_receiving": 4 }
+    },
+    { "caso": "sem saldo é zero", "saldos": [], "livre": { "qty_available": 0, "qty_receiving": 0 } },
+    {
+      "caso": "o saldo inconsistente não deixa o livre negativo",
+      "saldos": [
+        { "location_id": "A-01", "qty_on_hand": 1, "qty_reserved": 3 },
+        { "location_id": "A-02", "qty_on_hand": "2" },
+        { "location_id": "RECEBIMENTO", "qty_on_hand": -4 }
+      ],
+      "livre": { "qty_available": 2, "qty_receiving": 0 }
+    },
+    {
+      "caso": "o saldo sem local entra no disponível, como antes; a EXPEDICAO toda reservada não conta",
+      "saldos": [{ "qty_on_hand": 2 }, { "location_id": "EXPEDICAO", "qty_on_hand": 3, "qty_reserved": 3 }],
+      "livre": { "qty_available": 2, "qty_receiving": 0 }
+    }
+  ]
+}
