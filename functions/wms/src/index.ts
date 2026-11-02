@@ -1588,6 +1588,35 @@ function notificationKindForEvent(eventType: string, severity?: string) {
   return null;
 }
 
+/**
+ * A caixa é detalhe interno (P8, decidido em 02/11/2026): o aviso ao cliente
+ * nunca cita um CX-. O evento da abertura do inventário diz a caixa e a
+ * posição, e vira rascunho interno, como qualquer evento que cite uma caixa.
+ */
+const AVISO_INTERNO_DO_ESTOQUE = {
+  topic: "inventory",
+  audience: "internal",
+  subject: "Registro interno do estoque",
+  action: "Registro interno do armazém: a caixa e a posição não vão ao cliente.",
+};
+
+function citaCaixa(textos: unknown[]) {
+  return textos.some((texto) => typeof texto === "string" && /\bCX-\d/i.test(texto));
+}
+
+/** O aviso ao cliente gravado antes da regra acima não se aprova nem se envia. */
+function recusarCaixaNoAvisoAoCliente(
+  data: Record<string, unknown>,
+  parsed: z.infer<typeof DecideOperationalNotificationSchema>,
+) {
+  if (rowText(data, "audience") !== "client") return;
+  if (!citaCaixa([data.title, data.subject, data.body, parsed.subject, parsed.body])) return;
+  throw new HttpsError(
+    "failed-precondition",
+    "O aviso ao cliente cita uma caixa (CX-): a caixa é detalhe interno. Arquive este rascunho.",
+  );
+}
+
 function notificationDraftFromEvent(event: EventRow) {
   const type = rowText(event, "type");
   const title = rowText(event, "title") || "Evento operacional";
@@ -1598,8 +1627,13 @@ function notificationDraftFromEvent(event: EventRow) {
   const source = rowText(event, "source");
   if (!type || source === "agent_chat") return null;
 
-  const kind = notificationKindForEvent(type, severity);
-  if (!kind) return null;
+  const tipo = notificationKindForEvent(type, severity);
+  if (!tipo) return null;
+  const kind =
+    tipo.audience === "client" &&
+    (type.toLowerCase().startsWith("inventory.opening_") || citaCaixa([title, description]))
+      ? AVISO_INTERNO_DO_ESTOQUE
+      : tipo;
 
   const payload = rowRecord(event, "payload");
   const quantity = Number(
@@ -1878,6 +1912,7 @@ async function decideOperationalNotificationFlow(
         "Somente notificações aprovadas podem ser enviadas.",
       );
     }
+    recusarCaixaNoAvisoAoCliente(data, parsed);
     deliveryResult = await deliverOperationalNotification(data, parsed, actor);
   }
 
@@ -1894,6 +1929,7 @@ async function decideOperationalNotificationFlow(
         "Somente rascunhos podem ser aprovados.",
       );
     }
+    if (parsed.action !== "archive") recusarCaixaNoAvisoAoCliente(data, parsed);
     if (parsed.action === "mark_sent" && status !== "approved") {
       throw new HttpsError(
         "failed-precondition",
