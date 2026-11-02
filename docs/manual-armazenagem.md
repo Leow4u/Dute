@@ -164,7 +164,9 @@ tinha, e o aviso diz "SKU reativado".
 
 **Guardar:** "Posição" ("Bipe ou busque a prateleira") lista só as ativas da
 zona do cliente; "Concluir guarda" move o saldo para ela, que não pode ser a
-origem. O recebimento não põe nada em caixa: a caixa é da abertura.
+origem. O recebimento não põe nada em caixa: a caixa é da abertura. O pedido
+do cliente só reserva o que está na prateleira: o saldo no "RECEBIMENTO" ou
+na "EXPEDICAO" fica fora do disponível do portal até a guarda.
 
 ## Estoque › Itens
 

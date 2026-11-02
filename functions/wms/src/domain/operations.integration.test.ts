@@ -882,7 +882,10 @@ describe("fluxo WMS transacional", () => {
     assert.equal(await storedUnitPrice(db, "BTG Pactual", "BTG-000001"), 89.9);
     assert.equal(projections.size, 1);
     assert.equal(projections.docs[0]?.data().qty_on_hand, 7);
-    assert.equal(projections.docs[0]?.data().qty_available, 7);
+    // A entrada fica no RECEBIMENTO: para o cliente, em recebimento e fora do
+    // disponível até a guarda (recebimento com caixas, parte 7).
+    assert.equal(projections.docs[0]?.data().qty_available, 0);
+    assert.equal(projections.docs[0]?.data().qty_receiving, 7);
     assert.equal(projections.docs[0]?.data().total_cost, undefined);
     assert.equal(movements.size, 1);
     assert.equal(movements.docs[0]?.data().tipo_mov, "ENTRADA");

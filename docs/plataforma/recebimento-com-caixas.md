@@ -3,8 +3,10 @@
 **Situação:** desenho aprovado, em construção por partes. As treze perguntas
 foram decididas pelo Leonardo em 01/11/2026 (seção 6), o texto foi revisado no
 mesmo dia com o levantamento do código (seções 2.5, 4 e 7) e as telas foram
-aprovadas (parte 1, em `docs/mockups`). A parte 2 (liberação e modo da
-chegada) está feita; a tela continua criando por linha até a parte 5. Motivo: em 30/10/2026 a equipe recebeu
+aprovadas (parte 1, em `docs/mockups`). As partes 2 (liberação e modo da
+chegada) e 3 (a caixa do recebimento) estão feitas, e a regra da parte 7 (só
+prateleira para o cliente) está no servidor, sem liberação por ambiente; a
+tela continua criando por linha até a parte 5. Motivo: em 30/10/2026 a equipe recebeu
 uma NF da BTG pela chegada avulsa, guardou as 71 peças em B-02 e o sistema não
 deu etiqueta nem mostrou caixa no Mapa, porque o recebimento de hoje não
 conhece caixa. O fluxo real do galpão é por caixa; o sistema só tem caixa na
@@ -266,7 +268,9 @@ divergência continua como hoje, na chegada. Quem precisa de linha sem caixa
 ### 4.4 Concluir entrada
 
 "Concluir entrada" exige toda linha da NF tratada (coberta por caixas ou
-marcada como falta) e toda caixa fechada com destino confirmado. Faz o que
+marcada como falta) e toda caixa fechada; a caixa sem destino, porque a zona
+do cliente está cheia, não trava a entrada e ganha o destino na guarda
+(decisão 14). Faz o que
 faz hoje, na mesma transação e do mesmo tamanho: lança o saldo de cada linha
 em `RECEBIMENTO`, grava a `ENTRADA` com `source: wms_receiving` uma vez por
 linha (a fatura e o relógio de parados continuam iguais, numa data só por NF)
@@ -290,7 +294,8 @@ saldo de todas as linhas da caixa de `RECEBIMENTO` para a prateleira com os
 movimentos `wms_putaway` de hoje, põe a caixa em `stored` e grava o evento. A
 quantidade é a da caixa: não há guarda parcial de caixa. "Não cabe aqui" na
 prateleira recusa com motivo, o motor sugere outra, a caixa continua
-reservando a nova e a etiqueta é reimpressa.
+reservando a nova e a etiqueta é reimpressa. É o único jeito de trocar o
+destino confirmado: a bancada não libera o destino (decisão 15).
 
 Zona cheia ou sem zona não trava a entrada: a NF entra em `RECEBIMENTO` e a
 caixa fica por guardar até owner, admin ou coordenação ampliarem a zona em
@@ -473,9 +478,45 @@ desenhada e aprovada antes do PR de tela.
 6. **Etiquetas:** caixa `committing` com destino, origem "Recebimento", o
    conteúdo da caixa do recebimento na etiqueta e no Mapa, "Etiquetas da
    chegada", reimpressão com evento.
-7. **Só prateleira para o cliente:** "Disponível" e "Em recebimento" no
-   portal e a reserva do pedido só de prateleira (decisão 10), em PR próprio,
-   antes ou junto da parte 4; testes da alocação e do portal.
+7. **Só prateleira para o cliente** (decisão 10), sem liberação por ambiente:
+   o Leonardo decidiu em 02/11/2026 que vale já para a produção, no próximo
+   disparo manual dele. Em quatro PRs:
+   - **7a e 7b, a regra no servidor:** feita em 02/11/2026. A reserva do
+     pedido, na criação pelo portal e na aprovação da solicitação que chegou
+     sem reserva, só cai em saldo de prateleira: os locais `RECEBIMENTO` e
+     `EXPEDICAO`, sem diferenciar maiúscula nem acento
+     (`functions/wms/src/domain/areas-de-passagem.ts`), ficam de fora; o
+     "Disponível" da recusa por saldo insuficiente conta só a prateleira; e o
+     item que pede o local de uma área é recusado ("O local RECEBIMENTO não
+     atende pedido: o pedido só reserva o que está na prateleira."). A
+     reserva que já estava numa área continua valendo. O `client_inventory`
+     grava `qty_available` com o livre das prateleiras e o campo novo
+     `qty_receiving` com o livre do `RECEBIMENTO`, tirados dos saldos do SKU
+     depois da escrita, em todas as escritas da projeção e na guarda, que até
+     aqui não mexia no portal (a guarda grava só esses dois campos, e só na
+     projeção que já existe). O total (`qty_on_hand`), a reserva
+     (`qty_reserved`) e o valor da mercadoria ficam como estavam; a EXPEDICAO
+     entra só no total; `DEVOLUCAO` e os demais locais contam como
+     prateleira. O Agent Dute, que lê o disponível da projeção, passa a
+     responder só com a prateleira. Testes: `areas-de-passagem.test.ts` e
+     `areas-de-passagem.integration.test.ts` no WMS.
+   - **7c, o recálculo:** a projeção só se acerta quando o SKU tem uma
+     escrita nova; uma rotina refaz `qty_available` e `qty_receiving` de todo
+     `client_inventory` a partir dos saldos, respeita o congelamento e a
+     zeragem, só atualiza documento que já existe e grava o evento
+     `warehouse.client_projection_recalculated`.
+   - **7d, o portal:** "Disponível para pedido" e "Em recebimento" no Estoque
+     do portal (mockup `PortalEstoqueRecebimento`), aceitando a projeção ainda
+     sem `qty_receiving`.
+   - A API REST v1 recusava com 404 a retirada de um SKU com saldo fora de
+     prateleira cadastrada (`stockLocations`, em `api/module.ts`); a correção
+     entrou em 02/11/2026 (PR 533), e com esta parte a conferência dela também
+     deixa de fora o saldo das áreas de passagem, como o alocador.
+
+   Antes do disparo da produção com a 7a e a 7b: a 7c junto, para o portal
+   não mostrar como disponível o que o pedido recusa, e a conferência dos
+   saldos parados no `RECEBIMENTO` e na `EXPEDICAO` (o que está ali só volta
+   a atender pedido depois da guarda).
 8. **Aviso ao cliente de produto novo:** modelo na lista de avisos da
    Operação, disparado pela última guarda da chegada; e-mail em HTML com a
    identidade da Dutelog (molde dos e-mails de convite e confirmação, que
@@ -512,17 +553,9 @@ não resolve caixa, etiqueta nem Mapa, e por isso não entra como etapa.
 | 11 | A conferência por caixa é no computador ou no celular? | No computador da bancada; o celular fica para a guarda. |
 | 12 | Quem informa o custo do produto? | A operação, na chegada, com o custo unitário da NF, como hoje. |
 | 13 | E-mail do aviso em texto ou HTML? | HTML com a identidade da Dutelog, no molde dos e-mails de convite e confirmação. |
-
-Faltam, para as partes 4 e 5 (não travam a parte 3):
-
-14. **Zona cheia na conclusão:** com a zona do cliente cheia, a caixa fica
-    fechada e sem destino. A entrada pode ser concluída com essa caixa (ela
-    ganha o destino na guarda), ou a chegada espera a coordenação ampliar a
-    zona? A seção 4.4 pede toda caixa com destino; a 4.5 diz que zona cheia
-    não trava a NF.
-15. **Trocar o destino na bancada:** depois de confirmar o destino, e antes
-    de levar a caixa, a troca é só pelo "Não cabe aqui" na prateleira (parte
-    4), ou a bancada também libera o destino, como a abertura faz?
+| 14 | Zona cheia na conclusão: a entrada se conclui com a caixa fechada e sem destino? (02/11/2026) | Sim: a caixa ganha o destino na guarda. A seção 4.4 deixa de pedir toda caixa com destino. |
+| 15 | Trocar o destino depois de confirmado, antes de levar a caixa? (02/11/2026) | Só pelo "Não cabe aqui" na prateleira (parte 4); a bancada não libera o destino. |
+| — | A parte 7 entra com liberação por ambiente? (02/11/2026) | Não: pode ir à produção; quem dispara a produção é o Leonardo, à mão. |
 
 Os mockups das telas que mudam (chegada avulsa, ficha da chegada por caixa,
 fechar caixa e onde guardar, fila do Receber, guarda da caixa no computador e

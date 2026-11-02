@@ -214,7 +214,7 @@ test("retirada pela API passa com o saldo zerado que a guarda deixa no RECEBIMEN
   assert.equal((await run("GET", "/pedidos/{id}", undefined, { id: requestId })).data.status, "approved");
 });
 
-test("retirada pela API confere só o saldo livre: a área sem posição passa como no portal, a prateleira de outra zona recusa", async () => {
+test("retirada pela API confere só o saldo livre: o local sem posição passa como no portal, a área de passagem fica de fora, a prateleira de outra zona recusa", async () => {
   await produto("SKU-E", "ITEM-E");
   // A prateleira do cliente; zerado, um saldo na prateleira da zona de outro
   // cliente (o código em minúsculas é a mesma prateleira, como na guarda); uma
@@ -222,13 +222,18 @@ test("retirada pela API confere só o saldo livre: a área sem posição passa c
   // cancelado depois da separação.
   const locais = [["A1", 2], ["b1", 0], ["DEVOLUCAO", 1], ["DOCA 2", 1], ["EXPEDICAO", 2]] as const;
   await Promise.all(locais.map(([local, qty]) => db.collection("stock_balances").doc(`bal-e-${local}`).set({ customer_code: "A", sku_code: "SKU-E", client_item_code: "ITEM-E", product_name: "Produto SKU-E", location_id: local, qty_on_hand: qty, qty_reserved: 0, qty_available: qty, status: qty ? "available" : "empty" })));
-  // O alocador usa o saldo livre de qualquer local, na ordem do código.
-  const pedido = await run("POST", "/pedidos", { customer_code: "A", type: "retirada", title: "Retirada com áreas", items: [{ sku_code: "SKU-E", quantity: 6 }] }, {}, "area-request");
-  assert.deepEqual(await reservas(String(pedido.id)), [["A1", 2], ["DEVOLUCAO", 1], ["DOCA 2", 1], ["EXPEDICAO", 2]]);
+  // O alocador usa o saldo livre de qualquer local, na ordem do código, menos o
+  // das áreas de passagem: a EXPEDICAO fica de fora (recebimento com caixas, parte 7).
+  await assert.rejects(
+    run("POST", "/pedidos", { customer_code: "A", type: "retirada", title: "Retirada com áreas", items: [{ sku_code: "SKU-E", quantity: 6 }] }, {}, "area-request-6"),
+    { code: "failed-precondition", message: "Saldo insuficiente para o SKU SKU-E. Disponível: 4; solicitado: 6." },
+  );
+  const pedido = await run("POST", "/pedidos", { customer_code: "A", type: "retirada", title: "Retirada com áreas", items: [{ sku_code: "SKU-E", quantity: 4 }] }, {}, "area-request");
+  assert.deepEqual(await reservas(String(pedido.id)), [["A1", 2], ["DEVOLUCAO", 1], ["DOCA 2", 1]]);
   // Com saldo livre, a prateleira da outra zona entra na conferência e recusa, sem reservar nada.
   await db.collection("stock_balances").doc("bal-e-b1").update({ qty_on_hand: 1, qty_available: 1, status: "available" });
   await assert.rejects(run("POST", "/pedidos", { customer_code: "A", type: "retirada", title: "Retirada da outra zona", items: [{ sku_code: "SKU-E", quantity: 1 }] }, {}, "area-request-b1"), { code: "permission-denied" });
-  assert.equal((await db.collection("stock_reservations").where("sku_code", "==", "SKU-E").get()).size, 4);
+  assert.equal((await db.collection("stock_reservations").where("sku_code", "==", "SKU-E").get()).size, 3);
 });
 
 test("retirada pela API de SKU com saldo sem local tem a recusa do alocador, como no portal", async () => {
