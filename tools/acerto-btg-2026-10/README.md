@@ -280,6 +280,30 @@ espelhando a CX-000004, a CX-000179 e a CX-000180 da produção: 58 a gravar,
 58 aplicadas e 58 já aplicadas em seguida; com os `aj-0805-*` ligados, 64, e os
 totais da azul-marinho ficam como as etiquetas.
 
+## Segunda aplicação na produção (02/11/2026)
+
+Aplicada pelo Leonardo depois do nono dry-run limpo, com o código do
+`a5291b9`: as 18 operações da segunda e da terceira rodadas. O décimo dry-run
+deu 58 já aplicadas, 0 a gravar, 7 sem mudança, 8 pendentes e 0 erros.
+
+O que ficou no banco:
+
+- SKUs criados: BTG-000177 (`A.01.0719.004.P`, a PAN cinza P, 15 em B-09, na
+  CX-000131), BTG-000178 (`A.02.0813.005.GG`, 15 em A-03) e BTG-000179
+  (`A.02.0813.005.XG`, 15 em A-03), as duas pima pretas na CX-000180.
+  Arquivado o BTG-000087 (`A.01.O719.004.P`, com letra O).
+- A pima azul `A.02.0814.002` GG e XG ficou com 15 e 15, na CX-000179.
+- A sacola N6 ficou com 148 (a CX-000208 com 73).
+- A CX-000019 saiu do registro; a CX-000036 apoia direto na prateleira.
+- A CX-000004 ficou com 10 linhas e 11 peças: saíram para o saldão a rosa OUT
+  rosa G, GG e XG, a PAN rosa P (3), a camiseta fio egípcio M e a mescla black
+  XG; a mescla black GG subiu para 2 e a pima preta SW G desceu para 1.
+
+Pendentes, à espera do Guilherme (e-mail do Leonardo de 02/11/2026): as fotos
+das etiquetas do fornecedor das caixas CX-000136 a CX-000140, da azul-marinho
+(item 14), e o código da polo feminina mand algodão preto G que ficou na
+CX-000004, que não existe no cadastro (`--nome MAND` não acha nada).
+
 ## Validação no emulador (30/10/2026)
 
 Feita no ambiente de desenvolvimento, sem credencial da nuvem, com o
