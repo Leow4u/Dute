@@ -326,6 +326,67 @@ describe("o modo da chegada (recebimento com caixas, parte 2)", () => {
 
 type Callable = { run: (request: never) => Promise<unknown> };
 
+describe("a guarda genérica (recebimento com caixas, parte 4b)", () => {
+  function guardar(taskId: string, key: string, operation?: Record<string, unknown>) {
+    return advanceWarehouseTaskTransaction(
+      db,
+      { task_uid: `putaway:${taskId}`, expected_status: "planned", operation, idempotency_key: key },
+      operacao,
+    );
+  }
+
+  it("a tarefa de guarda da caixa não anda pela guarda por linha, com ou sem destino, e nada é gravado", async () => {
+    const ref = db.collection("putaway_tasks").doc("put_cx");
+    await ref.set({
+      id: "put_cx",
+      customer_code: UNIFORMES,
+      box_code: "CX-000132",
+      receipt_id: "inb_caixa",
+      source_location_id: "RECEBIMENTO",
+      quantity: 10,
+      total_units: 10,
+      status: "planned",
+    });
+    const before = (await ref.get()).updateTime!;
+    for (const [key, operation] of [
+      ["guarda-sem-destino", undefined],
+      ["guarda-com-destino", { destination_location_id: "A-01", location_id: "A-01", quantity: 10 }],
+    ] as const) {
+      await assert.rejects(guardar("put_cx", key, operation), {
+        code: "failed-precondition",
+        message: "A guarda da caixa CX-000132 é feita pela guarda da caixa: a prateleira e o conteúdo vêm dela.",
+      });
+    }
+    const after = await ref.get();
+    assert.equal(after.get("status"), "planned");
+    assert.ok(after.updateTime!.isEqual(before));
+    for (const collection of ["events", "ai_agent_inbox", "movements", "operational_operations"]) {
+      assert.equal(await sizeOf(collection), 0, collection);
+    }
+  });
+
+  it("a guarda por linha move no máximo a quantidade da tarefa (decisão 23)", async () => {
+    await db.collection("warehouse_positions").doc("A-01").set({
+      code: "A-01", aisle: "A", shelf: 1, sequence: 1, length_m: 1.8, depth_m: 0.75, height_m: 0.5, customer_code: UNIFORMES, status: "active",
+    });
+    const created = await arrival(UNIFORMES, "linha-teto");
+    const receiptId = String(created.receipt_id);
+    await advance(receiptId, "created");
+    await conference(receiptId);
+    await advance(receiptId, "checking");
+    const [tarefa] = (await db.collection("putaway_tasks").where("receipt_id", "==", receiptId).get()).docs;
+    assert.equal(tarefa!.get("quantity"), 10);
+
+    await assert.rejects(guardar(tarefa!.id, "teto-11", { source_location_id: "RECEBIMENTO", destination_location_id: "A-01", location_id: "A-01", quantity: 11 }), {
+      code: "failed-precondition",
+      message: `A tarefa guarda no máximo 10 un. de ${skuOf(UNIFORMES)}.`,
+    });
+    assert.equal(await sizeOf("movements"), 1, "só a ENTRADA da chegada");
+    const guardada = (await guardar(tarefa!.id, "teto-10", { source_location_id: "RECEBIMENTO", destination_location_id: "A-01", location_id: "A-01", quantity: 10 })) as Record<string, unknown>;
+    assert.equal(guardada.status, "completed");
+  });
+});
+
 describe("a callable da chegada (createInboundReceipt.run)", () => {
   /** A callable de verdade, com o zod e a liberação do ambiente: aqui o projeto é o demo, fora da lista. */
   async function viaCallable(key: string, extra: Record<string, unknown> = {}) {

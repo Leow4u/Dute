@@ -159,3 +159,34 @@ export function assertLineConference(
     { code: "RECEIPT_CONFERRED_PER_BOX" },
   );
 }
+
+/**
+ * A guarda da caixa (parte 4f) move todas as linhas da caixa para a prateleira
+ * reservada dela: a tarefa com box_code não anda pela guarda por linha, que
+ * escolhe prateleira e quantidade de um SKU só (parte 4b).
+ */
+export function assertLinePutaway(task: Record<string, unknown>) {
+  const boxCode = typeof task.box_code === "string" ? task.box_code.trim() : "";
+  if (!boxCode) return;
+  throw new HttpsError(
+    "failed-precondition",
+    `A guarda da caixa ${boxCode} é feita pela guarda da caixa: a prateleira e o conteúdo vêm dela.`,
+    { code: "PUTAWAY_IS_BY_BOX" },
+  );
+}
+
+/**
+ * A guarda por linha move no máximo a quantidade da própria tarefa (decisão
+ * 23): o resto do RECEBIMENTO é de outras tarefas, inclusive o conteúdo das
+ * caixas do mesmo SKU. A tarefa sem quantidade gravada não tem teto.
+ */
+export function putawayQuantityWithinTask(task: Record<string, unknown>, quantity: number) {
+  const limit = Number(task.quantity ?? task.total_units ?? 0);
+  if (!Number.isFinite(limit) || limit <= 0 || quantity <= limit) return;
+  const skuCode = String(task.sku_code ?? task.sku ?? "").trim();
+  throw new HttpsError(
+    "failed-precondition",
+    `A tarefa guarda no máximo ${limit} un. de ${skuCode}.`,
+    { code: "PUTAWAY_ABOVE_TASK", limit },
+  );
+}

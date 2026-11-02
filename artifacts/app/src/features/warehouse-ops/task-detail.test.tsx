@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { normalizeQueues, type OpsAlert, type WarehouseTask } from "@/lib/warehouse-ops/model";
-import { PutawayDetailSection, TaskDetailPanel } from "./task-detail";
+import { PutawayDetailSection, TaskDetailPanel, passoDaGuarda } from "./task-detail";
 
 const guardTask: WarehouseTask = {
   id: "putaway:put_1",
@@ -69,5 +69,35 @@ describe("ficha da guarda", () => {
     );
     expect(markup).toContain('value="A-0"');
     expect(markup).toContain("A-01");
+  });
+
+  it("a quantidade não passa da tarefa: o + para nela (decisão 23)", () => {
+    const render = (quantity: number) =>
+      renderToStaticMarkup(
+        <PutawayDetailSection
+          task={guardTask}
+          operation={{ source_location_id: "RECEBIMENTO", destination_location_id: "A-01", location_id: "A-01", quantity }}
+          query=""
+          positions={[]}
+          positionsStatus="ready"
+          customerCode="TikTok"
+          onOperationChange={() => undefined}
+          onQueryChange={() => undefined}
+        />,
+      );
+    const mais = (markup: string) => markup.match(/<button[^>]*>\+<\/button>/)?.[0] ?? "";
+    expect(mais(render(50))).toContain('disabled=""');
+    expect(mais(render(49))).not.toContain('disabled=""');
+  });
+
+  it("o + e o − andam de uma em uma unidade sem passar da tarefa, também com quantidade fracionada", () => {
+    expect([passoDaGuarda(49, 50, 1), passoDaGuarda(50, 50, 1), passoDaGuarda(50, 50, -1), passoDaGuarda(1, 50, -1)]).toEqual([50, 50, 49, 1]);
+    // Tarefa de 1,5: o − vai a 1 e o + volta a 1,5, não a 2.
+    expect([passoDaGuarda(1.5, 1.5, -1), passoDaGuarda(1, 1.5, 1)]).toEqual([1, 1.5]);
+    // Tarefa de 0,5: o − não sobe acima dela.
+    expect(passoDaGuarda(0.5, 0.5, -1)).toBe(0.5);
+    expect(passoDaGuarda(2.6, 2.6, -1)).toBe(1.6);
+    // Tarefa sem quantidade: sem teto.
+    expect(passoDaGuarda(3, 0, 1)).toBe(4);
   });
 });

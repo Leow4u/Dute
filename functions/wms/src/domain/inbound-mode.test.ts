@@ -8,7 +8,9 @@ import {
   INBOUND_CONFERENCE_MODES,
   RECEBIMENTO_POR_CAIXA_PROJECTS,
   assertLineConference,
+  assertLinePutaway,
   boxReceiptLineLocation,
+  putawayQuantityWithinTask,
   boxReceivingEnabled,
   conferenceModeOf,
   requestedConferenceMode,
@@ -80,6 +82,33 @@ describe("as linhas da chegada por caixa (parte 4a)", () => {
   it("a chegada por linha guarda o local como veio", () => {
     assert.equal(boxReceiptLineLocation("per_line", 1, "A-02"), "A-02");
     assert.equal(boxReceiptLineLocation("per_line", 1, "recebimento"), "recebimento");
+  });
+});
+
+describe("a guarda genérica (parte 4b)", () => {
+  it("a tarefa de guarda da caixa não anda pela guarda por linha", () => {
+    assert.throws(() => assertLinePutaway({ id: "put_cx", box_code: "CX-000132" }), {
+      code: "failed-precondition",
+      message: "A guarda da caixa CX-000132 é feita pela guarda da caixa: a prateleira e o conteúdo vêm dela.",
+      details: { code: "PUTAWAY_IS_BY_BOX" },
+    });
+    for (const task of [{ id: "put_1" }, { id: "put_2", box_code: "" }, { id: "put_3", box_code: null }]) {
+      assert.doesNotThrow(() => assertLinePutaway(task));
+    }
+  });
+
+  it("a guarda por linha move no máximo a quantidade da tarefa (decisão 23)", () => {
+    assert.throws(() => putawayQuantityWithinTask({ quantity: 4, sku_code: "UNI-000001" }, 5), {
+      code: "failed-precondition",
+      message: "A tarefa guarda no máximo 4 un. de UNI-000001.",
+      details: { code: "PUTAWAY_ABOVE_TASK", limit: 4 },
+    });
+    assert.doesNotThrow(() => putawayQuantityWithinTask({ quantity: 4, sku_code: "UNI-000001" }, 4));
+    assert.doesNotThrow(() => putawayQuantityWithinTask({ quantity: 4, sku_code: "UNI-000001" }, 3));
+    assert.doesNotThrow(() => putawayQuantityWithinTask({ total_units: 6, sku_code: "UNI-000001" }, 6));
+    assert.throws(() => putawayQuantityWithinTask({ total_units: 6, sku_code: "UNI-000001" }, 7), { code: "failed-precondition" });
+    // A tarefa sem quantidade gravada não tem teto.
+    assert.doesNotThrow(() => putawayQuantityWithinTask({ sku_code: "UNI-000001" }, 9));
   });
 });
 
