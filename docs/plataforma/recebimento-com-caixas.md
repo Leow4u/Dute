@@ -463,16 +463,56 @@ desenhada e aprovada antes do PR de tela.
    sobra, na transação do lançamento, com o SKU gerado ou reativado e o
    custo da NF, como na chegada de hoje; a parte 4 recalcula as quantidades
    da chegada na conclusão. A parte 3 lança só as linhas da NF.
-4. **Concluir entrada e guarda por caixa:** barreira por linhas cobertas e
-   caixas confirmadas (no lugar da recusa da parte 2), `ENTRADA` como hoje, uma guarda por caixa com destino,
-   a guarda que move todas as linhas da caixa e fecha a caixa `stored`, a
-   chegada em aberto até a última guarda, API inalterada
-   (`api/module.integration.test.ts`), o Agent Dute com os status novos.
-   Também: revalidar o destino na guarda (a prateleira reservada pode ter
-   sido apagada, bloqueada ou mudado de zona), o "Não cabe aqui" na
-   prateleira que troca a reserva, o aviso à coordenação quando a zona do
-   cliente está cheia, e a regra da caixa vazia iniciada no mesmo instante
-   da conclusão.
+4. **Concluir entrada e guarda por caixa**, em PRs pequenos, nesta ordem
+   (desenho e crítica de 02/11/2026, com as decisões 14 e 17 a 24):
+   - **4a, as linhas da chegada por caixa:** feita em 02/11/2026. Toda
+     linha passa pelo `RECEBIMENTO`, gravado sempre como "RECEBIMENTO",
+     porque a entrada e a guarda da caixa acham o saldo pelo local exato;
+     outro local é recusado na criação ("A linha 1 vai direto para A-02: na
+     chegada por caixa, toda linha passa pela área de recebimento.",
+     `boxReceiptLineLocation` em `inbound-mode.ts`). A chegada por linha
+     guarda o local como veio. Testes: `inbound-mode.test.ts` e
+     `inbound-mode.integration.test.ts`.
+   - **4b, a guarda genérica:** a tarefa de guarda da caixa não anda pelo
+     avanço genérico, e a guarda por linha move no máximo a quantidade da
+     tarefa (decisão 23).
+   - **4c, marcar falta:** na linha da NF da chegada por caixa, pela
+     operação, com o motivo (falta ou avaria, decisão 17); grava só a
+     linha, nunca a chegada. A marca da linha que depois foi coberta não
+     vale.
+   - **4d, concluir a entrada:** porta própria, e a porta genérica e a API
+     seguem recusando a chegada por caixa. A barreira: nenhuma caixa em
+     conferência, mesmo vazia (decisão 18); toda linha coberta pelas caixas
+     ou com a falta marcada; justificativa na divergência; a NF sem nenhuma
+     caixa é recusada (decisão 19). A `ENTRADA` como hoje, uma por linha da
+     NF, com a quantidade das caixas e numa data só. Uma guarda por caixa:
+     com o destino da caixa reservada, ou sem destino na caixa fechada sem
+     prateleira (decisão 14, sem condição). A chegada fica `received` com
+     os contadores das caixas e em aberto até a última guarda.
+   - **4f, a guarda da caixa:** numa transação, move todas as linhas da
+     caixa do `RECEBIMENTO` para a prateleira reservada, revalida a
+     prateleira (apagada, bloqueada ou de outra zona), põe a caixa em
+     `stored` e regrava o disponível do portal. Na última guarda, grava o
+     evento que a parte 8 usa e só então o aviso de envio vinculado aparece
+     como recebido no portal (decisão 20). Se o `RECEBIMENTO` ficou menor que
+     a caixa, a guarda é recusada com o produto e quanto falta, e a
+     coordenação acerta o saldo (decisão 24). A régua `billing-callables`
+     ganha um caso que roda a conclusão e a guarda de verdade.
+   - **4g, o destino depois da conclusão:** a caixa sem prateleira ganha o
+     destino com a chegada `received` (sugerir, recusar a sugestão,
+     confirmar); o conteúdo da caixa continua fechado.
+   - **4h, "Não cabe aqui" na prateleira:** o único jeito de trocar o
+     destino confirmado (decisão 15). Solta a reserva, avisa a coordenação
+     com evento de atenção (decisão 21) e pede outro destino.
+   - **4i, o Agent Dute:** vê a chegada guardando caixas e a guarda da
+     caixa, nas duas cópias (WMS e núcleo).
+
+   A 4d, a 4f e a 4g sobem uma logo depois da outra: entre elas, a chegada
+   por caixa concluída na homologação fica sem guarda. A primeira chegada por
+   caixa de um cliente espera a abertura dele terminar, por procedimento
+   (decisão 22). A tela da parte 5 lê o que a parte 4 grava e precisa de novo
+   alinhamento: o mockup aprovado desabilita "Concluir entrada" com caixa sem
+   destino, o que a decisão 14 mudou.
 5. **Ficha da chegada por caixa (tela)** e a fila do Receber; "Físico"
    derivado; divergência automática. Testes de textos e `axe`.
 6. **Etiquetas:** caixa `committing` com destino, origem "Recebimento", o
@@ -606,6 +646,14 @@ não resolve caixa, etiqueta nem Mapa, e por isso não entra como etapa.
 | 15 | Trocar o destino depois de confirmado, antes de levar a caixa? (02/11/2026) | Só pelo "Não cabe aqui" na prateleira (parte 4); a bancada não libera o destino. |
 | 16 | Saldo numa área sem guarda: a entrada manual e a contagem no `RECEBIMENTO`, a devolução com o local de uma área e o que já está parado nas áreas? (02/11/2026) | Uma ação "Guardar" no Estoque: a coordenação abre a guarda do saldo parado numa área, e a guarda segue a de hoje (parte 7e). |
 | — | A parte 7 entra com liberação por ambiente? (02/11/2026) | Não: pode ir à produção; quem dispara a produção é o Leonardo, à mão. |
+| 17 | Marcar falta na linha da NF da chegada por caixa: quem marca, e com que dado? (02/11/2026) | A operação, com o motivo (falta ou avaria); a justificativa da divergência continua na conclusão. |
+| 18 | Caixa vazia ainda em conferência na hora de concluir a entrada? (02/11/2026) | A conclusão recusa e nomeia a caixa a remover. |
+| 19 | NF sem nenhuma caixa, com toda linha marcada como falta? (02/11/2026) | A conclusão recusa; a chegada fica aberta até alguém tratar. |
+| 20 | Aviso de envio do cliente vinculado: quando o portal o mostra como recebido? (02/11/2026) | Na última guarda, quando as peças ficam disponíveis para pedido. |
+| 21 | O "Não cabe aqui" na prateleira avisa a coordenação? (02/11/2026) | Sim, com evento de atenção. |
+| 22 | Travar a primeira chegada por caixa enquanto a abertura do cliente está aberta? (02/11/2026) | Não: é procedimento da coordenação. |
+| 23 | Teto na guarda por linha? (02/11/2026) | Sim, na parte 4: a guarda por linha move no máximo a quantidade da tarefa. |
+| 24 | Caixa com mais peças que o saldo do `RECEBIMENTO`? (02/11/2026) | A guarda recusa com o produto e quanto falta; a coordenação acerta o `RECEBIMENTO` (entrada manual, que não cobra) e a guarda segue. |
 | 25 | Como o "Em recebimento" entra no Estoque do portal (parte 7d)? (02/11/2026) | Na tela de hoje: coluna na Lista, linha no card só quando há, o detalhe do produto e a linha do topo. |
 | 26 | A "Última entrada" do mockup entra na parte 7d? (02/11/2026) | Não: fica para uma parte própria, com a gravação no WMS. |
 | 27 | Produto sem disponível e com peça chegando: que selo? (02/11/2026) | "Em recebimento", no lugar de "Sem saldo", e a dica não sugere reposição; os botões continuam como hoje. |

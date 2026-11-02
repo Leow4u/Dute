@@ -27,6 +27,7 @@ import {
 import {
   assertLineConference,
   assertNewReceiptMode,
+  boxReceiptLineLocation,
   requestedConferenceMode,
 } from "./inbound-mode.js";
 import {
@@ -4607,6 +4608,14 @@ export async function createInboundReceiptTransaction(
       mode: conferenceMode,
       boxReceivingEnabled: options.boxReceivingEnabled === true,
     });
+    // Por caixa, toda linha passa pelo RECEBIMENTO, gravado sempre assim (parte 4a).
+    for (const item of normalizedItems) {
+      item.location_id = boxReceiptLineLocation(
+        conferenceMode,
+        item.line_number,
+        item.location_id,
+      );
+    }
 
     // SKU gerado para cada linha nova, na ordem das linhas, e duplicidade por
     // código de barras dentro do cliente. Tudo leitura, antes das escritas.
