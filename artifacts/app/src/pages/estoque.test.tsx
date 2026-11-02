@@ -9,7 +9,7 @@ import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
 
-import { ItemList, SecaoDoGiro } from "./estoque";
+import { ItemList, SecaoDoGiro, SecaoOndeEsta } from "./estoque";
 import { payloadDaMovimentacao } from "./movements";
 
 /**
@@ -188,5 +188,38 @@ describe("os dias parado no Estoque (parte 5.4c)", () => {
 
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(giro())).toEqual([]);
+  });
+});
+
+describe("o Guardar do saldo parado numa área (decisão 16, parte 7e)", () => {
+  const locais = [
+    { id: "A-03", qty: 12 },
+    { id: "RECEBIMENTO", qty: 30 },
+    { id: "Expedição", qty: 2 },
+    { id: "EXPEDICAO", qty: 0 },
+  ];
+  const secao = (podeGuardar: boolean) =>
+    renderToStaticMarkup(<SecaoOndeEsta locations={locais} podeGuardar={podeGuardar} onGuardar={() => undefined} />);
+
+  it("a coordenação vê o Guardar só no saldo de uma área, em qualquer grafia, e com peça", () => {
+    const html = secao(true);
+    const botoes = [...html.matchAll(/aria-label="([^"]+)"[^>]*>Guardar<\/button>/g)].map((match) => match[1]);
+    expect(botoes).toEqual(["Guardar do RECEBIMENTO", "Guardar do Expedição"]);
+  });
+
+  it("quem não coordena não vê o Guardar", () => {
+    expect(secao(false)).not.toContain(">Guardar</button>");
+  });
+
+  it("a área fica em âmbar e a prateleira, como antes", () => {
+    const html = secao(true);
+    expect(html).toMatch(/bg-warning-soft text-warning-soft-foreground"[^>]*>RECEBIMENTO</);
+    expect(html).toMatch(/bg-info-soft text-info-soft-foreground"[^>]*>A-03</);
+  });
+
+  it("mostra só rótulos, dados e ações e passa no axe", async () => {
+    const html = secao(true);
+    expect(textosDaTela(html)).toEqual(["Onde está", "A-03", "12 un.", "RECEBIMENTO", "30 un.", "Guardar", "Expedição", "2 un.", "EXPEDICAO", "0 un."]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });
