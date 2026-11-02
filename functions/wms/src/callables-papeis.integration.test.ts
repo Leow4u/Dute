@@ -252,6 +252,7 @@ const MATRIZ: Record<string, Linha> = {
   setUserAccess: { passam: ACESSO, recusa: SO_ACESSO },
   splitCatalogPrices: { passam: ACESSO, recusa: "Só a administração separa o preço do catálogo." },
   startInboundBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  storeInboundBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   storeOpeningConferenceBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   suggestInboundBoxPosition: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   suggestWarehousePosition: { passam: ARMAZEM, recusa: SO_ARMAZEM },

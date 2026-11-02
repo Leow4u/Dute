@@ -14,6 +14,7 @@ import {
   suggestInboundBoxPosition,
   markInboundBoxShortage,
   completeInboundBoxReceipt,
+  storeInboundBox,
 } from "./inbound-boxes.js";
 import { billingMovementDirection } from "./billing-scope.js";
 import { boxPutawayTaskId } from "./inbound-box-entry.js";
@@ -22,7 +23,9 @@ import {
   advanceWarehouseTaskTransaction,
   createCustomerRequestTransaction,
   createInboundReceiptTransaction,
+  createInventoryMovementTransaction,
   decideCustomerRequestTransaction,
+  updateInboundReceiptConferenceTransaction,
   type OperationalActor,
 } from "./operations.js";
 import { seedDefaultWarehouseLayout, upsertWarehousePositions } from "./warehouse-positions.js";
@@ -168,6 +171,20 @@ async function confirm(r: Receipt, code: string, location: string, extra: Row = 
 }
 async function shortage(r: Receipt, size: "XG" | "GG", extra: Row = {}, k = key("shortage")) {
   return markInboundBoxShortage(db, { action: "mark", receipt_id: r.id, inbound_item_id: r.items[size], reason: "falta", expected_boxed_qty: Number((await itemOf(r.items[size])).boxed_qty ?? 0), idempotency_key: k, ...extra }, operacao) as Promise<Row>;
+}
+async function store(r: Receipt, code: string, location: string, k = key("store"), extra: Row = {}) {
+  return storeInboundBox(db, { receipt_id: r.id, box_code: code, location_id: location, expected_revision: await rev(code), idempotency_key: k, ...extra }, operacao) as Promise<Row>;
+}
+async function saldosPorLocal() {
+  return (await db.collection("stock_balances").get()).docs.map((row) => [row.get("sku_code"), row.get("location_id"), row.get("qty_on_hand")]).sort();
+}
+/** Uma caixa com o conteúdo, fechada e reservada na prateleira. */
+async function reservedBox(r: Receipt, content: Array<["XG" | "GG", number]>, shelf: string) {
+  const code = String((await start(r)).box.code);
+  for (const [size, qty] of content) await line(r, code, size, qty);
+  await close(r, code);
+  await confirm(r, code, shelf);
+  return code;
 }
 function complete(r: Receipt, extra: Row = {}, k = key("complete")) {
   return completeInboundBoxReceipt(db, { receipt_id: r.id, expected_status: "created", note: "Fornecedor mandou 12 XG a menos", idempotency_key: k, ...extra }, operacao) as Promise<Row>;
@@ -872,6 +889,180 @@ describe("concluir a entrada pelas caixas (recebimento com caixas, parte 4d)", (
     assert.deepEqual([pedido.status, pedido.operational_status], ["approved", "receiving_created"]);
     const portal = (await db.collection("client_request_status").doc(avisoId).get()).data() ?? {};
     assert.deepEqual([portal.status, portal.operational_status, portal.qty_received], ["approved", "receiving_created", undefined]);
+  });
+});
+
+describe("guardar a caixa (recebimento com caixas, parte 4f)", () => {
+  it("move todas as linhas da caixa do RECEBIMENTO para a prateleira reservada, numa transação, e a caixa fica guardada", async () => {
+    const r = await receipt();
+    const one = await reservedBox(r, [["XG", 29], ["GG", 12]], "A-01");
+    const two = String((await start(r)).box.code);
+    await line(r, two, "GG", 18);
+    await close(r, two);
+    await shortage(r, "XG");
+    await complete(r);
+    const shelfBefore = Number((await positionOf("A-01")).occupancy_revision ?? 0);
+
+    const pedido = { receipt_id: r.id, box_code: one, location_id: "A-01", expected_revision: await rev(one), idempotency_key: "guardar-1" };
+    const stored = (await storeInboundBox(db, pedido, operacao)) as Row;
+    assert.deepEqual([stored.status, stored.boxes_stored, stored.box_count, stored.putaway_status], ["stored", 1, 2, "pending"]);
+    const caixa = await boxOf(one);
+    assert.deepEqual([caixa.status, caixa.location_id, caixa.line_count, caixa.unit_count, caixa.sku_codes], ["stored", "A-01", 2, 41, ["UNI-000001", "UNI-000002"]]);
+    assert.match(String(caixa.stored_at), /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(Number((await positionOf("A-01")).occupancy_revision), shelfBefore + 1);
+    assert.deepEqual(await saldosPorLocal(), [
+      ["UNI-000001", "A-01", 29], ["UNI-000001", "RECEBIMENTO", 0],
+      ["UNI-000002", "A-01", 12], ["UNI-000002", "RECEBIMENTO", 18],
+    ]);
+    const guardas = (await db.collection("movements").where("source", "==", "wms_putaway").get()).docs.map((row) => row.data());
+    assert.equal(guardas.length, 4);
+    for (const movimento of guardas) assert.equal(billingMovementDirection(movimento, { snapshot: false }), null, "a guarda não cobra");
+    assert.equal((await db.collection("putaway_tasks").doc(boxPutawayTaskId(r.id, one)).get()).get("status"), "completed");
+    const chegada = (await db.collection("inbound_receipts").doc(r.id).get()).data() ?? {};
+    assert.deepEqual([chegada.boxes_stored, chegada.putaway_status], [1, "pending"]);
+    assert.equal((await events("inventory.arrival_stored")).length, 0, "a chegada ainda tem caixa por guardar");
+    // O portal: o que foi guardado passa para o disponível.
+    const portal = (await db.collection("client_inventory").get()).docs.map((row) => [row.get("sku_code"), row.get("qty_on_hand"), row.get("qty_available"), row.get("qty_receiving")]).sort();
+    assert.deepEqual(portal, [["UNI-000001", 29, 29, 0], ["UNI-000002", 30, 12, 18]]);
+
+    // A mesma chave devolve o mesmo; a caixa sem prateleira não se guarda.
+    assert.deepEqual(await storeInboundBox(db, pedido, operacao), stored);
+    assert.equal(guardas.length, (await db.collection("movements").where("source", "==", "wms_putaway").get()).size);
+    await assert.rejects(store(r, two, "A-02"), {
+      code: "failed-precondition",
+      message: `Escolha a prateleira da caixa ${two} antes de guardar.`,
+      details: { code: "BOX_WITHOUT_DESTINATION" },
+    });
+    // A guarda genérica não leva a caixa (parte 4b).
+    await assert.rejects(
+      advanceWarehouseTaskTransaction(db, { task_uid: `putaway:${boxPutawayTaskId(r.id, two)}`, expected_status: "planned", operation: { destination_location_id: "A-02", quantity: 18 }, idempotency_key: "generica-caixa" }, operacao),
+      { code: "failed-precondition", message: `A guarda da caixa ${two} é feita pela guarda da caixa: a prateleira e o conteúdo vêm dela.` },
+    );
+  });
+
+  it("recusa sem gravar nada: antes da entrada, outra prateleira, a prateleira apagada, bloqueada ou de outra zona, o RECEBIMENTO curto e o congelamento", async () => {
+    const r = await receipt();
+    const code = await reservedBox(r, [["XG", 41], ["GG", 30]], "A-02");
+    await assert.rejects(store(r, code, "A-02"), {
+      code: "failed-precondition",
+      message: `Conclua a entrada da chegada ${r.number} antes de guardar a caixa ${code}.`,
+    });
+    // O aviso de envio vinculado: não muda na conclusão (decisão 20).
+    await db.collection("customer_requests").doc("aviso-1").set({ id: "aviso-1", type: "recebimento", status: "approved", customer_code: ALFA, operational_status: "awaiting_receipt" });
+    await db.collection("inbound_receipts").doc(r.id).update({ customer_request_id: "aviso-1" });
+    await complete(r);
+    assert.equal((await db.collection("customer_requests").doc("aviso-1").get()).get("operational_status"), "awaiting_receipt");
+    assert.equal((await db.collection("client_request_status").doc("aviso-1").get()).exists, false);
+
+    const before = await snapshotOf();
+    const movementsBefore = await sizeOf("movements");
+    await assert.rejects(store(r, code, "A-01"), {
+      code: "failed-precondition",
+      message: `A caixa ${code} está reservada em A-02: guarde lá ou use "Não cabe aqui".`,
+    });
+    const shelf = await positionOf("A-02");
+    await db.collection("warehouse_positions").doc("A-02").update({ status: "blocked" });
+    await assert.rejects(store(r, code, "A-02"), { message: `A prateleira A-02 está bloqueada: use "Não cabe aqui" para escolher outra.` });
+    await db.collection("warehouse_positions").doc("A-02").update({ status: "active", customer_code: BETA });
+    await assert.rejects(store(r, code, "A-02"), { message: `A prateleira A-02 não é mais da zona de ${ALFA}: use "Não cabe aqui" para escolher outra.` });
+    await db.collection("warehouse_positions").doc("A-02").delete();
+    await assert.rejects(store(r, code, "A-02"), { message: `A prateleira A-02 não está mais cadastrada: use "Não cabe aqui" para escolher outra.` });
+    await db.collection("warehouse_positions").doc("A-02").set(shelf);
+    // Um ajuste tirou 1 XG do RECEBIMENTO: a guarda é recusada inteira (decisão 24).
+    await createInventoryMovementTransaction(
+      db,
+      { customer_code: ALFA, type: "SAIDA", quantity: 1, sku_code: "UNI-000001", location_id: "RECEBIMENTO", reason: "Peça avariada separada", idempotency_key: "ajuste-1" },
+      coordenacao,
+    );
+    await assert.rejects(store(r, code, "A-02"), {
+      code: "failed-precondition",
+      message: `No RECEBIMENTO há 40 de POLO PIQUET PRETO XG (UNI-000001) livres, e a caixa ${code} tem 41: a coordenação acerta o saldo do RECEBIMENTO antes da guarda.`,
+      details: { code: "RECEIVING_SHORT_FOR_BOX", sku_code: "UNI-000001", available: 40, box_qty: 41 },
+    });
+    await createInventoryMovementTransaction(
+      db,
+      { customer_code: ALFA, type: "ENTRADA", quantity: 1, sku_code: "UNI-000001", location_id: "RECEBIMENTO", reason: "Acerto do RECEBIMENTO para a guarda da caixa", idempotency_key: "ajuste-2" },
+      coordenacao,
+    );
+    await db.collection("system_controls").doc("inventory").set({ movements_frozen: true });
+    await assert.rejects(store(r, code, "A-02"), { code: "failed-precondition", message: FROZEN.message });
+    await db.collection("system_controls").doc("inventory").delete();
+    assert.equal(await sizeOf("movements"), movementsBefore + 2, "só os dois ajustes");
+    assert.equal((await snapshotOf()).boxes, before.boxes);
+
+    // Guardada a última caixa: a chegada fecha, o aviso vinculado vira recebido e sai o evento da chegada guardada.
+    const last = await store(r, code, "A-02", "guardar-ultima");
+    assert.equal(last.putaway_status, "completed");
+    const chegada = (await db.collection("inbound_receipts").doc(r.id).get()).data() ?? {};
+    assert.deepEqual([chegada.boxes_stored, chegada.putaway_status], [1, "completed"]);
+    const [guardada] = await events("inventory.arrival_stored");
+    assert.equal(guardada!.severity, "info");
+    assert.equal(guardada!.payload.id, r.id);
+    assert.deepEqual(guardada!.payload.items.map((item: Row) => [item.sku_code, item.quantity]), [["UNI-000001", 41], ["UNI-000002", 30]]);
+    assert.doesNotMatch(JSON.stringify(guardada!.payload), /cost|valor|preco|location|CX-/);
+    assert.equal((await db.collection("customer_requests").doc("aviso-1").get()).get("operational_status"), "received");
+    const portal = (await db.collection("client_request_status").doc("aviso-1").get()).data() ?? {};
+    assert.deepEqual([portal.status, portal.qty_received, portal.qty_expected], ["closed", 71, 71]);
+  });
+
+  it("o aviso aprovado entre a entrada e a última guarda só aparece recebido no portal na última guarda (decisão 20)", async () => {
+    const r = await receipt();
+    const code = await reservedBox(r, [["XG", 41], ["GG", 30]], "A-02");
+    const avisoId = await avisoVinculado(r);
+    await complete(r);
+    await approveNotice(avisoId);
+    // Aprovado com a caixa ainda no RECEBIMENTO: segue em recebimento, sem fechar.
+    const antes = (await db.collection("client_request_status").doc(avisoId).get()).data() ?? {};
+    assert.deepEqual([antes.status, antes.operational_status, antes.qty_received], ["approved", "receiving_created", undefined]);
+
+    // A última guarda fecha o aviso, com o recebido.
+    await store(r, code, "A-02");
+    assert.equal((await db.collection("customer_requests").doc(avisoId).get()).get("operational_status"), "received");
+    const depois = (await db.collection("client_request_status").doc(avisoId).get()).data() ?? {};
+    assert.deepEqual([depois.status, depois.operational_status, depois.qty_received], ["closed", "received", 71]);
+  });
+
+  it("as duas últimas guardas da mesma chegada ao mesmo tempo: as duas passam, e a chegada fecha uma vez", async () => {
+    const r = await receipt();
+    const a = await reservedBox(r, [["XG", 41]], "A-01");
+    const b = await reservedBox(r, [["GG", 30]], "A-02");
+    await complete(r);
+    const [primeira, segunda] = await Promise.all([store(r, a, "A-01", "corrida-a"), store(r, b, "A-02", "corrida-b")]);
+    assert.deepEqual([primeira.putaway_status, segunda.putaway_status].sort(), ["completed", "pending"]);
+    const chegada = (await db.collection("inbound_receipts").doc(r.id).get()).data() ?? {};
+    assert.deepEqual([chegada.boxes_stored, chegada.putaway_status], [2, "completed"]);
+    assert.equal((await events("inventory.arrival_stored")).length, 1);
+  });
+
+  it("a guarda da caixa grava o razão como a guarda por linha, no mesmo saldo da prateleira", async () => {
+    // A guarda por linha de 5 XG em A-03.
+    const linha = await receipt(ALFA, "per_line");
+    await advanceWarehouseTaskTransaction(db, { task_uid: `receiving:${linha.id}`, expected_status: "created", idempotency_key: "paridade-1" }, operacao);
+    await updateInboundReceiptConferenceTransaction(
+      db,
+      { receipt_id: linha.id, expected_status: "checking", idempotency_key: "paridade-2", lines: [{ inbound_item_id: linha.items.XG, received_qty: 5 }, { inbound_item_id: linha.items.GG, received_qty: 0 }] },
+      operacao,
+    );
+    await advanceWarehouseTaskTransaction(db, { task_uid: `receiving:${linha.id}`, expected_status: "checking", note: "Teste de paridade", idempotency_key: "paridade-3" }, operacao);
+    const [tarefa] = (await db.collection("putaway_tasks").where("receipt_id", "==", linha.id).get()).docs;
+    await advanceWarehouseTaskTransaction(db, { task_uid: `putaway:${tarefa!.id}`, expected_status: "planned", operation: { source_location_id: "RECEBIMENTO", destination_location_id: "A-03", location_id: "A-03", quantity: 5 }, idempotency_key: "paridade-4" }, operacao);
+    const porLinha = (await db.collection("movements").where("source", "==", "wms_putaway").get()).docs.map((row) => row.data());
+
+    // A guarda da caixa de 5 XG na mesma A-03.
+    const caixa = await receipt();
+    const code = await reservedBox(caixa, [["XG", 5]], "A-03");
+    await shortage(caixa, "XG");
+    await shortage(caixa, "GG");
+    await complete(caixa);
+    await store(caixa, code, "A-03");
+    const todas = (await db.collection("movements").where("source", "==", "wms_putaway").get()).docs.map((row) => row.data());
+    const daCaixa = todas.filter((movimento) => movimento.box_code === code);
+    const campos = (movimento: Row) => [movimento.source, movimento.tipo_mov, movimento.sinal, movimento.qtde, movimento.location_id, movimento.movement_kind, movimento.origem, movimento.destino, movimento.sku_code];
+    assert.deepEqual(daCaixa.map(campos).sort(), porLinha.map(campos).sort());
+    // Um saldo só em A-03 para o XG, com as duas guardas.
+    const a03 = (await db.collection("stock_balances").where("location_id", "==", "A-03").get()).docs.map((row) => row.data());
+    assert.equal(a03.length, 1);
+    assert.deepEqual([a03[0]!.sku_code, a03[0]!.qty_on_hand, a03[0]!.qty_available, a03[0]!.status, a03[0]!.source], ["UNI-000001", 10, 10, "available", "wms_putaway"]);
   });
 });
 
