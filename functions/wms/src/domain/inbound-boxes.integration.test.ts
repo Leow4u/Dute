@@ -229,6 +229,11 @@ describe("a caixa do recebimento (recebimento com caixas, parte 3)", () => {
     assert.deepEqual([reserved.status, reserved.location_id, reserved.destination_location_id, reserved.front_m], ["committing", "A-01", "A-01", 0.38]);
     assert.equal(reserved.suggestion.followed, true);
     assert.equal((await positionOf("A-01")).occupancy_revision, 1);
+    // O conteúdo é rascunho até a guarda (parte 4): o que está no estoque continua zero.
+    assert.deepEqual(
+      [reserved.draft_line_count, reserved.draft_unit_count, reserved.line_count, reserved.unit_count, reserved.sku_codes, reserved.total_cost],
+      [2, 41, 0, 0, [], 0],
+    );
 
     const second = String((await start(r)).box.code);
     assert.equal(second, "CX-000002");
@@ -292,6 +297,46 @@ describe("a caixa do recebimento (recebimento com caixas, parte 3)", () => {
     await confirm(r, loser, "A-02");
   });
 
+  it("duas telas na mesma caixa e na mesma revisão: uma grava, a outra recebe o conflito", async () => {
+    const r = await receipt();
+    const code = String((await start(r)).box.code);
+    await line(r, code, "XG", 29);
+    const results = await Promise.allSettled([
+      saveInboundBoxLine(db, { receipt_id: r.id, box_code: code, inbound_item_id: r.items.GG, counted_qty: 12, expected_revision: 1, idempotency_key: "tela-1" }, operacao),
+      saveInboundBoxLine(db, { receipt_id: r.id, box_code: code, inbound_item_id: r.items.XG, counted_qty: 0, expected_revision: 1, idempotency_key: "tela-2" }, operacao),
+    ]);
+    assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+    const rejected = results.find((result) => result.status === "rejected") as PromiseRejectedResult;
+    assert.equal(rejected.reason?.code, "aborted");
+    assert.equal(rejected.reason?.details?.code, "CONFERENCE_REVISION_CONFLICT");
+    // O conteúdo da caixa e o que cada linha da NF diz ter em caixas batem.
+    const box = await boxOf(code);
+    assert.equal(box.conference_revision, 2);
+    for (const size of ["XG", "GG"] as const) {
+      const inBox = (box.lines as Row[]).find((entry) => entry.inbound_item_id === r.items[size]);
+      const item = await itemOf(r.items[size]);
+      assert.equal(Number(item.boxed_qty ?? 0), Number(inBox?.counted_qty ?? 0), size);
+      assert.deepEqual(item.box_codes ?? [], inBox ? [code] : [], size);
+    }
+  });
+
+  it("a prévia de uma prateleira escolhida e o exclude da sugestão", async () => {
+    const r = await receipt();
+    const code = await closedBox(r);
+    const chosen = await suggest(r, code, { location_id: "a-03" });
+    assert.deepEqual([chosen.position.code, chosen.position.reason, chosen.alternatives], ["A-03", "Prateleira selecionada manualmente.", []]);
+    await assert.rejects(suggest(r, code, { location_id: "B-01" }), { code: "not-found", message: "Prateleira não cadastrada na zona deste cliente." });
+    await db.collection("warehouse_positions").doc("A-02").update({ status: "blocked" });
+    await assert.rejects(suggest(r, code, { location_id: "A-02" }), { code: "failed-precondition", message: "Escolha uma prateleira ativa da zona do cliente." });
+    await db.collection("warehouse_positions").doc("A-02").update({ status: "active" });
+    assert.equal((await suggest(r, code, { exclude: ["A-01"] })).position.code, "A-02");
+    await refuse(r, code, "A-01");
+    await assert.rejects(suggest(r, code, { location_id: "A-01" }), {
+      code: "failed-precondition",
+      message: "A caixa não cabe nesta prateleira ou ela foi excluída da escolha. Selecione outra.",
+    });
+  });
+
   it("mesmo produto: o saldo da prateleira e a caixa do recebimento já reservada contam", async () => {
     const r = await receipt();
     await db.collection("stock_balances").doc("bal_gg_a02").set({ customer_code: ALFA, sku_code: "UNI-000002", location_id: "A-02", qty_on_hand: 5 });
@@ -348,8 +393,16 @@ describe("a caixa do recebimento (recebimento com caixas, parte 3)", () => {
     // O código vem normalizado; a mesma prateleira não é recusada duas vezes; reabrir limpa as recusas.
     assert.deepEqual((await refuse(r, other, "a-02")).refused, ["A-02"]);
     await assert.rejects(refuse(r, other, "A-02"), { code: "failed-precondition", message: "A prateleira A-02 já foi recusada para esta caixa." });
-    await reopen(r, other);
-    assert.deepEqual((await boxOf(other)).refusals, []);
+    const revisionBefore = await rev(other);
+    const reopened = await reopen(r, other);
+    assert.deepEqual([reopened.status, reopened.conference_revision], ["counting", revisionBefore + 1]);
+    const back = await boxOf(other);
+    assert.deepEqual([back.status, back.refusals, back.length_m], ["counting", [], 0.48]);
+    const [reopenEvent] = await events("warehouse.box_reopened");
+    assert.deepEqual([reopenEvent.entity_id, reopenEvent.customer_code, reopenEvent.payload.receipt_id], [other, ALFA, r.id]);
+    await assert.rejects(reopen(r, other), { code: "failed-precondition", message: "Só a caixa fechada e sem destino reabre." });
+    await line(r, other, "GG", 2);
+    assert.equal((await close(r, other)).status, "reviewed");
   });
 
   it("repetir a mesma chave devolve o que foi gravado, sem gravar de novo", async () => {
@@ -388,10 +441,22 @@ describe("a caixa do recebimento (recebimento com caixas, parte 3)", () => {
     }
     assert.equal(await sizeOf("operational_operations"), 6, "o recibo da chegada e um por ação");
 
+    // Reabrir e remover também repetem o gravado, sem segundo evento nem devolução dobrada.
+    const spare = await closedBox(r, BOX, "GG", 5);
+    const reopenInput = { action: "reopen", receipt_id: r.id, box_code: spare, expected_revision: await rev(spare), idempotency_key: "reopen-k" };
+    const reopened = await setInboundBoxState(db, reopenInput, operacao);
+    assert.deepEqual(await setInboundBoxState(db, reopenInput, operacao), reopened);
+    const removeInput = { receipt_id: r.id, box_code: spare, expected_revision: await rev(spare), idempotency_key: "remove-k" };
+    const removed = await removeInboundBox(db, removeInput, operacao);
+    assert.deepEqual(await removeInboundBox(db, removeInput, operacao), removed);
+    assert.equal((await itemOf(r.items.GG)).boxed_qty, 0);
+    assert.equal((await events("warehouse.box_reopened")).length, 1);
+    assert.equal((await events("warehouse.box_removed")).length, 1);
+
     // Duas chamadas ao mesmo tempo com a mesma chave: uma caixa só.
     const together = await Promise.all([start(r, "start-par"), start(r, "start-par")]);
     assert.equal(together[0]!.box.code, together[1]!.box.code);
-    assert.equal(await sizeOf("warehouse_boxes"), 2);
+    assert.equal(await sizeOf("warehouse_boxes"), 2, "a primeira e a da chave repetida; a spare foi removida");
   });
 
   it("outro cliente, outra chegada e a chegada que não é por caixa são recusados sem gravar", async () => {

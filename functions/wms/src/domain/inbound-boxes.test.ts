@@ -83,7 +83,7 @@ describe("as travas de fonte", () => {
   const index = source("../../src/index.ts");
 
   it("o módulo usa o encaixe estrito: nada da abertura nem da liberação", () => {
-    for (const proibido of [/resolveOpeningPlacement/, /opening_inventory\b/, /session_id/, /opening-inventory-conference/, /boxReceivingEnabled/, /RECEBIMENTO_POR_CAIXA/]) {
+    for (const proibido of [/resolveOpeningPlacement/, /openingSessionDocId/, /opening_inventory/, /session_id/, /opening-inventory-conference/, /boxReceivingEnabled/, /RECEBIMENTO_POR_CAIXA/]) {
       assert.doesNotMatch(modulo, proibido);
     }
   });

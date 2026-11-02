@@ -107,8 +107,8 @@ const MATRIZ: Record<string, Linha> = {
   // A entrada válida chamaria o Gemini; a conversa é de todos, sem checagem de papel.
   chatWithAgentDute: { passam: TODOS },
   completeOpeningInventorySession: { passam: ARMAZEM, recusa: SO_ARMAZEM },
-  // Qualquer papel do WMS abre solicitação (pergunta 55 do plano de implantação).
   confirmInboundBoxDestination: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  // Qualquer papel do WMS abre solicitação (pergunta 55 do plano de implantação).
   createCustomerRequest: {
     passam: TODOS,
     entrada: (papel) => ({ idempotency_key: `papeis-pedido-${papel}`, title: "Solicitação do teste de papéis" }),

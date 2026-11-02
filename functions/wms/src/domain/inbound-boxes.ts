@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { FieldValue, type DocumentReference, type Firestore, type Transaction } from "firebase-admin/firestore";
+import { FieldValue, type DocumentReference, type DocumentSnapshot, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 import { z } from "genkit";
 
@@ -82,31 +82,33 @@ export type InboundBoxLine = {
 
 // ------------------------------------------------------------------ entrada
 
-const identity = z
-  .string({ required_error: "Informe a chegada." })
-  .trim()
-  .min(1, "Identificador inválido.")
-  .max(200, "Identificador inválido.")
-  .refine((value) => !value.includes("/"), "Identificador inválido.");
+const identity = (missing: string) =>
+  z
+    .string({ required_error: missing })
+    .trim()
+    .min(1, missing)
+    .max(200, "Identificador inválido.")
+    .refine((value) => !value.includes("/"), "Identificador inválido.");
+const operationKey = identity("Chave da operação ausente. Atualize a tela e tente de novo.");
 const boxCodeField = z.string().trim().toUpperCase().regex(/^CX-\d{6,}$/, "Caixa inválida.");
 const positionField = SuggestWarehousePositionSchema.shape.location_id.unwrap();
 const receiptFields = {
   /** O cliente ativo da tela; só serve para recusar a chegada de outro cliente. */
   customer_code: z.string().trim().max(160).optional(),
-  receipt_id: identity,
+  receipt_id: identity("Informe a chegada."),
 };
 const mutationFields = {
   ...receiptFields,
   box_code: boxCodeField,
   expected_revision: z.number().int().nonnegative(),
-  idempotency_key: identity,
+  idempotency_key: operationKey,
 };
 
-export const StartInboundBoxSchema = z.object({ ...receiptFields, idempotency_key: identity });
+export const StartInboundBoxSchema = z.object({ ...receiptFields, idempotency_key: operationKey });
 
 export const SaveInboundBoxLineSchema = z.object({
   ...mutationFields,
-  inbound_item_id: identity,
+  inbound_item_id: identity("Informe a linha da NF."),
   /** Quantidade contada desta linha da NF nesta caixa; 0 tira o produto da caixa. */
   counted_qty: z.number().finite().min(0, "Quantidade inválida.").max(1_000_000, "Quantidade inválida."),
 });
@@ -310,23 +312,33 @@ export function assertReceiptTakesBoxes(receipt: Row, selectedCustomer?: string)
 
 // ---------------------------------------------------------------- leituras
 
-async function readReceipt(read: Transaction | Firestore, db: Firestore, receiptId: string) {
-  const ref = db.collection(INBOUND_RECEIPTS_COLLECTION).doc(receiptId);
-  const snapshot = "runTransaction" in read ? await ref.get() : await (read as Transaction).get(ref);
+function receiptFrom(snapshot: DocumentSnapshot): Row {
   if (!snapshot.exists) throw new HttpsError("not-found", "Chegada não encontrada.");
-  return { id: snapshot.id, ...(snapshot.data() ?? {}) } as Row;
+  return { id: snapshot.id, ...(snapshot.data() ?? {}) };
 }
 
-async function readBox(read: Transaction | Firestore, db: Firestore, boxCode: string, receiptId: string, owner: string) {
-  const ref = db.collection(WAREHOUSE_BOXES_COLLECTION).doc(boxCode);
-  const snapshot = "runTransaction" in read ? await ref.get() : await (read as Transaction).get(ref);
+function boxFrom(snapshot: DocumentSnapshot, boxCode: string, receiptId: string, owner: string): Row {
   if (!snapshot.exists) throw new HttpsError("not-found", `Caixa ${boxCode} não encontrada.`);
   const box = snapshot.data() ?? {};
   const origin = (box.origin ?? {}) as Row;
   if (origin.kind !== "receipt" || text(origin.receipt_id) !== receiptId || text(box.customer_code) !== owner) {
     throw new HttpsError("permission-denied", "Caixa de outra chegada.");
   }
-  return { ref, box };
+  return box;
+}
+
+/**
+ * Leituras das escritas: sempre pela transação, para a revisão da caixa e o
+ * status da chegada valerem até o commit (duas telas na mesma caixa: a
+ * segunda refaz a leitura e recebe o conflito de revisão).
+ */
+async function readReceipt(transaction: Transaction, db: Firestore, receiptId: string) {
+  return receiptFrom(await transaction.get(db.collection(INBOUND_RECEIPTS_COLLECTION).doc(receiptId)));
+}
+
+async function readBox(transaction: Transaction, db: Firestore, boxCode: string, receiptId: string, owner: string) {
+  const ref = db.collection(WAREHOUSE_BOXES_COLLECTION).doc(boxCode);
+  return { ref, box: boxFrom(await transaction.get(ref), boxCode, receiptId, owner) };
 }
 
 function requireStatus(box: Row, boxCode: string, allowed: "counting" | "reviewed") {
@@ -733,9 +745,10 @@ async function readZone(db: Firestore, customerCode: string) {
 export async function suggestInboundBoxPosition(db: Firestore, raw: unknown, actor: OperationalActor) {
   requireEditor(actor);
   const input = parse(SuggestInboundBoxPositionSchema, raw);
-  const receipt = await readReceipt(db, db, input.receipt_id);
+  // Só lê: fora de transação, como a sugestão de hoje (suggestWarehousePosition).
+  const receipt = receiptFrom(await db.collection(INBOUND_RECEIPTS_COLLECTION).doc(input.receipt_id).get());
   const owner = assertReceiptTakesBoxes(receipt, input.customer_code);
-  const { box } = await readBox(db, db, input.box_code, input.receipt_id, owner);
+  const box = boxFrom(await db.collection(WAREHOUSE_BOXES_COLLECTION).doc(input.box_code).get(), input.box_code, input.receipt_id, owner);
   requireStatus(box, input.box_code, "reviewed");
   const dimensions = dimensionsOf(box);
   const refused = refusedPositions(box);
