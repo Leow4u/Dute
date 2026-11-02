@@ -45,6 +45,14 @@ export const DEFAULT_OPERATION_TEMPLATE: OperationTemplateKey = "uniformes";
 /** Modelos sem portal: o cadastro nasce e permanece com o portal desligado. */
 export const TEMPLATES_WITHOUT_PORTAL: readonly OperationTemplateKey[] = ["insumos"];
 
+/**
+ * Modelos cuja chegada pode nascer por caixa (docs/plataforma/recebimento-com-caixas.md,
+ * decisão 1): uniformes. Mobiliário e insumos decidem no modelo de cada um e,
+ * até lá, recebem por linha. Igual ao `inboundConference` dos modelos do app:
+ * o teste lib/operations/operations.test.ts trava.
+ */
+export const TEMPLATES_WITH_BOX_RECEIVING: readonly OperationTemplateKey[] = ["uniformes"];
+
 export const PORTAL_STATUSES = ["active", "inactive"] as const;
 export type PortalStatus = (typeof PORTAL_STATUSES)[number];
 

@@ -17,6 +17,8 @@ export const mobiliario: OperationTemplate = {
   status: "building",
   control: "piece",
   portal: ["assistant", "home", "inventory", "requests", "orders", "services", "invoices", "documents"],
+  // Decide no próprio modelo (decisão 1); até lá, por linha.
+  inboundConference: "per_line",
   defines: [
     {
       label: "Portal",

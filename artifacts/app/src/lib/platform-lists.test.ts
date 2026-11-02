@@ -26,10 +26,12 @@ import {
   MEMORIA_AMBIENTES_LIBERADOS,
   OMIE_AMBIENTES_LIBERADOS,
   OPERACAO_AMBIENTES_LIBERADOS,
+  RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS,
   RH_AMBIENTES_LIBERADOS,
   RH_PUBLICADO,
   agenteLiberado,
   memoriaLiberada,
+  recebimentoPorCaixaLiberado,
   rhLiberado,
 } from "./liberacao";
 import { MODULOS_DO_AGENTE } from "./agente/cliente";
@@ -296,6 +298,20 @@ describe("listas do Financeiro iguais em todo lugar (Fase 4)", () => {
     const eventos = read("functions/financeiro/src/domain/events.ts");
     const parada = eventos.match(/const emissaoParada = z[\s\S]*?motivo: z\.enum\(\[([^\]]*)\]\)/);
     expect(parada && [...parada[1].matchAll(/"([^"]+)"/g)].map((item) => item[1])).toEqual([...MOTIVOS_DA_PARADA]);
+  });
+});
+
+describe("o recebimento por caixa igual em todo lugar (recebimento com caixas, parte 2)", () => {
+  const modo = read("functions/wms/src/domain/inbound-mode.ts");
+
+  it("a liberação da callable da chegada é a do app: só a homologação, até o OK do Leonardo", () => {
+    expect(tsList(modo, "RECEBIMENTO_POR_CAIXA_PROJECTS")).toEqual([...RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS]);
+    expect([...RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
+    expect([recebimentoPorCaixaLiberado("dute-homolog"), recebimentoPorCaixaLiberado("dute-prod"), recebimentoPorCaixaLiberado("dute-btg"), recebimentoPorCaixaLiberado(undefined)]).toEqual([true, false, false, false]);
+  });
+
+  it("a callable da chegada passa a liberação do ambiente ao domínio", () => {
+    expect(read("functions/wms/src/index.ts")).toContain("{ boxReceivingEnabled: boxReceivingEnabled(PROJECT_ID) }");
   });
 });
 

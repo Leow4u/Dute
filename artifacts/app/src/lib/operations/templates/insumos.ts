@@ -15,6 +15,8 @@ export const insumos: OperationTemplate = {
   status: "building",
   control: "quantity",
   portal: null,
+  // Decide no próprio modelo (decisão 1); até lá, por linha.
+  inboundConference: "per_line",
   defines: [
     { label: "Portal", value: "Não tem: só a equipe Dutelog vê" },
     { label: "Controle", value: "Por quantidade, com mínimo de estoque" },

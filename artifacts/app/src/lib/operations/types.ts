@@ -26,6 +26,14 @@ export type PortalModuleKey =
 export type StockControl = "quantity" | "piece";
 
 /**
+ * Como a chegada é conferida (docs/plataforma/recebimento-com-caixas.md): por
+ * linha, a quantidade de cada linha da NF; por caixa, cada caixa com o que tem
+ * dentro, as medidas, a etiqueta e a guarda. Os valores de
+ * `inbound_receipts.conference_mode` (functions/wms/src/domain/inbound-mode.ts).
+ */
+export type InboundConferenceMode = "per_line" | "per_box";
+
+/**
  * "ready": o modelo existe inteiro no sistema. "building": o cadastro já
  * aceita o modelo, mas as telas ainda são as do modelo base; o que falta
  * está na ficha do modelo e no doc.
@@ -43,6 +51,12 @@ export type OperationTemplate = {
    * A ordem do menu é a de lib/modules.ts, não desta lista.
    */
   portal: readonly PortalModuleKey[] | null;
+  /**
+   * Como a chegada deste modelo é conferida onde o recebimento por caixa está
+   * liberado (lib/liberacao.ts). Igual a TEMPLATES_WITH_BOX_RECEIVING das
+   * Functions: o teste operations.test.ts trava.
+   */
+  inboundConference: InboundConferenceMode;
   /** Ficha "O que o modelo define", em Configurações › Clientes. */
   defines: ReadonlyArray<{ label: string; value: string }>;
   /** Caminho no repositório, mostrado na tela: mudar o modelo é um PR. */

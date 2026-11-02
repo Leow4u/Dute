@@ -227,6 +227,7 @@ import {
   type DueRoutine,
 } from "./domain/agent-routines.js";
 import { PROJECT_ID } from "./project.js";
+import { boxReceivingEnabled } from "./domain/inbound-mode.js";
 import { PRODUCT_PHOTO_DEFAULT_MODEL, PRODUCT_PHOTO_IMAGE_SIZE, PRODUCT_PHOTO_INPUT_MAX_BYTES, ProductPhotoInput, originalProductPhoto, productPhotoPrompt, generateProductPhoto, reviewProductPhoto } from "./domain/product-photo.js";
 import { vertexPlugin } from "./domain/vertex-location.js";
 
@@ -471,6 +472,8 @@ const CreateInboundReceiptSchema = z.object({
   notes: z.string().trim().optional(),
   priority: z.string().trim().default("normal"),
   received_at: z.string().trim().optional(),
+  /** Por linha (sem o campo) ou por caixa; o domínio confere (domain/inbound-mode.ts). */
+  conference_mode: z.string().trim().optional(),
   idempotency_key: z.string().trim().min(1),
   items: z.array(RequestItemSchema).min(1).max(100),
 });
@@ -6542,6 +6545,7 @@ export const createInboundReceipt = onCall(async (request) => {
     db,
     { ...input, customer_code },
     profile,
+    { boxReceivingEnabled: boxReceivingEnabled(PROJECT_ID) },
   );
 });
 

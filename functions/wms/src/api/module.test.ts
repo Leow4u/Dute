@@ -22,6 +22,13 @@ test("corpos recusam troca de cliente e ações fora da rota antes de I/O", asyn
     await assert.rejects(route.run(context, { id: "request" }, { method: "PATCH", path: route.path, headers: {}, query: {}, body }), { code: "invalid-argument" });
   }
 });
+test("recebimento pela API nasce por linha: o corpo não aceita o modo da chegada (recebimento com caixas, 4.10)", async () => {
+  const route = armazenagemApi.routes.find((entry) => entry.method === "POST" && entry.path.endsWith("/recebimentos"))!;
+  const context = { ...ctx, integration: { ...ctx.integration, scopes: [route.scope] } };
+  for (const conference_mode of ["per_box", "per_line"]) {
+    await assert.rejects(route.run(context, {}, { method: "POST", path: route.path, headers: {}, query: {}, body: { customer_code: "A", conference_mode, items: [{ sku_code: "SKU-A", quantity: 1 }] } }), { code: "invalid-argument", message: /conference_mode/ });
+  }
+});
 test("cliente fora da chave é recusado antes de consultar SKU", async () => {
   const route = armazenagemApi.routes.find((entry) => entry.method === "POST" && entry.path.endsWith("movimentacoes"))!;
   await assert.rejects(route.run({ ...ctx, integration: { ...ctx.integration, scopes: [route.scope] } }, {}, { method: "POST", path: route.path, headers: {}, query: {}, body: { customer_code: "B", type: "ENTRADA", quantity: 1, sku_code: "SKU", location_id: "A1", reason: "teste" } }), { code: "permission-denied" });

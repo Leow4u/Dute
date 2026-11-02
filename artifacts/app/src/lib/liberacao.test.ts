@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   COMERCIAL_AMBIENTES_LIBERADOS,
   OPERACAO_AMBIENTES_LIBERADOS,
+  RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS,
   comercialLiberado,
   operacaoLiberada,
   plataformaLiberada,
+  recebimentoPorCaixaLiberado,
 } from "./liberacao";
 
 describe("liberação da plataforma por ambiente", () => {
@@ -57,6 +59,20 @@ describe("liberação da Operação por ambiente", () => {
   it("produção antiga e projeto de teste ficam desligados, porque as callables recusam", () => {
     for (const projectId of ["dute-btg", "demo-dute", "", null, undefined]) {
       expect(operacaoLiberada(projectId)).toBe(false);
+    }
+  });
+});
+
+describe("liberação do recebimento por caixa por ambiente", () => {
+  it("só a homologação, a mesma lista da callable da chegada (platform-lists.test.ts)", () => {
+    expect(RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS).toEqual(["dute-homolog"]);
+    expect(recebimentoPorCaixaLiberado("dute-homolog")).toBe(true);
+    expect(recebimentoPorCaixaLiberado(" dute-homolog ")).toBe(true);
+  });
+
+  it("produção, produção antiga e projeto de teste ficam desligados, porque a callable recusa", () => {
+    for (const projectId of ["dute-prod", "dute-btg", "demo-dute", "", null, undefined]) {
+      expect(recebimentoPorCaixaLiberado(projectId)).toBe(false);
     }
   });
 });
