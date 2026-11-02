@@ -29,6 +29,7 @@ import {
   assertLinePutaway,
   assertNewReceiptMode,
   boxReceiptLineLocation,
+  conferenceModeOf,
   putawayQuantityWithinTask,
   requestedConferenceMode,
 } from "./inbound-mode.js";
@@ -44,6 +45,19 @@ import {
   skusQuePrecisamDasDatas,
   type Entrada,
 } from "./datas-do-saldo.js";
+import {
+  AREA_DE_RECEBIMENTO,
+  CLIENT_NOTICE_AFTER_PUTAWAY,
+  boxEntryTarget,
+  boxPutawayTaskId,
+  entradaPorCaixa,
+  type EntradaPorCaixa,
+} from "./inbound-box-entry.js";
+import {
+  BOX_COUNTER_DOC,
+  WAREHOUSE_BOXES_COLLECTION,
+  WAREHOUSE_COUNTERS_COLLECTION,
+} from "./warehouse-boxes.js";
 import {
   WAREHOUSE_POSITIONS_COLLECTION,
   putawayAdvanceStatus,
@@ -6595,10 +6609,15 @@ export async function decideCustomerRequestTransaction(
     );
 
     // Chegada vinculada que já foi conferida: o portal continua em "recebido",
-    // como fica quando a conferência vem depois da aprovação.
-    const linkedReceived = ["received", "completed"].includes(
-      text(linkedReceipt?.data.status).toLowerCase(),
-    );
+    // como fica quando a conferência vem depois da aprovação. A chegada por
+    // caixa só conta como recebida depois da última guarda (decisão 20): até
+    // lá, as peças estão no RECEBIMENTO, e a última guarda fecha o aviso.
+    const linkedReceived =
+      ["received", "completed"].includes(
+        text(linkedReceipt?.data.status).toLowerCase(),
+      ) &&
+      (conferenceModeOf(linkedReceipt?.data) !== "per_box" ||
+        text(linkedReceipt?.data.putaway_status) === "completed");
     const inboundStatus = linkedReceived ? "received" : "receiving_created";
     transaction.update(
       requestRef,
@@ -7270,10 +7289,20 @@ function completionEvent(type: string, status: string) {
   return mapping[type]?.[status] ?? `${type}.advanced`;
 }
 
+/**
+ * A porta da conclusão da chegada por caixa (inbound-boxes.ts,
+ * completeInboundBoxReceipt) passa `boxEntry`; sem ela, a chegada por caixa
+ * segue recusada aqui (a porta genérica e a API REST v1).
+ */
+export type AdvanceWarehouseTaskOptions = {
+  boxEntry?: { selectedCustomer?: string };
+};
+
 export async function advanceWarehouseTaskTransaction(
   db: Firestore,
   input: AdvanceOperationalTaskInput,
   actor: OperationalActor,
+  options: AdvanceWarehouseTaskOptions = {},
 ) {
   const { type, id, collection } = taskParts(input.task_uid);
   const expectedStatus = text(input.expected_status).toLowerCase() || undefined;
@@ -7316,6 +7345,16 @@ export async function advanceWarehouseTaskTransaction(
       );
     }
     let targetStatus = nextStatus(type, currentStatus);
+    // A chegada por caixa vai direto a received pela porta dela (parte 4d).
+    const boxEntry = type === "receiving" ? options.boxEntry : undefined;
+    if (boxEntry) targetStatus = boxEntryTarget(task, boxEntry.selectedCustomer);
+    let boxEntryPlan: EntradaPorCaixa | undefined;
+    /** O local da linha na entrada: na chegada por caixa, sempre o RECEBIMENTO. */
+    const receivingLocationOf = (row: Row) =>
+      boxEntry
+        ? AREA_DE_RECEBIMENTO
+        : text(row.data.location_id || task.location_id || task.receiving_location) ||
+          "RECEBIMENTO";
     const customerCode = text(task.customer_code) || LEGACY_CUSTOMER_CODE;
     const orderId = text(task.order_id);
     const requestId = text(task.customer_request_id);
@@ -7416,7 +7455,7 @@ export async function advanceWarehouseTaskTransaction(
     }
 
     if (type === "receiving" && targetStatus === "received") {
-      assertLineConference(task, "concluir");
+      if (!boxEntry) assertLineConference(task, "concluir");
       inboundItems = await readRows(
         transaction,
         db.collection(collections.inboundItems).where("receipt_id", "==", id),
@@ -7427,13 +7466,31 @@ export async function advanceWarehouseTaskTransaction(
           "Recebimento não possui linhas para confirmar.",
         );
       }
+      if (boxEntry) {
+        // As caixas da chegada, e o contador CX que o "Iniciar caixa" grava:
+        // a caixa iniciada no mesmo instante derruba uma das duas transações.
+        const [boxRows] = await Promise.all([
+          readRows(
+            transaction,
+            db.collection(WAREHOUSE_BOXES_COLLECTION).where("receipt_id", "==", id),
+          ),
+          transaction.get(
+            db.collection(WAREHOUSE_COUNTERS_COLLECTION).doc(BOX_COUNTER_DOC),
+          ),
+        ]);
+        boxEntryPlan = entradaPorCaixa({
+          receiptId: id,
+          receiptNumber: text(task.receipt_number) || id,
+          owner: customerCode,
+          linhas: inboundItems.map((row) => ({ ...row.data, id: row.id })),
+          caixas: boxRows.map((row) => ({ ...row.data, code: row.id })),
+          nota: input.note,
+        });
+      }
       const keys = new Map<string, { skuCode: string; locationId: string }>();
       for (const row of inboundItems) {
         const skuCode = text(row.data.sku_code);
-        const locationId =
-          text(
-            row.data.location_id || task.location_id || task.receiving_location,
-          ) || "RECEBIMENTO";
+        const locationId = receivingLocationOf(row);
         if (!skuCode) {
           throw new HttpsError(
             "failed-precondition",
@@ -7445,7 +7502,8 @@ export async function advanceWarehouseTaskTransaction(
           locationId,
         });
       }
-      const uncheckedRows = inboundItems.filter((row) => {
+      // Na chegada por caixa, a conferência e a divergência são das caixas (entradaPorCaixa).
+      const uncheckedRows = boxEntry ? [] : inboundItems.filter((row) => {
         const status = text(row.data.status);
         return (
           status !== "checked" &&
@@ -7459,7 +7517,7 @@ export async function advanceWarehouseTaskTransaction(
           `Salve a conferência física de ${uncheckedRows.length} linha(s) antes de concluir a entrada.`,
         );
       }
-      const divergentRows = inboundItems.filter((row) => {
+      const divergentRows = boxEntry ? [] : inboundItems.filter((row) => {
         const differenceQty =
           row.data.difference_qty === undefined
             ? number(row.data.received_qty) - number(row.data.expected_qty)
@@ -8193,23 +8251,25 @@ export async function advanceWarehouseTaskTransaction(
         }
       >();
       for (const row of inboundItems) {
-        const expectedQty = requiredPositive(
-          row.data.expected_qty,
-          `Quantidade de ${row.id}`,
-        );
-        const rowStatus = text(row.data.status);
-        const wasConferenced =
-          rowStatus === "checked" ||
-          rowStatus === "divergence" ||
-          Boolean(row.data.checked_at);
-        const quantity = wasConferenced
-          ? number(row.data.received_qty)
-          : expectedQty;
+        // Na chegada por caixa, a quantidade é a soma das caixas (entradaPorCaixa).
+        const boxLine = boxEntryPlan?.linhas.get(row.id);
+        let quantity: number;
+        if (boxEntryPlan) {
+          quantity = boxLine?.received_qty ?? 0;
+        } else {
+          const expectedQty = requiredPositive(
+            row.data.expected_qty,
+            `Quantidade de ${row.id}`,
+          );
+          const rowStatus = text(row.data.status);
+          const wasConferenced =
+            rowStatus === "checked" ||
+            rowStatus === "divergence" ||
+            Boolean(row.data.checked_at);
+          quantity = wasConferenced ? number(row.data.received_qty) : expectedQty;
+        }
         const skuCode = text(row.data.sku_code);
-        const locationId =
-          text(
-            row.data.location_id || task.location_id || task.receiving_location,
-          ) || "RECEBIMENTO";
+        const locationId = receivingLocationOf(row);
         const state = balanceStates.get(
           balanceKey(customerCode, skuCode, locationId),
         );
@@ -8243,11 +8303,19 @@ export async function advanceWarehouseTaskTransaction(
           status: "received",
           received_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
+          ...(boxLine
+            ? {
+                difference_qty: boxLine.difference_qty,
+                conference_status: boxLine.conference_status,
+                ...(boxLine.clear_shortage ? { shortage: FieldValue.delete() } : {}),
+              }
+            : {}),
         });
         if (quantity <= 0) {
           continue;
         }
-        if (locationId.toUpperCase() === "RECEBIMENTO") {
+        // A chegada por caixa guarda por caixa, não por linha (abaixo).
+        if (!boxEntryPlan && locationId.toUpperCase() === "RECEBIMENTO") {
           const putawayTaskId = `put_${digest({
             receiptId: id,
             inboundItemId: row.id,
@@ -8310,16 +8378,46 @@ export async function advanceWarehouseTaskTransaction(
           actor,
         );
       }
+      // Uma guarda por caixa, com o destino da caixa reservada; a caixa
+      // fechada sem prateleira ganha o destino na guarda (decisão 14).
+      for (const guarda of boxEntryPlan?.caixas ?? []) {
+        const putawayTaskId = boxPutawayTaskId(id, guarda.code);
+        transaction.create(
+          db.collection(collections.putawayTasks).doc(putawayTaskId),
+          compact({
+            id: putawayTaskId,
+            customer_code: customerCode,
+            receipt_id: id,
+            receipt_number: task.receipt_number,
+            invoice_number: text(task.invoice_number) || undefined,
+            box_code: guarda.code,
+            source_location_id: AREA_DE_RECEBIMENTO,
+            location_id: guarda.destination ?? undefined,
+            destination_location_id: guarda.destination ?? undefined,
+            lines: guarda.lines,
+            sku_codes: guarda.sku_codes,
+            quantity: guarda.unit_count,
+            total_units: guarda.unit_count,
+            status: "planned",
+            priority: "normal",
+            title: `Guardar caixa ${guarda.code}`,
+            next_action: guarda.destination
+              ? `Levar a caixa ${guarda.code} para ${guarda.destination} e confirmar a guarda.`
+              : `Escolher a prateleira da caixa ${guarda.code} e guardar.`,
+            source: "wms_receiving",
+            created_from_operation_id: operationId,
+            created_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp(),
+          }),
+        );
+        putawayTasksCreated += 1;
+      }
       const receivingWrites: Array<BalanceWrite & { skuCode: string }> = [];
       for (const state of balanceStates.values()) {
         const sourceItem = inboundItems.find(
           (row) =>
             text(row.data.sku_code) === state.skuCode &&
-            (text(
-              row.data.location_id ||
-                task.location_id ||
-                task.receiving_location,
-            ) || "RECEBIMENTO") === state.locationId,
+            receivingLocationOf(row) === state.locationId,
         );
         const balancePayload = compact({
           customer_code: customerCode,
@@ -8449,6 +8547,19 @@ export async function advanceWarehouseTaskTransaction(
         qty_received: receivedQty,
         received_at: FieldValue.serverTimestamp(),
       });
+      if (boxEntryPlan) {
+        // A chegada fica received e em aberto até a última guarda (decisão 5).
+        Object.assign(taskUpdate, {
+          qty_difference: boxEntryPlan.qty_difference,
+          divergence_count: boxEntryPlan.divergence_count,
+          conference_status: boxEntryPlan.conference_status,
+          box_count: boxEntryPlan.caixas.length,
+          box_codes: boxEntryPlan.caixas.map((guarda) => guarda.code),
+          boxes_stored: 0,
+          putaway_status: "pending",
+        });
+        effects.box_count = boxEntryPlan.caixas.length;
+      }
       effects.received_lines = inboundItems.length;
       effects.received_qty = receivedQty;
       effects.putaway_tasks_created = putawayTasksCreated || undefined;
@@ -8465,21 +8576,51 @@ export async function advanceWarehouseTaskTransaction(
             entity_type: "recebimento",
             entity_id: id,
             customer_code: customerCode,
-            payload: {
+            payload: compact({
               received_qty: receivedQty,
               movement_count: inboundItems.length,
-            },
+              // A chegada por caixa avisa na última guarda (decisão 20).
+              client_notice: boxEntryPlan ? CLIENT_NOTICE_AFTER_PUTAWAY : undefined,
+            }),
           },
           actor,
         ),
       );
+      const boxesWithoutShelf = (boxEntryPlan?.caixas ?? []).filter((guarda) => !guarda.destination);
+      if (boxesWithoutShelf.length) {
+        const receiptNumber = text(task.receipt_number) || id;
+        events.push(
+          createEvent(
+            transaction,
+            db,
+            operationEventId(operationId, "boxes_without_shelf"),
+            {
+              type: "warehouse.boxes_without_shelf",
+              title: `${boxesWithoutShelf.length} caixa(s) da chegada ${receiptNumber} sem prateleira`,
+              description: `${boxesWithoutShelf.map((guarda) => guarda.code).join(", ")}: escolha a prateleira na guarda.`,
+              severity: "attention",
+              entity_type: "recebimento",
+              entity_id: id,
+              customer_code: customerCode,
+              payload: {
+                receipt_id: id,
+                receipt_number: receiptNumber,
+                box_codes: boxesWithoutShelf.map((guarda) => guarda.code),
+              },
+            },
+            actor,
+          ),
+        );
+      }
       // Aviso recusado pela coordenação ou cancelado pelo cliente com a
       // chegada avulsa ainda vinculada (domain/inbound-notice.ts): a entrada
-      // conta no estoque, mas o portal continua mostrando a decisão.
+      // conta no estoque, mas o portal continua mostrando a decisão. Na
+      // chegada por caixa, o aviso vinculado vira recebido na última guarda
+      // (decisão 20).
       const requestDecided = ["rejected", "cancelled"].includes(
         text(requestRow?.data.status).toLowerCase(),
       );
-      if (requestRow && !requestDecided) {
+      if (requestRow && !requestDecided && !boxEntryPlan) {
         transaction.update(requestRow.ref, {
           operational_status: "received",
           fulfillment_updated_at: FieldValue.serverTimestamp(),
@@ -9344,6 +9485,7 @@ export async function advanceWarehouseTaskTransaction(
             after_status: targetStatus,
             ...effects,
             ...created,
+            ...(boxEntryPlan ? { client_notice: CLIENT_NOTICE_AFTER_PUTAWAY } : {}),
           },
         },
         actor,

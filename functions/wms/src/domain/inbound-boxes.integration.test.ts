@@ -13,8 +13,18 @@ import {
   startInboundBox,
   suggestInboundBoxPosition,
   markInboundBoxShortage,
+  completeInboundBoxReceipt,
 } from "./inbound-boxes.js";
-import { createInboundReceiptTransaction, type OperationalActor } from "./operations.js";
+import { billingMovementDirection } from "./billing-scope.js";
+import { boxPutawayTaskId } from "./inbound-box-entry.js";
+import { linkInboundNoticeTransaction } from "./inbound-notice.js";
+import {
+  advanceWarehouseTaskTransaction,
+  createCustomerRequestTransaction,
+  createInboundReceiptTransaction,
+  decideCustomerRequestTransaction,
+  type OperationalActor,
+} from "./operations.js";
 import { seedDefaultWarehouseLayout, upsertWarehousePositions } from "./warehouse-positions.js";
 import { createWarehouseBox, removeWarehouseBox, suggestWarehousePosition } from "./warehouse-boxes.js";
 
@@ -158,6 +168,35 @@ async function confirm(r: Receipt, code: string, location: string, extra: Row = 
 }
 async function shortage(r: Receipt, size: "XG" | "GG", extra: Row = {}, k = key("shortage")) {
   return markInboundBoxShortage(db, { action: "mark", receipt_id: r.id, inbound_item_id: r.items[size], reason: "falta", expected_boxed_qty: Number((await itemOf(r.items[size])).boxed_qty ?? 0), idempotency_key: k, ...extra }, operacao) as Promise<Row>;
+}
+function complete(r: Receipt, extra: Row = {}, k = key("complete")) {
+  return completeInboundBoxReceipt(db, { receipt_id: r.id, expected_status: "created", note: "Fornecedor mandou 12 XG a menos", idempotency_key: k, ...extra }, operacao) as Promise<Row>;
+}
+/** O aviso de envio do portal, vinculado à chegada no Receber; devolve o id dele. */
+async function avisoVinculado(r: Receipt) {
+  const aviso = (await createCustomerRequestTransaction(
+    db,
+    {
+      type: "recebimento",
+      priority: "normal",
+      title: "Entrega de polos",
+      customer_code: r.customer,
+      supplier: "Confecções Alfa",
+      invoice_number: "48230",
+      idempotency_key: key("aviso"),
+      items: [{ line_number: 1, sku_code: `${PREFIX[r.customer]}-000001`, client_item_code: `${PREFIX[r.customer]}.POLO.XG`, product_name: "POLO PIQUET PRETO XG", product_registration: "existing", location_id: "RECEBIMENTO", quantity: 41 }],
+    },
+    { uid: "cli-1", role: "cliente", customer_code: r.customer, name: "Cliente" },
+  )) as Row;
+  await linkInboundNoticeTransaction(db, { receipt_id: `receiving:${r.id}`, request_id: String(aviso.id), customer_code: r.customer }, operacao);
+  return String(aviso.id);
+}
+function approveNotice(requestId: string) {
+  return decideCustomerRequestTransaction(
+    db,
+    { request_id: requestId, action: "approve", expected_status: "open", idempotency_key: key("aprovar") },
+    coordenacao,
+  ) as Promise<Row>;
 }
 async function remove(r: Receipt, code: string, k = key("remove")) {
   return removeInboundBox(db, { receipt_id: r.id, box_code: code, expected_revision: await rev(code), idempotency_key: k }, operacao) as Promise<Row>;
@@ -676,6 +715,163 @@ describe("marcar falta na linha da NF (recebimento com caixas, parte 4c)", () =>
     await assert.rejects(shortage(r, "XG"), { code: "failed-precondition", details: { code: "RECEIPT_NOT_OPEN" } });
     assert.equal((await itemOf(r.items.XG)).shortage, undefined);
     assert.equal((await events("warehouse.line_shortage_marked")).length, 0);
+  });
+});
+
+describe("concluir a entrada pelas caixas (recebimento com caixas, parte 4d)", () => {
+  /** CX-1 com XG 29 e GG 12, reservada em A-01; CX-2 com GG 18, fechada e sem prateleira; falta de 12 XG marcada. */
+  async function montagem() {
+    const r = await receipt();
+    const one = String((await start(r)).box.code);
+    await line(r, one, "XG", 29);
+    await line(r, one, "GG", 12);
+    await close(r, one);
+    await confirm(r, one, "A-01");
+    const two = String((await start(r)).box.code);
+    await line(r, two, "GG", 18);
+    await close(r, two);
+    await shortage(r, "XG");
+    return { r, one, two };
+  }
+
+  it("lança a ENTRADA de cada linha da NF, abre uma guarda por caixa e deixa a chegada em aberto até a última guarda", async () => {
+    const { r, one, two } = await montagem();
+    const boxesBefore = JSON.stringify([await boxOf(one), await boxOf(two)]);
+    const inboxBefore = await sizeOf("ai_agent_inbox");
+
+    const result = await complete(r, {}, "concluir-1");
+    assert.equal(result.status, "received");
+
+    const chegada = (await db.collection("inbound_receipts").doc(r.id).get()).data() ?? {};
+    assert.deepEqual(
+      [chegada.status, chegada.box_count, chegada.box_codes, chegada.boxes_stored, chegada.putaway_status],
+      ["received", 2, [one, two], 0, "pending"],
+    );
+    assert.deepEqual(
+      [chegada.qty_received, chegada.qty_difference, chegada.divergence_count, chegada.conference_status, chegada.operation_note],
+      [59, -12, 1, "divergence", "Fornecedor mandou 12 XG a menos"],
+    );
+    const xg = await itemOf(r.items.XG);
+    const gg = await itemOf(r.items.GG);
+    assert.deepEqual([xg.received_qty, xg.difference_qty, xg.conference_status, xg.status, xg.location_id], [29, -12, "short", "received", "RECEBIMENTO"]);
+    assert.equal(xg.shortage.qty, 12, "a falta marcada fica na linha");
+    assert.deepEqual([gg.received_qty, gg.difference_qty, gg.conference_status], [30, 0, "ok"]);
+
+    // O RECEBIMENTO recebe a NF; a guarda é que leva às prateleiras.
+    const saldos = (await db.collection("stock_balances").get()).docs.map((row) => [row.get("sku_code"), row.get("location_id"), row.get("qty_on_hand")]).sort();
+    assert.deepEqual(saldos, [["UNI-000001", "RECEBIMENTO", 29], ["UNI-000002", "RECEBIMENTO", 30]]);
+
+    // Uma ENTRADA por linha da NF, na mesma data, que a cobrança conta como entrada.
+    const movimentos = (await db.collection("movements").get()).docs.map((row) => row.data());
+    assert.equal(movimentos.length, 2);
+    assert.deepEqual(movimentos.map((movimento) => [movimento.tipo_mov, movimento.source]).sort(), [["ENTRADA", "wms_receiving"], ["ENTRADA", "wms_receiving"]]);
+    assert.equal(new Set(movimentos.map((movimento) => movimento.occurred_at)).size, 1);
+    assert.equal(movimentos.reduce((sum, movimento) => sum + Number(movimento.qtde ?? movimento.quantity), 0), 59);
+    for (const movimento of movimentos) assert.equal(billingMovementDirection(movimento, { snapshot: false }), "incoming");
+
+    // Uma guarda por caixa: a reservada com o destino, a sem prateleira sem.
+    const guardas = (await db.collection("putaway_tasks").get()).docs.map((row) => ({ id: row.id, ...row.data() })) as Row[];
+    assert.equal(guardas.length, 2);
+    const daUm = guardas.find((guarda) => guarda.box_code === one)!;
+    const doDois = guardas.find((guarda) => guarda.box_code === two)!;
+    assert.equal(daUm.id, boxPutawayTaskId(r.id, one));
+    assert.deepEqual([daUm.destination_location_id, daUm.quantity, daUm.sku_codes, daUm.source_location_id, daUm.status], ["A-01", 41, ["UNI-000001", "UNI-000002"], "RECEBIMENTO", "planned"]);
+    assert.deepEqual([doDois.destination_location_id, doDois.quantity, doDois.sku_codes], [undefined, 18, ["UNI-000002"]]);
+    for (const guarda of guardas) assert.equal(guarda.sku_code, undefined);
+    assert.equal(JSON.stringify([await boxOf(one), await boxOf(two)]), boxesBefore, "as caixas não mudam na conclusão");
+
+    // O portal: tudo em recebimento até a guarda.
+    const portal = (await db.collection("client_inventory").get()).docs.map((row) => [row.get("sku_code"), row.get("qty_on_hand"), row.get("qty_available"), row.get("qty_receiving")]).sort();
+    assert.deepEqual(portal, [["UNI-000001", 29, 0, 29], ["UNI-000002", 30, 0, 30]]);
+
+    // Os eventos da conclusão não avisam o cliente (decisão 20); a caixa sem prateleira avisa a coordenação.
+    for (const tipo of ["inventory.received", "inbound.checked"]) {
+      const [evento] = await events(tipo);
+      assert.equal(evento!.payload.client_notice, "after_putaway", tipo);
+    }
+    const [semPrateleira] = await events("warehouse.boxes_without_shelf");
+    assert.equal(semPrateleira!.severity, "attention");
+    assert.deepEqual(semPrateleira!.payload.box_codes, [two]);
+    assert.equal(await sizeOf("ai_agent_inbox"), inboxBefore + 1);
+    const caixaDeEntrada = await db.collection("ai_agent_inbox").where("event_id", "==", semPrateleira!.id).get();
+    assert.equal(caixaDeEntrada.size, 1);
+
+    // A mesma chave devolve o mesmo, sem segundo movimento nem segunda guarda.
+    assert.deepEqual(await complete(r, {}, "concluir-1"), result);
+    assert.equal(await sizeOf("movements"), 2);
+    assert.equal(await sizeOf("putaway_tasks"), 2);
+    // Concluída, a caixa não muda mais pela bancada.
+    await assert.rejects(start(r), { code: "failed-precondition", details: { code: "RECEIPT_NOT_OPEN" } });
+  });
+
+  it("recusa sem gravar nada: caixa vazia ou aberta, linha sem caixa e sem marca, divergência sem nota, outro cliente, nenhuma caixa", async () => {
+    const vazia = await receipt();
+    const aberta = String((await start(vazia)).box.code);
+    let before = await snapshotOf();
+    await assert.rejects(complete(vazia), {
+      code: "failed-precondition",
+      message: `Remova a caixa ${aberta}, vazia, antes de concluir a entrada.`,
+    });
+    assert.deepEqual(await snapshotOf(), before);
+    await semEstoque();
+    await remove(vazia, aberta);
+    await assert.rejects(complete(vazia), {
+      code: "failed-precondition",
+      message: `A chegada ${vazia.number} não tem nenhuma caixa: a entrada pede ao menos uma caixa fechada.`,
+    });
+
+    const { r, one } = await montagem();
+    await line(r, String((await start(r)).box.code), "XG", 1);
+    before = await snapshotOf();
+    await assert.rejects(complete(r), { code: "failed-precondition", message: /^Feche a caixa CX-\d+ \(medidas e peso\) antes de concluir a entrada\.$/ });
+    assert.deepEqual(await snapshotOf(), before);
+    await semEstoque();
+
+    const semMarca = await receipt();
+    const caixa = String((await start(semMarca)).box.code);
+    await line(semMarca, caixa, "GG", 30);
+    await close(semMarca, caixa);
+    await assert.rejects(complete(semMarca), {
+      code: "failed-precondition",
+      message: "A linha 1 tem 0 de 41: complete as caixas ou marque a falta.",
+    });
+    await shortage(semMarca, "XG");
+    await assert.rejects(complete(semMarca, { note: "" }), {
+      code: "failed-precondition",
+      message: "Recebimento possui 1 linha(s) com divergência. Informe a justificativa operacional antes de concluir.",
+    });
+    await assert.rejects(complete(semMarca, { customer_code: BETA }), { code: "permission-denied" });
+    await semEstoque();
+    assert.equal((await db.collection("inbound_receipts").doc(semMarca.id).get()).get("status"), "created");
+    assert.ok(one);
+  });
+
+  it("a porta genérica segue recusando a chegada por caixa, e a por caixa recusa a chegada por linha", async () => {
+    const r = await receipt();
+    // A porta genérica leva a chegada a checking, como antes, e recusa concluir.
+    await advanceWarehouseTaskTransaction(db, { task_uid: `receiving:${r.id}`, expected_status: "created", idempotency_key: "generica-1" }, operacao);
+    await assert.rejects(
+      advanceWarehouseTaskTransaction(db, { task_uid: `receiving:${r.id}`, expected_status: "checking", idempotency_key: "generica-2" }, operacao),
+      { code: "failed-precondition", message: `A chegada ${r.number} é conferida por caixa: a entrada é concluída pelas caixas, na ficha da chegada.` },
+    );
+    const porLinha = await receipt(ALFA, "per_line");
+    await assert.rejects(complete(porLinha), {
+      code: "failed-precondition",
+      message: `A chegada ${porLinha.number} é conferida por linha: use a conferência da chegada.`,
+    });
+    await semEstoque();
+  });
+
+  it("o aviso vinculado aprovado depois da entrada segue em recebimento: a chegada por caixa só conta como recebida na última guarda (decisão 20)", async () => {
+    const { r } = await montagem();
+    const avisoId = await avisoVinculado(r);
+    await complete(r);
+    const aprovado = await approveNotice(avisoId);
+    assert.equal(aprovado.inbound_id, r.id);
+    const pedido = (await db.collection("customer_requests").doc(avisoId).get()).data() ?? {};
+    assert.deepEqual([pedido.status, pedido.operational_status], ["approved", "receiving_created"]);
+    const portal = (await db.collection("client_request_status").doc(avisoId).get()).data() ?? {};
+    assert.deepEqual([portal.status, portal.operational_status, portal.qty_received], ["approved", "receiving_created", undefined]);
   });
 });
 

@@ -261,7 +261,7 @@ describe("o modo da chegada (recebimento com caixas, parte 2)", () => {
     });
     await assert.rejects(advance(receiptId, "checking"), {
       code: "failed-precondition",
-      message: `A chegada ${receiptNumber} é conferida por caixa: concluir a entrada pede as caixas fechadas e com destino.`,
+      message: `A chegada ${receiptNumber} é conferida por caixa: a entrada é concluída pelas caixas, na ficha da chegada.`,
     });
     const lines = await db.collection("inbound_items").where("receipt_id", "==", receiptId).get();
     assert.equal(lines.size, 1);
