@@ -16,6 +16,7 @@ import {
   Minus,
   Package,
   PackageCheck,
+  PackageOpen,
   PackagePlus,
   Plus,
   RotateCcw,
@@ -88,6 +89,7 @@ import {
   inventoryItemName,
   inventoryItemReserved,
   inventoryItemPhoto,
+  inventoryItemReceiving,
   inventoryItemSku,
   inventoryItemTotal,
   inventoryItemValue,
@@ -110,6 +112,8 @@ type StockProduct = {
   name: string;
   category: string;
   available: number;
+  /** No RECEBIMENTO, ainda sem guarda: aparece, mas não entra no pedido (decisão 10). */
+  receiving: number;
   reserved: number;
   total: number;
   value: number;
@@ -1389,12 +1393,13 @@ export function StockList({
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card">
-      <Table className="min-w-[860px]">
+      <Table className="min-w-[980px]">
         <TableHeader className="sticky top-0 z-10 bg-card">
           <TableRow>
             <TableHead className="w-[170px]">Código</TableHead>
             <TableHead className="min-w-[300px]">Produto</TableHead>
             <TableHead className="text-right">Disponível</TableHead>
+            <TableHead className="text-right">Em recebimento</TableHead>
             <TableHead className="text-right">Reservado</TableHead>
             <TableHead className="w-[270px] text-right">Pedido</TableHead>
           </TableRow>
@@ -1440,6 +1445,9 @@ export function StockList({
                     {formatNumber(liveAvailable)}
                   </p>
 
+                </TableCell>
+                <TableCell className="text-right">
+                  <ReceivingQuantity quantity={product.receiving} />
                 </TableCell>
                 <TableCell className="text-right text-muted-foreground">
                   {formatNumber(product.reserved)}
@@ -1605,8 +1613,11 @@ export function FamilyCard({
   onReplenish: (product: StockProduct) => void;
   onArchive: (product: StockProduct) => void;
 }) {
+  // Sem tamanho com saldo, o card abre no tamanho que está chegando (parte 7d).
   const firstAvailable =
-    family.variants.find((entry) => liveAvailableForProduct(entry.item, cart) > 0) ?? family.variants[0];
+    family.variants.find((entry) => liveAvailableForProduct(entry.item, cart) > 0) ??
+    family.variants.find((entry) => entry.item.receiving > 0) ??
+    family.variants[0];
   const [selectedKey, setSelectedKey] = useState(firstAvailable.item.key);
   const selected =
     family.variants.find((entry) => entry.item.key === selectedKey) ?? firstAvailable;
@@ -1615,9 +1626,10 @@ export function FamilyCard({
   const draftQuantity = draftQuantityForProduct(product, cart, draftQuantities);
   const inCart = family.variants.reduce((sum, entry) => sum + (cart[entry.item.key] ?? 0), 0);
   const familyAvailable = family.variants.reduce((sum, entry) => sum + entry.item.available, 0);
+  const familyReceiving = family.variants.reduce((sum, entry) => sum + entry.item.receiving, 0);
   const photo = family.variants.find((entry) => entry.item.photoUrl)?.item ?? product;
   const status = productStatus(
-    { ...product, available: familyAvailable },
+    { ...product, available: familyAvailable, receiving: familyReceiving },
     family.variants.reduce((sum, entry) => sum + liveAvailableForProduct(entry.item, cart), 0),
   );
   const title = productTitle(product);
@@ -1644,7 +1656,7 @@ export function FamilyCard({
       ) : null}
 
       <div className="flex flex-1 flex-col gap-2.5 p-3.5">
-        {!hasPhoto && (inCart > 0 || status === "zero" || status === "low") ? (
+        {!hasPhoto && (inCart > 0 || status === "zero" || status === "receiving" || status === "low") ? (
           <div>
             <StockBadge status={status} compact inCart={inCart} />
           </div>
@@ -1681,14 +1693,18 @@ export function FamilyCard({
                     active
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-border text-foreground hover:border-primary/40",
-                    entry.item.available <= 0 && !active && "text-muted-foreground/60",
+                    entry.item.available <= 0 && entry.item.receiving <= 0 && !active && "text-muted-foreground/60",
                   )}
                 >
-                  <span className={cn("text-xs font-semibold", entry.item.available <= 0 && "line-through")}>
+                  <span className={cn("text-xs font-semibold", entry.item.available <= 0 && entry.item.receiving <= 0 && "line-through")}>
                     {variantLabel(entry.variant ?? entry.item.clientCode)}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {entry.item.available <= 0 ? "esgotado" : `${formatNumber(available)} disp.`}
+                    {entry.item.available > 0
+                      ? `${formatNumber(available)} disp.`
+                      : entry.item.receiving > 0
+                        ? "em recebimento"
+                        : "esgotado"}
                   </span>
                 </button>
               );
@@ -1706,6 +1722,12 @@ export function FamilyCard({
             "Sem saldo no momento"
           )}
         </p>
+        {product.receiving > 0 ? (
+          <p className="-mt-1.5 text-xs text-muted-foreground">
+            <span className="font-semibold text-info-soft-foreground">{formatNumber(product.receiving)}</span>{" "}
+            {showVariants ? "em recebimento neste tamanho" : "em recebimento"}
+          </p>
+        ) : null}
 
         {/* Contador e "Adicionar" lado a lado só quando cabem (240px de conteúdo:
             contador de 114px, espaço e botão de ~110px); abaixo disso, empilhados,
@@ -2085,7 +2107,7 @@ export function CartPanel({
   );
 }
 
-function ProductDetailPanel({
+export function ProductDetailPanel({
   product,
   cart,
   draftQuantity,
@@ -2165,6 +2187,12 @@ function ProductDetailPanel({
               value={formatNumber(cart[product.key] ?? 0)}
             />
           )}
+          {product.receiving > 0 ? (
+            <StockFact
+              label="Em recebimento"
+              value={formatNumber(product.receiving)}
+            />
+          ) : null}
           {product.reserved > 0 ? (
             <StockFact
               label="Reservado"
@@ -2507,6 +2535,16 @@ function FilterChip({
   );
 }
 
+/** O em recebimento na lista: em destaque quando há peça chegando (mockup PortalEstoqueRecebimento). */
+function ReceivingQuantity({ quantity }: { quantity: number }) {
+  if (quantity <= 0) return <span className="text-muted-foreground">{formatNumber(0)}</span>;
+  return (
+    <span className="inline-flex items-center rounded-md border border-info-soft-border bg-info-soft px-2 py-0.5 font-semibold text-info-soft-foreground">
+      {formatNumber(quantity)}
+    </span>
+  );
+}
+
 function StockFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-lg border border-border bg-card p-3">
@@ -2542,6 +2580,14 @@ function StockBadge({
       <span className={cn("inline-flex items-center gap-1 rounded-md bg-card font-semibold text-destructive-soft-foreground shadow-sm", size)}>
         <AlertTriangle className="h-3.5 w-3.5" />
         Sem saldo
+      </span>
+    );
+  }
+  if (status === "receiving") {
+    return (
+      <span className={cn("inline-flex items-center gap-1 rounded-md bg-card font-semibold text-info-soft-foreground shadow-sm", size)}>
+        <PackageOpen className="h-3.5 w-3.5" aria-hidden="true" />
+        Em recebimento
       </span>
     );
   }
@@ -2635,6 +2681,7 @@ export function groupInventoryProducts(items: InventoryItem[]) {
       name,
       category,
       available: 0,
+      receiving: 0,
       reserved: 0,
       total: 0,
       value: 0,
@@ -2645,6 +2692,7 @@ export function groupInventoryProducts(items: InventoryItem[]) {
     };
 
     current.available += inventoryItemAvailable(item);
+    current.receiving += inventoryItemReceiving(item);
     current.reserved += inventoryItemReserved(item);
     current.total += inventoryItemTotal(item);
     current.value += inventoryItemValue(item);
@@ -2857,7 +2905,8 @@ function draftQuantityForProduct(
 }
 
 function productStatus(product: StockProduct, liveAvailable: number) {
-  if (product.available <= 0) return "zero" as const;
+  // Sem disponível, com peça chegando: o selo diz que está em recebimento.
+  if (product.available <= 0) return product.receiving > 0 ? ("receiving" as const) : ("zero" as const);
   if (liveAvailable <= 0) return "cart" as const;
   if (isLowStock(product, liveAvailable)) return "low" as const;
   return "ok" as const;
@@ -2870,6 +2919,10 @@ function isLowStock(product: StockProduct, liveAvailable: number) {
 }
 
 function agentDuteSignal(product: StockProduct, liveAvailable: number) {
+  if (product.available <= 0 && product.receiving > 0) {
+    return "Há peças deste produto em recebimento na Dutelog: entram no disponível para pedido depois da guarda.";
+  }
+
   if (product.available <= 0) {
     return "Produto sem saldo disponível. Avise a Dutelog sobre a reposição ou arquive o produto; o histórico é preservado.";
   }

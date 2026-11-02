@@ -504,11 +504,11 @@ desenhada e aprovada antes do PR de tela.
      de aprovação (`customer-requests.tsx`, para a solicitação que chegou sem
      reserva) usa a mesma regra. Testes: `areas-de-passagem.test.ts` e
      `areas-de-passagem.integration.test.ts` no WMS, `areas-de-passagem.test.ts`
-     e `customer-requests.test.ts` no app. Fica em aberto o saldo que entra
-     numa área sem tarefa de guarda (entrada manual ou contagem no
-     `RECEBIMENTO`, devolução com o local de uma área): ele sai do disponível,
-     e o caminho de volta à prateleira, hoje, é a saída e a entrada manuais
-     (pergunta 16).
+     e `customer-requests.test.ts` no app. O saldo que entra numa área sem
+     tarefa de guarda (entrada manual ou contagem no `RECEBIMENTO`, devolução
+     com o local de uma área) sai do disponível; o caminho de volta à
+     prateleira é a ação "Guardar" no Estoque (decisão 16, parte 7e) e, até
+     ela, a saída e a entrada manuais.
    - **7c, o recálculo:** feito em 02/11/2026. A projeção só se acerta
      quando o SKU tem uma escrita nova; a rotina `runPortalAvailability` (WMS,
      de 15 em 15 minutos, uma instância) refaz `qty_available` e
@@ -531,9 +531,31 @@ desenhada e aprovada antes do PR de tela.
      apague esse documento, e o novo recálculo grava o seu evento. Testes:
      `disponivel-do-portal.test.ts` e
      `disponivel-do-portal.integration.test.ts`.
-   - **7d, o portal:** "Disponível para pedido" e "Em recebimento" no Estoque
-     do portal (mockup `PortalEstoqueRecebimento`), aceitando a projeção ainda
-     sem `qty_receiving`.
+   - **7d, o portal:** feita em 02/11/2026, na tela de hoje (decisões 25 a
+     27, mockup `PortalEstoqueRecebimento`). O `cloud-api.ts` passa o
+     `qty_receiving` da projeção ao Estoque do portal
+     (`quantidadesDoPortal`), e a prévia interna, que lê os saldos por local,
+     separa a área de passagem pela mesma regra; a projeção ainda sem o
+     campo conta zero. A Lista ganha a coluna "Em recebimento", entre
+     "Disponível" e "Reservado", com o número em destaque quando há peça
+     chegando; o card mostra "24 em recebimento" só quando há ("neste
+     tamanho" no card agrupado, que abre no tamanho chegando quando nenhum
+     tem saldo, e o tamanho chegando diz "em recebimento", não "esgotado");
+     o detalhe do produto ganha o "Em recebimento"; a linha do topo ganha "·
+     24 em recebimento". O produto sem disponível e com peça chegando leva o
+     selo "Em recebimento" no lugar de "Sem saldo", e a dica do Agent Dute
+     não sugere reposição; os botões, o filtro "Sem saldo" e a contagem dele
+     seguem o disponível, como antes. O destaque usa a cor de informação do
+     sistema, e não o âmbar do mockup, para não se confundir com o "Baixo
+     estoque". A "Última entrada" do mockup fica para depois (decisão 26).
+     Testes: `estoque.test.tsx` (lista, card, card agrupado e detalhe, com
+     a lista dos textos e o axe), `portal-stock.test.ts` e
+     `cloud-api-portal.test.ts`.
+   - **7e, a ação "Guardar" no Estoque (decisão 16):** a coordenação abre a
+     guarda de um saldo parado numa área de passagem (entrada manual ou
+     contagem no `RECEBIMENTO`, devolução com o local de uma área, e o que já
+     está parado nas áreas na produção), e a guarda segue a de hoje. Antes do
+     PR, o mockup da ação para aprovar.
    - A API REST v1 recusava com 404 a retirada de um SKU com saldo fora de
      prateleira cadastrada (`stockLocations`, em `api/module.ts`); a correção
      entrou em 02/11/2026 (PR 533), e com esta parte a conferência dela também
@@ -582,16 +604,13 @@ não resolve caixa, etiqueta nem Mapa, e por isso não entra como etapa.
 | 13 | E-mail do aviso em texto ou HTML? | HTML com a identidade da Dutelog, no molde dos e-mails de convite e confirmação. |
 | 14 | Zona cheia na conclusão: a entrada se conclui com a caixa fechada e sem destino? (02/11/2026) | Sim: a caixa ganha o destino na guarda. A seção 4.4 deixa de pedir toda caixa com destino. |
 | 15 | Trocar o destino depois de confirmado, antes de levar a caixa? (02/11/2026) | Só pelo "Não cabe aqui" na prateleira (parte 4); a bancada não libera o destino. |
+| 16 | Saldo numa área sem guarda: a entrada manual e a contagem no `RECEBIMENTO`, a devolução com o local de uma área e o que já está parado nas áreas? (02/11/2026) | Uma ação "Guardar" no Estoque: a coordenação abre a guarda do saldo parado numa área, e a guarda segue a de hoje (parte 7e). |
 | — | A parte 7 entra com liberação por ambiente? (02/11/2026) | Não: pode ir à produção; quem dispara a produção é o Leonardo, à mão. |
+| 25 | Como o "Em recebimento" entra no Estoque do portal (parte 7d)? (02/11/2026) | Na tela de hoje: coluna na Lista, linha no card só quando há, o detalhe do produto e a linha do topo. |
+| 26 | A "Última entrada" do mockup entra na parte 7d? (02/11/2026) | Não: fica para uma parte própria, com a gravação no WMS. |
+| 27 | Produto sem disponível e com peça chegando: que selo? (02/11/2026) | "Em recebimento", no lugar de "Sem saldo", e a dica não sugere reposição; os botões continuam como hoje. |
 
-Falta decidir:
-
-16. **Saldo numa área sem guarda:** a entrada manual e a contagem no
-    `RECEBIMENTO`, e a devolução disponível com o local de uma área, põem
-    saldo onde o pedido do cliente não reserva e não abrem guarda. O que
-    fazer: abrir a guarda sozinha nesses caminhos, como o Receber faz; dar ao
-    Estoque uma ação "Guardar" para o saldo parado numa área; ou recusar
-    esses lançamentos nas áreas, deixando o RECEBIMENTO só para o Receber?
+Nada em aberto.
 
 Os mockups das telas que mudam (chegada avulsa, ficha da chegada por caixa,
 fechar caixa e onde guardar, fila do Receber, guarda da caixa no computador e
