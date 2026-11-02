@@ -15,6 +15,7 @@ import {
   markInboundBoxShortage,
   completeInboundBoxReceipt,
   storeInboundBox,
+  refuseInboundBoxShelf,
 } from "./inbound-boxes.js";
 import { billingMovementDirection } from "./billing-scope.js";
 import { boxPutawayTaskId } from "./inbound-box-entry.js";
@@ -1100,6 +1101,59 @@ describe("o destino da caixa sem prateleira depois da entrada (recebimento com c
     assert.equal(last.putaway_status, "completed");
     // Guardada a caixa, o destino não se dá mais.
     await assert.rejects(confirm(r, two, "A-03"), { code: "failed-precondition" });
+  });
+});
+
+describe("\"Não cabe aqui\" na prateleira (recebimento com caixas, parte 4h)", () => {
+  async function naoCabe(r: Receipt, code: string, reason = "A prateleira tem uma viga mais baixa", k = key("nao-cabe")) {
+    return refuseInboundBoxShelf(db, { receipt_id: r.id, box_code: code, reason, expected_revision: await rev(code), idempotency_key: k }, operacao) as Promise<Row>;
+  }
+
+  it("na guarda, solta a reserva, avisa a coordenação e a caixa ganha outra prateleira", async () => {
+    const r = await receipt();
+    const code = await reservedBox(r, [["XG", 41], ["GG", 30]], "A-01");
+    // Na bancada, o destino confirmado não muda (decisão 15).
+    await assert.rejects(naoCabe(r, code), {
+      code: "failed-precondition",
+      message: `A caixa ${code} já tem destino confirmado em A-01: a troca é pelo "Não cabe aqui", na guarda, depois da entrada.`,
+      details: { code: "BOX_DESTINATION_LOCKED" },
+    });
+    assert.equal((await boxOf(code)).status, "committing");
+    await complete(r);
+    const shelfBefore = Number((await positionOf("A-01")).occupancy_revision ?? 0);
+    const inboxBefore = await sizeOf("ai_agent_inbox");
+
+    const refused = await naoCabe(r, code);
+    assert.deepEqual([refused.status, refused.refused], ["reviewed", ["A-01"]]);
+    const caixa = await boxOf(code);
+    assert.deepEqual([caixa.status, caixa.location_id, caixa.destination_location_id, caixa.front_m], ["reviewed", "", null, null]);
+    assert.equal(Number((await positionOf("A-01")).occupancy_revision), shelfBefore + 1);
+    const tarefa = (await db.collection("putaway_tasks").doc(boxPutawayTaskId(r.id, code)).get()).data() ?? {};
+    assert.deepEqual([tarefa.status, tarefa.destination_location_id, tarefa.location_id], ["planned", undefined, undefined]);
+    const [aviso] = await events("warehouse.box_shelf_refused");
+    assert.equal(aviso!.severity, "attention");
+    assert.equal(await sizeOf("ai_agent_inbox"), inboxBefore + 1);
+
+    // A sugestão não volta para A-01; confirma A-02 e guarda lá.
+    const sugestao = await suggest(r, code);
+    assert.notEqual(sugestao.position?.code, "A-01");
+    await confirm(r, code, "A-02");
+    assert.equal((await store(r, code, "A-02")).putaway_status, "completed");
+  });
+
+  it("a prateleira reservada apagada: a guarda recusa, o \"Não cabe aqui\" solta a caixa sem tocar no documento que sumiu", async () => {
+    const r = await receipt();
+    const code = await reservedBox(r, [["XG", 41], ["GG", 30]], "A-03");
+    await complete(r);
+    await db.collection("warehouse_positions").doc("A-03").delete();
+    await assert.rejects(store(r, code, "A-03"), { details: { code: "SHELF_GONE" } });
+    const refused = await naoCabe(r, code, "A prateleira foi desmontada");
+    assert.equal(refused.status, "reviewed");
+    assert.equal((await db.collection("warehouse_positions").doc("A-03").get()).exists, false);
+    const [aviso] = await events("warehouse.box_shelf_refused");
+    assert.equal(aviso!.payload.shelf_exists, false);
+    await confirm(r, code, "A-02");
+    assert.equal((await store(r, code, "A-02")).status, "stored");
   });
 });
 
