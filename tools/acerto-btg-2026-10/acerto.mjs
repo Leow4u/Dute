@@ -167,9 +167,16 @@ async function skuPorCodigo(codigo, { incluirArquivados = false, estrito = false
   const valor = text(codigo);
   if (!valor) return null;
   const aceita = (data) => doCliente(data) && (incluirArquivados || !arquivado(data));
+  // Com `estrito`, o cadastro do SKU tem de ter o código pedido (ou nenhum): um saldo ou uma linha com o código
+  // certo digitado não pode fazer o SKU errado (A.01.O719.004.P, com letra O) passar pelo certo.
+  const proprioConfere = (data) => {
+    if (!estrito) return true;
+    const proprios = [data.cod_cliente_key, data.cod_cliente, data.client_item_code].map(normalizedIdentity).filter(Boolean);
+    return !proprios.length || proprios.includes(normalizedIdentity(valor));
+  };
   const achados = new Map();
   const guardar = (snap) => {
-    if (snap?.exists && aceita(snap.data()) && !achados.has(snap.id)) achados.set(snap.id, linhaSku(snap));
+    if (snap?.exists && aceita(snap.data()) && proprioConfere(snap.data()) && !achados.has(snap.id)) achados.set(snap.id, linhaSku(snap));
   };
   if (ehSku(valor)) {
     guardar(await db.collection("skus").doc(valor.toUpperCase()).get());
@@ -682,6 +689,8 @@ const OPS = {
           previsto: [],
         };
       }
+      const produtoExistente = await db.collection("products").doc(safeDocId(op.codigo)).get();
+      if (produtoExistente.exists) throw new Erro(`já existe products/${safeDocId(op.codigo)} (${text(produtoExistente.data().produto || produtoExistente.data().name) || "sem nome"}, cliente ${text(produtoExistente.data().customer_code) || "vazio"}) sem SKU com esse código; criar por cima apagaria o que ele tem`);
       const irmao = await skuPorCodigo(op.copiar_de);
       if (!irmao) throw new Erro(await naoEncontrado("SKU de referência", op.copiar_de));
       const tamIrmao = text(irmao.data.size || irmao.data.tamanho) || text(op.copiar_de).split(".").pop();
@@ -704,7 +713,8 @@ const OPS = {
         const key = normalizedIdentity(op.codigo);
         const jaExiste = (await tx.get(db.collection("skus").where("cod_cliente_key", "==", key))).docs.some((d) => !arquivado(d.data()) && doCliente(d.data()));
         if (jaExiste) throw new Erro(`${op.codigo} apareceu no cadastro entre o dry-run e a gravação`);
-        const irmaoSnap = await tx.get(irmao.ref);
+        const [irmaoSnap, produtoSnap] = await Promise.all([tx.get(irmao.ref), tx.get(db.collection("products").doc(safeDocId(op.codigo)))]);
+        if (produtoSnap.exists) throw new Erro(`products/${safeDocId(op.codigo)} apareceu entre o dry-run e a gravação`);
         const ref = irmaoSnap.data();
         const alocador = await catalogCodes.openSkuAllocator(tx, db, CLIENTE);
         const skuCode = await alocador.next();
@@ -793,6 +803,7 @@ const OPS = {
       const de = await skuPorCodigo(op.de, { incluirArquivados: saiu });
       if (!de) throw new Erro(await naoEncontrado("SKU de origem", op.de));
       const para = await destino(op.para);
+      if (para.sku && para.sku.id === de.id) throw new Erro(`origem e destino são o mesmo SKU (${de.id}): ${op.de} e ${op.para}`);
       // Saída já gravada e entrada não: quantidade e posição vêm do recibo da saída (com "tudo",
       // o saldo de hoje já é outro, e a origem pode ter ficado sem saldo em qualquer posição).
       const saida = saiu ? await movimentoDoRecibo(idReciboMovimento(chave(op, "saida"))) : null;
@@ -1185,6 +1196,7 @@ const OPS = {
       if (!itens.length) throw new Erro(`nenhuma linha da abertura de ${op.de}${op.caixa ? ` na caixa ${op.caixa}` : ""}`);
       if ((op.caixa || op.qtde != null) && itens.length !== 1) throw new Erro(`${itens.length} linha(s) da abertura de ${op.de}${op.caixa ? ` na caixa ${op.caixa}` : ""}; com qtde ou caixa precisa ser exatamente 1`);
       const para = await destino(op.para);
+      if (para.sku && para.sku.id === deSku) throw new Erro(`origem e destino são o mesmo SKU (${deSku}): ${op.de} e ${op.para}`);
       const estado = [];
       const previsto = [];
       for (const item of itens) {

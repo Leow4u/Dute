@@ -227,6 +227,13 @@ aplicado") e aplique de novo: só o que faltar é gravado.
    Guilherme; falta cruzar com as linhas do sistema (`--buscar
    A.01.0805.002.`), inclusive as registradas em B-10.
 
+Antes do oitavo dry-run (02/11/2026), três travas a mais: a busca exata
+(criar e destino) só aceita o SKU cujo próprio cadastro tem o código pedido,
+para um saldo com `A.01.0719.004.P` digitado certo não fazer o BTG-000087
+(`A.01.O719.004.P`) passar pelo SKU novo; transferência e correção de linha
+recusam origem e destino iguais; e criar SKU recusa quando já existe um
+`products` com o mesmo id, para não gravar por cima.
+
 Com isso o plano tem 62 operações: 47 já gravadas ou a gravar, 7 sem mudança
 e 8 pendentes. No emulador: dry-run com 47 a gravar, aplicação com 47, dry-run
 seguinte com 47 já aplicadas; a baixa parcial da CX-000004 tem teste próprio
