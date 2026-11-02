@@ -168,6 +168,21 @@ origem. O recebimento não põe nada em caixa: a caixa é da abertura. O pedido
 do cliente só reserva o que está na prateleira: o saldo no "RECEBIMENTO" ou
 na "EXPEDICAO" fica fora do disponível do portal até a guarda.
 
+**Caixa na prateleira (FIFO, 02/11/2026):** sai primeiro o que entrou
+primeiro, e o sistema não confere a caixa: o hábito garante.
+
+- Ao guardar peça sem etiqueta de caixa, escreva a data do dia na frente da
+  caixa (DD/MM/AA). Caixa da abertura não precisa de data escrita.
+- A caixa nova vai atrás ou embaixo; a mais antiga fica na frente ou em cima.
+- Na separação, tire da caixa mais antiga da prateleira indicada e deixe a
+  sobra nela, na frente. Uma caixa aberta por item em cada prateleira.
+- Caixa vazia sai da prateleira na hora. Se a caixa sair inteira para o
+  cliente, tire a etiqueta CX.
+- Não mude caixa de prateleira; se precisar, trate como guarda nova, com a
+  data do dia.
+
+O desenho está em `docs/plataforma/fifo-por-data.md`.
+
 ## Estoque › Itens
 
 "Estoque · cliente", com "Itens" e "Histórico". A busca acha por código, nome

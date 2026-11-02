@@ -358,6 +358,12 @@ documentação de produto e operação está em `docs/`.
   `qty_receiving` (livre do `RECEBIMENTO`) a partir dos saldos do SKU depois
   da escrita; escrita nova da projeção lê todos os saldos do SKU antes da
   primeira escrita. O total, a reserva e o valor da mercadoria não mudam.
+- **FIFO por data (P8, versão enxuta, decidida em 02/11/2026):** a separação
+  tira primeiro o mais antigo, por prateleira e data, sem conteúdo por caixa.
+  As datas saem do ledger (o que sobra numa prateleira são as entradas mais
+  recentes nela), o cliente vê só a data e a quantidade, e o aviso ao cliente
+  não cita caixa (`CX-`) nem posição. Desenho, partes e hábitos da prateleira
+  em `docs/plataforma/fifo-por-data.md`.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os
   modelos (`uniformes` pronto, `mobiliario` e `insumos` em construção) e os
