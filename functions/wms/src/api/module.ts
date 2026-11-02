@@ -56,9 +56,20 @@ async function target(ctx: ReadContext, collection: string, targetId: string): P
   requireCustomer(ctx, data.customer_code);
   return { ...data, expected_version: `${snapshot.updateTime!.seconds}:${snapshot.updateTime!.nanoseconds}` };
 }
-async function location(ctx: ReadContext, code: string, customer: string) {
-  const data = await target(ctx, "warehouse_positions", code);
+async function position(ctx: ReadContext, code: string) {
+  const ref = ctx.db.collection("warehouse_positions").doc(code);
+  const snapshot = ctx.transaction ? await ctx.transaction.get(ref) : await ref.get();
+  return snapshot.exists ? snapshot.data()! : undefined;
+}
+function activeZone(ctx: ReadContext, data: Record<string, unknown>, customer: string) {
+  requireCustomer(ctx, data.customer_code);
   if (data.customer_code !== customer || (data.status && data.status !== "active")) denied("Posição fora da zona ativa do cliente.");
+}
+async function location(ctx: ReadContext, code: string, customer: string) {
+  parse(id, code);
+  const data = await position(ctx, code);
+  if (!data) throw new HttpsError("not-found", "Registro não encontrado.");
+  activeZone(ctx, data, customer);
 }
 async function sku(ctx: ReadContext, code: string, customer: string) {
   const data = await target(ctx, "skus", code);
@@ -72,12 +83,28 @@ async function related(ctx: ReadContext, data: Record<string, unknown>, customer
     }
   }
 }
+/** O disponível do alocador do pedido (createCustomerRequestTransaction): qty_on_hand menos qty_reserved. */
+function available(balance: Record<string, unknown>) {
+  const quantity = (value: unknown) => { const parsed = Number(value ?? 0); return Number.isFinite(parsed) ? parsed : 0; };
+  return quantity(balance.qty_on_hand) - quantity(balance.qty_reserved);
+}
 async function stockLocations(ctx: ReadContext, customer: string, code: string, selected?: string) {
   const query = ctx.db.collection("stock_balances").where("customer_code", "==", customer).where("sku_code", "==", code);
   const rows = ctx.transaction ? await ctx.transaction.get(query) : await query.get();
+  const wanted = (selected ?? "").trim();
   for (const row of rows.docs) {
-    const balance = row.data();
-    if (!selected || balance.location_id === selected) await location(ctx, String(balance.location_id), customer);
+    const balance = row.data(), place = String(balance.location_id ?? "").trim();
+    // Só o saldo que a alocação pode usar, com disponível: o zerado (a doca
+    // depois da guarda) e o todo reservado ficam de fora.
+    if ((wanted && place !== wanted) || available(balance) <= 0) continue;
+    // O alocador usa o saldo livre de qualquer local. A prateleira (pelo código
+    // da etiqueta, como na guarda) precisa ser da zona ativa do cliente; a área
+    // sem posição (RECEBIMENTO, EXPEDICAO, DEVOLUCAO, uma doca digitada no
+    // Receber) passa, como no pedido do portal: o saldo já é do cliente. O
+    // saldo sem local também passa daqui, e o próprio alocador o recusa.
+    const shelf = place.toUpperCase();
+    const data = id.safeParse(shelf).success ? await position(ctx, shelf) : undefined;
+    if (data) activeZone(ctx, data, customer);
   }
 }
 async function validateItems(ctx: ReadContext, customer: string, items: z.infer<typeof item>[]) {

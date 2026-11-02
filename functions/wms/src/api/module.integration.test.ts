@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { before, after, test } from "node:test";
 import { initializeApp, deleteApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { advanceWarehouseTaskTransaction } from "../domain/operations.js";
 import { armazenagemApi } from "./module.js";
 import type { ApiContext } from "./shared/core.js";
 const project = "demo-dute-api-wms";
@@ -173,4 +174,68 @@ test("handler cliente pessoal: pedido valida tenant na transação e replay apó
   assert.equal(badSku.status, 403);
   await db.doc("users/personal-client-writer").update({ customer_code: "B" });
   assert.equal((await handler(request)).status, 403, "recibo antigo não abre cliente anterior");
+});
+
+async function saldos(skuCode: string) {
+  const rows = await db.collection("stock_balances").where("customer_code", "==", "A").where("sku_code", "==", skuCode).get();
+  return Object.fromEntries(rows.docs.map(doc => [doc.get("location_id"), [doc.get("qty_on_hand"), doc.get("qty_reserved"), doc.get("status")]]));
+}
+async function reservas(requestId: string) {
+  const rows = await db.collection("stock_reservations").where("customer_request_id", "==", requestId).get();
+  return rows.docs.map(doc => [doc.get("location_id"), doc.get("reserved_qty")]).sort();
+}
+async function produto(skuCode: string, itemCode: string) {
+  await Promise.all([
+    db.collection("skus").doc(skuCode).set({ customer_code: "A", sku_code: skuCode, cod_btg: skuCode, cod_cliente: itemCode, produto: `Produto ${skuCode}` }),
+    db.collection("products").doc(itemCode).set({ customer_code: "A", cod_cliente: itemCode, produto: `Produto ${skuCode}` }),
+  ]);
+}
+
+test("retirada pela API passa com o saldo zerado que a guarda deixa no RECEBIMENTO", async () => {
+  await produto("SKU-R", "ITEM-R");
+  // O Receber deixa a chegada na doca e abre a guarda; a guarda leva o item
+  // à prateleira e deixa o saldo da doca zerado, sem apagá-lo.
+  const receiptId = String((await run("POST", "/recebimentos", { customer_code: "A", items: [{ sku_code: "SKU-R", client_item_code: "ITEM-R", product_name: "Produto SKU-R", quantity: 4 }] }, {}, "dock-receipt")).receipt_id);
+  await run("POST", "/recebimentos/{id}/avancar", { expected_status: "created" }, { id: receiptId }, "dock-start");
+  const [linha] = (await run("GET", "/recebimentos/{id}/itens", undefined, { id: receiptId })).data;
+  const versao = (await run("GET", "/recebimentos/{id}", undefined, { id: receiptId })).data.expected_version;
+  await run("PATCH", "/recebimentos/{id}", { expected_version: versao, expected_status: "checking", lines: [{ inbound_item_id: linha.id, received_qty: 4 }] }, { id: receiptId }, "dock-conference");
+  await run("POST", "/recebimentos/{id}/avancar", { expected_status: "checking" }, { id: receiptId }, "dock-complete");
+  const [guarda] = (await db.collection("putaway_tasks").where("receipt_id", "==", receiptId).get()).docs;
+  assert.ok(guarda, "a chegada na doca abre a guarda");
+  await advanceWarehouseTaskTransaction(db, { task_uid: `putaway:${guarda.id}`, expected_status: "planned", operation: { destination_location_id: "A1" }, idempotency_key: "dock-putaway" }, { uid: "wms-1", role: "wms", name: "Armazém" });
+  assert.deepEqual(await saldos("SKU-R"), { A1: [4, 0, "available"], RECEBIMENTO: [0, 0, "empty"] });
+
+  const pedido = await run("POST", "/pedidos", { customer_code: "A", type: "retirada", title: "Retirada pela API", items: [{ sku_code: "SKU-R", quantity: 3 }] }, {}, "dock-request");
+  const requestId = String(pedido.id);
+  assert.deepEqual(await reservas(requestId), [["A1", 3]]);
+  // A aprovação pela API confere o saldo do mesmo jeito.
+  await run("PATCH", "/pedidos/{id}", { action: "approve", expected_status: "open" }, { id: requestId }, "dock-approve");
+  assert.equal((await run("GET", "/pedidos/{id}", undefined, { id: requestId })).data.status, "approved");
+});
+
+test("retirada pela API confere só o saldo livre: a área sem posição passa como no portal, a prateleira de outra zona recusa", async () => {
+  await produto("SKU-E", "ITEM-E");
+  // A prateleira do cliente; zerado, um saldo na prateleira da zona de outro
+  // cliente (o código em minúsculas é a mesma prateleira, como na guarda); uma
+  // devolução disponível; uma doca digitada no Receber; e a sobra de um pedido
+  // cancelado depois da separação.
+  const locais = [["A1", 2], ["b1", 0], ["DEVOLUCAO", 1], ["DOCA 2", 1], ["EXPEDICAO", 2]] as const;
+  await Promise.all(locais.map(([local, qty]) => db.collection("stock_balances").doc(`bal-e-${local}`).set({ customer_code: "A", sku_code: "SKU-E", client_item_code: "ITEM-E", product_name: "Produto SKU-E", location_id: local, qty_on_hand: qty, qty_reserved: 0, qty_available: qty, status: qty ? "available" : "empty" })));
+  // O alocador usa o saldo livre de qualquer local, na ordem do código.
+  const pedido = await run("POST", "/pedidos", { customer_code: "A", type: "retirada", title: "Retirada com áreas", items: [{ sku_code: "SKU-E", quantity: 6 }] }, {}, "area-request");
+  assert.deepEqual(await reservas(String(pedido.id)), [["A1", 2], ["DEVOLUCAO", 1], ["DOCA 2", 1], ["EXPEDICAO", 2]]);
+  // Com saldo livre, a prateleira da outra zona entra na conferência e recusa, sem reservar nada.
+  await db.collection("stock_balances").doc("bal-e-b1").update({ qty_on_hand: 1, qty_available: 1, status: "available" });
+  await assert.rejects(run("POST", "/pedidos", { customer_code: "A", type: "retirada", title: "Retirada da outra zona", items: [{ sku_code: "SKU-E", quantity: 1 }] }, {}, "area-request-b1"), { code: "permission-denied" });
+  assert.equal((await db.collection("stock_reservations").where("sku_code", "==", "SKU-E").get()).size, 4);
+});
+
+test("retirada pela API de SKU com saldo sem local tem a recusa do alocador, como no portal", async () => {
+  await produto("SKU-S", "ITEM-S");
+  await Promise.all([
+    db.collection("stock_balances").doc("bal-s-A1").set({ customer_code: "A", sku_code: "SKU-S", location_id: "A1", qty_on_hand: 2, qty_reserved: 0, qty_available: 2, status: "available" }),
+    db.collection("stock_balances").doc("bal-s-sem-local").set({ customer_code: "A", sku_code: "SKU-S", qty_on_hand: 1, qty_reserved: 0, qty_available: 1, status: "available" }),
+  ]);
+  await assert.rejects(run("POST", "/pedidos", { customer_code: "A", type: "retirada", title: "Retirada sem local", items: [{ sku_code: "SKU-S", quantity: 1 }] }, {}, "no-location-request"), { code: "failed-precondition", message: /sem localização física/ });
 });
