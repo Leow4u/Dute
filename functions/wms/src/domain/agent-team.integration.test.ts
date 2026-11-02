@@ -132,6 +132,26 @@ describe("consultas da equipe", () => {
     ]);
   });
 
+  it("a chegada por caixa recebida segue em aberto até a última guarda, e a guarda da caixa mostra a caixa e as peças (parte 4i)", async () => {
+    await db.collection("inbound_receipts").doc("inb_caixa").set({
+      customer_code: BTG, receipt_number: "AVL-CAIXA", status: "received", conference_mode: "per_box", putaway_status: "pending",
+      box_count: 3, boxes_stored: 1, qty_received: 71, created_at: at("2026-09-30T12:00:00Z"),
+    });
+    await db.collection("putaway_tasks").doc("put_box_1").set({
+      customer_code: BTG, receipt_number: "AVL-CAIXA", box_code: "CX-000132", status: "planned", quantity: 41, total_units: 41,
+      lines: [{ product_name: "POLO XG", counted_qty: 29, sku_code: "S2" }, { product_name: "POLO GG", counted_qty: 12, sku_code: "S3" }],
+      created_at: at("2026-09-30T12:00:00Z"), updated_at: at("2026-09-30T12:00:00Z"),
+    });
+    const open = await receipts(db, equipe);
+    const caixa = open.recebimentos.find((item) => item.numero === "AVL-CAIXA");
+    assert.deepEqual([caixa?.situacao, caixa?.caixas, caixa?.caixas_guardadas], ["recebida, guardando caixas", 3, 1]);
+    const tasks = await warehouseTasks(db, equipe, NOW);
+    const guarda = tasks.tarefas.find((task) => task.caixa === "CX-000132");
+    assert.deepEqual([guarda?.item, guarda?.endereco_destino, guarda?.pecas], ["caixa CX-000132", "sem prateleira", 41]);
+    assert.deepEqual(guarda?.conteudo, [{ produto: "POLO XG", pecas: 29 }, { produto: "POLO GG", pecas: 12 }]);
+    assert.doesNotMatch(JSON.stringify(guarda), /cost|custo|valor/);
+  });
+
   it("endereços: saldo por endereço do cliente, sem vazios e sem custo", async () => {
     const found = await itemLocations(db, equipe, "cam-01");
     assert.deepEqual(found.enderecos.map((item) => [item.endereco, item.em_estoque, item.disponivel]), [
