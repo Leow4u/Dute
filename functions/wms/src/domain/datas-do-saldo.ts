@@ -26,8 +26,8 @@
  * ao seguinte quando ele não basta (pergunta 2). O razão só é lido para o SKU
  * em que a ordem pode mudar (skusQuePrecisamDasDatas).
  *
- * Funções puras, sem Firestore, que nunca lançam erro. Os casos estão em
- * datas-do-saldo.casos.json, ao lado.
+ * Funções puras, sem Firestore, que nunca lançam erro com os valores que o
+ * Firestore devolve. Os casos estão em datas-do-saldo.casos.json, ao lado.
  */
 
 import { areaDePassagem } from "./areas-de-passagem.js";

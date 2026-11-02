@@ -266,7 +266,7 @@ describe("o pedido sai pela data de guarda mais antiga (FIFO por data, parte 4)"
     assert.deepEqual(await reservas("customer_request_id", criado.id), { "B-01": 20 });
   });
 
-  it("(e) a contagem de abertura vale o dia em que a sessão começou, mesmo contada em três dias; a chegada no meio dela vale o dia dela", async () => {
+  it("(e) a contagem de abertura vale o dia em que a sessão começou, mesmo contada em dois dias; a chegada no meio dela vale o dia dela", async () => {
     await db.collection("customers").doc("Itau").set({ code: ITAU, customer_code: ITAU, name: "Itaú Unibanco", sku_prefix: "ITAU", status: "active" });
     const sessao = await createOpeningInventorySessionTransaction(db, { customer_code: ITAU, idempotency_key: "fifo-abertura" }, armazem);
     const sessionId = String(sessao.session_id);
@@ -313,10 +313,10 @@ describe("o pedido sai pela data de guarda mais antiga (FIFO por data, parte 4)"
     );
 
     // O servidor grava a hora de agora: a sessão e o razão voltam aos dias do caso.
-    await db.collection("opening_inventory_sessions").doc(sessionId).update({ started_at: "2026-10-16T12:00:00.000Z" });
+    await db.collection("opening_inventory_sessions").doc(sessionId).update({ started_at: "2026-10-15T12:00:00.000Z" });
     const dias: Record<string, string> = {
       "C-01": "2026-10-16T15:00:00.000Z",
-      "A-01": "2026-10-17T15:00:00.000Z",
+      "A-01": "2026-10-16T15:00:00.000Z",
       "B-01": "2026-10-18T15:00:00.000Z",
     };
     const razao = await db.collection("movements").where("customer_code", "==", ITAU).where("sku_code", "==", sku).get();
@@ -326,7 +326,9 @@ describe("o pedido sai pela data de guarda mais antiga (FIFO por data, parte 4)"
     );
     await Promise.all(razao.docs.map((doc) => doc.ref.update({ created_at: Timestamp.fromDate(new Date(dias[String(doc.get("location_id"))]!)) })));
 
-    // Pela abertura, B-01 e C-01 são de 16/10 (empate: B-01), antes da chegada de 17/10 em A-01.
+    // Pela abertura, B-01 e C-01 são de 15/10 (empate: B-01), antes da chegada de 16/10 em A-01.
+    // Só o started_at explica B-01: pelo created_at, ou pelo dia da primeira entrada da
+    // abertura, A-01 empataria em 16/10 e sairia na frente pela ordem do location_id.
     const clienteItau: OperationalActor = { uid: "client-itau", name: "Compras Itaú", role: "cliente", customer_code: ITAU };
     const criado = await pedir([{ quantity: 30 }], "fifo-e", clienteItau, ITAU, sku);
     assert.deepEqual(await reservas("customer_request_id", criado.id), { "B-01": 30 });
