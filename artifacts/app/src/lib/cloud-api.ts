@@ -186,6 +186,15 @@ const OPS_TASK_READ_CAP = 500;
 /** As encerradas de cada fila do armazém; as abertas entram todas. */
 const OPS_CLOSED_TASKS_IN_QUEUE = 12;
 const OPS_CLOSED_TASK_STATUSES = new Set(["completed", "delivered", "received", "closed", "cancelled", "canceled"]);
+/** A situação da tarefa que não traz a sua, em cada fila do armazém. */
+const OPS_LANE_DEFAULT_STATUS = {
+  receiving: "received",
+  putaway: "planned",
+  picking: "planned",
+  packing: "ready",
+  shipping: "ready_to_dispatch",
+} as const;
+type OpsLaneId = keyof typeof OPS_LANE_DEFAULT_STATUS;
 const RECENT_MOVEMENTS_CAP = 300;
 const RECENT_EVENTS_CAP = 80;
 const EXPORT_HARD_CAP = 5000;
@@ -281,6 +290,32 @@ async function readLimited(
   constraints.push(fsLimit(Math.max(1, Math.min(maxDocs, 5000))));
   const snapshot = await getDocs(query(collection(firestore, name), ...constraints));
   return snapshot.docs.map(normalizeDoc);
+}
+
+/** Quantos valores o Firestore aceita num filtro `in`. */
+const FIRESTORE_IN_MAX = 30;
+
+/**
+ * Os registros cujo `field` é um dos valores, lidos em lotes de `in`. Sem
+ * teto nem ordem: vem tudo o que pertence a esses valores e só a eles, para
+ * as linhas de tarefas já escolhidas chegarem inteiras.
+ */
+async function readWhereIn(
+  name: string,
+  field: string,
+  values: Iterable<string>,
+): Promise<AnyRecord[]> {
+  const db = firestore;
+  const unique = [...new Set(values)].filter(Boolean);
+  if (!db || !unique.length) return [];
+  const batches: string[][] = [];
+  for (let start = 0; start < unique.length; start += FIRESTORE_IN_MAX) {
+    batches.push(unique.slice(start, start + FIRESTORE_IN_MAX));
+  }
+  const snapshots = await Promise.all(
+    batches.map((batch) => getDocs(query(collection(db, name), where(field, "in", batch)))),
+  );
+  return snapshots.flatMap((snapshot) => snapshot.docs.map(normalizeDoc));
 }
 
 async function readCollectionCount(name: string): Promise<number> {
@@ -1386,6 +1421,11 @@ async function getAgentDuteConversations() {
   return { conversations };
 }
 
+/** A situação da tarefa na fila: a dela ou, sem ela, a padrão da fila. */
+function laneStatus(laneId: OpsLaneId, task: AnyRecord): string {
+  return String(task.status ?? OPS_LANE_DEFAULT_STATUS[laneId]);
+}
+
 function laneTask(input: {
   id: string;
   type: string;
@@ -1446,13 +1486,9 @@ async function getWarehouseOps() {
     savedLocations,
     savedBalances,
     inboundReceipts,
-    inboundItems,
     putawayTasks,
     qualityExceptions,
-    orderItems,
-    stockReservations,
     pickTasks,
-    pickLines,
     packTasks,
     shipments,
     inbox,
@@ -1463,13 +1499,9 @@ async function getWarehouseOps() {
     readLimited(collectionNames.locations, CATALOG_READ_CAP),
     readLimited(collectionNames.stockBalances, CATALOG_READ_CAP),
     readLimited(collectionNames.inboundReceipts, OPS_TASK_READ_CAP, "created_at", "desc"),
-    readLimited(collectionNames.inboundItems, OPS_TASK_READ_CAP),
     readLimited(collectionNames.putawayTasks, OPS_TASK_READ_CAP, "updated_at", "desc"),
     readLimited(collectionNames.qualityExceptions, OPS_TASK_READ_CAP, "created_at", "desc"),
-    readLimited(collectionNames.orderItems, OPS_TASK_READ_CAP),
-    readLimited(collectionNames.stockReservations, OPS_TASK_READ_CAP),
     readLimited(collectionNames.pickTasks, OPS_TASK_READ_CAP, "updated_at", "desc"),
-    readLimited(collectionNames.pickLines, OPS_TASK_READ_CAP),
     readLimited(collectionNames.packTasks, OPS_TASK_READ_CAP, "updated_at", "desc"),
     readLimited(collectionNames.shipments, OPS_TASK_READ_CAP, "updated_at", "desc"),
     readLimited(collectionNames.agentInbox, 100, "created_at", "desc"),
@@ -1512,15 +1544,91 @@ async function getWarehouseOps() {
           source: "derived_from_orders",
         }));
   const derivedPutawayTasks: AnyRecord[] = putawayTasks;
-  const inboundItemsByReceipt = groupByField(inboundItems, "receipt_id");
-  const pickLinesByTask = groupByField(pickLines, "pick_task_id");
-  const orderItemsByOrder = groupByField(orderItems, "order_id");
-  const reservationsByOrder = groupByField(stockReservations, "order_id");
 
   const isHistoricalMovementReceipt = (receipt: AnyRecord) =>
     String(receipt.source ?? "").toLowerCase() === "derived_from_movements";
   const isHistoricalLocationPutaway = (task: AnyRecord) =>
     String(task.source ?? "").toLowerCase() === "derived_from_locations";
+  const laneRecords: Record<OpsLaneId, AnyRecord[]> = {
+    receiving: derivedReceipts.filter((receipt) => !isHistoricalMovementReceipt(receipt)),
+    putaway: derivedPutawayTasks.filter((task) => !isHistoricalLocationPutaway(task)),
+    picking: derivedPickTasks,
+    packing: derivedPackTasks,
+    shipping: derivedShipments,
+  };
+
+  // Pedidos, Receber e o Início leem estas filas: toda tarefa aberta entra,
+  // por mais antiga que seja. O pedido entra com todas as etapas ou não
+  // entra (o que ainda não saiu e os encerrados mais recentes, pela última
+  // etapa), para a linha do pedido entregue não ficar só com a separação e
+  // aparecer em "Para separar". Das outras filas, as encerradas mais recentes.
+  // A escolha sai das tarefas, antes das linhas: só as delas se leem.
+  const isClosedTask = (laneId: OpsLaneId, task: AnyRecord) =>
+    OPS_CLOSED_TASK_STATUSES.has(laneStatus(laneId, task));
+  const orderLanes = new Set<OpsLaneId>(["picking", "packing", "shipping"]);
+  const orderTasks = [...orderLanes].flatMap((laneId) =>
+    laneRecords[laneId]
+      .filter((task) => task.order_id)
+      .map((task) => ({ laneId, task })),
+  );
+  const openOrderIds = new Set(
+    orderTasks
+      .filter(({ laneId, task }) => !isClosedTask(laneId, task))
+      .map(({ task }) => String(task.order_id)),
+  );
+  const closedOrderUpdates = new Map<string, string>();
+  for (const { task } of orderTasks) {
+    const orderId = String(task.order_id);
+    if (openOrderIds.has(orderId)) continue;
+    const updatedAt = toIso(task.updated_at);
+    const latest = closedOrderUpdates.get(orderId);
+    if (latest === undefined || updatedAt > latest) closedOrderUpdates.set(orderId, updatedAt);
+  }
+  const queuedOrderIds = new Set([
+    ...openOrderIds,
+    ...[...closedOrderUpdates]
+      .sort(([, left], [, right]) => right.localeCompare(left))
+      .slice(0, OPS_CLOSED_TASKS_IN_QUEUE)
+      .map(([orderId]) => orderId),
+  ]);
+  const queuedTasks = (laneId: OpsLaneId) => {
+    let closed = 0;
+    return laneRecords[laneId].filter((task) => {
+      if (orderLanes.has(laneId) && task.order_id) return queuedOrderIds.has(String(task.order_id));
+      if (!isClosedTask(laneId, task)) return true;
+      closed += 1;
+      return closed <= OPS_CLOSED_TASKS_IN_QUEUE;
+    });
+  };
+  const queued: Record<OpsLaneId, AnyRecord[]> = {
+    receiving: queuedTasks("receiving"),
+    putaway: queuedTasks("putaway"),
+    picking: queuedTasks("picking"),
+    packing: queuedTasks("packing"),
+    shipping: queuedTasks("shipping"),
+  };
+  const queuedTaskUids = new Set(
+    Object.entries(queued).flatMap(([laneId, tasks]) =>
+      tasks.map((task) => `${laneId}:${String(task.id)}`),
+    ),
+  );
+
+  // As linhas, os itens do pedido e as reservas das tarefas das filas, por
+  // tarefa, pedido e chegada, inteiros. Lidos sem filtro, eram os 500
+  // primeiros pelo id (de hash), não os dos pedidos em aberto, e a separação
+  // do pedido novo chegava sem itens.
+  const idsOf = (tasks: AnyRecord[]) => tasks.map((task) => String(task.id));
+  const orderIdsOf = (tasks: AnyRecord[]) => tasks.map((task) => String(task.order_id ?? ""));
+  const [inboundItems, pickLines, orderItems, stockReservations] = await Promise.all([
+    readWhereIn(collectionNames.inboundItems, "receipt_id", idsOf(queued.receiving)),
+    readWhereIn(collectionNames.pickLines, "pick_task_id", idsOf(queued.picking)),
+    readWhereIn(collectionNames.orderItems, "order_id", orderIdsOf([...queued.picking, ...queued.packing])),
+    readWhereIn(collectionNames.stockReservations, "order_id", orderIdsOf(queued.picking)),
+  ]);
+  const inboundItemsByReceipt = groupByField(inboundItems, "receipt_id");
+  const pickLinesByTask = groupByField(pickLines, "pick_task_id");
+  const orderItemsByOrder = groupByField(orderItems, "order_id");
+  const reservationsByOrder = groupByField(stockReservations, "order_id");
 
   // Só a exceção em aberto conta: resolver ou cancelar em Qualidade tira a
   // tarefa e o pedido de "com exceção", como o servidor baixa a contagem.
@@ -1608,7 +1716,7 @@ async function getWarehouseOps() {
       id: "receiving",
       title: "Receiving",
       description: "Entradas por NF/remessa",
-      items: derivedReceipts.filter((receipt) => !isHistoricalMovementReceipt(receipt)).map((receipt) => {
+      items: laneRecords.receiving.map((receipt) => {
         const receiptItems = receivingItemsFor(receipt);
         const expectedUnits = receiptItems.length
           ? receiptItems.reduce(
@@ -1631,7 +1739,7 @@ async function getWarehouseOps() {
           type: "receiving",
           title: String(receipt.receipt_number ?? receipt.id),
           subtitle: `${receiptItems.length || Number(receipt.item_count ?? 0)} linha(s) · ${expectedUnits} un. esperadas`,
-          status: String(receipt.status ?? "received"),
+          status: laneStatus("receiving", receipt),
           customer_code: receipt.customer_code,
           units: expectedUnits || receivedUnits,
           source: receipt.source,
@@ -1652,7 +1760,7 @@ async function getWarehouseOps() {
       id: "putaway",
       title: "Guarda",
       description: "Guarda e endereçamento",
-      items: derivedPutawayTasks.filter((task) => !isHistoricalLocationPutaway(task)).map((task) => {
+      items: laneRecords.putaway.map((task) => {
         const quantity = Number(task.quantity ?? task.total_units ?? 0);
         const destinationLocation = String(
           task.destination_location_id ?? task.location_id ?? "",
@@ -1667,7 +1775,7 @@ async function getWarehouseOps() {
           subtitle: String(
             destinationLocation || sourceLocation || "Endereço físico",
           ),
-          status: String(task.status ?? "planned"),
+          status: laneStatus("putaway", task),
           customer_code: task.customer_code,
           units: quantity,
           source: task.source,
@@ -1698,7 +1806,7 @@ async function getWarehouseOps() {
       id: "picking",
       title: "Picking",
       description: "Separação por pedido",
-      items: derivedPickTasks.map((task) => {
+      items: laneRecords.picking.map((task) => {
         const taskItems = pickingItemsFor(task);
         const reserved =
           reservationsByOrder.get(String(task.order_id ?? "")) ?? [];
@@ -1724,7 +1832,7 @@ async function getWarehouseOps() {
           type: "picking",
           title: String(task.order_number ?? task.id),
           subtitle: `${pickedUnits} / ${totalUnits} un. · ${taskItems.length || Number(task.total_lines ?? 0)} linha(s)`,
-          status: String(task.status ?? "planned"),
+          status: laneStatus("picking", task),
           customer_code: task.customer_code,
           units: totalUnits,
           priority: task.priority,
@@ -1749,13 +1857,13 @@ async function getWarehouseOps() {
       id: "packing",
       title: "Packing",
       description: "Conferência e volumes",
-      items: derivedPackTasks.map((task) =>
+      items: laneRecords.packing.map((task) =>
         laneTask({
           id: String(task.id),
           type: "packing",
           title: String(task.order_number ?? task.id),
           subtitle: `${Number(task.packed_units ?? 0)} un. separadas`,
-          status: String(task.status ?? "ready"),
+          status: laneStatus("packing", task),
           customer_code: task.customer_code,
           units: Number(task.packed_units ?? 0),
           source: task.source,
@@ -1786,13 +1894,13 @@ async function getWarehouseOps() {
       id: "shipping",
       title: "Expedição",
       description: "Despacho e entrega",
-      items: derivedShipments.map((task) =>
+      items: laneRecords.shipping.map((task) =>
         laneTask({
           id: String(task.id),
           type: "shipping",
           title: String(task.order_number ?? task.id),
           subtitle: String(task.destination ?? "Destino a confirmar"),
-          status: String(task.status ?? "ready_to_dispatch"),
+          status: laneStatus("shipping", task),
           customer_code: task.customer_code,
           units: Number(task.total_units ?? 0),
           source: task.source,
@@ -1817,44 +1925,6 @@ async function getWarehouseOps() {
     (sum, item) => sum + Number(item.qty_on_hand ?? 0),
     0,
   );
-  // Pedidos, Receber e o Início leem estas filas: toda tarefa aberta entra,
-  // por mais antiga que seja. O pedido entra com todas as etapas ou não
-  // entra (o que ainda não saiu e os encerrados mais recentes, pela última
-  // etapa), para a linha do pedido entregue não ficar só com a separação e
-  // aparecer em "Para separar". Das outras filas, as encerradas mais recentes.
-  const isClosedTask = (task: AnyRecord) => OPS_CLOSED_TASK_STATUSES.has(String(task.status));
-  const orderLanes = new Set(["picking", "packing", "shipping"]);
-  const orderTasks = lanes
-    .filter((lane) => orderLanes.has(lane.id))
-    .flatMap((lane) => lane.items)
-    .filter((task) => task.order_id);
-  const openOrderIds = new Set(
-    orderTasks.filter((task) => !isClosedTask(task)).map((task) => String(task.order_id)),
-  );
-  const closedOrderUpdates = new Map<string, string>();
-  for (const task of orderTasks) {
-    const orderId = String(task.order_id);
-    if (openOrderIds.has(orderId)) continue;
-    const updatedAt = String(task.updated_at ?? "");
-    const latest = closedOrderUpdates.get(orderId);
-    if (latest === undefined || updatedAt > latest) closedOrderUpdates.set(orderId, updatedAt);
-  }
-  const queuedOrderIds = new Set([
-    ...openOrderIds,
-    ...[...closedOrderUpdates]
-      .sort(([, left], [, right]) => right.localeCompare(left))
-      .slice(0, OPS_CLOSED_TASKS_IN_QUEUE)
-      .map(([orderId]) => orderId),
-  ]);
-  const queueItems = (laneId: string, items: AnyRecord[]) => {
-    let closed = 0;
-    return items.filter((task) => {
-      if (orderLanes.has(laneId) && task.order_id) return queuedOrderIds.has(String(task.order_id));
-      if (!isClosedTask(task)) return true;
-      closed += 1;
-      return closed <= OPS_CLOSED_TASKS_IN_QUEUE;
-    });
-  };
 
   return {
     generated_at: new Date().toISOString(),
@@ -1879,7 +1949,7 @@ async function getWarehouseOps() {
     queues: Object.fromEntries(
       lanes.map((lane) => {
         const queueKey = lane.id === "shipping" ? "expedition" : lane.id;
-        const tasks = queueItems(lane.id, lane.items).map((task) => ({
+        const tasks = lane.items.filter((task) => queuedTaskUids.has(task.task_uid)).map((task) => ({
           id: task.task_uid,
           title: task.title,
           reference: task.id,
