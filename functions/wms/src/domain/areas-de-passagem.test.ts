@@ -1,68 +1,79 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   AREAS_DE_PASSAGEM,
   areaDePassagem,
   livreParaOCliente,
   problemaDoLocalDoPedido,
+  type SaldoDoLocal,
 } from "./areas-de-passagem.js";
 
-/** Só prateleira para o cliente (recebimento com caixas, decisão 10 e parte 7), sem o banco. */
+/**
+ * Só prateleira para o cliente (recebimento com caixas, decisão 10 e parte 7),
+ * sem o banco: cópia literal de lib/dominio/src/areas-de-passagem.ts (as
+ * Functions não importam lib/dominio). Roda os mesmos casos de
+ * lib/dominio/src/areas-de-passagem.casos.json que o vitest do app roda contra
+ * o original, e a trava confere que a cópia é idêntica (o padrão de
+ * parados.test.ts do núcleo).
+ */
 
-describe("as áreas de passagem", () => {
-  it("RECEBIMENTO e EXPEDICAO, sem diferenciar maiúscula nem acento; o resto é prateleira", () => {
-    assert.deepEqual([...AREAS_DE_PASSAGEM], ["RECEBIMENTO", "EXPEDICAO"]);
-    for (const local of ["RECEBIMENTO", " recebimento ", "Recebimento"]) {
-      assert.equal(areaDePassagem(local), "RECEBIMENTO", local);
-    }
-    for (const local of ["EXPEDICAO", "expedicao", "EXPEDIÇÃO", "Expedição"]) {
-      assert.equal(areaDePassagem(local), "EXPEDICAO", local);
-    }
-    for (const local of ["A-01", "S-01", "LOC-12", "DEVOLUCAO", "RUA-A/PRAT-01/CX-001", "RECEBIMENTO-2", "", undefined, null, 7]) {
-      assert.equal(areaDePassagem(local), null, String(local));
-    }
+// Compilado em functions/wms/lib/domain/areas-de-passagem.test.js.
+const read = (relative: string) => readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");
+
+const ORIGINAL = "../../../../lib/dominio/src/areas-de-passagem.ts";
+const COPIA = "../../src/domain/areas-de-passagem.ts";
+const CASOS = "../../../../lib/dominio/src/areas-de-passagem.casos.json";
+
+/** A única linha que a cópia pode ter a mais: o comentário de origem, na primeira linha. */
+const LINHA_DE_ORIGEM = /^\/\/ Cópia literal de lib\/dominio\/src\/areas-de-passagem\.ts\b.*$/;
+
+function semLinhaDeOrigem(source: string): string {
+  const lines = source.replace(/\r\n/g, "\n").split("\n");
+  if (LINHA_DE_ORIGEM.test(lines[0] ?? "")) lines.shift();
+  return lines.join("\n");
+}
+
+type Casos = {
+  areas: { caso: string; local: unknown; area: string | null }[];
+  problemas: { caso: string; local: unknown; problema: string | null }[];
+  livres: { caso: string; saldos: SaldoDoLocal[]; livre: { qty_available: number; qty_receiving: number } }[];
+};
+
+const casos = JSON.parse(read(CASOS)) as Casos;
+
+describe("áreas de passagem no WMS: a cópia é a de lib/dominio", () => {
+  it("functions/wms/src/domain/areas-de-passagem.ts é idêntico a lib/dominio/src/areas-de-passagem.ts", () => {
+    const original = read(ORIGINAL).replace(/\r\n/g, "\n");
+    const copia = semLinhaDeOrigem(read(COPIA));
+    assert.ok(original.length > 1000, "lib/dominio/src/areas-de-passagem.ts não encontrado");
+    assert.equal(copia, original, "a cópia mudou: copie lib/dominio/src/areas-de-passagem.ts de novo, sem editar aqui");
   });
 
-  it("o pedido não reserva de área de passagem: o local pedido numa delas é recusado", () => {
-    assert.equal(
-      problemaDoLocalDoPedido("RECEBIMENTO"),
-      "O local RECEBIMENTO não atende pedido: o pedido só reserva o que está na prateleira.",
-    );
-    assert.equal(
-      problemaDoLocalDoPedido("expedição"),
-      "O local expedição não atende pedido: o pedido só reserva o que está na prateleira.",
-    );
-    for (const local of ["A-01", "DEVOLUCAO", "", undefined]) {
-      assert.equal(problemaDoLocalDoPedido(local), null, String(local));
-    }
+  it("a trava ignora só o comentário de origem na primeira linha", () => {
+    const original = "export const A = 1;\n";
+    assert.equal(semLinhaDeOrigem(`// Cópia literal de lib/dominio/src/areas-de-passagem.ts (não edite).\n${original}`), original);
+    assert.notEqual(semLinhaDeOrigem(`// Cópia literal de lib/dominio/src/parados.ts\n${original}`), original);
+    assert.notEqual(semLinhaDeOrigem(`${original}// Cópia literal de lib/dominio/src/areas-de-passagem.ts\n`), original);
   });
 });
 
-describe("o livre do cliente", () => {
-  it("o livre de cada saldo vai para a prateleira ou para o recebimento; a EXPEDICAO só conta no total", () => {
-    assert.deepEqual(
-      livreParaOCliente([
-        { location_id: "A-01", qty_on_hand: 3, qty_reserved: 1 },
-        { location_id: "S-01", qty_on_hand: 4 },
-        { location_id: "DEVOLUCAO", qty_on_hand: 1 },
-        { location_id: "RECEBIMENTO", qty_on_hand: 5, qty_reserved: 2 },
-        { location_id: "recebimento", qty_on_hand: 1 },
-        { location_id: "EXPEDICAO", qty_on_hand: 2 },
-      ]),
-      { qty_available: 2 + 4 + 1, qty_receiving: 3 + 1 },
-    );
+describe("áreas de passagem no WMS: casos de referência", () => {
+  it("as áreas são o RECEBIMENTO e a EXPEDICAO, e o JSON de casos foi lido", () => {
+    assert.deepEqual([...AREAS_DE_PASSAGEM], ["RECEBIMENTO", "EXPEDICAO"]);
+    assert.ok(casos.areas.length >= 10);
+    assert.ok(casos.livres.length >= 3);
   });
 
-  it("sem saldo é zero, e o saldo inconsistente não deixa o livre negativo", () => {
-    assert.deepEqual(livreParaOCliente([]), { qty_available: 0, qty_receiving: 0 });
-    assert.deepEqual(
-      livreParaOCliente([
-        { location_id: "A-01", qty_on_hand: 1, qty_reserved: 3 },
-        { location_id: "A-02", qty_on_hand: "2" },
-        { location_id: "RECEBIMENTO", qty_on_hand: -4 },
-      ]),
-      { qty_available: 2, qty_receiving: 0 },
-    );
-  });
+  for (const caso of casos.areas) {
+    it(`área: ${caso.caso}`, () => assert.equal(areaDePassagem(caso.local), caso.area));
+  }
+  for (const caso of casos.problemas) {
+    it(`local do pedido: ${caso.caso}`, () => assert.equal(problemaDoLocalDoPedido(caso.local), caso.problema));
+  }
+  for (const caso of casos.livres) {
+    it(`livre do cliente: ${caso.caso}`, () => assert.deepEqual(livreParaOCliente(caso.saldos), caso.livre));
+  }
 });

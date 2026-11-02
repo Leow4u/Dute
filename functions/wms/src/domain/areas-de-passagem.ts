@@ -1,13 +1,16 @@
+// Cópia literal de lib/dominio/src/areas-de-passagem.ts: não edite aqui (trava em areas-de-passagem.test.ts).
 /**
  * Áreas de passagem do armazém (docs/plataforma/recebimento-com-caixas.md,
  * decisão 10 e parte 7). O que está nelas ainda não está numa prateleira e
  * não serve ao pedido do cliente: o RECEBIMENTO guarda o que chegou até a
  * guarda, e a EXPEDICAO, o separado à espera da entrega ou da guarda de volta
- * (pedido cancelado, domain/order-cancel.ts).
+ * (pedido cancelado).
  *
  * O local de um saldo é texto livre (posições cadastradas, LOC-*, DEVOLUCAO):
  * a prateleira é definida por exclusão, todo local que não é área de
- * passagem.
+ * passagem. Funções puras, sem Firestore. functions/wms guarda uma cópia
+ * literal (domain/areas-de-passagem.ts), e os dois rodam os mesmos casos de
+ * areas-de-passagem.casos.json.
  */
 export const AREAS_DE_PASSAGEM = ["RECEBIMENTO", "EXPEDICAO"] as const;
 export type AreaDePassagem = (typeof AREAS_DE_PASSAGEM)[number];

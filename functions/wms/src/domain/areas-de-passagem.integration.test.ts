@@ -350,6 +350,57 @@ describe("o portal conta como disponível só o que está na prateleira (parte 7
     assert.deepEqual(await portal(), { qty_on_hand: 18, qty_reserved: 0, qty_available: 11, qty_receiving: 5 });
   });
 
+  it("a guarda do item sem projeção conclui e não cria a projeção", async () => {
+    const chegada = (await createInboundReceiptTransaction(
+      db,
+      {
+        customer_code: BTG,
+        supplier: "Confecções Alfa",
+        invoice_number: "NF-8",
+        idempotency_key: "chegada-sem-projecao",
+        items: [{ line_number: 1, sku_code: SKU, client_item_code: "POLO-P", product_name: "Camiseta polo P", product_registration: "existing", location_id: "RECEBIMENTO", quantity: 2 }],
+      },
+      armazem,
+    )) as Record<string, unknown>;
+    const receiptId = String(chegada.receipt_id);
+    await avancar(`receiving:${receiptId}`, "created");
+    const linhas = await db.collection("inbound_items").where("receipt_id", "==", receiptId).get();
+    await updateInboundReceiptConferenceTransaction(
+      db,
+      { receipt_id: receiptId, expected_status: "checking", idempotency_key: "conferencia-sem-projecao", lines: linhas.docs.map((linha) => ({ inbound_item_id: linha.id, received_qty: 2, location_id: "RECEBIMENTO" })) },
+      armazem,
+    );
+    await avancar(`receiving:${receiptId}`, "checking");
+    await db.collection("client_inventory").doc(PORTAL).delete();
+
+    const [guarda] = (await db.collection("putaway_tasks").where("receipt_id", "==", receiptId).get()).docs;
+    const guardada = await avancar(`putaway:${guarda!.id}`, "planned", { source_location_id: "RECEBIMENTO", destination_location_id: "S-01", location_id: "S-01", quantity: 2 });
+    assert.equal(guardada.status, "completed");
+    assert.deepEqual(await saldos(), { "A-01": [3, 0], EXPEDICAO: [2, 0], RECEBIMENTO: [5, 0], "S-01": [6, 0] });
+    assert.equal((await db.collection("client_inventory").doc(PORTAL).get()).exists, false);
+  });
+
+  it("no SKU escopado por variante, cada projeção conta só os saldos da própria variante", async () => {
+    const ESCOPADO = "BTG-1043";
+    const variante = (id: string, local: string, quantidade: number, codigo: string) =>
+      db.collection("stock_balances").doc(id).set({ id, customer_code: BTG, sku_code: ESCOPADO, client_item_code: codigo, product_name: `Caneca ${codigo}`, location_id: local, qty_on_hand: quantidade, qty_reserved: 0, qty_available: quantidade });
+    await Promise.all([
+      db.collection("skus").doc(ESCOPADO).set({ id: ESCOPADO, customer_code: BTG, cod_cliente: "C.1", cod_btg: ESCOPADO, sku_code: ESCOPADO, produto: "Caneca", status: "active" }),
+      variante("v1-a01", "A-01", 2, "C.1"),
+      variante("v1-rec", "RECEBIMENTO", 3, "C.1"),
+      variante("v2-s01", "S-01", 4, "C.2"),
+      variante("v2-b02", "B-02", 1, "C.2"),
+    ]);
+    await createInventoryMovementTransaction(
+      db,
+      { customer_code: BTG, type: "ENTRADA", quantity: 1, sku_code: ESCOPADO, client_item_code: "C.1", product_name: "Caneca C.1", location_id: "A-01", reason: "Ajuste de teste", idempotency_key: "variante-1" },
+      armazem,
+    );
+    const c1 = (await db.collection("client_inventory").doc(`cinv_BTG_Pactual__${ESCOPADO}__C.1`).get()).data() ?? {};
+    assert.deepEqual([c1.qty_available, c1.qty_receiving], [3, 3]);
+    assert.equal((await db.collection("client_inventory").doc(`cinv_BTG_Pactual__${ESCOPADO}__C.2`).get()).exists, false);
+  });
+
   it("a entrada e a saída manuais mexem só no lugar de cada uma", async () => {
     const mover = (type: "ENTRADA" | "SAIDA", location_id: string, quantity: number, chave: string) =>
       createInventoryMovementTransaction(

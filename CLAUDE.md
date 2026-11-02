@@ -351,7 +351,9 @@ documentação de produto e operação está em `docs/`.
   usa o encaixe estrito do motor e guarda o conteúdo em `lines[]`, com os
   contadores de rascunho até a guarda. **Só prateleira para o cliente**
   (parte 7, sem liberação por ambiente): o pedido do cliente nunca reserva do
-  `RECEBIMENTO` nem da `EXPEDICAO` (`domain/areas-de-passagem.ts`), e o
+  `RECEBIMENTO` nem da `EXPEDICAO` (regra em
+  `lib/dominio/src/areas-de-passagem.ts`, com cópia literal no WMS travada em
+  `domain/areas-de-passagem.test.ts`), e o
   `client_inventory` grava `qty_available` (livre das prateleiras) e
   `qty_receiving` (livre do `RECEBIMENTO`) a partir dos saldos do SKU depois
   da escrita; escrita nova da projeção lê todos os saldos do SKU antes da

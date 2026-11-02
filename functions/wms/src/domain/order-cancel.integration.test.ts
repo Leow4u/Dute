@@ -374,6 +374,12 @@ describe("Cancelar pedido (pergunta 59)", () => {
       Object.fromEntries(Object.entries(porPosicao).map(([local, saldo]) => [local, [saldo.qty_on_hand, saldo.qty_reserved, saldo.qty_available]])),
       { "A-01": [0, 0, 0], "A-02": [0, 0, 0], EXPEDICAO: [10, 0, 10], RECEBIMENTO: [0, 0, 0] },
     );
+    // Para o cliente, tudo está na EXPEDICAO: no total, fora do disponível e do em recebimento.
+    const portal = async () => {
+      const dados = (await db.collection("client_inventory").doc(`cinv_BTG_Pactual__${SKU}`).get()).data() ?? {};
+      return [dados.qty_on_hand, dados.qty_reserved, dados.qty_available, dados.qty_receiving];
+    };
+    assert.deepEqual(await portal(), [10, 0, 0, 0]);
     const guardas = (await db.collection("putaway_tasks").where("order_id", "==", orderId).get()).docs.map((doc) => doc.data());
     assert.deepEqual(
       guardas.map((guarda) => [guarda.destination_location_id ?? "sem destino", guarda.quantity]).sort(),
@@ -394,6 +400,8 @@ describe("Cancelar pedido (pergunta 59)", () => {
     const depois = await saldos();
     assert.equal(depois["A-02"].qty_on_hand, 1);
     assert.equal(depois.EXPEDICAO.qty_on_hand, 9);
+    // A guarda devolve à prateleira, e o cliente volta a poder pedir.
+    assert.deepEqual(await portal(), [10, 0, 1, 0]);
   });
 
   it("não cancela o pedido que já saiu do armazém, e não muda nada", async () => {

@@ -484,8 +484,10 @@ desenhada e aprovada antes do PR de tela.
    - **7a e 7b, a regra no servidor:** feita em 02/11/2026. A reserva do
      pedido, na criação pelo portal e na aprovação da solicitação que chegou
      sem reserva, só cai em saldo de prateleira: os locais `RECEBIMENTO` e
-     `EXPEDICAO`, sem diferenciar maiúscula nem acento
-     (`functions/wms/src/domain/areas-de-passagem.ts`), ficam de fora; o
+     `EXPEDICAO`, sem diferenciar maiúscula nem acento (a regra mora em
+     `lib/dominio/src/areas-de-passagem.ts`, com a cópia literal do WMS em
+     `functions/wms/src/domain/areas-de-passagem.ts` travada por teste e os
+     casos em `areas-de-passagem.casos.json`), ficam de fora; o
      "Disponível" da recusa por saldo insuficiente conta só a prateleira; e o
      item que pede o local de uma área é recusado ("O local RECEBIMENTO não
      atende pedido: o pedido só reserva o que está na prateleira."). A
@@ -498,8 +500,15 @@ desenhada e aprovada antes do PR de tela.
      (`qty_reserved`) e o valor da mercadoria ficam como estavam; a EXPEDICAO
      entra só no total; `DEVOLUCAO` e os demais locais contam como
      prateleira. O Agent Dute, que lê o disponível da projeção, passa a
-     responder só com a prateleira. Testes: `areas-de-passagem.test.ts` e
-     `areas-de-passagem.integration.test.ts` no WMS.
+     responder só com a prateleira, e a conferência de saldo da tela interna
+     de aprovação (`customer-requests.tsx`, para a solicitação que chegou sem
+     reserva) usa a mesma regra. Testes: `areas-de-passagem.test.ts` e
+     `areas-de-passagem.integration.test.ts` no WMS, `areas-de-passagem.test.ts`
+     e `customer-requests.test.ts` no app. Fica em aberto o saldo que entra
+     numa área sem tarefa de guarda (entrada manual ou contagem no
+     `RECEBIMENTO`, devolução com o local de uma área): ele sai do disponível,
+     e o caminho de volta à prateleira, hoje, é a saída e a entrada manuais
+     (pergunta 16).
    - **7c, o recálculo:** a projeção só se acerta quando o SKU tem uma
      escrita nova; uma rotina refaz `qty_available` e `qty_receiving` de todo
      `client_inventory` a partir dos saldos, respeita o congelamento e a
@@ -556,6 +565,15 @@ não resolve caixa, etiqueta nem Mapa, e por isso não entra como etapa.
 | 14 | Zona cheia na conclusão: a entrada se conclui com a caixa fechada e sem destino? (02/11/2026) | Sim: a caixa ganha o destino na guarda. A seção 4.4 deixa de pedir toda caixa com destino. |
 | 15 | Trocar o destino depois de confirmado, antes de levar a caixa? (02/11/2026) | Só pelo "Não cabe aqui" na prateleira (parte 4); a bancada não libera o destino. |
 | — | A parte 7 entra com liberação por ambiente? (02/11/2026) | Não: pode ir à produção; quem dispara a produção é o Leonardo, à mão. |
+
+Falta decidir:
+
+16. **Saldo numa área sem guarda:** a entrada manual e a contagem no
+    `RECEBIMENTO`, e a devolução disponível com o local de uma área, põem
+    saldo onde o pedido do cliente não reserva e não abrem guarda. O que
+    fazer: abrir a guarda sozinha nesses caminhos, como o Receber faz; dar ao
+    Estoque uma ação "Guardar" para o saldo parado numa área; ou recusar
+    esses lançamentos nas áreas, deixando o RECEBIMENTO só para o Receber?
 
 Os mockups das telas que mudam (chegada avulsa, ficha da chegada por caixa,
 fechar caixa e onde guardar, fila do Receber, guarda da caixa no computador e
