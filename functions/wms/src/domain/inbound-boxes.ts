@@ -165,6 +165,25 @@ export const ConfirmInboundBoxDestinationSchema = z.object({
 
 export const RemoveInboundBoxSchema = z.object(mutationFields);
 
+/** Os motivos da falta marcada na linha da NF (decisão 17), os do separar a menos. */
+export const MOTIVOS_DA_FALTA = ["falta", "avaria"] as const;
+
+const itemField = identity("Informe a linha da NF.");
+
+export const MarkInboundBoxShortageSchema = z.discriminatedUnion("action", [
+  z.object({
+    ...receiptFields,
+    action: z.literal("mark"),
+    inbound_item_id: itemField,
+    reason: z.enum(MOTIVOS_DA_FALTA, { errorMap: () => ({ message: "Informe o motivo: falta ou avaria." }) }),
+    detail: z.string().trim().max(300, "Detalhe da falta muito longo.").optional(),
+    /** O que a tela viu nas caixas: a marca vale para essa quantidade. */
+    expected_boxed_qty: z.number().finite().min(0, "Quantidade inválida.").max(1_000_000, "Quantidade inválida."),
+    idempotency_key: operationKey,
+  }),
+  z.object({ ...receiptFields, action: z.literal("clear"), inbound_item_id: itemField, idempotency_key: operationKey }),
+]);
+
 /** Valida a entrada com a frase do esquema. O ZodError cru viraria INTERNAL na callable. */
 function parse<S extends z.ZodTypeAny>(schema: S, raw: unknown): z.output<S> {
   const result = schema.safeParse(raw ?? {});
@@ -1031,6 +1050,98 @@ export async function removeInboundBox(db: Firestore, raw: unknown, actor: Opera
       ok: true,
       box_code: input.box_code,
       removed_lines: lines.length,
+      events: [event],
+    });
+  });
+}
+
+// --------------------------------------------------------- marcar falta
+
+/**
+ * Marca (ou desmarca) a falta numa linha da NF da chegada por caixa (parte 4c,
+ * decisão 17): a operação, na bancada, com o motivo. A marca vale para o que
+ * estava nas caixas quando foi feita; a linha que passar a ser coberta deixa a
+ * marca sem valor. Grava só a linha, nunca a chegada.
+ */
+export async function markInboundBoxShortage(db: Firestore, raw: unknown, actor: OperationalActor) {
+  requireEditor(actor);
+  const input = parse(MarkInboundBoxShortageSchema, raw);
+  const inputHash = digest(input, 64);
+  const action = `shortage_${input.action}`;
+  const opRef = operationRef(db, action, input.receipt_id, input.idempotency_key);
+  const itemRef = db.collection(INBOUND_ITEMS_COLLECTION).doc(input.inbound_item_id);
+
+  return db.runTransaction(async (transaction) => {
+    const previous = await replayOf(transaction, opRef, inputHash);
+    if (previous) return previous;
+    await assertInventoryOperationsEnabled(transaction, db);
+    const receipt = await readReceipt(transaction, db, input.receipt_id);
+    const owner = assertReceiptTakesBoxes(receipt, input.customer_code);
+    const itemSnapshot = await transaction.get(itemRef);
+    if (!itemSnapshot.exists) throw new HttpsError("not-found", "Linha da chegada não encontrada.");
+    const item = itemSnapshot.data() ?? {};
+    if (text(item.receipt_id) !== input.receipt_id || recordOwner(item) !== owner) {
+      throw new HttpsError("permission-denied", "Linha de outra chegada.");
+    }
+    const lineNumber = Number(item.line_number) || 0;
+    const expectedQty = round(Number(item.expected_qty) || 0);
+    const boxedQty = round(Number(item.boxed_qty) || 0);
+    const productName = text(item.product_name) || text(item.sku_code) || input.inbound_item_id;
+    const receiptNumber = text(receipt.receipt_number) || input.receipt_id;
+
+    let shortage: Row | null = null;
+    if (input.action === "mark") {
+      if (boxedQty >= expectedQty) {
+        throw new HttpsError(
+          "failed-precondition",
+          `A linha ${lineNumber} já está coberta pelas caixas: ${boxedQty} de ${expectedQty}.`,
+        );
+      }
+      if (round(input.expected_boxed_qty) !== boxedQty) {
+        throw new HttpsError("aborted", `A linha ${lineNumber} mudou em outra tela. Atualize antes de continuar.`, {
+          code: "BOXED_QTY_CONFLICT",
+        });
+      }
+      shortage = clean({
+        qty: round(expectedQty - boxedQty),
+        boxed_qty: boxedQty,
+        expected_qty: expectedQty,
+        reason: input.reason,
+        detail: input.detail || undefined,
+        marked_at: new Date().toISOString(),
+        marked_by: actorFields(actor),
+      });
+      transaction.update(itemRef, { shortage, updated_at: FieldValue.serverTimestamp() });
+    } else {
+      transaction.update(itemRef, { shortage: FieldValue.delete(), updated_at: FieldValue.serverTimestamp() });
+    }
+
+    const marking = input.action === "mark";
+    const event = boxEvent(transaction, db, opRef.id, action, {
+      type: marking ? "warehouse.line_shortage_marked" : "warehouse.line_shortage_cleared",
+      title: marking
+        ? `Falta na linha ${lineNumber}: ${String(shortage?.qty)} un.`
+        : `Falta desmarcada na linha ${lineNumber}`,
+      description: `${productName} · chegada ${receiptNumber}`,
+      entity_type: "inbound_item",
+      entity_id: input.inbound_item_id,
+      customer_code: owner,
+      payload: clean({
+        receipt_id: input.receipt_id,
+        receipt_number: receiptNumber,
+        inbound_item_id: input.inbound_item_id,
+        line_number: lineNumber,
+        sku_code: text(item.sku_code) || undefined,
+        expected_qty: expectedQty,
+        boxed_qty: boxedQty,
+        qty: shortage?.qty,
+        reason: shortage?.reason,
+        detail: shortage?.detail,
+      }),
+    }, actor);
+    return finish(transaction, opRef, { action, targetId: input.inbound_item_id, customerCode: owner, inputHash }, actor, {
+      ok: true,
+      inbound_item: { id: input.inbound_item_id, boxed_qty: boxedQty, shortage },
       events: [event],
     });
   });
