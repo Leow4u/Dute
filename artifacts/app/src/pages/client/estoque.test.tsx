@@ -6,13 +6,14 @@ import { describe, expect, it } from "vitest";
 import { typeOptions } from "@/lib/portal-stock";
 import { groupFamilies } from "@/lib/stock-variants";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosForaDaLista } from "@/test/textos";
+import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import {
   ActiveFilterChips,
   CartPanel,
   FamilyCard,
   MarketplaceToolbar,
+  ProductDetailPanel,
   StockFilterGroups,
   StockList,
   activeCatalogFilters,
@@ -159,6 +160,173 @@ describe("gênero no estoque do portal", () => {
     expect(html.match(/>FEM</g)).toHaveLength(1);
     expect(html.match(/>MASC</g)).toHaveLength(1);
     expect(html.match(/bg-gender-/g)).toHaveLength(2);
+  });
+});
+
+describe("em recebimento no estoque do portal (parte 7d)", () => {
+  // Do mockup PortalEstoqueRecebimento: a polo chegando, ainda sem guarda, e a calça na prateleira.
+  const polo: InventoryItem = {
+    sku_code: "BTG-000201",
+    client_item_code: "A.01.0806.005.GG",
+    product_name: "Camisa polo manga longa GG",
+    category: "Polo",
+    qty_on_hand: 24,
+    qty_available: 0,
+    qty_receiving: 24,
+  };
+  const calca: InventoryItem = {
+    sku_code: "BTG-000202",
+    client_item_code: "B.02.0110.001.42",
+    product_name: "Calça social 42",
+    category: "Calça",
+    qty_on_hand: 76,
+    qty_available: 64,
+    qty_receiving: 0,
+    qty_reserved: 12,
+  };
+  // Com prateleira e peça chegando: 64 livres, 6 chegando, 12 reservados.
+  const misto: InventoryItem = { ...calca, qty_on_hand: 82, qty_receiving: 6 };
+  const lista = (items: InventoryItem[]) =>
+    renderToStaticMarkup(
+      <StockList
+        products={groupInventoryProducts(items)}
+        cart={{}}
+        draftQuantities={{}}
+        onDraftQuantityChange={noop}
+        onAdd={noop}
+        onDetails={noop}
+        onReplenish={noop}
+        onArchive={noop}
+      />,
+    );
+  /** Cada linha da lista: o produto e os números sob Disponível, Em recebimento e Reservado. */
+  const linhas = (html: string) => {
+    const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+    const resultado = [...dom.window.document.querySelectorAll("tbody tr")].map((linha) => {
+      const celulas = [...linha.querySelectorAll("td")].map((celula) => celula.textContent?.trim() ?? "");
+      return { codigo: celulas[0], disponivel: celulas[2], recebimento: celulas[3], reservado: celulas[4], pedido: celulas[5] };
+    });
+    dom.window.close();
+    return resultado;
+  };
+  const card = (items: InventoryItem[]) => {
+    const [family] = groupFamilies(
+      groupInventoryProducts(items),
+      (product) => product.clientItemCode ?? product.clientCode,
+      (product) => product.key,
+    );
+    return renderToStaticMarkup(
+      <FamilyCard
+        family={family!}
+        cart={{}}
+        draftQuantities={{}}
+        onDraftQuantityChange={noop}
+        onAdd={noop}
+        onDetails={noop}
+        onReplenish={noop}
+        onArchive={noop}
+      />,
+    );
+  };
+  const detalhe = (item: InventoryItem) =>
+    renderToStaticMarkup(
+      <ProductDetailPanel
+        product={groupInventoryProducts([item])[0]!}
+        cart={{}}
+        draftQuantity={0}
+        isPending={false}
+        onClose={noop}
+        onDraftQuantityChange={noop}
+        onAdd={noop}
+        onReplenish={noop}
+        onArchive={noop}
+      />,
+    );
+  /** O valor de um fato do detalhe, pelo rótulo dele. */
+  const fato = (html: string, rotulo: string) => html.match(new RegExp(`>${rotulo}</p><p[^>]*>([^<]*)</p>`))?.[1];
+  const DICA_DE_REPOSICAO = "Avise a Dutelog sobre a reposição";
+
+  it("o produto soma o em recebimento da projeção; a projeção ainda sem o campo conta zero", () => {
+    const [p, c] = groupInventoryProducts([polo, calca]).sort((left, right) => left.sku.localeCompare(right.sku));
+    expect([p!.available, p!.receiving, p!.total]).toEqual([0, 24, 24]);
+    expect([c!.available, c!.receiving, c!.reserved]).toEqual([64, 0, 12]);
+    expect(groupInventoryProducts([estoque[1]!])[0]!.receiving).toBe(0);
+  });
+
+  it("a lista: a coluna fica entre o disponível e o reservado, cada número sob o seu cabeçalho, e o disponível não conta o que chega", () => {
+    const html = lista([polo, misto]);
+    const cabecalho = [...html.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((match) => match[1]);
+    expect(cabecalho).toEqual(["Código", "Produto", "Disponível", "Em recebimento", "Reservado", "Pedido"]);
+    const porCodigo = Object.fromEntries(linhas(html).map((linha) => [linha.codigo, linha]));
+    expect(porCodigo["A.01.0806.005.GG"]).toMatchObject({ disponivel: "0", recebimento: "24", reservado: "0" });
+    expect(porCodigo["B.02.0110.001.42"]).toMatchObject({ disponivel: "64", recebimento: "6", reservado: "12" });
+    // Só o produto chegando leva o número em destaque e o selo; os botões dele continuam.
+    expect(html.match(/bg-info-soft px-2/g)).toHaveLength(2);
+    expect(html.match(/>Em recebimento<\/span>/g)).toHaveLength(1);
+    expect(porCodigo["A.01.0806.005.GG"]!.pedido).toBe("Avisar reposiçãoArquivar");
+    expect(porCodigo["B.02.0110.001.42"]!.pedido).toBe("Adicionar");
+    expect(html).not.toContain("Sem saldo");
+  });
+
+  it("a lista mostra só rótulos, dados e ações e passa no axe", async () => {
+    const html = lista([polo, calca]);
+    expect(textosDaTela(html)).toEqual([
+      "Código", "Produto", "Disponível", "Em recebimento", "Reservado", "Pedido",
+      "B.02.0110.001.42", "Calça social 42", "Calça", "64", "0", "12", "Adicionar",
+      "A.01.0806.005.GG", "Camisa polo manga longa GG", "Polo", "24", "Avisar reposição", "Arquivar",
+    ]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("o card do produto só chegando: o selo, a linha do em recebimento e os botões de hoje; textos e axe", async () => {
+    const html = card([polo]);
+    expect(textosDaTela(html)).toEqual([
+      "Em recebimento", "Polo · A.01.0806.005", "Camisa polo manga longa GG", "Sem saldo no momento", "24", "em recebimento", "Avisar reposição", "Arquivar",
+    ]);
+    expect(html).toContain('text-info-soft-foreground">24</span> em recebimento');
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("o card com prateleira e peça chegando: o disponível é só o da prateleira, sem o selo", () => {
+    expect(textosDaTela(card([misto]))).toEqual(["Calça · B.02.0110.001", "Calça social 42", "64", "disponíveis", "6", "em recebimento", "Adicionar"]);
+    expect(textosDaTela(card([calca]))).not.toContain("em recebimento");
+  });
+
+  it("o card agrupado: sem tamanho com saldo, abre no tamanho chegando; o tamanho chegando não diz esgotado", () => {
+    const pp: InventoryItem = { ...polo, sku_code: "BTG-000200", client_item_code: "A.01.0806.005.PP", product_name: "Camisa polo manga longa PP", qty_on_hand: 0, qty_receiving: 0 };
+    expect(textosDaTela(card([pp, polo]))).toEqual([
+      "Em recebimento", "Polo · A.01.0806.005", "Camisa polo manga longa GG", "PP", "esgotado", "GG", "em recebimento",
+      "Sem saldo no momento", "24", "em recebimento neste tamanho", "Avisar reposição", "Arquivar",
+    ]);
+    // Com um tamanho com saldo, o card abre nele, sem o selo; o tamanho chegando continua dizendo que está em recebimento.
+    const m: InventoryItem = { ...polo, sku_code: "BTG-000199", client_item_code: "A.01.0806.005.M", product_name: "Camisa polo manga longa M", qty_on_hand: 10, qty_available: 10, qty_receiving: 0 };
+    expect(textosDaTela(card([m, polo]))).toEqual([
+      "Polo · A.01.0806.005", "Camisa polo manga longa M", "M", "10 disp.", "GG", "em recebimento", "10", "disponíveis neste tamanho", "Adicionar",
+    ]);
+  });
+
+  it("o detalhe do produto só chegando: o em recebimento com o valor, nada para pedir e a dica sem reposição; textos e axe", async () => {
+    const html = detalhe(polo);
+    expect([fato(html, "Disponível para pedido"), fato(html, "Em recebimento"), fato(html, "Total físico")]).toEqual(["0", "24", "24"]);
+    expect(html).toContain("Há peças deste produto em recebimento na Dutelog: entram no disponível para pedido depois da guarda.");
+    expect(html).not.toContain(DICA_DE_REPOSICAO);
+    expect(textosDaTela(html)).toEqual([
+      "Detalhe do produto", "PO", "Polo", "Em recebimento", "A.01.0806.005.GG", "Camisa polo manga longa GG",
+      "Disponível para pedido", "0", "No pedido", "24", "Total físico",
+      "Há peças deste produto em recebimento na Dutelog: entram no disponível para pedido depois da guarda.",
+      "Avisar reposição", "Arquivar",
+    ]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("o detalhe com prateleira e peça chegando: o disponível só da prateleira, o em recebimento à parte e a dica de saldo", () => {
+    const html = detalhe(misto);
+    expect([fato(html, "Disponível para pedido"), fato(html, "Em recebimento"), fato(html, "Reservado"), fato(html, "Total físico")]).toEqual(["64", "6", "12", "82"]);
+    expect(html).not.toContain(">Em recebimento</span>");
+    expect(html).toContain("Saldo disponível. Escolha a quantidade e clique em Adicionar para incluir no pedido.");
+    // Sem nada chegando e sem saldo, a dica de hoje volta.
+    expect(detalhe({ ...polo, qty_on_hand: 0, qty_receiving: 0 })).toContain(DICA_DE_REPOSICAO);
+    expect(fato(detalhe(calca), "Em recebimento")).toBeUndefined();
   });
 });
 

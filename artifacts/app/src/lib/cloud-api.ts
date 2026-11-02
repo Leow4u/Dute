@@ -15,7 +15,7 @@ import {
   type QueryConstraint,
 } from "firebase/firestore";
 
-import { PAPEIS_DO_WMS, estagioDoCadastro, isPapel, modulosContratados } from "@workspace/dominio";
+import { PAPEIS_DO_WMS, estagioDoCadastro, isPapel, livreParaOCliente, modulosContratados } from "@workspace/dominio";
 import { clienteDaChamada, LEGACY_CUSTOMER_CODE } from "./active-customer";
 import { periodBelongsToCustomer } from "./billing-scope";
 import { leiturasDoPortal } from "./operations";
@@ -917,6 +917,27 @@ async function getClientProfile() {
   return { customer_code: customerCode, profile: rows[0] ?? null };
 }
 
+/**
+ * As quantidades do item do Estoque do portal (partes 7 e 7d). O cliente lê
+ * a projeção (client_inventory), que já traz o disponível só da prateleira e
+ * o em recebimento. A prévia interna lê os saldos por local (stock_balances):
+ * a área de passagem vai à parte, pela mesma regra da projeção.
+ */
+export function quantidadesDoPortal(item: AnyRecord, options: { saldoPorLocal: boolean }) {
+  const onHand = Number(item.qty_on_hand ?? 0);
+  const reserved = Number(item.qty_reserved ?? 0);
+  const livre = options.saldoPorLocal
+    ? livreParaOCliente([{ location_id: item.location_id, qty_on_hand: onHand, qty_reserved: reserved }])
+    : null;
+  return {
+    pieces: onHand,
+    qty_on_hand: onHand,
+    qty_available: livre ? livre.qty_available : Number(item.qty_available ?? item.qty_on_hand ?? 0),
+    qty_reserved: reserved,
+    qty_receiving: livre ? livre.qty_receiving : Number(item.qty_receiving ?? 0),
+  };
+}
+
 async function getClientOverview() {
   const profile = await getCurrentProfile();
   const customerCode = String(profile.customer_code || DEFAULT_CUSTOMER.code);
@@ -1109,10 +1130,7 @@ async function getClientOverview() {
       produto: item.product_name,
       category: item.category,
       categoria: item.category,
-      pieces: Number(item.qty_on_hand ?? 0),
-      qty_on_hand: Number(item.qty_on_hand ?? 0),
-      qty_available: Number(item.qty_available ?? item.qty_on_hand ?? 0),
-      qty_reserved: Number(item.qty_reserved ?? 0),
+      ...quantidadesDoPortal(item, { saldoPorLocal: !isClient }),
       total_value: showMerchandise ? lineValue(item) : undefined,
       total_cost: showMerchandise ? lineValue(item) : undefined,
       unit_cost: showMerchandise
