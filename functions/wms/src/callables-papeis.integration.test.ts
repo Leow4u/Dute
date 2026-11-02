@@ -171,6 +171,7 @@ const MATRIZ: Record<string, Linha> = {
   // Pública: o token do convite é a credencial (callables-auth.integration.test.ts).
   lookupInvite: { passam: TODOS },
   manageCatalogPhotos: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  markInboundBoxShortage: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   moveOpeningInventoryLine: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   "mutateManagedEntity:products": { passam: COORDENACAO, recusa: SO_COORDENACAO, entrada: cadastro("products", "update") },
   "mutateManagedEntity:skus": { passam: COORDENACAO, recusa: SO_COORDENACAO, entrada: cadastro("skus", "update") },

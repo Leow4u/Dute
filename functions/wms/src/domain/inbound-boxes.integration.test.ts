@@ -12,6 +12,7 @@ import {
   setInboundBoxState,
   startInboundBox,
   suggestInboundBoxPosition,
+  markInboundBoxShortage,
 } from "./inbound-boxes.js";
 import { createInboundReceiptTransaction, type OperationalActor } from "./operations.js";
 import { seedDefaultWarehouseLayout, upsertWarehousePositions } from "./warehouse-positions.js";
@@ -154,6 +155,9 @@ async function refuse(r: Receipt, code: string, position: string, reason = "Prat
 }
 async function confirm(r: Receipt, code: string, location: string, extra: Row = {}, k = key("confirm")) {
   return confirmInboundBoxDestination(db, { receipt_id: r.id, box_code: code, location_id: location, expected_revision: await rev(code), idempotency_key: k, ...extra }, operacao) as Promise<Row>;
+}
+async function shortage(r: Receipt, size: "XG" | "GG", extra: Row = {}, k = key("shortage")) {
+  return markInboundBoxShortage(db, { action: "mark", receipt_id: r.id, inbound_item_id: r.items[size], reason: "falta", expected_boxed_qty: Number((await itemOf(r.items[size])).boxed_qty ?? 0), idempotency_key: k, ...extra }, operacao) as Promise<Row>;
 }
 async function remove(r: Receipt, code: string, k = key("remove")) {
   return removeInboundBox(db, { receipt_id: r.id, box_code: code, expected_revision: await rev(code), idempotency_key: k }, operacao) as Promise<Row>;
@@ -604,6 +608,76 @@ describe("a caixa do recebimento (recebimento com caixas, parte 3)", () => {
 });
 
 type Callable = { run: (request: never) => Promise<unknown> };
+
+describe("marcar falta na linha da NF (recebimento com caixas, parte 4c)", () => {
+  it("a operação marca a falta com o motivo; grava só a linha, nunca a chegada, e o evento não avisa", async () => {
+    const r = await receipt();
+    const code = String((await start(r)).box.code);
+    await line(r, code, "XG", 29);
+    const receiptRef = db.collection("inbound_receipts").doc(r.id);
+    const receiptBefore = (await receiptRef.get()).updateTime!;
+    const inboxBefore = await sizeOf("ai_agent_inbox");
+
+    const marked = await shortage(r, "XG", { reason: "avaria", detail: "Caixa molhada no caminhão" }, "falta-1");
+    assert.equal(marked.ok, true);
+    const xg = await itemOf(r.items.XG);
+    assert.deepEqual(
+      [xg.shortage.qty, xg.shortage.boxed_qty, xg.shortage.expected_qty, xg.shortage.reason, xg.shortage.detail, xg.shortage.marked_by.uid],
+      [12, 29, 41, "avaria", "Caixa molhada no caminhão", operacao.uid],
+    );
+    assert.match(String(xg.shortage.marked_at), /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(xg.boxed_qty, 29, "a marca não mexe no que está nas caixas");
+    assert.ok((await receiptRef.get()).updateTime!.isEqual(receiptBefore));
+    const [evento] = await events("warehouse.line_shortage_marked");
+    assert.equal(evento!.severity, "info");
+    assert.deepEqual([evento!.payload.qty, evento!.payload.reason, evento!.payload.line_number], [12, "avaria", 1]);
+    assert.equal(await sizeOf("ai_agent_inbox"), inboxBefore);
+    await semEstoque();
+
+    // A mesma chave devolve o mesmo; outro conteúdo na mesma chave é recusado.
+    assert.deepEqual(await shortage(r, "XG", { reason: "avaria", detail: "Caixa molhada no caminhão" }, "falta-1"), marked);
+    await assert.rejects(shortage(r, "XG", { reason: "falta" }, "falta-1"), { code: "already-exists" });
+
+    // Marcar de novo troca a marca; desmarcar tira.
+    await shortage(r, "XG", { reason: "falta" }, "falta-2");
+    assert.deepEqual([(await itemOf(r.items.XG)).shortage.reason, (await itemOf(r.items.XG)).shortage.detail], ["falta", undefined]);
+    await markInboundBoxShortage(db, { action: "clear", receipt_id: r.id, inbound_item_id: r.items.XG, idempotency_key: "desmarca-1" }, operacao);
+    assert.equal((await itemOf(r.items.XG)).shortage, undefined);
+    assert.equal((await events("warehouse.line_shortage_cleared")).length, 1);
+    assert.ok((await receiptRef.get()).updateTime!.isEqual(receiptBefore));
+  });
+
+  it("recusa a linha coberta, a tela velha, o motivo fora da lista, outro cliente, a chegada fora da bancada e o congelamento", async () => {
+    const r = await receipt();
+    const code = String((await start(r)).box.code);
+    await line(r, code, "GG", 30);
+    await line(r, code, "XG", 29);
+
+    await assert.rejects(shortage(r, "GG"), {
+      code: "failed-precondition",
+      message: "A linha 2 já está coberta pelas caixas: 30 de 30.",
+    });
+    await assert.rejects(shortage(r, "XG", { expected_boxed_qty: 20 }), {
+      code: "aborted",
+      message: "A linha 1 mudou em outra tela. Atualize antes de continuar.",
+    });
+    await assert.rejects(shortage(r, "XG", { reason: "sumiu" }), { code: "invalid-argument", message: "Informe o motivo: falta ou avaria." });
+    await assert.rejects(shortage(r, "XG", { customer_code: BETA }), { code: "permission-denied" });
+    await assert.rejects(
+      markInboundBoxShortage(db, { action: "mark", receipt_id: r.id, inbound_item_id: r.items.XG, reason: "falta", expected_boxed_qty: 29, idempotency_key: "papel" }, { uid: "fin-1", role: "financeiro" }),
+      { code: "permission-denied" },
+    );
+
+    await db.collection("system_controls").doc("inventory").set({ movements_frozen: true });
+    await assert.rejects(shortage(r, "XG"), { code: "failed-precondition", message: FROZEN.message });
+    await db.collection("system_controls").doc("inventory").delete();
+
+    await db.collection("inbound_receipts").doc(r.id).update({ status: "received" });
+    await assert.rejects(shortage(r, "XG"), { code: "failed-precondition", details: { code: "RECEIPT_NOT_OPEN" } });
+    assert.equal((await itemOf(r.items.XG)).shortage, undefined);
+    assert.equal((await events("warehouse.line_shortage_marked")).length, 0);
+  });
+});
 
 describe("as callables da caixa do recebimento (pelo .run)", () => {
   async function viaCallable(data: Row) {
