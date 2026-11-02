@@ -516,16 +516,20 @@ desenhada e aprovada antes do PR de tela.
      por projeção (`refreshClientInventorySplitTransaction`), sem mexer no
      total, na reserva nem no resto do documento, e não cria projeção. Com o
      estoque congelado (reconciliação ou zeragem), a rodada não grava nada,
-     nem o controle, e a seguinte continua de onde parou. Só conclui com uma
+     nem o controle (cada gravação dele confere o congelamento na mesma
+     transação), e a seguinte continua de onde parou. Só conclui com uma
      passada sem nada a refazer que começou ao menos uma hora depois da
      primeira rodada (`ESPERA_MINIMA_MS`): durante a publicação, uma function
-     de revisão antiga ainda grava o disponível de antes. Concluído, grava o
-     evento `warehouse.client_projection_recalculated` (sem cliente, fora da
-     caixa do agente), marca o controle
+     de revisão antiga ainda grava o disponível de antes. A página fica
+     marcada como aberta até a rodada gravar o fim dela, e a rodada que parou
+     no meio de uma página não deixa a passada se dar por limpa. Concluído,
+     grava o evento `warehouse.client_projection_recalculated` (sem cliente,
+     fora da caixa do agente; um por recálculo), marca o controle
      `system_controls/client_inventory_split` como feito e daí em diante só
      lê esse controle. Subir `VERSAO_DO_RECALCULO` refaz tudo; para refazer
      sem mudar a conta (uma publicação do WMS que parou no meio, por exemplo),
-     apague esse documento. Testes: `disponivel-do-portal.test.ts` e
+     apague esse documento, e o novo recálculo grava o seu evento. Testes:
+     `disponivel-do-portal.test.ts` e
      `disponivel-do-portal.integration.test.ts`.
    - **7d, o portal:** "Disponível para pedido" e "Em recebimento" no Estoque
      do portal (mockup `PortalEstoqueRecebimento`), aceitando a projeção ainda

@@ -238,6 +238,43 @@ describe("o recálculo do disponível do portal (recebimento com caixas, parte 7
     assert.equal((await eventos()).length, 1);
   });
 
+  it("a rodada que parou no meio de uma página não deixa a passada se dar por limpa", async () => {
+    const rodada = (quando: Date) => recalcularDisponivelDoPortal(db, { porPagina: 2, tempoMs: 0, agora: () => quando });
+    // Em T0, a passada 1 refaz as seis em quatro rodadas.
+    for (let vez = 0; vez < 4; vez += 1) await rodada(T0);
+    // Depois da espera, a passada 2 confere a primeira página e para no fim dela.
+    assert.deepEqual(await rodada(DEPOIS), { status: "em_andamento", passada: 2, conferidas: 2, refeitas: 0 });
+    assert.equal((await controle())?.page_open, false);
+    // A rodada seguinte marca a segunda página, refaz uma projeção dela e cai
+    // antes de gravar o fim da página: é o que ela deixa no banco.
+    await db.collection("system_controls").doc(CONTROLE_DO_RECALCULO).update({ page_open: true });
+
+    // O resto da passada 2 sai sem nada a refazer, mas a passada não conclui.
+    for (let vez = 0; vez < 2; vez += 1) assert.equal((await rodada(DEPOIS)).status, "em_andamento");
+    assert.deepEqual(await rodada(DEPOIS), { status: "em_andamento", passada: 3, conferidas: 0, refeitas: 0 });
+    assert.equal((await eventos()).length, 0);
+    // A passada 3, inteira, conclui.
+    for (let vez = 0; vez < 3; vez += 1) assert.equal((await rodada(DEPOIS)).status, "em_andamento");
+    assert.deepEqual(await rodada(DEPOIS), { status: "feito", passada: 3, conferidas: 7, refeitas: 6 });
+    assert.equal((await controle())?.page_open, false);
+  });
+
+  it("refazer apagando o controle grava o evento do novo recálculo", async () => {
+    await ateTerminar();
+    // Uma publicação do WMS parou no meio e deixou uma projeção com o
+    // disponível de antes: o controle é apagado para refazer.
+    await db.collection("client_inventory").doc("cinv_BTG_Pactual__SKU-1").update({ qty_available: 9, qty_receiving: 0 });
+    await db.collection("system_controls").doc(CONTROLE_DO_RECALCULO).delete();
+    const T1 = new Date(DEPOIS.getTime() + 24 * 60 * 60 * 1000);
+    const T1_DEPOIS = new Date(T1.getTime() + ESPERA_MINIMA_MS + 60_000);
+    assert.equal((await recalcularDisponivelDoPortal(db, { agora: () => T1 })).status, "em_andamento");
+    assert.equal((await recalcularDisponivelDoPortal(db, { agora: () => T1_DEPOIS })).status, "feito");
+
+    const todos = (await eventos()).map((evento) => [evento.payload.started_at, evento.payload.projections_changed]).sort();
+    assert.deepEqual(todos, [[T0.toISOString(), 6], [T1.toISOString(), 1]]);
+    assert.deepEqual([(await lida("cinv_BTG_Pactual__SKU-1")).qty_available, (await lida("cinv_BTG_Pactual__SKU-1")).qty_receiving], [2, 5]);
+  });
+
   it("a versão nova da conta refaz tudo, mesmo com o recálculo anterior feito", async () => {
     await db.collection("system_controls").doc(CONTROLE_DO_RECALCULO).set({
       version: VERSAO_DO_RECALCULO - 1,

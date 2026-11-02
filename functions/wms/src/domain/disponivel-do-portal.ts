@@ -56,11 +56,18 @@ type Controle = {
   total_changed?: number;
   started_at?: string;
   pass_started_at?: string | null;
+  /** Uma página começou e a rodada parou antes de gravar o fim dela. */
+  page_open?: boolean;
 };
 
 function numero(value: unknown) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** O estoque congelado para reconciliação ou zeragem (system_controls/inventory). */
+function congeladoNoControle(controle: Record<string, unknown> | undefined) {
+  return controle?.movements_frozen === true || controle?.reconciliation_status === "running";
 }
 
 function congelado(error: unknown) {
@@ -95,23 +102,39 @@ export async function recalcularDisponivelDoPortal(
     // O começo da passada em curso; sem cursor, a passada começa nesta rodada.
     passStartedAt: null as string | null,
   };
-  if (mesmaVersao && estado.cursor) estado.passStartedAt = lido.pass_started_at || estado.startedAt;
-  const salvar = () =>
-    controleRef.set(
-      {
-        version: VERSAO_DO_RECALCULO,
-        status: "running",
-        pass: estado.pass,
-        cursor: estado.cursor,
-        pass_checked: estado.checked,
-        pass_changed: estado.changed,
-        total_changed: estado.totalChanged,
-        started_at: estado.startedAt,
-        pass_started_at: estado.passStartedAt,
-        updated_at: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
+  if (mesmaVersao && estado.cursor) {
+    estado.passStartedAt = lido.pass_started_at || estado.startedAt;
+    // A rodada anterior parou no meio de uma página: o que ela refez ali não
+    // ficou contado, e esta passada não se dá por limpa. (Sem cursor, a
+    // passada recomeça do início e confere tudo de novo.)
+    if (lido.page_open === true) estado.changed = Math.max(estado.changed, 1);
+  }
+  const inventarioRef = db.collection("system_controls").doc("inventory");
+  // O controle só se grava com o estoque solto, na mesma transação que confere
+  // o congelamento: a zeragem apaga o controle e confere no fim.
+  const gravar = (paginaAberta: boolean) =>
+    db.runTransaction(async (transaction) => {
+      const inventario = await transaction.get(inventarioRef);
+      if (congeladoNoControle(inventario.data())) return false;
+      transaction.set(
+        controleRef,
+        {
+          version: VERSAO_DO_RECALCULO,
+          status: "running",
+          pass: estado.pass,
+          cursor: estado.cursor,
+          pass_checked: estado.checked,
+          pass_changed: estado.changed,
+          total_changed: estado.totalChanged,
+          started_at: estado.startedAt,
+          pass_started_at: estado.passStartedAt,
+          page_open: paginaAberta,
+          updated_at: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      return true;
+    });
   const andamento = (): ResultadoDoRecalculo => ({
     status: "em_andamento",
     passada: estado.pass,
@@ -119,8 +142,14 @@ export async function recalcularDisponivelDoPortal(
     refeitas: estado.changed,
   });
 
+  const parar = async (): Promise<ResultadoDoRecalculo> =>
+    (await gravar(false)) ? andamento() : { ...andamento(), status: "congelado" };
+
   for (;;) {
     if (!estado.cursor) estado.passStartedAt = agora().toISOString();
+    // A página fica marcada como aberta antes da primeira projeção refeita
+    // nela; esta gravação também guarda o fim da página anterior.
+    if (!(await gravar(true))) return { ...andamento(), status: "congelado" };
     let pagina = db
       .collection("client_inventory")
       .orderBy(FieldPath.documentId())
@@ -133,7 +162,7 @@ export async function recalcularDisponivelDoPortal(
         resultado = await refreshClientInventorySplitTransaction(db, documento.id);
       } catch (error) {
         // Congelou no meio: a rodada para sem gravar; a seguinte retoma do
-        // último cursor salvo (o que esta refez já fica igual aos saldos).
+        // último cursor salvo, com a página marcada como aberta.
         if (congelado(error)) return { ...andamento(), status: "congelado" };
         throw error;
       }
@@ -164,20 +193,15 @@ export async function recalcularDisponivelDoPortal(
       estado.passStartedAt = null;
       estado.checked = 0;
       estado.changed = 0;
-      if (limpa) {
-        // Limpa, mas cedo: a próxima passada fica para a próxima rodada.
-        await salvar();
-        return andamento();
-      }
+      // Limpa, mas cedo: a próxima passada fica para a próxima rodada.
+      if (limpa) return parar();
     }
-    await salvar();
-    if (Date.now() - inicio > tempoMs) return andamento();
+    if (Date.now() - inicio > tempoMs) return parar();
   }
 }
 
 async function estoqueCongelado(db: Firestore) {
-  const controle = (await db.collection("system_controls").doc("inventory").get()).data() ?? {};
-  return controle.movements_frozen === true || controle.reconciliation_status === "running";
+  return congeladoNoControle((await db.collection("system_controls").doc("inventory").get()).data());
 }
 
 async function concluir(
@@ -187,7 +211,11 @@ async function concluir(
   quando: Date,
 ): Promise<boolean> {
   const quandoIso = quando.toISOString();
-  const eventoRef = db.collection("events").doc(`evt_portal_disponivel_v${VERSAO_DO_RECALCULO}`);
+  // Um evento por recálculo: o refazer (o controle apagado, ou a zeragem que
+  // guarda os eventos) começa de novo o started_at e grava o seu.
+  const eventoRef = db
+    .collection("events")
+    .doc(`evt_portal_disponivel_v${VERSAO_DO_RECALCULO}_${estado.startedAt.replace(/\D/g, "")}`);
   const inventarioRef = db.collection("system_controls").doc("inventory");
   return db.runTransaction(async (transaction) => {
     const [controle, evento, inventario] = await Promise.all([
@@ -196,8 +224,7 @@ async function concluir(
       transaction.get(inventarioRef),
     ]);
     // Congelou entre a última passada e aqui: nada se grava.
-    const congelou = inventario.get("movements_frozen") === true || inventario.get("reconciliation_status") === "running";
-    if (congelou) return false;
+    if (congeladoNoControle(inventario.data())) return false;
     if (controle.get("version") === VERSAO_DO_RECALCULO && controle.get("status") === "done") return true;
     transaction.set(
       controleRef,
@@ -211,6 +238,7 @@ async function concluir(
         total_changed: estado.totalChanged,
         started_at: estado.startedAt,
         pass_started_at: estado.passStartedAt,
+        page_open: false,
         done_at: quandoIso,
         updated_at: FieldValue.serverTimestamp(),
       },
