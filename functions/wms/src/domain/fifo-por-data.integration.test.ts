@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
 
 import { deleteApp, initializeApp } from "firebase-admin/app";
-import { Timestamp, getFirestore, type Firestore } from "firebase-admin/firestore";
+import { Timestamp, getFirestore, type Firestore, type Transaction } from "firebase-admin/firestore";
 
 import {
   completeOpeningInventorySessionTransaction,
@@ -115,9 +115,9 @@ async function guardado(local: string, quantidade: number, quando: string) {
   await Promise.all([saldo(local, quantidade), entrada(local, quantidade, quando)]);
 }
 
-function pedir(itens: Array<{ quantity: number; location_id?: string }>, chave: string, ator = cliente, customer = BTG, sku = SKU) {
+function pedir(itens: Array<{ quantity: number; location_id?: string }>, chave: string, ator = cliente, customer = BTG, sku = SKU, banco = db) {
   return createCustomerRequestTransaction(
-    db,
+    banco,
     {
       type: "retirada",
       priority: "normal",
@@ -151,6 +151,43 @@ async function reservas(campo: "customer_request_id" | "order_id", valor: unknow
 async function saldos() {
   const snapshot = await db.collection("stock_balances").where("sku_code", "==", SKU).get();
   return Object.fromEntries(snapshot.docs.map((doc) => [String(doc.get("location_id")), [doc.get("qty_on_hand"), doc.get("qty_reserved")]]));
+}
+
+/**
+ * O banco com um olho nas consultas das transações: guarda o caminho de cada
+ * documento que elas devolveram. Mostra se o pedido leu o razão (movements).
+ */
+function espiarConsultas() {
+  const lidos: string[] = [];
+  const espiar = (transacao: Transaction) =>
+    new Proxy(transacao, {
+      get(alvo, nome) {
+        const valor = Reflect.get(alvo, nome);
+        if (typeof valor !== "function") return valor;
+        if (nome !== "get") return valor.bind(alvo);
+        return async (...args: unknown[]) => {
+          const lido = await valor.apply(alvo, args);
+          for (const doc of (lido as { docs?: Array<{ ref: { path: string } }> }).docs ?? []) lidos.push(doc.ref.path);
+          return lido;
+        };
+      },
+    });
+  const banco = new Proxy(db, {
+    get(alvo, nome) {
+      const valor = Reflect.get(alvo, nome);
+      if (typeof valor !== "function") return valor;
+      if (nome !== "runTransaction") return valor.bind(alvo);
+      return ((corpo: (transacao: Transaction) => Promise<unknown>, opcoes?: Parameters<Firestore["runTransaction"]>[1]) =>
+        alvo.runTransaction((transacao) => corpo(espiar(transacao)), opcoes)) as Firestore["runTransaction"];
+    },
+  });
+  return {
+    banco,
+    razaoLido: () => lidos.filter((caminho) => caminho.startsWith("movements/")),
+    esquecer: () => {
+      lidos.length = 0;
+    },
+  };
 }
 
 describe("o pedido sai pela data de guarda mais antiga (FIFO por data, parte 4)", () => {
@@ -332,5 +369,50 @@ describe("o pedido sai pela data de guarda mais antiga (FIFO por data, parte 4)"
 
     const criado = await pedir([{ quantity: 10, location_id: "A-01" }, { quantity: 10 }], "fifo-h");
     assert.deepEqual(await reservas("customer_request_id", criado.id), { "A-01": 10, "B-01": 10 });
+  });
+
+  it("(i) a-01, digitado na movimentação manual, é outro saldo que A-01: a ENTRADA nova dele não muda a data de A-01", async () => {
+    await Promise.all([guardado("A-01", 50, "2026-08-05T10:00:00-03:00"), guardado("B-01", 50, "2026-09-20T10:00:00-03:00")]);
+    // A movimentação manual grava o destino como foi digitado: o saldo e a ENTRADA ficam em a-01.
+    await createInventoryMovementTransaction(
+      db,
+      { type: "ENTRADA", quantity: 50, customer_code: BTG, sku_code: SKU, location_id: "a-01", reason: "Chegada do fornecedor", idempotency_key: "fifo-i-a01" },
+      armazem,
+    );
+    const manual = await db.collection("movements").where("location_id", "==", "a-01").get();
+    assert.equal(manual.size, 1);
+    await manual.docs[0]!.ref.update({ created_at: Timestamp.fromDate(new Date("2026-10-03T10:00:00-03:00")) });
+    assert.deepEqual(await saldos(), { "A-01": [50, 0], "a-01": [50, 0], "B-01": [50, 0] });
+
+    // A-01 (05/08) antes de B-01 (20/09) e de a-01 (03/10); pela ordem de location_id, seria a-01.
+    const criado = await pedir([{ quantity: 30 }], "fifo-i");
+    assert.deepEqual(await reservas("customer_request_id", criado.id), { "A-01": 30 });
+  });
+
+  it("(j) o razão só é lido quando a ordem pode mudar: item sem local pedido e livre em duas prateleiras", async () => {
+    await Promise.all([
+      guardado("A-01", 50, "2026-10-03T10:00:00-03:00"),
+      guardado("B-01", 50, "2026-08-05T10:00:00-03:00"),
+      saldo("RECEBIMENTO", 50),
+      entrada("RECEBIMENTO", 50, "2026-08-01T10:00:00-03:00", { source: "wms_receiving" }),
+    ]);
+    const espia = espiarConsultas();
+
+    // O item que pede o local reserva nele: não há ordem a escolher, e o razão não é lido.
+    const noLocal = await pedir([{ quantity: 10, location_id: "A-01" }], "fifo-j-1", cliente, BTG, SKU, espia.banco);
+    assert.deepEqual(await reservas("customer_request_id", noLocal.id), { "A-01": 10 });
+    assert.deepEqual(espia.razaoLido(), []);
+
+    // Livre em A-01 e em B-01: o razão é lido, e o pedido vai a B-01, de 05/08.
+    const pelaData = await pedir([{ quantity: 50 }], "fifo-j-2", cliente, BTG, SKU, espia.banco);
+    assert.deepEqual(await reservas("customer_request_id", pelaData.id), { "B-01": 50 });
+    assert.ok(espia.razaoLido().length > 0, "o pedido com livre em duas prateleiras lê o razão");
+
+    // B-01 toda reservada: livre numa prateleira só (o RECEBIMENTO não atende pedido), e o razão não é lido.
+    espia.esquecer();
+    const umaSo = await pedir([{ quantity: 20 }], "fifo-j-3", cliente, BTG, SKU, espia.banco);
+    assert.deepEqual(await reservas("customer_request_id", umaSo.id), { "A-01": 20 });
+    assert.deepEqual(espia.razaoLido(), []);
+    assert.deepEqual(await saldos(), { "A-01": [50, 30], "B-01": [50, 50], RECEBIMENTO: [50, 0] });
   });
 });

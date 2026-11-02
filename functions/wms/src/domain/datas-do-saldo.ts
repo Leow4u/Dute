@@ -16,17 +16,21 @@
  * origens dos parados não vale aqui). O dia é o de São Paulo do created_at do
  * movimento, a hora do servidor; o campo data, que a movimentação manual e a
  * API deixam digitar, não conta. A ENTRADA da contagem de abertura vale um dia
- * só por cliente, o do started_at da sessão dele.
+ * só por cliente, o do started_at da sessão dele. O local é o location_id como
+ * o alocador o compara, só sem o espaço das pontas (chaveDoLocal).
  *
  * A ordem do pedido: primeiro o local com data livre, do dia livre mais antigo
  * ao mais novo; depois o local sem data livre; no empate, o location_id, como
  * antes. Sem data nenhuma, a ordem é a de location_id. O pedido não se divide
  * para seguir a data: o alocador continua enchendo um local por vez e só passa
- * ao seguinte quando ele não basta (pergunta 2).
+ * ao seguinte quando ele não basta (pergunta 2). O razão só é lido para o SKU
+ * em que a ordem pode mudar (skusQuePrecisamDasDatas).
  *
  * Funções puras, sem Firestore, que nunca lançam erro. Os casos estão em
  * datas-do-saldo.casos.json, ao lado.
  */
+
+import { areaDePassagem } from "./areas-de-passagem.js";
 
 /** O dia "AAAA-MM-DD" no calendário de São Paulo; null quando não se sabe. */
 export type Dia = string | null;
@@ -46,10 +50,14 @@ export type DatasDoSaldo = {
 
 export type SaldoDoLocal = { location_id?: unknown; qty_on_hand?: unknown; qty_reserved?: unknown };
 
+/** Um item do pedido: o SKU e o local, quando o cliente pede um. */
+export type ItemDoPedido = { sku_code?: unknown; location_id?: unknown };
+
 /** A sessão de abertura do cliente: o id dela e o started_at. */
 export type Abertura = { id?: unknown; started_at?: unknown };
 
-type PorLocal<T> = ReadonlyMap<string, readonly T[]> | Readonly<Record<string, readonly T[]>>;
+/** Listas por local (ou por SKU), num Map ou num objeto. */
+type PorChave<T> = ReadonlyMap<string, readonly T[]> | Readonly<Record<string, readonly T[]>>;
 
 const DIA = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -81,13 +89,14 @@ export function diaDeSaoPaulo(instante: unknown): Dia {
   }
 }
 
-/** O local como chave de comparação, como operations.ts compara códigos: sem espaço nas pontas, maiúsculo e sem acento. */
+/**
+ * O local como o alocador o compara: o location_id sem o espaço das pontas.
+ * Maiúscula e acento contam: "a-01", que a movimentação manual grava como foi
+ * digitado, é outro saldo que "A-01", e cada movimento grava o location_id do
+ * saldo que mexe. Juntar os dois daria a um a data do outro.
+ */
 export function chaveDoLocal(local: unknown): string {
-  return texto(local)
-    .toUpperCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/\s+/g, " ");
+  return texto(local);
 }
 
 /** As datas físicas e as livres do saldo de um local (seção 3.1). */
@@ -131,14 +140,14 @@ export function diaLivreMaisAntigo(livres: readonly DataDoSaldo[] = []): Dia {
  */
 export function ordenarCandidatos<T>(
   candidatos: readonly T[],
-  datasLivres: PorLocal<DataDoSaldo>,
+  datasLivres: PorChave<DataDoSaldo>,
   localDe: (candidato: T) => unknown = (candidato) => (candidato as { location_id?: unknown } | null)?.location_id,
 ): T[] {
-  const porLocal = porChave(datasLivres);
+  const porLocal = porChave(datasLivres, chaveDoLocal);
   return lista(candidatos)
     .map((candidato, posicao) => {
-      const local = localDe(candidato);
-      return { candidato, posicao, local: texto(local), dia: diaLivreMaisAntigo(porLocal.get(chaveDoLocal(local)) ?? []) };
+      const local = chaveDoLocal(localDe(candidato));
+      return { candidato, posicao, local, dia: diaLivreMaisAntigo(porLocal.get(local) ?? []) };
     })
     .sort((a, b) => {
       if (a.dia !== b.dia) {
@@ -151,18 +160,27 @@ export function ordenarCandidatos<T>(
     .map((item) => item.candidato);
 }
 
-/** As datas livres de cada saldo, por local, com as ENTRADAs de cada um. */
+/**
+ * As datas livres de cada local, com as ENTRADAs dele. Dois saldos no mesmo
+ * local somam: as ENTRADAs são do local e explicam os dois.
+ */
 export function datasLivresPorLocal(
   saldos: readonly SaldoDoLocal[],
-  entradas: PorLocal<Entrada>,
+  entradas: PorChave<Entrada>,
 ): Map<string, DataDoSaldo[]> {
-  const entradasPorLocal = porChave(entradas);
-  const livres = new Map<string, DataDoSaldo[]>();
+  const entradasPorLocal = porChave(entradas, chaveDoLocal);
+  const somados = new Map<string, { qty_on_hand: number; qty_reserved: number }>();
   for (const saldo of lista(saldos)) {
     const local = chaveDoLocal(saldo?.location_id);
-    if (local) livres.set(local, datasDoSaldo(saldo, entradasPorLocal.get(local) ?? []).livres);
+    if (!local) continue;
+    const doLocal = somados.get(local) ?? { qty_on_hand: 0, qty_reserved: 0 };
+    doLocal.qty_on_hand += quantidade(saldo?.qty_on_hand);
+    doLocal.qty_reserved += quantidade(saldo?.qty_reserved);
+    somados.set(local, doLocal);
   }
-  return livres;
+  return new Map(
+    [...somados].map(([local, saldo]) => [local, datasDoSaldo(saldo, entradasPorLocal.get(local) ?? []).livres]),
+  );
 }
 
 /** A ordem só pode mudar com livre em dois ou mais locais: só então vale ler o razão. */
@@ -171,7 +189,28 @@ export function precisaDasDatas(saldos: readonly SaldoDoLocal[]): boolean {
 }
 
 /**
- * As ENTRADAs do razão de um SKU por local (a chave de chaveDoLocal). O dia é o
+ * Os SKUs do pedido cujo razão o alocador lê, dentro da transação: o SKU com
+ * algum item sem local pedido (o item que pede o local reserva nele) e livre
+ * em duas ou mais prateleiras. O RECEBIMENTO e a EXPEDICAO não contam, porque
+ * não atendem pedido (areas-de-passagem.ts). Os outros SKUs seguem a ordem de
+ * location_id sem ler nada. Na ordem dos itens, sem repetir.
+ */
+export function skusQuePrecisamDasDatas(itens: readonly ItemDoPedido[], saldosPorSku: PorChave<SaldoDoLocal>): string[] {
+  const saldos = porChave(saldosPorSku, texto);
+  const vistos = new Set<string>();
+  const skus: string[] = [];
+  for (const item of lista(itens)) {
+    const sku = texto(item?.sku_code);
+    if (!sku || texto(item?.location_id) || vistos.has(sku)) continue;
+    vistos.add(sku);
+    const prateleiras = (saldos.get(sku) ?? []).filter((saldo) => areaDePassagem(saldo?.location_id) === null);
+    if (precisaDasDatas(prateleiras)) skus.push(sku);
+  }
+  return skus;
+}
+
+/**
+ * As ENTRADAs do razão de um SKU por local (chaveDoLocal). O dia é o
  * do created_at em São Paulo; a ENTRADA da abertura do cliente (com o
  * opening_inventory_session_id da sessão) vale o dia do started_at dela, e,
  * sem started_at válido, o do created_at. O que não é ENTRADA, ou não tem
@@ -244,10 +283,16 @@ function milissegundos(instante: unknown): number {
   return segundos * 1000 + (typeof nanos === "number" ? nanos / 1e6 : 0);
 }
 
-function porChave<T>(valores: PorLocal<T>): Map<string, readonly T[]> {
+/** As listas pela chave (`chave`); as de duas chaves que viram uma só se juntam. */
+function porChave<T>(valores: PorChave<T>, chave: (valor: unknown) => string): Map<string, readonly T[]> {
   const pares: Array<[string, readonly T[]]> =
     valores instanceof Map ? [...valores.entries()] : Object.entries((valores ?? {}) as Record<string, readonly T[]>);
-  return new Map(pares.map(([local, itens]) => [chaveDoLocal(local), lista(itens)]));
+  const juntas = new Map<string, readonly T[]>();
+  for (const [valor, itens] of pares) {
+    const chaveDoValor = chave(valor);
+    juntas.set(chaveDoValor, [...(juntas.get(chaveDoValor) ?? []), ...lista(itens)]);
+  }
+  return juntas;
 }
 
 function lista<T>(valor: readonly T[] | null | undefined): readonly T[] {

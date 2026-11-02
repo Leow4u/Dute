@@ -208,10 +208,23 @@
       "ordem": ["A-01", "B-01"]
     },
     {
-      "caso": "o local casa sem diferenciar maiúscula, acento e espaço nas pontas",
-      "candidatos": ["A-01", " b-01"],
-      "datas_livres": { "a-01": [{ "dia": "2026-10-03", "quantidade": 1 }], "B-01": [{ "dia": "2026-08-05", "quantidade": 1 }] },
-      "ordem": [" b-01", "A-01"]
+      "caso": "A-01 e a-01 são locais distintos, cada um com a sua data, como no alocador; o espaço nas pontas não conta",
+      "candidatos": ["A-01", "a-01", " B-01"],
+      "datas_livres": {
+        "A-01": [{ "dia": "2026-10-03", "quantidade": 1 }],
+        "a-01": [{ "dia": "2026-08-05", "quantidade": 1 }],
+        "B-01 ": [{ "dia": "2026-09-20", "quantidade": 1 }]
+      },
+      "ordem": ["a-01", " B-01", "A-01"]
+    },
+    {
+      "caso": "o acento conta: DEVOLUÇÃO não leva a data de DEVOLUCAO",
+      "candidatos": ["DEVOLUCAO", "DEVOLUÇÃO", "A-01"],
+      "datas_livres": {
+        "DEVOLUCAO": [{ "dia": "2026-08-05", "quantidade": 1 }],
+        "A-01": [{ "dia": "2026-10-03", "quantidade": 1 }]
+      },
+      "ordem": ["DEVOLUCAO", "A-01", "DEVOLUÇÃO"]
     },
     {
       "caso": "um local só",
@@ -286,6 +299,35 @@
         "B-01": [{ "dia": null, "quantidade": 30 }]
       },
       "ordem": ["A-01", "B-01", "C-01"]
+    },
+    {
+      "caso": "A-01 e a-01 são dois saldos, cada um com as suas ENTRADAs: a-01, de 05/08, vem antes de B-01, de 20/09, e de A-01, de 03/10",
+      "saldos": [
+        { "location_id": "A-01", "qty_on_hand": 50, "qty_reserved": 0 },
+        { "location_id": "a-01", "qty_on_hand": 50, "qty_reserved": 0 },
+        { "location_id": "B-01", "qty_on_hand": 50, "qty_reserved": 0 }
+      ],
+      "entradas": {
+        "A-01": [{ "dia": "2026-10-03", "quantidade": 50 }],
+        "a-01": [{ "dia": "2026-08-05", "quantidade": 50 }],
+        "B-01": [{ "dia": "2026-09-20", "quantidade": 50 }]
+      },
+      "livres": {
+        "A-01": [{ "dia": "2026-10-03", "quantidade": 50 }],
+        "a-01": [{ "dia": "2026-08-05", "quantidade": 50 }],
+        "B-01": [{ "dia": "2026-09-20", "quantidade": 50 }]
+      },
+      "ordem": ["a-01", "B-01", "A-01"]
+    },
+    {
+      "caso": "dois saldos no mesmo local (o mesmo location_id sem o espaço das pontas) somam: as ENTRADAs do local explicam os dois",
+      "saldos": [
+        { "location_id": "A-01", "qty_on_hand": 30, "qty_reserved": 0 },
+        { "location_id": " A-01", "qty_on_hand": 20, "qty_reserved": 10 }
+      ],
+      "entradas": { "A-01": [{ "dia": "2026-08-05", "quantidade": 20 }, { "dia": "2026-10-03", "quantidade": 30 }] },
+      "livres": { "A-01": [{ "dia": "2026-08-05", "quantidade": 10 }, { "dia": "2026-10-03", "quantidade": 30 }] },
+      "ordem": ["A-01", " A-01"]
     }
   ],
   "razao": [
@@ -334,15 +376,17 @@
       "entradas": { "A-01": [{ "dia": "2026-10-18", "quantidade": 40 }] }
     },
     {
-      "caso": "o local vira chave: maiúsculo, sem acento e sem espaço nas pontas",
+      "caso": "o local vira chave só sem o espaço nas pontas: maiúscula e acento contam, como no alocador (a-01, digitado na movimentação manual, é outro saldo)",
       "abertura": {},
       "movimentos": [
         { "tipo_mov": "ENTRADA", "source": "functions_return_disposition", "location_id": " devolução ", "quantity": 2, "created_at": "2026-10-20T15:00:00.000Z" },
-        { "tipo_mov": "ENTRADA", "source": "wms_putaway", "location_id": "a-01", "quantity": 3, "created_at": "2026-10-21T15:00:00.000Z" }
+        { "tipo_mov": "ENTRADA", "source": "functions_manual_inventory", "location_id": "a-01", "quantity": 3, "created_at": "2026-08-05T15:00:00.000Z" },
+        { "tipo_mov": "ENTRADA", "source": "wms_putaway", "location_id": "A-01 ", "quantity": 4, "created_at": "2026-10-03T15:00:00.000Z" }
       ],
       "entradas": {
-        "DEVOLUCAO": [{ "dia": "2026-10-20", "quantidade": 2 }],
-        "A-01": [{ "dia": "2026-10-21", "quantidade": 3 }]
+        "devolução": [{ "dia": "2026-10-20", "quantidade": 2 }],
+        "a-01": [{ "dia": "2026-08-05", "quantidade": 3 }],
+        "A-01": [{ "dia": "2026-10-03", "quantidade": 4 }]
       }
     },
     {
@@ -392,6 +436,91 @@
         { "location_id": "C-01", "qty_on_hand": 3, "qty_reserved": 0 }
       ],
       "le": true
+    }
+  ],
+  "skus_lidos": [
+    {
+      "caso": "item sem local e livre em duas prateleiras: lê o razão do SKU",
+      "itens": [{ "sku_code": "BTG-POLO-M" }],
+      "saldos": {
+        "BTG-POLO-M": [
+          { "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 },
+          { "location_id": "B-01", "qty_on_hand": 5, "qty_reserved": 0 }
+        ]
+      },
+      "skus": ["BTG-POLO-M"]
+    },
+    {
+      "caso": "o item que pede o local reserva nele: não lê",
+      "itens": [{ "sku_code": "BTG-POLO-M", "location_id": "A-01" }],
+      "saldos": {
+        "BTG-POLO-M": [
+          { "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 },
+          { "location_id": "B-01", "qty_on_hand": 5, "qty_reserved": 0 }
+        ]
+      },
+      "skus": []
+    },
+    {
+      "caso": "livre numa prateleira só, mais o RECEBIMENTO e a EXPEDICAO, que não atendem pedido: não lê",
+      "itens": [{ "sku_code": "BTG-POLO-M" }],
+      "saldos": {
+        "BTG-POLO-M": [
+          { "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 },
+          { "location_id": "RECEBIMENTO", "qty_on_hand": 50, "qty_reserved": 0 },
+          { "location_id": " expedição ", "qty_on_hand": 4, "qty_reserved": 0 }
+        ]
+      },
+      "skus": []
+    },
+    {
+      "caso": "a segunda prateleira toda reservada: não lê",
+      "itens": [{ "sku_code": "BTG-POLO-M" }],
+      "saldos": {
+        "BTG-POLO-M": [
+          { "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 },
+          { "location_id": "B-01", "qty_on_hand": 5, "qty_reserved": 5 }
+        ]
+      },
+      "skus": []
+    },
+    {
+      "caso": "um item do SKU com local e outro sem: lê",
+      "itens": [{ "sku_code": "BTG-POLO-M", "location_id": "A-01" }, { "sku_code": "BTG-POLO-M" }],
+      "saldos": {
+        "BTG-POLO-M": [
+          { "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 },
+          { "location_id": "B-01", "qty_on_hand": 5, "qty_reserved": 0 }
+        ]
+      },
+      "skus": ["BTG-POLO-M"]
+    },
+    {
+      "caso": "vários SKUs: só os que têm livre em duas prateleiras, uma vez cada, na ordem dos itens",
+      "itens": [{ "sku_code": "BTG-CAMISA-P" }, { "sku_code": "BTG-POLO-M" }, { "sku_code": "BTG-POLO-M" }, { "sku_code": "BTG-BONE" }],
+      "saldos": {
+        "BTG-CAMISA-P": [{ "location_id": "A-02", "qty_on_hand": 8, "qty_reserved": 0 }],
+        "BTG-POLO-M": [
+          { "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 },
+          { "location_id": "B-01", "qty_on_hand": 5, "qty_reserved": 0 }
+        ],
+        "BTG-BONE": [
+          { "location_id": "C-01", "qty_on_hand": 2, "qty_reserved": 0 },
+          { "location_id": "A-03", "qty_on_hand": 3, "qty_reserved": 0 }
+        ]
+      },
+      "skus": ["BTG-POLO-M", "BTG-BONE"]
+    },
+    {
+      "caso": "o SKU do item casa sem o espaço das pontas; o local só de espaço vale como sem local; SKU sem saldo e item sem SKU não leem",
+      "itens": [{ "sku_code": "BTG-SEM-SALDO" }, { "location_id": "A-01" }, { "sku_code": " BTG-POLO-M ", "location_id": "  " }],
+      "saldos": {
+        "BTG-POLO-M": [
+          { "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 },
+          { "location_id": "B-01", "qty_on_hand": 5, "qty_reserved": 0 }
+        ]
+      },
+      "skus": ["BTG-POLO-M"]
     }
   ]
 }

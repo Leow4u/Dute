@@ -14,9 +14,11 @@ import {
   entradasDoRazao,
   ordenarCandidatos,
   precisaDasDatas,
+  skusQuePrecisamDasDatas,
   type Abertura,
   type DataDoSaldo,
   type Entrada,
+  type ItemDoPedido,
   type SaldoDoLocal,
 } from "./datas-do-saldo.js";
 
@@ -42,6 +44,7 @@ type Casos = {
   }[];
   razao: { caso: string; abertura: Abertura; movimentos: unknown[]; entradas: Record<string, Entrada[]> }[];
   leituras: { caso: string; saldos: SaldoDoLocal[]; le: boolean }[];
+  skus_lidos: { caso: string; itens: ItemDoPedido[]; saldos: Record<string, SaldoDoLocal[]>; skus: string[] }[];
 };
 
 const casos = JSON.parse(readFileSync(CASOS, "utf8")) as Casos;
@@ -56,6 +59,7 @@ describe("datas do saldo: casos de referência", () => {
     assert.ok(casos.pedidos.length >= 3);
     assert.ok(casos.razao.length >= 4);
     assert.ok(casos.leituras.length >= 4);
+    assert.ok(casos.skus_lidos.length >= 6);
   });
 
   for (const caso of casos.dias) {
@@ -104,6 +108,21 @@ describe("datas do saldo: casos de referência", () => {
   for (const caso of casos.leituras) {
     it(`leitura: ${caso.caso}`, () => assert.equal(precisaDasDatas(caso.saldos), caso.le));
   }
+
+  for (const caso of casos.skus_lidos) {
+    it(`SKUs cujo razão o pedido lê: ${caso.caso}`, () => {
+      assert.deepEqual(skusQuePrecisamDasDatas(caso.itens, caso.saldos), caso.skus);
+      // O mesmo com o mapa de saldos por SKU, como o alocador chama.
+      assert.deepEqual(skusQuePrecisamDasDatas(caso.itens, new Map(Object.entries(caso.saldos))), caso.skus);
+    });
+  }
+
+  it("a chave do local é a do alocador: o location_id sem o espaço das pontas, com maiúscula e acento", () => {
+    assert.equal(chaveDoLocal(" a-01 "), "a-01");
+    assert.notEqual(chaveDoLocal("A-01"), chaveDoLocal("a-01"));
+    assert.notEqual(chaveDoLocal("DEVOLUÇÃO"), chaveDoLocal("DEVOLUCAO"));
+    assert.equal(chaveDoLocal("A  01"), "A  01");
+  });
 });
 
 describe("datas do saldo: o instante do Firestore e o que não é data", () => {
@@ -139,6 +158,8 @@ describe("datas do saldo: nunca lança erro", () => {
     assert.deepEqual([...datasLivresPorLocal(estranho, estranho)], []);
     assert.deepEqual([...entradasDoRazao(estranho, estranho)], []);
     assert.equal(precisaDasDatas(estranho), false);
+    assert.deepEqual(skusQuePrecisamDasDatas(estranho, estranho), []);
+    assert.deepEqual(skusQuePrecisamDasDatas([null, 5, { sku_code: {} }, { sku_code: "S" }] as never, { S: null, X: 5 } as never), []);
     assert.equal(chaveDoLocal(undefined), "");
   });
 

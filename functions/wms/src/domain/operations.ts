@@ -38,7 +38,7 @@ import {
   datasLivresPorLocal,
   entradasDoRazao,
   ordenarCandidatos,
-  precisaDasDatas,
+  skusQuePrecisamDasDatas,
   type Entrada,
 } from "./datas-do-saldo.js";
 import {
@@ -872,18 +872,16 @@ function orderableBalanceRows(rows: Row[], requestedLocation: string): Row[] {
 /**
  * As ENTRADAs de cada SKU do pedido por local, para ele sair pela data de
  * guarda mais antiga (docs/plataforma/fifo-por-data.md, parte 4; a conta e a
- * ordem em domain/datas-do-saldo.ts). Lê o razão só do SKU em que a ordem
- * pode mudar: algum item dele sem local pedido e livre em duas ou mais
- * prateleiras. A consulta tem só igualdades (sem índice composto) e corre na
- * fase de leitura da transação. A ENTRADA da contagem de abertura vale o dia
- * em que a sessão do cliente começou. SKU sem leitura segue a ordem de
- * location_id.
+ * ordem em domain/datas-do-saldo.ts). Lê o razão só dos SKUs que
+ * skusQuePrecisamDasDatas aponta, aqueles em que a ordem pode mudar. A
+ * consulta tem só igualdades (sem índice composto) e corre na fase de leitura
+ * da transação. A ENTRADA da contagem de abertura vale o dia em que a sessão
+ * do cliente começou. SKU sem leitura segue a ordem de location_id.
  */
 async function ledgerEntriesForOrder(
   transaction: Transaction,
   db: Firestore,
   customerCode: string,
-  skuCodes: string[],
   balanceRowsBySku: Map<string, Row[]>,
   items: OperationalRequestItem[],
 ) {
@@ -892,12 +890,12 @@ async function ledgerEntriesForOrder(
     .collection(collections.openingInventorySessions)
     .doc(openingInventorySessionDocumentId(text(customerCode)));
   let openingSession: Promise<DocumentData | undefined> | undefined;
-  for (const skuCode of skuCodes) {
-    const choosesLocation = items.some(
-      (item) => text(item.sku_code) === skuCode && !text(item.location_id),
-    );
-    const candidates = orderableBalanceRows(balanceRowsBySku.get(skuCode) ?? [], "");
-    if (!choosesLocation || !precisaDasDatas(candidates.map((row) => row.data))) continue;
+  const balancesBySku = new Map(
+    [...balanceRowsBySku].map(
+      ([skuCode, rows]) => [skuCode, rows.map((row) => row.data)] as const,
+    ),
+  );
+  for (const skuCode of skusQuePrecisamDasDatas(items, balancesBySku)) {
     const entries = await readRows(
       transaction,
       db
@@ -4237,7 +4235,6 @@ export async function createCustomerRequestTransaction(
         transaction,
         db,
         input.customer_code,
-        uniqueSkus,
         balanceRowsBySku,
         input.items,
       );
@@ -5737,7 +5734,6 @@ export async function decideCustomerRequestTransaction(
           transaction,
           db,
           customerCode,
-          uniqueSkus,
           balanceRowsBySku,
           items,
         );
