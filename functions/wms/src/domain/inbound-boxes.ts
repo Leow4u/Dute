@@ -188,6 +188,11 @@ export const CompleteInboundBoxReceiptSchema = z.object({
   idempotency_key: operationKey,
 });
 
+export const RefuseInboundBoxShelfSchema = z.object({
+  ...mutationFields,
+  reason: z.string().trim().min(1, "Informe por que a caixa não cabe.").max(300, "Motivo muito longo."),
+});
+
 export const StoreInboundBoxSchema = z.object({
   ...mutationFields,
   /** A prateleira onde a caixa está sendo guardada: a reservada para ela. */
@@ -1638,6 +1643,109 @@ export async function storeInboundBox(db: Firestore, raw: unknown, actor: Operat
       putaway_status: lastPutaway ? "completed" : "pending",
       conference_revision: nextRevision,
       events,
+    });
+  });
+}
+
+// ------------------------------------------- "Não cabe aqui" na prateleira
+
+/**
+ * "Não cabe aqui" na prateleira reservada (parte 4h, decisão 15): o único
+ * jeito de trocar o destino confirmado, e só na guarda, depois da entrada. A
+ * prateleira sai da escolha desta caixa, a reserva sai (a caixa volta a
+ * fechada e sem prateleira, e a tarefa fica sem destino) e a coordenação é
+ * avisada (decisão 21). A prateleira apagada também se recusa, sem tocar no
+ * documento que não existe mais. O novo destino é pelo sugerir e confirmar.
+ */
+export async function refuseInboundBoxShelf(db: Firestore, raw: unknown, actor: OperationalActor) {
+  requireEditor(actor);
+  const input = parse(RefuseInboundBoxShelfSchema, raw);
+  const inputHash = digest(input, 64);
+  const opRef = operationRef(db, "refuse_shelf", input.receipt_id, input.idempotency_key);
+
+  return db.runTransaction(async (transaction) => {
+    const previous = await replayOf(transaction, opRef, inputHash);
+    if (previous) return previous;
+    await assertInventoryOperationsEnabled(transaction, db);
+    const receipt = await readReceipt(transaction, db, input.receipt_id);
+    const owner = assertReceiptTakesBoxes(receipt, input.customer_code, "destination");
+    const { ref: boxRef, box } = await readBox(transaction, db, input.box_code, input.receipt_id, owner);
+    const reserved = text(box.destination_location_id || box.location_id).toUpperCase();
+    if (text(box.status) !== "committing" || !reserved) {
+      throw new HttpsError("failed-precondition", `A caixa ${input.box_code} não tem prateleira reservada.`);
+    }
+    revision(box, input.expected_revision);
+    if (text(receipt.status).toLowerCase() !== "received") {
+      throw new HttpsError(
+        "failed-precondition",
+        `A caixa ${input.box_code} já tem destino confirmado em ${reserved}: a troca é pelo "Não cabe aqui", na guarda, depois da entrada.`,
+        { code: "BOX_DESTINATION_LOCKED" },
+      );
+    }
+    const taskRef = await readOpenBoxTask(transaction, db, receipt, input.receipt_id, input.box_code);
+    const positionRef = db.collection(WAREHOUSE_POSITIONS_COLLECTION).doc(reserved);
+    const positionSnapshot = await transaction.get(positionRef);
+
+    const refusal = { position: reserved, reason: input.reason, refused_at: new Date().toISOString(), refused_by: actorFields(actor), phase: "putaway" };
+    const refusals = [...(Array.isArray(box.refusals) ? (box.refusals as Row[]) : []), refusal];
+    const nextRevision = input.expected_revision + 1;
+    // A reserva sai: a ocupação da prateleira conta só stored e committing.
+    if (positionSnapshot.exists) transaction.update(positionRef, { occupancy_revision: FieldValue.increment(1) });
+    transaction.update(boxRef, {
+      status: "reviewed",
+      location_id: "",
+      destination_location_id: null,
+      front_m: null,
+      depth_m: null,
+      placed_height_m: null,
+      orientation: null,
+      support_box_code: null,
+      base_height_m: null,
+      refusals,
+      conference_revision: nextRevision,
+      updated_at: FieldValue.serverTimestamp(),
+    });
+    if (taskRef) {
+      transaction.update(taskRef, {
+        location_id: FieldValue.delete(),
+        destination_location_id: FieldValue.delete(),
+        next_action: `Escolher outra prateleira para a caixa ${input.box_code} e guardar.`,
+        updated_at: FieldValue.serverTimestamp(),
+      });
+    }
+    const receiptNumber = text(receipt.receipt_number) || input.receipt_id;
+    // Avisa a coordenação: medida errada ou prateleira com problema (decisão 21).
+    const event = createEvent(
+      transaction,
+      db,
+      `evt_${digest({ operationId: opRef.id, suffix: "box_shelf_refused" })}`,
+      {
+        type: "warehouse.box_shelf_refused",
+        title: `A caixa ${input.box_code} não coube em ${reserved}`,
+        description: `${input.reason}. A caixa ficou sem prateleira · chegada ${receiptNumber}`,
+        severity: "attention",
+        entity_type: "warehouse_box",
+        entity_id: input.box_code,
+        customer_code: owner,
+        source: EVENT_SOURCE,
+        payload: {
+          box_code: input.box_code,
+          receipt_id: input.receipt_id,
+          receipt_number: receiptNumber,
+          location_id: reserved,
+          reason: input.reason,
+          shelf_exists: positionSnapshot.exists,
+        },
+      },
+      actor,
+    );
+    return finish(transaction, opRef, { action: "refuse_shelf", targetId: input.box_code, customerCode: owner, inputHash }, actor, {
+      ok: true,
+      box_code: input.box_code,
+      status: "reviewed",
+      refused: refusals.map((item) => text(item.position)),
+      conference_revision: nextRevision,
+      events: [event],
     });
   });
 }

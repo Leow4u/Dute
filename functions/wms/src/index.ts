@@ -138,6 +138,7 @@ import {
   markInboundBoxShortage as markInboundBoxShortageFor,
   completeInboundBoxReceipt as completeInboundBoxReceiptFor,
   storeInboundBox as storeInboundBoxFor,
+  refuseInboundBoxShelf as refuseInboundBoxShelfFor,
 } from "./domain/inbound-boxes.js";
 import { readSystemHealth } from "./domain/system-health.js";
 import { CostSettingsSchema, readSystemDashboard, saveCostSettings } from "./domain/system-dashboard.js";
@@ -8217,6 +8218,12 @@ export const storeInboundBox = onCall(async (request) => {
   const profile = await getProfile(request);
   requireWarehouseWrite(profile);
   return storeInboundBoxFor(db, request.data, profile);
+});
+
+export const refuseInboundBoxShelf = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return refuseInboundBoxShelfFor(db, request.data, profile);
 });
 
 /** Adaptador externo autenticado; só o gateway é documentado para consumidores. */

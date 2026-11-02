@@ -559,9 +559,18 @@ desenhada e aprovada antes do PR de tela.
      conferência (`RECEIPT_NOT_OPEN`), para a caixa não se descolar da
      ENTRADA já gravada. Testes: `inbound-boxes.test.ts` e
      `inbound-boxes.integration.test.ts`.
-   - **4h, "Não cabe aqui" na prateleira:** o único jeito de trocar o
-     destino confirmado (decisão 15). Solta a reserva, avisa a coordenação
-     com evento de atenção (decisão 21) e pede outro destino.
+   - **4h, "Não cabe aqui" na prateleira:** feita em 02/11/2026. A callable
+     `refuseInboundBoxShelf` (papel do armazém), o único jeito de trocar o
+     destino confirmado (decisão 15): só na guarda, com a chegada `received`
+     e a guarda da caixa aberta; na bancada recusa
+     (`BOX_DESTINATION_LOCKED`). A prateleira reservada entra nas recusas da
+     caixa, a reserva sai (a caixa volta a fechada e sem prateleira, e a
+     tarefa fica sem destino), a revisão da prateleira sobe se ela ainda
+     existe, e a coordenação é avisada com o evento de atenção
+     `warehouse.box_shelf_refused` (decisão 21). O novo destino é pelo
+     sugerir e confirmar da 4g. Testes: `inbound-boxes.integration.test.ts`
+     (inclusive a prateleira apagada) e uma linha em
+     `callables-papeis.integration.test.ts`.
    - **4i, o Agent Dute:** vê a chegada guardando caixas e a guarda da
      caixa, nas duas cópias (WMS e núcleo).
 
