@@ -2780,12 +2780,15 @@ export async function recordCycleCountTransaction(
             : delta === 0
             ? "Inventário cíclico sem divergência"
             : "Inventário cíclico ajustado",
+        // O evento da contagem cíclica vira rascunho de aviso ao cliente,
+        // que nunca vê prateleira (P8, 02/11/2026): o local fica só no
+        // payload.
         description:
           mode === "opening"
             ? `${productName} publicado com ${countedQty} unidade(s) no local ${locationId}${boxCode ? ` (caixa ${boxCode})` : ""}.`
             : delta === 0
-            ? `${skuCode} conferido no local ${locationId} sem diferença.`
-            : `${skuCode} ajustado em ${delta > 0 ? "+" : ""}${delta} unidade(s) no local ${locationId}.`,
+            ? `${skuCode} conferido sem diferença.`
+            : `${skuCode} ajustado em ${delta > 0 ? "+" : ""}${delta} unidade(s).`,
         severity:
           mode === "opening" || delta === 0 ? "info" : "attention",
         entity_type:
