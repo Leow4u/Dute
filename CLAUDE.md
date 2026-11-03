@@ -352,7 +352,10 @@ documentação de produto e operação está em `docs/`.
   (`completeInboundBoxReceipt`, regras em `domain/inbound-box-entry.ts`,
   parte 4d): ENTRADA como a por linha, uma guarda por caixa, a chegada
   `received` e em aberto até a última guarda, e o aviso ao cliente só na
-  última guarda. A API REST v1, o aviso do portal e o Documentos criam por linha, e
+  última guarda. A guarda da caixa (`storeInboundBox`, parte 4f) move a
+  caixa inteira com o mesmo razão da guarda por linha (paridade travada no
+  teste) e não cobra; a régua `billing-callables` roda esse fluxo de
+  verdade. A API REST v1, o aviso do portal e o Documentos criam por linha, e
   a conferência e a entrada por linha recusam a chegada por caixa. A caixa do
   recebimento mora em `functions/wms/src/domain/inbound-boxes.ts` (parte 3):
   iniciar, lançar, fechar ou reabrir, sugerir, recusar, confirmar o destino

@@ -5,6 +5,16 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
 import { competenciaFromDate, emissionAvailableFrom } from "./billing.js";
 import { billingDocumentId } from "./domain/billing-scope.js";
+import {
+  completeInboundBoxReceipt,
+  confirmInboundBoxDestination,
+  saveInboundBoxLine,
+  setInboundBoxState,
+  startInboundBox,
+  storeInboundBox,
+} from "./domain/inbound-boxes.js";
+import { createInboundReceiptTransaction } from "./domain/operations.js";
+import { upsertWarehousePositions } from "./domain/warehouse-positions.js";
 
 /**
  * As trilhas de dinheiro do WMS (parte 7.1,
@@ -630,6 +640,66 @@ describe("o mês sem foto", () => {
       saidas_pecas: 4,
       movimentacoes: 2,
     });
+  });
+});
+
+describe("a chegada por caixa de verdade (recebimento com caixas, parte 4)", () => {
+  /**
+   * A régua com a conclusão e a guarda da caixa rodando de verdade, sem
+   * movimento semeado: a entrada cobra as peças uma vez, como uma linha de
+   * recebimento, na competência da conclusão, e a guarda da caixa (o par
+   * wms_putaway) não cobra. Entradas 10 × 1,00; movimento 1 × 0,50: 10,50.
+   */
+  it("a entrada da NF cobra as peças uma vez, na competência da conclusão, e a guarda da caixa não cobra", async () => {
+    const CAIXAS = "Cliente das Caixas";
+    const operacao = { uid: "arm", role: "wms", name: "Armazém" };
+    const competencia = competenciaFromDate(new Date());
+    const lote = db.batch();
+    lote.set(db.collection("customers").doc("cliente_das_caixas"), { code: CAIXAS, customer_code: CAIXAS, name: CAIXAS, sku_prefix: "CXA", status: "active", operation_template: "uniformes" });
+    lote.set(db.collection("products").doc("CXA.POLO"), { id: "CXA.POLO", customer_code: CAIXAS, cod_cliente: "CXA.POLO", produto: "POLO", status: "active" });
+    lote.set(db.collection("skus").doc("CXA-000001"), { id: "CXA-000001", customer_code: CAIXAS, cod_cliente: "CXA.POLO", cod_btg: "CXA-000001", sku_code: "CXA-000001", produto: "POLO", status: "active" });
+    for (const [doc, item] of [
+      ["cxa_1", { id: 1, customer_code: CAIXAS, grupo: "Movimentação", item: "Entrada por peça", valor_unit: 1, auto_source: "mov_entrada_pecas", ordem: 1 }],
+      ["cxa_2", { id: 2, customer_code: CAIXAS, grupo: "Movimentação", item: "Saída por peça", valor_unit: 2, auto_source: "mov_saida_pecas", ordem: 2 }],
+      ["cxa_3", { id: 3, customer_code: CAIXAS, grupo: "Movimentação", item: "Movimento", valor_unit: 0.5, auto_source: "mov_count", ordem: 3 }],
+    ] as const) lote.set(db.collection("billing_price_list").doc(doc), item);
+    await lote.commit();
+    await upsertWarehousePositions(
+      db,
+      { positions: [{ aisle: "Z", shelf: 1, length_m: 1.8, depth_m: 0.75, height_m: 0.65, customer_code: CAIXAS }] },
+      { uid: "coord", role: "interno", name: "Coordenação" },
+    );
+
+    const chegada = (await createInboundReceiptTransaction(
+      db,
+      {
+        customer_code: CAIXAS,
+        supplier: "Confecções",
+        invoice_number: "NF-CX",
+        idempotency_key: "regua-chegada",
+        conference_mode: "per_box",
+        items: [{ line_number: 1, sku_code: "CXA-000001", client_item_code: "CXA.POLO", product_name: "POLO", product_registration: "existing", quantity: 10 }],
+      },
+      operacao,
+      { boxReceivingEnabled: true },
+    )) as Record<string, unknown>;
+    const receiptId = String(chegada.receipt_id);
+    const [linha] = (await db.collection("inbound_items").where("receipt_id", "==", receiptId).get()).docs;
+    const caixa = String(((await startInboundBox(db, { receipt_id: receiptId, idempotency_key: "regua-iniciar" }, operacao)) as { box: { code: string } }).box.code);
+    const revisao = async () => Number((await db.collection("warehouse_boxes").doc(caixa).get()).get("conference_revision") ?? 0);
+    await saveInboundBoxLine(db, { receipt_id: receiptId, box_code: caixa, inbound_item_id: linha!.id, counted_qty: 10, expected_revision: await revisao(), idempotency_key: "regua-linha" }, operacao);
+    await setInboundBoxState(db, { action: "close", receipt_id: receiptId, box_code: caixa, length_m: 0.48, width_m: 0.38, height_m: 0.3, gross_weight_kg: 9.4, expected_revision: await revisao(), idempotency_key: "regua-fechar" }, operacao);
+    await confirmInboundBoxDestination(db, { receipt_id: receiptId, box_code: caixa, location_id: "Z-01", expected_revision: await revisao(), idempotency_key: "regua-destino" }, operacao);
+    await completeInboundBoxReceipt(db, { receipt_id: receiptId, expected_status: "created", idempotency_key: "regua-concluir" }, operacao);
+
+    const depoisDaEntrada = await previa({ competencia, customer_code: CAIXAS });
+    assert.deepEqual(["1", "2", "3"].map((id) => linhas(depoisDaEntrada).get(id)?.qtde ?? 0), [10, 0, 1]);
+    assert.equal(depoisDaEntrada.total_cents, 1050);
+
+    await storeInboundBox(db, { receipt_id: receiptId, box_code: caixa, location_id: "Z-01", expected_revision: await revisao(), idempotency_key: "regua-guardar" }, operacao);
+    const depoisDaGuarda = await previa({ competencia, customer_code: CAIXAS });
+    assert.deepEqual(["1", "2", "3"].map((id) => linhas(depoisDaGuarda).get(id)?.qtde ?? 0), [10, 0, 1]);
+    assert.equal(depoisDaGuarda.total_cents, 1050);
   });
 });
 

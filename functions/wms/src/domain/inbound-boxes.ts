@@ -6,10 +6,23 @@ import { z } from "genkit";
 
 import { recordOwner } from "./customer-scope.js";
 import { conferenceModeOf } from "./inbound-mode.js";
+import { publishedMoneyDeletes } from "./catalog-prices.js";
+import { receivedSummary } from "./client-shipments.js";
+import { boxPutawayTaskId } from "./inbound-box-entry.js";
 import {
   advanceWarehouseTaskTransaction,
   assertInventoryOperationsEnabled,
+  assertSingleBalance,
+  balancesAfter,
+  clientScopedInventoryId,
+  clientSplit,
+  createMovement,
+  movementId,
+  readRows,
+  setClientInventorySplit,
+  skuBalancesQuery,
   createEvent,
+  type Row as LedgerRow,
   type OperationalActor,
   type OperationalEventInput,
   type OperationalEventSummary,
@@ -173,6 +186,12 @@ export const CompleteInboundBoxReceiptSchema = z.object({
   /** A justificativa da divergência, quando há falta ou sobra. */
   note: z.string().trim().max(1000, "Justificativa muito longa.").optional(),
   idempotency_key: operationKey,
+});
+
+export const StoreInboundBoxSchema = z.object({
+  ...mutationFields,
+  /** A prateleira onde a caixa está sendo guardada: a reservada para ela. */
+  location_id: positionField,
 });
 
 /** Os motivos da falta marcada na linha da NF (decisão 17), os do separar a menos. */
@@ -1179,4 +1198,411 @@ export async function completeInboundBoxReceipt(db: Firestore, raw: unknown, act
     actor,
     { boxEntry: { selectedCustomer: input.customer_code } },
   ) as Promise<Row>;
+}
+
+// ------------------------------------------------------ guardar a caixa
+
+const PUTAWAY_TASKS_COLLECTION = "putaway_tasks";
+const CUSTOMER_REQUESTS_COLLECTION = "customer_requests";
+const CLIENT_REQUEST_STATUS_COLLECTION = "client_request_status";
+const CLIENT_INVENTORY_COLLECTION = "client_inventory";
+
+/** A caixa só se guarda depois da entrada (parte 4d): a chegada por caixa, received, com a caixa nela. */
+function assertReceiptStoresBoxes(receipt: Row, selectedCustomer: string | undefined, boxCode: string): string {
+  const owner = recordOwner(receipt);
+  const selected = text(selectedCustomer);
+  if (selected && selected !== owner) {
+    throw new HttpsError("permission-denied", `Chegada de outro cliente. Troque o cliente ativo para ${owner}.`);
+  }
+  const receiptNumber = text(receipt.receipt_number || receipt.id);
+  if (conferenceModeOf(receipt) !== "per_box") {
+    throw new HttpsError(
+      "failed-precondition",
+      `A chegada ${receiptNumber} é conferida por linha: use a guarda da tarefa.`,
+      { code: "RECEIPT_CONFERRED_PER_LINE" },
+    );
+  }
+  const status = text(receipt.status || "created").toLowerCase();
+  if (status !== "received") {
+    throw new HttpsError(
+      "failed-precondition",
+      `Conclua a entrada da chegada ${receiptNumber} antes de guardar a caixa ${boxCode}.`,
+      { code: "RECEIPT_NOT_RECEIVED" },
+    );
+  }
+  const codes = Array.isArray(receipt.box_codes) ? receipt.box_codes.map((code) => text(code)) : [];
+  if (!codes.includes(boxCode)) {
+    throw new HttpsError("failed-precondition", `A caixa ${boxCode} não entrou na chegada ${receiptNumber}.`);
+  }
+  return owner;
+}
+
+type BoxSku = { skuCode: string; clientItemCode?: string; productName: string; quantity: number };
+
+/** O conteúdo da caixa por SKU: o razão é por cliente, SKU e local. */
+function skusOfBox(lines: InboundBoxLine[]): BoxSku[] {
+  const bySku = new Map<string, BoxSku>();
+  for (const line of lines) {
+    const skuCode = text(line.sku_code);
+    const current = bySku.get(skuCode) ?? {
+      skuCode,
+      clientItemCode: text(line.client_item_code) || undefined,
+      productName: text(line.product_name) || skuCode,
+      quantity: 0,
+    };
+    current.quantity = round(current.quantity + (Number(line.counted_qty) || 0));
+    bySku.set(skuCode, current);
+  }
+  return [...bySku.values()].sort((left, right) => left.skuCode.localeCompare(right.skuCode));
+}
+
+/**
+ * Guarda a caixa do recebimento na prateleira reservada para ela (parte 4f),
+ * numa transação só: todas as linhas da caixa saem do RECEBIMENTO para a
+ * prateleira, com o par SAIDA/ENTRADA `wms_putaway` da guarda por linha (que
+ * não cobra), a caixa vai a `stored` e o disponível do portal se acerta. Sem
+ * guarda parcial: o RECEBIMENTO menor que a caixa recusa a guarda inteira, e
+ * a coordenação acerta o saldo (decisão 24). A prateleira é conferida pelo
+ * documento dela: apagada, bloqueada ou de outra zona recusa, e a troca é
+ * pelo "Não cabe aqui". Na última guarda da chegada, a chegada sai de "em
+ * aberto", o aviso de envio vinculado fica recebido no portal e o evento da
+ * chegada guardada (para o aviso de produto novo) é gravado (decisão 20).
+ */
+export async function storeInboundBox(db: Firestore, raw: unknown, actor: OperationalActor) {
+  requireEditor(actor);
+  const input = parse(StoreInboundBoxSchema, raw);
+  const inputHash = digest(input, 64);
+  const opRef = operationRef(db, "store", input.receipt_id, input.idempotency_key);
+  const locationCode = input.location_id;
+  const positionRef = db.collection(WAREHOUSE_POSITIONS_COLLECTION).doc(locationCode);
+  const receiptRef = db.collection(INBOUND_RECEIPTS_COLLECTION).doc(input.receipt_id);
+  const taskRef = db.collection(PUTAWAY_TASKS_COLLECTION).doc(boxPutawayTaskId(input.receipt_id, input.box_code));
+
+  return db.runTransaction(async (transaction) => {
+    const previous = await replayOf(transaction, opRef, inputHash);
+    if (previous) return previous;
+    await assertInventoryOperationsEnabled(transaction, db);
+    const receipt = await readReceipt(transaction, db, input.receipt_id);
+    const owner = assertReceiptStoresBoxes(receipt, input.customer_code, input.box_code);
+    const { ref: boxRef, box } = await readBox(transaction, db, input.box_code, input.receipt_id, owner);
+    const status = text(box.status);
+    if (status === "stored") {
+      throw new HttpsError("failed-precondition", `A caixa ${input.box_code} já foi guardada em ${text(box.location_id)}.`);
+    }
+    if (status !== "committing") {
+      throw new HttpsError(
+        "failed-precondition",
+        `Escolha a prateleira da caixa ${input.box_code} antes de guardar.`,
+        { code: "BOX_WITHOUT_DESTINATION" },
+      );
+    }
+    revision(box, input.expected_revision);
+    const reserved = text(box.destination_location_id || box.location_id).toUpperCase();
+    if (reserved !== locationCode) {
+      throw new HttpsError(
+        "failed-precondition",
+        `A caixa ${input.box_code} está reservada em ${reserved}: guarde lá ou use "Não cabe aqui".`,
+        { code: "BOX_RESERVED_ELSEWHERE", location_id: reserved },
+      );
+    }
+    const [taskSnapshot, positionSnapshot] = await Promise.all([transaction.get(taskRef), transaction.get(positionRef)]);
+    if (!taskSnapshot.exists) throw new HttpsError("not-found", `Guarda da caixa ${input.box_code} não encontrada.`);
+    const taskStatus = text(taskSnapshot.get("status"));
+    if (!["planned", "in_progress"].includes(taskStatus)) {
+      throw new HttpsError("failed-precondition", `A guarda da caixa ${input.box_code} não está aberta (${taskStatus}).`);
+    }
+    // A prateleira reservada pode ter sido apagada, bloqueada ou mudado de zona.
+    if (!positionSnapshot.exists) {
+      throw new HttpsError(
+        "failed-precondition",
+        `A prateleira ${locationCode} não está mais cadastrada: use "Não cabe aqui" para escolher outra.`,
+        { code: "SHELF_GONE" },
+      );
+    }
+    const position = asPosition(positionSnapshot.data() ?? {});
+    if ((position.status ?? "active") !== "active") {
+      throw new HttpsError(
+        "failed-precondition",
+        `A prateleira ${locationCode} está ${position.status === "blocked" ? "bloqueada" : "em verificação"}: use "Não cabe aqui" para escolher outra.`,
+        { code: "SHELF_NOT_ACTIVE" },
+      );
+    }
+    if (text(position.customer_code) !== owner) {
+      throw new HttpsError(
+        "failed-precondition",
+        `A prateleira ${locationCode} não é mais da zona de ${owner}: use "Não cabe aqui" para escolher outra.`,
+        { code: "SHELF_OUT_OF_ZONE" },
+      );
+    }
+    const lines = linesOf(box);
+    if (!lines.length) throw new HttpsError("failed-precondition", `A caixa ${input.box_code} está vazia.`);
+
+    // Os saldos de cada SKU da caixa e a projeção do portal, antes da primeira escrita.
+    const skus = skusOfBox(lines);
+    const plans: Array<{
+      sku: BoxSku;
+      rows: LedgerRow[];
+      source: LedgerRow;
+      destination?: LedgerRow;
+      projection: DocumentSnapshot;
+    }> = [];
+    for (const sku of skus) {
+      const rows = await readRows(transaction, skuBalancesQuery(db, owner, sku.skuCode));
+      const sourceRows = rows.filter((row) => text(row.data.location_id) === RECEIVING_AREA);
+      const sourceAvailable = sourceRows.length === 1
+        ? round((Number(sourceRows[0]!.data.qty_on_hand) || 0) - (Number(sourceRows[0]!.data.qty_reserved) || 0))
+        : sourceRows.length
+          ? Number.NaN
+          : 0;
+      if (sourceRows.length > 1) assertSingleBalance(sourceRows, sku.skuCode, RECEIVING_AREA);
+      if (!(sourceAvailable >= sku.quantity)) {
+        throw new HttpsError(
+          "failed-precondition",
+          `No RECEBIMENTO há ${Math.max(0, sourceAvailable)} de ${sku.productName} (${sku.skuCode}) livres, e a caixa ${input.box_code} tem ${sku.quantity}: a coordenação acerta o saldo do RECEBIMENTO antes da guarda.`,
+          { code: "RECEIVING_SHORT_FOR_BOX", sku_code: sku.skuCode, available: Math.max(0, sourceAvailable), box_qty: sku.quantity },
+        );
+      }
+      const destinationRows = rows.filter((row) => text(row.data.location_id) === locationCode);
+      if (destinationRows.length > 1) assertSingleBalance(destinationRows, sku.skuCode, locationCode);
+      const projection = await transaction.get(
+        db.collection(CLIENT_INVENTORY_COLLECTION).doc(clientScopedInventoryId(owner, sku.skuCode, sku.clientItemCode)),
+      );
+      plans.push({ sku, rows, source: sourceRows[0]!, destination: destinationRows[0], projection });
+    }
+
+    // A última guarda da chegada fecha a chegada e avisa (decisão 20).
+    const boxCount = Number(receipt.box_count) || 0;
+    const storedAfter = (Number(receipt.boxes_stored) || 0) + 1;
+    const lastPutaway = boxCount > 0 && storedAfter >= boxCount;
+    let inboundItems: Row[] = [];
+    let request: DocumentSnapshot | undefined;
+    if (lastPutaway) {
+      inboundItems = (await transaction.get(db.collection(INBOUND_ITEMS_COLLECTION).where("receipt_id", "==", input.receipt_id))).docs
+        .map((document) => document.data() ?? {});
+      const requestId = text(receipt.customer_request_id);
+      if (requestId) request = await transaction.get(db.collection(CUSTOMER_REQUESTS_COLLECTION).doc(requestId));
+    }
+
+    const occurredAt = new Date().toISOString();
+    const receiptNumber = text(receipt.receipt_number) || input.receipt_id;
+    plans.forEach((plan, index) => {
+      const { sku, source } = plan;
+      const sourceOnHand = Number(source.data.qty_on_hand) || 0;
+      const sourceReserved = Number(source.data.qty_reserved) || 0;
+      const sourceAfter = round(sourceOnHand - sku.quantity);
+      const destinationOnHand = Number(plan.destination?.data.qty_on_hand) || 0;
+      const destinationReserved = Number(plan.destination?.data.qty_reserved) || 0;
+      const destinationAfter = round(destinationOnHand + sku.quantity);
+      const destinationRef = plan.destination?.ref ??
+        db.collection("stock_balances").doc(`bal_${digest({ customerCode: owner, skuCode: sku.skuCode, locationId: locationCode })}`);
+      transaction.update(source.ref, {
+        qty_on_hand: sourceAfter,
+        qty_available: round(sourceAfter - sourceReserved),
+        status: sourceAfter > 0 ? "available" : "empty",
+        ...publishedMoneyDeletes(),
+        updated_at: FieldValue.serverTimestamp(),
+      });
+      const destinationPayload: Row = {
+        customer_code: owner,
+        sku_code: sku.skuCode,
+        ...(sku.clientItemCode ? { client_item_code: sku.clientItemCode } : {}),
+        product_name: sku.productName,
+        location_id: locationCode,
+        qty_on_hand: destinationAfter,
+        qty_reserved: destinationReserved,
+        qty_available: round(destinationAfter - destinationReserved),
+        status: "available",
+        source: "wms_putaway",
+        updated_at: FieldValue.serverTimestamp(),
+      };
+      if (plan.destination) {
+        transaction.update(destinationRef, { ...destinationPayload, ...publishedMoneyDeletes() });
+      } else {
+        transaction.create(destinationRef, { id: destinationRef.id, ...destinationPayload, created_at: FieldValue.serverTimestamp() });
+      }
+      const entity = {
+        putaway_task_id: taskRef.id,
+        box_code: input.box_code,
+        receipt_id: input.receipt_id,
+        origem: RECEIVING_AREA,
+        destino: locationCode,
+      };
+      createMovement(transaction, db, movementId(opRef.id, `putaway_out_${index}`), {
+        type: "SAIDA",
+        quantity: sku.quantity,
+        customerCode: owner,
+        skuCode: sku.skuCode,
+        clientItemCode: sku.clientItemCode,
+        productName: sku.productName,
+        locationId: RECEIVING_AREA,
+        beforeQty: sourceOnHand,
+        afterQty: sourceAfter,
+        source: "wms_putaway",
+        occurredAt,
+        entity: { ...entity, movement_kind: "putaway_transfer_out" },
+      }, actor);
+      createMovement(transaction, db, movementId(opRef.id, `putaway_in_${index}`), {
+        type: "ENTRADA",
+        quantity: sku.quantity,
+        customerCode: owner,
+        skuCode: sku.skuCode,
+        clientItemCode: sku.clientItemCode,
+        productName: sku.productName,
+        locationId: locationCode,
+        beforeQty: destinationOnHand,
+        afterQty: destinationAfter,
+        source: "wms_putaway",
+        occurredAt,
+        entity: { ...entity, movement_kind: "putaway_transfer_in" },
+      }, actor);
+      setClientInventorySplit(
+        transaction,
+        plan.projection,
+        clientSplit(
+          balancesAfter(plan.rows, [
+            { ref: source.ref, data: { qty_on_hand: sourceAfter } },
+            { ref: destinationRef, data: destinationPayload },
+          ]),
+          sku.skuCode,
+          sku.clientItemCode,
+        ),
+      );
+    });
+
+    const unitCount = round(lines.reduce((sum, line) => sum + (Number(line.counted_qty) || 0), 0));
+    const skuCodes = skus.map((sku) => sku.skuCode);
+    const nextRevision = input.expected_revision + 1;
+    transaction.update(boxRef, {
+      status: "stored",
+      location_id: locationCode,
+      destination_location_id: locationCode,
+      stored_at: occurredAt,
+      stored_by: actorFields(actor),
+      line_count: lines.length,
+      unit_count: unitCount,
+      sku_codes: skuCodes,
+      conference_revision: nextRevision,
+      updated_at: FieldValue.serverTimestamp(),
+    });
+    // Serializa com as outras guardas e reservas desta prateleira.
+    transaction.update(positionRef, { occupancy_revision: FieldValue.increment(1) });
+    transaction.update(taskRef, {
+      status: "completed",
+      location_id: locationCode,
+      destination_location_id: locationCode,
+      putaway_completed_at: FieldValue.serverTimestamp(),
+      completed_by: actorFields(actor),
+      last_operation_id: opRef.id,
+      updated_at: FieldValue.serverTimestamp(),
+    });
+    transaction.update(receiptRef, {
+      boxes_stored: storedAfter,
+      ...(lastPutaway ? { putaway_status: "completed", putaway_completed_at: FieldValue.serverTimestamp() } : {}),
+      updated_at: FieldValue.serverTimestamp(),
+    });
+
+    const events: OperationalEventSummary[] = [
+      boxEvent(transaction, db, opRef.id, "putaway_completed", {
+        type: "putaway.completed",
+        title: `Caixa ${input.box_code} guardada em ${locationCode}`,
+        description: `${unitCount} un. de ${lines.length} produto(s) · chegada ${receiptNumber}`,
+        entity_type: PUTAWAY_TASKS_COLLECTION,
+        entity_id: taskRef.id,
+        customer_code: owner,
+        payload: {
+          task_uid: `putaway:${taskRef.id}`,
+          before_status: taskStatus,
+          after_status: "completed",
+          box_code: input.box_code,
+          receipt_id: input.receipt_id,
+          destination_location_id: locationCode,
+          putaway_qty: unitCount,
+        },
+      }, actor),
+      boxEvent(transaction, db, opRef.id, "box_stored", {
+        type: "warehouse.box_stored",
+        title: `Caixa ${input.box_code} em ${locationCode}`,
+        description: `${unitCount} un. · chegada ${receiptNumber}`,
+        entity_id: input.box_code,
+        customer_code: owner,
+        payload: {
+          box_code: input.box_code,
+          receipt_id: input.receipt_id,
+          receipt_number: receiptNumber,
+          location_id: locationCode,
+          line_count: lines.length,
+          unit_count: unitCount,
+          sku_codes: skuCodes,
+          boxes_stored: storedAfter,
+          box_count: boxCount,
+        },
+      }, actor),
+    ];
+
+    if (lastPutaway) {
+      // O que chegou, sem valor, caixa nem posição: o aviso de produto novo (parte 8) parte daqui.
+      const items = inboundItems
+        .filter((item) => (Number(item.received_qty) || 0) > 0)
+        .sort((left, right) => (Number(left.line_number) || 0) - (Number(right.line_number) || 0))
+        .map((item) => clean({
+          sku_code: text(item.sku_code) || undefined,
+          client_item_code: text(item.client_item_code) || undefined,
+          product_name: text(item.product_name) || undefined,
+          size: text(item.size) || undefined,
+          quantity: Number(item.received_qty) || 0,
+        }));
+      events.push(
+        boxEvent(transaction, db, opRef.id, "arrival_stored", {
+          type: "inventory.arrival_stored",
+          title: `Chegada ${receiptNumber} guardada`,
+          description: `${items.reduce((sum, item) => sum + item.quantity, 0)} un. de ${items.length} produto(s) disponíveis para pedido.`,
+          entity_type: "recebimento",
+          entity_id: input.receipt_id,
+          customer_code: owner,
+          payload: clean({
+            id: input.receipt_id,
+            receipt_id: input.receipt_id,
+            receipt_number: receiptNumber,
+            invoice_number: text(receipt.invoice_number) || undefined,
+            items,
+          }),
+        }, actor),
+      );
+      // O aviso de envio vinculado vira recebido agora, quando as peças ficam disponíveis (decisão 20).
+      const requestDecided = ["rejected", "cancelled"].includes(text(request?.get("status")).toLowerCase());
+      if (request?.exists && !requestDecided) {
+        transaction.update(request.ref, {
+          operational_status: "received",
+          fulfillment_updated_at: FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
+        });
+        transaction.set(
+          db.collection(CLIENT_REQUEST_STATUS_COLLECTION).doc(request.id),
+          {
+            customer_code: owner,
+            operational_status: "received",
+            status: "closed",
+            ...receivedSummary(inboundItems as Parameters<typeof receivedSummary>[0]),
+            received_at: occurredAt,
+            published_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+    }
+
+    return finish(transaction, opRef, { action: "store", targetId: input.box_code, customerCode: owner, inputHash }, actor, {
+      ok: true,
+      box_code: input.box_code,
+      location_id: locationCode,
+      status: "stored",
+      unit_count: unitCount,
+      boxes_stored: storedAfter,
+      box_count: boxCount,
+      putaway_status: lastPutaway ? "completed" : "pending",
+      conference_revision: nextRevision,
+      events,
+    });
+  });
 }
