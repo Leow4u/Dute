@@ -10,6 +10,7 @@ import {
   conteudoDaCaixa,
   FichaDaChegadaPorCaixaConteudo,
   linhaPeloCodigo,
+  rascunhoDaCaixa,
   rascunhoVazio,
   type FichaDaChegadaPorCaixaProps,
 } from "./chegada-por-caixa";
@@ -121,6 +122,7 @@ function render(over: Partial<FichaDaChegadaPorCaixaProps> = {}) {
       onCancelarFechamento={noop}
       onReabrir={noop}
       onRemover={noop}
+      onVoltar={noop}
       onRegistrarDivergencia={noop}
       {...over}
     />,
@@ -128,6 +130,7 @@ function render(over: Partial<FichaDaChegadaPorCaixaProps> = {}) {
 }
 
 const CABECALHO = ["Recebimento", "em conferência", "por caixa", "AVL-0D0E620B", "NF 48.230 · 71 un.", "Registrar divergência"];
+const CABECALHO_DA_CAIXA = ["Recebimento", "em conferência", "por caixa", "Voltar à chegada"];
 const LINHAS_DA_NF = [
   "Linhas da NF",
   "Linha",
@@ -166,6 +169,9 @@ const CAIXAS = [
 describe("a bancada da chegada por caixa", () => {
   it("a caixa em conferência: o código lido, as linhas dela com a quantidade, fechar e remover", async () => {
     const html = render();
+    // As duas colunas só cabem na ficha larga; estreita, as caixas vêm antes das linhas da NF.
+    expect(html).toMatch(/^<div class="@container /);
+    expect(html).toContain("@2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]");
     expect(html).toContain('aria-pressed="true"');
     expect(html).toMatch(/<input[^>]*id="caixa-qtd-inb_avulso_0d0e620b_02"[^>]*value="18"/);
     expect(
@@ -185,64 +191,75 @@ describe("a bancada da chegada por caixa", () => {
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
-  it("fechar a caixa: as medidas, o peso e como ela pode ir na prateleira", async () => {
+  it("fechar a caixa abre a vista dela: as medidas, o peso e como ela pode ir na prateleira", async () => {
     const vazio = render({ fechando: true });
     const fechar = (html: string) => html.match(/<button[^>]*>Fechar caixa<\/button>/)?.[0] ?? "";
     expect(fechar(vazio)).toContain('disabled=""');
+    expect(vazio).not.toContain("Volume");
     const preenchido = render({
       fechando: true,
       rascunho: { length_cm: "48", width_cm: "38", height_cm: "30", weight_kg: "6,1", content: "", tombar: true, empilhar: false },
     });
     expect(fechar(preenchido)).not.toContain('disabled=""');
+    // A vista da caixa no lugar da chegada: nem a lista das caixas nem as linhas da NF.
+    expect(preenchido).not.toContain("Caixas da chegada");
+    expect(preenchido).not.toContain("Linhas da NF");
     expect(
       textosForaDaLista(preenchido, [
-        ...CABECALHO,
-        ...CAIXAS,
-        "Fechar caixa CX-000132",
+        ...CABECALHO_DA_CAIXA,
+        "Caixa CX-000132",
+        "em conferência",
+        "AVL-0D0E620B · NF 48.230 · GG 18 · 18 un.",
         "Comprimento (cm)",
         "Largura (cm)",
         "Altura (cm)",
         "Peso (kg)",
         "Pode virar esta caixa de lado",
         "Pode empilhar esta caixa sobre outra que suporte seu peso",
+        "Volume 0,055 m³",
         "Fechar caixa",
         "Cancelar",
-        ...LINHAS_DA_NF,
       ]),
     ).toEqual([]);
     expect(await violacoesDeAcessibilidade(preenchido)).toEqual([]);
   });
 
-  it("a caixa fechada sem destino reabre ou sai; a confirmada não tem essas ações", async () => {
+  it("a caixa fechada sem destino abre a vista dela, com as medidas sem edição, reabrir e remover", async () => {
     const fechada = caixa("CX-000132", "reviewed", [linha(`${RECEIPT}_02`, 2, "GG", 18)], {
       length_m: 0.48,
       width_m: 0.38,
       height_m: 0.3,
       gross_weight_kg: 6.1,
+      allow_tilt: true,
     });
     const html = render({ caixas: [caixas[0]!, fechada] });
-    expect(html).toContain("Reabrir para ajustar");
+    expect(html).toMatch(/<input[^>]*id="fechar-length_cm"[^>]*disabled=""[^>]*value="48"/);
+    expect(html).toMatch(/<input[^>]*id="fechar-weight_kg"[^>]*disabled=""[^>]*value="6,1"/);
+    expect(html).toMatch(/<button[^>]*aria-checked="true"[^>]*id="fechar-tombar"/);
     expect(
       textosForaDaLista(html, [
-        ...CABECALHO,
-        "Caixas da chegada",
-        "Iniciar caixa",
-        "CX-000131 · destino B-02",
-        "XG 29 · GG 12 · 41 un. · 48 × 38 × 30 cm · 9,4 kg",
-        "destino confirmado",
-        "CX-000132",
-        "GG 18 · 18 un. · 48 × 38 × 30 cm · 6,1 kg",
-        "sem prateleira",
+        ...CABECALHO_DA_CAIXA,
         "Caixa CX-000132",
+        "fechada · sem destino",
+        "AVL-0D0E620B · NF 48.230 · GG 18 · 18 un.",
+        "Comprimento (cm)",
+        "Largura (cm)",
+        "Altura (cm)",
+        "Peso (kg)",
+        "Pode virar esta caixa de lado",
+        "Pode empilhar esta caixa sobre outra que suporte seu peso",
+        "Volume 0,055 m³",
         "Reabrir para ajustar",
         "Remover caixa",
-        ...LINHAS_DA_NF,
       ]),
     ).toEqual([]);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    // A caixa com destino confirmado fica na chegada, sem essas ações.
     const confirmada = render({ caixas, selecionada: "CX-000131" });
+    expect(confirmada).toContain("Caixas da chegada");
     expect(confirmada).not.toContain("Reabrir para ajustar");
     expect(confirmada).not.toContain("Remover caixa");
+    expect(confirmada).not.toContain("Voltar à chegada");
   });
 
   it("quem não registra divergência não vê o botão", () => {
@@ -262,5 +279,18 @@ describe("o que a bancada lê", () => {
 
   it("o conteúdo da caixa pelo tamanho, com o total", () => {
     expect(conteudoDaCaixa(caixas[0]!)).toBe("XG 29 · GG 12 · 41 un.");
+  });
+
+  it("a caixa já medida volta ao formato que a tela digita, em centímetros e quilos", () => {
+    expect(rascunhoDaCaixa(caixas[0]!)).toEqual({
+      length_cm: "48",
+      width_cm: "38",
+      height_cm: "30",
+      weight_kg: "9,4",
+      content: "",
+      tombar: false,
+      empilhar: false,
+    });
+    expect(rascunhoDaCaixa(caixa("CX-000140", "counting", [], { length_m: 0.485, width_m: null, height_m: 0.3 })).length_cm).toBe("48,5");
   });
 });

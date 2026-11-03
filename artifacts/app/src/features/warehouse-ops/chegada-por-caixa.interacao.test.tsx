@@ -60,6 +60,31 @@ const entry = {
     receipt_number: "AVL-0D0E620B",
     boxes: [
       {
+        code: "CX-000131",
+        status: "reviewed",
+        location_id: "",
+        lines: [
+          {
+            inbound_item_id: `${RECEIPT}_01`,
+            line_number: 1,
+            sku_code: "BTG-000086",
+            client_item_code: "A.01.0806.004.XG",
+            product_name: "POLO MASCULINO PIQUET PRETO XG",
+            size: "XG",
+            counted_qty: 29,
+          },
+        ],
+        unit_count: 29,
+        length_m: 0.48,
+        width_m: 0.38,
+        height_m: 0.3,
+        gross_weight_kg: 9.4,
+        allow_tilt: false,
+        allow_stacking: true,
+        conference_revision: 4,
+        refused_positions: [],
+      },
+      {
         code: "CX-000132",
         status: "counting",
         location_id: "",
@@ -86,7 +111,7 @@ const entry = {
       },
     ],
     items: [
-      { id: `${RECEIPT}_01`, line_number: 1, client_item_code: "A.01.0806.004.XG", sku_code: "BTG-000086", expected_quantity: 41, boxed_qty: 0 },
+      { id: `${RECEIPT}_01`, line_number: 1, client_item_code: "A.01.0806.004.XG", sku_code: "BTG-000086", expected_quantity: 41, boxed_qty: 29 },
       { id: `${RECEIPT}_02`, line_number: 2, client_item_code: "A.01.0806.004.GG", sku_code: "BTG-000087", expected_quantity: 30, boxed_qty: 18 },
     ],
   },
@@ -194,6 +219,9 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
 
   it("fechar a caixa manda as medidas em metros, o peso em quilos e se pode virar ou empilhar", async () => {
     await clicar("Fechar caixa");
+    // A vista da caixa no lugar da chegada (mockup WmsRecebimentoFecharCaixa).
+    expect(document.body.textContent).toContain("Caixa CX-000132");
+    expect(document.body.textContent).not.toContain("Linhas da NF");
     expect(botao("Fechar caixa").disabled).toBe(true);
     await digitar("fechar-length_cm", "48");
     await digitar("fechar-width_cm", "38");
@@ -215,5 +243,50 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
       allow_tilt: true,
       allow_stacking: false,
     });
+  });
+
+  it("da caixa sendo fechada, Voltar à chegada e Cancelar levam de volta à caixa em conferência", async () => {
+    await clicar("Fechar caixa");
+    await clicar("Voltar à chegada");
+    expect(document.body.textContent).toContain("Linhas da NF");
+    expect(document.getElementById("caixa-busca")).not.toBeNull();
+    await clicar("Fechar caixa");
+    await clicar("Cancelar");
+    expect(document.getElementById("caixa-busca")).not.toBeNull();
+  });
+
+  it("a caixa fechada abre a vista dela, sem edição; Voltar à chegada volta à caixa em conferência", async () => {
+    await act(async () => {
+      [...document.querySelectorAll("button")].find((elemento) => elemento.textContent?.includes("CX-000131"))!.click();
+    });
+    expect(document.body.textContent).toContain("fechada · sem destino");
+    expect((document.getElementById("fechar-length_cm") as HTMLInputElement).value).toBe("48");
+    expect((document.getElementById("fechar-length_cm") as HTMLInputElement).disabled).toBe(true);
+    expect(botao("Reabrir para ajustar").disabled).toBe(false);
+    await clicar("Voltar à chegada");
+    expect(document.body.textContent).toContain("Linhas da NF");
+    expect(document.getElementById("caixa-busca")).not.toBeNull();
+  });
+
+  it("fechar de novo a caixa reaberta começa pelas medidas que ela já tem", async () => {
+    const reaberta = {
+      ...entry,
+      task: {
+        ...entry.task,
+        boxes: [{ ...entry.task.boxes![1]!, length_m: 0.5, width_m: 0.4, height_m: 0.35, gross_weight_kg: 7.25, allow_tilt: true }],
+      },
+    } as TaskQueueEntry;
+    await act(async () => {
+      raiz!.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <FichaDaChegadaPorCaixa entry={reaberta} onOpenException={() => undefined} />
+        </QueryClientProvider>,
+      );
+    });
+    await clicar("Fechar caixa");
+    const valor = (id: string) => (document.getElementById(id) as HTMLInputElement).value;
+    expect([valor("fechar-length_cm"), valor("fechar-width_cm"), valor("fechar-height_cm"), valor("fechar-weight_kg")]).toEqual(["50", "40", "35", "7,25"]);
+    expect(document.getElementById("fechar-tombar")!.getAttribute("aria-checked")).toBe("true");
+    expect(botao("Fechar caixa").disabled).toBe(false);
   });
 });

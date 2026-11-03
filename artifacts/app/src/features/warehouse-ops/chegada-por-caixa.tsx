@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageSquareWarning } from "lucide-react";
+import { ArrowLeft, MessageSquareWarning } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,11 +30,14 @@ import {
  * A ficha da chegada por caixa, na bancada (docs/plataforma/recebimento-com-caixas.md,
  * parte 5b; mockups WmsRecebimentoCaixa e WmsRecebimentoFecharCaixa, aprovados
  * em 03/11/2026): iniciar a caixa, lançar as linhas da NF que estão nela,
- * fechar com as medidas e o peso, reabrir e remover. O destino (5c) e as
- * linhas, a falta e a conclusão (5d) entram nas partes seguintes.
+ * fechar com as medidas e o peso, reabrir e remover. Fechar e a caixa
+ * fechada abrem a vista da caixa, como no mockup WmsRecebimentoFecharCaixa.
+ * O destino (5c) e as linhas, a falta e a conclusão (5d) entram nas partes
+ * seguintes.
  */
 
 const numero = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
+const metrosCubicos = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
 const TOM_DO_SELO: Record<EstadoDaCaixa["tom"], string> = {
   amb: "border-warning-soft-border bg-warning-soft text-warning-soft-foreground",
@@ -107,29 +110,71 @@ export type FichaDaChegadaPorCaixaProps = {
   onCancelarFechamento: () => void;
   onReabrir: () => void;
   onRemover: () => void;
+  onVoltar: () => void;
   onRegistrarDivergencia: () => void;
 };
 
+function tituloDaChegada(task: WarehouseTask) {
+  return task.receipt_number || task.title || receiptIdOf(task);
+}
+
+/** Centímetros e quilos da caixa já fechada, no formato que a tela digita. */
+export function rascunhoDaCaixa(caixa: CaixaDaChegada): RascunhoDoFechamento {
+  const centimetros = (metros: number | null) => (metros == null ? "" : numero.format(Math.round(metros * 1000) / 10));
+  return {
+    length_cm: centimetros(caixa.length_m),
+    width_cm: centimetros(caixa.width_m),
+    height_cm: centimetros(caixa.height_m),
+    weight_kg: caixa.gross_weight_kg == null ? "" : numero.format(caixa.gross_weight_kg),
+    content: "",
+    tombar: caixa.allow_tilt,
+    empilhar: caixa.allow_stacking,
+  };
+}
+
+/** A caixa que abre a vista dela: a que está sendo fechada e a fechada sem destino. */
+function caixaEmVista(caixa: CaixaDaChegada | null, fechando: boolean) {
+  if (!caixa) return null;
+  return (caixa.status === "counting" && fechando) || caixa.status === "reviewed" ? caixa : null;
+}
+
 /** O corpo da ficha, sem as chamadas: o estado e as ações vêm de fora. */
 export function FichaDaChegadaPorCaixaConteudo(props: FichaDaChegadaPorCaixaProps) {
-  const { task, caixas, selecionada, ocupado } = props;
-  const itens = task.items ?? [];
+  const { task, caixas, selecionada } = props;
   const caixa = caixas.find((candidata) => candidata.code === selecionada) ?? null;
-  const esperado = emTresCasas(itens.reduce((soma, item) => soma + Number(item.expected_quantity ?? item.quantity ?? 0), 0));
-  const nasCaixas = emTresCasas(itens.reduce((soma, item) => soma + Number(item.boxed_qty ?? 0), 0));
-  const semCaixa = Math.max(0, emTresCasas(esperado - nasCaixas));
-  const titulo = task.receipt_number || task.title || receiptIdOf(task);
-  const detalhe = [task.invoice_number ? `NF ${task.invoice_number}` : null, `${numero.format(esperado)} un.`].filter(Boolean).join(" · ");
+  const emVista = caixaEmVista(caixa, props.fechando);
 
   return (
-    <div className="flex min-w-0 flex-col gap-4 rounded-lg border border-border bg-card p-5">
+    <div className="@container flex min-w-0 flex-col gap-4 rounded-lg border border-border bg-card p-5">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className="border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground">Recebimento</Badge>
         <Badge variant="outline" className="border-border bg-muted text-muted-foreground">{statusLabel(task.status)}</Badge>
         <Badge variant="outline" className="border-info-soft-border bg-info-soft text-info-soft-foreground">por caixa</Badge>
+        {emVista ? (
+          <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={props.onVoltar}>
+            <ArrowLeft data-icon="inline-start" />
+            Voltar à chegada
+          </Button>
+        ) : null}
       </div>
+      {emVista ? <VistaDaCaixa {...props} caixa={emVista} /> : <VistaDaChegada {...props} caixa={caixa} />}
+    </div>
+  );
+}
+
+/** A chegada: as caixas, a caixa em conferência e as linhas da NF (mockup WmsRecebimentoCaixa). */
+function VistaDaChegada(props: FichaDaChegadaPorCaixaProps & { caixa: CaixaDaChegada | null }) {
+  const { task, caixas, caixa, selecionada, ocupado } = props;
+  const itens = task.items ?? [];
+  const esperado = emTresCasas(itens.reduce((soma, item) => soma + Number(item.expected_quantity ?? item.quantity ?? 0), 0));
+  const nasCaixas = emTresCasas(itens.reduce((soma, item) => soma + Number(item.boxed_qty ?? 0), 0));
+  const semCaixa = Math.max(0, emTresCasas(esperado - nasCaixas));
+  const detalhe = [task.invoice_number ? `NF ${task.invoice_number}` : null, `${numero.format(esperado)} un.`].filter(Boolean).join(" · ");
+
+  return (
+    <>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="text-2xl font-extrabold tracking-tight">{titulo}</h2>
+        <h2 className="text-2xl font-extrabold tracking-tight">{tituloDaChegada(task)}</h2>
         <span className="text-sm text-muted-foreground">{detalhe}</span>
       </div>
       {props.podeRegistrarDivergencia ? (
@@ -141,7 +186,8 @@ export function FichaDaChegadaPorCaixaConteudo(props: FichaDaChegadaPorCaixaProp
         </div>
       ) : null}
 
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+      {/* Duas colunas só quando a ficha tem largura para elas; estreita, as caixas vêm antes das linhas. */}
+      <div className="grid min-w-0 gap-4 @2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
         <section aria-labelledby="caixas-da-chegada" className="flex min-w-0 flex-col gap-2.5">
           <div className="flex items-center justify-between gap-2">
             <h3 id="caixas-da-chegada" className="text-base font-extrabold">Caixas da chegada</h3>
@@ -175,26 +221,7 @@ export function FichaDaChegadaPorCaixaConteudo(props: FichaDaChegadaPorCaixaProp
             );
           })}
 
-          {caixa && caixa.status === "counting" && !props.fechando ? (
-            <CaixaEmConferencia {...props} caixa={caixa} itens={itens} />
-          ) : null}
-          {caixa && caixa.status === "counting" && props.fechando ? (
-            <FecharCaixa {...props} caixa={caixa} />
-          ) : null}
-          {caixa && caixa.status === "reviewed" ? (
-            <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-card p-4">
-              <h4 className="text-base font-extrabold">Caixa {caixa.code}</h4>
-              <p className="text-sm text-muted-foreground">{[conteudoDaCaixa(caixa), medidasDaCaixa(caixa)].filter(Boolean).join(" · ")}</p>
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" size="sm" variant="outline" disabled={ocupado} onClick={props.onReabrir}>
-                  Reabrir para ajustar
-                </Button>
-                <Button type="button" size="sm" variant="outline" disabled={ocupado} onClick={props.onRemover}>
-                  Remover caixa
-                </Button>
-              </div>
-            </div>
-          ) : null}
+          {caixa && caixa.status === "counting" ? <CaixaEmConferencia {...props} caixa={caixa} itens={itens} /> : null}
         </section>
 
         <section aria-labelledby="linhas-da-nf" className="flex min-w-0 flex-col gap-2.5">
@@ -235,7 +262,7 @@ export function FichaDaChegadaPorCaixaConteudo(props: FichaDaChegadaPorCaixaProp
           </dl>
         </section>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -316,9 +343,28 @@ function CaixaEmConferencia(props: FichaDaChegadaPorCaixaProps & { caixa: CaixaD
   );
 }
 
-function FecharCaixa(props: FichaDaChegadaPorCaixaProps & { caixa: CaixaDaChegada }) {
-  const { caixa, rascunho, ocupado } = props;
-  const pronto = Boolean(boxDraftToPayload(rascunho)?.gross_weight_kg);
+/**
+ * A vista da caixa (mockup WmsRecebimentoFecharCaixa): fechar com as medidas e
+ * o peso e, fechada sem destino, reabrir ou remover. As medidas da caixa
+ * fechada ficam à vista, sem edição.
+ */
+function VistaDaCaixa(props: FichaDaChegadaPorCaixaProps & { caixa: CaixaDaChegada }) {
+  const { task, caixa, ocupado } = props;
+  const fechando = caixa.status === "counting";
+  const rascunho = fechando ? props.rascunho : rascunhoDaCaixa(caixa);
+  const medidas = fechando ? boxDraftToPayload(rascunho) : null;
+  const pronto = Boolean(medidas?.gross_weight_kg);
+  const lados = fechando
+    ? medidas && [medidas.length_m, medidas.width_m, medidas.height_m]
+    : caixa.length_m != null && caixa.width_m != null && caixa.height_m != null
+      ? [caixa.length_m, caixa.width_m, caixa.height_m]
+      : null;
+  const volume = lados ? lados.reduce((produto, lado) => produto * lado, 1) : null;
+  const selo: EstadoDaCaixa = fechando ? estadoDaCaixa(caixa) : { rotulo: "fechada · sem destino", tom: "amb" };
+  const detalhe = [tituloDaChegada(task), task.invoice_number ? `NF ${task.invoice_number}` : null, conteudoDaCaixa(caixa)]
+    .filter(Boolean)
+    .join(" · ");
+  const editavel = fechando && !ocupado;
   const campo = (chave: keyof BoxDraft, rotulo: string) => (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={`fechar-${chave}`}>{rotulo}</Label>
@@ -326,47 +372,70 @@ function FecharCaixa(props: FichaDaChegadaPorCaixaProps & { caixa: CaixaDaChegad
         id={`fechar-${chave}`}
         inputMode="decimal"
         value={rascunho[chave]}
-        disabled={ocupado}
-        onChange={(event) => props.onRascunho({ ...rascunho, [chave]: event.target.value })}
+        disabled={!editavel}
+        onChange={(event) => props.onRascunho({ ...props.rascunho, [chave]: event.target.value })}
       />
     </div>
   );
+
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
-      <h4 className="text-base font-extrabold">Fechar caixa {caixa.code}</h4>
-      <div className="grid grid-cols-2 gap-3">
+    <>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <h2 className="text-2xl font-extrabold tracking-tight">Caixa {caixa.code}</h2>
+        <Badge variant="outline" className={TOM_DO_SELO[selo.tom]}>{selo.rotulo}</Badge>
+        <span className="text-sm text-muted-foreground">{detalhe}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3 @xl:grid-cols-4">
         {campo("length_cm", "Comprimento (cm)")}
         {campo("width_cm", "Largura (cm)")}
         {campo("height_cm", "Altura (cm)")}
         {campo("weight_kg", "Peso (kg)")}
       </div>
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id="fechar-tombar"
-          checked={rascunho.tombar}
-          disabled={ocupado}
-          onCheckedChange={(valor) => props.onRascunho({ ...rascunho, tombar: valor === true })}
-        />
-        <Label htmlFor="fechar-tombar">Pode virar esta caixa de lado</Label>
-      </div>
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id="fechar-empilhar"
-          checked={rascunho.empilhar}
-          disabled={ocupado}
-          onCheckedChange={(valor) => props.onRascunho({ ...rascunho, empilhar: valor === true })}
-        />
-        <Label htmlFor="fechar-empilhar">Pode empilhar esta caixa sobre outra que suporte seu peso</Label>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="fechar-tombar"
+            checked={rascunho.tombar}
+            disabled={!editavel}
+            onCheckedChange={(valor) => props.onRascunho({ ...props.rascunho, tombar: valor === true })}
+          />
+          <Label htmlFor="fechar-tombar">Pode virar esta caixa de lado</Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="fechar-empilhar"
+            checked={rascunho.empilhar}
+            disabled={!editavel}
+            onCheckedChange={(valor) => props.onRascunho({ ...props.rascunho, empilhar: valor === true })}
+          />
+          <Label htmlFor="fechar-empilhar">Pode empilhar esta caixa sobre outra que suporte seu peso</Label>
+        </div>
+        {volume != null ? (
+          <span className="ml-auto text-sm text-muted-foreground">Volume {metrosCubicos.format(volume)} m³</span>
+        ) : null}
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" disabled={ocupado || !pronto} onClick={props.onFechar}>
-          Fechar caixa
-        </Button>
-        <Button type="button" size="sm" variant="outline" disabled={ocupado} onClick={props.onCancelarFechamento}>
-          Cancelar
-        </Button>
+        {fechando ? (
+          <>
+            <Button type="button" disabled={ocupado || !pronto} onClick={props.onFechar}>
+              Fechar caixa
+            </Button>
+            <Button type="button" variant="outline" disabled={ocupado} onClick={props.onCancelarFechamento}>
+              Cancelar
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button type="button" variant="outline" disabled={ocupado} onClick={props.onReabrir}>
+              Reabrir para ajustar
+            </Button>
+            <Button type="button" variant="outline" disabled={ocupado} onClick={props.onRemover}>
+              Remover caixa
+            </Button>
+          </>
+        )}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -471,6 +540,8 @@ export function FichaDaChegadaPorCaixa({
       });
     },
     onSuccess: (resultado, alvo) => {
+      // A caixa fechada continua à vista: dela sai o destino (parte 5c).
+      setEscolhida(alvo.code);
       setFechando(false);
       setRascunho(rascunhoVazio());
       depois(resultado.conference_revision, alvo.code);
@@ -540,12 +611,21 @@ export function FichaDaChegadaPorCaixa({
         }
         lancar.mutate({ caixa, itemId, quantidade: emTresCasas(quantidade) });
       }}
-      onAbrirFechamento={() => setFechando(true)}
+      onAbrirFechamento={() => {
+        // A caixa reaberta já tem as medidas: fechar de novo começa por elas.
+        setRascunho(caixa && caixa.length_m != null ? rascunhoDaCaixa(caixa) : rascunhoVazio());
+        setFechando(true);
+      }}
       onRascunho={setRascunho}
       onFechar={() => caixa && fechar.mutate(caixa)}
       onCancelarFechamento={() => setFechando(false)}
       onReabrir={() => caixa && reabrir.mutate(caixa)}
       onRemover={() => caixa && remover.mutate(caixa)}
+      onVoltar={() => {
+        // Da caixa sendo fechada volta-se a ela, em conferência; da fechada, à chegada.
+        if (caixa?.status === "counting") setFechando(false);
+        else setEscolhida(null);
+      }}
       onRegistrarDivergencia={() => onOpenException(task)}
     />
   );

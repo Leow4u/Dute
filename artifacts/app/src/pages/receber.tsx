@@ -104,6 +104,8 @@ export default function Receber() {
   });
   const selected = entries.find((entry) => entry.task.id === selectedId) ?? null;
   const selectedNotice = pendingNotices.find((notice) => notice.id === selectedNoticeId) ?? null;
+  // A bancada da chegada por caixa tem duas colunas: a ficha fica larga e a fila, estreita.
+  const fichaLarga = Boolean(!selectedNotice && selected && selected.queue.key === "receiving" && chegadaPorCaixa(selected.task));
   // Aviso da chegada selecionada que já saiu dos abertos (aprovado, recusado
   // ou cancelado): lido à parte para a ficha mostrar o vínculo.
   const selectedRequestId =
@@ -257,6 +259,7 @@ export default function Receber() {
           className={cn(
             "grid grid-cols-1 gap-4",
             desktop && (selected || selectedNotice) && "lg:grid-cols-[minmax(0,1fr)_480px]",
+            desktop && fichaLarga && "xl:grid-cols-[minmax(280px,1fr)_minmax(480px,2.6fr)]",
           )}
         >
           <div className="flex min-w-0 flex-col gap-6">

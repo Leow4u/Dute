@@ -49,6 +49,13 @@ describe("Receber na v3", () => {
     expect(TELA).toMatch(/<Button type="button" variant="outline" onClick=\{\(\) => setUnplannedOpen\(true\)\}>/);
   });
 
+  it("a chegada por caixa abre a ficha larga e a fila estreita a partir de 1280 px, como nos mockups", () => {
+    expect(TELA).toContain(
+      'const fichaLarga = Boolean(!selectedNotice && selected && selected.queue.key === "receiving" && chegadaPorCaixa(selected.task));',
+    );
+    expect(TELA).toContain('desktop && fichaLarga && "xl:grid-cols-[minmax(280px,1fr)_minmax(480px,2.6fr)]"');
+  });
+
   it("a chegada avulsa: o diálogo não explica, e o fornecedor e a NF têm rótulo ligado ao campo", () => {
     expect(AVULSA).not.toContain("Use quando o fornecedor entregou sem aviso");
     expect(AVULSA).toMatch(/<Label htmlFor="chegada-fornecedor">Fornecedor<\/Label>\s*<Input\s+id="chegada-fornecedor"/);

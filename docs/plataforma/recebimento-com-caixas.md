@@ -622,8 +622,13 @@ desenhada e aprovada antes do PR de tela.
      com as medidas em centímetros, o peso em quilos e se pode virar ou
      empilhar, "Reabrir para ajustar" e "Remover caixa" na caixa sem
      destino, e as linhas da NF com o que está nas caixas e a situação de
-     cada uma. Cada escrita manda a revisão que a anterior devolveu, sem
-     esperar a releitura da fila. A busca só acha a linha da NF (a sobra e o
+     cada uma. Fechar e a caixa fechada abrem a vista da caixa (mockup
+     `WmsRecebimentoFecharCaixa`), com "Voltar à chegada", que os mockups
+     não desenharam; fechar de novo a caixa reaberta começa pelas medidas
+     dela. A partir de 1280 px a ficha fica larga e a fila, estreita, como
+     nos mockups; abaixo disso, a ficha tem a largura de hoje e as caixas
+     vêm antes das linhas da NF. Cada escrita manda a revisão que a anterior
+     devolveu, sem esperar a releitura da fila. A busca só acha a linha da NF (a sobra e o
      produto fora da NF são a parte 3b). Testes: `chegada-por-caixa.test.tsx`
      (textos e `axe`) e `chegada-por-caixa.interacao.test.tsx`.
    - **5c, o destino na bancada:** a sugestão, escolher a prateleira,
