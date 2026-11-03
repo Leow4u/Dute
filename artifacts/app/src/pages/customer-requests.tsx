@@ -60,6 +60,8 @@ export type CustomerRequest = {
   pick_task_id?: string | null;
   /** Timestamp do Firestore como veio da lista; ver parseRequestDate. */
   created_at?: unknown;
+  /** O "Para quando" que o cliente pediu no portal (ISO); ver textoDoParaQuando. */
+  due_at?: unknown;
   requested_by?: {
     name?: string;
     email?: string;

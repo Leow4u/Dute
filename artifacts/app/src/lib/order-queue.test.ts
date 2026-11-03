@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { buildOrderQueue, chaveDaPrincipal, isAwaitingDecision, ordersGroupEmpty } from "./order-queue";
+import {
+  buildOrderQueue,
+  chaveDaPrincipal,
+  isAwaitingDecision,
+  linhaDoParaQuando,
+  ordersGroupEmpty,
+  paraQuandoDoPedido,
+  textoDoParaQuando,
+} from "./order-queue";
 import type { OrderGroup } from "./warehouse-ops/orders";
 import type { WarehouseOpsResponse, WarehouseTask } from "./warehouse-ops/model";
 
@@ -112,5 +120,34 @@ describe("a ação principal da tela (v3)", () => {
     expect(chaveDaPrincipal(fila, false)).toBe("pick:PED-1");
     expect(chaveDaPrincipal({ ...fila, pick: [] }, false)).toBe("deliver:PED-3");
     expect(chaveDaPrincipal({ approve: [], pick: [], deliver: [] }, true)).toBeNull();
+  });
+});
+
+// No teste de ponta a ponta de 01/11/2026, o "Para quando" ficava gravado na
+// solicitação (due_at), mas a coordenação não via a data em Pedidos.
+describe("o Para quando que o cliente pediu", () => {
+  it("vem no horário de São Paulo, no formato da linha da entrega", () => {
+    expect(textoDoParaQuando("2026-11-05T12:00:00.000Z")).toBe("Qui 05/11 09:00");
+    // 01:30 em UTC ainda é o dia anterior em São Paulo.
+    expect(textoDoParaQuando("2026-11-06T01:30:00.000Z")).toBe("Qui 05/11 22:30");
+    expect(textoDoParaQuando({ seconds: Date.parse("2026-11-05T12:00:00.000Z") / 1000 })).toBe("Qui 05/11 09:00");
+    expect(textoDoParaQuando(new Date("2026-11-05T12:00:00.000Z"))).toBe("Qui 05/11 09:00");
+  });
+
+  it("sem data válida, nada", () => {
+    expect(textoDoParaQuando(undefined)).toBe("");
+    expect(textoDoParaQuando("")).toBe("");
+    expect(textoDoParaQuando("amanhã")).toBe("");
+    expect(linhaDoParaQuando(null)).toBeUndefined();
+  });
+
+  it("a linha leva o rótulo; o pedido em separação ou entrega usa o da solicitação que o originou", () => {
+    expect(linhaDoParaQuando("2026-11-05T12:00:00.000Z")).toBe("Para quando Qui 05/11 09:00");
+    const solicitacoes = [{ id: "r1", due_at: "2026-11-05T12:00:00.000Z" }, { id: "r2" }];
+    expect(paraQuandoDoPedido({ requestId: "r1" }, solicitacoes)).toBe("Para quando Qui 05/11 09:00");
+    expect(paraQuandoDoPedido({ requestId: "r2" }, solicitacoes)).toBeUndefined();
+    expect(paraQuandoDoPedido({ requestId: "r3" }, solicitacoes)).toBeUndefined();
+    expect(paraQuandoDoPedido({}, solicitacoes)).toBeUndefined();
+    expect(paraQuandoDoPedido({ requestId: "r1" }, undefined)).toBeUndefined();
   });
 });
