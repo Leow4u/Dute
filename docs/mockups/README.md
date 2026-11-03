@@ -162,6 +162,19 @@ pelas decisões:
 | E-mail ao cliente · Chegou produto novo | `EmailProdutoNovo.dc.html` | HTML na identidade da Dutelog (decisão 13), enviado quando a última caixa da chegada é guardada; itens, quantidades e total, sem valor; botão "Ver estoque no portal". |
 | Armazenagem · Posições, encaixotar o saldo sem caixa | `WmsEncaixotarSaldo.dc.html` | Correção pontual (decisão 9), para owner, admin e coordenação: pelo painel da prateleira com saldo sem caixa, "Registrar caixa com o saldo" com medidas, motivo e etiqueta; a ação some quando esse saldo acaba. |
 
+A página "FIFO por data" não tem canvas: as duas telas das partes 5 e 6 de
+`docs/plataforma/fifo-por-data.md` foram enviadas na conversa em 03/11/2026 e
+esperam a aprovação do Leonardo antes do código. A do portal segue a
+identidade do portal; a da Armazenagem, o shell v3 (Estoque › Itens, cliente
+ativo BTG, Guilherme, Operação WMS). As fontes são estáticas e os números
+fecham entre as duas: 16 peças de 22/10/2026 em B-05, 30 de 30/10/2026 e 60 de
+03/11/2026 em B-02, 10 reservadas.
+
+| Tela | Arquivo | O que muda |
+|---|---|---|
+| Portal · Estoque, detalhe do produto | `PortalEstoqueDatas.dc.html` | A seção "Por data de entrada": uma linha por data, "desde DD/MM/AAAA" e as peças, da mais antiga para a mais nova (seção 3.3). Só o que está nas prateleiras, sem prateleira nem caixa; o "Em recebimento" segue sem data. "desde" é a data de entrada e não se confunde com o "sem movimento há N dias" do aviso "Itens parados". |
+| Armazenagem · Estoque › Itens, ficha do item | `WmsItemDatas.dc.html` | "Onde está" ganha a data: uma linha por prateleira e data, com a quantidade, e a prateleira de data mais antiga primeiro (seção 3.4). A linha mais antiga de cada prateleira é a sobra da caixa aberta. `RECEBIMENTO` e `EXPEDICAO` seguem sem data, e o que as entradas não cobrem aparece como "sem data". A lista não muda. |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador
