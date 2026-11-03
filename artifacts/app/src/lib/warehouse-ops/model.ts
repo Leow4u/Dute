@@ -60,6 +60,8 @@ export type WarehouseTaskItem = {
   volume_id?: string | null;
   /** A chegada por caixa (recebimento com caixas, parte 5): a linha da NF nas caixas. */
   line_number?: number | null;
+  /** O código de barras do produto da linha, para a busca da bancada. */
+  barcode?: string | null;
   boxed_qty?: number | null;
   box_codes?: string[] | null;
   shortage?: FaltaMarcada | Record<string, unknown> | null;
