@@ -1295,6 +1295,69 @@ const OPS = {
       });
     },
   },
+
+  adicionar_linha: {
+    // Linha nova da abertura numa caixa que já existe, para um SKU que a caixa não tem (o Mapa e as Etiquetas
+    // montam o conteúdo pelas linhas). Copia sessão, posição e status de uma linha viva da mesma caixa. O saldo
+    // vem de um Ajuste + no bloco quantidades; esta operação só mexe no registro da caixa.
+    async ler(op) {
+      if (await reciboExiste(idReciboDireto(op))) return { jaAplicado: true, estado: [`linha já adicionada`], previsto: [] };
+      if (!op.caixa || !op.codigo || !(num(op.qtde) > 0)) throw new Erro("informe caixa, codigo e qtde");
+      const box = await caixa(op.caixa);
+      if (!box) throw new Erro(`caixa ${op.caixa} não encontrada`);
+      const linhas = await linhasAbertura({ caixa: op.caixa });
+      if (!linhas.length) throw new Erro(`caixa ${op.caixa} sem linha da abertura para copiar a sessão`);
+      const para = await destino(op.codigo);
+      if (para.sku && linhas.some((l) => text(l.data.sku_code) === para.sku.id)) throw new Erro(`a caixa ${op.caixa} já tem linha de ${op.codigo}; use ajustar_linha`);
+      return {
+        estado: [`caixa ${op.caixa} em ${box.posicao} · ${num(box.data.line_count)} produto(s), ${fmt(num(box.data.unit_count))} un.`],
+        previsto: [`nova linha na caixa ${op.caixa}: ${para.texto} · ${fmt(num(op.qtde))} un.`],
+        dados: { box, modelo: linhas[0] },
+      };
+    },
+    async gravar(op, L) {
+      const { box, modelo } = L.dados;
+      const sku = await skuPorCodigo(op.codigo, { estrito: true });
+      if (!sku) throw new Erro(`SKU ${op.codigo} ainda não existe`);
+      const qtde = num(op.qtde);
+      const ref = db.collection("opening_inventory_lines").doc(`line_acerto_${digest({ plano: PLANO.id, op: op.id })}`);
+      return transacaoDireta(op, "adicionar_linha", ref.id, async (tx) => {
+        const [boxSnap, existente] = await Promise.all([tx.get(box.ref), tx.get(ref)]);
+        if (existente.exists) return { linha: ref.id, jaExistia: true };
+        const m = modelo.data;
+        tx.create(ref, compact({
+          id: ref.id,
+          session_id: text(m.session_id) || undefined,
+          customer_code: CLIENTE,
+          sku_code: sku.id,
+          client_item_code: sku.codCliente || sku.id,
+          product_name: sku.nome,
+          product_registration: "existing",
+          category: text(sku.data.category || sku.data.categoria) || undefined,
+          location_id: text(m.location_id || box.data.location_id),
+          box_code: box.id,
+          counted_qty: qtde,
+          unit_cost: 0,
+          total_cost: 0,
+          status: text(m.status) || "counted",
+          occurred_at: text(m.occurred_at) || new Date().toISOString(),
+          acerto: { op: op.id, at: new Date().toISOString() },
+          created_at: ts(),
+          updated_at: ts(),
+        }));
+        if (boxSnap.exists) {
+          const codigos = lista(boxSnap.data().sku_codes, 100);
+          if (!codigos.includes(sku.id)) codigos.push(sku.id);
+          tx.update(box.ref, { line_count: FieldValue.increment(1), unit_count: FieldValue.increment(qtde), sku_codes: codigos, updated_at: ts() });
+        }
+        evento(tx, op, "opening_line.added_by_acerto", `Linha nova na caixa ${box.id}`, `${sku.id} · ${sku.codCliente} · ${fmt(qtde)} un.`, "opening_inventory_line", ref.id, {
+          caixa: box.id,
+          depois: { sku_code: sku.id, cod_cliente: sku.codCliente, counted_qty: qtde },
+        });
+        return { linha: ref.id, sku: sku.id, qtde };
+      });
+    },
+  },
 };
 
 // --- Execução ------------------------------------------------------------------------------
@@ -1314,6 +1377,7 @@ function descrever(op) {
     case "arquivar": return `arquivar ${op.codigo}`;
     case "remover_caixa": return `remover caixa ${op.caixa}`;
     case "corrigir_linha": return `corrigir linha ${op.caixa ? `da caixa ${op.caixa} ` : ""}${op.de} → ${op.para}`;
+    case "adicionar_linha": return `adicionar linha na caixa ${op.caixa} ${op.codigo} · ${fmt(num(op.qtde))}`;
     case "ajustar_linha": return `ajustar linha ${op.caixa ? `da caixa ${op.caixa} ` : ""}${op.codigo ?? "?"}`;
     case "nota": return "nota";
     default: return op.tipo;

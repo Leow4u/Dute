@@ -43,13 +43,13 @@ const safeDocId = (v) => String(v).replace(/[^\w.-]/g, "_").slice(0, 900);
 const FEM_AZUL = (t) => ({ fotos: [`https://fotos.teste/0805-feminina-${t}-1.jpg`, `https://fotos.teste/0805-feminina-${t}-2.jpg`], paths: [`fotos/0805-feminina-${t}-1.jpg`, `fotos/0805-feminina-${t}-2.jpg`] });
 const MASC_AZUL = (t) => ({ fotos: [`https://fotos.teste/0805-masculina-${t}-1.jpg`, `https://fotos.teste/0805-masculina-${t}-2.jpg`], paths: [`fotos/0805-masculina-${t}-1.jpg`, `fotos/0805-masculina-${t}-2.jpg`] });
 const ITENS = [
-  ["A.01.0805.002.PP", "POLO FEMININA PIQUET AZUL MARINHO PP", "Masculino", [["CX-000301", "B-05", 12]], FEM_AZUL("PP")],
-  ["A.01.0805.002.P", "POLO MASCULINO PIQUET AZUL MARINHO P", "Masculino", [["CX-000302", "B-05", 44], ["CX-000322", "B-10", 34]], FEM_AZUL("P")],
-  ["A.01.0805.002.M", "POLO MASCULINO PIQUET AZUL MARINHO M", "Masculino", [["CX-000303", "B-05", 176], ["CX-000323", "B-10", 72]], FEM_AZUL("M")],
-  ["A.01.0805.002.G", "POLO MASCULINO PIQUET AZUL MARINHO G", "Masculino", [["CX-000304", "B-05", 157], ["CX-000324", "B-10", 72]], FEM_AZUL("G")],
-  ["A.01.0805.002.GG", "POLO MASCULINO PIQUET AZUL MARINHO GG", "Masculino", [["CX-000305", "B-05", 59], ["CX-000325", "B-10", 41]], FEM_AZUL("GG")],
-  ["A.01.0805.002.XG", "POLO MASCULINO PIQUET AZUL MARINHO XG", "Masculino", [["CX-000306", "B-05", 42], ["CX-000326", "B-10", 22]], FEM_AZUL("XG")],
-  ["A.01.0805.002.XGG", "POLO MASCULINO PIQUET AZUL MARINHO XGG", "Masculino", [["CX-000307", "B-05", 13]], FEM_AZUL("XGG")],
+  ["A.01.0805.002.PP", "POLO FEMININA PIQUET AZUL MARINHO PP", "Masculino", [["CX-000160", "B-05", 12]], FEM_AZUL("PP")],
+  ["A.01.0805.002.P", "POLO MASCULINO PIQUET AZUL MARINHO P", "Masculino", [["CX-000160", "B-05", 44], ["CX-000137", "B-10", 34]], FEM_AZUL("P")],
+  ["A.01.0805.002.M", "POLO MASCULINO PIQUET AZUL MARINHO M", "Masculino", [["CX-000160", "B-05", 40], ["CX-000159", "B-05", 88], ["CX-000157", "B-05", 48], ["CX-000140", "B-10", 72]], FEM_AZUL("M")],
+  ["A.01.0805.002.G", "POLO MASCULINO PIQUET AZUL MARINHO G", "Masculino", [["CX-000157", "B-05", 38], ["CX-000156", "B-05", 20], ["CX-000154", "B-05", 86], ["CX-000158", "B-05", 13], ["CX-000136", "B-10", 72]], FEM_AZUL("G")],
+  ["A.01.0805.002.GG", "POLO MASCULINO PIQUET AZUL MARINHO GG", "Masculino", [["CX-000159", "B-05", 2], ["CX-000156", "B-05", 57], ["CX-000138", "B-10", 41]], FEM_AZUL("GG")],
+  ["A.01.0805.002.XG", "POLO MASCULINO PIQUET AZUL MARINHO XG", "Masculino", [["CX-000158", "B-05", 42], ["CX-000139", "B-10", 22]], FEM_AZUL("XG")],
+  ["A.01.0805.002.XGG", "POLO MASCULINO PIQUET AZUL MARINHO XGG", "Masculino", [["CX-000158", "B-05", 13]], FEM_AZUL("XGG")],
   ["A.02.0805.002.PP", "POLO FEMININA PIQUET AZUL MARINHO PP", "Feminino", [["CX-000310", "A-02", 5]], MASC_AZUL("PP")],
   ["A.02.0805.002.P", "POLO FEMININA PIQUET AZUL MARINHO P", "Feminino", [["CX-000311", "A-02", 10]], MASC_AZUL("P")],
   ["A.02.0805.002.M", "POLO FEMININA PIQUET AZUL MARINHO M", "Feminino", [["CX-000312", "A-02", 20]], MASC_AZUL("M")],
@@ -68,7 +68,7 @@ const ITENS = [
   ["A.02.0808.002.G", "Polo feminina piquet mescla preto G", "Feminino", [["CX-000152", "A-12", 18]]],
   ["A.01.05334.005.M", "Tricot meio zíper preto m", "Masculino", [["CX-000120", "A-05", 12]], null, "BTG-000045"],
   ["A.01.0534.005.M", "Tricot meio zíper preto M", "Masculino", [["CX-000121", "A-05", 30]]],
-  ["A.01.O719.004.P", "Polo masculina piquet PAN cinza p", "Masculino", [["CX-000140", "C-03", 15]], null, "BTG-000087"],
+  ["A.01.O719.004.P", "Polo masculina piquet PAN cinza p", "Masculino", [["CX-000131", "B-09", 15]], null, "BTG-000087"],
   ["A.01.0719.004.PP", "Polo masculino piquet PAN cinza PP", "Masculino", [["CX-000141", "C-03", 9]], null, "BTG-000088"],
   // Pima preta e azul como na produção (--caixa e --buscar de 02/11/2026): a azul GG e XG em duas caixas de 15 em A-03.
   ["A.02.0813.005.PP", "POLO FEMININA PIMA PRETO PP", "Feminino", [["CX-000169", "A-01", 20]]],
@@ -211,7 +211,7 @@ async function conferir() {
     "J.0149.003.N6", "J.0562.003.N6", "A.01.0798.002.P", "A.01.0219.004.M", "A.01.0690.004.P", "A.01.O719.004.P", "A.01.0719.004.P",
     "A.02.0814.002.GG", "A.02.0814.002.XG", "A.02.0813.005.GG", "A.02.0813.005.XG", "A.02.0697.016.GG", "A.02.0697.016.XG", "A.01.0695.005.G",
     "A.02.0689.013.G", "A.02.0714.013.P", "A.01.0805.002.PP", "A.01.0805.002.P", "A.01.0805.002.M", "A.01.0805.002.G", "A.01.0805.002.GG",
-    "A.01.0805.002.XG",
+    "A.01.0805.002.XG", "A.01.0805.002.XGG",
   ];
   console.log("\nSKU por código do cliente (inclui arquivados):");
   for (const codigo of codigos) {
@@ -231,7 +231,7 @@ async function conferir() {
   const oceano = await db.collection("skus").doc("BTG-000165").get();
   console.log(`  ${"BTG-000165".padEnd(18)} ${oceano.exists ? `"${oceano.data().produto}"${oceano.data().archived ? " · ARQUIVADO" : ""} · estoque_atual ${oceano.data().estoque_atual}` : "—"}`);
   console.log("\nCaixas:");
-  for (const code of ["CX-000004", "CX-000005", "CX-000033", "CX-000018", "CX-000019", "CX-000036", "CX-000032", "CX-000076", "CX-000090", "CX-000091", "CX-000092", "CX-000120", "CX-000130", "CX-000150", "CX-000152", "CX-000179", "CX-000180", "CX-000198", "CX-000207", "CX-000208"]) {
+  for (const code of ["CX-000004", "CX-000005", "CX-000033", "CX-000018", "CX-000019", "CX-000036", "CX-000032", "CX-000076", "CX-000090", "CX-000091", "CX-000092", "CX-000120", "CX-000130", "CX-000150", "CX-000152", "CX-000136", "CX-000138", "CX-000140", "CX-000179", "CX-000180", "CX-000198", "CX-000207", "CX-000208"]) {
     const snap = await db.collection("warehouse_boxes").doc(code).get();
     if (!snap.exists) {
       console.log(`  ${code} removida`);

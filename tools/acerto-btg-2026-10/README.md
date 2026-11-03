@@ -304,6 +304,29 @@ das etiquetas do fornecedor das caixas CX-000136 a CX-000140, da azul-marinho
 (item 14), e o código da polo feminina mand algodão preto G que ficou na
 CX-000004, que não existe no cadastro (`--nome MAND` não acha nada).
 
+## Quarta rodada: etiquetas da azul-marinho (03/11/2026)
+
+O Guilherme mandou as etiquetas das 5 caixas da A.01.0805.002 registradas em
+B-10. A CX-000137 (P 34) e a CX-000139 (XG 22, caixa da Dutelog, contada)
+estão certas. As outras três não:
+
+| Caixa | Sistema | Etiqueta do fornecedor |
+|---|---|---|
+| CX-000136 | G 72 | G 88 |
+| CX-000138 | GG 41 | M 1, G 4, GG 61, XGG 1 |
+| CX-000140 | M 72 | M 90 |
+
+As somas do PDF de 29/10 não valem (a etiqueta G 88 nem aparece nelas), então
+os ajustes por total da terceira rodada saíram do plano. Entraram, por caixa,
+Ajustes + nas três caixas e as linhas correspondentes; as linhas novas da
+CX-000138 (M, G e XGG) usam o tipo novo `adicionar_linha`, que copia a sessão
+e a posição de uma linha viva da mesma caixa. Os totais ficam M 267, G 249,
+GG 120 e XGG 14 (60 peças a mais, todas nas três caixas).
+
+A polo feminina mand algodão preto G da CX-000004 tem o código
+`A.02.0712.005.G` na etiqueta; o Ajuste + e a linha dela ficam pendentes até o
+`--buscar A.02.0712.005.` mostrar se o SKU existe.
+
 ## Validação no emulador (30/10/2026)
 
 Feita no ambiente de desenvolvimento, sem credencial da nuvem, com o
