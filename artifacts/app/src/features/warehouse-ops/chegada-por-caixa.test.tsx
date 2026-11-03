@@ -14,6 +14,7 @@ import {
   rascunhoVazio,
   type FichaDaChegadaPorCaixaProps,
 } from "./chegada-por-caixa";
+import { destinoVazio } from "./destino-da-caixa";
 
 /** A bancada da chegada por caixa (parte 5b; mockups WmsRecebimentoCaixa e WmsRecebimentoFecharCaixa). */
 
@@ -125,6 +126,11 @@ function render(over: Partial<FichaDaChegadaPorCaixaProps> = {}) {
       onRemover={noop}
       onVoltar={noop}
       onRegistrarDivergencia={noop}
+      destino={destinoVazio()}
+      recusando={null}
+      onDestino={{ onModo: noop, onEscolher: noop, onConfirmar: noop, onNaoCabe: noop, onTentarDeNovo: noop }}
+      onCancelarRecusa={noop}
+      onRecusar={noop}
       {...over}
     />,
   );
@@ -250,6 +256,9 @@ describe("a bancada da chegada por caixa", () => {
         "Pode virar esta caixa de lado",
         "Pode empilhar esta caixa sobre outra que suporte seu peso",
         "Volume 0,055 m³",
+        "Guardar em",
+        "Sugestão do sistema",
+        "Escolher prateleira",
         "Reabrir para ajustar",
         "Remover caixa",
       ]),
@@ -300,6 +309,8 @@ describe("a bancada da chegada por caixa", () => {
     expect(vista).toContain("Caixa CX-000132");
     expect(vista).not.toContain("Reabrir para ajustar");
     expect(vista).not.toContain("Remover caixa");
+    // Nem o destino (parte 5c): quem só consulta não pede sugestão nem confirma.
+    expect(vista).not.toContain("Guardar em");
   });
 });
 

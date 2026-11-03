@@ -632,8 +632,21 @@ desenhada e aprovada antes do PR de tela.
      devolveu, sem esperar a releitura da fila. A busca só acha a linha da NF (a sobra e o
      produto fora da NF são a parte 3b). Testes: `chegada-por-caixa.test.tsx`
      (textos e `axe`) e `chegada-por-caixa.interacao.test.tsx`.
-   - **5c, o destino na bancada:** a sugestão, escolher a prateleira,
-     confirmar e "Não cabe aqui", e a caixa sem prateleira livre.
+   - **5c, o destino na bancada:** feita em 03/11/2026. A vista da caixa
+     fechada ganha o "Guardar em" (`features/warehouse-ops/destino-da-caixa.tsx`,
+     mockups `WmsRecebimentoFecharCaixa` e `WmsRecebimentoSemPrateleira`):
+     a prateleira que o motor sugere, com o motivo dele, como a caixa fica,
+     o nível e as alternativas; "Escolher prateleira", na lista das
+     prateleiras ativas da zona do cliente sem as já recusadas para a caixa,
+     com a prévia do encaixe; "Confirmar destino em …", que manda o encaixe
+     e a sugestão do motor mesmo quando a pessoa escolheu outra; e "Não cabe
+     aqui", com o motivo e "Recusar …" (o diálogo segue o da guarda, mockup
+     `WmsGuardaNaoCabe`), que tira a prateleira da escolha da caixa e traz
+     outra sugestão. Sem prateleira livre na zona, a caixa fica "fechada ·
+     sem prateleira", com a frase do servidor (decisão 14). Confirmado, a
+     ficha volta à chegada; fechar a caixa espera a releitura da fila e
+     passa direto ao destino. Testes: `destino-da-caixa.test.tsx` (textos e
+     `axe`) e casos novos em `chegada-por-caixa.interacao.test.tsx`.
    - **5d, as linhas da NF:** "Marcar falta", a justificativa e "Concluir
      entrada".
    - **5e, a fila:** "Recebidas, por guardar" e a guarda por caixa na lista.

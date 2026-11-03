@@ -16,7 +16,18 @@ const estado = vi.hoisted(() => ({
   chamadas: [] as Array<{ nome: string; dados: Record<string, unknown> }>,
   revisao: 2,
   avisos: [] as Array<{ title?: string; description?: string }>,
+  recusadas: [] as string[],
+  linhasDePrateleiras: [] as string[],
 }));
+
+const candidato = (code: string, tier: number) => ({
+  code,
+  reason: tier === 1 ? "Já tem BTG-000086 nesta prateleira e ainda cabe." : "A mais próxima de B-02, que já tem o mesmo produto.",
+  tier,
+  leftover_m: 0.8,
+  sequence: 14,
+  placement: { front_m: 0.48, depth_m: 0.38, height_m: 0.3, orientation: "width_length_height", support_box_code: "CX-000090" },
+});
 
 vi.mock("@/lib/wms/caixas-do-recebimento", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/wms/caixas-do-recebimento")>();
@@ -35,8 +46,30 @@ vi.mock("@/lib/wms/caixas-do-recebimento", async (importOriginal) => {
       estado.revisao += 1;
       return { ok: true, status: "reviewed", conference_revision: estado.revisao };
     }),
+    // A sugestão tira as prateleiras já recusadas, como o servidor.
+    sugerirPrateleira: registra("sugerir", () =>
+      estado.recusadas.includes("B-02")
+        ? { ok: true, position: candidato("B-03", 2), alternatives: [], rejected: null, checked: 43 }
+        : { ok: true, position: candidato("B-02", 1), alternatives: [candidato("B-03", 2)], rejected: null, checked: 43 },
+    ),
+    confirmarDestino: registra("confirmar", () => ({ ok: true, status: "committing", conference_revision: 5 })),
+    recusarSugestao: async (dados: Record<string, unknown>) => {
+      estado.chamadas.push({ nome: "recusar", dados });
+      estado.recusadas.push(String(dados.position));
+      return { ok: true, conference_revision: 5 };
+    },
   };
 });
+
+vi.mock("@/lib/warehouse-rows", () => ({
+  fetchWarehouseRows: async (url: string) => {
+    estado.linhasDePrateleiras.push(url);
+    return [
+      { code: "A-03", customer_code: "BTG Pactual", status: "active", sequence: 3 },
+      { code: "B-02", customer_code: "BTG Pactual", status: "active", sequence: 14 },
+    ];
+  },
+}));
 
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: (aviso: { title?: string; description?: string }) => estado.avisos.push(aviso) }),
@@ -124,6 +157,8 @@ beforeEach(async () => {
   estado.chamadas = [];
   estado.revisao = 2;
   estado.avisos = [];
+  estado.recusadas = [];
+  estado.linhasDePrateleiras = [];
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -288,5 +323,62 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
     expect([valor("fechar-length_cm"), valor("fechar-width_cm"), valor("fechar-height_cm"), valor("fechar-weight_kg")]).toEqual(["50", "40", "35", "7,25"]);
     expect(document.getElementById("fechar-tombar")!.getAttribute("aria-checked")).toBe("true");
     expect(botao("Fechar caixa").disabled).toBe(false);
+  });
+
+  async function abrirCaixaFechada() {
+    await act(async () => {
+      [...document.querySelectorAll("button")].find((elemento) => elemento.textContent?.includes("CX-000131"))!.click();
+    });
+    await esperar(() => Boolean(document.body.textContent?.includes("Confirmar destino em B-02")), "a sugestão B-02");
+  }
+
+  it("a caixa fechada pede a sugestão e confirma o destino com o encaixe e a sugestão do motor", async () => {
+    await abrirCaixaFechada();
+    expect(dados("sugerir")[0]).toEqual({ receipt_id: RECEIPT, customer_code: "BTG Pactual", box_code: "CX-000131" });
+    expect(document.body.textContent).toContain("alternativas B-03");
+    await clicar("Confirmar destino em B-02");
+    await esperar(() => dados("confirmar").length === 1, "o destino confirmado");
+    expect(dados("confirmar")[0]).toMatchObject({
+      receipt_id: RECEIPT,
+      box_code: "CX-000131",
+      expected_revision: 4,
+      location_id: "B-02",
+      orientation: "width_length_height",
+      support_box_code: "CX-000090",
+      suggestion: { position: "B-02", alternatives: ["B-03"], tier: 1 },
+    });
+    expect(String(dados("confirmar")[0]!.idempotency_key)).not.toBe("");
+    // Confirmado, a ficha volta à chegada.
+    await esperar(() => Boolean(document.body.textContent?.includes("Linhas da NF")), "a volta à chegada");
+  });
+
+  it("Não cabe aqui pede o motivo, recusa a prateleira com a revisão e traz outra sugestão", async () => {
+    await abrirCaixaFechada();
+    await clicar("Não cabe aqui");
+    expect(botao("Recusar B-02").disabled).toBe(true);
+    await digitar("nao-cabe-motivo", "Outra caixa ocupando a frente da prateleira");
+    await clicar("Recusar B-02");
+    await esperar(() => dados("recusar").length === 1, "a recusa");
+    expect(dados("recusar")[0]).toMatchObject({
+      receipt_id: RECEIPT,
+      box_code: "CX-000131",
+      expected_revision: 4,
+      position: "B-02",
+      reason: "Outra caixa ocupando a frente da prateleira",
+    });
+    // A revisão nova pede outra sugestão, já sem B-02.
+    await esperar(() => Boolean(document.body.textContent?.includes("Confirmar destino em B-03")), "a sugestão nova");
+    expect(document.getElementById("nao-cabe-motivo")).toBeNull();
+  });
+
+  it("Escolher prateleira busca as prateleiras da zona; a sugestão continua à mão", async () => {
+    await abrirCaixaFechada();
+    await clicar("Escolher prateleira");
+    await esperar(() => estado.linhasDePrateleiras.length === 1, "as prateleiras");
+    expect(estado.linhasDePrateleiras[0]).toBe("/api/warehouse/positions?limit=2000");
+    expect(document.body.textContent).toContain("Prateleira cadastrada");
+    expect(document.body.textContent).not.toContain("Confirmar destino");
+    await clicar("Sugestão do sistema");
+    expect(document.body.textContent).toContain("Confirmar destino em B-02");
   });
 });
