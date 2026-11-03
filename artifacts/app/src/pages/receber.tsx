@@ -15,6 +15,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { FichaDaChegadaPorCaixa } from "@/features/warehouse-ops/chegada-por-caixa";
+import { GuardaDaCaixa } from "@/features/warehouse-ops/guarda-da-caixa";
 import { ReceivingTaskDetailCard, UnplannedReceiptDialog } from "@/features/warehouse-ops/receiving";
 import { ExceptionDialog, useWarehouseTaskActions } from "@/features/warehouse-ops/task-actions";
 import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
@@ -490,6 +491,10 @@ function TaskPanel({
   lineConfirmations: LineConfirmationMap;
   onLineConfirmationChange: Parameters<typeof TaskDetailPanel>[0]["onLineConfirmationChange"];
 }) {
+  // A guarda da caixa do recebimento é da caixa inteira (recebimento com caixas, parte 5f).
+  if (entry.queue.key === "putaway" && entry.task.box_code) {
+    return <GuardaDaCaixa key={entry.task.id} entry={entry} />;
+  }
   // A chegada por caixa tem a ficha dela (recebimento com caixas, parte 5).
   if (entry.queue.key === "receiving" && chegadaPorCaixa(entry.task)) {
     return (

@@ -324,7 +324,7 @@ export function guardandoRowMeta(task: WarehouseTask) {
 }
 
 /** O destino da guarda; o "local" igual à origem (a fila preenche assim a guarda sem prateleira) não é destino. */
-function destinoDaGuarda(task: WarehouseTask) {
+export function destinoDaGuarda(task: WarehouseTask) {
   const firstItem = task.items?.[0];
   const origem = coerceText(task.source_location_id, firstItem?.source_location_id) || "RECEBIMENTO";
   const destino = coerceText(task.destination_location_id, task.location, firstItem?.destination_location_id);

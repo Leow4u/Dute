@@ -678,8 +678,27 @@ desenhada e aprovada antes do PR de tela.
      data da entrada concluída da chegada por caixa e a origem da tarefa.
      Testes: `receiving.test.ts`, `queue-list.test.tsx`, `receber.test.tsx`
      e um caso novo em `cloud-api-warehouse.test.ts`.
-   - **5f, a guarda da caixa:** o destino na guarda, "Concluir guarda" e
-     "Não cabe aqui", no computador e no celular.
+   - **5f, a guarda da caixa:** feita em 03/11/2026 (mockups
+     `WmsGuardaCaixa`, `WmsGuardaCaixaCelular`, `WmsGuardaCaixaSemPrateleira`,
+     `WmsGuardaCaixaCelularSemPrateleira` e `WmsGuardaNaoCabe`). A guarda da
+     caixa abre a ficha dela (`features/warehouse-ops/guarda-da-caixa.tsx`),
+     não o avanço por linha, que o servidor recusa. Com o destino, "Destino"
+     com a prateleira e o endereço do cadastro ("Rua B · prateleira 02 · zona
+     …"), o conteúdo, as medidas, "Concluir guarda em …" (`storeInboundBox`,
+     com a revisão da caixa e a prateleira reservada) e "Não cabe aqui", que
+     pede o motivo e solta a reserva ("Liberar …", `refuseInboundBoxShelf`);
+     a caixa volta à guarda sem prateleira. Sem prateleira, o selo e o mesmo
+     "Guardar em" da bancada (a sugestão, escolher, confirmar e recusar, num
+     hook só, `useDestinoDaCaixa`), com "Concluir guarda" desligado até o
+     destino. A recusa do servidor ao guardar (o `RECEBIMENTO` curto,
+     decisão 24) fica na própria guarda. Guardada, a ficha mostra onde a
+     caixa ficou, sem ações; quem só consulta não vê as ações. No celular é a
+     mesma ficha, no painel de baixo do Receber. O `cloud-api.ts` passa a
+     caixa da guarda (lida pela chegada da guarda) e a NF. A linha do tempo
+     do mockup (caixa fechada, destino confirmado, etiqueta impressa) fica
+     para a parte 6, que traz a etiqueta. Testes: `guarda-da-caixa.test.tsx`
+     (textos e `axe`), `guarda-da-caixa.interacao.test.tsx`, um caso em
+     `receber.test.tsx` e asserções novas em `cloud-api-warehouse.test.ts`.
 6. **Etiquetas:** caixa `committing` com destino, origem "Recebimento", o
    conteúdo da caixa do recebimento na etiqueta e no Mapa, "Etiquetas da
    chegada", reimpressão com evento.

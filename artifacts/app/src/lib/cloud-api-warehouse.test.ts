@@ -524,6 +524,7 @@ describe("as linhas das tarefas da fila chegam inteiras", () => {
         registro("put_box_abc", {
           receipt_id: receiptId,
           receipt_number: "AVL-CX1",
+          invoice_number: "48230",
           box_code: "CX-000131",
           lines: [linhaDaCaixa(`${receiptId}_01`, 1, "BTG-000086", 29), linhaDaCaixa(`${receiptId}_02`, 2, "BTG-000087", 12)],
           sku_codes: ["BTG-000086", "BTG-000087"],
@@ -573,6 +574,9 @@ describe("as linhas das tarefas da fila chegam inteiras", () => {
       ["POLO XG", 29],
       ["POLO GG", 12],
     ]);
+    // A guarda da caixa (parte 5f) leva a caixa, com a revisão que a guarda manda, e a NF.
+    expect(guarda.invoice_number).toBe("48230");
+    expect(guarda.box).toMatchObject({ code: "CX-000131", status: "committing", location_id: "B-02", conference_revision: 7 });
   });
 
   it("a chegada por caixa recebida traz quando a entrada foi concluída, e a guarda aberta no Estoque diz de onde veio (parte 5e)", async () => {

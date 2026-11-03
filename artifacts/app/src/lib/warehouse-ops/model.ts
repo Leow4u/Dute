@@ -128,6 +128,8 @@ export type WarehouseTask = {
   received_at?: string | null;
   /** A guarda da caixa: a caixa, a chegada e o conteúdo. */
   box_code?: string | null;
+  /** A caixa da guarda (parte 5f), com a revisão que a guarda manda. */
+  box?: CaixaDaChegada | null;
   receipt_id?: string | null;
   box_lines?: LinhaDaCaixa[] | null;
   /** De onde a tarefa veio (a guarda aberta no Estoque é `wms_area_putaway`). */
