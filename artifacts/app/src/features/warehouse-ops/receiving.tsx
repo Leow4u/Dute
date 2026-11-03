@@ -1,6 +1,6 @@
 /** Receber: ficha da chegada, chegada avulsa e conferência física. */
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -58,6 +58,7 @@ import {
   type OpsAlert,
   type TaskQueueEntry,
   type WarehouseTask,
+  type WarehouseTaskItem,
   canAdvanceTask,
   canRegisterException,
   coerceNumber,
@@ -68,6 +69,7 @@ import {
   getErrorMessage,
   getPhysicalLineRows,
   getTaskTitle,
+  isTerminalTask,
   normalizeStatus,
   statusClass,
   statusLabel,
@@ -316,7 +318,7 @@ export function ReceivingTaskDetailCard({
     );
   }
 
-  const { task, queue } = entry;
+  const { task } = entry;
   const canAdvance = canAdvanceTask(task);
   const canRegister = canRegisterException(task);
   const taskAlerts = alerts.filter((alert) => alert.task_id === task.id);
@@ -341,9 +343,6 @@ export function ReceivingTaskDetailCard({
         <div className="flex flex-col gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
-                {queue.label}
-              </Badge>
               <Badge variant="outline" className={statusClass(task.status)}>
                 {statusLabel(task.status)}
               </Badge>
@@ -441,16 +440,19 @@ export function ReceivingTaskDetailCard({
           </Alert>
         ) : null}
 
-        <div className="rounded-lg border border-border bg-card px-4 py-3">
-          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <Route className="size-3.5 text-primary" />
-            Próximo passo
+        {/* A chegada recebida não tem próximo passo aqui: as guardas seguem na fila. */}
+        {!isTerminalTask(task) ? (
+          <div className="rounded-lg border border-border bg-card px-4 py-3">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Route className="size-3.5 text-primary" />
+              Próximo passo
+            </div>
+            <p className="mt-2 text-sm leading-6 text-foreground">
+              {task.next_action ||
+                "Salvar conferência física e concluir entrada para liberar o saldo ao cliente."}
+            </p>
           </div>
-          <p className="mt-2 text-sm leading-6 text-foreground">
-            {task.next_action ||
-              "Salvar conferência física e concluir entrada para liberar o saldo ao cliente."}
-          </p>
-        </div>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -1171,6 +1173,47 @@ function photoPathFromUrl(fileUrl: string) {
 }
 
 
+/** A linha da conferência já fechada: produto, código, esperado e o que foi contado, sem campos. */
+function LinhaConferida({
+  item,
+  line,
+  expected,
+  badge,
+}: {
+  item: WarehouseTaskItem;
+  line: { receivedQty: string; location: string; unitCost: string } | undefined;
+  expected: number;
+  badge: ReactNode;
+}) {
+  const dados: Array<[string, string]> = [
+    ["Físico", line?.receivedQty.trim() ? `${formatNumber(Number(line.receivedQty))} un.` : "—"],
+    ["Local", line?.location || "—"],
+  ];
+  if (line?.unitCost.trim()) dados.push(["Custo", line.unitCost]);
+  return (
+    <div className="rounded-lg border border-border bg-card p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="truncate text-sm font-medium text-foreground">
+          {item.product_name || item.name || item.description || item.sku || item.sku_code}
+        </div>
+        {badge}
+      </div>
+      <div className="mt-1 text-xs text-muted-foreground">
+        {item.client_item_code || item.sku || item.sku_code || "sem código"} · esperado {formatNumber(Number(expected))} un.
+      </div>
+      <dl className="mt-3 grid grid-cols-3 gap-2">
+        {dados.map(([rotulo, valor]) => (
+          <div key={rotulo} className="min-w-0">
+            <dt className="text-xs text-muted-foreground">{rotulo}</dt>
+            <dd className="mt-1 truncate text-sm font-medium text-foreground">{valor}</dd>
+          </div>
+        ))}
+      </dl>
+      {item.notes ? <p className="mt-2 text-xs text-muted-foreground">{item.notes}</p> : null}
+    </div>
+  );
+}
+
 export function ReceivingConferenceSection({
   task,
 }: {
@@ -1329,6 +1372,9 @@ export function ReceivingConferenceSection({
   });
 
   if (!task.items?.length) return null;
+  // Depois da entrada (ou para quem só consulta), a conferência é só leitura:
+  // o que foi contado, onde e por quanto, sem campos que não gravam mais nada.
+  const editavel = canAdvanceTask(task);
 
   return (
     <div className="@container rounded-lg border border-border bg-card p-4">
@@ -1337,13 +1383,15 @@ export function ReceivingConferenceSection({
           <h3 className="text-sm font-semibold text-foreground">
             Conferência de recebimento
           </h3>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Salve a quantidade física contada antes de concluir a entrada no estoque.
-          </p>
+          {editavel ? (
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Salve a quantidade física contada antes de concluir a entrada no estoque.
+            </p>
+          ) : null}
         </div>
         {/* A conferência se salva na chegada aberta (o servidor só aceita
             "created" e "checking") e por quem opera o armazém. */}
-        {canAdvanceTask(task) ? (
+        {editavel ? (
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
@@ -1394,7 +1442,7 @@ export function ReceivingConferenceSection({
         </div>
       </div>
 
-      {pendingCodes ? (
+      {pendingCodes && editavel ? (
         <Alert className="mt-4 border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
           <AlertTriangle className="size-4" />
           <AlertTitle>Código a definir</AlertTitle>
@@ -1404,7 +1452,7 @@ export function ReceivingConferenceSection({
         </Alert>
       ) : null}
 
-      {hasDivergence ? (
+      {hasDivergence && editavel ? (
         <Alert className="mt-4 border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
           <AlertTriangle className="size-4" />
           <AlertTitle>Divergência física detectada</AlertTitle>
@@ -1416,6 +1464,9 @@ export function ReceivingConferenceSection({
 
       <div className="mt-4 space-y-3">
         {conferenceRows.map(({ item, line, expected, difference, needsCode }, index) => {
+          if (!editavel) {
+            return <LinhaConferida key={item.id || index} item={item} line={line} expected={expected} badge={conferenceBadge(difference)} />;
+          }
           return (
             <div
               key={item.id || index}
