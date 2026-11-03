@@ -151,9 +151,9 @@ pelas decisões:
 | Tela | Arquivo | O que muda |
 |---|---|---|
 | Armazenagem · Registrar chegada avulsa | `WmsChegadaAvulsa.dc.html` | Volumes na NF e volumes recebidos; "Ler itens da nota" pré-preenche as linhas, com revisão (decisão 4); custo unitário da NF por linha, informado pela operação (decisão 12); o selo "Conferência por caixa" para o cliente cujo modelo pede caixa (decisão 1). |
-| Armazenagem · Ficha da chegada por caixa | `WmsRecebimentoCaixa.dc.html` | Conferência por caixa no computador da bancada (decisão 11): "Iniciar caixa", as linhas da NF dentro da caixa, vários tamanhos na mesma caixa (decisão 3), a coluna "Custo NF", "Marcar falta" e "Concluir entrada" só com toda linha tratada e toda caixa fechada. Depois da aprovação, a decisão 14 (02/11/2026) liberou concluir com caixa fechada sem prateleira, que ganha o destino na guarda: o mockup ainda desabilita o botão nesse caso e precisa de novo alinhamento antes da tela da parte 5. |
+| Armazenagem · Ficha da chegada por caixa | `WmsRecebimentoCaixa.dc.html` | Conferência por caixa no computador da bancada (decisão 11): "Iniciar caixa", as linhas da NF dentro da caixa, vários tamanhos na mesma caixa (decisão 3), a coluna "Custo NF", "Marcar falta" e "Concluir entrada" só com toda linha tratada e toda caixa fechada. Atualizada para a parte 5 em 03/11/2026: a caixa sem prateleira não trava mais a entrada (decisão 14), e "Concluir entrada" desligado diz o que falta, na frase do servidor (a caixa em conferência, a linha sem falta marcada). |
 | Armazenagem · Fechar caixa e onde guardar | `WmsRecebimentoFecharCaixa.dc.html` | Medidas e peso da caixa do fornecedor, como chegou (decisão 2); "pode virar de lado" e "pode empilhar"; a prateleira sugerida pelo motor, com as alternativas; "Confirmar destino", "Não cabe aqui" e "Imprimir etiqueta" antes de levar a caixa (decisão 6). |
-| Armazenagem · Receber, a fila | `WmsReceberFila.dc.html` | A chegada fica em "Recebidas, por guardar" até a última guarda ("1 de 3 caixas guardadas", decisão 5); "Para guardar" lista uma guarda por caixa, com o destino. |
+| Armazenagem · Receber, a fila | `WmsReceberFila.dc.html` | A chegada fica em "Recebidas, por guardar" até a última guarda ("0 de 2 caixas guardadas", decisão 5); "Para guardar" lista uma guarda por caixa, com o destino. Atualizada para a parte 5 em 03/11/2026: a caixa sem prateleira entra com o selo "sem prateleira" (decisão 14), e a guarda por linha aberta no Estoque (parte 7e) aparece na mesma lista. |
 | Armazenagem · Guarda da caixa | `WmsGuardaCaixa.dc.html` | A guarda é da caixa inteira: destino, conteúdo, "Concluir guarda em B-02", "Não cabe aqui" e a timeline (caixa fechada, destino confirmado, etiqueta impressa). |
 | Armazenagem · Guarda da caixa no celular | `WmsGuardaCaixaCelular.dc.html` | A mesma guarda no celular, que é onde a equipe guarda (decisão 11). |
 | Etiqueta da caixa do recebimento | `WmsEtiquetaCaixaRecebimento.dc.html` | A etiqueta de caixa de hoje com a origem "Recebimento · NF 48.230" e o conteúdo da caixa. |
@@ -162,6 +162,24 @@ pelas decisões:
 | E-mail ao cliente · Chegou produto novo | `EmailProdutoNovo.dc.html` | HTML na identidade da Dutelog (decisão 13), enviado quando a última caixa da chegada é guardada; itens, quantidades e total, sem valor; botão "Ver estoque no portal". |
 | Armazenagem · Estoque, guardar o saldo parado numa área (decisão 16, parte 7e, aprovado em 02/11/2026) | `WmsEstoqueGuardar.dc.html` | Na ficha do item, o saldo numa área de passagem (em âmbar) ganha "Guardar", só para a coordenação; o diálogo mostra o livre na área, o que está em guardas abertas e o que está sem guarda, pede a quantidade e o motivo, e "Abrir a guarda" cria a guarda em Receber › Para guardar. |
 | Armazenagem · Posições, encaixotar o saldo sem caixa | `WmsEncaixotarSaldo.dc.html` | Correção pontual (decisão 9), para owner, admin e coordenação: pelo painel da prateleira com saldo sem caixa, "Registrar caixa com o saldo" com medidas, motivo e etiqueta; a ação some quando esse saldo acaba. |
+
+A parte 5 (a ficha da chegada por caixa, a fila do Receber e a guarda da
+caixa no computador e no celular) ganhou em 03/11/2026 a atualização das duas
+telas acima e as seis telas abaixo, com as decisões 14, 15, 17, 21 e 24 e o
+que a parte 4 grava, aprovadas pelo Leonardo no mesmo dia, com a guarda da
+caixa dentro da parte 5. As recusas usam as frases do servidor; a da guarda com o `RECEBIMENTO` curto
+(decisão 24) sai como aviso na própria guarda, sem tela própria. As telas de
+01/11 que não mudaram (fechar a caixa, a guarda com destino no computador e
+no celular) valem como estão.
+
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| Armazenagem · Marcar falta na linha da NF | `WmsRecebimentoFalta.dc.html` | O diálogo do "Marcar falta" (decisão 17, parte 4c): o que a NF pede, o que está nas caixas e a falta da linha; o motivo (falta ou avaria) e o detalhe. A marca vale para o que estava nas caixas. |
+| Armazenagem · Caixa fechada sem prateleira livre | `WmsRecebimentoSemPrateleira.dc.html` | A zona sem prateleira livre que caiba a caixa: ela fica fechada e sem prateleira, e a entrada se conclui assim mesmo (decisão 14). |
+| Armazenagem · Ficha pronta para concluir | `WmsRecebimentoConcluir.dc.html` | "Concluir entrada" ligado com uma caixa sem prateleira e a falta marcada na linha; a divergência pede a justificativa, como na entrada por linha. |
+| Armazenagem · Guarda da caixa sem prateleira | `WmsGuardaCaixaSemPrateleira.dc.html` | A caixa sem prateleira ganha o destino na guarda (parte 4g): a sugestão, "Confirmar destino", "Não cabe aqui" e "Concluir guarda" desligado até o destino. |
+| Armazenagem · Não cabe aqui na guarda | `WmsGuardaNaoCabe.dc.html` | O único jeito de trocar o destino confirmado (decisão 15, parte 4h): o motivo e "Liberar B-02". A reserva sai, a coordenação é avisada (decisão 21) e a caixa volta à guarda sem prateleira. |
+| Armazenagem · Guarda da caixa sem prateleira no celular | `WmsGuardaCaixaCelularSemPrateleira.dc.html` | A mesma escolha do destino no celular, onde a equipe guarda (decisão 11); confirmado o destino, a tela é a `WmsGuardaCaixaCelular`. |
 
 ## Regras da v3
 

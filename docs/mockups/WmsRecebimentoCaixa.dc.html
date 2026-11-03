@@ -100,7 +100,7 @@ button{font:inherit;color:inherit}
 .note{font-size:13.5px;color:#5F6368}
 .step{display:flex;gap:10px;align-items:flex-start}
 .step i{width:24px;height:24px;border-radius:50%;background:#161616;color:#fff;font-style:normal;font-weight:800;font-size:12px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
-x-dc{display:contents}
+x-dc{display:contents}.tbl.nf td,.tbl.nf th{padding-left:10px !important;padding-right:10px !important}
 </style>
 </helmet>
 <div class="app">
@@ -124,21 +124,21 @@ x-dc{display:contents}
   <a class="nav"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Documentos</a>
   <div class="sbf"><span class="av2">GD</span><div><b>Guilherme Dantas</b><span>Operação WMS</span></div></div>
 </aside><main class="main"><div class="ph"><h1>Receber</h1><div style="display:flex;gap:10px;align-items:center"><span class="seg"><a class="on">Em aberto · 1</a><a>Recebidos</a></span><a class="btn btn-s">Chegada avulsa</a></div></div>
-<div style="display:grid;grid-template-columns:300px minmax(0,1fr);gap:22px;align-items:start">
+<div style="display:grid;grid-template-columns:260px minmax(0,1fr);gap:22px;align-items:start">
   <div style="display:flex;flex-direction:column;gap:14px">
     <div class="sec">Para conferir <span style="font-weight:600;color:#5F6368">1</span></div>
-    <div class="card"><div class="row" style="box-shadow:inset 3px 0 0 #161616"><span class="tile"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></span><div style="flex:1"><b>AVL-0D0E620B</b><span class="sub2">Avulsa · em conferência · por caixa · 71 un. · 1 de 3 caixas</span></div><a class="btn btn-s btn-sm">Conferir</a></div></div>
+    <div class="card"><div class="row" style="box-shadow:inset 3px 0 0 #161616;padding:16px 18px;gap:12px"><div style="flex:1;min-width:0"><b>AVL-0D0E620B</b><span class="sub2">Avulsa · em conferência · por caixa · 71 un. · 2 caixas</span></div><a class="btn btn-s btn-sm">Conferir</a></div></div>
     <div class="sec">Para guardar</div>
     <div class="card" style="padding:16px 22px;color:#5F6368">Nada para guardar.</div>
   </div>
   <div class="panel">
     <div style="display:flex;align-items:center;gap:8px"><span class="badge s-red">Recebimento</span><span class="badge s-mut">em conferência</span><span class="badge s-blu">por caixa</span><a class="btn btn-g btn-sm" style="margin-left:auto">Fechar</a></div>
     <div style="display:flex;align-items:center;gap:12px"><span class="big">AVL-0D0E620B</span><span class="muted">NF 48.230 · Uniformes Alfa Confecções · 3 volumes</span></div>
-    <div style="display:flex;gap:10px;align-items:center"><a class="btn btn-s">Registrar divergência</a><a class="btn btn-s">Etiquetas da chegada</a><a class="btn btn-p dis">Concluir entrada</a><span class="note">1 caixa sem destino · 12 un. sem caixa</span></div>
-    <div style="display:grid;grid-template-columns:1fr 1.45fr;gap:16px;align-items:start">
+    <div style="display:flex;gap:10px;align-items:center"><a class="btn btn-s">Registrar divergência</a><a class="btn btn-s">Etiquetas da chegada</a><a class="btn btn-p dis">Concluir entrada</a><span class="note">CX-000132 em conferência · linha 1 sem falta marcada</span></div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:16px;align-items:start">
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between"><span class="h3">Caixas da chegada</span><a class="btn btn-d btn-sm">Iniciar caixa</a></div>
-        <div class="ln"><div class="t"><b>CX-000131 · destino B-02</b><span>XG 29 · GG 12 · 41 un. · 48 × 38 × 30 cm · 9,4 kg · etiqueta impressa</span></div><span class="badge s-grn">confirmada</span></div>
+        <div class="ln"><div class="t"><b>CX-000131 · destino B-02</b><span>XG 29 · GG 12 · 41 un. · 48 × 38 × 30 cm · 9,4 kg · etiqueta impressa</span></div><span class="badge s-grn">destino confirmado</span></div>
         <div class="ln on"><div class="t"><b>CX-000132</b><span>GG 18 · 18 un.</span></div><span class="badge s-amb">em conferência</span></div>
         <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
           <div class="h3">Caixa CX-000132</div>
@@ -150,10 +150,10 @@ x-dc{display:contents}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div class="h3" style="height:32px;display:flex;align-items:center">Linhas da NF</div>
         <div class="card" style="padding:0;overflow:hidden">
-          <table class="tbl" style="font-size:13.5px"><thead><tr><th style="padding:10px 12px">Linha</th><th class="num" style="padding:10px 10px">NF (un.)</th><th class="num" style="padding:10px 10px">Em caixas (un.)</th><th class="num" style="padding:10px 10px">Custo NF</th><th style="padding:10px 12px">Situação</th></tr></thead>
+          <table class="tbl nf" style="font-size:13.5px"><thead><tr><th style="padding:10px 12px">Linha</th><th class="num" style="padding:10px 10px">NF (un.)</th><th class="num" style="padding:10px 10px">Em caixas (un.)</th><th class="num" style="padding:10px 10px">Custo NF</th><th style="padding:10px 12px">Situação</th></tr></thead>
           <tbody>
-            <tr><td><b>POLO MASCULINO PIQUET PRETO XG</b><br><span class="muted">A.01.0806.004.XG</span></td><td class="num">41</td><td class="num">29</td><td class="num">89,90</td><td style="padding:10px 12px;white-space:nowrap"><span class="badge s-amb">faltam 12</span><br><a class="btn btn-g btn-sm" style="margin-top:6px">Marcar falta</a></td></tr>
-            <tr><td><b>POLO MASCULINO PIQUET PRETO GG</b><br><span class="muted">A.01.0806.004.GG</span></td><td class="num">30</td><td class="num">30</td><td class="num">89,90</td><td><span class="badge s-grn">OK</span></td></tr>
+            <tr><td><b>1 · POLO MASCULINO PIQUET PRETO XG</b><br><span class="muted">A.01.0806.004.XG</span></td><td class="num">41</td><td class="num">29</td><td class="num">89,90</td><td style="padding:10px 12px;white-space:nowrap"><span class="badge s-amb">faltam 12</span><br><a class="btn btn-g btn-sm" style="margin-top:6px">Marcar falta</a></td></tr>
+            <tr><td><b>2 · POLO MASCULINO PIQUET PRETO GG</b><br><span class="muted">A.01.0806.004.GG</span></td><td class="num">30</td><td class="num">30</td><td class="num">89,90</td><td><span class="badge s-grn">OK</span></td></tr>
           </tbody></table>
         </div>
         <div class="card" style="padding:14px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
