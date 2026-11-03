@@ -340,7 +340,8 @@ documentação de produto e operação está em `docs/`.
   modo (`conference_mode`, `per_line` ou `per_box`; sem o campo, por linha).
   Por caixa só nasce pela callable `createInboundReceipt`, no ambiente de
   `RECEBIMENTO_POR_CAIXA_PROJECTS` (`functions/wms/src/domain/inbound-mode.ts`,
-  cópia travada da lista do app em `lib/liberacao.ts`; só o `dute-homolog`)
+  cópia travada da lista do app em `lib/liberacao.ts`; o `dute-homolog` e,
+  desde 03/11/2026, com o OK do Leonardo, o `dute-prod`)
   e para o modelo que confere por caixa (`TEMPLATES_WITH_BOX_RECEIVING`,
   uniformes). A liberação rege só a criação; quem trata a chegada lê o modo
   gravado. Por caixa, toda linha nasce no `RECEBIMENTO`, gravado sempre

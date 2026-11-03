@@ -208,7 +208,9 @@ modo fica gravado na chegada e não muda depois da primeira caixa. A chegada
 por linha continua exatamente como está.
 
 A funcionalidade entra atrás de uma liberação própria do WMS, primeiro só o
-`dute-homolog`: `RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS` no app
+`dute-homolog` e, desde 03/11/2026, com o OK do Leonardo, também o
+`dute-prod` (o `dute-btg` fica de fora); vale no próximo disparo manual da
+produção: `RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS` no app
 (`lib/liberacao.ts`) e a cópia `RECEBIMENTO_POR_CAIXA_PROJECTS` nas Functions
 (`domain/inbound-mode.ts`), travadas iguais pelo `platform-lists.test.ts`. A
 liberação rege só a criação: desligada, a callable recusa a chegada nova por
@@ -431,7 +433,11 @@ desenhada e aprovada antes do PR de tela.
    `inbound-mode.test.ts` e `inbound-mode.integration.test.ts` no WMS,
    `api/module.test.ts` e `api/module.integration.test.ts` na API, e
    `liberacao.test.ts`, `platform-lists.test.ts` e `operations.test.ts` no
-   app. Desligar é tirar o ambiente das duas listas no mesmo PR.
+   app. Desligar é tirar o ambiente das duas listas no mesmo PR. Ligada no
+   `dute-prod` em 03/11/2026, com o OK do Leonardo, depois da parte 5g; vale
+   no próximo disparo manual da produção. Antes da primeira chegada por caixa
+   de um cliente, a abertura dele precisa estar concluída (seção 7). O que já
+   foi guardado por linha continua sem caixa até a parte 9.
 3. **Domínio: a caixa do recebimento**, em módulo próprio
    (`functions/wms/src/domain/inbound-boxes.ts`), sem parametrizar a contagem
    de abertura nem crescer `operations.ts`: iniciar, lançar linha, fechar,

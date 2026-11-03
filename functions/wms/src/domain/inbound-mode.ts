@@ -27,11 +27,11 @@ import {
  */
 
 /**
- * Onde a chegada pode nascer por caixa: só a homologação, até o OK do
- * Leonardo para a produção. Cópia de RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS
+ * Onde a chegada pode nascer por caixa: a homologação e, desde 03/11/2026
+ * (OK do Leonardo), a produção; o dute-btg fica de fora. Cópia de RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS
  * do app (lib/liberacao.ts), travada pelo platform-lists.test.ts do app.
  */
-export const RECEBIMENTO_POR_CAIXA_PROJECTS = ["dute-homolog"];
+export const RECEBIMENTO_POR_CAIXA_PROJECTS = ["dute-homolog", "dute-prod"];
 
 export function boxReceivingEnabled(projectId: string | undefined) {
   return !!projectId && RECEBIMENTO_POR_CAIXA_PROJECTS.includes(projectId);

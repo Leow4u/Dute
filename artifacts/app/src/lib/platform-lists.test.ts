@@ -304,10 +304,10 @@ describe("listas do Financeiro iguais em todo lugar (Fase 4)", () => {
 describe("o recebimento por caixa igual em todo lugar (recebimento com caixas, parte 2)", () => {
   const modo = read("functions/wms/src/domain/inbound-mode.ts");
 
-  it("a liberação da callable da chegada é a do app: só a homologação, até o OK do Leonardo", () => {
+  it("a liberação da callable da chegada é a do app: a homologação e a produção, sem o dute-btg", () => {
     expect(tsList(modo, "RECEBIMENTO_POR_CAIXA_PROJECTS")).toEqual([...RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS]);
-    expect([...RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
-    expect([recebimentoPorCaixaLiberado("dute-homolog"), recebimentoPorCaixaLiberado("dute-prod"), recebimentoPorCaixaLiberado("dute-btg"), recebimentoPorCaixaLiberado(undefined)]).toEqual([true, false, false, false]);
+    expect([...RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog", "dute-prod"]);
+    expect([recebimentoPorCaixaLiberado("dute-homolog"), recebimentoPorCaixaLiberado("dute-prod"), recebimentoPorCaixaLiberado("dute-btg"), recebimentoPorCaixaLiberado(undefined)]).toEqual([true, true, false, false]);
   });
 
   it("a callable da chegada passa a liberação do ambiente ao domínio", () => {

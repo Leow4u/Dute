@@ -157,12 +157,12 @@ export const RH_LIBERADO = !SOMENTE_ARMAZENAGEM && rhLiberado(import.meta.env.VI
  * Recebimento por caixa (docs/plataforma/recebimento-com-caixas.md, seção 4.1).
  * A callable createInboundReceipt do WMS recusa a chegada por caixa fora de
  * RECEBIMENTO_POR_CAIXA_PROJECTS (functions/wms/src/domain/inbound-mode.ts,
- * travada igual a esta por platform-lists.test.ts). Começa só na
- * homologação; a produção entra com o OK do Leonardo. É do WMS, então não
+ * travada igual a esta por platform-lists.test.ts). A homologação e, desde
+ * 03/11/2026 (OK do Leonardo), a produção; o dute-btg fica de fora. É do WMS, então não
  * depende de SOMENTE_ARMAZENAGEM. Desligada, a chegada nova nasce por linha,
  * e as que já nasceram por caixa seguem por caixa até o fim.
  */
-export const RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+export const RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog", "dute-prod"];
 
 export function recebimentoPorCaixaLiberado(projectId: string | null | undefined): boolean {
   return RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());
