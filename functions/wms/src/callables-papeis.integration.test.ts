@@ -211,6 +211,8 @@ const MATRIZ: Record<string, Linha> = {
   recordWarehouseException: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   refuseInboundBoxPosition: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   refuseInboundBoxShelf: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  previewAreaPutaway: { passam: COORDENACAO, recusa: SO_COORDENACAO },
+  openAreaPutaway: { passam: COORDENACAO, recusa: SO_COORDENACAO },
   removeInboundBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   removeOpeningConferenceLine: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   removeOpeningInventoryLine: { passam: ARMAZEM, recusa: SO_ARMAZEM },

@@ -160,6 +160,7 @@ pelas decisões:
 | Armazenagem · Mapa | `WmsMapaRecebimento.dc.html` | A prateleira mostra a caixa do recebimento guardada e a reservada (destino confirmado, por guardar), com a origem e o conteúdo. |
 | Portal · Estoque | `PortalEstoqueRecebimento.dc.html` | "Disponível para pedido" só do que está na prateleira e "Em recebimento" separado, sem pedido (decisão 10); o sino com "Chegou produto novo", itens e quantidades, sem caixa nem posição (decisão 7). |
 | E-mail ao cliente · Chegou produto novo | `EmailProdutoNovo.dc.html` | HTML na identidade da Dutelog (decisão 13), enviado quando a última caixa da chegada é guardada; itens, quantidades e total, sem valor; botão "Ver estoque no portal". |
+| Armazenagem · Estoque, guardar o saldo parado numa área (decisão 16, parte 7e, aprovado em 02/11/2026) | `WmsEstoqueGuardar.dc.html` | Na ficha do item, o saldo numa área de passagem (em âmbar) ganha "Guardar", só para a coordenação; o diálogo mostra o livre na área, o que está em guardas abertas e o que está sem guarda, pede a quantidade e o motivo, e "Abrir a guarda" cria a guarda em Receber › Para guardar. |
 | Armazenagem · Posições, encaixotar o saldo sem caixa | `WmsEncaixotarSaldo.dc.html` | Correção pontual (decisão 9), para owner, admin e coordenação: pelo painel da prateleira com saldo sem caixa, "Registrar caixa com o saldo" com medidas, motivo e etiqueta; a ação some quando esse saldo acaba. |
 
 ## Regras da v3
