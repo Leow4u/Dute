@@ -8,7 +8,8 @@ desempate. No mesmo dia, com uma pessoa separando, ele trocou o pacote de 41
 partes (conteúdo por caixa, modo sombra, modo caixa por cliente, montar
 caixa, leitor Bluetooth, três listas de liberação) por esta versão: o
 sistema sabe quanto há em cada prateleira e de que data, e o conteúdo de
-cada caixa fica na caixa. As partes 2 (A1) e 3 (A5) estão nos PRs 536 e 537.
+cada caixa fica na caixa. As partes 1, 2 e 3 entraram em 02/11/2026 (PRs
+538, 536 e 537); a parte 4 está no PR 539.
 
 Relação com o recebimento com caixas (`recebimento-com-caixas.md`): aquele
 desenho deixa de fora de qual caixa a separação tira e a baixa do conteúdo
@@ -49,8 +50,9 @@ continuar simples de usar.
 
 ### 3.1 A conta das datas
 
-Uma função pura no WMS (`functions/wms/src/domain/`, com os casos num JSON ao
-lado e o teste na lista do `test:unit`). Ela só lê e nunca dá erro.
+Uma função pura no WMS (`functions/wms/src/domain/datas-do-saldo.ts`, com os
+casos em `datas-do-saldo.casos.json` e o teste na lista do `test:unit`). Ela
+só lê e nunca dá erro.
 
 - Pelo FIFO, o que sobra numa prateleira são as entradas mais recentes nela. A
   conta pega o saldo da prateleira (`qty_on_hand`) e as `ENTRADA` dela, da mais
@@ -65,6 +67,9 @@ lado e o teste na lista do `test:unit`). Ela só lê e nunca dá erro.
   `started_at` da sessão `opening_<cliente>` (pergunta 1).
 - O que as entradas não cobrirem fica "sem data", e o total sempre fecha com
   o saldo.
+- O local é o `location_id` como o alocador o compara, só sem o espaço das
+  pontas: `A-01` e `a-01` (o destino digitado na movimentação manual) são
+  saldos e datas separados.
 
 Exemplo: a prateleira tem 300 polos. Entraram 150 em 05/08 e 200 em 03/10.
 Sobram as 200 de 03/10 e 100 das 150 de 05/08.
@@ -130,7 +135,7 @@ aprovado.
 | 1 | Registro | Este roteiro, a P8 no desenho do mapa, os hábitos no manual e a linha no `CLAUDE.md`. | Só documentos. |
 | 2 | Aviso sem caixa (A1, PR 536) | O evento da abertura e qualquer evento que cite `CX-` viram rascunho interno; o aviso ao cliente com `CX-` não se aprova nem se envia. | `rascunhos-de-aviso.integration.test.ts`. |
 | 3 | Aviso sem prateleira (A5, PR 537) | A descrição da contagem cíclica não diz o local; ele fica no payload. | `operations.integration.test.ts`. |
-| 4 | Pedido pela data mais antiga | A conta das datas (3.1) e a ordem nova nas duas cópias do alocador (3.2). | B-01 com peças de 05/08 e A-01 com peças de 03/10: hoje o pedido reserva A-01. |
+| 4 | Pedido pela data mais antiga (PR 539) | A conta das datas (3.1) e a ordem nova nas duas cópias do alocador (3.2). | B-01 com peças de 05/08 e A-01 com peças de 03/10: hoje o pedido reserva A-01. |
 | 5 | Datas no portal | A callable de leitura e as datas no detalhe do produto (3.3), com os testes de textos e `axe`, e a linha nova nas travas de callables. | O cliente recebe as datas do próprio item, sem prateleira, e não lê as de outro cliente. |
 | 6 | Datas na ficha interna | As datas por prateleira em "Onde está" (3.4), na v3. | A ficha mostra só a quantidade por prateleira. |
 

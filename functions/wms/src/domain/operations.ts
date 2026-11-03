@@ -36,6 +36,13 @@ import {
   problemaDoLocalDoPedido,
 } from "./areas-de-passagem.js";
 import {
+  datasLivresPorLocal,
+  entradasDoRazao,
+  ordenarCandidatos,
+  skusQuePrecisamDasDatas,
+  type Entrada,
+} from "./datas-do-saldo.js";
+import {
   WAREHOUSE_POSITIONS_COLLECTION,
   putawayAdvanceStatus,
   resolveGuardDestination,
@@ -861,6 +868,81 @@ function orderableBalanceRows(rows: Row[], requestedLocation: string): Row[] {
       areaDePassagem(row.data.location_id) === null &&
       (!requestedLocation || text(row.data.location_id) === requestedLocation),
   );
+}
+
+/**
+ * As ENTRADAs de cada SKU do pedido por local, para ele sair pela data de
+ * guarda mais antiga (docs/plataforma/fifo-por-data.md, parte 4; a conta e a
+ * ordem em domain/datas-do-saldo.ts). Lê o razão só dos SKUs que
+ * skusQuePrecisamDasDatas aponta, aqueles em que a ordem pode mudar. A
+ * consulta tem só igualdades (sem índice composto) e corre na fase de leitura
+ * da transação. A ENTRADA da contagem de abertura vale o dia em que a sessão
+ * do cliente começou. SKU sem leitura segue a ordem de location_id.
+ */
+async function ledgerEntriesForOrder(
+  transaction: Transaction,
+  db: Firestore,
+  customerCode: string,
+  balanceRowsBySku: Map<string, Row[]>,
+  items: OperationalRequestItem[],
+) {
+  const entriesBySku = new Map<string, Map<string, Entrada[]>>();
+  const sessionRef = db
+    .collection(collections.openingInventorySessions)
+    .doc(openingInventorySessionDocumentId(text(customerCode)));
+  let openingSession: Promise<DocumentData | undefined> | undefined;
+  const balancesBySku = new Map(
+    [...balanceRowsBySku].map(
+      ([skuCode, rows]) => [skuCode, rows.map((row) => row.data)] as const,
+    ),
+  );
+  for (const skuCode of skusQuePrecisamDasDatas(items, balancesBySku)) {
+    const entries = await readRows(
+      transaction,
+      db
+        .collection(collections.movements)
+        .where("customer_code", "==", customerCode)
+        .where("sku_code", "==", skuCode)
+        .where("tipo_mov", "==", "ENTRADA"),
+    );
+    const session = entries.some((row) => text(row.data.opening_inventory_session_id))
+      ? await (openingSession ??= transaction
+          .get(sessionRef)
+          .then((snapshot) => snapshot.data()))
+      : undefined;
+    entriesBySku.set(
+      skuCode,
+      entradasDoRazao(
+        entries.map((row) => row.data),
+        { id: sessionRef.id, started_at: session?.started_at },
+      ),
+    );
+  }
+  return entriesBySku;
+}
+
+/**
+ * Os locais candidatos de um item na ordem da data livre mais antiga; no
+ * empate, location_id. O que o próprio pedido já pegou num local sai das
+ * datas mais antigas dele, como a reserva. Sem as entradas, a ordem de antes.
+ */
+function byOldestFreeDate(
+  rows: Row[],
+  entries: Map<string, Entrada[]> | undefined,
+  alreadyAllocated: (locationId: string) => number,
+): Row[] {
+  if (!entries) return rows;
+  const freeDates = datasLivresPorLocal(
+    rows.map((row) => ({
+      location_id: row.data.location_id,
+      qty_on_hand: row.data.qty_on_hand,
+      qty_reserved:
+        number(row.data.qty_reserved) +
+        alreadyAllocated(text(row.data.location_id)),
+    })),
+    entries,
+  );
+  return ordenarCandidatos(rows, freeDates, (row) => row.data.location_id);
 }
 
 /** A reserva que a transação grava em cada saldo, só nos do SKU (rows). */
@@ -4197,13 +4279,27 @@ export async function createCustomerRequestTransaction(
           ),
         );
       }
+      const ledgerEntries = await ledgerEntriesForOrder(
+        transaction,
+        db,
+        input.customer_code,
+        balanceRowsBySku,
+        input.items,
+      );
 
       input.items.forEach((item, itemIndex) => {
         const skuCode = text(item.sku_code);
         const requestedLocation = text(item.location_id);
-        const candidateRows = orderableBalanceRows(
-          balanceRowsBySku.get(skuCode) ?? [],
-          requestedLocation,
+        const candidateRows = byOldestFreeDate(
+          orderableBalanceRows(
+            balanceRowsBySku.get(skuCode) ?? [],
+            requestedLocation,
+          ),
+          ledgerEntries.get(skuCode),
+          (locationId) =>
+            reservedBalances.get(
+              balanceKey(input.customer_code, skuCode, locationId),
+            )?.quantity ?? 0,
         );
         let remaining = number(item.quantity);
         let availableTotal = 0;
@@ -5690,12 +5786,25 @@ export async function decideCustomerRequestTransaction(
           );
         }
       } else {
+        const ledgerEntries = await ledgerEntriesForOrder(
+          transaction,
+          db,
+          customerCode,
+          balanceRowsBySku,
+          items,
+        );
         items.forEach((item, itemIndex) => {
           const skuCode = text(item.sku_code);
           const requestedLocation = text(item.location_id);
-          const candidateRows = orderableBalanceRows(
-            balanceRowsBySku.get(skuCode) ?? [],
-            requestedLocation,
+          const candidateRows = byOldestFreeDate(
+            orderableBalanceRows(
+              balanceRowsBySku.get(skuCode) ?? [],
+              requestedLocation,
+            ),
+            ledgerEntries.get(skuCode),
+            (locationId) =>
+              reservedBalances.get(balanceKey(customerCode, skuCode, locationId))
+                ?.quantity ?? 0,
           );
           let remaining = item.quantity;
           let availableTotal = 0;

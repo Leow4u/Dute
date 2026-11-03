@@ -1,0 +1,526 @@
+{
+  "dias": [
+    { "caso": "instante em UTC à tarde", "instante": "2026-08-05T15:00:00.000Z", "dia": "2026-08-05" },
+    { "caso": "22h30 em São Paulo ainda é o mesmo dia, já no dia seguinte em UTC", "instante": "2026-10-04T01:30:00.000Z", "dia": "2026-10-03" },
+    { "caso": "meia-noite em São Paulo já é o dia seguinte", "instante": "2026-10-04T03:00:00.000Z", "dia": "2026-10-04" },
+    { "caso": "instante com o fuso de São Paulo", "instante": "2026-08-05T23:59:59-03:00", "dia": "2026-08-05" },
+    { "caso": "Timestamp do Firestore (seconds e nanoseconds), no último instante do dia", "instante": { "seconds": 1785985199, "nanoseconds": 999000000 }, "dia": "2026-08-05" },
+    { "caso": "Timestamp serializado (_seconds e _nanoseconds), à meia-noite", "instante": { "_seconds": 1785985200, "_nanoseconds": 0 }, "dia": "2026-08-06" },
+    { "caso": "milissegundos", "instante": 1785942000000, "dia": "2026-08-05" },
+    { "caso": "dia sem hora vale o dia escrito", "instante": "2026-08-05", "dia": "2026-08-05" },
+    { "caso": "data e hora sem fuso valem o dia escrito", "instante": "2026-08-05T23:30:00", "dia": "2026-08-05" },
+    { "caso": "texto que não é data", "instante": "ontem", "dia": null },
+    { "caso": "dia que não existe", "instante": "2026-02-30", "dia": null },
+    { "caso": "mês que não existe", "instante": "2026-13-01T10:00:00", "dia": null },
+    { "caso": "texto vazio", "instante": "  ", "dia": null },
+    { "caso": "nulo", "instante": null, "dia": null },
+    { "caso": "objeto sem data", "instante": {}, "dia": null },
+    { "caso": "segundos em texto não são Timestamp", "instante": { "seconds": "1785942000" }, "dia": null },
+    { "caso": "booleano", "instante": true, "dia": null }
+  ],
+  "contas": [
+    {
+      "caso": "300 polos: entraram 150 em 05/08 e 200 em 03/10; sobram as 200 de 03/10 e 100 das 150 de 05/08",
+      "saldo": { "qty_on_hand": 300, "qty_reserved": 0 },
+      "entradas": [{ "dia": "2026-08-05", "quantidade": 150 }, { "dia": "2026-10-03", "quantidade": 200 }],
+      "fisicas": [{ "dia": "2026-08-05", "quantidade": 100 }, { "dia": "2026-10-03", "quantidade": 200 }],
+      "livres": [{ "dia": "2026-08-05", "quantidade": 100 }, { "dia": "2026-10-03", "quantidade": 200 }]
+    },
+    {
+      "caso": "o reservado sai das datas mais antigas: 120 reservadas levam as 100 de 05/08 e 20 de 03/10",
+      "saldo": { "qty_on_hand": 300, "qty_reserved": 120 },
+      "entradas": [{ "dia": "2026-08-05", "quantidade": 150 }, { "dia": "2026-10-03", "quantidade": 200 }],
+      "fisicas": [{ "dia": "2026-08-05", "quantidade": 100 }, { "dia": "2026-10-03", "quantidade": 200 }],
+      "livres": [{ "dia": "2026-10-03", "quantidade": 180 }]
+    },
+    {
+      "caso": "o reservado menor que a data mais antiga deixa o resto dela livre",
+      "saldo": { "qty_on_hand": 300, "qty_reserved": 30 },
+      "entradas": [{ "dia": "2026-08-05", "quantidade": 150 }, { "dia": "2026-10-03", "quantidade": 200 }],
+      "fisicas": [{ "dia": "2026-08-05", "quantidade": 100 }, { "dia": "2026-10-03", "quantidade": 200 }],
+      "livres": [{ "dia": "2026-08-05", "quantidade": 70 }, { "dia": "2026-10-03", "quantidade": 200 }]
+    },
+    {
+      "caso": "a entrada mais antiga cobre só o que falta: 50 de 05/08 e 100 de 01/11 com saldo 120",
+      "saldo": { "qty_on_hand": 120, "qty_reserved": 0 },
+      "entradas": [{ "dia": "2026-08-05", "quantidade": 50 }, { "dia": "2026-11-01", "quantidade": 100 }],
+      "fisicas": [{ "dia": "2026-08-05", "quantidade": 20 }, { "dia": "2026-11-01", "quantidade": 100 }],
+      "livres": [{ "dia": "2026-08-05", "quantidade": 20 }, { "dia": "2026-11-01", "quantidade": 100 }]
+    },
+    {
+      "caso": "saldo maior que as entradas: o resto fica sem data, como o mais antigo do local",
+      "saldo": { "qty_on_hand": 250, "qty_reserved": 0 },
+      "entradas": [{ "dia": "2026-10-03", "quantidade": 100 }],
+      "fisicas": [{ "dia": null, "quantidade": 150 }, { "dia": "2026-10-03", "quantidade": 100 }],
+      "livres": [{ "dia": null, "quantidade": 150 }, { "dia": "2026-10-03", "quantidade": 100 }]
+    },
+    {
+      "caso": "o reservado tira primeiro o sem data, que é o mais antigo",
+      "saldo": { "qty_on_hand": 250, "qty_reserved": 160 },
+      "entradas": [{ "dia": "2026-10-03", "quantidade": 100 }],
+      "fisicas": [{ "dia": null, "quantidade": 150 }, { "dia": "2026-10-03", "quantidade": 100 }],
+      "livres": [{ "dia": "2026-10-03", "quantidade": 90 }]
+    },
+    {
+      "caso": "sem entradas no razão (saldo semeado ou da planilha): tudo sem data",
+      "saldo": { "qty_on_hand": 40, "qty_reserved": 10 },
+      "entradas": [],
+      "fisicas": [{ "dia": null, "quantidade": 40 }],
+      "livres": [{ "dia": null, "quantidade": 30 }]
+    },
+    {
+      "caso": "saldo zero: nenhuma data, mesmo com entradas",
+      "saldo": { "qty_on_hand": 0, "qty_reserved": 0 },
+      "entradas": [{ "dia": "2026-08-05", "quantidade": 50 }],
+      "fisicas": [],
+      "livres": []
+    },
+    {
+      "caso": "entradas sem data válida ficam fora; o que elas cobririam fica sem data",
+      "saldo": { "qty_on_hand": 60, "qty_reserved": 0 },
+      "entradas": [
+        { "dia": null, "quantidade": 50 },
+        { "dia": "ontem", "quantidade": 10 },
+        { "dia": "2026-02-30", "quantidade": 5 },
+        { "dia": "2026-09-01", "quantidade": 20 }
+      ],
+      "fisicas": [{ "dia": null, "quantidade": 40 }, { "dia": "2026-09-01", "quantidade": 20 }],
+      "livres": [{ "dia": null, "quantidade": 40 }, { "dia": "2026-09-01", "quantidade": 20 }]
+    },
+    {
+      "caso": "duas entradas no mesmo dia somam; a mais antiga nem entra",
+      "saldo": { "qty_on_hand": 25, "qty_reserved": 0 },
+      "entradas": [{ "dia": "2026-08-05", "quantidade": 10 }, { "dia": "2026-08-01", "quantidade": 30 }, { "dia": "2026-08-05", "quantidade": 15 }],
+      "fisicas": [{ "dia": "2026-08-05", "quantidade": 25 }],
+      "livres": [{ "dia": "2026-08-05", "quantidade": 25 }]
+    },
+    {
+      "caso": "a ordem das entradas na lista não importa",
+      "saldo": { "qty_on_hand": 300, "qty_reserved": 0 },
+      "entradas": [{ "dia": "2026-10-03", "quantidade": 200 }, { "dia": "2026-08-05", "quantidade": 150 }],
+      "fisicas": [{ "dia": "2026-08-05", "quantidade": 100 }, { "dia": "2026-10-03", "quantidade": 200 }],
+      "livres": [{ "dia": "2026-08-05", "quantidade": 100 }, { "dia": "2026-10-03", "quantidade": 200 }]
+    },
+    {
+      "caso": "entrada com quantidade zero, negativa ou que não é número fica fora",
+      "saldo": { "qty_on_hand": 50, "qty_reserved": 0 },
+      "entradas": [
+        { "dia": "2026-11-01", "quantidade": -10 },
+        { "dia": "2026-11-01", "quantidade": "abc" },
+        { "dia": "2026-11-01", "quantidade": 0 },
+        { "dia": "2026-10-03", "quantidade": 50 }
+      ],
+      "fisicas": [{ "dia": "2026-10-03", "quantidade": 50 }],
+      "livres": [{ "dia": "2026-10-03", "quantidade": 50 }]
+    },
+    {
+      "caso": "a entrada maior que o saldo cobre só o saldo",
+      "saldo": { "qty_on_hand": 30, "qty_reserved": 0 },
+      "entradas": [{ "dia": "2026-08-05", "quantidade": 100 }],
+      "fisicas": [{ "dia": "2026-08-05", "quantidade": 30 }],
+      "livres": [{ "dia": "2026-08-05", "quantidade": 30 }]
+    },
+    {
+      "caso": "reservado maior que o físico: nada livre",
+      "saldo": { "qty_on_hand": 30, "qty_reserved": 50 },
+      "entradas": [{ "dia": "2026-08-05", "quantidade": 30 }],
+      "fisicas": [{ "dia": "2026-08-05", "quantidade": 30 }],
+      "livres": []
+    },
+    {
+      "caso": "saldo negativo conta como zero",
+      "saldo": { "qty_on_hand": -5, "qty_reserved": 0 },
+      "entradas": [{ "dia": "2026-08-05", "quantidade": 5 }],
+      "fisicas": [],
+      "livres": []
+    },
+    {
+      "caso": "saldo e reservado em texto valem como número, como no alocador",
+      "saldo": { "qty_on_hand": "12", "qty_reserved": "2" },
+      "entradas": [{ "dia": " 2026-08-05 ", "quantidade": 12 }],
+      "fisicas": [{ "dia": "2026-08-05", "quantidade": 12 }],
+      "livres": [{ "dia": "2026-08-05", "quantidade": 10 }]
+    }
+  ],
+  "ordens": [
+    {
+      "caso": "a data livre mais antiga primeiro: B-01 de 05/08 antes de A-01 de 03/10",
+      "candidatos": ["A-01", "B-01"],
+      "datas_livres": { "A-01": [{ "dia": "2026-10-03", "quantidade": 50 }], "B-01": [{ "dia": "2026-08-05", "quantidade": 50 }] },
+      "ordem": ["B-01", "A-01"]
+    },
+    {
+      "caso": "empate no dia: a ordem de location_id",
+      "candidatos": ["B-01", "A-01"],
+      "datas_livres": { "A-01": [{ "dia": "2026-08-05", "quantidade": 10 }], "B-01": [{ "dia": "2026-08-05", "quantidade": 10 }] },
+      "ordem": ["A-01", "B-01"]
+    },
+    {
+      "caso": "local sem data depois dos datados",
+      "candidatos": ["A-01", "B-01", "C-01"],
+      "datas_livres": {
+        "A-01": [{ "dia": null, "quantidade": 30 }],
+        "B-01": [{ "dia": "2026-10-03", "quantidade": 30 }],
+        "C-01": [{ "dia": "2026-08-05", "quantidade": 30 }]
+      },
+      "ordem": ["C-01", "B-01", "A-01"]
+    },
+    {
+      "caso": "local fora das datas conta como sem data",
+      "candidatos": ["A-01", "B-01"],
+      "datas_livres": { "B-01": [{ "dia": "2026-10-03", "quantidade": 30 }] },
+      "ordem": ["B-01", "A-01"]
+    },
+    {
+      "caso": "sem data nenhuma, a ordem de location_id, a de antes",
+      "candidatos": ["C-01", "A-01", "B-01"],
+      "datas_livres": {},
+      "ordem": ["A-01", "B-01", "C-01"]
+    },
+    {
+      "caso": "os locais sem data, entre eles, pela ordem de location_id",
+      "candidatos": ["D-01", "C-01", "B-01"],
+      "datas_livres": { "B-01": [{ "dia": "2026-08-05", "quantidade": 5 }], "C-01": [{ "dia": null, "quantidade": 5 }] },
+      "ordem": ["B-01", "C-01", "D-01"]
+    },
+    {
+      "caso": "a parte sem data não vale como data: A-01 com sem data e 20/10 vai depois de B-01 de 03/10",
+      "candidatos": ["A-01", "B-01"],
+      "datas_livres": {
+        "A-01": [{ "dia": null, "quantidade": 20 }, { "dia": "2026-10-20", "quantidade": 30 }],
+        "B-01": [{ "dia": "2026-10-03", "quantidade": 50 }]
+      },
+      "ordem": ["B-01", "A-01"]
+    },
+    {
+      "caso": "parte livre com zero peças não conta como data",
+      "candidatos": ["A-01", "B-01"],
+      "datas_livres": {
+        "A-01": [{ "dia": "2026-08-05", "quantidade": 0 }, { "dia": "2026-10-20", "quantidade": 10 }],
+        "B-01": [{ "dia": "2026-10-03", "quantidade": 10 }]
+      },
+      "ordem": ["B-01", "A-01"]
+    },
+    {
+      "caso": "dia inválido nas datas livres conta como sem data",
+      "candidatos": ["B-01", "A-01"],
+      "datas_livres": { "A-01": [{ "dia": "ontem", "quantidade": 5 }], "B-01": [{ "dia": null, "quantidade": 5 }] },
+      "ordem": ["A-01", "B-01"]
+    },
+    {
+      "caso": "A-01 e a-01 são locais distintos, cada um com a sua data, como no alocador; o espaço nas pontas não conta",
+      "candidatos": ["A-01", "a-01", " B-01"],
+      "datas_livres": {
+        "A-01": [{ "dia": "2026-10-03", "quantidade": 1 }],
+        "a-01": [{ "dia": "2026-08-05", "quantidade": 1 }],
+        "B-01 ": [{ "dia": "2026-09-20", "quantidade": 1 }]
+      },
+      "ordem": ["a-01", " B-01", "A-01"]
+    },
+    {
+      "caso": "o acento conta: DEVOLUÇÃO não leva a data de DEVOLUCAO",
+      "candidatos": ["DEVOLUCAO", "DEVOLUÇÃO", "A-01"],
+      "datas_livres": {
+        "DEVOLUCAO": [{ "dia": "2026-08-05", "quantidade": 1 }],
+        "A-01": [{ "dia": "2026-10-03", "quantidade": 1 }]
+      },
+      "ordem": ["DEVOLUCAO", "A-01", "DEVOLUÇÃO"]
+    },
+    {
+      "caso": "um local só",
+      "candidatos": ["A-01"],
+      "datas_livres": { "A-01": [{ "dia": "2026-08-05", "quantidade": 1 }] },
+      "ordem": ["A-01"]
+    },
+    {
+      "caso": "nenhum candidato",
+      "candidatos": [],
+      "datas_livres": { "A-01": [{ "dia": "2026-08-05", "quantidade": 1 }] },
+      "ordem": []
+    }
+  ],
+  "pedidos": [
+    {
+      "caso": "a data mais antiga de A-01 toda reservada: vai antes B-01, com a data livre mais antiga",
+      "saldos": [
+        { "location_id": "A-01", "qty_on_hand": 120, "qty_reserved": 20 },
+        { "location_id": "B-01", "qty_on_hand": 100, "qty_reserved": 0 }
+      ],
+      "entradas": {
+        "A-01": [{ "dia": "2026-08-05", "quantidade": 20 }, { "dia": "2026-10-01", "quantidade": 100 }],
+        "B-01": [{ "dia": "2026-09-20", "quantidade": 100 }]
+      },
+      "livres": { "A-01": [{ "dia": "2026-10-01", "quantidade": 100 }], "B-01": [{ "dia": "2026-09-20", "quantidade": 100 }] },
+      "ordem": ["B-01", "A-01"]
+    },
+    {
+      "caso": "sem a reserva, A-01 vem antes pela data de 05/08",
+      "saldos": [
+        { "location_id": "A-01", "qty_on_hand": 120, "qty_reserved": 0 },
+        { "location_id": "B-01", "qty_on_hand": 100, "qty_reserved": 0 }
+      ],
+      "entradas": {
+        "A-01": [{ "dia": "2026-08-05", "quantidade": 20 }, { "dia": "2026-10-01", "quantidade": 100 }],
+        "B-01": [{ "dia": "2026-09-20", "quantidade": 100 }]
+      },
+      "livres": {
+        "A-01": [{ "dia": "2026-08-05", "quantidade": 20 }, { "dia": "2026-10-01", "quantidade": 100 }],
+        "B-01": [{ "dia": "2026-09-20", "quantidade": 100 }]
+      },
+      "ordem": ["A-01", "B-01"]
+    },
+    {
+      "caso": "as 300 polos de A-01 (100 de 05/08) antes das 50 de B-01 de 20/09",
+      "saldos": [
+        { "location_id": "B-01", "qty_on_hand": 50, "qty_reserved": 0 },
+        { "location_id": "A-01", "qty_on_hand": 300, "qty_reserved": 0 }
+      ],
+      "entradas": {
+        "A-01": [{ "dia": "2026-08-05", "quantidade": 150 }, { "dia": "2026-10-03", "quantidade": 200 }],
+        "B-01": [{ "dia": "2026-09-20", "quantidade": 50 }]
+      },
+      "livres": {
+        "B-01": [{ "dia": "2026-09-20", "quantidade": 50 }],
+        "A-01": [{ "dia": "2026-08-05", "quantidade": 100 }, { "dia": "2026-10-03", "quantidade": 200 }]
+      },
+      "ordem": ["A-01", "B-01"]
+    },
+    {
+      "caso": "saldos sem entradas no razão seguem a ordem de location_id",
+      "saldos": [
+        { "location_id": "C-01", "qty_on_hand": 30, "qty_reserved": 0 },
+        { "location_id": "A-01", "qty_on_hand": 30, "qty_reserved": 0 },
+        { "location_id": "B-01", "qty_on_hand": 30, "qty_reserved": 0 }
+      ],
+      "entradas": {},
+      "livres": {
+        "C-01": [{ "dia": null, "quantidade": 30 }],
+        "A-01": [{ "dia": null, "quantidade": 30 }],
+        "B-01": [{ "dia": null, "quantidade": 30 }]
+      },
+      "ordem": ["A-01", "B-01", "C-01"]
+    },
+    {
+      "caso": "A-01 e a-01 são dois saldos, cada um com as suas ENTRADAs: a-01, de 05/08, vem antes de B-01, de 20/09, e de A-01, de 03/10",
+      "saldos": [
+        { "location_id": "A-01", "qty_on_hand": 50, "qty_reserved": 0 },
+        { "location_id": "a-01", "qty_on_hand": 50, "qty_reserved": 0 },
+        { "location_id": "B-01", "qty_on_hand": 50, "qty_reserved": 0 }
+      ],
+      "entradas": {
+        "A-01": [{ "dia": "2026-10-03", "quantidade": 50 }],
+        "a-01": [{ "dia": "2026-08-05", "quantidade": 50 }],
+        "B-01": [{ "dia": "2026-09-20", "quantidade": 50 }]
+      },
+      "livres": {
+        "A-01": [{ "dia": "2026-10-03", "quantidade": 50 }],
+        "a-01": [{ "dia": "2026-08-05", "quantidade": 50 }],
+        "B-01": [{ "dia": "2026-09-20", "quantidade": 50 }]
+      },
+      "ordem": ["a-01", "B-01", "A-01"]
+    },
+    {
+      "caso": "dois saldos no mesmo local (o mesmo location_id sem o espaço das pontas) somam: as ENTRADAs do local explicam os dois",
+      "saldos": [
+        { "location_id": "A-01", "qty_on_hand": 30, "qty_reserved": 0 },
+        { "location_id": " A-01", "qty_on_hand": 20, "qty_reserved": 10 }
+      ],
+      "entradas": { "A-01": [{ "dia": "2026-08-05", "quantidade": 20 }, { "dia": "2026-10-03", "quantidade": 30 }] },
+      "livres": { "A-01": [{ "dia": "2026-08-05", "quantidade": 10 }, { "dia": "2026-10-03", "quantidade": 30 }] },
+      "ordem": ["A-01", " A-01"]
+    }
+  ],
+  "razao": [
+    {
+      "caso": "toda ENTRADA conta, de qualquer origem, pelo dia de São Paulo do created_at; a SAIDA fica de fora; o campo data digitado não conta",
+      "abertura": {},
+      "movimentos": [
+        { "tipo_mov": "ENTRADA", "source": "wms_putaway", "location_id": "A-01", "quantity": 50, "created_at": "2026-10-04T01:30:00.000Z", "data": "2026-01-01T12:00:00.000Z" },
+        { "tipo_mov": "ENTRADA", "source": "functions_return_disposition", "location_id": "DEVOLUCAO", "quantity": 3, "created_at": { "seconds": 1785942000, "nanoseconds": 0 } },
+        { "tipo_mov": "ENTRADA", "source": "wms_order_cancel", "location_id": "EXPEDICAO", "qtde": 4, "created_at": "2026-10-20T15:00:00.000Z" },
+        { "tipo_mov": "SAIDA", "source": "wms_shipping", "location_id": "A-01", "quantity": 10, "created_at": "2026-10-21T15:00:00.000Z" }
+      ],
+      "entradas": {
+        "A-01": [{ "dia": "2026-10-03", "quantidade": 50 }],
+        "DEVOLUCAO": [{ "dia": "2026-08-05", "quantidade": 3 }],
+        "EXPEDICAO": [{ "dia": "2026-10-20", "quantidade": 4 }]
+      }
+    },
+    {
+      "caso": "a contagem de abertura e a troca de caixa dela valem o dia em que a sessão começou; a guarda, o dia dela",
+      "abertura": { "id": "opening_Cliente_Novo", "started_at": "2026-10-16T12:00:00.000Z" },
+      "movimentos": [
+        { "tipo_mov": "ENTRADA", "source": "functions_opening_inventory", "location_id": "A-01", "quantity": 40, "created_at": "2026-10-18T15:00:00.000Z", "opening_inventory_session_id": "opening_Cliente_Novo" },
+        { "tipo_mov": "ENTRADA", "source": "functions_opening_inventory_transfer", "location_id": "B-01", "quantity": 5, "created_at": "2026-10-19T15:00:00.000Z", "opening_inventory_session_id": "opening_Cliente_Novo" },
+        { "tipo_mov": "ENTRADA", "source": "wms_putaway", "location_id": "B-01", "quantity": 20, "created_at": "2026-10-17T15:00:00.000Z" }
+      ],
+      "entradas": {
+        "A-01": [{ "dia": "2026-10-16", "quantidade": 40 }],
+        "B-01": [{ "dia": "2026-10-16", "quantidade": 5 }, { "dia": "2026-10-17", "quantidade": 20 }]
+      }
+    },
+    {
+      "caso": "sessão sem started_at válido: a abertura fica com o created_at",
+      "abertura": { "id": "opening_Cliente_Novo", "started_at": "ontem" },
+      "movimentos": [
+        { "tipo_mov": "ENTRADA", "source": "functions_opening_inventory", "location_id": "A-01", "quantity": 40, "created_at": "2026-10-18T15:00:00.000Z", "opening_inventory_session_id": "opening_Cliente_Novo" }
+      ],
+      "entradas": { "A-01": [{ "dia": "2026-10-18", "quantidade": 40 }] }
+    },
+    {
+      "caso": "ENTRADA de outra sessão de abertura fica com o created_at",
+      "abertura": { "id": "opening_Cliente_Novo", "started_at": "2026-10-16T12:00:00.000Z" },
+      "movimentos": [
+        { "tipo_mov": "ENTRADA", "source": "functions_opening_inventory", "location_id": "A-01", "quantity": 40, "created_at": "2026-10-18T15:00:00.000Z", "opening_inventory_session_id": "opening_Outro_Cliente" }
+      ],
+      "entradas": { "A-01": [{ "dia": "2026-10-18", "quantidade": 40 }] }
+    },
+    {
+      "caso": "o local vira chave só sem o espaço nas pontas: maiúscula e acento contam, como no alocador (a-01, digitado na movimentação manual, é outro saldo)",
+      "abertura": {},
+      "movimentos": [
+        { "tipo_mov": "ENTRADA", "source": "functions_return_disposition", "location_id": " devolução ", "quantity": 2, "created_at": "2026-10-20T15:00:00.000Z" },
+        { "tipo_mov": "ENTRADA", "source": "functions_manual_inventory", "location_id": "a-01", "quantity": 3, "created_at": "2026-08-05T15:00:00.000Z" },
+        { "tipo_mov": "ENTRADA", "source": "wms_putaway", "location_id": "A-01 ", "quantity": 4, "created_at": "2026-10-03T15:00:00.000Z" }
+      ],
+      "entradas": {
+        "devolução": [{ "dia": "2026-10-20", "quantidade": 2 }],
+        "a-01": [{ "dia": "2026-08-05", "quantidade": 3 }],
+        "A-01": [{ "dia": "2026-10-03", "quantidade": 4 }]
+      }
+    },
+    {
+      "caso": "sem local ou sem quantidade fica fora; sem created_at válido, a entrada fica sem data",
+      "abertura": {},
+      "movimentos": [
+        { "tipo_mov": "ENTRADA", "source": "wms_putaway", "quantity": 5, "created_at": "2026-10-20T15:00:00.000Z" },
+        { "tipo_mov": "ENTRADA", "source": "wms_putaway", "location_id": "A-01", "quantity": 0, "created_at": "2026-10-20T15:00:00.000Z" },
+        { "tipo_mov": "ENTRADA", "source": "wms_putaway", "location_id": "A-01", "quantity": 7 },
+        null,
+        "ENTRADA"
+      ],
+      "entradas": { "A-01": [{ "dia": null, "quantidade": 7 }] }
+    }
+  ],
+  "leituras": [
+    {
+      "caso": "livre em duas prateleiras: lê o razão",
+      "saldos": [{ "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 }, { "location_id": "B-01", "qty_on_hand": 5, "qty_reserved": 0 }],
+      "le": true
+    },
+    {
+      "caso": "livre numa prateleira só: não lê",
+      "saldos": [{ "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 }],
+      "le": false
+    },
+    {
+      "caso": "a segunda prateleira toda reservada: não lê",
+      "saldos": [{ "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 }, { "location_id": "B-01", "qty_on_hand": 5, "qty_reserved": 5 }],
+      "le": false
+    },
+    {
+      "caso": "saldo zero não conta",
+      "saldos": [{ "location_id": "A-01", "qty_on_hand": 0, "qty_reserved": 0 }, { "location_id": "B-01", "qty_on_hand": 3, "qty_reserved": 0 }],
+      "le": false
+    },
+    {
+      "caso": "nenhum saldo",
+      "saldos": [],
+      "le": false
+    },
+    {
+      "caso": "três prateleiras com livre",
+      "saldos": [
+        { "location_id": "A-01", "qty_on_hand": 1, "qty_reserved": 0 },
+        { "location_id": "B-01", "qty_on_hand": 2, "qty_reserved": 1 },
+        { "location_id": "C-01", "qty_on_hand": 3, "qty_reserved": 0 }
+      ],
+      "le": true
+    }
+  ],
+  "skus_lidos": [
+    {
+      "caso": "item sem local e livre em duas prateleiras: lê o razão do SKU",
+      "itens": [{ "sku_code": "BTG-POLO-M" }],
+      "saldos": {
+        "BTG-POLO-M": [
+          { "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 },
+          { "location_id": "B-01", "qty_on_hand": 5, "qty_reserved": 0 }
+        ]
+      },
+      "skus": ["BTG-POLO-M"]
+    },
+    {
+      "caso": "o item que pede o local reserva nele: não lê",
+      "itens": [{ "sku_code": "BTG-POLO-M", "location_id": "A-01" }],
+      "saldos": {
+        "BTG-POLO-M": [
+          { "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 },
+          { "location_id": "B-01", "qty_on_hand": 5, "qty_reserved": 0 }
+        ]
+      },
+      "skus": []
+    },
+    {
+      "caso": "livre numa prateleira só, mais o RECEBIMENTO e a EXPEDICAO, que não atendem pedido: não lê",
+      "itens": [{ "sku_code": "BTG-POLO-M" }],
+      "saldos": {
+        "BTG-POLO-M": [
+          { "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 },
+          { "location_id": "RECEBIMENTO", "qty_on_hand": 50, "qty_reserved": 0 },
+          { "location_id": " expedição ", "qty_on_hand": 4, "qty_reserved": 0 }
+        ]
+      },
+      "skus": []
+    },
+    {
+      "caso": "a segunda prateleira toda reservada: não lê",
+      "itens": [{ "sku_code": "BTG-POLO-M" }],
+      "saldos": {
+        "BTG-POLO-M": [
+          { "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 },
+          { "location_id": "B-01", "qty_on_hand": 5, "qty_reserved": 5 }
+        ]
+      },
+      "skus": []
+    },
+    {
+      "caso": "um item do SKU com local e outro sem: lê",
+      "itens": [{ "sku_code": "BTG-POLO-M", "location_id": "A-01" }, { "sku_code": "BTG-POLO-M" }],
+      "saldos": {
+        "BTG-POLO-M": [
+          { "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 },
+          { "location_id": "B-01", "qty_on_hand": 5, "qty_reserved": 0 }
+        ]
+      },
+      "skus": ["BTG-POLO-M"]
+    },
+    {
+      "caso": "vários SKUs: só os que têm livre em duas prateleiras, uma vez cada, na ordem dos itens",
+      "itens": [{ "sku_code": "BTG-CAMISA-P" }, { "sku_code": "BTG-POLO-M" }, { "sku_code": "BTG-POLO-M" }, { "sku_code": "BTG-BONE" }],
+      "saldos": {
+        "BTG-CAMISA-P": [{ "location_id": "A-02", "qty_on_hand": 8, "qty_reserved": 0 }],
+        "BTG-POLO-M": [
+          { "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 },
+          { "location_id": "B-01", "qty_on_hand": 5, "qty_reserved": 0 }
+        ],
+        "BTG-BONE": [
+          { "location_id": "C-01", "qty_on_hand": 2, "qty_reserved": 0 },
+          { "location_id": "A-03", "qty_on_hand": 3, "qty_reserved": 0 }
+        ]
+      },
+      "skus": ["BTG-POLO-M", "BTG-BONE"]
+    },
+    {
+      "caso": "o SKU do item casa sem o espaço das pontas; o local só de espaço vale como sem local; SKU sem saldo e item sem SKU não leem",
+      "itens": [{ "sku_code": "BTG-SEM-SALDO" }, { "location_id": "A-01" }, { "sku_code": " BTG-POLO-M ", "location_id": "  " }],
+      "saldos": {
+        "BTG-POLO-M": [
+          { "location_id": "A-01", "qty_on_hand": 10, "qty_reserved": 0 },
+          { "location_id": "B-01", "qty_on_hand": 5, "qty_reserved": 0 }
+        ]
+      },
+      "skus": ["BTG-POLO-M"]
+    }
+  ]
+}
