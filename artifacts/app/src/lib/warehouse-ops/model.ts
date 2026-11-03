@@ -1,5 +1,6 @@
 /** Pure warehouse-ops domain model (types + helpers, no React UI). */
 
+import type { CaixaDaChegada, FaltaMarcada, LinhaDaCaixa } from "../wms/caixas-do-recebimento";
 import {
   ClipboardCheck,
   Forklift,
@@ -57,6 +58,11 @@ export type WarehouseTaskItem = {
   unit_cost?: number | null;
   volume?: string | null;
   volume_id?: string | null;
+  /** A chegada por caixa (recebimento com caixas, parte 5): a linha da NF nas caixas. */
+  line_number?: number | null;
+  boxed_qty?: number | null;
+  box_codes?: string[] | null;
+  shortage?: FaltaMarcada | Record<string, unknown> | null;
 };
 
 export type WarehouseTaskTimelineEvent = {
@@ -108,6 +114,18 @@ export type WarehouseTask = {
   order_id?: string | null;
   can_advance?: boolean | null;
   can_register_exception?: boolean | null;
+  /** A chegada por caixa (recebimento com caixas, parte 5): o modo, as caixas e as guardas. */
+  conference_mode?: "per_box" | null;
+  receipt_number?: string | null;
+  invoice_number?: string | null;
+  box_count?: number | null;
+  boxes_stored?: number | null;
+  putaway_status?: string | null;
+  boxes?: CaixaDaChegada[] | null;
+  /** A guarda da caixa: a caixa, a chegada e o conteúdo. */
+  box_code?: string | null;
+  receipt_id?: string | null;
+  box_lines?: LinhaDaCaixa[] | null;
 };
 
 export type OpsQueue = {
