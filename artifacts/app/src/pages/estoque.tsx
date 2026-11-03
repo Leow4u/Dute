@@ -36,6 +36,7 @@ import {
 import { type ProductPhoto, uploadProductPhoto } from "@/features/warehouse-ops/shared";
 import { ProductPhotoStudio } from "@/features/warehouse-ops/product-photo-studio";
 import { ProductPhotoManager } from "@/features/warehouse-ops/product-photo-manager";
+import { GuardarDaAreaDialog } from "@/features/warehouse-ops/guardar-da-area";
 import { photoContextFromRecord } from "@/features/warehouse-ops/photo-context";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
@@ -44,6 +45,7 @@ import {
   canOperateWarehouse,
   canWriteCatalog,
   humanApiError,
+  canOpenAreaPutaway,
 } from "@/lib/permissions";
 import {
   buildStockItems,
@@ -55,7 +57,7 @@ import {
 import { cn } from "@/lib/utils";
 import Movements, { MovementModal } from "./movements";
 import { DeleteSkuButton, SkuModal } from "./skus";
-import { regraDoModelo, rotuloDaEtiqueta } from "@workspace/dominio";
+import { areaDePassagem, regraDoModelo, rotuloDaEtiqueta } from "@workspace/dominio";
 
 import { customerRows } from "@/lib/active-customer";
 import { desdeEmTexto, locaisValidos, type LocalComDatas } from "@/lib/datas-de-entrada";
@@ -418,13 +420,90 @@ function Chip({ tone, children }: { tone: "warn" | "bad" | "muted"; children: Re
 // Endereço real é longo ("RUA B - PRATELEIRA 12 - CAIXA 194"): quebra linha
 // dentro da coluna em vez de invadir o saldo ou esconder a caixa.
 function LocationTag({ id }: { id: string }) {
+  // A área de passagem (RECEBIMENTO, EXPEDICAO) fica em âmbar: o saldo dela não está na prateleira.
+  const area = areaDePassagem(id) !== null;
   return (
     <span
       title={id}
-      className="inline-block max-w-full break-words rounded-md bg-info-soft px-1.5 py-0.5 align-middle font-mono text-xs text-info-soft-foreground"
+      className={cn(
+        "inline-block max-w-full break-words rounded-md px-1.5 py-0.5 align-middle font-mono text-xs",
+        area ? "bg-warning-soft text-warning-soft-foreground" : "bg-info-soft text-info-soft-foreground",
+      )}
     >
       {id}
     </span>
+  );
+}
+
+/**
+ * Onde está o item. Com as datas de entrada (FIFO por data, parte 6; tela
+ * aprovada em docs/mockups/WmsItemDatas.dc.html), uma linha por prateleira e
+ * data, a prateleira de data livre mais antiga primeiro, como o pedido as
+ * usa, e o RECEBIMENTO e a EXPEDICAO no fim, sem data. Sem as datas, a
+ * quantidade de cada local, como antes. O saldo numa área de passagem ganha o
+ * "Guardar" para a coordenação (decisão 16, parte 7e): a guarda dele não abre
+ * sozinha.
+ */
+export function SecaoOndeEsta({
+  locations,
+  locais = null,
+  podeGuardar,
+  onGuardar,
+}: {
+  locations: StockItem["locations"];
+  locais?: LocalComDatas[] | null;
+  podeGuardar: boolean;
+  onGuardar: (locationId: string) => void;
+}) {
+  if (locais?.length) {
+    return (
+      <Section title="Onde está">
+        <ul>
+          {locais.flatMap((local) =>
+            (local.datas.length ? local.datas : [null]).map((data) => (
+              <li
+                key={`${local.local}:${data ? (data.desde ?? "sem-data") : "sem-datas"}`}
+                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 py-1 text-sm"
+              >
+                <LocationTag id={local.local} />
+                <span className="min-w-0 text-foreground">{data ? desdeEmTexto(data.desde) : null}</span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <span className="font-semibold tabular-nums">
+                    {numberFormatter.format(data ? data.pecas : local.pecas)} un.
+                  </span>
+                  {!data && podeGuardar && local.pecas > 0 && areaDePassagem(local.local) ? (
+                    <Button type="button" size="sm" variant="outline" aria-label={`Guardar do ${local.local}`} onClick={() => onGuardar(local.local)}>
+                      Guardar
+                    </Button>
+                  ) : null}
+                </span>
+              </li>
+            )),
+          )}
+        </ul>
+      </Section>
+    );
+  }
+  return (
+    <Section title="Onde está">
+      {locations.length ? (
+        locations.map((location) => (
+          <div key={location.id} className="flex min-w-0 items-center justify-between gap-3 py-1 text-sm">
+            <LocationTag id={location.id} />
+            <span className="flex shrink-0 items-center gap-2">
+              <span className="font-semibold tabular-nums">{numberFormatter.format(location.qty)} un.</span>
+              {podeGuardar && location.qty > 0 && areaDePassagem(location.id) ? (
+                <Button type="button" size="sm" variant="outline" aria-label={`Guardar do ${location.id}`} onClick={() => onGuardar(location.id)}>
+                  Guardar
+                </Button>
+              ) : null}
+            </span>
+          </div>
+        ))
+      ) : (
+        <p className="text-sm text-muted-foreground">Sem endereço registrado.</p>
+      )}
+    </Section>
   );
 }
 
@@ -545,6 +624,11 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
   const photoWriter = canAddItemPhotos(role);
   // Contar é de quem opera o armazém; o suporte só consulta a ficha.
   const warehouseWriter = canOperateWarehouse(role);
+  // Abrir a guarda do saldo parado numa área é da coordenação (parte 7e).
+  const areaPutaway = canOpenAreaPutaway(role);
+  // O local fica guardado depois de fechar: o diálogo ainda aparece na animação de saída.
+  const [guardarAberto, setGuardarAberto] = useState(false);
+  const [guardarDe, setGuardarDe] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -733,7 +817,24 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
           ) : null}
         </div>
 
-        <SecaoOndeEsta locations={item.locations} locais={datas.data ?? null} />
+        <SecaoOndeEsta
+          locations={item.locations}
+          locais={datas.data ?? null}
+          podeGuardar={areaPutaway}
+          onGuardar={(local) => {
+            setGuardarDe(local);
+            setGuardarAberto(true);
+          }}
+        />
+        <GuardarDaAreaDialog
+          aberto={guardarAberto}
+          onFechar={() => setGuardarAberto(false)}
+          customerCode={customerCode}
+          skuCode={item.skuCode}
+          locationId={guardarDe}
+          nome={item.name}
+          codigo={[item.skuCode, item.clientCode].filter(Boolean).join(" · ")}
+        />
 
         <SecaoDoGiro giro={item.giro} caixas={caixas} rotuloDaCaixaParada={rotuloDaCaixaParada} />
 
@@ -837,54 +938,6 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
 }
 
 /** O giro do item e as caixas dele, com os dias parado de cada uma (parte 5.4c). */
-/**
- * "Onde está" na ficha (FIFO por data, parte 6; tela aprovada em
- * docs/mockups/WmsItemDatas.dc.html): com as datas, uma linha por prateleira e
- * data, a prateleira de data livre mais antiga primeiro, como o pedido as usa;
- * o RECEBIMENTO e a EXPEDICAO no fim, sem data. Sem as datas, a quantidade de
- * cada local, como antes.
- */
-export function SecaoOndeEsta({ locations, locais }: { locations: StockItem["locations"]; locais: LocalComDatas[] | null }) {
-  if (locais?.length) {
-    return (
-      <Section title="Onde está">
-        <ul>
-          {locais.flatMap((local) =>
-            (local.datas.length ? local.datas : [null]).map((data) => (
-              <li
-                key={`${local.local}:${data ? (data.desde ?? "sem-data") : "sem-datas"}`}
-                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 py-1 text-sm"
-              >
-                <LocationTag id={local.local} />
-                <span className="min-w-0 text-foreground">{data ? desdeEmTexto(data.desde) : null}</span>
-                <span className="shrink-0 font-semibold tabular-nums">
-                  {numberFormatter.format(data ? data.pecas : local.pecas)} un.
-                </span>
-              </li>
-            )),
-          )}
-        </ul>
-      </Section>
-    );
-  }
-  return (
-    <Section title="Onde está">
-      {locations.length ? (
-        locations.map((location) => (
-          <div key={location.id} className="flex min-w-0 items-center justify-between gap-3 py-1 text-sm">
-            <LocationTag id={location.id} />
-            <span className="shrink-0 font-semibold tabular-nums">
-              {numberFormatter.format(location.qty)} un.
-            </span>
-          </div>
-        ))
-      ) : (
-        <p className="text-sm text-muted-foreground">Sem endereço registrado.</p>
-      )}
-    </Section>
-  );
-}
-
 /** As datas de entrada por prateleira do item do cliente ativo, pelo getStockDates. */
 export async function buscarDatasDaFicha(customerCode: string, skuCode: string): Promise<LocalComDatas[]> {
   const resposta = await fetch(

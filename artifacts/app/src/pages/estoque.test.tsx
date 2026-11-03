@@ -213,10 +213,10 @@ describe("as datas de entrada na ficha (FIFO por data, parte 6)", () => {
     { id: "RECEBIMENTO", qty: 40 },
     { id: "B-05", qty: 16 },
   ];
-  const secao = (locais: LocalComDatas[] | null) =>
+  const secao = (locais: LocalComDatas[] | null, podeGuardar = false) =>
     renderToStaticMarkup(
       <div className="v3">
-        <SecaoOndeEsta locations={LOCATIONS} locais={locais} />
+        <SecaoOndeEsta locations={LOCATIONS} locais={locais} podeGuardar={podeGuardar} onGuardar={() => undefined} />
       </div>,
     );
   /** Cada linha de "Onde está": o local, a data e a quantidade. */
@@ -249,8 +249,16 @@ describe("as datas de entrada na ficha (FIFO por data, parte 6)", () => {
     expect(linhas(secao([]))).toHaveLength(3);
   });
 
+  it("com as datas, a área continua com o Guardar para a coordenação (parte 7e), e a prateleira não", () => {
+    const html = secao(LOCAIS, true);
+    const botoes = [...html.matchAll(/aria-label="([^"]+)"[^>]*>Guardar<\/button>/g)].map((match) => match[1]);
+    expect(botoes).toEqual(["Guardar do RECEBIMENTO"]);
+    expect(html).toMatch(/bg-warning-soft text-warning-soft-foreground"[^>]*>RECEBIMENTO</);
+    expect(html).toMatch(/bg-info-soft text-info-soft-foreground"[^>]*>B-05</);
+  });
+
   it("o que as entradas não cobrem diz sem data", () => {
-    const html = secao([{ local: "A-01", pecas: 25, datas: [{ desde: null, pecas: 10 }, { desde: "2026-10-30", pecas: 15 }] }]);
+    const html = secao([{ local: "A-01", pecas: 25, datas: [{ desde: null, pecas: 10 }, { desde: "2026-10-30", pecas: 15 }] }], true);
     expect(linhas(html)).toEqual([
       ["A-01", "sem data", "10 un."],
       ["A-01", "desde 30/10/2026", "15 un."],
@@ -258,8 +266,8 @@ describe("as datas de entrada na ficha (FIFO por data, parte 6)", () => {
   });
 
   it("só rótulos e dados, sem legenda, e passa no axe", async () => {
-    const html = secao(LOCAIS);
-    expect(textosForaDaLista(html, ["Onde está", "B-05", "B-02", "RECEBIMENTO", /^desde \d{2}\/\d{2}\/\d{4}$/, /^\d[\d.]* un\.$/])).toEqual([]);
+    const html = secao(LOCAIS, true);
+    expect(textosForaDaLista(html, ["Onde está", "B-05", "B-02", "RECEBIMENTO", "Guardar", /^desde \d{2}\/\d{2}\/\d{4}$/, /^\d[\d.]* un\.$/])).toEqual([]);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
@@ -280,5 +288,38 @@ describe("as datas de entrada na ficha (FIFO por data, parte 6)", () => {
     });
     expect(await buscarDatasDaFicha("BTG Pactual", "BTG-000214")).toEqual(LOCAIS);
     expect(chamadas).toEqual([caminho]);
+  });
+});
+
+describe("o Guardar do saldo parado numa área (decisão 16, parte 7e)", () => {
+  const locais = [
+    { id: "A-03", qty: 12 },
+    { id: "RECEBIMENTO", qty: 30 },
+    { id: "Expedição", qty: 2 },
+    { id: "EXPEDICAO", qty: 0 },
+  ];
+  const secao = (podeGuardar: boolean) =>
+    renderToStaticMarkup(<SecaoOndeEsta locations={locais} podeGuardar={podeGuardar} onGuardar={() => undefined} />);
+
+  it("a coordenação vê o Guardar só no saldo de uma área, em qualquer grafia, e com peça", () => {
+    const html = secao(true);
+    const botoes = [...html.matchAll(/aria-label="([^"]+)"[^>]*>Guardar<\/button>/g)].map((match) => match[1]);
+    expect(botoes).toEqual(["Guardar do RECEBIMENTO", "Guardar do Expedição"]);
+  });
+
+  it("quem não coordena não vê o Guardar", () => {
+    expect(secao(false)).not.toContain(">Guardar</button>");
+  });
+
+  it("a área fica em âmbar e a prateleira, como antes", () => {
+    const html = secao(true);
+    expect(html).toMatch(/bg-warning-soft text-warning-soft-foreground"[^>]*>RECEBIMENTO</);
+    expect(html).toMatch(/bg-info-soft text-info-soft-foreground"[^>]*>A-03</);
+  });
+
+  it("mostra só rótulos, dados e ações e passa no axe", async () => {
+    const html = secao(true);
+    expect(textosDaTela(html)).toEqual(["Onde está", "A-03", "12 un.", "RECEBIMENTO", "30 un.", "Guardar", "Expedição", "2 un.", "EXPEDICAO", "0 un."]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });
