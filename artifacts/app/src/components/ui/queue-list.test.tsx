@@ -40,4 +40,16 @@ describe("a fila e o cabeçalho na v3", () => {
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(fila())).toEqual([]);
   });
+
+  it("o selo opcional fica ao lado do título, sem mudar a linha sem selo", async () => {
+    const html = renderToStaticMarkup(
+      <div className="v3">
+        <QueueGroup title="Para guardar" count={1} empty="Nada para guardar.">
+          <QueueRow icon={Package} tone="store" title="Guardar caixa CX-000132" badge={<span>sem prateleira</span>} meta="POLO GG · 18 un. · está em RECEBIMENTO" />
+        </QueueGroup>
+      </div>,
+    );
+    expect(html).toMatch(/<p class="[^"]*">Guardar caixa CX-000132<span class="ml-2 inline-flex align-middle"><span>sem prateleira<\/span><\/span><\/p>/);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
 });

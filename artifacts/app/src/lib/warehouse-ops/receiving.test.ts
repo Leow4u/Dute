@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import { getAdvanceGate, normalizeQueues, type WarehouseOpsResponse, type WarehouseTask } from "./model";
 import {
   buildReceivingBoard,
+  conteudoDaGuarda,
+  guardaSemPrateleira,
+  guardandoRowMeta,
   linhasDivergentesDoRecebimento,
   linkedShipmentNotice,
   noticeLinkChoice,
@@ -12,7 +15,9 @@ import {
   putawayRowMeta,
   receivingArrivalMeta,
   receivingRowMeta,
+  situacaoDaChegada,
   tarefaPrincipal,
+  tituloDaGuarda,
   unlinkedShipmentNotices,
 } from "./receiving";
 
@@ -75,7 +80,7 @@ describe("quadro do Receber", () => {
   });
 
   it("não quebra sem filas", () => {
-    expect(buildReceivingBoard(normalizeQueues(undefined))).toEqual({ check: [], store: [], done: [] });
+    expect(buildReceivingBoard(normalizeQueues(undefined))).toEqual({ check: [], guardando: [], store: [], done: [] });
   });
 
   it("a ação principal da tela (v3) é a da primeira a conferir, senão a primeira a guardar", () => {
@@ -304,5 +309,115 @@ describe("justificativa da divergência na chegada", () => {
     expect(problemaDaJustificativaDoRecebimento("")).toBe("Justifique a divergência física antes de concluir o recebimento.");
     expect(problemaDaJustificativaDoRecebimento("  Falta 2 cx  ")).toBe("Justifique a divergência física antes de concluir o recebimento.");
     expect(problemaDaJustificativaDoRecebimento("Faltaram 2 caixas")).toBeNull();
+  });
+});
+
+describe("a chegada por caixa na fila do Receber (parte 5e; mockup WmsReceberFila)", () => {
+  const caixa = (code: string, status: string) => ({ code, status }) as unknown as NonNullable<WarehouseTask["boxes"]>[number];
+  const porCaixa = (overrides: Partial<WarehouseTask> & { id: string }) =>
+    task({ reference: overrides.id, conference_mode: "per_box", invoice_number: "48.230", quantity: 71, ...overrides });
+  const fila = {
+    queues: {
+      receiving: {
+        key: "receiving",
+        tasks: [
+          porCaixa({ id: "inb_avulso_a", title: "AVL-A", status: "created" }),
+          porCaixa({
+            id: "inb_avulso_b",
+            title: "AVL-B",
+            status: "received",
+            can_advance: false,
+            putaway_status: "pending",
+            box_count: 2,
+            boxes_stored: 0,
+            received_at: "2026-11-03T19:14:00.000Z",
+            items: [
+              { id: "b1", line_number: 1, expected_quantity: 41, boxed_qty: 29, shortage: { qty: 12, boxed_qty: 29, expected_qty: 41, reason: "falta" } },
+              { id: "b2", line_number: 2, expected_quantity: 30, boxed_qty: 30 },
+            ],
+          }),
+          porCaixa({ id: "inb_avulso_c", title: "AVL-C", status: "received", can_advance: false, putaway_status: "completed", box_count: 1, boxes_stored: 1 }),
+        ],
+      },
+      putaway: {
+        key: "putaway",
+        tasks: [
+          task({
+            id: "put_box_cx131",
+            title: "Guardar caixa CX-000131",
+            box_code: "CX-000131",
+            destination_location_id: "B-02",
+            source_location_id: "RECEBIMENTO",
+            quantity: 41,
+            box_lines: [
+              { inbound_item_id: "b1", line_number: 1, sku_code: "BTG-000086", client_item_code: "A.01.0806.004.XG", product_name: "POLO MASCULINO PIQUET PRETO XG", size: "XG", counted_qty: 29 },
+              { inbound_item_id: "b2", line_number: 2, sku_code: "BTG-000087", client_item_code: "A.01.0806.004.GG", product_name: "POLO MASCULINO PIQUET PRETO GG", size: "GG", counted_qty: 12 },
+            ],
+          }),
+          task({
+            id: "put_box_cx132",
+            title: "Guardar caixa CX-000132",
+            box_code: "CX-000132",
+            source_location_id: "RECEBIMENTO",
+            quantity: 18,
+            box_lines: [
+              { inbound_item_id: "b2", line_number: 2, sku_code: "BTG-000087", client_item_code: "A.01.0806.004.GG", product_name: "POLO MASCULINO PIQUET PRETO GG", size: "GG", counted_qty: 18 },
+            ],
+          }),
+          task({ id: "put_area", title: "Guardar CALÇA SOCIAL MASCULINA PRETA 42", source: "wms_area_putaway", quantity: 6, source_location_id: "RECEBIMENTO" }),
+        ],
+      },
+    },
+  } as unknown as WarehouseOpsResponse;
+  const board = buildReceivingBoard(normalizeQueues(fila.queues));
+
+  it("a recebida com caixa por guardar fica em aberto, em Recebidas, por guardar (decisão 5); guardada, vai a Recebidos", () => {
+    expect(board.check.map(({ task }) => task.id)).toEqual(["inb_avulso_a"]);
+    expect(board.guardando.map(({ task }) => task.id)).toEqual(["inb_avulso_b"]);
+    expect(board.done.map(({ task }) => task.id)).toEqual(["inb_avulso_c"]);
+  });
+
+  it("a chegada a conferir diz o modo e as caixas; com caixa iniciada, ela já está em conferência", () => {
+    const aConferir = board.check[0]!.task;
+    expect(receivingRowMeta(aConferir)).toBe("Avulsa · a conferir · por caixa · NF 48.230 · 71 un.");
+    expect(situacaoDaChegada(aConferir)).toBe("a conferir");
+    const comCaixas = { ...aConferir, boxes: [caixa("CX-000131", "committing"), caixa("CX-000132", "counting")] };
+    expect(receivingRowMeta(comCaixas)).toBe("Avulsa · em conferência · por caixa · NF 48.230 · 71 un. · 2 caixas");
+    expect(situacaoDaChegada(comCaixas)).toBe("em conferência");
+    // A chegada por linha segue como antes.
+    expect(situacaoDaChegada({ ...comCaixas, conference_mode: null })).toBe("a conferir");
+  });
+
+  it("a recebida, por guardar: o que entrou nas caixas, a falta marcada e quando a entrada foi concluída", () => {
+    const meta = guardandoRowMeta(board.guardando[0]!.task);
+    expect(meta).toMatch(/^Avulsa · recebida · NF 48\.230 · 59 un\. · falta marcada 12 un\. · entrada concluída \d{2}\/\d{2}\/\d{4}/);
+  });
+
+  it("a guarda da caixa: o destino no título, o selo sem prateleira e o conteúdo com o nome em comum", () => {
+    const [comDestino, semDestino, daArea] = board.store.map(({ task }) => task);
+    expect(tituloDaGuarda(comDestino!)).toBe("Guardar caixa CX-000131 em B-02");
+    expect(guardaSemPrateleira(comDestino!)).toBe(false);
+    expect(putawayRowMeta(comDestino!)).toBe("POLO MASCULINO PIQUET PRETO XG 29 · GG 12 · 41 un. · está em RECEBIMENTO");
+    expect(tituloDaGuarda(semDestino!)).toBe("Guardar caixa CX-000132");
+    expect(guardaSemPrateleira(semDestino!)).toBe(true);
+    // A fila preenche o local da guarda sem prateleira com a origem: não é destino.
+    const comOrigemNoLocal = { ...semDestino!, location: "RECEBIMENTO", items: [{ id: "i", destination_location_id: "RECEBIMENTO", source_location_id: "RECEBIMENTO" }] };
+    expect(tituloDaGuarda(comOrigemNoLocal)).toBe("Guardar caixa CX-000132");
+    expect(guardaSemPrateleira(comOrigemNoLocal)).toBe(true);
+    expect(putawayRowMeta(semDestino!)).toBe("POLO MASCULINO PIQUET PRETO GG · 18 un. · está em RECEBIMENTO");
+    // A guarda aberta no Estoque (parte 7e) diz de onde veio.
+    expect(tituloDaGuarda(daArea!)).toBeNull();
+    expect(guardaSemPrateleira(daArea!)).toBe(false);
+    expect(putawayRowMeta(daArea!)).toBe("6 un. · está em RECEBIMENTO · aberta no Estoque");
+  });
+
+  it("o conteúdo sem nome em comum vai pelo nome de cada produto", () => {
+    expect(
+      conteudoDaGuarda([
+        { inbound_item_id: "x", line_number: 1, sku_code: "BTG-1", client_item_code: "C1", product_name: "CAMISA AZUL", size: "M", counted_qty: 3 },
+        { inbound_item_id: "y", line_number: 2, sku_code: "BTG-2", client_item_code: "C2", product_name: "CALÇA PRETA", size: "42", counted_qty: 2 },
+      ]),
+    ).toBe("CAMISA AZUL 3 · CALÇA PRETA 2 · 5 un.");
+    expect(conteudoDaGuarda([])).toBeNull();
   });
 });

@@ -56,6 +56,16 @@ describe("Receber na v3", () => {
     expect(TELA).toContain('desktop && fichaLarga && "xl:grid-cols-[minmax(280px,1fr)_minmax(480px,2.6fr)]"');
   });
 
+  it("a chegada por caixa recebida fica em Recebidas, por guardar, com as caixas guardadas, até a última guarda", () => {
+    expect(TELA).toContain('<QueueGroup title="Recebidas, por guardar" count={board.guardando.length} empty={null}>');
+    expect(TELA).toContain("{caixasGuardadas(entry.task)}");
+    expect(TELA).toContain("meta={guardandoRowMeta(entry.task)}");
+    expect(TELA).toContain("board.check.length + board.guardando.length + board.store.length");
+    // A guarda da caixa: o destino no título e o selo sem prateleira.
+    expect(TELA).toContain("title={tituloDaGuarda(entry.task) ?? getTaskTitle(entry.task)}");
+    expect(TELA).toMatch(/guardaSemPrateleira\(entry\.task\) \?[\s\S]{0,240}sem prateleira/);
+  });
+
   it("a chegada avulsa: o diálogo não explica, e o fornecedor e a NF têm rótulo ligado ao campo", () => {
     expect(AVULSA).not.toContain("Use quando o fornecedor entregou sem aviso");
     expect(AVULSA).toMatch(/<Label htmlFor="chegada-fornecedor">Fornecedor<\/Label>\s*<Input\s+id="chegada-fornecedor"/);

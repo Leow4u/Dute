@@ -11,16 +11,26 @@ import {
   normalizeStatus,
   statusLabel,
 } from "./model";
+import { chegadaPorCaixa, totaisDaChegada } from "../wms/caixas-do-recebimento";
 
 /**
- * Receber em três grupos, como Pedidos: o que chegou e precisa de
- * conferência, o que foi conferido e espera endereço, e o que terminou.
+ * Receber em grupos, como Pedidos: o que chegou e precisa de conferência, o
+ * que foi conferido e espera endereço, e o que terminou. A chegada por caixa
+ * recebida fica em aberto até a última guarda (decisão 5): "Recebidas, por
+ * guardar".
  */
 export type ReceivingBoard = {
   check: TaskQueueEntry[];
+  /** A chegada por caixa com a entrada concluída e caixa ainda por guardar. */
+  guardando: TaskQueueEntry[];
   store: TaskQueueEntry[];
   done: TaskQueueEntry[];
 };
+
+/** A chegada por caixa recebida e ainda com caixa por guardar. */
+export function recebidaPorGuardar(task: WarehouseTask) {
+  return chegadaPorCaixa(task) && normalizeStatus(task.status) === "received" && task.putaway_status === "pending";
+}
 
 function lastActivityTime(task: WarehouseTask) {
   const events = task.timeline ?? [];
@@ -40,9 +50,10 @@ export function buildReceivingBoard(queues: NormalizedQueue[]): ReceivingBoard {
   const putaway = entriesOf("putaway");
   return {
     check: receiving.filter(({ task }) => !isTerminalTask(task)),
+    guardando: receiving.filter(({ task }) => recebidaPorGuardar(task)),
     store: putaway.filter(({ task }) => !isTerminalTask(task)),
     done: [...receiving, ...putaway]
-      .filter(({ task }) => isTerminalTask(task))
+      .filter(({ task }) => isTerminalTask(task) && !recebidaPorGuardar(task))
       .sort((left, right) => lastActivityTime(right.task) - lastActivityTime(left.task)),
   };
 }
@@ -253,10 +264,38 @@ export function receivingArrivalMeta(
     .join(" · ");
 }
 
+/**
+ * A situação da chegada por caixa: com caixa iniciada, ela já está em
+ * conferência, embora o servidor só mude a chegada na conclusão.
+ */
+export function situacaoDaChegada(task: WarehouseTask) {
+  if (chegadaPorCaixa(task) && normalizeStatus(task.status) === "created" && (task.boxes?.length ?? 0) > 0) {
+    return statusLabel("checking");
+  }
+  return statusLabel(task.status);
+}
+
+function caixasText(count: number) {
+  return count ? `${formatNumber(count)} ${count === 1 ? "caixa" : "caixas"}` : null;
+}
+
 /** "Prevista · em conferência · 1 linha · 1.000 un. · prazo 09/10/2026, 14:00" */
 export function receivingRowMeta(task: WarehouseTask) {
   const lines = task.items?.length ?? 0;
   const status = normalizeStatus(task.status);
+  // A chegada por caixa: o modo, a NF e as caixas (mockups WmsReceberFila e WmsRecebimentoCaixa).
+  if (chegadaPorCaixa(task)) {
+    return [
+      isUnplannedReceipt(task) ? "Avulsa" : "Prevista",
+      situacaoDaChegada(task),
+      "por caixa",
+      task.invoice_number ? `NF ${task.invoice_number}` : null,
+      unitsText(task),
+      caixasText(task.boxes?.length ?? 0),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
   return [
     isUnplannedReceipt(task) ? "Avulsa" : "Prevista",
     status && status !== "planned" ? statusLabel(task.status) : null,
@@ -268,11 +307,79 @@ export function receivingRowMeta(task: WarehouseTask) {
     .join(" · ");
 }
 
+/** "Avulsa · recebida · NF 48.230 · 59 un. · falta marcada 12 un. · entrada concluída 03/11/2026, 16:14" */
+export function guardandoRowMeta(task: WarehouseTask) {
+  const linhas = (task.items ?? []).map((item) => ({ ...item, id: item.id ?? "" }));
+  const totais = totaisDaChegada(linhas);
+  return [
+    isUnplannedReceipt(task) ? "Avulsa" : "Prevista",
+    statusLabel(task.status),
+    task.invoice_number ? `NF ${task.invoice_number}` : null,
+    `${formatNumber(totais.emCaixas)} un.`,
+    totais.faltaMarcada ? `falta marcada ${formatNumber(totais.faltaMarcada)} un.` : null,
+    task.received_at ? `entrada concluída ${formatDate(task.received_at)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** O destino da guarda; o "local" igual à origem (a fila preenche assim a guarda sem prateleira) não é destino. */
+function destinoDaGuarda(task: WarehouseTask) {
+  const firstItem = task.items?.[0];
+  const origem = coerceText(task.source_location_id, firstItem?.source_location_id) || "RECEBIMENTO";
+  const destino = coerceText(task.destination_location_id, task.location, firstItem?.destination_location_id);
+  return destino && destino.toUpperCase() !== origem.toUpperCase() ? destino : "";
+}
+
+/** "Guardar caixa CX-000131 em B-02"; sem destino, só a caixa. */
+export function tituloDaGuarda(task: WarehouseTask) {
+  if (!task.box_code) return null;
+  const destino = destinoDaGuarda(task);
+  return destino ? `Guardar caixa ${task.box_code} em ${destino}` : `Guardar caixa ${task.box_code}`;
+}
+
+/** A guarda da caixa que ainda não tem prateleira (decisão 14): o selo "sem prateleira". */
+export function guardaSemPrateleira(task: WarehouseTask) {
+  return Boolean(task.box_code) && !destinoDaGuarda(task);
+}
+
+/**
+ * O conteúdo da caixa na fila: o produto e o tamanho com a quantidade, e o
+ * total. "POLO MASCULINO PIQUET PRETO XG 29 · GG 12 · 41 un." quando os
+ * produtos têm o nome em comum; "POLO MASCULINO PIQUET PRETO GG · 18 un."
+ * com um só.
+ */
+export function conteudoDaGuarda(lines: WarehouseTask["box_lines"]) {
+  const linhas = (lines ?? []).filter((linha) => linha && coerceNumber(linha.counted_qty) > 0);
+  if (!linhas.length) return null;
+  const total = linhas.reduce((soma, linha) => soma + coerceNumber(linha.counted_qty), 0);
+  const nome = (linha: (typeof linhas)[number]) => coerceText(linha.product_name, linha.client_item_code, linha.sku_code);
+  if (linhas.length === 1) return `${nome(linhas[0]!)} · ${formatNumber(total)} un.`;
+  const palavras = linhas.map((linha) => nome(linha).split(/\s+/).filter(Boolean));
+  const comum: string[] = [];
+  for (const [indice, palavra] of palavras[0]!.entries()) {
+    if (palavras.every((outra) => outra[indice] === palavra)) comum.push(palavra);
+    else break;
+  }
+  const partes = linhas.map((linha, indice) => {
+    const resto = palavras[indice]!.slice(comum.length).join(" ") || coerceText(linha.size, linha.client_item_code, linha.sku_code);
+    return `${resto} ${formatNumber(coerceNumber(linha.counted_qty))}`;
+  });
+  const prefixo = comum.length ? `${comum.join(" ")} ` : "";
+  return `${prefixo}${partes.join(" · ")} · ${formatNumber(total)} un.`;
+}
+
 /** "280 un. · está em RECEBIMENTO · guardar em A-03-2" */
 export function putawayRowMeta(task: WarehouseTask) {
   const firstItem = task.items?.[0];
   const source =
     coerceText(task.source_location_id, firstItem?.source_location_id) || "RECEBIMENTO";
+  // A guarda da caixa: o conteúdo e onde ela está; o destino vai no título.
+  if (task.box_code) {
+    return [conteudoDaGuarda(task.box_lines) ?? unitsText(task), `está em ${source}`, normalizeStatus(task.status) === "in_progress" ? "em execução" : null]
+      .filter(Boolean)
+      .join(" · ");
+  }
   const destination = coerceText(
     task.destination_location_id,
     task.location,
@@ -286,6 +393,8 @@ export function putawayRowMeta(task: WarehouseTask) {
       ? `guardar em ${destination}`
       : null,
     status === "in_progress" ? "em execução" : null,
+    // A guarda aberta no Estoque (parte 7e, decisão 16).
+    task.source === "wms_area_putaway" ? "aberta no Estoque" : null,
   ]
     .filter(Boolean)
     .join(" · ");

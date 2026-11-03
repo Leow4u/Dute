@@ -574,4 +574,47 @@ describe("as linhas das tarefas da fila chegam inteiras", () => {
       ["POLO GG", 12],
     ]);
   });
+
+  it("a chegada por caixa recebida traz quando a entrada foi concluída, e a guarda aberta no Estoque diz de onde veio (parte 5e)", async () => {
+    const receiptId = "inb_avulso_caixa2";
+    const filas: Colecoes = {
+      inbound_receipts: [
+        registro(receiptId, {
+          receipt_number: "AVL-CX2",
+          invoice_number: "48231",
+          status: "received",
+          conference_mode: "per_box",
+          putaway_status: "pending",
+          box_count: 2,
+          boxes_stored: 0,
+          created_at: hora(1000),
+          received_at: hora(1100),
+          updated_at: hora(1100),
+        }),
+      ],
+      putaway_tasks: [
+        registro("put_area_1", {
+          title: "Guardar CALÇA SOCIAL 42",
+          sku_code: "BTG-000092",
+          quantity: 6,
+          total_units: 6,
+          status: "planned",
+          source: "wms_area_putaway",
+          source_location_id: "RECEBIMENTO",
+          updated_at: hora(1101),
+        }),
+      ],
+    };
+    comoOFirestore(juntar(...historico(), filas, chegada("d4b8a0", "received", 2, 1000)));
+
+    const ops = await lerAsFilas();
+    const recebida = ops.queues.receiving!.tasks.find((candidata) => candidata.reference === receiptId) as WarehouseTask;
+    expect(recebida).toMatchObject({ conference_mode: "per_box", putaway_status: "pending", box_count: 2, boxes_stored: 0 });
+    expect(recebida.received_at).toBe(new Date(hora(1100)).toISOString());
+    // A chegada por linha não leva a data: a fila dela não mudou.
+    const porLinha = ops.queues.receiving!.tasks.find((candidata) => candidata.reference === "inb_creq_d4b8a0") as WarehouseTask;
+    expect(porLinha.received_at).toBeUndefined();
+    const daArea = ops.queues.putaway!.tasks.find((candidata) => candidata.reference === "put_area_1") as WarehouseTask;
+    expect(daArea.source).toBe("wms_area_putaway");
+  });
 });
