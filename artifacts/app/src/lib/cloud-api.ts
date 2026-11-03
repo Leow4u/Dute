@@ -1464,6 +1464,18 @@ function laneTask(input: {
   customer_request_id?: string;
   order_id?: string;
   inbound_id?: string;
+  /** A chegada por caixa (recebimento com caixas, parte 5): o modo e as caixas. */
+  conference_mode?: string;
+  receipt_number?: string;
+  invoice_number?: string;
+  box_count?: number;
+  boxes_stored?: number;
+  putaway_status?: string;
+  boxes?: AnyRecord[];
+  /** A guarda da caixa: a caixa, a chegada e o conteúdo. */
+  box_code?: string;
+  receipt_id?: string;
+  box_lines?: AnyRecord[];
 }) {
   return {
     task_uid: `${input.type}:${input.id}`,
@@ -1486,6 +1498,16 @@ function laneTask(input: {
     customer_request_id: input.customer_request_id,
     order_id: input.order_id,
     inbound_id: input.inbound_id,
+    conference_mode: input.conference_mode,
+    receipt_number: input.receipt_number,
+    invoice_number: input.invoice_number,
+    box_count: input.box_count,
+    boxes_stored: input.boxes_stored,
+    putaway_status: input.putaway_status,
+    boxes: input.boxes,
+    box_code: input.box_code,
+    receipt_id: input.receipt_id,
+    box_lines: input.box_lines,
   };
 }
 
@@ -1637,13 +1659,17 @@ async function getWarehouseOps() {
   // do pedido novo chegava sem itens.
   const idsOf = (tasks: AnyRecord[]) => tasks.map((task) => String(task.id));
   const orderIdsOf = (tasks: AnyRecord[]) => tasks.map((task) => String(task.order_id ?? ""));
-  const [inboundItems, pickLines, orderItems, stockReservations] = await Promise.all([
+  // A chegada por caixa (parte 5): as caixas dela, pelo receipt_id que a caixa grava no topo.
+  const porCaixa = queued.receiving.filter((receipt) => String(receipt.conference_mode ?? "") === "per_box");
+  const [inboundItems, pickLines, orderItems, stockReservations, receiptBoxes] = await Promise.all([
     readWhereIn(collectionNames.inboundItems, "receipt_id", idsOf(queued.receiving)),
     readWhereIn(collectionNames.pickLines, "pick_task_id", idsOf(queued.picking)),
     readWhereIn(collectionNames.orderItems, "order_id", orderIdsOf([...queued.picking, ...queued.packing])),
     readWhereIn(collectionNames.stockReservations, "order_id", orderIdsOf(queued.picking)),
+    readWhereIn(collectionNames.warehouseBoxes, "receipt_id", idsOf(porCaixa)),
   ]);
   const inboundItemsByReceipt = groupByField(inboundItems, "receipt_id");
+  const boxesByReceipt = groupByField(receiptBoxes, "receipt_id");
   const pickLinesByTask = groupByField(pickLines, "pick_task_id");
   const orderItemsByOrder = groupByField(orderItems, "order_id");
   const reservationsByOrder = groupByField(stockReservations, "order_id");
@@ -1707,7 +1733,44 @@ async function getWarehouseOps() {
       notes: item.notes,
       status: item.status,
       location: item.location_id,
+      // A chegada por caixa (parte 5): o que está nas caixas e a falta marcada.
+      line_number: item.line_number === undefined ? undefined : Number(item.line_number),
+      boxed_qty: item.boxed_qty === undefined ? undefined : Number(item.boxed_qty),
+      box_codes: Array.isArray(item.box_codes) ? item.box_codes.map(String) : undefined,
+      shortage: item.shortage && typeof item.shortage === "object" ? item.shortage : undefined,
     }));
+
+  /** A caixa da chegada como a ficha a mostra (lib/wms/caixas-do-recebimento.ts). */
+  const receiptBoxesFor = (receipt: AnyRecord) =>
+    (boxesByReceipt.get(String(receipt.id)) ?? [])
+      .map((box) => ({
+        code: String(box.code ?? box.id),
+        status: String(box.status ?? ""),
+        location_id: String(box.location_id ?? ""),
+        lines: Array.isArray(box.lines)
+          ? (box.lines as AnyRecord[]).map((line) => ({
+              inbound_item_id: String(line.inbound_item_id ?? ""),
+              line_number: Number(line.line_number ?? 0),
+              sku_code: String(line.sku_code ?? ""),
+              client_item_code: String(line.client_item_code ?? ""),
+              product_name: String(line.product_name ?? ""),
+              size: line.size == null ? null : String(line.size),
+              counted_qty: Number(line.counted_qty ?? 0),
+            }))
+          : [],
+        unit_count: Number(box.status === "stored" ? box.unit_count ?? 0 : box.draft_unit_count ?? 0),
+        length_m: box.length_m == null ? null : Number(box.length_m),
+        width_m: box.width_m == null ? null : Number(box.width_m),
+        height_m: box.height_m == null ? null : Number(box.height_m),
+        gross_weight_kg: box.gross_weight_kg == null ? null : Number(box.gross_weight_kg),
+        allow_tilt: box.allow_tilt === true,
+        allow_stacking: box.allow_stacking === true,
+        conference_revision: Number(box.conference_revision ?? 0),
+        refused_positions: Array.isArray(box.refusals)
+          ? (box.refusals as AnyRecord[]).map((refusal) => String(refusal.position ?? "").toUpperCase()).filter(Boolean)
+          : [],
+      }))
+      .sort((left, right) => left.code.localeCompare(right.code));
 
   const pickingItemsFor = (task: AnyRecord) => {
     const lines =
@@ -1771,6 +1834,13 @@ async function getWarehouseOps() {
             : undefined,
           customer_request_id: receipt.customer_request_id,
           inbound_id: String(receipt.id),
+          conference_mode: receipt.conference_mode === "per_box" ? "per_box" : undefined,
+          receipt_number: receipt.receipt_number == null ? undefined : String(receipt.receipt_number),
+          invoice_number: receipt.invoice_number == null ? undefined : String(receipt.invoice_number),
+          box_count: receipt.box_count == null ? undefined : Number(receipt.box_count),
+          boxes_stored: receipt.boxes_stored == null ? undefined : Number(receipt.boxes_stored),
+          putaway_status: receipt.putaway_status == null ? undefined : String(receipt.putaway_status),
+          boxes: receipt.conference_mode === "per_box" ? receiptBoxesFor(receipt) : undefined,
         });
       }),
     },
@@ -1817,6 +1887,10 @@ async function getWarehouseOps() {
           ],
           timeline: timelineForTask(task, "Putaway criado"),
           exception_count: exceptionCountFor(String(task.id)),
+          box_code: task.box_code ? String(task.box_code) : undefined,
+          receipt_id: task.receipt_id ? String(task.receipt_id) : undefined,
+          receipt_number: task.receipt_number ? String(task.receipt_number) : undefined,
+          box_lines: task.box_code && Array.isArray(task.lines) ? (task.lines as AnyRecord[]) : undefined,
         });
       }),
     },
@@ -2000,6 +2074,17 @@ async function getWarehouseOps() {
           items: task.items,
           timeline: task.timeline,
           customer_request_id: task.customer_request_id,
+          // A chegada por caixa e a guarda da caixa (recebimento com caixas, parte 5).
+          conference_mode: task.conference_mode,
+          receipt_number: task.receipt_number,
+          invoice_number: task.invoice_number,
+          box_count: task.box_count,
+          boxes_stored: task.boxes_stored,
+          putaway_status: task.putaway_status,
+          boxes: task.boxes,
+          box_code: task.box_code,
+          receipt_id: task.receipt_id,
+          box_lines: task.box_lines,
           // A tarefa cancelada com o pedido (pergunta 59) também não avança.
           can_advance:
             !String(task.source ?? "").startsWith("derived_from_") &&

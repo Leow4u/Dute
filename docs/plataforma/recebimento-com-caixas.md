@@ -596,6 +596,31 @@ desenhada e aprovada antes do PR de tela.
    fila mudam, e seis telas novas mostram marcar a falta, a caixa sem
    prateleira livre na bancada, a ficha pronta para concluir, a guarda sem
    prateleira (no computador e no celular) e o "Não cabe aqui" na guarda.
+   Em PRs pequenos, nesta ordem:
+   - **5a, os dados e as regras no app:** feita em 03/11/2026. O Receber
+     (`getWarehouseOps`, em `lib/cloud-api.ts`) passa a trazer da chegada o
+     modo (`conference_mode`), o número, a NF, `box_count`, `boxes_stored`,
+     `putaway_status` e, da chegada por caixa aberta, as caixas dela
+     (`warehouse_boxes` pelo `receipt_id` que a caixa grava no topo, só
+     dessas chegadas); a linha da NF traz `line_number`, `boxed_qty`,
+     `box_codes` e a falta marcada; a guarda traz `box_code`, a chegada e o
+     conteúdo da caixa. `lib/wms/caixas-do-recebimento.ts` tem as chamadas
+     às callables da caixa e as regras que a tela mostra antes de chamar,
+     espelhadas de `entradaPorCaixa`: a situação de cada linha (OK, faltam,
+     sobram, falta marcada, marca velha), o que impede concluir, na ordem do
+     servidor (nenhuma caixa, a caixa vazia ou em conferência, a linha sem
+     falta marcada; a caixa sem prateleira não impede), quando a conclusão
+     pede a justificativa e o selo da caixa. Nada muda na tela. Testes:
+     `caixas-do-recebimento.test.ts` e um caso novo em
+     `cloud-api-warehouse.test.ts`.
+   - **5b, a bancada:** iniciar, lançar, fechar, reabrir e remover a caixa.
+   - **5c, o destino na bancada:** a sugestão, escolher a prateleira,
+     confirmar e "Não cabe aqui", e a caixa sem prateleira livre.
+   - **5d, as linhas da NF:** "Marcar falta", a justificativa e "Concluir
+     entrada".
+   - **5e, a fila:** "Recebidas, por guardar" e a guarda por caixa na lista.
+   - **5f, a guarda da caixa:** o destino na guarda, "Concluir guarda" e
+     "Não cabe aqui", no computador e no celular.
 6. **Etiquetas:** caixa `committing` com destino, origem "Recebimento", o
    conteúdo da caixa do recebimento na etiqueta e no Mapa, "Etiquetas da
    chegada", reimpressão com evento.

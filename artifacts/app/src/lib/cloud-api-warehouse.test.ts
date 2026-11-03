@@ -29,7 +29,7 @@ vi.mock("firebase/firestore", async (importOriginal) => {
 
 import { installCloudApi } from "./cloud-api";
 import { buildOrderQueue } from "./order-queue";
-import type { WarehouseOpsResponse } from "./warehouse-ops/model";
+import type { WarehouseOpsResponse, WarehouseTask } from "./warehouse-ops/model";
 
 function document(id: string, data: Record<string, unknown>) {
   return { id, data: () => data, get: (field: string) => data[field] };
@@ -439,5 +439,139 @@ describe("as linhas das tarefas da fila chegam inteiras", () => {
     expect(lidos("stock_reservations", "order_id")).toEqual(pedidosDaSeparacao);
     expect(naFila("receiving").size).toBe(13);
     expect(lidos("inbound_items", "receipt_id")).toEqual(naFila("receiving"));
+  });
+  it("a chegada por caixa chega com as caixas e as linhas com o que está nelas, e a guarda com a caixa (recebimento com caixas, parte 5)", async () => {
+    const receiptId = "inb_avulso_caixa1";
+    const linhaDaCaixa = (item: string, numero: number, sku: string, quantidade: number) => ({
+      inbound_item_id: item,
+      line_number: numero,
+      sku_code: sku,
+      client_item_code: `A.01.0806.004.${numero === 1 ? "XG" : "GG"}`,
+      product_name: `POLO ${numero === 1 ? "XG" : "GG"}`,
+      size: numero === 1 ? "XG" : "GG",
+      counted_qty: quantidade,
+    });
+    const doCliente = (id: string, dados: Record<string, unknown>) => document(id, { customer_code: "BTG Pactual", ...dados });
+    const porCaixa: Colecoes = {
+      inbound_receipts: [
+        registro(receiptId, {
+          receipt_number: "AVL-CX1",
+          invoice_number: "48230",
+          status: "checking",
+          conference_mode: "per_box",
+          created_at: hora(1000),
+          updated_at: hora(1000),
+        }),
+      ],
+      inbound_items: [
+        registro(`${receiptId}_01`, {
+          receipt_id: receiptId,
+          line_number: 1,
+          sku_code: "BTG-000086",
+          product_name: "POLO XG",
+          expected_qty: 41,
+          received_qty: 0,
+          boxed_qty: 29,
+          box_codes: ["CX-000131"],
+          shortage: { qty: 12, boxed_qty: 29, expected_qty: 41, reason: "falta", detail: "Volume 3" },
+          status: "expected",
+        }),
+        registro(`${receiptId}_02`, {
+          receipt_id: receiptId,
+          line_number: 2,
+          sku_code: "BTG-000087",
+          product_name: "POLO GG",
+          expected_qty: 30,
+          received_qty: 0,
+          boxed_qty: 30,
+          box_codes: ["CX-000131", "CX-000132"],
+          status: "expected",
+        }),
+      ],
+      warehouse_boxes: [
+        doCliente("CX-000132", {
+          code: "CX-000132",
+          status: "counting",
+          receipt_id: receiptId,
+          location_id: "",
+          lines: [linhaDaCaixa(`${receiptId}_02`, 2, "BTG-000087", 18)],
+          draft_unit_count: 18,
+          unit_count: 0,
+          conference_revision: 3,
+          refusals: [],
+        }),
+        doCliente("CX-000131", {
+          code: "CX-000131",
+          status: "committing",
+          receipt_id: receiptId,
+          location_id: "B-02",
+          lines: [linhaDaCaixa(`${receiptId}_01`, 1, "BTG-000086", 29), linhaDaCaixa(`${receiptId}_02`, 2, "BTG-000087", 12)],
+          draft_unit_count: 41,
+          unit_count: 0,
+          length_m: 0.48,
+          width_m: 0.38,
+          height_m: 0.3,
+          gross_weight_kg: 9.4,
+          allow_tilt: true,
+          allow_stacking: false,
+          conference_revision: 7,
+          refusals: [{ position: "b-03", reason: "Cheia" }],
+        }),
+        // A caixa da abertura não é de chegada nenhuma.
+        doCliente("CX-000020", { code: "CX-000020", status: "stored", location_id: "A-01", lines: [] }),
+      ],
+      putaway_tasks: [
+        registro("put_box_abc", {
+          receipt_id: receiptId,
+          receipt_number: "AVL-CX1",
+          box_code: "CX-000131",
+          lines: [linhaDaCaixa(`${receiptId}_01`, 1, "BTG-000086", 29), linhaDaCaixa(`${receiptId}_02`, 2, "BTG-000087", 12)],
+          sku_codes: ["BTG-000086", "BTG-000087"],
+          quantity: 41,
+          total_units: 41,
+          status: "planned",
+          source_location_id: "RECEBIMENTO",
+          destination_location_id: "B-02",
+          updated_at: hora(1001),
+        }),
+      ],
+    };
+    comoOFirestore(juntar(...historico(), porCaixa, chegada("d4b8a0", "created", 2, 1000)));
+
+    const ops = await lerAsFilas();
+    const tarefa = ops.queues.receiving!.tasks.find((candidata) => candidata.reference === receiptId) as WarehouseTask;
+    expect(tarefa).toMatchObject({ conference_mode: "per_box", receipt_number: "AVL-CX1", invoice_number: "48230" });
+    // As caixas pelo código, com a revisão que a próxima escrita manda.
+    expect(tarefa.boxes!.map((item) => [item.code, item.status, item.location_id, item.unit_count, item.conference_revision])).toEqual([
+      ["CX-000131", "committing", "B-02", 41, 7],
+      ["CX-000132", "counting", "", 18, 3],
+    ]);
+    expect(tarefa.boxes![0]).toMatchObject({
+      length_m: 0.48,
+      gross_weight_kg: 9.4,
+      allow_tilt: true,
+      allow_stacking: false,
+      refused_positions: ["B-03"],
+    });
+    expect(tarefa.boxes![1]!.lines).toEqual([linhaDaCaixa(`${receiptId}_02`, 2, "BTG-000087", 18)]);
+    // A linha da NF com o que está nas caixas e a falta marcada.
+    expect(tarefa.items!.map((item) => [item.line_number, item.boxed_qty, item.box_codes, (item.shortage as { qty?: number } | undefined)?.qty])).toEqual([
+      [1, 29, ["CX-000131"], 12],
+      [2, 30, ["CX-000131", "CX-000132"], undefined],
+    ]);
+
+    // A chegada por linha não ganha caixas, e só as caixas da chegada por caixa são lidas.
+    const porLinha = ops.queues.receiving!.tasks.find((candidata) => candidata.reference === "inb_creq_d4b8a0") as WarehouseTask;
+    expect(porLinha.conference_mode).toBeUndefined();
+    expect(porLinha.boxes).toBeUndefined();
+    expect((devolvidos.warehouse_boxes ?? []).map((documento) => documento.id).sort()).toEqual(["CX-000131", "CX-000132"]);
+
+    // A guarda da caixa leva a caixa, a chegada e o conteúdo.
+    const guarda = ops.queues.putaway!.tasks.find((candidata) => candidata.reference === "put_box_abc") as WarehouseTask;
+    expect(guarda).toMatchObject({ box_code: "CX-000131", receipt_id: receiptId, receipt_number: "AVL-CX1" });
+    expect(guarda.box_lines!.map((item) => [item.product_name, item.counted_qty])).toEqual([
+      ["POLO XG", 29],
+      ["POLO GG", 12],
+    ]);
   });
 });
