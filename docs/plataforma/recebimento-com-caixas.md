@@ -473,9 +473,16 @@ desenhada e aprovada antes do PR de tela.
      `boxReceiptLineLocation` em `inbound-mode.ts`). A chegada por linha
      guarda o local como veio. Testes: `inbound-mode.test.ts` e
      `inbound-mode.integration.test.ts`.
-   - **4b, a guarda genérica:** a tarefa de guarda da caixa não anda pelo
-     avanço genérico, e a guarda por linha move no máximo a quantidade da
-     tarefa (decisão 23).
+   - **4b, a guarda genérica:** feita em 02/11/2026. A tarefa de guarda
+     com `box_code` não anda pelo avanço genérico, com ou sem destino ("A
+     guarda da caixa CX-… é feita pela guarda da caixa: a prateleira e o
+     conteúdo vêm dela.", `assertLinePutaway`), e a guarda por linha move no
+     máximo a quantidade da tarefa ("A tarefa guarda no máximo 10 un. de
+     …", `putawayQuantityWithinTask`, decisão 23); o "+" do painel de guarda
+     para na quantidade da tarefa. A tarefa sem quantidade gravada não tem
+     teto, e a guarda parcial continua valendo. Testes:
+     `inbound-mode.test.ts`, `inbound-mode.integration.test.ts` e
+     `task-detail.test.tsx`.
    - **4c, marcar falta:** na linha da NF da chegada por caixa, pela
      operação, com o motivo (falta ou avaria, decisão 17); grava só a
      linha, nunca a chegada. A marca da linha que depois foi coberta não

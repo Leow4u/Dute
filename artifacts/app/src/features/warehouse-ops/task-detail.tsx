@@ -427,6 +427,17 @@ function PhysicalLineChecklist({
   );
 }
 
+/**
+ * O próximo valor do + e do − da guarda: de uma em uma unidade, sem passar da
+ * quantidade da tarefa (decisão 23) e sem cair abaixo de uma unidade, ou da
+ * tarefa, quando ela é menor. Tarefa sem quantidade não tem teto.
+ */
+export function passoDaGuarda(quantidade: number, daTarefa: number, sentido: 1 | -1): number {
+  const proximo = Math.round((quantidade + sentido) * 1000) / 1000;
+  if (sentido > 0) return daTarefa > 0 ? Math.min(daTarefa, proximo) : proximo;
+  return Math.max(daTarefa > 0 ? Math.min(1, daTarefa) : 1, proximo);
+}
+
 export function PutawayDetailSection({
   task,
   operation,
@@ -448,16 +459,18 @@ export function PutawayDetailSection({
   onQueryChange: (query: string) => void;
 }) {
   const firstItem = task.items?.[0];
-  const quantity = coerceNumber(
+  // A guarda leva no máximo a quantidade da tarefa (o servidor recusa o resto).
+  const taskQuantity = coerceNumber(
     Number(
-      operation.quantity ??
-        task.quantity ??
+      task.quantity ??
         task.total_units ??
         firstItem?.quantity ??
         firstItem?.expected_quantity ??
         0,
     ),
   );
+  const quantity = coerceNumber(Number(operation.quantity ?? taskQuantity));
+  const atLimit = taskQuantity > 0 && quantity >= taskQuantity;
   const sourceLocation =
     coerceText(operation.source_location_id, task.source_location_id, firstItem?.source_location_id) ||
     "RECEBIMENTO";
@@ -554,7 +567,7 @@ export function PutawayDetailSection({
             variant="outline"
             size="icon"
             onClick={() =>
-              onOperationChange({ ...operation, quantity: Math.max(1, quantity - 1) })
+              onOperationChange({ ...operation, quantity: passoDaGuarda(quantity, taskQuantity, -1) })
             }
           >
             −
@@ -564,7 +577,8 @@ export function PutawayDetailSection({
             type="button"
             variant="outline"
             size="icon"
-            onClick={() => onOperationChange({ ...operation, quantity: quantity + 1 })}
+            disabled={atLimit}
+            onClick={() => onOperationChange({ ...operation, quantity: passoDaGuarda(quantity, taskQuantity, 1) })}
           >
             +
           </Button>
