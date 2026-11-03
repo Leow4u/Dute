@@ -108,6 +108,7 @@ import {
   toQueueKey,
 } from "@/lib/warehouse-ops/model";
 import {
+  destinoDaGuarda,
   linhasDivergentesDoRecebimento,
   pedeJustificativaDoRecebimento,
   problemaDaJustificativaDoRecebimento,
@@ -586,6 +587,38 @@ export function PutawayDetailSection({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * A guarda concluída ou cancelada: só onde ficou e quanto, sem o seletor de
+ * posição nem o + e o −, que não gravam mais nada.
+ */
+export function GuardaEncerrada({ task }: { task: WarehouseTask }) {
+  const concluida = normalizeStatus(task.status) === "completed";
+  const destino = destinoDaGuarda(task);
+  const origem = coerceText(task.source_location_id, task.items?.[0]?.source_location_id) || "RECEBIMENTO";
+  const quantidade = coerceNumber(Number(task.quantity ?? task.total_units ?? 0));
+  const linhas: Array<[string, string]> = concluida
+    ? [
+        ["Guardada em", destino || "—"],
+        ["Quantidade", quantidade ? `${formatNumber(quantidade)} un.` : "—"],
+        ["Origem", origem],
+      ]
+    : [
+        ["Situação", "Guarda cancelada"],
+        ["Quantidade", quantidade ? `${formatNumber(quantidade)} un.` : "—"],
+        ["Ficou em", origem],
+      ];
+  return (
+    <dl className="grid gap-3 rounded-lg border border-border bg-card p-3 sm:grid-cols-3">
+      {linhas.map(([rotulo, valor]) => (
+        <div key={rotulo} className="min-w-0">
+          <dt className="text-xs text-muted-foreground">{rotulo}</dt>
+          <dd className="mt-1 truncate text-sm font-semibold text-foreground">{valor}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -1864,6 +1897,8 @@ export function TaskDetailPanel({
             onLineConfirmationChange={onLineConfirmationChange}
             onOpenException={onOpenException}
           />
+        ) : isPutaway && isTerminalTask(task) ? (
+          <GuardaEncerrada task={task} />
         ) : isPutaway ? (
           <PutawayDetailSection
             task={task}

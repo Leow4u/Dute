@@ -79,6 +79,16 @@ describe("quadro do Receber", () => {
     );
   });
 
+  it("a guarda concluída diz onde ficou, não a origem nem \"guardar em\"", () => {
+    const putaway = board.store[0].task;
+    const concluida = { ...putaway, status: "completed", destination_location_id: "B-02", quantity: 41 };
+    expect(putawayRowMeta(concluida)).toBe("41 un. · guardada em B-02");
+    expect(putawayRowMeta({ ...concluida, status: "cancelled" })).toBe("41 un. · guarda cancelada");
+    expect(putawayRowMeta({ ...concluida, box_code: "CX-000132", box_lines: [{ sku_code: "S", product_name: "POLO", counted_qty: 41 }] })).toBe(
+      "POLO · 41 un. · guardada em B-02",
+    );
+  });
+
   it("não quebra sem filas", () => {
     expect(buildReceivingBoard(normalizeQueues(undefined))).toEqual({ check: [], guardando: [], store: [], done: [] });
   });

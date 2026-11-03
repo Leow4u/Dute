@@ -3,7 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { normalizeQueues, type OpsAlert, type WarehouseTask } from "@/lib/warehouse-ops/model";
-import { PutawayDetailSection, TaskDetailPanel, passoDaGuarda } from "./task-detail";
+import { textosForaDaLista } from "@/test/textos";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { GuardaEncerrada, PutawayDetailSection, TaskDetailPanel, passoDaGuarda } from "./task-detail";
 
 const guardTask: WarehouseTask = {
   id: "putaway:put_1",
@@ -18,8 +20,8 @@ const guardTask: WarehouseTask = {
   items: [{ id: "pi_1", sku_code: "TT-0019", quantity: 50 }],
 };
 
-function guardPanel(alerts: OpsAlert[]) {
-  const queue = normalizeQueues({ putaway: { key: "putaway", name: "Guarda", tasks: [guardTask] } }).find(
+function guardPanel(alerts: OpsAlert[], task: WarehouseTask = guardTask) {
+  const queue = normalizeQueues({ putaway: { key: "putaway", name: "Guarda", tasks: [task] } }).find(
     (entry) => entry.key === "putaway",
   )!;
   return renderToStaticMarkup(
@@ -99,5 +101,28 @@ describe("ficha da guarda", () => {
     expect(passoDaGuarda(2.6, 2.6, -1)).toBe(1.6);
     // Tarefa sem quantidade: sem teto.
     expect(passoDaGuarda(3, 0, 1)).toBe(4);
+  });
+
+  it("a guarda concluída mostra onde ficou, sem o seletor de posição nem a quantidade editável", () => {
+    const concluida = { ...guardTask, status: "completed", can_advance: false, destination_location_id: "B-02" };
+    const markup = guardPanel([], concluida);
+    expect(markup).toContain("Guardada em");
+    expect(markup).toContain("B-02");
+    expect(markup).not.toContain("Bipe ou busque a prateleira");
+    expect(markup).not.toMatch(/<button[^>]*>\+<\/button>/);
+    // A guarda aberta continua com o seletor.
+    expect(guardPanel([])).toContain("Bipe ou busque a prateleira");
+  });
+
+  it("a guarda encerrada só tem rótulos e dados, e passa no axe", async () => {
+    const concluida = renderToStaticMarkup(
+      <GuardaEncerrada task={{ ...guardTask, status: "completed", destination_location_id: "B-02" }} />,
+    );
+    const cancelada = renderToStaticMarkup(<GuardaEncerrada task={{ ...guardTask, status: "cancelled" }} />);
+    const permitidos = ["Guardada em", "B-02", "Quantidade", "50 un.", "Origem", "RECEBIMENTO", "Situação", "Guarda cancelada", "Ficou em"];
+    expect(textosForaDaLista(concluida, permitidos)).toEqual([]);
+    expect(textosForaDaLista(cancelada, permitidos)).toEqual([]);
+    expect(cancelada).toContain("Guarda cancelada");
+    expect(await violacoesDeAcessibilidade(concluida)).toEqual([]);
   });
 });
