@@ -65,6 +65,7 @@ import { accessChangeFromTo, assertAccessActorCurrent, setUserAccessFor } from "
 import { assertDirectoryPersonManageable, enableReinvitedLoginFor, readReinvitedUser, userDirectoryArchivePayload } from "./domain/user-directory.js";
 import { accountRetentionEnabled, anonymizeRemovedAccounts } from "./domain/account-retention.js";
 import { recalcularDisponivelDoPortal } from "./domain/disponivel-do-portal.js";
+import { openAreaPutaway as openAreaPutawayFor, previewAreaPutaway as previewAreaPutawayFor } from "./domain/area-putaway.js";
 import { CLIENT_NOTICE_AFTER_PUTAWAY } from "./domain/inbound-box-entry.js";
 import {
   CLIENT_ACCESS_COLLECTION,
@@ -8260,6 +8261,21 @@ export const refuseInboundBoxShelf = onCall(async (request) => {
   const profile = await getProfile(request);
   requireWarehouseWrite(profile);
   return refuseInboundBoxShelfFor(db, request.data, profile);
+});
+
+/** "Guardar" no Estoque (decisão 16, parte 7e): o que dá para guardar do saldo parado numa área. */
+export const previewAreaPutaway = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireOperationsCoordinator(profile);
+  // O cliente ativo vem da tela, sempre: sem ele, recusa (nunca a BTG por padrão).
+  return previewAreaPutawayFor(db, request.data);
+});
+
+/** "Guardar" no Estoque (decisão 16, parte 7e): a coordenação abre a guarda do saldo parado numa área. */
+export const openAreaPutaway = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireOperationsCoordinator(profile);
+  return openAreaPutawayFor(db, request.data, profile);
 });
 
 /** Adaptador externo autenticado; só o gateway é documentado para consumidores. */

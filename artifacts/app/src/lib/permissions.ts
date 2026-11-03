@@ -54,6 +54,11 @@ export function canDecideRequests(role: ProfileRole | null | undefined) {
   return Boolean(role && REQUEST_DECISION_ROLES.has(role));
 }
 
+/** requireOperationsCoordinator: abrir a guarda do saldo parado numa área (parte 7e). */
+export function canOpenAreaPutaway(role: ProfileRole | null | undefined) {
+  return Boolean(role && REQUEST_DECISION_ROLES.has(role));
+}
+
 /** A lista de usuários (users): quem administra o acesso, como canManageAccess nas regras. */
 export function canListUsers(role: string | null | undefined) {
   return (ACCESS_ADMIN_ROLES as readonly string[]).includes(String(role ?? ""));
