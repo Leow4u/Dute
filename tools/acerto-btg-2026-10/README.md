@@ -334,6 +334,14 @@ cadastro nem com outro tamanho (`--buscar A.02.0712.005.`): a peça ficou de
 fora da contagem de abertura da CX-000004, que foi registrada com 19 peças e
 tinha 24. Ela entra pelo Receber (produto novo) ou por um `criar_sku`.
 
+## Fechamento (03/11/2026)
+
+O Leonardo decidiu criar a mand algodão pelo script: `criar-0712-G` criou o
+BTG-000180 (`A.02.0712.005.G`, sem foto, copiando categoria e gênero de uma
+polo feminina preta G), com 1 peça na CX-000004. O décimo quarto dry-run deu
+80 operações, 73 já aplicadas, 7 sem mudança, 0 pendentes e 0 erros: os 14
+itens da Cristiane estão corrigidos no sistema.
+
 ## Validação no emulador (30/10/2026)
 
 Feita no ambiente de desenvolvimento, sem credencial da nuvem, com o
