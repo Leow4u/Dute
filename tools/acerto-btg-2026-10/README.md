@@ -327,6 +327,13 @@ A polo feminina mand algodão preto G da CX-000004 tem o código
 `A.02.0712.005.G` na etiqueta; o Ajuste + e a linha dela ficam pendentes até o
 `--buscar A.02.0712.005.` mostrar se o SKU existe.
 
+Aplicado em 03/11/2026: o décimo segundo dry-run deu 70 já aplicadas, 0 a
+gravar e 2 pendentes (a mand algodão). A azul-marinho ficou com PP 12, P 78,
+M 267, G 249, GG 120, XG 64 e XGG 14. A `A.02.0712.005.G` não existe no
+cadastro nem com outro tamanho (`--buscar A.02.0712.005.`): a peça ficou de
+fora da contagem de abertura da CX-000004, que foi registrada com 19 peças e
+tinha 24. Ela entra pelo Receber (produto novo) ou por um `criar_sku`.
+
 ## Validação no emulador (30/10/2026)
 
 Feita no ambiente de desenvolvimento, sem credencial da nuvem, com o
