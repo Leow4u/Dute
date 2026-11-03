@@ -14,7 +14,8 @@ import { cn } from "@/lib/utils";
 import { boxDraftToPayload, emptyBoxDraft, formatBoxDimensions, type BoxDraft, type SlottingCandidate } from "@/lib/warehouse-boxes";
 import type { WarehousePosition } from "@/lib/warehouse-positions";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
-import { statusLabel, type TaskQueueEntry, type WarehouseTask, type WarehouseTaskItem } from "@/lib/warehouse-ops/model";
+import { type TaskQueueEntry, type WarehouseTask, type WarehouseTaskItem } from "@/lib/warehouse-ops/model";
+import { situacaoDaChegada } from "@/lib/warehouse-ops/receiving";
 import {
   MOTIVO_DA_FALTA,
   bloqueiosDaTela,
@@ -196,7 +197,7 @@ export function FichaDaChegadaPorCaixaConteudo(props: FichaDaChegadaPorCaixaProp
     <div className="@container flex min-w-0 flex-col gap-4 rounded-lg border border-border bg-card p-5">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className="border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground">Recebimento</Badge>
-        <Badge variant="outline" className="border-border bg-muted text-muted-foreground">{statusLabel(task.status)}</Badge>
+        <Badge variant="outline" className="border-border bg-muted text-muted-foreground">{situacaoDaChegada(task)}</Badge>
         <Badge variant="outline" className="border-info-soft-border bg-info-soft text-info-soft-foreground">por caixa</Badge>
         {emVista ? (
           <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={props.onVoltar}>

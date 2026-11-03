@@ -663,7 +663,21 @@ desenhada e aprovada antes do PR de tela.
      vê essas ações. Testes: `falta-da-linha.test.tsx`, casos novos em
      `chegada-por-caixa.test.tsx`, `chegada-por-caixa.interacao.test.tsx` e
      `caixas-do-recebimento.test.ts`.
-   - **5e, a fila:** "Recebidas, por guardar" e a guarda por caixa na lista.
+   - **5e, a fila:** feita em 03/11/2026 (mockup `WmsReceberFila`). A
+     chegada por caixa recebida com caixa por guardar sai de Recebidos e fica
+     em aberto, em "Recebidas, por guardar", com "0 de 2 caixas guardadas" e
+     o apoio "Avulsa · recebida · NF … · 59 un. · falta marcada 12 un. ·
+     entrada concluída …"; guardada a última caixa, vai a Recebidos. A
+     chegada a conferir diz "por caixa", a NF e as caixas, e a com caixa
+     iniciada fica "em conferência" (na fila e na ficha), embora o servidor
+     só mude a chegada na conclusão. A guarda da caixa tem o destino no
+     título ("Guardar caixa CX-000131 em B-02") ou o selo "sem prateleira"
+     (o local igual à origem não é destino), e o conteúdo com o nome em
+     comum ("POLO MASCULINO PIQUET PRETO XG 29 · GG 12 · 41 un."); a guarda
+     aberta no Estoque diz "aberta no Estoque". O `cloud-api.ts` passa a
+     data da entrada concluída da chegada por caixa e a origem da tarefa.
+     Testes: `receiving.test.ts`, `queue-list.test.tsx`, `receber.test.tsx`
+     e um caso novo em `cloud-api-warehouse.test.ts`.
    - **5f, a guarda da caixa:** o destino na guarda, "Concluir guarda" e
      "Não cabe aqui", no computador e no celular.
 6. **Etiquetas:** caixa `committing` com destino, origem "Recebimento", o

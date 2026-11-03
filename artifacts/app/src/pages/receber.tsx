@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, Forklift, Inbox, PackageOpen, RefreshCw, X } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { QueueGroup, QueueRow } from "@/components/ui/queue-list";
@@ -20,7 +21,7 @@ import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
 import { useToast } from "@/hooks/use-toast";
 import { useIsDesktop } from "@/hooks/use-desktop";
 import { useActiveCustomer } from "@/lib/active-customer-context";
-import { chegadaPorCaixa } from "@/lib/wms/caixas-do-recebimento";
+import { caixasGuardadas, chegadaPorCaixa } from "@/lib/wms/caixas-do-recebimento";
 import { useAppUser } from "@/lib/auth";
 import { canOperateWarehouse } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,8 @@ import {
 } from "@/lib/warehouse-ops/model";
 import {
   buildReceivingBoard,
+  guardaSemPrateleira,
+  guardandoRowMeta,
   isUnplannedReceipt,
   linkedShipmentNotice,
   type NoticeLinkChoice,
@@ -49,6 +52,7 @@ import {
   receivingRowMeta,
   type ShipmentNotice,
   tarefaPrincipal,
+  tituloDaGuarda,
   unlinkedShipmentNotices,
 } from "@/lib/warehouse-ops/receiving";
 import { formatRequestAge } from "./customer-requests";
@@ -162,7 +166,7 @@ export default function Receber() {
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
   };
-  const openCount = pendingNotices.length + board.check.length + board.store.length;
+  const openCount = pendingNotices.length + board.check.length + board.guardando.length + board.store.length;
 
   const panel = selectedNotice ? (
     <NoticeCard notice={selectedNotice} />
@@ -345,6 +349,31 @@ export default function Receber() {
                   ))}
                 </QueueGroup>
 
+                {board.guardando.length ? (
+                  <QueueGroup title="Recebidas, por guardar" count={board.guardando.length} empty={null}>
+                    {board.guardando.map((entry) => (
+                      <QueueRow
+                        key={entry.task.id}
+                        icon={Inbox}
+                        tone="check"
+                        title={getTaskTitle(entry.task)}
+                        badge={
+                          <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
+                            {caixasGuardadas(entry.task)}
+                          </Badge>
+                        }
+                        meta={guardandoRowMeta(entry.task)}
+                        className={cn(selected?.task.id === entry.task.id && "bg-muted/60")}
+                        actions={
+                          <Button type="button" variant="outline" onClick={() => selectEntry(entry)}>
+                            Ver
+                          </Button>
+                        }
+                      />
+                    ))}
+                  </QueueGroup>
+                ) : null}
+
                 <QueueGroup
                   title="Para guardar"
                   count={board.store.length}
@@ -355,7 +384,14 @@ export default function Receber() {
                       key={entry.task.id}
                       icon={Forklift}
                       tone="store"
-                      title={getTaskTitle(entry.task)}
+                      title={tituloDaGuarda(entry.task) ?? getTaskTitle(entry.task)}
+                      badge={
+                        guardaSemPrateleira(entry.task) ? (
+                          <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
+                            sem prateleira
+                          </Badge>
+                        ) : undefined
+                      }
                       meta={putawayRowMeta(entry.task)}
                       age={formatRequestAge(entry.task.created_at)}
                       note={blockedNote(entry)}

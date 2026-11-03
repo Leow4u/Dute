@@ -124,10 +124,14 @@ export type WarehouseTask = {
   boxes_stored?: number | null;
   putaway_status?: string | null;
   boxes?: CaixaDaChegada[] | null;
+  /** Quando a entrada da chegada por caixa foi concluída. */
+  received_at?: string | null;
   /** A guarda da caixa: a caixa, a chegada e o conteúdo. */
   box_code?: string | null;
   receipt_id?: string | null;
   box_lines?: LinhaDaCaixa[] | null;
+  /** De onde a tarefa veio (a guarda aberta no Estoque é `wms_area_putaway`). */
+  source?: string | null;
 };
 
 export type OpsQueue = {

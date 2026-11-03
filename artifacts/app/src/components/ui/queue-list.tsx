@@ -56,6 +56,7 @@ export function QueueRow({
   icon: Icon,
   tone,
   title,
+  badge,
   meta,
   age,
   note,
@@ -71,6 +72,8 @@ export function QueueRow({
   icon: LucideIcon;
   tone: QueueTone;
   title: string;
+  /** Um selo ao lado do título ("sem prateleira", "0 de 2 caixas guardadas"). */
+  badge?: ReactNode;
   meta: string;
   age?: string;
   note?: ReactNode;
@@ -92,7 +95,10 @@ export function QueueRow({
           <Icon className="size-5" aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-foreground in-[.v3]:text-base in-[.v3]:font-bold">{title}</p>
+          <p className="font-semibold text-foreground in-[.v3]:text-base in-[.v3]:font-bold">
+            {title}
+            {badge ? <span className="ml-2 inline-flex align-middle">{badge}</span> : null}
+          </p>
           <p className="mt-0.5 text-sm text-foreground/60">
             {meta}
             {age ? <span className="text-foreground/45"> · {age}</span> : null}

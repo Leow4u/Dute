@@ -1472,6 +1472,7 @@ function laneTask(input: {
   boxes_stored?: number;
   putaway_status?: string;
   boxes?: AnyRecord[];
+  received_at?: unknown;
   /** A guarda da caixa: a caixa, a chegada e o conteúdo. */
   box_code?: string;
   receipt_id?: string;
@@ -1505,6 +1506,7 @@ function laneTask(input: {
     boxes_stored: input.boxes_stored,
     putaway_status: input.putaway_status,
     boxes: input.boxes,
+    received_at: input.received_at === undefined ? undefined : toIso(input.received_at) || undefined,
     box_code: input.box_code,
     receipt_id: input.receipt_id,
     box_lines: input.box_lines,
@@ -1842,6 +1844,8 @@ async function getWarehouseOps() {
           boxes_stored: receipt.boxes_stored == null ? undefined : Number(receipt.boxes_stored),
           putaway_status: receipt.putaway_status == null ? undefined : String(receipt.putaway_status),
           boxes: receipt.conference_mode === "per_box" ? receiptBoxesFor(receipt) : undefined,
+          // "Entrada concluída" na fila das recebidas, por guardar (parte 5e).
+          received_at: receipt.conference_mode === "per_box" && receipt.received_at ? receipt.received_at : undefined,
         });
       }),
     },
@@ -2083,9 +2087,11 @@ async function getWarehouseOps() {
           boxes_stored: task.boxes_stored,
           putaway_status: task.putaway_status,
           boxes: task.boxes,
+          received_at: task.received_at,
           box_code: task.box_code,
           receipt_id: task.receipt_id,
           box_lines: task.box_lines,
+          source: task.source,
           // A tarefa cancelada com o pedido (pergunta 59) também não avança.
           can_advance:
             !String(task.source ?? "").startsWith("derived_from_") &&
