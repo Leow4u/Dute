@@ -1405,7 +1405,7 @@ export async function storeInboundBox(db: Firestore, raw: unknown, actor: Operat
       const destinationRows = rows.filter((row) => text(row.data.location_id) === locationCode);
       if (destinationRows.length > 1) assertSingleBalance(destinationRows, sku.skuCode, locationCode);
       const projection = await transaction.get(
-        db.collection(CLIENT_INVENTORY_COLLECTION).doc(clientScopedInventoryId(owner, sku.skuCode, sku.clientItemCode)),
+        db.collection(CLIENT_INVENTORY_COLLECTION).doc(clientScopedInventoryId(owner, sku.skuCode)),
       );
       plans.push({ sku, rows, source: sourceRows[0]!, destination: destinationRows[0], projection });
     }
@@ -1503,8 +1503,6 @@ export async function storeInboundBox(db: Firestore, raw: unknown, actor: Operat
             { ref: source.ref, data: { qty_on_hand: sourceAfter } },
             { ref: destinationRef, data: destinationPayload },
           ]),
-          sku.skuCode,
-          sku.clientItemCode,
         ),
       );
     });

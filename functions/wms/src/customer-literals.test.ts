@@ -18,9 +18,6 @@ const SRC = fileURLToPath(new URL("../src/", import.meta.url));
 /** As constantes do cliente legado: o faturamento guarda a sua (billing-scope.ts). */
 const CONSTANTES = new Set(["domain/customer-scope.ts", "domain/billing-scope.ts"]);
 
-/** Código de item do cliente legado, dado dele: não é texto nem fronteira. */
-const DADO_DO_CLIENTE_LEGADO = new Set(["domain/operations.ts: const CLIENT_SCOPED_SKUS = new Set([\"BTG-1043\"]);"]);
-
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
     const path = join(dir, entry);
@@ -57,10 +54,9 @@ describe("a BTG fixa nas Functions do WMS", () => {
   });
 
   it("nenhum texto do código cita a BTG", () => {
-    const found = linhas((code) => /BTG/.test(code)).filter((line) => {
-      const [file, , ...rest] = line.split(":");
-      return !CONSTANTES.has(file) && !DADO_DO_CLIENTE_LEGADO.has(`${file}: ${rest.join(":").trim()}`);
-    });
+    const found = linhas((code) => /BTG/.test(code)).filter(
+      (line) => !CONSTANTES.has(line.split(":")[0]),
+    );
     assert.deepEqual(found, []);
   });
 });
