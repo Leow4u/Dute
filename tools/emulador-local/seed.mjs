@@ -252,8 +252,18 @@ function dadosDoContrato(customer_code, nome, extra) {
   };
 }
 
+/**
+ * Cria com o id fixo, como a carga de contratos (`idNaCriacao`): o orçamento
+ * aponta para `alfa-2026` e a medição para `beta-2026`. A callable não aceita
+ * id na criação; a regra do domínio continua a mesma para ela.
+ */
 async function contrato(id, dados) {
-  await contratos.salvarContrato(db, comercial, { idempotency_key: chave("ct"), acao: "criar", contrato_id: id, contrato: dados });
+  await contratos.salvarContrato(
+    db,
+    comercial,
+    { idempotency_key: chave("ct"), acao: "criar", contrato_id: id, contrato: dados },
+    { idNaCriacao: true },
+  );
 }
 
 // --- 4. Tabelas (pela carga real, em CSV sintético) --------------------------------
