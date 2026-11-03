@@ -467,6 +467,19 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  // Estoque › Itens, ficha: as datas de entrada por prateleira do item do
+  // cliente ativo (FIFO por data, parte 6); o cliente e o SKU vão no caminho.
+  const stockDatesMatch = pathname.match(/^\/api\/warehouse\/stock-dates\/([^/]+)\/([^/]+)$/);
+  if (method === "GET" && stockDatesMatch) {
+    return {
+      name: "getStockDates",
+      payload: async () => ({
+        customer_code: decodeURIComponent(stockDatesMatch[1]!),
+        sku_code: decodeURIComponent(stockDatesMatch[2]!),
+      }),
+    };
+  }
+
   // Sessão de abertura do cliente ativo: o código do cliente vai no caminho.
   const openingSessionMatch = pathname.match(
     /^\/api\/warehouse\/opening-inventory\/session\/([^/]+)$/,

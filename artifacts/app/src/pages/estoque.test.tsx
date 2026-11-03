@@ -1,15 +1,18 @@
 import { readFileSync } from "node:fs";
 
+import { JSDOM } from "jsdom";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { StockToolbar } from "@/components/stock/stock-workbench";
 import type { StockItem } from "@/lib/stock-items";
 import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosDaTela } from "@/test/textos";
+import type { LocalComDatas } from "@/lib/datas-de-entrada";
+import { functionRoute } from "@/lib/functions-api";
+import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
-import { ItemList, SecaoDoGiro, SecaoOndeEsta } from "./estoque";
+import { ItemList, SecaoDoGiro, SecaoOndeEsta, buscarDatasDaFicha } from "./estoque";
 import { payloadDaMovimentacao } from "./movements";
 
 /**
@@ -188,6 +191,103 @@ describe("os dias parado no Estoque (parte 5.4c)", () => {
 
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(giro())).toEqual([]);
+  });
+});
+
+describe("as datas de entrada na ficha (FIFO por data, parte 6)", () => {
+  // A tela aprovada (docs/mockups/WmsItemDatas.dc.html), com o RECEBIMENTO a mais.
+  const LOCAIS: LocalComDatas[] = [
+    { local: "B-05", pecas: 16, datas: [{ desde: "2026-10-22", pecas: 16 }] },
+    {
+      local: "B-02",
+      pecas: 90,
+      datas: [
+        { desde: "2026-10-30", pecas: 30 },
+        { desde: "2026-11-03", pecas: 60 },
+      ],
+    },
+    { local: "RECEBIMENTO", pecas: 40, datas: [] },
+  ];
+  const LOCATIONS = [
+    { id: "B-02", qty: 90 },
+    { id: "RECEBIMENTO", qty: 40 },
+    { id: "B-05", qty: 16 },
+  ];
+  const secao = (locais: LocalComDatas[] | null, podeGuardar = false) =>
+    renderToStaticMarkup(
+      <div className="v3">
+        <SecaoOndeEsta locations={LOCATIONS} locais={locais} podeGuardar={podeGuardar} onGuardar={() => undefined} />
+      </div>,
+    );
+  /** Cada linha de "Onde está": o local, a data e a quantidade. */
+  const linhas = (html: string) => {
+    const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+    const resultado = [...dom.window.document.querySelectorAll("section li, section > div")].map((linha) =>
+      [...linha.children].map((celula) => celula.textContent?.trim() ?? ""),
+    );
+    dom.window.close();
+    return resultado;
+  };
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("uma linha por prateleira e data, a de data mais antiga primeiro, e o RECEBIMENTO no fim, sem data", () => {
+    expect(linhas(secao(LOCAIS))).toEqual([
+      ["B-05", "desde 22/10/2026", "16 un."],
+      ["B-02", "desde 30/10/2026", "30 un."],
+      ["B-02", "desde 03/11/2026", "60 un."],
+      ["RECEBIMENTO", "", "40 un."],
+    ]);
+  });
+
+  it("sem as datas (carregando, sem leitura ou com erro), a quantidade de cada local, como antes", () => {
+    expect(linhas(secao(null))).toEqual([
+      ["B-02", "90 un."],
+      ["RECEBIMENTO", "40 un."],
+      ["B-05", "16 un."],
+    ]);
+    expect(linhas(secao([]))).toHaveLength(3);
+  });
+
+  it("com as datas, a área continua com o Guardar para a coordenação (parte 7e), e a prateleira não", () => {
+    const html = secao(LOCAIS, true);
+    const botoes = [...html.matchAll(/aria-label="([^"]+)"[^>]*>Guardar<\/button>/g)].map((match) => match[1]);
+    expect(botoes).toEqual(["Guardar do RECEBIMENTO"]);
+    expect(html).toMatch(/bg-warning-soft text-warning-soft-foreground"[^>]*>RECEBIMENTO</);
+    expect(html).toMatch(/bg-info-soft text-info-soft-foreground"[^>]*>B-05</);
+  });
+
+  it("o que as entradas não cobrem diz sem data", () => {
+    const html = secao([{ local: "A-01", pecas: 25, datas: [{ desde: null, pecas: 10 }, { desde: "2026-10-30", pecas: 15 }] }], true);
+    expect(linhas(html)).toEqual([
+      ["A-01", "sem data", "10 un."],
+      ["A-01", "desde 30/10/2026", "15 un."],
+    ]);
+  });
+
+  it("só rótulos e dados, sem legenda, e passa no axe", async () => {
+    const html = secao(LOCAIS, true);
+    expect(textosForaDaLista(html, ["Onde está", "B-05", "B-02", "RECEBIMENTO", "Guardar", /^desde \d{2}\/\d{2}\/\d{4}$/, /^\d[\d.]* un\.$/])).toEqual([]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("a leitura vai ao getStockDates com o cliente ativo e o SKU no caminho, e deixa de fora o que não é local", async () => {
+    const caminho = "/api/warehouse/stock-dates/BTG%20Pactual/BTG-000214";
+    const route = functionRoute(caminho, "GET");
+    expect(route?.name).toBe("getStockDates");
+    expect(await route?.payload(caminho)).toEqual({ customer_code: "BTG Pactual", sku_code: "BTG-000214" });
+    expect(functionRoute(caminho, "POST")).toBeNull();
+
+    const chamadas: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      chamadas.push(url);
+      return new Response(
+        JSON.stringify({ datas: [], locais: [...LOCAIS, { local: "", pecas: 3, datas: [] }, { local: "C-01", pecas: 0, datas: [] }] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    expect(await buscarDatasDaFicha("BTG Pactual", "BTG-000214")).toEqual(LOCAIS);
+    expect(chamadas).toEqual([caminho]);
   });
 });
 

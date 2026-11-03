@@ -191,6 +191,14 @@ mínimo), "Reservados", "Sem foto", "Zerados" e, onde a memória roda,
 "Parados" e "Sem giro". A ficha traz "em estoque", "disponível", "Onde está",
 "Reservado", os 5 "Últimos movimentos" e, onde ela roda, "Giro" e "Caixas".
 
+- **"Onde está"**: uma linha por prateleira e data de entrada ("B-05 · desde
+  22/10/2026 · 16 un."). A prateleira com a data livre mais antiga vem
+  primeiro: é dela que o próximo pedido sai. Numa prateleira com duas datas,
+  a mais antiga é a sobra da caixa aberta (os hábitos em "Caixa na
+  prateleira"). "sem data" são peças de antes do primeiro registro de
+  entrada. O `RECEBIMENTO` e a `EXPEDICAO` vêm no fim, sem data. Enquanto as
+  datas carregam, ou se a leitura falha, aparece a quantidade de cada local.
+
 - **Ações:** "Adicionar foto" ou "Mais fotos" (`owner`, `admin`, `interno` e
   `wms`, até 4 por vez); "Contar este item"; "Editar cadastro" (os dois
   códigos só se leem: são a identidade do item), "Ajustar saldo" e "Arquivar"
