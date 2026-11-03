@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Portal · Estoque, detalhe com as datas de entrada</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+button{font:inherit;color:inherit}
+.ic{width:20px;height:20px;flex:0 0 auto}.ic-s{width:16px;height:16px;flex:0 0 auto}
+.app{display:flex;width:1440px;height:900px;overflow:hidden}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:22px 14px 18px;gap:2px}
+.logo{font-weight:800;font-size:22px;letter-spacing:.04em;padding:0 10px 6px}
+.logo small{display:block;font-size:8px;letter-spacing:.18em;font-weight:700;opacity:.8;margin-top:-2px}
+.sw{display:flex;align-items:center;gap:10px;width:100%;height:44px;margin:8px 0 6px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font:800 15px Manrope,sans-serif;text-align:left}
+.sw .ch{margin-left:auto;opacity:.75}
+.cli{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px}
+.cli .tile{width:34px;height:34px;border-radius:9px;background:#2a2a2a;display:inline-flex;align-items:center;justify-content:center}
+.cli small{display:block;font-size:11px;color:rgba(255,255,255,.6)}
+.cli b{font-size:14px}
+.nav{display:flex;align-items:center;gap:12px;height:44px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.74);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.sub{padding-left:14px}
+.sub .nav{height:40px;font-size:14px;padding-left:28px}
+.sbf{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 10px 0;border-top:1px solid rgba(255,255,255,.12)}
+.av2{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.sbf b{display:block;font-size:14px}.sbf span{font-size:13px;color:rgba(255,255,255,.6)}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;padding:30px 44px;gap:22px;overflow:hidden;position:relative}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.ph h1{font-size:30px;font-weight:800;letter-spacing:-.01em}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;white-space:nowrap;text-decoration:none;cursor:pointer}
+.btn-p{background:#E71C23;color:#fff}.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-g{background:#F0F0ED;color:#161616}
+.btn-d{background:#161616;color:#fff}
+.btn[disabled],.btn.dis{opacity:.45;cursor:default}
+.btn-sm{height:32px;padding:0 12px;font-size:13px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.sec{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#5F6368}
+.muted{color:#5F6368}
+.h2{font-size:18px;font-weight:800}
+.h3{font-size:15px;font-weight:800}
+.row{display:flex;align-items:center;gap:18px;padding:18px 22px;border-top:1px solid #E5E5E1}
+.row:first-child{border-top:0}
+.row b{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:700;flex-wrap:wrap}
+.row span.sub2{display:block;font-size:13.5px;color:#5F6368;margin-top:2px}
+.tile{width:48px;height:48px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;background:#F0F0ED}
+.badge{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.s-red{background:#FBE3E4;border-color:#F3C2C4;color:#8E1016}
+.s-amb{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.s-grn{background:#DDF5E4;border-color:#B6E4C4;color:#14602F}
+.s-blu{background:#E3ECFB;border-color:#C5D6F5;color:#1E4E9C}
+.s-mut{background:#F0F0ED;border-color:#E5E5E1;color:#5F6368}
+.s-new{background:#F3EEFF;border-color:#D9CCFB;color:#5B3FC4}
+.seg{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px}
+.seg a{height:34px;padding:0 14px;border-radius:6px;display:inline-flex;align-items:center;font-weight:700;font-size:13.5px;color:#5F6368;text-decoration:none}
+.seg a.on{background:#161616;color:#fff}
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{text-align:left;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#5F6368;font-weight:800;padding:12px 16px;border-bottom:1px solid #E5E5E1;background:#FAFAF8}
+.tbl td{padding:12px 16px;border-bottom:1px solid #F0F0ED;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13.5px;font-weight:700}
+.inp{height:40px;border:1px solid #D4D4CF;border-radius:8px;background:#fff;padding:0 12px;display:flex;align-items:center;font-size:14px}
+.inp.ro{background:#F0F0ED;color:#5F6368}
+.inp.ph2{color:#5F6368}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.kpi{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border:1px solid #E5E5E1;border-radius:10px;background:#fff}
+.kpi small{font-size:12px;color:#5F6368;font-weight:700}
+.kpi b{font-size:20px;font-weight:800}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 480px;gap:22px;align-items:start}
+.panel{background:#fff;border:1px solid #E5E5E1;border-radius:12px;padding:20px 22px;display:flex;flex-direction:column;gap:16px}
+.ln{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #E5E5E1;border-radius:10px;background:#fff}
+.ln.on{border-color:#E71C23;background:#FFF6F6}
+.ln .t{flex:1 1 auto;min-width:0}
+.ln .t b{display:block;font-size:14.5px}
+.ln .t span{display:block;font-size:13.5px;color:#5F6368}
+.ln .q{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.check{width:18px;height:18px;border-radius:4px;border:1.5px solid #8A8F94;display:inline-block}
+.check.on{background:#161616;border-color:#161616}
+.toast{position:absolute;right:28px;bottom:28px;width:380px;background:#fff;border:1px solid #E5E5E1;border-radius:12px;padding:14px 16px;box-shadow:0 14px 36px rgba(0,0,0,.18)}
+.toast b{display:block;font-size:14px}.toast span{font-size:13.5px;color:#5F6368}
+.dim{position:absolute;inset:0;background:rgba(22,22,22,.45)}
+.dlg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:1120px;max-height:840px;background:#fff;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.35);padding:26px 30px;display:flex;flex-direction:column;gap:18px;overflow:hidden}
+.dlg h2{font-size:22px;font-weight:800}
+.pos{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #E5E5E1;border-radius:10px}
+.pos .rb{width:16px;height:16px;border-radius:50%;border:1.5px solid #8A8F94}
+.pos.on{border-color:#E71C23;background:#FFF6F6}.pos.on .rb{border:5px solid #E71C23}
+.big{font-size:28px;font-weight:800;letter-spacing:-.01em}
+.note{font-size:13.5px;color:#5F6368}
+.step{display:flex;gap:10px;align-items:flex-start}
+.step i{width:24px;height:24px;border-radius:50%;background:#161616;color:#fff;font-style:normal;font-weight:800;font-size:12px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+x-dc{display:contents}.top{height:64px;background:#161616;color:#fff;display:flex;align-items:center;gap:26px;padding:0 44px;font-weight:700}.top .lg{font-weight:800;font-size:20px;letter-spacing:.04em;margin-right:10px}.top a{color:rgba(255,255,255,.72)}.top a.on{color:#fff;border-bottom:2px solid #E71C23;padding-bottom:4px}.bell{margin-left:auto;position:relative;display:flex;align-items:center;gap:14px}.bell .dotr{position:absolute;left:12px;top:-4px;width:9px;height:9px;border-radius:50%;background:#E71C23;border:2px solid #161616}.drop{position:absolute;right:250px;top:58px;width:420px;background:#fff;color:#161616;border:1px solid #E5E5E1;border-radius:12px;box-shadow:0 14px 36px rgba(0,0,0,.25);padding:8px;font-weight:500;z-index:5}.drop .it{padding:10px 12px;border-radius:8px}.drop .it b{display:block;font-size:14.5px}.drop .it span{display:block;font-size:13.5px;color:#5F6368}.pg{padding:30px 44px;display:flex;flex-direction:column;gap:18px}body{width:1440px;height:900px;overflow:hidden}
+</style>
+<style>
+
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;justify-content:flex-end;padding:20px;z-index:10}
+.dr{width:440px;height:100%;background:#fff;border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+.drh{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid #E5E5E1}
+.drh b{font-size:16px;font-weight:800}
+.drh .x{margin-left:auto;width:36px;height:36px;border-radius:10px;border:1px solid #E5E5E1;background:#fff;display:inline-flex;align-items:center;justify-content:center;color:#5F6368}
+.drb{padding:18px 20px;display:flex;flex-direction:column;gap:16px;overflow:hidden}
+.vis{height:132px;border-radius:8px;border:1px solid #E5E5E1;background:#F0F0ED;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#5F6368}
+.vis span{width:48px;height:48px;border-radius:12px;background:#fff;border:1px solid #E5E5E1;display:inline-flex;align-items:center;justify-content:center;font-weight:800;color:#161616}
+.vis small{font-size:12px;font-weight:700}
+.code{font-size:12px;font-weight:700;letter-spacing:.04em;color:#5F6368}
+.pn{font-size:19px;font-weight:800;line-height:1.3;margin-top:2px}
+.chips{display:flex;gap:8px;margin-top:10px}
+.chip{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:999px;border:1px solid #E5E5E1;font-size:12.5px;font-weight:700;color:#5F6368}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fact{border:1px solid #E5E5E1;border-radius:8px;padding:10px 12px}
+.fact small{display:block;font-size:12px;color:#5F6368;font-weight:600}
+.fact b{display:block;font-size:15px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
+.datas{border:1px solid #E5E5E1;border-radius:8px;padding:12px 14px}
+.datas h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:800;color:#5F6368;margin-bottom:6px}
+.datas li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid #F0F0ED;font-size:14px}
+.datas li:first-child{border-top:0}
+.datas li b{font-weight:800;font-variant-numeric:tabular-nums}
+.agent{display:flex;gap:10px;align-items:flex-start;border:1px solid #D9CCFB;background:#F3EEFF;color:#5B3FC4;border-radius:8px;padding:12px 14px;font-size:13.5px;font-weight:600}
+.stp{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.stp label{font-size:13.5px;font-weight:700}
+.stp .q{display:inline-flex;align-items:center;border:1px solid #D4D4CF;border-radius:8px;overflow:hidden}
+.stp .q span{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;color:#5F6368}
+.stp .q i{font-style:normal;width:56px;text-align:center;font-weight:700;border-left:1px solid #E5E5E1;border-right:1px solid #E5E5E1;line-height:36px}
+.full{width:100%}
+</style>
+</helmet>
+<div class="top"><span class="lg">DUTELOG</span><a>Início</a><a class="on">Estoque</a><a>Pedidos</a><a>Envios</a><a>Faturas</a><div class="bell"><span style="position:relative">🔔</span><span>Cristiane · BTG</span></div></div>
+<div class="pg">
+  <div class="ph"><h1>Estoque</h1><a class="btn btn-p">Novo pedido</a></div>
+  <div class="grid4"><div class="kpi"><small>Disponível para pedido</small><b>4.261 un.</b></div><div class="kpi"><small>Em recebimento</small><b>0 un.</b></div><div class="kpi"><small>Reservado</small><b>86 un.</b></div><div class="kpi"><small>Produtos</small><b>214</b></div></div>
+  <div class="card" style="overflow:hidden">
+    <table class="tbl"><thead><tr><th>Item</th><th class="num">Disponível</th><th class="num">Em recebimento</th><th class="num">Reservado</th><th>Última entrada</th></tr></thead>
+    <tbody>
+      <tr><td><b>POLO MASCULINO PIQUET PRETO XG</b><br><span class="muted">A.01.0806.004.XG</span></td><td class="num"><b>41</b></td><td class="num">0</td><td class="num">0</td><td>30/10/2026 · NF 48.230</td></tr>
+      <tr><td><b>POLO MASCULINO PIQUET PRETO GG</b><br><span class="muted">A.01.0806.004.GG</span></td><td class="num"><b>96</b></td><td class="num">0</td><td class="num">10</td><td>03/11/2026 · NF 48.301</td></tr>
+      <tr><td><b>CAMISA POLO MANGA LONGA GG</b><br><span class="muted">A.01.0806.005.GG</span></td><td class="num"><b>24</b></td><td class="num">0</td><td class="num">0</td><td>31/10/2026 · NF 48.235</td></tr>
+      <tr><td><b>CALÇA SOCIAL MASCULINA 42</b><br><span class="muted">B.02.0110.001.42</span></td><td class="num"><b>64</b></td><td class="num">0</td><td class="num">12</td><td>22/10/2026 · abertura</td></tr>
+    </tbody></table>
+  </div>
+  <div class="ov">
+    <div class="dr" role="dialog" aria-label="Detalhe do produto">
+      <div class="drh"><b>Detalhe do produto</b><button class="x" aria-label="Fechar detalhe"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+      <div class="drb">
+        <div class="vis"><span>PO</span><small>Polo</small></div>
+        <div>
+          <p class="code">A.01.0806.004.GG</p>
+          <h2 class="pn">POLO MASCULINO PIQUET PRETO GG</h2>
+          <div class="chips"><span class="chip">Polo</span><span class="chip">Masculino</span></div>
+        </div>
+        <div class="facts">
+          <div class="fact"><small>Disponível para pedido</small><b>96</b></div>
+          <div class="fact"><small>No pedido</small><b>0</b></div>
+          <div class="fact"><small>Reservado</small><b>10</b></div>
+          <div class="fact"><small>Total físico</small><b>106</b></div>
+        </div>
+        <section class="datas">
+          <h3>Por data de entrada</h3>
+          <ul>
+            <li><span>desde 22/10/2026</span><b>16 peças</b></li>
+            <li><span>desde 30/10/2026</span><b>30 peças</b></li>
+            <li><span>desde 03/11/2026</span><b>60 peças</b></li>
+          </ul>
+        </section>
+        <div class="agent"><svg class="ic-s" style="margin-top:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"/></svg><span>Saldo disponível. Escolha a quantidade e clique em Adicionar para incluir no pedido.</span></div>
+        <div class="stp"><label>Quantidade</label><div class="q"><span>−</span><i>0</i><span>+</span></div></div>
+        <a class="btn btn-p full dis"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>Adicionar ao pedido</a>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

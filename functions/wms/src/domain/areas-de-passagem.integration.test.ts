@@ -380,25 +380,30 @@ describe("o portal conta como disponível só o que está na prateleira (parte 7
     assert.equal((await db.collection("client_inventory").doc(PORTAL).get()).exists, false);
   });
 
-  it("no SKU escopado por variante, cada projeção conta só os saldos da própria variante", async () => {
-    const ESCOPADO = "BTG-1043";
-    const variante = (id: string, local: string, quantidade: number, codigo: string) =>
-      db.collection("stock_balances").doc(id).set({ id, customer_code: BTG, sku_code: ESCOPADO, client_item_code: codigo, product_name: `Caneca ${codigo}`, location_id: local, qty_on_hand: quantidade, qty_reserved: 0, qty_available: quantidade });
+  it("o BTG-1043, SKU legado que juntava dois produtos, tem a projeção de qualquer SKU, com os saldos dos dois códigos do cliente", async () => {
+    const LEGADO = "BTG-1043";
+    const saldoDoLegado = (id: string, local: string, quantidade: number, codigo: string) =>
+      db.collection("stock_balances").doc(id).set({ id, customer_code: BTG, sku_code: LEGADO, client_item_code: codigo, product_name: `Caneca ${codigo}`, location_id: local, qty_on_hand: quantidade, qty_reserved: 0, qty_available: quantidade });
     await Promise.all([
-      db.collection("skus").doc(ESCOPADO).set({ id: ESCOPADO, customer_code: BTG, cod_cliente: "C.1", cod_btg: ESCOPADO, sku_code: ESCOPADO, produto: "Caneca", status: "active" }),
-      variante("v1-a01", "A-01", 2, "C.1"),
-      variante("v1-rec", "RECEBIMENTO", 3, "C.1"),
-      variante("v2-s01", "S-01", 4, "C.2"),
-      variante("v2-b02", "B-02", 1, "C.2"),
+      db.collection("skus").doc(LEGADO).set({ id: LEGADO, customer_code: BTG, cod_cliente: "A.01.0533.004.G", cod_btg: LEGADO, sku_code: LEGADO, produto: "Caneca", status: "active" }),
+      saldoDoLegado("g-a01", "A-01", 2, "A.01.0533.004.G"),
+      saldoDoLegado("g-rec", "RECEBIMENTO", 3, "A.01.0533.004.G"),
+      saldoDoLegado("m-s01", "S-01", 4, "A.01.0533.004.M"),
+      saldoDoLegado("m-b02", "B-02", 1, "A.01.0533.004.M"),
     ]);
-    await createInventoryMovementTransaction(
-      db,
-      { customer_code: BTG, type: "ENTRADA", quantity: 1, sku_code: ESCOPADO, client_item_code: "C.1", product_name: "Caneca C.1", location_id: "A-01", reason: "Ajuste de teste", idempotency_key: "variante-1" },
-      armazem,
-    );
-    const c1 = (await db.collection("client_inventory").doc(`cinv_BTG_Pactual__${ESCOPADO}__C.1`).get()).data() ?? {};
-    assert.deepEqual([c1.qty_available, c1.qty_receiving], [3, 3]);
-    assert.equal((await db.collection("client_inventory").doc(`cinv_BTG_Pactual__${ESCOPADO}__C.2`).get()).exists, false);
+    const mover = (type: "ENTRADA" | "SAIDA", codigo: string, local: string, chave: string) =>
+      createInventoryMovementTransaction(
+        db,
+        { customer_code: BTG, type, quantity: 1, sku_code: LEGADO, client_item_code: codigo, product_name: `Caneca ${codigo}`, location_id: local, reason: "Ajuste de teste", idempotency_key: chave },
+        armazem,
+      );
+    const projecoes = async () =>
+      (await db.collection("client_inventory").where("sku_code", "==", LEGADO).get()).docs.map((doc) => [doc.id, doc.get("qty_available"), doc.get("qty_receiving")]);
+
+    await mover("ENTRADA", "A.01.0533.004.G", "A-01", "legado-g");
+    assert.deepEqual(await projecoes(), [[`cinv_BTG_Pactual__${LEGADO}`, 8, 3]]);
+    await mover("SAIDA", "A.01.0533.004.M", "S-01", "legado-m");
+    assert.deepEqual(await projecoes(), [[`cinv_BTG_Pactual__${LEGADO}`, 7, 3]]);
   });
 
   it("a entrada e a saída manuais mexem só no lugar de cada uma", async () => {
