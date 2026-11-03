@@ -22,7 +22,7 @@ import {
 const PROJECT_ID = "demo-dute-operations";
 const BTG = "BTG Pactual";
 const OUTRO = "Outro Cliente";
-const ESCOPADO = "BTG-1043";
+const LEGADO = "BTG-1043";
 const T0 = new Date("2026-11-02T12:00:00.000Z");
 const DEPOIS = new Date(T0.getTime() + ESPERA_MINIMA_MS + 60_000);
 
@@ -102,14 +102,11 @@ beforeEach(async () => {
     // O disponível já certo, mas sem o em recebimento: ganha o campo.
     saldo("s5-a05", "SKU-5", "A-05", 6),
     projecao("cinv_BTG_Pactual__SKU-5", "SKU-5", { qty_on_hand: 6, qty_reserved: 0, qty_available: 6 }),
-    // O SKU escopado: uma projeção por variante, cada uma com os saldos dela.
-    saldo("e1-a03", ESCOPADO, "A-03", 2, 0, "C.1"),
-    saldo("e1-rec", ESCOPADO, "RECEBIMENTO", 1, 0, "C.1"),
-    saldo("e2-a04", ESCOPADO, "A-04", 5, 0, "C.2"),
-    projecao(`cinv_BTG_Pactual__${ESCOPADO}__C.1`, ESCOPADO, { client_item_code: "C.1", qty_on_hand: 3, qty_reserved: 0, qty_available: 8 }),
-    projecao(`cinv_BTG_Pactual__${ESCOPADO}__C.2`, ESCOPADO, { client_item_code: "C.2", qty_on_hand: 5, qty_reserved: 0, qty_available: 8 }),
-    // A projeção do escopado gravada sem a variante no id conta todas as variantes.
-    projecao(`cinv_BTG_Pactual__${ESCOPADO}`, ESCOPADO, { client_item_code: "C.1", qty_on_hand: 8, qty_reserved: 0, qty_available: 8 }),
+    // O SKU legado com saldos de dois códigos do cliente: uma projeção, que conta os dois.
+    saldo("e1-a03", LEGADO, "A-03", 2, 0, "C.1"),
+    saldo("e1-rec", LEGADO, "RECEBIMENTO", 1, 0, "C.1"),
+    saldo("e2-a04", LEGADO, "A-04", 5, 0, "C.2"),
+    projecao(`cinv_BTG_Pactual__${LEGADO}`, LEGADO, { client_item_code: "C.1", qty_on_hand: 8, qty_reserved: 0, qty_available: 8 }),
     // Saldo sem projeção: a rotina não cria projeção.
     saldo("s4-a05", "SKU-4", "A-05", 7),
   ]);
@@ -120,7 +117,7 @@ describe("o recálculo do disponível do portal (recebimento com caixas, parte 7
     const { primeira, segunda } = await ateTerminar();
     // Em T0: a passada 1 refaz, a 2 sai limpa, mas cedo; a 3, depois da espera, conclui.
     assert.deepEqual(primeira, { status: "em_andamento", passada: 3, conferidas: 0, refeitas: 0 });
-    assert.deepEqual(segunda, { status: "feito", passada: 3, conferidas: 7, refeitas: 6 });
+    assert.deepEqual(segunda, { status: "feito", passada: 3, conferidas: 5, refeitas: 4 });
 
     const sku1 = await lida("cinv_BTG_Pactual__SKU-1");
     assert.deepEqual([sku1.qty_on_hand, sku1.qty_reserved, sku1.qty_available, sku1.qty_receiving], [10, 1, 2, 5]);
@@ -133,24 +130,20 @@ describe("o recálculo do disponível do portal (recebimento com caixas, parte 7
     assert.deepEqual([sku3.qty_on_hand, sku3.qty_available, sku3.qty_receiving], [2, 0, 0]);
     const sku5 = await lida("cinv_BTG_Pactual__SKU-5");
     assert.deepEqual([sku5.qty_available, sku5.qty_receiving], [6, 0]);
-    const c1 = await lida(`cinv_BTG_Pactual__${ESCOPADO}__C.1`);
-    assert.deepEqual([c1.qty_available, c1.qty_receiving], [2, 1]);
-    const c2 = await lida(`cinv_BTG_Pactual__${ESCOPADO}__C.2`);
-    assert.deepEqual([c2.qty_available, c2.qty_receiving], [5, 0]);
-    const semVariante = await lida(`cinv_BTG_Pactual__${ESCOPADO}`);
-    assert.deepEqual([semVariante.qty_available, semVariante.qty_receiving], [7, 1]);
+    const legado = await lida(`cinv_BTG_Pactual__${LEGADO}`);
+    assert.deepEqual([legado.qty_available, legado.qty_receiving], [7, 1]);
     assert.equal((await db.collection("client_inventory").doc("cinv_BTG_Pactual__SKU-4").get()).exists, false);
 
     const feito = (await controle()) ?? {};
     assert.deepEqual(
       [feito.version, feito.status, feito.pass, feito.total_changed, feito.cursor, feito.started_at, feito.pass_started_at, feito.done_at],
-      [VERSAO_DO_RECALCULO, "done", 3, 6, null, T0.toISOString(), DEPOIS.toISOString(), DEPOIS.toISOString()],
+      [VERSAO_DO_RECALCULO, "done", 3, 4, null, T0.toISOString(), DEPOIS.toISOString(), DEPOIS.toISOString()],
     );
     const [evento, ...outros] = await eventos();
     assert.equal(outros.length, 0);
     assert.equal(evento!.severity, "info");
     assert.equal(evento!.customer_code, undefined);
-    assert.deepEqual(evento!.payload, { version: VERSAO_DO_RECALCULO, passes: 3, projections_checked: 7, projections_changed: 6, started_at: T0.toISOString() });
+    assert.deepEqual(evento!.payload, { version: VERSAO_DO_RECALCULO, passes: 3, projections_checked: 5, projections_changed: 4, started_at: T0.toISOString() });
     assert.equal((await db.collection("ai_agent_inbox").get()).size, 0);
 
     // Feito, a rodada só lê o controle.
@@ -166,7 +159,7 @@ describe("o recálculo do disponível do portal (recebimento com caixas, parte 7
     await db.collection("client_inventory").doc("cinv_BTG_Pactual__SKU-1").update({ qty_available: 9, qty_receiving: 0 });
     // A passada que refaz não conclui; a seguinte, limpa e depois da espera, sim.
     const segunda = await recalcularDisponivelDoPortal(db, { agora: () => DEPOIS });
-    assert.deepEqual([segunda.status, segunda.passada, segunda.refeitas], ["feito", 4, 7]);
+    assert.deepEqual([segunda.status, segunda.passada, segunda.refeitas], ["feito", 4, 5]);
     assert.deepEqual([(await lida("cinv_BTG_Pactual__SKU-1")).qty_available, (await lida("cinv_BTG_Pactual__SKU-1")).qty_receiving], [2, 5]);
   });
 
@@ -201,47 +194,47 @@ describe("o recálculo do disponível do portal (recebimento com caixas, parte 7
   it("a rodada sem tempo para no fim da página, e a seguinte continua do cursor", async () => {
     const primeira = await recalcularDisponivelDoPortal(db, { porPagina: 2, tempoMs: 0, agora: () => T0 });
     assert.deepEqual(primeira, { status: "em_andamento", passada: 1, conferidas: 2, refeitas: 2 });
-    // As duas primeiras pela ordem do id são o escopado sem variante e a C.1.
-    assert.equal((await controle())?.cursor, `cinv_BTG_Pactual__${ESCOPADO}__C.1`);
+    // As duas primeiras pela ordem do id são a do SKU legado e a SKU-1.
+    assert.equal((await controle())?.cursor, "cinv_BTG_Pactual__SKU-1");
     const segunda = await recalcularDisponivelDoPortal(db, { porPagina: 2, tempoMs: 0, agora: () => T0 });
-    assert.deepEqual(segunda, { status: "em_andamento", passada: 1, conferidas: 4, refeitas: 4 });
-    assert.equal((await controle())?.cursor, "cinv_BTG_Pactual__SKU-1", "a segunda rodada seguiu do cursor, não do começo");
-    assert.equal((await lida("cinv_BTG_Pactual__SKU-3")).qty_available, 2, "a SKU-3 ainda não foi visitada");
+    assert.deepEqual(segunda, { status: "em_andamento", passada: 1, conferidas: 4, refeitas: 3 });
+    assert.equal((await controle())?.cursor, "cinv_BTG_Pactual__SKU-3", "a segunda rodada seguiu do cursor, não do começo");
+    assert.equal((await lida("cinv_BTG_Pactual__SKU-5")).qty_receiving, undefined, "a SKU-5 ainda não foi visitada");
 
     for (let rodada = 0; rodada < 6 && (await controle())?.status !== "done"; rodada += 1) {
       await recalcularDisponivelDoPortal(db, { porPagina: 2, agora: () => (rodada === 0 ? T0 : DEPOIS) });
     }
     assert.equal((await controle())?.status, "done");
-    assert.equal((await lida("cinv_BTG_Pactual__SKU-3")).qty_available, 0);
+    assert.equal((await lida("cinv_BTG_Pactual__SKU-5")).qty_receiving, 0);
     const [evento] = await eventos();
-    assert.equal(evento!.payload.projections_changed, 6);
+    assert.equal(evento!.payload.projections_changed, 4);
   });
 
   it("a passada limpa que começou antes do fim da espera não conclui, mesmo terminando depois dela", async () => {
-    // Uma página por rodada: sete projeções, quatro páginas por passada.
+    // Uma página por rodada: cinco projeções, três páginas por passada.
     const rodada = (quando: Date) => recalcularDisponivelDoPortal(db, { porPagina: 2, tempoMs: 0, agora: () => quando });
-    // Em T0, a passada 1 refaz as seis em quatro rodadas, e a quinta começa a passada 2.
-    for (let vez = 0; vez < 5; vez += 1) await rodada(T0);
+    // Em T0, a passada 1 refaz as quatro em três rodadas, e a quarta começa a passada 2.
+    for (let vez = 0; vez < 4; vez += 1) await rodada(T0);
     const meio = (await controle()) ?? {};
     assert.deepEqual([meio.pass, meio.pass_started_at, meio.pass_changed], [2, T0.toISOString(), 0]);
 
     // A passada 2 termina limpa depois da espera, mas começou em T0: não conclui.
-    for (let vez = 0; vez < 2; vez += 1) assert.equal((await rodada(DEPOIS)).status, "em_andamento");
+    assert.equal((await rodada(DEPOIS)).status, "em_andamento");
     assert.deepEqual(await rodada(DEPOIS), { status: "em_andamento", passada: 3, conferidas: 0, refeitas: 0 });
     assert.equal((await controle())?.pass_started_at, null, "a passada 3 começa na rodada seguinte");
     assert.equal((await eventos()).length, 0);
 
     // A passada 3 começa depois da espera e conclui no fim.
-    for (let vez = 0; vez < 3; vez += 1) assert.equal((await rodada(DEPOIS)).status, "em_andamento");
-    assert.deepEqual(await rodada(DEPOIS), { status: "feito", passada: 3, conferidas: 7, refeitas: 6 });
+    for (let vez = 0; vez < 2; vez += 1) assert.equal((await rodada(DEPOIS)).status, "em_andamento");
+    assert.deepEqual(await rodada(DEPOIS), { status: "feito", passada: 3, conferidas: 5, refeitas: 4 });
     assert.equal((await controle())?.pass_started_at, DEPOIS.toISOString());
     assert.equal((await eventos()).length, 1);
   });
 
   it("a rodada que parou no meio de uma página não deixa a passada se dar por limpa", async () => {
     const rodada = (quando: Date) => recalcularDisponivelDoPortal(db, { porPagina: 2, tempoMs: 0, agora: () => quando });
-    // Em T0, a passada 1 refaz as seis em quatro rodadas.
-    for (let vez = 0; vez < 4; vez += 1) await rodada(T0);
+    // Em T0, a passada 1 refaz as quatro em três rodadas.
+    for (let vez = 0; vez < 3; vez += 1) await rodada(T0);
     // Depois da espera, a passada 2 confere a primeira página e para no fim dela.
     assert.deepEqual(await rodada(DEPOIS), { status: "em_andamento", passada: 2, conferidas: 2, refeitas: 0 });
     assert.equal((await controle())?.page_open, false);
@@ -250,12 +243,12 @@ describe("o recálculo do disponível do portal (recebimento com caixas, parte 7
     await db.collection("system_controls").doc(CONTROLE_DO_RECALCULO).update({ page_open: true });
 
     // O resto da passada 2 sai sem nada a refazer, mas a passada não conclui.
-    for (let vez = 0; vez < 2; vez += 1) assert.equal((await rodada(DEPOIS)).status, "em_andamento");
+    assert.equal((await rodada(DEPOIS)).status, "em_andamento");
     assert.deepEqual(await rodada(DEPOIS), { status: "em_andamento", passada: 3, conferidas: 0, refeitas: 0 });
     assert.equal((await eventos()).length, 0);
     // A passada 3, inteira, conclui.
-    for (let vez = 0; vez < 3; vez += 1) assert.equal((await rodada(DEPOIS)).status, "em_andamento");
-    assert.deepEqual(await rodada(DEPOIS), { status: "feito", passada: 3, conferidas: 7, refeitas: 6 });
+    for (let vez = 0; vez < 2; vez += 1) assert.equal((await rodada(DEPOIS)).status, "em_andamento");
+    assert.deepEqual(await rodada(DEPOIS), { status: "feito", passada: 3, conferidas: 5, refeitas: 4 });
     assert.equal((await controle())?.page_open, false);
   });
 
@@ -271,7 +264,7 @@ describe("o recálculo do disponível do portal (recebimento com caixas, parte 7
     assert.equal((await recalcularDisponivelDoPortal(db, { agora: () => T1_DEPOIS })).status, "feito");
 
     const todos = (await eventos()).map((evento) => [evento.payload.started_at, evento.payload.projections_changed]).sort();
-    assert.deepEqual(todos, [[T0.toISOString(), 6], [T1.toISOString(), 1]]);
+    assert.deepEqual(todos, [[T0.toISOString(), 4], [T1.toISOString(), 1]]);
     assert.deepEqual([(await lida("cinv_BTG_Pactual__SKU-1")).qty_available, (await lida("cinv_BTG_Pactual__SKU-1")).qty_receiving], [2, 5]);
   });
 
@@ -290,7 +283,7 @@ describe("o recálculo do disponível do portal (recebimento com caixas, parte 7
     const { primeira, segunda } = await ateTerminar();
     assert.equal(primeira.status, "em_andamento");
     assert.equal(segunda.status, "feito");
-    assert.equal(segunda.refeitas, 6);
+    assert.equal(segunda.refeitas, 4);
     assert.equal((await controle())?.started_at, T0.toISOString(), "a versão nova começa a espera de novo");
     assert.equal((await lida("cinv_BTG_Pactual__SKU-1")).qty_receiving, 5);
   });

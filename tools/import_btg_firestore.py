@@ -32,7 +32,7 @@ SKU_CLIENT_ITEM_OVERRIDES = {
 BALANCE_SOURCE = os.environ.get("BTG_BALANCE_SOURCE", "movements").strip().lower()
 CLIENT_SCOPED_SKUS = {
     sku.strip()
-    for sku in os.environ.get("BTG_CLIENT_SCOPED_SKUS", "BTG-1043").split(",")
+    for sku in os.environ.get("BTG_CLIENT_SCOPED_SKUS", "").split(",")
     if sku.strip()
 }
 HTTP_TIMEOUT_SECONDS = 60

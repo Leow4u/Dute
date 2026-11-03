@@ -790,36 +790,8 @@ function balanceKey(customerCode: string, skuCode: string, locationId: string) {
   return `${customerCode}\u0000${skuCode}\u0000${locationId}`;
 }
 
-const CLIENT_SCOPED_SKUS = new Set(["BTG-1043"]);
-
-export function clientScopedInventoryId(
-  customerCode: string,
-  skuCode: string,
-  clientItemCode?: string,
-) {
-  const scope =
-    clientItemCode && CLIENT_SCOPED_SKUS.has(skuCode)
-      ? `__${clientItemCode}`
-      : "";
-  return safeDocId(`cinv_${customerCode}__${skuCode}${scope}`);
-}
-
-/**
- * A projeção client_inventory de um SKU escopado (CLIENT_SCOPED_SKUS) é
- * mantida por variante de cod_cliente. Somas agregadas destinadas a um doc
- * escopado devem considerar apenas os saldos daquela variante — nunca as
- * variantes irmãs que compartilham o mesmo SKU.
- */
-function variantScopedBalanceRows(
-  rows: Row[],
-  skuCode: string,
-  clientItemCode?: string,
-) {
-  if (!clientItemCode || !CLIENT_SCOPED_SKUS.has(skuCode)) return rows;
-  const variantKey = normalizedIdentity(clientItemCode);
-  return rows.filter(
-    (row) => normalizedIdentity(row.data.client_item_code) === variantKey,
-  );
+export function clientScopedInventoryId(customerCode: string, skuCode: string) {
+  return safeDocId(`cinv_${customerCode}__${skuCode}`);
 }
 
 /** O que a transação grava num saldo do SKU; null quando apaga o saldo. */
@@ -854,21 +826,12 @@ export function balancesAfter(rows: Row[], writes: BalanceWrite[]): Row[] {
 /**
  * O livre do cliente no SKU (recebimento com caixas, decisão 10 e parte 7):
  * o das prateleiras é o disponível do portal, e o do RECEBIMENTO, o em
- * recebimento; a EXPEDICAO só conta no total. Para o SKU escopado, só os
- * saldos da variante, como o doc da projeção.
+ * recebimento; a EXPEDICAO só conta no total.
  */
 type ClientSplit = { qty_available: number; qty_receiving: number };
 
-export function clientSplit(
-  rows: Row[],
-  skuCode: string,
-  clientItemCode?: string,
-): ClientSplit {
-  return livreParaOCliente(
-    variantScopedBalanceRows(rows, skuCode, clientItemCode).map(
-      (row) => row.data,
-    ),
-  );
+export function clientSplit(rows: Row[]): ClientSplit {
+  return livreParaOCliente(rows.map((row) => row.data));
 }
 
 /**
@@ -1015,13 +978,7 @@ function updateClientInventory(
   const unitCost = number(input.unitCost);
   const ref = db
     .collection(collections.clientInventory)
-    .doc(
-      clientScopedInventoryId(
-        input.customerCode,
-        input.skuCode,
-        input.clientItemCode,
-      ),
-    );
+    .doc(clientScopedInventoryId(input.customerCode, input.skuCode));
   rememberCatalogPrice(transaction, db, {
     customerCode: input.customerCode,
     skuCode: input.skuCode,
@@ -1085,13 +1042,7 @@ function setClientInventorySnapshot(
 ) {
   const ref = db
     .collection(collections.clientInventory)
-    .doc(
-      clientScopedInventoryId(
-        input.customerCode,
-        input.skuCode,
-        input.clientItemCode,
-      ),
-    );
+    .doc(clientScopedInventoryId(input.customerCode, input.skuCode));
   const unitCost = number(input.unitCost);
   // Sem o custo (o pedido do portal não leva, e o saldo não guarda), o valor
   // gravado fica como está: qty × 0 zerava o valor da mercadoria do SKU.
@@ -1170,17 +1121,11 @@ export async function refreshClientInventorySplitTransaction(
     const customerCode = text(data.customer_code);
     const skuCode = text(data.sku_code);
     if (!customerCode || !skuCode) return "same";
-    const clientItemCode = text(data.client_item_code) || undefined;
-    // A variante do SKU escopado vem do id, como as escritas o montam.
-    const variant =
-      clientScopedInventoryId(customerCode, skuCode, clientItemCode) === ref.id
-        ? clientItemCode
-        : undefined;
     const rows = await readRows(
       transaction,
       skuBalancesQuery(db, customerCode, skuCode),
     );
-    const split = clientSplit(rows, skuCode, variant);
+    const split = clientSplit(rows);
     if (
       data.qty_available === split.qty_available &&
       data.qty_receiving === split.qty_receiving
@@ -1574,8 +1519,6 @@ export async function createInventoryMovementTransaction(
       onHandDelta: delta,
       split: clientSplit(
         balancesAfter(skuRows, [{ ref: balanceRef, data: balancePayload }]),
-        skuCode,
-        text(input.client_item_code) || undefined,
       ),
     });
     applyCatalogStockAggregates(transaction, catalogTargets, {
@@ -2860,8 +2803,6 @@ export async function recordCycleCountTransaction(
           balancesAfter(aggregateBalanceRows, [
             { ref: balanceRow.ref, data: balancePayload },
           ]),
-          skuCode,
-          clientItemCode,
         ),
       });
       if (mode === "cycle") {
@@ -2874,16 +2815,11 @@ export async function recordCycleCountTransaction(
       // Sem divergência nada mudou no ledger; a projeção do cliente é
       // por SKU (todas as localizações), então o snapshot precisa somar os
       // saldos agregados — nunca os números de uma única localização.
-      const projectionRows = variantScopedBalanceRows(
-        aggregateBalanceRows,
-        skuCode,
-        clientItemCode,
-      );
-      const aggregateOnHand = projectionRows.reduce(
+      const aggregateOnHand = aggregateBalanceRows.reduce(
         (total, row) => total + number(row.data.qty_on_hand),
         0,
       );
-      const aggregateReserved = projectionRows.reduce(
+      const aggregateReserved = aggregateBalanceRows.reduce(
         (total, row) => total + number(row.data.qty_reserved),
         0,
       );
@@ -2905,8 +2841,6 @@ export async function recordCycleCountTransaction(
           balancesAfter(aggregateBalanceRows, [
             { ref: balanceRow.ref, data: balancePayload },
           ]),
-          skuCode,
-          clientItemCode,
         ),
       });
     }
@@ -3313,7 +3247,7 @@ export async function removeOpeningInventoryLineTransaction(
     const skuRef = db.collection(collections.skus).doc(safeDocId(skuCode));
     const projectionRef = db
       .collection(collections.clientInventory)
-      .doc(clientScopedInventoryId(customerCode, skuCode, clientItemCode));
+      .doc(clientScopedInventoryId(customerCode, skuCode));
     const cycleCountRef = db
       .collection(collections.cycleCounts)
       .doc(cycleCountId);
@@ -3539,11 +3473,7 @@ export async function removeOpeningInventoryLineTransaction(
         unitCost,
         qtyOnHand: nextOnHand,
         qtyReserved: aggregateReserved,
-        split: clientSplit(
-          balancesAfter(balanceRows, [balanceWrite]),
-          skuCode,
-          clientItemCode,
-        ),
+        split: clientSplit(balancesAfter(balanceRows, [balanceWrite])),
       });
     }
 
@@ -4024,8 +3954,6 @@ export async function setReturnDispositionTransaction(
         onHandDelta: quantity,
         split: clientSplit(
           balancesAfter(skuRows, [{ ref: balanceRef, data: balancePayload }]),
-          skuCode,
-          clientItemCode,
         ),
       });
       applyCatalogStockAggregates(transaction, returnCatalogTargets, {
@@ -4417,11 +4345,7 @@ export async function createCustomerRequestTransaction(
         });
       }
       for (const [skuCode, item] of reservedBySku) {
-        const skuRows = variantScopedBalanceRows(
-          balanceRowsBySku.get(skuCode) ?? [],
-          skuCode,
-          text(item.client_item_code) || undefined,
-        );
+        const skuRows = balanceRowsBySku.get(skuCode) ?? [];
         const qtyOnHand = skuRows.reduce(
           (sum, row) => sum + number(row.data.qty_on_hand),
           0,
@@ -4446,8 +4370,6 @@ export async function createCustomerRequestTransaction(
               balanceRowsBySku.get(skuCode) ?? [],
               reservationWrites(balanceRowsBySku.get(skuCode) ?? [], reservedAfter),
             ),
-            skuCode,
-            text(item.client_item_code) || undefined,
           ),
         });
         applyCatalogStockAggregates(
@@ -6065,11 +5987,7 @@ export async function decideCustomerRequestTransaction(
         });
       }
       for (const [skuCode, item] of reservedBySku) {
-        const skuRows = variantScopedBalanceRows(
-          balanceRowsBySku.get(skuCode) ?? [],
-          skuCode,
-          text(item.client_item_code) || undefined,
-        );
+        const skuRows = balanceRowsBySku.get(skuCode) ?? [];
         const qtyOnHand = skuRows.reduce(
           (sum, row) => sum + number(row.data.qty_on_hand),
           0,
@@ -6094,8 +6012,6 @@ export async function decideCustomerRequestTransaction(
               balanceRowsBySku.get(skuCode) ?? [],
               reservationWrites(balanceRowsBySku.get(skuCode) ?? [], reservedAfter),
             ),
-            skuCode,
-            text(item.client_item_code) || undefined,
           ),
         });
         if (!preReservedRows.length) {
@@ -6509,11 +6425,7 @@ export async function decideCustomerRequestTransaction(
         reservedAfter: number(entry.row.data.qty_reserved) - entry.quantity,
       }));
       for (const [skuCode, released] of releasedBySku) {
-        const skuRows = variantScopedBalanceRows(
-          releaseBalancesBySku.get(skuCode) ?? [],
-          skuCode,
-          released.clientItemCode,
-        );
+        const skuRows = releaseBalancesBySku.get(skuCode) ?? [];
         const qtyOnHand = skuRows.reduce(
           (sum, row) => sum + number(row.data.qty_on_hand),
           0,
@@ -6543,8 +6455,6 @@ export async function decideCustomerRequestTransaction(
               releaseBalancesBySku.get(skuCode) ?? [],
               reservationWrites(releaseBalancesBySku.get(skuCode) ?? [], releasedAfter),
             ),
-            skuCode,
-            released.clientItemCode,
           ),
         });
         applyCatalogStockAggregates(
@@ -7001,20 +6911,15 @@ export async function cancelWarehouseOrderTransaction(
     // O portal e o catálogo: o SKU fica com o mesmo saldo e sem a reserva do
     // pedido; o separado que foi para a EXPEDICAO sai do disponível.
     for (const [skuCode, released] of bySku) {
-      const skuRows = variantScopedBalanceRows(
-        balancesBySku.get(skuCode) ?? [],
-        skuCode,
-        released.clientItemCode,
-      );
+      const skuRows = balancesBySku.get(skuCode) ?? [];
       const source = skuRows[0]?.data ?? {};
       // Cada saldo mexido como fica: o novo (a EXPEDICAO que ainda não
-      // existia) com o local e a variante com que é criado.
+      // existia) com o local com que é criado.
       const ledgerWrites: BalanceWrite[] = [...ledger.values()]
         .filter((entry) => entry.skuCode === skuCode)
         .map((entry) => ({
           ref: entry.ref,
           data: compact({
-            client_item_code: entry.exists ? undefined : entry.clientItemCode,
             location_id: entry.exists ? undefined : entry.locationId,
             qty_on_hand: entry.qtyOnHand + entry.onHandDelta,
             qty_reserved: entry.qtyReserved + entry.reservedDelta,
@@ -7034,8 +6939,6 @@ export async function cancelWarehouseOrderTransaction(
         ),
         split: clientSplit(
           balancesAfter(balancesBySku.get(skuCode) ?? [], ledgerWrites),
-          skuCode,
-          released.clientItemCode,
         ),
       });
       applyCatalogStockAggregates(transaction, catalogTargets.get(skuCode) ?? {}, {
@@ -8111,7 +8014,7 @@ export async function advanceWarehouseTaskTransaction(
         transaction.get(
           db
             .collection(collections.clientInventory)
-            .doc(clientScopedInventoryId(customerCode, skuCode, clientItemCode)),
+            .doc(clientScopedInventoryId(customerCode, skuCode)),
         ),
       ]);
 
@@ -8164,8 +8067,6 @@ export async function advanceWarehouseTaskTransaction(
             { ref: sourceBalance.ref, data: { qty_on_hand: sourceAfter } },
             { ref: destinationBalance.ref, data: destinationPayload },
           ]),
-          skuCode,
-          clientItemCode,
         ),
       );
       createMovement(
@@ -8485,8 +8386,6 @@ export async function advanceWarehouseTaskTransaction(
           onHandDelta: projected.quantity,
           split: clientSplit(
             balancesAfter(skuBalanceRows.get(skuCode) ?? [], writes),
-            skuCode,
-            projected.clientItemCode,
           ),
         });
         if (
@@ -8781,8 +8680,6 @@ export async function advanceWarehouseTaskTransaction(
           reservedDelta: -entry.released,
           split: clientSplit(
             balancesAfter(skuBalanceRows.get(skuCode) ?? [], writes),
-            skuCode,
-            entry.clientItemCode,
           ),
         });
         applyCatalogStockAggregates(transaction, taskCatalogTargets.get(skuCode) ?? {}, {
@@ -9276,8 +9173,6 @@ export async function advanceWarehouseTaskTransaction(
                 .filter((state) => state.skuCode === skuCode)
                 .map(stateWrite),
             ),
-            skuCode,
-            projected.clientItemCode,
           ),
         });
         applyCatalogStockAggregates(
@@ -9560,7 +9455,7 @@ export async function addCatalogPhotosTransaction(
   const operationRef = db.collection(collections.operations).doc(operationId);
   const clientInventoryRef = db
     .collection(collections.clientInventory)
-    .doc(clientScopedInventoryId(customerCode, skuCode, clientItemCode));
+    .doc(clientScopedInventoryId(customerCode, skuCode));
 
   return db.runTransaction(async (transaction) => {
     const previous = operationResult<Record<string, unknown>>(
