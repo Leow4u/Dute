@@ -163,8 +163,9 @@ pelas decisões:
 | Armazenagem · Posições, encaixotar o saldo sem caixa | `WmsEncaixotarSaldo.dc.html` | Correção pontual (decisão 9), para owner, admin e coordenação: pelo painel da prateleira com saldo sem caixa, "Registrar caixa com o saldo" com medidas, motivo e etiqueta; a ação some quando esse saldo acaba. |
 
 A página "FIFO por data" não tem canvas: as duas telas das partes 5 e 6 de
-`docs/plataforma/fifo-por-data.md` foram enviadas na conversa em 03/11/2026 e
-esperam a aprovação do Leonardo antes do código. A do portal segue a
+`docs/plataforma/fifo-por-data.md` foram enviadas na conversa e aprovadas
+pelo Leonardo em 03/11/2026, com a prateleira de data mais antiga primeiro na
+ficha interna. A do portal segue a
 identidade do portal; a da Armazenagem, o shell v3 (Estoque › Itens, cliente
 ativo BTG, Guilherme, Operação WMS). As fontes são estáticas e os números
 fecham entre as duas: 16 peças de 22/10/2026 em B-05, 30 de 30/10/2026 e 60 de
