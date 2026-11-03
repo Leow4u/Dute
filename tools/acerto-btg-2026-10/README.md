@@ -342,6 +342,15 @@ polo feminina preta G), com 1 peça na CX-000004. O décimo quarto dry-run deu
 80 operações, 73 já aplicadas, 7 sem mudança, 0 pendentes e 0 erros: os 14
 itens da Cristiane estão corrigidos no sistema.
 
+## Saldão de 03/11/2026
+
+A Cristiane pediu por telefone que 8 itens fossem para a planilha do saldão.
+O tipo `zerar_sku` tirou todo o saldo e as linhas deles: 47 peças em B-09
+(PAN cinza P 15 e PP 9 na CX-000131; azul P 13, índigo P 2, branca P 3, cinza
+P 3 e M 1 na CX-000132; jaqueta copa azul G 1 na CX-000190). A CX-000131 e a
+CX-000132 ficaram vazias e saem do registro (`saldao2-cx-131` e `-132`).
+Aplicado em 03/11/2026: as 8 zeragens e as 2 remoções de caixa, sem falha.
+
 ## Validação no emulador (30/10/2026)
 
 Feita no ambiente de desenvolvimento, sem credencial da nuvem, com o
