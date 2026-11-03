@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, MessageSquareWarning } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -10,30 +10,47 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { cn } from "@/lib/utils";
-import { boxDraftToPayload, emptyBoxDraft, formatBoxDimensions, type BoxDraft } from "@/lib/warehouse-boxes";
+import { boxDraftToPayload, emptyBoxDraft, formatBoxDimensions, type BoxDraft, type SlottingCandidate } from "@/lib/warehouse-boxes";
+import type { WarehousePosition } from "@/lib/warehouse-positions";
+import { fetchWarehouseRows } from "@/lib/warehouse-rows";
 import { statusLabel, type TaskQueueEntry, type WarehouseTask, type WarehouseTaskItem } from "@/lib/warehouse-ops/model";
 import {
+  confirmarDestino,
   emTresCasas,
   estadoDaCaixa,
   fecharCaixa,
   iniciarCaixa,
   lancarNaCaixa,
   reabrirCaixa,
+  recusarSugestao,
   removerCaixa,
   situacaoDaLinha,
+  sugerirPrateleira,
   type CaixaDaChegada,
   type EstadoDaCaixa,
   type SituacaoDaLinha,
 } from "@/lib/wms/caixas-do-recebimento";
+
+import {
+  DestinoDaCaixa,
+  RecusaDaPrateleira,
+  destinoVazio,
+  seloDaCaixaFechada,
+  sugestaoDoConfirmar,
+  type DestinoDaCaixaEstado,
+  type DestinoDaCaixaProps,
+  type ModoDoDestino,
+} from "./destino-da-caixa";
+import { eligibleShelfPositions } from "./shelf-picker";
 
 /**
  * A ficha da chegada por caixa, na bancada (docs/plataforma/recebimento-com-caixas.md,
  * parte 5b; mockups WmsRecebimentoCaixa e WmsRecebimentoFecharCaixa, aprovados
  * em 03/11/2026): iniciar a caixa, lançar as linhas da NF que estão nela,
  * fechar com as medidas e o peso, reabrir e remover. Fechar e a caixa
- * fechada abrem a vista da caixa, como no mockup WmsRecebimentoFecharCaixa.
- * O destino (5c) e as linhas, a falta e a conclusão (5d) entram nas partes
- * seguintes.
+ * fechada abrem a vista da caixa, como no mockup WmsRecebimentoFecharCaixa,
+ * com o destino da caixa fechada (parte 5c, destino-da-caixa.tsx). As
+ * linhas, a falta e a conclusão (5d) entram na parte seguinte.
  */
 
 const numero = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
@@ -114,6 +131,13 @@ export type FichaDaChegadaPorCaixaProps = {
   onRemover: () => void;
   onVoltar: () => void;
   onRegistrarDivergencia: () => void;
+  /** O destino da caixa fechada (parte 5c). */
+  destino: DestinoDaCaixaEstado;
+  /** A prateleira do "Não cabe aqui" aberto, se houver. */
+  recusando: string | null;
+  onDestino: Omit<DestinoDaCaixaProps, "estado" | "ocupado">;
+  onCancelarRecusa: () => void;
+  onRecusar: (motivo: string) => void;
 };
 
 function tituloDaChegada(task: WarehouseTask) {
@@ -364,7 +388,7 @@ function VistaDaCaixa(props: FichaDaChegadaPorCaixaProps & { caixa: CaixaDaChega
       ? [caixa.length_m, caixa.width_m, caixa.height_m]
       : null;
   const volume = lados ? lados.reduce((produto, lado) => produto * lado, 1) : null;
-  const selo: EstadoDaCaixa = fechando ? estadoDaCaixa(caixa) : { rotulo: "fechada · sem destino", tom: "amb" };
+  const selo: EstadoDaCaixa = fechando ? estadoDaCaixa(caixa) : { rotulo: seloDaCaixaFechada(props.destino), tom: "amb" };
   const detalhe = [tituloDaChegada(task), task.invoice_number ? `NF ${task.invoice_number}` : null, conteudoDaCaixa(caixa)]
     .filter(Boolean)
     .join(" · ");
@@ -418,6 +442,19 @@ function VistaDaCaixa(props: FichaDaChegadaPorCaixaProps & { caixa: CaixaDaChega
           <span className="ml-auto text-sm text-muted-foreground">Volume {metrosCubicos.format(volume)} m³</span>
         ) : null}
       </div>
+      {!fechando && props.podeOperar ? (
+        <>
+          <DestinoDaCaixa estado={props.destino} ocupado={ocupado} {...props.onDestino} />
+          <RecusaDaPrateleira
+            prateleira={props.recusando}
+            caixa={caixa.code}
+            detalhe={[medidasDaCaixa(caixa), conteudoDaCaixa(caixa)].filter(Boolean).join(" · ")}
+            enviando={ocupado}
+            onCancelar={props.onCancelarRecusa}
+            onRecusar={props.onRecusar}
+          />
+        </>
+      ) : null}
       {props.podeOperar ? (
         <div className="flex flex-wrap gap-2">
           {fechando ? (
@@ -479,6 +516,10 @@ export function FichaDaChegadaPorCaixa({
   const [rascunho, setRascunho] = useState<RascunhoDoFechamento>(rascunhoVazio);
   // A revisão que a última escrita devolveu: a próxima não espera a releitura da fila.
   const [revisoes, setRevisoes] = useState<Record<string, number>>({});
+  // O destino da caixa fechada (parte 5c).
+  const [modoDoDestino, setModoDoDestino] = useState<ModoDoDestino>("sugestao");
+  const [prateleiraEscolhida, setPrateleiraEscolhida] = useState("");
+  const [recusando, setRecusando] = useState<string | null>(null);
 
   const selecionada = escolhida && caixas.some((caixa) => caixa.code === escolhida)
     ? escolhida
@@ -487,14 +528,69 @@ export function FichaDaChegadaPorCaixa({
   const revisaoDe = (alvo: CaixaDaChegada) => Math.max(alvo.conference_revision, revisoes[alvo.code] ?? 0);
   const chave = () => crypto.randomUUID();
   const daChegada = { receipt_id: receiptId, customer_code: customerCode || undefined };
+  const podeOperar = task.can_advance !== false;
+  // A caixa fechada à vista é a que espera o destino; quem só consulta não pede a sugestão.
+  const semDestino = podeOperar && caixa && caixa.status === "reviewed" ? caixa : null;
+  const revisaoSemDestino = semDestino ? revisaoDe(semDestino) : 0;
 
-  const depois = (revisao?: unknown, code?: string) => {
+  const anotarRevisao = (revisao?: unknown, code?: string) => {
     if (code && typeof revisao === "number") setRevisoes((atual) => ({ ...atual, [code]: revisao }));
-    void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
+  };
+  const releitura = () => queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
+  const depois = (revisao?: unknown, code?: string) => {
+    anotarRevisao(revisao, code);
+    void releitura();
   };
   const falhou = (titulo: string) => (error: unknown) => {
     toast({ title: titulo, description: error instanceof Error ? error.message : String(error), variant: "destructive" });
   };
+  const limparDestino = () => {
+    setModoDoDestino("sugestao");
+    setPrateleiraEscolhida("");
+    setRecusando(null);
+  };
+  const mensagem = (error: unknown) => (error ? (error instanceof Error ? error.message : String(error)) : null);
+
+  const sugestao = useQuery({
+    queryKey: ["sugestao-da-caixa", receiptId, semDestino?.code ?? "", revisaoSemDestino],
+    queryFn: () => sugerirPrateleira({ ...daChegada, box_code: semDestino!.code }),
+    enabled: Boolean(semDestino),
+    retry: false,
+    staleTime: 0,
+  });
+  const posicoes = useQuery({
+    queryKey: ["warehouse-positions", "all-pages"],
+    staleTime: 30_000,
+    queryFn: async () => ({ items: await fetchWarehouseRows<WarehousePosition>("/api/warehouse/positions?limit=2000") }),
+    enabled: Boolean(semDestino) && modoDoDestino === "escolha",
+  });
+  const previa = useQuery({
+    queryKey: ["sugestao-da-caixa", receiptId, semDestino?.code ?? "", revisaoSemDestino, "prateleira", prateleiraEscolhida],
+    queryFn: () => sugerirPrateleira({ ...daChegada, box_code: semDestino!.code, location_id: prateleiraEscolhida }),
+    enabled: Boolean(semDestino) && modoDoDestino === "escolha" && Boolean(prateleiraEscolhida),
+    retry: false,
+    staleTime: 0,
+  });
+  const prateleiras = useMemo(() => {
+    const recusadas = new Set(semDestino?.refused_positions ?? []);
+    // A fila do Receber é a do cliente ativo: as prateleiras são as da zona dele.
+    return eligibleShelfPositions(posicoes.data?.items ?? [], customerCode).filter((posicao) => !recusadas.has(posicao.code));
+  }, [posicoes.data?.items, semDestino?.refused_positions, customerCode]);
+  const destino: DestinoDaCaixaEstado = semDestino
+    ? {
+        modo: modoDoDestino,
+        sugestao: sugestao.data ?? null,
+        carregandoSugestao: sugestao.isFetching,
+        erroSugestao: mensagem(sugestao.error),
+        prateleiras,
+        carregandoPrateleiras: posicoes.isLoading,
+        erroPrateleiras: mensagem(posicoes.error),
+        escolhida: prateleiraEscolhida,
+        previa: previa.data?.position ?? null,
+        carregandoPrevia: previa.isFetching,
+        erroPrevia: mensagem(previa.error),
+      }
+    : destinoVazio();
 
   const iniciar = useMutation({
     mutationFn: () => iniciarCaixa({ ...daChegada, idempotency_key: chave() }),
@@ -504,6 +600,7 @@ export function FichaDaChegadaPorCaixa({
         : null;
       if (code) setEscolhida(code);
       setFechando(false);
+      limparDestino();
       depois();
     },
     onError: falhou("Não foi possível iniciar a caixa"),
@@ -545,19 +642,24 @@ export function FichaDaChegadaPorCaixa({
         idempotency_key: chave(),
       });
     },
-    onSuccess: (resultado, alvo) => {
-      // A caixa fechada continua à vista: dela sai o destino (parte 5c).
+    onSuccess: async (resultado, alvo) => {
+      anotarRevisao(resultado.conference_revision, alvo.code);
+      // Espera a fila trazer a caixa fechada: a vista passa direto ao destino, sem piscar a chegada.
+      await releitura();
       setEscolhida(alvo.code);
       setFechando(false);
       setRascunho(rascunhoVazio());
-      depois(resultado.conference_revision, alvo.code);
+      limparDestino();
     },
     onError: falhou("Não foi possível fechar a caixa"),
   });
   const reabrir = useMutation({
     mutationFn: (alvo: CaixaDaChegada) =>
       reabrirCaixa({ ...daChegada, box_code: alvo.code, expected_revision: revisaoDe(alvo), idempotency_key: chave() }),
-    onSuccess: (resultado, alvo) => depois(resultado.conference_revision, alvo.code),
+    onSuccess: (resultado, alvo) => {
+      limparDestino();
+      depois(resultado.conference_revision, alvo.code);
+    },
     onError: falhou("Não foi possível reabrir a caixa"),
   });
   const remover = useMutation({
@@ -566,11 +668,53 @@ export function FichaDaChegadaPorCaixa({
     onSuccess: () => {
       setEscolhida(null);
       setFechando(false);
+      limparDestino();
       depois();
     },
     onError: falhou("Não foi possível remover a caixa"),
   });
-  const ocupado = iniciar.isPending || lancar.isPending || fechar.isPending || reabrir.isPending || remover.isPending;
+  const confirmar = useMutation({
+    mutationFn: (input: { caixa: CaixaDaChegada; candidato: SlottingCandidate }) =>
+      confirmarDestino({
+        ...daChegada,
+        box_code: input.caixa.code,
+        expected_revision: revisaoDe(input.caixa),
+        location_id: input.candidato.code,
+        orientation: input.candidato.placement.orientation,
+        support_box_code: input.candidato.placement.support_box_code,
+        // A sugestão do motor vai junto mesmo quando a pessoa escolheu outra prateleira.
+        suggestion: sugestaoDoConfirmar(sugestao.data ?? null),
+        idempotency_key: chave(),
+      }),
+    onSuccess: async (resultado, input) => {
+      anotarRevisao(resultado.conference_revision, input.caixa.code);
+      await releitura();
+      // Com o destino confirmado, a caixa volta à lista da chegada.
+      setEscolhida(null);
+      limparDestino();
+    },
+    onError: falhou("Não foi possível confirmar o destino"),
+  });
+  const recusar = useMutation({
+    mutationFn: (input: { caixa: CaixaDaChegada; prateleira: string; motivo: string }) =>
+      recusarSugestao({
+        ...daChegada,
+        box_code: input.caixa.code,
+        expected_revision: revisaoDe(input.caixa),
+        position: input.prateleira,
+        reason: input.motivo,
+        idempotency_key: chave(),
+      }),
+    onSuccess: (resultado, input) => {
+      setRecusando(null);
+      // A revisão nova pede outra sugestão, já sem a prateleira recusada.
+      depois(resultado.conference_revision, input.caixa.code);
+    },
+    onError: falhou("Não foi possível recusar a prateleira"),
+  });
+  const ocupado =
+    iniciar.isPending || lancar.isPending || fechar.isPending || reabrir.isPending || remover.isPending ||
+    confirmar.isPending || recusar.isPending;
 
   return (
     <FichaDaChegadaPorCaixaConteudo
@@ -582,11 +726,12 @@ export function FichaDaChegadaPorCaixa({
       fechando={fechando}
       rascunho={rascunho}
       ocupado={ocupado}
-      podeOperar={task.can_advance !== false}
+      podeOperar={podeOperar}
       podeRegistrarDivergencia={task.can_register_exception !== false && registeringExceptionId !== task.id}
       onSelecionar={(code) => {
         setEscolhida(code);
         setFechando(false);
+        limparDestino();
       }}
       onIniciar={() => iniciar.mutate()}
       onBusca={setBusca}
@@ -632,8 +777,20 @@ export function FichaDaChegadaPorCaixa({
         // Da caixa sendo fechada volta-se a ela, em conferência; da fechada, à chegada.
         if (caixa?.status === "counting") setFechando(false);
         else setEscolhida(null);
+        limparDestino();
       }}
       onRegistrarDivergencia={() => onOpenException(task)}
+      destino={destino}
+      recusando={recusando}
+      onDestino={{
+        onModo: setModoDoDestino,
+        onEscolher: setPrateleiraEscolhida,
+        onConfirmar: (candidato) => semDestino && confirmar.mutate({ caixa: semDestino, candidato }),
+        onNaoCabe: setRecusando,
+        onTentarDeNovo: () => void sugestao.refetch(),
+      }}
+      onCancelarRecusa={() => setRecusando(null)}
+      onRecusar={(motivo) => semDestino && recusando && recusar.mutate({ caixa: semDestino, prateleira: recusando, motivo })}
     />
   );
 }
