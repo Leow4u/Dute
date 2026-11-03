@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import {
   AlertTriangle,
@@ -72,6 +72,7 @@ import {
 import { cn } from "@/lib/utils";
 import { groupFamilies, variantLabel, type Family } from "@/lib/stock-variants";
 
+import { DatasDeEntrada, buscarDatasDeEntrada, type DataDeEntrada } from "./datas-de-entrada";
 import { useClientEvents, useSaveClientEvent } from "./events-api";
 import {
   ClientDataBoundary,
@@ -832,7 +833,7 @@ export function ClienteEstoque() {
               </SideDrawer>
             ) : selectedProduct ? (
               <SideDrawer onClose={() => setSelectedProductKey(null)}>
-                <ProductDetailPanel
+                <ProductDetailWithDates
                   product={selectedProduct}
                   cart={cart}
                   draftQuantity={getDraftQuantity(selectedProduct)}
@@ -2107,6 +2108,30 @@ export function CartPanel({
   );
 }
 
+type ProductDetailProps = {
+  product: StockProduct;
+  cart: Record<string, number>;
+  draftQuantity: number;
+  isPending: boolean;
+  onClose: () => void;
+  onDraftQuantityChange: (quantity: number) => void;
+  onAdd: () => void;
+  onReplenish: () => void;
+  onArchive: () => void;
+  /** As datas de entrada do item (FIFO por data, parte 5); sem elas, a seção não aparece. */
+  datasDeEntrada?: readonly DataDeEntrada[];
+};
+
+/** O detalhe com as datas de entrada do item, lidas quando o painel abre; sem elas, o detalhe de sempre. */
+function ProductDetailWithDates(props: ProductDetailProps) {
+  const datas = useQuery({
+    queryKey: ["client-stock-dates", props.product.sku],
+    queryFn: () => buscarDatasDeEntrada(props.product.sku),
+    staleTime: 60_000,
+  });
+  return <ProductDetailPanel {...props} datasDeEntrada={datas.data ?? []} />;
+}
+
 export function ProductDetailPanel({
   product,
   cart,
@@ -2117,17 +2142,8 @@ export function ProductDetailPanel({
   onAdd,
   onReplenish,
   onArchive,
-}: {
-  product: StockProduct;
-  cart: Record<string, number>;
-  draftQuantity: number;
-  isPending: boolean;
-  onClose: () => void;
-  onDraftQuantityChange: (quantity: number) => void;
-  onAdd: () => void;
-  onReplenish: () => void;
-  onArchive: () => void;
-}) {
+  datasDeEntrada = [],
+}: ProductDetailProps) {
   const liveAvailable = liveAvailableForProduct(product, cart);
   const remaining = Math.max(0, liveAvailable - draftQuantity);
   const status = productStatus(product, liveAvailable);
@@ -2212,6 +2228,8 @@ export function ProductDetailPanel({
             />
           ) : null}
         </div>
+
+        <DatasDeEntrada datas={datasDeEntrada} />
 
         <div className="rounded-lg border border-primary/15 bg-primary/10 p-4 text-sm leading-6 text-primary">
           <div className="flex items-start gap-3">

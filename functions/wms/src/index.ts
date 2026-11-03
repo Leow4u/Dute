@@ -65,6 +65,7 @@ import { accessChangeFromTo, assertAccessActorCurrent, setUserAccessFor } from "
 import { assertDirectoryPersonManageable, enableReinvitedLoginFor, readReinvitedUser, userDirectoryArchivePayload } from "./domain/user-directory.js";
 import { accountRetentionEnabled, anonymizeRemovedAccounts } from "./domain/account-retention.js";
 import { recalcularDisponivelDoPortal } from "./domain/disponivel-do-portal.js";
+import { lerDatasDoEstoque } from "./domain/datas-do-estoque.js";
 import { openAreaPutaway as openAreaPutawayFor, previewAreaPutaway as previewAreaPutawayFor } from "./domain/area-putaway.js";
 import { CLIENT_NOTICE_AFTER_PUTAWAY } from "./domain/inbound-box-entry.js";
 import {
@@ -6652,6 +6653,28 @@ export const createInventoryMovement = onCall(async (request) => {
     },
     profile,
   );
+});
+
+// As datas de entrada do estoque de um SKU (docs/plataforma/fifo-por-data.md,
+// seções 3.3 e 3.4; a conta em domain/datas-do-estoque.ts). O cliente lê só as
+// do próprio estoque, por dia e sem prateleira; a equipe que lê os saldos por
+// local (canReadOperations nas Firestore Rules) recebe também as de cada
+// prateleira. Só lê: nada é gravado.
+const StockDatesInput = z.object({
+  customer_code: z.string().trim().min(1).max(160).optional(),
+  sku_code: z.string().trim().min(1).max(160),
+});
+
+export const getStockDates = onCall(async (request) => {
+  const profile = await getProfile(request);
+  if (!["owner", "admin", "interno", "wms", "suporte", "cliente"].includes(profile.role)) {
+    throw new HttpsError("permission-denied", "Datas do estoque visíveis somente para a operação ou o cliente.");
+  }
+  const parsed = StockDatesInput.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", "Informe o SKU do item.");
+  const customerCode = requireCustomerScope(profile, parsed.data.customer_code);
+  const { datas, locais } = await lerDatasDoEstoque(db, customerCode, parsed.data.sku_code);
+  return profile.role === "cliente" ? { datas } : { datas, locais };
 });
 
 export const getOpeningInventorySession = onCall(async (request) => {
