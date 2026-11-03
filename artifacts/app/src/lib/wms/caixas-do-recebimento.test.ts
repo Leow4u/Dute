@@ -6,6 +6,7 @@ import {
   caixasGuardadas,
   chegadaPorCaixa,
   esperaJustificativa,
+  modoDaChegadaAvulsa,
   emTresCasas,
   estadoDaCaixa,
   pedeJustificativa,
@@ -145,6 +146,13 @@ describe("a caixa e a chegada na tela", () => {
     expect(caixasGuardadas({ box_count: 2, boxes_stored: 0 })).toBe("0 de 2 caixas guardadas");
     expect(caixasGuardadas({ box_count: 1, boxes_stored: 1 })).toBe("1 de 1 caixa guardada");
     expect(caixasGuardadas({ box_count: 2, boxes_stored: 5 })).toBe("2 de 2 caixas guardadas");
+  });
+
+  it("a chegada avulsa pede por caixa só com a liberação e o modelo que confere por caixa (parte 5g, decisão 1)", () => {
+    expect(modoDaChegadaAvulsa(true, { inboundConference: "per_box" })).toBe("per_box");
+    expect(modoDaChegadaAvulsa(false, { inboundConference: "per_box" })).toBeUndefined();
+    expect(modoDaChegadaAvulsa(true, { inboundConference: "per_line" })).toBeUndefined();
+    expect(modoDaChegadaAvulsa(true, null)).toBeUndefined();
   });
 
   it("só a chegada gravada por caixa vai para a tela da caixa", () => {

@@ -356,7 +356,12 @@ documentação de produto e operação está em `docs/`.
   caixa inteira com o mesmo razão da guarda por linha (paridade travada no
   teste) e não cobra; a régua `billing-callables` roda esse fluxo de
   verdade. A API REST v1, o aviso do portal e o Documentos criam por linha, e
-  a conferência e a entrada por linha recusam a chegada por caixa. A caixa do
+  a conferência e a entrada por linha recusam a chegada por caixa. A tela é a
+  parte 5, no Receber: a bancada (`features/warehouse-ops/chegada-por-caixa.tsx`),
+  o destino da caixa fechada (`destino-da-caixa.tsx`, o mesmo hook na bancada e
+  na guarda), a fila e a guarda da caixa (`guarda-da-caixa.tsx`); a chegada
+  avulsa só pede por caixa com a liberação e o modelo do cliente
+  (`modoDaChegadaAvulsa`). A caixa do
   recebimento mora em `functions/wms/src/domain/inbound-boxes.ts` (parte 3):
   iniciar, lançar, fechar ou reabrir, sugerir, recusar, confirmar o destino
   (`committing`, a reserva da prateleira) e remover; nunca escreve a chegada,

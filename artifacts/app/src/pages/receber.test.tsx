@@ -70,6 +70,14 @@ describe("Receber na v3", () => {
     expect(TELA).toMatch(/if \(entry\.queue\.key === "putaway" && entry\.task\.box_code\) \{\s*return <GuardaDaCaixa key=\{entry\.task\.id\} entry=\{entry\} \/>;/);
   });
 
+  it("a chegada avulsa pede por caixa com a liberação e o modelo do cliente, com o selo e sem o local da linha (parte 5g)", () => {
+    expect(AVULSA).toContain("const conferenceMode = modoDaChegadaAvulsa(RECEBIMENTO_POR_CAIXA_LIBERADO, activeCustomer?.profile?.template);");
+    expect(AVULSA).toContain("conference_mode: conferenceMode,");
+    expect(AVULSA).toContain('location_id: conferenceMode ? "RECEBIMENTO" : line.location.trim() || "RECEBIMENTO",');
+    expect(AVULSA).toMatch(/\{conferenceMode \? \(\s*<Badge[^>]*>\s*Conferência por caixa\s*<\/Badge>/);
+    expect(AVULSA).toMatch(/\{conferenceMode \? null : \(\s*<label[^>]*>\s*<span>Local<\/span>/);
+  });
+
   it("a chegada avulsa: o diálogo não explica, e o fornecedor e a NF têm rótulo ligado ao campo", () => {
     expect(AVULSA).not.toContain("Use quando o fornecedor entregou sem aviso");
     expect(AVULSA).toMatch(/<Label htmlFor="chegada-fornecedor">Fornecedor<\/Label>\s*<Input\s+id="chegada-fornecedor"/);

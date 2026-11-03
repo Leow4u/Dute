@@ -87,6 +87,8 @@ import {
 } from "@/features/warehouse-ops/shared";
 import { customerRows } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { RECEBIMENTO_POR_CAIXA_LIBERADO } from "@/lib/liberacao";
+import { modoDaChegadaAvulsa } from "@/lib/wms/caixas-do-recebimento";
 import { ProductPhotoStudio } from "./product-photo-studio";
 import { photoContextFromRecord, type PhotoContext } from "./photo-context";
 import {
@@ -468,6 +470,8 @@ export function UnplannedReceiptDialog({
   const { toast } = useToast();
   // A chegada é do cliente ativo: só os produtos dele aparecem na busca.
   const { code: customerCode, active: activeCustomer } = useActiveCustomer();
+  // Por caixa onde a liberação vale e o modelo do cliente confere por caixa (parte 5g, decisão 1).
+  const conferenceMode = modoDaChegadaAvulsa(RECEBIMENTO_POR_CAIXA_LIBERADO, activeCustomer?.profile?.template);
   const [supplier, setSupplier] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [notes, setNotes] = useState("");
@@ -621,7 +625,8 @@ export function UnplannedReceiptDialog({
           unit_cost: line.unitCost.trim()
             ? Number(line.unitCost)
             : existing?.unitCost || undefined,
-          location_id: line.location.trim() || "RECEBIMENTO",
+          // Na chegada por caixa, toda linha entra no RECEBIMENTO (parte 4a).
+          location_id: conferenceMode ? "RECEBIMENTO" : line.location.trim() || "RECEBIMENTO",
           product_registration: existing ? "existing" : "new",
         };
       })
@@ -636,6 +641,7 @@ export function UnplannedReceiptDialog({
       notes: notes.trim() || undefined,
       priority: "normal",
       received_at: new Date().toISOString(),
+      conference_mode: conferenceMode,
       idempotency_key: crypto.randomUUID(),
       items,
     });
@@ -695,8 +701,13 @@ export function UnplannedReceiptDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl" aria-describedby={undefined}>
-        <DialogHeader>
+        <DialogHeader className="flex-row flex-wrap items-center gap-2 space-y-0">
           <DialogTitle>Registrar chegada avulsa · {activeCustomer.name}</DialogTitle>
+          {conferenceMode ? (
+            <Badge variant="outline" className="border-info-soft-border bg-info-soft text-info-soft-foreground">
+              Conferência por caixa
+            </Badge>
+          ) : null}
         </DialogHeader>
         <form className="space-y-5" onSubmit={submit}>
           <div className="grid gap-4 md:grid-cols-2">
@@ -906,14 +917,16 @@ export function UnplannedReceiptDialog({
                             placeholder="Custo"
                           />
                         </label>
-                        <label className="space-y-1.5 text-sm text-foreground">
-                          <span>Local</span>
-                          <Input
-                            value={line.location}
-                            onChange={(event) => updateLine(index, { location: event.target.value })}
-                            placeholder="Local"
-                          />
-                        </label>
+                        {conferenceMode ? null : (
+                          <label className="space-y-1.5 text-sm text-foreground">
+                            <span>Local</span>
+                            <Input
+                              value={line.location}
+                              onChange={(event) => updateLine(index, { location: event.target.value })}
+                              placeholder="Local"
+                            />
+                          </label>
+                        )}
                       </div>
 
                       {existing ? (

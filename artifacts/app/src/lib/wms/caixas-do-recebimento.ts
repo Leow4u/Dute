@@ -76,6 +76,19 @@ function quantidade(value: unknown): number {
   return Number.isFinite(parsed) ? emTresCasas(parsed) : 0;
 }
 
+/**
+ * O modo que a chegada avulsa pede (parte 5g, decisão 1): por caixa só onde a
+ * liberação vale (RECEBIMENTO_POR_CAIXA_LIBERADO, lib/liberacao.ts) e para o
+ * cliente cujo modelo confere por caixa; senão, por linha (sem o campo). O
+ * servidor confere os dois de novo na criação.
+ */
+export function modoDaChegadaAvulsa(
+  liberado: boolean,
+  modelo: { inboundConference?: string | null } | null | undefined,
+): "per_box" | undefined {
+  return liberado && modelo?.inboundConference === "per_box" ? "per_box" : undefined;
+}
+
 /** A chegada é conferida por caixa: a tela da parte 5, não a conferência por linha. */
 export function chegadaPorCaixa(task: { conference_mode?: string | null } | null | undefined): boolean {
   return task?.conference_mode === "per_box";

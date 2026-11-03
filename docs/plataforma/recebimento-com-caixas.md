@@ -699,6 +699,18 @@ desenhada e aprovada antes do PR de tela.
      para a parte 6, que traz a etiqueta. Testes: `guarda-da-caixa.test.tsx`
      (textos e `axe`), `guarda-da-caixa.interacao.test.tsx`, um caso em
      `receber.test.tsx` e asserções novas em `cloud-api-warehouse.test.ts`.
+   - **5g, a chegada avulsa por caixa:** feita em 03/11/2026 (mockup
+     `WmsChegadaAvulsa`, decisão 1). A parte 2 deixou a tela criando por
+     linha até aqui; a 5g fecha a parte 5 por último, para a homologação só
+     criar chegada por caixa com a bancada, o destino, a conclusão, a fila e
+     a guarda já na `main`. Onde a liberação vale
+     (`RECEBIMENTO_POR_CAIXA_LIBERADO`) e o modelo do cliente ativo confere
+     por caixa, o diálogo mostra o selo "Conferência por caixa", tira o
+     "Local" da linha (toda linha entra no `RECEBIMENTO`, parte 4a) e manda
+     `conference_mode: per_box`; o servidor confere os dois de novo. Os
+     volumes da NF (parte 10) e a leitura da nota ficam de fora. Testes:
+     `caixas-do-recebimento.test.ts` (`modoDaChegadaAvulsa`) e
+     `receber.test.tsx`.
 6. **Etiquetas:** caixa `committing` com destino, origem "Recebimento", o
    conteúdo da caixa do recebimento na etiqueta e no Mapa, "Etiquetas da
    chegada", reimpressão com evento.
