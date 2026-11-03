@@ -194,8 +194,9 @@ export type DaCaixa = DaChegada & { box_code: string; expected_revision: number;
 
 export type Resultado = Record<string, unknown> & { ok?: boolean };
 
+/** Devolve a caixa criada (`box.code`), já em conferência. */
 export function iniciarCaixa(input: DaChegada & { idempotency_key: string }) {
-  return chamarWms<Resultado & { box_code?: string }>("startInboundBox", input);
+  return chamarWms<Resultado & { box?: { code?: string } }>("startInboundBox", input);
 }
 
 /** Lança (ou acerta) a quantidade de uma linha da NF na caixa; 0 tira o produto da caixa. */

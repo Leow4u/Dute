@@ -613,7 +613,19 @@ desenhada e aprovada antes do PR de tela.
      pede a justificativa e o selo da caixa. Nada muda na tela. Testes:
      `caixas-do-recebimento.test.ts` e um caso novo em
      `cloud-api-warehouse.test.ts`.
-   - **5b, a bancada:** iniciar, lançar, fechar, reabrir e remover a caixa.
+   - **5b, a bancada:** feita em 03/11/2026. No Receber, a chegada por caixa
+     abre a ficha dela (`features/warehouse-ops/chegada-por-caixa.tsx`), no
+     lugar da conferência por linha: as caixas da chegada com o selo de cada
+     uma, "Iniciar caixa", a caixa em conferência com o código lido (código
+     do cliente, SKU ou código de barras da linha da NF; o lido soma uma
+     peça) e a quantidade de cada linha (0 tira o produto), "Fechar caixa"
+     com as medidas em centímetros, o peso em quilos e se pode virar ou
+     empilhar, "Reabrir para ajustar" e "Remover caixa" na caixa sem
+     destino, e as linhas da NF com o que está nas caixas e a situação de
+     cada uma. Cada escrita manda a revisão que a anterior devolveu, sem
+     esperar a releitura da fila. A busca só acha a linha da NF (a sobra e o
+     produto fora da NF são a parte 3b). Testes: `chegada-por-caixa.test.tsx`
+     (textos e `axe`) e `chegada-por-caixa.interacao.test.tsx`.
    - **5c, o destino na bancada:** a sugestão, escolher a prateleira,
      confirmar e "Não cabe aqui", e a caixa sem prateleira livre.
    - **5d, as linhas da NF:** "Marcar falta", a justificativa e "Concluir

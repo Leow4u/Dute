@@ -1735,6 +1735,7 @@ async function getWarehouseOps() {
       location: item.location_id,
       // A chegada por caixa (parte 5): o que está nas caixas e a falta marcada.
       line_number: item.line_number === undefined ? undefined : Number(item.line_number),
+      barcode: item.barcode ? String(item.barcode) : undefined,
       boxed_qty: item.boxed_qty === undefined ? undefined : Number(item.boxed_qty),
       box_codes: Array.isArray(item.box_codes) ? item.box_codes.map(String) : undefined,
       shortage: item.shortage && typeof item.shortage === "object" ? item.shortage : undefined,

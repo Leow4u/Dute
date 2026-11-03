@@ -13,12 +13,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { FichaDaChegadaPorCaixa } from "@/features/warehouse-ops/chegada-por-caixa";
 import { ReceivingTaskDetailCard, UnplannedReceiptDialog } from "@/features/warehouse-ops/receiving";
 import { ExceptionDialog, useWarehouseTaskActions } from "@/features/warehouse-ops/task-actions";
 import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
 import { useToast } from "@/hooks/use-toast";
 import { useIsDesktop } from "@/hooks/use-desktop";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { chegadaPorCaixa } from "@/lib/wms/caixas-do-recebimento";
 import { useAppUser } from "@/lib/auth";
 import { canOperateWarehouse } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -449,6 +451,17 @@ function TaskPanel({
   lineConfirmations: LineConfirmationMap;
   onLineConfirmationChange: Parameters<typeof TaskDetailPanel>[0]["onLineConfirmationChange"];
 }) {
+  // A chegada por caixa tem a ficha dela (recebimento com caixas, parte 5).
+  if (entry.queue.key === "receiving" && chegadaPorCaixa(entry.task)) {
+    return (
+      <FichaDaChegadaPorCaixa
+        key={entry.task.id}
+        entry={entry}
+        registeringExceptionId={actions.registeringExceptionId}
+        onOpenException={actions.exception.openFor}
+      />
+    );
+  }
   if (entry.queue.key === "receiving") {
     return (
       <ReceivingTaskDetailCard
