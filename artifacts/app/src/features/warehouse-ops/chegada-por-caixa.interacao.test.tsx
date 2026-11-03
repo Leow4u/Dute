@@ -58,6 +58,9 @@ vi.mock("@/lib/wms/caixas-do-recebimento", async (importOriginal) => {
       estado.recusadas.push(String(dados.position));
       return { ok: true, conference_revision: 5 };
     },
+    marcarFalta: registra("marcar", () => ({ ok: true })),
+    desmarcarFalta: registra("desmarcar", () => ({ ok: true })),
+    concluirEntradaPorCaixa: registra("concluir", () => ({ ok: true, status: "received" })),
   };
 });
 
@@ -380,5 +383,72 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
     expect(document.body.textContent).not.toContain("Confirmar destino");
     await clicar("Sugestão do sistema");
     expect(document.body.textContent).toContain("Confirmar destino em B-02");
+  });
+
+  it("Marcar falta abre o diálogo e manda o motivo, o detalhe e o que estava nas caixas", async () => {
+    await clicar("Marcar falta");
+    expect(document.body.textContent).toContain("Marcar falta · linha 1");
+    await clicar("Avaria");
+    await digitar("falta-detalhe", "Volume 3 molhado");
+    await clicar("Marcar falta de 12 un.");
+    await esperar(() => dados("marcar").length === 1, "a falta marcada");
+    expect(dados("marcar")[0]).toMatchObject({
+      receipt_id: RECEIPT,
+      customer_code: "BTG Pactual",
+      inbound_item_id: `${RECEIPT}_01`,
+      reason: "avaria",
+      detail: "Volume 3 molhado",
+      expected_boxed_qty: 29,
+    });
+    await esperar(() => !document.body.textContent?.includes("Marcar falta · linha 1"), "o diálogo fechado");
+  });
+
+  describe("a chegada pronta para concluir", () => {
+    const pronta = {
+      ...entry,
+      task: {
+        ...entry.task,
+        boxes: [{ ...entry.task.boxes![0]!, status: "committing", location_id: "B-02" }],
+        items: [
+          { ...entry.task.items![0]!, shortage: { qty: 12, boxed_qty: 29, expected_qty: 41, reason: "falta", detail: "Volume 3 não veio" } },
+          { ...entry.task.items![1]!, boxed_qty: 30 },
+        ],
+      },
+    } as TaskQueueEntry;
+
+    beforeEach(async () => {
+      await act(async () => {
+        raiz!.render(
+          <QueryClientProvider client={new QueryClient()}>
+            <FichaDaChegadaPorCaixa entry={pronta} onOpenException={() => undefined} />
+          </QueryClientProvider>,
+        );
+      });
+    });
+
+    it("Concluir entrada espera a justificativa e manda o status que a tela viu", async () => {
+      expect(botao("Concluir entrada").disabled).toBe(true);
+      await act(async () => {
+        const campo = document.getElementById("justificativa-da-divergencia") as HTMLTextAreaElement;
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(campo, "Fornecedor envia o volume 3 na próxima NF.");
+        campo.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(botao("Concluir entrada").disabled).toBe(false);
+      await clicar("Concluir entrada");
+      await esperar(() => dados("concluir").length === 1, "a entrada concluída");
+      expect(dados("concluir")[0]).toMatchObject({
+        receipt_id: RECEIPT,
+        customer_code: "BTG Pactual",
+        expected_status: "checking",
+        note: "Fornecedor envia o volume 3 na próxima NF.",
+      });
+      await esperar(() => estado.avisos.some((aviso) => aviso.title === "Entrada concluída"), "o aviso");
+    });
+
+    it("Desmarcar tira a falta da linha", async () => {
+      await clicar("Desmarcar");
+      await esperar(() => dados("desmarcar").length === 1, "a falta desmarcada");
+      expect(dados("desmarcar")[0]).toMatchObject({ receipt_id: RECEIPT, inbound_item_id: `${RECEIPT}_01` });
+    });
   });
 });

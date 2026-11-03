@@ -131,12 +131,30 @@ function render(over: Partial<FichaDaChegadaPorCaixaProps> = {}) {
       onDestino={{ onModo: noop, onEscolher: noop, onConfirmar: noop, onNaoCabe: noop, onTentarDeNovo: noop }}
       onCancelarRecusa={noop}
       onRecusar={noop}
+      justificativa=""
+      onJustificativa={noop}
+      onConcluir={noop}
+      marcando={null}
+      onMarcarFalta={noop}
+      onCancelarFalta={noop}
+      onConfirmarFalta={noop}
+      onDesmarcarFalta={noop}
       {...over}
     />,
   );
 }
 
-const CABECALHO = ["Recebimento", "em conferência", "por caixa", "AVL-0D0E620B", "NF 48.230 · 71 un.", "Registrar divergência"];
+const CABECALHO = [
+  "Recebimento",
+  "em conferência",
+  "por caixa",
+  "AVL-0D0E620B",
+  "NF 48.230 · 71 un.",
+  "Registrar divergência",
+  "Concluir entrada",
+  "CX-000132 em conferência · linha 1 sem falta marcada",
+  "Marcar falta",
+];
 const CABECALHO_DA_CAIXA = ["Recebimento", "em conferência", "por caixa", "Voltar à chegada"];
 const LINHAS_DA_NF = [
   "Linhas da NF",
@@ -272,13 +290,76 @@ describe("a bancada da chegada por caixa", () => {
     expect(confirmada).not.toContain("Voltar à chegada");
   });
 
+  it("concluir entrada desligado diz o que falta, na frase do servidor (mockup WmsRecebimentoCaixa)", () => {
+    const html = render();
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Concluir entrada<\/button>/);
+    expect(html).toContain("CX-000132 em conferência · linha 1 sem falta marcada");
+    // A justificativa só entra quando as caixas e as linhas já estão tratadas.
+    expect(html).not.toContain("Justificativa da divergência");
+  });
+
+  it("pronta para concluir: a falta marcada com o motivo, desmarcar, a justificativa e o concluir (mockup WmsRecebimentoConcluir)", async () => {
+    const marcada = {
+      ...task,
+      items: [
+        { ...task.items![0]!, shortage: { qty: 12, boxed_qty: 29, expected_qty: 41, reason: "avaria", detail: "Volume 3 molhado" } },
+        task.items![1]!,
+      ],
+    };
+    const fechada = caixa("CX-000132", "reviewed", [linha(`${RECEIPT}_02`, 2, "GG", 18)], {
+      length_m: 0.48,
+      width_m: 0.38,
+      height_m: 0.3,
+      gross_weight_kg: 6.1,
+    });
+    const semJustificativa = render({ task: marcada, caixas: [caixas[0]!, fechada], selecionada: null });
+    expect(semJustificativa).toMatch(/<button[^>]*disabled=""[^>]*>Concluir entrada<\/button>/);
+    expect(semJustificativa).toMatch(/<label[^>]*for="justificativa-da-divergencia"[^>]*>Justificativa da divergência<\/label>/);
+    const pronta = render({
+      task: marcada,
+      caixas: [caixas[0]!, fechada],
+      selecionada: null,
+      justificativa: "Fornecedor envia o volume 3 na próxima NF.",
+    });
+    expect(pronta).not.toMatch(/<button[^>]*disabled=""[^>]*>Concluir entrada<\/button>/);
+    expect(pronta).not.toContain("Sem caixa");
+    expect(
+      textosForaDaLista(semJustificativa, [
+        "Recebimento",
+        "em conferência",
+        "por caixa",
+        "AVL-0D0E620B",
+        "NF 48.230 · 71 un.",
+        "Registrar divergência",
+        "Concluir entrada",
+        "divergência sem justificativa",
+        "Caixas da chegada",
+        "Iniciar caixa",
+        "CX-000131 · destino B-02",
+        "XG 29 · GG 12 · 41 un. · 48 × 38 × 30 cm · 9,4 kg",
+        "destino confirmado",
+        "CX-000132",
+        "GG 18 · 18 un. · 48 × 38 × 30 cm · 6,1 kg",
+        "sem prateleira",
+        ...LINHAS_DA_NF.filter((texto) => !["faltam 12", "Sem caixa", "12 un."].includes(texto)),
+        "falta marcada · 12",
+        "Avaria · Volume 3 molhado",
+        "Desmarcar",
+        "Falta marcada",
+        "12 un.",
+        "Justificativa da divergência",
+      ]),
+    ).toEqual([]);
+    expect(await violacoesDeAcessibilidade(semJustificativa)).toEqual([]);
+  });
+
   it("quem não registra divergência não vê o botão", () => {
     expect(render({ podeRegistrarDivergencia: false })).not.toContain("Registrar divergência");
   });
 
   it("quem só consulta (o suporte) vê as caixas e as linhas, sem as ações", async () => {
     const html = render({ podeOperar: false, podeRegistrarDivergencia: false });
-    for (const acao of ["Iniciar caixa", "Cód. cliente, SKU ou barras", "Fechar caixa", "Remover caixa"]) {
+    for (const acao of ["Iniciar caixa", "Cód. cliente, SKU ou barras", "Fechar caixa", "Remover caixa", "Concluir entrada", "Marcar falta"]) {
       expect(html).not.toContain(acao);
     }
     expect(

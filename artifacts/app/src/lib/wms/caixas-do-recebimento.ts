@@ -139,6 +139,54 @@ export function pedeJustificativa(linhas: readonly LinhaDaNf[]): boolean {
   return linhas.some((linha) => situacaoDaLinha(linha).tipo !== "ok");
 }
 
+/** O rótulo do motivo da falta marcada (parte 4c). */
+export const MOTIVO_DA_FALTA: Record<FaltaMarcada["reason"], string> = { falta: "Falta", avaria: "Avaria" };
+
+export type TotaisDaChegada = {
+  esperado: number;
+  emCaixas: number;
+  /** O que a NF pede e não está em caixa nem tem a falta marcada. */
+  semCaixa: number;
+  faltaMarcada: number;
+};
+
+/**
+ * Os totais da chegada, linha a linha: a sobra de uma linha não cobre a
+ * falta de outra, e a falta marcada sai do que está sem caixa.
+ */
+export function totaisDaChegada(linhas: readonly LinhaDaNf[]): TotaisDaChegada {
+  const totais: TotaisDaChegada = { esperado: 0, emCaixas: 0, semCaixa: 0, faltaMarcada: 0 };
+  for (const linha of linhas) {
+    totais.esperado += quantidade(linha.expected_quantity ?? linha.quantity);
+    totais.emCaixas += quantidade(linha.boxed_qty);
+    const situacao = situacaoDaLinha(linha);
+    if (situacao.tipo === "faltam" || situacao.tipo === "marca_velha") totais.semCaixa += situacao.quantidade;
+    if (situacao.tipo === "falta_marcada") totais.faltaMarcada += situacao.quantidade;
+  }
+  return {
+    esperado: emTresCasas(totais.esperado),
+    emCaixas: emTresCasas(totais.emCaixas),
+    semCaixa: emTresCasas(totais.semCaixa),
+    faltaMarcada: emTresCasas(totais.faltaMarcada),
+  };
+}
+
+/** A chegada só espera a justificativa: as caixas e as linhas já estão tratadas, e há falta ou sobra. */
+export function esperaJustificativa(caixas: readonly CaixaDaChegada[], linhas: readonly LinhaDaNf[]): boolean {
+  return bloqueiosDaConclusao(caixas, linhas).length === 0 && pedeJustificativa(linhas);
+}
+
+/**
+ * O que impede o "Concluir entrada" na tela: o que o servidor recusa e,
+ * quando só falta isso, a justificativa da divergência em branco (mockups
+ * WmsRecebimentoCaixa e WmsRecebimentoConcluir).
+ */
+export function bloqueiosDaTela(caixas: readonly CaixaDaChegada[], linhas: readonly LinhaDaNf[], justificativa: string): string[] {
+  const bloqueios = bloqueiosDaConclusao(caixas, linhas);
+  if (esperaJustificativa(caixas, linhas) && !justificativa.trim()) bloqueios.push("divergência sem justificativa");
+  return bloqueios;
+}
+
 export type EstadoDaCaixa = {
   /** O texto do selo da caixa na ficha. */
   rotulo: string;

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { cn } from "@/lib/utils";
@@ -15,17 +16,25 @@ import type { WarehousePosition } from "@/lib/warehouse-positions";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
 import { statusLabel, type TaskQueueEntry, type WarehouseTask, type WarehouseTaskItem } from "@/lib/warehouse-ops/model";
 import {
+  MOTIVO_DA_FALTA,
+  bloqueiosDaTela,
+  concluirEntradaPorCaixa,
   confirmarDestino,
+  desmarcarFalta,
   emTresCasas,
+  esperaJustificativa,
   estadoDaCaixa,
   fecharCaixa,
   iniciarCaixa,
   lancarNaCaixa,
+  marcarFalta,
   reabrirCaixa,
   recusarSugestao,
   removerCaixa,
   situacaoDaLinha,
   sugerirPrateleira,
+  totaisDaChegada,
+  type FaltaMarcada,
   type CaixaDaChegada,
   type EstadoDaCaixa,
   type SituacaoDaLinha,
@@ -41,6 +50,7 @@ import {
   type DestinoDaCaixaProps,
   type ModoDoDestino,
 } from "./destino-da-caixa";
+import { FaltaDaLinha } from "./falta-da-linha";
 import { eligibleShelfPositions } from "./shelf-picker";
 
 /**
@@ -49,8 +59,10 @@ import { eligibleShelfPositions } from "./shelf-picker";
  * em 03/11/2026): iniciar a caixa, lançar as linhas da NF que estão nela,
  * fechar com as medidas e o peso, reabrir e remover. Fechar e a caixa
  * fechada abrem a vista da caixa, como no mockup WmsRecebimentoFecharCaixa,
- * com o destino da caixa fechada (parte 5c, destino-da-caixa.tsx). As
- * linhas, a falta e a conclusão (5d) entram na parte seguinte.
+ * com o destino da caixa fechada (parte 5c, destino-da-caixa.tsx). Nas
+ * linhas da NF, marcar e desmarcar a falta, a justificativa da divergência e
+ * "Concluir entrada" (parte 5d; mockups WmsRecebimentoFalta e
+ * WmsRecebimentoConcluir).
  */
 
 const numero = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
@@ -138,6 +150,16 @@ export type FichaDaChegadaPorCaixaProps = {
   onDestino: Omit<DestinoDaCaixaProps, "estado" | "ocupado">;
   onCancelarRecusa: () => void;
   onRecusar: (motivo: string) => void;
+  /** A justificativa da divergência, digitada (parte 5d). */
+  justificativa: string;
+  onJustificativa: (valor: string) => void;
+  onConcluir: () => void;
+  /** A linha da NF do "Marcar falta" aberto, se houver. */
+  marcando: string | null;
+  onMarcarFalta: (itemId: string) => void;
+  onCancelarFalta: () => void;
+  onConfirmarFalta: (marca: { motivo: FaltaMarcada["reason"]; detalhe: string }) => void;
+  onDesmarcarFalta: (itemId: string) => void;
 };
 
 function tituloDaChegada(task: WarehouseTask) {
@@ -192,10 +214,19 @@ export function FichaDaChegadaPorCaixaConteudo(props: FichaDaChegadaPorCaixaProp
 function VistaDaChegada(props: FichaDaChegadaPorCaixaProps & { caixa: CaixaDaChegada | null }) {
   const { task, caixas, caixa, selecionada, ocupado } = props;
   const itens = task.items ?? [];
-  const esperado = emTresCasas(itens.reduce((soma, item) => soma + Number(item.expected_quantity ?? item.quantity ?? 0), 0));
-  const nasCaixas = emTresCasas(itens.reduce((soma, item) => soma + Number(item.boxed_qty ?? 0), 0));
-  const semCaixa = Math.max(0, emTresCasas(esperado - nasCaixas));
-  const detalhe = [task.invoice_number ? `NF ${task.invoice_number}` : null, `${numero.format(esperado)} un.`].filter(Boolean).join(" · ");
+  const linhas = itens.map((item) => ({ ...item, id: item.id ?? "" }));
+  const totais = totaisDaChegada(linhas);
+  const detalhe = [task.invoice_number ? `NF ${task.invoice_number}` : null, `${numero.format(totais.esperado)} un.`].filter(Boolean).join(" · ");
+  const bloqueios = bloqueiosDaTela(caixas, linhas, props.justificativa);
+  // A justificativa entra quando só falta ela; o que já foi digitado não some (mockup WmsRecebimentoConcluir).
+  const justificar = props.podeOperar && (esperaJustificativa(caixas, linhas) || Boolean(props.justificativa));
+  const marcando = props.marcando ? itens.find((item) => item.id === props.marcando) ?? null : null;
+  const totaisAVista = [
+    { rotulo: "Esperado", valor: totais.esperado },
+    { rotulo: "Em caixas", valor: totais.emCaixas },
+    ...(totais.semCaixa > 0 || totais.faltaMarcada === 0 ? [{ rotulo: "Sem caixa", valor: totais.semCaixa }] : []),
+    ...(totais.faltaMarcada > 0 ? [{ rotulo: "Falta marcada", valor: totais.faltaMarcada }] : []),
+  ];
 
   return (
     <>
@@ -203,12 +234,22 @@ function VistaDaChegada(props: FichaDaChegadaPorCaixaProps & { caixa: CaixaDaChe
         <h2 className="text-2xl font-extrabold tracking-tight">{tituloDaChegada(task)}</h2>
         <span className="text-sm text-muted-foreground">{detalhe}</span>
       </div>
-      {props.podeRegistrarDivergencia ? (
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={props.onRegistrarDivergencia}>
-            <MessageSquareWarning data-icon="inline-start" />
-            Registrar divergência
-          </Button>
+      {props.podeRegistrarDivergencia || props.podeOperar ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {props.podeRegistrarDivergencia ? (
+            <Button type="button" variant="outline" onClick={props.onRegistrarDivergencia}>
+              <MessageSquareWarning data-icon="inline-start" />
+              Registrar divergência
+            </Button>
+          ) : null}
+          {props.podeOperar ? (
+            <>
+              <Button type="button" disabled={ocupado || bloqueios.length > 0} onClick={props.onConcluir}>
+                Concluir entrada
+              </Button>
+              {bloqueios.length ? <span className="text-sm text-muted-foreground">{bloqueios.join(" · ")}</span> : null}
+            </>
+          ) : null}
         </div>
       ) : null}
 
@@ -258,60 +299,130 @@ function VistaDaChegada(props: FichaDaChegadaPorCaixaProps & { caixa: CaixaDaChe
             <table className="w-full text-sm">
               <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th scope="col" className="px-2.5 py-2 text-left font-extrabold">Linha</th>
-                  <th scope="col" className="px-2.5 py-2 text-right font-extrabold">NF (un.)</th>
-                  <th scope="col" className="px-2.5 py-2 text-right font-extrabold">Em caixas (un.)</th>
-                  <th scope="col" className="px-2.5 py-2 text-right font-extrabold">Custo NF</th>
-                  <th scope="col" className="px-2.5 py-2 text-left font-extrabold">Situação</th>
+                  <th scope="col" className="px-2 py-2 text-left font-extrabold">Linha</th>
+                  <th scope="col" className="px-2 py-2 text-right font-extrabold">NF (un.)</th>
+                  <th scope="col" className="px-2 py-2 text-right font-extrabold">Em caixas (un.)</th>
+                  <th scope="col" className="px-2 py-2 text-right font-extrabold">Custo NF</th>
+                  <th scope="col" className="px-2 py-2 text-left font-extrabold">Situação</th>
                 </tr>
               </thead>
               <tbody>
                 {[...itens]
                   .sort((a, b) => Number(a.line_number ?? 0) - Number(b.line_number ?? 0))
                   .map((item) => (
-                    <LinhaDaNfRow key={item.id ?? String(item.line_number)} item={item} />
+                    <LinhaDaNfRow
+                      key={item.id ?? String(item.line_number)}
+                      item={item}
+                      podeOperar={props.podeOperar}
+                      ocupado={ocupado}
+                      onMarcarFalta={props.onMarcarFalta}
+                      onDesmarcarFalta={props.onDesmarcarFalta}
+                    />
                   ))}
               </tbody>
             </table>
           </div>
-          <dl className="grid grid-cols-3 gap-2 rounded-lg border border-border p-3.5">
-            <div>
-              <dt className="text-xs font-bold text-muted-foreground">Esperado</dt>
-              <dd className="font-extrabold">{numero.format(esperado)} un.</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-bold text-muted-foreground">Em caixas</dt>
-              <dd className="font-extrabold">{numero.format(nasCaixas)} un.</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-bold text-muted-foreground">Sem caixa</dt>
-              <dd className="font-extrabold">{numero.format(semCaixa)} un.</dd>
-            </div>
+          <dl className={cn("grid gap-2 rounded-lg border border-border p-3.5", totaisAVista.length === 4 ? "grid-cols-4" : "grid-cols-3")}>
+            {totaisAVista.map((total) => (
+              <div key={total.rotulo}>
+                <dt className="text-xs font-bold text-muted-foreground">{total.rotulo}</dt>
+                <dd className="font-extrabold">{numero.format(total.valor)} un.</dd>
+              </div>
+            ))}
           </dl>
+          {justificar ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="justificativa-da-divergencia">Justificativa da divergência</Label>
+              <Textarea
+                id="justificativa-da-divergencia"
+                rows={3}
+                maxLength={1000}
+                value={props.justificativa}
+                disabled={ocupado}
+                onChange={(event) => props.onJustificativa(event.target.value)}
+              />
+            </div>
+          ) : null}
         </section>
       </div>
+      {props.podeOperar ? (
+        <FaltaDaLinha
+          linha={marcando}
+          nf={Number(marcando?.expected_quantity ?? marcando?.quantity ?? 0)}
+          emCaixas={Number(marcando?.boxed_qty ?? 0)}
+          falta={marcando ? Math.max(0, emTresCasas(Number(marcando.expected_quantity ?? marcando.quantity ?? 0) - Number(marcando.boxed_qty ?? 0))) : 0}
+          enviando={ocupado}
+          onCancelar={props.onCancelarFalta}
+          onMarcar={props.onConfirmarFalta}
+        />
+      ) : null}
     </>
   );
 }
 
-function LinhaDaNfRow({ item }: { item: WarehouseTaskItem }) {
+function LinhaDaNfRow({
+  item,
+  podeOperar,
+  ocupado,
+  onMarcarFalta,
+  onDesmarcarFalta,
+}: {
+  item: WarehouseTaskItem;
+  podeOperar: boolean;
+  ocupado: boolean;
+  onMarcarFalta: (itemId: string) => void;
+  onDesmarcarFalta: (itemId: string) => void;
+}) {
   const situacao = situacaoDaLinha({ ...item, id: item.id ?? "" });
   const nome = item.product_name || item.name || item.sku_code || "";
+  const linha = item.line_number ?? "";
+  const semMarca = situacao.tipo === "faltam" || situacao.tipo === "marca_velha";
   return (
     <tr className="border-t border-border/60">
-      <td className="px-2.5 py-2 align-middle">
+      <td className="px-2 py-2 align-middle">
         <span className="block font-bold">{item.line_number ? `${item.line_number} · ${nome}` : nome}</span>
         <span className="block text-muted-foreground">{item.client_item_code || item.sku_code}</span>
       </td>
-      <td className="px-2.5 py-2 text-right tabular-nums">{numero.format(Number(item.expected_quantity ?? item.quantity ?? 0))}</td>
-      <td className="px-2.5 py-2 text-right tabular-nums">{numero.format(Number(item.boxed_qty ?? 0))}</td>
-      <td className="px-2.5 py-2 text-right tabular-nums">
+      <td className="px-2 py-2 text-right tabular-nums">{numero.format(Number(item.expected_quantity ?? item.quantity ?? 0))}</td>
+      <td className="px-2 py-2 text-right tabular-nums">{numero.format(Number(item.boxed_qty ?? 0))}</td>
+      <td className="px-2 py-2 text-right tabular-nums">
         {typeof item.unit_cost === "number" && item.unit_cost > 0
           ? item.unit_cost.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
           : ""}
       </td>
-      <td className="px-2.5 py-2">
-        <SeloDaLinha situacao={situacao} />
+      <td className="px-2 py-2">
+        <div className="flex flex-col items-start gap-1.5">
+          <SeloDaLinha situacao={situacao} />
+          {situacao.tipo === "falta_marcada" ? (
+            <span className="text-xs text-muted-foreground">
+              {[MOTIVO_DA_FALTA[situacao.motivo], situacao.detalhe].filter(Boolean).join(" · ")}
+            </span>
+          ) : null}
+          {podeOperar && item.id && semMarca ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              aria-label={`Marcar falta na linha ${linha}`}
+              disabled={ocupado}
+              onClick={() => onMarcarFalta(item.id!)}
+            >
+              Marcar falta
+            </Button>
+          ) : null}
+          {podeOperar && item.id && situacao.tipo === "falta_marcada" ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              aria-label={`Desmarcar a falta da linha ${linha}`}
+              disabled={ocupado}
+              onClick={() => onDesmarcarFalta(item.id!)}
+            >
+              Desmarcar
+            </Button>
+          ) : null}
+        </div>
       </td>
     </tr>
   );
@@ -520,6 +631,9 @@ export function FichaDaChegadaPorCaixa({
   const [modoDoDestino, setModoDoDestino] = useState<ModoDoDestino>("sugestao");
   const [prateleiraEscolhida, setPrateleiraEscolhida] = useState("");
   const [recusando, setRecusando] = useState<string | null>(null);
+  // As linhas da NF e a conclusão (parte 5d).
+  const [marcando, setMarcando] = useState<string | null>(null);
+  const [justificativa, setJustificativa] = useState("");
 
   const selecionada = escolhida && caixas.some((caixa) => caixa.code === escolhida)
     ? escolhida
@@ -712,9 +826,49 @@ export function FichaDaChegadaPorCaixa({
     },
     onError: falhou("Não foi possível recusar a prateleira"),
   });
+  const marcar = useMutation({
+    mutationFn: (input: { item: WarehouseTaskItem; motivo: FaltaMarcada["reason"]; detalhe: string }) =>
+      marcarFalta({
+        ...daChegada,
+        inbound_item_id: input.item.id ?? "",
+        reason: input.motivo,
+        detail: input.detalhe || undefined,
+        // A marca vale para o que a tela viu nas caixas; mudou em outra tela, o servidor recusa.
+        expected_boxed_qty: emTresCasas(Number(input.item.boxed_qty ?? 0)),
+        idempotency_key: chave(),
+      }),
+    onSuccess: () => {
+      setMarcando(null);
+      depois();
+    },
+    onError: falhou("Não foi possível marcar a falta"),
+  });
+  const desmarcar = useMutation({
+    mutationFn: (itemId: string) => desmarcarFalta({ ...daChegada, inbound_item_id: itemId, idempotency_key: chave() }),
+    onSuccess: () => depois(),
+    onError: falhou("Não foi possível desmarcar a falta"),
+  });
+  const concluir = useMutation({
+    mutationFn: () =>
+      concluirEntradaPorCaixa({
+        ...daChegada,
+        // O status que a tela viu: a chegada por caixa conclui de created ou checking.
+        expected_status: task.status === "checking" ? "checking" : "created",
+        note: justificativa.trim() || undefined,
+        idempotency_key: chave(),
+      }),
+    onSuccess: () => {
+      const titulo = task.receipt_number || task.title || receiptId;
+      toast({ title: "Entrada concluída", description: `${titulo} · ${caixas.length} ${caixas.length === 1 ? "caixa" : "caixas"} para guardar` });
+      setJustificativa("");
+      void releitura();
+      void queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
+    },
+    onError: falhou("Não foi possível concluir a entrada"),
+  });
   const ocupado =
     iniciar.isPending || lancar.isPending || fechar.isPending || reabrir.isPending || remover.isPending ||
-    confirmar.isPending || recusar.isPending;
+    confirmar.isPending || recusar.isPending || marcar.isPending || desmarcar.isPending || concluir.isPending;
 
   return (
     <FichaDaChegadaPorCaixaConteudo
@@ -791,6 +945,17 @@ export function FichaDaChegadaPorCaixa({
       }}
       onCancelarRecusa={() => setRecusando(null)}
       onRecusar={(motivo) => semDestino && recusando && recusar.mutate({ caixa: semDestino, prateleira: recusando, motivo })}
+      justificativa={justificativa}
+      onJustificativa={setJustificativa}
+      onConcluir={() => concluir.mutate()}
+      marcando={marcando}
+      onMarcarFalta={setMarcando}
+      onCancelarFalta={() => setMarcando(null)}
+      onConfirmarFalta={(marca) => {
+        const item = (task.items ?? []).find((candidato) => candidato.id === marcando);
+        if (item) marcar.mutate({ item, ...marca });
+      }}
+      onDesmarcarFalta={(itemId) => desmarcar.mutate(itemId)}
     />
   );
 }

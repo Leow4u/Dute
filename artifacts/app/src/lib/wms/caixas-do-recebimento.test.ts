@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   bloqueiosDaConclusao,
+  bloqueiosDaTela,
   caixasGuardadas,
   chegadaPorCaixa,
+  esperaJustificativa,
   emTresCasas,
   estadoDaCaixa,
   pedeJustificativa,
   situacaoDaLinha,
+  totaisDaChegada,
   type CaixaDaChegada,
   type LinhaDaNf,
 } from "./caixas-do-recebimento";
@@ -97,6 +100,36 @@ describe("o que impede concluir a entrada", () => {
     expect(pedeJustificativa([linha(1, 41, 41), linha(2, 30, 30)])).toBe(false);
     expect(pedeJustificativa([linha(1, 41, 29, { qty: 12, boxed_qty: 29, expected_qty: 41, reason: "falta" }), linha(2, 30, 30)])).toBe(true);
     expect(pedeJustificativa([linha(1, 41, 43)])).toBe(true);
+  });
+});
+
+describe("os totais e o concluir na tela", () => {
+  it("linha a linha: a sobra de uma linha não cobre a falta de outra, e a falta marcada sai do sem caixa", () => {
+    const marcada = { qty: 12, boxed_qty: 29, expected_qty: 41, reason: "avaria" as const };
+    expect(totaisDaChegada([linha(1, 41, 0), linha(2, 30, 36)])).toEqual({ esperado: 71, emCaixas: 36, semCaixa: 41, faltaMarcada: 0 });
+    expect(totaisDaChegada([linha(1, 41, 29, marcada), linha(2, 30, 30)])).toEqual({ esperado: 71, emCaixas: 59, semCaixa: 0, faltaMarcada: 12 });
+    // A marca velha volta ao sem caixa.
+    expect(totaisDaChegada([linha(1, 41, 28, marcada), linha(2, 30, 30)])).toEqual({ esperado: 71, emCaixas: 58, semCaixa: 13, faltaMarcada: 0 });
+  });
+
+  it("com divergência, a justificativa em branco também impede concluir", () => {
+    const caixas = [caixa("CX-000131", "committing", [29, 12], "B-02")];
+    const marcada = { qty: 12, boxed_qty: 29, expected_qty: 41, reason: "falta" as const };
+    const linhas = [linha(1, 41, 29, marcada), linha(2, 30, 30)];
+    expect(bloqueiosDaTela(caixas, linhas, "  ")).toEqual(["divergência sem justificativa"]);
+    expect(bloqueiosDaTela(caixas, linhas, "Fornecedor envia o volume 3 na próxima NF.")).toEqual([]);
+    expect(bloqueiosDaTela(caixas, [linha(1, 41, 41), linha(2, 30, 30)], "")).toEqual([]);
+    expect(bloqueiosDaTela([], linhas, "")).toEqual(["Nenhuma caixa"]);
+  });
+
+  it("a justificativa só entra quando as caixas e as linhas já estão tratadas", () => {
+    const emConferencia = [caixa("CX-000131", "committing", [29, 12], "B-02"), caixa("CX-000132", "counting", [0, 18])];
+    const linhas = [linha(1, 41, 29), linha(2, 30, 30)];
+    expect(esperaJustificativa(emConferencia, linhas)).toBe(false);
+    expect(bloqueiosDaTela(emConferencia, linhas, "")).toEqual(["CX-000132 em conferência", "linha 1 sem falta marcada"]);
+    const prontas = [caixa("CX-000131", "committing", [29, 12], "B-02")];
+    expect(esperaJustificativa(prontas, [linha(1, 41, 43), linha(2, 30, 30)])).toBe(true);
+    expect(esperaJustificativa(prontas, [linha(1, 41, 41), linha(2, 30, 30)])).toBe(false);
   });
 });
 

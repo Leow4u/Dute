@@ -647,8 +647,22 @@ desenhada e aprovada antes do PR de tela.
      ficha volta à chegada; fechar a caixa espera a releitura da fila e
      passa direto ao destino. Testes: `destino-da-caixa.test.tsx` (textos e
      `axe`) e casos novos em `chegada-por-caixa.interacao.test.tsx`.
-   - **5d, as linhas da NF:** "Marcar falta", a justificativa e "Concluir
-     entrada".
+   - **5d, as linhas da NF:** feita em 03/11/2026 (mockups
+     `WmsRecebimentoFalta`, `WmsRecebimentoCaixa` e `WmsRecebimentoConcluir`).
+     A linha a menos ganha "Marcar falta" (`falta-da-linha.tsx`): o que a NF
+     pede, o que está nas caixas e a falta, o motivo (falta ou avaria) e o
+     detalhe, e a marca vai com o que a tela viu nas caixas. A linha com a
+     falta marcada mostra o motivo e o detalhe e ganha "Desmarcar"; a marca
+     velha volta a pedir a marca. Os totais contam linha a linha (a sobra de
+     uma linha não cobre a falta de outra) e mostram a "Falta marcada" à
+     parte do "Sem caixa". "Concluir entrada" chama a porta da chegada por
+     caixa com o status que a tela viu e, desligado, diz o que falta na
+     frase do servidor ("CX-000132 em conferência · linha 1 sem falta
+     marcada"); com as caixas e as linhas tratadas e falta ou sobra, entra a
+     "Justificativa da divergência", e só ela impede. Quem só consulta não
+     vê essas ações. Testes: `falta-da-linha.test.tsx`, casos novos em
+     `chegada-por-caixa.test.tsx`, `chegada-por-caixa.interacao.test.tsx` e
+     `caixas-do-recebimento.test.ts`.
    - **5e, a fila:** "Recebidas, por guardar" e a guarda por caixa na lista.
    - **5f, a guarda da caixa:** o destino na guarda, "Concluir guarda" e
      "Não cabe aqui", no computador e no celular.
