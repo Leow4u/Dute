@@ -58,6 +58,7 @@ import { DeleteSkuButton, SkuModal } from "./skus";
 import { regraDoModelo, rotuloDaEtiqueta } from "@workspace/dominio";
 
 import { customerRows } from "@/lib/active-customer";
+import { desdeEmTexto, locaisValidos, type LocalComDatas } from "@/lib/datas-de-entrada";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { MEMORIA_LIBERADA } from "@/lib/liberacao";
 import {
@@ -549,6 +550,15 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [photoIndex, setPhotoIndex] = useState(0);
 
+  // As datas de entrada por prateleira (FIFO por data, parte 6): enquanto não
+  // chegam, ou se a leitura falha, "Onde está" mostra só as quantidades.
+  const datas = useQuery({
+    queryKey: ["stock-dates", customerCode, item.skuCode],
+    queryFn: () => buscarDatasDaFicha(customerCode, item.skuCode),
+    enabled: Boolean(customerCode && item.skuCode),
+    staleTime: 60_000,
+  });
+
   const movements = useQuery({
     queryKey: ["movements", "item", item.skuCode],
     queryFn: () =>
@@ -723,20 +733,7 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
           ) : null}
         </div>
 
-        <Section title="Onde está">
-          {item.locations.length ? (
-            item.locations.map((location) => (
-              <div key={location.id} className="flex min-w-0 items-center justify-between gap-3 py-1 text-sm">
-                <LocationTag id={location.id} />
-                <span className="shrink-0 font-semibold tabular-nums">
-                  {numberFormatter.format(location.qty)} un.
-                </span>
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground">Sem endereço registrado.</p>
-          )}
-        </Section>
+        <SecaoOndeEsta locations={item.locations} locais={datas.data ?? null} />
 
         <SecaoDoGiro giro={item.giro} caixas={caixas} rotuloDaCaixaParada={rotuloDaCaixaParada} />
 
@@ -840,6 +837,64 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
 }
 
 /** O giro do item e as caixas dele, com os dias parado de cada uma (parte 5.4c). */
+/**
+ * "Onde está" na ficha (FIFO por data, parte 6; tela aprovada em
+ * docs/mockups/WmsItemDatas.dc.html): com as datas, uma linha por prateleira e
+ * data, a prateleira de data livre mais antiga primeiro, como o pedido as usa;
+ * o RECEBIMENTO e a EXPEDICAO no fim, sem data. Sem as datas, a quantidade de
+ * cada local, como antes.
+ */
+export function SecaoOndeEsta({ locations, locais }: { locations: StockItem["locations"]; locais: LocalComDatas[] | null }) {
+  if (locais?.length) {
+    return (
+      <Section title="Onde está">
+        <ul>
+          {locais.flatMap((local) =>
+            (local.datas.length ? local.datas : [null]).map((data) => (
+              <li
+                key={`${local.local}:${data ? (data.desde ?? "sem-data") : "sem-datas"}`}
+                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 py-1 text-sm"
+              >
+                <LocationTag id={local.local} />
+                <span className="min-w-0 text-foreground">{data ? desdeEmTexto(data.desde) : null}</span>
+                <span className="shrink-0 font-semibold tabular-nums">
+                  {numberFormatter.format(data ? data.pecas : local.pecas)} un.
+                </span>
+              </li>
+            )),
+          )}
+        </ul>
+      </Section>
+    );
+  }
+  return (
+    <Section title="Onde está">
+      {locations.length ? (
+        locations.map((location) => (
+          <div key={location.id} className="flex min-w-0 items-center justify-between gap-3 py-1 text-sm">
+            <LocationTag id={location.id} />
+            <span className="shrink-0 font-semibold tabular-nums">
+              {numberFormatter.format(location.qty)} un.
+            </span>
+          </div>
+        ))
+      ) : (
+        <p className="text-sm text-muted-foreground">Sem endereço registrado.</p>
+      )}
+    </Section>
+  );
+}
+
+/** As datas de entrada por prateleira do item do cliente ativo, pelo getStockDates. */
+export async function buscarDatasDaFicha(customerCode: string, skuCode: string): Promise<LocalComDatas[]> {
+  const resposta = await fetch(
+    `/api/warehouse/stock-dates/${encodeURIComponent(customerCode)}/${encodeURIComponent(skuCode)}`,
+  );
+  if (!resposta.ok) throw new Error("Não consegui carregar as datas de entrada.");
+  const corpo = (await resposta.json()) as { locais?: unknown };
+  return locaisValidos(corpo.locais);
+}
+
 export function SecaoDoGiro({ giro, caixas, rotuloDaCaixaParada }: { giro?: GiroDoItem; caixas: CaixaParada[]; rotuloDaCaixaParada: string }) {
   return (
     <>

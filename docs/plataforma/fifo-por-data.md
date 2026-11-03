@@ -111,7 +111,10 @@ Sobram as 200 de 03/10 e 100 das 150 de 05/08.
 
 Em Estoque › Itens, "Onde está" mostra as datas e as quantidades de cada
 prateleira, pela mesma callable. A quantidade da data mais antiga é a sobra
-da caixa aberta.
+da caixa aberta. Na tela aprovada (`docs/mockups/WmsItemDatas.dc.html`), é
+uma linha por prateleira e data, a prateleira de data livre mais antiga
+primeiro (a ordem do pedido), com o `RECEBIMENTO` e a `EXPEDICAO` no fim, sem
+data. Sem a leitura, a quantidade de cada local, como antes.
 
 ### 3.5 Hábitos na prateleira
 
