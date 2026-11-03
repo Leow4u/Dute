@@ -268,9 +268,8 @@ divergência continua como hoje, na chegada. Quem precisa de linha sem caixa
 ### 4.4 Concluir entrada
 
 "Concluir entrada" exige toda linha da NF tratada (coberta por caixas ou
-marcada como falta) e toda caixa fechada; a caixa sem destino, porque a zona
-do cliente está cheia, não trava a entrada e ganha o destino na guarda
-(decisão 14). Faz o que
+marcada como falta) e toda caixa fechada; a caixa sem destino não trava a
+entrada e ganha o destino na guarda (decisão 14). Faz o que
 faz hoje, na mesma transação e do mesmo tamanho: lança o saldo de cada linha
 em `RECEBIMENTO`, grava a `ENTRADA` com `source: wms_receiving` uma vez por
 linha (a fatura e o relógio de parados continuam iguais, numa data só por NF)
@@ -497,15 +496,37 @@ desenhada e aprovada antes do PR de tela.
      muda, deixa a marca sem valor (a 4d confere). Testes:
      `inbound-boxes.integration.test.ts`, `inbound-boxes.test.ts` e uma
      linha em `callables-papeis.integration.test.ts`.
-   - **4d, concluir a entrada:** porta própria, e a porta genérica e a API
-     seguem recusando a chegada por caixa. A barreira: nenhuma caixa em
-     conferência, mesmo vazia (decisão 18); toda linha coberta pelas caixas
-     ou com a falta marcada; justificativa na divergência; a NF sem nenhuma
-     caixa é recusada (decisão 19). A `ENTRADA` como hoje, uma por linha da
-     NF, com a quantidade das caixas e numa data só. Uma guarda por caixa:
-     com o destino da caixa reservada, ou sem destino na caixa fechada sem
-     prateleira (decisão 14, sem condição). A chegada fica `received` com
-     os contadores das caixas e em aberto até a última guarda.
+   - **4d, concluir a entrada:** feita em 02/11/2026. Porta própria, a
+     callable `completeInboundBoxReceipt` (papel do armazém), que chama o
+     ramo da entrada de `advanceWarehouseTaskTransaction` com a opção
+     `boxEntry`; a porta genérica e a API seguem recusando a chegada por
+     caixa ("a entrada é concluída pelas caixas, na ficha da chegada"). As
+     regras ficam no módulo puro `inbound-box-entry.ts`
+     (`entradaPorCaixa`): a chegada vai de `created` ou `checking` direto a
+     `received`; nenhuma caixa vazia ou em conferência (decisão 18, a recusa
+     nomeia a caixa); ao menos uma caixa (decisão 19); a quantidade de cada
+     linha é a soma das caixas, conferida com `boxed_qty` e `box_codes`; a
+     linha a menos precisa da falta marcada para essa quantidade (parte 4c);
+     a divergência pede a justificativa, com a frase da entrada por linha. A
+     transação lê as caixas da chegada e o contador `CX`, que o "Iniciar
+     caixa" grava, para a caixa iniciada no mesmo instante derrubar uma das
+     duas. A `ENTRADA` sai como hoje: uma por linha da NF, `wms_receiving`,
+     no `RECEBIMENTO`, numa data só, com o portal em "em recebimento"; a
+     linha grava `received_qty`, `difference_qty` e `conference_status`, e a
+     marca de falta da linha coberta sai. Nasce uma guarda por caixa
+     (`boxPutawayTaskId`, sem `sku_code`, com `box_code`, as linhas e os
+     SKUs), com o destino da caixa reservada ou sem destino na caixa fechada
+     sem prateleira (decisão 14), e a caixa sem prateleira avisa a
+     coordenação (`warehouse.boxes_without_shelf`, atenção). A chegada fica
+     `received` com `box_count`, `box_codes`, `boxes_stored` 0 e
+     `putaway_status` `pending`, em aberto até a última guarda; o aviso de
+     envio vinculado e o rascunho "Estoque atualizado" não saem na
+     conclusão (os eventos levam `client_notice: after_putaway`, decisão
+     20), e o aviso vinculado aprovado nessa janela segue em recebimento: a
+     aprovação só conta a chegada por caixa como recebida depois da última
+     guarda. Testes: `inbound-box-entry.test.ts`,
+     `inbound-boxes.integration.test.ts` e uma linha em
+     `callables-papeis.integration.test.ts`.
    - **4f, a guarda da caixa:** numa transação, move todas as linhas da
      caixa do `RECEBIMENTO` para a prateleira reservada, revalida a
      prateleira (apagada, bloqueada ou de outra zona), põe a caixa em

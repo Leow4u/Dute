@@ -7,6 +7,7 @@ import { z } from "genkit";
 import { recordOwner } from "./customer-scope.js";
 import { conferenceModeOf } from "./inbound-mode.js";
 import {
+  advanceWarehouseTaskTransaction,
   assertInventoryOperationsEnabled,
   createEvent,
   type OperationalActor,
@@ -164,6 +165,15 @@ export const ConfirmInboundBoxDestinationSchema = z.object({
 });
 
 export const RemoveInboundBoxSchema = z.object(mutationFields);
+
+export const CompleteInboundBoxReceiptSchema = z.object({
+  ...receiptFields,
+  /** O status que a tela viu: a chegada por caixa conclui de created ou checking. */
+  expected_status: z.enum(["created", "checking"], { errorMap: () => ({ message: "Atualize a tela: a chegada mudou." }) }),
+  /** A justificativa da divergência, quando há falta ou sobra. */
+  note: z.string().trim().max(1000, "Justificativa muito longa.").optional(),
+  idempotency_key: operationKey,
+});
 
 /** Os motivos da falta marcada na linha da NF (decisão 17), os do separar a menos. */
 export const MOTIVOS_DA_FALTA = ["falta", "avaria"] as const;
@@ -1145,4 +1155,28 @@ export async function markInboundBoxShortage(db: Firestore, raw: unknown, actor:
       events: [event],
     });
   });
+}
+
+// ------------------------------------------------------ concluir a entrada
+
+/**
+ * Conclui a entrada da chegada por caixa (parte 4d): a porta própria do ramo
+ * da entrada em operations.ts, que confere as caixas (inbound-box-entry.ts),
+ * lança a ENTRADA de cada linha da NF como hoje e abre uma guarda por caixa.
+ * A porta genérica e a API REST v1 seguem recusando a chegada por caixa.
+ */
+export async function completeInboundBoxReceipt(db: Firestore, raw: unknown, actor: OperationalActor) {
+  requireEditor(actor);
+  const input = parse(CompleteInboundBoxReceiptSchema, raw);
+  return advanceWarehouseTaskTransaction(
+    db,
+    {
+      task_uid: `receiving:${input.receipt_id}`,
+      expected_status: input.expected_status,
+      note: input.note,
+      idempotency_key: `box_entry_${input.idempotency_key}`,
+    },
+    actor,
+    { boxEntry: { selectedCustomer: input.customer_code } },
+  ) as Promise<Row>;
 }

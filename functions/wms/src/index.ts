@@ -65,6 +65,7 @@ import { accessChangeFromTo, assertAccessActorCurrent, setUserAccessFor } from "
 import { assertDirectoryPersonManageable, enableReinvitedLoginFor, readReinvitedUser, userDirectoryArchivePayload } from "./domain/user-directory.js";
 import { accountRetentionEnabled, anonymizeRemovedAccounts } from "./domain/account-retention.js";
 import { recalcularDisponivelDoPortal } from "./domain/disponivel-do-portal.js";
+import { CLIENT_NOTICE_AFTER_PUTAWAY } from "./domain/inbound-box-entry.js";
 import {
   CLIENT_ACCESS_COLLECTION,
   CLIENT_PROFILES_COLLECTION,
@@ -135,6 +136,7 @@ import {
   confirmInboundBoxDestination as confirmInboundBoxDestinationFor,
   removeInboundBox as removeInboundBoxFor,
   markInboundBoxShortage as markInboundBoxShortageFor,
+  completeInboundBoxReceipt as completeInboundBoxReceiptFor,
 } from "./domain/inbound-boxes.js";
 import { readSystemHealth } from "./domain/system-health.js";
 import { CostSettingsSchema, readSystemDashboard, saveCostSettings } from "./domain/system-dashboard.js";
@@ -1619,6 +1621,8 @@ function recusarCaixaNoAvisoAoCliente(
 }
 
 function notificationDraftFromEvent(event: EventRow) {
+  // A conclusão da chegada por caixa avisa na última guarda (decisão 20).
+  if (rowRecord(event, "payload").client_notice === CLIENT_NOTICE_AFTER_PUTAWAY) return null;
   const type = rowText(event, "type");
   const title = rowText(event, "title") || "Evento operacional";
   const description = rowText(event, "description");
@@ -8236,6 +8240,12 @@ export const markInboundBoxShortage = onCall(async (request) => {
   const profile = await getProfile(request);
   requireWarehouseWrite(profile);
   return markInboundBoxShortageFor(db, request.data, profile);
+});
+
+export const completeInboundBoxReceipt = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return completeInboundBoxReceiptFor(db, request.data, profile);
 });
 
 /** Adaptador externo autenticado; só o gateway é documentado para consumidores. */

@@ -106,6 +106,7 @@ const MATRIZ: Record<string, Linha> = {
   cancelWarehouseOrder: { passam: COORDENACAO, recusa: SO_COORDENACAO },
   // A entrada válida chamaria o Gemini; a conversa é de todos, sem checagem de papel.
   chatWithAgentDute: { passam: TODOS },
+  completeInboundBoxReceipt: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   completeOpeningInventorySession: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   confirmInboundBoxDestination: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   // Qualquer papel do WMS abre solicitação (pergunta 55 do plano de implantação).
