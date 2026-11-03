@@ -173,6 +173,30 @@ describe("o que cada uma responde", () => {
     assert.deepEqual((await rodar("eventos", escopo("interno"), { referencia: "PED-0043" })).eventos.map((linha: Record<string, unknown>) => [linha.o_que, linha.quem]), [["Pedido PED-0043 aprovado", "Ops"]]);
   });
 
+  it("a chegada por caixa recebida segue em aberto até a última guarda, e a guarda da caixa mostra a caixa e as peças (parte 4i)", async () => {
+    const dados = {
+      ...DADOS,
+      inbound_receipts: {
+        ...DADOS.inbound_receipts,
+        ...porId({ id: "rc2", customer_code: "ITAU", receipt_number: "REC-0002", status: "received", conference_mode: "per_box", putaway_status: "pending", box_count: 3, boxes_stored: 1, created_at: "2026-10-19T12:00:00.000Z" }),
+      },
+      putaway_tasks: {
+        ...DADOS.putaway_tasks,
+        ...porId({ id: "g1", customer_code: "ITAU", receipt_number: "REC-0002", box_code: "CX-000132", status: "planned", total_units: 41, lines: [{ product_name: "POLO XG", counted_qty: 29 }, { product_name: "POLO GG", counted_qty: 12 }], created_at: "2026-10-21T12:00:00.000Z", updated_at: "2026-10-22T12:00:00.000Z" }),
+      },
+    };
+    const recebimentos = await rodar("recebimentos", escopo("wms"), {}, dados);
+    assert.deepEqual(
+      recebimentos.recebimentos.map((linha: Record<string, unknown>) => [linha.numero, linha.situacao, linha.caixas, linha.caixas_guardadas]),
+      [["REC-0001", "em conferência", undefined, undefined], ["REC-0002", "recebida, guardando caixas", 3, 1]],
+    );
+    const tarefas = await rodar("tarefas_armazem", escopo("wms"), {}, dados);
+    const guarda = tarefas.tarefas.find((tarefa: Record<string, unknown>) => tarefa.caixa === "CX-000132");
+    assert.deepEqual([guarda.item, guarda.endereco_destino, guarda.pecas], ["caixa CX-000132", "sem prateleira", 41]);
+    assert.deepEqual(guarda.conteudo, [{ produto: "POLO XG", pecas: 29 }, { produto: "POLO GG", pecas: 12 }]);
+    assert.doesNotMatch(JSON.stringify(tarefas), /SAFRA/);
+  });
+
   it("a entrada fora do esquema volta como erro para o modelo, sem ler nada", async () => {
     assert.deepEqual(Object.keys(await rodar("buscar_itens", escopo("cliente"), { texto: 3 })), ["erro"]);
     assert.deepEqual(Object.keys(await rodar("listar_pedidos", escopo("cliente"), { limite: 99 })), ["erro"]);

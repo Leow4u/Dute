@@ -571,8 +571,14 @@ desenhada e aprovada antes do PR de tela.
      sugerir e confirmar da 4g. Testes: `inbound-boxes.integration.test.ts`
      (inclusive a prateleira apagada) e uma linha em
      `callables-papeis.integration.test.ts`.
-   - **4i, o Agent Dute:** vê a chegada guardando caixas e a guarda da
-     caixa, nas duas cópias (WMS e núcleo).
+   - **4i, o Agent Dute:** feita em 02/11/2026, nas duas cópias
+     (`agent-team.ts` no WMS e `agente-armazenagem.ts` no núcleo, mudadas
+     juntas). A chegada por caixa `received` com `putaway_status` `pending`
+     segue entre os recebimentos abertos, como "recebida, guardando caixas",
+     com `caixas` e `caixas_guardadas`; a guarda da caixa mostra a caixa, o
+     conteúdo (produto e peças, sem custo) e "sem prateleira" quando não tem
+     destino. As descrições das ferramentas dizem isso. Testes:
+     `agent-team.integration.test.ts` e `agente-armazenagem.test.ts`.
 
    A 4d, a 4f e a 4g sobem uma logo depois da outra: entre elas, a chegada
    por caixa concluída na homologação fica sem guarda. A primeira chegada por

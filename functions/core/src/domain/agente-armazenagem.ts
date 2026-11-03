@@ -349,15 +349,26 @@ export async function filaDeSolicitacoes(leitor: LeitorDoAgente, agora: Date) {
 
 const RECEBIMENTO_FEITO = new Set(["received", "closed", "cancelled", "canceled", "completed"]);
 
+/** A chegada por caixa recebida segue em aberto até a última guarda (recebimento com caixas, parte 4i). */
+function guardandoCaixas(recebimento: RegistroLido) {
+  return normalizado(recebimento.status) === "received" && texto(recebimento.putaway_status) === "pending";
+}
+
 export async function recebimentos(leitor: LeitorDoAgente, entrada: { situacao?: "abertos" | "todos"; texto?: string }) {
   const situacao = entrada.situacao ?? "abertos";
   const lista = (await leitor.doCliente("inbound_receipts", { ordem: [["created_at", "desc"]], limite: 80 }))
-    .filter((recebimento) => situacao === "todos" || !RECEBIMENTO_FEITO.has(normalizado(recebimento.status)))
+    .filter((recebimento) => situacao === "todos" || !RECEBIMENTO_FEITO.has(normalizado(recebimento.status)) || guardandoCaixas(recebimento))
     .filter((recebimento) => bate(entrada.texto, recebimento.receipt_number, recebimento.supplier, recebimento.invoice_number, recebimento.reference))
     .map((recebimento) => ({
       numero: texto(recebimento.receipt_number) || undefined,
       situacao:
-        normalizado(recebimento.status) === "checking" ? "em conferência" : RECEBIMENTO_FEITO.has(normalizado(recebimento.status)) ? "concluído" : "aguardando chegada",
+        normalizado(recebimento.status) === "checking"
+          ? "em conferência"
+          : guardandoCaixas(recebimento)
+            ? "recebida, guardando caixas"
+            : RECEBIMENTO_FEITO.has(normalizado(recebimento.status)) ? "concluído" : "aguardando chegada",
+      caixas: numero(recebimento.box_count) || undefined,
+      caixas_guardadas: numero(recebimento.box_count) ? numero(recebimento.boxes_stored) : undefined,
       fornecedor: texto(recebimento.supplier) || undefined,
       nota_fiscal: texto(recebimento.invoice_number) || undefined,
       previsto_para: instante(recebimento.expected_at),
@@ -388,8 +399,13 @@ export async function tarefasDoArmazem(leitor: LeitorDoAgente, agora: Date) {
     tipo,
     pedido: tipo === "separação" ? texto(tarefa.order_number) || undefined : undefined,
     recebimento: tipo === "guarda" ? texto(tarefa.receipt_number) || undefined : undefined,
-    item: tipo === "guarda" ? texto(tarefa.product_name) || texto(tarefa.client_item_code) || undefined : undefined,
-    endereco_destino: tipo === "guarda" ? texto(tarefa.destination_location_id) || undefined : undefined,
+    item: tipo === "guarda" ? texto(tarefa.product_name) || texto(tarefa.client_item_code) || (texto(tarefa.box_code) ? `caixa ${texto(tarefa.box_code)}` : undefined) : undefined,
+    // A guarda da caixa (parte 4f): a caixa e as peças de cada produto, sem custo.
+    caixa: tipo === "guarda" ? texto(tarefa.box_code) || undefined : undefined,
+    conteudo: tipo === "guarda" && texto(tarefa.box_code) && Array.isArray(tarefa.lines)
+      ? (tarefa.lines as RegistroLido[]).slice(0, 20).map((linha) => ({ produto: texto(linha.product_name) || texto(linha.client_item_code) || texto(linha.sku_code), pecas: numero(linha.counted_qty) }))
+      : undefined,
+    endereco_destino: tipo === "guarda" ? texto(tarefa.destination_location_id) || (texto(tarefa.box_code) ? "sem prateleira" : undefined) : undefined,
     situacao: SITUACAO_DA_TAREFA[normalizado(tarefa.status)] ?? (texto(tarefa.status) || "a fazer"),
     prioridade: texto(tarefa.priority) || undefined,
     pecas: numero(tarefa.total_units) || numero(tarefa.quantity) || undefined,
@@ -549,7 +565,7 @@ export const FERRAMENTAS_DA_ARMAZENAGEM: readonly FerramentaDoAgente[] = [
   }),
   ferramenta({
     nome: "recebimentos",
-    descricao: "Recebimentos no armazém: aguardando chegada ou em conferência (padrão), ou todos. Mostra fornecedor, nota fiscal, previsão e peças previstas e recebidas.",
+    descricao: "Recebimentos no armazém: aguardando chegada, em conferência ou recebidos guardando caixas (padrão), ou todos. Mostra fornecedor, nota fiscal, previsão, peças previstas e recebidas e, na chegada por caixa, as caixas guardadas.",
     modulo: "wms",
     entrada: z.object({
       situacao: z.enum(["abertos", "todos"]).optional(),
@@ -560,7 +576,7 @@ export const FERRAMENTAS_DA_ARMAZENAGEM: readonly FerramentaDoAgente[] = [
   }),
   ferramenta({
     nome: "tarefas_armazem",
-    descricao: "Tarefas abertas do armazém: separação de pedidos e guarda de recebimentos, com situação, peças e há quantos dias estão abertas.",
+    descricao: "Tarefas abertas do armazém: separação de pedidos e guarda de recebimentos (por linha ou por caixa, com o conteúdo da caixa), com situação, peças e há quantos dias estão abertas.",
     modulo: "wms",
     entrada: z.object({}),
     para: daEquipe,
