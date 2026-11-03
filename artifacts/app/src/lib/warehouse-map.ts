@@ -44,6 +44,8 @@ export type Shelf = {
   sku_codes: string[];
   /** Caixas de referência que ainda cabem, numa camada, pela frente livre e pelo peso. */
   remaining_reference_boxes: number;
+  /** O saldo do estoque na prateleira, com ou sem caixa registrada. */
+  saldo: SaldoDaPrateleira;
   /** Frente usada sobre a frente total, de 0 a 1. */
   fill: number;
   state: ShelfState;
@@ -76,7 +78,45 @@ export function referenceBoxesThatFit(
   return Math.max(0, Math.floor((freeFront + TOLERANCE_M) / Math.min(...fronts)));
 }
 
-export function buildShelves(positions: WarehousePosition[], boxes: WarehouseBox[]): Shelf[] {
+/**
+ * O saldo do estoque na prateleira (stock_balances), com ou sem caixa
+ * registrada. A guarda por linha move o saldo e não registra caixa: sem isto,
+ * a prateleira com mercadoria parecia vazia no mapa.
+ */
+export type SaldoDaPrateleira = {
+  unidades: number;
+  itens: Array<{ sku: string; qty: number }>;
+};
+
+export type SaldoDaPosicao = {
+  location_id?: unknown;
+  sku_code?: unknown;
+  qty_on_hand?: unknown;
+};
+
+export function saldoPorPrateleira(balances: SaldoDaPosicao[]): Map<string, SaldoDaPrateleira> {
+  const porSku = new Map<string, Map<string, number>>();
+  for (const balance of balances) {
+    const code = String(balance.location_id ?? "").trim().toUpperCase();
+    const sku = String(balance.sku_code ?? "").trim();
+    const qty = Number(balance.qty_on_hand ?? 0);
+    if (!code || !sku || !Number.isFinite(qty) || qty <= 0) continue;
+    const skus = porSku.get(code) ?? new Map<string, number>();
+    skus.set(sku, (skus.get(sku) ?? 0) + qty);
+    porSku.set(code, skus);
+  }
+  const result = new Map<string, SaldoDaPrateleira>();
+  for (const [code, skus] of porSku) {
+    const itens = [...skus].map(([sku, qty]) => ({ sku, qty })).sort((a, b) => a.sku.localeCompare(b.sku));
+    result.set(code, { unidades: round(itens.reduce((soma, item) => soma + item.qty, 0)), itens });
+  }
+  return result;
+}
+
+const SEM_SALDO: SaldoDaPrateleira = { unidades: 0, itens: [] };
+
+export function buildShelves(positions: WarehousePosition[], boxes: WarehouseBox[], balances: SaldoDaPosicao[] = []): Shelf[] {
+  const saldos = saldoPorPrateleira(balances);
   const byLocation = new Map<string, WarehouseBox[]>();
   for (const box of boxes) {
     if (box.status !== "stored" && box.status !== "committing") continue;
@@ -116,6 +156,7 @@ export function buildShelves(positions: WarehousePosition[], boxes: WarehouseBox
       unit_count: stored.reduce((sum, box) => sum + box.unit_count, 0),
       sku_codes: [...new Set(stored.flatMap((box) => box.sku_codes))],
       remaining_reference_boxes,
+      saldo: saldos.get(code) ?? SEM_SALDO,
       fill: position.length_m > 0 ? Math.min(1, front_used_m / position.length_m) : 0,
       state,
     };
@@ -222,7 +263,7 @@ export function shelfMatches(shelf: Shelf, term: string, skuIndex: SkuIndex) {
   for (const box of shelf.boxes) {
     if (box.code.includes(needle)) return true;
   }
-  for (const sku of shelf.sku_codes) {
+  for (const sku of new Set([...shelf.sku_codes, ...shelf.saldo.itens.map((item) => item.sku)])) {
     if (normalize(sku).includes(needle)) return true;
     const info = skuIndex.get(sku.toUpperCase());
     if (info && (normalize(info.name).includes(needle) || normalize(info.clientCode).includes(needle))) return true;

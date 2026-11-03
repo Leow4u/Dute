@@ -7,6 +7,7 @@ import {
   buildShelves,
   groupByAisle,
   referenceBoxesThatFit,
+  saldoPorPrateleira,
   shelfMatches,
   skuIndexFromRows,
   summarizeZone,
@@ -249,5 +250,37 @@ describe("busca e conteúdo", () => {
       { code: "B.02", name: "Calça preta", qty: null },
     ]);
     expect(boxContents(box("CX-000010", "A-01", { sku_codes: ["SKU-9"] }), [], index)).toEqual([{ code: "SKU-9", name: "SKU-9", qty: null }]);
+  });
+});
+
+describe("saldo da prateleira sem caixa registrada", () => {
+  const balances = [
+    { location_id: "b-02", sku_code: "BTG-000002", qty_on_hand: 41 },
+    { location_id: "B-02", sku_code: "BTG-000001", qty_on_hand: 30 },
+    { location_id: "B-02", sku_code: "BTG-000003", qty_on_hand: 0 },
+    { location_id: "RECEBIMENTO", sku_code: "BTG-000001", qty_on_hand: 5 },
+    { location_id: "", sku_code: "BTG-000009", qty_on_hand: 9 },
+  ];
+
+  it("soma o saldo positivo por prateleira, sem diferenciar maiúscula", () => {
+    const saldos = saldoPorPrateleira(balances);
+    expect(saldos.get("B-02")).toEqual({
+      unidades: 71,
+      itens: [
+        { sku: "BTG-000001", qty: 30 },
+        { sku: "BTG-000002", qty: 41 },
+      ],
+    });
+    expect(saldos.has("")).toBe(false);
+  });
+
+  it("a guarda por linha aparece na prateleira sem caixa, e a busca acha pelo produto", () => {
+    const [b02, b03] = buildShelves([shelf("B-02", 1), shelf("B-03", 2)], [], balances);
+    expect(b02!.boxes).toEqual([]);
+    expect(b02!.saldo.unidades).toBe(71);
+    expect(b03!.saldo).toEqual({ unidades: 0, itens: [] });
+    const index = skuIndexFromRows([{ id: "BTG-000002", produto: "POLO MASCULINO PIQUET PRETO - XG" }]);
+    expect(shelfMatches(b02!, "polo", index)).toBe(true);
+    expect(shelfMatches(b03!, "polo", index)).toBe(false);
   });
 });
