@@ -589,13 +589,13 @@ desenhada e aprovada antes do PR de tela.
 5. **Ficha da chegada por caixa (tela)**, a fila do Receber e a guarda da
    caixa no computador e no celular; "Físico" derivado; divergência
    automática. Testes de textos e `axe`. A guarda da caixa não estava em
-   nenhuma parte e entra aqui: sem ela, a caixa não chega à prateleira. Os
-   mockups foram atualizados em 03/11/2026 com as decisões 14, 15, 17, 21 e
-   24 (`docs/mockups/README.md`, seção do recebimento com caixas), numa
-   proposta à espera da aprovação do Leonardo: a ficha e a fila mudam, e
-   seis telas novas mostram marcar a falta, a caixa sem prateleira livre na
-   bancada, a ficha pronta para concluir, a guarda sem prateleira (no
-   computador e no celular) e o "Não cabe aqui" na guarda.
+   nenhuma parte e entra aqui, por decisão do Leonardo em 03/11/2026: sem
+   ela, a caixa não chega à prateleira. Os mockups foram atualizados com as
+   decisões 14, 15, 17, 21 e 24 e aprovados pelo Leonardo em 03/11/2026
+   (`docs/mockups/README.md`, seção do recebimento com caixas): a ficha e a
+   fila mudam, e seis telas novas mostram marcar a falta, a caixa sem
+   prateleira livre na bancada, a ficha pronta para concluir, a guarda sem
+   prateleira (no computador e no celular) e o "Não cabe aqui" na guarda.
 6. **Etiquetas:** caixa `committing` com destino, origem "Recebimento", o
    conteúdo da caixa do recebimento na etiqueta e no Mapa, "Etiquetas da
    chegada", reimpressão com evento.

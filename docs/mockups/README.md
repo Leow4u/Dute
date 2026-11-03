@@ -166,8 +166,8 @@ pelas decisões:
 A parte 5 (a ficha da chegada por caixa, a fila do Receber e a guarda da
 caixa no computador e no celular) ganhou em 03/11/2026 a atualização das duas
 telas acima e as seis telas abaixo, com as decisões 14, 15, 17, 21 e 24 e o
-que a parte 4 grava. É uma proposta, à espera da aprovação do Leonardo. As
-recusas usam as frases do servidor; a da guarda com o `RECEBIMENTO` curto
+que a parte 4 grava, aprovadas pelo Leonardo no mesmo dia, com a guarda da
+caixa dentro da parte 5. As recusas usam as frases do servidor; a da guarda com o `RECEBIMENTO` curto
 (decisão 24) sai como aviso na própria guarda, sem tela própria. As telas de
 01/11 que não mudaram (fechar a caixa, a guarda com destino no computador e
 no celular) valem como estão.
