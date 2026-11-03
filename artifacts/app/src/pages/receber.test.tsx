@@ -8,7 +8,7 @@ import { ReceivingTaskDetailCard } from "@/features/warehouse-ops/receiving";
 import { normalizeQueues, somenteConsulta, type WarehouseTask } from "@/lib/warehouse-ops/model";
 import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosDaTela } from "@/test/textos";
+import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import { NoticeCard } from "./receber";
 
@@ -160,5 +160,72 @@ describe("o Receber para quem só consulta (o suporte)", () => {
     expect(TELA).toContain('{operador ? label : "Ver"}');
     expect(TELA).toContain("entry={operador ? selected : somenteConsulta(selected)}");
     expect(TELA).toContain("operador && noticeChoice?.editable");
+  });
+});
+
+describe("a chegada recebida (a ficha depois da entrada)", () => {
+  const recebida: WarehouseTask = {
+    id: "receiving:inb_avulso_9",
+    reference: "inb_avulso_9",
+    title: "AVL-0D0E620B",
+    status: "received",
+    can_advance: false,
+    quantity: 71,
+    next_action: "Fluxo registrado. Acompanhar documentação e billing.",
+    items: [
+      { id: "l1", product_name: "POLO MASCULINO PIQUET PRETO GG", client_item_code: "A.01.0806.005.GG", expected_quantity: 30, received_qty: 30, conference_status: "ok", location: "RECEBIMENTO" },
+      { id: "l2", product_name: "POLO MASCULINO PIQUET PRETO - XG", client_item_code: "A.01.0806.005.XG", expected_quantity: 41, received_qty: 41, conference_status: "ok", location: "RECEBIMENTO" },
+    ],
+  };
+
+  it("sem o selo da fila em inglês, sem o próximo passo e sem campos: só o que foi contado", async () => {
+    const html = fichaDaChegada(recebida);
+    expect(html).not.toContain("Receiving");
+    expect(html).not.toContain("Próximo passo");
+    expect(html).not.toContain("Acompanhar documentação");
+    expect(html).not.toContain("Salve a quantidade física");
+    expect(html).not.toContain("<input");
+    expect(html).not.toContain("<textarea");
+    expect(html).toContain("recebida");
+    expect(html).toContain("A.01.0806.005.GG · esperado 30 un.");
+    expect(html).toMatch(/<dt[^>]*>Físico<\/dt><dd[^>]*>30 un\.<\/dd>/);
+    expect(
+      textosForaDaLista(html, [
+        "recebida",
+        "AVL-0D0E620B",
+        "Referência",
+        "inb_avulso_9",
+        "Itens",
+        "2 linha(s)",
+        "Quantidade",
+        "71 un.",
+        "Prazo",
+        "Sem prazo",
+        "Conferência de recebimento",
+        "Esperado",
+        "Físico contado",
+        "2 de 2 linha(s)",
+        "Diferença",
+        "sem diverg.",
+        "Divergências",
+        "0",
+        "POLO MASCULINO PIQUET PRETO GG",
+        "POLO MASCULINO PIQUET PRETO - XG",
+        "OK físico",
+        "A.01.0806.005.GG · esperado 30 un.",
+        "A.01.0806.005.XG · esperado 41 un.",
+        "Físico",
+        "Local",
+        "RECEBIMENTO",
+        /^\d+ un\.$/,
+      ]),
+    ).toEqual([]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("a chegada aberta continua com os campos da conferência e o próximo passo", () => {
+    const aberta = fichaDaChegada({ ...recebida, status: "checking", can_advance: true, next_action: undefined });
+    expect(aberta).toContain('aria-label="Quantidade conferida"');
+    expect(aberta).toContain("Próximo passo");
   });
 });
