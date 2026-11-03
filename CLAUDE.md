@@ -357,8 +357,9 @@ documentação de produto e operação está em `docs/`.
   `client_inventory` grava `qty_available` (livre das prateleiras) e
   `qty_receiving` (livre do `RECEBIMENTO`) a partir dos saldos do SKU depois
   da escrita; escrita nova da projeção lê todos os saldos do SKU antes da
-  primeira escrita. O total, a reserva e o valor da mercadoria não mudam. A
-  rotina `runPortalAvailability` refaz uma vez as projeções antigas
+  primeira escrita. O total, a reserva e o valor da mercadoria não mudam; o
+  Estoque do portal mostra o `qty_receiving` como "Em recebimento" (parte
+  7d). A rotina `runPortalAvailability` refaz uma vez as projeções antigas
   (`domain/disponivel-do-portal.ts`, controle em
   `system_controls/client_inventory_split`; mudou a conta, suba a versão),
   não grava nada com o estoque congelado e só conclui com uma passada limpa

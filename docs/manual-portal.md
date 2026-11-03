@@ -102,6 +102,11 @@ saldo", "Menor saldo" e "Nome: A-Z"; a exibição em "Cards" ou "Lista".
 
 - **"Adicionar"** põe no pedido até o "Disponível para pedido"; o que já está
   no pedido conta.
+- **"Em recebimento"**: as peças que chegaram e ainda não foram guardadas na
+  prateleira. Aparecem na coluna da Lista, no card ("24 em recebimento") e
+  no detalhe do produto, mas não entram no pedido; passam ao disponível
+  depois da guarda. O produto só com peças chegando leva o selo "Em
+  recebimento".
 - **"Seu pedido"**: "Nome do pedido (opcional)", até 120 caracteres;
   "Entregar em", obrigatório; "Para quando", de agora em diante (no passado,
   o carrinho avisa antes de enviar); "Observações". O pedido fica salvo no

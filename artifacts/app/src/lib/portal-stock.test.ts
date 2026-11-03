@@ -33,9 +33,20 @@ describe("estoque do portal", () => {
 
   it("resumo do topo e contagens, sem arquivados", () => {
     const overview = stockOverview(products);
-    expect(overview).toEqual({ items: 5, pieces: 724, withStock: 4, low: 1, zero: 1, archived: 1 });
+    expect(overview).toEqual({ items: 5, pieces: 724, receiving: 0, withStock: 4, low: 1, zero: 1, archived: 1 });
     expect(overviewLine(overview)).toBe("724 peças em 5 itens · 1 abaixo do mínimo · 1 sem saldo");
     expect(overviewLine(stockOverview([products[2]!]))).toBe("435 peças em 1 item");
+  });
+
+  it("o em recebimento entra no resumo do topo quando há peça chegando, fora os arquivados (parte 7d)", () => {
+    const chegando = [
+      { name: "Camisa polo manga longa GG", category: "Polo", available: 0, receiving: 24, total: 24 },
+      { name: "Polo piquet preto XG", category: "Polo", available: 41, receiving: 6, total: 47 },
+      { name: "Polo antiga", category: "Polo", available: 0, receiving: 3, total: 3, archived: true },
+    ];
+    const overview = stockOverview(chegando);
+    expect([overview.pieces, overview.receiving, overview.zero]).toEqual([71, 30, 1]);
+    expect(overviewLine(overview)).toBe("71 peças em 2 itens · 30 em recebimento · 1 sem saldo");
   });
 });
 
