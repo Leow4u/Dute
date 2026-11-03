@@ -483,10 +483,20 @@ desenhada e aprovada antes do PR de tela.
      teto, e a guarda parcial continua valendo. Testes:
      `inbound-mode.test.ts`, `inbound-mode.integration.test.ts` e
      `task-detail.test.tsx`.
-   - **4c, marcar falta:** na linha da NF da chegada por caixa, pela
-     operação, com o motivo (falta ou avaria, decisão 17); grava só a
-     linha, nunca a chegada. A marca da linha que depois foi coberta não
-     vale.
+   - **4c, marcar falta:** feita em 02/11/2026. A callable
+     `markInboundBoxShortage` (papel do armazém, decisão 17) marca a falta
+     numa linha da NF da chegada por caixa, a conferir ou em conferência,
+     com o motivo (falta ou avaria) e um detalhe opcional, ou a desmarca.
+     Grava só `inbound_items.shortage` (`qty`, `boxed_qty`, `expected_qty`,
+     `reason`, `detail`, `marked_at`, `marked_by`), nunca a chegada, com os
+     eventos `warehouse.line_shortage_marked` e
+     `warehouse.line_shortage_cleared` (info, fora da caixa do agente).
+     Recusa a linha já coberta e a tela velha (`expected_boxed_qty`
+     diferente do que está nas caixas). A marca vale para o que estava nas
+     caixas quando foi feita: a linha que depois passa a ser coberta, ou
+     muda, deixa a marca sem valor (a 4d confere). Testes:
+     `inbound-boxes.integration.test.ts`, `inbound-boxes.test.ts` e uma
+     linha em `callables-papeis.integration.test.ts`.
    - **4d, concluir a entrada:** porta própria, e a porta genérica e a API
      seguem recusando a chegada por caixa. A barreira: nenhuma caixa em
      conferência, mesmo vazia (decisão 18); toda linha coberta pelas caixas
