@@ -66,6 +66,10 @@ describe("Receber na v3", () => {
     expect(TELA).toMatch(/guardaSemPrateleira\(entry\.task\) \?[\s\S]{0,240}sem prateleira/);
   });
 
+  it("a guarda da caixa abre a guarda da caixa inteira, não o avanço por linha (parte 5f)", () => {
+    expect(TELA).toMatch(/if \(entry\.queue\.key === "putaway" && entry\.task\.box_code\) \{\s*return <GuardaDaCaixa key=\{entry\.task\.id\} entry=\{entry\} \/>;/);
+  });
+
   it("a chegada avulsa: o diálogo não explica, e o fornecedor e a NF têm rótulo ligado ao campo", () => {
     expect(AVULSA).not.toContain("Use quando o fornecedor entregou sem aviso");
     expect(AVULSA).toMatch(/<Label htmlFor="chegada-fornecedor">Fornecedor<\/Label>\s*<Input\s+id="chegada-fornecedor"/);

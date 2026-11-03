@@ -1475,6 +1475,7 @@ function laneTask(input: {
   received_at?: unknown;
   /** A guarda da caixa: a caixa, a chegada e o conteúdo. */
   box_code?: string;
+  box?: AnyRecord;
   receipt_id?: string;
   box_lines?: AnyRecord[];
 }) {
@@ -1508,6 +1509,7 @@ function laneTask(input: {
     boxes: input.boxes,
     received_at: input.received_at === undefined ? undefined : toIso(input.received_at) || undefined,
     box_code: input.box_code,
+    box: input.box,
     receipt_id: input.receipt_id,
     box_lines: input.box_lines,
   };
@@ -1661,14 +1663,21 @@ async function getWarehouseOps() {
   // do pedido novo chegava sem itens.
   const idsOf = (tasks: AnyRecord[]) => tasks.map((task) => String(task.id));
   const orderIdsOf = (tasks: AnyRecord[]) => tasks.map((task) => String(task.order_id ?? ""));
-  // A chegada por caixa (parte 5): as caixas dela, pelo receipt_id que a caixa grava no topo.
+  // A chegada por caixa (parte 5): as caixas dela, pelo receipt_id que a caixa grava no topo; e a
+  // caixa de cada guarda de caixa (parte 5f), pela chegada da guarda, que pode já ter saído da fila.
   const porCaixa = queued.receiving.filter((receipt) => String(receipt.conference_mode ?? "") === "per_box");
+  const chegadasComCaixas = [
+    ...new Set([
+      ...idsOf(porCaixa),
+      ...queued.putaway.filter((task) => task.box_code && task.receipt_id).map((task) => String(task.receipt_id)),
+    ]),
+  ];
   const [inboundItems, pickLines, orderItems, stockReservations, receiptBoxes] = await Promise.all([
     readWhereIn(collectionNames.inboundItems, "receipt_id", idsOf(queued.receiving)),
     readWhereIn(collectionNames.pickLines, "pick_task_id", idsOf(queued.picking)),
     readWhereIn(collectionNames.orderItems, "order_id", orderIdsOf([...queued.picking, ...queued.packing])),
     readWhereIn(collectionNames.stockReservations, "order_id", orderIdsOf(queued.picking)),
-    readWhereIn(collectionNames.warehouseBoxes, "receipt_id", idsOf(porCaixa)),
+    readWhereIn(collectionNames.warehouseBoxes, "receipt_id", chegadasComCaixas),
   ]);
   const inboundItemsByReceipt = groupByField(inboundItems, "receipt_id");
   const boxesByReceipt = groupByField(receiptBoxes, "receipt_id");
@@ -1895,7 +1904,12 @@ async function getWarehouseOps() {
           box_code: task.box_code ? String(task.box_code) : undefined,
           receipt_id: task.receipt_id ? String(task.receipt_id) : undefined,
           receipt_number: task.receipt_number ? String(task.receipt_number) : undefined,
+          invoice_number: task.box_code && task.invoice_number ? String(task.invoice_number) : undefined,
           box_lines: task.box_code && Array.isArray(task.lines) ? (task.lines as AnyRecord[]) : undefined,
+          // A caixa da guarda (parte 5f): a revisão que a guarda manda, as medidas e as recusas.
+          box: task.box_code && task.receipt_id
+            ? receiptBoxesFor({ id: task.receipt_id }).find((box) => box.code === String(task.box_code).toUpperCase())
+            : undefined,
         });
       }),
     },
@@ -2089,6 +2103,7 @@ async function getWarehouseOps() {
           boxes: task.boxes,
           received_at: task.received_at,
           box_code: task.box_code,
+          box: task.box,
           receipt_id: task.receipt_id,
           box_lines: task.box_lines,
           source: task.source,

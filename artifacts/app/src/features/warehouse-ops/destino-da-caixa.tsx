@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -9,8 +10,10 @@ import { Label } from "@/components/ui/label";
 import { Segmented } from "@/components/ui/segmented";
 import { formatBoxPlacement, tierLabel, type SlottingCandidate, type SuggestionResult } from "@/lib/warehouse-boxes";
 import type { WarehousePosition } from "@/lib/warehouse-positions";
+import { fetchWarehouseRows } from "@/lib/warehouse-rows";
+import { confirmarDestino, recusarSugestao, sugerirPrateleira, type CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
 
-import { ShelfPicker } from "./shelf-picker";
+import { ShelfPicker, eligibleShelfPositions } from "./shelf-picker";
 
 /**
  * Onde guardar a caixa fechada (docs/plataforma/recebimento-com-caixas.md,
@@ -190,12 +193,14 @@ export type RecusaDaPrateleiraProps = {
   caixa: string;
   detalhe: string;
   enviando: boolean;
+  /** "Recusar" na bancada; "Liberar" na guarda, que solta a reserva (mockup WmsGuardaNaoCabe). */
+  acao?: string;
   onCancelar: () => void;
   onRecusar: (motivo: string) => void;
 };
 
 /** "Não cabe aqui": o motivo, e a prateleira sai da escolha desta caixa. */
-export function RecusaDaPrateleira({ prateleira, caixa, detalhe, enviando, onCancelar, onRecusar }: RecusaDaPrateleiraProps) {
+export function RecusaDaPrateleira({ prateleira, caixa, detalhe, enviando, acao = "Recusar", onCancelar, onRecusar }: RecusaDaPrateleiraProps) {
   return (
     <Dialog open={Boolean(prateleira)} onOpenChange={(aberto) => (aberto ? undefined : onCancelar())}>
       <DialogContent className="sm:max-w-lg">
@@ -209,6 +214,7 @@ export function RecusaDaPrateleira({ prateleira, caixa, detalhe, enviando, onCan
             caixa={caixa}
             detalhe={detalhe}
             enviando={enviando}
+            acao={acao}
             onCancelar={onCancelar}
             onRecusar={onRecusar}
           />
@@ -224,6 +230,7 @@ export function RecusaDaPrateleiraConteudo({
   caixa,
   detalhe,
   enviando,
+  acao = "Recusar",
   onCancelar,
   onRecusar,
   motivoInicial = "",
@@ -250,9 +257,147 @@ export function RecusaDaPrateleiraConteudo({
           Cancelar
         </Button>
         <Button type="submit" disabled={!motivo.trim() || enviando}>
-          Recusar {prateleira}
+          {acao} {prateleira}
         </Button>
       </div>
     </form>
   );
+}
+
+/**
+ * A sugestão, a escolha, a prévia, confirmar e recusar o destino de uma
+ * caixa fechada: na bancada (parte 5c) e na guarda da caixa sem prateleira
+ * (parte 5f, decisão 14), pelas mesmas callables (a 4g aceita depois da
+ * conclusão). Sem caixa, nada é pedido.
+ */
+export function useDestinoDaCaixa({
+  caixa,
+  receiptId,
+  customerCode,
+  revisao,
+  chave,
+  anotarRevisao,
+  releitura,
+  onConfirmado,
+  falhou,
+}: {
+  caixa: CaixaDaChegada | null;
+  receiptId: string;
+  customerCode: string;
+  /** A revisão que a próxima escrita manda: a maior entre a lida e a devolvida. */
+  revisao: number;
+  chave: () => string;
+  anotarRevisao: (revisao: unknown, code: string) => void;
+  releitura: () => Promise<unknown>;
+  /** Depois da releitura da fila, com o destino confirmado. */
+  onConfirmado: () => void;
+  falhou: (titulo: string) => (error: unknown) => void;
+}) {
+  const [modo, setModo] = useState<ModoDoDestino>("sugestao");
+  const [escolhida, setEscolhida] = useState("");
+  const [recusando, setRecusando] = useState<string | null>(null);
+  const daChegada = { receipt_id: receiptId, customer_code: customerCode || undefined };
+  const mensagem = (error: unknown) => (error ? (error instanceof Error ? error.message : String(error)) : null);
+
+  const sugestao = useQuery({
+    queryKey: ["sugestao-da-caixa", receiptId, caixa?.code ?? "", revisao],
+    queryFn: () => sugerirPrateleira({ ...daChegada, box_code: caixa!.code }),
+    enabled: Boolean(caixa),
+    retry: false,
+    staleTime: 0,
+  });
+  const posicoes = useQuery({
+    queryKey: ["warehouse-positions", "all-pages"],
+    staleTime: 30_000,
+    queryFn: async () => ({ items: await fetchWarehouseRows<WarehousePosition>("/api/warehouse/positions?limit=2000") }),
+    enabled: Boolean(caixa) && modo === "escolha",
+  });
+  const previa = useQuery({
+    queryKey: ["sugestao-da-caixa", receiptId, caixa?.code ?? "", revisao, "prateleira", escolhida],
+    queryFn: () => sugerirPrateleira({ ...daChegada, box_code: caixa!.code, location_id: escolhida }),
+    enabled: Boolean(caixa) && modo === "escolha" && Boolean(escolhida),
+    retry: false,
+    staleTime: 0,
+  });
+  const prateleiras = useMemo(() => {
+    const recusadas = new Set(caixa?.refused_positions ?? []);
+    // A fila do Receber é a do cliente ativo: as prateleiras são as da zona dele.
+    return eligibleShelfPositions(posicoes.data?.items ?? [], customerCode).filter((posicao) => !recusadas.has(posicao.code));
+  }, [posicoes.data?.items, caixa?.refused_positions, customerCode]);
+  const estado: DestinoDaCaixaEstado = caixa
+    ? {
+        modo,
+        sugestao: sugestao.data ?? null,
+        carregandoSugestao: sugestao.isFetching,
+        erroSugestao: mensagem(sugestao.error),
+        prateleiras,
+        carregandoPrateleiras: posicoes.isLoading,
+        erroPrateleiras: mensagem(posicoes.error),
+        escolhida,
+        previa: previa.data?.position ?? null,
+        carregandoPrevia: previa.isFetching,
+        erroPrevia: mensagem(previa.error),
+      }
+    : destinoVazio();
+
+  const limpar = () => {
+    setModo("sugestao");
+    setEscolhida("");
+    setRecusando(null);
+  };
+  const confirmar = useMutation({
+    mutationFn: (input: { caixa: CaixaDaChegada; candidato: SlottingCandidate }) =>
+      confirmarDestino({
+        ...daChegada,
+        box_code: input.caixa.code,
+        expected_revision: revisao,
+        location_id: input.candidato.code,
+        orientation: input.candidato.placement.orientation,
+        support_box_code: input.candidato.placement.support_box_code,
+        // A sugestão do motor vai junto mesmo quando a pessoa escolheu outra prateleira.
+        suggestion: sugestaoDoConfirmar(sugestao.data ?? null),
+        idempotency_key: chave(),
+      }),
+    onSuccess: async (resultado, input) => {
+      anotarRevisao(resultado.conference_revision, input.caixa.code);
+      await releitura();
+      limpar();
+      onConfirmado();
+    },
+    onError: falhou("Não foi possível confirmar o destino"),
+  });
+  const recusar = useMutation({
+    mutationFn: (input: { caixa: CaixaDaChegada; prateleira: string; motivo: string }) =>
+      recusarSugestao({
+        ...daChegada,
+        box_code: input.caixa.code,
+        expected_revision: revisao,
+        position: input.prateleira,
+        reason: input.motivo,
+        idempotency_key: chave(),
+      }),
+    onSuccess: (resultado, input) => {
+      setRecusando(null);
+      // A revisão nova pede outra sugestão, já sem a prateleira recusada.
+      anotarRevisao(resultado.conference_revision, input.caixa.code);
+      void releitura();
+    },
+    onError: falhou("Não foi possível recusar a prateleira"),
+  });
+
+  return {
+    estado,
+    recusando,
+    limpar,
+    ocupado: confirmar.isPending || recusar.isPending,
+    acoes: {
+      onModo: setModo,
+      onEscolher: setEscolhida,
+      onConfirmar: (candidato: SlottingCandidate) => caixa && confirmar.mutate({ caixa, candidato }),
+      onNaoCabe: setRecusando,
+      onTentarDeNovo: () => void sugestao.refetch(),
+    } satisfies Omit<DestinoDaCaixaProps, "estado" | "ocupado">,
+    onCancelarRecusa: () => setRecusando(null),
+    onRecusar: (motivo: string) => caixa && recusando && recusar.mutate({ caixa, prateleira: recusando, motivo }),
+  };
 }
