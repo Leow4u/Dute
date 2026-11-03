@@ -374,4 +374,18 @@ export const BLOCOS = [
       { id: "arq-0719", tipo: "arquivar", codigo: "A.01.O719.004.P", motivo: ITEM(12, "código com letra O no lugar do zero") },
     ],
   },
+  {
+    id: "saldao-novembro",
+    titulo: "Saldão de 03/11/2026: itens que a BTG pediu para zerar",
+    ops: [
+      { id: "saldao2-A.01.0705.017.P", tipo: "zerar_sku", codigo: "A.01.0705.017.P", motivo: "Ligação da Cristiane (BTG) em 03/11/2026: A.01.0705.017.P vai para a planilha do saldão, fora do sistema" },
+      { id: "saldao2-A.01.0719.004.P", tipo: "zerar_sku", codigo: "A.01.0719.004.P", motivo: "Ligação da Cristiane (BTG) em 03/11/2026: A.01.0719.004.P vai para a planilha do saldão, fora do sistema" },
+      { id: "saldao2-A.01.0719.004.PP", tipo: "zerar_sku", codigo: "A.01.0719.004.PP", motivo: "Ligação da Cristiane (BTG) em 03/11/2026: A.01.0719.004.PP vai para a planilha do saldão, fora do sistema" },
+      { id: "saldao2-A.01.0601.001.P", tipo: "zerar_sku", codigo: "A.01.0601.001.P", motivo: "Ligação da Cristiane (BTG) em 03/11/2026: A.01.0601.001.P vai para a planilha do saldão, fora do sistema" },
+      { id: "saldao2-A.01.0609.003.P", tipo: "zerar_sku", codigo: "A.01.0609.003.P", motivo: "Ligação da Cristiane (BTG) em 03/11/2026: A.01.0609.003.P vai para a planilha do saldão, fora do sistema" },
+      { id: "saldao2-A.01.0709.004.M", tipo: "zerar_sku", codigo: "A.01.0709.004.M", motivo: "Ligação da Cristiane (BTG) em 03/11/2026: A.01.0709.004.M vai para a planilha do saldão, fora do sistema" },
+      { id: "saldao2-A.01.0709.004.P", tipo: "zerar_sku", codigo: "A.01.0709.004.P", motivo: "Ligação da Cristiane (BTG) em 03/11/2026: A.01.0709.004.P vai para a planilha do saldão, fora do sistema" },
+      { id: "saldao2-A.01.0772.001.G", tipo: "zerar_sku", codigo: "A.01.0772.001.G", motivo: "Ligação da Cristiane (BTG) em 03/11/2026: A.01.0772.001.G vai para a planilha do saldão, fora do sistema" },
+    ],
+  },
 ];

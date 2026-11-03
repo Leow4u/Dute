@@ -107,6 +107,11 @@ const ITENS = [
   ["A.02.0714.013.P", "POLO FEMININO PIQUET PAN ROSA P", "Feminino", [["CX-000004", "A-01", 3]]],
   ["A.02.0716.005.G", "POLO FEMININA MANDARIM ALGODAO PRETO G", "Feminino", [["CX-000215", "C-05", 4]]],
   ["A.01.0709.004.P", "Polo masculino piquet cinza p", "Masculino", [["CX-000033", "A-01", 3]]],
+  // Itens do saldão de 03/11/2026 que não estavam no cenário.
+  ["A.01.0709.004.M", "Polo masculino piquet cinza m", "Masculino", [["CX-000033", "A-01", 2], ["CX-000034", "A-02", 5]]],
+  ["A.01.0601.001.P", "Polo masculino piquet azul p", "Masculino", [["CX-000035", "A-02", 13]]],
+  ["A.01.0609.003.P", "Polo masculino piquet branca p", "Masculino", [["CX-000035", "A-02", 3]]],
+  ["A.01.0772.001.G", "Polo masculino piquet verde g", "Masculino", [["CX-000037", "A-04", 6]]],
   ["A.01.0705.017.P", "Polo masculino piquet indigo p", "Masculino", [["CX-000036", "B-02", 2]]],
 ];
 /** Caixas apoiadas em outra, como na produção (CX-000033 sobre a CX-000005, CX-000036 sobre a CX-000019). */

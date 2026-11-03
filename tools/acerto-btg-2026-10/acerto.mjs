@@ -1033,6 +1033,72 @@ const OPS = {
     },
   },
 
+  zerar_sku: {
+    // Tudo de um SKU sai do sistema (saldão, controle na planilha): SAIDA de todo o saldo em cada posição e
+    // retirada das linhas da abertura dele, com os contadores das caixas acompanhando. O cadastro fica ativo.
+    async ler(op) {
+      if (await reciboExiste(idReciboDireto(op))) return { jaAplicado: true, estado: [`${op.codigo} já zerado por este acerto`], previsto: [] };
+      const sku = await skuPorCodigo(op.codigo);
+      if (!sku) throw new Erro(await naoEncontrado("SKU", op.codigo));
+      const saldos = (await saldosDoSku(sku.id)).filter((r) => num(r.data.qty_on_hand) > 0);
+      const reservado = saldos.reduce((t, r) => t + num(r.data.qty_reserved), 0);
+      if (reservado > 0) throw new Erro(`${op.codigo} tem ${fmt(reservado)} reservado (pedido em aberto); resolva antes de zerar`);
+      const linhas = await linhasAbertura({ sku: sku.id });
+      const estado = [`${rotulo(op.codigo, sku)} · "${sku.nome}" · saldo ${descreverSaldos(saldos)}`];
+      for (const l of linhas) estado.push(`  linha da caixa ${text(l.data.box_code)} · ${fmt(num(l.data.counted_qty))} un.`);
+      const totalLinhas = linhas.reduce((t, l) => t + num(l.data.counted_qty), 0);
+      const totalSaldo = saldos.reduce((t, r) => t + num(r.data.qty_on_hand), 0);
+      if (!saldos.length && !linhas.length) return { semMudanca: true, estado, previsto: [] };
+      if (totalLinhas !== totalSaldo) estado.push(`  atenção: as caixas somam ${fmt(totalLinhas)} e o saldo ${fmt(totalSaldo)}; sai o saldo inteiro e as linhas inteiras`);
+      const previsto = [
+        ...saldos.map((r) => `SAIDA ${fmt(num(r.data.qty_on_hand))} em ${r.posicao}`),
+        ...linhas.map((l) => `linha da caixa ${text(l.data.box_code)} (${fmt(num(l.data.counted_qty))}) sai do registro`),
+      ];
+      return { estado, previsto, dados: { sku, saldos, linhas } };
+    },
+    async gravar(op, L) {
+      const { sku, saldos, linhas } = L.dados;
+      for (const r of saldos) {
+        const idem = chave(op, r.posicao);
+        if (await reciboExiste(idReciboMovimento(idem))) continue;
+        await movimento(db, compact({
+          type: "SAIDA", quantity: num(r.data.qty_on_hand), customer_code: CLIENTE, sku_code: sku.id,
+          client_item_code: sku.codCliente || undefined, product_name: sku.nome || undefined, location_id: r.posicao,
+          reason: op.motivo, reference: PLANO.referencia, idempotency_key: idem,
+        }), ATOR);
+      }
+      for (const l of linhas) {
+        await transacaoDireta(op, "retirar_linha", l.id, async (tx) => {
+          const boxRef = db.collection("warehouse_boxes").doc(text(l.data.box_code).toUpperCase());
+          const [snap, boxSnap, irmas] = await Promise.all([
+            tx.get(l.ref), tx.get(boxRef),
+            tx.get(db.collection("opening_inventory_lines").where("box_code", "==", text(l.data.box_code))),
+          ]);
+          if (!snap.exists) return { jaRetirada: true };
+          const antes = snap.data();
+          tx.delete(l.ref);
+          if (boxSnap.exists) {
+            const d = boxSnap.data();
+            const outra = irmas.docs.some((x) => x.id !== l.id && linhaViva(x.data()) && text(x.data().sku_code) === sku.id);
+            tx.update(boxRef, compact({
+              line_count: Math.max(0, num(d.line_count) - 1),
+              unit_count: Math.max(0, num(d.unit_count) - num(antes.counted_qty)),
+              sku_codes: outra ? undefined : lista(d.sku_codes, 100).filter((c) => c !== sku.id),
+              updated_at: ts(),
+            }));
+          }
+          evento(tx, op, "opening_line.removed_by_acerto", `Linha da caixa ${text(l.data.box_code)} retirada da abertura`, `${sku.id} · ${text(antes.client_item_code)} · ${fmt(num(antes.counted_qty))} un. · foi para o saldão`, "opening_inventory_line", l.id, {
+            caixa: text(l.data.box_code),
+            antes: { sku_code: text(antes.sku_code), client_item_code: text(antes.client_item_code), product_name: text(antes.product_name), counted_qty: num(antes.counted_qty), location_id: text(antes.location_id), session_id: text(antes.session_id) },
+          });
+          return { linha: l.id };
+        }, l.id);
+      }
+      await transacaoDireta(op, "zerar_sku", sku.id, async () => ({ sku: sku.id, posicoes: saldos.length, linhas: linhas.length }));
+      return { sku: sku.id, posicoes: saldos.length, linhas: linhas.length };
+    },
+  },
+
   saida: {
     async ler(op) {
       if (await reciboExiste(idReciboMovimento(chave(op)))) return { jaAplicado: true, estado: [`saída já gravada`], previsto: [] };
@@ -1374,6 +1440,7 @@ function descrever(op) {
     case "transferir": return `transferir ${op.qtde === "tudo" ? "tudo" : fmt(num(op.qtde))} de ${op.de} para ${op.para}`;
     case "ajuste": return `ajuste ${op.delta === "zerar" ? "zerar a sobra" : `${num(op.delta) > 0 ? "+" : ""}${fmt(num(op.delta))}`} em ${op.codigo}`;
     case "baixar_caixa": return `baixar o conteúdo da caixa ${op.caixa}`;
+    case "zerar_sku": return `zerar ${op.codigo} (saldão)`;
     case "saida": return `saída de ${op.qtde ?? "?"} de ${op.codigo ?? "?"}`;
     case "arquivar": return `arquivar ${op.codigo}`;
     case "remover_caixa": return `remover caixa ${op.caixa}`;
