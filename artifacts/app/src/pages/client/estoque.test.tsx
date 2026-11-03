@@ -21,6 +21,7 @@ import {
   problemaDoPrazoDoPedido,
   problemaDoTamanhoDoPedido,
 } from "./estoque";
+import type { DataDeEntrada } from "./datas-de-entrada";
 import type { InventoryItem } from "./shared";
 
 function renderCart(outboundBlocked: boolean, cartKey = "") {
@@ -265,7 +266,7 @@ describe("em recebimento no estoque do portal (parte 7d)", () => {
       />,
     );
   };
-  const detalhe = (item: InventoryItem) =>
+  const detalhe = (item: InventoryItem, datasDeEntrada?: DataDeEntrada[]) =>
     renderToStaticMarkup(
       <ProductDetailPanel
         product={groupInventoryProducts([item])[0]!}
@@ -277,6 +278,7 @@ describe("em recebimento no estoque do portal (parte 7d)", () => {
         onAdd={noop}
         onReplenish={noop}
         onArchive={noop}
+        datasDeEntrada={datasDeEntrada}
       />,
     );
   /** O valor de um fato do detalhe, pelo rótulo dele. */
@@ -364,6 +366,24 @@ describe("em recebimento no estoque do portal (parte 7d)", () => {
     // Sem nada chegando e sem saldo, a dica de hoje volta.
     expect(detalhe({ ...polo, qty_on_hand: 0, qty_receiving: 0 })).toContain(DICA_DE_REPOSICAO);
     expect(fato(detalhe(calca), "Em recebimento")).toBeUndefined();
+  });
+
+  it("o detalhe com as datas de entrada (FIFO por data, parte 5): uma linha por dia, depois dos números e antes da dica; textos e axe", async () => {
+    const html = detalhe(calca, [
+      { desde: "2026-10-22", pecas: 16 },
+      { desde: "2026-10-30", pecas: 30 },
+      { desde: "2026-11-03", pecas: 60 },
+    ]);
+    const textos = textosDaTela(html);
+    const inicio = textos.indexOf("Por data de entrada");
+    expect(textos.slice(inicio, inicio + 7)).toEqual([
+      "Por data de entrada", "desde 22/10/2026", "16 peças", "desde 30/10/2026", "30 peças", "desde 03/11/2026", "60 peças",
+    ]);
+    expect(inicio).toBeGreaterThan(textos.indexOf("Reservado"));
+    expect(inicio).toBeLessThan(textos.indexOf("Saldo disponível. Escolha a quantidade e clique em Adicionar para incluir no pedido."));
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    // Sem datas (carregando, sem prateleira ou com erro), a seção não aparece.
+    expect(detalhe(calca, [])).not.toContain("Por data de entrada");
   });
 });
 

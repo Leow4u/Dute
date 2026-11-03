@@ -93,12 +93,17 @@ Sobram as 200 de 03/10 e 100 das 150 de 05/08.
 
 ### 3.3 O que o cliente vê
 
-- Uma callable só de leitura no WMS, por SKU (e por `client_item_code` na
-  variante), com `getProfile` antes da entrada e `requireCustomerScope`. Ao
-  cliente, devolve só `[{desde, pecas}]` das prateleiras, sem local nem
-  caixa. À equipe, devolve também por prateleira.
-- No portal, o detalhe do produto ganha uma linha por data ("100 peças ·
-  desde 05/08/2026"). O que está no `RECEBIMENTO` segue como "Em
+- Uma callable só de leitura no WMS, `getStockDates`, por SKU, com
+  `getProfile` antes da entrada e `requireCustomerScope` (a conta em
+  `functions/wms/src/domain/datas-do-estoque.ts`). Ao cliente, devolve só
+  `[{desde, pecas}]` das prateleiras, sem local nem caixa. À equipe que lê os
+  saldos por local (owner, admin, interno, wms e suporte, os de
+  `canReadOperations` nas regras), devolve também por prateleira. O
+  financeiro, que não lê `stock_balances`, não recebe.
+- No portal, o detalhe do produto ganha "Por data de entrada", uma linha por
+  dia ("desde 05/08/2026 · 100 peças"), na tela aprovada
+  (`docs/mockups/PortalEstoqueDatas.dc.html`). O que as entradas não cobrem
+  aparece como "sem data". O que está no `RECEBIMENTO` segue como "Em
   recebimento", sem data.
 - Nenhuma data é gravada em `client_inventory`.
 

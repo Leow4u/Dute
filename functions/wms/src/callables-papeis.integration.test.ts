@@ -161,6 +161,11 @@ const MATRIZ: Record<string, Linha> = {
   getOpeningConferenceBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   getOpeningInventorySession: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   getSystemDashboard: { passam: OWNER, recusa: SO_PAINEL },
+  // O cliente lê só as do próprio estoque, sem prateleira (parte 5 do FIFO por data).
+  getStockDates: {
+    passam: ["owner", "admin", "interno", "wms", "suporte", "cliente"],
+    recusa: "Datas do estoque visíveis somente para a operação ou o cliente.",
+  },
   getSystemHealth: { passam: ["owner", "admin", "suporte"], recusa: "Sistema visível somente para administração ou suporte." },
   // O owner consultaria o Google Cloud; o caminho dele está em domain/system-infra.integration.test.ts.
   getSystemInfra: { passam: OWNER, recusa: SO_PAINEL, soRecusa: true },

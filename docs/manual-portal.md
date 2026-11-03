@@ -107,6 +107,11 @@ saldo", "Menor saldo" e "Nome: A-Z"; a exibição em "Cards" ou "Lista".
   no detalhe do produto, mas não entram no pedido; passam ao disponível
   depois da guarda. O produto só com peças chegando leva o selo "Em
   recebimento".
+- **"Por data de entrada"**, no detalhe do produto: quantas peças da
+  prateleira entraram em cada dia ("desde 22/10/2026 · 16 peças"), da mais
+  antiga para a mais nova. A Dutelog separa primeiro as mais antigas. "sem
+  data" são peças de antes do primeiro registro de entrada. O "Em recebimento" não entra aqui. A data de entrada
+  não é a do aviso "Itens parados", que conta os dias sem movimento do item.
 - **"Seu pedido"**: "Nome do pedido (opcional)", até 120 caracteres;
   "Entregar em", obrigatório; "Para quando", de agora em diante (no passado,
   o carrinho avisa antes de enviar); "Observações". O pedido fica salvo no

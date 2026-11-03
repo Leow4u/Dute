@@ -380,8 +380,10 @@ documentação de produto e operação está em `docs/`.
   tira primeiro o mais antigo, por prateleira e data, sem conteúdo por caixa.
   As datas saem do ledger (o que sobra numa prateleira são as entradas mais
   recentes nela), o cliente vê só a data e a quantidade, e o aviso ao cliente
-  não cita caixa (`CX-`) nem posição. Desenho, partes e hábitos da prateleira
-  em `docs/plataforma/fifo-por-data.md`.
+  não cita caixa (`CX-`) nem posição. As datas que as telas mostram vêm da
+  callable só de leitura `getStockDates` (cliente sem prateleira; equipe por
+  prateleira). Desenho, partes e hábitos da prateleira em
+  `docs/plataforma/fifo-por-data.md`.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os
   modelos (`uniformes` pronto, `mobiliario` e `insumos` em construção) e os

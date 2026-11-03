@@ -146,6 +146,16 @@ export function functionRoute(pathname: string, method: string): FunctionRoute |
     };
   }
 
+  // Portal › Estoque: as datas de entrada do item, sem prateleira (FIFO por
+  // data, parte 5). O cliente é o do perfil; o servidor recusa outro.
+  const clientDatesMatch = pathname.match(/^\/api\/client\/inventory\/dates\/([^/]+)$/);
+  if (method === "GET" && clientDatesMatch) {
+    return {
+      name: "getStockDates",
+      payload: async () => ({ sku_code: decodeURIComponent(clientDatesMatch[1]!) }),
+    };
+  }
+
   // Portal › Eventos: modelos de pedido do cliente (só pelo backend).
   if (method === "GET" && pathname === "/api/client/events") {
     return { name: "listClientEventTemplates", payload: async () => ({}) };
