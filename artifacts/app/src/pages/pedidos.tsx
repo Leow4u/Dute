@@ -67,7 +67,13 @@ import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { chamarOperacao, novaChave } from "@/lib/operacao/api";
 import { hojeIso } from "@/lib/operacao/fila";
 import { useLeitura } from "@/lib/operacao/leitura";
-import { buildOrderQueue, chaveDaPrincipal, ordersGroupEmpty } from "@/lib/order-queue";
+import {
+  buildOrderQueue,
+  chaveDaPrincipal,
+  linhaDoParaQuando,
+  ordersGroupEmpty,
+  paraQuandoDoPedido,
+} from "@/lib/order-queue";
 import { useItemPhotos } from "@/lib/use-item-photos";
 import { canDecideRequests, canOperateWarehouse, humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -565,6 +571,7 @@ export default function Pedidos() {
                     tone="approve"
                     title={requestTitle(request)}
                     meta={requestSummary(request)}
+                    detail={linhaDoParaQuando(request.due_at)}
                     age={formatRequestAge(request.created_at)}
                     note={
                       validation.canApprove ? undefined : (
@@ -624,6 +631,7 @@ export default function Pedidos() {
                 order={order}
                 icon={Package}
                 tone="pick"
+                paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
                 defaultOpen
                 onTreat={operador ? () => setTreating(order) : undefined}
                 {...daEntrega(order)}
@@ -660,6 +668,7 @@ export default function Pedidos() {
                 order={order}
                 icon={Truck}
                 tone="deliver"
+                paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
                 onTreat={operador ? () => setTreating(order) : undefined}
                 {...(order.stage === "enviar" ? daEntrega(order) : {})}
                 menu={menuDo(order)}
@@ -933,6 +942,7 @@ function OrderRow({
   secondary,
   menu,
   detail,
+  paraQuando,
   defaultOpen = false,
   onTreat,
 }: {
@@ -946,6 +956,8 @@ function OrderRow({
   menu?: ReactNode;
   /** A entrega do pedido em uma linha. */
   detail?: ReactNode;
+  /** "Para quando Qui 05/11 09:00", a data que o cliente pediu, antes da entrega. */
+  paraQuando?: string;
   defaultOpen?: boolean;
   onTreat?: () => void;
 }) {
@@ -981,7 +993,7 @@ function OrderRow({
             </span>
           ) : undefined
         }
-        detail={detail}
+        detail={paraQuando && detail ? <>{paraQuando} · {detail}</> : paraQuando ?? detail}
         onToggle={items.length ? () => setOpen((value) => !value) : undefined}
         open={open}
         actions={

@@ -1,3 +1,4 @@
+import { quandoEmTexto } from "./warehouse-ops/entrega";
 import type { WarehouseOpsResponse } from "./warehouse-ops/model";
 import { groupWarehouseOrders, type OrderGroup } from "./warehouse-ops/orders";
 
@@ -91,6 +92,49 @@ export function buildOrderQueue<R extends QueueRequest>({
       .sort(blockedFirst),
     delivered: orders.filter((order) => order.stage === "entregue"),
   };
+}
+
+const PARTES_EM_SAO_PAULO = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Sao_Paulo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+/**
+ * O "Para quando" que o cliente pediu no portal (`due_at` da solicitação), no
+ * horário de São Paulo e no formato da linha da entrega: "Qui 05/11 09:00".
+ * Sem data válida, "".
+ */
+export function textoDoParaQuando(dueAt: unknown): string {
+  const instante = dueAt instanceof Date ? dueAt.getTime() : requestTime(dueAt);
+  if (!instante) return "";
+  const partes = Object.fromEntries(
+    PARTES_EM_SAO_PAULO.formatToParts(new Date(instante)).map((parte) => [parte.type, parte.value]),
+  );
+  return quandoEmTexto(`${partes.year}-${partes.month}-${partes.day}`, `${partes.hour}:${partes.minute}`);
+}
+
+/** A linha do "Para quando" na fila de Pedidos; sem prazo, nada. */
+export function linhaDoParaQuando(dueAt: unknown): string | undefined {
+  const texto = textoDoParaQuando(dueAt);
+  return texto ? `Para quando ${texto}` : undefined;
+}
+
+/**
+ * O "Para quando" do pedido em separação ou entrega: o da solicitação que o
+ * originou (`customer_request_id` da tarefa), que a tela já lê.
+ */
+export function paraQuandoDoPedido(
+  order: Pick<OrderGroup, "requestId">,
+  requests?: ReadonlyArray<{ id: string; due_at?: unknown }>,
+): string | undefined {
+  if (!order.requestId) return undefined;
+  const request = requests?.find((item) => item.id === order.requestId);
+  return request ? linhaDoParaQuando(request.due_at) : undefined;
 }
 
 /** O grupo vazio diz o dado, sem ensinar o fluxo (sem legenda, parte 4.7c). */

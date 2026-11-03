@@ -54,6 +54,12 @@ describe("Pedidos na v3", () => {
     expect(FONTE).toMatch(/<Label htmlFor="motivo-da-recusa">Motivo<\/Label>\s*<Textarea\s+id="motivo-da-recusa"/);
   });
 
+  it("a coordenação vê o Para quando que o cliente pediu em aprovar, separar e entregar", () => {
+    expect(FONTE).toContain("detail={linhaDoParaQuando(request.due_at)}");
+    expect(FONTE.match(/paraQuando=\{paraQuandoDoPedido\(order, requests\.data\?\.items\)\}/g)).toHaveLength(2);
+    expect(FONTE).toContain("detail={paraQuando && detail ? <>{paraQuando} · {detail}</> : paraQuando ?? detail}");
+  });
+
   it("só a primeira linha da fila tem a ação principal", () => {
     expect(FONTE).toContain("const principal = chaveDaPrincipal(queue, decider);");
     for (const chave of ["approve:${request.id}", "pick:${order.key}", "deliver:${order.key}"]) {
