@@ -1066,6 +1066,43 @@ describe("guardar a caixa (recebimento com caixas, parte 4f)", () => {
   });
 });
 
+describe("o destino da caixa sem prateleira depois da entrada (recebimento com caixas, parte 4g)", () => {
+  it("a caixa fechada sem prateleira ganha o destino na guarda; o conteúdo da caixa fica fechado", async () => {
+    const r = await receipt();
+    const one = await reservedBox(r, [["XG", 41]], "A-01");
+    const two = String((await start(r)).box.code);
+    await line(r, two, "GG", 30);
+    await close(r, two);
+    await complete(r);
+    const tarefa = db.collection("putaway_tasks").doc(boxPutawayTaskId(r.id, two));
+    assert.equal((await tarefa.get()).get("destination_location_id"), undefined);
+
+    // O conteúdo não muda depois da entrada.
+    await assert.rejects(start(r), { details: { code: "RECEIPT_NOT_OPEN" } });
+    await assert.rejects(line(r, two, "GG", 29), { details: { code: "RECEIPT_NOT_OPEN" } });
+    await assert.rejects(reopen(r, two), { details: { code: "RECEIPT_NOT_OPEN" } });
+    await assert.rejects(remove(r, two), { details: { code: "RECEIPT_NOT_OPEN" } });
+
+    // O destino, sim: sugerir, recusar a sugestão e confirmar outra.
+    const sugestao = await suggest(r, two);
+    assert.ok(sugestao.position?.code);
+    await refuse(r, two, "A-03", "Prateleira com caixa avariada na frente");
+    const confirmed = await confirm(r, two, "A-02");
+    assert.equal(confirmed.status, "committing");
+    const depois = (await tarefa.get()).data() ?? {};
+    assert.deepEqual([depois.destination_location_id, depois.location_id, depois.status], ["A-02", "A-02", "planned"]);
+    const [evento] = (await events("warehouse.box_destination_confirmed")).filter((item) => item.payload.box_code === two);
+    assert.equal(evento!.payload.phase, "putaway");
+
+    // Guardadas as duas, a chegada fecha.
+    await store(r, one, "A-01");
+    const last = await store(r, two, "A-02");
+    assert.equal(last.putaway_status, "completed");
+    // Guardada a caixa, o destino não se dá mais.
+    await assert.rejects(confirm(r, two, "A-03"), { code: "failed-precondition" });
+  });
+});
+
 describe("as callables da caixa do recebimento (pelo .run)", () => {
   async function viaCallable(data: Row) {
     const { startInboundBox: callable } = (await import("../index.js")) as unknown as { startInboundBox: Callable };

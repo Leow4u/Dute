@@ -550,9 +550,15 @@ desenhada e aprovada antes do PR de tela.
      um caso novo na régua `billing-callables.integration.test.ts`, com a
      conclusão e a guarda de verdade: a entrada cobra as peças uma vez, na
      competência da conclusão, e a guarda não cobra.
-   - **4g, o destino depois da conclusão:** a caixa sem prateleira ganha o
-     destino com a chegada `received` (sugerir, recusar a sugestão,
-     confirmar); o conteúdo da caixa continua fechado.
+   - **4g, o destino depois da conclusão:** feita em 02/11/2026. Com a
+     chegada `received`, a caixa fechada sem prateleira ganha o destino pelas
+     mesmas callables da bancada (sugerir, recusar a sugestão, confirmar),
+     desde que a guarda dela esteja aberta; o confirmar grava também o
+     destino na tarefa, e o evento leva `phase: putaway`. Iniciar, lançar,
+     fechar ou reabrir e remover seguem só com a chegada a conferir ou em
+     conferência (`RECEIPT_NOT_OPEN`), para a caixa não se descolar da
+     ENTRADA já gravada. Testes: `inbound-boxes.test.ts` e
+     `inbound-boxes.integration.test.ts`.
    - **4h, "Não cabe aqui" na prateleira:** o único jeito de trocar o
      destino confirmado (decisão 15). Solta a reserva, avisa a coordenação
      com evento de atenção (decisão 21) e pede outro destino.

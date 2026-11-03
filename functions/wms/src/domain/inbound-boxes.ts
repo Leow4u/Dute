@@ -329,11 +329,17 @@ export function boxContentWith(lines: InboundBoxLine[], next: InboundBoxLine) {
 }
 
 /**
- * A chegada aceita caixa? Só a chegada por caixa, a conferir ou em
- * conferência, do cliente ativo. Nunca lê a liberação: o modo gravado manda.
+ * A chegada aceita caixa? Só a chegada por caixa, do cliente ativo. O
+ * conteúdo da caixa só muda com a chegada a conferir ou em conferência; o
+ * destino da caixa fechada sem prateleira também se dá depois da entrada
+ * (decisão 14, parte 4g). Nunca lê a liberação: o modo gravado manda.
  * Devolve o cliente da chegada.
  */
-export function assertReceiptTakesBoxes(receipt: Row, selectedCustomer?: string): string {
+export function assertReceiptTakesBoxes(
+  receipt: Row,
+  selectedCustomer?: string,
+  phase: "content" | "destination" = "content",
+): string {
   const owner = recordOwner(receipt);
   const selected = text(selectedCustomer);
   if (selected && selected !== owner) {
@@ -348,7 +354,8 @@ export function assertReceiptTakesBoxes(receipt: Row, selectedCustomer?: string)
     );
   }
   const status = text(receipt.status || "created").toLowerCase();
-  if (!["created", "checking"].includes(status)) {
+  const allowed = phase === "destination" ? ["created", "checking", "received"] : ["created", "checking"];
+  if (!allowed.includes(status)) {
     throw new HttpsError(
       "failed-precondition",
       `A chegada ${receiptNumber} não está em conferência (${status}): as caixas dela não mudam.`,
@@ -356,6 +363,22 @@ export function assertReceiptTakesBoxes(receipt: Row, selectedCustomer?: string)
     );
   }
   return owner;
+}
+
+/**
+ * Depois da entrada, o destino da caixa sem prateleira anda com a guarda dela
+ * (parte 4g): a tarefa da caixa tem de estar aberta. Antes da entrada, não há
+ * tarefa. Leitura da transação, antes das escritas.
+ */
+async function readOpenBoxTask(transaction: Transaction, db: Firestore, receipt: Row, receiptId: string, boxCode: string) {
+  if (text(receipt.status).toLowerCase() !== "received") return null;
+  const ref = db.collection("putaway_tasks").doc(boxPutawayTaskId(receiptId, boxCode));
+  const snapshot = await transaction.get(ref);
+  const status = text(snapshot.get("status"));
+  if (!snapshot.exists || !["planned", "in_progress"].includes(status)) {
+    throw new HttpsError("failed-precondition", `A guarda da caixa ${boxCode} não está aberta${status ? ` (${status})` : ""}.`);
+  }
+  return ref;
 }
 
 // ---------------------------------------------------------------- leituras
@@ -795,7 +818,7 @@ export async function suggestInboundBoxPosition(db: Firestore, raw: unknown, act
   const input = parse(SuggestInboundBoxPositionSchema, raw);
   // Só lê: fora de transação, como a sugestão de hoje (suggestWarehousePosition).
   const receipt = receiptFrom(await db.collection(INBOUND_RECEIPTS_COLLECTION).doc(input.receipt_id).get());
-  const owner = assertReceiptTakesBoxes(receipt, input.customer_code);
+  const owner = assertReceiptTakesBoxes(receipt, input.customer_code, "destination");
   const box = boxFrom(await db.collection(WAREHOUSE_BOXES_COLLECTION).doc(input.box_code).get(), input.box_code, input.receipt_id, owner);
   requireStatus(box, input.box_code, "reviewed");
   const dimensions = dimensionsOf(box);
@@ -855,10 +878,11 @@ export async function refuseInboundBoxPosition(db: Firestore, raw: unknown, acto
     if (previous) return previous;
     await assertInventoryOperationsEnabled(transaction, db);
     const receipt = await readReceipt(transaction, db, input.receipt_id);
-    const owner = assertReceiptTakesBoxes(receipt, input.customer_code);
+    const owner = assertReceiptTakesBoxes(receipt, input.customer_code, "destination");
     const { ref: boxRef, box } = await readBox(transaction, db, input.box_code, input.receipt_id, owner);
     requireStatus(box, input.box_code, "reviewed");
     revision(box, input.expected_revision);
+    await readOpenBoxTask(transaction, db, receipt, input.receipt_id, input.box_code);
     const positionSnapshot = await transaction.get(positionRef);
     if (!positionSnapshot.exists) {
       throw new HttpsError("not-found", `Posição ${input.position} não está cadastrada em Estoque › Posições.`);
@@ -910,13 +934,15 @@ export async function confirmInboundBoxDestination(db: Firestore, raw: unknown, 
     if (previous) return previous;
     await assertInventoryOperationsEnabled(transaction, db);
     const receipt = await readReceipt(transaction, db, input.receipt_id);
-    const owner = assertReceiptTakesBoxes(receipt, input.customer_code);
+    const owner = assertReceiptTakesBoxes(receipt, input.customer_code, "destination");
     const { ref: boxRef, box } = await readBox(transaction, db, input.box_code, input.receipt_id, owner);
     requireStatus(box, input.box_code, "reviewed");
     revision(box, input.expected_revision);
     if (!linesOf(box).length) {
       throw new HttpsError("failed-precondition", "Lance ao menos um produto antes de fechar a caixa.");
     }
+    // Depois da entrada, a tarefa da caixa ganha o destino junto (decisão 14).
+    const taskRef = await readOpenBoxTask(transaction, db, receipt, input.receipt_id, input.box_code);
     if (refusedPositions(box).includes(locationCode)) {
       throw new HttpsError("failed-precondition", `A prateleira ${locationCode} foi recusada para esta caixa. Escolha outra.`);
     }
@@ -986,6 +1012,14 @@ export async function confirmInboundBoxDestination(db: Firestore, raw: unknown, 
 
     // Serializa com as outras guardas e reservas desta prateleira.
     transaction.update(positionRef, { occupancy_revision: FieldValue.increment(1) });
+    if (taskRef) {
+      transaction.update(taskRef, {
+        location_id: locationCode,
+        destination_location_id: locationCode,
+        next_action: `Levar a caixa ${input.box_code} para ${locationCode} e confirmar a guarda.`,
+        updated_at: FieldValue.serverTimestamp(),
+      });
+    }
     transaction.update(boxRef, {
       ...reservation,
       suggestion,
@@ -1018,6 +1052,7 @@ export async function confirmInboundBoxDestination(db: Firestore, raw: unknown, 
         suggestion,
         refusals: refusals.map((item) => ({ position: text(item.position), reason: text(item.reason) })),
         occupancy_before: { front_used_m: occupancy.front_used_m, box_count: occupancy.box_count },
+        phase: taskRef ? "putaway" : "bench",
       },
     }, actor);
     return finish(transaction, opRef, { action: "confirm", targetId: input.box_code, customerCode: owner, inputHash }, actor, {
