@@ -64,14 +64,15 @@ describe("liberação da Operação por ambiente", () => {
 });
 
 describe("liberação do recebimento por caixa por ambiente", () => {
-  it("só a homologação, a mesma lista da callable da chegada (platform-lists.test.ts)", () => {
-    expect(RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS).toEqual(["dute-homolog"]);
+  it("a homologação e a produção (OK do Leonardo em 03/11/2026), a mesma lista da callable da chegada (platform-lists.test.ts)", () => {
+    expect(RECEBIMENTO_POR_CAIXA_AMBIENTES_LIBERADOS).toEqual(["dute-homolog", "dute-prod"]);
     expect(recebimentoPorCaixaLiberado("dute-homolog")).toBe(true);
+    expect(recebimentoPorCaixaLiberado("dute-prod")).toBe(true);
     expect(recebimentoPorCaixaLiberado(" dute-homolog ")).toBe(true);
   });
 
-  it("produção, produção antiga e projeto de teste ficam desligados, porque a callable recusa", () => {
-    for (const projectId of ["dute-prod", "dute-btg", "demo-dute", "", null, undefined]) {
+  it("produção antiga e projeto de teste ficam desligados, porque a callable recusa", () => {
+    for (const projectId of ["dute-btg", "demo-dute", "", null, undefined]) {
       expect(recebimentoPorCaixaLiberado(projectId)).toBe(false);
     }
   });

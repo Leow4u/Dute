@@ -94,6 +94,13 @@ export default function WarehouseMapPage() {
     refetchInterval: 120_000,
     queryFn: async () => (await fetchWarehouseRows<AnyRecord>("/api/warehouse/boxes?limit=5000")).map(warehouseBoxFromRecord),
   });
+  // O saldo de cada prateleira: a guarda por linha move o saldo sem registrar caixa.
+  const balancesQuery = useQuery({
+    queryKey: ["stock-balances", "estoque"],
+    staleTime: 30_000,
+    refetchInterval: 120_000,
+    queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/stock-balances?limit=2000"),
+  });
   const skusQuery = useQuery({
     queryKey: ["estoque", "skus"],
     staleTime: 120_000,
@@ -105,8 +112,8 @@ export default function WarehouseMapPage() {
   const showOpeningNotice = Boolean(openingNotice) && showSessionStatus && !sessionQuery.isError;
 
   const shelves = useMemo(
-    () => buildShelves(positionsQuery.data?.items ?? [], boxesQuery.data ?? []),
-    [boxesQuery.data, positionsQuery.data?.items],
+    () => buildShelves(positionsQuery.data?.items ?? [], boxesQuery.data ?? [], balancesQuery.data?.items ?? []),
+    [balancesQuery.data?.items, boxesQuery.data, positionsQuery.data?.items],
   );
   const skuIndex = useMemo<SkuIndex>(() => skuIndexFromRows(skusQuery.data?.items ?? []), [skusQuery.data?.items]);
   const zones = useMemo(() => zonesOf(shelves), [shelves]);
@@ -385,7 +392,7 @@ function ShelfCell({ shelf, selected, onClick }: { shelf: Shelf; selected: boole
       variant="outline"
       onClick={onClick}
       aria-pressed={selected}
-      aria-label={`${shelf.code}, ${SHELF_STATE_LABELS[shelf.state]}, ${shelf.boxes.length} caixa(s)`}
+      aria-label={`${shelf.code}, ${SHELF_STATE_LABELS[shelf.state]}, ${shelf.boxes.length} caixa(s)${shelf.boxes.length === 0 && shelf.saldo.unidades > 0 ? `, ${saldoSemCaixa(shelf)}` : ""}`}
       className={cn(
         "h-auto min-w-0 flex-col items-stretch justify-start gap-3 whitespace-normal rounded-lg p-3 text-left font-normal",
         STATE_CLASS[shelf.state],
@@ -409,6 +416,8 @@ function ShelfCell({ shelf, selected, onClick }: { shelf: Shelf; selected: boole
               <dd className="mt-1 text-sm font-medium tabular-nums text-foreground">{formatVolumeM3(shelf.volume.freeM3)}</dd>
             </div>
         </dl>
+      ) : shelf.saldo.unidades > 0 ? (
+        <div className="text-sm text-foreground">{saldoSemCaixa(shelf)}</div>
       ) : (
         <div className="text-sm text-muted-foreground">Ocupação não confirmada</div>
       )}
@@ -422,6 +431,37 @@ function ShelfCell({ shelf, selected, onClick }: { shelf: Shelf; selected: boole
         </div>
       </div>
     </Button>
+  );
+}
+
+/** "71 un. · 2 itens sem caixa registrada" */
+function saldoSemCaixa(shelf: Shelf) {
+  const itens = shelf.saldo.itens.length;
+  return `${formatNumber(shelf.saldo.unidades)} un. · ${formatNumber(itens)} ${itens === 1 ? "item" : "itens"} sem caixa registrada`;
+}
+
+/** O saldo da prateleira que não tem caixa registrada: produto e quantidade. */
+export function SaldoSemCaixa({ shelf, skuIndex }: { shelf: Shelf; skuIndex: SkuIndex }) {
+  return (
+    <div className="rounded-md border border-border bg-card p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-foreground">Saldo sem caixa registrada</span>
+        <span className="text-xs text-muted-foreground">{formatNumber(shelf.saldo.unidades)} un.</span>
+      </div>
+      <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+        {shelf.saldo.itens.map((item) => {
+          const info = skuIndex.get(item.sku.toUpperCase());
+          const nome = info?.name || item.sku;
+          const codigo = info?.clientCode || item.sku;
+          return (
+            <li key={item.sku} className="truncate">
+              {formatNumber(item.qty)} × {nome}
+              {codigo !== nome ? ` · ${codigo}` : ""}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -489,7 +529,9 @@ function ShelfPanel({
           <h3 className="text-sm font-medium text-foreground">Caixas nesta prateleira</h3>
           {shelf.boxes.length > 0 ? <span className="text-xs text-muted-foreground">{formatNumber(visibleBoxes.length)} de {formatNumber(shelf.boxes.length)}</span> : null}
         </div>
-        {shelf.boxes.length === 0 ? (
+        {shelf.boxes.length === 0 && shelf.saldo.unidades > 0 ? (
+          <SaldoSemCaixa shelf={shelf} skuIndex={skuIndex} />
+        ) : shelf.boxes.length === 0 ? (
           <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">Sem caixas registradas. Ocupação não confirmada.</div>
         ) : (
           <div className="space-y-2">

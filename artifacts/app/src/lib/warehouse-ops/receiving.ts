@@ -370,7 +370,22 @@ export function conteudoDaGuarda(lines: WarehouseTask["box_lines"]) {
 }
 
 /** "280 un. · está em RECEBIMENTO · guardar em A-03-2" */
+/**
+ * A guarda que terminou: concluída (o saldo já está no destino) ou cancelada.
+ * A fila e a ficha mostram onde ficou, não a origem nem "guardar em".
+ */
+export function situacaoDaGuardaEncerrada(task: WarehouseTask): string | null {
+  if (!isTerminalTask(task)) return null;
+  if (normalizeStatus(task.status) !== "completed") return "guarda cancelada";
+  const destino = destinoDaGuarda(task);
+  return destino ? `guardada em ${destino}` : "guardada";
+}
+
 export function putawayRowMeta(task: WarehouseTask) {
+  const encerrada = situacaoDaGuardaEncerrada(task);
+  if (encerrada) {
+    return [task.box_code ? conteudoDaGuarda(task.box_lines) ?? unitsText(task) : unitsText(task), encerrada].join(" · ");
+  }
   const firstItem = task.items?.[0];
   const source =
     coerceText(task.source_location_id, firstItem?.source_location_id) || "RECEBIMENTO";

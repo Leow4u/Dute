@@ -113,10 +113,11 @@ describe("a guarda genérica (parte 4b)", () => {
 });
 
 describe("a liberação do recebimento por caixa", () => {
-  it("só a homologação, até o OK do Leonardo para a produção", () => {
-    assert.deepEqual(RECEBIMENTO_POR_CAIXA_PROJECTS, ["dute-homolog"]);
+  it("a homologação e a produção (OK do Leonardo em 03/11/2026); o dute-btg fica de fora", () => {
+    assert.deepEqual(RECEBIMENTO_POR_CAIXA_PROJECTS, ["dute-homolog", "dute-prod"]);
     assert.equal(boxReceivingEnabled("dute-homolog"), true);
-    for (const project of ["dute-prod", "dute-btg", "demo-dute-operations", "", undefined]) {
+    assert.equal(boxReceivingEnabled("dute-prod"), true);
+    for (const project of ["dute-btg", "demo-dute-operations", "", undefined]) {
       assert.equal(boxReceivingEnabled(project), false, String(project));
     }
   });
