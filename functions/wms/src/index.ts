@@ -138,6 +138,7 @@ import {
   markInboundBoxShortage as markInboundBoxShortageFor,
   completeInboundBoxReceipt as completeInboundBoxReceiptFor,
   storeInboundBox as storeInboundBoxFor,
+  refuseInboundBoxShelf as refuseInboundBoxShelfFor,
 } from "./domain/inbound-boxes.js";
 import { readSystemHealth } from "./domain/system-health.js";
 import { CostSettingsSchema, readSystemDashboard, saveCostSettings } from "./domain/system-dashboard.js";
@@ -2341,7 +2342,7 @@ function agentDuteTools(
       {
         name: "recebimentos",
         description:
-          "Recebimentos no armazém: aguardando chegada ou em conferência (padrão), ou todos. Mostra fornecedor, nota fiscal, previsão e peças previstas e recebidas.",
+          "Recebimentos no armazém: aguardando chegada, em conferência ou recebidos guardando caixas (padrão), ou todos. Mostra fornecedor, nota fiscal, previsão, peças previstas e recebidas e, na chegada por caixa, as caixas guardadas.",
         inputSchema: z.object({
           situacao: z.enum(["abertos", "todos"]).optional(),
           texto: z.string().optional().describe("Número do recebimento, fornecedor ou nota fiscal"),
@@ -2353,7 +2354,7 @@ function agentDuteTools(
       {
         name: "tarefas_armazem",
         description:
-          "Tarefas abertas do armazém: separação de pedidos e guarda de recebimentos, com situação, peças e há quantos dias estão abertas.",
+          "Tarefas abertas do armazém: separação de pedidos e guarda de recebimentos (por linha ou por caixa, com o conteúdo da caixa), com situação, peças e há quantos dias estão abertas.",
         inputSchema: z.object({}),
       },
       async () => warehouseTasks(db, scope),
@@ -8253,6 +8254,12 @@ export const storeInboundBox = onCall(async (request) => {
   const profile = await getProfile(request);
   requireWarehouseWrite(profile);
   return storeInboundBoxFor(db, request.data, profile);
+});
+
+export const refuseInboundBoxShelf = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return refuseInboundBoxShelfFor(db, request.data, profile);
 });
 
 /** Adaptador externo autenticado; só o gateway é documentado para consumidores. */

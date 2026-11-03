@@ -79,6 +79,11 @@ export async function pendingRequests(db: Firestore, scope: AgentScope, now = ne
 
 const RECEIPT_DONE = new Set(["received", "closed", "cancelled", "canceled", "completed"]);
 
+/** A chegada por caixa recebida segue em aberto até a última guarda (recebimento com caixas, parte 4i). */
+function storingBoxes(receipt: Row) {
+  return normalize(receipt.status) === "received" && text(receipt.putaway_status) === "pending";
+}
+
 export async function receipts(
   db: Firestore,
   scope: AgentScope,
@@ -94,11 +99,17 @@ export async function receipts(
   );
   const situacao = input.situacao ?? "abertos";
   const list = all
-    .filter((receipt) => situacao === "todos" || !RECEIPT_DONE.has(normalize(receipt.status)))
+    .filter((receipt) => situacao === "todos" || !RECEIPT_DONE.has(normalize(receipt.status)) || storingBoxes(receipt))
     .filter((receipt) => matches(input.texto, receipt.receipt_number, receipt.supplier, receipt.invoice_number, receipt.reference))
     .map((receipt) => ({
       numero: text(receipt.receipt_number) || undefined,
-      situacao: normalize(receipt.status) === "checking" ? "em conferência" : RECEIPT_DONE.has(normalize(receipt.status)) ? "concluído" : "aguardando chegada",
+      situacao: normalize(receipt.status) === "checking"
+        ? "em conferência"
+        : storingBoxes(receipt)
+          ? "recebida, guardando caixas"
+          : RECEIPT_DONE.has(normalize(receipt.status)) ? "concluído" : "aguardando chegada",
+      caixas: num(receipt.box_count) || undefined,
+      caixas_guardadas: num(receipt.box_count) ? num(receipt.boxes_stored) : undefined,
       fornecedor: text(receipt.supplier) || undefined,
       nota_fiscal: text(receipt.invoice_number) || undefined,
       previsto_para: isoOf(receipt.expected_at),
@@ -140,8 +151,13 @@ export async function warehouseTasks(db: Firestore, scope: AgentScope, now = new
     tipo: kind,
     pedido: kind === "separação" ? text(task.order_number) || undefined : undefined,
     recebimento: kind === "guarda" ? text(task.receipt_number) || undefined : undefined,
-    item: kind === "guarda" ? text(task.product_name) || text(task.client_item_code) || undefined : undefined,
-    endereco_destino: kind === "guarda" ? text(task.destination_location_id) || undefined : undefined,
+    item: kind === "guarda" ? text(task.product_name) || text(task.client_item_code) || (text(task.box_code) ? `caixa ${text(task.box_code)}` : undefined) : undefined,
+    // A guarda da caixa (parte 4f): a caixa e as peças de cada produto, sem custo.
+    caixa: kind === "guarda" ? text(task.box_code) || undefined : undefined,
+    conteudo: kind === "guarda" && text(task.box_code) && Array.isArray(task.lines)
+      ? (task.lines as Row[]).slice(0, 20).map((line) => ({ produto: text(line.product_name) || text(line.client_item_code) || text(line.sku_code), pecas: num(line.counted_qty) }))
+      : undefined,
+    endereco_destino: kind === "guarda" ? text(task.destination_location_id) || (text(task.box_code) ? "sem prateleira" : undefined) : undefined,
     situacao: TASK_STATUS[normalize(task.status)] ?? (text(task.status) || "a fazer"),
     prioridade: text(task.priority) || undefined,
     pecas: num(task.total_units) || num(task.quantity) || undefined,
