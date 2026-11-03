@@ -181,6 +181,20 @@ no celular) valem como estão.
 | Armazenagem · Não cabe aqui na guarda | `WmsGuardaNaoCabe.dc.html` | O único jeito de trocar o destino confirmado (decisão 15, parte 4h): o motivo e "Liberar B-02". A reserva sai, a coordenação é avisada (decisão 21) e a caixa volta à guarda sem prateleira. |
 | Armazenagem · Guarda da caixa sem prateleira no celular | `WmsGuardaCaixaCelularSemPrateleira.dc.html` | A mesma escolha do destino no celular, onde a equipe guarda (decisão 11); confirmado o destino, a tela é a `WmsGuardaCaixaCelular`. |
 
+A página "FIFO por data" não tem canvas: as duas telas das partes 5 e 6 de
+`docs/plataforma/fifo-por-data.md` foram enviadas na conversa e aprovadas
+pelo Leonardo em 03/11/2026, com a prateleira de data mais antiga primeiro na
+ficha interna. A do portal segue a
+identidade do portal; a da Armazenagem, o shell v3 (Estoque › Itens, cliente
+ativo BTG, Guilherme, Operação WMS). As fontes são estáticas e os números
+fecham entre as duas: 16 peças de 22/10/2026 em B-05, 30 de 30/10/2026 e 60 de
+03/11/2026 em B-02, 10 reservadas.
+
+| Tela | Arquivo | O que muda |
+|---|---|---|
+| Portal · Estoque, detalhe do produto | `PortalEstoqueDatas.dc.html` | A seção "Por data de entrada": uma linha por data, "desde DD/MM/AAAA" e as peças, da mais antiga para a mais nova (seção 3.3). Só o que está nas prateleiras, sem prateleira nem caixa; o "Em recebimento" segue sem data. "desde" é a data de entrada e não se confunde com o "sem movimento há N dias" do aviso "Itens parados". |
+| Armazenagem · Estoque › Itens, ficha do item | `WmsItemDatas.dc.html` | "Onde está" ganha a data: uma linha por prateleira e data, com a quantidade, e a prateleira de data mais antiga primeiro (seção 3.4). A linha mais antiga de cada prateleira é a sobra da caixa aberta. `RECEBIMENTO` e `EXPEDICAO` seguem sem data, e o que as entradas não cobrem aparece como "sem data". A lista não muda. |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador
