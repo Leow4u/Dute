@@ -68,8 +68,11 @@ Para apagar o emulador e semear de novo sem reiniciá-lo, acrescente `--refazer`
 
 O seed grava pelas funções de domínio de `functions/comercial` (as mesmas das
 callables), então recibos, eventos, números de demanda e RV saem como no
-sistema. Ele **aborta sem fazer nada** se as duas variáveis acima faltarem ou
-não apontarem para `127.0.0.1`/`localhost`.
+sistema. Os contratos entram com o id fixo, como na carga de contratos
+(`idNaCriacao`), porque o orçamento e a medição apontam para eles; pela
+callable, o id do contrato novo é sempre gerado no servidor. Ele **aborta sem
+fazer nada** se as duas variáveis acima faltarem ou não apontarem para
+`127.0.0.1`/`localhost`.
 
 O que ele cria:
 
