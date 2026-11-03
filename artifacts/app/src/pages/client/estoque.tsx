@@ -2418,9 +2418,12 @@ function QuantityStepper({
           onChange(Number(raw));
         }}
         aria-label={`Quantidade de ${label}`}
+        // Sem as setas do campo numérico do navegador: o − e o + estão ao
+        // lado, e as setas comiam o terceiro dígito ("10C" no lugar de 100).
         className={cn(
           "border-0 bg-transparent px-1 text-center shadow-none focus-visible:ring-0",
-          compact ? "h-8 w-11 text-xs" : "h-9 w-20",
+          "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+          compact ? "h-8 w-14 text-xs" : "h-9 w-20",
         )}
       />
       <button
