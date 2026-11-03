@@ -59,6 +59,43 @@ describe("pedido do portal durante a abertura", () => {
   });
 });
 
+describe("a quantidade no carrinho", () => {
+  // No teste de ponta a ponta de 01/11/2026, 100 aparecia como "10C": o campo
+  // tinha 44px e as setas do campo numérico do navegador comiam o terceiro
+  // dígito. As setas sobram (o − e o + estão ao lado) e o campo cabe 4 dígitos.
+  it("o campo mostra 100 inteiro: sem as setas do navegador e com largura para quatro dígitos", () => {
+    const [toalha] = groupInventoryProducts([estoque[2]!]);
+    const html = renderToStaticMarkup(
+      <CartPanel
+        cartKey=""
+        seed={0}
+        lines={[{ product: toalha!, quantity: 100 }]}
+        isSubmitting={false}
+        isSavingEvent={false}
+        outboundBlocked={false}
+        expanded={false}
+        onToggleExpanded={noop}
+        onClose={noop}
+        onSaveEvent={noop}
+        onIncrement={noop}
+        onDecrement={noop}
+        onQuantityChange={noop}
+        onRemove={noop}
+        onSubmit={noop}
+      />,
+    );
+    const campo = new JSDOM(html).window.document.querySelector<HTMLInputElement>(
+      'input[aria-label="Quantidade de Toalha de academia"]',
+    );
+    expect(campo?.getAttribute("value")).toBe("100");
+    const classes = campo?.className.split(/\s+/) ?? [];
+    expect(classes).toContain("[appearance:textfield]");
+    expect(classes).toContain("[&::-webkit-inner-spin-button]:appearance-none");
+    expect(classes).toContain("[&::-webkit-outer-spin-button]:appearance-none");
+    expect(classes).toContain("w-14");
+  });
+});
+
 describe("pedido do portal neste aparelho", () => {
   it("sem saber de quem é o pedido, não diz que está salvo", () => {
     expect(renderCart(false)).not.toContain("Salvo neste aparelho");
