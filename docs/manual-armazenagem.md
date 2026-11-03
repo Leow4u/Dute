@@ -202,6 +202,14 @@ mínimo), "Reservados", "Sem foto", "Zerados" e, onde a memória roda,
   SKU, a quantidade, o produto, "Origem" e "Destino"; a saída acima do
   disponível é recusada. Gravam para o cliente ativo e só em item do cadastro
   dele: o SKU de outro cliente ou fora do cadastro é recusado.
+- **"Guardar"** (`owner`, `admin` e `interno`): no "Onde está", o saldo numa
+  área de passagem (`RECEBIMENTO` ou `EXPEDICAO`, em âmbar) ganha o botão. O
+  diálogo mostra "Livre no RECEBIMENTO", "Em guardas abertas" e "Sem guarda",
+  pede a "Quantidade" (até o sem guarda) e o "Motivo", e "Abrir a guarda" cria
+  a guarda em Receber › Para guardar, que segue a guarda de hoje. É o caminho
+  do saldo que entrou numa área sem guarda: a entrada manual ou a contagem no
+  `RECEBIMENTO`, a devolução com o local de uma área, o resto de uma guarda
+  feita a menos e o que já estava parado.
 
 ## Estoque › Posições, Mapa e Etiquetas
 

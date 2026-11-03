@@ -9,7 +9,8 @@ partes (conteúdo por caixa, modo sombra, modo caixa por cliente, montar
 caixa, leitor Bluetooth, três listas de liberação) por esta versão: o
 sistema sabe quanto há em cada prateleira e de que data, e o conteúdo de
 cada caixa fica na caixa. As partes 1, 2 e 3 entraram em 02/11/2026 (PRs
-538, 536 e 537); a parte 4 está no PR 539.
+538, 536 e 537), e a parte 4 em 03/11/2026 (PR 539). As telas das partes 5 e
+6 estão em desenho, para aprovação antes do código.
 
 Relação com o recebimento com caixas (`recebimento-com-caixas.md`): aquele
 desenho deixa de fora de qual caixa a separação tira e a baixa do conteúdo
@@ -158,6 +159,13 @@ As três perguntas abaixo receberam o Ok do Leonardo às recomendações em
 | 1 | Que dia vale para o estoque da contagem de abertura? | Um dia por cliente, o dia em que a contagem começou (`started_at`). Entre prateleiras, desempata a ordem delas. |
 | 2 | Para seguir a data à risca, o pedido pode se dividir entre prateleiras? | Não: vai à prateleira de data livre mais antiga e completa nela. Numa simulação, dividir à risca levou os pedidos divididos de 11% para 17%. |
 | 3 | "Posições ocupadas" do Mapa conta caixa guardada, e a caixa que esvazia continua contando. | Um PR à parte, fora deste pacote, para contar a prateleira com saldo. Até lá, conferir na prateleira antes de faturar por posição. |
+
+Decididos pelo Leonardo em 03/11/2026, antes de a parte 4 ir à produção:
+
+| # | Pergunta | Decisão |
+|---|---|---|
+| 4 | Devolução e locais digitados (`DEVOLUCAO`, `ESTOQUE_BTG`, `CLIENTE`, `LOC-*`) contam como prateleira (decisão 10 do recebimento com caixas). Com a peça mais antiga, passam à frente das ruas A, B e C? | Sim: seguem a ordem por data, sem chave a mais. É raro, porque a peça devolvida entra com a data da devolução; quando acontece, sai primeiro a que está parada há mais tempo. A peça devolvida e boa volta à prateleira por movimentação e entra na ordem normal. |
+| 5 | O SKU legado `BTG-1043`, que separava duas variantes do cliente (`A.01.0533.004.G` e `.M`) por `client_item_code`, ainda existe? | Não: o Leonardo não achou nenhum item com esses códigos na produção, e todo produto novo nasce com o código gerado (`<SIGLA>-000001`). O caso especial sai do código, em PR próprio. |
 
 Regras assumidas: o pedido só reserva da prateleira (decisão 10 do
 recebimento com caixas); a peça de pedido cancelado depois de separado volta

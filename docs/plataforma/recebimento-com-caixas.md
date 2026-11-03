@@ -571,17 +571,31 @@ desenhada e aprovada antes do PR de tela.
      sugerir e confirmar da 4g. Testes: `inbound-boxes.integration.test.ts`
      (inclusive a prateleira apagada) e uma linha em
      `callables-papeis.integration.test.ts`.
-   - **4i, o Agent Dute:** vê a chegada guardando caixas e a guarda da
-     caixa, nas duas cópias (WMS e núcleo).
+   - **4i, o Agent Dute:** feita em 02/11/2026, nas duas cópias
+     (`agent-team.ts` no WMS e `agente-armazenagem.ts` no núcleo, mudadas
+     juntas). A chegada por caixa `received` com `putaway_status` `pending`
+     segue entre os recebimentos abertos, como "recebida, guardando caixas",
+     com `caixas` e `caixas_guardadas`; a guarda da caixa mostra a caixa, o
+     conteúdo (produto e peças, sem custo) e "sem prateleira" quando não tem
+     destino. As descrições das ferramentas dizem isso. Testes:
+     `agent-team.integration.test.ts` e `agente-armazenagem.test.ts`.
 
    A 4d, a 4f e a 4g sobem uma logo depois da outra: entre elas, a chegada
    por caixa concluída na homologação fica sem guarda. A primeira chegada por
    caixa de um cliente espera a abertura dele terminar, por procedimento
-   (decisão 22). A tela da parte 5 lê o que a parte 4 grava e precisa de novo
-   alinhamento: o mockup aprovado desabilita "Concluir entrada" com caixa sem
-   destino, o que a decisão 14 mudou.
-5. **Ficha da chegada por caixa (tela)** e a fila do Receber; "Físico"
-   derivado; divergência automática. Testes de textos e `axe`.
+   (decisão 22). A tela da parte 5 lê o que a parte 4 grava; o mockup de
+   01/11 desabilitava "Concluir entrada" com caixa sem destino, o que a
+   decisão 14 mudou, e foi atualizado em 03/11/2026 (parte 5, abaixo).
+5. **Ficha da chegada por caixa (tela)**, a fila do Receber e a guarda da
+   caixa no computador e no celular; "Físico" derivado; divergência
+   automática. Testes de textos e `axe`. A guarda da caixa não estava em
+   nenhuma parte e entra aqui, por decisão do Leonardo em 03/11/2026: sem
+   ela, a caixa não chega à prateleira. Os mockups foram atualizados com as
+   decisões 14, 15, 17, 21 e 24 e aprovados pelo Leonardo em 03/11/2026
+   (`docs/mockups/README.md`, seção do recebimento com caixas): a ficha e a
+   fila mudam, e seis telas novas mostram marcar a falta, a caixa sem
+   prateleira livre na bancada, a ficha pronta para concluir, a guarda sem
+   prateleira (no computador e no celular) e o "Não cabe aqui" na guarda.
 6. **Etiquetas:** caixa `committing` com destino, origem "Recebimento", o
    conteúdo da caixa do recebimento na etiqueta e no Mapa, "Etiquetas da
    chegada", reimpressão com evento.
@@ -614,8 +628,7 @@ desenhada e aprovada antes do PR de tela.
      e `customer-requests.test.ts` no app. O saldo que entra numa área sem
      tarefa de guarda (entrada manual ou contagem no `RECEBIMENTO`, devolução
      com o local de uma área) sai do disponível; o caminho de volta à
-     prateleira é a ação "Guardar" no Estoque (decisão 16, parte 7e) e, até
-     ela, a saída e a entrada manuais.
+     prateleira é a ação "Guardar" no Estoque (decisão 16, parte 7e).
    - **7c, o recálculo:** feito em 02/11/2026. A projeção só se acerta
      quando o SKU tem uma escrita nova; a rotina `runPortalAvailability` (WMS,
      de 15 em 15 minutos, uma instância) refaz `qty_available` e
@@ -658,11 +671,29 @@ desenhada e aprovada antes do PR de tela.
      Testes: `estoque.test.tsx` (lista, card, card agrupado e detalhe, com
      a lista dos textos e o axe), `portal-stock.test.ts` e
      `cloud-api-portal.test.ts`.
-   - **7e, a ação "Guardar" no Estoque (decisão 16):** a coordenação abre a
-     guarda de um saldo parado numa área de passagem (entrada manual ou
-     contagem no `RECEBIMENTO`, devolução com o local de uma área, e o que já
-     está parado nas áreas na produção), e a guarda segue a de hoje. Antes do
-     PR, o mockup da ação para aprovar.
+   - **7e, a ação "Guardar" no Estoque (decisão 16):** feita em 02/11/2026,
+     com o mockup `WmsEstoqueGuardar` aprovado no mesmo dia. A coordenação
+     (owner, admin e interno) abre a guarda de um saldo parado numa área de
+     passagem: a entrada manual ou a contagem no `RECEBIMENTO`, a devolução
+     com o local de uma área, o resto de uma guarda feita a menos e o que já
+     estava parado. As callables `previewAreaPutaway` (só lê) e
+     `openAreaPutaway`, em `domain/area-putaway.ts`: o que dá para guardar é
+     o livre do saldo naquele local menos o que as guardas abertas do SKU vão
+     tirar dali (por linha, pela origem gravada, como a volta do pedido
+     cancelado; por caixa, pelas linhas dela), em três casas, e a guarda
+     nunca pede mais do que a origem tem de fato (o resto de ponto
+     flutuante). A guarda nasce por linha, sem destino, com o motivo, numa
+     transação idempotente, com o evento `warehouse.area_putaway_opened`
+     (sem rascunho ao cliente nem item na caixa do agente), e segue a guarda
+     de hoje. O cliente vem da tela, sempre. Na ficha do item (Estoque ›
+     Itens), o "Onde está" mostra a área em âmbar e o "Guardar"; o diálogo
+     mostra "Livre no RECEBIMENTO", "Em guardas abertas" e "Sem guarda". O
+     "disponível" da ficha continua contando todos os locais, como o WMS por
+     dentro. Testes: `area-putaway.test.ts` e
+     `area-putaway.integration.test.ts` no WMS (da entrada manual à
+     prateleira e ao portal), e `guardar-da-area.test.tsx`,
+     `guardar-da-area.dialogo.test.tsx`, `guarda-da-area.test.ts` e
+     `estoque.test.tsx` no app.
    - A API REST v1 recusava com 404 a retirada de um SKU com saldo fora de
      prateleira cadastrada (`stockLocations`, em `api/module.ts`); a correção
      entrou em 02/11/2026 (PR 533), e com esta parte a conferência dela também

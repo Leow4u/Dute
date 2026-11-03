@@ -65,6 +65,7 @@ import { accessChangeFromTo, assertAccessActorCurrent, setUserAccessFor } from "
 import { assertDirectoryPersonManageable, enableReinvitedLoginFor, readReinvitedUser, userDirectoryArchivePayload } from "./domain/user-directory.js";
 import { accountRetentionEnabled, anonymizeRemovedAccounts } from "./domain/account-retention.js";
 import { recalcularDisponivelDoPortal } from "./domain/disponivel-do-portal.js";
+import { openAreaPutaway as openAreaPutawayFor, previewAreaPutaway as previewAreaPutawayFor } from "./domain/area-putaway.js";
 import { CLIENT_NOTICE_AFTER_PUTAWAY } from "./domain/inbound-box-entry.js";
 import {
   CLIENT_ACCESS_COLLECTION,
@@ -2342,7 +2343,7 @@ function agentDuteTools(
       {
         name: "recebimentos",
         description:
-          "Recebimentos no armazém: aguardando chegada ou em conferência (padrão), ou todos. Mostra fornecedor, nota fiscal, previsão e peças previstas e recebidas.",
+          "Recebimentos no armazém: aguardando chegada, em conferência ou recebidos guardando caixas (padrão), ou todos. Mostra fornecedor, nota fiscal, previsão, peças previstas e recebidas e, na chegada por caixa, as caixas guardadas.",
         inputSchema: z.object({
           situacao: z.enum(["abertos", "todos"]).optional(),
           texto: z.string().optional().describe("Número do recebimento, fornecedor ou nota fiscal"),
@@ -2354,7 +2355,7 @@ function agentDuteTools(
       {
         name: "tarefas_armazem",
         description:
-          "Tarefas abertas do armazém: separação de pedidos e guarda de recebimentos, com situação, peças e há quantos dias estão abertas.",
+          "Tarefas abertas do armazém: separação de pedidos e guarda de recebimentos (por linha ou por caixa, com o conteúdo da caixa), com situação, peças e há quantos dias estão abertas.",
         inputSchema: z.object({}),
       },
       async () => warehouseTasks(db, scope),
@@ -8260,6 +8261,21 @@ export const refuseInboundBoxShelf = onCall(async (request) => {
   const profile = await getProfile(request);
   requireWarehouseWrite(profile);
   return refuseInboundBoxShelfFor(db, request.data, profile);
+});
+
+/** "Guardar" no Estoque (decisão 16, parte 7e): o que dá para guardar do saldo parado numa área. */
+export const previewAreaPutaway = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireOperationsCoordinator(profile);
+  // O cliente ativo vem da tela, sempre: sem ele, recusa (nunca a BTG por padrão).
+  return previewAreaPutawayFor(db, request.data);
+});
+
+/** "Guardar" no Estoque (decisão 16, parte 7e): a coordenação abre a guarda do saldo parado numa área. */
+export const openAreaPutaway = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireOperationsCoordinator(profile);
+  return openAreaPutawayFor(db, request.data, profile);
 });
 
 /** Adaptador externo autenticado; só o gateway é documentado para consumidores. */
