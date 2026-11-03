@@ -701,7 +701,8 @@ const OPS = {
       const contador = await db.collection("sku_counters").doc(prefixo).get();
       previstos.contagem += 1;
       const proximo = `${prefixo}-${String(num(contador.data()?.last) + previstos.contagem).padStart(6, "0")}`;
-      const fotos = lista(irmao.data.photo_urls);
+      // sem_fotos: o irmão é só um modelo parecido (categoria, gênero, grupo), não o mesmo produto.
+      const fotos = op.sem_fotos ? [] : lista(irmao.data.photo_urls);
       return {
         estado: [`${op.codigo} não existe · referência ${op.copiar_de} = ${irmao.id} · "${irmao.nome}" · ${text(irmao.data.categoria || irmao.data.category) || "sem categoria"} · ${text(irmao.data.genero) || "sem gênero"} · ${fotos.length} fotos`],
         previsto: [`cria products, skus e client_inventory ${op.codigo} · "${nome}" · tamanho ${op.tamanho} · SKU ${proximo} (previsto) · saldo 0`],
@@ -734,9 +735,9 @@ const OPS = {
           tamanho: op.tamanho,
           color: text(ref.color || ref.cor) || undefined,
           cor: text(ref.cor || ref.color) || undefined,
-          photo_urls: lista(ref.photo_urls).length ? lista(ref.photo_urls) : undefined,
-          primary_photo_url: text(ref.primary_photo_url) || lista(ref.photo_urls)[0] || undefined,
-          photo_storage_paths: lista(ref.photo_storage_paths).length ? lista(ref.photo_storage_paths) : undefined,
+          photo_urls: !op.sem_fotos && lista(ref.photo_urls).length ? lista(ref.photo_urls) : undefined,
+          primary_photo_url: op.sem_fotos ? undefined : text(ref.primary_photo_url) || lista(ref.photo_urls)[0] || undefined,
+          photo_storage_paths: !op.sem_fotos && lista(ref.photo_storage_paths).length ? lista(ref.photo_storage_paths) : undefined,
           status: "active",
           archived: false,
           source: FONTE,

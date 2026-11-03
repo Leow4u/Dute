@@ -115,6 +115,19 @@ export const BLOCOS = [
         tamanho: "P",
         motivo: ITEM(12, "código da etiqueta da peça; o cadastro tinha A.01.O719.004.P, com letra O"),
       },
+      // A polo feminina mand algodão preto G da CX-000004 (A.02.0712.005.G) nunca foi cadastrada: ficou de fora da contagem
+      // de abertura. Leonardo (03/11/2026): criar pelo script. Copia categoria e gênero de uma polo feminina preta G, sem
+      // as fotos dela; a foto se põe depois pela ficha do produto.
+      {
+        id: "criar-0712-G",
+        tipo: "criar_sku",
+        codigo: "A.02.0712.005.G",
+        copiar_de: "A.02.0813.005.G",
+        tamanho: "G",
+        nome: "POLO FEMININA MAND ALGODÃO PRETO G",
+        sem_fotos: true,
+        motivo: ITEM(10, "polo feminina mand algodão preto G achada na CX-000004, fora do cadastro"),
+      },
       {
         id: "criar-0813-GG",
         tipo: "criar_sku",
@@ -265,7 +278,6 @@ export const BLOCOS = [
         posicao: { caixa: "CX-000004" },
         posicao_nova: true,
         motivo: ITEM(10, "1 polo feminina mand algodão preto G (A.02.0712.005.G) na CX-000004, fora do sistema"),
-        pendente: "ver se A.02.0712.005.G existe no cadastro (--buscar A.02.0712.005.); se não existir, entra um criar_sku antes",
       },
       // O Guilherme contou 73 na CX-000208, que tinha 72 (item 3; confirmado em 30/10): +1 no SKU novo, em B-12, depois da transferência.
       {
@@ -340,7 +352,7 @@ export const BLOCOS = [
       // CX-000004 (item 10): as linhas da mescla black GG e da pima preta SW G acompanham a recontagem.
       { id: "cx-linha-4-black-GG", tipo: "ajustar_linha", caixa: "CX-000004", codigo: "A.02.0697.016.GG", qtde: 2, motivo: ITEM(10, "CX-000004 tem 2 mescla black GG") },
       { id: "cx-linha-4-pima-G", tipo: "ajustar_linha", caixa: "CX-000004", codigo: "A.01.0695.005.G", qtde: 1, motivo: ITEM(10, "CX-000004 tem 1 pima preta SW G") },
-      { id: "cx-linha-4-mand-G", tipo: "adicionar_linha", caixa: "CX-000004", codigo: "A.02.0712.005.G", qtde: 1, motivo: ITEM(10, "CX-000004 tem 1 polo feminina mand algodão preto G"), pendente: "junto com o aj-cx4-mand-G" },
+      { id: "cx-linha-4-mand-G", tipo: "adicionar_linha", caixa: "CX-000004", codigo: "A.02.0712.005.G", qtde: 1, motivo: ITEM(10, "CX-000004 tem 1 polo feminina mand algodão preto G") },
       // Item 14: linhas das caixas da azul-marinho pelas etiquetas do fornecedor.
       { id: "cx-linha-136-G", tipo: "ajustar_linha", caixa: "CX-000136", codigo: "A.01.0805.002.G", qtde: 88, motivo: ITEM(14, "etiqueta do fornecedor da CX-000136: G 88") },
       { id: "cx-linha-140-M", tipo: "ajustar_linha", caixa: "CX-000140", codigo: "A.01.0805.002.M", qtde: 90, motivo: ITEM(14, "etiqueta do fornecedor da CX-000140: M 90") },
