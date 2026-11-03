@@ -13,7 +13,7 @@
 
 import { displayName } from "./stock-variants";
 
-type StockLike = { name: string; category: string; available: number; total?: number; minimum?: number; archived?: boolean };
+type StockLike = { name: string; category: string; available: number; receiving?: number; total?: number; minimum?: number; archived?: boolean };
 
 function slug(value: string) {
   return value
@@ -88,6 +88,7 @@ export function stockOverview(products: StockLike[]) {
   return {
     items: active.length,
     pieces: active.reduce((sum, product) => sum + Math.max(0, product.total ?? product.available), 0),
+    receiving: active.reduce((sum, product) => sum + Math.max(0, product.receiving ?? 0), 0),
     withStock: active.filter((product) => product.available > 0).length,
     low: active.filter(isLow).length,
     zero: active.filter((product) => product.available <= 0).length,
@@ -100,6 +101,7 @@ const integer = new Intl.NumberFormat("pt-BR");
 export function overviewLine(overview: ReturnType<typeof stockOverview>) {
   return [
     `${integer.format(overview.pieces)} ${overview.pieces === 1 ? "peça" : "peças"} em ${integer.format(overview.items)} ${overview.items === 1 ? "item" : "itens"}`,
+    overview.receiving ? `${integer.format(overview.receiving)} em recebimento` : "",
     overview.low ? `${integer.format(overview.low)} abaixo do mínimo` : "",
     overview.zero ? `${integer.format(overview.zero)} sem saldo` : "",
   ]

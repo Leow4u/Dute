@@ -357,7 +357,13 @@ documentação de produto e operação está em `docs/`.
   `client_inventory` grava `qty_available` (livre das prateleiras) e
   `qty_receiving` (livre do `RECEBIMENTO`) a partir dos saldos do SKU depois
   da escrita; escrita nova da projeção lê todos os saldos do SKU antes da
-  primeira escrita. O total, a reserva e o valor da mercadoria não mudam.
+  primeira escrita. O total, a reserva e o valor da mercadoria não mudam; o
+  Estoque do portal mostra o `qty_receiving` como "Em recebimento" (parte
+  7d). A rotina `runPortalAvailability` refaz uma vez as projeções antigas
+  (`domain/disponivel-do-portal.ts`, controle em
+  `system_controls/client_inventory_split`; mudou a conta, suba a versão),
+  não grava nada com o estoque congelado e só conclui com uma passada limpa
+  que começou uma hora depois da primeira rodada.
 - **FIFO por data (P8, versão enxuta, decidida em 02/11/2026):** a separação
   tira primeiro o mais antigo, por prateleira e data, sem conteúdo por caixa.
   As datas saem do ledger (o que sobra numa prateleira são as entradas mais

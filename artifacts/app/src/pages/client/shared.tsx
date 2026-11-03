@@ -101,6 +101,8 @@ export type InventoryItem = {
   available_pieces?: Numberish;
   qty_reserved?: Numberish;
   reserved_pieces?: Numberish;
+  /** Livre no RECEBIMENTO, ainda sem guarda: aparece, mas não entra em pedido (decisão 10). */
+  qty_receiving?: Numberish;
   qty_on_hand?: Numberish;
   pieces?: Numberish;
   total_pieces?: Numberish;
@@ -1147,6 +1149,11 @@ export function inventoryItemTotal(item: InventoryItem) {
 
 export function inventoryItemReserved(item: InventoryItem) {
   return firstNumber(item.qty_reserved, item.reserved_pieces);
+}
+
+/** O em recebimento da projeção; a projeção ainda sem o campo conta zero. */
+export function inventoryItemReceiving(item: InventoryItem) {
+  return Math.max(0, firstNumber(item.qty_receiving));
 }
 
 export function inventoryItemValue(item: InventoryItem) {

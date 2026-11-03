@@ -1132,6 +1132,53 @@ function setClientInventorySplit(
   });
 }
 
+/**
+ * Refaz só o disponível e o em recebimento de uma projeção do portal pelos
+ * saldos do SKU (recebimento com caixas, parte 7c): a projeção que não teve
+ * escrita nova desde a parte 7 ainda tem o disponível de antes, que contava
+ * todos os locais. O total, a reserva e o valor da mercadoria ficam como
+ * estão; a projeção que não existe não é criada. Respeita o congelamento do
+ * estoque, como toda escrita de estoque.
+ */
+export async function refreshClientInventorySplitTransaction(
+  db: Firestore,
+  projectionId: string,
+): Promise<"changed" | "same" | "missing"> {
+  const ref = db.collection(collections.clientInventory).doc(projectionId);
+  return db.runTransaction(async (transaction) => {
+    await assertInventoryOperationsEnabled(transaction, db);
+    const projection = await transaction.get(ref);
+    if (!projection.exists) return "missing";
+    const data = projection.data() ?? {};
+    const customerCode = text(data.customer_code);
+    const skuCode = text(data.sku_code);
+    if (!customerCode || !skuCode) return "same";
+    const clientItemCode = text(data.client_item_code) || undefined;
+    // A variante do SKU escopado vem do id, como as escritas o montam.
+    const variant =
+      clientScopedInventoryId(customerCode, skuCode, clientItemCode) === ref.id
+        ? clientItemCode
+        : undefined;
+    const rows = await readRows(
+      transaction,
+      skuBalancesQuery(db, customerCode, skuCode),
+    );
+    const split = clientSplit(rows, skuCode, variant);
+    if (
+      data.qty_available === split.qty_available &&
+      data.qty_receiving === split.qty_receiving
+    ) {
+      return "same";
+    }
+    transaction.update(ref, {
+      qty_available: split.qty_available,
+      qty_receiving: split.qty_receiving,
+      updated_at: FieldValue.serverTimestamp(),
+    });
+    return "changed";
+  });
+}
+
 type CatalogAggregateTarget = {
   productRef?: DocumentReference<DocumentData>;
   skuRef?: DocumentReference<DocumentData>;
