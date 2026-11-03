@@ -109,6 +109,7 @@ function render(over: Partial<FichaDaChegadaPorCaixaProps> = {}) {
       fechando={false}
       rascunho={rascunhoVazio()}
       ocupado={false}
+      podeOperar
       podeRegistrarDivergencia
       onSelecionar={noop}
       onIniciar={noop}
@@ -264,6 +265,41 @@ describe("a bancada da chegada por caixa", () => {
 
   it("quem não registra divergência não vê o botão", () => {
     expect(render({ podeRegistrarDivergencia: false })).not.toContain("Registrar divergência");
+  });
+
+  it("quem só consulta (o suporte) vê as caixas e as linhas, sem as ações", async () => {
+    const html = render({ podeOperar: false, podeRegistrarDivergencia: false });
+    for (const acao of ["Iniciar caixa", "Cód. cliente, SKU ou barras", "Fechar caixa", "Remover caixa"]) {
+      expect(html).not.toContain(acao);
+    }
+    expect(
+      textosForaDaLista(html, [
+        "Recebimento",
+        "em conferência",
+        "por caixa",
+        "AVL-0D0E620B",
+        "NF 48.230 · 71 un.",
+        "Caixas da chegada",
+        "CX-000131 · destino B-02",
+        "XG 29 · GG 12 · 41 un. · 48 × 38 × 30 cm · 9,4 kg",
+        "destino confirmado",
+        "CX-000132",
+        "GG 18 · 18 un.",
+        "em conferência",
+        ...LINHAS_DA_NF,
+      ]),
+    ).toEqual([]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    const fechada = caixa("CX-000132", "reviewed", [linha(`${RECEIPT}_02`, 2, "GG", 18)], {
+      length_m: 0.48,
+      width_m: 0.38,
+      height_m: 0.3,
+      gross_weight_kg: 6.1,
+    });
+    const vista = render({ podeOperar: false, caixas: [caixas[0]!, fechada] });
+    expect(vista).toContain("Caixa CX-000132");
+    expect(vista).not.toContain("Reabrir para ajustar");
+    expect(vista).not.toContain("Remover caixa");
   });
 });
 

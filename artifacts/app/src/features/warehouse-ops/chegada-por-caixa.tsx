@@ -97,6 +97,8 @@ export type FichaDaChegadaPorCaixaProps = {
   fechando: boolean;
   rascunho: RascunhoDoFechamento;
   ocupado: boolean;
+  /** Quem só consulta (o suporte) vê as caixas e as linhas, sem as ações. */
+  podeOperar: boolean;
   podeRegistrarDivergencia: boolean;
   onSelecionar: (code: string) => void;
   onIniciar: () => void;
@@ -191,9 +193,11 @@ function VistaDaChegada(props: FichaDaChegadaPorCaixaProps & { caixa: CaixaDaChe
         <section aria-labelledby="caixas-da-chegada" className="flex min-w-0 flex-col gap-2.5">
           <div className="flex items-center justify-between gap-2">
             <h3 id="caixas-da-chegada" className="text-base font-extrabold">Caixas da chegada</h3>
-            <Button type="button" size="sm" variant="secondary" disabled={ocupado} onClick={props.onIniciar}>
-              Iniciar caixa
-            </Button>
+            {props.podeOperar ? (
+              <Button type="button" size="sm" variant="secondary" disabled={ocupado} onClick={props.onIniciar}>
+                Iniciar caixa
+              </Button>
+            ) : null}
           </div>
           {caixas.map((item) => {
             const estado = estadoDaCaixa(item);
@@ -221,7 +225,7 @@ function VistaDaChegada(props: FichaDaChegadaPorCaixaProps & { caixa: CaixaDaChe
             );
           })}
 
-          {caixa && caixa.status === "counting" ? <CaixaEmConferencia {...props} caixa={caixa} itens={itens} /> : null}
+          {caixa && caixa.status === "counting" && props.podeOperar ? <CaixaEmConferencia {...props} caixa={caixa} itens={itens} /> : null}
         </section>
 
         <section aria-labelledby="linhas-da-nf" className="flex min-w-0 flex-col gap-2.5">
@@ -414,27 +418,29 @@ function VistaDaCaixa(props: FichaDaChegadaPorCaixaProps & { caixa: CaixaDaChega
           <span className="ml-auto text-sm text-muted-foreground">Volume {metrosCubicos.format(volume)} m³</span>
         ) : null}
       </div>
-      <div className="flex flex-wrap gap-2">
-        {fechando ? (
-          <>
-            <Button type="button" disabled={ocupado || !pronto} onClick={props.onFechar}>
-              Fechar caixa
-            </Button>
-            <Button type="button" variant="outline" disabled={ocupado} onClick={props.onCancelarFechamento}>
-              Cancelar
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button type="button" variant="outline" disabled={ocupado} onClick={props.onReabrir}>
-              Reabrir para ajustar
-            </Button>
-            <Button type="button" variant="outline" disabled={ocupado} onClick={props.onRemover}>
-              Remover caixa
-            </Button>
-          </>
-        )}
-      </div>
+      {props.podeOperar ? (
+        <div className="flex flex-wrap gap-2">
+          {fechando ? (
+            <>
+              <Button type="button" disabled={ocupado || !pronto} onClick={props.onFechar}>
+                Fechar caixa
+              </Button>
+              <Button type="button" variant="outline" disabled={ocupado} onClick={props.onCancelarFechamento}>
+                Cancelar
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button type="button" variant="outline" disabled={ocupado} onClick={props.onReabrir}>
+                Reabrir para ajustar
+              </Button>
+              <Button type="button" variant="outline" disabled={ocupado} onClick={props.onRemover}>
+                Remover caixa
+              </Button>
+            </>
+          )}
+        </div>
+      ) : null}
     </>
   );
 }
@@ -576,6 +582,7 @@ export function FichaDaChegadaPorCaixa({
       fechando={fechando}
       rascunho={rascunho}
       ocupado={ocupado}
+      podeOperar={task.can_advance !== false}
       podeRegistrarDivergencia={task.can_register_exception !== false && registeringExceptionId !== task.id}
       onSelecionar={(code) => {
         setEscolhida(code);

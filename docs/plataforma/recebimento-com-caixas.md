@@ -627,7 +627,8 @@ desenhada e aprovada antes do PR de tela.
      não desenharam; fechar de novo a caixa reaberta começa pelas medidas
      dela. A partir de 1280 px a ficha fica larga e a fila, estreita, como
      nos mockups; abaixo disso, a ficha tem a largura de hoje e as caixas
-     vêm antes das linhas da NF. Cada escrita manda a revisão que a anterior
+     vêm antes das linhas da NF. Quem só consulta (o suporte) vê as caixas e
+     as linhas, sem as ações. Cada escrita manda a revisão que a anterior
      devolveu, sem esperar a releitura da fila. A busca só acha a linha da NF (a sobra e o
      produto fora da NF são a parte 3b). Testes: `chegada-por-caixa.test.tsx`
      (textos e `axe`) e `chegada-por-caixa.interacao.test.tsx`.
