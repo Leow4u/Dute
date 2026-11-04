@@ -244,6 +244,7 @@ import {
   type DueRoutine,
 } from "./domain/agent-routines.js";
 import { PROJECT_ID } from "./project.js";
+import { abreAvisoNaCaixaAntiga } from "./domain/caixa-do-agente.js";
 import { boxReceivingEnabled } from "./domain/inbound-mode.js";
 import { PRODUCT_PHOTO_DEFAULT_MODEL, PRODUCT_PHOTO_IMAGE_SIZE, PRODUCT_PHOTO_INPUT_MAX_BYTES, ProductPhotoInput, originalProductPhoto, productPhotoPrompt, generateProductPhoto, reviewProductPhoto } from "./domain/product-photo.js";
 import { vertexPlugin } from "./domain/vertex-location.js";
@@ -6431,34 +6432,37 @@ export const applyDocumentOperationalAction = onCall(async (request) => {
       },
       { merge: true },
     );
-    transaction.create(inboxRef, {
-      id: actionId,
-      event_id: `evt_${actionId}`,
-      status: "open",
-      severity: "attention",
-      title: `Tratar documento: ${title}`,
-      description: note,
-      customer_code: customerCode,
-      entity_type: "documents",
-      entity_id: documentId,
-      source: "document_operational_action",
-      action: suggestedAction,
-      payload: {
-        document_id: documentId,
-        document_type: documentType,
-        document_title: title,
-        reference: document.reference ?? null,
-        suggested_action: suggestedAction,
-      },
-      actor: {
-        uid: profile.uid,
-        email: profile.email ?? null,
-        name: profile.name ?? null,
-        role: profile.role,
-      },
-      created_at: FieldValue.serverTimestamp(),
-      updated_at: FieldValue.serverTimestamp(),
-    });
+    // Onde o agente do núcleo roda, o painel novo não lê a caixa antiga (domain/caixa-do-agente.ts).
+    if (abreAvisoNaCaixaAntiga(PROJECT_ID)) {
+      transaction.create(inboxRef, {
+        id: actionId,
+        event_id: `evt_${actionId}`,
+        status: "open",
+        severity: "attention",
+        title: `Tratar documento: ${title}`,
+        description: note,
+        customer_code: customerCode,
+        entity_type: "documents",
+        entity_id: documentId,
+        source: "document_operational_action",
+        action: suggestedAction,
+        payload: {
+          document_id: documentId,
+          document_type: documentType,
+          document_title: title,
+          reference: document.reference ?? null,
+          suggested_action: suggestedAction,
+        },
+        actor: {
+          uid: profile.uid,
+          email: profile.email ?? null,
+          name: profile.name ?? null,
+          role: profile.role,
+        },
+        created_at: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
+      });
+    }
     transaction.create(db.collection(collectionNames.events).doc(`evt_${actionId}`), {
       id: `evt_${actionId}`,
       type: "document.operational_action_staged",

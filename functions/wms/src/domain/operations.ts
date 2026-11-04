@@ -6,6 +6,8 @@ import {
   reserveRequestNumber,
 } from "./request-numbers.js";
 
+import { PROJECT_ID } from "../project.js";
+import { abreAvisoNaCaixaAntiga } from "./caixa-do-agente.js";
 import { receivedSummary } from "./client-shipments.js";
 import { conferirSeparacao, type LinhaSeparada } from "./short-pick.js";
 import {
@@ -566,6 +568,7 @@ export function createEvent(
 
   if (
     input.inbox !== false &&
+    abreAvisoNaCaixaAntiga(PROJECT_ID) &&
     (severity === "attention" || severity === "critical")
   ) {
     const inboxId = `inbox_${safeDocId(id)}`;
