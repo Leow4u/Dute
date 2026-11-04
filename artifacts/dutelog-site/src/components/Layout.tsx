@@ -138,37 +138,54 @@ export function Layout({
               aria-expanded={mega}
               className="nav-trigger"
             >
-              Soluções <span aria-hidden="true">⌄</span>
+              Soluções
+              <svg
+                className="nav-chevron"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m5 7.5 5 5 5-5" />
+              </svg>
             </button>
             {navLink("A Dutelog", "/a-dutelog/")}
             {navLink("Blog", "/blog/")}
             {navLink("Contato", "/contato/")}
           </nav>
-          <a className="header-cta" href="/contato/">
-            Vamos conversar <Arrow diagonal />
-          </a>
-          <button
-            data-menu-toggle
-            ref={mobileToggle}
-            className="menu-toggle"
-            onClick={() => {
-              if (mobile) mobileToggle.current?.focus();
-              setMobile(!mobile);
-            }}
-            aria-label={mobile ? "Fechar menu" : "Abrir menu"}
-            aria-controls="mobile-menu"
-            aria-expanded={mobile}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              aria-hidden="true"
+          <div className="header-actions">
+            <a className="header-cta" href="/contato/">
+              Vamos conversar <Arrow diagonal />
+            </a>
+            <button
+              data-menu-toggle
+              ref={mobileToggle}
+              className="menu-toggle"
+              onClick={() => {
+                if (mobile) mobileToggle.current?.focus();
+                setMobile(!mobile);
+              }}
+              aria-label={mobile ? "Fechar menu" : "Abrir menu"}
+              aria-controls="mobile-menu"
+              aria-expanded={mobile}
             >
-              <path d={mobile ? "M5 5l14 14M19 5 5 19" : "M3 8h18M3 16h18"} />
-            </svg>
-          </button>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                aria-hidden="true"
+              >
+                <path d={mobile ? "M5 5l14 14M19 5 5 19" : "M3 8h18M3 16h18"} />
+              </svg>
+            </button>
+            <a className="header-client" href={company.portal}>
+              Área do cliente <Arrow diagonal />
+            </a>
+          </div>
         </div>
         <div id="mega-menu" hidden={!mega}>
           <div className="mega-grid">
