@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import {
@@ -9,7 +10,6 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronRight,
-  Eye,
   Grid2X2,
   List,
   Mars,
@@ -23,7 +23,7 @@ import {
   Search,
   ShoppingCart,
   SlidersHorizontal,
-  Sparkles,
+  TrendingDown,
   Truck,
   Venus,
   X,
@@ -79,7 +79,6 @@ import {
   useClientOverview,
   ClientModuleShell,
   EmptyModuleState,
-  ModulePanel,
   clientOverviewQueryKey,
   createClientRequest,
   firstText,
@@ -182,6 +181,13 @@ export function ClienteEstoque() {
   const [selectedProductKey, setSelectedProductKey] = useState<string | null>(
     null,
   );
+  // O que o detalhe acabou de pôr no pedido: o painel fica aberto e confirma
+  // (docs/mockups/PortalDetalheAdicionado.dc.html), para pedir outro tamanho
+  // sem reabrir. Vale só para o produto que está aberto.
+  const [adicionadoNoDetalhe, setAdicionadoNoDetalhe] = useState<{
+    key: string;
+    quantidade: number;
+  } | null>(null);
   // Agrupar tamanhos é preferência de quem usa: fica salva neste navegador.
   const [groupVariants, setGroupVariantsState] = useState(() => {
     try {
@@ -432,6 +438,13 @@ export function ClienteEstoque() {
           groupVariants,
         );
         const visibleFamilies = families.slice(0, visibleProductLimit);
+        // A família do produto aberto, a mesma do card: o detalhe oferece os
+        // mesmos tamanhos e, no tamanho sem foto, a foto da família.
+        const selectedFamily = selectedProduct
+          ? families.find((family) =>
+              family.variants.some((entry) => entry.item.key === selectedProduct.key),
+            ) ?? null
+          : null;
         const hasMoreProducts =
           viewMode === "cards"
             ? visibleFamilies.length < families.length
@@ -499,7 +512,8 @@ export function ClienteEstoque() {
           }));
         }
 
-        function addDraftToCart(product: StockProduct) {
+        /** Põe no pedido a quantidade do contador e devolve quantas peças entraram (0 quando nenhuma). */
+        function addDraftToCart(product: StockProduct): number {
           const liveAvailable = liveAvailableForProduct(product, cart);
           const quantity = Math.min(getDraftQuantity(product), liveAvailable);
 
@@ -509,7 +523,7 @@ export function ClienteEstoque() {
               description: "Use +/− ou digite quantas peças deseja pedir.",
               variant: "destructive",
             });
-            return;
+            return 0;
           }
 
           setCart((current) => {
@@ -527,7 +541,23 @@ export function ClienteEstoque() {
             const { [product.key]: _added, ...rest } = current;
             return rest;
           });
+          return quantity;
+        }
+
+        function openDetails(product: StockProduct) {
+          setSelectedProductKey(product.key);
+          setAdicionadoNoDetalhe(null);
+          setCartOpen(false);
+        }
+
+        function closeDetails() {
           setSelectedProductKey(null);
+          setAdicionadoNoDetalhe(null);
+        }
+
+        function openCart() {
+          setCartOpen(true);
+          closeDetails();
         }
 
         function addSingleToCart(product: StockProduct) {
@@ -739,7 +769,7 @@ export function ClienteEstoque() {
                 onClearFilters={clearCatalogFilters}
                 onCartToggle={() => {
                   setCartOpen((current) => !current);
-                  setSelectedProductKey(null);
+                  closeDetails();
                 }}
               />
             ) : null}
@@ -758,10 +788,7 @@ export function ClienteEstoque() {
                         draftQuantities={draftQuantities}
                         onDraftQuantityChange={updateDraftQuantity}
                         onAdd={addDraftToCart}
-                        onDetails={(product) => {
-                          setSelectedProductKey(product.key);
-                          setCartOpen(false);
-                        }}
+                        onDetails={openDetails}
                         onReplenish={requestReplenishment}
                         onArchive={requestArchive}
                       />
@@ -772,10 +799,7 @@ export function ClienteEstoque() {
                         draftQuantities={draftQuantities}
                         onDraftQuantityChange={updateDraftQuantity}
                         onAdd={addDraftToCart}
-                        onDetails={(product) => {
-                          setSelectedProductKey(product.key);
-                          setCartOpen(false);
-                        }}
+                        onDetails={openDetails}
                         onReplenish={requestReplenishment}
                         onArchive={requestArchive}
                       />
@@ -810,7 +834,7 @@ export function ClienteEstoque() {
             </section>
 
             {cartOpen ? (
-              <SideDrawer onClose={() => setCartOpen(false)} wide={cartExpanded}>
+              <SideDrawer title="Seu pedido" onClose={() => setCartOpen(false)} wide={cartExpanded}>
                 <CartPanel
                   cartKey={cartKey}
                   seed={cartSeed}
@@ -832,17 +856,34 @@ export function ClienteEstoque() {
                 />
               </SideDrawer>
             ) : selectedProduct ? (
-              <SideDrawer onClose={() => setSelectedProductKey(null)}>
+              <SideDrawer title={productTitle(selectedProduct)} onClose={closeDetails} bottomSheetOnMobile>
                 <ProductDetailWithDates
                   product={selectedProduct}
+                  family={selectedFamily}
                   cart={cart}
                   draftQuantity={getDraftQuantity(selectedProduct)}
                   isPending={productActionMutation.isPending}
-                  onClose={() => setSelectedProductKey(null)}
-                  onDraftQuantityChange={(quantity) =>
-                    updateDraftQuantity(selectedProduct, quantity)
+                  adicionado={
+                    adicionadoNoDetalhe?.key === selectedProduct.key
+                      ? adicionadoNoDetalhe.quantidade
+                      : null
                   }
-                  onAdd={() => addDraftToCart(selectedProduct)}
+                  onClose={closeDetails}
+                  onDraftQuantityChange={(quantity) => {
+                    updateDraftQuantity(selectedProduct, quantity);
+                    setAdicionadoNoDetalhe(null);
+                  }}
+                  onAdd={() => {
+                    const quantidade = addDraftToCart(selectedProduct);
+                    setAdicionadoNoDetalhe(
+                      quantidade > 0 ? { key: selectedProduct.key, quantidade } : null,
+                    );
+                  }}
+                  onSelectVariant={(product) => {
+                    setSelectedProductKey(product.key);
+                    setAdicionadoNoDetalhe(null);
+                  }}
+                  onOpenCart={openCart}
                   onReplenish={() => requestReplenishment(selectedProduct)}
                   onArchive={() => requestArchive(selectedProduct)}
                 />
@@ -853,10 +894,7 @@ export function ClienteEstoque() {
             {cartQuantity > 0 && !cartOpen ? (
               <button
                 type="button"
-                onClick={() => {
-                  setCartOpen(true);
-                  setSelectedProductKey(null);
-                }}
+                onClick={openCart}
                 className="fixed inset-x-4 bottom-4 z-40 flex items-center justify-between rounded-2xl bg-foreground px-4 py-3 text-sm font-semibold text-background shadow-lg md:hidden"
               >
                 <span>
@@ -1505,42 +1543,71 @@ export function StockList({
   );
 }
 
-function SideDrawer({
+/**
+ * O painel lateral do Estoque (o pedido e o detalhe do produto) é um diálogo:
+ * o leitor de tela ouve o nome dele, o foco entra e fica dentro, Esc e o
+ * clique fora fecham (o pedido continua guardado) e, ao fechar, o foco volta a
+ * quem abriu. O detalhe, no celular, sobe de baixo, com até 88% da tela
+ * (docs/mockups/PortalDetalheCelular.dc.html); a partir do md, fica ao lado.
+ */
+export function SideDrawer({
   children,
+  title,
   onClose,
   wide = false,
+  bottomSheetOnMobile = false,
 }: {
   children: ReactNode;
+  /** O nome do diálogo para o leitor de tela: o produto aberto, ou "Seu pedido". */
+  title: string;
   onClose: () => void;
   wide?: boolean;
+  bottomSheetOnMobile?: boolean;
 }) {
-  // Esc fecha, como o clique fora; o pedido continua guardado.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-  // Fundo escuro sem desfoque e painel opaco: atrás há uma vitrine de
-  // fotos, e o painel translúcido ficava ilegível.
+  // Quem abriu o painel (o card, a linha da lista, o botão do pedido): o foco
+  // volta para ele. A Radix só devolve o foco a um Dialog.Trigger, que aqui não há.
+  const opener = useRef<HTMLElement | null>(
+    typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null),
+  );
   return (
-    <div className="fixed inset-0 z-[80] flex justify-end bg-black/35 p-3 sm:p-5">
-      <button
-        type="button"
-        className="absolute inset-0 cursor-default"
-        onClick={onClose}
-        aria-label="Fechar painel"
-      />
-      <div
-        className={cn(
-          "relative z-[1] h-full w-full overflow-hidden rounded-lg",
-          wide ? "max-w-[1200px]" : "max-w-[440px]",
-        )}
-      >
-        {children}
-      </div>
-    </div>
+    <DialogPrimitive.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogPrimitive.Portal>
+        {/* Fundo escuro sem desfoque e painel opaco: atrás há uma vitrine de
+            fotos, e o painel translúcido ficava ilegível. */}
+        <DialogPrimitive.Overlay
+          className={cn(
+            "fixed inset-0 z-[80] flex bg-black/35",
+            bottomSheetOnMobile
+              ? "items-end justify-center md:items-stretch md:justify-end md:p-5"
+              : "justify-end p-3 sm:p-5",
+          )}
+        >
+          <DialogPrimitive.Content
+            aria-describedby={undefined}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              // Abriu outro painel no lugar (o "Ver pedido"): o foco fica nele.
+              if (document.querySelector('[role="dialog"]')) return;
+              if (opener.current?.isConnected) opener.current.focus();
+            }}
+            className={cn(
+              "relative w-full overflow-hidden text-foreground outline-none",
+              bottomSheetOnMobile
+                ? "flex max-h-[88dvh] flex-col rounded-t-xl bg-card shadow-lg md:h-full md:max-h-none md:max-w-[440px] md:rounded-xl"
+                : cn("h-full rounded-lg", wide ? "max-w-[1200px]" : "max-w-[440px]"),
+            )}
+          >
+            <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
+            {children}
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Overlay>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 
@@ -1679,38 +1746,12 @@ export function FamilyCard({
         </div>
 
         {showVariants ? (
-          <div role="group" aria-label="Tamanho" className="flex flex-wrap gap-1.5">
-            {family.variants.map((entry) => {
-              const available = liveAvailableForProduct(entry.item, cart);
-              const active = entry.item.key === product.key;
-              return (
-                <button
-                  key={entry.item.key}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setSelectedKey(entry.item.key)}
-                  className={cn(
-                    "flex min-w-[44px] cursor-pointer flex-col items-center rounded-md border px-2 py-1 leading-tight transition",
-                    active
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-foreground hover:border-primary/40",
-                    entry.item.available <= 0 && entry.item.receiving <= 0 && !active && "text-muted-foreground/60",
-                  )}
-                >
-                  <span className={cn("text-xs font-semibold", entry.item.available <= 0 && entry.item.receiving <= 0 && "line-through")}>
-                    {variantLabel(entry.variant ?? entry.item.clientCode)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {entry.item.available > 0
-                      ? `${formatNumber(available)} disp.`
-                      : entry.item.receiving > 0
-                        ? "em recebimento"
-                        : "esgotado"}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <VariantButtons
+            variants={family.variants}
+            cart={cart}
+            selectedKey={product.key}
+            onSelect={(variant) => setSelectedKey(variant.key)}
+          />
         ) : null}
 
         <p className="text-xs text-muted-foreground">
@@ -1765,6 +1806,69 @@ export function FamilyCard({
         </div>
       </div>
     </article>
+  );
+}
+
+/**
+ * Os botões de tamanho de uma família, cada um com o disponível: os mesmos no
+ * card e no detalhe. No detalhe, com 44px de altura (alvo de toque) e o
+ * rótulo "Tamanho" à vista.
+ */
+function VariantButtons({
+  variants,
+  cart,
+  selectedKey,
+  onSelect,
+  labelledBy,
+  large = false,
+}: {
+  variants: Family<StockProduct>["variants"];
+  cart: Record<string, number>;
+  selectedKey: string;
+  onSelect: (product: StockProduct) => void;
+  /** O id do rótulo à vista; sem ele, o grupo se chama "Tamanho" só para o leitor de tela. */
+  labelledBy?: string;
+  large?: boolean;
+}) {
+  return (
+    <div
+      role="group"
+      {...(labelledBy ? { "aria-labelledby": labelledBy } : { "aria-label": "Tamanho" })}
+      className="flex flex-wrap gap-1.5"
+    >
+      {variants.map((entry) => {
+        const available = liveAvailableForProduct(entry.item, cart);
+        const active = entry.item.key === selectedKey;
+        const semPeca = entry.item.available <= 0 && entry.item.receiving <= 0;
+        return (
+          <button
+            key={entry.item.key}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onSelect(entry.item)}
+            className={cn(
+              "flex cursor-pointer flex-col items-center rounded-md border leading-tight transition",
+              large ? "min-h-11 min-w-[52px] justify-center px-2.5 py-1" : "min-w-[44px] px-2 py-1",
+              active
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border text-foreground hover:border-primary/40",
+              semPeca && !active && "text-muted-foreground/60",
+            )}
+          >
+            <span className={cn("text-xs font-semibold", semPeca && "line-through")}>
+              {variantLabel(entry.variant ?? entry.item.clientCode)}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {entry.item.available > 0
+                ? `${formatNumber(available)} disp.`
+                : entry.item.receiving > 0
+                  ? "em recebimento"
+                  : "esgotado"}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -2110,12 +2214,18 @@ export function CartPanel({
 
 type ProductDetailProps = {
   product: StockProduct;
+  /** A família do produto, a mesma do card: com mais de um tamanho, o detalhe mostra os botões. */
+  family?: Family<StockProduct> | null;
   cart: Record<string, number>;
   draftQuantity: number;
   isPending: boolean;
+  /** Quantas peças este painel acabou de pôr no pedido; sem nada, a confirmação não aparece. */
+  adicionado?: number | null;
   onClose: () => void;
   onDraftQuantityChange: (quantity: number) => void;
   onAdd: () => void;
+  onSelectVariant?: (product: StockProduct) => void;
+  onOpenCart?: () => void;
   onReplenish: () => void;
   onArchive: () => void;
   /** As datas de entrada do item (FIFO por data, parte 5); sem elas, a seção não aparece. */
@@ -2132,44 +2242,57 @@ function ProductDetailWithDates(props: ProductDetailProps) {
   return <ProductDetailPanel {...props} datasDeEntrada={datas.data ?? []} />;
 }
 
+/**
+ * O detalhe do produto no painel lateral (docs/mockups/PortalDetalhe*.dc.html,
+ * aprovados em 04/11/2026): o cabeçalho numa linha, o corpo que rola e o
+ * rodapé com a ação, sempre à vista, em qualquer altura de tela.
+ */
 export function ProductDetailPanel({
   product,
+  family = null,
   cart,
   draftQuantity,
   isPending,
+  adicionado = null,
   onClose,
   onDraftQuantityChange,
   onAdd,
+  onSelectVariant,
+  onOpenCart,
   onReplenish,
   onArchive,
   datasDeEntrada = [],
 }: ProductDetailProps) {
+  const tamanhoId = useId();
   const liveAvailable = liveAvailableForProduct(product, cart);
-  const remaining = Math.max(0, liveAvailable - draftQuantity);
   const status = productStatus(product, liveAvailable);
   const showPhysicalTotal = product.total > liveAvailable;
   const gender = productGender(product);
+  const aviso = avisoDoDetalhe(product, liveAvailable);
+  const variants = family && family.variants.length > 1 ? family.variants : null;
+  // O tamanho sem foto mostra a foto da família, como o card.
+  const visual = product.photoUrl
+    ? product
+    : { ...product, photoUrl: family?.variants.find((entry) => entry.item.photoUrl)?.item.photoUrl ?? null };
 
   return (
-    <ModulePanel
-      title="Detalhe do produto"
-      description="Visão para pedido e reposição"
-      icon={Eye}
-      className="h-fit xl:sticky xl:top-4"
-    >
-      <div className="space-y-5">
-        <div className="-mt-2 flex justify-end">
-          <button
-            type="button"
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-2xl border border-border bg-card text-muted-foreground transition hover:bg-surface-hover"
-            onClick={onClose}
-            aria-label="Fechar detalhe"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-card">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border py-3 pl-5 pr-3">
+        <p className="font-semibold leading-6 text-foreground">Detalhe do produto</p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="cursor-pointer text-muted-foreground"
+          onClick={onClose}
+          aria-label="Fechar detalhe"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
 
-        <ProductVisual product={product} status={status} large />
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-5">
+        <ProductVisual product={visual} status={status} large />
 
         <div>
           <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
@@ -2178,31 +2301,40 @@ export function ProductDetailPanel({
           <h2 className="mt-1 text-xl font-semibold leading-7 text-foreground">
             {productTitle(product)}
           </h2>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
               {productType(product)}
             </span>
-            {gender ? <GenderChip gender={gender} className="self-center" /> : null}
+            {gender ? <GenderChip gender={gender} /> : null}
             <StockBadge status={status} />
           </div>
         </div>
+
+        {variants ? (
+          <div>
+            <p id={tamanhoId} className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Tamanho
+            </p>
+            <VariantButtons
+              variants={variants}
+              cart={cart}
+              selectedKey={product.key}
+              onSelect={(variant) => onSelectVariant?.(variant)}
+              labelledBy={tamanhoId}
+              large
+            />
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-3">
           <StockFact
             label="Disponível para pedido"
             value={formatNumber(liveAvailable)}
           />
-          {draftQuantity > 0 ? (
-            <StockFact
-              label="Sobra após este pedido"
-              value={formatNumber(remaining)}
-            />
-          ) : (
-            <StockFact
-              label="No pedido"
-              value={formatNumber(cart[product.key] ?? 0)}
-            />
-          )}
+          <StockFact
+            label="No pedido"
+            value={formatNumber(cart[product.key] ?? 0)}
+          />
           {product.receiving > 0 ? (
             <StockFact
               label="Em recebimento"
@@ -2221,25 +2353,53 @@ export function ProductDetailPanel({
               value={formatNumber(product.total)}
             />
           ) : null}
-          {draftQuantity > 0 ? (
-            <StockFact
-              label="Quantidade selecionada"
-              value={formatNumber(draftQuantity)}
-            />
-          ) : null}
         </div>
 
         <DatasDeEntrada datas={datasDeEntrada} />
 
-        <div className="rounded-lg border border-primary/15 bg-primary/10 p-4 text-sm leading-6 text-primary">
-          <div className="flex items-start gap-3">
-            <Sparkles className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
-            <p>{agentDuteSignal(product, liveAvailable)}</p>
+        {aviso ? (
+          <div
+            data-testid="detalhe-aviso"
+            className={cn("flex items-start gap-3 rounded-lg border px-4 py-3.5 text-sm leading-6", avisoTone[aviso.tom])}
+          >
+            <aviso.icone className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
+            <p>{aviso.texto}</p>
           </div>
-        </div>
+        ) : null}
+      </div>
 
+      <div data-testid="detalhe-rodape" className="@container shrink-0 border-t border-border bg-card px-5 py-4">
+        {/* O status existe desde o início, vazio: o leitor de tela anuncia quando ele muda. */}
+        <div
+          className={cn(
+            "flex items-center justify-between gap-3",
+            adicionado
+              ? "mb-3 rounded-lg border border-success-soft-border bg-success-soft px-3 py-1 text-success-soft-foreground"
+              : null,
+          )}
+        >
+          <p role="status" className="flex items-center gap-2 text-sm font-semibold">
+            {adicionado ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {pecasAdicionadas(adicionado)}
+              </>
+            ) : null}
+          </p>
+          {adicionado && onOpenCart ? (
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="cursor-pointer font-semibold text-success-soft-foreground underline"
+              onClick={onOpenCart}
+            >
+              Ver pedido
+            </Button>
+          ) : null}
+        </div>
         {product.available > 0 ? (
-          <div className="space-y-3">
+          <div className="flex items-center gap-3">
             <QuantityStepper
               label={product.name}
               value={draftQuantity}
@@ -2248,7 +2408,7 @@ export function ProductDetailPanel({
             />
             <Button
               type="button"
-              className="w-full cursor-pointer"
+              className="min-h-11 min-w-0 flex-1 cursor-pointer"
               disabled={liveAvailable <= 0 || draftQuantity <= 0}
               onClick={onAdd}
             >
@@ -2265,8 +2425,15 @@ export function ProductDetailPanel({
           />
         )}
       </div>
-    </ModulePanel>
+    </div>
   );
+}
+
+/** A confirmação do que o detalhe acabou de pôr no pedido. */
+function pecasAdicionadas(quantidade: number) {
+  return quantidade === 1
+    ? "1 peça adicionada ao pedido"
+    : `${formatNumber(quantidade)} peças adicionadas ao pedido`;
 }
 
 function ProductVisual({
@@ -2285,6 +2452,36 @@ function ProductVisual({
   gender?: ProductGender | null;
 }) {
   const initials = product.category.slice(0, 2).toUpperCase();
+
+  // No detalhe: a foto inteira num quadro mais baixo, sem selo por cima (o
+  // selo da situação fica uma vez, na linha do tipo). Sem foto, o quadro menor
+  // com a sigla e o tipo (docs/mockups/PortalDetalheSemSaldo.dc.html).
+  if (large) {
+    return product.photoUrl ? (
+      <div
+        data-testid="detalhe-foto"
+        className="flex h-[200px] items-center justify-center overflow-hidden rounded-lg border border-border bg-card p-3"
+      >
+        <img
+          src={product.photoUrl}
+          alt={product.name}
+          loading="lazy"
+          className="h-full w-full object-contain"
+        />
+      </div>
+    ) : (
+      <div
+        data-testid="detalhe-foto"
+        className="flex h-[132px] flex-col items-center justify-center gap-1.5 rounded-lg border border-border bg-muted text-muted-foreground"
+      >
+        <span className="flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-card text-sm font-extrabold text-foreground">
+          {initials || "BT"}
+        </span>
+        <span className="text-sm font-medium">{product.category}</span>
+      </div>
+    );
+  }
+
   // Situação à esquerda e gênero à direita, numa faixa só: não se sobrepõem
   // nem no cartão mais estreito.
   const badges = (
@@ -2303,24 +2500,12 @@ function ProductVisual({
   // placeholder atual.
   if (product.photoUrl) {
     return (
-      <div
-        className={cn(
-          "relative overflow-hidden border-b border-border bg-muted",
-          large ? "rounded-lg border border-border" : "",
-        )}
-      >
+      <div className="relative overflow-hidden border-b border-border bg-muted">
         <img
           src={product.photoUrl}
           alt={product.name}
           loading="lazy"
-          className={cn(
-            "w-full object-cover",
-            large
-              ? "min-h-[260px] max-h-[320px]"
-              : compact
-                ? "h-[104px]"
-                : "h-[170px]",
-          )}
+          className={cn("w-full object-cover", compact ? "h-[104px]" : "h-[170px]")}
         />
         {badges}
       </div>
@@ -2328,12 +2513,7 @@ function ProductVisual({
   }
 
   return (
-    <div
-      className={cn(
-        "relative overflow-hidden border-b border-border bg-muted",
-        large ? "rounded-lg border border-border" : "",
-      )}
-    >
+    <div className="relative overflow-hidden border-b border-border bg-muted">
       <div
         className={cn(
           "absolute inset-0 opacity-80",
@@ -2343,11 +2523,7 @@ function ProductVisual({
       <div
         className={cn(
           "relative flex flex-col items-center justify-center gap-3 p-6 text-center",
-          large
-            ? "min-h-[260px]"
-            : compact
-              ? "min-h-[104px] p-4"
-              : "min-h-[170px]",
+          compact ? "min-h-[104px] p-4" : "min-h-[170px]",
         )}
       >
         <div
@@ -2478,18 +2654,20 @@ function ZeroStockActions({
   onReplenish: () => void;
   onArchive: () => void;
 }) {
+  // Fora do card, no rodapé do detalhe: lado a lado quando o painel tem
+  // largura (@sm, pelo @container do rodapé), um embaixo do outro no celular.
   return (
     <div
       className={cn(
         "grid gap-2",
-        compact ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2",
+        compact ? "grid-cols-2" : "grid-cols-1 @sm:grid-cols-2",
       )}
     >
       <Button
         type="button"
         variant="outline"
         size={compact ? "sm" : "default"}
-        className="cursor-pointer"
+        className={cn("cursor-pointer", !compact && "min-h-11")}
         disabled={disabled}
         onClick={onReplenish}
       >
@@ -2500,7 +2678,7 @@ function ZeroStockActions({
         type="button"
         variant="ghost"
         size={compact ? "sm" : "default"}
-        className="cursor-pointer text-muted-foreground"
+        className={cn("cursor-pointer text-muted-foreground", !compact && "min-h-11")}
         disabled={disabled}
         onClick={onArchive}
       >
@@ -2613,9 +2791,10 @@ function StockBadge({
     );
   }
   if (status === "low") {
+    // O ícone de queda, não o brilho da IA: o selo é regra do mínimo, não sugestão do agente.
     return (
       <span className={cn("inline-flex items-center gap-1 rounded-md bg-card font-semibold text-warning-soft-foreground shadow-sm", size)}>
-        <Sparkles className="h-3.5 w-3.5" />
+        <TrendingDown className="h-3.5 w-3.5" />
         Baixo estoque
       </span>
     );
@@ -2939,24 +3118,58 @@ function isLowStock(product: StockProduct, liveAvailable: number) {
   return product.available > 0 && liveAvailable > 0 && liveAvailable <= product.minimum;
 }
 
-function agentDuteSignal(product: StockProduct, liveAvailable: number) {
+type AvisoDoDetalhe = {
+  tom: "info" | "semSaldo" | "noPedido" | "baixo";
+  icone: LucideIcon;
+  texto: string;
+};
+
+const avisoTone: Record<AvisoDoDetalhe["tom"], string> = {
+  info: "border-info-soft-border bg-info-soft text-info-soft-foreground",
+  semSaldo: "border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground",
+  noPedido: "border-success-soft-border bg-success-soft text-success-soft-foreground",
+  baixo: "border-warning-soft-border bg-warning-soft text-warning-soft-foreground",
+};
+
+/**
+ * O aviso do detalhe só quando informa algo, no tom e com o ícone da situação
+ * (docs/mockups/PortalDetalheEstados.dc.html). São frases fixas por situação,
+ * não sugestão do Agent Dute: sem o ícone da IA. Com saldo, nenhum aviso.
+ */
+function avisoDoDetalhe(product: StockProduct, liveAvailable: number): AvisoDoDetalhe | null {
   if (product.available <= 0 && product.receiving > 0) {
-    return "Há peças deste produto em recebimento na Dutelog: entram no disponível para pedido depois da guarda.";
+    return {
+      tom: "info",
+      icone: PackageOpen,
+      texto: "Há peças deste produto em recebimento na Dutelog: entram no disponível para pedido depois da guarda.",
+    };
   }
 
   if (product.available <= 0) {
-    return "Produto sem saldo disponível. Avise a Dutelog sobre a reposição ou arquive o produto; o histórico é preservado.";
+    return {
+      tom: "semSaldo",
+      icone: AlertTriangle,
+      texto: "Produto sem saldo disponível. Avise a Dutelog sobre a reposição ou arquive o produto; o histórico é preservado.",
+    };
   }
 
   if (liveAvailable <= 0) {
-    return "Todo o saldo disponível já está no seu pedido. Ao enviar, a Dutelog separa, confere e entrega.";
+    return {
+      tom: "noPedido",
+      icone: ShoppingCart,
+      texto: "Todo o saldo disponível já está no seu pedido. Ao enviar, a Dutelog separa, confere e entrega.",
+    };
   }
 
   if (isLowStock(product, liveAvailable)) {
-    return "Estoque baixo. Vale acompanhar a reposição antes de pedidos grandes.";
+    return {
+      tom: "baixo",
+      icone: TrendingDown,
+      texto: "Estoque baixo. Vale acompanhar a reposição antes de pedidos grandes.",
+    };
   }
 
-  return "Saldo disponível. Escolha a quantidade e clique em Adicionar para incluir no pedido.";
+  return null;
 }
 
 function clampQuantity(quantity: number, max: number) {
