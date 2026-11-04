@@ -1,5 +1,6 @@
 import serviceData from "./content/services.json" with { type: "json" };
 import articleData from "./content/articles.json" with { type: "json" };
+import type { RichNode } from "./blog/model";
 
 export type ImageName = "corporate" | "detail" | "transport" | "storage";
 export type Service = {
@@ -24,6 +25,8 @@ export type Article = {
   image: ImageName;
   readTime: string;
   service: string;
+  body?: RichNode;
+  cover?: { src: string; alt: string };
   sections: {
     id: string;
     title: string;

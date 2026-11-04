@@ -11,9 +11,9 @@ fixa: a zeragem de julho (reset_btg_inventory.py) deixou request_counters e
 ops_aggregates para trás justamente por depender de uma lista escrita antes
 dessas coleções existirem.
 
-A zeragem é do WMS e nunca apaga dado do Comercial nem o cadastro da
-Operação: as coleções ficam sempre, inclusive com --include-setup, e em
-`events` ficam os eventos com source "functions_comercial" ou
+A zeragem é do WMS e nunca apaga dado do Comercial, o cadastro da
+Operação nem o Blog institucional: as coleções ficam sempre, inclusive com
+--include-setup, e em `events` ficam os eventos com source "functions_comercial" ou
 "functions_operacao". Se a zeragem fosse apagar `customers` e algum
 cadastro tem o campo `stage` (do Comercial), ela para antes de alterar
 qualquer coisa.
@@ -138,6 +138,16 @@ MEMORIA_COLLECTIONS = (
     "ai_suggestions",
     "ai_case_memory",
 )
+# Conteúdo editorial do site institucional, independente do estoque: os
+# rascunhos, metadados das imagens, artigos publicados, reservas de URL e o
+# marcador de migração ficam sempre, inclusive com --include-setup.
+SITE_BLOG_COLLECTIONS = (
+    "site_blog_drafts",
+    "site_blog_media",
+    "site_blog_posts",
+    "site_blog_slugs",
+    "site_blog_meta",
+)
 # Os eventos do Comercial moram em `events`, junto dos do WMS: a zeragem apaga
 # só os outros.
 COMERCIAL_EVENT_SOURCE = "functions_comercial"
@@ -176,6 +186,7 @@ def preserved_collections(
         | set(OPERACAO_COLLECTIONS)
         | set(FINANCEIRO_COLLECTIONS)
         | set(MEMORIA_COLLECTIONS)
+        | set(SITE_BLOG_COLLECTIONS)
     )
     if not include_setup:
         preserved.update(SETUP_COLLECTIONS)
@@ -281,6 +292,11 @@ def memoria_path(name: str) -> bool:
     return document_path(name).split("/", 1)[0] in MEMORIA_COLLECTIONS
 
 
+def site_blog_path(name: str) -> bool:
+    """Documento editorial do site, inclusive dentro de subcoleções."""
+    return document_path(name).split("/", 1)[0] in SITE_BLOG_COLLECTIONS
+
+
 def has_stage(document: dict[str, Any]) -> bool:
     return STAGE_FIELD in document.get("fields", {})
 
@@ -357,6 +373,10 @@ def delete_writes(
             if memoria_path(name):
                 raise RuntimeError(
                     "A zeragem não apaga a memória da Dute: " + document_path(name)
+                )
+            if site_blog_path(name):
+                raise RuntimeError(
+                    "A zeragem não apaga o Blog institucional: " + document_path(name)
                 )
             if collection == CUSTOMERS_COLLECTION and has_stage(document):
                 raise RuntimeError(

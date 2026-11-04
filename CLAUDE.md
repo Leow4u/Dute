@@ -500,7 +500,11 @@ removidas justamente por induzirem a erro.
 - Nunca commitar esses arquivos, nunca colar o conteúdo deles em serviço externo,
   nunca incluí-los em imagem de container.
 - O deploy monta um diretório de staging com apenas `Dockerfile`, `nginx.conf` e
-  `dist/public` — mantenha assim.
+  `dist/public` para o app operacional — mantenha assim. O site institucional,
+  com o painel do Blog, usa o pacote separado gerado por
+  `artifacts/dutelog-site/scripts/stage-release.mjs`: apenas Dockerfile, manifests
+  das dependências de runtime e `dist/{public,server,runtime}` compilado. Nunca
+  enviar a árvore do repositório ou arquivos de configuração privada como contexto.
 - Onde cada dado pessoal fica, quem lê e o que falta para a LGPD:
   `docs/plataforma/lgpd.md` (25/10/2026, com as decisões do Leonardo de
   26/10). A retenção roda por codebase, cada uma no que é dela, com a

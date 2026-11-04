@@ -4,6 +4,9 @@ import { render, routes } from "../dist/server/entry-server.js";
 
 const destination = resolve("dist/public");
 const template = await readFile(resolve(destination, "index.html"), "utf8");
+await writeFile(resolve("dist/server/template.html"), template);
+await mkdir(resolve(destination, "admin/blog"), { recursive: true });
+await writeFile(resolve(destination, "admin/blog/index.html"), template.replace("<!--site-head-->", '<title>Painel do Blog | Dutelog</title><meta name="robots" content="noindex,nofollow" />'));
 const origin = "https://www.dutelog.com.br";
 const escape = (text) =>
   text
@@ -51,8 +54,8 @@ for (const pathname of [...routes.map((route) => route.path), "/404.html"]) {
   await writeFile(
     file,
     template
-      .replace("<!--site-head-->", head)
-      .replace('<div id="root"></div>', `<div id="root">${html}</div>`),
+      .replace("<!--site-head-->", () => head)
+      .replace('<div id="root"></div>', () => `<div id="root">${html}</div>`),
   );
 }
 await writeFile(

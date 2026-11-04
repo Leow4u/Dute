@@ -138,6 +138,34 @@ jobs:
       - name: Unit tests
         run: python -m unittest discover -s tools -p "test_*.py" -v
 
+  blog-firestore:
+    name: Transações editoriais do Blog
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install Java (Firestore emulator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+      - name: Draft conflicts, publication and withdrawal in isolated Firestore
+        working-directory: artifacts/dutelog-site
+        env:
+          BLOG_TEST_FIRESTORE_PROJECT: demo-site-blog-tests
+        run: firebase emulators:exec --project demo-site-blog-tests --config tests/firebase.json --only firestore "pnpm exec tsx --test tests/blog-repository.test.ts"
+
   functions-integration:
     runs-on: ubuntu-latest
     defaults:

@@ -1,0 +1,22 @@
+import { cp, mkdir, readFile, writeFile, access } from "node:fs/promises";
+import { dirname, isAbsolute, resolve, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+const site = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const repository = resolve(site, "../..");
+const destination = process.argv[2];
+if (!destination || !isAbsolute(destination)) throw new Error("Informe uma pasta absoluta, nova e fora do repositório.");
+const output = resolve(destination);
+const inside = relative(repository, output);
+if (!inside.startsWith(".." + sep) && inside !== "..") throw new Error("O pacote deve ficar fora do repositório.");
+try { await access(output); throw new Error("A pasta de destino já existe; escolha uma pasta nova."); } catch (error) { if (error.code !== "ENOENT") throw error; }
+await access(resolve(site, "dist/runtime/index.mjs"));
+await access(resolve(site, "dist/server/template.html"));
+const pkg = JSON.parse(await readFile(resolve(site, "package.json"), "utf8"));
+const dependencies = Object.fromEntries(["express", "firebase-admin", "sharp"].map(name => [name, pkg.dependencies[name]]));
+Object.assign(dependencies, { react: "19.1.0", "react-dom": "19.1.0" });
+await mkdir(output, { recursive: true });
+await cp(resolve(site, "dist"), resolve(output, "dist"), { recursive: true });
+await cp(resolve(repository, "deploy/cloud-run/Dockerfile.site"), resolve(output, "Dockerfile"));
+await writeFile(resolve(output, "package.json"), JSON.stringify({ name: "dutelog-site-runtime", private: true, version: pkg.version, type: "module", dependencies }, null, 2) + "\n");
+await writeFile(resolve(output, ".dockerignore"), "node_modules\n*.log\n");
+console.log(`Pacote criado: ${output}\nGere package-lock.json nessa pasta com npm install --package-lock-only --ignore-scripts antes do build da imagem.`);
