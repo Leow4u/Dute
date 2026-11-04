@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  articles,
   categories,
   filterArticles,
   serviceHref,
@@ -9,12 +8,14 @@ import {
 import {
   Arrow,
   ArticleCard,
+  ArticlePhoto,
   Breadcrumbs,
   Button,
   ClosingCta,
-  Photo,
   TextLink,
 } from "../components/ui";
+import { RichText, richHeadings } from "../blog/RichText";
+import { useArticles } from "../blog/catalog";
 
 function readFilters() {
   const parameters = new URLSearchParams(window.location.search);
@@ -47,6 +48,7 @@ function updateFilterUrl(category: string, query: string) {
 }
 
 export function BlogPage() {
+  const articles = useArticles();
   // URL state is read after hydration so the server and initial client markup agree.
   const [category, setCategory] = useState("Todos");
   const [query, setQuery] = useState("");
@@ -92,15 +94,17 @@ export function BlogPage() {
           <br /> da sua empresa.
         </p>
       </section>
-      <section
-        className="container blog-featured"
-        aria-label="Artigo em destaque"
-      >
-        <div className="featured-label">
-          Em destaque <span>Planejamento na prática</span>
-        </div>
-        <ArticleCard article={articles[0]} />
-      </section>
+      {articles.length > 0 && (
+        <section
+          className="container blog-featured"
+          aria-label="Artigo em destaque"
+        >
+          <div className="featured-label">
+            Em destaque <span>Planejamento na prática</span>
+          </div>
+          <ArticleCard article={articles[0]} />
+        </section>
+      )}
       <section
         className="section blog-library"
         id="artigos"
@@ -192,7 +196,14 @@ export function BlogPage() {
   );
 }
 
-export function ArticlePage({ article }: { article: Article }) {
+export function ArticlePage({
+  article,
+  preview = false,
+}: {
+  article: Article;
+  preview?: boolean;
+}) {
+  const articles = useArticles();
   const progressRef = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -202,10 +213,14 @@ export function ArticlePage({ article }: { article: Article }) {
   const related = articles
     .filter((item) => item.slug !== article.slug)
     .slice(0, 2);
-  const solutionHref = serviceHref(article.service);
+  const solutionHref = article.service
+    ? serviceHref(article.service)
+    : "/solucoes/";
   const categoryHref = `/blog/?categoria=${encodeURIComponent(article.category)}`;
+  const headings = article.body ? richHeadings(article.body) : article.sections;
 
   useEffect(() => {
+    if (preview) return;
     mountedRef.current = true;
     let frame: number | undefined;
     const updateProgress = () => {
@@ -245,7 +260,7 @@ export function ArticlePage({ article }: { article: Article }) {
       window.removeEventListener("resize", requestUpdate);
       window.removeEventListener("load", requestUpdate);
     };
-  }, [article.slug]);
+  }, [article.slug, preview]);
 
   async function copyLink() {
     let message = "Link copiado.";
@@ -264,16 +279,18 @@ export function ArticlePage({ article }: { article: Article }) {
 
   return (
     <>
-      <div
-        ref={progressRef}
-        className="reading-progress"
-        data-scroll-progress
-        role="progressbar"
-        aria-label="Progresso de leitura"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={0}
-      />
+      {!preview && (
+        <div
+          ref={progressRef}
+          className="reading-progress"
+          data-scroll-progress
+          role="progressbar"
+          aria-label="Progresso de leitura"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={0}
+        />
+      )}
       <Breadcrumbs
         items={[
           { label: "Blog", href: "/blog/" },
@@ -289,33 +306,35 @@ export function ArticlePage({ article }: { article: Article }) {
           </div>
           <h1>{article.title}</h1>
           <p>{article.excerpt}</p>
-          <button
-            type="button"
-            className="text-link copy-link"
-            data-copy-link
-            onClick={copyLink}
-          >
-            <span>Copiar link</span>
-            <Arrow diagonal />
-          </button>
+          {!preview && (
+            <button
+              type="button"
+              className="text-link copy-link"
+              data-copy-link
+              onClick={copyLink}
+            >
+              <span>Copiar link</span>
+              <Arrow diagonal />
+            </button>
+          )}
         </header>
         <div className="container article-cover">
-          <Photo
-            name={article.image}
-            alt={`Cena ilustrativa de ${article.category.toLocaleLowerCase("pt-BR")}`}
-            eager
-          />
+          <ArticlePhoto article={article} eager />
         </div>
         <div className="container article-layout">
           <aside className="article-toc">
-            <span className="section-label">Neste artigo</span>
-            <nav aria-label="Sumário do artigo">
-              {article.sections.map((section) => (
-                <a key={section.id} href={`#${section.id}`}>
-                  {section.title}
-                </a>
-              ))}
-            </nav>
+            {headings.length > 0 && (
+              <>
+                <span className="section-label">Neste artigo</span>
+                <nav aria-label="Sumário do artigo">
+                  {headings.map((section) => (
+                    <a key={section.id} href={`#${section.id}`}>
+                      {section.title}
+                    </a>
+                  ))}
+                </nav>
+              </>
+            )}
             <div className="toc-contact">
               <p>
                 Do planejamento
@@ -326,26 +345,30 @@ export function ArticlePage({ article }: { article: Article }) {
           </aside>
           <div className="article-body">
             <p className="article-lead">{article.excerpt}</p>
-            {article.sections.map((section) => (
-              <section
-                key={section.id}
-                id={section.id}
-                tabIndex={-1}
-                aria-labelledby={`${section.id}-heading`}
-              >
-                <h2 id={`${section.id}-heading`}>{section.title}</h2>
-                {section.paragraphs.map((paragraph, index) => (
-                  <p key={index}>{paragraph}</p>
-                ))}
-                {section.bullets.length > 0 && (
-                  <ul>
-                    {section.bullets.map((bullet, index) => (
-                      <li key={index}>{bullet}</li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            ))}
+            {article.body ? (
+              <RichText document={article.body} />
+            ) : (
+              article.sections.map((section) => (
+                <section
+                  key={section.id}
+                  id={section.id}
+                  tabIndex={-1}
+                  aria-labelledby={`${section.id}-heading`}
+                >
+                  <h2 id={`${section.id}-heading`}>{section.title}</h2>
+                  {section.paragraphs.map((paragraph, index) => (
+                    <p key={index}>{paragraph}</p>
+                  ))}
+                  {section.bullets.length > 0 && (
+                    <ul>
+                      {section.bullets.map((bullet, index) => (
+                        <li key={index}>{bullet}</li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              ))
+            )}
             <div className="article-inline-cta">
               <span className="section-label">
                 O próximo movimento pode começar aqui
@@ -361,22 +384,24 @@ export function ArticlePage({ article }: { article: Article }) {
           </div>
         </div>
       </article>
-      <section
-        className="section related-reading"
-        aria-labelledby="related-heading"
-      >
-        <div className="container">
-          <div className="section-heading">
-            <h2 id="related-heading">Continue explorando.</h2>
-            <TextLink href="/blog/">Voltar ao Blog</TextLink>
+      {!preview && (
+        <section
+          className="section related-reading"
+          aria-labelledby="related-heading"
+        >
+          <div className="container">
+            <div className="section-heading">
+              <h2 id="related-heading">Continue explorando.</h2>
+              <TextLink href="/blog/">Voltar ao Blog</TextLink>
+            </div>
+            <div className="blog-grid two">
+              {related.map((item) => (
+                <ArticleCard key={item.slug} article={item} />
+              ))}
+            </div>
           </div>
-          <div className="blog-grid two">
-            {related.map((item) => (
-              <ArticleCard key={item.slug} article={item} />
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
       <ClosingCta />
       <div
         className={`toast${copyMessage ? " is-visible" : ""}`}

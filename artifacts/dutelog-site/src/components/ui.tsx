@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
+import { safeImageSource } from "../blog/RichText";
+import { useArticles } from "../blog/catalog";
 import {
-  articles,
   articleHref,
   serviceHref,
   type Article,
@@ -148,10 +149,7 @@ export function ArticleCard({
   return (
     <article className={`article-card ${compact ? "compact" : ""}`}>
       <a className="article-image" href={articleHref(article.slug)}>
-        <Photo
-          name={article.image}
-          alt={`Cena ilustrativa de ${article.category.toLocaleLowerCase("pt-BR")}`}
-        />
+        <ArticlePhoto article={article} />
         <span className="image-arrow">
           <Arrow diagonal />
         </span>
@@ -172,12 +170,36 @@ export function ArticleCard({
     </article>
   );
 }
-export function Journal({
-  items = articles.slice(0, 3),
+export function ArticlePhoto({
+  article,
+  eager = false,
 }: {
-  items?: Article[];
+  article: Article;
+  eager?: boolean;
 }) {
-  if (!items.length) return null;
+  const src = safeImageSource(article.cover?.src);
+  return src ? (
+    <img
+      src={src}
+      alt={article.cover?.alt || ""}
+      loading={eager ? "eager" : "lazy"}
+      fetchPriority={eager ? "high" : "auto"}
+      decoding="async"
+      width="1600"
+      height="900"
+    />
+  ) : (
+    <Photo
+      name={article.image}
+      alt={`Cena ilustrativa de ${article.category.toLocaleLowerCase("pt-BR")}`}
+      eager={eager}
+    />
+  );
+}
+export function Journal({ items }: { items?: Article[] }) {
+  const articles = useArticles();
+  const selected = items ?? articles.slice(0, 3);
+  if (!selected.length) return null;
   return (
     <section className="section journal">
       <div className="container">
@@ -192,9 +214,9 @@ export function Journal({
           <TextLink href="/blog/">Todos os artigos</TextLink>
         </div>
         <div className="journal-layout">
-          <ArticleCard article={items[0]} />
+          <ArticleCard article={selected[0]} />
           <div className="journal-side">
-            {items.slice(1, 3).map((article) => (
+            {selected.slice(1, 3).map((article) => (
               <ArticleCard key={article.slug} article={article} compact />
             ))}
           </div>

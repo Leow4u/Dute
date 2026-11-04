@@ -3,7 +3,7 @@ steps:
     args:
       - build
       - --file
-      - deploy/cloud-run/Dockerfile.site
+      - Dockerfile
       - --tag
       - southamerica-east1-docker.pkg.dev/$PROJECT_ID/dute/dutelog-site:$BUILD_ID
       - .

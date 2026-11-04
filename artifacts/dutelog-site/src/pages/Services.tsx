@@ -1,10 +1,4 @@
-import {
-  articles,
-  contactHref,
-  serviceHref,
-  services,
-  type Service,
-} from "../content";
+import { contactHref, serviceHref, services, type Service } from "../content";
 import {
   Arrow,
   ArticleCard,
@@ -17,6 +11,7 @@ import {
   ServiceRows,
   TextLink,
 } from "../components/ui";
+import { useArticles } from "../blog/catalog";
 
 const corporateServices = services.filter(
   (service) => service.group === "corporativa",
@@ -226,6 +221,7 @@ function ScopeItems({
 }
 
 export function ServicePage({ service }: { service: Service }) {
+  const articles = useArticles();
   const corporate = service.group === "corporativa";
   const hubHref = corporate
     ? "/logistica-corporativa/"
@@ -335,6 +331,15 @@ export function ServicePage({ service }: { service: Service }) {
 }
 
 export function TransportPage() {
+  const articles = useArticles();
+  const reading = [
+    ...articles.filter(
+      (article) => article.category === "Transporte de Cargas",
+    ),
+    ...articles.filter(
+      (article) => article.category !== "Transporte de Cargas",
+    ),
+  ].slice(0, 3);
   return (
     <>
       <Breadcrumbs
@@ -391,7 +396,7 @@ export function TransportPage() {
           </div>
         </div>
       </section>
-      <Journal items={[articles[3], articles[5], articles[0]]} />
+      <Journal items={reading} />
       <ClosingCta href={contactHref("transporte-de-cargas")} />
     </>
   );
@@ -427,6 +432,11 @@ const storageFaq = [
 ];
 
 export function StoragePage() {
+  const articles = useArticles();
+  const reading = [
+    ...articles.filter((article) => article.category === "Armazenagem"),
+    ...articles.filter((article) => article.category !== "Armazenagem"),
+  ].slice(0, 3);
   return (
     <>
       <Breadcrumbs
@@ -490,7 +500,7 @@ export function StoragePage() {
         </div>
       </section>
       <Faq items={storageFaq} />
-      <Journal items={[articles[4], articles[1], articles[0]]} />
+      <Journal items={reading} />
       <ClosingCta href={contactHref("armazenagem")} />
     </>
   );

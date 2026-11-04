@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
-import { articles, services } from "./content";
+import { articles as legacyArticles, services, type Article } from "./content";
+import { ArticlesProvider } from "./blog/catalog";
 import { Layout } from "./components/Layout";
 import { Breadcrumbs, Button, Arrow } from "./components/ui";
 import { HomePage } from "./pages/Home";
@@ -13,10 +14,17 @@ import {
 import { AboutPage } from "./pages/About";
 import { BlogPage, ArticlePage } from "./pages/Blog";
 import { ContactPage } from "./pages/Contact";
-import { resolveRoute, routes, notFoundRoute } from "./routes";
+import { resolveRoute, createRoutes, notFoundRoute } from "./routes";
 
-export default function App({ pathname = "/" }: { pathname?: string }) {
-  const route = resolveRoute(pathname) || notFoundRoute;
+export default function App({
+  pathname = "/",
+  catalog = legacyArticles,
+}: {
+  pathname?: string;
+  catalog?: Article[];
+}) {
+  const route = resolveRoute(pathname, catalog) || notFoundRoute;
+  const routes = createRoutes(catalog);
   useEffect(() => {
     document.title = route.title;
   }, [route.title]);
@@ -45,7 +53,7 @@ export default function App({ pathname = "/" }: { pathname?: string }) {
       break;
     case "article":
       page = (
-        <ArticlePage article={articles.find((a) => a.slug === route.slug)!} />
+        <ArticlePage article={catalog.find((a) => a.slug === route.slug)!} />
       );
       break;
     case "service":
@@ -98,8 +106,10 @@ export default function App({ pathname = "/" }: { pathname?: string }) {
       );
   }
   return (
-    <Layout pathname={route.path} home={route.kind === "home"}>
-      {page}
-    </Layout>
+    <ArticlesProvider articles={catalog}>
+      <Layout pathname={route.path} home={route.kind === "home"}>
+        {page}
+      </Layout>
+    </ArticlesProvider>
   );
 }

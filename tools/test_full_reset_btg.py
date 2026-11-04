@@ -68,6 +68,13 @@ MEMORIA = (
     "ai_suggestions",
     "ai_case_memory",
 )
+SITE_BLOG = (
+    "site_blog_drafts",
+    "site_blog_media",
+    "site_blog_posts",
+    "site_blog_slugs",
+    "site_blog_meta",
+)
 # O que as Functions dos módulos declaram e a zeragem apaga de propósito: o
 # estoque e o faturamento do WMS, que elas leem, e o Agent Dute, cujas
 # conversas e conhecimento recomeçam (docs/novo-go-live-zeragem-total.md).
@@ -330,7 +337,8 @@ class PlanTests(unittest.TestCase):
             | set(COMERCIAL)
             | set(OPERACAO)
             | set(FINANCEIRO)
-            | set(MEMORIA),
+            | set(MEMORIA)
+            | set(SITE_BLOG),
         )
 
     def test_comercial_collections_are_always_preserved(self) -> None:
@@ -422,6 +430,28 @@ class PlanTests(unittest.TestCase):
             )
         self.assertIn("memória", str(raised.exception))
 
+    def test_site_blog_is_always_preserved(self) -> None:
+        for include_setup in (False, True):
+            with self.subTest(include_setup=include_setup):
+                to_delete, kept = full_reset_btg.split_collections(
+                    [*SITE_BLOG, "products"],
+                    full_reset_btg.preserved_collections(include_setup=include_setup),
+                )
+                self.assertEqual(to_delete, ["products"])
+                self.assertEqual(kept, sorted(SITE_BLOG))
+
+    def test_delete_writes_refuse_any_site_blog_path(self) -> None:
+        control = full_reset_btg.control_document_name(PROJECT, DATABASE)
+        for path in (*SITE_BLOG, "site_blog_drafts/article/revisions"):
+            with self.subTest(path=path):
+                with self.assertRaises(RuntimeError) as raised:
+                    full_reset_btg.delete_writes(
+                        {"products": [raw_document(path, "x")]},
+                        ["products"],
+                        control_name=control,
+                    )
+                self.assertIn("Blog", str(raised.exception))
+
     def test_delete_writes_refuse_any_comercial_path(self) -> None:
         # O script só lê documentos das coleções raiz; se um dia descer nas
         # subcoleções, aditivos e revisões continuam fora do alcance.
@@ -503,7 +533,7 @@ class PlanTests(unittest.TestCase):
         preserved = full_reset_btg.preserved_collections(include_setup=True)
         self.assertEqual(
             preserved,
-            set(full_reset_btg.ACCESS_COLLECTIONS) | set(COMERCIAL) | set(OPERACAO) | set(FINANCEIRO) | set(MEMORIA),
+            set(full_reset_btg.ACCESS_COLLECTIONS) | set(COMERCIAL) | set(OPERACAO) | set(FINANCEIRO) | set(MEMORIA) | set(SITE_BLOG),
         )
 
     def test_keep_extends_preserved(self) -> None:
@@ -806,6 +836,28 @@ class MainTests(unittest.TestCase):
         self.assertEqual(result["deleted_collections"]["events"], 2)
         # 12 do padrão + 7 da estrutura + o evento e2.
         self.assertEqual(result["deleted_documents"], 20)
+
+    def test_apply_preserves_site_blog_with_and_without_setup(self) -> None:
+        # Executa o fluxo real de zeragem contra o backend em memória: uma
+        # coleção ausente da proteção apagaria o conteúdo editorial aqui.
+        for include_setup in (False, True):
+            with self.subTest(include_setup=include_setup):
+                fake = copy.deepcopy(self.fake)
+                fake.seed("site_blog_drafts", "article", {"revision": 4, "draft": {"title": "Rascunho privado"}})
+                fake.seed("site_blog_media", "image", {"publishedPostIds": ["article"], "alt": "Equipe Dutelog"})
+                fake.seed("site_blog_posts", "mudanca", {"id": "article", "content": {"title": "Artigo publicado"}})
+                fake.seed("site_blog_slugs", "mudanca", {"id": "article"})
+                fake.seed("site_blog_meta", "catalog", {"initialized": True})
+                before = {name: copy.deepcopy(fake.docs[name]) for name in SITE_BLOG}
+                backup = Path(self.tmp.name) / f"blog-{include_setup}.json"
+                extra = ("--include-setup",) if include_setup else ()
+                with fake_backend(fake):
+                    code, output = run_main(self.apply_args(*extra, backup=backup))
+                self.assertEqual(code, 0)
+                self.assertEqual({name: fake.docs.get(name, {}) for name in SITE_BLOG}, before)
+                self.assertNotIn("products", fake.collections())
+                result = json.loads(output.rsplit("Export gerenciado concluído", 1)[1].split("\n", 1)[1])
+                self.assertTrue(set(SITE_BLOG).isdisjoint(result["deleted_collections"]))
 
     def test_apply_keeps_comercial_events_without_include_setup(self) -> None:
         seed_comercial(self.fake)
