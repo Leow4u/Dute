@@ -18,7 +18,8 @@ import type { CoreProfile } from "./profile.js";
  *
  * - A anotação nasce do cartão da conversa: quem conversou a envia
  *   (`suggestDuteNote`), e ela fica pendente até a coordenação aprovar
- *   (pergunta 34). O agente nunca a grava.
+ *   (pergunta 34). O agente nunca a grava. A coordenação também a escreve no
+ *   Conhecimento (`writeDuteNote`, 04/11/2026), e aí ela vale direto.
  * - Os playbooks são da coordenação: escrito por ela vale direto; os iniciais
  *   entram pendentes.
  * - Quem revisa é a coordenação (AGENTE_REVISAO_ROLES), sempre do cliente
@@ -196,6 +197,52 @@ export async function decideDuteNoteFor(db: Firestore, caller: CoreProfile, data
     // A anotação arquivada pode voltar como sugestão: cada decisão tem o evento dela. A repetição já parou acima, pelo estado.
     createCoreEvent(transaction, db, { type: EVENTO_DA_NOTA[proximo], payload: { id: pedido.id }, customer_code: customerCode, actor: caller, occurred_at: new Date().toISOString(), chave: randomUUID() });
     return { id: pedido.id, status: proximo };
+  });
+}
+
+const NotaEscrita = z
+  .object({
+    customer_code: codigo,
+    text: z.string().trim().max(TAMANHO_DA_NOTA, "Anotação longa demais."),
+    visibility: z.enum(["todos", "equipe"]),
+  })
+  .strict();
+
+/**
+ * A anotação que a coordenação escreve no Conhecimento (o antigo "Ensinar o
+ * Agent Dute" do painel, 04/11/2026): vale direto, como o playbook escrito
+ * por ela. O id sai do cliente e do texto, então escrever de novo a que já
+ * vale não grava nada; a mesma anotação sugerida na conversa, recusada ou
+ * arquivada passa a valer, com o evento.
+ */
+export async function writeDuteNoteFor(db: Firestore, caller: CoreProfile, data: unknown) {
+  const pedido = interpretar(NotaEscrita, data);
+  const customerCode = await clienteDaRevisao(db, caller, pedido.customer_code);
+  const nota = limparNota(pedido.text);
+  if (nota.length < 8) throw new HttpsError("invalid-argument", "Anotação curta demais.");
+  const id = idDaNota(customerCode, nota);
+  const ref = db.collection(NOTES_COLLECTION).doc(id);
+  return db.runTransaction(async (transaction) => {
+    const existente = await transaction.get(ref);
+    if (texto(existente.get("status")) === "active") return { id, status: "active" as const, ja_existia: true as const };
+    transaction.set(
+      ref,
+      {
+        id,
+        customer_code: customerCode,
+        text: nota,
+        visibility: pedido.visibility,
+        status: "active",
+        written_by: autor(caller),
+        decided_by: autor(caller),
+        decided_at: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
+        ...(existente.exists ? {} : { reason: null, source_conversation_id: null, source_message_id: null, created_at: FieldValue.serverTimestamp() }),
+      },
+      { merge: true },
+    );
+    createCoreEvent(transaction, db, { type: "agente.anotacao_escrita", payload: { id }, customer_code: customerCode, actor: caller, occurred_at: new Date().toISOString(), chave: randomUUID() });
+    return { id, status: "active" as const };
   });
 }
 

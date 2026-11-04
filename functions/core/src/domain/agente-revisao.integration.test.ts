@@ -14,6 +14,7 @@ import {
   saveDutePlaybookFor,
   seedDutePlaybooksFor,
   suggestDuteNoteFor,
+  writeDuteNoteFor,
 } from "./agente-revisao.js";
 import type { CoreProfile } from "./profile.js";
 
@@ -122,6 +123,42 @@ describe("a coordenação decide", () => {
     await assert.rejects(decideDuteNoteFor(db, interno, { customer_code: "SAFRA", id, action: "approve" }), recusa("not-found"));
     assert.deepEqual((await listDuteNotesFor(db, interno, { customer_code: "SAFRA" })).items, []);
     await assert.rejects(listDuteNotesFor(db, interno, { customer_code: "NADA" }), recusa("not-found"));
+  });
+});
+
+describe("a coordenação escreve a anotação no Conhecimento", () => {
+  it("vale direto, com o evento; escrever de novo a que vale não grava nada", async () => {
+    const escrita = await writeDuteNoteFor(db, interno, { customer_code: "ITAU", text: "  Coleta na doca 2 só depois das 14h  ", visibility: "equipe" });
+    const id = idDaNota("ITAU", "Coleta na doca 2 só depois das 14h");
+    assert.deepEqual(escrita, { id, status: "active" });
+    const nota = (await db.collection("ai_agent_notes").doc(id).get()).data();
+    assert.deepEqual([nota?.customer_code, nota?.text, nota?.status, nota?.visibility, nota?.written_by?.uid, nota?.decided_by?.uid], ["ITAU", "Coleta na doca 2 só depois das 14h", "active", "equipe", "ops-1", "ops-1"]);
+    const [evento] = await eventos("agente.anotacao_escrita");
+    assert.deepEqual([evento.payload, evento.actor.role, evento.source, evento.customer_code], [{ id }, "interno", "functions_core", "ITAU"]);
+    assert.deepEqual((await listDuteNotesFor(db, interno, { customer_code: "ITAU" })).items.map((item) => [item.id, item.status, item.visibility]), [[id, "active", "equipe"]]);
+    assert.deepEqual(await writeDuteNoteFor(db, interno, { customer_code: "ITAU", text: "coleta na doca 2 SO depois das 14h", visibility: "todos" }), { id, status: "active", ja_existia: true });
+    assert.equal((await eventos()).length, 1);
+  });
+
+  it("a mesma anotação sugerida na conversa passa a valer, com o que a coordenação escolheu", async () => {
+    const { id } = await suggestDuteNoteFor(db, cliente, { agent_message_id: "msg_agent_1" });
+    assert.deepEqual(await writeDuteNoteFor(db, interno, { customer_code: "ITAU", text: "Entregas na Paulista só pela manhã", visibility: "equipe" }), { id, status: "active" });
+    const nota = (await db.collection("ai_agent_notes").doc(id).get()).data();
+    assert.deepEqual([nota?.status, nota?.visibility, nota?.suggested_by?.uid, nota?.written_by?.uid, nota?.source_message_id], ["active", "equipe", "cli-itau", "ops-1", "msg_agent_1"]);
+    assert.deepEqual((await eventos()).map((evento) => evento.type).sort(), ["agente.anotacao_escrita", "agente.anotacao_sugerida"]);
+  });
+
+  it("só a coordenação, de um cliente do cadastro, com um texto de verdade", async () => {
+    const pedido = { customer_code: "ITAU", text: "Coleta na doca 2 só depois das 14h", visibility: "todos" };
+    for (const quem of [cliente, { uid: "com-1", role: "comercial" as const }, { uid: "wms-1", role: "wms" as const }]) {
+      await assert.rejects(writeDuteNoteFor(db, quem, pedido), recusa("permission-denied"), quem.role);
+    }
+    await assert.rejects(writeDuteNoteFor(db, interno, { ...pedido, customer_code: "NADA" }), recusa("not-found"));
+    await assert.rejects(writeDuteNoteFor(db, interno, { ...pedido, text: "  curta " }), recusa("invalid-argument", /curta/));
+    await assert.rejects(writeDuteNoteFor(db, interno, { ...pedido, visibility: "cliente" }), recusa("invalid-argument"));
+    await assert.rejects(writeDuteNoteFor(db, interno, { ...pedido, status: "active" }), recusa("invalid-argument"));
+    assert.equal((await db.collection("ai_agent_notes").get()).size, 0);
+    assert.equal((await eventos()).length, 0);
   });
 });
 

@@ -40,6 +40,7 @@ describe("functions do núcleo", () => {
       "suggestDuteNote",
       "listDuteNotes",
       "decideDuteNote",
+      "writeDuteNote",
       "listDutePlaybooks",
       "saveDutePlaybook",
       "decideDutePlaybook",
@@ -54,7 +55,7 @@ describe("functions do núcleo", () => {
   it("as callables começam pela liberação e pelo perfil, e nada é reexportado; as do Agent Dute, pela liberação do agente", () => {
     assert.doesNotMatch(index, /^export\s*\{/m);
     const blocks = index.split(/^(?=export const )/m).filter((block) => /^export const \w+ = onCall/.test(block));
-    assert.equal(blocks.length, 16);
+    assert.equal(blocks.length, 17);
     for (const block of blocks) {
       const doAgente = /^export const \w*Dute\w* = /.test(block);
       assert.match(block, doAgente ? ENTRADA_DO_AGENTE : ENTRADA);

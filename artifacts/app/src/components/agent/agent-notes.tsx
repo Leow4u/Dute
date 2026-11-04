@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Loader2, NotebookPen, X } from "lucide-react";
+import { Check, Loader2, NotebookPen, Plus, X } from "lucide-react";
 
-import { chaveNoAlvo, type NotaDoAgente } from "@/lib/agente/cliente";
+import { origemDaNota } from "@/lib/agente/anotacoes";
+import { CHAVE_DAS_ANOTACOES, chaveNoAlvo, type ClienteDoAgente, type NotaDoAgente } from "@/lib/agente/cliente";
 import { useClienteDoAgente } from "@/lib/agente/contexto";
 import { buttonVariants } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -11,29 +12,78 @@ import { cn } from "@/lib/utils";
 /**
  * Anotações que o Agent Dute sugeriu nas conversas. Pendentes não mudam
  * nenhuma resposta; a coordenação aprova (pode editar e escolher quem vê),
- * recusa ou arquiva. Cada decisão grava evento no backend.
+ * recusa ou arquiva. Cada decisão grava evento no backend. Com o agente do
+ * núcleo, a coordenação também escreve a anotação aqui, e ela vale direto
+ * (o antigo "Ensinar o Agent Dute" do painel, 04/11/2026).
  */
 
 type Note = NotaDoAgente;
 
-const notesKey = ["agent-dute-notes"] as const;
-const dateBr = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
+const MENOR_NOTA = 8;
 
-function when(iso: string | null) {
-  const date = iso ? new Date(iso) : null;
-  return date && !Number.isNaN(date.getTime()) ? dateBr.format(date) : "";
-}
-
-function who(note: Note) {
-  const origin = note.suggested_by_role === "cliente" ? "na conversa de" : "na conversa da equipe com";
-  return [note.suggested_by_name ? `${origin} ${note.suggested_by_name.split(/\s+/)[0]}` : "", when(note.created_at)].filter(Boolean).join(" · ");
+/** A anotação escrita pela coordenação: o texto e quem o agente considera; vale direto. */
+export function NewNote({ escrever }: { escrever: NonNullable<ClienteDoAgente["anotacoes"]["escrever"]> }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const agente = useClienteDoAgente();
+  const [text, setText] = useState("");
+  const [visibility, setVisibility] = useState<Note["visibility"]>("equipe");
+  const save = useMutation({
+    mutationFn: () => escrever({ text: text.trim(), visibility }),
+    onSuccess: () => {
+      toast({ title: "Anotação salva: o Agent Dute passa a considerar" });
+      setText("");
+      void queryClient.invalidateQueries({ queryKey: chaveNoAlvo(agente, CHAVE_DAS_ANOTACOES) });
+    },
+    onError: (error) => toast({ title: "Não foi possível salvar", description: error instanceof Error ? error.message : "", variant: "destructive" }),
+  });
+  const short = text.trim().length < MENOR_NOTA;
+  return (
+    <form
+      className="mt-4 rounded-xl border border-border/70 p-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!short && !save.isPending) save.mutate();
+      }}
+    >
+      <label htmlFor="agent-new-note" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Nova anotação
+      </label>
+      <textarea
+        id="agent-new-note"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        maxLength={300}
+        rows={2}
+        className="mt-2 w-full resize-none rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/40"
+      />
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex rounded-lg border border-border bg-card p-0.5 text-xs" role="group" aria-label="Quem o agente considera">
+          {(["todos", "equipe"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={visibility === value}
+              onClick={() => setVisibility(value)}
+              className={cn("rounded-md px-2.5 py-1", visibility === value ? "bg-foreground text-background" : "text-muted-foreground")}
+            >
+              {value === "todos" ? "Cliente e equipe" : "Só equipe"}
+            </button>
+          ))}
+        </div>
+        <button type="submit" disabled={short || save.isPending} className={buttonVariants({ size: "sm" })}>
+          <Plus className="h-3.5 w-3.5" /> Salvar
+        </button>
+      </div>
+    </form>
+  );
 }
 
 export function AgentNotes() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const agente = useClienteDoAgente();
-  const notesQueryKey = chaveNoAlvo(agente, notesKey);
+  const notesQueryKey = chaveNoAlvo(agente, CHAVE_DAS_ANOTACOES);
   const notes = useQuery({
     queryKey: notesQueryKey,
     queryFn: () => agente.anotacoes.listar(),
@@ -63,6 +113,8 @@ export function AgentNotes() {
           </p>
         </div>
       </header>
+
+      {agente.anotacoes.escrever ? <NewNote escrever={agente.anotacoes.escrever} /> : null}
 
       {notes.isLoading ? (
         <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</p>
@@ -138,7 +190,7 @@ function PendingNote({
         className="w-full resize-none rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/40"
       />
       <p className="mt-1 text-xs text-muted-foreground">
-        {[who(note), note.reason ? `“${note.reason}”` : ""].filter(Boolean).join(" · ")}
+        {[origemDaNota(note), note.reason ? `“${note.reason}”` : ""].filter(Boolean).join(" · ")}
       </p>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex rounded-lg border border-border bg-card p-0.5 text-xs" role="group" aria-label="Quem o agente considera">

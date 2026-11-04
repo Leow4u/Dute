@@ -66,6 +66,8 @@ export type ClienteDoAgente = {
     decidir(id: string, acao: AcaoDaRevisao, ajuste?: { text?: string; visibility?: NotaDoAgente["visibility"] }): Promise<unknown>;
     /** O envio do cartão de anotação; o agente do WMS grava a sugestão sozinho e não tem cartão. */
     sugerir: ((mensagemId: string) => Promise<unknown>) | null;
+    /** A anotação que a coordenação escreve no Conhecimento e já vale (o antigo "Ensinar o Agent Dute"); só o núcleo tem. */
+    escrever: ((nota: { text: string; visibility: NotaDoAgente["visibility"] }) => Promise<unknown>) | null;
   };
   playbooks: {
     listar(): Promise<{ playbooks: Playbook[] }>;
@@ -74,6 +76,9 @@ export type ClienteDoAgente = {
     carregar(): Promise<{ created: number }>;
   };
 };
+
+/** A chave das anotações no cache, de Conhecimento, do painel e do Início: a decisão num lugar atualiza os outros. */
+export const CHAVE_DAS_ANOTACOES = ["agent-dute-notes"] as const;
 
 /** A chave do cache no alvo: a do WMS fica como sempre foi. */
 export function chaveNoAlvo(cliente: Pick<ClienteDoAgente, "chave">, base: readonly unknown[]): unknown[] {
@@ -105,6 +110,7 @@ export const CLIENTE_DO_WMS: ClienteDoAgente = {
     listar: () => fetchChatJson("/api/agent-dute/notes"),
     decidir: (id, acao, ajuste) => postJson(`/api/agent-dute/notes/${caminho(id)}/${acao}`, { text: ajuste?.text, visibility: ajuste?.visibility }),
     sugerir: null,
+    escrever: null,
   },
   playbooks: {
     listar: () => fetchChatJson("/api/agent-dute/playbooks"),
@@ -224,6 +230,7 @@ export function clienteDoNucleo(modulo: ModuloDoAgente, customerCode: string): C
           ...(ajuste?.visibility ? { visibility: ajuste.visibility } : {}),
         }),
       sugerir: (mensagemId) => chamarNucleo("suggestDuteNote", { agent_message_id: mensagemId }),
+      escrever: ({ text, visibility }) => chamarNucleo("writeDuteNote", { ...doCliente, text, visibility }),
     },
     playbooks: {
       listar: async () => ({ playbooks: (await chamarNucleo<{ items: Playbook[] }>("listDutePlaybooks", doCliente)).items }),
