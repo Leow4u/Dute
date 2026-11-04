@@ -41,6 +41,12 @@ export type HomeSummary = {
 /** O alerta do item parado aberto de um cliente (parte 5.4e), com quantos itens. */
 export type HomeStockAlert = { id: string; customer_code: string; itens: number };
 
+/**
+ * O que o agente do núcleo espera da coordenação, no cliente ativo
+ * (04/11/2026): o texto de cada anotação e o nome de cada playbook para aprovar.
+ */
+export type HomeAgentDecisions = { notes: readonly string[]; playbooks: readonly string[] };
+
 export type HomeInbox = {
   items: HomeInboxItem[];
   summary: HomeSummary;
@@ -84,7 +90,7 @@ function plural(count: number, singular: string, pluralForm: string) {
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
 
-function listPreview(values: Array<string | null | undefined>, max = 2) {
+function listPreview(values: ReadonlyArray<string | null | undefined>, max = 2) {
   const clean = values.filter((value): value is string => Boolean(value));
   if (!clean.length) return "";
   const shown = clean.slice(0, max).join(" · ");
@@ -100,12 +106,15 @@ export function buildHomeInbox({
   ops,
   requests,
   stockAlerts,
+  agentDecisions,
   agenteDoNucleo = abreAgenteDoNucleo(role),
 }: {
   role: ProfileRole | null | undefined;
   ops?: WarehouseOpsResponse;
   requests?: HomeRequest[];
   stockAlerts?: HomeStockAlert[];
+  /** As anotações e os playbooks do agente do núcleo para aprovar (só de quem os decide). */
+  agentDecisions?: HomeAgentDecisions;
   /** A pessoa tem o agente do núcleo (liberação e papel); padrão: abreAgenteDoNucleo(role). */
   agenteDoNucleo?: boolean;
 }): HomeInbox {
@@ -213,9 +222,35 @@ export function buildHomeInbox({
     });
   }
 
-  // Com o agente do núcleo, o radar do painel é este mesmo "Precisa de você"
-  // (parte 5.5k) e não mostra a caixa antiga do agente: a linha levava ao
-  // painel, que trazia a linha de volta, sem nenhum jeito de resolver.
+  // As decisões do agente do núcleo (04/11/2026): a anotação se decide no
+  // painel do agente; o playbook, que é longo, no Conhecimento.
+  const notes = agenteDoNucleo ? (agentDecisions?.notes ?? []) : [];
+  if (notes.length) {
+    items.push({
+      id: "agent-notes",
+      tone: "agent",
+      title: `${plural(notes.length, "anotação", "anotações")} do Agent Dute para aprovar`,
+      detail: listPreview(notes, 1),
+      href: "/agente/painel",
+      actionLabel: "Revisar",
+    });
+  }
+
+  const playbooks = agenteDoNucleo ? (agentDecisions?.playbooks ?? []) : [];
+  if (playbooks.length) {
+    items.push({
+      id: "agent-playbooks",
+      tone: "agent",
+      title: `${plural(playbooks.length, "playbook", "playbooks")} do Agent Dute para aprovar`,
+      detail: listPreview(playbooks, 2),
+      href: "/agente/conhecimento",
+      actionLabel: "Revisar",
+    });
+  }
+
+  // A caixa antiga do agente (ai_agent_inbox) só fora do agente do núcleo:
+  // com ele, o painel novo não a lê, e a linha levaria a um aviso que
+  // ninguém consegue resolver.
   if (agentCount > 0 && !agenteDoNucleo) {
     items.push({
       id: "agent",

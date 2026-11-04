@@ -1,4 +1,4 @@
-import { AlertTriangle, ClipboardList, Hourglass, PackageCheck, Sparkles, Truck, type LucideIcon } from "lucide-react";
+import { AlertTriangle, BookOpenCheck, ClipboardList, Hourglass, NotebookPen, PackageCheck, Sparkles, Truck, type LucideIcon } from "lucide-react";
 
 import type { HomeInboxItem, HomeSummary } from "./home-inbox";
 import type { ItemDoInicio } from "./inicio-do-modulo";
@@ -15,6 +15,8 @@ const ICONE_DO_ITEM: Record<string, LucideIcon> = {
   "to-ship": Truck,
   receipts: PackageCheck,
   agent: Sparkles,
+  "agent-notes": NotebookPen,
+  "agent-playbooks": BookOpenCheck,
   "stock-alerts": Hourglass,
 };
 

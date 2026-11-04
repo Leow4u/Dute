@@ -1,3 +1,4 @@
+import { AGENTE_LIBERADO } from "./liberacao";
 import { normalizePath } from "./modules";
 
 /**
@@ -21,10 +22,17 @@ export const TELAS_DO_WMS_NA_V3: readonly string[] = [
 ];
 
 /**
+ * O painel do Agent Dute na v3 (04/11/2026): só com a liberação do agente do
+ * núcleo, onde ele é o painel novo. Fora dela, o painel antigo segue o
+ * visual do WMS.
+ */
+export const TELAS_DO_AGENTE_NA_V3: readonly string[] = ["/agente/painel"];
+
+/**
  * A tela aberta já segue a v3: o caminho exato, sem a busca. As telas dentro
  * de outra (Estoque › Mapa, Posições e Etiquetas) entram cada uma por si.
  */
-export function telaDoWmsNaV3(location: string, telas: readonly string[] = TELAS_DO_WMS_NA_V3): boolean {
+export function telaDoWmsNaV3(location: string, telas: readonly string[] = TELAS_DO_WMS_NA_V3, agenteLiberado: boolean = AGENTE_LIBERADO): boolean {
   const caminho = normalizePath(location);
-  return telas.includes(caminho);
+  return telas.includes(caminho) || (agenteLiberado && TELAS_DO_AGENTE_NA_V3.includes(caminho));
 }

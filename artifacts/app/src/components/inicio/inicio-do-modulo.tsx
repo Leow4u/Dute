@@ -14,7 +14,8 @@ import { cn } from "@/lib/utils";
  * módulo. Sem legenda: só rótulos, dados e ações.
  */
 
-const CAIXA_DO_TOM: Record<TomDoItem, string> = {
+/** A caixa do ícone de cada tom (também nas linhas do painel do Agent Dute). */
+export const CAIXA_DO_TOM: Record<TomDoItem, string> = {
   critical: "border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground",
   attention: "border-warning-soft-border bg-warning-soft text-warning-soft-foreground",
   info: "border-info-soft-border bg-info-soft text-info-soft-foreground",
@@ -42,7 +43,8 @@ export function LinhaDeNumero({ ponto, rotulo, valor, alerta = false }: { ponto:
   );
 }
 
-function Linha({ item, principal }: { item: ItemDoInicio; principal: boolean }) {
+/** A linha do "Precisa de você": o ícone, o que espera e a ação que leva à tela que resolve. */
+export function LinhaDoPrecisa({ item, principal }: { item: ItemDoInicio; principal: boolean }) {
   const Icone = item.icon;
   return (
     <li className="flex flex-col gap-3 border-t border-border px-5 py-4 first:border-t-0 sm:flex-row sm:items-center sm:gap-4 md:px-6">
@@ -113,7 +115,7 @@ export function InicioDoModulo({ nome, hoje, noModulo, itens, carregando, falhas
             ) : (
               <ul className="rounded-lg border border-border bg-card">
                 {itens.map((item, indice) => (
-                  <Linha key={item.id} item={item} principal={indice === 0} />
+                  <LinhaDoPrecisa key={item.id} item={item} principal={indice === 0} />
                 ))}
               </ul>
             )}
