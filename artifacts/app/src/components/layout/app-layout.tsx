@@ -34,7 +34,7 @@ import WmsLayout from "@/components/layout/wms-layout";
 import { useAtalhoDoAgente } from "@/hooks/use-atalho-do-agente";
 import { isAgentScreen } from "@/lib/agent-chat";
 import { useAppAuth, useAppUser } from "@/lib/auth";
-import { OPERACAO_LIBERADO } from "@/lib/liberacao";
+import { sinoDisponivelNoPortal } from "@/lib/portal/avisos";
 import { useOperationProfile } from "@/lib/operation-profile";
 import { usePwaInstall } from "@/lib/pwa-install";
 import { rememberReturnPath } from "@/lib/settings-nav";
@@ -290,7 +290,7 @@ function LayoutDoPortal({ children }: { children: ReactNode }) {
     location === "/portal" || location.startsWith("/portal/");
   const profileRole = user?.publicMetadata.role;
   // O sino dos avisos (parte 4.6c): só o cliente, onde a rotina dos avisos roda.
-  const showSino = profileRole === "cliente" && OPERACAO_LIBERADO;
+  const showSino = sinoDisponivelNoPortal(profileRole, import.meta.env.VITE_FIREBASE_PROJECT_ID);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("dute.sidebar") === "collapsed";

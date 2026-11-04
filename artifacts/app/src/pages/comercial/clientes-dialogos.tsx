@@ -413,12 +413,14 @@ export function AvisosDoContato({
   form,
   desabilitado,
   onMarcar,
+  modelos,
 }: {
   form: FormContato;
   desabilitado: boolean;
   onMarcar: (modelo: ModeloDeAviso, marcado: boolean) => void;
+  modelos?: readonly ModeloDeAviso[];
 }) {
-  const oferecidos = avisosOferecidos(form);
+  const oferecidos = avisosOferecidos(form).filter((modelo) => !modelos || modelos.includes(modelo));
   if (!oferecidos.length) return null;
   return (
     <fieldset className="grid gap-2.5 sm:grid-cols-2">
@@ -444,12 +446,27 @@ export function ContatoDialog({
   contato,
   empresas,
   onSalvar,
-}: BaseProps & { contato: ContatoResumo | null; empresas: string[]; onSalvar: (form: FormContato) => void }) {
+  modelos,
+  emailObrigatorio = false,
+  titulo,
+  papelEditavel = true,
+}: BaseProps & {
+  contato: ContatoResumo | null;
+  empresas: string[];
+  onSalvar: (form: FormContato) => void;
+  modelos?: readonly ModeloDeAviso[];
+  emailObrigatorio?: boolean;
+  titulo?: string;
+  papelEditavel?: boolean;
+}) {
   const [form, setForm] = useState<FormContato>(() => formDoContato(null));
   useEffect(() => {
-    if (aberto) setForm(formDoContato(contato));
-  }, [aberto, contato]);
-  const valido = form.nome.trim().length >= 2;
+    if (aberto) {
+      const inicial = formDoContato(contato);
+      setForm(!contato && !papelEditavel ? { ...inicial, papel: "outro" } : inicial);
+    }
+  }, [aberto, contato, papelEditavel]);
+  const valido = form.nome.trim().length >= 2 && (!emailObrigatorio || Boolean(form.email.trim()));
   const muda = (campo: Exclude<keyof FormContato, "avisos">) => (event: { target: { value: string } }) =>
     setForm((atual) => ({ ...atual, [campo]: event.target.value }));
 
@@ -460,18 +477,18 @@ export function ContatoDialog({
           className="grid gap-4"
           onSubmit={(event) => {
             event.preventDefault();
-            if (valido) onSalvar(form);
+            if (valido && !ocupado) onSalvar(form);
           }}
         >
           <DialogHeader>
-            <DialogTitle>{contato ? contato.nome : "Novo contato"}</DialogTitle>
+            <DialogTitle>{titulo ?? (contato ? contato.nome : "Novo contato")}</DialogTitle>
           </DialogHeader>
           <Campo id="contato-nome" rotulo="Nome">
-            <Input id="contato-nome" value={form.nome} onChange={muda("nome")} maxLength={120} required />
+            <Input id="contato-nome" value={form.nome} onChange={muda("nome")} maxLength={120} required disabled={ocupado} />
           </Campo>
           <div className="grid gap-4 sm:grid-cols-2">
             <Campo id="contato-empresa" rotulo="Empresa">
-              <Input id="contato-empresa" value={form.empresa} onChange={muda("empresa")} maxLength={120} list="contato-empresas" />
+              <Input id="contato-empresa" value={form.empresa} onChange={muda("empresa")} maxLength={120} list="contato-empresas" disabled={ocupado} />
               <datalist id="contato-empresas">
                 {empresas.map((empresa) => (
                   <option key={empresa} value={empresa} />
@@ -483,7 +500,7 @@ export function ContatoDialog({
                 id="contato-papel"
                 value={form.papel}
                 onChange={(event) => setForm((atual) => ({ ...atual, papel: event.target.value }))}
-                disabled={ocupado}
+                disabled={ocupado || !papelEditavel}
                 className={CAMPO_SELECT}
               >
                 <option value="">—</option>
@@ -495,13 +512,13 @@ export function ContatoDialog({
               </select>
             </Campo>
             <Campo id="contato-email" rotulo="E-mail">
-              <Input id="contato-email" type="email" value={form.email} onChange={muda("email")} maxLength={160} autoComplete="off" />
+              <Input id="contato-email" type="email" value={form.email} onChange={muda("email")} maxLength={160} autoComplete="off" required={emailObrigatorio} disabled={ocupado} />
             </Campo>
             <Campo id="contato-telefone" rotulo="Telefone">
-              <Input id="contato-telefone" type="tel" value={form.telefone} onChange={muda("telefone")} maxLength={20} autoComplete="off" />
+              <Input id="contato-telefone" type="tel" value={form.telefone} onChange={muda("telefone")} maxLength={20} autoComplete="off" disabled={ocupado} />
             </Campo>
           </div>
-          <AvisosDoContato form={form} desabilitado={ocupado} onMarcar={(modelo, marcado) => setForm((atual) => marcarAviso(atual, modelo, marcado))} />
+          <AvisosDoContato form={form} desabilitado={ocupado} onMarcar={(modelo, marcado) => setForm((atual) => marcarAviso(atual, modelo, marcado))} modelos={modelos} />
           <Erro erro={erro} />
           <Rodape ocupado={ocupado} rotulo="Salvar contato" onCancelar={onCancelar} desabilitado={!valido} />
         </form>

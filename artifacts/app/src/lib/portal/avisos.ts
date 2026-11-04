@@ -1,5 +1,8 @@
 import { MODELOS_DE_AVISO, type ModeloDeAviso } from "@workspace/dominio";
 
+import { operacaoLiberada } from "../liberacao";
+import { rotaDisponivelNaArmazenagem } from "../somente-armazenagem";
+
 /**
  * O sino do portal (docs/plataforma/fase-4-financeiro.md, parte 4.6c;
  * docs/mockups/Portal.dc.html): os últimos avisos do cliente
@@ -9,6 +12,11 @@ import { MODELOS_DE_AVISO, type ModeloDeAviso } from "@workspace/dominio";
  */
 
 export const AVISOS_NO_SINO = 20;
+
+/** A rotina e a marcação de leitura continuam ativas quando a interface da Operação está pausada. */
+export function sinoDisponivelNoPortal(papel: string | null | undefined, projectId: string | null | undefined): boolean {
+  return papel === "cliente" && operacaoLiberada(projectId);
+}
 
 export type AvisoDoPortal = {
   id: string;
@@ -34,17 +42,24 @@ export function instanteDe(valor: unknown): Date | null {
   return null;
 }
 
-export function avisoDoPortal(id: string, dados: Record<string, unknown>): AvisoDoPortal | null {
+export function avisoDoPortal(id: string, dados: Record<string, unknown>, somenteArmazenagem = false): AvisoDoPortal | null {
   const modelo = texto(dados.modelo) as ModeloDeAviso;
   const titulo = texto(dados.titulo);
   const link = texto(dados.link);
   if (!(MODELOS_DE_AVISO as readonly string[]).includes(modelo) || !titulo) return null;
+  const linkDoPortal = /^\/portal(\/|\?|$)/.test(link) ? link : "/portal";
+  if (somenteArmazenagem) {
+    // Faturas seguem no portal da armazenagem; OS e solicitações de serviço estão pausadas.
+    if (!["estoque_parado", "estoque_disponivel", "nf_emitida"].includes(modelo)) return null;
+    const caminho = new URL(linkDoPortal, "https://portal.invalid").pathname;
+    if (!rotaDisponivelNaArmazenagem(caminho, true)) return null;
+  }
   return {
     id,
     modelo,
     titulo,
     texto: texto(dados.texto),
-    link: /^\/portal(\/|\?|$)/.test(link) ? link : "/portal",
+    link: linkDoPortal,
     criadoEm: instanteDe(dados.created_at) ?? instanteDe(dados.ocorrido_em),
   };
 }

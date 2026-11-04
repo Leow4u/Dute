@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useAppUser } from "@/lib/auth";
 import { chamarOperacao } from "@/lib/operacao/api";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { SOMENTE_ARMAZENAGEM } from "@/lib/somente-armazenagem";
 import {
   AVISOS_NO_SINO,
   avisoDoPortal,
@@ -105,9 +106,10 @@ export function SinoDoPortal({ lado = "right", className }: { lado?: "right" | "
   const uid = user?.uid ?? null;
   const codigo = user?.publicMetadata.role === "cliente" ? (user.publicMetadata.customer_code ?? null) : null;
   const leitura = useLeitura(
-    codigo ? `client_notifications:${codigo}` : null,
+    codigo ? `client_notifications:${codigo}:${SOMENTE_ARMAZENAGEM ? "armazenagem" : "plataforma"}` : null,
     (db) => query(collection(db, "client_notifications"), where("customer_code", "==", codigo ?? "-"), orderBy("created_at", "desc"), limit(AVISOS_NO_SINO)),
-    avisoDoPortal,
+    // Até 20 documentos recentes; os modelos pausados saem antes da lista e do contador.
+    (id, dados) => avisoDoPortal(id, dados, SOMENTE_ARMAZENAGEM),
   );
   const marca = useDocumento(
     uid && codigo ? `client_notification_reads:${uid}` : null,

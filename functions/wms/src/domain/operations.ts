@@ -9,6 +9,7 @@ import {
 import { PROJECT_ID } from "../project.js";
 import { abreAvisoNaCaixaAntiga } from "./caixa-do-agente.js";
 import { receivedSummary } from "./client-shipments.js";
+import { lineArrivalStored, type StoredArrivalPayload } from "./arrival-stored.js";
 import { conferirSeparacao, type LinhaSeparada } from "./short-pick.js";
 import {
   LOCAL_DO_CANCELADO,
@@ -7911,6 +7912,7 @@ export async function advanceWarehouseTaskTransaction(
     const created: Record<string, unknown> = {};
     const effects: Record<string, unknown> = {};
     const events: OperationalEventSummary[] = [];
+    let storedArrival: { ref: DocumentReference<DocumentData>; payload: StoredArrivalPayload } | undefined;
 
     if (type === "putaway" && targetStatus === "completed") {
       const skuCode = text(task.sku_code || task.sku);
@@ -8020,6 +8022,32 @@ export async function advanceWarehouseTaskTransaction(
             .doc(clientScopedInventoryId(customerCode, skuCode)),
         ),
       ]);
+
+      // Todas as guardas vinculadas entram na leitura transacional. Duas
+      // últimas guardas concorrentes se veem na repetição da transação e só
+      // uma publica a chegada. Guarda avulsa não encerra chegada por inferência.
+      const receiptId = text(task.receipt_id);
+      if (receiptId && task.source === "wms_receiving") {
+        const receiptRef = db.collection(collections.inboundReceipts).doc(receiptId);
+        const receiptSnapshot = await transaction.get(receiptRef);
+        const receipt = receiptSnapshot.data();
+        if (receipt && text(receipt.customer_code) === customerCode && !receipt.arrival_stored_event_id && conferenceModeOf(receipt) === "per_line") {
+          const [lines, putaways] = await Promise.all([
+            readRows(transaction, db.collection(collections.inboundItems).where("receipt_id", "==", receiptId)),
+            readRows(transaction, db.collection(collections.putawayTasks).where("receipt_id", "==", receiptId)),
+          ]);
+          const payload = lineArrivalStored(
+            receiptId,
+            receipt,
+            lines.map((line) => ({ ...line.data, id: line.id })),
+            putaways.map((row) => row.id === id ? {
+              ...row.data, status: "completed", quantity,
+              source_location_id: sourceLocationId, destination_location_id: destinationLocationId,
+            } : row.data),
+          );
+          if (payload) storedArrival = { ref: receiptRef, payload };
+        }
+      }
 
       transaction.update(sourceBalance.ref, {
         qty_on_hand: sourceAfter,
@@ -8465,6 +8493,16 @@ export async function advanceWarehouseTaskTransaction(
       effects.received_lines = inboundItems.length;
       effects.received_qty = receivedQty;
       effects.putaway_tasks_created = putawayTasksCreated || undefined;
+      if (!boxEntryPlan && !task.arrival_stored_event_id) {
+        const payload = lineArrivalStored(
+          id,
+          { ...task, status: "received" },
+          inboundItems.map((row) => ({ ...row.data, id: row.id, location_id: receivingLocationOf(row) })),
+          [],
+        );
+        if (payload) storedArrival = { ref: taskRef, payload };
+        else if (receivedQty > 0) taskUpdate.putaway_status = "pending";
+      }
       events.push(
         createEvent(
           transaction,
@@ -9358,6 +9396,29 @@ export async function advanceWarehouseTaskTransaction(
       }
     }
 
+    if (storedArrival) {
+      const { ref, payload } = storedArrival;
+      const eventId = `evt_arrival_stored_${digest({ receiptId: payload.receipt_id })}`;
+      events.push(createEvent(transaction, db, eventId, {
+        type: "inventory.arrival_stored",
+        title: `Chegada ${payload.receipt_number} guardada`,
+        description: `${payload.items.reduce((sum, item) => sum + item.quantity, 0)} un. de ${payload.items.length} produto(s) disponíveis para pedido.`,
+        severity: "info",
+        inbox: false,
+        entity_type: "recebimento",
+        entity_id: payload.receipt_id,
+        customer_code: customerCode,
+        payload,
+      }, actor));
+      const completion = {
+        putaway_status: "completed",
+        putaway_completed_at: FieldValue.serverTimestamp(),
+        arrival_stored_event_id: eventId,
+        updated_at: FieldValue.serverTimestamp(),
+      };
+      if (ref.path === taskRef.path) Object.assign(taskUpdate, completion);
+      else transaction.update(ref, completion);
+    }
     transaction.update(taskRef, compact(taskUpdate));
     events.unshift(
       createEvent(

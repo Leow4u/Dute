@@ -998,6 +998,8 @@ describe("guardar a caixa (recebimento com caixas, parte 4f)", () => {
     assert.deepEqual([chegada.boxes_stored, chegada.putaway_status], [1, "completed"]);
     const [guardada] = await events("inventory.arrival_stored");
     assert.equal(guardada!.severity, "info");
+    assert.equal(guardada!.source, "functions_inbound_boxes");
+    assert.equal(guardada!.payload.notification_model, "estoque_disponivel");
     assert.equal(guardada!.payload.id, r.id);
     assert.deepEqual(guardada!.payload.items.map((item: Row) => [item.sku_code, item.quantity]), [["UNI-000001", 41], ["UNI-000002", 30]]);
     assert.doesNotMatch(JSON.stringify(guardada!.payload), /cost|valor|preco|location|CX-/);
