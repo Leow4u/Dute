@@ -1,0 +1,515 @@
+[
+  {
+    "slug": "mudanca-corporativa",
+    "title": "Mudança Corporativa",
+    "group": "corporativa",
+    "short": "Uma nova sede começa com cada detalhe no lugar.",
+    "headline": "Mude de endereço. Prepare o próximo capítulo.",
+    "intro": "Da preparação dos ambientes à chegada dos bens, uma mudança corporativa reúne decisões sobre pessoas, espaços e rotina. O projeto começa entendendo o que precisa mudar e como a empresa vai continuar operando.",
+    "image": "corporate",
+    "situations": [
+      "Transferência de escritório ou sede",
+      "Consolidação de equipes em um novo endereço",
+      "Mudança por etapas, com prioridades por área"
+    ],
+    "scope": [
+      {
+        "title": "O que vai, o que fica",
+        "text": "Identificação dos bens, ambientes de origem e destinos para delimitar o escopo da mudança."
+      },
+      {
+        "title": "Uma sequência para a mudança",
+        "text": "Definição de etapas, acessos, janelas de execução e prioridades de cada área envolvida."
+      },
+      {
+        "title": "Do preparo à organização",
+        "text": "Proteção, movimentação e posicionamento dos itens conforme os serviços previstos na proposta."
+      }
+    ],
+    "steps": [
+      {
+        "title": "Entender os ambientes",
+        "text": "Reunir endereços, relação de bens, plantas disponíveis e restrições dos locais."
+      },
+      {
+        "title": "Desenhar a sequência",
+        "text": "Combinar o escopo, as responsabilidades e a ordem de transferência das áreas."
+      },
+      {
+        "title": "Acompanhar a chegada",
+        "text": "Prever a conferência dos itens e o registro de pendências no destino."
+      }
+    ],
+    "faq": [
+      {
+        "q": "A mudança pode acontecer por etapas?",
+        "a": "Essa possibilidade deve ser avaliada conforme os ambientes, os acessos e a rotina da empresa. Informe quais áreas precisam permanecer em uso e as datas desejadas."
+      },
+      {
+        "q": "A montagem dos móveis faz parte da mudança?",
+        "a": "Montagem e desmontagem podem compor o escopo, mas precisam constar na proposta. A avaliação considera o tipo de mobiliário e as condições de instalação."
+      },
+      {
+        "q": "Quais informações ajudam a solicitar uma proposta?",
+        "a": "Endereços, data desejada, relação aproximada dos bens, fotos dos ambientes e informações sobre elevadores, escadas, estacionamento e regras dos edifícios."
+      }
+    ],
+    "related": ["inventario", "montagem-e-desmontagem"]
+  },
+  {
+    "slug": "inventario",
+    "title": "Inventário",
+    "group": "corporativa",
+    "short": "Conheça os bens antes de decidir o próximo movimento.",
+    "headline": "Saiba o que existe. Decida com mais clareza.",
+    "intro": "Um inventário organiza o olhar sobre os bens da empresa: o que são, onde estão e como devem ser identificados. É um ponto de partida para mudanças, reorganizações e decisões sobre o mobiliário.",
+    "image": "detail",
+    "situations": [
+      "Levantamento antes de uma mudança",
+      "Conferência de bens distribuídos entre ambientes",
+      "Organização de informações para gestão de mobiliário"
+    ],
+    "scope": [
+      {
+        "title": "Uma base comum",
+        "text": "Definição das categorias, campos e critérios que vão orientar o levantamento."
+      },
+      {
+        "title": "Cada item em contexto",
+        "text": "Registro de identificação e localização, com fotos e condições aparentes quando previstos no escopo."
+      },
+      {
+        "title": "Informação para usar",
+        "text": "Organização da relação de bens no formato combinado para consulta e conferência."
+      }
+    ],
+    "steps": [
+      {
+        "title": "Definir o que levantar",
+        "text": "Delimitar locais, tipos de bens e informações necessárias para a decisão da empresa."
+      },
+      {
+        "title": "Registrar os itens",
+        "text": "Planejar o levantamento em campo e a identificação conforme os critérios definidos."
+      },
+      {
+        "title": "Conferir a base",
+        "text": "Revisar registros, tratar divergências e preparar a entrega acordada."
+      }
+    ],
+    "faq": [
+      {
+        "q": "O inventário precisa incluir todos os bens da empresa?",
+        "a": "O escopo pode abranger uma unidade, um ambiente ou categorias específicas. O importante é delimitar o levantamento e o uso esperado das informações."
+      },
+      {
+        "q": "É possível incluir fotografias e identificação dos itens?",
+        "a": "Esses requisitos devem ser definidos na proposta, incluindo o padrão de identificação, as imagens necessárias e os campos de registro."
+      },
+      {
+        "q": "Inventário é a mesma coisa que avaliação patrimonial?",
+        "a": "Não. O levantamento físico e a identificação dos bens não estabelecem, por si só, seu valor contábil ou de mercado. Eventuais necessidades de avaliação devem ser tratadas separadamente."
+      }
+    ],
+    "related": ["gestao-de-mobiliario", "mudanca-corporativa"]
+  },
+  {
+    "slug": "mudancas-industriais",
+    "title": "Mudanças Industriais",
+    "group": "corporativa",
+    "short": "Cada etapa da transferência precisa conversar com a operação.",
+    "headline": "O próximo espaço começa com um plano de movimentação.",
+    "intro": "A transferência de uma operação industrial exige conhecer os itens, os acessos e as interfaces com a produção. O escopo deve considerar as particularidades de cada ambiente antes de definir recursos e etapas.",
+    "image": "storage",
+    "situations": [
+      "Transferência de áreas entre instalações",
+      "Reorganização de ambientes industriais",
+      "Mudança de unidade com etapas de movimentação definidas"
+    ],
+    "scope": [
+      {
+        "title": "Conhecer os itens",
+        "text": "Levantamento das características, dimensões e condições de movimentação dos bens envolvidos."
+      },
+      {
+        "title": "Ler o percurso",
+        "text": "Avaliação dos acessos, interferências e restrições dos ambientes de origem e destino."
+      },
+      {
+        "title": "Delimitar responsabilidades",
+        "text": "Definição dos serviços logísticos e das atividades técnicas que exigem responsáveis específicos."
+      }
+    ],
+    "steps": [
+      {
+        "title": "Levantar as condições",
+        "text": "Reunir informações dos itens, instalações e janelas disponíveis para a transferência."
+      },
+      {
+        "title": "Compatibilizar as etapas",
+        "text": "Articular a sequência de movimentação com as liberações necessárias de cada área."
+      },
+      {
+        "title": "Conferir o posicionamento",
+        "text": "Prever a entrega dos bens nos pontos acordados e o registro das pendências logísticas."
+      }
+    ],
+    "faq": [
+      {
+        "q": "É possível transferir qualquer tipo de equipamento?",
+        "a": "A viabilidade depende das características de cada item e das condições dos locais. Dimensões, peso, pontos de movimentação e requisitos específicos precisam ser avaliados antes da proposta."
+      },
+      {
+        "q": "Desligamento e instalação técnica estão incluídos?",
+        "a": "Essas atividades não devem ser presumidas como parte do transporte. O escopo precisa identificar quem responde por desconexão, instalação, testes e liberação dos equipamentos."
+      },
+      {
+        "q": "Como preparar a solicitação?",
+        "a": "Envie uma relação dos bens, fotos, dimensões e pesos disponíveis, endereços e informações sobre acessos e restrições de horário. Indique também as etapas desejadas da transferência."
+      }
+    ],
+    "related": ["remanejamento-interno", "transporte-dedicado"]
+  },
+  {
+    "slug": "transporte-de-tecnologias",
+    "title": "Transporte de Tecnologias",
+    "group": "corporativa",
+    "short": "Equipamentos identificados. Uma movimentação pensada item a item.",
+    "headline": "A tecnologia muda de lugar. O cuidado acompanha.",
+    "intro": "Computadores, monitores e outros equipamentos têm necessidades próprias de proteção e identificação. A movimentação deve conectar a relação de itens, o acondicionamento e os destinos definidos pela empresa.",
+    "image": "detail",
+    "situations": [
+      "Transferência de equipamentos entre unidades",
+      "Mudança de estações de trabalho",
+      "Remanejamento de itens de tecnologia entre ambientes"
+    ],
+    "scope": [
+      {
+        "title": "Identificação na origem",
+        "text": "Relação de equipamentos e acessórios com os destinos e os critérios de conferência previstos."
+      },
+      {
+        "title": "Proteção compatível",
+        "text": "Definição do acondicionamento a partir das características e orientações de manuseio dos itens."
+      },
+      {
+        "title": "Entrega organizada",
+        "text": "Planejamento da distribuição e da conferência nos ambientes indicados pela empresa."
+      }
+    ],
+    "steps": [
+      {
+        "title": "Relacionar os equipamentos",
+        "text": "Informar os tipos de itens, quantidades, acessórios e condições especiais de transporte."
+      },
+      {
+        "title": "Combinar as interfaces",
+        "text": "Definir responsabilidades por preparação, desconexão, transporte e recebimento."
+      },
+      {
+        "title": "Conferir no destino",
+        "text": "Prever a comparação entre os itens relacionados e os recebidos em cada local."
+      }
+    ],
+    "faq": [
+      {
+        "q": "O transporte inclui a reinstalação dos equipamentos?",
+        "a": "Conexão, configuração e testes de funcionamento são atividades distintas da movimentação. As responsabilidades devem ser combinadas com a área de tecnologia da empresa."
+      },
+      {
+        "q": "Preciso manter as embalagens originais?",
+        "a": "Se estiverem disponíveis e adequadas, informe isso na solicitação. As condições de embalagem e as orientações do fabricante devem ser consideradas na definição do acondicionamento."
+      },
+      {
+        "q": "É possível identificar os itens por usuário ou sala?",
+        "a": "O padrão de identificação pode ser definido conforme a organização da empresa. Informe os campos necessários e a relação entre origem, item e destino."
+      }
+    ],
+    "related": ["inventario", "mudanca-corporativa"]
+  },
+  {
+    "slug": "montagem-e-desmontagem",
+    "title": "Montagem e Desmontagem",
+    "group": "corporativa",
+    "short": "Mobiliário preparado para sair e organizado para voltar ao uso.",
+    "headline": "Cada peça tem um lugar no próximo ambiente.",
+    "intro": "Desmontar, identificar e remontar mobiliário são partes importantes de uma mudança ou reorganização. O trabalho começa pela avaliação das peças e das condições para sua nova disposição.",
+    "image": "detail",
+    "situations": [
+      "Preparação de móveis para mudança",
+      "Reorganização de estações de trabalho",
+      "Montagem de mobiliário transferido entre ambientes"
+    ],
+    "scope": [
+      {
+        "title": "Avaliar o mobiliário",
+        "text": "Identificação dos modelos, sistemas de fixação e condições aparentes das peças."
+      },
+      {
+        "title": "Preservar a organização",
+        "text": "Definição dos critérios de identificação e acondicionamento de componentes e ferragens."
+      },
+      {
+        "title": "Preparar o novo arranjo",
+        "text": "Planejamento da montagem conforme o layout e os serviços acordados na proposta."
+      }
+    ],
+    "steps": [
+      {
+        "title": "Conhecer as peças",
+        "text": "Reunir fotos, quantidades, modelos e informações sobre o mobiliário existente."
+      },
+      {
+        "title": "Definir a sequência",
+        "text": "Compatibilizar desmontagem, movimentação e montagem com os ambientes disponíveis."
+      },
+      {
+        "title": "Revisar o conjunto",
+        "text": "Prever a conferência da montagem e o registro de ajustes ou peças pendentes."
+      }
+    ],
+    "faq": [
+      {
+        "q": "Qualquer móvel pode ser desmontado e remontado?",
+        "a": "A possibilidade depende do projeto, do material e das condições de conservação. Fotos e, quando necessário, avaliação do mobiliário ajudam a definir a viabilidade."
+      },
+      {
+        "q": "O serviço inclui adaptações ou fabricação de peças?",
+        "a": "Adaptações, reparos e fabricação não devem ser presumidos no escopo de montagem. Informe essas necessidades para que sejam avaliadas separadamente."
+      },
+      {
+        "q": "É necessário ter um layout pronto?",
+        "a": "Uma planta ou indicação clara do destino das peças ajuda a organizar a montagem. O nível de detalhamento necessário deve ser combinado antes da execução."
+      }
+    ],
+    "related": ["remanejamento-interno", "gestao-de-mobiliario"]
+  },
+  {
+    "slug": "remanejamento-interno",
+    "title": "Remanejamento Interno",
+    "group": "corporativa",
+    "short": "Novas configurações para os espaços que a empresa já tem.",
+    "headline": "O endereço é o mesmo. As possibilidades mudam.",
+    "intro": "Uma nova equipe, uma reforma ou uma mudança de layout podem exigir a movimentação de bens dentro da própria empresa. O remanejamento organiza esses deslocamentos a partir do uso de cada ambiente.",
+    "image": "corporate",
+    "situations": [
+      "Troca de equipes entre salas ou andares",
+      "Preparação de áreas para reforma",
+      "Reorganização de mobiliário no mesmo endereço"
+    ],
+    "scope": [
+      {
+        "title": "Origem e destino claros",
+        "text": "Relação dos itens que mudam de posição e dos locais previstos no novo arranjo."
+      },
+      {
+        "title": "Percursos e prioridades",
+        "text": "Definição das rotas internas, restrições de acesso e ordem de movimentação."
+      },
+      {
+        "title": "Composição do ambiente",
+        "text": "Posicionamento dos bens conforme o layout combinado, com montagem quando contratada."
+      }
+    ],
+    "steps": [
+      {
+        "title": "Mapear a mudança",
+        "text": "Indicar os ambientes envolvidos, os itens e as posições desejadas."
+      },
+      {
+        "title": "Organizar as liberações",
+        "text": "Combinar acessos, horários e disponibilidade das áreas com os responsáveis internos."
+      },
+      {
+        "title": "Conferir o novo arranjo",
+        "text": "Prever a verificação dos destinos e das pendências de cada ambiente."
+      }
+    ],
+    "faq": [
+      {
+        "q": "O serviço pode atender apenas uma sala?",
+        "a": "O remanejamento pode ser delimitado por ambiente ou conjunto de itens. A proposta considera o volume, as condições de movimentação e os serviços necessários."
+      },
+      {
+        "q": "É possível movimentar itens entre andares?",
+        "a": "Essa necessidade deve ser avaliada com as características dos bens e os acessos disponíveis, incluindo elevadores, escadas e regras do edifício."
+      },
+      {
+        "q": "Como organizar uma mudança durante uma reforma?",
+        "a": "Informe as áreas que serão liberadas, as etapas da obra e os locais temporários ou definitivos dos bens. Essas informações ajudam a delimitar a sequência da movimentação."
+      }
+    ],
+    "related": ["montagem-e-desmontagem", "inventario"]
+  },
+  {
+    "slug": "gestao-de-mobiliario",
+    "title": "Gestão de Mobiliário",
+    "group": "corporativa",
+    "short": "Uma visão organizada dos móveis e de seus próximos destinos.",
+    "headline": "Antes de comprar mais, conheça o que já existe.",
+    "intro": "O mobiliário acompanha as transformações da empresa. Organizar informações sobre localização, disponibilidade e destino ajuda a planejar remanejamentos e a avaliar o reaproveitamento dos bens existentes.",
+    "image": "storage",
+    "situations": [
+      "Reorganização de móveis entre unidades",
+      "Mapeamento de itens disponíveis para reaproveitamento",
+      "Planejamento dos destinos após uma mudança"
+    ],
+    "scope": [
+      {
+        "title": "Visibilidade dos bens",
+        "text": "Definição da base de informações sobre tipos, quantidades, localização e condições aparentes."
+      },
+      {
+        "title": "Destinos definidos",
+        "text": "Organização dos itens por uso previsto, remanejamento ou outras decisões da empresa."
+      },
+      {
+        "title": "Movimentações registradas",
+        "text": "Planejamento dos registros e das conferências necessários para acompanhar as transferências."
+      }
+    ],
+    "steps": [
+      {
+        "title": "Organizar a base",
+        "text": "Reunir as informações existentes e delimitar o que precisa ser levantado."
+      },
+      {
+        "title": "Relacionar necessidades",
+        "text": "Comparar os itens disponíveis com os ambientes e usos previstos pela empresa."
+      },
+      {
+        "title": "Planejar os destinos",
+        "text": "Definir as movimentações necessárias e os critérios de atualização das informações."
+      }
+    ],
+    "faq": [
+      {
+        "q": "É preciso fazer um inventário antes?",
+        "a": "Uma base confiável é importante para o planejamento. Se já houver registros, eles podem orientar a avaliação; se estiverem incompletos, o levantamento necessário deve ser definido no escopo."
+      },
+      {
+        "q": "A gestão inclui armazenagem?",
+        "a": "A armazenagem é um serviço que pode ser considerado conforme a necessidade. Espaço, período, acesso aos itens e condições de guarda precisam ser avaliados em proposta própria ou integrada."
+      },
+      {
+        "q": "O serviço determina o descarte dos móveis?",
+        "a": "As decisões sobre reaproveitamento, transferência ou destinação pertencem à empresa. Qualquer atividade relacionada à destinação deve ter escopo e responsabilidades expressamente definidos."
+      }
+    ],
+    "related": ["inventario", "remanejamento-interno"]
+  },
+  {
+    "slug": "transporte-dedicado",
+    "title": "Transporte Dedicado",
+    "group": "transporte",
+    "short": "Uma operação de transporte desenhada para a sua necessidade.",
+    "headline": "Uma carga. Um percurso pensado para ela.",
+    "intro": "No transporte dedicado, a operação é dimensionada para uma demanda específica. Características da carga, pontos de coleta e entrega e condições de acesso orientam a definição do atendimento.",
+    "image": "transport",
+    "situations": [
+      "Transferências com necessidade de veículo exclusivo",
+      "Movimentação entre unidades da empresa",
+      "Coletas e entregas com requisitos específicos"
+    ],
+    "scope": [
+      {
+        "title": "Perfil da carga",
+        "text": "Levantamento do volume, peso, dimensões e condições de acondicionamento dos itens."
+      },
+      {
+        "title": "Desenho do atendimento",
+        "text": "Avaliação dos pontos de coleta e entrega, acessos e janelas de atendimento desejadas."
+      },
+      {
+        "title": "Condições de entrega",
+        "text": "Definição das responsabilidades e dos serviços envolvidos no carregamento e recebimento."
+      }
+    ],
+    "steps": [
+      {
+        "title": "Descrever a demanda",
+        "text": "Informar carga, origem, destino e datas desejadas para a movimentação."
+      },
+      {
+        "title": "Avaliar a operação",
+        "text": "Compatibilizar as necessidades informadas com as condições de atendimento."
+      },
+      {
+        "title": "Confirmar o escopo",
+        "text": "Revisar a proposta, as responsabilidades e as condições acordadas antes da contratação."
+      }
+    ],
+    "faq": [
+      {
+        "q": "Qual a diferença entre dedicado e fracionado?",
+        "a": "O dedicado prevê uma operação ou veículo exclusivo para a demanda contratada. No fracionado, a carga compartilha capacidade com outras remessas, conforme as condições do atendimento."
+      },
+      {
+        "q": "Posso solicitar mais de um ponto de entrega?",
+        "a": "Informe todos os pontos e suas restrições. A possibilidade e as condições de uma rota com múltiplas entregas precisam ser avaliadas na proposta."
+      },
+      {
+        "q": "O transporte inclui carga e descarga?",
+        "a": "Essas atividades precisam estar previstas no escopo. Informe os recursos disponíveis em cada local e se há necessidade de apoio à movimentação."
+      }
+    ],
+    "related": ["transporte-fracionado", "mudancas-industriais"]
+  },
+  {
+    "slug": "transporte-fracionado",
+    "title": "Transporte Fracionado",
+    "group": "transporte",
+    "short": "Uma alternativa para cargas que não precisam de um veículo inteiro.",
+    "headline": "O espaço que a sua carga precisa para seguir.",
+    "intro": "O transporte fracionado atende remessas que compartilham capacidade com outras cargas. A avaliação considera o perfil dos volumes, a origem, o destino e as condições disponíveis para o atendimento.",
+    "image": "transport",
+    "situations": [
+      "Envio de volumes sem necessidade de veículo exclusivo",
+      "Remessas com diferentes frequências e quantidades",
+      "Avaliação de alternativas para distribuição de cargas"
+    ],
+    "scope": [
+      {
+        "title": "Volumes bem descritos",
+        "text": "Informações sobre quantidade, dimensões, peso e embalagem para avaliar a remessa."
+      },
+      {
+        "title": "Condições de atendimento",
+        "text": "Verificação da origem, destino, características da carga e prazos possíveis na proposta."
+      },
+      {
+        "title": "Recebimento preparado",
+        "text": "Identificação de horários, acessos e exigências dos locais de coleta e entrega."
+      }
+    ],
+    "steps": [
+      {
+        "title": "Informar a remessa",
+        "text": "Enviar os dados dos volumes e os endereços de origem e destino."
+      },
+      {
+        "title": "Avaliar as condições",
+        "text": "Confirmar a adequação da modalidade à carga e à necessidade apresentada."
+      },
+      {
+        "title": "Combinar o atendimento",
+        "text": "Revisar a proposta, a preparação dos itens e as condições de coleta e entrega."
+      }
+    ],
+    "faq": [
+      {
+        "q": "Como saber se o fracionado atende à minha carga?",
+        "a": "Informe os tipos de itens, quantidade de volumes, dimensões, peso e endereços. A adequação depende dessas características e das condições de atendimento disponíveis."
+      },
+      {
+        "q": "Existe um prazo único para todas as entregas?",
+        "a": "Não se deve presumir um prazo único. Origem, destino, características da remessa e condições do atendimento precisam ser considerados na proposta."
+      },
+      {
+        "q": "Quais cuidados tomar com a embalagem?",
+        "a": "A embalagem deve ser compatível com o item e com as etapas de movimentação. Informe fragilidade, restrições de empilhamento e orientações específicas antes de contratar."
+      }
+    ],
+    "related": ["transporte-dedicado", "transporte-de-tecnologias"]
+  }
+]
