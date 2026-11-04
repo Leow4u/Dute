@@ -12,7 +12,6 @@ import {
   ChevronRight,
   Grid2X2,
   List,
-  Mars,
   Minus,
   Package,
   PackageCheck,
@@ -25,7 +24,6 @@ import {
   SlidersHorizontal,
   TrendingDown,
   Truck,
-  Venus,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -2812,17 +2810,15 @@ function StockBadge({
   return null;
 }
 
-const genderChips: Record<ProductGender, { short: string; label: string; icon: LucideIcon; className: string }> = {
+const genderChips: Record<ProductGender, { short: string; label: string; className: string }> = {
   feminino: {
     short: "FEM",
     label: "Feminino",
-    icon: Venus,
     className: "border-gender-fem-soft-border bg-gender-fem-soft text-gender-fem-soft-foreground",
   },
   masculino: {
     short: "MASC",
     label: "Masculino",
-    icon: Mars,
     className: "border-gender-masc-soft-border bg-gender-masc-soft text-gender-masc-soft-foreground",
   },
 };
@@ -2842,18 +2838,16 @@ function GenderChip({
   className?: string;
 }) {
   const chip = genderChips[gender];
-  const Icon = chip.icon;
   return (
     <span
       title={chip.label}
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 text-xs font-bold uppercase tracking-wide",
+        "inline-flex shrink-0 items-center rounded-md border px-1.5 text-xs font-bold uppercase tracking-wide",
         onPhoto ? "h-6 shadow-sm" : "h-5",
         chip.className,
         className,
       )}
     >
-      <Icon className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
       <span aria-hidden="true">{chip.short}</span>
       <span className="sr-only">{chip.label}</span>
     </span>
