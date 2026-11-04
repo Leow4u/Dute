@@ -1,0 +1,380 @@
+[
+  {
+    "slug": "checklist-mudanca-corporativa",
+    "title": "Mudança corporativa: antes da primeira caixa, vem o plano",
+    "category": "Logística Corporativa",
+    "excerpt": "Pessoas, espaços, mobiliário e tecnologia precisam chegar juntos ao novo endereço. Veja como organizar as decisões antes da mudança.",
+    "image": "corporate",
+    "readTime": "5 min",
+    "service": "mudanca-corporativa",
+    "sections": [
+      {
+        "id": "escopo",
+        "title": "1. Defina o que realmente vai mudar",
+        "paragraphs": [
+          "Uma mudança empresarial começa com decisões sobre a operação. Antes de solicitar caixas ou reservar um veículo, reúna as áreas envolvidas e descreva o que será transferido, o que continuará funcionando e o que precisa estar disponível no primeiro dia. Uma lista de ambientes costuma ser um bom ponto de partida para essa conversa.",
+          "Separe o mobiliário que será reaproveitado dos itens que ficarão no endereço atual ou terão outro destino. Identifique também equipamentos compartilhados, arquivos e materiais de uso diário. Quanto mais clara estiver essa divisão, mais fácil será dimensionar a mudança e evitar transportar objetos que não têm lugar definido no novo espaço."
+        ],
+        "bullets": [
+          "Ambientes e equipes envolvidos.",
+          "Itens que vão, ficam ou seguem para armazenagem.",
+          "Responsável por aprovar cada decisão."
+        ]
+      },
+      {
+        "id": "enderecos",
+        "title": "2. Conheça os dois lados do percurso",
+        "paragraphs": [
+          "O caminho entre a mesa e o veículo merece tanta atenção quanto o trajeto entre os endereços. Visite os espaços de origem e destino para observar portas, corredores, escadas, elevadores e áreas de carga. Um móvel que cabe na sala pode exigir desmontagem para passar pelo acesso disponível, alterando a sequência prevista para o trabalho.",
+          "Confirme com a administração de cada local os horários de acesso e as orientações para uso das áreas comuns. No destino, confira o posicionamento das estações e deixe os ambientes identificados. A equipe de movimentação precisa saber onde descarregar e onde cada grupo de itens será instalado, sem depender de decisões improvisadas durante a chegada."
+        ],
+        "bullets": [
+          "Acessos e elevadores conferidos.",
+          "Horários alinhados com os dois locais.",
+          "Layout de destino disponível para consulta."
+        ]
+      },
+      {
+        "id": "sequencia",
+        "title": "3. Monte uma sequência que respeite a operação",
+        "paragraphs": [
+          "Nem todos os setores precisam mudar ao mesmo tempo. Relacione as atividades que podem ser interrompidas e aquelas que dependem de uma transição coordenada. A partir disso, organize ondas de preparação, retirada e instalação. Uma equipe que trabalha com atendimento, por exemplo, pode precisar de uma janela diferente da equipe responsável por arquivos físicos.",
+          "Inclua a tecnologia nesse planejamento desde o início. Desligamento, identificação, transporte e reconexão de equipamentos devem ser combinados com os responsáveis internos. Defina também um canal para dúvidas no dia da execução e mantenha uma versão única do cronograma, com responsáveis e dependências visíveis para todos que participam da mudança."
+        ],
+        "bullets": [
+          "Sequência por equipe ou ambiente.",
+          "Janelas de interrupção combinadas.",
+          "Contato de referência durante a operação."
+        ]
+      },
+      {
+        "id": "conferencia",
+        "title": "4. Planeje a chegada e a conferência",
+        "paragraphs": [
+          "A mudança não termina quando o último volume sai do veículo. Reserve tempo para conferir os itens recebidos, orientar a montagem e verificar se os ambientes estão prontos para uso. Uma identificação simples por setor, sala e estação ajuda a encaminhar caixas e mobiliário corretamente e reduz a necessidade de movimentações adicionais no destino.",
+          "Prepare uma lista de pendências para registrar o que ainda precisa ser ajustado, com responsável e próximo passo. Compartilhe com as equipes onde encontrar materiais essenciais e como comunicar dúvidas. Essa organização transforma a entrega em uma transição compreensível e oferece uma base concreta para avaliar o que funcionou e o que melhorar na próxima movimentação."
+        ],
+        "bullets": [
+          "Conferência por ambiente.",
+          "Materiais essenciais identificados.",
+          "Pendências registradas e encaminhadas."
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "inventario-antes-da-mudanca",
+    "title": "Inventário: saber o que existe muda a qualidade da decisão",
+    "category": "Logística Corporativa",
+    "excerpt": "Um inventário útil conecta cada bem à sua localização, condição e próximo destino. Entenda como preparar essa informação para uma movimentação.",
+    "image": "detail",
+    "readTime": "5 min",
+    "service": "inventario",
+    "sections": [
+      {
+        "id": "objetivo",
+        "title": "1. Comece pela decisão que o inventário deve apoiar",
+        "paragraphs": [
+          "Inventariar não é apenas contar objetos. A informação necessária muda conforme a pergunta da empresa: preparar uma mudança, localizar equipamentos, reaproveitar mobiliário ou compreender o que está guardado. Definir esse objetivo antes do levantamento ajuda a escolher os campos que realmente serão usados e evita uma coleta extensa que depois ninguém consegue manter atualizada.",
+          "Para uma movimentação corporativa, o registro deve permitir reconhecer o item, saber onde ele está e indicar para onde deverá seguir. Um identificador único conecta essas informações. Combine também o nível de detalhe: algumas categorias podem ser controladas por unidade, enquanto materiais padronizados podem exigir uma organização diferente, definida conforme a necessidade da operação."
+        ],
+        "bullets": [
+          "Objetivo do levantamento definido.",
+          "Categorias e nível de detalhe combinados.",
+          "Identificação que possa acompanhar o item."
+        ]
+      },
+      {
+        "id": "campos",
+        "title": "2. Registre o suficiente para reconhecer e localizar",
+        "paragraphs": [
+          "Uma descrição genérica, como cadeira ou monitor, pode não ser suficiente quando existem dezenas de itens parecidos. Estabeleça um padrão de descrição que diferencie o que importa para o uso: tipo, características principais, identificação existente e localização. Use os mesmos nomes para prédios, andares e salas em toda a base, evitando abreviações que só uma pessoa conhece.",
+          "Fotografias podem ajudar a esclarecer a condição ou distinguir peças semelhantes, desde que sejam vinculadas ao registro correto. Separe a observação física da decisão sobre o destino: um item pode estar em bom estado e ainda assim não servir ao novo layout. Essa distinção mantém o levantamento descritivo e deixa a escolha de reaproveitamento com os responsáveis."
+        ],
+        "bullets": [
+          "Descrição consistente.",
+          "Localização com um padrão único.",
+          "Condição observada e destino em campos separados."
+        ]
+      },
+      {
+        "id": "validacao",
+        "title": "3. Trate dúvidas antes de movimentar",
+        "paragraphs": [
+          "Durante o levantamento, surgem itens sem identificação, registros duplicados e diferenças entre a lista anterior e o espaço físico. Em vez de resolver essas situações por suposição, marque o que precisa de revisão. Uma fila de dúvidas permite que cada área confirme a informação e evita que um erro de cadastro acompanhe o bem para outro endereço.",
+          "Defina quem pode corrigir descrições, aprovar destinos e encerrar divergências. Antes da retirada, revise a relação dos itens que seguem para cada ambiente e destaque aquilo que exige tratamento diferente, como desmontagem ou embalagem específica. O inventário passa a orientar o trabalho quando essas informações são compreensíveis para quem vai executá-lo, não apenas para quem criou a planilha."
+        ],
+        "bullets": [
+          "Duplicidades revisadas.",
+          "Itens sem identificação sinalizados.",
+          "Destinos confirmados pelos responsáveis."
+        ]
+      },
+      {
+        "id": "continuidade",
+        "title": "4. Atualize a localização depois da mudança",
+        "paragraphs": [
+          "Uma base correta na origem perde utilidade se a chegada não for registrada. Prepare a conferência no destino usando a mesma identificação adotada no levantamento. Registre o recebimento, a localização final e eventuais diferenças observadas. Se um móvel precisar aguardar montagem ou seguir temporariamente para outra sala, essa condição também deve ficar clara para quem consulta.",
+          "Depois da transição, combine como novas movimentações serão informadas. A atualização pode começar com uma rotina simples, desde que exista um responsável e um modo consistente de registrar mudanças. O valor do inventário está na continuidade: ele precisa ajudar a encontrar, planejar e reaproveitar os bens quando a empresa voltar a precisar dessas respostas."
+        ],
+        "bullets": [
+          "Conferência ligada à identificação original.",
+          "Localização final registrada.",
+          "Rotina de atualização acordada com a equipe."
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "remanejamento-de-escritorio",
+    "title": "Novo layout, mesmo endereço: como organizar o remanejamento",
+    "category": "Logística Corporativa",
+    "excerpt": "Mudar equipes de lugar envolve mais que arrastar mesas. Planeje a sequência, os acessos e as dependências para reorganizar o escritório.",
+    "image": "corporate",
+    "readTime": "5 min",
+    "service": "remanejamento-interno",
+    "sections": [
+      {
+        "id": "layout",
+        "title": "1. Transforme o novo layout em uma lista de movimentos",
+        "paragraphs": [
+          "Quando a empresa continua no mesmo prédio, o remanejamento pode parecer uma tarefa pequena. Ainda assim, cada troca de posição afeta outras decisões: o lugar de uma equipe, a circulação no ambiente, a disponibilidade de pontos de conexão e o reaproveitamento do mobiliário. Comece com um layout de destino compreensível e atualizado antes de definir a execução.",
+          "Compare a situação atual com a futura e liste os movimentos por ambiente. Identifique quais peças permanecem, quais serão desmontadas e quais precisam sair temporariamente para liberar espaço. Essa lista mostra dependências que nem sempre aparecem no desenho, como uma sala que precisa ser esvaziada antes de receber os móveis de outro setor."
+        ],
+        "bullets": [
+          "Layout atual e futuro disponíveis.",
+          "Movimentos organizados por ambiente.",
+          "Peças e posições identificadas de forma consistente."
+        ]
+      },
+      {
+        "id": "dependencias",
+        "title": "2. Alinhe pessoas, mobiliário e tecnologia",
+        "paragraphs": [
+          "Uma estação só está pronta quando todos os elementos necessários ao trabalho estão disponíveis. Por isso, reúna os responsáveis por instalações, tecnologia e pelas equipes que ocuparão o espaço. Verifique o que depende de preparação anterior, o que pode acontecer durante a movimentação e o que precisa ser testado antes de liberar o ambiente para uso.",
+          "Não presuma que equipamentos e acessórios semelhantes podem ser trocados livremente. Confirme o que acompanha cada pessoa ou posição e o que pertence ao uso compartilhado. Identificar conjuntos de mesa, equipamento e acessórios pode simplificar a recomposição. Os responsáveis internos devem orientar qualquer desligamento, reconexão e validação dos recursos usados no trabalho diário."
+        ],
+        "bullets": [
+          "Dependências de instalações e tecnologia revisadas.",
+          "Conjuntos e acessórios identificados.",
+          "Responsáveis pela liberação de cada ambiente definidos."
+        ]
+      },
+      {
+        "id": "execucao",
+        "title": "3. Escolha uma sequência que deixe espaço para trabalhar",
+        "paragraphs": [
+          "O remanejamento acontece dentro de um espaço que pode continuar ocupado. Planeje onde os itens ficarão durante cada etapa e como a equipe circulará com eles. Uma área temporária de apoio evita usar aleatoriamente corredores ou salas que ainda precisam funcionar. Sua capacidade deve ser considerada no cronograma, assim como o acesso entre os pavimentos envolvidos.",
+          "Organize a execução em etapas compreensíveis: preparar, liberar, movimentar, recompor e conferir. Quando uma área depende da conclusão de outra, deixe essa relação explícita. Comunique às equipes quais espaços estarão disponíveis e em quais momentos. A clareza da sequência ajuda a evitar que pessoas retornem a um ambiente que ainda está em reorganização."
+        ],
+        "bullets": [
+          "Área de apoio planejada.",
+          "Sequência de liberação dos ambientes.",
+          "Orientações compartilhadas com as equipes afetadas."
+        ]
+      },
+      {
+        "id": "ajustes",
+        "title": "4. Confira o uso, não apenas a posição dos móveis",
+        "paragraphs": [
+          "Ao finalizar uma etapa, compare o ambiente com o layout aprovado e confira os conjuntos movimentados. Verifique se gaveteiros, cadeiras e acessórios chegaram à posição esperada e se as áreas de circulação ficaram livres. Quando houver montagem, encaminhe a conferência aos responsáveis pelo serviço e registre os ajustes necessários de forma objetiva, com a localização correspondente.",
+          "Reserve um momento de retorno com quem vai ocupar o espaço. Pequenas diferenças entre o desenho e o uso cotidiano podem aparecer depois da instalação. Centralize esses apontamentos para distinguir correções de execução de novas solicitações de layout. Atualize o inventário quando ele existir e mantenha um registro final das posições, preparando a empresa para o próximo remanejamento."
+        ],
+        "bullets": [
+          "Posições e conjuntos conferidos.",
+          "Ajustes separados de novas solicitações.",
+          "Layout e inventário atualizados após a conclusão."
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "dedicado-ou-fracionado",
+    "title": "Dedicado ou fracionado: comece pela necessidade da carga",
+    "category": "Transporte de Cargas",
+    "excerpt": "Volume é apenas uma parte da escolha. Frequência, destinos e janelas de entrega também ajudam a comparar as duas modalidades de transporte.",
+    "image": "transport",
+    "readTime": "5 min",
+    "service": "transporte-dedicado",
+    "sections": [
+      {
+        "id": "modalidades",
+        "title": "1. Entenda o que está sendo organizado",
+        "paragraphs": [
+          "Em uma operação dedicada, o recurso de transporte é reservado à necessidade acordada com um cliente. No fracionado, cargas podem compartilhar etapas e capacidade de uma operação de distribuição. Essas definições ajudam a iniciar a conversa, mas não substituem a análise da rota, da mercadoria e das condições específicas oferecidas para cada embarque ou rotina.",
+          "Evite escolher apenas pelo nome da modalidade. Uma carga pequena pode exigir uma operação dedicada por causa do horário ou da sequência de atendimento, enquanto volumes recorrentes podem se adaptar a um fluxo fracionado. A comparação ganha sentido quando as duas alternativas são avaliadas para o mesmo escopo, com as mesmas informações de coleta e entrega."
+        ],
+        "bullets": [
+          "Necessidade do embarque descrita.",
+          "Condições de coleta e entrega informadas.",
+          "Alternativas comparadas com o mesmo escopo."
+        ]
+      },
+      {
+        "id": "perfil",
+        "title": "2. Descreva a carga além do peso",
+        "paragraphs": [
+          "Quantidade de volumes, dimensões, peso e forma de acondicionamento são informações básicas para avaliar o transporte. Acrescente características que possam mudar a movimentação, como peças desmontadas, itens frágeis, conjuntos que precisam permanecer juntos ou volumes que não podem ser empilhados. A descrição deve refletir o que estará pronto para coleta, e não uma estimativa desatualizada.",
+          "Fotografias e uma relação organizada dos volumes podem facilitar o entendimento quando a carga é variada. Informe também os recursos disponíveis nos dois endereços para carga e descarga. Se ainda houver decisões em aberto sobre embalagem ou preparação, destaque essas dúvidas para que a proposta considere o trabalho necessário e as responsabilidades sejam combinadas com antecedência."
+        ],
+        "bullets": [
+          "Volumes, medidas e peso.",
+          "Acondicionamento e características de manuseio.",
+          "Recursos de carga e descarga em cada endereço."
+        ]
+      },
+      {
+        "id": "rota",
+        "title": "3. Considere a rotina, os destinos e os horários",
+        "paragraphs": [
+          "Uma entrega isolada e uma distribuição recorrente podem pedir organizações diferentes. Registre a frequência esperada, os destinos envolvidos e a variação de volume ao longo do período. Explique se há uma ordem de atendimento necessária ou se as entregas podem ser planejadas com flexibilidade. Isso ajuda a discutir a operação com base no uso real do transporte.",
+          "As janelas de recebimento também precisam entrar na conversa. Informe restrições de acesso, necessidade de agendamento e quem receberá a carga. Diferencie o horário desejado de uma condição indispensável para a entrega. Essa distinção permite avaliar as alternativas com mais clareza, sem transformar uma preferência não discutida em uma expectativa que a operação não considerou."
+        ],
+        "bullets": [
+          "Frequência e variação de volume.",
+          "Destinos e sequência de atendimento.",
+          "Janelas e contatos de recebimento confirmados."
+        ]
+      },
+      {
+        "id": "comparacao",
+        "title": "4. Compare a proposta completa",
+        "paragraphs": [
+          "Antes de decidir, confira o que cada proposta inclui e o que depende de preparação pela sua empresa. Coleta, entrega, movimentação nos endereços e eventuais etapas intermediárias precisam estar compreensíveis. Pergunte como será realizado o acompanhamento e qual contato deverá ser acionado se houver uma alteração na programação ou na disponibilidade de recebimento da carga.",
+          "A melhor escolha depende da combinação entre necessidade, condições e custo apresentado para aquela operação. Não existe uma modalidade superior em todos os cenários. Reúna os dados em um resumo único, valide as dúvidas e guarde a versão acordada. Quando o perfil da carga ou a rotina mudar, refaça a comparação em vez de repetir automaticamente a decisão anterior."
+        ],
+        "bullets": [
+          "Escopo e responsabilidades claros.",
+          "Forma de acompanhamento combinada.",
+          "Proposta revisada quando a necessidade mudar."
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "armazenagem-de-mobiliario",
+    "title": "Mobiliário armazenado precisa continuar fácil de encontrar",
+    "category": "Armazenagem",
+    "excerpt": "Guardar é só o começo. Identificação, condição e planejamento de retirada ajudam a manter o mobiliário pronto para a próxima necessidade.",
+    "image": "storage",
+    "readTime": "5 min",
+    "service": "armazenagem",
+    "sections": [
+      {
+        "id": "finalidade",
+        "title": "1. Defina por que os itens serão guardados",
+        "paragraphs": [
+          "Uma reforma, a entrega de um novo espaço ou uma mudança de layout pode criar um intervalo entre a retirada e o próximo uso do mobiliário. Antes de planejar a armazenagem, descreva esse contexto e identifique quais itens poderão ser necessários primeiro. A finalidade orienta a preparação e ajuda a organizar a saída futura, mesmo quando a data ainda não está definida.",
+          "Separe o que será reaproveitado do que ainda depende de avaliação. Evite enviar tudo com a mesma indicação genérica, porque isso transfere decisões pendentes para um momento em que os objetos estarão menos acessíveis. Uma relação de itens com destino previsto ou status de decisão permite acompanhar o que deve permanecer guardado e o que precisa de encaminhamento."
+        ],
+        "bullets": [
+          "Motivo da armazenagem registrado.",
+          "Itens prioritários para retirada identificados.",
+          "Pendências de destino separadas do mobiliário disponível."
+        ]
+      },
+      {
+        "id": "preparacao",
+        "title": "2. Prepare conjuntos que possam ser recompostos",
+        "paragraphs": [
+          "Móveis desmontados exigem atenção à relação entre suas partes. Uma mesa pode ocupar menos espaço separada, mas sua montagem futura depende de reconhecer tampo, estrutura, acessórios e ferragens. Combine como esses componentes serão identificados e mantidos associados. A decisão de desmontar deve considerar as características da peça e o trabalho necessário para devolvê-la ao uso depois.",
+          "Registre a condição observada antes da saída e destaque peças com particularidades. Quando houver embalagem, a identificação deve permanecer consultável sem exigir a abertura de cada volume. Faça a preparação de acordo com o tipo de mobiliário e as orientações aplicáveis ao item; soluções improvisadas podem dificultar tanto a movimentação quanto a conferência no momento de receber."
+        ],
+        "bullets": [
+          "Componentes vinculados ao móvel de origem.",
+          "Ferragens e acessórios associados ao conjunto.",
+          "Identificação visível e condição registrada."
+        ]
+      },
+      {
+        "id": "registro",
+        "title": "3. Conecte o item à sua localização",
+        "paragraphs": [
+          "Uma lista de entrada informa o que foi recebido, mas é a atualização de localização que ajuda a encontrar o item depois. Defina quais informações deverão acompanhar cada unidade ou conjunto e como serão consultadas. Essa organização é especialmente importante quando diferentes áreas da empresa utilizam o mesmo estoque de mobiliário e fazem solicitações em momentos distintos.",
+          "Combine como serão tratadas entradas adicionais, retiradas parciais e alterações de destino. Um conjunto pode ser reservado para um projeto sem sair imediatamente da armazenagem, e essa situação precisa ser compreendida por quem planeja o uso dos bens. O registro deve distinguir disponibilidade, separação e retirada conforme o fluxo acordado, evitando decisões baseadas em uma lista antiga."
+        ],
+        "bullets": [
+          "Identificação e localização relacionadas.",
+          "Movimentações atualizadas após cada alteração.",
+          "Disponibilidade compreensível para quem solicita os itens."
+        ]
+      },
+      {
+        "id": "retirada",
+        "title": "4. Planeje a saída com a mesma atenção da entrada",
+        "paragraphs": [
+          "Quando surgir uma nova necessidade, envie uma solicitação que permita reconhecer os itens desejados e o local em que serão usados. Acrescente a data pretendida, as condições de recebimento e a necessidade de montagem. Quanto mais claro for esse pedido, mais fácil será conferir o que deve ser separado e o que continuará disponível para outros ambientes.",
+          "Na retirada, utilize a identificação original para conferir conjuntos e acessórios. Atualize o destino final e registre eventuais pendências antes de encerrar a movimentação. Rever periodicamente o mobiliário guardado também ajuda a identificar peças sem previsão de uso e oportunidades de reaproveitamento. Assim, a armazenagem permanece ligada às decisões da empresa, em vez de se tornar apenas um acúmulo de objetos."
+        ],
+        "bullets": [
+          "Pedido de retirada com itens e destino.",
+          "Conjuntos conferidos antes do envio.",
+          "Revisão periódica do que permanece armazenado."
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "transporte-de-tecnologia",
+    "title": "Tecnologia em movimento: organize cada etapa da transferência",
+    "category": "Logística Corporativa",
+    "excerpt": "Equipamentos, acessórios e responsáveis precisam estar conectados no planejamento. Veja o que alinhar antes de transferir a tecnologia da empresa.",
+    "image": "detail",
+    "readTime": "5 min",
+    "service": "transporte-de-tecnologias",
+    "sections": [
+      {
+        "id": "inventario",
+        "title": "1. Saiba quais equipamentos entram na operação",
+        "paragraphs": [
+          "Uma transferência de tecnologia pode envolver equipamentos individuais, recursos compartilhados e conjuntos que dependem de vários componentes. Comece por uma relação clara do que será movimentado, com identificação, localização de origem e destino previsto. Inclua os acessórios necessários ao uso de cada item, para que a conferência não se limite ao equipamento principal e deixe partes importantes para trás.",
+          "Defina quem representa a área de tecnologia e quem poderá validar as informações no local. Se houver itens que exigem procedimentos específicos, sinalize-os antes de organizar a retirada. A equipe responsável pelo equipamento deve orientar o que pode ser desligado, como preparar a transferência e quais condições precisam estar disponíveis no destino antes de programar a movimentação."
+        ],
+        "bullets": [
+          "Equipamentos e acessórios relacionados.",
+          "Responsável técnico identificado.",
+          "Origem, destino e particularidades registrados."
+        ]
+      },
+      {
+        "id": "preparo",
+        "title": "2. Combine preparação, identificação e embalagem",
+        "paragraphs": [
+          "A movimentação física deve começar depois da liberação pelos responsáveis internos. Combine a sequência de preparação e estabeleça como cada equipamento será identificado após o desligamento. Um padrão por área, posição e conjunto pode ajudar a encaminhar os volumes corretamente. As informações precisam ser compreensíveis tanto para quem embala quanto para quem receberá os itens no novo local.",
+          "Discuta a proteção adequada às características de cada equipamento e as orientações do fabricante. Não presuma que a mesma solução serve para todos os formatos. Cabos, fontes e periféricos devem ter uma associação clara com seus conjuntos, quando aplicável. Evite expor informações sensíveis em etiquetas externas; a identificação logística deve conter apenas o necessário para reconhecer e encaminhar o volume."
+        ],
+        "bullets": [
+          "Liberação para movimentação confirmada.",
+          "Identificação consistente nos volumes.",
+          "Proteção e associação dos acessórios definidas."
+        ]
+      },
+      {
+        "id": "transicao",
+        "title": "3. Organize a janela entre retirada e recebimento",
+        "paragraphs": [
+          "O horário do transporte precisa conversar com a disponibilidade das equipes nos dois endereços. Identifique quem acompanhará a retirada e quem fará a conferência na chegada. Confirme os acessos e as condições para movimentar os volumes até seus ambientes finais. Uma entrega sem responsáveis ou sem espaço preparado pode criar uma etapa adicional de espera e armazenamento temporário.",
+          "Quando diferentes setores participam da transferência, deixe visíveis as dependências entre suas tarefas. A movimentação pode depender da preparação de uma sala, e a retomada do trabalho pode depender de instalação e testes posteriores. Defina um canal de atualização e registre alterações de programação para que a sequência continue coerente quando houver uma mudança no plano original."
+        ],
+        "bullets": [
+          "Contatos de retirada e recebimento.",
+          "Acessos e ambiente de destino preparados.",
+          "Dependências e alterações compartilhadas entre as equipes."
+        ]
+      },
+      {
+        "id": "retomada",
+        "title": "4. Separe a conferência física da validação técnica",
+        "paragraphs": [
+          "Na chegada, confira os volumes e seus identificadores, registrando a condição observada e as diferenças em relação à lista de origem. Encaminhe cada conjunto para a posição prevista antes da abertura e instalação, conforme o fluxo combinado. Essa conferência documenta a movimentação física; ela não substitui a verificação de funcionamento que cabe aos responsáveis técnicos pelos equipamentos.",
+          "Planeje quem fará a reconexão, os testes e a liberação para uso. Mantenha uma relação de pendências com a pessoa responsável por cada encaminhamento, distinguindo itens de movimentação dos ajustes técnicos. Ao concluir, atualize a localização dos bens e reúna os registros da transferência. Esse fechamento facilita consultas posteriores e oferece uma referência útil para a próxima operação da empresa."
+        ],
+        "bullets": [
+          "Conferência física registrada.",
+          "Validação técnica conduzida pelos responsáveis.",
+          "Localização e pendências atualizadas ao final."
+        ]
+      }
+    ]
+  }
+]

@@ -52,6 +52,12 @@ jobs:
         run: pnpm run typecheck
       - name: Frontend unit tests
         run: pnpm run test
+      - name: Verify institutional website
+        working-directory: .
+        run: |
+          pnpm --filter @workspace/dutelog-site run test
+          pnpm --filter @workspace/dutelog-site run build
+          pnpm --filter @workspace/dutelog-site run test:build
       # Só o Chromium, sem --with-deps: o runner já tem as bibliotecas (vem com
       # o Google Chrome), e o --with-deps baixava pelo apt fontes e xvfb que o
       # teste headless não usa. Em 22/10/2026 esse apt levou 12 min a 25 kB/s;

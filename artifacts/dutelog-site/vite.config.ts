@@ -1,8 +1,10 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-export default defineConfig({
+export default defineConfig(({ isSsrBuild, isPreview }) => ({
   plugins: [react()],
+  appType: isPreview ? "mpa" : "spa",
+  publicDir: isSsrBuild ? false : "public",
   build: {
     outDir: "dist/public",
     emptyOutDir: true,
@@ -18,4 +20,4 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: true,
   },
-});
+}));
