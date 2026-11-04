@@ -1,3 +1,4 @@
+import { abreAgenteDoNucleo } from "./agente/navegacao";
 import {
   canAccessModule,
   getRouteProfileRoles,
@@ -99,11 +100,14 @@ export function buildHomeInbox({
   ops,
   requests,
   stockAlerts,
+  agenteDoNucleo = abreAgenteDoNucleo(role),
 }: {
   role: ProfileRole | null | undefined;
   ops?: WarehouseOpsResponse;
   requests?: HomeRequest[];
   stockAlerts?: HomeStockAlert[];
+  /** A pessoa tem o agente do núcleo (liberação e papel); padrão: abreAgenteDoNucleo(role). */
+  agenteDoNucleo?: boolean;
 }): HomeInbox {
   const orders = groupWarehouseOrders(ops).filter(
     (order) => order.stage !== "entregue",
@@ -209,7 +213,10 @@ export function buildHomeInbox({
     });
   }
 
-  if (agentCount > 0) {
+  // Com o agente do núcleo, o radar do painel é este mesmo "Precisa de você"
+  // (parte 5.5k) e não mostra a caixa antiga do agente: a linha levava ao
+  // painel, que trazia a linha de volta, sem nenhum jeito de resolver.
+  if (agentCount > 0 && !agenteDoNucleo) {
     items.push({
       id: "agent",
       tone: "agent",

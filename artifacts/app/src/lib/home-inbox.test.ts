@@ -61,6 +61,7 @@ describe("buildHomeInbox", () => {
       role: "admin",
       ops: busyOps,
       requests,
+      agenteDoNucleo: false,
     });
 
     expect(items.map((item) => [item.id, item.title, item.href])).toEqual([
@@ -75,6 +76,13 @@ describe("buildHomeInbox", () => {
     expect(items[1].detail).toBe("Retirada 40 un · Recebimento NF 9");
     expect(items[5].detail).toBe("Saldo divergente em 3 SKUs e mais 1");
     expect(summary).toEqual({ toPick: 2, toShip: 1, inTransit: 1, openReceipts: 1 });
+  });
+
+  it("com o agente do núcleo, não conta a caixa antiga do agente", () => {
+    // O radar do painel é este "Precisa de você": a linha voltaria para ele.
+    const { items } = buildHomeInbox({ role: "admin", ops: busyOps, requests, agenteDoNucleo: true });
+    expect(items.map((item) => item.id)).not.toContain("agent");
+    expect(items.some((item) => item.href === "/agente/painel")).toBe(false);
   });
 
   it("fica vazia quando não há nada parado", () => {
