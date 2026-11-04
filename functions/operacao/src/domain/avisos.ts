@@ -8,6 +8,8 @@
  * aprovação). A fonte é o evento que cada módulo já grava em `events`. O
  * alerta dos itens parados (docs/plataforma/fase-5-memoria.md, parte 5.4f)
  * é o que a coordenação aprovou no núcleo: só o aprovado vira aviso.
+ * A chegada completamente guardada no WMS avisa os produtos recebidos,
+ * sem expor caixas ou posições; o saldo atual continua sendo o do portal.
  *
  * O aviso vai só ao cliente dono (`customer_code`) e só com o módulo do
  * modelo no contrato (`client_access.modules`). A OS não leva valor. A NF
@@ -16,7 +18,7 @@
  * gerenciadora.
  */
 
-export const MODELOS_DE_AVISO = ["os_agendada", "os_iniciada", "os_concluida", "nf_emitida", "pedido_do_portal", "estoque_parado"] as const;
+export const MODELOS_DE_AVISO = ["os_agendada", "os_iniciada", "os_concluida", "nf_emitida", "pedido_do_portal", "estoque_parado", "estoque_disponivel"] as const;
 export type ModeloDeAviso = (typeof MODELOS_DE_AVISO)[number];
 
 export const MODELO_ROTULO: Record<ModeloDeAviso, string> = {
@@ -26,6 +28,7 @@ export const MODELO_ROTULO: Record<ModeloDeAviso, string> = {
   nf_emitida: "NF emitida",
   pedido_do_portal: "Solicitação recebida",
   estoque_parado: "Itens parados",
+  estoque_disponivel: "Produtos disponíveis em estoque",
 };
 
 /** O módulo que o cliente precisa ter no contrato para receber o modelo. */
@@ -36,6 +39,7 @@ export const MODULO_DO_MODELO: Record<ModeloDeAviso, "operacao" | "financeiro" |
   nf_emitida: "financeiro",
   pedido_do_portal: "operacao",
   estoque_parado: "wms",
+  estoque_disponivel: "wms",
 };
 
 /** Os modelos que levam valor: por e-mail, só aos papéis de contato que leem valor. */
@@ -51,6 +55,8 @@ export const FONTE_DO_EVENTO = {
   "nf.registered": "functions_financeiro",
   "portal.service_requested": "functions_operacao",
   "estoque_parado.aprovado": "functions_core",
+  // Guarda por caixa e guarda por linha, respectivamente.
+  "inventory.arrival_stored": ["functions_inbound_boxes", "functions"],
 } as const;
 export const EVENTOS_DE_AVISO = Object.keys(FONTE_DO_EVENTO) as Array<keyof typeof FONTE_DO_EVENTO>;
 
@@ -77,7 +83,8 @@ export function eventoLido(id: string, dados: Record<string, unknown>): EventoLi
 
 /** O modelo do evento, ou null quando ele não dá aviso (ou não veio da codebase que grava o tipo). */
 export function modeloDoEvento(evento: Pick<EventoLido, "type" | "source" | "payload">): ModeloDeAviso | null {
-  if (FONTE_DO_EVENTO[evento.type as keyof typeof FONTE_DO_EVENTO] !== evento.source) return null;
+  const fonte = FONTE_DO_EVENTO[evento.type as keyof typeof FONTE_DO_EVENTO];
+  if (typeof fonte === "string" ? fonte !== evento.source : !fonte?.some((permitida) => permitida === evento.source)) return null;
   switch (evento.type) {
     case "os.scheduled":
       return "os_agendada";
@@ -93,6 +100,9 @@ export function modeloDoEvento(evento: Pick<EventoLido, "type" | "source" | "pay
       return "pedido_do_portal";
     case "estoque_parado.aprovado":
       return "estoque_parado";
+    case "inventory.arrival_stored":
+      // O cursor pode anteceder chegadas antigas: só os novos produtores ativam o aviso.
+      return evento.payload.notification_model === "estoque_disponivel" ? "estoque_disponivel" : null;
     default:
       return null;
   }
@@ -105,6 +115,10 @@ export function documentoDoModelo(modelo: ModeloDeAviso, evento: Pick<EventoLido
   if (modelo === "nf_emitida") return { colecao: "client_faturas", id };
   if (modelo === "pedido_do_portal") return { colecao: "service_requests", id };
   if (modelo === "estoque_parado") return { colecao: "ai_stock_alerts", id };
+  if (modelo === "estoque_disponivel") {
+    if (texto(evento.payload.receipt_id) !== id) return null;
+    return { colecao: "inbound_receipts", id };
+  }
   return { colecao: "service_orders", id };
 }
 
@@ -248,6 +262,28 @@ export function avisoDoEvento(evento: EventoLido, documento: Record<string, unkn
         customer_code: customerCode,
         titulo: itens.length === 1 ? "1 item parado no estoque" : `${itens.length} itens parados no estoque`,
         texto: [`Sem movimento há ${dias} dias ou mais`, codigosEmTexto(codigos)].join(" · "),
+        link: "/portal/estoque",
+        entidade: id,
+      };
+    }
+    case "estoque_disponivel": {
+      // A chegada é relida: só a do cliente explícito e já guardada por inteiro.
+      if (!documentoDoModelo(modelo, evento) || texto(documento.customer_code) !== customerCode
+        || (texto(documento.id) && texto(documento.id) !== id)
+        || documento.status !== "received" || documento.putaway_status !== "completed") return null;
+      const itens = (Array.isArray(evento.payload.items) ? evento.payload.items : []).map(registro);
+      if (!itens.length || itens.some((item) => !texto(item.sku_code)
+        || typeof item.quantity !== "number" || !Number.isFinite(item.quantity) || item.quantity <= 0)) return null;
+      const total = itens.reduce((soma, item) => soma + (item.quantity as number), 0);
+      if (!Number.isFinite(total)) return null;
+      // O evento descreve o que entrou; reservas ou saídas posteriores podem mudar o saldo.
+      const quantidade = (valor: number) => valor.toLocaleString("pt-BR", { maximumSignificantDigits: 15 });
+      const resumo = itens.map((item) => `${texto(item.client_item_code) || texto(item.sku_code)} (${quantidade(item.quantity as number)} un.)`);
+      return {
+        modelo,
+        customer_code: customerCode,
+        titulo: "Produtos disponíveis em estoque",
+        texto: `${quantidade(total)} un. recebidas e guardadas · ${codigosEmTexto(resumo)}. Consulte o saldo atual no estoque.`,
         link: "/portal/estoque",
         entidade: id,
       };

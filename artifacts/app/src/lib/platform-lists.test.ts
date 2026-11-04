@@ -392,6 +392,18 @@ describe("os avisos por modelo iguais em todo lugar (parte 4.6)", () => {
     expect(tsList(operacao, "MODELOS_DE_AVISO")).toEqual([...MODELOS_DE_AVISO]);
   });
 
+  it("a API do Comercial publica os mesmos modelos ao criar e editar contatos", () => {
+    const rotas = JSON.parse(read("functions/comercial/src/api/routes.json")) as Array<{
+      requestSchema?: { properties?: { avisos?: { items: { enum: string[] }; maxItems: number } } };
+    }>;
+    const schemas = rotas.flatMap((rota) => rota.requestSchema?.properties?.avisos ?? []);
+    expect(schemas).toHaveLength(2);
+    for (const schema of schemas) {
+      expect(schema.items.enum).toEqual([...MODELOS_DE_AVISO]);
+      expect(schema.maxItems).toBe(MODELOS_DE_AVISO.length);
+    }
+  });
+
   it("o que leva valor e quem lê valor: o mesmo no cadastro e na rotina", () => {
     expect(tsList(comercial, "MODELOS_DE_AVISO_COM_VALOR")).toEqual([...MODELOS_DE_AVISO_COM_VALOR]);
     expect(tsList(operacao, "MODELOS_DE_AVISO_COM_VALOR")).toEqual([...MODELOS_DE_AVISO_COM_VALOR]);

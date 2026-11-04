@@ -67,6 +67,101 @@ const ALERTA = {
   ],
 };
 
+const CHEGADA = { id: "inb_itau", customer_code: "ITAU", status: "received", putaway_status: "completed" };
+const ITENS_GUARDADOS = [
+  { sku_code: "ITAU-000001", client_item_code: "POLO-XG", quantity: 41, product_name: "Polo", size: "XG", location_id: "A-01", box_code: "CX-001", valor_cents: 55555 },
+  { sku_code: "ITAU-000002", quantity: 30 },
+];
+
+function chegadaGuardada(payload: Record<string, unknown> = {}, source = "functions_inbound_boxes"): EventoLido {
+  return evento("inventory.arrival_stored", { id: CHEGADA.id, receipt_id: CHEGADA.id, notification_model: "estoque_disponivel", items: ITENS_GUARDADOS, ...payload }, { source });
+}
+
+describe("os produtos recebidos e guardados", () => {
+  it("avisa a chegada pelas duas fontes do WMS e abre o estoque do cliente", () => {
+    for (const source of ["functions_inbound_boxes", "functions"]) {
+      const aviso = avisoDoEvento(chegadaGuardada({}, source), CHEGADA);
+      assert.deepEqual(aviso, {
+        modelo: "estoque_disponivel", customer_code: "ITAU", titulo: "Produtos disponíveis em estoque",
+        texto: "71 un. recebidas e guardadas · POLO-XG (41 un.) e ITAU-000002 (30 un.). Consulte o saldo atual no estoque.",
+        link: "/portal/estoque", entidade: "inb_itau",
+      });
+      assert.doesNotMatch(JSON.stringify(aviso), /CX-001|A-01|55555|location|box_code|valor|Polo/);
+    }
+  });
+
+  it("recusa fonte não autorizada e resolve somente a chegada indicada pelo evento", () => {
+    for (const source of ["functions_wms", "functions_operacao", "functions_core", ""]) {
+      assert.equal(modeloDoEvento(chegadaGuardada({}, source)), null, source);
+    }
+    const evento = chegadaGuardada();
+    const modelo = modeloDoEvento(evento);
+    assert.equal(modelo, "estoque_disponivel");
+    assert.ok(modelo);
+    assert.deepEqual(documentoDoModelo(modelo, evento), { colecao: "inbound_receipts", id: "inb_itau" });
+    for (const payload of [{ id: "a/b" }, { id: "" }, { receipt_id: "outra_chegada" }]) {
+      assert.equal(documentoDoModelo(modelo, chegadaGuardada(payload)), null);
+    }
+  });
+
+  it("ignora chegadas anteriores à ativação do aviso mesmo com o cursor antigo", () => {
+    for (const notification_model of [undefined, "estoque_parado", ""]) {
+      assert.equal(modeloDoEvento(chegadaGuardada({ notification_model })), null);
+      assert.equal(avisoDoEvento(chegadaGuardada({ notification_model }), CHEGADA), null);
+    }
+  });
+
+  it("só avisa a chegada recebida e guardada do cliente explícito do evento", () => {
+    const evento = chegadaGuardada();
+    for (const documento of [null, { ...CHEGADA, customer_code: "SAFRA" }, { ...CHEGADA, customer_code: "" },
+      { ...CHEGADA, customer_code: undefined }, { ...CHEGADA, status: "created" },
+      { ...CHEGADA, putaway_status: "pending" }, { ...CHEGADA, id: "outra_chegada" }]) {
+      assert.equal(avisoDoEvento(evento, documento), null);
+    }
+    assert.equal(avisoDoEvento({ ...evento, customer_code: null }, CHEGADA), null);
+    assert.equal(avisoDoEvento(chegadaGuardada({ receipt_id: "outra_chegada" }), CHEGADA), null);
+  });
+
+  it("não informa quantidades inválidas nem itens sem código de produto", () => {
+    for (const items of [[], null, [{ quantity: 4 }], [{ sku_code: "ITAU-000001", quantity: 0 }],
+      [{ sku_code: "ITAU-000001", quantity: -1 }], [{ sku_code: "ITAU-000001", quantity: NaN }],
+      [{ sku_code: "ITAU-000001", quantity: Infinity }], [{ sku_code: "ITAU-000001", quantity: "4" }],
+      [...ITENS_GUARDADOS, { sku_code: "ITAU-000003", quantity: -1 }]]) {
+      assert.equal(avisoDoEvento(chegadaGuardada({ items }), CHEGADA), null);
+    }
+  });
+
+  it("resume até três códigos com as quantidades e mantém o total de todos", () => {
+    const items = [
+      { sku_code: "ITAU-000001", client_item_code: "POLO-XG", quantity: 41 },
+      { sku_code: "ITAU-000002", quantity: 30 },
+      { sku_code: "ITAU-000003", quantity: 2.5 },
+      { sku_code: "ITAU-000004", quantity: 1 },
+    ];
+    assert.equal(avisoDoEvento(chegadaGuardada({ items }), CHEGADA)?.texto,
+      "74,5 un. recebidas e guardadas · POLO-XG (41 un.), ITAU-000002 (30 un.), ITAU-000003 (2,5 un.) e mais 1. Consulte o saldo atual no estoque.");
+  });
+
+  it("preserva quantidades menores que um milésimo aceitas no recebimento por linha", () => {
+    const items = [{ sku_code: "ITAU-000001", quantity: 0.0004 }, { sku_code: "ITAU-000002", quantity: 1.2345 }];
+    assert.equal(avisoDoEvento(chegadaGuardada({ items }, "functions"), CHEGADA)?.texto,
+      "1,2349 un. recebidas e guardadas · ITAU-000001 (0,0004 un.) e ITAU-000002 (1,2345 un.). Consulte o saldo atual no estoque.");
+  });
+
+  it("exige WMS e aceita todo papel de contato somente com o modelo ligado", () => {
+    const modelo = modeloDoEvento(chegadaGuardada());
+    assert.ok(modelo);
+    assert.equal(clienteRecebeOModelo(modelo, ["wms"]), true);
+    assert.equal(clienteRecebeOModelo(modelo, ["operacao", "financeiro"]), false);
+    const contatos = ["gestor_cliente", "financeiro", "gerenciadora", "outro"].map((papel) => ({
+      papel, email: `${papel}@exemplo.com`, avisos: ["estoque_disponivel"], ativo: true,
+    }));
+    assert.deepEqual(destinatariosDoModelo(modelo, contatos), ["financeiro@exemplo.com", "gerenciadora@exemplo.com", "gestor_cliente@exemplo.com", "outro@exemplo.com"]);
+    assert.deepEqual(destinatariosDoModelo(modelo, [...contatos.map((contato) => ({ ...contato, avisos: [] })),
+      { ...contatos[0], ativo: false }, { ...contatos[1], email: "inválido" }]), []);
+  });
+});
+
 describe("qual evento vira aviso", () => {
   it("a OS agendada (ou planejada com a data), iniciada e concluída, a NF registrada e a solicitação do portal", () => {
     assert.equal(modeloDoEvento(evento("os.scheduled", { id: "10050-01" })), "os_agendada");

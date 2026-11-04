@@ -300,18 +300,28 @@ documento" filtra quando há mais de um.
 | "NF 1234 emitida" | O Financeiro registra a NF; o valor e o vencimento. | Faturas | Faturas |
 | "Solicitação recebida" | A solicitação enviada pelo portal; o tipo e o dia. | Minhas OS | Operação |
 | "2 itens parados no estoque" | A coordenação aprovou o alerta: "Sem movimento há 90 dias ou mais" e até três códigos. | Estoque | Armazenagem |
+| "Produtos disponíveis em estoque" | O recebimento foi inteiramente guardado nas prateleiras; inclui a quantidade recebida e códigos dos produtos. Também vale para reposição. | Estoque | Armazenagem |
 
 - **O sino** traz os 20 avisos mais novos da empresa, ao vivo. Novo é o que
   chegou depois da última vez que o login abriu o sino ("Avisos: 2 novos");
   abrir marca tudo como visto, só para aquele login.
 - **O prazo:** a rotina roda a cada 5 minutos e pega o evento com mais de 1
-  minuto: o aviso chega em até 6 minutos. A vistoria, a OS cancelada e os
-  pedidos e envios do armazém não dão aviso.
+  minuto: normalmente o aviso chega em até 6 minutos, sujeito à fila e a
+  retentativas. A vistoria, a OS cancelada e os pedidos do armazém não dão aviso.
+  No recebimento, cadastrar ou conferir os produtos ainda não dispara o aviso:
+  ele espera a última guarda. O texto registra o que foi recebido e guardado;
+  o saldo atual para pedido deve ser consultado no Estoque.
 - **O e-mail** vai aos contatos do cliente no cadastro da Dutelog (Comercial ›
   Clientes) ativos, com e-mail e com o modelo marcado em "Avisos por e-mail".
   A "NF emitida", que leva valor, vai só ao "Gestor do cliente" e ao
   "Financeiro", nunca à "Gerenciadora". Sai de "Dutelog
   <avisos@dutelog.com.br>", com o assunto "… · Dutelog" e o link da tela.
+- **Produtos disponíveis em estoque:** pode ser marcado para qualquer papel
+  de contato. Começa desmarcado; habilitar depois não reenvia recebimentos
+  anteriores. Não há aviso por caixa intermediária, inventário de abertura
+  ou entrada manual. Por linha, uma guarda parcial seguida de guarda avulsa
+  sem vínculo com o recebimento não gera o aviso de conclusão: é preciso
+  comprovar a guarda de toda a quantidade daquele recebimento.
 - **Com o portal desligado** (o cliente arquivado ou "Sem portal"), não sai
   aviso, nem no sino nem por e-mail. O que aconteceu nesse tempo não vira
   aviso quando o portal volta.

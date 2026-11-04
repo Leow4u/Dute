@@ -23,6 +23,7 @@ import {
 } from "./operations.js";
 import { assignMissingRequestNumbers } from "./request-numbers.js";
 import { catalogPriceId } from "./catalog-prices.js";
+import { openAreaPutaway } from "./area-putaway.js";
 
 const PROJECT_ID = "demo-dute-operations";
 const actor: OperationalActor = {
@@ -3669,5 +3670,239 @@ describe("guarda numa posição cadastrada", () => {
     assert.equal(source?.qty_on_hand, 10);
     assert.equal((await db.collection("movements").where("putaway_task_id", "==", "put_guarda_4").get()).size, 0);
     assert.equal((await db.collection("events").where("entity_id", "==", "put_guarda_4").get()).size, 0);
+  });
+});
+
+describe("aviso de produtos disponíveis no recebimento por linha", () => {
+  const CUSTOMER = "BTG Pactual";
+  type ArrivalLine = { expected: number; received?: number; location?: string };
+
+  async function prepareArrival(lines: ArrivalLine[]) {
+    await clearFirestore();
+    for (const [index, code] of ["A-01", "A-02"].entries()) {
+      await db.collection("warehouse_positions").doc(code).set({
+        code, aisle: "A", shelf: index + 1, sequence: index + 1,
+        length_m: 1.8, depth_m: 0.75, height_m: 0.5,
+        customer_code: CUSTOMER, status: "active",
+      });
+    }
+    const created = await createInboundReceiptTransaction(db, {
+      customer_code: CUSTOMER,
+      supplier: "Fornecedor do aviso de disponibilidade",
+      invoice_number: "NF-DISPONIVEL-1",
+      idempotency_key: "chegada-disponivel",
+      items: lines.map((line, index) => ({
+        line_number: index + 1,
+        client_item_code: `DISPONIVEL-${index + 1}`,
+        product_name: `Produto disponível ${index + 1}`,
+        product_registration: "new" as const,
+        category: "VESTUARIO",
+        size: index === 0 ? "M" : "G",
+        photo_urls: ["https://storage.googleapis.com/demo-dute-operations/product-photos/disponivel.jpg"],
+        unit_cost: 25,
+        quantity: line.expected,
+        location_id: line.location ?? "RECEBIMENTO",
+      })),
+    }, actor);
+    const receiptId = String(created.receipt_id);
+    await advance(`receiving:${receiptId}`, "created");
+    const items = (await db.collection("inbound_items").where("receipt_id", "==", receiptId).get()).docs
+      .sort((left, right) => Number(left.get("line_number")) - Number(right.get("line_number")));
+    await updateInboundReceiptConferenceTransaction(db, {
+      receipt_id: receiptId,
+      expected_status: "checking",
+      idempotency_key: "conferencia-disponivel",
+      lines: items.map((item, index) => ({
+        inbound_item_id: item.id,
+        received_qty: lines[index]!.received ?? lines[index]!.expected,
+        location_id: lines[index]!.location ?? "RECEBIMENTO",
+      })),
+    }, actor);
+    const completionInput = {
+      task_uid: `receiving:${receiptId}`,
+      expected_status: "checking",
+      note: "Conferência física: quantidade efetivamente recebida.",
+      idempotency_key: "concluir-disponivel",
+    };
+    return { receiptId, items, completionInput, receiptNumber: String(created.receipt_number) };
+  }
+
+  async function notices(receiptId: string) {
+    const events = await db.collection("events").where("type", "==", "inventory.arrival_stored").get();
+    return events.docs.filter((event) => event.get("entity_id") === receiptId);
+  }
+
+  async function guards(receiptId: string) {
+    return (await db.collection("putaway_tasks").where("receipt_id", "==", receiptId).get()).docs
+      .sort((left, right) => String(left.get("sku_code")).localeCompare(String(right.get("sku_code"))));
+  }
+
+  const guard = (id: string, quantity: number, destination = "A-01") =>
+    advance(`putaway:${id}`, "planned", {
+      source_location_id: "RECEBIMENTO",
+      destination_location_id: destination,
+      location_id: destination,
+      quantity,
+    });
+
+  async function assertNotAnnounced(receiptId: string) {
+    assert.equal((await notices(receiptId)).length, 0);
+    const receipt = await db.collection("inbound_receipts").doc(receiptId).get();
+    assert.notEqual(receipt.get("putaway_status"), "completed");
+    assert.equal(receipt.get("arrival_stored_event_id"), undefined);
+  }
+
+  it("a entrada direta na prateleira anuncia só o recebido, sem a falta, uma vez no replay", async () => {
+    const arrival = await prepareArrival([
+      { expected: 4, received: 3, location: "A-01" },
+      { expected: 2, received: 0, location: "RECEBIMENTO" },
+    ]);
+    assert.equal((await notices(arrival.receiptId)).length, 0, "a conferência não anuncia");
+    const result = await advanceWarehouseTaskTransaction(db, arrival.completionInput, actor);
+    const [event] = await notices(arrival.receiptId);
+    assert.ok(event);
+    assert.equal(event.get("source"), "functions");
+    assert.equal(event.get("customer_code"), CUSTOMER);
+    assert.equal(event.get("entity_type"), "recebimento");
+    assert.equal(event.get("payload.notification_model"), "estoque_disponivel");
+    assert.deepEqual(event.get("payload"), {
+      notification_model: "estoque_disponivel",
+      id: arrival.receiptId,
+      receipt_id: arrival.receiptId,
+      receipt_number: arrival.receiptNumber,
+      invoice_number: "NF-DISPONIVEL-1",
+      items: [{
+        sku_code: String(arrival.items[0]!.get("sku_code")),
+        client_item_code: "DISPONIVEL-1",
+        product_name: "Produto disponível 1",
+        size: "M",
+        quantity: 3,
+      }],
+    });
+    assert.doesNotMatch(JSON.stringify(event.get("payload")), /unit_cost|valor|preco|location|CX-/);
+    const receipt = await db.collection("inbound_receipts").doc(arrival.receiptId).get();
+    assert.equal(receipt.get("putaway_status"), "completed");
+    assert.ok(receipt.get("putaway_completed_at"));
+    assert.equal(receipt.get("arrival_stored_event_id"), event.id);
+    const movements = await db.collection("movements").get();
+    assert.equal(movements.size, 1, "só a entrada da quantidade recebida");
+    const eventCount = (await db.collection("events").get()).size;
+    const replay = await advanceWarehouseTaskTransaction(db, arrival.completionInput, actor);
+    // O recibo persistido remove propriedades undefined, como a resposta JSON.
+    assert.deepEqual(replay, JSON.parse(JSON.stringify(result)));
+    assert.deepEqual(replay.effects, { received_lines: 2, received_qty: 3 });
+    assert.deepEqual(replay.events, result.events);
+    assert.equal((await notices(arrival.receiptId)).length, 1);
+    assert.equal((await db.collection("movements").get()).size, movements.size);
+    assert.equal((await db.collection("events").get()).size, eventCount);
+    await assert.rejects(updateInboundReceiptConferenceTransaction(db, {
+      receipt_id: arrival.receiptId,
+      idempotency_key: "reconferir-disponivel",
+      lines: [{ inbound_item_id: arrival.items[0]!.id, received_qty: 4 }],
+    }, actor), /não aceita nova conferência/);
+    assert.equal((await notices(arrival.receiptId)).length, 1);
+  });
+
+  it("espera a última guarda integral e mantém no aviso os produtos recebidos direto", async () => {
+    const arrival = await prepareArrival([
+      { expected: 2, location: "A-01" },
+      { expected: 4 },
+      { expected: 6, received: 5 },
+    ]);
+    await advanceWarehouseTaskTransaction(db, arrival.completionInput, actor);
+    await assertNotAnnounced(arrival.receiptId);
+    const tasks = await guards(arrival.receiptId);
+    assert.equal(tasks.length, 2);
+    await guard(tasks[0]!.id, 4);
+    await assertNotAnnounced(arrival.receiptId);
+    const last = await guard(tasks[1]!.id, 5, "A-02");
+    const [event] = await notices(arrival.receiptId);
+    assert.ok(event);
+    assert.deepEqual(event.get("payload.items").map((item: { quantity: number }) => item.quantity), [2, 4, 5]);
+    assert.equal((await db.collection("inbound_receipts").doc(arrival.receiptId).get()).get("putaway_status"), "completed");
+    assert.deepEqual(await guard(tasks[1]!.id, 5, "A-02"), last);
+    assert.equal((await notices(arrival.receiptId)).length, 1);
+    await assert.rejects(advanceWarehouseTaskTransaction(db, {
+      task_uid: `putaway:${tasks[1]!.id}`,
+      expected_status: "completed",
+      operation: { destination_location_id: "A-02", quantity: 5 },
+      idempotency_key: "outra-chave-depois-da-guarda",
+    }, actor), /já finalizada/);
+    assert.equal((await notices(arrival.receiptId)).length, 1);
+  });
+
+  it("duas últimas guardas de SKUs e prateleiras diferentes ao mesmo tempo anunciam uma única chegada", async () => {
+    const arrival = await prepareArrival([{ expected: 4 }, { expected: 6 }]);
+    await advanceWarehouseTaskTransaction(db, arrival.completionInput, actor);
+    const tasks = await guards(arrival.receiptId);
+    await Promise.all([guard(tasks[0]!.id, 4, "A-01"), guard(tasks[1]!.id, 6, "A-02")]);
+    const events = await notices(arrival.receiptId);
+    assert.equal(events.length, 1);
+    assert.deepEqual(events[0]!.get("payload.items").map((item: { quantity: number }) => item.quantity), [4, 6]);
+    const receipt = await db.collection("inbound_receipts").doc(arrival.receiptId).get();
+    assert.equal(receipt.get("arrival_stored_event_id"), events[0]!.id);
+    assert.equal(receipt.get("putaway_status"), "completed");
+    assert.equal((await db.collection("movements").get()).size, 6, "duas entradas e dois pares de guarda");
+  });
+
+  it("guarda parcial seguida de baixa do restante não anuncia, mesmo com todas as tarefas concluídas", async () => {
+    const arrival = await prepareArrival([{ expected: 4 }, { expected: 2 }]);
+    await advanceWarehouseTaskTransaction(db, arrival.completionInput, actor);
+    const tasks = await guards(arrival.receiptId);
+    await guard(tasks[0]!.id, 3);
+    assert.equal((await tasks[0]!.ref.get()).get("status"), "completed", "preserva a semântica da guarda parcial");
+    await createInventoryMovementTransaction(db, {
+      customer_code: CUSTOMER,
+      sku_code: String(arrival.items[0]!.get("sku_code")),
+      client_item_code: "DISPONIVEL-1",
+      type: "SAIDA",
+      quantity: 1,
+      location_id: "RECEBIMENTO",
+      reason: "Peça avariada descartada depois da entrada",
+      idempotency_key: "baixa-restante",
+    }, actor);
+    await guard(tasks[1]!.id, 2, "A-02");
+    assert.ok((await guards(arrival.receiptId)).every((task) => task.get("status") === "completed"));
+    const receiving = await db.collection("stock_balances").where("location_id", "==", "RECEBIMENTO").get();
+    assert.ok(receiving.docs.every((balance) => balance.get("qty_on_hand") === 0));
+    await assertNotAnnounced(arrival.receiptId);
+  });
+
+  it("remanescente de guarda parcial tratado por guarda avulsa não comprova a conclusão da chegada", async () => {
+    const arrival = await prepareArrival([{ expected: 4 }, { expected: 2 }]);
+    await advanceWarehouseTaskTransaction(db, arrival.completionInput, actor);
+    const tasks = await guards(arrival.receiptId);
+    await guard(tasks[0]!.id, 3);
+    const extra = await openAreaPutaway(db, {
+      customer_code: CUSTOMER,
+      sku_code: String(arrival.items[0]!.get("sku_code")),
+      location_id: "RECEBIMENTO",
+      quantity: 1,
+      reason: "Remanescente sem guarda vinculada",
+      idempotency_key: "abrir-guarda-restante",
+    }, { ...actor, role: "interno" });
+    const extraTask = await db.collection("putaway_tasks").doc(String(extra.putaway_task_id)).get();
+    assert.equal(extraTask.get("receipt_id"), undefined);
+    await guard(extraTask.id, 1);
+    await guard(tasks[1]!.id, 2, "A-02");
+    await assertNotAnnounced(arrival.receiptId);
+  });
+
+  it("entrada em EXPEDICAO não anuncia, mesmo quando a outra linha termina a guarda", async () => {
+    const arrival = await prepareArrival([{ expected: 4, location: "EXPEDICAO" }, { expected: 2 }]);
+    await advanceWarehouseTaskTransaction(db, arrival.completionInput, actor);
+    await assertNotAnnounced(arrival.receiptId);
+    const tasks = await guards(arrival.receiptId);
+    assert.equal(tasks.length, 1);
+    await guard(tasks[0]!.id, 2);
+    await assertNotAnnounced(arrival.receiptId);
+  });
+
+  it("recebimento totalmente faltante não anuncia produtos disponíveis", async () => {
+    const arrival = await prepareArrival([{ expected: 4, received: 0, location: "A-01" }]);
+    await advanceWarehouseTaskTransaction(db, arrival.completionInput, actor);
+    assert.equal((await notices(arrival.receiptId)).length, 0);
+    assert.equal((await guards(arrival.receiptId)).length, 0);
+    assert.equal((await db.collection("movements").get()).size, 0);
   });
 });

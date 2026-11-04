@@ -816,10 +816,11 @@
               "os_concluida",
               "nf_emitida",
               "pedido_do_portal",
-              "estoque_parado"
+              "estoque_parado",
+              "estoque_disponivel"
             ]
           },
-          "maxItems": 6
+          "maxItems": 7
         },
         "ativo": {
           "type": "boolean"
@@ -882,10 +883,11 @@
               "os_concluida",
               "nf_emitida",
               "pedido_do_portal",
-              "estoque_parado"
+              "estoque_parado",
+              "estoque_disponivel"
             ]
           },
-          "maxItems": 6
+          "maxItems": 7
         },
         "ativo": {
           "type": "boolean"

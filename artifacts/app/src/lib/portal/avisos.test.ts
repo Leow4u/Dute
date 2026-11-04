@@ -8,6 +8,15 @@ const AGORA = new Date("2026-10-28T17:30:00.000Z"); // 14:30 em São Paulo
 const timestamp = (iso: string) => ({ toDate: () => new Date(iso) });
 
 describe("o aviso do portal", () => {
+  it("mostra a chegada disponível e abre o estoque", () => {
+    expect(avisoDoPortal("ntf_chegada", {
+      modelo: "estoque_disponivel",
+      titulo: "Produtos disponíveis em estoque",
+      texto: "30 un. recebidas e guardadas · POLO-P: 30 un.",
+      link: "/portal/estoque",
+    })).toMatchObject({ modelo: "estoque_disponivel", link: "/portal/estoque" });
+  });
+
   it("lê o aviso gravado pela rotina; sem título ou com modelo desconhecido, fica de fora", () => {
     expect(
       avisoDoPortal("ntf_1", { modelo: "os_agendada", titulo: "OS 10050-01 agendada", texto: "Transporte · 29/10/2026 08:00–12:00", link: "/portal/servicos?os=10050-01", created_at: timestamp("2026-10-28T17:00:00.000Z") }),

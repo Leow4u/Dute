@@ -252,6 +252,17 @@ describe("entrada de local e contato", () => {
 });
 
 describe("os avisos do contato por e-mail (parte 4.6b)", () => {
+  it("aceita o aviso de estoque disponível em todos os papéis de contato", () => {
+    for (const papel of ["gestor_cliente", "gerenciadora", "financeiro", "outro"]) {
+      const contato = entrada(SaveCustomerContactInput, {
+        idempotency_key: "k", customer_code: "ITAU", nome: "Fulano de Tal",
+        email: "fulano@cliente.com", papel, avisos: ["estoque_disponivel"],
+      });
+      assert.deepEqual(contato.avisos, ["estoque_disponivel"]);
+      assert.equal(problemaDosAvisos(contato.avisos!, papel, contato.email), null);
+    }
+  });
+
   it("a lista vem na ordem dos modelos, sem repetir; modelo fora da lista recusa", async () => {
     const contato = entrada(SaveCustomerContactInput, {
       idempotency_key: "k",

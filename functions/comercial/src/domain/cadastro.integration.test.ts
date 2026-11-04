@@ -700,6 +700,20 @@ describe("contatos do cliente", () => {
     }
   });
 
+  it("o contato adere ao estoque disponível, preserva ao editar e pode desligar", async () => {
+    await criar(comercial, { name: "Construtora Ômega" });
+    const base = { customer_code: "CONSTRUTORA-OMEGA", nome: "Contato", email: "estoque@omega.com.br", papel: "gerenciadora" };
+    const criado = await saveCustomerContactFor(db, comercial, { ...base, idempotency_key: key() });
+    const ref = db.collection("customer_contacts").doc(criado.contato_id);
+    assert.deepEqual((await ref.get()).get("avisos"), []);
+    await saveCustomerContactFor(db, comercial, { ...base, contato_id: criado.contato_id, idempotency_key: key(), avisos: ["estoque_disponivel"] });
+    assert.deepEqual((await ref.get()).get("avisos"), ["estoque_disponivel"]);
+    await saveCustomerContactFor(db, comercial, { ...base, contato_id: criado.contato_id, idempotency_key: key(), telefone: "11987654321" });
+    assert.deepEqual((await ref.get()).get("avisos"), ["estoque_disponivel"]);
+    await saveCustomerContactFor(db, comercial, { ...base, contato_id: criado.contato_id, idempotency_key: key(), avisos: [] });
+    assert.deepEqual((await ref.get()).get("avisos"), []);
+  });
+
   it("a mesma pessoa em dois clientes são dois contatos; no mesmo cliente, um só", async () => {
     await criar(comercial, { name: "Construtora Ômega" });
     await criar(comercial, { name: "Banco Safra" });

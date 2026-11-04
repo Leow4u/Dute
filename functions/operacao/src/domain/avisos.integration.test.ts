@@ -210,6 +210,87 @@ describe("a rotina dos avisos", () => {
     assert.equal(resultado.emails, 0);
     assert.deepEqual(await emails(), []);
   });
+
+  it("a chegada guardada por caixa ou linha dá um aviso e e-mail por evento, sem duplicar no replay", async () => {
+    await rodar(AS_10H);
+    await db.collection("customer_contacts").doc("ct_obra").update({ avisos: ["estoque_disponivel"] });
+    await db.collection("customer_contacts").doc("ct_safra").update({ avisos: ["estoque_disponivel"] });
+    for (const [id, source] of [["inb_caixa", "functions_inbound_boxes"], ["inb_linha", "functions"]]) {
+      await db.collection("inbound_receipts").doc(id).set({ id, customer_code: "ITAU", status: "received", putaway_status: "completed" });
+      await evento(`evt_${id}`, "inventory.arrival_stored", {
+        id, receipt_id: id, notification_model: "estoque_disponivel",
+        items: [{ sku_code: "ITAU-000001", client_item_code: "POLO-XG", quantity: 41, box_code: "CX-001", location_id: "A-01", valor_cents: 55555 }],
+      }, minutos(AS_10H, 1), { source });
+    }
+    const resultado = await rodar(minutos(AS_10H, 5));
+    assert.deepEqual([resultado.eventos, resultado.avisos, resultado.emails, resultado.auditados], [2, 2, 2, 2]);
+    for (const aviso of await avisos()) {
+      assert.equal(aviso.customer_code, "ITAU");
+      assert.equal(aviso.modelo, "estoque_disponivel");
+      assert.equal(aviso.titulo, "Produtos disponíveis em estoque");
+      assert.equal(aviso.link, "/portal/estoque");
+      assert.doesNotMatch(JSON.stringify(aviso), /CX-001|A-01|55555/);
+    }
+    for (const email of await emails()) {
+      assert.deepEqual(email.to, ["obra@gerenciadora.com"]);
+      assert.match(email.text, /41 un\. recebidas e guardadas/);
+      assert.match(email.text, /Consulte o saldo atual no estoque\./);
+      assert.match(email.text, /https:\/\/app\.dutelog\.com\.br\/portal\/estoque/);
+    }
+    await db.collection(NOTIFICATION_CURSORS_COLLECTION).doc(CURSOR_ID).set({ created_at: Timestamp.fromDate(AS_10H), evento_id: "" });
+    const replay = await rodar(minutos(AS_10H, 6));
+    assert.deepEqual([replay.eventos, replay.avisos, replay.emails], [2, 0, 0]);
+    assert.deepEqual([(await avisos()).length, (await emails()).length], [2, 2]);
+  });
+
+  it("sem adesão ao novo modelo, a chegada guardada aparece somente no sino", async () => {
+    await rodar(AS_10H);
+    await db.collection("inbound_receipts").doc("inb_sem_optin").set({ customer_code: "ITAU", status: "received", putaway_status: "completed" });
+    await evento("evt_chegada", "inventory.arrival_stored", {
+      id: "inb_sem_optin", receipt_id: "inb_sem_optin", notification_model: "estoque_disponivel", items: [{ sku_code: "ITAU-000001", quantity: 3 }],
+    }, minutos(AS_10H, 1), { source: "functions_inbound_boxes" });
+    const resultado = await rodar(minutos(AS_10H, 5));
+    assert.deepEqual([resultado.avisos, resultado.emails], [1, 0]);
+    assert.equal((await avisos())[0].modelo, "estoque_disponivel");
+    assert.deepEqual(await emails(), []);
+  });
+
+  it("não avisa estoque de outro cliente, sem dono, incompleto, de outra fonte ou com acesso desligado", async () => {
+    await rodar(AS_10H);
+    const casos = [
+      { id: "inb_outro", customer: "ITAU", owner: "SAFRA" },
+      { id: "inb_sem_dono", customer: "ITAU", owner: "" },
+      { id: "inb_incompleto", customer: "ITAU", owner: "ITAU", putaway: "pending" },
+      { id: "inb_fonte", customer: "ITAU", owner: "ITAU", source: "functions_operacao" },
+      { id: "inb_sem_wms", customer: "OBRA", owner: "OBRA" },
+      { id: "inb_sem_portal", customer: "SAFRA", owner: "SAFRA" },
+      { id: "inb_referencia", customer: "ITAU", owner: "ITAU", receipt_id: "outro_id" },
+    ];
+    await db.collection("client_access").doc("OBRA").set({ modules: ["operacao", "financeiro"] });
+    await db.collection("client_access").doc("SAFRA").update({ portal_ativo: false });
+    await db.collection("customer_contacts").doc("ct_obra").update({ avisos: ["estoque_disponivel"] });
+    for (const caso of casos) {
+      await db.collection("inbound_receipts").doc(caso.id).set({ customer_code: caso.owner, status: "received", putaway_status: caso.putaway ?? "completed" });
+      await evento(`evt_${caso.id}`, "inventory.arrival_stored", {
+        id: caso.id, receipt_id: caso.receipt_id ?? caso.id, notification_model: "estoque_disponivel", items: [{ sku_code: "ITAU-000001", quantity: 3 }],
+      }, minutos(AS_10H, 1), { customer_code: caso.customer, source: caso.source ?? "functions_inbound_boxes" });
+    }
+    const resultado = await rodar(minutos(AS_10H, 5));
+    assert.deepEqual([resultado.eventos, resultado.avisos, resultado.emails], [7, 0, 0]);
+    assert.deepEqual([await avisos(), await emails()], [[], []]);
+  });
+
+  it("não envia a chegada histórica sem o marcador novo mesmo que ela esteja após o cursor", async () => {
+    await rodar(AS_10H);
+    await db.collection("customer_contacts").doc("ct_obra").update({ avisos: ["estoque_disponivel"] });
+    await db.collection("inbound_receipts").doc("inb_legado").set({ customer_code: "ITAU", status: "received", putaway_status: "completed" });
+    await evento("evt_chegada_legada", "inventory.arrival_stored", {
+      id: "inb_legado", receipt_id: "inb_legado", items: [{ sku_code: "ITAU-000001", quantity: 3 }],
+    }, minutos(AS_10H, 1), { source: "functions_inbound_boxes" });
+    const resultado = await rodar(minutos(AS_10H, 5));
+    assert.deepEqual([resultado.eventos, resultado.avisos, resultado.emails], [1, 0, 0]);
+    assert.deepEqual([await avisos(), await emails()], [[], []]);
+  });
 });
 
 describe("a fila de e-mail", () => {

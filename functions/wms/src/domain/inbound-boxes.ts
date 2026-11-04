@@ -1598,6 +1598,7 @@ export async function storeInboundBox(db: Firestore, raw: unknown, actor: Operat
           entity_id: input.receipt_id,
           customer_code: owner,
           payload: clean({
+            notification_model: "estoque_disponivel",
             id: input.receipt_id,
             receipt_id: input.receipt_id,
             receipt_number: receiptNumber,

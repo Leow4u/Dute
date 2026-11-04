@@ -507,7 +507,7 @@ describe("chamadas das callables (functions/comercial, entrada .strict())", () =
   it("avisos por e-mail (parte 4.6b): nenhum sem e-mail; a NF só para o gestor e o financeiro do cliente", () => {
     const vazio = formDoContato(null);
     expect(avisosOferecidos(vazio)).toEqual([]);
-    expect(avisosOferecidos({ email: "r@itau.com", papel: "gestor_cliente" })).toEqual(["os_agendada", "os_iniciada", "os_concluida", "nf_emitida", "pedido_do_portal", "estoque_parado"]);
+    expect(avisosOferecidos({ email: "r@itau.com", papel: "gestor_cliente" })).toEqual(["os_agendada", "os_iniciada", "os_concluida", "nf_emitida", "pedido_do_portal", "estoque_parado", "estoque_disponivel"]);
     expect(avisosOferecidos({ email: "r@itau.com", papel: "financeiro" })).toContain("nf_emitida");
     for (const papel of ["gerenciadora", "outro", ""]) expect(avisosOferecidos({ email: "c@sl.com", papel })).not.toContain("nf_emitida");
 
@@ -519,6 +519,19 @@ describe("chamadas das callables (functions/comercial, entrada .strict())", () =
     expect(avisosDoFormulario({ ...form, email: "" })).toEqual([]);
     expect(avisosDoFormulario({ ...form, papel: "gerenciadora" })).toEqual(["os_agendada"]);
     expect(payloadContato("ITAU-UNIBANCO", { ...form, papel: "gerenciadora" }, "k14").avisos).toEqual(["os_agendada"]);
+  });
+
+  it("estoque disponível começa desmarcado e preserva a escolha do contato ao editar", () => {
+    const novo = formDoContato(null);
+    expect(novo.avisos).toEqual([]);
+    for (const papel of ["gestor_cliente", "financeiro", "gerenciadora", "outro"]) {
+      expect(avisosOferecidos({ email: "contato@cliente.com", papel })).toContain("estoque_disponivel");
+    }
+    const marcado = marcarAviso({ ...novo, nome: "Contato", email: "contato@cliente.com", papel: "outro" }, "estoque_disponivel", true);
+    expect(payloadContato("ITAU", marcado, "k-estoque").avisos).toEqual(["estoque_disponivel"]);
+    const salvo = contatoDoDocumento("ct_estoque", { customer_code: "ITAU", ...marcado })!;
+    expect(formDoContato(salvo).avisos).toEqual(["estoque_disponivel"]);
+    expect(payloadContato("ITAU", marcarAviso(formDoContato(salvo), "estoque_disponivel", false), "k-remover", salvo).avisos).toEqual([]);
   });
 
   it("alteração de contato manda os avisos só quando mudam", () => {
