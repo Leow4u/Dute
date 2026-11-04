@@ -61,6 +61,7 @@ describe("buildHomeInbox", () => {
       role: "admin",
       ops: busyOps,
       requests,
+      agenteDoNucleo: false,
     });
 
     expect(items.map((item) => [item.id, item.title, item.href])).toEqual([
@@ -75,6 +76,32 @@ describe("buildHomeInbox", () => {
     expect(items[1].detail).toBe("Retirada 40 un · Recebimento NF 9");
     expect(items[5].detail).toBe("Saldo divergente em 3 SKUs e mais 1");
     expect(summary).toEqual({ toPick: 2, toShip: 1, inTransit: 1, openReceipts: 1 });
+  });
+
+  it("com o agente do núcleo, não conta a caixa antiga do agente", () => {
+    // O radar do painel é este "Precisa de você": a linha voltaria para ele.
+    const { items } = buildHomeInbox({ role: "admin", ops: busyOps, requests, agenteDoNucleo: true });
+    expect(items.map((item) => item.id)).not.toContain("agent");
+    expect(items.some((item) => item.href === "/agente/painel")).toBe(false);
+  });
+
+  it("com o agente do núcleo, as anotações e os playbooks para aprovar levam ao painel e ao Conhecimento", () => {
+    const agentDecisions = {
+      notes: ["A BTG pede a entrega na portaria até as 10h", "Nas NFs de uniformes, contar por tamanho"],
+      playbooks: ["Aprovar solicitação", "Receber", "Recebimento com divergência", "Separar e embalar", "Entregar", "Pedido pelo portal", "Aviso de envio"],
+    };
+    const { items } = buildHomeInbox({ role: "admin", ops: busyOps, requests, agentDecisions, agenteDoNucleo: true });
+    expect(items.slice(-2).map((item) => [item.id, item.tone, item.title, item.detail, item.href, item.actionLabel])).toEqual([
+      ["agent-notes", "agent", "2 anotações do Agent Dute para aprovar", "A BTG pede a entrega na portaria até as 10h e mais 1", "/agente/painel", "Revisar"],
+      ["agent-playbooks", "agent", "7 playbooks do Agent Dute para aprovar", "Aprovar solicitação · Receber e mais 5", "/agente/conhecimento", "Revisar"],
+    ]);
+    expect(buildHomeInbox({ role: "admin", agentDecisions: { notes: ["Só uma anotação"], playbooks: [] }, agenteDoNucleo: true }).items.map((item) => [item.title, item.detail])).toEqual([
+      ["1 anotação do Agent Dute para aprovar", "Só uma anotação"],
+    ]);
+    // O armazém não decide o agente: as telas são da coordenação.
+    expect(buildHomeInbox({ role: "wms", agentDecisions, agenteDoNucleo: true }).items).toEqual([]);
+    // Sem o agente do núcleo, não há o que decidir por aqui.
+    expect(buildHomeInbox({ role: "admin", agentDecisions, agenteDoNucleo: false }).items).toEqual([]);
   });
 
   it("fica vazia quando não há nada parado", () => {

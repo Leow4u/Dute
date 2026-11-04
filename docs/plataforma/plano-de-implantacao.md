@@ -938,6 +938,9 @@ esperam o alinhamento.
     pendente" quando a lista de notificações não carrega: o erro parece fila
     vazia (achado 66 da auditoria de 24/07, ainda aberto). Recomendo a tela
     dizer que não carregou, com "Tentar de novo", como as telas da v3.
+    Resolvida em 04/11/2026 onde o agente do núcleo roda: o painel novo não
+    tem as notificações e diz o que não carregou (`fase-5-memoria.md`, "O
+    painel do Agent Dute na v3").
 
 **Faturamento do WMS** (25/10/2026). O uso do mês fechado congela uma vez
 em `billing_operational_snapshots` (`ensureFrozenBillingUsage`, de
@@ -1194,7 +1197,8 @@ Limitações conhecidas, sem pergunta, para quando houver tempo:
   parou e foi desistida, fica órfã na Omie: sem nota e sem conta a receber.
   Exige várias falhas seguidas e uma desistência; quem usa a Omie a
   reconhece pelo código de integração (o id da emissão na Dute).
-- O "peças em acompanhamento" do Painel do Agent Dute lê o total do
+- (Fora do agente do núcleo: o painel novo, de 04/11/2026, não tem esse
+  número.) O "peças em acompanhamento" do Painel do Agent Dute lê o total do
   `ops_aggregates/dashboard`. A abertura do inventário e o recebimento de
   produto novo não somam nesse total, e a entrega desconta, então ele fica
   menor que o estoque e pode ficar negativo. É o total de todos os clientes,

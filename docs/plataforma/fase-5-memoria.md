@@ -1734,3 +1734,89 @@ Na produção, vale desde a segunda publicação do mesmo dia (`59d78bc`, run
 6. **Para desfazer:** reverter o PR das listas e publicar de novo. O
    agente do WMS volta a responder, e as rotinas voltam para ele. O que o
    núcleo gravou fica nas mesmas coleções.
+
+### O painel do Agent Dute na v3 (04/11/2026)
+
+Pedido do Leonardo em 03/11/2026, com a proposta aprovada em 04/11/2026
+(canvas privado https://claude.ai/artifact/P5Jyf1DNAp9FnLxCjpTMZK, fontes em
+`docs/mockups/AgentePainel*.dc.html`). Vale com a liberação do agente
+(`AGENTE_AMBIENTES_LIBERADOS`); fora dela, o painel antigo segue como estava.
+
+- **O defeito.** No `dute-prod`, o Início da Armazenagem mostrava "10 avisos
+  para revisar".
+  - O "Revisar" levava ao painel, cujo radar (parte 5.5k) é o próprio
+    "Precisa de você": a linha voltava para o painel, e a caixa antiga
+    (`ai_agent_inbox`), onde ficava o "Resolver", não aparecia mais.
+  - Os avisos eram eco de eventos de rotina (conferência salva, pedido,
+    reserva, picking, packing e expedição criados), que já têm fila própria,
+    e nunca fechavam.
+  - O painel tinha doze blocos, quase todos sem ação.
+- **As respostas do Leonardo:**
+  1. As anotações e os playbooks para aprovar entram no "Precisa de você" da
+     Armazenagem.
+  2. O rascunho de aviso ao cliente (as notificações do Agent Dute,
+     `operational_notifications`) sai do painel; os avisos automáticos por
+     modelo seguem.
+  3. Os itens com estoque e sem custo eram regra antiga do painel e saem com
+     ele.
+  4. Não há tela com todos os eventos: cada ficha tem a sua linha do tempo.
+  5. Os avisos antigos abertos se fecham com um script.
+- **O Início** (`lib/home-inbox.ts`, `lib/use-inicio-do-wms.ts`):
+  - Para quem decide (owner, admin, interno e suporte,
+    `REVISAO_DO_AGENTE_ROLES`, travada contra `AGENTE_REVISAO_ROLES` do
+    núcleo), "N anotações do Agent Dute para aprovar" leva ao painel e "N
+    playbooks do Agent Dute para aprovar", ao Conhecimento, do cliente ativo.
+  - As leituras usam as chaves de cache do Conhecimento e do painel: a
+    decisão num lugar atualiza os outros. O menu e a entrada contam pela
+    mesma lista.
+  - A linha da caixa antiga sai onde o agente do núcleo roda.
+- **O painel** (`pages/agente-painel.tsx` e `agente-painel-view.tsx`, na v3
+  pela `TELAS_DO_AGENTE_NA_V3` de `lib/wms-v3.ts`):
+  - O título e as abas Conversa, Painel e Conhecimento.
+  - "Para decidir": as linhas do agente no "Precisa de você", na ordem dele
+    (o alerta de itens parados, as anotações, os playbooks). A anotação se
+    decide ali, com o texto, quem o agente considera, "Recusar" e
+    "Aprovar", pela `decideDuteNote`. Sem linha, "Nada para decidir".
+  - "No agente": as anotações e os playbooks valendo, os documentos e as
+    rotinas da pessoa, cada um levando à tela dele.
+- **Saem:** os quatro números do topo, as decisões sugeridas, os riscos, o
+  radar (`radar-do-agente.tsx` e `lib/agente/radar.ts`), as três listas de
+  eventos, as memórias e as notificações do agente. Fora da liberação, o
+  painel antigo (`pages/ai-control.tsx`) fica, sem o ramo do radar.
+- **A nova anotação** (Conhecimento › Anotações), no lugar do "Ensinar o
+  Agent Dute", que só gravava um evento `operator.note` que o agente do
+  núcleo não lê:
+  - A callable `writeDuteNote` do núcleo grava a anotação já valendo, com o
+    evento `agente.anotacao_escrita` (só o id), só pela coordenação e do
+    cliente ativo.
+  - O id sai do cliente e do texto: a mesma anotação não vira duas, e a
+    sugerida, recusada ou arquivada passa a valer.
+- **A caixa antiga fecha** (`functions/wms/src/domain/caixa-do-agente.ts`):
+  onde o agente do núcleo roda (`CORE_AGENT_PROJECTS`), o evento de atenção
+  ou crítico e a ação "tratar documento" não abrem mais aviso em
+  `ai_agent_inbox`. O evento continua em `events`. No `dute-btg`, nada muda.
+- **Os avisos já abertos** fecham pelo `tools/fechar_avisos_antigos.py`, como
+  o "Resolver" do painel antigo fazia (`status` "resolved", `resolved_by` com
+  o script e a conta do gcloud, `resolved_at`). Nada se apaga. Sem `--apply`,
+  só lista; só aceita o `dute-homolog` e o `dute-prod`. Depois de publicar,
+  da máquina do responsável:
+
+  ```powershell
+  cd C:\DEV\Dute
+  python tools\fechar_avisos_antigos.py --project-id dute-homolog
+  python tools\fechar_avisos_antigos.py --project-id dute-homolog --apply
+  python tools\fechar_avisos_antigos.py --project-id dute-prod
+  python tools\fechar_avisos_antigos.py --project-id dute-prod --apply
+  ```
+- **Testes:**
+  - `home-inbox.test.ts`: as duas linhas novas, só para quem decide e só
+    com o agente do núcleo; sem a linha da caixa antiga.
+  - `agente-painel-view.test.tsx` e `agente-painel.test.ts`: os textos
+    listados, uma ação principal, a anotação decidida ali, vazio, carregando
+    e o `axe`; só as linhas do agente, e as abas por papel.
+  - `agent-notes.test.tsx`: a nova anotação, só com o agente do núcleo.
+  - `agente-revisao.integration.test.ts` e `agente-revisao.test.ts` (núcleo):
+    a anotação escrita, o evento, a repetição e quem pode.
+  - `caixa-do-agente.test.ts` (WMS): a guarda e os dois pontos que a usam.
+  - `test_fechar_avisos_antigos.py`: só lista sem `--apply`, a escrita igual
+    ao "Resolver", e os projetos iguais aos do agente do núcleo.

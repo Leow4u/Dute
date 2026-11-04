@@ -75,6 +75,16 @@ describe("os eventos das anotações e dos playbooks", () => {
     assert.equal(playbook.entity_type, "playbook_do_agente");
   });
 
+  it("a anotação escrita pela coordenação leva só o id, e o cliente não a grava", () => {
+    const escrita = buildCoreEvent({ type: "agente.anotacao_escrita", payload: { id: nota }, customer_code: "ITAU", actor: equipe, occurred_at: quando, chave: "k1" });
+    assert.deepEqual([escrita.entity_type, escrita.payload, escrita.source], ["anotacao_do_agente", { id: nota }, "functions_core"]);
+    assert.throws(
+      () => buildCoreEvent({ type: "agente.anotacao_escrita", payload: { id: nota }, customer_code: "ITAU", actor: cliente, occurred_at: quando, chave: "k2" }),
+      (erro: unknown) => erro instanceof HttpsError && erro.code === "permission-denied",
+    );
+    assert.throws(() => buildCoreEvent({ type: "agente.anotacao_escrita", payload: { id: nota, texto: "Contato: Cristiane" } as never, customer_code: "ITAU", actor: equipe, occurred_at: quando, chave: "k3" }), /payload inválido/);
+  });
+
   it("a chave distingue duas edições; sem ela, o id é o do alerta de antes", () => {
     assert.notEqual(coreEventId("agente.playbook_editado", "pb_0123456789ab", "k1"), coreEventId("agente.playbook_editado", "pb_0123456789ab", "k2"));
     assert.equal(

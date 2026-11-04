@@ -35,7 +35,7 @@ import {
   rhLiberado,
 } from "./liberacao";
 import { MODULOS_DO_AGENTE } from "./agente/cliente";
-import { AGENTE_ROLES } from "./agente/navegacao";
+import { AGENTE_ROLES, REVISAO_DO_AGENTE_ROLES } from "./agente/navegacao";
 import { OPERACAO_CADASTRO_ROLES } from "./operacao/navegacao";
 import { FINANCE_ROLES, INTERNAL_ROLES, WMS_OPERATOR_ROLES } from "./modules";
 import { canOperateWarehouse } from "./permissions";
@@ -378,6 +378,8 @@ describe("o Agent Dute do núcleo igual em todo lugar (parte 5.5)", () => {
     expect([...MODULOS_DO_AGENTE]).toEqual(tsList(read("functions/core/src/domain/agente-escopo.ts"), "MODULOS_DO_AGENTE"));
     // O app abre a tela do agente do núcleo para os mesmos papéis (parte 5.5j).
     expect([...AGENTE_ROLES]).toEqual(tsList(papeis, "AGENTE_ROLES"));
+    // Quem decide as anotações e os playbooks no painel e no "Precisa de você" é quem o núcleo deixa decidir (04/11/2026).
+    expect([...REVISAO_DO_AGENTE_ROLES]).toEqual(tsList(papeis, "AGENTE_REVISAO_ROLES"));
   });
 });
 

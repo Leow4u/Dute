@@ -45,3 +45,11 @@ export function ehTelaDoAgente(caminho: string): boolean {
 export function abreAgenteDoNucleo(role: Papel | string | null | undefined, liberado: boolean = AGENTE_LIBERADO): boolean {
   return liberado && Boolean(role) && (AGENTE_ROLES as readonly string[]).includes(role as string);
 }
+
+/** Quem decide as anotações e os playbooks do agente do núcleo: AGENTE_REVISAO_ROLES de functions/core, travada em platform-lists.test.ts. */
+export const REVISAO_DO_AGENTE_ROLES = ["owner", "admin", "interno", "suporte"] as const satisfies readonly Papel[];
+
+/** A pessoa decide as anotações e os playbooks do agente do núcleo (o painel e o "Precisa de você", 04/11/2026). */
+export function revisaODoAgente(role: Papel | string | null | undefined, liberado: boolean = AGENTE_LIBERADO): boolean {
+  return abreAgenteDoNucleo(role, liberado) && (REVISAO_DO_AGENTE_ROLES as readonly string[]).includes(role as string);
+}

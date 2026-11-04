@@ -24,6 +24,8 @@ export const CALLABLES_DO_NUCLEO = [
   "suggestDuteNote",
   "listDuteNotes",
   "decideDuteNote",
+  // A anotação escrita pela coordenação no Conhecimento, que vale direto (o antigo "Ensinar o Agent Dute", 04/11/2026).
+  "writeDuteNote",
   "listDutePlaybooks",
   "saveDutePlaybook",
   "decideDutePlaybook",

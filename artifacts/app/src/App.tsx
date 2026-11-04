@@ -92,7 +92,8 @@ const SettingsAccount = lazy(() =>
 const SettingsApp = lazy(() =>
   import("./pages/settings").then((m) => ({ default: m.SettingsApp })),
 );
-const AiControl = lazy(() => import("./pages/ai-control"));
+// Com o agente do núcleo, o painel novo na v3; fora dele, o antigo (pages/ai-control.tsx).
+const PainelDoAgente = lazy(() => import("./pages/agente-painel"));
 const AgentePage = lazy(() => import("./pages/agente"));
 // O Agent Dute no shell de cada módulo (parte 5.5j): só com a liberação dele.
 const AgenteDoComercial = lazy(() => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDoComercial })));
@@ -560,7 +561,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   ...(SOMENTE_ARMAZENAGEM ? [protectedRoute("/faturamento/contratos", BillingHub)] : []),
   protectedRoute("/tabela-precos", PriceListRedirect),
   protectedRoute("/agente", AgentePage),
-  protectedRoute("/agente/painel", AiControl),
+  protectedRoute("/agente/painel", PainelDoAgente),
   protectedRoute("/agente/conhecimento", AgentKnowledge),
   protectedRoute("/suporte", legacySettingsRedirect("/suporte")),
   protectedRoute("/documentos", Documents),

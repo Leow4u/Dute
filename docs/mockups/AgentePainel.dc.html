@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Agent Dute · Painel</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+button,textarea,input{font:inherit;color:inherit}
+.vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.ic{width:20px;height:20px;flex:0 0 auto}.ic-s{width:16px;height:16px;flex:0 0 auto}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:26px 14px 18px;gap:4px}
+.logo{display:block;padding:0 10px 16px;color:#fff;font-weight:800;font-size:22px;letter-spacing:.04em;line-height:1.1}
+.logo small{display:block;font-size:8px;letter-spacing:.18em;font-weight:700;opacity:.8;margin-top:3px}
+.logo:hover{color:#fff}
+.sw{display:flex;align-items:center;gap:10px;width:100%;height:44px;margin:0 0 6px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font:800 15px Manrope,sans-serif;text-align:left;cursor:pointer}
+.sw:hover{background:rgba(255,255,255,.11)}
+.sw .ch,.cli .ch{margin-left:auto;opacity:.75}
+.cli{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;margin:0 0 10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#fff;text-align:left;cursor:pointer}
+.cli .tl{width:34px;height:34px;border-radius:9px;background:#2A2A2A;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.cli small{display:block;font-size:11.5px;color:rgba(255,255,255,.65);line-height:1.3}
+.cli b{display:block;font-size:14px;line-height:1.3}
+.nav{display:flex;align-items:center;gap:12px;height:48px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.72);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav.agent{color:#C9B8FB}.nav.agent:hover{color:#E0D6FF}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.sbf{margin-top:auto;display:flex;align-items:center;gap:12px;padding:14px 10px 0;border-top:1px solid rgba(255,255,255,.1)}
+.av2{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.sbf b{display:block;font-size:14.5px}.sbf span{display:block;font-size:12.5px;color:rgba(255,255,255,.6)}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;padding:34px 44px;gap:22px;position:relative}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-d{background:#161616;color:#fff}.btn-d:hover{background:#3F403F;color:#fff}
+.btn-sm{height:34px;padding:0 12px;font-size:13.5px}
+.btn[disabled]{opacity:.45;cursor:default}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px;overflow:hidden}
+.sec{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#5F6368}
+.tile{width:52px;height:52px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;border:1px solid transparent}
+.t-agent{background:#F3EEFF;border-color:#D9CCFB;color:#5B3FC4}
+.t-warn{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.row{display:flex;align-items:center;gap:18px;padding:20px 24px;border-top:1px solid #E5E5E1}
+.row:first-child{border-top:0}
+.row b{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:700;flex-wrap:wrap}
+.row .sub{display:block;font-size:14px;color:#5F6368;margin-top:2px}
+.num{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-top:1px solid #E5E5E1;font-size:15px;font-weight:600;color:#161616}
+.num:first-child{border-top:0}
+a.num:hover{background:#FCFCFA;color:#161616}
+.num b{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums}
+.tabs{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px;align-self:flex-start}
+.tabs a{height:34px;padding:0 14px;border-radius:6px;display:inline-flex;align-items:center;font-weight:700;font-size:13.5px;color:#5F6368}
+.tabs a:hover{color:#161616}
+.tabs a.on{background:#fff;color:#161616;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.cols{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+.left{flex:2.2 1 560px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.right{flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.note{border:1px solid #D9CCFB;background:#FAF7FF;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.ta{display:block;width:100%;resize:none;border:1px solid #D4D4CF;border-radius:8px;background:#fff;padding:8px 12px;font-size:14.5px;line-height:1.45}
+.ta:focus{outline:2px solid #5B3FC4;outline-offset:1px;border-color:#5B3FC4}
+.meta{font-size:13px;color:#5F6368}
+.nf{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.tg{display:inline-flex;border:1px solid #D4D4CF;background:#fff;border-radius:8px;padding:3px;gap:2px}
+.tg button{height:30px;padding:0 12px;border-radius:6px;border:0;background:transparent;font-weight:700;font-size:13px;color:#5F6368;cursor:pointer}
+.tg button[aria-pressed="true"]{background:#161616;color:#fff}
+.toast{position:fixed;right:28px;bottom:28px;display:flex;align-items:center;gap:10px;background:#161616;color:#fff;border-radius:10px;padding:12px 16px;font-weight:700;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+</style>
+</helmet>
+<div style="min-height: 100%; display: flex; flex-wrap: wrap">
+<aside class="sb">
+<a class="logo" href="#">DUTELOG<small>SOLUÇÕES LOGÍSTICAS</small></a>
+<button type="button" class="sw"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>Armazenagem<svg class="ic-s ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 9 5-5 5 5M7 15l5 5 5-5"/></svg></button>
+<button type="button" class="cli"><span class="tl"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></span><span><small>Cliente ativo</small><b>BTG</b></span><svg class="ic-s ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 9 5-5 5 5M7 15l5 5 5-5"/></svg></button>
+<a class="nav" href="AgenteInicioArmazenagem.dc.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início<span class="cnt">{{inicio}}</span></a>
+<a class="nav agent on" href="AgentePainel.dc.html" aria-current="page"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"/></svg>Agent Dute<span class="cnt">{{agente}}</span></a>
+<a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Pedidos</a>
+<a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Estoque<span class="cnt">2</span></a>
+<a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 17.5v-11"/></svg>Faturamento</a>
+<a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-6"/></svg>Relatórios</a>
+<a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Documentos</a>
+<div class="sbf"><span class="av2">LE</span><div><b>Leonardo</b><span>Administração (owner)</span></div></div>
+</aside>
+<main class="main">
+<div style="display: flex; flex-direction: column; gap: 14px">
+<h1 style="font-size: 30px; font-weight: 800; letter-spacing: -.01em">Agent Dute</h1>
+<nav class="tabs" aria-label="Agent Dute"><a href="#">Conversa</a><a class="on" href="AgentePainel.dc.html" aria-current="page">Painel</a><a href="#">Conhecimento</a></nav>
+</div>
+<div class="cols">
+<section class="left" aria-labelledby="h-decidir">
+<h2 id="h-decidir" class="sec">Para decidir</h2>
+<div class="card">
+<div class="row">
+<span class="tile t-warn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+<div style="flex: 1 1 auto; min-width: 0"><b>Alerta de 12 itens parados para aprovar</b><span class="sub">BTG</span></div>
+<a class="btn btn-p" href="#" aria-label="Revisar o alerta de itens parados">Revisar</a>
+</div>
+<sc-if value="{{verA}}" hint-placeholder-val="{{true}}">
+<div class="row" style="align-items: flex-start">
+<span class="tile t-agent"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M21.4 5.6a2.1 2.1 0 1 0-3-3l-5 5a2 2 0 0 0-.5.9l-.8 2.9a.5.5 0 0 0 .6.6l2.9-.8a2 2 0 0 0 .9-.5z"/></svg></span>
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+<div><b>{{tituloA}}</b><span class="sub">{{subA}}</span></div>
+<sc-if value="{{ver1}}" hint-placeholder-val="{{true}}">
+<div class="note">
+<label class="vh" for="nota-1">Texto da anotação de Guilherme Dantas</label>
+<textarea id="nota-1" class="ta" rows="2" value="{{t1}}" onChange="{{editar1}}"></textarea>
+<p class="meta">Conversa de Guilherme Dantas · ontem, 16:42</p>
+<div class="nf">
+<div class="tg" role="group" aria-label="Quem o agente considera">
+<button type="button" aria-pressed="{{todos1}}" onClick="{{porTodos1}}">Cliente e equipe</button>
+<button type="button" aria-pressed="{{equipe1}}" onClick="{{porEquipe1}}">Só equipe</button>
+</div>
+<div style="display: flex; gap: 8px">
+<button type="button" class="btn btn-s btn-sm" onClick="{{recusar1}}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>Recusar</button>
+<button type="button" class="btn btn-d btn-sm" disabled="{{curta1}}" onClick="{{aprovar1}}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Aprovar</button>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ver2}}" hint-placeholder-val="{{true}}">
+<div class="note">
+<label class="vh" for="nota-2">Texto da anotação de Leonardo</label>
+<textarea id="nota-2" class="ta" rows="2" value="{{t2}}" onChange="{{editar2}}"></textarea>
+<p class="meta">Conversa de Leonardo · 31/10, 11:05</p>
+<div class="nf">
+<div class="tg" role="group" aria-label="Quem o agente considera">
+<button type="button" aria-pressed="{{todos2}}" onClick="{{porTodos2}}">Cliente e equipe</button>
+<button type="button" aria-pressed="{{equipe2}}" onClick="{{porEquipe2}}">Só equipe</button>
+</div>
+<div style="display: flex; gap: 8px">
+<button type="button" class="btn btn-s btn-sm" onClick="{{recusar2}}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>Recusar</button>
+<button type="button" class="btn btn-d btn-sm" disabled="{{curta2}}" onClick="{{aprovar2}}"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Aprovar</button>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+<div class="row">
+<span class="tile t-agent"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
+<div style="flex: 1 1 auto; min-width: 0"><b>7 playbooks para aprovar</b><span class="sub">Aprovar solicitação · Receber · Recebimento com divergência e mais 4</span></div>
+<a class="btn btn-s" href="#" aria-label="Revisar os playbooks">Revisar</a>
+</div>
+</div>
+</section>
+<section class="right" aria-labelledby="h-agente">
+<h2 id="h-agente" class="sec">No agente</h2>
+<div class="card">
+<a class="num" href="#"><span>Anotações valendo</span><b>{{valendo}}</b></a>
+<a class="num" href="#"><span>Playbooks valendo</span><b>0</b></a>
+<a class="num" href="#"><span>Documentos</span><b>23</b></a>
+<a class="num" href="#"><span>Suas rotinas</span><b>2</b></a>
+</div>
+</section>
+</div>
+<sc-if value="{{verToast}}" hint-placeholder-val="{{false}}">
+<div class="toast" role="status"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>{{toast}}</div>
+</sc-if>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  avisar(texto) {
+    this.setState({ toast: texto });
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.setState({ toast: '' }), 2600);
+  }
+  decidir(chave, decisao) {
+    this.setState({ [chave]: decisao });
+    this.avisar(decisao === 'aprovada' ? 'Anotação aprovada' : 'Anotação recusada');
+  }
+  componentWillUnmount() {
+    clearTimeout(this.timer);
+  }
+  renderVals() {
+    const NOTA_1 = 'A BTG pede a entrega na portaria até as 10h; depois disso, a entrega fica para o dia seguinte.';
+    const NOTA_2 = 'Nas NFs de uniformes, contar por tamanho: a nota vem agrupada por modelo.';
+    const s = this.state || {};
+    const n1 = s.n1 || 'aberta';
+    const n2 = s.n2 || 'aberta';
+    const v1 = s.v1 || 'todos';
+    const v2 = s.v2 || 'equipe';
+    const t1 = typeof s.t1 === 'string' ? s.t1 : NOTA_1;
+    const t2 = typeof s.t2 === 'string' ? s.t2 : NOTA_2;
+    const abertas = (n1 === 'aberta' ? 1 : 0) + (n2 === 'aberta' ? 1 : 0);
+    const aprovadas = (n1 === 'aprovada' ? 1 : 0) + (n2 === 'aprovada' ? 1 : 0);
+    const quem = [n1 === 'aberta' ? 'Guilherme Dantas' : '', n2 === 'aberta' ? 'Leonardo' : ''].filter(Boolean);
+    return {
+      verA: abertas > 0,
+      tituloA: abertas === 1 ? '1 anotação para aprovar' : '2 anotações para aprovar',
+      subA: quem.length === 2 ? 'Conversas de Guilherme Dantas e Leonardo' : 'Conversa de ' + (quem[0] || ''),
+      ver1: n1 === 'aberta',
+      ver2: n2 === 'aberta',
+      t1: t1,
+      t2: t2,
+      editar1: (e) => this.setState({ t1: e.target.value }),
+      editar2: (e) => this.setState({ t2: e.target.value }),
+      todos1: v1 === 'todos' ? 'true' : 'false',
+      equipe1: v1 === 'equipe' ? 'true' : 'false',
+      todos2: v2 === 'todos' ? 'true' : 'false',
+      equipe2: v2 === 'equipe' ? 'true' : 'false',
+      porTodos1: () => this.setState({ v1: 'todos' }),
+      porEquipe1: () => this.setState({ v1: 'equipe' }),
+      porTodos2: () => this.setState({ v2: 'todos' }),
+      porEquipe2: () => this.setState({ v2: 'equipe' }),
+      aprovar1: () => this.decidir('n1', 'aprovada'),
+      recusar1: () => this.decidir('n1', 'recusada'),
+      aprovar2: () => this.decidir('n2', 'aprovada'),
+      recusar2: () => this.decidir('n2', 'recusada'),
+      curta1: t1.trim().length < 8,
+      curta2: t2.trim().length < 8,
+      inicio: abertas > 0 ? 4 : 3,
+      agente: abertas > 0 ? 2 : 1,
+      valendo: 14 + aprovadas,
+      verToast: Boolean(s.toast),
+      toast: s.toast || ''
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -18,6 +18,7 @@ import {
   saveDutePlaybookFor,
   seedDutePlaybooksFor,
   suggestDuteNoteFor,
+  writeDuteNoteFor,
 } from "./domain/agente-revisao.js";
 import { deleteDuteRoutineFor, listDuteRoutinesFor, rodarRotinasVencidas, runDuteRoutineNowFor, saveDuteRoutineFor } from "./domain/agente-rotinas.js";
 import { answerStockAlertFor, runStockFor } from "./domain/alertas-parados-gravacao.js";
@@ -129,6 +130,12 @@ export const listDuteNotes = onCall(async (request) => {
 export const decideDuteNote = onCall(async (request) => {
   const caller = await requireDuteCaller(db, request, PROJECT_ID);
   return decideDuteNoteFor(db, caller, request.data);
+});
+
+/** A coordenação escreve a anotação no Conhecimento, que vale direto, com o evento (o antigo "Ensinar o Agent Dute", 04/11/2026). */
+export const writeDuteNote = onCall(async (request) => {
+  const caller = await requireDuteCaller(db, request, PROJECT_ID);
+  return writeDuteNoteFor(db, caller, request.data);
 });
 
 /** Os playbooks pendentes e os que valem, do cliente ativo, para a coordenação (parte 5.5f). */

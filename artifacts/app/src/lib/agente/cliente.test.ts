@@ -87,14 +87,16 @@ describe("o agente do núcleo", () => {
     expect(await agente.anotacoes.listar()).toEqual({ notes: [{ id: "x" }] });
     await agente.anotacoes.decidir("note_1", "approve", { text: "  ", visibility: "todos" });
     await agente.anotacoes.sugerir!("msg_agent_1");
+    await agente.anotacoes.escrever!({ text: "Coleta na doca 2 só depois das 14h", visibility: "equipe" });
     expect(await agente.playbooks.listar()).toEqual({ playbooks: [{ id: "x" }] });
     expect(await agente.playbooks.salvar({ title: "Devolução", when: "Quando devolve", steps: ["Abrir"], open_points: [], audience: "equipe" })).toEqual({ id: "pb_novo123" });
     await agente.playbooks.decidir("pb_novo123", "archive");
     expect(await agente.playbooks.carregar()).toEqual({ created: 7 });
-    const [lista, decisao, sugestao, playbooks, salvo, decidido, carga] = chamadas.nucleo;
+    const [lista, decisao, sugestao, escrita, playbooks, salvo, decidido, carga] = chamadas.nucleo;
     expect(lista).toEqual(["listDuteNotes", { customer_code: "ITAU" }]);
     expect(decisao).toEqual(["decideDuteNote", { customer_code: "ITAU", id: "note_1", action: "approve", visibility: "todos" }]);
     expect(sugestao).toEqual(["suggestDuteNote", { agent_message_id: "msg_agent_1" }]);
+    expect(escrita).toEqual(["writeDuteNote", { customer_code: "ITAU", text: "Coleta na doca 2 só depois das 14h", visibility: "equipe" }]);
     expect(playbooks).toEqual(["listDutePlaybooks", { customer_code: "ITAU" }]);
     expect(salvo![0]).toBe("saveDutePlaybook");
     expect(salvo![1]).toMatchObject({ customer_code: "ITAU", title: "Devolução", audience: "equipe" });
@@ -115,6 +117,7 @@ describe("o agente do WMS", () => {
       ["/api/agent-dute/notes/note_1/reject", {}],
     ]);
     expect(CLIENTE_DO_WMS.anotacoes.sugerir).toBeNull();
+    expect(CLIENTE_DO_WMS.anotacoes.escrever).toBeNull();
     expect(chamadas.nucleo).toEqual([]);
   });
 });

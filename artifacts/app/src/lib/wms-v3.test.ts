@@ -20,6 +20,14 @@ describe("telas do WMS na v3", () => {
     expect(TELAS_DO_WMS_NA_V3).toEqual(["/dashboard", "/pedidos", "/estoque", "/wms/receber", "/estoque/alertas"]);
   });
 
+  it("o painel do Agent Dute entra na v3 só com a liberação do agente do núcleo (04/11/2026)", () => {
+    expect(telaDoWmsNaV3("/agente/painel", TELAS_DO_WMS_NA_V3, true)).toBe(true);
+    expect(telaDoWmsNaV3("/agente/painel", TELAS_DO_WMS_NA_V3, false)).toBe(false);
+    // A conversa e o Conhecimento seguem como estão.
+    expect(telaDoWmsNaV3("/agente", TELAS_DO_WMS_NA_V3, true)).toBe(false);
+    expect(telaDoWmsNaV3("/agente/conhecimento", TELAS_DO_WMS_NA_V3, true)).toBe(false);
+  });
+
   it("o layout do WMS usa a lista", () => {
     const fonte = readFileSync(new URL("../components/layout/wms-layout.tsx", import.meta.url), "utf8");
     expect(fonte).toContain("conteudoV3={telaDoWmsNaV3(location)}");
