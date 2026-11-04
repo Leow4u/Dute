@@ -215,6 +215,32 @@ Guilherme · 03/11").
 | Agent Dute · Painel sem nada para decidir | `AgentePainelVazio.dc.html` |
 | Armazenagem · Início com as decisões do agente | `AgenteInicioArmazenagem.dc.html` |
 
+A página "Portal · detalhe do produto" tem canvas próprio (privado,
+https://claude.ai/artifact/Ny4uPp8m8nwQLxRJXV5utA), aprovado pelo Leonardo em
+04/11/2026: as correções 1 a 10 do diagnóstico do painel "Detalhe do produto"
+do Estoque do portal, que não rolava e deixava o "Adicionar ao pedido" fora da
+tela nos notebooks e no celular. As telas seguem o visual do WMS
+(`docs/sistema-visual.md`), como o resto do Estoque do portal. Nenhuma regra de
+negócio muda: os números, as frases dos avisos e o que pode ser pedido são os
+de antes. `PortalDetalheFundoDesktop` e `PortalDetalheFundoCelular` são a
+vitrine atrás do painel, importada pelas outras telas. O que não aparece na
+tela (o `@container` no rodapé, a descrição que nunca aparecia e os testes)
+está nas notas do canvas e em `estoque.test.tsx` e `estoque-gaveta.test.tsx`.
+
+| Tela | Arquivo | O que muda |
+|---|---|---|
+| Hoje | `PortalDetalheHoje.dc.html` | O painel como estava: sem rolagem, o botão fora da tela. |
+| Com saldo (1 a 4) | `PortalDetalhe.dc.html` | Cabeçalho numa linha (título e fechar, sem o olho), corpo que rola e rodapé fixo com o contador e "Adicionar ao pedido"; a foto inteira num quadro de 200 px; "Disponível para pedido" e "No pedido", sem "Sobra após este pedido" nem "Quantidade selecionada"; com saldo, sem aviso. |
+| Tamanhos no detalhe (6) | `PortalDetalheTamanhos.dc.html` | Os botões de tamanho do card, com o disponível de cada um; no tamanho sem foto, a foto da família. |
+| Depois de adicionar (9) | `PortalDetalheAdicionado.dc.html` | O painel fica aberto: "10 peças adicionadas ao pedido" e "Ver pedido" no rodapé, e o contador volta a 1. |
+| Notebook, rolando (1) | `PortalDetalheNotebook.dc.html` | Em 1366 × 680, o corpo rola e o rodapé com a ação fica à vista. |
+| Sem saldo (5) | `PortalDetalheSemSaldo.dc.html` | "Avisar reposição" e "Arquivar" no rodapé; o aviso de sem saldo no tom dele; sem foto, o quadro de 132 px com a sigla e o tipo. |
+| Pelo teclado (7) | `PortalDetalheTeclado.dc.html` | O painel é um diálogo com o nome do produto: ao abrir, o foco vai para "Fechar detalhe"; o Tab fica dentro; Esc fecha; ao fechar, o foco volta ao card. |
+| Avisos e selo (5 e 9) | `PortalDetalheEstados.dc.html` | O aviso só onde informa (em recebimento, sem saldo, tudo no pedido, estoque baixo), cada um no seu tom e ícone, sem o brilho da IA; o selo "Baixo estoque" com o ícone de queda; o selo de situação uma vez, na linha do tipo. |
+| Hoje no celular | `PortalDetalheCelularHoje.dc.html` | O painel em tela cheia, sem rolagem. |
+| Celular (8) | `PortalDetalheCelular.dc.html` | O painel sobe de baixo, com até 88% da altura (`dvh`), e o rodapé com a ação. |
+| Celular, rolando (8) | `PortalDetalheCelularRolando.dc.html` | O corpo rola; o cabeçalho e o rodapé ficam. |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador

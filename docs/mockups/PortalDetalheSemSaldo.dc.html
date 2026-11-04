@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Detalhe do produto · sem saldo</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 900px; overflow: hidden; background: #F3F5F7; color: #1E293B; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
+  <div style="position: absolute; top: 0; left: 0; width: 1440px; height: 900px">
+    <dc-import name="PortalDetalheFundoDesktop" hint-size="1440px,900px"></dc-import>
+  </div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(0, 0, 0, 0.35)"></div>
+
+  <section role="dialog" aria-modal="true" aria-labelledby="produto-nome" style="position: absolute; top: 20px; right: 20px; bottom: 20px; width: 440px; display: flex; flex-direction: column; background: #FFFFFF; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)">
+
+    <header style="flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 12px 12px 20px; border-bottom: 1px solid #E2E6EB">
+      <p style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 600">Detalhe do produto</p>
+      <button type="button" aria-label="Fechar detalhe" style="width: 40px; height: 40px; border: 0; border-radius: 6px; background: transparent; color: #5D6877; display: flex; align-items: center; justify-content: center; padding: 0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+      </button>
+    </header>
+
+    <div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+      <div style="flex: 0 0 auto; height: 132px; box-sizing: border-box; border: 1px solid #E2E6EB; border-radius: 10px; background: #F0F2F4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: #5D6877">
+        <span style="width: 48px; height: 48px; box-sizing: border-box; border-radius: 10px; border: 1px solid #E2E6EB; background: #FFFFFF; display: flex; align-items: center; justify-content: center; color: #1E293B; font-size: 14px; font-weight: 800">PO</span>
+        <span style="font-size: 13px; font-weight: 500">Polo</span>
+      </div>
+
+      <div style="flex: 0 0 auto">
+        <p style="margin: 0; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; color: #5D6877">A.01.0806.005.GG</p>
+        <h2 id="produto-nome" style="margin: 4px 0 0; font-size: 20px; line-height: 28px; font-weight: 600">Camisa polo manga longa GG</h2>
+        <div style="margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+          <span style="display: inline-flex; align-items: center; height: 26px; padding: 0 12px; box-sizing: border-box; border-radius: 999px; border: 1px solid #E2E6EB; font-size: 12px; color: #5D6877">Polo</span>
+          <span style="display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; box-sizing: border-box; border-radius: 6px; border: 1px solid #FECDD3; background: #FFFFFF; color: #BF123D; font-size: 12px; font-weight: 600">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+            Sem saldo
+          </span>
+        </div>
+      </div>
+
+      <div style="flex: 0 0 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div style="border: 1px solid #E2E6EB; border-radius: 10px; padding: 12px">
+          <p style="margin: 0; font-size: 12px; color: #5D6877">Disponível para pedido</p>
+          <p style="margin: 4px 0 0; font-size: 14px; line-height: 20px; font-weight: 600">0</p>
+        </div>
+        <div style="border: 1px solid #E2E6EB; border-radius: 10px; padding: 12px">
+          <p style="margin: 0; font-size: 12px; color: #5D6877">No pedido</p>
+          <p style="margin: 4px 0 0; font-size: 14px; line-height: 20px; font-weight: 600">0</p>
+        </div>
+      </div>
+
+      <div style="flex: 0 0 auto; display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid #FECDD3; border-radius: 10px; background: #FFF0F1; color: #BF123D; font-size: 14px; line-height: 22px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 auto; margin-top: 3px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+        <p style="margin: 0">Produto sem saldo disponível. Avise a Dutelog sobre a reposição ou arquive o produto; o histórico é preservado.</p>
+      </div>
+    </div>
+
+    <footer style="flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-top: 1px solid #E2E6EB; background: #FFFFFF">
+      <button type="button" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 8px; height: 46px; box-sizing: border-box; border: 1px solid #CED4DC; border-radius: 6px; background: #FFFFFF; color: #1E293B; font-family: inherit; font-size: 14px; font-weight: 600">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path><circle cx="17" cy="18" r="2"></circle><circle cx="7" cy="18" r="2"></circle></svg>
+        Avisar reposição
+      </button>
+      <button type="button" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 8px; height: 46px; border: 0; border-radius: 6px; background: transparent; color: #5D6877; font-family: inherit; font-size: 14px; font-weight: 600">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg>
+        Arquivar
+      </button>
+    </footer>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
