@@ -102,6 +102,15 @@ saldo", "Menor saldo" e "Nome: A-Z"; a exibição em "Cards" ou "Lista".
 
 - **"Adicionar"** põe no pedido até o "Disponível para pedido"; o que já está
   no pedido conta.
+- **Detalhe do produto** (a foto ou o nome, no card; o nome ou a seta, na
+  lista): o painel rola, e o contador com "Adicionar ao pedido" fica sempre no
+  rodapé (sem saldo, "Avisar reposição" e "Arquivar"). Mostra "Disponível para
+  pedido" e "No pedido", os tamanhos da família como no card (o tamanho sem
+  foto usa a foto da família) e um aviso só quando ele informa algo: em
+  recebimento, sem saldo, tudo no pedido ou estoque baixo. Depois de
+  "Adicionar ao pedido", o painel continua aberto e confirma ("10 peças
+  adicionadas ao pedido", com "Ver pedido"), para pedir outro tamanho sem
+  reabrir. Esc e o clique fora fecham. No celular, o painel sobe de baixo.
 - **"Em recebimento"**: as peças que chegaram e ainda não foram guardadas na
   prateleira. Aparecem na coluna da Lista, no card ("24 em recebimento") e
   no detalhe do produto, mas não entram no pedido; passam ao disponível
