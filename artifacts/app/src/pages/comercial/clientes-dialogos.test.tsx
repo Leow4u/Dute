@@ -1,6 +1,7 @@
 import { JSDOM } from "jsdom";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { ModeloDeAviso } from "@workspace/dominio";
 
 import { formDoContato, type FormContato } from "@/lib/comercial/clientes";
 
@@ -20,8 +21,8 @@ function form(parcial: Partial<FormContato>): FormContato {
   return { ...formDoContato(null), nome: "Renata Okubo", ...parcial };
 }
 
-function html(f: FormContato): string {
-  return renderToStaticMarkup(<AvisosDoContato form={f} desabilitado={false} onMarcar={noop} />);
+function html(f: FormContato, modelos?: readonly ModeloDeAviso[]): string {
+  return renderToStaticMarkup(<AvisosDoContato form={f} desabilitado={false} onMarcar={noop} modelos={modelos} />);
 }
 
 function render(f: FormContato): HTMLElement {
@@ -47,6 +48,14 @@ describe("avisos por e-mail do contato", () => {
   it("a gerenciadora não vê a NF, que leva o valor", () => {
     const container = render(form({ email: "camila@sl.com", papel: "gerenciadora", avisos: ["nf_emitida"] }));
     expect(textos(container)).toEqual(["Avisos por e-mail", "OS agendada", "OS em execução", "OS concluída", "Solicitação recebida", "Itens parados", "Produtos disponíveis em estoque"]);
+  });
+
+  it("a configuração de estoque oferece só seus modelos sem apagar preferências dos demais módulos", () => {
+    const contato = form({ email: "renata@itau.com", papel: "gestor_cliente", avisos: ["nf_emitida", "estoque_disponivel"] });
+    const container = new JSDOM(html(contato, ["estoque_parado", "estoque_disponivel"])).window.document.body;
+    expect(textos(container)).toEqual(["Avisos por e-mail", "Itens parados", "Produtos disponíveis em estoque"]);
+    expect(container.querySelector('[role="checkbox"][aria-checked="true"]')?.id).toBe("contato-aviso-estoque_disponivel");
+    expect(contato.avisos).toEqual(["nf_emitida", "estoque_disponivel"]);
   });
 
   it("sem violações de acessibilidade", async () => {

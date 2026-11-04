@@ -311,8 +311,10 @@ documento" filtra quando há mais de um.
   No recebimento, cadastrar ou conferir os produtos ainda não dispara o aviso:
   ele espera a última guarda. O texto registra o que foi recebido e guardado;
   o saldo atual para pedido deve ser consultado no Estoque.
-- **O e-mail** vai aos contatos do cliente no cadastro da Dutelog (Comercial ›
-  Clientes) ativos, com e-mail e com o modelo marcado em "Avisos por e-mail".
+- **O e-mail** vai aos contatos ativos do cliente, com e-mail e com o modelo
+  marcado. Para avisos de estoque, owner e admin configuram em **Configurações ›
+  Clientes › Avisos por e-mail**, mesmo com o Comercial desligado. O cadastro
+  compartilhado também fica no Comercial quando esse módulo está disponível.
   A "NF emitida", que leva valor, vai só ao "Gestor do cliente" e ao
   "Financeiro", nunca à "Gerenciadora". Sai de "Dutelog
   <avisos@dutelog.com.br>", com o assunto "… · Dutelog" e o link da tela.
@@ -322,6 +324,10 @@ documento" filtra quando há mais de um.
   ou entrada manual. Por linha, uma guarda parcial seguida de guarda avulsa
   sem vínculo com o recebimento não gera o aviso de conclusão: é preciso
   comprovar a guarda de toda a quantidade daquele recebimento.
+- **No modo somente Armazenagem**, o sino continua disponível e mostra os avisos
+  de estoque e de faturas entre os 20 mais recentes. Avisos de OS e solicitações
+  de serviço ficam ocultos enquanto essas telas estão desligadas. Cadastrar um
+  destinatário de e-mail não cria acesso ao portal; isso continua em Pessoas e acessos.
 - **Com o portal desligado** (o cliente arquivado ou "Sem portal"), não sai
   aviso, nem no sino nem por e-mail. O que aconteceu nesse tempo não vira
   aviso quando o portal volta.

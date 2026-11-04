@@ -19,3 +19,17 @@ e 216 de integração; Operação 274 unitários e 193 de integração; WMS 450 
 e 127 de integração dirigidos, incluindo faturamento pelas callables. Revisão
 independente concluída sem bloqueios. Entrega real de e-mail será conferida na
 homologação conforme o desenho.
+
+## Ajuste para o modo somente Armazenagem
+
+- [x] Administrar os contatos e preferências em Configurações → Clientes, com
+  Comercial desligado, usando o cadastro e as validações existentes.
+- [x] Exibir o sino independente das telas da Operação, filtrando modelos e links
+  de serviços pausados no modo somente Armazenagem.
+- [x] Validar inclusão, edição, desativação, estados de falha e acessibilidade;
+  checar tipos/build e atualizar o mesmo PR.
+
+Validação do ajuste: 3.123 testes do app em 274 arquivos, typecheck do workspace
+e build do app passaram. Revisão independente sem achados. Os serviços, as regras
+e os lockfiles não precisaram de alteração para disponibilizar a configuração
+no modo somente Armazenagem.

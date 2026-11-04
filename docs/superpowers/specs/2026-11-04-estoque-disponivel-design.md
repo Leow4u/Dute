@@ -27,9 +27,29 @@ saldo atual, que pode mudar depois da guarda.
 - Reutilizar `client_notifications`, `email_outbox`, cursor e retentativas atuais.
   Acesso do cliente, módulo, contatos ativos e preferências são conferidos pelo fluxo
   existente. IDs derivados do evento impedem duplicação em uma reexecução.
-- Expor a nova opção em Comercial → Clientes → contato → Avisos por e-mail. Nenhum
-  contato existente ou novo adere automaticamente. Todos os papéis de contato podem
-  aderir, porque o aviso não leva valores.
+- Expor a nova opção em **Configurações → Clientes → Avisos por e-mail**, para
+  owner/admin, funcionando no modo somente Armazenagem. Nenhum contato existente
+  ou novo adere automaticamente. Todos os papéis de contato podem aderir, porque
+  o aviso não leva valores. O Comercial continua usando o mesmo cadastro quando ativo.
+
+## Acesso com os módulos pausados
+
+A produção está em `SOMENTE_ARMAZENAGEM`: as rotas do Comercial e da Operação
+ficam ocultas, mas seus serviços e dados são preservados. A administração dos
+destinatários reutiliza `customer_contacts` e `saveCustomerContact`, já disponíveis
+a owner/admin em produção. Não cria outra lista em `customers`, não transforma
+o contato principal em inscrito e não cria convites ou usuários do portal.
+
+O diálogo das Configurações permite criar/editar contatos e desativá-los/reativá-los.
+Apresenta somente as preferências de estoque, preservando as escolhas dos outros
+modelos. A lista é consultada pelo cliente selecionado; as permissões e validações
+continuam no backend existente.
+
+O sino depende da disponibilidade do serviço de avisos no ambiente, independente
+da liberação das telas da Operação. No modo exclusivo, filtra avisos de OS e
+solicitações antes de calcular o contador e renderizar os links. Faturas continuam
+visíveis porque `/portal/faturas` atende a Armazenagem. O limite continua sendo
+os 20 avisos mais recentes da consulta, dos quais só os modelos disponíveis aparecem.
 
 ## Limite conhecido da guarda parcial por linha
 
@@ -53,7 +73,7 @@ manual existente.
 
 ## Conferência na homologação
 
-1. Em Comercial → Clientes → contato, marcar **Produtos disponíveis em estoque**
+1. Em Configurações → Clientes → Avisos por e-mail, marcar **Produtos disponíveis em estoque**
    em um contato de teste `@dutelog.com.br`; manter outro contato sem a marcação.
 2. Conferir um recebimento novo por caixa e guardar somente a primeira de duas
    caixas. O novo aviso ainda não deve aparecer. Guardar a última caixa.

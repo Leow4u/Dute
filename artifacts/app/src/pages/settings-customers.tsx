@@ -2,7 +2,7 @@ import { useListBillingUsers } from "@workspace/api-client-react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ChevronRight, Pencil, Plus } from "lucide-react";
+import { ChevronRight, Mail, Pencil, Plus } from "lucide-react";
 
 import {
   AlertDialog,
@@ -66,12 +66,13 @@ import {
   templateStatusLabel,
   type OperationTemplateKey,
 } from "@/lib/operations";
-import { PLATAFORMA_LIBERADA } from "@/lib/liberacao";
+import { comercialLiberado, PLATAFORMA_LIBERADA } from "@/lib/liberacao";
 import { CLIENT_PROFILES_QUERY_KEY } from "@/lib/active-customer-context";
 import { humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { fetchJson } from "@/lib/warehouse-ops/model";
 import type { WarehousePosition } from "@/lib/warehouse-positions";
+import SettingsCustomerNotifications from "./settings-customer-notifications";
 
 /**
  * Configurações › Clientes: cada cliente nasce de um modelo de operação
@@ -154,6 +155,10 @@ export default function SettingsCustomers() {
   const [prefixTouched, setPrefixTouched] = useState(false);
   const [archiving, setArchiving] = useState<CustomerRow | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [notificationCustomer, setNotificationCustomer] = useState<CustomerRow | null>(null);
+  // O cadastro de contatos continua disponível quando só as telas do
+  // Comercial estão pausadas; fora dos projetos liberados, a callable não atende.
+  const contactsEnabled = comercialLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
 
   const customers = useQuery({
     queryKey: CUSTOMERS_KEY,
@@ -377,6 +382,12 @@ export default function SettingsCustomers() {
                       ) : null}
                     </td>
                     <td className="whitespace-nowrap px-2 py-2 text-right">
+                      {contactsEnabled ? (
+                        <Button variant="ghost" size="sm" disabled={row.archived} onClick={() => setNotificationCustomer(row)}>
+                          <Mail className="h-4 w-4" />
+                          Avisos por e-mail
+                        </Button>
+                      ) : null}
                       <Button variant="ghost" size="sm" onClick={() => openEdit(row)}>
                         <Pencil className="h-4 w-4" />
                         Editar
@@ -449,6 +460,14 @@ export default function SettingsCustomers() {
           </p>
         </div>
       </section>
+
+      {notificationCustomer ? (
+        <SettingsCustomerNotifications
+          key={notificationCustomer.code}
+          customer={{ code: notificationCustomer.code, name: notificationCustomer.name }}
+          onClose={() => setNotificationCustomer(null)}
+        />
+      ) : null}
 
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[780px]">

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { avisoDoPortal, avisoNovo, avisosNovos, instanteDe, quandoDoAviso, rotuloDoSino, vistosAteDoDocumento } from "./avisos";
 
@@ -8,6 +8,22 @@ const AGORA = new Date("2026-10-28T17:30:00.000Z"); // 14:30 em São Paulo
 const timestamp = (iso: string) => ({ toDate: () => new Date(iso) });
 
 describe("o aviso do portal", () => {
+  it("no modo armazenagem, não mostra OS nem solicitação de serviço, inclusive com link genérico", () => {
+    for (const modelo of ["os_agendada", "os_iniciada", "os_concluida", "pedido_do_portal"]) {
+      expect(avisoDoPortal("ntf_operacao", { modelo, titulo: "Serviço", link: "/portal" }, true)).toBeNull();
+    }
+  });
+
+  it("no modo armazenagem, mantém estoque e faturas e bloqueia links para serviços pausados", () => {
+    for (const modelo of ["estoque_disponivel", "estoque_parado", "nf_emitida"]) {
+      const link = modelo === "nf_emitida" ? "/portal/faturas" : "/portal/estoque";
+      expect(avisoDoPortal("ntf", { modelo, titulo: "Aviso", link }, true)?.link).toBe(link);
+      for (const pausado of ["/portal/servicos", "/portal/servicos?os=10050-01", "/portal/servicos/comprovante?os=10050-01", "/portal/estoque/../servicos?os=10050-01"]) {
+        expect(avisoDoPortal("ntf", { modelo, titulo: "Aviso", link: pausado }, true)).toBeNull();
+      }
+    }
+  });
+
   it("mostra a chegada disponível e abre o estoque", () => {
     expect(avisoDoPortal("ntf_chegada", {
       modelo: "estoque_disponivel",
@@ -44,6 +60,25 @@ describe("o aviso do portal", () => {
     expect(instanteDe("2026-10-28T17:00:00.000Z")).toEqual(new Date("2026-10-28T17:00:00.000Z"));
     expect(instanteDe(null)).toBeNull();
     expect(avisoDoPortal("ntf", { modelo: "nf_emitida", titulo: "NF", ocorrido_em: "2026-10-27T12:00:00.000Z" })?.criadoEm).toEqual(new Date("2026-10-27T12:00:00.000Z"));
+  });
+});
+
+describe("a disponibilidade do sino", () => {
+  it("o cliente de produção tem sino mesmo com a interface da Operação pausada", async () => {
+    vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "dute-prod");
+    vi.resetModules();
+    try {
+      const { OPERACAO_LIBERADO } = await import("../liberacao");
+      const { sinoDisponivelNoPortal } = await import("./avisos");
+      expect(OPERACAO_LIBERADO).toBe(false);
+      expect(sinoDisponivelNoPortal("cliente", "dute-prod")).toBe(true);
+      expect(sinoDisponivelNoPortal("cliente", "dute-homolog")).toBe(true);
+      for (const papel of ["owner", "admin", "wms", null, undefined]) expect(sinoDisponivelNoPortal(papel, "dute-prod")).toBe(false);
+      for (const projeto of ["dute-btg", "demo-dute", "", null, undefined]) expect(sinoDisponivelNoPortal("cliente", projeto)).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
   });
 });
 
