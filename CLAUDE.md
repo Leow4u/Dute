@@ -220,7 +220,11 @@ documentação de produto e operação está em `docs/`.
     do WMS em cópia literal, travada em `agente-nota.test.ts`: mudou um, muda
     o outro. No app, o agente do núcleo entra em cada shell (`lib/agente`,
     rota `/<modulo>/agente`) só com a liberação dele; fora dela, segue o do
-    WMS. Usa **npm**, como as outras codebases.
+    WMS. Com a liberação, o painel (`/agente/painel`, v3, 04/11/2026) é o
+    "Para decidir": as linhas do agente no "Precisa de você" da Armazenagem
+    (anotações, playbooks e alerta de itens parados), e a caixa antiga
+    `ai_agent_inbox` não recebe aviso (`fase-5-memoria.md`, "O painel do
+    Agent Dute na v3"). Usa **npm**, como as outras codebases.
   - `functions/rh`: Functions do RH (Fase 8), codebase `rh`, no
     `firebase.json` desde a parte 8.1b, com o banco Firestore `dute-rh`
     (criado nos dois ambientes pelo workflow manual `Banco rh`,

@@ -195,6 +195,26 @@ fecham entre as duas: 16 peças de 22/10/2026 em B-05, 30 de 30/10/2026 e 60 de
 | Portal · Estoque, detalhe do produto | `PortalEstoqueDatas.dc.html` | A seção "Por data de entrada": uma linha por data, "desde DD/MM/AAAA" e as peças, da mais antiga para a mais nova (seção 3.3). Só o que está nas prateleiras, sem prateleira nem caixa; o "Em recebimento" segue sem data. "desde" é a data de entrada e não se confunde com o "sem movimento há N dias" do aviso "Itens parados". |
 | Armazenagem · Estoque › Itens, ficha do item | `WmsItemDatas.dc.html` | "Onde está" ganha a data: uma linha por prateleira e data, com a quantidade, e a prateleira de data mais antiga primeiro (seção 3.4). A linha mais antiga de cada prateleira é a sobra da caixa aberta. `RECEBIMENTO` e `EXPEDICAO` seguem sem data, e o que as entradas não cobrem aparece como "sem data". A lista não muda. |
 
+A página "Agent Dute · Painel" tem canvas próprio (privado,
+https://claude.ai/artifact/P5Jyf1DNAp9FnLxCjpTMZK), aprovado pelo Leonardo em
+04/11/2026 com as cinco respostas registradas em
+`docs/plataforma/fase-5-memoria.md` ("O painel do Agent Dute na v3"). O
+painel antigo tinha doze blocos, quase todos sem ação, e o aviso da caixa
+antiga não fechava. Na proposta, o painel fica só com o que o agente propõe e
+uma pessoa decide: as linhas do agente no "Precisa de você" da Armazenagem (o
+alerta de itens parados e as anotações e os playbooks para aprovar), a
+anotação decidida ali mesmo e, ao lado, o que vale no agente. A alternativa
+com o rascunho de aviso ao cliente ficou de fora (pergunta 2). As telas
+seguem o shell v3 da Armazenagem (cliente ativo BTG, Leonardo). No app, a
+origem da anotação segue o texto do Conhecimento ("Na conversa da equipe com
+Guilherme · 03/11").
+
+| Tela | Arquivo |
+|---|---|
+| Agent Dute · Painel (interativo: "Aprovar" e "Recusar" tiram a anotação e baixam os contadores) | `AgentePainel.dc.html` |
+| Agent Dute · Painel sem nada para decidir | `AgentePainelVazio.dc.html` |
+| Armazenagem · Início com as decisões do agente | `AgenteInicioArmazenagem.dc.html` |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador
