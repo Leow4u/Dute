@@ -438,10 +438,20 @@ export function ClienteEstoque() {
           groupVariants,
         );
         const visibleFamilies = families.slice(0, visibleProductLimit);
-        // A família do produto aberto, a mesma do card: o detalhe oferece os
-        // mesmos tamanhos e, no tamanho sem foto, a foto da família.
+        // Ao consumir o saldo, o tamanho aberto sai dos filtros "Com saldo"
+        // e "Abaixo do mínimo". Mantenha-o só no detalhe, junto dos tamanhos
+        // que ainda atendem ao filtro, para continuar o pedido sem reabrir.
+        const detailFamilies =
+          selectedProduct && !sortedProducts.some((product) => product.key === selectedProduct.key)
+            ? groupFamilies(
+                [...sortedProducts, selectedProduct],
+                (product) => product.clientItemCode ?? product.clientCode,
+                (product) => product.key,
+                groupVariants,
+              )
+            : families;
         const selectedFamily = selectedProduct
-          ? families.find((family) =>
+          ? detailFamilies.find((family) =>
               family.variants.some((entry) => entry.item.key === selectedProduct.key),
             ) ?? null
           : null;
