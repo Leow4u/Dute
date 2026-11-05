@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ChevronRight, Loader2, PackageOpen, Truck } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Loader2, PackageOpen, Truck } from "lucide-react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
@@ -122,22 +122,31 @@ function HistoryBadge({ view }: { view: OrderView }) {
 
 function Steps({ view, withDates = false }: { view: OrderView; withDates?: boolean }) {
   const step = orderStepIndex(view.stage);
+  const delivered = view.stage === "delivered";
   return (
     <ol className={cn("flex items-start", withDates ? "w-full" : "max-w-xl")} aria-label={`Etapa: ${ORDER_STEPS[step]}`}>
       {ORDER_STEPS.map((label, index) => {
-        const done = index < step;
-        const current = index === step;
+        const done = delivered || index < step;
+        const current = !delivered && index === step;
         return (
-          <li key={label} className="flex flex-1 flex-col last:flex-none">
-            <div className="flex w-full items-center">
+          <li
+            key={label}
+            className="flex min-w-0 flex-1 flex-col last:flex-none"
+            aria-current={current ? "step" : undefined}
+            aria-label={`${label}: ${done ? "concluída" : current ? "etapa atual" : "pendente"}`}
+          >
+            <div className="flex w-full items-center" aria-hidden="true">
               <span
                 className={cn(
-                  "h-3 w-3 shrink-0 rounded-full border-2",
-                  done && "border-primary bg-primary",
-                  current && "border-primary bg-card ring-4 ring-primary/15",
+                  "relative flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+                  (done || current) && "border-primary bg-primary",
+                  current && "ring-4 ring-primary/10",
                   !done && !current && "border-border bg-card",
                 )}
-              />
+              >
+                {done ? <Check className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={3} /> : null}
+                {current ? <span className="absolute -inset-1 rounded-full bg-primary/20 motion-safe:animate-ping motion-safe:[animation-duration:2s]" /> : null}
+              </span>
               {index < ORDER_STEPS.length - 1 ? <span className={cn("h-0.5 flex-1", done ? "bg-primary" : "bg-border")} /> : null}
             </div>
             <span
