@@ -79,10 +79,12 @@ Arquivos: novos `features/warehouse-ops/cancelar-recebimento.tsx`, `lib/wms/canc
 - [x] Revisão independente funcional e de concorrência.
 - [x] Comparação visual das quatro etapas e cancelamento com os mockups em notebook e viewport estreito; registrar bloqueio se o navegador não estiver disponível.
 - [x] Documentar comportamento e evidências visuais.
-- [ ] Abrir PR com dependência explícita do #577 e acompanhar CI. Não publicar nem executar recebimentos reais.
+- [x] Abrir PR com dependência explícita do #577 e acompanhar CI. Não publicar nem executar recebimentos reais.
 
 Comandos de frontend usam `PATH=/tmp/dute-review-bin:$PATH pnpm` (pnpm 9.15.9). Functions usam npm e emulador isolado. A implementação segue nesta sessão com frentes paralelas por arquivo, revisão e integração pelo agente principal.
 
 ## Evidência de execução
 
 [Verificação visual e funcional](../../mockups/recebimento-manual/design-qa.md): 3.221 testes do app, typecheck/build, 327 testes WMS no emulador e revisão independente sem bloqueios.
+
+Entrega: [PR #578](https://github.com/Leow4u/Dute/pull/578), baseado no [hotfix #577](https://github.com/Leow4u/Dute/pull/577). Os checks atuais ficam na aba Checks do PR.
