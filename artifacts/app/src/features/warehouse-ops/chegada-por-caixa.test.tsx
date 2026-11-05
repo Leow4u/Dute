@@ -9,14 +9,15 @@ import { textosForaDaLista } from "@/test/textos";
 import {
   conteudoDaCaixa,
   FichaDaChegadaPorCaixaConteudo,
-  linhaPeloCodigo,
+  quantidadeManual,
   rascunhoDaCaixa,
   rascunhoVazio,
   type FichaDaChegadaPorCaixaProps,
-} from "./chegada-por-caixa";
+} from "./chegada-por-caixa-conteudo";
+import { linhaPeloCodigo } from "./chegada-por-caixa";
 import { destinoVazio } from "./destino-da-caixa";
 
-/** A bancada da chegada por caixa (parte 5b; mockups WmsRecebimentoCaixa e WmsRecebimentoFecharCaixa). */
+/** As quatro etapas da conferência manual mantêm as regras da chegada por caixa. */
 
 const RECEIPT = "inb_avulso_0d0e620b";
 
@@ -145,257 +146,159 @@ function render(over: Partial<FichaDaChegadaPorCaixaProps> = {}) {
 }
 
 const CABECALHO = [
-  "Recebimento",
-  "em conferência",
-  "por caixa",
-  "AVL-0D0E620B",
-  "NF 48.230 · 71 un.",
-  "Registrar divergência",
-  "Concluir entrada",
-  "CX-000132 em conferência · linha 1 sem falta marcada",
-  "Marcar falta",
+  "em conferência", "AVL-0D0E620B · NF 48.230", "Conferência", "Fechar caixa", "Destino", "Revisar entrada", "1", "2", "3", "4",
 ];
-const CABECALHO_DA_CAIXA = ["Recebimento", "em conferência", "por caixa", "Voltar à chegada"];
-const LINHAS_DA_NF = [
-  "Linhas da NF",
-  "Linha",
-  "NF (un.)",
-  "Em caixas (un.)",
-  "Custo NF",
-  "Situação",
-  "1 · POLO MASCULINO PIQUET PRETO XG",
-  "A.01.0806.004.XG",
-  "41",
-  "29",
-  "89,90",
-  "faltam 12",
-  "2 · POLO MASCULINO PIQUET PRETO GG",
-  "A.01.0806.004.GG",
-  "30",
-  "OK",
-  "Esperado",
-  "71 un.",
-  "Em caixas",
-  "59 un.",
-  "Sem caixa",
-  "12 un.",
-];
+const PRODUTOS = ["POLO MASCULINO PIQUET PRETO XG", "A.01.0806.004.XG", "POLO MASCULINO PIQUET PRETO GG", "A.01.0806.004.GG"];
 const CAIXAS = [
-  "Caixas da chegada",
-  "Iniciar caixa",
-  "CX-000131 · destino B-02",
-  "XG 29 · GG 12 · 41 un. · 48 × 38 × 30 cm · 9,4 kg",
-  "destino confirmado",
-  "CX-000132",
-  "GG 18 · 18 un.",
-  "em conferência",
+  "CX-000131 · destino B-02", "XG 29 · GG 12 · 41 un. · 48 × 38 × 30 cm · 9,4 kg", "destino confirmado", "CX-000132", "GG 18 · 18 un.", "em conferência",
 ];
+const LINHAS_DA_NF = [
+  "Conferência da NF", "Produto", "NF (un.)", "Conferido (un.)", "Custo NF", "Situação",
+  "1 · POLO MASCULINO PIQUET PRETO XG", "A.01.0806.004.XG", "41", "29", "89,90", "faltam 12",
+  "2 · POLO MASCULINO PIQUET PRETO GG", "A.01.0806.004.GG", "30", "Quantidade confere",
+  "Esperado", "71 un.", "Em caixas", "59 un.", "Sem caixa", "12 un.",
+];
+const RESUMO_DA_CAIXA = [
+  "Caixa CX-000132", "Conteúdo da caixa", "Produto", "Quantidade", "POLO MASCULINO PIQUET PRETO GG", "A.01.0806.004.GG", "18 un.", "Total na caixa: 18 un.",
+];
+const AVISO_DA_REVISAO = "Ao concluir a entrada, as caixas seguem para a fila de guarda física. Caixas sem prateleira terão o destino definido na guarda.";
+function tagDoBotao(html: string, texto: string) {
+  const tag = html.match(new RegExp(`<button[^>]*>${texto}</button>`))?.[0];
+  expect(tag, `botão ${texto}`).toBeTruthy();
+  return tag!;
+}
+async function conferirTextosEAcessibilidade(html: string, textos: string[]) {
+  expect(textosForaDaLista(html, textos)).toEqual([]);
+  expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+}
 
-describe("a bancada da chegada por caixa", () => {
-  it("a caixa em conferência: o código lido, as linhas dela com a quantidade, fechar e remover", async () => {
-    const html = render();
-    // As duas colunas só cabem na ficha larga; estreita, as caixas vêm antes das linhas da NF.
-    expect(html).toMatch(/^<div class="@container /);
-    expect(html).toContain("@2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]");
-    expect(html).toContain('aria-pressed="true"');
-    expect(html).toMatch(/<input[^>]*id="caixa-qtd-inb_avulso_0d0e620b_02"[^>]*value="18"/);
-    expect(
-      textosForaDaLista(html, [
-        ...CABECALHO,
-        ...CAIXAS,
-        "Caixa CX-000132",
-        "Cód. cliente, SKU ou barras",
-        "POLO MASCULINO PIQUET PRETO GG",
-        "A.01.0806.004.GG · BTG-000087",
-        "un.",
-        "Fechar caixa",
-        "Remover caixa",
-        ...LINHAS_DA_NF,
-      ]),
-    ).toEqual([]);
-    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+describe("a conferência em quatro etapas", () => {
+  it("conferência prioriza seleção dos produtos da NF, com comparação e caixa ativa separados", async () => {
+    const html = render({ etapa: 1 });
+    expect(html).toContain("@3xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,1fr)]");
+    expect(html).toContain('aria-current="step"');
+    expect(html).toContain('aria-label="Selecionar caixa CX-000132"');
+    expect(html).toContain("Quantidade confere");
+    expect(html).not.toContain(">OK<");
+    expect(html).not.toContain('id="caixa-quantidade"');
+    expect(html).not.toContain("Cód. cliente, SKU ou barras");
+    await conferirTextosEAcessibilidade(html, [
+      ...CABECALHO, ...CAIXAS, ...PRODUTOS, "Conferir recebimento", "Caixa ativa CX-000132", "Em conferência · 18 un. salvas nesta caixa", "Iniciar outra caixa", "Produtos da NF",
+      "Buscar produto por nome ou código", "Produto", "NF", "Nesta caixa", "Conferência", "41", "30", "0", "18", "faltam 12", "Quantidade confere",
+      "A conferência compara o total de todas as caixas com a NF.", "Esperado", "71 un.", "Salvo nesta caixa", "18 un.", "Faltam na chegada", "12 un.",
+      "Selecione um produto da NF para informar a quantidade nesta caixa.", "Remover caixa", "Revisar caixa",
+    ]);
   });
 
-  it("fechar a caixa abre a vista dela: as medidas, o peso e como ela pode ir na prateleira", async () => {
+  it("produto novo começa vazio, existente mostra total e a revisão espera salvar ou descartar", () => {
+    const novo = render({ produtoSelecionado: `${RECEIPT}_01` });
+    expect(novo).toMatch(/<input[^>]*id="caixa-quantidade"[^>]*value=""/);
+    expect(tagDoBotao(novo, "Adicionar à caixa")).toContain('disabled=""');
+    expect(novo).toContain("Quantidade ainda não adicionada.");
+    const existente = render({ produtoSelecionado: `${RECEIPT}_02` });
+    expect(existente).toMatch(/<input[^>]*id="caixa-quantidade"[^>]*value="18"/);
+    expect(existente).toContain("Salvo nesta caixa: 18 un.");
+    expect(tagDoBotao(existente, "Salvar quantidade")).toContain('disabled=""');
+    expect(existente).toContain("Remover produto da caixa");
+    const editando = render({ produtoSelecionado: `${RECEIPT}_02`, quantidades: { [`${RECEIPT}_02`]: "20" }, rascunhosPendentes: true, onBack: () => undefined });
+    expect(tagDoBotao(editando, "Salvar quantidade")).not.toContain('disabled=""');
+    expect(tagDoBotao(editando, "Revisar caixa")).toContain('disabled=""');
+    expect(tagDoBotao(editando, "Revisar entrada")).toContain('disabled=""');
+    expect(editando).toContain("Descartar alteração");
+    expect(editando).toContain("Há quantidade não salva. Salve ou descarte a alteração antes de revisar.");
+  });
+
+  it("busca parcial filtra a NF por nome ou código e ausência de resultado tem status", () => {
+    const peloNome = render({ busca: "preto xg" });
+    expect(peloNome).toContain("POLO MASCULINO PIQUET PRETO XG");
+    expect(peloNome).not.toContain("POLO MASCULINO PIQUET PRETO GG");
+    const peloCodigo = render({ busca: "000087" });
+    expect(peloCodigo).toContain("POLO MASCULINO PIQUET PRETO GG");
+    expect(peloCodigo).not.toContain("POLO MASCULINO PIQUET PRETO XG");
+    expect(render({ busca: "inexistente" })).toContain("Nenhum produto da NF encontrado.");
+  });
+
+  it("fechamento mantém conteúdo, medidas, peso e orientação e confirma somente com dados válidos", async () => {
     const vazio = render({ fechando: true });
-    const fechar = (html: string) => html.match(/<button[^>]*>Fechar caixa<\/button>/)?.[0] ?? "";
-    expect(fechar(vazio)).toContain('disabled=""');
+    expect(tagDoBotao(vazio, "Fechar caixa")).toContain('disabled=""');
     expect(vazio).not.toContain("Volume");
-    const preenchido = render({
-      fechando: true,
-      rascunho: { length_cm: "48", width_cm: "38", height_cm: "30", weight_kg: "6,1", content: "", tombar: true, empilhar: false },
-    });
-    expect(fechar(preenchido)).not.toContain('disabled=""');
-    // A vista da caixa no lugar da chegada: nem a lista das caixas nem as linhas da NF.
-    expect(preenchido).not.toContain("Caixas da chegada");
-    expect(preenchido).not.toContain("Linhas da NF");
-    expect(
-      textosForaDaLista(preenchido, [
-        ...CABECALHO_DA_CAIXA,
-        "Caixa CX-000132",
-        "em conferência",
-        "AVL-0D0E620B · NF 48.230 · GG 18 · 18 un.",
-        "Comprimento (cm)",
-        "Largura (cm)",
-        "Altura (cm)",
-        "Peso (kg)",
-        "Pode virar esta caixa de lado",
-        "Pode empilhar esta caixa sobre outra que suporte seu peso",
-        "Volume 0,055 m³",
-        "Fechar caixa",
-        "Cancelar",
-      ]),
-    ).toEqual([]);
-    expect(await violacoesDeAcessibilidade(preenchido)).toEqual([]);
+    const preenchido = render({ fechando: true, rascunho: { length_cm: "48", width_cm: "38", height_cm: "30", weight_kg: "6,1", content: "", tombar: true, empilhar: false } });
+    expect(tagDoBotao(preenchido, "Fechar caixa")).not.toContain('disabled=""');
+    expect(preenchido).toMatch(/<input[^>]*id="fechar-length_cm"[^>]*value="48"/);
+    expect(preenchido).toMatch(/<button[^>]*aria-checked="true"[^>]*id="fechar-tombar"/);
+    expect(preenchido).not.toContain("Produtos da NF");
+    expect(preenchido).not.toContain("Guardar em");
+    await conferirTextosEAcessibilidade(preenchido, [
+      ...CABECALHO, ...RESUMO_DA_CAIXA, "1 produtos · 18 un.", "Medidas e peso", "Comprimento (cm)", "Largura (cm)", "Altura (cm)", "Peso (kg)",
+      "Pode virar esta caixa de lado", "Pode empilhar esta caixa sobre outra que suporte seu peso", "Volume 0,055 m³", "Editar conteúdo", "Próxima etapa: destino",
+    ]);
   });
 
-  it("a caixa fechada sem destino abre a vista dela, com as medidas sem edição, reabrir e remover", async () => {
-    const fechada = caixa("CX-000132", "reviewed", [linha(`${RECEIPT}_02`, 2, "GG", 18)], {
-      length_m: 0.48,
-      width_m: 0.38,
-      height_m: 0.3,
-      gross_weight_kg: 6.1,
-      allow_tilt: true,
-    });
+  it("destino mostra a caixa já fechada e medidas sem reeditar, com reabertura explícita", async () => {
+    const fechada = caixa("CX-000132", "reviewed", [linha(`${RECEIPT}_02`, 2, "GG", 18)], { length_m: 0.48, width_m: 0.38, height_m: 0.3, gross_weight_kg: 6.1, allow_tilt: true });
     const html = render({ caixas: [caixas[0]!, fechada] });
-    expect(html).toMatch(/<input[^>]*id="fechar-length_cm"[^>]*disabled=""[^>]*value="48"/);
-    expect(html).toMatch(/<input[^>]*id="fechar-weight_kg"[^>]*disabled=""[^>]*value="6,1"/);
-    expect(html).toMatch(/<button[^>]*aria-checked="true"[^>]*id="fechar-tombar"/);
-    expect(
-      textosForaDaLista(html, [
-        ...CABECALHO_DA_CAIXA,
-        "Caixa CX-000132",
-        "fechada · sem destino",
-        "AVL-0D0E620B · NF 48.230 · GG 18 · 18 un.",
-        "Comprimento (cm)",
-        "Largura (cm)",
-        "Altura (cm)",
-        "Peso (kg)",
-        "Pode virar esta caixa de lado",
-        "Pode empilhar esta caixa sobre outra que suporte seu peso",
-        "Volume 0,055 m³",
-        "Guardar em",
-        "Sugestão do sistema",
-        "Escolher prateleira",
-        "Reabrir para ajustar",
-        "Remover caixa",
-      ]),
-    ).toEqual([]);
-    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
-    // A caixa com destino confirmado fica na chegada, sem essas ações.
+    expect(html).not.toContain('id="fechar-length_cm"');
+    expect(html).not.toContain('id="caixa-quantidade"');
+    expect(html).toContain("48 × 38 × 30 cm · 6,1 kg");
+    await conferirTextosEAcessibilidade(html, [
+      ...CABECALHO, ...RESUMO_DA_CAIXA, "Definir destino", "sem prateleira", "1 produtos · 18 un. · 48 × 38 × 30 cm · 6,1 kg", "Guardar em", "Sugestão do sistema", "Escolher prateleira",
+      "Confirmar o destino reserva a prateleira. A guarda física será feita após concluir a entrada.", "Reabrir para ajustar", "Remover caixa", "Continuar sem prateleira",
+    ]);
     const confirmada = render({ caixas, selecionada: "CX-000131" });
-    expect(confirmada).toContain("Caixas da chegada");
+    expect(confirmada).toContain("Caixas e destinos");
     expect(confirmada).not.toContain("Reabrir para ajustar");
     expect(confirmada).not.toContain("Remover caixa");
-    expect(confirmada).not.toContain("Voltar à chegada");
   });
 
-  it("concluir entrada desligado diz o que falta, na frase do servidor (mockup WmsRecebimentoCaixa)", () => {
-    const html = render();
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Concluir entrada<\/button>/);
+  it("revisão mantém Concluir entrada bloqueado por caixa aberta e linha sem falta marcada", () => {
+    const html = render({ etapa: 4 });
+    expect(tagDoBotao(html, "Concluir entrada")).toContain('disabled=""');
     expect(html).toContain("CX-000132 em conferência · linha 1 sem falta marcada");
-    // A justificativa só entra quando as caixas e as linhas já estão tratadas.
     expect(html).not.toContain("Justificativa da divergência");
+    expect(html).toContain("Marcar falta");
+    expect(render({ etapa: 4, podeRegistrarDivergencia: false })).not.toContain("Registrar divergência");
   });
 
-  it("pronta para concluir: a falta marcada com o motivo, desmarcar, a justificativa e o concluir (mockup WmsRecebimentoConcluir)", async () => {
-    const marcada = {
-      ...task,
-      items: [
-        { ...task.items![0]!, shortage: { qty: 12, boxed_qty: 29, expected_qty: 41, reason: "avaria", detail: "Volume 3 molhado" } },
-        task.items![1]!,
-      ],
-    };
-    const fechada = caixa("CX-000132", "reviewed", [linha(`${RECEIPT}_02`, 2, "GG", 18)], {
-      length_m: 0.48,
-      width_m: 0.38,
-      height_m: 0.3,
-      gross_weight_kg: 6.1,
-    });
+  it("falta marcada mantém motivo, desmarcar e justificativa obrigatória antes de concluir", async () => {
+    const marcada = { ...task, items: [{ ...task.items![0]!, shortage: { qty: 12, boxed_qty: 29, expected_qty: 41, reason: "avaria", detail: "Volume 3 molhado" } }, task.items![1]!] };
+    const fechada = caixa("CX-000132", "reviewed", [linha(`${RECEIPT}_02`, 2, "GG", 18)], { length_m: 0.48, width_m: 0.38, height_m: 0.3, gross_weight_kg: 6.1 });
     const semJustificativa = render({ task: marcada, caixas: [caixas[0]!, fechada], selecionada: null });
-    expect(semJustificativa).toMatch(/<button[^>]*disabled=""[^>]*>Concluir entrada<\/button>/);
+    expect(tagDoBotao(semJustificativa, "Concluir entrada")).toContain('disabled=""');
     expect(semJustificativa).toMatch(/<label[^>]*for="justificativa-da-divergencia"[^>]*>Justificativa da divergência<\/label>/);
-    const pronta = render({
-      task: marcada,
-      caixas: [caixas[0]!, fechada],
-      selecionada: null,
-      justificativa: "Fornecedor envia o volume 3 na próxima NF.",
-    });
-    expect(pronta).not.toMatch(/<button[^>]*disabled=""[^>]*>Concluir entrada<\/button>/);
+    const pronta = render({ task: marcada, caixas: [caixas[0]!, fechada], selecionada: null, justificativa: "Fornecedor envia o volume 3 na próxima NF." });
+    expect(tagDoBotao(pronta, "Concluir entrada")).not.toContain('disabled=""');
     expect(pronta).not.toContain("Sem caixa");
-    expect(
-      textosForaDaLista(semJustificativa, [
-        "Recebimento",
-        "em conferência",
-        "por caixa",
-        "AVL-0D0E620B",
-        "NF 48.230 · 71 un.",
-        "Registrar divergência",
-        "Concluir entrada",
-        "divergência sem justificativa",
-        "Caixas da chegada",
-        "Iniciar caixa",
-        "CX-000131 · destino B-02",
-        "XG 29 · GG 12 · 41 un. · 48 × 38 × 30 cm · 9,4 kg",
-        "destino confirmado",
-        "CX-000132",
-        "GG 18 · 18 un. · 48 × 38 × 30 cm · 6,1 kg",
-        "sem prateleira",
-        ...LINHAS_DA_NF.filter((texto) => !["faltam 12", "Sem caixa", "12 un."].includes(texto)),
-        "falta marcada · 12",
-        "Avaria · Volume 3 molhado",
-        "Desmarcar",
-        "Falta marcada",
-        "12 un.",
-        "Justificativa da divergência",
-      ]),
-    ).toEqual([]);
-    expect(await violacoesDeAcessibilidade(semJustificativa)).toEqual([]);
+    await conferirTextosEAcessibilidade(semJustificativa, [
+      ...CABECALHO, ...CAIXAS, ...LINHAS_DA_NF.filter((texto) => !["faltam 12", "Sem caixa"].includes(texto)), "2 caixas", "59 un. conferidas", "Há divergências na conferência", "Caixas e destinos",
+      "GG 18 · 18 un. · 48 × 38 × 30 cm · 6,1 kg", "sem prateleira", "falta marcada · 12", "Avaria · Volume 3 molhado", "Desmarcar", "Falta marcada", "Justificativa da divergência",
+      "divergência sem justificativa", "Voltar à conferência", "Registrar divergência", "Concluir entrada", AVISO_DA_REVISAO,
+    ]);
   });
 
-  it("quem não registra divergência não vê o botão", () => {
-    expect(render({ podeRegistrarDivergencia: false })).not.toContain("Registrar divergência");
-  });
-
-  it("quem só consulta (o suporte) vê as caixas e as linhas, sem as ações", async () => {
+  it("quem só consulta vê comparação, caixas e medidas sem controles de operação", async () => {
     const html = render({ podeOperar: false, podeRegistrarDivergencia: false });
-    for (const acao of ["Iniciar caixa", "Cód. cliente, SKU ou barras", "Fechar caixa", "Remover caixa", "Concluir entrada", "Marcar falta"]) {
-      expect(html).not.toContain(acao);
-    }
-    expect(
-      textosForaDaLista(html, [
-        "Recebimento",
-        "em conferência",
-        "por caixa",
-        "AVL-0D0E620B",
-        "NF 48.230 · 71 un.",
-        "Caixas da chegada",
-        "CX-000131 · destino B-02",
-        "XG 29 · GG 12 · 41 un. · 48 × 38 × 30 cm · 9,4 kg",
-        "destino confirmado",
-        "CX-000132",
-        "GG 18 · 18 un.",
-        "em conferência",
-        ...LINHAS_DA_NF,
-      ]),
-    ).toEqual([]);
-    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
-    const fechada = caixa("CX-000132", "reviewed", [linha(`${RECEIPT}_02`, 2, "GG", 18)], {
-      length_m: 0.48,
-      width_m: 0.38,
-      height_m: 0.3,
-      gross_weight_kg: 6.1,
-    });
+    for (const acao of ["Iniciar caixa", "Revisar caixa", "Adicionar à caixa", "Salvar quantidade", "Fechar caixa", "Remover caixa", "Concluir entrada", "Marcar falta", "Registrar divergência"]) expect(html).not.toContain(acao);
+    expect(html).not.toContain('aria-label="Etapas do recebimento"');
+    await conferirTextosEAcessibilidade(html, ["Detalhes do recebimento", "em conferência", "AVL-0D0E620B · NF 48.230", ...CAIXAS, ...LINHAS_DA_NF, "2 caixas", "59 un. conferidas", "Há divergências na conferência", "Caixas e destinos"]);
+    const fechada = caixa("CX-000132", "reviewed", [linha(`${RECEIPT}_02`, 2, "GG", 18)], { length_m: 0.48, width_m: 0.38, height_m: 0.3, gross_weight_kg: 6.1 });
     const vista = render({ podeOperar: false, caixas: [caixas[0]!, fechada] });
-    expect(vista).toContain("Caixa CX-000132");
+    expect(vista).toContain("48 × 38 × 30 cm · 6,1 kg");
     expect(vista).not.toContain("Reabrir para ajustar");
-    expect(vista).not.toContain("Remover caixa");
-    // Nem o destino (parte 5c): quem só consulta não pede sugestão nem confirma.
     expect(vista).not.toContain("Guardar em");
   });
 });
 
 describe("o que a bancada lê", () => {
+  it.each(["", " ", "0", "-1", "Infinity", "1000001", "1,2345", "1.2345"])("quantidade inválida %j não vira uma contagem", (texto) => {
+    expect(quantidadeManual(texto)).toBeNull();
+  });
+
+  it("a quantidade física aceita vírgula decimal e conserva três casas", () => {
+    expect(quantidadeManual("1,25")).toBe(1.25);
+    expect(quantidadeManual("0,001")).toBe(0.001);
+    expect(quantidadeManual("1000000")).toBe(1_000_000);
+  });
+
   it("o código lido acha a linha da NF pelo código do cliente, pelo SKU ou pelo código de barras", () => {
     const itens = task.items!;
     expect(linhaPeloCodigo(itens, "a.01.0806.004.xg ")?.id).toBe(`${RECEIPT}_01`);

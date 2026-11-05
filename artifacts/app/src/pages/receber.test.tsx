@@ -10,7 +10,7 @@ import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
-import { NoticeCard } from "./receber";
+import { CancelledReceiptHistory, NoticeCard } from "./receber";
 
 /**
  * O Receber na v3 (parte 4.7e): só rótulos, dados e ações; uma ação
@@ -49,12 +49,6 @@ describe("Receber na v3", () => {
     expect(TELA).toMatch(/<Button type="button" variant="outline" onClick=\{\(\) => setUnplannedOpen\(true\)\}>/);
   });
 
-  it("a chegada por caixa abre a ficha larga e a fila estreita a partir de 1280 px, como nos mockups", () => {
-    expect(TELA).toContain(
-      'const fichaLarga = Boolean(!selectedNotice && selected && selected.queue.key === "receiving" && chegadaPorCaixa(selected.task));',
-    );
-    expect(TELA).toContain('desktop && fichaLarga && "xl:grid-cols-[minmax(280px,1fr)_minmax(480px,2.6fr)]"');
-  });
 
   it("a chegada por caixa recebida fica em Recebidas, por guardar, com as caixas guardadas, até a última guarda", () => {
     expect(TELA).toContain('<QueueGroup title="Recebidas, por guardar" count={board.guardando.length} empty={null}>');
@@ -158,7 +152,7 @@ describe("o Receber para quem só consulta (o suporte)", () => {
     expect(TELA).toContain("const operador = canOperateWarehouse(user?.publicMetadata.role);");
     expect(TELA).toMatch(/\{operador \? \(\s*<Button type="button" variant="outline" onClick=\{\(\) => setUnplannedOpen\(true\)\}>/);
     expect(TELA).toContain('{operador ? label : "Ver"}');
-    expect(TELA).toContain("entry={operador ? selected : somenteConsulta(selected)}");
+    expect(TELA).toContain("entry={operador && !isCancelledReceipt(selected.task) ? selected : somenteConsulta(selected)}");
     expect(TELA).toContain("operador && noticeChoice?.editable");
   });
 });
@@ -227,5 +221,14 @@ describe("a chegada recebida (a ficha depois da entrada)", () => {
     const aberta = fichaDaChegada({ ...recebida, status: "checking", can_advance: true, next_action: undefined });
     expect(aberta).toContain('aria-label="Quantidade conferida"');
     expect(aberta).toContain("Próximo passo");
+  });
+});
+
+
+describe("histórico de cancelamento", () => {
+  it("mostra motivo, observação, original, ator e data sem ação operacional; textos e axe", async () => {
+    const html = renderToStaticMarkup(<CancelledReceiptHistory task={{ id: "receiving:avulsa", status: "cancelled", cancellation_reason: "duplicate", cancellation_note: "Entrada repetida", cancelled_at: "2026-11-04T12:00:00Z", cancelled_by: { uid: "operador", role: "wms", name: "Guilherme" }, duplicate_of_receipt_id: "original", duplicate_of_receipt_number: "AVL-123" }} />);
+    expect(textosDaTela(html)).toEqual(["Recebimento cancelado", "Duplicado", "Entrada repetida", "Cancelado em 04/11/2026, 12:00", "Por Guilherme", "Original: AVL-123"]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });

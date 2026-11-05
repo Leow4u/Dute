@@ -43,6 +43,7 @@ import {
   type OperationalActor,
 } from "./domain/operations.js";
 import { linkInboundNoticeTransaction } from "./domain/inbound-notice.js";
+import { cancelInboundReceiptTransaction } from "./domain/inbound-cancel.js";
 import { setOrderDeliveryTransaction } from "./domain/order-delivery.js";
 import { receiveOrderReturnFlow } from "./domain/order-return.js";
 import {
@@ -1535,6 +1536,8 @@ function rowRecord(row: Record<string, unknown>, key: string) {
 
 function notificationKindForEvent(eventType: string, severity?: string) {
   const normalized = eventType.toLowerCase();
+  // Cancelar um rascunho de chegada é auditoria interna, sem atualização de estoque.
+  if (normalized === "inbound.cancelled") return null;
   if (
     normalized.includes("exception") ||
     normalized.includes("diverg") ||
@@ -6606,6 +6609,12 @@ export const createInboundReceipt = onCall(async (request) => {
     profile,
     { boxReceivingEnabled: boxReceivingEnabled(PROJECT_ID) },
   );
+});
+
+export const cancelInboundReceipt = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return cancelInboundReceiptTransaction(db, request.data, profile);
 });
 
 export const updateInboundReceiptConference = onCall(async (request) => {

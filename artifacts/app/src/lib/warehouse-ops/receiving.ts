@@ -25,6 +25,7 @@ export type ReceivingBoard = {
   guardando: TaskQueueEntry[];
   store: TaskQueueEntry[];
   done: TaskQueueEntry[];
+  cancelled: TaskQueueEntry[];
 };
 
 /** A chegada por caixa recebida e ainda com caixa por guardar. */
@@ -36,7 +37,7 @@ function lastActivityTime(task: WarehouseTask) {
   const events = task.timeline ?? [];
   const last = events[events.length - 1];
   const value =
-    last?.occurred_at || last?.created_at || last?.at || task.due_at || task.created_at || "";
+    task.cancelled_at || last?.occurred_at || last?.created_at || last?.at || task.due_at || task.created_at || "";
   const time = Date.parse(value);
   return Number.isFinite(time) ? time : 0;
 }
@@ -53,7 +54,10 @@ export function buildReceivingBoard(queues: NormalizedQueue[]): ReceivingBoard {
     guardando: receiving.filter(({ task }) => recebidaPorGuardar(task)),
     store: putaway.filter(({ task }) => !isTerminalTask(task)),
     done: [...receiving, ...putaway]
-      .filter(({ task }) => isTerminalTask(task) && !recebidaPorGuardar(task))
+      .filter(({ task }) => isTerminalTask(task) && !isCancelledReceipt(task) && !recebidaPorGuardar(task))
+      .sort((left, right) => lastActivityTime(right.task) - lastActivityTime(left.task)),
+    cancelled: [...receiving, ...putaway]
+      .filter(({ task }) => isCancelledReceipt(task))
       .sort((left, right) => lastActivityTime(right.task) - lastActivityTime(left.task)),
   };
 }
@@ -67,7 +71,107 @@ export function tarefaPrincipal(board: Pick<ReceivingBoard, "check" | "store">):
 }
 
 export function isUnplannedReceipt(task: WarehouseTask) {
-  return String(task.reference || task.id).includes("inb_avulso");
+  return task.source === "wms_unplanned_receipt" || String(task.reference || task.id).includes("inb_avulso");
+}
+
+export function isCancelledReceipt(task: WarehouseTask) {
+  return ["cancelled", "canceled"].includes(normalizeStatus(task.status));
+}
+
+export type ChegadaParaCompararDuplicidade = {
+  customer_code: string;
+  invoice_number: string;
+  items: Array<{
+    sku_code?: string | null;
+    client_item_code?: string | null;
+    quantity: number;
+    size?: string | null;
+    color?: string | null;
+  }>;
+};
+
+function chaveDaDuplicidade(value: unknown): string {
+  return coerceText(value).toUpperCase().replace(/\s+/g, " ");
+}
+
+type LinhaDaDuplicidade = { sku: string; cliente: string; quantidade: number };
+
+function linhasDaDuplicidade(items: ChegadaParaCompararDuplicidade["items"]): LinhaDaDuplicidade[] | null {
+  if (!items.length) return null;
+  const linhas: LinhaDaDuplicidade[] = [];
+  for (const item of items) {
+    const sku = chaveDaDuplicidade(item.sku_code);
+    const codigo = chaveDaDuplicidade(item.client_item_code);
+    if ((!sku && !codigo) || !Number.isFinite(item.quantity) || item.quantity <= 0) return null;
+    linhas.push({
+      sku,
+      cliente: codigo ? JSON.stringify([codigo, chaveDaDuplicidade(item.size), chaveDaDuplicidade(item.color)]) : "",
+      quantidade: item.quantity,
+    });
+  }
+  return linhas;
+}
+
+type QuantidadeDecimal = { unidades: bigint; casas: number };
+
+/** Soma decimal exata: dividir 0,3 em linhas de 0,1 e 0,2 não muda a assinatura. */
+function quantidadeDecimal(quantidade: number): QuantidadeDecimal {
+  const [numero, expoente = "0"] = String(quantidade).split("e");
+  const [inteiro, fracao = ""] = numero.split(".");
+  const casas = fracao.length - Number(expoente);
+  const unidades = BigInt(inteiro + fracao);
+  return { unidades: casas < 0 ? unidades * 10n ** BigInt(-casas) : unidades, casas: Math.max(0, casas) };
+}
+
+function assinaturaDasLinhas(linhas: LinhaDaDuplicidade[], clientesPorSku: Map<string, Set<string>>): string | null {
+  const totais = new Map<string, QuantidadeDecimal>();
+  for (const linha of linhas) {
+    const alternativas = clientesPorSku.get(linha.sku);
+    if (!linha.cliente && alternativas && alternativas.size > 1) return null;
+    const cliente = linha.cliente || alternativas?.values().next().value;
+    const chave = cliente ? `cliente:${cliente}` : `sku:${linha.sku}`;
+    const quantidade = quantidadeDecimal(linha.quantidade);
+    const atual = totais.get(chave) ?? { unidades: 0n, casas: 0 };
+    const casas = Math.max(atual.casas, quantidade.casas);
+    totais.set(chave, {
+      unidades: atual.unidades * 10n ** BigInt(casas - atual.casas) + quantidade.unidades * 10n ** BigInt(casas - quantidade.casas),
+      casas,
+    });
+  }
+  return JSON.stringify([...totais].sort(([a], [b]) => a.localeCompare(b)).map(([chave, total]) => {
+    let { unidades, casas } = total;
+    while (casas > 0 && unidades % 10n === 0n) { unidades /= 10n; casas -= 1; }
+    return [chave, String(unidades), casas];
+  }));
+}
+
+/** Indício entre as chegadas carregadas, não uma garantia de unicidade no banco. */
+export function possiveisChegadasDuplicadas(tasks: WarehouseTask[], draft: ChegadaParaCompararDuplicidade): WarehouseTask[] {
+  const cliente = coerceText(draft.customer_code);
+  const documento = chaveDaDuplicidade(draft.invoice_number);
+  const declaradas = linhasDaDuplicidade(draft.items);
+  if (!cliente || !documento || !declaradas) return [];
+  return tasks.filter((task) => {
+    if (isCancelledReceipt(task) || coerceText(task.customer_code ?? task.customer) !== cliente
+      || chaveDaDuplicidade(task.invoice_number) !== documento) return false;
+    const anteriores = linhasDaDuplicidade((task.items ?? []).map((item) => ({
+      sku_code: item.sku_code || item.sku,
+      client_item_code: item.client_item_code,
+      quantity: item.expected_quantity ?? item.quantity ?? NaN,
+      size: item.size,
+      color: item.color,
+    })));
+    if (!anteriores) return false;
+    const clientesPorSku = new Map<string, Set<string>>();
+    for (const linha of [...declaradas, ...anteriores]) {
+      if (!linha.sku || !linha.cliente) continue;
+      const identidades = clientesPorSku.get(linha.sku) ?? new Set<string>();
+      identidades.add(linha.cliente);
+      clientesPorSku.set(linha.sku, identidades);
+    }
+    const assinatura = assinaturaDasLinhas(declaradas, clientesPorSku);
+    return assinatura !== null && assinatura === assinaturaDasLinhas(anteriores, clientesPorSku);
+  });
 }
 
 /**

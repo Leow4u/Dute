@@ -128,9 +128,17 @@ as telas novas. **Ler antes:** `docs/manual-armazenagem.md`.
 2. **Pedidos:** aprovar uma solicitação (com o `interno`), "Separado" com o
    lacre e "Entregue" com quem levou e a placa. Num pedido, a "Entrega pela
    Dutelog"; em outro, a "Retirada pelo cliente".
-3. **Receber:** a "Chegada avulsa" de um item do cliente; a conferência com
-   uma linha a menos, a "Justificativa da divergência" e "Concluir entrada";
-   a guarda numa posição da zona do cliente.
+3. **Receber:** criar uma "Chegada avulsa" do cliente e conferir a chegada
+   que abre após o sucesso. No modo por caixa, selecionar um produto da NF,
+   digitar a quantidade contada e "Adicionar à caixa"; corrigir o total com
+   "Salvar quantidade". Fechar a caixa, confirmar destino ou continuar sem
+   prateleira, revisar a entrada e tratar uma falta com justificativa. Só
+   depois de concluir a entrada, fazer a guarda física na posição do cliente.
+   Voltar à fila e consultar "Recebidos" e "Cancelados" (até 12 recentes por
+   fila). Num exemplo ainda sem entrada, cancelar uma chegada duplicada,
+   selecionando a original, e conferir o histórico preservado. No alerta de
+   possível duplicidade, distinguir "Abrir recebimento" de "Registrar outra
+   entrega"; o alerta só compara dados já carregados.
 4. **Itens:** a ficha, uma foto e, com o `interno`, "Ajustar saldo".
 5. **Etiquetas:** imprimir a da posição.
 

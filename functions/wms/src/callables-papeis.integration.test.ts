@@ -98,6 +98,7 @@ const MATRIZ: Record<string, Linha> = {
   },
   assignRequestNumbers: { passam: OWNER, recusa: "Só o owner roda esta manutenção." },
   cancelCustomerOrder: { passam: CLIENTE, recusa: "Cancelamento disponível no portal do cliente." },
+  cancelInboundReceipt: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   cancelShipmentNotice: {
     passam: CLIENTE,
     recusa: "Só quem avisou o envio pode cancelar o aviso.",
