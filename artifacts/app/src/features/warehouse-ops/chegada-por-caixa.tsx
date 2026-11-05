@@ -771,7 +771,7 @@ export function FichaDaChegadaPorCaixa({
         ...daChegada,
         // O status que a tela viu: a chegada por caixa conclui de created ou checking.
         expected_status: task.status === "checking" ? "checking" : "created",
-        note: justificativa.trim() || undefined,
+        ...(justificativa.trim() ? { note: justificativa.trim() } : {}),
         idempotency_key: chave(),
       }),
     onSuccess: () => {
