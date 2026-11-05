@@ -929,6 +929,9 @@ export async function removeWarehouseBox(
     if (customerCode && String(data.customer_code ?? "") !== customerCode) {
       throw new HttpsError("permission-denied", "Caixa de outro cliente.");
     }
+    if (["cancelled", "canceled"].includes(String(data.status))) {
+      throw new HttpsError("failed-precondition", `A caixa ${code} pertence ao histórico de uma chegada cancelada e não pode ser removida.`);
+    }
     if (data.status === "committing") {
       throw new HttpsError("failed-precondition", `A caixa ${code} está sendo guardada. Aguarde a conclusão antes de removê-la.`);
     }

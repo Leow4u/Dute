@@ -1464,10 +1464,20 @@ function laneTask(input: {
   customer_request_id?: string;
   order_id?: string;
   inbound_id?: string;
+  receipt_customer_code?: string;
+  created_at?: unknown;
   /** A chegada por caixa (recebimento com caixas, parte 5): o modo e as caixas. */
   conference_mode?: string;
   receipt_number?: string;
   invoice_number?: string;
+  supplier?: string;
+  cancellation_reason?: string;
+  cancellation_note?: string;
+  cancellation_previous_status?: string;
+  cancelled_at?: unknown;
+  cancelled_by?: AnyRecord;
+  duplicate_of_receipt_id?: string;
+  duplicate_of_receipt_number?: string;
   box_count?: number;
   boxes_stored?: number;
   putaway_status?: string;
@@ -1500,9 +1510,19 @@ function laneTask(input: {
     customer_request_id: input.customer_request_id,
     order_id: input.order_id,
     inbound_id: input.inbound_id,
+    receipt_customer_code: input.receipt_customer_code,
+    created_at: input.created_at === undefined ? undefined : toIso(input.created_at) || undefined,
     conference_mode: input.conference_mode,
     receipt_number: input.receipt_number,
     invoice_number: input.invoice_number,
+    supplier: input.supplier,
+    cancellation_reason: input.cancellation_reason,
+    cancellation_note: input.cancellation_note,
+    cancellation_previous_status: input.cancellation_previous_status,
+    cancelled_at: input.cancelled_at === undefined ? undefined : toIso(input.cancelled_at) || undefined,
+    cancelled_by: input.cancelled_by,
+    duplicate_of_receipt_id: input.duplicate_of_receipt_id,
+    duplicate_of_receipt_number: input.duplicate_of_receipt_number,
     box_count: input.box_count,
     boxes_stored: input.boxes_stored,
     putaway_status: input.putaway_status,
@@ -1637,9 +1657,20 @@ async function getWarehouseOps() {
   ]);
   const queuedTasks = (laneId: OpsLaneId) => {
     let closed = 0;
-    return laneRecords[laneId].filter((task) => {
+    let cancelled = 0;
+    const candidates = laneId === "receiving"
+      ? [...laneRecords[laneId]].sort((left, right) =>
+          toIso(right.cancelled_at ?? right.updated_at ?? right.created_at)
+            .localeCompare(toIso(left.cancelled_at ?? left.updated_at ?? left.created_at)))
+      : laneRecords[laneId];
+    return candidates.filter((task) => {
       if (orderLanes.has(laneId) && task.order_id) return queuedOrderIds.has(String(task.order_id));
       if (!isClosedTask(laneId, task)) return true;
+      // Cancelados têm histórico próprio: não disputam as 12 recebidas recentes.
+      if (laneId === "receiving" && ["cancelled", "canceled"].includes(laneStatus(laneId, task))) {
+        cancelled += 1;
+        return cancelled <= OPS_CLOSED_TASKS_IN_QUEUE;
+      }
       closed += 1;
       return closed <= OPS_CLOSED_TASKS_IN_QUEUE;
     });
@@ -1732,6 +1763,8 @@ async function getWarehouseOps() {
       sku: item.sku_code,
       sku_code: item.sku_code,
       client_item_code: item.client_item_code,
+      size: item.size,
+      color: item.color,
       name: item.product_name,
       product_name: item.product_name,
       quantity: Number(item.expected_qty ?? item.quantity ?? 0),
@@ -1846,9 +1879,19 @@ async function getWarehouseOps() {
             : undefined,
           customer_request_id: receipt.customer_request_id,
           inbound_id: String(receipt.id),
+          receipt_customer_code: String(receipt.customer_code ?? ""),
+          created_at: receipt.created_at,
           conference_mode: receipt.conference_mode === "per_box" ? "per_box" : undefined,
           receipt_number: receipt.receipt_number == null ? undefined : String(receipt.receipt_number),
           invoice_number: receipt.invoice_number == null ? undefined : String(receipt.invoice_number),
+          supplier: receipt.supplier,
+          cancellation_reason: receipt.cancellation_reason,
+          cancellation_note: receipt.cancellation_note,
+          cancellation_previous_status: receipt.cancellation_previous_status,
+          cancelled_at: receipt.cancelled_at,
+          cancelled_by: receipt.cancelled_by,
+          duplicate_of_receipt_id: receipt.duplicate_of_receipt_id,
+          duplicate_of_receipt_number: receipt.duplicate_of_receipt_number,
           box_count: receipt.box_count == null ? undefined : Number(receipt.box_count),
           boxes_stored: receipt.boxes_stored == null ? undefined : Number(receipt.boxes_stored),
           putaway_status: receipt.putaway_status == null ? undefined : String(receipt.putaway_status),
@@ -2066,6 +2109,8 @@ async function getWarehouseOps() {
           reference: task.id,
           sku: task.items[0]?.sku ?? task.subtitle,
           customer: task.customer_code,
+          customer_code: task.type === "receiving" ? task.receipt_customer_code : task.customer_code,
+          created_at: task.created_at,
           location:
             task.location ||
             task.items[0]?.location ||
@@ -2097,6 +2142,14 @@ async function getWarehouseOps() {
           conference_mode: task.conference_mode,
           receipt_number: task.receipt_number,
           invoice_number: task.invoice_number,
+          supplier: task.supplier,
+          cancellation_reason: task.cancellation_reason,
+          cancellation_note: task.cancellation_note,
+          cancellation_previous_status: task.cancellation_previous_status,
+          cancelled_at: task.cancelled_at,
+          cancelled_by: task.cancelled_by,
+          duplicate_of_receipt_id: task.duplicate_of_receipt_id,
+          duplicate_of_receipt_number: task.duplicate_of_receipt_number,
           box_count: task.box_count,
           boxes_stored: task.boxes_stored,
           putaway_status: task.putaway_status,
@@ -2129,7 +2182,7 @@ async function getWarehouseOps() {
             name: lane.title,
             pending: tasks.filter(
               (task) =>
-                !["completed", "delivered", "received"].includes(
+                !["completed", "delivered", "received", "cancelled", "canceled"].includes(
                   String(task.status),
                 ),
             ).length,

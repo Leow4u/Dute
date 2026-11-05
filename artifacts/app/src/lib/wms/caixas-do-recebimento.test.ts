@@ -140,6 +140,7 @@ describe("a caixa e a chegada na tela", () => {
     expect(estadoDaCaixa({ status: "reviewed", location_id: "" })).toEqual({ rotulo: "sem prateleira", tom: "amb" });
     expect(estadoDaCaixa({ status: "committing", location_id: "B-02" })).toEqual({ rotulo: "destino confirmado", tom: "grn" });
     expect(estadoDaCaixa({ status: "stored", location_id: "B-02" })).toEqual({ rotulo: "guardada em B-02", tom: "mut" });
+    expect(estadoDaCaixa({ status: "cancelled", location_id: "" })).toEqual({ rotulo: "cancelada", tom: "mut" });
   });
 
   it("as caixas guardadas da chegada recebida (decisão 5)", () => {

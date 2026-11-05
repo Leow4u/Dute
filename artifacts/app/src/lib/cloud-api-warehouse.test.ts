@@ -621,4 +621,18 @@ describe("as linhas das tarefas da fila chegam inteiras", () => {
     const daArea = ops.queues.putaway!.tasks.find((candidata) => candidata.reference === "put_area_1") as WarehouseTask;
     expect(daArea.source).toBe("wms_area_putaway");
   });
+  it("reserva histórico separado de 12 recebidas e 12 canceladas e preserva os dados do cancelamento", async () => {
+    const originals = numeros(13).map((n) => registro(`original_${n}`, { status: "received", updated_at: hora(1000 + n), created_at: hora(n) }));
+    const cancelled = numeros(13).map((n) => registro(`cancelada_${n}`, { status: "cancelled", updated_at: hora(100 + n), created_at: hora(n), source: "wms_unplanned_receipt", cancellation_reason: "duplicate", cancellation_note: "Repetida", cancellation_previous_status: "checking", cancelled_at: hora(n === 1 ? 5000 : 100 + n), cancelled_by: { uid: "operador", role: "wms", name: "Guilherme" }, duplicate_of_receipt_id: "original_13", duplicate_of_receipt_number: "AVL-13", supplier: "Fornecedor" }));
+    comoOFirestore({ inbound_receipts: [...originals, ...cancelled], inbound_items: [registro("linha", { receipt_id: "cancelada_13", sku_code: "BTG-1", client_item_code: "COD-1", expected_qty: 7, received_qty: 0, size: "M", color: "Preto" })] });
+    const ops = await lerAsFilas();
+    const tasks = ops.queues.receiving!.tasks;
+    expect(ops.queues.receiving!.pending).toBe(0);
+    expect(tasks.filter((task) => task.status === "received")).toHaveLength(12);
+    expect(tasks.filter((task) => task.status === "cancelled")).toHaveLength(12);
+    expect(tasks.some((task) => task.reference === "cancelada_1")).toBe(true);
+    expect(tasks.some((task) => task.reference === "cancelada_2")).toBe(false);
+    expect(tasks.find((task) => task.reference === "cancelada_13")).toMatchObject({ customer: "BTG Pactual", customer_code: "BTG Pactual", supplier: "Fornecedor", cancellation_reason: "duplicate", cancellation_note: "Repetida", cancellation_previous_status: "checking", cancelled_at: hora(113), cancelled_by: { uid: "operador", role: "wms", name: "Guilherme" }, duplicate_of_receipt_id: "original_13", duplicate_of_receipt_number: "AVL-13", can_advance: false, items: [expect.objectContaining({ expected_quantity: 7, size: "M", color: "Preto" })] });
+  });
+
 });

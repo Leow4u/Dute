@@ -1,20 +1,17 @@
 # Recebimento com caixas: avaliação do fluxo e desenho da fase 1 do mapa
 
-**Situação:** desenho aprovado, em construção por partes. As treze perguntas
-foram decididas pelo Leonardo em 01/11/2026 (seção 6), o texto foi revisado no
-mesmo dia com o levantamento do código (seções 2.5, 4 e 7) e as telas foram
-aprovadas (parte 1, em `docs/mockups`). As partes 2 (liberação e modo da
-chegada) e 3 (a caixa do recebimento) estão feitas, e a regra da parte 7 (só
-prateleira para o cliente) está no servidor, sem liberação por ambiente; a
-tela continua criando por linha até a parte 5. Motivo: em 30/10/2026 a equipe recebeu
-uma NF da BTG pela chegada avulsa, guardou as 71 peças em B-02 e o sistema não
-deu etiqueta nem mostrou caixa no Mapa, porque o recebimento de hoje não
-conhece caixa. O fluxo real do galpão é por caixa; o sistema só tem caixa na
-contagem de abertura. O desenho aprovado em 16/10/2026
-(`docs/mapa-do-armazem-enderecamento-dirigido.md`, seção 2) já decidiu que
-medidas e peso são informados por caixa **no recebimento** e que toda caixa
-sai com etiqueta; a entrega dessa parte ficou como "fase 1, logo após o
-go-live" (seção 5.3) e não começou.
+**Situação:** desenho aprovado, com implementação registrada por partes na
+seção 5. As decisões iniciais são de 01/11/2026 (seção 6). A atualização do
+fluxo manual e do cancelamento anterior à entrada está nas seções 4.3,
+4.5a e na parte 5h; as instruções de uso estão no manual da Armazenagem.
+
+O diagnóstico da seção 2 registra o estado levantado antes dessas mudanças.
+Em 30/10/2026, a equipe recebeu uma NF da BTG pela chegada avulsa e guardou
+71 peças em B-02 sem obter etiqueta nem caixa no Mapa: naquela versão, o
+recebimento não criava caixa, apenas a abertura do inventário. O desenho de
+16/10/2026 (`docs/mapa-do-armazem-enderecamento-dirigido.md`, seção 2) já
+previa medidas e peso por caixa no recebimento e etiqueta ao confirmar o
+destino. Esse caso motivou a implementação descrita aqui.
 
 Documentos relacionados: `docs/mapa-do-armazem-enderecamento-dirigido.md`
 (modelo de posição e caixa, motor, etiquetas, pendências P1 a P10),
@@ -239,16 +236,16 @@ Na ficha da chegada por caixa, no lugar de "Físico" por linha:
    receipt`, com o id e o número da chegada e a NF) e a caixa fica "em
    conferência" (`counting`). O cliente da caixa é o da chegada, nunca o do
    seletor; divergência é recusada.
-2. **Lançar o que está na caixa:** cada produto das linhas da NF, com a
-   quantidade física contada; a busca acha pelo código do cliente, SKU ou
-   código de barras no catálogo inteiro; produto que não está na NF entra
-   como sobra; produto novo segue a regra de hoje (foto, categoria, custo, SKU
-   gerado ou reativado). O custo unitário é o da NF e quem o informa é a
-   operação, na chegada, como hoje (decisão 12); é custo de entrada, não
-   preço, e a tabela de preços continua restrita. Caixa do fornecedor com
-   vários tamanhos é normal (decisão 3); até 100 linhas por caixa, como na
-   abertura. A conferência por caixa é feita no computador da bancada do
-   recebimento; a guarda tem a tela de celular (decisão 11).
+2. **Lançar o que está na caixa:** a bancada ocupa a largura útil da tela,
+   com "Voltar à fila". A pessoa seleciona uma linha da NF pelo nome ou
+   código e informa manualmente a quantidade contada na caixa ativa. A
+   quantidade nova começa vazia; o esperado da NF é referência. "Adicionar
+   à caixa" salva o total inicial; num produto já incluído, "Salvar
+   quantidade" substitui o total. Seleção de código e saída do campo não
+   acrescentam nem salvam peças. Rascunhos pertencem à caixa e à chegada;
+   antes de revisar ou voltar, é preciso salvá-los ou descartá-los. Caixa
+   com vários tamanhos é normal (decisão 3), até 100 linhas por caixa. A
+   inclusão de produto fora da NF continua na evolução da parte 3b.
 3. **"Fechar caixa"** (`reviewed`): comprimento, largura, altura e peso na
    balança; "pode virar de lado" e "pode empilhar". A caixa é a do
    fornecedor, como chegou, medida na hora (decisão 2).
@@ -261,6 +258,11 @@ Na ficha da chegada por caixa, no lugar de "Físico" por linha:
    na caixa e **"Imprimir etiqueta"** sai aqui, com a posição impressa. A
    etiqueta passa a aceitar caixa `committing` com destino; se a posição
    mudar numa recusa na prateleira, reimprime, com evento.
+
+Fechar a caixa e confirmar o destino são etapas anteriores à entrada e à
+**guarda física**. "Continuar sem prateleira" leva à revisão da entrada sem
+reservar destino; a prateleira pode ser definida na guarda. A revisão exibe
+as caixas, as quantidades salvas e os bloqueios antes de "Concluir entrada".
 
 O "Físico" de cada linha da NF passa a ser a soma do que foi lançado nas
 caixas; falta e sobra são calculadas por linha, e a justificativa da
@@ -303,6 +305,30 @@ caixa fica por guardar até owner, admin ou coordenação ampliarem a zona em
 Posições, como o desenho do mapa já prevê. Devolução e cancelamento de
 pedido seguem como estão (decisão 8): o cancelamento já guarda a partir de
 `EXPEDICAO` com destino preenchido; a devolução grava direto no local.
+
+### 4.5a Cancelar a chegada antes da entrada
+
+`cancelInboundReceipt`, implementada em `domain/inbound-cancel.ts`, atende
+`owner`, `admin`, `interno` e `wms`. Só aceita chegada avulsa em `created` ou
+`checking`, com cliente explícito e estado esperado coerente. Motivo
+`duplicate` exige outra chegada do mesmo cliente, não cancelada; `other`
+exige observação. O servidor recusa entrada ou movimento já ocorrido,
+guarda criada, aviso aprovado e vínculos inconsistentes.
+
+A transação preserva a chegada, os itens e as caixas como `cancelled`, com
+estado anterior, motivo, observação, ator, data e referência à original,
+quando houver. Libera as reservas de destino anteriores à entrada e remove
+só o vínculo ativo de aviso quando permitido, preservando a referência no
+histórico. Não altera o recebimento original, o catálogo, o razão, o saldo
+ou a cobrança. O replay usa `operational_operations`; a mesma chave com
+conteúdo diferente é recusada. É cancelamento de intenção anterior à
+entrada, não estorno de estoque.
+
+A fila separa `cancelled`/`canceled` de Recebidos e força consulta sem ações.
+O leitor reserva até 12 recebidas e 12 canceladas recentes para a fila de
+recebimento, dentro dos documentos já carregados; outras filas mantêm seu
+limite de 12 encerradas. Canceladas são escolhidas pela data de cancelamento.
+A interface informa o limite e não representa um histórico completo.
 
 ### 4.6 Etiqueta
 
@@ -619,7 +645,8 @@ desenhada e aprovada antes do PR de tela.
      pede a justificativa e o selo da caixa. Nada muda na tela. Testes:
      `caixas-do-recebimento.test.ts` e um caso novo em
      `cloud-api-warehouse.test.ts`.
-   - **5b, a bancada:** feita em 03/11/2026. No Receber, a chegada por caixa
+   - **5b, a bancada inicial:** feita em 03/11/2026; interação substituída
+     pela atualização 5h abaixo. No Receber, a chegada por caixa
      abre a ficha dela (`features/warehouse-ops/chegada-por-caixa.tsx`), no
      lugar da conferência por linha: as caixas da chegada com o selo de cada
      uma, "Iniciar caixa", a caixa em conferência com o código lido (código
@@ -717,6 +744,26 @@ desenhada e aprovada antes do PR de tela.
      volumes da NF (parte 10) e a leitura da nota ficam de fora. Testes:
      `caixas-do-recebimento.test.ts` (`modoDaChegadaAvulsa`) e
      `receber.test.tsx`.
+   - **5h, fluxo manual e cancelamento (atualização de 05/11/2026):**
+     `receber.tsx` recolhe a fila ao abrir a bancada por caixa e recebe
+     `onBack` para restaurar o foco. A fila continua com todos os clientes;
+     conferência e cancelamento usam o cliente da tarefa, enquanto criação e
+     avisos usam o cliente ativo. Troca de contexto descarta a sessão local;
+     na criação, uma resposta antiga não modifica o novo rascunho nem mostra feedback.
+     O formulário avulso aguarda sucesso para limpar/fechar e selecionar a
+     chegada criada. Falha preserva payload, `received_at` e chave; o replay
+     sem edição ocorre antes de revalidar o catálogo ou a fila atualizados.
+     Trava síncrona evita dois envios da mesma intenção.
+
+     `possiveisChegadasDuplicadas` compara cliente, documento normalizado
+     conservadoramente, produto/variante e quantidades declaradas agregadas.
+     Usa somente chegadas carregadas, ignora canceladas e oferece abrir a
+     existente ou confirmar outra entrega. Não bloqueia pela NF isolada e
+     não garante unicidade entre criações simultâneas. Testes de referência:
+     `receiving-chegada-avulsa.test.tsx`, `receber-interacao.test.tsx`,
+     `receiving.test.ts`, `cloud-api-warehouse.test.ts`,
+     `chegada-por-caixa-manual.test.tsx`, `cancelar-recebimento.test.tsx` e
+     `inbound-cancel.test.ts` / `inbound-cancel.integration.test.ts`.
 6. **Etiquetas:** caixa `committing` com destino, origem "Recebimento", o
    conteúdo da caixa do recebimento na etiqueta e no Mapa, "Etiquetas da
    chegada", reimpressão com evento.

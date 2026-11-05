@@ -1,6 +1,6 @@
 /** Receber: ficha da chegada, chegada avulsa e conferência física. */
 
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -78,6 +78,7 @@ import {
 } from "@/lib/warehouse-ops/model";
 import {
   type NoticeLinkChoice,
+  possiveisChegadasDuplicadas,
   pedeJustificativaDoRecebimento,
   problemaDaJustificativaDoRecebimento,
 } from "@/lib/warehouse-ops/receiving";
@@ -463,11 +464,15 @@ export function UnplannedReceiptDialog({
   isPending,
   onOpenChange,
   onCreate,
+  receipts = [],
+  onOpenReceipt,
 }: {
   open: boolean;
   isPending: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (payload: Record<string, unknown>) => void;
+  onCreate: (payload: Record<string, unknown>) => Promise<unknown> | void;
+  receipts?: WarehouseTask[];
+  onOpenReceipt?: (task: WarehouseTask) => void;
 }) {
   const { toast } = useToast();
   // A chegada é do cliente ativo: só os produtos dele aparecem na busca.
@@ -479,6 +484,31 @@ export function UnplannedReceiptDialog({
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<ReceiptDraftLine[]>([emptyReceiptLine()]);
   const [activeLineIndex, setActiveLineIndex] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [confirmedDuplicate, setConfirmedDuplicate] = useState("");
+  const sending = useRef(false);
+  const intent = useRef<{ signature: string; payload: Record<string, unknown> } | null>(null);
+  const session = useRef({ customerCode, revision: 0 });
+  if (session.current.customerCode !== customerCode) session.current = { customerCode, revision: session.current.revision + 1 };
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  function clearDraft() {
+    setSupplier("");
+    setInvoiceNumber("");
+    setNotes("");
+    setLines([emptyReceiptLine()]);
+    setActiveLineIndex(0);
+    setSubmitError("");
+    setConfirmedDuplicate("");
+    intent.current = null;
+  }
+  useEffect(() => {
+    clearDraft();
+    sending.current = false;
+    setSubmitting(false);
+  }, [customerCode]);
+  const busy = isPending || submitting;
   const lookupQuery = useQuery({
     queryKey: ["receiving-product-lookup", customerCode],
     enabled: open,
@@ -535,11 +565,13 @@ export function UnplannedReceiptDialog({
     const line = lines[index];
     const clientItemCode =
       line?.clientCode.trim() || line?.sku.trim() || `rascunho-${index + 1}`;
+    const photoSession = session.current;
     updateLine(index, { photoUploading: true });
     try {
       const uploaded = await Promise.all(
         selected.map((file) => uploadProductPhoto(file, clientItemCode, customerCode)),
       );
+      if (!mounted.current || session.current !== photoSession) return;
       setLines((current) =>
         current.map((currentLine, lineIndex) =>
           lineIndex === index
@@ -552,6 +584,7 @@ export function UnplannedReceiptDialog({
         ),
       );
     } catch (error) {
+      if (!mounted.current || session.current !== photoSession) return;
       updateLine(index, { photoUploading: false });
       toast({
         title: "Não consegui anexar a foto",
@@ -576,78 +609,117 @@ export function UnplannedReceiptDialog({
     return Boolean(barcode) && barcode === barcodeKey(other.barcode);
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  const draftSignature = JSON.stringify({ customerCode, supplier: supplier.trim(), invoiceNumber: invoiceNumber.trim(), notes: notes.trim(), conferenceMode, lines });
+  const retryingIntent = intent.current?.signature === draftSignature;
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const hasInvalidLine = lines.some((line, index) => {
-      const currentKey = normalizeProductKey(line.clientCode || line.sku);
-      const quantity = Number(line.quantity);
-      const duplicateInDraft =
-        currentKey &&
-        lines.some(
-          (otherLine, otherIndex) =>
-            otherIndex !== index && sameProduct(line, otherLine),
-        );
-      const existing = findExistingProduct(line, productLookup);
-      return (
-        !currentKey ||
-        !Number.isFinite(quantity) ||
-        quantity <= 0 ||
-        duplicateInDraft ||
-        (!existing && line.createNew && !line.product.trim()) ||
-        (!existing &&
-          line.createNew &&
-          (!line.category.trim() ||
-            !Number.isFinite(Number(line.unitCost)) ||
-            Number(line.unitCost) <= 0 ||
-            line.photos.length === 0 ||
-            line.photoUploading)) ||
-        (!existing && !line.createNew) ||
-        (existing && line.createNew)
-      );
-    });
-
-    if (hasInvalidLine) return;
-
-    const items = lines
-      .map((line) => {
+    if (sending.current || isPending) return;
+    // Uma resposta perdida pode atualizar catálogo/fila. A mesma intenção
+    // repete o payload congelado antes de revalidar esses dados externos.
+    if (!retryingIntent) {
+      if (duplicates.length > 0 && confirmedDuplicate !== duplicateSignature) return;
+      const hasInvalidLine = lines.some((line, index) => {
+        const currentKey = normalizeProductKey(line.clientCode || line.sku);
+        const quantity = Number(line.quantity);
+        const duplicateInDraft =
+          currentKey &&
+          lines.some(
+            (otherLine, otherIndex) =>
+              otherIndex !== index && sameProduct(line, otherLine),
+          );
         const existing = findExistingProduct(line, productLookup);
-        return {
-          // Produto novo não leva SKU: as Functions geram na sigla do cliente.
-          sku_code: existing?.skuCode || undefined,
-          client_item_code: existing?.clientCode || line.clientCode.trim(),
-          product_name: existing?.productName || line.product.trim(),
-          category: line.category.trim() || undefined,
-          barcode: line.barcode.trim() || undefined,
-          brand: line.brand.trim() || undefined,
-          size: line.size.trim() || undefined,
-          color: line.color.trim() || undefined,
-          photo_urls: line.photos.map((photo) => photo.fileUrl),
-          photo_storage_paths: line.photos.map((photo) => photo.storagePath),
-          quantity: Number(line.quantity),
-          unit_cost: line.unitCost.trim()
-            ? Number(line.unitCost)
-            : existing?.unitCost || undefined,
-          // Na chegada por caixa, toda linha entra no RECEBIMENTO (parte 4a).
-          location_id: conferenceMode ? "RECEBIMENTO" : line.location.trim() || "RECEBIMENTO",
-          product_registration: existing ? "existing" : "new",
-        };
-      })
-      .filter((line) => line.product_name && line.quantity > 0);
+        return (
+          !currentKey ||
+          !Number.isFinite(quantity) ||
+          quantity <= 0 ||
+          duplicateInDraft ||
+          (!existing && line.createNew && !line.product.trim()) ||
+          (!existing &&
+            line.createNew &&
+            (!line.category.trim() ||
+              !Number.isFinite(Number(line.unitCost)) ||
+              Number(line.unitCost) <= 0 ||
+              line.photos.length === 0 ||
+              line.photoUploading)) ||
+          (!existing && !line.createNew) ||
+          (existing && line.createNew)
+        );
+      });
 
-    if (!items.length) return;
+      if (hasInvalidLine) return;
 
-    onCreate({
-      customer_code: customerCode,
-      supplier: supplier.trim() || undefined,
-      invoice_number: invoiceNumber.trim() || undefined,
-      notes: notes.trim() || undefined,
-      priority: "normal",
-      received_at: new Date().toISOString(),
-      conference_mode: conferenceMode,
-      idempotency_key: crypto.randomUUID(),
-      items,
-    });
+      const items = lines
+        .map((line) => {
+          const existing = findExistingProduct(line, productLookup);
+          return {
+            // Produto novo não leva SKU: as Functions geram na sigla do cliente.
+            sku_code: existing?.skuCode || undefined,
+            client_item_code: existing?.clientCode || line.clientCode.trim(),
+            product_name: existing?.productName || line.product.trim(),
+            category: line.category.trim() || undefined,
+            barcode: line.barcode.trim() || undefined,
+            brand: line.brand.trim() || undefined,
+            size: line.size.trim() || undefined,
+            color: line.color.trim() || undefined,
+            photo_urls: line.photos.map((photo) => photo.fileUrl),
+            photo_storage_paths: line.photos.map((photo) => photo.storagePath),
+            quantity: Number(line.quantity),
+            unit_cost: line.unitCost.trim()
+              ? Number(line.unitCost)
+              : existing?.unitCost || undefined,
+            // Na chegada por caixa, toda linha entra no RECEBIMENTO (parte 4a).
+            location_id: conferenceMode ? "RECEBIMENTO" : line.location.trim() || "RECEBIMENTO",
+            product_registration: existing ? "existing" : "new",
+          };
+        })
+        .filter((line) => line.product_name && line.quantity > 0);
+
+      if (!items.length) return;
+
+      const draft = {
+        customer_code: customerCode,
+        supplier: supplier.trim() || undefined,
+        invoice_number: invoiceNumber.trim() || undefined,
+        notes: notes.trim() || undefined,
+        priority: "normal",
+        conference_mode: conferenceMode,
+        items,
+      };
+      intent.current = { signature: draftSignature, payload: { ...draft, received_at: new Date().toISOString(), idempotency_key: crypto.randomUUID() } };
+    }
+    const submittedSession = session.current;
+    sending.current = true;
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      await onCreate(intent.current!.payload);
+      if (mounted.current && session.current === submittedSession) {
+        clearDraft();
+        onOpenChange(false);
+      }
+    } catch (error) {
+      if (mounted.current && session.current === submittedSession) setSubmitError(getErrorMessage(error));
+    } finally {
+      if (mounted.current && session.current === submittedSession) {
+        sending.current = false;
+        setSubmitting(false);
+      }
+    }
   }
+
+  const duplicateDraft = {
+    customer_code: customerCode,
+    invoice_number: invoiceNumber,
+    items: lines.map((line) => {
+      const existing = findExistingProduct(line, productLookup);
+      return { sku_code: existing?.skuCode || line.sku, client_item_code: existing?.clientCode || line.clientCode,
+        quantity: Number(line.quantity), size: existing?.size || line.size, color: existing?.color || line.color };
+    }),
+  };
+  const duplicates = possiveisChegadasDuplicadas(receipts, duplicateDraft);
+  const duplicateSignature = JSON.stringify(duplicateDraft);
+  const duplicateConfirmed = confirmedDuplicate === duplicateSignature;
 
   const lineIssues = lines.map((line, index) => {
     const currentKey = normalizeProductKey(line.clientCode || line.sku);
@@ -701,7 +773,7 @@ export function UnplannedReceiptDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => { if (!sending.current && !isPending) onOpenChange(next); }}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl" aria-describedby={undefined}>
         <DialogHeader className="flex-row flex-wrap items-center gap-2 space-y-0">
           <DialogTitle>Registrar chegada avulsa · {activeCustomer.name}</DialogTitle>
@@ -712,6 +784,7 @@ export function UnplannedReceiptDialog({
           ) : null}
         </DialogHeader>
         <form className="space-y-5" onSubmit={submit}>
+          <fieldset className="min-w-0 space-y-5" disabled={busy}>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="chegada-fornecedor">Fornecedor</Label>
@@ -738,7 +811,7 @@ export function UnplannedReceiptDialog({
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={isPending}
+                disabled={busy}
                 onClick={() => {
                   setActiveLineIndex(lines.length);
                   setLines((current) => [...current, emptyReceiptLine()]);
@@ -1113,24 +1186,44 @@ export function UnplannedReceiptDialog({
             </div>
           </div>
 
+          {duplicates.length > 0 && !retryingIntent ? (
+            <Alert>
+              <AlertTriangle className="size-4" />
+              <AlertTitle>Possível duplicidade nos recebimentos carregados</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>Mesmo documento e itens declarados.</p>
+                {duplicates.map((task) => (
+                  <div key={task.id} className="flex flex-wrap items-center gap-2">
+                    <span>{[getTaskTitle(task), task.supplier, `NF ${task.invoice_number}`, `${formatNumber(task.quantity ?? task.total_units ?? 0)} un.`, statusLabel(task.status), task.created_at ? formatDate(task.created_at) : null].filter(Boolean).join(" · ")}</span>
+                    {onOpenReceipt ? <Button type="button" variant="outline" size="sm" onClick={() => { onOpenReceipt(task); onOpenChange(false); }}>Abrir recebimento</Button> : null}
+                  </div>
+                ))}
+                <Button type="button" variant="outline" onClick={() => setConfirmedDuplicate(duplicateSignature)} disabled={duplicateConfirmed}>
+                  {duplicateConfirmed ? "Outra entrega confirmada" : "Registrar outra entrega"}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          {submitError ? <Alert variant="destructive"><AlertTitle>Não consegui criar a conferência</AlertTitle><AlertDescription>{submitError}</AlertDescription></Alert> : null}
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={isPending}
+              disabled={busy}
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={isPending || !canSubmit}>
-              {isPending ? (
+            <Button type="submit" disabled={busy || (!retryingIntent && (!canSubmit || (duplicates.length > 0 && !duplicateConfirmed)))}>
+              {busy ? (
                 <RefreshCw data-icon="inline-start" className="animate-spin" />
               ) : (
                 <PackageOpen data-icon="inline-start" />
               )}
-              Criar conferência
+              {retryingIntent ? "Tentar novamente" : "Criar conferência"}
             </Button>
           </DialogFooter>
+          </fieldset>
         </form>
       </DialogContent>
     </Dialog>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -11,7 +11,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { formatBoxPlacement, tierLabel, type SlottingCandidate, type SuggestionResult } from "@/lib/warehouse-boxes";
 import type { WarehousePosition } from "@/lib/warehouse-positions";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
-import { confirmarDestino, recusarSugestao, sugerirPrateleira, type CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
+import { confirmarDestino, pedidoFoiRejeitado, recusarSugestao, sugerirPrateleira, type CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
 
 import { ShelfPicker, eligibleShelfPositions } from "./shelf-picker";
 
@@ -277,6 +277,8 @@ export function useDestinoDaCaixa({
   revisao,
   chave,
   anotarRevisao,
+  onAtualizarCaixa,
+  travaDeEscrita,
   releitura,
   onConfirmado,
   falhou,
@@ -288,6 +290,10 @@ export function useDestinoDaCaixa({
   revisao: number;
   chave: () => string;
   anotarRevisao: (revisao: unknown, code: string) => void;
+  /** Aplica a escrita confirmada junto com a revisão, antes de liberar a próxima ação. */
+  onAtualizarCaixa?: (caixa: CaixaDaChegada) => void;
+  /** Compartilhada com as demais escritas da ficha, inclusive antes de renderizar busy. */
+  travaDeEscrita?: { current: boolean };
   releitura: () => Promise<unknown>;
   /** Depois da releitura da fila, com o destino confirmado. */
   onConfirmado: () => void;
@@ -296,8 +302,20 @@ export function useDestinoDaCaixa({
   const [modo, setModo] = useState<ModoDoDestino>("sugestao");
   const [escolhida, setEscolhida] = useState("");
   const [recusando, setRecusando] = useState<string | null>(null);
-  const daChegada = { receipt_id: receiptId, customer_code: customerCode || undefined };
-  const mensagem = (error: unknown) => (error ? (error instanceof Error ? error.message : String(error)) : null);
+  const travaLocal = useRef(false);
+  const trava = travaDeEscrita ?? travaLocal;
+  const tentativas = useRef(new Map<string, Record<string, unknown>>());
+  const montada = useRef(true);
+  useEffect(() => {
+    montada.current = true;
+    return () => { montada.current = false; };
+  }, []);
+  const daChegada = {
+    receipt_id: receiptId,
+    ...(customerCode ? { customer_code: customerCode } : {}),
+  };
+  const mensagem = (error: unknown) =>
+    error ? (error instanceof Error ? error.message : String(error)) : null;
 
   const sugestao = useQuery({
     queryKey: ["sugestao-da-caixa", receiptId, caixa?.code ?? "", revisao],
@@ -309,12 +327,28 @@ export function useDestinoDaCaixa({
   const posicoes = useQuery({
     queryKey: ["warehouse-positions", "all-pages"],
     staleTime: 30_000,
-    queryFn: async () => ({ items: await fetchWarehouseRows<WarehousePosition>("/api/warehouse/positions?limit=2000") }),
+    queryFn: async () => ({
+      items: await fetchWarehouseRows<WarehousePosition>(
+        "/api/warehouse/positions?limit=2000",
+      ),
+    }),
     enabled: Boolean(caixa) && modo === "escolha",
   });
   const previa = useQuery({
-    queryKey: ["sugestao-da-caixa", receiptId, caixa?.code ?? "", revisao, "prateleira", escolhida],
-    queryFn: () => sugerirPrateleira({ ...daChegada, box_code: caixa!.code, location_id: escolhida }),
+    queryKey: [
+      "sugestao-da-caixa",
+      receiptId,
+      caixa?.code ?? "",
+      revisao,
+      "prateleira",
+      escolhida,
+    ],
+    queryFn: () =>
+      sugerirPrateleira({
+        ...daChegada,
+        box_code: caixa!.code,
+        location_id: escolhida,
+      }),
     enabled: Boolean(caixa) && modo === "escolha" && Boolean(escolhida),
     retry: false,
     staleTime: 0,
@@ -322,7 +356,10 @@ export function useDestinoDaCaixa({
   const prateleiras = useMemo(() => {
     const recusadas = new Set(caixa?.refused_positions ?? []);
     // A fila do Receber é a do cliente ativo: as prateleiras são as da zona dele.
-    return eligibleShelfPositions(posicoes.data?.items ?? [], customerCode).filter((posicao) => !recusadas.has(posicao.code));
+    return eligibleShelfPositions(
+      posicoes.data?.items ?? [],
+      customerCode,
+    ).filter((posicao) => !recusadas.has(posicao.code));
   }, [posicoes.data?.items, caixa?.refused_positions, customerCode]);
   const estado: DestinoDaCaixaEstado = caixa
     ? {
@@ -345,9 +382,24 @@ export function useDestinoDaCaixa({
     setEscolhida("");
     setRecusando(null);
   };
+  function pedido<T extends Record<string, unknown>>(tipo: string, dados: T) {
+    const assinatura = JSON.stringify([
+      tipo,
+      { ...dados, expected_revision: undefined },
+    ]);
+    const payload = (tentativas.current.get(assinatura) ?? {
+      ...dados,
+      idempotency_key: chave(),
+    }) as T & { idempotency_key: string };
+    tentativas.current.set(assinatura, payload);
+    return { assinatura, payload };
+  }
   const confirmar = useMutation({
-    mutationFn: (input: { caixa: CaixaDaChegada; candidato: SlottingCandidate }) =>
-      confirmarDestino({
+    mutationFn: (input: {
+      caixa: CaixaDaChegada;
+      candidato: SlottingCandidate;
+    }) => {
+      const tentativa = pedido("confirmar", {
         ...daChegada,
         box_code: input.caixa.code,
         expected_revision: revisao,
@@ -356,33 +408,81 @@ export function useDestinoDaCaixa({
         support_box_code: input.candidato.placement.support_box_code,
         // A sugestão do motor vai junto mesmo quando a pessoa escolheu outra prateleira.
         suggestion: sugestaoDoConfirmar(sugestao.data ?? null),
-        idempotency_key: chave(),
-      }),
+      });
+      return confirmarDestino(tentativa.payload).then((resultado) => {
+        tentativas.current.delete(tentativa.assinatura);
+        return resultado;
+      }, (error: unknown) => {
+        if (pedidoFoiRejeitado(error)) tentativas.current.delete(tentativa.assinatura);
+        throw error;
+      });
+    },
     onSuccess: async (resultado, input) => {
+      if (!montada.current) return;
       anotarRevisao(resultado.conference_revision, input.caixa.code);
+      onAtualizarCaixa?.({
+        ...input.caixa,
+        status: "committing",
+        location_id: input.candidato.code,
+        conference_revision:
+          Number(resultado.conference_revision) || revisao + 1,
+      });
       await releitura();
+      if (!montada.current) return;
       limpar();
       onConfirmado();
     },
-    onError: falhou("Não foi possível confirmar o destino"),
+    onError: async (error) => {
+      if (!montada.current) return;
+      if (pedidoFoiRejeitado(error)) await releitura();
+      if (montada.current) falhou("Não foi possível confirmar o destino")(error);
+    },
+    onSettled: () => {
+      trava.current = false;
+    },
   });
   const recusar = useMutation({
-    mutationFn: (input: { caixa: CaixaDaChegada; prateleira: string; motivo: string }) =>
-      recusarSugestao({
+    mutationFn: (input: {
+      caixa: CaixaDaChegada;
+      prateleira: string;
+      motivo: string;
+    }) => {
+      const tentativa = pedido("recusar", {
         ...daChegada,
         box_code: input.caixa.code,
         expected_revision: revisao,
         position: input.prateleira,
         reason: input.motivo,
-        idempotency_key: chave(),
-      }),
-    onSuccess: (resultado, input) => {
+      });
+      return recusarSugestao(tentativa.payload).then((resultado) => {
+        tentativas.current.delete(tentativa.assinatura);
+        return resultado;
+      }, (error: unknown) => {
+        if (pedidoFoiRejeitado(error)) tentativas.current.delete(tentativa.assinatura);
+        throw error;
+      });
+    },
+    onSuccess: async (resultado, input) => {
+      if (!montada.current) return;
       setRecusando(null);
       // A revisão nova pede outra sugestão, já sem a prateleira recusada.
       anotarRevisao(resultado.conference_revision, input.caixa.code);
-      void releitura();
+      onAtualizarCaixa?.({
+        ...input.caixa,
+        refused_positions: [...input.caixa.refused_positions, input.prateleira],
+        conference_revision:
+          Number(resultado.conference_revision) || revisao + 1,
+      });
+      await releitura();
     },
-    onError: falhou("Não foi possível recusar a prateleira"),
+    onError: async (error) => {
+      if (!montada.current) return;
+      if (pedidoFoiRejeitado(error)) await releitura();
+      if (montada.current) falhou("Não foi possível recusar a prateleira")(error);
+    },
+    onSettled: () => {
+      trava.current = false;
+    },
   });
 
   return {
@@ -393,11 +493,19 @@ export function useDestinoDaCaixa({
     acoes: {
       onModo: setModo,
       onEscolher: setEscolhida,
-      onConfirmar: (candidato: SlottingCandidate) => caixa && confirmar.mutate({ caixa, candidato }),
+      onConfirmar: (candidato: SlottingCandidate) => {
+        if (!caixa || trava.current) return;
+        trava.current = true;
+        confirmar.mutate({ caixa, candidato });
+      },
       onNaoCabe: setRecusando,
       onTentarDeNovo: () => void sugestao.refetch(),
     } satisfies Omit<DestinoDaCaixaProps, "estado" | "ocupado">,
     onCancelarRecusa: () => setRecusando(null),
-    onRecusar: (motivo: string) => caixa && recusando && recusar.mutate({ caixa, prateleira: recusando, motivo }),
+    onRecusar: (motivo: string) => {
+      if (!caixa || !recusando || trava.current) return;
+      trava.current = true;
+      recusar.mutate({ caixa, prateleira: recusando, motivo });
+    },
   };
 }

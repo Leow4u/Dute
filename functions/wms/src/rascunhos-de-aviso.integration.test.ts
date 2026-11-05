@@ -86,6 +86,11 @@ before(async () => {
     });
   }
   // A conclusão da chegada por caixa: o aviso sai na última guarda (decisão 20).
+  await db.collection("events").doc("evt_chegada_cancelada").set({
+    type: "inbound.cancelled", severity: "info", title: "Chegada avulsa cancelada",
+    customer_code: CLIENTE, source: "functions", occurred_at: new Date().toISOString(),
+    payload: { receipt_id: "inb_avulso_cancelado", reason: "duplicate" },
+  });
   for (const [id, type] of [["evt_caixa_entrada", "inventory.received"], ["evt_caixa_concluida", "inbound.checked"]]) {
     await db.collection("events").doc(id).set({
       type,
@@ -133,6 +138,10 @@ describe("os rascunhos de aviso do Agent Dute", () => {
   it("a conclusão da chegada por caixa não vira rascunho: o aviso sai na última guarda", () => {
     assert.equal(rascunhos.has("evt_caixa_entrada"), false);
     assert.equal(rascunhos.has("evt_caixa_concluida"), false);
+  });
+
+  it("cancelar a chegada antes da entrada não cria comunicação de estoque ao cliente", () => {
+    assert.equal(rascunhos.has("evt_chegada_cancelada"), false);
   });
 
   it("o do cliente cumprimenta sem nome; o interno diz de que cliente é", () => {

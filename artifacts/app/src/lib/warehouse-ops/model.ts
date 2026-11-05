@@ -53,6 +53,8 @@ export type WarehouseTaskItem = {
   package_number?: string | number | null;
   tracking_code?: string | null;
   client_item_code?: string | null;
+  size?: string | null;
+  color?: string | null;
   /** Observação do aviso do cliente (ex.: código do fornecedor). */
   notes?: string | null;
   unit_cost?: number | null;
@@ -85,6 +87,15 @@ export type WarehouseTask = {
   sku?: string | null;
   sku_code?: string | null;
   customer?: string | null;
+  customer_code?: string | null;
+  supplier?: string | null;
+  cancellation_reason?: "duplicate" | "mistake" | "other" | null;
+  cancellation_note?: string | null;
+  cancellation_previous_status?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by?: { uid: string; role: string; name?: string; email?: string } | null;
+  duplicate_of_receipt_id?: string | null;
+  duplicate_of_receipt_number?: string | null;
   location?: string | null;
   source_location_id?: string | null;
   destination_location_id?: string | null;

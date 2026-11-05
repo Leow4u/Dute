@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, Forklift, Inbox, PackageOpen, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, Ban, Check, Forklift, Inbox, PackageOpen, RefreshCw, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { FichaDaChegadaPorCaixa } from "@/features/warehouse-ops/chegada-por-caixa";
+import { CancelarRecebimentoDialog } from "@/features/warehouse-ops/cancelar-recebimento";
+import { podeCancelarRecebimento } from "@/lib/wms/cancelar-recebimento";
 import { GuardaDaCaixa } from "@/features/warehouse-ops/guarda-da-caixa";
 import { ReceivingTaskDetailCard, UnplannedReceiptDialog } from "@/features/warehouse-ops/receiving";
 import { ExceptionDialog, useWarehouseTaskActions } from "@/features/warehouse-ops/task-actions";
@@ -26,14 +28,18 @@ import { caixasGuardadas, chegadaPorCaixa } from "@/lib/wms/caixas-do-recebiment
 import { useAppUser } from "@/lib/auth";
 import { canOperateWarehouse } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { generatedSkuNote } from "@/lib/product-match";
 import {
   type LineConfirmationMap,
   type OpsAlert,
   type TaskQueueEntry,
   type WarehouseOpsResponse,
+  type WarehouseTask,
+  formatDate,
   coerceText,
   fetchJson,
   getTaskTitle,
+  getErrorMessage,
   lineConfirmationKey,
   normalizeQueues,
   queueEntries,
@@ -44,6 +50,7 @@ import {
   guardaSemPrateleira,
   guardandoRowMeta,
   isUnplannedReceipt,
+  isCancelledReceipt,
   linkedShipmentNotice,
   type NoticeLinkChoice,
   noticeLinkChoice,
@@ -59,8 +66,8 @@ import {
 import { formatRequestAge } from "./customer-requests";
 
 /**
- * Receber no padrão de Pedidos: uma lista em grupos (Para conferir, Para
- * guardar, Recebidos) e a ficha da chegada ao lado (no celular, um sheet).
+ * Receber: fila em grupos e bancada inteira para a conferência por caixa.
+ * Avisos, chegadas por linha e guardas usam a ficha lateral ou o sheet.
  * Conferir e concluir a entrada continuam nas mesmas chamadas de sempre;
  * guardar é a tarefa de putaway que antes vivia numa tela própria.
  */
@@ -72,11 +79,39 @@ export default function Receber() {
   const { user } = useAppUser();
   const operador = canOperateWarehouse(user?.publicMetadata.role);
   const desktop = useIsDesktop();
-  const [view, setView] = useState<"open" | "done">("open");
+  const [view, setView] = useState<"open" | "done" | "cancelled">("open");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedNoticeId, setSelectedNoticeId] = useState<string | null>(null);
   const [unplannedOpen, setUnplannedOpen] = useState(false);
+  const [cancelTask, setCancelTask] = useState<WarehouseTask | null>(null);
   const [lineConfirmations, setLineConfirmations] = useState<LineConfirmationMap>({});
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const activeCustomerSession = useRef({ customerCode });
+  if (activeCustomerSession.current.customerCode !== customerCode) {
+    activeCustomerSession.current = { customerCode };
+  }
+  const originReceiptId = useRef<string | null>(null);
+  const restoreFocus = useRef(false);
+  useEffect(() => {
+    setSelectedId(null);
+    setSelectedNoticeId(null);
+    setCancelTask(null);
+    setUnplannedOpen(false);
+    setLineConfirmations({});
+    setView("open");
+  }, [customerCode]);
+  useEffect(() => {
+    if (!selectedId && restoreFocus.current) {
+      restoreFocus.current = false;
+      Array.from(document.querySelectorAll<HTMLElement>("[data-receipt-id]")).find((button) => button.dataset.receiptId === originReceiptId.current)?.focus();
+    }
+  }, [selectedId]);
+  const backToQueue = () => {
+    restoreFocus.current = true;
+    setSelectedId(null);
+    setSelectedNoticeId(null);
+  };
 
   const ops = useQuery({
     queryKey: ["warehouse-ops"],
@@ -109,7 +144,7 @@ export default function Receber() {
   });
   const selected = entries.find((entry) => entry.task.id === selectedId) ?? null;
   const selectedNotice = pendingNotices.find((notice) => notice.id === selectedNoticeId) ?? null;
-  // A bancada da chegada por caixa tem duas colunas: a ficha fica larga e a fila, estreita.
+  // A conferência ocupa a bancada inteira em qualquer tamanho de tela.
   const fichaLarga = Boolean(!selectedNotice && selected && selected.queue.key === "receiving" && chegadaPorCaixa(selected.task));
   // Aviso da chegada selecionada que já saiu dos abertos (aprovado, recusado
   // ou cancelado): lido à parte para a ficha mostrar o vínculo.
@@ -153,27 +188,28 @@ export default function Receber() {
 
   // Esc recolhe a ficha no desktop, como na lista de Estoque.
   useEffect(() => {
-    if (!desktop || (!selectedId && !selectedNoticeId)) return;
+    if (!desktop || fichaLarga || (!selectedId && !selectedNoticeId)) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !event.defaultPrevented && !document.querySelector("[role=dialog]")) {
         setSelectedId(null);
         setSelectedNoticeId(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [desktop, selectedId, selectedNoticeId]);
+  }, [desktop, fichaLarga, selectedId, selectedNoticeId]);
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
   };
   const openCount = pendingNotices.length + board.check.length + board.guardando.length + board.store.length;
 
-  const panel = selectedNotice ? (
+  const taskPanel = selectedNotice ? (
     <NoticeCard notice={selectedNotice} />
   ) : selected ? (
     <TaskPanel
-      entry={operador ? selected : somenteConsulta(selected)}
+      entry={operador && !isCancelledReceipt(selected.task) ? selected : somenteConsulta(selected)}
+      onBack={backToQueue}
       alerts={alerts}
       actions={actions}
       noticeChoice={noticeChoice}
@@ -194,20 +230,40 @@ export default function Receber() {
   ) : null;
 
   const selectEntry = (entry: TaskQueueEntry) => {
+    originReceiptId.current = entry.task.id;
     setSelectedNoticeId(null);
     setSelectedId(entry.task.id);
   };
 
+  const panel = selected ? (
+    <div className="space-y-4">
+      {operador && selected.queue.key === "receiving" && podeCancelarRecebimento(selected.task) ? (
+        <div className="flex justify-end"><Button type="button" variant="outline" onClick={() => setCancelTask(selected.task)}>Cancelar recebimento</Button></div>
+      ) : null}
+      {isCancelledReceipt(selected.task) ? <CancelledReceiptHistory task={selected.task} onOpenOriginal={(id) => {
+        const original = entries.find((entry) => entry.queue.key === "receiving" && (entry.task.id === id || entry.task.reference === id));
+        if (original) selectEntry(original);
+      }} hasOriginal={entries.some((entry) => entry.task.id === selected.task.duplicate_of_receipt_id || entry.task.reference === selected.task.duplicate_of_receipt_id)} /> : null}
+      {taskPanel}
+    </div>
+  ) : taskPanel;
+
   // Na v3, só a primeira tarefa da fila tem a ação principal; as outras são secundárias.
   const principal = tarefaPrincipal(board);
   const rowAction = (entry: TaskQueueEntry, label: string) => (
+    <>
     <Button
       type="button"
       variant={selected?.task.id === entry.task.id ? "secondary" : principal === entry.task.id ? "default" : "outline"}
       onClick={() => selectEntry(entry)}
+      data-receipt-id={entry.task.id}
     >
       {operador ? label : "Ver"}
     </Button>
+    {operador && entry.queue.key === "receiving" && podeCancelarRecebimento(entry.task) ? (
+      <Button type="button" variant="outline" onClick={() => setCancelTask(entry.task)}>Cancelar recebimento</Button>
+    ) : null}
+    </>
   );
 
   const blockedNote = (entry: TaskQueueEntry) =>
@@ -220,20 +276,22 @@ export default function Receber() {
 
   return (
     <div className="flex flex-col gap-6 pb-24">
-      <PageHeader
+      {!fichaLarga ? <PageHeader
         title="Receber"
         actions={
           <>
-            <Segmented<"open" | "done">
+            <Segmented<"open" | "done" | "cancelled">
               value={view}
               onChange={(next) => {
                 setView(next);
+                setSelectedId(null);
                 setSelectedNoticeId(null);
               }}
-              aria-label="Chegadas em aberto ou recebidas"
+              aria-label="Situação das chegadas"
               options={[
                 { value: "open", label: `Em aberto${openCount ? ` · ${openCount}` : ""}` },
                 { value: "done", label: "Recebidos" },
+                { value: "cancelled", label: "Cancelados" },
               ]}
             />
             {operador ? (
@@ -248,9 +306,9 @@ export default function Receber() {
             </Button>
           </>
         }
-      />
+      /> : null}
 
-      {ops.isLoading ? (
+      {fichaLarga ? <section aria-label="Bancada de conferência" className="min-w-0">{panel}</section> : ops.isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando chegadas...</p>
       ) : ops.error ? (
         <p className="text-sm text-destructive">
@@ -264,11 +322,20 @@ export default function Receber() {
           className={cn(
             "grid grid-cols-1 gap-4",
             desktop && (selected || selectedNotice) && "lg:grid-cols-[minmax(0,1fr)_480px]",
-            desktop && fichaLarga && "xl:grid-cols-[minmax(280px,1fr)_minmax(480px,2.6fr)]",
           )}
         >
           <div className="flex min-w-0 flex-col gap-6">
-            {view === "done" ? (
+            {view !== "open" ? <p className="text-sm text-muted-foreground">Até 12 registros recentes por fila</p> : null}
+            {view === "cancelled" ? (
+              <QueueGroup title="Cancelados" count={board.cancelled.length} empty="Nenhum recebimento cancelado.">
+                {board.cancelled.map((entry) => (
+                  <QueueRow key={entry.task.id} icon={Ban} tone="done" title={getTaskTitle(entry.task)}
+                    meta={entry.queue.key === "receiving" ? receivingRowMeta(entry.task) : putawayRowMeta(entry.task)}
+                    note={entry.task.duplicate_of_receipt_number ? `Original: ${entry.task.duplicate_of_receipt_number}` : undefined}
+                    actions={<Button type="button" variant="outline" data-receipt-id={entry.task.id} onClick={() => selectEntry(entry)}>Ver</Button>} />
+                ))}
+              </QueueGroup>
+            ) : view === "done" ? (
               <QueueGroup
                 title="Recebidos"
                 count={board.done.length}
@@ -290,6 +357,7 @@ export default function Receber() {
                       <Button
                         type="button"
                         variant="outline"
+                        data-receipt-id={entry.task.id}
                         onClick={() => selectEntry(entry)}
                       >
                         Ver
@@ -366,7 +434,7 @@ export default function Receber() {
                         meta={guardandoRowMeta(entry.task)}
                         className={cn(selected?.task.id === entry.task.id && "bg-muted/60")}
                         actions={
-                          <Button type="button" variant="outline" onClick={() => selectEntry(entry)}>
+                          <Button type="button" variant="outline" data-receipt-id={entry.task.id} onClick={() => selectEntry(entry)}>
                             Ver
                           </Button>
                         }
@@ -422,7 +490,7 @@ export default function Receber() {
         </div>
       )}
 
-      {!desktop ? (
+      {!desktop && !fichaLarga ? (
         <Sheet open={Boolean(selected || selectedNotice)} onOpenChange={(open) => { if (!open) { setSelectedId(null); setSelectedNoticeId(null); } }}>
           <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto rounded-t-lg bg-card p-0">
             <SheetHeader className="sr-only">
@@ -435,13 +503,43 @@ export default function Receber() {
       ) : null}
 
       <UnplannedReceiptDialog
+        key={customerCode}
         open={unplannedOpen}
         isPending={actions.createUnplannedReceipt.isPending}
         onOpenChange={setUnplannedOpen}
-        onCreate={(payload) => {
-          actions.createUnplannedReceipt.mutate(payload);
-          setUnplannedOpen(false);
+        receipts={entries.filter((entry) => entry.queue.key === "receiving").map((entry) => entry.task)}
+        onOpenReceipt={(task) => { const entry = entries.find((entry) => entry.task.id === task.id); if (entry) selectEntry(entry); }}
+        onCreate={async (payload) => {
+          const session = activeCustomerSession.current;
+          try {
+            const result = await actions.createUnplannedReceipt.mutateAsync(payload);
+            if (!mounted.current || activeCustomerSession.current !== session || session.customerCode !== payload.customer_code) return;
+            const receiptId = result.receipt_id || result.id;
+            if (receiptId) {
+              setView("open");
+              setSelectedNoticeId(null);
+              originReceiptId.current = `receiving:${receiptId}`;
+              setSelectedId(`receiving:${receiptId}`);
+            }
+            toast({
+              title: "Chegada avulsa registrada",
+              description: ["A conferência foi criada no WMS sem lançar estoque ainda.", generatedSkuNote(result.items)].filter(Boolean).join(" "),
+            });
+          } catch (error) {
+            if (mounted.current && activeCustomerSession.current === session) {
+              toast({ title: "Não consegui registrar a chegada", description: getErrorMessage(error), variant: "destructive" });
+            }
+            throw error;
+          }
         }}
+      />
+      <CancelarRecebimentoDialog
+        key={`${customerCode}:${cancelTask?.id ?? "closed"}`}
+        task={cancelTask}
+        receipts={entries.filter((entry) => entry.queue.key === "receiving").map((entry) => entry.task)}
+        customerCode={cancelTask?.customer_code ?? cancelTask?.customer ?? customerCode}
+        onOpenChange={(open) => { if (!open) setCancelTask(null); }}
+        onCancelled={() => { setCancelTask(null); setSelectedId(null); setSelectedNoticeId(null); setView("cancelled"); }}
       />
 
       <ExceptionDialog
@@ -454,6 +552,38 @@ export default function Receber() {
         onSubmit={(event) => actions.exception.submit(event, selected ?? undefined)}
       />
     </div>
+  );
+}
+
+export function CancelledReceiptHistory({
+  task,
+  hasOriginal = false,
+  onOpenOriginal,
+}: {
+  task: WarehouseTask;
+  hasOriginal?: boolean;
+  onOpenOriginal?: (id: string) => void;
+}) {
+  const reasons = { duplicate: "Duplicado", mistake: "Lançado por engano", other: "Outro motivo" };
+  const actor = task.cancelled_by?.name || task.cancelled_by?.email || task.cancelled_by?.uid;
+  return (
+    <section aria-label="Histórico do cancelamento" className="space-y-2 rounded-lg border border-border bg-card p-4">
+      <h2 className="font-semibold">Recebimento cancelado</h2>
+      {task.cancellation_reason ? <p>{reasons[task.cancellation_reason]}</p> : null}
+      {task.cancellation_note ? <p>{task.cancellation_note}</p> : null}
+      {task.cancelled_at ? <p>Cancelado em {formatDate(task.cancelled_at)}</p> : null}
+      {actor ? <p>Por {actor}</p> : null}
+      {task.duplicate_of_receipt_id ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span>Original: {task.duplicate_of_receipt_number || task.duplicate_of_receipt_id}</span>
+          {hasOriginal && onOpenOriginal ? (
+            <Button type="button" variant="outline" size="sm" onClick={() => onOpenOriginal(task.duplicate_of_receipt_id!)}>
+              Abrir original
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -481,8 +611,10 @@ function TaskPanel({
   onLinkNotice,
   lineConfirmations,
   onLineConfirmationChange,
+  onBack,
 }: {
   entry: TaskQueueEntry;
+  onBack?: () => void;
   alerts: OpsAlert[];
   actions: ReturnType<typeof useWarehouseTaskActions>;
   noticeChoice: NoticeLinkChoice | null;
@@ -503,6 +635,7 @@ function TaskPanel({
         entry={entry}
         registeringExceptionId={actions.registeringExceptionId}
         onOpenException={actions.exception.openFor}
+        onBack={onBack}
       />
     );
   }

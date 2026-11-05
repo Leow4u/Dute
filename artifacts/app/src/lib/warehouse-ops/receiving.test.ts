@@ -6,11 +6,14 @@ import {
   conteudoDaGuarda,
   guardaSemPrateleira,
   guardandoRowMeta,
+  isCancelledReceipt,
+  isUnplannedReceipt,
   linhasDivergentesDoRecebimento,
   linkedShipmentNotice,
   noticeLinkChoice,
   openShipmentNotices,
   pedeJustificativaDoRecebimento,
+  possiveisChegadasDuplicadas,
   problemaDaJustificativaDoRecebimento,
   putawayRowMeta,
   receivingArrivalMeta,
@@ -90,13 +93,112 @@ describe("quadro do Receber", () => {
   });
 
   it("não quebra sem filas", () => {
-    expect(buildReceivingBoard(normalizeQueues(undefined))).toEqual({ check: [], guardando: [], store: [], done: [] });
+    expect(buildReceivingBoard(normalizeQueues(undefined))).toEqual({ check: [], guardando: [], store: [], done: [], cancelled: [] });
+  });
+
+  it("separa canceladas de recebidas e nunca as oferece para conferir ou guardar", () => {
+    const filas = normalizeQueues({
+      receiving: { tasks: [task({ id: "cancelada", status: "cancelled", created_at: "2026-11-05T12:00:00Z" }), task({ id: "recebida", status: "received" })] },
+      putaway: { tasks: [task({ id: "guarda_cancelada", status: "canceled", created_at: "2026-11-05T13:00:00Z" })] },
+    });
+    const quadro = buildReceivingBoard(filas);
+    expect(quadro.cancelled.map(({ task }) => task.id)).toEqual(["guarda_cancelada", "cancelada"]);
+    expect(quadro.done.map(({ task }) => task.id)).toEqual(["recebida"]);
+    expect(quadro.check).toEqual([]);
+    expect(quadro.store).toEqual([]);
+    expect(isCancelledReceipt(task({ id: "r", status: "CANCELLED" }))).toBe(true);
+  });
+
+  it("reconhece chegada avulsa pela origem, inclusive sem o prefixo legado no id", () => {
+    expect(isUnplannedReceipt(task({ id: "receiving:r1", source: "wms_unplanned_receipt" }))).toBe(true);
+    expect(isUnplannedReceipt(task({ id: "receiving:inb_avulso_1" }))).toBe(true);
+    expect(isUnplannedReceipt(task({ id: "receiving:r2", source: "customer_request" }))).toBe(false);
   });
 
   it("a ação principal da tela (v3) é a da primeira a conferir, senão a primeira a guardar", () => {
     expect(tarefaPrincipal(board)).toBe("r4");
     expect(tarefaPrincipal({ check: [], store: board.store })).toBe("p1");
     expect(tarefaPrincipal({ check: [], store: [] })).toBeNull();
+  });
+});
+
+describe("possíveis duplicidades da chegada avulsa", () => {
+  const draft = {
+    customer_code: "ITAU",
+    invoice_number: "NF 00123",
+    items: [{ sku_code: "ITAU-001", client_item_code: "POLO", size: "M", color: "AZUL", quantity: 10 }],
+  };
+  const chegada = (overrides: Partial<WarehouseTask> = {}) => task({
+    id: "receiving:inb_1", customer_code: "ITAU", customer: "ITAU", invoice_number: "NF 00123", status: "created",
+    items: [{ sku_code: "ITAU-001", client_item_code: "POLO", size: "M", color: "AZUL", expected_quantity: 10, quantity: 10, received_qty: 8 }],
+    ...overrides,
+  });
+
+  it("compara cliente, documento e quantidade declarada, sem usar o recebido ou o total da tarefa", () => {
+    const igual = chegada({ quantity: 8, status: "received" });
+    const outroCliente = chegada({ id: "outra", customer_code: "SAFRA", customer: "SAFRA" });
+    const outraQuantidade = chegada({ id: "outra_qtde", items: [{ ...igual.items![0], expected_quantity: 9, quantity: 10 }] });
+    expect(possiveisChegadasDuplicadas([igual, outroCliente, outraQuantidade], draft)).toEqual([igual]);
+  });
+
+  it("normaliza espaços e caixa sem apagar prefixos, pontuação ou zeros do documento", () => {
+    const igual = chegada({ invoice_number: "  nf   00123  " });
+    const diferentes = ["00123", "NF 123", "NF-00123", "NF 00.123"].map((invoice_number) => chegada({ invoice_number }));
+    expect(possiveisChegadasDuplicadas([igual, ...diferentes], draft)).toEqual([igual]);
+  });
+
+  it("não sinaliza chegada cancelada, sem documento ou sem cliente explícito", () => {
+    const candidatas = ["cancelled", "canceled"].map((status) => chegada({ status }));
+    candidatas.push(chegada({ invoice_number: "" }), chegada({ customer_code: undefined, customer: undefined }));
+    expect(possiveisChegadasDuplicadas(candidatas, draft)).toEqual([]);
+    expect(possiveisChegadasDuplicadas([chegada()], { ...draft, invoice_number: "" })).toEqual([]);
+    expect(possiveisChegadasDuplicadas([chegada()], { ...draft, customer_code: "" })).toEqual([]);
+    // Antes do campo explícito, a fila já publica o código em customer.
+    const legada = chegada({ customer_code: undefined });
+    expect(possiveisChegadasDuplicadas([legada], draft)).toEqual([legada]);
+    const semDonoComRotuloPadrao = chegada({ customer_code: "", customer: "ITAU" });
+    expect(possiveisChegadasDuplicadas([semDonoComRotuloPadrao], draft)).toEqual([]);
+  });
+
+  it("compara pelo código cliente e variante antes do SKU e reconhece a linha que ganhou SKU depois", () => {
+    const legada = chegada({ items: [{ client_item_code: " polo ", size: "m", color: "azul", expected_quantity: 10 }] });
+    const outroSku = chegada({ items: [{ ...draft.items[0], sku_code: "ITAU-999", expected_quantity: 10 }] });
+    const outroCodigo = chegada({ items: [{ ...draft.items[0], client_item_code: "OUTRO", expected_quantity: 10 }] });
+    const outraVariante = chegada({ items: [{ ...draft.items[0], size: "G", expected_quantity: 10 }] });
+    expect(possiveisChegadasDuplicadas([legada, outroSku, outroCodigo, outraVariante], draft)).toEqual([legada, outroSku]);
+  });
+
+  it("usa SKU como alternativa inequívoca quando falta código cliente em um lado", () => {
+    const soSku = chegada({ items: [{ sku: "ITAU-001", expected_quantity: 10 }] });
+    expect(possiveisChegadasDuplicadas([soSku], draft)).toEqual([soSku]);
+    const ambigua = { ...draft, items: [...draft.items, { ...draft.items[0], client_item_code: "OUTRO", quantity: 2 }] };
+    expect(possiveisChegadasDuplicadas([chegada({ items: [{ sku_code: "ITAU-001", expected_quantity: 12 }] })], ambigua)).toEqual([]);
+  });
+
+  it("é invariável à ordem e à divisão da quantidade declarada entre linhas, inclusive decimais", () => {
+    const itens = [
+      { sku_code: "ITAU-001", client_item_code: "POLO", size: "M", color: "AZUL", quantity: 0.3 },
+      { sku_code: "ITAU-002", client_item_code: "CAMISA", quantity: 7 },
+    ];
+    const igual = chegada({ items: [
+      { ...itens[1], expected_quantity: 7 },
+      { ...itens[0], expected_quantity: 0.1 },
+      { ...itens[0], expected_quantity: 0.2 },
+    ] });
+    expect(possiveisChegadasDuplicadas([igual], { ...draft, items: itens })).toEqual([igual]);
+    expect(possiveisChegadasDuplicadas([igual], { ...draft, items: [...itens].reverse() })).toEqual([igual]);
+  });
+
+  it("ignora comparações incompletas ou quantidades inválidas sem usar nome para adivinhar identidade", () => {
+    const incompletas = [
+      chegada({ items: [] }),
+      chegada({ items: [{ name: "Polo", expected_quantity: 10 }] }),
+      ...[0, -1, NaN, Infinity].map((expected_quantity) => chegada({ items: [{ ...draft.items[0], expected_quantity }] })),
+    ];
+    expect(possiveisChegadasDuplicadas(incompletas, draft)).toEqual([]);
+    for (const quantity of [0, -1, NaN, Infinity]) {
+      expect(possiveisChegadasDuplicadas([chegada()], { ...draft, items: [{ ...draft.items[0], quantity }] })).toEqual([]);
+    }
   });
 });
 

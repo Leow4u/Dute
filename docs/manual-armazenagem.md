@@ -133,21 +133,60 @@ Operação".
 
 ## Receber
 
-"Em aberto" e "Recebidos", com "Chegada avulsa"; a fila é de todos os
-clientes. "Para conferir" traz os avisos de envio do cliente ativo ainda não
-aprovados ("Aguardando aprovação da coordenação") e as chegadas abertas
-("Conferir"); "Para guardar", as guardas ("Guardar").
+"Em aberto", "Recebidos" e "Cancelados", com "Chegada avulsa"; a fila é
+de todos os clientes. "Para conferir" traz os avisos de envio do cliente
+ativo ainda não aprovados ("Aguardando aprovação da coordenação") e as chegadas abertas
+("Conferir"); "Para guardar", as guardas ("Guardar"). Uma chegada por caixa
+com entrada concluída fica em "Recebidas, por guardar" até a última guarda.
+"Recebidos" e "Cancelados" mostram até 12 registros recentes por fila; são
+recortes do histórico, não uma busca completa de todas as chegadas.
+
+A conferência e o cancelamento usam o cliente da chegada selecionada, mesmo
+que outro esteja no seletor. A criação avulsa e os avisos seguem o cliente
+ativo. Trocar o cliente fecha a ficha e recomeça o rascunho de criação.
 
 **A chegada avulsa:** "Fornecedor", "NF / pedido" e as linhas. "Cód. cliente,
 SKU ou barras" acha o cadastro do cliente ativo; o "SKU" só se lê. Sem
 cadastro, "Cadastrar como novo" pede "Categoria *", o "Custo unitário" (maior
 que zero) e uma foto ("Fotografar ou anexar", até 8). O mesmo produto não entra
-em duas linhas; "Local" vem "RECEBIMENTO". "Criar conferência" cria a chegada
-sem lançar estoque e mostra o SKU gerado. Produto excluído em Estoque › Itens
+em duas linhas. Por linha, "Local" vem "RECEBIMENTO"; por caixa, toda linha
+entra nessa área. "Criar conferência" cria a chegada sem lançar estoque e
+mostra o SKU gerado. Produto excluído em Estoque › Itens
 não aparece na busca: "Cadastrar como novo" o traz de volta com o SKU que já
-tinha, e o aviso diz "SKU reativado".
+tinha, e o aviso diz "SKU reativado". Depois do sucesso, o formulário fecha,
+fica limpo para a próxima chegada e abre a conferência criada. Em falha,
+os dados ficam para "Tentar novamente"; aguarde o resultado antes de iniciar
+outra chegada.
 
-**A ficha da chegada:**
+O alerta "Possível duplicidade nos recebimentos carregados" compara o
+cliente, a NF / pedido e os produtos com suas quantidades declaradas. Use
+"Abrir recebimento" para conferir a chegada existente ou "Registrar outra
+entrega" se esta for outra entrega real. A mesma NF pode ter entregas
+parciais com itens ou quantidades diferentes. O alerta só conhece os dados
+já carregados: sua ausência não garante que a chegada seja inédita.
+
+**A conferência por caixa:**
+
+1. "Conferir" recolhe a fila e abre a bancada na largura da tela. "Voltar à
+   fila" retorna à chegada de origem. Escolha a caixa ativa ou use "Iniciar
+   caixa"; cada caixa mantém seu próprio conteúdo.
+2. Selecione um produto da NF pelo nome ou código. "Quantidade nesta caixa"
+   começa vazia para um produto ainda não incluído; a quantidade da NF é
+   referência. Digite o que contou e use "Adicionar à caixa".
+3. Para corrigir um produto já incluído, informe o novo total e use "Salvar
+   quantidade". Essa ação substitui o total salvo, sem somar novamente.
+   Sair do campo ou selecionar um código não grava nem acrescenta peças.
+   Salve ou descarte a alteração pendente antes de revisar ou voltar à fila.
+4. Em "Fechar caixa", informe medidas e peso. Depois, confirme o destino
+   sugerido, escolha outra prateleira ou use "Continuar sem prateleira".
+   Fechar a caixa e confirmar o destino ainda não concluem a entrada nem a
+   guarda física.
+5. Em "Revisar entrada", confira caixas, itens e divergências. "Concluir
+   entrada" exige caixas fechadas, linhas tratadas e justificativa quando
+   houver falta ou sobra. A entrada vai para o RECEBIMENTO e gera uma guarda
+   por caixa. A caixa sem destino pode receber a prateleira na guarda.
+
+**A conferência por linha:**
 
 - "Aviso do cliente", só na chegada avulsa aberta do cliente ativo: "Sem aviso"
   ou um aviso aberto que não esteja em outra chegada.
@@ -162,11 +201,22 @@ tinha, e o aviso diz "SKU reativado".
   na trilha da entrada; o botão "Divergência" registra a exceção, para tratar
   com o fornecedor.
 
-**Guardar:** "Posição" ("Bipe ou busque a prateleira") lista só as ativas da
-zona do cliente; "Concluir guarda" move o saldo para ela, que não pode ser a
-origem. O recebimento não põe nada em caixa: a caixa é da abertura. O pedido
-do cliente só reserva o que está na prateleira: o saldo no "RECEBIMENTO" ou
-na "EXPEDICAO" fica fora do disponível do portal até a guarda.
+**Cancelar antes da entrada:** na chegada avulsa ainda a conferir ou em
+conferência, "Cancelar recebimento" pede o motivo. Em "Duplicado", selecione
+o recebimento original do mesmo cliente; em "Outro", explique na observação.
+O servidor recusa quando a entrada já ocorreu, existe movimentação ou o
+vínculo não permite cancelar. O cancelamento preserva a chegada, os itens e
+as caixas no histórico, com motivo, responsável e data; o original permanece
+intacto. Em "Cancelados", "Ver" permite consultar, sem ações de conferência
+ou guarda. Cancelar aqui não estorna estoque já recebido.
+
+**Guardar:** a caixa recebida tem uma tarefa para guardar seu conteúdo
+inteiro. Confirme a prateleira e só use "Concluir guarda" depois de levá-la
+fisicamente ao destino. Na guarda por linha, "Posição" ("Bipe ou busque a
+prateleira") lista só as ativas da zona do cliente; "Concluir guarda" move o
+saldo para ela, que não pode ser a origem. O pedido do cliente só reserva o
+saldo livre na prateleira: "RECEBIMENTO" e "EXPEDICAO" ficam fora do
+disponível do portal.
 
 **Caixa na prateleira (FIFO, 02/11/2026):** sai primeiro o que entrou
 primeiro, e o sistema não confere a caixa: o hábito garante.

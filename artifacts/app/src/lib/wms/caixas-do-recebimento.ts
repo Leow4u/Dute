@@ -208,6 +208,7 @@ export type EstadoDaCaixa = {
 
 /** O selo da caixa na ficha da chegada (mockups WmsRecebimentoCaixa e WmsRecebimentoConcluir). */
 export function estadoDaCaixa(caixa: Pick<CaixaDaChegada, "status" | "location_id">): EstadoDaCaixa {
+  if (["cancelled", "canceled"].includes(caixa.status)) return { rotulo: "cancelada", tom: "mut" };
   if (caixa.status === "counting") return { rotulo: "em conferência", tom: "amb" };
   if (caixa.status === "reviewed") return { rotulo: "sem prateleira", tom: "amb" };
   if (caixa.status === "committing") return { rotulo: "destino confirmado", tom: "grn" };
@@ -243,11 +244,21 @@ async function chamarWms<T>(nome: NomeDaCallable, dados: Record<string, unknown>
   try {
     return (await callable(dados)).data;
   } catch (error) {
-    throw new Error(mensagemDoErro(error));
+    // A UI precisa distinguir recusa do servidor de resposta perdida no transporte:
+    // só a primeira permite substituir a chave da tentativa após reler a revisão.
+    throw Object.assign(new Error(mensagemDoErro(error), { cause: error }), {
+      code: String((error as { code?: unknown } | null)?.code ?? ""),
+    });
   }
 }
 
-/** A chegada e o cliente ativo da tela (o servidor só usa o cliente para recusar a chegada de outro). */
+/** Rejeições explícitas não confirmam escrita; erro de rede/timeout mantém o pedido exato. */
+export function pedidoFoiRejeitado(error: unknown): boolean {
+  const code = String((error as { code?: unknown } | null)?.code ?? "").replace(/^functions\//, "");
+  return ["failed-precondition", "aborted", "invalid-argument", "permission-denied", "unauthenticated", "not-found", "already-exists", "out-of-range"].includes(code);
+}
+
+/** A chegada e seu cliente (o servidor recusa quando o cliente informado não é o dono). */
 export type DaChegada = { receipt_id: string; customer_code?: string };
 
 /** A caixa e a revisão que a tela viu: a escrita com revisão velha é recusada. */
