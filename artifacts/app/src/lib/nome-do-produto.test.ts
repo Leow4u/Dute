@@ -103,26 +103,27 @@ describe("padrão do nome: casos de referência", () => {
   });
 });
 
-describe("padrão do nome: a cópia da ferramenta responde igual", () => {
-  const COPIA = resolve(here, "../../../../tools/padronizar-nomes/regras.mjs");
+describe("padrão do nome: a cópia da ferramenta é a gerada deste arquivo", () => {
+  const RAIZ = resolve(here, "../../../..");
+  const COPIA = resolve(RAIZ, "tools/padronizar-nomes/regras.mjs");
 
-  it("as mesmas listas e as mesmas funções", async () => {
-    const copia = (await import(/* @vite-ignore */ pathToFileURL(COPIA).href)) as Record<string, unknown>;
-    expect([...(copia.SIGLAS as Set<string>)]).toEqual([...regra.SIGLAS]);
-    expect([...(copia.CONECTIVOS as Set<string>)]).toEqual([...regra.CONECTIVOS]);
-    expect([...(copia.UNIDADES as Set<string>)]).toEqual([...regra.UNIDADES]);
-    expect(copia.TAMANHOS_DE_ROUPA).toEqual([...regra.TAMANHOS_DE_ROUPA]);
-    expect(copia.CORES_COMPOSTAS).toEqual([...regra.CORES_COMPOSTAS]);
-    const funcoes = (modulo: Record<string, unknown>) =>
-      Object.keys(modulo)
-        .filter((nome) => typeof modulo[nome] === "function")
-        .sort();
-    const daRegra = funcoes(regra as unknown as Record<string, unknown>).filter((nome) => nome in copia || /Nome|Tamanho|Codigo|Genero|Cores|Espacos|Letras/.test(nome));
-    expect(funcoes(copia)).toEqual(daRegra);
+  it("tools/padronizar-nomes/regras.mjs é o que gerar-regras.mjs produz de lib/dominio", async () => {
+    const ts = await import("typescript");
+    const gerador = (await import(/* @vite-ignore */ pathToFileURL(resolve(RAIZ, "tools/padronizar-nomes/gerar-regras.mjs")).href)) as {
+      gerar: (fonte: string, typescript: unknown) => string;
+    };
+    const fonte = readFileSync(resolve(RAIZ, "lib/dominio/src/nome-do-produto.ts"), "utf8");
+    const esperado = gerador.gerar(fonte, ts.default ?? ts);
+    expect(readFileSync(COPIA, "utf8").replace(/\r\n/g, "\n"), "regras.mjs desatualizado: rode node tools/padronizar-nomes/gerar-regras.mjs").toBe(esperado);
   });
 
-  it("as mesmas saídas em todas as entradas dos casos", async () => {
+  it("as mesmas listas e as mesmas saídas em todas as entradas dos casos", async () => {
     const copia = (await import(/* @vite-ignore */ pathToFileURL(COPIA).href)) as typeof regra;
+    expect([...copia.SIGLAS]).toEqual([...regra.SIGLAS]);
+    expect([...copia.CONECTIVOS]).toEqual([...regra.CONECTIVOS]);
+    expect([...copia.UNIDADES]).toEqual([...regra.UNIDADES]);
+    expect([...copia.TAMANHOS_DE_ROUPA]).toEqual([...regra.TAMANHOS_DE_ROUPA]);
+    expect([...copia.CORES_COMPOSTAS]).toEqual([...regra.CORES_COMPOSTAS]);
     const entradas = [...casos.nomes, ...casos.exibicao, ...casos.problemas];
     for (const entrada of entradas) {
       for (const nome of ["padronizarNome", "nomeSemTamanho", "nomeComTamanho", "problemaDoNome", "tamanhoDoProduto"] as const) {
@@ -131,12 +132,6 @@ describe("padrão do nome: a cópia da ferramenta responde igual", () => {
       for (const nome of ["sufixoDoCodigo", "tamanhoDoCodigo", "familiaDoCodigo"] as const) {
         expect(copia[nome](entrada.codigo), `${nome} · ${entrada.caso}`).toEqual(regra[nome](entrada.codigo));
       }
-      for (const nome of ["limparEspacos", "caixaDasLetras"] as const) {
-        expect(copia[nome](entrada.nome), `${nome} · ${entrada.caso}`).toEqual(regra[nome](entrada.nome));
-      }
-      expect(copia.etiquetaDeGenero(entrada.nome), entrada.caso).toEqual(regra.etiquetaDeGenero(entrada.nome));
-      expect(copia.hifenizarCores(entrada.nome), entrada.caso).toEqual(regra.hifenizarCores(entrada.nome));
-      expect(copia.generoDoNome(entrada.nome), entrada.caso).toEqual(regra.generoDoNome(entrada.nome));
     }
   });
 });

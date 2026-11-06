@@ -8,39 +8,125 @@
  * 2. O gênero é uma etiqueta igual para tudo, "Masculino" ou "Feminino", sem
  *    concordar com a peça ("Polo Masculino", "Calça Social Masculino").
  * 3. Inicial maiúscula em cada palavra; conectivos (de, da, com, e) em
- *    minúscula; siglas (BTG) em maiúsculas; unidade depois de número em
- *    minúscula ("500 ml"); cores compostas com hífen ("Azul-Marinho").
+ *    minúscula; siglas (BTG) em maiúsculas; unidade depois de número na forma
+ *    de sempre ("500 ml", "2 L", "20 W"); cores compostas com hífen
+ *    ("Azul-Marinho").
  * 4. Nada além disso: a regra não reordena palavras, não acrescenta cor nem
  *    corrige digitação. O que ela não resolve sozinha vira "conferir".
  *
- * Funções puras, sem Firestore. tools/padronizar-nomes/regras.mjs guarda uma
- * cópia em JavaScript, e os dois rodam os mesmos casos de
- * nome-do-produto.casos.json (vitest do app e node --test da ferramenta).
+ * Funções puras, sem Firestore. Cópias: functions/wms/src/domain/nome-do-produto.ts
+ * (literal, travada em nome-do-produto.test.ts de lá) e
+ * tools/padronizar-nomes/regras.mjs (gerada deste arquivo por
+ * gerar-regras.mjs, travada no vitest do app). As três rodam os mesmos casos
+ * de nome-do-produto.casos.json.
  */
 
 /** Os tamanhos de roupa na ordem natural; N1… e os números vêm depois. */
 export const TAMANHOS_DE_ROUPA = ["PP", "P", "M", "G", "GG", "XG", "XGG", "XXG", "XXXG", "EG", "EGG", "EXG", "XS", "S", "L", "XL", "XXL", "U"] as const;
 
 /** Siglas que ficam em maiúsculas no nome. */
-export const SIGLAS = new Set(["BTG", "PAN", "SW", "UV", "UVA", "UVB", "LED", "USB", "PVC", "PET", "GPS", "TV", "PC", "SP", "RJ", "MG", "DF", "BR"]);
+export const SIGLAS: ReadonlySet<string> = new Set([
+  "BTG",
+  "PAN",
+  "SW",
+  "UV",
+  "UVA",
+  "UVB",
+  "LED",
+  "USB",
+  "PVC",
+  "PET",
+  "GPS",
+  "TV",
+  "PC",
+  "SP",
+  "RJ",
+  "MG",
+  "DF",
+  "BR",
+  "ML",
+  "MC",
+  "AA",
+  "AAA",
+  "TNT",
+  "MDF",
+  "HDMI",
+  "VGA",
+  "PU",
+  "EVA",
+  "EPI",
+  "LCD",
+  "SSD",
+  "QR",
+  "NF",
+]);
 
-/** Conectivos em minúscula, exceto na primeira palavra. */
-export const CONECTIVOS = new Set(["de", "da", "do", "das", "dos", "e", "em", "com", "sem", "para", "a", "o", "ao", "aos", "à", "às", "na", "no", "nas", "nos", "por", "pelo", "pela", "pelos", "pelas", "ou"]);
+/** Conectivos em minúscula, menos na primeira e na última palavra ("Vitamina A"). */
+export const CONECTIVOS: ReadonlySet<string> = new Set([
+  "de",
+  "da",
+  "do",
+  "das",
+  "dos",
+  "e",
+  "em",
+  "com",
+  "sem",
+  "para",
+  "a",
+  "o",
+  "ao",
+  "aos",
+  "à",
+  "às",
+  "na",
+  "no",
+  "nas",
+  "nos",
+  "por",
+  "pelo",
+  "pela",
+  "pelos",
+  "pelas",
+  "ou",
+]);
 
-/** Unidades em minúscula quando vêm depois de um número ("500 ml"). */
-export const UNIDADES = new Set(["ml", "l", "kg", "g", "cm", "mm", "m", "un", "cl", "w", "v", "mah", "gb", "mb"]);
+/** A unidade depois de um número, na forma de sempre: "500 ML" → "500 ml", "20 w" → "20 W", "32GB" → "32 GB". */
+export const UNIDADES: ReadonlyMap<string, string> = new Map([
+  ["ml", "ml"],
+  ["cl", "cl"],
+  ["l", "L"],
+  ["mg", "mg"],
+  ["g", "g"],
+  ["kg", "kg"],
+  ["mm", "mm"],
+  ["cm", "cm"],
+  ["m", "m"],
+  ["un", "un"],
+  ["w", "W"],
+  ["v", "V"],
+  ["mah", "mAh"],
+  ["mb", "MB"],
+  ["gb", "GB"],
+  ["tb", "TB"],
+]);
 
-/** Cores compostas que levam hífen (a forma sem hífen vira a com hífen). */
+/** Cores compostas que levam hífen. A forma sem hífen ganha o hífen; as letras e os acentos ficam como vieram. */
 export const CORES_COMPOSTAS = [
   "azul-marinho",
   "azul-claro",
   "azul-escuro",
   "azul-bebê",
+  "azul-royal",
+  "azul-turquesa",
+  "azul-petróleo",
   "verde-claro",
   "verde-escuro",
   "verde-água",
   "verde-musgo",
   "verde-bandeira",
+  "verde-oliva",
+  "verde-limão",
   "cinza-claro",
   "cinza-escuro",
   "cinza-chumbo",
@@ -49,8 +135,12 @@ export const CORES_COMPOSTAS = [
   "rosa-bebê",
   "vermelho-escuro",
   "amarelo-claro",
+  "amarelo-ouro",
   "off-white",
 ] as const;
+
+/** Palavras que vêm antes de uma letra que faz parte do nome, não do tamanho: "Gola U", "Tipo C", "Vitamina A". */
+const ANTES_DE_LETRA_DO_NOME: ReadonlySet<string> = new Set(["gola", "decote", "tipo", "modelo", "formato", "perfil", "vitamina", "classe", "plano", "série", "serie", "letra", "linha"]);
 
 export type MotivoDoNome =
   | "espaços"
@@ -84,24 +174,37 @@ export type NomePadronizado = {
 };
 
 const texto = (valor: unknown): string => String(valor ?? "").trim();
+const NUMERO = /^\d+(?:[.,]\d+)?$/;
 
 /**
- * O tamanho que o código do cliente carrega no fim: o último trecho depois do
- * ponto, de 1 a 4 letras ou números, quando o código tem três trechos ou
- * mais (A.01.0806.005.XG → XG, J.0149.003.N1 → N1). É a mesma regra do
- * agrupamento do portal (artifacts/app/src/lib/stock-variants.ts).
+ * O último trecho do código depois do ponto, de 1 a 4 letras ou números,
+ * quando o código tem três trechos ou mais (A.01.0806.005.XG → XG). É a regra
+ * do agrupamento do portal (artifacts/app/src/lib/stock-variants.ts); para
+ * saber se é um tamanho, `tamanhoDoCodigo`.
  */
 export function sufixoDoCodigo(codigo: unknown): string | null {
-  const partes = texto(codigo).split(".");
+  const partes = texto(codigo).replace(/\.+$/, "").split(".");
   if (partes.length < 3) return null;
   const ultimo = partes[partes.length - 1];
   return /^[A-Za-z0-9]{1,4}$/.test(ultimo) ? ultimo.toUpperCase() : null;
 }
 
-/** Um tamanho de roupa, N1…N9 ou um número de 1 a 69 (infantil e numeração). */
+/** Um tamanho de roupa, N1…N99 ou um número de 1 a 69 (infantil e numeração). */
 export function ehTamanho(token: unknown): boolean {
   const valor = texto(token).toUpperCase();
-  return (TAMANHOS_DE_ROUPA as readonly string[]).includes(valor) || /^N[1-9]$/.test(valor) || /^(?:[1-9]|[1-6][0-9])$/.test(valor);
+  return (TAMANHOS_DE_ROUPA as readonly string[]).includes(valor) || /^N[1-9]\d?$/.test(valor) || /^(?:[1-9]|[1-6][0-9])$/.test(valor);
+}
+
+/** O tamanho do código, quando o fim dele é um tamanho conhecido (A.01.0806.005.XG → XG; A.01.0806.005 → null). */
+export function tamanhoDoCodigo(codigo: unknown): string | null {
+  const sufixo = sufixoDoCodigo(codigo);
+  return sufixo && ehTamanho(sufixo) ? sufixo : null;
+}
+
+/** O código sem o tamanho: a família (A.01.0806.005.XG → A.01.0806.005). Sem tamanho conhecido no fim, o código inteiro. */
+export function familiaDoCodigo(codigo: unknown): string {
+  const valor = texto(codigo).replace(/\.+$/, "");
+  return tamanhoDoCodigo(valor) ? valor.slice(0, valor.lastIndexOf(".")) : valor;
 }
 
 /** A posição na ordem natural: PP, P, M, G…; depois N1…; depois os números; o resto no fim. */
@@ -109,7 +212,7 @@ export function ordemDoTamanho(tamanho: unknown): number {
   const valor = texto(tamanho).toUpperCase();
   const indice = (TAMANHOS_DE_ROUPA as readonly string[]).indexOf(valor);
   if (indice !== -1) return indice;
-  if (/^N[1-9]$/.test(valor)) return 100 + Number(valor.slice(1));
+  if (/^N\d+$/.test(valor)) return 100 + Number(valor.slice(1));
   if (/^\d+$/.test(valor)) return 200 + Number(valor);
   return 1000;
 }
@@ -118,33 +221,58 @@ export function ordemDoTamanho(tamanho: unknown): number {
 export function limparEspacos(nome: string): string {
   return nome
     .replace(/\s+/g, " ")
-    .replace(/^[\s\-–.,;:]+/, "")
-    .replace(/[\s\-–.,;:]+$/, "")
+    .replace(/^[\s\-–—.,;:]+/, "")
+    .replace(/[\s\-–—.,;:]+$/, "")
     .trim();
 }
 
+const SEPARADO_NO_FIM = /^(.*?)(?:\s*[-–—/]\s*|\s+)([A-Za-z0-9]{1,4})$/u;
+const ENTRE_PARENTESES_NO_FIM = /^(.*?)\s*[([]\s*([A-Za-z0-9]{1,4})\s*[)\]]$/u;
+
 /**
- * Tira do fim do nome o tamanho que o código carrega ("… preto - XG" com
- * código …XG). Um tamanho no fim que não é o do código também sai, mas vira
- * "conferir"; sem tamanho no código, o nome fica como está e também vira
- * "conferir".
+ * O tamanho no fim do nome e o que vem antes dele; null quando o fim não é um
+ * tamanho. Fica no nome a medida ("500 G", "1 M"), a letra que faz parte dele
+ * ("Gola U", "Tipo C") e o "U" de quem não é tamanho único.
  */
-export function tirarTamanhoDoFim(nome: string, sufixo: string | null): { nome: string; tirou: string | null; conferir: string | null } {
-  const achado = /^(.*?)(?:\s*[-–]\s*|\s+)([A-Za-z0-9]{1,4})$/.exec(nome);
-  if (!achado) return { nome, tirou: null, conferir: null };
-  const [, antes, token] = achado;
-  const maiusculo = token.toUpperCase();
-  if (!antes.trim()) return { nome, tirou: null, conferir: null };
-  // "Polo preto tam G" e "… tamanho G": a palavra sai junto com o tamanho.
-  const semPalavra = antes.trim().replace(/[\s\-–]+(?:tam\.?|tamanho)$/iu, "").trim() || antes.trim();
-  if (sufixo && maiusculo === sufixo) return { nome: semPalavra, tirou: token, conferir: null };
-  if (!ehTamanho(maiusculo)) return { nome, tirou: null, conferir: null };
-  if (!sufixo) return { nome, tirou: null, conferir: `tamanho no nome (${maiusculo}) e código sem tamanho` };
-  return { nome: semPalavra, tirou: token, conferir: `tamanho no nome (${maiusculo}) diferente do código (${sufixo})` };
+function tamanhoNoFim(nome: string, alvo: string | null): { antes: string; tamanho: string } | null {
+  const achado = ENTRE_PARENTESES_NO_FIM.exec(nome) ?? SEPARADO_NO_FIM.exec(nome);
+  if (!achado) return null;
+  const antes = achado[1].trim();
+  const tamanho = achado[2].toUpperCase();
+  if (!antes || !ehTamanho(tamanho)) return null;
+  if (tamanho === "U" && alvo !== "U") return null;
+  const palavras = antes.split(" ");
+  const anterior = (palavras[palavras.length - 1] ?? "").toLocaleLowerCase("pt-BR");
+  if (NUMERO.test(anterior) || ANTES_DE_LETRA_DO_NOME.has(anterior)) return null;
+  return { antes, tamanho };
 }
 
-const MASCULINO = /\b(?:masculin[oa]s?|masc)\b\.?/giu;
-const FEMININO = /\b(?:feminin[oa]s?|fem)\b\.?/giu;
+/** O que sobra antes do tamanho, sem pontuação solta e sem a palavra "tam"/"tamanho" ("Preto, Tam.:" → "Preto"). */
+function semRotuloDeTamanho(antes: string): string {
+  const limpo = limparEspacos(antes);
+  const semRotulo = limparEspacos(limpo.replace(/(?:^|[\s\-–—])(?:tam|tamanho)$/iu, ""));
+  return semRotulo || limpo;
+}
+
+/**
+ * Tira do fim do nome o tamanho `sufixo` ("… preto - XG" com XG). Um tamanho
+ * no fim que não é o `sufixo` também sai, mas vira "conferir"; sem `sufixo`, o
+ * nome fica como está e também vira "conferir".
+ */
+export function tirarTamanhoDoFim(nome: string, sufixo: string | null): { nome: string; tirou: string | null; conferir: string | null } {
+  const fim = tamanhoNoFim(nome, sufixo);
+  if (!fim) return { nome, tirou: null, conferir: null };
+  if (!sufixo) return { nome, tirou: null, conferir: `tamanho no nome (${fim.tamanho}) e código sem tamanho` };
+  const antes = semRotuloDeTamanho(fim.antes);
+  if (fim.tamanho === sufixo) return { nome: antes, tirou: fim.tamanho, conferir: null };
+  return { nome: antes, tirou: fim.tamanho, conferir: `tamanho no nome (${fim.tamanho}) diferente do código (${sufixo})` };
+}
+
+const SEM_LETRA_ANTES = "(?<![\\p{L}\\p{N}])";
+const SEM_LETRA_DEPOIS = "(?![\\p{L}\\p{N}])";
+const MASCULINO = new RegExp(`${SEM_LETRA_ANTES}(?:masculin[oa]s?|masc)${SEM_LETRA_DEPOIS}(?:\\.(?=\\s|$))?`, "giu");
+const FEMININO = new RegExp(`${SEM_LETRA_ANTES}(?:feminin[oa]s?|fem)${SEM_LETRA_DEPOIS}(?:\\.(?=\\s|$))?`, "giu");
+const ABREVIACAO_COLADA = new RegExp(`${SEM_LETRA_ANTES}(masculin[oa]s?|masc|feminin[oa]s?|fem)\\.(?=\\p{L})`, "giu");
 
 /** A palavra do gênero vira a etiqueta: masculina, masc. → Masculino; feminino, fem. → Feminino. */
 export function etiquetaDeGenero(nome: string): { nome: string; mudou: boolean } {
@@ -154,8 +282,9 @@ export function etiquetaDeGenero(nome: string): { nome: string; mudou: boolean }
       if (palavra.toLocaleLowerCase("pt-BR") !== etiqueta.toLocaleLowerCase("pt-BR")) mudou = true;
       return etiqueta;
     });
-  const resultado = trocar(trocar(nome, "Masculino", MASCULINO), "Feminino", FEMININO);
-  return { nome: resultado, mudou };
+  const separado = nome.replace(ABREVIACAO_COLADA, "$1. ");
+  const resultado = trocar(trocar(separado, "Masculino", MASCULINO), "Feminino", FEMININO);
+  return { nome: resultado, mudou: mudou || separado !== nome };
 }
 
 /** O gênero que o nome diz; null sem a palavra ou com as duas. */
@@ -177,13 +306,22 @@ export function generoDoCampo(valor: unknown): "Masculino" | "Feminino" | null {
   return null;
 }
 
-/** "azul marinho" → "azul-marinho", só para as cores da lista. */
+const VOGAIS_COM_ACENTO: Record<string, string> = { a: "aáàâãä", e: "eéèêë", i: "iíìîï", o: "oóòôõö", u: "uúùûü", c: "cç" };
+
+/** A palavra com e sem acento, para a cor digitada sem acento também ganhar o hífen. */
+function comOuSemAcento(palavra: string): string {
+  return [...palavra.normalize("NFD").replace(/[̀-ͯ]/g, "")]
+    .map((letra) => (VOGAIS_COM_ACENTO[letra] ? `[${VOGAIS_COM_ACENTO[letra]}]` : letra.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+    .join("");
+}
+
+/** "azul marinho" → "azul-marinho", só para as cores da lista; troca só o espaço pelo hífen. */
 export function hifenizarCores(nome: string): { nome: string; mudou: boolean } {
   let resultado = nome;
   for (const cor of CORES_COMPOSTAS) {
-    const semHifen = cor.replace("-", " ");
-    const padrao = new RegExp(`(?<!\\p{L})${semHifen.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?!\\p{L})`, "giu");
-    resultado = resultado.replace(padrao, cor);
+    const [primeira, segunda] = cor.split("-");
+    const padrao = new RegExp(`${SEM_LETRA_ANTES}(${comOuSemAcento(primeira)})\\s+(${comOuSemAcento(segunda)})${SEM_LETRA_DEPOIS}`, "giu");
+    resultado = resultado.replace(padrao, "$1-$2");
   }
   return { nome: resultado, mudou: resultado !== nome };
 }
@@ -196,27 +334,39 @@ function capitalizar(parte: string): string {
 }
 
 /**
- * Inicial maiúscula em cada palavra. Conectivo em minúscula fora da primeira
- * palavra; sigla em maiúsculas; unidade depois de número em minúscula; palavra
- * com número fica como está; cada parte de uma palavra com hífen ou barra conta
- * como palavra.
+ * Inicial maiúscula em cada palavra. Conectivo em minúscula fora da primeira e
+ * da última palavra; sigla em maiúsculas; unidade depois de número na forma de
+ * sempre, e a colada ao número ganha o espaço ("500ML" → "500 ml"); o "x" de
+ * medida entre números fica minúsculo ("70 x 140"); "c/", "p/" e "s/" ficam
+ * minúsculos; outra palavra com número fica como está; cada parte de uma
+ * palavra com hífen, barra ou apóstrofo conta como palavra ("D'Água").
  */
 export function caixaDasLetras(nome: string): string {
   const palavras = nome.split(" ");
+  const ultima = palavras.length - 1;
   return palavras
     .map((palavra, indice) => {
       if (!/\p{L}/u.test(palavra)) return palavra;
-      if (/\d/.test(palavra)) return palavra;
       const anterior = indice > 0 ? palavras[indice - 1] : "";
+      const seguinte = indice < ultima ? palavras[indice + 1] : "";
+      const minusculo = palavra.toLocaleLowerCase("pt-BR");
+      if (minusculo === "x" && /^\d/.test(anterior) && /^\d/.test(seguinte)) return "x";
+      const colada = /^(\d+(?:[.,]\d+)?)(\p{L}+)$/u.exec(palavra);
+      if (colada) {
+        const unidade = UNIDADES.get(colada[2].toLocaleLowerCase("pt-BR"));
+        return unidade ? `${colada[1]} ${unidade}` : palavra;
+      }
+      if (/\d/.test(palavra)) return palavra;
+      const unidade = UNIDADES.get(minusculo);
+      if (unidade && NUMERO.test(anterior)) return unidade;
+      if (indice > 0 && indice < ultima && CONECTIVOS.has(minusculo)) return minusculo;
+      if (/^[cps]\/$/.test(minusculo)) return minusculo;
       return palavra
-        .split(/([-/])/)
+        .split(/([-/'’])/)
         .map((parte) => {
-          if (parte === "-" || parte === "/") return parte;
+          if (/^[-/'’]$/.test(parte)) return parte;
           const letras = parte.replace(/[^\p{L}]/gu, "");
-          const minusculo = parte.toLocaleLowerCase("pt-BR");
           if (SIGLAS.has(letras.toUpperCase())) return parte.toUpperCase();
-          if (indice > 0 && CONECTIVOS.has(minusculo)) return minusculo;
-          if (UNIDADES.has(minusculo) && /^\d/.test(anterior)) return minusculo;
           return capitalizar(parte);
         })
         .join("");
@@ -246,26 +396,33 @@ export function padronizarNome(entrada: EntradaDoNome): NomePadronizado {
   if (!sufixo && campoTamanho && campoMaiusculo !== campoTamanho) motivos.push("tamanho pelo código");
   if (trecho && !sufixo) conferir.push(`tamanho do código (${trecho}) não é um tamanho conhecido`);
 
-  if (!original) {
+  let nome = limparEspacos(original);
+  if (nome !== original) motivos.push("espaços");
+  if (!nome) {
     conferir.push("nome vazio");
     return { nome: "", tamanho, motivos: ordenar(motivos), conferir };
   }
 
-  let nome = limparEspacos(original);
-  if (nome !== original) motivos.push("espaços");
-  const letrasOriginais = nome.replace(/[^\p{L}]/gu, "");
-  const todoMaiusculo = letrasOriginais.length > 0 && letrasOriginais === letrasOriginais.toLocaleUpperCase("pt-BR");
-  if (sufixo && nome.toUpperCase() === sufixo) {
+  // Sem tamanho no código, vale o do campo Tamanho, quando é um tamanho conhecido.
+  const alvo = sufixo ?? (campoMaiusculo && ehTamanho(campoMaiusculo) ? campoMaiusculo : null);
+  if (ehTamanho(nome) || (alvo && nome.toUpperCase() === alvo)) {
     conferir.push("nome é só o tamanho");
     return { nome, tamanho, motivos: ordenar(motivos), conferir };
   }
 
-  // Sem tamanho no código, vale o do campo Tamanho, quando é um tamanho conhecido.
-  const alvo = sufixo ?? (campoMaiusculo && ehTamanho(campoMaiusculo) ? campoMaiusculo : null);
-  const semTamanho = tirarTamanhoDoFim(nome, alvo);
-  if (semTamanho.tirou) motivos.push("tamanho no nome");
-  if (semTamanho.conferir) conferir.push(sufixo ? semTamanho.conferir : semTamanho.conferir.replace("diferente do código", "diferente do campo Tamanho"));
-  nome = semTamanho.nome;
+  // O tamanho repetido no fim ("M M") sai todo; um tamanho que não é o do produto sai e vira conferir.
+  let tirou = false;
+  for (let volta = 0; volta < 3; volta += 1) {
+    const semTamanho = tirarTamanhoDoFim(nome, alvo);
+    if (semTamanho.conferir) {
+      conferir.push(sufixo ? semTamanho.conferir : semTamanho.conferir.replace("diferente do código", "diferente do campo Tamanho"));
+    }
+    if (!semTamanho.tirou) break;
+    nome = semTamanho.nome;
+    tirou = true;
+    if (semTamanho.conferir) break;
+  }
+  if (tirou) motivos.push("tamanho no nome");
 
   const comEtiqueta = etiquetaDeGenero(nome);
   if (comEtiqueta.mudou) motivos.push("gênero");
@@ -281,6 +438,8 @@ export function padronizarNome(entrada: EntradaDoNome): NomePadronizado {
   if (comHifen.mudou) motivos.push("hífen");
   nome = comHifen.nome;
 
+  const letrasOriginais = original.replace(/[^\p{L}]/gu, "");
+  const todoMaiusculo = letrasOriginais.length > 0 && letrasOriginais === letrasOriginais.toLocaleUpperCase("pt-BR");
   const comCaixa = caixaDasLetras(nome);
   if (comCaixa !== nome) motivos.push(todoMaiusculo ? "maiúsculas" : "caixa das letras");
   nome = comCaixa;
@@ -292,18 +451,6 @@ const ORDEM_DOS_MOTIVOS: MotivoDoNome[] = ["espaços", "tamanho no nome", "gêne
 
 function ordenar(motivos: MotivoDoNome[]): MotivoDoNome[] {
   return ORDEM_DOS_MOTIVOS.filter((motivo) => motivos.includes(motivo));
-}
-
-/** O tamanho do código, quando o fim dele é um tamanho conhecido (A.01.0806.005.XG → XG; A.01.0806.005 → null). */
-export function tamanhoDoCodigo(codigo: unknown): string | null {
-  const sufixo = sufixoDoCodigo(codigo);
-  return sufixo && ehTamanho(sufixo) ? sufixo : null;
-}
-
-/** O código sem o tamanho: a família (A.01.0806.005.XG → A.01.0806.005). Sem tamanho conhecido no fim, o código inteiro. */
-export function familiaDoCodigo(codigo: unknown): string {
-  const valor = texto(codigo);
-  return tamanhoDoCodigo(valor) ? valor.slice(0, valor.lastIndexOf(".")) : valor;
 }
 
 /** O tamanho do produto: o do código, quando o fim dele é um tamanho conhecido; senão o campo Tamanho (em maiúsculas quando é um tamanho conhecido). */
@@ -363,25 +510,24 @@ export function problemaDoNome(produto: { nome: unknown; codigo?: unknown; taman
   const doCodigo = tamanhoDoCodigo(codigo);
   const campo = texto(produto.tamanho);
   const tamanho = tamanhoDoProduto(produto);
-  if (ehTamanho(nome) || (tamanho && nome.toUpperCase() === tamanho.toUpperCase())) {
+  const alvo = tamanho && ehTamanho(tamanho) ? tamanho.toUpperCase() : null;
+  if (ehTamanho(nome) || (alvo && nome.toUpperCase() === alvo)) {
     return { tipo: "so_o_tamanho", mensagem: "O nome do produto não pode ser só o tamanho." };
   }
   if (doCodigo && campo && campo.toUpperCase() !== doCodigo) {
     return { tipo: "campo_com_outro_tamanho", mensagem: `O código ${codigo} é do tamanho ${doCodigo}, e o Tamanho informado é ${campo}.` };
   }
-  const achado = /^(.*?)(?:\s*[-–]\s*|\s+)([A-Za-z0-9]{1,4})$/.exec(nome);
-  if (!achado || !achado[1].trim()) return null;
-  const fim = achado[2].toUpperCase();
-  if (!ehTamanho(fim)) return null;
-  if (tamanho && fim === tamanho.toUpperCase()) {
+  const fim = tamanhoNoFim(nome, alvo);
+  if (!fim) return null;
+  if (alvo && fim.tamanho === alvo) {
     const familia = doCodigo ? ` O nome é o mesmo em todos os tamanhos de ${familiaDoCodigo(codigo)}.` : "";
-    return { tipo: "tamanho_no_nome", mensagem: `O tamanho ${fim} fica no campo Tamanho.${familia}` };
+    return { tipo: "tamanho_no_nome", mensagem: `O tamanho ${fim.tamanho} fica no campo Tamanho.${familia}` };
   }
   if (doCodigo) {
-    return { tipo: "nome_com_outro_tamanho", mensagem: `O nome termina em ${fim}, e o código ${codigo} é do tamanho ${doCodigo}.` };
+    return { tipo: "nome_com_outro_tamanho", mensagem: `O nome termina em ${fim.tamanho}, e o código ${codigo} é do tamanho ${doCodigo}.` };
   }
-  if (tamanho) {
-    return { tipo: "nome_com_outro_tamanho", mensagem: `O nome termina em ${fim}, e o Tamanho informado é ${tamanho}.` };
+  if (alvo) {
+    return { tipo: "nome_com_outro_tamanho", mensagem: `O nome termina em ${fim.tamanho}, e o Tamanho informado é ${alvo}.` };
   }
   return null;
 }

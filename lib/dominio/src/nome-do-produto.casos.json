@@ -72,6 +72,11 @@
       "caso": "infantil de um dígito",
       "codigo": "A.04.0100.001.8",
       "familia": "A.04.0100.001"
+    },
+    {
+      "caso": "ponto no fim do código",
+      "codigo": "A.01.0806.005.M.",
+      "familia": "A.01.0806.005"
     }
   ],
   "nomes": [
@@ -718,6 +723,429 @@
           "tamanho no nome (G) diferente do campo Tamanho (M)"
         ]
       }
+    },
+    {
+      "caso": "tamanho depois de barra",
+      "nome": "POLO MASCULINA PIQUET PRETO/GG",
+      "codigo": "A.01.0806.005.GG",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Preto",
+        "tamanho": "GG",
+        "motivos": [
+          "tamanho no nome",
+          "gênero",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "nome só de separador",
+      "nome": "-",
+      "codigo": "A.01.0806.005.G",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "",
+        "tamanho": "G",
+        "motivos": [
+          "espaços",
+          "tamanho pelo código"
+        ],
+        "conferir": [
+          "nome vazio"
+        ]
+      }
+    },
+    {
+      "caso": "vírgula antes do tamanho",
+      "nome": "POLO PIQUET PRETO, G",
+      "codigo": "A.01.0806.005.G",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Piquet Preto",
+        "tamanho": "G",
+        "motivos": [
+          "tamanho no nome",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "a palavra tam. e o tamanho saem",
+      "nome": "POLO MASCULINA PIQUET PRETO TAM. XG",
+      "codigo": "A.01.0806.005.XG",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Preto",
+        "tamanho": "XG",
+        "motivos": [
+          "tamanho no nome",
+          "gênero",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "a palavra tamanho com dois pontos sai",
+      "nome": "POLO PIQUET PRETO TAMANHO: G",
+      "codigo": "A.01.0806.005.G",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Piquet Preto",
+        "tamanho": "G",
+        "motivos": [
+          "tamanho no nome",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "tamanho entre parênteses",
+      "nome": "POLO MASCULINA PIQUET PRETO (G)",
+      "codigo": "A.01.0806.005.G",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Preto",
+        "tamanho": "G",
+        "motivos": [
+          "tamanho no nome",
+          "gênero",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "tamanho repetido sai todo",
+      "nome": "POLO PIQUET PRETO M M",
+      "codigo": "A.01.0806.005.M",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Piquet Preto",
+        "tamanho": "M",
+        "motivos": [
+          "tamanho no nome",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "travessão longo antes do tamanho",
+      "nome": "POLO PIQUET PRETO—G",
+      "codigo": "A.01.0806.005.G",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Piquet Preto",
+        "tamanho": "G",
+        "motivos": [
+          "tamanho no nome",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "abreviação do gênero colada na palavra seguinte",
+      "nome": "POLO MASC.PRETA",
+      "codigo": "A.01.0806.006.M",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Masculino Preta",
+        "tamanho": "M",
+        "motivos": [
+          "gênero",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "gola U não é tamanho único",
+      "nome": "CAMISETA GOLA U",
+      "codigo": "A.01.0310.001.U",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Camiseta Gola U",
+        "tamanho": "U",
+        "motivos": [
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "U no fim de quem não é tamanho único fica",
+      "nome": "CAMISETA GOLA U",
+      "codigo": "A.01.0310.001.M",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Camiseta Gola U",
+        "tamanho": "M",
+        "motivos": [
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "medida no fim não é tamanho",
+      "nome": "TOALHA 500 G",
+      "codigo": "C.0659.001.G",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Toalha 500 g",
+        "tamanho": "G",
+        "motivos": [
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "unidade com símbolo maiúsculo",
+      "nome": "CARREGADOR 20 W USB-C",
+      "codigo": "MAT-043",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Carregador 20 W USB-C",
+        "tamanho": null,
+        "motivos": [
+          "maiúsculas"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "unidade colada ao número ganha o espaço",
+      "nome": "PEN DRIVE USB 32GB",
+      "codigo": "MAT-044",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Pen Drive USB 32 GB",
+        "tamanho": null,
+        "motivos": [
+          "maiúsculas"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "mililitro colado ao número",
+      "nome": "CANECA TÉRMICA 500ML",
+      "codigo": "MAT-020",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Caneca Térmica 500 ml",
+        "tamanho": null,
+        "motivos": [
+          "maiúsculas"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "apóstrofo",
+      "nome": "CANECA D'ÁGUA",
+      "codigo": "MAT-024",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Caneca D'Água",
+        "tamanho": null,
+        "motivos": [
+          "maiúsculas"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "cor composta sem acento ganha hífen e fica sem acento",
+      "nome": "POLO VERDE AGUA",
+      "codigo": "A.01.0900.001.M",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Verde-Agua",
+        "tamanho": "M",
+        "motivos": [
+          "hífen",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "cor composta já em caixa certa: só o hífen",
+      "nome": "Polo Azul Marinho",
+      "codigo": "A.01.0805.002.M",
+      "genero": "Masculino",
+      "tamanho": "M",
+      "esperado": {
+        "nome": "Polo Azul-Marinho",
+        "tamanho": "M",
+        "motivos": [
+          "hífen"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "letra no fim depois de vitamina",
+      "nome": "VITAMINA A",
+      "codigo": "MAT-030",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Vitamina A",
+        "tamanho": null,
+        "motivos": [
+          "maiúsculas"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "x de medida entre números fica minúsculo",
+      "nome": "TOALHA 70 x 140 cm",
+      "codigo": "MAT-015",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Toalha 70 x 140 cm",
+        "tamanho": null,
+        "motivos": [
+          "caixa das letras"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "nome que é só outro tamanho",
+      "nome": "M",
+      "codigo": "A.01.0806.005.G",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "M",
+        "tamanho": "G",
+        "motivos": [
+          "tamanho pelo código"
+        ],
+        "conferir": [
+          "nome é só o tamanho"
+        ]
+      }
+    },
+    {
+      "caso": "código com ponto no fim",
+      "nome": "Polo preto",
+      "codigo": "A.01.0806.005.M.",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Preto",
+        "tamanho": "M",
+        "motivos": [
+          "caixa das letras",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "numeração N10",
+      "nome": "Sacola quadrada – BTG",
+      "codigo": "J.0149.003.N10",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Sacola Quadrada – BTG",
+        "tamanho": "N10",
+        "motivos": [
+          "caixa das letras",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "sigla ML e tamanho numérico de um dígito",
+      "nome": "CAMISA SOCIAL ML BRANCA MASCULINA",
+      "codigo": "A.01.0700.001.3",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Camisa Social ML Branca Masculino",
+        "tamanho": "3",
+        "motivos": [
+          "gênero",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "c/ fica minúsculo",
+      "nome": "KIT C/ 3 CANETAS",
+      "codigo": "MAT-050",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Kit c/ 3 Canetas",
+        "tamanho": null,
+        "motivos": [
+          "maiúsculas"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "sigla AA e volt",
+      "nome": "PILHA AA 1,5 V",
+      "codigo": "MAT-051",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Pilha AA 1,5 V",
+        "tamanho": null,
+        "motivos": [
+          "maiúsculas"
+        ],
+        "conferir": []
+      }
     }
   ],
   "tamanhos_do_codigo": [
@@ -750,6 +1178,16 @@
       "caso": "sem ponto",
       "codigo": "MAT-001",
       "tamanho": null
+    },
+    {
+      "caso": "ponto no fim do código",
+      "codigo": "A.01.0806.005.M.",
+      "tamanho": "M"
+    },
+    {
+      "caso": "N10",
+      "codigo": "J.0149.003.N10",
+      "tamanho": "N10"
     }
   ],
   "exibicao": [
@@ -964,6 +1402,50 @@
       "problema": {
         "tipo": "tamanho_no_nome",
         "mensagem": "O tamanho U fica no campo Tamanho. O nome é o mesmo em todos os tamanhos de C.0659.001."
+      }
+    },
+    {
+      "caso": "tamanho entre parênteses no fim",
+      "nome": "Polo Masculino Piquet Preto (XG)",
+      "codigo": "A.01.0806.005.XG",
+      "tamanho": "",
+      "problema": {
+        "tipo": "tamanho_no_nome",
+        "mensagem": "O tamanho XG fica no campo Tamanho. O nome é o mesmo em todos os tamanhos de A.01.0806.005."
+      }
+    },
+    {
+      "caso": "tamanho depois de barra",
+      "nome": "Polo Masculino Piquet Preto/XG",
+      "codigo": "A.01.0806.005.XG",
+      "tamanho": "",
+      "problema": {
+        "tipo": "tamanho_no_nome",
+        "mensagem": "O tamanho XG fica no campo Tamanho. O nome é o mesmo em todos os tamanhos de A.01.0806.005."
+      }
+    },
+    {
+      "caso": "medida no fim não é problema",
+      "nome": "Toalha 500 g",
+      "codigo": "C.0659.001.G",
+      "tamanho": "",
+      "problema": null
+    },
+    {
+      "caso": "gola U em quem não é tamanho único não é problema",
+      "nome": "Camiseta Gola U",
+      "codigo": "A.01.0310.001.M",
+      "tamanho": "",
+      "problema": null
+    },
+    {
+      "caso": "nome que é só outro tamanho",
+      "nome": "M",
+      "codigo": "A.01.0806.005.G",
+      "tamanho": "",
+      "problema": {
+        "tipo": "so_o_tamanho",
+        "mensagem": "O nome do produto não pode ser só o tamanho."
       }
     }
   ]
