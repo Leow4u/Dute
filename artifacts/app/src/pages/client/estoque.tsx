@@ -757,9 +757,13 @@ export function ClienteEstoque() {
               <Button
                 type="button"
                 variant="outline"
-                className="hidden h-11 shrink-0 gap-2 md:inline-flex"
+                className={cn(
+                  "hidden h-10 shrink-0 gap-2 rounded-lg px-3 font-medium md:inline-flex",
+                  cartQuantity > 0 && "border-primary/20 bg-info-soft text-primary hover:bg-primary/10 active:bg-primary/15 dark:text-info-soft-foreground",
+                )}
                 aria-expanded={cartOpen}
-                aria-label={`Abrir pedido de abastecimento com ${formatNumber(cartQuantity)} item(ns)`}
+                aria-label={`Abrir pedido de abastecimento com ${formatNumber(cartQuantity)} ${cartQuantity === 1 ? "peça" : "peças"}`}
+                title={cartQuantity > 0 ? `${formatNumber(cartQuantity)} ${cartQuantity === 1 ? "peça" : "peças"} no pedido` : "Pedido vazio"}
                 onClick={() => {
                   setCartOpen((current) => !current);
                   closeDetails();
@@ -767,7 +771,14 @@ export function ClienteEstoque() {
               >
                 <ShoppingCart aria-hidden="true" />
                 Ver pedido
-                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">{formatNumber(cartQuantity)}</span>
+                <span aria-hidden="true" className={cn("border-l border-border pl-2", cartQuantity > 0 && "border-primary/15")}>
+                  <span className={cn(
+                    "flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1 text-xs font-semibold tabular-nums",
+                    cartQuantity > 0 && "bg-primary text-primary-foreground dark:bg-primary-hover",
+                  )}>
+                    {formatNumber(cartQuantity)}
+                  </span>
+                </span>
               </Button>
             ) : undefined}
           >
