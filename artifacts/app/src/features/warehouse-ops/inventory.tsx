@@ -1166,6 +1166,7 @@ export function OpeningInventoryWorkspace() {
                   box={currentBox}
                   lines={conferenceLines}
                   busy={conferenceBusy || photoUploading || formDirty}
+                  resuming={resumeConference.isPending}
                   onEdit={editConferenceLine}
                   onRemove={setDraftToRemove}
                   onReview={() => setReviewBoxOpen(true)}

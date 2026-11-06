@@ -12,16 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { Confirmacao } from "@/components/ui/confirmacao";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -299,20 +290,17 @@ function RoutineCard({ routine, onEdit, onOpenConversation }: { routine: Routine
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Apagar a rotina "{routine.name}"?</AlertDialogTitle>
-            <AlertDialogDescription>Ela para de rodar. As respostas que já chegaram continuam na conversa da rotina.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => remove.mutate()} className="bg-red-700 text-white hover:bg-red-800">
-              Apagar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Confirmacao
+        aberta={confirmDelete}
+        ocupada={remove.isPending}
+        titulo={`Apagar a rotina "${routine.name}"?`}
+        descricao="Ela para de rodar. As respostas que já chegaram continuam na conversa da rotina."
+        confirmar="Apagar"
+        confirmando="Apagando…"
+        classeDoConfirmar="bg-red-700 text-white hover:bg-red-800"
+        onConfirmar={() => remove.mutate(undefined, { onSuccess: () => setConfirmDelete(false) })}
+        onFechar={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }

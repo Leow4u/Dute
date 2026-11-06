@@ -29,7 +29,8 @@ const estado = vi.hoisted(() => {
       produto: { id: codigo, cod_cliente: codigo, cod_cliente_key: codigo, produto: `Camisa ${codigo}`, customer_code: "BTG Pactual" },
     };
   });
-  return { PAGINA_PADRAO, catalogo, chamadas: [] as string[], customerCode: "BTG Pactual" };
+  // `segurar` deixa a leitura do catálogo pendente até a promessa resolver; `falhar` faz a leitura recusar.
+  return { PAGINA_PADRAO, catalogo, chamadas: [] as string[], customerCode: "BTG Pactual", segurar: null as Promise<void> | null, falhar: false };
 });
 
 vi.mock("@/lib/warehouse-ops/model", async (importOriginal) => {
@@ -40,6 +41,8 @@ vi.mock("@/lib/warehouse-ops/model", async (importOriginal) => {
     // decrescente de código (como a rota de lib/cloud-api.ts).
     fetchJson: async (url: string) => {
       estado.chamadas.push(url);
+      if (estado.falhar) throw new Error("Sem conexão");
+      if (estado.segurar) await estado.segurar;
       const { pathname, searchParams } = new URL(url, "http://dute.local");
       const limite = Number(searchParams.get("limit")) || estado.PAGINA_PADRAO;
       const decrescente = [...estado.catalogo].reverse();
@@ -115,6 +118,8 @@ beforeEach(async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   estado.chamadas.length = 0;
   estado.customerCode = "BTG Pactual";
+  estado.segurar = null;
+  estado.falhar = false;
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   props = { open: true, isPending: false, onOpenChange: vi.fn(), onCreate: vi.fn(async () => undefined) };
   container = document.createElement("div");
@@ -151,6 +156,73 @@ describe("a busca de produto da chegada avulsa", () => {
     await esperar(() => campo("SKU da linha 1").value === "BTG-000090", "o cadastro encontrado");
     expect(document.body.textContent).toContain("Cadastro encontrado");
     expect(document.body.textContent).not.toContain("Identificação pendente");
+  });
+});
+
+/** Um QueryClient novo, sem o catálogo em cache, e a leitura como o teste pedir. */
+async function remontar(ajuste: () => void) {
+  act(() => raiz!.unmount());
+  client.clear();
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  ajuste();
+  raiz = createRoot(container!);
+  await renderDialog();
+}
+
+function botao(texto: string) {
+  return Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === texto);
+}
+
+function linha(numero: number) {
+  return Array.from(document.querySelectorAll<HTMLButtonElement>("button[aria-pressed]"))[numero - 1]!;
+}
+
+/**
+ * Antes de o catálogo chegar, todo código caía em "Produto não localizado" e a
+ * tela oferecia "Cadastrar como novo" para um produto que existe; as Functions
+ * recusavam no fim, depois de a pessoa preencher categoria, custo e foto
+ * (docs/plataforma/diagnostico-carregamento.md, decisão 6 de 06/11/2026).
+ */
+describe("antes de o catálogo chegar", () => {
+  it("diz que está verificando, não oferece o cadastro novo e não conta zero", async () => {
+    let soltar!: () => void;
+    await remontar(() => {
+      estado.segurar = new Promise<void>((pronto) => { soltar = pronto; });
+    });
+    await digitar("Código do produto da linha 1", "A.01.0806.090.GG");
+    const texto = () => document.body.textContent ?? "";
+    expect(texto()).toContain("Verificando o catálogo…");
+    expect(linha(1).textContent).toContain("Verificando o catálogo");
+    expect(texto()).not.toContain("Produto não localizado pelo código informado");
+    expect(botao("Cadastrar como novo")).toBeUndefined();
+    expect(texto()).toContain("Produtos existentes—");
+    expect(texto()).toContain("Novos cadastros—");
+    expect(botao("Criar conferência")!.disabled).toBe(true);
+
+    estado.segurar = null;
+    await act(async () => soltar());
+    await esperar(() => campo("SKU da linha 1").value === "BTG-000090", "o cadastro encontrado");
+    expect(linha(1).textContent).toContain("Cadastro encontrado");
+    expect(texto()).not.toContain("Verificando o catálogo");
+    expect(texto()).toContain("Produtos existentes1");
+  });
+
+  it("quando o catálogo não vem, mostra a falha, bloqueia o cadastro novo e deixa tentar de novo", async () => {
+    await remontar(() => {
+      estado.falhar = true;
+    });
+    await digitar("Código do produto da linha 1", "A.01.0806.090.GG");
+    await esperar(() => (document.body.textContent ?? "").includes("Não consegui carregar o catálogo."), "a falha do catálogo");
+    expect(linha(1).textContent).toContain("Sem catálogo");
+    expect(botao("Cadastrar como novo")).toBeUndefined();
+    expect(document.body.textContent).not.toContain("Produto não localizado pelo código informado");
+    expect(botao("Criar conferência")!.disabled).toBe(true);
+
+    estado.falhar = false;
+    await act(async () => botao("Tentar de novo")!.click());
+    await esperar(() => campo("SKU da linha 1").value === "BTG-000090", "o cadastro depois da nova tentativa");
+    expect(linha(1).textContent).toContain("Cadastro encontrado");
+    expect(document.body.textContent).not.toContain("Não consegui carregar o catálogo.");
   });
 });
 

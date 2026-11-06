@@ -60,6 +60,15 @@ describe("Pedidos na v3", () => {
     expect(FONTE).toContain("detail={paraQuando && detail ? <>{paraQuando} · {detail}</> : paraQuando ?? detail}");
   });
 
+  it("a leitura que falhou vira o erro com Tentar de novo, não o vazio das filas (decisão 6 de 06/11/2026)", () => {
+    expect(FONTE).toContain("const semLeitura = (ops.isError && !ops.data) || (decider && requests.isError && !requests.data);");
+    // O erro vem antes das filas e de "Entregues": sem leitura, nenhum "Nenhum pedido para…".
+    const erro = FONTE.indexOf(") : semLeitura ? (");
+    expect(erro).toBeGreaterThan(FONTE.indexOf("Carregando pedidos..."));
+    expect(erro).toBeLessThan(FONTE.indexOf(') : view === "delivered" ? ('));
+    expect(FONTE).toMatch(/<ErroNaLeitura\s+mensagem="Não consegui carregar os pedidos\."\s+tentando=\{ops\.isFetching \|\| requests\.isFetching\}\s+onTentar=\{refreshAll\}/);
+  });
+
   it("só a primeira linha da fila tem a ação principal", () => {
     expect(FONTE).toContain("const principal = chaveDaPrincipal(queue, decider);");
     for (const chave of ["approve:${request.id}", "pick:${order.key}", "deliver:${order.key}"]) {

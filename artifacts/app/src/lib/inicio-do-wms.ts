@@ -31,4 +31,5 @@ export function itensDoInicioDoWms(items: readonly HomeInboxItem[]): ItemDoInici
   return items.map((item) => ({ ...item, icon: ICONE_DO_ITEM[item.id] ?? ICONE_DO_TOM[item.tone] }));
 }
 
-export type HojeNoArmazem = HomeSummary & { skus: number };
+/** `skus` null enquanto o total não chegou ou quando a leitura falhou: o Início não inventa zero. */
+export type HojeNoArmazem = HomeSummary & { skus: number | null };

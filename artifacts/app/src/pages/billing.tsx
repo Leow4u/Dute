@@ -14,17 +14,7 @@ import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { Confirmacao } from "@/components/ui/confirmacao";
 import { useToast } from "@/hooks/use-toast";
 import { CABECALHO_DO_CLIENTE } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
@@ -129,6 +119,8 @@ export default function Billing() {
   const [qty, setQty] = useState<Record<string, string>>({});
   const [obs, setObs] = useState<Record<string, string>>({});
   const [dirty, setDirty] = useState(false);
+  // A confirmação de Emitir espera a resposta: fecha só no sucesso (decisão 6 de 06/11/2026).
+  const [confirmarEmissao, setConfirmarEmissao] = useState(false);
 
   const lines = useMemo(() => data?.grupos.flatMap((group) => group.itens) ?? [], [data]);
   const autoLines = lines.filter((line) => line.auto);
@@ -218,6 +210,7 @@ export default function Billing() {
       { competencia },
       {
         onSuccess: () => {
+          setConfirmarEmissao(false);
           toast({
             title: "Fatura emitida",
             description:
@@ -488,30 +481,28 @@ export default function Billing() {
                   </Link>
                 </Button>
                 {aberto ? (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button disabled={!canEmit || emit.isPending}>
-                        <Send className="mr-2 h-4 w-4" />
-                        Emitir e publicar para a cliente
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          Emitir a fatura de {competenciaLabel(competencia)}?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
+                  <>
+                    <Button disabled={!canEmit || emit.isPending} onClick={() => setConfirmarEmissao(true)}>
+                      <Send className="mr-2 h-4 w-4" />
+                      Emitir e publicar para a cliente
+                    </Button>
+                    <Confirmacao
+                      aberta={confirmarEmissao}
+                      ocupada={emit.isPending}
+                      titulo={`Emitir a fatura de ${competenciaLabel(competencia)}?`}
+                      descricao={
+                        <>
                           Os valores serão congelados e a fatura não poderá mais ser editada. Ela ficará
                           disponível para a cliente em Faturas. Total:{" "}
                           <strong>{fmtBRL(data.total)}</strong>.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleEmit}>Emitir</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                        </>
+                      }
+                      confirmar="Emitir"
+                      confirmando="Emitindo…"
+                      onConfirmar={handleEmit}
+                      onFechar={() => setConfirmarEmissao(false)}
+                    />
+                  </>
                 ) : null}
                 {acao?.tipo === "pagar_no_wms" ? (
                   <Button variant="outline" onClick={handlePay} disabled={pay.isPending}>

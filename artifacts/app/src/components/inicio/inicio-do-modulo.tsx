@@ -31,7 +31,7 @@ export function TituloDaSecao({ id, children }: { id?: string; children: ReactNo
 }
 
 /** Linha de número: ponto da cor, rótulo e o valor. */
-export function LinhaDeNumero({ ponto, rotulo, valor, alerta = false }: { ponto: string; rotulo: string; valor: number; alerta?: boolean }) {
+export function LinhaDeNumero({ ponto, rotulo, valor, alerta = false }: { ponto: string; rotulo: string; valor: number | string; alerta?: boolean }) {
   return (
     <li className="flex items-center justify-between gap-3 border-t border-border px-5 py-3.5 first:border-t-0">
       <span className={cn("flex items-center gap-2.5 text-base font-semibold", alerta && "text-destructive-soft-foreground")}>

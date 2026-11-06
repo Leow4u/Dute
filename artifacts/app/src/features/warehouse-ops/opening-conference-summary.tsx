@@ -1,17 +1,25 @@
-import { Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { conferenceCanEditLine, type OpeningConferenceLine } from "@/lib/opening-conference";
 import type { WarehouseBox } from "@/lib/warehouse-boxes";
 import { formatNumber } from "@/lib/warehouse-ops/model";
 
 export function OpeningConferenceSummary({
-  box, lines, busy, onEdit, onRemove, onReview, onReopen, onResume,
+  box, lines, busy, resuming, onEdit, onRemove, onReview, onReopen, onResume,
 }: {
   box: WarehouseBox;
   lines: OpeningConferenceLine[];
+  /** Algo impede as ações (outra gravação, foto subindo, formulário sujo). */
   busy: boolean;
+  /**
+   * A guarda está sendo retomada agora. Só isso gira o botão: o formulário
+   * sujo desliga, mas não é operação em andamento
+   * (docs/plataforma/diagnostico-carregamento.md, decisão 6 de 06/11/2026).
+   */
+  resuming: boolean;
   onEdit: (line: OpeningConferenceLine) => void;
   onRemove: (line: OpeningConferenceLine) => void;
   onReview: () => void;
@@ -57,7 +65,12 @@ export function OpeningConferenceSummary({
       <div className="flex flex-wrap gap-2">
         {box.status === "counting" ? <Button type="button" onClick={onReview} disabled={busy || !lines.length}>Revisar e fechar caixa</Button> : null}
         {box.status === "reviewed" ? <Button type="button" variant="outline" onClick={onReopen} disabled={busy}>Reabrir conferência</Button> : null}
-        {committing ? <Button type="button" onClick={onResume} disabled={busy}>{busy ? <RefreshCw className="mr-2 size-4 animate-spin" /> : null}Retomar guarda</Button> : null}
+        {committing ? (
+          <Button type="button" onClick={onResume} disabled={busy || resuming} aria-busy={resuming || undefined}>
+            {resuming ? <Spinner /> : null}
+            {resuming ? "Retomando guarda…" : "Retomar guarda"}
+          </Button>
+        ) : null}
       </div>
     </section>
   );
