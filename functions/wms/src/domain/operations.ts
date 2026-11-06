@@ -93,6 +93,8 @@ import {
   type Transaction,
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
+import { nomeComTamanho } from "./nome-do-produto.js";
+import { nomeParaGravar } from "./nome-para-gravar.js";
 
 const collections = {
   events: "events",
@@ -501,7 +503,9 @@ function itemSummary(items: OperationalRequestItem[], fallback: string) {
     .slice(0, 3)
     .map(
       (item) =>
-        `${item.quantity}x ${item.product_name ?? item.sku_code ?? "item"}`,
+        // O tamanho ao lado do nome (padrão de 06/11/2026): o evento e o
+        // rascunho de aviso dizem qual tamanho saiu.
+        `${item.quantity}x ${item.product_name ? nomeComTamanho({ nome: item.product_name, codigo: item.client_item_code, tamanho: item.size }) : (item.sku_code ?? "item")}`,
     )
     .join(", ");
   return items.length > 3
@@ -2439,7 +2443,7 @@ export async function recordCycleCountTransaction(
       normalizedIdentity(catalogSku.cod_cliente) ||
       normalizedIdentity(catalogProduct.cod_cliente) ||
       undefined;
-    const productName =
+    const productNameRaw =
       text(input.product_name) ||
       text(balanceRow.data.product_name) ||
       text(catalogSku.produto || catalogSku.product_name) ||
@@ -2471,7 +2475,7 @@ export async function recordCycleCountTransaction(
       text(balanceRow.data.brand) ||
       text(catalogSku.brand || catalogSku.marca || catalogProduct.brand || catalogProduct.marca) ||
       undefined;
-    const size =
+    const sizeRaw =
       text(input.size) ||
       text(balanceRow.data.size) ||
       text(catalogSku.size || catalogSku.tamanho || catalogProduct.size || catalogProduct.tamanho) ||
@@ -2481,6 +2485,14 @@ export async function recordCycleCountTransaction(
       text(balanceRow.data.color) ||
       text(catalogSku.color || catalogSku.cor || catalogProduct.color || catalogProduct.cor) ||
       undefined;
+    // Produto novo nasce com o nome no padrão de 06/11/2026 e o tamanho do
+    // código (domain/nome-para-gravar.ts); o que contradiz o código para aqui.
+    // O cadastrado guarda o nome que tem até o passo 3 da padronização.
+    const nomeNovo = wantsNewProduct
+      ? nomeParaGravar({ nome: productNameRaw, codigo: clientItemCode, genero, tamanho: sizeRaw })
+      : null;
+    const productName = nomeNovo?.nome || productNameRaw;
+    const size = (nomeNovo ? nomeNovo.tamanho : undefined) ?? sizeRaw;
     const photoUrls =
       stringList(input.photo_urls).length > 0
         ? stringList(input.photo_urls)
@@ -4534,7 +4546,13 @@ export async function createInboundReceiptTransaction(
     const skuCode = isNew
       ? ""
       : normalizedIdentity(item.sku_code || item.client_item_code);
-    const productName = text(item.product_name || clientItemCode || skuCode);
+    // Produto novo com o nome no padrão de 06/11/2026 e o tamanho do código
+    // (domain/nome-para-gravar.ts); o que contradiz o código para aqui.
+    const nomeNovo =
+      isNew && text(item.product_name)
+        ? nomeParaGravar({ nome: item.product_name, codigo: clientItemCode, tamanho: item.size })
+        : null;
+    const productName = text(nomeNovo?.nome || item.product_name || clientItemCode || skuCode);
     const quantity = requiredPositive(
       item.quantity,
       `Quantidade da linha ${index + 1}`,
@@ -4555,7 +4573,7 @@ export async function createInboundReceiptTransaction(
       category: text(item.category) || undefined,
       barcode: text(item.barcode) || undefined,
       brand: text(item.brand) || undefined,
-      size: text(item.size) || undefined,
+      size: nomeNovo?.tamanho ?? (text(item.size) || undefined),
       color: text(item.color) || undefined,
       photo_urls: stringList(item.photo_urls),
       photo_storage_paths: stringList(item.photo_storage_paths),
@@ -5288,10 +5306,16 @@ export async function updateInboundReceiptConferenceTransaction(
           newSkusHere.set(clientCode, skuCode);
         }
       }
+      // Produto novo: o nome do aviso no padrão de 06/11/2026, sem recusar o
+      // que o cliente digitou (domain/nome-para-gravar.ts).
+      const nomeDoAviso = text(row.data.product_name);
+      const nomeNovo = !exists && nomeDoAviso
+        ? nomeParaGravar({ nome: nomeDoAviso, codigo: clientCode, tamanho: row.data.size }, "corrige").nome
+        : "";
       codeAssignments.set(row.id, {
         sku_code: skuCode,
         client_item_code: clientCode,
-        product_name: catalogName || text(row.data.product_name) || clientCode,
+        product_name: catalogName || nomeNovo || nomeDoAviso || clientCode,
         product_registration: exists ? "existing" : "new",
       });
     }
@@ -6277,6 +6301,12 @@ export async function decideCustomerRequestTransaction(
       items.forEach((item, index) => {
         const lineNumber = index + 1;
         const itemId = `inbi_${safeDocId(inboundId)}_${String(lineNumber).padStart(2, "0")}`;
+        // Produto novo do aviso: o nome no padrão de 06/11/2026, sem recusar o
+        // que o cliente digitou (vale o código; domain/nome-para-gravar.ts).
+        const nomeNovo =
+          text(item.product_registration) === "new" && text(item.product_name)
+            ? nomeParaGravar({ nome: item.product_name, codigo: item.client_item_code, tamanho: item.size }, "corrige")
+            : null;
         transaction.create(
           db.collection(collections.inboundItems).doc(itemId),
           compact({
@@ -6287,12 +6317,12 @@ export async function decideCustomerRequestTransaction(
             line_number: lineNumber,
             sku_code: item.sku_code,
             client_item_code: item.client_item_code,
-            product_name: item.product_name ?? item.sku_code,
+            product_name: nomeNovo?.nome || (item.product_name ?? item.sku_code),
             product_registration: item.product_registration,
             category: item.category,
             barcode: item.barcode,
             brand: item.brand,
-            size: item.size,
+            size: nomeNovo?.tamanho ?? item.size,
             color: item.color,
             photo_urls: item.photo_urls?.length ? item.photo_urls : undefined,
             photo_storage_paths: item.photo_storage_paths?.length
@@ -6902,7 +6932,7 @@ export async function cancelWarehouseOrderTransaction(
           total_units: guard.quantity,
           status: "planned",
           priority: "normal",
-          title: `Guardar ${guard.productName || guard.skuCode}`,
+          title: `Guardar ${guard.productName ? nomeComTamanho({ nome: guard.productName, codigo: guard.clientItemCode }) : guard.skuCode}`,
           next_action: "Devolver à posição o item do pedido cancelado.",
           source: "wms_order_cancel",
           created_from_operation_id: operationId,
@@ -8273,7 +8303,7 @@ export async function advanceWarehouseTaskTransaction(
               total_units: quantity,
               status: "planned",
               priority: "normal",
-              title: `Guardar ${text(row.data.product_name) || skuCode}`,
+              title: `Guardar ${text(row.data.product_name) ? nomeComTamanho({ nome: row.data.product_name, codigo: row.data.client_item_code, tamanho: row.data.size }) : skuCode}`,
               next_action: "Informar endereco final e concluir guarda.",
               source: "wms_receiving",
               created_from_operation_id: operationId,

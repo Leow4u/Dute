@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { familiaDoCodigo, nomeComTamanho, ordemDoTamanho, padronizarNome, problemaDoNome, tamanhoDoCodigo } from "@workspace/dominio";
 import {
   AlertCircle,
   AlertTriangle,
@@ -124,6 +125,8 @@ import {
   CATALOG_GRUPOS,
   inferGeneroFromClientCode,
   inferGrupoFromProduto,
+  isCatalogGenero,
+  isCatalogGrupo,
 } from "@/lib/catalog-taxonomy";
 import {
   type OpeningInventoryLine,
@@ -138,8 +141,17 @@ import {
   CODE_MATCH_LABEL,
   findProductByAnyCode,
   findProductByBarcode,
+  productCodeKey,
 } from "@/lib/product-match";
-import { ProductIdentityCard, NewProductNotice } from "./product-identity";
+import {
+  atributosDoProblema,
+  campoDoProblemaDoNome,
+  FamiliaNoCadastroCard,
+  NewProductNotice,
+  ProductIdentityCard,
+  seguirSugestao,
+  useProblemaAoParar,
+} from "./product-identity";
 
 export type CycleCountResult = {
   ok?: boolean;
@@ -159,6 +171,92 @@ export type CycleCountResult = {
 };
 
 export type { OpeningInventoryLine, OpeningInventorySession };
+
+/** A família do código novo no cadastro do cliente e o que o produto novo herda dela. */
+export type FamiliaNoCadastro = {
+  /** O código sem o tamanho, como está no cadastro: "A.02.0809.002". */
+  familia: string;
+  /** O tamanho novo, o do fim do código digitado. */
+  tamanho: string;
+  /** Os tamanhos que a família já tem no cadastro, na ordem natural. */
+  tamanhos: string[];
+  /** O nome da família no padrão de 06/11/2026. */
+  nome: string;
+  /** O irmão que dá o nome: o primeiro tamanho do nome mais comum. */
+  irmao: ProductLookupItem;
+  categoria: string;
+  genero: string;
+  grupo: string;
+  marca: string;
+  cor: string;
+  /** As fotos do irmão, com as mesmas URLs e caminhos. */
+  fotos: ProductPhoto[];
+  fotoUrl: string;
+};
+
+/**
+ * O código digitado é um tamanho novo de uma família do cadastro
+ * (A.02.0809.002.GG com o P, o M e o G cadastrados): os irmãos são os
+ * produtos do mesmo código sem o tamanho, na ordem dos tamanhos. O nome da
+ * família é o do irmão mais comum, no padrão (empate: o primeiro tamanho); os
+ * outros dados vêm dos irmãos desse nome, do primeiro que tem cada um. Sem
+ * tamanho conhecido no fim do código, ou sem irmão, não há família.
+ */
+export function familiaNoCadastro(codigo: string, produtos: ProductLookupItem[]): FamiliaNoCadastro | null {
+  const tamanho = tamanhoDoCodigo(codigo);
+  if (!tamanho) return null;
+  const chave = productCodeKey(familiaDoCodigo(codigo));
+  const irmaos = produtos
+    .filter((produto) =>
+      Boolean(tamanhoDoCodigo(produto.clientCode)) &&
+      productCodeKey(familiaDoCodigo(produto.clientCode)) === chave &&
+      productCodeKey(produto.clientCode) !== productCodeKey(codigo))
+    .sort((a, b) =>
+      ordemDoTamanho(tamanhoDoCodigo(a.clientCode)) - ordemDoTamanho(tamanhoDoCodigo(b.clientCode)) ||
+      a.clientCode.localeCompare(b.clientCode));
+  const porNome = new Map<string, ProductLookupItem[]>();
+  for (const irmao of irmaos) {
+    const nome = padronizarNome({
+      nome: irmao.productName,
+      codigo: irmao.clientCode,
+      genero: sourceText(irmao.source, "genero"),
+      tamanho: irmao.size,
+    }).nome;
+    if (nome) porNome.set(nome, [...(porNome.get(nome) ?? []), irmao]);
+  }
+  // O Map guarda a ordem dos tamanhos: no empate, fica o nome que chegou primeiro.
+  let escolhido: [string, ProductLookupItem[]] | undefined;
+  for (const grupo of porNome) if (!escolhido || grupo[1].length > escolhido[1].length) escolhido = grupo;
+  if (!escolhido) return null;
+  const [nome, mesmoNome] = escolhido;
+  const primeiro = (ler: (produto: ProductLookupItem) => string) => mesmoNome.map(ler).find(Boolean) ?? "";
+  const fotos = mesmoNome.map((produto) => sourcePhotos(produto.source)).find((lista) => lista.length > 0) ?? [];
+  return {
+    familia: familiaDoCodigo(irmaos[0]!.clientCode),
+    tamanho,
+    tamanhos: [...new Set(irmaos.map((irmao) => tamanhoDoCodigo(irmao.clientCode) ?? ""))].filter(Boolean),
+    nome,
+    irmao: mesmoNome[0]!,
+    categoria: primeiro((produto) => sourceText(produto.source, "category", "categoria")),
+    genero: primeiro((produto) => {
+      const genero = sourceText(produto.source, "genero");
+      return isCatalogGenero(genero) ? genero : "";
+    }),
+    grupo: primeiro((produto) => {
+      const grupo = sourceText(produto.source, "grupo");
+      return isCatalogGrupo(grupo) ? grupo : "";
+    }),
+    marca: primeiro((produto) => produto.brand),
+    cor: primeiro((produto) => produto.color),
+    fotos,
+    fotoUrl: primeiro((produto) => produto.photoUrl) || fotos[0]?.fileUrl || "",
+  };
+}
+
+/** O que a tela pôs sozinha nos campos do produto (seguirSugestao): o Tamanho pelo código e os dados da família. */
+type PreenchidoPelaTela = Partial<Record<"tamanho" | "produto" | "categoria" | "genero" | "grupo" | "marca" | "cor" | "fotos", string>>;
+
+const assinaturaDasFotos = (fotos: ProductPhoto[]) => fotos.map((foto) => `${foto.fileUrl}\n${foto.storagePath}`).join("\n");
 
 /**
  * A Contagem tem duas abas: o inventário de abertura (uma vez por cliente,
@@ -236,6 +334,7 @@ export function OpeningInventoryWorkspace() {
   // tela avisa antes. Perfil ainda não publicado fica para as Functions dizerem.
   const missingSkuPrefix =
     !customerLoading && activeCustomer.profile.source === "published" && !skuPrefix;
+  const semSiglaDoSku = `Cadastre a sigla do SKU de ${activeCustomer.name} em Configurações › Clientes antes de cadastrar produto novo: o SKU é gerado com ela.`;
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -420,6 +519,51 @@ export function OpeningInventoryWorkspace() {
     : barcodeMatch
       ? CODE_MATCH_LABEL.barcode
       : "";
+  // Código novo de uma família do cadastro: o cartão da família no lugar do aviso de produto novo.
+  const familia = useMemo(
+    () => (existingProduct || identityConflict || !lookupQuery.isSuccess ? null : familiaNoCadastro(clientCode, lookupProducts)),
+    [clientCode, existingProduct, identityConflict, lookupProducts, lookupQuery.isSuccess],
+  );
+
+  // O que a tela preenche sozinha só entra no campo vazio e acompanha o código
+  // enquanto a pessoa não mexe no campo (seguirSugestao); o que ela digitou fica.
+  const preenchido = useRef<PreenchidoPelaTela>({});
+  const camposAtuais = useRef({ productName, category, genero, grupo, brand, color, size, photos });
+  camposAtuais.current = { productName, category, genero, grupo, brand, color, size, photos };
+  const tamanhoDoCodigoDigitado = tamanhoDoCodigo(clientCode) ?? "";
+  useEffect(() => {
+    const atual = camposAtuais.current.size;
+    const sugestao = seguirSugestao(atual, preenchido.current.tamanho ?? "", tamanhoDoCodigoDigitado);
+    preenchido.current.tamanho = sugestao.posto;
+    if (sugestao.valor !== atual) setSize(sugestao.valor);
+  }, [tamanhoDoCodigoDigitado]);
+  const chaveDaFamilia = familia ? `${familia.familia}\n${familia.nome}\n${familia.irmao.id}` : "";
+  useEffect(() => {
+    const atuais = camposAtuais.current;
+    const seguir = (campo: keyof PreenchidoPelaTela, atual: string, sugerido: string, definir: (valor: string) => void) => {
+      const sugestao = seguirSugestao(atual, preenchido.current[campo] ?? "", sugerido);
+      preenchido.current[campo] = sugestao.posto;
+      if (sugestao.valor !== atual) definir(sugestao.valor);
+    };
+    seguir("produto", atuais.productName, familia?.nome ?? "", setProductName);
+    seguir("categoria", atuais.category, familia?.categoria ?? "", setCategory);
+    seguir("genero", atuais.genero, familia?.genero ?? "", setGenero);
+    seguir("grupo", atuais.grupo, familia?.grupo ?? "", setGrupo);
+    seguir("marca", atuais.brand, familia?.marca ?? "", setBrand);
+    seguir("cor", atuais.color, familia?.cor ?? "", setColor);
+    // As fotos do irmão só entram quando a pessoa ainda não pôs foto.
+    seguir("fotos", assinaturaDasFotos(atuais.photos), assinaturaDasFotos(familia?.fotos ?? []), (valor) =>
+      setPhotos(valor ? familia?.fotos ?? [] : []));
+    // A família só muda com o código ou com o catálogo: a chave basta.
+  }, [chaveDaFamilia]);
+
+  // Produto novo sai com o nome no padrão de 06/11/2026 (lib/dominio,
+  // nome-do-produto.ts); o cadastrado escolhido fica com o nome que tem até a
+  // limpeza do passo 3.
+  const problemaDoNomeNovo = selectedProduct ? null : problemaDoNome({ nome: productName, codigo: clientCode, tamanho: size });
+  const problemaVisivel = useProblemaAoParar(problemaDoNomeNovo);
+  const problemaNoTamanho = problemaVisivel && campoDoProblemaDoNome(problemaVisivel) === "tamanho" ? problemaVisivel : null;
+  const problemaNoNome = problemaVisivel && !problemaNoTamanho ? problemaVisivel : null;
   const parsedCount = Number(countedQty);
   const parsedCost = Number(unitCost);
   const hasIdentity = Boolean(clientCode.trim());
@@ -450,6 +594,7 @@ export function OpeningInventoryWorkspace() {
     parsedCount > 0 &&
     !photoUploading &&
     taxonomyComplete &&
+    !problemaDoNomeNovo &&
     ((Boolean(selectedProduct?.hasSku) && selectedProductCost > 0) ||
       (createNew && newProductComplete && !missingSkuPrefix)) &&
     !(selectedProduct && createNew);
@@ -681,6 +826,7 @@ export function OpeningInventoryWorkspace() {
     setBarcode(""); setBrand(""); setSize(""); setColor(""); setCountedQty(""); setUnitCost("");
     setReference(""); setPhotos([]); setCreateNew(false); setSelectedProduct(undefined);
     setEditingDraft(undefined); setBoxAcknowledged(false);
+    preenchido.current = {};
   }
 
   function activateBox(box?: WarehouseBox) {
@@ -960,6 +1106,8 @@ export function OpeningInventoryWorkspace() {
     setPhotos(sourcePhotos(product.source));
     setCreateNew(false);
     setSelectedProduct(product);
+    // O que veio do cadastro escolhido não é sugestão da tela.
+    preenchido.current = {};
   }
 
   async function addOpeningPhotos(files: FileList | null) {
@@ -1411,7 +1559,12 @@ export function OpeningInventoryWorkspace() {
                         value={productName}
                         onChange={(event) => setProductName(event.target.value)}
                         placeholder="Descrição clara do produto"
+                        className="aria-[invalid=true]:border-destructive"
+                        {...atributosDoProblema(problemaNoNome, "opening-product")}
                       />
+                      {problemaNoNome ? (
+                        <p id="opening-product-problema" className="text-xs font-medium text-destructive">{problemaNoNome.mensagem}</p>
+                      ) : null}
                     </div>
                   </div>
 
@@ -1451,7 +1604,7 @@ export function OpeningInventoryWorkspace() {
                       disabled={missingSkuPrefix}
                       title="Código sem SKU"
                       note={missingSkuPrefix
-                        ? `Cadastre a sigla do SKU de ${activeCustomer.name} em Configurações › Clientes antes de cadastrar produto novo: o SKU é gerado com ela.`
+                        ? semSiglaDoSku
                         : `Este código não tem SKU ativo. Cadastre como novo. ${isDraftBox ? "SKU gerado ao guardar a caixa." : "SKU gerado ao salvar."}`}
                       onToggle={() => setCreateNew((current) => !current)}
                     />
@@ -1463,14 +1616,29 @@ export function OpeningInventoryWorkspace() {
                       onSelect={() => applyProduct(existingProduct)}
                     />
                   ) : hasIdentity && lookupQuery.isSuccess ? (
-                    <NewProductNotice
-                      confirmed={createNew}
-                      disabled={missingSkuPrefix}
-                      note={missingSkuPrefix
-                        ? `Cadastre a sigla do SKU de ${activeCustomer.name} em Configurações › Clientes antes de cadastrar produto novo: o SKU é gerado com ela.`
-                        : isDraftBox ? "SKU gerado ao guardar a caixa." : "SKU gerado ao salvar."}
-                      onToggle={() => setCreateNew((current) => !current)}
-                    />
+                    familia ? (
+                      <FamiliaNoCadastroCard
+                        id="opening-family-new"
+                        familia={familia.familia}
+                        nome={familia.nome}
+                        tamanhos={familia.tamanhos}
+                        tamanho={familia.tamanho}
+                        fotoUrl={familia.fotoUrl}
+                        confirmed={createNew}
+                        disabled={missingSkuPrefix}
+                        note={missingSkuPrefix ? semSiglaDoSku : undefined}
+                        onToggle={setCreateNew}
+                      />
+                    ) : (
+                      <NewProductNotice
+                        confirmed={createNew}
+                        disabled={missingSkuPrefix}
+                        note={missingSkuPrefix
+                          ? semSiglaDoSku
+                          : isDraftBox ? "SKU gerado ao guardar a caixa." : "SKU gerado ao salvar."}
+                        onToggle={() => setCreateNew((current) => !current)}
+                      />
+                    )
                   ) : null}
 
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1516,8 +1684,18 @@ export function OpeningInventoryWorkspace() {
 
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="space-y-2">
-                      <Label>Tamanho</Label>
-                      <Input value={size} onChange={(event) => setSize(event.target.value)} placeholder="Tamanho" />
+                      <Label htmlFor="opening-size">Tamanho</Label>
+                      <Input
+                        id="opening-size"
+                        value={size}
+                        onChange={(event) => setSize(event.target.value)}
+                        placeholder="Tamanho"
+                        className="aria-[invalid=true]:border-destructive"
+                        {...atributosDoProblema(problemaNoTamanho, "opening-size")}
+                      />
+                      {problemaNoTamanho ? (
+                        <p id="opening-size-problema" className="text-xs font-medium text-destructive">{problemaNoTamanho.mensagem}</p>
+                      ) : null}
                     </div>
                     <div className="space-y-2">
                       <Label>Cor</Label>
@@ -1826,7 +2004,7 @@ export function OpeningInventoryWorkspace() {
                       >
                         <div className="min-w-0 [overflow-wrap:anywhere]">
                           <div className="text-sm font-medium leading-snug text-foreground">
-                            {line.product_name || line.client_item_code || line.sku_code}
+                            {line.product_name ? nomeComTamanho({ nome: line.product_name, codigo: line.client_item_code, tamanho: line.size }) : line.client_item_code || line.sku_code}
                           </div>
                           <div className="mt-1 text-xs text-muted-foreground">
                             {line.client_item_code || "Sem cód. cliente"}
@@ -1859,7 +2037,7 @@ export function OpeningInventoryWorkspace() {
                               className="shrink-0 text-muted-foreground hover:text-destructive"
                               onClick={() => setLineToRemove(line)}
                               disabled={removeOpeningLine.isPending}
-                              aria-label={`Remover ${line.product_name || line.client_item_code || line.sku_code}`}
+                              aria-label={`Remover ${line.product_name ? nomeComTamanho({ nome: line.product_name, codigo: line.client_item_code, tamanho: line.size }) : line.client_item_code || line.sku_code}`}
                               title="Remover para corrigir"
                             >
                               <Trash2 className="size-4" />
@@ -1906,7 +2084,7 @@ export function OpeningInventoryWorkspace() {
           <ScrollArea className="max-h-80">
             <div className="space-y-2">
               {reviewLines.map((line) => <div key={line.id} className="flex justify-between gap-3 rounded-md border border-border p-3">
-                <span>{line.product_name || line.client_item_code || line.sku_code}<span className="block text-sm text-muted-foreground">{line.client_item_code} · {line.sku_code || "SKU ao guardar"}</span></span>
+                <span>{line.product_name ? nomeComTamanho({ nome: line.product_name, codigo: line.client_item_code, tamanho: line.size }) : line.client_item_code || line.sku_code}<span className="block text-sm text-muted-foreground">{line.client_item_code} · {line.sku_code || "SKU ao guardar"}</span></span>
                 <span className="whitespace-nowrap font-semibold">{formatNumber(line.counted_qty)} un.</span>
               </div>)}
             </div>

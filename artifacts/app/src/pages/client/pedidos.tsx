@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { nomeSemTamanho, tamanhoDoProduto } from "@workspace/dominio";
 import { ArrowLeft, Check, ChevronRight, Loader2, PackageOpen, Truck } from "lucide-react";
 import { Link } from "wouter";
 
@@ -8,6 +9,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { ORDER_STEPS, orderStepIndex, splitOrders, type OrderView } from "@/lib/orders";
 import { orderProofs, type PortalDocument } from "@/lib/portal-documents";
+import { variantLabel } from "@/lib/stock-variants";
 import { cn } from "@/lib/utils";
 
 import { DocumentList } from "./documentos";
@@ -16,7 +18,10 @@ import { ClientDataBoundary, clientOverviewQueryKey, getOrders, getRequests } fr
 /**
  * Pedidos do portal: o que a BTG pediu do estoque e onde está cada entrega.
  * Em andamento com a régua das etapas; entregues e cancelados embaixo. O
- * detalhe mostra os itens e as atualizações da Dutelog.
+ * detalhe mostra os itens e as atualizações da Dutelog. O nome do item é o
+ * mesmo em todos os tamanhos (padrão de 06/11/2026,
+ * docs/mockups/NomePortalMeusPedidos.dc.html): o tamanho tem coluna própria,
+ * tirada do fim do código do cliente.
  */
 
 const integer = new Intl.NumberFormat("pt-BR");
@@ -312,19 +317,26 @@ function OrderDetail({ view, proofs, onBack }: { view: OrderView; proofs: Portal
                 <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wider text-muted-foreground">
                   <th className="py-1.5 pr-2 font-semibold">Código</th>
                   <th className="py-1.5 pr-2 font-semibold">Produto</th>
+                  <th className="py-1.5 pr-2 font-semibold">Tamanho</th>
                   <th className="py-1.5 text-right font-semibold">Peças</th>
                 </tr>
               </thead>
               <tbody>
-                {view.items.map((item, index) => (
-                  <tr key={`${item.code}-${index}`} className="border-b border-border/40 last:border-0">
-                    <td className="py-2 pr-2 font-mono text-xs">
-                      {item.code || <span className="font-sans text-warning-soft-foreground">código a definir</span>}
-                    </td>
-                    <td className="py-2 pr-2">{item.name}</td>
-                    <td className="py-2 text-right tabular-nums">{integer.format(item.quantity)}</td>
-                  </tr>
-                ))}
+                {view.items.map((item, index) => {
+                  const tamanho = tamanhoDoProduto({ codigo: item.code });
+                  return (
+                    <tr key={`${item.code}-${index}`} className="border-b border-border/40 last:border-0">
+                      <td className="py-2 pr-2 font-mono text-xs">
+                        {item.code || <span className="font-sans text-warning-soft-foreground">código a definir</span>}
+                      </td>
+                      <td className="py-2 pr-2">{nomeSemTamanho({ nome: item.name, codigo: item.code })}</td>
+                      <td className={cn("py-2 pr-2", tamanho ? "font-semibold" : "text-muted-foreground")}>
+                        {tamanho ? variantLabel(tamanho) : "—"}
+                      </td>
+                      <td className="py-2 text-right tabular-nums">{integer.format(item.quantity)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           ) : (

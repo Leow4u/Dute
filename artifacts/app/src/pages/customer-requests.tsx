@@ -10,7 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "wouter";
-import { areaDePassagem, problemaDoLocalDoPedido } from "@workspace/dominio";
+import { areaDePassagem, nomeComTamanho, problemaDoLocalDoPedido } from "@workspace/dominio";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -97,6 +97,7 @@ export type CustomerRequestItem =
       product?: string | null;
       name?: string | null;
       description?: string | null;
+      size?: string | null;
       quantity?: number | string | null;
       qty?: number | string | null;
       requested_qty?: number | string | null;
@@ -205,7 +206,6 @@ type BalanceValidationStatus =
 type RequestValidationLine = {
   key: string;
   label: string;
-  productName?: string;
   skuCode?: string;
   clientItemCode?: string;
   locationId?: string;
@@ -380,21 +380,27 @@ function getRequestItems(request: CustomerRequest) {
   return Array.isArray(request.items) ? request.items : [];
 }
 
+/** O rótulo da linha: o nome com o tamanho depois do ponto ("Polo Masculino Piquet Preto · GG"); sem o nome, o código. */
 function getItemLabel(item: CustomerRequestItem) {
   if (typeof item === "string") return item;
+  const nome = firstNonEmpty(item.product_name, item.product, item.name);
+  if (nome) return nomeComTamanho({ nome, codigo: getItemClientCode(item), tamanho: item.size });
   return String(
     item.sku_code ||
       item.sku ||
       item.cod_sku ||
       item.client_item_code ||
       item.cod_cliente ||
-      item.product_name ||
-      item.product ||
-      item.name ||
       item.description ||
       item.id ||
       "Item sem identificação",
   );
+}
+
+/** A linha de apoio do item: "A.01.0806.005.GG · BTG-000125", o código do cliente e o SKU, sem repetir o rótulo. */
+export function codigosDaLinha(line: Pick<RequestValidationLine, "label" | "clientItemCode" | "skuCode">) {
+  const codigos = [line.clientItemCode, line.skuCode].filter((codigo): codigo is string => Boolean(codigo) && codigo !== line.label);
+  return [...new Set(codigos)].join(" · ");
 }
 
 function getItemQuantity(item: CustomerRequestItem) {
@@ -459,10 +465,6 @@ export function getRequestValidationLines(request: CustomerRequest): RequestVali
     return {
       key: `${label}-${locationId ?? "sem-local"}-${index}`,
       label,
-      productName:
-        typeof item === "string"
-          ? undefined
-          : firstNonEmpty(item.product_name, item.product, item.name),
       skuCode: getItemSkuCode(item),
       clientItemCode: getItemClientCode(item),
       locationId,
@@ -491,9 +493,9 @@ export function getRequestValidationLines(request: CustomerRequest): RequestVali
   return [
     {
       key: `${skuCode ?? clientItemCode ?? request.id}-${locationId ?? "sem-local"}`,
-      label:
-        firstNonEmpty(request.product_name, skuCode, clientItemCode) ??
-        "Item sem identificação",
+      label: request.product_name?.trim()
+        ? nomeComTamanho({ nome: request.product_name, codigo: clientItemCode })
+        : firstNonEmpty(skuCode, clientItemCode) ?? "Item sem identificação",
       skuCode,
       clientItemCode,
       locationId,
@@ -1335,7 +1337,12 @@ export default function CustomerRequests() {
           item.description,
           item.requested_by?.email,
           item.requested_by?.name,
-          ...getRequestItems(item).map((requestItem) => getItemLabel(requestItem)),
+          // O rótulo é o nome; os códigos continuam achando o item.
+          ...getRequestItems(item).flatMap((requestItem) => [
+            getItemLabel(requestItem),
+            getItemSkuCode(requestItem),
+            getItemClientCode(requestItem),
+          ]),
         ]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(needle));
@@ -1730,6 +1737,7 @@ function RequestDetail({
             <tbody>
               {shownLines.map((line) => {
                 const situation = lineSituation(line, reserved);
+                const codigos = codigosDaLinha(line);
                 return (
                   <tr key={line.key} className="border-b border-border/40">
                     <td className="py-2.5 pr-3">
@@ -1745,10 +1753,8 @@ function RequestDetail({
                           <span className="size-10 shrink-0 rounded-lg border border-dashed border-border" />
                         )}
                         <div className="min-w-0">
-                          <div className="font-mono text-sm text-foreground/85">{line.label}</div>
-                          {line.productName && line.productName !== line.label ? (
-                            <div className="text-xs text-foreground/55">{line.productName}</div>
-                          ) : null}
+                          <div className="text-sm text-foreground/85">{line.label}</div>
+                          {codigos ? <div className="text-xs text-foreground/55">{codigos}</div> : null}
                         </div>
                       </div>
                     </td>

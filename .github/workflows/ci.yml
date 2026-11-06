@@ -137,6 +137,13 @@ jobs:
       # Zeragem total (tools/full_reset_btg.py) e helpers de backup: só stdlib.
       - name: Unit tests
         run: python -m unittest discover -s tools -p "test_*.py" -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Padronização dos nomes do catálogo (tools/padronizar-nomes): a cópia em
+      # JavaScript da regra de lib/dominio e o relatório, só com o Node.
+      - name: Testes do padronizar-nomes (node --test)
+        run: node --test "tools/padronizar-nomes/*.test.mjs"
 
   blog-firestore:
     name: Transações editoriais do Blog

@@ -275,7 +275,8 @@ describe("inventário de abertura: conferir antes de guardar", () => {
     assert.equal(stock.products.length, 1);
     assert.equal(stock.products[0]!.id, clientCode);
     assert.equal(stock.products[0]!.archived, false);
-    assert.equal(stock.products[0]!.produto, "Camisa social G");
+    // O nome do produto novo vai para o padrão de 06/11/2026: sem o tamanho, inicial maiúscula.
+    assert.equal(stock.products[0]!.produto, "Camisa Social");
     assert.equal(stock.skus.length, 1);
     assert.equal(stock.skus[0]!.id, "BTG-000099");
     assert.equal(stock.skus[0]!.archived, false);
@@ -297,7 +298,7 @@ describe("inventário de abertura: conferir antes de guardar", () => {
       estoque_btg: 4,
     });
     await assert.rejects(
-      save(code, { client_item_code: "A.01.0655.005.GG" }),
+      save(code, { client_item_code: "A.01.0655.005.GG", product_name: "Camisa branca", size: "GG" }),
       /ainda tem saldo/,
     );
     await db.collection("products").doc("A.01.0655.005.GG").set({
@@ -317,7 +318,7 @@ describe("inventário de abertura: conferir antes de guardar", () => {
       qty_reserved: 0,
     });
     await assert.rejects(
-      save(code, { client_item_code: "A.01.0655.005.GG" }),
+      save(code, { client_item_code: "A.01.0655.005.GG", product_name: "Camisa branca", size: "GG" }),
       /ainda tem saldo/,
     );
   });
@@ -370,7 +371,7 @@ describe("inventário de abertura: conferir antes de guardar", () => {
   it("corrige somente a linha que falhou após publicação parcial e retoma preservando a primeira", async () => {
     const { code } = await createBox();
     await save(code, { client_item_code: "CAMISA-G", counted_qty: 3 });
-    await save(code, { client_item_code: "CAMISA-M", size: "M", counted_qty: 4 });
+    await save(code, { client_item_code: "CAMISA-M", product_name: "Camisa branca M", size: "M", counted_qty: 4 });
     await change(code, "review");
     await reserveCheckpoint(code);
     const ordered = (await state(code)).lines as Row[];
@@ -430,7 +431,7 @@ describe("inventário de abertura: conferir antes de guardar", () => {
     const first = await createBox();
     const second = await createBox();
     await save(first.code, { client_item_code: "CAMISA-G" });
-    await save(second.code, { client_item_code: "CAMISA-M", size: "M" });
+    await save(second.code, { client_item_code: "CAMISA-M", product_name: "Camisa branca M", size: "M" });
     await change(first.code, "review");
     await change(second.code, "review");
     const inputs = await Promise.all([storeInput(first.code), storeInput(second.code)]);
@@ -570,7 +571,7 @@ describe("guarda de conferência com empilhamento", () => {
     assert.ok(Math.abs(Number(started?.payload.occupancy_before.front_used_m) - 1.8) < 0.001);
 
     const second = await createBox();
-    await save(second.code, { client_item_code: "CAMISA-M", size: "M" });
+    await save(second.code, { client_item_code: "CAMISA-M", product_name: "Camisa branca M", size: "M" });
     await change(second.code, "review");
     const again = await storeOpeningConferenceBox(db, { ...await storeInput(second.code, "A-02"), ...measured }, actor);
     assert.equal(again.box.location_id, "A-02");

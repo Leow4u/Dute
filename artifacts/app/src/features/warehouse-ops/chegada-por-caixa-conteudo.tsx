@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { ArrowLeft, Check, Package, Plus, Search } from "lucide-react";
+import { tamanhoDoProduto } from "@workspace/dominio";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -67,11 +68,12 @@ export const rascunhoVazio = (): RascunhoDoFechamento => ({
   empilhar: false,
 });
 
+/** "XG 29 · GG 12 · 41 un.": o tamanho de cada linha (o do código, senão o campo Tamanho; sem tamanho, o código) e o total. */
 export function conteudoDaCaixa(caixa: CaixaDaChegada) {
   return [
     ...caixa.lines.map(
       (linha) =>
-        `${linha.size || linha.client_item_code || linha.sku_code} ${numero.format(linha.counted_qty)}`,
+        `${tamanhoDoProduto({ codigo: linha.client_item_code, tamanho: linha.size }) || linha.client_item_code || linha.sku_code} ${numero.format(linha.counted_qty)}`,
     ),
     `${numero.format(caixa.unit_count)} un.`,
   ].join(" · ");

@@ -514,14 +514,14 @@ describe("a chegada por caixa na fila do Receber (parte 5e; mockup WmsReceberFil
     const [comDestino, semDestino, daArea] = board.store.map(({ task }) => task);
     expect(tituloDaGuarda(comDestino!)).toBe("Guardar caixa CX-000131 em B-02");
     expect(guardaSemPrateleira(comDestino!)).toBe(false);
-    expect(putawayRowMeta(comDestino!)).toBe("POLO MASCULINO PIQUET PRETO XG 29 · GG 12 · 41 un. · está em RECEBIMENTO");
+    expect(putawayRowMeta(comDestino!)).toBe("POLO MASCULINO PIQUET PRETO · XG 29 · GG 12 · 41 un. · está em RECEBIMENTO");
     expect(tituloDaGuarda(semDestino!)).toBe("Guardar caixa CX-000132");
     expect(guardaSemPrateleira(semDestino!)).toBe(true);
     // A fila preenche o local da guarda sem prateleira com a origem: não é destino.
     const comOrigemNoLocal = { ...semDestino!, location: "RECEBIMENTO", items: [{ id: "i", destination_location_id: "RECEBIMENTO", source_location_id: "RECEBIMENTO" }] };
     expect(tituloDaGuarda(comOrigemNoLocal)).toBe("Guardar caixa CX-000132");
     expect(guardaSemPrateleira(comOrigemNoLocal)).toBe(true);
-    expect(putawayRowMeta(semDestino!)).toBe("POLO MASCULINO PIQUET PRETO GG · 18 un. · está em RECEBIMENTO");
+    expect(putawayRowMeta(semDestino!)).toBe("POLO MASCULINO PIQUET PRETO · GG · 18 un. · está em RECEBIMENTO");
     // A guarda aberta no Estoque (parte 7e) diz de onde veio.
     expect(tituloDaGuarda(daArea!)).toBeNull();
     expect(guardaSemPrateleira(daArea!)).toBe(false);
@@ -534,7 +534,55 @@ describe("a chegada por caixa na fila do Receber (parte 5e; mockup WmsReceberFil
         { inbound_item_id: "x", line_number: 1, sku_code: "BTG-1", client_item_code: "C1", product_name: "CAMISA AZUL", size: "M", counted_qty: 3 },
         { inbound_item_id: "y", line_number: 2, sku_code: "BTG-2", client_item_code: "C2", product_name: "CALÇA PRETA", size: "42", counted_qty: 2 },
       ]),
-    ).toBe("CAMISA AZUL 3 · CALÇA PRETA 2 · 5 un.");
+    ).toBe("CAMISA AZUL · M 3 · CALÇA PRETA · 42 2 · 5 un.");
     expect(conteudoDaGuarda([])).toBeNull();
+  });
+
+  describe("o conteúdo no padrão do nome (06/11/2026)", () => {
+    let numero = 0;
+    const linha = (product_name: string, client_item_code: string, counted_qty: number, size: string | null = null) => {
+      numero += 1;
+      return { inbound_item_id: `l${numero}`, line_number: numero, sku_code: `BTG-${numero}`, client_item_code, product_name, size, counted_qty };
+    };
+
+    it("um produto em tamanhos: o nome uma vez e o tamanho de cada linha, antes e depois da limpeza dos nomes", () => {
+      expect(
+        conteudoDaGuarda([linha("Polo Masculino Piquet Preto", "A.01.0806.005.XG", 29, "XG"), linha("Polo Masculino Piquet Preto", "A.01.0806.005.GG", 12, "GG")]),
+      ).toBe("Polo Masculino Piquet Preto · XG 29 · GG 12 · 41 un.");
+      expect(
+        conteudoDaGuarda([linha("Polo masculino piquet preto - XG", "A.01.0806.005.XG", 29), linha("Polo masculino piquet preto - GG", "A.01.0806.005.GG", 12)]),
+      ).toBe("Polo masculino piquet preto · XG 29 · GG 12 · 41 un.");
+    });
+
+    it("uma linha: o nome com o tamanho; tamanho único e produto sem tamanho, só o nome", () => {
+      expect(conteudoDaGuarda([linha("Polo Masculino Piquet Preto", "A.01.0806.005.GG", 18, "GG")])).toBe("Polo Masculino Piquet Preto · GG · 18 un.");
+      expect(conteudoDaGuarda([linha("Boné BTG U", "A.05.0101.001.U", 4)])).toBe("Boné BTG · 4 un.");
+      expect(conteudoDaGuarda([linha("Caneca BTG 300 ml", "A.09.0001.002", 6)])).toBe("Caneca BTG 300 ml · 6 un.");
+      // Sem o nome do produto, o código, que já diz o tamanho.
+      expect(conteudoDaGuarda([linha("", "A.01.0806.005.XG", 4)])).toBe("A.01.0806.005.XG · 4 un.");
+    });
+
+    it("o tamanho vem do código, senão do campo Tamanho; sem nenhum dos dois, o código do cliente", () => {
+      expect(conteudoDaGuarda([linha("Camiseta dry fit M", "CAM-01", 3, "M"), linha("Camiseta dry fit G", "CAM-02", 4, "g")])).toBe(
+        "Camiseta dry fit · M 3 · G 4 · 7 un.",
+      );
+      // O código manda quando o campo diz outro tamanho.
+      expect(conteudoDaGuarda([linha("Polo preto XG", "A.01.0806.005.XG", 2, "GG"), linha("Polo preto P", "A.01.0806.005.P", 1, "P")])).toBe(
+        "Polo preto · XG 2 · P 1 · 3 un.",
+      );
+      expect(conteudoDaGuarda([linha("Caneca BTG", "A.09.0001.002", 10), linha("Caneca BTG", "A.09.0001.003", 5)])).toBe(
+        "Caneca BTG · A.09.0001.002 10 · A.09.0001.003 5 · 15 un.",
+      );
+    });
+
+    it("produtos diferentes: cada linha com o nome e o tamanho, e a linha sem quantidade fica de fora", () => {
+      expect(
+        conteudoDaGuarda([
+          linha("Polo masculino piquet preto - XG", "A.01.0806.005.XG", 3),
+          linha("Boné BTG", "A.05.0101.001.U", 2),
+          linha("Calça Social Masculino Preta", "A.01.0712.001.42", 0),
+        ]),
+      ).toBe("Polo masculino piquet preto · XG 3 · Boné BTG 2 · 5 un.");
+    });
   });
 });

@@ -97,6 +97,8 @@ import {
   openingUsesGlobalControl,
 } from "./domain/customer-scope.js";
 import { assertManagedCatalogCreateAllowed } from "./domain/catalog-codes.js";
+import { ehMedida, problemaDoNome, tamanhoDoProduto } from "./domain/nome-do-produto.js";
+import { nomeParaGravar } from "./domain/nome-para-gravar.js";
 import {
   COMERCIAL_PRICE_TABLES,
   dataBaseDaCompetencia,
@@ -4183,6 +4185,41 @@ function assertManagedAction(
   }
 }
 
+/**
+ * O nome e o tamanho do produto no Catálogo, pelo padrão de 06/11/2026
+ * (domain/nome-para-gravar.ts). Só quando o nome ou o tamanho mudam: editar
+ * a cor de um produto cujo nome antigo ainda tem o tamanho não trava nem
+ * renomeia (os nomes antigos mudam no passo 3, com a planilha revisada). Nome
+ * novo vai para o padrão, e o que contradiz o código para com a frase da tela;
+ * tamanho novo vai para maiúsculas e não pode contradizer o código.
+ */
+function nomeDoCatalogo(data: Record<string, unknown>, before: Record<string, unknown>, clientCode: string) {
+  const has = (field: string) => Object.prototype.hasOwnProperty.call(data, field);
+  const nomeMudou = has("produto") && String(data.produto ?? "").trim() !== String(before.produto ?? "").trim();
+  const tamanhoMudou = has("tamanho") && String(data.tamanho ?? "").trim() !== String(before.tamanho ?? "").trim();
+  if (nomeMudou) {
+    const padrao = nomeParaGravar({
+      nome: data.produto,
+      codigo: clientCode,
+      genero: has("genero") ? data.genero : before.genero,
+      tamanho: has("tamanho") ? data.tamanho : before.tamanho,
+    });
+    data.produto = padrao.nome;
+    if (padrao.tamanho && (has("tamanho") || !String(before.tamanho ?? "").trim())) data.tamanho = padrao.tamanho;
+    return;
+  }
+  if (tamanhoMudou) {
+    const tamanho = String(data.tamanho ?? "").trim();
+    const problema = problemaDoNome({ nome: "Produto", codigo: clientCode, tamanho });
+    if (problema?.tipo === "campo_com_outro_tamanho") {
+      throw new HttpsError("invalid-argument", problema.mensagem, { code: "PRODUCT_NAME_SIZE", tipo: problema.tipo });
+    }
+    // A medida ("500ML" de uma garrafa) é a capacidade e fica como foi digitada.
+    const doProduto = ehMedida(tamanho) ? null : tamanhoDoProduto({ codigo: clientCode, tamanho });
+    if (doProduto) data.tamanho = doProduto;
+  }
+}
+
 function managedWritePayload(
   input: z.infer<typeof ManagedEntityMutationSchema>,
   profile: Profile,
@@ -4193,6 +4230,7 @@ function managedWritePayload(
   if (input.resource === "products") {
     const data = allowedFields(input.data, PRODUCT_WRITE_FIELDS);
     delete data.preco_unit;
+    if (input.action !== "archive" && catalogIdentity) nomeDoCatalogo(data, before, catalogIdentity.clientCode);
     if (input.action === "create") {
       if (!String(data.produto ?? "").trim()) {
         throw new HttpsError(
@@ -4241,6 +4279,7 @@ function managedWritePayload(
 
   if (input.resource === "skus") {
     const data = allowedFields(input.data, SKU_WRITE_FIELDS);
+    if (input.action !== "archive" && catalogIdentity) nomeDoCatalogo(data, before, catalogIdentity.clientCode);
     if (Object.prototype.hasOwnProperty.call(data, "estoque_minimo")) {
       try {
         data.estoque_minimo = normalizeMinimumStock(data.estoque_minimo);
@@ -5165,6 +5204,13 @@ export const mutateManagedEntity = onCall(async (request) => {
         "status",
       ]),
     };
+    // O recibo guarda só valores: o FieldValue.delete() dos campos de dinheiro
+    // (publishedMoneyDeletes) é ordem de escrita, e aninhado no recibo o
+    // Firestore recusa a transação inteira (a edição de produto e de SKU pelo
+    // Catálogo falhava assim).
+    for (const [campo, valor] of Object.entries(result) as Array<[string, unknown]>) {
+      if (valor instanceof FieldValue) delete (result as Record<string, unknown>)[campo];
+    }
     // O id do convite é o token do link, que abre o convite: o evento, que a
     // equipe do armazém lê, leva só a referência dele.
     const eventEntityId =

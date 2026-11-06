@@ -1,3 +1,4 @@
+import { nomeComTamanho, nomeSemTamanho, tamanhoDoProduto } from "@workspace/dominio";
 import {
   type NormalizedQueue,
   type TaskQueueEntry,
@@ -11,7 +12,7 @@ import {
   normalizeStatus,
   statusLabel,
 } from "./model";
-import { chegadaPorCaixa, totaisDaChegada } from "../wms/caixas-do-recebimento";
+import { chegadaPorCaixa, totaisDaChegada, type LinhaDaCaixa } from "../wms/caixas-do-recebimento";
 
 /**
  * Receber em grupos, como Pedidos: o que chegou e precisa de conferência, o
@@ -452,30 +453,37 @@ export function guardaSemPrateleira(task: WarehouseTask) {
   return Boolean(task.box_code) && !destinoDaGuarda(task);
 }
 
+const produtoDaLinha = (linha: LinhaDaCaixa) => ({ nome: linha.product_name, codigo: linha.client_item_code, tamanho: linha.size });
+const codigoDaLinha = (linha: LinhaDaCaixa) => coerceText(linha.client_item_code, linha.sku_code);
+// Sem o nome do produto, a linha vai pelo código, que já termina no tamanho.
+const nomeDaLinha = (linha: LinhaDaCaixa) =>
+  coerceText(linha.product_name) ? nomeComTamanho(produtoDaLinha(linha)) : codigoDaLinha(linha);
+const familiaDaLinha = (linha: LinhaDaCaixa) =>
+  coerceText(linha.product_name) ? nomeSemTamanho(produtoDaLinha(linha)) : codigoDaLinha(linha);
+
 /**
- * O conteúdo da caixa na fila: o produto e o tamanho com a quantidade, e o
- * total. "POLO MASCULINO PIQUET PRETO XG 29 · GG 12 · 41 un." quando os
- * produtos têm o nome em comum; "POLO MASCULINO PIQUET PRETO GG · 18 un."
- * com um só.
+ * O conteúdo da caixa na fila "Para guardar", no padrão do nome (06/11/2026):
+ * as linhas se agrupam pelo nome sem o tamanho. Um produto só: o nome uma
+ * vez e o tamanho de cada linha (sem tamanho, o código do cliente) com a
+ * quantidade, "Polo Masculino Piquet Preto · XG 29 · GG 12 · 41 un."; uma
+ * linha: "Polo Masculino Piquet Preto · GG · 18 un."; produtos diferentes:
+ * cada linha com o nome e o tamanho, "Camisa Azul · M 3 · Calça Preta · 42 2
+ * · 5 un.". O total fecha a frase.
  */
 export function conteudoDaGuarda(lines: WarehouseTask["box_lines"]) {
   const linhas = (lines ?? []).filter((linha) => linha && coerceNumber(linha.counted_qty) > 0);
   if (!linhas.length) return null;
-  const total = linhas.reduce((soma, linha) => soma + coerceNumber(linha.counted_qty), 0);
-  const nome = (linha: (typeof linhas)[number]) => coerceText(linha.product_name, linha.client_item_code, linha.sku_code);
-  if (linhas.length === 1) return `${nome(linhas[0]!)} · ${formatNumber(total)} un.`;
-  const palavras = linhas.map((linha) => nome(linha).split(/\s+/).filter(Boolean));
-  const comum: string[] = [];
-  for (const [indice, palavra] of palavras[0]!.entries()) {
-    if (palavras.every((outra) => outra[indice] === palavra)) comum.push(palavra);
-    else break;
+  const total = `${formatNumber(linhas.reduce((soma, linha) => soma + coerceNumber(linha.counted_qty), 0))} un.`;
+  const quantidade = (linha: LinhaDaCaixa) => formatNumber(coerceNumber(linha.counted_qty));
+  if (linhas.length === 1) return `${nomeDaLinha(linhas[0]!)} · ${total}`;
+  const familias = new Set(linhas.map(familiaDaLinha));
+  if (familias.size === 1) {
+    const tamanhos = linhas.map(
+      (linha) => `${tamanhoDoProduto({ codigo: linha.client_item_code, tamanho: linha.size }) ?? codigoDaLinha(linha)} ${quantidade(linha)}`,
+    );
+    return [...familias, ...tamanhos, total].join(" · ");
   }
-  const partes = linhas.map((linha, indice) => {
-    const resto = palavras[indice]!.slice(comum.length).join(" ") || coerceText(linha.size, linha.client_item_code, linha.sku_code);
-    return `${resto} ${formatNumber(coerceNumber(linha.counted_qty))}`;
-  });
-  const prefixo = comum.length ? `${comum.join(" ")} ` : "";
-  return `${prefixo}${partes.join(" · ")} · ${formatNumber(total)} un.`;
+  return [...linhas.map((linha) => `${nomeDaLinha(linha)} ${quantidade(linha)}`), total].join(" · ");
 }
 
 /** "280 un. · está em RECEBIMENTO · guardar em A-03-2" */

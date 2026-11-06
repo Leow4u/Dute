@@ -114,6 +114,28 @@ describe("ficha da guarda", () => {
     expect(guardPanel([])).toContain("Bipe ou busque a prateleira");
   });
 
+  it("a guarda de linha leva no título o nome com o tamanho depois do ponto (padrão do nome, 06/11/2026)", () => {
+    const polo: WarehouseTask = {
+      ...guardTask,
+      id: "putaway:put_2",
+      reference: "put_2",
+      title: "Guardar Polo masculino piquet preto - XG",
+      items: [
+        {
+          id: "put_2:putaway",
+          sku_code: "BTG-000126",
+          client_item_code: "A.01.0806.005.XG",
+          name: "Polo masculino piquet preto - XG",
+          product_name: "Polo masculino piquet preto - XG",
+          quantity: 50,
+        },
+      ],
+    };
+    const markup = guardPanel([], polo);
+    expect(markup).toContain("Guardar Polo masculino piquet preto · XG");
+    expect(markup).not.toContain("piquet preto - XG");
+  });
+
   it("a guarda encerrada só tem rótulos e dados, e passa no axe", async () => {
     const concluida = renderToStaticMarkup(
       <GuardaEncerrada task={{ ...guardTask, status: "completed", destination_location_id: "B-02" }} />,
@@ -124,5 +146,41 @@ describe("ficha da guarda", () => {
     expect(textosForaDaLista(cancelada, permitidos)).toEqual([]);
     expect(cancelada).toContain("Guarda cancelada");
     expect(await violacoesDeAcessibilidade(concluida)).toEqual([]);
+  });
+});
+
+describe("as linhas da separação na ficha (padrão do nome, 06/11/2026)", () => {
+  it("cada linha com o nome e o tamanho, e o código do cliente no apoio no lugar do SKU", () => {
+    const separacao: WarehouseTask = {
+      id: "picking:pick_1",
+      reference: "pick_1",
+      title: "Separar PED-0142",
+      status: "planned",
+      can_advance: true,
+      items: [
+        { id: "l1", sku: "BTG-000125", client_item_code: "A.01.0806.005.GG", product_name: "Polo masculino piquet preto - GG", quantity: 20, location: "B-02" },
+        { id: "l2", sku: "BTG-000084", client_item_code: "A.01.0712.001.42", product_name: "Calça Social Masculino Preta", quantity: 6, location: "A-05" },
+      ],
+    };
+    const queue = normalizeQueues({ picking: { key: "picking", name: "Separação", tasks: [separacao] } }).find(
+      (entry) => entry.key === "picking",
+    )!;
+    const markup = renderToStaticMarkup(
+      <QueryClientProvider client={new QueryClient()}>
+        <TaskDetailPanel
+          entry={{ task: queue.tasks[0]!, queue }}
+          alerts={[]}
+          lineConfirmations={{}}
+          onLineConfirmationChange={() => undefined}
+          onAdvance={() => undefined}
+          onOpenException={() => undefined}
+        />
+      </QueryClientProvider>,
+    );
+    expect(markup).toContain("Polo masculino piquet preto · GG");
+    expect(markup).toContain("Calça Social Masculino Preta · 42");
+    expect(markup).toContain("<span>A.01.0806.005.GG</span>");
+    expect(markup).toContain("<span>A.01.0712.001.42</span>");
+    expect(markup).not.toContain("BTG-000125");
   });
 });

@@ -12,6 +12,7 @@ export * from "./areas-de-passagem";
 export * from "./avisos";
 export * from "./contratos-datas";
 export * from "./dinheiro";
+export * from "./nome-do-produto";
 export * from "./parados";
 
 export const MODULOS = ["wms", "operacao", "comercial", "financeiro", "rh"] as const;

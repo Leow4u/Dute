@@ -8,7 +8,11 @@ import { textosDaTela } from "@/test/textos";
 
 import { CancelarPedidoView, motivoValido, pedidoCancelavel, voltasDoPedido, type VoltaAPosicao } from "./cancel-order";
 
-/** Cancelar pedido no diálogo de Pedidos (pergunta 59): o motivo e o que volta à posição, sem legenda. */
+/**
+ * Cancelar pedido no diálogo de Pedidos (pergunta 59): o motivo e o que volta
+ * à posição, sem legenda. O item vai com o tamanho, como no Separado (padrão
+ * do nome de 06/11/2026: o nome é o mesmo em todos os tamanhos).
+ */
 
 const noop = () => undefined;
 
@@ -24,9 +28,10 @@ const SEPARADO: Partial<WarehouseTask> = {
   id: "picking:pick_ord_1",
   status: "completed",
   items: [
-    { id: "pli_1", name: "Camiseta polo P", picked_quantity: 40, location: "A-03-2" },
+    { id: "pli_1", name: "Camiseta polo P", client_item_code: "A.01.0310.001.P", picked_quantity: 40, location: "A-03-2" },
     { id: "pli_2", product_name: "Calça brim 42", picked_quantity: 30, location: "B-01-1" },
     { id: "pli_3", name: "Boné", picked_quantity: 0, location: "C-02-4" },
+    { id: "pli_4", product_name: "Toalha de Academia", client_item_code: "C.0659.001.U", picked_quantity: 5, location: "C-01-1" },
   ],
 };
 
@@ -35,11 +40,12 @@ describe("cancelar pedido", () => {
     expect(textosDaTela(render())).toEqual(["Motivo"]);
   });
 
-  it("já separado: o que volta à posição, com a quantidade e a posição de cada item", () => {
+  it("já separado: o que volta à posição, com o item e o tamanho, a quantidade e a posição", () => {
     const voltas = voltasDoPedido(pedido("enviar", SEPARADO));
     expect(voltas).toEqual([
-      { id: "pli_1", item: "Camiseta polo P", quantidade: 40, posicao: "A-03-2" },
+      { id: "pli_1", item: "Camiseta polo · P", quantidade: 40, posicao: "A-03-2" },
       { id: "pli_2", item: "Calça brim 42", quantidade: 30, posicao: "B-01-1" },
+      { id: "pli_4", item: "Toalha de Academia", quantidade: 5, posicao: "C-01-1" },
     ]);
     expect(textosDaTela(render(voltas))).toEqual([
       "Motivo",
@@ -47,13 +53,18 @@ describe("cancelar pedido", () => {
       "Item",
       "Quantidade",
       "Posição",
-      "Camiseta polo P",
+      "Camiseta polo · P",
       "40 un.",
       "A-03-2",
       "Calça brim 42",
       "30 un.",
       "B-01-1",
+      "Toalha de Academia",
+      "5 un.",
+      "C-01-1",
     ]);
+    // Sem o código do cliente, o nome fica como está; o tamanho único não aparece.
+    expect(render(voltas)).not.toContain("· U");
   });
 
   it("a separação que não terminou não devolve nada", () => {

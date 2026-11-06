@@ -26,6 +26,8 @@ export type OpeningInventoryLine = {
   category?: string;
   genero?: string;
   grupo?: string;
+  /** O tamanho gravado na linha (o do código, no padrão do nome de 06/11/2026). */
+  size?: string;
   location_id?: string;
   /** Caixa em que o produto foi guardado (CX-000001); vazio nas linhas antigas. */
   box_code?: string;

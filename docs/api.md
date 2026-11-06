@@ -250,6 +250,14 @@ integração, compartilhado entre instâncias. Em 429 respeitar Retry-After; em
 falha de rede ou 5xx, repetir escrita com a **mesma** chave. Não trocar a chave
 porque a resposta se perdeu: a operação pode ter sido concluída.
 
+Produto novo num recebimento (`product_registration: "new"`) nasce com o nome
+no padrão do catálogo (`tools/padronizar-nomes/README.md`): o nome sem o
+tamanho, com a etiqueta do gênero e inicial maiúscula em cada palavra, e o
+tamanho do fim do `client_item_code` em `size`. Linha cujo nome termina em
+outro tamanho, ou cujo `size` contradiz o código, volta 400 com a frase do
+problema ("O nome termina em M, e o código A.01.0806.005.XG é do tamanho
+XG.").
+
 Nos novos módulos, o recibo da API impede executores concorrentes com a mesma
 chave. Repetição concluída retorna 200 com `replayed: true`; conteúdo diferente
 retorna 409. Se houver falha após um efeito possivelmente confirmado, o recibo

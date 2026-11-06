@@ -6,14 +6,40 @@
  * cartão usa o nome; o filtro agrupa pela categoria (agrupar pelo nome dava
  * uma opção por produto).
  *
+ * O nome é o mesmo em todos os tamanhos da família (padrão de 06/11/2026,
+ * docs/mockups/NomePortal*.dc.html): o título tira o tamanho repetido no fim
+ * ("Polo masculino piquet preto - XG" → "Polo masculino piquet preto"), e o
+ * que mostra um tamanho só leva o tamanho depois do ponto ("… · XG"). O
+ * tamanho é o fim do código do cliente (A.01.0806.005.XG → XG); sem ele, o
+ * campo Tamanho da projeção. Assim a tela fica certa antes e depois da
+ * limpeza dos nomes gravados.
+ *
  * O gênero do chip FEM/MASC vem do mesmo texto do título, não do campo Gênero
  * do cadastro: a Contagem pré-preenche esse campo pelo prefixo do código (A.01
  * vira Masculino), e a BTG usa A.01 também em polo feminina (A.01.0805.002).
  */
 
+import { nomeSemTamanho, tamanhoDoProduto } from "@workspace/dominio";
+
 import { displayName } from "./stock-variants";
 
-type StockLike = { name: string; category: string; available: number; receiving?: number; total?: number; minimum?: number; archived?: boolean };
+type StockLike = {
+  name: string;
+  category: string;
+  /** O código do cliente que o card mostra ("Sem cod. cliente" quando falta). */
+  clientCode?: string | null;
+  /** O código do cliente do item (cod_cliente), que termina no tamanho: A.01.0806.005.XG. */
+  clientItemCode?: string | null;
+  /** O campo Tamanho da projeção (size): vale quando o código não diz o tamanho. */
+  size?: string | null;
+  available: number;
+  receiving?: number;
+  total?: number;
+  minimum?: number;
+  archived?: boolean;
+};
+
+type NamedProduct = Pick<StockLike, "name" | "category" | "clientCode" | "clientItemCode" | "size">;
 
 function slug(value: string) {
   return value
@@ -30,9 +56,37 @@ function categoryOf(product: Pick<StockLike, "category">) {
   return category && category !== "Sem categoria" ? category : "";
 }
 
-/** Nome que a pessoa reconhece: a descrição; sem ela, a categoria. */
-export function productTitle(product: Pick<StockLike, "name" | "category">) {
-  return displayName(product.name?.trim() || categoryOf(product));
+function codeOf(product: NamedProduct) {
+  return product.clientItemCode ?? product.clientCode ?? null;
+}
+
+/**
+ * Nome que a pessoa reconhece: a descrição; sem ela, a categoria. Sem o
+ * tamanho repetido no fim, que os botões de tamanho mostram (ou
+ * productTitleWithSize, depois do ponto).
+ */
+export function productTitle(product: NamedProduct) {
+  const nome = product.name?.trim() || categoryOf(product);
+  return displayName(nomeSemTamanho({ nome, codigo: codeOf(product), tamanho: product.size }));
+}
+
+/** O tamanho do produto: o fim do código do cliente; sem ele, o campo Tamanho; ou null. */
+export function productSize(product: NamedProduct) {
+  return tamanhoDoProduto({ codigo: codeOf(product), tamanho: product.size });
+}
+
+/**
+ * "Polo masculino piquet preto · XG": o título e o tamanho depois do ponto,
+ * para o que mostra um tamanho só (a linha da lista e a do pedido, o card e o
+ * detalhe sem botões de tamanho, o contador). Tamanho único (U) e produto sem
+ * tamanho ficam só com o título. O tamanho entra depois do displayName, que
+ * poria em minúscula a palavra de uma letra ("P").
+ */
+export function productTitleWithSize(product: NamedProduct) {
+  const title = productTitle(product);
+  const size = productSize(product);
+  if (!size || size.toUpperCase() === "U") return title;
+  return title ? `${title} · ${size}` : size;
 }
 
 /** Tipo do produto, a categoria (POLO → Polo), para o filtro e a linha de apoio. */
@@ -49,7 +103,7 @@ const MASCULINO = /\b(?:masculin[oa]s?|masc)\b/;
  * Gênero dito no nome que o cartão mostra ("Polo feminina…", "Camiseta
  * masculino…", "fem."/"masc."). Sem a palavra, ou com as duas, não marca.
  */
-export function productGender(product: Pick<StockLike, "name" | "category">): ProductGender | null {
+export function productGender(product: NamedProduct): ProductGender | null {
   const text = productTitle(product)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")

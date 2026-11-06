@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { nomeComTamanho } from "@workspace/dominio";
 import {
   Activity,
   AlertTriangle,
@@ -1395,13 +1396,11 @@ function TaskItemsList({ items }: { items: WarehouseTaskItem[] }) {
   return (
     <div className="flex flex-col gap-2">
       {items.slice(0, 8).map((item, index) => {
-        const title =
-          item.name ||
-          item.product_name ||
-          item.description ||
-          item.sku ||
-          item.sku_code ||
-          `Item ${index + 1}`;
+        // O nome com o tamanho depois do ponto (padrão do nome, 06/11/2026).
+        const nome = coerceText(item.name, item.product_name);
+        const title = nome
+          ? nomeComTamanho({ nome, codigo: item.client_item_code, tamanho: item.size })
+          : item.description || item.sku || item.sku_code || `Item ${index + 1}`;
         const quantity =
           item.quantity ??
           item.expected_quantity ??
@@ -1420,6 +1419,7 @@ function TaskItemsList({ items }: { items: WarehouseTaskItem[] }) {
                   {title}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  {item.client_item_code ? <span>{item.client_item_code}</span> : null}
                   {item.sku || item.sku_code ? (
                     <span>{item.sku || item.sku_code}</span>
                   ) : null}

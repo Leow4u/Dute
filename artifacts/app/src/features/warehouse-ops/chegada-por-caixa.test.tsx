@@ -312,6 +312,20 @@ describe("o que a bancada lê", () => {
     expect(conteudoDaCaixa(caixas[0]!)).toBe("XG 29 · GG 12 · 41 un.");
   });
 
+  it("o tamanho da linha é o do código; sem ele, o campo Tamanho; sem tamanho, o código (padrão do nome, 06/11/2026)", () => {
+    const base = caixas[0]!.lines[0]!;
+    const linhas: CaixaDaChegada["lines"] = [
+      { ...base, size: null, counted_qty: 5 },
+      // O código manda quando o campo diz outro tamanho.
+      { ...base, client_item_code: "A.01.0806.004.GG", size: "XG", counted_qty: 2 },
+      { ...base, client_item_code: "CAM-01", size: "m", counted_qty: 3 },
+      { ...base, client_item_code: "A.09.0001.002", size: null, counted_qty: 1 },
+      { ...base, client_item_code: "", size: null, sku_code: "BTG-000300", counted_qty: 1 },
+    ];
+    const caixa = { ...caixas[0]!, lines: linhas, unit_count: 12 };
+    expect(conteudoDaCaixa(caixa)).toBe("XG 5 · GG 2 · M 3 · A.09.0001.002 1 · BTG-000300 1 · 12 un.");
+  });
+
   it("a caixa já medida volta ao formato que a tela digita, em centímetros e quilos", () => {
     expect(rascunhoDaCaixa(caixas[0]!)).toEqual({
       length_cm: "48",

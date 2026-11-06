@@ -5,6 +5,7 @@ import { HttpsError } from "firebase-functions/https";
 import { z } from "genkit";
 
 import { areaDePassagem } from "./areas-de-passagem.js";
+import { nomeComTamanho } from "./nome-do-produto.js";
 import { AREA_DE_RECEBIMENTO } from "./inbound-box-entry.js";
 import {
   assertInventoryOperationsEnabled,
@@ -267,7 +268,7 @@ export async function openAreaPutaway(db: Firestore, raw: unknown, actor: Operat
       total_units: quantidadeDaGuarda,
       status: "planned",
       priority: "normal",
-      title: `Guardar ${productName}`,
+      title: `Guardar ${nomeComTamanho({ nome: productName, codigo: clientItemCode })}`,
       next_action: `Levar da área ${area} para a prateleira e concluir a guarda.`,
       reason,
       source: "wms_area_putaway",

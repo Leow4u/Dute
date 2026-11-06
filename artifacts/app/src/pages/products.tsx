@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { type Product, useListProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, getListProductsQueryKey } from "@workspace/api-client-react";
+import { tamanhoDoCodigo } from "@workspace/dominio";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,7 @@ import {
   StockTablePagination,
   StockToolbar,
 } from "@/components/stock/stock-workbench";
+import { atributosDoProblema, problemaDoNomeNoCadastro, seguirSugestao } from "@/features/warehouse-ops/product-identity";
 
 const productSchema = z.object({
   cod_cliente: z.string().min(1, "Obrigatório"),
@@ -41,6 +43,18 @@ const productSchema = z.object({
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
+
+/**
+ * O nome no padrão de 06/11/2026: o tamanho fica no campo Tamanho e o nome é
+ * o mesmo em todos os tamanhos. O formulário recusa antes de enviar, na
+ * criação e quando o nome ou o tamanho mudam na edição (problemaDoNomeNoCadastro).
+ */
+function productSchemaFor(product?: { produto?: unknown; tamanho?: unknown }) {
+  return productSchema.superRefine((dados, ctx) => {
+    const achado = problemaDoNomeNoCadastro(dados, product);
+    if (achado) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [achado.campo], message: achado.problema.mensagem });
+  });
+}
 
 export default function Products() {
   // Espelho do requireCatalogWrite do servidor: quem não pode criar/editar
@@ -241,7 +255,7 @@ export default function Products() {
   );
 }
 
-function ProductModal({ product, showPrice = false }: { product?: any; showPrice?: boolean }) {
+export function ProductModal({ product, showPrice = false }: { product?: any; showPrice?: boolean }) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -249,10 +263,21 @@ function ProductModal({ product, showPrice = false }: { product?: any; showPrice
   const updateProduct = useUpdateProduct();
 
   const isEdit = !!product;
+  const schema = useMemo(() => productSchemaFor(product), [product]);
+  // O Tamanho que o código pôs sozinho no produto novo (seguirSugestao).
+  const tamanhoPosto = useRef("");
 
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<ProductFormValues>({
-    resolver: zodResolver(productSchema),
-    defaultValues: product || {
+  const { register, handleSubmit, formState: { errors, isSubmitted }, reset, getValues, setValue, trigger } = useForm<ProductFormValues>({
+    resolver: zodResolver(schema),
+    // Campo nulo no cadastro vira vazio: o schema só aceita texto.
+    defaultValues: product ? {
+      ...product,
+      genero: product.genero ?? "",
+      categoria: product.categoria ?? "",
+      grupo: product.grupo ?? "",
+      cor: product.cor ?? "",
+      tamanho: product.tamanho ?? "",
+    } : {
       cod_cliente: "",
       produto: "",
       genero: "",
@@ -262,6 +287,20 @@ function ProductModal({ product, showPrice = false }: { product?: any; showPrice
       tamanho: "",
       preco_unit: 0,
     }
+  });
+
+  // No produto novo, o fim do código preenche o Tamanho (A.01.0806.005.XG → XG).
+  const codCliente = register("cod_cliente", {
+    onChange: (event) => {
+      if (!isEdit) {
+        const atual = getValues("tamanho") ?? "";
+        const sugestao = seguirSugestao(atual, tamanhoPosto.current, tamanhoDoCodigo(event.target.value) ?? "");
+        tamanhoPosto.current = sugestao.posto;
+        if (sugestao.valor !== atual) setValue("tamanho", sugestao.valor);
+      }
+      // A recusa do nome depende do código: depois de tentar salvar, ela acompanha.
+      if (isSubmitted) void trigger(["produto", "tamanho"]);
+    },
   });
 
   const onSubmit = (data: ProductFormValues) => {
@@ -293,6 +332,7 @@ function ProductModal({ product, showPrice = false }: { product?: any; showPrice
             toast({ title: "Produto criado com sucesso" });
             setOpen(false);
             reset();
+            tamanhoPosto.current = "";
           },
           onError: (error) => {
             toast({
@@ -327,8 +367,8 @@ function ProductModal({ product, showPrice = false }: { product?: any; showPrice
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="cod_cliente">Cod. Cliente *</Label>
-              <Input id="cod_cliente" {...register("cod_cliente")} />
-              {errors.cod_cliente && <span className="text-xs text-destructive">{errors.cod_cliente.message}</span>}
+              <Input id="cod_cliente" {...codCliente} {...atributosDoProblema(errors.cod_cliente, "cod_cliente")} />
+              {errors.cod_cliente && <span id="cod_cliente-problema" className="text-xs text-destructive">{errors.cod_cliente.message}</span>}
             </div>
             {showPrice ? (
               <div className="space-y-2">
@@ -340,8 +380,8 @@ function ProductModal({ product, showPrice = false }: { product?: any; showPrice
             )}
             <div className="space-y-2 col-span-2">
               <Label htmlFor="produto">Nome do Produto *</Label>
-              <Input id="produto" {...register("produto")} />
-              {errors.produto && <span className="text-xs text-destructive">{errors.produto.message}</span>}
+              <Input id="produto" className="aria-[invalid=true]:border-destructive" {...register("produto")} {...atributosDoProblema(errors.produto, "produto")} />
+              {errors.produto && <span id="produto-problema" className="text-xs text-destructive">{errors.produto.message}</span>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="categoria">Categoria</Label>
@@ -361,7 +401,8 @@ function ProductModal({ product, showPrice = false }: { product?: any; showPrice
             </div>
             <div className="space-y-2">
               <Label htmlFor="tamanho">Tamanho</Label>
-              <Input id="tamanho" {...register("tamanho")} />
+              <Input id="tamanho" className="aria-[invalid=true]:border-destructive" {...register("tamanho")} {...atributosDoProblema(errors.tamanho, "tamanho")} />
+              {errors.tamanho && <span id="tamanho-problema" className="text-xs text-destructive">{errors.tamanho.message}</span>}
             </div>
           </div>
           <DialogFooter className="pt-4">

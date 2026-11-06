@@ -283,6 +283,40 @@ do `Loader2` e do `RefreshCw` girando de hoje (pergunta 5, aprovado).
 | Estoque › Itens, fotos do item | `WmsCarregandoFotos.dc.html` | "Enviando 3 de 4" com o progresso, as fotos já enviadas e as que passaram de 4. |
 | Receber, a atualização falhou | `WmsCarregandoReceberAtualizar.dc.html` | A lista de 10:42 fica na tela, com "Não consegui atualizar" e "Tentar de novo". |
 
+A página "Catálogo · nome sem tamanho" tem canvas próprio (privado,
+https://claude.ai/artifact/KsF8UuJqi2akHLxDaiMCWw), feito em 06/11/2026 para
+o Leonardo avaliar a padronização do nome do produto: hoje cada tamanho é um
+cadastro, o nome foi digitado à mão em cada um e ficou com o tamanho no fim
+("… p", "… m", "… - XG"), o gênero sem padrão ("masculino" e "masculina") e
+MAIÚSCULAS misturadas. A proposta: o nome é o mesmo nos tamanhos da família,
+o tamanho vai para o campo Tamanho (preenchido pelo fim do código do cliente)
+e as telas que mostravam só o nome passam a mostrar o tamanho ao lado
+("Polo Masculino Piquet Preto · XG"), com o código do cliente na linha de
+apoio. As pranchas "hoje" reproduzem o app como está; nas "proposta" só o
+nome e o lugar do tamanho mudam. O portal segue o visual do WMS
+(`docs/sistema-visual.md`); a Armazenagem, o shell v3 (o Catálogo e a
+Contagem ainda não têm a v3 no app). As fontes são estáticas. Decisões do
+Leonardo em 06/11/2026, nas notas do canvas: tamanho fora do nome; gênero
+como etiqueta, sempre "Masculino" ou "Feminino", sem concordar com a peça
+("Polo Masculino", "Calça Social Masculino"); inicial maiúscula em cada
+palavra ("Polo Masculino Piquet Preto"), conectivos em minúscula; só esses
+ajustes e os erros de digitação que a planilha apontar.
+
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| Portal · Estoque, hoje | `NomePortalEstoqueHoje.dc.html` | O card da família com o XG escolhido: o título vira o nome daquele tamanho, "Polo masculino piquet preto - XG"; ao lado, a azul-marinho em MAIÚSCULAS e a arpoador "feminino". |
+| Portal · Estoque, proposta | `NomePortalEstoque.dc.html` | Os mesmos cards com o nome igual em todos os tamanhos; o tamanho só nos botões. |
+| Portal · detalhe do produto | `NomePortalDetalhe.dc.html` | O código completo, o nome sem tamanho e o XG escolhido no grupo "Tamanho"; as aria-labels do contador levam o tamanho. |
+| Portal · Seu pedido | `NomePortalPedido.dc.html` | Duas linhas da mesma polo em tamanhos diferentes, distinguidas por "· GG" e "· XG" e pelo código. |
+| Portal · Meus pedidos | `NomePortalMeusPedidos.dc.html` | A tabela de itens ganha a coluna Tamanho. |
+| Armazenagem · Pedidos, itens hoje | `NomeWmsPedidosHoje.dc.html` | A lista de itens de hoje: posição, SKU interno e o nome como está. |
+| Armazenagem · Pedidos, itens com o tamanho | `NomeWmsPedidos.dc.html` | Nome com o tamanho em negrito e, na linha de apoio, o código do cliente e o SKU. |
+| Armazenagem · Separado | `NomeWmsSeparado.dc.html` | A conferência do separado com o tamanho e a posição em cada linha. |
+| Armazenagem · Receber | `NomeWmsReceber.dc.html` | A fila "Para guardar" com o conteúdo da caixa por tamanho. |
+| Armazenagem · Catálogo, editar produto | `NomeWmsCatalogo.dc.html` | A família na tabela com o mesmo nome; no diálogo, o nome digitado com "XG" no fim é recusado e o tamanho fica no campo Tamanho. |
+| Armazenagem · Contagem, tamanho novo | `NomeWmsContagem.dc.html` | O código de um tamanho novo de uma família existente pré-preenche nome, categoria, gênero, grupo, cor e Tamanho. |
+| Planilha de revisão (passo 1) | `NomePlanilhaRevisao.dc.html` | A ilustração da planilha para a avaliação: nome hoje, nome proposto, motivo, tamanho e a decisão por linha. O CSV de verdade tem as colunas do README de `tools/padronizar-nomes` e não acrescenta cor nem aponta digitação. |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador

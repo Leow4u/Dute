@@ -1,4 +1,5 @@
 import { Pencil, Trash2 } from "lucide-react";
+import { nomeComTamanho } from "@workspace/dominio";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,8 +47,8 @@ export function OpeningConferenceSummary({
           {lines.map((line) => (
             <div key={line.id} className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border p-3">
               <div className="min-w-0 flex-1">
-                <div className="font-medium">{line.product_name || line.client_item_code || line.sku_code}</div>
-                <div className="text-sm text-muted-foreground">{line.client_item_code} {line.size ? `· tamanho ${line.size}` : ""} · {formatNumber(line.counted_qty)} un.</div>
+                <div className="font-medium">{line.product_name ? nomeComTamanho({ nome: line.product_name, codigo: line.client_item_code, tamanho: line.size }) : line.client_item_code || line.sku_code}</div>
+                <div className="text-sm text-muted-foreground">{line.client_item_code} · {formatNumber(line.counted_qty)} un.</div>
                 {line.status === "committed" ? <Badge variant="outline" className="mt-2">Já publicada</Badge> : null}
                 {line.status === "processing" ? <Badge variant="outline" className="mt-2">Publicação em andamento</Badge> : null}
                 {line.error ? <p className="mt-2 text-sm text-destructive">{line.error}</p> : null}
@@ -55,7 +56,7 @@ export function OpeningConferenceSummary({
               {conferenceCanEditLine(box, line) ? (
                 <div className="flex gap-1">
                   <Button type="button" variant="outline" size="sm" onClick={() => onEdit(line)} disabled={busy}><Pencil className="mr-2 size-4" />Editar</Button>
-                  <Button type="button" variant="ghost" size="icon" onClick={() => onRemove(line)} disabled={busy} aria-label={`Remover rascunho de ${line.product_name || line.client_item_code}`}><Trash2 className="size-4" /></Button>
+                  <Button type="button" variant="ghost" size="icon" onClick={() => onRemove(line)} disabled={busy} aria-label={`Remover rascunho de ${line.product_name ? nomeComTamanho({ nome: line.product_name, codigo: line.client_item_code, tamanho: line.size }) : line.client_item_code}`}><Trash2 className="size-4" /></Button>
                 </div>
               ) : null}
             </div>

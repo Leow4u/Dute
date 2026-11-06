@@ -311,36 +311,39 @@ describe("em recebimento no estoque do portal (parte 7d)", () => {
     const html = lista([polo, calca]);
     expect(textosDaTela(html)).toEqual([
       "Código", "Produto", "Disponível", "Em recebimento", "Reservado", "Pedido",
-      "B.02.0110.001.42", "Calça social 42", "Calça", "64", "0", "12", "Adicionar",
-      "A.01.0806.005.GG", "Camisa polo manga longa GG", "Polo", "24", "Avisar reposição", "Arquivar",
+      "B.02.0110.001.42", "Calça social · 42", "Calça", "64", "0", "12", "Adicionar",
+      "A.01.0806.005.GG", "Camisa polo manga longa · GG", "Polo", "24", "Avisar reposição", "Arquivar",
     ]);
+    // Uma linha por tamanho: o nome com o tamanho também no contador.
+    expect(html).toContain('title="Calça social · 42"');
+    expect(html).toContain('aria-label="Quantidade de Calça social · 42"');
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
   it("o card do produto só chegando: o selo, a linha do em recebimento e os botões de hoje; textos e axe", async () => {
     const html = card([polo]);
     expect(textosDaTela(html)).toEqual([
-      "Em recebimento", "Polo · A.01.0806.005", "Camisa polo manga longa GG", "Sem saldo no momento", "24", "em recebimento", "Avisar reposição", "Arquivar",
+      "Em recebimento", "Polo · A.01.0806.005", "Camisa polo manga longa · GG", "Sem saldo no momento", "24", "em recebimento", "Avisar reposição", "Arquivar",
     ]);
     expect(html).toContain('text-info-soft-foreground">24</span> em recebimento');
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
   it("o card com prateleira e peça chegando: o disponível é só o da prateleira, sem o selo", () => {
-    expect(textosDaTela(card([misto]))).toEqual(["Calça · B.02.0110.001", "Calça social 42", "64", "disponíveis", "6", "em recebimento", "Adicionar"]);
+    expect(textosDaTela(card([misto]))).toEqual(["Calça · B.02.0110.001", "Calça social · 42", "64", "disponíveis", "6", "em recebimento", "Adicionar"]);
     expect(textosDaTela(card([calca]))).not.toContain("em recebimento");
   });
 
   it("o card agrupado: sem tamanho com saldo, abre no tamanho chegando; o tamanho chegando não diz esgotado", () => {
     const pp: InventoryItem = { ...polo, sku_code: "BTG-000200", client_item_code: "A.01.0806.005.PP", product_name: "Camisa polo manga longa PP", qty_on_hand: 0, qty_receiving: 0 };
     expect(textosDaTela(card([pp, polo]))).toEqual([
-      "Em recebimento", "Polo · A.01.0806.005", "Camisa polo manga longa GG", "PP", "esgotado", "GG", "em recebimento",
+      "Em recebimento", "Polo · A.01.0806.005", "Camisa polo manga longa", "PP", "esgotado", "GG", "em recebimento",
       "Sem saldo no momento", "24", "em recebimento neste tamanho", "Avisar reposição", "Arquivar",
     ]);
     // Com um tamanho com saldo, o card abre nele, sem o selo; o tamanho chegando continua dizendo que está em recebimento.
     const m: InventoryItem = { ...polo, sku_code: "BTG-000199", client_item_code: "A.01.0806.005.M", product_name: "Camisa polo manga longa M", qty_on_hand: 10, qty_available: 10, qty_receiving: 0 };
     expect(textosDaTela(card([m, polo]))).toEqual([
-      "Polo · A.01.0806.005", "Camisa polo manga longa M", "M", "10 disp.", "GG", "em recebimento", "10", "disponíveis neste tamanho", "Adicionar",
+      "Polo · A.01.0806.005", "Camisa polo manga longa", "M", "10 disp.", "GG", "em recebimento", "10", "disponíveis neste tamanho", "Adicionar",
     ]);
   });
 
@@ -350,7 +353,7 @@ describe("em recebimento no estoque do portal (parte 7d)", () => {
     expect(html).toContain("Há peças deste produto em recebimento na Dutelog: entram no disponível para pedido depois da guarda.");
     expect(html).not.toContain(DICA_DE_REPOSICAO);
     expect(textosDaTela(html)).toEqual([
-      "Detalhe do produto", "PO", "Polo", "A.01.0806.005.GG", "Camisa polo manga longa GG", "Em recebimento",
+      "Detalhe do produto", "PO", "Polo", "A.01.0806.005.GG", "Camisa polo manga longa · GG", "Em recebimento",
       "Disponível para pedido", "0", "No pedido", "24", "Total físico",
       "Há peças deste produto em recebimento na Dutelog: entram no disponível para pedido depois da guarda.",
       "Avisar reposição", "Arquivar",
@@ -508,16 +511,21 @@ describe("o detalhe do produto que rola (docs/mockups/PortalDetalhe*.dc.html, 04
       ["M267 disp.", "true"],
     ]);
     const foto = documento.querySelector("img")!;
-    expect([foto.getAttribute("src"), foto.getAttribute("alt")]).toEqual(["https://fotos.exemplo/polo-azul-marinho.jpg", "Polo masculino piquet azul marinho M"]);
+    // A foto pode ser a de outro tamanho: leva o nome da família, sem o tamanho.
+    expect([foto.getAttribute("src"), foto.getAttribute("alt")]).toEqual(["https://fotos.exemplo/polo-azul-marinho.jpg", "Polo masculino piquet azul marinho"]);
+    // Com os botões, o nome da família no cabeçalho; o tamanho escolhido está nos botões e no contador.
+    expect(documento.querySelector("h2")?.textContent).toBe("Polo masculino piquet azul marinho");
+    expect(documento.querySelector('[data-testid="detalhe-rodape"] input')?.getAttribute("aria-label")).toBe("Quantidade de Polo masculino piquet azul marinho · M");
     expect(textosDaTela(html)).toEqual([
-      "Detalhe do produto", "A.01.0805.002.M", "Polo masculino piquet azul marinho M", "Polo", "MASC", "Masculino",
+      "Detalhe do produto", "A.01.0805.002.M", "Polo masculino piquet azul marinho", "Polo", "MASC", "Masculino",
       "Tamanho", "PP", "12 disp.", "M", "267 disp.",
       "Disponível para pedido", "267", "No pedido", "0",
       "Adicionar ao pedido",
     ]);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
-    // Sem a família, ou com um tamanho só, o detalhe não mostra os botões.
+    // Sem a família, ou com um tamanho só, o detalhe não mostra os botões e o cabeçalho diz o tamanho.
     expect(detalhe({ product: medio })).not.toContain('role="group"');
+    expect(montar(detalhe({ product: medio })).querySelector("h2")?.textContent).toBe("Polo masculino piquet azul marinho · M");
   });
 
   it("depois de adicionar, o painel segue aberto com a confirmação e o Ver pedido; textos e axe", async () => {

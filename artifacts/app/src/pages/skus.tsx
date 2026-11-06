@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { type Sku, useListSkus, useCreateSku, useUpdateSku, useDeleteSku, getListSkusQueryKey } from "@workspace/api-client-react";
+import { tamanhoDoCodigo } from "@workspace/dominio";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useOpeningInventorySession } from "@/features/warehouse-ops/opening-inventory-status";
+import { atributosDoProblema, problemaDoNomeNoCadastro, seguirSugestao } from "@/features/warehouse-ops/product-identity";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 import {
@@ -49,6 +51,17 @@ const skuSchema = z.object({
 });
 
 type SkuFormValues = z.infer<typeof skuSchema>;
+
+/**
+ * O nome no padrão de 06/11/2026, como no Cadastro (products.tsx): recusa
+ * antes de enviar na criação e quando o nome ou o tamanho mudam na edição.
+ */
+function skuSchemaFor(sku?: { produto?: unknown; tamanho?: unknown }) {
+  return skuSchema.superRefine((dados, ctx) => {
+    const achado = problemaDoNomeNoCadastro(dados, sku);
+    if (achado) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [achado.campo], message: achado.problema.mensagem });
+  });
+}
 
 export default function Skus() {
   // Espelho do requireCatalogWrite do servidor (mesma regra de Produtos).
@@ -340,9 +353,23 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
   const openingSession = useOpeningInventorySession();
   const openingAvailable = openingSession.data?.status !== "completed";
 
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<SkuFormValues>({
-    resolver: zodResolver(skuSchema),
-    defaultValues: sku ? { ...sku, estoque_minimo: sku.estoque_minimo ?? "" } : {
+  const schema = useMemo(() => skuSchemaFor(sku), [sku]);
+  // O Tamanho que o código pôs sozinho no item novo (seguirSugestao).
+  const tamanhoPosto = useRef("");
+
+  const { register, handleSubmit, formState: { errors, isSubmitted }, reset, getValues, setValue, trigger: validar } = useForm<SkuFormValues>({
+    resolver: zodResolver(schema),
+    // Campo nulo no cadastro vira vazio: o schema só aceita texto.
+    defaultValues: sku ? {
+      ...sku,
+      estoque_tipo: sku.estoque_tipo ?? "",
+      genero: sku.genero ?? "",
+      categoria: sku.categoria ?? "",
+      cor: sku.cor ?? "",
+      tamanho: sku.tamanho ?? "",
+      estado: sku.estado ?? "",
+      estoque_minimo: sku.estoque_minimo ?? "",
+    } : {
       cod_btg: "",
       cod_cliente: "",
       produto: "",
@@ -354,6 +381,20 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
       estado: "NOVO",
       estoque_minimo: "",
     }
+  });
+
+  // No item novo, o fim do código preenche o Tamanho (A.01.0806.005.XG → XG).
+  const codCliente = register("cod_cliente", {
+    onChange: (event) => {
+      if (!isEdit) {
+        const atual = getValues("tamanho") ?? "";
+        const sugestao = seguirSugestao(atual, tamanhoPosto.current, tamanhoDoCodigo(event.target.value) ?? "");
+        tamanhoPosto.current = sugestao.posto;
+        if (sugestao.valor !== atual) setValue("tamanho", sugestao.valor);
+      }
+      // A recusa do nome depende do código: depois de tentar salvar, ela acompanha.
+      if (isSubmitted) void validar(["produto", "tamanho"]);
+    },
   });
 
   const onSubmit = (data: SkuFormValues) => {
@@ -386,6 +427,7 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
             toast({ title: "SKU criado com sucesso" });
             setOpen(false);
             reset();
+            tamanhoPosto.current = "";
           },
           onError: (error) => {
             toast({
@@ -429,13 +471,13 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="cod_cliente">Cod. Cliente *</Label>
-                <Input id="cod_cliente" readOnly={isEdit} className="read-only:bg-muted read-only:text-muted-foreground" {...register("cod_cliente")} />
-                {errors.cod_cliente && <span className="text-xs text-destructive">{errors.cod_cliente.message}</span>}
+                <Input id="cod_cliente" readOnly={isEdit} className="read-only:bg-muted read-only:text-muted-foreground" {...codCliente} {...atributosDoProblema(errors.cod_cliente, "cod_cliente")} />
+                {errors.cod_cliente && <span id="cod_cliente-problema" className="text-xs text-destructive">{errors.cod_cliente.message}</span>}
               </div>
               <div className="space-y-2 col-span-2">
                 <Label htmlFor="produto">Nome do Produto *</Label>
-                <Input id="produto" {...register("produto")} />
-                {errors.produto && <span className="text-xs text-destructive">{errors.produto.message}</span>}
+                <Input id="produto" className="aria-[invalid=true]:border-destructive" {...register("produto")} {...atributosDoProblema(errors.produto, "produto")} />
+                {errors.produto && <span id="produto-problema" className="text-xs text-destructive">{errors.produto.message}</span>}
               </div>
             </div>
           </div>
@@ -453,7 +495,8 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="tamanho">Tamanho</Label>
-                <Input id="tamanho" {...register("tamanho")} />
+                <Input id="tamanho" className="aria-[invalid=true]:border-destructive" {...register("tamanho")} {...atributosDoProblema(errors.tamanho, "tamanho")} />
+                {errors.tamanho && <span id="tamanho-problema" className="text-xs text-destructive">{errors.tamanho.message}</span>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="estoque_tipo">Tipo de Estoque</Label>

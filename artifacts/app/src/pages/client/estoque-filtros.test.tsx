@@ -239,7 +239,7 @@ describe("filtros do catálogo do portal", () => {
     expect(porNome<HTMLSelectElement>("Filtrar por saldo").value).toBe("baixo");
     expect(porNome<HTMLSelectElement>("Ordenar produtos").value).toBe("nome");
     expect(cards()).toHaveLength(1);
-    expect(cards()[0]?.textContent).toContain("Polo azul P");
+    expect(cards()[0]?.textContent).toContain("Polo azul · P");
   });
 
   it("o pedido abre pelo cabeçalho, separado das ferramentas de resultado e de filtro", async () => {

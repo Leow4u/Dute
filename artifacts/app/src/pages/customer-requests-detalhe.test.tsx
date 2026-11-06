@@ -63,6 +63,7 @@ async function esperar(condicao: () => boolean, oQue: string) {
 }
 
 const tituloDoDetalhe = () => container!.querySelector("h2")?.textContent ?? "";
+const lista = () => container!.querySelector("section")?.textContent ?? "";
 const botao = (texto: string) => [...container!.querySelectorAll("button")].find((item) => item.textContent?.trim() === texto) ?? null;
 
 async function abrir() {
@@ -127,6 +128,27 @@ describe("o detalhe da Solicitações", () => {
     expect(tituloDoDetalhe()).toBe("Pedido da Faria Lima");
     expect(botao("Recusar com motivo")).toBeNull();
     expect(estado.decisoes).toEqual([]);
+  });
+
+  it("a linha do item leva o nome com o tamanho e os códigos embaixo; a busca acha pelo nome e pelos códigos", async () => {
+    const polo = { sku_code: "BTG-000101", client_item_code: "A.01.0806.005.GG", product_name: "Polo masculino piquet preto - GG", quantity: 10 };
+    estado.solicitacoes = [{ ...FARIA_LIMA, items: [polo] }, LEBLON];
+    await abrir();
+
+    const linha = container!.querySelector("tbody tr")!;
+    expect(linha.textContent).toContain("Polo masculino piquet preto · GG");
+    expect(linha.textContent).toContain("A.01.0806.005.GG · BTG-000101");
+    expect(linha.textContent).not.toContain("piquet preto - GG");
+
+    const busca = container!.querySelector<HTMLInputElement>('input[placeholder="Buscar por título, SKU ou cliente"]')!;
+    for (const termo of ["BTG-000101", "a.01.0806.005.gg", "polo masculino"]) {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(busca, termo);
+        busca.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(lista()).toContain("Pedido da Faria Lima");
+    }
+    expect(lista()).not.toContain("Pedido do Leblon");
   });
 
   it("aprovada aqui, o detalhe passa à próxima da aba, como antes", async () => {
