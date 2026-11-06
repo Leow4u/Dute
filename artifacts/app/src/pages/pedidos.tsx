@@ -21,7 +21,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { semConexaoNaLeitura } from "@/lib/conexao";
 import { PageHeader } from "@/components/ui/page-header";
 import { QueueGroup, QueueRow, type QueueTone } from "@/components/ui/queue-list";
 import { Segmented } from "@/components/ui/segmented";
@@ -78,6 +79,7 @@ import {
 import { useItemPhotos } from "@/lib/use-item-photos";
 import { canDecideRequests, canOperateWarehouse, humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { erroDaResposta } from "@/lib/erro-da-resposta";
 import {
   type LineConfirmationMap,
   type WarehouseOpsResponse,
@@ -112,10 +114,7 @@ const numberFormatter = new Intl.NumberFormat("pt-BR");
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(text || `HTTP ${response.status}`);
-  }
+  if (!response.ok) throw erroDaResposta(response.status, await response.text().catch(() => ""));
   return response.json() as Promise<T>;
 }
 
@@ -498,6 +497,10 @@ export default function Pedidos() {
   // decisão 6 de 06/11/2026). Com a lista já lida, a falha de uma atualização
   // não a apaga.
   const semLeitura = (ops.isError && !ops.data) || (decider && requests.isError && !requests.data);
+  // Sem rede, a lista que já estava fica, com a hora da leitura; sem nada
+  // lido, o aviso (decisão 2 do celular).
+  const semRede = semConexaoNaLeitura(ops, ...(decider ? [requests] : []));
+  const relendo = ops.isFetching || requests.isFetching;
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 pb-24">
@@ -531,12 +534,18 @@ export default function Pedidos() {
         }
       />
 
+      {!loading && semRede && semRede.lidaEm !== null ? (
+        <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={relendo} onTentar={refreshAll} />
+      ) : null}
+
       {loading ? (
         <p className="text-sm text-muted-foreground">Carregando pedidos...</p>
+      ) : semRede && semRede.lidaEm === null ? (
+        <BlocoSemConexao tentando={relendo} onTentar={refreshAll} />
       ) : semLeitura ? (
         <ErroNaLeitura
           mensagem="Não consegui carregar os pedidos."
-          tentando={ops.isFetching || requests.isFetching}
+          tentando={relendo}
           onTentar={refreshAll}
         />
       ) : view === "delivered" ? (

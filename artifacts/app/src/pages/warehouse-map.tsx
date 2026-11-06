@@ -6,13 +6,14 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutGrid, PackageOpen, Printer, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/page-header";
@@ -24,6 +25,7 @@ import { ShelfVolumeSummary } from "@/features/warehouse-ops/shelf-volume-summar
 import { useIsDesktop } from "@/hooks/use-desktop";
 import { cn } from "@/lib/utils";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { ehSemConexao, semConexaoNaLeitura } from "@/lib/conexao";
 import { openingInventoryNotice } from "@/lib/opening-inventory";
 import { boxVolumeM3, formatVolumeM3 } from "@/lib/warehouse-volume";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
@@ -77,6 +79,7 @@ export default function WarehouseMapPage() {
   const [, navigate] = useLocation();
   const desktop = useIsDesktop();
   const { code: activeCustomerCode, active: activeCustomer } = useActiveCustomer();
+  const queryClient = useQueryClient();
   const [zone, setZone] = useState<ZoneFilter>("all");
   const [aisle, setAisle] = useState<string>(ALL);
   const [search, setSearch] = useState("");
@@ -140,8 +143,18 @@ export default function WarehouseMapPage() {
   }, [desktop, selectedCode]);
 
   const loading = positionsQuery.isLoading || boxesQuery.isLoading;
-  const error = positionsQuery.error ?? boxesQuery.error;
-  const empty = !loading && !error && shelves.length === 0;
+  // Sem rede, o mapa que já estava fica, com a hora da leitura; sem nada
+  // lido, o aviso, e não "Nenhuma posição cadastrada" (decisão 2 do celular).
+  const semRede = semConexaoNaLeitura(positionsQuery, boxesQuery);
+  const semNadaLido = semRede !== null && semRede.lidaEm === null;
+  const error = semRede ? null : positionsQuery.error ?? boxesQuery.error;
+  const empty = !loading && !error && !semNadaLido && shelves.length === 0;
+  const relendo = positionsQuery.isFetching || boxesQuery.isFetching;
+  const reler = () => {
+    void queryClient.invalidateQueries({ queryKey: ["warehouse-positions", "all-pages"] });
+    void queryClient.invalidateQueries({ queryKey: ["warehouse-boxes", "all", "all-pages"] });
+    void queryClient.invalidateQueries({ queryKey: ["stock-balances", "estoque"] });
+  };
   const searching = search.trim().length > 0;
 
   const panel = selected ? (
@@ -181,6 +194,14 @@ export default function WarehouseMapPage() {
         }
       />
 
+      {!loading && semRede ? (
+        semRede.lidaEm === null ? (
+          <BlocoSemConexao tentando={relendo} onTentar={reler} />
+        ) : (
+          <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={relendo} onTentar={reler} />
+        )
+      ) : null}
+
       {error ? (
         <Alert variant="destructive">
           <AlertTitle>Não foi possível carregar o mapa</AlertTitle>
@@ -188,7 +209,7 @@ export default function WarehouseMapPage() {
         </Alert>
       ) : null}
 
-      {showSessionStatus && sessionQuery.isError ? (
+      {showSessionStatus && sessionQuery.isError && !ehSemConexao(sessionQuery.error) ? (
         <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
           <AlertTitle>Situação do inventário indisponível</AlertTitle>
           <AlertDescription className="space-y-2">

@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ehSemConexao } from "@/lib/conexao";
 import { cn } from "@/lib/utils";
 
 type Numberish = number | string | null | undefined;
@@ -476,7 +477,10 @@ export function ClientDataBoundary({ children }: ClientDataBoundaryProps) {
     return <ClientModuleLoading />;
   }
 
-  if (overview.isError) {
+  // Sem rede, o que já estava na tela fica: a falta de conexão na releitura
+  // não troca o portal pelo erro (decisão 2 do celular). A faixa "Sem
+  // conexão" do portal já está no topo.
+  if (overview.isError && !(overview.data && ehSemConexao(overview.error))) {
     return (
       <ClientModuleError
         error={overview.error}

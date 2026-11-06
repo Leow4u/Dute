@@ -544,7 +544,7 @@ ficam no fluxo da página, e o conteúdo rola entre eles.
 | # | O que falta | Onde | Quem sente |
 | --- | --- | --- | --- |
 | 1 | Sem rede, a leitura vira "Sem conexão" e nunca lista vazia: a leitura pausada pelo react-query e a que veio só do cache do Firestore aparecem como falta de conexão, no `ErroNaLeitura` | Todas as listas e fichas | A operação no galpão |
-| 2 | A ação sem rede tem resposta clara: é recusada na hora com "Sem conexão", ou espera numa fila que a tela mostra (pergunta 1). Com sinal fraco, "Sem conexão. Tente de novo quando o sinal voltar." no lugar de "Falha interna no servidor"; o toast sem JSON cru | Toda gravação | Todos |
+| 2 | A ação sem rede tem resposta clara: é recusada na hora com "Sem conexão" (decisão 1). Com sinal fraco, "Sem conexão. Tente de novo quando o sinal voltar." no lugar de "Falha interna no servidor"; o toast sem JSON cru | Toda gravação | Todos |
 | 3 | As telas da operação abrem sem sinal: depois de entrar, os papéis internos guardam no cache as telas que usam. O `ChunkErrorBoundary` diz "Sem conexão" quando for isso, separa erro de arquivo de erro de tela e ganha os acentos | Toda tela depois de um deploy | A operação |
 | 4 | As fotos sobem compactadas, com a contagem e o progresso | Chegada avulsa, Contagem, ficha do item | Quem recebe e quem conta |
 | 5 | A trava contra toque duplo, com a chave de idempotência por tentativa na guarda da caixa e na exceção | Ações | A operação |
@@ -554,7 +554,7 @@ ficam no fluxo da página, e o conteúdo rola entre eles.
 | 9 | No celular, o rodapé do diálogo longo fica preso embaixo, acima do teclado, com o "Sem conexão" dentro do diálogo; o X do painel com 44 px | Chegada avulsa, Separado, ficha do item | Quem recebe e quem separa |
 | 10 | Só o botão da ação gira e diz o gerúndio; o resto da tela não apaga | Posições e as ações da seção 4 | A operação |
 | 11 | O toast longe do cabeçalho, com um jeito de fechar no toque | Toda ação | Todos |
-| 12 | Botão de ícone com 44 px no celular, e o Atualizar onde a operação precisa (pergunta 5) | Pedidos, Receber, Estoque | A operação |
+| 12 | Botão de ícone com 44 px no celular, e o Atualizar onde a operação precisa (decisão 5) | Pedidos, Receber, Estoque | A operação |
 
 ### 9.3 Proposta para o celular
 
@@ -563,7 +563,7 @@ já estava decidido. O restante vira cinco PRs, um problema por PR:
 
 1. **Sem conexão na leitura e na ação** (itens 1 e 2). A leitura pausada ou
    vinda só do cache, com o aparelho sem rede, vira erro de conexão, e a ação
-   segue a pergunta 1. A falha de rede da chamada vira "Sem conexão", e o
+   é recusada na hora (decisão 1). A falha de rede da chamada vira "Sem conexão", e o
    toast de Pedidos para de mostrar o JSON.
 2. **Telas da operação sem sinal** (item 3). Depois de entrar, os papéis
    internos aquecem o cache das telas que usam, e o `ChunkErrorBoundary`
@@ -580,23 +580,56 @@ O PR 1 vem antes dos outros. Sem ele, o erro de Pedidos e a espera da chegada
 avulsa do PR 581 não aparecem no celular sem sinal, porque a leitura não
 falha.
 
-### 9.4 Perguntas para o Leonardo
+### 9.4 Decisões do Leonardo (06/11/2026)
 
-1. Sem rede, a ação é recusada na hora com "Sem conexão", ou fica numa fila
-   que sai quando o sinal voltar, como no Campo? A recomendação é recusar na
-   hora, que é simples e honesto; a fila do Campo pode vir depois, para a
+As cinco perguntas do celular foram respondidas com a recomendação de cada
+uma:
+
+1. **Ação sem rede: recusada na hora**, com "Sem conexão", em vez de ficar
+   numa fila. É simples e honesto; a fila do Campo pode vir depois, para a
    guarda, se a operação pedir.
-2. Sem sinal, a lista mostra o que já estava na tela, marcado com "Sem
-   conexão · lista de 10:42", ou só o aviso no lugar dela? A recomendação é
-   mostrar o que estava, marcado, e o aviso só quando não houver nada.
-3. Os papéis internos guardam no aparelho, depois de entrar, as telas da
-   operação, para abrirem sem sinal? O custo é baixar alguns MB a cada
-   publicação. A recomendação é sim.
-4. A foto do celular é compactada para 2000 px no lado maior, como o anexo do
-   Agent Dute? A recomendação é sim, porque a foto do catálogo continua nítida
-   nesse tamanho.
-5. No celular, o toast vai para baixo, acima da barra de navegação, ou fica no
-   topo, abaixo do cabeçalho? E o puxar para atualizar: ligar, ou manter o
-   botão Atualizar com 44 px, levado também ao Estoque? A recomendação é o
-   toast embaixo, perto do polegar, e o botão no lugar do gesto, que conflita
-   com a rolagem das listas longas.
+2. **Lista sem sinal: o que já estava fica**, marcado com "Sem conexão ·
+   lista de 10:42". O aviso no lugar da lista só aparece quando ainda não há
+   nada lido.
+3. **As telas da operação ficam no aparelho**: depois de entrar, os papéis
+   internos guardam as telas que usam, para abrirem sem sinal. O custo é
+   baixar alguns MB a cada publicação.
+4. **A foto do celular é compactada** para 2000 px no lado maior, como o
+   anexo do Agent Dute: a foto do catálogo continua nítida nesse tamanho.
+5. **No celular, o toast vai para baixo**, perto do polegar, acima da barra
+   de navegação. **No lugar de puxar para atualizar fica o botão Atualizar**
+   com 44 px, levado também ao Estoque, porque o gesto conflita com a rolagem
+   das listas longas.
+
+O PR 1 do celular (sem conexão na leitura e na ação) entrou no PR 582, com
+este diagnóstico:
+
+- a leitura de `lib/cloud-api.ts` que só achou o cache da memória responde
+  503 com o código `sem_conexao`; a contagem, o agregado e o índice de
+  preços sem rede não viram zero nem vazio (`lib/conexao.ts`);
+- o react-query não pausa a leitura nem a ação sem rede (`networkMode:
+  "always"` em `lib/queryClient.ts`); a fila do Campo não passa por ali;
+- a ação sem rede é recusada na hora, e a chamada sem resposta diz "Sem
+  conexão. Tente de novo quando o sinal voltar." no lugar de "Falha interna
+  no servidor": em `lib/functions-api.ts`, na chegada por caixa, na guarda da
+  área, no cancelamento do recebimento e nas chamadas do núcleo (o Agent
+  Dute e a memória);
+- o toast mostra a mensagem do servidor, não o JSON: `lib/erro-da-resposta.ts`
+  nos `fetchJson` da Armazenagem que guardavam o corpo cru, e o
+  `humanApiError`;
+- Pedidos, Receber, Estoque, Estoque › Alertas, Mapa, Solicitações, o
+  Início e o painel do owner mantêm a lista lida, com "Sem conexão · lista
+  de 10:42" (`FaixaSemConexao`), e, sem nada lido, mostram o aviso "Sem
+  conexão." (`BlocoSemConexao`), os dois em
+  `components/ui/erro-na-leitura.tsx`. O Início sem nada lido não diz que
+  nada espera nem mostra os números zerados, e o portal não troca o que já
+  estava por "Portal indisponível".
+
+Ficam para depois:
+
+- as leituras que vão ao Firestore sem passar por `lib/cloud-api.ts` (o
+  seletor de cliente, Pessoas, as anotações e os playbooks do Agent Dute),
+  que sem rede ainda devolvem o cache;
+- o `deadline-exceeded` de 70 s, que fica com a mensagem própria das
+  operações longas (seção 6, PR 8);
+- os PRs 2 a 5 do celular.

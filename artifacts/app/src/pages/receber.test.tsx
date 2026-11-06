@@ -240,3 +240,16 @@ describe("histórico de cancelamento", () => {
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });
+
+/** Sem rede (docs/plataforma/diagnostico-carregamento.md, decisão 2 do celular, de 06/11/2026). */
+describe("Receber sem conexão", () => {
+  it("a lista lida fica com a hora; sem nada lido, o aviso; a falta de conexão não troca a lista pelo erro", () => {
+    expect(TELA).toContain("const semRede = semConexaoNaLeitura(ops, requests);");
+    expect(TELA).toMatch(/!fichaLarga && !ops\.isLoading && semRede && semRede\.lidaEm !== null \? \(\s*<FaixaSemConexao lidaEm=\{semRede\.lidaEm\}/);
+    // O aviso vem depois do carregando e antes do erro e das filas.
+    const aviso = TELA.indexOf(") : semRede && semRede.lidaEm === null ? (");
+    expect(aviso).toBeGreaterThan(TELA.indexOf("Carregando chegadas..."));
+    expect(aviso).toBeLessThan(TELA.indexOf("Não consegui carregar as chegadas."));
+    expect(TELA).toContain(") : ops.error && !semRede ? (");
+  });
+});

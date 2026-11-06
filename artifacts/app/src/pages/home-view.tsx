@@ -16,6 +16,8 @@ export type InicioDoWms = {
   falhas: readonly string[];
   /** Os números do dia; null para quem não vê o armazém (o financeiro). */
   hoje: HojeNoArmazem | null;
+  /** Sem rede (decisão 2 do celular): a hora da leitura na tela, ou `null` sem nada lido. */
+  semConexao?: { lidaEm: number | null; tentando: boolean; onTentar: () => void } | null;
 };
 
 function NumerosDoArmazem({ hoje }: { hoje: HojeNoArmazem }) {
@@ -34,7 +36,9 @@ function NumerosDoArmazem({ hoje }: { hoje: HojeNoArmazem }) {
 }
 
 export function InicioDoWmsView({ nome, hoje, inicio }: { nome: string; hoje: Date; inicio: InicioDoWms }) {
-  const lateral = inicio.hoje ? (
+  // Sem rede e sem nada lido, os números seriam zeros falsos: ficam de fora.
+  const semNadaLido = inicio.semConexao?.lidaEm === null;
+  const lateral = inicio.hoje && !semNadaLido ? (
     inicio.carregando ? <Skeleton className="h-80 rounded-lg" /> : <NumerosDoArmazem hoje={inicio.hoje} />
   ) : null;
   return (
@@ -46,6 +50,7 @@ export function InicioDoWmsView({ nome, hoje, inicio }: { nome: string; hoje: Da
       carregando={inicio.carregando}
       falhas={inicio.falhas}
       lateral={lateral}
+      semConexao={inicio.semConexao ?? null}
     />
   );
 }
