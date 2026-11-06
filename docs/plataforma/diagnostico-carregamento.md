@@ -72,6 +72,10 @@ sente, do mais grave ao mais cosmético:
    (a regra 1.2 do plano pede); a validação de saldo usa o ícone de alerta
    como indicador de espera.
 
+O celular tem seção própria (seção 9), com o app de verdade num Pixel 7
+simulado. O achado mais grave de lá vale para o computador também: sem rede, a
+leitura devolve a lista vazia como se fosse a resposta.
+
 ## 2. Como a Armazenagem carrega hoje
 
 - **Entrada.** `AuthProvider` (`lib/auth.tsx`) só libera depois do
@@ -408,3 +412,130 @@ O `Spinner` já é o anel (decisão 5). O atraso de 300 ms e o aviso de 10 s
 | Diálogos que fecham durante a ação | 22, mais 4 confirmações que fecham no clique |
 | Timeout das callables | 70 s; 180 s na foto de catálogo e no chat |
 | Testes do WMS que travam "Carregando" | 6 de 69 |
+
+## 9. No celular (06/11/2026)
+
+Esta seção veio de rodar o app de verdade num Pixel 7 simulado (412 × 839 px),
+contra os emuladores locais de `docs/plataforma/ambiente-local.md`: Auth e
+Firestore, sem as Functions. A base tinha três usuários de teste (operação,
+owner e cliente da BTG) e seis itens de estoque. Cada estado saiu de um jeito:
+
+- o "carregando", de segurar as respostas do Firestore;
+- o "sem sinal", de cortar a rede do aparelho;
+- a ação em andamento, de segurar e depois recusar as chamadas às Functions.
+
+As fotos estão em `docs/plataforma/diagnostico-carregamento/celular/`. As
+correções do PR 581 aparecem como estão hoje no código.
+
+### 9.1 O que o celular mostra
+
+1. **Sem sinal, a leitura responde vazio como se fosse a resposta.** O
+   Firestore roda só com cache em memória (`lib/firebase.ts`). Sem rede, o
+   `getDocs` devolve com sucesso o que estiver nessa memória, vazio ou pela
+   metade, e nenhuma das 13 leituras de `lib/cloud-api.ts` confere
+   `metadata.fromCache`. Medido sem rede, logo depois de entrar:
+   `/api/products` voltou com 0 itens em 4 ms (o servidor tem 6),
+   `/api/stock-balances` com 0, e `/api/skus` com os 6 que já estavam na
+   memória. No galpão com sinal fraco, as listas dizem "Nenhum…", o Estoque
+   perde os endereços, e o erro de Pedidos do PR 581 não aparece, porque não há
+   erro. Só a faixa "Sem conexão" do shell avisa, e só quando o aparelho sabe
+   que está sem rede (`navigator.onLine`). Com sinal fraco, ele acha que está
+   conectado.
+2. **A tela que ainda não foi aberta quebra sem rede** (foto 05). O service
+   worker guarda só o shell, e cada tela entra no cache na primeira visita
+   (`vite.config.ts`, `runtimeCaching`). Como todo deploy troca o nome dos
+   arquivos, isso vale para toda tela ainda não aberta desde a última
+   publicação. Sem sinal, ela cai em "Nao foi possivel carregar esta tela.
+   Uma nova versao pode ter sido publicada.", assim, sem acentos
+   (`App.tsx`, `ChunkErrorBoundary`). "Recarregar", sem rede, não resolve.
+3. **A ação sem sinal diz "Falha interna no servidor"** (foto 04). Quando a
+   chamada não chega ao servidor, o SDK devolve o código `internal`, e
+   `lib/functions-api.ts:1050` traduz para "Falha interna no servidor. Tente
+   novamente ou avise o time técnico.". A pessoa no galpão lê que o sistema
+   quebrou, quando o que faltou foi sinal.
+4. **A abertura fica em branco** (foto 01), na operação e no portal do
+   cliente: até o perfil chegar, a tela não mostra nada.
+5. **A ação em andamento apaga a tela inteira** (foto 03). Em Posições,
+   durante a gravação, todos os botões esmaecem por igual, sem spinner nem
+   rótulo, e o botão tocado não se distingue dos outros.
+6. **O toast cobre o cabeçalho** (foto 04). No celular ele aparece no topo
+   (`components/ui/toast.tsx:16`, `fixed top-0`), por cima do seletor de
+   módulo e do cliente ativo.
+7. **O diálogo longo esconde a ação e o "Sem conexão"** (fotos 06 e 07). Na
+   chegada avulsa, o "Criar conferência" fica no fim da rolagem, uns 500 px
+   abaixo da tela, e o diálogo cobre a faixa "Sem conexão". Sem rede, a
+   linha fica em "Verificando o catálogo" por mais de 30 s (medido), sem dizer
+   que o problema é a conexão; o cadastro novo continua bloqueado, que é o que
+   importa.
+8. **Não há puxar para atualizar, e o Atualizar é pequeno.** A área de
+   conteúdo usa `overscroll-behavior: contain` (medido), o que desliga o
+   gesto. O botão Atualizar mede 40 × 40 px (medido), abaixo dos 44 px da
+   regra 1.2 do plano de implantação.
+9. **O "carregando" é um texto pequeno no topo** (foto 02), e o resto da tela
+   parece vazio. O spinner com rótulo já foi decidido (decisão 1) e entra com
+   as peças.
+10. **As fotos sobem no tamanho original.** A câmera abre direto
+    (`capture="environment"`) na chegada avulsa, na Contagem e na ficha do
+    item, e a foto vai inteira para o Storage, sem compactar, por um envio que
+    não informa progresso (`uploadBytes`, `features/warehouse-ops/shared.ts`).
+    A compactação já existe no app (`lib/attachment-compact.ts`), mas só serve
+    o anexo do Agent Dute e o aviso de envio do portal. Uma foto de celular
+    passa fácil de 3 MB; no 4G do galpão, cada uma leva dezenas de segundos só
+    com "Enviando...". Este tempo é estimado, não medido.
+11. **Não há trava contra toque duplo na Armazenagem.** O Campo tem a dele
+    (`lib/campo/toque-unico.ts`, 1 s), e nenhuma tela da Armazenagem a usa. No
+    celular, onde o toque sem retorno visual se repete, o botão que não
+    desliga durante a ação (seção 4) manda a ação duas vezes.
+
+### 9.2 Necessidades no celular, em ordem de dor
+
+| # | O que falta | Onde | Quem sente |
+| --- | --- | --- | --- |
+| 1 | Sem rede, a leitura vira "Sem conexão" e nunca lista vazia. Para isso, as leituras de `lib/cloud-api.ts` conferem se vieram só do cache e devolvem erro de conexão, que a tela mostra com o `ErroNaLeitura` | Todas as listas e fichas | A operação no galpão |
+| 2 | As telas da operação abrem sem sinal: depois de entrar, os papéis internos guardam no cache as telas que usam. O `ChunkErrorBoundary` diz "Sem conexão" quando for isso, com os acentos | Toda tela depois de um deploy | A operação |
+| 3 | A ação sem sinal diz "Sem conexão. Tente de novo quando o sinal voltar." e não "Falha interna no servidor" | Toda gravação | Todos |
+| 4 | As fotos sobem compactadas, com a contagem e o progresso | Chegada avulsa, Contagem, ficha do item | Quem recebe e quem conta |
+| 5 | A abertura com a marca e o spinner (decisão 3), e "Sem conexão" depois de 3 s sem rede | Abertura | Todos |
+| 6 | Só o botão da ação gira e diz o gerúndio; o resto da tela não apaga | Posições e as ações da seção 4 | A operação |
+| 7 | Trava contra toque duplo nos botões de ação | Ações | A operação |
+| 8 | No celular, o rodapé do diálogo longo fica preso embaixo, e o "Sem conexão" aparece dentro do diálogo | Chegada avulsa, Separado, ficha do item | Quem recebe |
+| 9 | O toast fica longe do cabeçalho, sem cobrir o seletor de módulo nem o cliente ativo | Toda ação | Todos |
+| 10 | Botão de ícone com 44 px no celular, e o puxar para atualizar ligado ou o Atualizar mais fácil de achar (pergunta 5) | Atualizar | A operação |
+
+### 9.3 Proposta para o celular
+
+Os itens 5, 6, 9 e o tamanho do botão (item 10) entram no PR das peças, que já
+estava decidido. O restante vira quatro PRs, um problema por PR:
+
+1. **Sem conexão na leitura e na ação** (itens 1 e 3). Uma leitura só do
+   cache, com o aparelho sem rede, vira erro de conexão. A falha de rede da
+   chamada vira "Sem conexão", e não `internal`.
+2. **Telas da operação sem sinal** (item 2). Depois de entrar, os papéis
+   internos aquecem o cache das telas que usam. A mensagem do
+   `ChunkErrorBoundary` passa a distinguir falta de rede de versão nova.
+3. **Fotos do celular** (item 4). A foto passa pela compactação que o app já
+   tem, e o envio mostra a contagem e o progresso (`uploadBytesResumable`).
+4. **Ação no celular** (itens 7 e 8). A trava de toque duplo e o rodapé
+   preso nos diálogos longos.
+
+O PR 1 vem antes dos outros. Sem ele, o erro de Pedidos e a espera da chegada
+avulsa do PR 581 não aparecem no celular sem sinal, porque a leitura não
+falha.
+
+### 9.4 Perguntas para o Leonardo
+
+1. Sem sinal, a lista mostra o que já estava na tela, marcado com "Sem
+   conexão · lista de 10:42", ou só o aviso no lugar dela? A recomendação é
+   mostrar o que estava, marcado, e o aviso só quando não houver nada.
+2. Os papéis internos guardam no aparelho, depois de entrar, as telas da
+   operação, para abrirem sem sinal? O custo é baixar alguns MB a cada
+   publicação. A recomendação é sim.
+3. A foto do celular é compactada para 2000 px no lado maior, como o anexo
+   do Agent Dute? A recomendação é sim, porque a foto do catálogo continua
+   nítida nesse tamanho.
+4. No celular, o toast vai para baixo, acima da barra de navegação, ou fica
+   no topo, abaixo do cabeçalho? A recomendação é embaixo, perto do polegar e
+   longe do seletor.
+5. Ligar o puxar para atualizar no celular, ou manter só o botão Atualizar,
+   agora com 44 px? A recomendação é manter o botão, porque o gesto conflita
+   com a rolagem das listas longas e com os diálogos.
