@@ -1,7 +1,8 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useActiveCustomer } from "./active-customer-context";
+import { semConexaoNaLeitura, type LeituraNaTela } from "./conexao";
 import { playbooksKey } from "./agent-playbooks";
 import { CHAVE_DAS_ANOTACOES, chaveNoAlvo, clienteDoNucleo } from "./agente/cliente";
 import { revisaODoAgente } from "./agente/navegacao";
@@ -24,6 +25,13 @@ export type InicioDoWms = HomeInbox & {
   carregando: boolean;
   /** As fontes que não carregaram, em palavras ("armazém", "solicitações"). */
   falhas: string[];
+  /**
+   * Sem rede: a hora da leitura que está na tela, ou `null` quando ainda não
+   * há nada lido (decisão 2 do celular). Sem falta de conexão, `null`.
+   */
+  semConexao: { lidaEm: number | null } | null;
+  relendo: boolean;
+  reler: () => void;
 };
 
 /**
@@ -39,6 +47,7 @@ export function useInicioDoWms(role: ProfileRole | null | undefined, ligado = tr
   const seesAlerts = ligado && MEMORIA_LIBERADA && canAccessModule(role, ALERTA_PARADO_ROLES);
   const decidesAgent = ligado && revisaODoAgente(role);
   const { code } = useActiveCustomer();
+  const queryClient = useQueryClient();
   const agente = useMemo(() => clienteDoNucleo("wms", code), [code]);
   const ops = useQuery({
     queryKey: ["warehouse-ops"],
@@ -88,8 +97,20 @@ export function useInicioDoWms(role: ProfileRole | null | undefined, ligado = tr
     .filter((alerta): alerta is AlertaProposto => alerta !== null)
     .map((alerta) => ({ id: alerta.id, customer_code: alerta.customerCode, itens: alerta.itens.length }));
   const inbox = buildHomeInbox({ role, ops: ops.data, requests: requests.data?.items, stockAlerts, agentDecisions });
+  // As anotações e os playbooks leem o Firestore direto, fora de lib/cloud-api.ts:
+  // só as leituras de /api/* dizem que faltou conexão.
+  const leiturasDaApi = [seesWarehouse ? ops : null, seesRequests ? requests : null, seesAlerts ? alerts : null].filter(
+    (leitura): leitura is NonNullable<typeof leitura> => leitura !== null,
+  ) as LeituraNaTela[];
   return {
     ...inbox,
+    semConexao: semConexaoNaLeitura(...leiturasDaApi),
+    relendo: ops.isFetching || requests.isFetching || alerts.isFetching,
+    reler: () => {
+      void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
+      void queryClient.invalidateQueries({ queryKey: ["customer-requests", "home"] });
+      void queryClient.invalidateQueries({ queryKey: ["stock-alerts"] });
+    },
     carregando:
       (seesWarehouse && ops.isLoading) || (seesRequests && requests.isLoading) || (seesAlerts && alerts.isLoading) || (decidesAgent && (notes.isLoading || playbooks.isLoading)),
     falhas: [

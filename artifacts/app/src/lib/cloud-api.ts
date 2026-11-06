@@ -4,20 +4,25 @@ import {
   doc,
   documentId,
   getCountFromServer,
-  getDoc,
-  getDocs,
+  getDoc as lerDocDoFirestore,
+  getDocs as lerDocsDoFirestore,
   limit as fsLimit,
   orderBy,
   query,
   startAfter,
   where,
+  type DocumentData,
+  type DocumentReference,
   type DocumentSnapshot,
+  type Query,
   type QueryConstraint,
+  type QuerySnapshot,
 } from "firebase/firestore";
 
 import { PAPEIS_DO_WMS, estagioDoCadastro, isPapel, livreParaOCliente, modulosContratados } from "@workspace/dominio";
 import { clienteDaChamada, LEGACY_CUSTOMER_CODE } from "./active-customer";
 import { periodBelongsToCustomer } from "./billing-scope";
+import { SemConexao, corpoSemConexao, firestoreSemConexao } from "./conexao";
 import { leiturasDoPortal } from "./operations";
 import { canListUsers, canSeeCatalogPrice, canSeeMerchandiseValue } from "./permissions";
 import { firebaseAuth, firestore } from "./firebase";
@@ -146,7 +151,9 @@ async function readCatalogPriceIndex(customerCode?: string) {
       if (typeof data.sku_code === "string" && data.sku_code) store(`sku:${data.sku_code}`);
       if (typeof data.item_code === "string" && data.item_code) store(`item:${data.item_code}`);
     }
-  } catch {
+  } catch (error) {
+    // Sem conexão, o índice vazio tiraria os valores da tela sem aviso.
+    if (firestoreSemConexao(error)) throw error;
     return index;
   }
   return index;
@@ -220,6 +227,25 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: { "content-type": "application/json" },
   });
+}
+
+/*
+ * Sem rede, o Firestore não falha: devolve com sucesso o que estiver no cache
+ * da memória, vazio ou pela metade, e a tela afirmava "Nenhum…"
+ * (docs/plataforma/diagnostico-carregamento.md, seção 9, item 1). Toda
+ * leitura daqui passa por estas duas, e a que não veio do servidor é falta de
+ * conexão.
+ */
+async function getDocs<A, D extends DocumentData>(consulta: Query<A, D>): Promise<QuerySnapshot<A, D>> {
+  const snapshot = await lerDocsDoFirestore(consulta);
+  if (snapshot.metadata?.fromCache === true) throw new SemConexao();
+  return snapshot;
+}
+
+async function getDoc<A, D extends DocumentData>(referencia: DocumentReference<A, D>): Promise<DocumentSnapshot<A, D>> {
+  const snapshot = await lerDocDoFirestore(referencia);
+  if (snapshot.metadata?.fromCache === true) throw new SemConexao();
+  return snapshot;
 }
 
 function toIso(value: unknown): string {
@@ -323,7 +349,9 @@ async function readCollectionCount(name: string): Promise<number> {
   try {
     const snapshot = await getCountFromServer(collection(firestore, name));
     return snapshot.data().count;
-  } catch {
+  } catch (error) {
+    // Sem conexão, o 0 seria um zero falso no Início.
+    if (firestoreSemConexao(error)) throw error;
     return 0;
   }
 }
@@ -334,7 +362,8 @@ async function readOpsAggregate(id: string): Promise<AnyRecord | null> {
     const snapshot = await getDoc(doc(firestore, collectionNames.opsAggregates, id));
     if (!snapshot.exists()) return null;
     return normalizeDoc(snapshot);
-  } catch {
+  } catch (error) {
+    if (firestoreSemConexao(error)) throw error;
     return null;
   }
 }
@@ -504,7 +533,7 @@ async function readPaged(
     );
   } catch (error) {
     // Uma lista parcial de caixas faria o espaço livre parecer maior.
-    if (options.requireIndexedRead) throw error;
+    if (options.requireIndexedRead || firestoreSemConexao(error)) throw error;
     console.warn(
       `[readPaged] query failed for ${name}, falling back to capped scan.`,
       error,
@@ -1204,7 +1233,8 @@ async function getClientOverview() {
     try {
       const portalStatus = await getDoc(doc(firestore, collectionNames.clientPortalStatus, customerCode));
       outboundBlocked = portalStatus.exists() && portalStatus.data()?.outbound_blocked === true;
-    } catch {
+    } catch (error) {
+      if (firestoreSemConexao(error)) throw error;
       outboundBlocked = false;
     }
   }
@@ -1349,6 +1379,7 @@ async function getAgentDuteChat(conversationId?: string) {
       ),
     );
   } catch (error) {
+    if (firestoreSemConexao(error)) throw error;
     console.warn(
       "[agent-dute] histórico sem índice composto; reduzindo o escopo mas mantendo a ordem.",
       error,
@@ -1421,6 +1452,7 @@ async function getAgentDuteConversations() {
       query(conversationsRef, ...scope, orderBy("last_message_at", "desc"), fsLimit(CONVERSATION_LIST_CAP)),
     );
   } catch (error) {
+    if (firestoreSemConexao(error)) throw error;
     // Sem o índice composto (ainda não publicado), lê sem ordem e ordena aqui.
     console.warn("[agent-dute] lista de conversas sem índice composto.", error);
     snapshot = await getDocs(query(conversationsRef, ...scope, fsLimit(200)));
@@ -3174,6 +3206,7 @@ export function installCloudApi() {
 
       return await route(url.pathname, method, url.searchParams, init);
     } catch (error) {
+      if (firestoreSemConexao(error)) return json(corpoSemConexao(), 503);
       return json(
         {
           message:

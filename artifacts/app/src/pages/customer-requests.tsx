@@ -29,6 +29,9 @@ import { canDecideRequests, humanApiError } from "@/lib/permissions";
 import { useItemPhotos } from "@/lib/use-item-photos";
 import { cn } from "@/lib/utils";
 import { recordCustomerCode } from "@/lib/active-customer";
+import { erroDaResposta } from "@/lib/erro-da-resposta";
+import { semConexaoNaLeitura } from "@/lib/conexao";
+import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
 
 export type CustomerRequest = {
   id: string;
@@ -240,10 +243,7 @@ const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(text || `HTTP ${response.status}`);
-  }
+  if (!response.ok) throw erroDaResposta(response.status, await response.text().catch(() => ""));
   return response.json() as Promise<T>;
 }
 
@@ -1218,6 +1218,9 @@ export default function CustomerRequests() {
     refetchInterval: 120_000,
     retry: 1,
   });
+  // Sem rede, a fila que já estava fica, com a hora da leitura; sem nada
+  // lido, o aviso (decisão 2 do celular).
+  const semRede = semConexaoNaLeitura(requests);
 
   const transition = useMutation<
     TransitionResponse,
@@ -1435,11 +1438,16 @@ export default function CustomerRequests() {
               className="pl-9"
             />
           </div>
+          {!requests.isLoading && semRede && semRede.lidaEm !== null ? (
+            <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={requests.isFetching} onTentar={() => void requests.refetch()} />
+          ) : null}
           {requests.isLoading ? (
             <p className="px-1 py-6 text-sm text-muted-foreground">
               Carregando solicitações...
             </p>
-          ) : requests.error ? (
+          ) : semRede && semRede.lidaEm === null ? (
+            <BlocoSemConexao tentando={requests.isFetching} onTentar={() => void requests.refetch()} />
+          ) : requests.error && !semRede ? (
             <p className="px-1 py-6 text-sm text-destructive">
               Não consegui carregar a fila.
             </p>

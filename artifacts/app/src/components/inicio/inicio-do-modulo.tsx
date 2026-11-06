@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
+import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fraseDoInicio, type ItemDoInicio, type TomDoItem } from "@/lib/inicio-do-modulo";
 import { formatToday, greeting } from "@/lib/saudacao";
@@ -74,11 +75,19 @@ export type InicioDoModuloProps = {
   falhas: readonly string[];
   /** A coluna ao lado: os números do módulo. */
   lateral?: ReactNode;
+  /**
+   * Sem rede (docs/plataforma/diagnostico-carregamento.md, decisão 2 do
+   * celular): o que já estava fica, com a hora da leitura (`lidaEm`); sem
+   * nada lido (`lidaEm: null`), o aviso no lugar do "Precisa de você", e
+   * nenhuma frase de que nada espera.
+   */
+  semConexao?: { lidaEm: number | null; tentando: boolean; onTentar: () => void } | null;
 };
 
-export function InicioDoModulo({ nome, hoje, noModulo, itens, carregando, falhas, lateral }: InicioDoModuloProps) {
+export function InicioDoModulo({ nome, hoje, noModulo, itens, carregando, falhas, lateral, semConexao = null }: InicioDoModuloProps) {
   const primeiroNome = nome.split(" ")[0] ?? "";
   const frase = fraseDoInicio(itens.length, noModulo);
+  const semNadaLido = semConexao !== null && semConexao.lidaEm === null;
   return (
     <div className="flex flex-col gap-7">
       <header className="flex flex-col gap-1.5">
@@ -87,7 +96,7 @@ export function InicioDoModulo({ nome, hoje, noModulo, itens, carregando, falhas
           {greeting(hoje)}
           {primeiroNome ? `, ${primeiroNome}` : ""}
         </h1>
-        {carregando ? null : (
+        {carregando || semNadaLido ? null : (
           <p className="text-lg text-muted-foreground">
             {frase.destaque ? <strong className="font-extrabold text-destructive-soft-foreground">{frase.destaque}</strong> : null}
             {frase.destaque ? " " : null}
@@ -96,14 +105,20 @@ export function InicioDoModulo({ nome, hoje, noModulo, itens, carregando, falhas
         )}
       </header>
 
-      {falhas.length ? (
+      {semConexao ? (
+        semConexao.lidaEm === null ? (
+          <BlocoSemConexao tentando={semConexao.tentando} onTentar={semConexao.onTentar} />
+        ) : (
+          <FaixaSemConexao lidaEm={semConexao.lidaEm} tentando={semConexao.tentando} onTentar={semConexao.onTentar} />
+        )
+      ) : falhas.length ? (
         <p role="alert" className="rounded-lg border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm font-semibold text-warning-soft-foreground">
           Não foi possível carregar: {falhas.join(", ")}.
         </p>
       ) : null}
 
       <div className="flex flex-wrap items-start gap-7">
-        {carregando || itens.length ? (
+        {!semNadaLido && (carregando || itens.length) ? (
           <section aria-labelledby="precisa-de-voce" className="flex min-w-0 flex-[2.2_1_560px] flex-col gap-3.5">
             <TituloDaSecao id="precisa-de-voce">Precisa de você</TituloDaSecao>
             {carregando ? (

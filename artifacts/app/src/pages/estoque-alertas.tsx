@@ -6,6 +6,8 @@ import { useActiveCustomer } from "@/lib/active-customer-context";
 import { MEMORIA_LIBERADA } from "@/lib/liberacao";
 import { alertaLido, alternarItem, alternarTodos, itensMarcados, type AlertaProposto } from "@/lib/memoria/alertas";
 import { chamarNucleo } from "@/lib/memoria/api";
+import { erroDaResposta } from "@/lib/erro-da-resposta";
+import { semConexaoNaLeitura } from "@/lib/conexao";
 
 import { AlertasParadosView } from "./estoque-alertas-view";
 
@@ -40,7 +42,7 @@ export function alertaDoDetalhe(
 
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
-  if (!response.ok) throw new Error((await response.text().catch(() => "")) || `HTTP ${response.status}`);
+  if (!response.ok) throw erroDaResposta(response.status, await response.text().catch(() => ""));
   return response.json() as Promise<T>;
 }
 
@@ -96,9 +98,18 @@ export default function EstoqueAlertas() {
     if (alerta) setMarcadosPorAlerta((atual) => ({ ...atual, [alerta.id]: proximos }));
   };
 
+  // Sem rede, a lista lida fica com a hora dela; sem nada lido, o aviso
+  // (decisão 2 do celular).
+  const semRede = MEMORIA_LIBERADA ? semConexaoNaLeitura(consulta) : null;
+
   return (
     <AlertasParadosView
-      estado={MEMORIA_LIBERADA && consulta.isLoading ? "carregando" : consulta.isError ? "erro" : "pronto"}
+      estado={MEMORIA_LIBERADA && consulta.isLoading ? "carregando" : consulta.isError && !semRede ? "erro" : "pronto"}
+      semConexao={
+        semRede
+          ? { lidaEm: semRede.lidaEm, tentando: consulta.isFetching, onTentar: () => void queryClient.invalidateQueries({ queryKey: ["stock-alerts"] }) }
+          : null
+      }
       alertas={alertas}
       alerta={alerta}
       nomeDoCliente={nomeDoCliente}

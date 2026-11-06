@@ -57,6 +57,7 @@ import type { OperationalFoundationSnapshot } from "@/lib/operational-foundation
 import { cn } from "@/lib/utils";
 import { recordCustomerCode } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { erroDaResposta } from "@/lib/erro-da-resposta";
 
 type EventSeverity = "info" | "attention" | "critical";
 
@@ -263,10 +264,7 @@ const genericTraceEventType = "operator.note";
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
-  if (!response.ok) {
-    const message = await response.text().catch(() => "");
-    throw new Error(message || `HTTP ${response.status}`);
-  }
+  if (!response.ok) throw erroDaResposta(response.status, await response.text().catch(() => ""));
   return response.json() as Promise<T>;
 }
 
