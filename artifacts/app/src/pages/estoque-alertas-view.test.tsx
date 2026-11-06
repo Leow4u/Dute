@@ -100,3 +100,29 @@ describe("Estoque › Alertas na v3", () => {
     expect(await violacoesDeAcessibilidade(tela({ alertas: [SAFRA, ITAU] }))).toEqual([]);
   });
 });
+
+/** Sem rede (docs/plataforma/diagnostico-carregamento.md, decisão 2 do celular, de 06/11/2026). */
+describe("Estoque › Alertas sem conexão", () => {
+  const tentar = { tentando: false, onTentar: () => undefined };
+  // 13:42 UTC são 10:42 no armazém.
+  const lidaEm = Date.parse("2026-11-06T13:42:00Z");
+
+  it("com a lista lida: o alerta fica, com a hora da leitura", () => {
+    const textos = textosDaTela(tela({ semConexao: { lidaEm, ...tentar } }));
+    expect(textos.slice(0, 3)).toEqual(["Alertas de itens parados", "Sem conexão · lista de 10:42", "Tentar de novo"]);
+    expect(textos).toContain("Itaú Unibanco");
+  });
+
+  it("sem nada lido: o aviso, nunca \"Nenhum alerta para aprovar\"", () => {
+    expect(textosDaTela(tela({ alertas: [], alerta: null, semConexao: { lidaEm: null, ...tentar } }))).toEqual([
+      "Alertas de itens parados",
+      "Sem conexão.",
+      "Tentar de novo",
+    ]);
+  });
+
+  it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
+    expect(await violacoesDeAcessibilidade(tela({ semConexao: { lidaEm, ...tentar } }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(tela({ alertas: [], alerta: null, semConexao: { lidaEm: null, ...tentar } }))).toEqual([]);
+  });
+});

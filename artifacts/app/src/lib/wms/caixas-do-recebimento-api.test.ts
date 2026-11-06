@@ -48,3 +48,14 @@ describe("tentativas rejeitadas pelo servidor", () => {
     expect(pedidoFoiRejeitado(new Error("Falha de rede"))).toBe(false);
   });
 });
+
+/** Sem rede (docs/plataforma/diagnostico-carregamento.md, seção 9, item 2). */
+it("a chamada sem resposta diz que faltou conexão e continua contando como resultado incerto", async () => {
+  // O SDK do Firebase, quando o fetch nem chega a uma resposta (status 0).
+  const causa = Object.assign(new Error("internal"), { code: "functions/internal" });
+  chamada.mockRejectedValueOnce(causa);
+  const falha = await iniciarCaixa({ receipt_id: "inb_teste", idempotency_key: "tentativa-1" }).catch((erro: unknown) => erro);
+  expect(falha).toMatchObject({ message: "Sem conexão. Tente de novo quando o sinal voltar.", code: "functions/internal", cause: causa });
+  // A chave da tentativa fica: o pedido pode ter chegado ao servidor.
+  expect(pedidoFoiRejeitado(falha)).toBe(false);
+});

@@ -72,6 +72,10 @@ sente, do mais grave ao mais cosmético:
    (a regra 1.2 do plano pede); a validação de saldo usa o ícone de alerta
    como indicador de espera.
 
+O celular tem seção própria (seção 9), com o app de verdade num Pixel 7
+simulado. O achado mais grave de lá vale para o computador também: sem rede, a
+leitura devolve a lista vazia como se fosse a resposta.
+
 ## 2. Como a Armazenagem carrega hoje
 
 - **Entrada.** `AuthProvider` (`lib/auth.tsx`) só libera depois do
@@ -408,3 +412,224 @@ O `Spinner` já é o anel (decisão 5). O atraso de 300 ms e o aviso de 10 s
 | Diálogos que fecham durante a ação | 22, mais 4 confirmações que fecham no clique |
 | Timeout das callables | 70 s; 180 s na foto de catálogo e no chat |
 | Testes do WMS que travam "Carregando" | 6 de 69 |
+
+## 9. No celular (06/11/2026)
+
+Esta seção veio de rodar o app de verdade num Pixel 7 simulado (412 × 839 px),
+contra os emuladores locais de `docs/plataforma/ambiente-local.md`: Auth e
+Firestore, sem as Functions. A base tinha três usuários de teste (operação,
+owner e cliente da BTG) e seis itens de estoque. Cada estado saiu de um jeito:
+
+- o "carregando", de segurar as respostas do Firestore;
+- o "sem sinal", de cortar a rede do aparelho;
+- a ação em andamento, de segurar e depois recusar as chamadas às Functions.
+
+A leitura do código das telas, com a lente do celular, completou o que as fotos
+não mostram (teclado, toque, câmera, volta do segundo plano). As fotos estão em
+`docs/plataforma/diagnostico-carregamento/celular/`, e as correções do PR 581
+aparecem como estão hoje no código. "Medido" quer dizer que foi visto no app
+rodando; o resto foi lido no código, e o que é inferido diz isso.
+
+### 9.1 O que o celular mostra
+
+1. **Sem rede, a lista aparece vazia em vez de dar erro.** São dois caminhos
+   para o mesmo "Nenhum pedido…":
+   - **Sem rede nenhuma**, o react-query (5.101, `networkMode` padrão) pausa
+     a leitura. A tela fica sem `isLoading` e sem erro, e mostra o vazio
+     (`pages/pedidos.tsx:494`, `pages/receber.tsx:329`). No portal, o Estoque
+     diz "Inventário inicial em andamento" (`pages/client/shared.tsx:475`).
+     Lido no pacote instalado.
+   - **Com sinal fraco**, o aparelho acha que está conectado, e o Firestore,
+     que só tem cache em memória (`lib/firebase.ts`), devolve com sucesso o
+     que estiver nessa memória, vazio ou pela metade. Nenhuma das 13 leituras
+     de `lib/cloud-api.ts` confere `metadata.fromCache`. Medido sem rede, logo
+     depois de entrar: `/api/products` voltou com 0 itens em 4 ms (o servidor
+     tem 6), `/api/stock-balances` com 0, e `/api/skus` com os 6 que já
+     estavam na memória.
+
+   Nos dois casos, o erro de Pedidos do PR 581 não aparece, porque não há
+   erro. Só a faixa "Sem conexão" do shell avisa, e só quando o aparelho sabe
+   que está sem rede (`navigator.onLine`).
+2. **A ação sem rede trava ou diz "Falha interna no servidor"** (foto 04).
+   - Sem rede nenhuma, a gravação fica pausada em "Registrando..." até a rede
+     voltar, e aí sai sozinha, minutos depois, sem aviso. A faixa do portal diz
+     que "movimentações permanecem bloqueadas"
+     (`components/layout/app-layout.tsx:462`), mas nada bloqueia.
+   - Com sinal fraco, a chamada que não alcança o servidor volta com o código
+     `internal`, e `lib/functions-api.ts:1050` traduz para "Falha interna no
+     servidor. Tente novamente ou avise o time técnico." (medido). Se a rede
+     só demora, a chamada desiste em 70 s com `deadline-exceeded`.
+   - Em Pedidos, o toast de erro mostra o JSON cru da resposta, porque
+     `humanApiError` não lê o corpo que `fetchJson` põe na mensagem
+     (`lib/permissions.ts:73`).
+3. **A tela que ainda não foi aberta quebra sem rede** (foto 05). O service
+   worker guarda só o shell, e cada tela entra no cache na primeira visita
+   (`vite.config.ts`, `runtimeCaching`). Como todo deploy troca o nome dos
+   arquivos, isso vale para toda tela ainda não aberta desde a última
+   publicação. Sem sinal, ela cai em "Nao foi possivel carregar esta tela.
+   Uma nova versao pode ter sido publicada.", assim, sem acentos (medido).
+   "Recarregar", sem rede, não resolve. O mesmo `ChunkErrorBoundary`
+   (`App.tsx:50`) pega qualquer erro de tela, não só o de arquivo, e dá a
+   mesma frase para todos. Depois de um deploy, nada avisa nem recarrega.
+4. **A abertura fica em branco** (foto 01, medido), na operação e no portal:
+   até o perfil chegar, a tela não mostra nada. Sem perfil guardado e sem
+   sinal, fica assim até a rede voltar. A folha do Google Fonts no
+   `index.html` não está em cache e segura a primeira pintura com sinal fraco.
+5. **A leitura do armazém pesa no 4G.** O `/api/warehouse/ops` traz até cerca
+   de 9.900 documentos de 12 coleções (`lib/cloud-api.ts:184`, `:1545`). O
+   shell da Armazenagem relê essa leitura a cada 60 s em qualquer tela, para os
+   contadores do menu, que a barra do celular nem mostra
+   (`components/layout/wms-layout.tsx:36`). Como a chave é a mesma, o
+   "Atualizar" de Pedidos e de Receber gira e desliga sozinho a cada
+   releitura. O "Confirmar separação" faz até quatro chamadas e duas dessas
+   leituras debaixo de um único "Registrando..." (`pages/pedidos.tsx:388`).
+6. **Na volta de outro app, nada relê na hora.** `refetchOnWindowFocus` está
+   desligado (`lib/queryClient.ts:6`), e o intervalo parado em segundo plano só
+   roda no próximo tique: até 60 s em Pedidos e Receber, de 120 a 300 s no
+   Estoque. O `realtime-sync` atualiza Pedidos e Receber quando o Firestore
+   reconecta, mas não o Estoque. Nenhuma tela v3 diz "atualizado às".
+7. **A ação em andamento apaga a tela inteira** (foto 03, medido). Em
+   Posições, durante a gravação, todos os botões esmaecem por igual, sem
+   spinner nem rótulo, e o botão tocado não se distingue dos outros.
+8. **O toast cobre o cabeçalho** (foto 04, medido). No celular ele aparece no
+   topo (`components/ui/toast.tsx:16`, `fixed top-0`) por 5 s, por cima do
+   seletor de módulo e do cliente ativo, e essa faixa não aceita toque
+   enquanto ele está lá. O X só aparece no hover, então não existe no toque;
+   dá para deslizar para a direita.
+9. **O diálogo longo esconde a ação, e o teclado esconde mais** (fotos 06 e
+   07). Na chegada avulsa, o "Criar conferência" fica no fim da rolagem, uns
+   500 px abaixo da tela (medido), e o diálogo cobre a faixa "Sem conexão".
+   Sem rede, a linha fica em "Verificando o catálogo" por mais de 30 s
+   (medido), sem dizer que o problema é a conexão; o cadastro novo continua
+   bloqueado, que é o que importa. O Separado foca o lacre ao abrir
+   (`features/warehouse-ops/separado.tsx:100`), e no Android o teclado cobre o
+   "Confirmar separação" (inferido). Só o detalhe do produto no portal tem o
+   rodapé sempre à vista. A ficha do item, abaixo de 1024 px, abre num painel
+   com um X de cerca de 16 px.
+10. **As fotos sobem no tamanho original.** A câmera abre direto
+    (`capture="environment"`) na chegada avulsa, na Contagem e na ficha do
+    item, e a foto vai inteira para o Storage, sem compactar, por um envio que
+    não informa progresso (`uploadBytes`, `features/warehouse-ops/shared.ts`).
+    O SDK tenta de novo por até 10 min. A compactação já existe no app
+    (`lib/attachment-compact.ts`), mas só serve o anexo do Agent Dute e o aviso
+    de envio do portal. Uma foto de celular tem de 2 a 5 MB; no 4G do galpão,
+    cada uma leva dezenas de segundos só com "Enviando..." (estimado). Os
+    Documentos mandam até 20 MB em base64 por uma chamada que desiste em 70 s.
+11. **Não há trava contra toque duplo na Armazenagem.** O Campo tem a dele
+    (`lib/campo/toque-unico.ts`, 1 s), e nenhuma tela da Armazenagem a usa.
+    No celular, o toque sem retorno visual se repete, e há brechas:
+    - a guarda da caixa gera uma chave de idempotência nova a cada toque
+      (`features/warehouse-ops/guarda-da-caixa.tsx:199`, `:232`, `:238`);
+    - a exceção da tarefa vai sem chave (`features/warehouse-ops/task-actions.tsx:81`);
+    - em Pedidos, o botão volta ativo antes de a lista se reler;
+    - no portal, "Avisar reposição" e "Arquivar" nos cards não desligam
+      (`pages/client/estoque.tsx:1526`, `:1807`).
+
+    O que o servidor faz com o segundo envio não foi conferido.
+12. **Não há puxar para atualizar, e o Atualizar é pequeno.** A área de
+    conteúdo usa `overscroll-behavior: contain` (medido), o que desliga o
+    gesto. O Atualizar só existe em Pedidos, Receber e Solicitações, e mede
+    40 × 40 px (medido), abaixo dos 44 px da regra 1.2 do plano de
+    implantação. Estoque, Mapa e o portal não têm o botão.
+13. **O "carregando" é um texto pequeno no topo** (foto 02, medido), e o resto
+    da tela parece vazio. O spinner com rótulo já foi decidido (decisão 1) e
+    entra com as peças. No portal, o botão flutuante "Pedido · N itens"
+    (`pages/client/estoque.tsx:906`) fica por cima da barra de baixo.
+
+No WMS, nada fica escondido atrás da barra de baixo nem do cabeçalho: os dois
+ficam no fluxo da página, e o conteúdo rola entre eles.
+
+### 9.2 Necessidades no celular, em ordem de dor
+
+| # | O que falta | Onde | Quem sente |
+| --- | --- | --- | --- |
+| 1 | Sem rede, a leitura vira "Sem conexão" e nunca lista vazia: a leitura pausada pelo react-query e a que veio só do cache do Firestore aparecem como falta de conexão, no `ErroNaLeitura` | Todas as listas e fichas | A operação no galpão |
+| 2 | A ação sem rede tem resposta clara: é recusada na hora com "Sem conexão" (decisão 1). Com sinal fraco, "Sem conexão. Tente de novo quando o sinal voltar." no lugar de "Falha interna no servidor"; o toast sem JSON cru | Toda gravação | Todos |
+| 3 | As telas da operação abrem sem sinal: depois de entrar, os papéis internos guardam no cache as telas que usam. O `ChunkErrorBoundary` diz "Sem conexão" quando for isso, separa erro de arquivo de erro de tela e ganha os acentos | Toda tela depois de um deploy | A operação |
+| 4 | As fotos sobem compactadas, com a contagem e o progresso | Chegada avulsa, Contagem, ficha do item | Quem recebe e quem conta |
+| 5 | A trava contra toque duplo, com a chave de idempotência por tentativa na guarda da caixa e na exceção | Ações | A operação |
+| 6 | A leitura do armazém mais leve no celular: o shell não relê a cada 60 s o que a barra não mostra, e o Separado não lê duas vezes | Todas as telas da Armazenagem | Quem usa 4G |
+| 7 | A volta do segundo plano relê as listas abertas e diz "atualizado às" | Pedidos, Receber, Estoque | A operação |
+| 8 | A abertura com a marca e o spinner (decisão 3), "Sem conexão" depois de 3 s sem rede, e a fonte que não segura a primeira pintura | Abertura | Todos |
+| 9 | No celular, o rodapé do diálogo longo fica preso embaixo, acima do teclado, com o "Sem conexão" dentro do diálogo; o X do painel com 44 px | Chegada avulsa, Separado, ficha do item | Quem recebe e quem separa |
+| 10 | Só o botão da ação gira e diz o gerúndio; o resto da tela não apaga | Posições e as ações da seção 4 | A operação |
+| 11 | O toast longe do cabeçalho, com um jeito de fechar no toque | Toda ação | Todos |
+| 12 | Botão de ícone com 44 px no celular, e o Atualizar onde a operação precisa (decisão 5) | Pedidos, Receber, Estoque | A operação |
+
+### 9.3 Proposta para o celular
+
+Os itens 8, 10, 11 e o tamanho do botão (item 12) entram no PR das peças, que
+já estava decidido. O restante vira cinco PRs, um problema por PR:
+
+1. **Sem conexão na leitura e na ação** (itens 1 e 2). A leitura pausada ou
+   vinda só do cache, com o aparelho sem rede, vira erro de conexão, e a ação
+   é recusada na hora (decisão 1). A falha de rede da chamada vira "Sem conexão", e o
+   toast de Pedidos para de mostrar o JSON.
+2. **Telas da operação sem sinal** (item 3). Depois de entrar, os papéis
+   internos aquecem o cache das telas que usam, e o `ChunkErrorBoundary`
+   distingue falta de rede, versão nova e erro de tela.
+3. **Fotos do celular** (item 4). A foto passa pela compactação que o app já
+   tem, e o envio mostra a contagem e o progresso (`uploadBytesResumable`).
+4. **Ação no celular** (itens 5 e 9). A trava de toque duplo, as chaves por
+   tentativa, o rodapé preso nos diálogos longos e o X de 44 px.
+5. **Leitura leve e volta do segundo plano** (itens 6 e 7). O shell sem a
+   releitura de 60 s no celular, o Separado com uma leitura só, e a releitura
+   na volta ao app com o "atualizado às".
+
+O PR 1 vem antes dos outros. Sem ele, o erro de Pedidos e a espera da chegada
+avulsa do PR 581 não aparecem no celular sem sinal, porque a leitura não
+falha.
+
+### 9.4 Decisões do Leonardo (06/11/2026)
+
+As cinco perguntas do celular foram respondidas com a recomendação de cada
+uma:
+
+1. **Ação sem rede: recusada na hora**, com "Sem conexão", em vez de ficar
+   numa fila. É simples e honesto; a fila do Campo pode vir depois, para a
+   guarda, se a operação pedir.
+2. **Lista sem sinal: o que já estava fica**, marcado com "Sem conexão ·
+   lista de 10:42". O aviso no lugar da lista só aparece quando ainda não há
+   nada lido.
+3. **As telas da operação ficam no aparelho**: depois de entrar, os papéis
+   internos guardam as telas que usam, para abrirem sem sinal. O custo é
+   baixar alguns MB a cada publicação.
+4. **A foto do celular é compactada** para 2000 px no lado maior, como o
+   anexo do Agent Dute: a foto do catálogo continua nítida nesse tamanho.
+5. **No celular, o toast vai para baixo**, perto do polegar, acima da barra
+   de navegação. **No lugar de puxar para atualizar fica o botão Atualizar**
+   com 44 px, levado também ao Estoque, porque o gesto conflita com a rolagem
+   das listas longas.
+
+O PR 1 do celular (sem conexão na leitura e na ação) entrou no PR 582, com
+este diagnóstico:
+
+- a leitura de `lib/cloud-api.ts` que só achou o cache da memória responde
+  503 com o código `sem_conexao`; a contagem, o agregado e o índice de
+  preços sem rede não viram zero nem vazio (`lib/conexao.ts`);
+- o react-query não pausa a leitura nem a ação sem rede (`networkMode:
+  "always"` em `lib/queryClient.ts`); a fila do Campo não passa por ali;
+- a ação sem rede é recusada na hora, e a chamada sem resposta diz "Sem
+  conexão. Tente de novo quando o sinal voltar." no lugar de "Falha interna
+  no servidor": em `lib/functions-api.ts`, na chegada por caixa, na guarda da
+  área, no cancelamento do recebimento e nas chamadas do núcleo (o Agent
+  Dute e a memória);
+- o toast mostra a mensagem do servidor, não o JSON: `lib/erro-da-resposta.ts`
+  nos `fetchJson` da Armazenagem que guardavam o corpo cru, e o
+  `humanApiError`;
+- Pedidos, Receber, Estoque, Estoque › Alertas, Mapa, Solicitações, o
+  Início e o painel do owner mantêm a lista lida, com "Sem conexão · lista
+  de 10:42" (`FaixaSemConexao`), e, sem nada lido, mostram o aviso "Sem
+  conexão." (`BlocoSemConexao`), os dois em
+  `components/ui/erro-na-leitura.tsx`. O Início sem nada lido não diz que
+  nada espera nem mostra os números zerados, e o portal não troca o que já
+  estava por "Portal indisponível".
+
+Ficam para depois:
+
+- as leituras que vão ao Firestore sem passar por `lib/cloud-api.ts` (o
+  seletor de cliente, Pessoas, as anotações e os playbooks do Agent Dute),
+  que sem rede ainda devolvem o cache;
+- o `deadline-exceeded` de 70 s, que fica com a mensagem própria das
+  operações longas (seção 6, PR 8);
+- os PRs 2 a 5 do celular.

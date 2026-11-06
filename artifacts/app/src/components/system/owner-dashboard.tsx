@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Settings2 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
 import { useToast } from "@/hooks/use-toast";
+import { semConexaoNaLeitura } from "@/lib/conexao";
 import {
   dashboardKey,
   formatMoney,
@@ -127,8 +129,14 @@ export function OwnerDashboard() {
     refetchInterval: 60_000,
   });
 
+  // Sem rede, o painel que já estava fica, com a hora da leitura; sem nada
+  // lido, o aviso (decisão 2 do celular).
+  const semRede = semConexaoNaLeitura(dashboard);
+  const reler = () => void dashboard.refetch();
+
   if (dashboard.isLoading) return <p className="text-sm text-muted-foreground">Carregando o painel…</p>;
-  if (dashboard.isError || !dashboard.data) {
+  if (semRede && semRede.lidaEm === null) return <BlocoSemConexao tentando={dashboard.isFetching} onTentar={reler} />;
+  if (!dashboard.data || (dashboard.isError && !semRede)) {
     return <p className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-4 text-sm text-destructive-soft-foreground">Não consegui carregar o painel: {dashboard.error?.message}</p>;
   }
   const data = dashboard.data;
@@ -138,6 +146,9 @@ export function OwnerDashboard() {
 
   return (
     <div className="space-y-4">
+      {semRede && semRede.lidaEm !== null ? (
+        <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={dashboard.isFetching} onTentar={reler} />
+      ) : null}
       {usage.month.over_budget ? (
         <p className="flex items-start gap-2 rounded-md border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm text-warning-soft-foreground" role="alert">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />

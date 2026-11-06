@@ -4,6 +4,7 @@ import { AlertTriangle, Ban, Check, Forklift, Inbox, PackageOpen, RefreshCw, X }
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
 import { PageHeader } from "@/components/ui/page-header";
 import { QueueGroup, QueueRow } from "@/components/ui/queue-list";
 import { Segmented } from "@/components/ui/segmented";
@@ -26,6 +27,7 @@ import { useIsDesktop } from "@/hooks/use-desktop";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { caixasGuardadas, chegadaPorCaixa } from "@/lib/wms/caixas-do-recebimento";
 import { useAppUser } from "@/lib/auth";
+import { semConexaoNaLeitura } from "@/lib/conexao";
 import { canOperateWarehouse } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { generatedSkuNote } from "@/lib/product-match";
@@ -202,6 +204,14 @@ export default function Receber() {
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
   };
+  // Sem rede, a lista que já estava fica, com a hora da leitura; sem nada
+  // lido, o aviso. A falta de conexão não troca a lista pelo erro
+  // (decisão 2 do celular).
+  const semRede = semConexaoNaLeitura(ops, requests);
+  const recarregar = () => {
+    refresh();
+    void queryClient.invalidateQueries({ queryKey: ["customer-requests", "receber"] });
+  };
   const openCount = pendingNotices.length + board.check.length + board.guardando.length + board.store.length;
 
   const taskPanel = selectedNotice ? (
@@ -326,9 +336,15 @@ export default function Receber() {
         }
       /> : null}
 
+      {!fichaLarga && !ops.isLoading && semRede && semRede.lidaEm !== null ? (
+        <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={ops.isFetching || requests.isFetching} onTentar={recarregar} />
+      ) : null}
+
       {fichaLarga ? <section aria-label="Bancada de conferência" className="min-w-0">{panel}</section> : ops.isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando chegadas...</p>
-      ) : ops.error ? (
+      ) : semRede && semRede.lidaEm === null ? (
+        <BlocoSemConexao tentando={ops.isFetching || requests.isFetching} onTentar={recarregar} />
+      ) : ops.error && !semRede ? (
         <p className="text-sm text-destructive">
           Não consegui carregar as chegadas.{" "}
           <button type="button" className="font-medium underline" onClick={() => ops.refetch()}>

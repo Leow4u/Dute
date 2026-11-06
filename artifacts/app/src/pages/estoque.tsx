@@ -76,6 +76,9 @@ import {
 } from "@/lib/memoria/parados";
 import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
+import { erroDaResposta } from "@/lib/erro-da-resposta";
+import { semConexaoNaLeitura } from "@/lib/conexao";
+import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -96,10 +99,7 @@ const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(text || `HTTP ${response.status}`);
-  }
+  if (!response.ok) throw erroDaResposta(response.status, await response.text().catch(() => ""));
   return response.json() as Promise<T>;
 }
 
@@ -119,6 +119,7 @@ const FILTERS: Array<{ value: StockFilter; label: string }> = [
 ];
 
 export default function Estoque() {
+  const queryClient = useQueryClient();
   const { user } = useAppUser();
   const role = user?.publicMetadata.role;
   const catalogWriter = canWriteCatalog(role);
@@ -169,6 +170,15 @@ export default function Estoque() {
     enabled: MEMORIA_LIBERADA,
     staleTime: 60_000,
   });
+  // Sem rede, a lista que já estava fica, com a hora da leitura; sem nada
+  // lido, o aviso. A falta de conexão não troca a lista pelo erro
+  // (decisão 2 do celular).
+  const semRede = semConexaoNaLeitura(skus, balances, products);
+  const relendo = skus.isFetching || balances.isFetching || products.isFetching;
+  const reler = () => {
+    void queryClient.invalidateQueries({ queryKey: ["estoque"] });
+    void queryClient.invalidateQueries({ queryKey: ["stock-balances", "estoque"] });
+  };
   const regra = regraDoModelo(activeCustomer.profile.template.key);
   const hoje = hojeEmSaoPaulo();
   const parados = useMemo(
@@ -309,9 +319,15 @@ export default function Estoque() {
             </FilterPanel>
           </div>
 
+          {!skus.isLoading && semRede && semRede.lidaEm !== null ? (
+            <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={relendo} onTentar={reler} />
+          ) : null}
+
           {skus.isLoading ? (
             <p className="text-sm text-muted-foreground">Carregando estoque...</p>
-          ) : skus.error ? (
+          ) : semRede && semRede.lidaEm === null ? (
+            <BlocoSemConexao tentando={relendo} onTentar={reler} />
+          ) : skus.error && !semRede ? (
             <p className="text-sm text-destructive">Não consegui carregar o estoque.</p>
           ) : (
             <div

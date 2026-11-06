@@ -28,6 +28,7 @@ export default function Home() {
         carregando: inbox.carregando,
         falhas: inbox.falhas,
         hoje: seesWarehouse ? { ...inbox.summary, skus } : null,
+        semConexao: inbox.semConexao ? { ...inbox.semConexao, tentando: inbox.relendo, onTentar: inbox.reler } : null,
       }}
     />
   );

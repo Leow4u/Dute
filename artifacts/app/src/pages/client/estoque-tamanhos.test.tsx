@@ -82,9 +82,14 @@ async function abrir(filtro = "Com saldo", itens = [...ITENS, ARQUIVADO], card =
     });
   }
   expect(document.querySelector('[data-testid="stock-card"]'), "catálogo carregado").not.toBeNull();
-  const situacao = [...document.querySelectorAll("button")].find((item) => item.textContent?.trim().startsWith(filtro));
-  expect(situacao, `filtro ${filtro}`).toBeDefined();
-  await clicar(situacao!);
+  const situacao = document.querySelector<HTMLSelectElement>('select[aria-label="Filtrar por saldo"]');
+  expect(situacao, "filtro de saldo").not.toBeNull();
+  const opcao = [...situacao!.options].find((item) => item.textContent?.startsWith(filtro));
+  expect(opcao, `filtro ${filtro}`).toBeDefined();
+  await act(async () => {
+    situacao!.value = opcao!.value;
+    situacao!.dispatchEvent(new Event("change", { bubbles: true }));
+  });
   await clicar(botao(card));
 }
 

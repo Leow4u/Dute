@@ -2,6 +2,7 @@ import { httpsCallable } from "firebase/functions";
 import { functionsDoApp } from "./firebase-functions";
 
 import { clienteDaChamada } from "./active-customer";
+import { SEM_CONEXAO, aparelhoSemRede, callableSemResposta, corpoSemConexao } from "./conexao";
 import { firebaseApp } from "./firebase";
 
 /**
@@ -1031,6 +1032,9 @@ export async function callFunctionsApi(
   if (!firebaseApp) return null;
   const route = functionRoute(pathname, method);
   if (!route) return null;
+  // Sem rede, a ação é recusada na hora, sem chegar a sair
+  // (docs/plataforma/diagnostico-carregamento.md, decisão 1 do celular).
+  if (aparelhoSemRede()) return response(corpoSemConexao(), 503);
 
   try {
     const callable = httpsCallable(
@@ -1041,6 +1045,8 @@ export async function callFunctionsApi(
     const result = await callable(await route.payload(pathname, init));
     return response(result.data, route.status ?? 200);
   } catch (error) {
+    // A chamada que não teve resposta nenhuma não é falha do servidor.
+    if (callableSemResposta(error)) return response(corpoSemConexao(), 503);
     const { code, status } = functionsErrorStatus(error);
     const rawMessage =
       error instanceof Error
@@ -1088,6 +1094,7 @@ export async function streamAgentDuteChat<T>(
     for await (const chunk of stream) onChunk(chunk);
     return await data;
   } catch (error) {
+    if (callableSemResposta(error)) throw new Error(SEM_CONEXAO);
     const rawMessage = error instanceof Error ? error.message : "";
     throw new Error(
       !rawMessage || rawMessage === "INTERNAL"

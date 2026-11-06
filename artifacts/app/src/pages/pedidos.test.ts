@@ -66,7 +66,18 @@ describe("Pedidos na v3", () => {
     const erro = FONTE.indexOf(") : semLeitura ? (");
     expect(erro).toBeGreaterThan(FONTE.indexOf("Carregando pedidos..."));
     expect(erro).toBeLessThan(FONTE.indexOf(') : view === "delivered" ? ('));
-    expect(FONTE).toMatch(/<ErroNaLeitura\s+mensagem="Não consegui carregar os pedidos\."\s+tentando=\{ops\.isFetching \|\| requests\.isFetching\}\s+onTentar=\{refreshAll\}/);
+    expect(FONTE).toContain("const relendo = ops.isFetching || requests.isFetching;");
+    expect(FONTE).toMatch(/<ErroNaLeitura\s+mensagem="Não consegui carregar os pedidos\."\s+tentando=\{relendo\}\s+onTentar=\{refreshAll\}/);
+  });
+
+  it("sem rede, a lista lida fica com a hora, e sem nada lido vem o aviso, nunca o vazio (decisão 2 do celular)", () => {
+    // Quem não decide não lê as solicitações: só o armazém entra na conta.
+    expect(FONTE).toContain("const semRede = semConexaoNaLeitura(ops, ...(decider ? [requests] : []));");
+    const aviso = FONTE.indexOf(") : semRede && semRede.lidaEm === null ? (");
+    expect(aviso).toBeGreaterThan(FONTE.indexOf("Carregando pedidos..."));
+    expect(aviso).toBeLessThan(FONTE.indexOf(") : semLeitura ? ("));
+    expect(FONTE).toMatch(/<BlocoSemConexao tentando=\{relendo\} onTentar=\{refreshAll\} \/>/);
+    expect(FONTE).toMatch(/!loading && semRede && semRede\.lidaEm !== null \? \(\s*<FaixaSemConexao lidaEm=\{semRede\.lidaEm\} tentando=\{relendo\} onTentar=\{refreshAll\} \/>/);
   });
 
   it("só a primeira linha da fila tem a ação principal", () => {

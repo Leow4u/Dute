@@ -133,3 +133,36 @@ describe("Início da Armazenagem", () => {
     expect(await violacoesDeAcessibilidade(render({ itens: [], carregando: true }))).toEqual([]);
   });
 });
+
+/** Sem rede (docs/plataforma/diagnostico-carregamento.md, decisão 2 do celular, de 06/11/2026). */
+describe("Início da Armazenagem sem conexão", () => {
+  const tentar = { tentando: false, onTentar: () => undefined };
+  // 13:42 UTC são 10:42 no armazém.
+  const lidaEm = Date.parse("2026-11-06T13:42:00Z");
+
+  it("com o que já estava lido: fica tudo, com a hora da leitura no lugar do aviso de falha", () => {
+    const textos = textosDaTela(render({ falhas: ["armazém"], semConexao: { lidaEm, ...tentar } }));
+    expect(textos).toContain("Sem conexão · lista de 10:42");
+    expect(textos).toContain("PED-3 parado na separação");
+    expect(textos).toContain("Hoje no armazém");
+    expect(textos).not.toContain("Não foi possível carregar: armazém.");
+  });
+
+  it("sem nada lido: o aviso, sem a frase de que nada espera e sem os números zerados", () => {
+    // Sem leitura, a caixa de entrada sai vazia e os números do dia, zerados.
+    const textos = textosDaTela(
+      render({
+        itens: [],
+        falhas: ["armazém"],
+        hoje: { toPick: 0, toShip: 0, inTransit: 0, openReceipts: 0, skus: null },
+        semConexao: { lidaEm: null, ...tentar },
+      }),
+    );
+    expect(textos).toEqual(["Sexta-feira, 23 de outubro", "Bom dia, Sandra", "Sem conexão.", "Tentar de novo"]);
+  });
+
+  it("passa nas regras WCAG 2.1 A e AA do axe, com a lista e sem nada lido", async () => {
+    expect(await violacoesDeAcessibilidade(render({ semConexao: { lidaEm, ...tentar } }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ itens: [], semConexao: { lidaEm: null, ...tentar } }))).toEqual([]);
+  });
+});

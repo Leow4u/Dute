@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -42,5 +44,19 @@ describe("Mapa › saldo sem caixa registrada", () => {
       textosForaDaLista(html, ["Saldo sem caixa registrada", "71 un.", /^\d+ × .+$/]),
     ).toEqual([]);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+});
+
+/** Sem rede (docs/plataforma/diagnostico-carregamento.md, decisão 2 do celular, de 06/11/2026). */
+describe("Mapa sem conexão", () => {
+  const fonte = readFileSync(new URL("./warehouse-map.tsx", import.meta.url), "utf8");
+
+  it("o mapa lido fica com a hora; sem nada lido, o aviso, e não \"Nenhuma posição cadastrada\"", () => {
+    expect(fonte).toContain("const semRede = semConexaoNaLeitura(positionsQuery, boxesQuery);");
+    expect(fonte).toContain("const error = semRede ? null : positionsQuery.error ?? boxesQuery.error;");
+    expect(fonte).toContain("const empty = !loading && !error && !semNadaLido && shelves.length === 0;");
+    expect(fonte).toMatch(/semRede\.lidaEm === null \? \(\s*<BlocoSemConexao tentando=\{relendo\} onTentar=\{reler\} \/>\s*\) : \(\s*<FaixaSemConexao lidaEm=\{semRede\.lidaEm\}/);
+    // A situação do inventário sem rede não vira um segundo aviso.
+    expect(fonte).toContain("showSessionStatus && sessionQuery.isError && !ehSemConexao(sessionQuery.error)");
   });
 });

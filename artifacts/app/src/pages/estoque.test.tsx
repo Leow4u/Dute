@@ -323,3 +323,17 @@ describe("o Guardar do saldo parado numa área (decisão 16, parte 7e)", () => {
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });
+
+/** Sem rede (docs/plataforma/diagnostico-carregamento.md, decisão 2 do celular, de 06/11/2026). */
+describe("Estoque sem conexão", () => {
+  const fonte = readFileSync(new URL("./estoque.tsx", import.meta.url), "utf8");
+
+  it("a lista lida fica com a hora; sem nada lido, o aviso; a falta de conexão não troca a lista pelo erro", () => {
+    expect(fonte).toContain("const semRede = semConexaoNaLeitura(skus, balances, products);");
+    expect(fonte).toMatch(/!skus\.isLoading && semRede && semRede\.lidaEm !== null \? \(\s*<FaixaSemConexao lidaEm=\{semRede\.lidaEm\} tentando=\{relendo\} onTentar=\{reler\} \/>/);
+    const aviso = fonte.indexOf(") : semRede && semRede.lidaEm === null ? (");
+    expect(aviso).toBeGreaterThan(fonte.indexOf("Carregando estoque..."));
+    expect(aviso).toBeLessThan(fonte.indexOf("Não consegui carregar o estoque."));
+    expect(fonte).toContain(") : skus.error && !semRede ? (");
+  });
+});

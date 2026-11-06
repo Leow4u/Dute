@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip as FilterChip } from "@/components/ui/chip";
+import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
 import { PageHeader } from "@/components/ui/page-header";
 import { itensParadosEmTexto, rotuloDoAlerta, type AlertaProposto } from "@/lib/memoria/alertas";
 import { dataDoRelogio, diasEmTexto } from "@/lib/memoria/parados";
@@ -32,6 +33,11 @@ export type AlertasParadosViewProps = {
   /** O erro da última decisão. */
   erro: string | null;
   acoes: AcoesDosAlertas;
+  /**
+   * Sem rede (decisão 2 do celular): a lista lida fica com a hora dela
+   * (`lidaEm`), e sem nada lido vem o aviso (`lidaEm: null`).
+   */
+  semConexao?: { lidaEm: number | null; tentando: boolean; onTentar: () => void } | null;
 };
 
 const numero = new Intl.NumberFormat("pt-BR");
@@ -101,12 +107,17 @@ function Alerta({ alerta, nome, marcados, ocupado, erro, acoes }: { alerta: Aler
   );
 }
 
-export function AlertasParadosView({ estado, alertas, alerta, nomeDoCliente, marcados, ocupado, erro, acoes }: AlertasParadosViewProps) {
+export function AlertasParadosView({ estado, alertas, alerta, nomeDoCliente, marcados, ocupado, erro, acoes, semConexao = null }: AlertasParadosViewProps) {
   return (
     <div className="flex flex-col gap-4 pb-24">
       <PageHeader title="Alertas de itens parados" />
+      {estado !== "carregando" && semConexao && semConexao.lidaEm !== null ? (
+        <FaixaSemConexao lidaEm={semConexao.lidaEm} tentando={semConexao.tentando} onTentar={semConexao.onTentar} />
+      ) : null}
       {estado === "carregando" ? (
         <p className="text-sm text-muted-foreground">Carregando alertas...</p>
+      ) : semConexao && semConexao.lidaEm === null ? (
+        <BlocoSemConexao tentando={semConexao.tentando} onTentar={semConexao.onTentar} />
       ) : estado === "erro" ? (
         <p className="text-sm text-destructive-soft-foreground">Não consegui carregar os alertas.</p>
       ) : !alerta ? (

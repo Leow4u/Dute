@@ -553,24 +553,22 @@ function renderToolbar(props: Partial<ComponentProps<typeof MarketplaceToolbar>>
     <MarketplaceToolbar
       searchTerm=""
       stockFilter="todos"
-      categoryFilter="todos"
+      categoryFilters={[]}
       categories={categorias}
-      sortMode="relevancia"
+      sortMode="maior-saldo"
       viewMode="cards"
       groupVariants
       onGroupVariantsChange={noop}
-      cartQuantity={0}
-      cartOpen={false}
+      resultCount={3}
       filterCounts={contagens}
       activeFilterCount={0}
       hasActiveFilters={false}
       onSearchChange={noop}
       onStockFilterChange={noop}
-      onCategoryFilterChange={noop}
+      onCategoryFiltersChange={noop}
       onSortModeChange={noop}
       onViewModeChange={noop}
       onClearFilters={noop}
-      onCartToggle={noop}
       {...props}
     />,
   );
@@ -586,25 +584,8 @@ function controlesNoCelular(html: string) {
   return controles;
 }
 
-const textosDaBarra = [
-  "Cards",
-  "Lista",
-  "Agrupar tamanhos",
-  "Pedido",
-  "0",
-  "Situação",
-  /^(Todos|Com saldo|Abaixo do mínimo|Sem saldo) · \d+$/,
-  "Arquivados",
-  /^Todos os tipos \(\d+\)$/,
-  /^(Polo|Toalha) \(\d+\)$/,
-  "Mais relevantes",
-  "Maior saldo",
-  "Menor saldo",
-  "Nome: A-Z",
-];
-
-describe("barra do estoque no celular", () => {
-  it("presa no topo, fica só a busca e o botão de filtros", () => {
+describe("barra e resultados do estoque", () => {
+  it("no celular, os controles da barra são a busca e o botão de filtros", () => {
     expect(controlesNoCelular(renderToolbar())).toEqual(["Buscar por nome ou código", "Filtros"]);
   });
 
@@ -617,26 +598,36 @@ describe("barra do estoque no celular", () => {
     dom.window.close();
   });
 
-  it("o botão diz quantos filtros estão ativos", () => {
-    const html = renderToolbar({ stockFilter: "disponiveis", sortMode: "nome", activeFilterCount: 2, hasActiveFilters: true });
-    expect(html).toContain('aria-label="Filtros, 2 ativos"');
+  it("o botão conta filtros de saldo e tipo, sem contar a ordenação", () => {
+    const html = renderToolbar({ stockFilter: "disponiveis", categoryFilters: ["polo"], sortMode: "nome", activeFilterCount: 2, hasActiveFilters: true });
     expect(controlesNoCelular(html)).toEqual(["Buscar por nome ou código", "Filtros, 2 ativos"]);
   });
 
-  it("no desktop a barra continua com formato, tamanhos, pedido, situação, tipo e ordem", () => {
-    const html = renderToolbar();
-    expect(html).toContain('aria-label="Formato de visualização"');
-    expect(html).toContain('role="switch"');
-    expect(html).toContain("Pedido");
-    expect(html).toContain('aria-label="Filtrar por tipo"');
-    expect(html).toContain('aria-label="Ordenar produtos"');
-    expect(html).toContain("Com saldo · 3");
+  it("oferece saldo, resultado, ordenação e exibição; o pedido fica no cabeçalho da página", () => {
+    const dom = new JSDOM(renderToolbar());
+    const documento = dom.window.document;
+    const saldo = documento.querySelector<HTMLSelectElement>('select[aria-label="Filtrar por saldo"]')!;
+    expect(saldo).not.toBeNull();
+    expect([...saldo.options].map((option) => option.value)).toEqual(["todos", "disponiveis", "baixo", "zerado"]);
+    expect(saldo.disabled).toBe(false);
+    expect(documento.querySelector('[aria-label="Formato de visualização"]')).not.toBeNull();
+    expect(documento.querySelector('[role="switch"]')).not.toBeNull();
+    expect(documento.querySelector('[aria-label="Ordenar produtos"]')).not.toBeNull();
+    expect(documento.querySelector('[role="status"]')?.textContent).toBe("3 itens encontrados");
+    expect(documento.querySelector('[aria-label^="Abrir pedido"]')).toBeNull();
+    dom.window.close();
   });
 
-  it("mostra só rótulos, dados e ações e passa no axe", async () => {
-    const html = renderToolbar();
-    expect(textosForaDaLista(html, textosDaBarra)).toEqual([]);
-    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  it("em arquivados, desativa saldo e indica que todos os saldos estão incluídos", () => {
+    const dom = new JSDOM(renderToolbar({ stockFilter: "arquivados", activeFilterCount: 1, hasActiveFilters: true }));
+    const saldo = dom.window.document.querySelector<HTMLSelectElement>('select[aria-label="Filtrar por saldo"]')!;
+    expect(saldo.disabled).toBe(true);
+    expect(saldo.selectedOptions[0]?.textContent).toContain("Todos os saldos");
+    dom.window.close();
+  });
+
+  it("a barra passa no axe", async () => {
+    expect(await violacoesDeAcessibilidade(renderToolbar())).toEqual([]);
   });
 });
 
@@ -646,13 +637,13 @@ describe("painel de filtros do estoque no celular", () => {
       <StockFilterGroups
         stockFilter="disponiveis"
         filterCounts={contagens}
-        categoryFilter="polo"
+        categoryFilters={["polo"]}
         categories={categorias}
-        sortMode="relevancia"
+        sortMode="maior-saldo"
         viewMode={viewMode}
         groupVariants
         onStockFilterChange={noop}
-        onCategoryFilterChange={noop}
+        onCategoryFiltersChange={noop}
         onSortModeChange={noop}
         onViewModeChange={noop}
         onGroupVariantsChange={noop}
@@ -660,70 +651,75 @@ describe("painel de filtros do estoque no celular", () => {
     );
   }
 
-  it("leva situação, tipo, ordem e exibição", () => {
-    const html = renderGrupos();
-    for (const grupo of ["Situação", "Tipo", "Ordenar", "Exibição"]) {
-      expect(html).toContain(`role="group" aria-label="${grupo}"`);
+  it("leva saldo, tipos, cadastro, ordem e exibição em grupos nomeados", () => {
+    const dom = new JSDOM(renderGrupos());
+    for (const grupo of ["Saldo", "Ordenar", "Exibição"]) {
+      expect(dom.window.document.querySelector(`[role="group"][aria-label="${grupo}"]`), grupo).not.toBeNull();
     }
-    expect(html).toContain('aria-label="Formato de visualização"');
-    expect(html).toContain("Agrupar tamanhos");
+    expect([...dom.window.document.querySelectorAll("fieldset legend")].map((legend) => legend.textContent)).toEqual(["Tipo de produto", "Cadastro"]);
+    expect(dom.window.document.querySelector('[aria-label="Formato de visualização"]')).not.toBeNull();
+    expect(dom.window.document.body.textContent).toContain("Agrupar tamanhos");
+    dom.window.close();
   });
 
   it("na lista, sem cards, não oferece agrupar tamanhos", () => {
     expect(renderGrupos("lista")).not.toContain("Agrupar tamanhos");
   });
 
-  it("o tipo é um seletor de 16px, para o Safari não aproximar a tela", () => {
+  it("permite mais de um tipo com checkboxes rotulados e busca", () => {
     const dom = new JSDOM(renderGrupos());
-    const tipo = dom.window.document.querySelector('select[aria-label="Filtrar por tipo"]')!;
-    expect(tipo.classList.contains("text-base")).toBe(true);
+    const documento = dom.window.document;
+    expect(documento.querySelector('input[aria-label="Buscar tipo de produto"]')).not.toBeNull();
+    expect(documento.querySelectorAll('[role="checkbox"]')).toHaveLength(3);
+    for (const label of ["Todos os tipos", "Polo", "Toalha"]) {
+      expect([...documento.querySelectorAll("label")].some((elemento) => elemento.textContent === label)).toBe(true);
+    }
     dom.window.close();
   });
 
-  it("mostra só rótulos, dados e ações e passa no axe", async () => {
-    const html = renderGrupos();
-    expect(
-      textosForaDaLista(html, [...textosDaBarra, "Tipo", "Ordenar", "Exibição"]),
-    ).toEqual([]);
-    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  it("os grupos passam no axe", async () => {
+    expect(await violacoesDeAcessibilidade(renderGrupos())).toEqual([]);
   });
 });
 
 describe("filtros ativos do estoque", () => {
-  it("contam situação, tipo e ordem fora do padrão, na ordem do painel", () => {
+  it("conta saldo e cada tipo selecionado, sem preferência de ordenação", () => {
     expect(
-      activeCatalogFilters({ stockFilter: "baixo", categoryFilter: "polo", categories: categorias, sortMode: "maior-saldo" }),
+      activeCatalogFilters({ stockFilter: "baixo", categoryFilters: ["polo", "toalha"], categories: categorias }),
     ).toEqual([
       { key: "situacao", label: "Abaixo do mínimo" },
-      { key: "tipo", label: "Polo" },
-      { key: "ordem", label: "Maior saldo" },
+      { key: "tipo:polo", label: "Polo" },
+      { key: "tipo:toalha", label: "Toalha" },
+    ]);
+  });
+
+  it("arquivados é um filtro de cadastro, sem saldo contraditório", () => {
+    expect(activeCatalogFilters({ stockFilter: "arquivados", categoryFilters: [], categories: categorias })).toEqual([
+      { key: "cadastro", label: "Arquivados" },
     ]);
   });
 
   it("no padrão, não há nada ativo nem etiqueta", () => {
-    const ativos = activeCatalogFilters({
-      stockFilter: "todos",
-      categoryFilter: "todos",
-      categories: categorias,
-      sortMode: "relevancia",
-    });
+    const ativos = activeCatalogFilters({ stockFilter: "todos", categoryFilters: [], categories: categorias });
     expect(ativos).toEqual([]);
     expect(renderToStaticMarkup(<ActiveFilterChips filters={ativos} onRemove={noop} />)).toBe("");
   });
 
-  it("cada etiqueta tira o próprio filtro e passa no axe", async () => {
+  it("cada etiqueta tem uma ação nomeada para tirar o próprio filtro e passa no axe", async () => {
     const html = renderToStaticMarkup(
       <ActiveFilterChips
         filters={[
           { key: "situacao", label: "Com saldo" },
-          { key: "tipo", label: "Polo" },
+          { key: "tipo:polo", label: "Polo" },
+          { key: "tipo:toalha", label: "Toalha" },
         ]}
         onRemove={noop}
       />,
     );
-    expect(html).toContain('aria-label="Tirar o filtro Com saldo"');
-    expect(html).toContain('aria-label="Tirar o filtro Polo"');
-    expect(textosForaDaLista(html, ["Com saldo", "Polo"])).toEqual([]);
+    for (const filtro of ["Com saldo", "Polo", "Toalha"]) {
+      expect(html).toContain(`aria-label="Tirar o filtro ${filtro}"`);
+    }
+    expect(textosForaDaLista(html, ["Com saldo", "Polo", "Toalha"])).toEqual([]);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });

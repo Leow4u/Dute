@@ -1,6 +1,7 @@
 /** Pure warehouse-ops domain model (types + helpers, no React UI). */
 
 import { nomeComTamanho } from "@workspace/dominio";
+import { erroDaResposta } from "../erro-da-resposta";
 import type { CaixaDaChegada, FaltaMarcada, LinhaDaCaixa } from "../wms/caixas-do-recebimento";
 import {
   ClipboardCheck,
@@ -554,8 +555,7 @@ export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> 
   const response = await fetch(url, init);
 
   if (!response.ok) {
-    const message = await response.text().catch(() => "");
-    throw new Error(message || `HTTP ${response.status}`);
+    throw erroDaResposta(response.status, await response.text().catch(() => ""));
   }
 
   return response.json() as Promise<T>;

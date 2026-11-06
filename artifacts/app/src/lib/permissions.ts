@@ -81,8 +81,22 @@ export function humanApiError(error: unknown, fallback: string): string {
     if (typeof message === "string") {
       // ApiError.message vem como "HTTP 403 Forbidden: <texto do servidor>".
       const detail = message.replace(/^HTTP \d+[^:]*:\s*/, "").trim();
+      // Os fetchJson das telas guardam na mensagem o corpo inteiro da
+      // resposta, e o toast mostrava o JSON cru
+      // (docs/plataforma/diagnostico-carregamento.md, seção 9, item 2).
+      if (detail.startsWith("{")) return mensagemDoCorpo(detail) ?? fallback;
       if (detail && !/^HTTP \d+/.test(detail)) return detail;
     }
   }
   return fallback;
+}
+
+function mensagemDoCorpo(texto: string): string | null {
+  try {
+    const corpo = JSON.parse(texto) as { message?: unknown; error?: unknown } | null;
+    const message = corpo?.message ?? corpo?.error;
+    return typeof message === "string" && message.trim() ? message.trim() : null;
+  } catch {
+    return null;
+  }
 }
