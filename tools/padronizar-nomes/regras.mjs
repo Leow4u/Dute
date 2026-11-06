@@ -7,7 +7,7 @@
  */
 
 /** Os tamanhos de roupa na ordem natural; N1… e os números vêm depois. */
-export const TAMANHOS_DE_ROUPA = ["PP", "P", "M", "G", "GG", "XG", "XGG", "EG", "EGG", "U"];
+export const TAMANHOS_DE_ROUPA = ["PP", "P", "M", "G", "GG", "XG", "XGG", "XXG", "XXXG", "EG", "EGG", "EXG", "XS", "S", "L", "XL", "XXL", "U"];
 
 /** Siglas que ficam em maiúsculas no nome. */
 export const SIGLAS = new Set(["BTG", "PAN", "SW", "UV", "UVA", "UVB", "LED", "USB", "PVC", "PET", "GPS", "TV", "PC", "SP", "RJ", "MG", "DF", "BR"]);
@@ -54,10 +54,10 @@ export function sufixoDoCodigo(codigo) {
   return /^[A-Za-z0-9]{1,4}$/.test(ultimo) ? ultimo.toUpperCase() : null;
 }
 
-/** Um tamanho de roupa, N1…N9 ou um número de dois dígitos (20 a 69). */
+/** Um tamanho de roupa, N1…N9 ou um número de 1 a 69 (infantil e numeração). */
 export function ehTamanho(token) {
   const valor = texto(token).toUpperCase();
-  return TAMANHOS_DE_ROUPA.includes(valor) || /^N[1-9]$/.test(valor) || /^[2-6][0-9]$/.test(valor);
+  return TAMANHOS_DE_ROUPA.includes(valor) || /^N[1-9]$/.test(valor) || /^(?:[1-9]|[1-6][0-9])$/.test(valor);
 }
 
 /** A posição na ordem natural: PP, P, M, G…; depois N1…; depois os números; o resto no fim. */
@@ -90,10 +90,12 @@ export function tirarTamanhoDoFim(nome, sufixo) {
   const [, antes, token] = achado;
   const maiusculo = token.toUpperCase();
   if (!antes.trim()) return { nome, tirou: null, conferir: null };
-  if (sufixo && maiusculo === sufixo) return { nome: antes.trim(), tirou: token, conferir: null };
+  // "Polo preto tam G" e "… tamanho G": a palavra sai junto com o tamanho.
+  const semPalavra = antes.trim().replace(/[\s\-–]+(?:tam\.?|tamanho)$/iu, "").trim() || antes.trim();
+  if (sufixo && maiusculo === sufixo) return { nome: semPalavra, tirou: token, conferir: null };
   if (!ehTamanho(maiusculo)) return { nome, tirou: null, conferir: null };
   if (!sufixo) return { nome, tirou: null, conferir: `tamanho no nome (${maiusculo}) e código sem tamanho` };
-  return { nome: antes.trim(), tirou: token, conferir: `tamanho no nome (${maiusculo}) diferente do código (${sufixo})` };
+  return { nome: semPalavra, tirou: token, conferir: `tamanho no nome (${maiusculo}) diferente do código (${sufixo})` };
 }
 
 const MASCULINO = /\b(?:masculin[oa]s?|masc)\b\.?/giu;
@@ -135,7 +137,7 @@ export function hifenizarCores(nome) {
   let resultado = nome;
   for (const cor of CORES_COMPOSTAS) {
     const semHifen = cor.replace("-", " ");
-    const padrao = new RegExp(`\\b${semHifen.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "giu");
+    const padrao = new RegExp(`(?<!\\p{L})${semHifen.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?!\\p{L})`, "giu");
     resultado = resultado.replace(padrao, cor);
   }
   return { nome: resultado, mudou: resultado !== nome };
@@ -185,12 +187,19 @@ export function padronizarNome(entrada) {
   const original = texto(entrada.nome);
   const motivos = [];
   const conferir = [];
-  const sufixo = sufixoDoCodigo(entrada.codigo);
+  const trecho = sufixoDoCodigo(entrada.codigo);
+  const sufixo = tamanhoDoCodigo(entrada.codigo);
   const campoTamanho = texto(entrada.tamanho);
+  const campoMaiusculo = ehTamanho(campoTamanho) ? campoTamanho.toUpperCase() : campoTamanho;
 
-  const tamanho = sufixo ?? (campoTamanho || null);
-  if (sufixo && !campoTamanho) motivos.push("tamanho pelo código");
-  if (sufixo && campoTamanho && campoTamanho.toUpperCase() !== sufixo) conferir.push(`campo Tamanho (${campoTamanho}) diferente do código (${sufixo})`);
+  const tamanho = sufixo ?? (campoMaiusculo || null);
+  if (sufixo && campoMaiusculo !== sufixo) {
+    if (!campoTamanho || campoMaiusculo === sufixo) motivos.push("tamanho pelo código");
+    else conferir.push(`campo Tamanho (${campoTamanho}) diferente do código (${sufixo})`);
+  }
+  if (sufixo && campoTamanho && campoMaiusculo === sufixo && campoTamanho !== sufixo) motivos.push("tamanho pelo código");
+  if (!sufixo && campoTamanho && campoMaiusculo !== campoTamanho) motivos.push("tamanho pelo código");
+  if (trecho && !sufixo) conferir.push(`tamanho do código (${trecho}) não é um tamanho conhecido`);
 
   if (!original) {
     conferir.push("nome vazio");
@@ -206,9 +215,11 @@ export function padronizarNome(entrada) {
     return { nome, tamanho, motivos: ordenar(motivos), conferir };
   }
 
-  const semTamanho = tirarTamanhoDoFim(nome, sufixo);
+  // Sem tamanho no código, vale o do campo Tamanho, quando é um tamanho conhecido.
+  const alvo = sufixo ?? (campoMaiusculo && ehTamanho(campoMaiusculo) ? campoMaiusculo : null);
+  const semTamanho = tirarTamanhoDoFim(nome, alvo);
   if (semTamanho.tirou) motivos.push("tamanho no nome");
-  if (semTamanho.conferir) conferir.push(semTamanho.conferir);
+  if (semTamanho.conferir) conferir.push(sufixo ? semTamanho.conferir : semTamanho.conferir.replace("diferente do código", "diferente do campo Tamanho"));
   nome = semTamanho.nome;
 
   const comEtiqueta = etiquetaDeGenero(nome);
@@ -238,8 +249,90 @@ function ordenar(motivos) {
   return ORDEM_DOS_MOTIVOS.filter((motivo) => motivos.includes(motivo));
 }
 
-/** O código sem o tamanho: a família (A.01.0806.005.XG → A.01.0806.005). Sem tamanho, o código inteiro. */
+/** O tamanho do código, quando o fim dele é um tamanho conhecido (A.01.0806.005.XG → XG; A.01.0806.005 → null). */
+export function tamanhoDoCodigo(codigo) {
+  const sufixo = sufixoDoCodigo(codigo);
+  return sufixo && ehTamanho(sufixo) ? sufixo : null;
+}
+
+/** O código sem o tamanho: a família (A.01.0806.005.XG → A.01.0806.005). Sem tamanho conhecido no fim, o código inteiro. */
 export function familiaDoCodigo(codigo) {
   const valor = texto(codigo);
-  return sufixoDoCodigo(valor) ? valor.slice(0, valor.lastIndexOf(".")) : valor;
+  return tamanhoDoCodigo(valor) ? valor.slice(0, valor.lastIndexOf(".")) : valor;
+}
+
+/** O tamanho do produto: o do código, quando o fim dele é um tamanho conhecido; senão o campo Tamanho (em maiúsculas quando é um tamanho conhecido). */
+export function tamanhoDoProduto(produto) {
+  const doCodigo = tamanhoDoCodigo(produto.codigo);
+  if (doCodigo) return doCodigo;
+  const campo = texto(produto.tamanho);
+  if (!campo) return null;
+  return ehTamanho(campo) ? campo.toUpperCase() : campo;
+}
+
+/**
+ * O nome sem o tamanho no fim, quando o fim é o tamanho do próprio produto
+ * ("Polo preto - XG" com código …XG → "Polo preto"). Só tira o tamanho (e a
+ * palavra "tam"/"tamanho" antes dele); não muda letras nem o resto do nome.
+ */
+export function nomeSemTamanho(produto) {
+  const nome = limparEspacos(texto(produto.nome));
+  const tamanho = tamanhoDoProduto(produto);
+  if (!nome || !tamanho) return nome;
+  const resultado = tirarTamanhoDoFim(nome, tamanho.toUpperCase());
+  return resultado.tirou && !resultado.conferir && resultado.nome ? resultado.nome : nome;
+}
+
+/**
+ * "Polo Masculino Piquet Preto · XG": o nome sem o tamanho e o tamanho depois
+ * do ponto, para as listas que mostram uma linha por tamanho. Tamanho único
+ * (U) e produto sem tamanho ficam só com o nome.
+ */
+export function nomeComTamanho(produto) {
+  const nome = nomeSemTamanho(produto);
+  const tamanho = tamanhoDoProduto(produto);
+  if (!tamanho || tamanho.toUpperCase() === "U") return nome;
+  return nome ? `${nome} · ${tamanho}` : tamanho;
+}
+
+/**
+ * O que impede gravar o nome como está, com a frase que o cadastro mostra;
+ * null quando pode. A caixa das letras, o gênero e os espaços o padrão corrige
+ * sozinho e não são problema. Nome vazio também não: o formulário cobra o
+ * campo obrigatório.
+ *
+ * - so_o_tamanho: o nome é só o tamanho.
+ * - campo_com_outro_tamanho: o campo Tamanho diz um tamanho e o código, outro.
+ * - nome_com_outro_tamanho: o nome termina num tamanho e o código é de outro.
+ * - tamanho_no_nome: o nome termina no tamanho do próprio produto. As telas
+ *   recusam; o backend tira o tamanho do nome (padronizarNome).
+ */
+export function problemaDoNome(produto) {
+  const nome = limparEspacos(texto(produto.nome));
+  if (!nome) return null;
+  const codigo = texto(produto.codigo);
+  const doCodigo = tamanhoDoCodigo(codigo);
+  const campo = texto(produto.tamanho);
+  const tamanho = tamanhoDoProduto(produto);
+  if (ehTamanho(nome) || (tamanho && nome.toUpperCase() === tamanho.toUpperCase())) {
+    return { tipo: "so_o_tamanho", mensagem: "O nome do produto não pode ser só o tamanho." };
+  }
+  if (doCodigo && campo && campo.toUpperCase() !== doCodigo) {
+    return { tipo: "campo_com_outro_tamanho", mensagem: `O código ${codigo} é do tamanho ${doCodigo}, e o Tamanho informado é ${campo}.` };
+  }
+  const achado = /^(.*?)(?:\s*[-–]\s*|\s+)([A-Za-z0-9]{1,4})$/.exec(nome);
+  if (!achado || !achado[1].trim()) return null;
+  const fim = achado[2].toUpperCase();
+  if (!ehTamanho(fim)) return null;
+  if (tamanho && fim === tamanho.toUpperCase()) {
+    const familia = doCodigo ? ` O nome é o mesmo em todos os tamanhos de ${familiaDoCodigo(codigo)}.` : "";
+    return { tipo: "tamanho_no_nome", mensagem: `O tamanho ${fim} fica no campo Tamanho.${familia}` };
+  }
+  if (doCodigo) {
+    return { tipo: "nome_com_outro_tamanho", mensagem: `O nome termina em ${fim}, e o código ${codigo} é do tamanho ${doCodigo}.` };
+  }
+  if (tamanho) {
+    return { tipo: "nome_com_outro_tamanho", mensagem: `O nome termina em ${fim}, e o Tamanho informado é ${tamanho}.` };
+  }
+  return null;
 }

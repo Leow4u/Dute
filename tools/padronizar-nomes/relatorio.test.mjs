@@ -92,6 +92,13 @@ describe("relatório: o que vira conferir", () => {
     assert.equal(semProducts.conferir, "sem registro em products");
   });
 
+  it("products é lido por cliente e código: dois clientes com o mesmo código não se misturam", () => {
+    const skus = [sku("BTG-000001", "A.01.0001.001.M", "Polo Masculino Piquet Preto"), { ...sku("ACM-000001", "A.01.0001.001.M", "Camiseta Acme Branca"), customer_code: "ACME" }];
+    const products = [product("A.01.0001.001.M", "Polo Masculino Piquet Preto"), { ...product("A.01.0001.001.M", "Camiseta Acme Branca"), customer_code: "ACME" }];
+    const { linhas } = montarRelatorio({ skus, products });
+    assert.ok(linhas.every((l) => !l.conferir.includes("products")), linhas.map((l) => l.conferir).join(" | "));
+  });
+
   it("gênero do nome diferente do campo e campo Tamanho diferente do código", () => {
     const skus = [sku("BTG-000401", "A.01.0805.002.PP", "Polo feminina piquet azul marinho PP", { tamanho: "P" })];
     const { linhas } = montarRelatorio({ skus, products: [product("A.01.0805.002.PP", skus[0].produto)] });

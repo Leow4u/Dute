@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { caixaDasLetras, familiaDoCodigo, ordemDoTamanho, padronizarNome, sufixoDoCodigo } from "./regras.mjs";
+import { caixaDasLetras, familiaDoCodigo, nomeComTamanho, nomeSemTamanho, ordemDoTamanho, padronizarNome, problemaDoNome, sufixoDoCodigo, tamanhoDoCodigo } from "./regras.mjs";
 
 /**
  * A cópia em JavaScript do padrão do nome (regras.mjs) roda os mesmos casos
@@ -21,6 +21,25 @@ describe("padrão do nome: casos de referência", () => {
   for (const caso of casos.sufixos) {
     it(`sufixo · ${caso.caso}`, () => {
       assert.equal(sufixoDoCodigo(caso.codigo), caso.sufixo);
+    });
+  }
+
+  for (const caso of casos.tamanhos_do_codigo) {
+    it(`tamanho do código · ${caso.caso}`, () => {
+      assert.equal(tamanhoDoCodigo(caso.codigo), caso.tamanho);
+    });
+  }
+
+  for (const caso of casos.exibicao) {
+    it(`exibição · ${caso.caso}`, () => {
+      assert.equal(nomeSemTamanho(caso), caso.sem_tamanho);
+      assert.equal(nomeComTamanho(caso), caso.com_tamanho);
+    });
+  }
+
+  for (const caso of casos.problemas) {
+    it(`problema · ${caso.caso}`, () => {
+      assert.deepEqual(problemaDoNome(caso), caso.problema);
     });
   }
 

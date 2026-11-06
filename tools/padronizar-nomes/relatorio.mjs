@@ -80,10 +80,12 @@ export function montarRelatorio({ skus, products, cliente = "", familia = "", co
   const linhas = todas.filter((l) => (comArquivados || !l.arquivado) && (!cliente || l.cliente === cliente) && (!familia || chaveDoCodigo(l.codigo).startsWith(chaveDoCodigo(familia))));
 
   // products por código: o apply grava skus e products juntos, então o nome dos dois tem de bater.
+  // Chave por cliente e código (invariante 4): dois clientes podem ter o mesmo código.
   const produtos = new Map();
   for (const doc of products) {
     for (const chave of [chaveDoCodigo(doc.cod_cliente_key), chaveDoCodigo(doc.cod_cliente), chaveDoCodigo(doc.id)]) {
-      if (chave && !produtos.has(chave)) produtos.set(chave, doc);
+      const composta = `${texto(doc.customer_code)}|${chave}`;
+      if (chave && !produtos.has(composta)) produtos.set(composta, doc);
     }
   }
 
@@ -119,7 +121,7 @@ export function montarRelatorio({ skus, products, cliente = "", familia = "", co
     const { linha } = membro;
     const duplicados = porCodigo.get(`${linha.cliente}|${chaveDoCodigo(linha.codigo)}`) ?? [];
     if (duplicados.length > 1) membro.conferir.push(`código com ${duplicados.length} SKUs ativos (${duplicados.join(", ")})`);
-    const produto = produtos.get(chaveDoCodigo(linha.codigo));
+    const produto = produtos.get(`${linha.cliente}|${chaveDoCodigo(linha.codigo)}`);
     if (!produto) membro.conferir.push("sem registro em products");
     else if (texto(produto.produto || produto.name || produto.product_name) !== linha.nome) {
       membro.conferir.push(`products com outro nome: "${texto(produto.produto || produto.name || produto.product_name)}"`);
