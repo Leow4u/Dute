@@ -120,6 +120,21 @@ describe("relatório: o que vira conferir", () => {
     assert.equal(linhas[0].decisao, "aprovar");
   });
 
+  it("a medida no campo Tamanho é a capacidade: aprovar, com o campo como está", () => {
+    const skus = [
+      sku("BTG-000203", "B.0003.006.U", "GARRAFA INOX - BTG", { genero: "", tamanho: "500ML" }),
+      sku("BTG-000197", "B.0572.003.U.B", "COPO BEERCUP EM INOX", { genero: "", tamanho: "475ML" }),
+    ];
+    const { linhas } = montarRelatorio({ skus, products: skus.map((s) => product(s.cod_cliente, s.produto)) });
+    assert.deepEqual(
+      linhas.map((l) => [l.codigo, l.nome_proposto, l.tamanho_proposto, l.decisao, l.conferir]),
+      [
+        ["B.0003.006.U", "Garrafa Inox - BTG", "500ML", "aprovar", ""],
+        ["B.0572.003.U.B", "Copo Beercup em Inox", "475ML", "aprovar", ""],
+      ],
+    );
+  });
+
   it("gênero do nome diferente do campo e campo Tamanho diferente do código", () => {
     const skus = [sku("BTG-000401", "A.01.0805.002.PP", "Polo feminina piquet azul marinho PP", { tamanho: "P" })];
     const { linhas } = montarRelatorio({ skus, products: [product("A.01.0805.002.PP", skus[0].produto)] });

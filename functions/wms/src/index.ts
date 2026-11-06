@@ -97,7 +97,7 @@ import {
   openingUsesGlobalControl,
 } from "./domain/customer-scope.js";
 import { assertManagedCatalogCreateAllowed } from "./domain/catalog-codes.js";
-import { problemaDoNome, tamanhoDoProduto } from "./domain/nome-do-produto.js";
+import { ehMedida, problemaDoNome, tamanhoDoProduto } from "./domain/nome-do-produto.js";
 import { nomeParaGravar } from "./domain/nome-para-gravar.js";
 import {
   COMERCIAL_PRICE_TABLES,
@@ -4214,7 +4214,8 @@ function nomeDoCatalogo(data: Record<string, unknown>, before: Record<string, un
     if (problema?.tipo === "campo_com_outro_tamanho") {
       throw new HttpsError("invalid-argument", problema.mensagem, { code: "PRODUCT_NAME_SIZE", tipo: problema.tipo });
     }
-    const doProduto = tamanhoDoProduto({ codigo: clientCode, tamanho });
+    // A medida ("500ML" de uma garrafa) é a capacidade e fica como foi digitada.
+    const doProduto = ehMedida(tamanho) ? null : tamanhoDoProduto({ codigo: clientCode, tamanho });
     if (doProduto) data.tamanho = doProduto;
   }
 }

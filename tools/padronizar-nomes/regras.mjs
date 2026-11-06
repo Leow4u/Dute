@@ -6,7 +6,8 @@
  *
  * 1. O nome é o mesmo em todos os tamanhos da família: o tamanho sai do fim do
  *    nome e vai para o campo Tamanho, preenchido pelo fim do código do cliente
- *    (A.01.0806.005.XG → XG). "Único" no campo Tamanho é o U do código.
+ *    (A.01.0806.005.XG → XG). "Único" no campo Tamanho é o U do código; a
+ *    medida no campo ("500ML" de um copo) é a capacidade e fica como está.
  * 2. O gênero é uma etiqueta igual para tudo, "Masculino" ou "Feminino", sem
  *    concordar com a peça ("Polo Masculino", "Calça Social Masculino").
  * 3. Inicial maiúscula em cada palavra; conectivos (de, da, com, e) em
@@ -163,6 +164,15 @@ export function ehTamanho(token) {
 export function tamanhoDoCodigo(codigo) {
     const sufixo = sufixoDoCodigo(codigo);
     return sufixo && ehTamanho(sufixo) ? sufixo : null;
+}
+/**
+ * Uma medida, número e unidade colados ou não: "500ML", "1,5 L", "32GB". No
+ * campo Tamanho é a capacidade do produto (copo, garrafa), não um tamanho: não
+ * contradiz o fim do código e fica como está.
+ */
+export function ehMedida(valor) {
+    const partes = /^(\d+(?:[.,]\d+)?)\s*(\p{L}+)$/u.exec(texto(valor));
+    return Boolean(partes && UNIDADES.has(partes[2].toLocaleLowerCase("pt-BR")));
 }
 /** "Único", "UNICO", "Tamanho único" e "Tam. Único", sem acento e em maiúsculas. */
 const TAMANHO_UNICO = /^(?:TAM(?:ANHO)?\.?\s*)?UNICO$/;
@@ -377,8 +387,10 @@ export function padronizarNome(entrada) {
     const sufixo = tamanhoDoCodigo(entrada.codigo);
     const campoTamanho = texto(entrada.tamanho);
     const campoMaiusculo = tamanhoDoCampo(campoTamanho);
-    const tamanho = sufixo ?? (campoMaiusculo || null);
-    if (sufixo && campoMaiusculo !== sufixo) {
+    // A medida no campo ("500ML" de um copo) é a capacidade: fica, e não contradiz o código.
+    const medida = ehMedida(campoTamanho);
+    const tamanho = medida ? campoTamanho : (sufixo ?? (campoMaiusculo || null));
+    if (sufixo && !medida && campoMaiusculo !== sufixo) {
         if (!campoTamanho || campoMaiusculo === sufixo)
             motivos.push("tamanho pelo código");
         else
@@ -388,7 +400,7 @@ export function padronizarNome(entrada) {
         motivos.push("tamanho pelo código");
     if (!sufixo && campoTamanho && campoMaiusculo !== campoTamanho)
         motivos.push("tamanho pelo código");
-    if (trecho && !sufixo)
+    if (trecho && !sufixo && !medida)
         conferir.push(`tamanho do código (${trecho}) não é um tamanho conhecido`);
     let nome = limparEspacos(original);
     if (nome !== original)
@@ -503,7 +515,7 @@ export function problemaDoNome(produto) {
     if (ehTamanho(nome) || (alvo && nome.toUpperCase() === alvo)) {
         return { tipo: "so_o_tamanho", mensagem: "O nome do produto não pode ser só o tamanho." };
     }
-    if (doCodigo && campo && tamanhoDoCampo(campo) !== doCodigo) {
+    if (doCodigo && campo && !ehMedida(campo) && tamanhoDoCampo(campo) !== doCodigo) {
         return { tipo: "campo_com_outro_tamanho", mensagem: `O código ${codigo} é do tamanho ${doCodigo}, e o Tamanho informado é ${campo}.` };
     }
     const fim = tamanhoNoFim(nome, alvo);

@@ -35,6 +35,14 @@ describe("nome para gravar", () => {
     recusa({ nome: "XG", codigo: "A.01.0806.005.XG" }, /não pode ser só o tamanho/);
   });
 
+  it("a medida no campo Tamanho é a capacidade: não é recusada nem trocada pelo código", () => {
+    assert.deepEqual(nomeParaGravar({ nome: "GARRAFA INOX - BTG", codigo: "B.0003.006.U", tamanho: "500ML" }), { nome: "Garrafa Inox - BTG", tamanho: "500ML" });
+    assert.deepEqual(nomeParaGravar({ nome: "Copo Beercup em Inox", codigo: "B.0572.003.U.P", tamanho: "475ML" }, "corrige"), {
+      nome: "Copo Beercup em Inox",
+      tamanho: "475ML",
+    });
+  });
+
   it("com corrige, vale o código e nada para", () => {
     assert.deepEqual(nomeParaGravar({ nome: "Camiseta básica branca M", codigo: "A.01.0310.001.G" }, "corrige"), {
       nome: "Camiseta Básica Branca",

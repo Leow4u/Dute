@@ -1237,6 +1237,64 @@
           "campo Tamanho (Único) diferente do código (M)"
         ]
       }
+    },
+    {
+      "caso": "medida no campo Tamanho é a capacidade: fica como está, sem conferir",
+      "nome": "GARRAFA INOX - BTG",
+      "codigo": "B.0003.006.U",
+      "genero": "",
+      "tamanho": "500ML",
+      "esperado": {
+        "nome": "Garrafa Inox - BTG",
+        "tamanho": "500ML",
+        "motivos": [
+          "maiúsculas"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "medida no campo e letra de tamanho no fim do código: o campo fica",
+      "nome": "COPO BEERCUP EM INOX",
+      "codigo": "B.0572.003.U.P",
+      "genero": "",
+      "tamanho": "475ML",
+      "esperado": {
+        "nome": "Copo Beercup em Inox",
+        "tamanho": "475ML",
+        "motivos": [
+          "maiúsculas"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "medida no campo e fim do código que não é tamanho: sem conferir",
+      "nome": "COPO BEERCUP EM INOX",
+      "codigo": "B.0572.003.U.B",
+      "genero": "",
+      "tamanho": "475ML",
+      "esperado": {
+        "nome": "Copo Beercup em Inox",
+        "tamanho": "475ML",
+        "motivos": [
+          "maiúsculas"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "medida com vírgula e espaço também é medida",
+      "nome": "Squeeze BTG",
+      "codigo": "B.0610.001.U",
+      "genero": "",
+      "tamanho": "1,5 L",
+      "esperado": {
+        "nome": "Squeeze BTG",
+        "tamanho": "1,5 L",
+        "motivos": [],
+        "conferir": []
+      }
     }
   ],
   "tamanhos_do_codigo": [
@@ -1385,6 +1443,14 @@
       "tamanho": "ÚNICO",
       "sem_tamanho": "Toalha de Academia",
       "com_tamanho": "Toalha de Academia"
+    },
+    {
+      "caso": "medida no campo e tamanho único no código: só o nome",
+      "nome": "Garrafa Inox - BTG",
+      "codigo": "B.0003.006.U",
+      "tamanho": "500ML",
+      "sem_tamanho": "Garrafa Inox - BTG",
+      "com_tamanho": "Garrafa Inox - BTG"
     }
   ],
   "problemas": [
@@ -1570,6 +1636,20 @@
         "tipo": "campo_com_outro_tamanho",
         "mensagem": "O código A.01.0806.005.M é do tamanho M, e o Tamanho informado é Único."
       }
+    },
+    {
+      "caso": "medida no campo Tamanho não contradiz o código",
+      "nome": "Garrafa Inox - BTG",
+      "codigo": "B.0003.006.U",
+      "tamanho": "500ML",
+      "problema": null
+    },
+    {
+      "caso": "medida no campo e letra no fim do código não é problema",
+      "nome": "Copo Beercup em Inox",
+      "codigo": "B.0572.003.U.P",
+      "tamanho": "475ML",
+      "problema": null
     }
   ]
 }

@@ -24,7 +24,8 @@ Os tamanhos conhecidos são PP, P, M, G, GG, XG, XGG, XXG, XXXG, EG, EGG, EXG,
 XS, S, L, XL, XXL e U, N1 a N99 e os números de 1 a 69. O fim do código só
 vale como tamanho quando é um deles (A.01.0806.005 não tem tamanho "005").
 No campo Tamanho, "Único", "UNICO" e "Tam. Único" são o U, o mesmo do código
-terminado em U. Fica no nome a medida ("Toalha 500 g"), a letra que é parte dele ("Gola U",
+terminado em U, e a medida ("500ML" de uma garrafa, "475ML" de um copo) é a
+capacidade: não contradiz o fim do código e fica como está. Fica no nome a medida ("Toalha 500 g"), a letra que é parte dele ("Gola U",
 "Vitamina A") e o "U" de quem não é tamanho único.
 
 ## Onde a regra mora

@@ -65,6 +65,17 @@ describe("o Catálogo grava o nome no padrão (passo 2 da padronização)", () =
     assert.equal(sku?.produto, "Polo masculino piquet preto - XG");
   });
 
+  it("a medida no Tamanho de uma garrafa fica como está, e o nome editado vai para o padrão", async () => {
+    const garrafa = { customer_code: BTG, cod_cliente: "B.0003.006.U", cod_cliente_key: "B.0003.006.U", status: "active", archived: false };
+    await db().collection("products").doc("B.0003.006.U").set({ id: "B.0003.006.U", ...garrafa, produto: "GARRAFA INOX - BTG", tamanho: "" });
+    await salvar("products", "B.0003.006.U", { cod_cliente: "B.0003.006.U", tamanho: "500ML" });
+    assert.equal((await db().collection("products").doc("B.0003.006.U").get()).data()?.tamanho, "500ML");
+    await salvar("products", "B.0003.006.U", { cod_cliente: "B.0003.006.U", produto: "garrafa inox - btg", tamanho: "500ML" });
+    const produto = (await db().collection("products").doc("B.0003.006.U").get()).data();
+    assert.equal(produto?.produto, "Garrafa Inox - BTG");
+    assert.equal(produto?.tamanho, "500ML");
+  });
+
   it("editar a cor de um produto com o nome antigo não trava nem renomeia", async () => {
     await salvar("skus", "BTG-000126", { cod_btg: "BTG-000126", cod_cliente: "A.01.0806.005.XG", produto: "Polo masculino piquet preto - XG", cor: "Grafite" });
     const sku = (await db().collection("skus").doc("BTG-000126").get()).data();
