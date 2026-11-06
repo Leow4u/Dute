@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Guarda da caixa no celular com a etiqueta</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+button{font:inherit;color:inherit}
+.ic{width:20px;height:20px;flex:0 0 auto}.ic-s{width:16px;height:16px;flex:0 0 auto}
+.app{display:flex;width:1440px;height:900px;overflow:hidden}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:22px 14px 18px;gap:2px}
+.logo{font-weight:800;font-size:22px;letter-spacing:.04em;padding:0 10px 6px}
+.logo small{display:block;font-size:8px;letter-spacing:.18em;font-weight:700;opacity:.8;margin-top:-2px}
+.sw{display:flex;align-items:center;gap:10px;width:100%;height:44px;margin:8px 0 6px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font:800 15px Manrope,sans-serif;text-align:left}
+.sw .ch{margin-left:auto;opacity:.75}
+.cli{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px}
+.cli .tile{width:34px;height:34px;border-radius:9px;background:#2a2a2a;display:inline-flex;align-items:center;justify-content:center}
+.cli small{display:block;font-size:11px;color:rgba(255,255,255,.6)}
+.cli b{font-size:14px}
+.nav{display:flex;align-items:center;gap:12px;height:44px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.74);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.sub{padding-left:14px}
+.sub .nav{height:40px;font-size:14px;padding-left:28px}
+.sbf{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 10px 0;border-top:1px solid rgba(255,255,255,.12)}
+.av2{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.sbf b{display:block;font-size:14px}.sbf span{font-size:13px;color:rgba(255,255,255,.6)}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;padding:30px 44px;gap:22px;overflow:hidden;position:relative}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.ph h1{font-size:30px;font-weight:800;letter-spacing:-.01em}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;white-space:nowrap;text-decoration:none;cursor:pointer}
+.btn-p{background:#E71C23;color:#fff}.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-g{background:#F0F0ED;color:#161616}
+.btn-d{background:#161616;color:#fff}
+.btn[disabled],.btn.dis{opacity:.45;cursor:default}
+.btn-sm{height:32px;padding:0 12px;font-size:13px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.sec{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#5F6368}
+.muted{color:#5F6368}
+.h2{font-size:18px;font-weight:800}
+.h3{font-size:15px;font-weight:800}
+.row{display:flex;align-items:center;gap:18px;padding:18px 22px;border-top:1px solid #E5E5E1}
+.row:first-child{border-top:0}
+.row b{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:700;flex-wrap:wrap}
+.row span.sub2{display:block;font-size:13.5px;color:#5F6368;margin-top:2px}
+.tile{width:48px;height:48px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;background:#F0F0ED}
+.badge{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.s-red{background:#FBE3E4;border-color:#F3C2C4;color:#8E1016}
+.s-amb{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.s-grn{background:#DDF5E4;border-color:#B6E4C4;color:#14602F}
+.s-blu{background:#E3ECFB;border-color:#C5D6F5;color:#1E4E9C}
+.s-mut{background:#F0F0ED;border-color:#E5E5E1;color:#5F6368}
+.s-new{background:#F3EEFF;border-color:#D9CCFB;color:#5B3FC4}
+.seg{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px}
+.seg a{height:34px;padding:0 14px;border-radius:6px;display:inline-flex;align-items:center;font-weight:700;font-size:13.5px;color:#5F6368;text-decoration:none}
+.seg a.on{background:#161616;color:#fff}
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{text-align:left;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#5F6368;font-weight:800;padding:12px 16px;border-bottom:1px solid #E5E5E1;background:#FAFAF8}
+.tbl td{padding:12px 16px;border-bottom:1px solid #F0F0ED;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13.5px;font-weight:700}
+.inp{height:40px;border:1px solid #D4D4CF;border-radius:8px;background:#fff;padding:0 12px;display:flex;align-items:center;font-size:14px}
+.inp.ro{background:#F0F0ED;color:#5F6368}
+.inp.ph2{color:#5F6368}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.kpi{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border:1px solid #E5E5E1;border-radius:10px;background:#fff}
+.kpi small{font-size:12px;color:#5F6368;font-weight:700}
+.kpi b{font-size:20px;font-weight:800}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 480px;gap:22px;align-items:start}
+.panel{background:#fff;border:1px solid #E5E5E1;border-radius:12px;padding:20px 22px;display:flex;flex-direction:column;gap:16px}
+.ln{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #E5E5E1;border-radius:10px;background:#fff}
+.ln.on{border-color:#E71C23;background:#FFF6F6}
+.ln .t{flex:1 1 auto;min-width:0}
+.ln .t b{display:block;font-size:14.5px}
+.ln .t span{display:block;font-size:13.5px;color:#5F6368}
+.ln .q{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.check{width:18px;height:18px;border-radius:4px;border:1.5px solid #8A8F94;display:inline-block}
+.check.on{background:#161616;border-color:#161616}
+.toast{position:absolute;right:28px;bottom:28px;width:380px;background:#fff;border:1px solid #E5E5E1;border-radius:12px;padding:14px 16px;box-shadow:0 14px 36px rgba(0,0,0,.18)}
+.toast b{display:block;font-size:14px}.toast span{font-size:13.5px;color:#5F6368}
+.dim{position:absolute;inset:0;background:rgba(22,22,22,.45)}
+.dlg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:1120px;max-height:840px;background:#fff;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.35);padding:26px 30px;display:flex;flex-direction:column;gap:18px;overflow:hidden}
+.dlg h2{font-size:22px;font-weight:800}
+.pos{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #E5E5E1;border-radius:10px}
+.pos .rb{width:16px;height:16px;border-radius:50%;border:1.5px solid #8A8F94}
+.pos.on{border-color:#E71C23;background:#FFF6F6}.pos.on .rb{border:5px solid #E71C23}
+.big{font-size:28px;font-weight:800;letter-spacing:-.01em}
+.note{font-size:13.5px;color:#5F6368}
+.step{display:flex;gap:10px;align-items:flex-start}
+.step i{width:24px;height:24px;border-radius:50%;background:#161616;color:#fff;font-style:normal;font-weight:800;font-size:12px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+x-dc{display:contents}.m{width:390px;height:844px;background:#F5F5F3;display:flex;flex-direction:column}.mt{height:64px;background:#161616;color:#fff;display:flex;align-items:center;gap:6px;padding:0 10px;font-weight:800;font-size:18px}.mt .bk{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;font-size:26px;font-weight:600}.mb{flex:1;padding:16px;display:flex;flex-direction:column;gap:12px;overflow:hidden}.bn{height:72px;background:#161616;display:flex;justify-content:space-around;align-items:center;color:rgba(255,255,255,.66);font-size:12.5px;font-weight:700}.bn b{color:#fff}body{width:390px;height:844px;overflow:hidden}
+</style>
+</helmet>
+<div class="m">
+  <div class="mt"><span class="bk">‹</span><span>Guardar caixa</span><span style="margin-left:auto;font-size:13px;font-weight:700;opacity:.85;padding-right:8px">BTG</span></div>
+  <div class="mb">
+    <div style="display:flex;gap:8px"><span class="badge s-red">Guarda</span><span class="badge s-mut">planejada</span></div>
+    <div class="big" style="font-size:24px">CX-000225</div>
+    <div class="muted">AVL-7C21A9F0 · NF 48.377 · origem RECEBIMENTO</div>
+    <div class="card" style="padding:16px;background:#FAFAF8"><div class="sec">Destino</div><div class="big" style="font-size:40px">B-11</div><div>Rua B · prateleira 11</div><div class="muted">Primeira livre da zona</div></div>
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:#FDF0D5;border:1px solid #F3DCA3;color:#8A4B00"><span style="flex:1"><b>Etiqueta impressa com B-09</b> · 14:32</span></div>
+    <div class="sec">Conteúdo</div>
+    <div class="ln" style="flex-direction:column;align-items:stretch;gap:8px">
+      <div style="display:flex;align-items:center;gap:12px"><div class="t"><b>Polo Masculino Piquet Preto · G</b><span>A.01.0713.005.G</span></div><span class="q">12 un.</span></div>
+      <div style="display:flex;align-items:center;gap:12px;border-top:1px solid #E5E5E1;padding-top:8px"><div class="t"><b>Polo Masculino Piquet Preto · GG</b><span>A.01.0713.005.GG</span></div><span class="q">7 un.</span></div>
+    </div>
+    <a class="btn btn-p" style="height:52px;font-size:16px">Concluir guarda em B-11</a>
+    <a class="btn btn-s" style="height:48px">Não cabe aqui</a>
+    <a class="btn btn-s" style="height:48px"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Imprimir etiqueta</a>
+  </div>
+  <div class="bn"><span>Início</span><span>Pedidos</span><b>Receber</b><span>Contagem</span></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

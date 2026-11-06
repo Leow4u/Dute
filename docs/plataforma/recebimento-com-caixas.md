@@ -776,7 +776,11 @@ desenhada e aprovada antes do PR de tela.
      `receber.test.tsx` e `receber-interacao.test.tsx`.
 6. **Etiquetas:** caixa `committing` com destino, origem "Recebimento", o
    conteúdo da caixa do recebimento na etiqueta e no Mapa, "Etiquetas da
-   chegada", reimpressão com evento.
+   chegada", reimpressão com evento. Mockup das nove pranchas feito em
+   06/11/2026, a partir do caso do mesmo dia (duas caixas guardadas em B-09
+   sem etiqueta e sem conteúdo no Mapa), esperando a aprovação do Leonardo e
+   as cinco perguntas do README dos mockups ("Recebimento · etiqueta da
+   caixa").
 7. **Só prateleira para o cliente** (decisão 10), sem liberação por ambiente:
    o Leonardo decidiu em 02/11/2026 que vale já para a produção, no próximo
    disparo manual dele. Em quatro PRs:
