@@ -1,5 +1,9 @@
+import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, ImageOff, PackageSearch, RefreshCw } from "lucide-react";
+import { problemaDoNome, type ProblemaDoNome } from "@workspace/dominio";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import type { ProductLookupItem } from "./shared";
 
@@ -86,6 +90,132 @@ export function NewProductNotice({
       </div>
     </div>
   );
+}
+
+const LISTA = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
+
+/**
+ * O código novo de uma família que já está no cadastro (A.02.0809.002.GG com
+ * o P, o M e o G cadastrados): no lugar do aviso de produto novo, o cartão diz
+ * a família e os tamanhos dela, e o mesmo controle de cadastrar como novo
+ * (docs/mockups/NomeWmsContagem.dc.html).
+ */
+export function FamiliaNoCadastroCard({
+  id,
+  familia,
+  nome,
+  tamanhos,
+  tamanho,
+  fotoUrl,
+  confirmed,
+  disabled = false,
+  note,
+  onToggle,
+}: {
+  id: string;
+  /** O código sem o tamanho: "A.02.0809.002". */
+  familia: string;
+  /** O nome da família no padrão. */
+  nome: string;
+  /** Os tamanhos já cadastrados, na ordem natural. */
+  tamanhos: string[];
+  /** O tamanho novo, o do código digitado. */
+  tamanho: string;
+  fotoUrl?: string;
+  confirmed: boolean;
+  disabled?: boolean;
+  /** O bloqueio que a tela informa (sem a sigla do SKU, por exemplo). */
+  note?: string;
+  onToggle: (confirmed: boolean) => void;
+}) {
+  const titulo = `Família ${familia} · ${tamanhos.length} ${tamanhos.length === 1 ? "tamanho" : "tamanhos"} no cadastro`;
+  const linha = [nome, LISTA.format(tamanhos), `tamanho ${tamanho} novo`].filter(Boolean).join(" · ");
+  return (
+    <div role="status" className="@container rounded-lg border border-primary/20 bg-primary/5 p-4">
+      <div className="flex flex-col gap-3 @sm:flex-row @sm:items-center">
+        {fotoUrl ? (
+          <img src={fotoUrl} alt="Foto da família" className="size-14 shrink-0 rounded-md border border-border bg-card object-contain" />
+        ) : (
+          <div className="flex size-14 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground">
+            <PackageSearch className="size-5" aria-hidden="true" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="break-words text-sm font-medium text-foreground">{titulo}</p>
+          <p className="mt-1 break-words text-xs text-muted-foreground">{linha}</p>
+          {note ? <p className="mt-1 text-xs text-muted-foreground">{note}</p> : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Checkbox id={id} checked={confirmed} disabled={disabled} onCheckedChange={(checked) => onToggle(checked === true)} />
+          <Label htmlFor={id} className="leading-5">{`Cadastrar o tamanho ${tamanho} como novo`}</Label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * O campo depois da sugestão da tela (o Tamanho pelo código, os dados da
+ * família): a sugestão entra no campo vazio e no que a própria tela pôs, que
+ * acompanha o código digitado letra a letra ("…G" e depois "…GG"); o que a
+ * pessoa digitou fica. `posto` é o que a tela deixou no campo.
+ */
+export function seguirSugestao(atual: string, posto: string, sugerido: string): { valor: string; posto: string } {
+  const daTela = !atual.trim() || (posto !== "" && atual === posto);
+  return daTela ? { valor: sugerido, posto: sugerido } : { valor: atual, posto: "" };
+}
+
+/** Onde a tela mostra o problema do nome: no Tamanho quando o campo contradiz o código; no nome nos outros casos. */
+export function campoDoProblemaDoNome(problema: Pick<ProblemaDoNome, "tipo">): "nome" | "tamanho" {
+  return problema.tipo === "campo_com_outro_tamanho" ? "tamanho" : "nome";
+}
+
+/** O campo com problema: inválido e descrito pela mensagem embaixo dele (`<id>-problema`). */
+export function atributosDoProblema(problema: unknown, id: string) {
+  return problema ? { "aria-invalid": true as const, "aria-describedby": `${id}-problema` } : {};
+}
+
+const texto = (valor: unknown) => String(valor ?? "").trim();
+
+/**
+ * O que o Catálogo recusa antes de enviar, pelo padrão do nome de 06/11/2026
+ * (lib/dominio, nome-do-produto.ts): o nome de um produto novo, ou o nome e o
+ * tamanho que mudaram na edição. Editar outra coisa de um produto cujo nome
+ * antigo ainda tem o tamanho não trava: o nome não mudou, e os nomes antigos
+ * mudam no passo 3.
+ */
+export function problemaDoNomeNoCadastro(
+  dados: { produto?: unknown; cod_cliente?: unknown; tamanho?: unknown },
+  antes?: { produto?: unknown; tamanho?: unknown },
+): { campo: "produto" | "tamanho"; problema: ProblemaDoNome } | null {
+  if (antes && texto(dados.produto) === texto(antes.produto)) {
+    if (texto(dados.tamanho) === texto(antes.tamanho)) return null;
+    // Só o Tamanho mudou: o nome antigo fica até o passo 3; o que trava é o
+    // Tamanho que contradiz o código (o mesmo que o servidor confere).
+    const doTamanho = problemaDoNome({ nome: "Produto", codigo: dados.cod_cliente, tamanho: dados.tamanho });
+    return doTamanho?.tipo === "campo_com_outro_tamanho" ? { campo: "tamanho", problema: doTamanho } : null;
+  }
+  const problema = problemaDoNome({ nome: dados.produto, codigo: dados.cod_cliente, tamanho: dados.tamanho });
+  if (!problema) return null;
+  return { campo: campoDoProblemaDoNome(problema) === "tamanho" ? "tamanho" : "produto", problema };
+}
+
+/**
+ * O problema do nome que a tela mostra embaixo do campo: o de agora, depois
+ * de um instante parado. Enquanto a pessoa digita, o "P" de "Polo" não acende
+ * "O nome do produto não pode ser só o tamanho."; o botão já fica desligado
+ * pelo problema de agora. Resolvido, some na hora. `chave` separa os campos
+ * de linhas diferentes.
+ */
+export function useProblemaAoParar<T extends { mensagem: string }>(problema: T | null, chave = "", espera = 600): T | null {
+  const assinatura = problema ? `${chave}\n${problema.mensagem}` : "";
+  const [assentada, setAssentada] = useState("");
+  useEffect(() => {
+    if (!assinatura) return undefined;
+    const relogio = setTimeout(() => setAssentada(assinatura), espera);
+    return () => clearTimeout(relogio);
+  }, [assinatura, espera]);
+  return problema && assentada === assinatura ? problema : null;
 }
 
 /**

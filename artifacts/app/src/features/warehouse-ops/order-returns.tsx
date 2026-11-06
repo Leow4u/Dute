@@ -16,6 +16,7 @@ import { novaChave } from "@/lib/operacao/api";
 import { useLeitura } from "@/lib/operacao/leitura";
 import { humanApiError } from "@/lib/permissions";
 import {
+  codigosDaLinha,
   detalheDoRetorno,
   linhaDoRetorno,
   pedidoDoRetorno,
@@ -92,9 +93,10 @@ export function RetornosView({ retornos, aberto, acoes, somenteConsulta = false 
                   {aberto.linhas.map((linha) => (
                     <li key={linha.id} className="grid grid-cols-[minmax(0,1fr)_6rem] items-end gap-3">
                       <span className="flex min-w-0 flex-col">
-                        <span className="truncate text-sm font-medium text-foreground">{linha.nome}</span>
+                        {/* Sem reticências no celular: o " · GG" do fim é o que distingue a linha. */}
+                        <span className="break-words text-sm font-medium text-foreground sm:truncate">{linha.item}</span>
                         <span className="font-mono text-xs text-muted-foreground">
-                          {linha.skuCode} · saiu {linha.saiu}
+                          {codigosDaLinha(linha)} · saiu {linha.saiu}
                         </span>
                       </span>
                       <span className="grid gap-1.5">

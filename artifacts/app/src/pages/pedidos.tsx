@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "wouter";
+import { nomeComTamanho } from "@workspace/dominio";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -82,6 +83,7 @@ import {
   type LineConfirmationMap,
   type WarehouseOpsResponse,
   type WarehouseTask,
+  type WarehouseTaskItem,
   lineConfirmationKey,
   normalizeQueues,
   queueEntries,
@@ -1056,13 +1058,28 @@ function MenuDoPedido({
   );
 }
 
-function ItemList({ items }: { items: NonNullable<WarehouseTask["items"]> }) {
+/** "A.01.0806.005.GG · BTG-000125": o código do cliente e o SKU, o que existir, sem repetir. */
+export function codigosDoItem(item: WarehouseTaskItem) {
+  const codigos = [item.client_item_code, item.sku_code ?? item.sku]
+    .map((codigo) => String(codigo ?? "").trim())
+    .filter(Boolean);
+  return [...new Set(codigos)].join(" · ");
+}
+
+/**
+ * Os itens do pedido (docs/mockups/NomeWmsPedidos.dc.html): a foto, a posição,
+ * o nome com o tamanho ("Polo Masculino Piquet Preto · GG": o nome é o mesmo
+ * em todos os tamanhos), os códigos e a quantidade.
+ */
+export function ItemList({ items }: { items: NonNullable<WarehouseTask["items"]> }) {
   // Mesma foto do Estoque: quem separa confere o item pela imagem.
   const photoFor = useItemPhotos();
   return (
     <ul className="border-t border-border/50 bg-muted/30 px-4 py-2 md:px-5 md:pl-[4.6rem]">
       {items.map((item, index) => {
         const photo = photoFor(item.sku_code, item.sku, item.client_item_code);
+        const nome = nomeComTamanho({ nome: item.name ?? item.product_name, codigo: item.client_item_code, tamanho: item.size });
+        const codigos = codigosDoItem(item);
         return (
           <li key={String(item.id ?? index)} className="flex items-center gap-3 py-1.5 text-sm">
             {photo ? (
@@ -1081,14 +1098,18 @@ function ItemList({ items }: { items: NonNullable<WarehouseTask["items"]> }) {
               <span className="rounded-md bg-info-soft px-1.5 py-0.5 font-mono text-xs text-info-soft-foreground">
                 {item.location || "sem endereço"}
               </span>
-              <span className="font-mono text-sm text-foreground/85">
-                {item.sku_code ?? item.sku}
+              {/* No celular, a grade: a posição, os códigos e a quantidade numa linha e o nome embaixo (o bloco vira
+                  `contents`); o nome quebra a linha para o tamanho, no fim, não sumir. */}
+              <span className="contents sm:block sm:min-w-0 sm:flex-1">
+                {nome ? (
+                  <span className="col-span-3 row-start-2 block font-semibold text-foreground sm:truncate">{nome}</span>
+                ) : null}
+                {codigos ? (
+                  <span className="col-start-2 row-start-1 block truncate text-xs text-muted-foreground">{codigos}</span>
+                ) : null}
               </span>
-              <span className="whitespace-nowrap font-semibold tabular-nums sm:order-last">
+              <span className="col-start-3 row-start-1 whitespace-nowrap font-semibold tabular-nums">
                 {numberFormatter.format(Number(item.expected_quantity ?? item.quantity ?? 0))} un.
-              </span>
-              <span className="col-span-3 min-w-0 truncate text-foreground/60 sm:flex-1">
-                {item.name ?? item.product_name}
               </span>
             </div>
           </li>

@@ -7,6 +7,7 @@ import {
   getListMovementsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { nomeComTamanho } from "@workspace/dominio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowDownRight, ArrowUpRight, Plus } from "lucide-react";
@@ -56,6 +57,17 @@ const MOVEMENT_LABELS: Record<string, string> = {
 
 function movementLabel(type: string | undefined) {
   return (type && MOVEMENT_LABELS[type]) || type || "—";
+}
+
+/**
+ * O produto do movimento: com o código do cliente no registro, o nome com o
+ * tamanho depois do ponto ("Polo Masculino Piquet Preto · XG"); sem ele, como
+ * veio. O `cod_cliente` do movimento é o cliente, não o código do item.
+ */
+export function produtoDoMovimento(mov: Pick<Movement, "produto"> & { client_item_code?: string | null }) {
+  const codigo = String(mov.client_item_code ?? "").trim();
+  if (!codigo || !String(mov.produto ?? "").trim()) return mov.produto;
+  return nomeComTamanho({ nome: mov.produto, codigo });
 }
 
 const movementSchema = z.object({
@@ -239,6 +251,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
                   movements.map((mov: Movement) => {
                     const isPositive = mov.sinal > 0;
                     const Arrow = isPositive ? ArrowDownRight : ArrowUpRight;
+                    const produto = produtoDoMovimento(mov);
                     return (
                       <tr key={mov.id} className="border-b border-border/40 last:border-0 hover:bg-muted/60">
                         <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">
@@ -256,8 +269,8 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
                         <td className="whitespace-nowrap px-3 py-3 font-mono text-xs font-semibold text-primary">
                           {mov.cod_sku}
                         </td>
-                        <td className="max-w-[280px] truncate px-3 py-3 font-medium text-foreground" title={mov.produto}>
-                          {mov.produto}
+                        <td className="max-w-[280px] truncate px-3 py-3 font-medium text-foreground" title={produto}>
+                          {produto}
                         </td>
                         <td
                           className={cn(
@@ -326,6 +339,7 @@ function MovementCard({ movement: mov }: { movement: Movement }) {
   const isPositive = mov.sinal > 0;
   const Arrow = isPositive ? ArrowDownRight : ArrowUpRight;
   const when = new Date(mov.data).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const produto = produtoDoMovimento(mov);
   const details = [
     mov.origem || mov.destino ? `${mov.origem || "-"} → ${mov.destino || "-"}` : null,
     mov.estoque_resultante != null ? `saldo ${mov.estoque_resultante.toLocaleString("pt-BR")}` : null,
@@ -347,8 +361,8 @@ function MovementCard({ movement: mov }: { movement: Movement }) {
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="truncate text-sm font-medium text-foreground" title={mov.produto}>
-            {mov.produto}
+          <span className="truncate text-sm font-medium text-foreground" title={produto}>
+            {produto}
           </span>
           <span
             className={cn(

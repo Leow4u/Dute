@@ -9,7 +9,7 @@ describe("resumo da caixa física", () => {
   it("permite revisar e corrigir antes de guardar", () => {
     const html = renderToStaticMarkup(<OpeningConferenceSummary {...props} box={warehouseBoxFromRecord({ code: "CX-000001", status: "counting" })} lines={[line]} />);
     expect(html).toContain("Conteúdo da caixa CX-000001");
-    expect(html).toContain("tamanho G");
+    expect(html).toContain("Camisa · G");
     expect(html).toContain("Editar");
     expect(html).toContain("Revisar e fechar caixa");
     expect(html).not.toContain("Retomar guarda");

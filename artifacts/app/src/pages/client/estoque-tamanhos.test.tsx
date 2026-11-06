@@ -58,7 +58,8 @@ async function clicar(elemento: HTMLElement) {
   await act(async () => elemento.click());
 }
 
-async function abrir(filtro = "Com saldo", itens = [...ITENS, ARQUIVADO]) {
+/** Abre o detalhe pelo nome do card: com os tamanhos agrupados, o nome da família ("Polo"); sem, o nome e o tamanho. */
+async function abrir(filtro = "Com saldo", itens = [...ITENS, ARQUIVADO], card = "Polo") {
   vi.stubGlobal("fetch", vi.fn(async (entrada: RequestInfo | URL) => {
     const url = new URL(String(entrada), window.location.origin);
     const corpo = url.pathname === "/api/client/overview"
@@ -84,7 +85,7 @@ async function abrir(filtro = "Com saldo", itens = [...ITENS, ARQUIVADO]) {
   const situacao = [...document.querySelectorAll("button")].find((item) => item.textContent?.trim().startsWith(filtro));
   expect(situacao, `filtro ${filtro}`).toBeDefined();
   await clicar(situacao!);
-  await clicar(botao("Polo P"));
+  await clicar(botao(card));
 }
 
 beforeEach(() => window.localStorage.clear());
@@ -110,7 +111,8 @@ describe("pedir outro tamanho sem fechar o detalhe", () => {
       expect(tamanhos()).toEqual(["P", "M", "G"]);
 
       await clicar(botao("M1 disp.", detalhe()));
-      expect(detalhe().querySelector("h2")?.textContent).toBe("Polo M");
+      // O nome é o mesmo em todos os tamanhos: o escolhido está nos botões.
+      expect(detalhe().querySelector("h2")?.textContent).toBe("Polo");
       await clicar(botao("Adicionar ao pedido", detalhe()));
       expect(tamanhos()).toContain("G");
       expect(tamanhos()).not.toContain("PP");
@@ -119,7 +121,7 @@ describe("pedir outro tamanho sem fechar o detalhe", () => {
       await clicar(botao("Adicionar ao pedido", detalhe()));
       await clicar(botao("Ver pedido", detalhe()));
       for (const tamanho of ["P", "M", "G"]) {
-        expect(detalhe().querySelector<HTMLInputElement>(`input[aria-label="Quantidade de Polo ${tamanho}"]`)?.value).toBe("1");
+        expect(detalhe().querySelector<HTMLInputElement>(`input[aria-label="Quantidade de Polo · ${tamanho}"]`)?.value).toBe("1");
       }
       expect(detalhe().querySelectorAll("li")).toHaveLength(3);
       if (filtro !== "Todos") {
@@ -144,10 +146,10 @@ describe("pedir outro tamanho sem fechar o detalhe", () => {
 
   it("respeita a preferência de não agrupar tamanhos ao esgotar o selecionado", async () => {
     window.localStorage.setItem("dute.portal.agrupar-tamanhos", "nao");
-    await abrir();
+    await abrir("Com saldo", [...ITENS, ARQUIVADO], "Polo · P");
     await clicar(botao("Adicionar ao pedido", detalhe()));
     expect(tamanhos()).toEqual([]);
-    expect(detalhe().querySelector("h2")?.textContent).toBe("Polo P");
+    expect(detalhe().querySelector("h2")?.textContent).toBe("Polo · P");
     expect(document.querySelectorAll('[data-testid="stock-card"]')).toHaveLength(2);
   });
 });

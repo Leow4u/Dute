@@ -1,3 +1,5 @@
+import { nomeComTamanho } from "@workspace/dominio";
+
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { OrderGroup } from "@/lib/warehouse-ops/orders";
@@ -11,6 +13,7 @@ import type { OrderGroup } from "@/lib/warehouse-ops/orders";
 
 const numero = new Intl.NumberFormat("pt-BR");
 
+/** `item`: o nome com o tamanho ("Polo Masculino Piquet Preto · GG"), como no Separado. */
 export type VoltaAPosicao = { id: string; item: string; quantidade: number; posicao: string };
 
 /** O motivo que o servidor aceita: de 3 a 500 caracteres. */
@@ -28,12 +31,15 @@ export function pedidoCancelavel(order: OrderGroup) {
 export function voltasDoPedido(order: OrderGroup): VoltaAPosicao[] {
   if (String(order.pick?.status ?? "") !== "completed") return [];
   return (order.pick?.items ?? [])
-    .map((item, index) => ({
-      id: String(item.id ?? index),
-      item: String(item.name ?? item.product_name ?? item.sku_code ?? item.sku ?? "Item"),
-      quantidade: Number(item.picked_quantity ?? 0),
-      posicao: String(item.location ?? ""),
-    }))
+    .map((item, index) => {
+      const nome = [item.name, item.product_name, item.sku_code, item.sku].map((valor) => String(valor ?? "").trim()).find(Boolean) ?? "Item";
+      return {
+        id: String(item.id ?? index),
+        item: nomeComTamanho({ nome, codigo: item.client_item_code, tamanho: item.size }),
+        quantidade: Number(item.picked_quantity ?? 0),
+        posicao: String(item.location ?? ""),
+      };
+    })
     .filter((volta) => volta.quantidade > 0);
 }
 

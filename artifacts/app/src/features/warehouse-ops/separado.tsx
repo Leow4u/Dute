@@ -1,4 +1,5 @@
 import { Minus, Plus } from "lucide-react";
+import { nomeComTamanho } from "@workspace/dominio";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +21,10 @@ export type MotivoDaDiferenca = "falta" | "avaria";
 
 export type LinhaDoSeparado = {
   id: string;
+  /** O nome com o tamanho ("Polo Masculino Piquet Preto · GG"): o nome é o mesmo em todos os tamanhos. */
   item: string;
+  /** O código do cliente (A.01.0806.005.GG); vazio quando o item não tem. */
+  codigo: string;
   posicao: string;
   pedido: number;
   separado: number;
@@ -38,9 +42,11 @@ export function linhasDoSeparado(order: OrderGroup): LinhaDoSeparado[] {
   return (order.pick?.items ?? [])
     .map((item, index) => {
       const pedido = Number(item.expected_quantity ?? item.quantity ?? 0);
+      const nome = [item.name, item.product_name, item.sku_code, item.sku].map((valor) => String(valor ?? "").trim()).find(Boolean) ?? "Item";
       return {
         id: String(item.id ?? index),
-        item: String(item.name ?? item.product_name ?? item.sku_code ?? item.sku ?? "Item"),
+        item: nomeComTamanho({ nome, codigo: item.client_item_code, tamanho: item.size }),
+        codigo: String(item.client_item_code ?? "").trim(),
         posicao: String(item.location ?? ""),
         pedido,
         separado: pedido,
@@ -127,7 +133,11 @@ export function SeparadoView({
                         −{numero.format(diferenca)}
                       </span>
                     ) : null}
-                    {linha.posicao ? <span className="block text-xs font-medium text-muted-foreground">{linha.posicao}</span> : null}
+                    {linha.codigo || linha.posicao ? (
+                      <span className="block text-xs font-medium text-muted-foreground">
+                        {[linha.codigo, linha.posicao].filter(Boolean).join(" · ")}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="py-2.5 text-right font-semibold tabular-nums">{numero.format(linha.pedido)} un.</td>
                   <td className="py-2.5 pl-3">

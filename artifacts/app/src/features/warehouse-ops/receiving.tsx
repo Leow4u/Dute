@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { problemaDoNome, tamanhoDoCodigo } from "@workspace/dominio";
 import {
   AlertCircle,
   AlertTriangle,
@@ -99,7 +100,16 @@ import {
   findProductByAnyCode,
   findProductByBarcode,
 } from "@/lib/product-match";
-import { CatalogoIndisponivel, CatalogoVerificando, ProductIdentityCard, NewProductNotice } from "./product-identity";
+import {
+  atributosDoProblema,
+  campoDoProblemaDoNome,
+  CatalogoIndisponivel,
+  CatalogoVerificando,
+  NewProductNotice,
+  ProductIdentityCard,
+  seguirSugestao,
+  useProblemaAoParar,
+} from "./product-identity";
 
 function DetailField({
   icon: Icon,
@@ -139,7 +149,24 @@ export type ReceiptDraftLine = {
   unitCost: string;
   location: string;
   createNew: boolean;
+  /** O Tamanho que o código pôs sozinho no produto novo (seguirSugestao). */
+  autoSize?: string;
 };
+
+/**
+ * O Tamanho da linha pelo fim do código (A.01.0806.005.XG → XG), só na linha
+ * de produto novo (`codigo` vazio na linha de produto do cadastro): entra no
+ * campo vazio e no que a tela pôs; o que a pessoa digitou fica.
+ */
+export function tamanhoDaLinhaPeloCodigo(line: ReceiptDraftLine, codigo: string): Pick<ReceiptDraftLine, "size" | "autoSize"> {
+  const sugestao = seguirSugestao(line.size, line.autoSize ?? "", tamanhoDoCodigo(codigo) ?? "");
+  return { size: sugestao.valor, autoSize: sugestao.posto };
+}
+
+/** O nome da linha de produto novo no padrão de 06/11/2026 (lib/dominio, nome-do-produto.ts); a de produto do cadastro não é conferida. */
+function problemaDoNomeDaLinha(line: ReceiptDraftLine, existing: ProductLookupItem | undefined) {
+  return !existing && line.createNew ? problemaDoNome({ nome: line.product, codigo: line.clientCode, tamanho: line.size }) : null;
+}
 
 export const emptyReceiptLine = (): ReceiptDraftLine => ({
   sku: "",
@@ -649,7 +676,8 @@ export function UnplannedReceiptDialog({
               line.photos.length === 0 ||
               line.photoUploading)) ||
           (!existing && !line.createNew) ||
-          (existing && line.createNew)
+          (existing && line.createNew) ||
+          Boolean(problemaDoNomeDaLinha(line, existing))
         );
       });
 
@@ -751,6 +779,7 @@ export function UnplannedReceiptDialog({
           !Number.isFinite(Number(line.unitCost)) ||
           Number(line.unitCost) <= 0 ||
           line.photos.length === 0),
+      problemaDoNome: problemaDoNomeDaLinha(line, existing),
       photoUploading: line.photoUploading,
     };
   });
@@ -763,11 +792,14 @@ export function UnplannedReceiptDialog({
         !issue.invalidQuantity &&
         !issue.missingProduct &&
         !issue.missingNewProductData &&
+        !issue.problemaDoNome &&
         !issue.photoUploading &&
         !issue.duplicateInDraft &&
         (Boolean(issue.existing) || lines[index]?.createNew) &&
         !(issue.existing && lines[index]?.createNew),
     );
+  // A mensagem do nome aparece na linha aberta no editor, depois de a pessoa parar de digitar.
+  const problemaDaLinhaAberta = useProblemaAoParar(lineIssues[activeLineIndex]?.problemaDoNome ?? null, String(activeLineIndex));
   const receiptDraftSummary = lines.reduce(
     (acc, line, index) => {
       const quantity = Number(line.quantity);
@@ -838,7 +870,7 @@ export function UnplannedReceiptDialog({
                       ? "Quantidade inválida"
                       : !existing && estadoDoCatalogo !== "pronto" && (line.clientCode.trim() || line.sku.trim())
                         ? estadoDoCatalogo === "lendo" ? "Verificando o catálogo" : "Sem catálogo"
-                        : issue?.missingProduct || issue?.missingNewProductData
+                        : issue?.missingProduct || issue?.missingNewProductData || issue?.problemaDoNome
                         ? "Cadastro incompleto"
                         : existing
                           ? "Cadastro encontrado"
@@ -882,6 +914,9 @@ export function UnplannedReceiptDialog({
                   const existing = issue?.existing;
                   const mustCreate =
                     !existing && Boolean(line.clientCode.trim() || line.sku.trim());
+                  const problemaNoTamanho =
+                    problemaDaLinhaAberta && campoDoProblemaDoNome(problemaDaLinhaAberta) === "tamanho" ? problemaDaLinhaAberta : null;
+                  const problemaNoNome = problemaDaLinhaAberta && !problemaNoTamanho ? problemaDaLinhaAberta : null;
                   return (
                     <div
                       key={index}
@@ -949,13 +984,17 @@ export function UnplannedReceiptDialog({
                           <span>Cód. cliente, SKU ou barras</span>
                           <Input
                             value={line.clientCode}
-                            onChange={(event) =>
+                            onChange={(event) => {
+                              const clientCode = event.target.value;
+                              // Só o código novo dá o Tamanho; o do cadastro já tem o dele.
+                              const novo = estadoDoCatalogo === "pronto" && !findExistingProduct({ ...line, clientCode, sku: "" }, productLookup);
                               updateLine(index, {
-                                clientCode: event.target.value,
+                                clientCode,
                                 sku: "",
                                 createNew: false,
-                              })
-                            }
+                                ...tamanhoDaLinhaPeloCodigo(line, novo ? clientCode : ""),
+                              });
+                            }}
                             placeholder="Cód. cliente, SKU ou barras"
                             aria-label={`Código do produto da linha ${index + 1}`}
                           />
@@ -972,14 +1011,21 @@ export function UnplannedReceiptDialog({
                             aria-label={`SKU da linha ${index + 1}`}
                           />
                         </label>
-                        <label className="space-y-1.5 text-sm text-foreground">
-                          <span>Produto</span>
-                          <Input
-                            value={line.product}
-                            onChange={(event) => updateLine(index, { product: event.target.value })}
-                            placeholder="Produto"
-                          />
-                        </label>
+                        <div className="space-y-1.5">
+                          <label className="block space-y-1.5 text-sm text-foreground">
+                            <span>Produto</span>
+                            <Input
+                              value={line.product}
+                              onChange={(event) => updateLine(index, { product: event.target.value })}
+                              placeholder="Produto"
+                              className="aria-[invalid=true]:border-destructive"
+                              {...atributosDoProblema(problemaNoNome, `receipt-line-${index}-product`)}
+                            />
+                          </label>
+                          {problemaNoNome ? (
+                            <p id={`receipt-line-${index}-product-problema`} className="text-xs font-medium text-destructive">{problemaNoNome.mensagem}</p>
+                          ) : null}
+                        </div>
                         <label className="space-y-1.5 text-sm text-foreground">
                           <span>Quantidade</span>
                           <Input
@@ -1030,7 +1076,11 @@ export function UnplannedReceiptDialog({
                           <NewProductNotice
                             confirmed={line.createNew}
                             note="SKU gerado ao salvar o novo cadastro."
-                            onToggle={() => updateLine(index, { createNew: !line.createNew })}
+                            onToggle={() =>
+                              updateLine(index, line.createNew
+                                ? { createNew: false }
+                                : { createNew: true, ...tamanhoDaLinhaPeloCodigo(line, line.clientCode) })
+                            }
                           />
                         </div>
                       ) : null}
@@ -1066,16 +1116,23 @@ export function UnplannedReceiptDialog({
                                 placeholder="Marca"
                               />
                             </label>
-                            <label className="space-y-1.5 text-sm text-foreground">
-                              <span>Tamanho</span>
-                              <Input
-                                value={line.size}
-                                onChange={(event) =>
-                                  updateLine(index, { size: event.target.value })
-                                }
-                                placeholder="Tamanho"
-                              />
-                            </label>
+                            <div className="space-y-1.5">
+                              <label className="block space-y-1.5 text-sm text-foreground">
+                                <span>Tamanho</span>
+                                <Input
+                                  value={line.size}
+                                  onChange={(event) =>
+                                    updateLine(index, { size: event.target.value })
+                                  }
+                                  placeholder="Tamanho"
+                                  className="aria-[invalid=true]:border-destructive"
+                                  {...atributosDoProblema(problemaNoTamanho, `receipt-line-${index}-size`)}
+                                />
+                              </label>
+                              {problemaNoTamanho ? (
+                                <p id={`receipt-line-${index}-size-problema`} className="text-xs font-medium text-destructive">{problemaNoTamanho.mensagem}</p>
+                              ) : null}
+                            </div>
                             <label className="space-y-1.5 text-sm text-foreground">
                               <span>Cor</span>
                               <Input

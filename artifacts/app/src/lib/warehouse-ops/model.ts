@@ -1,5 +1,6 @@
 /** Pure warehouse-ops domain model (types + helpers, no React UI). */
 
+import { nomeComTamanho } from "@workspace/dominio";
 import type { CaixaDaChegada, FaltaMarcada, LinhaDaCaixa } from "../wms/caixas-do-recebimento";
 import {
   ClipboardCheck,
@@ -660,8 +661,21 @@ export function canRegisterException(task?: WarehouseTask) {
   return Boolean(task.id) && !isTerminalTask(task);
 }
 
+/**
+ * O título da tarefa, como o servidor gravou. A guarda de linha criada antes do
+ * padrão do nome ("Guardar <produto>", com o nome gravado) ganha aqui o nome
+ * com o tamanho depois do ponto ("Guardar Polo Masculino Piquet Preto · XG"),
+ * tirado da linha da tarefa, onde a fila põe o produto. A guarda nova já vem
+ * do servidor com o tamanho (inclusive o do campo Tamanho, que a fila não
+ * traz) e fica como está, como a guarda da caixa.
+ */
 export function getTaskTitle(task: WarehouseTask) {
-  return task.title || task.reference || `Tarefa ${task.id}`;
+  const titulo = task.title || task.reference || `Tarefa ${task.id}`;
+  const linha = task.items?.[0];
+  const nome = coerceText(linha?.product_name);
+  // Sem o nome do produto, a fila repete o título na linha ("Guardar BTG-000123").
+  if (task.box_code || !nome || nome === task.title || task.title !== `Guardar ${nome}`) return titulo;
+  return `Guardar ${nomeComTamanho({ nome, codigo: linha?.client_item_code, tamanho: linha?.size })}`;
 }
 
 export function getTaskDate(task: WarehouseTask) {
@@ -932,19 +946,17 @@ export function getPackingCheckRows(task: WarehouseTask): PackingCheckRow[] {
     const hasDivergence =
       (typeof delta === "number" && delta !== 0) ||
       PACKING_DIVERGENT_STATUSES.has(normalizedStatus);
-    const title =
-      item.name ||
-      item.product_name ||
-      item.description ||
-      item.sku ||
-      item.sku_code ||
-      `Linha ${index + 1}`;
+    // O nome com o tamanho depois do ponto, e o código do cliente antes do SKU.
+    const nome = coerceText(item.name, item.product_name);
+    const title = nome
+      ? nomeComTamanho({ nome, codigo: item.client_item_code, tamanho: item.size })
+      : item.description || item.sku || item.sku_code || `Linha ${index + 1}`;
 
     return {
       id: item.id || `${task.id}:packing:${index}`,
       label: packageLabel(item, index),
       title,
-      code: item.sku || item.sku_code,
+      code: item.client_item_code || item.sku || item.sku_code,
       location: item.location,
       status: item.status || task.status,
       expectedQuantity,

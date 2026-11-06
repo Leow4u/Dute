@@ -4,7 +4,9 @@ import {
   buildBalanceValidation,
   buildVerdict,
   canCloseRequest,
+  codigosDaLinha,
   formatRequestAge,
+  getRequestValidationLines,
   lineSituation,
   parseRequestDate,
   requestTab,
@@ -176,6 +178,38 @@ describe("buildBalanceValidation: só a prateleira atende o pedido (recebimento 
 
     expect(validation.status).toBe("missing-balance");
     expect(validation.canApprove).toBe(false);
+  });
+});
+
+describe("o rótulo das linhas de item (padrão do nome, 06/11/2026)", () => {
+  it("o nome com o tamanho no rótulo e o código do cliente antes do SKU no apoio", () => {
+    const lines = getRequestValidationLines(
+      outboundRequest({
+        items: [
+          { sku_code: "BTG-000125", client_item_code: "A.01.0806.005.GG", product_name: "Polo masculino piquet preto - GG", quantity: 20 },
+          { sku_code: "BTG-000084", client_item_code: "A.01.0712.001.42", product_name: "Calça Social Masculino Preta", quantity: 6 },
+          { product_name: "Camiseta dry fit M", client_item_code: "CAM-01", size: "M", quantity: 3 },
+          { sku_code: "BTG-000300", client_item_code: "A.05.0101.001.U", product_name: "Boné BTG", quantity: 2 },
+          { sku_code: "BTG-000200", quantity: 1 },
+          { client_item_code: "A.09.0001.002", quantity: 2 },
+        ],
+      }),
+    );
+    expect(lines.map((line) => [line.label, codigosDaLinha(line)])).toEqual([
+      ["Polo masculino piquet preto · GG", "A.01.0806.005.GG · BTG-000125"],
+      ["Calça Social Masculino Preta · 42", "A.01.0712.001.42 · BTG-000084"],
+      ["Camiseta dry fit · M", "CAM-01"],
+      ["Boné BTG", "A.05.0101.001.U · BTG-000300"],
+      ["BTG-000200", ""],
+      ["A.09.0001.002", ""],
+    ]);
+  });
+
+  it("a solicitação de um item só, sem a lista de itens, também leva o nome com o tamanho", () => {
+    const [line] = getRequestValidationLines(
+      outboundRequest({ items: undefined, product_name: "Polo preto XG", client_item_code: "A.01.0806.005.XG", sku_code: "BTG-000126", quantity: 2 }),
+    );
+    expect([line?.label, codigosDaLinha(line!)]).toEqual(["Polo preto · XG", "A.01.0806.005.XG · BTG-000126"]);
   });
 });
 

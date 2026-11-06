@@ -1,3 +1,5 @@
+import { nomeComTamanho } from "@workspace/dominio";
+
 import { quandoEmTexto } from "./entrega";
 
 /**
@@ -38,7 +40,12 @@ export function detalheDoRetorno(retorno: RetornoAReceber): string {
   return [retorno.os ? `OS ${retorno.os}` : null, chegada].filter(Boolean).join(" · ");
 }
 
-export type LinhaDoRetorno = { id: string; skuCode: string; clientItemCode: string; nome: string; saiu: number; voltou: string };
+/**
+ * `nome` é o nome gravado no pedido e vai assim para o servidor; `item` é o
+ * que a tela mostra, o nome com o tamanho ("Polo Masculino Piquet Preto · GG"),
+ * porque o nome é o mesmo em todos os tamanhos.
+ */
+export type LinhaDoRetorno = { id: string; skuCode: string; clientItemCode: string; nome: string; item: string; saiu: number; voltou: string };
 
 /** As linhas do pedido (`order_items`), com o que saiu; o que voltou começa igual. */
 export function linhaDoRetorno(id: string, dados: Record<string, unknown>): LinhaDoRetorno | null {
@@ -46,15 +53,21 @@ export function linhaDoRetorno(id: string, dados: Record<string, unknown>): Linh
   const clientItemCode = texto(dados.client_item_code) || skuCode;
   const saiu = Number(dados.picked_qty || dados.allocated_qty || dados.requested_qty || 0);
   if (!skuCode || !(saiu > 0)) return null;
-  return { id, skuCode, clientItemCode, nome: texto(dados.product_name) || skuCode, saiu, voltou: String(saiu) };
+  const nome = texto(dados.product_name) || skuCode;
+  return { id, skuCode, clientItemCode, nome, item: nomeComTamanho({ nome, codigo: clientItemCode }), saiu, voltou: String(saiu) };
+}
+
+/** "A.01.0806.005.GG · BTG-000125": o código do cliente, quando a linha tem, e o SKU. */
+export function codigosDaLinha(linha: LinhaDoRetorno): string {
+  return [...new Set([linha.clientItemCode, linha.skuCode].filter(Boolean))].join(" · ");
 }
 
 /** O que falta antes de receber: a quantidade inteira, de zero ao que saiu, e ao menos um item que voltou. */
 export function problemaDoRetorno(linhas: readonly LinhaDoRetorno[]): string | null {
   for (const linha of linhas) {
     const valor = linha.voltou.trim();
-    if (!/^\d+$/.test(valor)) return `${linha.nome}: informe quantos voltaram.`;
-    if (Number(valor) > linha.saiu) return `${linha.nome}: voltaram mais do que saiu (${linha.saiu}).`;
+    if (!/^\d+$/.test(valor)) return `${linha.item}: informe quantos voltaram.`;
+    if (Number(valor) > linha.saiu) return `${linha.item}: voltaram mais do que saiu (${linha.saiu}).`;
   }
   if (!linhas.some((linha) => Number(linha.voltou) > 0)) return "Informe ao menos um item que voltou.";
   return null;

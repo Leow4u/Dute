@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
+import { ordemDoTamanho, tamanhoDoCodigo } from "@workspace/dominio";
 import {
   AlertTriangle,
   ArrowDownWideNarrow,
@@ -61,6 +62,7 @@ import {
   overviewLine,
   productGender,
   productTitle,
+  productTitleWithSize,
   productType,
   stockOverview,
   typeOptions,
@@ -68,7 +70,7 @@ import {
   type ProductGender,
 } from "@/lib/portal-stock";
 import { cn } from "@/lib/utils";
-import { groupFamilies, variantLabel, type Family } from "@/lib/stock-variants";
+import { displayName, groupFamilies, variantLabel, type Family } from "@/lib/stock-variants";
 
 import { DatasDeEntrada, buscarDatasDeEntrada, type DataDeEntrada } from "./datas-de-entrada";
 import { useClientEvents, useSaveClientEvent } from "./events-api";
@@ -109,6 +111,8 @@ type StockProduct = {
   clientItemCode?: string | null;
   name: string;
   category: string;
+  /** O campo Tamanho da projeção (size); o nome e o tamanho saem do código do cliente quando ele diz. */
+  size: string | null;
   available: number;
   /** No RECEBIMENTO, ainda sem guarda: aparece, mas não entra no pedido (decisão 10). */
   receiving: number;
@@ -638,10 +642,13 @@ export function ClienteEstoque() {
               next_date: input.nextDate || null,
               schedule: fields.notes.trim() || null,
               logistics: null,
+              // O nome do cadastro, como sempre foi guardado: a falta do evento
+              // e o aviso do pedido listam por ele, e Eventos mostra o nome e
+              // o tamanho pelo código do cliente.
               items: cartLines.map((line) => ({
                 sku_code: line.product.sku,
                 client_item_code: line.product.clientItemCode ?? null,
-                product_name: productTitle(line.product),
+                product_name: displayName(line.product.name),
                 quantity: line.quantity,
               })),
             },
@@ -864,7 +871,7 @@ export function ClienteEstoque() {
                 />
               </SideDrawer>
             ) : selectedProduct ? (
-              <SideDrawer title={productTitle(selectedProduct)} onClose={closeDetails} bottomSheetOnMobile>
+              <SideDrawer title={tituloDaFamilia(selectedProduct, selectedFamily?.variants)} onClose={closeDetails} bottomSheetOnMobile>
                 <ProductDetailWithDates
                   product={selectedProduct}
                   family={selectedFamily}
@@ -1461,6 +1468,8 @@ export function StockList({
             );
             const status = productStatus(product, liveAvailable);
             const gender = productGender(product);
+            // Uma linha por tamanho: o nome e o tamanho depois do ponto.
+            const title = productTitleWithSize(product);
 
             return (
               <TableRow key={product.key}>
@@ -1472,9 +1481,9 @@ export function StockList({
                     type="button"
                     onClick={() => onDetails(product)}
                     className="max-w-[520px] cursor-pointer truncate text-left font-medium text-foreground transition hover:text-primary"
-                    title={productTitle(product)}
+                    title={title}
                   >
-                    {productTitle(product)}
+                    {title}
                   </button>
                   {gender ? <GenderChip gender={gender} className="ml-2 align-middle" /> : null}
                   <span className="ml-2 text-xs text-muted-foreground">{productType(product)}</span>
@@ -1504,7 +1513,7 @@ export function StockList({
                     {product.available > 0 ? (
                       <>
                         <QuantityStepper
-                          label={product.name}
+                          label={title}
                           value={draftQuantity}
                           max={liveAvailable}
                           onChange={(quantity) =>
@@ -1667,6 +1676,39 @@ function FamilyGrid({
 }
 
 /**
+ * Quem dá o nome da família: o primeiro tamanho na ordem dos botões, só
+ * quando o código de cada variação termina num tamanho conhecido
+ * (tamanhoDoCodigo). O agrupamento junta qualquer fim de código de 1 a 4
+ * letras ou números (lib/stock-variants.ts), e o trecho que não é tamanho
+ * não faz família (familiaDoCodigo): as canecas A.09.0001.002 e .003, ou a
+ * camisa G1 e G2, ficam sem nome de família.
+ */
+function produtoDoNomeDaFamilia(variants?: Family<StockProduct>["variants"] | null) {
+  if (!variants || variants.length < 2) return null;
+  const deTamanhos = variants.every(
+    (entry) => tamanhoDoCodigo(entry.item.clientItemCode ?? entry.item.clientCode) !== null,
+  );
+  return deTamanhos ? variants[0]!.item : null;
+}
+
+/**
+ * O nome do card, do detalhe e do diálogo (docs/mockups/NomePortalEstoque.dc.html
+ * e NomePortalDetalhe.dc.html): com os botões de tamanho, o da família, o
+ * mesmo qualquer que seja o tamanho escolhido; com um tamanho só, ou com
+ * botões que não são todos de tamanho, o da variação escolhida, com o
+ * tamanho depois do ponto quando ela tem um.
+ */
+function tituloDaFamilia(product: StockProduct, variants?: Family<StockProduct>["variants"] | null) {
+  const daFamilia = produtoDoNomeDaFamilia(variants);
+  return daFamilia ? productTitle(daFamilia) : productTitleWithSize(product);
+}
+
+/** O gênero do chip sai do mesmo nome do título (lib/portal-stock.ts). */
+function generoDaFamilia(product: StockProduct, variants?: Family<StockProduct>["variants"] | null) {
+  return productGender(produtoDoNomeDaFamilia(variants) ?? product);
+}
+
+/**
  * Um card por produto. Com tamanhos agrupados, a pessoa escolhe a variação
  * nos botões (cada um com o disponível) e adiciona daquele tamanho.
  */
@@ -1708,10 +1750,12 @@ export function FamilyCard({
     { ...product, available: familyAvailable, receiving: familyReceiving },
     family.variants.reduce((sum, entry) => sum + liveAvailableForProduct(entry.item, cart), 0),
   );
-  const title = productTitle(product);
-  const gender = productGender(product);
   // Tamanho único ("U") não precisa de botão: o disponível já diz tudo.
   const showVariants = family.variants.length > 1;
+  const title = tituloDaFamilia(product, family.variants);
+  const gender = generoDaFamilia(product, family.variants);
+  // O contador é do tamanho escolhido: o leitor de tela ouve o nome e o tamanho.
+  const quantityLabel = productTitleWithSize(product);
   const hasPhoto = Boolean(photo.photoUrl);
 
   return (
@@ -1787,7 +1831,7 @@ export function FamilyCard({
             <div className="flex flex-col items-start gap-2 @min-[240px]:flex-row @min-[240px]:items-center">
               <QuantityStepper
                 compact
-                label={title}
+                label={quantityLabel}
                 value={draftQuantity}
                 max={liveAvailable}
                 onChange={(quantity) => onDraftQuantityChange(product, quantity)}
@@ -1981,7 +2025,7 @@ export function CartPanel({
   const shownLines = needle
     ? lines.filter((line) =>
         normalizeSlug(
-          [line.product.name, line.product.category, line.product.clientCode, line.product.clientItemCode]
+          [productTitleWithSize(line.product), line.product.name, line.product.category, line.product.clientCode, line.product.clientItemCode]
             .filter(Boolean)
             .join(" "),
         ).includes(needle),
@@ -2002,42 +2046,46 @@ export function CartPanel({
         </div>
       ) : null}
       <ul className="min-h-0 flex-1 overflow-y-auto">
-        {shownLines.map((line) => (
-          <li key={line.product.key} className="flex items-center gap-3 border-b border-border/40 px-4 py-2.5">
-            <span className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-muted">
-              {line.product.photoUrl ? (
-                <img src={line.product.photoUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
-              ) : (
-                <Package className="m-2.5 h-5 w-5 text-muted-foreground" aria-hidden="true" />
-              )}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">
-                {productTitle(line.product)}
+        {shownLines.map((line) => {
+          // O nome é o mesmo em todos os tamanhos: a linha diz o tamanho depois do ponto.
+          const title = productTitleWithSize(line.product);
+          return (
+            <li key={line.product.key} className="flex items-center gap-3 border-b border-border/40 px-4 py-2.5">
+              <span className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-muted">
+                {line.product.photoUrl ? (
+                  <img src={line.product.photoUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                  <Package className="m-2.5 h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                )}
               </span>
-              <span className="block truncate text-xs text-muted-foreground">
-                {line.product.clientCode} · {formatNumber(liveAvailableForLine(line.product, line))} disponíveis
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">
+                  {title}
+                </span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {line.product.clientCode} · {formatNumber(liveAvailableForLine(line.product, line))} disponíveis
+                </span>
               </span>
-            </span>
-            <QuantityStepper
-              compact
-              label={line.product.name}
-              value={line.quantity}
-              max={line.product.available}
-              onChange={(quantity) => onQuantityChange(line.product, quantity)}
-              onIncrement={() => onIncrement(line.product)}
-              onDecrement={() => onDecrement(line.product)}
-            />
-            <button
-              type="button"
-              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
-              onClick={() => onRemove(line.product)}
-              aria-label={`Remover ${line.product.name}`}
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </li>
-        ))}
+              <QuantityStepper
+                compact
+                label={title}
+                value={line.quantity}
+                max={line.product.available}
+                onChange={(quantity) => onQuantityChange(line.product, quantity)}
+                onIncrement={() => onIncrement(line.product)}
+                onDecrement={() => onDecrement(line.product)}
+              />
+              <button
+                type="button"
+                className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
+                onClick={() => onRemove(line.product)}
+                aria-label={`Remover ${title}`}
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </li>
+          );
+        })}
         {needle && !shownLines.length ? (
           <li className="px-4 py-6 text-center text-sm text-muted-foreground">Nenhum item do pedido com esse nome.</li>
         ) : null}
@@ -2275,9 +2323,11 @@ export function ProductDetailPanel({
   const liveAvailable = liveAvailableForProduct(product, cart);
   const status = productStatus(product, liveAvailable);
   const showPhysicalTotal = product.total > liveAvailable;
-  const gender = productGender(product);
   const aviso = avisoDoDetalhe(product, liveAvailable);
   const variants = family && family.variants.length > 1 ? family.variants : null;
+  // Com os botões de tamanho, o nome da família (o escolhido está nos botões); senão, o da variação escolhida.
+  const title = tituloDaFamilia(product, variants);
+  const gender = generoDaFamilia(product, variants);
   // O tamanho sem foto mostra a foto da família, como o card.
   const visual = product.photoUrl
     ? product
@@ -2307,7 +2357,7 @@ export function ProductDetailPanel({
             {product.clientCode}
           </p>
           <h2 className="mt-1 text-xl font-semibold leading-7 text-foreground">
-            {productTitle(product)}
+            {title}
           </h2>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
@@ -2409,7 +2459,7 @@ export function ProductDetailPanel({
         {product.available > 0 ? (
           <div className="flex items-center gap-3">
             <QuantityStepper
-              label={product.name}
+              label={productTitleWithSize(product)}
               value={draftQuantity}
               max={liveAvailable}
               onChange={onDraftQuantityChange}
@@ -2472,7 +2522,7 @@ function ProductVisual({
       >
         <img
           src={product.photoUrl}
-          alt={product.name}
+          alt={productTitle(product)}
           loading="lazy"
           className="h-full w-full object-contain"
         />
@@ -2511,7 +2561,7 @@ function ProductVisual({
       <div className="relative overflow-hidden border-b border-border bg-muted">
         <img
           src={product.photoUrl}
-          alt={product.name}
+          alt={productTitle(product)}
           loading="lazy"
           className={cn("w-full object-cover", compact ? "h-[104px]" : "h-[170px]")}
         />
@@ -2876,6 +2926,7 @@ export function groupInventoryProducts(items: InventoryItem[]) {
     const category = firstText(item.category, item.categoria, "Sem categoria")!;
     const clientCode = inventoryItemClientCode(item);
     const clientItemCode = firstText(item.client_item_code, item.cod_cliente) ?? null;
+    const size = firstText((item as { size?: unknown }).size) ?? null;
     const key = [sku, clientItemCode ?? "", name, category].join("::");
     const current = grouped.get(key) ?? {
       key,
@@ -2884,6 +2935,7 @@ export function groupInventoryProducts(items: InventoryItem[]) {
       clientItemCode,
       name,
       category,
+      size,
       available: 0,
       receiving: 0,
       reserved: 0,
@@ -2901,6 +2953,7 @@ export function groupInventoryProducts(items: InventoryItem[]) {
     current.total += inventoryItemTotal(item);
     current.value += inventoryItemValue(item);
     current.photoUrl = current.photoUrl ?? inventoryItemPhoto(item);
+    current.size = current.size ?? size;
     current.sources.push(item);
     grouped.set(key, current);
   }
@@ -2960,11 +3013,14 @@ function filterProducts({
     if (stockFilter === "zerado" && product.available > 0) return false;
 
     if (!query) return true;
+    // O nome com o tamanho que a tela mostra também conta: depois da limpeza
+    // dos nomes, "preto xg" continua achando a polo preta XG.
     return normalizeSlug(
       [
         product.clientCode,
         product.clientItemCode,
         product.name,
+        productTitleWithSize(product),
         product.category,
       ]
         .filter(Boolean)
@@ -2996,7 +3052,12 @@ function sortProducts(
     }
 
     if (sortMode === "nome") {
-      return left.name.localeCompare(right.name, "pt-BR");
+      // Depois do passo 3 os tamanhos de uma família têm o mesmo nome: PP, P, M, G… em ordem.
+      return (
+        left.name.localeCompare(right.name, "pt-BR") ||
+        ordemDoTamanho(tamanhoDoCodigo(left.clientItemCode ?? left.clientCode)) -
+          ordemDoTamanho(tamanhoDoCodigo(right.clientItemCode ?? right.clientCode))
+      );
     }
 
     return (
@@ -3061,7 +3122,7 @@ function buildReplenishmentRequest(
     // do armazém sem nada para chegar.
     type: "suporte",
     priority: "normal",
-    title: `Reposição: ${productTitle(product)} (${product.clientCode})`,
+    title: `Reposição: ${productTitleWithSize(product)} (${product.clientCode})`,
     description: [
       `O item ${product.clientCode} está sem saldo e precisa de reposição.`,
       "Quando o fornecedor tiver data, avise a entrega pelo portal.",
