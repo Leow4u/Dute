@@ -100,3 +100,12 @@ corepack pnpm --filter "@workspace/app" exec vitest run src/lib/nome-do-produto.
 
 O CI roda os dois: o `node --test` no job das ferramentas e o vitest no
 `frontend-typecheck`.
+
+Para ver a leitura do Firestore de ponta a ponta, o cenário no emulador
+grava uma família sintética, roda o relatório contra ela e confere o CSV
+(exige Java e o firebase-tools; recusa rodar fora de 127.0.0.1):
+
+```powershell
+cd C:\DEV\Dute
+npx firebase-tools emulators:exec --only firestore --project demo-nomes "node tools/padronizar-nomes/cenario-emulador.mjs"
+```
