@@ -497,6 +497,7 @@ type ClientModuleShellProps = {
   title: string;
   description?: string;
   icon: LucideIcon;
+  headerAction?: ReactNode;
   children: ReactNode;
   className?: string;
 };
@@ -506,6 +507,7 @@ export function ClientModuleShell({
   eyebrow,
   title,
   description,
+  headerAction,
   children,
   className,
 }: ClientModuleShellProps) {
@@ -532,6 +534,7 @@ export function ClientModuleShell({
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
             {description ? <p className="max-w-3xl text-sm text-muted-foreground">{description}</p> : null}
           </div>
+          {headerAction}
         </header>
         <div
           data-testid="client-module-content"

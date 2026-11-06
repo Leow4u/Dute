@@ -9,8 +9,10 @@ import {
   Box,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Grid2X2,
+  Info,
   List,
   Minus,
   Package,
@@ -18,7 +20,6 @@ import {
   PackageOpen,
   PackagePlus,
   Plus,
-  RotateCcw,
   Search,
   ShoppingCart,
   SlidersHorizontal,
@@ -33,6 +34,8 @@ import { Chip as UiChip } from "@/components/ui/chip";
 import { FilterGroup, FilterSheet } from "@/components/ui/filter-panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Table,
   TableBody,
@@ -71,6 +74,7 @@ import { cn } from "@/lib/utils";
 import { groupFamilies, variantLabel, type Family } from "@/lib/stock-variants";
 
 import { DatasDeEntrada, buscarDatasDeEntrada, type DataDeEntrada } from "./datas-de-entrada";
+import { StockTypeFilter } from "./stock-type-filter";
 import { useClientEvents, useSaveClientEvent } from "./events-api";
 import {
   ClientDataBoundary,
@@ -99,7 +103,7 @@ import {
 
 type StockViewMode = "lista" | "cards";
 type StockFilter = "todos" | "disponiveis" | "baixo" | "zerado" | "arquivados";
-type StockSort = "relevancia" | "maior-saldo" | "menor-saldo" | "nome";
+type StockSort = "maior-saldo" | "menor-saldo" | "nome";
 type ProductAction = "restock" | "archive" | "restore";
 
 type StockProduct = {
@@ -152,7 +156,6 @@ const stockSortOptions: Array<{
   value: StockSort;
   label: string;
 }> = [
-  { value: "relevancia", label: "Mais relevantes" },
   { value: "maior-saldo", label: "Maior saldo" },
   { value: "menor-saldo", label: "Menor saldo" },
   { value: "nome", label: "Nome: A-Z" },
@@ -165,8 +168,9 @@ export function ClienteEstoque() {
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<StockViewMode>("cards");
   const [stockFilter, setStockFilter] = useState<StockFilter>("todos");
-  const [categoryFilter, setCategoryFilter] = useState("todos");
-  const [sortMode, setSortMode] = useState<StockSort>("relevancia");
+  const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
+  const [filterResetKey, setFilterResetKey] = useState(0);
+  const [sortMode, setSortMode] = useState<StockSort>("maior-saldo");
   const [visibleProductLimit, setVisibleProductLimit] =
     useState(STOCK_PAGE_SIZE);
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -424,7 +428,7 @@ export function ClienteEstoque() {
           products,
           cart,
           searchTerm,
-          categoryFilter,
+          categoryFilters,
           stockFilter,
         });
         const sortedProducts = sortProducts(filteredProducts, cart, sortMode);
@@ -460,13 +464,11 @@ export function ClienteEstoque() {
         const hasActiveFilters =
           Boolean(searchTerm.trim()) ||
           stockFilter !== "todos" ||
-          categoryFilter !== "todos" ||
-          sortMode !== "relevancia";
+          categoryFilters.length > 0;
         const activeFilters = activeCatalogFilters({
           stockFilter,
-          categoryFilter,
+          categoryFilters,
           categories,
-          sortMode,
         });
 
         function resetVisibleProducts() {
@@ -483,8 +485,8 @@ export function ClienteEstoque() {
           resetVisibleProducts();
         }
 
-        function updateCategoryFilter(value: string) {
-          setCategoryFilter(value);
+        function updateCategoryFilters(values: string[]) {
+          setCategoryFilters(values);
           resetVisibleProducts();
         }
 
@@ -496,15 +498,14 @@ export function ClienteEstoque() {
         function clearCatalogFilters() {
           setSearchTerm("");
           setStockFilter("todos");
-          setCategoryFilter("todos");
-          setSortMode("relevancia");
+          setCategoryFilters([]);
+          setFilterResetKey((current) => current + 1);
           resetVisibleProducts();
         }
 
         function removeCatalogFilter(key: CatalogFilterKey) {
-          if (key === "situacao") updateStockFilter("todos");
-          if (key === "tipo") updateCategoryFilter("todos");
-          if (key === "ordem") updateSortMode("relevancia");
+          if (key === "situacao" || key === "cadastro") updateStockFilter("todos");
+          if (key.startsWith("tipo:")) updateCategoryFilters(categoryFilters.filter((value) => value !== key.slice(5)));
         }
         function getDraftQuantity(product: StockProduct) {
           const max = liveAvailableForProduct(product, cart);
@@ -752,33 +753,46 @@ export function ClienteEstoque() {
             description={products.length ? overviewLine(summary) : undefined}
             icon={Box}
             className="max-w-[1720px]"
+            headerAction={products.length > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="hidden h-11 shrink-0 gap-2 md:inline-flex"
+                aria-expanded={cartOpen}
+                aria-label={`Abrir pedido de abastecimento com ${formatNumber(cartQuantity)} item(ns)`}
+                onClick={() => {
+                  setCartOpen((current) => !current);
+                  closeDetails();
+                }}
+              >
+                <ShoppingCart aria-hidden="true" />
+                Ver pedido
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">{formatNumber(cartQuantity)}</span>
+              </Button>
+            ) : undefined}
           >
             {draftLoader}
             {products.length > 0 ? (
               <MarketplaceToolbar
                 searchTerm={searchTerm}
                 stockFilter={stockFilter}
-                categoryFilter={categoryFilter}
+                categoryFilters={categoryFilters}
+                filterResetKey={filterResetKey}
                 categories={categories}
                 sortMode={sortMode}
                 viewMode={viewMode}
                 groupVariants={groupVariants}
                 onGroupVariantsChange={setGroupVariants}
-                cartQuantity={cartQuantity}
-                cartOpen={cartOpen}
+                resultCount={filteredProducts.length}
                 filterCounts={filterCounts}
                 activeFilterCount={activeFilters.length}
                 hasActiveFilters={hasActiveFilters}
                 onSearchChange={updateSearch}
                 onStockFilterChange={updateStockFilter}
-                onCategoryFilterChange={updateCategoryFilter}
+                onCategoryFiltersChange={updateCategoryFilters}
                 onSortModeChange={updateSortMode}
                 onViewModeChange={setViewMode}
                 onClearFilters={clearCatalogFilters}
-                onCartToggle={() => {
-                  setCartOpen((current) => !current);
-                  closeDetails();
-                }}
               />
             ) : null}
 
@@ -815,7 +829,7 @@ export function ClienteEstoque() {
                   ) : (
                     <EmptyModuleState
                       title="Nenhum produto encontrado"
-                      description="Ajuste a busca, filtros de estoque ou categoria."
+                      description="Ajuste a busca ou os filtros de estoque e tipo de produto."
                       icon={Search}
                     />
                   )
@@ -948,37 +962,28 @@ function OpeningInventoryState({
   );
 }
 
-type CatalogFilterKey = "situacao" | "tipo" | "ordem";
+type CatalogFilterKey = "situacao" | "cadastro" | `tipo:${string}`;
 type CatalogFilter = { key: CatalogFilterKey; label: string };
+type StockTypeOption = { value: string; label: string; count: number };
 
-/**
- * O que o painel de filtros tem fora do padrão, na ordem do painel: vira a
- * contagem do botão e as etiquetas do celular. A busca fica de fora porque
- * está sempre à vista.
- */
+/** Ordenação e formato não restringem o catálogo e não contam como filtros. */
 export function activeCatalogFilters({
   stockFilter,
-  categoryFilter,
+  categoryFilters,
   categories,
-  sortMode,
 }: {
   stockFilter: StockFilter;
-  categoryFilter: string;
+  categoryFilters: string[];
   categories: Array<{ value: string; label: string }>;
-  sortMode: StockSort;
 }): CatalogFilter[] {
   const active: CatalogFilter[] = [];
   if (stockFilter !== "todos") {
     const option = stockFilterOptions.find((item) => item.value === stockFilter);
-    active.push({ key: "situacao", label: option?.label ?? stockFilter });
+    active.push({ key: stockFilter === "arquivados" ? "cadastro" : "situacao", label: option?.label ?? stockFilter });
   }
-  if (categoryFilter !== "todos") {
-    const category = categories.find((item) => item.value === categoryFilter);
-    active.push({ key: "tipo", label: category?.label ?? categoryFilter });
-  }
-  if (sortMode !== "relevancia") {
-    const option = stockSortOptions.find((item) => item.value === sortMode);
-    active.push({ key: "ordem", label: option?.label ?? sortMode });
+  for (const value of categoryFilters) {
+    const category = categories.find((item) => item.value === value);
+    active.push({ key: `tipo:${value}`, label: category?.label ?? value });
   }
   return active;
 }
@@ -986,300 +991,236 @@ export function activeCatalogFilters({
 export function MarketplaceToolbar({
   searchTerm,
   stockFilter,
-  categoryFilter,
+  categoryFilters,
   categories,
+  filterResetKey,
   sortMode,
   viewMode,
   groupVariants,
   onGroupVariantsChange,
-  cartQuantity,
-  cartOpen,
+  resultCount,
   filterCounts,
   activeFilterCount,
   hasActiveFilters,
   onSearchChange,
   onStockFilterChange,
-  onCategoryFilterChange,
+  onCategoryFiltersChange,
   onSortModeChange,
   onViewModeChange,
   onClearFilters,
-  onCartToggle,
 }: {
   searchTerm: string;
   stockFilter: StockFilter;
-  categoryFilter: string;
-  categories: Array<{ value: string; label: string; count: number }>;
+  categoryFilters: string[];
+  categories: StockTypeOption[];
+  filterResetKey?: number;
   sortMode: StockSort;
   viewMode: StockViewMode;
   groupVariants: boolean;
   onGroupVariantsChange: (value: boolean) => void;
-  cartQuantity: number;
-  cartOpen: boolean;
+  resultCount: number;
   filterCounts: Record<StockFilter, number>;
   activeFilterCount: number;
   hasActiveFilters: boolean;
   onSearchChange: (value: string) => void;
   onStockFilterChange: (value: StockFilter) => void;
-  onCategoryFilterChange: (value: string) => void;
+  onCategoryFiltersChange: (values: string[]) => void;
   onSortModeChange: (value: StockSort) => void;
   onViewModeChange: (value: StockViewMode) => void;
   onClearFilters: () => void;
-  onCartToggle: () => void;
 }) {
-  // No celular a barra presa é uma linha só, a busca e o botão de filtros; o
-  // resto mora no painel (docs/mockups/PortalEstoqueCelular.dc.html).
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const panelTitleId = useId();
+  // Ao passar para o celular, o popover cede lugar ao painel inferior.
+  useEffect(() => {
+    const media = window.matchMedia?.("(min-width: 768px)");
+    const onResize = () => { if (!media?.matches) setFiltersOpen(false); };
+    media?.addEventListener("change", onResize);
+    return () => media?.removeEventListener("change", onResize);
+  }, []);
+  const refinements = {
+    stockFilter, filterCounts, categoryFilters, categories, filterResetKey,
+    onStockFilterChange, onCategoryFiltersChange,
+  };
+  const resultSuffix = stockFilter === "disponiveis" ? "com saldo"
+    : stockFilter === "zerado" ? "sem saldo"
+      : stockFilter === "baixo" ? "abaixo do mínimo"
+        : stockFilter === "arquivados" ? (resultCount === 1 ? "arquivado" : "arquivados")
+          : (resultCount === 1 ? "encontrado" : "encontrados");
+
   return (
-    <section
-      data-testid="stock-toolbar"
-      className="sticky top-0 z-20 shrink-0 border-b border-border bg-background py-2 md:rounded-lg md:border md:bg-card md:p-4"
-    >
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+    <>
+      <section
+        data-testid="stock-toolbar"
+        aria-label="Buscar e filtrar estoque"
+        className="sticky top-0 z-20 shrink-0 border-b border-border bg-background py-2 md:rounded-lg md:border md:bg-card md:p-4"
+      >
+        <div className="flex min-w-0 items-center gap-3">
           <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            {/* Texto de 16px no celular (o padrão do Input): abaixo disso o
-                Safari aproxima a tela quando a pessoa toca no campo. */}
+            <Search aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={searchTerm}
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder="Buscar por nome ou código"
               aria-label="Buscar por nome ou código"
-              className="h-11 rounded-lg border-border bg-card pl-11"
+              className="h-11 border-border bg-card pl-11"
             />
           </div>
+          <div className="hidden shrink-0 md:block">
+            <StockStatusSelect stockFilter={stockFilter} filterCounts={filterCounts} onChange={onStockFilterChange} />
+          </div>
+          <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                aria-label={activeFilterCount ? `Filtros, ${activeFilterCount} ${activeFilterCount === 1 ? "ativo" : "ativos"}` : "Filtros"}
+                className={cn("hidden h-11 shrink-0 gap-2 md:inline-flex", (filtersOpen || activeFilterCount > 0) && "border-primary bg-info-soft text-primary")}
+              >
+                <SlidersHorizontal aria-hidden="true" />
+                Filtros
+                {activeFilterCount > 0 ? <span aria-hidden="true" className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold">{activeFilterCount}</span> : null}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              side="bottom"
+              sideOffset={8}
+              collisionPadding={16}
+              aria-labelledby={panelTitleId}
+              className="flex max-h-[var(--radix-popover-content-available-height)] w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg p-0"
+            >
+              <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3">
+                <h2 id={panelTitleId} className="text-base font-semibold">Filtrar estoque</h2>
+                <Button type="button" variant="ghost" size="icon" aria-label="Fechar filtros" onClick={() => setFiltersOpen(false)}>
+                  <X aria-hidden="true" />
+                </Button>
+              </div>
+              <div className="min-h-0 overflow-y-auto overscroll-contain px-5 py-4">
+                <CatalogRefinements {...refinements} />
+              </div>
+              <div className="shrink-0 space-y-2 border-t border-border px-5 py-3">
+                <p className="flex items-center gap-2 text-xs text-muted-foreground"><Info className="h-4 w-4 shrink-0" aria-hidden="true" />Filtros aplicados automaticamente</p>
+                <Button type="button" variant="ghost" size="sm" className="-ml-3 text-primary" disabled={!hasActiveFilters} onClick={onClearFilters}>
+                  Limpar filtros
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
           <FilterSheet
             className="md:hidden"
             count={activeFilterCount}
             onClear={hasActiveFilters ? onClearFilters : undefined}
           >
             <StockFilterGroups
-              stockFilter={stockFilter}
-              filterCounts={filterCounts}
-              categoryFilter={categoryFilter}
-              categories={categories}
+              {...refinements}
               sortMode={sortMode}
               viewMode={viewMode}
               groupVariants={groupVariants}
-              onStockFilterChange={onStockFilterChange}
-              onCategoryFilterChange={onCategoryFilterChange}
               onSortModeChange={onSortModeChange}
               onViewModeChange={onViewModeChange}
               onGroupVariantsChange={onGroupVariantsChange}
             />
           </FilterSheet>
         </div>
-        <div className="hidden shrink-0 items-center gap-2 md:flex">
-          <ViewControls
-            viewMode={viewMode}
-            groupVariants={groupVariants}
-            onViewModeChange={onViewModeChange}
-            onGroupVariantsChange={onGroupVariantsChange}
-          />
-          <button
-            type="button"
-            onClick={onCartToggle}
-            aria-expanded={cartOpen}
-            aria-label={`Abrir pedido de abastecimento com ${formatNumber(cartQuantity)} item(ns)`}
-            className={cn(
-              "relative flex h-11 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-sm font-medium transition hover:bg-surface-hover active:translate-y-px",
-              cartOpen
-                ? "border-primary/25 bg-primary/10 text-primary"
-                : "border-border bg-card text-foreground",
-            )}
-          >
-            <ShoppingCart className="h-4 w-4" aria-hidden="true" />
-            Pedido
-            <span
-              className={cn(
-                "flex min-w-7 items-center justify-center rounded-full px-2 py-1 text-xs font-semibold",
-                cartQuantity > 0
-                  ? "bg-primary text-white"
-                  : "bg-muted text-muted-foreground",
-              )}
-            >
-              {formatNumber(cartQuantity)}
-            </span>
-          </button>
+      </section>
+      <div data-testid="stock-results-toolbar" className="flex flex-wrap items-center justify-between gap-3">
+        <p role="status" aria-live="polite" className="text-sm font-semibold">
+          {formatNumber(resultCount)} {resultCount === 1 ? "item" : "itens"} {resultSuffix}
+        </p>
+        <div className="hidden flex-wrap items-center gap-3 md:flex">
+          <CatalogSelect ariaLabel="Ordenar produtos" icon={ArrowDownWideNarrow} value={sortMode} onChange={(value) => onSortModeChange(value as StockSort)} options={stockSortOptions.map((option) => ({ ...option, label: `Ordenar: ${option.label}` }))} />
+          <ViewControls viewMode={viewMode} groupVariants={groupVariants} onViewModeChange={onViewModeChange} onGroupVariantsChange={onGroupVariantsChange} />
         </div>
       </div>
-
-      {/* Desktop, uma linha só: situação à esquerda (rola se faltar espaço),
-          tipo e ordem à direita. */}
-      <div className="mt-3 hidden flex-col gap-2.5 md:flex lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto pb-0.5">
-          <FilterGroup label="Situação" className="flex-nowrap">
-            <SituationChips
-              stockFilter={stockFilter}
-              filterCounts={filterCounts}
-              onStockFilterChange={onStockFilterChange}
-            />
-          </FilterGroup>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap items-center gap-2 lg:flex-nowrap">
-          {/* Tipo (POLO, SACOLA…) sempre como seletor: em chips disputava a linha com a situação. */}
-          {categories.length > 2 ? (
-            <CatalogSelect
-              ariaLabel="Filtrar por tipo"
-              icon={SlidersHorizontal}
-              value={categoryFilter}
-              onChange={onCategoryFilterChange}
-              options={categories.map((category) => ({
-                value: category.value,
-                label: `${category.label} (${formatNumber(category.count)})`,
-              }))}
-            />
-          ) : null}
-          <CatalogSelect
-            ariaLabel="Ordenar produtos"
-            icon={ArrowDownWideNarrow}
-            value={sortMode}
-            onChange={(value) => onSortModeChange(value as StockSort)}
-            options={stockSortOptions}
-          />
-          {hasActiveFilters ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onClearFilters}
-              className="cursor-pointer text-muted-foreground"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Limpar
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    </section>
+    </>
   );
 }
 
-/** Os grupos do painel de filtros do celular: tudo o que no desktop fica na barra. */
-export function StockFilterGroups({
-  stockFilter,
-  filterCounts,
-  categoryFilter,
-  categories,
-  sortMode,
-  viewMode,
-  groupVariants,
-  onStockFilterChange,
-  onCategoryFilterChange,
-  onSortModeChange,
-  onViewModeChange,
-  onGroupVariantsChange,
-}: {
+type CatalogRefinementsProps = {
   stockFilter: StockFilter;
   filterCounts: Record<StockFilter, number>;
-  categoryFilter: string;
-  categories: Array<{ value: string; label: string; count: number }>;
+  categoryFilters: string[];
+  categories: StockTypeOption[];
+  filterResetKey?: number;
+  onStockFilterChange: (value: StockFilter) => void;
+  onCategoryFiltersChange: (values: string[]) => void;
+};
+
+function CatalogRefinements({ stockFilter, filterCounts, categoryFilters, categories, filterResetKey, onStockFilterChange, onCategoryFiltersChange }: CatalogRefinementsProps) {
+  const scopeId = useId();
+  return (
+    <div className="space-y-4">
+      <StockTypeFilter categories={categories} selectedValues={categoryFilters} onChange={onCategoryFiltersChange} resetKey={filterResetKey} />
+      <fieldset className="border-t border-border pt-4">
+        <legend className="sr-only">Cadastro</legend>
+        <p aria-hidden="true" className="mb-2 text-sm font-semibold">Cadastro</p>
+        <RadioGroup aria-label="Cadastro" value={stockFilter === "arquivados" ? "arquivados" : "ativos"} onValueChange={(value) => onStockFilterChange(value === "arquivados" ? "arquivados" : "todos")}>
+          <Label htmlFor={`${scopeId}-ativos`} className="flex min-h-10 cursor-pointer items-center gap-3 font-normal">
+            <RadioGroupItem id={`${scopeId}-ativos`} value="ativos" />Ativos
+          </Label>
+          <Label htmlFor={`${scopeId}-arquivados`} className="flex min-h-10 cursor-pointer items-center gap-3 font-normal">
+            <RadioGroupItem id={`${scopeId}-arquivados`} value="arquivados" />Arquivados
+            <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">{formatNumber(filterCounts.arquivados)}</span>
+          </Label>
+        </RadioGroup>
+      </fieldset>
+    </div>
+  );
+}
+
+function StockStatusSelect({ stockFilter, filterCounts, onChange }: { stockFilter: StockFilter; filterCounts: Record<StockFilter, number>; onChange: (value: StockFilter) => void }) {
+  const archived = stockFilter === "arquivados";
+  return (
+    <CatalogSelect
+      ariaLabel="Filtrar por saldo"
+      icon={PackageCheck}
+      value={stockFilter}
+      disabled={archived}
+      onChange={(value) => onChange(value as StockFilter)}
+      options={archived ? [{ value: "arquivados", label: "Todos os saldos" }] : stockFilterOptions.filter((option) => option.value !== "arquivados").map((option) => ({ value: option.value, label: `${option.label} · ${formatNumber(filterCounts[option.value])}` }))}
+    />
+  );
+}
+
+/** No celular, o painel inferior inclui também saldo, ordem e preferências de exibição. */
+export function StockFilterGroups({
+  sortMode, viewMode, groupVariants, onSortModeChange, onViewModeChange, onGroupVariantsChange, ...refinements
+}: CatalogRefinementsProps & {
   sortMode: StockSort;
   viewMode: StockViewMode;
   groupVariants: boolean;
-  onStockFilterChange: (value: StockFilter) => void;
-  onCategoryFilterChange: (value: string) => void;
   onSortModeChange: (value: StockSort) => void;
   onViewModeChange: (value: StockViewMode) => void;
   onGroupVariantsChange: (value: boolean) => void;
 }) {
   return (
     <>
-      <FilterGroup label="Situação">
-        <SituationChips
-          stockFilter={stockFilter}
-          filterCounts={filterCounts}
-          onStockFilterChange={onStockFilterChange}
-        />
+      <FilterGroup label="Saldo">
+        <StockStatusSelect stockFilter={refinements.stockFilter} filterCounts={refinements.filterCounts} onChange={refinements.onStockFilterChange} />
       </FilterGroup>
-      {/* O tipo pode ter dezenas de opções: seletor nativo, que no celular abre a roda do sistema. */}
-      {categories.length > 2 ? (
-        <FilterGroup label="Tipo">
-          <select
-            aria-label="Filtrar por tipo"
-            value={categoryFilter}
-            onChange={(event) => onCategoryFilterChange(event.target.value)}
-            className="h-11 w-full cursor-pointer rounded-lg border border-input bg-card px-3 text-base text-foreground"
-          >
-            {categories.map((category) => (
-              <option key={category.value} value={category.value}>
-                {`${category.label} (${formatNumber(category.count)})`}
-              </option>
-            ))}
-          </select>
-        </FilterGroup>
-      ) : null}
+      <CatalogRefinements {...refinements} />
       <FilterGroup label="Ordenar">
-        {stockSortOptions.map((option) => (
-          <FilterChip
-            key={option.value}
-            active={sortMode === option.value}
-            label={option.label}
-            onClick={() => onSortModeChange(option.value)}
-          />
-        ))}
+        {stockSortOptions.map((option) => <FilterChip key={option.value} active={sortMode === option.value} label={option.label} onClick={() => onSortModeChange(option.value)} />)}
       </FilterGroup>
       <FilterGroup label="Exibição">
-        <ViewControls
-          viewMode={viewMode}
-          groupVariants={groupVariants}
-          onViewModeChange={onViewModeChange}
-          onGroupVariantsChange={onGroupVariantsChange}
-        />
+        <ViewControls viewMode={viewMode} groupVariants={groupVariants} onViewModeChange={onViewModeChange} onGroupVariantsChange={onGroupVariantsChange} />
       </FilterGroup>
     </>
   );
 }
 
-/** Celular: o que o painel tem ativo, logo acima da lista, para tirar com um toque. */
-export function ActiveFilterChips({
-  filters,
-  onRemove,
-}: {
-  filters: CatalogFilter[];
-  onRemove: (key: CatalogFilterKey) => void;
-}) {
+/** Tipos escolhidos continuam visíveis mesmo com o painel ou a lista recolhidos. */
+export function ActiveFilterChips({ filters, onRemove }: { filters: CatalogFilter[]; onRemove: (key: CatalogFilterKey) => void }) {
   if (filters.length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-2 md:hidden">
+    <div className="flex flex-wrap gap-2">
       {filters.map((filter) => (
-        <Button
-          key={filter.key}
-          type="button"
-          variant="outline"
-          size="sm"
-          aria-label={`Tirar o filtro ${filter.label}`}
-          onClick={() => onRemove(filter.key)}
-          className="border-primary/25 bg-primary/10 text-primary"
-        >
-          {filter.label}
-          <X aria-hidden="true" />
+        <Button key={filter.key} type="button" variant="outline" size="sm" aria-label={`Tirar o filtro ${filter.label}`} onClick={() => onRemove(filter.key)} className={cn("border-primary/25 bg-primary/10 text-primary", filter.key === "situacao" && "md:hidden")}>
+          {filter.label}<X aria-hidden="true" />
         </Button>
       ))}
     </div>
-  );
-}
-
-function SituationChips({
-  stockFilter,
-  filterCounts,
-  onStockFilterChange,
-}: {
-  stockFilter: StockFilter;
-  filterCounts: Record<StockFilter, number>;
-  onStockFilterChange: (value: StockFilter) => void;
-}) {
-  return (
-    <>
-      {stockFilterOptions.map((option) => (
-        <FilterChip
-          key={option.value}
-          active={stockFilter === option.value}
-          label={option.value === "arquivados" && !filterCounts.arquivados ? option.label : `${option.label} · ${formatNumber(filterCounts[option.value])}`}
-          onClick={() => onStockFilterChange(option.value)}
-        />
-      ))}
-    </>
   );
 }
 
@@ -1299,12 +1240,12 @@ function ViewControls({
       <div
         role="group"
         aria-label="Formato de visualização"
-        className="flex items-center gap-1 rounded-md border border-border bg-card p-1"
+        className="order-2 flex items-center gap-1 rounded-md border border-border bg-card p-1"
       >
         <ViewModeButton
           active={viewMode === "cards"}
           icon={Grid2X2}
-          label="Cards"
+          label="Grade"
           onClick={() => onViewModeChange("cards")}
         />
         <ViewModeButton
@@ -1349,21 +1290,24 @@ function CatalogSelect({
   value,
   options,
   onChange,
+  disabled = false,
 }: {
   ariaLabel: string;
   icon: LucideIcon;
   value: string;
   options: Array<{ value: string; label: string }>;
   onChange: (value: string) => void;
+  disabled?: boolean;
 }) {
   return (
-    <label className="flex h-9 min-w-[178px] cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-3 text-xs text-muted-foreground transition hover:bg-card focus-within:ring-2 focus-within:ring-ring/25">
-      <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+    <label className={cn("flex h-11 min-w-44 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus-within:ring-2 focus-within:ring-ring", disabled && "opacity-60")}>
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       <select
         aria-label={ariaLabel}
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 cursor-pointer appearance-none bg-transparent text-xs font-medium text-foreground outline-none"
+        className="min-w-0 flex-1 cursor-pointer appearance-none bg-transparent text-base font-medium text-foreground outline-none disabled:cursor-default md:text-sm"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -1371,6 +1315,7 @@ function CatalogSelect({
           </option>
         ))}
       </select>
+      <ChevronDown className="pointer-events-none h-4 w-4 shrink-0" aria-hidden="true" />
     </label>
   );
 }
@@ -2929,13 +2874,13 @@ function filterProducts({
   products,
   cart,
   searchTerm,
-  categoryFilter,
+  categoryFilters,
   stockFilter,
 }: {
   products: StockProduct[];
   cart: Record<string, number>;
   searchTerm: string;
-  categoryFilter: string;
+  categoryFilters: string[];
   stockFilter: StockFilter;
 }) {
   const query = normalizeSlug(searchTerm);
@@ -2948,7 +2893,7 @@ function filterProducts({
       return false;
     }
 
-    if (categoryFilter !== "todos" && typeValue(product) !== categoryFilter) {
+    if (categoryFilters.length > 0 && !categoryFilters.includes(typeValue(product))) {
       return false;
     }
 
