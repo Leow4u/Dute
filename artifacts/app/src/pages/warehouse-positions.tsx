@@ -4,17 +4,8 @@ import { LayoutGrid, Pencil, Plus, Printer, Rows3, Trash2, Users } from "lucide-
 import { useLocation } from "wouter";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Confirmacao } from "@/components/ui/confirmacao";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -810,22 +801,16 @@ export default function WarehousePositionsPage() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={Boolean(removing)} onOpenChange={(open) => (!open ? setRemoving(null) : null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remover a posição {removing?.code}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Só é possível remover prateleira sem saldo. Com caixa guardada, mova antes. A remoção fica registrada nos eventos.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => removing && remove.mutate(removing.code)} disabled={remove.isPending}>
-              Remover
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Confirmacao
+        aberta={Boolean(removing)}
+        ocupada={remove.isPending}
+        titulo={`Remover a posição ${removing?.code ?? ""}?`}
+        descricao="Só é possível remover prateleira sem saldo. Com caixa guardada, mova antes. A remoção fica registrada nos eventos."
+        confirmar="Remover"
+        confirmando="Removendo…"
+        onConfirmar={() => { if (removing) remove.mutate(removing.code); }}
+        onFechar={() => setRemoving(null)}
+      />
     </div>
   );
 }

@@ -20,10 +20,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogContent, AlertDialogHeader,
-  AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
-} from "@/components/ui/alert-dialog";
+import { Confirmacao } from "@/components/ui/confirmacao";
+import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,8 +50,13 @@ const EMPTY: FormState = { grupo: "armazenamento", item: "", unidade: "", valor_
 export default function PriceList() {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const { data } = useListPriceList();
-  const { data: config } = useGetBillingConfig();
+  // A tabela e a cobrança só se afirmam depois de lidas: carregando não é
+  // "Nenhum serviço", e a cobrança não salva antes de chegar
+  // (docs/plataforma/diagnostico-carregamento.md, decisão 6 de 06/11/2026).
+  const lista = useListPriceList();
+  const { data } = lista;
+  const leituraDaConfig = useGetBillingConfig();
+  const config = leituraDaConfig.data;
 
   const create = useCreatePriceListItem();
   const update = useUpdatePriceListItem();
@@ -115,7 +118,13 @@ export default function PriceList() {
   };
 
   const handleDelete = (id: number) => {
-    del.mutate({ id }, { onSuccess: () => { toast({ title: "Item removido" }); refetch(); } });
+    del.mutate(
+      { id },
+      {
+        onSuccess: () => { toast({ title: "Item removido" }); setRemoving(null); refetch(); },
+        onError: () => toast({ title: "Erro ao remover item", variant: "destructive" }),
+      },
+    );
   };
 
   const handleSaveConfig = () => {
@@ -153,7 +162,19 @@ export default function PriceList() {
               </tr>
             </thead>
             <tbody>
-              {items.length === 0 ? (
+              {lista.isLoading ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-6 text-sm text-muted-foreground">
+                    Carregando serviços...
+                  </td>
+                </tr>
+              ) : lista.isError && !data ? (
+                <tr>
+                  <td colSpan={6} className="p-3">
+                    <ErroNaLeitura mensagem="Não consegui carregar a tabela." tentando={lista.isFetching} onTentar={() => void lista.refetch()} />
+                  </td>
+                </tr>
+              ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-6 text-sm text-muted-foreground">
                     Nenhum serviço na tabela. Adicione o primeiro em "Novo item".
@@ -211,24 +232,35 @@ export default function PriceList() {
 
       <section className="h-fit rounded-lg border border-border bg-card">
         <h2 className="border-b border-border/60 px-5 py-3.5 text-sm font-semibold">Cobrança</h2>
+        {!config && leituraDaConfig.isError ? (
+          <div className="p-3">
+            <ErroNaLeitura
+              className="sm:flex-col sm:items-start"
+              mensagem="Não consegui carregar a cobrança."
+              tentando={leituraDaConfig.isFetching}
+              onTentar={() => void leituraDaConfig.refetch()}
+            />
+          </div>
+        ) : (
         <div className="space-y-4 p-5">
           <div className="space-y-1.5">
             <Label htmlFor="billing-rate">Taxa ad valorem (%)</Label>
-            <Input id="billing-rate" type="number" step="0.001" value={rate} onChange={(e) => setRate(e.target.value)} />
+            <Input id="billing-rate" type="number" step="0.001" value={rate} onChange={(e) => setRate(e.target.value)} disabled={!config} />
             <p className="text-xs text-muted-foreground">Aplicada sobre o valor total do estoque.</p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="billing-name">Nome do cliente</Label>
-            <Input id="billing-name" value={nome} onChange={(e) => setNome(e.target.value)} />
+            <Input id="billing-name" value={nome} onChange={(e) => setNome(e.target.value)} disabled={!config} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="billing-email">E-mail para envio da fatura</Label>
-            <Input id="billing-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@empresa.com" />
+            <Input id="billing-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@empresa.com" disabled={!config} />
           </div>
-          <Button variant="outline" className="w-full" onClick={handleSaveConfig} disabled={saveConfig.isPending}>
+          <Button variant="outline" className="w-full" onClick={handleSaveConfig} disabled={!config || saveConfig.isPending}>
             {saveConfig.isPending ? "Salvando..." : "Salvar cobrança"}
           </Button>
         </div>
+        )}
       </section>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -291,25 +323,16 @@ export default function PriceList() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={removing !== null} onOpenChange={(open) => !open && setRemoving(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remover "{removing?.item}"?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (removing) handleDelete(removing.id);
-                setRemoving(null);
-              }}
-            >
-              Remover
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Confirmacao
+        aberta={removing !== null}
+        ocupada={del.isPending}
+        titulo={`Remover "${removing?.item ?? ""}"?`}
+        descricao="Esta ação não pode ser desfeita."
+        confirmar="Remover"
+        confirmando="Removendo…"
+        onConfirmar={() => { if (removing) handleDelete(removing.id); }}
+        onFechar={() => setRemoving(null)}
+      />
     </div>
   );
 }

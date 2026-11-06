@@ -38,6 +38,14 @@ function render(inicio: Partial<InicioDoWms> = {}) {
   );
 }
 
+describe("Início da Armazenagem sem o total de SKUs", () => {
+  /** Antes, o total aparecia como 0 enquanto o painel carregava ou quando ele falhava (decisão 6 de 06/11/2026). */
+  it("a linha dos SKUs mostra — e não um zero", () => {
+    const textos = textosDaTela(render({ hoje: { ...PRONTO.hoje!, skus: null } }));
+    expect(textos[textos.indexOf("SKUs em estoque") + 1]).toBe("—");
+  });
+});
+
 describe("Início da Armazenagem", () => {
   it("data, saudação, o que precisa de você e o dia no armazém, na ordem", () => {
     expect(textosDaTela(render())).toEqual([

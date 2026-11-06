@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { OpeningConferenceSummary } from "./opening-conference-summary";
 import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import type { OpeningConferenceLine } from "@/lib/opening-conference";
-const props = { busy: false, onEdit: () => {}, onRemove: () => {}, onReview: () => {}, onReopen: () => {}, onResume: () => {} };
+const props = { busy: false, resuming: false, onEdit: () => {}, onRemove: () => {}, onReview: () => {}, onReopen: () => {}, onResume: () => {} };
 const line: OpeningConferenceLine = { id: "line-1", status: "pending", product_name: "Camisa", client_item_code: "CAM-G", size: "G", counted_qty: 4, unit_cost: 20 };
 describe("resumo da caixa física", () => {
   it("permite revisar e corrigir antes de guardar", () => {
@@ -27,5 +27,20 @@ describe("resumo da caixa física", () => {
     expect(html).toContain("Revise o código");
     expect(html).toContain("Remover rascunho de Polo");
     expect(html).not.toContain("Remover rascunho de Camisa");
+  });
+
+  /** Antes, o ícone girava com o formulário sujo, sem nenhuma operação (decisão 6 de 06/11/2026). */
+  it("desligado por outra coisa, o Retomar guarda não gira", () => {
+    const html = renderToStaticMarkup(<OpeningConferenceSummary {...props} busy box={warehouseBoxFromRecord({ code: "CX-000001", status: "committing" })} lines={[{ ...line, status: "failed" }]} />);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Retomar guarda<\/button>/);
+    expect(html).not.toContain("data-spinner");
+    expect(html).not.toContain("animate-spin");
+  });
+
+  it("retomando, o botão gira e diz Retomando guarda…", () => {
+    const html = renderToStaticMarkup(<OpeningConferenceSummary {...props} resuming box={warehouseBoxFromRecord({ code: "CX-000001", status: "committing" })} lines={[{ ...line, status: "failed" }]} />);
+    expect(html).toContain("Retomando guarda…");
+    expect(html).toContain("data-spinner");
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-busy="true"/);
   });
 });

@@ -1,5 +1,6 @@
-import { CheckCircle2, ImageOff, PackageSearch } from "lucide-react";
+import { AlertCircle, CheckCircle2, ImageOff, PackageSearch, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import type { ProductLookupItem } from "./shared";
 
 export function ProductIdentityCard({
@@ -81,6 +82,38 @@ export function NewProductNotice({
         </div>
         <Button type="button" size="sm" variant="outline" className="shrink-0" disabled={disabled} onClick={onToggle}>
           {confirmed ? "Rever identificação" : "Cadastrar como novo"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * O catálogo do cliente ainda não chegou: a tela não diz que o produto não
+ * existe nem oferece o cadastro novo antes de ler
+ * (docs/plataforma/diagnostico-carregamento.md, decisão 6 de 06/11/2026).
+ */
+export function CatalogoVerificando() {
+  return (
+    <div role="status" className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-4 text-sm font-medium text-foreground">
+      <Spinner />
+      Verificando o catálogo…
+    </div>
+  );
+}
+
+/** O catálogo não veio: a falha na linha, com a nova tentativa, e o cadastro novo continua bloqueado. */
+export function CatalogoIndisponivel({ tentando, onTentar }: { tentando: boolean; onTentar: () => void }) {
+  return (
+    <div role="alert" className="@container rounded-lg border border-destructive/30 bg-destructive/10 p-4">
+      <div className="flex flex-col gap-3 @sm:flex-row @sm:items-center @sm:justify-between">
+        <p className="flex items-center gap-2 text-sm font-medium text-destructive">
+          <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
+          Não consegui carregar o catálogo.
+        </p>
+        <Button type="button" size="sm" variant="outline" className="shrink-0" disabled={tentando} aria-busy={tentando || undefined} onClick={onTentar}>
+          {tentando ? <Spinner /> : <RefreshCw className="size-4" aria-hidden="true" />}
+          {tentando ? "Tentando de novo…" : "Tentar de novo"}
         </Button>
       </div>
     </div>

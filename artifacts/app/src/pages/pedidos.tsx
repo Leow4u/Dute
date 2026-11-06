@@ -21,6 +21,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import { PageHeader } from "@/components/ui/page-header";
 import { QueueGroup, QueueRow, type QueueTone } from "@/components/ui/queue-list";
 import { Segmented } from "@/components/ui/segmented";
@@ -492,6 +493,11 @@ export default function Pedidos() {
   const openCount =
     (decider ? queue.approve.length : 0) + queue.pick.length + queue.deliver.length;
   const loading = ops.isLoading || (decider && requests.isLoading);
+  // A leitura falhou sem nada para mostrar: a tela diz isso, em vez de
+  // "Nenhum pedido para…" (docs/plataforma/diagnostico-carregamento.md,
+  // decisão 6 de 06/11/2026). Com a lista já lida, a falha de uma atualização
+  // não a apaga.
+  const semLeitura = (ops.isError && !ops.data) || (decider && requests.isError && !requests.data);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 pb-24">
@@ -527,6 +533,12 @@ export default function Pedidos() {
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Carregando pedidos...</p>
+      ) : semLeitura ? (
+        <ErroNaLeitura
+          mensagem="Não consegui carregar os pedidos."
+          tentando={ops.isFetching || requests.isFetching}
+          onTentar={refreshAll}
+        />
       ) : view === "delivered" ? (
         <>
           <QueueGroup

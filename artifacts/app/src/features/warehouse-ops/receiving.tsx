@@ -99,7 +99,7 @@ import {
   findProductByAnyCode,
   findProductByBarcode,
 } from "@/lib/product-match";
-import { ProductIdentityCard, NewProductNotice } from "./product-identity";
+import { CatalogoIndisponivel, CatalogoVerificando, ProductIdentityCard, NewProductNotice } from "./product-identity";
 
 function DetailField({
   icon: Icon,
@@ -528,6 +528,11 @@ export function UnplannedReceiptDialog({
     },
   });
   const productLookup = lookupQuery.data ?? [];
+  // Antes de o catálogo chegar (ou quando ele não vem), a tela não diz que o
+  // produto não existe nem oferece o cadastro novo
+  // (docs/plataforma/diagnostico-carregamento.md, decisão 6 de 06/11/2026).
+  const estadoDoCatalogo: "lendo" | "falhou" | "pronto" =
+    lookupQuery.data !== undefined ? "pronto" : lookupQuery.isError ? "falhou" : "lendo";
 
   function updateLine(index: number, patch: Partial<ReceiptDraftLine>) {
     setLines((current) =>
@@ -618,6 +623,7 @@ export function UnplannedReceiptDialog({
     // Uma resposta perdida pode atualizar catálogo/fila. A mesma intenção
     // repete o payload congelado antes de revalidar esses dados externos.
     if (!retryingIntent) {
+      if (estadoDoCatalogo !== "pronto") return;
       if (duplicates.length > 0 && confirmedDuplicate !== duplicateSignature) return;
       const hasInvalidLine = lines.some((line, index) => {
         const currentKey = normalizeProductKey(line.clientCode || line.sku);
@@ -749,6 +755,7 @@ export function UnplannedReceiptDialog({
     };
   });
   const canSubmit =
+    estadoDoCatalogo === "pronto" &&
     lines.some((line) => line.clientCode.trim() || line.sku.trim()) &&
     lineIssues.every(
       (issue, index) =>
@@ -829,7 +836,9 @@ export function UnplannedReceiptDialog({
                     ? "Produto repetido"
                     : issue?.invalidQuantity
                       ? "Quantidade inválida"
-                      : issue?.missingProduct || issue?.missingNewProductData
+                      : !existing && estadoDoCatalogo !== "pronto" && (line.clientCode.trim() || line.sku.trim())
+                        ? estadoDoCatalogo === "lendo" ? "Verificando o catálogo" : "Sem catálogo"
+                        : issue?.missingProduct || issue?.missingNewProductData
                         ? "Cadastro incompleto"
                         : existing
                           ? "Cadastro encontrado"
@@ -1008,6 +1017,14 @@ export function UnplannedReceiptDialog({
                         <div className="mt-3">
                           <ProductIdentityCard product={existing} onSelect={() => applyExistingProduct(index, existing)} />
                         </div>
+                      ) : mustCreate && estadoDoCatalogo === "lendo" ? (
+                        <div className="mt-3">
+                          <CatalogoVerificando />
+                        </div>
+                      ) : mustCreate && estadoDoCatalogo === "falhou" ? (
+                        <div className="mt-3">
+                          <CatalogoIndisponivel tentando={lookupQuery.isFetching} onTentar={() => void lookupQuery.refetch()} />
+                        </div>
                       ) : mustCreate ? (
                         <div className="mt-3">
                           <NewProductNotice
@@ -1018,7 +1035,7 @@ export function UnplannedReceiptDialog({
                         </div>
                       ) : null}
 
-                      {line.createNew && !existing ? (
+                      {line.createNew && !existing && estadoDoCatalogo === "pronto" ? (
                         <div className="mt-3 space-y-3 rounded-lg border border-border bg-card p-3">
                           <div>
                             <div className="text-sm font-semibold text-foreground">
@@ -1175,13 +1192,13 @@ export function UnplannedReceiptDialog({
             <div>
               <div className="text-xs text-muted-foreground">Produtos existentes</div>
               <div className="mt-1 font-semibold text-foreground">
-                {formatNumber(receiptDraftSummary.existing)}
+                {estadoDoCatalogo === "pronto" ? formatNumber(receiptDraftSummary.existing) : "—"}
               </div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Novos cadastros</div>
               <div className="mt-1 font-semibold text-foreground">
-                {formatNumber(receiptDraftSummary.newProducts)}
+                {estadoDoCatalogo === "pronto" ? formatNumber(receiptDraftSummary.newProducts) : "—"}
               </div>
             </div>
           </div>

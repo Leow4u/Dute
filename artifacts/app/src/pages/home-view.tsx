@@ -27,7 +27,7 @@ function NumerosDoArmazem({ hoje }: { hoje: HojeNoArmazem }) {
         <LinhaDeNumero ponto="bg-info-soft-foreground" rotulo="Prontos para envio" valor={hoje.toShip} />
         <LinhaDeNumero ponto="bg-muted-foreground" rotulo="Em rota de entrega" valor={hoje.inTransit} />
         <LinhaDeNumero ponto="bg-warning-soft-foreground" rotulo="Recebimentos em aberto" valor={hoje.openReceipts} />
-        <LinhaDeNumero ponto="bg-success-soft-foreground" rotulo="SKUs em estoque" valor={hoje.skus} />
+        <LinhaDeNumero ponto="bg-success-soft-foreground" rotulo="SKUs em estoque" valor={hoje.skus ?? "—"} />
       </ul>
     </section>
   );

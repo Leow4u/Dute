@@ -1,7 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ProductLookupItem } from "./shared";
-import { NewProductNotice, ProductIdentityCard } from "./product-identity";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { textosDaTela } from "@/test/textos";
+import { CatalogoIndisponivel, CatalogoVerificando, NewProductNotice, ProductIdentityCard } from "./product-identity";
 
 const product: ProductLookupItem = {
   id: "tricot-gg",
@@ -95,5 +97,30 @@ describe("identificação de produto novo", () => {
     );
     expect(html).toMatch(/<button[^>]*disabled=""/);
     expect(html).toContain("Cadastre a sigla do SKU.");
+  });
+});
+
+describe("o catálogo que ainda não chegou ou não veio (decisão 6 de 06/11/2026)", () => {
+  it("verificando: o spinner e o rótulo, como aviso de status", async () => {
+    const html = renderToStaticMarkup(<CatalogoVerificando />);
+    expect(textosDaTela(html)).toEqual(["Verificando o catálogo…"]);
+    expect(html).toContain('role="status"');
+    expect(html).toContain("data-spinner");
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("não veio: a falha e a nova tentativa, sem oferecer cadastro novo", async () => {
+    const html = renderToStaticMarkup(<CatalogoIndisponivel tentando={false} onTentar={() => undefined} />);
+    expect(textosDaTela(html)).toEqual(["Não consegui carregar o catálogo.", "Tentar de novo"]);
+    expect(html).toContain('role="alert"');
+    expect(html).not.toContain("Cadastrar como novo");
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("tentando de novo: o botão gira e fica desligado", () => {
+    const html = renderToStaticMarkup(<CatalogoIndisponivel tentando onTentar={() => undefined} />);
+    expect(textosDaTela(html)).toEqual(["Não consegui carregar o catálogo.", "Tentando de novo…"]);
+    expect(html).toMatch(/<button[^>]*disabled=""/);
+    expect(html).toContain('aria-busy="true"');
   });
 });

@@ -14,7 +14,10 @@ export default function Home() {
   const seesWarehouse = canAccessModule(role, WMS_ROLES);
   const dashboard = useGetDashboard();
   const inbox = useInicioDoWms(role);
-  const skus = Number((dashboard.data as { total_skus?: number } | undefined)?.total_skus ?? 0);
+  // Sem o painel (carregando ou com falha), o total fica sem valor, e a linha
+  // mostra "—" no lugar de um zero (docs/plataforma/diagnostico-carregamento.md,
+  // decisão 6 de 06/11/2026).
+  const skus = dashboard.data === undefined ? null : Number((dashboard.data as { total_skus?: number }).total_skus ?? 0);
 
   return (
     <InicioDoWmsView
