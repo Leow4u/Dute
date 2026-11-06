@@ -253,13 +253,15 @@ está nas notas do canvas e em `estoque.test.tsx` e `estoque-gaveta.test.tsx`.
 
 A página "Carregamento na Armazenagem" não tem canvas: as telas foram
 enviadas na conversa em 06/11/2026, junto com o diagnóstico de
-`docs/plataforma/diagnostico-carregamento.md`, e esperam o OK do Leonardo
-(seção 7 do diagnóstico). Seguem o shell v3 da Armazenagem (cliente ativo
+`docs/plataforma/diagnostico-carregamento.md`, e aprovadas pelo Leonardo no
+mesmo dia, com as seis recomendações (seção 7 do diagnóstico): spinner com
+rótulo nas listas, o que deixa de fora a opção B do skeleton em Pedidos.
+Seguem o shell v3 da Armazenagem (cliente ativo
 BTG; Guilherme na operação, Leonardo no Faturamento). As fontes são
 estáticas; no navegador, o spinner gira e o skeleton pulsa, e os dois param
 com `prefers-reduced-motion`. "Hoje" mostra o app como está; o resto é
 proposta. O spinner é um anel com o arco, desenhado no `Spinner`, no lugar
-do `Loader2` e do `RefreshCw` girando de hoje (pergunta 5).
+do `Loader2` e do `RefreshCw` girando de hoje (pergunta 5, aprovado).
 
 | Tela | Arquivo | O que mostra |
 |---|---|---|
@@ -272,7 +274,7 @@ do `Loader2` e do `RefreshCw` girando de hoje (pergunta 5).
 | Pedidos, hoje | `WmsCarregandoPedidosHoje.dc.html` | A leitura falhou e as três filas dizem "Nenhum pedido para…". |
 | Pedidos, erro na leitura | `WmsCarregandoPedidosErro.dc.html` | "Não consegui carregar os pedidos." com "Tentar de novo", no lugar das filas. |
 | Pedidos, primeira leitura (opção A) | `WmsCarregandoPedidosSpinner.dc.html` | O spinner com o rótulo no lugar da lista (pergunta 1). |
-| Pedidos, primeira leitura (opção B) | `WmsCarregandoPedidosSkeleton.dc.html` | O skeleton das três filas, com os títulos que a tela já conhece (pergunta 1). |
+| Pedidos, primeira leitura (opção B, não escolhida) | `WmsCarregandoPedidosSkeleton.dc.html` | O skeleton das três filas, com os títulos que a tela já conhece (pergunta 1). |
 | Pedidos, a linha em andamento | `WmsCarregandoPedidosAprovando.dc.html` | Só a linha aprovada gira e diz "Aprovando…"; as outras continuam livres. |
 | Pedidos, Separado | `WmsCarregandoSeparado.dc.html` | O diálogo fica aberto com "Voltar" desligado, e as etapas Separação e Embalagem mostram onde está. |
 | Faturamento, emitir a fatura | `WmsCarregandoEmitir.dc.html` | A confirmação espera a emissão com "Emitindo…" e "Cancelar" desligado. O fundo segue a v3, que o Faturamento do app ainda não tem. |

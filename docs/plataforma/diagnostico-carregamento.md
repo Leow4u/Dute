@@ -23,8 +23,12 @@ sente, do mais grave ao mais cosmético:
 
 1. **A tela afirma antes de ler.** Na chegada avulsa, enquanto o catálogo
    carrega, qualquer código digitado vira "produto novo"
-   (`features/warehouse-ops/receiving.tsx:530`, `:1011`): dá para cadastrar
-   de novo um produto que já existe. O mesmo acontece em Devoluções e na
+   (`features/warehouse-ops/receiving.tsx:530`, `:1011`), e a tela oferece
+   "Cadastrar como novo" para um produto que já existe. As Functions recusam
+   o código do cliente que já está no cadastro ("Use o produto existente para
+   evitar SKU duplicado", `functions/wms/src/domain/operations.ts`), então o
+   dano é a pessoa preencher categoria, custo e foto à toa e levar a recusa
+   no fim. Corrigido no primeiro PR (decisão 6). O mesmo acontece em Devoluções e na
    Contagem cíclica ("não localizado"). Fora isso, treze lugares mostram
    vazio ou zero antes dos dados chegarem (seção 5, item 3).
 2. **Erro vira vazio.** Pedidos não tem estado de erro: se a leitura falha,
@@ -282,7 +286,7 @@ o Início) ou por URL.
 
 | # | Onde | O que falta | Quem sente |
 | --- | --- | --- | --- |
-| 1 | Chegada avulsa, Devoluções, Contagem cíclica | Esperar o catálogo antes de dizer "produto novo" ou "não localizado", como a abertura faz com "Verificando o catálogo" | Quem recebe: pode duplicar produto |
+| 1 | Chegada avulsa, Devoluções, Contagem cíclica | Esperar o catálogo antes de dizer "produto novo" ou "não localizado", como a abertura faz com "Verificando o catálogo" | Quem recebe: preenche um cadastro novo que as Functions recusam no fim |
 | 2 | Pedidos, Receber (avisos), Exceções, Posições, histórico do item, Produtos, Movimentações, conversa e Conhecimento do agente, Retornos | Estado de erro próprio: erro nunca vira vazio nem some | Quem opera com a rede ruim |
 | 3 | Painel da abertura, Tabela de preços, cartões do Fechamento, Início (SKUs), Estoque (endereço, foto, Parados), Receber (avisos), Pedidos legado, SKUs, Clientes, Faturas do portal, Conhecimento, painel antigo, formulário de Cobrança | Nunca afirmar vazio ou zero antes da primeira leitura | Todos |
 | 4 | Abertura do app, `Suspense` de Faturamento, Catálogo e painel antigo | A marca e um spinner no lugar do branco; "Sem sinal" quando a rede não vem | Todos, toda vez |
@@ -349,20 +353,44 @@ As telas das propostas estão nos mockups `docs/mockups/WmsCarregando*.dc.html`,
 com "Hoje" ao lado da proposta onde a diferença importa (tabela em
 `docs/mockups/README.md`, "Carregamento na Armazenagem").
 
-## 7. Perguntas para o Leonardo
+## 7. Decisões do Leonardo (06/11/2026)
 
-1. Nas listas da v3 (Pedidos, Receber, Estoque), skeleton ou spinner com
-   rótulo? A proposta é spinner com rótulo, e skeleton só onde a tela tem
-   desenho fixo.
-2. O toast de sucesso continua como retorno padrão da Armazenagem, ou a
-   linha mudar na lista basta nas bancadas (como a chegada por caixa faz)?
-3. Splash com a marca na abertura, ou só o spinner?
-4. Tempo mínimo do spinner para não piscar (300 ms) e aviso de demora
-   (10 s): valem esses números?
-5. Um ícone só: o anel com o arco dos mockups, desenhado no `Spinner`, ou o
-   `Loader2` e o `RefreshCw` que o WMS gira hoje?
-6. A chegada avulsa (item 1 da seção 5) entra antes de tudo, inclusive da
-   regra escrita?
+As seis perguntas foram respondidas com a recomendação de cada uma:
+
+1. **Listas carregando: spinner com rótulo.** Pedidos, Receber e Estoque
+   mostram o spinner com o rótulo no lugar da lista. O skeleton fica só nas
+   telas de desenho fixo: Início, Operações, Contagem, Mapa, Posições e o
+   portal. A opção B do mockup (`WmsCarregandoPedidosSkeleton`) não entra.
+2. **O toast continua o retorno padrão** da Armazenagem depois de uma ação.
+3. **Abertura com a marca**: o splash do mockup, em CSS no `index.html`,
+   no lugar da tela branca.
+4. **Tempos**: o spinner aparece depois de 300 ms, para não piscar na
+   resposta rápida, e o aviso de demora, depois de 10 s.
+5. **Um ícone só**: o anel com o arco, desenhado no `Spinner`, no lugar do
+   `Loader2` e do `RefreshCw` que giram hoje.
+6. **Ordem**: a chegada avulsa entra antes de tudo, inclusive da regra
+   escrita, no mesmo primeiro PR das cinco correções pequenas: o erro em
+   Pedidos, a espera da Tabela de preços, as quatro confirmações que fecham
+   antes da resposta (Emitir fatura, Remover item da tabela, Remover
+   posição, Apagar rotina), o giro falso do "Retomar guarda" e o zero de
+   SKUs no Início. Devoluções e a Contagem cíclica, com o mesmo "não
+   localizado", ficam para o PR seguinte, com as peças.
+
+As seis correções do primeiro PR entraram no PR 581, com este diagnóstico e
+os mockups:
+
+- a chegada avulsa espera o catálogo (`CatalogoVerificando` e
+  `CatalogoIndisponivel`, em `features/warehouse-ops/product-identity.tsx`);
+- Pedidos e a Tabela de preços mostram o `ErroNaLeitura`
+  (`components/ui/erro-na-leitura.tsx`) no lugar do vazio, e a cobrança só
+  salva depois de lida;
+- as quatro confirmações usam a `Confirmacao` (`components/ui/confirmacao.tsx`),
+  que fecha só no sucesso;
+- o "Retomar guarda" gira só com a guarda sendo retomada (`resuming`);
+- o Início mostra "—" no total de SKUs enquanto o painel não chega.
+
+O `Spinner` já é o anel (decisão 5). O atraso de 300 ms e o aviso de 10 s
+(decisão 4) entram com as peças, no PR seguinte.
 
 ## 8. Números do levantamento (só a Armazenagem)
 
