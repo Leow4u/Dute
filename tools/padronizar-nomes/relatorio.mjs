@@ -21,10 +21,10 @@
  */
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { abrirFirestore, lerColecao, RAIZ } from "./firestore.mjs";
 import { familiaDoCodigo, ordemDoTamanho, padronizarNome } from "./regras.mjs";
 
 // --- Puro: montar o relatório a partir dos registros ---------------------------------
@@ -35,19 +35,19 @@ const num = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 /** A chave de busca do código, como as Functions comparam (cod_cliente_key). */
-const chaveDoCodigo = (v) =>
+export const chaveDoCodigo = (v) =>
   texto(v)
     .toUpperCase()
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .replace(/\s+/g, " ");
-const arquivado = (data) => data.archived === true || texto(data.status) === "archived";
+export const arquivado = (data) => data.archived === true || texto(data.status) === "archived";
 
 /** O cliente do registro sem customer_code: o legado, como nas Functions (LEGACY_CUSTOMER_CODE em domain/customer-scope.ts). */
 export const CLIENTE_LEGADO = "BTG Pactual";
-const clienteDe = (data) => texto(data.customer_code) || CLIENTE_LEGADO;
+export const clienteDe = (data) => texto(data.customer_code) || CLIENTE_LEGADO;
 /** O id de documento que o WMS dá ao código (safeDocId): "7781/09" → "7781_09". */
-const idDoCodigo = (v) => texto(v).replace(/[^\w.-]/g, "_").toUpperCase();
+export const idDoCodigo = (v) => texto(v).replace(/[^\w.-]/g, "_").toUpperCase();
 
 /** Os campos de um documento de `skus` que o relatório usa. `id` é o SKU (BTG-000126). */
 export function linhaDoSku(id, data) {
@@ -275,48 +275,8 @@ async function principal() {
   }
   if (!args.projeto) abortar("Informe --projeto (dute-homolog ou dute-prod; demo-* com o emulador).");
 
-  const emuladorHost = process.env.FIRESTORE_EMULATOR_HOST ?? "";
-  const emulador = Boolean(emuladorHost);
-  if (emulador && !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(emuladorHost)) {
-    abortar(`FIRESTORE_EMULATOR_HOST precisa apontar para 127.0.0.1 ou localhost (está ${emuladorHost}).`);
-  }
-  if (emulador && !/^demo-/.test(args.projeto)) {
-    abortar(`Com FIRESTORE_EMULATOR_HOST o projeto precisa ser demo-* (está ${args.projeto}). Para a nuvem, limpe a variável antes de rodar.`);
-  }
-  process.env.GCLOUD_PROJECT = args.projeto;
-  process.env.GOOGLE_CLOUD_PROJECT = args.projeto;
-  if (emulador) {
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    process.env.METADATA_SERVER_DETECTION = "none";
-  }
-
-  const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-  const requireWms = createRequire(path.join(raiz, "functions", "wms", "package.json"));
-  let adminApp;
-  let adminFirestore;
-  try {
-    adminApp = requireWms("firebase-admin/app");
-    adminFirestore = requireWms("firebase-admin/firestore");
-  } catch {
-    abortar("firebase-admin não encontrado em functions/wms. Rode: npm --prefix functions/wms ci");
-  }
-  const app = adminApp.initializeApp({ projectId: args.projeto });
-  const db = adminFirestore.getFirestore(app);
-
-  // Tudo, em páginas de 500 pelo id: um relatório pela metade sairia errado, não só incompleto.
-  const ler = async (colecao) => {
-    const todos = [];
-    let ultimo = null;
-    for (;;) {
-      let consulta = db.collection(colecao).orderBy(adminFirestore.FieldPath.documentId()).limit(500);
-      if (ultimo) consulta = consulta.startAfter(ultimo);
-      const pagina = await consulta.get();
-      for (const doc of pagina.docs) todos.push({ ...doc.data(), id: doc.id });
-      if (pagina.size < 500) return todos;
-      ultimo = pagina.docs[pagina.docs.length - 1].id;
-    }
-  };
-  const [skus, products] = await Promise.all([ler("skus"), ler("products")]);
+  const { app, db, FieldPath } = abrirFirestore(args.projeto, abortar);
+  const [skus, products] = await Promise.all([lerColecao(db, FieldPath, "skus"), lerColecao(db, FieldPath, "products")]);
 
   const relatorio = montarRelatorio({ skus, products, cliente: args.cliente, familia: args.familia, comArquivados: args.comArquivados });
   if (args.cliente && !relatorio.linhas.length) {
@@ -325,7 +285,7 @@ async function principal() {
   }
   const hoje = new Date();
   const data = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
-  const pedido = path.resolve(raiz, args.saida || path.join("tmp", `nomes-fora-do-padrao-${args.projeto}-${data}.csv`));
+  const pedido = path.resolve(RAIZ, args.saida || path.join("tmp", `nomes-fora-do-padrao-${args.projeto}-${data}.csv`));
   const saida = caminhoLivre(pedido);
   mkdirSync(path.dirname(saida), { recursive: true });
   // "wx": se outro processo criou o arquivo no meio tempo, falha em vez de sobrescrever.

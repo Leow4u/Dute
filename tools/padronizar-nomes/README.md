@@ -95,10 +95,8 @@ de ser `demo-*`; para a nuvem, limpe a variável antes
 | Motivo | O que mudou: espaços, tamanho no nome, gênero, hífen, maiúsculas, caixa das letras, tamanho pelo código e família (o proposto é o nome da família, não o próprio da linha). Vazio quando nada mudou. |
 | Tamanho hoje, Tamanho proposto | O campo Tamanho como está e o que ele deve ter: o fim do código quando é um tamanho conhecido; senão, o campo, em maiúsculas quando é um tamanho. |
 | Gênero | O campo Gênero, para a conferência. |
-| Decisão | `aprovar` quando só a regra agiu; `conferir` quando há algo em Conferir; `—` quando nada muda. A coluna é para a revisão: o passo 3 aplica só as linhas com `aprovar`, com o Nome proposto e o Tamanho proposto como estiverem; a linha com `conferir` ou `—` fica como está. Na revisão, corrija o Nome proposto onde precisar e troque `conferir` por `aprovar` no que aceitar. |
+| Decisão | `aprovar` quando só a regra agiu; `conferir` quando há algo em Conferir; `—` quando nada muda. É para leitura: o passo 3 não lê o CSV e grava a proposta de todas as linhas, menos as de fora (nome vazio, nome que é só o tamanho, código com mais de um SKU ativo), com as escolhas de `decisoes.mjs` por cima. |
 | Conferir | O que uma pessoa decide: família com mais de um nome (todas as linhas dela, com a contagem de cada nome), tamanho no nome diferente do código, tamanho no nome e código sem tamanho, tamanho do código que não é um tamanho conhecido, campo Tamanho diferente do código, gênero do nome diferente do campo Gênero, código com mais de um SKU ativo, `products` com outro nome ou sem registro, SKU sem código do cliente, nome vazio ou só com o tamanho. |
-
-Revisado, salve no Excel como "CSV UTF-8", para os acentos não se perderem.
 
 Valor que começa com `=`, `+`, `-` ou `@` sai com um apóstrofo na frente, para
 o Excel não ler como fórmula. A planilha do canvas
@@ -107,7 +105,7 @@ avaliação: o CSV de verdade é este, com estas colunas, e a regra não
 acrescenta cor nem aponta digitação (o erro aparece como família com mais de
 um nome).
 
-## Passo 2: o cadastro e as telas (na `main` com este PR)
+## Passo 2: o cadastro e as telas (na `main` desde o PR 584)
 
 O cadastro grava o produto novo no padrão, pelo `nomeParaGravar` das
 Functions: o nome sem o tamanho, com a etiqueta do gênero e a caixa das
@@ -129,13 +127,51 @@ mostra o nome da família, igual em todos os tamanhos. A tela recusa antes o
 nome que traz o próprio tamanho (`problemaDoNome`), e a Contagem sugere o nome,
 os campos e as fotos da família quando o código é de um tamanho novo.
 
-## Passo 3: aplicar os renomes
+## Passo 3: aplicar os renomes, sem planilha
 
-Com o CSV revisado, na homologação e depois na produção, pelo motor do acerto
-de outubro (`tools/acerto-btg-2026-10`, operação `renomear`: skus, products,
-saldos, linhas da abertura e a projeção do portal, com recibo e evento por
-item, idempotente). Essa ferramenta ainda não existe: entra com o OK do
-Leonardo sobre o CSV.
+O passo 3 grava o padrão nos produtos já cadastrados. Ele não lê o CSV: monta
+o mesmo relatório do passo 1 na hora e grava o Nome proposto e o Tamanho
+proposto de cada SKU, com as escolhas que a regra não faz sozinha por cima
+(`decisoes.mjs`, aprovadas pelo Leonardo em 06/11/2026):
+
+- "Arpoardor", a grafia da maioria da família masculina A.01.0809.002, vira
+  "Arpoador"; "Basica" vira "Básica"; "Copo Termico" vira "Copo Térmico";
+  "Lancheira Grande Az" vira "Lancheira Grande Azul".
+- Os copos de café B.0790.005.U e B.0791.005.U, que tinham o "P" e o "G" no
+  nome, viram "Copo Café Pequeno" e "Copo Café Grande".
+
+Fica de fora, sem gravar, o que precisa de uma pessoa: o nome vazio, o nome
+que é só o tamanho e o código com mais de um SKU ativo. O campo Gênero não
+muda; onde ele contradiz o nome, corrige-se no Catálogo.
+
+Grava por SKU, numa transação, como o `renomear` do acerto de outubro
+(`tools/acerto-btg-2026-10`): o nome e o tamanho em `skus` e `products`, o
+`product_name` dos saldos e das linhas da abertura, o `product_name` e o
+`size` da projeção do portal, o recibo em `operational_operations` e o evento
+`catalog.renamed` em `events`. Rodar de novo não repete, pelo recibo de cada
+SKU, e o SKU que mudou desde a leitura fica de fora. O histórico (pedidos,
+movimentos, eventos) guarda o nome da época.
+
+Só depois de publicar na produção a `main` com o passo 2: nas telas antigas,
+os tamanhos de uma família apareceriam todos com o mesmo nome. Os
+pré-requisitos são os do passo 1.
+
+```powershell
+cd C:\DEV\Dute
+git switch main
+git pull
+node tools/padronizar-nomes/aplicar.mjs --projeto dute-prod
+```
+
+Mostra quantos mudam, as linhas com as escolhas e o que fica de fora, sem
+gravar nada. `--listar` mostra todas as linhas; `--familia` e `--cliente`
+limitam como no relatório; `--json` dá o resumo para outro script. Para
+gravar:
+
+```powershell
+cd C:\DEV\Dute
+node tools/padronizar-nomes/aplicar.mjs --projeto dute-prod --aplicar --confirmo "PADRONIZAR NOMES dute-prod"
+```
 
 ## Testes
 
@@ -146,7 +182,8 @@ corepack pnpm --filter "@workspace/app" exec vitest run src/lib/nome-do-produto.
 ```
 
 O CI roda os dois: o `node --test` no job das ferramentas e o vitest no
-`frontend-typecheck`.
+`frontend-typecheck`. O `node --test` cobre o plano do passo 3
+(`aplicar.test.mjs`); a gravação roda no cenário do emulador abaixo.
 
 Para ver a leitura do Firestore de ponta a ponta, o cenário no emulador
 grava uma família sintética, roda o relatório contra ela e confere o CSV
@@ -155,4 +192,14 @@ grava uma família sintética, roda o relatório contra ela e confere o CSV
 ```powershell
 cd C:\DEV\Dute
 npx firebase-tools emulators:exec --only firestore --project demo-nomes "node tools/padronizar-nomes/cenario-emulador.mjs"
+```
+
+O do passo 3 grava produtos fora do padrão, com saldos, linhas da abertura e a
+projeção do portal, roda o `aplicar.mjs` sem gravar e gravando e confere cada
+coleção, o recibo, o evento, a retomada sem repetir, o SKU que mudou no meio e
+o cliente que não é o do SKU:
+
+```powershell
+cd C:\DEV\Dute
+npx firebase-tools emulators:exec --only firestore --project demo-nomes "node tools/padronizar-nomes/cenario-aplicar.mjs"
 ```
