@@ -291,13 +291,16 @@ cadastro, o nome foi digitado à mão em cada um e ficou com o tamanho no fim
 MAIÚSCULAS misturadas. A proposta: o nome é o mesmo nos tamanhos da família,
 o tamanho vai para o campo Tamanho (preenchido pelo fim do código do cliente)
 e as telas que mostravam só o nome passam a mostrar o tamanho ao lado
-("Polo masculina piquet preto · XG"), com o código do cliente na linha de
+("Polo Masculino Piquet Preto · XG"), com o código do cliente na linha de
 apoio. As pranchas "hoje" reproduzem o app como está; nas "proposta" só o
 nome e o lugar do tamanho mudam. O portal segue o visual do WMS
 (`docs/sistema-visual.md`); a Armazenagem, o shell v3 (o Catálogo e a
-Contagem ainda não têm a v3 no app). As fontes são estáticas. As decisões
-que o canvas espera estão nas notas: tamanho fora do nome, gênero
-concordando com a peça, caixa de frase e só esses ajustes.
+Contagem ainda não têm a v3 no app). As fontes são estáticas. Decisões do
+Leonardo em 06/11/2026, nas notas do canvas: tamanho fora do nome; gênero
+como etiqueta, sempre "Masculino" ou "Feminino", sem concordar com a peça
+("Polo Masculino", "Calça Social Masculino"); inicial maiúscula em cada
+palavra ("Polo Masculino Piquet Preto"), conectivos em minúscula; só esses
+ajustes e os erros de digitação que a planilha apontar.
 
 | Tela | Arquivo | O que mostra |
 |---|---|---|
