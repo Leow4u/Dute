@@ -417,6 +417,17 @@ documentação de produto e operação está em `docs/`.
   mais cadastro avulso de produto, e o código de barras não se repete dentro do
   cliente. Ver `docs/multicliente-modelos-de-operacao.md` (inclui a ordem dos
   próximos PRs: mobiliário, com patrimônio, e insumos).
+- **O nome do produto tem padrão (decidido em 06/11/2026):** o mesmo nome em
+  todos os tamanhos da família, o tamanho no campo Tamanho (o fim do código
+  do cliente), o gênero como etiqueta igual para tudo ("Masculino" ou
+  "Feminino") e inicial maiúscula em cada palavra: "Polo Masculino Piquet
+  Preto". A regra é `padronizarNome` em `lib/dominio/src/nome-do-produto.ts`,
+  com os casos em `nome-do-produto.casos.json`, que a cópia em JavaScript da
+  ferramenta também roda. O relatório só de leitura que lista o que está fora
+  do padrão é `tools/padronizar-nomes/relatorio.mjs` (roteiro no README da
+  pasta); as telas aprovadas estão em `docs/mockups/Nome*.dc.html`. O cadastro
+  de hoje ainda não valida o padrão: entra no PR de tela, e a aplicação dos
+  renomes vem depois, com o CSV revisado.
 - **`pnpm` não está no PATH.** Use `corepack pnpm`. Os diretórios
   `functions/wms/` e `functions/comercial/` usam **npm** (cada um tem
   `package-lock.json` próprio), não pnpm. Como o `pnpm-workspace.yaml` inclui

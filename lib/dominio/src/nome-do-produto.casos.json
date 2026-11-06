@@ -1,0 +1,545 @@
+{
+  "_leia": "Casos de referência do padrão do nome do produto (lib/dominio/src/nome-do-produto.ts, decisões do Leonardo de 06/11/2026). Rodam no vitest do app, contra o original, e no node --test de tools/padronizar-nomes, contra a cópia regras.mjs. Em `nomes`, `esperado.tamanho` null é sem tamanho; `motivos` e `conferir` vazios são sem mudança.",
+  "sufixos": [
+    {
+      "caso": "tamanho de roupa",
+      "codigo": "A.01.0806.005.XG",
+      "sufixo": "XG"
+    },
+    {
+      "caso": "minúsculo vira maiúsculo",
+      "codigo": "A.01.0806.005.pp",
+      "sufixo": "PP"
+    },
+    {
+      "caso": "numeração da sacola",
+      "codigo": "J.0149.003.N1",
+      "sufixo": "N1"
+    },
+    {
+      "caso": "tamanho único",
+      "codigo": "C.0659.001.U",
+      "sufixo": "U"
+    },
+    {
+      "caso": "número",
+      "codigo": "A.01.0712.001.42",
+      "sufixo": "42"
+    },
+    {
+      "caso": "dois trechos não é família",
+      "codigo": "MAT-001.P",
+      "sufixo": null
+    },
+    {
+      "caso": "sem ponto",
+      "codigo": "MAT-001",
+      "sufixo": null
+    },
+    {
+      "caso": "trecho longo não é tamanho",
+      "codigo": "A.01.0806.00512",
+      "sufixo": null
+    },
+    {
+      "caso": "vazio",
+      "codigo": "",
+      "sufixo": null
+    }
+  ],
+  "familias": [
+    {
+      "caso": "família é o código sem o tamanho",
+      "codigo": "A.01.0806.005.XG",
+      "familia": "A.01.0806.005"
+    },
+    {
+      "caso": "sem tamanho, o código inteiro",
+      "codigo": "MAT-001",
+      "familia": "MAT-001"
+    }
+  ],
+  "nomes": [
+    {
+      "caso": "PP: só a caixa das letras e o tamanho pelo código",
+      "nome": "Polo masculino piquet preto",
+      "codigo": "A.01.0806.005.PP",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Preto",
+        "tamanho": "PP",
+        "motivos": [
+          "caixa das letras",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "P: tamanho minúsculo no fim",
+      "nome": "Polo masculino piquet preto p",
+      "codigo": "A.01.0806.005.P",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Preto",
+        "tamanho": "P",
+        "motivos": [
+          "tamanho no nome",
+          "caixa das letras",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "M: tamanho minúsculo no fim",
+      "nome": "Polo masculino piquet preto m",
+      "codigo": "A.01.0806.005.M",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Preto",
+        "tamanho": "M",
+        "motivos": [
+          "tamanho no nome",
+          "caixa das letras",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "G: tamanho maiúsculo no fim",
+      "nome": "Polo masculino piquet preto G",
+      "codigo": "A.01.0806.005.G",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Preto",
+        "tamanho": "G",
+        "motivos": [
+          "tamanho no nome",
+          "caixa das letras",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "GG: tudo em maiúsculas",
+      "nome": "POLO MASCULINO PIQUET PRETO GG",
+      "codigo": "A.01.0806.005.GG",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Preto",
+        "tamanho": "GG",
+        "motivos": [
+          "tamanho no nome",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "XG: tamanho com hífen no fim",
+      "nome": "Polo masculino piquet preto - XG",
+      "codigo": "A.01.0806.005.XG",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Preto",
+        "tamanho": "XG",
+        "motivos": [
+          "tamanho no nome",
+          "caixa das letras",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "XGG: gênero concordado vira etiqueta",
+      "nome": "Polo masculina piquet preto XGG",
+      "codigo": "A.01.0806.005.XGG",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Preto",
+        "tamanho": "XGG",
+        "motivos": [
+          "tamanho no nome",
+          "gênero",
+          "caixa das letras",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "feminino já como etiqueta",
+      "nome": "Polo feminino piquet arpoador P",
+      "codigo": "A.02.0809.002.P",
+      "genero": "Feminino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Feminino Piquet Arpoador",
+        "tamanho": "P",
+        "motivos": [
+          "tamanho no nome",
+          "caixa das letras",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "feminina com travessão antes do tamanho",
+      "nome": "Polo feminina piquet arpoador – M",
+      "codigo": "A.02.0809.002.M",
+      "genero": "Feminino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Feminino Piquet Arpoador",
+        "tamanho": "M",
+        "motivos": [
+          "tamanho no nome",
+          "gênero",
+          "caixa das letras",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "erro de digitação fica: a família é que aponta",
+      "nome": "POLO FEMININO PIQUET ARPOARDOR G",
+      "codigo": "A.02.0809.002.G",
+      "genero": "Feminino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Feminino Piquet Arpoardor",
+        "tamanho": "G",
+        "motivos": [
+          "tamanho no nome",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "cor composta ganha hífen",
+      "nome": "POLO MASCULINO PIQUET AZUL MARINHO M",
+      "codigo": "A.01.0805.002.M",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Azul-Marinho",
+        "tamanho": "M",
+        "motivos": [
+          "tamanho no nome",
+          "hífen",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "cor composta já com hífen",
+      "nome": "Polo masculino piquet azul-marinho",
+      "codigo": "A.01.0805.002.XG",
+      "genero": "Masculino",
+      "tamanho": "XG",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Azul-Marinho",
+        "tamanho": "XG",
+        "motivos": [
+          "caixa das letras"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "tamanho numérico; a cor não é acrescentada",
+      "nome": "CALÇA SOCIAL MASCULINA 42",
+      "codigo": "A.01.0712.001.42",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Calça Social Masculino",
+        "tamanho": "42",
+        "motivos": [
+          "tamanho no nome",
+          "gênero",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "conectivo em minúscula; tamanho único",
+      "nome": "Toalha de academia",
+      "codigo": "C.0659.001.U",
+      "genero": "Outros",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Toalha de Academia",
+        "tamanho": "U",
+        "motivos": [
+          "caixa das letras",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "sigla fica em maiúsculas; travessão no meio fica",
+      "nome": "Sacola quadrada – BTG",
+      "codigo": "J.0149.003.N1",
+      "genero": "—",
+      "tamanho": "N1",
+      "esperado": {
+        "nome": "Sacola Quadrada – BTG",
+        "tamanho": "N1",
+        "motivos": [
+          "caixa das letras"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "já no padrão: nada muda",
+      "nome": "Polo Masculino Piquet Preto",
+      "codigo": "A.01.0806.005.M",
+      "genero": "Masculino",
+      "tamanho": "M",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Preto",
+        "tamanho": "M",
+        "motivos": [],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "gênero do nome diferente do campo",
+      "nome": "Polo masculina piquet preto",
+      "codigo": "A.01.0805.002.PP",
+      "genero": "Feminino",
+      "tamanho": "PP",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Preto",
+        "tamanho": "PP",
+        "motivos": [
+          "gênero",
+          "caixa das letras"
+        ],
+        "conferir": [
+          "gênero do nome (Masculino) diferente do campo Gênero (Feminino)"
+        ]
+      }
+    },
+    {
+      "caso": "tamanho no nome diferente do código",
+      "nome": "Camiseta básica branca M",
+      "codigo": "A.01.0310.001.G",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Camiseta Básica Branca",
+        "tamanho": "G",
+        "motivos": [
+          "tamanho no nome",
+          "caixa das letras",
+          "tamanho pelo código"
+        ],
+        "conferir": [
+          "tamanho no nome (M) diferente do código (G)"
+        ]
+      }
+    },
+    {
+      "caso": "campo Tamanho diferente do código",
+      "nome": "Polo masculino piquet preto",
+      "codigo": "A.01.0806.005.G",
+      "genero": "Masculino",
+      "tamanho": "M",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Preto",
+        "tamanho": "G",
+        "motivos": [
+          "caixa das letras"
+        ],
+        "conferir": [
+          "campo Tamanho (M) diferente do código (G)"
+        ]
+      }
+    },
+    {
+      "caso": "código sem tamanho e tamanho no nome",
+      "nome": "Toalha de rosto G",
+      "codigo": "MAT-014",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Toalha de Rosto G",
+        "tamanho": null,
+        "motivos": [
+          "caixa das letras"
+        ],
+        "conferir": [
+          "tamanho no nome (G) e código sem tamanho"
+        ]
+      }
+    },
+    {
+      "caso": "unidade depois de número em minúscula",
+      "nome": "CANECA TERMICA 500 ML",
+      "codigo": "MAT-020",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Caneca Termica 500 ml",
+        "tamanho": null,
+        "motivos": [
+          "maiúsculas"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "palavra com número fica como está",
+      "nome": "Papel A4 500 folhas",
+      "codigo": "MAT-021",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Papel A4 500 Folhas",
+        "tamanho": null,
+        "motivos": [
+          "caixa das letras"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "espaços repetidos e separador solto no fim",
+      "nome": "  POLO  PIQUET  MESCLA - ",
+      "codigo": "A.01.0601.001.P",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Polo Piquet Mescla",
+        "tamanho": "P",
+        "motivos": [
+          "espaços",
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "abreviação do gênero com ponto",
+      "nome": "Camiseta masc. básica branca",
+      "codigo": "A.01.0310.001.P",
+      "genero": "Masculino",
+      "tamanho": "P",
+      "esperado": {
+        "nome": "Camiseta Masculino Básica Branca",
+        "tamanho": "P",
+        "motivos": [
+          "gênero",
+          "caixa das letras"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "as duas palavras de gênero: sem etiqueta para conferir",
+      "nome": "Boné bordado masculino e feminino",
+      "codigo": "A.03.0101.001.U",
+      "genero": "Outros",
+      "tamanho": "U",
+      "esperado": {
+        "nome": "Boné Bordado Masculino e Feminino",
+        "tamanho": "U",
+        "motivos": [
+          "caixa das letras"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "conectivo na primeira palavra fica maiúsculo",
+      "nome": "com bolso lateral",
+      "codigo": "A.03.0102.001.U",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Com Bolso Lateral",
+        "tamanho": "U",
+        "motivos": [
+          "caixa das letras",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "nome que é só o tamanho fica e vira conferir",
+      "nome": "XG",
+      "codigo": "A.01.0806.005.XG",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "XG",
+        "tamanho": "XG",
+        "motivos": [
+          "tamanho pelo código"
+        ],
+        "conferir": [
+          "nome é só o tamanho"
+        ]
+      }
+    },
+    {
+      "caso": "nome vazio",
+      "nome": "   ",
+      "codigo": "A.01.0806.005.XG",
+      "genero": "Masculino",
+      "tamanho": "",
+      "esperado": {
+        "nome": "",
+        "tamanho": "XG",
+        "motivos": [
+          "tamanho pelo código"
+        ],
+        "conferir": [
+          "nome vazio"
+        ]
+      }
+    },
+    {
+      "caso": "acento no título",
+      "nome": "CAMISETA BÁSICA BRANCA MASCULINA",
+      "codigo": "A.01.0310.001.M",
+      "genero": "Masculino",
+      "tamanho": "M",
+      "esperado": {
+        "nome": "Camiseta Básica Branca Masculino",
+        "tamanho": "M",
+        "motivos": [
+          "gênero",
+          "maiúsculas"
+        ],
+        "conferir": []
+      }
+    }
+  ]
+}
