@@ -10,7 +10,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -64,11 +64,13 @@ assert.equal(json.resumo.products_lidos, 8);
 assert.equal(json.resumo.arquivados_ignorados, 1);
 assert.equal(json.resumo.linhas, 8);
 assert.deepEqual(json.resumo.por_decisao, { aprovar: 8 });
-const csv = readFileSync(saida, "utf8");
+// O relatório não sobrescreve: o CSV desta rodada é o que ele diz que gravou.
+const csv = readFileSync(json.saida, "utf8");
 const linhas = csv.slice(1).trim().split("\r\n");
 assert.equal(linhas.length, 9, "cabeçalho + 8 linhas");
 assert.ok(linhas[1].startsWith("BTG Pactual;A.01.0806.005;A.01.0806.005.PP;BTG-000121;Polo masculino piquet preto;Polo Masculino Piquet Preto;"), linhas[1]);
 assert.ok(linhas.slice(1, 8).every((l) => l.includes(";Polo Masculino Piquet Preto;")), "os sete tamanhos com o mesmo nome");
 assert.ok(linhas[8].includes(";Toalha de Academia;"), linhas[8]);
-console.log(`Cenário no emulador ok: ${json.resumo.linhas} linhas, ${json.resumo.familias} famílias, CSV em ${saida}`);
+rmSync(json.saida);
+console.log(`Cenário no emulador ok: ${json.resumo.linhas} linhas, ${json.resumo.familias} famílias.`);
 process.exit(0);
