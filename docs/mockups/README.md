@@ -251,6 +251,36 @@ está nas notas do canvas e em `estoque.test.tsx` e `estoque-gaveta.test.tsx`.
 | Celular (8) | `PortalDetalheCelular.dc.html` | O painel sobe de baixo, com até 88% da altura (`dvh`), e o rodapé com a ação. |
 | Celular, rolando (8) | `PortalDetalheCelularRolando.dc.html` | O corpo rola; o cabeçalho e o rodapé ficam. |
 
+A página "Carregamento na Armazenagem" não tem canvas: as telas foram
+enviadas na conversa em 06/11/2026, junto com o diagnóstico de
+`docs/plataforma/diagnostico-carregamento.md`, e esperam o OK do Leonardo
+(seção 7 do diagnóstico). Seguem o shell v3 da Armazenagem (cliente ativo
+BTG; Guilherme na operação, Leonardo no Faturamento). As fontes são
+estáticas; no navegador, o spinner gira e o skeleton pulsa, e os dois param
+com `prefers-reduced-motion`. "Hoje" mostra o app como está; o resto é
+proposta. O spinner é um anel com o arco, desenhado no `Spinner`, no lugar
+do `Loader2` e do `RefreshCw` girando de hoje (pergunta 5).
+
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| As peças | `WmsCarregandoPecas.dc.html` | O spinner (16, 22 e 30 px), o bloco "Carregando…", "Sem conexão", o botão em ação, o skeleton, o erro na leitura, o erro na atualização, o progresso e a demora com o tempo limite. |
+| Abertura | `WmsCarregandoAbertura.dc.html` | A marca e o spinner no lugar da tela branca, enquanto o perfil chega. |
+| Abertura sem conexão | `WmsCarregandoAberturaSemConexao.dc.html` | Depois de 3 s sem rede, "Sem conexão" abaixo do spinner, que continua esperando. |
+| Chegada avulsa, hoje | `WmsCarregandoChegadaHoje.dc.html` | Com o catálogo ainda carregando, a linha diz "Identificação pendente" e oferece "Cadastrar como novo" para um produto que existe. |
+| Chegada avulsa | `WmsCarregandoChegada.dc.html` | A linha diz "Verificando" e o editor, "Verificando o catálogo…"; sem "Cadastrar como novo" e sem contar zero no resumo. |
+| Chegada avulsa, o catálogo não veio | `WmsCarregandoChegadaErro.dc.html` | "Não consegui carregar o catálogo." com "Tentar de novo"; a linha fica "Sem catálogo" e o produto novo continua bloqueado. |
+| Pedidos, hoje | `WmsCarregandoPedidosHoje.dc.html` | A leitura falhou e as três filas dizem "Nenhum pedido para…". |
+| Pedidos, erro na leitura | `WmsCarregandoPedidosErro.dc.html` | "Não consegui carregar os pedidos." com "Tentar de novo", no lugar das filas. |
+| Pedidos, primeira leitura (opção A) | `WmsCarregandoPedidosSpinner.dc.html` | O spinner com o rótulo no lugar da lista (pergunta 1). |
+| Pedidos, primeira leitura (opção B) | `WmsCarregandoPedidosSkeleton.dc.html` | O skeleton das três filas, com os títulos que a tela já conhece (pergunta 1). |
+| Pedidos, a linha em andamento | `WmsCarregandoPedidosAprovando.dc.html` | Só a linha aprovada gira e diz "Aprovando…"; as outras continuam livres. |
+| Pedidos, Separado | `WmsCarregandoSeparado.dc.html` | O diálogo fica aberto com "Voltar" desligado, e as etapas Separação e Embalagem mostram onde está. |
+| Faturamento, emitir a fatura | `WmsCarregandoEmitir.dc.html` | A confirmação espera a emissão com "Emitindo…" e "Cancelar" desligado. O fundo segue a v3, que o Faturamento do app ainda não tem. |
+| Estoque › Itens, hoje | `WmsCarregandoEstoqueHoje.dc.html` | Antes dos saldos, toda linha diz "Sem endereço". |
+| Estoque › Itens | `WmsCarregandoEstoque.dc.html` | O endereço em skeleton até os saldos chegarem; saldo e disponível já vêm do SKU. |
+| Estoque › Itens, fotos do item | `WmsCarregandoFotos.dc.html` | "Enviando 3 de 4" com o progresso, as fotos já enviadas e as que passaram de 4. |
+| Receber, a atualização falhou | `WmsCarregandoReceberAtualizar.dc.html` | A lista de 10:42 fica na tela, com "Não consegui atualizar" e "Tentar de novo". |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador

@@ -345,6 +345,10 @@ o Início) ou por URL.
 
 Os PRs 1 e 2 vêm antes dos outros; 3 a 10 não dependem entre si.
 
+As telas das propostas estão nos mockups `docs/mockups/WmsCarregando*.dc.html`,
+com "Hoje" ao lado da proposta onde a diferença importa (tabela em
+`docs/mockups/README.md`, "Carregamento na Armazenagem").
+
 ## 7. Perguntas para o Leonardo
 
 1. Nas listas da v3 (Pedidos, Receber, Estoque), skeleton ou spinner com
@@ -355,7 +359,8 @@ Os PRs 1 e 2 vêm antes dos outros; 3 a 10 não dependem entre si.
 3. Splash com a marca na abertura, ou só o spinner?
 4. Tempo mínimo do spinner para não piscar (300 ms) e aviso de demora
    (10 s): valem esses números?
-5. Um ícone só: o `Loader2` do `Spinner` ou o `RefreshCw` que o WMS usa?
+5. Um ícone só: o anel com o arco dos mockups, desenhado no `Spinner`, ou o
+   `Loader2` e o `RefreshCw` que o WMS gira hoje?
 6. A chegada avulsa (item 1 da seção 5) entra antes de tudo, inclusive da
    regra escrita?
 
