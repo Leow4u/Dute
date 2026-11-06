@@ -266,6 +266,24 @@ export default function Receber() {
     </>
   );
 
+  // Recebidos, em dois grupos: a chegada e a guarda da caixa dela encerram
+  // juntas e, numa lista só, pareciam o mesmo registro repetido.
+  const rowDone = (entry: TaskQueueEntry, meta: string) => (
+    <QueueRow
+      key={entry.task.id}
+      icon={Check}
+      tone="done"
+      title={getTaskTitle(entry.task)}
+      meta={meta}
+      className={cn(selected?.task.id === entry.task.id && "bg-muted/60")}
+      actions={
+        <Button type="button" variant="outline" data-receipt-id={entry.task.id} onClick={() => selectEntry(entry)}>
+          Ver
+        </Button>
+      }
+    />
+  );
+
   const blockedNote = (entry: TaskQueueEntry) =>
     entry.task.blocked_reason ? (
       <span className="flex items-center gap-1.5 text-destructive-soft-foreground">
@@ -336,36 +354,14 @@ export default function Receber() {
                 ))}
               </QueueGroup>
             ) : view === "done" ? (
-              <QueueGroup
-                title="Recebidos"
-                count={board.done.length}
-                empty="Nenhuma chegada recebida."
-              >
-                {board.done.map((entry) => (
-                  <QueueRow
-                    key={`${entry.queue.key}:${entry.task.id}`}
-                    icon={Check}
-                    tone="done"
-                    title={getTaskTitle(entry.task)}
-                    meta={
-                      entry.queue.key === "receiving"
-                        ? receivingRowMeta(entry.task)
-                        : putawayRowMeta(entry.task)
-                    }
-                    className={cn(selected?.task.id === entry.task.id && "bg-muted/60")}
-                    actions={
-                      <Button
-                        type="button"
-                        variant="outline"
-                        data-receipt-id={entry.task.id}
-                        onClick={() => selectEntry(entry)}
-                      >
-                        Ver
-                      </Button>
-                    }
-                  />
-                ))}
-              </QueueGroup>
+              <>
+                <QueueGroup title="Chegadas" count={board.chegadas.length} empty="Nenhuma chegada recebida.">
+                  {board.chegadas.map((entry) => rowDone(entry, receivingRowMeta(entry.task)))}
+                </QueueGroup>
+                <QueueGroup title="Guardas" count={board.guardas.length} empty="Nenhuma guarda concluída.">
+                  {board.guardas.map((entry) => rowDone(entry, putawayRowMeta(entry.task)))}
+                </QueueGroup>
+              </>
             ) : (
               <>
                 <QueueGroup

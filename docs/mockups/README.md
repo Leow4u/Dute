@@ -181,6 +181,16 @@ no celular) valem como estão.
 | Armazenagem · Não cabe aqui na guarda | `WmsGuardaNaoCabe.dc.html` | O único jeito de trocar o destino confirmado (decisão 15, parte 4h): o motivo e "Liberar B-02". A reserva sai, a coordenação é avisada (decisão 21) e a caixa volta à guarda sem prateleira. |
 | Armazenagem · Guarda da caixa sem prateleira no celular | `WmsGuardaCaixaCelularSemPrateleira.dc.html` | A mesma escolha do destino no celular, onde a equipe guarda (decisão 11); confirmado o destino, a tela é a `WmsGuardaCaixaCelular`. |
 
+A aba Recebidos do Receber ganhou em 06/11/2026 dois grupos, "Chegadas" e
+"Guardas", no lugar da lista única: a chegada de uma caixa e a guarda dela
+encerram juntas, com a mesma quantidade, e lado a lado pareciam o mesmo
+registro repetido. A fonte é estática e segue o shell v3 da Armazenagem, com
+os dados da tela de 05/11/2026 que motivou a mudança.
+
+| Tela | Arquivo | O que muda |
+|---|---|---|
+| Armazenagem · Receber, a aba Recebidos | `WmsReceberRecebidos.dc.html` | "Chegadas" lista a chegada com a entrada concluída e todas as caixas guardadas; "Guardas" lista a guarda concluída, de caixa ou de linha, com onde ficou. Cada grupo do mais recente ao mais antigo, até 12 por fila. |
+
 A página "FIFO por data" não tem canvas: as duas telas das partes 5 e 6 de
 `docs/plataforma/fifo-por-data.md` foram enviadas na conversa e aprovadas
 pelo Leonardo em 03/11/2026, com a prateleira de data mais antiga primeiro na

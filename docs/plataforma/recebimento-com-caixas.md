@@ -764,6 +764,16 @@ desenhada e aprovada antes do PR de tela.
      `receiving.test.ts`, `cloud-api-warehouse.test.ts`,
      `chegada-por-caixa-manual.test.tsx`, `cancelar-recebimento.test.tsx` e
      `inbound-cancel.test.ts` / `inbound-cancel.integration.test.ts`.
+   - **5i, Recebidos em dois grupos (06/11/2026, mockup
+     `WmsReceberRecebidos`):** a aba Recebidos lista as chegadas e as guardas
+     em grupos separados, "Chegadas" e "Guardas", cada um do mais recente ao
+     mais antigo, no lugar da lista única que misturava as duas filas. A
+     chegada de uma caixa e a guarda dela encerram juntas, com a mesma
+     quantidade, e lado a lado pareciam o mesmo registro repetido. O quadro
+     em `lib/warehouse-ops/receiving.ts` troca `done` por `chegadas` e
+     `guardas`; a linha, a ficha e o limite de 12 encerradas por fila não
+     mudam, e Cancelados segue numa lista só. Testes: `receiving.test.ts`,
+     `receber.test.tsx` e `receber-interacao.test.tsx`.
 6. **Etiquetas:** caixa `committing` com destino, origem "Recebimento", o
    conteúdo da caixa do recebimento na etiqueta e no Mapa, "Etiquetas da
    chegada", reimpressão com evento.

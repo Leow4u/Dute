@@ -60,6 +60,14 @@ describe("Receber na v3", () => {
     expect(TELA).toMatch(/guardaSemPrateleira\(entry\.task\) \?[\s\S]{0,240}sem prateleira/);
   });
 
+  it("Recebidos em dois grupos, Chegadas e Guardas, cada um com o vazio dizendo o dado (06/11/2026)", () => {
+    expect(TELA).toContain('<QueueGroup title="Chegadas" count={board.chegadas.length} empty="Nenhuma chegada recebida.">');
+    expect(TELA).toContain('<QueueGroup title="Guardas" count={board.guardas.length} empty="Nenhuma guarda concluída.">');
+    expect(TELA).toContain("rowDone(entry, receivingRowMeta(entry.task))");
+    expect(TELA).toContain("rowDone(entry, putawayRowMeta(entry.task))");
+    expect(TELA).not.toContain("board.done");
+  });
+
   it("a guarda da caixa abre a guarda da caixa inteira, não o avanço por linha (parte 5f)", () => {
     expect(TELA).toMatch(/if \(entry\.queue\.key === "putaway" && entry\.task\.box_code\) \{\s*return <GuardaDaCaixa key=\{entry\.task\.id\} entry=\{entry\} \/>;/);
   });
