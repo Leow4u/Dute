@@ -95,8 +95,10 @@ de ser `demo-*`; para a nuvem, limpe a variável antes
 | Motivo | O que mudou: espaços, tamanho no nome, gênero, hífen, maiúsculas, caixa das letras, tamanho pelo código e família (o proposto é o nome da família, não o próprio da linha). Vazio quando nada mudou. |
 | Tamanho hoje, Tamanho proposto | O campo Tamanho como está e o que ele deve ter: o fim do código quando é um tamanho conhecido; senão, o campo, em maiúsculas quando é um tamanho. |
 | Gênero | O campo Gênero, para a conferência. |
-| Decisão | `aprovar` quando só a regra agiu; `conferir` quando há algo em Conferir; `—` quando nada muda. A coluna é para a revisão: troque o que quiser antes do passo 3. |
+| Decisão | `aprovar` quando só a regra agiu; `conferir` quando há algo em Conferir; `—` quando nada muda. A coluna é para a revisão: o passo 3 aplica só as linhas com `aprovar`, com o Nome proposto e o Tamanho proposto como estiverem; a linha com `conferir` ou `—` fica como está. Na revisão, corrija o Nome proposto onde precisar e troque `conferir` por `aprovar` no que aceitar. |
 | Conferir | O que uma pessoa decide: família com mais de um nome (todas as linhas dela, com a contagem de cada nome), tamanho no nome diferente do código, tamanho no nome e código sem tamanho, tamanho do código que não é um tamanho conhecido, campo Tamanho diferente do código, gênero do nome diferente do campo Gênero, código com mais de um SKU ativo, `products` com outro nome ou sem registro, SKU sem código do cliente, nome vazio ou só com o tamanho. |
+
+Revisado, salve no Excel como "CSV UTF-8", para os acentos não se perderem.
 
 Valor que começa com `=`, `+`, `-` ou `@` sai com um apóstrofo na frente, para
 o Excel não ler como fórmula. A planilha do canvas
