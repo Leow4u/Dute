@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Planilha de revisão</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#fff;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:13.5px;line-height:1.45}
+h1,p{margin:0}
+.sheet{width:1440px;height:900px;overflow:hidden;background:#fff;display:flex;flex-direction:column}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:16px;height:52px;padding:0 20px;background:#F0F0ED;border-bottom:1px solid #D4D4CF}
+.bar h1{font-size:15px;font-weight:800}
+.bar p{font-size:13px;color:#5F6368;font-weight:600}
+.cols{display:flex;height:26px;background:#FAFAF8;border-bottom:1px solid #E5E5E1;color:#8A8F94;font-size:11px;font-weight:700}
+.cols span{display:flex;align-items:center;justify-content:center;border-right:1px solid #E5E5E1}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5F6368;font-weight:800;padding:10px 12px;background:#FAFAF8;border:1px solid #E5E5E1;border-top:0}
+td{padding:9px 12px;border:1px solid #E5E5E1;vertical-align:middle;white-space:nowrap}
+td.n{color:#8A8F94;text-align:right;width:44px;background:#FAFAF8;font-weight:600}
+td.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+td.novo{font-weight:700}
+td.mot{color:#5F6368}
+td.tam{font-weight:700;text-align:center}
+.dec{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:6px;font-weight:700;font-size:12.5px}
+.dec.ok{background:#DDF5E4;color:#14602F}
+.dec.at{background:#FDF0D5;color:#8A4B00}
+.dec.nd{background:#F0F0ED;color:#5F6368}
+x-dc{display:contents}
+</style>
+</helmet>
+<div class="sheet">
+  <div class="bar"><h1>nomes-fora-do-padrao · dute-prod · 06/11/2026.csv</h1><p>14 linhas · 3 famílias com mudança</p></div>
+  <div class="cols"><span style="width:44px"></span><span style="width:150px">A</span><span style="width:190px">B</span><span style="width:290px">C</span><span style="width:260px">D</span><span style="width:300px">E</span><span style="width:76px">F</span><span style="flex:1">G</span></div>
+  <table>
+    <thead><tr><th></th><th>Família</th><th>Código</th><th>Nome hoje</th><th>Nome proposto</th><th>Motivo</th><th style="text-align:center">Tamanho</th><th>Decisão</th></tr></thead>
+    <tbody>
+<tr><td class="n">1</td><td>A.01.0806.005</td><td class="mono">A.01.0806.005.PP</td><td>Polo masculino piquet preto</td><td class="novo">Polo masculina piquet preto</td><td class="mot">gênero</td><td class="tam">PP</td><td><span class="dec ok">aprovar</span></td></tr>
+<tr><td class="n">2</td><td>A.01.0806.005</td><td class="mono">A.01.0806.005.P</td><td>Polo masculino piquet preto p</td><td class="novo">Polo masculina piquet preto</td><td class="mot">tamanho no nome · gênero</td><td class="tam">P</td><td><span class="dec ok">aprovar</span></td></tr>
+<tr><td class="n">3</td><td>A.01.0806.005</td><td class="mono">A.01.0806.005.M</td><td>Polo masculino piquet preto m</td><td class="novo">Polo masculina piquet preto</td><td class="mot">tamanho no nome · gênero</td><td class="tam">M</td><td><span class="dec ok">aprovar</span></td></tr>
+<tr><td class="n">4</td><td>A.01.0806.005</td><td class="mono">A.01.0806.005.G</td><td>Polo masculino piquet preto G</td><td class="novo">Polo masculina piquet preto</td><td class="mot">tamanho no nome · gênero</td><td class="tam">G</td><td><span class="dec ok">aprovar</span></td></tr>
+<tr><td class="n">5</td><td>A.01.0806.005</td><td class="mono">A.01.0806.005.GG</td><td>POLO MASCULINO PIQUET PRETO GG</td><td class="novo">Polo masculina piquet preto</td><td class="mot">maiúsculas · tamanho no nome · gênero</td><td class="tam">GG</td><td><span class="dec ok">aprovar</span></td></tr>
+<tr><td class="n">6</td><td>A.01.0806.005</td><td class="mono">A.01.0806.005.XG</td><td>Polo masculino piquet preto - XG</td><td class="novo">Polo masculina piquet preto</td><td class="mot">tamanho no nome · gênero</td><td class="tam">XG</td><td><span class="dec ok">aprovar</span></td></tr>
+<tr><td class="n">7</td><td>A.01.0806.005</td><td class="mono">A.01.0806.005.XGG</td><td>Polo masculina piquet preto XGG</td><td class="novo">Polo masculina piquet preto</td><td class="mot">tamanho no nome</td><td class="tam">XGG</td><td><span class="dec ok">aprovar</span></td></tr>
+<tr><td class="n">8</td><td>A.02.0809.002</td><td class="mono">A.02.0809.002.P</td><td>Polo feminino piquet arpoador P</td><td class="novo">Polo feminina piquet arpoador</td><td class="mot">tamanho no nome · gênero</td><td class="tam">P</td><td><span class="dec ok">aprovar</span></td></tr>
+<tr><td class="n">9</td><td>A.02.0809.002</td><td class="mono">A.02.0809.002.M</td><td>Polo feminina piquet arpoador – M</td><td class="novo">Polo feminina piquet arpoador</td><td class="mot">tamanho no nome</td><td class="tam">M</td><td><span class="dec ok">aprovar</span></td></tr>
+<tr><td class="n">10</td><td>A.02.0809.002</td><td class="mono">A.02.0809.002.G</td><td>POLO FEMININO PIQUET ARPOARDOR G</td><td class="novo">Polo feminina piquet arpoador</td><td class="mot">maiúsculas · tamanho no nome · gênero · digitação</td><td class="tam">G</td><td><span class="dec at">conferir</span></td></tr>
+<tr><td class="n">11</td><td>A.01.0805.002</td><td class="mono">A.01.0805.002.M</td><td>POLO MASCULINO PIQUET AZUL MARINHO M</td><td class="novo">Polo masculina piquet azul-marinho</td><td class="mot">maiúsculas · tamanho no nome · gênero</td><td class="tam">M</td><td><span class="dec ok">aprovar</span></td></tr>
+<tr><td class="n">12</td><td>A.01.0805.002</td><td class="mono">A.01.0805.002.XG</td><td>POLO MASCULINO PIQUET AZUL MARINHO XG</td><td class="novo">Polo masculina piquet azul-marinho</td><td class="mot">maiúsculas · tamanho no nome · gênero</td><td class="tam">XG</td><td><span class="dec ok">aprovar</span></td></tr>
+<tr><td class="n">13</td><td>A.01.0712.001</td><td class="mono">A.01.0712.001.42</td><td>CALÇA SOCIAL MASCULINA 42</td><td class="novo">Calça social masculina preta</td><td class="mot">maiúsculas · tamanho no nome · cor</td><td class="tam">42</td><td><span class="dec at">conferir</span></td></tr>
+<tr><td class="n">14</td><td>C.0659.001</td><td class="mono">C.0659.001.U</td><td>Toalha de academia</td><td class="novo">Toalha de academia</td><td class="mot">sem mudança</td><td class="tam">U</td><td><span class="dec nd">—</span></td></tr>
+    </tbody>
+  </table>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Pedidos · separado</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+button{font:inherit;color:inherit}
+.ic{width:20px;height:20px;flex:0 0 auto}.ic-s{width:16px;height:16px;flex:0 0 auto}
+.app{display:flex;width:1440px;height:900px;overflow:hidden}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:22px 14px 18px;gap:2px}
+.logo{font-weight:800;font-size:22px;letter-spacing:.04em;padding:0 10px 6px}
+.logo small{display:block;font-size:8px;letter-spacing:.18em;font-weight:700;opacity:.8;margin-top:-2px}
+.sw{display:flex;align-items:center;gap:10px;width:100%;height:44px;margin:8px 0 6px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font:800 15px Manrope,sans-serif;text-align:left}
+.sw .ch{margin-left:auto;opacity:.75}
+.cli{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px}
+.cli .tile{width:34px;height:34px;border-radius:9px;background:#2a2a2a;display:inline-flex;align-items:center;justify-content:center}
+.cli small{display:block;font-size:11px;color:rgba(255,255,255,.6)}
+.cli b{font-size:14px}
+.nav{display:flex;align-items:center;gap:12px;height:44px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.74);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.sub{padding-left:14px}
+.sub .nav{height:40px;font-size:14px;padding-left:28px}
+.sbf{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 10px 0;border-top:1px solid rgba(255,255,255,.12)}
+.av2{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.sbf b{display:block;font-size:14px}.sbf span{font-size:13px;color:rgba(255,255,255,.6)}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;padding:30px 44px;gap:22px;overflow:hidden;position:relative}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.ph h1{font-size:30px;font-weight:800;letter-spacing:-.01em}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;white-space:nowrap;text-decoration:none;cursor:pointer}
+.btn-p{background:#E71C23;color:#fff}.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-g{background:#F0F0ED;color:#161616}
+.btn-d{background:#161616;color:#fff}
+.btn[disabled],.btn.dis{opacity:.45;cursor:default}
+.btn-sm{height:32px;padding:0 12px;font-size:13px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.sec{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#5F6368}
+.muted{color:#5F6368}
+.h2{font-size:18px;font-weight:800}
+.h3{font-size:15px;font-weight:800}
+.row{display:flex;align-items:center;gap:18px;padding:18px 22px;border-top:1px solid #E5E5E1}
+.row:first-child{border-top:0}
+.row b{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:700;flex-wrap:wrap}
+.row span.sub2{display:block;font-size:13.5px;color:#5F6368;margin-top:2px}
+.tile{width:48px;height:48px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;background:#F0F0ED}
+.badge{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.s-red{background:#FBE3E4;border-color:#F3C2C4;color:#8E1016}
+.s-amb{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.s-grn{background:#DDF5E4;border-color:#B6E4C4;color:#14602F}
+.s-blu{background:#E3ECFB;border-color:#C5D6F5;color:#1E4E9C}
+.s-mut{background:#F0F0ED;border-color:#E5E5E1;color:#5F6368}
+.s-new{background:#F3EEFF;border-color:#D9CCFB;color:#5B3FC4}
+.seg{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px}
+.seg a{height:34px;padding:0 14px;border-radius:6px;display:inline-flex;align-items:center;font-weight:700;font-size:13.5px;color:#5F6368;text-decoration:none}
+.seg a.on{background:#161616;color:#fff}
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{text-align:left;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#5F6368;font-weight:800;padding:12px 16px;border-bottom:1px solid #E5E5E1;background:#FAFAF8}
+.tbl td{padding:12px 16px;border-bottom:1px solid #F0F0ED;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13.5px;font-weight:700}
+.inp{height:40px;border:1px solid #D4D4CF;border-radius:8px;background:#fff;padding:0 12px;display:flex;align-items:center;font-size:14px}
+.inp.ro{background:#F0F0ED;color:#5F6368}
+.inp.ph2{color:#5F6368}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.kpi{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border:1px solid #E5E5E1;border-radius:10px;background:#fff}
+.kpi small{font-size:12px;color:#5F6368;font-weight:700}
+.kpi b{font-size:20px;font-weight:800}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 480px;gap:22px;align-items:start}
+.panel{background:#fff;border:1px solid #E5E5E1;border-radius:12px;padding:20px 22px;display:flex;flex-direction:column;gap:16px}
+.ln{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #E5E5E1;border-radius:10px;background:#fff}
+.ln.on{border-color:#E71C23;background:#FFF6F6}
+.ln .t{flex:1 1 auto;min-width:0}
+.ln .t b{display:block;font-size:14.5px}
+.ln .t span{display:block;font-size:13.5px;color:#5F6368}
+.ln .q{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.check{width:18px;height:18px;border-radius:4px;border:1.5px solid #8A8F94;display:inline-block}
+.check.on{background:#161616;border-color:#161616}
+.toast{position:absolute;right:28px;bottom:28px;width:380px;background:#fff;border:1px solid #E5E5E1;border-radius:12px;padding:14px 16px;box-shadow:0 14px 36px rgba(0,0,0,.18)}
+.toast b{display:block;font-size:14px}.toast span{font-size:13.5px;color:#5F6368}
+.dim{position:absolute;inset:0;background:rgba(22,22,22,.45)}
+.dlg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:1120px;max-height:840px;background:#fff;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.35);padding:26px 30px;display:flex;flex-direction:column;gap:18px;overflow:hidden}
+.dlg h2{font-size:22px;font-weight:800}
+.pos{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #E5E5E1;border-radius:10px}
+.pos .rb{width:16px;height:16px;border-radius:50%;border:1.5px solid #8A8F94}
+.pos.on{border-color:#E71C23;background:#FFF6F6}.pos.on .rb{border:5px solid #E71C23}
+.big{font-size:28px;font-weight:800;letter-spacing:-.01em}
+.note{font-size:13.5px;color:#5F6368}
+.step{display:flex;gap:10px;align-items:flex-start}
+.step i{width:24px;height:24px;border-radius:50%;background:#161616;color:#fff;font-style:normal;font-weight:800;font-size:12px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.stp{display:inline-flex;align-items:stretch;height:40px;border:1px solid #D4D4CF;border-radius:8px;overflow:hidden;background:#fff}
+.stp button{width:38px;border:0;background:#fff;font:800 16px Manrope,sans-serif;color:#161616;cursor:pointer}
+.stp output{min-width:52px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-variant-numeric:tabular-nums;border-left:1px solid #E5E5E1;border-right:1px solid #E5E5E1}
+.tbl .it b{display:block;font-size:14.5px;font-weight:700}
+.tbl .it span{display:block;font-size:13px;color:#5F6368;margin-top:1px}
+x-dc{display:contents}
+@keyframes gira{to{transform:rotate(360deg)}}
+@keyframes pulsa{50%{opacity:.45}}
+.sp{animation:gira .8s linear infinite}
+.sp-m{width:22px;height:22px;flex:0 0 auto}.sp-l{width:30px;height:30px;flex:0 0 auto}
+.sk{display:block;background:#E8E8E4;border-radius:6px;animation:pulsa 1.6s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.sp,.sk{animation:none}}
+.btn-i{width:40px;padding:0}
+.btn-x{background:#fff;color:#8E1016;border-color:#F3C2C4}
+.btn.carregando{cursor:progress}
+.carr{display:flex;align-items:center;justify-content:center;gap:12px;padding:40px 22px;font-size:15px;font-weight:700;color:#3F403F}
+.err{display:flex;align-items:center;gap:16px;padding:20px 22px}
+.err .tile{background:#FBE3E4;color:#8E1016}
+.err b{font-size:16px;font-weight:700}
+.aviso{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:10px;border:1px solid #F3DCA3;background:#FDF0D5;color:#8A4B00;font-weight:700;font-size:14px}
+.aviso .lk2{margin-left:auto;color:#8A4B00;font-weight:800;text-decoration:underline;text-underline-offset:3px}
+.vz{padding:18px 22px;font-size:14px;color:#5F6368}
+.lk{color:#161616;font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.pg{height:6px;border-radius:999px;background:#E8E8E4;overflow:hidden}
+.pg i{display:block;height:100%;background:#161616;border-radius:999px}
+.etapas{display:flex;gap:22px;padding:12px 16px;border:1px solid #E5E5E1;border-radius:10px;background:#FAFAF8}
+.etapa{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:14px;color:#3F403F}
+.etapa.ok{color:#14602F}
+.off{display:flex;align-items:center;justify-content:center;gap:8px;margin:-30px -44px 0;padding:8px 16px;background:#FDF0D5;border-bottom:1px solid #F3DCA3;color:#8A4B00;font-weight:700;font-size:14px}
+</style>
+</helmet>
+<div class="app">
+<aside class="sb">
+  <div class="logo">DUTELOG<small>SOLUÇÕES LOGÍSTICAS</small></div>
+  <button class="sw"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>Armazenagem<svg class="ic-s ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 9 5-5 5 5M7 15l5 5 5-5"/></svg></button>
+  <div class="cli"><span class="tile"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></span><div><small>Cliente ativo</small><b>BTG</b></div></div>
+  <a class="nav"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início<span class="cnt">4</span></a>
+  <a class="nav" style="color:#C9B8FB"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"/></svg>Agent Dute</a>
+  <a class="nav on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Pedidos</a>
+  <a class="nav"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Estoque</a>
+  <div class="sub">
+    <a class="nav"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Itens</a>
+    <a class="nav"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Receber</a>
+    <a class="nav"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>Contagem</a>
+    <a class="nav"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Mapa</a>
+    <a class="nav"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Posições</a>
+  </div>
+  <a class="nav"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 17.5v-11"/></svg>Faturamento</a>
+  <a class="nav"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-6"/></svg>Relatórios</a>
+  <a class="nav"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Documentos</a>
+  <div class="sbf"><span class="av2">GD</span><div><b>Guilherme Dantas</b><span>Operação WMS</span></div></div>
+</aside><main class="main"><div class="ph"><h1>Pedidos</h1><div style="display:flex;gap:10px;align-items:center"><span class="seg"><a class="on">Em aberto · 6</a><a>Entregues</a></span><a class="btn btn-s btn-i" aria-label="Atualizar"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></a></div></div><div class="sec">Para aprovar <span style="font-weight:600;color:#5F6368">3</span></div><div class="card"><div class="row"><span class="tile" style="background:#FDF0D5;color:#8A4B00"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span><div style="flex:1"><b>Uniformes para a agência Faria Lima</b><span class="sub2">Retirada · BTG · 4 itens · 62 un. · há 25 min</span></div><div style="display:flex;gap:8px"><a class="btn btn-x">Recusar</a><a class="btn btn-p"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Aprovar</a></div></div><div class="row"><span class="tile" style="background:#FDF0D5;color:#8A4B00"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span><div style="flex:1"><b>Reposição da agência Paulista</b><span class="sub2">Retirada · BTG · 2 itens · 18 un. · há 1 h</span></div><div style="display:flex;gap:8px"><a class="btn btn-x">Recusar</a><a class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Aprovar</a></div></div><div class="row"><span class="tile" style="background:#FDF0D5;color:#8A4B00"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span><div style="flex:1"><b>Kit de boas-vindas · Rio de Janeiro</b><span class="sub2">Retirada · BTG · 6 itens · 120 un. · há 3 h</span></div><div style="display:flex;gap:8px"><a class="btn btn-x">Recusar</a><a class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Aprovar</a></div></div></div><div class="sec">Para separar <span style="font-weight:600;color:#5F6368">2</span></div><div class="card"><div class="row"><span class="tile" style="background:#E3ECFB;color:#1E4E9C"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7"/><path d="m7.5 4.27 9 5.15"/></svg></span><div style="flex:1"><b>PED-0142</b><span class="sub2">BTG · 3 itens · 41 un. · entrega 07/11/2026</span></div><div style="display:flex;gap:8px"><a class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Separado</a></div></div><div class="row"><span class="tile" style="background:#E3ECFB;color:#1E4E9C"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7"/><path d="m7.5 4.27 9 5.15"/></svg></span><div style="flex:1"><b>PED-0141</b><span class="sub2">BTG · 5 itens · 76 un. · retirada no armazém</span></div><div style="display:flex;gap:8px"><a class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Separado</a></div></div></div><div class="sec">Para entregar <span style="font-weight:600;color:#5F6368">1</span></div><div class="card"><div class="row"><span class="tile" style="background:#DDF5E4;color:#14602F"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></span><div style="flex:1"><b>PED-0139</b><span class="sub2">BTG · 2 itens · 24 un. · lacre 88231</span></div><div style="display:flex;gap:8px"><a class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Entregue</a></div></div></div><div class="dim"></div><div class="dlg" role="dialog" aria-labelledby="sep-titulo" style="width:720px;gap:16px"><div><h2 id="sep-titulo">PED-0142: separado</h2><p class="note" style="margin-top:4px;font-weight:600">BTG · 3 itens · 41 un. · entrega 07/11/2026</p></div><div class="field"><label for="lacre">Número do lacre</label><div class="inp" id="lacre">88231</div></div><div class="card" style="overflow:hidden"><table class="tbl"><thead><tr><th>Item</th><th class="num">Pedido</th><th>Separado</th></tr></thead><tbody><tr><td class="it"><b>Polo masculina piquet preto · GG</b><span>A.01.0806.005.GG · B-02</span></td><td class="num">20 un.</td><td style="width:160px"><div class="stp"><button type="button" aria-label="Menos um: Polo masculina piquet preto · GG">−</button><output aria-label="Separado de Polo masculina piquet preto · GG">20</output><button type="button" aria-label="Mais um: Polo masculina piquet preto · GG">+</button></div></td></tr><tr><td class="it"><b>Polo masculina piquet preto · XG</b><span>A.01.0806.005.XG · B-02</span></td><td class="num">15 un.</td><td style="width:160px"><div class="stp"><button type="button" aria-label="Menos um: Polo masculina piquet preto · XG">−</button><output aria-label="Separado de Polo masculina piquet preto · XG">15</output><button type="button" aria-label="Mais um: Polo masculina piquet preto · XG">+</button></div></td></tr><tr><td class="it"><b>Calça social masculina preta · 42</b><span>A.01.0712.001.42 · A-05</span></td><td class="num">6 un.</td><td style="width:160px"><div class="stp"><button type="button" aria-label="Menos um: Calça social masculina preta · 42">−</button><output aria-label="Separado de Calça social masculina preta · 42">6</output><button type="button" aria-label="Mais um: Calça social masculina preta · 42">+</button></div></td></tr></tbody></table></div><div style="display:flex;justify-content:flex-end;gap:10px"><a class="btn btn-s">Voltar</a><a class="btn btn-p">Confirmar separação</a></div></div></main></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
