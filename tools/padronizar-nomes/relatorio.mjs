@@ -8,6 +8,8 @@
  * regras.mjs a cada SKU ativo, confere a família (o nome tem de ser o mesmo
  * em todos os tamanhos) e grava um CSV para revisão em tmp/. Não grava nada
  * no Firestore: não há FieldValue, set, update nem create neste arquivo.
+ * Também não sobrescreve o CSV: se o do dia já existe, talvez já revisado, o
+ * novo sai com -2, -3.
  *
  *   node tools/padronizar-nomes/relatorio.mjs --projeto dute-prod
  *   node tools/padronizar-nomes/relatorio.mjs --projeto dute-prod --familia A.01.0806.005
@@ -18,7 +20,7 @@
  * FIRESTORE_EMULATOR_HOST apontando para o emulador local, com projeto demo-*.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,6 +61,20 @@ export function linhaDoSku(id, data) {
     estoque: num(data.estoque_atual),
     arquivado: arquivado(data),
   };
+}
+
+/** O motivo de conferir sem o detalhe: "família com 2 nomes", "campo Tamanho", "gênero do nome". */
+const tipoDoConferir = (item) => item.replace(/\s*[(:"].*$/, "");
+
+/** O caminho que ainda não existe: o CSV de antes, talvez já revisado, nunca é sobrescrito (…-2.csv, …-3.csv). */
+export function caminhoLivre(caminho, existe = existsSync) {
+  if (!existe(caminho)) return caminho;
+  const extensao = path.extname(caminho);
+  const base = caminho.slice(0, caminho.length - extensao.length);
+  for (let n = 2; ; n += 1) {
+    const outro = `${base}-${n}${extensao}`;
+    if (!existe(outro)) return outro;
+  }
 }
 
 /** O nome próprio que não pode virar o da família: vazio, só o tamanho, ou com o tamanho em conflito. */
@@ -125,7 +141,8 @@ export function montarRelatorio({ skus, products, cliente = "", familia = "", co
     // com a contagem de cada nome; o mais comum fica só como sugestão.
     const nomes = new Map();
     for (const membro of grupo) if (membro.proprio.nome) nomes.set(membro.proprio.nome, (nomes.get(membro.proprio.nome) ?? 0) + 1);
-    const variados = nomes.size > 1 ? `família com ${nomes.size} nomes: ${[...nomes.entries()].sort((a, b) => b[1] - a[1]).map(([n, v]) => `"${n}" (${v})`).join(" · ")}` : "";
+    // Os nomes separados por vírgula: o " · " separa só os motivos de conferir.
+    const variados = nomes.size > 1 ? `família com ${nomes.size} nomes: ${[...nomes.entries()].sort((a, b) => b[1] - a[1]).map(([n, v]) => `"${n}" (${v})`).join(", ")}` : "";
     for (const membro of grupo) {
       membro.familia = membro.linha.codigo ? texto(familiaDoCodigo(membro.linha.codigo)) : "";
       membro.proposto = nome || membro.proprio.nome;
@@ -146,9 +163,12 @@ export function montarRelatorio({ skus, products, cliente = "", familia = "", co
     if (linha.arquivado) membro.conferir.push("arquivado");
   }
 
+  // Os motivos de conferir de cada linha, para o resumo: contados da lista, não do texto juntado.
+  const motivosDeConferir = [];
   const resultado = membros.map((membro) => {
     const { linha, proprio } = membro;
     const conferir = [...proprio.conferir, ...membro.conferir];
+    motivosDeConferir.push([...new Set(conferir.map(tipoDoConferir))]);
     const mudouNome = membro.proposto !== linha.nome;
     const mudouTamanho = (proprio.tamanho ?? "") !== linha.tamanho;
     const decisao = conferir.length ? "conferir" : mudouNome || mudouTamanho ? "aprovar" : "—";
@@ -192,7 +212,7 @@ export function montarRelatorio({ skus, products, cliente = "", familia = "", co
     familias_com_mudanca: familiasComMudanca,
     por_decisao: contar(resultado, (l) => [l.decisao]),
     por_motivo: contar(resultado, (l) => (l.motivo ? l.motivo.split(" · ") : [])),
-    por_conferir: contar(resultado, (l) => (l.conferir ? l.conferir.split(" · ").map((c) => c.replace(/\s*[(:"].*$/, "")) : [])),
+    por_conferir: contar(motivosDeConferir, (motivos) => motivos),
   };
   return { linhas: resultado, resumo };
 }
@@ -305,9 +325,11 @@ async function principal() {
   }
   const hoje = new Date();
   const data = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
-  const saida = path.resolve(raiz, args.saida || path.join("tmp", `nomes-fora-do-padrao-${args.projeto}-${data}.csv`));
+  const pedido = path.resolve(raiz, args.saida || path.join("tmp", `nomes-fora-do-padrao-${args.projeto}-${data}.csv`));
+  const saida = caminhoLivre(pedido);
   mkdirSync(path.dirname(saida), { recursive: true });
-  writeFileSync(saida, csvDoRelatorio(relatorio.linhas), "utf8");
+  // "wx": se outro processo criou o arquivo no meio tempo, falha em vez de sobrescrever.
+  writeFileSync(saida, csvDoRelatorio(relatorio.linhas), { encoding: "utf8", flag: "wx" });
 
   if (args.json) {
     console.log(JSON.stringify({ projeto: args.projeto, saida, resumo: relatorio.resumo }, null, 2));
@@ -320,6 +342,7 @@ async function principal() {
       for (const l of conferir.slice(0, 40)) console.log(`  ${l.codigo} = ${l.sku} · "${l.nome_hoje}" → "${l.nome_proposto}" · ${l.conferir}`);
     }
     console.log(`\nCSV: ${saida}`);
+    if (saida !== pedido) console.log(`O ${pedido} já existia e ficou como estava.`);
   }
   await app.delete();
 }

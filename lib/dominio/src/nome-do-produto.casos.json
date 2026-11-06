@@ -648,10 +648,10 @@
       "nome": "Toalha de Rosto",
       "codigo": "MAT-014",
       "genero": "",
-      "tamanho": "Único",
+      "tamanho": "Adulto",
       "esperado": {
         "nome": "Toalha de Rosto",
-        "tamanho": "Único",
+        "tamanho": "Adulto",
         "motivos": [],
         "conferir": []
       }
@@ -1176,6 +1176,67 @@
         ],
         "conferir": []
       }
+    },
+    {
+      "caso": "ÚNICO no campo Tamanho é o U do código",
+      "nome": "TOALHA DE ACADEMIA",
+      "codigo": "C.0659.001.U",
+      "genero": "",
+      "tamanho": "ÚNICO",
+      "esperado": {
+        "nome": "Toalha de Academia",
+        "tamanho": "U",
+        "motivos": [
+          "maiúsculas",
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "Unico sem acento também é o U do código",
+      "nome": "Malinha de Mão",
+      "codigo": "D.0613.003.U",
+      "genero": "",
+      "tamanho": "Unico",
+      "esperado": {
+        "nome": "Malinha de Mão",
+        "tamanho": "U",
+        "motivos": [
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "Tam. Único sem tamanho no código vira U",
+      "nome": "Garrafa Térmica BTG",
+      "codigo": "MAT-300",
+      "genero": "",
+      "tamanho": "Tam. Único",
+      "esperado": {
+        "nome": "Garrafa Térmica BTG",
+        "tamanho": "U",
+        "motivos": [
+          "tamanho pelo código"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "Único no campo e outro tamanho no código vai para conferir",
+      "nome": "Polo Masculino Piquet Preto",
+      "codigo": "A.01.0806.005.M",
+      "genero": "Masculino",
+      "tamanho": "Único",
+      "esperado": {
+        "nome": "Polo Masculino Piquet Preto",
+        "tamanho": "M",
+        "motivos": [],
+        "conferir": [
+          "campo Tamanho (Único) diferente do código (M)"
+        ]
+      }
     }
   ],
   "tamanhos_do_codigo": [
@@ -1316,6 +1377,14 @@
       "tamanho": "",
       "sem_tamanho": "",
       "com_tamanho": "XG"
+    },
+    {
+      "caso": "ÚNICO no campo é tamanho único: só o nome",
+      "nome": "Toalha de Academia",
+      "codigo": "C.0659",
+      "tamanho": "ÚNICO",
+      "sem_tamanho": "Toalha de Academia",
+      "com_tamanho": "Toalha de Academia"
     }
   ],
   "problemas": [
@@ -1484,6 +1553,23 @@
       "codigo": "DISPONIVEL-1",
       "tamanho": "M",
       "problema": null
+    },
+    {
+      "caso": "ÚNICO no campo e U no código não é problema",
+      "nome": "Lancheira Grande Azul",
+      "codigo": "C.0612.002.U",
+      "tamanho": "ÚNICO",
+      "problema": null
+    },
+    {
+      "caso": "Único no campo e outro tamanho no código é problema",
+      "nome": "Polo Masculino Piquet Preto",
+      "codigo": "A.01.0806.005.M",
+      "tamanho": "Único",
+      "problema": {
+        "tipo": "campo_com_outro_tamanho",
+        "mensagem": "O código A.01.0806.005.M é do tamanho M, e o Tamanho informado é Único."
+      }
     }
   ]
 }

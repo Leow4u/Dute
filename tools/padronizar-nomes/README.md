@@ -23,7 +23,8 @@ e "masculina") e MAIÚSCULAS misturadas. O padrão, decidido pelo Leonardo em
 Os tamanhos conhecidos são PP, P, M, G, GG, XG, XGG, XXG, XXXG, EG, EGG, EXG,
 XS, S, L, XL, XXL e U, N1 a N99 e os números de 1 a 69. O fim do código só
 vale como tamanho quando é um deles (A.01.0806.005 não tem tamanho "005").
-Fica no nome a medida ("Toalha 500 g"), a letra que é parte dele ("Gola U",
+No campo Tamanho, "Único", "UNICO" e "Tam. Único" são o U, o mesmo do código
+terminado em U. Fica no nome a medida ("Toalha 500 g"), a letra que é parte dele ("Gola U",
 "Vitamina A") e o "U" de quem não é tamanho único.
 
 ## Onde a regra mora
@@ -68,7 +69,9 @@ node tools/padronizar-nomes/relatorio.mjs --projeto dute-prod
 
 Imprime o resumo (quantos SKUs, famílias, por decisão, por motivo, o que há
 para conferir) e grava `tmp/nomes-fora-do-padrao-dute-prod-AAAA-MM-DD.csv`,
-que o Excel em português abre direto (ponto e vírgula, BOM, CRLF). Opções:
+que o Excel em português abre direto (ponto e vírgula, BOM, CRLF). Não
+sobrescreve: se o arquivo do dia já existe, talvez já revisado, o novo sai com
+`-2`, `-3` no nome, e o de antes fica como estava. Opções:
 
 - `--familia A.01.0806.005`: só uma família (ou um prefixo de código).
 - `--cliente "BTG Pactual"`: só um cliente, pelo `customer_code` (o registro

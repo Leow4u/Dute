@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { COLUNAS, csvDoRelatorio, linhaDoSku, montarRelatorio, nomeDaFamilia, textoDoResumo } from "./relatorio.mjs";
+import { COLUNAS, caminhoLivre, csvDoRelatorio, linhaDoSku, montarRelatorio, nomeDaFamilia, textoDoResumo } from "./relatorio.mjs";
 
 /**
  * O relatório dos nomes fora do padrão, a parte pura: as linhas, a família,
@@ -49,7 +49,7 @@ describe("relatório: a família", () => {
     const { linhas } = montarRelatorio({ skus, products: skus.map((s) => product(s.cod_cliente, s.produto)) });
     assert.ok(linhas.every((l) => l.nome_proposto === "Polo Feminino Piquet Arpoador"));
     assert.ok(linhas.every((l) => l.decisao === "conferir"));
-    assert.ok(linhas.every((l) => l.conferir === 'família com 2 nomes: "Polo Feminino Piquet Arpoador" (2) · "Polo Feminino Piquet Arpoardor" (1)'), linhas[0].conferir);
+    assert.ok(linhas.every((l) => l.conferir === 'família com 2 nomes: "Polo Feminino Piquet Arpoador" (2), "Polo Feminino Piquet Arpoardor" (1)'), linhas[0].conferir);
     assert.ok(linhas.find((l) => l.codigo === "A.02.0809.002.G").motivo.endsWith("família"));
   });
 
@@ -110,6 +110,16 @@ describe("relatório: o que vira conferir", () => {
     assert.ok(linhas.every((l) => !l.conferir.includes("products")), linhas.map((l) => l.conferir).join(" | "));
   });
 
+  it("o campo Tamanho Único é o U do código: aprovar, com o Tamanho U", () => {
+    const skus = [sku("BTG-000078", "C.0659.001.U", "TOALHA DE ACADEMIA", { genero: "", tamanho: "ÚNICO" })];
+    const { linhas } = montarRelatorio({ skus, products: [product("C.0659.001.U", skus[0].produto)] });
+    assert.equal(linhas[0].nome_proposto, "Toalha de Academia");
+    assert.equal(linhas[0].tamanho_proposto, "U");
+    assert.equal(linhas[0].motivo, "maiúsculas · tamanho pelo código");
+    assert.equal(linhas[0].conferir, "");
+    assert.equal(linhas[0].decisao, "aprovar");
+  });
+
   it("gênero do nome diferente do campo e campo Tamanho diferente do código", () => {
     const skus = [sku("BTG-000401", "A.01.0805.002.PP", "Polo feminina piquet azul marinho PP", { tamanho: "P" })];
     const { linhas } = montarRelatorio({ skus, products: [product("A.01.0805.002.PP", skus[0].produto)] });
@@ -167,6 +177,28 @@ describe("relatório: o CSV e o resumo", () => {
     const formula = csvDoRelatorio(montarRelatorio({ skus: [sku("BTG-000801", "A.01.0801.001.P", "=SOMA(A1:A2)")], products: [] }).linhas);
     assert.ok(formula.includes(";'=SOMA(A1:A2);"), formula);
     assert.ok(csv.endsWith("\r\n"));
+  });
+
+  it("o resumo do Conferir conta cada motivo uma vez por linha, sem rótulo vazio", () => {
+    const skus = [
+      sku("BTG-000069", "A.02.0809.002.PP", "POLO FEMININA PIQUET ARPOADOR - PP"),
+      sku("BTG-000068", "A.02.0809.002.G", "POLO FEMININA PIQUET ARPOARDOR G", { genero: "Feminino" }),
+      sku("BTG-000072", "A.02.0809.002.GG", "POLO FEMININA PIQUET AROPOADOR - GG", { genero: "Feminino" }),
+    ];
+    const { linhas, resumo } = montarRelatorio({ skus, products: skus.map((s) => product(s.cod_cliente, s.produto)) });
+    assert.equal(
+      linhas[0].conferir,
+      'gênero do nome (Feminino) diferente do campo Gênero (Masculino) · família com 3 nomes: "Polo Feminino Piquet Arpoador" (1), "Polo Feminino Piquet Arpoardor" (1), "Polo Feminino Piquet Aropoador" (1)',
+    );
+    assert.deepEqual(resumo.por_conferir, { "família com 3 nomes": 3, "gênero do nome": 1 });
+    assert.ok(textoDoResumo(resumo).includes("Conferir: família com 3 nomes 3 · gênero do nome 1."), textoDoResumo(resumo));
+  });
+
+  it("o CSV de antes não é sobrescrito: o novo ganha -2, -3", () => {
+    const existentes = new Set(["/tmp/nomes-dute-prod-2026-11-06.csv", "/tmp/nomes-dute-prod-2026-11-06-2.csv"]);
+    const existe = (caminho) => existentes.has(caminho);
+    assert.equal(caminhoLivre("/tmp/nomes-dute-prod-2026-11-07.csv", existe), "/tmp/nomes-dute-prod-2026-11-07.csv");
+    assert.equal(caminhoLivre("/tmp/nomes-dute-prod-2026-11-06.csv", existe), "/tmp/nomes-dute-prod-2026-11-06-3.csv");
   });
 
   it("o resumo em texto diz o que foi lido e o que mudou", () => {

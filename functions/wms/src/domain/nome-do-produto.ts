@@ -5,7 +5,7 @@
  *
  * 1. O nome é o mesmo em todos os tamanhos da família: o tamanho sai do fim do
  *    nome e vai para o campo Tamanho, preenchido pelo fim do código do cliente
- *    (A.01.0806.005.XG → XG).
+ *    (A.01.0806.005.XG → XG). "Único" no campo Tamanho é o U do código.
  * 2. O gênero é uma etiqueta igual para tudo, "Masculino" ou "Feminino", sem
  *    concordar com a peça ("Polo Masculino", "Calça Social Masculino").
  * 3. Inicial maiúscula em cada palavra; conectivos (de, da, com, e) em
@@ -204,6 +204,21 @@ export function tamanhoDoCodigo(codigo: unknown): string | null {
   return sufixo && ehTamanho(sufixo) ? sufixo : null;
 }
 
+/** "Único", "UNICO", "Tamanho único" e "Tam. Único", sem acento e em maiúsculas. */
+const TAMANHO_UNICO = /^(?:TAM(?:ANHO)?\.?\s*)?UNICO$/;
+
+/**
+ * O campo Tamanho lido como tamanho: em maiúsculas quando é um tamanho
+ * conhecido ("xg" → "XG"), U quando diz tamanho único ("Único" → "U", o mesmo
+ * fim do código C.0659.001.U); senão, como está.
+ */
+export function tamanhoDoCampo(campo: unknown): string {
+  const valor = texto(campo);
+  if (ehTamanho(valor)) return valor.toUpperCase();
+  const semAcento = valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  return TAMANHO_UNICO.test(semAcento) ? "U" : valor;
+}
+
 /** O código sem o tamanho: a família (A.01.0806.005.XG → A.01.0806.005). Sem tamanho conhecido no fim, o código inteiro. */
 export function familiaDoCodigo(codigo: unknown): string {
   const valor = texto(codigo).replace(/\.+$/, "");
@@ -396,7 +411,7 @@ export function padronizarNome(entrada: EntradaDoNome): NomePadronizado {
   const trecho = sufixoDoCodigo(entrada.codigo);
   const sufixo = tamanhoDoCodigo(entrada.codigo);
   const campoTamanho = texto(entrada.tamanho);
-  const campoMaiusculo = ehTamanho(campoTamanho) ? campoTamanho.toUpperCase() : campoTamanho;
+  const campoMaiusculo = tamanhoDoCampo(campoTamanho);
 
   const tamanho = sufixo ?? (campoMaiusculo || null);
   if (sufixo && campoMaiusculo !== sufixo) {
@@ -464,13 +479,13 @@ function ordenar(motivos: MotivoDoNome[]): MotivoDoNome[] {
   return ORDEM_DOS_MOTIVOS.filter((motivo) => motivos.includes(motivo));
 }
 
-/** O tamanho do produto: o do código, quando o fim dele é um tamanho conhecido; senão o campo Tamanho (em maiúsculas quando é um tamanho conhecido). */
+/** O tamanho do produto: o do código, quando o fim dele é um tamanho conhecido; senão o campo Tamanho lido como tamanho (tamanhoDoCampo). */
 export function tamanhoDoProduto(produto: { codigo?: unknown; tamanho?: unknown }): string | null {
   const doCodigo = tamanhoDoCodigo(produto.codigo);
   if (doCodigo) return doCodigo;
   const campo = texto(produto.tamanho);
   if (!campo) return null;
-  return ehTamanho(campo) ? campo.toUpperCase() : campo;
+  return tamanhoDoCampo(campo);
 }
 
 /**
@@ -525,7 +540,7 @@ export function problemaDoNome(produto: { nome: unknown; codigo?: unknown; taman
   if (ehTamanho(nome) || (alvo && nome.toUpperCase() === alvo)) {
     return { tipo: "so_o_tamanho", mensagem: "O nome do produto não pode ser só o tamanho." };
   }
-  if (doCodigo && campo && campo.toUpperCase() !== doCodigo) {
+  if (doCodigo && campo && tamanhoDoCampo(campo) !== doCodigo) {
     return { tipo: "campo_com_outro_tamanho", mensagem: `O código ${codigo} é do tamanho ${doCodigo}, e o Tamanho informado é ${campo}.` };
   }
   const fim = tamanhoNoFim(nome, alvo);
