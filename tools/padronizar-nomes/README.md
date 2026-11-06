@@ -12,22 +12,41 @@ e "masculina") e MAIÚSCULAS misturadas. O padrão, decidido pelo Leonardo em
 2. O gênero é uma etiqueta igual para tudo, "Masculino" ou "Feminino", sem
    concordar com a peça: "Polo Masculino", "Calça Social Masculino".
 3. Inicial maiúscula em cada palavra: "Polo Masculino Piquet Preto".
-   Conectivos em minúscula (de, da, com, e), siglas em maiúsculas (BTG),
-   unidade depois de número em minúscula ("500 ml"), cor composta com hífen
-   ("Azul-Marinho").
+   Conectivos em minúscula (de, da, com, e), menos na primeira e na última
+   palavra; siglas em maiúsculas (a palavra de 2 a 5 letras sem vogal, como
+   TNT e MDF, e a lista de `SIGLAS`); unidade depois de número na forma de
+   sempre ("500 ml", "2 L", "20 W", "32 GB"), e a colada ao número ganha o
+   espaço; cor composta da lista com hífen ("Azul-Marinho").
 4. Nada além disso: a regra não reordena palavras, não acrescenta cor nem
    corrige digitação. O que ela não resolve sozinha vira "conferir".
 
-A regra mora em `lib/dominio/src/nome-do-produto.ts` (o app e as Functions
-vão usá-la na validação do cadastro e na Contagem). `regras.mjs` é a cópia em
-JavaScript para a ferramenta, e os dois rodam os mesmos casos de
-`lib/dominio/src/nome-do-produto.casos.json`: caso novo entra no JSON.
+Os tamanhos conhecidos são PP, P, M, G, GG, XG, XGG, XXG, XXXG, EG, EGG, EXG,
+XS, S, L, XL, XXL e U, N1 a N99 e os números de 1 a 69. O fim do código só
+vale como tamanho quando é um deles (A.01.0806.005 não tem tamanho "005").
+Fica no nome a medida ("Toalha 500 g"), a letra que é parte dele ("Gola U",
+"Vitamina A") e o "U" de quem não é tamanho único.
+
+## Onde a regra mora
+
+- `lib/dominio/src/nome-do-produto.ts`: o original, que o app importa.
+- `functions/wms/src/domain/nome-do-produto.ts`: a cópia literal das
+  Functions, travada em `nome-do-produto.test.ts` de lá (as Functions não
+  importam `lib/dominio`). `nome-para-gravar.ts`, ao lado, é o que o cadastro
+  grava.
+- `tools/padronizar-nomes/regras.mjs`: gerada do original por
+  `gerar-regras.mjs` (só tira os tipos), para a ferramenta rodar em Node puro.
+  O vitest do app reprova quando o arquivo não é o que o gerador produz.
+
+As três rodam os mesmos casos de `lib/dominio/src/nome-do-produto.casos.json`:
+caso novo entra no JSON. Mudou a regra, rode
+`node tools/padronizar-nomes/gerar-regras.mjs` e copie o original para as
+Functions, com a linha de origem no topo.
 
 ## Passo 1: o relatório, só leitura
 
-`relatorio.mjs` lê `skus` e `products` do projeto, aplica o padrão a cada SKU
-ativo, confere a família e grava um CSV para revisão em `tmp/` (pasta fora do
-git). Não grava nada no Firestore.
+`relatorio.mjs` lê `skus` e `products` do projeto inteiros, em páginas, aplica
+o padrão a cada SKU ativo, confere a família e grava um CSV para revisão em
+`tmp/` (pasta fora do git). Não grava nada no Firestore.
 
 Pré-requisitos, uma vez:
 
@@ -52,11 +71,11 @@ para conferir) e grava `tmp/nomes-fora-do-padrao-dute-prod-AAAA-MM-DD.csv`,
 que o Excel em português abre direto (ponto e vírgula, BOM, CRLF). Opções:
 
 - `--familia A.01.0806.005`: só uma família (ou um prefixo de código).
-- `--cliente BTG`: só um cliente.
+- `--cliente "BTG Pactual"`: só um cliente, pelo `customer_code` (o registro
+  sem ele é do cliente legado, "BTG Pactual", como nas Functions). Cliente
+  sem SKU para a execução e lista os clientes do cadastro.
 - `--saida tmp\outro-nome.csv`: outro arquivo.
 - `--com-arquivados`: inclui os SKUs arquivados, marcados em Conferir.
-- `--limite 20000`: mais de 10.000 documentos por coleção (o padrão avisa
-  quando chega no limite).
 - `--json`: o resumo em JSON, para outro script.
 
 Com `FIRESTORE_EMULATOR_HOST` apontando para o emulador local, o projeto tem
@@ -67,28 +86,50 @@ de ser `demo-*`; para a nuvem, limpe a variável antes
 
 | Coluna | O que é |
 |---|---|
-| Cliente, Família, Código, SKU | O cliente, a família (o código sem o tamanho), o código do cliente e o SKU interno. |
-| Nome hoje, Nome proposto | O nome como está e o nome no padrão. Numa família com nomes diferentes, o proposto é o nome mais comum entre os tamanhos (empate: o de mais saldo; depois, o do menor tamanho), e as linhas que diferem viram Conferir. |
-| Motivo | O que a regra mudou: espaços, tamanho no nome, gênero, hífen, maiúsculas, caixa das letras, tamanho pelo código. Vazio quando nada mudou. |
-| Tamanho hoje, Tamanho proposto | O campo Tamanho como está e o que ele deve ter (o fim do código; sem tamanho no código, o campo como está). |
+| Cliente, Família, Código, SKU | O cliente, a família (o código sem o tamanho; vazia no SKU sem código do cliente), o código do cliente e o SKU interno. |
+| Nome hoje, Nome proposto | O nome como está e o nome no padrão. O proposto é o nome da família: o nome próprio mais comum entre os tamanhos (empate: o de mais saldo; depois, o do menor tamanho), sem contar o nome vazio, o que é só o tamanho ou o que tem o tamanho em conflito. |
+| Motivo | O que mudou: espaços, tamanho no nome, gênero, hífen, maiúsculas, caixa das letras, tamanho pelo código e família (o proposto é o nome da família, não o próprio da linha). Vazio quando nada mudou. |
+| Tamanho hoje, Tamanho proposto | O campo Tamanho como está e o que ele deve ter: o fim do código quando é um tamanho conhecido; senão, o campo, em maiúsculas quando é um tamanho. |
 | Gênero | O campo Gênero, para a conferência. |
 | Decisão | `aprovar` quando só a regra agiu; `conferir` quando há algo em Conferir; `—` quando nada muda. A coluna é para a revisão: troque o que quiser antes do passo 3. |
-| Conferir | O que uma pessoa decide: tamanho no nome diferente do código, campo Tamanho diferente do código, gênero do nome diferente do campo Gênero, nome que difere da família, código com mais de um SKU ativo, `products` com outro nome ou sem registro, nome vazio ou só com o tamanho. |
+| Conferir | O que uma pessoa decide: família com mais de um nome (todas as linhas dela, com a contagem de cada nome), tamanho no nome diferente do código, tamanho no nome e código sem tamanho, tamanho do código que não é um tamanho conhecido, campo Tamanho diferente do código, gênero do nome diferente do campo Gênero, código com mais de um SKU ativo, `products` com outro nome ou sem registro, SKU sem código do cliente, nome vazio ou só com o tamanho. |
 
-A linha 13 da planilha do canvas acrescentava a cor na calça; a regra não
-faz isso (decisão 4): a cor entra à mão na revisão, se for o caso.
+Valor que começa com `=`, `+`, `-` ou `@` sai com um apóstrofo na frente, para
+o Excel não ler como fórmula. A planilha do canvas
+(`docs/mockups/NomePlanilhaRevisao.dc.html`) foi a ilustração para a
+avaliação: o CSV de verdade é este, com estas colunas, e a regra não
+acrescenta cor nem aponta digitação (o erro aparece como família com mais de
+um nome).
 
-## Os próximos passos
+## Passo 2: o cadastro e as telas (na `main` com este PR)
 
-2. PR de código, antes dos dados: o campo Tamanho preenchido pelo fim do
-   código, o tamanho ao lado do nome nas telas que só mostravam o nome, e a
-   validação na criação do produto (Contagem, Receber, portal, Catálogo) com
-   `padronizarNome` de `lib/dominio`, para não voltar a acontecer.
-3. Aplicar os renomes com o CSV revisado, na homologação e depois na
-   produção, pelo motor do acerto de outubro (`tools/acerto-btg-2026-10`,
-   operação `renomear`: skus, products, saldos, linhas da abertura e a
-   projeção do portal, com recibo e evento por item, idempotente). Essa
-   ferramenta ainda não existe: entra com o OK do Leonardo sobre o CSV.
+O cadastro grava o produto novo no padrão, pelo `nomeParaGravar` das
+Functions: o nome sem o tamanho, com a etiqueta do gênero e a caixa das
+letras, e o tamanho do código no campo Tamanho.
+
+- A Contagem, a conferência de abertura, a chegada avulsa, a API e o
+  Documentos recusam o que contradiz o código (outro tamanho no fim do nome,
+  o campo Tamanho com outro tamanho, o nome que é só o tamanho), com a mesma
+  frase da tela.
+- O aviso do cliente aprovado e o código a definir da conferência não
+  recusam: vale o código, e o nome vai para o padrão.
+- O Catálogo só aplica o padrão quando o nome ou o tamanho mudam: editar a cor
+  de um produto cujo nome antigo ainda tem o tamanho não trava nem renomeia.
+- O produto já cadastrado guarda o nome que tem até o passo 3.
+
+As telas mostram o tamanho ao lado do nome onde há uma linha por tamanho
+("Polo Masculino Piquet Preto · XG", com `nomeComTamanho`), e o card do portal
+mostra o nome da família, igual em todos os tamanhos. A tela recusa antes o
+nome que traz o próprio tamanho (`problemaDoNome`), e a Contagem sugere o nome,
+os campos e as fotos da família quando o código é de um tamanho novo.
+
+## Passo 3: aplicar os renomes
+
+Com o CSV revisado, na homologação e depois na produção, pelo motor do acerto
+de outubro (`tools/acerto-btg-2026-10`, operação `renomear`: skus, products,
+saldos, linhas da abertura e a projeção do portal, com recibo e evento por
+item, idempotente). Essa ferramenta ainda não existe: entra com o OK do
+Leonardo sobre o CSV.
 
 ## Testes
 

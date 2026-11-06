@@ -419,15 +419,20 @@ documentação de produto e operação está em `docs/`.
   próximos PRs: mobiliário, com patrimônio, e insumos).
 - **O nome do produto tem padrão (decidido em 06/11/2026):** o mesmo nome em
   todos os tamanhos da família, o tamanho no campo Tamanho (o fim do código
-  do cliente), o gênero como etiqueta igual para tudo ("Masculino" ou
-  "Feminino") e inicial maiúscula em cada palavra: "Polo Masculino Piquet
-  Preto". A regra é `padronizarNome` em `lib/dominio/src/nome-do-produto.ts`,
-  com os casos em `nome-do-produto.casos.json`, que a cópia em JavaScript da
-  ferramenta também roda. O relatório só de leitura que lista o que está fora
-  do padrão é `tools/padronizar-nomes/relatorio.mjs` (roteiro no README da
-  pasta); as telas aprovadas estão em `docs/mockups/Nome*.dc.html`. O cadastro
-  de hoje ainda não valida o padrão: entra no PR de tela, e a aplicação dos
-  renomes vem depois, com o CSV revisado.
+  do cliente, quando é um tamanho conhecido), o gênero como etiqueta igual
+  para tudo ("Masculino" ou "Feminino") e inicial maiúscula em cada palavra:
+  "Polo Masculino Piquet Preto". A regra é `padronizarNome` em
+  `lib/dominio/src/nome-do-produto.ts`, com os casos em
+  `nome-do-produto.casos.json`; as Functions têm cópia literal travada
+  (`functions/wms/src/domain/nome-do-produto.ts`) e a ferramenta, a cópia
+  gerada (`tools/padronizar-nomes/regras.mjs`, por `gerar-regras.mjs`). O
+  produto novo nasce no padrão (`nomeParaGravar`): a Contagem, a chegada
+  avulsa, a API e o Catálogo recusam o que contradiz o código, o aviso do
+  cliente não recusa; o Catálogo só aplica quando o nome ou o tamanho mudam.
+  As listas com uma linha por tamanho mostram "Nome · XG" (`nomeComTamanho`).
+  Os nomes antigos mudam no passo 3, com a planilha do relatório só de
+  leitura (`tools/padronizar-nomes/relatorio.mjs`) revisada; roteiro no
+  README da pasta, pranchas "proposta" em `docs/mockups/Nome*.dc.html`.
 - **`pnpm` não está no PATH.** Use `corepack pnpm`. Os diretórios
   `functions/wms/` e `functions/comercial/` usam **npm** (cada um tem
   `package-lock.json` próprio), não pnpm. Como o `pnpm-workspace.yaml` inclui

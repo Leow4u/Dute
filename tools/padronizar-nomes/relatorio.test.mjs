@@ -40,18 +40,26 @@ describe("relatório: a família", () => {
     assert.deepEqual(resumo.por_decisao, { aprovar: 7 });
   });
 
-  it("o erro de digitação de um tamanho recebe o nome da família e vira conferir", () => {
+  it("família com dois nomes: o mais comum é a sugestão e todas as linhas vão para conferir", () => {
     const skus = [
       sku("BTG-000131", "A.02.0809.002.P", "Polo feminino piquet arpoador P", { genero: "Feminino" }),
       sku("BTG-000132", "A.02.0809.002.M", "Polo feminina piquet arpoador – M", { genero: "Feminino" }),
       sku("BTG-000133", "A.02.0809.002.G", "POLO FEMININO PIQUET ARPOARDOR G", { genero: "Feminino" }),
     ];
     const { linhas } = montarRelatorio({ skus, products: skus.map((s) => product(s.cod_cliente, s.produto)) });
-    const g = linhas.find((l) => l.codigo === "A.02.0809.002.G");
-    assert.equal(g.nome_proposto, "Polo Feminino Piquet Arpoador");
-    assert.equal(g.decisao, "conferir");
-    assert.equal(g.conferir, 'difere da família: "Polo Feminino Piquet Arpoardor"');
-    assert.ok(linhas.filter((l) => l !== g).every((l) => l.decisao === "aprovar"));
+    assert.ok(linhas.every((l) => l.nome_proposto === "Polo Feminino Piquet Arpoador"));
+    assert.ok(linhas.every((l) => l.decisao === "conferir"));
+    assert.ok(linhas.every((l) => l.conferir === 'família com 2 nomes: "Polo Feminino Piquet Arpoador" (2) · "Polo Feminino Piquet Arpoardor" (1)'), linhas[0].conferir);
+    assert.ok(linhas.find((l) => l.codigo === "A.02.0809.002.G").motivo.endsWith("família"));
+  });
+
+  it("o nome que é só o tamanho não vira o nome da família", () => {
+    const skus = [
+      sku("BTG-000141", "A.01.1100.001.XG", "XG", { estoque_atual: 100 }),
+      sku("BTG-000142", "A.01.1100.001.P", "Polo preto P", { estoque_atual: 10 }),
+    ];
+    const { linhas } = montarRelatorio({ skus, products: skus.map((s) => product(s.cod_cliente, s.produto)) });
+    assert.ok(linhas.every((l) => l.nome_proposto === "Polo Preto"), linhas.map((l) => l.nome_proposto).join(" | "));
   });
 
   it("empate no nome da família: ganha o de mais saldo; depois, o do menor tamanho", () => {
@@ -88,6 +96,9 @@ describe("relatório: o que vira conferir", () => {
     assert.equal(porSku["BTG-000302"].conferir, 'código com 2 SKUs ativos (BTG-000302, BTG-000303) · products com outro nome: "CAMISA SOCIAL BRANCA"');
     assert.equal(porSku["BTG-000303"].decisao, "conferir");
     assert.equal(porSku["BTG-000304"].decisao, "aprovar");
+    // O product arquivado com o mesmo código não ganha do ativo.
+    const comArquivado = montarRelatorio({ skus: [skus[0]], products: [{ ...product("A.01.0901.001.P", "NOME VELHO"), id: "A.01.0901.001.P_old", archived: true }, products[0]] }).linhas[0];
+    assert.equal(comArquivado.decisao, "aprovar");
     const semProducts = montarRelatorio({ skus: [skus[0]], products: [] }).linhas[0];
     assert.equal(semProducts.conferir, "sem registro em products");
   });
@@ -123,8 +134,20 @@ describe("relatório: filtros e leitura", () => {
     const skus = [...FAMILIA, sku("BTG-000501", "C.0659.001.U", "Toalha de academia"), { ...sku("ACM-000001", "X.01.0001.001.P", "Camiseta ACME P"), customer_code: "ACME" }];
     const btg = montarRelatorio({ skus, products: [], cliente: "BTG" });
     assert.equal(btg.linhas.length, 8);
+    // O registro sem customer_code é do cliente legado, como nas Functions.
+    const legado = montarRelatorio({ skus: [{ ...sku("BTG-000601", "A.01.0601.001.P", "Polo P"), customer_code: undefined }], products: [{ ...product("A.01.0601.001.P", "Polo P"), customer_code: undefined }], cliente: "BTG Pactual" });
+    assert.equal(legado.linhas.length, 1);
+    assert.equal(legado.linhas[0].decisao, "aprovar");
     const familia = montarRelatorio({ skus, products: [], familia: "a.01.0806.005" });
     assert.equal(familia.linhas.length, 7);
+  });
+
+  it("SKU sem código do cliente é família de si mesmo e vai para conferir", () => {
+    const skus = [sku("BTG-000701", "", "Toalha de banho branca"), sku("BTG-000702", "", "Caneca BTG")];
+    const { linhas, resumo } = montarRelatorio({ skus, products: [] });
+    assert.equal(resumo.familias, 2);
+    assert.deepEqual(linhas.map((l) => l.nome_proposto).sort(), ["Caneca BTG", "Toalha de Banho Branca"]);
+    assert.ok(linhas.every((l) => l.conferir.includes("sem código do cliente") && !l.conferir.includes("SKUs ativos")));
   });
 
   it("linhaDoSku lê os nomes antigos dos campos", () => {
@@ -141,6 +164,8 @@ describe("relatório: o CSV e o resumo", () => {
     const [cabecalho, primeira] = csv.slice(1).split("\r\n");
     assert.equal(cabecalho, COLUNAS.map(([, rotulo]) => rotulo).join(";"));
     assert.ok(primeira.includes('"Polo ""piquet""; mescla P"'));
+    const formula = csvDoRelatorio(montarRelatorio({ skus: [sku("BTG-000801", "A.01.0801.001.P", "=SOMA(A1:A2)")], products: [] }).linhas);
+    assert.ok(formula.includes(";'=SOMA(A1:A2);"), formula);
     assert.ok(csv.endsWith("\r\n"));
   });
 

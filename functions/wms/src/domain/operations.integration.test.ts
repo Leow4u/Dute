@@ -100,7 +100,8 @@ function openingCountInput(
     // produto como existente.
     sku_code: "BTG-000001",
     client_item_code: "CLIENTE-OPEN-001",
-    product_name: "Camiseta institucional de teste",
+    // Já no padrão do nome (domain/nome-para-gravar.ts): o cadastro grava como veio.
+    product_name: "Camiseta Institucional de Teste",
     product_registration: "new",
     category: "VESTUARIO",
     genero: "Masculino",
@@ -3694,7 +3695,7 @@ describe("aviso de produtos disponíveis no recebimento por linha", () => {
       items: lines.map((line, index) => ({
         line_number: index + 1,
         client_item_code: `DISPONIVEL-${index + 1}`,
-        product_name: `Produto disponível ${index + 1}`,
+        product_name: `Produto Disponível ${index + 1}`,
         product_registration: "new" as const,
         category: "VESTUARIO",
         size: index === 0 ? "M" : "G",
@@ -3774,7 +3775,7 @@ describe("aviso de produtos disponíveis no recebimento por linha", () => {
       items: [{
         sku_code: String(arrival.items[0]!.get("sku_code")),
         client_item_code: "DISPONIVEL-1",
-        product_name: "Produto disponível 1",
+        product_name: "Produto Disponível 1",
         size: "M",
         quantity: 3,
       }],

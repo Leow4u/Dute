@@ -1146,6 +1146,36 @@
         ],
         "conferir": []
       }
+    },
+    {
+      "caso": "número no fim de quem tem tamanho de letra é nome",
+      "nome": "Produto disponível 1",
+      "codigo": "DISPONIVEL-1",
+      "genero": "",
+      "tamanho": "M",
+      "esperado": {
+        "nome": "Produto Disponível 1",
+        "tamanho": "M",
+        "motivos": [
+          "caixa das letras"
+        ],
+        "conferir": []
+      }
+    },
+    {
+      "caso": "número no fim sem tamanho nenhum é nome",
+      "nome": "COPO 50",
+      "codigo": "MAT-200",
+      "genero": "",
+      "tamanho": "",
+      "esperado": {
+        "nome": "Copo 50",
+        "tamanho": null,
+        "motivos": [
+          "maiúsculas"
+        ],
+        "conferir": []
+      }
     }
   ],
   "tamanhos_do_codigo": [
@@ -1447,6 +1477,13 @@
         "tipo": "so_o_tamanho",
         "mensagem": "O nome do produto não pode ser só o tamanho."
       }
+    },
+    {
+      "caso": "número no fim de quem tem tamanho de letra não é problema",
+      "nome": "Produto disponível 1",
+      "codigo": "DISPONIVEL-1",
+      "tamanho": "M",
+      "problema": null
     }
   ]
 }

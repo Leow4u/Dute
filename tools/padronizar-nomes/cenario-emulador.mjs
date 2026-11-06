@@ -32,7 +32,7 @@ const { initializeApp } = requireWms("firebase-admin/app");
 const { getFirestore } = requireWms("firebase-admin/firestore");
 const db = getFirestore(initializeApp({ projectId: PROJETO }));
 
-const sku = (id, codigo, produto, extra = {}) => ({ sku_code: id, cod_btg: id, customer_code: "BTG", cod_cliente: codigo, cod_cliente_key: codigo.toUpperCase(), produto, genero: "Masculino", categoria: "POLO", estoque_atual: 10, status: "active", archived: false, ...extra });
+const sku = (id, codigo, produto, extra = {}) => ({ sku_code: id, cod_btg: id, customer_code: "BTG Pactual", cod_cliente: codigo, cod_cliente_key: codigo.toUpperCase(), produto, genero: "Masculino", categoria: "POLO", estoque_atual: 10, status: "active", archived: false, ...extra });
 const familia = [
   ["BTG-000121", "A.01.0806.005.PP", "Polo masculino piquet preto"],
   ["BTG-000122", "A.01.0806.005.P", "Polo masculino piquet preto p"],
@@ -45,10 +45,10 @@ const familia = [
 const lote = db.batch();
 for (const [id, codigo, produto] of familia) {
   lote.set(db.collection("skus").doc(id), sku(id, codigo, produto));
-  lote.set(db.collection("products").doc(codigo), { id: codigo, customer_code: "BTG", cod_cliente: codigo, cod_cliente_key: codigo.toUpperCase(), produto, genero: "Masculino", archived: false, status: "active" });
+  lote.set(db.collection("products").doc(codigo), { id: codigo, customer_code: "BTG Pactual", cod_cliente: codigo, cod_cliente_key: codigo.toUpperCase(), produto, genero: "Masculino", archived: false, status: "active" });
 }
 lote.set(db.collection("skus").doc("BTG-000998"), sku("BTG-000998", "C.0659.001.U", "Toalha de academia", { genero: "Outros", tamanho: "U" }));
-lote.set(db.collection("products").doc("C.0659.001.U"), { id: "C.0659.001.U", customer_code: "BTG", cod_cliente: "C.0659.001.U", produto: "Toalha de academia" });
+lote.set(db.collection("products").doc("C.0659.001.U"), { id: "C.0659.001.U", customer_code: "BTG Pactual", cod_cliente: "C.0659.001.U", produto: "Toalha de academia" });
 lote.set(db.collection("skus").doc("BTG-000999"), sku("BTG-000999", "A.01.0806.005.EG", "Polo masculino piquet preto EG", { archived: true, status: "archived" }));
 await lote.commit();
 
@@ -67,7 +67,7 @@ assert.deepEqual(json.resumo.por_decisao, { aprovar: 8 });
 const csv = readFileSync(saida, "utf8");
 const linhas = csv.slice(1).trim().split("\r\n");
 assert.equal(linhas.length, 9, "cabeçalho + 8 linhas");
-assert.ok(linhas[1].startsWith("BTG;A.01.0806.005;A.01.0806.005.PP;BTG-000121;Polo masculino piquet preto;Polo Masculino Piquet Preto;"), linhas[1]);
+assert.ok(linhas[1].startsWith("BTG Pactual;A.01.0806.005;A.01.0806.005.PP;BTG-000121;Polo masculino piquet preto;Polo Masculino Piquet Preto;"), linhas[1]);
 assert.ok(linhas.slice(1, 8).every((l) => l.includes(";Polo Masculino Piquet Preto;")), "os sete tamanhos com o mesmo nome");
 assert.ok(linhas[8].includes(";Toalha de Academia;"), linhas[8]);
 console.log(`Cenário no emulador ok: ${json.resumo.linhas} linhas, ${json.resumo.familias} famílias, CSV em ${saida}`);

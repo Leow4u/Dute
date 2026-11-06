@@ -315,7 +315,7 @@ ajustes e os erros de digitação que a planilha apontar.
 | Armazenagem · Receber | `NomeWmsReceber.dc.html` | A fila "Para guardar" com o conteúdo da caixa por tamanho. |
 | Armazenagem · Catálogo, editar produto | `NomeWmsCatalogo.dc.html` | A família na tabela com o mesmo nome; no diálogo, o nome digitado com "XG" no fim é recusado e o tamanho fica no campo Tamanho. |
 | Armazenagem · Contagem, tamanho novo | `NomeWmsContagem.dc.html` | O código de um tamanho novo de uma família existente pré-preenche nome, categoria, gênero, grupo, cor e Tamanho. |
-| Planilha de revisão (passo 1) | `NomePlanilhaRevisao.dc.html` | A planilha que o relatório só de leitura gera: nome hoje, nome proposto, motivo, tamanho e a decisão por linha. |
+| Planilha de revisão (passo 1) | `NomePlanilhaRevisao.dc.html` | A ilustração da planilha para a avaliação: nome hoje, nome proposto, motivo, tamanho e a decisão por linha. O CSV de verdade tem as colunas do README de `tools/padronizar-nomes` e não acrescenta cor nem aponta digitação. |
 
 ## Regras da v3
 

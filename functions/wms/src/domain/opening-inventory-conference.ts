@@ -8,6 +8,7 @@ import {
   normalizeBarcode, readCatalogQuantities, readCustomerSkuPrefix,
 } from "./catalog-codes.js";
 import { assertCatalogOwnedBy, LEGACY_CUSTOMER_CODE } from "./customer-scope.js";
+import { nomeParaGravar } from "./nome-para-gravar.js";
 import { openingInventorySessionDocumentId, recordCycleCountTransaction, type OperationalActor, type RecordCycleCountInput } from "./operations.js";
 import {
   BOX_COUNTER_DOC, BOX_EDITOR_ROLES, WAREHOUSE_BOXES_COLLECTION, WAREHOUSE_COUNTERS_COLLECTION,
@@ -95,7 +96,15 @@ function finish(tx: Transaction, ref: DocumentReference, input: unknown, result:
 }
 function draftBody(input: DraftInput): Row {
   const { expected_revision: _revision, idempotency_key: _key, line_id: _line, ...rest } = input;
-  return clean({ ...rest, sku_code: input.product_registration === "new" ? "" : upper(input.sku_code), client_item_code: upper(input.client_item_code), barcode: normalizeBarcode(input.barcode) });
+  const body: Row = clean({ ...rest, sku_code: input.product_registration === "new" ? "" : upper(input.sku_code), client_item_code: upper(input.client_item_code), barcode: normalizeBarcode(input.barcode) });
+  // Produto novo: o nome no padrão de 06/11/2026 e o tamanho do código desde o
+  // rascunho (domain/nome-para-gravar.ts); o que contradiz o código para aqui.
+  if (input.product_registration === "new" && str(body.product_name)) {
+    const padrao = nomeParaGravar({ nome: body.product_name, codigo: body.client_item_code, genero: body.genero, tamanho: body.size });
+    body.product_name = padrao.nome;
+    if (padrao.tamanho) body.size = padrao.tamanho;
+  }
+  return body;
 }
 function keys(line: Row): string[] {
   return [str(line.sku_code) && `sku:${upper(line.sku_code)}`, str(line.client_item_code) && `client:${upper(line.client_item_code)}`,

@@ -25,10 +25,12 @@
 /** Os tamanhos de roupa na ordem natural; N1… e os números vêm depois. */
 export const TAMANHOS_DE_ROUPA = ["PP", "P", "M", "G", "GG", "XG", "XGG", "XXG", "XXXG", "EG", "EGG", "EXG", "XS", "S", "L", "XL", "XXL", "U"] as const;
 
-/** Siglas que ficam em maiúsculas no nome. */
+/**
+ * Siglas com vogal que ficam em maiúsculas no nome. A palavra de 2 a 5 letras
+ * sem vogal já é sigla e não precisa estar aqui (a sigla do cliente, TNT, MDF,
+ * ML de manga longa): a lista não cita cliente nenhum.
+ */
 export const SIGLAS: ReadonlySet<string> = new Set([
-  "BTG",
-  "PAN",
   "SW",
   "UV",
   "UVA",
@@ -233,7 +235,8 @@ const ENTRE_PARENTESES_NO_FIM = /^(.*?)\s*[([]\s*([A-Za-z0-9]{1,4})\s*[)\]]$/u;
 /**
  * O tamanho no fim do nome e o que vem antes dele; null quando o fim não é um
  * tamanho. Fica no nome a medida ("500 G", "1 M"), a letra que faz parte dele
- * ("Gola U", "Tipo C") e o "U" de quem não é tamanho único.
+ * ("Gola U", "Tipo C"), o "U" de quem não é tamanho único e o número de quem
+ * não tem tamanho numérico ("Caderno 2").
  */
 function tamanhoNoFim(nome: string, alvo: string | null): { antes: string; tamanho: string } | null {
   const achado = ENTRE_PARENTESES_NO_FIM.exec(nome) ?? SEPARADO_NO_FIM.exec(nome);
@@ -242,6 +245,8 @@ function tamanhoNoFim(nome: string, alvo: string | null): { antes: string; taman
   const tamanho = achado[2].toUpperCase();
   if (!antes || !ehTamanho(tamanho)) return null;
   if (tamanho === "U" && alvo !== "U") return null;
+  // Número no fim só é tamanho quando o do produto também é ("Calça 42"); "Caderno 2", "Modelo 3" e "Copo 50" são nome.
+  if (/^\d+$/.test(tamanho) && !(alvo && /^\d+$/.test(alvo))) return null;
   const palavras = antes.split(" ");
   const anterior = (palavras[palavras.length - 1] ?? "").toLocaleLowerCase("pt-BR");
   if (NUMERO.test(anterior) || ANTES_DE_LETRA_DO_NOME.has(anterior)) return null;
@@ -327,6 +332,11 @@ export function hifenizarCores(nome: string): { nome: string; mudou: boolean } {
   return { nome: resultado, mudou: resultado !== nome };
 }
 
+/** Palavra de 2 a 5 letras sem vogal: sigla ("TNT", "MDF", "ML"). */
+function ehSiglaSemVogal(letras: string): boolean {
+  return /^\p{L}{2,5}$/u.test(letras) && !/[aeiouyáàâãäéèêëíìîïóòôõöúùûü]/iu.test(letras);
+}
+
 function capitalizar(parte: string): string {
   const minusculo = parte.toLocaleLowerCase("pt-BR");
   const indice = minusculo.search(/\p{L}/u);
@@ -367,7 +377,7 @@ export function caixaDasLetras(nome: string): string {
         .map((parte) => {
           if (/^[-/'’]$/.test(parte)) return parte;
           const letras = parte.replace(/[^\p{L}]/gu, "");
-          if (SIGLAS.has(letras.toUpperCase())) return parte.toUpperCase();
+          if (SIGLAS.has(letras.toUpperCase()) || ehSiglaSemVogal(letras)) return parte.toUpperCase();
           return capitalizar(parte);
         })
         .join("");

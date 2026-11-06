@@ -11,7 +11,7 @@
  *
  *   node tools/padronizar-nomes/relatorio.mjs --projeto dute-prod
  *   node tools/padronizar-nomes/relatorio.mjs --projeto dute-prod --familia A.01.0806.005
- *   node tools/padronizar-nomes/relatorio.mjs --projeto dute-prod --cliente BTG --saida tmp/nomes.csv
+ *   node tools/padronizar-nomes/relatorio.mjs --projeto dute-prod --cliente "BTG Pactual" --saida tmp/nomes.csv
  *
  * Pré-requisitos: `npm --prefix functions/wms ci` (o firebase-admin vem de
  * lá) e `gcloud auth application-default login` com uma conta do projeto; ou
@@ -41,11 +41,17 @@ const chaveDoCodigo = (v) =>
     .replace(/\s+/g, " ");
 const arquivado = (data) => data.archived === true || texto(data.status) === "archived";
 
+/** O cliente do registro sem customer_code: o legado, como nas Functions (LEGACY_CUSTOMER_CODE em domain/customer-scope.ts). */
+export const CLIENTE_LEGADO = "BTG Pactual";
+const clienteDe = (data) => texto(data.customer_code) || CLIENTE_LEGADO;
+/** O id de documento que o WMS dá ao código (safeDocId): "7781/09" → "7781_09". */
+const idDoCodigo = (v) => texto(v).replace(/[^\w.-]/g, "_").toUpperCase();
+
 /** Os campos de um documento de `skus` que o relatório usa. `id` é o SKU (BTG-000126). */
 export function linhaDoSku(id, data) {
   return {
     sku: texto(id),
-    cliente: texto(data.customer_code),
+    cliente: clienteDe(data),
     codigo: texto(data.cod_cliente || data.client_item_code),
     nome: texto(data.produto || data.name || data.product_name),
     tamanho: texto(data.tamanho || data.size),
@@ -55,11 +61,14 @@ export function linhaDoSku(id, data) {
   };
 }
 
+/** O nome próprio que não pode virar o da família: vazio, só o tamanho, ou com o tamanho em conflito. */
+const NAO_SERVE_PARA_A_FAMILIA = /^(nome vazio|nome é só o tamanho|tamanho no nome \(.+\) diferente|campo Tamanho)/;
+
 /** O nome que a família adota: o mais comum entre os tamanhos; empate, o de mais saldo; depois, o do menor tamanho. */
 export function nomeDaFamilia(membros) {
   const porNome = new Map();
   for (const membro of membros) {
-    if (!membro.proprio.nome) continue;
+    if (!membro.proprio.nome || (membro.proprio.conferir ?? []).some((item) => NAO_SERVE_PARA_A_FAMILIA.test(item))) continue;
     const atual = porNome.get(membro.proprio.nome) ?? { nome: membro.proprio.nome, vezes: 0, estoque: 0, ordem: Infinity };
     atual.vezes += 1;
     atual.estoque += membro.linha.estoque;
@@ -82,17 +91,18 @@ export function montarRelatorio({ skus, products, cliente = "", familia = "", co
   // products por código: o apply grava skus e products juntos, então o nome dos dois tem de bater.
   // Chave por cliente e código (invariante 4): dois clientes podem ter o mesmo código.
   const produtos = new Map();
-  for (const doc of products) {
-    for (const chave of [chaveDoCodigo(doc.cod_cliente_key), chaveDoCodigo(doc.cod_cliente), chaveDoCodigo(doc.id)]) {
-      const composta = `${texto(doc.customer_code)}|${chave}`;
+  for (const doc of [...products].sort((a, b) => Number(arquivado(a)) - Number(arquivado(b)))) {
+    for (const chave of [chaveDoCodigo(doc.cod_cliente_key), chaveDoCodigo(doc.cod_cliente), idDoCodigo(doc.id)]) {
+      const composta = `${clienteDe(doc)}|${chave}`;
       if (chave && !produtos.has(composta)) produtos.set(composta, doc);
     }
   }
+  const productDe = (linha) => produtos.get(`${linha.cliente}|${chaveDoCodigo(linha.codigo)}`) ?? produtos.get(`${linha.cliente}|${idDoCodigo(linha.codigo)}`);
 
   // SKUs ativos com o mesmo código: o apply não sabe qual renomear.
   const porCodigo = new Map();
   for (const linha of linhas) {
-    if (linha.arquivado) continue;
+    if (linha.arquivado || !linha.codigo) continue;
     const chave = `${linha.cliente}|${chaveDoCodigo(linha.codigo)}`;
     porCodigo.set(chave, [...(porCodigo.get(chave) ?? []), linha.sku]);
   }
@@ -105,15 +115,22 @@ export function montarRelatorio({ skus, products, cliente = "", familia = "", co
 
   const familias = new Map();
   for (const membro of membros) {
-    const chave = `${membro.linha.cliente}|${chaveDoCodigo(familiaDoCodigo(membro.linha.codigo))}`;
+    const codigo = membro.linha.codigo;
+    const chave = codigo ? `${membro.linha.cliente}|${chaveDoCodigo(familiaDoCodigo(codigo))}` : `${membro.linha.cliente}|sku:${membro.linha.sku}`;
     familias.set(chave, [...(familias.get(chave) ?? []), membro]);
   }
   for (const grupo of familias.values()) {
     const nome = nomeDaFamilia(grupo);
+    // Mais de um nome próprio na família: todas as linhas vão para conferir,
+    // com a contagem de cada nome; o mais comum fica só como sugestão.
+    const nomes = new Map();
+    for (const membro of grupo) if (membro.proprio.nome) nomes.set(membro.proprio.nome, (nomes.get(membro.proprio.nome) ?? 0) + 1);
+    const variados = nomes.size > 1 ? `família com ${nomes.size} nomes: ${[...nomes.entries()].sort((a, b) => b[1] - a[1]).map(([n, v]) => `"${n}" (${v})`).join(" · ")}` : "";
     for (const membro of grupo) {
-      membro.familia = texto(familiaDoCodigo(membro.linha.codigo));
+      membro.familia = membro.linha.codigo ? texto(familiaDoCodigo(membro.linha.codigo)) : "";
       membro.proposto = nome || membro.proprio.nome;
-      if (nome && membro.proprio.nome && membro.proprio.nome !== nome) membro.conferir.push(`difere da família: "${membro.proprio.nome}"`);
+      if (variados) membro.conferir.push(variados);
+      if (!membro.linha.codigo) membro.conferir.push("sem código do cliente");
     }
   }
 
@@ -121,7 +138,7 @@ export function montarRelatorio({ skus, products, cliente = "", familia = "", co
     const { linha } = membro;
     const duplicados = porCodigo.get(`${linha.cliente}|${chaveDoCodigo(linha.codigo)}`) ?? [];
     if (duplicados.length > 1) membro.conferir.push(`código com ${duplicados.length} SKUs ativos (${duplicados.join(", ")})`);
-    const produto = produtos.get(`${linha.cliente}|${chaveDoCodigo(linha.codigo)}`);
+    const produto = productDe(linha);
     if (!produto) membro.conferir.push("sem registro em products");
     else if (texto(produto.produto || produto.name || produto.product_name) !== linha.nome) {
       membro.conferir.push(`products com outro nome: "${texto(produto.produto || produto.name || produto.product_name)}"`);
@@ -142,7 +159,7 @@ export function montarRelatorio({ skus, products, cliente = "", familia = "", co
       sku: linha.sku,
       nome_hoje: linha.nome,
       nome_proposto: membro.proposto,
-      motivo: proprio.motivos.join(" · ") || (mudouNome ? "família" : ""),
+      motivo: [...proprio.motivos, ...(membro.proposto !== proprio.nome ? ["família"] : [])].join(" · "),
       tamanho_hoje: linha.tamanho,
       tamanho_proposto: proprio.tamanho ?? "",
       genero: linha.genero,
@@ -163,7 +180,9 @@ export function montarRelatorio({ skus, products, cliente = "", familia = "", co
     for (const item of lista) for (const valor of chave(item)) mapa.set(valor, (mapa.get(valor) ?? 0) + 1);
     return Object.fromEntries([...mapa.entries()].sort((a, b) => b[1] - a[1]));
   };
-  const familiasComMudanca = new Set(resultado.filter((l) => l.decisao !== "—").map((l) => `${l.cliente}|${l.familia}`)).size;
+  const familiasComMudanca = new Set(
+    resultado.filter((l) => l.nome_proposto !== l.nome_hoje || l.tamanho_proposto !== l.tamanho_hoje).map((l) => `${l.cliente}|${l.familia || l.sku}`),
+  ).size;
   const resumo = {
     skus_lidos: skus.length,
     products_lidos: products.length,
@@ -196,7 +215,9 @@ export const COLUNAS = [
 /** CSV como o Excel em português abre direto: BOM, ponto e vírgula e CRLF (o mesmo do toExcelCsv do app). */
 export function csvDoRelatorio(linhas) {
   const campo = (valor) => {
-    const t = String(valor ?? "");
+    const bruto = String(valor ?? "");
+    // O Excel lê como fórmula o que começa com =, +, - ou @: o apóstrofo deixa como texto.
+    const t = /^[=+\-@]/.test(bruto) ? `'${bruto}` : bruto;
     return /[";\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
   const saida = [COLUNAS.map(([, rotulo]) => campo(rotulo)).join(";"), ...linhas.map((linha) => COLUNAS.map(([chave]) => campo(linha[chave])).join(";"))];
@@ -219,7 +240,7 @@ export function textoDoResumo(resumo) {
 // --- Linha de comando ---------------------------------------------------------------
 
 async function principal() {
-  const args = { projeto: "", cliente: "", familia: "", saida: "", limite: 10000, comArquivados: false, json: false };
+  const args = { projeto: "", cliente: "", familia: "", saida: "", comArquivados: false, json: false };
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -228,13 +249,11 @@ async function principal() {
     else if (a === "--cliente") args.cliente = texto(proximo());
     else if (a === "--familia") args.familia = texto(proximo());
     else if (a === "--saida") args.saida = texto(proximo());
-    else if (a === "--limite") args.limite = Number(proximo());
     else if (a === "--com-arquivados") args.comArquivados = true;
     else if (a === "--json") args.json = true;
     else abortar(`Argumento desconhecido: ${a}`);
   }
   if (!args.projeto) abortar("Informe --projeto (dute-homolog ou dute-prod; demo-* com o emulador).");
-  if (!Number.isInteger(args.limite) || args.limite < 1) abortar("--limite precisa ser um inteiro positivo.");
 
   const emuladorHost = process.env.FIRESTORE_EMULATOR_HOST ?? "";
   const emulador = Boolean(emuladorHost);
@@ -264,13 +283,26 @@ async function principal() {
   const app = adminApp.initializeApp({ projectId: args.projeto });
   const db = adminFirestore.getFirestore(app);
 
-  const ler = async (colecao) => (await db.collection(colecao).limit(args.limite).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+  // Tudo, em páginas de 500 pelo id: um relatório pela metade sairia errado, não só incompleto.
+  const ler = async (colecao) => {
+    const todos = [];
+    let ultimo = null;
+    for (;;) {
+      let consulta = db.collection(colecao).orderBy(adminFirestore.FieldPath.documentId()).limit(500);
+      if (ultimo) consulta = consulta.startAfter(ultimo);
+      const pagina = await consulta.get();
+      for (const doc of pagina.docs) todos.push({ ...doc.data(), id: doc.id });
+      if (pagina.size < 500) return todos;
+      ultimo = pagina.docs[pagina.docs.length - 1].id;
+    }
+  };
   const [skus, products] = await Promise.all([ler("skus"), ler("products")]);
-  for (const [nome, lista] of [["skus", skus], ["products", products]]) {
-    if (lista.length >= args.limite) console.error(`AVISO: ${nome} chegou ao limite de ${fmt(args.limite)} documentos; passe --limite maior.`);
-  }
 
   const relatorio = montarRelatorio({ skus, products, cliente: args.cliente, familia: args.familia, comArquivados: args.comArquivados });
+  if (args.cliente && !relatorio.linhas.length) {
+    const clientes = [...new Set(skus.map((doc) => linhaDoSku(doc.id, doc).cliente))].sort();
+    abortar(`Nenhum SKU do cliente "${args.cliente}". Clientes no cadastro: ${clientes.map((c) => `"${c}"`).join(", ") || "nenhum"}.`);
+  }
   const hoje = new Date();
   const data = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
   const saida = path.resolve(raiz, args.saida || path.join("tmp", `nomes-fora-do-padrao-${args.projeto}-${data}.csv`));
