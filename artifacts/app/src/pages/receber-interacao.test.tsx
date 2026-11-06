@@ -82,6 +82,19 @@ describe("fila e bancada do Receber", () => {
     expect(container.textContent).not.toContain("Operação");
   });
 
+  it("Recebidos separa as chegadas das guardas em dois grupos", async () => {
+    state.extraGuards = [{ id: "putaway:guardada", title: "Guardar caixa CX-2", status: "completed", can_advance: false, box_code: "CX-2", customer: "BTG Pactual", location: "B-02" }];
+    await act(async () => { await client.invalidateQueries({ queryKey: ["warehouse-ops"] }); });
+    await click("Recebidos");
+    await waitFor(() => container.textContent?.includes("Guardar caixa CX-2") === true);
+    const grupo = (titulo: string) => Array.from(container.querySelectorAll("section")).find((section) => section.querySelector("h2")?.textContent?.startsWith(titulo))!;
+    expect(Array.from(container.querySelectorAll("h2")).map((h2) => h2.textContent)).toEqual(["Chegadas1", "Guardas1"]);
+    expect(grupo("Chegadas").textContent).toContain("recebido");
+    expect(grupo("Chegadas").textContent).not.toContain("Guardar caixa CX-2");
+    expect(grupo("Guardas").textContent).toContain("Guardar caixa CX-2");
+    expect(grupo("Guardas").textContent).not.toContain("recebido");
+  });
+
   it("preserva chegadas e guardas de todos os clientes e cancela com o dono da tarefa", async () => {
     state.tasks = [...state.tasks, receipt("inb_avulso_itau", { customer: "Itaú", customer_code: "Itaú" })];
     state.extraGuards = [{ id: "putaway:itau", title: "Guardar caixa do Itaú", status: "planned", box_code: "CX-ITAU", customer: "Itaú", customer_code: "Itaú" }];

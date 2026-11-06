@@ -46,6 +46,8 @@ const ops = {
         task({ id: "p1", reference: "put_1", title: "Guardar canecas", status: "planned", quantity: 280, source_location_id: "RECEBIMENTO" }),
         task({ id: "p2", reference: "put_2", title: "Guardar agendas", status: "completed", can_advance: false, quantity: 50,
           timeline: [{ id: "e2", title: "Guardado", occurred_at: "2026-10-06T10:00:00Z" }] }),
+        task({ id: "p3", reference: "put_3", title: "Guardar cadernos", status: "completed", can_advance: false, quantity: 20,
+          timeline: [{ id: "e3", title: "Guardado", occurred_at: "2026-10-04T10:00:00Z" }] }),
       ],
     },
   },
@@ -57,8 +59,9 @@ describe("quadro do Receber", () => {
   it("separa em conferir, guardar e recebidos; bloqueio vem primeiro", () => {
     expect(board.check.map(({ task }) => task.id)).toEqual(["r4", "r1", "r2"]);
     expect(board.store.map(({ task }) => task.id)).toEqual(["p1"]);
-    // Recebidos: o mais recente primeiro, misturando conferência e guarda.
-    expect(board.done.map(({ task }) => task.id)).toEqual(["p2", "r3"]);
+    // Recebidos: as chegadas e as guardas em grupos separados, cada um do mais recente ao mais antigo.
+    expect(board.chegadas.map(({ task }) => task.id)).toEqual(["r3"]);
+    expect(board.guardas.map(({ task }) => task.id)).toEqual(["p2", "p3"]);
   });
 
   it("apoio da linha diz o tipo, o estado e o tamanho da chegada", () => {
@@ -93,7 +96,7 @@ describe("quadro do Receber", () => {
   });
 
   it("não quebra sem filas", () => {
-    expect(buildReceivingBoard(normalizeQueues(undefined))).toEqual({ check: [], guardando: [], store: [], done: [], cancelled: [] });
+    expect(buildReceivingBoard(normalizeQueues(undefined))).toEqual({ check: [], guardando: [], store: [], chegadas: [], guardas: [], cancelled: [] });
   });
 
   it("separa canceladas de recebidas e nunca as oferece para conferir ou guardar", () => {
@@ -103,7 +106,8 @@ describe("quadro do Receber", () => {
     });
     const quadro = buildReceivingBoard(filas);
     expect(quadro.cancelled.map(({ task }) => task.id)).toEqual(["guarda_cancelada", "cancelada"]);
-    expect(quadro.done.map(({ task }) => task.id)).toEqual(["recebida"]);
+    expect(quadro.chegadas.map(({ task }) => task.id)).toEqual(["recebida"]);
+    expect(quadro.guardas).toEqual([]);
     expect(quadro.check).toEqual([]);
     expect(quadro.store).toEqual([]);
     expect(isCancelledReceipt(task({ id: "r", status: "CANCELLED" }))).toBe(true);
@@ -486,7 +490,8 @@ describe("a chegada por caixa na fila do Receber (parte 5e; mockup WmsReceberFil
   it("a recebida com caixa por guardar fica em aberto, em Recebidas, por guardar (decisão 5); guardada, vai a Recebidos", () => {
     expect(board.check.map(({ task }) => task.id)).toEqual(["inb_avulso_a"]);
     expect(board.guardando.map(({ task }) => task.id)).toEqual(["inb_avulso_b"]);
-    expect(board.done.map(({ task }) => task.id)).toEqual(["inb_avulso_c"]);
+    expect(board.chegadas.map(({ task }) => task.id)).toEqual(["inb_avulso_c"]);
+    expect(board.guardas).toEqual([]);
   });
 
   it("a chegada a conferir diz o modo e as caixas; com caixa iniciada, ela já está em conferência", () => {

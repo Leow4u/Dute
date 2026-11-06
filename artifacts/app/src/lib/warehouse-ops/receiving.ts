@@ -17,14 +17,19 @@ import { chegadaPorCaixa, totaisDaChegada } from "../wms/caixas-do-recebimento";
  * Receber em grupos, como Pedidos: o que chegou e precisa de conferência, o
  * que foi conferido e espera endereço, e o que terminou. A chegada por caixa
  * recebida fica em aberto até a última guarda (decisão 5): "Recebidas, por
- * guardar".
+ * guardar". Em Recebidos, as chegadas e as guardas ficam em grupos separados
+ * (06/11/2026): a chegada de uma caixa e a guarda dela encerram juntas, com
+ * a mesma quantidade, e numa lista só pareciam o mesmo registro repetido.
  */
 export type ReceivingBoard = {
   check: TaskQueueEntry[];
   /** A chegada por caixa com a entrada concluída e caixa ainda por guardar. */
   guardando: TaskQueueEntry[];
   store: TaskQueueEntry[];
-  done: TaskQueueEntry[];
+  /** Recebidos › Chegadas: a chegada com a entrada concluída e nenhuma caixa por guardar. */
+  chegadas: TaskQueueEntry[];
+  /** Recebidos › Guardas: a guarda concluída, de caixa ou de linha. */
+  guardas: TaskQueueEntry[];
   cancelled: TaskQueueEntry[];
 };
 
@@ -49,16 +54,16 @@ export function buildReceivingBoard(queues: NormalizedQueue[]): ReceivingBoard {
   };
   const receiving = entriesOf("receiving");
   const putaway = entriesOf("putaway");
+  const maisRecentePrimeiro = (left: TaskQueueEntry, right: TaskQueueEntry) =>
+    lastActivityTime(right.task) - lastActivityTime(left.task);
+  const encerrada = ({ task }: TaskQueueEntry) => isTerminalTask(task) && !isCancelledReceipt(task);
   return {
     check: receiving.filter(({ task }) => !isTerminalTask(task)),
     guardando: receiving.filter(({ task }) => recebidaPorGuardar(task)),
     store: putaway.filter(({ task }) => !isTerminalTask(task)),
-    done: [...receiving, ...putaway]
-      .filter(({ task }) => isTerminalTask(task) && !isCancelledReceipt(task) && !recebidaPorGuardar(task))
-      .sort((left, right) => lastActivityTime(right.task) - lastActivityTime(left.task)),
-    cancelled: [...receiving, ...putaway]
-      .filter(({ task }) => isCancelledReceipt(task))
-      .sort((left, right) => lastActivityTime(right.task) - lastActivityTime(left.task)),
+    chegadas: receiving.filter((entry) => encerrada(entry) && !recebidaPorGuardar(entry.task)).sort(maisRecentePrimeiro),
+    guardas: putaway.filter(encerrada).sort(maisRecentePrimeiro),
+    cancelled: [...receiving, ...putaway].filter(({ task }) => isCancelledReceipt(task)).sort(maisRecentePrimeiro),
   };
 }
 
