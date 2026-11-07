@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   boxDraftToPayload,
+  boxOriginLabel,
   emptyBoxDraft,
   formatBoxDimensions,
   formatBoxPlacement,
@@ -90,6 +91,33 @@ describe("caixas guardadas", () => {
     expect(full.session_id).toBe("sessao-1");
     expect(full.suggestion).toEqual({ position: "A-01", reason: "Primeira livre", alternatives: ["A-02"], followed: true });
     expect(full.refusal).toEqual({ position: "A-03", reason: "Ocupada" });
+  });
+
+  it("lê o conteúdo e a origem da caixa do recebimento; a abertura e o cadastro manual dizem a origem (parte 6)", () => {
+    const receipt = warehouseBoxFromRecord(
+      record("CX-000225", "B-09", {
+        status: "committing",
+        origin: { kind: "receipt", receipt_id: "inb_1", receipt_number: "AVL-7C21A9F0", invoice_number: "48.377" },
+        lines: [
+          { sku_code: "BTG-000112", client_item_code: "A.01.0713.005.G", product_name: "Polo Masculino Piquet Preto", size: "G", counted_qty: 12 },
+          { sku_code: "BTG-000113", client_item_code: "", product_name: "", size: null, counted_qty: 0 },
+          "lixo",
+        ],
+      }),
+    );
+    expect(receipt.origin).toEqual({ kind: "receipt", session_id: null, receipt_id: "inb_1", receipt_number: "AVL-7C21A9F0", invoice_number: "48.377" });
+    expect(receipt.lines).toEqual([
+      { sku_code: "BTG-000112", client_item_code: "A.01.0713.005.G", product_name: "Polo Masculino Piquet Preto", size: "G", counted_qty: 12 },
+    ]);
+    expect(receipt.session_id).toBeNull();
+    expect(boxOriginLabel(receipt)).toBe("Recebimento · NF 48.377");
+    expect(boxOriginLabel({ origin: { ...receipt.origin, invoice_number: null } })).toBe("Recebimento · AVL-7C21A9F0");
+    const opening = warehouseBoxFromRecord(record("CX-000001", "A-01"));
+    expect(opening.origin.kind).toBe("opening_inventory");
+    expect(opening.lines).toEqual([]);
+    expect(boxOriginLabel(opening)).toBe("Abertura");
+    expect(boxOriginLabel(warehouseBoxFromRecord(record("CX-000002", "A-01", { origin: { kind: "manual" } })))).toBe("Manual");
+    expect(boxOriginLabel(warehouseBoxFromRecord({ id: "cx-000003" }))).toBe("Manual");
   });
 
   it("ordena pela mais recente e separa as da sessão", () => {

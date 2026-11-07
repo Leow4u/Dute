@@ -284,3 +284,23 @@ describe("saldo da prateleira sem caixa registrada", () => {
     expect(shelfMatches(b03!, "polo", index)).toBe(false);
   });
 });
+
+/** A caixa do recebimento traz o conteúdo nela (recebimento com caixas, parte 6). */
+describe("conteúdo da caixa do recebimento", () => {
+  it("vem das linhas da própria caixa, com o nome e o tamanho, somando o mesmo produto; as linhas da abertura não entram", () => {
+    const receipt = box("CX-000225", "B-09", {
+      sku_codes: ["BTG-000112", "BTG-000113"],
+      origin: { kind: "receipt", receipt_number: "AVL-7C21A9F0", invoice_number: "48.377" },
+      lines: [
+        { sku_code: "BTG-000112", client_item_code: "A.01.0713.005.G", product_name: "Polo Masculino Piquet Preto", size: "G", counted_qty: 12 },
+        { sku_code: "BTG-000113", client_item_code: "A.01.0713.005.GG", product_name: "Polo Masculino Piquet Preto", size: "GG", counted_qty: 7 },
+        { sku_code: "BTG-000112", client_item_code: "A.01.0713.005.G", product_name: "Polo Masculino Piquet Preto", size: "G", counted_qty: 1 },
+      ],
+    });
+    const index = skuIndexFromRows([{ id: "BTG-000112", produto: "Outro nome", cod_cliente: "X" }]);
+    expect(boxContents(receipt, [{ box_code: "CX-000225", sku_code: "SKU-9", product_name: "Da abertura", counted_qty: 99 }], index)).toEqual([
+      { code: "A.01.0713.005.G", name: "Polo Masculino Piquet Preto · G", qty: 13 },
+      { code: "A.01.0713.005.GG", name: "Polo Masculino Piquet Preto · GG", qty: 7 },
+    ]);
+  });
+});

@@ -144,6 +144,7 @@ import {
   completeInboundBoxReceipt as completeInboundBoxReceiptFor,
   storeInboundBox as storeInboundBoxFor,
   refuseInboundBoxShelf as refuseInboundBoxShelfFor,
+  recordInboundBoxLabelPrint as recordInboundBoxLabelPrintFor,
 } from "./domain/inbound-boxes.js";
 import { readSystemHealth } from "./domain/system-health.js";
 import { CostSettingsSchema, readSystemDashboard, saveCostSettings } from "./domain/system-dashboard.js";
@@ -8343,6 +8344,12 @@ export const refuseInboundBoxShelf = onCall(async (request) => {
   const profile = await getProfile(request);
   requireWarehouseWrite(profile);
   return refuseInboundBoxShelfFor(db, request.data, profile);
+});
+
+export const recordInboundBoxLabelPrint = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return recordInboundBoxLabelPrintFor(db, request.data, profile);
 });
 
 /** "Guardar" no Estoque (decisão 16, parte 7e): o que dá para guardar do saldo parado numa área. */

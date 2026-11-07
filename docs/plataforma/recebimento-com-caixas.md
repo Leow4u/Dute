@@ -774,9 +774,51 @@ desenhada e aprovada antes do PR de tela.
      `guardas`; a linha, a ficha e o limite de 12 encerradas por fila não
      mudam, e Cancelados segue numa lista só. Testes: `receiving.test.ts`,
      `receber.test.tsx` e `receber-interacao.test.tsx`.
-6. **Etiquetas:** caixa `committing` com destino, origem "Recebimento", o
-   conteúdo da caixa do recebimento na etiqueta e no Mapa, "Etiquetas da
-   chegada", reimpressão com evento.
+6. **Etiquetas:** feita em 07/11/2026, no PR 587, em três partes, depois do
+   mockup das nove pranchas (06/11/2026, a partir do caso do mesmo dia: duas
+   caixas guardadas em B-09 sem etiqueta e sem conteúdo no Mapa), aprovado
+   pelo Leonardo com as cinco respostas (decisões 28 a 32). Sem liberação
+   própria: vale onde o recebimento por caixa vale.
+   - **6a, o dado, a etiqueta e o Mapa:** o modelo da caixa no app lê o
+     conteúdo (`lines[]`) e a origem da chegada; a etiqueta usa as linhas da
+     própria caixa (o nome com o tamanho, o código do cliente e o SKU, decisão
+     32) e a origem "Recebimento · NF 48.377" (decisão 31); a tela de
+     Etiquetas aceita a caixa com o destino confirmado, lê a chegada da URL
+     (`chegada=`, volta ao Receber), nomeia a caixa ainda sem destino (decisão
+     30) e só pede a sessão de abertura para a caixa da abertura; o Mapa lê a
+     mesma fonte, diz a origem e a data, lista a reservada e tem "Etiqueta"
+     por caixa. Testes: `warehouse-boxes`, `warehouse-labels`,
+     `warehouse-map` e a página do Mapa.
+   - **6b, as ações no Receber:** "Etiqueta" ao lado da caixa com destino e
+     "Etiquetas da chegada" em "Caixas e destinos" (todas as caixas; a sem
+     prateleira fica nomeada na tela de Etiquetas), também para quem só
+     consulta; "Imprimir etiqueta" na ficha da guarda, no computador e no
+     celular (decisão 28), e na guarda concluída ("Guardada em"), por onde as
+     caixas guardadas antes da parte 6 ganham a etiqueta com o conteúdo.
+     Testes: `chegada-por-caixa` e `guarda-da-caixa`.
+   - **6c, o evento:** a callable `recordInboundBoxLabelPrint` registra a
+     impressão (decisão 29), com recibo em `operational_operations` e o
+     evento `warehouse.box_label_printed` (depois,
+     `warehouse.box_label_reprinted`): a tela de Etiquetas chama ao clicar em
+     "Imprimir / Salvar PDF", com a posição impressa, que tem de ser a atual
+     da caixa com destino confirmado ou guardada; a caixa guarda
+     `label_printed_at`, `label_printed_location`, `label_print_count` e
+     `label_prints[]`, sem mudar a revisão nem conferir o congelamento (não é
+     escrita de saldo). A fila e o chip dizem "etiqueta impressa 14:32" ou
+     "etiqueta com B-09" (a caixa mudou de destino depois); a ficha da guarda
+     avisa a etiqueta desatualizada e ganha a timeline (caixa fechada,
+     sugestão recusada, destino confirmado, etiqueta impressa ou reimpressa,
+     prateleira liberada, guardada), lida dos carimbos da caixa. Testes:
+     `inbound-boxes.integration.test.ts`, a linha em
+     `callables-papeis.integration.test.ts`, `receiving.test.ts`,
+     `warehouse-labels.test.ts`, `chegada-por-caixa.test.tsx` e
+     `guarda-da-caixa.test.tsx`.
+   - O que ficou diferente do mockup: sem o toast ao confirmar o destino;
+     "Etiquetas da chegada" fica em "Caixas e destinos", no fim da revisão,
+     não na linha de ações do topo; o cartão da guarda concluída não diz quem
+     guardou nem a hora (a timeline tem a data); o aviso da etiqueta
+     desatualizada é uma linha no cartão do destino, com "Imprimir etiqueta"
+     na linha de ações.
 7. **Só prateleira para o cliente** (decisão 10), sem liberação por ambiente:
    o Leonardo decidiu em 02/11/2026 que vale já para a produção, no próximo
    disparo manual dele. Em quatro PRs:
@@ -933,6 +975,11 @@ não resolve caixa, etiqueta nem Mapa, e por isso não entra como etapa.
 | 25 | Como o "Em recebimento" entra no Estoque do portal (parte 7d)? (02/11/2026) | Na tela de hoje: coluna na Lista, linha no card só quando há, o detalhe do produto e a linha do topo. |
 | 26 | A "Última entrada" do mockup entra na parte 7d? (02/11/2026) | Não: fica para uma parte própria, com a gravação no WMS. |
 | 27 | Produto sem disponível e com peça chegando: que selo? (02/11/2026) | "Em recebimento", no lugar de "Sem saldo", e a dica não sugere reposição; os botões continuam como hoje. |
+| 28 | O celular imprime a etiqueta da caixa do recebimento? (07/11/2026) | Sim: a guarda no celular também tem "Imprimir etiqueta", pela tela de Etiquetas no navegador do celular. |
+| 29 | "Etiqueta impressa" vira evento? (07/11/2026) | Sim: ao clicar em "Imprimir / Salvar PDF", o app registra a caixa e a posição impressas (a primeira vez "impressa", depois "reimpressa"), por uma callable do WMS. É o registro do clique, não da impressora, até o ZPL. |
+| 30 | "Etiquetas da chegada" leva que caixas? (07/11/2026) | Só as com destino confirmado ou guardadas; a caixa fechada sem prateleira é nomeada no aviso e imprime na guarda, quando ganha o destino. |
+| 31 | A origem na etiqueta e no Mapa (07/11/2026) | "Recebimento · NF 48.377" e, sem NF, "Recebimento · AVL-7C21A9F0"; "Abertura" e "Manual" como hoje. |
+| 32 | O nome na etiqueta (07/11/2026) | O padrão de 06/11 ("Polo Masculino Piquet Preto · G"), com o código do cliente e o SKU; a caixa de antes do passo 3 sai com o nome que o catálogo tiver. |
 
 Nada em aberto.
 

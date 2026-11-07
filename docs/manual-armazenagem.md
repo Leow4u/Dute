@@ -24,7 +24,7 @@ nas fases 4, 5 e 7 de `docs/plataforma/`.
 | Relatórios | Posição de estoque, Abaixo do mínimo, Itens parados, Movimentações e Pedidos. |
 | Documentos | NFs, comprovantes e contratos. |
 
-Fora do menu: Estoque › Etiquetas (pela Contagem, por Posições e pelo Mapa),
+Fora do menu: Estoque › Etiquetas (pela Contagem, por Posições, pelo Mapa e pelo Receber),
 Estoque › Alertas (pelo Início), a triagem das solicitações (pelo Início e por
 Pedidos) e Devoluções, só pelo endereço `/wms/devolucoes`. Início, Pedidos,
 Itens, Receber e Alertas estão no visual novo (v3); as outras, no anterior do
@@ -185,6 +185,11 @@ já carregados: sua ausência não garante que a chegada seja inédita.
    entrada" exige caixas fechadas, linhas tratadas e justificativa quando
    houver falta ou sobra. A entrada vai para o RECEBIMENTO e gera uma guarda
    por caixa. A caixa sem destino pode receber a prateleira na guarda.
+6. A etiqueta da caixa sai antes de levá-la à prateleira: com o destino
+   confirmado, "Etiqueta" ao lado da caixa e "Etiquetas da chegada" em
+   "Caixas e destinos" abrem a tela de Etiquetas (a caixa sem prateleira fica
+   nomeada lá, sem etiqueta até o destino). "Imprimir / Salvar PDF" registra a
+   impressão, e a caixa passa a dizer "etiqueta impressa 14:32".
 
 **A conferência por linha:**
 
@@ -212,7 +217,13 @@ ou guarda. Cancelar aqui não estorna estoque já recebido.
 
 **Guardar:** a caixa recebida tem uma tarefa para guardar seu conteúdo
 inteiro. Confirme a prateleira e só use "Concluir guarda" depois de levá-la
-fisicamente ao destino. Na guarda por linha, "Posição" ("Bipe ou busque a
+fisicamente ao destino. A ficha da guarda, no computador e no celular, tem
+"Imprimir etiqueta" com o destino e a timeline da caixa (fechada, destino
+confirmado, etiqueta impressa, prateleira liberada, guardada). Depois de "Não
+cabe aqui", a etiqueta antiga fica avisada no destino novo ("Etiqueta impressa
+com B-09") e a fila diz "etiqueta com B-09": reimprima antes de guardar. A
+guarda concluída, em Recebidos › Guardas › Ver, mostra "Guardada em" e
+reimprime. Na guarda por linha, "Posição" ("Bipe ou busque a
 prateleira") lista só as ativas da zona do cliente; "Concluir guarda" move o
 saldo para ela, que não pode ser a origem. O pedido do cliente só reserva o
 saldo livre na prateleira: "RECEBIMENTO" e "EXPEDICAO" ficam fora do
@@ -286,16 +297,24 @@ guardada, a referência da fatura manual), as prateleiras, "Volume registrado" e
 "Caixas guardadas". A prateleira fica "sem caixas registradas", "parcial", "sem
 vaga na base" (não cabe mais uma caixa de 50 × 50 × 35 cm na frente livre, ou o
 peso chegou ao máximo), "em verificação" ou "bloqueada". A ficha traz medidas,
-peso, frente livre e as caixas (o conteúdo vem da abertura do cliente ativo).
+peso, frente livre e as caixas, cada uma com a origem ("Abertura", "Manual" ou
+"Recebimento · NF 48.377"), a data da guarda, o conteúdo (o da própria caixa, no
+recebimento; o da abertura do cliente ativo, na contagem) e "Etiqueta"; a caixa
+do recebimento com o destino confirmado aparece como "reservada".
 
 **A etiqueta** tem 101,6 × 50,8 mm: "Folha A4, dez por folha" ou "Uma por
 etiqueta (rolo Zebra)"; "Pular etiquetas usadas" (0 a 9) aproveita folha
 começada; "Imprimir / Salvar PDF" usa o navegador. As duas trazem o código em
 barras (Code 128) e em texto. A da caixa traz a posição, o cliente, medidas e
-peso, "Abertura" ou "Manual", a data, até 4 produtos ("+ 2 produto(s) no
-sistema") e as unidades; sai só de caixa guardada do cliente ativo, com o
-conteúdo da abertura. A da posição traz a zona, rua e prateleira, as medidas e
-o "Peso máx.".
+peso, a origem ("Abertura", "Manual" ou "Recebimento · NF 48.377"), a data, até
+4 produtos com o tamanho ao lado do nome, o código do cliente e o SKU ("+ 2
+produto(s) no sistema") e as unidades. Sai da caixa guardada do cliente ativo
+(o conteúdo da abertura vem da sessão) e da caixa do recebimento com o destino
+confirmado ou guardada (o conteúdo vem da própria caixa); aberta pelo Receber,
+a tela volta ao Receber, diz a chegada e nomeia a caixa ainda sem destino. Na
+caixa do recebimento, "Imprimir / Salvar PDF" registra a impressão com a
+posição impressa (a primeira vez "etiqueta impressa", depois "reimpressa"). A
+da posição traz a zona, rua e prateleira, as medidas e o "Peso máx.".
 
 ## Estoque › Contagem
 

@@ -54,7 +54,8 @@ import { WAREHOUSE_POSITIONS_COLLECTION } from "./warehouse-positions.js";
  * a bancada abre a caixa do fornecedor, lança o que tem dentro (as linhas da
  * NF), fecha com as medidas e o peso, pede a prateleira ao motor e confirma o
  * destino, que fica reservado com a caixa em `committing`. A guarda que leva a
- * caixa a `stored` e a entrada no estoque são da parte 4; a etiqueta, da 6.
+ * caixa a `stored` e a entrada no estoque são da parte 4; a etiqueta, da 6 (`recordInboundBoxLabelPrint`, no
+ * fim deste módulo).
  *
  * Regras deste módulo:
  * - A chegada manda: cliente, modo e status vêm do documento dela, que é lido
@@ -197,6 +198,14 @@ export const StoreInboundBoxSchema = z.object({
   ...mutationFields,
   /** A prateleira onde a caixa está sendo guardada: a reservada para ela. */
   location_id: positionField,
+});
+
+export const RecordInboundBoxLabelPrintSchema = z.object({
+  ...receiptFields,
+  box_code: boxCodeField,
+  /** A posição que saiu na etiqueta: a prateleira reservada para a caixa ou onde ela está. */
+  location_id: positionField,
+  idempotency_key: operationKey,
 });
 
 /** Os motivos da falta marcada na linha da NF (decisão 17), os do separar a menos. */
@@ -430,6 +439,13 @@ function requireStatus(box: Row, boxCode: string, allowed: "counting" | "reviewe
     throw new HttpsError("failed-precondition", `Reabra a caixa ${boxCode} antes de alterar o conteúdo.`);
   }
   throw new HttpsError("failed-precondition", `Feche a caixa ${boxCode} (medidas e peso) antes de escolher a prateleira.`);
+}
+
+/** A prateleira atual da caixa com destino: a reservada (committing) ou onde ela está (stored). */
+function currentLocationOf(box: Row): string {
+  const status = text(box.status);
+  if (status !== "committing" && status !== "stored") return "";
+  return text(box.location_id || box.destination_location_id).toUpperCase();
 }
 
 // ----------------------------------------------------- recibo e evento
@@ -1744,6 +1760,79 @@ export async function refuseInboundBoxShelf(db: Firestore, raw: unknown, actor: 
       status: "reviewed",
       refused: refusals.map((item) => text(item.position)),
       conference_revision: nextRevision,
+      events: [event],
+    });
+  });
+}
+
+// ------------------------------------------------------- etiqueta impressa
+
+/**
+ * Registra a impressão da etiqueta da caixa (parte 6, decisão 29): a tela de
+ * Etiquetas chama ao clicar em "Imprimir / Salvar PDF", com a posição que
+ * saiu na etiqueta. É o registro do clique, não da impressora, até o ZPL. Só
+ * a caixa com o destino confirmado ou guardada tem etiqueta, e a posição tem
+ * de ser a atual: a etiqueta de outra prateleira não vale. A impressão não
+ * muda a revisão da caixa (a bancada e a guarda não precisam reler) nem
+ * confere o congelamento do estoque, porque não é escrita de saldo. A
+ * primeira vez é "impressa"; as seguintes, "reimpressa", com a contagem.
+ */
+export async function recordInboundBoxLabelPrint(db: Firestore, raw: unknown, actor: OperationalActor) {
+  requireEditor(actor);
+  const input = parse(RecordInboundBoxLabelPrintSchema, raw);
+  const inputHash = digest(input, 64);
+  const opRef = operationRef(db, "label", input.receipt_id, input.idempotency_key);
+  const printed = input.location_id.toUpperCase();
+
+  return db.runTransaction(async (transaction) => {
+    const previous = await replayOf(transaction, opRef, inputHash);
+    if (previous) return previous;
+    const receipt = await readReceipt(transaction, db, input.receipt_id);
+    const owner = assertReceiptTakesBoxes(receipt, input.customer_code, "destination");
+    const { ref: boxRef, box } = await readBox(transaction, db, input.box_code, input.receipt_id, owner);
+    const location = currentLocationOf(box);
+    if (!location) {
+      throw new HttpsError(
+        "failed-precondition",
+        `A caixa ${input.box_code} ainda não tem destino: a etiqueta sai depois de confirmar o destino.`,
+        { code: "BOX_WITHOUT_DESTINATION" },
+      );
+    }
+    if (location !== printed) {
+      throw new HttpsError(
+        "failed-precondition",
+        `A caixa ${input.box_code} está em ${location}, não em ${printed}: imprima a etiqueta de novo.`,
+        { code: "BOX_LABEL_LOCATION_MISMATCH", location_id: location },
+      );
+    }
+    const printedAt = new Date().toISOString();
+    const count = (Number(box.label_print_count) || 0) + 1;
+    const reprinted = count > 1;
+    const by = actorFields(actor);
+    transaction.update(boxRef, {
+      label_printed_at: printedAt,
+      label_printed_location: location,
+      label_printed_by: by,
+      label_print_count: count,
+      label_prints: FieldValue.arrayUnion({ at: printedAt, location_id: location, by }),
+      updated_at: FieldValue.serverTimestamp(),
+    });
+    const receiptNumber = text(receipt.receipt_number) || input.receipt_id;
+    const event = boxEvent(transaction, db, opRef.id, reprinted ? "label_reprinted" : "label_printed", {
+      type: reprinted ? "warehouse.box_label_reprinted" : "warehouse.box_label_printed",
+      title: `Etiqueta da caixa ${input.box_code} ${reprinted ? "reimpressa" : "impressa"} · ${location}`,
+      description: `${reprinted ? `Impressão ${count}` : "Primeira impressão"} · chegada ${receiptNumber}`,
+      entity_id: input.box_code,
+      customer_code: owner,
+      payload: { box_code: input.box_code, receipt_id: input.receipt_id, receipt_number: receiptNumber, location_id: location, print_count: count },
+    }, actor);
+    return finish(transaction, opRef, { action: "label", targetId: input.box_code, customerCode: owner, inputHash }, actor, {
+      ok: true,
+      box_code: input.box_code,
+      location_id: location,
+      label_printed_at: printedAt,
+      label_print_count: count,
+      reprinted,
       events: [event],
     });
   });

@@ -12,7 +12,7 @@ import {
   normalizeStatus,
   statusLabel,
 } from "./model";
-import { chegadaPorCaixa, totaisDaChegada, type LinhaDaCaixa } from "../wms/caixas-do-recebimento";
+import { chegadaPorCaixa, situacaoDaEtiqueta, totaisDaChegada, type LinhaDaCaixa } from "../wms/caixas-do-recebimento";
 
 /**
  * Receber em grupos, como Pedidos: o que chegou e precisa de conferência, o
@@ -508,7 +508,12 @@ export function putawayRowMeta(task: WarehouseTask) {
     coerceText(task.source_location_id, firstItem?.source_location_id) || "RECEBIMENTO";
   // A guarda da caixa: o conteúdo e onde ela está; o destino vai no título.
   if (task.box_code) {
-    return [conteudoDaGuarda(task.box_lines) ?? unitsText(task), `está em ${source}`, normalizeStatus(task.status) === "in_progress" ? "em execução" : null]
+    return [
+      conteudoDaGuarda(task.box_lines) ?? unitsText(task),
+      `está em ${source}`,
+      task.box ? situacaoDaEtiqueta(task.box) : null,
+      normalizeStatus(task.status) === "in_progress" ? "em execução" : null,
+    ]
       .filter(Boolean)
       .join(" · ");
   }

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Printer } from "lucide-react";
+import { useLocation } from "wouter";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -7,11 +9,12 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { formatBoxDimensions } from "@/lib/warehouse-boxes";
+import { labelsUrl } from "@/lib/warehouse-labels";
 import { statusLabel, type TaskQueueEntry, type WarehouseTask } from "@/lib/warehouse-ops/model";
 import { destinoDaGuarda } from "@/lib/warehouse-ops/receiving";
 import type { WarehousePosition } from "@/lib/warehouse-positions";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
-import { guardarCaixa, naoCabeNaPrateleira, type CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
+import { guardarCaixa, horaCurta, naoCabeNaPrateleira, timelineDaCaixa, type CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
 
 import {
   DestinoDaCaixa,
@@ -82,7 +85,32 @@ export type GuardaDaCaixaProps = {
   onCancelarLiberar: () => void;
   onLiberar: (motivo: string) => void;
   onGuardar: () => void;
+  /** A etiqueta da caixa com destino (parte 6): abre a tela de Etiquetas, também no celular (decisão 28). */
+  onEtiqueta?: () => void;
 };
+
+/** A timeline da caixa (mockup WmsGuardaCaixa): da etapa mais recente para a primeira. */
+function TimelineDaCaixa({ caixa }: { caixa: CaixaDaChegada }) {
+  const etapas = timelineDaCaixa(caixa);
+  if (!etapas.length) return null;
+  return (
+    <section aria-labelledby="timeline-da-caixa" className="flex flex-col gap-2">
+      <h3 id="timeline-da-caixa" className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Timeline</h3>
+      <ol className="flex flex-col gap-2">
+        {etapas.map((etapa, index) => (
+          <li key={`${etapa.quando}-${etapa.titulo}`} className="flex items-start gap-3 text-sm">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-extrabold text-background">
+              {etapas.length - index}
+            </span>
+            <span>
+              <strong>{etapa.titulo}</strong> <span className="text-muted-foreground">{etapa.detalhe}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
 
 /** O corpo da guarda, sem as chamadas. */
 export function GuardaDaCaixaConteudo(props: GuardaDaCaixaProps) {
@@ -96,6 +124,18 @@ export function GuardaDaCaixaConteudo(props: GuardaDaCaixaProps) {
   const conteudo = linhas.map((linha) => `${linha.size || linha.client_item_code || linha.sku_code} ${numero.format(linha.counted_qty)}`).join(" · ");
   const detalhe = [medidas, conteudo].filter(Boolean).join(" · ");
   const concluida = !podeOperar && task.status === "completed";
+  // A etiqueta impressa com outra prateleira: a caixa mudou de destino depois (parte 6).
+  const etiquetaAntiga =
+    caixa?.label_printed_at && caixa.label_printed_location && destino && caixa.label_printed_location.toUpperCase() !== destino.toUpperCase()
+      ? caixa
+      : null;
+  const etiqueta =
+    destino && props.onEtiqueta ? (
+      <Button type="button" variant="outline" onClick={props.onEtiqueta}>
+        <Printer aria-hidden="true" />
+        Imprimir etiqueta
+      </Button>
+    ) : null;
 
   return (
     <div className="@container flex min-w-0 flex-col gap-4 rounded-lg border border-border bg-card p-5">
@@ -115,9 +155,16 @@ export function GuardaDaCaixaConteudo(props: GuardaDaCaixaProps) {
 
       {destino ? (
         <section aria-labelledby="destino-da-guarda" className="flex flex-col gap-1 rounded-lg border border-border bg-muted/40 p-5">
-          <h3 id="destino-da-guarda" className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Destino</h3>
+          <h3 id="destino-da-guarda" className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+            {concluida ? "Guardada em" : "Destino"}
+          </h3>
           <p className="text-4xl font-extrabold tracking-tight">{destino}</p>
           {props.endereco ? <p className="text-sm">{props.endereco}</p> : null}
+          {etiquetaAntiga ? (
+            <p className="mt-2 rounded-md border border-warning-soft-border bg-warning-soft px-3 py-2 text-sm text-warning-soft-foreground">
+              Etiqueta impressa com {etiquetaAntiga.label_printed_location} · {horaCurta(etiquetaAntiga.label_printed_at)}
+            </p>
+          ) : null}
         </section>
       ) : podeOperar && caixa ? (
         <>
@@ -167,7 +214,10 @@ export function GuardaDaCaixaConteudo(props: GuardaDaCaixaProps) {
               Não cabe aqui
             </Button>
           ) : null}
+          {etiqueta}
         </div>
+      ) : concluida && etiqueta ? (
+        <div className="flex flex-col gap-2 @md:flex-row">{etiqueta}</div>
       ) : null}
       {podeOperar && destino ? (
         <RecusaDaPrateleira
@@ -180,6 +230,7 @@ export function GuardaDaCaixaConteudo(props: GuardaDaCaixaProps) {
           onRecusar={props.onLiberar}
         />
       ) : null}
+      {caixa ? <TimelineDaCaixa caixa={caixa} /> : null}
     </div>
   );
 }
@@ -189,9 +240,11 @@ export function GuardaDaCaixa({ entry }: { entry: TaskQueueEntry }) {
   const { task } = entry;
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const { code: customerCode } = useActiveCustomer();
   const caixa = task.box ?? null;
   const receiptId = task.receipt_id ?? "";
+  const codigo = task.box_code ?? caixa?.code ?? "";
   const podeOperar = task.can_advance !== false;
   const [revisoes, setRevisoes] = useState<Record<string, number>>({});
   const [liberando, setLiberando] = useState(false);
@@ -271,6 +324,7 @@ export function GuardaDaCaixa({ entry }: { entry: TaskQueueEntry }) {
         guardar.reset();
         guardar.mutate();
       }}
+      onEtiqueta={codigo ? () => navigate(labelsUrl({ boxes: [codigo], receipt: task.receipt_number ?? null })) : undefined}
     />
   );
 }

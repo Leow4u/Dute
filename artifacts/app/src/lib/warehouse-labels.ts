@@ -6,8 +6,10 @@
  * folha A4 cabem dez; na Zebra sai uma por etiqueta, com o mesmo conteúdo.
  */
 
+import { nomeComTamanho } from "@workspace/dominio";
+
 import type { WarehouseBox } from "@/lib/warehouse-boxes";
-import { formatBoxDimensions } from "@/lib/warehouse-boxes";
+import { boxOriginLabel, formatBoxDimensions } from "@/lib/warehouse-boxes";
 import { type WarehousePosition, formatKilos, formatMeters } from "@/lib/warehouse-positions";
 
 export const LABEL_MM = { width: 101.6, height: 50.8 } as const;
@@ -35,7 +37,8 @@ export function sheetMargins() {
 
 export type LabelMode = "a4" | "zebra";
 
-export type LabelContentLine = { code: string; name: string; qty: number };
+/** Uma linha da etiqueta: o código do cliente, o SKU, o nome com o tamanho (decisão 32) e a quantidade. */
+export type LabelContentLine = { code: string; sku: string; name: string; qty: number };
 
 export type BoxLabelData = {
   kind: "box";
@@ -76,7 +79,17 @@ export const MAX_CONTENT_LINES = 4;
 
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" });
 
-/** Agrupa as linhas da caixa por produto, maior quantidade primeiro. */
+function sortedContent(grouped: Map<string, LabelContentLine>) {
+  return [...grouped.values()].sort((left, right) => right.qty - left.qty || left.name.localeCompare(right.name, "pt-BR"));
+}
+
+/** O nome na etiqueta segue o padrão do produto: o mesmo nome e o tamanho ao lado ("Polo Masculino Piquet Preto · G"). */
+function labelName(product: { product_name?: unknown; client_item_code?: unknown; size?: unknown }, fallback: string) {
+  const nome = String(product.product_name ?? "").trim() || fallback;
+  return nomeComTamanho({ nome, codigo: product.client_item_code, tamanho: product.size }) || nome;
+}
+
+/** Agrupa as linhas da abertura por produto, maior quantidade primeiro. */
 export function boxContent(lines: BoxContentSource[], boxCode: string): LabelContentLine[] {
   const code = boxCode.trim().toUpperCase();
   const grouped = new Map<string, LabelContentLine>();
@@ -91,12 +104,66 @@ export function boxContent(lines: BoxContentSource[], boxCode: string): LabelCon
     } else {
       grouped.set(key, {
         code: String(line.client_item_code || line.sku_code || key).trim(),
-        name: String(line.product_name || "").trim() || key,
+        sku: String(line.sku_code ?? "").trim(),
+        name: labelName(line, key),
         qty,
       });
     }
   }
-  return [...grouped.values()].sort((left, right) => right.qty - left.qty || left.name.localeCompare(right.name, "pt-BR"));
+  return sortedContent(grouped);
+}
+
+/** O conteúdo que a caixa do recebimento guarda nela (parte 6): por produto, maior quantidade primeiro. */
+export function ownBoxContent(box: Pick<WarehouseBox, "lines">): LabelContentLine[] {
+  const grouped = new Map<string, LabelContentLine>();
+  for (const line of box.lines) {
+    const key = (line.sku_code || line.client_item_code).toUpperCase();
+    const current = grouped.get(key);
+    if (current) {
+      current.qty += line.counted_qty;
+    } else {
+      grouped.set(key, {
+        code: line.client_item_code || line.sku_code,
+        sku: line.sku_code,
+        name: labelName(line, line.sku_code || line.client_item_code),
+        qty: line.counted_qty,
+      });
+    }
+  }
+  return sortedContent(grouped);
+}
+
+export type ImpressaoParaRegistrar = { receipt_id: string; box_code: string; location_id: string };
+
+/**
+ * As caixas do recebimento da folha, para registrar a impressão (decisão 29):
+ * a chegada, a caixa e a posição impressa. A caixa da abertura e a manual
+ * não registram.
+ */
+export function impressoesParaRegistrar(
+  boxes: Array<Pick<WarehouseBox, "code" | "status" | "location_id" | "origin">>,
+): ImpressaoParaRegistrar[] {
+  return boxes.flatMap((box) =>
+    box.origin.kind === "receipt" && box.origin.receipt_id && boxLabelAvailability(box).ready
+      ? [{ receipt_id: box.origin.receipt_id, box_code: box.code, location_id: box.location_id }]
+      : [],
+  );
+}
+
+export type LabelAvailability = { ready: true; reason: null } | { ready: false; reason: string };
+
+/**
+ * A etiqueta sai da caixa guardada ou com o destino confirmado (decisão 30):
+ * a caixa do recebimento ainda em conferência ou sem prateleira espera o
+ * destino; a da abertura, a guarda.
+ */
+export function boxLabelAvailability(box: Pick<WarehouseBox, "code" | "status" | "location_id" | "origin">): LabelAvailability {
+  if (box.status === "stored" || (box.status === "committing" && box.location_id)) return { ready: true, reason: null };
+  if (box.origin.kind === "receipt") {
+    const state = box.status === "counting" ? "em conferência" : "sem prateleira";
+    return { ready: false, reason: `${box.code} ${state}: sem etiqueta até confirmar o destino.` };
+  }
+  return { ready: false, reason: `${box.code} aguarda a guarda.` };
 }
 
 export function boxLabel(
@@ -104,7 +171,8 @@ export function boxLabel(
   lines: BoxContentSource[],
   options: { printedAt?: Date; maxLines?: number } = {},
 ): BoxLabelData {
-  const content = boxContent(lines, box.code);
+  // A caixa do recebimento traz o conteúdo nela; a da abertura, nas linhas da sessão.
+  const content = box.lines.length ? ownBoxContent(box) : boxContent(lines, box.code);
   const maxLines = options.maxLines ?? MAX_CONTENT_LINES;
   const shown = content.slice(0, maxLines);
   const units = content.reduce((sum, line) => sum + line.qty, 0) || box.unit_count;
@@ -117,7 +185,7 @@ export function boxLabel(
     units,
     lines: shown,
     hiddenLines: content.length - shown.length,
-    origin: box.session_id ? "Abertura" : "Manual",
+    origin: boxOriginLabel(box),
     printedAt: dateFormatter.format(options.printedAt ?? new Date()),
   };
 }
@@ -155,6 +223,8 @@ export type LabelsQuery = {
   positions: string[];
   /** Todas as caixas da sessão de abertura em curso. */
   session: boolean;
+  /** A chegada (número) de onde as caixas vieram: a volta é ao Receber e a tela diz a chegada. */
+  receipt: string | null;
   skip: number;
   mode: LabelMode;
 };
@@ -170,6 +240,7 @@ export function parseLabelsQuery(search: string): LabelsQuery {
     boxes: codes(params.get("caixas")),
     positions: codes(params.get("posicoes")),
     session: params.get("sessao") === "atual",
+    receipt: (params.get("chegada") ?? "").trim() || null,
     skip: Number.isFinite(skip) && skip > 0 ? Math.min(Math.floor(skip), LABELS_PER_SHEET - 1) : 0,
     mode: params.get("modo") === "zebra" ? "zebra" : "a4",
   };
@@ -180,6 +251,7 @@ export function labelsUrl(query: Partial<LabelsQuery>): string {
   if (query.session) params.set("sessao", "atual");
   if (query.boxes?.length) params.set("caixas", query.boxes.join(","));
   if (query.positions?.length) params.set("posicoes", query.positions.join(","));
+  if (query.receipt) params.set("chegada", query.receipt);
   if (query.skip) params.set("pular", String(query.skip));
   if (query.mode === "zebra") params.set("modo", "zebra");
   const text = params.toString();

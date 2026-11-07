@@ -112,12 +112,15 @@ export function BoxLabelCard({ label }: { label: BoxLabelData }) {
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: "hidden", borderTop: `0.2mm solid ${INK}`, paddingTop: "0.8mm" }}>
         {label.lines.length ? (
-          label.lines.map((line) => (
-            <div key={`${line.code}-${line.name}`} style={{ ...ellipsis, fontSize: "6.5pt", lineHeight: 1.3 }}>
-              <strong style={{ fontVariantNumeric: "tabular-nums" }}>{new Intl.NumberFormat("pt-BR").format(line.qty)} ×</strong> {line.name}
-              {line.code ? <span style={{ opacity: 0.75 }}> · {line.code}</span> : null}
-            </div>
-          ))
+          label.lines.map((line) => {
+            const codes = [...new Set([line.code, line.sku].filter(Boolean))];
+            return (
+              <div key={`${line.code}-${line.name}`} style={{ ...ellipsis, fontSize: "6.5pt", lineHeight: 1.3 }}>
+                <strong style={{ fontVariantNumeric: "tabular-nums" }}>{new Intl.NumberFormat("pt-BR").format(line.qty)} ×</strong> {line.name}
+                {codes.length ? <span style={{ opacity: 0.75 }}>{codes.map((code) => ` · ${code}`).join("")}</span> : null}
+              </div>
+            );
+          })
         ) : (
           <div style={{ fontSize: "7pt", fontStyle: "italic" }}>Conteúdo a lançar na contagem.</div>
         )}

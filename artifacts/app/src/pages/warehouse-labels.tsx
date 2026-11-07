@@ -2,13 +2,15 @@
  * Estoque › Etiquetas: as etiquetas de caixa e de posição prontas para
  * imprimir (docs/mapa-do-armazem-enderecamento-dirigido.md, seção 6).
  *
- * Chega aqui pela Contagem (uma caixa, ou todas da sessão) e por Posições
- * (as posições filtradas), com os códigos na URL. Dez por folha A4 ou uma
- * por etiqueta (rolo da Zebra pelo driver). A impressão é a do navegador.
+ * Chega aqui pela Contagem (uma caixa, ou todas da sessão), por Posições
+ * (as posições filtradas), pelo Mapa e pelo Receber (as caixas de uma
+ * chegada, parte 6 do recebimento com caixas), com os códigos na URL. Dez por
+ * folha A4 ou uma por etiqueta (rolo da Zebra pelo driver). A impressão é a
+ * do navegador.
  */
 
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Printer, Tags } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
 
@@ -22,6 +24,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOpeningInventorySession } from "@/features/warehouse-ops/opening-inventory-status";
+import { useToast } from "@/hooks/use-toast";
 import { normalizeApiRows } from "@/features/warehouse-ops/receiving";
 import { sessionBoxes, warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import {
@@ -29,7 +32,10 @@ import {
   type LabelMode,
   LABELS_PER_SHEET,
   boxLabel,
+  boxLabelAvailability,
+  impressoesParaRegistrar,
   labelsUrl,
+  type ImpressaoParaRegistrar,
   paginate,
   parseLabelsQuery,
   positionLabel,
@@ -37,6 +43,7 @@ import {
 import { fetchJson, formatNumber, getErrorMessage } from "@/lib/warehouse-ops/model";
 import { type WarehousePosition, sortPositions } from "@/lib/warehouse-positions";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { registrarEtiquetaImpressa } from "@/lib/wms/caixas-do-recebimento";
 
 type PositionsResponse = { items?: WarehousePosition[] };
 
@@ -67,15 +74,21 @@ export default function WarehouseLabelsPage() {
     queryFn: () => fetchJson<PositionsResponse>("/api/warehouse/positions?limit=2000"),
   });
 
-  const boxes = useMemo(() => {
+  const chosen = useMemo(() => {
     if (!wantsBoxes) return [];
-    const all = (boxesQuery.data ?? []).filter((box) => box.status === "stored");
-    const chosen = query.session
-      ? sessionBoxes(all, sessionQuery.data?.session_id)
+    const all = boxesQuery.data ?? [];
+    const picked = query.session
+      ? sessionBoxes(all, sessionQuery.data?.session_id).filter((box) => box.status === "stored")
       : query.boxes.flatMap((code) => all.filter((box) => box.code === code));
     // Da mais antiga para a mais nova: a ordem em que foram guardadas.
-    return [...chosen].sort((left, right) => left.code.localeCompare(right.code));
+    return [...picked].sort((left, right) => left.code.localeCompare(right.code));
   }, [boxesQuery.data, query.boxes, query.session, sessionQuery.data?.session_id, wantsBoxes]);
+  // A etiqueta sai da caixa guardada ou com o destino confirmado (parte 6); as outras ficam nomeadas no aviso.
+  const boxes = useMemo(() => chosen.filter((box) => boxLabelAvailability(box).ready), [chosen]);
+  const heldBack = useMemo(() => chosen.flatMap((box) => boxLabelAvailability(box).reason ?? []), [chosen]);
+  // A caixa da abertura lê o conteúdo da sessão; a do recebimento traz o dela.
+  const needsSession = boxes.some((box) => box.lines.length === 0);
+  const invoice = chosen.find((box) => box.origin.invoice_number)?.origin.invoice_number ?? null;
 
   const positions = useMemo(() => {
     if (!wantsPositions) return [];
@@ -88,30 +101,61 @@ export default function WarehouseLabelsPage() {
     return [...boxes.map((box) => boxLabel(box, lines)), ...positions.map(positionLabel)];
   }, [boxes, positions, sessionQuery.data?.lines]);
 
-  const missingBoxes = wantsBoxes && boxesQuery.isSuccess ? query.boxes.filter((code) => !boxes.some((box) => box.code === code)) : [];
+  const missingBoxes = wantsBoxes && boxesQuery.isSuccess ? query.boxes.filter((code) => !chosen.some((box) => box.code === code)) : [];
   const missingPositions =
     wantsPositions && positionsQuery.isSuccess ? query.positions.filter((code) => !positions.some((position) => position.code.toUpperCase() === code)) : [];
 
   const sheets = query.mode === "zebra" ? labels.map((label) => [label]) : paginate(labels, LABELS_PER_SHEET, query.skip);
-  const loading = (wantsBoxes && (boxesQuery.isLoading || sessionQuery.isLoading)) || (wantsPositions && positionsQuery.isLoading);
-  const error = (wantsBoxes && (boxesQuery.error ?? sessionQuery.error)) || (wantsPositions && positionsQuery.error) || null;
-  const backHref = wantsPositions && !wantsBoxes ? "/estoque/posicoes" : "/wms/contagem";
+  const loading = (wantsBoxes && (boxesQuery.isLoading || (needsSession && sessionQuery.isLoading))) || (wantsPositions && positionsQuery.isLoading);
+  const error =
+    (wantsBoxes && (boxesQuery.error ?? (needsSession ? sessionQuery.error : null))) || (wantsPositions && positionsQuery.error) || null;
+  const back = query.receipt
+    ? { href: "/wms/receber", label: "Receber" }
+    : wantsPositions && !wantsBoxes
+      ? { href: "/estoque/posicoes", label: "Posições" }
+      : { href: "/wms/contagem", label: "Contagem" };
+  const description = query.receipt
+    ? [`Chegada ${query.receipt}`, invoice ? `NF ${invoice}` : null, customerCode].filter(Boolean).join(" · ")
+    : "Etiqueta de 101,6 × 50,8 mm, dez por folha A4 ou uma por etiqueta no rolo da Zebra. Imprimir / Salvar PDF usa a impressão do navegador.";
 
   const update = (changes: { mode?: LabelMode; skip?: number }) =>
     navigate(labelsUrl({ ...query, ...changes }), { replace: true });
 
+  // A impressão é a do navegador; o registro é o do clique (decisão 29), só da caixa do recebimento.
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const registrar = useMutation({
+    mutationFn: (impressoes: ImpressaoParaRegistrar[]) =>
+      Promise.all(
+        impressoes.map((impressao) =>
+          registrarEtiquetaImpressa({ ...impressao, customer_code: customerCode || undefined, idempotency_key: crypto.randomUUID() }),
+        ),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["warehouse-boxes"] });
+      void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
+    },
+    onError: (error) =>
+      toast({ title: "Não foi possível registrar a impressão", description: getErrorMessage(error), variant: "destructive" }),
+  });
+  const imprimir = () => {
+    window.print();
+    const impressoes = impressoesParaRegistrar(boxes);
+    if (impressoes.length) registrar.mutate(impressoes);
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="no-print flex flex-col gap-4">
-        <Link href={backHref} className="inline-flex w-fit items-center gap-2 text-sm text-primary">
+        <Link href={back.href} className="inline-flex w-fit items-center gap-2 text-sm text-primary">
           <ArrowLeft className="size-4" />
-          {backHref === "/estoque/posicoes" ? "Posições" : "Contagem"}
+          {back.label}
         </Link>
         <PageHeader
           title="Etiquetas"
-          description="Etiqueta de 101,6 × 50,8 mm, dez por folha A4 ou uma por etiqueta no rolo da Zebra. Imprimir / Salvar PDF usa a impressão do navegador."
+          description={description}
           actions={
-            <Button onClick={() => window.print()} disabled={loading || labels.length === 0}>
+            <Button onClick={imprimir} disabled={loading || labels.length === 0}>
               <Printer className="size-4" />
               Imprimir / Salvar PDF
             </Button>
@@ -160,7 +204,13 @@ export default function WarehouseLabelsPage() {
             </AlertDescription>
           </Alert>
         ) : null}
-        {boxes.length && !sessionQuery.data?.lines?.length ? (
+        {heldBack.length ? (
+          <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
+            <AlertTitle>Caixas ainda sem etiqueta</AlertTitle>
+            <AlertDescription>{heldBack.join(" ")}</AlertDescription>
+          </Alert>
+        ) : null}
+        {needsSession && !sessionQuery.data?.lines?.length ? (
           <Alert className="border-border bg-card">
             <AlertTitle>Conteúdo da caixa</AlertTitle>
             <AlertDescription>

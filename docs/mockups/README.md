@@ -317,6 +317,57 @@ ajustes e os erros de digitação que a planilha apontar.
 | Armazenagem · Contagem, tamanho novo | `NomeWmsContagem.dc.html` | O código de um tamanho novo de uma família existente pré-preenche nome, categoria, gênero, grupo, cor e Tamanho. |
 | Planilha de revisão (passo 1) | `NomePlanilhaRevisao.dc.html` | A ilustração da planilha para a avaliação: nome hoje, nome proposto, motivo, tamanho e a decisão por linha. O CSV de verdade tem as colunas do README de `tools/padronizar-nomes` e não acrescenta cor nem aponta digitação. |
 
+A parte 6 do recebimento com caixas (a etiqueta da caixa do recebimento) tem
+canvas próprio (privado, https://claude.ai/artifact/WqvC91v2bcZLVUQjHoucG2),
+feito em 06/11/2026 a partir do caso do mesmo dia e aprovado pelo Leonardo
+em 07/11/2026 com as cinco respostas abaixo (decisões 28 a 32 do runbook): a chegada avulsa por caixa terminou sem lugar para imprimir a etiqueta,
+e a etiqueta aberta pelo Mapa saiu "Manual", com "Conteúdo a lançar na
+contagem", porque a tela de Etiquetas e o Mapa só leem o conteúdo da sessão
+de abertura, e a caixa do recebimento guarda o dela em `lines[]`. As pranchas
+seguem o shell v3 da Armazenagem (cliente ativo BTG, Guilherme, Operação WMS)
+e partem das telas das partes 4 e 5 que estão na `main`; em cada uma só a
+etiqueta muda. As fontes são estáticas; os dados são os de uma chegada de
+três caixas (CX-000225, CX-000226 e CX-000227, NF 48.377) e os nomes seguem o
+padrão de 06/11/2026 ("Polo Masculino Piquet Preto · G"). As perguntas para o
+Leonardo estão na nota do canvas e abaixo da tabela. O código entrou em
+07/11/2026 (PR 587, partes 6a a 6c do runbook), e o que ficou diferente das
+pranchas está registrado na parte 6 do runbook.
+
+| Tela | Arquivo | O que muda |
+|---|---|---|
+| Armazenagem · Receber, revisar entrada | `WmsEtiquetaRecebimentoRevisao.dc.html` | Depois de "Confirmar destino", a caixa ganha "Etiqueta" na lista das caixas da chegada, com "etiqueta impressa 14:32" na linha, e a ficha ganha "Etiquetas da chegada"; a caixa sem prateleira fica sem a ação. |
+| Estoque › Etiquetas, as etiquetas da chegada | `WmsEtiquetaRecebimentoEtiquetas.dc.html` | A tela de hoje aberta pela chegada: volta ao Receber, as caixas com destino confirmado ou guardadas (hoje só a guardada), a origem "Recebimento · NF 48.377" e o conteúdo da própria caixa; a caixa sem prateleira é nomeada no aviso, sem etiqueta. O aviso de hoje sobre o conteúdo da abertura sai. |
+| Armazenagem · Guarda da caixa | `WmsEtiquetaRecebimentoGuarda.dc.html` | A ficha da guarda ganha "Imprimir etiqueta" ao lado de "Não cabe aqui" e a timeline aprovada em 01/11 (caixa fechada, destino confirmado, etiqueta impressa), que a parte 5f deixou para cá. |
+| Armazenagem · Guarda com a etiqueta desatualizada | `WmsEtiquetaRecebimentoReimpressao.dc.html` | Depois de "Não cabe aqui" e do novo destino, o cartão do destino diz "Etiqueta impressa com B-09" com "Imprimir etiqueta", e a reimpressão entra na timeline; a fila diz "etiqueta com B-09". |
+| Armazenagem · Guarda concluída | `WmsEtiquetaRecebimentoGuardada.dc.html` | Em Recebidos › Guardas › Ver, a ficha mostra "Guardada em B-09" e a única ação é "Imprimir etiqueta": é por aqui que as caixas de 06/11 ganham a etiqueta com o conteúdo. |
+| Armazenagem · Mapa | `WmsEtiquetaRecebimentoMapa.dc.html` | A ficha da prateleira lê o conteúdo da caixa do recebimento e diz a origem ("Recebimento · NF 48.377 · 06/11/2026", "Abertura · 06/11/2026"), com "Etiqueta" por caixa; o "Conteúdo ainda não lançado" e o "manual" saem das caixas do recebimento. |
+| Armazenagem · Guarda da caixa no celular | `WmsEtiquetaRecebimentoCelular.dc.html` | A mesma guarda no celular, com a etiqueta desatualizada em âmbar e "Imprimir etiqueta" (pergunta 1). |
+| Etiqueta da caixa do recebimento, hoje | `WmsEtiquetaRecebimentoHoje.dc.html` | A etiqueta como saiu em 06/11/2026: "Manual", "Conteúdo a lançar na contagem." e as unidades certas. |
+| Etiqueta da caixa do recebimento, proposta | `WmsEtiquetaRecebimentoEtiqueta.dc.html` | A mesma etiqueta com "Recebimento · NF 48.377 · 06/11/2026" e o conteúdo da caixa, uma linha por tamanho, com o código do cliente e o SKU. Substitui a `WmsEtiquetaCaixaRecebimento` de 01/11, que trazia o nome em maiúsculas com o tamanho no fim. |
+
+Perguntas e respostas do Leonardo (07/11/2026):
+
+1. O celular imprime? A guarda no celular ganha "Imprimir etiqueta" (abre a
+   tela de Etiquetas no navegador do celular) ou só a bancada imprime?
+   Resposta: sim, os dois.
+2. "Etiqueta impressa" vira evento: a tela de Etiquetas registra, ao clicar
+   em "Imprimir / Salvar PDF", a caixa e a posição impressas (depois,
+   "reimpressa"). É o registro do clique, não da impressora, até o ZPL.
+   Proposta: sim, por uma callable pequena do WMS, porque é o que alimenta a
+   timeline, a fila e o aviso da etiqueta desatualizada. Resposta: sim.
+3. "Etiquetas da chegada" leva só as caixas com destino confirmado ou
+   guardadas; a caixa fechada sem prateleira (decisão 14) é nomeada no aviso
+   e imprime na guarda, quando ganha o destino. Resposta: sim.
+4. A origem na etiqueta e no Mapa: "Recebimento · NF 48.377" e, sem NF,
+   "Recebimento · AVL-7C21A9F0"; "Abertura" e "Manual" seguem como hoje.
+   Resposta: sim.
+5. O nome na etiqueta segue o padrão de 06/11 ("Polo Masculino Piquet Preto ·
+   G"), com o código do cliente e o SKU; a caixa de antes do passo 3 sai com
+   o nome que o catálogo tiver. Resposta: sim.
+
+As caixas CX-000225 e CX-000226 de 06/11 não precisam de nada: com a parte
+6, a etiqueta delas sai pelo Mapa ou por Recebidos › Guardas, com o conteúdo.
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador

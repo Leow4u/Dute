@@ -2,9 +2,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { WarehouseTask } from "@/lib/warehouse-ops/model";
-import type { CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
+import { situacaoDaEtiqueta, temEtiqueta, type CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosForaDaLista } from "@/test/textos";
+import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import {
   conteudoDaCaixa,
@@ -285,6 +285,47 @@ describe("a conferência em quatro etapas", () => {
     expect(vista).toContain("48 × 38 × 30 cm · 6,1 kg");
     expect(vista).not.toContain("Reabrir para ajustar");
     expect(vista).not.toContain("Guardar em");
+  });
+});
+
+/** As etiquetas na revisão da entrada (recebimento com caixas, parte 6; mockup WmsEtiquetaRecebimentoRevisao). */
+describe("as etiquetas na revisão da entrada", () => {
+  it("a caixa com destino ganha Etiqueta e a chegada, Etiquetas da chegada; a caixa em conferência fica sem a ação", async () => {
+    const base = textosDaTela(render({ etapa: 4 }));
+    const html = render({ etapa: 4, onEtiquetas: () => undefined });
+    expect(textosForaDaLista(html, base)).toEqual(["Etiquetas da chegada", "Etiqueta"]);
+    expect(html).toMatch(/<button[^>]*aria-label="Etiqueta da caixa CX-000131"/);
+    expect(html).not.toMatch(/aria-label="Etiqueta da caixa CX-000132"/);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("quem só consulta também imprime; sem caixa com destino, nada de etiqueta", () => {
+    const consulta = render({ podeOperar: false, onEtiquetas: () => undefined });
+    expect(consulta).toContain("Etiquetas da chegada");
+    expect(consulta).toMatch(/aria-label="Etiqueta da caixa CX-000131"/);
+    const semDestino = render({ etapa: 4, caixas: [caixas[1]!], selecionada: null, onEtiquetas: () => undefined });
+    expect(semDestino).not.toContain("Etiqueta");
+  });
+
+  it("a etiqueta sai com o destino confirmado ou guardada (decisão 30)", () => {
+    expect(temEtiqueta({ status: "committing", location_id: "B-02" })).toBe(true);
+    expect(temEtiqueta({ status: "stored", location_id: "B-02" })).toBe(true);
+    expect(temEtiqueta({ status: "committing", location_id: "" })).toBe(false);
+    expect(temEtiqueta({ status: "reviewed", location_id: "" })).toBe(false);
+    expect(temEtiqueta({ status: "counting", location_id: "" })).toBe(false);
+  });
+
+  it("a situação da etiqueta: impressa com a prateleira atual, ou com outra; o chip da caixa mostra (decisão 29)", () => {
+    const impressa = { status: "committing", location_id: "B-02", label_printed_at: "2026-11-06T17:32:00.000Z", label_printed_location: "B-02" };
+    expect(situacaoDaEtiqueta(impressa)).toBe("etiqueta impressa 14:32");
+    expect(situacaoDaEtiqueta({ ...impressa, location_id: "B-05" })).toBe("etiqueta com B-02");
+    expect(situacaoDaEtiqueta({ ...impressa, status: "reviewed", location_id: "" })).toBe("etiqueta com B-02");
+    expect(situacaoDaEtiqueta({ ...impressa, label_printed_at: null })).toBeNull();
+    const html = render({
+      etapa: 4,
+      caixas: [{ ...caixas[0]!, label_printed_at: "2026-11-06T17:32:00.000Z", label_printed_location: "B-02", label_print_count: 1 }, caixas[1]!],
+    });
+    expect(html).toContain("XG 29 · GG 12 · 41 un. · 48 × 38 × 30 cm · 9,4 kg · etiqueta impressa 14:32");
   });
 });
 

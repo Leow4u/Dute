@@ -95,6 +95,31 @@ describe("quadro do Receber", () => {
     );
   });
 
+  it("a guarda da caixa diz a etiqueta: impressa com a prateleira atual, ou com outra (parte 6)", () => {
+    const putaway = board.store[0].task;
+    const caixa = {
+      code: "CX-000132",
+      status: "committing",
+      location_id: "B-02",
+      lines: [],
+      unit_count: 41,
+      length_m: null,
+      width_m: null,
+      height_m: null,
+      gross_weight_kg: null,
+      allow_tilt: false,
+      allow_stacking: false,
+      conference_revision: 1,
+      refused_positions: [],
+      label_printed_at: "2026-11-06T17:32:00.000Z",
+      label_printed_location: "B-02",
+    };
+    const guarda = { ...putaway, box_code: "CX-000132", box_lines: [{ sku_code: "S", product_name: "POLO", counted_qty: 41 }], box: caixa };
+    expect(putawayRowMeta(guarda)).toBe("POLO · 41 un. · está em RECEBIMENTO · etiqueta impressa 14:32");
+    expect(putawayRowMeta({ ...guarda, box: { ...caixa, location_id: "B-05" } })).toBe("POLO · 41 un. · está em RECEBIMENTO · etiqueta com B-02");
+    expect(putawayRowMeta({ ...guarda, box: { ...caixa, label_printed_at: null } })).toBe("POLO · 41 un. · está em RECEBIMENTO");
+  });
+
   it("não quebra sem filas", () => {
     expect(buildReceivingBoard(normalizeQueues(undefined))).toEqual({ check: [], guardando: [], store: [], chegadas: [], guardas: [], cancelled: [] });
   });

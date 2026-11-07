@@ -331,15 +331,23 @@ app (`lib/code128.ts`, conjunto B, com teste do dígito verificador da norma).
 - Caixa: código em barras e em texto, posição em destaque, cliente, medidas,
   peso, origem e data, até quatro produtos com quantidade e "+ n produto(s)"
   quando não cabe, total de unidades. O conteúdo vem das linhas da abertura
-  da caixa, por isso a etiqueta se imprime depois de lançar os produtos.
+  da caixa, por isso a etiqueta se imprime depois de lançar os produtos. A
+  caixa do recebimento (parte 6 do recebimento com caixas, 07/11/2026) traz
+  o conteúdo nela, diz "Recebimento · NF 48.377" e imprime com o destino
+  confirmado.
 - Posição: código em barras e em texto, zona, rua e prateleira, medidas e
   peso máximo.
 - Modo "uma por etiqueta": cada etiqueta vira uma página do tamanho dela. É o
   caminho da Zebra no primeiro dia, pelo driver do Windows com o rolo
   configurado. ZPL direto (Zebra Browser Print) fica para quando houver a
   impressora, com o mesmo conteúdo; nada da etiqueta muda.
-- Ainda sem evento "etiqueta impressa": a impressão é do navegador e o app
-  não sabe se saiu. Entra com o ZPL, quando o app passa a mandar o texto.
+- "Etiqueta impressa" é evento para a caixa do recebimento (parte 6 do
+  recebimento com caixas, decisão 29, 07/11/2026): a tela registra o clique
+  em "Imprimir / Salvar PDF", com a posição impressa, pela callable
+  `recordInboundBoxLabelPrint` (`warehouse.box_label_printed` e, depois,
+  `warehouse.box_label_reprinted`). É o registro do clique, não da
+  impressora. A caixa da abertura e a manual seguem sem evento até o ZPL,
+  quando o app passa a mandar o texto.
 
 ## 7. Invariantes que continuam valendo
 

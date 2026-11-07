@@ -4,7 +4,7 @@ import { SEM_CONEXAO, callableSemResposta } from "../conexao";
 import { firebaseApp } from "../firebase";
 import { functionsDoApp } from "../firebase-functions";
 import { mensagemDoErro } from "../operacao/api";
-import type { SuggestionResult } from "../warehouse-boxes";
+import { formatBoxDimensions, type SuggestionResult } from "../warehouse-boxes";
 
 /**
  * A chegada por caixa no app (docs/plataforma/recebimento-com-caixas.md,
@@ -45,7 +45,19 @@ export type CaixaDaChegada = {
   conference_revision: number;
   /** As prateleiras recusadas nesta caixa ("Não cabe aqui"), fora da sugestão. */
   refused_positions: string[];
+  /** A etiqueta impressa (parte 6, decisão 29): quando, com que prateleira e quantas vezes; sem nada antes da primeira. */
+  label_printed_at?: string | null;
+  label_printed_location?: string | null;
+  label_print_count?: number;
+  /** Os carimbos da caixa, para a timeline da guarda. */
+  closed_at?: string | null;
+  destination_confirmed_at?: string | null;
+  stored_at?: string | null;
+  /** As recusas com o detalhe: a da sugestão, na bancada, e a da prateleira, na guarda (`phase` "putaway"). */
+  refusals?: RecusaDaCaixa[];
 };
+
+export type RecusaDaCaixa = { position: string; reason: string; refused_at: string | null; phase: string | null };
 
 /** A falta marcada na linha da NF (parte 4c): vale para o que estava nas caixas. */
 export type FaltaMarcada = {
@@ -217,6 +229,93 @@ export function estadoDaCaixa(caixa: Pick<CaixaDaChegada, "status" | "location_i
   return { rotulo: caixa.status || "sem estado", tom: "mut" };
 }
 
+/** A etiqueta da caixa sai com o destino confirmado ou guardada (parte 6, decisão 30). */
+export function temEtiqueta(caixa: Pick<CaixaDaChegada, "status" | "location_id">): boolean {
+  return caixa.status === "stored" || (caixa.status === "committing" && Boolean(caixa.location_id));
+}
+
+const horaFormatter = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
+const dataHoraFormatter = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+function instante(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** "14:32", no fuso de São Paulo; vazio sem data válida. */
+export function horaCurta(iso: string | null | undefined): string {
+  const date = instante(iso);
+  return date ? horaFormatter.format(date) : "";
+}
+
+/** "06/11/2026, 14:32", no fuso de São Paulo; vazio sem data válida. */
+export function dataHora(iso: string | null | undefined): string {
+  const date = instante(iso);
+  return date ? dataHoraFormatter.format(date) : "";
+}
+
+/**
+ * A etiqueta na fila, no chip e na guarda (parte 6): "etiqueta impressa 14:32"
+ * quando ela é da prateleira atual; "etiqueta com B-09" quando a caixa mudou
+ * de destino depois da impressão; nada antes da primeira impressão.
+ */
+export function situacaoDaEtiqueta(
+  caixa: Pick<CaixaDaChegada, "status" | "location_id" | "label_printed_at" | "label_printed_location">,
+): string | null {
+  if (!caixa.label_printed_at || !caixa.label_printed_location) return null;
+  const atual = temEtiqueta(caixa) ? caixa.location_id.toUpperCase() : "";
+  if (atual && atual === caixa.label_printed_location.toUpperCase()) return `etiqueta impressa ${horaCurta(caixa.label_printed_at)}`;
+  return `etiqueta com ${caixa.label_printed_location}`;
+}
+
+export type EtapaDaCaixa = { quando: string; titulo: string; detalhe: string };
+
+/**
+ * A timeline da caixa na guarda (mockup WmsGuardaCaixa, parte 6), da mais
+ * recente para a mais antiga: fechada, sugestão recusada, destino confirmado,
+ * etiqueta impressa ou reimpressa, prateleira liberada ("Não cabe aqui") e
+ * guardada. Só o que a caixa guarda; a hora é a de São Paulo.
+ */
+export function timelineDaCaixa(caixa: CaixaDaChegada): EtapaDaCaixa[] {
+  const etapas: EtapaDaCaixa[] = [];
+  const medidas =
+    caixa.length_m != null && caixa.width_m != null && caixa.height_m != null
+      ? formatBoxDimensions({ length_m: caixa.length_m, width_m: caixa.width_m, height_m: caixa.height_m, gross_weight_kg: caixa.gross_weight_kg })
+      : null;
+  if (caixa.closed_at) {
+    etapas.push({ quando: caixa.closed_at, titulo: medidas ? `Caixa fechada · ${medidas}` : "Caixa fechada", detalhe: dataHora(caixa.closed_at) });
+  }
+  for (const recusa of caixa.refusals ?? []) {
+    if (!recusa.refused_at) continue;
+    const detalhe = [dataHora(recusa.refused_at), recusa.reason].filter(Boolean).join(" · ");
+    etapas.push(
+      recusa.phase === "putaway"
+        ? { quando: recusa.refused_at, titulo: `Prateleira ${recusa.position} liberada · não coube`, detalhe }
+        : { quando: recusa.refused_at, titulo: `Sugestão ${recusa.position} recusada`, detalhe },
+    );
+  }
+  const destino = temEtiqueta(caixa) ? caixa.location_id : "";
+  if (caixa.destination_confirmed_at && destino) {
+    etapas.push({ quando: caixa.destination_confirmed_at, titulo: `Destino confirmado · ${destino}`, detalhe: dataHora(caixa.destination_confirmed_at) });
+  }
+  if (caixa.label_printed_at && caixa.label_printed_location) {
+    const titulo = (caixa.label_print_count ?? 1) > 1 ? "Etiqueta reimpressa" : "Etiqueta impressa";
+    etapas.push({ quando: caixa.label_printed_at, titulo: `${titulo} · ${caixa.label_printed_location}`, detalhe: dataHora(caixa.label_printed_at) });
+  }
+  if (caixa.stored_at && caixa.status === "stored" && caixa.location_id) {
+    etapas.push({ quando: caixa.stored_at, titulo: `Guardada em ${caixa.location_id}`, detalhe: dataHora(caixa.stored_at) });
+  }
+  return etapas.sort((a, b) => b.quando.localeCompare(a.quando));
+}
+
 /** "0 de 2 caixas guardadas": a chegada recebida fica em aberto até a última guarda (decisão 5). */
 export function caixasGuardadas(task: { box_count?: number | null; boxes_stored?: number | null }): string {
   const total = Number(task.box_count) || 0;
@@ -237,7 +336,8 @@ type NomeDaCallable =
   | "markInboundBoxShortage"
   | "completeInboundBoxReceipt"
   | "storeInboundBox"
-  | "refuseInboundBoxShelf";
+  | "refuseInboundBoxShelf"
+  | "recordInboundBoxLabelPrint";
 
 async function chamarWms<T>(nome: NomeDaCallable, dados: Record<string, unknown>): Promise<T> {
   if (!firebaseApp) throw new Error("Firebase não configurado.");
@@ -351,6 +451,11 @@ export function concluirEntradaPorCaixa(
 /** Guarda a caixa inteira na prateleira reservada para ela (parte 4f). */
 export function guardarCaixa(input: DaCaixa & { location_id: string }) {
   return chamarWms<Resultado>("storeInboundBox", input);
+}
+
+/** Registra a impressão da etiqueta da caixa (parte 6, decisão 29): a posição impressa tem de ser a atual. */
+export function registrarEtiquetaImpressa(input: DaChegada & { box_code: string; location_id: string; idempotency_key: string }) {
+  return chamarWms<Resultado & { label_print_count?: number; reprinted?: boolean }>("recordInboundBoxLabelPrint", input);
 }
 
 /** "Não cabe aqui" na prateleira, na guarda (parte 4h): a reserva sai e a coordenação é avisada. */

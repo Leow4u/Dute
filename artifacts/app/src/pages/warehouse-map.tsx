@@ -29,7 +29,7 @@ import { ehSemConexao, semConexaoNaLeitura } from "@/lib/conexao";
 import { openingInventoryNotice } from "@/lib/opening-inventory";
 import { boxVolumeM3, formatVolumeM3 } from "@/lib/warehouse-volume";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
-import { formatBoxDimensions, warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
+import { type WarehouseBox, boxOriginLabel, formatBoxDimensions, warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import { labelsUrl } from "@/lib/warehouse-labels";
 import {
   type BoxContentSource,
@@ -486,6 +486,75 @@ export function SaldoSemCaixa({ shelf, skuIndex }: { shelf: Shelf; skuIndex: Sku
   );
 }
 
+const dataFormatter = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" });
+
+function dataDaGuarda(box: WarehouseBox) {
+  if (!box.stored_at) return null;
+  const date = new Date(box.stored_at);
+  return Number.isNaN(date.getTime()) ? null : dataFormatter.format(date);
+}
+
+/**
+ * Uma caixa da prateleira: código, conteúdo, origem e data, medidas e a
+ * etiqueta (parte 6 do recebimento com caixas). A reservada é a caixa do
+ * recebimento com o destino confirmado, ainda por guardar.
+ */
+export function BoxCard({
+  box,
+  lines,
+  skuIndex,
+  reserved = false,
+  onLabels,
+}: {
+  box: WarehouseBox;
+  lines: BoxContentSource[];
+  skuIndex: SkuIndex;
+  reserved?: boolean;
+  onLabels: (url: string) => void;
+}) {
+  const contents = boxContents(box, lines, skuIndex);
+  const units = reserved ? (box.draft_unit_count ?? 0) : box.unit_count;
+  return (
+    <div className={cn("rounded-md border border-border bg-card p-3", reserved && "border-dashed")}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-foreground">{box.code}</span>
+          {reserved ? (
+            <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
+              reservada
+            </Badge>
+          ) : null}
+        </span>
+        <span className="flex shrink-0 items-center gap-2">
+          <span className="text-xs text-muted-foreground">{formatNumber(units)} un.</span>
+          <Button type="button" size="sm" variant="outline" onClick={() => onLabels(labelsUrl({ boxes: [box.code] }))}>
+            <Printer className="size-4" />
+            Etiqueta
+          </Button>
+        </span>
+      </div>
+      {contents.length ? (
+        <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+          {contents.slice(0, 4).map((line) => (
+            <li key={`${line.code}-${line.name}`} className="truncate">
+              {line.qty != null ? `${formatNumber(line.qty)} × ` : ""}
+              {line.name}
+              {line.code && line.code !== line.name ? ` · ${line.code}` : ""}
+            </li>
+          ))}
+          {contents.length > 4 ? <li>+ {contents.length - 4} produto(s)</li> : null}
+        </ul>
+      ) : (
+        <div className="mt-1 text-xs text-muted-foreground">Conteúdo ainda não lançado.</div>
+      )}
+      <div className="mt-1 text-xs text-muted-foreground">
+        {[boxOriginLabel(box), reserved ? null : dataDaGuarda(box), formatBoxDimensions(box), formatVolumeM3(boxVolumeM3(box))].filter(Boolean).join(" · ")}
+        {box.support_box_code ? ` · sobre ${box.support_box_code}` : ""}
+      </div>
+    </div>
+  );
+}
+
 function ShelfPanel({
   shelf,
   lines,
@@ -502,6 +571,8 @@ function ShelfPanel({
   const { position } = shelf;
   const [showAllBoxes, setShowAllBoxes] = useState(false);
   const visibleBoxes = showAllBoxes ? shelf.boxes : shelf.boxes.slice(0, 3);
+  // A caixa do recebimento com o destino confirmado, ainda por guardar (parte 6).
+  const reserved = shelf.volumeBoxes.filter((box) => box.status === "committing");
   return (
     <section className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
@@ -556,35 +627,9 @@ function ShelfPanel({
           <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">Sem caixas registradas. Ocupação não confirmada.</div>
         ) : (
           <div className="space-y-2">
-            {visibleBoxes.map((box) => {
-              const contents = boxContents(box, lines, skuIndex);
-              return (
-                <div key={box.code} className="rounded-md border border-border bg-card p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold text-foreground">{box.code}</span>
-                    <span className="text-xs text-muted-foreground">{formatNumber(box.unit_count)} un.</span>
-                  </div>
-                  {contents.length ? (
-                    <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-                      {contents.slice(0, 4).map((line) => (
-                        <li key={`${line.code}-${line.name}`} className="truncate">
-                          {line.qty != null ? `${formatNumber(line.qty)} × ` : ""}
-                          {line.name}
-                          {line.code && line.code !== line.name ? ` · ${line.code}` : ""}
-                        </li>
-                      ))}
-                      {contents.length > 4 ? <li>+ {contents.length - 4} produto(s)</li> : null}
-                    </ul>
-                  ) : (
-                    <div className="mt-1 text-xs text-muted-foreground">Conteúdo ainda não lançado.</div>
-                  )}
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {formatBoxDimensions(box)} · {formatVolumeM3(boxVolumeM3(box))} · {box.session_id ? "abertura" : "manual"}
-                    {box.support_box_code ? ` · sobre ${box.support_box_code}` : ""}
-                  </div>
-                </div>
-              );
-            })}
+            {visibleBoxes.map((box) => (
+              <BoxCard key={box.code} box={box} lines={lines} skuIndex={skuIndex} onLabels={onLabels} />
+            ))}
             {shelf.boxes.length > 3 ? (
               <Button type="button" variant="outline" className="w-full" onClick={() => setShowAllBoxes((current) => !current)}>
                 {showAllBoxes ? "Mostrar menos caixas" : `Ver todas as ${formatNumber(shelf.boxes.length)} caixas`}
@@ -592,6 +637,13 @@ function ShelfPanel({
             ) : null}
           </div>
         )}
+        {reserved.length ? (
+          <div className="mt-2 space-y-2">
+            {reserved.map((box) => (
+              <BoxCard key={box.code} box={box} lines={lines} skuIndex={skuIndex} reserved onLabels={onLabels} />
+            ))}
+          </div>
+        ) : null}
       </div>
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="outline" onClick={() => onLabels(labelsUrl({ positions: [shelf.code] }))}>
