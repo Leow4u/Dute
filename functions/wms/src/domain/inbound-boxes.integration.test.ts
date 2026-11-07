@@ -16,6 +16,7 @@ import {
   completeInboundBoxReceipt,
   storeInboundBox,
   refuseInboundBoxShelf,
+  recordInboundBoxLabelPrint,
 } from "./inbound-boxes.js";
 import { billingMovementDirection } from "./billing-scope.js";
 import { boxPutawayTaskId } from "./inbound-box-entry.js";
@@ -1179,5 +1180,59 @@ describe("as callables da caixa do recebimento (pelo .run)", () => {
       message: "Chegada de outro cliente. Troque o cliente ativo para Uniformes Alfa.",
     });
     await assert.rejects(viaCallable({}), { code: "invalid-argument" });
+  });
+});
+
+describe("a etiqueta impressa (recebimento com caixas, parte 6, decisão 29)", () => {
+  function print(r: Receipt, code: string, location: string, k = key("label"), extra: Row = {}) {
+    return recordInboundBoxLabelPrint(db, { receipt_id: r.id, box_code: code, location_id: location, idempotency_key: k, ...extra }, operacao) as Promise<Row>;
+  }
+
+  it("registra a impressão da caixa com destino, sem mexer na revisão; a segunda vez é reimpressão; guardada, continua imprimindo", async () => {
+    const r = await receipt();
+    const code = await reservedBox(r, [["XG", 29]], "A-01");
+    const revisao = await rev(code);
+    const first = await print(r, code, "a-01", "etiqueta-1");
+    assert.deepEqual([first.ok, first.box_code, first.location_id, first.label_print_count, first.reprinted], [true, code, "A-01", 1, false]);
+    const caixa = await boxOf(code);
+    assert.deepEqual([caixa.label_printed_location, caixa.label_print_count, caixa.conference_revision, caixa.label_printed_by.uid], ["A-01", 1, revisao, "wms-1"]);
+    assert.match(String(caixa.label_printed_at), /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(caixa.label_prints.length, 1);
+    const impressa = await events("warehouse.box_label_printed");
+    assert.equal(impressa.length, 1);
+    assert.deepEqual([impressa[0]!.severity, impressa[0]!.entity_id, impressa[0]!.payload.print_count], ["info", code, 1]);
+    // A mesma chave devolve o mesmo; outra chave é reimpressão.
+    assert.deepEqual(await print(r, code, "A-01", "etiqueta-1"), first);
+    const second = await print(r, code, "A-01", "etiqueta-2");
+    assert.deepEqual([second.label_print_count, second.reprinted], [2, true]);
+    assert.equal((await events("warehouse.box_label_reprinted")).length, 1);
+    assert.equal((await boxOf(code)).label_prints.length, 2);
+    // Guardada, a etiqueta continua saindo.
+    await shortage(r, "XG");
+    await shortage(r, "GG");
+    await complete(r);
+    await store(r, code, "A-01");
+    assert.equal((await print(r, code, "A-01")).label_print_count, 3);
+    assert.equal((await boxOf(code)).conference_revision, revisao + 1, "só a guarda mudou a revisão");
+  });
+
+  it("sem destino, ou com outra prateleira na etiqueta, recusa; outro cliente não imprime a caixa desta chegada", async () => {
+    const r = await receipt();
+    const code = String((await start(r)).box.code);
+    await line(r, code, "XG", 5);
+    await assert.rejects(print(r, code, "A-01"), { code: "failed-precondition", details: { code: "BOX_WITHOUT_DESTINATION" } });
+    await close(r, code);
+    await assert.rejects(print(r, code, "A-01"), {
+      code: "failed-precondition",
+      message: `A caixa ${code} ainda não tem destino: a etiqueta sai depois de confirmar o destino.`,
+    });
+    await confirm(r, code, "A-02");
+    await assert.rejects(print(r, code, "A-01"), {
+      code: "failed-precondition",
+      message: `A caixa ${code} está em A-02, não em A-01: imprima a etiqueta de novo.`,
+      details: { code: "BOX_LABEL_LOCATION_MISMATCH", location_id: "A-02" },
+    });
+    await assert.rejects(print(r, code, "A-02", key("label"), { customer_code: BETA }), { code: "permission-denied" });
+    assert.equal((await events("warehouse.box_label_printed")).length, 0);
   });
 });

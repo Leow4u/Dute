@@ -133,6 +133,23 @@ export function ownBoxContent(box: Pick<WarehouseBox, "lines">): LabelContentLin
   return sortedContent(grouped);
 }
 
+export type ImpressaoParaRegistrar = { receipt_id: string; box_code: string; location_id: string };
+
+/**
+ * As caixas do recebimento da folha, para registrar a impressão (decisão 29):
+ * a chegada, a caixa e a posição impressa. A caixa da abertura e a manual
+ * não registram.
+ */
+export function impressoesParaRegistrar(
+  boxes: Array<Pick<WarehouseBox, "code" | "status" | "location_id" | "origin">>,
+): ImpressaoParaRegistrar[] {
+  return boxes.flatMap((box) =>
+    box.origin.kind === "receipt" && box.origin.receipt_id && boxLabelAvailability(box).ready
+      ? [{ receipt_id: box.origin.receipt_id, box_code: box.code, location_id: box.location_id }]
+      : [],
+  );
+}
+
 export type LabelAvailability = { ready: true; reason: null } | { ready: false; reason: string };
 
 /**

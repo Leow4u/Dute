@@ -14,7 +14,7 @@ import { statusLabel, type TaskQueueEntry, type WarehouseTask } from "@/lib/ware
 import { destinoDaGuarda } from "@/lib/warehouse-ops/receiving";
 import type { WarehousePosition } from "@/lib/warehouse-positions";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
-import { guardarCaixa, naoCabeNaPrateleira, type CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
+import { guardarCaixa, horaCurta, naoCabeNaPrateleira, timelineDaCaixa, type CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
 
 import {
   DestinoDaCaixa,
@@ -89,6 +89,29 @@ export type GuardaDaCaixaProps = {
   onEtiqueta?: () => void;
 };
 
+/** A timeline da caixa (mockup WmsGuardaCaixa): da etapa mais recente para a primeira. */
+function TimelineDaCaixa({ caixa }: { caixa: CaixaDaChegada }) {
+  const etapas = timelineDaCaixa(caixa);
+  if (!etapas.length) return null;
+  return (
+    <section aria-labelledby="timeline-da-caixa" className="flex flex-col gap-2">
+      <h3 id="timeline-da-caixa" className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Timeline</h3>
+      <ol className="flex flex-col gap-2">
+        {etapas.map((etapa, index) => (
+          <li key={`${etapa.quando}-${etapa.titulo}`} className="flex items-start gap-3 text-sm">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-extrabold text-background">
+              {etapas.length - index}
+            </span>
+            <span>
+              <strong>{etapa.titulo}</strong> <span className="text-muted-foreground">{etapa.detalhe}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 /** O corpo da guarda, sem as chamadas. */
 export function GuardaDaCaixaConteudo(props: GuardaDaCaixaProps) {
   const { task, podeOperar, ocupado } = props;
@@ -101,6 +124,11 @@ export function GuardaDaCaixaConteudo(props: GuardaDaCaixaProps) {
   const conteudo = linhas.map((linha) => `${linha.size || linha.client_item_code || linha.sku_code} ${numero.format(linha.counted_qty)}`).join(" · ");
   const detalhe = [medidas, conteudo].filter(Boolean).join(" · ");
   const concluida = !podeOperar && task.status === "completed";
+  // A etiqueta impressa com outra prateleira: a caixa mudou de destino depois (parte 6).
+  const etiquetaAntiga =
+    caixa?.label_printed_at && caixa.label_printed_location && destino && caixa.label_printed_location.toUpperCase() !== destino.toUpperCase()
+      ? caixa
+      : null;
   const etiqueta =
     destino && props.onEtiqueta ? (
       <Button type="button" variant="outline" onClick={props.onEtiqueta}>
@@ -132,6 +160,11 @@ export function GuardaDaCaixaConteudo(props: GuardaDaCaixaProps) {
           </h3>
           <p className="text-4xl font-extrabold tracking-tight">{destino}</p>
           {props.endereco ? <p className="text-sm">{props.endereco}</p> : null}
+          {etiquetaAntiga ? (
+            <p className="mt-2 rounded-md border border-warning-soft-border bg-warning-soft px-3 py-2 text-sm text-warning-soft-foreground">
+              Etiqueta impressa com {etiquetaAntiga.label_printed_location} · {horaCurta(etiquetaAntiga.label_printed_at)}
+            </p>
+          ) : null}
         </section>
       ) : podeOperar && caixa ? (
         <>
@@ -197,6 +230,7 @@ export function GuardaDaCaixaConteudo(props: GuardaDaCaixaProps) {
           onRecusar={props.onLiberar}
         />
       ) : null}
+      {caixa ? <TimelineDaCaixa caixa={caixa} /> : null}
     </div>
   );
 }

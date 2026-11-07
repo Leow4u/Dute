@@ -6,6 +6,7 @@ import {
   boxContent,
   boxLabel,
   boxLabelAvailability,
+  impressoesParaRegistrar,
   labelsUrl,
   paginate,
   parseLabelsQuery,
@@ -196,5 +197,13 @@ describe("etiqueta da caixa do recebimento", () => {
       reason: "CX-000225 em conferência: sem etiqueta até confirmar o destino.",
     });
     expect(boxLabelAvailability({ ...box, status: "committing", location_id: "" })).toEqual({ ready: false, reason: "CX-000012 aguarda a guarda." });
+  });
+
+  it("só a caixa do recebimento com destino registra a impressão, com a chegada, a caixa e a posição impressa (decisão 29)", () => {
+    const semDestino = warehouseBoxFromRecord({ ...receiptBox, code: "CX-000227", status: "reviewed", location_id: "" });
+    const abertura = warehouseBoxFromRecord({ code: "CX-000190", status: "stored", location_id: "B-09", origin: { kind: "opening_inventory", session_id: "s" } });
+    expect(impressoesParaRegistrar([receiptBox, semDestino, abertura, box])).toEqual([
+      { receipt_id: "inb_7c21a9f0", box_code: "CX-000225", location_id: "B-09" },
+    ]);
   });
 });

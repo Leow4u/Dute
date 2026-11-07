@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { WarehouseTask } from "@/lib/warehouse-ops/model";
-import type { CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
+import { timelineDaCaixa, type CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosForaDaLista } from "@/test/textos";
 
@@ -219,6 +219,62 @@ describe("a etiqueta na guarda", () => {
     expect(await violacoesDeAcessibilidade(guardada)).toEqual([]);
     const consulta = render({ task: guarda(caixa("committing", "B-02")), podeOperar: false, onEtiqueta: () => undefined });
     expect(consulta).not.toContain("Imprimir etiqueta");
+  });
+
+  it("a etiqueta impressa com outra prateleira avisa; a timeline conta a caixa, da etapa mais recente à primeira", async () => {
+    const comHistorico = caixa("committing", "B-05", {
+      closed_at: "2026-11-06T17:28:00.000Z",
+      destination_confirmed_at: "2026-11-06T17:41:00.000Z",
+      label_printed_at: "2026-11-06T17:32:00.000Z",
+      label_printed_location: "B-02",
+      label_print_count: 1,
+      refusals: [{ position: "B-02", reason: "Frente ocupada por caixa sem registro", refused_at: "2026-11-06T17:40:00.000Z", phase: "putaway" }],
+    });
+    expect(timelineDaCaixa(comHistorico).map((etapa) => etapa.titulo)).toEqual([
+      "Destino confirmado · B-05",
+      "Prateleira B-02 liberada · não coube",
+      "Etiqueta impressa · B-02",
+      "Caixa fechada · 48 × 38 × 30 cm · 9,4 kg",
+    ]);
+    const html = render({ task: guarda(comHistorico), endereco: "Rua B · prateleira 05 · zona BTG Pactual", onEtiqueta: () => undefined });
+    expect(html).toContain("Etiqueta impressa com B-02 · 14:32");
+    expect(
+      textosForaDaLista(html, [
+        "Guarda",
+        "planejada",
+        "Guardar caixa CX-000131",
+        "AVL-0D0E620B · NF 48.230 · origem RECEBIMENTO",
+        "Destino",
+        "B-05",
+        "Rua B · prateleira 05 · zona BTG Pactual",
+        "Etiqueta impressa com B-02 · 14:32",
+        ...CONTEUDO,
+        "Concluir guarda em B-05",
+        "Não cabe aqui",
+        "Imprimir etiqueta",
+        "Timeline",
+        /^[1-4]$/,
+        "Destino confirmado · B-05",
+        "06/11/2026, 14:41",
+        "Prateleira B-02 liberada · não coube",
+        "06/11/2026, 14:40 · Frente ocupada por caixa sem registro",
+        "Etiqueta impressa · B-02",
+        "06/11/2026, 14:32",
+        "Caixa fechada · 48 × 38 × 30 cm · 9,4 kg",
+        "06/11/2026, 14:28",
+      ]),
+    ).toEqual([]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    // Guardada: a guarda é a última etapa, a segunda impressão é reimpressão, e a etiqueta da prateleira atual não avisa.
+    const guardada = caixa("stored", "B-02", {
+      stored_at: "2026-11-06T18:02:00.000Z",
+      label_printed_at: "2026-11-06T17:32:00.000Z",
+      label_printed_location: "B-02",
+      label_print_count: 2,
+    });
+    expect(timelineDaCaixa(guardada).map((etapa) => etapa.titulo)).toEqual(["Guardada em B-02", "Etiqueta reimpressa · B-02"]);
+    expect(render({ task: guarda(guardada, { status: "completed" }), podeOperar: false })).not.toContain("Etiqueta impressa com");
+    expect(timelineDaCaixa(caixa("counting", ""))).toEqual([]);
   });
 });
 

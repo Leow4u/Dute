@@ -10,7 +10,7 @@
  */
 
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Printer, Tags } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
 
@@ -24,6 +24,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOpeningInventorySession } from "@/features/warehouse-ops/opening-inventory-status";
+import { useToast } from "@/hooks/use-toast";
 import { normalizeApiRows } from "@/features/warehouse-ops/receiving";
 import { sessionBoxes, warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import {
@@ -32,7 +33,9 @@ import {
   LABELS_PER_SHEET,
   boxLabel,
   boxLabelAvailability,
+  impressoesParaRegistrar,
   labelsUrl,
+  type ImpressaoParaRegistrar,
   paginate,
   parseLabelsQuery,
   positionLabel,
@@ -40,6 +43,7 @@ import {
 import { fetchJson, formatNumber, getErrorMessage } from "@/lib/warehouse-ops/model";
 import { type WarehousePosition, sortPositions } from "@/lib/warehouse-positions";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { registrarEtiquetaImpressa } from "@/lib/wms/caixas-do-recebimento";
 
 type PositionsResponse = { items?: WarehousePosition[] };
 
@@ -117,6 +121,29 @@ export default function WarehouseLabelsPage() {
   const update = (changes: { mode?: LabelMode; skip?: number }) =>
     navigate(labelsUrl({ ...query, ...changes }), { replace: true });
 
+  // A impressão é a do navegador; o registro é o do clique (decisão 29), só da caixa do recebimento.
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const registrar = useMutation({
+    mutationFn: (impressoes: ImpressaoParaRegistrar[]) =>
+      Promise.all(
+        impressoes.map((impressao) =>
+          registrarEtiquetaImpressa({ ...impressao, customer_code: customerCode || undefined, idempotency_key: crypto.randomUUID() }),
+        ),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["warehouse-boxes"] });
+      void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
+    },
+    onError: (error) =>
+      toast({ title: "Não foi possível registrar a impressão", description: getErrorMessage(error), variant: "destructive" }),
+  });
+  const imprimir = () => {
+    window.print();
+    const impressoes = impressoesParaRegistrar(boxes);
+    if (impressoes.length) registrar.mutate(impressoes);
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="no-print flex flex-col gap-4">
@@ -128,7 +155,7 @@ export default function WarehouseLabelsPage() {
           title="Etiquetas"
           description={description}
           actions={
-            <Button onClick={() => window.print()} disabled={loading || labels.length === 0}>
+            <Button onClick={imprimir} disabled={loading || labels.length === 0}>
               <Printer className="size-4" />
               Imprimir / Salvar PDF
             </Button>

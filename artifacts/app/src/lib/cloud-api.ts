@@ -1846,6 +1846,23 @@ async function getWarehouseOps() {
         refused_positions: Array.isArray(box.refusals)
           ? (box.refusals as AnyRecord[]).map((refusal) => String(refusal.position ?? "").toUpperCase()).filter(Boolean)
           : [],
+        // A etiqueta impressa, os carimbos e as recusas com o detalhe (parte 6).
+        label_printed_at: box.label_printed_at ? String(box.label_printed_at) : null,
+        label_printed_location: box.label_printed_location ? String(box.label_printed_location).toUpperCase() : null,
+        label_print_count: Number(box.label_print_count ?? 0),
+        closed_at: box.closed_at ? String(box.closed_at) : null,
+        destination_confirmed_at: box.destination_confirmed_at ? String(box.destination_confirmed_at) : null,
+        stored_at: box.stored_at ? String(box.stored_at) : null,
+        refusals: Array.isArray(box.refusals)
+          ? (box.refusals as AnyRecord[])
+              .filter((refusal) => String(refusal.position ?? "").trim())
+              .map((refusal) => ({
+                position: String(refusal.position ?? "").toUpperCase(),
+                reason: String(refusal.reason ?? ""),
+                refused_at: refusal.refused_at ? String(refusal.refused_at) : null,
+                phase: refusal.phase ? String(refusal.phase) : null,
+              }))
+          : [],
       }))
       .sort((left, right) => left.code.localeCompare(right.code));
 

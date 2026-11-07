@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { WarehouseTask } from "@/lib/warehouse-ops/model";
-import { temEtiqueta, type CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
+import { situacaoDaEtiqueta, temEtiqueta, type CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
@@ -313,6 +313,19 @@ describe("as etiquetas na revisão da entrada", () => {
     expect(temEtiqueta({ status: "committing", location_id: "" })).toBe(false);
     expect(temEtiqueta({ status: "reviewed", location_id: "" })).toBe(false);
     expect(temEtiqueta({ status: "counting", location_id: "" })).toBe(false);
+  });
+
+  it("a situação da etiqueta: impressa com a prateleira atual, ou com outra; o chip da caixa mostra (decisão 29)", () => {
+    const impressa = { status: "committing", location_id: "B-02", label_printed_at: "2026-11-06T17:32:00.000Z", label_printed_location: "B-02" };
+    expect(situacaoDaEtiqueta(impressa)).toBe("etiqueta impressa 14:32");
+    expect(situacaoDaEtiqueta({ ...impressa, location_id: "B-05" })).toBe("etiqueta com B-02");
+    expect(situacaoDaEtiqueta({ ...impressa, status: "reviewed", location_id: "" })).toBe("etiqueta com B-02");
+    expect(situacaoDaEtiqueta({ ...impressa, label_printed_at: null })).toBeNull();
+    const html = render({
+      etapa: 4,
+      caixas: [{ ...caixas[0]!, label_printed_at: "2026-11-06T17:32:00.000Z", label_printed_location: "B-02", label_print_count: 1 }, caixas[1]!],
+    });
+    expect(html).toContain("XG 29 · GG 12 · 41 un. · 48 × 38 × 30 cm · 9,4 kg · etiqueta impressa 14:32");
   });
 });
 

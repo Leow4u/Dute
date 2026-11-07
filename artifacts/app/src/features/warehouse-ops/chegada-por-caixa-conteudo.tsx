@@ -25,6 +25,7 @@ import {
   emTresCasas,
   esperaJustificativa,
   estadoDaCaixa,
+  situacaoDaEtiqueta,
   situacaoDaLinha,
   temEtiqueta,
   totaisDaChegada,
@@ -353,7 +354,7 @@ function Caixas({ props }: { props: FichaDaChegadaPorCaixaProps }) {
               {caixa.location_id ? ` · destino ${caixa.location_id}` : ""}
             </span>
             <span className="text-xs text-muted-foreground">
-              {[conteudoDaCaixa(caixa), medidasDaCaixa(caixa)]
+              {[conteudoDaCaixa(caixa), medidasDaCaixa(caixa), situacaoDaEtiqueta(caixa)]
                 .filter(Boolean)
                 .join(" · ")}
             </span>
