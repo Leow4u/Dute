@@ -15,6 +15,24 @@ const MAX_CENTIMETERS = 5000;
 
 export type BoxOrientation = "length_width_height" | "width_length_height" | "length_height_width" | "height_length_width" | "width_height_length" | "height_width_length";
 
+/** Uma linha da NF dentro da caixa do recebimento, como a caixa grava (`lines[]`, parte 3). */
+export type BoxLine = {
+  sku_code: string;
+  client_item_code: string;
+  product_name: string;
+  size: string | null;
+  counted_qty: number;
+};
+
+/** De onde a caixa veio: a abertura (a sessão), a chegada (o recebimento) ou o cadastro manual. */
+export type BoxOrigin = {
+  kind: "opening_inventory" | "receipt" | "manual";
+  session_id: string | null;
+  receipt_id: string | null;
+  receipt_number: string | null;
+  invoice_number: string | null;
+};
+
 export type WarehouseBox = {
   code: string;
   customer_code: string;
@@ -44,6 +62,9 @@ export type WarehouseBox = {
   /** Quando a caixa foi guardada na posição; null antes da guarda. */
   stored_at: string | null;
   session_id: string | null;
+  origin: BoxOrigin;
+  /** O conteúdo que a caixa do recebimento guarda nela; vazio na caixa da abertura, cujo conteúdo mora na sessão. */
+  lines: BoxLine[];
   suggestion: {
     position: string | null;
     reason: string | null;
@@ -160,6 +181,45 @@ export function tierLabel(tier: number | null | undefined) {
   return TIER_LABELS[tier as 1 | 2 | 3] ?? "sugerida";
 }
 
+function boxOriginFromRecord(origin: AnyRecord): BoxOrigin {
+  const kind = text(origin.kind);
+  const session_id = text(origin.session_id) || null;
+  return {
+    kind: kind === "receipt" ? "receipt" : session_id || kind === "opening_inventory" ? "opening_inventory" : "manual",
+    session_id,
+    receipt_id: text(origin.receipt_id) || null,
+    receipt_number: text(origin.receipt_number) || null,
+    invoice_number: text(origin.invoice_number) || null,
+  };
+}
+
+function boxLinesFromRecord(value: unknown): BoxLine[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const line = item && typeof item === "object" ? (item as AnyRecord) : null;
+    const counted_qty = line ? number(line.counted_qty) : 0;
+    if (!line || counted_qty <= 0) return [];
+    const sku_code = text(line.sku_code);
+    const client_item_code = text(line.client_item_code);
+    if (!sku_code && !client_item_code) return [];
+    return [{ sku_code, client_item_code, product_name: text(line.product_name), size: text(line.size) || null, counted_qty }];
+  });
+}
+
+/**
+ * A origem como a etiqueta e o Mapa dizem (recebimento com caixas, parte 6,
+ * decisão 31): "Abertura", "Manual" ou "Recebimento · NF 48.377"; a chegada
+ * sem NF leva o número dela.
+ */
+export function boxOriginLabel(box: Pick<WarehouseBox, "origin">): string {
+  const { origin } = box;
+  if (origin.kind === "receipt") {
+    const reference = origin.invoice_number ? `NF ${origin.invoice_number}` : origin.receipt_number;
+    return reference ? `Recebimento · ${reference}` : "Recebimento";
+  }
+  return origin.kind === "opening_inventory" ? "Abertura" : "Manual";
+}
+
 export function warehouseBoxFromRecord(record: AnyRecord): WarehouseBox {
   const origin = record.origin && typeof record.origin === "object" ? (record.origin as AnyRecord) : {};
   const suggestion =
@@ -193,6 +253,8 @@ export function warehouseBoxFromRecord(record: AnyRecord): WarehouseBox {
     sku_codes: Array.isArray(record.sku_codes) ? record.sku_codes.map((sku) => text(sku)).filter(Boolean) : [],
     stored_at: text(record.stored_at) || null,
     session_id: text(origin.session_id) || null,
+    origin: boxOriginFromRecord(origin),
+    lines: boxLinesFromRecord(record.lines),
     suggestion: suggestion
       ? {
           position: text(suggestion.position) || null,

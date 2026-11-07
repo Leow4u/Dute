@@ -9,6 +9,8 @@
  * de referência (50 × 50 × 35 cm) na base; o motor verifica empilhamento.
  */
 
+import { nomeComTamanho } from "@workspace/dominio";
+
 import type { AnyRecord } from "@/lib/warehouse-ops/model";
 import type { WarehouseBox } from "@/lib/warehouse-boxes";
 import { calculateShelfVolume } from "@/lib/warehouse-volume";
@@ -281,11 +283,33 @@ export type BoxContentSource = {
 
 export type BoxContentLine = { code: string; name: string; qty: number | null };
 
+const byQuantity = (left: BoxContentLine, right: BoxContentLine) =>
+  (right.qty ?? -1) - (left.qty ?? -1) || left.name.localeCompare(right.name, "pt-BR");
+
 /**
- * O que tem na caixa: com as linhas da abertura, produto e quantidade; sem
- * elas, só os SKUs que a caixa conhece, com o nome do catálogo.
+ * O que tem na caixa: a caixa do recebimento traz o conteúdo nela (parte 6);
+ * a da abertura, nas linhas da sessão, produto e quantidade; sem nada disso,
+ * só os SKUs que a caixa conhece, com o nome do catálogo.
  */
 export function boxContents(box: WarehouseBox, lines: BoxContentSource[], skuIndex: SkuIndex): BoxContentLine[] {
+  if (box.lines.length) {
+    const own = new Map<string, BoxContentLine>();
+    for (const line of box.lines) {
+      const key = (line.sku_code || line.client_item_code).toUpperCase();
+      const current = own.get(key);
+      if (current) {
+        current.qty = (current.qty ?? 0) + line.counted_qty;
+      } else {
+        const nome = line.product_name || skuIndex.get(key)?.name || line.sku_code || line.client_item_code;
+        own.set(key, {
+          code: line.client_item_code || line.sku_code,
+          name: nomeComTamanho({ nome, codigo: line.client_item_code, tamanho: line.size }) || nome,
+          qty: line.counted_qty,
+        });
+      }
+    }
+    return [...own.values()].sort(byQuantity);
+  }
   const grouped = new Map<string, BoxContentLine>();
   for (const line of lines) {
     if (text(line.box_code).toUpperCase() !== box.code) continue;
@@ -308,5 +332,5 @@ export function boxContents(box: WarehouseBox, lines: BoxContentSource[], skuInd
     const info = skuIndex.get(sku.toUpperCase());
     grouped.set(sku.toUpperCase(), { code: info?.clientCode || sku, name: info?.name || sku, qty: null });
   }
-  return [...grouped.values()].sort((left, right) => (right.qty ?? -1) - (left.qty ?? -1) || left.name.localeCompare(right.name, "pt-BR"));
+  return [...grouped.values()].sort(byQuantity);
 }
