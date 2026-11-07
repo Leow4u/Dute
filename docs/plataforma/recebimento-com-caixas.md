@@ -778,9 +778,8 @@ desenhada e aprovada antes do PR de tela.
    conteúdo da caixa do recebimento na etiqueta e no Mapa, "Etiquetas da
    chegada", reimpressão com evento. Mockup das nove pranchas feito em
    06/11/2026, a partir do caso do mesmo dia (duas caixas guardadas em B-09
-   sem etiqueta e sem conteúdo no Mapa), esperando a aprovação do Leonardo e
-   as cinco perguntas do README dos mockups ("Recebimento · etiqueta da
-   caixa").
+   sem etiqueta e sem conteúdo no Mapa), aprovado pelo Leonardo em 07/11/2026 com
+   as cinco respostas (decisões 28 a 32).
 7. **Só prateleira para o cliente** (decisão 10), sem liberação por ambiente:
    o Leonardo decidiu em 02/11/2026 que vale já para a produção, no próximo
    disparo manual dele. Em quatro PRs:
@@ -937,6 +936,11 @@ não resolve caixa, etiqueta nem Mapa, e por isso não entra como etapa.
 | 25 | Como o "Em recebimento" entra no Estoque do portal (parte 7d)? (02/11/2026) | Na tela de hoje: coluna na Lista, linha no card só quando há, o detalhe do produto e a linha do topo. |
 | 26 | A "Última entrada" do mockup entra na parte 7d? (02/11/2026) | Não: fica para uma parte própria, com a gravação no WMS. |
 | 27 | Produto sem disponível e com peça chegando: que selo? (02/11/2026) | "Em recebimento", no lugar de "Sem saldo", e a dica não sugere reposição; os botões continuam como hoje. |
+| 28 | O celular imprime a etiqueta da caixa do recebimento? (07/11/2026) | Sim: a guarda no celular também tem "Imprimir etiqueta", pela tela de Etiquetas no navegador do celular. |
+| 29 | "Etiqueta impressa" vira evento? (07/11/2026) | Sim: ao clicar em "Imprimir / Salvar PDF", o app registra a caixa e a posição impressas (a primeira vez "impressa", depois "reimpressa"), por uma callable do WMS. É o registro do clique, não da impressora, até o ZPL. |
+| 30 | "Etiquetas da chegada" leva que caixas? (07/11/2026) | Só as com destino confirmado ou guardadas; a caixa fechada sem prateleira é nomeada no aviso e imprime na guarda, quando ganha o destino. |
+| 31 | A origem na etiqueta e no Mapa (07/11/2026) | "Recebimento · NF 48.377" e, sem NF, "Recebimento · AVL-7C21A9F0"; "Abertura" e "Manual" como hoje. |
+| 32 | O nome na etiqueta (07/11/2026) | O padrão de 06/11 ("Polo Masculino Piquet Preto · G"), com o código do cliente e o SKU; a caixa de antes do passo 3 sai com o nome que o catálogo tiver. |
 
 Nada em aberto.
 

@@ -319,8 +319,8 @@ ajustes e os erros de digitação que a planilha apontar.
 
 A parte 6 do recebimento com caixas (a etiqueta da caixa do recebimento) tem
 canvas próprio (privado, https://claude.ai/artifact/WqvC91v2bcZLVUQjHoucG2),
-feito em 06/11/2026 para a aprovação do Leonardo, a partir do caso do mesmo
-dia: a chegada avulsa por caixa terminou sem lugar para imprimir a etiqueta,
+feito em 06/11/2026 a partir do caso do mesmo dia e aprovado pelo Leonardo
+em 07/11/2026 com as cinco respostas abaixo (decisões 28 a 32 do runbook): a chegada avulsa por caixa terminou sem lugar para imprimir a etiqueta,
 e a etiqueta aberta pelo Mapa saiu "Manual", com "Conteúdo a lançar na
 contagem", porque a tela de Etiquetas e o Mapa só leem o conteúdo da sessão
 de abertura, e a caixa do recebimento guarda o dela em `lines[]`. As pranchas
@@ -343,25 +343,25 @@ Leonardo estão na nota do canvas e abaixo da tabela.
 | Etiqueta da caixa do recebimento, hoje | `WmsEtiquetaRecebimentoHoje.dc.html` | A etiqueta como saiu em 06/11/2026: "Manual", "Conteúdo a lançar na contagem." e as unidades certas. |
 | Etiqueta da caixa do recebimento, proposta | `WmsEtiquetaRecebimentoEtiqueta.dc.html` | A mesma etiqueta com "Recebimento · NF 48.377 · 06/11/2026" e o conteúdo da caixa, uma linha por tamanho, com o código do cliente e o SKU. Substitui a `WmsEtiquetaCaixaRecebimento` de 01/11, que trazia o nome em maiúsculas com o tamanho no fim. |
 
-Perguntas para o Leonardo (parte 6):
+Perguntas e respostas do Leonardo (07/11/2026):
 
 1. O celular imprime? A guarda no celular ganha "Imprimir etiqueta" (abre a
    tela de Etiquetas no navegador do celular) ou só a bancada imprime?
-   Proposta: os dois.
+   Resposta: sim, os dois.
 2. "Etiqueta impressa" vira evento: a tela de Etiquetas registra, ao clicar
    em "Imprimir / Salvar PDF", a caixa e a posição impressas (depois,
    "reimpressa"). É o registro do clique, não da impressora, até o ZPL.
    Proposta: sim, por uma callable pequena do WMS, porque é o que alimenta a
-   timeline, a fila e o aviso da etiqueta desatualizada.
+   timeline, a fila e o aviso da etiqueta desatualizada. Resposta: sim.
 3. "Etiquetas da chegada" leva só as caixas com destino confirmado ou
    guardadas; a caixa fechada sem prateleira (decisão 14) é nomeada no aviso
-   e imprime na guarda, quando ganha o destino. Proposta: sim.
+   e imprime na guarda, quando ganha o destino. Resposta: sim.
 4. A origem na etiqueta e no Mapa: "Recebimento · NF 48.377" e, sem NF,
    "Recebimento · AVL-7C21A9F0"; "Abertura" e "Manual" seguem como hoje.
-   Proposta: sim.
+   Resposta: sim.
 5. O nome na etiqueta segue o padrão de 06/11 ("Polo Masculino Piquet Preto ·
    G"), com o código do cliente e o SKU; a caixa de antes do passo 3 sai com
-   o nome que o catálogo tiver. Proposta: sim.
+   o nome que o catálogo tiver. Resposta: sim.
 
 As caixas CX-000225 e CX-000226 de 06/11 não precisam de nada: com a parte
 6, a etiqueta delas sai pelo Mapa ou por Recebidos › Guardas, com o conteúdo.
