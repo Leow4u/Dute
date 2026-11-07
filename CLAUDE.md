@@ -366,7 +366,14 @@ documentação de produto e operação está em `docs/`.
   o destino da caixa fechada (`destino-da-caixa.tsx`, o mesmo hook na bancada e
   na guarda), a fila e a guarda da caixa (`guarda-da-caixa.tsx`); a chegada
   avulsa só pede por caixa com a liberação e o modelo do cliente
-  (`modoDaChegadaAvulsa`). A caixa do
+  (`modoDaChegadaAvulsa`). A etiqueta da caixa do recebimento (parte 6,
+  07/11/2026, decisões 28 a 32): a etiqueta e o Mapa leem o conteúdo da
+  própria caixa (`lines[]`) e a origem "Recebimento · NF"; a etiqueta sai com
+  o destino confirmado ou guardada, pelo Receber ("Etiqueta", "Etiquetas da
+  chegada", "Imprimir etiqueta" na guarda, também no celular), e a impressão
+  é registrada pela callable `recordInboundBoxLabelPrint` (evento
+  `warehouse.box_label_printed`), que alimenta "etiqueta impressa 14:32",
+  "etiqueta com B-09" e a timeline da guarda. A caixa do
   recebimento mora em `functions/wms/src/domain/inbound-boxes.ts` (parte 3):
   iniciar, lançar, fechar ou reabrir, sugerir, recusar, confirmar o destino
   (`committing`, a reserva da prateleira) e remover; nunca escreve a chegada,

@@ -329,7 +329,9 @@ e partem das telas das partes 4 e 5 que estão na `main`; em cada uma só a
 etiqueta muda. As fontes são estáticas; os dados são os de uma chegada de
 três caixas (CX-000225, CX-000226 e CX-000227, NF 48.377) e os nomes seguem o
 padrão de 06/11/2026 ("Polo Masculino Piquet Preto · G"). As perguntas para o
-Leonardo estão na nota do canvas e abaixo da tabela.
+Leonardo estão na nota do canvas e abaixo da tabela. O código entrou em
+07/11/2026 (PR 587, partes 6a a 6c do runbook), e o que ficou diferente das
+pranchas está registrado na parte 6 do runbook.
 
 | Tela | Arquivo | O que muda |
 |---|---|---|
