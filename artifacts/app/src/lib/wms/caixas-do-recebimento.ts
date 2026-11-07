@@ -217,6 +217,11 @@ export function estadoDaCaixa(caixa: Pick<CaixaDaChegada, "status" | "location_i
   return { rotulo: caixa.status || "sem estado", tom: "mut" };
 }
 
+/** A etiqueta da caixa sai com o destino confirmado ou guardada (parte 6, decisão 30). */
+export function temEtiqueta(caixa: Pick<CaixaDaChegada, "status" | "location_id">): boolean {
+  return caixa.status === "stored" || (caixa.status === "committing" && Boolean(caixa.location_id));
+}
+
 /** "0 de 2 caixas guardadas": a chegada recebida fica em aberto até a última guarda (decisão 5). */
 export function caixasGuardadas(task: { box_count?: number | null; boxes_stored?: number | null }): string {
   const total = Number(task.box_count) || 0;

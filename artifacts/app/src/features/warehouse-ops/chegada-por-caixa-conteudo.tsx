@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ArrowLeft, Check, Package, Plus, Search } from "lucide-react";
+import { ArrowLeft, Check, Package, Plus, Printer, Search } from "lucide-react";
 import { tamanhoDoProduto } from "@workspace/dominio";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import {
   esperaJustificativa,
   estadoDaCaixa,
   situacaoDaLinha,
+  temEtiqueta,
   totaisDaChegada,
   type CaixaDaChegada,
   type EstadoDaCaixa,
@@ -197,6 +198,11 @@ export type FichaDaChegadaPorCaixaProps = {
     detalhe: string;
   }) => void;
   onDesmarcarFalta: (itemId: string) => void;
+  /**
+   * As etiquetas das caixas pedidas (parte 6): a de uma caixa com destino, ou
+   * todas as da chegada, que a tela de Etiquetas filtra e nomeia.
+   */
+  onEtiquetas?: (codigos: string[]) => void;
 };
 
 export function FichaDaChegadaPorCaixaConteudo(
@@ -356,10 +362,9 @@ function Caixas({ props }: { props: FichaDaChegadaPorCaixaProps }) {
             </Badge>
           </>
         );
-        return props.podeOperar ? (
+        const chip = props.podeOperar ? (
           <button
             type="button"
-            key={caixa.code}
             aria-label={`Selecionar caixa ${caixa.code}`}
             aria-pressed={caixa.code === props.selecionada}
             disabled={props.ocupado}
@@ -372,11 +377,29 @@ function Caixas({ props }: { props: FichaDaChegadaPorCaixaProps }) {
             {conteudo}
           </button>
         ) : (
-          <div
-            key={caixa.code}
-            className="flex flex-col items-start gap-1 rounded-lg border border-border bg-card p-4"
-          >
+          <div className="flex flex-col items-start gap-1 rounded-lg border border-border bg-card p-4">
             {conteudo}
+          </div>
+        );
+        // A etiqueta da caixa com destino (parte 6), ao lado da caixa.
+        const etiqueta =
+          props.onEtiquetas && temEtiqueta(caixa) ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="self-center"
+              aria-label={`Etiqueta da caixa ${caixa.code}`}
+              onClick={() => props.onEtiquetas?.([caixa.code])}
+            >
+              <Printer aria-hidden="true" />
+              Etiqueta
+            </Button>
+          ) : null;
+        return (
+          <div key={caixa.code} className="flex min-w-0 items-stretch gap-1">
+            {chip}
+            {etiqueta}
           </div>
         );
       })}
@@ -931,6 +954,8 @@ function Revisao(props: FichaDaChegadaPorCaixaProps) {
   const justificar =
     props.podeOperar &&
     (esperaJustificativa(props.caixas, linhas) || Boolean(props.justificativa));
+  // "Etiquetas da chegada" leva todas as caixas; a tela de Etiquetas nomeia a que ainda não tem destino (decisão 30).
+  const comEtiqueta = props.caixas.some(temEtiqueta);
   return (
     <>
       <div className="flex flex-wrap gap-5 rounded-lg border border-border bg-muted/30 p-4">
@@ -1009,9 +1034,23 @@ function Revisao(props: FichaDaChegadaPorCaixaProps) {
         </dl>
       </section>
       <section aria-labelledby="caixas-e-destinos">
-        <h3 id="caixas-e-destinos" className="mb-3 text-lg font-extrabold">
-          Caixas e destinos
-        </h3>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 id="caixas-e-destinos" className="text-lg font-extrabold">
+            Caixas e destinos
+          </h3>
+          {props.onEtiquetas && comEtiqueta ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                props.onEtiquetas?.(props.caixas.map((caixa) => caixa.code))
+              }
+            >
+              <Printer aria-hidden="true" />
+              Etiquetas da chegada
+            </Button>
+          ) : null}
+        </div>
         <Caixas props={props} />
       </section>
       {justificar ? (

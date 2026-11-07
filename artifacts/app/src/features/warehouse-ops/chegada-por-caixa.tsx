@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { boxDraftToPayload } from "@/lib/warehouse-boxes";
+import { labelsUrl } from "@/lib/warehouse-labels";
 import type {
   TaskQueueEntry,
   WarehouseTask,
@@ -77,6 +79,7 @@ function FichaDaChegadaEstado({
 }: FichaProps & { customerCode: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const original = entry.task;
   const receiptId =
     original.reference || original.id.replace(/^receiving:/, "");
@@ -631,6 +634,14 @@ function FichaDaChegadaEstado({
           desmarcarFalta,
           () => setFaltas((atual) => ({ ...atual, [id]: null })),
           "Falta desmarcada.",
+        )
+      }
+      onEtiquetas={(codigos) =>
+        navigate(
+          labelsUrl({
+            boxes: codigos,
+            receipt: original.receipt_number ?? null,
+          }),
         )
       }
     />

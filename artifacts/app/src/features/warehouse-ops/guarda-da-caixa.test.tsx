@@ -170,6 +170,58 @@ describe("a guarda da caixa", () => {
   });
 });
 
+/** A etiqueta na guarda (recebimento com caixas, parte 6; mockups WmsEtiquetaRecebimentoGuarda, WmsEtiquetaRecebimentoGuardada e WmsEtiquetaRecebimentoCelular). */
+describe("a etiqueta na guarda", () => {
+  it("com destino, Imprimir etiqueta ao lado de Não cabe aqui; sem prateleira, nada", async () => {
+    const html = render({ onEtiqueta: () => undefined });
+    expect(
+      textosForaDaLista(html, [
+        "Guarda",
+        "planejada",
+        "Guardar caixa CX-000131",
+        "AVL-0D0E620B · NF 48.230 · origem RECEBIMENTO",
+        "Destino",
+        "B-02",
+        "Rua B · prateleira 02 · zona BTG Pactual",
+        ...CONTEUDO,
+        "Concluir guarda em B-02",
+        "Não cabe aqui",
+        "Imprimir etiqueta",
+      ]),
+    ).toEqual([]);
+    expect(html).toContain("Imprimir etiqueta");
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    expect(render({ task: guarda(caixa("reviewed", "")), onEtiqueta: () => undefined })).not.toContain("Imprimir etiqueta");
+  });
+
+  it("guardada: Guardada em e só Imprimir etiqueta; quem só consulta a guarda aberta não imprime", async () => {
+    const guardada = render({
+      task: guarda(caixa("stored", "B-02"), { status: "completed", can_advance: false }),
+      podeOperar: false,
+      onEtiqueta: () => undefined,
+    });
+    expect(guardada).toContain("Guardada em");
+    expect(guardada).not.toContain("Destino");
+    expect(guardada).not.toContain("Concluir guarda");
+    expect(
+      textosForaDaLista(guardada, [
+        "Guarda",
+        /^concluída$/i,
+        "Guardar caixa CX-000131",
+        "AVL-0D0E620B · NF 48.230 · origem RECEBIMENTO",
+        "Guardada em",
+        "B-02",
+        "Rua B · prateleira 02 · zona BTG Pactual",
+        ...CONTEUDO,
+        "Imprimir etiqueta",
+      ]),
+    ).toEqual([]);
+    expect(await violacoesDeAcessibilidade(guardada)).toEqual([]);
+    const consulta = render({ task: guarda(caixa("committing", "B-02")), podeOperar: false, onEtiqueta: () => undefined });
+    expect(consulta).not.toContain("Imprimir etiqueta");
+  });
+});
+
 describe("o que a guarda lê", () => {
   it("o destino é o da caixa reservada ou guardada; sem a caixa, o da tarefa sem a origem", () => {
     expect(destinoDaCaixaNaGuarda(guarda(caixa("committing", "B-02")))).toBe("B-02");
