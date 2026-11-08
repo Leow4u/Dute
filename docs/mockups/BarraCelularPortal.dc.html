@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Portal · barra com a pílula</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2457D6}a:hover{color:#1E46B0}
+.aba{cursor:pointer;-webkit-tap-highlight-color:transparent;outline:none}
+.aba:focus-visible{outline:2px solid #2457D6;outline-offset:-3px;border-radius:12px}
+.aba .icone{transition:transform 120ms ease-out}
+.aba:active .icone{transform:scale(.9)}
+@media (prefers-reduced-motion: reduce){.pilula,.aba .icone{transition:none !important}}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 710px; overflow: hidden; display: flex; flex-direction: column; background: #F4F5F7; color: #1E293B; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; line-height: 20px; box-sizing: border-box">
+
+  <header style="flex: 0 0 64px; height: 64px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; background: #FFFFFF; border-bottom: 1px solid #EBEEF1">
+    <img src="/_blob/e31d93483f6b485b11bf4a1e453aa739" alt="Dutelog Soluções Logísticas" style="height: 32px; width: auto; max-width: 168px; display: block; object-fit: contain">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <button type="button" aria-label="Avisos" style="width: 40px; height: 40px; border: 0; border-radius: 6px; background: transparent; color: #1E293B; display: flex; align-items: center; justify-content: center; padding: 0">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></svg>
+      </button>
+      <button type="button" aria-label="Minha conta" style="width: 44px; height: 44px; border: 0; border-radius: 999px; background: transparent; display: flex; align-items: center; justify-content: center; padding: 0">
+        <span style="width: 36px; height: 36px; box-sizing: border-box; border-radius: 999px; border: 1px solid #E2E6EB; background: #EEF2F7; color: #1E293B; display: flex; align-items: center; justify-content: center">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        </span>
+      </button>
+    </div>
+  </header>
+
+  <main style="flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 20px 16px 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+    <div style="flex: 0 0 auto">
+      <h1 style="margin: 0; font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.025em">Olá, Leonardo</h1>
+      <p style="margin: 2px 0 0; font-size: 14px; line-height: 20px; color: #5D6877">BTG Pactual · domingo, 8 de novembro</p>
+    </div>
+
+    <div style="flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 10px 16px; border: 1px solid #D9D0FB; border-radius: 10px; background: linear-gradient(to right, #E8EFFC, #FBFAFF)">
+      <span style="flex: 0 0 32px; width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #FFFFFF; background: linear-gradient(to bottom right, #5B7CFA, #895AF6)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path><path d="M20 3v4"></path><path d="M22 5h-4"></path><path d="M4 17v2"></path><path d="M5 18H3"></path></svg>
+      </span>
+      <input type="text" aria-label="Pergunte ao Agent Dute" placeholder="Pergunte ao Agent Dute: &quot;o que saiu esta semana?&quot;, &quot;onde está meu pedido?&quot;…" style="flex: 1 1 auto; min-width: 0; border: 0; background: transparent; padding: 4px 0; font-family: inherit; font-size: 16px; line-height: 24px; color: #1E293B; outline: none">
+    </div>
+
+    <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 12px">
+      <a href="#estoque" style="display: flex; align-items: center; gap: 16px; padding: 16px 20px; border: 1px solid #E2E6EB; border-radius: 10px; background: #FFFFFF; color: #1E293B; text-decoration: none">
+        <span style="flex: 0 0 44px; width: 44px; height: 44px; border-radius: 14px; background: #E9EEFB; color: #2457D6; display: flex; align-items: center; justify-content: center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path><path d="m3.3 7 8.7 5 8.7-5"></path><path d="M12 22V12"></path></svg>
+        </span>
+        <span style="flex: 1 1 auto; min-width: 0">
+          <span style="display: block; font-size: 16px; line-height: 24px; font-weight: 600">Pedir itens do estoque</span>
+          <span style="display: block; font-size: 14px; line-height: 20px; color: #5D6877">7.910 peças disponíveis em 207 itens</span>
+        </span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5D6877" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 auto"><path d="m9 18 6-6-6-6"></path></svg>
+      </a>
+      <a href="#recebimentos" style="display: flex; align-items: center; gap: 16px; padding: 16px 20px; border: 1px solid #E2E6EB; border-radius: 10px; background: #FFFFFF; color: #1E293B; text-decoration: none">
+        <span style="flex: 0 0 44px; width: 44px; height: 44px; border-radius: 14px; background: #E9EEFB; color: #2457D6; display: flex; align-items: center; justify-content: center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 16h6"></path><path d="M19 13v6"></path><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="m7.5 4.27 9 5.15"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" x2="12" y1="22" y2="12"></line></svg>
+        </span>
+        <span style="flex: 1 1 auto; min-width: 0">
+          <span style="display: block; font-size: 16px; line-height: 24px; font-weight: 600">Avisar um envio</span>
+          <span style="display: block; font-size: 14px; line-height: 20px; color: #5D6877">O fornecedor vai entregar na Dutelog? Avise e anexe a NF</span>
+        </span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5D6877" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 auto"><path d="m9 18 6-6-6-6"></path></svg>
+      </a>
+    </div>
+
+    <section style="flex: 0 0 auto">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 0 4px">
+        <h2 style="margin: 0; font-size: 14px; line-height: 20px; font-weight: 600">Pedidos em andamento</h2>
+        <a href="#pedidos" style="font-size: 14px; line-height: 20px; font-weight: 500; text-decoration: none">Ver todos ›</a>
+      </div>
+      <p style="margin: 0; padding: 24px 20px; border: 1px dashed #E2E6EB; border-radius: 10px; font-size: 14px; line-height: 20px; color: #5D6877">Nenhum pedido em andamento. Use "Pedir itens do estoque" para fazer um.</p>
+    </section>
+
+    <section style="flex: 0 0 auto; border: 1px solid #E2E6EB; border-radius: 10px; background: #FFFFFF; overflow: hidden">
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid #EDEFF3">
+        <h2 style="margin: 0; font-size: 14px; line-height: 20px; font-weight: 600">Envios a caminho</h2>
+        <a href="#recebimentos" style="font-size: 14px; line-height: 20px; font-weight: 500; text-decoration: none">Ver ›</a>
+      </div>
+      <p style="margin: 0; padding: 16px 20px; font-size: 14px; line-height: 20px; color: #5D6877">Nenhum envio a caminho.</p>
+    </section>
+  </main>
+
+  <nav aria-label="Navegação principal" style="flex: 0 0 auto; display: flex; background: #FFFFFF; border-top: 1px solid #E2E6EB">
+    <button type="button" class="aba" aria-current="{{ inicio.atual }}" onClick="{{ inicio.abrir }}" style="flex: 1 1 0; min-width: 0; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0; border: 0; background: transparent; font-family: inherit; color: {{ inicio.cor }}; transition: color 150ms ease-out">
+      <span style="position: relative; width: 56px; height: 32px; display: flex; align-items: center; justify-content: center">
+        <span class="pilula" aria-hidden="true" style="position: absolute; inset: 0; border-radius: 999px; background: #E9EEFB; opacity: {{ inicio.opacidade }}; transform: {{ inicio.escala }}; transition: transform 220ms cubic-bezier(0.2, 0, 0, 1), opacity 160ms ease-out"></span>
+        <svg class="icone" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="{{ inicio.traco }}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: relative"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+      </span>
+      <span style="max-width: 100%; padding: 0 4px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; line-height: 16px; font-weight: {{ inicio.peso }}; color: {{ inicio.corDoNome }}">Início</span>
+    </button>
+    <button type="button" class="aba" aria-current="{{ pedidos.atual }}" onClick="{{ pedidos.abrir }}" style="flex: 1 1 0; min-width: 0; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0; border: 0; background: transparent; font-family: inherit; color: {{ pedidos.cor }}; transition: color 150ms ease-out">
+      <span style="position: relative; width: 56px; height: 32px; display: flex; align-items: center; justify-content: center">
+        <span class="pilula" aria-hidden="true" style="position: absolute; inset: 0; border-radius: 999px; background: #E9EEFB; opacity: {{ pedidos.opacidade }}; transform: {{ pedidos.escala }}; transition: transform 220ms cubic-bezier(0.2, 0, 0, 1), opacity 160ms ease-out"></span>
+        <svg class="icone" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="{{ pedidos.traco }}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: relative"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path><circle cx="17" cy="18" r="2"></circle><circle cx="7" cy="18" r="2"></circle></svg>
+      </span>
+      <span style="max-width: 100%; padding: 0 4px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; line-height: 16px; font-weight: {{ pedidos.peso }}; color: {{ pedidos.corDoNome }}">Pedidos</span>
+    </button>
+    <button type="button" class="aba" aria-current="{{ estoque.atual }}" onClick="{{ estoque.abrir }}" style="flex: 1 1 0; min-width: 0; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0; border: 0; background: transparent; font-family: inherit; color: {{ estoque.cor }}; transition: color 150ms ease-out">
+      <span style="position: relative; width: 56px; height: 32px; display: flex; align-items: center; justify-content: center">
+        <span class="pilula" aria-hidden="true" style="position: absolute; inset: 0; border-radius: 999px; background: #E9EEFB; opacity: {{ estoque.opacidade }}; transform: {{ estoque.escala }}; transition: transform 220ms cubic-bezier(0.2, 0, 0, 1), opacity 160ms ease-out"></span>
+        <svg class="icone" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="{{ estoque.traco }}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: relative"><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="m7.5 4.27 9 5.15"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" x2="12" y1="22" y2="12"></line><circle cx="18.5" cy="15.5" r="2.5"></circle><path d="M20.27 17.27 22 19"></path></svg>
+      </span>
+      <span style="max-width: 100%; padding: 0 4px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; line-height: 16px; font-weight: {{ estoque.peso }}; color: {{ estoque.corDoNome }}">Estoque</span>
+    </button>
+    <button type="button" class="aba" aria-current="{{ agente.atual }}" onClick="{{ agente.abrir }}" style="flex: 1 1 0; min-width: 0; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0; border: 0; background: transparent; font-family: inherit; color: {{ agente.cor }}; transition: color 150ms ease-out">
+      <span style="position: relative; width: 56px; height: 32px; display: flex; align-items: center; justify-content: center">
+        <span class="pilula" aria-hidden="true" style="position: absolute; inset: 0; border-radius: 999px; background: #E9EEFB; opacity: {{ agente.opacidade }}; transform: {{ agente.escala }}; transition: transform 220ms cubic-bezier(0.2, 0, 0, 1), opacity 160ms ease-out"></span>
+        <svg class="icone" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="{{ agente.traco }}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: relative"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"></path><path d="M9 13a4.5 4.5 0 0 0 3-4"></path><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"></path><path d="M3.477 10.896a4 4 0 0 1 .585-.396"></path><path d="M6 18a4 4 0 0 1-1.967-.516"></path><path d="M12 13h4"></path><path d="M12 18h6a2 2 0 0 1 2 2v1"></path><path d="M12 8h8"></path><path d="M16 8V5a2 2 0 0 1 2-2"></path><circle cx="16" cy="13" r=".5"></circle><circle cx="18" cy="3" r=".5"></circle><circle cx="20" cy="21" r=".5"></circle><circle cx="20" cy="8" r=".5"></circle></svg>
+      </span>
+      <span style="max-width: 100%; padding: 0 4px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; line-height: 16px; font-weight: {{ agente.peso }}; color: {{ agente.corDoNome }}">Agent Dute</span>
+    </button>
+    <button type="button" class="aba" aria-current="{{ mais.atual }}" onClick="{{ mais.abrir }}" style="flex: 1 1 0; min-width: 0; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0; border: 0; background: transparent; font-family: inherit; color: {{ mais.cor }}; transition: color 150ms ease-out">
+      <span style="position: relative; width: 56px; height: 32px; display: flex; align-items: center; justify-content: center">
+        <span class="pilula" aria-hidden="true" style="position: absolute; inset: 0; border-radius: 999px; background: #E9EEFB; opacity: {{ mais.opacidade }}; transform: {{ mais.escala }}; transition: transform 220ms cubic-bezier(0.2, 0, 0, 1), opacity 160ms ease-out"></span>
+        <svg class="icone" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="{{ mais.traco }}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: relative"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg>
+      </span>
+      <span style="max-width: 100%; padding: 0 4px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; line-height: 16px; font-weight: {{ mais.peso }}; color: {{ mais.corDoNome }}">Mais</span>
+    </button>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"nomeDaAba":{"editor":"enum","options":["azul","preto"],"default":"azul"},"$preview":{"width":390,"height":710}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const aberta = (this.state && this.state.aberta) || 'inicio';
+    const nomePreto = (this.props.nomeDaAba ?? 'azul') === 'preto';
+    const aba = (id) => {
+      const atual = aberta === id;
+      return {
+        atual: atual ? 'page' : undefined,
+        cor: atual ? '#2457D6' : '#5D6877',
+        corDoNome: atual ? (nomePreto ? '#1E293B' : '#2457D6') : '#5D6877',
+        peso: atual ? '700' : '500',
+        traco: atual ? 2.25 : 1.75,
+        escala: atual ? 'scaleX(1)' : 'scaleX(0.5)',
+        opacidade: atual ? '1' : '0',
+        abrir: () => this.setState({ aberta: id })
+      };
+    };
+    return {
+      inicio: aba('inicio'),
+      pedidos: aba('pedidos'),
+      estoque: aba('estoque'),
+      agente: aba('agente'),
+      mais: aba('mais')
+    };
+  }
+}
+</script>
+</body>
+</html>
