@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Armazenagem · barra com a pílula</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#161616}a:hover{color:#161616}
+.aba{cursor:pointer;-webkit-tap-highlight-color:transparent;outline:none}
+.aba:focus-visible{outline:2px solid #FFFFFF;outline-offset:-3px;border-radius:12px}
+.aba .icone{transition:transform 120ms ease-out}
+.aba:active .icone{transform:scale(.9)}
+@media (prefers-reduced-motion: reduce){.pilula,.aba .icone{transition:none !important}}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 710px; overflow: hidden; display: flex; flex-direction: column; background: #F5F5F3; color: #161616; font-family: Manrope, system-ui, sans-serif; font-size: 14px; line-height: 20px; box-sizing: border-box">
+
+  <header style="flex: 0 0 auto; background: #161616; color: #FFFFFF">
+    <div style="height: 64px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px">
+      <button type="button" style="height: 44px; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 4px; border: 0; border-radius: 12px; background: transparent; color: #FFFFFF; font-family: inherit; font-size: 20px; line-height: 28px; font-weight: 800; letter-spacing: -0.025em">
+        <span>Armazenagem</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="opacity: 0.7"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>
+      </button>
+      <button type="button" aria-label="Minha conta" style="width: 44px; height: 44px; border: 0; border-radius: 999px; background: transparent; display: flex; align-items: center; justify-content: center; padding: 0">
+        <span style="width: 36px; height: 36px; border-radius: 999px; background: #E71C23; color: #FFFFFF; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center">L</span>
+      </button>
+    </div>
+    <div style="height: 44px; box-sizing: border-box; display: flex; align-items: center; padding: 0 12px; border-top: 1px solid rgba(255, 255, 255, 0.1)">
+      <button type="button" style="height: 40px; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 6px; border: 0; border-radius: 12px; background: transparent; color: #FFFFFF; font-family: inherit; font-size: 14px; line-height: 20px; font-weight: 700">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"></path><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"></path><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"></path><path d="M10 6h4"></path><path d="M10 10h4"></path><path d="M10 14h4"></path><path d="M10 18h4"></path></svg>
+        <span>BTG Pactual</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="opacity: 0.7"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <main style="flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 28px">
+    <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px">
+      <p style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; color: #5F6368">Domingo, 8 de novembro</p>
+      <h1 style="margin: 0; font-size: 36px; line-height: 40px; font-weight: 800; letter-spacing: -0.025em">Boa tarde, Leonardo</h1>
+      <p style="margin: 0; font-size: 18px; line-height: 28px; color: #5F6368"><strong style="font-weight: 800; color: #BF123D">3 coisas</strong> precisam de você na Armazenagem.</p>
+    </div>
+
+    <section aria-labelledby="precisa-proposta" style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 14px">
+      <h2 id="precisa-proposta" style="margin: 0; padding: 0 4px; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #5F6368">Precisa de você</h2>
+      <ul style="margin: 0; padding: 0; list-style: none; border: 1px solid #E5E5E1; border-radius: 12px; background: #FFFFFF">
+        <li style="display: flex; flex-direction: column; gap: 12px; padding: 16px 20px">
+          <div style="display: flex; align-items: center; gap: 16px">
+            <span style="flex: 0 0 52px; width: 52px; height: 52px; box-sizing: border-box; border-radius: 12px; border: 1px solid #EEE5C8; background: #F7F5EE; color: #8B6C23; display: flex; align-items: center; justify-content: center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path><circle cx="17" cy="18" r="2"></circle><circle cx="7" cy="18" r="2"></circle></svg>
+            </span>
+            <div style="min-width: 0">
+              <p style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 700">Pedido 1042 para separar</p>
+              <p style="margin: 2px 0 0; font-size: 14px; line-height: 20px; color: #5F6368">BTG Pactual · 12 itens · desde 09:40</p>
+            </div>
+          </div>
+          <a href="#separar" style="align-self: flex-start; height: 40px; box-sizing: border-box; display: inline-flex; align-items: center; padding: 0 16px; border-radius: 10px; background: #E71C23; color: #FFFFFF; font-size: 14px; font-weight: 700; text-decoration: none">Separar</a>
+        </li>
+        <li style="display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; border-top: 1px solid #E5E5E1">
+          <div style="display: flex; align-items: center; gap: 16px">
+            <span style="flex: 0 0 52px; width: 52px; height: 52px; box-sizing: border-box; border-radius: 12px; border: 1px solid #C2D2F4; background: #E8EFFC; color: #1F4DB7; display: flex; align-items: center; justify-content: center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 16h6"></path><path d="M19 13v6"></path><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="m7.5 4.27 9 5.15"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" x2="12" y1="22" y2="12"></line></svg>
+            </span>
+            <div style="min-width: 0">
+              <p style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 700">3 caixas para guardar</p>
+              <p style="margin: 2px 0 0; font-size: 14px; line-height: 20px; color: #5F6368">Recebimento · NF 48.377</p>
+            </div>
+          </div>
+          <a href="#guardar" style="align-self: flex-start; height: 40px; box-sizing: border-box; display: inline-flex; align-items: center; padding: 0 16px; border: 1px solid #D4D4CF; border-radius: 10px; background: #FFFFFF; color: #161616; font-size: 14px; font-weight: 700; text-decoration: none">Guardar</a>
+        </li>
+        <li style="display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; border-top: 1px solid #E5E5E1">
+          <div style="display: flex; align-items: center; gap: 16px">
+            <span style="flex: 0 0 52px; width: 52px; height: 52px; box-sizing: border-box; border-radius: 12px; border: 1px solid #D9D0FB; background: #FBFAFF; color: #5C3FC6; display: flex; align-items: center; justify-content: center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path><path d="M20 3v4"></path><path d="M22 5h-4"></path><path d="M4 17v2"></path><path d="M5 18H3"></path></svg>
+            </span>
+            <div style="min-width: 0">
+              <p style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 700">Itens parados há 90 dias</p>
+              <p style="margin: 2px 0 0; font-size: 14px; line-height: 20px; color: #5F6368">Agent Dute sugere avisar o cliente</p>
+            </div>
+          </div>
+          <a href="#parados" style="align-self: flex-start; height: 40px; box-sizing: border-box; display: inline-flex; align-items: center; padding: 0 16px; border: 1px solid #D4D4CF; border-radius: 10px; background: #FFFFFF; color: #161616; font-size: 14px; font-weight: 700; text-decoration: none">Ver</a>
+        </li>
+      </ul>
+    </section>
+  </main>
+
+  <nav aria-label="Navegação principal" style="flex: 0 0 auto; display: flex; background: #161616">
+    <button type="button" class="aba" aria-current="{{ inicio.atual }}" onClick="{{ inicio.abrir }}" style="flex: 1 1 0; min-width: 0; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0; border: 0; background: transparent; font-family: inherit; color: {{ inicio.cor }}; transition: color 150ms ease-out">
+      <span style="position: relative; width: 64px; height: 32px; display: flex; align-items: center; justify-content: center">
+        <span class="pilula" aria-hidden="true" style="position: absolute; inset: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.15); opacity: {{ inicio.opacidade }}; transform: {{ inicio.escala }}; transition: transform 220ms cubic-bezier(0.2, 0, 0, 1), opacity 160ms ease-out"></span>
+        <svg class="icone" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="{{ inicio.traco }}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: relative; color: {{ inicio.corDoIcone }}"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+      </span>
+      <span style="max-width: 100%; padding: 0 4px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; line-height: 16px; font-weight: {{ inicio.peso }}">Início</span>
+    </button>
+    <button type="button" class="aba" aria-current="{{ pedidos.atual }}" onClick="{{ pedidos.abrir }}" style="flex: 1 1 0; min-width: 0; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0; border: 0; background: transparent; font-family: inherit; color: {{ pedidos.cor }}; transition: color 150ms ease-out">
+      <span style="position: relative; width: 64px; height: 32px; display: flex; align-items: center; justify-content: center">
+        <span class="pilula" aria-hidden="true" style="position: absolute; inset: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.15); opacity: {{ pedidos.opacidade }}; transform: {{ pedidos.escala }}; transition: transform 220ms cubic-bezier(0.2, 0, 0, 1), opacity 160ms ease-out"></span>
+        <svg class="icone" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="{{ pedidos.traco }}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: relative; color: {{ pedidos.corDoIcone }}"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path><circle cx="17" cy="18" r="2"></circle><circle cx="7" cy="18" r="2"></circle></svg>
+      </span>
+      <span style="max-width: 100%; padding: 0 4px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; line-height: 16px; font-weight: {{ pedidos.peso }}">Pedidos</span>
+    </button>
+    <button type="button" class="aba" aria-current="{{ estoque.atual }}" onClick="{{ estoque.abrir }}" style="flex: 1 1 0; min-width: 0; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0; border: 0; background: transparent; font-family: inherit; color: {{ estoque.cor }}; transition: color 150ms ease-out">
+      <span style="position: relative; width: 64px; height: 32px; display: flex; align-items: center; justify-content: center">
+        <span class="pilula" aria-hidden="true" style="position: absolute; inset: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.15); opacity: {{ estoque.opacidade }}; transform: {{ estoque.escala }}; transition: transform 220ms cubic-bezier(0.2, 0, 0, 1), opacity 160ms ease-out"></span>
+        <svg class="icone" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="{{ estoque.traco }}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: relative; color: {{ estoque.corDoIcone }}"><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="m7.5 4.27 9 5.15"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" x2="12" y1="22" y2="12"></line><circle cx="18.5" cy="15.5" r="2.5"></circle><path d="M20.27 17.27 22 19"></path></svg>
+      </span>
+      <span style="max-width: 100%; padding: 0 4px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; line-height: 16px; font-weight: {{ estoque.peso }}">Estoque</span>
+    </button>
+    <button type="button" class="aba" aria-current="{{ mais.atual }}" onClick="{{ mais.abrir }}" style="flex: 1 1 0; min-width: 0; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0; border: 0; background: transparent; font-family: inherit; color: {{ mais.cor }}; transition: color 150ms ease-out">
+      <span style="position: relative; width: 64px; height: 32px; display: flex; align-items: center; justify-content: center">
+        <span class="pilula" aria-hidden="true" style="position: absolute; inset: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.15); opacity: {{ mais.opacidade }}; transform: {{ mais.escala }}; transition: transform 220ms cubic-bezier(0.2, 0, 0, 1), opacity 160ms ease-out"></span>
+        <svg class="icone" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="{{ mais.traco }}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: relative; color: {{ mais.corDoIcone }}"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg>
+      </span>
+      <span style="max-width: 100%; padding: 0 4px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; line-height: 16px; font-weight: {{ mais.peso }}">Mais</span>
+    </button>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"iconeDaAba":{"editor":"enum","options":["vermelho","branco"],"default":"vermelho"},"$preview":{"width":390,"height":710}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const aberta = (this.state && this.state.aberta) || 'inicio';
+    const iconeBranco = (this.props.iconeDaAba ?? 'vermelho') === 'branco';
+    const aba = (id) => {
+      const atual = aberta === id;
+      return {
+        atual: atual ? 'page' : undefined,
+        cor: atual ? '#FFFFFF' : 'rgba(255, 255, 255, 0.7)',
+        corDoIcone: atual ? (iconeBranco ? '#FFFFFF' : '#E71C23') : 'rgba(255, 255, 255, 0.7)',
+        peso: atual ? '800' : '600',
+        traco: atual ? 2.25 : 1.75,
+        escala: atual ? 'scaleX(1)' : 'scaleX(0.5)',
+        opacidade: atual ? '1' : '0',
+        abrir: () => this.setState({ aberta: id })
+      };
+    };
+    return {
+      inicio: aba('inicio'),
+      pedidos: aba('pedidos'),
+      estoque: aba('estoque'),
+      mais: aba('mais')
+    };
+  }
+}
+</script>
+</body>
+</html>

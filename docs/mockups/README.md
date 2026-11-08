@@ -368,6 +368,36 @@ Perguntas e respostas do Leonardo (07/11/2026):
 As caixas CX-000225 e CX-000226 de 06/11 não precisam de nada: com a parte
 6, a etiqueta delas sai pelo Mapa ou por Recebidos › Guardas, com o conteúdo.
 
+A página "Barra do celular · pílula na aba aberta" tem canvas próprio
+(privado, https://claude.ai/artifact/X6QckNeqdxSkHoLteqxAKC), feito em
+08/11/2026 a partir do print do portal no iPhone, para o Leonardo avaliar no
+celular. A barra de baixo (`MobileTabBar`, um componente só para o portal e
+para os shells dos módulos) hoje só troca a cor da aba aberta. Na proposta,
+sem vidro e sem mexer no layout (`docs/sistema-visual.md`), a aba aberta
+ganha uma pílula atrás do ícone: no portal, o azul-claro do quadrado dos
+cartões do Início (`bg-primary/10`); nos módulos, o cinza da tela aberta no
+menu do computador (branco a 15%), com o ícone no vermelho da marca, como
+hoje. O nome da aba aberta fica em negrito, o ícone dela ganha traço mais
+grosso, a pílula abre do centro ao trocar de aba (0,2 s, parada com "reduzir
+movimento") e a barra passa de 56 para 64 px. As telas medem 390 × 710, como
+as outras do celular. As "hoje" reproduzem o app como está; as "proposta" são
+interativas (tocar nas abas) e têm, em Tweaks, a cor do nome da aba aberta
+(azul ou preto) no portal e a do ícone (vermelho ou branco) nos módulos. Os
+dados da Armazenagem são ilustrativos.
+
+| Tela | Arquivo | O que muda |
+|---|---|---|
+| Portal · hoje | `BarraCelularPortalHoje.dc.html` | O Início do portal como no print de 08/11/2026: a aba aberta só muda de cor. |
+| Portal · proposta | `BarraCelularPortal.dc.html` | A pílula azul-clara atrás do ícone da aba aberta, o nome em negrito e a barra de 64 px; tocar nas abas mostra a animação. No canvas, é a `Main.dc.html`. |
+| Armazenagem · hoje | `BarraCelularModuloHoje.dc.html` | O shell v3 no celular: a barra preta com o ícone da aba aberta em vermelho. |
+| Armazenagem · proposta | `BarraCelularModulo.dc.html` | A pílula cinza (branco a 15%) atrás do ícone vermelho, nos quatro itens da barra. |
+
+Perguntas para o Leonardo (também na nota do canvas):
+
+1. Aprova a pílula?
+2. No portal, o nome da aba aberta fica azul (como hoje) ou preto?
+3. Nos módulos, o ícone da aba aberta continua vermelho?
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador
