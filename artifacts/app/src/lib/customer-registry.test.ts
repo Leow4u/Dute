@@ -11,6 +11,8 @@ import {
   customerPayload,
   emptyCustomerForm,
   inviteCustomers,
+  customerInitials,
+  customerSituation,
   peopleLabel,
   portalStatusFor,
   zoneCustomers,
@@ -223,5 +225,23 @@ describe("módulos contratados no cadastro (Fase 2)", () => {
     expect(customerPayload(form, "edit", { modules: false })).not.toHaveProperty("modules");
     expect(customerPayload(form, "edit", { modules: true }).modules).toEqual(["wms", "operacao"]);
     expect(customerPayload(form, "create", { modules: true }).modules).toEqual(["wms", "operacao"]);
+  });
+});
+
+describe("a linha da lista de Configurações › Clientes", () => {
+  it("abre com a sigla do nome: duas palavras ou as duas letras de uma só", () => {
+    expect(customerInitials("Itaú Unibanco")).toBe("IU");
+    expect(customerInitials("BTG")).toBe("BT");
+    expect(customerInitials("  banco  safra s.a. ")).toBe("BS");
+    expect(customerInitials("123")).toBe("?");
+    expect(customerInitials("")).toBe("?");
+  });
+
+  it("o selo diz arquivado, pausado ou se o portal está ligado", () => {
+    const ativo = { archived: false, paused: false, profile: { portalStatus: "active" } } as const;
+    expect(customerSituation(ativo)).toEqual({ tone: "ok", label: "Portal" });
+    expect(customerSituation({ ...ativo, profile: { portalStatus: "inactive" } })).toEqual({ tone: "off", label: "Sem portal" });
+    expect(customerSituation({ ...ativo, paused: true })).toEqual({ tone: "warn", label: "Pausado" });
+    expect(customerSituation({ ...ativo, archived: true, paused: true })).toEqual({ tone: "off", label: "Arquivado" });
   });
 });

@@ -15,6 +15,7 @@ vi.mock("@/lib/auth", () => ({
   useAppUser: () => ({ user: { uid: "admin-1", publicMetadata: { role: "admin" } }, isLoaded: true }),
 }));
 vi.mock("@workspace/api-client-react", () => ({ useListBillingUsers: fronteiras.pessoas }));
+vi.mock("@/hooks/use-desktop", () => ({ useIsDesktop: () => true }));
 vi.mock("@/lib/liberacao", async (original) => ({
   ...await original<typeof import("@/lib/liberacao")>(),
   COMERCIAL_LIBERADO: false,
@@ -134,11 +135,23 @@ async function montarClientes() {
   await esperar(() => expect(container.textContent).toContain(CLIENTE.name));
 }
 
+/** A ficha do cliente escolhido na lista (a tela é lista com ficha). */
+function ficha() {
+  const article = container.querySelector("article");
+  expect(article, "ficha do cliente").toBeTruthy();
+  return article!;
+}
+
+async function escolher(nome: string) {
+  const button = [...container.querySelectorAll<HTMLButtonElement>("li button")].find((item) => item.textContent?.includes(nome));
+  expect(button, `cliente ${nome}`).toBeTruthy();
+  await act(async () => button!.click());
+}
+
 async function abrir(customer = CLIENTE) {
   await montarClientes();
-  const row = [...container.querySelectorAll("tbody tr")].find((item) => item.textContent?.includes(customer.name));
-  expect(row).toBeTruthy();
-  await tocar("Avisos por e-mail", row!);
+  await escolher(customer.name);
+  await tocar("Avisos por e-mail", ficha());
 }
 
 async function novoContato() {
@@ -202,8 +215,9 @@ describe("destinatários de avisos em Configurações › Clientes", () => {
     clientes.push({ ...OUTRO_CLIENTE, status: "archived" });
     await montarClientes();
     await tocar("Mostrar 1 arquivado");
-    const row = [...container.querySelectorAll("tbody tr")].find((item) => item.textContent?.includes(OUTRO_CLIENTE.name))!;
-    expect(botao("Avisos por e-mail", row)?.disabled).toBe(true);
+    await escolher(OUTRO_CLIENTE.name);
+    expect(ficha().textContent).toContain(OUTRO_CLIENTE.name);
+    expect(botao("Avisos por e-mail", ficha())?.disabled).toBe(true);
     expect(fronteiras.escutar).not.toHaveBeenCalled();
   });
 

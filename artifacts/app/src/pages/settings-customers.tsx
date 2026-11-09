@@ -25,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/page-header";
@@ -35,15 +36,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { useIsDesktop } from "@/hooks/use-desktop";
 import { useToast } from "@/hooks/use-toast";
 import {
   buildCustomerRows,
   customerDocumentId,
   customerFormFrom,
   customerFormProblem,
+  customerInitials,
   customerPayload,
+  customerSituation,
   emptyCustomerForm,
   peopleLabel,
   portalStatusFor,
@@ -56,7 +61,6 @@ import {
   type PersonRecord,
 } from "@/lib/customer-registry";
 import {
-  OPERATION_PACKS,
   OPERATION_TEMPLATES,
   canonicalSkuPrefix,
   operationTemplate,
@@ -80,6 +84,13 @@ import SettingsCustomerNotifications from "./settings-customer-notifications";
  * por contrato entra no pacote do cliente, também em código. Aqui só se
  * escolhe o modelo, a sigla do SKU e o portal
  * (docs/multicliente-modelos-de-operacao.md).
+ *
+ * A tela é lista com ficha, como Clientes nos outros módulos
+ * (docs/mockups/Cadastros.dc.html, ModOpClientes.dc.html): a lista à esquerda,
+ * com nome, código, modelo e o selo do portal; a ficha do cliente escolhido à
+ * direita, por seção (operação, armazém, portal e contrato), com "Editar" e
+ * "Avisos por e-mail". No celular a ficha abre num sheet. Sem legenda: só
+ * rótulos, dados e ações.
  */
 
 const CUSTOMERS_KEY = ["admin-customers"];
@@ -147,6 +158,262 @@ function FormField({
   );
 }
 
+function Initials({ name, muted, large }: { name: string; muted?: boolean; large?: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "grid shrink-0 place-items-center rounded-md font-semibold",
+        large ? "h-12 w-12 text-sm" : "h-9 w-9 text-xs",
+        muted ? "bg-muted text-muted-foreground" : "bg-info-soft text-info-soft-foreground",
+      )}
+    >
+      {customerInitials(name)}
+    </span>
+  );
+}
+
+function FichaLink({ href, children }: { href: string; children: string }) {
+  return (
+    <Link href={href} className="inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline">
+      {children}
+      <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+    </Link>
+  );
+}
+
+function Secao({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="px-5 py-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+      <dl className="mt-3 space-y-2.5">{children}</dl>
+    </section>
+  );
+}
+
+function Campo({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-0.5 sm:grid-cols-[148px_minmax(0,1fr)] sm:gap-3">
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 text-sm text-foreground">{children}</dd>
+    </div>
+  );
+}
+
+/** A lista: uma linha por cliente, com a linha escolhida marcada. */
+function ListaDeClientes({
+  rows,
+  selectedCode,
+  onSelect,
+  archivedCount,
+  showArchived,
+  onToggleArchived,
+}: {
+  rows: CustomerRow[];
+  selectedCode: string | null;
+  onSelect: (code: string) => void;
+  archivedCount: number;
+  showArchived: boolean;
+  onToggleArchived: () => void;
+}) {
+  return (
+    <section aria-label="Lista de clientes" className="overflow-hidden rounded-lg border border-border bg-card">
+      {rows.length === 0 ? (
+        <p role="status" className="px-5 py-6 text-sm text-muted-foreground">
+          Nenhum cliente ativo
+        </p>
+      ) : (
+        <ul className="divide-y divide-border/60">
+          {rows.map((row) => {
+            const current = row.code === selectedCode;
+            const situation = customerSituation(row);
+            return (
+              <li key={row.code}>
+                <button
+                  type="button"
+                  aria-current={current ? "true" : undefined}
+                  onClick={() => onSelect(row.code)}
+                  className={cn(
+                    "relative flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40",
+                    current &&
+                      "bg-muted/60 before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-primary",
+                  )}
+                >
+                  <Initials name={row.name} muted={row.archived} />
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={cn("block truncate text-sm font-medium", row.archived ? "text-muted-foreground" : "text-foreground")}
+                    >
+                      {row.name}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {`${row.code} · ${row.profile.template.label}`}
+                    </span>
+                  </span>
+                  <StatusBadge tone={situation.tone}>{situation.label}</StatusBadge>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground lg:hidden" aria-hidden="true" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {archivedCount > 0 ? (
+        <div className="border-t border-border/60 px-4 py-2 text-xs">
+          <button type="button" className="font-medium text-primary hover:underline" onClick={onToggleArchived}>
+            {showArchived ? "Esconder arquivados" : `Mostrar ${archivedCount} arquivado${archivedCount === 1 ? "" : "s"}`}
+          </button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * A ficha do cliente escolhido: o que o cadastro aponta (modelo, pacote e
+ * sigla), o que vem de outras telas (a zona, de Estoque › Posições; as
+ * pessoas, de Pessoas e acessos) e o contrato. Mudar é pelo diálogo "Editar".
+ */
+function FichaDoCliente({
+  row,
+  contactsEnabled,
+  embedded = false,
+  onEdit,
+  onNotifications,
+}: {
+  row: CustomerRow;
+  contactsEnabled: boolean;
+  /** Dentro do sheet do celular: sem a própria borda e com espaço para o "Fechar". */
+  embedded?: boolean;
+  onEdit: () => void;
+  onNotifications: () => void;
+}) {
+  const { profile, customer } = row;
+  const contact = String(customer.primary_contact_name ?? "").trim();
+  const email = String(customer.primary_contact_email ?? "").trim();
+  const notes = String(customer.notes ?? "").trim();
+  return (
+    <article
+      aria-labelledby="cliente-ficha-titulo"
+      className={cn("overflow-hidden bg-card", !embedded && "rounded-lg border border-border")}
+    >
+      <header
+        className={cn(
+          "flex flex-col gap-4 border-b border-border/60 px-5 py-4 sm:flex-row sm:items-center",
+          embedded && "pr-14",
+        )}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <Initials name={row.name} muted={row.archived} large />
+          <div className="min-w-0">
+            <h2 id="cliente-ficha-titulo" className="truncate text-lg font-semibold text-foreground">
+              {row.name}
+            </h2>
+            <p className="truncate text-sm text-muted-foreground">{row.code}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {contactsEnabled ? (
+            <Button variant="outline" size="sm" disabled={row.archived} onClick={onNotifications}>
+              <Mail aria-hidden="true" />
+              Avisos por e-mail
+            </Button>
+          ) : null}
+          <Button variant="outline" size="sm" onClick={onEdit}>
+            <Pencil aria-hidden="true" />
+            Editar
+          </Button>
+        </div>
+      </header>
+      <div className="divide-y divide-border/60">
+        <Secao title="Operação">
+          <Campo label="Modelo de operação">
+            <span className="inline-flex flex-wrap items-center gap-2">
+              {profile.template.label}
+              <StatusBadge tone={profile.template.status === "ready" ? "ok" : "off"}>
+                {templateStatusLabel(profile.template)}
+              </StatusBadge>
+            </span>
+          </Campo>
+          <Campo label="Pacote de código">{profile.pack ? <CodeBadge>{profile.pack.key}</CodeBadge> : "Nenhum"}</Campo>
+          <Campo label="Sigla do SKU">
+            {profile.skuPrefix ? (
+              <span className="inline-flex flex-wrap items-center gap-2">
+                <CodeBadge>{profile.skuPrefix}</CodeBadge>
+                <span className="font-mono text-xs text-muted-foreground">{skuExample(profile.skuPrefix)}</span>
+              </span>
+            ) : (
+              <StatusBadge tone="warn">A definir</StatusBadge>
+            )}
+          </Campo>
+          {PLATAFORMA_LIBERADA ? (
+            <Campo label="Módulos contratados">{profile.modules.map((key) => MODULO_ROTULO[key]).join(" · ")}</Campo>
+          ) : null}
+        </Secao>
+        <Secao title="Armazém">
+          <Campo label="Zona">
+            {row.zone ? (
+              <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+                {zoneLabel(row.zone)}
+                <FichaLink href="/estoque/posicoes">Posições</FichaLink>
+              </span>
+            ) : (
+              <FichaLink href="/estoque/posicoes">{zoneLabel(null)}</FichaLink>
+            )}
+          </Campo>
+        </Secao>
+        <Secao title="Portal do cliente">
+          <Campo label="Situação">
+            {row.archived ? (
+              <StatusBadge tone="off">Arquivado</StatusBadge>
+            ) : profile.portalStatus === "active" ? (
+              <StatusBadge tone="ok">Ativo</StatusBadge>
+            ) : (
+              <StatusBadge tone="off">Sem portal</StatusBadge>
+            )}
+          </Campo>
+          <Campo label="Pessoas">
+            <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+              {peopleLabel(row.people)}
+              {row.invitable ? (
+                <FichaLink href={`/configuracoes/pessoas?convidar=cliente&cliente=${encodeURIComponent(row.code)}`}>
+                  Convidar
+                </FichaLink>
+              ) : null}
+            </span>
+          </Campo>
+        </Secao>
+        <Secao title="Contrato">
+          <Campo label="Situação">
+            {row.archived ? (
+              <StatusBadge tone="off">Arquivado</StatusBadge>
+            ) : row.paused ? (
+              <StatusBadge tone="warn">Pausado</StatusBadge>
+            ) : (
+              <StatusBadge tone="ok">Ativo</StatusBadge>
+            )}
+          </Campo>
+          <Campo label="Razão social">{String(customer.legal_name ?? "").trim() || "—"}</Campo>
+          <Campo label="CNPJ">{String(customer.document ?? "").trim() || "—"}</Campo>
+          <Campo label="Contato principal">
+            {contact || email ? (
+              <>
+                {contact ? <span className="block">{contact}</span> : null}
+                {email ? <span className="block text-muted-foreground">{email}</span> : null}
+              </>
+            ) : (
+              "—"
+            )}
+          </Campo>
+          <Campo label="Observações internas">
+            <span className="whitespace-pre-line">{notes || "—"}</span>
+          </Campo>
+        </Secao>
+      </div>
+    </article>
+  );
+}
+
 export default function SettingsCustomers() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -156,6 +423,8 @@ export default function SettingsCustomers() {
   const [archiving, setArchiving] = useState<CustomerRow | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [notificationCustomer, setNotificationCustomer] = useState<CustomerRow | null>(null);
+  const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const desktop = useIsDesktop();
   // O cadastro de contatos continua disponível quando só as telas do
   // Comercial estão pausadas; fora dos projetos liberados, a callable não atende.
   const contactsEnabled = comercialLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
@@ -184,6 +453,10 @@ export default function SettingsCustomers() {
   );
   const archivedCount = rows.filter((row) => row.archived).length;
   const visible = showArchived ? rows : rows.filter((row) => !row.archived);
+  // No computador a ficha mostra sempre alguém: a escolha ou o primeiro da
+  // lista. No celular só a escolha, que abre o sheet.
+  const chosen = visible.find((row) => row.code === selectedCode) ?? null;
+  const shown = chosen ?? (desktop ? (visible[0] ?? null) : null);
 
   const mode: FormMode = dialog?.mode === "edit" ? "edit" : "create";
   const template = operationTemplate(form.operation_template) ?? OPERATION_TEMPLATES[0];
@@ -227,23 +500,27 @@ export default function SettingsCustomers() {
     ]);
 
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<string | null> => {
       const problem = customerFormProblem(form, mode);
       if (problem) throw new Error(problem);
       if (dialog?.mode === "edit") {
-        return apiJson(`/api/customers/${encodeURIComponent(customerDocumentId(dialog.row.customer))}`, {
+        await apiJson(`/api/customers/${encodeURIComponent(customerDocumentId(dialog.row.customer))}`, {
           method: "PATCH",
           body: JSON.stringify(customerPayload(form, "edit", { modules: PLATAFORMA_LIBERADA })),
         });
+        return null;
       }
-      return apiJson("/api/customers", {
+      await apiJson("/api/customers", {
         method: "POST",
         body: JSON.stringify(customerPayload(form, "create", { modules: PLATAFORMA_LIBERADA })),
       });
+      return form.code.trim();
     },
-    onSuccess: async () => {
+    onSuccess: async (created) => {
       closeDialog();
       await invalidate();
+      // O cliente novo já abre na ficha.
+      if (created) setSelectedCode(created);
       toast({ title: mode === "create" ? "Cliente cadastrado" : "Dados do cliente salvos" });
     },
     onError: (error) =>
@@ -272,194 +549,80 @@ export default function SettingsCustomers() {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <PageHeader
         title="Clientes"
-        description="Cada cliente nasce de um modelo de operação. O que o modelo define vive em código; o que muda por contrato entra no pacote do cliente, também em código. Aqui só se escolhe."
         actions={
           <Button onClick={openCreate} disabled={customers.isLoading}>
-            <Plus className="h-4 w-4" />
+            <Plus aria-hidden="true" />
             Novo cliente
           </Button>
         }
       />
 
-      <section className="overflow-hidden rounded-lg border border-border bg-card">
-        {customers.isLoading ? (
-          <div className="space-y-3 p-5">
-            <Skeleton className="h-5 w-2/3" />
-            <Skeleton className="h-5 w-1/2" />
-            <Skeleton className="h-5 w-3/5" />
-          </div>
-        ) : customers.isError ? (
-          <p className="px-5 py-4 text-sm text-destructive">
-            {humanApiError(customers.error, "Não foi possível carregar os clientes.")}
-          </p>
-        ) : visible.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-muted-foreground">
-            Nenhum cliente cadastrado. Comece pelo primeiro em "Novo cliente".
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
-                  <th className="px-4 py-2.5 font-medium">Cliente</th>
-                  <th className="px-4 py-2.5 font-medium">Sigla do SKU</th>
-                  <th className="px-4 py-2.5 font-medium">Modelo de operação</th>
-                  <th className="px-4 py-2.5 font-medium">Pacote de código</th>
-                  <th className="px-4 py-2.5 font-medium">Zona no armazém</th>
-                  <th className="px-4 py-2.5 font-medium">Portal</th>
-                  <th className="px-4 py-2.5 font-medium">Pessoas</th>
-                  <th className="px-4 py-2.5" />
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map((row) => (
-                  <tr
-                    key={row.code}
-                    className={cn(
-                      "border-b border-border/40 align-middle last:border-0",
-                      row.archived && "text-muted-foreground",
-                    )}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-foreground">{row.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {row.code}
-                        {row.paused ? " · pausado" : ""}
-                        {row.archived ? " · arquivado" : ""}
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {row.profile.skuPrefix ? (
-                        <CodeBadge>{row.profile.skuPrefix}</CodeBadge>
-                      ) : (
-                        <StatusBadge tone="warn">a definir</StatusBadge>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {row.profile.template.label}
-                      {row.profile.template.status === "building" ? (
-                        <span className="ml-1.5 text-xs text-muted-foreground">em construção</span>
-                      ) : null}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {row.profile.pack ? (
-                        <CodeBadge>{row.profile.pack.key}</CodeBadge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">sem pacote (só o modelo)</span>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {row.zone ? (
-                        zoneLabel(row.zone)
-                      ) : (
-                        <Link href="/estoque/posicoes" className="text-muted-foreground hover:underline">
-                          {zoneLabel(null)}
-                        </Link>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {row.archived ? (
-                        <StatusBadge tone="off">Arquivado</StatusBadge>
-                      ) : row.profile.portalStatus === "active" ? (
-                        <StatusBadge tone="ok">Ativo</StatusBadge>
-                      ) : (
-                        <StatusBadge tone="off">Sem portal</StatusBadge>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {peopleLabel(row.people)}
-                      {row.invitable ? (
-                        <Link
-                          href={`/configuracoes/pessoas?convidar=cliente&cliente=${encodeURIComponent(row.code)}`}
-                          className="ml-2 inline-flex items-center text-xs font-medium text-primary hover:underline"
-                        >
-                          Convidar
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </Link>
-                      ) : null}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-2 text-right">
-                      {contactsEnabled ? (
-                        <Button variant="ghost" size="sm" disabled={row.archived} onClick={() => setNotificationCustomer(row)}>
-                          <Mail className="h-4 w-4" />
-                          Avisos por e-mail
-                        </Button>
-                      ) : null}
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(row)}>
-                        <Pencil className="h-4 w-4" />
-                        Editar
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {archivedCount > 0 ? (
-          <div className="border-t border-border/60 px-4 py-2 text-xs text-muted-foreground">
-            <button
-              type="button"
-              className="font-medium text-primary hover:underline"
-              onClick={() => setShowArchived((state) => !state)}
-            >
-              {showArchived ? "Esconder arquivados" : `Mostrar ${archivedCount} arquivado${archivedCount === 1 ? "" : "s"}`}
-            </button>
-          </div>
-        ) : null}
-      </section>
+      {customers.isLoading ? (
+        <div
+          role="status"
+          className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-5 py-6 text-sm text-muted-foreground"
+        >
+          <Spinner />
+          Carregando clientes…
+        </div>
+      ) : customers.isError ? (
+        <ErroNaLeitura
+          mensagem={humanApiError(customers.error, "Não foi possível carregar os clientes.")}
+          tentando={customers.isFetching}
+          onTentar={() => void customers.refetch()}
+        />
+      ) : rows.length === 0 ? (
+        <p role="status" className="rounded-lg border border-border bg-card px-5 py-12 text-center text-sm font-medium">
+          Nenhum cliente cadastrado
+        </p>
+      ) : (
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+          <ListaDeClientes
+            rows={visible}
+            selectedCode={shown?.code ?? null}
+            onSelect={setSelectedCode}
+            archivedCount={archivedCount}
+            showArchived={showArchived}
+            onToggleArchived={() => setShowArchived((state) => !state)}
+          />
+          {desktop && shown ? (
+            <FichaDoCliente
+              row={shown}
+              contactsEnabled={contactsEnabled}
+              onEdit={() => openEdit(shown)}
+              onNotifications={() => setNotificationCustomer(shown)}
+            />
+          ) : null}
+        </div>
+      )}
 
-      <section className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-lg border border-border bg-card px-5 py-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            1 · Modelo de operação (código)
-          </div>
-          <ul className="mt-3 space-y-2.5 text-sm">
-            {OPERATION_TEMPLATES.map((item) => (
-              <li key={item.key}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{item.label}</span>
-                  <StatusBadge tone={item.status === "ready" ? "ok" : "off"}>{templateStatusLabel(item)}</StatusBadge>
-                </div>
-                <div className="text-xs leading-5 text-muted-foreground">{item.summary}</div>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="rounded-lg border border-border bg-card px-5 py-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            2 · Pacote do cliente (código, opcional)
-          </div>
-          <ul className="mt-3 space-y-2.5 text-sm">
-            {OPERATION_PACKS.map((item) => (
-              <li key={item.key}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{item.label}</span>
-                  <CodeBadge>{item.key}</CodeBadge>
-                </div>
-                <div className="text-xs leading-5 text-muted-foreground">{item.summary}</div>
-              </li>
-            ))}
-            <li className="text-xs leading-5 text-muted-foreground">
-              Uma solicitação específica de um cliente vira regra no pacote dele, com teste. Quando outro
-              cliente pedir o mesmo, a regra sobe para o modelo.
-            </li>
-          </ul>
-        </div>
-        <div className="rounded-lg border border-border bg-card px-5 py-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            3 · Cadastro (aqui)
-          </div>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            O cadastro só aponta para o modelo e guarda a sigla do SKU. A zona no armazém é definida em
-            Estoque › Posições; quem entra no portal, em Pessoas e acessos. O portal do cliente mostra só os
-            módulos do modelo dele.
-          </p>
-        </div>
-      </section>
+      {!desktop ? (
+        <Sheet
+          open={chosen !== null}
+          onOpenChange={(open) => {
+            if (!open) setSelectedCode(null);
+          }}
+        >
+          <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto rounded-t-lg bg-card p-0">
+            <SheetHeader className="sr-only">
+              <SheetTitle>{chosen?.name}</SheetTitle>
+              <SheetDescription>{chosen?.code}</SheetDescription>
+            </SheetHeader>
+            {chosen ? (
+              <FichaDoCliente
+                row={chosen}
+                embedded
+                contactsEnabled={contactsEnabled}
+                onEdit={() => openEdit(chosen)}
+                onNotifications={() => setNotificationCustomer(chosen)}
+              />
+            ) : null}
+          </SheetContent>
+        </Sheet>
+      ) : null}
 
       {notificationCustomer ? (
         <SettingsCustomerNotifications

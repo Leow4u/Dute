@@ -291,3 +291,31 @@ export function peopleLabel(count: number): string {
   if (count === 0) return "Ninguém no portal";
   return count === 1 ? "1 pessoa" : `${count} pessoas`;
 }
+
+/**
+ * A sigla que abre a linha do cliente na lista: a inicial das duas primeiras
+ * palavras ("Itaú Unibanco" vira "IU") ou, com uma palavra só, as duas
+ * primeiras letras ("BTG" vira "BT"). Sem letra, "?".
+ */
+export function customerInitials(name: string): string {
+  const words = String(name ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter((part) => /^\p{L}/u.test(part));
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
+  return words
+    .slice(0, 2)
+    .map((part) => part[0]!.toUpperCase())
+    .join("");
+}
+
+/** O selo da linha: arquivado e pausado antes do portal; o resto diz se tem portal. */
+export function customerSituation(
+  row: Pick<CustomerRow, "archived" | "paused" | "profile">,
+): { tone: "ok" | "off" | "warn"; label: string } {
+  if (row.archived) return { tone: "off", label: "Arquivado" };
+  if (row.paused) return { tone: "warn", label: "Pausado" };
+  if (row.profile.portalStatus === "active") return { tone: "ok", label: "Portal" };
+  return { tone: "off", label: "Sem portal" };
+}

@@ -63,7 +63,8 @@ Um modelo novo nasce quando dois clientes pedem a mesma coisa.
   BTG"; o endereço antigo redireciona): lista com sigla, modelo, pacote
   encontrado, zona no armazém (de Estoque › Posições), portal e pessoas;
   cadastro e edição com o modelo, a sigla (sugerida pelo nome), o portal e a
-  ficha "O que o modelo define"; arquivar.
+  ficha "O que o modelo define"; arquivar. Desde 09/11/2026 a tela é lista
+  com ficha (ver "A tela de Clientes", abaixo).
 - **Convite por cliente** (Pessoas e acessos): o perfil cliente escolhe a conta
   do portal entre os clientes com portal ativo; "Convidar" na lista de
   clientes já chega com o cliente escolhido.
@@ -227,6 +228,36 @@ $env:FUNCTIONS_DISCOVERY_TIMEOUT = "180"
 firebase deploy --only functions --project dute-btg
 tools\check_functions_invoker.ps1
 ```
+
+## A tela de Clientes (09/11/2026): lista com ficha
+
+A tabela de oito colunas de 19/10 não cabia na área da Configuração: as
+colunas de pessoas e de ações ficavam fora da tela, atrás de uma rolagem
+lateral, e os três cartões abaixo dela explicavam as camadas (legenda, que a
+regra de 23/10/2026 proíbe: só rótulos, dados e ações). A tela passou a ser
+lista com ficha, como Clientes nos outros módulos
+(`docs/mockups/Cadastros.dc.html`, `ModOpClientes.dc.html`), no visual da
+Configuração (`docs/sistema-visual.md`):
+
+- **A lista**, à esquerda: uma linha por cliente, com a sigla do nome, o nome,
+  o código operacional, o modelo de operação e o selo (Portal, Sem portal,
+  Pausado ou Arquivado); os arquivados entram por "Mostrar N arquivados".
+  No computador o primeiro cliente já abre na ficha; no celular a lista fica
+  sozinha e o cliente tocado abre a ficha num sheet.
+- **A ficha**, à direita, por seção: Operação (modelo e situação dele, pacote
+  de código, sigla do SKU com o exemplo gerado, módulos contratados), Armazém
+  (a zona, de Estoque › Posições, com o atalho), Portal do cliente (situação,
+  pessoas e "Convidar") e Contrato (situação, razão social, CNPJ, contato
+  principal e observações internas). "Editar" abre o mesmo diálogo de antes;
+  "Avisos por e-mail", os destinatários. O cliente novo já abre na ficha.
+- A área da Configuração usa a largura inteira nesta tela, como em Pessoas e
+  acessos. `settings-customers.test.tsx` lista os textos da tela (a trava
+  contra legenda) e roda o axe; `customer-registry.ts` tem a sigla do nome
+  (`customerInitials`) e o selo da linha (`customerSituation`), com teste.
+
+O diálogo de cadastro e edição não mudou nesta parte; os textos de apoio
+dele (o pacote encontrado, "mudar o modelo é um PR") ficam para uma parte
+própria.
 
 ## Prospect do Comercial (20/10/2026): o WMS não enxerga
 
