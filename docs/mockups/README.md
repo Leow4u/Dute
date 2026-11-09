@@ -368,6 +368,28 @@ Perguntas e respostas do Leonardo (07/11/2026):
 As caixas CX-000225 e CX-000226 de 06/11 não precisam de nada: com a parte
 6, a etiqueta delas sai pelo Mapa ou por Recebidos › Guardas, com o conteúdo.
 
+A página "Configuração · Clientes" não tem canvas: é a proposta de
+09/11/2026, feita no mesmo dia em que o Leonardo recusou a lista com ficha
+(lista à esquerda, ficha à direita) do PR 589, e **espera a avaliação dele**.
+A tela vira galeria de cartões (um por cliente, com a sigla do nome numa cor
+do próprio cliente, o modelo, o pacote, o selo do portal e os números) e cada
+cliente ganha a própria página, com as seções Operação, Armazém, Portal do
+cliente, Contrato e Avisos por e-mail em cartões, cada uma com o próprio
+"Editar" no lugar. A Configuração inteira aparece na v3 (barra preta, Manrope,
+o vermelho só na ação principal). As fontes são estáticas e os dados, fictícios
+(o cliente Dutelog, de Insumos internos, não existe no cadastro; "cliente
+desde", "último acesso", as prateleiras ocupadas por rua e as caixas guardadas
+são dados que a tela de hoje não lê).
+
+| Tela | Arquivo |
+|---|---|
+| Configuração · Clientes, a galeria | `ConfigClientes.dc.html` |
+| Configuração · a página do cliente (BTG) | `ConfigCliente.dc.html` |
+| A página com o Contrato em edição no lugar | `ConfigClienteEditar.dc.html` |
+| A página com o menu de mais ações aberto | `ConfigClienteMenu.dc.html` |
+| Celular · a lista | `ConfigClientesCelular.dc.html` |
+| Celular · a página do cliente | `ConfigClienteCelular.dc.html` |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador
