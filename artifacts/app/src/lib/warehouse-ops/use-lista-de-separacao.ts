@@ -37,17 +37,40 @@ export function useCaixasDoCliente(cliente?: string | null) {
   });
 }
 
+/** A lista e o estado das duas leituras de que ela depende. */
+export type LeituraDaLista = {
+  grupos: GrupoDaLista[];
+  /** A primeira leitura das posições ou das caixas ainda não voltou. */
+  carregando: boolean;
+  /** A leitura das posições falhou: a ordem é a do código da prateleira. */
+  semPosicoes: boolean;
+  /** A leitura das caixas falhou: a linha sai sem caixa. */
+  semCaixas: boolean;
+};
+
 /**
  * As linhas do pedido por prateleira, na ordem de caminhada, com a caixa de
  * cada item. Enquanto as posições não chegam (ou se a leitura falha), a ordem
  * é a do código da prateleira; enquanto as caixas não chegam, a linha sai sem
- * caixa: a lista nunca fica em branco.
+ * caixa: a lista nunca fica em branco. A folha impressa espera as duas
+ * leituras e avisa a que falhou.
  */
-export function useListaDeSeparacao(itens: readonly WarehouseTaskItem[], cliente?: string | null): GrupoDaLista[] {
+export function useLeituraDaLista(itens: readonly WarehouseTaskItem[], cliente?: string | null): LeituraDaLista {
   const posicoes = usePosicoesDoArmazem(itens.length > 0);
   const caixas = useCaixasDoCliente(itens.length > 0 ? cliente : null);
-  return useMemo(
+  const grupos = useMemo(
     () => gruposDaSeparacao(itens, posicoes.data?.items ?? [], { caixas: caixas.data, cliente }),
     [itens, posicoes.data?.items, caixas.data, cliente],
   );
+  return {
+    grupos,
+    carregando: posicoes.isLoading || caixas.isLoading,
+    semPosicoes: posicoes.isError && !posicoes.data,
+    semCaixas: caixas.isError && !caixas.data,
+  };
+}
+
+/** Só a lista, para a fila de Pedidos. */
+export function useListaDeSeparacao(itens: readonly WarehouseTaskItem[], cliente?: string | null): GrupoDaLista[] {
+  return useLeituraDaLista(itens, cliente).grupos;
 }

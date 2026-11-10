@@ -1,5 +1,6 @@
 import { nomeComTamanho, nomeSemTamanho, ordemDoTamanho, tamanhoDoCodigo } from "@workspace/dominio";
 
+import { textoDoParaQuandoComAno } from "../order-queue";
 import type { WarehouseTaskItem } from "./model";
 
 /**
@@ -147,4 +148,76 @@ export function gruposDaSeparacao(
         )
         .map(({ ordem: _ordem, familia: _familia, tamanho: _tamanho, ...linha }) => linha),
     }));
+}
+
+/**
+ * A folha impressa da lista (docs/mockups/WmsSepararListaImpressa.dc.html):
+ * o cabeçalho com o pedido e as prateleiras na ordem de caminhada. Os textos
+ * chegam prontos: o papel só os mostra.
+ */
+export type FolhaDaLista = {
+  numero: string;
+  cliente: string;
+  destino: string;
+  /** "Seg 16/11/2026 11:36"; "" sem prazo. */
+  paraQuando: string;
+  /** "116 itens · 3.335 un." */
+  resumo: string;
+  /** "10/11/2026 14:20" */
+  impressaEm: string;
+  por: string;
+  grupos: GrupoDaLista[];
+};
+
+const DATA_E_HORA_EM_SAO_PAULO = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+/** "10/11/2026 14:20", no horário de São Paulo. */
+export function impressaEmTexto(agora: Date): string {
+  const partes = Object.fromEntries(DATA_E_HORA_EM_SAO_PAULO.formatToParts(agora).map((parte) => [parte.type, parte.value]));
+  return `${partes.day}/${partes.month}/${partes.year} ${partes.hour}:${partes.minute}`;
+}
+
+export function folhaDaLista(dados: {
+  numero: string;
+  cliente?: string | null;
+  destino?: string | null;
+  /** O `due_at` da solicitação que originou o pedido. */
+  paraQuando?: unknown;
+  por?: string | null;
+  agora: Date;
+  grupos: GrupoDaLista[];
+}): FolhaDaLista {
+  return {
+    numero: texto(dados.numero),
+    cliente: texto(dados.cliente),
+    destino: texto(dados.destino),
+    paraQuando: textoDoParaQuandoComAno(dados.paraQuando),
+    resumo: resumoDoGrupo({
+      itens: dados.grupos.reduce((soma, grupo) => soma + grupo.itens, 0),
+      unidades: dados.grupos.reduce((soma, grupo) => soma + grupo.unidades, 0),
+    }),
+    impressaEm: impressaEmTexto(dados.agora),
+    por: texto(dados.por),
+    grupos: dados.grupos,
+  };
+}
+
+/** O endereço da lista para imprimir: o pedido vai na busca, como nas Etiquetas. */
+export const ROTA_DA_LISTA_DE_SEPARACAO = "/pedidos/lista";
+
+export function hrefDaListaDeSeparacao(pedido: string): string {
+  return `${ROTA_DA_LISTA_DE_SEPARACAO}?pedido=${encodeURIComponent(pedido)}`;
+}
+
+/** O pedido da busca (`?pedido=ord_…`); sem ele, null. */
+export function pedidoDaBusca(busca: string): string | null {
+  return new URLSearchParams(busca).get("pedido")?.trim() || null;
 }

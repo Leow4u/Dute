@@ -8,6 +8,7 @@ import {
   ordersGroupEmpty,
   paraQuandoDoPedido,
   textoDoParaQuando,
+  textoDoParaQuandoComAno,
 } from "./order-queue";
 import type { OrderGroup } from "./warehouse-ops/orders";
 import type { WarehouseOpsResponse, WarehouseTask } from "./warehouse-ops/model";
@@ -132,6 +133,15 @@ describe("o Para quando que o cliente pediu", () => {
     expect(textoDoParaQuando("2026-11-06T01:30:00.000Z")).toBe("Qui 05/11 22:30");
     expect(textoDoParaQuando({ seconds: Date.parse("2026-11-05T12:00:00.000Z") / 1000 })).toBe("Qui 05/11 09:00");
     expect(textoDoParaQuando(new Date("2026-11-05T12:00:00.000Z"))).toBe("Qui 05/11 09:00");
+  });
+
+  it("no papel que fica guardado, a mesma data com o ano", () => {
+    expect(textoDoParaQuandoComAno("2026-11-16T14:36:00.000Z")).toBe("Seg 16/11/2026 11:36");
+    // 01:30 em UTC do dia 1º de janeiro ainda é o ano anterior em São Paulo.
+    expect(textoDoParaQuandoComAno("2027-01-01T01:30:00.000Z")).toBe("Qui 31/12/2026 22:30");
+    expect(textoDoParaQuandoComAno({ seconds: Date.parse("2026-11-05T12:00:00.000Z") / 1000 })).toBe("Qui 05/11/2026 09:00");
+    expect(textoDoParaQuandoComAno("amanhã")).toBe("");
+    expect(textoDoParaQuandoComAno(null)).toBe("");
   });
 
   it("sem data válida, nada", () => {

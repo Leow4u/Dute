@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   MoreHorizontal,
   Package,
+  Printer,
   RefreshCw,
   Truck,
   XCircle,
@@ -77,7 +78,7 @@ import {
   paraQuandoDoPedido,
 } from "@/lib/order-queue";
 import { useItemPhotos } from "@/lib/use-item-photos";
-import { resumoDoGrupo } from "@/lib/warehouse-ops/lista-de-separacao";
+import { hrefDaListaDeSeparacao, resumoDoGrupo } from "@/lib/warehouse-ops/lista-de-separacao";
 import { useListaDeSeparacao } from "@/lib/warehouse-ops/use-lista-de-separacao";
 import { canDecideRequests, canOperateWarehouse, humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -656,6 +657,7 @@ export default function Pedidos() {
                 tone="pick"
                 paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
                 defaultOpen
+                listaHref={hrefDaListaDeSeparacao(order.key)}
                 onTreat={operador ? () => setTreating(order) : undefined}
                 {...daEntrega(order)}
                 menu={menuDo(order)}
@@ -957,7 +959,8 @@ export default function Pedidos() {
   );
 }
 
-function OrderRow({
+/** A linha do pedido em separação ou entrega. Exportada para o teste (pedidos.lista.test.tsx). */
+export function OrderRow({
   order,
   icon,
   tone,
@@ -968,6 +971,7 @@ function OrderRow({
   paraQuando,
   defaultOpen = false,
   onTreat,
+  listaHref,
 }: {
   order: OrderGroup;
   icon: LucideIcon;
@@ -983,6 +987,8 @@ function OrderRow({
   paraQuando?: string;
   defaultOpen?: boolean;
   onTreat?: () => void;
+  /** A lista de separação do pedido para imprimir (separação com caixas, parte 1b). */
+  listaHref?: string;
 }) {
   const acoes = action || secondary ? (
     <>
@@ -994,6 +1000,16 @@ function OrderRow({
   const items = orderItems(order);
   const blocked = Boolean(order.blockedReason || order.exceptionCount);
   const meta = orderMeta(order);
+  // "Imprimir lista" (docs/mockups/WmsSepararLista.dc.html): no computador, um botão antes das ações do pedido.
+  const imprimir =
+    listaHref && items.length ? (
+      <Button asChild variant="outline">
+        <Link href={listaHref}>
+          <Printer className="size-4" aria-hidden="true" />
+          Imprimir lista
+        </Link>
+      </Button>
+    ) : null;
 
   return (
     <div className={cn(blocked && "bg-destructive-soft/40")}>
@@ -1019,9 +1035,19 @@ function OrderRow({
         detail={paraQuando && detail ? <>{paraQuando} · {detail}</> : paraQuando ?? detail}
         onToggle={items.length ? () => setOpen((value) => !value) : undefined}
         open={open}
+        // No celular os botões vêm depois dos itens: o atalho fica ao lado de "Esconder itens"
+        // (docs/mockups/WmsSepararListaCelular.dc.html).
+        aoLadoDoToggle={
+          listaHref && items.length ? (
+            <Link href={listaHref} className="text-xs font-medium text-foreground underline underline-offset-2 sm:hidden">
+              Imprimir lista
+            </Link>
+          ) : undefined
+        }
         actions={
-          acoes || menu ? (
+          imprimir || acoes || menu ? (
             <>
+              {imprimir}
               {acoes}
               {menu}
             </>

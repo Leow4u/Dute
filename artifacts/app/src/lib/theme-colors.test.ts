@@ -31,6 +31,8 @@ const PAPER_FILES = new Set([
   "components/financeiro/nf-documento.tsx",
   // O comprovante da OS no portal (parte 4.3d), no molde da OS impressa.
   "components/portal/comprovante-documento.tsx",
+  // A lista de separação impressa (separação com caixas, parte 1b, docs/mockups/WmsSepararListaImpressa.dc.html).
+  "features/warehouse-ops/lista-de-separacao-documento.tsx",
   "pages/client/relatorio.tsx",
 ]);
 

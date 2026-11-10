@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { caixasDoItem, gruposDaSeparacao, resumoDoGrupo, type CaixaDaLista, type PosicaoDaLista } from "./lista-de-separacao";
+import {
+  caixasDoItem,
+  folhaDaLista,
+  gruposDaSeparacao,
+  hrefDaListaDeSeparacao,
+  impressaEmTexto,
+  pedidoDaBusca,
+  resumoDoGrupo,
+  type CaixaDaLista,
+  type PosicaoDaLista,
+} from "./lista-de-separacao";
 import type { WarehouseTaskItem } from "./model";
 
 /**
@@ -163,5 +173,59 @@ describe("a caixa de cada item da lista", () => {
   it("sem as caixas lidas, a lista sai como antes, sem caixa na linha", () => {
     const [grupo] = gruposDaSeparacao([polo], POSICOES);
     expect(grupo.linhas[0].caixas).toEqual([]);
+  });
+});
+
+/**
+ * A folha impressa (parte 1b; docs/mockups/WmsSepararListaImpressa.dc.html):
+ * o cabeçalho do pedido com os textos prontos e o endereço da tela.
+ */
+describe("a folha da lista de separação", () => {
+  const grupos = gruposDaSeparacao(
+    [linha("1", "A-03", "Polo Masculino Piquet Preto M", "A.01.0806.005.M", 3200), linha("2", "B-09", "Copo Café", "B.0791.005.U", 135)],
+    POSICOES,
+  );
+
+  it("o pedido, o cliente, o destino, o Para quando com o ano, o total e quem imprimiu, no horário de São Paulo", () => {
+    expect(
+      folhaDaLista({
+        numero: " PED-0001 ",
+        cliente: "BTG Pactual",
+        destino: " Agência Faria Lima ",
+        paraQuando: "2026-11-16T14:36:00.000Z",
+        por: "Guilherme Dantas",
+        agora: new Date("2026-11-11T02:05:00.000Z"),
+        grupos,
+      }),
+    ).toEqual({
+      numero: "PED-0001",
+      cliente: "BTG Pactual",
+      destino: "Agência Faria Lima",
+      paraQuando: "Seg 16/11/2026 11:36",
+      resumo: "2 itens · 3.335 un.",
+      // 02:05 UTC do dia 11 ainda é o dia 10 em São Paulo.
+      impressaEm: "10/11/2026 23:05",
+      por: "Guilherme Dantas",
+      grupos,
+    });
+  });
+
+  it("sem destino, sem prazo e sem nome, os campos ficam vazios (o papel mostra o traço)", () => {
+    const folha = folhaDaLista({ numero: "PED-0002", agora: new Date("2026-11-10T17:20:00.000Z"), grupos: [] });
+    expect(folha).toMatchObject({ cliente: "", destino: "", paraQuando: "", por: "", resumo: "0 itens · 0 un.", impressaEm: "10/11/2026 14:20" });
+    expect(folhaDaLista({ numero: "PED-0002", paraQuando: "sem data", agora: new Date("2026-11-10T17:20:00.000Z"), grupos: [] }).paraQuando).toBe("");
+  });
+
+  it("a hora da impressão sai com dois dígitos e sem vírgula", () => {
+    expect(impressaEmTexto(new Date("2026-01-05T12:07:00.000Z"))).toBe("05/01/2026 09:07");
+    expect(impressaEmTexto(new Date("2026-01-05T03:00:00.000Z"))).toBe("05/01/2026 00:00");
+  });
+
+  it("o endereço da lista leva o pedido na busca, e a tela o lê de volta", () => {
+    expect(hrefDaListaDeSeparacao("ord_req 1/á")).toBe("/pedidos/lista?pedido=ord_req%201%2F%C3%A1");
+    expect(pedidoDaBusca("pedido=ord_req%201%2F%C3%A1")).toBe("ord_req 1/á");
+    expect(pedidoDaBusca("?pedido=ord_123")).toBe("ord_123");
+    expect(pedidoDaBusca("pedido=%20")).toBeNull();
+    expect(pedidoDaBusca("")).toBeNull();
   });
 });

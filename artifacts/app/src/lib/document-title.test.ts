@@ -40,6 +40,7 @@ describe("título da aba do navegador", () => {
     ["/wms/qualidade", "Dutelog | Qualidade"],
     ["/wms/devolucoes", "Dutelog | Devoluções"],
     ["/pedidos", "Dutelog | Pedidos"],
+    ["/pedidos/lista", "Dutelog | Lista de separação"],
     ["/faturamento", "Dutelog | Faturamento"],
     ["/faturamento/tabela", "Dutelog | Faturamento"],
     ["/faturamento/fatura", "Dutelog | Fatura"],
