@@ -1,0 +1,796 @@
+{
+  "_leia": "Casos de referência do saldo da caixa (lib/dominio/src/saldo-da-caixa.ts, separação com caixas, parte 3). Rodam no vitest do app e no node --test de functions/wms, contra a cópia de lá.",
+  "saldos": [
+    {
+      "caso": "a caixa intacta: o saldo é a entrada",
+      "entrada": [
+        {
+          "sku_code": "BTG-000083",
+          "qty": 30
+        },
+        {
+          "sku_code": "BTG-000084",
+          "qty": 12
+        }
+      ],
+      "retirado": [],
+      "saldo": [
+        {
+          "sku_code": "BTG-000083",
+          "qty": 30
+        },
+        {
+          "sku_code": "BTG-000084",
+          "qty": 12
+        }
+      ],
+      "unidades": 42
+    },
+    {
+      "caso": "saiu um item inteiro: a linha zerada some do saldo",
+      "entrada": [
+        {
+          "sku_code": "BTG-000083",
+          "qty": 30
+        },
+        {
+          "sku_code": "BTG-000084",
+          "qty": 12
+        }
+      ],
+      "retirado": [
+        {
+          "sku_code": "BTG-000083",
+          "qty": 30
+        }
+      ],
+      "saldo": [
+        {
+          "sku_code": "BTG-000084",
+          "qty": 12
+        }
+      ],
+      "unidades": 12
+    },
+    {
+      "caso": "saiu parte de um item",
+      "entrada": [
+        {
+          "sku_code": "BTG-000085",
+          "qty": 40
+        }
+      ],
+      "retirado": [
+        {
+          "sku_code": "BTG-000085",
+          "qty": 35
+        }
+      ],
+      "saldo": [
+        {
+          "sku_code": "BTG-000085",
+          "qty": 5
+        }
+      ],
+      "unidades": 5
+    },
+    {
+      "caso": "a entrada com o mesmo item em duas linhas soma",
+      "entrada": [
+        {
+          "sku_code": "BTG-000085",
+          "qty": 10
+        },
+        {
+          "sku_code": "BTG-000085",
+          "qty": 8
+        }
+      ],
+      "retirado": [
+        {
+          "sku_code": "BTG-000085",
+          "qty": 3
+        }
+      ],
+      "saldo": [
+        {
+          "sku_code": "BTG-000085",
+          "qty": 15
+        }
+      ],
+      "unidades": 15
+    },
+    {
+      "caso": "o retirado maior que a entrada (a entrada foi corrigida depois) não fica negativo",
+      "entrada": [
+        {
+          "sku_code": "BTG-000085",
+          "qty": 5
+        }
+      ],
+      "retirado": [
+        {
+          "sku_code": "BTG-000085",
+          "qty": 9
+        }
+      ],
+      "saldo": [],
+      "unidades": 0
+    },
+    {
+      "caso": "o retirado de um item que a caixa não tem é ignorado",
+      "entrada": [
+        {
+          "sku_code": "BTG-000085",
+          "qty": 5
+        }
+      ],
+      "retirado": [
+        {
+          "sku_code": "BTG-000999",
+          "qty": 2
+        }
+      ],
+      "saldo": [
+        {
+          "sku_code": "BTG-000085",
+          "qty": 5
+        }
+      ],
+      "unidades": 5
+    },
+    {
+      "caso": "linha sem código ou sem quantidade não conta",
+      "entrada": [
+        {
+          "sku_code": "",
+          "qty": 5
+        },
+        {
+          "sku_code": "BTG-000085",
+          "qty": 0
+        },
+        {
+          "sku_code": "BTG-000086",
+          "qty": "7"
+        }
+      ],
+      "retirado": [],
+      "saldo": [
+        {
+          "sku_code": "BTG-000086",
+          "qty": 7
+        }
+      ],
+      "unidades": 7
+    }
+  ],
+  "retirados": [
+    {
+      "caso": "a primeira saída da caixa",
+      "retirado": [],
+      "sku_code": "BTG-000083",
+      "qty": 30,
+      "resultado": [
+        {
+          "sku_code": "BTG-000083",
+          "qty": 30
+        }
+      ]
+    },
+    {
+      "caso": "outra saída do mesmo item soma",
+      "retirado": [
+        {
+          "sku_code": "BTG-000083",
+          "qty": 10
+        }
+      ],
+      "sku_code": "BTG-000083",
+      "qty": 5,
+      "resultado": [
+        {
+          "sku_code": "BTG-000083",
+          "qty": 15
+        }
+      ]
+    },
+    {
+      "caso": "outro item entra numa linha nova",
+      "retirado": [
+        {
+          "sku_code": "BTG-000083",
+          "qty": 30
+        }
+      ],
+      "sku_code": "BTG-000084",
+      "qty": 12,
+      "resultado": [
+        {
+          "sku_code": "BTG-000083",
+          "qty": 30
+        },
+        {
+          "sku_code": "BTG-000084",
+          "qty": 12
+        }
+      ]
+    },
+    {
+      "caso": "desfazer devolve parte",
+      "retirado": [
+        {
+          "sku_code": "BTG-000083",
+          "qty": 30
+        }
+      ],
+      "sku_code": "BTG-000083",
+      "qty": -10,
+      "resultado": [
+        {
+          "sku_code": "BTG-000083",
+          "qty": 20
+        }
+      ]
+    },
+    {
+      "caso": "desfazer tudo tira a linha",
+      "retirado": [
+        {
+          "sku_code": "BTG-000083",
+          "qty": 30
+        },
+        {
+          "sku_code": "BTG-000084",
+          "qty": 12
+        }
+      ],
+      "sku_code": "BTG-000083",
+      "qty": -30,
+      "resultado": [
+        {
+          "sku_code": "BTG-000084",
+          "qty": 12
+        }
+      ]
+    },
+    {
+      "caso": "desfazer mais do que saiu não fica negativo",
+      "retirado": [
+        {
+          "sku_code": "BTG-000083",
+          "qty": 4
+        }
+      ],
+      "sku_code": "BTG-000083",
+      "qty": -9,
+      "resultado": []
+    }
+  ],
+  "sugestoes": [
+    {
+      "caso": "a mais antiga basta",
+      "pedido": 30,
+      "caixas": [
+        {
+          "code": "CX-000028",
+          "stored_at": "2026-10-22T14:00:00.000Z",
+          "disponivel": 28,
+          "saldo": 63,
+          "intacta": true
+        },
+        {
+          "code": "CX-000027",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 30,
+          "saldo": 42,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "caixas": [
+          {
+            "box_code": "CX-000027",
+            "qty": 30,
+            "inteira": false,
+            "esvazia": false
+          }
+        ],
+        "sem_caixa": 0
+      }
+    },
+    {
+      "caso": "a mais antiga não basta: esvazia, e a seguinte completa",
+      "pedido": 40,
+      "caixas": [
+        {
+          "code": "CX-000027",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 12,
+          "saldo": 12,
+          "intacta": false
+        },
+        {
+          "code": "CX-000028",
+          "stored_at": "2026-10-22T14:00:00.000Z",
+          "disponivel": 28,
+          "saldo": 63,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "caixas": [
+          {
+            "box_code": "CX-000027",
+            "qty": 12,
+            "inteira": false,
+            "esvazia": true
+          },
+          {
+            "box_code": "CX-000028",
+            "qty": 28,
+            "inteira": false,
+            "esvazia": false
+          }
+        ],
+        "sem_caixa": 0
+      }
+    },
+    {
+      "caso": "a caixa intacta que sai toda é inteira",
+      "pedido": 25,
+      "caixas": [
+        {
+          "code": "CX-000029",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 25,
+          "saldo": 25,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "caixas": [
+          {
+            "box_code": "CX-000029",
+            "qty": 25,
+            "inteira": true,
+            "esvazia": false
+          }
+        ],
+        "sem_caixa": 0
+      }
+    },
+    {
+      "caso": "a caixa intacta com outros itens não sai inteira",
+      "pedido": 25,
+      "caixas": [
+        {
+          "code": "CX-000029",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 25,
+          "saldo": 40,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "caixas": [
+          {
+            "box_code": "CX-000029",
+            "qty": 25,
+            "inteira": false,
+            "esvazia": false
+          }
+        ],
+        "sem_caixa": 0
+      }
+    },
+    {
+      "caso": "no empate de data, o código menor primeiro",
+      "pedido": 10,
+      "caixas": [
+        {
+          "code": "CX-000062",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 40,
+          "saldo": 40,
+          "intacta": true
+        },
+        {
+          "code": "CX-000061",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 20,
+          "saldo": 20,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "caixas": [
+          {
+            "box_code": "CX-000061",
+            "qty": 10,
+            "inteira": false,
+            "esvazia": false
+          }
+        ],
+        "sem_caixa": 0
+      }
+    },
+    {
+      "caso": "a caixa sem data vem depois das datadas",
+      "pedido": 10,
+      "caixas": [
+        {
+          "code": "CX-000001",
+          "stored_at": null,
+          "disponivel": 40,
+          "saldo": 40,
+          "intacta": true
+        },
+        {
+          "code": "CX-000064",
+          "stored_at": "2026-11-06T13:00:00.000Z",
+          "disponivel": 30,
+          "saldo": 30,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "caixas": [
+          {
+            "box_code": "CX-000064",
+            "qty": 10,
+            "inteira": false,
+            "esvazia": false
+          }
+        ],
+        "sem_caixa": 0
+      }
+    },
+    {
+      "caso": "as caixas não cobrem a linha: o resto sai sem caixa",
+      "pedido": 35,
+      "caixas": [
+        {
+          "code": "CX-000061",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 20,
+          "saldo": 20,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "caixas": [
+          {
+            "box_code": "CX-000061",
+            "qty": 20,
+            "inteira": true,
+            "esvazia": false
+          }
+        ],
+        "sem_caixa": 15
+      }
+    },
+    {
+      "caso": "sem caixa na prateleira, a linha sai sem caixa",
+      "pedido": 6,
+      "caixas": [],
+      "resultado": {
+        "caixas": [],
+        "sem_caixa": 6
+      }
+    },
+    {
+      "caso": "a caixa sem o item não entra",
+      "pedido": 6,
+      "caixas": [
+        {
+          "code": "CX-000061",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 0,
+          "saldo": 20,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "caixas": [],
+        "sem_caixa": 6
+      }
+    },
+    {
+      "caso": "a linha zerada não tira nada",
+      "pedido": 0,
+      "caixas": [
+        {
+          "code": "CX-000061",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 20,
+          "saldo": 20,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "caixas": [],
+        "sem_caixa": 0
+      }
+    }
+  ],
+  "informadas": [
+    {
+      "caso": "outra caixa da prateleira, com a soma fechando",
+      "pedido": 35,
+      "informadas": [
+        {
+          "box_code": "CX-000062",
+          "qty": 35
+        }
+      ],
+      "caixas": [
+        {
+          "code": "CX-000061",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 20,
+          "saldo": 20,
+          "intacta": true
+        },
+        {
+          "code": "CX-000062",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 40,
+          "saldo": 40,
+          "intacta": true
+        },
+        {
+          "code": "CX-000064",
+          "stored_at": "2026-11-06T13:00:00.000Z",
+          "disponivel": 30,
+          "saldo": 30,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "caixas": [
+          {
+            "box_code": "CX-000062",
+            "qty": 35,
+            "inteira": false,
+            "esvazia": false
+          }
+        ],
+        "sem_caixa": 0
+      }
+    },
+    {
+      "caso": "duas caixas, na ordem de saída, com o código em minúscula",
+      "pedido": 35,
+      "informadas": [
+        {
+          "box_code": "cx-000064",
+          "qty": 15
+        },
+        {
+          "box_code": "CX-000061",
+          "qty": 20
+        }
+      ],
+      "caixas": [
+        {
+          "code": "CX-000061",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 20,
+          "saldo": 20,
+          "intacta": true
+        },
+        {
+          "code": "CX-000064",
+          "stored_at": "2026-11-06T13:00:00.000Z",
+          "disponivel": 30,
+          "saldo": 30,
+          "intacta": false
+        }
+      ],
+      "resultado": {
+        "caixas": [
+          {
+            "box_code": "CX-000061",
+            "qty": 20,
+            "inteira": true,
+            "esvazia": false
+          },
+          {
+            "box_code": "CX-000064",
+            "qty": 15,
+            "inteira": false,
+            "esvazia": false
+          }
+        ],
+        "sem_caixa": 0
+      }
+    },
+    {
+      "caso": "a mesma caixa informada duas vezes soma",
+      "pedido": 10,
+      "informadas": [
+        {
+          "box_code": "CX-000061",
+          "qty": 4
+        },
+        {
+          "box_code": "CX-000061",
+          "qty": 6
+        }
+      ],
+      "caixas": [
+        {
+          "code": "CX-000061",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 20,
+          "saldo": 20,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "caixas": [
+          {
+            "box_code": "CX-000061",
+            "qty": 10,
+            "inteira": false,
+            "esvazia": false
+          }
+        ],
+        "sem_caixa": 0
+      }
+    },
+    {
+      "caso": "a soma menor que a linha é recusada",
+      "pedido": 35,
+      "informadas": [
+        {
+          "box_code": "CX-000062",
+          "qty": 30
+        }
+      ],
+      "caixas": [
+        {
+          "code": "CX-000062",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 40,
+          "saldo": 40,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "problema": "As caixas somam 30 un., e o separado nas caixas desta prateleira é de 35 un."
+      }
+    },
+    {
+      "caso": "a soma maior que a linha é recusada",
+      "pedido": 35,
+      "informadas": [
+        {
+          "box_code": "CX-000062",
+          "qty": 36
+        }
+      ],
+      "caixas": [
+        {
+          "code": "CX-000062",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 40,
+          "saldo": 40,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "problema": "As caixas somam 36 un., e o separado nas caixas desta prateleira é de 35 un."
+      }
+    },
+    {
+      "caso": "mais do que a caixa tem é recusado",
+      "pedido": 35,
+      "informadas": [
+        {
+          "box_code": "CX-000061",
+          "qty": 35
+        }
+      ],
+      "caixas": [
+        {
+          "code": "CX-000061",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 20,
+          "saldo": 20,
+          "intacta": true
+        },
+        {
+          "code": "CX-000062",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 40,
+          "saldo": 40,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "problema": "A caixa CX-000061 tem 20 un. deste item, e não 35."
+      }
+    },
+    {
+      "caso": "a caixa de outra prateleira, ou sem o item, é recusada",
+      "pedido": 5,
+      "informadas": [
+        {
+          "box_code": "CX-000900",
+          "qty": 5
+        }
+      ],
+      "caixas": [
+        {
+          "code": "CX-000061",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 20,
+          "saldo": 20,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "problema": "A caixa CX-000900 não tem este item nesta prateleira."
+      }
+    },
+    {
+      "caso": "as caixas não cobrem a linha: informa tudo o que elas têm, e o resto sai sem caixa",
+      "pedido": 35,
+      "informadas": [
+        {
+          "box_code": "CX-000061",
+          "qty": 20
+        }
+      ],
+      "caixas": [
+        {
+          "code": "CX-000061",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 20,
+          "saldo": 20,
+          "intacta": false
+        }
+      ],
+      "resultado": {
+        "caixas": [
+          {
+            "box_code": "CX-000061",
+            "qty": 20,
+            "inteira": false,
+            "esvazia": true
+          }
+        ],
+        "sem_caixa": 15
+      }
+    },
+    {
+      "caso": "com caixa sobrando na prateleira, não sai sem caixa",
+      "pedido": 35,
+      "informadas": [],
+      "caixas": [
+        {
+          "code": "CX-000061",
+          "stored_at": "2026-10-22T13:00:00.000Z",
+          "disponivel": 20,
+          "saldo": 20,
+          "intacta": true
+        }
+      ],
+      "resultado": {
+        "problema": "As caixas somam 0 un., e o separado nas caixas desta prateleira é de 20 un."
+      }
+    },
+    {
+      "caso": "sem caixa na prateleira, nada a informar",
+      "pedido": 6,
+      "informadas": [],
+      "caixas": [],
+      "resultado": {
+        "caixas": [],
+        "sem_caixa": 6
+      }
+    }
+  ]
+}
