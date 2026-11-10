@@ -303,6 +303,8 @@ describe("Separar com o progresso salvo (separação com caixas, parte 2a)", () 
     // Repetir a chamada (o clique dobrado, a rede que caiu) não refaz nada.
     const repetido = await concluir(pickTaskId, guilherme, "concluir-pedido-0001");
     assert.deepEqual([repetido.ok, repetido.pack_task_id], [true, `pack_${orderId}`]);
+    // A repetição também diz qual é a remessa: é dela que a tela abre "Para entregar".
+    assert.equal(repetido.shipment_id, shipmentId);
     assert.equal((await eventos("packing.completed")).length, 1);
     // Quem chega depois com outro lacre fica sabendo que o pedido já concluiu, e com qual.
     const outroLacre = await recusa(completeOrderSeparation(db, { pick_task_id: pickTaskId, seal_code: "L-0202", idempotency_key: chave("concluir") }, coordenacao));

@@ -76,6 +76,7 @@ export const PICK_TASKS_COLLECTION = "pick_tasks";
 export const PICK_LINES_COLLECTION = "pick_lines";
 const PACK_TASKS_COLLECTION = "pack_tasks";
 const ORDER_ITEMS_COLLECTION = "order_items";
+const SHIPMENTS_COLLECTION = "shipments";
 const OPERATIONS_COLLECTION = "operational_operations";
 const EVENT_SOURCE = "functions_wms";
 
@@ -816,8 +817,11 @@ async function concluirDeOndeEsta(db: Firestore, input: z.infer<typeof CompleteO
   if (!pack) throw new HttpsError("failed-precondition", "A embalagem do pedido não foi criada. Atualize e tente de novo.");
   const packUid = `packing:${pack.id}`;
   let packStatus = text(pack.get("status")).toLowerCase();
-  let shipmentId = text(pack.get("shipment_id")) || undefined;
+  let shipmentId: string | undefined;
   if (packStatus === "completed") {
+    // A remessa nasceu com a embalagem fechada: a repetição da chamada a devolve também.
+    const remessas = await db.collection(SHIPMENTS_COLLECTION).where("order_id", "==", orderId).get();
+    shipmentId = remessas.docs.find((doc) => text(doc.get("status")).toLowerCase() !== "cancelled")?.id;
     // Já concluído: é a repetição da mesma chamada, ou outra pessoa concluiu antes.
     const lacre = text(pack.get("seal_code"));
     if (lacre !== input.seal_code) {
