@@ -1075,7 +1075,7 @@ export { codigosDoItem } from "@/lib/warehouse-ops/lista-de-separacao";
  * (docs/mockups/WmsSepararLista.dc.html; o nome com o tamanho vem de
  * NomeWmsPedidos.dc.html): o cabeçalho da prateleira com os itens e as
  * unidades e, em cada linha, a foto, o nome com o tamanho ("Polo Masculino
- * Piquet Preto · GG"), os códigos e a quantidade.
+ * Piquet Preto · GG"), os códigos, a caixa onde o item está e a quantidade.
  */
 export function ItemList({ items, cliente }: { items: NonNullable<WarehouseTask["items"]>; cliente?: string | null }) {
   // Mesma foto do Estoque: quem separa confere o item pela imagem.
@@ -1109,9 +1109,9 @@ export function ItemList({ items, cliente }: { items: NonNullable<WarehouseTask[
                       <Package className="size-4" aria-hidden="true" />
                     </span>
                   )}
-                  {/* No celular, a grade (docs/mockups/WmsSepararListaCelular.dc.html): o nome e os códigos à esquerda
-                      e a quantidade no alto, à direita (o bloco do nome vira `contents`); o nome quebra a linha para o
-                      tamanho, no fim, não sumir. */}
+                  {/* No celular, a grade (docs/mockups/WmsSepararListaCelular.dc.html): o nome, os códigos e as caixas
+                      à esquerda e a quantidade no alto, à direita (o bloco do nome vira `contents`); o nome quebra a
+                      linha para o tamanho, no fim, não sumir. */}
                   <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto] items-start gap-x-3 gap-y-0.5 sm:flex sm:items-center">
                     <span className="contents sm:block sm:min-w-0 sm:flex-1">
                       {linha.nome ? (
@@ -1121,6 +1121,19 @@ export function ItemList({ items, cliente }: { items: NonNullable<WarehouseTask[
                         <span className="col-start-1 block truncate text-xs text-muted-foreground">{linha.codigos}</span>
                       ) : null}
                     </span>
+                    {/* A caixa onde o item está (decisão 10): as guardadas na prateleira, a mais antiga primeiro. */}
+                    {linha.caixas.length ? (
+                      <span className="col-start-1 flex flex-wrap gap-1.5 pt-0.5 sm:max-w-xs sm:shrink-0 sm:justify-end sm:pt-0">
+                        {linha.caixas.map((caixa) => (
+                          <span
+                            key={caixa}
+                            className="whitespace-nowrap rounded-md bg-info-soft px-1.5 py-0.5 font-mono text-xs font-medium text-info-soft-foreground"
+                          >
+                            {caixa}
+                          </span>
+                        ))}
+                      </span>
+                    ) : null}
                     <span className="col-start-2 row-start-1 whitespace-nowrap font-semibold tabular-nums">
                       {numberFormatter.format(linha.quantidade)} un.
                     </span>

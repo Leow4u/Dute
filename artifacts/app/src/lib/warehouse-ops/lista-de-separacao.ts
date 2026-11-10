@@ -82,11 +82,15 @@ export function caixasDoItem(item: WarehouseTaskItem, caixas: readonly CaixaDaLi
         (!dono || chave(caixa.customer_code) === dono) &&
         caixa.sku_codes.some((codigo) => chave(codigo) === sku),
     )
-    .sort(
-      (esquerda, direita) =>
-        (esquerda.stored_at ?? "￿").localeCompare(direita.stored_at ?? "￿") || esquerda.code.localeCompare(direita.code, "pt-BR", { numeric: true }),
-    )
+    .sort((esquerda, direita) => porGuarda(esquerda.stored_at, direita.stored_at) || esquerda.code.localeCompare(direita.code, "pt-BR", { numeric: true }))
     .map((caixa) => caixa.code);
+}
+
+/** A data da guarda é um instante ISO: compara como texto; a caixa sem data fica depois. */
+function porGuarda(esquerda: string | null, direita: string | null): number {
+  const antes = esquerda || "￿";
+  const depois = direita || "￿";
+  return antes < depois ? -1 : antes > depois ? 1 : 0;
 }
 
 /**

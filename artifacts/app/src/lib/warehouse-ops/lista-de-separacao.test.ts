@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { gruposDaSeparacao, resumoDoGrupo, type PosicaoDaLista } from "./lista-de-separacao";
+import { caixasDoItem, gruposDaSeparacao, resumoDoGrupo, type CaixaDaLista, type PosicaoDaLista } from "./lista-de-separacao";
 import type { WarehouseTaskItem } from "./model";
 
 /**
@@ -86,5 +86,82 @@ describe("a lista de separação por prateleira", () => {
   it("sem o cadastro de posições, a ordem é a do código da prateleira", () => {
     const grupos = gruposDaSeparacao([linha("1", "B-09", "Copo", "B.1.U", 1), linha("2", "A-03", "Polo", "A.1.U", 1)]);
     expect(grupos.map((grupo) => grupo.posicao)).toEqual(["A-03", "B-09"]);
+  });
+});
+
+/**
+ * A caixa de cada item (parte 1c, decisão 10 de 10/11/2026): as caixas
+ * guardadas na prateleira da linha cujo conteúdo de entrada tem o item, a
+ * mais antiga primeiro. Só leitura: a separação ainda não baixa a caixa.
+ */
+function caixa(code: string, location: string, skus: string[], extra: Partial<CaixaDaLista> = {}): CaixaDaLista {
+  return { code, customer_code: "BTG", status: "stored", location_id: location, sku_codes: skus, stored_at: "2026-10-20T12:00:00.000Z", ...extra };
+}
+
+describe("a caixa de cada item da lista", () => {
+  const polo = linha("1", "A-03", "Polo Masculino Piquet Preto M", "A.01.0806.005.M", 120);
+
+  it("só a caixa guardada na prateleira da linha, do cliente do pedido, que recebeu o SKU", () => {
+    const caixas = [
+      caixa("CX-000011", "A-03", ["SKU-1", "SKU-9"]),
+      caixa("CX-000020", "A-04", ["SKU-1"]),
+      caixa("CX-000021", "A-03", ["SKU-2"]),
+      caixa("CX-000022", "A-03", ["SKU-1"], { status: "committing" }),
+      caixa("CX-000023", "A-03", ["SKU-1"], { status: "cancelled" }),
+      caixa("CX-000024", "A-03", ["SKU-1"], { customer_code: "ITAU" }),
+      caixa("CX-000012", "a-03", ["sku-1"]),
+    ];
+    expect(caixasDoItem(polo, caixas, "btg")).toEqual(["CX-000011", "CX-000012"]);
+  });
+
+  it("a mais antiga primeiro, pela data da guarda; no empate, o código; a caixa sem data fica depois", () => {
+    const caixas = [
+      caixa("CX-000300", "A-03", ["SKU-1"], { stored_at: null }),
+      caixa("CX-000200", "A-03", ["SKU-1"], { stored_at: "2026-10-21T09:00:00.000Z" }),
+      caixa("CX-000100", "A-03", ["SKU-1"], { stored_at: "2026-10-21T09:00:00.000Z" }),
+      caixa("CX-000900", "A-03", ["SKU-1"], { stored_at: "2026-10-17T15:30:00.000Z" }),
+    ];
+    expect(caixasDoItem(polo, caixas, "BTG")).toEqual(["CX-000900", "CX-000100", "CX-000200", "CX-000300"]);
+  });
+
+  it("a linha sem endereço ou sem SKU não tem caixa", () => {
+    const caixas = [caixa("CX-000011", "A-03", ["SKU-1"]), caixa("CX-000012", "", ["SKU-1"])];
+    expect(caixasDoItem({ ...polo, location: null }, caixas, "BTG")).toEqual([]);
+    expect(caixasDoItem({ id: "1", location: "A-03", product_name: "Polo" }, caixas, "BTG")).toEqual([]);
+  });
+
+  it("na prateleira, as linhas seguem a caixa: quem separa abre uma caixa de cada vez", () => {
+    const [grupo] = gruposDaSeparacao(
+      [
+        linha("1", "B-09", "Porta Cartão Couro", "B.0567.005.U", 6),
+        linha("2", "B-09", "Copo Café", "B.0791.005.U", 1),
+        linha("3", "B-09", "Lancheira Grande", "C.0612.002.U", 2),
+        linha("4", "B-09", "Caneca Térmica", "C.0734.003.U", 1),
+        linha("5", "B-09", "Agenda", "D.0100.001.U", 1),
+      ],
+      POSICOES,
+      {
+        cliente: "BTG",
+        caixas: [
+          caixa("CX-000190", "B-09", ["SKU-1"]),
+          caixa("CX-000187", "B-09", ["SKU-2", "SKU-4"]),
+          caixa("CX-000186", "B-09", ["SKU-3"]),
+          caixa("CX-000189", "B-09", ["SKU-4"]),
+        ],
+      },
+    );
+    expect(grupo.linhas.map((item) => [item.nome, item.caixas])).toEqual([
+      ["Lancheira Grande", ["CX-000186"]],
+      ["Caneca Térmica", ["CX-000187", "CX-000189"]],
+      ["Copo Café", ["CX-000187"]],
+      ["Porta Cartão Couro", ["CX-000190"]],
+      // A linha sem caixa na prateleira fica no fim do grupo.
+      ["Agenda", []],
+    ]);
+  });
+
+  it("sem as caixas lidas, a lista sai como antes, sem caixa na linha", () => {
+    const [grupo] = gruposDaSeparacao([polo], POSICOES);
+    expect(grupo.linhas[0].caixas).toEqual([]);
   });
 });
