@@ -417,11 +417,15 @@ documentação de produto e operação está em `docs/`.
   por prateleira na ordem de caminhada, com a caixa de cada item
   (`lib/warehouse-ops/lista-de-separacao.ts`, o conteúdo de entrada da caixa,
   sem baixa), e "Imprimir lista" (`/pedidos/lista`, a folha A4 em
-  `features/warehouse-ops/lista-de-separacao-documento.tsx`). As partes 2 a 5
-  (progresso por linha, baixa da caixa, volumes e separar menos) têm o mockup
-  aprovado e não estão no código; a parte 6 (etiqueta com todos os produtos)
-  espera a avaliação do desenho. Tela só entra com mockup aprovado. Desenho,
-  partes e registro em `docs/plataforma/separacao-com-caixas.md`.
+  `features/warehouse-ops/lista-de-separacao-documento.tsx`). **A parte 6 (a
+  etiqueta com todos os produtos) também, para a caixa e a posição:**
+  `boxLabels` (`lib/warehouse-labels.ts`) devolve a primeira etiqueta, com até
+  cinco produtos, e as de continuação, com onze cada ("etiqueta 2 de 2"), e o
+  rodapé de toda etiqueta leva o logo da Dutelog, em preto no rolo da Zebra
+  (`components/labels/label-sheet.tsx`). As partes 2 a 5 (progresso por linha,
+  baixa da caixa, volumes e separar menos) têm o mockup aprovado e não estão
+  no código. Tela só entra com mockup aprovado. Desenho, partes e registro em
+  `docs/plataforma/separacao-com-caixas.md`.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os
   modelos (`uniformes` pronto, `mobiliario` e `insumos` em construção) e os

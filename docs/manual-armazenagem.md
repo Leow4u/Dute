@@ -320,9 +320,14 @@ do recebimento com o destino confirmado aparece como "reservada".
 etiqueta (rolo Zebra)"; "Pular etiquetas usadas" (0 a 9) aproveita folha
 começada; "Imprimir / Salvar PDF" usa o navegador. As duas trazem o código em
 barras (Code 128) e em texto. A da caixa traz a posição, o cliente, medidas e
-peso, a origem ("Abertura", "Manual" ou "Recebimento · NF 48.377"), a data, até
-4 produtos com o tamanho ao lado do nome, o código do cliente e o SKU ("+ 2
-produto(s) no sistema") e as unidades. Sai da caixa guardada do cliente ativo
+peso, a origem ("Abertura", "Manual" ou "Recebimento · NF 48.377"), a data,
+os produtos com o tamanho ao lado do nome, o código do cliente e o SKU, e as
+unidades. Todos os produtos saem: a primeira etiqueta leva até 5 e, com mais,
+diz "etiqueta 1 de 2"; os outros vêm em etiquetas de continuação do mesmo
+tamanho, com a caixa, a posição, "etiqueta 2 de 2", até 11 produtos cada e as
+unidades da caixa, sem código de barras. A contagem da tela soma as de
+continuação. O rodapé de toda etiqueta leva o logo da Dutelog (na folha A4,
+nas cores dele; no rolo da Zebra, em preto). Sai da caixa guardada do cliente ativo
 (o conteúdo da abertura vem da sessão) e da caixa do recebimento com o destino
 confirmado ou guardada (o conteúdo vem da própria caixa); aberta pelo Receber,
 a tela volta ao Receber, diz a chegada e nomeia a caixa ainda sem destino. Na
