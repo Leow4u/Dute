@@ -422,9 +422,17 @@ documentação de produto e operação está em `docs/`.
   `boxLabels` (`lib/warehouse-labels.ts`) devolve a primeira etiqueta, com até
   cinco produtos, e as de continuação, com onze cada ("etiqueta 2 de 2"), e o
   rodapé de toda etiqueta leva o logo da Dutelog, em preto no rolo da Zebra
-  (`components/labels/label-sheet.tsx`). As partes 2 a 5 (progresso por linha,
-  baixa da caixa, volumes e separar menos) têm o mockup aprovado e não estão
-  no código. Tela só entra com mockup aprovado. Desenho, partes e registro em
+  (`components/labels/label-sheet.tsx`). **As partes 2 e 5 (separar com o
+  progresso salvo e "Separar menos") também:** a bancada do pedido
+  (`/pedidos/separar`) grava cada linha na hora por `setPickLineSeparated`
+  (o progresso mora em `pick_lines`, `separated_*`, sem tocar a reserva nem
+  o saldo) e conclui por `completeOrderSeparation`, que roda as transições de
+  sempre (`advanceWarehouseTaskTransaction`) numa chamada, com o lacre;
+  quem opera registra a diferença e só a coordenação conclui o pedido com
+  diferença; a contagem cíclica recusa a prateleira com linha já separada
+  (`functions/wms/src/domain/pick-progress.ts`). As partes 3 e 4 (baixa da
+  caixa e volumes) têm o mockup aprovado e não estão no código. Tela só entra
+  com mockup aprovado. Desenho, partes e registro em
   `docs/plataforma/separacao-com-caixas.md`.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os

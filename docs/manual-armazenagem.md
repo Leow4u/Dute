@@ -99,14 +99,9 @@ avanço e "Registrar exceção" ("Motivo da exceção").
   diferente. "Imprimir" usa a impressão do navegador (ou "Salvar como PDF");
   cada página leva o pedido e "página 2 de 5". No celular, "Imprimir lista"
   fica ao lado de "Esconder itens". A lista só lê: nada muda no pedido.
-  "Separado" pede o "Número do lacre" e, com "Confirmar
-  separação", confirma cada linha na quantidade pedida, num volume só. Para a
-  coordenação (`owner`, `admin` e `interno`), o diálogo lista cada linha com
-  "Pedido" e "Separado" (com − e +). A linha a menos mostra a diferença e pede
-  "Motivo da diferença em …" ("Falta" ou "Avaria") e "Detalhe". O pedido segue
-  com o separado: a diferença volta a ficar disponível, e o item zerado não vai
-  no volume. Quem opera registra a falta pelo "Tratar", e a exceção fica
-  resolvida quando a coordenação separa a menos.
+  "Separar" abre a bancada do pedido; depois da primeira linha, o botão vira
+  "Continuar" e o pedido ganha o selo "em separação desde 12/11 · 2 de 5
+  itens" (ver "Separar o pedido", abaixo).
 - **"Para entregar":** "Entregue" pede "Quem levou" e "Placa" (no pronto para
   envio; o aparelho lembra os últimos) e "Quem recebeu (opcional)". "Confirmar
   entrega" registra a saída e a entrega, e o estoque baixa. Na retirada pelo
@@ -122,6 +117,36 @@ avanço e "Registrar exceção" ("Motivo da exceção").
 Com a abertura do cliente ativo pendente ou em andamento, a faixa do inventário
 aparece com "Continuar contagem", e os pedidos de saída do cliente ficam
 bloqueados (na BTG, pelo controle geral; nos outros, com a sessão aberta).
+
+## Separar o pedido
+
+A bancada do pedido (Pedidos › "Separar" ou "Continuar") guarda o progresso
+linha a linha: a pessoa para, volta no dia seguinte e continua de onde parou,
+no computador ou no celular, e outra pessoa pode continuar. O que uma pessoa
+separa aparece para a outra sem recarregar.
+
+- **O cabeçalho:** o pedido, "em separação desde 10/11", o cliente, os itens
+  e as unidades, o "Para quando", "Imprimir lista" e "Concluir separação". O
+  progresso diz "10 de 116 itens · 665 de 3.335 un.".
+- **As linhas** vêm por prateleira, na ordem de caminhada, com a caixa onde o
+  item está. "Separar" grava a linha na hora; "Desfazer" a volta. A prateleira
+  toda separada fecha sozinha, com "separado", e abre no botão ao lado. A
+  primeira linha separada começa a separação: o cliente passa a ver "Em
+  separação" no portal.
+- **"Separar menos"** fica no "⋯" da linha: "Separado" (com − e +), o "Motivo
+  da diferença" ("Falta" ou "Avaria") e o "Detalhe". A linha fica "separado 1
+  de 2 · Avaria" e o pedido mostra "1 linha com diferença". Quem opera
+  registra a diferença; só a coordenação (`owner`, `admin` e `interno`)
+  conclui o pedido com diferença.
+- **"Concluir separação"** liga com todas as linhas tratadas (separadas ou
+  com a diferença registrada); antes, o pedido diz "106 itens por separar". O
+  diálogo pede o "Número do lacre", um por pedido, e "Confirmar separação"
+  fecha a separação e a embalagem de uma vez, num volume só. O pedido segue
+  com o separado: a diferença volta a ficar disponível, e o item zerado não
+  vai no volume. O pedido vai para "Para entregar".
+- A contagem cíclica de uma prateleira com linha já separada é recusada até a
+  entrega: o item já saiu dela e só baixa do saldo na entrega.
+- O suporte vê a bancada, sem as ações.
 
 ## A entrega do pedido
 

@@ -125,8 +125,10 @@ as telas novas. **Ler antes:** `docs/manual-armazenagem.md`.
 1. **O cliente ativo:** trocar no seletor e ver o que segue o cliente (os
    itens, a Contagem, a chegada avulsa) e o que mostra todos (Início,
    Pedidos, a fila do Receber).
-2. **Pedidos:** aprovar uma solicitação (com o `interno`), "Separado" com o
-   lacre e "Entregue" com quem levou e a placa. Num pedido, a "Entrega pela
+2. **Pedidos:** aprovar uma solicitação (com o `interno`), "Separar" (a
+   bancada: separar linha a linha, parar, "Continuar", um "Separar menos" e
+   "Concluir separação" com o lacre) e "Entregue" com quem levou e a placa.
+   Num pedido, a "Entrega pela
    Dutelog"; em outro, a "Retirada pelo cliente".
 3. **Receber:** criar uma "Chegada avulsa" do cliente e conferir a chegada
    que abre após o sucesso. No modo por caixa, selecionar um produto da NF,
