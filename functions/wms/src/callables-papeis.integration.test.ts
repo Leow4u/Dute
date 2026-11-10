@@ -213,6 +213,7 @@ const MATRIZ: Record<string, Linha> = {
   },
   recordWarehouseException: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   refuseInboundBoxPosition: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  recordBoxBalanceLabelPrint: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   recordInboundBoxLabelPrint: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   refuseInboundBoxShelf: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   previewAreaPutaway: { passam: COORDENACAO, recusa: SO_COORDENACAO },

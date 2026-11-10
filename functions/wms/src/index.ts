@@ -72,6 +72,7 @@ import {
   completeOrderSeparation as completeOrderSeparationFor,
   setPickLineSeparated as setPickLineSeparatedFor,
 } from "./domain/pick-progress.js";
+import { recordBoxBalanceLabelPrint as recordBoxBalanceLabelPrintFor } from "./domain/box-relabel.js";
 import { CLIENT_NOTICE_AFTER_PUTAWAY } from "./domain/inbound-box-entry.js";
 import {
   CLIENT_ACCESS_COLLECTION,
@@ -8375,6 +8376,16 @@ export const recordInboundBoxLabelPrint = onCall(async (request) => {
   const profile = await getProfile(request);
   requireWarehouseWrite(profile);
   return recordInboundBoxLabelPrintFor(db, request.data, profile);
+});
+
+/**
+ * Etiquetas para trocar (separação com caixas, parte 3d): registra a
+ * impressão da etiqueta com o saldo das caixas que a separação abriu.
+ */
+export const recordBoxBalanceLabelPrint = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return recordBoxBalanceLabelPrintFor(db, request.data, profile);
 });
 
 /** "Guardar" no Estoque (decisão 16, parte 7e): o que dá para guardar do saldo parado numa área. */
