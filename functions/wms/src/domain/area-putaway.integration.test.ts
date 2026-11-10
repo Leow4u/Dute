@@ -137,6 +137,32 @@ describe("a ação Guardar no Estoque (recebimento com caixas, parte 7e)", () =>
     assert.deepEqual([portal.qty_available, portal.qty_receiving], [20, 10]);
   });
 
+  it("o recibo da guarda aberta fica em operational_operations, com os outros recibos do WMS", async () => {
+    const aberta = await open(5, "recibo-5");
+    const task = (await db.collection("putaway_tasks").doc(String(aberta.putaway_task_id)).get()).data() ?? {};
+    const recibo = await db.collection("operational_operations").doc(String(task.created_from_operation_id)).get();
+    assert.equal(recibo.exists, true, "o recibo não está em operational_operations");
+    assert.deepEqual(
+      [recibo.get("kind"), recibo.get("target_id"), recibo.get("status"), recibo.get("customer_code"), recibo.get("actor")?.uid],
+      ["warehouse.area_putaway.open", aberta.putaway_task_id, "completed", BTG, coordenacao.uid],
+    );
+    assert.equal((await db.collection("operations").get()).size, 0, "nenhum recibo na coleção operations");
+  });
+
+  it("a chave repetida com o recibo antigo em operations não abre uma segunda guarda", async () => {
+    const aberta = await open(5, "antes-da-correcao");
+    const opId = String((await db.collection("putaway_tasks").doc(String(aberta.putaway_task_id)).get()).get("created_from_operation_id"));
+    // Como ficou a guarda aberta antes da correção: o recibo só em operations.
+    const recibo = (await db.collection("operational_operations").doc(opId).get()).data() ?? {};
+    await db.collection("operations").doc(opId).set(recibo);
+    await db.collection("operational_operations").doc(opId).delete();
+    // A guarda tem o id tirado do recibo: a segunda criação é recusada, e nada muda.
+    await assert.rejects(open(5, "antes-da-correcao"), { code: 6 }); // ALREADY_EXISTS
+    assert.equal((await tasks()).length, 1);
+    assert.equal((await db.collection("events").where("type", "==", "warehouse.area_putaway_opened").get()).size, 1);
+    assert.equal((await preview()).sem_guarda, 25);
+  });
+
   it("na EXPEDICAO, só o livre: o reservado do pedido não se guarda", async () => {
     await db.collection("stock_balances").doc("bal-expedicao").set({ id: "bal-expedicao", customer_code: BTG, sku_code: SKU, client_item_code: "POLO-P", product_name: "Camiseta polo P", location_id: "EXPEDICAO", qty_on_hand: 5, qty_reserved: 3, qty_available: 2 });
     const conta = await preview({ location_id: "EXPEDICAO" });
