@@ -74,6 +74,20 @@ describe("as linhas para concluir a separação", () => {
     }
   });
 
+  it("cada linha leva o registro lido (`separated_at`), para a transação recusar a que mudou depois", () => {
+    const lidas = linhasParaConcluir(
+      [
+        { ...POLO, separadoEm: "2026-11-12T13:05:00.000Z" },
+        { ...CALCA_A_MENOS, separadoEm: "2026-11-13T09:40:00.000Z" },
+      ],
+      "interno",
+    );
+    assert.deepEqual(lidas, [
+      { pick_line_id: "pli_1", qty_picked: 60, status: "confirmed", separated_at: "2026-11-12T13:05:00.000Z" },
+      { pick_line_id: "pli_2", qty_picked: 38, status: "confirmed", shortage_reason: "falta", shortage_detail: "A-05 tinha 38", separated_at: "2026-11-13T09:40:00.000Z" },
+    ]);
+  });
+
   it("a linha que ninguém separou barra a conclusão, com o nome quando é uma só", () => {
     const uma = recusa(() => linhasParaConcluir([POLO, CALCA], "interno"));
     assert.equal(uma.code, "failed-precondition");

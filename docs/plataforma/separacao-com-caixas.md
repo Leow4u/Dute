@@ -339,6 +339,14 @@ menos" na linha.
     derivada da chave da chamada; repetir continua de onde parou. O resultado
     é o mesmo da cadeia antiga: a régua `billing-callables` e o teste do
     separar a menos seguem verdes.
+  - A conclusão manda à transação o `separated_at` que leu de cada linha: a
+    linha desfeita ou separada de novo depois dessa leitura recusa ("A
+    separação mudou enquanto o pedido era concluído"), e nada conclui.
+  - Duas pessoas concluindo ao mesmo tempo: o pedido conclui uma vez. A
+    transição que a outra pessoa já fez recusa pelo status, e a conclusão lê
+    de novo e continua do que encontrou (até quatro voltas, uma por passo).
+    Quem chega com outro lacre recebe "A separação deste pedido já foi
+    concluída, com o lacre X"; com o mesmo lacre, é a repetição da chamada.
   - A contagem cíclica (`recordCycleCountTransaction`) recusa a prateleira
     com reserva cuja linha já tem algo separado: o item saiu da prateleira e
     só baixa do saldo na entrega. A linha separada com zero não barra a
@@ -363,8 +371,9 @@ menos" na linha.
 
 Os testes: `pick-progress.test.ts` (a regra sem banco),
 `pick-progress.integration.test.ts` (no emulador, do pedido aprovado à
-entrega: o progresso, o desfazer, a outra pessoa, a conclusão, a retomada, o
-separar a menos, a contagem cíclica e o cancelamento), as duas linhas na
+entrega: o progresso, o desfazer, a outra pessoa, a conclusão, a retomada, a
+linha que mudou depois da leitura, as duas pessoas concluindo ao mesmo tempo,
+o separar a menos, a contagem cíclica e o cancelamento), as duas linhas na
 tabela de papéis (`callables-papeis.integration.test.ts`), `separacao.test.ts`,
 `pedidos-separar-view.test.tsx`, `separar-menos.test.tsx` e
 `concluir-separacao.test.tsx` (a lista dos textos e o `axe`).
@@ -402,6 +411,11 @@ pedido.
 Os dois são separados com o sistema de hoje e a lista da parte 1. Enquanto a
 parte 3 não entra, a caixa aberta leva a sobra e a data escritas à mão, e a
 lista impressa guarda de qual caixa saiu cada linha e quais esvaziaram.
+
+Se a parte 2 chegar à produção com um deles ainda por concluir, a bancada
+abre com todas as linhas por separar: o que já foi separado pela lista
+impressa não está no sistema. Quem está com a lista marca as linhas já
+separadas, um toque por linha, e segue dali.
 
 A caixa da lista é a do conteúdo de entrada (decisão 10). Nesses dois pedidos
 ela é exata, porque nenhum pedido saiu desde a zeragem. Do terceiro pedido em

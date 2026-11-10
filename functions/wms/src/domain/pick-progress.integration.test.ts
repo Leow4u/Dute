@@ -301,6 +301,10 @@ describe("Separar com o progresso salvo (separação com caixas, parte 2a)", () 
     const repetido = await concluir(pickTaskId, guilherme, "concluir-pedido-0001");
     assert.deepEqual([repetido.ok, repetido.pack_task_id], [true, `pack_${orderId}`]);
     assert.equal((await eventos("packing.completed")).length, 1);
+    // Quem chega depois com outro lacre fica sabendo que o pedido já concluiu, e com qual.
+    const outroLacre = await recusa(completeOrderSeparation(db, { pick_task_id: pickTaskId, seal_code: "L-0202", idempotency_key: chave("concluir") }, coordenacao));
+    assert.deepEqual([outroLacre.code, outroLacre.message], ["failed-precondition", "A separação deste pedido já foi concluída, com o lacre L-0101."]);
+    assert.equal((await db.collection("pack_tasks").doc(`pack_${orderId}`).get()).get("seal_code"), "L-0101");
     // Depois de concluída, a linha não aceita mais progresso.
     assert.equal((await recusa(desfazer(pickTaskId, linhaPolo))).message, "A separação deste pedido já foi concluída.");
 
@@ -327,6 +331,55 @@ describe("Separar com o progresso salvo (separação com caixas, parte 2a)", () 
     assert.equal(concluido.ok, true);
     assert.equal((await db.collection("pack_tasks").doc(`pack_${orderId}`).get()).get("status"), "completed");
     assert.equal((await db.collection("shipments").doc(String(concluido.shipment_id)).get()).get("status"), "ready_to_dispatch");
+  });
+
+  it("a conclusão confere o progresso que leu: a linha desfeita ou separada de novo depois recusa, e nada conclui", async () => {
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    const polo = await separar(pickTaskId, linhaPolo);
+    const bone = await separar(pickTaskId, linhaBone);
+    // O que a conclusão leu das linhas, antes de outra pessoa desfazer o boné.
+    const lido = [
+      { pick_line_id: linhaPolo, qty_picked: 5, status: "confirmed", separated_at: polo.separated_at },
+      { pick_line_id: linhaBone, qty_picked: 4, status: "confirmed", separated_at: bone.separated_at },
+    ];
+    await desfazer(pickTaskId, linhaBone, rafael);
+    const desfeita = await recusa(avancar(`picking:${pickTaskId}`, "in_progress", { picking_lines: lido }));
+    assert.deepEqual([desfeita.code, desfeita.message], ["failed-precondition", "A separação mudou enquanto o pedido era concluído. Atualize e tente de novo."]);
+    // Separada de novo, a linha tem outro registro: a leitura antiga continua recusada.
+    const deNovo = await separar(pickTaskId, linhaBone, rafael);
+    assert.notEqual(deNovo.separated_at, bone.separated_at);
+    assert.equal((await recusa(avancar(`picking:${pickTaskId}`, "in_progress", { picking_lines: lido }))).message, desfeita.message);
+    assert.equal((await tarefa(pickTaskId)).status, "in_progress");
+    const reservas = await porLinha("stock_reservations", orderId);
+    assert.deepEqual([reservas[POLO]!.status, reservas[BONE]!.status], ["reserved", "reserved"]);
+    assert.equal((await eventos("picking.completed")).length, 0);
+
+    // A conclusão pela bancada lê o progresso de agora e conclui.
+    assert.equal((await concluir(pickTaskId)).ok, true);
+    assert.equal((await porLinha("pick_lines", orderId))[BONE]!.separated_by.name, "Rafael");
+  });
+
+  it("duas pessoas concluem ao mesmo tempo: o pedido conclui uma vez, e a outra recebe a recusa com o lacre gravado", async () => {
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    await separar(pickTaskId, linhaPolo);
+    await separar(pickTaskId, linhaBone);
+    const concluirCom = (lacre: string, ator: OperationalActor) =>
+      completeOrderSeparation(db, { pick_task_id: pickTaskId, seal_code: lacre, idempotency_key: chave("concluir") }, ator) as Promise<Record<string, unknown>>;
+    const resultados = await Promise.allSettled([concluirCom("L-0101", guilherme), concluirCom("L-0202", rafael)]);
+    const feitas = resultados.flatMap((resultado) => (resultado.status === "fulfilled" ? [resultado.value] : []));
+    const recusadas = resultados.flatMap((resultado) => (resultado.status === "rejected" ? [resultado.reason as HttpsError] : []));
+    assert.deepEqual([feitas.length, recusadas.length], [1, 1], recusadas.map((erro) => erro.message).join(" | "));
+
+    const embalagem = (await db.collection("pack_tasks").doc(`pack_${orderId}`).get()).data() ?? {};
+    assert.deepEqual([embalagem.status, embalagem.seal_code], ["completed", feitas[0]!.seal_code]);
+    assert.equal(recusadas[0]!.message, `A separação deste pedido já foi concluída, com o lacre ${embalagem.seal_code}.`);
+    // Cada transição aconteceu uma vez só.
+    for (const tipo of ["picking.completed", "packing.started", "packing.completed"]) {
+      assert.equal((await eventos(tipo)).length, 1, tipo);
+    }
+    assert.equal((await db.collection("packages").where("pack_task_id", "==", `pack_${orderId}`).get()).size, 1);
+    assert.equal((await db.collection("shipments").where("order_id", "==", orderId).get()).size, 1);
+    assert.deepEqual(await saldos(), { [`${POLO}@A-01`]: [8, 5, 3], [`${BONE}@A-02`]: [4, 4, 0] });
   });
 
   it("quem opera registra o separado a menos na linha, com o motivo; só a coordenação conclui o pedido com diferença", async () => {
