@@ -64,6 +64,8 @@ WMS:
 - `putaway.exception_found`
 - `picking.created`
 - `picking.started`
+- `picking.line_separated`
+- `picking.line_unseparated`
 - `picking.completed`
 - `picking.shortage_found`
 - `packing.created`
