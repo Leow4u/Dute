@@ -5,7 +5,10 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import type { CaixaDaLinha } from "@workspace/dominio";
+
 import { cn } from "@/lib/utils";
+import { textoDaCaixa } from "@/lib/warehouse-ops/caixas-da-separacao";
 import { resumoDoGrupo, type GrupoDaLista, type LinhaDaLista } from "@/lib/warehouse-ops/lista-de-separacao";
 import type { WarehouseTaskItem } from "@/lib/warehouse-ops/model";
 import {
@@ -26,10 +29,12 @@ import {
  * Pedidos › Separar, a bancada do pedido (separação com caixas, partes 2 e 5;
  * docs/mockups/WmsSepararBancada.dc.html e WmsSepararCelular.dc.html): o
  * progresso salvo, as linhas por prateleira na ordem de caminhada com
- * "Separar", "Desfazer" e "Separar menos", e "Concluir separação". A caixa
- * sugerida com a quantidade, "Levar a caixa", os volumes e as etiquetas para
- * trocar da prancha entram com as partes 3 e 4. Os dados e as ações chegam
- * por props (pages/pedidos-separar.tsx). Sem legenda.
+ * "Separar", "Desfazer" e "Separar menos", e "Concluir separação". A linha
+ * por separar diz de qual caixa o sistema vai tirar ("12 de CX-000027",
+ * "esvazia", "CX-000029 inteira"), a separada diz de onde saiu, e "Outra
+ * caixa" corrige (parte 3b). "Levar a caixa" e os volumes da prancha entram
+ * com a parte 4. Os dados e as ações chegam por props
+ * (pages/pedidos-separar.tsx). Sem legenda.
  */
 
 export type EstadoDaBancada = "carregando" | "nao_encontrado" | "erro" | "concluida" | "pronto";
@@ -56,10 +61,13 @@ export function PedidosSepararView({
   coordenacao,
   fechada = false,
   ocupadas,
+  caixasDaLinha,
+  comOutraCaixa,
   fotoDe,
   onSeparar,
   onDesfazer,
   onSepararMenos,
+  onOutraCaixa,
   onConcluir,
 }: {
   estado: EstadoDaBancada;
@@ -85,10 +93,19 @@ export function PedidosSepararView({
   fechada?: boolean;
   /** As linhas com uma gravação em curso. */
   ocupadas?: ReadonlySet<string>;
+  /**
+   * De qual caixa cada linha sai: a sugestão do sistema, na linha por
+   * separar; o que ficou gravado, na separada. A linha fora do mapa mostra só
+   * os códigos das caixas da prateleira (a leitura das caixas não chegou).
+   */
+  caixasDaLinha?: ReadonlyMap<string, readonly CaixaDaLinha[]>;
+  /** As linhas com caixa na prateleira para escolher: ganham "Outra caixa". */
+  comOutraCaixa?: ReadonlySet<string>;
   fotoDe?: (item: WarehouseTaskItem) => string | undefined;
   onSeparar: (linha: LinhaDaLista) => void;
   onDesfazer: (linha: LinhaDaLista) => void;
   onSepararMenos: (linha: LinhaDaLista) => void;
+  onOutraCaixa?: (linha: LinhaDaLista) => void;
   onConcluir: () => void;
 }) {
   // A prateleira toda separada fecha sozinha; a pessoa abre a que quiser rever.
@@ -209,9 +226,11 @@ export function PedidosSepararView({
                           principal={linha.id === primeira}
                           operador={operador && !fechada}
                           ocupada={ocupadas?.has(linha.id) ?? false}
+                          caixas={caixasDaLinha?.get(linha.id)}
                           onSeparar={onSeparar}
                           onDesfazer={onDesfazer}
                           onSepararMenos={onSepararMenos}
+                          onOutraCaixa={onOutraCaixa && comOutraCaixa?.has(linha.id) ? onOutraCaixa : undefined}
                         />
                       ))}
                     </ul>
@@ -232,24 +251,30 @@ function Linha({
   principal,
   operador,
   ocupada,
+  caixas,
   onSeparar,
   onDesfazer,
   onSepararMenos,
+  onOutraCaixa,
 }: {
   linha: LinhaDaLista;
   foto?: string;
   principal: boolean;
   operador: boolean;
   ocupada: boolean;
+  /** De qual caixa a linha sai (ou saiu); undefined sem a leitura das caixas. */
+  caixas?: readonly CaixaDaLinha[];
   onSeparar: (linha: LinhaDaLista) => void;
   onDesfazer: (linha: LinhaDaLista) => void;
   onSepararMenos: (linha: LinhaDaLista) => void;
+  /** Só na linha com caixa na prateleira para escolher. */
+  onOutraCaixa?: (linha: LinhaDaLista) => void;
 }) {
   const estado = estadoDaLinha(linha.item);
   const pendente = estado === "pendente";
   return (
     <li className={cn("flex flex-col gap-2.5 border-t border-border/50 px-4 py-2.5 text-sm sm:flex-row sm:items-center sm:gap-3 md:px-5", !pendente && "bg-muted/30")}>
-      <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
+      <div className="flex min-w-0 flex-1 flex-wrap items-start gap-x-3 gap-y-1.5 sm:flex-nowrap sm:items-center">
         {foto ? (
           <img src={foto} alt="" loading="lazy" className="size-11 shrink-0 rounded-lg bg-muted object-cover" />
         ) : (
@@ -260,8 +285,19 @@ function Linha({
         <div className="min-w-0 flex-1">
           {linha.nome ? <p className="font-semibold leading-snug text-foreground sm:truncate">{linha.nome}</p> : null}
           {linha.codigos ? <p className="truncate text-xs text-muted-foreground">{linha.codigos}</p> : null}
-          {/* A caixa onde o item está: só enquanto a linha está por separar. */}
-          {pendente && linha.caixas.length ? (
+          {/* De qual caixa a linha por separar sai: a mais antiga, e a seguinte completa. */}
+          {pendente && caixas?.length ? (
+            <p className="flex flex-wrap items-center gap-1.5 pt-1">
+              {caixas.map((caixa) => (
+                <span key={caixa.box_code} className="contents">
+                  <span className="whitespace-nowrap rounded-md bg-info-soft px-1.5 py-0.5 font-mono text-xs font-medium text-info-soft-foreground">{textoDaCaixa(caixa)}</span>
+                  {caixa.esvazia ? <span className="rounded-md bg-warning-soft px-1.5 py-0.5 text-xs font-bold text-warning-soft-foreground">esvazia</span> : null}
+                </span>
+              ))}
+            </p>
+          ) : null}
+          {/* Sem a leitura das caixas, ficam os códigos das caixas da prateleira (parte 1). */}
+          {pendente && !caixas && linha.caixas.length ? (
             <p className="flex flex-wrap gap-1.5 pt-1">
               {linha.caixas.map((caixa) => (
                 <span key={caixa} className="whitespace-nowrap rounded-md bg-info-soft px-1.5 py-0.5 font-mono text-xs font-medium text-info-soft-foreground">
@@ -278,6 +314,16 @@ function Linha({
             </p>
           ) : null}
         </div>
+        {/* De onde a linha separada saiu: ao lado no computador, embaixo no celular. */}
+        {!pendente && caixas?.length ? (
+          <p className="order-last flex basis-full flex-wrap gap-1.5 pl-14 sm:order-none sm:basis-auto sm:flex-nowrap sm:pl-0">
+            {caixas.map((caixa) => (
+              <span key={caixa.box_code} className="whitespace-nowrap rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs font-medium text-foreground">
+                {textoDaCaixa(caixa)}
+              </span>
+            ))}
+          </p>
+        ) : null}
         <span className="whitespace-nowrap font-semibold tabular-nums">{numero.format(linha.quantidade)} un.</span>
       </div>
       {operador ? (
@@ -293,6 +339,7 @@ function Linha({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {onOutraCaixa ? <DropdownMenuItem onSelect={() => onOutraCaixa(linha)}>Outra caixa</DropdownMenuItem> : null}
                 <DropdownMenuItem onSelect={() => onSepararMenos(linha)}>Separar menos</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -73,6 +73,8 @@ export type WarehouseTaskItem = {
   separated_by?: string | null;
   shortage_reason?: string | null;
   shortage_detail?: string | null;
+  /** De quais caixas a linha separada saiu (separação com caixas, parte 3b). */
+  separated_boxes?: Array<{ box_code: string; qty: number; whole?: boolean; emptied?: boolean }> | null;
   /** O código de barras do produto da linha, para a busca da bancada. */
   barcode?: string | null;
   boxed_qty?: number | null;

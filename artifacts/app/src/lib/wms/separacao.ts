@@ -7,10 +7,12 @@ import { mensagemDoErro } from "../operacao/api";
 
 /**
  * Separar com o progresso salvo (docs/plataforma/separacao-com-caixas.md,
- * partes 2 e 5): as callables do WMS (functions/wms, domain/pick-progress.ts).
- * `setPickLineSeparated` separa, registra o separado a menos ou desfaz uma
- * linha; `completeOrderSeparation` conclui a separação e a embalagem, com o
- * lacre, numa chamada.
+ * partes 2, 3b e 5): as callables do WMS (functions/wms,
+ * domain/pick-progress.ts). `setPickLineSeparated` separa, registra o
+ * separado a menos ou desfaz uma linha, e baixa a caixa: a mais antiga da
+ * prateleira ou, com `boxes`, as que a pessoa informou em "Outra caixa".
+ * `completeOrderSeparation` conclui a separação e a embalagem, com o lacre,
+ * numa chamada.
  */
 
 export type LinhaSeparada = {
@@ -23,6 +25,9 @@ export type LinhaSeparada = {
   separated_qty: number;
   shortage_reason?: string;
   separated_at?: string;
+  /** De quais caixas saiu, e o que saiu sem caixa. */
+  boxes?: Array<{ box_code: string; qty: number; whole?: boolean; emptied?: boolean }>;
+  loose_qty?: number;
 };
 
 export type SeparacaoConcluida = {
@@ -44,8 +49,8 @@ async function chamarWms<T>(nome: "setPickLineSeparated" | "completeOrderSeparat
   }
 }
 
-/** "Separar": a linha inteira. */
-export function separarLinha(input: { pick_task_id: string; pick_line_id: string; idempotency_key: string }) {
+/** "Separar": a linha inteira, da caixa mais antiga; com `boxes` ("Outra caixa"), das caixas informadas. */
+export function separarLinha(input: { pick_task_id: string; pick_line_id: string; idempotency_key: string; boxes?: Array<{ box_code: string; qty: number }> }) {
   return chamarWms<LinhaSeparada>("setPickLineSeparated", { ...input, separated: true });
 }
 

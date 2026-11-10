@@ -71,7 +71,20 @@ function progressoDaLinha(data: Record<string, unknown>, por: { name?: unknown; 
     separated_by: texto(por?.name) || texto(por?.email) || undefined,
     shortage_reason: texto(concluida ? data.shortage_reason : data.separated_shortage_reason) || undefined,
     shortage_detail: texto(concluida ? data.shortage_detail : data.separated_shortage_detail) || undefined,
+    separated_boxes: caixasDaLinhaGravadas(data.separated_boxes),
   };
+}
+
+/** De quais caixas a linha saiu, como o servidor grava (`separated_boxes`). */
+function caixasDaLinhaGravadas(valor: unknown) {
+  if (!Array.isArray(valor)) return undefined;
+  const caixas = valor.flatMap((caixa) => {
+    const linha = caixa && typeof caixa === "object" ? (caixa as Record<string, unknown>) : null;
+    const box_code = texto(linha?.box_code).toUpperCase();
+    const qty = Number(linha?.qty ?? 0) || 0;
+    return box_code && qty > 0 ? [{ box_code, qty, whole: linha?.whole === true || undefined, emptied: linha?.emptied === true || undefined }] : [];
+  });
+  return caixas.length ? caixas : undefined;
 }
 
 /** O instante de um carimbo do Firestore, em ISO; sem data válida, "". */

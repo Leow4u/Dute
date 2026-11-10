@@ -3,7 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { collection, doc, query, where } from "firebase/firestore";
 import { useLocation, useSearch } from "wouter";
 
+import type { CaixaDaLinha } from "@workspace/dominio";
+
 import { ConcluirSeparacaoDialog } from "@/features/warehouse-ops/concluir-separacao";
+import { OutraCaixaDialog, type OutraCaixaDaLinha } from "@/features/warehouse-ops/outra-caixa";
 import { SepararMenosDialog, type DiferencaDaLinha } from "@/features/warehouse-ops/separar-menos";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
@@ -12,10 +15,20 @@ import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { textoDoParaQuando } from "@/lib/order-queue";
 import { canDecideRequests, canOperateWarehouse } from "@/lib/permissions";
 import { useItemPhotos } from "@/lib/use-item-photos";
+import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
+import {
+  caixasComOItem,
+  caixasGravadas,
+  caixasParaEnviar,
+  entradaDasCaixas,
+  linhaDeEntrada,
+  sugestaoDaLinha,
+  type CaixaDaPrateleira,
+} from "@/lib/warehouse-ops/caixas-da-separacao";
 import { hrefDaListaDeSeparacao, pedidoDaBusca, resumoDoGrupo, type LinhaDaLista } from "@/lib/warehouse-ops/lista-de-separacao";
 import { fetchJson, type WarehouseOpsResponse, type WarehouseTaskItem } from "@/lib/warehouse-ops/model";
 import { groupWarehouseOrders } from "@/lib/warehouse-ops/orders";
-import { idDaTarefaDeSeparacao, itemDaLinhaDeSeparacao, progressoDoPedido, separacaoComecou } from "@/lib/warehouse-ops/separacao";
+import { estadoDaLinha, idDaTarefaDeSeparacao, itemDaLinhaDeSeparacao, progressoDoPedido, separacaoComecou } from "@/lib/warehouse-ops/separacao";
 import { useLeituraDaLista } from "@/lib/warehouse-ops/use-lista-de-separacao";
 import { concluirSeparacao, desfazerLinha, separarLinha, separarMenos } from "@/lib/wms/separacao";
 
@@ -25,15 +38,21 @@ const SEM_ITENS: WarehouseTaskItem[] = [];
 
 type Acao =
   | { tipo: "separar" | "desfazer"; linha: LinhaDaLista }
-  | { tipo: "menos"; linha: LinhaDaLista; diferenca: DiferencaDaLinha };
+  | { tipo: "menos"; linha: LinhaDaLista; diferenca: DiferencaDaLinha }
+  | { tipo: "outra"; linha: LinhaDaLista; caixas: Array<{ box_code: string; qty: number }> };
 
 /**
- * Pedidos › Separar (separação com caixas, partes 2 e 5): a bancada do pedido
- * da URL (?pedido=). As linhas vêm ao vivo do servidor: o que outra pessoa
- * separa aparece sem recarregar, e quem volta no dia seguinte continua de
- * onde parou. Cada "Separar", "Desfazer" e "Separar menos" grava na hora pela
- * callable; "Concluir separação" fecha a separação e a embalagem, com o
+ * Pedidos › Separar (separação com caixas, partes 2, 3b e 5): a bancada do
+ * pedido da URL (?pedido=). As linhas vêm ao vivo do servidor: o que outra
+ * pessoa separa aparece sem recarregar, e quem volta no dia seguinte continua
+ * de onde parou. Cada "Separar", "Desfazer" e "Separar menos" grava na hora
+ * pela callable; "Concluir separação" fecha a separação e a embalagem, com o
  * lacre, numa chamada.
+ *
+ * As caixas (parte 3b) também vêm ao vivo: a linha por separar mostra de qual
+ * caixa o sistema vai tirar, e a separada, de onde saiu. "Separar" deixa o
+ * servidor baixar a caixa mais antiga; "Outra caixa" manda as que a pessoa
+ * informou.
  */
 export default function PaginaPedidosSeparar() {
   const chave = pedidoDaBusca(useSearch());
@@ -74,6 +93,40 @@ export default function PaginaPedidosSeparar() {
   const lista = useLeituraDaLista(itens, codigoDoCliente);
   const progresso = useMemo(() => progressoDoPedido(itens), [itens]);
 
+  // As caixas guardadas do cliente e o conteúdo de entrada das da abertura, ao vivo.
+  const caixasAoVivo = useLeitura(
+    codigoDoCliente ? `warehouse_boxes:${codigoDoCliente}:guardadas` : null,
+    (db) => query(collection(db, "warehouse_boxes"), where("customer_code", "==", codigoDoCliente), where("status", "==", "stored")),
+    (id, data) => warehouseBoxFromRecord({ id, ...data }),
+  );
+  const entradaAoVivo = useLeitura(
+    codigoDoCliente ? `opening_inventory_lines:${codigoDoCliente}` : null,
+    (db) => query(collection(db, "opening_inventory_lines"), where("customer_code", "==", codigoDoCliente)),
+    linhaDeEntrada,
+  );
+  // De qual caixa cada linha sai: a sugestão, na linha por separar; o gravado, na separada.
+  const { caixasDaLinha, candidatasDaLinha } = useMemo(() => {
+    const daLinha = new Map<string, CaixaDaLinha[]>();
+    const candidatas = new Map<string, CaixaDaPrateleira[]>();
+    const guardadas = caixasAoVivo.itens;
+    const entrada = guardadas && entradaAoVivo.itens ? entradaDasCaixas(guardadas, entradaAoVivo.itens) : null;
+    for (const linha of lista.grupos.flatMap((grupo) => grupo.linhas)) {
+      if (estadoDaLinha(linha.item) !== "pendente") {
+        daLinha.set(linha.id, caixasGravadas(linha.item));
+      } else if (guardadas && entrada) {
+        const daPrateleira = caixasComOItem(linha.item, guardadas, entrada, codigoDoCliente);
+        candidatas.set(linha.id, daPrateleira);
+        daLinha.set(linha.id, sugestaoDaLinha(linha.item, daPrateleira).caixas);
+      }
+    }
+    return { caixasDaLinha: daLinha, candidatasDaLinha: candidatas };
+  }, [lista.grupos, caixasAoVivo.itens, entradaAoVivo.itens, codigoDoCliente]);
+  // "Outra caixa" só faz sentido com mais de uma caixa na prateleira para escolher.
+  const comOutraCaixa = useMemo(
+    () => new Set([...candidatasDaLinha].filter(([, daPrateleira]) => daPrateleira.length > 1).map(([id]) => id)),
+    [candidatasDaLinha],
+  );
+
   const solicitacaoId = pedido?.requestId ?? null;
   const solicitacao = useDocumento(
     solicitacaoId ? `customer_requests/${solicitacaoId}:bancada` : null,
@@ -91,6 +144,7 @@ export default function PaginaPedidosSeparar() {
 
   const [ocupadas, setOcupadas] = useState<ReadonlySet<string>>(new Set());
   const [diferenca, setDiferenca] = useState<DiferencaDaLinha | null>(null);
+  const [outraCaixa, setOutraCaixa] = useState<OutraCaixaDaLinha | null>(null);
   const [lacre, setLacre] = useState<string | null>(null);
   // A chave da conclusão vale enquanto o diálogo está aberto: repetir continua de onde parou.
   const chaveDaConclusao = useRef<string | null>(null);
@@ -105,6 +159,8 @@ export default function PaginaPedidosSeparar() {
       if (acao.tipo === "menos") {
         return separarMenos({ ...entrada, separated_qty: acao.diferenca.separado, shortage_reason: acao.diferenca.motivo, shortage_detail: acao.diferenca.detalhe });
       }
+      // "Outra caixa" manda as caixas informadas; "Separar" deixa o servidor baixar a mais antiga.
+      if (acao.tipo === "outra") return separarLinha({ ...entrada, boxes: acao.caixas });
       return separarLinha(entrada);
     },
     onMutate: (acao) => setOcupadas((atuais) => new Set(atuais).add(acao.linha.id)),
@@ -116,6 +172,7 @@ export default function PaginaPedidosSeparar() {
       }),
     onSuccess: (_resultado, acao) => {
       if (acao.tipo === "menos") setDiferenca(null);
+      if (acao.tipo === "outra") setOutraCaixa(null);
     },
     onError: erro("Não foi possível gravar a linha"),
   });
@@ -167,9 +224,22 @@ export default function PaginaPedidosSeparar() {
         coordenacao={coordenacao}
         fechada={situacao?.status === "completed"}
         ocupadas={ocupadas}
+        caixasDaLinha={caixasDaLinha}
+        comOutraCaixa={comOutraCaixa}
         fotoDe={(item) => fotoDoItem(item.sku_code, item.sku, item.client_item_code)}
         onSeparar={(linha) => gravar.mutate({ tipo: "separar", linha })}
         onDesfazer={(linha) => gravar.mutate({ tipo: "desfazer", linha })}
+        onOutraCaixa={(linha) =>
+          setOutraCaixa({
+            id: linha.id,
+            nome: linha.nome || linha.codigos,
+            posicao: String(linha.item.location ?? ""),
+            quantidade: linha.quantidade,
+            caixas: candidatasDaLinha.get(linha.id) ?? [],
+            // Começa na sugestão do sistema: a pessoa só corrige.
+            informadas: Object.fromEntries((caixasDaLinha.get(linha.id) ?? []).map((caixa) => [caixa.box_code, caixa.qty])),
+          })
+        }
         onSepararMenos={(linha) =>
           setDiferenca({ id: linha.id, nome: linha.nome || linha.codigos, posicao: String(linha.item.location ?? ""), pedido: linha.quantidade, separado: Math.max(0, linha.quantidade - 1), motivo: "", detalhe: "" })
         }
@@ -186,6 +256,16 @@ export default function PaginaPedidosSeparar() {
         onRegistrar={() => {
           const linha = diferenca ? lista.grupos.flatMap((grupo) => grupo.linhas).find((candidata) => candidata.id === diferenca.id) : undefined;
           if (linha && diferenca) gravar.mutate({ tipo: "menos", linha, diferenca });
+        }}
+      />
+      <OutraCaixaDialog
+        linha={outraCaixa}
+        confirmando={gravar.isPending}
+        onMudar={setOutraCaixa}
+        onFechar={() => setOutraCaixa(null)}
+        onConfirmar={() => {
+          const linha = outraCaixa ? lista.grupos.flatMap((grupo) => grupo.linhas).find((candidata) => candidata.id === outraCaixa.id) : undefined;
+          if (linha && outraCaixa) gravar.mutate({ tipo: "outra", linha, caixas: caixasParaEnviar(outraCaixa.informadas) });
         }}
       />
       <ConcluirSeparacaoDialog

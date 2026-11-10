@@ -231,3 +231,90 @@ describe("Pedidos › Separar, a bancada do pedido", () => {
     expect(await violacoesDeAcessibilidade(render("erro"))).toEqual([]);
   });
 });
+
+/**
+ * A caixa na bancada (separação com caixas, parte 3b;
+ * docs/mockups/WmsSepararBancada.dc.html). Antes, a linha dizia só em quais
+ * caixas o item estava, sem a quantidade, e a separada não dizia de onde saiu.
+ */
+describe("Pedidos › Separar, a caixa de cada linha", () => {
+  const caixasDaLinha = new Map([
+    // A calça 40, já separada: saiu da CX-000027.
+    ["pli_ord_1_03", [{ box_code: "CX-000027", qty: 30, inteira: false, esvazia: false }]],
+    // A calça 42, por separar: a CX-000027 esvazia, e a CX-000028 completa.
+    [
+      "pli_ord_1_04",
+      [
+        { box_code: "CX-000027", qty: 12, inteira: false, esvazia: true },
+        { box_code: "CX-000028", qty: 28, inteira: false, esvazia: false },
+      ],
+    ],
+    // A lancheira, com diferença: a caixa de onde saiu a que foi separada.
+    ["pli_ord_1_05", [{ box_code: "CX-000186", qty: 1, inteira: false, esvazia: false }]],
+    // O copo, por separar: a caixa sai inteira.
+    ["pli_ord_1_06", [{ box_code: "CX-000187", qty: 1, inteira: true, esvazia: false }]],
+  ]);
+
+  function textosDaPrateleira(html: string, prateleira: string) {
+    const textos = textosDaTela(html);
+    const inicio = textos.indexOf(prateleira);
+    const fim = textos.findIndex((texto, indice) => indice > inicio && /^[A-Z]-\d\d$/.test(texto));
+    return textos.slice(inicio, fim === -1 ? undefined : fim);
+  }
+
+  it("a linha por separar diz de qual caixa o sistema tira e qual esvazia; a separada, de onde saiu", () => {
+    const html = render("pronto", { caixasDaLinha });
+    expect(textosDaPrateleira(html, "A-05")).toEqual([
+      "A-05",
+      "2 itens · 70 un.",
+      "1 de 2",
+      "Calça Social Masculino Preta · 40",
+      "A.01.0712.001.40 · BTG-000083",
+      "30 de CX-000027",
+      "30 un.",
+      "Desfazer",
+      "Calça Social Masculino Preta · 42",
+      "A.01.0712.001.42 · BTG-000084",
+      "12 de CX-000027",
+      "esvazia",
+      "28 de CX-000028",
+      "40 un.",
+      "Separar",
+    ]);
+  });
+
+  it("a caixa que sai toda vem como inteira, e a linha com diferença diz de onde saiu o que foi separado", () => {
+    const html = render("pronto", { caixasDaLinha });
+    // A lista dos textos não repete o que já apareceu: "1 de 2", "Separar" e "Desfazer" vieram na A-05.
+    expect(textosDaPrateleira(html, "B-09")).toEqual([
+      "B-09",
+      "2 itens · 3 un.",
+      "Copo Café",
+      "B.0791.005.U · BTG-000202",
+      "CX-000187 inteira",
+      "1 un.",
+      "Lancheira Grande AZ",
+      "C.0612.002.U · BTG-000106",
+      "separado 1 de 2 · Avaria",
+      "1 de CX-000186",
+      "2 un.",
+    ]);
+  });
+
+  it("a linha por separar sem caixa com o item na prateleira não mostra caixa; sem a leitura, ficam os códigos", () => {
+    // Com a leitura das caixas e nenhuma com o item: a linha sai sem caixa.
+    const semCaixa = new Map(caixasDaLinha).set("pli_ord_1_04", []);
+    expect(textosDaPrateleira(render("pronto", { caixasDaLinha: semCaixa }), "A-05").slice(-4)).toEqual([
+      "Calça Social Masculino Preta · 42",
+      "A.01.0712.001.42 · BTG-000084",
+      "40 un.",
+      "Separar",
+    ]);
+    // Sem a leitura (a linha fora do mapa), ficam os códigos das caixas da prateleira, como na lista.
+    expect(textosDaPrateleira(render(), "A-05").slice(-5)).toEqual(["A.01.0712.001.42 · BTG-000084", "CX-000027", "CX-000028", "40 un.", "Separar"]);
+  });
+
+  it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
+    expect(await violacoesDeAcessibilidade(render("pronto", { caixasDaLinha, comOutraCaixa: new Set(["pli_ord_1_04"]), onOutraCaixa: noop }))).toEqual([]);
+  });
+});
