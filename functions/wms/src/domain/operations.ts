@@ -2230,7 +2230,8 @@ export async function recordCycleCountTransaction(
         const pickLineId = pickLineIdOf(reservation.data);
         if (!pickLineId) continue;
         const pickLine = await transaction.get(db.collection(collections.pickLines).doc(pickLineId));
-        if (pickLine.exists && pickLine.get("separated_at")) {
+        // A linha separada com zero (falta total) não tirou nada da prateleira.
+        if (pickLine.exists && pickLine.get("separated_at") && number(pickLine.get("separated_qty")) > 0) {
           const order = text(reservation.data.order_number);
           throw new HttpsError(
             "failed-precondition",

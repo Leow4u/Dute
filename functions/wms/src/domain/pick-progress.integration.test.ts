@@ -111,12 +111,21 @@ function separar(pickTaskId: string, pickLineId: string, ator: OperationalActor 
   return setPickLineSeparated(db, { pick_task_id: pickTaskId, pick_line_id: pickLineId, separated: true, idempotency_key: idempotencyKey }, ator) as Promise<Record<string, unknown>>;
 }
 
+/** "Separar menos": o separado de fato, com o motivo. */
+function separarMenos(pickTaskId: string, pickLineId: string, separado: number, motivo: Record<string, unknown>, ator: OperationalActor = guilherme) {
+  return setPickLineSeparated(
+    db,
+    { pick_task_id: pickTaskId, pick_line_id: pickLineId, separated: true, separated_qty: separado, ...motivo, idempotency_key: chave("separar-menos") },
+    ator,
+  ) as Promise<Record<string, unknown>>;
+}
+
 function desfazer(pickTaskId: string, pickLineId: string, ator: OperationalActor = guilherme, idempotencyKey = chave("desfazer")) {
   return setPickLineSeparated(db, { pick_task_id: pickTaskId, pick_line_id: pickLineId, separated: false, idempotency_key: idempotencyKey }, ator) as Promise<Record<string, unknown>>;
 }
 
-function concluir(pickTaskId: string, extra: Record<string, unknown> = {}, ator: OperationalActor = guilherme, idempotencyKey = chave("concluir")) {
-  return completeOrderSeparation(db, { pick_task_id: pickTaskId, seal_code: "L-0101", idempotency_key: idempotencyKey, ...extra }, ator) as Promise<Record<string, unknown>>;
+function concluir(pickTaskId: string, ator: OperationalActor = guilherme, idempotencyKey = chave("concluir")) {
+  return completeOrderSeparation(db, { pick_task_id: pickTaskId, seal_code: "L-0101", idempotency_key: idempotencyKey }, ator) as Promise<Record<string, unknown>>;
 }
 
 function avancar(taskUid: string, expectedStatus: string, operation?: Record<string, unknown>, ator: OperationalActor = guilherme) {
@@ -197,6 +206,7 @@ describe("Separar com o progresso salvo (separação com caixas, parte 2a)", () 
       line_number: linhas[POLO]!.line_number,
       sku_code: POLO,
       location_id: "A-01",
+      expected_qty: 5,
       quantity: 5,
     });
     const avisos = (await db.collection("ai_agent_inbox").get()).docs.map((doc) => doc.get("event_id"));
@@ -259,7 +269,7 @@ describe("Separar com o progresso salvo (separação com caixas, parte 2a)", () 
     assert.equal((await tarefa(pickTaskId)).status, "in_progress");
 
     await separar(pickTaskId, linhaBone, rafael);
-    const concluido = await concluir(pickTaskId, {}, guilherme, "concluir-pedido-0001");
+    const concluido = await concluir(pickTaskId, guilherme, "concluir-pedido-0001");
     assert.deepEqual([concluido.ok, concluido.order_id, concluido.pack_task_id, concluido.seal_code], [true, orderId, `pack_${orderId}`, "L-0101"]);
     const shipmentId = String(concluido.shipment_id);
 
@@ -288,7 +298,7 @@ describe("Separar com o progresso salvo (separação com caixas, parte 2a)", () 
     assert.deepEqual(await saldos(), { [`${POLO}@A-01`]: [8, 5, 3], [`${BONE}@A-02`]: [4, 4, 0] });
 
     // Repetir a chamada (o clique dobrado, a rede que caiu) não refaz nada.
-    const repetido = await concluir(pickTaskId, {}, guilherme, "concluir-pedido-0001");
+    const repetido = await concluir(pickTaskId, guilherme, "concluir-pedido-0001");
     assert.deepEqual([repetido.ok, repetido.pack_task_id], [true, `pack_${orderId}`]);
     assert.equal((await eventos("packing.completed")).length, 1);
     // Depois de concluída, a linha não aceita mais progresso.
@@ -319,23 +329,75 @@ describe("Separar com o progresso salvo (separação com caixas, parte 2a)", () 
     assert.equal((await db.collection("shipments").doc(String(concluido.shipment_id)).get()).get("status"), "ready_to_dispatch");
   });
 
-  it("só a coordenação conclui com uma linha a menos; a diferença volta a ficar disponível", async () => {
+  it("quem opera registra o separado a menos na linha, com o motivo; só a coordenação conclui o pedido com diferença", async () => {
     const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
     await separar(pickTaskId, linhaBone);
-    const aMenos = { short_lines: [{ pick_line_id: linhaPolo, qty_picked: 3, shortage_reason: "falta", shortage_detail: "A-01 tinha 3" }] };
-    // Quem opera não separa a menos: a regra é a de sempre.
-    const erro = await recusa(concluir(pickTaskId, aMenos, guilherme));
+    // A menos sem o motivo, ou mais que o pedido, é recusado e nada fica gravado.
+    assert.equal((await recusa(separarMenos(pickTaskId, linhaPolo, 3, {}))).message, "Informe o motivo da diferença em Camiseta polo G.");
+    assert.equal((await recusa(separarMenos(pickTaskId, linhaPolo, 6, { shortage_reason: "falta" }))).code, "failed-precondition");
+    assert.equal((await porLinha("pick_lines", orderId))[POLO]!.separated_at, undefined);
+
+    const aMenos = await separarMenos(pickTaskId, linhaPolo, 3, { shortage_reason: "falta", shortage_detail: "A-01 tinha 3" });
+    assert.deepEqual([aMenos.separated, aMenos.changed, aMenos.expected_qty, aMenos.separated_qty, aMenos.shortage_reason], [true, true, 5, 3, "falta"]);
+    let linhas = await porLinha("pick_lines", orderId);
+    assert.deepEqual(
+      [linhas[POLO]!.separated_qty, linhas[POLO]!.separated_shortage_reason, linhas[POLO]!.separated_shortage_detail, linhas[POLO]!.status],
+      [3, "falta", "A-01 tinha 3", "open"],
+    );
+    const eventosDaPolo = (await eventos("picking.line_separated")).filter((evento) => evento.payload.pick_line_id === linhaPolo);
+    assert.equal(eventosDaPolo.length, 1);
+    assert.equal(eventosDaPolo[0]!.description, "3 de 5 un. de Camiseta polo G · A-01");
+    assert.deepEqual(
+      [eventosDaPolo[0]!.payload.expected_qty, eventosDaPolo[0]!.payload.quantity, eventosDaPolo[0]!.payload.short_qty, eventosDaPolo[0]!.payload.shortage_reason],
+      [5, 3, 2, "falta"],
+    );
+    // A reserva só solta a diferença na conclusão.
+    assert.deepEqual(await saldos(), { [`${POLO}@A-01`]: [8, 5, 3], [`${BONE}@A-02`]: [4, 4, 0] });
+
+    // Quem opera não conclui o pedido com diferença.
+    const erro = await recusa(concluir(pickTaskId, guilherme));
     assert.equal(erro.code, "permission-denied");
+    assert.equal(erro.message, "O pedido tem 1 linha com diferença: só a coordenação conclui.");
     assert.equal((await tarefa(pickTaskId)).status, "in_progress");
 
-    const concluido = await concluir(pickTaskId, aMenos, coordenacao);
+    const concluido = await concluir(pickTaskId, coordenacao);
     assert.equal(concluido.ok, true);
-    const linhas = await porLinha("pick_lines", orderId);
-    assert.deepEqual([linhas[POLO]!.qty_picked, linhas[POLO]!.physical_status, linhas[POLO]!.shortage_reason], [3, "short", "falta"]);
+    linhas = await porLinha("pick_lines", orderId);
+    assert.deepEqual(
+      [linhas[POLO]!.qty_picked, linhas[POLO]!.physical_status, linhas[POLO]!.short_qty, linhas[POLO]!.shortage_reason, linhas[POLO]!.shortage_detail],
+      [3, "short", 2, "falta", "A-01 tinha 3"],
+    );
     const reservas = await porLinha("stock_reservations", orderId);
     assert.deepEqual([reservas[POLO]!.status, reservas[POLO]!.reserved_qty, reservas[POLO]!.released_qty], ["picked", 3, 2]);
     assert.deepEqual(await saldos(), { [`${POLO}@A-01`]: [8, 3, 5], [`${BONE}@A-02`]: [4, 4, 0] });
     assert.equal((await db.collection("shipments").doc(String(concluido.shipment_id)).get()).get("total_units"), 7);
+    assert.equal((await eventos("picking.short_picked")).length, 1);
+  });
+
+  it("a linha separada inteira vira a menos sem desfazer, e a linha zerada não vai na embalagem", async () => {
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    await separar(pickTaskId, linhaPolo);
+    await separar(pickTaskId, linhaBone);
+    // Na conferência, o boné estava avariado: nada dele segue.
+    const zerado = await separarMenos(pickTaskId, linhaBone, 0, { shortage_reason: "avaria" }, rafael);
+    assert.deepEqual([zerado.changed, zerado.separated_qty], [true, 0]);
+    // Repetir o mesmo separado não muda nada.
+    assert.equal((await separarMenos(pickTaskId, linhaBone, 0, { shortage_reason: "avaria" }, rafael)).changed, false);
+    assert.equal((await eventos("picking.line_separated")).filter((evento) => evento.payload.pick_line_id === linhaBone).length, 2);
+
+    const concluido = await concluir(pickTaskId, coordenacao);
+    const itens = await porLinha("order_items", orderId);
+    assert.deepEqual([itens[POLO]!.status, itens[BONE]!.status, itens[BONE]!.picked_qty], ["packed", "short", 0]);
+    assert.equal((await db.collection("shipments").doc(String(concluido.shipment_id)).get()).get("total_units"), 5);
+    assert.deepEqual(await saldos(), { [`${POLO}@A-01`]: [8, 5, 3], [`${BONE}@A-02`]: [4, 0, 4] });
+  });
+
+  it("com todas as linhas zeradas, o pedido não segue: é Cancelar pedido", async () => {
+    const { pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    await separarMenos(pickTaskId, linhaPolo, 0, { shortage_reason: "falta" });
+    await separarMenos(pickTaskId, linhaBone, 0, { shortage_reason: "falta" });
+    assert.equal((await recusa(concluir(pickTaskId, coordenacao))).message, "Nada foi separado. Para desistir do pedido, use Cancelar pedido.");
+    assert.equal((await tarefa(pickTaskId)).status, "in_progress");
   });
 
   it("a contagem cíclica da prateleira com a linha já separada é recusada; desfeita a linha, passa", async () => {
@@ -355,6 +417,10 @@ describe("Separar com o progresso salvo (separação com caixas, parte 2a)", () 
 
     await desfazer(pickTaskId, linhaPolo);
     await contar("contagem-0002");
+    assert.deepEqual((await saldos())[`${POLO}@A-01`], [6, 5, 1]);
+    // A linha separada com zero (falta total) não tirou nada da prateleira: a contagem passa.
+    await separarMenos(pickTaskId, linhaPolo, 0, { shortage_reason: "falta" });
+    await contar("contagem-0003");
     assert.deepEqual((await saldos())[`${POLO}@A-01`], [6, 5, 1]);
   });
 
