@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { warehouseBoxFromRecord } from "./warehouse-boxes";
 import {
+  CONTINUATION_LABEL_LINES,
+  FIRST_LABEL_LINES,
   LABELS_PER_SHEET,
   boxContent,
-  boxLabel,
+  boxLabels,
   boxLabelAvailability,
   impressoesParaRegistrar,
   labelsUrl,
@@ -46,25 +48,76 @@ describe("etiqueta da caixa", () => {
     expect(boxContent([line("Z", 4), line("A", 4)], "CX-000012").map((item) => item.code)).toEqual(["C-A", "C-Z"]);
   });
 
-  it("monta a etiqueta com posição, medidas, total e o que não coube", () => {
-    const lines = ["A", "B", "C", "D", "E", "F"].map((sku, index) => line(sku, 10 - index));
-    const label = boxLabel(box, lines, { printedAt: new Date("2026-10-17T12:00:00Z"), maxLines: 4 });
+  it("monta a etiqueta com posição, medidas e total; com até cinco produtos, uma etiqueta só", () => {
+    const lines = ["A", "B", "C", "D", "E"].map((sku, index) => line(sku, 10 - index));
+    const labels = boxLabels(box, lines, { printedAt: new Date("2026-10-17T12:00:00Z") });
+    expect(labels).toHaveLength(1);
+    const [label] = labels;
     expect(label.kind).toBe("box");
     expect(label.code).toBe("CX-000012");
     expect(label.position).toBe("A-03");
     expect(label.dimensions).toBe("50 × 50 × 35 cm · 12,4 kg");
-    expect(label.units).toBe(10 + 9 + 8 + 7 + 6 + 5);
-    expect(label.lines).toHaveLength(4);
-    expect(label.hiddenLines).toBe(2);
+    expect(label.units).toBe(10 + 9 + 8 + 7 + 6);
+    expect(label.lines.map((item) => item.sku)).toEqual(["A", "B", "C", "D", "E"]);
+    expect([label.part, label.parts]).toEqual([1, 1]);
     expect(label.origin).toBe("Abertura");
     expect(label.printedAt).toBe("17/10/2026");
   });
 
   it("sem linhas conhecidas, usa o contador da caixa", () => {
-    const label = boxLabel(box, []);
-    expect(label.units).toBe(30);
-    expect(label.lines).toEqual([]);
-    expect(label.hiddenLines).toBe(0);
+    const labels = boxLabels(box, []);
+    expect(labels).toHaveLength(1);
+    expect(labels[0].units).toBe(30);
+    expect(labels[0].lines).toEqual([]);
+    expect([labels[0].part, labels[0].parts]).toEqual([1, 1]);
+  });
+});
+
+/**
+ * Toda etiqueta mostra todos os produtos (separação com caixas, parte 6;
+ * decisão 13 de 10/11/2026, docs/mockups/WmsEtiquetaTodosCaixa.dc.html).
+ * Antes, a caixa com nove produtos imprimia quatro e "+ 5 produto(s) no
+ * sistema".
+ */
+describe("etiqueta da caixa com todos os produtos", () => {
+  const produtos = (quantos: number) => Array.from({ length: quantos }, (_, index) => line(`P${String(index + 1).padStart(2, "0")}`, 100 - index));
+
+  it("a caixa com nove produtos sai em duas etiquetas: cinco na primeira e quatro na de continuação", () => {
+    const labels = boxLabels(box, produtos(9), { printedAt: new Date("2026-10-17T12:00:00Z") });
+    expect(labels.map((label) => [label.part, label.parts, label.lines.length])).toEqual([
+      [1, 2, 5],
+      [2, 2, 4],
+    ]);
+    // Nenhum produto fica de fora, e a ordem é a de sempre: a maior quantidade primeiro.
+    expect(labels.flatMap((label) => label.lines.map((item) => item.sku))).toEqual(["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09"]);
+  });
+
+  it("a continuação repete a caixa, a posição, a origem e as unidades da caixa inteira", () => {
+    const [primeira, continuacao] = boxLabels(box, produtos(9), { printedAt: new Date("2026-10-17T12:00:00Z") });
+    const total = 100 + 99 + 98 + 97 + 96 + 95 + 94 + 93 + 92;
+    expect(primeira.units).toBe(total);
+    expect(continuacao).toMatchObject({
+      kind: "box",
+      code: "CX-000012",
+      position: "A-03",
+      customer: "BTG Pactual",
+      units: total,
+      origin: "Abertura",
+      printedAt: "17/10/2026",
+    });
+  });
+
+  it("cinco na primeira e onze em cada continuação: 16 produtos cabem em duas etiquetas, 17 pedem a terceira", () => {
+    expect([FIRST_LABEL_LINES, CONTINUATION_LABEL_LINES]).toEqual([5, 11]);
+    expect(boxLabels(box, produtos(5)).map((label) => label.lines.length)).toEqual([5]);
+    expect(boxLabels(box, produtos(6)).map((label) => label.lines.length)).toEqual([5, 1]);
+    expect(boxLabels(box, produtos(16)).map((label) => label.lines.length)).toEqual([5, 11]);
+    const tres = boxLabels(box, produtos(17));
+    expect(tres.map((label) => [label.part, label.parts, label.lines.length])).toEqual([
+      [1, 3, 5],
+      [2, 3, 11],
+      [3, 3, 1],
+    ]);
   });
 });
 
@@ -165,7 +218,7 @@ describe("etiqueta da caixa do recebimento", () => {
 
   it("lê o conteúdo da própria caixa, com o nome e o tamanho, o código do cliente e o SKU, e a origem com a NF", () => {
     // As linhas da abertura não entram: a caixa do recebimento traz o conteúdo nela.
-    const label = boxLabel(receiptBox, [line("A", 99, { box_code: "CX-000225" })], { printedAt: new Date("2026-11-06T18:00:00Z") });
+    const [label] = boxLabels(receiptBox, [line("A", 99, { box_code: "CX-000225" })], { printedAt: new Date("2026-11-06T18:00:00Z") });
     expect(label.lines).toEqual([
       { code: "A.01.0713.005.G", sku: "BTG-000112", name: "Polo Masculino Piquet Preto · G", qty: 12 },
       { code: "A.01.0713.005.GG", sku: "BTG-000113", name: "POLO MASCULINO PIQUET PRETO · GG", qty: 7 },
@@ -179,9 +232,9 @@ describe("etiqueta da caixa do recebimento", () => {
 
   it("sem NF, a origem leva o número da chegada; a abertura e o cadastro manual seguem como hoje", () => {
     const semNf = warehouseBoxFromRecord({ ...receiptBox, origin: { kind: "receipt", receipt_number: "AVL-7C21A9F0" } });
-    expect(boxLabel(semNf, []).origin).toBe("Recebimento · AVL-7C21A9F0");
-    expect(boxLabel(box, []).origin).toBe("Abertura");
-    expect(boxLabel(warehouseBoxFromRecord({ code: "CX-000300", status: "stored", location_id: "A-01" }), []).origin).toBe("Manual");
+    expect(boxLabels(semNf, [])[0].origin).toBe("Recebimento · AVL-7C21A9F0");
+    expect(boxLabels(box, [])[0].origin).toBe("Abertura");
+    expect(boxLabels(warehouseBoxFromRecord({ code: "CX-000300", status: "stored", location_id: "A-01" }), [])[0].origin).toBe("Manual");
   });
 
   it("a etiqueta sai da caixa guardada ou com o destino confirmado; a do recebimento sem destino diz o porquê (decisão 30)", () => {

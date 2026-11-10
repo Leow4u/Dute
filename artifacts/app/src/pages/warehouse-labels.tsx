@@ -31,7 +31,7 @@ import {
   type LabelData,
   type LabelMode,
   LABELS_PER_SHEET,
-  boxLabel,
+  boxLabels,
   boxLabelAvailability,
   impressoesParaRegistrar,
   labelsUrl,
@@ -98,7 +98,8 @@ export default function WarehouseLabelsPage() {
 
   const labels = useMemo<LabelData[]>(() => {
     const lines = sessionQuery.data?.lines ?? [];
-    return [...boxes.map((box) => boxLabel(box, lines)), ...positions.map(positionLabel)];
+    // A caixa com mais de cinco produtos sai em mais de uma etiqueta: a primeira e as de continuação.
+    return [...boxes.flatMap((box) => boxLabels(box, lines)), ...positions.map(positionLabel)];
   }, [boxes, positions, sessionQuery.data?.lines]);
 
   const missingBoxes = wantsBoxes && boxesQuery.isSuccess ? query.boxes.filter((code) => !chosen.some((box) => box.code === code)) : [];

@@ -46,10 +46,13 @@ export type BoxLabelData = {
   position: string;
   customer: string;
   dimensions: string;
+  /** As unidades da caixa inteira, iguais em todas as etiquetas dela. */
   units: number;
+  /** Os produtos desta etiqueta: os primeiros na primeira, os outros nas de continuação. */
   lines: LabelContentLine[];
-  /** Produtos que não couberam na etiqueta. */
-  hiddenLines: number;
+  /** A etiqueta entre as da mesma caixa ("etiqueta 2 de 3"); com tudo na primeira, 1 de 1. */
+  part: number;
+  parts: number;
   origin: string;
   printedAt: string;
 };
@@ -75,7 +78,14 @@ export type BoxContentSource = {
   counted_qty?: number;
 };
 
-export const MAX_CONTENT_LINES = 4;
+/**
+ * Toda etiqueta mostra todos os produtos (separação com caixas, decisão 13 de
+ * 10/11/2026; docs/mockups/WmsEtiquetaTodosCaixa.dc.html): a primeira leva
+ * até cinco e os outros saem em etiquetas de continuação do mesmo tamanho.
+ * Os dois números são o que cabe no desenho de components/labels.
+ */
+export const FIRST_LABEL_LINES = 5;
+export const CONTINUATION_LABEL_LINES = 11;
 
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" });
 
@@ -166,28 +176,29 @@ export function boxLabelAvailability(box: Pick<WarehouseBox, "code" | "status" |
   return { ready: false, reason: `${box.code} aguarda a guarda.` };
 }
 
-export function boxLabel(
-  box: WarehouseBox,
-  lines: BoxContentSource[],
-  options: { printedAt?: Date; maxLines?: number } = {},
-): BoxLabelData {
+/**
+ * As etiquetas de uma caixa: a primeira, com a posição, o código de barras e
+ * até cinco produtos, e as de continuação com os outros, na mesma ordem (a
+ * maior quantidade primeiro). Todas levam as unidades da caixa inteira.
+ */
+export function boxLabels(box: WarehouseBox, lines: BoxContentSource[], options: { printedAt?: Date } = {}): BoxLabelData[] {
   // A caixa do recebimento traz o conteúdo nela; a da abertura, nas linhas da sessão.
   const content = box.lines.length ? ownBoxContent(box) : boxContent(lines, box.code);
-  const maxLines = options.maxLines ?? MAX_CONTENT_LINES;
-  const shown = content.slice(0, maxLines);
-  const units = content.reduce((sum, line) => sum + line.qty, 0) || box.unit_count;
-  return {
-    kind: "box",
+  const pages = [content.slice(0, FIRST_LABEL_LINES)];
+  for (let start = FIRST_LABEL_LINES; start < content.length; start += CONTINUATION_LABEL_LINES) {
+    pages.push(content.slice(start, start + CONTINUATION_LABEL_LINES));
+  }
+  const base = {
+    kind: "box" as const,
     code: box.code,
     position: box.location_id,
     customer: box.customer_code,
     dimensions: formatBoxDimensions(box),
-    units,
-    lines: shown,
-    hiddenLines: content.length - shown.length,
+    units: content.reduce((sum, line) => sum + line.qty, 0) || box.unit_count,
     origin: boxOriginLabel(box),
     printedAt: dateFormatter.format(options.printedAt ?? new Date()),
   };
+  return pages.map((page, index) => ({ ...base, lines: page, part: index + 1, parts: pages.length }));
 }
 
 export function positionLabel(position: WarehousePosition): PositionLabelData {

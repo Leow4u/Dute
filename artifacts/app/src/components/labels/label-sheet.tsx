@@ -1,5 +1,7 @@
 /**
  * Desenho das etiquetas de caixa e de posição e da folha A4 com dez delas.
+ * A caixa com mais de cinco produtos sai em mais de uma etiqueta do mesmo
+ * tamanho: a primeira e as de continuação (separação com caixas, parte 6).
  *
  * Papel de impressão: medidas físicas em milímetros e preto sobre branco,
  * fora dos tokens do tema, porque o resultado é a etiqueta adesiva e não a
@@ -87,10 +89,47 @@ function LabelFrame({ children, ariaLabel }: { children: React.ReactNode; ariaLa
   );
 }
 
-export function BoxLabelCard({ label }: { label: BoxLabelData }) {
-  const units = new Intl.NumberFormat("pt-BR").format(label.units);
+/** O rodapé da etiqueta: "Dutelog", a parte ("etiqueta 1 de 2") quando a caixa pede mais de uma, e o total. */
+function LabelFooter({ part, children }: { part?: string | null; children: React.ReactNode }) {
   return (
-    <LabelFrame ariaLabel={`Etiqueta da caixa ${label.code}`}>
+    <div style={{ display: "flex", justifyContent: "space-between", gap: "3mm", fontSize: "7pt", fontWeight: 700 }}>
+      <span style={ellipsis}>{part ? `Dutelog · ${part}` : "Dutelog"}</span>
+      <span style={{ flexShrink: 0, textAlign: "right" }}>{children}</span>
+    </div>
+  );
+}
+
+/** "etiqueta 2 de 3"; com tudo numa etiqueta só, nada. */
+function partLabel(label: Pick<BoxLabelData, "part" | "parts">) {
+  return label.parts > 1 ? `etiqueta ${label.part} de ${label.parts}` : null;
+}
+
+const quantity = new Intl.NumberFormat("pt-BR");
+
+/** As linhas do conteúdo: a quantidade, o nome com o tamanho, o código do cliente e o SKU. */
+function ContentLines({ lines }: { lines: BoxLabelData["lines"] }) {
+  return (
+    <>
+      {lines.map((line) => {
+        const codes = [...new Set([line.code, line.sku].filter(Boolean))];
+        return (
+          <div key={`${line.code}-${line.name}`} className="lbl-line" style={{ ...ellipsis, fontSize: "6.5pt", lineHeight: 1.3 }}>
+            <strong style={{ fontVariantNumeric: "tabular-nums" }}>{quantity.format(line.qty)} ×</strong> {line.name}
+            {codes.length ? <span style={{ opacity: 0.75 }}>{codes.map((code) => ` · ${code}`).join("")}</span> : null}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+const content: React.CSSProperties = { flex: 1, minHeight: 0, overflow: "hidden", borderTop: `0.2mm solid ${INK}`, paddingTop: "0.8mm" };
+
+export function BoxLabelCard({ label }: { label: BoxLabelData }) {
+  const part = partLabel(label);
+  if (label.part > 1) return <BoxContinuationCard label={label} />;
+  return (
+    <LabelFrame ariaLabel={part ? `Etiqueta da caixa ${label.code}, ${label.part} de ${label.parts}` : `Etiqueta da caixa ${label.code}`}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "3mm" }}>
         <div style={{ minWidth: 0 }}>
           <div style={caption}>Caixa</div>
@@ -110,28 +149,34 @@ export function BoxLabelCard({ label }: { label: BoxLabelData }) {
           {label.origin} {label.printedAt}
         </span>
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflow: "hidden", borderTop: `0.2mm solid ${INK}`, paddingTop: "0.8mm" }}>
-        {label.lines.length ? (
-          label.lines.map((line) => {
-            const codes = [...new Set([line.code, line.sku].filter(Boolean))];
-            return (
-              <div key={`${line.code}-${line.name}`} style={{ ...ellipsis, fontSize: "6.5pt", lineHeight: 1.3 }}>
-                <strong style={{ fontVariantNumeric: "tabular-nums" }}>{new Intl.NumberFormat("pt-BR").format(line.qty)} ×</strong> {line.name}
-                {codes.length ? <span style={{ opacity: 0.75 }}>{codes.map((code) => ` · ${code}`).join("")}</span> : null}
-              </div>
-            );
-          })
-        ) : (
-          <div style={{ fontSize: "7pt", fontStyle: "italic" }}>Conteúdo a lançar na contagem.</div>
-        )}
-        {label.hiddenLines > 0 ? (
-          <div style={{ fontSize: "6pt", fontStyle: "italic", lineHeight: 1.3 }}>+ {label.hiddenLines} produto(s) no sistema</div>
-        ) : null}
+      <div className="lbl-content" style={content}>
+        {label.lines.length ? <ContentLines lines={label.lines} /> : <div style={{ fontSize: "7pt", fontStyle: "italic" }}>Conteúdo a lançar na contagem.</div>}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "7pt", fontWeight: 700 }}>
-        <span>Dutelog</span>
-        <span>{units} un.</span>
+      <LabelFooter part={part}>{quantity.format(label.units)} un.</LabelFooter>
+    </LabelFrame>
+  );
+}
+
+/**
+ * A etiqueta de continuação (docs/mockups/WmsEtiquetaTodosCaixa.dc.html): os
+ * produtos que não couberam na primeira, com a caixa, a posição, a parte e as
+ * unidades da caixa inteira. Sem código de barras: o da primeira identifica a
+ * caixa.
+ */
+function BoxContinuationCard({ label }: { label: BoxLabelData }) {
+  return (
+    <LabelFrame ariaLabel={`Etiqueta da caixa ${label.code}, ${label.part} de ${label.parts}`}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "3mm" }}>
+        <span style={{ ...ellipsis, fontFamily: MONO, fontSize: "11pt", fontWeight: 700, letterSpacing: "0.02em", lineHeight: 1.2 }}>
+          {label.code}
+          <strong style={{ fontFamily: FONT, fontWeight: 800 }}> · {label.position}</strong>
+        </span>
+        <span style={{ flexShrink: 0, fontSize: "8pt", fontWeight: 800 }}>{partLabel(label)}</span>
       </div>
+      <div className="lbl-content" style={content}>
+        <ContentLines lines={label.lines} />
+      </div>
+      <LabelFooter>{quantity.format(label.units)} un.</LabelFooter>
     </LabelFrame>
   );
 }
@@ -157,10 +202,7 @@ export function PositionLabelCard({ label }: { label: PositionLabelData }) {
         <span style={ellipsis}>{label.dimensions}</span>
         <span style={{ flexShrink: 0 }}>Peso máx. {label.maxWeight}</span>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "7pt", fontWeight: 700 }}>
-        <span>Dutelog</span>
-        <span>Comprimento × largura × altura livre</span>
-      </div>
+      <LabelFooter>Comprimento × largura × altura livre</LabelFooter>
     </LabelFrame>
   );
 }
