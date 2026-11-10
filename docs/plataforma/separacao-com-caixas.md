@@ -92,6 +92,16 @@ O retrato de antes deste roteiro. A parte 1 mudou a lista e a caixa na linha
 | 14 | Quem opera registra "Separar menos"; só a coordenação conclui o pedido com diferença. |
 | 15 | O peso do volume é opcional. |
 | 16 | A etiqueta com todos os produtos está aprovada, com o logo original da Dutelog no lugar da palavra "Dutelog", em todas as etiquetas. |
+| 17 | No celular, "Fechar volume" fecha sem peso; o peso fica no computador. |
+| 18 | O volume fechado que esvazia sai, e o de maior número ocupa o número dele; a bancada avisa para trocar a etiqueta. |
+| 19 | O volume fechado de que sai uma parte perde o peso; a bancada avisa para imprimir a etiqueta de novo. |
+| 20 | Depois de "Confirmar separação", a tela fica no pedido separado. |
+| 21 | A etiqueta da caixa leva a data de entrada (a do FIFO), e não a da impressão. |
+| 22 | O que volta à prateleira (cancelamento, devolução) volta sem caixa. |
+
+As decisões 17 a 22 foram tomadas no caminho das partes 3 e 4, onde as
+pranchas não diziam, e confirmadas pelo Leonardo em 10/11/2026, depois do
+merge do PR 592.
 
 ## 4. Desenho
 
@@ -457,12 +467,14 @@ com a guarda de volta), as duas linhas na tabela de papéis
   entrada (a da guarda), que é a do FIFO, como nas pranchas aprovadas
   ("Abertura · 22/10/2026"). Até aqui saía a data da impressão: era a mesma
   quando a etiqueta saía no dia da guarda, e errada na reimpressão.
+  Confirmado pelo Leonardo (decisão 21).
 - **O diálogo de concluir** diz as caixas de onde o pedido saiu: "Caixas
   inteiras", "Caixas abertas" e "Caixas vazias". "Volumes" entrou com a parte 4.
 - **O que volta à prateleira volta sem caixa.** No pedido cancelado no meio
   da separação e na devolução, o que a guarda devolve à prateleira entra no
   saldo dela, sem caixa: a caixa de onde saiu continua com o saldo baixado (ou
   vazia). A linha seguinte daquele item sai das caixas e, depois, sem caixa.
+  Confirmado pelo Leonardo (decisão 22).
 - **A conferência não tem tela.** A conta da seção 4.3 vale como está: o
   saldo sem caixa da prateleira é o que sobra do razão depois do separado que
   espera a entrega e do saldo das caixas. Mostrar a divergência (as caixas
@@ -564,22 +576,26 @@ romaneio) e 4d ("Para entregar" e o pedido separado).
 - **O pedido de antes dos volumes** aparece com um volume só, com todos os
   itens: "Ver volumes", a etiqueta e o romaneio funcionam para ele.
 
-A confirmar com o Leonardo (decidido no caminho, sem prancha que dissesse):
+Decidido no caminho, sem prancha que dissesse. Confirmados pelo Leonardo
+em 10/11/2026 (seção 3, decisões 17 a 20):
 
 1. No celular, "Fechar volume" fecha sem peso, como na prancha; o peso só no
    computador.
-2. Ao fechar o volume, a etiqueta não abre sozinha: fica em "Etiqueta", na
-   linha do volume fechado.
-3. O volume fechado que esvazia some, e o de maior número ocupa o número
+2. O volume fechado que esvazia some, e o de maior número ocupa o número
    dele; a bancada avisa "O volume 12 passou a ser o volume 5. Troque a
    etiqueta dele."
-4. O volume fechado de que sai uma parte perde o peso; a bancada avisa "O
+3. O volume fechado de que sai uma parte perde o peso; a bancada avisa "O
    volume 5 mudou. Imprima a etiqueta dele de novo." Não há como informar o
    peso de novo.
-5. Com mais de uma caixa saindo inteira na mesma linha, o botão diz "Levar as
-   caixas".
-6. Depois de "Confirmar separação", a pessoa fica no pedido separado, e não
+4. Depois de "Confirmar separação", a pessoa fica no pedido separado, e não
    volta a Pedidos.
+
+Ainda a confirmar (estão no PR 592, sem resposta):
+
+5. Ao fechar o volume, a etiqueta não abre sozinha: fica em "Etiqueta", na
+   linha do volume fechado.
+6. Com mais de uma caixa saindo inteira na mesma linha, o botão diz "Levar as
+   caixas".
 7. Em "Para entregar", "Ver volumes" fica no lugar de "Ver itens"; no
    celular, "Etiquetas dos volumes" e "Romaneio" ficam atrás de "Ver volumes".
 8. No romaneio, "Separado" vai da primeira linha separada à conclusão, e
@@ -640,6 +656,13 @@ pedido.
 | 1 | Dá para colocar o logo original da Dutelog nas etiquetas? | Sim (decisão 16): no rodapé, no lugar da palavra, em todas as etiquetas; em preto no rolo da Zebra. |
 
 ## 7. PED-0001 e PED-0002
+
+**Em 10/11/2026, quando as partes 2 a 5 entraram na `main`, nenhum dos dois
+tinha começado a ser separado** (Leonardo). Os dois começam pela bancada,
+com as caixas e os volumes desde a primeira linha, e não há acerto de caixa
+a fazer: o conteúdo das caixas é o de entrada, exato, porque nenhum pedido
+saiu desde a zeragem. Os parágrafos abaixo ficam como o plano para o caso de
+eles começarem antes da bancada.
 
 Os dois são separados com o sistema de hoje e a lista da parte 1. Enquanto a
 parte 3 não entra, a caixa aberta leva a sobra e a data escritas à mão, e a
