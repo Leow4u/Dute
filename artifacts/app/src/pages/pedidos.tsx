@@ -1021,7 +1021,7 @@ export function OrderRow({
         </div>
       ) : null}
       {/* As caixas que o pedido abriu e que ainda estão com a etiqueta velha: a última linha do pedido. */}
-      {volumes ? <EtiquetasDeCaixaDoPedido items={items} cliente={order.pick?.customer_code ?? order.ship?.customer_code} /> : null}
+      {volumes ? <EtiquetasDeCaixaDoPedido items={items} cliente={order.pick?.customer_code ?? order.ship?.customer_code} pedido={order.orderId ?? order.key} /> : null}
     </div>
   );
 }
@@ -1031,12 +1031,13 @@ export function OrderRow({
  * .dc.html): as caixas que o pedido abriu e cuja etiqueta não é a do saldo de
  * agora, com "Imprimir". Sem caixa para trocar, nada.
  */
-function EtiquetasDeCaixaDoPedido({ items, cliente }: { items: NonNullable<WarehouseTask["items"]>; cliente?: string | null }) {
+function EtiquetasDeCaixaDoPedido({ items, cliente, pedido }: { items: NonNullable<WarehouseTask["items"]>; cliente?: string | null; pedido: string }) {
   // Só lê as caixas do cliente quando alguma linha do pedido saiu de caixa.
   const saiuDeCaixa = items.some((item) => item.separated_boxes?.length);
   const caixas = useCaixasDoCliente(saiuDeCaixa ? cliente : null);
   const paraTrocar = useMemo(() => (caixas.data ? etiquetasParaTrocar(items, caixas.data) : []), [items, caixas.data]);
-  return <AvisoDeEtiquetasDeCaixa quantas={paraTrocar.length} href={paraTrocar.length ? labelsUrl({ boxes: paraTrocar.map((caixa) => caixa.code) }) : null} />;
+  // Com o pedido junto, a volta das etiquetas é ao pedido.
+  return <AvisoDeEtiquetasDeCaixa quantas={paraTrocar.length} href={paraTrocar.length ? labelsUrl({ boxes: paraTrocar.map((caixa) => caixa.code), order: pedido }) : null} />;
 }
 
 /** Exportado para o teste (pedidos.lista.test.tsx). */

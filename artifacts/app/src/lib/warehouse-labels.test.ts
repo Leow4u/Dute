@@ -278,6 +278,10 @@ describe("etiqueta do volume", () => {
     expect(parseLabelsQuery("?pedido=%20&volumes=1")).toMatchObject({ order: null });
     // Sem o pedido, os volumes não vão ao endereço.
     expect(labelsUrl({ volumes: [1] })).toBe("/estoque/etiquetas");
+    // As caixas que o pedido abriu vão com o pedido, sem volumes: a volta das etiquetas é a ele.
+    const dasCaixas = labelsUrl({ boxes: ["CX-000027"], order: "ord_1" });
+    expect(dasCaixas).toBe("/estoque/etiquetas?caixas=CX-000027&pedido=ord_1");
+    expect(parseLabelsQuery(dasCaixas.split("?")[1]!)).toMatchObject({ boxes: ["CX-000027"], order: "ord_1", volumes: [] });
   });
 });
 

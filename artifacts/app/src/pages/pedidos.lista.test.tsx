@@ -343,7 +343,8 @@ describe("Para entregar com os volumes", () => {
     const html = entregar({}, comCaixas());
     const textos = textosDaTela(html);
     expect(textos.slice(-2)).toEqual(["2 etiquetas de caixa para trocar", "Imprimir"]);
-    expect(html).toContain('href="/estoque/etiquetas?caixas=CX-000014%2CCX-000015"');
+    // As caixas vão com o pedido, para a volta das etiquetas ser a ele.
+    expect(html).toContain('href="/estoque/etiquetas?caixas=CX-000014%2CCX-000015&amp;pedido=ord_req_1"');
     // Sem a leitura das caixas, ou sem caixa para trocar, a linha fica sem o aviso.
     expect(textosDaTela(entregar()).join(" ")).not.toContain("para trocar");
     const semCaixa: OrderGroup = { ...SEPARADO, pick: { ...SEPARADO.pick!, items: SEPARADO.pick!.items!.map(({ separated_boxes: _caixas, ...resto }) => resto) } };

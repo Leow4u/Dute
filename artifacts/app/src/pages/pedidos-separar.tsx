@@ -298,7 +298,7 @@ export default function PaginaPedidosSeparar() {
         romaneioHref={hrefDoRomaneio(pedidoId)}
         etiquetaDoVolumeHref={(volume) => labelsUrl({ order: pedidoId, volumes: [volume.numero] })}
         etiquetas={etiquetas}
-        etiquetasHref={etiquetas.length ? labelsUrl({ boxes: etiquetas.map((etiqueta) => etiqueta.code) }) : null}
+        etiquetasHref={etiquetas.length ? labelsUrl({ boxes: etiquetas.map((etiqueta) => etiqueta.code), order: pedidoId }) : null}
         vazias={caixasVazias}
       />
     );
@@ -322,7 +322,8 @@ export default function PaginaPedidosSeparar() {
         caixasDaLinha={caixasDaLinha}
         comOutraCaixa={comOutraCaixa}
         etiquetas={etiquetas}
-        etiquetasHref={etiquetas.length ? labelsUrl({ boxes: etiquetas.map((etiqueta) => etiqueta.code) }) : null}
+        // Com o pedido junto, a volta das etiquetas é à bancada.
+        etiquetasHref={etiquetas.length ? labelsUrl({ boxes: etiquetas.map((etiqueta) => etiqueta.code), order: pedidoId }) : null}
         volumes={volumes}
         caixasInteiras={caixasInteiras}
         fechandoVolume={fechar.isPending}

@@ -11,7 +11,8 @@
  * As etiquetas dos volumes de um pedido (separação com caixas, parte 4c)
  * também saem daqui: `?pedido=` com `volumes=12` (o volume que acabou de
  * fechar, sem o total) ou `volumes=todos` (o lote, com "de 42" depois de
- * concluir).
+ * concluir). As caixas que o pedido abriu chegam com o pedido junto
+ * (`?caixas=…&pedido=`), para a volta ser ao pedido.
  */
 
 import { useMemo } from "react";
@@ -66,9 +67,10 @@ export default function WarehouseLabelsPage() {
   const query = useMemo(() => parseLabelsQuery(search), [search]);
   const wantsBoxes = query.session || query.boxes.length > 0;
   const wantsPositions = query.positions.length > 0;
-  // Os volumes de um pedido: lidos pelo pedido, não pelo cliente ativo.
-  const wantsVolumes = Boolean(query.order);
-  const orderVolumes = useVolumesDoPedido(wantsVolumes ? query.order : null);
+  // O pedido de onde a pessoa veio: os volumes dele, e a volta a ele. Lido pelo pedido, não pelo cliente ativo.
+  const fromOrder = Boolean(query.order);
+  const wantsVolumes = fromOrder && (query.volumes === "all" || query.volumes.length > 0);
+  const orderVolumes = useVolumesDoPedido(fromOrder ? query.order : null);
 
   const boxesQuery = useQuery({
     queryKey: ["warehouse-boxes", customerCode],
@@ -146,14 +148,14 @@ export default function WarehouseLabelsPage() {
   const loading =
     (wantsBoxes && (boxesQuery.isLoading || (needsSession && sessionQuery.isLoading))) ||
     (wantsPositions && positionsQuery.isLoading) ||
-    (wantsVolumes && orderVolumes.estado === "carregando");
+    (fromOrder && orderVolumes.estado === "carregando");
   const error =
     (wantsBoxes && (boxesQuery.error ?? (needsSession ? sessionQuery.error : null))) ||
     (wantsPositions && positionsQuery.error) ||
     (wantsVolumes && orderVolumes.estado === "erro" ? new Error("Não foi possível carregar os volumes do pedido.") : null) ||
     (wantsVolumes && orderVolumes.estado === "nao_encontrado" ? new Error("Pedido não encontrado.") : null) ||
     null;
-  const back = wantsVolumes
+  const back = fromOrder
     ? // De volta ao pedido: a bancada, ou o pedido já separado.
       { href: query.order ? hrefDaBancada(query.order) : "/pedidos", label: order?.numero || "Pedidos" }
     : query.receipt
@@ -162,7 +164,7 @@ export default function WarehouseLabelsPage() {
         ? { href: "/estoque/posicoes", label: "Posições" }
         : { href: "/wms/contagem", label: "Contagem" };
   const description =
-    wantsVolumes && order
+    fromOrder && order
       ? [order.numero, orderCustomer, order.destino].filter(Boolean).join(" · ")
       : query.receipt
         ? [`Chegada ${query.receipt}`, invoice ? `NF ${invoice}` : null, customerCode].filter(Boolean).join(" · ")
