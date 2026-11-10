@@ -13,6 +13,7 @@ import {
   recordCycleCountTransaction,
   type OperationalActor,
 } from "./operations.js";
+import { billingMovementDirection } from "./billing-scope.js";
 import { completeOrderSeparation, setPickLineSeparated } from "./pick-progress.js";
 
 /**
@@ -477,13 +478,70 @@ describe("Separar com o progresso salvo (separação com caixas, parte 2a)", () 
     assert.deepEqual((await saldos())[`${POLO}@A-01`], [6, 5, 1]);
   });
 
-  it("o pedido cancelado no meio da separação solta a reserva; a linha não aceita mais progresso", async () => {
+  it("o pedido cancelado no meio da separação: o que já foi separado vai para a EXPEDICAO e volta pela guarda; o resto só solta a reserva", async () => {
     const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
-    await separar(pickTaskId, linhaPolo);
-    await cancelWarehouseOrderTransaction(db, { order_id: orderId, reason: "O cliente desistiu do evento", idempotency_key: "cancelar-0001" }, coordenacao);
+    // Das 5 polos, 3 foram separadas (2 em falta); os bonés ainda estão na prateleira.
+    await separarMenos(pickTaskId, linhaPolo, 3, { shortage_reason: "falta" });
+    const cancelado = (await cancelWarehouseOrderTransaction(
+      db,
+      { order_id: orderId, reason: "O cliente desistiu do evento", idempotency_key: "cancelar-0001" },
+      coordenacao,
+    )) as Record<string, unknown> & { returns: Array<Record<string, unknown>> };
     assert.equal((await tarefa(pickTaskId)).status, "cancelled");
-    assert.deepEqual(await saldos(), { [`${POLO}@A-01`]: [8, 0, 8], [`${BONE}@A-02`]: [4, 0, 4] });
+    // A reserva sai inteira; só o separado conta como volta.
+    assert.deepEqual([cancelado.released_qty, cancelado.returned_qty], [9, 3]);
+    assert.equal(cancelado.returns.length, 1);
+    const [volta] = cancelado.returns;
+    assert.deepEqual([volta!.sku_code, volta!.quantity, volta!.location_id, volta!.destination_location_id], [POLO, 3, "A-01", "A-01"]);
+    // As 3 polos estão na bancada: saem do saldo da prateleira e esperam a guarda na EXPEDICAO.
+    assert.deepEqual(await saldos(), { [`${POLO}@A-01`]: [5, 0, 5], [`${POLO}@EXPEDICAO`]: [3, 0, 3], [`${BONE}@A-02`]: [4, 0, 4] });
+    const reservas = await porLinha("stock_reservations", orderId);
+    assert.deepEqual(
+      [reservas[POLO]!.status, reservas[POLO]!.released_qty, reservas[POLO]!.returned_qty, reservas[POLO]!.returned_to_location_id],
+      ["released", 5, 3, "EXPEDICAO"],
+    );
+    assert.deepEqual([reservas[BONE]!.status, reservas[BONE]!.released_qty, reservas[BONE]!.returned_to_location_id], ["released", 4, undefined]);
+    // O movimento é interno: sai da prateleira e entra na EXPEDICAO, sem cobrança.
+    const movimentos = (await db.collection("movements").where("source", "==", "wms_order_cancel").get()).docs.map((doc) => doc.data());
+    assert.deepEqual(
+      movimentos.map((movimento) => [movimento.movement_kind, movimento.tipo_mov, movimento.location_id, movimento.quantity]).sort(),
+      [
+        ["order_cancel_in", "ENTRADA", "EXPEDICAO", 3],
+        ["order_cancel_out", "SAIDA", "A-01", 3],
+      ],
+    );
+    for (const movimento of movimentos) assert.equal(billingMovementDirection(movimento, { snapshot: false }), null);
+    const guarda = (await db.collection("putaway_tasks").doc(String(volta!.putaway_task_id)).get()).data() ?? {};
+    assert.deepEqual([guarda.status, guarda.quantity, guarda.source_location_id, guarda.destination_location_id], ["planned", 3, "EXPEDICAO", "A-01"]);
+
+    // A linha fica como histórico e não aceita mais progresso.
+    const linhas = await porLinha("pick_lines", orderId);
+    assert.deepEqual([linhas[POLO]!.status, linhas[POLO]!.separated_qty], ["cancelled", 3]);
     assert.equal((await recusa(separar(pickTaskId, linhaBone))).message, "Pedido cancelado.");
     assert.equal((await recusa(concluir(pickTaskId))).message, "Pedido cancelado.");
+
+    // A guarda de volta é a de sempre: move da EXPEDICAO para a prateleira.
+    const guardada = await avancar(`putaway:${String(volta!.putaway_task_id)}`, "planned", {
+      source_location_id: "EXPEDICAO",
+      destination_location_id: "A-01",
+      location_id: "A-01",
+      quantity: 3,
+    });
+    assert.equal(guardada.status, "completed");
+    assert.deepEqual(await saldos(), { [`${POLO}@A-01`]: [8, 0, 8], [`${POLO}@EXPEDICAO`]: [0, 0, 0], [`${BONE}@A-02`]: [4, 0, 4] });
+  });
+
+  it("o pedido cancelado com a separação começada e nada fora da prateleira só solta a reserva", async () => {
+    const { orderId, pickTaskId, linhaPolo } = await pedidoAprovado();
+    // A linha zerada (falta total) não tirou nada da prateleira; desfeita, a outra voltou.
+    await separarMenos(pickTaskId, linhaPolo, 0, { shortage_reason: "falta" });
+    const cancelado = (await cancelWarehouseOrderTransaction(
+      db,
+      { order_id: orderId, reason: "O cliente desistiu do evento", idempotency_key: "cancelar-0002" },
+      coordenacao,
+    )) as Record<string, unknown>;
+    assert.deepEqual([cancelado.released_qty, cancelado.returned_qty, cancelado.returns], [9, 0, []]);
+    assert.deepEqual(await saldos(), { [`${POLO}@A-01`]: [8, 0, 8], [`${BONE}@A-02`]: [4, 0, 4] });
+    assert.equal((await db.collection("putaway_tasks").get()).size, 0);
   });
 });

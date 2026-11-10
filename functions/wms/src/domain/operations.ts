@@ -616,6 +616,16 @@ function pickLineIdOf(reservation: DocumentData): string | undefined {
   return `pli_${safeDocId(orderId)}_${String(lineNumber).padStart(2, "0")}`;
 }
 
+/**
+ * O que a linha já separou numa separação em andamento (separação com
+ * caixas, parte 2): saiu da prateleira e está na bancada, embora a reserva só
+ * vire "picked" na conclusão. Nunca mais que a reserva.
+ */
+function separatedOutOf(pickLine: Row | undefined, reservedQty: number): number {
+  if (!pickLine || text(pickLine.data.status) !== "open" || !pickLine.data.separated_at) return 0;
+  return Math.min(Math.max(0, number(pickLine.data.separated_qty)), reservedQty);
+}
+
 function operationEventId(operationId: string, suffix: string) {
   return `evt_${digest({ operationId, suffix })}`;
 }
@@ -6745,8 +6755,16 @@ export async function cancelWarehouseOrderTransaction(
     const releaseRows = reservations.filter((row) =>
       ["reserved", "picked"].includes(text(row.data.status)),
     );
+    // O que saiu da prateleira em cada reserva: a separada inteira e, na
+    // separação em andamento, o que a linha dela já separou (parte 2).
+    const pickLinesById = new Map(pickLines.map((row) => [row.id, row]));
+    const outOf = (reservation: Row): number => {
+      const quantity = number(reservation.data.reserved_qty || reservation.data.requested_qty);
+      if (text(reservation.data.status) === "picked") return quantity;
+      return separatedOutOf(pickLinesById.get(pickLineIdOf(reservation.data) ?? ""), quantity);
+    };
     // As prateleiras: o separado volta à dele, se ela ainda recebe guarda.
-    const positions = releaseRows.some((row) => text(row.data.status) === "picked")
+    const positions = releaseRows.some((row) => outOf(row) > 0)
       ? (await transaction.get(db.collection(WAREHOUSE_POSITIONS_COLLECTION))).docs.map((document) => document.data())
       : [];
     const balancesBySku = new Map<string, Row[]>();
@@ -6819,9 +6837,10 @@ export async function cancelWarehouseOrderTransaction(
           `Saldo físico da reserva ${reservation.id} não foi encontrado para liberação.`,
         );
       }
-      const picked = text(reservation.data.status) === "picked";
+      // O que saiu da prateleira volta pela guarda; o resto da reserva só se solta.
+      const out = outOf(reservation);
       // O separado que já está na EXPEDICAO (de um cancelamento de antes) não se move no razão.
-      const moves = picked && locationId.toUpperCase() !== LOCAL_DO_CANCELADO;
+      const moves = out > 0 && locationId.toUpperCase() !== LOCAL_DO_CANCELADO;
       const item: Item = {
         skuCode,
         locationId,
@@ -6833,7 +6852,7 @@ export async function cancelWarehouseOrderTransaction(
       source.reservedDelta -= quantity;
       let staging: Ledger | undefined;
       if (moves) {
-        source.onHandDelta -= quantity;
+        source.onHandDelta -= out;
         const stagingRow = (balancesBySku.get(skuCode) ?? []).find(
           (row) => text(row.data.location_id).toUpperCase() === LOCAL_DO_CANCELADO,
         );
@@ -6842,17 +6861,17 @@ export async function cancelWarehouseOrderTransaction(
           { ...item, locationId: LOCAL_DO_CANCELADO },
           `bal_${digest({ customerCode, skuCode, locationId: LOCAL_DO_CANCELADO })}`,
         );
-        staging.onHandDelta += quantity;
+        staging.onHandDelta += out;
       }
       const skuEntry = bySku.get(skuCode) ?? { ...item, released: 0 };
       skuEntry.released += quantity;
       bySku.set(skuCode, skuEntry);
       releasedTotal += quantity;
-      if (picked) {
-        returnedTotal += quantity;
+      if (out > 0) {
+        returnedTotal += out;
         const guardKey = balanceKey(customerCode, skuCode, locationId);
         const guard = toGuard.get(guardKey) ?? { ...item, quantity: 0, moves, source: moves ? source : undefined, staging };
-        guard.quantity += quantity;
+        guard.quantity += out;
         toGuard.set(guardKey, guard);
       }
       transaction.update(
@@ -6861,7 +6880,9 @@ export async function cancelWarehouseOrderTransaction(
           status: "released",
           released_qty: quantity,
           release_reason: "order_cancelled",
-          returned_to_location_id: picked ? LOCAL_DO_CANCELADO : undefined,
+          returned_to_location_id: out > 0 ? LOCAL_DO_CANCELADO : undefined,
+          // O que saiu da prateleira e volta pela guarda: na separação em andamento, só o já separado.
+          returned_qty: out > 0 ? out : undefined,
           released_by: actorPayload(actor),
           released_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
