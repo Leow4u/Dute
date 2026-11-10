@@ -24,6 +24,9 @@ export type BoxLine = {
   counted_qty: number;
 };
 
+/** O que saiu de um SKU da caixa nas separações. */
+export type BoxTakenLine = { sku_code: string; qty: number };
+
 /** De onde a caixa veio: a abertura (a sessão), a chegada (o recebimento) ou o cadastro manual. */
 export type BoxOrigin = {
   kind: "opening_inventory" | "receipt" | "manual";
@@ -65,6 +68,15 @@ export type WarehouseBox = {
   origin: BoxOrigin;
   /** O conteúdo que a caixa do recebimento guarda nela; vazio na caixa da abertura, cujo conteúdo mora na sessão. */
   lines: BoxLine[];
+  /** O que as separações já tiraram da caixa, por SKU (separação com caixas, parte 3): o saldo é a entrada menos isto. */
+  taken_lines?: BoxTakenLine[];
+  taken_units?: number;
+  /** Quando o saldo mudou pela última vez; null na caixa intacta. */
+  balance_at?: string | null;
+  /** A caixa vazia (`status: "emptied"`): quando saiu, em qual pedido e se saiu inteira. */
+  emptied_at?: string | null;
+  emptied_order_number?: string | null;
+  emptied_whole?: boolean;
   suggestion: {
     position: string | null;
     reason: string | null;
@@ -206,6 +218,26 @@ function boxLinesFromRecord(value: unknown): BoxLine[] {
   });
 }
 
+function boxTakenFromRecord(value: unknown): BoxTakenLine[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const line = item && typeof item === "object" ? (item as AnyRecord) : null;
+    const sku_code = line ? text(line.sku_code) : "";
+    const qty = line ? number(line.qty) : 0;
+    return sku_code && qty > 0 ? [{ sku_code, qty }] : [];
+  });
+}
+
+/** A caixa aberta: guardada, com saída registrada e ainda com saldo. */
+export function boxIsOpen(box: Pick<WarehouseBox, "status" | "taken_units">) {
+  return box.status === "stored" && (box.taken_units ?? 0) > 0;
+}
+
+/** As unidades que a caixa tem agora: a entrada menos o que as separações tiraram. */
+export function boxBalanceUnits(box: Pick<WarehouseBox, "unit_count" | "taken_units">) {
+  return Math.max(0, box.unit_count - (box.taken_units ?? 0));
+}
+
 /**
  * A origem como a etiqueta e o Mapa dizem (recebimento com caixas, parte 6,
  * decisão 31): "Abertura", "Manual" ou "Recebimento · NF 48.377"; a chegada
@@ -255,6 +287,12 @@ export function warehouseBoxFromRecord(record: AnyRecord): WarehouseBox {
     session_id: text(origin.session_id) || null,
     origin: boxOriginFromRecord(origin),
     lines: boxLinesFromRecord(record.lines),
+    taken_lines: boxTakenFromRecord(record.taken_lines),
+    taken_units: number(record.taken_units),
+    balance_at: text(record.balance_at) || null,
+    emptied_at: text(record.emptied_at) || null,
+    emptied_order_number: text(record.emptied_order_number) || null,
+    emptied_whole: record.emptied_whole === true,
     suggestion: suggestion
       ? {
           position: text(suggestion.position) || null,
@@ -280,7 +318,7 @@ export function sessionBoxes<T extends Pick<WarehouseBox, "session_id">>(boxes: 
   return boxes.filter((box) => box.session_id === sessionId);
 }
 
-/** Quantas prateleiras têm ao menos uma caixa guardada: a base da cobrança por posição. */
+/** Quantas prateleiras têm ao menos uma caixa guardada: a base da cobrança por posição. A caixa vazia (`emptied`) não conta. */
 export function occupiedPositions(boxes: Array<Pick<WarehouseBox, "location_id" | "status">>) {
   const positions = new Set<string>();
   for (const box of boxes) {

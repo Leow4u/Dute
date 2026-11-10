@@ -9,7 +9,7 @@
 import { nomeComTamanho } from "@workspace/dominio";
 
 import type { WarehouseBox } from "@/lib/warehouse-boxes";
-import { boxOriginLabel, formatBoxDimensions } from "@/lib/warehouse-boxes";
+import { boxBalanceUnits, boxOriginLabel, formatBoxDimensions } from "@/lib/warehouse-boxes";
 import { type WarehousePosition, formatKilos, formatMeters } from "@/lib/warehouse-positions";
 
 export const LABEL_MM = { width: 101.6, height: 50.8 } as const;
@@ -54,7 +54,10 @@ export type BoxLabelData = {
   part: number;
   parts: number;
   origin: string;
-  printedAt: string;
+  /** A data de entrada da caixa (a da guarda), que é a do FIFO; antes da guarda, a da impressão. */
+  date: string;
+  /** Na caixa aberta, de quando é o saldo ("saldo em 12/11/2026"); null na caixa intacta. */
+  balanceAt: string | null;
 };
 
 export type PositionLabelData = {
@@ -143,6 +146,26 @@ export function ownBoxContent(box: Pick<WarehouseBox, "lines">): LabelContentLin
   return sortedContent(grouped);
 }
 
+/**
+ * O saldo da caixa (separação com caixas, parte 3): o conteúdo de entrada
+ * menos o que as separações tiraram de cada SKU, sem as linhas zeradas.
+ */
+export function balanceContent(content: LabelContentLine[], taken: ReadonlyArray<{ sku_code: string; qty: number }>): LabelContentLine[] {
+  if (!taken.length) return content;
+  const saiu = new Map<string, number>();
+  for (const line of taken) saiu.set(line.sku_code.toUpperCase(), (saiu.get(line.sku_code.toUpperCase()) ?? 0) + line.qty);
+  return content
+    .map((line) => ({ ...line, qty: line.qty - (saiu.get(line.sku.toUpperCase()) ?? 0) }))
+    .filter((line) => line.qty > 0)
+    .sort((left, right) => right.qty - left.qty || left.name.localeCompare(right.name, "pt-BR"));
+}
+
+function labelDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : dateFormatter.format(date);
+}
+
 export type ImpressaoParaRegistrar = { receipt_id: string; box_code: string; location_id: string };
 
 /**
@@ -169,6 +192,8 @@ export type LabelAvailability = { ready: true; reason: null } | { ready: false; 
  */
 export function boxLabelAvailability(box: Pick<WarehouseBox, "code" | "status" | "location_id" | "origin">): LabelAvailability {
   if (box.status === "stored" || (box.status === "committing" && box.location_id)) return { ready: true, reason: null };
+  // A caixa de que a separação tirou tudo saiu da prateleira (separação com caixas, parte 3c).
+  if (box.status === "emptied") return { ready: false, reason: `${box.code} está vazia: saiu da prateleira.` };
   if (box.origin.kind === "receipt") {
     const state = box.status === "counting" ? "em conferência" : "sem prateleira";
     return { ready: false, reason: `${box.code} ${state}: sem etiqueta até confirmar o destino.` };
@@ -180,23 +205,32 @@ export function boxLabelAvailability(box: Pick<WarehouseBox, "code" | "status" |
  * As etiquetas de uma caixa: a primeira, com a posição, o código de barras e
  * até cinco produtos, e as de continuação com os outros, na mesma ordem (a
  * maior quantidade primeiro). Todas levam as unidades da caixa inteira.
+ *
+ * A caixa aberta (docs/mockups/WmsSepararEtiquetaCaixa.dc.html) sai com o
+ * saldo e "saldo em", sem o peso de entrada. A data é sempre a de entrada da
+ * caixa, que é a do FIFO.
  */
 export function boxLabels(box: WarehouseBox, lines: BoxContentSource[], options: { printedAt?: Date } = {}): BoxLabelData[] {
   // A caixa do recebimento traz o conteúdo nela; a da abertura, nas linhas da sessão.
-  const content = box.lines.length ? ownBoxContent(box) : boxContent(lines, box.code);
+  const entrada = box.lines.length ? ownBoxContent(box) : boxContent(lines, box.code);
+  const aberta = (box.taken_units ?? 0) > 0;
+  const content = balanceContent(entrada, box.taken_lines ?? []);
   const pages = [content.slice(0, FIRST_LABEL_LINES)];
   for (let start = FIRST_LABEL_LINES; start < content.length; start += CONTINUATION_LABEL_LINES) {
     pages.push(content.slice(start, start + CONTINUATION_LABEL_LINES));
   }
+  const units = content.reduce((sum, line) => sum + line.qty, 0);
   const base = {
     kind: "box" as const,
     code: box.code,
     position: box.location_id,
     customer: box.customer_code,
-    dimensions: formatBoxDimensions(box),
-    units: content.reduce((sum, line) => sum + line.qty, 0) || box.unit_count,
+    dimensions: formatBoxDimensions(aberta ? { ...box, gross_weight_kg: null } : box),
+    // Sem o conteúdo lido, vale o que a caixa diz ter.
+    units: units || (entrada.length ? 0 : boxBalanceUnits(box)),
     origin: boxOriginLabel(box),
-    printedAt: dateFormatter.format(options.printedAt ?? new Date()),
+    date: labelDate(box.stored_at) ?? dateFormatter.format(options.printedAt ?? new Date()),
+    balanceAt: aberta ? labelDate(box.balance_at) : null,
   };
   return pages.map((page, index) => ({ ...base, lines: page, part: index + 1, parts: pages.length }));
 }

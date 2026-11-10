@@ -34,6 +34,21 @@ const CAIXA = warehouseBoxFromRecord({
   origin: { kind: "opening_inventory", session_id: "sessao-1" },
 });
 
+/** A mesma caixa, guardada em 22/10: a etiqueta reimpressa hoje continua com a data de entrada. */
+const CAIXA_INTACTA_DE_OUTUBRO = {
+  code: "CX-000142",
+  customer_code: "BTG",
+  status: "stored",
+  location_id: "B-07",
+  length_m: 0.5,
+  width_m: 0.4,
+  height_m: 0.3,
+  gross_weight_kg: 8.4,
+  unit_count: 18,
+  stored_at: "2026-10-22T13:00:00.000Z",
+  origin: { kind: "opening_inventory", session_id: "sessao-1" },
+};
+
 const NOVE: Array<[string, string, string, number]> = [
   ["Porta Cartão Couro", "B.0567.005.U", "BTG-000211", 12],
   ["Caneca Térmica Fokus", "C.0734.003.U", "BTG-000193", 6],
@@ -188,5 +203,71 @@ describe("as etiquetas na folha e no rolo", () => {
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(folha(todas))).toEqual([]);
     expect(await violacoesDeAcessibilidade(folha(todas, "zebra"))).toEqual([]);
+  });
+});
+
+/**
+ * A etiqueta da caixa aberta, com o saldo (separação com caixas, parte 3;
+ * docs/mockups/WmsSepararEtiquetaCaixa.dc.html): o que a caixa tem agora, de
+ * quando é o saldo e a data de entrada, sem o peso de entrada.
+ */
+describe("a etiqueta da caixa aberta, com o saldo", () => {
+  // A CX-000028 entrou na abertura com 28 calças 42 e 40 calças 44; os pedidos tiraram 26 e 35.
+  const ABERTA = warehouseBoxFromRecord({
+    code: "CX-000028",
+    customer_code: "BTG Pactual",
+    status: "stored",
+    location_id: "A-05",
+    length_m: 0.4,
+    width_m: 0.6,
+    height_m: 0.35,
+    gross_weight_kg: 21.4,
+    unit_count: 68,
+    stored_at: "2026-10-22T14:10:00.000Z",
+    origin: { kind: "opening_inventory", session_id: "sessao-1" },
+    taken_lines: [
+      { sku_code: "BTG-000084", qty: 26 },
+      { sku_code: "BTG-000085", qty: 35 },
+    ],
+    taken_units: 61,
+    balance_at: "2026-11-12T17:40:00.000Z",
+  });
+  const ENTRADA = [
+    { box_code: "CX-000028", product_name: "Calça Social Masculino Preta", client_item_code: "A.01.0712.001.42", sku_code: "BTG-000084", counted_qty: 28 },
+    { box_code: "CX-000028", product_name: "Calça Social Masculino Preta", client_item_code: "A.01.0712.001.44", sku_code: "BTG-000085", counted_qty: 40 },
+  ];
+
+  it("diz o saldo de cada produto, as unidades com 'saldo em' e a data de entrada, sem o peso", () => {
+    const { dom, lista } = etiquetas(folha(boxLabels(ABERTA, ENTRADA, { printedAt: AGORA })));
+    expect(textosDaTela(lista[0].outerHTML)).toEqual([
+      "Caixa",
+      "CX-000028",
+      "Posição",
+      "A-05",
+      "BTG Pactual · 40 × 60 × 35 cm",
+      "Abertura 22/10/2026",
+      "5 ×",
+      "Calça Social Masculino Preta · 44",
+      "· A.01.0712.001.44 · BTG-000085",
+      "2 ×",
+      "Calça Social Masculino Preta · 42",
+      "· A.01.0712.001.42 · BTG-000084",
+      "7 un. · saldo em 12/11/2026",
+    ]);
+    dom.window.close();
+  });
+
+  it("a caixa intacta guardada antes de hoje sai com a data de entrada, o peso e sem 'saldo em'", () => {
+    const intacta = warehouseBoxFromRecord({ ...CAIXA_INTACTA_DE_OUTUBRO });
+    const { dom, lista } = etiquetas(folha(boxLabels(intacta, linhas(NOVE.slice(0, 2)), { printedAt: AGORA })));
+    const textos = textosDaTela(lista[0].outerHTML);
+    expect(textos).toContain("BTG · 50 × 40 × 30 cm · 8,4 kg");
+    expect(textos).toContain("Abertura 22/10/2026");
+    expect(textos.at(-1)).toBe("18 un.");
+    dom.window.close();
+  });
+
+  it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
+    expect(await violacoesDeAcessibilidade(folha(boxLabels(ABERTA, ENTRADA, { printedAt: AGORA })))).toEqual([]);
   });
 });

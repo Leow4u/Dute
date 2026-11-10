@@ -120,6 +120,12 @@ function partLabel(label: Pick<BoxLabelData, "part" | "parts">) {
 
 const quantity = new Intl.NumberFormat("pt-BR");
 
+/** "39 un."; na caixa aberta, o saldo e de quando ele é: "7 un. · saldo em 12/11/2026". */
+function unitsLabel(label: Pick<BoxLabelData, "units" | "balanceAt">) {
+  const units = `${quantity.format(label.units)} un.`;
+  return label.balanceAt ? `${units} · saldo em ${label.balanceAt}` : units;
+}
+
 /** As linhas do conteúdo: a quantidade, o nome com o tamanho, o código do cliente e o SKU. */
 function ContentLines({ lines }: { lines: BoxLabelData["lines"] }) {
   return (
@@ -160,13 +166,13 @@ export function BoxLabelCard({ label }: { label: BoxLabelData }) {
           {label.customer} · {label.dimensions}
         </span>
         <span style={{ flexShrink: 0 }}>
-          {label.origin} {label.printedAt}
+          {label.origin} {label.date}
         </span>
       </div>
       <div className="lbl-content" style={content}>
         {label.lines.length ? <ContentLines lines={label.lines} /> : <div style={{ fontSize: "7pt", fontStyle: "italic" }}>Conteúdo a lançar na contagem.</div>}
       </div>
-      <LabelFooter part={part}>{quantity.format(label.units)} un.</LabelFooter>
+      <LabelFooter part={part}>{unitsLabel(label)}</LabelFooter>
     </LabelFrame>
   );
 }
@@ -190,7 +196,7 @@ function BoxContinuationCard({ label }: { label: BoxLabelData }) {
       <div className="lbl-content" style={content}>
         <ContentLines lines={label.lines} />
       </div>
-      <LabelFooter>{quantity.format(label.units)} un.</LabelFooter>
+      <LabelFooter>{unitsLabel(label)}</LabelFooter>
     </LabelFrame>
   );
 }
