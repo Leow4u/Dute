@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Romaneio do pedido</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:12px;line-height:1.4}
+a{color:#0054CE}a:hover{color:#003E99}
+h1,h2,p{margin:0}
+x-dc{display:contents}
+.pg{width:794px;height:1123px;background:#fff;padding:34px 40px;display:flex;flex-direction:column;gap:12px}
+.hd{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;padding-bottom:10px;border-bottom:3px solid #E71C23}
+.wm{font-weight:800;font-size:24px;letter-spacing:.04em;line-height:1}
+.wm small{display:block;font-size:8px;letter-spacing:.18em;font-weight:700;margin-top:3px}
+.doc{text-align:right}
+.doc span{display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:800;color:#5F6368}
+.doc b{display:block;font-size:30px;font-weight:800;line-height:1.05}
+.kv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 14px}
+.kv div span{display:block;font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:#5F6368;font-weight:700}
+.kv div b{display:block;font-size:12.5px;font-weight:700}
+.t{width:100%;border-collapse:collapse;table-layout:fixed}
+.t th{text-align:left;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:#5F6368;font-weight:800;padding:6px;border-bottom:1.5px solid #161616}
+.t td{padding:4px 6px;border-bottom:1px solid #E5E5E1;font-size:11px;vertical-align:top;white-space:nowrap}
+.t td.p{font-size:12px;font-weight:600}
+.t td.n,.t th.n{text-align:right;font-variant-numeric:tabular-nums}
+.t td.n{font-size:12px;font-weight:800}
+.t td.v{font-size:14px;font-weight:800;border-bottom:1.5px solid #161616}
+.t td.w{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;border-bottom:1.5px solid #161616}
+.t tr.e td{border-bottom:1.5px solid #161616}
+.ft{margin-top:auto;display:flex;justify-content:space-between;font-size:9.5px;color:#5F6368;font-weight:600;padding-top:8px;border-top:1px solid #E5E5E1}
+</style>
+</helmet>
+<div class="pg">
+  <div class="hd">
+    <div class="wm">DUTELOG<small>SOLUÇÕES LOGÍSTICAS</small></div>
+    <div class="doc"><span>Romaneio</span><b>PED-0001</b></div>
+  </div>
+  <div class="kv">
+    <div><span>Cliente</span><b>BTG Pactual</b></div>
+    <div><span>Destino</span><b>Agência Faria Lima</b></div>
+    <div><span>Para quando</span><b>Seg 16/11/2026 11:36</b></div>
+    <div><span>Lacre</span><b>88231</b></div>
+    <div><span>Volumes</span><b>42</b></div>
+    <div><span>Unidades</span><b>3.335</b></div>
+    <div><span>Separado</span><b>10/11 a 13/11/2026</b></div>
+    <div><span>Por</span><b>Guilherme Dantas</b></div>
+  </div>
+  <table class="t">
+    <colgroup><col style="width:56px"><col style="width:318px"><col style="width:170px"><col style="width:60px"><col style="width:110px"></colgroup>
+    <thead><tr><th>Volume</th><th>Conteúdo</th><th>Código</th><th class="n">Qtd.</th><th class="n">Peso</th></tr></thead>
+    <tbody>
+      <tr class="e"><td class="v">1</td><td class="p">Polo Masculino Piquet Preto · P</td><td>A.01.0806.005.P</td><td class="n">60</td><td class="w">14,2 kg</td></tr>
+      <tr class="e"><td class="v">2</td><td class="p">Polo Masculino Piquet Preto · M</td><td>A.01.0806.005.M</td><td class="n">60</td><td class="w">14,0 kg</td></tr>
+      <tr class="e"><td class="v">3</td><td class="p">Polo Masculino Piquet Preto · M</td><td>A.01.0806.005.M</td><td class="n">60</td><td class="w">14,1 kg</td></tr>
+      <tr class="e"><td class="v">4</td><td class="p">Polo Masculino Piquet Preto · G</td><td>A.01.0806.005.G</td><td class="n">80</td><td class="w">19,3 kg</td></tr>
+      <tr class="e"><td class="v">5</td><td class="p">Polo Masculino Piquet Preto · GG</td><td>A.01.0806.005.GG</td><td class="n">50</td><td class="w">12,8 kg</td></tr>
+      <tr class="e"><td class="v">6</td><td class="p">Polo Masculino Piquet Preto · GG</td><td>A.01.0806.005.GG</td><td class="n">50</td><td class="w">12,7 kg</td></tr>
+      <tr class="e"><td class="v">7</td><td class="p">Polo Masculino Piquet Preto · XG</td><td>A.01.0806.005.XG</td><td class="n">90</td><td class="w">23,5 kg</td></tr>
+      <tr class="e"><td class="v">8</td><td class="p">Polo Feminino Piquet Preto · P</td><td>A.01.0805.002.P</td><td class="n">40</td><td class="w">8,1 kg</td></tr>
+      <tr class="e"><td class="v">9</td><td class="p">Polo Feminino Piquet Preto · M</td><td>A.01.0805.002.M</td><td class="n">70</td><td class="w">16,5 kg</td></tr>
+      <tr class="e"><td class="v">10</td><td class="p">Polo Feminino Piquet Preto · G</td><td>A.01.0805.002.G</td><td class="n">50</td><td class="w">8,2 kg</td></tr>
+      <tr class="e"><td class="v">11</td><td class="p">Calça Social Masculino Preta · 46</td><td>A.01.0712.001.46</td><td class="n">25</td><td class="w">6,3 kg</td></tr>
+      <tr><td class="v" rowspan="2">12</td><td class="p">Calça Social Masculino Preta · 40</td><td>A.01.0712.001.40</td><td class="n">30</td><td class="w" rowspan="2">11,6 kg</td></tr>
+      <tr class="e"><td class="p">Calça Social Masculino Preta · 42</td><td>A.01.0712.001.42</td><td class="n">12</td></tr>
+      <tr><td class="v" rowspan="2">13</td><td class="p">Calça Social Masculino Preta · 42</td><td>A.01.0712.001.42</td><td class="n">28</td><td class="w" rowspan="2">17,4 kg</td></tr>
+      <tr class="e"><td class="p">Calça Social Masculino Preta · 44</td><td>A.01.0712.001.44</td><td class="n">35</td></tr>
+      <tr class="e"><td class="v">14</td><td class="p">Camiseta Masculino Preta · M</td><td>A.01.0816.005.M</td><td class="n">30</td><td class="w">5,8 kg</td></tr>
+      <tr class="e"><td class="v">15</td><td class="p">Camiseta Masculino Preta · G</td><td>A.01.0816.005.G</td><td class="n">35</td><td class="w">6,9 kg</td></tr>
+      <tr class="e"><td class="v">16</td><td class="p">Camiseta Masculino Preta · XGG</td><td>A.01.0816.005.XGG</td><td class="n">30</td><td class="w">6,4 kg</td></tr>
+      <tr class="e"><td class="v">17</td><td class="p">Camisa Social Masculino Branca · 40</td><td>A.01.0901.001.40</td><td class="n">40</td><td class="w">7,9 kg</td></tr>
+      <tr class="e"><td class="v">18</td><td class="p">Camisa Social Masculino Branca · 41</td><td>A.01.0901.001.41</td><td class="n">40</td><td class="w">7,9 kg</td></tr>
+      <tr><td class="v" rowspan="2">19</td><td class="p">Camisa Social Masculino Branca · 42</td><td>A.01.0901.001.42</td><td class="n">36</td><td class="w" rowspan="2">11,8 kg</td></tr>
+      <tr class="e"><td class="p">Camisa Social Masculino Branca · 43</td><td>A.01.0901.001.43</td><td class="n">24</td></tr>
+      <tr><td class="v" rowspan="10">20</td><td class="p">Lancheira Grande AZ</td><td>C.0612.002.U</td><td class="n">2</td><td class="w" rowspan="10">4,2 kg</td></tr>
+      <tr><td class="p">Copo Beercup em Inox</td><td>B.0572.003.U.B</td><td class="n">1</td></tr>
+      <tr><td class="p">Copo Café · G</td><td>B.0791.005.U</td><td class="n">1</td></tr>
+      <tr><td class="p">Copo Café · P</td><td>B.0790.005.U</td><td class="n">1</td></tr>
+      <tr><td class="p">Copo Stanley · P</td><td>B.0672.003.U.P</td><td class="n">1</td></tr>
+      <tr><td class="p">Copo Stanley</td><td>B.0672.003.U.B</td><td class="n">1</td></tr>
+      <tr><td class="p">Copo Stanley</td><td>B.0670.003.U.B</td><td class="n">1</td></tr>
+      <tr><td class="p">Caneca Térmica Fokus</td><td>C.0734.003.U</td><td class="n">1</td></tr>
+      <tr><td class="p">Caneca Térmica Fokus</td><td>C.0735.005.U</td><td class="n">1</td></tr>
+      <tr class="e"><td class="p">Porta Cartão Couro</td><td>B.0567.005.U</td><td class="n">6</td></tr>
+    </tbody>
+  </table>
+  <div class="ft"><span>app.dutelog.com.br</span><span>PED-0001 · página 1 de 2</span></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":794,"height":1123}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

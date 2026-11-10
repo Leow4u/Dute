@@ -368,6 +368,72 @@ Perguntas e respostas do Leonardo (07/11/2026):
 As caixas CX-000225 e CX-000226 de 06/11 não precisam de nada: com a parte
 6, a etiqueta delas sai pelo Mapa ou por Recebidos › Guardas, com o conteúdo.
 
+A página "Separação e expedição" tem canvas próprio (privado,
+https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz), feito em 10/11/2026 a
+partir do primeiro pedido depois da zeragem (PED-0001, com 116 linhas e 3.335
+un., e PED-0002) e das decisões do Leonardo do mesmo dia
+(`docs/plataforma/separacao-com-caixas.md`, seção 3). **É proposta, à espera
+da aprovação.** Hoje "Separado" pede o lacre e confirma todas as linhas de uma
+vez, num volume só; a lista sai na ordem do carrinho, sem a caixa; a caixa
+aberta fica com a etiqueta do que entrou; e não há etiqueta de expedição. Os
+pedidos da BTG levam de 3 a 4 dias para separar. As pranchas seguem o shell v3
+da Armazenagem com o menu de quem opera (cliente ativo BTG, Guilherme,
+Operação WMS); o Mapa segue a prancha de 06/11 (`WmsEtiquetaRecebimentoMapa`).
+As fontes são estáticas. As linhas de B-09 são as do PED-0001; as outras
+linhas, as caixas e os volumes são ilustrativos, e os números fecham entre as
+telas (42 volumes, 31 caixas inteiras, 23 abertas, 4 vazias). O celular da
+página 2 mostra o caminho com uma diferença (avaria); as outras telas, o
+caminho sem diferença. No canvas, a primeira prancha se chama `Main.dc.html`;
+aqui, `WmsSepararLista.dc.html`. Os diálogos "Outra caixa" e "Separar menos"
+importam a `WmsSepararBancada` como fundo.
+
+Página 1, a lista de separação (parte 1, só leitura, para antes de 16/11):
+
+| Tela | Arquivo | O que muda |
+|---|---|---|
+| Armazenagem · Pedidos, itens por prateleira | `WmsSepararLista.dc.html` | "Ver itens" agrupa as linhas por prateleira, na ordem de caminhada, com os itens e as unidades de cada uma; a linha troca a posição pela caixa onde o item está; o pedido ganha "Imprimir lista". "Separado" fica como hoje. |
+| Lista de separação impressa (A4) | `WmsSepararListaImpressa.dc.html` | O pedido, o cliente, o destino e o prazo; as linhas por prateleira com o quadrado para marcar, o produto, o código, a caixa, a quantidade e "Separado" em branco. |
+| Armazenagem · Pedidos no celular | `WmsSepararListaCelular.dc.html` | A mesma lista no celular, com "Imprimir lista" ao lado de "Esconder itens" (os botões do pedido vêm depois das 116 linhas). |
+
+Página 2, separar com caixa e volumes (partes 2 a 5):
+
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| Armazenagem · Separar, a bancada do pedido | `WmsSepararBancada.dc.html` | "Separar" abre o pedido: o progresso salvo ("10 de 116 itens", "em separação desde 10/11"), as linhas por prateleira com a caixa sugerida ("12 de CX-000027", "esvazia", "inteira"), "Separar" por linha, "Levar a caixa" na caixa que sai inteira, "Desfazer" na linha separada e o "⋯" com "Outra caixa" e "Separar menos". Ao lado, o volume aberto com o peso e "Fechar volume", os volumes fechados com "Etiqueta" e as "Etiquetas para trocar" das caixas abertas. "Concluir separação" desligado diz quantos itens faltam. |
+| Armazenagem · Separar, outra caixa | `WmsSepararOutraCaixa.dc.html` | "De qual caixa saiu?": as caixas da prateleira que têm o item, com a origem, a data e o saldo, e a quantidade tirada de cada uma; a soma fecha com a linha. |
+| Armazenagem · Separar, separar menos | `WmsSepararMenos.dc.html` | Quem opera registra o separado a menos, com o motivo ("Falta" ou "Avaria") e o detalhe. |
+| Armazenagem · Separar, concluir | `WmsSepararConcluir.dc.html` | Com todas as linhas separadas, "Concluir separação" mostra os volumes, as caixas inteiras, abertas e vazias, e pede o "Número do lacre", um por pedido. |
+| Armazenagem · Pedido separado | `WmsSepararConcluido.dc.html` | Os 42 volumes com o conteúdo, as unidades, o peso e "Etiqueta"; "Etiquetas dos volumes" e "Romaneio"; as "Etiquetas para trocar" que sobraram e as caixas vazias, já encerradas. |
+| Armazenagem · Pedidos, Para entregar | `WmsSepararParaEntregar.dc.html` | O pedido em separação mostra o progresso e "Continuar"; o separado mostra os volumes e o lacre, com "Etiquetas dos volumes", "Romaneio" e o aviso das etiquetas de caixa por trocar. "Entregue" não muda. |
+| Armazenagem · Separar no celular | `WmsSepararCelular.dc.html` | A mesma bancada no celular: o progresso, o volume aberto, a linha com diferença ("separado 1 de 2 · Avaria") e "1 linha com diferença". |
+| Etiqueta da caixa aberta | `WmsSepararEtiquetaCaixa.dc.html` | A etiqueta de hoje com o saldo da caixa e "saldo em 12/11/2026"; a origem e a data de entrada ficam, e o peso sai. |
+| Etiqueta do volume | `WmsSepararEtiquetaVolume.dc.html` | O pedido, "12 de 42", o cliente, o destino, a data, o peso, o conteúdo com o código do cliente e as unidades. Sem caixa, posição nem valor. |
+| Romaneio (A4) | `WmsSepararRomaneio.dc.html` | O conteúdo completo de cada volume, com a quantidade e o peso; o lacre e o total de volumes. Sem caixa, posição nem valor. |
+| Armazenagem · Mapa | `WmsSepararMapa.dc.html` | Depois do pedido: a caixa aberta com o saldo, as caixas que saíram em "Saíram desta prateleira" e "Posições ocupadas" contando só a prateleira com caixa com saldo. |
+
+Perguntas para o Leonardo (10/11/2026), também nas notas do canvas:
+
+Página 1:
+
+1. A lista já sai com a caixa de cada item, lida do conteúdo de entrada da
+   caixa, sem baixa? Proposta: sim.
+2. A lista impressa leva "Separado" em branco, para anotar a quantidade
+   quando for diferente? Proposta: sim.
+
+Página 2:
+
+1. A caixa que sai inteira vira o volume, sem reembalar ("Levar a caixa")?
+   Proposta: sim.
+2. Como o pedido leva dias, a etiqueta do volume sai ao fechar cada volume
+   ("Volume 12"), sem o total, e o lote com o total ("Volume 12 de 42") só
+   depois de concluir. Serve assim?
+3. A etiqueta do volume, no tamanho de hoje, mostra até quatro produtos e
+   "+ n no romaneio"; o romaneio traz o conteúdo completo. Serve ao cliente,
+   ou ele precisa de todos os produtos na etiqueta?
+4. Quem opera registra "Separar menos", e só a coordenação conclui o pedido
+   com diferença, como hoje? Proposta: sim.
+5. O peso do volume é opcional ao fechar? Proposta: sim.
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador
