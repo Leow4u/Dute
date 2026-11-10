@@ -44,6 +44,19 @@ describe("Concluir separação", () => {
     expect(confirmar(render("88231", true))).toEqual({ texto: "Registrando...", desligado: true });
   });
 
+  it("com as caixas do pedido lidas, diz as inteiras, as abertas e as vazias (parte 3)", async () => {
+    const comCaixas = renderToStaticMarkup(
+      <ConcluirSeparacaoConteudo resumo={RESUMO} caixas={{ inteiras: 31, abertas: 23, vazias: 4 }} lacre="88231" onLacre={noop} onVoltar={noop} onConfirmar={noop} />,
+    );
+    expect(textosDaTela(comCaixas)).toEqual([RESUMO, "Caixas inteiras", "31", "Caixas abertas", "23", "Caixas vazias", "4", "Número do lacre", "Voltar", "Confirmar separação"]);
+    expect(await violacoesDeAcessibilidade(comCaixas)).toEqual([]);
+    // O pedido que não saiu de caixa nenhuma não ganha os números.
+    const semCaixas = renderToStaticMarkup(
+      <ConcluirSeparacaoConteudo resumo={RESUMO} caixas={{ inteiras: 0, abertas: 0, vazias: 0 }} lacre="88231" onLacre={noop} onVoltar={noop} onConfirmar={noop} />,
+    );
+    expect(textosDaTela(semCaixas)).toEqual([RESUMO, "Número do lacre", "Voltar", "Confirmar separação"]);
+  });
+
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(render("88231"))).toEqual([]);
   });

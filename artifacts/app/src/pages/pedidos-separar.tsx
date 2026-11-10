@@ -16,11 +16,14 @@ import { textoDoParaQuando } from "@/lib/order-queue";
 import { canDecideRequests, canOperateWarehouse } from "@/lib/permissions";
 import { useItemPhotos } from "@/lib/use-item-photos";
 import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
+import { labelsUrl } from "@/lib/warehouse-labels";
 import {
   caixasComOItem,
+  caixasDoPedido,
   caixasGravadas,
   caixasParaEnviar,
   entradaDasCaixas,
+  etiquetasParaTrocar,
   linhaDeEntrada,
   sugestaoDaLinha,
   type CaixaDaPrateleira,
@@ -121,6 +124,9 @@ export default function PaginaPedidosSeparar() {
     }
     return { caixasDaLinha: daLinha, candidatasDaLinha: candidatas };
   }, [lista.grupos, caixasAoVivo.itens, entradaAoVivo.itens, codigoDoCliente]);
+  // As caixas que o pedido abriu e que estão com a etiqueta velha, e as caixas do pedido para o diálogo de concluir.
+  const etiquetas = useMemo(() => (caixasAoVivo.itens ? etiquetasParaTrocar(itens, caixasAoVivo.itens) : []), [itens, caixasAoVivo.itens]);
+  const caixasDoDialogo = useMemo(() => (caixasAoVivo.itens ? caixasDoPedido(itens, caixasAoVivo.itens) : null), [itens, caixasAoVivo.itens]);
   // "Outra caixa" só faz sentido com mais de uma caixa na prateleira para escolher.
   const comOutraCaixa = useMemo(
     () => new Set([...candidatasDaLinha].filter(([, daPrateleira]) => daPrateleira.length > 1).map(([id]) => id)),
@@ -226,6 +232,8 @@ export default function PaginaPedidosSeparar() {
         ocupadas={ocupadas}
         caixasDaLinha={caixasDaLinha}
         comOutraCaixa={comOutraCaixa}
+        etiquetas={etiquetas}
+        etiquetasHref={etiquetas.length ? labelsUrl({ boxes: etiquetas.map((etiqueta) => etiqueta.code) }) : null}
         fotoDe={(item) => fotoDoItem(item.sku_code, item.sku, item.client_item_code)}
         onSeparar={(linha) => gravar.mutate({ tipo: "separar", linha })}
         onDesfazer={(linha) => gravar.mutate({ tipo: "desfazer", linha })}
@@ -272,6 +280,7 @@ export default function PaginaPedidosSeparar() {
         aberto={lacre !== null}
         numero={pedido?.orderNumber ?? ""}
         resumo={resumo}
+        caixas={caixasDoDialogo}
         lacre={lacre ?? ""}
         confirmando={concluir.isPending}
         onLacre={setLacre}

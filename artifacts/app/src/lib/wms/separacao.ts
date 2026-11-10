@@ -39,7 +39,7 @@ export type SeparacaoConcluida = {
   seal_code: string;
 };
 
-async function chamarWms<T>(nome: "setPickLineSeparated" | "completeOrderSeparation", dados: Record<string, unknown>): Promise<T> {
+async function chamarWms<T>(nome: "setPickLineSeparated" | "completeOrderSeparation" | "recordBoxBalanceLabelPrint", dados: Record<string, unknown>): Promise<T> {
   if (!firebaseApp) throw new Error("Firebase não configurado.");
   const callable = httpsCallable<Record<string, unknown>, T>(functionsDoApp(firebaseApp), nome);
   try {
@@ -74,4 +74,12 @@ export function desfazerLinha(input: { pick_task_id: string; pick_line_id: strin
 /** "Confirmar separação": a separação e a embalagem, com o lacre. */
 export function concluirSeparacao(input: { pick_task_id: string; seal_code: string; idempotency_key: string }) {
   return chamarWms<SeparacaoConcluida>("completeOrderSeparation", input);
+}
+
+/**
+ * Registra a impressão da etiqueta com o saldo das caixas abertas (parte 3d):
+ * elas saem de "Etiquetas para trocar". A caixa que não está aberta é pulada.
+ */
+export function registrarEtiquetaDeSaldo(input: { box_codes: string[]; idempotency_key: string }) {
+  return chamarWms<{ ok: true; printed: string[]; skipped: string[] }>("recordBoxBalanceLabelPrint", input);
 }

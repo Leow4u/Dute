@@ -318,3 +318,48 @@ describe("Pedidos › Separar, a caixa de cada linha", () => {
     expect(await violacoesDeAcessibilidade(render("pronto", { caixasDaLinha, comOutraCaixa: new Set(["pli_ord_1_04"]), onOutraCaixa: noop }))).toEqual([]);
   });
 });
+
+/**
+ * "Etiquetas para trocar" (separação com caixas, parte 3d;
+ * docs/mockups/WmsSepararBancada.dc.html). Antes, nada dizia que a caixa de
+ * onde saiu peça precisava de etiqueta nova.
+ */
+describe("Pedidos › Separar, as etiquetas para trocar", () => {
+  const etiquetas = [
+    { code: "CX-000023", posicao: "A-04", saldo: 10 },
+    { code: "CX-000027", posicao: "A-05", saldo: 12 },
+  ];
+  const href = "/estoque/etiquetas?caixas=CX-000023%2CCX-000027";
+
+  function painel(html: string) {
+    const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+    const secao = dom.window.document.querySelector("section[aria-labelledby='etiquetas-para-trocar']");
+    const resultado = secao ? { textos: textosDaTela(secao.outerHTML), imprimir: secao.querySelector("a")?.getAttribute("href") ?? null } : null;
+    dom.window.close();
+    return resultado;
+  }
+
+  it("lista as caixas abertas do pedido, com a prateleira e o saldo, e Imprimir leva às etiquetas delas", () => {
+    expect(painel(render("pronto", { etiquetas, etiquetasHref: href }))).toEqual({
+      textos: ["Etiquetas para trocar", "2 caixas abertas", "Imprimir", "CX-000023", "A-04 · saldo 10 un.", "CX-000027", "A-05 · saldo 12 un."],
+      imprimir: href,
+    });
+  });
+
+  it("sem caixa aberta, a bancada não ganha o painel", () => {
+    expect(painel(render("pronto", { etiquetas: [], etiquetasHref: null }))).toBeNull();
+    expect(painel(render())).toBeNull();
+  });
+
+  it("com mais de cinco caixas, mostra as cinco primeiras e Ver as N caixas", () => {
+    const muitas = Array.from({ length: 7 }, (_, indice) => ({ code: `CX-00010${indice}`, posicao: "B-09", saldo: indice + 1 }));
+    const textos = painel(render("pronto", { etiquetas: muitas, etiquetasHref: href }))!.textos;
+    expect(textos.slice(0, 2)).toEqual(["Etiquetas para trocar", "7 caixas abertas"]);
+    expect(textos.filter((texto) => texto.startsWith("CX-"))).toEqual(["CX-000100", "CX-000101", "CX-000102", "CX-000103", "CX-000104"]);
+    expect(textos.at(-1)).toBe("Ver as 7 caixas");
+  });
+
+  it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
+    expect(await violacoesDeAcessibilidade(render("pronto", { etiquetas, etiquetasHref: href }))).toEqual([]);
+  });
+});

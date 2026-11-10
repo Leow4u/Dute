@@ -9,7 +9,7 @@
 import { nomeComTamanho } from "@workspace/dominio";
 
 import type { WarehouseBox } from "@/lib/warehouse-boxes";
-import { boxBalanceUnits, boxOriginLabel, formatBoxDimensions } from "@/lib/warehouse-boxes";
+import { boxBalanceUnits, boxIsOpen, boxOriginLabel, formatBoxDimensions } from "@/lib/warehouse-boxes";
 import { type WarehousePosition, formatKilos, formatMeters } from "@/lib/warehouse-positions";
 
 export const LABEL_MM = { width: 101.6, height: 50.8 } as const;
@@ -181,6 +181,15 @@ export function impressoesParaRegistrar(
       ? [{ receipt_id: box.origin.receipt_id, box_code: box.code, location_id: box.location_id }]
       : [],
   );
+}
+
+/**
+ * As caixas abertas da folha, para registrar a impressão da etiqueta com o
+ * saldo (separação com caixas, parte 3d): a caixa sai de "Etiquetas para
+ * trocar". Vale para a caixa de qualquer origem.
+ */
+export function saldosParaRegistrar(boxes: Array<Pick<WarehouseBox, "code" | "status" | "location_id" | "origin" | "taken_units">>): string[] {
+  return boxes.filter((box) => boxIsOpen(box) && boxLabelAvailability(box).ready).map((box) => box.code);
 }
 
 export type LabelAvailability = { ready: true; reason: null } | { ready: false; reason: string };

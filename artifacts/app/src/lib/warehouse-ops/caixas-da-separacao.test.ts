@@ -4,15 +4,19 @@ import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 
 import {
   caixasComOItem,
+  caixasDoPedido,
   caixasGravadas,
   caixasParaEnviar,
   entradaDasCaixas,
+  etiquetasParaTrocar,
   linhaDeEntrada,
   separadoNasCaixas,
   somaDasInformadas,
   sugestaoDaLinha,
   textoDaCaixa,
   textoDaCandidata,
+  textoDaEtiqueta,
+  textoDasAbertas,
 } from "./caixas-da-separacao";
 import type { WarehouseTaskItem } from "./model";
 
@@ -142,5 +146,46 @@ describe("Outra caixa", () => {
     expect(separadoNasCaixas(35, [])).toBe(0);
     expect(somaDasInformadas({ "CX-000061": 0, "CX-000062": 35 })).toBe(35);
     expect(caixasParaEnviar({ "CX-000061": 0, "CX-000062": 35 })).toEqual([{ box_code: "CX-000062", qty: 35 }]);
+  });
+});
+
+describe("Etiquetas para trocar e as caixas do pedido", () => {
+  // O pedido tirou 30 da CX-000027 (ficou aberta), levou a CX-000029 inteira e esvaziou a CX-000030.
+  const itens = [
+    linha({ id: "pli_1", separated_at: "2026-11-11T14:00:00.000Z", separated_boxes: [{ box_code: "CX-000027", qty: 30 }] }),
+    linha({ id: "pli_2", separated_at: "2026-11-11T15:00:00.000Z", separated_boxes: [{ box_code: "CX-000029", qty: 25, whole: true }] }),
+    linha({ id: "pli_3", separated_at: "2026-11-11T16:00:00.000Z", separated_boxes: [{ box_code: "CX-000030", qty: 8, emptied: true }, { box_code: "CX-000023", qty: 2 }] }),
+    linha({ id: "pli_4" }),
+  ];
+  const aberta = (code: string, extra: Record<string, unknown> = {}) => caixa(code, { taken_lines: [{ sku_code: CALCA_42, qty: 30 }], taken_units: 30, balance_at: "2026-11-11T14:00:00.000Z", ...extra });
+  // Só as guardadas chegam à bancada: a inteira e a vazia saíram da prateleira.
+  const guardadas = [
+    aberta("CX-000027"),
+    aberta("CX-000023", { location_id: "A-04", unit_count: 40 }),
+    // Aberta por outro pedido: não é deste.
+    aberta("CX-000050"),
+    caixa("CX-000028"),
+  ];
+
+  it("lista as caixas que o pedido abriu, por prateleira, com o saldo; a de outro pedido e a intacta não entram", () => {
+    const lista = etiquetasParaTrocar(itens, guardadas);
+    expect(lista).toEqual([
+      { code: "CX-000023", posicao: "A-04", saldo: 10 },
+      { code: "CX-000027", posicao: "A-05", saldo: 12 },
+    ]);
+    expect(lista.map(textoDaEtiqueta)).toEqual(["A-04 · saldo 10 un.", "A-05 · saldo 12 un."]);
+    expect([textoDasAbertas(2), textoDasAbertas(1)]).toEqual(["2 caixas abertas", "1 caixa aberta"]);
+  });
+
+  it("a caixa sai da lista quando a etiqueta do saldo de agora foi impressa, e volta quando o saldo muda", () => {
+    const impressa = aberta("CX-000027", { balance_label_printed_for: "2026-11-11T14:00:00.000Z" });
+    expect(etiquetasParaTrocar(itens, [impressa]).map((etiqueta) => etiqueta.code)).toEqual([]);
+    const mudou = aberta("CX-000027", { balance_at: "2026-11-12T09:00:00.000Z", balance_label_printed_for: "2026-11-11T14:00:00.000Z" });
+    expect(etiquetasParaTrocar(itens, [mudou]).map((etiqueta) => etiqueta.code)).toEqual(["CX-000027"]);
+  });
+
+  it("conta as caixas do pedido: a que continua guardada é aberta; das que saíram, a que saiu toda é inteira e a outra, vazia", () => {
+    expect(caixasDoPedido(itens, guardadas)).toEqual({ inteiras: 1, abertas: 2, vazias: 1 });
+    expect(caixasDoPedido([linha()], guardadas)).toEqual({ inteiras: 0, abertas: 0, vazias: 0 });
   });
 });

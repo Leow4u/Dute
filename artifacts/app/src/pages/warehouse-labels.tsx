@@ -34,6 +34,7 @@ import {
   boxLabels,
   boxLabelAvailability,
   impressoesParaRegistrar,
+  saldosParaRegistrar,
   labelsUrl,
   type ImpressaoParaRegistrar,
   paginate,
@@ -44,6 +45,7 @@ import { fetchJson, formatNumber, getErrorMessage } from "@/lib/warehouse-ops/mo
 import { type WarehousePosition, sortPositions } from "@/lib/warehouse-positions";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { registrarEtiquetaImpressa } from "@/lib/wms/caixas-do-recebimento";
+import { registrarEtiquetaDeSaldo } from "@/lib/wms/separacao";
 
 type PositionsResponse = { items?: WarehousePosition[] };
 
@@ -139,10 +141,21 @@ export default function WarehouseLabelsPage() {
     onError: (error) =>
       toast({ title: "Não foi possível registrar a impressão", description: getErrorMessage(error), variant: "destructive" }),
   });
+  // A caixa aberta sai com o saldo: a impressão registrada tira a caixa de "Etiquetas para trocar" (separação com caixas, parte 3d).
+  const registrarSaldo = useMutation({
+    mutationFn: (box_codes: string[]) => registrarEtiquetaDeSaldo({ box_codes, idempotency_key: crypto.randomUUID() }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["warehouse-boxes"] });
+    },
+    onError: (error) =>
+      toast({ title: "Não foi possível registrar a impressão", description: getErrorMessage(error), variant: "destructive" }),
+  });
   const imprimir = () => {
     window.print();
     const impressoes = impressoesParaRegistrar(boxes);
     if (impressoes.length) registrar.mutate(impressoes);
+    const saldos = saldosParaRegistrar(boxes);
+    if (saldos.length) registrarSaldo.mutate(saldos);
   };
 
   return (

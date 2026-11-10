@@ -73,6 +73,8 @@ export type WarehouseBox = {
   taken_units?: number;
   /** Quando o saldo mudou pela última vez; null na caixa intacta. */
   balance_at?: string | null;
+  /** O `balance_at` do saldo que saiu na última etiqueta impressa (parte 3d); null sem etiqueta de saldo. */
+  balance_label_printed_for?: string | null;
   /** A caixa vazia (`status: "emptied"`): quando saiu, em qual pedido e se saiu inteira. */
   emptied_at?: string | null;
   emptied_order_number?: string | null;
@@ -233,6 +235,14 @@ export function boxIsOpen(box: Pick<WarehouseBox, "status" | "taken_units">) {
   return box.status === "stored" && (box.taken_units ?? 0) > 0;
 }
 
+/**
+ * A caixa aberta cuja etiqueta não é a do saldo de agora: entra em "Etiquetas
+ * para trocar" até a impressão ser registrada (separação com caixas, parte 3d).
+ */
+export function boxNeedsRelabel(box: Pick<WarehouseBox, "status" | "taken_units" | "balance_at" | "balance_label_printed_for">) {
+  return boxIsOpen(box) && (box.balance_label_printed_for ?? "") !== (box.balance_at ?? "");
+}
+
 /** As unidades que a caixa tem agora: a entrada menos o que as separações tiraram. */
 export function boxBalanceUnits(box: Pick<WarehouseBox, "unit_count" | "taken_units">) {
   return Math.max(0, box.unit_count - (box.taken_units ?? 0));
@@ -290,6 +300,7 @@ export function warehouseBoxFromRecord(record: AnyRecord): WarehouseBox {
     taken_lines: boxTakenFromRecord(record.taken_lines),
     taken_units: number(record.taken_units),
     balance_at: text(record.balance_at) || null,
+    balance_label_printed_for: text(record.balance_label_printed_for) || null,
     emptied_at: text(record.emptied_at) || null,
     emptied_order_number: text(record.emptied_order_number) || null,
     emptied_whole: record.emptied_whole === true,

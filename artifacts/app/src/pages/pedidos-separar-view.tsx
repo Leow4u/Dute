@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { CaixaDaLinha } from "@workspace/dominio";
 
 import { cn } from "@/lib/utils";
-import { textoDaCaixa } from "@/lib/warehouse-ops/caixas-da-separacao";
+import { textoDaCaixa, textoDaEtiqueta, textoDasAbertas, type EtiquetaParaTrocar } from "@/lib/warehouse-ops/caixas-da-separacao";
 import { resumoDoGrupo, type GrupoDaLista, type LinhaDaLista } from "@/lib/warehouse-ops/lista-de-separacao";
 import type { WarehouseTaskItem } from "@/lib/warehouse-ops/model";
 import {
@@ -32,10 +32,14 @@ import {
  * "Separar", "Desfazer" e "Separar menos", e "Concluir separação". A linha
  * por separar diz de qual caixa o sistema vai tirar ("12 de CX-000027",
  * "esvazia", "CX-000029 inteira"), a separada diz de onde saiu, e "Outra
- * caixa" corrige (parte 3b). "Levar a caixa" e os volumes da prancha entram
- * com a parte 4. Os dados e as ações chegam por props
- * (pages/pedidos-separar.tsx). Sem legenda.
+ * caixa" corrige (parte 3b). "Etiquetas para trocar" lista as caixas que o
+ * pedido abriu, até a etiqueta com o saldo ser impressa (parte 3d). "Levar a
+ * caixa" e os volumes da prancha entram com a parte 4. Os dados e as ações
+ * chegam por props (pages/pedidos-separar.tsx). Sem legenda.
  */
+
+/** Quantas caixas "Etiquetas para trocar" lista antes de "Ver as N caixas". */
+const ETIQUETAS_A_VISTA = 5;
 
 export type EstadoDaBancada = "carregando" | "nao_encontrado" | "erro" | "concluida" | "pronto";
 
@@ -63,6 +67,8 @@ export function PedidosSepararView({
   ocupadas,
   caixasDaLinha,
   comOutraCaixa,
+  etiquetas,
+  etiquetasHref,
   fotoDe,
   onSeparar,
   onDesfazer,
@@ -101,6 +107,10 @@ export function PedidosSepararView({
   caixasDaLinha?: ReadonlyMap<string, readonly CaixaDaLinha[]>;
   /** As linhas com caixa na prateleira para escolher: ganham "Outra caixa". */
   comOutraCaixa?: ReadonlySet<string>;
+  /** As caixas que o pedido abriu e que estão com a etiqueta velha. */
+  etiquetas?: readonly EtiquetaParaTrocar[];
+  /** A tela de Etiquetas com essas caixas. */
+  etiquetasHref?: string | null;
   fotoDe?: (item: WarehouseTaskItem) => string | undefined;
   onSeparar: (linha: LinhaDaLista) => void;
   onDesfazer: (linha: LinhaDaLista) => void;
@@ -118,7 +128,7 @@ export function PedidosSepararView({
   const primeira = grupos.flatMap((grupo) => grupo.linhas).find((linha) => estadoDaLinha(linha.item) === "pendente")?.id;
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-5 pb-24">
+    <div className="mx-auto flex max-w-6xl flex-col gap-5 pb-24">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <Button asChild variant="outline" size="icon" className="shrink-0">
@@ -177,6 +187,7 @@ export function PedidosSepararView({
             <p className="rounded-lg border border-warning-soft-border bg-warning-soft px-4 py-2.5 text-sm font-semibold text-warning-soft-foreground">{diferenca}</p>
           ) : null}
 
+          <div className={cn(etiquetas?.length && "grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start")}>
           <div className="overflow-hidden rounded-lg border border-border bg-card">
             {grupos.map((grupo) => {
               const nome = grupo.posicao || "sem endereço";
@@ -239,9 +250,52 @@ export function PedidosSepararView({
               );
             })}
           </div>
+          {etiquetas?.length ? <EtiquetasParaTrocar etiquetas={etiquetas} href={etiquetasHref ?? null} /> : null}
+          </div>
         </>
       )}
     </div>
+  );
+}
+
+/** "Etiquetas para trocar": as caixas abertas do pedido, com a prateleira e o saldo, e "Imprimir". */
+function EtiquetasParaTrocar({ etiquetas, href }: { etiquetas: readonly EtiquetaParaTrocar[]; href: string | null }) {
+  const [todas, setTodas] = useState(false);
+  const visiveis = todas ? etiquetas : etiquetas.slice(0, ETIQUETAS_A_VISTA);
+  return (
+    <section aria-labelledby="etiquetas-para-trocar" className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0">
+          <h2 id="etiquetas-para-trocar" className="text-sm font-bold text-foreground">
+            Etiquetas para trocar
+          </h2>
+          <p className="text-xs text-muted-foreground">{textoDasAbertas(etiquetas.length)}</p>
+        </div>
+        {href ? (
+          <Button asChild variant="outline" size="sm">
+            <Link href={href}>
+              <Printer className="size-4" aria-hidden="true" />
+              Imprimir
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+      <ul>
+        {visiveis.map((etiqueta) => (
+          <li key={etiqueta.code} className="border-t border-border/60 px-4 py-2.5">
+            <p className="font-mono text-sm font-bold text-foreground">{etiqueta.code}</p>
+            <p className="text-xs text-muted-foreground">{textoDaEtiqueta(etiqueta)}</p>
+          </li>
+        ))}
+      </ul>
+      {!todas && etiquetas.length > ETIQUETAS_A_VISTA ? (
+        <div className="border-t border-border/60 px-4 py-2">
+          <Button type="button" variant="link" className="h-auto px-0" onClick={() => setTodas(true)}>
+            Ver as {etiquetas.length} caixas
+          </Button>
+        </div>
+      ) : null}
+    </section>
   );
 }
 

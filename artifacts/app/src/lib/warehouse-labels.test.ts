@@ -14,6 +14,7 @@ import {
   paginate,
   parseLabelsQuery,
   positionLabel,
+  saldosParaRegistrar,
   sheetMargins,
 } from "./warehouse-labels";
 
@@ -339,6 +340,14 @@ describe("etiqueta da caixa aberta (separação com caixas, parte 3)", () => {
     const [label] = boxLabels(aberta, []);
     expect(label.lines).toEqual([]);
     expect(label.units).toBe(57);
+  });
+
+  it("a impressão registra o saldo só das caixas abertas da folha, de qualquer origem", () => {
+    const aberta = warehouseBoxFromRecord({ ...guardada, taken_lines: [{ sku_code: "BTG-000084", qty: 20 }], taken_units: 20, balance_at: "2026-11-12T17:40:00.000Z" });
+    const recebidaAberta = warehouseBoxFromRecord({ ...guardada, code: "CX-000064", origin: { kind: "receipt", receipt_id: "inb_1" }, taken_units: 3, balance_at: "2026-11-12T10:00:00.000Z" });
+    const intacta = warehouseBoxFromRecord({ ...guardada, code: "CX-000030" });
+    const vazia = warehouseBoxFromRecord({ ...guardada, code: "CX-000027", status: "emptied", taken_units: 77 });
+    expect(saldosParaRegistrar([aberta, recebidaAberta, intacta, vazia])).toEqual(["CX-000028", "CX-000064"]);
   });
 
   it("o saldo ignora a saída de um produto que a caixa não tem e não fica negativo", () => {
