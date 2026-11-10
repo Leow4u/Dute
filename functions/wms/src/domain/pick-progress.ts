@@ -10,7 +10,7 @@ import {
   createEvent,
   type OperationalActor,
 } from "./operations.js";
-import { caixasComOItem, lerCaixasDaPrateleira, retiradoDaCaixa } from "./box-balance.js";
+import { BOX_STATUS_EMPTIED, BOX_STATUS_STORED, caixasComOItem, lerCaixasDaPrateleira, retiradoDaCaixa } from "./box-balance.js";
 import { conferirCaixasInformadas, retiradoCom, sugerirCaixas, unidadesDaCaixa, type CaixaDaLinha, type LinhaDaCaixa } from "./saldo-da-caixa.js";
 import { DETALHE_DA_DIFERENCA_MAXIMO, MOTIVOS_DA_DIFERENCA, concluiComDiferenca, type MotivoDaDiferenca } from "./short-pick.js";
 
@@ -43,6 +43,12 @@ import { DETALHE_DA_DIFERENCA_MAXIMO, MOTIVOS_DA_DIFERENCA, concluiComDiferenca,
  * quais saiu (`boxes`), e a soma tem de fechar com a linha. A linha guarda de
  * onde saiu (`separated_boxes`), e "Desfazer" devolve às mesmas caixas. O que
  * as caixas da prateleira não têm sai sem caixa, como antes.
+ *
+ * A caixa vazia (parte 3c): a caixa de que a separação tirou tudo fica
+ * `emptied`, com a data, o pedido e se saiu inteira; o Mapa, "Posições
+ * ocupadas" e o encaixe da prateleira só olham a guardada. Desfazer a linha
+ * devolve a caixa à prateleira. Cada mudança grava `warehouse.box_emptied`
+ * ou `warehouse.box_reopened`.
  */
 
 export const PICK_TASKS_COLLECTION = "pick_tasks";
@@ -363,7 +369,7 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
     let semCaixa = tira;
     let mudaramAsCaixas = false;
     const retirados = new Map<string, LinhaDaCaixa[]>();
-    const tocadas = new Map<string, DocumentReference<DocumentData>>();
+    const tocadas = new Map<string, { ref: DocumentReference<DocumentData>; data: Row }>();
     if ((mudouALinha || informou) && naPrateleira && (tira > 0 || anteriores.length || informadas?.length)) {
       const prateleira = await lerCaixasDaPrateleira(transaction, db, { customerCode, locationId, skuCode });
       const tirar = (codigo: string, qty: number) => {
@@ -371,7 +377,7 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
         // A caixa que saiu do cadastro não tem mais o que devolver.
         if (!box) return;
         retirados.set(codigo, retiradoCom(retirados.get(codigo) ?? retiradoDaCaixa(box), skuCode, qty));
-        tocadas.set(codigo, box.ref);
+        tocadas.set(codigo, { ref: box.ref, data: box.data });
       };
       for (const anterior of anteriores) tirar(anterior.box_code, -anterior.qty);
       if (tira > 0 || informadas?.length) {
@@ -390,15 +396,64 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
 
     const events: unknown[] = [];
     if (changed) {
+      const pedidoDaCaixa = clean({ order_id: text(task.order_id) || text(line.order_id) || undefined, order_number: text(task.order_number) || text(line.order_number) || undefined });
       // O saldo das caixas: o retirado de cada uma como ficou. A caixa a que tudo voltou fica intacta de novo.
-      for (const [codigo, ref] of tocadas) {
+      for (const [codigo, box] of tocadas) {
         const retirado = retirados.get(codigo) ?? [];
-        transaction.update(
-          ref,
-          retirado.length
-            ? { taken_lines: retirado, taken_units: unidadesDaCaixa(retirado), balance_at: occurredAt, updated_at: FieldValue.serverTimestamp() }
-            : { taken_lines: FieldValue.delete(), taken_units: FieldValue.delete(), balance_at: FieldValue.delete(), updated_at: FieldValue.serverTimestamp() },
-        );
+        const tirou = unidadesDaCaixa(retirado);
+        const entrou = quantity(box.data.unit_count);
+        const estavaVazia = text(box.data.status) === BOX_STATUS_EMPTIED;
+        const vazia = entrou > 0 && tirou >= entrou;
+        const inteira = caixas.some((caixa) => caixa.box_code === codigo && caixa.inteira);
+        const update: Row = retirado.length
+          ? { taken_lines: retirado, taken_units: tirou, balance_at: occurredAt, updated_at: FieldValue.serverTimestamp() }
+          : { taken_lines: FieldValue.delete(), taken_units: FieldValue.delete(), balance_at: FieldValue.delete(), updated_at: FieldValue.serverTimestamp() };
+        if (vazia && !estavaVazia) {
+          // A caixa vazia sai da prateleira: fica o registro de quando, em qual pedido e se saiu inteira.
+          Object.assign(update, {
+            status: BOX_STATUS_EMPTIED,
+            emptied_at: occurredAt,
+            emptied_by: actorFields(actor),
+            emptied_whole: inteira,
+            emptied_pick_line_id: input.pick_line_id,
+            emptied_order_id: pedidoDaCaixa.order_id ?? FieldValue.delete(),
+            emptied_order_number: pedidoDaCaixa.order_number ?? FieldValue.delete(),
+          });
+        } else if (!vazia && estavaVazia) {
+          Object.assign(update, {
+            status: BOX_STATUS_STORED,
+            emptied_at: FieldValue.delete(),
+            emptied_by: FieldValue.delete(),
+            emptied_whole: FieldValue.delete(),
+            emptied_pick_line_id: FieldValue.delete(),
+            emptied_order_id: FieldValue.delete(),
+            emptied_order_number: FieldValue.delete(),
+          });
+        }
+        transaction.update(box.ref, update);
+        if (vazia !== estavaVazia) {
+          events.push(
+            createEvent(
+              transaction,
+              db,
+              `evt_${digest({ operationId: opRef.id, suffix: vazia ? "box_emptied" : "box_reopened", box: codigo })}`,
+              {
+                type: vazia ? "warehouse.box_emptied" : "warehouse.box_reopened",
+                title: vazia ? (inteira ? `Caixa ${codigo} saiu inteira` : `Caixa ${codigo} vazia`) : `Caixa ${codigo} de volta à prateleira`,
+                description: [codigo, locationId, pedidoDaCaixa.order_number ? `pedido ${pedidoDaCaixa.order_number}` : ""].filter(Boolean).join(" · "),
+                severity: "info",
+                inbox: false,
+                entity_type: "warehouse_boxes",
+                entity_id: codigo,
+                customer_code: customerCode,
+                occurred_at: occurredAt,
+                payload: clean({ box_code: codigo, location_id: locationId, ...pedidoDaCaixa, pick_line_id: input.pick_line_id, whole: vazia ? inteira : undefined }),
+                source: EVENT_SOURCE,
+              },
+              actor,
+            ),
+          );
+        }
       }
       transaction.update(
         lineRef,

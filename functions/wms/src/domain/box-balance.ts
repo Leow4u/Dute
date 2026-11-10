@@ -19,7 +19,12 @@ import { WAREHOUSE_BOXES_COLLECTION } from "./warehouse-boxes.js";
 const OPENING_LINES_COLLECTION = "opening_inventory_lines";
 
 /** A caixa guardada na prateleira: a que ainda está fechando o destino não conta. */
-const STATUS_GUARDADA = "stored";
+export const BOX_STATUS_STORED = "stored";
+/**
+ * A caixa vazia (parte 3c): a separação tirou tudo. Sai do Mapa, de
+ * "Posições ocupadas" e do encaixe da prateleira, que só olham a guardada.
+ */
+export const BOX_STATUS_EMPTIED = "emptied";
 
 function text(value: unknown): string {
   if (typeof value === "string") return value.trim();
@@ -94,12 +99,14 @@ export async function lerCaixasDaPrateleira(
 /**
  * As caixas guardadas que têm o item agora. `retirados` é o retirado de cada
  * caixa como a transação o deixou até aqui (a linha que muda devolve antes o
- * que tinha tirado); sem entrada nele, vale o gravado na caixa.
+ * que tinha tirado); sem entrada nele, vale o gravado na caixa. A caixa vazia
+ * a que a transação devolveu algo volta a contar.
  */
 export function caixasComOItem(prateleira: CaixasDaPrateleira, retirados: ReadonlyMap<string, LinhaDaCaixa[]>, skuCode: string): CaixaComOItem[] {
   const caixas: CaixaComOItem[] = [];
   for (const [code, box] of prateleira.porCodigo) {
-    if (text(box.data.status) !== STATUS_GUARDADA) continue;
+    const status = text(box.data.status);
+    if (status !== BOX_STATUS_STORED && !(status === BOX_STATUS_EMPTIED && retirados.has(code))) continue;
     const entrada = prateleira.entradaDoItem.get(code) ?? 0;
     if (!entrada) continue;
     const retirado = retirados.get(code) ?? retiradoDaCaixa(box);
