@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { collection, query, where } from "firebase/firestore";
+import { collection, doc, query, where } from "firebase/firestore";
 import {
   AlertTriangle,
   Check,
@@ -69,7 +69,7 @@ import { useAppUser } from "@/lib/auth";
 import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { chamarOperacao, novaChave } from "@/lib/operacao/api";
 import { hojeIso } from "@/lib/operacao/fila";
-import { useLeitura } from "@/lib/operacao/leitura";
+import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import {
   buildOrderQueue,
   chaveDaPrincipal,
@@ -656,6 +656,7 @@ export default function Pedidos() {
                 icon={Package}
                 tone="pick"
                 paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
+                lerParaQuando={!decider}
                 defaultOpen
                 listaHref={hrefDaListaDeSeparacao(order.key)}
                 onTreat={operador ? () => setTreating(order) : undefined}
@@ -694,6 +695,7 @@ export default function Pedidos() {
                 icon={Truck}
                 tone="deliver"
                 paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
+                lerParaQuando={!decider}
                 onTreat={operador ? () => setTreating(order) : undefined}
                 {...(order.stage === "enviar" ? daEntrega(order) : {})}
                 menu={menuDo(order)}
@@ -959,6 +961,21 @@ export default function Pedidos() {
   );
 }
 
+/**
+ * O "Para quando" da linha do pedido. A coordenação já tem o da lista das
+ * solicitações; quem só separa não lê essa lista, e o prazo vem da
+ * solicitação que originou o pedido, lida pelo id (docs/mockups/WmsSepararLista.dc.html).
+ */
+function useParaQuandoDoPedido(order: Pick<OrderGroup, "requestId">, daFila: string | undefined, ler: boolean): string | undefined {
+  const requestId = !daFila && ler ? order.requestId : undefined;
+  const solicitacao = useDocumento(
+    requestId ? `customer_requests/${requestId}:para-quando` : null,
+    (db) => doc(db, "customer_requests", requestId ?? "-"),
+    (_id, data) => ({ dueAt: data.due_at as unknown }),
+  );
+  return daFila ?? (solicitacao.item ? linhaDoParaQuando(solicitacao.item.dueAt) : undefined);
+}
+
 /** A linha do pedido em separação ou entrega. Exportada para o teste (pedidos.lista.test.tsx). */
 export function OrderRow({
   order,
@@ -968,7 +985,8 @@ export function OrderRow({
   secondary,
   menu,
   detail,
-  paraQuando,
+  paraQuando: paraQuandoDaFila,
+  lerParaQuando = false,
   defaultOpen = false,
   onTreat,
   listaHref,
@@ -985,6 +1003,8 @@ export function OrderRow({
   detail?: ReactNode;
   /** "Para quando Qui 05/11 09:00", a data que o cliente pediu, antes da entrega. */
   paraQuando?: string;
+  /** Quem não lê a lista das solicitações (o armazém) lê o prazo da solicitação do pedido, pelo id. */
+  lerParaQuando?: boolean;
   defaultOpen?: boolean;
   onTreat?: () => void;
   /** A lista de separação do pedido para imprimir (separação com caixas, parte 1b). */
@@ -1000,6 +1020,7 @@ export function OrderRow({
   const items = orderItems(order);
   const blocked = Boolean(order.blockedReason || order.exceptionCount);
   const meta = orderMeta(order);
+  const paraQuando = useParaQuandoDoPedido(order, paraQuandoDaFila, lerParaQuando);
   // "Imprimir lista" (docs/mockups/WmsSepararLista.dc.html): no computador, um botão antes das ações do pedido.
   const imprimir =
     listaHref && items.length ? (

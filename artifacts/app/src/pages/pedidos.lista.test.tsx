@@ -2,13 +2,28 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { JSDOM } from "jsdom";
 import { Package, Truck } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Router } from "wouter";
 
 import { hrefDaListaDeSeparacao } from "@/lib/warehouse-ops/lista-de-separacao";
 import type { OrderGroup } from "@/lib/warehouse-ops/orders";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
+
+// As solicitações que o Firestore devolveria, pela chave da leitura; sem entrada, ainda carregando.
+const { solicitacoes, chavesLidas } = vi.hoisted(() => ({
+  solicitacoes: {} as Record<string, { due_at?: unknown } | null>,
+  chavesLidas: [] as Array<string | null>,
+}));
+
+vi.mock("@/lib/operacao/leitura", () => ({
+  useLeitura: () => ({ itens: null, erro: false }),
+  useDocumento: (chave: string | null, _referencia: unknown, mapear: (id: string, data: Record<string, unknown>) => unknown) => {
+    chavesLidas.push(chave);
+    const dados = chave ? solicitacoes[chave] : undefined;
+    return { item: dados === undefined ? undefined : dados === null ? null : mapear("req_1", dados), erro: false };
+  },
+}));
 
 import { OrderRow } from "./pedidos";
 
@@ -54,6 +69,50 @@ function linha(props: Partial<Parameters<typeof OrderRow>[0]> = {}) {
     </Router>,
   );
 }
+
+beforeEach(() => {
+  chavesLidas.length = 0;
+  for (const chave of Object.keys(solicitacoes)) delete solicitacoes[chave];
+});
+
+/**
+ * No mockup aprovado a fila de quem separa mostra o "Para quando"
+ * (docs/mockups/WmsSepararLista.dc.html). Antes, só a coordenação via: o
+ * prazo vinha da lista das solicitações, que o armazém não lê.
+ */
+describe("o Para quando na fila de quem separa", () => {
+  const CHAVE = "customer_requests/req_1:para-quando";
+
+  it("quem não lê as solicitações vê o prazo da solicitação do pedido, lida pelo id", () => {
+    solicitacoes[CHAVE] = { due_at: "2026-11-16T14:36:00.000Z" };
+    const textos = textosDaTela(linha({ lerParaQuando: true }));
+    expect(textos.slice(0, 3)).toEqual(["PED-0001", "1 item · 20 un.", "Para quando Seg 16/11 11:36"]);
+    expect(chavesLidas).toEqual([CHAVE]);
+  });
+
+  it("enquanto a solicitação não chega, sem prazo ou sem a solicitação, a linha fica sem o Para quando", () => {
+    expect(textosDaTela(linha({ lerParaQuando: true })).join(" ")).not.toContain("Para quando");
+    solicitacoes[CHAVE] = {};
+    expect(textosDaTela(linha({ lerParaQuando: true })).join(" ")).not.toContain("Para quando");
+    solicitacoes[CHAVE] = null;
+    expect(textosDaTela(linha({ lerParaQuando: true })).join(" ")).not.toContain("Para quando");
+  });
+
+  it("a coordenação usa o da lista das solicitações, sem ler de novo; sem pedir, ninguém lê", () => {
+    solicitacoes[CHAVE] = { due_at: "2026-11-16T14:36:00.000Z" };
+    const textos = textosDaTela(linha({ paraQuando: "Para quando Qui 05/11 09:00", lerParaQuando: true }));
+    expect(textos).toContain("Para quando Qui 05/11 09:00");
+    expect(textos.join(" ")).not.toContain("16/11");
+    expect(textosDaTela(linha()).join(" ")).not.toContain("Para quando");
+    expect(chavesLidas).toEqual([null, null]);
+  });
+
+  it("o pedido sem solicitação não lê nada", () => {
+    const semSolicitacao: OrderGroup = { ...PEDIDO, requestId: undefined };
+    expect(textosDaTela(linha({ order: semSolicitacao, lerParaQuando: true })).join(" ")).not.toContain("Para quando");
+    expect(chavesLidas).toEqual([null]);
+  });
+});
 
 describe("Imprimir lista na fila de Pedidos", () => {
   const href = hrefDaListaDeSeparacao(PEDIDO.key);
