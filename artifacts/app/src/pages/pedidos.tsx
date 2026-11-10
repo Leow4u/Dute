@@ -4,6 +4,7 @@ import { collection, doc, query, where } from "firebase/firestore";
 import {
   AlertTriangle,
   Check,
+  ChevronRight,
   ClipboardCheck,
   MoreHorizontal,
   Package,
@@ -72,9 +73,13 @@ import {
   paraQuandoDoPedido,
 } from "@/lib/order-queue";
 import { useItemPhotos } from "@/lib/use-item-photos";
+import { labelsUrl } from "@/lib/warehouse-labels";
+import { etiquetasParaTrocar, textoDeEtiquetasParaTrocar } from "@/lib/warehouse-ops/caixas-da-separacao";
 import { hrefDaListaDeSeparacao, resumoDoGrupo } from "@/lib/warehouse-ops/lista-de-separacao";
+import { hrefDoRomaneio } from "@/lib/warehouse-ops/romaneio";
 import { hrefDaBancada, seloDaSeparacao, separacaoComecou } from "@/lib/warehouse-ops/separacao";
-import { useListaDeSeparacao } from "@/lib/warehouse-ops/use-lista-de-separacao";
+import { useCaixasDoCliente, useListaDeSeparacao } from "@/lib/warehouse-ops/use-lista-de-separacao";
+import { textoDeVolumes } from "@/lib/warehouse-ops/volumes-do-pedido";
 import { canDecideRequests, canOperateWarehouse, humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { erroDaResposta } from "@/lib/erro-da-resposta";
@@ -145,18 +150,29 @@ function orderItems(order: OrderGroup) {
   return order.pick?.items ?? order.pack?.items ?? order.ship?.items ?? [];
 }
 
-/** "3 itens · 120 un. · lacre L-0098": a linha do pedido e o diálogo de cancelar. */
-function orderMeta(order: OrderGroup) {
+/** "116 itens · 3.335 un. · 42 volumes · lacre 88231": a linha do pedido e o diálogo de cancelar. */
+export function orderMeta(order: OrderGroup) {
   const items = orderItems(order);
   const units = orderUnits(order);
-  const seal = order.pack?.seal_code ?? order.ship?.seal_code;
+  const seal = order.ship?.seal_code ?? order.pack?.seal_code;
+  const volumes = Number(order.ship?.package_count ?? order.pack?.package_count ?? 0) || 0;
   return [
     items.length ? `${items.length} ${items.length === 1 ? "item" : "itens"}` : null,
     units ? `${numberFormatter.format(units)} un.` : null,
+    volumes ? textoDeVolumes(volumes) : null,
     seal ? `lacre ${seal}` : null,
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+/** Os volumes do pedido já separado (separação com caixas, parte 4d): onde vê-los e de onde saem as etiquetas e o romaneio. */
+export type VolumesDoPedidoNaFila = { verHref: string; etiquetasHref: string; romaneioHref: string };
+
+export function volumesDoPedidoNaFila(order: OrderGroup): VolumesDoPedidoNaFila | undefined {
+  if (!order.ship) return undefined;
+  const pedido = order.orderId ?? order.key;
+  return { verHref: hrefDaBancada(order.key), etiquetasHref: labelsUrl({ order: pedido, volumes: "all" }), romaneioHref: hrefDoRomaneio(pedido) };
 }
 
 type DialogState =
@@ -617,6 +633,7 @@ export default function Pedidos() {
                 lerParaQuando={!decider}
                 onTreat={operador ? () => setTreating(order) : undefined}
                 {...(order.stage === "enviar" ? daEntrega(order) : {})}
+                volumes={volumesDoPedidoNaFila(order)}
                 menu={menuDo(order)}
                 action={
                   operador ? (
@@ -872,6 +889,7 @@ export function OrderRow({
   defaultOpen = false,
   onTreat,
   listaHref,
+  volumes,
 }: {
   order: OrderGroup;
   icon: LucideIcon;
@@ -891,6 +909,12 @@ export function OrderRow({
   onTreat?: () => void;
   /** A lista de separação do pedido para imprimir (separação com caixas, parte 1b). */
   listaHref?: string;
+  /**
+   * O pedido já separado (docs/mockups/WmsSepararParaEntregar.dc.html): "Ver
+   * volumes" no lugar de "Ver itens", e "Etiquetas dos volumes" e "Romaneio"
+   * antes das ações. No celular, os dois ficam atrás de "Ver volumes".
+   */
+  volumes?: VolumesDoPedidoNaFila;
 }) {
   const acoes = action || secondary ? (
     <>
@@ -946,30 +970,49 @@ export function OrderRow({
           ) : undefined
         }
         detail={paraQuando && detail ? <>{paraQuando} · {detail}</> : paraQuando ?? detail}
-        onToggle={items.length ? () => setOpen((value) => !value) : undefined}
+        // O pedido já separado mostra os volumes, e não os itens.
+        onToggle={items.length && !volumes ? () => setOpen((value) => !value) : undefined}
         open={open}
         // No celular os botões vêm depois dos itens: o atalho fica ao lado de "Esconder itens"
         // (docs/mockups/WmsSepararListaCelular.dc.html).
         aoLadoDoToggle={
-          listaHref && items.length ? (
+          volumes ? (
+            <Link href={volumes.verHref} className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+              <ChevronRight className="size-3.5" aria-hidden="true" />
+              Ver volumes
+            </Link>
+          ) : listaHref && items.length ? (
             <Link href={listaHref} className="text-xs font-medium text-foreground underline underline-offset-2 sm:hidden">
               Imprimir lista
             </Link>
           ) : undefined
         }
         actions={
-          imprimir || acoes || menu ? (
+          imprimir || volumes || acoes || menu ? (
             <>
               {imprimir}
+              {volumes ? (
+                <>
+                  <Button asChild variant="outline">
+                    <Link href={volumes.etiquetasHref}>Etiquetas dos volumes</Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link href={volumes.romaneioHref}>
+                      <Printer className="size-4" aria-hidden="true" />
+                      Romaneio
+                    </Link>
+                  </Button>
+                </>
+              ) : null}
               {acoes}
               {menu}
             </>
           ) : null
         }
-        actionsClassName="hidden sm:flex"
+        actionsClassName={volumes ? "hidden sm:flex sm:flex-wrap sm:justify-end" : "hidden sm:flex"}
       />
       {/* A caixa só aparece enquanto o pedido está para separar: depois, o item já saiu dela. */}
-      {open && items.length ? <ItemList items={items} cliente={order.stage === "separar" ? order.pick?.customer_code : undefined} /> : null}
+      {open && items.length && !volumes ? <ItemList items={items} cliente={order.stage === "separar" ? order.pick?.customer_code : undefined} /> : null}
       {/* No celular os botões vêm depois da lista do que separar. */}
       {acoes || menu ? (
         <div className="flex gap-2 px-4 pb-4 pt-3 sm:hidden">
@@ -977,7 +1020,35 @@ export function OrderRow({
           {menu}
         </div>
       ) : null}
+      {/* As caixas que o pedido abriu e que ainda estão com a etiqueta velha: a última linha do pedido. */}
+      {volumes ? <EtiquetasDeCaixaDoPedido items={items} cliente={order.pick?.customer_code ?? order.ship?.customer_code} /> : null}
     </div>
+  );
+}
+
+/**
+ * "5 etiquetas de caixa para trocar" (docs/mockups/WmsSepararParaEntregar
+ * .dc.html): as caixas que o pedido abriu e cuja etiqueta não é a do saldo de
+ * agora, com "Imprimir". Sem caixa para trocar, nada.
+ */
+function EtiquetasDeCaixaDoPedido({ items, cliente }: { items: NonNullable<WarehouseTask["items"]>; cliente?: string | null }) {
+  // Só lê as caixas do cliente quando alguma linha do pedido saiu de caixa.
+  const saiuDeCaixa = items.some((item) => item.separated_boxes?.length);
+  const caixas = useCaixasDoCliente(saiuDeCaixa ? cliente : null);
+  const paraTrocar = useMemo(() => (caixas.data ? etiquetasParaTrocar(items, caixas.data) : []), [items, caixas.data]);
+  return <AvisoDeEtiquetasDeCaixa quantas={paraTrocar.length} href={paraTrocar.length ? labelsUrl({ boxes: paraTrocar.map((caixa) => caixa.code) }) : null} />;
+}
+
+/** Exportado para o teste (pedidos.lista.test.tsx). */
+export function AvisoDeEtiquetasDeCaixa({ quantas, href }: { quantas: number; href: string | null }) {
+  if (!quantas || !href) return null;
+  return (
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-warning-soft-border bg-warning-soft px-4 py-2.5 text-sm font-semibold text-warning-soft-foreground md:px-5">
+      {textoDeEtiquetasParaTrocar(quantas)}
+      <Link href={href} className="font-bold underline underline-offset-2">
+        Imprimir
+      </Link>
+    </p>
   );
 }
 

@@ -7,6 +7,7 @@ import {
   caixasDoPedido,
   caixasGravadas,
   caixasParaEnviar,
+  caixasVaziasDoPedido,
   entradaDasCaixas,
   etiquetasParaTrocar,
   linhaDeEntrada,
@@ -17,6 +18,8 @@ import {
   textoDaCandidata,
   textoDaEtiqueta,
   textoDasAbertas,
+  textoDasVazias,
+  textoDeEtiquetasParaTrocar,
 } from "./caixas-da-separacao";
 import type { WarehouseTaskItem } from "./model";
 
@@ -187,5 +190,23 @@ describe("Etiquetas para trocar e as caixas do pedido", () => {
   it("conta as caixas do pedido: a que continua guardada é aberta; das que saíram, a que saiu toda é inteira e a outra, vazia", () => {
     expect(caixasDoPedido(itens, guardadas)).toEqual({ inteiras: 1, abertas: 2, vazias: 1 });
     expect(caixasDoPedido([linha()], guardadas)).toEqual({ inteiras: 0, abertas: 0, vazias: 0 });
+  });
+
+  it("as caixas vazias do pedido: as que ele esvaziou sem levar inteiras, com a prateleira de onde saíram (parte 4d)", () => {
+    // A CX-000030 saiu da prateleira esvaziada pelo pedido; a CX-000029 saiu inteira; as outras continuam guardadas.
+    expect(caixasVaziasDoPedido(itens, guardadas)).toEqual([{ code: "CX-000030", posicao: "A-05" }]);
+    expect(caixasVaziasDoPedido([linha()], guardadas)).toEqual([]);
+    // Por prateleira e código.
+    const duas = [
+      linha({ id: "pli_5", location: "B-09", separated_at: "x", separated_boxes: [{ box_code: "CX-000190", qty: 6, emptied: true }] }),
+      linha({ id: "pli_6", location: "A-05", separated_at: "x", separated_boxes: [{ box_code: "CX-000031", qty: 3, emptied: true }, { box_code: "CX-000030", qty: 2, emptied: true }] }),
+    ];
+    expect(caixasVaziasDoPedido(duas, [])).toEqual([
+      { code: "CX-000030", posicao: "A-05" },
+      { code: "CX-000031", posicao: "A-05" },
+      { code: "CX-000190", posicao: "B-09" },
+    ]);
+    expect([textoDasVazias(4), textoDasVazias(1)]).toEqual(["4 encerradas", "1 encerrada"]);
+    expect([textoDeEtiquetasParaTrocar(5), textoDeEtiquetasParaTrocar(1)]).toEqual(["5 etiquetas de caixa para trocar", "1 etiqueta de caixa para trocar"]);
   });
 });

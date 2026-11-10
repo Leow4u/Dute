@@ -243,7 +243,7 @@ export function PedidosSepararView({
             <p className="rounded-lg border border-warning-soft-border bg-warning-soft px-4 py-2.5 text-sm font-semibold text-warning-soft-foreground">{diferenca}</p>
           ) : null}
 
-          <div className={cn(comLateral && "grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start")}>
+          <div className={cn(comLateral && "grid gap-5 lg:grid-cols-[minmax(0,1fr)_372px] lg:items-start")}>
           <div className="overflow-hidden rounded-lg border border-border bg-card">
             {grupos.map((grupo) => {
               const nome = grupo.posicao || "sem endereço";

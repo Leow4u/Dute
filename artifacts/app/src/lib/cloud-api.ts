@@ -1523,6 +1523,9 @@ function laneTask(input: {
   box_lines?: AnyRecord[];
   /** Quando a primeira linha do pedido foi separada (separação com caixas, parte 2). */
   separation_started_at?: unknown;
+  /** O lacre do pedido e quantos volumes ele tem (separação com caixas, parte 4d). */
+  seal_code?: unknown;
+  package_count?: unknown;
 }) {
   return {
     task_uid: `${input.type}:${input.id}`,
@@ -1568,6 +1571,8 @@ function laneTask(input: {
     receipt_id: input.receipt_id,
     box_lines: input.box_lines,
     separation_started_at: input.separation_started_at === undefined ? undefined : toIso(input.separation_started_at) || undefined,
+    seal_code: String(input.seal_code ?? "").trim() || undefined,
+    package_count: Number(input.package_count ?? 0) || undefined,
   };
 }
 
@@ -2085,6 +2090,8 @@ async function getWarehouseOps() {
             String(task.order_id ?? ""),
           ),
           order_id: task.order_id,
+          seal_code: task.seal_code,
+          package_count: task.package_count,
         }),
       ),
     },
@@ -2110,6 +2117,8 @@ async function getWarehouseOps() {
             String(task.order_id ?? ""),
           ),
           order_id: task.order_id,
+          seal_code: task.seal_code,
+          package_count: task.package_count,
         }),
       ),
     },
@@ -2186,6 +2195,9 @@ async function getWarehouseOps() {
           order_id: task.order_id,
           // "em separação desde 12/11" (separação com caixas, parte 2).
           separation_started_at: task.separation_started_at,
+          // "42 volumes · lacre 88231" em Para entregar (separação com caixas, parte 4d).
+          seal_code: task.seal_code,
+          package_count: task.package_count,
           // A chegada por caixa e a guarda da caixa (recebimento com caixas, parte 5).
           conference_mode: task.conference_mode,
           receipt_number: task.receipt_number,

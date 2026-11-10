@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { collection, doc, query, where } from "firebase/firestore";
-import { useLocation, useSearch } from "wouter";
+import { useSearch } from "wouter";
 
 import type { CaixaDaLinha } from "@workspace/dominio";
 
@@ -22,6 +22,7 @@ import {
   caixasDoPedido,
   caixasGravadas,
   caixasParaEnviar,
+  caixasVaziasDoPedido,
   entradaDasCaixas,
   etiquetasParaTrocar,
   linhaDeEntrada,
@@ -31,11 +32,22 @@ import {
 import { hrefDaListaDeSeparacao, pedidoDaBusca, resumoDoGrupo, type LinhaDaLista } from "@/lib/warehouse-ops/lista-de-separacao";
 import { fetchJson, type WarehouseOpsResponse, type WarehouseTaskItem } from "@/lib/warehouse-ops/model";
 import { groupWarehouseOrders } from "@/lib/warehouse-ops/orders";
+import { hrefDoRomaneio } from "@/lib/warehouse-ops/romaneio";
 import { estadoDaLinha, idDaTarefaDeSeparacao, itemDaLinhaDeSeparacao, progressoDoPedido, separacaoComecou } from "@/lib/warehouse-ops/separacao";
 import { useLeituraDaLista } from "@/lib/warehouse-ops/use-lista-de-separacao";
-import { avisoDosVolumes, nomeDoVolume, volumesAoConcluir, volumesDaSeparacao, volumesDaTarefa, type VolumeDoPedido } from "@/lib/warehouse-ops/volumes-do-pedido";
+import { useVolumesDoPedido } from "@/lib/warehouse-ops/use-volumes-do-pedido";
+import {
+  avisoDosVolumes,
+  nomeDoVolume,
+  textoDeVolumes,
+  volumesAoConcluir,
+  volumesDaSeparacao,
+  volumesDaTarefa,
+  type VolumeDoPedido,
+} from "@/lib/warehouse-ops/volumes-do-pedido";
 import { concluirSeparacao, desfazerLinha, fecharVolume, separarLinha, separarMenos } from "@/lib/wms/separacao";
 
+import { PedidoSeparadoView } from "./pedido-separado-view";
 import { PedidosSepararView, type EstadoDaBancada } from "./pedidos-separar-view";
 
 const SEM_ITENS: WarehouseTaskItem[] = [];
@@ -61,10 +73,13 @@ type Acao =
  * Os volumes (parte 4) moram na tarefa, ao vivo: a linha separada entra no
  * volume aberto, "Fechar volume" fecha com o peso, e "Levar a caixa" manda
  * as caixas que a bancada mostrou, para a que sai inteira virar o volume.
+ *
+ * O pedido já separado (parte 4d) abre aqui com os volumes, as etiquetas com
+ * o total e o romaneio: é onde "Confirmar separação" deixa a pessoa, e para
+ * onde "Ver volumes" de Para entregar leva.
  */
 export default function PaginaPedidosSeparar() {
   const chave = pedidoDaBusca(useSearch());
-  const [, navegar] = useLocation();
   const { user } = useAppUser();
   const papel = user?.publicMetadata.role;
   const operador = canOperateWarehouse(papel);
@@ -175,6 +190,12 @@ export default function PaginaPedidosSeparar() {
   const [lacre, setLacre] = useState<string | null>(null);
   // A chave da conclusão vale enquanto o diálogo está aberto: repetir continua de onde parou.
   const chaveDaConclusao = useRef<string | null>(null);
+  // Concluído agora: a tela do pedido separado entra sem esperar a fila ler de novo.
+  const [concluiuAgora, setConcluiuAgora] = useState(false);
+  const separado = Boolean(pedido && pickTaskId && (pedido.stage !== "separar" || concluiuAgora));
+  const pedidoId = pedido?.orderId ?? pedido?.key ?? null;
+  const doPedidoSeparado = useVolumesDoPedido(separado ? pedidoId : null);
+  const caixasVazias = useMemo(() => (separado && caixasAoVivo.itens ? caixasVaziasDoPedido(itens, caixasAoVivo.itens) : []), [separado, itens, caixasAoVivo.itens]);
 
   const erro = (titulo: string) => (falha: Error) => toast({ title: titulo, description: falha.message, variant: "destructive" });
 
@@ -228,8 +249,9 @@ export default function PaginaPedidosSeparar() {
       toast({ title: "Separado. O pedido está pronto para entrega." });
       setLacre(null);
       chaveDaConclusao.current = null;
+      // A pessoa fica no pedido separado: é dali que saem as etiquetas com o total e o romaneio.
+      setConcluiuAgora(true);
       await queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-      navegar("/pedidos");
     },
     onError: (falha: Error) => {
       erro("Não foi possível concluir a separação")(falha);
@@ -246,9 +268,41 @@ export default function PaginaPedidosSeparar() {
         ? "erro"
         : !pedido || !pickTaskId
           ? "nao_encontrado"
-          : pedido.stage !== "separar"
+          : separado
             ? "concluida"
             : "pronto";
+
+  if (estado === "concluida" && pedido && pedidoId) {
+    const volumesDoPedido = doPedidoSeparado.volumes;
+    const lidos = doPedidoSeparado.estado === "pronto";
+    const unidades = lidos ? volumesDoPedido.reduce((soma, volume) => soma + volume.unidades, 0) : progresso.unidadesSeparadas;
+    return (
+      <PedidoSeparadoView
+        numero={pedido.orderNumber}
+        selo={pedido.stage === "entregue" ? "entregue" : "separado"}
+        resumo={[
+          clientes.find((cliente) => cliente.code === codigoDoCliente)?.name || codigoDoCliente,
+          resumoDoGrupo({ itens: progresso.itens, unidades }),
+          lidos && volumesDoPedido.length ? textoDeVolumes(volumesDoPedido.length) : null,
+          doPedidoSeparado.pedido?.lacre ? `lacre ${doPedidoSeparado.pedido.lacre}` : null,
+          paraQuando ? `Para quando ${paraQuando}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+        // O pedido que a fila ainda não leu como separado: a remessa chega em seguida.
+        estado={
+          doPedidoSeparado.estado === "erro" || doPedidoSeparado.estado === "nao_encontrado" ? "erro" : lidos && doPedidoSeparado.pedido?.concluido ? "pronto" : "carregando"
+        }
+        volumes={volumesDoPedido}
+        etiquetasDosVolumesHref={labelsUrl({ order: pedidoId, volumes: "all" })}
+        romaneioHref={hrefDoRomaneio(pedidoId)}
+        etiquetaDoVolumeHref={(volume) => labelsUrl({ order: pedidoId, volumes: [volume.numero] })}
+        etiquetas={etiquetas}
+        etiquetasHref={etiquetas.length ? labelsUrl({ boxes: etiquetas.map((etiqueta) => etiqueta.code) }) : null}
+        vazias={caixasVazias}
+      />
+    );
+  }
 
   return (
     <>

@@ -184,6 +184,20 @@ describe("a tarefa da fila leva o que Pedidos mostra do pedido", () => {
     expect(fila.pick.map((pedido) => [pedido.orderNumber, pedido.orderId])).toEqual([["PED-0002", "ord_1"]]);
     expect(fila.deliver.map((pedido) => [pedido.orderNumber, pedido.orderId])).toEqual([["PED-0001", "ord_2"]]);
   });
+
+  it("a remessa e a embalagem levam o lacre e quantos volumes o pedido tem (parte 4d)", async () => {
+    servir({
+      pack_tasks: [document("pack_ord_2", { id: "pack_ord_2", order_id: "ord_2", order_number: "PED-0001", status: "completed", customer_code: "BTG Pactual", packed_units: 3335, package_count: 42, seal_code: "88231" })],
+      shipments: [document("ship_ord_2", { id: "ship_ord_2", order_id: "ord_2", order_number: "PED-0001", status: "ready_to_dispatch", customer_code: "BTG Pactual", total_units: 3335, package_count: 42, seal_code: " 88231 " })],
+    });
+    const ops = (await (await window.fetch("/api/warehouse/ops")).json()) as WarehouseOpsResponse & { queues: Record<string, { tasks: WarehouseTask[] }> };
+    expect(ops.queues.expedition!.tasks[0]).toMatchObject({ reference: "ship_ord_2", seal_code: "88231", package_count: 42 });
+    expect(ops.queues.packing!.tasks[0]).toMatchObject({ reference: "pack_ord_2", seal_code: "88231", package_count: 42 });
+    // A remessa de antes dos volumes, sem os campos, sai sem eles.
+    servir({ shipments: [document("ship_ord_3", { id: "ship_ord_3", order_id: "ord_3", order_number: "PED-0003", status: "ready_to_dispatch", customer_code: "BTG Pactual" })] });
+    const antiga = (await (await window.fetch("/api/warehouse/ops")).json()).queues.expedition.tasks[0];
+    expect([antiga.seal_code, antiga.package_count]).toEqual([undefined, undefined]);
+  });
 });
 
 describe("a fila leva toda tarefa aberta", () => {

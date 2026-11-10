@@ -25,7 +25,9 @@ vi.mock("@/lib/operacao/leitura", () => ({
   },
 }));
 
-import { OrderRow } from "./pedidos";
+import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
+
+import { AvisoDeEtiquetasDeCaixa, OrderRow, orderMeta, volumesDoPedidoNaFila } from "./pedidos";
 
 /**
  * "Imprimir lista" na fila de Pedidos (separação com caixas, parte 1b;
@@ -229,5 +231,140 @@ describe("Imprimir lista na fila de Pedidos", () => {
 
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(linha({ listaHref: href }))).toEqual([]);
+  });
+});
+
+/**
+ * Para entregar com os volumes (separação com caixas, parte 4d;
+ * docs/mockups/WmsSepararParaEntregar.dc.html): o pedido já separado diz os
+ * volumes e o lacre, e leva "Ver volumes", "Etiquetas dos volumes" e
+ * "Romaneio". Antes, a linha só dizia os itens e as unidades.
+ */
+describe("Para entregar com os volumes", () => {
+  const item = PEDIDO.pick!.items![0];
+  const SEPARADO: OrderGroup = {
+    ...PEDIDO,
+    orderId: "ord_req_1",
+    stage: "enviar",
+    pick: {
+      ...PEDIDO.pick!,
+      status: "completed",
+      items: [
+        { ...item, separated_qty: 20, separated_at: "2026-11-12T13:00:00.000Z", separated_boxes: [{ box_code: "CX-000014", qty: 20 }] },
+        {
+          ...item,
+          id: "pli_ord_req_1_02",
+          line_number: 2,
+          sku_code: "BTG-000124",
+          client_item_code: "A.01.0806.005.G",
+          product_name: "Polo Masculino Piquet Preto G",
+          separated_qty: 20,
+          separated_at: "2026-11-12T13:00:00.000Z",
+          separated_boxes: [
+            { box_code: "CX-000015", qty: 12 },
+            { box_code: "CX-000016", qty: 8, whole: true },
+          ],
+        },
+      ],
+    },
+    pack: { id: "pack_ord_req_1", status: "completed", customer_code: "BTG", seal_code: "88231", package_count: 3 },
+    ship: { id: "ship_ord_req_1", status: "ready_to_dispatch", customer_code: "BTG", seal_code: "88231", package_count: 3 },
+  };
+  const volumes = volumesDoPedidoNaFila(SEPARADO);
+  const entregar = (props: Partial<Parameters<typeof OrderRow>[0]> = {}, cliente = new QueryClient()) =>
+    linha({ order: SEPARADO, icon: Truck, tone: "deliver", volumes, action: <button type="button">Entregue</button>, ...props }, cliente);
+
+  /** As caixas do cliente: a CX-000014 e a CX-000015, abertas com a etiqueta velha; a CX-000016 saiu inteira. */
+  function comCaixas() {
+    const cliente = new QueryClient();
+    const aberta = (code: string, extra: Record<string, unknown> = {}) =>
+      warehouseBoxFromRecord({
+        code,
+        customer_code: "BTG",
+        status: "stored",
+        location_id: "B-02",
+        unit_count: 30,
+        taken_lines: [{ sku_code: "BTG-000125", qty: 20 }],
+        taken_units: 20,
+        balance_at: "2026-11-12T13:00:00.000Z",
+        ...extra,
+      });
+    cliente.setQueryData(
+      ["warehouse-boxes", "BTG", "all-pages"],
+      [
+        aberta("CX-000014"),
+        aberta("CX-000015", { location_id: "B-03" }),
+        warehouseBoxFromRecord({ code: "CX-000016", customer_code: "BTG", status: "emptied", location_id: "B-03", unit_count: 8, taken_units: 8 }),
+        // Aberta por outro pedido: não é deste.
+        aberta("CX-000099"),
+      ],
+    );
+    return cliente;
+  }
+
+  it("a linha diz os itens, as unidades, os volumes e o lacre, com Ver volumes no lugar de Ver itens", () => {
+    expect(textosDaTela(entregar())).toEqual(["PED-0001", "2 itens · 40 un. · 3 volumes · lacre 88231", "Ver volumes", "Etiquetas dos volumes", "Romaneio", "Entregue"]);
+    // Os itens não abrem aqui: o conteúdo está nos volumes.
+    expect(entregar()).not.toContain("Polo Masculino Piquet Preto");
+    expect(orderMeta({ ...SEPARADO, ship: { ...SEPARADO.ship!, package_count: 1 } })).toBe("2 itens · 40 un. · 1 volume · lacre 88231");
+    // O pedido de antes dos volumes, sem a contagem, fica como era.
+    expect(orderMeta({ ...SEPARADO, pack: { id: "pack", status: "completed" }, ship: { id: "ship", status: "ready_to_dispatch" } })).toBe("2 itens · 40 un.");
+  });
+
+  it("Ver volumes abre o pedido separado; as etiquetas saem em lote, e o romaneio, pelo pedido", () => {
+    expect(volumes).toEqual({
+      verHref: "/pedidos/separar?pedido=ord_req_1",
+      etiquetasHref: "/estoque/etiquetas?pedido=ord_req_1&volumes=todos",
+      romaneioHref: "/pedidos/romaneio?pedido=ord_req_1",
+    });
+    const dom = new JSDOM(`<!doctype html><body>${entregar()}</body>`);
+    const links = Object.fromEntries([...dom.window.document.querySelectorAll("a")].map((link) => [link.textContent, link.getAttribute("href")]));
+    expect(links).toEqual({ "Ver volumes": volumes!.verHref, "Etiquetas dos volumes": volumes!.etiquetasHref, Romaneio: volumes!.romaneioHref });
+    dom.window.close();
+    // O pedido que ainda não tem remessa não tem volumes para ver.
+    expect(volumesDoPedidoNaFila(PEDIDO)).toBeUndefined();
+  });
+
+  it("no computador, as etiquetas e o romaneio vêm antes de Entregue; no celular, ficam atrás de Ver volumes", () => {
+    const dom = new JSDOM(`<!doctype html><body>${entregar()}</body>`);
+    const { document } = dom.window;
+    const etiquetas = [...document.querySelectorAll("a")].find((link) => link.textContent === "Etiquetas dos volumes");
+    const acoes = etiquetas?.parentElement;
+    expect(acoes?.className).toMatch(/\bhidden\b.*\bsm:flex\b/);
+    expect([...(acoes?.children ?? [])].map((filho) => filho.textContent)).toEqual(["Etiquetas dos volumes", "Romaneio", "Entregue"]);
+    const noCelular = [...document.querySelectorAll("div")].find((div) => div.className.split(" ").includes("sm:hidden"));
+    expect(noCelular?.textContent).toBe("Entregue");
+    // "Ver volumes" aparece nos dois.
+    expect(document.querySelector("a[href='/pedidos/separar?pedido=ord_req_1']")?.className).not.toContain("sm:hidden");
+    dom.window.close();
+  });
+
+  it("as caixas que o pedido abriu e estão com a etiqueta velha viram o aviso, com Imprimir", () => {
+    const html = entregar({}, comCaixas());
+    const textos = textosDaTela(html);
+    expect(textos.slice(-2)).toEqual(["2 etiquetas de caixa para trocar", "Imprimir"]);
+    expect(html).toContain('href="/estoque/etiquetas?caixas=CX-000014%2CCX-000015"');
+    // Sem a leitura das caixas, ou sem caixa para trocar, a linha fica sem o aviso.
+    expect(textosDaTela(entregar()).join(" ")).not.toContain("para trocar");
+    const semCaixa: OrderGroup = { ...SEPARADO, pick: { ...SEPARADO.pick!, items: SEPARADO.pick!.items!.map(({ separated_boxes: _caixas, ...resto }) => resto) } };
+    expect(textosDaTela(entregar({ order: semCaixa }, comCaixas())).join(" ")).not.toContain("para trocar");
+  });
+
+  it("o aviso diz uma ou várias etiquetas", () => {
+    const aviso = (quantas: number) =>
+      textosDaTela(
+        renderToStaticMarkup(
+          <Router ssrPath="/pedidos">
+            <AvisoDeEtiquetasDeCaixa quantas={quantas} href="/estoque/etiquetas?caixas=CX-000014" />
+          </Router>,
+        ),
+      );
+    expect(aviso(5)).toEqual(["5 etiquetas de caixa para trocar", "Imprimir"]);
+    expect(aviso(1)).toEqual(["1 etiqueta de caixa para trocar", "Imprimir"]);
+    expect(aviso(0)).toEqual([]);
+  });
+
+  it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
+    expect(await violacoesDeAcessibilidade(entregar({}, comCaixas()))).toEqual([]);
   });
 });

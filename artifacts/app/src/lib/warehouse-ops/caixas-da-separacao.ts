@@ -142,14 +142,15 @@ export function caixasParaEnviar(informadas: CaixasInformadas): Array<{ box_code
 /** Uma caixa que o pedido abriu e que está com a etiqueta velha (parte 3d). */
 export type EtiquetaParaTrocar = { code: string; posicao: string; saldo: number };
 
-/** As caixas de onde as linhas do pedido saíram, com a que saiu inteira marcada. */
-function caixasTocadas(itens: readonly WarehouseTaskItem[]): Map<string, { inteira: boolean }> {
-  const tocadas = new Map<string, { inteira: boolean }>();
+/** As caixas de onde as linhas do pedido saíram, com a que saiu inteira marcada e a prateleira de onde saiu. */
+function caixasTocadas(itens: readonly WarehouseTaskItem[]): Map<string, { inteira: boolean; posicao: string }> {
+  const tocadas = new Map<string, { inteira: boolean; posicao: string }>();
   for (const item of itens) {
     for (const caixa of item.separated_boxes ?? []) {
       const codigo = chave(caixa.box_code);
       if (!codigo) continue;
-      tocadas.set(codigo, { inteira: (tocadas.get(codigo)?.inteira ?? false) || caixa.whole === true });
+      const antes = tocadas.get(codigo);
+      tocadas.set(codigo, { inteira: (antes?.inteira ?? false) || caixa.whole === true, posicao: antes?.posicao || String(item.location ?? "").trim() });
     }
   }
   return tocadas;
@@ -176,6 +177,32 @@ export function textoDasAbertas(caixas: number): string {
 /** "A-04 · saldo 10 un." */
 export function textoDaEtiqueta(etiqueta: Pick<EtiquetaParaTrocar, "posicao" | "saldo">): string {
   return [etiqueta.posicao, `saldo ${numero.format(etiqueta.saldo)} un.`].filter(Boolean).join(" · ");
+}
+
+/** "5 etiquetas de caixa para trocar": o aviso do pedido em Para entregar. */
+export function textoDeEtiquetasParaTrocar(caixas: number): string {
+  return `${numero.format(caixas)} ${caixas === 1 ? "etiqueta de caixa para trocar" : "etiquetas de caixa para trocar"}`;
+}
+
+/** Uma caixa que o pedido esvaziou: saiu da prateleira sem ter saído inteira. */
+export type CaixaVazia = { code: string; posicao: string };
+
+/**
+ * "Caixas vazias": as caixas já abertas que as linhas do pedido esvaziaram,
+ * por prateleira e código. A que saiu inteira não entra (ela é a caixa do
+ * volume, ou foi desmontada cheia), nem a que continua guardada.
+ */
+export function caixasVaziasDoPedido(itens: readonly WarehouseTaskItem[], guardadas: readonly WarehouseBox[]): CaixaVazia[] {
+  const naPrateleira = new Set(guardadas.filter((caixa) => caixa.status === "stored").map((caixa) => caixa.code));
+  return [...caixasTocadas(itens)]
+    .filter(([codigo, caixa]) => !caixa.inteira && !naPrateleira.has(codigo))
+    .map(([codigo, caixa]) => ({ code: codigo, posicao: caixa.posicao }))
+    .sort((esquerda, direita) => esquerda.posicao.localeCompare(direita.posicao, "pt-BR", { numeric: true }) || esquerda.code.localeCompare(direita.code, "pt-BR", { numeric: true }));
+}
+
+/** "4 encerradas" */
+export function textoDasVazias(caixas: number): string {
+  return `${numero.format(caixas)} ${caixas === 1 ? "encerrada" : "encerradas"}`;
 }
 
 /** As caixas do pedido, como o diálogo de concluir as conta. */
