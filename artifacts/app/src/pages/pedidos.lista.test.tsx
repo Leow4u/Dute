@@ -60,10 +60,10 @@ const PEDIDO: OrderGroup = {
   },
 };
 
-function linha(props: Partial<Parameters<typeof OrderRow>[0]> = {}) {
+function linha(props: Partial<Parameters<typeof OrderRow>[0]> = {}, cliente = new QueryClient()) {
   return renderToStaticMarkup(
     <Router ssrPath="/pedidos">
-      <QueryClientProvider client={new QueryClient()}>
+      <QueryClientProvider client={cliente}>
         <OrderRow order={PEDIDO} icon={Package} tone="pick" defaultOpen action={<button type="button">Separado</button>} {...props} />
       </QueryClientProvider>
     </Router>,
@@ -111,6 +111,35 @@ describe("o Para quando na fila de quem separa", () => {
     const semSolicitacao: OrderGroup = { ...PEDIDO, requestId: undefined };
     expect(textosDaTela(linha({ order: semSolicitacao, lerParaQuando: true })).join(" ")).not.toContain("Para quando");
     expect(chavesLidas).toEqual([null]);
+  });
+});
+
+/**
+ * A caixa da linha é onde o item está para ser separado (parte 1c). No pedido
+ * já separado ou entregue o item saiu dela: a linha não mostra caixa.
+ */
+describe("a caixa só no pedido para separar", () => {
+  function comCaixas() {
+    const cliente = new QueryClient();
+    cliente.setQueryData(
+      ["warehouse-boxes", "BTG", "all-pages"],
+      [{ code: "CX-000014", customer_code: "BTG", status: "stored", location_id: "B-02", sku_codes: ["BTG-000125"], stored_at: "2026-10-20T10:00:00.000Z" }],
+    );
+    return cliente;
+  }
+
+  it("para separar, a linha mostra a caixa", () => {
+    expect(textosDaTela(linha({}, comCaixas()))).toContain("CX-000014");
+  });
+
+  it("para entregar e entregue, a linha fica sem caixa", () => {
+    const separado: OrderGroup = { ...PEDIDO, stage: "enviar", pack: { id: "pack_ord_req_1", status: "completed", customer_code: "BTG" }, ship: { id: "ship_ord_req_1", status: "ready_to_dispatch", customer_code: "BTG" } };
+    expect(textosDaTela(linha({ order: separado, icon: Truck, tone: "deliver" }, comCaixas())).join(" ")).not.toContain("CX-");
+    const entregue: OrderGroup = { ...separado, stage: "entregue" };
+    const textos = textosDaTela(linha({ order: entregue, icon: Truck, tone: "done" }, comCaixas()));
+    expect(textos.join(" ")).not.toContain("CX-");
+    // A lista continua por prateleira.
+    expect(textos).toContain("B-02");
   });
 });
 

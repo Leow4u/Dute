@@ -1076,7 +1076,8 @@ export function OrderRow({
         }
         actionsClassName="hidden sm:flex"
       />
-      {open && items.length ? <ItemList items={items} cliente={(order.pick ?? order.pack ?? order.ship)?.customer_code} /> : null}
+      {/* A caixa só aparece enquanto o pedido está para separar: depois, o item já saiu dela. */}
+      {open && items.length ? <ItemList items={items} cliente={order.stage === "separar" ? order.pick?.customer_code : undefined} /> : null}
       {/* No celular os botões vêm depois da lista do que separar. */}
       {acoes || menu ? (
         <div className="flex gap-2 px-4 pb-4 pt-3 sm:hidden">

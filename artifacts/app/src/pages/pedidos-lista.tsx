@@ -38,7 +38,8 @@ export default function PaginaPedidosLista() {
   const tarefa = pedido?.pick ?? pedido?.pack ?? pedido?.ship;
   const itens = tarefa?.items ?? SEM_ITENS;
   const codigoDoCliente = tarefa?.customer_code ?? null;
-  const lista = useLeituraDaLista(itens, codigoDoCliente);
+  // A caixa só entra na folha do pedido que ainda está para separar: depois, o item já saiu dela.
+  const lista = useLeituraDaLista(itens, pedido?.stage === "separar" ? codigoDoCliente : null);
   const solicitacaoId = pedido?.requestId ?? null;
   const solicitacao = useDocumento(
     solicitacaoId ? `customer_requests/${solicitacaoId}` : null,

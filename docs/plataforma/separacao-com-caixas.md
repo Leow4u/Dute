@@ -231,9 +231,10 @@ coluna "Caixa" preenchida.
   prateleira, do cliente do pedido, com o SKU em `sku_codes`, pela data da
   guarda (`stored_at`) e, no empate, pelo código. As caixas vêm da consulta
   da Contagem (`/api/warehouse/boxes?customer_code=…`), com o índice já
-  travado em `cloud-api-indices.test.ts`. É o conteúdo de entrada: depois do
-  primeiro pedido separado, a lista pode citar uma caixa que já esvaziou, até
-  a parte 3 (seção 7).
+  travado em `cloud-api-indices.test.ts`. A caixa só aparece no pedido que
+  ainda está para separar: no separado e no entregue o item já saiu dela. É o
+  conteúdo de entrada: depois do primeiro pedido separado, a lista pode citar
+  uma caixa que já esvaziou, até a parte 3 (seção 7).
 - **1b, "Imprimir lista".** A tela nova Pedidos › Lista de separação
   (`/pedidos/lista?pedido=<chave do pedido>`, na v3, os papéis de Pedidos),
   com a folha em `features/warehouse-ops/lista-de-separacao-documento.tsx`.

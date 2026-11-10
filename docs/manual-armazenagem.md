@@ -81,9 +81,10 @@ os recebimentos em aberto e os SKUs em estoque.
 itens por prateleira, na ordem de caminhada do cadastro de Posições: o
 cabeçalho da prateleira com os itens e as unidades ("A-03 5 itens · 450 un.")
 e, em cada linha, a foto, o nome com o tamanho, o código do cliente e o SKU,
-a caixa onde o item está e a quantidade. A caixa é a guardada naquela
-prateleira que recebeu o item, a mais antiga primeiro; é o conteúdo de
-entrada, e a separação ainda não baixa a caixa. O pedido em "Para separar" e
+a caixa onde o item está e a quantidade. A caixa aparece no pedido em "Para
+separar": é a guardada naquela prateleira que recebeu o item, a mais antiga
+primeiro; é o conteúdo de entrada, e a separação ainda não baixa a caixa. O
+pedido já separado ou entregue não mostra caixa. O pedido em "Para separar" e
 em "Para entregar" mostra o "Para quando" que o cliente pediu. O pedido com
 exceção vem antes, em vermelho, com "Tratar": a tarefa abre num painel, com o
 avanço e "Registrar exceção" ("Motivo da exceção").
