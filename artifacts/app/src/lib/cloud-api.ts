@@ -1873,6 +1873,8 @@ async function getWarehouseOps() {
       [];
     return lines.map((line) => ({
       id: line.id,
+      // O número da linha do pedido: a lista de separação ordena por ele, e não pelo id (a 100 vinha depois da 10).
+      line_number: line.line_number,
       sku: line.sku_code,
       sku_code: line.sku_code,
       client_item_code: line.client_item_code,
