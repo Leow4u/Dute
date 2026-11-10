@@ -10,6 +10,7 @@ import {
   createEvent,
   type OperationalActor,
 } from "./operations.js";
+import { DETALHE_DA_DIFERENCA_MAXIMO, MOTIVOS_DA_DIFERENCA, concluiComDiferenca, type MotivoDaDiferenca } from "./short-pick.js";
 
 /**
  * Separar com o progresso salvo (docs/plataforma/separacao-com-caixas.md,
@@ -20,16 +21,19 @@ import {
  * - `setPickLineSeparated` marca ou desmarca uma linha como separada. A
  *   primeira linha começa a separação (a tarefa vai a `in_progress` pela
  *   porta de sempre, `advanceWarehouseTaskTransaction`, com o evento e o
- *   "Em separação" do portal).
+ *   "Em separação" do portal). Quem opera também registra o separado a menos
+ *   na linha, com o motivo (parte 5, decisão 14): "Separar menos".
  * - `completeOrderSeparation` conclui a separação e a embalagem numa chamada:
  *   as mesmas transições que a tela encadeava (separação concluída, embalagem
- *   iniciada e fechada com o lacre), na mesma ordem e pela mesma porta.
+ *   iniciada e fechada com o lacre), na mesma ordem e pela mesma porta. O
+ *   pedido com diferença só conclui com a coordenação.
  *
  * O progresso é só o registro de quem separou o quê: mora na linha
- * (`separated_qty`, `separated_at`, `separated_by`), sem tocar a reserva, o
- * saldo nem o `qty_picked`, que continuam mudando só na conclusão. A linha
- * com progresso é o que a contagem cíclica consulta para não contar a
- * prateleira de onde o item já saiu (operations.ts, recordCycleCount).
+ * (`separated_qty`, `separated_at`, `separated_by` e, na linha a menos,
+ * `separated_shortage_reason` e `separated_shortage_detail`), sem tocar a
+ * reserva, o saldo nem o `qty_picked`, que continuam mudando só na conclusão.
+ * A linha com progresso é o que a contagem cíclica consulta para não contar
+ * a prateleira de onde o item já saiu (operations.ts, recordCycleCount).
  */
 
 export const PICK_TASKS_COLLECTION = "pick_tasks";
@@ -50,6 +54,13 @@ export const SetPickLineSeparatedSchema = z
     pick_line_id: id,
     /** true separa a linha; false desfaz. */
     separated: z.boolean(),
+    /**
+     * "Separar menos" (parte 5): o que foi separado de fato, de 0 ao pedido.
+     * Sem ele, a linha inteira. A menos, pede o motivo.
+     */
+    separated_qty: z.number().nonnegative().optional(),
+    shortage_reason: z.string().trim().max(40).optional(),
+    shortage_detail: z.string().trim().max(DETALHE_DA_DIFERENCA_MAXIMO).optional(),
     idempotency_key: idempotencyKey,
   })
   .strict();
@@ -58,24 +69,6 @@ export const CompleteOrderSeparationSchema = z
   .object({
     pick_task_id: id,
     seal_code: z.string().trim().min(1).max(60),
-    /**
-     * Separar a menos (pergunta 59): só a coordenação informa menos que o
-     * pedido numa linha, com o motivo. A regra é a de sempre (short-pick.ts),
-     * conferida na conclusão da separação.
-     */
-    short_lines: z
-      .array(
-        z
-          .object({
-            pick_line_id: id,
-            qty_picked: z.number().nonnegative(),
-            shortage_reason: z.string().trim().min(1).max(40),
-            shortage_detail: z.string().trim().max(300).optional(),
-          })
-          .strict(),
-      )
-      .max(500)
-      .optional(),
     idempotency_key: idempotencyKey,
   })
   .strict();
@@ -133,13 +126,9 @@ export type LinhaDoProgresso = {
   pedido: number;
   /** O que já foi separado e gravado; null sem progresso. */
   separado: number | null;
-};
-
-export type LinhaAMenos = {
-  pick_line_id: string;
-  qty_picked: number;
-  shortage_reason: string;
-  shortage_detail?: string;
+  /** Na linha separada a menos: o motivo e o detalhe. */
+  motivo?: string;
+  detalhe?: string;
 };
 
 /** A linha como a conclusão da separação a recebe (operations.ts, `picking_lines`). */
@@ -159,23 +148,44 @@ export function progressoDaSeparacao(linhas: readonly LinhaDoProgresso[]) {
     separated_lines: separadas.length,
     units: linhas.reduce((soma, linha) => soma + linha.pedido, 0),
     separated_units: separadas.reduce((soma, linha) => soma + (linha.separado ?? 0), 0),
+    /** As linhas separadas a menos: o pedido com diferença só conclui com a coordenação. */
+    short_lines: separadas.filter((linha) => (linha.separado ?? 0) < linha.pedido).length,
   };
 }
 
 /**
- * As linhas para concluir a separação: cada uma com o separado gravado, ou
- * com o que a coordenação informou a menos. A linha que ninguém tratou barra
- * a conclusão. Quem pode separar a menos, e com que motivo, é a regra de
- * sempre, conferida adiante (conferirSeparacao).
+ * O separado de uma linha: de 0 ao pedido, nunca mais; a menos, com o motivo
+ * (falta ou avaria) e, se quiser, o detalhe. É a mesma conferência da
+ * conclusão (short-pick.ts), feita já na linha.
  */
-export function linhasParaConcluir(linhas: readonly LinhaDoProgresso[], aMenos: readonly LinhaAMenos[] = []): LinhaConferida[] {
-  const porLinha = new Map(aMenos.map((linha) => [linha.pick_line_id, linha]));
-  const conhecidas = new Set(linhas.map((linha) => linha.id));
-  const estranha = aMenos.find((linha) => !conhecidas.has(linha.pick_line_id));
-  if (estranha) {
-    throw new HttpsError("invalid-argument", `A linha ${estranha.pick_line_id} não é deste pedido.`);
+export function separadoDaLinha(
+  pedido: number,
+  entrada: { separated_qty?: number; shortage_reason?: string; shortage_detail?: string },
+  produto: string,
+): { separado: number; motivo?: MotivoDaDiferenca; detalhe?: string } {
+  const separado = entrada.separated_qty ?? pedido;
+  if (!Number.isFinite(separado) || separado < 0) {
+    throw new HttpsError("invalid-argument", `Quantidade separada de ${produto} inválida.`);
   }
-  const semTratar = linhas.filter((linha) => linha.separado === null && !porLinha.has(linha.id));
+  if (separado > pedido) {
+    throw new HttpsError("failed-precondition", `${produto}: o pedido é de ${pedido} un. e o separado informado é ${separado}.`);
+  }
+  if (separado === pedido) return { separado };
+  const motivo = text(entrada.shortage_reason).toLowerCase();
+  if (!(MOTIVOS_DA_DIFERENCA as readonly string[]).includes(motivo)) {
+    throw new HttpsError("invalid-argument", `Informe o motivo da diferença em ${produto}.`);
+  }
+  const detalhe = text(entrada.shortage_detail).replace(/\s+/g, " ");
+  return { separado, motivo: motivo as MotivoDaDiferenca, detalhe: detalhe || undefined };
+}
+
+/**
+ * As linhas para concluir a separação: cada uma com o separado gravado (a
+ * menos, com o motivo). A linha que ninguém tratou barra a conclusão, e o
+ * pedido com diferença só conclui com a coordenação (decisão 14).
+ */
+export function linhasParaConcluir(linhas: readonly LinhaDoProgresso[], papel: string): LinhaConferida[] {
+  const semTratar = linhas.filter((linha) => linha.separado === null);
   if (semTratar.length) {
     throw new HttpsError(
       "failed-precondition",
@@ -183,26 +193,34 @@ export function linhasParaConcluir(linhas: readonly LinhaDoProgresso[], aMenos: 
       { code: "SEPARATION_PENDING_LINES", pending: semTratar.length },
     );
   }
-  return linhas.map((linha) => {
-    const informado = porLinha.get(linha.id);
-    if (!informado) return { pick_line_id: linha.id, qty_picked: linha.separado ?? 0, status: "confirmed" as const };
-    return clean({
+  const comDiferenca = linhas.filter((linha) => (linha.separado ?? 0) < linha.pedido);
+  if (comDiferenca.length && !concluiComDiferenca(papel)) {
+    throw new HttpsError(
+      "permission-denied",
+      comDiferenca.length === 1 ? "O pedido tem 1 linha com diferença: só a coordenação conclui." : `O pedido tem ${comDiferenca.length} linhas com diferença: só a coordenação conclui.`,
+      { code: "SEPARATION_SHORT_LINES", short: comDiferenca.length },
+    );
+  }
+  return linhas.map((linha) =>
+    clean({
       pick_line_id: linha.id,
-      qty_picked: informado.qty_picked,
+      qty_picked: linha.separado ?? 0,
       status: "confirmed" as const,
-      shortage_reason: informado.shortage_reason,
-      shortage_detail: informado.shortage_detail,
-    });
-  });
+      shortage_reason: (linha.separado ?? 0) < linha.pedido ? linha.motivo : undefined,
+      shortage_detail: (linha.separado ?? 0) < linha.pedido ? linha.detalhe : undefined,
+    }),
+  );
 }
 
 function linhaDoProgresso(lineId: string, data: Row): LinhaDoProgresso {
-  return {
+  return clean({
     id: lineId,
     produto: text(data.product_name) || text(data.sku_code) || lineId,
     pedido: quantity(data.qty_to_pick),
     separado: data.separated_at ? quantity(data.separated_qty) : null,
-  };
+    motivo: text(data.separated_shortage_reason) || undefined,
+    detalhe: text(data.separated_shortage_detail) || undefined,
+  });
 }
 
 /** A tarefa cancelada ou concluída não aceita mais progresso. */
@@ -269,33 +287,57 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
     }
     const pedido = quantity(line.qty_to_pick);
     if (!(pedido > 0)) throw new HttpsError("failed-precondition", "Linha da separação sem quantidade.");
+    const produto = text(line.product_name) || text(line.sku_code) || input.pick_line_id;
+    const novo = input.separated ? separadoDaLinha(pedido, input, produto) : null;
     const estava = Boolean(line.separated_at);
-    const changed = estava !== input.separated;
+    // Separar de novo a linha já separada só muda algo se a quantidade ou o motivo mudaram.
+    const changed = novo
+      ? !estava ||
+        quantity(line.separated_qty) !== novo.separado ||
+        text(line.separated_shortage_reason) !== (novo.motivo ?? "") ||
+        text(line.separated_shortage_detail) !== (novo.detalhe ?? "")
+      : estava;
     const customerCode = text(task.customer_code) || text(line.customer_code);
 
     const events: unknown[] = [];
     if (changed) {
       transaction.update(
         lineRef,
-        input.separated
-          ? { separated_qty: pedido, separated_at: occurredAt, separated_by: actorFields(actor), updated_at: FieldValue.serverTimestamp() }
-          : { separated_qty: FieldValue.delete(), separated_at: FieldValue.delete(), separated_by: FieldValue.delete(), updated_at: FieldValue.serverTimestamp() },
+        novo
+          ? {
+              separated_qty: novo.separado,
+              separated_at: occurredAt,
+              separated_by: actorFields(actor),
+              separated_shortage_reason: novo.motivo ?? FieldValue.delete(),
+              separated_shortage_detail: novo.detalhe ?? FieldValue.delete(),
+              updated_at: FieldValue.serverTimestamp(),
+            }
+          : {
+              separated_qty: FieldValue.delete(),
+              separated_at: FieldValue.delete(),
+              separated_by: FieldValue.delete(),
+              separated_shortage_reason: FieldValue.delete(),
+              separated_shortage_detail: FieldValue.delete(),
+              updated_at: FieldValue.serverTimestamp(),
+            },
       );
       // "em separação desde 10/11": a primeira linha separada data o começo.
-      if (input.separated && !task.separation_started_at) {
+      if (novo && !task.separation_started_at) {
         transaction.update(taskRef, { separation_started_at: occurredAt, separation_started_by: actorFields(actor), updated_at: FieldValue.serverTimestamp() });
       }
-      const produto = text(line.product_name) || text(line.sku_code) || input.pick_line_id;
       const pedidoNumero = text(task.order_number) || text(line.order_number);
+      const aMenos = novo && novo.separado < pedido ? pedido - novo.separado : 0;
       events.push(
         createEvent(
           transaction,
           db,
-          `evt_${digest({ operationId: opRef.id, suffix: input.separated ? "line_separated" : "line_unseparated" })}`,
+          `evt_${digest({ operationId: opRef.id, suffix: novo ? "line_separated" : "line_unseparated" })}`,
           {
-            type: input.separated ? "picking.line_separated" : "picking.line_unseparated",
-            title: input.separated ? `Linha separada do pedido ${pedidoNumero}` : `Separação da linha desfeita no pedido ${pedidoNumero}`,
-            description: `${pedido} un. de ${produto} · ${text(line.location_id) || "sem endereço"}`,
+            type: novo ? "picking.line_separated" : "picking.line_unseparated",
+            title: novo ? `Linha separada do pedido ${pedidoNumero}` : `Separação da linha desfeita no pedido ${pedidoNumero}`,
+            description: novo
+              ? `${novo.separado}${aMenos ? ` de ${pedido}` : ""} un. de ${produto} · ${text(line.location_id) || "sem endereço"}`
+              : `${produto} · ${text(line.location_id) || "sem endereço"}`,
             severity: "info",
             // Um pedido tem mais de cem linhas: o evento fica na trilha, fora da caixa de avisos.
             inbox: false,
@@ -311,7 +353,11 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
               sku_code: text(line.sku_code) || undefined,
               client_item_code: text(line.client_item_code) || undefined,
               location_id: text(line.location_id) || undefined,
-              quantity: pedido,
+              expected_qty: pedido,
+              quantity: novo ? novo.separado : undefined,
+              short_qty: aMenos || undefined,
+              shortage_reason: novo?.motivo,
+              shortage_detail: novo?.detalhe,
             }),
             source: EVENT_SOURCE,
           },
@@ -326,8 +372,10 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
       pick_line_id: input.pick_line_id,
       separated: input.separated,
       changed,
-      separated_qty: input.separated ? pedido : 0,
-      separated_at: input.separated ? (changed ? occurredAt : text(line.separated_at)) : undefined,
+      expected_qty: pedido,
+      separated_qty: novo ? novo.separado : 0,
+      shortage_reason: novo?.motivo,
+      separated_at: novo ? (changed ? occurredAt : text(line.separated_at)) : undefined,
       events,
     });
     transaction.create(opRef, {
@@ -369,7 +417,7 @@ export async function completeOrderSeparation(db: Firestore, raw: unknown, actor
     const lines = await db.collection(PICK_LINES_COLLECTION).where("pick_task_id", "==", input.pick_task_id).get();
     const conferidas = linhasParaConcluir(
       lines.docs.map((doc) => linhaDoProgresso(doc.id, doc.data())),
-      input.short_lines ?? [],
+      actor.role,
     );
     await advanceWarehouseTaskTransaction(
       db,
