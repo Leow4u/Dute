@@ -600,6 +600,17 @@ export function createEvent(
   return eventSummary(id, input);
 }
 
+/**
+ * A linha da separação de uma reserva do pedido: a aprovação cria o item, a
+ * reserva e a linha com o mesmo número (decideCustomerRequestTransaction).
+ */
+function pickLineIdOf(reservation: DocumentData): string | undefined {
+  const orderId = text(reservation.order_id);
+  const lineNumber = number(reservation.line_number);
+  if (!orderId || !lineNumber) return undefined;
+  return `pli_${safeDocId(orderId)}_${String(lineNumber).padStart(2, "0")}`;
+}
+
 function operationEventId(operationId: string, suffix: string) {
   return `evt_${digest({ operationId, suffix })}`;
 }
@@ -2202,6 +2213,30 @@ export async function recordCycleCountTransaction(
           "failed-precondition",
           `O SKU ${skuCode} no local ${locationId} tem itens separados esperando a entrega${order ? ` (pedido ${order})` : ""}. Conte depois da entrega.`,
         );
+      }
+      // A separação que leva dias (separação com caixas, parte 2): a linha
+      // já separada saiu da prateleira, mas a reserva dela só vira "picked"
+      // na conclusão. Contar agora baixaria o item duas vezes.
+      const reserved = await readRows(
+        transaction,
+        db
+          .collection(collections.stockReservations)
+          .where("customer_code", "==", customerCode)
+          .where("sku_code", "==", skuCode)
+          .where("location_id", "==", locationId)
+          .where("status", "==", "reserved"),
+      );
+      for (const reservation of reserved) {
+        const pickLineId = pickLineIdOf(reservation.data);
+        if (!pickLineId) continue;
+        const pickLine = await transaction.get(db.collection(collections.pickLines).doc(pickLineId));
+        if (pickLine.exists && pickLine.get("separated_at")) {
+          const order = text(reservation.data.order_number);
+          throw new HttpsError(
+            "failed-precondition",
+            `O SKU ${skuCode} no local ${locationId} tem itens já separados de um pedido em separação${order ? ` (pedido ${order})` : ""}. Conte depois da entrega.`,
+          );
+        }
       }
     }
 
