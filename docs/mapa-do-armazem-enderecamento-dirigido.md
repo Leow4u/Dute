@@ -136,6 +136,12 @@ de base até ficarem `stored`. A frente de uma pilha é contada uma única vez.
 Caixas antigas sem vínculo de apoio permanecem na base; nada é reorganizado
 automaticamente. Não se permite remover uma caixa com outra apoiada sobre ela.
 
+A caixa de que a separação tira tudo fica `emptied` (separação com caixas,
+parte 3c, `docs/plataforma/separacao-com-caixas.md`): não ocupa mais a frente
+nem o peso da prateleira e não serve de base. A caixa que estava sobre ela
+passa a ocupar a própria frente e não recebe outra em cima, pela regra do
+apoio que falta.
+
 ## 4. Regras de endereçamento (motor determinístico)
 
 Entrada: uma caixa com cliente, tipo ou medidas, peso e conteúdo.

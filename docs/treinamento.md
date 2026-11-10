@@ -126,8 +126,11 @@ as telas novas. **Ler antes:** `docs/manual-armazenagem.md`.
    itens, a Contagem, a chegada avulsa) e o que mostra todos (Início,
    Pedidos, a fila do Receber).
 2. **Pedidos:** aprovar uma solicitação (com o `interno`), "Separar" (a
-   bancada: separar linha a linha, parar, "Continuar", um "Separar menos" e
-   "Concluir separação" com o lacre) e "Entregue" com quem levou e a placa.
+   bancada: separar linha a linha conferindo a caixa que cada linha diz,
+   uma "Outra caixa", parar, "Continuar", um "Separar menos", imprimir as
+   "Etiquetas para trocar" e "Concluir separação" com o lacre) e "Entregue"
+   com quem levou e a placa. Depois, conferir no Mapa a caixa "aberta" e a
+   que saiu da prateleira.
    Num pedido, a "Entrega pela
    Dutelog"; em outro, a "Retirada pelo cliente".
 3. **Receber:** criar uma "Chegada avulsa" do cliente e conferir a chegada

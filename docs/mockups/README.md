@@ -433,20 +433,30 @@ Página 2, separar com caixa e volumes (partes 2 a 5):
 | Romaneio (A4) | `WmsSepararRomaneio.dc.html` | O conteúdo completo de cada volume, com a quantidade e o peso; o lacre e o total de volumes. Sem caixa, posição nem valor. |
 | Armazenagem · Mapa | `WmsSepararMapa.dc.html` | Depois do pedido: a caixa aberta com o saldo, as caixas que saíram em "Saíram desta prateleira" e "Posições ocupadas" contando só a prateleira com caixa com saldo. |
 
-Da página 2, as partes 2 e 5 estão no código desde 10/11/2026 (registro em
+Da página 2, as partes 2, 3 e 5 estão no código desde 10/11/2026 (registro em
 `docs/plataforma/separacao-com-caixas.md`, seção 5.1): a bancada com o
 progresso, "Separar", "Desfazer", "Separar menos" e "Concluir separação" com
-o lacre, a fila com "Separar"/"Continuar" e o selo "em separação desde", e o
-celular. O que a tela tem de diferente das pranchas, até as partes 3 e 4:
+o lacre, a fila com "Separar"/"Continuar" e o selo "em separação desde", o
+celular e, da parte 3, a caixa de cada linha, "Outra caixa", "Etiquetas para
+trocar", a etiqueta da caixa aberta e o Mapa depois do pedido. O que a tela
+tem de diferente das pranchas, até a parte 4:
 
-- A linha por separar mostra a caixa onde o item está (a da página 1), sem a
-  quantidade sugerida, "esvazia" nem "inteira"; não há "Levar a caixa" nem
-  "Outra caixa".
-- A bancada não tem o painel dos volumes nem as "Etiquetas para trocar", e o
-  diálogo de concluir pede só o lacre: a conclusão fecha um volume, como
-  antes.
+- A bancada não tem "Levar a caixa", o volume de cada linha nem o painel dos
+  volumes, e o diálogo de concluir não diz "Volumes": a conclusão fecha um
+  volume, como antes (parte 4).
+- A tela do pedido separado (`WmsSepararConcluido`), com as etiquetas para
+  trocar e as caixas vazias depois da conclusão, entra com a parte 4.
 - Com diferença registrada, a bancada mostra "1 linha com diferença" também
   no computador (a prancha só mostra no celular).
+- "Outra caixa" só aparece na linha com mais de uma caixa na prateleira, e a
+  quantidade de cada caixa pode ser digitada.
+- "Etiquetas para trocar" lista as cinco primeiras caixas e "Ver as N
+  caixas"; no celular, vem depois das linhas.
+- No Mapa, a caixa mantém a ficha de hoje (o conteúdo em linhas, as medidas e
+  o volume) e ganha o estado, o saldo e "saldo em"; "Saíram desta prateleira"
+  mostra as dez saídas mais recentes, sem o volume (parte 4).
+- A etiqueta da caixa aberta escreve "Abertura 22/10/2026", sem o ponto do
+  meio, como a etiqueta de hoje.
 
 Página 3, a etiqueta com todos os produtos (parte 6, vale para todas as
 etiquetas de caixa e de volume):

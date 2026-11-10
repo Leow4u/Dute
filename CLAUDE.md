@@ -432,9 +432,18 @@ documentação de produto e operação está em `docs/`.
   diferença; a contagem cíclica recusa a prateleira com linha já separada
   (`functions/wms/src/domain/pick-progress.ts`), e o cancelamento no meio da
   separação manda o que as linhas já separaram à `EXPEDICAO`, com a guarda de
-  volta, como o separado do pedido concluído. As partes 3 e 4 (baixa da
-  caixa e volumes) têm o mockup aprovado e não estão no código. Tela só entra
-  com mockup aprovado. Desenho, partes e registro em
+  volta, como o separado do pedido concluído. **A parte 3 (a caixa na
+  separação) também:** o saldo da caixa é o conteúdo de entrada menos o que
+  as separações tiraram (`taken_lines` na caixa; a regra em
+  `lib/dominio/src/saldo-da-caixa.ts`, com cópia literal no WMS travada em
+  `domain/saldo-da-caixa.test.ts`); separar a linha baixa a caixa mais antiga
+  da prateleira na mesma transação, "Outra caixa" informa de qual saiu, a
+  caixa de que sai tudo fica `emptied` (fora do Mapa, de "Posições ocupadas"
+  e do encaixe), e a caixa aberta fica em "Etiquetas para trocar" até
+  `recordBoxBalanceLabelPrint`. O conteúdo de entrada não muda, e o que volta
+  à prateleira (cancelamento, devolução) volta sem caixa. A parte 4 (os
+  volumes) tem o mockup aprovado e não está no código. Tela só entra com
+  mockup aprovado. Desenho, partes e registro em
   `docs/plataforma/separacao-com-caixas.md`.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os

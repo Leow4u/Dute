@@ -8,9 +8,11 @@ https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz, fontes em
 3 (a etiqueta com todos os produtos), no mesmo dia, com o logo original da
 Dutelog (decisão 16). **No código desde 10/11/2026** (registro na seção 5.1):
 a parte 1 (a lista de separação, PR 590), a parte 6 (a etiqueta com todos os
-produtos, na caixa e na posição, PR 591) e as partes 2 e 5 (separar com o
-progresso salvo e "Separar menos"). As partes 3 e 4 (a baixa da caixa e os
-volumes) têm o mockup aprovado e esperam a vez. Tela só depois do mockup
+produtos, na caixa e na posição, PR 591), as partes 2 e 5 (separar com o
+progresso salvo e "Separar menos") e a parte 3 (a caixa na separação: o
+saldo, a baixa, a caixa vazia e as etiquetas para trocar). As partes 2, 3 e 5
+estão no PR 592, que só entra na `main` quando o Leonardo disser. A parte 4
+(os volumes) tem o mockup aprovado e espera a vez. Tela só depois do mockup
 aprovado (decisão 8). Produção só com o OK do Leonardo.
 
 Relação com os outros desenhos: este roteiro retoma a regra 8 e a seção 5.4 do
@@ -147,6 +149,11 @@ O retrato de antes deste roteiro. A parte 1 mudou a lista e a caixa na linha
   saldo sem caixa.
 - O item sem caixa na prateleira separa como hoje, sem caixa na linha.
 
+Como ficou no código (registro na seção 5.1): o conteúdo de entrada não muda
+de lugar, e a caixa guarda só o que as separações tiraram dela; o saldo é a
+entrada menos o retirado. Quem volta à prateleira depois (o pedido cancelado
+no meio, a devolução) volta sem caixa. A conferência ainda não tem tela.
+
 ### 4.4 Volumes de expedição (parte 4)
 
 - A bancada tem um volume aberto. A linha separada entra nele. "Fechar
@@ -212,7 +219,7 @@ Um problema por commit, com o teste que falha antes.
 | 1c | A caixa na lista | A caixa de cada linha, lida do conteúdo de entrada. Só leitura. | A linha não mostra caixa. |
 | 2a | Progresso no servidor | Separar e desfazer a linha; a conclusão numa chamada; a contagem cíclica recusa a prateleira com linha separada. | A linha separada some ao recarregar. |
 | 2b | A bancada | "Separar" e "Continuar", o progresso e "em separação desde". Entrou com a parte 5. | A fila só tem "Separado". |
-| 3a | Saldo da caixa | O conteúdo atual por caixa, a etiqueta e o Mapa lendo o saldo, e a conferência. | A caixa de onde saiu peça mostra o conteúdo de entrada. |
+| 3a | Saldo da caixa | O conteúdo atual por caixa, a etiqueta, o Mapa e a lista lendo o saldo. A conferência ficou sem tela (seção 5.1). | A caixa de onde saiu peça mostra o conteúdo de entrada. |
 | 3b | Baixa na linha | A sugestão da mais antiga, a baixa na transação e "Outra caixa". | A separação não muda a caixa. |
 | 3c | Caixa vazia e Mapa | A caixa encerrada, "Posições ocupadas" e "Saíram desta prateleira". | A caixa vazia conta como posição ocupada. |
 | 3d | Etiquetas para trocar | A lista das caixas abertas, "saldo em" e o registro da impressão. | A etiqueta sai com o conteúdo de entrada. |
@@ -391,6 +398,87 @@ com a guarda de volta), as duas linhas na tabela de papéis
 `concluir-separacao.test.tsx` (a lista dos textos e o `axe`) e
 `cancel-order.test.tsx` (as linhas já separadas em "Voltam à posição").
 
+**Parte 3, a caixa na separação (10/11/2026).** Em commits próprios no PR
+592, depois das partes 2 e 5.
+
+- **O saldo é a entrada menos o retirado.** O conteúdo de entrada continua
+  onde estava: nas linhas da abertura (`opening_inventory_lines`, pelo
+  `box_code`) ou na própria caixa do recebimento (`lines[]`). A caixa passa a
+  guardar só o que as separações tiraram dela: `taken_lines` (por SKU),
+  `taken_units` e `balance_at`. Assim a correção de uma linha da abertura
+  (mover ou remover) continua valendo sem tocar o saldo, e a caixa sem nada
+  retirado não ganha campo nenhum. A regra sem banco é
+  `lib/dominio/src/saldo-da-caixa.ts`, com a cópia literal em
+  `functions/wms/src/domain/saldo-da-caixa.ts` travada por teste; os dois
+  lados rodam os mesmos casos (`saldo-da-caixa.casos.json`).
+- **A baixa na linha (3b).** `setPickLineSeparated` lê as caixas guardadas do
+  cliente na prateleira da linha e baixa, na mesma transação, a mais antiga
+  que tem o item (a data da guarda; no empate, o código); a seguinte completa,
+  e o que as caixas não têm sai sem caixa. Com `boxes` ("Outra caixa"), baixa
+  as caixas informadas: cada uma tem de ter o item na quantidade informada, e
+  a soma tem de fechar com a linha (`SEPARATION_BOXES_MISMATCH`). A linha
+  guarda de onde saiu (`separated_boxes`, com `whole` na caixa intacta que
+  saiu toda e `emptied` na já aberta que a linha esgotou), e o evento
+  `picking.line_separated` leva `boxes`. "Desfazer", e a linha separada de
+  novo com outra quantidade, devolvem antes às mesmas caixas. A reserva e o
+  saldo da prateleira não mudam.
+- **"Separar" não manda caixa.** A bancada mostra a sugestão lida ao vivo,
+  mas quem baixa é o servidor, pela mesma regra: se outra pessoa tirou da
+  mesma caixa no intervalo, a linha sai da caixa seguinte, e a linha separada
+  mostra de onde saiu de fato. Só "Outra caixa" manda as caixas, e aí a
+  recusa aparece para quem informou.
+- **A caixa vazia (3c).** A caixa de que a separação tira tudo passa a
+  `emptied`, com `emptied_at`, `emptied_by`, o pedido, a linha e
+  `emptied_whole` (saiu inteira). O encaixe da prateleira, o Mapa, "Posições
+  ocupadas" e a lista leem só a guardada: a vazia libera a frente e deixa de
+  contar. "Desfazer" devolve a caixa à prateleira. Cada mudança grava
+  `warehouse.box_emptied` ou `warehouse.box_reopened`, fora da caixa de
+  avisos. A caixa empilhada sobre a que esvaziou fica como base, pela regra
+  do encaixe para o apoio que falta.
+- **As telas.** Na bancada, a linha por separar mostra "12 de CX-000027",
+  "esvazia" e "CX-000029 inteira"; a separada mostra de onde saiu; "Outra
+  caixa" fica no "⋯" da linha com mais de uma caixa na prateleira
+  (`features/warehouse-ops/outra-caixa.tsx`,
+  `lib/warehouse-ops/caixas-da-separacao.ts`). O Mapa diz "CX-000028 · aberta"
+  ou "· guardada", mostra o saldo, "saldo em" e "Saíram desta prateleira" (as
+  dez mais recentes), e "Posições ocupadas" passa a "Prateleiras com caixa
+  com saldo." A lista de separação ("Ver itens" e a folha impressa) mostra só
+  as caixas que ainda têm o item.
+- **Etiquetas para trocar (3d).** A etiqueta da caixa aberta sai com o saldo,
+  "7 un. · saldo em 12/11/2026", sem o peso de entrada. A bancada lista as
+  caixas que o pedido abriu e que estão com a etiqueta velha, com "Imprimir".
+  `recordBoxBalanceLabelPrint` registra o clique: a caixa guarda para qual
+  saldo a etiqueta saiu (`balance_label_printed_for`), e volta à lista quando
+  o saldo muda de novo. O evento é `warehouse.box_balance_label_printed`.
+- **A data da etiqueta.** Toda etiqueta de caixa passa a levar a data de
+  entrada (a da guarda), que é a do FIFO, como nas pranchas aprovadas
+  ("Abertura · 22/10/2026"). Até aqui saía a data da impressão: era a mesma
+  quando a etiqueta saía no dia da guarda, e errada na reimpressão.
+- **O diálogo de concluir** diz as caixas de onde o pedido saiu: "Caixas
+  inteiras", "Caixas abertas" e "Caixas vazias". "Volumes" entra com a parte 4.
+- **O que volta à prateleira volta sem caixa.** No pedido cancelado no meio
+  da separação e na devolução, o que a guarda devolve à prateleira entra no
+  saldo dela, sem caixa: a caixa de onde saiu continua com o saldo baixado (ou
+  vazia). A linha seguinte daquele item sai das caixas e, depois, sem caixa.
+- **A conferência não tem tela.** A conta da seção 4.3 vale como está: o
+  saldo sem caixa da prateleira é o que sobra do razão depois do separado que
+  espera a entrega e do saldo das caixas. Mostrar a divergência (as caixas
+  dizendo mais do que o razão) pede uma tela, e tela pede mockup.
+- **O que da prancha fica para a parte 4:** "Levar a caixa", o volume em cada
+  linha separada, o painel dos volumes, "Volumes" no diálogo de concluir e a
+  tela do pedido separado (`WmsSepararConcluido`), com as etiquetas para
+  trocar e as caixas vazias depois da conclusão.
+
+Os testes: `saldo-da-caixa.test.ts` (os casos da regra, nos dois lados, e a
+trava da cópia), `pick-progress.integration.test.ts` (a mais antiga e a
+seguinte, o desfazer, o separar menos, a que esvazia, o que sai sem caixa,
+"Outra caixa" com as recusas, a caixa vazia e a de volta à prateleira),
+`box-relabel.integration.test.ts`, a linha nova na tabela de papéis,
+`caixas-da-separacao.test.ts`, `outra-caixa.test.tsx`,
+`pedidos-separar-view.test.tsx`, `concluir-separacao.test.tsx`,
+`warehouse-labels.test.ts`, `label-sheet.test.tsx`, `warehouse-map.test.ts` e
+`warehouse-map.test.tsx` (a lista dos textos e o `axe`).
+
 ## 6. Perguntas
 
 Todas respondidas pelo Leonardo em 10/11/2026.
@@ -435,6 +523,12 @@ ela é exata, porque nenhum pedido saiu desde a zeragem. Do terceiro pedido em
 diante, e até a parte 3, a lista pode citar uma caixa que os pedidos
 anteriores já esvaziaram: vale a anotação à mão na caixa.
 
+O pedido concluído antes de a parte 3 chegar não baixou caixa nenhuma: as
+caixas de onde ele saiu continuam com o saldo de entrada no sistema, e a
+sugestão dos pedidos seguintes pode apontar para elas. O acerto é pela
+própria bancada: no pedido seguinte, "Outra caixa" diz de onde o item saiu de
+fato. O total da prateleira não depende disso.
+
 Quando a parte 3a entrar, o saldo das caixas desses pedidos é acertado uma
 vez: pela regra da caixa mais antiga, conferida com a lista anotada, em
 simulação antes de gravar.
@@ -453,6 +547,14 @@ backend).
   do real até o acerto da seção 7.
 - **A sugestão depende do hábito.** Se a pessoa tira de outra caixa e não
   corrige, a etiqueta fica errada; o total da prateleira continua certo.
+- **O saldo da caixa não acompanha tudo.** A contagem cíclica, a devolução e
+  a guarda por linha mexem no saldo da prateleira e não sabem de caixa. O que
+  volta à prateleira volta sem caixa (seção 5.1). A divergência entre as
+  caixas e o razão ainda não aparece em tela nenhuma.
+- **A leitura das caixas tem teto.** As telas leem até 5.000 caixas do
+  cliente, da mais nova para a mais velha, e a caixa vazia continua no banco.
+  Longe do teto hoje (cerca de 200 caixas); quando chegar perto, a leitura
+  passa a pedir só as guardadas.
 - **Impressão.** Uma etiqueta por caixa aberta em cada pedido é volume de
   papel em pedido grande.
 - **"Posições ocupadas" cai** quando as caixas esvaziam: muda a referência da
@@ -470,6 +572,13 @@ backend).
 A parte 1 sai revertendo o PR, sem dado para limpar. As partes 2 a 5 gravam
 dado novo (progresso da linha, saldo da caixa, volumes): cada uma leva no PR
 dela o que fazer com esse dado ao reverter.
+
+A parte 3 sai revertendo os commits dela. O retirado gravado nas caixas
+(`taken_lines`, `taken_units`, `balance_at`) e nas linhas (`separated_boxes`)
+fica nos documentos, sem efeito. A caixa `emptied` é o único dado que pede
+cuidado: a tela antiga não a mostra em lugar nenhum (para ela, caixa é a
+guardada), o que é o certo para a caixa que saiu de fato; se alguma tiver de
+voltar à prateleira, é um acerto à mão no documento dela.
 
 As partes 2 e 5 saem revertendo o PR delas. O progresso gravado nas linhas
 (`separated_*`) e na tarefa (`separation_started_at`) fica nos documentos, sem

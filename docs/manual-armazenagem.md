@@ -130,11 +130,23 @@ separa aparece para a outra sem recarregar.
 - **O cabeçalho:** o pedido, "em separação desde 10/11", o cliente, os itens
   e as unidades, o "Para quando", "Imprimir lista" e "Concluir separação". O
   progresso diz "10 de 116 itens · 665 de 3.335 un.".
-- **As linhas** vêm por prateleira, na ordem de caminhada, com a caixa onde o
-  item está. "Separar" grava a linha na hora; "Desfazer" a volta. A prateleira
-  toda separada fecha sozinha, com "separado", e abre no botão ao lado. A
-  primeira linha separada começa a separação: o cliente passa a ver "Em
-  separação" no portal.
+- **As linhas** vêm por prateleira, na ordem de caminhada. "Separar" grava a
+  linha na hora; "Desfazer" a volta. A prateleira toda separada fecha
+  sozinha, com "separado", e abre no botão ao lado. A primeira linha separada
+  começa a separação: o cliente passa a ver "Em separação" no portal.
+- **A caixa de cada linha:** a linha por separar diz de qual caixa da
+  prateleira o item sai, a mais antiga primeiro: "12 de CX-000027", com
+  "esvazia" quando a linha esgota a caixa, e "CX-000029 inteira" quando a
+  caixa sai toda. "Separar" baixa essas caixas, e a linha separada mostra de
+  onde saiu. Quem tirou de outra caixa usa "Outra caixa", no "⋯" da linha: "De
+  qual caixa saiu?" lista as caixas da prateleira que têm o item ("Abertura ·
+  22/10/2026 · tem 20 un."), com a quantidade de cada uma; "Confirmar caixas"
+  liga quando a soma fecha com a linha. O que as caixas da prateleira não têm
+  sai sem caixa.
+- **"Etiquetas para trocar"** lista as caixas que o pedido abriu, com a
+  prateleira e o saldo ("A-05 · saldo 12 un."). "Imprimir" abre as etiquetas
+  delas com o saldo; a caixa sai da lista depois da impressão e volta se sair
+  mais peça dela.
 - **"Separar menos"** fica no "⋯" da linha: "Separado" (com − e +), o "Motivo
   da diferença" ("Falta" ou "Avaria") e o "Detalhe". A linha fica "separado 1
   de 2 · Avaria" e o pedido mostra "1 linha com diferença". Quem opera
@@ -142,7 +154,8 @@ separa aparece para a outra sem recarregar.
   conclui o pedido com diferença.
 - **"Concluir separação"** liga com todas as linhas tratadas (separadas ou
   com a diferença registrada); antes, o pedido diz "106 itens por separar". O
-  diálogo pede o "Número do lacre", um por pedido, e "Confirmar separação"
+  diálogo diz as caixas de onde o pedido saiu ("Caixas inteiras", "Caixas
+  abertas" e "Caixas vazias"), pede o "Número do lacre", um por pedido, e "Confirmar separação"
   fecha a separação e a embalagem de uma vez, num volume só. O pedido segue
   com o separado: a diferença volta a ficar disponível, e o item zerado não
   vai no volume. O pedido vai para "Para entregar".
@@ -334,14 +347,19 @@ dá as da rua a um cliente (com sigla, ou a BTG) ou as deixa "Sem cliente
 mapa inicial", só com o cadastro vazio, põe as 43 prateleiras de 16/10/2026.
 
 **O Mapa** mostra todas as zonas: "Posições ocupadas" (prateleiras com caixa
-guardada, a referência da fatura manual), as prateleiras, "Volume registrado" e
+com saldo, a referência da fatura manual), as prateleiras, "Volume registrado" e
 "Caixas guardadas". A prateleira fica "sem caixas registradas", "parcial", "sem
 vaga na base" (não cabe mais uma caixa de 50 × 50 × 35 cm na frente livre, ou o
 peso chegou ao máximo), "em verificação" ou "bloqueada". A ficha traz medidas,
 peso, frente livre e as caixas, cada uma com a origem ("Abertura", "Manual" ou
 "Recebimento · NF 48.377"), a data da guarda, o conteúdo (o da própria caixa, no
 recebimento; o da abertura do cliente ativo, na contagem) e "Etiqueta"; a caixa
-do recebimento com o destino confirmado aparece como "reservada".
+do recebimento com o destino confirmado aparece como "reservada". A caixa
+guardada diz "guardada" ou, depois que saiu peça dela, "aberta": a aberta
+mostra o que resta e "saldo em", sem o peso de entrada. A caixa de que a
+separação tirou tudo sai da prateleira, deixa de contar em "Posições ocupadas"
+e fica em "Saíram desta prateleira", com a data e o pedido ("inteira em
+11/11/2026 · PED-0001" ou "vazia em 12/11/2026 · PED-0001").
 
 **A etiqueta** tem 101,6 × 50,8 mm: "Folha A4, dez por folha" ou "Uma por
 etiqueta (rolo Zebra)"; "Pular etiquetas usadas" (0 a 9) aproveita folha

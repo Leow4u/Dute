@@ -135,7 +135,9 @@ obrigatório e sem conteúdo.
   devolução mexem só no saldo; nada baixa `unit_count` nem `sku_codes` da
   caixa. O conteúdo de uma caixa é o que entrou nela, não o que resta. Com o
   giro diário do uniforme, a caixa do recebimento ficaria "mentindo" mais
-  cedo que a da abertura.
+  cedo que a da abertura. (Mudou em 10/11/2026: a separação passou a baixar
+  o saldo da caixa, `separacao-com-caixas.md`, parte 3. O conteúdo de entrada
+  continua como está aqui, e a caixa guarda o que saiu.)
 - **A reserva do portal pode cair no saldo de `RECEBIMENTO`**: a alocação da
   aprovação percorre todas as linhas de saldo do SKU. Depois a guarda recusa
   e a separação manda o operador à área de recebimento.
