@@ -3,8 +3,10 @@
 **Situação:** diagnóstico e decisões do Leonardo em 10/11/2026. Os mockups
 foram feitos no mesmo dia (canvas privado
 https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz, fontes em
-`docs/mockups/WmsSeparar*.dc.html`) e **esperam a aprovação**. Nenhum código
-entrou. Tela só depois do mockup aprovado (decisão 8).
+`docs/mockups/WmsSeparar*.dc.html` e `WmsEtiquetaTodos*.dc.html`). As páginas
+1 e 2 foram **aprovadas em 10/11/2026**, com as decisões 10 a 15. A etiqueta
+com todos os produtos (página 3) tem o formato decidido e o desenho à espera
+da avaliação. Tela só depois do mockup aprovado (decisão 8).
 
 Relação com os outros desenhos: este roteiro retoma a regra 8 e a seção 5.4 do
 mapa (`docs/mapa-do-armazem-enderecamento-dirigido.md`) e revê a P8 de
@@ -70,6 +72,12 @@ caixas que precisam de etiqueta, e o cliente quer o conteúdo de cada uma.
 | 7 | A lista de separação entra antes de 16/11/2026. |
 | 8 | Toda troca de tela passa por mockup aprovado antes do código. |
 | 9 | O pedido que leva dias é o caso normal: o progresso fica salvo linha a linha, e as etiquetas saem ao longo do trabalho. |
+| 10 | A página 1 está aprovada como está: a lista sai com a caixa de cada item, lida do conteúdo de entrada, e a folha impressa leva "Separado" em branco. |
+| 11 | A caixa que sai inteira vira o volume, sem reembalar ("Levar a caixa"). |
+| 12 | A etiqueta do volume sai ao fechar cada volume, sem o total; o lote com o total ("Volume 12 de 42") sai depois de concluir. |
+| 13 | Toda etiqueta mostra todos os produtos, na caixa e no volume, no sistema inteiro. O formato são várias etiquetas do mesmo tamanho ("etiqueta 1 de 2"); a etiqueta maior, em A6, ficou de fora. |
+| 14 | Quem opera registra "Separar menos"; só a coordenação conclui o pedido com diferença. |
+| 15 | O peso do volume é opcional. |
 
 ## 4. Desenho
 
@@ -78,12 +86,12 @@ caixas que precisam de etiqueta, e o cliente quer o conteúdo de cada uma.
 - "Ver itens" agrupa as linhas por prateleira, na ordem de caminhada do
   cadastro de Posições (`sequence`). O cabeçalho do grupo diz a prateleira, os
   itens e as unidades. A prateleira fora do cadastro vai para o fim.
-- Cada linha mostra a caixa onde o item está (pergunta 1): as caixas guardadas
+- Cada linha mostra a caixa onde o item está (decisão 10): as caixas guardadas
   naquela prateleira cujo conteúdo de entrada tem o item, a mais antiga
   primeiro. É leitura, sem baixa.
 - "Imprimir lista" abre a lista em A4, com a impressão do navegador, como as
   Etiquetas: o quadrado para marcar, o produto, o código, a caixa, a
-  quantidade e "Separado" em branco (pergunta 2).
+  quantidade e "Separado" em branco (decisão 10).
 - No celular, a mesma lista; "Imprimir lista" fica ao lado de "Esconder
   itens", porque os botões do pedido vêm depois das 116 linhas.
 - O servidor não muda. "Separado" continua como hoje.
@@ -125,16 +133,16 @@ caixas que precisam de etiqueta, e o cliente quer o conteúdo de cada uma.
 ### 4.4 Volumes de expedição (parte 4)
 
 - A bancada tem um volume aberto. A linha separada entra nele. "Fechar
-  volume" pede o peso, opcional (pergunta 5), e o próximo volume abre sozinho.
-- "Levar a caixa" (pergunta 1 da página 2): a caixa que sai inteira vira o
-  volume, sem reembalar. A etiqueta do volume substitui a da caixa.
+  volume" pede o peso, opcional (decisão 15), e o próximo volume abre sozinho.
+- "Levar a caixa" (decisão 11): a caixa que sai inteira vira o volume, sem
+  reembalar. A etiqueta do volume substitui a da caixa.
 - Cada volume vira um `packages` com os `package_items` dele. O lacre fica no
   pedido.
 - **Etiqueta do volume**, no tamanho de hoje (101,6 × 50,8 mm): o pedido, o
-  volume, o cliente, o destino, a data, o peso, até quatro produtos com o
-  código do cliente e as unidades. Sai ao fechar o volume ("Volume 12"); depois
-  da conclusão, o lote sai com o total ("Volume 12 de 42") (pergunta 2). Com
-  mais de quatro produtos, "+ n no romaneio" (pergunta 3).
+  volume, o cliente, o destino, a data, o peso, os produtos com o código do
+  cliente e as unidades. Sai ao fechar o volume ("Volume 12"); depois da
+  conclusão, o lote sai com o total ("Volume 12 de 42") (decisão 12). Leva
+  todos os produtos, em etiquetas de continuação (seção 4.6).
 - **Romaneio** em A4: o conteúdo completo de cada volume, com o código do
   cliente, a quantidade e o peso; o lacre e o total de volumes.
 - A etiqueta do volume e o romaneio vão ao cliente: não citam caixa (`CX-`),
@@ -146,12 +154,31 @@ caixas que precisam de etiqueta, e o cliente quer o conteúdo de cada uma.
 
 Quem opera registra na linha o que separou a menos, com o motivo ("Falta" ou
 "Avaria") e o detalhe. O pedido com diferença só conclui com a coordenação,
-como hoje (pergunta 4). Substitui o "Tratar" como porta de entrada da falta.
+como hoje (decisão 14). Substitui o "Tratar" como porta de entrada da falta.
+
+### 4.6 Etiqueta com todos os produtos (parte 6)
+
+Hoje a etiqueta da caixa imprime quatro produtos e "+ n produto(s) no
+sistema" (`lib/warehouse-labels.ts`, `MAX_CONTENT_LINES`). Pela decisão 13,
+toda etiqueta mostra todos os produtos:
+
+- A primeira etiqueta fica como a de hoje e leva até cinco produtos. Com
+  mais, diz "etiqueta 1 de 2" ao lado de "Dutelog".
+- Os outros produtos saem em etiquetas de continuação do mesmo tamanho,
+  cerca de onze em cada: o código da caixa e a posição (no volume, o pedido e
+  o volume), "etiqueta 2 de 2" e as unidades do total. Sem código de barras.
+- A ordem é a de hoje, a maior quantidade primeiro.
+- Vale para a caixa da abertura, a do recebimento, a caixa aberta com o saldo
+  e o volume. A mesma folha de dez e o mesmo rolo; a contagem de etiquetas da
+  tela passa a somar as de continuação.
+
+Não depende das partes 2 a 5: pode entrar antes, com o mockup da página 3
+avaliado.
 
 ## 5. Partes, em ordem
 
-Um problema por PR, com o teste que falha antes. As partes 2 a 5 só começam
-com o mockup aprovado.
+Um problema por commit, com o teste que falha antes. As partes 1 a 5 têm o
+mockup aprovado (páginas 1 e 2); a parte 6 espera a avaliação da página 3.
 
 | # | Parte | O que entra | Teste que falha antes |
 |---|---|---|---|
@@ -170,28 +197,33 @@ com o mockup aprovado.
 | 4c | Etiqueta do volume e romaneio | As duas impressões. | — |
 | 4d | Para entregar | Os volumes e o lacre na fila. | — |
 | 5 | Separar menos | A diferença registrada por quem opera. | O operador não tem onde registrar a falta. |
+| 6 | Etiqueta com todos os produtos | As etiquetas de continuação na caixa e, com a parte 4c, no volume (seção 4.6). | A caixa com nove produtos imprime quatro e "+ 5 produto(s) no sistema". |
 
 Cada parte entra na homologação no merge e na produção só pela publicação
 manual, com o OK do Leonardo. A régua `billing-callables` fica verde em todas.
 
 ## 6. Perguntas
 
-Página 1 do canvas (a lista):
+Todas respondidas pelo Leonardo em 10/11/2026.
 
-| # | Pergunta | Proposta |
+Página 1 do canvas (a lista), aprovada como está:
+
+| # | Pergunta | Resposta |
 |---|---|---|
-| 1 | A lista já sai com a caixa de cada item, lida do conteúdo de entrada, sem baixa? | Sim. Hoje é exato, porque nenhum pedido saiu ainda. |
-| 2 | A lista impressa leva "Separado" em branco, para anotar a quantidade diferente? | Sim. |
+| 1 | A lista já sai com a caixa de cada item, lida do conteúdo de entrada, sem baixa? | Sim (decisão 10). Hoje é exato, porque nenhum pedido saiu ainda. |
+| 2 | A lista impressa leva "Separado" em branco, para anotar a quantidade diferente? | Sim (decisão 10). |
 
 Página 2 (separar com caixa e volumes):
 
-| # | Pergunta | Proposta |
+| # | Pergunta | Resposta |
 |---|---|---|
-| 1 | A caixa que sai inteira vira o volume, sem reembalar? | Sim. |
-| 2 | A etiqueta do volume sai ao fechar cada volume, sem o total, e o lote com o total só depois de concluir? | Sim: com 3 a 4 dias de separação, não dá para esperar o fim. |
-| 3 | A etiqueta do volume mostra até quatro produtos e "+ n no romaneio". Serve ao cliente, ou ele precisa de todos os produtos na etiqueta? | A decidir. Uma etiqueta maior pede outro papel. |
-| 4 | Quem opera registra "Separar menos", e só a coordenação conclui o pedido com diferença? | Sim. |
-| 5 | O peso do volume é opcional? | Sim. |
+| 1 | A caixa que sai inteira vira o volume, sem reembalar? | Sim (decisão 11). |
+| 2 | A etiqueta do volume sai ao fechar cada volume, sem o total, e o lote com o total só depois de concluir? | Sim (decisão 12). |
+| 3 | A etiqueta do volume mostra até quatro produtos e "+ n no romaneio", ou o cliente precisa de todos os produtos na etiqueta? | Todos os produtos, em todas as etiquetas do sistema, em várias etiquetas do mesmo tamanho (decisão 13). |
+| 4 | Quem opera registra "Separar menos", e só a coordenação conclui o pedido com diferença? | Sim (decisão 14). |
+| 5 | O peso do volume é opcional? | Sim (decisão 15). |
+
+Em aberto: a avaliação do desenho da página 3 (a etiqueta de continuação).
 
 ## 7. PED-0001 e PED-0002
 

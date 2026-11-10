@@ -372,8 +372,11 @@ A página "Separação e expedição" tem canvas próprio (privado,
 https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz), feito em 10/11/2026 a
 partir do primeiro pedido depois da zeragem (PED-0001, com 116 linhas e 3.335
 un., e PED-0002) e das decisões do Leonardo do mesmo dia
-(`docs/plataforma/separacao-com-caixas.md`, seção 3). **É proposta, à espera
-da aprovação.** Hoje "Separado" pede o lacre e confirma todas as linhas de uma
+(`docs/plataforma/separacao-com-caixas.md`, seção 3). **As páginas 1 e 2
+foram aprovadas pelo Leonardo em 10/11/2026**, com as respostas abaixo
+(decisões 10 a 15 do roteiro). A página 3, da etiqueta com todos os produtos,
+tem o formato escolhido no mesmo dia e o desenho à espera da avaliação. Hoje
+"Separado" pede o lacre e confirma todas as linhas de uma
 vez, num volume só; a lista sai na ordem do carrinho, sem a caixa; a caixa
 aberta fica com a etiqueta do que entrou; e não há etiqueta de expedição. Os
 pedidos da BTG levam de 3 a 4 dias para separar. As pranchas seguem o shell v3
@@ -411,28 +414,39 @@ Página 2, separar com caixa e volumes (partes 2 a 5):
 | Romaneio (A4) | `WmsSepararRomaneio.dc.html` | O conteúdo completo de cada volume, com a quantidade e o peso; o lacre e o total de volumes. Sem caixa, posição nem valor. |
 | Armazenagem · Mapa | `WmsSepararMapa.dc.html` | Depois do pedido: a caixa aberta com o saldo, as caixas que saíram em "Saíram desta prateleira" e "Posições ocupadas" contando só a prateleira com caixa com saldo. |
 
-Perguntas para o Leonardo (10/11/2026), também nas notas do canvas:
+Página 3, a etiqueta com todos os produtos (parte 6, vale para todas as
+etiquetas de caixa e de volume):
 
-Página 1:
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| Etiqueta da caixa, hoje | `WmsEtiquetaTodosHoje.dc.html` | A caixa com nove produtos imprime quatro e "+ 5 produto(s) no sistema". |
+| Etiqueta da caixa, todos os produtos | `WmsEtiquetaTodosCaixa.dc.html` | A mesma caixa em duas etiquetas do mesmo tamanho: a primeira com até cinco produtos e "etiqueta 1 de 2"; a de continuação com o código, a posição, "etiqueta 2 de 2" e os outros produtos. As unidades da caixa nas duas. |
+| Etiqueta do volume, todos os produtos | `WmsEtiquetaTodosVolume.dc.html` | O volume de dez produtos em duas etiquetas: a primeira com o pedido, "20 de 42" e "etiqueta 1 de 2"; a de continuação com o pedido, o volume e "etiqueta 2 de 2". |
+
+Perguntas e respostas do Leonardo (10/11/2026), também nas notas do canvas:
+
+Página 1, aprovada como está:
 
 1. A lista já sai com a caixa de cada item, lida do conteúdo de entrada da
-   caixa, sem baixa? Proposta: sim.
+   caixa, sem baixa? Resposta: sim.
 2. A lista impressa leva "Separado" em branco, para anotar a quantidade
-   quando for diferente? Proposta: sim.
+   quando for diferente? Resposta: sim.
 
 Página 2:
 
 1. A caixa que sai inteira vira o volume, sem reembalar ("Levar a caixa")?
-   Proposta: sim.
+   Resposta: sim.
 2. Como o pedido leva dias, a etiqueta do volume sai ao fechar cada volume
    ("Volume 12"), sem o total, e o lote com o total ("Volume 12 de 42") só
-   depois de concluir. Serve assim?
-3. A etiqueta do volume, no tamanho de hoje, mostra até quatro produtos e
-   "+ n no romaneio"; o romaneio traz o conteúdo completo. Serve ao cliente,
-   ou ele precisa de todos os produtos na etiqueta?
+   depois de concluir. Resposta: sim.
+3. A etiqueta do volume mostra até quatro produtos e "+ n no romaneio", ou o
+   cliente precisa de todos os produtos na etiqueta? Resposta: ele precisa de
+   todos os produtos, e isso vale para todas as etiquetas do sistema. O
+   formato escolhido é o de várias etiquetas do mesmo tamanho (página 3); a
+   etiqueta maior, em A6, ficou de fora.
 4. Quem opera registra "Separar menos", e só a coordenação conclui o pedido
-   com diferença, como hoje? Proposta: sim.
-5. O peso do volume é opcional ao fechar? Proposta: sim.
+   com diferença, como hoje? Resposta: sim.
+5. O peso do volume é opcional ao fechar? Resposta: sim.
 
 ## Regras da v3
 
