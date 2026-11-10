@@ -9,11 +9,12 @@ https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz, fontes em
 Dutelog (decisão 16). **No código desde 10/11/2026** (registro na seção 5.1):
 a parte 1 (a lista de separação, PR 590), a parte 6 (a etiqueta com todos os
 produtos, na caixa e na posição, PR 591), as partes 2 e 5 (separar com o
-progresso salvo e "Separar menos") e a parte 3 (a caixa na separação: o
-saldo, a baixa, a caixa vazia e as etiquetas para trocar). As partes 2, 3 e 5
-estão no PR 592, que só entra na `main` quando o Leonardo disser. A parte 4
-(os volumes) tem o mockup aprovado e espera a vez. Tela só depois do mockup
-aprovado (decisão 8). Produção só com o OK do Leonardo.
+progresso salvo e "Separar menos"), a parte 3 (a caixa na separação: o
+saldo, a baixa, a caixa vazia e as etiquetas para trocar) e a parte 4 (os
+volumes de expedição, a etiqueta do volume, o romaneio e "Para entregar").
+As partes 2, 3, 4 e 5 entraram na `main` pelo PR 592, com o OK do Leonardo
+em 10/11/2026, e vão para a homologação. Tela só depois do mockup aprovado
+(decisão 8). Produção só com o OK do Leonardo.
 
 Relação com os outros desenhos: este roteiro retoma a regra 8 e a seção 5.4 do
 mapa (`docs/mapa-do-armazem-enderecamento-dirigido.md`) e revê a P8 de
@@ -204,7 +205,7 @@ produtos:
   originais; no rolo da Zebra, que só imprime preto, sai em preto.
 
 Não depende das partes 2 a 5: entrou antes delas, para a caixa e a posição
-(seção 5.1). A caixa aberta com o saldo entra com a parte 3d e o volume, com
+(seção 5.1). A caixa aberta com o saldo entrou com a parte 3d e o volume, com
 a parte 4c, já neste desenho.
 
 ## 5. Partes, em ordem
@@ -224,9 +225,9 @@ Um problema por commit, com o teste que falha antes.
 | 3c | Caixa vazia e Mapa | A caixa encerrada, "Posições ocupadas" e "Saíram desta prateleira". | A caixa vazia conta como posição ocupada. |
 | 3d | Etiquetas para trocar | A lista das caixas abertas, "saldo em" e o registro da impressão. | A etiqueta sai com o conteúdo de entrada. |
 | 4a | Volumes no servidor | Um `packages` por volume, "Levar a caixa" e o lacre no pedido. | O pedido só tem o volume `_001`. |
-| 4b | Volumes na bancada | O volume aberto, "Fechar volume" e o peso. | — |
-| 4c | Etiqueta do volume e romaneio | As duas impressões. | — |
-| 4d | Para entregar | Os volumes e o lacre na fila. | — |
+| 4b | Volumes na bancada | O volume aberto, "Fechar volume" e o peso. | A bancada não tem volume. |
+| 4c | Etiqueta do volume e romaneio | As duas impressões. | O pedido sai sem etiqueta de volume e sem romaneio. |
+| 4d | Para entregar | Os volumes e o lacre na fila, e a tela do pedido separado. | A linha só diz os itens e as unidades, e o pedido concluído, "Separação concluída". |
 | 5 | Separar menos | A diferença registrada por quem opera, na linha; só a coordenação conclui com diferença. Entrou com a parte 2. | O operador não tem onde registrar a falta. |
 | 6 | Etiqueta com todos os produtos | As etiquetas de continuação e o logo, na caixa e na posição; com a parte 3d, na caixa aberta e, com a 4c, no volume (seção 4.6). | A caixa com nove produtos imprime quatro e "+ 5 produto(s) no sistema". |
 
@@ -234,6 +235,9 @@ As partes 1 a 5 têm o mockup aprovado (páginas 1 e 2), e a parte 6, o da
 página 3. Cada parte entra na homologação no merge e na produção só pela
 publicação manual, com o OK do Leonardo. A régua `billing-callables` fica
 verde em todas.
+
+O que as partes decidiram no caminho, e que o Leonardo ainda não viu, está
+junto do registro de cada uma (seção 5.1), marcado como "A confirmar".
 
 ### 5.1 Registro das partes
 
@@ -378,12 +382,11 @@ menos" na linha.
   (`separado.tsx`) saíram. O diálogo "Cancelar pedido" lista em "Voltam à
   posição" também as linhas já separadas do pedido em separação, na mesma
   tabela de antes, sem texto novo (`cancel-order.tsx`).
-- **O que da prancha da bancada fica para as partes 3 e 4:** a caixa sugerida
-  com a quantidade ("12 de CX-000027", "esvazia", "inteira"), "Levar a
-  caixa", "Outra caixa" no "⋯", o painel dos volumes, as "Etiquetas para
-  trocar" e os números de volumes e caixas do diálogo de concluir. Até lá, a
-  linha por separar mostra a caixa da parte 1c, e a conclusão fecha um volume
-  só, como antes.
+- **O que da prancha da bancada ficou para as partes 3 e 4** (e entrou com
+  elas): a caixa sugerida com a quantidade ("12 de CX-000027", "esvazia",
+  "inteira"), "Levar a caixa", "Outra caixa" no "⋯", o painel dos volumes, as
+  "Etiquetas para trocar" e os números de volumes e caixas do diálogo de
+  concluir.
 - **O pedido que parou entre a separação e a embalagem** (a conclusão caiu no
   meio) continua em "Para separar": a bancada abre só para concluir.
 
@@ -455,7 +458,7 @@ com a guarda de volta), as duas linhas na tabela de papéis
   ("Abertura · 22/10/2026"). Até aqui saía a data da impressão: era a mesma
   quando a etiqueta saía no dia da guarda, e errada na reimpressão.
 - **O diálogo de concluir** diz as caixas de onde o pedido saiu: "Caixas
-  inteiras", "Caixas abertas" e "Caixas vazias". "Volumes" entra com a parte 4.
+  inteiras", "Caixas abertas" e "Caixas vazias". "Volumes" entrou com a parte 4.
 - **O que volta à prateleira volta sem caixa.** No pedido cancelado no meio
   da separação e na devolução, o que a guarda devolve à prateleira entra no
   saldo dela, sem caixa: a caixa de onde saiu continua com o saldo baixado (ou
@@ -464,10 +467,10 @@ com a guarda de volta), as duas linhas na tabela de papéis
   saldo sem caixa da prateleira é o que sobra do razão depois do separado que
   espera a entrega e do saldo das caixas. Mostrar a divergência (as caixas
   dizendo mais do que o razão) pede uma tela, e tela pede mockup.
-- **O que da prancha fica para a parte 4:** "Levar a caixa", o volume em cada
-  linha separada, o painel dos volumes, "Volumes" no diálogo de concluir e a
-  tela do pedido separado (`WmsSepararConcluido`), com as etiquetas para
-  trocar e as caixas vazias depois da conclusão.
+- **O que da prancha ficou para a parte 4** (e entrou com ela): "Levar a
+  caixa", o volume em cada linha separada, o painel dos volumes, "Volumes" no
+  diálogo de concluir e a tela do pedido separado (`WmsSepararConcluido`), com
+  as etiquetas para trocar e as caixas vazias depois da conclusão.
 
 Os testes: `saldo-da-caixa.test.ts` (os casos da regra, nos dois lados, e a
 trava da cópia), `pick-progress.integration.test.ts` (a mais antiga e a
@@ -478,6 +481,135 @@ seguinte, o desfazer, o separar menos, a que esvazia, o que sai sem caixa,
 `pedidos-separar-view.test.tsx`, `concluir-separacao.test.tsx`,
 `warehouse-labels.test.ts`, `label-sheet.test.tsx`, `warehouse-map.test.ts` e
 `warehouse-map.test.tsx` (a lista dos textos e o `axe`).
+
+**Parte 4, os volumes de expedição (10/11/2026).** Em commits próprios no PR
+592, depois da parte 3: 4a (servidor), 4b (bancada), 4c (etiqueta e
+romaneio) e 4d ("Para entregar" e o pedido separado).
+
+- **Onde os volumes moram (4a).** Durante a separação, na tarefa:
+  `pick_tasks.volumes` (cada um com `id`, `number`, `status` `open` ou
+  `closed`, `units` e, no fechado, `weight_kg`, `box_code`, `closed_at` e
+  `closed_by`) e `volume_seq`, o contador dos ids, que não volta. A linha
+  guarda em quais volumes foi (`separated_volumes`). Na conclusão, cada
+  volume vira um `packages` (`pkg_<embalagem>_001`, `_002`, …) com os
+  `package_items` dele; a linha da remessa (`shipment_items`) continua uma por
+  item do pedido e diz em quais volumes ele foi (`package_ids`). O lacre
+  continua um por pedido. Nenhuma coleção nova: a zeragem não muda. A regra
+  sem banco é `functions/wms/src/domain/order-volumes.ts`.
+- **A linha entra no volume aberto.** `setPickLineSeparated` põe o separado
+  no volume aberto da tarefa, na mesma transação da caixa; sem volume aberto,
+  abre o seguinte. "Desfazer" tira a linha dos volumes. A linha separada a
+  menos até zero não entra em volume.
+- **"Fechar volume".** `closeOrderVolume` fecha o volume aberto com o peso,
+  opcional (decisão 15; até duas casas, até 2.000 kg), e grava
+  `picking.volume_closed`, fora da caixa de avisos. O volume vazio, o já
+  fechado e o que não existe recusam. O seguinte não é criado na hora: abre
+  na próxima linha separada, e a tela mostra o número dele, vazio.
+- **"Levar a caixa" (decisão 11).** A linha por separar de que uma caixa sai
+  inteira ganha "Levar a caixa". A bancada manda as caixas que mostrou
+  (`boxes`) com `take_boxes`: a caixa que sai inteira vira um volume fechado,
+  com a caixa (`box_code`) e o peso que ela tinha na entrada
+  (`gross_weight_kg`), e o resto da linha entra no volume aberto. Se a caixa
+  não sai mais inteira (outra pessoa tirou dela), recusa
+  (`SEPARATION_BOX_NOT_WHOLE`) e nada fica gravado. A caixa guarda qual
+  volume ela é (`emptied_volume_id` e `emptied_volume_number`, que acompanha
+  o volume se ele mudar de número): o Mapa diz, em "Saíram desta prateleira",
+  "inteira em 11/11/2026 · PED-0001, volume 11".
+- **Os números vão de 1 a N, sem buraco.** O volume que esvazia (o desfazer
+  da linha, ou da caixa levada) sai, e o de maior número ocupa o lugar dele:
+  é o que troca menos etiqueta. Só o fechado tem etiqueta para trocar, e a
+  resposta diz qual mudou (`renumbered_volumes`). O volume fechado de que sai
+  só uma parte continua fechado, sem o peso que tinha, e a resposta diz qual
+  (`changed_volumes`). A bancada avisa nos dois casos.
+- **A conclusão.** `completeOrderSeparation` fecha junto o volume aberto que
+  tem alguma coisa, sem peso, e grava um `packages` por volume. A conta parte
+  dos itens do pedido: o que um item separou e nenhum volume diz que leva vai
+  no volume aberto (ou num volume a mais), para os volumes fecharem sempre
+  com o separado. O pedido sem volume nenhum (separado antes desta parte)
+  fecha no volume único de sempre. A saída, a entrega e o cancelamento já
+  liam todos os `packages` do pedido e seguem iguais.
+- **A bancada (4b).** O painel "Volumes": o volume aberto com o que já tem,
+  "Peso (kg)" e "Fechar volume"; os fechados, do mais recente ao mais antigo
+  (os dois primeiros e "Ver os N volumes"), cada um com "Etiqueta". A linha
+  separada diz em qual volume está. O diálogo de concluir diz "Volumes" antes
+  das caixas. No celular, o volume aberto vem em cima da lista, numa linha,
+  como na prancha (`lib/warehouse-ops/volumes-do-pedido.ts`).
+- **A etiqueta do volume (4c).** No tamanho de hoje, com o pedido, o volume,
+  o código de barras (`PED-0001-V12`), o cliente e o destino, a data em que o
+  volume fechou, o peso, e os produtos com o código do cliente (sem ele, o
+  SKU), a maior quantidade primeiro; com mais de cinco produtos, sai em
+  etiquetas de continuação. Sai em Estoque › Etiquetas: `?pedido=` com
+  `volumes=12` (ao fechar o volume, sem o total) ou `volumes=todos` (o lote,
+  com "de 42", depois de concluir). Não registra a impressão.
+- **O romaneio (4c).** `/pedidos/romaneio`, em A4: o cliente, o destino, o
+  prazo, o lacre, os volumes, as unidades, de quando a quando o pedido
+  separou (da primeira linha à conclusão) e quem concluiu; e o conteúdo de
+  cada volume, na ordem das linhas do pedido, com o código, a quantidade e o
+  peso. Só do pedido já separado. A etiqueta e o romaneio vão ao cliente: não
+  citam caixa, posição nem valor.
+- **De onde as telas leem os volumes.** `use-volumes-do-pedido.ts`, ao vivo:
+  da tarefa e das linhas, enquanto o pedido separa (só os fechados); dos
+  `packages` e `package_items`, depois de concluído. As duas consultas novas
+  são por `order_id`, sem índice composto.
+- **"Para entregar" (4d).** A linha diz "116 itens · 3.335 un. · 42 volumes ·
+  lacre 88231", com "Ver volumes" no lugar de "Ver itens", "Etiquetas dos
+  volumes" e "Romaneio" antes de "Entregue", e o aviso "5 etiquetas de caixa
+  para trocar", com "Imprimir". O lacre e a contagem dos volumes passaram a
+  chegar na fila.
+- **O pedido separado (4d).** A bancada do pedido já concluído
+  (`/pedidos/separar`) mostra os volumes com o conteúdo de cada um, "Etiquetas
+  dos volumes", "Romaneio", as caixas que o pedido abriu e as que ele
+  esvaziou (`pages/pedido-separado-view.tsx`). É onde "Confirmar separação"
+  deixa a pessoa, e para onde "Ver volumes" leva.
+- **O pedido de antes dos volumes** aparece com um volume só, com todos os
+  itens: "Ver volumes", a etiqueta e o romaneio funcionam para ele.
+
+A confirmar com o Leonardo (decidido no caminho, sem prancha que dissesse):
+
+1. No celular, "Fechar volume" fecha sem peso, como na prancha; o peso só no
+   computador.
+2. Ao fechar o volume, a etiqueta não abre sozinha: fica em "Etiqueta", na
+   linha do volume fechado.
+3. O volume fechado que esvazia some, e o de maior número ocupa o número
+   dele; a bancada avisa "O volume 12 passou a ser o volume 5. Troque a
+   etiqueta dele."
+4. O volume fechado de que sai uma parte perde o peso; a bancada avisa "O
+   volume 5 mudou. Imprima a etiqueta dele de novo." Não há como informar o
+   peso de novo.
+5. Com mais de uma caixa saindo inteira na mesma linha, o botão diz "Levar as
+   caixas".
+6. Depois de "Confirmar separação", a pessoa fica no pedido separado, e não
+   volta a Pedidos.
+7. Em "Para entregar", "Ver volumes" fica no lugar de "Ver itens"; no
+   celular, "Etiquetas dos volumes" e "Romaneio" ficam atrás de "Ver volumes".
+8. No romaneio, "Separado" vai da primeira linha separada à conclusão, e
+   "Por" é quem concluiu.
+
+**Dois acertos que a parte 4 trouxe junto**, em commits próprios:
+
+- **A fila de Pedidos não recebia o pedido da tarefa.** A fila lê as tarefas
+  de `queues`, e o mapeamento não copiava o `order_id` nem o
+  `separation_started_at`, que ficavam só em `lanes`. Sem o `order_id`, a
+  linha do pedido não sabia de qual pedido era: "Entrega" não aparecia e
+  "Cancelar pedido" não abria. Sem o começo da separação, o selo saía "em
+  separação", sem "desde 12/11". Os testes das telas montavam a tarefa já
+  com os dois campos; o teste novo passa pela leitura de verdade
+  (`cloud-api-warehouse.test.ts`).
+- **A conclusão repetida não devolvia a remessa.** A embalagem nunca guardou
+  o `shipment_id`; com a embalagem já fechada, a resposta lê a remessa do
+  pedido.
+
+Os testes: `order-volumes.test.ts` (a regra dos volumes),
+`pick-progress.integration.test.ts` (o volume aberto, "Fechar volume",
+"Levar a caixa" e a recusa, o desfazer com o número e o peso, a conclusão
+com um `packages` por volume, a linha zerada, o pedido de antes dos volumes,
+o item sem linha e o cancelamento), a linha nova na tabela de papéis,
+`volumes-do-pedido.test.ts`, `use-volumes-do-pedido.test.ts`,
+`romaneio.test.ts`, `pedidos-separar-view.test.tsx`,
+`pedido-separado-view.test.tsx`, `pedidos-romaneio-view.test.tsx`,
+`pedidos.lista.test.tsx`, `concluir-separacao.test.tsx`,
+`warehouse-labels.test.ts`, `label-sheet.test.tsx` (a lista dos textos e o
+`axe`) e `cloud-api-warehouse.test.ts`.
 
 ## 6. Perguntas
 
@@ -533,6 +665,12 @@ Quando a parte 3a entrar, o saldo das caixas desses pedidos é acertado uma
 vez: pela regra da caixa mais antiga, conferida com a lista anotada, em
 simulação antes de gravar.
 
+Com a parte 4, o pedido concluído pelo fluxo antigo aparece com um volume só
+(o `_001`, com todos os itens): "Ver volumes", a etiqueta e o romaneio
+funcionam para ele, com esse volume único. O pedido que estiver em separação
+quando a parte 4 chegar monta os volumes a partir da primeira linha separada
+na bancada.
+
 ## 8. O que não muda
 
 O razão por cliente, SKU e posição; a reserva por prateleira e data; a baixa
@@ -557,6 +695,16 @@ backend).
   passa a pedir só as guardadas.
 - **Impressão.** Uma etiqueta por caixa aberta em cada pedido é volume de
   papel em pedido grande.
+- **Um volume aberto por pedido.** Duas pessoas separando o mesmo pedido ao
+  mesmo tempo põem as linhas no mesmo volume aberto, embora possam estar
+  enchendo caixas diferentes. Quem fecha o volume fecha o que as duas
+  puseram.
+- **O volume fechado não reabre.** "Fechar volume" por engano não se desfaz:
+  a linha seguinte abre o volume seguinte. O conteúdo de um volume fechado só
+  muda desfazendo a linha, e aí a etiqueta dele precisa sair de novo.
+- **A etiqueta do volume não registra a impressão.** Nada diz se a etiqueta
+  de um volume já saiu, nem se saiu antes de ele mudar: o lote com o total,
+  depois de concluir, é o que vale.
 - **"Posições ocupadas" cai** quando as caixas esvaziam: muda a referência da
   fatura manual (decisão 6).
 - **Sem leitura de código de barras.** A confirmação é por toque. A leitura
@@ -572,6 +720,13 @@ backend).
 A parte 1 sai revertendo o PR, sem dado para limpar. As partes 2 a 5 gravam
 dado novo (progresso da linha, saldo da caixa, volumes): cada uma leva no PR
 dela o que fazer com esse dado ao reverter.
+
+A parte 4 sai revertendo os commits dela. Os volumes gravados na tarefa
+(`volumes`, `volume_seq`) e nas linhas (`separated_volumes`) ficam nos
+documentos, sem efeito: o pedido em separação conclui no volume único de
+antes. O pedido já concluído com vários `packages` continua certo para a
+saída, a entrega e o cancelamento, que sempre leram todos os volumes do
+pedido; só deixa de haver tela para vê-los.
 
 A parte 3 sai revertendo os commits dela. O retirado gravado nas caixas
 (`taken_lines`, `taken_units`, `balance_at`) e nas linhas (`separated_boxes`)

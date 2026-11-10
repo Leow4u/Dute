@@ -441,9 +441,20 @@ documentação de produto e operação está em `docs/`.
   caixa de que sai tudo fica `emptied` (fora do Mapa, de "Posições ocupadas"
   e do encaixe), e a caixa aberta fica em "Etiquetas para trocar" até
   `recordBoxBalanceLabelPrint`. O conteúdo de entrada não muda, e o que volta
-  à prateleira (cancelamento, devolução) volta sem caixa. A parte 4 (os
-  volumes) tem o mockup aprovado e não está no código. Tela só entra com
-  mockup aprovado. Desenho, partes e registro em
+  à prateleira (cancelamento, devolução) volta sem caixa. **A parte 4 (os
+  volumes de expedição) também:** a linha separada entra no volume aberto da
+  tarefa (`pick_tasks.volumes`; a regra em
+  `functions/wms/src/domain/order-volumes.ts`), "Fechar volume"
+  (`closeOrderVolume`) fecha com o peso, opcional, e "Levar a caixa" faz da
+  caixa que sai inteira o volume; os números vão de 1 a N, sem buraco. A
+  conclusão grava um `packages` por volume, com os `package_items` dele, e o
+  lacre continua um por pedido. A etiqueta do volume sai em Estoque ›
+  Etiquetas (`?pedido=…&volumes=`), o romaneio em `/pedidos/romaneio`, e os
+  dois vão ao cliente: não citam caixa, posição nem valor. "Para entregar"
+  diz os volumes e o lacre, e o pedido já separado abre com os volumes em
+  `/pedidos/separar`. As partes 2 a 5 entraram na `main` pelo PR 592, com o
+  OK do Leonardo em 10/11/2026; a produção espera o OK dele. Tela só entra
+  com mockup aprovado. Desenho, partes e registro em
   `docs/plataforma/separacao-com-caixas.md`.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os

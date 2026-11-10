@@ -66,6 +66,7 @@ WMS:
 - `picking.started`
 - `picking.line_separated`
 - `picking.line_unseparated`
+- `picking.volume_closed`
 - `warehouse.box_emptied`
 - `warehouse.box_reopened`
 - `warehouse.box_balance_label_printed`

@@ -433,19 +433,34 @@ Página 2, separar com caixa e volumes (partes 2 a 5):
 | Romaneio (A4) | `WmsSepararRomaneio.dc.html` | O conteúdo completo de cada volume, com a quantidade e o peso; o lacre e o total de volumes. Sem caixa, posição nem valor. |
 | Armazenagem · Mapa | `WmsSepararMapa.dc.html` | Depois do pedido: a caixa aberta com o saldo, as caixas que saíram em "Saíram desta prateleira" e "Posições ocupadas" contando só a prateleira com caixa com saldo. |
 
-Da página 2, as partes 2, 3 e 5 estão no código desde 10/11/2026 (registro em
-`docs/plataforma/separacao-com-caixas.md`, seção 5.1): a bancada com o
+Da página 2, as partes 2, 3, 4 e 5 estão no código desde 10/11/2026 (registro
+em `docs/plataforma/separacao-com-caixas.md`, seção 5.1): a bancada com o
 progresso, "Separar", "Desfazer", "Separar menos" e "Concluir separação" com
 o lacre, a fila com "Separar"/"Continuar" e o selo "em separação desde", o
-celular e, da parte 3, a caixa de cada linha, "Outra caixa", "Etiquetas para
-trocar", a etiqueta da caixa aberta e o Mapa depois do pedido. O que a tela
-tem de diferente das pranchas, até a parte 4:
+celular; da parte 3, a caixa de cada linha, "Outra caixa", "Etiquetas para
+trocar", a etiqueta da caixa aberta e o Mapa depois do pedido; e, da parte
+4, os volumes na bancada, "Levar a caixa", a etiqueta do volume, o romaneio,
+o pedido separado e "Para entregar" com os volumes e o lacre. O que a tela
+tem de diferente das pranchas:
 
-- A bancada não tem "Levar a caixa", o volume de cada linha nem o painel dos
-  volumes, e o diálogo de concluir não diz "Volumes": a conclusão fecha um
-  volume, como antes (parte 4).
-- A tela do pedido separado (`WmsSepararConcluido`), com as etiquetas para
-  trocar e as caixas vazias depois da conclusão, entra com a parte 4.
+- O volume aberto que ainda não tem nada aparece como o seguinte, vazio
+  ("Volume 13 · aberto · 0 un."), com "Fechar volume" desligado: ele abre na
+  próxima linha separada.
+- Com mais de uma caixa saindo inteira na mesma linha, o botão diz "Levar as
+  caixas".
+- No celular, a lista dos volumes fechados e as "Etiquetas para trocar" vêm
+  depois das linhas; o volume aberto, em cima, fecha sem peso, como na
+  prancha.
+- O desfazer que muda o número ou o conteúdo de um volume fechado avisa que
+  a etiqueta dele precisa sair de novo (a prancha não mostra esse caso).
+- Em "Para entregar", o pedido com a entrega definida mantém "Entrega" ou
+  "Alterar entrega" entre "Romaneio" e "Entregue", e o "⋯" de "Cancelar
+  pedido"; no celular, "Etiquetas dos volumes" e "Romaneio" ficam atrás de
+  "Ver volumes".
+- No pedido separado, o volume sem peso mostra só as unidades, e o volume de
+  antes desta parte aparece sozinho, com todos os itens.
+- O romaneio e a lista impressa trazem o logo da Dutelog no cabeçalho, no
+  lugar da palavra, e o rodapé de cada página sai pela margem da impressão.
 - Com diferença registrada, a bancada mostra "1 linha com diferença" também
   no computador (a prancha só mostra no celular).
 - "Outra caixa" só aparece na linha com mais de uma caixa na prateleira, e a
@@ -454,7 +469,8 @@ tem de diferente das pranchas, até a parte 4:
   caixas"; no celular, vem depois das linhas.
 - No Mapa, a caixa mantém a ficha de hoje (o conteúdo em linhas, as medidas e
   o volume) e ganha o estado, o saldo e "saldo em"; "Saíram desta prateleira"
-  mostra as dez saídas mais recentes, sem o volume (parte 4).
+  mostra as dez saídas mais recentes, com o volume na caixa que virou volume
+  ("inteira em 11/11/2026 · PED-0001, volume 11").
 - A etiqueta da caixa aberta escreve "Abertura 22/10/2026", sem o ponto do
   meio, como a etiqueta de hoje.
 

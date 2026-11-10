@@ -102,7 +102,13 @@ avanço e "Registrar exceção" ("Motivo da exceção").
   "Separar" abre a bancada do pedido; depois da primeira linha, o botão vira
   "Continuar" e o pedido ganha o selo "em separação desde 12/11 · 2 de 5
   itens" (ver "Separar o pedido", abaixo).
-- **"Para entregar":** "Entregue" pede "Quem levou" e "Placa" (no pronto para
+- **"Para entregar":** a linha diz os volumes e o lacre ("116 itens · 3.335
+  un. · 42 volumes · lacre 88231"). "Ver volumes" abre o pedido separado (ver
+  "O pedido separado", abaixo); "Etiquetas dos volumes" abre o lote das
+  etiquetas, com o total, e "Romaneio", a folha do pedido (no celular, os
+  dois ficam atrás de "Ver volumes"). Com caixa aberta pelo pedido ainda de
+  etiqueta velha, a linha avisa "5 etiquetas de caixa para trocar", com
+  "Imprimir". "Entregue" pede "Quem levou" e "Placa" (no pronto para
   envio; o aparelho lembra os últimos) e "Quem recebeu (opcional)". "Confirmar
   entrega" registra a saída e a entrega, e o estoque baixa. Na retirada pelo
   cliente, quem levou e a placa vêm da entrega.
@@ -143,6 +149,21 @@ separa aparece para a outra sem recarregar.
   22/10/2026 · tem 20 un."), com a quantidade de cada uma; "Confirmar caixas"
   liga quando a soma fecha com a linha. O que as caixas da prateleira não têm
   sai sem caixa.
+- **Os volumes:** a linha separada entra no volume aberto e diz em qual está
+  ("Volume 12"). O painel "Volumes" mostra o volume aberto com o que já tem;
+  "Fechar volume" fecha com o "Peso (kg)", opcional, e o volume seguinte abre
+  sozinho na próxima linha. No celular, o volume aberto vem em cima da lista,
+  e "Fechar volume" fecha sem peso. Cada volume fechado tem "Etiqueta", que
+  abre a etiqueta dele (ainda sem o total); "Ver os 11 volumes" mostra todos.
+  O volume fechado não reabre.
+- **"Levar a caixa":** na linha de que uma caixa sai inteira, a caixa vira o
+  volume, sem reembalar, já fechado, com o peso que ela tinha na entrada. O
+  resto da linha, se houver, entra no volume aberto. A etiqueta do volume
+  substitui a da caixa.
+- **Desfazer e os volumes:** "Desfazer" tira a linha do volume. O volume
+  fechado que fica vazio some, e o de maior número ocupa o número dele; o
+  fechado de que sai só uma parte perde o peso. Nos dois casos a bancada
+  avisa que a etiqueta daquele volume precisa sair de novo.
 - **"Etiquetas para trocar"** lista as caixas que o pedido abriu, com a
   prateleira e o saldo ("A-05 · saldo 12 un."). "Imprimir" abre as etiquetas
   delas com o saldo; a caixa sai da lista depois da impressão e volta se sair
@@ -154,14 +175,39 @@ separa aparece para a outra sem recarregar.
   conclui o pedido com diferença.
 - **"Concluir separação"** liga com todas as linhas tratadas (separadas ou
   com a diferença registrada); antes, o pedido diz "106 itens por separar". O
-  diálogo diz as caixas de onde o pedido saiu ("Caixas inteiras", "Caixas
-  abertas" e "Caixas vazias"), pede o "Número do lacre", um por pedido, e "Confirmar separação"
-  fecha a separação e a embalagem de uma vez, num volume só. O pedido segue
-  com o separado: a diferença volta a ficar disponível, e o item zerado não
-  vai no volume. O pedido vai para "Para entregar".
+  diálogo diz os "Volumes" e as caixas de onde o pedido saiu ("Caixas
+  inteiras", "Caixas abertas" e "Caixas vazias"), pede o "Número do lacre",
+  um por pedido, e "Confirmar separação" fecha a separação e a embalagem de
+  uma vez; o volume aberto que tiver alguma coisa fecha junto, sem peso. O
+  pedido segue com o separado: a diferença volta a ficar disponível, e o item
+  zerado não vai em volume nenhum. O pedido vai para "Para entregar", e a
+  tela fica no pedido separado.
 - A contagem cíclica de uma prateleira com linha já separada é recusada até a
   entrega: o item já saiu dela e só baixa do saldo na entrega.
 - O suporte vê a bancada, sem as ações.
+
+## O pedido separado
+
+Depois de "Confirmar separação", e por "Ver volumes" em "Para entregar", o
+pedido abre com o selo "separado", os volumes e o lacre.
+
+- **"Volumes"** lista cada volume com a caixa que virou o volume (quando foi
+  "Levar a caixa"), o conteúdo ("30 × Calça Social Masculino Preta · 40"), as
+  unidades e o peso. "Etiqueta" abre a etiqueta daquele volume.
+- **"Etiquetas dos volumes"** abre o lote, com o total em cada uma ("Volume
+  12 de 42"): é o que substitui as etiquetas que saíram ao fechar cada
+  volume. Na folha A4 ou no rolo da Zebra, como as outras etiquetas.
+- **"Romaneio"** abre a folha A4 do pedido: o cliente, o destino, o prazo, o
+  lacre, os volumes e as unidades, de quando a quando o pedido separou e
+  quem concluiu; e o conteúdo de cada volume, com o código do cliente, a
+  quantidade e o peso. "Imprimir" é o do navegador.
+- **"Etiquetas para trocar"** e **"Caixas vazias"** dizem as caixas que o
+  pedido abriu e ainda estão com a etiqueta velha, e as que ele esvaziou
+  ("CX-000027 · A-05").
+
+A etiqueta do volume e o romaneio vão ao cliente: levam o código do cliente,
+e não dizem caixa, prateleira nem valor. O pedido concluído antes dos volumes
+aparece com um volume só, com todos os itens.
 
 ## A entrega do pedido
 
