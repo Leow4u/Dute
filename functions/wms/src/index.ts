@@ -68,6 +68,10 @@ import { accountRetentionEnabled, anonymizeRemovedAccounts } from "./domain/acco
 import { recalcularDisponivelDoPortal } from "./domain/disponivel-do-portal.js";
 import { lerDatasDoEstoque } from "./domain/datas-do-estoque.js";
 import { openAreaPutaway as openAreaPutawayFor, previewAreaPutaway as previewAreaPutawayFor } from "./domain/area-putaway.js";
+import {
+  completeOrderSeparation as completeOrderSeparationFor,
+  setPickLineSeparated as setPickLineSeparatedFor,
+} from "./domain/pick-progress.js";
 import { CLIENT_NOTICE_AFTER_PUTAWAY } from "./domain/inbound-box-entry.js";
 import {
   CLIENT_ACCESS_COLLECTION,
@@ -6605,6 +6609,27 @@ export const advanceWarehouseTask = onCall(async (request) => {
     AdvanceWarehouseTaskSchema.parse(request.data ?? {}),
     profile,
   );
+});
+
+/**
+ * Separar com o progresso salvo (separação com caixas, parte 2a): a linha
+ * separada fica gravada na hora, e "Desfazer" a volta. Quem separa é quem
+ * opera o armazém.
+ */
+export const setPickLineSeparated = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return setPickLineSeparatedFor(db, request.data, profile);
+});
+
+/**
+ * Concluir a separação (parte 2a): a separação e a embalagem, com o lacre,
+ * numa chamada. Separar a menos continua só da coordenação (short-pick.ts).
+ */
+export const completeOrderSeparation = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return completeOrderSeparationFor(db, request.data, profile);
 });
 
 /**
