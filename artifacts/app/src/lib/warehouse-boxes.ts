@@ -79,6 +79,8 @@ export type WarehouseBox = {
   emptied_at?: string | null;
   emptied_order_number?: string | null;
   emptied_whole?: boolean;
+  /** Na caixa que saiu inteira e virou volume ("Levar a caixa"): o número do volume. */
+  emptied_volume_number?: number | null;
   suggestion: {
     position: string | null;
     reason: string | null;
@@ -304,6 +306,7 @@ export function warehouseBoxFromRecord(record: AnyRecord): WarehouseBox {
     emptied_at: text(record.emptied_at) || null,
     emptied_order_number: text(record.emptied_order_number) || null,
     emptied_whole: record.emptied_whole === true,
+    emptied_volume_number: Number(record.emptied_volume_number) > 0 ? Number(record.emptied_volume_number) : null,
     suggestion: suggestion
       ? {
           position: text(suggestion.position) || null,

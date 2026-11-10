@@ -190,11 +190,12 @@ describe("Mapa › a prateleira depois do pedido", () => {
   it("Saíram desta prateleira: a caixa que saiu inteira e a que ficou vazia, com a data e o pedido", async () => {
     const saidas = [
       warehouseBoxFromRecord({ ...guardada, code: "CX-000027", status: "emptied", emptied_at: "2026-11-12T13:00:00.000Z", emptied_order_number: "PED-0001" }),
-      warehouseBoxFromRecord({ ...guardada, code: "CX-000029", status: "emptied", emptied_at: "2026-11-11T16:00:00.000Z", emptied_order_number: "PED-0001", emptied_whole: true }),
+      // A caixa que virou volume ("Levar a caixa") diz qual volume ela é, como na prancha.
+      warehouseBoxFromRecord({ ...guardada, code: "CX-000029", status: "emptied", emptied_at: "2026-11-11T16:00:00.000Z", emptied_order_number: "PED-0001", emptied_whole: true, emptied_volume_number: 11 }),
     ];
     const html = renderToStaticMarkup(<SaidasDaPrateleira shelf={{ saidas }} />);
     expect(
-      textosForaDaLista(html, ["Saíram desta prateleira", "CX-000027", "· vazia em 12/11/2026 · PED-0001", "CX-000029", "· inteira em 11/11/2026 · PED-0001"]),
+      textosForaDaLista(html, ["Saíram desta prateleira", "CX-000027", "· vazia em 12/11/2026 · PED-0001", "CX-000029", "· inteira em 11/11/2026 · PED-0001, volume 11"]),
     ).toEqual([]);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
     // Sem saída, a ficha não ganha a seção.

@@ -924,8 +924,14 @@ describe("Os volumes de expedição (separação com caixas, parte 4a)", () => {
       { volume_id: "v1", qty: 3 },
       { volume_id: "v2", qty: 2 },
     ]);
-    // A caixa levada sai da prateleira como a que saiu inteira.
-    assert.deepEqual([(await caixas())["CX-000001"]!.status, (await caixas())["CX-000001"]!.emptied_whole], ["emptied", true]);
+    // A caixa levada sai da prateleira como a que saiu inteira, e diz qual volume ela é.
+    let levadas = await caixas();
+    assert.deepEqual(
+      [levadas["CX-000001"]!.status, levadas["CX-000001"]!.emptied_whole, levadas["CX-000001"]!.emptied_volume_id, levadas["CX-000001"]!.emptied_volume_number],
+      ["emptied", true, "v1", 1],
+    );
+    // A caixa de onde saiu só uma parte não é volume.
+    assert.equal(levadas["CX-000002"]!.emptied_volume_number, undefined);
 
     // Os 4 bonés: sem informar a caixa, vale a mais antiga, que sai inteira, com o peso que ela tinha.
     const bone = await levarACaixa(pickTaskId, linhaBone, undefined, rafael);
@@ -935,11 +941,13 @@ describe("Os volumes de expedição (separação com caixas, parte 4a)", () => {
       ["v2", 2, "open", 2, null, null],
       ["v3", 3, "closed", 4, "CX-000003", 1.2],
     ]);
+    assert.equal((await caixas())["CX-000003"]!.emptied_volume_number, 3);
 
     // Desfazer devolve a caixa à prateleira e tira o volume dela.
     const desfeito = await desfazer(pickTaskId, linhaBone);
     assert.deepEqual([desfeito.renumbered_volumes, desfeito.changed_volumes], [undefined, undefined]);
-    assert.equal((await caixas())["CX-000003"]!.status, "stored");
+    levadas = await caixas();
+    assert.deepEqual([levadas["CX-000003"]!.status, levadas["CX-000003"]!.emptied_volume_id, levadas["CX-000003"]!.emptied_volume_number], ["stored", undefined, undefined]);
     assert.deepEqual(await volumes(pickTaskId), [
       ["v1", 1, "closed", 3, "CX-000001", null],
       ["v2", 2, "open", 2, null, null],
@@ -948,6 +956,28 @@ describe("Os volumes de expedição (separação com caixas, parte 4a)", () => {
     // O id do volume não volta: o próximo é o v4.
     assert.deepEqual((await separar(pickTaskId, linhaBone)).volumes, [{ volume_id: "v2", number: 2, qty: 4 }]);
     assert.equal((await tarefa(pickTaskId)).volume_seq, 3);
+  });
+
+  it("o volume da caixa levada que muda de número leva o número novo para a caixa", async () => {
+    await prateleiras();
+    const { pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    // Volume 1: a CX-000001 (3 polos). Volume 2: os outros 2 polos, fechado. Volume 3: a CX-000003 (os bonés).
+    await levarACaixa(pickTaskId, linhaPolo, [
+      { box_code: "CX-000001", qty: 3 },
+      { box_code: "CX-000002", qty: 2 },
+    ]);
+    await fecharVolume(pickTaskId, "v2");
+    await levarACaixa(pickTaskId, linhaBone);
+    assert.equal((await caixas())["CX-000003"]!.emptied_volume_number, 3);
+
+    // Os polos voltam: os volumes 1 e 2 saem, e a caixa dos bonés passa a ser o volume 1.
+    const desfeito = await desfazer(pickTaskId, linhaPolo);
+    assert.deepEqual(desfeito.renumbered_volumes, [{ volume_id: "v3", from: 3, to: 1 }]);
+    assert.deepEqual(await volumes(pickTaskId), [["v3", 1, "closed", 4, "CX-000003", 1.2]]);
+    const guardadas = await caixas();
+    assert.deepEqual([guardadas["CX-000003"]!.emptied_volume_id, guardadas["CX-000003"]!.emptied_volume_number], ["v3", 1]);
+    // A caixa que voltou à prateleira não é mais volume.
+    assert.deepEqual([guardadas["CX-000001"]!.status, guardadas["CX-000001"]!.emptied_volume_number], ["stored", undefined]);
   });
 
   it("Levar a caixa só vale para a caixa que sai inteira: a recusa não grava nada", async () => {

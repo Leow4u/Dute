@@ -379,8 +379,14 @@ export function dataDaCaixa(value: string | null | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : dataDaSaida.format(date);
 }
 
-/** "inteira em 11/11/2026 · PED-0001" ou "vazia em 12/11/2026 · PED-0001": como a caixa saiu da prateleira. */
-export function textoDaSaida(box: Pick<WarehouseBox, "emptied_at" | "emptied_whole" | "emptied_order_number">): string {
+/**
+ * "inteira em 11/11/2026 · PED-0001, volume 11" ou "vazia em 12/11/2026 ·
+ * PED-0001": como a caixa saiu da prateleira. O volume só na caixa que virou
+ * volume ("Levar a caixa", separação com caixas, parte 4).
+ */
+export function textoDaSaida(box: Pick<WarehouseBox, "emptied_at" | "emptied_whole" | "emptied_order_number" | "emptied_volume_number">): string {
   const data = dataDaCaixa(box.emptied_at);
-  return [`${box.emptied_whole ? "inteira" : "vazia"}${data ? ` em ${data}` : ""}`, box.emptied_order_number].filter(Boolean).join(" · ");
+  const volume = box.emptied_volume_number ? `volume ${box.emptied_volume_number}` : null;
+  const pedido = [box.emptied_order_number, volume].filter(Boolean).join(", ");
+  return [`${box.emptied_whole ? "inteira" : "vazia"}${data ? ` em ${data}` : ""}`, pedido].filter(Boolean).join(" · ");
 }

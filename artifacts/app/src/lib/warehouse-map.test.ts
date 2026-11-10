@@ -344,6 +344,11 @@ describe("a caixa na separação", () => {
     expect(textoDaSaida({ emptied_at: "2026-11-11T16:00:00.000Z", emptied_whole: true, emptied_order_number: "PED-0001" })).toBe("inteira em 11/11/2026 · PED-0001");
     expect(textoDaSaida({ emptied_at: "2026-11-12T13:00:00.000Z", emptied_whole: false, emptied_order_number: "PED-0001" })).toBe("vazia em 12/11/2026 · PED-0001");
     expect(textoDaSaida({ emptied_at: null, emptied_whole: false, emptied_order_number: null })).toBe("vazia");
+    // A caixa que saiu inteira e virou volume ("Levar a caixa") diz qual volume ela é.
+    expect(textoDaSaida({ emptied_at: "2026-11-11T16:00:00.000Z", emptied_whole: true, emptied_order_number: "PED-0001", emptied_volume_number: 11 })).toBe(
+      "inteira em 11/11/2026 · PED-0001, volume 11",
+    );
+    expect(textoDaSaida({ emptied_at: "2026-11-11T16:00:00.000Z", emptied_whole: true, emptied_order_number: null, emptied_volume_number: 11 })).toBe("inteira em 11/11/2026 · volume 11");
   });
 
   it("o conteúdo da caixa aberta é o saldo: a entrada menos o que saiu, sem o produto que zerou", () => {

@@ -26,6 +26,7 @@ import {
 } from "./order-volumes.js";
 import { conferirCaixasInformadas, retiradoCom, sugerirCaixas, unidadesDaCaixa, type CaixaDaLinha, type LinhaDaCaixa } from "./saldo-da-caixa.js";
 import { DETALHE_DA_DIFERENCA_MAXIMO, MOTIVOS_DA_DIFERENCA, concluiComDiferenca, type MotivoDaDiferenca } from "./short-pick.js";
+import { WAREHOUSE_BOXES_COLLECTION } from "./warehouse-boxes.js";
 
 /**
  * Separar com o progresso salvo (docs/plataforma/separacao-com-caixas.md,
@@ -491,6 +492,19 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
     }
     const numeroDepois = new Map(volumesDepois.volumes.map((volume) => [volume.id, volume]));
     const mudaramOsVolumes = volumesDepois.seq !== volumesAntes.seq || JSON.stringify(volumesDepois.volumes) !== JSON.stringify(volumesAntes.volumes);
+    // A caixa que virou volume guarda o número dele (o Mapa diz "PED-0001,
+    // volume 11"): a do volume que mudou de número acompanha. Lida antes de
+    // qualquer escrita; a que saiu do cadastro fica de fora.
+    const caixasRenumeradas = (
+      await Promise.all(
+        semALinha.renumerados.flatMap((renumerado) => {
+          const volume = numeroDepois.get(renumerado.id);
+          return volume?.box_code
+            ? [transaction.get(db.collection(WAREHOUSE_BOXES_COLLECTION).doc(volume.box_code)).then((snapshot) => ({ snapshot, number: volume.number }))]
+            : [];
+        }),
+      )
+    ).filter(({ snapshot }) => snapshot.exists);
 
     const events: unknown[] = [];
     if (changed) {
@@ -507,6 +521,8 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
           ? { taken_lines: retirado, taken_units: tirou, balance_at: occurredAt, updated_at: FieldValue.serverTimestamp() }
           : { taken_lines: FieldValue.delete(), taken_units: FieldValue.delete(), balance_at: FieldValue.delete(), updated_at: FieldValue.serverTimestamp() };
         if (vazia && !estavaVazia) {
+          // A caixa levada como volume ("Levar a caixa") diz qual volume ela é.
+          const doVolume = volumesDepois.volumes.find((volume) => volume.box_code === codigo);
           // A caixa vazia sai da prateleira: fica o registro de quando, em qual pedido e se saiu inteira.
           Object.assign(update, {
             status: BOX_STATUS_EMPTIED,
@@ -516,6 +532,8 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
             emptied_pick_line_id: input.pick_line_id,
             emptied_order_id: pedidoDaCaixa.order_id ?? FieldValue.delete(),
             emptied_order_number: pedidoDaCaixa.order_number ?? FieldValue.delete(),
+            emptied_volume_id: doVolume?.id ?? FieldValue.delete(),
+            emptied_volume_number: doVolume?.number ?? FieldValue.delete(),
           });
         } else if (!vazia && estavaVazia) {
           Object.assign(update, {
@@ -526,6 +544,8 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
             emptied_pick_line_id: FieldValue.delete(),
             emptied_order_id: FieldValue.delete(),
             emptied_order_number: FieldValue.delete(),
+            emptied_volume_id: FieldValue.delete(),
+            emptied_volume_number: FieldValue.delete(),
           });
         }
         transaction.update(box.ref, update);
@@ -584,6 +604,9 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
       }
       if (mudaramOsVolumes) Object.assign(naTarefa, { volumes: volumesDepois.volumes, volume_seq: volumesDepois.seq });
       if (Object.keys(naTarefa).length) transaction.update(taskRef, { ...naTarefa, updated_at: FieldValue.serverTimestamp() });
+      for (const { snapshot, number } of caixasRenumeradas) {
+        transaction.update(snapshot.ref, { emptied_volume_number: number, updated_at: FieldValue.serverTimestamp() });
+      }
       const pedidoNumero = text(task.order_number) || text(line.order_number);
       const aMenos = novo && novo.separado < pedido ? pedido - novo.separado : 0;
       events.push(
