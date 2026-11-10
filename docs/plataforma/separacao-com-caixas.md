@@ -98,8 +98,12 @@ O retrato de antes deste roteiro. A parte 1 mudou a lista e a caixa na linha
 | 20 | Depois de "Confirmar separação", a tela fica no pedido separado. |
 | 21 | A etiqueta da caixa leva a data de entrada (a do FIFO), e não a da impressão. |
 | 22 | O que volta à prateleira (cancelamento, devolução) volta sem caixa. |
+| 23 | Ao fechar o volume, a etiqueta não abre sozinha: fica no botão "Etiqueta" do volume fechado. |
+| 24 | Com mais de uma caixa saindo inteira na mesma linha, o botão diz "Levar as caixas". |
+| 25 | Em "Para entregar", "Ver volumes" fica no lugar de "Ver itens"; no celular, "Etiquetas dos volumes" e "Romaneio" ficam atrás de "Ver volumes". |
+| 26 | No romaneio, "Separado" vai da primeira linha separada à conclusão, e "Por" é quem concluiu. |
 
-As decisões 17 a 22 foram tomadas no caminho das partes 3 e 4, onde as
+As decisões 17 a 26 foram tomadas no caminho das partes 3 e 4, onde as
 pranchas não diziam, e confirmadas pelo Leonardo em 10/11/2026, depois do
 merge do PR 592.
 
@@ -577,7 +581,7 @@ romaneio) e 4d ("Para entregar" e o pedido separado).
   itens: "Ver volumes", a etiqueta e o romaneio funcionam para ele.
 
 Decidido no caminho, sem prancha que dissesse. Confirmados pelo Leonardo
-em 10/11/2026 (seção 3, decisões 17 a 20):
+em 10/11/2026 (seção 3, decisões 17 a 20 e 23 a 26):
 
 1. No celular, "Fechar volume" fecha sem peso, como na prancha; o peso só no
    computador.
@@ -589,9 +593,6 @@ em 10/11/2026 (seção 3, decisões 17 a 20):
    peso de novo.
 4. Depois de "Confirmar separação", a pessoa fica no pedido separado, e não
    volta a Pedidos.
-
-Ainda a confirmar (estão no PR 592, sem resposta):
-
 5. Ao fechar o volume, a etiqueta não abre sozinha: fica em "Etiqueta", na
    linha do volume fechado.
 6. Com mais de uma caixa saindo inteira na mesma linha, o botão diz "Levar as
