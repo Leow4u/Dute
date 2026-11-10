@@ -133,7 +133,11 @@ export default function PaginaPedidosSeparar() {
       await queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
       navegar("/pedidos");
     },
-    onError: erro("Não foi possível concluir a separação"),
+    onError: (falha: Error) => {
+      erro("Não foi possível concluir a separação")(falha);
+      // Outra pessoa pode ter concluído por baixo: a fila lê de novo e a bancada mostra onde o pedido está.
+      void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
+    },
   });
 
   const estado: EstadoDaBancada = !chave
