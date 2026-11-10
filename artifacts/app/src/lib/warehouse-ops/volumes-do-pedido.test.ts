@@ -76,7 +76,7 @@ describe("os volumes da separação em andamento", () => {
     expect(volumesDaLinhaGravados("v1")).toBeUndefined();
   });
 
-  it("cada volume leva o que as linhas puseram nele: o nome com o tamanho, o código do cliente e a quantidade, a maior primeiro", () => {
+  it("cada volume leva o que as linhas puseram nele, na ordem das linhas do pedido: o nome com o tamanho, o código do cliente e a quantidade", () => {
     const volumes = volumesDaSeparacao(volumesDaTarefa(DA_TAREFA), LINHAS);
     expect(volumes).toEqual([
       { id: "v1", numero: 10, aberto: false, unidades: 50, caixa: null, pesoKg: 8.2, fechadoEm: "2026-11-11T12:00:00.000Z", itens: [{ nome: "Polo Feminino Piquet Preto · G", codigo: "A.01.0805.002.G", quantidade: 50 }] },
@@ -98,12 +98,22 @@ describe("os volumes da separação em andamento", () => {
         caixa: null,
         pesoKg: null,
         fechadoEm: null,
+        // A linha 3 (a 42) vem antes da 4 (a 40): é a ordem do pedido, não a da quantidade.
         itens: [
-          { nome: "Calça Social Masculino Preta · 40", codigo: "A.01.0712.001.40", quantidade: 30 },
           { nome: "Calça Social Masculino Preta · 42", codigo: "A.01.0712.001.42", quantidade: 12 },
+          { nome: "Calça Social Masculino Preta · 40", codigo: "A.01.0712.001.40", quantidade: 30 },
         ],
       },
     ]);
+    // Duas linhas do mesmo produto no mesmo volume (duas prateleiras) somam numa só.
+    const somadas = volumesDaSeparacao(
+      [{ id: "v1", number: 1, status: "open", units: 9 }],
+      [
+        linha(2, "Boné Aba Curva", "C.1", "BTG-000301", 4, [{ volume_id: "v1", qty: 4 }]),
+        linha(1, "Boné Aba Curva", "C.1", "BTG-000301", 5, [{ volume_id: "v1", qty: 5 }]),
+      ],
+    );
+    expect(somadas[0]!.itens).toEqual([{ nome: "Boné Aba Curva", codigo: "C.1", quantidade: 9 }]);
   });
 
   it("sem as linhas lidas, valem as unidades que a tarefa diz; o item sem código do cliente sai com o SKU", () => {
@@ -151,13 +161,13 @@ describe("os volumes do pedido concluído", () => {
     { id: "pkg_pack_ord_1_003", volume_number: 3, packed_units: 5, status: "cancelled" },
   ];
   const ITENS = [
-    { package_id: "pkg_pack_ord_1_001", sku_code: "BTG-000122", client_item_code: "A.01.0806.005.P", product_name: "Polo Masculino Piquet Preto", qty_packed: 60, status: "packed" },
-    { package_id: "pkg_pack_ord_1_002", sku_code: "BTG-000084", client_item_code: "A.01.0712.001.42", product_name: "Calça Social Masculino Preta 42", qty_packed: 12, status: "packed" },
-    { package_id: "pkg_pack_ord_1_002", sku_code: "BTG-000083", client_item_code: "A.01.0712.001.40", product_name: "Calça Social Masculino Preta 40", qty_packed: 30, status: "packed" },
-    { package_id: "pkg_pack_ord_1_002", sku_code: "BTG-000090", client_item_code: "X", product_name: "Cancelado", qty_packed: 9, status: "cancelled" },
+    { package_id: "pkg_pack_ord_1_001", line_number: 1, sku_code: "BTG-000122", client_item_code: "A.01.0806.005.P", product_name: "Polo Masculino Piquet Preto", qty_packed: 60, status: "packed" },
+    { package_id: "pkg_pack_ord_1_002", line_number: 4, sku_code: "BTG-000084", client_item_code: "A.01.0712.001.42", product_name: "Calça Social Masculino Preta 42", qty_packed: 12, status: "packed" },
+    { package_id: "pkg_pack_ord_1_002", line_number: 3, sku_code: "BTG-000083", client_item_code: "A.01.0712.001.40", product_name: "Calça Social Masculino Preta 40", qty_packed: 30, status: "packed" },
+    { package_id: "pkg_pack_ord_1_002", line_number: 5, sku_code: "BTG-000090", client_item_code: "X", product_name: "Cancelado", qty_packed: 9, status: "cancelled" },
   ];
 
-  it("um volume por pacote, na ordem do número, com os itens de cada um; o cancelado não entra", () => {
+  it("um volume por pacote, na ordem do número, com os itens de cada um na ordem das linhas; o cancelado não entra", () => {
     expect(volumesDaRemessa(PACOTES, ITENS)).toEqual([
       {
         id: "pkg_pack_ord_1_001",
@@ -185,14 +195,8 @@ describe("os volumes do pedido concluído", () => {
     ]);
   });
 
-  it("o tamanho do catálogo entra no nome; o volume único de antes vem com as unidades do pacote", () => {
-    const comTamanho = volumesDaRemessa(
-      [{ id: "pkg_1", volume_number: 1, packed_units: 4, status: "packed" }],
-      [{ package_id: "pkg_1", sku_code: "BTG-000500", client_item_code: "Z.9", product_name: "Jaqueta Corta Vento", qty_packed: 4 }],
-      (sku) => (sku === "BTG-000500" ? "XG" : undefined),
-    );
-    expect(comTamanho[0]!.itens).toEqual([{ nome: "Jaqueta Corta Vento · XG", codigo: "Z.9", quantidade: 4 }]);
-    // O carimbo do Firestore vira ISO; sem `closed_at`, vale a criação.
+  it("o volume único de antes vem com as unidades do pacote; o carimbo do Firestore vira ISO", () => {
+    // Sem `closed_at`, vale a criação.
     const antigo = volumesDaRemessa([{ id: "pkg_pack_ord_2_001", volume_number: 1, packed_units: 9, status: "packed", created_at: { seconds: 1794571200 } }], []);
     expect(antigo).toEqual([{ id: "pkg_pack_ord_2_001", numero: 1, aberto: false, unidades: 9, caixa: null, pesoKg: null, fechadoEm: "2026-11-13T12:00:00.000Z", itens: [] }]);
   });

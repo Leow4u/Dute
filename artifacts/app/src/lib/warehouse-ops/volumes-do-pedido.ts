@@ -25,7 +25,7 @@ export type VolumeDaTarefa = {
   closed_at?: string;
 };
 
-/** O item dentro do volume: o nome com o tamanho, o código do cliente e a quantidade. */
+/** O item dentro do volume, na ordem das linhas do pedido: o nome com o tamanho, o código do cliente e a quantidade. */
 export type ItemDoVolume = { nome: string; codigo: string; quantidade: number };
 
 /** O volume como a bancada, a etiqueta e o romaneio o mostram. */
@@ -101,26 +101,33 @@ export function volumesDaLinhaGravados(valor: unknown): Array<{ volume_id: strin
   return entradas.length ? entradas : undefined;
 }
 
+/** O item com a linha do pedido de onde veio, para a ordem. */
+type ItemDaLinha = ItemDoVolume & { linha: number };
+
 /** O nome e o código de uma linha do pedido, como o volume os mostra. */
-function itemDaLinha(item: Pick<WarehouseTaskItem, "name" | "product_name" | "client_item_code" | "sku_code" | "sku" | "size">, quantidade: number): ItemDoVolume {
+function itemDaLinha(
+  item: Pick<WarehouseTaskItem, "name" | "product_name" | "client_item_code" | "sku_code" | "sku" | "size" | "line_number">,
+  quantidade: number,
+): ItemDaLinha {
   const nome = texto(item.name ?? item.product_name);
   return {
     nome: nomeComTamanho({ nome, codigo: item.client_item_code, tamanho: item.size }) || nome || texto(item.sku_code ?? item.sku),
     // O código do cliente; sem ele, o SKU.
     codigo: texto(item.client_item_code) || texto(item.sku_code ?? item.sku),
     quantidade,
+    linha: Number(item.line_number) || Number.MAX_SAFE_INTEGER,
   };
 }
 
-/** Junta as linhas do mesmo produto e ordena: a maior quantidade primeiro, depois o nome. */
-function itensEmOrdem(itens: readonly ItemDoVolume[]): ItemDoVolume[] {
-  const juntos = new Map<string, ItemDoVolume>();
-  for (const item of itens) {
+/** Os itens do volume na ordem das linhas do pedido, com as linhas do mesmo produto somadas. */
+function itensEmOrdem(itens: readonly ItemDaLinha[]): ItemDoVolume[] {
+  const juntos = new Map<string, ItemDaLinha>();
+  for (const item of [...itens].sort((esquerda, direita) => esquerda.linha - direita.linha)) {
     const chave = `${item.codigo}|${item.nome}`;
     const atual = juntos.get(chave);
     juntos.set(chave, atual ? { ...atual, quantidade: atual.quantidade + item.quantidade } : item);
   }
-  return [...juntos.values()].sort((esquerda, direita) => direita.quantidade - esquerda.quantidade || esquerda.nome.localeCompare(direita.nome, "pt-BR", { numeric: true }));
+  return [...juntos.values()].map(({ linha: _linha, ...item }) => item);
 }
 
 /**
@@ -129,7 +136,7 @@ function itensEmOrdem(itens: readonly ItemDoVolume[]): ItemDoVolume[] {
  * não chegam, vale o que a tarefa diz.
  */
 export function volumesDaSeparacao(volumes: readonly VolumeDaTarefa[], linhas: readonly WarehouseTaskItem[]): VolumeDoPedido[] {
-  const porVolume = new Map<string, ItemDoVolume[]>();
+  const porVolume = new Map<string, ItemDaLinha[]>();
   for (const linha of linhas) {
     for (const entrada of linha.separated_volumes ?? []) {
       porVolume.set(entrada.volume_id, [...(porVolume.get(entrada.volume_id) ?? []), itemDaLinha(linha, entrada.qty)]);
@@ -154,21 +161,18 @@ export function volumesDaSeparacao(volumes: readonly VolumeDaTarefa[], linhas: r
  * Os volumes do pedido concluído: um `packages` por volume, com os
  * `package_items` dele. O volume cancelado não entra.
  */
-export function volumesDaRemessa(
-  pacotes: ReadonlyArray<Record<string, unknown>>,
-  itens: ReadonlyArray<Record<string, unknown>>,
-  /** O tamanho de cada SKU, do catálogo, para o nome com o tamanho. */
-  tamanhoDe?: (sku: string) => string | undefined,
-): VolumeDoPedido[] {
-  const porPacote = new Map<string, ItemDoVolume[]>();
+export function volumesDaRemessa(pacotes: ReadonlyArray<Record<string, unknown>>, itens: ReadonlyArray<Record<string, unknown>>): VolumeDoPedido[] {
+  const porPacote = new Map<string, ItemDaLinha[]>();
   for (const item of itens) {
     const pacote = texto(item.package_id);
     const quantidade = positivo(item.qty_packed);
     if (!pacote || !quantidade || texto(item.status) === "cancelled") continue;
-    const sku = texto(item.sku_code);
     porPacote.set(pacote, [
       ...(porPacote.get(pacote) ?? []),
-      itemDaLinha({ product_name: texto(item.product_name), client_item_code: texto(item.client_item_code), sku_code: sku, size: tamanhoDe?.(sku) }, quantidade),
+      itemDaLinha(
+        { product_name: texto(item.product_name), client_item_code: texto(item.client_item_code), sku_code: texto(item.sku_code), line_number: Number(item.line_number) || undefined },
+        quantidade,
+      ),
     ]);
   }
   return pacotes

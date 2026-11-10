@@ -42,6 +42,7 @@ describe("título da aba do navegador", () => {
     ["/pedidos", "Dutelog | Pedidos"],
     ["/pedidos/lista", "Dutelog | Lista de separação"],
     ["/pedidos/separar", "Dutelog | Separar"],
+    ["/pedidos/romaneio", "Dutelog | Romaneio"],
     ["/faturamento", "Dutelog | Faturamento"],
     ["/faturamento/tabela", "Dutelog | Faturamento"],
     ["/faturamento/fatura", "Dutelog | Fatura"],

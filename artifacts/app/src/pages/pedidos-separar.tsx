@@ -272,6 +272,8 @@ export default function PaginaPedidosSeparar() {
         volumes={volumes}
         caixasInteiras={caixasInteiras}
         fechandoVolume={fechar.isPending}
+        // A etiqueta sai ao fechar o volume, sem o total (decisão 12).
+        etiquetaDoVolumeHref={(volume) => (pedido ? labelsUrl({ order: pedido.orderId ?? pedido.key, volumes: [volume.numero] }) : null)}
         fotoDe={(item) => fotoDoItem(item.sku_code, item.sku, item.client_item_code)}
         onSeparar={(linha) => gravar.mutate({ tipo: "separar", linha })}
         onDesfazer={(linha) => gravar.mutate({ tipo: "desfazer", linha })}

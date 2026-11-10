@@ -16,6 +16,7 @@ import {
   positionLabel,
   saldosParaRegistrar,
   sheetMargins,
+  volumeLabels,
 } from "./warehouse-labels";
 
 const box = warehouseBoxFromRecord({
@@ -177,6 +178,8 @@ describe("endereço da tela de etiquetas", () => {
       positions: [],
       session: false,
       receipt: null,
+      order: null,
+      volumes: [],
       skip: 3,
       mode: "zebra",
     });
@@ -185,6 +188,8 @@ describe("endereço da tela de etiquetas", () => {
       positions: ["A-01", "B-02"],
       session: true,
       receipt: null,
+      order: null,
+      volumes: [],
       skip: 0,
       mode: "a4",
     });
@@ -196,6 +201,83 @@ describe("endereço da tela de etiquetas", () => {
     expect(url).toBe("/estoque/etiquetas?caixas=CX-000225%2CCX-000226&chegada=AVL-7C21A9F0");
     expect(parseLabelsQuery(url.split("?")[1]!).receipt).toBe("AVL-7C21A9F0");
     expect(parseLabelsQuery("?caixas=CX-000225&chegada=%20").receipt).toBeNull();
+  });
+});
+
+/**
+ * A etiqueta do volume de expedição (separação com caixas, parte 4c;
+ * docs/mockups/WmsSepararEtiquetaVolume.dc.html e WmsEtiquetaTodosVolume
+ * .dc.html). Antes, o pedido saía sem etiqueta de volume.
+ */
+describe("etiqueta do volume", () => {
+  const PEDIDO = { number: "PED-0001", customer: "BTG Pactual", destination: "Agência Faria Lima", total: null };
+  const VOLUME_12 = {
+    id: "v3",
+    numero: 12,
+    aberto: false,
+    unidades: 42,
+    // A caixa que virou o volume é só da equipe: a etiqueta do cliente não a cita.
+    caixa: "CX-000029",
+    pesoKg: 11.6,
+    fechadoEm: "2026-11-12T17:40:00.000Z",
+    itens: [
+      { nome: "Calça Social Masculino Preta · 42", codigo: "A.01.0712.001.42", quantidade: 12 },
+      { nome: "Calça Social Masculino Preta · 40", codigo: "A.01.0712.001.40", quantidade: 30 },
+    ],
+  };
+
+  it("leva o pedido, o volume, o cliente, o destino, a data, o peso e os produtos com o código do cliente, a maior quantidade primeiro", () => {
+    expect(volumeLabels(VOLUME_12, PEDIDO)).toEqual([
+      {
+        kind: "volume",
+        code: "PED-0001-V12",
+        order: "PED-0001",
+        number: 12,
+        total: null,
+        recipient: "BTG Pactual · Agência Faria Lima",
+        closing: "12/11/2026 · 11,6 kg",
+        units: 42,
+        lines: [
+          { code: "A.01.0712.001.40", sku: "", name: "Calça Social Masculino Preta · 40", qty: 30 },
+          { code: "A.01.0712.001.42", sku: "", name: "Calça Social Masculino Preta · 42", qty: 12 },
+        ],
+        part: 1,
+        parts: 1,
+      },
+    ]);
+    // Nada da etiqueta cita a caixa.
+    expect(JSON.stringify(volumeLabels(VOLUME_12, PEDIDO))).not.toContain("CX-");
+  });
+
+  it("o total só entra com o pedido concluído; sem peso, só a data; sem destino, só o cliente", () => {
+    const [comTotal] = volumeLabels(VOLUME_12, { ...PEDIDO, total: 42 });
+    expect([comTotal!.number, comTotal!.total]).toEqual([12, 42]);
+    const [semPeso] = volumeLabels({ ...VOLUME_12, pesoKg: null }, { ...PEDIDO, destination: " " });
+    expect([semPeso!.closing, semPeso!.recipient]).toEqual(["12/11/2026", "BTG Pactual"]);
+    // O volume sem a data do fechamento sai com a da impressão.
+    const [semData] = volumeLabels({ ...VOLUME_12, fechadoEm: null }, PEDIDO, { printedAt: new Date("2026-11-13T15:00:00.000Z") });
+    expect(semData!.closing).toBe("13/11/2026 · 11,6 kg");
+  });
+
+  it("o volume com mais de cinco produtos sai em etiquetas de continuação, todas com as unidades do volume inteiro", () => {
+    const itens = Array.from({ length: 17 }, (_, indice) => ({ nome: `Produto ${String(indice + 1).padStart(2, "0")}`, codigo: `C.${indice + 1}`, quantidade: 17 - indice }));
+    const etiquetas = volumeLabels({ ...VOLUME_12, numero: 20, unidades: 153, itens }, { ...PEDIDO, total: 42 });
+    expect(etiquetas.map((etiqueta) => [etiqueta.part, etiqueta.parts, etiqueta.lines.length, etiqueta.units, etiqueta.code])).toEqual([
+      [1, 3, FIRST_LABEL_LINES, 153, "PED-0001-V20"],
+      [2, 3, CONTINUATION_LABEL_LINES, 153, "PED-0001-V20"],
+      [3, 3, 1, 153, "PED-0001-V20"],
+    ]);
+    expect(etiquetas[1]!.lines[0]!.name).toBe("Produto 06");
+  });
+
+  it("o endereço leva o pedido e os volumes: um, alguns ou todos", () => {
+    expect(labelsUrl({ order: "ord_1", volumes: [12] })).toBe("/estoque/etiquetas?pedido=ord_1&volumes=12");
+    expect(labelsUrl({ order: "ord_1", volumes: "all", mode: "zebra" })).toBe("/estoque/etiquetas?pedido=ord_1&volumes=todos&modo=zebra");
+    expect(parseLabelsQuery("?pedido=ord_1&volumes=12,3,abc,3,0")).toMatchObject({ order: "ord_1", volumes: [3, 12], boxes: [] });
+    expect(parseLabelsQuery("?pedido=ord_1&volumes=TODOS")).toMatchObject({ order: "ord_1", volumes: "all" });
+    expect(parseLabelsQuery("?pedido=%20&volumes=1")).toMatchObject({ order: null });
+    // Sem o pedido, os volumes não vão ao endereço.
+    expect(labelsUrl({ volumes: [1] })).toBe("/estoque/etiquetas");
   });
 });
 

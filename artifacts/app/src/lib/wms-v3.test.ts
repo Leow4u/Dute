@@ -17,7 +17,7 @@ describe("telas do WMS na v3", () => {
   });
 
   it("as telas na v3, na ordem da pergunta 18, e as telas novas: os alertas (parte 5.4e), a lista de separação e a bancada", () => {
-    expect(TELAS_DO_WMS_NA_V3).toEqual(["/dashboard", "/pedidos", "/estoque", "/wms/receber", "/estoque/alertas", "/pedidos/lista", "/pedidos/separar"]);
+    expect(TELAS_DO_WMS_NA_V3).toEqual(["/dashboard", "/pedidos", "/estoque", "/wms/receber", "/estoque/alertas", "/pedidos/lista", "/pedidos/separar", "/pedidos/romaneio"]);
   });
 
   it("o painel do Agent Dute entra na v3 só com a liberação do agente do núcleo (04/11/2026)", () => {

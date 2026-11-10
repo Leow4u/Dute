@@ -33,6 +33,8 @@ const PAPER_FILES = new Set([
   "components/portal/comprovante-documento.tsx",
   // A lista de separação impressa (separação com caixas, parte 1b, docs/mockups/WmsSepararListaImpressa.dc.html).
   "features/warehouse-ops/lista-de-separacao-documento.tsx",
+  // O romaneio impresso (separação com caixas, parte 4c, docs/mockups/WmsSepararRomaneio.dc.html).
+  "features/warehouse-ops/romaneio-documento.tsx",
   "pages/client/relatorio.tsx",
 ]);
 

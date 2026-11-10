@@ -23,6 +23,8 @@ export const TELAS_DO_WMS_NA_V3: readonly string[] = [
   "/pedidos/lista",
   // Separação com caixas, parte 2: a bancada do pedido, tela nova já na v3.
   "/pedidos/separar",
+  // Separação com caixas, parte 4c: o romaneio para imprimir, tela nova já na v3.
+  "/pedidos/romaneio",
 ];
 
 /**

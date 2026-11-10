@@ -111,6 +111,7 @@ const EstoqueAlertas = lazy(() => import("./pages/estoque-alertas"));
 const WarehouseMapPage = lazy(() => import("./pages/warehouse-map"));
 const Pedidos = lazy(() => import("./pages/pedidos"));
 const PedidosLista = lazy(() => import("./pages/pedidos-lista"));
+const PedidosRomaneio = lazy(() => import("./pages/pedidos-romaneio"));
 const PedidosSeparar = lazy(() => import("./pages/pedidos-separar"));
 const Estoque = lazy(() => import("./pages/estoque"));
 const WmsReturnsPage = lazy(() => import("./pages/wms-returns"));
@@ -535,6 +536,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/pedidos/lista", PedidosLista),
   // A bancada do pedido: separar com o progresso salvo (separação com caixas, parte 2).
   protectedRoute("/pedidos/separar", PedidosSeparar),
+  // O romaneio do pedido separado para imprimir (separação com caixas, parte 4c).
+  protectedRoute("/pedidos/romaneio", PedidosRomaneio),
   protectedRoute("/wms/contagem", WmsInventoryPage),
   protectedRoute("/wms/recebimento", WmsReceiveRedirect),
   protectedRoute("/wms/inventario", WmsCountRedirect),
