@@ -4,6 +4,7 @@ import { collection, doc, query, where } from "firebase/firestore";
 import {
   AlertTriangle,
   Check,
+  ChevronRight,
   ClipboardCheck,
   MoreHorizontal,
   Package,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -44,13 +46,6 @@ import {
   voltasDoPedido,
 } from "@/features/warehouse-ops/cancel-order";
 import { FormularioDaEntregaView } from "@/features/warehouse-ops/order-delivery";
-import {
-  SeparadoView,
-  linhasDoSeparado,
-  linhasParaSeparar,
-  separadoValido,
-  type LinhaDoSeparado,
-} from "@/features/warehouse-ops/separado";
 import { ExceptionDialog, useWarehouseTaskActions } from "@/features/warehouse-ops/task-actions";
 import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
 import {
@@ -78,8 +73,13 @@ import {
   paraQuandoDoPedido,
 } from "@/lib/order-queue";
 import { useItemPhotos } from "@/lib/use-item-photos";
+import { labelsUrl } from "@/lib/warehouse-labels";
+import { etiquetasParaTrocar, textoDeEtiquetasParaTrocar } from "@/lib/warehouse-ops/caixas-da-separacao";
 import { hrefDaListaDeSeparacao, resumoDoGrupo } from "@/lib/warehouse-ops/lista-de-separacao";
-import { useListaDeSeparacao } from "@/lib/warehouse-ops/use-lista-de-separacao";
+import { hrefDoRomaneio } from "@/lib/warehouse-ops/romaneio";
+import { hrefDaBancada, seloDaSeparacao, separacaoComecou } from "@/lib/warehouse-ops/separacao";
+import { useCaixasDoCliente, useListaDeSeparacao } from "@/lib/warehouse-ops/use-lista-de-separacao";
+import { textoDeVolumes } from "@/lib/warehouse-ops/volumes-do-pedido";
 import { canDecideRequests, canOperateWarehouse, humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { erroDaResposta } from "@/lib/erro-da-resposta";
@@ -103,7 +103,7 @@ import {
   type EntregaDoPedido,
   type FormularioDaEntrega,
 } from "@/lib/warehouse-ops/entrega";
-import { queueTasks, type OrderGroup } from "@/lib/warehouse-ops/orders";
+import type { OrderGroup } from "@/lib/warehouse-ops/orders";
 import {
   buildBalanceValidation,
   formatRequestAge,
@@ -150,23 +150,33 @@ function orderItems(order: OrderGroup) {
   return order.pick?.items ?? order.pack?.items ?? order.ship?.items ?? [];
 }
 
-/** "3 itens · 120 un. · lacre L-0098": a linha do pedido e o diálogo de cancelar. */
-function orderMeta(order: OrderGroup) {
+/** "116 itens · 3.335 un. · 42 volumes · lacre 88231": a linha do pedido e o diálogo de cancelar. */
+export function orderMeta(order: OrderGroup) {
   const items = orderItems(order);
   const units = orderUnits(order);
-  const seal = order.pack?.seal_code ?? order.ship?.seal_code;
+  const seal = order.ship?.seal_code ?? order.pack?.seal_code;
+  const volumes = Number(order.ship?.package_count ?? order.pack?.package_count ?? 0) || 0;
   return [
     items.length ? `${items.length} ${items.length === 1 ? "item" : "itens"}` : null,
     units ? `${numberFormatter.format(units)} un.` : null,
+    volumes ? textoDeVolumes(volumes) : null,
     seal ? `lacre ${seal}` : null,
   ]
     .filter(Boolean)
     .join(" · ");
 }
 
+/** Os volumes do pedido já separado (separação com caixas, parte 4d): onde vê-los e de onde saem as etiquetas e o romaneio. */
+export type VolumesDoPedidoNaFila = { verHref: string; etiquetasHref: string; romaneioHref: string };
+
+export function volumesDoPedidoNaFila(order: OrderGroup): VolumesDoPedidoNaFila | undefined {
+  if (!order.ship) return undefined;
+  const pedido = order.orderId ?? order.key;
+  return { verHref: hrefDaBancada(order.key), etiquetasHref: labelsUrl({ order: pedido, volumes: "all" }), romaneioHref: hrefDoRomaneio(pedido) };
+}
+
 type DialogState =
   | { kind: "reject"; request: CustomerRequest }
-  | { kind: "pick"; order: OrderGroup }
   | { kind: "deliver"; order: OrderGroup }
   | { kind: "entrega"; order: OrderGroup; orderId: string }
   | { kind: "cancel"; order: OrderGroup; orderId: string }
@@ -187,9 +197,6 @@ export default function Pedidos() {
   const [view, setView] = useState<"open" | "delivered">("open");
   const [dialog, setDialog] = useState<DialogState>(null);
   const [rejectReason, setRejectReason] = useState("");
-  const [seal, setSeal] = useState("");
-  // Separar a menos (pergunta 59): a coordenação informa o separado de cada linha.
-  const [linhasSeparadas, setLinhasSeparadas] = useState<LinhaDoSeparado[]>([]);
   const [driver, setDriver] = useState(() => remembered("motorista", "Equipe Dutelog"));
   const [plate, setPlate] = useState(() => remembered("placa", ""));
   const [receivedBy, setReceivedBy] = useState("");
@@ -365,13 +372,6 @@ export default function Pedidos() {
     setCancelReason("");
     setDialog({ kind: "cancel", order, orderId: order.orderId });
   };
-  // A coordenação confere o separado de cada linha enquanto a separação não terminou.
-  const conferindoLinhas = (order: OrderGroup) =>
-    decider && String(order.pick?.status ?? "") !== "completed" && linhasSeparadas.length > 0;
-  const resumoDoPedido = (order: OrderGroup) => {
-    const entrega = entregaDe(order);
-    return entrega ? resumoDaEntrega(entrega) : null;
-  };
   // O "⋯" do pedido ainda no armazém, só para quem decide (owner, admin e interno).
   const menuDo = (order: OrderGroup) =>
     decider && pedidoCancelavel(order) ? (
@@ -386,59 +386,6 @@ export default function Pedidos() {
     setEntregaErro(null);
     setDialog({ kind: "entrega", order, orderId: order.orderId });
   };
-
-  const pick = useMutation({
-    mutationFn: async ({ order, sealCode, linhas }: { order: OrderGroup; sealCode: string; linhas?: LinhaDoSeparado[] }) => {
-      const pickTask = order.pick;
-      if (pickTask && pickTask.status !== "completed") {
-        if (String(pickTask.status) === "planned") {
-          await advance(String(pickTask.id), "planned");
-        }
-        await advance(String(pickTask.id), "in_progress", {
-          picking_lines: linhas?.length
-            ? linhasParaSeparar(linhas)
-            : (pickTask.items ?? []).map((item) => ({
-                pick_line_id: String(item.id ?? ""),
-                qty_picked: Number(item.expected_quantity ?? item.quantity ?? 0),
-                status: "confirmed",
-              })),
-        });
-      }
-      // O packing nasce quando o picking termina: recarrega para achá-lo.
-      const packUid = order.pack ? String(order.pack.id) : `packing:pack_${order.key}`;
-      await queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-      const fresh = await fetchJson<WarehouseOpsResponse>("/api/warehouse/ops");
-      const packTask = queueTasks(fresh, "packing").find(
-        (task) => String(task.id) === packUid,
-      );
-      if (!packTask) {
-        throw new Error("A embalagem ainda não apareceu. Atualize e tente de novo.");
-      }
-      if (packTask.status !== "completed") {
-        if (String(packTask.status) === "ready") await advance(packUid, "ready");
-        await advance(packUid, "in_progress", {
-          // O item que a separação a menos zerou não se embala.
-          packing_lines: (packTask.items ?? [])
-            .map((item) => ({
-              order_item_id: String(item.id ?? ""),
-              qty_packed: Number(item.picked_quantity ?? item.quantity ?? 0),
-              status: "confirmed",
-            }))
-            .filter((line) => line.qty_packed > 0),
-          package_count: 1,
-          volume_label: "VOL-1",
-          seal_code: sealCode,
-        });
-      }
-    },
-    onSuccess: () => {
-      toast({ title: "Separado. O pedido está pronto para entrega." });
-      setDialog(null);
-      setSeal("");
-      refreshAll();
-    },
-    onError,
-  });
 
   const deliver = useMutation({
     mutationFn: async ({ order }: { order: OrderGroup }) => {
@@ -467,13 +414,9 @@ export default function Pedidos() {
     onError,
   });
 
-  const busy = decide.isPending || pick.isPending || deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
-  // A tabela do cancelamento e as linhas do Separado da coordenação pedem um diálogo mais largo.
-  const larguraDoDialogo = cn(
-    "sm:max-w-[440px]",
-    dialog?.kind === "cancel" && "sm:max-w-[560px]",
-    dialog?.kind === "pick" && conferindoLinhas(dialog.order) && "sm:max-w-[640px]",
-  );
+  const busy = decide.isPending || deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
+  // A tabela do cancelamento pede um diálogo mais largo.
+  const larguraDoDialogo = cn("sm:max-w-[440px]", dialog?.kind === "cancel" && "sm:max-w-[560px]");
 
   /** A entrega do pedido na linha e a ação de definir (ou abrir na Operação), com a Operação liberada. */
   const daEntrega = (order: OrderGroup) => {
@@ -657,25 +600,17 @@ export default function Pedidos() {
                 tone="pick"
                 paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
                 lerParaQuando={!decider}
-                defaultOpen
+                // O pedido por separar abre com os itens; o que já está em separação, fechado (a bancada mostra).
+                defaultOpen={!separacaoComecou(order.pick, order.pick?.items ?? [])}
                 listaHref={hrefDaListaDeSeparacao(order.key)}
                 onTreat={operador ? () => setTreating(order) : undefined}
                 {...daEntrega(order)}
                 menu={menuDo(order)}
+                // "Separar" abre a bancada do pedido; com a separação começada, "Continuar" (parte 2).
                 action={
                   operador ? (
-                    <Button
-                      type="button"
-                      variant={variante(`pick:${order.key}`)}
-                      disabled={busy}
-                      onClick={() => {
-                        setSeal("");
-                        setLinhasSeparadas(linhasDoSeparado(order));
-                        setDialog({ kind: "pick", order });
-                      }}
-                    >
-                      <Check className="size-4" />
-                      Separado
+                    <Button asChild variant={variante(`pick:${order.key}`)}>
+                      <Link href={hrefDaBancada(order.key)}>{separacaoComecou(order.pick, order.pick?.items ?? []) ? "Continuar" : "Separar"}</Link>
                     </Button>
                   ) : undefined
                 }
@@ -698,6 +633,7 @@ export default function Pedidos() {
                 lerParaQuando={!decider}
                 onTreat={operador ? () => setTreating(order) : undefined}
                 {...(order.stage === "enviar" ? daEntrega(order) : {})}
+                volumes={volumesDoPedidoNaFila(order)}
                 menu={menuDo(order)}
                 action={
                   operador ? (
@@ -760,43 +696,6 @@ export default function Pedidos() {
                   }
                 >
                   Recusar
-                </Button>
-              </DialogFooter>
-            </>
-          ) : dialog?.kind === "pick" ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>{dialog.order.orderNumber}: separado</DialogTitle>
-                <p className="text-sm font-medium text-muted-foreground">
-                  {[cliente.name, orderMeta(dialog.order), resumoDoPedido(dialog.order)].filter(Boolean).join(" · ")}
-                </p>
-              </DialogHeader>
-              <SeparadoView
-                lacre={seal}
-                onLacre={setSeal}
-                linhas={conferindoLinhas(dialog.order) ? linhasSeparadas : undefined}
-                onLinha={(linha) =>
-                  setLinhasSeparadas((atuais) => atuais.map((atual) => (atual.id === linha.id ? linha : atual)))
-                }
-              />
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  Voltar
-                </Button>
-                <Button
-                  type="button"
-                  disabled={
-                    !seal.trim() || busy || (conferindoLinhas(dialog.order) && !separadoValido(linhasSeparadas))
-                  }
-                  onClick={() =>
-                    pick.mutate({
-                      order: dialog.order,
-                      sealCode: seal.trim(),
-                      linhas: conferindoLinhas(dialog.order) ? linhasSeparadas : undefined,
-                    })
-                  }
-                >
-                  {pick.isPending ? "Registrando..." : "Confirmar separação"}
                 </Button>
               </DialogFooter>
             </>
@@ -990,6 +889,7 @@ export function OrderRow({
   defaultOpen = false,
   onTreat,
   listaHref,
+  volumes,
 }: {
   order: OrderGroup;
   icon: LucideIcon;
@@ -1009,6 +909,12 @@ export function OrderRow({
   onTreat?: () => void;
   /** A lista de separação do pedido para imprimir (separação com caixas, parte 1b). */
   listaHref?: string;
+  /**
+   * O pedido já separado (docs/mockups/WmsSepararParaEntregar.dc.html): "Ver
+   * volumes" no lugar de "Ver itens", e "Etiquetas dos volumes" e "Romaneio"
+   * antes das ações. No celular, os dois ficam atrás de "Ver volumes".
+   */
+  volumes?: VolumesDoPedidoNaFila;
 }) {
   const acoes = action || secondary ? (
     <>
@@ -1021,6 +927,8 @@ export function OrderRow({
   const blocked = Boolean(order.blockedReason || order.exceptionCount);
   const meta = orderMeta(order);
   const paraQuando = useParaQuandoDoPedido(order, paraQuandoDaFila, lerParaQuando);
+  // O selo só no pedido ainda para separar: depois de concluída, a separação não é mais notícia.
+  const selo = order.stage === "separar" ? seloDaSeparacao(order.pick, items) : null;
   // "Imprimir lista" (docs/mockups/WmsSepararLista.dc.html): no computador, um botão antes das ações do pedido.
   const imprimir =
     listaHref && items.length ? (
@@ -1038,6 +946,14 @@ export function OrderRow({
         icon={icon}
         tone={tone}
         title={order.orderNumber}
+        // "em separação desde 12/11 · 2 de 5 itens" (docs/mockups/WmsSepararParaEntregar.dc.html).
+        badge={
+          selo ? (
+            <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
+              {selo}
+            </Badge>
+          ) : undefined
+        }
         meta={meta || "—"}
         note={
           blocked ? (
@@ -1054,30 +970,49 @@ export function OrderRow({
           ) : undefined
         }
         detail={paraQuando && detail ? <>{paraQuando} · {detail}</> : paraQuando ?? detail}
-        onToggle={items.length ? () => setOpen((value) => !value) : undefined}
+        // O pedido já separado mostra os volumes, e não os itens.
+        onToggle={items.length && !volumes ? () => setOpen((value) => !value) : undefined}
         open={open}
         // No celular os botões vêm depois dos itens: o atalho fica ao lado de "Esconder itens"
         // (docs/mockups/WmsSepararListaCelular.dc.html).
         aoLadoDoToggle={
-          listaHref && items.length ? (
+          volumes ? (
+            <Link href={volumes.verHref} className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+              <ChevronRight className="size-3.5" aria-hidden="true" />
+              Ver volumes
+            </Link>
+          ) : listaHref && items.length ? (
             <Link href={listaHref} className="text-xs font-medium text-foreground underline underline-offset-2 sm:hidden">
               Imprimir lista
             </Link>
           ) : undefined
         }
         actions={
-          imprimir || acoes || menu ? (
+          imprimir || volumes || acoes || menu ? (
             <>
               {imprimir}
+              {volumes ? (
+                <>
+                  <Button asChild variant="outline">
+                    <Link href={volumes.etiquetasHref}>Etiquetas dos volumes</Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link href={volumes.romaneioHref}>
+                      <Printer className="size-4" aria-hidden="true" />
+                      Romaneio
+                    </Link>
+                  </Button>
+                </>
+              ) : null}
               {acoes}
               {menu}
             </>
           ) : null
         }
-        actionsClassName="hidden sm:flex"
+        actionsClassName={volumes ? "hidden sm:flex sm:flex-wrap sm:justify-end" : "hidden sm:flex"}
       />
       {/* A caixa só aparece enquanto o pedido está para separar: depois, o item já saiu dela. */}
-      {open && items.length ? <ItemList items={items} cliente={order.stage === "separar" ? order.pick?.customer_code : undefined} /> : null}
+      {open && items.length && !volumes ? <ItemList items={items} cliente={order.stage === "separar" ? order.pick?.customer_code : undefined} /> : null}
       {/* No celular os botões vêm depois da lista do que separar. */}
       {acoes || menu ? (
         <div className="flex gap-2 px-4 pb-4 pt-3 sm:hidden">
@@ -1085,7 +1020,36 @@ export function OrderRow({
           {menu}
         </div>
       ) : null}
+      {/* As caixas que o pedido abriu e que ainda estão com a etiqueta velha: a última linha do pedido. */}
+      {volumes ? <EtiquetasDeCaixaDoPedido items={items} cliente={order.pick?.customer_code ?? order.ship?.customer_code} pedido={order.orderId ?? order.key} /> : null}
     </div>
+  );
+}
+
+/**
+ * "5 etiquetas de caixa para trocar" (docs/mockups/WmsSepararParaEntregar
+ * .dc.html): as caixas que o pedido abriu e cuja etiqueta não é a do saldo de
+ * agora, com "Imprimir". Sem caixa para trocar, nada.
+ */
+function EtiquetasDeCaixaDoPedido({ items, cliente, pedido }: { items: NonNullable<WarehouseTask["items"]>; cliente?: string | null; pedido: string }) {
+  // Só lê as caixas do cliente quando alguma linha do pedido saiu de caixa.
+  const saiuDeCaixa = items.some((item) => item.separated_boxes?.length);
+  const caixas = useCaixasDoCliente(saiuDeCaixa ? cliente : null);
+  const paraTrocar = useMemo(() => (caixas.data ? etiquetasParaTrocar(items, caixas.data) : []), [items, caixas.data]);
+  // Com o pedido junto, a volta das etiquetas é ao pedido.
+  return <AvisoDeEtiquetasDeCaixa quantas={paraTrocar.length} href={paraTrocar.length ? labelsUrl({ boxes: paraTrocar.map((caixa) => caixa.code), order: pedido }) : null} />;
+}
+
+/** Exportado para o teste (pedidos.lista.test.tsx). */
+export function AvisoDeEtiquetasDeCaixa({ quantas, href }: { quantas: number; href: string | null }) {
+  if (!quantas || !href) return null;
+  return (
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-warning-soft-border bg-warning-soft px-4 py-2.5 text-sm font-semibold text-warning-soft-foreground md:px-5">
+      {textoDeEtiquetasParaTrocar(quantas)}
+      <Link href={href} className="font-bold underline underline-offset-2">
+        Imprimir
+      </Link>
+    </p>
   );
 }
 

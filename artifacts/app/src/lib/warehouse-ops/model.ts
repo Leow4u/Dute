@@ -64,6 +64,19 @@ export type WarehouseTaskItem = {
   volume_id?: string | null;
   /** A chegada por caixa (recebimento com caixas, parte 5): a linha da NF nas caixas. */
   line_number?: number | null;
+  /**
+   * Separar com o progresso salvo (separação com caixas, partes 2 e 5): o
+   * que já foi separado da linha, quando e por quem; a menos, com o motivo.
+   */
+  separated_qty?: number | null;
+  separated_at?: string | null;
+  separated_by?: string | null;
+  shortage_reason?: string | null;
+  shortage_detail?: string | null;
+  /** De quais caixas a linha separada saiu (separação com caixas, parte 3b). */
+  separated_boxes?: Array<{ box_code: string; qty: number; whole?: boolean; emptied?: boolean }> | null;
+  /** Em quais volumes a linha separada foi (separação com caixas, parte 4). */
+  separated_volumes?: Array<{ volume_id: string; qty: number }> | null;
   /** O código de barras do produto da linha, para a busca da bancada. */
   barcode?: string | null;
   boxed_qty?: number | null;
@@ -121,6 +134,8 @@ export type WarehouseTask = {
   notes?: string | null;
   progress?: number | null;
   blocked_reason?: string | null;
+  /** Quando a primeira linha do pedido foi separada ("em separação desde 10/11"). */
+  separation_started_at?: string | null;
   exception_count?: number | null;
   items?: WarehouseTaskItem[];
   timeline?: WarehouseTaskTimelineEvent[];

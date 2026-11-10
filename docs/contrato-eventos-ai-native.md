@@ -64,6 +64,12 @@ WMS:
 - `putaway.exception_found`
 - `picking.created`
 - `picking.started`
+- `picking.line_separated`
+- `picking.line_unseparated`
+- `picking.volume_closed`
+- `warehouse.box_emptied`
+- `warehouse.box_reopened`
+- `warehouse.box_balance_label_printed`
 - `picking.completed`
 - `picking.shortage_found`
 - `packing.created`

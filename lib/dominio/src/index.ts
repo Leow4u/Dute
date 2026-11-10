@@ -14,6 +14,7 @@ export * from "./contratos-datas";
 export * from "./dinheiro";
 export * from "./nome-do-produto";
 export * from "./parados";
+export * from "./saldo-da-caixa";
 
 export const MODULOS = ["wms", "operacao", "comercial", "financeiro", "rh"] as const;
 

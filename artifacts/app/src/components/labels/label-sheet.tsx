@@ -1,7 +1,8 @@
 /**
- * Desenho das etiquetas de caixa e de posição e da folha A4 com dez delas.
- * A caixa com mais de cinco produtos sai em mais de uma etiqueta do mesmo
- * tamanho: a primeira e as de continuação (separação com caixas, parte 6).
+ * Desenho das etiquetas de caixa, de posição e de volume e da folha A4 com
+ * dez delas. A caixa e o volume com mais de cinco produtos saem em mais de
+ * uma etiqueta do mesmo tamanho: a primeira e as de continuação (separação
+ * com caixas, partes 4c e 6).
  *
  * Papel de impressão: medidas físicas em milímetros e preto sobre branco,
  * fora dos tokens do tema, porque o resultado é a etiqueta adesiva e não a
@@ -19,6 +20,7 @@ import {
   type LabelData,
   type LabelMode,
   type PositionLabelData,
+  type VolumeLabelData,
   LABEL_MM,
   SHEET_MM,
   sheetMargins,
@@ -114,11 +116,17 @@ function LabelFooter({ part, children }: { part?: string | null; children: React
 }
 
 /** "etiqueta 2 de 3"; com tudo numa etiqueta só, nada. */
-function partLabel(label: Pick<BoxLabelData, "part" | "parts">) {
+function partLabel(label: { part: number; parts: number }) {
   return label.parts > 1 ? `etiqueta ${label.part} de ${label.parts}` : null;
 }
 
 const quantity = new Intl.NumberFormat("pt-BR");
+
+/** "39 un."; na caixa aberta, o saldo e de quando ele é: "7 un. · saldo em 12/11/2026". */
+function unitsLabel(label: Pick<BoxLabelData, "units" | "balanceAt">) {
+  const units = `${quantity.format(label.units)} un.`;
+  return label.balanceAt ? `${units} · saldo em ${label.balanceAt}` : units;
+}
 
 /** As linhas do conteúdo: a quantidade, o nome com o tamanho, o código do cliente e o SKU. */
 function ContentLines({ lines }: { lines: BoxLabelData["lines"] }) {
@@ -160,13 +168,13 @@ export function BoxLabelCard({ label }: { label: BoxLabelData }) {
           {label.customer} · {label.dimensions}
         </span>
         <span style={{ flexShrink: 0 }}>
-          {label.origin} {label.printedAt}
+          {label.origin} {label.date}
         </span>
       </div>
       <div className="lbl-content" style={content}>
         {label.lines.length ? <ContentLines lines={label.lines} /> : <div style={{ fontSize: "7pt", fontStyle: "italic" }}>Conteúdo a lançar na contagem.</div>}
       </div>
-      <LabelFooter part={part}>{quantity.format(label.units)} un.</LabelFooter>
+      <LabelFooter part={part}>{unitsLabel(label)}</LabelFooter>
     </LabelFrame>
   );
 }
@@ -190,7 +198,7 @@ function BoxContinuationCard({ label }: { label: BoxLabelData }) {
       <div className="lbl-content" style={content}>
         <ContentLines lines={label.lines} />
       </div>
-      <LabelFooter>{quantity.format(label.units)} un.</LabelFooter>
+      <LabelFooter>{unitsLabel(label)}</LabelFooter>
     </LabelFrame>
   );
 }
@@ -221,8 +229,70 @@ export function PositionLabelCard({ label }: { label: PositionLabelData }) {
   );
 }
 
+/**
+ * A etiqueta do volume de expedição (docs/mockups/WmsSepararEtiquetaVolume
+ * .dc.html): o pedido, o volume (com o total, depois de concluir), o código
+ * de barras, o cliente e o destino, a data e o peso, e os produtos com o
+ * código do cliente. Vai ao cliente: sem caixa, posição nem valor.
+ */
+export function VolumeLabelCard({ label }: { label: VolumeLabelData }) {
+  const part = partLabel(label);
+  if (label.part > 1) return <VolumeContinuationCard label={label} />;
+  return (
+    <LabelFrame ariaLabel={part ? `Etiqueta do volume ${label.number} do pedido ${label.order}, ${label.part} de ${label.parts}` : `Etiqueta do volume ${label.number} do pedido ${label.order}`}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "3mm" }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={caption}>Pedido</div>
+          <div style={{ ...ellipsis, fontFamily: MONO, fontSize: "15pt", fontWeight: 700, lineHeight: 1.05, letterSpacing: "0.02em" }}>{label.order}</div>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={caption}>Volume</div>
+          <div style={{ fontSize: "24pt", fontWeight: 800, lineHeight: 1 }}>
+            {quantity.format(label.number)}
+            {label.total ? <span style={{ fontSize: "12pt", fontWeight: 700 }}> de {quantity.format(label.total)}</span> : null}
+          </div>
+        </div>
+      </div>
+      <Barcode value={label.code} heightMm={9} />
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "3mm", fontSize: "6.5pt" }}>
+        <span style={ellipsis}>{label.recipient}</span>
+        <span style={{ flexShrink: 0 }}>{label.closing}</span>
+      </div>
+      <div className="lbl-content" style={content}>
+        <ContentLines lines={label.lines} />
+      </div>
+      <LabelFooter part={part}>{quantity.format(label.units)} un.</LabelFooter>
+    </LabelFrame>
+  );
+}
+
+/**
+ * A continuação da etiqueta do volume (docs/mockups/WmsEtiquetaTodosVolume
+ * .dc.html): os produtos que não couberam na primeira, com o pedido, o
+ * volume, a parte e as unidades do volume inteiro.
+ */
+function VolumeContinuationCard({ label }: { label: VolumeLabelData }) {
+  return (
+    <LabelFrame ariaLabel={`Etiqueta do volume ${label.number} do pedido ${label.order}, ${label.part} de ${label.parts}`}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "3mm" }}>
+        <span style={{ ...ellipsis, fontFamily: MONO, fontSize: "11pt", fontWeight: 700, letterSpacing: "0.02em", lineHeight: 1.2 }}>
+          {label.order}
+          <strong style={{ fontFamily: FONT, fontWeight: 800 }}> · Volume {quantity.format(label.number)}</strong>
+        </span>
+        <span style={{ flexShrink: 0, fontSize: "8pt", fontWeight: 800 }}>{partLabel(label)}</span>
+      </div>
+      <div className="lbl-content" style={content}>
+        <ContentLines lines={label.lines} />
+      </div>
+      <LabelFooter>{quantity.format(label.units)} un.</LabelFooter>
+    </LabelFrame>
+  );
+}
+
 export function LabelCard({ label }: { label: LabelData }) {
-  return label.kind === "box" ? <BoxLabelCard label={label} /> : <PositionLabelCard label={label} />;
+  if (label.kind === "box") return <BoxLabelCard label={label} />;
+  if (label.kind === "volume") return <VolumeLabelCard label={label} />;
+  return <PositionLabelCard label={label} />;
 }
 
 function EmptySlot() {

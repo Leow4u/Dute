@@ -171,7 +171,7 @@ As três perguntas abaixo receberam o Ok do Leonardo às recomendações em
 |---|---|---|
 | 1 | Que dia vale para o estoque da contagem de abertura? | Um dia por cliente, o dia em que a contagem começou (`started_at`). Entre prateleiras, desempata a ordem delas. |
 | 2 | Para seguir a data à risca, o pedido pode se dividir entre prateleiras? | Não: vai à prateleira de data livre mais antiga e completa nela. Numa simulação, dividir à risca levou os pedidos divididos de 11% para 17%. |
-| 3 | "Posições ocupadas" do Mapa conta caixa guardada, e a caixa que esvazia continua contando. | Um PR à parte, fora deste pacote, para contar a prateleira com saldo. Até lá, conferir na prateleira antes de faturar por posição. |
+| 3 | "Posições ocupadas" do Mapa conta caixa guardada, e a caixa que esvazia continua contando. | Um PR à parte, fora deste pacote, para contar a prateleira com saldo. Até lá, conferir na prateleira antes de faturar por posição. Feito na parte 3c da separação com caixas (`separacao-com-caixas.md`): a caixa de que a separação tira tudo sai da prateleira e deixa de contar. |
 
 Decididos pelo Leonardo em 03/11/2026, antes de a parte 4 ir à produção:
 

@@ -29,7 +29,7 @@ import { ehSemConexao, semConexaoNaLeitura } from "@/lib/conexao";
 import { openingInventoryNotice } from "@/lib/opening-inventory";
 import { boxVolumeM3, formatVolumeM3 } from "@/lib/warehouse-volume";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
-import { type WarehouseBox, boxOriginLabel, formatBoxDimensions, warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
+import { type WarehouseBox, boxBalanceUnits, boxOriginLabel, formatBoxDimensions, warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import { labelsUrl } from "@/lib/warehouse-labels";
 import {
   type BoxContentSource,
@@ -41,11 +41,14 @@ import {
   SHELF_STATE_LABELS,
   boxContents,
   buildShelves,
+  dataDaCaixa,
+  estadoDaCaixa,
   groupByAisle,
   inZone,
   shelfMatches,
   skuIndexFromRows,
   summarizeZone,
+  textoDaSaida,
   zonesOf,
 } from "@/lib/warehouse-map";
 import { type AnyRecord, fetchJson, formatNumber, getErrorMessage } from "@/lib/warehouse-ops/model";
@@ -251,7 +254,7 @@ export default function WarehouseMapPage() {
             <Tile
               label={`Posições ocupadas · ${zoneLabel(zone)}`}
               value={formatNumber(summary.occupied)}
-              note="Prateleiras com caixas guardadas. Referência da fatura manual."
+              note="Prateleiras com caixa com saldo. Referência da fatura manual."
             />
             <Tile
               label={zone === "all" ? "Prateleiras cadastradas" : `Prateleiras na zona ${zoneLabel(zone)}`}
@@ -486,18 +489,13 @@ export function SaldoSemCaixa({ shelf, skuIndex }: { shelf: Shelf; skuIndex: Sku
   );
 }
 
-const dataFormatter = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" });
-
-function dataDaGuarda(box: WarehouseBox) {
-  if (!box.stored_at) return null;
-  const date = new Date(box.stored_at);
-  return Number.isNaN(date.getTime()) ? null : dataFormatter.format(date);
-}
-
 /**
  * Uma caixa da prateleira: código, conteúdo, origem e data, medidas e a
  * etiqueta (parte 6 do recebimento com caixas). A reservada é a caixa do
- * recebimento com o destino confirmado, ainda por guardar.
+ * recebimento com o destino confirmado, ainda por guardar. A guardada diz se
+ * está "aberta" (já saiu peça dela) ou "guardada", e a aberta mostra o saldo
+ * e de quando ele é, sem o peso de entrada (separação com caixas, parte 3;
+ * docs/mockups/WmsSepararMapa.dc.html).
  */
 export function BoxCard({
   box,
@@ -513,12 +511,13 @@ export function BoxCard({
   onLabels: (url: string) => void;
 }) {
   const contents = boxContents(box, lines, skuIndex);
-  const units = reserved ? (box.draft_unit_count ?? 0) : box.unit_count;
+  const units = reserved ? (box.draft_unit_count ?? 0) : boxBalanceUnits(box);
+  const aberta = !reserved && estadoDaCaixa(box) === "aberta";
   return (
     <div className={cn("rounded-md border border-border bg-card p-3", reserved && "border-dashed")}>
       <div className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-foreground">{box.code}</span>
+          <span className="text-sm font-semibold text-foreground">{reserved ? box.code : `${box.code} · ${estadoDaCaixa(box)}`}</span>
           {reserved ? (
             <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
               reservada
@@ -548,9 +547,34 @@ export function BoxCard({
         <div className="mt-1 text-xs text-muted-foreground">Conteúdo ainda não lançado.</div>
       )}
       <div className="mt-1 text-xs text-muted-foreground">
-        {[boxOriginLabel(box), reserved ? null : dataDaGuarda(box), formatBoxDimensions(box), formatVolumeM3(boxVolumeM3(box))].filter(Boolean).join(" · ")}
+        {[
+          boxOriginLabel(box),
+          reserved ? null : dataDaCaixa(box.stored_at),
+          aberta && dataDaCaixa(box.balance_at) ? `saldo em ${dataDaCaixa(box.balance_at)}` : null,
+          formatBoxDimensions(aberta ? { ...box, gross_weight_kg: null } : box),
+          formatVolumeM3(boxVolumeM3(box)),
+        ]
+          .filter(Boolean)
+          .join(" · ")}
         {box.support_box_code ? ` · sobre ${box.support_box_code}` : ""}
       </div>
+    </div>
+  );
+}
+
+/** "Saíram desta prateleira": as caixas que as separações esvaziaram, a mais recente primeiro. */
+export function SaidasDaPrateleira({ shelf }: { shelf: Pick<Shelf, "saidas"> }) {
+  if (!shelf.saidas.length) return null;
+  return (
+    <div>
+      <h3 className="mb-2 text-sm font-medium text-foreground">Saíram desta prateleira</h3>
+      <ul className="space-y-1 text-xs text-muted-foreground">
+        {shelf.saidas.map((box) => (
+          <li key={box.code}>
+            <b className="font-semibold text-foreground">{box.code}</b> · {textoDaSaida(box)}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -645,6 +669,7 @@ function ShelfPanel({
           </div>
         ) : null}
       </div>
+      <SaidasDaPrateleira shelf={shelf} />
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="outline" onClick={() => onLabels(labelsUrl({ positions: [shelf.code] }))}>
           <Printer className="size-4" />

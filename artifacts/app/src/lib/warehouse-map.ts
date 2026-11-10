@@ -12,7 +12,7 @@
 import { nomeComTamanho } from "@workspace/dominio";
 
 import type { AnyRecord } from "@/lib/warehouse-ops/model";
-import type { WarehouseBox } from "@/lib/warehouse-boxes";
+import { boxBalanceUnits, boxIsOpen, type WarehouseBox } from "@/lib/warehouse-boxes";
 import { calculateShelfVolume } from "@/lib/warehouse-volume";
 import { type WarehousePosition, REFERENCE_BOX, sortPositions } from "@/lib/warehouse-positions";
 
@@ -48,10 +48,15 @@ export type Shelf = {
   remaining_reference_boxes: number;
   /** O saldo do estoque na prateleira, com ou sem caixa registrada. */
   saldo: SaldoDaPrateleira;
+  /** As caixas que saíram desta prateleira nas separações (vazias), a mais recente primeiro. */
+  saidas: WarehouseBox[];
   /** Frente usada sobre a frente total, de 0 a 1. */
   fill: number;
   state: ShelfState;
 };
+
+/** Quantas saídas a ficha da prateleira mostra: as mais recentes. */
+export const SAIDAS_DA_PRATELEIRA = 10;
 
 function round(value: number) {
   return Math.round(value * 1000) / 1000;
@@ -120,9 +125,15 @@ const SEM_SALDO: SaldoDaPrateleira = { unidades: 0, itens: [] };
 export function buildShelves(positions: WarehousePosition[], boxes: WarehouseBox[], balances: SaldoDaPosicao[] = []): Shelf[] {
   const saldos = saldoPorPrateleira(balances);
   const byLocation = new Map<string, WarehouseBox[]>();
+  // A caixa de que a separação tirou tudo (parte 3c): não ocupa mais a prateleira, fica no registro dela.
+  const emptied = new Map<string, WarehouseBox[]>();
   for (const box of boxes) {
-    if (box.status !== "stored" && box.status !== "committing") continue;
     const code = box.location_id.toUpperCase();
+    if (box.status === "emptied") {
+      emptied.set(code, [...(emptied.get(code) ?? []), box]);
+      continue;
+    }
+    if (box.status !== "stored" && box.status !== "committing") continue;
     byLocation.set(code, [...(byLocation.get(code) ?? []), box]);
   }
   return sortPositions(positions).map((position) => {
@@ -155,10 +166,14 @@ export function buildShelves(positions: WarehousePosition[], boxes: WarehouseBox
       front_used_m,
       free_front_m,
       weight_used_kg,
-      unit_count: stored.reduce((sum, box) => sum + box.unit_count, 0),
+      // O que as caixas têm agora: a entrada menos o que as separações tiraram.
+      unit_count: stored.reduce((sum, box) => sum + boxBalanceUnits(box), 0),
       sku_codes: [...new Set(stored.flatMap((box) => box.sku_codes))],
       remaining_reference_boxes,
       saldo: saldos.get(code) ?? SEM_SALDO,
+      saidas: (emptied.get(code) ?? [])
+        .sort((left, right) => (right.emptied_at ?? "").localeCompare(left.emptied_at ?? "") || right.code.localeCompare(left.code))
+        .slice(0, SAIDAS_DA_PRATELEIRA),
       fill: position.length_m > 0 ? Math.min(1, front_used_m / position.length_m) : 0,
       state,
     };
@@ -292,6 +307,21 @@ const byQuantity = (left: BoxContentLine, right: BoxContentLine) =>
  * só os SKUs que a caixa conhece, com o nome do catálogo.
  */
 export function boxContents(box: WarehouseBox, lines: BoxContentSource[], skuIndex: SkuIndex): BoxContentLine[] {
+  return saldoDoConteudo(conteudoDeEntrada(box, lines, skuIndex), box);
+}
+
+/** O saldo (separação com caixas, parte 3): a entrada menos o que as separações tiraram de cada SKU, sem as linhas zeradas. */
+function saldoDoConteudo(entrada: Map<string, BoxContentLine>, box: Pick<WarehouseBox, "taken_lines">): BoxContentLine[] {
+  for (const line of box.taken_lines ?? []) {
+    const atual = entrada.get(line.sku_code.toUpperCase());
+    if (!atual || atual.qty == null) continue;
+    atual.qty -= line.qty;
+    if (atual.qty <= 0) entrada.delete(line.sku_code.toUpperCase());
+  }
+  return [...entrada.values()].sort(byQuantity);
+}
+
+function conteudoDeEntrada(box: WarehouseBox, lines: BoxContentSource[], skuIndex: SkuIndex): Map<string, BoxContentLine> {
   if (box.lines.length) {
     const own = new Map<string, BoxContentLine>();
     for (const line of box.lines) {
@@ -308,7 +338,7 @@ export function boxContents(box: WarehouseBox, lines: BoxContentSource[], skuInd
         });
       }
     }
-    return [...own.values()].sort(byQuantity);
+    return own;
   }
   const grouped = new Map<string, BoxContentLine>();
   for (const line of lines) {
@@ -332,5 +362,31 @@ export function boxContents(box: WarehouseBox, lines: BoxContentSource[], skuInd
     const info = skuIndex.get(sku.toUpperCase());
     grouped.set(sku.toUpperCase(), { code: info?.clientCode || sku, name: info?.name || sku, qty: null });
   }
-  return [...grouped.values()].sort(byQuantity);
+  return grouped;
+}
+
+const dataDaSaida = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" });
+
+/** "aberta": a caixa guardada de onde já saiu alguma coisa; "guardada", a intacta. */
+export function estadoDaCaixa(box: Pick<WarehouseBox, "status" | "taken_units">): "aberta" | "guardada" {
+  return boxIsOpen(box) ? "aberta" : "guardada";
+}
+
+/** A data de um registro da caixa, no fuso de São Paulo; null sem data. */
+export function dataDaCaixa(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : dataDaSaida.format(date);
+}
+
+/**
+ * "inteira em 11/11/2026 · PED-0001, volume 11" ou "vazia em 12/11/2026 ·
+ * PED-0001": como a caixa saiu da prateleira. O volume só na caixa que virou
+ * volume ("Levar a caixa", separação com caixas, parte 4).
+ */
+export function textoDaSaida(box: Pick<WarehouseBox, "emptied_at" | "emptied_whole" | "emptied_order_number" | "emptied_volume_number">): string {
+  const data = dataDaCaixa(box.emptied_at);
+  const volume = box.emptied_volume_number ? `volume ${box.emptied_volume_number}` : null;
+  const pedido = [box.emptied_order_number, volume].filter(Boolean).join(", ");
+  return [`${box.emptied_whole ? "inteira" : "vazia"}${data ? ` em ${data}` : ""}`, pedido].filter(Boolean).join(" · ");
 }

@@ -170,6 +170,18 @@ describe("a caixa de cada item da lista", () => {
     ]);
   });
 
+  it("com o saldo das caixas lido, a caixa da linha é a que ainda tem o item (parte 3)", () => {
+    // Antes da parte 3, a lista citava toda caixa que recebeu o SKU, mesmo a que os pedidos já tinham esvaziado dele.
+    const itens = [linha("1", "A-05", "Calça Social Masculino Preta 42", "A.01.0712.001.42", 40), linha("2", "A-05", "Calça Social Masculino Preta 44", "A.01.0712.001.44", 35)];
+    const caixas = [caixa("CX-000027", "A-05", ["SKU-1"]), caixa("CX-000028", "A-05", ["SKU-1", "SKU-2"])];
+    // A CX-000027 não tem mais a calça 42: quem lê o saldo diz só a CX-000028.
+    const comSaldo = gruposDaSeparacao(itens, [], { caixas, cliente: "BTG", caixasDe: () => ["CX-000028"] });
+    expect(comSaldo[0]!.linhas.map((item) => item.caixas)).toEqual([["CX-000028"], ["CX-000028"]]);
+    // Sem o saldo, vale o que a caixa conhece do conteúdo de entrada.
+    const semSaldo = gruposDaSeparacao(itens, [], { caixas, cliente: "BTG" });
+    expect(semSaldo[0]!.linhas.map((item) => item.caixas)).toEqual([["CX-000027", "CX-000028"], ["CX-000028"]]);
+  });
+
   it("sem as caixas lidas, a lista sai como antes, sem caixa na linha", () => {
     const [grupo] = gruposDaSeparacao([polo], POSICOES);
     expect(grupo.linhas[0].caixas).toEqual([]);

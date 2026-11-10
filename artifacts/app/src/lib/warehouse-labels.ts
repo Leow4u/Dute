@@ -1,7 +1,8 @@
 /**
  * Etiquetas de caixa e de posição (docs/mapa-do-armazem-enderecamento-
- * dirigido.md, seção 6). O conteúdo é definido aqui, uma vez; o desenho fica
- * em components/labels e a impressão é do navegador (Imprimir → Salvar PDF),
+ * dirigido.md, seção 6) e do volume de expedição (separação com caixas,
+ * parte 4c). O conteúdo é definido aqui, uma vez; o desenho fica em
+ * components/labels e a impressão é do navegador (Imprimir → Salvar PDF),
  * como a fatura. A etiqueta tem 101,6 × 50,8 mm, o rolo padrão da Zebra: na
  * folha A4 cabem dez; na Zebra sai uma por etiqueta, com o mesmo conteúdo.
  */
@@ -9,8 +10,9 @@
 import { nomeComTamanho } from "@workspace/dominio";
 
 import type { WarehouseBox } from "@/lib/warehouse-boxes";
-import { boxOriginLabel, formatBoxDimensions } from "@/lib/warehouse-boxes";
+import { boxBalanceUnits, boxIsOpen, boxOriginLabel, formatBoxDimensions } from "@/lib/warehouse-boxes";
 import { type WarehousePosition, formatKilos, formatMeters } from "@/lib/warehouse-positions";
+import { pesoDoVolume, type VolumeDoPedido } from "@/lib/warehouse-ops/volumes-do-pedido";
 
 export const LABEL_MM = { width: 101.6, height: 50.8 } as const;
 
@@ -54,7 +56,10 @@ export type BoxLabelData = {
   part: number;
   parts: number;
   origin: string;
-  printedAt: string;
+  /** A data de entrada da caixa (a da guarda), que é a do FIFO; antes da guarda, a da impressão. */
+  date: string;
+  /** Na caixa aberta, de quando é o saldo ("saldo em 12/11/2026"); null na caixa intacta. */
+  balanceAt: string | null;
 };
 
 export type PositionLabelData = {
@@ -67,7 +72,33 @@ export type PositionLabelData = {
   maxWeight: string;
 };
 
-export type LabelData = BoxLabelData | PositionLabelData;
+/**
+ * A etiqueta do volume de expedição (docs/mockups/WmsSepararEtiquetaVolume
+ * .dc.html e WmsEtiquetaTodosVolume.dc.html). Vai ao cliente: leva o pedido,
+ * o volume, o cliente, o destino, a data, o peso e os produtos com o código
+ * do cliente; nunca a caixa (`CX-`), a posição nem valor.
+ */
+export type VolumeLabelData = {
+  kind: "volume";
+  /** "PED-0001-V12": o que o código de barras lê, e a chave da etiqueta. */
+  code: string;
+  /** "PED-0001" */
+  order: string;
+  number: number;
+  /** O total de volumes do pedido ("de 42"): só depois de concluído (decisão 12). */
+  total: number | null;
+  /** "BTG Pactual · Agência Faria Lima" */
+  recipient: string;
+  /** "12/11/2026 · 11,6 kg": quando o volume fechou e, se houver, o peso. */
+  closing: string;
+  /** As unidades do volume inteiro, iguais em todas as etiquetas dele. */
+  units: number;
+  lines: LabelContentLine[];
+  part: number;
+  parts: number;
+};
+
+export type LabelData = BoxLabelData | PositionLabelData | VolumeLabelData;
 
 /** O que a etiqueta precisa de uma linha da abertura. */
 export type BoxContentSource = {
@@ -143,6 +174,26 @@ export function ownBoxContent(box: Pick<WarehouseBox, "lines">): LabelContentLin
   return sortedContent(grouped);
 }
 
+/**
+ * O saldo da caixa (separação com caixas, parte 3): o conteúdo de entrada
+ * menos o que as separações tiraram de cada SKU, sem as linhas zeradas.
+ */
+export function balanceContent(content: LabelContentLine[], taken: ReadonlyArray<{ sku_code: string; qty: number }>): LabelContentLine[] {
+  if (!taken.length) return content;
+  const saiu = new Map<string, number>();
+  for (const line of taken) saiu.set(line.sku_code.toUpperCase(), (saiu.get(line.sku_code.toUpperCase()) ?? 0) + line.qty);
+  return content
+    .map((line) => ({ ...line, qty: line.qty - (saiu.get(line.sku.toUpperCase()) ?? 0) }))
+    .filter((line) => line.qty > 0)
+    .sort((left, right) => right.qty - left.qty || left.name.localeCompare(right.name, "pt-BR"));
+}
+
+function labelDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : dateFormatter.format(date);
+}
+
 export type ImpressaoParaRegistrar = { receipt_id: string; box_code: string; location_id: string };
 
 /**
@@ -160,6 +211,15 @@ export function impressoesParaRegistrar(
   );
 }
 
+/**
+ * As caixas abertas da folha, para registrar a impressão da etiqueta com o
+ * saldo (separação com caixas, parte 3d): a caixa sai de "Etiquetas para
+ * trocar". Vale para a caixa de qualquer origem.
+ */
+export function saldosParaRegistrar(boxes: Array<Pick<WarehouseBox, "code" | "status" | "location_id" | "origin" | "taken_units">>): string[] {
+  return boxes.filter((box) => boxIsOpen(box) && boxLabelAvailability(box).ready).map((box) => box.code);
+}
+
 export type LabelAvailability = { ready: true; reason: null } | { ready: false; reason: string };
 
 /**
@@ -169,6 +229,8 @@ export type LabelAvailability = { ready: true; reason: null } | { ready: false; 
  */
 export function boxLabelAvailability(box: Pick<WarehouseBox, "code" | "status" | "location_id" | "origin">): LabelAvailability {
   if (box.status === "stored" || (box.status === "committing" && box.location_id)) return { ready: true, reason: null };
+  // A caixa de que a separação tirou tudo saiu da prateleira (separação com caixas, parte 3c).
+  if (box.status === "emptied") return { ready: false, reason: `${box.code} está vazia: saiu da prateleira.` };
   if (box.origin.kind === "receipt") {
     const state = box.status === "counting" ? "em conferência" : "sem prateleira";
     return { ready: false, reason: `${box.code} ${state}: sem etiqueta até confirmar o destino.` };
@@ -180,23 +242,69 @@ export function boxLabelAvailability(box: Pick<WarehouseBox, "code" | "status" |
  * As etiquetas de uma caixa: a primeira, com a posição, o código de barras e
  * até cinco produtos, e as de continuação com os outros, na mesma ordem (a
  * maior quantidade primeiro). Todas levam as unidades da caixa inteira.
+ *
+ * A caixa aberta (docs/mockups/WmsSepararEtiquetaCaixa.dc.html) sai com o
+ * saldo e "saldo em", sem o peso de entrada. A data é sempre a de entrada da
+ * caixa, que é a do FIFO.
  */
 export function boxLabels(box: WarehouseBox, lines: BoxContentSource[], options: { printedAt?: Date } = {}): BoxLabelData[] {
   // A caixa do recebimento traz o conteúdo nela; a da abertura, nas linhas da sessão.
-  const content = box.lines.length ? ownBoxContent(box) : boxContent(lines, box.code);
+  const entrada = box.lines.length ? ownBoxContent(box) : boxContent(lines, box.code);
+  const aberta = (box.taken_units ?? 0) > 0;
+  const content = balanceContent(entrada, box.taken_lines ?? []);
   const pages = [content.slice(0, FIRST_LABEL_LINES)];
   for (let start = FIRST_LABEL_LINES; start < content.length; start += CONTINUATION_LABEL_LINES) {
     pages.push(content.slice(start, start + CONTINUATION_LABEL_LINES));
   }
+  const units = content.reduce((sum, line) => sum + line.qty, 0);
   const base = {
     kind: "box" as const,
     code: box.code,
     position: box.location_id,
     customer: box.customer_code,
-    dimensions: formatBoxDimensions(box),
-    units: content.reduce((sum, line) => sum + line.qty, 0) || box.unit_count,
+    dimensions: formatBoxDimensions(aberta ? { ...box, gross_weight_kg: null } : box),
+    // Sem o conteúdo lido, vale o que a caixa diz ter.
+    units: units || (entrada.length ? 0 : boxBalanceUnits(box)),
     origin: boxOriginLabel(box),
-    printedAt: dateFormatter.format(options.printedAt ?? new Date()),
+    date: labelDate(box.stored_at) ?? dateFormatter.format(options.printedAt ?? new Date()),
+    balanceAt: aberta ? labelDate(box.balance_at) : null,
+  };
+  return pages.map((page, index) => ({ ...base, lines: page, part: index + 1, parts: pages.length }));
+}
+
+/** O pedido como a etiqueta do volume o diz. */
+export type VolumeLabelOrder = {
+  /** "PED-0001" */
+  number: string;
+  /** O nome do cliente. */
+  customer: string;
+  destination: string;
+  /** O total de volumes, só com o pedido concluído. */
+  total: number | null;
+};
+
+/**
+ * As etiquetas de um volume: a primeira, com o pedido, o volume, o código de
+ * barras e até cinco produtos, e as de continuação com os outros (decisão
+ * 13). A maior quantidade primeiro, como na caixa. Só o código do cliente.
+ */
+export function volumeLabels(volume: VolumeDoPedido, order: VolumeLabelOrder, options: { printedAt?: Date } = {}): VolumeLabelData[] {
+  const content = [...volume.itens]
+    .map((item) => ({ code: item.codigo, sku: "", name: item.nome, qty: item.quantidade }))
+    .sort((left, right) => right.qty - left.qty || left.name.localeCompare(right.name, "pt-BR"));
+  const pages = [content.slice(0, FIRST_LABEL_LINES)];
+  for (let start = FIRST_LABEL_LINES; start < content.length; start += CONTINUATION_LABEL_LINES) {
+    pages.push(content.slice(start, start + CONTINUATION_LABEL_LINES));
+  }
+  const base = {
+    kind: "volume" as const,
+    code: `${order.number}-V${volume.numero}`,
+    order: order.number,
+    number: volume.numero,
+    total: order.total && order.total > 0 ? order.total : null,
+    recipient: [order.customer, order.destination].map((part) => part.trim()).filter(Boolean).join(" · "),
+    closing: [labelDate(volume.fechadoEm) ?? dateFormatter.format(options.printedAt ?? new Date()), pesoDoVolume(volume.pesoKg)].filter(Boolean).join(" · "),
+    units: volume.unidades,
   };
   return pages.map((page, index) => ({ ...base, lines: page, part: index + 1, parts: pages.length }));
 }
@@ -236,9 +344,26 @@ export type LabelsQuery = {
   session: boolean;
   /** A chegada (número) de onde as caixas vieram: a volta é ao Receber e a tela diz a chegada. */
   receipt: string | null;
+  /** O pedido (orders/{id}) das etiquetas de volume. */
+  order: string | null;
+  /** Os volumes do pedido, pelo número; "all", todos (o lote depois de concluir). */
+  volumes: number[] | "all";
   skip: number;
   mode: LabelMode;
 };
+
+/** O valor de `volumes=` que pede todos os volumes do pedido. */
+const TODOS_OS_VOLUMES = "todos";
+
+function volumeNumbers(value: string | null): number[] | "all" {
+  const text = (value ?? "").trim().toLowerCase();
+  if (text === TODOS_OS_VOLUMES) return "all";
+  const numbers = text
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((number) => Number.isInteger(number) && number > 0);
+  return [...new Set(numbers)].sort((left, right) => left - right);
+}
 
 function codes(value: string | null) {
   return [...new Set((value ?? "").split(",").map((code) => code.trim().toUpperCase()).filter(Boolean))];
@@ -252,6 +377,8 @@ export function parseLabelsQuery(search: string): LabelsQuery {
     positions: codes(params.get("posicoes")),
     session: params.get("sessao") === "atual",
     receipt: (params.get("chegada") ?? "").trim() || null,
+    order: (params.get("pedido") ?? "").trim() || null,
+    volumes: volumeNumbers(params.get("volumes")),
     skip: Number.isFinite(skip) && skip > 0 ? Math.min(Math.floor(skip), LABELS_PER_SHEET - 1) : 0,
     mode: params.get("modo") === "zebra" ? "zebra" : "a4",
   };
@@ -263,6 +390,11 @@ export function labelsUrl(query: Partial<LabelsQuery>): string {
   if (query.boxes?.length) params.set("caixas", query.boxes.join(","));
   if (query.positions?.length) params.set("posicoes", query.positions.join(","));
   if (query.receipt) params.set("chegada", query.receipt);
+  if (query.order) {
+    params.set("pedido", query.order);
+    if (query.volumes === "all") params.set("volumes", TODOS_OS_VOLUMES);
+    else if (query.volumes?.length) params.set("volumes", query.volumes.join(","));
+  }
   if (query.skip) params.set("pular", String(query.skip));
   if (query.mode === "zebra") params.set("modo", "zebra");
   const text = params.toString();

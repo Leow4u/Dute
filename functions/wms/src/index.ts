@@ -68,6 +68,12 @@ import { accountRetentionEnabled, anonymizeRemovedAccounts } from "./domain/acco
 import { recalcularDisponivelDoPortal } from "./domain/disponivel-do-portal.js";
 import { lerDatasDoEstoque } from "./domain/datas-do-estoque.js";
 import { openAreaPutaway as openAreaPutawayFor, previewAreaPutaway as previewAreaPutawayFor } from "./domain/area-putaway.js";
+import {
+  closeOrderVolume as closeOrderVolumeFor,
+  completeOrderSeparation as completeOrderSeparationFor,
+  setPickLineSeparated as setPickLineSeparatedFor,
+} from "./domain/pick-progress.js";
+import { recordBoxBalanceLabelPrint as recordBoxBalanceLabelPrintFor } from "./domain/box-relabel.js";
 import { CLIENT_NOTICE_AFTER_PUTAWAY } from "./domain/inbound-box-entry.js";
 import {
   CLIENT_ACCESS_COLLECTION,
@@ -6608,6 +6614,37 @@ export const advanceWarehouseTask = onCall(async (request) => {
 });
 
 /**
+ * Separar com o progresso salvo (separação com caixas, parte 2a): a linha
+ * separada fica gravada na hora, e "Desfazer" a volta. Quem separa é quem
+ * opera o armazém.
+ */
+export const setPickLineSeparated = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return setPickLineSeparatedFor(db, request.data, profile);
+});
+
+/**
+ * Fechar o volume aberto da separação, com o peso, opcional (separação com
+ * caixas, parte 4a). Quem fecha é quem opera o armazém.
+ */
+export const closeOrderVolume = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return closeOrderVolumeFor(db, request.data, profile);
+});
+
+/**
+ * Concluir a separação (parte 2a): a separação e a embalagem, com o lacre,
+ * numa chamada. Separar a menos continua só da coordenação (short-pick.ts).
+ */
+export const completeOrderSeparation = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return completeOrderSeparationFor(db, request.data, profile);
+});
+
+/**
  * Expedição › entrega do pedido (parte 4.5a): pela Dutelog (vira demanda e OS
  * na Operação, parte 4.5b) ou retirada pelo cliente (não gera OS). Só antes
  * da saída e enquanto a Operação não abriu a demanda.
@@ -8350,6 +8387,16 @@ export const recordInboundBoxLabelPrint = onCall(async (request) => {
   const profile = await getProfile(request);
   requireWarehouseWrite(profile);
   return recordInboundBoxLabelPrintFor(db, request.data, profile);
+});
+
+/**
+ * Etiquetas para trocar (separação com caixas, parte 3d): registra a
+ * impressão da etiqueta com o saldo das caixas que a separação abriu.
+ */
+export const recordBoxBalanceLabelPrint = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return recordBoxBalanceLabelPrintFor(db, request.data, profile);
 });
 
 /** "Guardar" no Estoque (decisão 16, parte 7e): o que dá para guardar do saldo parado numa área. */

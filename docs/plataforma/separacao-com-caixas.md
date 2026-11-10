@@ -6,11 +6,15 @@ https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz, fontes em
 `docs/mockups/WmsSeparar*.dc.html` e `WmsEtiquetaTodos*.dc.html`). As páginas
 1 e 2 foram **aprovadas em 10/11/2026**, com as decisões 10 a 15, e a página
 3 (a etiqueta com todos os produtos), no mesmo dia, com o logo original da
-Dutelog (decisão 16). **A parte 1 (a lista de separação) está no código desde
-10/11/2026** (PR 590) **e a parte 6 (a etiqueta com todos os produtos), na
-caixa e na posição, também** (registro na seção 5.1); as partes 2 a 5 têm o
-mockup aprovado e esperam a vez. Tela só depois do mockup aprovado (decisão
-8). Produção só com o OK do Leonardo.
+Dutelog (decisão 16). **No código desde 10/11/2026** (registro na seção 5.1):
+a parte 1 (a lista de separação, PR 590), a parte 6 (a etiqueta com todos os
+produtos, na caixa e na posição, PR 591), as partes 2 e 5 (separar com o
+progresso salvo e "Separar menos"), a parte 3 (a caixa na separação: o
+saldo, a baixa, a caixa vazia e as etiquetas para trocar) e a parte 4 (os
+volumes de expedição, a etiqueta do volume, o romaneio e "Para entregar").
+As partes 2, 3, 4 e 5 entraram na `main` pelo PR 592, com o OK do Leonardo
+em 10/11/2026, e vão para a homologação. Tela só depois do mockup aprovado
+(decisão 8). Produção só com o OK do Leonardo.
 
 Relação com os outros desenhos: este roteiro retoma a regra 8 e a seção 5.4 do
 mapa (`docs/mapa-do-armazem-enderecamento-dirigido.md`) e revê a P8 de
@@ -113,11 +117,17 @@ O retrato de antes deste roteiro. A parte 1 mudou a lista e a caixa na linha
 - Cada linha separada é gravada na hora por uma callable, com papel, status,
   transação, idempotência e evento. "Desfazer" volta a linha. A pessoa para e
   continua no dia seguinte, e outra pessoa pode continuar.
+- A primeira linha separada começa a separação: a tarefa vai a `in_progress`
+  e o cliente passa a ver "Em separação" no portal.
 - A fila mostra "em separação desde 10/11 · 10 de 116 itens".
 - "Concluir separação" só liga com todas as linhas tratadas. Pede o lacre, um
-  por pedido, e fecha a separação e a embalagem numa chamada do servidor (hoje
-  a tela encadeia até quatro).
-- A reserva, a baixa na entrega e a cobrança ficam como estão.
+  por pedido, e fecha a separação e a embalagem numa chamada do servidor (a
+  tela encadeava até quatro).
+- A reserva, a baixa na entrega e a cobrança ficam como estão: o progresso é
+  só o registro de quem separou o quê, e a reserva e o saldo continuam
+  mudando só na conclusão e na entrega.
+- A contagem cíclica da prateleira com linha já separada é recusada até a
+  entrega, como já era depois da separação concluída.
 
 ### 4.3 A caixa na separação (parte 3)
 
@@ -139,6 +149,11 @@ O retrato de antes deste roteiro. A parte 1 mudou a lista e a caixa na linha
   separado que espera a entrega, é igual à soma dos saldos das caixas mais o
   saldo sem caixa.
 - O item sem caixa na prateleira separa como hoje, sem caixa na linha.
+
+Como ficou no código (registro na seção 5.1): o conteúdo de entrada não muda
+de lugar, e a caixa guarda só o que as separações tiraram dela; o saldo é a
+entrada menos o retirado. Quem volta à prateleira depois (o pedido cancelado
+no meio, a devolução) volta sem caixa. A conferência ainda não tem tela.
 
 ### 4.4 Volumes de expedição (parte 4)
 
@@ -163,8 +178,12 @@ O retrato de antes deste roteiro. A parte 1 mudou a lista e a caixa na linha
 ### 4.5 Separar menos por quem opera (parte 5)
 
 Quem opera registra na linha o que separou a menos, com o motivo ("Falta" ou
-"Avaria") e o detalhe. O pedido com diferença só conclui com a coordenação,
-como hoje (decisão 14). Substitui o "Tratar" como porta de entrada da falta.
+"Avaria") e o detalhe. O pedido com diferença só conclui com a coordenação
+(decisão 14): a diferença solta a reserva na conclusão, pela regra de sempre
+da pergunta 59. Substitui o "Tratar" como porta de entrada da falta, e o
+diálogo "Separado" da coordenação, com − e + por linha, sai: a conferência
+linha a linha é a própria bancada. Entrou junto com a parte 2, porque sem
+ela a bancada deixaria a coordenação sem como separar a menos.
 
 ### 4.6 Etiqueta com todos os produtos (parte 6)
 
@@ -186,7 +205,7 @@ produtos:
   originais; no rolo da Zebra, que só imprime preto, sai em preto.
 
 Não depende das partes 2 a 5: entrou antes delas, para a caixa e a posição
-(seção 5.1). A caixa aberta com o saldo entra com a parte 3d e o volume, com
+(seção 5.1). A caixa aberta com o saldo entrou com a parte 3d e o volume, com
 a parte 4c, já neste desenho.
 
 ## 5. Partes, em ordem
@@ -199,23 +218,26 @@ Um problema por commit, com o teste que falha antes.
 | 1a | Lista por prateleira | "Ver itens" agrupado pela ordem de caminhada. Só o app. | Linhas em B-09, A-03 e A-05 saem na ordem do carrinho; com 116 linhas, a 100 vem depois da 10. |
 | 1b | Imprimir lista | A lista em A4 e o atalho no celular, com os testes de textos e `axe`. | A tela não existe. |
 | 1c | A caixa na lista | A caixa de cada linha, lida do conteúdo de entrada. Só leitura. | A linha não mostra caixa. |
-| 2a | Progresso no servidor | Separar e desfazer a linha; a conclusão numa chamada. | A linha separada some ao recarregar. |
-| 2b | A bancada | "Separar" e "Continuar", o progresso e "em separação desde". | A fila só tem "Separado". |
-| 3a | Saldo da caixa | O conteúdo atual por caixa, a etiqueta e o Mapa lendo o saldo, e a conferência. | A caixa de onde saiu peça mostra o conteúdo de entrada. |
+| 2a | Progresso no servidor | Separar e desfazer a linha; a conclusão numa chamada; a contagem cíclica recusa a prateleira com linha separada. | A linha separada some ao recarregar. |
+| 2b | A bancada | "Separar" e "Continuar", o progresso e "em separação desde". Entrou com a parte 5. | A fila só tem "Separado". |
+| 3a | Saldo da caixa | O conteúdo atual por caixa, a etiqueta, o Mapa e a lista lendo o saldo. A conferência ficou sem tela (seção 5.1). | A caixa de onde saiu peça mostra o conteúdo de entrada. |
 | 3b | Baixa na linha | A sugestão da mais antiga, a baixa na transação e "Outra caixa". | A separação não muda a caixa. |
 | 3c | Caixa vazia e Mapa | A caixa encerrada, "Posições ocupadas" e "Saíram desta prateleira". | A caixa vazia conta como posição ocupada. |
 | 3d | Etiquetas para trocar | A lista das caixas abertas, "saldo em" e o registro da impressão. | A etiqueta sai com o conteúdo de entrada. |
 | 4a | Volumes no servidor | Um `packages` por volume, "Levar a caixa" e o lacre no pedido. | O pedido só tem o volume `_001`. |
-| 4b | Volumes na bancada | O volume aberto, "Fechar volume" e o peso. | — |
-| 4c | Etiqueta do volume e romaneio | As duas impressões. | — |
-| 4d | Para entregar | Os volumes e o lacre na fila. | — |
-| 5 | Separar menos | A diferença registrada por quem opera. | O operador não tem onde registrar a falta. |
+| 4b | Volumes na bancada | O volume aberto, "Fechar volume" e o peso. | A bancada não tem volume. |
+| 4c | Etiqueta do volume e romaneio | As duas impressões. | O pedido sai sem etiqueta de volume e sem romaneio. |
+| 4d | Para entregar | Os volumes e o lacre na fila, e a tela do pedido separado. | A linha só diz os itens e as unidades, e o pedido concluído, "Separação concluída". |
+| 5 | Separar menos | A diferença registrada por quem opera, na linha; só a coordenação conclui com diferença. Entrou com a parte 2. | O operador não tem onde registrar a falta. |
 | 6 | Etiqueta com todos os produtos | As etiquetas de continuação e o logo, na caixa e na posição; com a parte 3d, na caixa aberta e, com a 4c, no volume (seção 4.6). | A caixa com nove produtos imprime quatro e "+ 5 produto(s) no sistema". |
 
 As partes 1 a 5 têm o mockup aprovado (páginas 1 e 2), e a parte 6, o da
 página 3. Cada parte entra na homologação no merge e na produção só pela
 publicação manual, com o OK do Leonardo. A régua `billing-callables` fica
 verde em todas.
+
+O que as partes decidiram no caminho, e que o Leonardo ainda não viu, está
+junto do registro de cada uma (seção 5.1), marcado como "A confirmar".
 
 ### 5.1 Registro das partes
 
@@ -303,6 +325,292 @@ imprimia quatro e "+ 5 produto(s) no sistema", sai em duas etiquetas; 16 e 17
 produtos) e `label-sheet.test.tsx` (os textos de cada etiqueta, o logo em
 todas, o preto no rolo e o `axe`).
 
+**Partes 2 e 5, separar com o progresso salvo e "Separar menos"
+(10/11/2026).** As duas entraram juntas: a bancada sem a parte 5 deixaria a
+coordenação sem como separar a menos, e a prancha aprovada já traz o "Separar
+menos" na linha.
+
+- **O servidor** (`functions/wms/src/domain/pick-progress.ts`), duas callables
+  de quem opera o armazém (`owner`, `admin`, `interno` e `wms`):
+  - `setPickLineSeparated` separa, registra o separado a menos ou desfaz uma
+    linha. O progresso mora na linha de separação (`pick_lines`):
+    `separated_qty`, `separated_at`, `separated_by` e, a menos,
+    `separated_shortage_reason` e `separated_shortage_detail`. A linha
+    continua `open`; a reserva, o saldo e o `qty_picked` não mudam. A primeira
+    linha começa a separação pela porta de sempre
+    (`advanceWarehouseTaskTransaction`, de `planned` a `in_progress`) e data
+    o começo na tarefa (`separation_started_at`). Idempotente pela chave e
+    pelo estado, em transação, com o recibo em `operational_operations` e o
+    evento `picking.line_separated` ou `picking.line_unseparated`, fora da
+    caixa de avisos (um pedido tem mais de cem linhas).
+  - `completeOrderSeparation` conclui: confere que toda linha foi tratada,
+    recusa o pedido com diferença para quem não é da coordenação e roda, em
+    ordem, as transições que a tela encadeava (separação concluída, embalagem
+    iniciada e fechada com o lacre, um volume). Cada passo tem a chave
+    derivada da chave da chamada; repetir continua de onde parou. O resultado
+    é o mesmo da cadeia antiga: a régua `billing-callables` e o teste do
+    separar a menos seguem verdes.
+  - A conclusão manda à transação o `separated_at` que leu de cada linha: a
+    linha desfeita ou separada de novo depois dessa leitura recusa ("A
+    separação mudou enquanto o pedido era concluído"), e nada conclui.
+  - Duas pessoas concluindo ao mesmo tempo: o pedido conclui uma vez. A
+    transição que a outra pessoa já fez recusa pelo status, e a conclusão lê
+    de novo e continua do que encontrou (até quatro voltas, uma por passo).
+    Quem chega com outro lacre recebe "A separação deste pedido já foi
+    concluída, com o lacre X"; com o mesmo lacre, é a repetição da chamada.
+  - A contagem cíclica (`recordCycleCountTransaction`) recusa a prateleira
+    com reserva cuja linha já tem algo separado: o item saiu da prateleira e
+    só baixa do saldo na entrega. A linha separada com zero não barra a
+    contagem.
+  - O cancelamento no meio da separação (`cancelWarehouseOrderTransaction`)
+    segue a decisão da pergunta 59 ("se já foi separado, pede a volta do
+    item à posição"), agora por linha: a reserva sai inteira, e o que a linha
+    já separou (`separated_qty`, nunca mais que a reserva) passa no razão da
+    prateleira para a `EXPEDICAO` e ganha a guarda de volta, pelo mesmo
+    caminho do separado do pedido concluído (movimento interno, sem
+    cobrança). A linha por separar e a linha zerada só soltam a reserva. A
+    reserva guarda `returned_qty`. Antes, o cancelamento soltava a reserva e
+    deixava disponível na prateleira o que estava na bancada.
+- **O app.** A bancada é a tela nova Pedidos › Separar
+  (`/pedidos/separar?pedido=<chave do pedido>`, na v3, os papéis de Pedidos;
+  o suporte só consulta): `pages/pedidos-separar.tsx` lê as linhas e a tarefa
+  ao vivo do Firestore e chama as callables (`lib/wms/separacao.ts`);
+  `pages/pedidos-separar-view.tsx` é a tela; as regras do progresso ficam em
+  `lib/warehouse-ops/separacao.ts`. Os diálogos são
+  `features/warehouse-ops/separar-menos.tsx` e `concluir-separacao.tsx`. Em
+  Pedidos, o "Separado" de um passo só e o diálogo da coordenação
+  (`separado.tsx`) saíram. O diálogo "Cancelar pedido" lista em "Voltam à
+  posição" também as linhas já separadas do pedido em separação, na mesma
+  tabela de antes, sem texto novo (`cancel-order.tsx`).
+- **O que da prancha da bancada ficou para as partes 3 e 4** (e entrou com
+  elas): a caixa sugerida com a quantidade ("12 de CX-000027", "esvazia",
+  "inteira"), "Levar a caixa", "Outra caixa" no "⋯", o painel dos volumes, as
+  "Etiquetas para trocar" e os números de volumes e caixas do diálogo de
+  concluir.
+- **O pedido que parou entre a separação e a embalagem** (a conclusão caiu no
+  meio) continua em "Para separar": a bancada abre só para concluir.
+
+Os testes: `pick-progress.test.ts` (a regra sem banco),
+`pick-progress.integration.test.ts` (no emulador, do pedido aprovado à
+entrega: o progresso, o desfazer, a outra pessoa, a conclusão, a retomada, a
+linha que mudou depois da leitura, as duas pessoas concluindo ao mesmo tempo,
+o separar a menos, a contagem cíclica e o cancelamento no meio da separação,
+com a guarda de volta), as duas linhas na tabela de papéis
+(`callables-papeis.integration.test.ts`), `separacao.test.ts`,
+`pedidos-separar-view.test.tsx`, `separar-menos.test.tsx`,
+`concluir-separacao.test.tsx` (a lista dos textos e o `axe`) e
+`cancel-order.test.tsx` (as linhas já separadas em "Voltam à posição").
+
+**Parte 3, a caixa na separação (10/11/2026).** Em commits próprios no PR
+592, depois das partes 2 e 5.
+
+- **O saldo é a entrada menos o retirado.** O conteúdo de entrada continua
+  onde estava: nas linhas da abertura (`opening_inventory_lines`, pelo
+  `box_code`) ou na própria caixa do recebimento (`lines[]`). A caixa passa a
+  guardar só o que as separações tiraram dela: `taken_lines` (por SKU),
+  `taken_units` e `balance_at`. Assim a correção de uma linha da abertura
+  (mover ou remover) continua valendo sem tocar o saldo, e a caixa sem nada
+  retirado não ganha campo nenhum. A regra sem banco é
+  `lib/dominio/src/saldo-da-caixa.ts`, com a cópia literal em
+  `functions/wms/src/domain/saldo-da-caixa.ts` travada por teste; os dois
+  lados rodam os mesmos casos (`saldo-da-caixa.casos.json`).
+- **A baixa na linha (3b).** `setPickLineSeparated` lê as caixas guardadas do
+  cliente na prateleira da linha e baixa, na mesma transação, a mais antiga
+  que tem o item (a data da guarda; no empate, o código); a seguinte completa,
+  e o que as caixas não têm sai sem caixa. Com `boxes` ("Outra caixa"), baixa
+  as caixas informadas: cada uma tem de ter o item na quantidade informada, e
+  a soma tem de fechar com a linha (`SEPARATION_BOXES_MISMATCH`). A linha
+  guarda de onde saiu (`separated_boxes`, com `whole` na caixa intacta que
+  saiu toda e `emptied` na já aberta que a linha esgotou), e o evento
+  `picking.line_separated` leva `boxes`. "Desfazer", e a linha separada de
+  novo com outra quantidade, devolvem antes às mesmas caixas. A reserva e o
+  saldo da prateleira não mudam.
+- **"Separar" não manda caixa.** A bancada mostra a sugestão lida ao vivo,
+  mas quem baixa é o servidor, pela mesma regra: se outra pessoa tirou da
+  mesma caixa no intervalo, a linha sai da caixa seguinte, e a linha separada
+  mostra de onde saiu de fato. Só "Outra caixa" manda as caixas, e aí a
+  recusa aparece para quem informou.
+- **A caixa vazia (3c).** A caixa de que a separação tira tudo passa a
+  `emptied`, com `emptied_at`, `emptied_by`, o pedido, a linha e
+  `emptied_whole` (saiu inteira). O encaixe da prateleira, o Mapa, "Posições
+  ocupadas" e a lista leem só a guardada: a vazia libera a frente e deixa de
+  contar. "Desfazer" devolve a caixa à prateleira. Cada mudança grava
+  `warehouse.box_emptied` ou `warehouse.box_reopened`, fora da caixa de
+  avisos. A caixa empilhada sobre a que esvaziou fica como base, pela regra
+  do encaixe para o apoio que falta.
+- **As telas.** Na bancada, a linha por separar mostra "12 de CX-000027",
+  "esvazia" e "CX-000029 inteira"; a separada mostra de onde saiu; "Outra
+  caixa" fica no "⋯" da linha com mais de uma caixa na prateleira
+  (`features/warehouse-ops/outra-caixa.tsx`,
+  `lib/warehouse-ops/caixas-da-separacao.ts`). O Mapa diz "CX-000028 · aberta"
+  ou "· guardada", mostra o saldo, "saldo em" e "Saíram desta prateleira" (as
+  dez mais recentes), e "Posições ocupadas" passa a "Prateleiras com caixa
+  com saldo." A lista de separação ("Ver itens" e a folha impressa) mostra só
+  as caixas que ainda têm o item.
+- **Etiquetas para trocar (3d).** A etiqueta da caixa aberta sai com o saldo,
+  "7 un. · saldo em 12/11/2026", sem o peso de entrada. A bancada lista as
+  caixas que o pedido abriu e que estão com a etiqueta velha, com "Imprimir".
+  `recordBoxBalanceLabelPrint` registra o clique: a caixa guarda para qual
+  saldo a etiqueta saiu (`balance_label_printed_for`), e volta à lista quando
+  o saldo muda de novo. O evento é `warehouse.box_balance_label_printed`.
+- **A data da etiqueta.** Toda etiqueta de caixa passa a levar a data de
+  entrada (a da guarda), que é a do FIFO, como nas pranchas aprovadas
+  ("Abertura · 22/10/2026"). Até aqui saía a data da impressão: era a mesma
+  quando a etiqueta saía no dia da guarda, e errada na reimpressão.
+- **O diálogo de concluir** diz as caixas de onde o pedido saiu: "Caixas
+  inteiras", "Caixas abertas" e "Caixas vazias". "Volumes" entrou com a parte 4.
+- **O que volta à prateleira volta sem caixa.** No pedido cancelado no meio
+  da separação e na devolução, o que a guarda devolve à prateleira entra no
+  saldo dela, sem caixa: a caixa de onde saiu continua com o saldo baixado (ou
+  vazia). A linha seguinte daquele item sai das caixas e, depois, sem caixa.
+- **A conferência não tem tela.** A conta da seção 4.3 vale como está: o
+  saldo sem caixa da prateleira é o que sobra do razão depois do separado que
+  espera a entrega e do saldo das caixas. Mostrar a divergência (as caixas
+  dizendo mais do que o razão) pede uma tela, e tela pede mockup.
+- **O que da prancha ficou para a parte 4** (e entrou com ela): "Levar a
+  caixa", o volume em cada linha separada, o painel dos volumes, "Volumes" no
+  diálogo de concluir e a tela do pedido separado (`WmsSepararConcluido`), com
+  as etiquetas para trocar e as caixas vazias depois da conclusão.
+
+Os testes: `saldo-da-caixa.test.ts` (os casos da regra, nos dois lados, e a
+trava da cópia), `pick-progress.integration.test.ts` (a mais antiga e a
+seguinte, o desfazer, o separar menos, a que esvazia, o que sai sem caixa,
+"Outra caixa" com as recusas, a caixa vazia e a de volta à prateleira),
+`box-relabel.integration.test.ts`, a linha nova na tabela de papéis,
+`caixas-da-separacao.test.ts`, `outra-caixa.test.tsx`,
+`pedidos-separar-view.test.tsx`, `concluir-separacao.test.tsx`,
+`warehouse-labels.test.ts`, `label-sheet.test.tsx`, `warehouse-map.test.ts` e
+`warehouse-map.test.tsx` (a lista dos textos e o `axe`).
+
+**Parte 4, os volumes de expedição (10/11/2026).** Em commits próprios no PR
+592, depois da parte 3: 4a (servidor), 4b (bancada), 4c (etiqueta e
+romaneio) e 4d ("Para entregar" e o pedido separado).
+
+- **Onde os volumes moram (4a).** Durante a separação, na tarefa:
+  `pick_tasks.volumes` (cada um com `id`, `number`, `status` `open` ou
+  `closed`, `units` e, no fechado, `weight_kg`, `box_code`, `closed_at` e
+  `closed_by`) e `volume_seq`, o contador dos ids, que não volta. A linha
+  guarda em quais volumes foi (`separated_volumes`). Na conclusão, cada
+  volume vira um `packages` (`pkg_<embalagem>_001`, `_002`, …) com os
+  `package_items` dele; a linha da remessa (`shipment_items`) continua uma por
+  item do pedido e diz em quais volumes ele foi (`package_ids`). O lacre
+  continua um por pedido. Nenhuma coleção nova: a zeragem não muda. A regra
+  sem banco é `functions/wms/src/domain/order-volumes.ts`.
+- **A linha entra no volume aberto.** `setPickLineSeparated` põe o separado
+  no volume aberto da tarefa, na mesma transação da caixa; sem volume aberto,
+  abre o seguinte. "Desfazer" tira a linha dos volumes. A linha separada a
+  menos até zero não entra em volume.
+- **"Fechar volume".** `closeOrderVolume` fecha o volume aberto com o peso,
+  opcional (decisão 15; até duas casas, até 2.000 kg), e grava
+  `picking.volume_closed`, fora da caixa de avisos. O volume vazio, o já
+  fechado e o que não existe recusam. O seguinte não é criado na hora: abre
+  na próxima linha separada, e a tela mostra o número dele, vazio.
+- **"Levar a caixa" (decisão 11).** A linha por separar de que uma caixa sai
+  inteira ganha "Levar a caixa". A bancada manda as caixas que mostrou
+  (`boxes`) com `take_boxes`: a caixa que sai inteira vira um volume fechado,
+  com a caixa (`box_code`) e o peso que ela tinha na entrada
+  (`gross_weight_kg`), e o resto da linha entra no volume aberto. Se a caixa
+  não sai mais inteira (outra pessoa tirou dela), recusa
+  (`SEPARATION_BOX_NOT_WHOLE`) e nada fica gravado. A caixa guarda qual
+  volume ela é (`emptied_volume_id` e `emptied_volume_number`, que acompanha
+  o volume se ele mudar de número): o Mapa diz, em "Saíram desta prateleira",
+  "inteira em 11/11/2026 · PED-0001, volume 11".
+- **Os números vão de 1 a N, sem buraco.** O volume que esvazia (o desfazer
+  da linha, ou da caixa levada) sai, e o de maior número ocupa o lugar dele:
+  é o que troca menos etiqueta. Só o fechado tem etiqueta para trocar, e a
+  resposta diz qual mudou (`renumbered_volumes`). O volume fechado de que sai
+  só uma parte continua fechado, sem o peso que tinha, e a resposta diz qual
+  (`changed_volumes`). A bancada avisa nos dois casos.
+- **A conclusão.** `completeOrderSeparation` fecha junto o volume aberto que
+  tem alguma coisa, sem peso, e grava um `packages` por volume. A conta parte
+  dos itens do pedido: o que um item separou e nenhum volume diz que leva vai
+  no volume aberto (ou num volume a mais), para os volumes fecharem sempre
+  com o separado. O pedido sem volume nenhum (separado antes desta parte)
+  fecha no volume único de sempre. A saída, a entrega e o cancelamento já
+  liam todos os `packages` do pedido e seguem iguais.
+- **A bancada (4b).** O painel "Volumes": o volume aberto com o que já tem,
+  "Peso (kg)" e "Fechar volume"; os fechados, do mais recente ao mais antigo
+  (os dois primeiros e "Ver os N volumes"), cada um com "Etiqueta". A linha
+  separada diz em qual volume está. O diálogo de concluir diz "Volumes" antes
+  das caixas. No celular, o volume aberto vem em cima da lista, numa linha,
+  como na prancha (`lib/warehouse-ops/volumes-do-pedido.ts`).
+- **A etiqueta do volume (4c).** No tamanho de hoje, com o pedido, o volume,
+  o código de barras (`PED-0001-V12`), o cliente e o destino, a data em que o
+  volume fechou, o peso, e os produtos com o código do cliente (sem ele, o
+  SKU), a maior quantidade primeiro; com mais de cinco produtos, sai em
+  etiquetas de continuação. Sai em Estoque › Etiquetas: `?pedido=` com
+  `volumes=12` (ao fechar o volume, sem o total) ou `volumes=todos` (o lote,
+  com "de 42", depois de concluir). Não registra a impressão.
+- **O romaneio (4c).** `/pedidos/romaneio`, em A4: o cliente, o destino, o
+  prazo, o lacre, os volumes, as unidades, de quando a quando o pedido
+  separou (da primeira linha à conclusão) e quem concluiu; e o conteúdo de
+  cada volume, na ordem das linhas do pedido, com o código, a quantidade e o
+  peso. Só do pedido já separado. A etiqueta e o romaneio vão ao cliente: não
+  citam caixa, posição nem valor.
+- **De onde as telas leem os volumes.** `use-volumes-do-pedido.ts`, ao vivo:
+  da tarefa e das linhas, enquanto o pedido separa (só os fechados); dos
+  `packages` e `package_items`, depois de concluído. As duas consultas novas
+  são por `order_id`, sem índice composto.
+- **"Para entregar" (4d).** A linha diz "116 itens · 3.335 un. · 42 volumes ·
+  lacre 88231", com "Ver volumes" no lugar de "Ver itens", "Etiquetas dos
+  volumes" e "Romaneio" antes de "Entregue", e o aviso "5 etiquetas de caixa
+  para trocar", com "Imprimir". O lacre e a contagem dos volumes passaram a
+  chegar na fila.
+- **O pedido separado (4d).** A bancada do pedido já concluído
+  (`/pedidos/separar`) mostra os volumes com o conteúdo de cada um, "Etiquetas
+  dos volumes", "Romaneio", as caixas que o pedido abriu e as que ele
+  esvaziou (`pages/pedido-separado-view.tsx`). É onde "Confirmar separação"
+  deixa a pessoa, e para onde "Ver volumes" leva.
+- **O pedido de antes dos volumes** aparece com um volume só, com todos os
+  itens: "Ver volumes", a etiqueta e o romaneio funcionam para ele.
+
+A confirmar com o Leonardo (decidido no caminho, sem prancha que dissesse):
+
+1. No celular, "Fechar volume" fecha sem peso, como na prancha; o peso só no
+   computador.
+2. Ao fechar o volume, a etiqueta não abre sozinha: fica em "Etiqueta", na
+   linha do volume fechado.
+3. O volume fechado que esvazia some, e o de maior número ocupa o número
+   dele; a bancada avisa "O volume 12 passou a ser o volume 5. Troque a
+   etiqueta dele."
+4. O volume fechado de que sai uma parte perde o peso; a bancada avisa "O
+   volume 5 mudou. Imprima a etiqueta dele de novo." Não há como informar o
+   peso de novo.
+5. Com mais de uma caixa saindo inteira na mesma linha, o botão diz "Levar as
+   caixas".
+6. Depois de "Confirmar separação", a pessoa fica no pedido separado, e não
+   volta a Pedidos.
+7. Em "Para entregar", "Ver volumes" fica no lugar de "Ver itens"; no
+   celular, "Etiquetas dos volumes" e "Romaneio" ficam atrás de "Ver volumes".
+8. No romaneio, "Separado" vai da primeira linha separada à conclusão, e
+   "Por" é quem concluiu.
+
+**Dois acertos que a parte 4 trouxe junto**, em commits próprios:
+
+- **A fila de Pedidos não recebia o pedido da tarefa.** A fila lê as tarefas
+  de `queues`, e o mapeamento não copiava o `order_id` nem o
+  `separation_started_at`, que ficavam só em `lanes`. Sem o `order_id`, a
+  linha do pedido não sabia de qual pedido era: "Entrega" não aparecia e
+  "Cancelar pedido" não abria. Sem o começo da separação, o selo saía "em
+  separação", sem "desde 12/11". Os testes das telas montavam a tarefa já
+  com os dois campos; o teste novo passa pela leitura de verdade
+  (`cloud-api-warehouse.test.ts`).
+- **A conclusão repetida não devolvia a remessa.** A embalagem nunca guardou
+  o `shipment_id`; com a embalagem já fechada, a resposta lê a remessa do
+  pedido.
+
+Os testes: `order-volumes.test.ts` (a regra dos volumes),
+`pick-progress.integration.test.ts` (o volume aberto, "Fechar volume",
+"Levar a caixa" e a recusa, o desfazer com o número e o peso, a conclusão
+com um `packages` por volume, a linha zerada, o pedido de antes dos volumes,
+o item sem linha e o cancelamento), a linha nova na tabela de papéis,
+`volumes-do-pedido.test.ts`, `use-volumes-do-pedido.test.ts`,
+`romaneio.test.ts`, `pedidos-separar-view.test.tsx`,
+`pedido-separado-view.test.tsx`, `pedidos-romaneio-view.test.tsx`,
+`pedidos.lista.test.tsx`, `concluir-separacao.test.tsx`,
+`warehouse-labels.test.ts`, `label-sheet.test.tsx` (a lista dos textos e o
+`axe`) e `cloud-api-warehouse.test.ts`.
+
 ## 6. Perguntas
 
 Todas respondidas pelo Leonardo em 10/11/2026.
@@ -337,14 +645,31 @@ Os dois são separados com o sistema de hoje e a lista da parte 1. Enquanto a
 parte 3 não entra, a caixa aberta leva a sobra e a data escritas à mão, e a
 lista impressa guarda de qual caixa saiu cada linha e quais esvaziaram.
 
+Se a parte 2 chegar à produção com um deles ainda por concluir, a bancada
+abre com todas as linhas por separar: o que já foi separado pela lista
+impressa não está no sistema. Quem está com a lista marca as linhas já
+separadas, um toque por linha, e segue dali.
+
 A caixa da lista é a do conteúdo de entrada (decisão 10). Nesses dois pedidos
 ela é exata, porque nenhum pedido saiu desde a zeragem. Do terceiro pedido em
 diante, e até a parte 3, a lista pode citar uma caixa que os pedidos
 anteriores já esvaziaram: vale a anotação à mão na caixa.
 
+O pedido concluído antes de a parte 3 chegar não baixou caixa nenhuma: as
+caixas de onde ele saiu continuam com o saldo de entrada no sistema, e a
+sugestão dos pedidos seguintes pode apontar para elas. O acerto é pela
+própria bancada: no pedido seguinte, "Outra caixa" diz de onde o item saiu de
+fato. O total da prateleira não depende disso.
+
 Quando a parte 3a entrar, o saldo das caixas desses pedidos é acertado uma
 vez: pela regra da caixa mais antiga, conferida com a lista anotada, em
 simulação antes de gravar.
+
+Com a parte 4, o pedido concluído pelo fluxo antigo aparece com um volume só
+(o `_001`, com todos os itens): "Ver volumes", a etiqueta e o romaneio
+funcionam para ele, com esse volume único. O pedido que estiver em separação
+quando a parte 4 chegar monta os volumes a partir da primeira linha separada
+na bancada.
 
 ## 8. O que não muda
 
@@ -360,15 +685,59 @@ backend).
   do real até o acerto da seção 7.
 - **A sugestão depende do hábito.** Se a pessoa tira de outra caixa e não
   corrige, a etiqueta fica errada; o total da prateleira continua certo.
+- **O saldo da caixa não acompanha tudo.** A contagem cíclica, a devolução e
+  a guarda por linha mexem no saldo da prateleira e não sabem de caixa. O que
+  volta à prateleira volta sem caixa (seção 5.1). A divergência entre as
+  caixas e o razão ainda não aparece em tela nenhuma.
+- **A leitura das caixas tem teto.** As telas leem até 5.000 caixas do
+  cliente, da mais nova para a mais velha, e a caixa vazia continua no banco.
+  Longe do teto hoje (cerca de 200 caixas); quando chegar perto, a leitura
+  passa a pedir só as guardadas.
 - **Impressão.** Uma etiqueta por caixa aberta em cada pedido é volume de
   papel em pedido grande.
+- **Um volume aberto por pedido.** Duas pessoas separando o mesmo pedido ao
+  mesmo tempo põem as linhas no mesmo volume aberto, embora possam estar
+  enchendo caixas diferentes. Quem fecha o volume fecha o que as duas
+  puseram.
+- **O volume fechado não reabre.** "Fechar volume" por engano não se desfaz:
+  a linha seguinte abre o volume seguinte. O conteúdo de um volume fechado só
+  muda desfazendo a linha, e aí a etiqueta dele precisa sair de novo.
+- **A etiqueta do volume não registra a impressão.** Nada diz se a etiqueta
+  de um volume já saiu, nem se saiu antes de ele mudar: o lote com o total,
+  depois de concluir, é o que vale.
 - **"Posições ocupadas" cai** quando as caixas esvaziam: muda a referência da
   fatura manual (decisão 6).
 - **Sem leitura de código de barras.** A confirmação é por toque. A leitura
   fica para depois, como no recebimento.
+- **Pedido cancelado no meio da separação.** Tratado com a parte 2 (seção
+  5.1): o que as linhas já separaram vai para a `EXPEDICAO` e volta pela
+  guarda, como o separado do pedido concluído. A tabela "Voltam à posição" do
+  diálogo lê a fila, que pode estar alguns segundos atrás do que outra pessoa
+  acabou de separar; o servidor decide pelo que está gravado na linha.
 
 ## 10. Como desfazer
 
 A parte 1 sai revertendo o PR, sem dado para limpar. As partes 2 a 5 gravam
 dado novo (progresso da linha, saldo da caixa, volumes): cada uma leva no PR
 dela o que fazer com esse dado ao reverter.
+
+A parte 4 sai revertendo os commits dela. Os volumes gravados na tarefa
+(`volumes`, `volume_seq`) e nas linhas (`separated_volumes`) ficam nos
+documentos, sem efeito: o pedido em separação conclui no volume único de
+antes. O pedido já concluído com vários `packages` continua certo para a
+saída, a entrega e o cancelamento, que sempre leram todos os volumes do
+pedido; só deixa de haver tela para vê-los.
+
+A parte 3 sai revertendo os commits dela. O retirado gravado nas caixas
+(`taken_lines`, `taken_units`, `balance_at`) e nas linhas (`separated_boxes`)
+fica nos documentos, sem efeito. A caixa `emptied` é o único dado que pede
+cuidado: a tela antiga não a mostra em lugar nenhum (para ela, caixa é a
+guardada), o que é o certo para a caixa que saiu de fato; se alguma tiver de
+voltar à prateleira, é um acerto à mão no documento dela.
+
+As partes 2 e 5 saem revertendo o PR delas. O progresso gravado nas linhas
+(`separated_*`) e na tarefa (`separation_started_at`) fica nos documentos, sem
+efeito: a tela antiga não o lê. O pedido que estiver em separação continua
+pelo "Separado" antigo, que confirma todas as linhas na quantidade pedida: a
+diferença já registrada numa linha precisa ser informada de novo pela
+coordenação.

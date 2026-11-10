@@ -67,7 +67,27 @@ describe("cancelar pedido", () => {
     expect(render(voltas)).not.toContain("· U");
   });
 
-  it("a separação que não terminou não devolve nada", () => {
+  it("a separação em andamento devolve só as linhas já separadas, na quantidade separada", () => {
+    // Na bancada: a polo separada inteira, a calça a menos (28 de 30), o boné zerado e a toalha por separar.
+    const emAndamento: Partial<WarehouseTask> = {
+      id: "picking:pick_ord_1",
+      status: "in_progress",
+      items: [
+        { id: "pli_1", name: "Camiseta polo P", client_item_code: "A.01.0310.001.P", quantity: 40, separated_qty: 40, separated_at: "2026-11-12T13:05:00.000Z", location: "A-03-2" },
+        { id: "pli_2", product_name: "Calça brim 42", quantity: 30, separated_qty: 28, separated_at: "2026-11-12T13:20:00.000Z", location: "B-01-1" },
+        { id: "pli_3", name: "Boné", quantity: 6, separated_qty: 0, separated_at: "2026-11-12T13:30:00.000Z", location: "C-02-4" },
+        { id: "pli_4", product_name: "Toalha de Academia", client_item_code: "C.0659.001.U", quantity: 5, location: "C-01-1" },
+      ],
+    };
+    expect(voltasDoPedido(pedido("separar", emAndamento))).toEqual([
+      { id: "pli_1", item: "Camiseta polo · P", quantidade: 40, posicao: "A-03-2" },
+      { id: "pli_2", item: "Calça brim 42", quantidade: 28, posicao: "B-01-1" },
+    ]);
+  });
+
+  it("a separação que não começou, ou começou sem nada separado, não devolve nada", () => {
+    expect(voltasDoPedido(pedido("separar", { ...SEPARADO, status: "planned" }))).toEqual([]);
+    // O que a separação concluída gravou (picked_quantity) não vale para a que está em andamento.
     expect(voltasDoPedido(pedido("separar", { ...SEPARADO, status: "in_progress" }))).toEqual([]);
     expect(voltasDoPedido(pedido("separar"))).toEqual([]);
   });

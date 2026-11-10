@@ -68,7 +68,9 @@ export function resumoDoGrupo(grupo: Pick<GrupoDaLista, "itens" | "unidades">): 
 /**
  * As caixas guardadas na prateleira da linha que receberam o SKU dela, do
  * cliente do pedido, a mais antiga primeiro (a data da guarda; no empate, o
- * código). É o conteúdo de entrada: a separação ainda não baixa a caixa.
+ * código). É o que a caixa conhece do conteúdo de entrada (`sku_codes`):
+ * vale enquanto o saldo das caixas não foi lido. Com ele (parte 3), a lista
+ * mostra só as caixas que ainda têm o item (`caixasDe`, em gruposDaSeparacao).
  */
 export function caixasDoItem(item: WarehouseTaskItem, caixas: readonly CaixaDaLista[], cliente?: string | null): string[] {
   const posicao = chave(item.location);
@@ -104,7 +106,12 @@ function porGuarda(esquerda: string | null, direita: string | null): number {
 export function gruposDaSeparacao(
   itens: readonly WarehouseTaskItem[],
   posicoes: readonly PosicaoDaLista[] = [],
-  opcoes: { caixas?: readonly CaixaDaLista[]; cliente?: string | null } = {},
+  opcoes: {
+    caixas?: readonly CaixaDaLista[];
+    cliente?: string | null;
+    /** As caixas que têm o item agora, pelo saldo (parte 3); sem ela, vale o conteúdo de entrada das `caixas`. */
+    caixasDe?: (item: WarehouseTaskItem) => string[];
+  } = {},
 ): GrupoDaLista[] {
   const sequencias = new Map(posicoes.flatMap((posicao) => (posicao.sequence == null ? [] : [[chave(posicao.code), Number(posicao.sequence)] as const])));
   const grupos = new Map<string, Array<LinhaDaLista & { ordem: number; familia: string; tamanho: number }>>();
@@ -117,7 +124,7 @@ export function gruposDaSeparacao(
       nome: nomeComTamanho({ nome, codigo, tamanho: item.size }),
       codigos: codigosDoItem(item),
       quantidade: quantidadeDoItem(item),
-      caixas: opcoes.caixas ? caixasDoItem(item, opcoes.caixas, opcoes.cliente) : [],
+      caixas: opcoes.caixasDe ? opcoes.caixasDe(item) : opcoes.caixas ? caixasDoItem(item, opcoes.caixas, opcoes.cliente) : [],
       item,
       ordem: Number(item.line_number) || indice + 1,
       familia: nomeSemTamanho({ nome, codigo, tamanho: item.size }),
