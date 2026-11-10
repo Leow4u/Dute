@@ -14,7 +14,7 @@ import {
   type OperationalActor,
 } from "./operations.js";
 import { billingMovementDirection } from "./billing-scope.js";
-import { completeOrderSeparation, setPickLineSeparated } from "./pick-progress.js";
+import { closeOrderVolume, completeOrderSeparation, setPickLineSeparated } from "./pick-progress.js";
 
 /**
  * Separar com o progresso salvo (separação com caixas, parte 2a), no
@@ -209,6 +209,8 @@ describe("Separar com o progresso salvo (separação com caixas, parte 2a)", () 
       location_id: "A-01",
       expected_qty: 5,
       quantity: 5,
+      // O separado entra no volume aberto (parte 4a).
+      volumes: [{ volume_number: 1, qty: 5 }],
     });
     const avisos = (await db.collection("ai_agent_inbox").get()).docs.map((doc) => doc.get("event_id"));
     assert.equal(avisos.includes(evento.id), false);
@@ -813,5 +815,322 @@ describe("A caixa na separação (separação com caixas, parte 3b)", () => {
     guardadas = await caixas();
     assert.deepEqual([guardadas["CX-000001"]!.taken_units, guardadas["CX-000002"]!.taken_units], [3, 2]);
     assert.equal((await eventos("picking.line_separated")).length, 2);
+  });
+});
+
+function fecharVolume(pickTaskId: string, volumeId: string, pesoKg?: number, ator: OperationalActor = guilherme, idempotencyKey = chave("fechar-volume")) {
+  return closeOrderVolume(db, { pick_task_id: pickTaskId, volume_id: volumeId, weight_kg: pesoKg, idempotency_key: idempotencyKey }, ator) as Promise<Record<string, unknown>>;
+}
+
+/** "Levar a caixa": a linha sai das caixas que a bancada mostrou, e a que sai inteira vira o volume. */
+function levarACaixa(pickTaskId: string, pickLineId: string, boxes?: Array<{ box_code: string; qty: number }>, ator: OperationalActor = guilherme) {
+  return setPickLineSeparated(
+    db,
+    { pick_task_id: pickTaskId, pick_line_id: pickLineId, separated: true, boxes, take_boxes: true, idempotency_key: chave("levar-a-caixa") },
+    ator,
+  ) as Promise<Record<string, unknown>>;
+}
+
+/** Os volumes da tarefa, resumidos: id, número, estado, unidades, caixa e peso. */
+async function volumes(pickTaskId: string) {
+  const lista = ((await tarefa(pickTaskId)).volumes ?? []) as Array<Record<string, unknown>>;
+  return lista.map((volume) => [volume.id, volume.number, volume.status, volume.units, volume.box_code ?? null, volume.weight_kg ?? null]);
+}
+
+describe("Os volumes de expedição (separação com caixas, parte 4a)", () => {
+  /** A-01: a CX-000001 (3 polos, a mais antiga) e a CX-000002 (4 polos e 6 de outro item); A-02: a CX-000003, com os 4 bonés e 1,2 kg. */
+  async function prateleiras() {
+    await Promise.all([
+      caixa("CX-000001", "A-01", "2026-10-22T13:00:00.000Z", 3),
+      linhaDaAbertura("CX-000001", POLO, 3, "A-01"),
+      caixa("CX-000002", "A-01", "2026-10-22T14:00:00.000Z", 10, { sku_codes: [POLO, "BTG-OUTRO"], line_count: 2 }),
+      linhaDaAbertura("CX-000002", POLO, 4, "A-01"),
+      linhaDaAbertura("CX-000002", "BTG-OUTRO", 6, "A-01"),
+      caixa("CX-000003", "A-02", "2026-11-06T13:00:00.000Z", 4, { sku_codes: [BONE], gross_weight_kg: 1.2 }),
+      linhaDaAbertura("CX-000003", BONE, 4, "A-02"),
+    ]);
+  }
+
+  it("a linha separada entra no volume aberto; Fechar volume guarda o peso, opcional, e a linha seguinte abre o próximo", async () => {
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    const pedidoNumero = String((await tarefa(pickTaskId)).order_number);
+
+    const polo = await separar(pickTaskId, linhaPolo);
+    assert.deepEqual(polo.volumes, [{ volume_id: "v1", number: 1, qty: 5 }]);
+    assert.deepEqual(await volumes(pickTaskId), [["v1", 1, "open", 5, null, null]]);
+    assert.equal((await tarefa(pickTaskId)).volume_seq, 1);
+    assert.deepEqual((await porLinha("pick_lines", orderId))[POLO]!.separated_volumes, [{ volume_id: "v1", qty: 5 }]);
+    const [separada] = await eventos("picking.line_separated");
+    assert.deepEqual(separada.payload.volumes, [{ volume_number: 1, qty: 5 }]);
+    // Separar de novo a linha já separada não põe nada a mais no volume.
+    assert.equal((await separar(pickTaskId, linhaPolo, rafael)).changed, false);
+    assert.deepEqual(await volumes(pickTaskId), [["v1", 1, "open", 5, null, null]]);
+
+    // O volume que não existe não fecha.
+    assert.equal((await recusa(fecharVolume(pickTaskId, "v9"))).message, "Volume não encontrado. Atualize e tente de novo.");
+    const fechado = await fecharVolume(pickTaskId, "v1", 2.346, guilherme, "fechar-volume-0001");
+    assert.deepEqual([fechado.ok, fechado.volume_id, fechado.volume_number, fechado.units, fechado.weight_kg], [true, "v1", 1, 5, 2.35]);
+    const [volume] = ((await tarefa(pickTaskId)).volumes ?? []) as Array<Record<string, any>>;
+    assert.deepEqual([volume!.status, volume!.weight_kg, volume!.closed_at, volume!.closed_by.name], ["closed", 2.35, fechado.closed_at, "Guilherme Dantas"]);
+    const [evento] = await eventos("picking.volume_closed");
+    assert.deepEqual(
+      [evento.title, evento.description, evento.entity_type, evento.entity_id, evento.customer_code],
+      [`Volume 1 fechado no pedido ${pedidoNumero}`, "5 un. · 2,35 kg", "pick_tasks", pickTaskId, BTG],
+    );
+    assert.deepEqual(evento.payload, { order_id: orderId, order_number: pedidoNumero, volume_id: "v1", volume_number: 1, units: 5, weight_kg: 2.35 });
+    const avisos = (await db.collection("ai_agent_inbox").get()).docs.map((doc) => doc.get("event_id"));
+    assert.equal(avisos.includes(evento.id), false);
+    // A mesma chave devolve o mesmo resultado; outra chamada fica sabendo que já fechou.
+    assert.deepEqual(await fecharVolume(pickTaskId, "v1", 2.346, guilherme, "fechar-volume-0001"), fechado);
+    assert.equal((await recusa(fecharVolume(pickTaskId, "v1", 3))).message, "O volume 1 já está fechado.");
+    assert.equal((await eventos("picking.volume_closed")).length, 1);
+
+    // A linha seguinte abre o volume 2, e ele fecha sem peso.
+    const bone = await separar(pickTaskId, linhaBone, rafael);
+    assert.deepEqual(bone.volumes, [{ volume_id: "v2", number: 2, qty: 4 }]);
+    assert.deepEqual(await volumes(pickTaskId), [
+      ["v1", 1, "closed", 5, null, 2.35],
+      ["v2", 2, "open", 4, null, null],
+    ]);
+    const semPeso = await fecharVolume(pickTaskId, "v2", undefined, rafael);
+    assert.deepEqual([semPeso.volume_number, semPeso.units, semPeso.weight_kg], [2, 4, undefined]);
+    assert.equal((await eventos("picking.volume_closed")).find((item) => item.payload.volume_number === 2)!.description, "4 un.");
+    // A reserva e o saldo não mudam: o volume é só onde o separado está.
+    assert.deepEqual(await saldos(), { [`${POLO}@A-01`]: [8, 5, 3], [`${BONE}@A-02`]: [4, 4, 0] });
+  });
+
+  it("Levar a caixa: a caixa que sai inteira vira um volume fechado, com o peso de entrada, e o resto da linha entra no volume aberto", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+
+    // Os 5 polos: a CX-000001 inteira (3) e 2 da CX-000002.
+    const polo = await levarACaixa(pickTaskId, linhaPolo, [
+      { box_code: "CX-000001", qty: 3 },
+      { box_code: "CX-000002", qty: 2 },
+    ]);
+    assert.deepEqual(polo.volumes, [
+      { volume_id: "v1", number: 1, qty: 3, box_code: "CX-000001" },
+      { volume_id: "v2", number: 2, qty: 2 },
+    ]);
+    assert.deepEqual(await volumes(pickTaskId), [
+      ["v1", 1, "closed", 3, "CX-000001", null],
+      ["v2", 2, "open", 2, null, null],
+    ]);
+    const [daCaixa] = ((await tarefa(pickTaskId)).volumes ?? []) as Array<Record<string, any>>;
+    assert.deepEqual([daCaixa!.closed_at, daCaixa!.closed_by.name], [polo.separated_at, "Guilherme Dantas"]);
+    assert.deepEqual((await porLinha("pick_lines", orderId))[POLO]!.separated_volumes, [
+      { volume_id: "v1", qty: 3 },
+      { volume_id: "v2", qty: 2 },
+    ]);
+    // A caixa levada sai da prateleira como a que saiu inteira.
+    assert.deepEqual([(await caixas())["CX-000001"]!.status, (await caixas())["CX-000001"]!.emptied_whole], ["emptied", true]);
+
+    // Os 4 bonés: sem informar a caixa, vale a mais antiga, que sai inteira, com o peso que ela tinha.
+    const bone = await levarACaixa(pickTaskId, linhaBone, undefined, rafael);
+    assert.deepEqual(bone.volumes, [{ volume_id: "v3", number: 3, qty: 4, box_code: "CX-000003" }]);
+    assert.deepEqual(await volumes(pickTaskId), [
+      ["v1", 1, "closed", 3, "CX-000001", null],
+      ["v2", 2, "open", 2, null, null],
+      ["v3", 3, "closed", 4, "CX-000003", 1.2],
+    ]);
+
+    // Desfazer devolve a caixa à prateleira e tira o volume dela.
+    const desfeito = await desfazer(pickTaskId, linhaBone);
+    assert.deepEqual([desfeito.renumbered_volumes, desfeito.changed_volumes], [undefined, undefined]);
+    assert.equal((await caixas())["CX-000003"]!.status, "stored");
+    assert.deepEqual(await volumes(pickTaskId), [
+      ["v1", 1, "closed", 3, "CX-000001", null],
+      ["v2", 2, "open", 2, null, null],
+    ]);
+    assert.deepEqual((await eventos("picking.line_unseparated"))[0]!.payload.volumes, [{ volume_number: 3, qty: 4 }]);
+    // O id do volume não volta: o próximo é o v4.
+    assert.deepEqual((await separar(pickTaskId, linhaBone)).volumes, [{ volume_id: "v2", number: 2, qty: 4 }]);
+    assert.equal((await tarefa(pickTaskId)).volume_seq, 3);
+  });
+
+  it("Levar a caixa só vale para a caixa que sai inteira: a recusa não grava nada", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo } = await pedidoAprovado();
+    // A pessoa tirou as 4 da CX-000002 (que tem outro item) e 1 da CX-000001: nenhuma sai inteira.
+    const recusada = await recusa(
+      levarACaixa(pickTaskId, linhaPolo, [
+        { box_code: "CX-000002", qty: 4 },
+        { box_code: "CX-000001", qty: 1 },
+      ]),
+    );
+    assert.deepEqual([recusada.code, recusada.message], ["failed-precondition", "Nenhuma caixa sai inteira nesta linha. Atualize e tente de novo."]);
+    assert.equal((recusada.details as Record<string, unknown>).code, "SEPARATION_BOX_NOT_WHOLE");
+    assert.equal((await porLinha("pick_lines", orderId))[POLO]!.separated_at, undefined);
+    assert.deepEqual(await volumes(pickTaskId), []);
+    assert.equal((await caixas())["CX-000002"]!.taken_lines, undefined);
+  });
+
+  it("Desfazer tira a linha dos volumes: o fechado que esvazia sai e o último ocupa o número dele; o fechado de que sai uma parte perde o peso", async () => {
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    await separar(pickTaskId, linhaPolo);
+    await fecharVolume(pickTaskId, "v1", 2.3);
+    await separar(pickTaskId, linhaBone);
+    await fecharVolume(pickTaskId, "v2", 1.1);
+
+    // O volume 1 só tinha os polos: ele sai, e o volume 2, já etiquetado, passa a ser o 1.
+    const semOPolo = await desfazer(pickTaskId, linhaPolo);
+    assert.deepEqual(semOPolo.renumbered_volumes, [{ volume_id: "v2", from: 2, to: 1 }]);
+    assert.equal(semOPolo.changed_volumes, undefined);
+    assert.deepEqual(await volumes(pickTaskId), [["v2", 1, "closed", 4, null, 1.1]]);
+    assert.equal((await porLinha("pick_lines", orderId))[POLO]!.separated_volumes, undefined);
+
+    // Os polos de novo, no volume aberto seguinte; fechado com os dois itens dentro.
+    await separar(pickTaskId, linhaPolo);
+    await desfazer(pickTaskId, linhaBone);
+    assert.deepEqual(await volumes(pickTaskId), [["v3", 1, "open", 5, null, null]]);
+    await separar(pickTaskId, linhaBone);
+    await fecharVolume(pickTaskId, "v3", 3.5);
+    assert.deepEqual(await volumes(pickTaskId), [["v3", 1, "closed", 9, null, 3.5]]);
+
+    // Tirar os bonés do volume fechado: ele continua fechado, sem o peso, e pede etiqueta nova.
+    const semOBone = await desfazer(pickTaskId, linhaBone);
+    assert.deepEqual([semOBone.changed_volumes, semOBone.renumbered_volumes], [[{ volume_id: "v3", number: 1 }], undefined]);
+    assert.deepEqual(await volumes(pickTaskId), [["v3", 1, "closed", 5, null, null]]);
+  });
+
+  it("a conclusão grava um volume por volume da bancada, com os itens de cada um; o lacre é um por pedido, e a entrega segue como sempre", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    const pedidoNumero = String((await tarefa(pickTaskId)).order_number);
+    // Volume 1: a CX-000001 inteira (3 polos). Volume 2: os outros 2 polos, fechado com 0,8 kg. Volume 3: os bonés, ainda aberto.
+    const polo = await levarACaixa(pickTaskId, linhaPolo, [
+      { box_code: "CX-000001", qty: 3 },
+      { box_code: "CX-000002", qty: 2 },
+    ]);
+    const fechado = await fecharVolume(pickTaskId, "v2", 0.8);
+    await separar(pickTaskId, linhaBone, rafael);
+
+    const concluido = await concluir(pickTaskId, rafael, "concluir-volumes-0001");
+    const packId = `pack_${orderId}`;
+    const shipmentId = String(concluido.shipment_id);
+
+    const pacotes = (await db.collection("packages").where("order_id", "==", orderId).get()).docs.map((doc) => doc.data()).sort((left, right) => left.volume_number - right.volume_number);
+    assert.deepEqual(
+      pacotes.map((pacote) => [pacote.id, pacote.volume_number, pacote.volume_label, pacote.packed_units, pacote.box_code ?? null, pacote.weight_kg ?? null, pacote.package_count, pacote.seal_code, pacote.status]),
+      [
+        [`pkg_${packId}_001`, 1, "Volume 1", 3, "CX-000001", null, 3, "L-0101", "packed"],
+        [`pkg_${packId}_002`, 2, "Volume 2", 2, null, 0.8, 3, "L-0101", "packed"],
+        [`pkg_${packId}_003`, 3, "Volume 3", 4, null, null, 3, "L-0101", "packed"],
+      ],
+    );
+    // Quem fechou cada volume e quando: a caixa levada, o fechado na bancada e o que fechou com a conclusão.
+    assert.deepEqual(
+      pacotes.map((pacote) => [pacote.closed_at, pacote.closed_by.name]),
+      [
+        [polo.separated_at, "Guilherme Dantas"],
+        [fechado.closed_at, "Guilherme Dantas"],
+        [pacotes[2]!.closed_at, "Rafael"],
+      ],
+    );
+    assert.ok(String(pacotes[2]!.closed_at) > String(fechado.closed_at));
+
+    // O conteúdo de cada volume: a linha dos polos foi em dois.
+    const conteudo = (await db.collection("package_items").where("order_id", "==", orderId).get()).docs
+      .map((doc) => doc.data())
+      .sort((left, right) => String(left.id).localeCompare(String(right.id)));
+    assert.deepEqual(
+      conteudo.map((item) => [item.id, item.package_id, item.sku_code, item.qty_packed, item.shipment_id, item.status]),
+      [
+        [`pki_pkg_${packId}_001_01`, `pkg_${packId}_001`, POLO, 3, shipmentId, "packed"],
+        [`pki_pkg_${packId}_002_01`, `pkg_${packId}_002`, POLO, 2, shipmentId, "packed"],
+        [`pki_pkg_${packId}_003_02`, `pkg_${packId}_003`, BONE, 4, shipmentId, "packed"],
+      ],
+    );
+    // A remessa continua com uma linha por item do pedido, e diz em quais volumes ele foi.
+    const daRemessa = await porLinha("shipment_items", orderId);
+    assert.deepEqual(
+      [daRemessa[POLO]!.qty_shipped, daRemessa[POLO]!.package_id, daRemessa[POLO]!.package_ids],
+      [5, `pkg_${packId}_001`, [`pkg_${packId}_001`, `pkg_${packId}_002`]],
+    );
+    assert.deepEqual([daRemessa[BONE]!.qty_shipped, daRemessa[BONE]!.package_id, daRemessa[BONE]!.package_ids], [4, `pkg_${packId}_003`, undefined]);
+    const remessa = (await db.collection("shipments").doc(shipmentId).get()).data() ?? {};
+    assert.deepEqual([remessa.status, remessa.total_units, remessa.package_count, remessa.volume_label, remessa.seal_code], ["ready_to_dispatch", 9, 3, "3 volumes", "L-0101"]);
+    const embalagem = (await db.collection("pack_tasks").doc(packId).get()).data() ?? {};
+    assert.deepEqual([embalagem.status, embalagem.package_count, embalagem.volume_label, embalagem.seal_code], ["completed", 3, "3 volumes", "L-0101"]);
+    const [criada] = await eventos("shipment.created");
+    assert.deepEqual(
+      [criada.entity_id, criada.description, criada.payload.package_id, criada.payload.package_count, criada.payload.packed_units, criada.payload.seal_code],
+      [shipmentId, `${pedidoNumero} pronto para despacho.`, `pkg_${packId}_001`, 3, 9, "L-0101"],
+    );
+
+    // Repetir a conclusão não grava volume de novo.
+    await concluir(pickTaskId, rafael, "concluir-volumes-0001");
+    assert.equal((await db.collection("packages").where("order_id", "==", orderId).get()).size, 3);
+    // Depois de concluída, o volume não fecha nem a linha muda.
+    assert.equal((await recusa(fecharVolume(pickTaskId, "v3"))).message, "A separação deste pedido já foi concluída.");
+
+    // A saída e a entrega conferem as unidades dos volumes e baixam o saldo.
+    await avancar(`shipping:${shipmentId}`, "ready_to_dispatch", { carrier: "Dutelog", driver_name: "Rafael", vehicle_plate: "DUTE-001" });
+    await avancar(`shipping:${shipmentId}`, "dispatched", { proof_reference: "Carlos Lima", delivery_notes: "Recebido pelo cliente." });
+    assert.deepEqual(await saldos(), { [`${POLO}@A-01`]: [3, 0, 3], [`${BONE}@A-02`]: [0, 0, 0] });
+    assert.equal((await db.collection("orders").doc(orderId).get()).get("status"), "ENTREGUE");
+    const entregues = (await db.collection("packages").where("order_id", "==", orderId).get()).docs.map((doc) => doc.get("status"));
+    assert.deepEqual(new Set(entregues).size, 1);
+  });
+
+  it("a linha separada a menos até zero não entra em volume, e o pedido com um volume só conclui com ele", async () => {
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    await separar(pickTaskId, linhaPolo);
+    const zerada = await separarMenos(pickTaskId, linhaBone, 0, { shortage_reason: "falta" });
+    assert.equal(zerada.volumes, undefined);
+    assert.deepEqual(await volumes(pickTaskId), [["v1", 1, "open", 5, null, null]]);
+    // Com diferença, só a coordenação conclui; o volume aberto fecha junto.
+    await concluir(pickTaskId, coordenacao);
+    const pacotes = (await db.collection("packages").where("order_id", "==", orderId).get()).docs.map((doc) => doc.data());
+    assert.deepEqual(
+      pacotes.map((pacote) => [pacote.id, pacote.volume_label, pacote.packed_units, pacote.package_count, pacote.closed_by.name]),
+      [[`pkg_pack_${orderId}_001`, "Volume 1", 5, 1, "Mariana Lopes"]],
+    );
+    const remessa = (await db.collection("shipments").where("order_id", "==", orderId).get()).docs[0]!.data();
+    assert.deepEqual([remessa.package_count, remessa.volume_label, remessa.total_units], [1, "Volume 1", 5]);
+  });
+
+  it("o pedido separado antes dos volumes conclui no volume único de sempre", async () => {
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    await separar(pickTaskId, linhaPolo);
+    await separar(pickTaskId, linhaBone);
+    // Como a separação ficava gravada antes da parte 4: sem volume na tarefa nem na linha.
+    const { FieldValue } = await import("firebase-admin/firestore");
+    await Promise.all([
+      db.collection("pick_tasks").doc(pickTaskId).update({ volumes: FieldValue.delete(), volume_seq: FieldValue.delete() }),
+      db.collection("pick_lines").doc(linhaPolo).update({ separated_volumes: FieldValue.delete() }),
+      db.collection("pick_lines").doc(linhaBone).update({ separated_volumes: FieldValue.delete() }),
+    ]);
+    await concluir(pickTaskId);
+    const pacotes = (await db.collection("packages").where("order_id", "==", orderId).get()).docs.map((doc) => doc.data());
+    assert.deepEqual(
+      pacotes.map((pacote) => [pacote.id, pacote.volume_label, pacote.packed_units, pacote.package_count]),
+      [[`pkg_pack_${orderId}_001`, "VOL-1", 9, 1]],
+    );
+    const conteudo = (await db.collection("package_items").where("order_id", "==", orderId).get()).docs.map((doc) => [doc.get("sku_code"), doc.get("qty_packed")]).sort();
+    assert.deepEqual(conteudo, [
+      [BONE, 4],
+      [POLO, 5],
+    ]);
+  });
+
+  it("o pedido com volumes cancelado depois de concluído cancela todos os volumes, e o separado volta pela guarda", async () => {
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    await separar(pickTaskId, linhaPolo);
+    await fecharVolume(pickTaskId, "v1", 2.3);
+    await separar(pickTaskId, linhaBone);
+    await concluir(pickTaskId);
+    assert.equal((await db.collection("packages").where("order_id", "==", orderId).get()).size, 2);
+
+    const cancelado = (await cancelWarehouseOrderTransaction(
+      db,
+      { order_id: orderId, reason: "O cliente desistiu do evento", idempotency_key: "cancelar-volumes-0001" },
+      coordenacao,
+    )) as Record<string, unknown>;
+    assert.equal(cancelado.returned_qty, 9);
+    const pacotes = (await db.collection("packages").where("order_id", "==", orderId).get()).docs.map((doc) => doc.get("status"));
+    assert.deepEqual(pacotes, ["cancelled", "cancelled"]);
+    const conteudo = (await db.collection("package_items").where("order_id", "==", orderId).get()).docs.map((doc) => doc.get("status"));
+    assert.deepEqual(conteudo, ["cancelled", "cancelled"]);
   });
 });

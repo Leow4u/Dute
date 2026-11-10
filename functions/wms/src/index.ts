@@ -69,6 +69,7 @@ import { recalcularDisponivelDoPortal } from "./domain/disponivel-do-portal.js";
 import { lerDatasDoEstoque } from "./domain/datas-do-estoque.js";
 import { openAreaPutaway as openAreaPutawayFor, previewAreaPutaway as previewAreaPutawayFor } from "./domain/area-putaway.js";
 import {
+  closeOrderVolume as closeOrderVolumeFor,
   completeOrderSeparation as completeOrderSeparationFor,
   setPickLineSeparated as setPickLineSeparatedFor,
 } from "./domain/pick-progress.js";
@@ -6621,6 +6622,16 @@ export const setPickLineSeparated = onCall(async (request) => {
   const profile = await getProfile(request);
   requireWarehouseWrite(profile);
   return setPickLineSeparatedFor(db, request.data, profile);
+});
+
+/**
+ * Fechar o volume aberto da separação, com o peso, opcional (separação com
+ * caixas, parte 4a). Quem fecha é quem opera o armazém.
+ */
+export const closeOrderVolume = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  return closeOrderVolumeFor(db, request.data, profile);
 });
 
 /**

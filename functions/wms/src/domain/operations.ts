@@ -274,6 +274,20 @@ export type AdvanceOperationalTaskInput = {
     volume_label?: string;
     seal_code?: string;
     package_notes?: string;
+    /**
+     * Só da conclusão pela bancada (pick-progress.ts, separação com caixas,
+     * parte 4a): os volumes que a separação montou. Com eles, a embalagem
+     * grava um `packages` por volume, com os itens de cada um; sem eles, o
+     * volume único de sempre.
+     */
+    volumes?: Array<{
+      number: number;
+      weight_kg?: number;
+      box_code?: string;
+      closed_at?: string;
+      closed_by?: Record<string, unknown>;
+      items: Array<{ order_item_id: string; qty: number }>;
+    }>;
     carrier?: string;
     driver_name?: string;
     vehicle_plate?: string;
@@ -7826,6 +7840,45 @@ export async function advanceWarehouseTaskTransaction(
           );
         }
       }
+      // Os volumes da bancada (parte 4a): numerados de 1 a N, nenhum vazio, e
+      // cada item do pedido inteiro dentro deles, nem mais nem menos.
+      const volumes = Array.isArray(operation.volumes) ? operation.volumes : [];
+      if (volumes.length) {
+        const numbers = volumes.map((volume) => number(volume.number)).sort((left, right) => left - right);
+        if (numbers.some((value, index) => value !== index + 1)) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Os volumes do pedido não estão numerados de 1 em diante. Atualize e tente de novo.",
+          );
+        }
+        const inVolumes = new Map<string, number>();
+        for (const volume of volumes) {
+          const items = Array.isArray(volume.items) ? volume.items : [];
+          if (!items.length) {
+            throw new HttpsError("failed-precondition", `O volume ${number(volume.number)} está vazio.`);
+          }
+          for (const item of items) {
+            const itemId = text(item.order_item_id);
+            const quantity = requiredPositive(item.qty, `Quantidade no volume ${number(volume.number)}`);
+            inVolumes.set(itemId, (inVolumes.get(itemId) ?? 0) + quantity);
+          }
+        }
+        const known = new Set(orderItems.map((row) => row.id));
+        const unknown = [...inVolumes.keys()].find((itemId) => !known.has(itemId));
+        if (unknown !== undefined) {
+          throw new HttpsError("failed-precondition", `O item ${unknown || "sem código"} dos volumes não é deste pedido.`);
+        }
+        for (const row of orderItems) {
+          const expectedQty = number(row.data.picked_qty || row.data.allocated_qty);
+          const inside = inVolumes.get(row.id) ?? 0;
+          if (inside !== expectedQty) {
+            throw new HttpsError(
+              "failed-precondition",
+              `Item ${row.id} tem ${inside} unidade(s) nos volumes, mas ${expectedQty} separada(s). Atualize e tente de novo.`,
+            );
+          }
+        }
+      }
     }
 
     if (
@@ -8994,33 +9047,83 @@ export async function advanceWarehouseTaskTransaction(
           "Packing não possui quantidade separada.",
         );
       }
-      const packageId = `pkg_${safeDocId(id)}_001`;
       const shipmentId = `ship_${safeDocId(orderId)}`;
       const orderNumber =
         task.order_number ?? orderRow?.data.order_number ?? null;
       const destination =
         task.destination ?? orderRow?.data.destination ?? "Destino a confirmar";
-      const packageCount = Math.max(1, number(operation.package_count) || 1);
-      const volumeLabel = text(operation.volume_label) || "Volume 1";
       const sealCode = text(operation.seal_code || task.seal_code);
       const packageNotes = text(operation.package_notes);
-      transaction.create(db.collection(collections.packages).doc(packageId), {
-        id: packageId,
-        customer_code: customerCode,
-        pack_task_id: id,
-        order_id: orderId,
-        order_number: orderNumber,
-        status: "packed",
-        volume_number: 1,
-        volume_label: volumeLabel,
-        seal_code: sealCode,
-        package_notes: packageNotes || null,
-        packed_units: packedUnits,
-        package_count: packageCount,
-        closed_by: actorPayload(actor),
-        created_at: FieldValue.serverTimestamp(),
-        updated_at: FieldValue.serverTimestamp(),
-      });
+      // Os volumes da bancada viram um `packages` cada (parte 4a). Sem eles,
+      // o pedido fecha no volume único de sempre, `_001`, com tudo dentro.
+      const bench = Array.isArray(operation.volumes) ? operation.volumes : [];
+      const volumes = bench.length
+        ? [...bench]
+            .sort((left, right) => number(left.number) - number(right.number))
+            .map((volume) => {
+              const items = new Map<string, number>();
+              for (const item of volume.items) {
+                items.set(text(item.order_item_id), (items.get(text(item.order_item_id)) ?? 0) + number(item.qty));
+              }
+              return {
+                id: `pkg_${safeDocId(id)}_${String(number(volume.number)).padStart(3, "0")}`,
+                number: number(volume.number),
+                label: `Volume ${number(volume.number)}`,
+                units: [...items.values()].reduce((sum, value) => sum + value, 0),
+                items,
+                weightKg: number(volume.weight_kg) > 0 ? number(volume.weight_kg) : undefined,
+                boxCode: text(volume.box_code) || undefined,
+                closedAt: text(volume.closed_at) || undefined,
+                closedBy: volume.closed_by ?? actorPayload(actor),
+              };
+            })
+        : [
+            {
+              id: `pkg_${safeDocId(id)}_001`,
+              number: 1,
+              label: text(operation.volume_label) || "Volume 1",
+              units: packedUnits,
+              items: undefined as Map<string, number> | undefined,
+              weightKg: undefined as number | undefined,
+              boxCode: undefined as string | undefined,
+              closedAt: undefined as string | undefined,
+              closedBy: actorPayload(actor),
+            },
+          ];
+      const packageId = volumes[0]!.id;
+      const packageCount = bench.length
+        ? volumes.length
+        : Math.max(1, number(operation.package_count) || 1);
+      const volumeLabel = bench.length
+        ? volumes.length === 1
+          ? volumes[0]!.label
+          : `${volumes.length} volumes`
+        : volumes[0]!.label;
+      for (const volume of volumes) {
+        transaction.create(
+          db.collection(collections.packages).doc(volume.id),
+          compact({
+            id: volume.id,
+            customer_code: customerCode,
+            pack_task_id: id,
+            order_id: orderId,
+            order_number: orderNumber,
+            status: "packed",
+            volume_number: volume.number,
+            volume_label: volume.label,
+            seal_code: sealCode,
+            package_notes: packageNotes || null,
+            packed_units: volume.units,
+            package_count: packageCount,
+            weight_kg: volume.weightKg,
+            box_code: volume.boxCode,
+            closed_at: volume.closedAt,
+            closed_by: volume.closedBy,
+            created_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp(),
+          }),
+        );
+      }
       transaction.create(db.collection(collections.shipments).doc(shipmentId), {
         id: shipmentId,
         customer_code: customerCode,
@@ -9059,7 +9162,6 @@ export async function advanceWarehouseTaskTransaction(
           created_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
         });
-        const packageItemId = `pki_${safeDocId(packageId)}_${line}`;
         const shipmentItemId = `shi_${safeDocId(shipmentId)}_${line}`;
         transaction.update(row.ref, compact({
           status: "packed",
@@ -9069,26 +9171,36 @@ export async function advanceWarehouseTaskTransaction(
           packed_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
         }));
-        transaction.create(
-          db.collection(collections.packageItems).doc(packageItemId),
-          {
-            id: packageItemId,
-            package_id: packageId,
-            shipment_id: shipmentId,
-            status: "packed",
-            ...common,
-          },
-        );
+        // O item em cada volume em que ele foi: no volume único, o item inteiro.
+        const inside = volumes
+          .map((volume) => ({ volume, qty: volume.items ? (volume.items.get(row.id) ?? 0) : packedQty }))
+          .filter((entry) => entry.qty > 0);
+        for (const { volume, qty } of inside) {
+          const packageItemId = `pki_${safeDocId(volume.id)}_${line}`;
+          transaction.create(
+            db.collection(collections.packageItems).doc(packageItemId),
+            {
+              id: packageItemId,
+              package_id: volume.id,
+              shipment_id: shipmentId,
+              status: "packed",
+              ...common,
+              qty_packed: qty,
+            },
+          );
+        }
+        // A linha da remessa continua uma por item do pedido, com os volumes em que ele foi.
         transaction.create(
           db.collection(collections.shipmentItems).doc(shipmentItemId),
-          {
+          compact({
             id: shipmentItemId,
-            package_id: packageId,
+            package_id: inside[0]?.volume.id ?? packageId,
+            package_ids: inside.length > 1 ? inside.map((entry) => entry.volume.id) : undefined,
             shipment_id: shipmentId,
             status: "ready_to_dispatch",
             qty_shipped: packedQty,
             ...common,
-          },
+          }),
         );
       });
       Object.assign(taskUpdate, {
@@ -9114,10 +9226,11 @@ export async function advanceWarehouseTaskTransaction(
           updated_at: FieldValue.serverTimestamp(),
         });
       }
-      Object.assign(created, {
+      Object.assign(created, compact({
         package_id: packageId,
+        package_ids: bench.length ? volumes.map((volume) => volume.id) : undefined,
         shipment_id: shipmentId,
-      });
+      }));
       effects.packed_units = packedUnits;
       effects.physical_lines_confirmed = orderItems.length;
       events.push(

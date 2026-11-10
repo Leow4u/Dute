@@ -11,6 +11,19 @@ import {
   type OperationalActor,
 } from "./operations.js";
 import { BOX_STATUS_EMPTIED, BOX_STATUS_STORED, caixasComOItem, lerCaixasDaPrateleira, retiradoDaCaixa } from "./box-balance.js";
+import {
+  caixaViraVolume,
+  fecharVolume,
+  porNoVolumeAberto,
+  problemaParaFechar,
+  tirarDosVolumes,
+  volumesDaLinha,
+  volumesDaTarefa,
+  volumesParaConcluir,
+  type EstadoDosVolumes,
+  type LinhaNosVolumes,
+  type NoVolume,
+} from "./order-volumes.js";
 import { conferirCaixasInformadas, retiradoCom, sugerirCaixas, unidadesDaCaixa, type CaixaDaLinha, type LinhaDaCaixa } from "./saldo-da-caixa.js";
 import { DETALHE_DA_DIFERENCA_MAXIMO, MOTIVOS_DA_DIFERENCA, concluiComDiferenca, type MotivoDaDiferenca } from "./short-pick.js";
 
@@ -49,6 +62,14 @@ import { DETALHE_DA_DIFERENCA_MAXIMO, MOTIVOS_DA_DIFERENCA, concluiComDiferenca,
  * ocupadas" e o encaixe da prateleira só olham a guardada. Desfazer a linha
  * devolve a caixa à prateleira. Cada mudança grava `warehouse.box_emptied`
  * ou `warehouse.box_reopened`.
+ *
+ * Os volumes (parte 4a, seção 4.4; a regra em order-volumes.ts): a linha
+ * separada entra no volume aberto da tarefa (`pick_tasks.volumes`) e guarda
+ * em quais volumes foi (`separated_volumes`); "Levar a caixa" (`take_boxes`)
+ * faz da caixa que sai inteira um volume fechado, com o peso de entrada;
+ * `closeOrderVolume` fecha o volume aberto com o peso, opcional. "Desfazer"
+ * tira a linha dos volumes. Na conclusão, cada volume vira um `packages`
+ * com os itens dele; o lacre continua um por pedido.
  */
 
 export const PICK_TASKS_COLLECTION = "pick_tasks";
@@ -84,6 +105,23 @@ export const SetPickLineSeparatedSchema = z
       .array(z.object({ box_code: z.string().trim().min(1).max(40), qty: z.number().positive() }).strict())
       .max(50)
       .optional(),
+    /**
+     * "Levar a caixa" (parte 4a): a caixa que sai inteira nesta linha vira o
+     * volume, sem reembalar. Sem ele, o separado entra no volume aberto.
+     */
+    take_boxes: z.boolean().optional(),
+    idempotency_key: idempotencyKey,
+  })
+  .strict();
+
+/** O peso do volume, em quilos: opcional (decisão 15), com duas casas. */
+export const PESO_DO_VOLUME_MAXIMO_KG = 2000;
+
+export const CloseOrderVolumeSchema = z
+  .object({
+    pick_task_id: id,
+    volume_id: z.string().trim().min(1).max(20),
+    weight_kg: z.number().positive().max(PESO_DO_VOLUME_MAXIMO_KG).optional(),
     idempotency_key: idempotencyKey,
   })
   .strict();
@@ -289,6 +327,27 @@ function mesmasCaixas(antes: readonly CaixaGravada[], depois: readonly CaixaDaLi
   return chave(antes) === chave(depois);
 }
 
+/** Os volumes como a tarefa os guarda (`volumes`, `volume_seq`). */
+function volumesDe(task: Row): EstadoDosVolumes {
+  return { volumes: volumesDaTarefa(task.volumes), seq: quantity(task.volume_seq) };
+}
+
+/** Os volumes da linha para a resposta: o número e, na caixa levada, a caixa. */
+function emQuaisVolumes(entradas: readonly NoVolume[], estado: EstadoDosVolumes) {
+  const porId = new Map(estado.volumes.map((volume) => [volume.id, volume]));
+  const lista = entradas
+    .filter((entrada) => porId.has(entrada.volume_id))
+    .map((entrada) => clean({ volume_id: entrada.volume_id, number: porId.get(entrada.volume_id)!.number, qty: entrada.qty, box_code: porId.get(entrada.volume_id)!.box_code }));
+  return lista.length ? lista : undefined;
+}
+
+/** O fechado de que saiu uma parte, com o número de agora (ele pode ter mudado na mesma operação). */
+function volumesMudados(alterados: ReadonlyArray<{ id: string }>, estado: EstadoDosVolumes) {
+  const porId = new Map(estado.volumes.map((volume) => [volume.id, volume.number]));
+  const lista = alterados.filter((volume) => porId.has(volume.id)).map((volume) => ({ volume_id: volume.id, number: porId.get(volume.id)! }));
+  return lista.length ? lista : undefined;
+}
+
 /**
  * Separar (ou desfazer) uma linha do pedido. Idempotente pela chave e pelo
  * estado: separar a linha já separada, ou desfazer a que não está, não muda
@@ -393,6 +452,44 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
       mudaramAsCaixas = !mesmasCaixas(anteriores, caixas);
     }
     const changed = mudouALinha || (informou && mudaramAsCaixas);
+    // "Levar a caixa": só a caixa que sai inteira nesta linha vira volume.
+    if (novo && changed && input.take_boxes && !caixas.some((caixa) => caixa.inteira)) {
+      throw new HttpsError("failed-precondition", "Nenhuma caixa sai inteira nesta linha. Atualize e tente de novo.", { code: "SEPARATION_BOX_NOT_WHOLE" });
+    }
+
+    // Os volumes (parte 4a): o que a linha tinha posto neles sai, e o novo
+    // separado entra no volume aberto; a caixa levada inteira vira um volume.
+    const volumesAntes = volumesDe(task);
+    const numeroAntes = new Map(volumesAntes.volumes.map((volume) => [volume.id, volume.number]));
+    const nosVolumesAntes = estava ? volumesDaLinha(line.separated_volumes) : [];
+    const semALinha = tirarDosVolumes(volumesAntes, changed ? nosVolumesAntes : []);
+    let volumesDepois: EstadoDosVolumes = { volumes: semALinha.volumes, seq: semALinha.seq };
+    const nosVolumes: NoVolume[] = [];
+    if (changed && novo && novo.separado > 0) {
+      let noAberto = novo.separado;
+      if (input.take_boxes) {
+        for (const caixa of caixas) {
+          if (!caixa.inteira) continue;
+          const levada = caixaViraVolume(volumesDepois, {
+            box_code: caixa.box_code,
+            qty: caixa.qty,
+            weight_kg: quantity(tocadas.get(caixa.box_code)?.data.gross_weight_kg),
+            at: occurredAt,
+            by: actorFields(actor),
+          });
+          volumesDepois = { volumes: levada.volumes, seq: levada.seq };
+          nosVolumes.push({ volume_id: levada.volume_id, qty: caixa.qty });
+          noAberto -= caixa.qty;
+        }
+      }
+      if (noAberto > 0) {
+        const aberto = porNoVolumeAberto(volumesDepois, noAberto);
+        volumesDepois = { volumes: aberto.volumes, seq: aberto.seq };
+        nosVolumes.push({ volume_id: aberto.volume_id, qty: noAberto });
+      }
+    }
+    const numeroDepois = new Map(volumesDepois.volumes.map((volume) => [volume.id, volume]));
+    const mudaramOsVolumes = volumesDepois.seq !== volumesAntes.seq || JSON.stringify(volumesDepois.volumes) !== JSON.stringify(volumesAntes.volumes);
 
     const events: unknown[] = [];
     if (changed) {
@@ -465,6 +562,7 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
               separated_shortage_reason: novo.motivo ?? FieldValue.delete(),
               separated_shortage_detail: novo.detalhe ?? FieldValue.delete(),
               separated_boxes: caixas.length ? paraGravar(caixas) : FieldValue.delete(),
+              separated_volumes: nosVolumes.length ? nosVolumes : FieldValue.delete(),
               updated_at: FieldValue.serverTimestamp(),
             }
           : {
@@ -474,13 +572,17 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
               separated_shortage_reason: FieldValue.delete(),
               separated_shortage_detail: FieldValue.delete(),
               separated_boxes: FieldValue.delete(),
+              separated_volumes: FieldValue.delete(),
               updated_at: FieldValue.serverTimestamp(),
             },
       );
+      const naTarefa: Row = {};
       // "em separação desde 10/11": a primeira linha separada data o começo.
       if (novo && !task.separation_started_at) {
-        transaction.update(taskRef, { separation_started_at: occurredAt, separation_started_by: actorFields(actor), updated_at: FieldValue.serverTimestamp() });
+        Object.assign(naTarefa, { separation_started_at: occurredAt, separation_started_by: actorFields(actor) });
       }
+      if (mudaramOsVolumes) Object.assign(naTarefa, { volumes: volumesDepois.volumes, volume_seq: volumesDepois.seq });
+      if (Object.keys(naTarefa).length) transaction.update(taskRef, { ...naTarefa, updated_at: FieldValue.serverTimestamp() });
       const pedidoNumero = text(task.order_number) || text(line.order_number);
       const aMenos = novo && novo.separado < pedido ? pedido - novo.separado : 0;
       events.push(
@@ -516,6 +618,14 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
               shortage_detail: novo?.detalhe,
               // De quais caixas saiu (ou, no desfazer, a quais voltou).
               boxes: (novo ? caixas : anteriores).length ? (novo ? caixas : anteriores).map((caixa) => ({ box_code: caixa.box_code, qty: caixa.qty })) : undefined,
+              // Em quais volumes entrou (ou, no desfazer, de quais saiu), com o número de então.
+              volumes: novo
+                ? nosVolumes.length
+                  ? nosVolumes.map((entrada) => ({ volume_number: numeroDepois.get(entrada.volume_id)?.number, qty: entrada.qty }))
+                  : undefined
+                : nosVolumesAntes.length
+                  ? nosVolumesAntes.map((entrada) => ({ volume_number: numeroAntes.get(entrada.volume_id), qty: entrada.qty }))
+                  : undefined,
             }),
             source: EVENT_SOURCE,
           },
@@ -537,12 +647,105 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
       // De onde saiu: as caixas e o que saiu sem caixa.
       boxes: novo && changed ? (caixas.length ? paraGravar(caixas) : undefined) : novo && anteriores.length ? anteriores : undefined,
       loose_qty: novo && changed && semCaixa > 0 ? semCaixa : undefined,
+      // Em quais volumes a linha está, com o número de agora.
+      volumes: novo ? emQuaisVolumes(changed ? nosVolumes : nosVolumesAntes, volumesDepois) : undefined,
+      // O volume fechado que mudou de número, e o fechado de que saiu uma parte: a etiqueta deles precisa sair de novo.
+      renumbered_volumes: semALinha.renumerados.length ? semALinha.renumerados.map((volume) => ({ volume_id: volume.id, from: volume.de, to: volume.para })) : undefined,
+      changed_volumes: volumesMudados(semALinha.alterados, volumesDepois),
       events,
     });
     transaction.create(opRef, {
       id: opRef.id,
       kind: input.separated ? "picking.line.separate" : "picking.line.unseparate",
       target_id: input.pick_line_id,
+      customer_code: customerCode,
+      input_hash: inputHash,
+      status: "completed",
+      actor: actorFields(actor),
+      result,
+      created_at: FieldValue.serverTimestamp(),
+      completed_at: FieldValue.serverTimestamp(),
+    });
+    return result;
+  });
+}
+
+/**
+ * "Fechar volume": o volume aberto fecha com o que tem, e o peso é opcional
+ * (decisão 15). O volume seguinte abre sozinho, na próxima linha separada. A
+ * etiqueta do volume sai aqui, sem o total (decisão 12). Não é escrita de
+ * saldo: não confere o congelamento do estoque.
+ */
+export async function closeOrderVolume(db: Firestore, raw: unknown, actor: OperationalActor) {
+  const input = parse(CloseOrderVolumeSchema, raw);
+  const taskRef = db.collection(PICK_TASKS_COLLECTION).doc(input.pick_task_id);
+  const opRef = db.collection(OPERATIONS_COLLECTION).doc(`op_pick_volume_${digest({ task: input.pick_task_id, volume: input.volume_id, nonce: input.idempotency_key })}`);
+  const inputHash = digest(input, 64);
+  const occurredAt = new Date().toISOString();
+  const weightKg = input.weight_kg === undefined ? undefined : Math.round(input.weight_kg * 100) / 100 || undefined;
+
+  return db.runTransaction(async (transaction) => {
+    const previous = await transaction.get(opRef);
+    if (previous.exists) {
+      if (previous.get("input_hash") !== inputHash) {
+        throw new HttpsError("already-exists", "A chave de idempotência já foi usada com outro conteúdo.");
+      }
+      return previous.get("result") as Row;
+    }
+    const taskSnapshot = await transaction.get(taskRef);
+    if (!taskSnapshot.exists) throw new HttpsError("not-found", "Separação não encontrada.");
+    const task = taskSnapshot.data() ?? {};
+    assertSeparating(text(task.status).toLowerCase());
+    const antes = volumesDe(task);
+    const problema = problemaParaFechar(antes.volumes, input.volume_id);
+    if (problema) throw new HttpsError("failed-precondition", problema, { code: "VOLUME_NOT_CLOSABLE" });
+    const depois = fecharVolume(antes, input.volume_id, { weight_kg: weightKg, at: occurredAt, by: actorFields(actor) });
+    const volume = depois.volumes.find((candidate) => candidate.id === input.volume_id)!;
+    transaction.update(taskRef, { volumes: depois.volumes, volume_seq: depois.seq, updated_at: FieldValue.serverTimestamp() });
+
+    const customerCode = text(task.customer_code);
+    const pedidoNumero = text(task.order_number);
+    const event = createEvent(
+      transaction,
+      db,
+      `evt_${digest({ operationId: opRef.id, suffix: "volume_closed" })}`,
+      {
+        type: "picking.volume_closed",
+        title: `Volume ${volume.number} fechado no pedido ${pedidoNumero}`,
+        description: `${volume.units} un.${volume.weight_kg ? ` · ${String(volume.weight_kg).replace(".", ",")} kg` : ""}`,
+        severity: "info",
+        // Um pedido grande tem dezenas de volumes: o evento fica na trilha, fora da caixa de avisos.
+        inbox: false,
+        entity_type: PICK_TASKS_COLLECTION,
+        entity_id: input.pick_task_id,
+        customer_code: customerCode,
+        occurred_at: occurredAt,
+        payload: clean({
+          order_id: text(task.order_id) || undefined,
+          order_number: pedidoNumero || undefined,
+          volume_id: volume.id,
+          volume_number: volume.number,
+          units: volume.units,
+          weight_kg: volume.weight_kg,
+        }),
+        source: EVENT_SOURCE,
+      },
+      actor,
+    );
+    const result = clean({
+      ok: true,
+      pick_task_id: input.pick_task_id,
+      volume_id: volume.id,
+      volume_number: volume.number,
+      units: volume.units,
+      weight_kg: volume.weight_kg,
+      closed_at: occurredAt,
+      events: [event],
+    });
+    transaction.create(opRef, {
+      id: opRef.id,
+      kind: "picking.volume.close",
+      target_id: input.pick_task_id,
       customer_code: customerCode,
       input_hash: inputHash,
       status: "completed",
@@ -629,17 +832,42 @@ async function concluirDeOndeEsta(db: Firestore, input: z.infer<typeof CompleteO
   }
   if (packStatus === "in_progress") {
     // O item que a separação a menos zerou não se embala.
-    const items = await db.collection(ORDER_ITEMS_COLLECTION).where("order_id", "==", orderId).get();
+    const [items, lines, concluida] = await Promise.all([
+      db.collection(ORDER_ITEMS_COLLECTION).where("order_id", "==", orderId).get(),
+      db.collection(PICK_LINES_COLLECTION).where("pick_task_id", "==", input.pick_task_id).get(),
+      // Com a separação concluída, os volumes não mudam mais: é a leitura que vale.
+      taskRef.get(),
+    ]);
     const packingLines = items.docs
       .map((doc) => ({ order_item_id: doc.id, qty_packed: quantity(doc.get("picked_qty")), status: "confirmed" }))
       .filter((line) => line.qty_packed > 0);
+    // Os volumes da bancada (parte 4a): a linha e o item do pedido andam pelo número da linha.
+    const itemDaLinha = new Map(items.docs.map((doc) => [quantity(doc.get("line_number")), doc.id]));
+    const embalados = new Set(packingLines.map((line) => line.order_item_id));
+    const nosVolumes: LinhaNosVolumes[] = lines.docs
+      .map((doc) => ({
+        order_item_id: itemDaLinha.get(quantity(doc.get("line_number"))) ?? "",
+        qty: quantity(doc.get("qty_picked")),
+        volumes: volumesDaLinha(doc.get("separated_volumes")),
+      }))
+      .filter((linha) => linha.qty > 0 && embalados.has(linha.order_item_id));
+    const volumes = volumesParaConcluir(volumesDe(concluida.data() ?? {}), nosVolumes, { at: new Date().toISOString(), by: actorFields(actor) });
     const packed = (await advanceWarehouseTaskTransaction(
       db,
       {
         task_uid: packUid,
         expected_status: "in_progress",
         idempotency_key: step("packing"),
-        operation: { packing_lines: packingLines, package_count: 1, volume_label: "VOL-1", seal_code: input.seal_code },
+        operation: volumes.length
+          ? {
+              packing_lines: packingLines,
+              seal_code: input.seal_code,
+              volumes: volumes.map((volume) =>
+                clean({ number: volume.number, weight_kg: volume.weight_kg, box_code: volume.box_code, closed_at: volume.closed_at, closed_by: volume.closed_by, items: volume.items }),
+              ),
+            }
+          : // O pedido separado antes dos volumes fecha no volume único de sempre.
+            { packing_lines: packingLines, package_count: 1, volume_label: "VOL-1", seal_code: input.seal_code },
       },
       actor,
     )) as Row;

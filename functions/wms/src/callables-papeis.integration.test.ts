@@ -107,6 +107,8 @@ const MATRIZ: Record<string, Linha> = {
   cancelWarehouseOrder: { passam: COORDENACAO, recusa: SO_COORDENACAO },
   // A entrada válida chamaria o Gemini; a conversa é de todos, sem checagem de papel.
   chatWithAgentDute: { passam: TODOS },
+  // Fechar o volume aberto da separação (separação com caixas, parte 4a): quem opera o armazém.
+  closeOrderVolume: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   completeInboundBoxReceipt: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   completeOpeningInventorySession: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   // Concluir a separação, com o lacre (separação com caixas, parte 2a): quem opera o armazém.
