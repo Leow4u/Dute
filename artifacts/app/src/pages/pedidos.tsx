@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -44,13 +45,6 @@ import {
   voltasDoPedido,
 } from "@/features/warehouse-ops/cancel-order";
 import { FormularioDaEntregaView } from "@/features/warehouse-ops/order-delivery";
-import {
-  SeparadoView,
-  linhasDoSeparado,
-  linhasParaSeparar,
-  separadoValido,
-  type LinhaDoSeparado,
-} from "@/features/warehouse-ops/separado";
 import { ExceptionDialog, useWarehouseTaskActions } from "@/features/warehouse-ops/task-actions";
 import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
 import {
@@ -79,6 +73,7 @@ import {
 } from "@/lib/order-queue";
 import { useItemPhotos } from "@/lib/use-item-photos";
 import { hrefDaListaDeSeparacao, resumoDoGrupo } from "@/lib/warehouse-ops/lista-de-separacao";
+import { hrefDaBancada, seloDaSeparacao, separacaoComecou } from "@/lib/warehouse-ops/separacao";
 import { useListaDeSeparacao } from "@/lib/warehouse-ops/use-lista-de-separacao";
 import { canDecideRequests, canOperateWarehouse, humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -103,7 +98,7 @@ import {
   type EntregaDoPedido,
   type FormularioDaEntrega,
 } from "@/lib/warehouse-ops/entrega";
-import { queueTasks, type OrderGroup } from "@/lib/warehouse-ops/orders";
+import type { OrderGroup } from "@/lib/warehouse-ops/orders";
 import {
   buildBalanceValidation,
   formatRequestAge,
@@ -166,7 +161,6 @@ function orderMeta(order: OrderGroup) {
 
 type DialogState =
   | { kind: "reject"; request: CustomerRequest }
-  | { kind: "pick"; order: OrderGroup }
   | { kind: "deliver"; order: OrderGroup }
   | { kind: "entrega"; order: OrderGroup; orderId: string }
   | { kind: "cancel"; order: OrderGroup; orderId: string }
@@ -187,9 +181,6 @@ export default function Pedidos() {
   const [view, setView] = useState<"open" | "delivered">("open");
   const [dialog, setDialog] = useState<DialogState>(null);
   const [rejectReason, setRejectReason] = useState("");
-  const [seal, setSeal] = useState("");
-  // Separar a menos (pergunta 59): a coordenação informa o separado de cada linha.
-  const [linhasSeparadas, setLinhasSeparadas] = useState<LinhaDoSeparado[]>([]);
   const [driver, setDriver] = useState(() => remembered("motorista", "Equipe Dutelog"));
   const [plate, setPlate] = useState(() => remembered("placa", ""));
   const [receivedBy, setReceivedBy] = useState("");
@@ -365,13 +356,6 @@ export default function Pedidos() {
     setCancelReason("");
     setDialog({ kind: "cancel", order, orderId: order.orderId });
   };
-  // A coordenação confere o separado de cada linha enquanto a separação não terminou.
-  const conferindoLinhas = (order: OrderGroup) =>
-    decider && String(order.pick?.status ?? "") !== "completed" && linhasSeparadas.length > 0;
-  const resumoDoPedido = (order: OrderGroup) => {
-    const entrega = entregaDe(order);
-    return entrega ? resumoDaEntrega(entrega) : null;
-  };
   // O "⋯" do pedido ainda no armazém, só para quem decide (owner, admin e interno).
   const menuDo = (order: OrderGroup) =>
     decider && pedidoCancelavel(order) ? (
@@ -386,59 +370,6 @@ export default function Pedidos() {
     setEntregaErro(null);
     setDialog({ kind: "entrega", order, orderId: order.orderId });
   };
-
-  const pick = useMutation({
-    mutationFn: async ({ order, sealCode, linhas }: { order: OrderGroup; sealCode: string; linhas?: LinhaDoSeparado[] }) => {
-      const pickTask = order.pick;
-      if (pickTask && pickTask.status !== "completed") {
-        if (String(pickTask.status) === "planned") {
-          await advance(String(pickTask.id), "planned");
-        }
-        await advance(String(pickTask.id), "in_progress", {
-          picking_lines: linhas?.length
-            ? linhasParaSeparar(linhas)
-            : (pickTask.items ?? []).map((item) => ({
-                pick_line_id: String(item.id ?? ""),
-                qty_picked: Number(item.expected_quantity ?? item.quantity ?? 0),
-                status: "confirmed",
-              })),
-        });
-      }
-      // O packing nasce quando o picking termina: recarrega para achá-lo.
-      const packUid = order.pack ? String(order.pack.id) : `packing:pack_${order.key}`;
-      await queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-      const fresh = await fetchJson<WarehouseOpsResponse>("/api/warehouse/ops");
-      const packTask = queueTasks(fresh, "packing").find(
-        (task) => String(task.id) === packUid,
-      );
-      if (!packTask) {
-        throw new Error("A embalagem ainda não apareceu. Atualize e tente de novo.");
-      }
-      if (packTask.status !== "completed") {
-        if (String(packTask.status) === "ready") await advance(packUid, "ready");
-        await advance(packUid, "in_progress", {
-          // O item que a separação a menos zerou não se embala.
-          packing_lines: (packTask.items ?? [])
-            .map((item) => ({
-              order_item_id: String(item.id ?? ""),
-              qty_packed: Number(item.picked_quantity ?? item.quantity ?? 0),
-              status: "confirmed",
-            }))
-            .filter((line) => line.qty_packed > 0),
-          package_count: 1,
-          volume_label: "VOL-1",
-          seal_code: sealCode,
-        });
-      }
-    },
-    onSuccess: () => {
-      toast({ title: "Separado. O pedido está pronto para entrega." });
-      setDialog(null);
-      setSeal("");
-      refreshAll();
-    },
-    onError,
-  });
 
   const deliver = useMutation({
     mutationFn: async ({ order }: { order: OrderGroup }) => {
@@ -467,13 +398,9 @@ export default function Pedidos() {
     onError,
   });
 
-  const busy = decide.isPending || pick.isPending || deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
-  // A tabela do cancelamento e as linhas do Separado da coordenação pedem um diálogo mais largo.
-  const larguraDoDialogo = cn(
-    "sm:max-w-[440px]",
-    dialog?.kind === "cancel" && "sm:max-w-[560px]",
-    dialog?.kind === "pick" && conferindoLinhas(dialog.order) && "sm:max-w-[640px]",
-  );
+  const busy = decide.isPending || deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
+  // A tabela do cancelamento pede um diálogo mais largo.
+  const larguraDoDialogo = cn("sm:max-w-[440px]", dialog?.kind === "cancel" && "sm:max-w-[560px]");
 
   /** A entrega do pedido na linha e a ação de definir (ou abrir na Operação), com a Operação liberada. */
   const daEntrega = (order: OrderGroup) => {
@@ -657,25 +584,17 @@ export default function Pedidos() {
                 tone="pick"
                 paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
                 lerParaQuando={!decider}
-                defaultOpen
+                // O pedido por separar abre com os itens; o que já está em separação, fechado (a bancada mostra).
+                defaultOpen={!separacaoComecou(order.pick, order.pick?.items ?? [])}
                 listaHref={hrefDaListaDeSeparacao(order.key)}
                 onTreat={operador ? () => setTreating(order) : undefined}
                 {...daEntrega(order)}
                 menu={menuDo(order)}
+                // "Separar" abre a bancada do pedido; com a separação começada, "Continuar" (parte 2).
                 action={
                   operador ? (
-                    <Button
-                      type="button"
-                      variant={variante(`pick:${order.key}`)}
-                      disabled={busy}
-                      onClick={() => {
-                        setSeal("");
-                        setLinhasSeparadas(linhasDoSeparado(order));
-                        setDialog({ kind: "pick", order });
-                      }}
-                    >
-                      <Check className="size-4" />
-                      Separado
+                    <Button asChild variant={variante(`pick:${order.key}`)}>
+                      <Link href={hrefDaBancada(order.key)}>{separacaoComecou(order.pick, order.pick?.items ?? []) ? "Continuar" : "Separar"}</Link>
                     </Button>
                   ) : undefined
                 }
@@ -760,43 +679,6 @@ export default function Pedidos() {
                   }
                 >
                   Recusar
-                </Button>
-              </DialogFooter>
-            </>
-          ) : dialog?.kind === "pick" ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>{dialog.order.orderNumber}: separado</DialogTitle>
-                <p className="text-sm font-medium text-muted-foreground">
-                  {[cliente.name, orderMeta(dialog.order), resumoDoPedido(dialog.order)].filter(Boolean).join(" · ")}
-                </p>
-              </DialogHeader>
-              <SeparadoView
-                lacre={seal}
-                onLacre={setSeal}
-                linhas={conferindoLinhas(dialog.order) ? linhasSeparadas : undefined}
-                onLinha={(linha) =>
-                  setLinhasSeparadas((atuais) => atuais.map((atual) => (atual.id === linha.id ? linha : atual)))
-                }
-              />
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  Voltar
-                </Button>
-                <Button
-                  type="button"
-                  disabled={
-                    !seal.trim() || busy || (conferindoLinhas(dialog.order) && !separadoValido(linhasSeparadas))
-                  }
-                  onClick={() =>
-                    pick.mutate({
-                      order: dialog.order,
-                      sealCode: seal.trim(),
-                      linhas: conferindoLinhas(dialog.order) ? linhasSeparadas : undefined,
-                    })
-                  }
-                >
-                  {pick.isPending ? "Registrando..." : "Confirmar separação"}
                 </Button>
               </DialogFooter>
             </>
@@ -1021,6 +903,8 @@ export function OrderRow({
   const blocked = Boolean(order.blockedReason || order.exceptionCount);
   const meta = orderMeta(order);
   const paraQuando = useParaQuandoDoPedido(order, paraQuandoDaFila, lerParaQuando);
+  // O selo só no pedido ainda para separar: depois de concluída, a separação não é mais notícia.
+  const selo = order.stage === "separar" ? seloDaSeparacao(order.pick, items) : null;
   // "Imprimir lista" (docs/mockups/WmsSepararLista.dc.html): no computador, um botão antes das ações do pedido.
   const imprimir =
     listaHref && items.length ? (
@@ -1038,6 +922,14 @@ export function OrderRow({
         icon={icon}
         tone={tone}
         title={order.orderNumber}
+        // "em separação desde 12/11 · 2 de 5 itens" (docs/mockups/WmsSepararParaEntregar.dc.html).
+        badge={
+          selo ? (
+            <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
+              {selo}
+            </Badge>
+          ) : undefined
+        }
         meta={meta || "—"}
         note={
           blocked ? (

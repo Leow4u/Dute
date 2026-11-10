@@ -28,10 +28,10 @@ describe("Pedidos na v3", () => {
     expect(FONTE).toMatch(/<SheetContent [^>]*aria-describedby=\{undefined\}/);
   });
 
-  it("quem só consulta (o suporte) não vê Separado, Entregue, Tratar nem a ação da entrega", () => {
+  it("quem só consulta (o suporte) não vê Separar, Entregue, Tratar nem a ação da entrega", () => {
     expect(FONTE).toContain("const operador = canOperateWarehouse(user?.publicMetadata.role);");
     expect(FONTE.match(/onTreat=\{operador \? \(\) => setTreating\(order\) : undefined\}/g)).toHaveLength(2);
-    expect(FONTE).toMatch(/operador \? \(\s*<Button[\s\S]*?Separado\s*<\/Button>\s*\) : undefined/);
+    expect(FONTE).toMatch(/operador \? \(\s*<Button asChild[\s\S]*?hrefDaBancada\(order\.key\)[\s\S]*?<\/Button>\s*\) : undefined/);
     expect(FONTE).toMatch(/operador \? \(\s*<Button[\s\S]*?Entregue\s*<\/Button>\s*\) : undefined/);
     expect(FONTE).toMatch(/secondary: operador \? \(/);
   });
@@ -43,11 +43,17 @@ describe("Pedidos na v3", () => {
     expect(FONTE).toMatch(/disabled=\{!motivoValido\(cancelReason\) \|\| busy\}/);
   });
 
-  it("no Separado, só a coordenação confere o separado de cada linha; o item zerado não vai no volume (pergunta 59)", () => {
-    expect(FONTE).toContain('decider && String(order.pick?.status ?? "") !== "completed" && linhasSeparadas.length > 0');
-    expect(FONTE).toContain("linhas={conferindoLinhas(dialog.order) ? linhasSeparadas : undefined}");
-    expect(FONTE).toContain(".filter((line) => line.qty_packed > 0)");
-    expect(FONTE).toContain('"Confirmar separação"');
+  it("Separar abre a bancada do pedido, e Continuar depois da primeira linha; a fila não conclui mais a separação (separação com caixas, parte 2)", () => {
+    expect(FONTE).toContain('<Link href={hrefDaBancada(order.key)}>{separacaoComecou(order.pick, order.pick?.items ?? []) ? "Continuar" : "Separar"}</Link>');
+    // O pedido por separar abre com os itens; o que já está em separação, fechado.
+    expect(FONTE).toContain("defaultOpen={!separacaoComecou(order.pick, order.pick?.items ?? [])}");
+    // O selo "em separação desde 12/11 · 2 de 5 itens" só no pedido ainda para separar.
+    expect(FONTE).toContain('const selo = order.stage === "separar" ? seloDaSeparacao(order.pick, items) : null;');
+    // O "Separado" de um passo só saiu: a separação e a embalagem concluem na bancada, numa chamada do servidor.
+    expect(FONTE).not.toContain("picking_lines");
+    expect(FONTE).not.toContain("packing_lines");
+    expect(FONTE).not.toContain('kind: "pick"');
+    expect(FONTE).not.toContain("Confirmar separação");
   });
 
   it("o motivo da recusa tem rótulo", () => {
