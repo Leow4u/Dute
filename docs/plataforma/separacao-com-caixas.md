@@ -4,12 +4,13 @@
 foram feitos no mesmo dia (canvas privado
 https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz, fontes em
 `docs/mockups/WmsSeparar*.dc.html` e `WmsEtiquetaTodos*.dc.html`). As páginas
-1 e 2 foram **aprovadas em 10/11/2026**, com as decisões 10 a 15. **A parte 1
-(a lista de separação) está no código desde 10/11/2026** (PR 590, registro na
-seção 5.1); as partes 2 a 5 têm o mockup aprovado e esperam a vez. A etiqueta
-com todos os produtos (página 3) tem o formato decidido e o desenho à espera
-da avaliação. Tela só depois do mockup aprovado (decisão 8). Produção só com
-o OK do Leonardo.
+1 e 2 foram **aprovadas em 10/11/2026**, com as decisões 10 a 15, e a página
+3 (a etiqueta com todos os produtos), no mesmo dia, com o logo original da
+Dutelog (decisão 16). **A parte 1 (a lista de separação) está no código desde
+10/11/2026** (PR 590) **e a parte 6 (a etiqueta com todos os produtos), na
+caixa e na posição, também** (registro na seção 5.1); as partes 2 a 5 têm o
+mockup aprovado e esperam a vez. Tela só depois do mockup aprovado (decisão
+8). Produção só com o OK do Leonardo.
 
 Relação com os outros desenhos: este roteiro retoma a regra 8 e a seção 5.4 do
 mapa (`docs/mapa-do-armazem-enderecamento-dirigido.md`) e revê a P8 de
@@ -86,6 +87,7 @@ O retrato de antes deste roteiro. A parte 1 mudou a lista e a caixa na linha
 | 13 | Toda etiqueta mostra todos os produtos, na caixa e no volume, no sistema inteiro. O formato são várias etiquetas do mesmo tamanho ("etiqueta 1 de 2"); a etiqueta maior, em A6, ficou de fora. |
 | 14 | Quem opera registra "Separar menos"; só a coordenação conclui o pedido com diferença. |
 | 15 | O peso do volume é opcional. |
+| 16 | A etiqueta com todos os produtos está aprovada, com o logo original da Dutelog no lugar da palavra "Dutelog", em todas as etiquetas. |
 
 ## 4. Desenho
 
@@ -166,27 +168,30 @@ como hoje (decisão 14). Substitui o "Tratar" como porta de entrada da falta.
 
 ### 4.6 Etiqueta com todos os produtos (parte 6)
 
-Hoje a etiqueta da caixa imprime quatro produtos e "+ n produto(s) no
-sistema" (`lib/warehouse-labels.ts`, `MAX_CONTENT_LINES`). Pela decisão 13,
-toda etiqueta mostra todos os produtos:
+Até 10/11/2026 a etiqueta da caixa imprimia quatro produtos e "+ n
+produto(s) no sistema". Pela decisão 13, toda etiqueta mostra todos os
+produtos:
 
-- A primeira etiqueta fica como a de hoje e leva até cinco produtos. Com
-  mais, diz "etiqueta 1 de 2" ao lado de "Dutelog".
-- Os outros produtos saem em etiquetas de continuação do mesmo tamanho,
-  cerca de onze em cada: o código da caixa e a posição (no volume, o pedido e
-  o volume), "etiqueta 2 de 2" e as unidades do total. Sem código de barras.
-- A ordem é a de hoje, a maior quantidade primeiro.
+- A primeira etiqueta fica como a de antes e leva até cinco produtos. Com
+  mais, diz "etiqueta 1 de 2" ao lado do logo.
+- Os outros produtos saem em etiquetas de continuação do mesmo tamanho, onze
+  em cada: o código da caixa e a posição (no volume, o pedido e o volume),
+  "etiqueta 2 de 2" e as unidades do total. Sem código de barras.
+- A ordem é a de sempre, a maior quantidade primeiro.
 - Vale para a caixa da abertura, a do recebimento, a caixa aberta com o saldo
   e o volume. A mesma folha de dez e o mesmo rolo; a contagem de etiquetas da
-  tela passa a somar as de continuação.
+  tela soma as de continuação.
+- O rodapé de toda etiqueta leva o logo original da Dutelog no lugar da
+  palavra (decisão 16), também a de posição. Na folha A4 ele sai nas cores
+  originais; no rolo da Zebra, que só imprime preto, sai em preto.
 
-Não depende das partes 2 a 5: pode entrar antes, com o mockup da página 3
-avaliado.
+Não depende das partes 2 a 5: entrou antes delas, para a caixa e a posição
+(seção 5.1). A caixa aberta com o saldo entra com a parte 3d e o volume, com
+a parte 4c, já neste desenho.
 
 ## 5. Partes, em ordem
 
-Um problema por commit, com o teste que falha antes. As partes 1 a 5 têm o
-mockup aprovado (páginas 1 e 2); a parte 6 espera a avaliação da página 3.
+Um problema por commit, com o teste que falha antes.
 
 | # | Parte | O que entra | Teste que falha antes |
 |---|---|---|---|
@@ -205,10 +210,12 @@ mockup aprovado (páginas 1 e 2); a parte 6 espera a avaliação da página 3.
 | 4c | Etiqueta do volume e romaneio | As duas impressões. | — |
 | 4d | Para entregar | Os volumes e o lacre na fila. | — |
 | 5 | Separar menos | A diferença registrada por quem opera. | O operador não tem onde registrar a falta. |
-| 6 | Etiqueta com todos os produtos | As etiquetas de continuação na caixa e, com a parte 4c, no volume (seção 4.6). | A caixa com nove produtos imprime quatro e "+ 5 produto(s) no sistema". |
+| 6 | Etiqueta com todos os produtos | As etiquetas de continuação e o logo, na caixa e na posição; com a parte 3d, na caixa aberta e, com a 4c, no volume (seção 4.6). | A caixa com nove produtos imprime quatro e "+ 5 produto(s) no sistema". |
 
-Cada parte entra na homologação no merge e na produção só pela publicação
-manual, com o OK do Leonardo. A régua `billing-callables` fica verde em todas.
+As partes 1 a 5 têm o mockup aprovado (páginas 1 e 2), e a parte 6, o da
+página 3. Cada parte entra na homologação no merge e na produção só pela
+publicação manual, com o OK do Leonardo. A régua `billing-callables` fica
+verde em todas.
 
 ### 5.1 Registro das partes
 
@@ -267,6 +274,35 @@ Armazenagem. Os testes: `lista-de-separacao.test.ts`, `pedidos.itens.test.tsx`,
 `pedidos.lista.test.tsx` e `pedidos-lista-view.test.tsx` (a lista dos textos
 e o `axe`).
 
+**Parte 6, a etiqueta com todos os produtos (10/11/2026).** Só o app: a
+etiqueta é desenho e impressão do navegador, e nada muda no servidor nem no
+registro da impressão (que é por caixa).
+
+- **Os dados.** `boxLabels` (`artifacts/app/src/lib/warehouse-labels.ts`)
+  devolve as etiquetas de uma caixa: a primeira com até cinco produtos
+  (`FIRST_LABEL_LINES`) e as de continuação com onze cada
+  (`CONTINUATION_LABEL_LINES`), todas com a parte ("1 de 2") e as unidades da
+  caixa inteira. O "+ n produto(s) no sistema" e o `MAX_CONTENT_LINES` saíram.
+- **O desenho.** `components/labels/label-sheet.tsx`: a primeira etiqueta como
+  antes, com "etiqueta 1 de 2" só quando a caixa pede mais de uma; a de
+  continuação com a caixa, a posição, a parte e os produtos, sem código de
+  barras. A continuação ocupa uma vaga da folha de dez ou uma página do rolo,
+  como qualquer etiqueta, e entra na contagem da tela.
+- **O logo.** O rodapé das etiquetas de caixa, de continuação e de posição
+  leva `/dutelog-logo.png` (3,6 mm de altura) no lugar da palavra. No modo
+  "Uma por etiqueta (rolo Zebra)" o logo sai em preto (`filter:
+  brightness(0)`), porque a térmica só imprime preto e o vermelho sairia
+  reticulado; na folha A4, nas cores originais.
+- **O que cabe.** Com o logo no rodapé, a linha do conteúdo passou de 1,3
+  para 1,2 de entrelinha. Medido no Chromium, na folha e no rolo: os cinco
+  produtos cabem na primeira com 0,6 mm de folga, e os onze na de
+  continuação, com 3,5 mm.
+
+Os testes: `warehouse-labels.test.ts` (a caixa com nove produtos, que
+imprimia quatro e "+ 5 produto(s) no sistema", sai em duas etiquetas; 16 e 17
+produtos) e `label-sheet.test.tsx` (os textos de cada etiqueta, o logo em
+todas, o preto no rolo e o `axe`).
+
 ## 6. Perguntas
 
 Todas respondidas pelo Leonardo em 10/11/2026.
@@ -288,7 +324,12 @@ Página 2 (separar com caixa e volumes):
 | 4 | Quem opera registra "Separar menos", e só a coordenação conclui o pedido com diferença? | Sim (decisão 14). |
 | 5 | O peso do volume é opcional? | Sim (decisão 15). |
 
-Em aberto: a avaliação do desenho da página 3 (a etiqueta de continuação).
+Página 3 (a etiqueta com todos os produtos): aprovada em 10/11/2026, com um
+pedido.
+
+| # | Pergunta do Leonardo | Resposta |
+|---|---|---|
+| 1 | Dá para colocar o logo original da Dutelog nas etiquetas? | Sim (decisão 16): no rodapé, no lugar da palavra, em todas as etiquetas; em preto no rolo da Zebra. |
 
 ## 7. PED-0001 e PED-0002
 

@@ -375,7 +375,8 @@ un., e PED-0002) e das decisões do Leonardo do mesmo dia
 (`docs/plataforma/separacao-com-caixas.md`, seção 3). **As páginas 1 e 2
 foram aprovadas pelo Leonardo em 10/11/2026**, com as respostas abaixo
 (decisões 10 a 15 do roteiro). A página 3, da etiqueta com todos os produtos,
-tem o formato escolhido no mesmo dia e o desenho à espera da avaliação. Quando
+foi **aprovada no mesmo dia, com o logo original da Dutelog no lugar da
+palavra** (decisão 16). Quando
 as pranchas foram feitas, "Separado" pedia o lacre e confirmava todas as
 linhas de uma vez, num volume só; a lista saía na ordem do carrinho, sem a
 caixa; a caixa aberta ficava com a etiqueta do que entrou; e não havia
@@ -441,6 +442,15 @@ etiquetas de caixa e de volume):
 | Etiqueta da caixa, todos os produtos | `WmsEtiquetaTodosCaixa.dc.html` | A mesma caixa em duas etiquetas do mesmo tamanho: a primeira com até cinco produtos e "etiqueta 1 de 2"; a de continuação com o código, a posição, "etiqueta 2 de 2" e os outros produtos. As unidades da caixa nas duas. |
 | Etiqueta do volume, todos os produtos | `WmsEtiquetaTodosVolume.dc.html` | O volume de dez produtos em duas etiquetas: a primeira com o pedido, "20 de 42" e "etiqueta 1 de 2"; a de continuação com o pedido, o volume e "etiqueta 2 de 2". |
 
+A página 3 foi aprovada em 10/11/2026 com o pedido do logo: as pranchas da
+caixa e do volume (e as duas etiquetas da página 2, `WmsSepararEtiquetaCaixa`
+e `WmsSepararEtiquetaVolume`) trazem o logo original da Dutelog no rodapé, no
+lugar da palavra; a prancha "hoje" fica como o retrato de antes. A etiqueta
+da caixa e a de posição estão no código desde 10/11/2026 (parte 6, registro
+em `docs/plataforma/separacao-com-caixas.md`, seção 5.1). O que a etiqueta
+real tem de diferente da prancha: no rolo da Zebra o logo sai em preto, e a
+etiqueta de posição ganhou o logo também.
+
 Perguntas e respostas do Leonardo (10/11/2026), também nas notas do canvas:
 
 Página 1, aprovada como está:
@@ -465,6 +475,11 @@ Página 2:
 4. Quem opera registra "Separar menos", e só a coordenação conclui o pedido
    com diferença, como hoje? Resposta: sim.
 5. O peso do volume é opcional ao fechar? Resposta: sim.
+
+Página 3, aprovada:
+
+1. Pedido do Leonardo: o logo original da Dutelog nas etiquetas. Resposta:
+   entra no rodapé, no lugar da palavra, em todas as etiquetas.
 
 ## Regras da v3
 
