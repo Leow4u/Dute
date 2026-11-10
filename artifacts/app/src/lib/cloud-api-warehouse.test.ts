@@ -148,6 +148,44 @@ describe("exceção resolvida não deixa a tarefa com exceção", () => {
   });
 });
 
+/**
+ * A fila de Pedidos lê as tarefas de `queues`: o que a tela precisa do pedido
+ * tem de chegar ali, não só em `lanes`. Antes, o pedido da tarefa e o começo
+ * da separação ficavam só em `lanes`: Pedidos não sabia de qual pedido era a
+ * linha (a entrega e o cancelamento não abriam), e "em separação desde 12/11"
+ * saía sem a data.
+ */
+describe("a tarefa da fila leva o que Pedidos mostra do pedido", () => {
+  const servir = (porColecao: Record<string, ReturnType<typeof document>[]>) =>
+    readDocs.mockImplementation(async (alvo: { target?: { path?: string }; path?: string }) => ({
+      docs: porColecao[alvo.target?.path ?? alvo.path ?? ""] ?? [],
+    }));
+
+  it("a separação e a remessa levam o pedido; a separação, quando começou", async () => {
+    servir({
+      pick_tasks: [
+        document("pick_ord_1", {
+          id: "pick_ord_1",
+          order_id: "ord_1",
+          order_number: "PED-0002",
+          status: "in_progress",
+          customer_code: "BTG Pactual",
+          customer_request_id: "creq_1",
+          separation_started_at: "2026-11-12T13:00:00.000Z",
+        }),
+      ],
+      shipments: [document("ship_ord_2", { id: "ship_ord_2", order_id: "ord_2", order_number: "PED-0001", status: "ready_to_dispatch", customer_code: "BTG Pactual", total_units: 3335 })],
+    });
+    const ops = (await (await window.fetch("/api/warehouse/ops")).json()) as WarehouseOpsResponse & { queues: Record<string, { tasks: WarehouseTask[] }> };
+    expect(ops.queues.picking!.tasks[0]).toMatchObject({ reference: "pick_ord_1", order_id: "ord_1", separation_started_at: "2026-11-12T13:00:00.000Z" });
+    expect(ops.queues.expedition!.tasks[0]).toMatchObject({ reference: "ship_ord_2", order_id: "ord_2" });
+    // É o que a fila de Pedidos usa para abrir a entrega e o cancelamento do pedido.
+    const fila = buildOrderQueue({ ops });
+    expect(fila.pick.map((pedido) => [pedido.orderNumber, pedido.orderId])).toEqual([["PED-0002", "ord_1"]]);
+    expect(fila.deliver.map((pedido) => [pedido.orderNumber, pedido.orderId])).toEqual([["PED-0001", "ord_2"]]);
+  });
+});
+
 describe("a fila leva toda tarefa aberta", () => {
   type Fila = { pending: number; tasks: Array<{ reference: string }> };
   type Etapa = [status: string, updatedAt: string];

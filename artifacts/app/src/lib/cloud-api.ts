@@ -2182,6 +2182,10 @@ async function getWarehouseOps() {
           items: task.items,
           timeline: task.timeline,
           customer_request_id: task.customer_request_id,
+          // O pedido da tarefa: é por ele que Pedidos abre a entrega, o cancelamento e os volumes.
+          order_id: task.order_id,
+          // "em separação desde 12/11" (separação com caixas, parte 2).
+          separation_started_at: task.separation_started_at,
           // A chegada por caixa e a guarda da caixa (recebimento com caixas, parte 5).
           conference_mode: task.conference_mode,
           receipt_number: task.receipt_number,
