@@ -845,16 +845,18 @@ async function concluirDeOndeEsta(db: Firestore, input: z.infer<typeof CompleteO
     const packingLines = items.docs
       .map((doc) => ({ order_item_id: doc.id, qty_packed: quantity(doc.get("picked_qty")), status: "confirmed" }))
       .filter((line) => line.qty_packed > 0);
-    // Os volumes da bancada (parte 4a): a linha e o item do pedido andam pelo número da linha.
-    const itemDaLinha = new Map(items.docs.map((doc) => [quantity(doc.get("line_number")), doc.id]));
-    const embalados = new Set(packingLines.map((line) => line.order_item_id));
-    const nosVolumes: LinhaNosVolumes[] = lines.docs
+    // Os volumes da bancada (parte 4a): a linha e o item do pedido andam pelo
+    // número da linha. A conta parte dos itens que a embalagem confere: o que um
+    // item separou e a linha dele não pôs em volume vai no volume aberto, e os
+    // volumes sempre fecham com o separado.
+    const volumesDaLinhaDe = new Map(lines.docs.map((doc) => [quantity(doc.get("line_number")), volumesDaLinha(doc.get("separated_volumes"))]));
+    const nosVolumes: LinhaNosVolumes[] = items.docs
       .map((doc) => ({
-        order_item_id: itemDaLinha.get(quantity(doc.get("line_number"))) ?? "",
-        qty: quantity(doc.get("qty_picked")),
-        volumes: volumesDaLinha(doc.get("separated_volumes")),
+        order_item_id: doc.id,
+        qty: quantity(doc.get("picked_qty")),
+        volumes: volumesDaLinhaDe.get(quantity(doc.get("line_number"))) ?? [],
       }))
-      .filter((linha) => linha.qty > 0 && embalados.has(linha.order_item_id));
+      .filter((linha) => linha.qty > 0);
     const volumes = volumesParaConcluir(volumesDe(concluida.data() ?? {}), nosVolumes, { at: new Date().toISOString(), by: actorFields(actor) });
     const packed = (await advanceWarehouseTaskTransaction(
       db,

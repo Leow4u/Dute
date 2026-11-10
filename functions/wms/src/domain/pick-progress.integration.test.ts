@@ -1116,6 +1116,33 @@ describe("Os volumes de expedição (separação com caixas, parte 4a)", () => {
     ]);
   });
 
+  it("o item que a linha não pôs em volume nenhum vai no volume aberto: os volumes fecham com o separado, e a conclusão não trava", async () => {
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    await separar(pickTaskId, linhaPolo);
+    await fecharVolume(pickTaskId, "v1", 2.3);
+    await separar(pickTaskId, linhaBone);
+    // O item dos bonés ficou sem a linha dele (o número da linha não casa): nenhum volume diz que o leva.
+    const itens = await porLinha("order_items", orderId);
+    await db.collection("order_items").doc(String(itens[BONE]!.id)).update({ line_number: 99 });
+
+    await concluir(pickTaskId);
+    const pacotes = (await db.collection("packages").where("order_id", "==", orderId).get()).docs.map((doc) => doc.data()).sort((left, right) => left.volume_number - right.volume_number);
+    assert.deepEqual(
+      pacotes.map((pacote) => [pacote.volume_number, pacote.packed_units, pacote.weight_kg ?? null]),
+      [
+        [1, 5, 2.3],
+        [2, 4, null],
+      ],
+    );
+    const conteudo = (await db.collection("package_items").where("order_id", "==", orderId).get()).docs
+      .map((doc) => [String(doc.get("package_id")).slice(-3), doc.get("sku_code"), doc.get("qty_packed")])
+      .sort();
+    assert.deepEqual(conteudo, [
+      ["001", POLO, 5],
+      ["002", BONE, 4],
+    ]);
+  });
+
   it("o pedido com volumes cancelado depois de concluído cancela todos os volumes, e o separado volta pela guarda", async () => {
     const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
     await separar(pickTaskId, linhaPolo);
