@@ -64,6 +64,7 @@ export function QueueRow({
   actions,
   onToggle,
   open,
+  aoLadoDoToggle,
   actionsClassName,
   className,
 }: {
@@ -82,7 +83,19 @@ export function QueueRow({
   actions?: ReactNode;
   onToggle?: () => void;
   open?: boolean;
+  /** Um atalho ao lado de "Ver itens" ("Imprimir lista" no celular, onde os botões vêm depois dos itens). */
+  aoLadoDoToggle?: ReactNode;
 }) {
+  const toggle = onToggle ? (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={cn("inline-flex items-center gap-1 text-xs font-medium text-primary", !aoLadoDoToggle && "mt-1.5")}
+    >
+      {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+      {open ? "Esconder itens" : "Ver itens"}
+    </button>
+  ) : null;
   return (
     <div
       className={cn(
@@ -107,16 +120,14 @@ export function QueueRow({
           {note ? (
             <p className="mt-1.5 flex items-center gap-1.5 text-sm text-warning-soft-foreground">{note}</p>
           ) : null}
-          {onToggle ? (
-            <button
-              type="button"
-              onClick={onToggle}
-              className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary"
-            >
-              {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-              {open ? "Esconder itens" : "Ver itens"}
-            </button>
-          ) : null}
+          {aoLadoDoToggle ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+              {toggle}
+              {aoLadoDoToggle}
+            </div>
+          ) : (
+            toggle
+          )}
         </div>
       </div>
       {actions ? (

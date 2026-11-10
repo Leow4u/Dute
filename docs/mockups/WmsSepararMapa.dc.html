@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Mapa · a prateleira depois do pedido</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+button,input{font:inherit;color:inherit}
+a{color:#0054CE}a:hover{color:#003E99}
+x-dc{display:contents}
+svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ic{width:20px;height:20px;flex:0 0 auto}.ic-s{width:16px;height:16px;flex:0 0 auto}
+.app{display:flex;width:1440px;height:900px;overflow:hidden}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:22px 14px 18px;gap:2px}
+.logo{font-weight:800;font-size:22px;letter-spacing:.04em;padding:0 10px 6px}
+.logo small{display:block;font-size:8px;letter-spacing:.18em;font-weight:700;opacity:.8;margin-top:-2px}
+.sw{display:flex;align-items:center;gap:10px;width:100%;height:44px;margin:8px 0 6px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font:800 15px Manrope,sans-serif;text-align:left;cursor:pointer}
+.cli{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px}
+.cli i{width:34px;height:34px;border-radius:9px;background:#2a2a2a;display:inline-flex;align-items:center;justify-content:center}
+.cli small{display:block;font-size:11px;color:rgba(255,255,255,.66)}
+.cli b{font-size:14px}
+.nav{display:flex;align-items:center;gap:12px;height:44px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.78);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.sub{padding-left:14px}
+.sub .nav{height:40px;font-size:14px;padding-left:28px}
+.sbf{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 10px 0;border-top:1px solid rgba(255,255,255,.12)}
+.av{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.sbf b{display:block;font-size:14px}.sbf span{font-size:13px;color:rgba(255,255,255,.66)}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;padding:30px 44px;gap:18px;overflow:hidden}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.ph h1{font-size:26px;font-weight:800;letter-spacing:-.01em}
+.muted{color:#5F6368}
+.acts{display:flex;gap:8px;align-items:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;white-space:nowrap;cursor:pointer}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}
+.btn-g{background:#F0F0ED;color:#161616}
+.btn-d{background:#161616;color:#fff}
+.btn-sm{height:32px;padding:0 12px;font-size:13px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.badge{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;border:1px solid #C5D6F5;background:#E3ECFB;color:#1E4E9C}
+.sec{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#5F6368}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.kpi{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border:1px solid #E5E5E1;border-radius:10px;background:#fff}
+.kpi small{font-size:12px;color:#5F6368;font-weight:700}
+.kpi b{font-size:20px;font-weight:800}
+.kpi span{font-size:13px;color:#5F6368}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 480px;gap:22px;align-items:start}
+.st{padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.sh{padding:14px;background:#fff;border:1px solid #E5E5E1;border-radius:12px;text-align:left;display:block;width:100%;cursor:pointer;font-size:14px}
+.sh.on{border-color:#1E4E9C;box-shadow:0 0 0 2px #C5D6F5}
+.sh .h{display:flex;justify-content:space-between}
+.sh .bar{height:6px;background:#F0F0ED;border-radius:3px;margin-top:10px;overflow:hidden}
+.sh .bar i{display:block;height:6px;background:#1E4E9C;border-radius:3px}
+.panel{padding:20px 22px;display:flex;flex-direction:column;gap:12px}
+.big{font-size:28px;font-weight:800;letter-spacing:-.01em}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.h3{font-size:15px;font-weight:800}
+.ln{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #E5E5E1;border-radius:10px;background:#fff}
+.ln .t{flex:1 1 auto;min-width:0}
+.ln .t b{display:block;font-size:14.5px}
+.ln .t span{display:block;font-size:13.5px;color:#5F6368}
+.out{font-size:13.5px;color:#5F6368;display:flex;flex-direction:column;gap:2px}
+.out b{color:#161616;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+</style>
+</helmet>
+<div class="app">
+<aside class="sb">
+  <div class="logo">DUTELOG<small>SOLUÇÕES LOGÍSTICAS</small></div>
+  <button type="button" class="sw"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>Armazenagem<svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:auto;opacity:.75"><path d="m7 9 5-5 5 5M7 15l5 5 5-5"/></svg></button>
+  <div class="cli"><i><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></i><div><small>Cliente ativo</small><b>BTG</b></div></div>
+  <a class="nav" href="#" style="color:#C9B8FB"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"/></svg>Agent Dute</a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Pedidos<span class="cnt">2</span></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Estoque<svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:auto"><path d="m6 9 6 6 6-6"/></svg></a>
+  <div class="sub">
+    <a class="nav" href="#">Itens</a>
+    <a class="nav" href="#">Receber</a>
+    <a class="nav" href="#">Contagem</a>
+    <a class="nav on" href="#" aria-current="page">Mapa</a>
+    <a class="nav" href="#">Posições</a>
+  </div>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Documentos</a>
+  <div class="sbf"><span class="av">GD</span><div><b>Guilherme Dantas</b><span>Operação WMS</span></div></div>
+</aside>
+<main class="main">
+  <div class="ph">
+    <div><h1>Mapa do armazém</h1><p class="muted">Prateleiras, ocupação registrada e caixas por zona de cliente.</p></div>
+    <div class="acts"><button type="button" class="btn btn-s">Etiquetas de posição</button><button type="button" class="btn btn-d">Cadastro de posições</button></div>
+  </div>
+  <div class="g4">
+    <div class="kpi"><small>Posições ocupadas · todas as zonas</small><b>12</b><span>Prateleiras com caixa com saldo. Referência da fatura manual.</span></div>
+    <div class="kpi"><small>Prateleiras cadastradas</small><b>43</b><span>12 com caixa · 31 sem caixas registradas</span></div>
+    <div class="kpi"><small>Volume registrado</small><b>4,180 m³</b><span>Volume das caixas guardadas na zona.</span></div>
+    <div class="kpi"><small>Caixas guardadas</small><b>42</b><span>840 unidade(s) · 203 produto(s)</span></div>
+  </div>
+  <div class="cols">
+    <div class="card st">
+      <div><b>Rua A</b> <span class="muted">16 prateleira(s) · 15 caixa(s)</span></div>
+      <div class="g3">
+        <button type="button" class="sh"><span class="h"><b>A-01</b><span class="muted">4 cx</span></span><span>parcial · cabe mais 1</span><span class="bar"><i style="width:72%"></i></span></button>
+        <button type="button" class="sh"><span class="h"><b>A-02</b><span class="muted">5 cx</span></span><span>sem vaga na base</span><span class="bar"><i style="width:100%"></i></span></button>
+        <button type="button" class="sh"><span class="h"><b>A-03</b><span class="muted">0 cx</span></span><span class="muted">sem caixas registradas</span><span class="bar"></span></button>
+        <button type="button" class="sh"><span class="h"><b>A-04</b><span class="muted">1 cx</span></span><span>parcial · cabe mais 2</span><span class="bar"><i style="width:30%"></i></span></button>
+        <button type="button" class="sh on" aria-pressed="true"><span class="h"><b>A-05</b><span class="muted">2 cx</span></span><span>parcial · cabe mais 1</span><span class="bar"><i style="width:50%"></i></span></button>
+        <button type="button" class="sh"><span class="h"><b>A-06</b><span class="muted">3 cx</span></span><span>parcial · cabe mais 1</span><span class="bar"><i style="width:68%"></i></span></button>
+      </div>
+    </div>
+    <div class="card panel">
+      <div style="display:flex;align-items:center;gap:10px"><span class="big">A-05</span><span class="badge">parcial</span><button type="button" class="btn btn-g btn-sm" style="margin-left:auto">Fechar</button></div>
+      <p class="muted">Rua A · prateleira 5 · zona BTG Pactual · sequência 5</p>
+      <div class="g2"><div><div class="sec">Frente ocupada</div><div class="h3">0,90 m de 1,80 m</div></div><div><div class="sec">Peso registrado</div><div class="h3">14,2 kg</div></div></div>
+      <h2 class="sec">Caixas nesta prateleira</h2>
+      <div class="ln"><div class="t"><b>CX-000028 · aberta</b><span>Abertura · 22/10/2026 · saldo em 12/11/2026 · Calça Social Masculino Preta · 42 2 · 44 5 · 7 un.</span></div><button type="button" class="btn btn-s btn-sm">Etiqueta</button></div>
+      <div class="ln"><div class="t"><b>CX-000030 · guardada</b><span>Abertura · 22/10/2026 · Calça Social Masculino Preta · 48 18 · 18 un.</span></div><button type="button" class="btn btn-s btn-sm">Etiqueta</button></div>
+      <h2 class="sec">Saíram desta prateleira</h2>
+      <div class="out">
+        <span><b>CX-000029</b> · inteira em 11/11/2026 · PED-0001, volume 11</span>
+        <span><b>CX-000027</b> · vazia em 12/11/2026 · PED-0001</span>
+      </div>
+      <div class="acts" style="flex-wrap:wrap"><button type="button" class="btn btn-s btn-sm">Etiqueta da posição</button><button type="button" class="btn btn-s btn-sm">Etiquetas das caixas</button><button type="button" class="btn btn-s btn-sm">Editar posição</button></div>
+    </div>
+  </div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

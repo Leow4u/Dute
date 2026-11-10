@@ -110,12 +110,26 @@ const PARTES_EM_SAO_PAULO = new Intl.DateTimeFormat("en-CA", {
  * Sem data válida, "".
  */
 export function textoDoParaQuando(dueAt: unknown): string {
+  const partes = partesDoParaQuando(dueAt);
+  return partes ? quandoEmTexto(partes.data, partes.hora) : "";
+}
+
+/** O mesmo "Para quando" com o ano, para o papel que fica guardado: "Seg 16/11/2026 11:36". */
+export function textoDoParaQuandoComAno(dueAt: unknown): string {
+  const partes = partesDoParaQuando(dueAt);
+  if (!partes) return "";
+  const [ano, mes, dia] = partes.data.split("-");
+  return quandoEmTexto(partes.data, partes.hora).replace(`${dia}/${mes}`, `${dia}/${mes}/${ano}`);
+}
+
+/** A data ("2026-11-16") e a hora ("11:36") do prazo em São Paulo; sem data válida, null. */
+function partesDoParaQuando(dueAt: unknown): { data: string; hora: string } | null {
   const instante = dueAt instanceof Date ? dueAt.getTime() : requestTime(dueAt);
-  if (!instante) return "";
+  if (!instante) return null;
   const partes = Object.fromEntries(
     PARTES_EM_SAO_PAULO.formatToParts(new Date(instante)).map((parte) => [parte.type, parte.value]),
   );
-  return quandoEmTexto(`${partes.year}-${partes.month}-${partes.day}`, `${partes.hour}:${partes.minute}`);
+  return { data: `${partes.year}-${partes.month}-${partes.day}`, hora: `${partes.hour}:${partes.minute}` };
 }
 
 /** A linha do "Para quando" na fila de Pedidos; sem prazo, nada. */

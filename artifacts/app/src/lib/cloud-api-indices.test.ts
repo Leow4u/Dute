@@ -119,7 +119,7 @@ const CONSULTAS_DAS_TELAS: Array<[tela: string, caminho: string]> = [
   ["Estoque › Histórico: o tipo", "/api/movements?tipo_mov=ENTRADA&limit=50&offset=0"],
   ["Estoque › Histórico: a busca", "/api/movements?search=ITAU-0001&limit=50&offset=0"],
   ["Estoque › Histórico: o tipo e a busca", "/api/movements?search=ITAU-0001&tipo_mov=ENTRADA&limit=50&offset=0"],
-  ["Estoque, Etiquetas e Inventário: as caixas do cliente", "/api/warehouse/boxes?customer_code=Itau&limit=1000"],
+  ["Estoque, Etiquetas, Inventário e Pedidos (a caixa de cada item da lista de separação): as caixas do cliente", "/api/warehouse/boxes?customer_code=Itau&limit=1000"],
   ["Pedidos: a situação", "/api/orders?status=pending&limit=50&offset=0"],
 ];
 

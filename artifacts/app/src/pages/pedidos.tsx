@@ -1,19 +1,19 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { collection, query, where } from "firebase/firestore";
+import { collection, doc, query, where } from "firebase/firestore";
 import {
   AlertTriangle,
   Check,
   ClipboardCheck,
   MoreHorizontal,
   Package,
+  Printer,
   RefreshCw,
   Truck,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "wouter";
-import { nomeComTamanho } from "@workspace/dominio";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -69,7 +69,7 @@ import { useAppUser } from "@/lib/auth";
 import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { chamarOperacao, novaChave } from "@/lib/operacao/api";
 import { hojeIso } from "@/lib/operacao/fila";
-import { useLeitura } from "@/lib/operacao/leitura";
+import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import {
   buildOrderQueue,
   chaveDaPrincipal,
@@ -78,6 +78,8 @@ import {
   paraQuandoDoPedido,
 } from "@/lib/order-queue";
 import { useItemPhotos } from "@/lib/use-item-photos";
+import { hrefDaListaDeSeparacao, resumoDoGrupo } from "@/lib/warehouse-ops/lista-de-separacao";
+import { useListaDeSeparacao } from "@/lib/warehouse-ops/use-lista-de-separacao";
 import { canDecideRequests, canOperateWarehouse, humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { erroDaResposta } from "@/lib/erro-da-resposta";
@@ -85,7 +87,6 @@ import {
   type LineConfirmationMap,
   type WarehouseOpsResponse,
   type WarehouseTask,
-  type WarehouseTaskItem,
   lineConfirmationKey,
   normalizeQueues,
   queueEntries,
@@ -655,7 +656,9 @@ export default function Pedidos() {
                 icon={Package}
                 tone="pick"
                 paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
+                lerParaQuando={!decider}
                 defaultOpen
+                listaHref={hrefDaListaDeSeparacao(order.key)}
                 onTreat={operador ? () => setTreating(order) : undefined}
                 {...daEntrega(order)}
                 menu={menuDo(order)}
@@ -692,6 +695,7 @@ export default function Pedidos() {
                 icon={Truck}
                 tone="deliver"
                 paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
+                lerParaQuando={!decider}
                 onTreat={operador ? () => setTreating(order) : undefined}
                 {...(order.stage === "enviar" ? daEntrega(order) : {})}
                 menu={menuDo(order)}
@@ -957,7 +961,23 @@ export default function Pedidos() {
   );
 }
 
-function OrderRow({
+/**
+ * O "Para quando" da linha do pedido. A coordenação já tem o da lista das
+ * solicitações; quem só separa não lê essa lista, e o prazo vem da
+ * solicitação que originou o pedido, lida pelo id (docs/mockups/WmsSepararLista.dc.html).
+ */
+function useParaQuandoDoPedido(order: Pick<OrderGroup, "requestId">, daFila: string | undefined, ler: boolean): string | undefined {
+  const requestId = !daFila && ler ? order.requestId : undefined;
+  const solicitacao = useDocumento(
+    requestId ? `customer_requests/${requestId}:para-quando` : null,
+    (db) => doc(db, "customer_requests", requestId ?? "-"),
+    (_id, data) => ({ dueAt: data.due_at as unknown }),
+  );
+  return daFila ?? (solicitacao.item ? linhaDoParaQuando(solicitacao.item.dueAt) : undefined);
+}
+
+/** A linha do pedido em separação ou entrega. Exportada para o teste (pedidos.lista.test.tsx). */
+export function OrderRow({
   order,
   icon,
   tone,
@@ -965,9 +985,11 @@ function OrderRow({
   secondary,
   menu,
   detail,
-  paraQuando,
+  paraQuando: paraQuandoDaFila,
+  lerParaQuando = false,
   defaultOpen = false,
   onTreat,
+  listaHref,
 }: {
   order: OrderGroup;
   icon: LucideIcon;
@@ -981,8 +1003,12 @@ function OrderRow({
   detail?: ReactNode;
   /** "Para quando Qui 05/11 09:00", a data que o cliente pediu, antes da entrega. */
   paraQuando?: string;
+  /** Quem não lê a lista das solicitações (o armazém) lê o prazo da solicitação do pedido, pelo id. */
+  lerParaQuando?: boolean;
   defaultOpen?: boolean;
   onTreat?: () => void;
+  /** A lista de separação do pedido para imprimir (separação com caixas, parte 1b). */
+  listaHref?: string;
 }) {
   const acoes = action || secondary ? (
     <>
@@ -994,6 +1020,17 @@ function OrderRow({
   const items = orderItems(order);
   const blocked = Boolean(order.blockedReason || order.exceptionCount);
   const meta = orderMeta(order);
+  const paraQuando = useParaQuandoDoPedido(order, paraQuandoDaFila, lerParaQuando);
+  // "Imprimir lista" (docs/mockups/WmsSepararLista.dc.html): no computador, um botão antes das ações do pedido.
+  const imprimir =
+    listaHref && items.length ? (
+      <Button asChild variant="outline">
+        <Link href={listaHref}>
+          <Printer className="size-4" aria-hidden="true" />
+          Imprimir lista
+        </Link>
+      </Button>
+    ) : null;
 
   return (
     <div className={cn(blocked && "bg-destructive-soft/40")}>
@@ -1019,9 +1056,19 @@ function OrderRow({
         detail={paraQuando && detail ? <>{paraQuando} · {detail}</> : paraQuando ?? detail}
         onToggle={items.length ? () => setOpen((value) => !value) : undefined}
         open={open}
+        // No celular os botões vêm depois dos itens: o atalho fica ao lado de "Esconder itens"
+        // (docs/mockups/WmsSepararListaCelular.dc.html).
+        aoLadoDoToggle={
+          listaHref && items.length ? (
+            <Link href={listaHref} className="text-xs font-medium text-foreground underline underline-offset-2 sm:hidden">
+              Imprimir lista
+            </Link>
+          ) : undefined
+        }
         actions={
-          acoes || menu ? (
+          imprimir || acoes || menu ? (
             <>
+              {imprimir}
               {acoes}
               {menu}
             </>
@@ -1029,7 +1076,8 @@ function OrderRow({
         }
         actionsClassName="hidden sm:flex"
       />
-      {open && items.length ? <ItemList items={items} /> : null}
+      {/* A caixa só aparece enquanto o pedido está para separar: depois, o item já saiu dela. */}
+      {open && items.length ? <ItemList items={items} cliente={order.stage === "separar" ? order.pick?.customer_code : undefined} /> : null}
       {/* No celular os botões vêm depois da lista do que separar. */}
       {acoes || menu ? (
         <div className="flex gap-2 px-4 pb-4 pt-3 sm:hidden">
@@ -1067,63 +1115,83 @@ function MenuDoPedido({
   );
 }
 
-/** "A.01.0806.005.GG · BTG-000125": o código do cliente e o SKU, o que existir, sem repetir. */
-export function codigosDoItem(item: WarehouseTaskItem) {
-  const codigos = [item.client_item_code, item.sku_code ?? item.sku]
-    .map((codigo) => String(codigo ?? "").trim())
-    .filter(Boolean);
-  return [...new Set(codigos)].join(" · ");
-}
+// O código do cliente e o SKU da linha moram com a regra da lista de separação.
+export { codigosDoItem } from "@/lib/warehouse-ops/lista-de-separacao";
 
 /**
- * Os itens do pedido (docs/mockups/NomeWmsPedidos.dc.html): a foto, a posição,
- * o nome com o tamanho ("Polo Masculino Piquet Preto · GG": o nome é o mesmo
- * em todos os tamanhos), os códigos e a quantidade.
+ * Os itens do pedido por prateleira, na ordem de caminhada
+ * (docs/mockups/WmsSepararLista.dc.html; o nome com o tamanho vem de
+ * NomeWmsPedidos.dc.html): o cabeçalho da prateleira com os itens e as
+ * unidades e, em cada linha, a foto, o nome com o tamanho ("Polo Masculino
+ * Piquet Preto · GG"), os códigos, a caixa onde o item está e a quantidade.
  */
-export function ItemList({ items }: { items: NonNullable<WarehouseTask["items"]> }) {
+export function ItemList({ items, cliente }: { items: NonNullable<WarehouseTask["items"]>; cliente?: string | null }) {
   // Mesma foto do Estoque: quem separa confere o item pela imagem.
   const photoFor = useItemPhotos();
+  const grupos = useListaDeSeparacao(items, cliente);
   return (
-    <ul className="border-t border-border/50 bg-muted/30 px-4 py-2 md:px-5 md:pl-[4.6rem]">
-      {items.map((item, index) => {
-        const photo = photoFor(item.sku_code, item.sku, item.client_item_code);
-        const nome = nomeComTamanho({ nome: item.name ?? item.product_name, codigo: item.client_item_code, tamanho: item.size });
-        const codigos = codigosDoItem(item);
-        return (
-          <li key={String(item.id ?? index)} className="flex items-center gap-3 py-1.5 text-sm">
-            {photo ? (
-              <img
-                src={photo}
-                alt=""
-                loading="lazy"
-                className="size-11 shrink-0 rounded-lg bg-muted object-cover"
-              />
-            ) : (
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground">
-                <Package className="size-4" aria-hidden="true" />
-              </span>
-            )}
-            <div className="grid min-w-0 flex-1 grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-0.5 sm:flex">
-              <span className="rounded-md bg-info-soft px-1.5 py-0.5 font-mono text-xs text-info-soft-foreground">
-                {item.location || "sem endereço"}
-              </span>
-              {/* No celular, a grade: a posição, os códigos e a quantidade numa linha e o nome embaixo (o bloco vira
-                  `contents`); o nome quebra a linha para o tamanho, no fim, não sumir. */}
-              <span className="contents sm:block sm:min-w-0 sm:flex-1">
-                {nome ? (
-                  <span className="col-span-3 row-start-2 block font-semibold text-foreground sm:truncate">{nome}</span>
-                ) : null}
-                {codigos ? (
-                  <span className="col-start-2 row-start-1 block truncate text-xs text-muted-foreground">{codigos}</span>
-                ) : null}
-              </span>
-              <span className="col-start-3 row-start-1 whitespace-nowrap font-semibold tabular-nums">
-                {numberFormatter.format(Number(item.expected_quantity ?? item.quantity ?? 0))} un.
-              </span>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="border-t border-border/50 bg-muted/30 px-4 pb-2 md:px-5 md:pl-[4.6rem]">
+      {grupos.map((grupo) => (
+        <section key={grupo.posicao || "sem-endereco"}>
+          <h3 className="flex items-baseline gap-2.5 pb-1 pt-3 text-sm font-medium text-muted-foreground">
+            <span className="font-mono text-sm font-bold text-foreground">{grupo.posicao || "sem endereço"}</span>
+            {resumoDoGrupo(grupo)}
+          </h3>
+          <ul>
+            {grupo.linhas.map((linha) => {
+              const photo = photoFor(linha.item.sku_code, linha.item.sku, linha.item.client_item_code);
+              return (
+                <li
+                  key={linha.id}
+                  className="flex items-start gap-3 border-t border-border/50 py-2 text-sm first:border-t-0 sm:items-center sm:border-t-0 sm:py-1.5"
+                >
+                  {photo ? (
+                    <img
+                      src={photo}
+                      alt=""
+                      loading="lazy"
+                      className="size-11 shrink-0 rounded-lg bg-muted object-cover"
+                    />
+                  ) : (
+                    <span className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground">
+                      <Package className="size-4" aria-hidden="true" />
+                    </span>
+                  )}
+                  {/* No celular, a grade (docs/mockups/WmsSepararListaCelular.dc.html): o nome, os códigos e as caixas
+                      à esquerda e a quantidade no alto, à direita (o bloco do nome vira `contents`); o nome quebra a
+                      linha para o tamanho, no fim, não sumir. */}
+                  <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto] items-start gap-x-3 gap-y-0.5 sm:flex sm:items-center">
+                    <span className="contents sm:block sm:min-w-0 sm:flex-1">
+                      {linha.nome ? (
+                        <span className="col-start-1 block font-semibold leading-snug text-foreground sm:truncate">{linha.nome}</span>
+                      ) : null}
+                      {linha.codigos ? (
+                        <span className="col-start-1 block truncate text-xs text-muted-foreground">{linha.codigos}</span>
+                      ) : null}
+                    </span>
+                    {/* A caixa onde o item está (decisão 10): as guardadas na prateleira, a mais antiga primeiro. */}
+                    {linha.caixas.length ? (
+                      <span className="col-start-1 flex flex-wrap gap-1.5 pt-0.5 sm:max-w-xs sm:shrink-0 sm:justify-end sm:pt-0">
+                        {linha.caixas.map((caixa) => (
+                          <span
+                            key={caixa}
+                            className="whitespace-nowrap rounded-md bg-info-soft px-1.5 py-0.5 font-mono text-xs font-medium text-info-soft-foreground"
+                          >
+                            {caixa}
+                          </span>
+                        ))}
+                      </span>
+                    ) : null}
+                    <span className="col-start-2 row-start-1 whitespace-nowrap font-semibold tabular-nums">
+                      {numberFormatter.format(linha.quantidade)} un.
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+    </div>
   );
 }

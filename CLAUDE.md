@@ -405,6 +405,23 @@ documentação de produto e operação está em `docs/`.
   callable só de leitura `getStockDates` (cliente sem prateleira; equipe por
   prateleira). Desenho, partes e hábitos da prateleira em
   `docs/plataforma/fifo-por-data.md`.
+- **Separação com caixa e volumes (decisões de 10/11/2026, em partes):** os
+  pedidos da BTG são grandes e levam de 3 a 4 dias para separar. O Leonardo
+  decidiu: a lista de separação por prateleira, com impressão, antes de
+  16/11; o progresso salvo por linha; o sistema baixa a caixa mais antiga e a
+  pessoa só corrige (revê a P8); etiqueta nova para a caixa aberta a cada
+  pedido; volumes de expedição com o conteúdo, etiqueta e romaneio; lacre por
+  pedido; a caixa vazia deixa de contar em "Posições ocupadas"; toda etiqueta
+  mostra todos os produtos; o limite de 100 itens por pedido fica. **A parte 1
+  (a lista de separação, só leitura e só o app) está no código:** "Ver itens"
+  por prateleira na ordem de caminhada, com a caixa de cada item
+  (`lib/warehouse-ops/lista-de-separacao.ts`, o conteúdo de entrada da caixa,
+  sem baixa), e "Imprimir lista" (`/pedidos/lista`, a folha A4 em
+  `features/warehouse-ops/lista-de-separacao-documento.tsx`). As partes 2 a 5
+  (progresso por linha, baixa da caixa, volumes e separar menos) têm o mockup
+  aprovado e não estão no código; a parte 6 (etiqueta com todos os produtos)
+  espera a avaliação do desenho. Tela só entra com mockup aprovado. Desenho,
+  partes e registro em `docs/plataforma/separacao-com-caixas.md`.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os
   modelos (`uniformes` pronto, `mobiliario` e `insumos` em construção) e os

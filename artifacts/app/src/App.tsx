@@ -110,6 +110,7 @@ const WarehouseLabelsPage = lazy(() => import("./pages/warehouse-labels"));
 const EstoqueAlertas = lazy(() => import("./pages/estoque-alertas"));
 const WarehouseMapPage = lazy(() => import("./pages/warehouse-map"));
 const Pedidos = lazy(() => import("./pages/pedidos"));
+const PedidosLista = lazy(() => import("./pages/pedidos-lista"));
 const Estoque = lazy(() => import("./pages/estoque"));
 const WmsReturnsPage = lazy(() => import("./pages/wms-returns"));
 const ClienteAssistente = lazy(() =>
@@ -529,6 +530,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/wms/receber", Receber),
   protectedRoute("/wms/pedidos", WmsOrdersRedirect),
   protectedRoute("/pedidos", Pedidos),
+  // A lista de separação do pedido para imprimir (separação com caixas, parte 1b).
+  protectedRoute("/pedidos/lista", PedidosLista),
   protectedRoute("/wms/contagem", WmsInventoryPage),
   protectedRoute("/wms/recebimento", WmsReceiveRedirect),
   protectedRoute("/wms/inventario", WmsCountRedirect),

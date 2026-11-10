@@ -18,6 +18,11 @@ desenho deixa de fora de qual caixa a separação tira e a baixa do conteúdo
 caixa continua com o conteúdo de entrada, e o saldo por prateleira continua
 sendo o ledger.
 
+Em 10/11/2026, com o primeiro pedido depois da zeragem, o Leonardo decidiu
+retomar a caixa na separação: o sistema baixa a caixa mais antiga e a pessoa
+só corrige, a caixa aberta ganha etiqueta nova e a expedição ganha volumes
+(`separacao-com-caixas.md`). Até a parte 3 de lá entrar, vale este desenho.
+
 ## 1. O que o Leonardo pediu
 
 1. **FIFO:** sai primeiro o que entrou primeiro, pela data de guarda.

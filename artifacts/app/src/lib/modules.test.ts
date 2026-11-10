@@ -65,6 +65,8 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/estoque/posicoes", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/movements", ["owner", "admin", "interno", "suporte"]],
   ["/pedidos", ["owner", "admin", "interno", "wms", "suporte"]],
+  // A lista de separação para imprimir: os mesmos papéis de Pedidos.
+  ["/pedidos/lista", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/orders", ["owner", "admin", "interno", "suporte"]],
   ["/faturamento", ["owner", "admin", "financeiro"]],
   ["/faturamento/tabela", ["owner", "admin", "financeiro"]],
@@ -265,6 +267,7 @@ describe("grupo ativo", () => {
     ["/solicitacoes", "Pedidos"],
     ["/wms/pedidos", "Pedidos"],
     ["/pedidos", "Pedidos"],
+    ["/pedidos/lista", "Pedidos"],
     ["/orders", "Pedidos"],
     ["/wms", "Estoque"],
     ["/estoque", "Estoque"],
