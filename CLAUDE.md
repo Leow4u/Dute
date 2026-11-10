@@ -430,7 +430,9 @@ documentação de produto e operação está em `docs/`.
   sempre (`advanceWarehouseTaskTransaction`) numa chamada, com o lacre;
   quem opera registra a diferença e só a coordenação conclui o pedido com
   diferença; a contagem cíclica recusa a prateleira com linha já separada
-  (`functions/wms/src/domain/pick-progress.ts`). As partes 3 e 4 (baixa da
+  (`functions/wms/src/domain/pick-progress.ts`), e o cancelamento no meio da
+  separação manda o que as linhas já separaram à `EXPEDICAO`, com a guarda de
+  volta, como o separado do pedido concluído. As partes 3 e 4 (baixa da
   caixa e volumes) têm o mockup aprovado e não estão no código. Tela só entra
   com mockup aprovado. Desenho, partes e registro em
   `docs/plataforma/separacao-com-caixas.md`.

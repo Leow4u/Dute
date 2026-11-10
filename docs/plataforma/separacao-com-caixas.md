@@ -351,6 +351,15 @@ menos" na linha.
     com reserva cuja linha já tem algo separado: o item saiu da prateleira e
     só baixa do saldo na entrega. A linha separada com zero não barra a
     contagem.
+  - O cancelamento no meio da separação (`cancelWarehouseOrderTransaction`)
+    segue a decisão da pergunta 59 ("se já foi separado, pede a volta do
+    item à posição"), agora por linha: a reserva sai inteira, e o que a linha
+    já separou (`separated_qty`, nunca mais que a reserva) passa no razão da
+    prateleira para a `EXPEDICAO` e ganha a guarda de volta, pelo mesmo
+    caminho do separado do pedido concluído (movimento interno, sem
+    cobrança). A linha por separar e a linha zerada só soltam a reserva. A
+    reserva guarda `returned_qty`. Antes, o cancelamento soltava a reserva e
+    deixava disponível na prateleira o que estava na bancada.
 - **O app.** A bancada é a tela nova Pedidos › Separar
   (`/pedidos/separar?pedido=<chave do pedido>`, na v3, os papéis de Pedidos;
   o suporte só consulta): `pages/pedidos-separar.tsx` lê as linhas e a tarefa
@@ -359,7 +368,9 @@ menos" na linha.
   `lib/warehouse-ops/separacao.ts`. Os diálogos são
   `features/warehouse-ops/separar-menos.tsx` e `concluir-separacao.tsx`. Em
   Pedidos, o "Separado" de um passo só e o diálogo da coordenação
-  (`separado.tsx`) saíram.
+  (`separado.tsx`) saíram. O diálogo "Cancelar pedido" lista em "Voltam à
+  posição" também as linhas já separadas do pedido em separação, na mesma
+  tabela de antes, sem texto novo (`cancel-order.tsx`).
 - **O que da prancha da bancada fica para as partes 3 e 4:** a caixa sugerida
   com a quantidade ("12 de CX-000027", "esvazia", "inteira"), "Levar a
   caixa", "Outra caixa" no "⋯", o painel dos volumes, as "Etiquetas para
@@ -373,10 +384,12 @@ Os testes: `pick-progress.test.ts` (a regra sem banco),
 `pick-progress.integration.test.ts` (no emulador, do pedido aprovado à
 entrega: o progresso, o desfazer, a outra pessoa, a conclusão, a retomada, a
 linha que mudou depois da leitura, as duas pessoas concluindo ao mesmo tempo,
-o separar a menos, a contagem cíclica e o cancelamento), as duas linhas na
-tabela de papéis (`callables-papeis.integration.test.ts`), `separacao.test.ts`,
-`pedidos-separar-view.test.tsx`, `separar-menos.test.tsx` e
-`concluir-separacao.test.tsx` (a lista dos textos e o `axe`).
+o separar a menos, a contagem cíclica e o cancelamento no meio da separação,
+com a guarda de volta), as duas linhas na tabela de papéis
+(`callables-papeis.integration.test.ts`), `separacao.test.ts`,
+`pedidos-separar-view.test.tsx`, `separar-menos.test.tsx`,
+`concluir-separacao.test.tsx` (a lista dos textos e o `axe`) e
+`cancel-order.test.tsx` (as linhas já separadas em "Voltam à posição").
 
 ## 6. Perguntas
 
@@ -446,11 +459,11 @@ backend).
   fatura manual (decisão 6).
 - **Sem leitura de código de barras.** A confirmação é por toque. A leitura
   fica para depois, como no recebimento.
-- **Pedido cancelado no meio da separação.** O cancelamento solta a reserva e
-  não move nada no razão, porque a linha separada em andamento ainda não saiu
-  do saldo da prateleira. As peças que já estão na bancada precisam voltar à
-  prateleira à mão: o diálogo de cancelar ainda não lista essas linhas
-  (proposta: mostrar "Voltam à posição" também para as linhas já separadas).
+- **Pedido cancelado no meio da separação.** Tratado com a parte 2 (seção
+  5.1): o que as linhas já separaram vai para a `EXPEDICAO` e volta pela
+  guarda, como o separado do pedido concluído. A tabela "Voltam à posição" do
+  diálogo lê a fila, que pode estar alguns segundos atrás do que outra pessoa
+  acabou de separar; o servidor decide pelo que está gravado na linha.
 
 ## 10. Como desfazer
 

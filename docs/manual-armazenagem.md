@@ -109,10 +109,12 @@ avanço e "Registrar exceção" ("Motivo da exceção").
 - **"Cancelar pedido"** (só `owner`, `admin` e `interno`): fica no "⋯" do
   pedido que ainda não saiu, em "Para separar" e "Para entregar". O diálogo
   pede o "Motivo" (3 caracteres ou mais). No pedido já separado, a tabela
-  "Voltam à posição" lista o item, a quantidade e a posição. "Cancelar pedido"
-  solta a reserva, cancela o que estava aberto e abre a guarda de volta (em
-  Receber, como a guarda da entrada). O pedido sai das filas. O cliente vê
-  "Cancelado pela Dutelog" e a data, sem o motivo.
+  "Voltam à posição" lista o item, a quantidade e a posição; no pedido em
+  separação, lista só as linhas já separadas, na quantidade separada.
+  "Cancelar pedido" solta a reserva, cancela o que estava aberto e abre a
+  guarda de volta do que já saiu da prateleira (em Receber, como a guarda da
+  entrada). O pedido sai das filas. O cliente vê "Cancelado pela Dutelog" e a
+  data, sem o motivo.
 
 Com a abertura do cliente ativo pendente ou em andamento, a faixa do inventário
 aparece com "Continuar contagem", e os pedidos de saída do cliente ficam
