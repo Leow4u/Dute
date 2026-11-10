@@ -4,9 +4,12 @@
 foram feitos no mesmo dia (canvas privado
 https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz, fontes em
 `docs/mockups/WmsSeparar*.dc.html` e `WmsEtiquetaTodos*.dc.html`). As páginas
-1 e 2 foram **aprovadas em 10/11/2026**, com as decisões 10 a 15. A etiqueta
+1 e 2 foram **aprovadas em 10/11/2026**, com as decisões 10 a 15. **A parte 1
+(a lista de separação) está no código desde 10/11/2026** (PR 590, registro na
+seção 5.1); as partes 2 a 5 têm o mockup aprovado e esperam a vez. A etiqueta
 com todos os produtos (página 3) tem o formato decidido e o desenho à espera
-da avaliação. Tela só depois do mockup aprovado (decisão 8).
+da avaliação. Tela só depois do mockup aprovado (decisão 8). Produção só com
+o OK do Leonardo.
 
 Relação com os outros desenhos: este roteiro retoma a regra 8 e a seção 5.4 do
 mapa (`docs/mapa-do-armazem-enderecamento-dirigido.md`) e revê a P8 de
@@ -27,7 +30,10 @@ Outras são abertas: sai a quantidade do pedido, a caixa volta à prateleira e a
 etiqueta dela precisa dizer o que sobrou. O que vai para a expedição sai em
 caixas que precisam de etiqueta, e o cliente quer o conteúdo de cada uma.
 
-## 2. O que o sistema faz hoje
+## 2. O que o sistema fazia em 10/11/2026
+
+O retrato de antes deste roteiro. A parte 1 mudou a lista e a caixa na linha
+(os dois itens marcados abaixo); o resto vale até a parte que o troca.
 
 - **"Separado" é um passo só.** O diálogo pede o "Número do lacre"; para o
   `wms`, todas as linhas são confirmadas na quantidade pedida; a tabela com −
@@ -35,13 +41,15 @@ caixas que precisam de etiqueta, e o cliente quer o conteúdo de cada uma.
   (`artifacts/app/src/pages/pedidos.tsx`, a mutação `pick`). Por baixo são até
   quatro chamadas: a separação e a embalagem, com `package_count: 1` e
   `volume_label: "VOL-1"`. Nada fica salvo antes da confirmação final.
-- **A lista não tem ordem de caminhada.** "Ver itens" mostra as linhas como o
-  Firestore as devolve, pelo id do documento: a ordem do carrinho, e a linha
-  100 depois da 10 (`lib/cloud-api.ts`, `readWhereIn` e `pickingItemsFor`).
-  Não imprime e não marca linha.
-- **A linha não diz a caixa.** O sistema sabe em que caixa cada item entrou (a
-  do recebimento, em `lines[]`; a da abertura, nas linhas da sessão), mas a
-  separação só mostra a prateleira.
+- **A lista não tinha ordem de caminhada** (mudou na parte 1). "Ver itens"
+  mostrava as linhas como o Firestore as devolve, pelo id do documento: a
+  ordem do carrinho, e a linha 100 depois da 10 (`lib/cloud-api.ts`,
+  `readWhereIn` e `pickingItemsFor`). Não imprimia. Continua sem marcar linha
+  (parte 2).
+- **A linha não dizia a caixa** (mudou na parte 1). O sistema sabe em que
+  caixa cada item entrou (a do recebimento, em `lines[]`; a da abertura, nas
+  linhas da sessão; as duas com os SKUs em `sku_codes`), mas a separação só
+  mostrava a prateleira.
 - **A saída nunca toca a caixa.** Separação, embalagem, entrega, cancelamento,
   movimentação manual e contagem cíclica não leem nem escrevem
   `warehouse_boxes`. A etiqueta reimpressa e o Mapa mostram o conteúdo de
@@ -202,6 +210,62 @@ mockup aprovado (páginas 1 e 2); a parte 6 espera a avaliação da página 3.
 Cada parte entra na homologação no merge e na produção só pela publicação
 manual, com o OK do Leonardo. A régua `billing-callables` fica verde em todas.
 
+### 5.1 Registro das partes
+
+**Parte 1, a lista de separação (10/11/2026, PR 590).** Só o app e só
+leitura: nenhuma callable, regra ou índice mudou, e "Separado" continua como
+estava. Os commits saíram na ordem 1a, 1c e 1b, para a folha já nascer com a
+coluna "Caixa" preenchida.
+
+- **1a, por prateleira.** A regra mora em
+  `artifacts/app/src/lib/warehouse-ops/lista-de-separacao.ts`
+  (`gruposDaSeparacao`): as prateleiras na ordem do `sequence` do cadastro de
+  Posições; a que não está no cadastro vem depois, em ordem; a linha sem
+  endereço fica no fim. Dentro da prateleira: a caixa, a família com os
+  tamanhos em ordem e o número da linha do pedido (`line_number`, que a
+  leitura da fila passou a trazer). As posições vêm da mesma leitura do Mapa
+  (`use-lista-de-separacao.ts`); enquanto não chegam, a ordem é a do código
+  da prateleira. No celular a linha segue `WmsSepararListaCelular`: o nome e
+  os códigos à esquerda, a quantidade no alto, à direita.
+- **1c, a caixa de cada item.** `caixasDoItem`: as caixas `stored` daquela
+  prateleira, do cliente do pedido, com o SKU em `sku_codes`, pela data da
+  guarda (`stored_at`) e, no empate, pelo código. As caixas vêm da consulta
+  da Contagem (`/api/warehouse/boxes?customer_code=…`), com o índice já
+  travado em `cloud-api-indices.test.ts`. É o conteúdo de entrada: depois do
+  primeiro pedido separado, a lista pode citar uma caixa que já esvaziou, até
+  a parte 3 (seção 7).
+- **1b, "Imprimir lista".** A tela nova Pedidos › Lista de separação
+  (`/pedidos/lista?pedido=<chave do pedido>`, na v3, os papéis de Pedidos),
+  com a folha em `features/warehouse-ops/lista-de-separacao-documento.tsx`.
+  O destino e o "Para quando" vêm da solicitação que originou o pedido
+  (`customer_requests/{id}`); "Impressa em" é a hora do clique em "Imprimir".
+  A folha espera as posições, as caixas e a solicitação; a leitura que falha
+  vira aviso acima da folha, fora do papel. Nada é gravado ao imprimir.
+- **O "Para quando" na fila de quem separa.** A prancha mostra o prazo na
+  linha do pedido para quem opera; só a coordenação via, porque o prazo vinha
+  da lista das solicitações, que o armazém não lê. Quem não decide lê o
+  `due_at` da solicitação do pedido, pelo id.
+
+O que a folha tem além da prancha, que só desenha a primeira página:
+
+- O cabeçalho da tabela se repete em cada página; a linha não se parte; a
+  prateleira com até 12 linhas fica inteira numa folha, e a maior quebra onde
+  a folha acabar, sem repetir o cabeçalho da prateleira.
+- O rodapé de cada página ("app.dutelog.com.br" e "PED-0001 · página 2 de 5")
+  sai pelas caixas de margem do `@page`, que o Chrome e o Edge imprimem. Em
+  navegador sem isso, a folha sai sem o rodapé; na tela, o rodapé fica no fim
+  da folha, sem a página.
+- O nome comprido quebra a linha em vez de cortar; o código e a caixa não se
+  partem no meio.
+- O cabeçalho usa o logo da Dutelog, como a OS impressa, e o botão da tela é
+  "Imprimir".
+
+Conferido em 10/11/2026 com um pedido sintético de 116 linhas, no Chromium:
+cinco páginas A4, o cabeçalho e o rodapé em todas, dentro do shell da
+Armazenagem. Os testes: `lista-de-separacao.test.ts`, `pedidos.itens.test.tsx`,
+`pedidos.lista.test.tsx` e `pedidos-lista-view.test.tsx` (a lista dos textos
+e o `axe`).
+
 ## 6. Perguntas
 
 Todas respondidas pelo Leonardo em 10/11/2026.
@@ -230,6 +294,11 @@ Em aberto: a avaliação do desenho da página 3 (a etiqueta de continuação).
 Os dois são separados com o sistema de hoje e a lista da parte 1. Enquanto a
 parte 3 não entra, a caixa aberta leva a sobra e a data escritas à mão, e a
 lista impressa guarda de qual caixa saiu cada linha e quais esvaziaram.
+
+A caixa da lista é a do conteúdo de entrada (decisão 10). Nesses dois pedidos
+ela é exata, porque nenhum pedido saiu desde a zeragem. Do terceiro pedido em
+diante, e até a parte 3, a lista pode citar uma caixa que os pedidos
+anteriores já esvaziaram: vale a anotação à mão na caixa.
 
 Quando a parte 3a entrar, o saldo das caixas desses pedidos é acertado uma
 vez: pela regra da caixa mais antiga, conferida com a lista anotada, em

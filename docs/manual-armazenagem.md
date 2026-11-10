@@ -77,15 +77,28 @@ os recebimentos em aberto e os SKUs em estoque.
 
 ## Pedidos
 
-"Em aberto" e "Entregues", relidos a cada minuto. O pedido aberto mostra cada
-item com a foto, o endereço, o SKU e a quantidade. O pedido com exceção vem
-antes, em vermelho, com "Tratar": a tarefa abre num painel, com o avanço e
-"Registrar exceção" ("Motivo da exceção").
+"Em aberto" e "Entregues", relidos a cada minuto. O pedido aberto mostra os
+itens por prateleira, na ordem de caminhada do cadastro de Posições: o
+cabeçalho da prateleira com os itens e as unidades ("A-03 5 itens · 450 un.")
+e, em cada linha, a foto, o nome com o tamanho, o código do cliente e o SKU,
+a caixa onde o item está e a quantidade. A caixa é a guardada naquela
+prateleira que recebeu o item, a mais antiga primeiro; é o conteúdo de
+entrada, e a separação ainda não baixa a caixa. O pedido em "Para separar" e
+em "Para entregar" mostra o "Para quando" que o cliente pediu. O pedido com
+exceção vem antes, em vermelho, com "Tratar": a tarefa abre num painel, com o
+avanço e "Registrar exceção" ("Motivo da exceção").
 
 - **"Para aprovar"** (só `owner`, `admin` e `interno`): a crítica ou urgente
   primeiro, depois a alta e a mais antiga. Com saldo, "Aprovar" (vai para a
   separação) e "Recusar" ("Motivo", 3 caracteres ou mais); sem, "Ver itens".
-- **"Para separar":** "Separado" pede o "Número do lacre" e, com "Confirmar
+- **"Para separar":** "Imprimir lista" abre a "Lista de separação" do pedido
+  em A4, para levar ao corredor: o pedido, o cliente, o destino, o "Para
+  quando" e, por prateleira, o quadrado para marcar, o produto, o código, a
+  caixa, a quantidade e "Separado" em branco, para anotar a quantidade
+  diferente. "Imprimir" usa a impressão do navegador (ou "Salvar como PDF");
+  cada página leva o pedido e "página 2 de 5". No celular, "Imprimir lista"
+  fica ao lado de "Esconder itens". A lista só lê: nada muda no pedido.
+  "Separado" pede o "Número do lacre" e, com "Confirmar
   separação", confirma cada linha na quantidade pedida, num volume só. Para a
   coordenação (`owner`, `admin` e `interno`), o diálogo lista cada linha com
   "Pedido" e "Separado" (com − e +). A linha a menos mostra a diferença e pede

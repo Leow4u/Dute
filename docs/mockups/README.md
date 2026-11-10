@@ -375,10 +375,12 @@ un., e PED-0002) e das decisões do Leonardo do mesmo dia
 (`docs/plataforma/separacao-com-caixas.md`, seção 3). **As páginas 1 e 2
 foram aprovadas pelo Leonardo em 10/11/2026**, com as respostas abaixo
 (decisões 10 a 15 do roteiro). A página 3, da etiqueta com todos os produtos,
-tem o formato escolhido no mesmo dia e o desenho à espera da avaliação. Hoje
-"Separado" pede o lacre e confirma todas as linhas de uma
-vez, num volume só; a lista sai na ordem do carrinho, sem a caixa; a caixa
-aberta fica com a etiqueta do que entrou; e não há etiqueta de expedição. Os
+tem o formato escolhido no mesmo dia e o desenho à espera da avaliação. Quando
+as pranchas foram feitas, "Separado" pedia o lacre e confirmava todas as
+linhas de uma vez, num volume só; a lista saía na ordem do carrinho, sem a
+caixa; a caixa aberta ficava com a etiqueta do que entrou; e não havia
+etiqueta de expedição. A página 1 está no código desde 10/11/2026 (abaixo);
+o resto continua assim até as partes 2 a 6. Os
 pedidos da BTG levam de 3 a 4 dias para separar. As pranchas seguem o shell v3
 da Armazenagem com o menu de quem opera (cliente ativo BTG, Guilherme,
 Operação WMS); o Mapa segue a prancha de 06/11 (`WmsEtiquetaRecebimentoMapa`).
@@ -397,6 +399,22 @@ Página 1, a lista de separação (parte 1, só leitura, para antes de 16/11):
 | Armazenagem · Pedidos, itens por prateleira | `WmsSepararLista.dc.html` | "Ver itens" agrupa as linhas por prateleira, na ordem de caminhada, com os itens e as unidades de cada uma; a linha troca a posição pela caixa onde o item está; o pedido ganha "Imprimir lista". "Separado" fica como hoje. |
 | Lista de separação impressa (A4) | `WmsSepararListaImpressa.dc.html` | O pedido, o cliente, o destino e o prazo; as linhas por prateleira com o quadrado para marcar, o produto, o código, a caixa, a quantidade e "Separado" em branco. |
 | Armazenagem · Pedidos no celular | `WmsSepararListaCelular.dc.html` | A mesma lista no celular, com "Imprimir lista" ao lado de "Esconder itens" (os botões do pedido vêm depois das 116 linhas). |
+
+A página 1 está no código desde 10/11/2026 (PR 590, partes 1a, 1b e 1c;
+registro em `docs/plataforma/separacao-com-caixas.md`, seção 5.1). O que a
+tela tem de diferente das pranchas:
+
+- "Imprimir lista" abre a tela Pedidos › Lista de separação, com a folha e o
+  botão "Imprimir" (a impressão do navegador, como as Etiquetas e a OS).
+- A prancha da folha desenha só a primeira página. Nas outras, o cabeçalho da
+  tabela se repete, a prateleira com até 12 linhas não se divide entre duas
+  folhas e o rodapé ("PED-0001 · página 2 de 5") sai em todas, no Chrome e no
+  Edge.
+- O cabeçalho da folha usa o logo da Dutelog, como a OS impressa; o nome
+  comprido quebra a linha em vez de cortar.
+- A caixa da linha vem do conteúdo de entrada: é exata até o primeiro pedido
+  separado e, depois dele, pode citar uma caixa que já esvaziou, até a parte
+  3 baixar a caixa.
 
 Página 2, separar com caixa e volumes (partes 2 a 5):
 
