@@ -57,6 +57,32 @@ describe("Concluir separação", () => {
     expect(textosDaTela(semCaixas)).toEqual([RESUMO, "Número do lacre", "Voltar", "Confirmar separação"]);
   });
 
+  it("com os volumes lidos, diz quantos o pedido fecha, antes das caixas (parte 4)", async () => {
+    const comVolumes = renderToStaticMarkup(
+      <ConcluirSeparacaoConteudo resumo={RESUMO} volumes={42} caixas={{ inteiras: 31, abertas: 23, vazias: 4 }} lacre="88231" onLacre={noop} onVoltar={noop} onConfirmar={noop} />,
+    );
+    expect(textosDaTela(comVolumes)).toEqual([
+      RESUMO,
+      "Volumes",
+      "42",
+      "Caixas inteiras",
+      "31",
+      "Caixas abertas",
+      "23",
+      "Caixas vazias",
+      "4",
+      "Número do lacre",
+      "Voltar",
+      "Confirmar separação",
+    ]);
+    expect(await violacoesDeAcessibilidade(comVolumes)).toEqual([]);
+    // O pedido que não saiu de caixa diz só os volumes; sem volume, nada.
+    const soVolumes = renderToStaticMarkup(<ConcluirSeparacaoConteudo resumo={RESUMO} volumes={3} lacre="88231" onLacre={noop} onVoltar={noop} onConfirmar={noop} />);
+    expect(textosDaTela(soVolumes)).toEqual([RESUMO, "Volumes", "3", "Número do lacre", "Voltar", "Confirmar separação"]);
+    const semVolumes = renderToStaticMarkup(<ConcluirSeparacaoConteudo resumo={RESUMO} volumes={0} lacre="88231" onLacre={noop} onVoltar={noop} onConfirmar={noop} />);
+    expect(textosDaTela(semVolumes)).toEqual([RESUMO, "Número do lacre", "Voltar", "Confirmar separação"]);
+  });
+
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(render("88231"))).toEqual([]);
   });

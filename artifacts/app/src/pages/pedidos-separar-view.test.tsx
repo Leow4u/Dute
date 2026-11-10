@@ -6,6 +6,7 @@ import { Router } from "wouter";
 import { gruposDaSeparacao, hrefDaListaDeSeparacao } from "@/lib/warehouse-ops/lista-de-separacao";
 import type { WarehouseTaskItem } from "@/lib/warehouse-ops/model";
 import { progressoDoPedido } from "@/lib/warehouse-ops/separacao";
+import { volumesDaSeparacao, type VolumeDaTarefa } from "@/lib/warehouse-ops/volumes-do-pedido";
 import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
@@ -361,5 +362,172 @@ describe("Pedidos › Separar, as etiquetas para trocar", () => {
 
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(render("pronto", { etiquetas, etiquetasHref: href }))).toEqual([]);
+  });
+});
+
+/**
+ * Os volumes na bancada (separação com caixas, parte 4b;
+ * docs/mockups/WmsSepararBancada.dc.html e WmsSepararCelular.dc.html). Antes,
+ * o pedido fechava num volume só, na conclusão: a bancada não tinha volume.
+ */
+describe("Pedidos › Separar, os volumes", () => {
+  const DA_TAREFA: VolumeDaTarefa[] = [
+    { id: "v1", number: 10, status: "closed", units: 50, weight_kg: 8.2, closed_at: "2026-11-11T12:00:00.000Z" },
+    { id: "v2", number: 11, status: "closed", units: 25, box_code: "CX-000029", weight_kg: 6.3, closed_at: "2026-11-12T12:00:00.000Z" },
+    { id: "v3", number: 12, status: "open", units: 31 },
+  ];
+  // A calça 40 e a lancheira estão no volume aberto; os polos, nos fechados.
+  const COM_VOLUMES = ITENS.map((item) =>
+    item.id === "pli_ord_1_01"
+      ? { ...item, separated_volumes: [{ volume_id: "v1", qty: 50 }, { volume_id: "v2", qty: 10 }] }
+      : item.id === "pli_ord_1_02"
+        ? { ...item, separated_volumes: [{ volume_id: "v2", qty: 15 }] }
+        : item.id === "pli_ord_1_03"
+          ? { ...item, separated_volumes: [{ volume_id: "v3", qty: 30 }] }
+          : item.id === "pli_ord_1_05"
+            ? { ...item, separated_volumes: [{ volume_id: "v3", qty: 1 }] }
+            : item,
+  );
+  const volumes = volumesDaSeparacao(DA_TAREFA, COM_VOLUMES);
+  const etiquetaDoVolumeHref = (volume: { numero: number }) => `/estoque/etiquetas?pedido=ord_1&volumes=${volume.numero}`;
+
+  function comVolumes(props: Props = {}) {
+    return render("pronto", { itens: COM_VOLUMES, volumes, onFecharVolume: noop, onLevarACaixa: noop, ...props });
+  }
+
+  function painel(html: string) {
+    const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+    const secao = dom.window.document.querySelector("section[aria-labelledby='volumes-do-pedido']");
+    const resultado = secao
+      ? {
+          textos: textosDaTela(secao.outerHTML),
+          etiquetas: [...secao.querySelectorAll("a")].map((link) => [link.getAttribute("aria-label"), link.getAttribute("href")]),
+          fechar: [...secao.querySelectorAll("button")].find((candidato) => candidato.textContent === "Fechar volume")?.hasAttribute("disabled") ?? null,
+        }
+      : null;
+    dom.window.close();
+    return resultado;
+  }
+
+  it("o painel: o volume aberto com o que já tem, o peso e Fechar volume; os fechados, do mais recente ao mais antigo", () => {
+    expect(painel(comVolumes({ etiquetaDoVolumeHref }))).toEqual({
+      textos: [
+        "Volumes",
+        "2 fechados",
+        "Volume 12",
+        "aberto",
+        "30 ×",
+        "Calça Social Masculino Preta · 40",
+        "1 ×",
+        "Lancheira Grande AZ",
+        "No volume",
+        "31 un.",
+        "Peso (kg)",
+        "Fechar volume",
+        "Volume 11",
+        "CX-000029 · 25 un. · 6,3 kg",
+        "Etiqueta",
+        "Volume 10",
+        "50 un. · 8,2 kg",
+      ],
+      etiquetas: [
+        ["Etiqueta do volume 11", "/estoque/etiquetas?pedido=ord_1&volumes=11"],
+        ["Etiqueta do volume 10", "/estoque/etiquetas?pedido=ord_1&volumes=10"],
+      ],
+      fechar: false,
+    });
+    expect(comVolumes()).toMatch(/<label[^>]*for="peso-do-volume"[^>]*>Peso \(kg\)<\/label>/);
+  });
+
+  it("a linha separada diz em qual volume está, depois da caixa de onde saiu", () => {
+    const caixasDaLinha = new Map([["pli_ord_1_03", [{ box_code: "CX-000027", qty: 30, inteira: false, esvazia: false }]]]);
+    const dom = new JSDOM(`<!doctype html><body>${comVolumes({ caixasDaLinha })}</body>`);
+    const daLinha = (nome: string) => textosDaTela([...dom.window.document.querySelectorAll("li")].find((item) => item.textContent?.includes(nome))?.outerHTML ?? "");
+    expect(daLinha("Calça Social Masculino Preta · 40")).toEqual(["Calça Social Masculino Preta · 40", "A.01.0712.001.40 · BTG-000083", "30 de CX-000027", "Volume 12", "30 un.", "Desfazer"]);
+    // A linha com diferença também; a por separar não está em volume nenhum.
+    expect(daLinha("Lancheira Grande AZ")).toEqual(["Lancheira Grande AZ", "C.0612.002.U · BTG-000106", "separado 1 de 2 · Avaria", "Volume 12", "2 un.", "Desfazer"]);
+    expect(daLinha("Copo Café").join(" ")).not.toContain("Volume");
+    dom.window.close();
+  });
+
+  it("nenhum selo fica dentro de parágrafo: o navegador o poria para fora da linha", () => {
+    // O selo é um bloco; dentro de <p>, o navegador fecha o parágrafo antes dele e o selo sai do lugar.
+    const caixasDaLinha = new Map([["pli_ord_1_03", [{ box_code: "CX-000027", qty: 30, inteira: false, esvazia: false }]]]);
+    expect(comVolumes({ caixasDaLinha })).not.toMatch(/<p\b[^>]*>(?:(?!<\/p>).)*?<div\b/s);
+  });
+
+  it("a linha que foi em dois volumes diz os dois, na ordem do número", () => {
+    // A prateleira toda separada fecha sozinha: os polos da A-03 aparecem com uma linha por separar nela.
+    const itens = [...COM_VOLUMES, linha(7, "A-03", "Polo Masculino Piquet Preto G", "A.01.0806.005.G", "BTG-000124", 80)];
+    const dom = new JSDOM(`<!doctype html><body>${comVolumes({ itens })}</body>`);
+    const polo = [...dom.window.document.querySelectorAll("li")].find((item) => item.textContent?.includes("Polo Masculino Piquet Preto · P"));
+    expect(textosDaTela(polo?.outerHTML ?? "")).toEqual(["Polo Masculino Piquet Preto · P", "A.01.0806.005.P · BTG-000122", "Volume 10", "Volume 11", "60 un.", "Desfazer"]);
+    dom.window.close();
+  });
+
+  it("no celular, o volume aberto vem em cima da lista, numa linha, com Fechar volume", () => {
+    const dom = new JSDOM(`<!doctype html><body>${comVolumes()}</body>`);
+    const barra = [...dom.window.document.querySelectorAll("div")].find((bloco) => bloco.className.includes("lg:hidden") && bloco.textContent?.includes("Fechar volume"));
+    expect(textosDaTela(barra?.outerHTML ?? "")).toEqual(["Volume 12", "aberto · 31 un.", "Fechar volume"]);
+    // A barra vem antes da primeira prateleira.
+    const html = comVolumes();
+    expect(html.indexOf("aberto · 31 un.")).toBeLessThan(html.indexOf("A-03"));
+    dom.window.close();
+  });
+
+  it("sem volume aberto, a bancada mostra o seguinte, vazio, com Fechar volume desligado", () => {
+    const fechados = volumesDaSeparacao(DA_TAREFA.slice(0, 2), COM_VOLUMES);
+    const lido = painel(comVolumes({ volumes: fechados }))!;
+    expect(lido.textos.slice(0, 8)).toEqual(["Volumes", "2 fechados", "Volume 12", "aberto", "No volume", "0 un.", "Peso (kg)", "Fechar volume"]);
+    expect(lido.fechar).toBe(true);
+    // Antes da primeira linha, é o volume 1.
+    expect(painel(comVolumes({ volumes: [] }))!.textos).toEqual(["Volumes", "Volume 1", "aberto", "No volume", "0 un.", "Peso (kg)", "Fechar volume"]);
+  });
+
+  it("com mais de dois fechados, mostra os dois mais recentes e Ver os N volumes", () => {
+    const muitos = volumesDaSeparacao(
+      Array.from({ length: 11 }, (_, indice) => ({ id: `v${indice + 1}`, number: indice + 1, status: "closed" as const, units: 10 + indice })),
+      [],
+    );
+    const textos = painel(comVolumes({ volumes: muitos }))!.textos;
+    expect(textos.filter((texto) => /^Volume \d+$/.test(texto))).toEqual(["Volume 12", "Volume 11", "Volume 10"]);
+    expect(textos.at(-1)).toBe("Ver os 11 volumes");
+  });
+
+  it("Levar a caixa só na linha por separar de que uma caixa sai inteira; com mais de uma, Levar as caixas", () => {
+    const caixasDaLinha = new Map([
+      ["pli_ord_1_04", [{ box_code: "CX-000028", qty: 40, inteira: true, esvazia: false }]],
+      ["pli_ord_1_06", [{ box_code: "CX-000187", qty: 1, inteira: false, esvazia: false }]],
+    ]);
+    const html = comVolumes({ caixasDaLinha, caixasInteiras: new Map([["pli_ord_1_04", 1]]) });
+    const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+    const acoes = (nome: string) =>
+      [...([...dom.window.document.querySelectorAll("li")].find((item) => item.textContent?.includes(nome))?.querySelectorAll("button") ?? [])].map((candidato) => candidato.textContent || candidato.getAttribute("aria-label"));
+    expect(acoes("Calça Social Masculino Preta · 42")).toEqual(["Levar a caixa", "Separar", "Mais ações de Calça Social Masculino Preta · 42"]);
+    expect(acoes("Copo Café")).toEqual(["Separar", "Mais ações de Copo Café"]);
+    dom.window.close();
+    expect(textosDaTela(comVolumes({ caixasInteiras: new Map([["pli_ord_1_04", 2]]) }))).toContain("Levar as caixas");
+    // Sem a ação (quem só consulta), o botão não aparece.
+    expect(textosDaTela(comVolumes({ caixasInteiras: new Map([["pli_ord_1_04", 1]]), operador: false }))).not.toContain("Levar a caixa");
+  });
+
+  it("quem só consulta e o pedido que já fechou a separação veem os volumes, sem peso nem Fechar volume", () => {
+    for (const props of [{ operador: false }, { fechada: true }]) {
+      const lido = painel(comVolumes(props))!;
+      expect(lido.textos).not.toContain("Fechar volume");
+      expect(lido.textos).not.toContain("Peso (kg)");
+      expect(lido.textos).toContain("Volume 12");
+      expect(textosDaTela(comVolumes(props))).not.toContain("Fechar volume");
+    }
+  });
+
+  it("um volume sendo fechado desliga Fechar volume; sem a leitura dos volumes, a bancada não ganha o painel", () => {
+    expect(painel(comVolumes({ fechandoVolume: true }))!.fechar).toBe(true);
+    expect(painel(render())).toBeNull();
+  });
+
+  it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
+    expect(await violacoesDeAcessibilidade(comVolumes({ etiquetaDoVolumeHref, caixasInteiras: new Map([["pli_ord_1_04", 1]]) }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(comVolumes({ operador: false }))).toEqual([]);
   });
 });

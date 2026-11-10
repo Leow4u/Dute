@@ -1,5 +1,6 @@
 import { quantidadeDoItem, type GrupoDaLista } from "./lista-de-separacao";
 import type { WarehouseTask, WarehouseTaskItem } from "./model";
+import { volumesDaLinhaGravados } from "./volumes-do-pedido";
 
 /**
  * Separar com o progresso salvo (docs/plataforma/separacao-com-caixas.md,
@@ -72,6 +73,7 @@ function progressoDaLinha(data: Record<string, unknown>, por: { name?: unknown; 
     shortage_reason: texto(concluida ? data.shortage_reason : data.separated_shortage_reason) || undefined,
     shortage_detail: texto(concluida ? data.shortage_detail : data.separated_shortage_detail) || undefined,
     separated_boxes: caixasDaLinhaGravadas(data.separated_boxes),
+    separated_volumes: volumesDaLinhaGravados(data.separated_volumes),
   };
 }
 

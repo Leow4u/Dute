@@ -7,12 +7,14 @@ import { mensagemDoErro } from "../operacao/api";
 
 /**
  * Separar com o progresso salvo (docs/plataforma/separacao-com-caixas.md,
- * partes 2, 3b e 5): as callables do WMS (functions/wms,
+ * partes 2, 3b, 4 e 5): as callables do WMS (functions/wms,
  * domain/pick-progress.ts). `setPickLineSeparated` separa, registra o
  * separado a menos ou desfaz uma linha, e baixa a caixa: a mais antiga da
- * prateleira ou, com `boxes`, as que a pessoa informou em "Outra caixa".
- * `completeOrderSeparation` conclui a separação e a embalagem, com o lacre,
- * numa chamada.
+ * prateleira ou, com `boxes`, as que a pessoa informou em "Outra caixa". O
+ * separado entra no volume aberto; com `take_boxes` ("Levar a caixa"), a
+ * caixa que sai inteira vira o volume. `closeOrderVolume` fecha o volume
+ * aberto, com o peso opcional. `completeOrderSeparation` conclui a separação
+ * e a embalagem, com o lacre, numa chamada.
  */
 
 export type LinhaSeparada = {
@@ -28,6 +30,21 @@ export type LinhaSeparada = {
   /** De quais caixas saiu, e o que saiu sem caixa. */
   boxes?: Array<{ box_code: string; qty: number; whole?: boolean; emptied?: boolean }>;
   loose_qty?: number;
+  /** Em quais volumes a linha está. */
+  volumes?: Array<{ volume_id: string; number: number; qty: number; box_code?: string }>;
+  /** O volume fechado que mudou de número, e o fechado de que saiu uma parte: a etiqueta deles precisa sair de novo. */
+  renumbered_volumes?: Array<{ volume_id: string; from: number; to: number }>;
+  changed_volumes?: Array<{ volume_id: string; number: number }>;
+};
+
+export type VolumeFechado = {
+  ok: true;
+  pick_task_id: string;
+  volume_id: string;
+  volume_number: number;
+  units: number;
+  weight_kg?: number;
+  closed_at: string;
 };
 
 export type SeparacaoConcluida = {
@@ -39,7 +56,10 @@ export type SeparacaoConcluida = {
   seal_code: string;
 };
 
-async function chamarWms<T>(nome: "setPickLineSeparated" | "completeOrderSeparation" | "recordBoxBalanceLabelPrint", dados: Record<string, unknown>): Promise<T> {
+async function chamarWms<T>(
+  nome: "setPickLineSeparated" | "closeOrderVolume" | "completeOrderSeparation" | "recordBoxBalanceLabelPrint",
+  dados: Record<string, unknown>,
+): Promise<T> {
   if (!firebaseApp) throw new Error("Firebase não configurado.");
   const callable = httpsCallable<Record<string, unknown>, T>(functionsDoApp(firebaseApp), nome);
   try {
@@ -49,9 +69,24 @@ async function chamarWms<T>(nome: "setPickLineSeparated" | "completeOrderSeparat
   }
 }
 
-/** "Separar": a linha inteira, da caixa mais antiga; com `boxes` ("Outra caixa"), das caixas informadas. */
-export function separarLinha(input: { pick_task_id: string; pick_line_id: string; idempotency_key: string; boxes?: Array<{ box_code: string; qty: number }> }) {
+/**
+ * "Separar": a linha inteira, da caixa mais antiga; com `boxes` ("Outra
+ * caixa"), das caixas informadas. Com `take_boxes` ("Levar a caixa"), a caixa
+ * que sai inteira vira o volume.
+ */
+export function separarLinha(input: {
+  pick_task_id: string;
+  pick_line_id: string;
+  idempotency_key: string;
+  boxes?: Array<{ box_code: string; qty: number }>;
+  take_boxes?: boolean;
+}) {
   return chamarWms<LinhaSeparada>("setPickLineSeparated", { ...input, separated: true });
+}
+
+/** "Fechar volume": o volume aberto fecha com o que tem; o peso é opcional. */
+export function fecharVolume(input: { pick_task_id: string; volume_id: string; weight_kg?: number; idempotency_key: string }) {
+  return chamarWms<VolumeFechado>("closeOrderVolume", input);
 }
 
 /** "Separar menos": o separado de fato, com o motivo e, se houver, o detalhe. */

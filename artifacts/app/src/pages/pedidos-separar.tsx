@@ -33,7 +33,8 @@ import { fetchJson, type WarehouseOpsResponse, type WarehouseTaskItem } from "@/
 import { groupWarehouseOrders } from "@/lib/warehouse-ops/orders";
 import { estadoDaLinha, idDaTarefaDeSeparacao, itemDaLinhaDeSeparacao, progressoDoPedido, separacaoComecou } from "@/lib/warehouse-ops/separacao";
 import { useLeituraDaLista } from "@/lib/warehouse-ops/use-lista-de-separacao";
-import { concluirSeparacao, desfazerLinha, separarLinha, separarMenos } from "@/lib/wms/separacao";
+import { avisoDosVolumes, nomeDoVolume, volumesAoConcluir, volumesDaSeparacao, volumesDaTarefa, type VolumeDoPedido } from "@/lib/warehouse-ops/volumes-do-pedido";
+import { concluirSeparacao, desfazerLinha, fecharVolume, separarLinha, separarMenos } from "@/lib/wms/separacao";
 
 import { PedidosSepararView, type EstadoDaBancada } from "./pedidos-separar-view";
 
@@ -42,7 +43,7 @@ const SEM_ITENS: WarehouseTaskItem[] = [];
 type Acao =
   | { tipo: "separar" | "desfazer"; linha: LinhaDaLista }
   | { tipo: "menos"; linha: LinhaDaLista; diferenca: DiferencaDaLinha }
-  | { tipo: "outra"; linha: LinhaDaLista; caixas: Array<{ box_code: string; qty: number }> };
+  | { tipo: "outra" | "levar"; linha: LinhaDaLista; caixas: Array<{ box_code: string; qty: number }> };
 
 /**
  * Pedidos › Separar (separação com caixas, partes 2, 3b e 5): a bancada do
@@ -56,6 +57,10 @@ type Acao =
  * caixa o sistema vai tirar, e a separada, de onde saiu. "Separar" deixa o
  * servidor baixar a caixa mais antiga; "Outra caixa" manda as que a pessoa
  * informou.
+ *
+ * Os volumes (parte 4) moram na tarefa, ao vivo: a linha separada entra no
+ * volume aberto, "Fechar volume" fecha com o peso, e "Levar a caixa" manda
+ * as caixas que a bancada mostrou, para a que sai inteira virar o volume.
  */
 export default function PaginaPedidosSeparar() {
   const chave = pedidoDaBusca(useSearch());
@@ -89,12 +94,19 @@ export default function PaginaPedidosSeparar() {
   const tarefaAoVivo = useDocumento(
     pickTaskId ? `pick_tasks/${pickTaskId}` : null,
     (db) => doc(db, "pick_tasks", pickTaskId ?? "-"),
-    (_id, data) => ({ status: String(data.status ?? ""), separation_started_at: data.separation_started_at ? String(data.separation_started_at) : null }),
+    (_id, data) => ({
+      status: String(data.status ?? ""),
+      separation_started_at: data.separation_started_at ? String(data.separation_started_at) : null,
+      volumes: volumesDaTarefa(data.volumes),
+    }),
   );
   const itens = linhasAoVivo.itens ?? tarefa?.items ?? SEM_ITENS;
   const situacao = tarefaAoVivo.item ?? (tarefa ? { status: String(tarefa.status ?? ""), separation_started_at: tarefa.separation_started_at ?? null } : undefined);
   const lista = useLeituraDaLista(itens, codigoDoCliente);
   const progresso = useMemo(() => progressoDoPedido(itens), [itens]);
+  // Os volumes só com a tarefa lida ao vivo: é nela que eles moram.
+  const volumesDaTarefaAoVivo = tarefaAoVivo.item?.volumes;
+  const volumes = useMemo(() => (volumesDaTarefaAoVivo ? volumesDaSeparacao(volumesDaTarefaAoVivo, itens) : undefined), [volumesDaTarefaAoVivo, itens]);
 
   // As caixas guardadas do cliente e o conteúdo de entrada das da abertura, ao vivo.
   const caixasAoVivo = useLeitura(
@@ -127,6 +139,15 @@ export default function PaginaPedidosSeparar() {
   // As caixas que o pedido abriu e que estão com a etiqueta velha, e as caixas do pedido para o diálogo de concluir.
   const etiquetas = useMemo(() => (caixasAoVivo.itens ? etiquetasParaTrocar(itens, caixasAoVivo.itens) : []), [itens, caixasAoVivo.itens]);
   const caixasDoDialogo = useMemo(() => (caixasAoVivo.itens ? caixasDoPedido(itens, caixasAoVivo.itens) : null), [itens, caixasAoVivo.itens]);
+  // "Levar a caixa" só na linha por separar de que alguma caixa sai inteira.
+  const caixasInteiras = useMemo(() => {
+    const inteiras = new Map<string, number>();
+    for (const id of candidatasDaLinha.keys()) {
+      const quantas = (caixasDaLinha.get(id) ?? []).filter((caixa) => caixa.inteira).length;
+      if (quantas) inteiras.set(id, quantas);
+    }
+    return inteiras;
+  }, [caixasDaLinha, candidatasDaLinha]);
   // "Outra caixa" só faz sentido com mais de uma caixa na prateleira para escolher.
   const comOutraCaixa = useMemo(
     () => new Set([...candidatasDaLinha].filter(([, daPrateleira]) => daPrateleira.length > 1).map(([id]) => id)),
@@ -167,6 +188,8 @@ export default function PaginaPedidosSeparar() {
       }
       // "Outra caixa" manda as caixas informadas; "Separar" deixa o servidor baixar a mais antiga.
       if (acao.tipo === "outra") return separarLinha({ ...entrada, boxes: acao.caixas });
+      // "Levar a caixa" manda as caixas que a bancada mostrou: a que sai inteira vira o volume.
+      if (acao.tipo === "levar") return separarLinha({ ...entrada, boxes: acao.caixas, take_boxes: true });
       return separarLinha(entrada);
     },
     onMutate: (acao) => setOcupadas((atuais) => new Set(atuais).add(acao.linha.id)),
@@ -176,11 +199,23 @@ export default function PaginaPedidosSeparar() {
         proximas.delete(acao.linha.id);
         return proximas;
       }),
-    onSuccess: (_resultado, acao) => {
+    onSuccess: (resultado, acao) => {
       if (acao.tipo === "menos") setDiferenca(null);
       if (acao.tipo === "outra") setOutraCaixa(null);
+      // O volume fechado que mudou de número ou de conteúdo: a etiqueta dele precisa sair de novo.
+      const aviso = avisoDosVolumes(resultado);
+      if (aviso) toast({ title: aviso });
     },
     onError: erro("Não foi possível gravar a linha"),
+  });
+
+  const fechar = useMutation({
+    mutationFn: async ({ volume, pesoKg }: { volume: VolumeDoPedido; pesoKg?: number }) => {
+      if (!pickTaskId) throw new Error("Pedido sem separação criada.");
+      return fecharVolume({ pick_task_id: pickTaskId, volume_id: volume.id, weight_kg: pesoKg, idempotency_key: crypto.randomUUID() });
+    },
+    onSuccess: (resultado) => toast({ title: `${nomeDoVolume(resultado.volume_number)} fechado` }),
+    onError: erro("Não foi possível fechar o volume"),
   });
 
   const concluir = useMutation({
@@ -234,9 +269,16 @@ export default function PaginaPedidosSeparar() {
         comOutraCaixa={comOutraCaixa}
         etiquetas={etiquetas}
         etiquetasHref={etiquetas.length ? labelsUrl({ boxes: etiquetas.map((etiqueta) => etiqueta.code) }) : null}
+        volumes={volumes}
+        caixasInteiras={caixasInteiras}
+        fechandoVolume={fechar.isPending}
         fotoDe={(item) => fotoDoItem(item.sku_code, item.sku, item.client_item_code)}
         onSeparar={(linha) => gravar.mutate({ tipo: "separar", linha })}
         onDesfazer={(linha) => gravar.mutate({ tipo: "desfazer", linha })}
+        onLevarACaixa={(linha) =>
+          gravar.mutate({ tipo: "levar", linha, caixas: (caixasDaLinha.get(linha.id) ?? []).map((caixa) => ({ box_code: caixa.box_code, qty: caixa.qty })) })
+        }
+        onFecharVolume={(volume, pesoKg) => fechar.mutate({ volume, pesoKg })}
         onOutraCaixa={(linha) =>
           setOutraCaixa({
             id: linha.id,
@@ -280,6 +322,7 @@ export default function PaginaPedidosSeparar() {
         aberto={lacre !== null}
         numero={pedido?.orderNumber ?? ""}
         resumo={resumo}
+        volumes={volumes ? volumesAoConcluir(volumes) : null}
         caixas={caixasDoDialogo}
         lacre={lacre ?? ""}
         confirmando={concluir.isPending}
