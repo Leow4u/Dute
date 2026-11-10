@@ -6,7 +6,9 @@ import type { OrderGroup } from "@/lib/warehouse-ops/orders";
 
 /**
  * Cancelar pedido (pergunta 59; canvas "Telas das decisões de 26/10", item
- * 6): o motivo e, no pedido já separado, o que volta à posição. O servidor
+ * 6): o motivo e o que volta à posição, que é o que já foi separado: o pedido
+ * inteiro, depois da separação concluída, ou as linhas já separadas de uma
+ * separação em andamento (separação com caixas, parte 2). O servidor
  * (cancelWarehouseOrder) solta a reserva, cancela as tarefas abertas e abre
  * a guarda do separado.
  */
@@ -27,16 +29,22 @@ export function pedidoCancelavel(order: OrderGroup) {
   return Boolean(order.orderId) && (order.stage === "separar" || order.stage === "enviar");
 }
 
-/** O que já foi separado volta à posição de onde saiu; antes da separação, nada se move. */
+/**
+ * O que já foi separado volta à posição de onde saiu; antes da separação,
+ * nada se move. Na separação em andamento, só as linhas já separadas, na
+ * quantidade separada.
+ */
 export function voltasDoPedido(order: OrderGroup): VoltaAPosicao[] {
-  if (String(order.pick?.status ?? "") !== "completed") return [];
+  const status = String(order.pick?.status ?? "");
+  if (status !== "completed" && status !== "in_progress") return [];
   return (order.pick?.items ?? [])
     .map((item, index) => {
       const nome = [item.name, item.product_name, item.sku_code, item.sku].map((valor) => String(valor ?? "").trim()).find(Boolean) ?? "Item";
+      const separado = status === "completed" ? item.picked_quantity : item.separated_at ? item.separated_qty : 0;
       return {
         id: String(item.id ?? index),
         item: nomeComTamanho({ nome, codigo: item.client_item_code, tamanho: item.size }),
-        quantidade: Number(item.picked_quantity ?? 0),
+        quantidade: Number(separado ?? 0) || 0,
         posicao: String(item.location ?? ""),
       };
     })
