@@ -89,11 +89,25 @@ function LabelFrame({ children, ariaLabel }: { children: React.ReactNode; ariaLa
   );
 }
 
-/** O rodapé da etiqueta: "Dutelog", a parte ("etiqueta 1 de 2") quando a caixa pede mais de uma, e o total. */
+/**
+ * O logo original da Dutelog no rodapé de toda etiqueta (pedido do Leonardo,
+ * 10/11/2026). Na folha A4 sai nas cores dele; no rolo da Zebra, que só
+ * imprime preto, sai em preto (labelSheetCss).
+ */
+export const LOGO_MM = { height: 3.6 } as const;
+
+function Logo() {
+  return <img className="lbl-logo" src="/dutelog-logo.png" alt="Dutelog" style={{ display: "block", height: `${LOGO_MM.height}mm`, width: "auto", flexShrink: 0 }} />;
+}
+
+/** O rodapé da etiqueta: o logo, a parte ("etiqueta 1 de 2") quando a caixa pede mais de uma, e o total. */
 function LabelFooter({ part, children }: { part?: string | null; children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: "3mm", fontSize: "7pt", fontWeight: 700 }}>
-      <span style={ellipsis}>{part ? `Dutelog · ${part}` : "Dutelog"}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "3mm", fontSize: "7pt", fontWeight: 700 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: "1.8mm", minWidth: 0 }}>
+        <Logo />
+        {part ? <span style={ellipsis}>{part}</span> : null}
+      </span>
       <span style={{ flexShrink: 0, textAlign: "right" }}>{children}</span>
     </div>
   );
@@ -113,7 +127,7 @@ function ContentLines({ lines }: { lines: BoxLabelData["lines"] }) {
       {lines.map((line) => {
         const codes = [...new Set([line.code, line.sku].filter(Boolean))];
         return (
-          <div key={`${line.code}-${line.name}`} className="lbl-line" style={{ ...ellipsis, fontSize: "6.5pt", lineHeight: 1.3 }}>
+          <div key={`${line.code}-${line.name}`} className="lbl-line" style={{ ...ellipsis, fontSize: "6.5pt", lineHeight: 1.2 }}>
             <strong style={{ fontVariantNumeric: "tabular-nums" }}>{quantity.format(line.qty)} ×</strong> {line.name}
             {codes.length ? <span style={{ opacity: 0.75 }}>{codes.map((code) => ` · ${code}`).join("")}</span> : null}
           </div>
@@ -237,7 +251,7 @@ export function labelSheetCss(mode: LabelMode) {
 }
 .lbl-roll .lbl { break-after: page; page-break-after: always; }
 .lbl-sheet:last-child, .lbl-roll .lbl:last-child { break-after: auto; page-break-after: auto; }
-.lbl-empty { visibility: hidden; }
+.lbl-empty { visibility: hidden; }${mode === "zebra" ? "\n.lbl-logo { filter: brightness(0); }" : ""}
 @media screen {
   .lbl-sheet, .lbl-roll { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12); margin: 0 auto 12px; }
   .lbl-roll { width: ${LABEL_MM.width}mm; }
