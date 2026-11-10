@@ -5,12 +5,14 @@ import {
   boxContents,
   boxFront,
   buildShelves,
+  estadoDaCaixa,
   groupByAisle,
   referenceBoxesThatFit,
   saldoPorPrateleira,
   shelfMatches,
   skuIndexFromRows,
   summarizeZone,
+  textoDaSaida,
   zonesOf,
 } from "./warehouse-map";
 import type { WarehousePosition } from "./warehouse-positions";
@@ -302,5 +304,56 @@ describe("conteúdo da caixa do recebimento", () => {
       { code: "A.01.0713.005.G", name: "Polo Masculino Piquet Preto · G", qty: 13 },
       { code: "A.01.0713.005.GG", name: "Polo Masculino Piquet Preto · GG", qty: 7 },
     ]);
+  });
+});
+
+/** A prateleira depois do pedido (separação com caixas, parte 3). */
+describe("a caixa na separação", () => {
+  const aberta = { taken_lines: [{ sku_code: "SKU-1", qty: 5 }], taken_units: 5, balance_at: "2026-11-12T17:40:00.000Z" };
+
+  it("as unidades da prateleira são o saldo das caixas, e a caixa vazia não ocupa a prateleira", () => {
+    // Antes da parte 3, a caixa de onde saíram as 12 peças continuava guardada: contava como posição ocupada.
+    const result = buildShelves([shelf("A-05", 5), shelf("A-06", 6)], [
+      box("CX-000028", "A-05", aberta),
+      box("CX-000030", "A-05"),
+      box("CX-000027", "A-06", { status: "emptied", taken_units: 12, emptied_at: "2026-11-12T13:00:00.000Z", emptied_order_number: "PED-0001" }),
+    ]);
+    const [a05, a06] = result;
+    expect(a05!.unit_count).toBe(19);
+    expect(a05!.boxes.map((item) => item.code)).toEqual(["CX-000028", "CX-000030"]);
+    expect(a05!.saidas).toEqual([]);
+    // A A-06 só tinha a caixa que esvaziou: fica sem caixa, sem frente usada, e guarda o registro.
+    expect([a06!.boxes.length, a06!.front_used_m, a06!.state, a06!.unit_count]).toEqual([0, 0, "free", 0]);
+    expect(a06!.saidas.map((item) => item.code)).toEqual(["CX-000027"]);
+    expect(summarizeZone(result, "all").occupied).toBe(1);
+  });
+
+  it("Saíram desta prateleira: a mais recente primeiro, e só as dez últimas", () => {
+    const saidas = Array.from({ length: 12 }, (_, index) =>
+      box(`CX-0000${String(index + 10)}`, "A-05", { status: "emptied", emptied_at: `2026-11-${String(index + 1).padStart(2, "0")}T12:00:00.000Z` }),
+    );
+    const [a05] = buildShelves([shelf("A-05", 5)], saidas);
+    expect(a05!.saidas).toHaveLength(10);
+    expect(a05!.saidas[0]!.code).toBe("CX-000021");
+    expect(a05!.saidas.at(-1)!.code).toBe("CX-000012");
+  });
+
+  it("a caixa diz aberta quando já saiu peça dela, e a saída diz como e em qual pedido", () => {
+    expect(estadoDaCaixa(box("CX-000028", "A-05", aberta))).toBe("aberta");
+    expect(estadoDaCaixa(box("CX-000030", "A-05"))).toBe("guardada");
+    expect(textoDaSaida({ emptied_at: "2026-11-11T16:00:00.000Z", emptied_whole: true, emptied_order_number: "PED-0001" })).toBe("inteira em 11/11/2026 · PED-0001");
+    expect(textoDaSaida({ emptied_at: "2026-11-12T13:00:00.000Z", emptied_whole: false, emptied_order_number: "PED-0001" })).toBe("vazia em 12/11/2026 · PED-0001");
+    expect(textoDaSaida({ emptied_at: null, emptied_whole: false, emptied_order_number: null })).toBe("vazia");
+  });
+
+  it("o conteúdo da caixa aberta é o saldo: a entrada menos o que saiu, sem o produto que zerou", () => {
+    const entrada = [
+      { box_code: "CX-000028", sku_code: "SKU-1", client_item_code: "A.01", product_name: "Calça 42", counted_qty: 7 },
+      { box_code: "CX-000028", sku_code: "SKU-2", client_item_code: "A.02", product_name: "Calça 44", counted_qty: 9 },
+    ];
+    const caixa = box("CX-000028", "A-05", { sku_codes: ["SKU-1", "SKU-2"], taken_lines: [{ sku_code: "SKU-1", qty: 5 }, { sku_code: "SKU-2", qty: 9 }], taken_units: 14 });
+    expect(boxContents(caixa, entrada, new Map())).toEqual([{ code: "A.01", name: "Calça 42", qty: 2 }]);
+    // Sem as linhas de entrada, ficam os SKUs que a caixa conhece, sem quantidade.
+    expect(boxContents(caixa, [], new Map()).map((line) => line.qty)).toEqual([null, null]);
   });
 });

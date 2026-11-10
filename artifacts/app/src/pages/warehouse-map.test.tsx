@@ -7,7 +7,7 @@ import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import { buildShelves, skuIndexFromRows } from "@/lib/warehouse-map";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosForaDaLista } from "@/test/textos";
-import { BoxCard, SaldoSemCaixa } from "./warehouse-map";
+import { BoxCard, SaidasDaPrateleira, SaldoSemCaixa } from "./warehouse-map";
 
 const [b02] = buildShelves(
   [
@@ -73,7 +73,7 @@ describe("Mapa › a caixa do recebimento", () => {
     );
     expect(
       textosForaDaLista(html, [
-        "CX-000225",
+        "CX-000225 · guardada",
         "19 un.",
         "Etiqueta",
         "12 × Polo Masculino Piquet Preto · G · A.01.0713.005.G",
@@ -131,5 +131,73 @@ describe("Mapa sem conexão", () => {
     expect(fonte).toMatch(/semRede\.lidaEm === null \? \(\s*<BlocoSemConexao tentando=\{relendo\} onTentar=\{reler\} \/>\s*\) : \(\s*<FaixaSemConexao lidaEm=\{semRede\.lidaEm\}/);
     // A situação do inventário sem rede não vira um segundo aviso.
     expect(fonte).toContain("showSessionStatus && sessionQuery.isError && !ehSemConexao(sessionQuery.error)");
+  });
+});
+
+/** A prateleira depois do pedido (separação com caixas, parte 3; mockup WmsSepararMapa). */
+describe("Mapa › a prateleira depois do pedido", () => {
+  const entrada = [
+    { box_code: "CX-000028", sku_code: "BTG-000084", client_item_code: "A.01.0712.001.42", product_name: "Calça Social Masculino Preta 42", counted_qty: 28 },
+    { box_code: "CX-000028", sku_code: "BTG-000085", client_item_code: "A.01.0712.001.44", product_name: "Calça Social Masculino Preta 44", counted_qty: 40 },
+  ];
+  const guardada = {
+    code: "CX-000028",
+    customer_code: "BTG Pactual",
+    status: "stored",
+    location_id: "A-05",
+    length_m: 0.4,
+    width_m: 0.6,
+    height_m: 0.35,
+    gross_weight_kg: 21.4,
+    unit_count: 68,
+    sku_codes: ["BTG-000084", "BTG-000085"],
+    stored_at: "2026-10-22T14:10:00.000Z",
+    origin: { kind: "opening_inventory", session_id: "sessao-1" },
+  };
+
+  it("a caixa aberta diz o saldo, de quando ele é e o que resta, sem o peso de entrada", async () => {
+    const aberta = warehouseBoxFromRecord({
+      ...guardada,
+      taken_lines: [
+        { sku_code: "BTG-000084", qty: 26 },
+        { sku_code: "BTG-000085", qty: 35 },
+      ],
+      taken_units: 61,
+      balance_at: "2026-11-12T17:40:00.000Z",
+    });
+    const html = renderToStaticMarkup(<BoxCard box={aberta} lines={entrada} skuIndex={index} onLabels={() => undefined} />);
+    expect(
+      textosForaDaLista(html, [
+        "CX-000028 · aberta",
+        "7 un.",
+        "Etiqueta",
+        "5 × Calça Social Masculino Preta 44 · A.01.0712.001.44",
+        "2 × Calça Social Masculino Preta 42 · A.01.0712.001.42",
+        "Abertura · 22/10/2026 · saldo em 12/11/2026 · 40 × 60 × 35 cm · 0,084 m³",
+      ]),
+    ).toEqual([]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("a caixa intacta diz guardada, com o conteúdo de entrada e o peso, sem 'saldo em'", () => {
+    const html = renderToStaticMarkup(<BoxCard box={warehouseBoxFromRecord(guardada)} lines={entrada} skuIndex={index} onLabels={() => undefined} />);
+    expect(html).toContain("CX-000028 · guardada");
+    expect(html).toContain("68 un.");
+    expect(html).toContain("Abertura · 22/10/2026 · 40 × 60 × 35 cm · 21,4 kg · 0,084 m³");
+    expect(html).not.toContain("saldo em");
+  });
+
+  it("Saíram desta prateleira: a caixa que saiu inteira e a que ficou vazia, com a data e o pedido", async () => {
+    const saidas = [
+      warehouseBoxFromRecord({ ...guardada, code: "CX-000027", status: "emptied", emptied_at: "2026-11-12T13:00:00.000Z", emptied_order_number: "PED-0001" }),
+      warehouseBoxFromRecord({ ...guardada, code: "CX-000029", status: "emptied", emptied_at: "2026-11-11T16:00:00.000Z", emptied_order_number: "PED-0001", emptied_whole: true }),
+    ];
+    const html = renderToStaticMarkup(<SaidasDaPrateleira shelf={{ saidas }} />);
+    expect(
+      textosForaDaLista(html, ["Saíram desta prateleira", "CX-000027", "· vazia em 12/11/2026 · PED-0001", "CX-000029", "· inteira em 11/11/2026 · PED-0001"]),
+    ).toEqual([]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    // Sem saída, a ficha não ganha a seção.
+    expect(renderToStaticMarkup(<SaidasDaPrateleira shelf={{ saidas: [] }} />)).toBe("");
   });
 });
