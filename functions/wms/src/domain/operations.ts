@@ -258,6 +258,11 @@ export type AdvanceOperationalTaskInput = {
       /** A linha separada a menos (pergunta 59): falta ou avaria. */
       shortage_reason?: string;
       shortage_detail?: string;
+      /**
+       * Só da conclusão pela bancada (pick-progress.ts): o `separated_at` que
+       * ela leu da linha. Se a linha mudou depois, a transação recusa.
+       */
+      separated_at?: string;
     }>;
     packing_lines?: Array<{
       order_item_id: string;
@@ -7351,6 +7356,7 @@ export async function advanceWarehouseTaskTransaction(
         notes?: string;
         shortage_reason?: string;
         shortage_detail?: string;
+        separated_at?: string;
       }
     >();
     // Separar a menos (pergunta 59): cada linha conferida e, na que veio a
@@ -7601,6 +7607,18 @@ export async function advanceWarehouseTaskTransaction(
       pickingConfirmationsById = new Map(
         pickingConfirmations.map((line) => [text(line.pick_line_id), line]),
       );
+      // A bancada conclui com o progresso que leu das linhas: a linha desfeita
+      // ou separada de novo depois dessa leitura não entra na conclusão.
+      for (const row of pickLines) {
+        const lido = pickingConfirmationsById.get(row.id)?.separated_at;
+        if (lido !== undefined && text(row.data.separated_at) !== text(lido)) {
+          throw new HttpsError(
+            "failed-precondition",
+            "A separação mudou enquanto o pedido era concluído. Atualize e tente de novo.",
+            { code: "SEPARATION_CHANGED", pick_line_id: row.id },
+          );
+        }
+      }
       separatedLines = conferirSeparacao(
         pickLines.map((row) => ({
           id: row.id,

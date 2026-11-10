@@ -126,6 +126,8 @@ export type LinhaDoProgresso = {
   pedido: number;
   /** O que já foi separado e gravado; null sem progresso. */
   separado: number | null;
+  /** Quando foi separada: a versão do progresso que a conclusão confere. */
+  separadoEm?: string;
   /** Na linha separada a menos: o motivo e o detalhe. */
   motivo?: string;
   detalhe?: string;
@@ -138,6 +140,8 @@ export type LinhaConferida = {
   status: "confirmed";
   shortage_reason?: string;
   shortage_detail?: string;
+  /** O `separated_at` lido: a transação recusa se a linha mudou depois. */
+  separated_at?: string;
 };
 
 /** "10 de 116 itens · 665 de 3.335 un.": o que a bancada e a fila mostram. */
@@ -208,6 +212,7 @@ export function linhasParaConcluir(linhas: readonly LinhaDoProgresso[], papel: s
       status: "confirmed" as const,
       shortage_reason: (linha.separado ?? 0) < linha.pedido ? linha.motivo : undefined,
       shortage_detail: (linha.separado ?? 0) < linha.pedido ? linha.detalhe : undefined,
+      separated_at: linha.separadoEm,
     }),
   );
 }
@@ -218,6 +223,7 @@ function linhaDoProgresso(lineId: string, data: Row): LinhaDoProgresso {
     produto: text(data.product_name) || text(data.sku_code) || lineId,
     pedido: quantity(data.qty_to_pick),
     separado: data.separated_at ? quantity(data.separated_qty) : null,
+    separadoEm: text(data.separated_at) || undefined,
     motivo: text(data.separated_shortage_reason) || undefined,
     detalhe: text(data.separated_shortage_detail) || undefined,
   });
@@ -230,8 +236,8 @@ function assertSeparating(status: string) {
   if (status !== "in_progress") throw new HttpsError("failed-precondition", "A separação ainda não começou. Atualize e tente de novo.");
 }
 
-/** A outra pessoa começou a separação no mesmo instante: a tarefa já saiu de planned. */
-function jaComecou(error: unknown): boolean {
+/** Outra pessoa fez a mesma transição no mesmo instante: a tarefa já saiu do status esperado. */
+function statusMudou(error: unknown): boolean {
   return error instanceof HttpsError && error.code === "failed-precondition" && /^Status divergente/.test(error.message);
 }
 
@@ -259,7 +265,7 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
           actor,
         );
       } catch (error) {
-        if (!jaComecou(error)) throw error;
+        if (!statusMudou(error)) throw error;
       }
     }
   }
@@ -395,13 +401,33 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
 }
 
 /**
+ * A conclusão anda por três transições (separação concluída, embalagem
+ * iniciada e fechada). Cada volta lê o ponto em que o pedido está e faz o que
+ * falta; a transição que outra pessoa fez no mesmo instante recusa pelo status,
+ * e a volta seguinte continua do que encontrou. Cada recusa dessas é um passo
+ * que já andou, então quatro voltas bastam.
+ */
+const VOLTAS_DA_CONCLUSAO = 4;
+
+/**
  * Concluir a separação: a separação e a embalagem numa chamada. Cada passo é
  * a transição de sempre, com a chave derivada da chave da chamada; se um passo
  * falha, repetir a chamada continua de onde parou (o passo já feito é pulado
- * pelo status).
+ * pelo status). O pedido que outra pessoa já concluiu só responde "feito" a
+ * quem informou o mesmo lacre; com outro, recusa e diz o lacre gravado.
  */
 export async function completeOrderSeparation(db: Firestore, raw: unknown, actor: OperationalActor) {
   const input = parse(CompleteOrderSeparationSchema, raw);
+  for (let volta = 1; ; volta += 1) {
+    try {
+      return await concluirDeOndeEsta(db, input, actor);
+    } catch (error) {
+      if (volta >= VOLTAS_DA_CONCLUSAO || !statusMudou(error)) throw error;
+    }
+  }
+}
+
+async function concluirDeOndeEsta(db: Firestore, input: z.infer<typeof CompleteOrderSeparationSchema>, actor: OperationalActor) {
   const taskRef = db.collection(PICK_TASKS_COLLECTION).doc(input.pick_task_id);
   const taskSnapshot = await taskRef.get();
   if (!taskSnapshot.exists) throw new HttpsError("not-found", "Separação não encontrada.");
@@ -432,15 +458,20 @@ export async function completeOrderSeparation(db: Firestore, raw: unknown, actor
   if (!pack) throw new HttpsError("failed-precondition", "A embalagem do pedido não foi criada. Atualize e tente de novo.");
   const packUid = `packing:${pack.id}`;
   let packStatus = text(pack.get("status")).toLowerCase();
-  if (packStatus === "ready") {
-    try {
-      await advanceWarehouseTaskTransaction(db, { task_uid: packUid, expected_status: "ready", idempotency_key: step("packing-start") }, actor);
-    } catch (error) {
-      if (!jaComecou(error)) throw error;
+  let shipmentId = text(pack.get("shipment_id")) || undefined;
+  if (packStatus === "completed") {
+    // Já concluído: é a repetição da mesma chamada, ou outra pessoa concluiu antes.
+    const lacre = text(pack.get("seal_code"));
+    if (lacre !== input.seal_code) {
+      throw new HttpsError("failed-precondition", `A separação deste pedido já foi concluída${lacre ? `, com o lacre ${lacre}` : ""}.`, {
+        code: "SEPARATION_ALREADY_COMPLETED",
+      });
     }
+  }
+  if (packStatus === "ready") {
+    await advanceWarehouseTaskTransaction(db, { task_uid: packUid, expected_status: "ready", idempotency_key: step("packing-start") }, actor);
     packStatus = "in_progress";
   }
-  let shipmentId = text(pack.get("shipment_id")) || undefined;
   if (packStatus === "in_progress") {
     // O item que a separação a menos zerou não se embala.
     const items = await db.collection(ORDER_ITEMS_COLLECTION).where("order_id", "==", orderId).get();
