@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import { FieldValue, type DocumentData, type DocumentReference, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 import { z } from "genkit";
 
@@ -10,6 +10,8 @@ import {
   createEvent,
   type OperationalActor,
 } from "./operations.js";
+import { caixasComOItem, lerCaixasDaPrateleira, retiradoDaCaixa } from "./box-balance.js";
+import { conferirCaixasInformadas, retiradoCom, sugerirCaixas, unidadesDaCaixa, type CaixaDaLinha, type LinhaDaCaixa } from "./saldo-da-caixa.js";
 import { DETALHE_DA_DIFERENCA_MAXIMO, MOTIVOS_DA_DIFERENCA, concluiComDiferenca, type MotivoDaDiferenca } from "./short-pick.js";
 
 /**
@@ -34,6 +36,13 @@ import { DETALHE_DA_DIFERENCA_MAXIMO, MOTIVOS_DA_DIFERENCA, concluiComDiferenca,
  * reserva, o saldo nem o `qty_picked`, que continuam mudando só na conclusão.
  * A linha com progresso é o que a contagem cíclica consulta para não contar
  * a prateleira de onde o item já saiu (operations.ts, recordCycleCount).
+ *
+ * A caixa (parte 3b, seção 4.3): separar a linha baixa o saldo das caixas da
+ * prateleira na mesma transação. Sem a pessoa dizer nada, sai da caixa mais
+ * antiga que tem o item, e a seguinte completa; "Outra caixa" informa de
+ * quais saiu (`boxes`), e a soma tem de fechar com a linha. A linha guarda de
+ * onde saiu (`separated_boxes`), e "Desfazer" devolve às mesmas caixas. O que
+ * as caixas da prateleira não têm sai sem caixa, como antes.
  */
 
 export const PICK_TASKS_COLLECTION = "pick_tasks";
@@ -61,6 +70,14 @@ export const SetPickLineSeparatedSchema = z
     separated_qty: z.number().nonnegative().optional(),
     shortage_reason: z.string().trim().max(40).optional(),
     shortage_detail: z.string().trim().max(DETALHE_DA_DIFERENCA_MAXIMO).optional(),
+    /**
+     * "Outra caixa" (parte 3b): de quais caixas da prateleira o item saiu.
+     * Sem ele, o sistema baixa da mais antiga.
+     */
+    boxes: z
+      .array(z.object({ box_code: z.string().trim().min(1).max(40), qty: z.number().positive() }).strict())
+      .max(50)
+      .optional(),
     idempotency_key: idempotencyKey,
   })
   .strict();
@@ -241,6 +258,31 @@ function statusMudou(error: unknown): boolean {
   return error instanceof HttpsError && error.code === "failed-precondition" && /^Status divergente/.test(error.message);
 }
 
+/** De onde a linha saiu, como ela guarda (`separated_boxes`). */
+type CaixaGravada = { box_code: string; qty: number; whole?: boolean; emptied?: boolean };
+
+function caixasGravadas(value: unknown): CaixaGravada[] {
+  if (!Array.isArray(value)) return [];
+  return (value as Row[])
+    .map((caixa) =>
+      clean({ box_code: text(caixa.box_code).toUpperCase(), qty: quantity(caixa.qty), whole: caixa.whole === true || undefined, emptied: caixa.emptied === true || undefined }),
+    )
+    .filter((caixa) => caixa.box_code && caixa.qty > 0);
+}
+
+function paraGravar(caixas: readonly CaixaDaLinha[]): CaixaGravada[] {
+  return caixas.map((caixa) => clean({ box_code: caixa.box_code, qty: caixa.qty, whole: caixa.inteira || undefined, emptied: caixa.esvazia || undefined }));
+}
+
+function mesmasCaixas(antes: readonly CaixaGravada[], depois: readonly CaixaDaLinha[]): boolean {
+  const chave = (caixas: ReadonlyArray<{ box_code: string; qty: number }>) =>
+    caixas
+      .map((caixa) => `${caixa.box_code}:${caixa.qty}`)
+      .sort()
+      .join("|");
+  return chave(antes) === chave(depois);
+}
+
 /**
  * Separar (ou desfazer) uma linha do pedido. Idempotente pela chave e pelo
  * estado: separar a linha já separada, ou desfazer a que não está, não muda
@@ -296,8 +338,8 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
     const produto = text(line.product_name) || text(line.sku_code) || input.pick_line_id;
     const novo = input.separated ? separadoDaLinha(pedido, input, produto) : null;
     const estava = Boolean(line.separated_at);
-    // Separar de novo a linha já separada só muda algo se a quantidade ou o motivo mudaram.
-    const changed = novo
+    // Separar de novo a linha já separada só muda algo se a quantidade, o motivo ou as caixas informadas mudaram.
+    const mudouALinha = novo
       ? !estava ||
         quantity(line.separated_qty) !== novo.separado ||
         text(line.separated_shortage_reason) !== (novo.motivo ?? "") ||
@@ -305,8 +347,59 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
       : estava;
     const customerCode = text(task.customer_code) || text(line.customer_code);
 
+    // A caixa (parte 3b): o que a linha tinha tirado volta às caixas, e o
+    // novo separado sai delas de novo. Tudo lido antes de qualquer escrita.
+    const skuCode = text(line.sku_code);
+    const locationId = text(line.location_id);
+    const anteriores = estava ? caixasGravadas(line.separated_boxes) : [];
+    const tira = novo ? novo.separado : 0;
+    const informadas = novo !== null && input.boxes !== undefined ? input.boxes : undefined;
+    const informou = informadas !== undefined;
+    const naPrateleira = Boolean(skuCode && locationId && customerCode);
+    if (informadas?.length && !naPrateleira) {
+      throw new HttpsError("failed-precondition", "Esta linha não tem prateleira para informar a caixa.");
+    }
+    let caixas: CaixaDaLinha[] = [];
+    let semCaixa = tira;
+    let mudaramAsCaixas = false;
+    const retirados = new Map<string, LinhaDaCaixa[]>();
+    const tocadas = new Map<string, DocumentReference<DocumentData>>();
+    if ((mudouALinha || informou) && naPrateleira && (tira > 0 || anteriores.length || informadas?.length)) {
+      const prateleira = await lerCaixasDaPrateleira(transaction, db, { customerCode, locationId, skuCode });
+      const tirar = (codigo: string, qty: number) => {
+        const box = prateleira.porCodigo.get(codigo);
+        // A caixa que saiu do cadastro não tem mais o que devolver.
+        if (!box) return;
+        retirados.set(codigo, retiradoCom(retirados.get(codigo) ?? retiradoDaCaixa(box), skuCode, qty));
+        tocadas.set(codigo, box.ref);
+      };
+      for (const anterior of anteriores) tirar(anterior.box_code, -anterior.qty);
+      if (tira > 0 || informadas?.length) {
+        const candidatas = caixasComOItem(prateleira, retirados, skuCode);
+        const conta = informadas ? conferirCaixasInformadas(tira, informadas, candidatas) : sugerirCaixas(tira, candidatas);
+        if ("problema" in conta) {
+          throw new HttpsError("failed-precondition", conta.problema, { code: "SEPARATION_BOXES_MISMATCH" });
+        }
+        caixas = conta.caixas;
+        semCaixa = conta.sem_caixa;
+        for (const caixa of caixas) tirar(caixa.box_code, caixa.qty);
+      }
+      mudaramAsCaixas = !mesmasCaixas(anteriores, caixas);
+    }
+    const changed = mudouALinha || (informou && mudaramAsCaixas);
+
     const events: unknown[] = [];
     if (changed) {
+      // O saldo das caixas: o retirado de cada uma como ficou. A caixa a que tudo voltou fica intacta de novo.
+      for (const [codigo, ref] of tocadas) {
+        const retirado = retirados.get(codigo) ?? [];
+        transaction.update(
+          ref,
+          retirado.length
+            ? { taken_lines: retirado, taken_units: unidadesDaCaixa(retirado), balance_at: occurredAt, updated_at: FieldValue.serverTimestamp() }
+            : { taken_lines: FieldValue.delete(), taken_units: FieldValue.delete(), balance_at: FieldValue.delete(), updated_at: FieldValue.serverTimestamp() },
+        );
+      }
       transaction.update(
         lineRef,
         novo
@@ -316,6 +409,7 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
               separated_by: actorFields(actor),
               separated_shortage_reason: novo.motivo ?? FieldValue.delete(),
               separated_shortage_detail: novo.detalhe ?? FieldValue.delete(),
+              separated_boxes: caixas.length ? paraGravar(caixas) : FieldValue.delete(),
               updated_at: FieldValue.serverTimestamp(),
             }
           : {
@@ -324,6 +418,7 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
               separated_by: FieldValue.delete(),
               separated_shortage_reason: FieldValue.delete(),
               separated_shortage_detail: FieldValue.delete(),
+              separated_boxes: FieldValue.delete(),
               updated_at: FieldValue.serverTimestamp(),
             },
       );
@@ -364,6 +459,8 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
               short_qty: aMenos || undefined,
               shortage_reason: novo?.motivo,
               shortage_detail: novo?.detalhe,
+              // De quais caixas saiu (ou, no desfazer, a quais voltou).
+              boxes: (novo ? caixas : anteriores).length ? (novo ? caixas : anteriores).map((caixa) => ({ box_code: caixa.box_code, qty: caixa.qty })) : undefined,
             }),
             source: EVENT_SOURCE,
           },
@@ -382,6 +479,9 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
       separated_qty: novo ? novo.separado : 0,
       shortage_reason: novo?.motivo,
       separated_at: novo ? (changed ? occurredAt : text(line.separated_at)) : undefined,
+      // De onde saiu: as caixas e o que saiu sem caixa.
+      boxes: novo && changed ? (caixas.length ? paraGravar(caixas) : undefined) : novo && anteriores.length ? anteriores : undefined,
+      loose_qty: novo && changed && semCaixa > 0 ? semCaixa : undefined,
       events,
     });
     transaction.create(opRef, {

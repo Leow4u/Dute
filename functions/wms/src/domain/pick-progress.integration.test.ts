@@ -545,3 +545,197 @@ describe("Separar com o progresso salvo (separação com caixas, parte 2a)", () 
     assert.equal((await db.collection("putaway_tasks").get()).size, 0);
   });
 });
+
+/** Uma caixa guardada, como a abertura ou o recebimento a deixam. */
+function caixa(code: string, locationId: string, storedAt: string, unitCount: number, extra: Record<string, unknown> = {}) {
+  return db
+    .collection("warehouse_boxes")
+    .doc(code)
+    .set({ id: code, code, customer_code: BTG, status: "stored", location_id: locationId, stored_at: storedAt, unit_count: unitCount, line_count: 1, sku_codes: [POLO], ...extra });
+}
+
+/** O conteúdo de entrada da caixa da abertura mora na linha da sessão. */
+function linhaDaAbertura(boxCode: string, skuCode: string, quantidade: number, locationId: string) {
+  return db
+    .collection("opening_inventory_lines")
+    .doc(`oil_${boxCode}_${skuCode}`)
+    .set({ session_id: "ois_BTG_Pactual", customer_code: BTG, sku_code: skuCode, location_id: locationId, box_code: boxCode, counted_qty: quantidade, status: "counted" });
+}
+
+async function caixas() {
+  const snapshot = await db.collection("warehouse_boxes").get();
+  return Object.fromEntries(snapshot.docs.map((doc) => [doc.id, doc.data()]));
+}
+
+describe("A caixa na separação (separação com caixas, parte 3b)", () => {
+  /** A-01: a CX-000001 (3 polos, a mais antiga) e a CX-000002 (4 polos e 6 de outro item); A-02: a CX-000003 do recebimento, com os 4 bonés. */
+  async function prateleiras() {
+    await Promise.all([
+      caixa("CX-000001", "A-01", "2026-10-22T13:00:00.000Z", 3),
+      linhaDaAbertura("CX-000001", POLO, 3, "A-01"),
+      caixa("CX-000002", "A-01", "2026-10-22T14:00:00.000Z", 10, { sku_codes: [POLO, "BTG-OUTRO"], line_count: 2 }),
+      linhaDaAbertura("CX-000002", POLO, 4, "A-01"),
+      linhaDaAbertura("CX-000002", "BTG-OUTRO", 6, "A-01"),
+      caixa("CX-000003", "A-02", "2026-11-06T13:00:00.000Z", 4, {
+        sku_codes: [BONE],
+        origin: { kind: "receipt", receipt_id: "rec_1" },
+        lines: [{ inbound_item_id: "ini_1", line_number: 1, sku_code: BONE, client_item_code: BONE, product_name: "Boné", size: null, counted_qty: 4 }],
+      }),
+    ]);
+  }
+
+  it("separar a linha baixa a caixa mais antiga, e a seguinte completa; a linha guarda de onde saiu", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    const antes = await saldos();
+
+    const polo = await separar(pickTaskId, linhaPolo);
+    // A CX-000001, intacta, sai inteira; as outras 2 saem da CX-000002, que continua com outro item.
+    assert.deepEqual(polo.boxes, [
+      { box_code: "CX-000001", qty: 3, whole: true },
+      { box_code: "CX-000002", qty: 2 },
+    ]);
+    assert.equal(polo.loose_qty, undefined);
+    let guardadas = await caixas();
+    assert.deepEqual(
+      [guardadas["CX-000001"]!.taken_lines, guardadas["CX-000001"]!.taken_units, guardadas["CX-000001"]!.balance_at],
+      [[{ sku_code: POLO, qty: 3 }], 3, polo.separated_at],
+    );
+    assert.deepEqual([guardadas["CX-000002"]!.taken_lines, guardadas["CX-000002"]!.taken_units], [[{ sku_code: POLO, qty: 2 }], 2]);
+    assert.equal(guardadas["CX-000003"]!.taken_lines, undefined);
+    const linhas = await porLinha("pick_lines", orderId);
+    assert.deepEqual(linhas[POLO]!.separated_boxes, polo.boxes);
+    const [evento] = await eventos("picking.line_separated");
+    assert.deepEqual(evento.payload.boxes, [
+      { box_code: "CX-000001", qty: 3 },
+      { box_code: "CX-000002", qty: 2 },
+    ]);
+    // A caixa do recebimento traz o conteúdo nela: os 4 bonés saem dela inteira.
+    const bone = await separar(pickTaskId, linhaBone, rafael);
+    assert.deepEqual(bone.boxes, [{ box_code: "CX-000003", qty: 4, whole: true }]);
+    assert.deepEqual((await caixas())["CX-000003"]!.taken_lines, [{ sku_code: BONE, qty: 4 }]);
+    // A reserva e o saldo da prateleira não mudam: a caixa é só de onde saiu.
+    assert.deepEqual(await saldos(), antes);
+
+    // Repetir "Separar" não baixa de novo.
+    assert.equal((await separar(pickTaskId, linhaPolo, rafael)).changed, false);
+    guardadas = await caixas();
+    assert.deepEqual([guardadas["CX-000001"]!.taken_units, guardadas["CX-000002"]!.taken_units], [3, 2]);
+
+    // A conclusão não mexe mais nas caixas.
+    await concluir(pickTaskId);
+    guardadas = await caixas();
+    assert.deepEqual([guardadas["CX-000001"]!.taken_units, guardadas["CX-000002"]!.taken_units, guardadas["CX-000003"]!.taken_units], [3, 2, 4]);
+  });
+
+  it("Desfazer devolve às mesmas caixas, e a caixa a que tudo voltou fica intacta de novo", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo } = await pedidoAprovado();
+    await separar(pickTaskId, linhaPolo);
+    const desfeita = await desfazer(pickTaskId, linhaPolo);
+    assert.equal(desfeita.changed, true);
+    const guardadas = await caixas();
+    for (const codigo of ["CX-000001", "CX-000002"]) {
+      assert.deepEqual([guardadas[codigo]!.taken_lines, guardadas[codigo]!.taken_units, guardadas[codigo]!.balance_at], [undefined, undefined, undefined], codigo);
+    }
+    assert.equal((await porLinha("pick_lines", orderId))[POLO]!.separated_boxes, undefined);
+    const [evento] = await eventos("picking.line_unseparated");
+    assert.deepEqual(evento.payload.boxes, [
+      { box_code: "CX-000001", qty: 3 },
+      { box_code: "CX-000002", qty: 2 },
+    ]);
+  });
+
+  it("separar menos, ou mudar o separado, refaz a conta das caixas", async () => {
+    await prateleiras();
+    const { pickTaskId, linhaPolo } = await pedidoAprovado();
+    await separar(pickTaskId, linhaPolo);
+    // Das 5, só 2 saíram: voltam as 3 da conta anterior, e as 2 saem da mais antiga, que fica aberta.
+    const aMenos = await separarMenos(pickTaskId, linhaPolo, 2, { shortage_reason: "falta" });
+    assert.deepEqual(aMenos.boxes, [{ box_code: "CX-000001", qty: 2 }]);
+    let guardadas = await caixas();
+    assert.deepEqual([guardadas["CX-000001"]!.taken_units, guardadas["CX-000002"]!.taken_units], [2, undefined]);
+    // A falta total não tira de caixa nenhuma.
+    const zerada = await separarMenos(pickTaskId, linhaPolo, 0, { shortage_reason: "falta" });
+    assert.equal(zerada.boxes, undefined);
+    guardadas = await caixas();
+    assert.deepEqual([guardadas["CX-000001"]!.taken_units, guardadas["CX-000002"]!.taken_units], [undefined, undefined]);
+  });
+
+  it("a caixa já aberta que a linha esgota vem marcada como a que esvazia", async () => {
+    await prateleiras();
+    // Outro pedido já tirou 1 polo da CX-000001: restam 2 nela.
+    await db.collection("warehouse_boxes").doc("CX-000001").update({ taken_lines: [{ sku_code: POLO, qty: 1 }], taken_units: 1, balance_at: "2026-11-09T12:00:00.000Z" });
+    const { pickTaskId, linhaPolo } = await pedidoAprovado();
+    const polo = await separar(pickTaskId, linhaPolo);
+    assert.deepEqual(polo.boxes, [
+      { box_code: "CX-000001", qty: 2, emptied: true },
+      { box_code: "CX-000002", qty: 3 },
+    ]);
+    const guardadas = await caixas();
+    assert.deepEqual(guardadas["CX-000001"]!.taken_lines, [{ sku_code: POLO, qty: 3 }]);
+    // Desfazer devolve só o que esta linha tirou: a saída do outro pedido fica.
+    await desfazer(pickTaskId, linhaPolo);
+    assert.deepEqual((await caixas())["CX-000001"]!.taken_lines, [{ sku_code: POLO, qty: 1 }]);
+  });
+
+  it("o que as caixas da prateleira não têm sai sem caixa", async () => {
+    await prateleiras();
+    // A CX-000002 só tem 1 polo: as caixas somam 4, e o pedido é de 5.
+    await db.collection("opening_inventory_lines").doc(`oil_CX-000002_${POLO}`).update({ counted_qty: 1 });
+    await db.collection("warehouse_boxes").doc("CX-000002").update({ unit_count: 7 });
+    const { pickTaskId, linhaPolo } = await pedidoAprovado();
+    const polo = await separar(pickTaskId, linhaPolo);
+    assert.deepEqual(polo.boxes, [
+      { box_code: "CX-000001", qty: 3, whole: true },
+      { box_code: "CX-000002", qty: 1 },
+    ]);
+    assert.equal(polo.loose_qty, 1);
+  });
+
+  it("Outra caixa: a pessoa informa de quais caixas saiu; a soma fecha com a linha, a caixa é da prateleira e tem o item", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo } = await pedidoAprovado();
+    const informar = (boxes: Array<{ box_code: string; qty: number }>, idempotencyKey = chave("outra-caixa")) =>
+      setPickLineSeparated(db, { pick_task_id: pickTaskId, pick_line_id: linhaPolo, separated: true, boxes, idempotency_key: idempotencyKey }, guilherme) as Promise<Record<string, unknown>>;
+
+    // Recusas: a soma não fecha, a caixa não tem tanto, a caixa é de outra prateleira. Nada fica gravado.
+    assert.equal((await recusa(informar([{ box_code: "CX-000002", qty: 4 }]))).message, "As caixas somam 4 un., e o separado nas caixas desta prateleira é de 5 un.");
+    assert.equal((await recusa(informar([{ box_code: "CX-000001", qty: 5 }]))).message, "A caixa CX-000001 tem 3 un. deste item, e não 5.");
+    const outraPrateleira = await recusa(informar([{ box_code: "CX-000003", qty: 5 }]));
+    assert.deepEqual([outraPrateleira.code, outraPrateleira.message], ["failed-precondition", "A caixa CX-000003 não tem este item nesta prateleira."]);
+    assert.equal((await porLinha("pick_lines", orderId))[POLO]!.separated_at, undefined);
+    assert.equal((await caixas())["CX-000002"]!.taken_lines, undefined);
+
+    // A pessoa tirou as 4 da CX-000002 e 1 da CX-000001.
+    const informado = await informar([
+      { box_code: "CX-000002", qty: 4 },
+      { box_code: "cx-000001", qty: 1 },
+    ]);
+    assert.deepEqual(informado.boxes, [
+      { box_code: "CX-000001", qty: 1 },
+      { box_code: "CX-000002", qty: 4 },
+    ]);
+    let guardadas = await caixas();
+    assert.deepEqual([guardadas["CX-000001"]!.taken_units, guardadas["CX-000002"]!.taken_units], [1, 4]);
+
+    // Na linha já separada, informar outras caixas troca de onde saiu; as mesmas não mudam nada.
+    assert.equal(
+      (
+        await informar([
+          { box_code: "CX-000001", qty: 1 },
+          { box_code: "CX-000002", qty: 4 },
+        ])
+      ).changed,
+      false,
+    );
+    const trocado = await informar([
+      { box_code: "CX-000001", qty: 3 },
+      { box_code: "CX-000002", qty: 2 },
+    ]);
+    assert.equal(trocado.changed, true);
+    guardadas = await caixas();
+    assert.deepEqual([guardadas["CX-000001"]!.taken_units, guardadas["CX-000002"]!.taken_units], [3, 2]);
+    assert.equal((await eventos("picking.line_separated")).length, 2);
+  });
+});
