@@ -13,8 +13,9 @@ progresso salvo e "Separar menos"), a parte 3 (a caixa na separação: o
 saldo, a baixa, a caixa vazia e as etiquetas para trocar) e a parte 4 (os
 volumes de expedição, a etiqueta do volume, o romaneio e "Para entregar").
 As partes 2, 3, 4 e 5 entraram na `main` pelo PR 592, com o OK do Leonardo
-em 10/11/2026, e vão para a homologação. Tela só depois do mockup aprovado
-(decisão 8). Produção só com o OK do Leonardo.
+em 10/11/2026. **Na produção desde 10/11/2026** (19:52 UTC, commit
+`7512f101`): as seis partes, pela publicação manual do Leonardo (seção 5.2).
+Tela só depois do mockup aprovado (decisão 8).
 
 Relação com os outros desenhos: este roteiro retoma a regra 8 e a seção 5.4 do
 mapa (`docs/mapa-do-armazem-enderecamento-dirigido.md`) e revê a P8 de
@@ -247,11 +248,12 @@ Um problema por commit, com o teste que falha antes.
 
 As partes 1 a 5 têm o mockup aprovado (páginas 1 e 2), e a parte 6, o da
 página 3. Cada parte entra na homologação no merge e na produção só pela
-publicação manual, com o OK do Leonardo. A régua `billing-callables` fica
-verde em todas.
+publicação manual, com o OK do Leonardo. As seis chegaram à produção juntas,
+em 10/11/2026 (seção 5.2). A régua `billing-callables` fica verde em todas.
 
-O que as partes decidiram no caminho, e que o Leonardo ainda não viu, está
-junto do registro de cada uma (seção 5.1), marcado como "A confirmar".
+O que as partes decidiram no caminho está junto do registro de cada uma
+(seção 5.1) e foi confirmado pelo Leonardo em 10/11/2026 (decisões 17 a 26,
+seção 3).
 
 ### 5.1 Registro das partes
 
@@ -628,6 +630,27 @@ o item sem linha e o cancelamento), a linha nova na tabela de papéis,
 `warehouse-labels.test.ts`, `label-sheet.test.tsx` (a lista dos textos e o
 `axe`) e `cloud-api-warehouse.test.ts`.
 
+### 5.2 Na produção
+
+**10/11/2026, 19:35 a 19:52 UTC.** O Leonardo publicou o commit `7512f101`
+(o merge do PR 592) pelo disparo manual do CI (run 42886730481), depois da
+homologação do mesmo commit, verde às 19:30 UTC (run 42882681524). As seis
+partes chegaram juntas ao `dute-prod`: a 1 pelo PR 590, a 6 pelo PR 591 e as
+2 a 5 pelo PR 592; a publicação anterior da produção era a do PR 587, de
+07/11/2026. Todas as conferências da publicação passaram:
+
+- o commit ainda era o HEAD da `main`;
+- as regras e os índices publicados, com as regras servidas conferidas;
+- as functions de todas as codebases publicadas, cada callable pública (a
+  `closeOrderVolume` nova entre elas) e a API REST com o contrato e a
+  autenticação certos;
+- o Cloud Run e o `app.dutelog.com.br` servindo o build, e a tela de login
+  abrindo no Chromium, no computador e no celular, sem erro.
+
+Depois dela, os PRs 593 e 594 mudaram só este documento. Antes do PED-0001,
+falta imprimir na Zebra a etiqueta da caixa aberta (parte 3d) e a do volume
+(parte 4c).
+
 ## 6. Perguntas
 
 Todas respondidas pelo Leonardo em 10/11/2026.
@@ -662,8 +685,9 @@ pedido.
 tinha começado a ser separado** (Leonardo). Os dois começam pela bancada,
 com as caixas e os volumes desde a primeira linha, e não há acerto de caixa
 a fazer: o conteúdo das caixas é o de entrada, exato, porque nenhum pedido
-saiu desde a zeragem. Os parágrafos abaixo ficam como o plano para o caso de
-eles começarem antes da bancada.
+saiu desde a zeragem. A bancada chegou à produção no mesmo dia (seção 5.2).
+Os parágrafos abaixo ficam como o plano para o caso de eles terem começado
+antes dela.
 
 Os dois são separados com o sistema de hoje e a lista da parte 1. Enquanto a
 parte 3 não entra, a caixa aberta leva a sobra e a data escritas à mão, e a

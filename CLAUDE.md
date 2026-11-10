@@ -453,9 +453,10 @@ documentação de produto e operação está em `docs/`.
   dois vão ao cliente: não citam caixa, posição nem valor. "Para entregar"
   diz os volumes e o lacre, e o pedido já separado abre com os volumes em
   `/pedidos/separar`. As partes 2 a 5 entraram na `main` pelo PR 592, com o
-  OK do Leonardo em 10/11/2026; a produção espera o OK dele. Tela só entra
-  com mockup aprovado. Desenho, partes e registro em
-  `docs/plataforma/separacao-com-caixas.md`.
+  OK do Leonardo em 10/11/2026, e as seis partes estão no `dute-prod` desde a
+  publicação manual do mesmo dia (commit `7512f101`, 19:52 UTC, com todas as
+  conferências verdes). Tela só entra com mockup aprovado. Desenho, partes e
+  registro em `docs/plataforma/separacao-com-caixas.md`.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os
   modelos (`uniformes` pronto, `mobiliario` e `insumos` em construção) e os
