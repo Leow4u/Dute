@@ -41,7 +41,6 @@ describe("título da aba do navegador", () => {
     ["/wms/devolucoes", "Dutelog | Devoluções"],
     ["/pedidos", "Dutelog | Pedidos"],
     ["/pedidos/lista", "Dutelog | Lista de separação"],
-    ["/pedidos/separar", "Dutelog | Separar"],
     ["/faturamento", "Dutelog | Faturamento"],
     ["/faturamento/tabela", "Dutelog | Faturamento"],
     ["/faturamento/fatura", "Dutelog | Fatura"],

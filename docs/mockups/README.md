@@ -433,21 +433,6 @@ Página 2, separar com caixa e volumes (partes 2 a 5):
 | Romaneio (A4) | `WmsSepararRomaneio.dc.html` | O conteúdo completo de cada volume, com a quantidade e o peso; o lacre e o total de volumes. Sem caixa, posição nem valor. |
 | Armazenagem · Mapa | `WmsSepararMapa.dc.html` | Depois do pedido: a caixa aberta com o saldo, as caixas que saíram em "Saíram desta prateleira" e "Posições ocupadas" contando só a prateleira com caixa com saldo. |
 
-Da página 2, as partes 2 e 5 estão no código desde 10/11/2026 (registro em
-`docs/plataforma/separacao-com-caixas.md`, seção 5.1): a bancada com o
-progresso, "Separar", "Desfazer", "Separar menos" e "Concluir separação" com
-o lacre, a fila com "Separar"/"Continuar" e o selo "em separação desde", e o
-celular. O que a tela tem de diferente das pranchas, até as partes 3 e 4:
-
-- A linha por separar mostra a caixa onde o item está (a da página 1), sem a
-  quantidade sugerida, "esvazia" nem "inteira"; não há "Levar a caixa" nem
-  "Outra caixa".
-- A bancada não tem o painel dos volumes nem as "Etiquetas para trocar", e o
-  diálogo de concluir pede só o lacre: a conclusão fecha um volume, como
-  antes.
-- Com diferença registrada, a bancada mostra "1 linha com diferença" também
-  no computador (a prancha só mostra no celular).
-
 Página 3, a etiqueta com todos os produtos (parte 6, vale para todas as
 etiquetas de caixa e de volume):
 

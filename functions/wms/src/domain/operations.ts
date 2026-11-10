@@ -258,11 +258,6 @@ export type AdvanceOperationalTaskInput = {
       /** A linha separada a menos (pergunta 59): falta ou avaria. */
       shortage_reason?: string;
       shortage_detail?: string;
-      /**
-       * Só da conclusão pela bancada (pick-progress.ts): o `separated_at` que
-       * ela leu da linha. Se a linha mudou depois, a transação recusa.
-       */
-      separated_at?: string;
     }>;
     packing_lines?: Array<{
       order_item_id: string;
@@ -603,17 +598,6 @@ export function createEvent(
   }
 
   return eventSummary(id, input);
-}
-
-/**
- * A linha da separação de uma reserva do pedido: a aprovação cria o item, a
- * reserva e a linha com o mesmo número (decideCustomerRequestTransaction).
- */
-function pickLineIdOf(reservation: DocumentData): string | undefined {
-  const orderId = text(reservation.order_id);
-  const lineNumber = number(reservation.line_number);
-  if (!orderId || !lineNumber) return undefined;
-  return `pli_${safeDocId(orderId)}_${String(lineNumber).padStart(2, "0")}`;
 }
 
 function operationEventId(operationId: string, suffix: string) {
@@ -2218,31 +2202,6 @@ export async function recordCycleCountTransaction(
           "failed-precondition",
           `O SKU ${skuCode} no local ${locationId} tem itens separados esperando a entrega${order ? ` (pedido ${order})` : ""}. Conte depois da entrega.`,
         );
-      }
-      // A separação que leva dias (separação com caixas, parte 2): a linha
-      // já separada saiu da prateleira, mas a reserva dela só vira "picked"
-      // na conclusão. Contar agora baixaria o item duas vezes.
-      const reserved = await readRows(
-        transaction,
-        db
-          .collection(collections.stockReservations)
-          .where("customer_code", "==", customerCode)
-          .where("sku_code", "==", skuCode)
-          .where("location_id", "==", locationId)
-          .where("status", "==", "reserved"),
-      );
-      for (const reservation of reserved) {
-        const pickLineId = pickLineIdOf(reservation.data);
-        if (!pickLineId) continue;
-        const pickLine = await transaction.get(db.collection(collections.pickLines).doc(pickLineId));
-        // A linha separada com zero (falta total) não tirou nada da prateleira.
-        if (pickLine.exists && pickLine.get("separated_at") && number(pickLine.get("separated_qty")) > 0) {
-          const order = text(reservation.data.order_number);
-          throw new HttpsError(
-            "failed-precondition",
-            `O SKU ${skuCode} no local ${locationId} tem itens já separados de um pedido em separação${order ? ` (pedido ${order})` : ""}. Conte depois da entrega.`,
-          );
-        }
       }
     }
 
@@ -7356,7 +7315,6 @@ export async function advanceWarehouseTaskTransaction(
         notes?: string;
         shortage_reason?: string;
         shortage_detail?: string;
-        separated_at?: string;
       }
     >();
     // Separar a menos (pergunta 59): cada linha conferida e, na que veio a
@@ -7607,18 +7565,6 @@ export async function advanceWarehouseTaskTransaction(
       pickingConfirmationsById = new Map(
         pickingConfirmations.map((line) => [text(line.pick_line_id), line]),
       );
-      // A bancada conclui com o progresso que leu das linhas: a linha desfeita
-      // ou separada de novo depois dessa leitura não entra na conclusão.
-      for (const row of pickLines) {
-        const lido = pickingConfirmationsById.get(row.id)?.separated_at;
-        if (lido !== undefined && text(row.data.separated_at) !== text(lido)) {
-          throw new HttpsError(
-            "failed-precondition",
-            "A separação mudou enquanto o pedido era concluído. Atualize e tente de novo.",
-            { code: "SEPARATION_CHANGED", pick_line_id: row.id },
-          );
-        }
-      }
       separatedLines = conferirSeparacao(
         pickLines.map((row) => ({
           id: row.id,

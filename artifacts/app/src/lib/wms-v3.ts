@@ -21,8 +21,6 @@ export const TELAS_DO_WMS_NA_V3: readonly string[] = [
   "/estoque/alertas",
   // Separação com caixas, parte 1b: a lista de separação para imprimir, tela nova já na v3.
   "/pedidos/lista",
-  // Separação com caixas, parte 2: a bancada do pedido, tela nova já na v3.
-  "/pedidos/separar",
 ];
 
 /**

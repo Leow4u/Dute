@@ -6,12 +6,11 @@ https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz, fontes em
 `docs/mockups/WmsSeparar*.dc.html` e `WmsEtiquetaTodos*.dc.html`). As páginas
 1 e 2 foram **aprovadas em 10/11/2026**, com as decisões 10 a 15, e a página
 3 (a etiqueta com todos os produtos), no mesmo dia, com o logo original da
-Dutelog (decisão 16). **No código desde 10/11/2026** (registro na seção 5.1):
-a parte 1 (a lista de separação, PR 590), a parte 6 (a etiqueta com todos os
-produtos, na caixa e na posição, PR 591) e as partes 2 e 5 (separar com o
-progresso salvo e "Separar menos"). As partes 3 e 4 (a baixa da caixa e os
-volumes) têm o mockup aprovado e esperam a vez. Tela só depois do mockup
-aprovado (decisão 8). Produção só com o OK do Leonardo.
+Dutelog (decisão 16). **A parte 1 (a lista de separação) está no código desde
+10/11/2026** (PR 590) **e a parte 6 (a etiqueta com todos os produtos), na
+caixa e na posição, também** (registro na seção 5.1); as partes 2 a 5 têm o
+mockup aprovado e esperam a vez. Tela só depois do mockup aprovado (decisão
+8). Produção só com o OK do Leonardo.
 
 Relação com os outros desenhos: este roteiro retoma a regra 8 e a seção 5.4 do
 mapa (`docs/mapa-do-armazem-enderecamento-dirigido.md`) e revê a P8 de
@@ -114,17 +113,11 @@ O retrato de antes deste roteiro. A parte 1 mudou a lista e a caixa na linha
 - Cada linha separada é gravada na hora por uma callable, com papel, status,
   transação, idempotência e evento. "Desfazer" volta a linha. A pessoa para e
   continua no dia seguinte, e outra pessoa pode continuar.
-- A primeira linha separada começa a separação: a tarefa vai a `in_progress`
-  e o cliente passa a ver "Em separação" no portal.
 - A fila mostra "em separação desde 10/11 · 10 de 116 itens".
 - "Concluir separação" só liga com todas as linhas tratadas. Pede o lacre, um
-  por pedido, e fecha a separação e a embalagem numa chamada do servidor (a
-  tela encadeava até quatro).
-- A reserva, a baixa na entrega e a cobrança ficam como estão: o progresso é
-  só o registro de quem separou o quê, e a reserva e o saldo continuam
-  mudando só na conclusão e na entrega.
-- A contagem cíclica da prateleira com linha já separada é recusada até a
-  entrega, como já era depois da separação concluída.
+  por pedido, e fecha a separação e a embalagem numa chamada do servidor (hoje
+  a tela encadeia até quatro).
+- A reserva, a baixa na entrega e a cobrança ficam como estão.
 
 ### 4.3 A caixa na separação (parte 3)
 
@@ -170,12 +163,8 @@ O retrato de antes deste roteiro. A parte 1 mudou a lista e a caixa na linha
 ### 4.5 Separar menos por quem opera (parte 5)
 
 Quem opera registra na linha o que separou a menos, com o motivo ("Falta" ou
-"Avaria") e o detalhe. O pedido com diferença só conclui com a coordenação
-(decisão 14): a diferença solta a reserva na conclusão, pela regra de sempre
-da pergunta 59. Substitui o "Tratar" como porta de entrada da falta, e o
-diálogo "Separado" da coordenação, com − e + por linha, sai: a conferência
-linha a linha é a própria bancada. Entrou junto com a parte 2, porque sem
-ela a bancada deixaria a coordenação sem como separar a menos.
+"Avaria") e o detalhe. O pedido com diferença só conclui com a coordenação,
+como hoje (decisão 14). Substitui o "Tratar" como porta de entrada da falta.
 
 ### 4.6 Etiqueta com todos os produtos (parte 6)
 
@@ -210,8 +199,8 @@ Um problema por commit, com o teste que falha antes.
 | 1a | Lista por prateleira | "Ver itens" agrupado pela ordem de caminhada. Só o app. | Linhas em B-09, A-03 e A-05 saem na ordem do carrinho; com 116 linhas, a 100 vem depois da 10. |
 | 1b | Imprimir lista | A lista em A4 e o atalho no celular, com os testes de textos e `axe`. | A tela não existe. |
 | 1c | A caixa na lista | A caixa de cada linha, lida do conteúdo de entrada. Só leitura. | A linha não mostra caixa. |
-| 2a | Progresso no servidor | Separar e desfazer a linha; a conclusão numa chamada; a contagem cíclica recusa a prateleira com linha separada. | A linha separada some ao recarregar. |
-| 2b | A bancada | "Separar" e "Continuar", o progresso e "em separação desde". Entrou com a parte 5. | A fila só tem "Separado". |
+| 2a | Progresso no servidor | Separar e desfazer a linha; a conclusão numa chamada. | A linha separada some ao recarregar. |
+| 2b | A bancada | "Separar" e "Continuar", o progresso e "em separação desde". | A fila só tem "Separado". |
 | 3a | Saldo da caixa | O conteúdo atual por caixa, a etiqueta e o Mapa lendo o saldo, e a conferência. | A caixa de onde saiu peça mostra o conteúdo de entrada. |
 | 3b | Baixa na linha | A sugestão da mais antiga, a baixa na transação e "Outra caixa". | A separação não muda a caixa. |
 | 3c | Caixa vazia e Mapa | A caixa encerrada, "Posições ocupadas" e "Saíram desta prateleira". | A caixa vazia conta como posição ocupada. |
@@ -220,7 +209,7 @@ Um problema por commit, com o teste que falha antes.
 | 4b | Volumes na bancada | O volume aberto, "Fechar volume" e o peso. | — |
 | 4c | Etiqueta do volume e romaneio | As duas impressões. | — |
 | 4d | Para entregar | Os volumes e o lacre na fila. | — |
-| 5 | Separar menos | A diferença registrada por quem opera, na linha; só a coordenação conclui com diferença. Entrou com a parte 2. | O operador não tem onde registrar a falta. |
+| 5 | Separar menos | A diferença registrada por quem opera. | O operador não tem onde registrar a falta. |
 | 6 | Etiqueta com todos os produtos | As etiquetas de continuação e o logo, na caixa e na posição; com a parte 3d, na caixa aberta e, com a 4c, no volume (seção 4.6). | A caixa com nove produtos imprime quatro e "+ 5 produto(s) no sistema". |
 
 As partes 1 a 5 têm o mockup aprovado (páginas 1 e 2), e a parte 6, o da
@@ -314,70 +303,6 @@ imprimia quatro e "+ 5 produto(s) no sistema", sai em duas etiquetas; 16 e 17
 produtos) e `label-sheet.test.tsx` (os textos de cada etiqueta, o logo em
 todas, o preto no rolo e o `axe`).
 
-**Partes 2 e 5, separar com o progresso salvo e "Separar menos"
-(10/11/2026).** As duas entraram juntas: a bancada sem a parte 5 deixaria a
-coordenação sem como separar a menos, e a prancha aprovada já traz o "Separar
-menos" na linha.
-
-- **O servidor** (`functions/wms/src/domain/pick-progress.ts`), duas callables
-  de quem opera o armazém (`owner`, `admin`, `interno` e `wms`):
-  - `setPickLineSeparated` separa, registra o separado a menos ou desfaz uma
-    linha. O progresso mora na linha de separação (`pick_lines`):
-    `separated_qty`, `separated_at`, `separated_by` e, a menos,
-    `separated_shortage_reason` e `separated_shortage_detail`. A linha
-    continua `open`; a reserva, o saldo e o `qty_picked` não mudam. A primeira
-    linha começa a separação pela porta de sempre
-    (`advanceWarehouseTaskTransaction`, de `planned` a `in_progress`) e data
-    o começo na tarefa (`separation_started_at`). Idempotente pela chave e
-    pelo estado, em transação, com o recibo em `operational_operations` e o
-    evento `picking.line_separated` ou `picking.line_unseparated`, fora da
-    caixa de avisos (um pedido tem mais de cem linhas).
-  - `completeOrderSeparation` conclui: confere que toda linha foi tratada,
-    recusa o pedido com diferença para quem não é da coordenação e roda, em
-    ordem, as transições que a tela encadeava (separação concluída, embalagem
-    iniciada e fechada com o lacre, um volume). Cada passo tem a chave
-    derivada da chave da chamada; repetir continua de onde parou. O resultado
-    é o mesmo da cadeia antiga: a régua `billing-callables` e o teste do
-    separar a menos seguem verdes.
-  - A conclusão manda à transação o `separated_at` que leu de cada linha: a
-    linha desfeita ou separada de novo depois dessa leitura recusa ("A
-    separação mudou enquanto o pedido era concluído"), e nada conclui.
-  - Duas pessoas concluindo ao mesmo tempo: o pedido conclui uma vez. A
-    transição que a outra pessoa já fez recusa pelo status, e a conclusão lê
-    de novo e continua do que encontrou (até quatro voltas, uma por passo).
-    Quem chega com outro lacre recebe "A separação deste pedido já foi
-    concluída, com o lacre X"; com o mesmo lacre, é a repetição da chamada.
-  - A contagem cíclica (`recordCycleCountTransaction`) recusa a prateleira
-    com reserva cuja linha já tem algo separado: o item saiu da prateleira e
-    só baixa do saldo na entrega. A linha separada com zero não barra a
-    contagem.
-- **O app.** A bancada é a tela nova Pedidos › Separar
-  (`/pedidos/separar?pedido=<chave do pedido>`, na v3, os papéis de Pedidos;
-  o suporte só consulta): `pages/pedidos-separar.tsx` lê as linhas e a tarefa
-  ao vivo do Firestore e chama as callables (`lib/wms/separacao.ts`);
-  `pages/pedidos-separar-view.tsx` é a tela; as regras do progresso ficam em
-  `lib/warehouse-ops/separacao.ts`. Os diálogos são
-  `features/warehouse-ops/separar-menos.tsx` e `concluir-separacao.tsx`. Em
-  Pedidos, o "Separado" de um passo só e o diálogo da coordenação
-  (`separado.tsx`) saíram.
-- **O que da prancha da bancada fica para as partes 3 e 4:** a caixa sugerida
-  com a quantidade ("12 de CX-000027", "esvazia", "inteira"), "Levar a
-  caixa", "Outra caixa" no "⋯", o painel dos volumes, as "Etiquetas para
-  trocar" e os números de volumes e caixas do diálogo de concluir. Até lá, a
-  linha por separar mostra a caixa da parte 1c, e a conclusão fecha um volume
-  só, como antes.
-- **O pedido que parou entre a separação e a embalagem** (a conclusão caiu no
-  meio) continua em "Para separar": a bancada abre só para concluir.
-
-Os testes: `pick-progress.test.ts` (a regra sem banco),
-`pick-progress.integration.test.ts` (no emulador, do pedido aprovado à
-entrega: o progresso, o desfazer, a outra pessoa, a conclusão, a retomada, a
-linha que mudou depois da leitura, as duas pessoas concluindo ao mesmo tempo,
-o separar a menos, a contagem cíclica e o cancelamento), as duas linhas na
-tabela de papéis (`callables-papeis.integration.test.ts`), `separacao.test.ts`,
-`pedidos-separar-view.test.tsx`, `separar-menos.test.tsx` e
-`concluir-separacao.test.tsx` (a lista dos textos e o `axe`).
-
 ## 6. Perguntas
 
 Todas respondidas pelo Leonardo em 10/11/2026.
@@ -412,11 +337,6 @@ Os dois são separados com o sistema de hoje e a lista da parte 1. Enquanto a
 parte 3 não entra, a caixa aberta leva a sobra e a data escritas à mão, e a
 lista impressa guarda de qual caixa saiu cada linha e quais esvaziaram.
 
-Se a parte 2 chegar à produção com um deles ainda por concluir, a bancada
-abre com todas as linhas por separar: o que já foi separado pela lista
-impressa não está no sistema. Quem está com a lista marca as linhas já
-separadas, um toque por linha, e segue dali.
-
 A caixa da lista é a do conteúdo de entrada (decisão 10). Nesses dois pedidos
 ela é exata, porque nenhum pedido saiu desde a zeragem. Do terceiro pedido em
 diante, e até a parte 3, a lista pode citar uma caixa que os pedidos
@@ -446,21 +366,9 @@ backend).
   fatura manual (decisão 6).
 - **Sem leitura de código de barras.** A confirmação é por toque. A leitura
   fica para depois, como no recebimento.
-- **Pedido cancelado no meio da separação.** O cancelamento solta a reserva e
-  não move nada no razão, porque a linha separada em andamento ainda não saiu
-  do saldo da prateleira. As peças que já estão na bancada precisam voltar à
-  prateleira à mão: o diálogo de cancelar ainda não lista essas linhas
-  (proposta: mostrar "Voltam à posição" também para as linhas já separadas).
 
 ## 10. Como desfazer
 
 A parte 1 sai revertendo o PR, sem dado para limpar. As partes 2 a 5 gravam
 dado novo (progresso da linha, saldo da caixa, volumes): cada uma leva no PR
 dela o que fazer com esse dado ao reverter.
-
-As partes 2 e 5 saem revertendo o PR delas. O progresso gravado nas linhas
-(`separated_*`) e na tarefa (`separation_started_at`) fica nos documentos, sem
-efeito: a tela antiga não o lê. O pedido que estiver em separação continua
-pelo "Separado" antigo, que confirma todas as linhas na quantidade pedida: a
-diferença já registrada numa linha precisa ser informada de novo pela
-coordenação.

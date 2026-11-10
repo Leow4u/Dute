@@ -27,7 +27,6 @@ import { leiturasDoPortal } from "./operations";
 import { canListUsers, canSeeCatalogPrice, canSeeMerchandiseValue } from "./permissions";
 import { firebaseAuth, firestore } from "./firebase";
 import { callFunctionsApi } from "./functions-api";
-import { itemDaLinhaDeSeparacao } from "./warehouse-ops/separacao";
 import {
   type CursorOrderValue,
   decodeOrderValue,
@@ -1521,8 +1520,6 @@ function laneTask(input: {
   box?: AnyRecord;
   receipt_id?: string;
   box_lines?: AnyRecord[];
-  /** Quando a primeira linha do pedido foi separada (separação com caixas, parte 2). */
-  separation_started_at?: unknown;
 }) {
   return {
     task_uid: `${input.type}:${input.id}`,
@@ -1567,7 +1564,6 @@ function laneTask(input: {
     box: input.box,
     receipt_id: input.receipt_id,
     box_lines: input.box_lines,
-    separation_started_at: input.separation_started_at === undefined ? undefined : toIso(input.separation_started_at) || undefined,
   };
 }
 
@@ -1875,9 +1871,21 @@ async function getWarehouseOps() {
       pickLinesByTask.get(String(task.id)) ??
       orderItemsByOrder.get(String(task.order_id ?? "")) ??
       [];
-    // A linha com o número (a lista de separação ordena por ele, e não pelo id: a 100 vinha
-    // depois da 10) e o progresso da separação (o que já foi separado, quando e por quem).
-    return lines.map((line) => itemDaLinhaDeSeparacao(String(line.id), line));
+    return lines.map((line) => ({
+      id: line.id,
+      // O número da linha do pedido: a lista de separação ordena por ele, e não pelo id (a 100 vinha depois da 10).
+      line_number: line.line_number,
+      sku: line.sku_code,
+      sku_code: line.sku_code,
+      client_item_code: line.client_item_code,
+      name: line.product_name,
+      product_name: line.product_name,
+      quantity: Number(line.qty_to_pick ?? line.requested_qty ?? 0),
+      expected_quantity: Number(line.qty_to_pick ?? line.requested_qty ?? 0),
+      picked_quantity: Number(line.qty_picked ?? line.picked_qty ?? 0),
+      status: line.status,
+      location: line.location_id,
+    }));
   };
 
   const lanes = [
@@ -2040,9 +2048,8 @@ async function getWarehouseOps() {
           exception_count: exceptions,
           customer_request_id: task.customer_request_id,
           order_id: task.order_id,
-          location: taskItems[0]?.location ?? undefined,
+          location: taskItems[0]?.location,
           due_at: task.due_at,
-          separation_started_at: task.separation_started_at,
           blocked_reason: exceptions
             ? "Há exceção aberta para este picking."
             : reserved.length && !taskItems.length

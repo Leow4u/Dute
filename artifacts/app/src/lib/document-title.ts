@@ -25,7 +25,6 @@ const EXTRA_RULES: TitleRule[] = [
   { path: "/sign-up", label: "Aceitar convite" },
   { path: "/estoque/etiquetas", label: "Etiquetas" },
   { path: "/pedidos/lista", label: "Lista de separação" },
-  { path: "/pedidos/separar", label: "Separar" },
   { path: "/wms/qualidade", label: "Qualidade" },
   { path: "/wms/devolucoes", label: "Devoluções" },
   { path: "/faturamento/fatura", label: "Fatura" },

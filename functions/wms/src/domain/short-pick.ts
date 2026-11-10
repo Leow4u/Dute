@@ -18,18 +18,10 @@ export type MotivoDaDiferenca = (typeof MOTIVOS_DA_DIFERENCA)[number];
 /** Quem separa a menos: a coordenação, como no Cancelar pedido. */
 const PAPEIS_QUE_SEPARAM_A_MENOS = ["owner", "admin", "interno"];
 
-/** Só a coordenação conclui o pedido com diferença (decisão 14 da separação com caixas). */
-export function concluiComDiferenca(papel: string): boolean {
-  return PAPEIS_QUE_SEPARAM_A_MENOS.includes(papel);
-}
-
-/** O limite do detalhe da diferença, o mesmo na linha e na conclusão. */
-export const DETALHE_DA_DIFERENCA_MAXIMO = 300;
-
 /** O que a tela manda como linha conferida. */
 const STATUS_CONFERIDOS = ["confirmed", "ok", "picked", "completed"];
 
-const DETALHE_MAXIMO = DETALHE_DA_DIFERENCA_MAXIMO;
+const DETALHE_MAXIMO = 300;
 
 export type LinhaDaSeparacao = {
   id: string;

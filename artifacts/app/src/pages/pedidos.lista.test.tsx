@@ -143,42 +143,6 @@ describe("a caixa só no pedido para separar", () => {
   });
 });
 
-/**
- * O pedido em separação na fila (separação com caixas, parte 2;
- * docs/mockups/WmsSepararParaEntregar.dc.html): o selo diz desde quando e
- * quantos itens já foram separados. Antes, a fila não sabia do progresso.
- */
-describe("o selo do pedido em separação na fila", () => {
-  const item = PEDIDO.pick!.items![0];
-  const emSeparacao: OrderGroup = {
-    ...PEDIDO,
-    pick: {
-      ...PEDIDO.pick!,
-      status: "in_progress",
-      separation_started_at: "2026-11-12T13:00:00.000Z",
-      items: [
-        { ...item, separated_qty: 20, separated_at: "2026-11-12T13:00:00.000Z", separated_by: "Guilherme Dantas" },
-        { ...item, id: "pli_ord_req_1_02", line_number: 2, sku_code: "BTG-000124", client_item_code: "A.01.0806.005.G", product_name: "Polo Masculino Piquet Preto G" },
-      ],
-    },
-  };
-
-  it("o pedido com a separação começada diz desde quando e quantos itens já foram", () => {
-    const textos = textosDaTela(linha({ order: emSeparacao }));
-    expect(textos.slice(0, 3)).toEqual(["PED-0001", "em separação desde 12/11 · 1 de 2 itens", "2 itens · 40 un."]);
-  });
-
-  it("antes da primeira linha, e depois de separado, a linha fica sem o selo", () => {
-    expect(textosDaTela(linha()).join(" ")).not.toContain("em separação");
-    const separado: OrderGroup = { ...emSeparacao, stage: "enviar" };
-    expect(textosDaTela(linha({ order: separado, icon: Truck, tone: "deliver" })).join(" ")).not.toContain("em separação");
-  });
-
-  it("o selo passa nas regras do axe", async () => {
-    expect(await violacoesDeAcessibilidade(linha({ order: emSeparacao }))).toEqual([]);
-  });
-});
-
 describe("Imprimir lista na fila de Pedidos", () => {
   const href = hrefDaListaDeSeparacao(PEDIDO.key);
 

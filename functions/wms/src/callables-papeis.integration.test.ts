@@ -109,8 +109,6 @@ const MATRIZ: Record<string, Linha> = {
   chatWithAgentDute: { passam: TODOS },
   completeInboundBoxReceipt: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   completeOpeningInventorySession: { passam: ARMAZEM, recusa: SO_ARMAZEM },
-  // Concluir a separação, com o lacre (separação com caixas, parte 2a): quem opera o armazém.
-  completeOrderSeparation: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   confirmInboundBoxDestination: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   // Qualquer papel do WMS abre solicitação (pergunta 55 do plano de implantação).
   createCustomerRequest: {
@@ -260,8 +258,6 @@ const MATRIZ: Record<string, Linha> = {
   setInboundBoxState: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   setOpeningConferenceBoxState: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   setOrderDelivery: { passam: ARMAZEM, recusa: SO_ARMAZEM },
-  // Separar com o progresso salvo (separação com caixas, parte 2a): quem opera o armazém.
-  setPickLineSeparated: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   setReturnDisposition: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   setUserAccess: { passam: ACESSO, recusa: SO_ACESSO },
   splitCatalogPrices: { passam: ACESSO, recusa: "Só a administração separa o preço do catálogo." },
