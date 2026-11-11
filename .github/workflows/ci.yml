@@ -144,6 +144,10 @@ jobs:
       # JavaScript da regra de lib/dominio e o relatório, só com o Node.
       - name: Testes do padronizar-nomes (node --test)
         run: node --test "tools/padronizar-nomes/*.test.mjs"
+      # Correção do código do cliente no mesmo SKU (tools/corrigir-codigo-do-produto):
+      # o nome da família e as linhas da caixa, só com o Node.
+      - name: Testes do corrigir-codigo-do-produto (node --test)
+        run: node --test "tools/corrigir-codigo-do-produto/*.test.mjs"
 
   blog-firestore:
     name: Transações editoriais do Blog

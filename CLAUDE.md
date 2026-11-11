@@ -479,7 +479,12 @@ documentação de produto e operação está em `docs/`.
   com `<SIGLA>-000001` gerado em `domain/catalog-codes.ts`, na transação que
   cria o produto (Contagem, Receber, conferência e envio do portal); não existe
   mais cadastro avulso de produto, e o código de barras não se repete dentro do
-  cliente. Ver `docs/multicliente-modelos-de-operacao.md` (inclui a ordem dos
+  cliente. O código do cliente é identidade imutável no Catálogo; o digitado
+  errado no Receber se corrige por `tools/corrigir-codigo-do-produto`: com o
+  código certo no cadastro, as peças passam para ele e o cadastro errado sai
+  (apagado, como no "Remover para corrigir", nunca arquivado); com ele livre,
+  o mesmo SKU muda de código (roteiro e recusas no README da pasta). Ver
+  `docs/multicliente-modelos-de-operacao.md` (inclui a ordem dos
   próximos PRs: mobiliário, com patrimônio, e insumos).
 - **O nome do produto tem padrão (decidido em 06/11/2026):** o mesmo nome em
   todos os tamanhos da família, o tamanho no campo Tamanho (o fim do código
