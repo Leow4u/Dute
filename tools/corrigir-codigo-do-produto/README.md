@@ -242,4 +242,5 @@ não pedem índice composto.
     em 79 em B-03.
   - **BTG avisada:** o Leonardo escreveu à Cristiane (BTG), em 11/11/2026,
     com a correção do aviso de chegada de 10/11.
-  - **Falta, na operação:** reimprimir a etiqueta da CX-000229.
+  - **Etiqueta:** o Leonardo reimprimiu a etiqueta da CX-000229 e a colocou
+    na caixa, em 11/11/2026. Com isso, a correção está concluída.
