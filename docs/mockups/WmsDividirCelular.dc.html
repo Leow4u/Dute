@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Dividir em volumes no celular</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5;width:390px;height:844px;overflow:hidden}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+button,input{font:inherit;color:inherit}
+a{color:#0054CE}a:hover{color:#003E99}
+x-dc{display:contents}
+svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ic{width:20px;height:20px;flex:0 0 auto}.ic-s{width:16px;height:16px;flex:0 0 auto}
+.m{width:390px;height:844px;background:#F5F5F3;display:flex;flex-direction:column}
+.mt{height:64px;flex:0 0 auto;background:#161616;color:#fff;display:flex;align-items:center;gap:6px;padding:0 16px 0 8px}
+.mt a,.mt a:hover{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;color:#fff}
+.mt h1{font-weight:800;font-size:18px}
+.mt span{margin-left:auto;font-size:13px;font-weight:700;opacity:.85}
+.mb{flex:1;min-height:0;padding:12px 16px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
+.bn{height:72px;flex:0 0 auto;background:#161616;display:flex;justify-content:space-around;align-items:center}
+.bn a,.bn a:hover{color:rgba(255,255,255,.72);font-size:12.5px;font-weight:700;text-decoration:none;min-height:44px;display:inline-flex;align-items:center;padding:0 8px}
+.bn a.on,.bn a.on:hover{color:#fff}
+.pr{display:flex;flex-direction:column;gap:6px;font-size:13.5px;color:#5F6368}
+.pr b{color:#161616}
+.pg{height:6px;border-radius:999px;background:#E8E8E4;overflow:hidden}
+.pg i{display:block;height:100%;background:#161616;border-radius:999px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.vo{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;border-color:#161616}
+.vo .t{flex:1;min-width:0}
+.vo .t b{display:block;font-size:15px}
+.vo .t span{display:block;font-size:13px;color:#5F6368}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 16px;border-radius:8px;font:700 15px Manrope,sans-serif;border:1px solid transparent;white-space:nowrap;cursor:pointer}
+.btn-p{background:#E71C23;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}
+.btn-i{width:48px;padding:0;flex:0 0 auto}
+.grp{display:flex;align-items:baseline;gap:10px;font-size:13.5px;color:#5F6368;font-weight:600;padding-top:2px}
+.grp b{font:800 15px ui-monospace,Menlo,Consolas,monospace;color:#161616}
+.grp span{margin-left:auto}
+.l{padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.l .h{display:flex;align-items:flex-start;gap:10px}
+.l .h b{flex:1;min-width:0;font-weight:700;font-size:15px;line-height:1.3}
+.l .h i{font-style:normal;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:15px}
+.l .c{font-size:12.5px;color:#5F6368}
+.x{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.cx{font:600 12.5px ui-monospace,Menlo,Consolas,monospace;background:#E3ECFB;color:#1E4E9C;border-radius:6px;padding:3px 7px;white-space:nowrap}
+.bd{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.bd.a{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.b2{display:flex;gap:8px}
+.b2 .btn{flex:1}
+.b2 .btn-i{flex:0 0 48px}
+.dlg{position:absolute;left:0;top:50%;transform:translateY(-50%);width:390px;max-height:85%;overflow-y:auto;background:#fff;border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.35);padding:24px;display:flex;flex-direction:column;gap:16px}
+.dlg h2{font-size:22px;font-weight:800;text-align:center}
+.dlg .ln{display:flex;flex-direction:column;gap:8px}
+.dlg .sub{font-size:13.5px;color:#5F6368;font-weight:600}
+.bx{flex:0 0 auto;border:1px solid #E5E5E1;border-radius:12px;overflow:hidden}
+.br{display:grid;grid-template-columns:minmax(0,1fr) 142px 44px;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #F0F0ED}
+.br.u{border-bottom:0}
+.br .t{min-width:0}
+.br .t b{display:block;font-weight:700;font-size:15px}
+.br .t b.ab{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.br .t>span{display:block;font-size:13px;color:#5F6368;line-height:1.4}
+.stp{display:flex;align-items:stretch;height:46px;border:1px solid #D4D4CF;border-radius:8px;overflow:hidden;background:#fff}
+.stp button{flex:0 0 44px;width:44px;padding:0;border:0;background:#fff;font:800 16px Manrope,sans-serif;color:#161616;cursor:pointer}
+.stp button[disabled]{opacity:.45;cursor:default}
+.stp input{flex:0 0 52px;width:52px;min-width:0;padding:0;border:0;border-left:1px solid #E5E5E1;border-right:1px solid #E5E5E1;background:#fff;text-align:center;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
+.stp button:focus-visible,.stp input:focus-visible{outline:2px solid #161616;outline-offset:-2px}
+.rs{text-align:center;font-weight:800;font-variant-numeric:tabular-nums}
+.ft{display:flex;flex-direction:column-reverse;gap:8px}
+.b{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 16px;border-radius:8px;font:700 15px Manrope,sans-serif;border:1px solid #D4D4CF;background:#fff;color:#161616;cursor:pointer;white-space:nowrap}
+.b.p{height:48px;background:#E71C23;border-color:#E71C23;color:#fff}
+.b[disabled]{opacity:.45;cursor:default}
+.b.sm{align-self:flex-start;flex:0 0 auto}
+.b.i{display:flex;width:44px;padding:0}
+</style>
+</helmet>
+<div style="position:relative;width:390px;height:844px;overflow:hidden">
+  <div class="m">
+    <header class="mt"><a href="WmsSepararListaCelular.dc.html" aria-label="Voltar a Pedidos"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>PED-0001</h1><span>BTG</span></header>
+    <main class="mb">
+      <div class="pr"><span><b>24 de 116 itens</b> · 1.185 de 3.335 un.</span><div class="pg" aria-hidden="true"><i style="width:21%"></i></div></div>
+      <div class="card vo"><div class="t"><b>Volume 16</b><span>aberto · 35 un.</span></div><button type="button" class="btn btn-s">Fechar volume</button></div>
+      <h2 class="grp"><b>A-07</b>2 itens · 127 un.<span>0 de 2</span></h2>
+      <div class="card l">
+        <div class="h"><b>Polo Masculino Piquet Preto · M</b><i>95 un.</i></div>
+        <div class="c">A.01.0806.005.M · BTG-000064</div>
+        <div class="x"><span class="cx">54 de CX-000218</span><span class="cx">41 de CX-000219</span></div>
+        <div class="b2"><button type="button" class="btn btn-p">Separar</button><button type="button" class="btn btn-s btn-i" aria-label="Mais ações de Polo Masculino Piquet Preto · M"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg></button></div>
+      </div>
+      <div class="card l">
+        <div class="h"><b>Polo Masculino Piquet Preto · GG</b><i>32 un.</i></div>
+        <div class="c">A.01.0806.005.GG · BTG-000090</div>
+        <div class="x"><span class="cx">32 de CX-000218</span></div>
+        <div class="b2"><button type="button" class="btn btn-s">Separar</button><button type="button" class="btn btn-s btn-i" aria-label="Mais ações de Polo Masculino Piquet Preto · GG"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg></button></div>
+      </div>
+    </main>
+    <nav class="bn" aria-label="Armazenagem"><a href="#">Início</a><a class="on" href="#" aria-current="page">Pedidos</a><a href="#">Receber</a><a href="#">Contagem</a></nav>
+  </div>
+  <div aria-hidden="true" style="position:absolute;inset:0;background:rgba(22,22,22,.45)"></div>
+  <section class="dlg" role="dialog" aria-modal="true" aria-labelledby="dv-titulo">
+    <h2 id="dv-titulo">Dividir em volumes</h2>
+    <div class="ln">
+      <p class="sub">Polo Masculino Piquet Preto · M · A-07 · 95 un.</p>
+      <div class="x"><span class="cx">54 de CX-000218</span><span class="cx">41 de CX-000219</span></div>
+    </div>
+    <div class="bx">
+      <sc-for list="{{linhas}}" as="linha" hint-placeholder-count="2">
+        <div class="br">
+          <div class="t"><b id="dv-v{{linha.numero}}">Volume {{linha.numero}}</b><span>{{linha.texto}}</span></div>
+          <div class="stp" role="group" aria-labelledby="dv-v{{linha.numero}}"><button type="button" aria-label="Menos um no volume {{linha.numero}}" disabled="{{linha.semMenos}}" onClick="{{linha.menos}}">−</button><input type="text" inputmode="numeric" aria-label="Separado no volume {{linha.numero}}" value="{{linha.valor}}" onChange="{{linha.digitar}}" onBlur="{{linha.normalizar}}"><button type="button" aria-label="Mais um no volume {{linha.numero}}" disabled="{{linha.semMais}}" onClick="{{linha.mais}}">+</button></div>
+          <sc-if value="{{linha.removivel}}" hint-placeholder-val="{{false}}"><button type="button" class="b i" aria-label="Tirar o volume {{linha.numero}}" onClick="{{linha.tirar}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></sc-if>
+        </div>
+      </sc-for>
+      <div class="br u">
+        <div class="t"><b class="ab">Volume {{numeroResto}}<span class="bd a">aberto</span></b></div>
+        <span class="rs">{{resto}}</span>
+      </div>
+    </div>
+    <button type="button" class="b sm" disabled="{{semMaisUm}}" onClick="{{maisUm}}"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Mais um volume</button>
+    <div class="ft"><button type="button" class="b">Voltar</button><button type="button" class="b p" disabled="{{primarioOff}}">Separar em {{volumes}} volumes</button></div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  parametros() {
+    return { TOTAL: 95, ABERTO: 16, TEM: 35, PESO: false, QTDS: [20, 54], PESOS: ['', ''] };
+  }
+  estado() {
+    const p = this.parametros();
+    const s = this.state || {};
+    const qtds = Array.isArray(s.qtds) ? s.qtds : p.QTDS;
+    const textos = Array.isArray(s.textos) ? s.textos : qtds.map(() => null);
+    const pesos = Array.isArray(s.pesos) ? s.pesos : p.PESOS;
+    return { qtds: qtds.slice(), textos: textos.slice(), pesos: pesos.slice() };
+  }
+  mudar(fn) {
+    const n = this.estado();
+    if (fn(n) === false) return;
+    this.setState({ qtds: n.qtds, textos: n.textos, pesos: n.pesos });
+  }
+  definir(n, i, q) {
+    const soma = n.qtds.reduce((a, b) => a + b, 0);
+    const maximo = this.parametros().TOTAL - (soma - n.qtds[i]) - 1;
+    n.qtds[i] = Math.max(1, Math.min(maximo, q));
+  }
+  passo(i, d) {
+    this.mudar((n) => {
+      if (i >= n.qtds.length) return false;
+      this.definir(n, i, n.qtds[i] + d);
+      n.textos[i] = null;
+    });
+  }
+  digitar(i, valor) {
+    const digitos = String(valor == null ? '' : valor).replace(/\D/g, '');
+    this.mudar((n) => {
+      if (i >= n.qtds.length) return false;
+      n.textos[i] = digitos;
+      const q = parseInt(digitos, 10);
+      if (q >= 1) this.definir(n, i, q);
+    });
+  }
+  normalizar(i) {
+    this.mudar((n) => {
+      if (n.textos[i] == null) return false;
+      n.textos[i] = null;
+    });
+  }
+  pesar(i, valor) {
+    this.mudar((n) => {
+      if (i >= n.pesos.length) return false;
+      n.pesos[i] = String(valor == null ? '' : valor);
+    });
+  }
+  maisUm() {
+    const total = this.parametros().TOTAL;
+    this.mudar((n) => {
+      const resto = total - n.qtds.reduce((a, b) => a + b, 0);
+      if (resto < 2 || n.qtds.length + 1 >= 20) return false;
+      const acima = n.qtds[n.qtds.length - 1];
+      n.qtds.push(acima <= resto - 1 ? acima : Math.floor(resto / 2));
+      n.textos.push(null);
+      n.pesos.push('');
+    });
+  }
+  tirar(i) {
+    this.mudar((n) => {
+      if (i < 1 || i >= n.qtds.length) return false;
+      n.qtds.splice(i, 1);
+      n.textos.splice(i, 1);
+      n.pesos.splice(i, 1);
+    });
+  }
+  pesoValido(valor) {
+    const texto = String(valor == null ? '' : valor).trim();
+    if (texto === '') return true;
+    const ponto = texto.replace(',', '.');
+    if (!/^\d+(\.\d{1,3})?$/.test(ponto)) return false;
+    const kg = parseFloat(ponto);
+    return kg > 0 && kg <= 2000;
+  }
+  renderVals() {
+    const p = this.parametros();
+    const e = this.estado();
+    const un = (v) => v.toLocaleString('pt-BR') + ' un.';
+    const resto = p.TOTAL - e.qtds.reduce((a, b) => a + b, 0);
+    let pesoInvalido = false;
+    const linhas = e.qtds.map((q, i) => {
+      const valido = !p.PESO || this.pesoValido(e.pesos[i]);
+      if (!valido) pesoInvalido = true;
+      return {
+        numero: p.ABERTO + i,
+        texto: i === 0 && p.TEM > 0 ? 'tem ' + un(p.TEM) + ' · fecha com ' + un(p.TEM + q) : 'fecha',
+        valor: e.textos[i] != null ? e.textos[i] : String(q),
+        semMenos: q <= 1,
+        semMais: resto <= 1,
+        menos: () => this.passo(i, -1),
+        mais: () => this.passo(i, 1),
+        digitar: (ev) => this.digitar(i, ev.target.value),
+        normalizar: () => this.normalizar(i),
+        peso: e.pesos[i] || '',
+        pesar: (ev) => this.pesar(i, ev.target.value),
+        pesoInvalido: valido ? 'false' : 'true',
+        removivel: i >= 1,
+        tirar: () => this.tirar(i)
+      };
+    });
+    return {
+      linhas: linhas,
+      numeroResto: p.ABERTO + e.qtds.length,
+      resto: un(resto),
+      semMaisUm: resto < 2 || e.qtds.length + 1 >= 20,
+      maisUm: () => this.maisUm(),
+      volumes: e.qtds.length + 1,
+      primarioOff: pesoInvalido
+    };
+  }
+}
+</script>
+</body>
+</html>
