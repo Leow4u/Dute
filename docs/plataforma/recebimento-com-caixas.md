@@ -920,6 +920,13 @@ desenhada e aprovada antes do PR de tela.
      prateleira cadastrada (`stockLocations`, em `api/module.ts`); a correção
      entrou em 02/11/2026 (PR 533), e com esta parte a conferência dela também
      deixa de fora o saldo das áreas de passagem, como o alocador.
+   - O recibo da guarda aberta pelo "Guardar" ia para a coleção
+     `operations`, fora da dos outros recibos do WMS; a correção de
+     10/11/2026 o leva a `operational_operations` (teste em
+     `area-putaway.integration.test.ts`). O recibo antigo que ficou em
+     `operations` não tem mais efeito: a mesma chave repetida depois da
+     publicação não abre uma segunda guarda, porque o id da guarda sai do
+     id do recibo e a segunda criação é recusada.
 
    Antes do disparo da produção com a 7a e a 7b: a 7c junto, para o portal
    não mostrar como disponível o que o pedido recusa (o recálculo começa
