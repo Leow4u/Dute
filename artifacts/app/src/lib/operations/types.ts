@@ -59,7 +59,7 @@ export type OperationTemplate = {
   inboundConference: InboundConferenceMode;
   /** Ficha "O que o modelo define", em Configurações › Clientes. */
   defines: ReadonlyArray<{ label: string; value: string }>;
-  /** Caminho no repositório, mostrado na tela: mudar o modelo é um PR. */
+  /** Caminho no repositório; operations.test.ts confere que o arquivo existe. */
   file: string;
 };
 
