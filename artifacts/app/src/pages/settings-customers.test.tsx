@@ -365,6 +365,14 @@ describe("Configurações › Clientes, a galeria", () => {
     expect(window.location.search).toBe("");
   });
 
+  it("'Novo cliente': as observações internas sem texto de exemplo", async () => {
+    await abrirGaleria();
+    await tocar("Novo cliente");
+    const observacoes = document.getElementById("c-notes");
+    expect(observacoes, "campo c-notes").not.toBeNull();
+    expect(observacoes!.getAttribute("placeholder")).toBeNull();
+  });
+
   it("'Novo cliente' cadastra, e o cliente criado abre na página dele", async () => {
     await abrirGaleria();
     await tocar("Novo cliente");

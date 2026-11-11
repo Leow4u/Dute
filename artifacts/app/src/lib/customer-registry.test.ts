@@ -125,7 +125,8 @@ describe("formulário do cliente", () => {
 
   it("aponta o primeiro problema antes de salvar", () => {
     const form = { ...emptyCustomerForm(), name: "Itaú Unibanco" };
-    expect(customerFormProblem(form, "create")).toMatch(/código operacional/);
+    // A mesma frase das Functions (customer-profile.ts): diz o que corrigir, sem explicar.
+    expect(customerFormProblem(form, "create")).toBe("Informe o código operacional do cliente.");
     expect(customerFormProblem({ ...form, code: "Itaú" }, "create")).toMatch(/Informe a sigla/);
     expect(customerFormProblem({ ...form, code: "Itaú", sku_prefix: "I" }, "create")).toMatch(/2 a 6/);
     expect(customerFormProblem({ ...form, code: "Itaú", sku_prefix: "ITAU", primary_contact_email: "x" }, "create")).toMatch(/E-mail/);
