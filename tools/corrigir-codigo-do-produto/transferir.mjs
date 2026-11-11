@@ -281,7 +281,7 @@ export async function lerTransferencia(leitor, db, correcao, { info = false } = 
     const plano = congelado.data().result;
     const passos = await situacaoDosPassos(leitor, db, correcao, plano);
     const remocao = await conferirRemocao(leitor, db, correcao, plano, passos);
-    if (!remocao.apaga) return { jaAplicado: true, recibo: final.data(), estado: [...feita, `o cadastro errado ${plano.sku_de} ficou: ${remocao.motivos.join("; ")}`] };
+    if (!remocao.apaga) return { jaAplicado: true, recibo: final.data(), estado: [...feita, `o ${plano.sku_de} (${plano.de}) continua no cadastro: ${remocao.motivos.join("; ")}`] };
     return { jaAplicado: false, soRemocao: true, congelado: true, plano, passos, remocao, estado: info ? await diagnostico(leitor, db, plano, passos) : [] };
   }
   const plano = congelado.exists ? congelado.data().result : await montarPlano(leitor, db, correcao);

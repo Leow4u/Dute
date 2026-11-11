@@ -591,7 +591,7 @@ async function principal() {
         console.log(`   fica    : os movimentos e os eventos guardam ${c.de} (histórico e cobrança)`);
       } else {
         for (const linha of c.grava ?? []) console.log(`   ${c.estado === "corrigido" ? "gravou" : "grava "}  : ${linha}`);
-        if (c.resultado?.nao_apagado) console.log(`   atenção : o cadastro errado ficou: ${c.resultado.nao_apagado.join("; ")}`);
+        if (c.resultado?.nao_apagado) console.log(`   atenção : o ${c.sku} (${c.de}) continua no cadastro: ${c.resultado.nao_apagado.join("; ")}`);
         console.log(`   fica    : os movimentos e os eventos guardam ${c.de} (histórico e cobrança)`);
       }
       console.log("");
