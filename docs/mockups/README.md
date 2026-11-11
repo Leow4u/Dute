@@ -399,6 +399,41 @@ se muda ali), e a página do arquivado só para leitura. O conteúdo das outras
 seções da Configuração segue o visual de antes; só a barra e o cabeçalho
 passaram para a v3.
 
+A página "Configuração · Pessoas e acessos" não tem canvas: é a proposta de
+11/11/2026, **à espera da avaliação do Leonardo**. Hoje a tela é uma tabela
+só, com a equipe e as pessoas dos clientes misturadas, a aba "Arquivados" e o
+diálogo "Entender os perfis". Na proposta, a tela ganha duas abas: "Equipe
+Dutelog" (a lista com o perfil e a situação) e "Clientes" (as pessoas
+agrupadas por cliente, cada grupo com "Convidar" e "Ver cliente"; o cliente
+sem portal aparece sem o convite). "Arquivados" vira uma situação do filtro,
+ao lado de Todos, Ativos e Convites pendentes, e o "Perfil" (na equipe) ou o
+"Cliente" (nos clientes) estreita a lista. O convite muda conforme o lugar:
+o da equipe lista os perfis com os módulos que cada um abre (no lugar do
+"Entender os perfis"); o do cliente já vem com o cliente e o perfil Cliente,
+e mostra as telas do portal. Na página do cliente, o "Portal do cliente"
+ganha a lista das pessoas, com "Reenviar" e o menu de cada uma, e o
+"Convidar" sai do cabeçalho para essa seção. A proposta é só de tela: os
+convites, os perfis e as callables continuam os de hoje. As fontes são
+estáticas e os dados, fictícios.
+
+| Tela | Arquivo |
+|---|---|
+| Pessoas e acessos · a equipe | `ConfigPessoasEquipe.dc.html` |
+| Pessoas e acessos · os clientes, uma pessoa por linha dentro do cliente | `ConfigPessoasClientes.dc.html` |
+| Convidar para a equipe, com os módulos de cada perfil | `ConfigPessoasConvite.dc.html` |
+| Convidar para o portal do cliente | `ConfigPessoasConviteCliente.dc.html` |
+| A página do cliente com as pessoas do portal | `ConfigClientePessoas.dc.html` |
+| Celular · os clientes | `ConfigPessoasCelular.dc.html` |
+
+Perguntas ao Leonardo (11/11/2026):
+
+1. Duas abas, "Equipe Dutelog" e "Clientes", no lugar da tabela única?
+2. "Arquivados" como situação do filtro, no lugar da aba própria?
+3. O convite da equipe mostra os módulos de cada perfil, e o "Entender os
+   perfis" sai?
+4. As pessoas do portal entram na página do cliente, com o "Convidar" na
+   seção do Portal?
+
 A página "Separação e expedição" tem canvas próprio (privado,
 https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz), feito em 10/11/2026 a
 partir do primeiro pedido depois da zeragem (PED-0001, com 116 linhas e 3.335
