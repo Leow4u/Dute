@@ -14,7 +14,11 @@ vi.mock("@/lib/firebase", () => ({ firestore: {}, firebaseApp: {}, firebaseAuth:
 vi.mock("@/lib/auth", () => ({
   useAppUser: () => ({ user: { uid: "admin-1", publicMetadata: { role: "admin" } }, isLoaded: true }),
 }));
-vi.mock("@workspace/api-client-react", () => ({ useListBillingUsers: fronteiras.pessoas }));
+vi.mock("@workspace/api-client-react", () => ({
+  useListBillingUsers: fronteiras.pessoas,
+  getListBillingUsersQueryKey: () => ["billing-users"],
+  useUpdateUserRole: () => ({ mutate: vi.fn(), isPending: false }),
+}));
 vi.mock("@/lib/liberacao", async (original) => ({
   ...await original<typeof import("@/lib/liberacao")>(),
   COMERCIAL_LIBERADO: false,
@@ -25,6 +29,8 @@ vi.mock("firebase/firestore", async (original) => ({
   where: vi.fn((field: string, operator: string, value: string) => ({ field, operator, value })),
   query: vi.fn((collection: unknown, ...constraints: unknown[]) => ({ collection, constraints })),
   onSnapshot: fronteiras.escutar,
+  // Os convites pendentes da seção Portal do cliente (components/pessoas/dados.ts): nenhum aqui.
+  getDocs: vi.fn(async () => ({ docs: [] })),
 }));
 vi.mock("firebase/functions", async (original) => ({
   ...await original<typeof import("firebase/functions")>(),

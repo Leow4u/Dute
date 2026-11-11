@@ -75,20 +75,32 @@ describe("as telas usam as regras do cadastro com armazenagem", () => {
     expect(source).toMatch(/zoneCustomers\(\s*customersQuery\.data\?\.items/);
   });
 
-  it("o convite de Pessoas filtra a lista de clientes por inviteCustomers", () => {
+  it("o convite de Pessoas oferece só os clientes que aceitam convite (row.invitable)", () => {
+    // Desde 11/11/2026 a lista do convite sai das linhas do cadastro (buildCustomerRows).
     const source = page("users.tsx");
-    expect(source).toMatch(/\/api\/customers\?status=active/);
-    expect(source).toMatch(/inviteCustomers\(\s*payload\.items/);
+    expect(source).toMatch(/rows\.filter\(\(row\) => row\.invitable\)/);
   });
 
-  it("o \"Convidar\" de Configurações › Clientes depende de row.invitable", () => {
-    // Desde 11/11/2026 o "Convidar" fica no cabeçalho da página do cliente.
-    const source = readFileSync(fileURLToPath(new URL("../components/clientes/pagina-do-cliente.tsx", import.meta.url)), "utf8");
-    const link = source.indexOf("convidar=cliente");
-    expect(link).toBeGreaterThan(0);
-    const condition = source.lastIndexOf("{row.invitable ? (", link);
+  it("o \"Convidar\" da página do cliente depende de row.invitable", () => {
+    // Desde 11/11/2026 o "Convidar" fica na seção Portal do cliente (components/pessoas/do-cliente.tsx).
+    const source = readFileSync(fileURLToPath(new URL("../components/pessoas/do-cliente.tsx", import.meta.url)), "utf8");
+    const convite = source.indexOf("pedidoDePortal(row.code, true)");
+    expect(convite).toBeGreaterThan(0);
+    const condition = source.lastIndexOf("row.invitable ? (", convite);
     expect(condition).toBeGreaterThan(0);
-    expect(link - condition).toBeLessThan(200);
+    expect(convite - condition).toBeLessThan(200);
+  });
+
+  it("row.invitable segue a regra de inviteCustomers: portal, armazenagem e não arquivado", () => {
+    const cadastros = [
+      { id: "a", code: "A", name: "A", sku_prefix: "AAA", portal_status: "active" },
+      { id: "b", code: "B", name: "B", sku_prefix: "BBB", portal_status: "inactive" },
+      { id: "c", code: "C", name: "C", sku_prefix: "", portal_status: "active" },
+      { id: "d", code: "D", name: "D", sku_prefix: "DDD", portal_status: "active", archived: true },
+    ];
+    const convidaveis = buildCustomerRows(cadastros, [], []).filter((row) => row.invitable).map((row) => row.code);
+    expect(convidaveis).toEqual(inviteCustomers(cadastros).map((cadastro) => cadastro.code));
+    expect(convidaveis).toEqual(["A"]);
   });
 });
 

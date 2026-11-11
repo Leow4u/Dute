@@ -66,9 +66,11 @@ Um modelo novo nasce quando dois clientes pedem a mesma coisa.
   ficha "O que o modelo define"; arquivar. Desde 11/11/2026 a tela é uma
   galeria de cartões com a página de cada cliente (ver "A tela de Clientes",
   abaixo).
-- **Convite por cliente** (Pessoas e acessos): o perfil cliente escolhe a conta
-  do portal entre os clientes com portal ativo; "Convidar" na lista de
-  clientes já chega com o cliente escolhido.
+- **Convite por cliente**: o convite do portal pede o cliente entre os que
+  aceitam convite (portal ativo e sigla do SKU, `row.invitable`); desde
+  11/11/2026 o "Convidar" fica na seção Portal do cliente da página do
+  cliente e abre o convite ali, já com o cliente (ver "Pessoas e acessos",
+  abaixo).
 - **Portal por modelo**: o menu (`getNavigationForProfileRole(role, perfil)`)
   e as rotas (`RoleGate`) do portal mostram só os módulos do modelo do
   cliente, lidos por `GET /api/client/profile` (`client_profiles`). Sem
@@ -244,8 +246,9 @@ aprovada em 11/11/2026 (`docs/mockups/ConfigClientes.dc.html` e as outras
 - **A Configuração na v3.** A barra lateral preta (logo, "Voltar", as seções
   por grupo, a conta no rodapé) e o cabeçalho preto no celular valem em todas
   as seções. O conteúdo entra no `.v3` seção por seção
-  (`SECOES_DA_CONFIGURACAO_NA_V3`, em `lib/settings-nav.ts`): hoje Clientes e
-  Chaves de API; as outras seguem `docs/sistema-visual.md` até a vez delas.
+  (`SECOES_DA_CONFIGURACAO_NA_V3`, em `lib/settings-nav.ts`): hoje Pessoas e
+  acessos, Clientes e Chaves de API; as outras seguem `docs/sistema-visual.md`
+  até a vez delas.
 - **A galeria** (`/configuracoes/clientes`): um cartão por cliente, com a
   sigla do nome numa cor tirada do código (`customerTone`), o nome, o código,
   o selo (Portal ativo, Sem portal, Pausado ou Arquivado), o modelo, o pacote
@@ -257,15 +260,16 @@ aprovada em 11/11/2026 (`docs/mockups/ConfigClientes.dc.html` e as outras
 - **A página do cliente** (`/configuracoes/clientes?cliente=<código>`, o
   mesmo jeito de endereço das outras telas, sem rota nova): o caminho de
   volta, o cabeçalho (sigla, nome, selo, código, modelo, pacote e "cliente
-  desde", quando o cadastro tem a data de criação) com "Avisos por e-mail",
-  "Convidar" e "Mais ações" › "Arquivar cliente"; a faixa de números
+  desde", quando o cadastro tem a data de criação) com "Avisos por e-mail" e
+  "Mais ações" › "Arquivar cliente"; a faixa de números
   (prateleiras, pessoas no portal, contatos de aviso e sigla); e as seções em
   cartões. **Operação**: modelo, pacote, sigla com o SKU de exemplo, módulos
   contratados e a conferência da chegada (por caixa só onde a caixa está
   liberada e o modelo pede). **Armazém**: a zona e a ocupação por rua, com as
   caixas guardadas, lidas como no Mapa (as mesmas chaves de leitura). **Portal
-  do cliente**: situação, pessoas (com as iniciais) e as telas que o portal
-  mostra (o modelo dentro do contrato). **Contrato**: situação, razão social,
+  do cliente**: situação e as telas que o portal mostra (o modelo dentro do
+  contrato) e, embaixo, as pessoas do portal, com "Convidar" no cabeçalho da
+  seção (ver "Pessoas e acessos", abaixo). **Contrato**: situação, razão social,
   CNPJ, contato e observações internas. **Avisos por e-mail**: os contatos e os
   avisos de estoque, com "Novo contato", "Editar" e "Desativar" ali mesmo.
 - **Editar no lugar.** Operação (modelo, sigla e módulos), Portal (ligado ou
@@ -304,6 +308,58 @@ modelo escolhido, ou "Nenhum", como na página do cliente. A opção do portal
 modelo, a situação e a lista. O teste "'Novo cliente' só tem rótulos, dados
 e ações", em `settings-customers.test.tsx`, lista os textos do diálogo e
 roda o axe, no vazio, com o código do pacote da BTG e no modelo sem portal.
+
+## Pessoas e acessos (11/11/2026): a equipe, o índice dos clientes e as pessoas de cada cliente
+
+Configuração › Pessoas e acessos era uma tabela só, com a equipe e as
+pessoas dos portais misturadas, a aba "Arquivados" e o diálogo "Entender os
+perfis". As pranchas `docs/mockups/ConfigPessoas*.dc.html` e
+`ConfigClientePessoas*.dc.html`, avaliadas pelo Leonardo em 11/11/2026 (uma
+tela por cliente; as respostas estão no README das pranchas), são o que está
+no app, na v3:
+
+- **Duas abas** (`pages/users.tsx`). "Equipe Dutelog": a lista com o perfil e
+  a situação; o filtro Todos (quem tem acesso ou convite), Ativos, Convites
+  pendentes e Arquivados (acesso removido), com a contagem, e o "Perfil" ao
+  lado, com os perfis que a equipe tem. "Clientes": só o índice, uma linha
+  por cliente com portal (e também a do cliente sem portal, arquivado ou fora
+  do cadastro que ainda tem gente com acesso ou convite, para ninguém sumir),
+  com quem entra no portal e os convites pendentes; a linha abre a página do
+  cliente.
+- **Uma tela por cliente: a página dele.** A seção Portal do cliente
+  (`components/pessoas/do-cliente.tsx`) lista quem entra, os convites
+  pendentes e, a pedido ("Arquivados · N"), quem saiu, com "Reenviar" e o
+  menu "…" de cada pessoa; o "Convidar" saiu do cabeçalho da página para a
+  seção e abre o convite ali, já com o cliente.
+- **A busca** acha qualquer pessoa, da equipe ou de um cliente, inclusive a
+  arquivada, numa lista só, com a coluna "Onde" (Equipe Dutelog ou o cliente,
+  com o link para a página dele).
+- **O convite muda conforme o lugar** (`components/pessoas/convite.tsx`). O
+  da equipe lista os perfis com os módulos que cada um abre neste ambiente (a
+  mesma regra da entrada, `modulesForPerson`), no lugar do "Entender os
+  perfis"; o do portal pede o cliente (só os que aceitam convite,
+  `row.invitable`) ou já vem com ele, com o perfil Cliente e as telas do
+  portal. "Enviar convite" substitui "Criar convite e enviar e-mail", sem a
+  frase de explicação. O endereço antigo de Clientes
+  (`/configuracoes/pessoas?convidar=cliente&cliente=<código>`) continua
+  abrindo o convite do portal com o cliente escolhido.
+- **As mesmas regras e ações nos dois lugares.** `lib/pessoas.ts` junta os
+  perfis e os convites pendentes, separa a equipe dos portais, conta as
+  situações, monta o índice e busca; `components/pessoas/acoes.tsx` tem as
+  ações de sempre (reenviar, copiar o link e cancelar o convite; trocar o
+  perfil e revogar; convidar de novo, devolver o acesso e tirar da lista),
+  com os mesmos recibos para repetir sem duplicar. Nenhuma callable, rota ou
+  regra mudou: só a tela. O cadastro de clientes é lido por
+  `lib/customer-records.ts`, a mesma chave da página de Clientes.
+
+O que ficou diferente das pranchas: a situação "Acesso removido" sai sem a
+data (a lista não traz quando o acesso foi removido); no celular o
+"Reenviar" fica só no menu da pessoa; o índice mostra o código embaixo do
+nome quando ele é diferente do nome. Os testes: `pages/users.test.tsx` (a
+tela: as abas, o índice, a busca, o convite da equipe e o do portal, as
+ações e os recibos; os textos de cada estado e o axe), os testes da página
+do cliente em `settings-customers.test.tsx` ("as pessoas do portal") e
+`lib/pessoas.test.ts` (as regras puras).
 
 ## Prospect do Comercial (20/10/2026): o WMS não enxerga
 

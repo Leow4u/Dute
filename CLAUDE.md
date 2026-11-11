@@ -259,7 +259,9 @@ documentação de produto e operação está em `docs/`.
   Estoque e Receber até aqui, e a tela nova Estoque › Alertas (parte 5.4e). As que não estão na lista seguem
   `docs/sistema-visual.md`. A Configuração tem a barra preta da v3 desde 11/11/2026, e o
   conteúdo de cada seção entra pela lista `SECOES_DA_CONFIGURACAO_NA_V3` (`lib/settings-nav.ts`):
-  Clientes (galeria de cartões e página do cliente, `docs/mockups/ConfigClientes.dc.html`) e
+  Pessoas e acessos (a equipe e o índice dos clientes; as pessoas de cada portal na página do
+  cliente, `docs/mockups/ConfigPessoas*.dc.html`, regras em `lib/pessoas.ts`), Clientes (galeria
+  de cartões e página do cliente, `docs/mockups/ConfigClientes.dc.html`) e
   Chaves de API. Nada de legenda nas telas: só rótulos, dados e ações. Toda tela nova tem teste com a
   lista dos textos (`src/test/textos.ts`, a trava contra legenda) e com o
   `axe` (`src/test/acessibilidade.ts`, WCAG 2.1 A e AA). O "Precisa de você"

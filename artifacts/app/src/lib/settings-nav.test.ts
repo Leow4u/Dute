@@ -124,11 +124,12 @@ it.each<ProfileRole>(['owner', 'admin', 'suporte', 'interno', 'wms', 'financeiro
 });
 
 describe("a Configuração na v3", () => {
-  it("o conteúdo segue a v3 em Clientes e em Chaves de API; nas outras seções, só a barra e o cabeçalho", () => {
-    expect(SECOES_DA_CONFIGURACAO_NA_V3).toEqual(["clientes", "integracoes"]);
+  it("o conteúdo segue a v3 em Pessoas e acessos, Clientes e Chaves de API; nas outras seções, só a barra e o cabeçalho", () => {
+    expect(SECOES_DA_CONFIGURACAO_NA_V3).toEqual(["pessoas", "clientes", "integracoes"]);
     expect(secaoDaConfiguracaoNaV3(getActiveSettingsSection("/configuracoes/clientes?cliente=BTG%20Pactual"))).toBe(true);
     expect(secaoDaConfiguracaoNaV3(getActiveSettingsSection("/configuracoes/integracoes"))).toBe(true);
-    expect(secaoDaConfiguracaoNaV3(getActiveSettingsSection("/configuracoes/pessoas"))).toBe(false);
+    expect(secaoDaConfiguracaoNaV3(getActiveSettingsSection("/configuracoes/pessoas"))).toBe(true);
+    expect(secaoDaConfiguracaoNaV3(getActiveSettingsSection("/configuracoes/conta"))).toBe(false);
     expect(secaoDaConfiguracaoNaV3(getActiveSettingsSection("/configuracoes"))).toBe(false);
     expect(secaoDaConfiguracaoNaV3(null)).toBe(false);
     // Toda seção da lista existe no menu da Configuração.

@@ -7,13 +7,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const fronteiras = vi.hoisted(() => ({
   pessoas: vi.fn(),
   escutar: vi.fn(),
+  convites: vi.fn(),
 }));
 
 vi.mock("@/lib/firebase", () => ({ firestore: {}, firebaseApp: {}, firebaseAuth: null }));
 vi.mock("@/lib/auth", () => ({
   useAppUser: () => ({ user: { uid: "admin-1", publicMetadata: { role: "admin" } }, isLoaded: true }),
 }));
-vi.mock("@workspace/api-client-react", () => ({ useListBillingUsers: fronteiras.pessoas }));
+vi.mock("@workspace/api-client-react", () => ({
+  useListBillingUsers: fronteiras.pessoas,
+  getListBillingUsersQueryKey: () => ["billing-users"],
+  useUpdateUserRole: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/lib/liberacao", async (original) => ({
   ...await original<typeof import("@/lib/liberacao")>(),
   PLATAFORMA_LIBERADA: true,
@@ -26,6 +32,8 @@ vi.mock("firebase/firestore", async (original) => ({
   where: vi.fn((field: string, operator: string, value: string) => ({ field, operator, value })),
   query: vi.fn((collection: unknown, ...constraints: unknown[]) => ({ collection, constraints })),
   onSnapshot: fronteiras.escutar,
+  // Os convites pendentes (components/pessoas/dados.ts).
+  getDocs: fronteiras.convites,
 }));
 
 import SettingsCustomers from "./settings-customers";
@@ -70,10 +78,16 @@ const caixa = (code: string, location_id: string) => ({
 });
 const CAIXAS = [caixa("CX-000001", "A-01"), caixa("CX-000002", "A-01"), caixa("CX-000003", "B-01")];
 const PESSOAS = [
-  { id: "p1", nome: "Ana Souza", role: "cliente", customer_code: BTG.code },
-  { id: "p2", nome: "Marcos Ribeiro", role: "cliente", customer_code: BTG.code },
-  { id: "p3", nome: "Zeca", role: "cliente", customer_code: BTG.code, access_disabled: true },
-  { id: "p4", nome: "Leonardo", role: "admin" },
+  { id: "p1", nome: "Ana Souza", email: "ana@btg.example", role: "cliente", customer_code: BTG.code },
+  { id: "p2", nome: "Marcos Ribeiro", email: "marcos@btg.example", role: "cliente", customer_code: BTG.code },
+  { id: "p3", nome: "Zeca", email: "zeca@btg.example", role: "cliente", customer_code: BTG.code, access_disabled: true },
+  { id: "p4", nome: "Leonardo", email: "diretoria@dutelog.example", role: "admin" },
+];
+const CONVITES = [
+  {
+    id: "t".repeat(36), nome: "Tiago Moreira", email: "tiago@btg.example", role: "cliente", customer_code: BTG.code,
+    status: "pending", email_status: "sent", email_requested_at: "2026-10-20T13:00:00.000Z",
+  },
 ];
 const CONTATO = {
   id: "ct_ana", customer_code: BTG.code, nome: "Ana Souza", email: "ana@btg.example", empresa: null, telefone: null,
@@ -214,6 +228,7 @@ beforeEach(() => {
   chamadas = [];
   assinaturas = [];
   fronteiras.pessoas.mockReset().mockReturnValue({ data: { items: PESSOAS }, isLoading: false });
+  fronteiras.convites.mockReset().mockResolvedValue({ docs: CONVITES.map(({ id, ...data }) => ({ id, data: () => data })) });
   fronteiras.escutar.mockReset().mockImplementation((consulta: { constraints: Array<{ value: string }> }, next: (typeof assinaturas)[number]["next"]) => {
     assinaturas.push({ value: consulta.constraints[0]!.value, next });
     return () => undefined;
@@ -238,6 +253,7 @@ beforeEach(() => {
       return falharPosicoes ? resposta({ message: "Falhou." }, 500) : resposta({ items: POSICOES, has_more: false });
     }
     if (path === "/api/warehouse/boxes") return resposta({ items: CAIXAS, has_more: false });
+    if (path === "/api/invites" && method === "POST") return resposta({ ok: true }, 201);
     return resposta({ items: [], has_more: false });
   }));
   client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -418,8 +434,11 @@ const TEXTOS_DA_PAGINA_BTG = [
   "Operação", "Editar", "Modelo de operação", "Pronto", "Pacote de código", "Sigla do SKU", "BTG-000001",
   "Módulos contratados", "Armazenagem", "Financeiro", "Conferência da chegada", "Por caixa",
   "Armazém", "Posições", "Zona", "Ruas A e B · 4 prateleiras", "Rua A", "1 de 3 ocupadas", "Rua B", "1 de 1 ocupadas", "Caixas guardadas", "3",
-  "Portal do cliente", "Situação", "Ativo", "Pessoas", "AS", "MR", "2 pessoas", "Pessoas e acessos",
+  "Portal do cliente", "Situação", "Ativo",
   "Telas do portal", "Agent Dute, Início, Estoque, Eventos, Envios para a Dutelog, Pedidos, Faturas, Documentos",
+  // As pessoas do portal (docs/mockups/ConfigClientePessoas.dc.html).
+  "Pessoas · 2 · 1 convite pendente", "Arquivados · 1", "AS", "MR", "TM", "Marcos Ribeiro", "marcos@btg.example",
+  "Tiago Moreira", "tiago@btg.example", "Convite pendente", /^E-mail enviado · \d{2}\/\d{2}$/, "Reenviar",
   "Contrato", "Razão social", "Banco BTG Pactual S.A.", "CNPJ", "12.345.678/0001-90", "Contato principal", "Ana Souza", "ana@btg.example",
   "Observações internas", "Retirada às terças.",
   "Novo contato", "Gestor do cliente", "Itens parados", "Desativar",
@@ -432,14 +451,22 @@ describe("Configurações › Clientes, a página do cliente", () => {
     await esperar(() => expect(secao("Armazém").textContent).toContain("1 de 3 ocupadas"));
     const cabecalho = container.querySelector("h1#cliente-titulo")!.closest("section")!;
     expect(cabecalho.textContent).toContain("cliente desde 30/07/2026");
-    expect(link("Convidar")?.getAttribute("href")).toBe("/configuracoes/pessoas?convidar=cliente&cliente=BTG%20Pactual");
+    // O "Convidar" saiu do cabeçalho: mora na seção do portal e abre o convite ali.
+    expect(botao("Convidar", cabecalho)).toBeUndefined();
+    expect(link("Convidar")).toBeUndefined();
     expect(container.querySelector('a[href="#avisos-por-email"]')).not.toBeNull();
     expect(botao("Mais ações")).toBeTruthy();
     const numeros = [...cabecalho.querySelectorAll("dl > div")].map((item) => item.textContent?.replace(/ /g, " "));
     expect(numeros).toEqual(["prateleiras · Ruas A e B4", "pessoas no portal2", "contatos de aviso1", "sigla do SKUBTG"]);
     expect(secao("Operação").textContent).toContain("Por caixa");
     expect(secao("Armazém").textContent).toContain("Caixas guardadas3");
-    expect(secao("Portal do cliente").textContent).toContain("2 pessoas");
+    await esperar(() => expect(secao("Portal do cliente").textContent).toContain("Pessoas · 2 · 1 convite pendente"));
+    expect(botao("Convidar", secao("Portal do cliente"))).toBeTruthy();
+    const pessoas = [...secao("Portal do cliente").querySelectorAll("li")].map((item) => item.textContent);
+    expect(pessoas).toHaveLength(3);
+    expect(pessoas.join(" | ")).toContain("Ana Souza");
+    expect(pessoas.join(" | ")).toContain("Tiago Moreira");
+    expect(pessoas.join(" | ")).not.toContain("Zeca");
     expect(secao("Contrato").textContent).toContain("Retirada às terças.");
     expect(secao("Avisos por e-mail").textContent).toContain("Itens parados");
     expect(assinaturas.every((assinatura) => assinatura.value === BTG.code)).toBe(true);
@@ -543,5 +570,93 @@ describe("Configurações › Clientes, a página do cliente", () => {
     falharPosicoes = false;
     await tocar("Tentar de novo", secao("Armazém"));
     await esperar(() => expect(secao("Armazém").textContent).toContain("1 de 3 ocupadas"));
+  });
+});
+
+describe("Configurações › Clientes, as pessoas do portal", () => {
+  /** Abre o menu "…" de uma pessoa e devolve o item pelo texto. */
+  async function itemDoMenu(pessoa: string, item: string) {
+    await act(async () => {
+      document
+        .querySelector<HTMLButtonElement>(`[aria-label="Ações de ${pessoa}"]`)!
+        .dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
+    });
+    await esperar(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
+    const achado = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((element) => element.textContent === item);
+    expect(achado, `item ${item}`).toBeTruthy();
+    return achado!;
+  }
+
+  function convites() {
+    return chamadas.filter((chamada) => chamada.method === "POST" && chamada.path === "/api/invites");
+  }
+
+  it("'Convidar' abre o convite do portal já com o cliente: o perfil Cliente e as telas; sem legenda e sem violação de acessibilidade", async () => {
+    await abrirCliente(BTG.code);
+    await tocar("Convidar", secao("Portal do cliente"));
+    await esperar(() => expect(dialogo().textContent).toContain("Convidar para o portal · BTG"));
+    expect(dialogo().querySelector("#invite-cliente")).toBeNull();
+    expect(dadoDoDialogo("Perfil").textContent).toBe("Cliente");
+    expect(dadoDoDialogo("Telas do portal").textContent).toBe(
+      "Agent Dute, Início, Estoque, Eventos, Envios para a Dutelog, Pedidos, Faturas, Documentos",
+    );
+    expect(
+      textosForaDaLista(dialogo().innerHTML, [
+        "Convidar para o portal · BTG", "Nome", "E-mail", "Perfil", "Cliente", "Telas do portal",
+        "Agent Dute, Início, Estoque, Eventos, Envios para a Dutelog, Pedidos, Faturas, Documentos", "Cancelar", "Enviar convite", "Fechar",
+      ]),
+    ).toEqual([]);
+    expect(await violacoesDeAcessibilidade(document.body.innerHTML)).toEqual([]);
+    await preencher("invite-nome", "Juliana Prado");
+    await preencher("invite-email", "Juliana@BTG.example");
+    await tocar("Enviar convite", dialogo());
+    await esperar(() => expect(convites()).toHaveLength(1));
+    expect(convites()[0]!.body).toMatchObject({ nome: "Juliana Prado", email: "juliana@btg.example", role: "cliente", customer_code: BTG.code });
+    await esperar(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+  });
+
+  it("os arquivados do cliente aparecem a pedido, e 'Convidar novamente' traz a pessoa para o convite do mesmo cliente", async () => {
+    await abrirCliente(BTG.code);
+    await esperar(() => expect(botao("Arquivados · 1", secao("Portal do cliente"))).toBeTruthy());
+    expect(botao("Arquivados · 1")!.getAttribute("aria-expanded")).toBe("false");
+    await tocar("Arquivados · 1", secao("Portal do cliente"));
+    expect(botao("Arquivados · 1")!.getAttribute("aria-expanded")).toBe("true");
+    const zeca = [...secao("Portal do cliente").querySelectorAll("li")].find((item) => item.textContent?.includes("Zeca"));
+    expect(zeca?.textContent).toContain("Acesso removido");
+    await act(async () => (await itemDoMenu("Zeca", "Convidar novamente")).click());
+    await esperar(() => expect(dialogo().textContent).toContain("Convidar para o portal · BTG"));
+    expect((document.getElementById("invite-nome") as HTMLInputElement).value).toBe("Zeca");
+    expect((document.getElementById("invite-email") as HTMLInputElement).value).toBe("zeca@btg.example");
+    await tocar("Enviar convite", dialogo());
+    await esperar(() => expect(convites()).toHaveLength(1));
+    expect(convites()[0]!.body).toMatchObject({ email: "zeca@btg.example", role: "cliente", customer_code: BTG.code });
+  });
+
+  it("o convite pendente: 'Reenviar' na linha pede a confirmação e reenvia", async () => {
+    await abrirCliente(BTG.code);
+    await esperar(() => expect(botao("Reenviar o convite de Tiago Moreira")).toBeTruthy());
+    await tocar("Reenviar o convite de Tiago Moreira");
+    await esperar(() => expect(dialogo().textContent).toContain("tiago@btg.example"));
+    await tocar("Reenviar convite", dialogo());
+    await esperar(() => expect(chamadas.some((chamada) => chamada.path === `/api/invites/${"t".repeat(36)}/resend`)).toBe(true));
+  });
+
+  it("sem portal e sem gente, a seção não lista pessoas nem convida; o arquivado não convida", async () => {
+    await abrirCliente(ITAU.code);
+    await esperar(() => expect(secao("Portal do cliente").textContent).toContain("Sem portal"));
+    expect(secao("Portal do cliente").textContent).not.toContain("Pessoas ·");
+    expect(botao("Convidar", secao("Portal do cliente"))).toBeUndefined();
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await abrirCliente(SAFRA.code);
+    expect(botao("Convidar", secao("Portal do cliente"))).toBeUndefined();
+  });
+
+  it("a leitura das pessoas que falhou diz isso na seção e lê de novo", async () => {
+    fronteiras.convites.mockRejectedValueOnce(new Error("sem rede"));
+    await abrirCliente(BTG.code);
+    await esperar(() => expect(secao("Portal do cliente").querySelector('[role="alert"]')?.textContent).toBe("Não foi possível ler as pessoas."));
+    await tocar("Tentar de novo", secao("Portal do cliente"));
+    await esperar(() => expect(secao("Portal do cliente").textContent).toContain("Pessoas · 2 · 1 convite pendente"));
   });
 });

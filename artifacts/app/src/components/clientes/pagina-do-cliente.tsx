@@ -1,10 +1,11 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "wouter";
-import { Archive, ChevronRight, Mail, Map as MapIcon, MoreHorizontal, Pencil, UserPlus } from "lucide-react";
+import { Archive, ChevronRight, Mail, Map as MapIcon, MoreHorizontal, Pencil } from "lucide-react";
 import { MODULOS_CONTRATAVEIS, MODULO_ROTULO, type ModuloContratavel } from "@workspace/dominio";
 
 import { ruasDaZona } from "@/components/clientes/galeria-de-clientes";
 import { Codigo, Pilula, QuadroDoCliente, Selo, SeloDaSituacao } from "@/components/clientes/partes";
+import type { PessoasDoCliente } from "@/components/pessoas/do-cliente";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -17,10 +18,8 @@ import {
   CUSTOMERS_PATH,
   customerFormFrom,
   customerHasStorage,
-  customerInitials,
   customerSince,
   inboundConferenceLabel,
-  peopleLabel,
   portalScreens,
   toggleContractedModule,
   zoneLabel,
@@ -47,6 +46,10 @@ import { cn } from "@/lib/utils";
  * estado dos formulários: gravar é da página (pages/settings-customers.tsx),
  * que manda à Function o cadastro inteiro com o que a seção mudou. O
  * arquivado fica só para leitura. Sem legenda.
+ *
+ * As pessoas do portal (docs/mockups/ConfigClientePessoas.dc.html) chegam
+ * prontas da página (components/pessoas/do-cliente.tsx): o "Convidar" no
+ * cabeçalho da seção Portal do cliente e a lista embaixo dos dados.
  */
 
 export type OcupacaoDaZona = {
@@ -72,6 +75,8 @@ export type PaginaDoClienteProps = {
   recebimentoPorCaixa?: boolean;
   onSalvar: (patch: Partial<CustomerForm>) => Promise<void>;
   onArquivar: () => void;
+  /** As pessoas do portal: o "Convidar" e a lista (components/pessoas/do-cliente.tsx). */
+  pessoas?: Pick<PessoasDoCliente, "convidar" | "lista">;
 };
 
 // --- Peças ---------------------------------------------------------------------------
@@ -105,18 +110,6 @@ function Dado({ rotulo, children }: { rotulo: string; children: ReactNode }) {
 
 function Vazio() {
   return <span className="text-muted-foreground">—</span>;
-}
-
-function LinkDaLinha({ href, children }: { href: string; children: string }) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex items-center gap-0.5 rounded font-bold text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-    >
-      {children}
-      <ChevronRight className="size-3.5" aria-hidden="true" />
-    </Link>
-  );
 }
 
 function BotaoEditar({ onClick, rotulo }: { onClick: () => void; rotulo: string }) {
@@ -288,14 +281,6 @@ function Cabecalho({ row, zonas, contatosAtivos, onArquivar }: Pick<PaginaDoClie
                 </a>
               </Button>
             ) : null}
-            {row.invitable ? (
-              <Button asChild variant="secondary">
-                <Link href={`/configuracoes/pessoas?convidar=cliente&cliente=${encodeURIComponent(row.code)}`}>
-                  <UserPlus aria-hidden="true" />
-                  Convidar
-                </Link>
-              </Button>
-            ) : null}
             {arquivavel ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -463,26 +448,7 @@ function SecaoArmazem({ row, zonas, ocupacao }: Pick<PaginaDoClienteProps, "row"
   );
 }
 
-function Avatares({ nomes }: { nomes: string[] }) {
-  const mostrados = nomes.slice(0, 4);
-  return (
-    <span aria-hidden="true" className="inline-flex items-center">
-      {mostrados.map((nome, index) => (
-        <span
-          key={`${nome}-${index}`}
-          className={cn(
-            "inline-flex size-8 items-center justify-center rounded-full border-2 border-card bg-foreground text-xs font-bold text-background",
-            index > 0 && "-ml-2",
-          )}
-        >
-          {customerInitials(nome)}
-        </span>
-      ))}
-    </span>
-  );
-}
-
-function SecaoPortal({ row, onSalvar }: Pick<PaginaDoClienteProps, "row" | "onSalvar">) {
+function SecaoPortal({ row, onSalvar, pessoas }: Pick<PaginaDoClienteProps, "row" | "onSalvar" | "pessoas">) {
   const { profile } = row;
   const semSigla = !profile.skuPrefix;
   const edicao = useEdicao<{ portal_status: PortalStatus; sku_prefix: string }>((valores) =>
@@ -496,15 +462,20 @@ function SecaoPortal({ row, onSalvar }: Pick<PaginaDoClienteProps, "row" | "onSa
       id="secao-portal"
       titulo="Portal do cliente"
       acao={
-        editavel && !valores ? (
-          <BotaoEditar
-            rotulo="Editar portal do cliente"
-            onClick={() => {
-              const form = customerFormFrom(row.customer);
-              edicao.abrir({ portal_status: form.portal_status, sku_prefix: form.sku_prefix });
-            }}
-          />
-        ) : null
+        valores ? null : (
+          <div className="flex flex-wrap items-center gap-2">
+            {pessoas?.convidar}
+            {editavel ? (
+              <BotaoEditar
+                rotulo="Editar portal do cliente"
+                onClick={() => {
+                  const form = customerFormFrom(row.customer);
+                  edicao.abrir({ portal_status: form.portal_status, sku_prefix: form.sku_prefix });
+                }}
+              />
+            ) : null}
+          </div>
+        )
       }
     >
       {valores ? (
@@ -527,14 +498,10 @@ function SecaoPortal({ row, onSalvar }: Pick<PaginaDoClienteProps, "row" | "onSa
           <Dado rotulo="Situação">
             {row.archived ? <Selo tom="off">Arquivado</Selo> : profile.portalStatus === "active" ? <Selo tom="ok">Ativo</Selo> : <Selo tom="off">Sem portal</Selo>}
           </Dado>
-          <Dado rotulo="Pessoas">
-            {row.peopleNames.length ? <Avatares nomes={row.peopleNames} /> : null}
-            <span>{peopleLabel(row.people)}</span>
-            <LinkDaLinha href="/configuracoes/pessoas">Pessoas e acessos</LinkDaLinha>
-          </Dado>
           <Dado rotulo="Telas do portal">{telas.length ? telas.join(", ") : <Vazio />}</Dado>
         </Dados>
       )}
+      {valores ? null : pessoas?.lista}
     </Secao>
   );
 }
@@ -661,7 +628,7 @@ export function PaginaDoCliente(props: PaginaDoClienteProps) {
       <div className="grid items-start gap-5 xl:grid-cols-2">
         <SecaoOperacao row={row} comModulos={props.comModulos} recebimentoPorCaixa={props.recebimentoPorCaixa} onSalvar={props.onSalvar} />
         <SecaoArmazem row={row} zonas={props.zonas} ocupacao={props.ocupacao} />
-        <SecaoPortal row={row} onSalvar={props.onSalvar} />
+        <SecaoPortal row={row} onSalvar={props.onSalvar} pessoas={props.pessoas} />
         <SecaoContrato row={row} onSalvar={props.onSalvar} />
         {props.avisos}
       </div>
