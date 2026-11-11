@@ -478,9 +478,10 @@ documentação de produto e operação está em `docs/`.
   cria o produto (Contagem, Receber, conferência e envio do portal); não existe
   mais cadastro avulso de produto, e o código de barras não se repete dentro do
   cliente. O código do cliente é identidade imutável no Catálogo; o digitado
-  errado no Receber se corrige no mesmo SKU por
-  `tools/corrigir-codigo-do-produto` (só o SKU que nasceu na chegada e não teve
-  outro movimento; roteiro e recusas no README da pasta). Ver
+  errado no Receber se corrige por `tools/corrigir-codigo-do-produto`: com o
+  código certo no cadastro, as peças passam para ele e o cadastro errado sai
+  (apagado, como no "Remover para corrigir", nunca arquivado); com ele livre,
+  o mesmo SKU muda de código (roteiro e recusas no README da pasta). Ver
   `docs/multicliente-modelos-de-operacao.md` (inclui a ordem dos
   próximos PRs: mobiliário, com patrimônio, e insumos).
 - **O nome do produto tem padrão (decidido em 06/11/2026):** o mesmo nome em

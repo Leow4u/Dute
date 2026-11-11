@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Corrige o código do cliente de um produto que entrou pelo Receber com o
- * código errado, no mesmo SKU (decisão do Leonardo de 11/11/2026, roteiro no
- * README desta pasta). As correções estão em `correcoes.mjs`.
+ * código errado (decisões do Leonardo de 11/11/2026, roteiro no README desta
+ * pasta). As correções estão em `correcoes.mjs`.
  *
  * Só mostra, sem gravar (padrão):
  *
@@ -13,62 +13,64 @@
  *   node tools/corrigir-codigo-do-produto/corrigir.mjs --projeto dute-prod --aplicar --confirmo "CORRIGIR CODIGO dute-prod"
  *
  * O código do cliente é identidade imutável no Catálogo (index.ts,
- * CATALOG_IDENTITY_IMMUTABLE). Esta ferramenta é a exceção, e só para o SKU
- * que nasceu na própria chegada e não teve outro movimento: o mesmo SKU passa
- * a ter o código e o nome certos, sem mexer em saldo, razão ou cobrança. Numa
- * transação só, com tudo relido dentro dela: o cadastro (`skus`; o cartão de
- * `products`, cujo id é o código, muda de documento), os saldos, a projeção do
- * portal, o preço guardado, o relógio de parados do núcleo, o conteúdo das
- * caixas, as tarefas de guarda e a linha da NF, com três eventos e o recibo.
- * Os movimentos e os eventos antigos ficam como estão: são o histórico.
+ * CATALOG_IDENTITY_IMMUTABLE). A ferramenta escolhe o caminho pelo banco:
+ *
+ * - o código certo já existe no cadastro: as peças das caixas passam para o
+ *   SKU dele e o cadastro errado sai (transferir.mjs);
+ * - o código certo está livre, e o SKU errado nasceu na própria chegada sem
+ *   outro movimento: o mesmo SKU passa a ter o código e o nome certos, sem
+ *   mexer em saldo, razão ou cobrança (este arquivo). Numa transação só, com
+ *   tudo relido dentro dela: o cadastro (`skus`; o cartão de `products`, cujo
+ *   id é o código, muda de documento), os saldos, a projeção do portal, o
+ *   preço guardado, o relógio de parados do núcleo, o conteúdo das caixas, as
+ *   tarefas de guarda e a linha da NF, com três eventos e o recibo.
+ *
+ * Nos dois, os movimentos e os eventos antigos ficam: são o histórico.
  */
 
-import { createHash } from "node:crypto";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { abrirFirestore, lerColecao } from "../padronizar-nomes/firestore.mjs";
+import { abrirFirestore, lerColecao, RAIZ } from "../padronizar-nomes/firestore.mjs";
 import { familiaDoCodigo, generoDoNome, ordemDoTamanho, padronizarNome, tamanhoDoCodigo } from "../padronizar-nomes/regras.mjs";
-import { chaveDoCodigo, clienteDe, linhaDoSku, nomeDaFamilia } from "../padronizar-nomes/relatorio.mjs";
-import { ATOR, CORRECOES } from "./correcoes.mjs";
+import { linhaDoSku, nomeDaFamilia } from "../padronizar-nomes/relatorio.mjs";
+import {
+  ATOR,
+  ErroDaCorrecao,
+  FONTE,
+  STATUS_DA_CAIXA,
+  STATUS_DA_CHEGADA,
+  arquivado,
+  chaveDoCodigo,
+  clienteDe,
+  codigoDe,
+  confirmacaoDe,
+  conferirCongelamento,
+  conferirCorrecao,
+  descreverMovimento,
+  digest,
+  doCliente,
+  fmt,
+  idDoEvento,
+  idDoItemParado,
+  idDoRecibo,
+  leitorDaTransacao,
+  leitorDoBanco,
+  linhasDe,
+  nomeDe,
+  num,
+  productsComCodigo,
+  quando,
+  recusar,
+  safeDocId,
+  skusComCodigo,
+  status,
+  texto,
+} from "./comum.mjs";
+import { CORRECOES } from "./correcoes.mjs";
+import { aplicarTransferencia, descreverPassos, lerTransferencia } from "./transferir.mjs";
 
-export const FONTE = "script_corrigir_codigo_do_produto";
-export const confirmacaoDe = (projeto) => `CORRIGIR CODIGO ${projeto}`;
-
-const texto = (v) => String(v ?? "").trim();
-const num = (v) => {
-  const n = Number(v ?? 0);
-  return Number.isFinite(n) ? n : 0;
-};
-const fmt = (n) => new Intl.NumberFormat("pt-BR").format(n);
-/** O id de documento como o WMS monta (safeDocId de domain/operations.ts). */
-const safeDocId = (v) => String(v).replace(/[^\w.-]/g, "_").slice(0, 900);
-const digest = (v, tamanho = 32) => createHash("sha256").update(JSON.stringify(v)).digest("hex").slice(0, tamanho);
-const arquivado = (d) => d.archived === true || texto(d.status) === "archived";
-const nomeDe = (d) => texto(d.produto || d.name || d.product_name);
-const codigoDe = (d) => texto(d.cod_cliente || d.client_item_code);
-const linhasDe = (d) => (Array.isArray(d?.lines) ? d.lines : []);
-/** Data e hora de São Paulo, para o dry-run ("10/11/2026 14:32"). */
-const quando = (v) => {
-  const data = typeof v?.toDate === "function" ? v.toDate() : texto(v) ? new Date(texto(v)) : null;
-  if (!data || Number.isNaN(data.getTime())) return "";
-  return data.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
-};
-
-const STATUS_DA_CHEGADA = { created: "a conferir", checking: "em conferência", received: "com entrada concluída", cancelled: "cancelada" };
-const STATUS_DA_CAIXA = { counting: "em conferência", reviewed: "fechada, sem prateleira", committing: "com destino, por guardar", stored: "guardada", emptied: "vazia" };
-const status = (mapa, valor) => mapa[texto(valor)] ?? (texto(valor) || "sem status");
-
-export class ErroDaCorrecao extends Error {}
-const recusar = (mensagem) => {
-  throw new ErroDaCorrecao(mensagem);
-};
-
-export const idDoRecibo = (correcao) => `op_corrigir_codigo_${digest({ correcao: correcao.id })}`;
-const idDoEvento = (correcao, tipo, entidade) => `evt_corrigir_codigo_${digest({ correcao: correcao.id, tipo, entidade })}`;
-/** O documento do item em `ai_stock_age` (idDoItemParado de functions/core/src/domain/parados-gravacao.ts). */
-export const idDoItemParado = (cliente, sku) =>
-  `item_${createHash("sha256").update(JSON.stringify([cliente, sku])).digest("hex").slice(0, 24)}`;
+export { ErroDaCorrecao, FONTE, confirmacaoDe, idDoItemParado, idDoRecibo, leitorDaTransacao, leitorDoBanco };
 
 // --- Puro: o nome e as linhas -------------------------------------------------------
 
@@ -142,40 +144,7 @@ export function camposDoCadastro(dados, { para, nome, genero }) {
 
 // --- Leitura e plano -----------------------------------------------------------------
 
-/** `get` igual para o banco (dry-run) e para a transação (aplicação). */
-export const leitorDoBanco = () => ({ get: (alvo) => alvo.get() });
-export const leitorDaTransacao = (tx) => ({ get: (alvo) => tx.get(alvo) });
-
-/** Os SKUs do cliente com o código, pelos três campos de busca (o cadastro importado não tem a chave). */
-async function skusComCodigo(leitor, db, codigo, cliente) {
-  const achados = new Map();
-  const consultas = [
-    db.collection("skus").where("cod_cliente_key", "==", chaveDoCodigo(codigo)),
-    db.collection("skus").where("cod_cliente", "==", texto(codigo)),
-    db.collection("skus").where("client_item_code", "==", texto(codigo)),
-  ];
-  for (const consulta of consultas) {
-    for (const doc of (await leitor.get(consulta)).docs) if (clienteDe(doc.data()) === cliente) achados.set(doc.id, doc);
-  }
-  return [...achados.values()];
-}
-
-/** Os cartões de `products` com o código: o do id (que não tem dono no id) e os das consultas do cliente. */
-async function productsComCodigo(leitor, db, codigo, cliente) {
-  const achados = new Map();
-  for (const consulta of [
-    db.collection("products").where("cod_cliente_key", "==", chaveDoCodigo(codigo)),
-    db.collection("products").where("cod_cliente", "==", texto(codigo)),
-  ]) {
-    for (const doc of (await leitor.get(consulta)).docs) if (!cliente || clienteDe(doc.data()) === cliente) achados.set(doc.ref.path, doc);
-  }
-  const direto = await leitor.get(db.collection("products").doc(safeDocId(chaveDoCodigo(codigo))));
-  if (direto.exists && (!cliente || clienteDe(direto.data()) === cliente)) achados.set(direto.ref.path, direto);
-  return [...achados.values()];
-}
-
-const doCliente = (docs, cliente) => docs.filter((doc) => clienteDe(doc.data()) === cliente);
-const descreverMovimento = (d) => `${texto(d.source) || "sem origem"} ${texto(d.tipo_mov || d.type)} ${fmt(num(d.quantity ?? d.qtde))} em ${texto(d.location_id) || "?"}${quando(d.occurred_at) ? ` ${quando(d.occurred_at)}` : ""}`;
+// --- Leitura e plano, no mesmo SKU ----------------------------------------------------
 
 /**
  * Lê tudo o que a correção toca e confere as condições. Devolve o estado de
@@ -190,19 +159,13 @@ export async function planejar(leitor, db, FieldValue, correcao, { nome, info = 
   const kDe = chaveDoCodigo(de);
   const kPara = chaveDoCodigo(para);
   const pedidas = [...new Set((correcao.caixas ?? []).map((c) => texto(c).toUpperCase()))];
-  if (!cliente || !kDe || !kPara || kDe === kPara) recusar("a correção precisa de cliente, de e para diferentes");
-  if (tamanhoDoCodigo(de) !== tamanhoDoCodigo(para)) recusar(`os dois códigos precisam terminar no mesmo tamanho (${de}, ${para})`);
-  if (!pedidas.length) recusar("a correção precisa da caixa (caixas)");
-  if (!["Masculino", "Feminino"].includes(correcao.genero)) recusar('o gênero da correção é "Masculino" ou "Feminino"');
+  conferirCorrecao(correcao, tamanhoDoCodigo);
 
   const reciboRef = db.collection("operational_operations").doc(idDoRecibo(correcao));
   const recibo = await leitor.get(reciboRef);
   if (recibo.exists) return { jaAplicado: true, recibo: recibo.data(), estado: [`recibo ${reciboRef.id} de ${quando(recibo.data().created_at) || "antes"}`], escritas: [] };
 
-  const controle = await leitor.get(db.collection("system_controls").doc("inventory"));
-  if (controle.exists && (controle.data().movements_frozen === true || texto(controle.data().reconciliation_status) === "running")) {
-    recusar("as movimentações do estoque estão congeladas (system_controls/inventory); libere antes da correção");
-  }
+  await conferirCongelamento(leitor, db);
 
   // As caixas pedidas, a linha do código errado em cada uma e o SKU dela.
   const caixas = [];
@@ -491,7 +454,7 @@ export async function prepararNome(db, FieldPath, correcao) {
   return { ...nomeProposto({ skus, correcao, skuAtual }), sku: skuAtual?.id ?? null };
 }
 
-/** Grava a correção numa transação, relendo e conferindo tudo dentro dela. */
+/** Grava a correção no mesmo SKU numa transação, relendo e conferindo tudo dentro dela. */
 export async function aplicar(db, FieldValue, correcao, nome) {
   return db.runTransaction(async (tx) => {
     const plano = await planejar(leitorDaTransacao(tx), db, FieldValue, correcao, { nome });
@@ -501,8 +464,30 @@ export async function aplicar(db, FieldValue, correcao, nome) {
       else if (e.tipo === "create") tx.create(e.ref, e.dados);
       else if (e.tipo === "delete") tx.delete(e.ref);
     }
-    return { estado: "corrigido", ...plano.resultado, escritas: plano.escritas.length };
+    return { estado: "corrigido", modo: "mesmo_sku", ...plano.resultado, escritas: plano.escritas.length };
   });
+}
+
+/**
+ * O caminho da correção, pelo banco: a já aplicada fica no modo do recibo; a
+ * transferência começada (plano congelado) continua transferência; com o
+ * código certo num SKU ativo, transferência; senão, no mesmo SKU.
+ */
+export async function modoDaCorrecao(leitor, db, correcao) {
+  const final = await leitor.get(db.collection("operational_operations").doc(idDoRecibo(correcao)));
+  if (final.exists) return texto(final.data().result?.modo) || "mesmo_sku";
+  if ((await leitor.get(db.collection("operational_operations").doc(idDoRecibo(correcao, "plano")))).exists) return "transferencia";
+  const comPara = (await skusComCodigo(leitor, db, correcao.para, texto(correcao.cliente))).filter((d) => !arquivado(d.data()));
+  return comPara.length ? "transferencia" : "mesmo_sku";
+}
+
+/** As funções de domínio do WMS (functions/wms/lib): a transferência move o saldo por elas, como as callables. */
+export async function carregarOperacoes(abortar) {
+  try {
+    return await import(pathToFileURL(path.join(RAIZ, "functions", "wms", "lib", "domain", "operations.js")).href);
+  } catch (erro) {
+    return abortar(`A transferência usa functions/wms/lib. Rode: npm --prefix functions/wms run build\n${erro.message}`);
+  }
 }
 
 // --- Linha de comando ---------------------------------------------------------------
@@ -539,20 +524,39 @@ async function principal() {
   for (const correcao of escolhidas) {
     const registro = { id: correcao.id, de: correcao.de, para: correcao.para, caixas: correcao.caixas };
     try {
-      const nome = await prepararNome(db, FieldPath, correcao);
-      Object.assign(registro, { nome: nome.nome || null, nome_origem: nome.origem || null, nomes_da_familia: nome.nomes_da_familia });
-      const plano = await planejar(leitorDoBanco(), db, FieldValue, correcao, { nome, info: true });
-      registro.estado_hoje = plano.estado;
-      if (plano.jaAplicado) {
-        registro.estado = "ja_aplicado";
+      registro.modo = await modoDaCorrecao(leitorDoBanco(), db, correcao);
+      if (registro.modo === "transferencia") {
+        const leitura = await lerTransferencia(leitorDoBanco(), db, correcao, { info: true });
+        registro.estado_hoje = leitura.estado;
+        if (leitura.jaAplicado) registro.estado = "ja_aplicado";
+        else {
+          registro.estado = "a_gravar";
+          registro.sku = leitura.plano.sku_de;
+          registro.alvo = leitura.plano.alvo;
+          registro.passos = descreverPassos(leitura);
+          registro.grava = registro.passos.filter((p) => !p.feito).map((p) => p.texto);
+          if (args.aplicar) {
+            const resultado = await aplicarTransferencia(db, FieldValue, correcao, { operations: await carregarOperacoes(abortar) });
+            registro.estado = resultado.estado;
+            registro.resultado = resultado;
+          }
+        }
       } else {
-        registro.estado = "a_gravar";
-        registro.sku = plano.skuCode;
-        registro.grava = plano.escritas.map((e) => e.descricao);
-        if (args.aplicar) {
-          const resultado = await aplicar(db, FieldValue, correcao, nome);
-          registro.estado = resultado.estado;
-          registro.resultado = resultado;
+        const nome = await prepararNome(db, FieldPath, correcao);
+        Object.assign(registro, { nome: nome.nome || null, nome_origem: nome.origem || null, nomes_da_familia: nome.nomes_da_familia });
+        const plano = await planejar(leitorDoBanco(), db, FieldValue, correcao, { nome, info: true });
+        registro.estado_hoje = plano.estado;
+        if (plano.jaAplicado) {
+          registro.estado = "ja_aplicado";
+        } else {
+          registro.estado = "a_gravar";
+          registro.sku = plano.skuCode;
+          registro.grava = plano.escritas.map((e) => e.descricao);
+          if (args.aplicar) {
+            const resultado = await aplicar(db, FieldValue, correcao, nome);
+            registro.estado = resultado.estado;
+            registro.resultado = resultado;
+          }
         }
       }
     } catch (erro) {
@@ -572,20 +576,30 @@ async function principal() {
     for (const c of saida.correcoes) {
       const correcao = CORRECOES.find((x) => x.id === c.id);
       console.log(`[${c.id}] ${c.de} → ${c.para} · ${correcao.cliente} · caixa ${c.caixas.join(", ")}`);
+      if (c.modo === "transferencia" && c.alvo) {
+        console.log(`   caminho : transferência. O ${c.para} já existe (${c.alvo.sku} · "${c.alvo.nome}"): as peças passam para ele, e o código de nenhum SKU muda`);
+      } else if (c.modo === "mesmo_sku" && c.estado !== "ja_aplicado") {
+        console.log(`   caminho : no mesmo SKU. O ${c.para} está livre: o SKU de hoje passa a ter o código e o nome certos`);
+      }
       for (const linha of c.estado_hoje ?? []) console.log(`   agora   : ${linha}`);
       if (c.nome) console.log(`   nome    : "${c.nome}" · ${c.nome_origem}`);
       if (c.nomes_da_familia) console.log(`   atenção : a família tem mais de um nome: ${c.nomes_da_familia.join(", ")}`);
       if (c.estado === "erro") console.log(`   ERRO    : ${c.erro}`);
       else if (c.estado === "ja_aplicado") console.log("   feito   : já aplicada");
-      else {
+      else if (c.passos && c.estado !== "corrigido") {
+        for (const p of c.passos) console.log(`   ${p.feito ? "feito " : "grava "}  : ${p.texto}`);
+        console.log(`   fica    : os movimentos e os eventos guardam ${c.de} (histórico e cobrança)`);
+      } else {
         for (const linha of c.grava ?? []) console.log(`   ${c.estado === "corrigido" ? "gravou" : "grava "}  : ${linha}`);
-        console.log(`   fica    : os movimentos e os eventos antigos guardam ${c.de} (histórico)`);
+        if (c.resultado?.nao_apagado) console.log(`   atenção : o cadastro errado ficou: ${c.resultado.nao_apagado.join("; ")}`);
+        console.log(`   fica    : os movimentos e os eventos guardam ${c.de} (histórico e cobrança)`);
       }
       console.log("");
     }
     console.log(`Resumo: ${saida.correcoes.length} correção(ões) · ${conta("a_gravar")} a gravar · ${conta("corrigido")} gravada(s) · ${conta("ja_aplicado")} já aplicada(s) · ${conta("erro")} com erro`);
     if (!args.aplicar && conta("a_gravar") && !conta("erro")) {
-      console.log(`\nPara gravar:\n  node tools/corrigir-codigo-do-produto/corrigir.mjs --projeto ${args.projeto} --aplicar --confirmo "${confirmacaoDe(args.projeto)}"`);
+      const transferencia = saida.correcoes.some((c) => c.estado === "a_gravar" && c.modo === "transferencia");
+      console.log(`\nPara gravar${transferencia ? " (a transferência usa functions/wms/lib: antes, npm --prefix functions/wms run build)" : ""}:\n  node tools/corrigir-codigo-do-produto/corrigir.mjs --projeto ${args.projeto} --aplicar --confirmo "${confirmacaoDe(args.projeto)}"`);
     }
     if (conta("corrigido")) console.log("\nDepois: reimprima a etiqueta da caixa e rode o dry-run de novo (a correção aparece como já aplicada).");
     if (!args.aplicar) console.log("\nDry-run encerrado. Nada foi gravado.");
