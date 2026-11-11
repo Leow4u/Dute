@@ -204,6 +204,24 @@ textarea.inp{height:auto;padding:10px 12px;resize:vertical}
 .mrowp:first-of-type{border-top:0}
 .mrowp b{display:block;font-size:15px;font-weight:700;line-height:1.25}
 .mrowp span.e{display:block;font-size:13px;color:#5F6368;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow.ix,.phead.ix{grid-template-columns:minmax(0,2fr) minmax(0,1.7fr) minmax(0,1.5fr) 40px}
+a.prow{color:#161616;text-decoration:none}
+a.prow:hover{background:#FAFAF8}
+.ix .tile{width:40px;height:40px;font-size:13px;border-radius:10px}
+.ix .nmx{font-size:15px;font-weight:800}
+.ix .ppl{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700}
+.ix .ppl .muted{font-weight:600}
+.ix .go{display:flex;justify-content:flex-end;color:#5F6368}
+.ix .avs .av{margin-left:-4px}
+.ix .avs .av:first-child{margin-left:0}
+.prow.bs,.phead.bs{grid-template-columns:minmax(0,2.2fr) minmax(0,1.3fr) minmax(0,1.1fr) minmax(0,1.4fr) 60px}
+.rhd{display:flex;align-items:center;gap:8px;border-bottom:1px solid #E5E5E1;padding:12px 2px}
+.rhd h2{font-size:15px;font-weight:800}
+.rhd em{font-style:normal;min-width:22px;height:22px;border-radius:999px;background:rgba(0,0,0,.07);font-size:12px;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.pend{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:700}
+.pend i{width:8px;height:8px;border-radius:50%;background:#D98A00;display:inline-block}
+.search a.clr{position:absolute;right:8px;top:8px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:#5F6368}
+.search a.clr svg{position:static}
 </style>
 </helmet>
 <div style="min-height: 100vh; display: flex; flex-wrap: wrap">
@@ -222,11 +240,11 @@ textarea.inp{height:auto;padding:10px 12px;resize:vertical}
     <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
       <h1 style="font-size: 28px; font-weight: 800; letter-spacing: -.02em">Pessoas e acessos</h1>
       <div style="margin-left: auto; display: flex; align-items: center; gap: 10px">
-        <label class="search"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input class="inp" aria-label="Buscar pessoa" placeholder="Nome ou e-mail"></label>
+        <span class="search"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input class="inp" aria-label="Buscar pessoa" placeholder="Nome ou e-mail"></span>
         <a class="btn btn-p" href="ConfigPessoasConvite.dc.html"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>Convidar pessoa</a>
       </div>
     </div>
-    <nav class="tabs" aria-label="Público"><a class="tab on" href="ConfigPessoasEquipe.dc.html">Equipe Dutelog<em>6</em></a><a class="tab " href="ConfigPessoasClientes.dc.html">Clientes<em>6</em></a></nav>
+    <nav class="tabs" aria-label="Público"><a class="tab on" href="ConfigPessoasEquipe.dc.html">Equipe Dutelog<em>6</em></a><a class="tab " href="ConfigPessoasClientes.dc.html">Clientes<em>3</em></a></nav>
     <div class="fbar">
       <nav class="seg" aria-label="Situação"><a class="on" href="#">Todos<em>6</em></a><a href="#">Ativos<em>5</em></a><a href="#">Convites pendentes<em>1</em></a><a href="#">Arquivados<em>1</em></a></nav>
       <span class="sel" style="margin-left: auto">Perfil: Todos<svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>

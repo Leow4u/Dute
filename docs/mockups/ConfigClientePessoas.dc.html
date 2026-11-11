@@ -204,6 +204,24 @@ textarea.inp{height:auto;padding:10px 12px;resize:vertical}
 .mrowp:first-of-type{border-top:0}
 .mrowp b{display:block;font-size:15px;font-weight:700;line-height:1.25}
 .mrowp span.e{display:block;font-size:13px;color:#5F6368;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow.ix,.phead.ix{grid-template-columns:minmax(0,2fr) minmax(0,1.7fr) minmax(0,1.5fr) 40px}
+a.prow{color:#161616;text-decoration:none}
+a.prow:hover{background:#FAFAF8}
+.ix .tile{width:40px;height:40px;font-size:13px;border-radius:10px}
+.ix .nmx{font-size:15px;font-weight:800}
+.ix .ppl{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700}
+.ix .ppl .muted{font-weight:600}
+.ix .go{display:flex;justify-content:flex-end;color:#5F6368}
+.ix .avs .av{margin-left:-4px}
+.ix .avs .av:first-child{margin-left:0}
+.prow.bs,.phead.bs{grid-template-columns:minmax(0,2.2fr) minmax(0,1.3fr) minmax(0,1.1fr) minmax(0,1.4fr) 60px}
+.rhd{display:flex;align-items:center;gap:8px;border-bottom:1px solid #E5E5E1;padding:12px 2px}
+.rhd h2{font-size:15px;font-weight:800}
+.rhd em{font-style:normal;min-width:22px;height:22px;border-radius:999px;background:rgba(0,0,0,.07);font-size:12px;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.pend{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:700}
+.pend i{width:8px;height:8px;border-radius:50%;background:#D98A00;display:inline-block}
+.search a.clr{position:absolute;right:8px;top:8px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:#5F6368}
+.search a.clr svg{position:static}
 </style>
 </helmet>
 <div style="min-height: 100vh; display: flex; flex-wrap: wrap">
@@ -266,7 +284,7 @@ textarea.inp{height:auto;padding:10px 12px;resize:vertical}
         <div><dt>Situação</dt><dd><span class="badge s-ok">Ativo</span></dd></div>
         <div><dt>Telas do portal</dt><dd>Agent Dute, Início, Estoque, Eventos, Envios para a Dutelog, Pedidos, Faturas, Documentos</dd></div>
       </dl>
-      <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 22px 6px; border-top: 1px solid #F0F0ED"><span class="sec">Pessoas · 4 · 1 convite pendente</span><a class="lnk" href="ConfigPessoasClientes.dc.html">Pessoas e acessos</a></div>
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 22px 6px; border-top: 1px solid #F0F0ED"><span class="sec">Pessoas · 4 · 1 convite pendente</span><a class="lnk" href="#">Arquivados · 1</a></div>
       <div style="padding-bottom: 6px"><div class="mrowp"><span class="pav" style="background:#E3ECFB;color:#1E4E9C" aria-hidden="true">AS</span><div style="min-width: 0; flex: 1 1 auto"><b>Ana Souza</b><span class="e">ana.souza@btgpactual.com</span></div><div class="st"><span class="l"><i style="background:#1F8A4C"></i>Ativo</span></div><div class="acts" style="min-width: 96px"><a class="dots" href="#" aria-label="Ações de Ana Souza"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></a></div></div><div class="mrowp"><span class="pav" style="background:#D5F2EF;color:#0E5F58" aria-hidden="true">MR</span><div style="min-width: 0; flex: 1 1 auto"><b>Marcos Ribeiro</b><span class="e">marcos.ribeiro@btgpactual.com</span></div><div class="st"><span class="l"><i style="background:#1F8A4C"></i>Ativo</span></div><div class="acts" style="min-width: 96px"><a class="dots" href="#" aria-label="Ações de Marcos Ribeiro"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></a></div></div><div class="mrowp"><span class="pav" style="background:#ECE6FA;color:#5B21B6" aria-hidden="true">PL</span><div style="min-width: 0; flex: 1 1 auto"><b>Paulo Lima</b><span class="e">paulo.lima@btgpactual.com</span></div><div class="st"><span class="l"><i style="background:#1F8A4C"></i>Ativo</span></div><div class="acts" style="min-width: 96px"><a class="dots" href="#" aria-label="Ações de Paulo Lima"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></a></div></div><div class="mrowp"><span class="pav" style="background:#DDF5E4;color:#14602F" aria-hidden="true">RC</span><div style="min-width: 0; flex: 1 1 auto"><b>Renata Costa</b><span class="e">renata.costa@btgpactual.com</span></div><div class="st"><span class="l"><i style="background:#1F8A4C"></i>Ativo</span></div><div class="acts" style="min-width: 96px"><a class="dots" href="#" aria-label="Ações de Renata Costa"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></a></div></div><div class="mrowp"><span class="pav" style="background:#F0F0ED;color:#3F403F" aria-hidden="true">TM</span><div style="min-width: 0; flex: 1 1 auto"><b>Tiago Moreira</b><span class="e">tiago.moreira@btgpactual.com</span></div><div class="st"><span class="l"><i style="background:#D98A00"></i>Convite pendente</span><small>enviado em 20/10</small></div><div class="acts" style="min-width: 96px"><a class="lnk" href="#">Reenviar</a><a class="dots" href="#" aria-label="Ações de Tiago Moreira"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></a></div></div></div>
     </section>
       <section class="scard">
@@ -281,6 +299,7 @@ textarea.inp{height:auto;padding:10px 12px;resize:vertical}
     </section>
     </div>
   </div>
+  
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1400}}'>
