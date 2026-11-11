@@ -63,8 +63,9 @@ Um modelo novo nasce quando dois clientes pedem a mesma coisa.
   BTG"; o endereço antigo redireciona): lista com sigla, modelo, pacote
   encontrado, zona no armazém (de Estoque › Posições), portal e pessoas;
   cadastro e edição com o modelo, a sigla (sugerida pelo nome), o portal e a
-  ficha "O que o modelo define"; arquivar. Desde 09/11/2026 a tela é lista
-  com ficha (ver "A tela de Clientes", abaixo).
+  ficha "O que o modelo define"; arquivar. Desde 11/11/2026 a tela é uma
+  galeria de cartões com a página de cada cliente (ver "A tela de Clientes",
+  abaixo).
 - **Convite por cliente** (Pessoas e acessos): o perfil cliente escolhe a conta
   do portal entre os clientes com portal ativo; "Convidar" na lista de
   clientes já chega com o cliente escolhido.
@@ -229,35 +230,72 @@ firebase deploy --only functions --project dute-btg
 tools\check_functions_invoker.ps1
 ```
 
-## A tela de Clientes (09/11/2026): lista com ficha
+## A tela de Clientes (11/11/2026): galeria de cartões e página do cliente
 
 A tabela de oito colunas de 19/10 não cabia na área da Configuração: as
 colunas de pessoas e de ações ficavam fora da tela, atrás de uma rolagem
 lateral, e os três cartões abaixo dela explicavam as camadas (legenda, que a
-regra de 23/10/2026 proíbe: só rótulos, dados e ações). A tela passou a ser
-lista com ficha, como Clientes nos outros módulos
-(`docs/mockups/Cadastros.dc.html`, `ModOpClientes.dc.html`), no visual da
-Configuração (`docs/sistema-visual.md`):
+regra de 23/10/2026 proíbe: só rótulos, dados e ações). Uma primeira versão,
+lista à esquerda e ficha à direita (09/11, PR 589), foi recusada pelo
+Leonardo. A proposta seguinte, galeria de cartões e página do cliente, foi
+aprovada em 11/11/2026 (`docs/mockups/ConfigClientes.dc.html` e as outras
+`Config*.dc.html`) e é a que está no app:
 
-- **A lista**, à esquerda: uma linha por cliente, com a sigla do nome, o nome,
-  o código operacional, o modelo de operação e o selo (Portal, Sem portal,
-  Pausado ou Arquivado); os arquivados entram por "Mostrar N arquivados".
-  No computador o primeiro cliente já abre na ficha; no celular a lista fica
-  sozinha e o cliente tocado abre a ficha num sheet.
-- **A ficha**, à direita, por seção: Operação (modelo e situação dele, pacote
-  de código, sigla do SKU com o exemplo gerado, módulos contratados), Armazém
-  (a zona, de Estoque › Posições, com o atalho), Portal do cliente (situação,
-  pessoas e "Convidar") e Contrato (situação, razão social, CNPJ, contato
-  principal e observações internas). "Editar" abre o mesmo diálogo de antes;
-  "Avisos por e-mail", os destinatários. O cliente novo já abre na ficha.
-- A área da Configuração usa a largura inteira nesta tela, como em Pessoas e
-  acessos. `settings-customers.test.tsx` lista os textos da tela (a trava
-  contra legenda) e roda o axe; `customer-registry.ts` tem a sigla do nome
-  (`customerInitials`) e o selo da linha (`customerSituation`), com teste.
+- **A Configuração na v3.** A barra lateral preta (logo, "Voltar", as seções
+  por grupo, a conta no rodapé) e o cabeçalho preto no celular valem em todas
+  as seções. O conteúdo entra no `.v3` seção por seção
+  (`SECOES_DA_CONFIGURACAO_NA_V3`, em `lib/settings-nav.ts`): hoje Clientes e
+  Chaves de API; as outras seguem `docs/sistema-visual.md` até a vez delas.
+- **A galeria** (`/configuracoes/clientes`): um cartão por cliente, com a
+  sigla do nome numa cor tirada do código (`customerTone`), o nome, o código,
+  o selo (Portal ativo, Sem portal, Pausado ou Arquivado), o modelo, o pacote
+  e "Em construção", e os números: prateleiras e ruas da zona, pessoas no
+  portal e a sigla do SKU; os módulos contratados no rodapé. Filtros Todos
+  (os não arquivados), Com portal, Sem portal e Arquivados, com a contagem;
+  busca por nome, código, razão social e CNPJ. No celular o cartão fica
+  compacto, com os números numa linha.
+- **A página do cliente** (`/configuracoes/clientes?cliente=<código>`, o
+  mesmo jeito de endereço das outras telas, sem rota nova): o caminho de
+  volta, o cabeçalho (sigla, nome, selo, código, modelo, pacote e "cliente
+  desde", quando o cadastro tem a data de criação) com "Avisos por e-mail",
+  "Convidar" e "Mais ações" › "Arquivar cliente"; a faixa de números
+  (prateleiras, pessoas no portal, contatos de aviso e sigla); e as seções em
+  cartões. **Operação**: modelo, pacote, sigla com o SKU de exemplo, módulos
+  contratados e a conferência da chegada (por caixa só onde a caixa está
+  liberada e o modelo pede). **Armazém**: a zona e a ocupação por rua, com as
+  caixas guardadas, lidas como no Mapa (as mesmas chaves de leitura). **Portal
+  do cliente**: situação, pessoas (com as iniciais) e as telas que o portal
+  mostra (o modelo dentro do contrato). **Contrato**: situação, razão social,
+  CNPJ, contato e observações internas. **Avisos por e-mail**: os contatos e os
+  avisos de estoque, com "Novo contato", "Editar" e "Desativar" ali mesmo.
+- **Editar no lugar.** Operação (modelo, sigla e módulos), Portal (ligado ou
+  sem portal) e Contrato (nome exibido, razão social, CNPJ, contato, e-mail,
+  situação e observações) têm o próprio "Editar". Cada seção grava o cadastro
+  inteiro com o que ela mudou (`customerFormWith`), pela mesma rota de
+  antes; a sigla é obrigatória em toda gravação (`normalizeSkuPrefix` nas
+  Functions), então, sem sigla no cadastro, o formulário da seção a pede,
+  já com a sugestão pelo nome. O diálogo de doze campos ficou só para o
+  "Novo cliente", e o cliente criado abre na página dele.
+- **O arquivado fica só para leitura.** A gravação das Functions marca
+  `archived: false`: editar e salvar um cliente arquivado o reativava sem
+  aviso. A página não oferece edição, convite, arquivar nem avisos para o
+  arquivado; reativar, se um dia for preciso, é uma ação própria.
+- **Sem afirmar o que não leu.** Enquanto as posições não chegam, o cartão e
+  a página mostram "…" no lugar da zona; se a leitura falha, "—" e, na
+  página, "Não foi possível ler a ocupação." com "Tentar de novo". A lista
+  que falha mostra o aviso com "Tentar de novo", nunca "Nenhum cliente".
 
-O diálogo de cadastro e edição não mudou nesta parte; os textos de apoio
-dele (o pacote encontrado, "mudar o modelo é um PR") ficam para uma parte
-própria.
+Ficou de fora das pranchas, de propósito: o "último acesso" das pessoas (não
+existe o dado; precisaria gravar o acesso), o item "Chaves da API" do menu
+de mais ações (a chave de API é pessoal, não do cliente) e o cliente Dutelog
+de exemplo. O "primeiro SKU gerado" da faixa de números virou a sigla, como
+na prancha do celular. Os testes: `settings-customers.test.tsx` (a galeria e
+a página: os textos de cada estado, a trava contra legenda, e o axe),
+`settings-customer-notifications.test.tsx` (a seção de avisos) e
+`customer-registry.test.ts` (as regras puras).
+
+O diálogo de cadastro ainda tem textos de apoio (o pacote encontrado, "mudar
+o modelo é um PR"); limpá-los é uma parte própria.
 
 ## Prospect do Comercial (20/10/2026): o WMS não enxerga
 

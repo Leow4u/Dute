@@ -19,6 +19,10 @@ import {
 } from "./operations";
 import { summarizeZones, type WarehousePosition } from "./warehouse-positions";
 import { LEGACY_CUSTOMER_CODE } from "./active-customer";
+import { RECEBIMENTO_POR_CAIXA_LIBERADO } from "./liberacao";
+import { APP_MODULES } from "./modules";
+import { portalModulesFor, type PortalModuleKey } from "./operations";
+import { groupByAisle, inZone, summarizeZone, type Shelf } from "./warehouse-map";
 
 /**
  * Configurações › Clientes: o cadastro de cada cliente aponta para um modelo
@@ -43,6 +47,8 @@ export type CustomerRecord = {
   sku_prefix?: string;
   archived?: boolean;
   modules?: unknown;
+  /** ISO, gravado pela Function na criação (cadastros antigos não têm). */
+  created_at?: unknown;
 };
 
 export type CustomerStatus = "active" | "paused";
@@ -70,6 +76,8 @@ export type PersonRecord = {
   role?: unknown;
   customer_code?: unknown;
   access_disabled?: unknown;
+  nome?: unknown;
+  email?: unknown;
 };
 
 export type CustomerZone = { positions: number; aisles: string[] };
@@ -81,6 +89,8 @@ export type CustomerRow = {
   profile: OperationProfile;
   zone: CustomerZone | null;
   people: number;
+  /** Os nomes de quem entra no portal do cliente, em ordem. */
+  peopleNames: string[];
   archived: boolean;
   paused: boolean;
   /** "Convidar" na lista: portal ativo e armazenagem; a Function recusa o resto. */
@@ -234,12 +244,21 @@ function isActiveClientPerson(person: PersonRecord): boolean {
 
 export function peopleByCustomer(people: PersonRecord[]): Map<string, number> {
   const counts = new Map<string, number>();
+  for (const [code, names] of peopleNamesByCustomer(people)) counts.set(code, names.length);
+  return counts;
+}
+
+/** Os nomes de quem entra no portal de cada cliente (o e-mail, sem nome), em ordem. */
+export function peopleNamesByCustomer(people: PersonRecord[]): Map<string, string[]> {
+  const names = new Map<string, string[]>();
   for (const person of people) {
     if (!isActiveClientPerson(person)) continue;
     const code = String(person.customer_code ?? "").trim() || LEGACY_CUSTOMER_CODE;
-    counts.set(code, (counts.get(code) ?? 0) + 1);
+    const name = String(person.nome ?? "").trim() || String(person.email ?? "").trim() || "Sem nome";
+    names.set(code, [...(names.get(code) ?? []), name]);
   }
-  return counts;
+  for (const list of names.values()) list.sort((left, right) => left.localeCompare(right, "pt-BR"));
+  return names;
 }
 
 /** Linhas da lista: ativos primeiro, pausados depois, arquivados por último; por nome. */
@@ -253,7 +272,7 @@ export function buildCustomerRows(
       .filter((zone) => zone.customer_code !== null)
       .map((zone) => [zone.customer_code as string, { positions: zone.positions, aisles: zone.aisles }]),
   );
-  const counts = peopleByCustomer(people);
+  const names = peopleNamesByCustomer(people);
   const order = (row: CustomerRow) => (row.archived ? 2 : row.paused ? 1 : 0);
   return customers
     .map((customer): CustomerRow | null => {
@@ -267,7 +286,8 @@ export function buildCustomerRows(
         name: String(customer.name ?? "").trim() || code,
         profile,
         zone: zones.get(code) ?? null,
-        people: counts.get(code) ?? 0,
+        people: names.get(code)?.length ?? 0,
+        peopleNames: names.get(code) ?? [],
         archived,
         paused: customer.status === "paused",
         invitable: !archived && profile.portalStatus === "active" && customerHasStorage(customer),
@@ -310,12 +330,135 @@ export function customerInitials(name: string): string {
     .join("");
 }
 
-/** O selo da linha: arquivado e pausado antes do portal; o resto diz se tem portal. */
+/** O selo do cliente: arquivado e pausado antes do portal; o resto diz se tem portal. */
 export function customerSituation(
   row: Pick<CustomerRow, "archived" | "paused" | "profile">,
 ): { tone: "ok" | "off" | "warn"; label: string } {
   if (row.archived) return { tone: "off", label: "Arquivado" };
   if (row.paused) return { tone: "warn", label: "Pausado" };
-  if (row.profile.portalStatus === "active") return { tone: "ok", label: "Portal" };
+  if (row.profile.portalStatus === "active") return { tone: "ok", label: "Portal ativo" };
   return { tone: "off", label: "Sem portal" };
 }
+
+// --- A galeria e a página do cliente (docs/mockups/ConfigClientes.dc.html) -----------
+
+export const CUSTOMERS_PATH = "/configuracoes/clientes";
+
+/** A página do cliente: a galeria com `?cliente=<código operacional>`. */
+export function customerHref(code: string): string {
+  return `${CUSTOMERS_PATH}?cliente=${encodeURIComponent(code)}`;
+}
+
+/** O código da página aberta, lido da busca do endereço; sem ele, a galeria. */
+export function customerCodeFromSearch(search: string): string | null {
+  const code = new URLSearchParams(search.startsWith("?") ? search : `?${search}`).get("cliente");
+  return code?.trim() || null;
+}
+
+/** A cor do cliente (o quadro da sigla), tirada do código: a mesma sempre. */
+export type CustomerTone = "info" | "teal" | "violet" | "amber";
+const CUSTOMER_TONES: readonly CustomerTone[] = ["info", "teal", "violet", "amber"];
+
+export function customerTone(code: string): CustomerTone {
+  let hash = 0;
+  for (const char of code) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) >>> 0;
+  return CUSTOMER_TONES[hash % CUSTOMER_TONES.length]!;
+}
+
+export type CustomerFilter = "todos" | "com_portal" | "sem_portal" | "arquivados";
+export const CUSTOMER_FILTERS: readonly CustomerFilter[] = ["todos", "com_portal", "sem_portal", "arquivados"];
+export const CUSTOMER_FILTER_LABEL: Record<CustomerFilter, string> = {
+  todos: "Todos",
+  com_portal: "Com portal",
+  sem_portal: "Sem portal",
+  arquivados: "Arquivados",
+};
+
+/** "Todos" são os não arquivados; o portal conta só entre eles. */
+export function customerInFilter(row: Pick<CustomerRow, "archived" | "profile">, filter: CustomerFilter): boolean {
+  if (filter === "arquivados") return row.archived;
+  if (row.archived) return false;
+  if (filter === "com_portal") return row.profile.portalStatus === "active";
+  if (filter === "sem_portal") return row.profile.portalStatus !== "active";
+  return true;
+}
+
+export function countCustomerFilters(rows: ReadonlyArray<Pick<CustomerRow, "archived" | "profile">>): Record<CustomerFilter, number> {
+  return Object.fromEntries(
+    CUSTOMER_FILTERS.map((filter) => [filter, rows.filter((row) => customerInFilter(row, filter)).length]),
+  ) as Record<CustomerFilter, number>;
+}
+
+function plain(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+/** Busca por nome, código, razão social ou CNPJ (com ou sem pontuação). */
+export function searchCustomerRows<T extends Pick<CustomerRow, "name" | "code" | "customer">>(rows: readonly T[], term: string): T[] {
+  const needle = plain(term);
+  if (!needle) return [...rows];
+  const digits = needle.replace(/\D/g, "");
+  return rows.filter((row) => {
+    const text = [row.name, row.code, row.customer.legal_name].map(plain).join(" ");
+    if (text.includes(needle)) return true;
+    return digits.length >= 3 && String(row.customer.document ?? "").replace(/\D/g, "").includes(digits);
+  });
+}
+
+/** "cliente desde 30/07/2026", pela data de criação do cadastro; sem ela, null. */
+export function customerSince(customer: Pick<CustomerRecord, "created_at">, timeZone = "America/Sao_Paulo"): string | null {
+  const value = customer.created_at;
+  if (typeof value !== "string" && !(value instanceof Date)) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("pt-BR", { timeZone, day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+const PORTAL_SCREENS: ReadonlyArray<{ key: PortalModuleKey; label: string }> = APP_MODULES.filter(
+  (module): module is typeof module & { portal: PortalModuleKey } => Boolean(module.portal),
+).map((module) => ({ key: module.portal, label: module.label }));
+
+/** As telas que o portal mostra ao cliente (o modelo dentro do contrato), na ordem do menu. */
+export function portalScreens(profile: OperationProfile): string[] {
+  if (profile.portalStatus !== "active") return [];
+  const screens = portalModulesFor(profile) ?? [];
+  return PORTAL_SCREENS.filter((screen) => screens.includes(screen.key)).map((screen) => screen.label);
+}
+
+/**
+ * Como a chegada do cliente é conferida no Receber: por caixa onde a caixa
+ * está liberada e o modelo pede; senão, por linha. A mesma regra de
+ * `modoDaChegadaAvulsa` (lib/wms/caixas-do-recebimento.ts), sem o Firebase dela.
+ */
+export function inboundConferenceLabel(profile: OperationProfile, liberado = RECEBIMENTO_POR_CAIXA_LIBERADO): string {
+  return liberado && profile.template.inboundConference === "per_box" ? "Por caixa" : "Por linha";
+}
+
+export type AisleOccupancy = { aisle: string; occupied: number; total: number };
+
+/**
+ * A ocupação da zona do cliente, como no Mapa (lib/warehouse-map.ts): por
+ * rua, as prateleiras com ao menos uma caixa sobre as da zona, e as caixas
+ * guardadas nelas.
+ */
+export function zoneOccupancy(shelves: Shelf[], code: string): { aisles: AisleOccupancy[]; boxes: number } {
+  const own = shelves.filter((shelf) => inZone(shelf, code));
+  return {
+    aisles: groupByAisle(own).map(({ aisle, shelves: items }) => ({
+      aisle,
+      occupied: items.filter((shelf) => shelf.boxes.length > 0).length,
+      total: items.length,
+    })),
+    boxes: summarizeZone(own, code).boxes,
+  };
+}
+
+/** O formulário de uma seção: o cadastro de agora com só o que a seção mudou. */
+export function customerFormWith(customer: CustomerRecord, patch: Partial<CustomerForm>): CustomerForm {
+  return { ...customerFormFrom(customer), ...patch };
+}
+

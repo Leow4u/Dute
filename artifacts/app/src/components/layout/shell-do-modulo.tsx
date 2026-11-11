@@ -42,12 +42,13 @@ export type ShellDoModuloProps = {
   children: ReactNode;
 };
 
-const ITEM =
+// O item da barra preta, também na barra da Configuração (settings-layout.tsx).
+export const ITEM =
   "relative flex h-12 w-full shrink-0 items-center gap-3 rounded-lg px-3.5 text-left text-base font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80";
-const ITEM_ATUAL = "bg-v3-header-foreground/15 text-v3-header-foreground";
-const ITEM_OUTRO = "text-v3-header-foreground/75 hover:bg-v3-header-foreground/10 hover:text-v3-header-foreground";
+export const ITEM_ATUAL = "bg-v3-header-foreground/15 text-v3-header-foreground";
+export const ITEM_OUTRO = "text-v3-header-foreground/75 hover:bg-v3-header-foreground/10 hover:text-v3-header-foreground";
 
-function MarcaDoAtual() {
+export function MarcaDoAtual() {
   return <span aria-hidden="true" className="absolute inset-y-3.5 left-0 w-0.75 rounded-full bg-v3-marca" />;
 }
 

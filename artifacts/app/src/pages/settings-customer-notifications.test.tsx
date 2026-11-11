@@ -15,7 +15,6 @@ vi.mock("@/lib/auth", () => ({
   useAppUser: () => ({ user: { uid: "admin-1", publicMetadata: { role: "admin" } }, isLoaded: true }),
 }));
 vi.mock("@workspace/api-client-react", () => ({ useListBillingUsers: fronteiras.pessoas }));
-vi.mock("@/hooks/use-desktop", () => ({ useIsDesktop: () => true }));
 vi.mock("@/lib/liberacao", async (original) => ({
   ...await original<typeof import("@/lib/liberacao")>(),
   COMERCIAL_LIBERADO: false,
@@ -34,7 +33,7 @@ vi.mock("firebase/functions", async (original) => ({
 }));
 
 import SettingsCustomers from "./settings-customers";
-import SettingsCustomerNotifications from "./settings-customer-notifications";
+import SettingsCustomerNotifications, { useContatosDeAviso } from "./settings-customer-notifications";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosForaDaLista } from "@/test/textos";
 import { COMERCIAL_LIBERADO, comercialLiberado } from "@/lib/liberacao";
@@ -91,8 +90,15 @@ function dialogo() {
   return dialogs[0]!;
 }
 
+/** A seção "Avisos por e-mail" da página do cliente. */
+function secao() {
+  const section = document.getElementById("avisos-por-email");
+  expect(section, "seção Avisos por e-mail").not.toBeNull();
+  return section!;
+}
+
 function linhaDoContato(nome = CONTATO.nome) {
-  const row = [...dialogo().querySelectorAll("li")].find((item) => item.textContent?.includes(nome));
+  const row = [...secao().querySelectorAll("li")].find((item) => item.textContent?.includes(nome));
   expect(row, `linha de ${nome}`).toBeTruthy();
   return row!;
 }
@@ -130,34 +136,22 @@ function payload(index = -1) {
   return call![1] as Record<string, unknown>;
 }
 
-async function montarClientes() {
+/** A página do cliente (a galeria com ?cliente=), onde a seção de avisos mora. */
+async function montarPagina(customer = CLIENTE) {
+  window.history.replaceState(null, "", `/configuracoes/clientes?cliente=${encodeURIComponent(customer.code)}`);
   await act(async () => root.render(<QueryClientProvider client={client}><SettingsCustomers /></QueryClientProvider>));
-  await esperar(() => expect(container.textContent).toContain(CLIENTE.name));
-}
-
-/** A ficha do cliente escolhido na lista (a tela é lista com ficha). */
-function ficha() {
-  const article = container.querySelector("article");
-  expect(article, "ficha do cliente").toBeTruthy();
-  return article!;
-}
-
-async function escolher(nome: string) {
-  const button = [...container.querySelectorAll<HTMLButtonElement>("li button")].find((item) => item.textContent?.includes(nome));
-  expect(button, `cliente ${nome}`).toBeTruthy();
-  await act(async () => button!.click());
+  await esperar(() => expect(container.querySelector("h1#cliente-titulo")?.textContent).toContain(customer.name));
 }
 
 async function abrir(customer = CLIENTE) {
-  await montarClientes();
-  await escolher(customer.name);
-  await tocar("Avisos por e-mail", ficha());
+  await montarPagina(customer);
+  await esperar(() => expect(document.getElementById("avisos-por-email")).not.toBeNull());
 }
 
 async function novoContato() {
   await abrir();
   await publicar([]);
-  await tocar("Novo contato", dialogo());
+  await tocar("Novo contato", secao());
   expect(dialogo().textContent).toContain(`Novo contato · ${CLIENTE.name}`);
   await preencher("contato-nome", "Novo contato");
   await preencher("contato-email", "novo@cliente.example");
@@ -181,7 +175,7 @@ beforeEach(() => {
   fronteiras.pessoas.mockReset().mockReturnValue({ data: { items: [] }, isLoading: false });
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
     const path = new URL(String(input), "https://dute.test").pathname;
-    const payload = path === "/api/customers" ? { items: clientes } : { items: [] };
+    const payload = path === "/api/customers" ? { items: clientes } : { items: [], has_more: false };
     return new Response(JSON.stringify(payload), { headers: { "content-type": "application/json" } });
   }));
   client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -196,14 +190,16 @@ afterEach(async () => {
   client.clear();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  window.history.replaceState(null, "", "/");
 });
 
-describe("destinatários de avisos em Configurações › Clientes", () => {
+describe("destinatários de avisos na página do cliente, em Configurações › Clientes", () => {
   it("abre pelo cliente sem portal nem usuários e lê apenas os contatos desse cliente", async () => {
     expect(COMERCIAL_LIBERADO).toBe(false);
     expect(comercialLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID)).toBe(true);
     await abrir();
-    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+    expect(container.querySelector('a[href="#avisos-por-email"]')).not.toBeNull();
     expect(fronteiras.escutar).toHaveBeenCalledWith(
       { collection: { path: "customer_contacts" }, constraints: [{ field: "customer_code", operator: "==", value: CLIENTE.code }] },
       expect.any(Function), expect.any(Function),
@@ -211,44 +207,44 @@ describe("destinatários de avisos em Configurações › Clientes", () => {
     expect(fronteiras.chamar).not.toHaveBeenCalled();
   });
 
-  it("não oferece a ação para cliente arquivado", async () => {
-    clientes.push({ ...OUTRO_CLIENTE, status: "archived" });
-    await montarClientes();
-    await tocar("Mostrar 1 arquivado");
-    await escolher(OUTRO_CLIENTE.name);
-    expect(ficha().textContent).toContain(OUTRO_CLIENTE.name);
-    expect(botao("Avisos por e-mail", ficha())?.disabled).toBe(true);
+  it("não oferece a seção para cliente arquivado", async () => {
+    const arquivado = { ...OUTRO_CLIENTE, status: "archived" };
+    clientes.push(arquivado);
+    await montarPagina(arquivado);
+    expect(document.getElementById("avisos-por-email")).toBeNull();
+    expect(container.querySelector('a[href="#avisos-por-email"]')).toBeNull();
     expect(fronteiras.escutar).not.toHaveBeenCalled();
   });
 
-  it("não oferece a ação no ambiente legado em que as callables de contato estão desligadas", async () => {
+  it("não oferece a seção no ambiente legado em que as callables de contato estão desligadas", async () => {
     vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "dute-btg");
-    await montarClientes();
-    expect(botao("Avisos por e-mail")).toBeUndefined();
+    await montarPagina();
+    expect(document.getElementById("avisos-por-email")).toBeNull();
+    expect(container.querySelector('a[href="#avisos-por-email"]')).toBeNull();
     expect(fronteiras.escutar).not.toHaveBeenCalled();
   });
 
   it("distingue carregamento, erro e lista vazia; tentar novamente refaz a leitura", async () => {
     await abrir();
-    expect(dialogo().textContent).toContain("Carregando contatos…");
-    expect(dialogo().textContent).not.toContain("Nenhum contato cadastrado.");
+    expect(secao().textContent).toContain("Carregando contatos…");
+    expect(secao().textContent).not.toContain("Nenhum contato cadastrado.");
     await act(async () => assinatura().error());
-    expect(dialogo().querySelector('[role="alert"]')?.textContent).toContain("Não foi possível carregar os contatos.");
-    expect(dialogo().textContent).not.toContain("Nenhum contato cadastrado.");
+    expect(secao().querySelector('[role="alert"]')?.textContent).toContain("Não foi possível carregar os contatos.");
+    expect(secao().textContent).not.toContain("Nenhum contato cadastrado.");
     const anterior = assinatura();
-    await tocar("Tentar novamente", dialogo());
+    await tocar("Tentar novamente", secao());
     expect(anterior.parar).toHaveBeenCalledTimes(1);
     expect(assinaturas).toHaveLength(2);
     await publicar([]);
-    expect(dialogo().textContent).toContain("Nenhum contato cadastrado.");
-    expect(dialogo().textContent).not.toContain("Carregando contatos…");
-    expect(dialogo().querySelector('[role="alert"]')).toBeNull();
+    expect(secao().textContent).toContain("Nenhum contato cadastrado.");
+    expect(secao().textContent).not.toContain("Carregando contatos…");
+    expect(secao().querySelector('[role="alert"]')).toBeNull();
   });
 
   it("cria contato com e-mail obrigatório e opt-in explícito, sem cadastrar pessoa ou convidar", async () => {
     await abrir();
     await publicar([]);
-    await tocar("Novo contato", dialogo());
+    await tocar("Novo contato", secao());
     expect((document.getElementById("contato-nome") as HTMLInputElement).value).toBe("");
     expect((document.getElementById("contato-email") as HTMLInputElement).value).toBe("");
     await preencher("contato-nome", "Novo contato");
@@ -267,7 +263,8 @@ describe("destinatários de avisos em Configurações › Clientes", () => {
       avisos: ["estoque_disponivel"], idempotency_key: expect.any(String),
     });
     expect(payload()).not.toHaveProperty("contato_id");
-    expect(dialogo().textContent).toContain(`Avisos por e-mail · ${CLIENTE.name}`);
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+    expect(secao().querySelector('[role="status"]')?.textContent).toBe("Contato criado");
     for (const [, init] of vi.mocked(fetch).mock.calls) expect(init?.method ?? "GET").toBe("GET");
     expect(fronteiras.chamar.mock.calls.every(([name]) => name === "saveCustomerContact")).toBe(true);
   });
@@ -322,8 +319,8 @@ describe("destinatários de avisos em Configurações › Clientes", () => {
     expect(fronteiras.chamar).toHaveBeenCalledTimes(2);
     expect(payload()).toEqual(primeiro);
     await act(async () => concluir({ data: { contato_id: "ct_novo" } }));
-    expect(dialogo().textContent).toContain(`Avisos por e-mail · ${CLIENTE.name}`);
-    await tocar("Novo contato", dialogo());
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+    await tocar("Novo contato", secao());
     await preencher("contato-nome", "Outra pessoa");
     await preencher("contato-email", "outra@cliente.example");
     await tocar("Salvar contato", dialogo());
@@ -337,7 +334,7 @@ describe("destinatários de avisos em Configurações › Clientes", () => {
     fronteiras.chamar.mockRejectedValueOnce(new Error("Falha ao desativar."));
     await tocar("Desativar", linhaDoContato());
     const primeira = payload();
-    expect(dialogo().textContent).toContain("Falha ao desativar.");
+    expect(secao().textContent).toContain("Falha ao desativar.");
     let concluir!: (result: unknown) => void;
     fronteiras.chamar.mockImplementationOnce(() => new Promise((resolve) => { concluir = resolve; }));
     const button = botao("Desativar", linhaDoContato())!;
@@ -348,9 +345,12 @@ describe("destinatários de avisos em Configurações › Clientes", () => {
   });
 
   it("trocar o cliente descarta lista, erro e formulário anteriores antes da próxima leitura", async () => {
-    const fechar = vi.fn();
+    function Secao({ customer }: { customer: typeof CLIENTE }) {
+      const contatos = useContatosDeAviso(customer.code);
+      return <SettingsCustomerNotifications customer={customer} contatos={contatos} />;
+    }
     const render = async (customer: typeof CLIENTE) => {
-      await act(async () => root.render(<SettingsCustomerNotifications customer={customer} onClose={fechar} />));
+      await act(async () => root.render(<Secao customer={customer} />));
     };
     await render(CLIENTE);
     await publicar([CONTATO]);
@@ -362,13 +362,13 @@ describe("destinatários de avisos em Configurações › Clientes", () => {
     const antiga = assinatura();
     await render(OUTRO_CLIENTE);
     expect(antiga.parar).toHaveBeenCalledTimes(1);
-    expect(dialogo().textContent).toContain(`Avisos por e-mail · ${OUTRO_CLIENTE.name}`);
-    expect(dialogo().textContent).toContain("Carregando contatos…");
-    expect(dialogo().textContent).not.toContain(CONTATO.nome);
-    expect(dialogo().textContent).not.toContain("Falha do Itaú.");
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+    expect(secao().textContent).toContain("Carregando contatos…");
+    expect(secao().textContent).not.toContain(CONTATO.nome);
+    expect(secao().textContent).not.toContain("Falha do Itaú.");
     expect(document.getElementById("contato-nome")).toBeNull();
     await publicar([], OUTRO_CLIENTE.code);
-    await tocar("Novo contato", dialogo());
+    await tocar("Novo contato", secao());
     expect((document.getElementById("contato-nome") as HTMLInputElement).value).toBe("");
     await preencher("contato-nome", "Contato Safra");
     await preencher("contato-email", "contato@safra.example");
@@ -376,11 +376,12 @@ describe("destinatários de avisos em Configurações › Clientes", () => {
     expect(payload().customer_code).toBe(OUTRO_CLIENTE.code);
   });
 
-  it("lista e edição mantêm um único diálogo, textos previstos e acessibilidade", async () => {
+  it("a seção e a edição: um diálogo só para o contato, textos previstos e acessibilidade", async () => {
     await abrir();
     await publicar([CONTATO]);
-    expect(textosForaDaLista(dialogo().innerHTML, [
-      `Avisos por e-mail · ${CLIENTE.name}`, "Fechar", "Novo contato", CONTATO.nome, CONTATO.email,
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+    expect(textosForaDaLista(secao().innerHTML, [
+      "Avisos por e-mail", "Novo contato", CONTATO.nome, CONTATO.email,
       "Ativo", "Editar", "Desativar", "Itens parados", "Produtos disponíveis em estoque", "Gestor do cliente",
     ])).toEqual([]);
     expect(await violacoesDeAcessibilidade(document.body.innerHTML)).toEqual([]);
@@ -392,7 +393,8 @@ describe("destinatários de avisos em Configurações › Clientes", () => {
     ])).toEqual([]);
     expect(await violacoesDeAcessibilidade(document.body.innerHTML)).toEqual([]);
     await tocar("Cancelar", dialogo());
-    expect(dialogo().textContent).toContain(`Avisos por e-mail · ${CLIENTE.name}`);
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+    expect(secao().textContent).toContain(CONTATO.nome);
     expect(fronteiras.chamar).not.toHaveBeenCalled();
   });
 });

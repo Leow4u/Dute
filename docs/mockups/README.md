@@ -370,16 +370,15 @@ As caixas CX-000225 e CX-000226 de 06/11 não precisam de nada: com a parte
 
 A página "Configuração · Clientes" não tem canvas: é a proposta de
 09/11/2026, feita no mesmo dia em que o Leonardo recusou a lista com ficha
-(lista à esquerda, ficha à direita) do PR 589, e **espera a avaliação dele**.
-A tela vira galeria de cartões (um por cliente, com a sigla do nome numa cor
-do próprio cliente, o modelo, o pacote, o selo do portal e os números) e cada
-cliente ganha a própria página, com as seções Operação, Armazém, Portal do
-cliente, Contrato e Avisos por e-mail em cartões, cada uma com o próprio
-"Editar" no lugar. A Configuração inteira aparece na v3 (barra preta, Manrope,
-o vermelho só na ação principal). As fontes são estáticas e os dados, fictícios
-(o cliente Dutelog, de Insumos internos, não existe no cadastro; "cliente
-desde", "último acesso", as prateleiras ocupadas por rua e as caixas guardadas
-são dados que a tela de hoje não lê).
+(lista à esquerda, ficha à direita) do PR 589, e **aprovada por ele em
+11/11/2026**. A tela vira galeria de cartões (um por cliente, com a sigla do
+nome numa cor do próprio cliente, o modelo, o pacote, o selo do portal e os
+números) e cada cliente ganha a própria página, com as seções Operação,
+Armazém, Portal do cliente, Contrato e Avisos por e-mail em cartões, cada uma
+com o próprio "Editar" no lugar. A Configuração inteira aparece na v3 (barra
+preta, Manrope, o vermelho só na ação principal). As fontes são estáticas e os
+dados, fictícios (o cliente Dutelog, de Insumos internos, não existe no
+cadastro).
 
 | Tela | Arquivo |
 |---|---|
@@ -389,6 +388,16 @@ são dados que a tela de hoje não lê).
 | A página com o menu de mais ações aberto | `ConfigClienteMenu.dc.html` |
 | Celular · a lista | `ConfigClientesCelular.dc.html` |
 | Celular · a página do cliente | `ConfigClienteCelular.dc.html` |
+
+No app (11/11/2026), o que ficou diferente das pranchas
+(`docs/multicliente-modelos-de-operacao.md`, "A tela de Clientes"): sem o
+"último acesso" das pessoas (o dado não existe), sem "Chaves da API" no menu
+de mais ações (a chave é pessoal, não do cliente), a faixa de números com a
+sigla no lugar do "primeiro SKU gerado", o "Pessoas e acessos" como link na
+linha das pessoas e o "Editar" no cabeçalho do Portal (a situação do portal
+se muda ali), e a página do arquivado só para leitura. O conteúdo das outras
+seções da Configuração segue o visual de antes; só a barra e o cabeçalho
+passaram para a v3.
 
 A página "Separação e expedição" tem canvas próprio (privado,
 https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz), feito em 10/11/2026 a

@@ -3,12 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getRouteAppRoles, getRouteProfileRoles, type ProfileRole } from "./modules";
 import {
   LEGACY_SETTINGS_REDIRECTS,
+  SECOES_DA_CONFIGURACAO_NA_V3,
   SETTINGS_SECTIONS,
   getActiveSettingsSection,
   getReturnPath,
   getSettingsSections,
   isSettingsPath,
   rememberReturnPath,
+  secaoDaConfiguracaoNaV3,
 } from "./settings-nav";
 
 const labels = (role: ProfileRole) => getSettingsSections(role).map((section) => section.label);
@@ -120,3 +122,17 @@ it.each<ProfileRole>(['owner', 'admin', 'suporte', 'interno', 'wms', 'financeiro
   expect(section).toMatchObject({ label: 'Chaves de API', group: 'conta', href: '/configuracoes/integracoes' });
   expect(getRouteProfileRoles('/configuracoes/integracoes')).toContain(role);
 });
+
+describe("a Configuração na v3", () => {
+  it("o conteúdo segue a v3 em Clientes e em Chaves de API; nas outras seções, só a barra e o cabeçalho", () => {
+    expect(SECOES_DA_CONFIGURACAO_NA_V3).toEqual(["clientes", "integracoes"]);
+    expect(secaoDaConfiguracaoNaV3(getActiveSettingsSection("/configuracoes/clientes?cliente=BTG%20Pactual"))).toBe(true);
+    expect(secaoDaConfiguracaoNaV3(getActiveSettingsSection("/configuracoes/integracoes"))).toBe(true);
+    expect(secaoDaConfiguracaoNaV3(getActiveSettingsSection("/configuracoes/pessoas"))).toBe(false);
+    expect(secaoDaConfiguracaoNaV3(getActiveSettingsSection("/configuracoes"))).toBe(false);
+    expect(secaoDaConfiguracaoNaV3(null)).toBe(false);
+    // Toda seção da lista existe no menu da Configuração.
+    for (const id of SECOES_DA_CONFIGURACAO_NA_V3) expect(SETTINGS_SECTIONS.some((section) => section.id === id)).toBe(true);
+  });
+});
+
