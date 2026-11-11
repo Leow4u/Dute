@@ -534,7 +534,7 @@ async function principal() {
           registro.sku = leitura.plano.sku_de;
           registro.alvo = leitura.plano.alvo;
           registro.passos = descreverPassos(leitura);
-          registro.grava = registro.passos.filter((p) => !p.feito).map((p) => p.texto);
+          registro.grava = registro.passos.filter((p) => !p.feito && !p.informativo).map((p) => p.texto);
           if (args.aplicar) {
             const resultado = await aplicarTransferencia(db, FieldValue, correcao, { operations: await carregarOperacoes(abortar) });
             registro.estado = resultado.estado;
@@ -587,7 +587,7 @@ async function principal() {
       if (c.estado === "erro") console.log(`   ERRO    : ${c.erro}`);
       else if (c.estado === "ja_aplicado") console.log("   feito   : já aplicada");
       else if (c.passos && c.estado !== "corrigido") {
-        for (const p of c.passos) console.log(`   ${p.feito ? "feito " : "grava "}  : ${p.texto}`);
+        for (const p of c.passos) console.log(`   ${p.informativo ? "fica  " : p.feito ? "feito " : "grava "}  : ${p.texto}`);
         console.log(`   fica    : os movimentos e os eventos guardam ${c.de} (histórico e cobrança)`);
       } else {
         for (const linha of c.grava ?? []) console.log(`   ${c.estado === "corrigido" ? "gravou" : "grava "}  : ${linha}`);

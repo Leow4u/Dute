@@ -227,4 +227,14 @@ não pedem índice composto.
     com as 79.
   - **Aviso ao cliente:** o aviso de chegada da AVL-3AE6D686 saiu para a BTG
     em 10/11/2026, às 15:14, com `A.02.0810.002.M`.
-  - Falta a aplicação.
+- **11/11/2026, 10:25 (Brasília), aplicação na produção**, pelo Leonardo, da
+  máquina dele, com o código do `0d1e157`: 1 correção gravada, sem erro.
+  - **Movimentos:** SAIDA de 92 do BTG-000213 em B-03 e ENTRADA de 92 no
+    BTG-000219 em B-03, os dois Ajuste, fora da cobrança.
+  - **Caixa e NF:** a CX-000229, a tarefa de guarda dela e a linha 1 da NF da
+    AVL-3AE6D686 passaram para o BTG-000219 (`A.01.0810.002.M`, "Polo
+    Masculino Piquet Azul-Gralha"), com o de antes em `acerto_codigo`.
+  - **Feminina:** o BTG-000213 continua no cadastro, com 79 em B-03 (a
+    CX-000228), como decidido.
+  - **Depois:** dry-run de conferência ("já aplicada") e a etiqueta da
+    CX-000229 reimpressa.

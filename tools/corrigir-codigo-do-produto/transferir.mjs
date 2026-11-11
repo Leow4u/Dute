@@ -349,7 +349,7 @@ export function descreverPassos(leitura) {
   linhas.push(
     remocao.apaga
       ? { feito: Boolean(remocao.feito), texto: `apaga o cadastro errado ${plano.sku_de} (${plano.de}): o SKU, o cartão de products, o item do portal, o preço guardado e os saldos zerados, com tudo no recibo${remocao.itensCancelados?.length ? `; a linha ${remocao.itensCancelados.map((i) => `${i.line_number} da chegada cancelada ${i.receipt_number}`).join(", ")} passa para ${plano.alvo.sku}, para o número ${plano.sku_de} não voltar` : ""}` }
-      : { feito: false, texto: `não apaga ${plano.sku_de}: ${remocao.motivos.join("; ")}` },
+      : { feito: false, informativo: true, texto: `não apaga ${plano.sku_de}: ${remocao.motivos.join("; ")}` },
   );
   return linhas;
 }
