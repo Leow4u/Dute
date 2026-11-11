@@ -212,5 +212,19 @@ não pedem índice composto.
   em 6 tamanhos e "Polo Masculino Piquet Azul Gralha" em 1.
 - **11/11/2026, segunda versão**: com o código certo no cadastro, o caminho é
   a transferência, e o cadastro errado sai em vez de ficar arquivado (decisão
-  4). Validada no emulador com o caso da produção. Falta o dry-run e a
-  aplicação.
+  4). Validada no emulador com o caso da produção.
+- **11/11/2026, segundo dry-run na produção**, limpo:
+  - **Caminho:** transferência para o BTG-000219 (`A.01.0810.002.M`, "Polo
+    Masculino Piquet Azul-Gralha", com 32 em B-03 e 46 em B-07).
+  - **CX-000229:** guardada em B-03, com 92 peças da linha 1 da chegada
+    AVL-3AE6D686, NF 046315.
+  - **BTG-000213 (`A.02.0810.002.M`, "Polo Feminino Piquet Gralha"):** nasceu
+    na outra chegada da mesma NF, a AVL-7428BFDB, que guardou 79 peças na
+    CX-000228, também em B-03. Ele tem 171 em B-03, e o dry-run disse "não
+    apaga".
+  - **Decisão do Leonardo:** a CX-000228 é a feminina de verdade. Grava-se só
+    a CX-000229: as 92 peças passam para o BTG-000219, e o BTG-000213 fica
+    com as 79.
+  - **Aviso ao cliente:** o aviso de chegada da AVL-3AE6D686 saiu para a BTG
+    em 10/11/2026, às 15:14, com `A.02.0810.002.M`.
+  - Falta a aplicação.

@@ -34,6 +34,6 @@ export const CORRECOES = [
     motivo:
       "Na segunda conferência da CX-000229, o código anotado A.02.0810.002.M é o da polo feminina; a peça e a NF são a polo masculina A.01.0810.002.M.",
     decisao:
-      "Leonardo, 11/11/2026: só o M da CX-000229, com a linha da NF corrigida; no mesmo SKU se der. O A.01.0810.002.M já existe (dry-run de 11/11): as peças passam para ele, e o cadastro errado sai em vez de ficar arquivado.",
+      "Leonardo, 11/11/2026: só as 92 peças da CX-000229, com a linha da NF corrigida. O A.01.0810.002.M já existe (BTG-000219): as peças passam para ele. O A.02.0810.002.M (BTG-000213) fica: é a feminina de verdade, com as 79 da CX-000228, da outra chegada da mesma NF 046315.",
   },
 ];
