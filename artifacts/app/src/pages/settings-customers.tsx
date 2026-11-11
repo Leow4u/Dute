@@ -17,6 +17,7 @@ import {
 import { GaleriaDeClientes } from "@/components/clientes/galeria-de-clientes";
 import { ClienteNaoEncontrado, PaginaDoCliente } from "@/components/clientes/pagina-do-cliente";
 import { Codigo } from "@/components/clientes/partes";
+import { usePessoasDoCliente } from "@/components/pessoas/do-cliente";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -41,7 +42,6 @@ import {
   zoneOccupancy,
   type CustomerFilter,
   type CustomerForm,
-  type CustomerRecord,
   type CustomerRow,
   type PersonRecord,
 } from "@/lib/customer-registry";
@@ -55,6 +55,7 @@ import {
   templateStatusLabel,
   type OperationTemplateKey,
 } from "@/lib/operations";
+import { CUSTOMERS_QUERY_KEY, useCustomerRecords } from "@/lib/customer-records";
 import { comercialLiberado, PLATAFORMA_LIBERADA } from "@/lib/liberacao";
 import { CLIENT_PROFILES_QUERY_KEY } from "@/lib/active-customer-context";
 import { humanApiError } from "@/lib/permissions";
@@ -79,12 +80,9 @@ import SettingsCustomerNotifications, { useContatosDeAviso } from "./settings-cu
  * página grava o cadastro inteiro com o que ela mudou, pela mesma rota.
  */
 
-const CUSTOMERS_KEY = ["admin-customers"];
 // As chaves do Mapa (pages/warehouse-map.tsx): a mesma leitura, o mesmo cache.
 const POSITIONS_KEY = ["warehouse-positions", "all-pages"];
 const BOXES_KEY = ["warehouse-boxes", "all", "all-pages"];
-
-type CustomersResponse = { items?: CustomerRecord[]; data?: CustomerRecord[] } | CustomerRecord[];
 
 async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -132,13 +130,8 @@ export default function SettingsCustomers() {
   const contactsEnabled = comercialLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
   const topo = useRef<HTMLDivElement>(null);
 
-  const customers = useQuery({
-    queryKey: CUSTOMERS_KEY,
-    queryFn: async () => {
-      const payload = await apiJson<CustomersResponse>("/api/customers?limit=250");
-      return Array.isArray(payload) ? payload : (payload.items ?? payload.data ?? []);
-    },
-  });
+  // A mesma leitura de Pessoas e acessos (lib/customer-records.ts).
+  const customers = useCustomerRecords();
   const positions = useQuery({
     queryKey: POSITIONS_KEY,
     staleTime: 30_000,
@@ -157,6 +150,8 @@ export default function SettingsCustomers() {
   );
   const row = openCode ? (rows.find((item) => item.code === openCode) ?? null) : null;
   const comZona = Boolean(row?.zone && row.zone.positions > 0);
+  // As pessoas do portal na página do cliente, com o convite já com o cliente.
+  const pessoasDoCliente = usePessoasDoCliente(row);
 
   // A ocupação por rua só na página de um cliente com zona: a leitura do Mapa.
   const boxes = useQuery({
@@ -212,7 +207,7 @@ export default function SettingsCustomers() {
   // O seletor de cliente ativo lê client_profiles, que o cadastro publica.
   const invalidate = () =>
     Promise.all([
-      queryClient.invalidateQueries({ queryKey: CUSTOMERS_KEY }),
+      queryClient.invalidateQueries({ queryKey: CUSTOMERS_QUERY_KEY }),
       queryClient.invalidateQueries({ queryKey: CLIENT_PROFILES_QUERY_KEY }),
     ]);
 
@@ -324,10 +319,13 @@ export default function SettingsCustomers() {
           }
           onSalvar={(patch) => saveSection(row, patch)}
           onArquivar={() => setArchiving(row)}
+          pessoas={pessoasDoCliente}
         />
       ) : (
         <ClienteNaoEncontrado />
       )}
+
+      {pessoasDoCliente.dialogos}
 
       <Dialog open={creating} onOpenChange={(open) => !open && !create.isPending && setCreating(false)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[780px]">

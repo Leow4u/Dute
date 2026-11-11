@@ -400,8 +400,9 @@ seções da Configuração segue o visual de antes; só a barra e o cabeçalho
 passaram para a v3.
 
 A página "Configuração · Pessoas e acessos" não tem canvas: é a proposta de
-11/11/2026, **avaliada pelo Leonardo no mesmo dia**, com as respostas abaixo.
-Hoje a tela é uma tabela
+11/11/2026, **avaliada pelo Leonardo no mesmo dia**, com as respostas abaixo,
+e **no app desde então** (o que ficou diferente está depois das respostas).
+Antes, a tela é uma tabela
 só, com a equipe e as pessoas dos clientes misturadas, a aba "Arquivados" e o
 diálogo "Entender os perfis". Na proposta, a tela ganha duas abas. "Equipe
 Dutelog" é a lista da equipe, com o perfil e a situação; "Arquivados" vira
@@ -445,6 +446,14 @@ Perguntas e respostas do Leonardo (11/11/2026):
    perfis" sai? Resposta: sim.
 3. A busca mostra a equipe e os clientes numa lista só, com a coluna "Onde"?
    Resposta: pode ser.
+
+No app (11/11/2026, `docs/multicliente-modelos-de-operacao.md`, "Pessoas e
+acessos"), o que ficou diferente das pranchas: a situação "Acesso removido"
+sai sem a data (a lista não traz quando o acesso foi removido); no celular o
+"Reenviar" fica só no menu da pessoa; o índice mostra o código embaixo do
+nome quando ele é diferente do nome; o filtro "Perfil" lista só os perfis
+que a equipe tem; e "Enviar convite" substitui "Criar convite e enviar
+e-mail", sem a frase de explicação do diálogo.
 
 A página "Separação e expedição" tem canvas próprio (privado,
 https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz), feito em 10/11/2026 a

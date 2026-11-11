@@ -532,7 +532,7 @@ produção.
   vem do "Convidar" de Configurações › Clientes ou o que a pessoa escolhe na
   lista (`pages/users.tsx`). Sem ele, "Criar convite e copiar link" fica
   desligado.
-- **Teste:** `pages/users-convite.test.tsx`, com a tela de verdade: sem
+- **Teste:** `pages/users-convite.test.tsx` (desde 11/11/2026, `pages/users.test.tsx`), com a tela de verdade: sem
   escolha e com a lista falhando, o convite não sai; o cliente do
   "Convidar" vale como escolhido. Antes, os dois primeiros falhavam.
 

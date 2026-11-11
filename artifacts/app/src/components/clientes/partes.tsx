@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
  * (docs/mockups/ConfigClientes.dc.html e ConfigCliente.dc.html), na v3.
  */
 
-const TOM_DO_QUADRO: Record<CustomerTone, string> = {
+/** Os tons suaves do cliente (o quadro da sigla); Pessoas usa os mesmos nos avatares. */
+export const TOM_DO_QUADRO: Record<CustomerTone, string> = {
   info: "bg-info-soft text-info-soft-foreground",
   teal: "bg-teal-soft text-teal-soft-foreground",
   violet: "bg-violet-soft text-violet-soft-foreground",

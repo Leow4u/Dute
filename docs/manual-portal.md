@@ -17,13 +17,16 @@ valor de custo do próprio estoque, base do seguro.
 
 ## Entrar
 
-- **O acesso é por convite**, feito em Configuração › Pessoas e acessos
-  (`owner` e `admin`), para o cliente cadastrado (não prospect), sem arquivo,
-  com o portal ligado (não "Sem portal") e com a sigla do SKU; a BTG passa
-  sempre. **"Criar convite e enviar e-mail"** agenda o envio automático,
-  normalmente na próxima rodada da fila (a cada 5 minutos), e também copia
-  o link para compartilhar. A situação do e-mail aparece em Pessoas e
-  acessos; pelas ações do convite, é possível copiar o link ou **"Reenviar
+- **O acesso é por convite**, feito em Configuração (`owner` e `admin`): na
+  página do cliente (Clientes › o cliente, seção "Portal do cliente",
+  "Convidar", já com o cliente) ou em Pessoas e acessos (aba Clientes,
+  "Convidar pessoa", escolhendo o cliente), para o cliente cadastrado (não
+  prospect), sem arquivo, com o portal ligado (não "Sem portal") e com a
+  sigla do SKU; a BTG passa sempre. **"Enviar convite"** agenda o envio
+  automático, normalmente na próxima rodada da fila (a cada 5 minutos), e
+  também copia o link para compartilhar. A situação do e-mail aparece na
+  linha do convite, na página do cliente e na busca de Pessoas e acessos;
+  pelas ações do convite ("…"), é possível copiar o link ou **"Reenviar
   convite por e-mail"** (enquanto não houver outro envio agendado). Falhas
   temporárias têm novas tentativas automáticas. Convites revogados ou já
   aceitos não são enviados. Na homologação, só endereços `@dutelog.com.br`
