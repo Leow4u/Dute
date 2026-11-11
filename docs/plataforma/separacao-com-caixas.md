@@ -15,9 +15,10 @@ volumes de expedição, a etiqueta do volume, o romaneio e "Para entregar").
 As partes 2, 3, 4 e 5 entraram na `main` pelo PR 592, com o OK do Leonardo
 em 10/11/2026. **Na produção desde 10/11/2026** (19:52 UTC, commit
 `7512f101`): as seis partes, pela publicação manual do Leonardo (seção 5.2).
-Tela só depois do mockup aprovado (decisão 8). **Proposta de 11/11/2026,
-esperando o OK do Leonardo:** dividir a linha em mais de um volume (seção
-11; pranchas na página 4 do canvas).
+Tela só depois do mockup aprovado (decisão 8). **Dividir a linha em mais de
+um volume (seção 11; pranchas na página 4 do canvas):** perguntas
+respondidas pelo Leonardo em 11/11/2026 (decisões 27 a 30); falta o OK das
+pranchas atualizadas com as respostas.
 
 Relação com os outros desenhos: este roteiro retoma a regra 8 e a seção 5.4 do
 mapa (`docs/mapa-do-armazem-enderecamento-dirigido.md`) e revê a P8 de
@@ -105,10 +106,16 @@ O retrato de antes deste roteiro. A parte 1 mudou a lista e a caixa na linha
 | 24 | Com mais de uma caixa saindo inteira na mesma linha, o botão diz "Levar as caixas". |
 | 25 | Em "Para entregar", "Ver volumes" fica no lugar de "Ver itens"; no celular, "Etiquetas dos volumes" e "Romaneio" ficam atrás de "Ver volumes". |
 | 26 | No romaneio, "Separado" vai da primeira linha separada à conclusão, e "Por" é quem concluiu. |
+| 27 | "Dividir em volumes" começa com um volume por caixa de onde a linha sai, a partir do volume aberto, mesmo quando ele já tem itens (11/11/2026, seção 11). |
+| 28 | A divisão é automática, e tudo se edita: o último volume já vem com o resto e fica aberto; mexeu numa linha, a última acompanha; mexeu na última, a de cima acompanha. A soma sempre fecha (11/11/2026). |
+| 29 | O peso de cada volume que a divisão fecha vai no diálogo, opcional, no computador; no celular, sem peso (11/11/2026). |
+| 30 | "Dividir em volumes" também na linha já separada, enquanto o que ela pôs está no volume aberto (11/11/2026). |
 
 As decisões 17 a 26 foram tomadas no caminho das partes 3 e 4, onde as
 pranchas não diziam, e confirmadas pelo Leonardo em 10/11/2026, depois do
-merge do PR 592.
+merge do PR 592. As decisões 27 a 30 são as respostas do Leonardo às
+perguntas do "Dividir em volumes", em 11/11/2026 (seção 11.6); a regra da 28
+é a forma que a prancha deu ao "automático, podendo editar qualquer coisa".
 
 ## 4. Desenho
 
@@ -792,12 +799,13 @@ pelo "Separado" antigo, que confirma todas as linhas na quantidade pedida: a
 diferença já registrada numa linha precisa ser informada de novo pela
 coordenação.
 
-## 11. A linha em mais de um volume (proposta de 11/11/2026)
+## 11. A linha em mais de um volume (11/11/2026)
 
-**Situação:** proposta, esperando o OK do Leonardo. As pranchas estão na
-página 4 do canvas (https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz), com
-as fontes em `docs/mockups/WmsDividir*.dc.html` (tabela no README dos
-mockups).
+**Situação:** as perguntas foram respondidas pelo Leonardo em 11/11/2026
+(decisões 27 a 30, seção 11.6), e as pranchas, atualizadas com as respostas;
+falta o OK delas para as partes 7a e 7b. As pranchas estão na página 4 do
+canvas (https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz), com as fontes em
+`docs/mockups/WmsDividir*.dc.html` (tabela no README dos mockups).
 
 ### 11.1 O caso
 
@@ -829,22 +837,31 @@ conclusão com volumes já tem uma linha em dois
 
 ### 11.3 O desenho
 
-- "Dividir em volumes" é o primeiro item do "⋯" da linha por separar com 2
-  un. ou mais, antes de "Outra caixa" e "Separar menos". O diálogo separa a
-  linha, das caixas que o sistema sugere, como "Separar", e a divide.
+- "Dividir em volumes" fica em dois lugares. Na linha por separar com 2 un.
+  ou mais, é o primeiro item do "⋯", antes de "Outra caixa" e "Separar
+  menos": o diálogo separa a linha, das caixas que o sistema sugere, como
+  "Separar", e a divide. Na linha já separada, enquanto o que ela pôs está
+  no volume aberto, é um botão ao lado de "Desfazer" (decisão 30): o
+  diálogo só divide, sem tocar as caixas nem a diferença. Isso cobre quem
+  tocou "Separar" por hábito, a linha corrigida pelo "Outra caixa", a
+  separada a menos e o resto de "Levar a caixa".
 - A primeira linha do diálogo é o volume aberto ("tem 35 un." quando já tem
-  itens de outras linhas). Cada volume, menos o último, fecha ao confirmar:
-  a quantidade, com − e +, e no computador o peso, opcional (decisão 15); no
-  celular, sem peso (decisão 17).
-- O último volume leva o resto, sem digitar, e fica aberto: as próximas
-  linhas entram nele.
+  itens de outras linhas). Cada volume, menos o último, fecha ao confirmar,
+  com o peso opcional no computador; no celular, sem peso (decisões 15, 17 e
+  29).
+- O último volume já vem com o resto e fica aberto: as próximas linhas
+  entram nele. Todas as linhas se editam, com − e + ou digitando, a última
+  também: mexeu numa linha, a última acompanha; mexeu na última, a de cima
+  acompanha. A soma sempre fecha (decisão 28).
 - Toda linha do diálogo tem ao menos 1 un. Para fechar o volume aberto como
   está, "Fechar volume" vem antes.
-- O diálogo começa com um volume por caixa de onde a linha sai (54 e 41); a
+- O diálogo começa com um volume por caixa de onde a linha sai (54 e 41), a
+  partir do volume aberto, mesmo quando ele já tem itens (decisão 27); a
   linha de uma caixa só começa ao meio. "Mais um volume" põe um volume antes
   do último, com a quantidade do de cima ou, se não couber, metade do resto;
   o volume acrescentado sai pela lixeira ("Tirar o volume 17").
-- O botão diz em quantos volumes: "Separar em 2 volumes". Depois vem o aviso
+- O botão diz em quantos volumes: "Separar em 2 volumes" na linha por
+  separar e "Dividir em 2 volumes" na já separada. Depois vem o aviso
   "Volume 16 fechado", e o volume fechado aparece no painel com "Etiqueta"
   (decisão 23).
 - A linha separada com mais de duas etiquetas (caixas e volumes) as mostra
@@ -854,8 +871,6 @@ conclusão com volumes já tem uma linha em dois
   (decisões 18 e 19). O volume fechado que esvazia e sai passa a avisar
   também: "O volume 16 saiu. Tire a etiqueta dele." Hoje, quando ele é o de
   maior número, sai sem aviso.
-- Pergunta 4: "Dividir em volumes" também na linha já separada, enquanto o
-  que ela pôs ainda está no volume aberto (prancha `WmsDividirNaSeparada`).
 
 ### 11.4 O servidor
 
@@ -866,10 +881,13 @@ quando não há) e `open_volume_units` (as unidades gravadas nele). Vale só com
 `separated: true` e sem `take_boxes`, `boxes` ou `separated_qty`. Na
 transação de sempre:
 
-1. A linha já separada com as mesmas quantidades é a repetição e responde
-   `changed: false`; a linha separada de outro jeito recusa
-   (`SEPARATION_LINE_ALREADY_SEPARATED`).
-2. As linhas somam a quantidade da linha do pedido.
+1. Na linha por separar, a chamada separa e divide. Na linha já separada
+   (decisão 30), ela só divide o que a linha pôs no volume aberto: as caixas
+   e a diferença ficam como estão, e a linha que não tem nada no volume
+   aberto recusa (`SEPARATION_LINE_NOT_IN_OPEN_VOLUME`). A repetição, com as
+   mesmas quantidades, responde `changed: false`.
+2. As linhas do diálogo somam o que se divide: na linha por separar, a
+   quantidade dela; na já separada, o que ela tem no volume aberto.
 3. O volume aberto (o id e as unidades) e os números que o servidor daria
    são os que o diálogo mostrou. Senão, recusa
    (`SEPARATION_VOLUMES_CHANGED`, "Os volumes mudaram. Confira e tente de
@@ -883,37 +901,29 @@ Os eventos: o `picking.line_separated` de sempre, com os volumes, e um
 `picking.volume_closed` por volume fechado. A resposta traz
 `closed_volumes` para o aviso, e a do desfazer passa a dizer os volumes
 fechados que saíram. É a mesma callable: nenhuma callable nova e nenhuma
-linha nova na tabela de papéis.
-
-Se a pergunta 4 for sim, a mesma chamada aceita a linha já separada,
-enquanto o que ela pôs ainda está no volume aberto: as caixas e a diferença
-ficam como estão, e só os volumes mudam.
+linha nova na tabela de papéis. A conta de que a soma fecha (decisão 28) é
+da tela; o servidor confere a soma de novo e recusa a que não fecha.
 
 ### 11.5 Partes
 
 | # | Parte | O que entra | Teste que falha antes |
 |---|---|---|---|
-| 7a | Dividir no servidor | `split_volumes`, a recusa do volume que mudou, os eventos e o aviso do volume fechado que sai no desfazer. | A linha de 95 un. só entra num volume. |
-| 7b | Dividir na bancada | O item do "⋯", o diálogo no computador e no celular, o aviso e as etiquetas da linha embaixo dos códigos, com a lista dos textos e o `axe`. | A bancada não tem como dividir a linha. |
+| 7a | Dividir no servidor | `split_volumes` na linha por separar e na já separada, a recusa do volume que mudou, os eventos e o aviso do volume fechado que sai no desfazer. | A linha de 95 un. só entra num volume. |
+| 7b | Dividir na bancada | O item do "⋯" e o botão na linha já separada, o diálogo no computador e no celular, o aviso e as etiquetas da linha embaixo dos códigos, com a lista dos textos e o `axe`. | A bancada não tem como dividir a linha. |
 
 A régua `billing-callables` fica verde. Homologação no merge; produção pela
 publicação manual, com o OK do Leonardo.
 
-### 11.6 Perguntas
+### 11.6 Perguntas e respostas
 
-1. O diálogo começa com um volume por caixa de onde a linha sai (54 e 41;
-   com três caixas, três volumes), a partir do volume aberto, mesmo quando
-   ele já tem itens (35 + 54 = 89). Pode ser?
-2. O último volume fica aberto e leva o resto, sem digitar. Pode ser? Ou
-   prefere digitar todos e conferir a soma, como no "Outra caixa"? Ou o
-   último também fecha?
-3. No computador, o peso de cada volume que fecha vai no próprio diálogo,
-   opcional; no celular, sem peso, como no "Fechar volume". Pode ser?
-4. "Dividir em volumes" também na linha já separada, enquanto ela está no
-   volume aberto? Cobre quem tocou "Separar" por hábito, a linha corrigida
-   pelo "Outra caixa" e a separada a menos. Sem isso, o caminho é "Desfazer"
-   e dividir: a linha volta a sair da caixa mais antiga, e a separada a
-   menos não se divide.
+Respondidas pelo Leonardo em 11/11/2026.
+
+| # | Pergunta | Resposta |
+|---|---|---|
+| 1 | O diálogo começa com um volume por caixa de onde a linha sai (54 e 41; com três caixas, três volumes), a partir do volume aberto, mesmo quando ele já tem itens (35 + 54 = 89)? | Sim (decisão 27). |
+| 2 | O último volume fica aberto e leva o resto, sem digitar? Ou digitar todos e conferir a soma, como no "Outra caixa"? Ou o último também fecha? | Automático, podendo editar qualquer coisa (decisão 28). Nas pranchas: o último já vem com o resto e fica aberto, e todas as linhas se editam; mexeu numa, a última acompanha; mexeu na última, a de cima acompanha. |
+| 3 | No computador, o peso de cada volume que fecha vai no próprio diálogo, opcional; no celular, sem peso, como no "Fechar volume"? | Ok (decisão 29). |
+| 4 | "Dividir em volumes" também na linha já separada, enquanto ela está no volume aberto? | Sim (decisão 30). |
 
 ### 11.7 Enquanto não entra
 

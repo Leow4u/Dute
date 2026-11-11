@@ -71,8 +71,8 @@ svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-lin
         </div>
       </sc-for>
       <div class="br u">
-        <div class="t"><b class="ab">Volume {{numeroResto}}<span class="badge s-amb">aberto</span></b></div>
-        <span class="rs">{{resto}}</span>
+        <div class="t"><b class="ab" id="dv-v{{numeroResto}}">Volume {{numeroResto}}<span class="badge s-amb">aberto</span></b></div>
+        <div class="stp" role="group" aria-labelledby="dv-v{{numeroResto}}"><button type="button" aria-label="Menos um no volume {{numeroResto}}" disabled="{{restoSemMenos}}" onClick="{{restoMenos}}">−</button><input type="text" inputmode="numeric" aria-label="Separado no volume {{numeroResto}}" value="{{restoValor}}" onChange="{{restoDigitar}}" onBlur="{{restoNormalizar}}"><button type="button" aria-label="Mais um no volume {{numeroResto}}" disabled="{{restoSemMais}}" onClick="{{restoMais}}">+</button></div>
       </div>
     </div>
     <button type="button" class="b sm" disabled="{{semMaisUm}}" onClick="{{maisUm}}"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Mais um volume</button>
@@ -91,12 +91,13 @@ class Component extends DCLogic {
     const qtds = Array.isArray(s.qtds) ? s.qtds : p.QTDS;
     const textos = Array.isArray(s.textos) ? s.textos : qtds.map(() => null);
     const pesos = Array.isArray(s.pesos) ? s.pesos : p.PESOS;
-    return { qtds: qtds.slice(), textos: textos.slice(), pesos: pesos.slice() };
+    const textoResto = typeof s.textoResto === 'string' ? s.textoResto : null;
+    return { qtds: qtds.slice(), textos: textos.slice(), pesos: pesos.slice(), textoResto: textoResto };
   }
   mudar(fn) {
     const n = this.estado();
     if (fn(n) === false) return;
-    this.setState({ qtds: n.qtds, textos: n.textos, pesos: n.pesos });
+    this.setState({ qtds: n.qtds, textos: n.textos, pesos: n.pesos, textoResto: n.textoResto });
   }
   definir(n, i, q) {
     const soma = n.qtds.reduce((a, b) => a + b, 0);
@@ -108,6 +109,7 @@ class Component extends DCLogic {
       if (i >= n.qtds.length) return false;
       this.definir(n, i, n.qtds[i] + d);
       n.textos[i] = null;
+      n.textoResto = null;
     });
   }
   digitar(i, valor) {
@@ -115,6 +117,7 @@ class Component extends DCLogic {
     this.mudar((n) => {
       if (i >= n.qtds.length) return false;
       n.textos[i] = digitos;
+      n.textoResto = null;
       const q = parseInt(digitos, 10);
       if (q >= 1) this.definir(n, i, q);
     });
@@ -123,6 +126,36 @@ class Component extends DCLogic {
     this.mudar((n) => {
       if (n.textos[i] == null) return false;
       n.textos[i] = null;
+    });
+  }
+  definirResto(n, q) {
+    const k = n.qtds.length - 1;
+    const resto = this.parametros().TOTAL - n.qtds.reduce((a, b) => a + b, 0);
+    const novo = Math.max(1, Math.min(resto + n.qtds[k] - 1, q));
+    n.qtds[k] = n.qtds[k] + resto - novo;
+  }
+  passoResto(d) {
+    const total = this.parametros().TOTAL;
+    this.mudar((n) => {
+      const resto = total - n.qtds.reduce((a, b) => a + b, 0);
+      this.definirResto(n, resto + d);
+      n.textos[n.qtds.length - 1] = null;
+      n.textoResto = null;
+    });
+  }
+  digitarResto(valor) {
+    const digitos = String(valor == null ? '' : valor).replace(/\D/g, '');
+    this.mudar((n) => {
+      n.textoResto = digitos;
+      n.textos[n.qtds.length - 1] = null;
+      const q = parseInt(digitos, 10);
+      if (q >= 1) this.definirResto(n, q);
+    });
+  }
+  normalizarResto() {
+    this.mudar((n) => {
+      if (n.textoResto == null) return false;
+      n.textoResto = null;
     });
   }
   pesar(i, valor) {
@@ -140,6 +173,7 @@ class Component extends DCLogic {
       n.qtds.push(acima <= resto - 1 ? acima : Math.floor(resto / 2));
       n.textos.push(null);
       n.pesos.push('');
+      n.textoResto = null;
     });
   }
   tirar(i) {
@@ -148,6 +182,7 @@ class Component extends DCLogic {
       n.qtds.splice(i, 1);
       n.textos.splice(i, 1);
       n.pesos.splice(i, 1);
+      n.textoResto = null;
     });
   }
   pesoValido(valor) {
@@ -187,7 +222,13 @@ class Component extends DCLogic {
     return {
       linhas: linhas,
       numeroResto: p.ABERTO + e.qtds.length,
-      resto: un(resto),
+      restoValor: e.textoResto != null ? e.textoResto : String(resto),
+      restoSemMenos: resto <= 1,
+      restoSemMais: e.qtds[e.qtds.length - 1] <= 1,
+      restoMenos: () => this.passoResto(-1),
+      restoMais: () => this.passoResto(1),
+      restoDigitar: (ev) => this.digitarResto(ev.target.value),
+      restoNormalizar: () => this.normalizarResto(),
       semMaisUm: resto < 2 || e.qtds.length + 1 >= 20,
       maisUm: () => this.maisUm(),
       volumes: e.qtds.length + 1,
