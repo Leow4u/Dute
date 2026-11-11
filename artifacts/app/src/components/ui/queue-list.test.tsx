@@ -52,4 +52,29 @@ describe("a fila e o cabeçalho na v3", () => {
     expect(html).toMatch(/<p class="[^"]*">Guardar caixa CX-000132<span class="ml-2 inline-flex align-middle"><span>sem prateleira<\/span><\/span><\/p>/);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
+
+  it("o atalho opcional fica ao lado de Ver itens, sem mudar a linha sem atalho", async () => {
+    const linha = (atalho?: boolean) =>
+      renderToStaticMarkup(
+        <div className="v3">
+          <QueueGroup title="Para separar" count={1} empty="Nenhum pedido para separar.">
+            <QueueRow
+              icon={Package}
+              tone="pick"
+              title="PED-0001"
+              meta="116 itens · 3.335 un."
+              onToggle={() => undefined}
+              open
+              aoLadoDoToggle={atalho ? <a href="/pedidos/lista?pedido=ord_1">Imprimir lista</a> : undefined}
+            />
+          </QueueGroup>
+        </div>,
+      );
+    const comAtalho = linha(true);
+    expect(comAtalho).toMatch(/<div class="mt-1\.5 flex[^"]*"><button type="button" class="inline-flex[^"]*">.*Esconder itens<\/button><a href="\/pedidos\/lista\?pedido=ord_1">Imprimir lista<\/a><\/div>/s);
+    const semAtalho = linha();
+    expect(semAtalho).toMatch(/<button type="button" class="inline-flex[^"]* mt-1\.5">.*Esconder itens<\/button>/s);
+    expect(semAtalho).not.toContain("Imprimir lista");
+    expect(await violacoesDeAcessibilidade(comAtalho)).toEqual([]);
+  });
 });

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Separar · concluir com o lacre</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+button,input{font:inherit;color:inherit}
+a{color:#0054CE}a:hover{color:#003E99}
+x-dc{display:contents}
+svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ic{width:20px;height:20px;flex:0 0 auto}.ic-s{width:16px;height:16px;flex:0 0 auto}
+.app{display:flex;width:1440px;height:900px;overflow:hidden;position:relative}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:22px 14px 18px;gap:2px}
+.logo{font-weight:800;font-size:22px;letter-spacing:.04em;padding:0 10px 6px}
+.logo small{display:block;font-size:8px;letter-spacing:.18em;font-weight:700;opacity:.8;margin-top:-2px}
+.sw{display:flex;align-items:center;gap:10px;width:100%;height:44px;margin:8px 0 6px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font:800 15px Manrope,sans-serif;text-align:left;cursor:pointer}
+.cli{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px}
+.cli i{width:34px;height:34px;border-radius:9px;background:#2a2a2a;display:inline-flex;align-items:center;justify-content:center}
+.cli small{display:block;font-size:11px;color:rgba(255,255,255,.66)}
+.cli b{font-size:14px}
+.nav{display:flex;align-items:center;gap:12px;height:44px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.78);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.sbf{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 10px 0;border-top:1px solid rgba(255,255,255,.12)}
+.av{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.sbf b{display:block;font-size:14px}.sbf span{font-size:13px;color:rgba(255,255,255,.66)}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;padding:30px 44px;gap:14px;overflow:hidden}
+.acts{display:flex;gap:8px;align-items:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;white-space:nowrap;cursor:pointer}
+.btn-p{background:#E71C23;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}
+.btn-sm{height:32px;padding:0 12px;font-size:13px}
+.btn-i{width:36px;padding:0}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.badge{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;border:1px solid transparent;letter-spacing:0}
+.s-amb{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.s-grn{background:#DDF5E4;border-color:#B6E4C4;color:#14602F}
+.bk,.bk:hover{width:40px;height:40px;border-radius:8px;border:1px solid #D4D4CF;background:#fff;display:inline-flex;align-items:center;justify-content:center;color:#161616;flex:0 0 auto}
+.hd{display:flex;align-items:center;gap:14px}
+.hd .t{flex:1;min-width:0}
+.hd h1{font-size:26px;font-weight:800;letter-spacing:-.01em;display:flex;align-items:center;gap:10px;line-height:1.2}
+.hd .t p{font-size:13.5px;color:#5F6368}
+.pgw{display:flex;align-items:center;gap:14px;font-size:13.5px;color:#5F6368}
+.pgw b{color:#161616}
+.pg{flex:1;height:6px;border-radius:999px;background:#E8E8E4;overflow:hidden}
+.pg i{display:block;height:100%;background:#161616;border-radius:999px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:22px;flex:1;min-height:0}
+.lst{overflow:hidden;align-self:start}
+.gh{display:flex;align-items:center;gap:10px;height:42px;padding:0 18px;background:#FAFAF8;border-top:1px solid #E5E5E1;font-size:13.5px;color:#5F6368;font-weight:600}
+.gh.f{border-top:0}
+.gh b{font:800 15px ui-monospace,Menlo,Consolas,monospace;color:#161616}
+.gh .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+.lk{background:none;border:0;padding:0;font-weight:700;font-size:13px;color:#161616;text-decoration:underline;text-underline-offset:3px;cursor:pointer;min-height:32px}
+.pn{display:flex;flex-direction:column;gap:12px;min-height:0}
+.pn h2{font-size:16px;font-weight:800;display:flex;align-items:baseline;gap:8px}
+.pn h2 span{font-size:13.5px;color:#5F6368;font-weight:600}
+.vr{display:flex;align-items:center;gap:12px;padding:10px 16px;border-top:1px solid #F0F0ED}
+.vr.f{border-top:0}
+.vr .t{flex:1;min-width:0}
+.vr .t b{display:block;font-size:14.5px}
+.vr .t span{display:block;font-size:13px;color:#5F6368}
+.dim{position:absolute;inset:0;background:rgba(22,22,22,.45)}
+.dlg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:600px;background:#fff;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.35);padding:26px 30px;display:flex;flex-direction:column;gap:18px}
+.dlg h2{font-size:22px;font-weight:800}
+.dlg .sub{font-size:13.5px;color:#5F6368;font-weight:600;margin-top:4px}
+.kp{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.kp div{border:1px solid #E5E5E1;border-radius:10px;padding:12px 14px}
+.kp span{display:block;font-size:12.5px;color:#5F6368;font-weight:700}
+.kp b{display:block;font-size:22px;font-weight:800;line-height:1.2}
+.fld{display:flex;flex-direction:column;gap:6px}
+.fld label{font-size:13.5px;font-weight:700}
+.inp{height:44px;border:1px solid #D4D4CF;border-radius:8px;background:#fff;padding:0 12px;font-size:14px;width:100%}
+.ft{display:flex;justify-content:flex-end;gap:10px}
+</style>
+</helmet>
+<div class="app">
+<aside class="sb">
+  <div class="logo">DUTELOG<small>SOLUÇÕES LOGÍSTICAS</small></div>
+  <button type="button" class="sw"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>Armazenagem<svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:auto;opacity:.75"><path d="m7 9 5-5 5 5M7 15l5 5 5-5"/></svg></button>
+  <div class="cli"><i><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></i><div><small>Cliente ativo</small><b>BTG</b></div></div>
+  <a class="nav" href="#" style="color:#C9B8FB"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"/></svg>Agent Dute</a>
+  <a class="nav on" href="#" aria-current="page"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Pedidos<span class="cnt">1</span></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Estoque<svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:auto"><path d="m9 18 6-6-6-6"/></svg></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Documentos</a>
+  <div class="sbf"><span class="av">GD</span><div><b>Guilherme Dantas</b><span>Operação WMS</span></div></div>
+</aside>
+<main class="main">
+  <div class="hd">
+    <a class="bk" href="#" aria-label="Voltar a Pedidos"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+    <div class="t">
+      <h1>PED-0001 <span class="badge s-amb">em separação desde 10/11</span></h1>
+      <p>BTG Pactual · 116 itens · 3.335 un. · Para quando Seg 16/11 11:36</p>
+    </div>
+    <div class="acts">
+      <button type="button" class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>Imprimir lista</button>
+      <button type="button" class="btn btn-p">Concluir separação</button>
+    </div>
+  </div>
+  <div class="pgw"><span><b>116 de 116 itens</b> · 3.335 de 3.335 un.</span><div class="pg" aria-hidden="true"><i style="width:100%"></i></div></div>
+  <div class="cols">
+    <div class="card lst">
+      <h3 class="gh f"><b>A-03</b>5 itens · 450 un.<span class="r"><span class="badge s-grn">separado</span></span></h3>
+      <h3 class="gh"><b>A-04</b>3 itens · 160 un.<span class="r"><span class="badge s-grn">separado</span></span></h3>
+      <h3 class="gh"><b>A-05</b>4 itens · 130 un.<span class="r"><span class="badge s-grn">separado</span></span></h3>
+      <h3 class="gh"><b>B-02</b>3 itens · 95 un.<span class="r"><span class="badge s-grn">separado</span></span></h3>
+      <h3 class="gh"><b>B-05</b>9 itens · 412 un.<span class="r"><span class="badge s-grn">separado</span></span></h3>
+      <h3 class="gh"><b>B-07</b>12 itens · 388 un.<span class="r"><span class="badge s-grn">separado</span></span></h3>
+      <h3 class="gh"><b>B-09</b>10 itens · 16 un.<span class="r"><span class="badge s-grn">separado</span></span></h3>
+      <h3 class="gh"><b>B-11</b>14 itens · 505 un.<span class="r"><span class="badge s-grn">separado</span></span></h3>
+      <h3 class="gh"><b>C-02</b>18 itens · 371 un.<span class="r"><span class="badge s-grn">separado</span></span></h3>
+      <h3 class="gh"><b>C-04</b>16 itens · 420 un.<span class="r"><span class="badge s-grn">separado</span></span></h3>
+      <h3 class="gh"><b>C-07</b>12 itens · 248 un.<span class="r"><span class="badge s-grn">separado</span></span></h3>
+      <h3 class="gh"><b>C-10</b>10 itens · 140 un.<span class="r"><span class="badge s-grn">separado</span></span></h3>
+    </div>
+    <div class="pn">
+      <h2>Volumes <span>42 fechados</span></h2>
+      <div class="card">
+        <div class="vr f"><div class="t"><b>Volume 42</b><span>26 un. · 5,4 kg</span></div><button type="button" class="btn btn-s btn-sm">Etiqueta</button></div>
+        <div class="vr"><div class="t"><b>Volume 41</b><span>48 un. · 9,7 kg</span></div><button type="button" class="btn btn-s btn-sm">Etiqueta</button></div>
+        <div class="vr"><button type="button" class="lk">Ver os 42 volumes</button></div>
+      </div>
+      <div class="card">
+        <div class="vr f"><div class="t"><b>Etiquetas para trocar</b><span>5 caixas abertas</span></div><button type="button" class="btn btn-s btn-sm">Imprimir</button></div>
+        <div class="vr"><div class="t"><b>CX-000186</b><span>B-09 · saldo 4 un.</span></div></div>
+        <div class="vr"><div class="t"><b>CX-000187</b><span>B-09 · saldo 7 un.</span></div></div>
+        <div class="vr"><button type="button" class="lk">Ver as 5 caixas</button></div>
+      </div>
+    </div>
+  </div>
+</main>
+<div class="dim" aria-hidden="true"></div>
+<section class="dlg" role="dialog" aria-modal="true" aria-labelledby="cs-titulo">
+  <div>
+    <h2 id="cs-titulo">PED-0001: concluir separação</h2>
+    <p class="sub">BTG Pactual · 116 itens · 3.335 un. · Para quando Seg 16/11 11:36</p>
+  </div>
+  <div class="kp">
+    <div><span>Volumes</span><b>42</b></div>
+    <div><span>Caixas inteiras</span><b>31</b></div>
+    <div><span>Caixas abertas</span><b>23</b></div>
+    <div><span>Caixas vazias</span><b>4</b></div>
+  </div>
+  <div class="fld">
+    <label for="cs-lacre">Número do lacre</label>
+    <input class="inp" id="cs-lacre" type="text" value="88231">
+  </div>
+  <div class="ft"><button type="button" class="btn btn-s">Voltar</button><button type="button" class="btn btn-p">Confirmar separação</button></div>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

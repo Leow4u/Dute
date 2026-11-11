@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Separar · outra caixa</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+button,input{font:inherit;color:inherit}
+a{color:#0054CE}a:hover{color:#003E99}
+x-dc{display:contents}
+.dlg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:600px;background:#fff;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.35);padding:26px 30px;display:flex;flex-direction:column;gap:16px}
+.dlg h2{font-size:22px;font-weight:800}
+.dlg .sub{font-size:13.5px;color:#5F6368;font-weight:600;margin-top:4px}
+.bx{border:1px solid #E5E5E1;border-radius:12px;overflow:hidden}
+.br{display:flex;align-items:center;gap:14px;padding:12px 16px;border-top:1px solid #F0F0ED}
+.br.f{border-top:0}
+.br .t{flex:1;min-width:0}
+.br .t b{display:block;font:700 15px ui-monospace,Menlo,Consolas,monospace}
+.br .t span{display:block;font-size:13px;color:#5F6368}
+.stp{display:inline-flex;align-items:stretch;height:44px;border:1px solid #D4D4CF;border-radius:8px;overflow:hidden;background:#fff}
+.stp button{width:44px;border:0;background:#fff;font:800 16px Manrope,sans-serif;color:#161616;cursor:pointer}
+.stp output{min-width:56px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-variant-numeric:tabular-nums;border-left:1px solid #E5E5E1;border-right:1px solid #E5E5E1}
+.tot{display:flex;justify-content:space-between;font-weight:800;font-size:15px}
+.ft{display:flex;justify-content:flex-end;gap:10px}
+.b{display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid #D4D4CF;background:#fff;color:#161616;cursor:pointer}
+.b.p{background:#E71C23;border-color:#E71C23;color:#fff}
+</style>
+</helmet>
+<div style="position:relative;width:1440px;height:900px;overflow:hidden">
+  <div style="position:absolute;top:0;left:0;width:1440px;height:900px"><dc-import name="WmsSepararBancada" hint-size="1440px,900px"></dc-import></div>
+  <div aria-hidden="true" style="position:absolute;inset:0;background:rgba(22,22,22,.45)"></div>
+  <section class="dlg" role="dialog" aria-modal="true" aria-labelledby="oc-titulo">
+    <div>
+      <h2 id="oc-titulo">De qual caixa saiu?</h2>
+      <p class="sub">Camiseta Masculino Preta · G · B-02 · 35 un.</p>
+    </div>
+    <div class="bx">
+      <div class="br f">
+        <div class="t"><b>CX-000061</b><span>Abertura · 22/10/2026 · tem 20 un.</span></div>
+        <div class="stp"><button type="button" aria-label="Menos um de CX-000061">−</button><output aria-label="Separado de CX-000061">0</output><button type="button" aria-label="Mais um de CX-000061">+</button></div>
+      </div>
+      <div class="br">
+        <div class="t"><b>CX-000062</b><span>Abertura · 22/10/2026 · tem 40 un.</span></div>
+        <div class="stp"><button type="button" aria-label="Menos um de CX-000062">−</button><output aria-label="Separado de CX-000062">35</output><button type="button" aria-label="Mais um de CX-000062">+</button></div>
+      </div>
+      <div class="br">
+        <div class="t"><b>CX-000064</b><span>Recebimento · NF 48.377 · 06/11/2026 · tem 30 un.</span></div>
+        <div class="stp"><button type="button" aria-label="Menos um de CX-000064">−</button><output aria-label="Separado de CX-000064">0</output><button type="button" aria-label="Mais um de CX-000064">+</button></div>
+      </div>
+    </div>
+    <div class="tot"><span>Separado</span><span>35 de 35 un.</span></div>
+    <div class="ft"><button type="button" class="b">Voltar</button><button type="button" class="b p">Confirmar caixas</button></div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

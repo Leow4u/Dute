@@ -927,6 +927,12 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: "/skus", roles: WMS_ROLES },
   // Etiquetas de caixa e de posição para imprimir, abertas pela Contagem e por Posições.
   { path: "/estoque/etiquetas", roles: WMS_ROLES },
+  // A lista de separação do pedido para imprimir, aberta por "Imprimir lista" em Pedidos.
+  { path: "/pedidos/lista", roles: WMS_ROLES },
+  // A bancada do pedido, aberta por "Separar" e "Continuar" em Pedidos; o suporte só consulta.
+  { path: "/pedidos/separar", roles: WMS_ROLES },
+  // O romaneio do pedido separado para imprimir, aberto por "Romaneio" em Pedidos.
+  { path: "/pedidos/romaneio", roles: WMS_ROLES },
   // O alerta do item parado para aprovar, aberto pelo Início (parte 5.4e): só a coordenação decide.
   { path: "/estoque/alertas", roles: ALERTA_PARADO_ROLES },
   { path: "/faturamento/tabela", roles: FINANCE_ROLES },

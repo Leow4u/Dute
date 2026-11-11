@@ -135,7 +135,9 @@ obrigatório e sem conteúdo.
   devolução mexem só no saldo; nada baixa `unit_count` nem `sku_codes` da
   caixa. O conteúdo de uma caixa é o que entrou nela, não o que resta. Com o
   giro diário do uniforme, a caixa do recebimento ficaria "mentindo" mais
-  cedo que a da abertura.
+  cedo que a da abertura. (Mudou em 10/11/2026: a separação passou a baixar
+  o saldo da caixa, `separacao-com-caixas.md`, parte 3. O conteúdo de entrada
+  continua como está aqui, e a caixa guarda o que saiu.)
 - **A reserva do portal pode cair no saldo de `RECEBIMENTO`**: a alocação da
   aprovação percorre todas as linhas de saldo do SKU. Depois a guarda recusa
   e a separação manda o operador à área de recebimento.
@@ -918,6 +920,13 @@ desenhada e aprovada antes do PR de tela.
      prateleira cadastrada (`stockLocations`, em `api/module.ts`); a correção
      entrou em 02/11/2026 (PR 533), e com esta parte a conferência dela também
      deixa de fora o saldo das áreas de passagem, como o alocador.
+   - O recibo da guarda aberta pelo "Guardar" ia para a coleção
+     `operations`, fora da dos outros recibos do WMS; a correção de
+     10/11/2026 o leva a `operational_operations` (teste em
+     `area-putaway.integration.test.ts`). O recibo antigo que ficou em
+     `operations` não tem mais efeito: a mesma chave repetida depois da
+     publicação não abre uma segunda guarda, porque o id da guarda sai do
+     id do recibo e a segunda criação é recusada.
 
    Antes do disparo da produção com a 7a e a 7b: a 7c junto, para o portal
    não mostrar como disponível o que o pedido recusa (o recálculo começa

@@ -32,7 +32,8 @@ import {
  */
 
 export const PUTAWAY_TASKS_COLLECTION = "putaway_tasks";
-const OPERATIONS_COLLECTION = "operations";
+/** Os recibos de idempotência do WMS, como os das outras callables. */
+const OPERATIONS_COLLECTION = "operational_operations";
 const EVENT_SOURCE = "functions_wms";
 /** A guarda que ainda vai tirar peças da origem. */
 const OPEN_PUTAWAY = new Set(["planned", "in_progress"]);

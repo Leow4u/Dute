@@ -390,6 +390,160 @@ são dados que a tela de hoje não lê).
 | Celular · a lista | `ConfigClientesCelular.dc.html` |
 | Celular · a página do cliente | `ConfigClienteCelular.dc.html` |
 
+A página "Separação e expedição" tem canvas próprio (privado,
+https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz), feito em 10/11/2026 a
+partir do primeiro pedido depois da zeragem (PED-0001, com 116 linhas e 3.335
+un., e PED-0002) e das decisões do Leonardo do mesmo dia
+(`docs/plataforma/separacao-com-caixas.md`, seção 3). **As páginas 1 e 2
+foram aprovadas pelo Leonardo em 10/11/2026**, com as respostas abaixo
+(decisões 10 a 15 do roteiro). A página 3, da etiqueta com todos os produtos,
+foi **aprovada no mesmo dia, com o logo original da Dutelog no lugar da
+palavra** (decisão 16). Quando
+as pranchas foram feitas, "Separado" pedia o lacre e confirmava todas as
+linhas de uma vez, num volume só; a lista saía na ordem do carrinho, sem a
+caixa; a caixa aberta ficava com a etiqueta do que entrou; e não havia
+etiqueta de expedição. A página 1 está no código desde 10/11/2026 (abaixo);
+o resto continua assim até as partes 2 a 6. Os
+pedidos da BTG levam de 3 a 4 dias para separar. As pranchas seguem o shell v3
+da Armazenagem com o menu de quem opera (cliente ativo BTG, Guilherme,
+Operação WMS); o Mapa segue a prancha de 06/11 (`WmsEtiquetaRecebimentoMapa`).
+As fontes são estáticas. As linhas de B-09 são as do PED-0001; as outras
+linhas, as caixas e os volumes são ilustrativos, e os números fecham entre as
+telas (42 volumes, 31 caixas inteiras, 23 abertas, 4 vazias). O celular da
+página 2 mostra o caminho com uma diferença (avaria); as outras telas, o
+caminho sem diferença. No canvas, a primeira prancha se chama `Main.dc.html`;
+aqui, `WmsSepararLista.dc.html`. Os diálogos "Outra caixa" e "Separar menos"
+importam a `WmsSepararBancada` como fundo.
+
+Página 1, a lista de separação (parte 1, só leitura, para antes de 16/11):
+
+| Tela | Arquivo | O que muda |
+|---|---|---|
+| Armazenagem · Pedidos, itens por prateleira | `WmsSepararLista.dc.html` | "Ver itens" agrupa as linhas por prateleira, na ordem de caminhada, com os itens e as unidades de cada uma; a linha troca a posição pela caixa onde o item está; o pedido ganha "Imprimir lista". "Separado" fica como hoje. |
+| Lista de separação impressa (A4) | `WmsSepararListaImpressa.dc.html` | O pedido, o cliente, o destino e o prazo; as linhas por prateleira com o quadrado para marcar, o produto, o código, a caixa, a quantidade e "Separado" em branco. |
+| Armazenagem · Pedidos no celular | `WmsSepararListaCelular.dc.html` | A mesma lista no celular, com "Imprimir lista" ao lado de "Esconder itens" (os botões do pedido vêm depois das 116 linhas). |
+
+A página 1 está no código desde 10/11/2026 (PR 590, partes 1a, 1b e 1c;
+registro em `docs/plataforma/separacao-com-caixas.md`, seção 5.1). O que a
+tela tem de diferente das pranchas:
+
+- "Imprimir lista" abre a tela Pedidos › Lista de separação, com a folha e o
+  botão "Imprimir" (a impressão do navegador, como as Etiquetas e a OS).
+- A prancha da folha desenha só a primeira página. Nas outras, o cabeçalho da
+  tabela se repete, a prateleira com até 12 linhas não se divide entre duas
+  folhas e o rodapé ("PED-0001 · página 2 de 5") sai em todas, no Chrome e no
+  Edge.
+- O cabeçalho da folha usa o logo da Dutelog, como a OS impressa; o nome
+  comprido quebra a linha em vez de cortar.
+- A caixa da linha vem do conteúdo de entrada: é exata até o primeiro pedido
+  separado e, depois dele, pode citar uma caixa que já esvaziou, até a parte
+  3 baixar a caixa.
+
+Página 2, separar com caixa e volumes (partes 2 a 5):
+
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| Armazenagem · Separar, a bancada do pedido | `WmsSepararBancada.dc.html` | "Separar" abre o pedido: o progresso salvo ("10 de 116 itens", "em separação desde 10/11"), as linhas por prateleira com a caixa sugerida ("12 de CX-000027", "esvazia", "inteira"), "Separar" por linha, "Levar a caixa" na caixa que sai inteira, "Desfazer" na linha separada e o "⋯" com "Outra caixa" e "Separar menos". Ao lado, o volume aberto com o peso e "Fechar volume", os volumes fechados com "Etiqueta" e as "Etiquetas para trocar" das caixas abertas. "Concluir separação" desligado diz quantos itens faltam. |
+| Armazenagem · Separar, outra caixa | `WmsSepararOutraCaixa.dc.html` | "De qual caixa saiu?": as caixas da prateleira que têm o item, com a origem, a data e o saldo, e a quantidade tirada de cada uma; a soma fecha com a linha. |
+| Armazenagem · Separar, separar menos | `WmsSepararMenos.dc.html` | Quem opera registra o separado a menos, com o motivo ("Falta" ou "Avaria") e o detalhe. |
+| Armazenagem · Separar, concluir | `WmsSepararConcluir.dc.html` | Com todas as linhas separadas, "Concluir separação" mostra os volumes, as caixas inteiras, abertas e vazias, e pede o "Número do lacre", um por pedido. |
+| Armazenagem · Pedido separado | `WmsSepararConcluido.dc.html` | Os 42 volumes com o conteúdo, as unidades, o peso e "Etiqueta"; "Etiquetas dos volumes" e "Romaneio"; as "Etiquetas para trocar" que sobraram e as caixas vazias, já encerradas. |
+| Armazenagem · Pedidos, Para entregar | `WmsSepararParaEntregar.dc.html` | O pedido em separação mostra o progresso e "Continuar"; o separado mostra os volumes e o lacre, com "Etiquetas dos volumes", "Romaneio" e o aviso das etiquetas de caixa por trocar. "Entregue" não muda. |
+| Armazenagem · Separar no celular | `WmsSepararCelular.dc.html` | A mesma bancada no celular: o progresso, o volume aberto, a linha com diferença ("separado 1 de 2 · Avaria") e "1 linha com diferença". |
+| Etiqueta da caixa aberta | `WmsSepararEtiquetaCaixa.dc.html` | A etiqueta de hoje com o saldo da caixa e "saldo em 12/11/2026"; a origem e a data de entrada ficam, e o peso sai. |
+| Etiqueta do volume | `WmsSepararEtiquetaVolume.dc.html` | O pedido, "12 de 42", o cliente, o destino, a data, o peso, o conteúdo com o código do cliente e as unidades. Sem caixa, posição nem valor. |
+| Romaneio (A4) | `WmsSepararRomaneio.dc.html` | O conteúdo completo de cada volume, com a quantidade e o peso; o lacre e o total de volumes. Sem caixa, posição nem valor. |
+| Armazenagem · Mapa | `WmsSepararMapa.dc.html` | Depois do pedido: a caixa aberta com o saldo, as caixas que saíram em "Saíram desta prateleira" e "Posições ocupadas" contando só a prateleira com caixa com saldo. |
+
+Da página 2, as partes 2, 3, 4 e 5 estão no código desde 10/11/2026 (registro
+em `docs/plataforma/separacao-com-caixas.md`, seção 5.1): a bancada com o
+progresso, "Separar", "Desfazer", "Separar menos" e "Concluir separação" com
+o lacre, a fila com "Separar"/"Continuar" e o selo "em separação desde", o
+celular; da parte 3, a caixa de cada linha, "Outra caixa", "Etiquetas para
+trocar", a etiqueta da caixa aberta e o Mapa depois do pedido; e, da parte
+4, os volumes na bancada, "Levar a caixa", a etiqueta do volume, o romaneio,
+o pedido separado e "Para entregar" com os volumes e o lacre. O que a tela
+tem de diferente das pranchas:
+
+- O volume aberto que ainda não tem nada aparece como o seguinte, vazio
+  ("Volume 13 · aberto · 0 un."), com "Fechar volume" desligado: ele abre na
+  próxima linha separada.
+- Com mais de uma caixa saindo inteira na mesma linha, o botão diz "Levar as
+  caixas".
+- No celular, a lista dos volumes fechados e as "Etiquetas para trocar" vêm
+  depois das linhas; o volume aberto, em cima, fecha sem peso, como na
+  prancha.
+- O desfazer que muda o número ou o conteúdo de um volume fechado avisa que
+  a etiqueta dele precisa sair de novo (a prancha não mostra esse caso).
+- Em "Para entregar", o pedido com a entrega definida mantém "Entrega" ou
+  "Alterar entrega" entre "Romaneio" e "Entregue", e o "⋯" de "Cancelar
+  pedido"; no celular, "Etiquetas dos volumes" e "Romaneio" ficam atrás de
+  "Ver volumes".
+- No pedido separado, o volume sem peso mostra só as unidades, e o volume de
+  antes desta parte aparece sozinho, com todos os itens.
+- O romaneio e a lista impressa trazem o logo da Dutelog no cabeçalho, no
+  lugar da palavra, e o rodapé de cada página sai pela margem da impressão.
+- Com diferença registrada, a bancada mostra "1 linha com diferença" também
+  no computador (a prancha só mostra no celular).
+- "Outra caixa" só aparece na linha com mais de uma caixa na prateleira, e a
+  quantidade de cada caixa pode ser digitada.
+- "Etiquetas para trocar" lista as cinco primeiras caixas e "Ver as N
+  caixas"; no celular, vem depois das linhas.
+- No Mapa, a caixa mantém a ficha de hoje (o conteúdo em linhas, as medidas e
+  o volume) e ganha o estado, o saldo e "saldo em"; "Saíram desta prateleira"
+  mostra as dez saídas mais recentes, com o volume na caixa que virou volume
+  ("inteira em 11/11/2026 · PED-0001, volume 11").
+- A etiqueta da caixa aberta escreve "Abertura 22/10/2026", sem o ponto do
+  meio, como a etiqueta de hoje.
+
+Página 3, a etiqueta com todos os produtos (parte 6, vale para todas as
+etiquetas de caixa e de volume):
+
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| Etiqueta da caixa, hoje | `WmsEtiquetaTodosHoje.dc.html` | A caixa com nove produtos imprime quatro e "+ 5 produto(s) no sistema". |
+| Etiqueta da caixa, todos os produtos | `WmsEtiquetaTodosCaixa.dc.html` | A mesma caixa em duas etiquetas do mesmo tamanho: a primeira com até cinco produtos e "etiqueta 1 de 2"; a de continuação com o código, a posição, "etiqueta 2 de 2" e os outros produtos. As unidades da caixa nas duas. |
+| Etiqueta do volume, todos os produtos | `WmsEtiquetaTodosVolume.dc.html` | O volume de dez produtos em duas etiquetas: a primeira com o pedido, "20 de 42" e "etiqueta 1 de 2"; a de continuação com o pedido, o volume e "etiqueta 2 de 2". |
+
+A página 3 foi aprovada em 10/11/2026 com o pedido do logo: as pranchas da
+caixa e do volume (e as duas etiquetas da página 2, `WmsSepararEtiquetaCaixa`
+e `WmsSepararEtiquetaVolume`) trazem o logo original da Dutelog no rodapé, no
+lugar da palavra; a prancha "hoje" fica como o retrato de antes. A etiqueta
+da caixa e a de posição estão no código desde 10/11/2026 (parte 6, registro
+em `docs/plataforma/separacao-com-caixas.md`, seção 5.1). O que a etiqueta
+real tem de diferente da prancha: no rolo da Zebra o logo sai em preto, e a
+etiqueta de posição ganhou o logo também.
+
+Perguntas e respostas do Leonardo (10/11/2026), também nas notas do canvas:
+
+Página 1, aprovada como está:
+
+1. A lista já sai com a caixa de cada item, lida do conteúdo de entrada da
+   caixa, sem baixa? Resposta: sim.
+2. A lista impressa leva "Separado" em branco, para anotar a quantidade
+   quando for diferente? Resposta: sim.
+
+Página 2:
+
+1. A caixa que sai inteira vira o volume, sem reembalar ("Levar a caixa")?
+   Resposta: sim.
+2. Como o pedido leva dias, a etiqueta do volume sai ao fechar cada volume
+   ("Volume 12"), sem o total, e o lote com o total ("Volume 12 de 42") só
+   depois de concluir. Resposta: sim.
+3. A etiqueta do volume mostra até quatro produtos e "+ n no romaneio", ou o
+   cliente precisa de todos os produtos na etiqueta? Resposta: ele precisa de
+   todos os produtos, e isso vale para todas as etiquetas do sistema. O
+   formato escolhido é o de várias etiquetas do mesmo tamanho (página 3); a
+   etiqueta maior, em A6, ficou de fora.
+4. Quem opera registra "Separar menos", e só a coordenação conclui o pedido
+   com diferença, como hoje? Resposta: sim.
+5. O peso do volume é opcional ao fechar? Resposta: sim.
+
+Página 3, aprovada:
+
+1. Pedido do Leonardo: o logo original da Dutelog nas etiquetas. Resposta:
+   entra no rodapé, no lugar da palavra, em todas as etiquetas.
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador

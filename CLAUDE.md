@@ -405,6 +405,58 @@ documentação de produto e operação está em `docs/`.
   callable só de leitura `getStockDates` (cliente sem prateleira; equipe por
   prateleira). Desenho, partes e hábitos da prateleira em
   `docs/plataforma/fifo-por-data.md`.
+- **Separação com caixa e volumes (decisões de 10/11/2026, em partes):** os
+  pedidos da BTG são grandes e levam de 3 a 4 dias para separar. O Leonardo
+  decidiu: a lista de separação por prateleira, com impressão, antes de
+  16/11; o progresso salvo por linha; o sistema baixa a caixa mais antiga e a
+  pessoa só corrige (revê a P8); etiqueta nova para a caixa aberta a cada
+  pedido; volumes de expedição com o conteúdo, etiqueta e romaneio; lacre por
+  pedido; a caixa vazia deixa de contar em "Posições ocupadas"; toda etiqueta
+  mostra todos os produtos; o limite de 100 itens por pedido fica. **A parte 1
+  (a lista de separação, só leitura e só o app) está no código:** "Ver itens"
+  por prateleira na ordem de caminhada, com a caixa de cada item
+  (`lib/warehouse-ops/lista-de-separacao.ts`, o conteúdo de entrada da caixa,
+  sem baixa), e "Imprimir lista" (`/pedidos/lista`, a folha A4 em
+  `features/warehouse-ops/lista-de-separacao-documento.tsx`). **A parte 6 (a
+  etiqueta com todos os produtos) também, para a caixa e a posição:**
+  `boxLabels` (`lib/warehouse-labels.ts`) devolve a primeira etiqueta, com até
+  cinco produtos, e as de continuação, com onze cada ("etiqueta 2 de 2"), e o
+  rodapé de toda etiqueta leva o logo da Dutelog, em preto no rolo da Zebra
+  (`components/labels/label-sheet.tsx`). **As partes 2 e 5 (separar com o
+  progresso salvo e "Separar menos") também:** a bancada do pedido
+  (`/pedidos/separar`) grava cada linha na hora por `setPickLineSeparated`
+  (o progresso mora em `pick_lines`, `separated_*`, sem tocar a reserva nem
+  o saldo) e conclui por `completeOrderSeparation`, que roda as transições de
+  sempre (`advanceWarehouseTaskTransaction`) numa chamada, com o lacre;
+  quem opera registra a diferença e só a coordenação conclui o pedido com
+  diferença; a contagem cíclica recusa a prateleira com linha já separada
+  (`functions/wms/src/domain/pick-progress.ts`), e o cancelamento no meio da
+  separação manda o que as linhas já separaram à `EXPEDICAO`, com a guarda de
+  volta, como o separado do pedido concluído. **A parte 3 (a caixa na
+  separação) também:** o saldo da caixa é o conteúdo de entrada menos o que
+  as separações tiraram (`taken_lines` na caixa; a regra em
+  `lib/dominio/src/saldo-da-caixa.ts`, com cópia literal no WMS travada em
+  `domain/saldo-da-caixa.test.ts`); separar a linha baixa a caixa mais antiga
+  da prateleira na mesma transação, "Outra caixa" informa de qual saiu, a
+  caixa de que sai tudo fica `emptied` (fora do Mapa, de "Posições ocupadas"
+  e do encaixe), e a caixa aberta fica em "Etiquetas para trocar" até
+  `recordBoxBalanceLabelPrint`. O conteúdo de entrada não muda, e o que volta
+  à prateleira (cancelamento, devolução) volta sem caixa. **A parte 4 (os
+  volumes de expedição) também:** a linha separada entra no volume aberto da
+  tarefa (`pick_tasks.volumes`; a regra em
+  `functions/wms/src/domain/order-volumes.ts`), "Fechar volume"
+  (`closeOrderVolume`) fecha com o peso, opcional, e "Levar a caixa" faz da
+  caixa que sai inteira o volume; os números vão de 1 a N, sem buraco. A
+  conclusão grava um `packages` por volume, com os `package_items` dele, e o
+  lacre continua um por pedido. A etiqueta do volume sai em Estoque ›
+  Etiquetas (`?pedido=…&volumes=`), o romaneio em `/pedidos/romaneio`, e os
+  dois vão ao cliente: não citam caixa, posição nem valor. "Para entregar"
+  diz os volumes e o lacre, e o pedido já separado abre com os volumes em
+  `/pedidos/separar`. As partes 2 a 5 entraram na `main` pelo PR 592, com o
+  OK do Leonardo em 10/11/2026, e as seis partes estão no `dute-prod` desde a
+  publicação manual do mesmo dia (commit `7512f101`, 19:52 UTC, com todas as
+  conferências verdes). Tela só entra com mockup aprovado. Desenho, partes e
+  registro em `docs/plataforma/separacao-com-caixas.md`.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os
   modelos (`uniformes` pronto, `mobiliario` e `insumos` em construção) e os

@@ -19,6 +19,12 @@ export const TELAS_DO_WMS_NA_V3: readonly string[] = [
   "/wms/receber",
   // Parte 5.4e: os Alertas de itens parados, tela nova já na v3.
   "/estoque/alertas",
+  // Separação com caixas, parte 1b: a lista de separação para imprimir, tela nova já na v3.
+  "/pedidos/lista",
+  // Separação com caixas, parte 2: a bancada do pedido, tela nova já na v3.
+  "/pedidos/separar",
+  // Separação com caixas, parte 4c: o romaneio para imprimir, tela nova já na v3.
+  "/pedidos/romaneio",
 ];
 
 /**

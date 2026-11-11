@@ -1,5 +1,8 @@
 /**
- * Desenho das etiquetas de caixa e de posição e da folha A4 com dez delas.
+ * Desenho das etiquetas de caixa, de posição e de volume e da folha A4 com
+ * dez delas. A caixa e o volume com mais de cinco produtos saem em mais de
+ * uma etiqueta do mesmo tamanho: a primeira e as de continuação (separação
+ * com caixas, partes 4c e 6).
  *
  * Papel de impressão: medidas físicas em milímetros e preto sobre branco,
  * fora dos tokens do tema, porque o resultado é a etiqueta adesiva e não a
@@ -17,6 +20,7 @@ import {
   type LabelData,
   type LabelMode,
   type PositionLabelData,
+  type VolumeLabelData,
   LABEL_MM,
   SHEET_MM,
   sheetMargins,
@@ -87,10 +91,67 @@ function LabelFrame({ children, ariaLabel }: { children: React.ReactNode; ariaLa
   );
 }
 
-export function BoxLabelCard({ label }: { label: BoxLabelData }) {
-  const units = new Intl.NumberFormat("pt-BR").format(label.units);
+/**
+ * O logo original da Dutelog no rodapé de toda etiqueta (pedido do Leonardo,
+ * 10/11/2026). Na folha A4 sai nas cores dele; no rolo da Zebra, que só
+ * imprime preto, sai em preto (labelSheetCss).
+ */
+export const LOGO_MM = { height: 3.6 } as const;
+
+function Logo() {
+  return <img className="lbl-logo" src="/dutelog-logo.png" alt="Dutelog" style={{ display: "block", height: `${LOGO_MM.height}mm`, width: "auto", flexShrink: 0 }} />;
+}
+
+/** O rodapé da etiqueta: o logo, a parte ("etiqueta 1 de 2") quando a caixa pede mais de uma, e o total. */
+function LabelFooter({ part, children }: { part?: string | null; children: React.ReactNode }) {
   return (
-    <LabelFrame ariaLabel={`Etiqueta da caixa ${label.code}`}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "3mm", fontSize: "7pt", fontWeight: 700 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: "1.8mm", minWidth: 0 }}>
+        <Logo />
+        {part ? <span style={ellipsis}>{part}</span> : null}
+      </span>
+      <span style={{ flexShrink: 0, textAlign: "right" }}>{children}</span>
+    </div>
+  );
+}
+
+/** "etiqueta 2 de 3"; com tudo numa etiqueta só, nada. */
+function partLabel(label: { part: number; parts: number }) {
+  return label.parts > 1 ? `etiqueta ${label.part} de ${label.parts}` : null;
+}
+
+const quantity = new Intl.NumberFormat("pt-BR");
+
+/** "39 un."; na caixa aberta, o saldo e de quando ele é: "7 un. · saldo em 12/11/2026". */
+function unitsLabel(label: Pick<BoxLabelData, "units" | "balanceAt">) {
+  const units = `${quantity.format(label.units)} un.`;
+  return label.balanceAt ? `${units} · saldo em ${label.balanceAt}` : units;
+}
+
+/** As linhas do conteúdo: a quantidade, o nome com o tamanho, o código do cliente e o SKU. */
+function ContentLines({ lines }: { lines: BoxLabelData["lines"] }) {
+  return (
+    <>
+      {lines.map((line) => {
+        const codes = [...new Set([line.code, line.sku].filter(Boolean))];
+        return (
+          <div key={`${line.code}-${line.name}`} className="lbl-line" style={{ ...ellipsis, fontSize: "6.5pt", lineHeight: 1.2 }}>
+            <strong style={{ fontVariantNumeric: "tabular-nums" }}>{quantity.format(line.qty)} ×</strong> {line.name}
+            {codes.length ? <span style={{ opacity: 0.75 }}>{codes.map((code) => ` · ${code}`).join("")}</span> : null}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+const content: React.CSSProperties = { flex: 1, minHeight: 0, overflow: "hidden", borderTop: `0.2mm solid ${INK}`, paddingTop: "0.8mm" };
+
+export function BoxLabelCard({ label }: { label: BoxLabelData }) {
+  const part = partLabel(label);
+  if (label.part > 1) return <BoxContinuationCard label={label} />;
+  return (
+    <LabelFrame ariaLabel={part ? `Etiqueta da caixa ${label.code}, ${label.part} de ${label.parts}` : `Etiqueta da caixa ${label.code}`}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "3mm" }}>
         <div style={{ minWidth: 0 }}>
           <div style={caption}>Caixa</div>
@@ -107,31 +168,37 @@ export function BoxLabelCard({ label }: { label: BoxLabelData }) {
           {label.customer} · {label.dimensions}
         </span>
         <span style={{ flexShrink: 0 }}>
-          {label.origin} {label.printedAt}
+          {label.origin} {label.date}
         </span>
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflow: "hidden", borderTop: `0.2mm solid ${INK}`, paddingTop: "0.8mm" }}>
-        {label.lines.length ? (
-          label.lines.map((line) => {
-            const codes = [...new Set([line.code, line.sku].filter(Boolean))];
-            return (
-              <div key={`${line.code}-${line.name}`} style={{ ...ellipsis, fontSize: "6.5pt", lineHeight: 1.3 }}>
-                <strong style={{ fontVariantNumeric: "tabular-nums" }}>{new Intl.NumberFormat("pt-BR").format(line.qty)} ×</strong> {line.name}
-                {codes.length ? <span style={{ opacity: 0.75 }}>{codes.map((code) => ` · ${code}`).join("")}</span> : null}
-              </div>
-            );
-          })
-        ) : (
-          <div style={{ fontSize: "7pt", fontStyle: "italic" }}>Conteúdo a lançar na contagem.</div>
-        )}
-        {label.hiddenLines > 0 ? (
-          <div style={{ fontSize: "6pt", fontStyle: "italic", lineHeight: 1.3 }}>+ {label.hiddenLines} produto(s) no sistema</div>
-        ) : null}
+      <div className="lbl-content" style={content}>
+        {label.lines.length ? <ContentLines lines={label.lines} /> : <div style={{ fontSize: "7pt", fontStyle: "italic" }}>Conteúdo a lançar na contagem.</div>}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "7pt", fontWeight: 700 }}>
-        <span>Dutelog</span>
-        <span>{units} un.</span>
+      <LabelFooter part={part}>{unitsLabel(label)}</LabelFooter>
+    </LabelFrame>
+  );
+}
+
+/**
+ * A etiqueta de continuação (docs/mockups/WmsEtiquetaTodosCaixa.dc.html): os
+ * produtos que não couberam na primeira, com a caixa, a posição, a parte e as
+ * unidades da caixa inteira. Sem código de barras: o da primeira identifica a
+ * caixa.
+ */
+function BoxContinuationCard({ label }: { label: BoxLabelData }) {
+  return (
+    <LabelFrame ariaLabel={`Etiqueta da caixa ${label.code}, ${label.part} de ${label.parts}`}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "3mm" }}>
+        <span style={{ ...ellipsis, fontFamily: MONO, fontSize: "11pt", fontWeight: 700, letterSpacing: "0.02em", lineHeight: 1.2 }}>
+          {label.code}
+          <strong style={{ fontFamily: FONT, fontWeight: 800 }}> · {label.position}</strong>
+        </span>
+        <span style={{ flexShrink: 0, fontSize: "8pt", fontWeight: 800 }}>{partLabel(label)}</span>
       </div>
+      <div className="lbl-content" style={content}>
+        <ContentLines lines={label.lines} />
+      </div>
+      <LabelFooter>{unitsLabel(label)}</LabelFooter>
     </LabelFrame>
   );
 }
@@ -157,16 +224,75 @@ export function PositionLabelCard({ label }: { label: PositionLabelData }) {
         <span style={ellipsis}>{label.dimensions}</span>
         <span style={{ flexShrink: 0 }}>Peso máx. {label.maxWeight}</span>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "7pt", fontWeight: 700 }}>
-        <span>Dutelog</span>
-        <span>Comprimento × largura × altura livre</span>
+      <LabelFooter>Comprimento × largura × altura livre</LabelFooter>
+    </LabelFrame>
+  );
+}
+
+/**
+ * A etiqueta do volume de expedição (docs/mockups/WmsSepararEtiquetaVolume
+ * .dc.html): o pedido, o volume (com o total, depois de concluir), o código
+ * de barras, o cliente e o destino, a data e o peso, e os produtos com o
+ * código do cliente. Vai ao cliente: sem caixa, posição nem valor.
+ */
+export function VolumeLabelCard({ label }: { label: VolumeLabelData }) {
+  const part = partLabel(label);
+  if (label.part > 1) return <VolumeContinuationCard label={label} />;
+  return (
+    <LabelFrame ariaLabel={part ? `Etiqueta do volume ${label.number} do pedido ${label.order}, ${label.part} de ${label.parts}` : `Etiqueta do volume ${label.number} do pedido ${label.order}`}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "3mm" }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={caption}>Pedido</div>
+          <div style={{ ...ellipsis, fontFamily: MONO, fontSize: "15pt", fontWeight: 700, lineHeight: 1.05, letterSpacing: "0.02em" }}>{label.order}</div>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={caption}>Volume</div>
+          <div style={{ fontSize: "24pt", fontWeight: 800, lineHeight: 1 }}>
+            {quantity.format(label.number)}
+            {label.total ? <span style={{ fontSize: "12pt", fontWeight: 700 }}> de {quantity.format(label.total)}</span> : null}
+          </div>
+        </div>
       </div>
+      <Barcode value={label.code} heightMm={9} />
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "3mm", fontSize: "6.5pt" }}>
+        <span style={ellipsis}>{label.recipient}</span>
+        <span style={{ flexShrink: 0 }}>{label.closing}</span>
+      </div>
+      <div className="lbl-content" style={content}>
+        <ContentLines lines={label.lines} />
+      </div>
+      <LabelFooter part={part}>{quantity.format(label.units)} un.</LabelFooter>
+    </LabelFrame>
+  );
+}
+
+/**
+ * A continuação da etiqueta do volume (docs/mockups/WmsEtiquetaTodosVolume
+ * .dc.html): os produtos que não couberam na primeira, com o pedido, o
+ * volume, a parte e as unidades do volume inteiro.
+ */
+function VolumeContinuationCard({ label }: { label: VolumeLabelData }) {
+  return (
+    <LabelFrame ariaLabel={`Etiqueta do volume ${label.number} do pedido ${label.order}, ${label.part} de ${label.parts}`}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "3mm" }}>
+        <span style={{ ...ellipsis, fontFamily: MONO, fontSize: "11pt", fontWeight: 700, letterSpacing: "0.02em", lineHeight: 1.2 }}>
+          {label.order}
+          <strong style={{ fontFamily: FONT, fontWeight: 800 }}> · Volume {quantity.format(label.number)}</strong>
+        </span>
+        <span style={{ flexShrink: 0, fontSize: "8pt", fontWeight: 800 }}>{partLabel(label)}</span>
+      </div>
+      <div className="lbl-content" style={content}>
+        <ContentLines lines={label.lines} />
+      </div>
+      <LabelFooter>{quantity.format(label.units)} un.</LabelFooter>
     </LabelFrame>
   );
 }
 
 export function LabelCard({ label }: { label: LabelData }) {
-  return label.kind === "box" ? <BoxLabelCard label={label} /> : <PositionLabelCard label={label} />;
+  if (label.kind === "box") return <BoxLabelCard label={label} />;
+  if (label.kind === "volume") return <VolumeLabelCard label={label} />;
+  return <PositionLabelCard label={label} />;
 }
 
 function EmptySlot() {
@@ -195,7 +321,7 @@ export function labelSheetCss(mode: LabelMode) {
 }
 .lbl-roll .lbl { break-after: page; page-break-after: always; }
 .lbl-sheet:last-child, .lbl-roll .lbl:last-child { break-after: auto; page-break-after: auto; }
-.lbl-empty { visibility: hidden; }
+.lbl-empty { visibility: hidden; }${mode === "zebra" ? "\n.lbl-logo { filter: brightness(0); }" : ""}
 @media screen {
   .lbl-sheet, .lbl-roll { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12); margin: 0 auto 12px; }
   .lbl-roll { width: ${LABEL_MM.width}mm; }

@@ -136,6 +136,12 @@ de base até ficarem `stored`. A frente de uma pilha é contada uma única vez.
 Caixas antigas sem vínculo de apoio permanecem na base; nada é reorganizado
 automaticamente. Não se permite remover uma caixa com outra apoiada sobre ela.
 
+A caixa de que a separação tira tudo fica `emptied` (separação com caixas,
+parte 3c, `docs/plataforma/separacao-com-caixas.md`): não ocupa mais a frente
+nem o peso da prateleira e não serve de base. A caixa que estava sobre ela
+passa a ocupar a própria frente e não recebe outra em cima, pela regra do
+apoio que falta.
+
 ## 4. Regras de endereçamento (motor determinístico)
 
 Entrada: uma caixa com cliente, tipo ou medidas, peso e conteúdo.
@@ -329,8 +335,12 @@ app (`lib/code128.ts`, conjunto B, com teste do dígito verificador da norma).
   A4 saem dez (duas colunas por cinco linhas, bloco centrado); "pular N" usa
   uma folha adesiva já começada.
 - Caixa: código em barras e em texto, posição em destaque, cliente, medidas,
-  peso, origem e data, até quatro produtos com quantidade e "+ n produto(s)"
-  quando não cabe, total de unidades. O conteúdo vem das linhas da abertura
+  peso, origem e data, os produtos com quantidade e o total de unidades.
+  Desde 10/11/2026 saem todos os produtos (separação com caixas, parte 6): a
+  primeira etiqueta leva até cinco e os outros vêm em etiquetas de
+  continuação do mesmo tamanho ("etiqueta 2 de 2"); antes eram quatro e "+ n
+  produto(s) no sistema". O rodapé leva o logo da Dutelog, em preto no rolo
+  da Zebra. O conteúdo vem das linhas da abertura
   da caixa, por isso a etiqueta se imprime depois de lançar os produtos. A
   caixa do recebimento (parte 6 do recebimento com caixas, 07/11/2026) traz
   o conteúdo nela, diz "Recebimento · NF 48.377" e imprime com o destino

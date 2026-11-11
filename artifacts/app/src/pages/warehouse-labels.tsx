@@ -7,6 +7,12 @@
  * chegada, parte 6 do recebimento com caixas), com os códigos na URL. Dez por
  * folha A4 ou uma por etiqueta (rolo da Zebra pelo driver). A impressão é a
  * do navegador.
+ *
+ * As etiquetas dos volumes de um pedido (separação com caixas, parte 4c)
+ * também saem daqui: `?pedido=` com `volumes=12` (o volume que acabou de
+ * fechar, sem o total) ou `volumes=todos` (o lote, com "de 42" depois de
+ * concluir). As caixas que o pedido abriu chegam com o pedido junto
+ * (`?caixas=…&pedido=`), para a volta ser ao pedido.
  */
 
 import { useMemo } from "react";
@@ -31,30 +37,40 @@ import {
   type LabelData,
   type LabelMode,
   LABELS_PER_SHEET,
-  boxLabel,
+  boxLabels,
   boxLabelAvailability,
   impressoesParaRegistrar,
+  saldosParaRegistrar,
   labelsUrl,
   type ImpressaoParaRegistrar,
   paginate,
   parseLabelsQuery,
   positionLabel,
+  volumeLabels,
 } from "@/lib/warehouse-labels";
 import { fetchJson, formatNumber, getErrorMessage } from "@/lib/warehouse-ops/model";
+import { hrefDaBancada } from "@/lib/warehouse-ops/separacao";
+import { useVolumesDoPedido } from "@/lib/warehouse-ops/use-volumes-do-pedido";
+import { nomeDoVolume, textoDeVolumes } from "@/lib/warehouse-ops/volumes-do-pedido";
 import { type WarehousePosition, sortPositions } from "@/lib/warehouse-positions";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { registrarEtiquetaImpressa } from "@/lib/wms/caixas-do-recebimento";
+import { registrarEtiquetaDeSaldo } from "@/lib/wms/separacao";
 
 type PositionsResponse = { items?: WarehousePosition[] };
 
 export default function WarehouseLabelsPage() {
   // Caixas e conteúdo do cliente ativo (o mesmo da Contagem que abriu a página).
-  const { code: customerCode } = useActiveCustomer();
+  const { code: customerCode, options: customers } = useActiveCustomer();
   const search = useSearch();
   const [, navigate] = useLocation();
   const query = useMemo(() => parseLabelsQuery(search), [search]);
   const wantsBoxes = query.session || query.boxes.length > 0;
   const wantsPositions = query.positions.length > 0;
+  // O pedido de onde a pessoa veio: os volumes dele, e a volta a ele. Lido pelo pedido, não pelo cliente ativo.
+  const fromOrder = Boolean(query.order);
+  const wantsVolumes = fromOrder && (query.volumes === "all" || query.volumes.length > 0);
+  const orderVolumes = useVolumesDoPedido(fromOrder ? query.order : null);
 
   const boxesQuery = useQuery({
     queryKey: ["warehouse-boxes", customerCode],
@@ -96,27 +112,63 @@ export default function WarehouseLabelsPage() {
     return sortPositions(query.positions.flatMap((code) => byCode.get(code) ?? []));
   }, [positionsQuery.data, query.positions, wantsPositions]);
 
+  // Os volumes pedidos, entre os fechados do pedido; o total só entra com o pedido concluído (decisão 12).
+  const volumes = useMemo(
+    () => (query.volumes === "all" ? orderVolumes.volumes : orderVolumes.volumes.filter((volume) => (query.volumes as number[]).includes(volume.numero))),
+    [orderVolumes.volumes, query.volumes],
+  );
+  const order = orderVolumes.pedido;
+  const orderCustomer = order ? customers.find((customer) => customer.code === order.clienteCodigo)?.name || order.clienteCodigo : "";
+
   const labels = useMemo<LabelData[]>(() => {
     const lines = sessionQuery.data?.lines ?? [];
-    return [...boxes.map((box) => boxLabel(box, lines)), ...positions.map(positionLabel)];
-  }, [boxes, positions, sessionQuery.data?.lines]);
+    // A caixa com mais de cinco produtos sai em mais de uma etiqueta: a primeira e as de continuação.
+    return [
+      ...boxes.flatMap((box) => boxLabels(box, lines)),
+      ...positions.map(positionLabel),
+      ...(order
+        ? volumes.flatMap((volume) =>
+            volumeLabels(volume, { number: order.numero, customer: orderCustomer, destination: order.destino, total: order.concluido ? orderVolumes.volumes.length : null }),
+          )
+        : []),
+    ];
+  }, [boxes, positions, sessionQuery.data?.lines, volumes, order, orderCustomer, orderVolumes.volumes.length]);
 
   const missingBoxes = wantsBoxes && boxesQuery.isSuccess ? query.boxes.filter((code) => !chosen.some((box) => box.code === code)) : [];
   const missingPositions =
     wantsPositions && positionsQuery.isSuccess ? query.positions.filter((code) => !positions.some((position) => position.code.toUpperCase() === code)) : [];
 
+  // O volume pedido que o pedido não tem fechado: ainda aberto, ou de outro número.
+  const missingVolumes =
+    wantsVolumes && orderVolumes.estado === "pronto" && query.volumes !== "all"
+      ? query.volumes.filter((number) => !volumes.some((volume) => volume.numero === number)).map((number) => nomeDoVolume(number))
+      : [];
+
   const sheets = query.mode === "zebra" ? labels.map((label) => [label]) : paginate(labels, LABELS_PER_SHEET, query.skip);
-  const loading = (wantsBoxes && (boxesQuery.isLoading || (needsSession && sessionQuery.isLoading))) || (wantsPositions && positionsQuery.isLoading);
+  const loading =
+    (wantsBoxes && (boxesQuery.isLoading || (needsSession && sessionQuery.isLoading))) ||
+    (wantsPositions && positionsQuery.isLoading) ||
+    (fromOrder && orderVolumes.estado === "carregando");
   const error =
-    (wantsBoxes && (boxesQuery.error ?? (needsSession ? sessionQuery.error : null))) || (wantsPositions && positionsQuery.error) || null;
-  const back = query.receipt
-    ? { href: "/wms/receber", label: "Receber" }
-    : wantsPositions && !wantsBoxes
-      ? { href: "/estoque/posicoes", label: "Posições" }
-      : { href: "/wms/contagem", label: "Contagem" };
-  const description = query.receipt
-    ? [`Chegada ${query.receipt}`, invoice ? `NF ${invoice}` : null, customerCode].filter(Boolean).join(" · ")
-    : "Etiqueta de 101,6 × 50,8 mm, dez por folha A4 ou uma por etiqueta no rolo da Zebra. Imprimir / Salvar PDF usa a impressão do navegador.";
+    (wantsBoxes && (boxesQuery.error ?? (needsSession ? sessionQuery.error : null))) ||
+    (wantsPositions && positionsQuery.error) ||
+    (wantsVolumes && orderVolumes.estado === "erro" ? new Error("Não foi possível carregar os volumes do pedido.") : null) ||
+    (wantsVolumes && orderVolumes.estado === "nao_encontrado" ? new Error("Pedido não encontrado.") : null) ||
+    null;
+  const back = fromOrder
+    ? // De volta ao pedido: a bancada, ou o pedido já separado.
+      { href: query.order ? hrefDaBancada(query.order) : "/pedidos", label: order?.numero || "Pedidos" }
+    : query.receipt
+      ? { href: "/wms/receber", label: "Receber" }
+      : wantsPositions && !wantsBoxes
+        ? { href: "/estoque/posicoes", label: "Posições" }
+        : { href: "/wms/contagem", label: "Contagem" };
+  const description =
+    fromOrder && order
+      ? [order.numero, orderCustomer, order.destino].filter(Boolean).join(" · ")
+      : query.receipt
+        ? [`Chegada ${query.receipt}`, invoice ? `NF ${invoice}` : null, customerCode].filter(Boolean).join(" · ")
+        : "Etiqueta de 101,6 × 50,8 mm, dez por folha A4 ou uma por etiqueta no rolo da Zebra. Imprimir / Salvar PDF usa a impressão do navegador.";
 
   const update = (changes: { mode?: LabelMode; skip?: number }) =>
     navigate(labelsUrl({ ...query, ...changes }), { replace: true });
@@ -138,10 +190,21 @@ export default function WarehouseLabelsPage() {
     onError: (error) =>
       toast({ title: "Não foi possível registrar a impressão", description: getErrorMessage(error), variant: "destructive" }),
   });
+  // A caixa aberta sai com o saldo: a impressão registrada tira a caixa de "Etiquetas para trocar" (separação com caixas, parte 3d).
+  const registrarSaldo = useMutation({
+    mutationFn: (box_codes: string[]) => registrarEtiquetaDeSaldo({ box_codes, idempotency_key: crypto.randomUUID() }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["warehouse-boxes"] });
+    },
+    onError: (error) =>
+      toast({ title: "Não foi possível registrar a impressão", description: getErrorMessage(error), variant: "destructive" }),
+  });
   const imprimir = () => {
     window.print();
     const impressoes = impressoesParaRegistrar(boxes);
     if (impressoes.length) registrar.mutate(impressoes);
+    const saldos = saldosParaRegistrar(boxes);
+    if (saldos.length) registrarSaldo.mutate(saldos);
   };
 
   return (
@@ -192,6 +255,7 @@ export default function WarehouseLabelsPage() {
               {query.mode === "a4" ? ` · ${formatNumber(sheets.length)} folha(s)` : ""}
               {boxes.length ? ` · ${formatNumber(boxes.length)} caixa(s)` : ""}
               {positions.length ? ` · ${formatNumber(positions.length)} posição(ões)` : ""}
+              {volumes.length ? ` · ${textoDeVolumes(volumes.length)}` : ""}
             </div>
           </div>
         </PageHeader>
@@ -208,6 +272,12 @@ export default function WarehouseLabelsPage() {
           <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
             <AlertTitle>Caixas ainda sem etiqueta</AlertTitle>
             <AlertDescription>{heldBack.join(" ")}</AlertDescription>
+          </Alert>
+        ) : null}
+        {missingVolumes.length ? (
+          <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
+            <AlertTitle>Volumes ainda sem etiqueta</AlertTitle>
+            <AlertDescription>{missingVolumes.join(", ")}. A etiqueta sai do volume fechado.</AlertDescription>
           </Alert>
         ) : null}
         {needsSession && !sessionQuery.data?.lines?.length ? (
@@ -227,7 +297,7 @@ export default function WarehouseLabelsPage() {
         </Alert>
       ) : loading ? (
         <Skeleton className="no-print h-96 w-full rounded-lg" />
-      ) : !wantsBoxes && !wantsPositions ? (
+      ) : !wantsBoxes && !wantsPositions && !wantsVolumes ? (
         <Empty className="no-print min-h-72 rounded-lg border border-dashed border-border bg-card">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -247,7 +317,11 @@ export default function WarehouseLabelsPage() {
             </EmptyMedia>
             <EmptyTitle>Nada para imprimir</EmptyTitle>
             <EmptyDescription>
-              {query.session ? "A sessão de abertura ainda não tem caixa guardada." : "Os códigos pedidos não existem ou as caixas ainda aguardam a guarda."}
+              {wantsVolumes
+                ? "O pedido ainda não tem volume fechado."
+                : query.session
+                  ? "A sessão de abertura ainda não tem caixa guardada."
+                  : "Os códigos pedidos não existem ou as caixas ainda aguardam a guarda."}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>

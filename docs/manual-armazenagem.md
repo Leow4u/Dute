@@ -77,37 +77,137 @@ os recebimentos em aberto e os SKUs em estoque.
 
 ## Pedidos
 
-"Em aberto" e "Entregues", relidos a cada minuto. O pedido aberto mostra cada
-item com a foto, o endereço, o SKU e a quantidade. O pedido com exceção vem
-antes, em vermelho, com "Tratar": a tarefa abre num painel, com o avanço e
-"Registrar exceção" ("Motivo da exceção").
+"Em aberto" e "Entregues", relidos a cada minuto. O pedido aberto mostra os
+itens por prateleira, na ordem de caminhada do cadastro de Posições: o
+cabeçalho da prateleira com os itens e as unidades ("A-03 5 itens · 450 un.")
+e, em cada linha, a foto, o nome com o tamanho, o código do cliente e o SKU,
+a caixa onde o item está e a quantidade. A caixa aparece no pedido em "Para
+separar": é a guardada naquela prateleira que recebeu o item, a mais antiga
+primeiro; é o conteúdo de entrada, e a separação ainda não baixa a caixa. O
+pedido já separado ou entregue não mostra caixa. O pedido em "Para separar" e
+em "Para entregar" mostra o "Para quando" que o cliente pediu. O pedido com
+exceção vem antes, em vermelho, com "Tratar": a tarefa abre num painel, com o
+avanço e "Registrar exceção" ("Motivo da exceção").
 
 - **"Para aprovar"** (só `owner`, `admin` e `interno`): a crítica ou urgente
   primeiro, depois a alta e a mais antiga. Com saldo, "Aprovar" (vai para a
   separação) e "Recusar" ("Motivo", 3 caracteres ou mais); sem, "Ver itens".
-- **"Para separar":** "Separado" pede o "Número do lacre" e, com "Confirmar
-  separação", confirma cada linha na quantidade pedida, num volume só. Para a
-  coordenação (`owner`, `admin` e `interno`), o diálogo lista cada linha com
-  "Pedido" e "Separado" (com − e +). A linha a menos mostra a diferença e pede
-  "Motivo da diferença em …" ("Falta" ou "Avaria") e "Detalhe". O pedido segue
-  com o separado: a diferença volta a ficar disponível, e o item zerado não vai
-  no volume. Quem opera registra a falta pelo "Tratar", e a exceção fica
-  resolvida quando a coordenação separa a menos.
-- **"Para entregar":** "Entregue" pede "Quem levou" e "Placa" (no pronto para
+- **"Para separar":** "Imprimir lista" abre a "Lista de separação" do pedido
+  em A4, para levar ao corredor: o pedido, o cliente, o destino, o "Para
+  quando" e, por prateleira, o quadrado para marcar, o produto, o código, a
+  caixa, a quantidade e "Separado" em branco, para anotar a quantidade
+  diferente. "Imprimir" usa a impressão do navegador (ou "Salvar como PDF");
+  cada página leva o pedido e "página 2 de 5". No celular, "Imprimir lista"
+  fica ao lado de "Esconder itens". A lista só lê: nada muda no pedido.
+  "Separar" abre a bancada do pedido; depois da primeira linha, o botão vira
+  "Continuar" e o pedido ganha o selo "em separação desde 12/11 · 2 de 5
+  itens" (ver "Separar o pedido", abaixo).
+- **"Para entregar":** a linha diz os volumes e o lacre ("116 itens · 3.335
+  un. · 42 volumes · lacre 88231"). "Ver volumes" abre o pedido separado (ver
+  "O pedido separado", abaixo); "Etiquetas dos volumes" abre o lote das
+  etiquetas, com o total, e "Romaneio", a folha do pedido (no celular, os
+  dois ficam atrás de "Ver volumes"). Com caixa aberta pelo pedido ainda de
+  etiqueta velha, a linha avisa "5 etiquetas de caixa para trocar", com
+  "Imprimir". "Entregue" pede "Quem levou" e "Placa" (no pronto para
   envio; o aparelho lembra os últimos) e "Quem recebeu (opcional)". "Confirmar
   entrega" registra a saída e a entrega, e o estoque baixa. Na retirada pelo
   cliente, quem levou e a placa vêm da entrega.
 - **"Cancelar pedido"** (só `owner`, `admin` e `interno`): fica no "⋯" do
   pedido que ainda não saiu, em "Para separar" e "Para entregar". O diálogo
   pede o "Motivo" (3 caracteres ou mais). No pedido já separado, a tabela
-  "Voltam à posição" lista o item, a quantidade e a posição. "Cancelar pedido"
-  solta a reserva, cancela o que estava aberto e abre a guarda de volta (em
-  Receber, como a guarda da entrada). O pedido sai das filas. O cliente vê
-  "Cancelado pela Dutelog" e a data, sem o motivo.
+  "Voltam à posição" lista o item, a quantidade e a posição; no pedido em
+  separação, lista só as linhas já separadas, na quantidade separada.
+  "Cancelar pedido" solta a reserva, cancela o que estava aberto e abre a
+  guarda de volta do que já saiu da prateleira (em Receber, como a guarda da
+  entrada). O pedido sai das filas. O cliente vê "Cancelado pela Dutelog" e a
+  data, sem o motivo.
 
 Com a abertura do cliente ativo pendente ou em andamento, a faixa do inventário
 aparece com "Continuar contagem", e os pedidos de saída do cliente ficam
 bloqueados (na BTG, pelo controle geral; nos outros, com a sessão aberta).
+
+## Separar o pedido
+
+A bancada do pedido (Pedidos › "Separar" ou "Continuar") guarda o progresso
+linha a linha: a pessoa para, volta no dia seguinte e continua de onde parou,
+no computador ou no celular, e outra pessoa pode continuar. O que uma pessoa
+separa aparece para a outra sem recarregar.
+
+- **O cabeçalho:** o pedido, "em separação desde 10/11", o cliente, os itens
+  e as unidades, o "Para quando", "Imprimir lista" e "Concluir separação". O
+  progresso diz "10 de 116 itens · 665 de 3.335 un.".
+- **As linhas** vêm por prateleira, na ordem de caminhada. "Separar" grava a
+  linha na hora; "Desfazer" a volta. A prateleira toda separada fecha
+  sozinha, com "separado", e abre no botão ao lado. A primeira linha separada
+  começa a separação: o cliente passa a ver "Em separação" no portal.
+- **A caixa de cada linha:** a linha por separar diz de qual caixa da
+  prateleira o item sai, a mais antiga primeiro: "12 de CX-000027", com
+  "esvazia" quando a linha esgota a caixa, e "CX-000029 inteira" quando a
+  caixa sai toda. "Separar" baixa essas caixas, e a linha separada mostra de
+  onde saiu. Quem tirou de outra caixa usa "Outra caixa", no "⋯" da linha: "De
+  qual caixa saiu?" lista as caixas da prateleira que têm o item ("Abertura ·
+  22/10/2026 · tem 20 un."), com a quantidade de cada uma; "Confirmar caixas"
+  liga quando a soma fecha com a linha. O que as caixas da prateleira não têm
+  sai sem caixa.
+- **Os volumes:** a linha separada entra no volume aberto e diz em qual está
+  ("Volume 12"). O painel "Volumes" mostra o volume aberto com o que já tem;
+  "Fechar volume" fecha com o "Peso (kg)", opcional, e o volume seguinte abre
+  sozinho na próxima linha. No celular, o volume aberto vem em cima da lista,
+  e "Fechar volume" fecha sem peso. Cada volume fechado tem "Etiqueta", que
+  abre a etiqueta dele (ainda sem o total); "Ver os 11 volumes" mostra todos.
+  O volume fechado não reabre.
+- **"Levar a caixa":** na linha de que uma caixa sai inteira, a caixa vira o
+  volume, sem reembalar, já fechado, com o peso que ela tinha na entrada. O
+  resto da linha, se houver, entra no volume aberto. A etiqueta do volume
+  substitui a da caixa.
+- **Desfazer e os volumes:** "Desfazer" tira a linha do volume. O volume
+  fechado que fica vazio some, e o de maior número ocupa o número dele; o
+  fechado de que sai só uma parte perde o peso. Nos dois casos a bancada
+  avisa que a etiqueta daquele volume precisa sair de novo.
+- **"Etiquetas para trocar"** lista as caixas que o pedido abriu, com a
+  prateleira e o saldo ("A-05 · saldo 12 un."). "Imprimir" abre as etiquetas
+  delas com o saldo; a caixa sai da lista depois da impressão e volta se sair
+  mais peça dela.
+- **"Separar menos"** fica no "⋯" da linha: "Separado" (com − e +), o "Motivo
+  da diferença" ("Falta" ou "Avaria") e o "Detalhe". A linha fica "separado 1
+  de 2 · Avaria" e o pedido mostra "1 linha com diferença". Quem opera
+  registra a diferença; só a coordenação (`owner`, `admin` e `interno`)
+  conclui o pedido com diferença.
+- **"Concluir separação"** liga com todas as linhas tratadas (separadas ou
+  com a diferença registrada); antes, o pedido diz "106 itens por separar". O
+  diálogo diz os "Volumes" e as caixas de onde o pedido saiu ("Caixas
+  inteiras", "Caixas abertas" e "Caixas vazias"), pede o "Número do lacre",
+  um por pedido, e "Confirmar separação" fecha a separação e a embalagem de
+  uma vez; o volume aberto que tiver alguma coisa fecha junto, sem peso. O
+  pedido segue com o separado: a diferença volta a ficar disponível, e o item
+  zerado não vai em volume nenhum. O pedido vai para "Para entregar", e a
+  tela fica no pedido separado.
+- A contagem cíclica de uma prateleira com linha já separada é recusada até a
+  entrega: o item já saiu dela e só baixa do saldo na entrega.
+- O suporte vê a bancada, sem as ações.
+
+## O pedido separado
+
+Depois de "Confirmar separação", e por "Ver volumes" em "Para entregar", o
+pedido abre com o selo "separado", os volumes e o lacre.
+
+- **"Volumes"** lista cada volume com a caixa que virou o volume (quando foi
+  "Levar a caixa"), o conteúdo ("30 × Calça Social Masculino Preta · 40"), as
+  unidades e o peso. "Etiqueta" abre a etiqueta daquele volume.
+- **"Etiquetas dos volumes"** abre o lote, com o total em cada uma ("Volume
+  12 de 42"): é o que substitui as etiquetas que saíram ao fechar cada
+  volume. Na folha A4 ou no rolo da Zebra, como as outras etiquetas.
+- **"Romaneio"** abre a folha A4 do pedido: o cliente, o destino, o prazo, o
+  lacre, os volumes e as unidades, de quando a quando o pedido separou e
+  quem concluiu; e o conteúdo de cada volume, com o código do cliente, a
+  quantidade e o peso. "Imprimir" é o do navegador.
+- **"Etiquetas para trocar"** e **"Caixas vazias"** dizem as caixas que o
+  pedido abriu e ainda estão com a etiqueta velha, e as que ele esvaziou
+  ("CX-000027 · A-05").
+
+A etiqueta do volume e o romaneio vão ao cliente: levam o código do cliente,
+e não dizem caixa, prateleira nem valor. O pedido concluído antes dos volumes
+aparece com um volume só, com todos os itens.
 
 ## A entrega do pedido
 
@@ -293,22 +393,32 @@ dá as da rua a um cliente (com sigla, ou a BTG) ou as deixa "Sem cliente
 mapa inicial", só com o cadastro vazio, põe as 43 prateleiras de 16/10/2026.
 
 **O Mapa** mostra todas as zonas: "Posições ocupadas" (prateleiras com caixa
-guardada, a referência da fatura manual), as prateleiras, "Volume registrado" e
+com saldo, a referência da fatura manual), as prateleiras, "Volume registrado" e
 "Caixas guardadas". A prateleira fica "sem caixas registradas", "parcial", "sem
 vaga na base" (não cabe mais uma caixa de 50 × 50 × 35 cm na frente livre, ou o
 peso chegou ao máximo), "em verificação" ou "bloqueada". A ficha traz medidas,
 peso, frente livre e as caixas, cada uma com a origem ("Abertura", "Manual" ou
 "Recebimento · NF 48.377"), a data da guarda, o conteúdo (o da própria caixa, no
 recebimento; o da abertura do cliente ativo, na contagem) e "Etiqueta"; a caixa
-do recebimento com o destino confirmado aparece como "reservada".
+do recebimento com o destino confirmado aparece como "reservada". A caixa
+guardada diz "guardada" ou, depois que saiu peça dela, "aberta": a aberta
+mostra o que resta e "saldo em", sem o peso de entrada. A caixa de que a
+separação tirou tudo sai da prateleira, deixa de contar em "Posições ocupadas"
+e fica em "Saíram desta prateleira", com a data e o pedido ("inteira em
+11/11/2026 · PED-0001" ou "vazia em 12/11/2026 · PED-0001").
 
 **A etiqueta** tem 101,6 × 50,8 mm: "Folha A4, dez por folha" ou "Uma por
 etiqueta (rolo Zebra)"; "Pular etiquetas usadas" (0 a 9) aproveita folha
 começada; "Imprimir / Salvar PDF" usa o navegador. As duas trazem o código em
 barras (Code 128) e em texto. A da caixa traz a posição, o cliente, medidas e
-peso, a origem ("Abertura", "Manual" ou "Recebimento · NF 48.377"), a data, até
-4 produtos com o tamanho ao lado do nome, o código do cliente e o SKU ("+ 2
-produto(s) no sistema") e as unidades. Sai da caixa guardada do cliente ativo
+peso, a origem ("Abertura", "Manual" ou "Recebimento · NF 48.377"), a data,
+os produtos com o tamanho ao lado do nome, o código do cliente e o SKU, e as
+unidades. Todos os produtos saem: a primeira etiqueta leva até 5 e, com mais,
+diz "etiqueta 1 de 2"; os outros vêm em etiquetas de continuação do mesmo
+tamanho, com a caixa, a posição, "etiqueta 2 de 2", até 11 produtos cada e as
+unidades da caixa, sem código de barras. A contagem da tela soma as de
+continuação. O rodapé de toda etiqueta leva o logo da Dutelog (na folha A4,
+nas cores dele; no rolo da Zebra, em preto). Sai da caixa guardada do cliente ativo
 (o conteúdo da abertura vem da sessão) e da caixa do recebimento com o destino
 confirmado ou guardada (o conteúdo vem da própria caixa); aberta pelo Receber,
 a tela volta ao Receber, diz a chegada e nomeia a caixa ainda sem destino. Na
