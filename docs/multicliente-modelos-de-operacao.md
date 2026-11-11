@@ -294,8 +294,16 @@ a página: os textos de cada estado, a trava contra legenda, e o axe),
 `settings-customer-notifications.test.tsx` (a seção de avisos) e
 `customer-registry.test.ts` (as regras puras).
 
-O diálogo de cadastro ainda tem textos de apoio (o pacote encontrado, "mudar
-o modelo é um PR"); limpá-los é uma parte própria.
+O diálogo "Novo cliente" também ficou só com rótulos, dados e ações
+(11/11/2026, numa parte própria): saíram as dicas sob o código operacional,
+o portal e as observações internas (fica "SKU gerado", que é dado), as frases
+da caixa do pacote e o "mudar o modelo é um PR" da ficha do modelo. O pacote
+é o dado: o arquivo dele, em fonte fixa, quando o código tem um pacote no
+modelo escolhido, ou "Nenhum", como na página do cliente. A opção do portal
+é "Ativo", também como na página. A ficha "O que o modelo define" fica com o
+modelo, a situação e a lista. O teste "'Novo cliente' só tem rótulos, dados
+e ações", em `settings-customers.test.tsx`, lista os textos do diálogo e
+roda o axe, no vazio, com o código do pacote da BTG e no modelo sem portal.
 
 ## Prospect do Comercial (20/10/2026): o WMS não enxerga
 

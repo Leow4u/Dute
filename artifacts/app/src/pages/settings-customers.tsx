@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { GaleriaDeClientes } from "@/components/clientes/galeria-de-clientes";
 import { ClienteNaoEncontrado, PaginaDoCliente } from "@/components/clientes/pagina-do-cliente";
+import { Codigo } from "@/components/clientes/partes";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -57,7 +58,6 @@ import {
 import { comercialLiberado, PLATAFORMA_LIBERADA } from "@/lib/liberacao";
 import { CLIENT_PROFILES_QUERY_KEY } from "@/lib/active-customer-context";
 import { humanApiError } from "@/lib/permissions";
-import { cn } from "@/lib/utils";
 import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import { buildShelves } from "@/lib/warehouse-map";
 import type { AnyRecord } from "@/lib/warehouse-ops/model";
@@ -184,8 +184,9 @@ export default function SettingsCustomers() {
   }, [openCode]);
 
   const template = operationTemplate(form.operation_template) ?? OPERATION_TEMPLATES[0];
+  // O pacote só vale no modelo dele, como na página do cliente (resolveOperationProfile).
   const pack = packForCustomer(form.code);
-  const packApplies = pack !== null && pack.template === form.operation_template;
+  const appliedPack = pack && pack.template === form.operation_template ? pack : null;
   const templateWithoutPortal = template.portal === null;
 
   const openCreate = () => {
@@ -352,7 +353,7 @@ export default function SettingsCustomers() {
                     placeholder="Itaú Unibanco"
                   />
                 </FormField>
-                <FormField id="c-code" label="Código operacional" hint="Como o cliente aparece em todo o sistema. Não muda depois.">
+                <FormField id="c-code" label="Código operacional">
                   <Input
                     id="c-code"
                     required
@@ -396,11 +397,7 @@ export default function SettingsCustomers() {
                     </SelectContent>
                   </Select>
                 </FormField>
-                <FormField
-                  id="c-portal"
-                  label="Portal do cliente"
-                  hint={templateWithoutPortal ? "Este modelo não tem portal." : undefined}
-                >
+                <FormField id="c-portal" label="Portal do cliente">
                   <Select
                     value={form.portal_status}
                     disabled={templateWithoutPortal}
@@ -410,7 +407,7 @@ export default function SettingsCustomers() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="active">Ativo (módulos do modelo)</SelectItem>
+                      <SelectItem value="active">Ativo</SelectItem>
                       <SelectItem value="inactive">Sem portal</SelectItem>
                     </SelectContent>
                   </Select>
@@ -436,30 +433,10 @@ export default function SettingsCustomers() {
                 </fieldset>
               ) : null}
 
-              <div
-                className={cn(
-                  "space-y-1 rounded-md border px-3.5 py-3",
-                  packApplies ? "border-info-soft bg-info-soft/60" : "border-border bg-muted/40",
-                )}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-medium">
-                  <span>Pacote de código do cliente</span>
-                  {pack ? (
-                    <span className={cn("inline-flex rounded-md px-2 py-0.5 font-mono text-xs font-medium", packApplies ? "bg-info-soft text-info-soft-foreground" : "bg-muted text-muted-foreground")}>
-                      {pack.file}
-                    </span>
-                  ) : null}
-                </div>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  {packApplies
-                    ? `Encontrado no repositório para o código operacional "${form.code.trim()}". Ele parte do modelo ${template.label} e muda só o que o contrato pede.`
-                    : pack
-                      ? `O pacote ${pack.key} é do modelo ${operationTemplate(pack.template)?.label ?? pack.template}; com outro modelo ele não se aplica e o cliente usa o modelo puro.`
-                      : form.code.trim()
-                        ? `Nenhum pacote no repositório para "${form.code.trim()}": o cliente usa o modelo puro. Regra própria dele entra num pacote, por PR.`
-                        : "Sem pacote, o cliente usa o modelo puro. Regra própria de um cliente entra num pacote, por PR."}
-                </p>
-              </div>
+              <dl className="min-w-0 space-y-1.5">
+                <dt className="text-sm font-medium leading-none">Pacote de código do cliente</dt>
+                <dd className="text-sm">{appliedPack ? <Codigo>{appliedPack.file}</Codigo> : "Nenhum"}</dd>
+              </dl>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <FormField id="c-legal" label="Razão social">
@@ -488,7 +465,7 @@ export default function SettingsCustomers() {
                   />
                 </FormField>
               </div>
-              <FormField id="c-notes" label="Observações internas" hint="Só a equipe Dutelog vê; o portal não recebe este campo.">
+              <FormField id="c-notes" label="Observações internas">
                 <Textarea
                   id="c-notes"
                   value={form.notes}
@@ -511,9 +488,6 @@ export default function SettingsCustomers() {
                   </div>
                 ))}
               </dl>
-              <p className="border-t border-border/60 pt-3 text-xs leading-5 text-muted-foreground">
-                Definido em código, em {template.file}, com teste. Mudar o modelo é um PR, não uma tela.
-              </p>
             </aside>
           </div>
           <DialogFooter className="gap-2">

@@ -29,6 +29,7 @@ vi.mock("firebase/firestore", async (original) => ({
 }));
 
 import SettingsCustomers from "./settings-customers";
+import { operationTemplate } from "@/lib/operations";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosForaDaLista } from "@/test/textos";
 
@@ -37,8 +38,8 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 /**
  * Configurações › Clientes (docs/mockups/ConfigClientes.dc.html e
  * ConfigCliente.dc.html): a galeria de cartões e a página do cliente, com a
- * edição por seção. Os textos de cada estado estão listados (a trava contra
- * legenda) e o axe roda sobre cada um.
+ * edição por seção, e o diálogo "Novo cliente". Os textos de cada estado
+ * estão listados (a trava contra legenda) e o axe roda sobre cada um.
  */
 
 type Cliente = Record<string, unknown> & { id: string; code: string; name: string };
@@ -153,6 +154,31 @@ function patches() {
   return chamadas.filter((chamada) => chamada.method === "PATCH");
 }
 
+function dialogo() {
+  const elemento = document.querySelector<HTMLElement>('[role="dialog"]');
+  expect(elemento, "o diálogo").not.toBeNull();
+  return elemento!;
+}
+
+/** O dado do diálogo pelo rótulo: o <dd> do <dt>. */
+function dadoDoDialogo(rotulo: string) {
+  const termo = [...dialogo().querySelectorAll("dt")].find((item) => item.textContent?.trim() === rotulo);
+  expect(termo, `dado ${rotulo}`).toBeTruthy();
+  return termo!.nextElementSibling as HTMLElement;
+}
+
+/** Troca o modelo pelo <select> que o Radix guarda para o formulário. */
+async function escolherModelo(modelo: string) {
+  await act(async () => {
+    const select = [...dialogo().querySelectorAll<HTMLSelectElement>("select")].find((item) =>
+      [...item.options].some((option) => option.value === modelo),
+    );
+    expect(select, `seletor do modelo ${modelo}`).toBeTruthy();
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, modelo);
+    select!.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
 async function montar(endereco = "/configuracoes/clientes") {
   window.history.replaceState(null, "", endereco);
   await act(async () => root.render(<QueryClientProvider client={client}><SettingsCustomers /></QueryClientProvider>));
@@ -237,6 +263,20 @@ const TEXTOS_DA_GALERIA = [
   // Itaú, sem sigla nem zona
   "IU", "Itaú Unibanco", "ITAU", "Mobiliário", "Em construção", "—", "zona a definir", "A definir", "Operação",
   "Zona a definir · 0 no portal · sigla a definir",
+];
+
+const UNIFORMES = operationTemplate("uniformes")!;
+const INSUMOS = operationTemplate("insumos")!;
+const TEXTOS_DO_NOVO_CLIENTE = [
+  "Novo cliente", "Nome exibido", "Código operacional", "Sigla do SKU", "SKU gerado: SIGLA-000001", "SKU gerado: BTG-000001",
+  "Modelo de operação", "Uniformes e materiais", "Mobiliário (em construção)", "Insumos internos (em construção)",
+  "Portal do cliente", "Ativo", "Sem portal", "Módulos contratados", "Armazenagem", "Operação", "Financeiro",
+  "Pacote de código do cliente", "Nenhum", "lib/operations/packs/btg.ts",
+  "Razão social", "CNPJ", "Contato principal", "E-mail do contato", "Observações internas",
+  `O que o modelo ${UNIFORMES.label} define`, `O que o modelo ${INSUMOS.label} define`, "Pronto", "Em construção",
+  // A ficha do modelo (rótulo e valor) é dado: vem do código do modelo, em lib/operations/templates.
+  ...[UNIFORMES, INSUMOS].flatMap((modelo) => modelo.defines.flatMap(({ label, value }) => [label, value])),
+  "Cancelar", "Criar cliente", "Fechar",
 ];
 
 describe("Configurações › Clientes, a galeria", () => {
@@ -336,6 +376,30 @@ describe("Configurações › Clientes, a galeria", () => {
     const criacao = chamadas.find((chamada) => chamada.method === "POST")!;
     expect(criacao.body).toMatchObject({ code: "INTER", name: "Banco Inter", sku_prefix: "BANCO", operation_template: "uniformes", modules: ["wms", "financeiro"] });
     expect(window.location.search).toBe("?cliente=INTER");
+  });
+
+  it("'Novo cliente' só tem rótulos, dados e ações: o pacote é o arquivo ou 'Nenhum', e sem violação de acessibilidade", async () => {
+    await abrirGaleria();
+    await tocar("Novo cliente");
+    expect(textosForaDaLista(dialogo().innerHTML, TEXTOS_DO_NOVO_CLIENTE)).toEqual([]);
+    expect(dadoDoDialogo("Pacote de código do cliente").textContent).toBe("Nenhum");
+    expect(await violacoesDeAcessibilidade(dialogo().outerHTML)).toEqual([]);
+
+    // O código do pacote da BTG, no modelo dele: o pacote é o arquivo, em fonte fixa.
+    await preencher("c-name", "BTG Pactual");
+    await preencher("c-code", "BTG Pactual");
+    expect(textosForaDaLista(dialogo().innerHTML, TEXTOS_DO_NOVO_CLIENTE)).toEqual([]);
+    expect(dadoDoDialogo("Pacote de código do cliente").querySelector(".font-mono")?.textContent).toBe("lib/operations/packs/btg.ts");
+    expect(await violacoesDeAcessibilidade(dialogo().outerHTML)).toEqual([]);
+
+    // Noutro modelo o pacote não se aplica; o modelo sem portal deixa o portal em "Sem portal".
+    await escolherModelo("insumos");
+    expect(dialogo().textContent).toContain(`O que o modelo ${INSUMOS.label} define`);
+    expect(textosForaDaLista(dialogo().innerHTML, TEXTOS_DO_NOVO_CLIENTE)).toEqual([]);
+    expect(dadoDoDialogo("Pacote de código do cliente").textContent).toBe("Nenhum");
+    expect(document.getElementById("c-portal")?.textContent).toBe("Sem portal");
+    expect((document.getElementById("c-portal") as HTMLButtonElement).disabled).toBe(true);
+    expect(await violacoesDeAcessibilidade(dialogo().outerHTML)).toEqual([]);
   });
 });
 
