@@ -362,7 +362,9 @@ mínimo), "Reservados", "Sem foto", "Zerados" e, onde a memória roda,
 
 - **Ações:** "Adicionar foto" ou "Mais fotos" (`owner`, `admin`, `interno` e
   `wms`, até 4 por vez); "Contar este item"; "Editar cadastro" (os dois
-  códigos só se leem: são a identidade do item), "Ajustar saldo" e "Arquivar"
+  códigos só se leem: são a identidade do item; o código do cliente digitado
+  errado no Receber se corrige pelo banco, com
+  `tools/corrigir-codigo-do-produto`), "Ajustar saldo" e "Arquivar"
   (`owner`, `admin` e `interno`). Arquivar tira o item das listas;
   o histórico fica. Não há "Novo item": produto novo entra pelo Receber ou pela
   Contagem.
