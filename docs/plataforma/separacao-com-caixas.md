@@ -15,7 +15,9 @@ volumes de expedição, a etiqueta do volume, o romaneio e "Para entregar").
 As partes 2, 3, 4 e 5 entraram na `main` pelo PR 592, com o OK do Leonardo
 em 10/11/2026. **Na produção desde 10/11/2026** (19:52 UTC, commit
 `7512f101`): as seis partes, pela publicação manual do Leonardo (seção 5.2).
-Tela só depois do mockup aprovado (decisão 8).
+Tela só depois do mockup aprovado (decisão 8). **Proposta de 11/11/2026,
+esperando o OK do Leonardo:** dividir a linha em mais de um volume (seção
+11; pranchas na página 4 do canvas).
 
 Relação com os outros desenhos: este roteiro retoma a regra 8 e a seção 5.4 do
 mapa (`docs/mapa-do-armazem-enderecamento-dirigido.md`) e revê a P8 de
@@ -789,3 +791,135 @@ efeito: a tela antiga não o lê. O pedido que estiver em separação continua
 pelo "Separado" antigo, que confirma todas as linhas na quantidade pedida: a
 diferença já registrada numa linha precisa ser informada de novo pela
 coordenação.
+
+## 11. A linha em mais de um volume (proposta de 11/11/2026)
+
+**Situação:** proposta, esperando o OK do Leonardo. As pranchas estão na
+página 4 do canvas (https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz), com
+as fontes em `docs/mockups/WmsDividir*.dc.html` (tabela no README dos
+mockups).
+
+### 11.1 O caso
+
+Em 11/11/2026, na separação do PED-0001, a linha "Polo Masculino Piquet
+Preto · M" tinha 95 un., e o sistema sugeria 54 da CX-000218 e 41 da
+CX-000219. Não havia caixa de expedição para as 95: elas precisavam ir em
+dois volumes, e a bancada não deixa.
+
+### 11.2 Por que não dá hoje
+
+- "Separar" põe todo o separado da linha no único volume aberto
+  (`pick-progress.ts`, `porNoVolumeAberto` em `order-volumes.ts`). Só
+  "Levar a caixa" põe a linha em mais de um volume, e só quando uma caixa
+  sai inteira nela.
+- Separar a linha de novo substitui, não soma: ela sai dos volumes em que
+  estava e a quantidade nova entra inteira no volume aberto.
+- "Separar menos" pede o motivo (falta ou avaria) e vira diferença no
+  pedido.
+- "Levar a caixa" não aparecia porque a caixa inteira é decidida linha a
+  linha (`saldo-da-caixa.ts`, `daLinha`): a CX-000218 também tem a GG, e 54
+  nunca é o total dela.
+
+O resto já aceita um produto em vários volumes: a linha guarda uma lista
+(`separated_volumes`), a conclusão grava um `packages` por volume com o item
+repartido, a embalagem confere a soma do item em todos eles
+(`operations.ts`), e a etiqueta e o romaneio são por volume. O teste da
+conclusão com volumes já tem uma linha em dois
+(`pick-progress.integration.test.ts`, com "Levar a caixa").
+
+### 11.3 O desenho
+
+- "Dividir em volumes" é o primeiro item do "⋯" da linha por separar com 2
+  un. ou mais, antes de "Outra caixa" e "Separar menos". O diálogo separa a
+  linha, das caixas que o sistema sugere, como "Separar", e a divide.
+- A primeira linha do diálogo é o volume aberto ("tem 35 un." quando já tem
+  itens de outras linhas). Cada volume, menos o último, fecha ao confirmar:
+  a quantidade, com − e +, e no computador o peso, opcional (decisão 15); no
+  celular, sem peso (decisão 17).
+- O último volume leva o resto, sem digitar, e fica aberto: as próximas
+  linhas entram nele.
+- Toda linha do diálogo tem ao menos 1 un. Para fechar o volume aberto como
+  está, "Fechar volume" vem antes.
+- O diálogo começa com um volume por caixa de onde a linha sai (54 e 41); a
+  linha de uma caixa só começa ao meio. "Mais um volume" põe um volume antes
+  do último, com a quantidade do de cima ou, se não couber, metade do resto;
+  o volume acrescentado sai pela lixeira ("Tirar o volume 17").
+- O botão diz em quantos volumes: "Separar em 2 volumes". Depois vem o aviso
+  "Volume 16 fechado", e o volume fechado aparece no painel com "Etiqueta"
+  (decisão 23).
+- A linha separada com mais de duas etiquetas (caixas e volumes) as mostra
+  embaixo dos códigos; com até duas, elas ficam à direita, como hoje. Vale
+  também para "Levar a caixa" com resto, que hoje já tem três.
+- "Desfazer" tira a linha de todos os volumes, com os avisos de hoje
+  (decisões 18 e 19). O volume fechado que esvazia e sai passa a avisar
+  também: "O volume 16 saiu. Tire a etiqueta dele." Hoje, quando ele é o de
+  maior número, sai sem aviso.
+- Pergunta 4: "Dividir em volumes" também na linha já separada, enquanto o
+  que ela pôs ainda está no volume aberto (prancha `WmsDividirNaSeparada`).
+
+### 11.4 O servidor
+
+`setPickLineSeparated` ganha `split_volumes` (de 2 a 20 linhas
+`{ number, qty, weight_kg? }`, todas, o resto inclusive, sem peso na
+última), `open_volume_id` (o volume aberto que o diálogo mostrou, ou `null`
+quando não há) e `open_volume_units` (as unidades gravadas nele). Vale só com
+`separated: true` e sem `take_boxes`, `boxes` ou `separated_qty`. Na
+transação de sempre:
+
+1. A linha já separada com as mesmas quantidades é a repetição e responde
+   `changed: false`; a linha separada de outro jeito recusa
+   (`SEPARATION_LINE_ALREADY_SEPARATED`).
+2. As linhas somam a quantidade da linha do pedido.
+3. O volume aberto (o id e as unidades) e os números que o servidor daria
+   são os que o diálogo mostrou. Senão, recusa
+   (`SEPARATION_VOLUMES_CHANGED`, "Os volumes mudaram. Confira e tente de
+   novo.") sem gravar nada: outra pessoa pode estar separando no mesmo
+   volume aberto (seção 9).
+4. Cada linha, menos a última: `porNoVolumeAberto` e `fecharVolume`, com o
+   peso arredondado como no `closeOrderVolume`. A última:
+   `porNoVolumeAberto`, que abre o volume novo.
+
+Os eventos: o `picking.line_separated` de sempre, com os volumes, e um
+`picking.volume_closed` por volume fechado. A resposta traz
+`closed_volumes` para o aviso, e a do desfazer passa a dizer os volumes
+fechados que saíram. É a mesma callable: nenhuma callable nova e nenhuma
+linha nova na tabela de papéis.
+
+Se a pergunta 4 for sim, a mesma chamada aceita a linha já separada,
+enquanto o que ela pôs ainda está no volume aberto: as caixas e a diferença
+ficam como estão, e só os volumes mudam.
+
+### 11.5 Partes
+
+| # | Parte | O que entra | Teste que falha antes |
+|---|---|---|---|
+| 7a | Dividir no servidor | `split_volumes`, a recusa do volume que mudou, os eventos e o aviso do volume fechado que sai no desfazer. | A linha de 95 un. só entra num volume. |
+| 7b | Dividir na bancada | O item do "⋯", o diálogo no computador e no celular, o aviso e as etiquetas da linha embaixo dos códigos, com a lista dos textos e o `axe`. | A bancada não tem como dividir a linha. |
+
+A régua `billing-callables` fica verde. Homologação no merge; produção pela
+publicação manual, com o OK do Leonardo.
+
+### 11.6 Perguntas
+
+1. O diálogo começa com um volume por caixa de onde a linha sai (54 e 41;
+   com três caixas, três volumes), a partir do volume aberto, mesmo quando
+   ele já tem itens (35 + 54 = 89). Pode ser?
+2. O último volume fica aberto e leva o resto, sem digitar. Pode ser? Ou
+   prefere digitar todos e conferir a soma, como no "Outra caixa"? Ou o
+   último também fecha?
+3. No computador, o peso de cada volume que fecha vai no próprio diálogo,
+   opcional; no celular, sem peso, como no "Fechar volume". Pode ser?
+4. "Dividir em volumes" também na linha já separada, enquanto ela está no
+   volume aberto? Cobre quem tocou "Separar" por hábito, a linha corrigida
+   pelo "Outra caixa" e a separada a menos. Sem isso, o caminho é "Desfazer"
+   e dividir: a linha volta a sair da caixa mais antiga, e a separada a
+   menos não se divide.
+
+### 11.7 Enquanto não entra
+
+A linha que não cabe num volume fica por último: a bancada não exige ordem.
+As peças vão nas caixas de expedição que couberem, anotadas à mão, e a linha
+se marca quando a divisão chegar à produção. Se o pedido precisar sair
+antes, a linha vai sozinha num volume (fechar o aberto antes, separar e
+fechar), e a etiqueta desse volume sai duas vezes, com as quantidades à mão.
+O romaneio dirá um volume a menos do que as caixas, e a BTG precisa saber.
