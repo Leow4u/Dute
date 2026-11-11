@@ -1,8 +1,8 @@
 import { useListBillingUsers } from "@workspace/api-client-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
-import { ChevronRight, Mail, Pencil, Plus } from "lucide-react";
+import { useLocation, useSearch } from "wouter";
+import { MODULOS_CONTRATAVEIS, MODULO_ROTULO } from "@workspace/dominio";
 
 import {
   AlertDialog,
@@ -14,49 +14,37 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MODULOS_CONTRATAVEIS, MODULO_ROTULO } from "@workspace/dominio";
-
+import { GaleriaDeClientes } from "@/components/clientes/galeria-de-clientes";
+import { ClienteNaoEncontrado, PaginaDoCliente } from "@/components/clientes/pagina-do-cliente";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageHeader } from "@/components/ui/page-header";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
   buildCustomerRows,
+  customerCodeFromSearch,
   customerDocumentId,
-  customerFormFrom,
   customerFormProblem,
+  customerFormWith,
+  customerHref,
   customerPayload,
   emptyCustomerForm,
-  peopleLabel,
   portalStatusFor,
   toggleContractedModule,
-  zoneLabel,
+  zoneOccupancy,
+  type CustomerFilter,
   type CustomerForm,
   type CustomerRecord,
   type CustomerRow,
-  type FormMode,
   type PersonRecord,
 } from "@/lib/customer-registry";
 import {
-  OPERATION_PACKS,
   OPERATION_TEMPLATES,
   canonicalSkuPrefix,
   operationTemplate,
@@ -70,9 +58,12 @@ import { comercialLiberado, PLATAFORMA_LIBERADA } from "@/lib/liberacao";
 import { CLIENT_PROFILES_QUERY_KEY } from "@/lib/active-customer-context";
 import { humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { fetchJson } from "@/lib/warehouse-ops/model";
+import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
+import { buildShelves } from "@/lib/warehouse-map";
+import type { AnyRecord } from "@/lib/warehouse-ops/model";
 import type { WarehousePosition } from "@/lib/warehouse-positions";
-import SettingsCustomerNotifications from "./settings-customer-notifications";
+import { fetchWarehouseRows } from "@/lib/warehouse-rows";
+import SettingsCustomerNotifications, { useContatosDeAviso } from "./settings-customer-notifications";
 
 /**
  * Configurações › Clientes: cada cliente nasce de um modelo de operação
@@ -80,14 +71,20 @@ import SettingsCustomerNotifications from "./settings-customer-notifications";
  * por contrato entra no pacote do cliente, também em código. Aqui só se
  * escolhe o modelo, a sigla do SKU e o portal
  * (docs/multicliente-modelos-de-operacao.md).
+ *
+ * A galeria de cartões e a página de cada cliente, com `?cliente=<código>`
+ * (docs/mockups/ConfigClientes.dc.html e ConfigCliente.dc.html, aprovadas em
+ * 11/11/2026). As leituras são as de antes, mais as do Mapa para a ocupação
+ * (as mesmas chaves: o que uma tela leu, a outra aproveita). Cada seção da
+ * página grava o cadastro inteiro com o que ela mudou, pela mesma rota.
  */
 
 const CUSTOMERS_KEY = ["admin-customers"];
-const POSITIONS_KEY = ["warehouse-positions"];
+// As chaves do Mapa (pages/warehouse-map.tsx): a mesma leitura, o mesmo cache.
+const POSITIONS_KEY = ["warehouse-positions", "all-pages"];
+const BOXES_KEY = ["warehouse-boxes", "all", "all-pages"];
 
-type PositionsResponse = { items?: WarehousePosition[] };
 type CustomersResponse = { items?: CustomerRecord[]; data?: CustomerRecord[] } | CustomerRecord[];
-type DialogState = { mode: "create" } | { mode: "edit"; row: CustomerRow };
 
 async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -97,34 +94,6 @@ async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
   const payload = (await response.json().catch(() => ({}))) as { message?: string };
   if (!response.ok) throw new Error(payload.message || "Não foi possível concluir a operação.");
   return payload as T;
-}
-
-function CodeBadge({ children, muted }: { children: string; muted?: boolean }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex rounded-md px-2 py-0.5 font-mono text-xs font-medium",
-        muted ? "bg-muted text-muted-foreground" : "bg-info-soft text-info-soft-foreground",
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
-function StatusBadge({ tone, children }: { tone: "ok" | "off" | "warn"; children: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold",
-        tone === "ok" && "bg-success-soft text-success-soft-foreground",
-        tone === "warn" && "bg-warning-soft text-warning-soft-foreground",
-        tone === "off" && "bg-muted text-muted-foreground",
-      )}
-    >
-      {children}
-    </span>
-  );
 }
 
 function FormField({
@@ -150,15 +119,18 @@ function FormField({
 export default function SettingsCustomers() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [, navigate] = useLocation();
+  const openCode = customerCodeFromSearch(useSearch());
+  const [filtro, setFiltro] = useState<CustomerFilter>("todos");
+  const [busca, setBusca] = useState("");
+  const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<CustomerForm>(emptyCustomerForm());
   const [prefixTouched, setPrefixTouched] = useState(false);
   const [archiving, setArchiving] = useState<CustomerRow | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
-  const [notificationCustomer, setNotificationCustomer] = useState<CustomerRow | null>(null);
   // O cadastro de contatos continua disponível quando só as telas do
   // Comercial estão pausadas; fora dos projetos liberados, a callable não atende.
   const contactsEnabled = comercialLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+  const topo = useRef<HTMLDivElement>(null);
 
   const customers = useQuery({
     queryKey: CUSTOMERS_KEY,
@@ -169,7 +141,8 @@ export default function SettingsCustomers() {
   });
   const positions = useQuery({
     queryKey: POSITIONS_KEY,
-    queryFn: () => fetchJson<PositionsResponse>("/api/warehouse/positions?limit=2000"),
+    staleTime: 30_000,
+    queryFn: async () => ({ items: await fetchWarehouseRows<WarehousePosition>("/api/warehouse/positions?limit=2000") }),
   });
   const users = useListBillingUsers();
 
@@ -182,34 +155,50 @@ export default function SettingsCustomers() {
       ),
     [customers.data, positions.data, users.data],
   );
-  const archivedCount = rows.filter((row) => row.archived).length;
-  const visible = showArchived ? rows : rows.filter((row) => !row.archived);
+  const row = openCode ? (rows.find((item) => item.code === openCode) ?? null) : null;
+  const comZona = Boolean(row?.zone && row.zone.positions > 0);
 
-  const mode: FormMode = dialog?.mode === "edit" ? "edit" : "create";
+  // A ocupação por rua só na página de um cliente com zona: a leitura do Mapa.
+  const boxes = useQuery({
+    queryKey: BOXES_KEY,
+    enabled: comZona,
+    staleTime: 10_000,
+    queryFn: async () => (await fetchWarehouseRows<AnyRecord>("/api/warehouse/boxes?limit=5000")).map(warehouseBoxFromRecord),
+  });
+  const occupancy = useMemo(
+    () => (row && comZona && boxes.data ? zoneOccupancy(buildShelves(positions.data?.items ?? [], boxes.data), row.code) : null),
+    [boxes.data, comZona, positions.data, row],
+  );
+
+  const contatos = useContatosDeAviso(contactsEnabled && row && !row.archived ? row.code : null);
+  const contatosAtivos =
+    !contactsEnabled || !row || row.archived
+      ? undefined
+      : contatos.leitura.itens === null
+        ? null
+        : contatos.lista.filter((contato) => contato.ativo).length;
+
+  // Abrir outro cliente (ou voltar à galeria) começa do topo da tela.
+  useEffect(() => {
+    topo.current?.scrollIntoView?.({ block: "start" });
+  }, [openCode]);
+
   const template = operationTemplate(form.operation_template) ?? OPERATION_TEMPLATES[0];
   const pack = packForCustomer(form.code);
   const packApplies = pack !== null && pack.template === form.operation_template;
   const templateWithoutPortal = template.portal === null;
 
-  const closeDialog = () => setDialog(null);
-
   const openCreate = () => {
     setForm(emptyCustomerForm());
     setPrefixTouched(false);
-    setDialog({ mode: "create" });
-  };
-
-  const openEdit = (row: CustomerRow) => {
-    setForm(customerFormFrom(row.customer));
-    setPrefixTouched(true);
-    setDialog({ mode: "edit", row });
+    setCreating(true);
   };
 
   const update = (patch: Partial<CustomerForm>) => setForm((state) => ({ ...state, ...patch }));
 
   const onNameChange = (name: string) => {
     // No cadastro novo a sigla acompanha o nome até a pessoa mexer nela.
-    update(prefixTouched || mode === "edit" ? { name } : { name, sku_prefix: suggestSkuPrefix(name) });
+    update(prefixTouched ? { name } : { name, sku_prefix: suggestSkuPrefix(name) });
   };
 
   const onTemplateChange = (operation_template: OperationTemplateKey) => {
@@ -226,25 +215,22 @@ export default function SettingsCustomers() {
       queryClient.invalidateQueries({ queryKey: CLIENT_PROFILES_QUERY_KEY }),
     ]);
 
-  const save = useMutation({
+  const create = useMutation({
     mutationFn: async () => {
-      const problem = customerFormProblem(form, mode);
+      const problem = customerFormProblem(form, "create");
       if (problem) throw new Error(problem);
-      if (dialog?.mode === "edit") {
-        return apiJson(`/api/customers/${encodeURIComponent(customerDocumentId(dialog.row.customer))}`, {
-          method: "PATCH",
-          body: JSON.stringify(customerPayload(form, "edit", { modules: PLATAFORMA_LIBERADA })),
-        });
-      }
-      return apiJson("/api/customers", {
+      await apiJson("/api/customers", {
         method: "POST",
         body: JSON.stringify(customerPayload(form, "create", { modules: PLATAFORMA_LIBERADA })),
       });
+      return form.code.trim();
     },
-    onSuccess: async () => {
-      closeDialog();
+    onSuccess: async (code) => {
+      setCreating(false);
       await invalidate();
-      toast({ title: mode === "create" ? "Cliente cadastrado" : "Dados do cliente salvos" });
+      toast({ title: "Cliente cadastrado" });
+      // O cliente novo já abre na página dele.
+      navigate(customerHref(code));
     },
     onError: (error) =>
       toast({
@@ -254,14 +240,30 @@ export default function SettingsCustomers() {
       }),
   });
 
+  /** Uma seção da página grava: o cadastro de agora com o que ela mudou. */
+  const saveSection = async (target: CustomerRow, patch: Partial<CustomerForm>) => {
+    const next = customerFormWith(target.customer, patch);
+    const problem = customerFormProblem(next, "edit");
+    if (problem) throw new Error(problem);
+    try {
+      await apiJson(`/api/customers/${encodeURIComponent(customerDocumentId(target.customer))}`, {
+        method: "PATCH",
+        body: JSON.stringify(customerPayload(next, "edit", { modules: PLATAFORMA_LIBERADA })),
+      });
+    } catch (error) {
+      throw new Error(humanApiError(error, "Não foi possível salvar. Tente novamente em instantes."));
+    }
+    await invalidate();
+    toast({ title: "Dados do cliente salvos" });
+  };
+
   const archive = useMutation({
-    mutationFn: (row: CustomerRow) =>
-      apiJson(`/api/customers/${encodeURIComponent(customerDocumentId(row.customer))}`, { method: "DELETE" }),
-    onSuccess: async (_result, row) => {
+    mutationFn: (target: CustomerRow) =>
+      apiJson(`/api/customers/${encodeURIComponent(customerDocumentId(target.customer))}`, { method: "DELETE" }),
+    onSuccess: async (_result, target) => {
       setArchiving(null);
-      closeDialog();
       await invalidate();
-      toast({ title: `${row.name} arquivado`, description: "O portal do cliente foi desligado." });
+      toast({ title: `${target.name} arquivado`, description: "O portal do cliente foi desligado." });
     },
     onError: (error) =>
       toast({
@@ -271,208 +273,65 @@ export default function SettingsCustomers() {
       }),
   });
 
+  const estado = customers.isLoading ? "carregando" : customers.isError ? "erro" : "pronto";
+  const zonas = positions.isSuccess ? "pronto" : positions.isError ? "erro" : "carregando";
+  const erroDaLeitura = customers.isError ? humanApiError(customers.error, "Não foi possível carregar os clientes.") : null;
+
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Clientes"
-        description="Cada cliente nasce de um modelo de operação. O que o modelo define vive em código; o que muda por contrato entra no pacote do cliente, também em código. Aqui só se escolhe."
-        actions={
-          <Button onClick={openCreate} disabled={customers.isLoading}>
-            <Plus className="h-4 w-4" />
-            Novo cliente
-          </Button>
-        }
-      />
-
-      <section className="overflow-hidden rounded-lg border border-border bg-card">
-        {customers.isLoading ? (
-          <div className="space-y-3 p-5">
-            <Skeleton className="h-5 w-2/3" />
-            <Skeleton className="h-5 w-1/2" />
-            <Skeleton className="h-5 w-3/5" />
-          </div>
-        ) : customers.isError ? (
-          <p className="px-5 py-4 text-sm text-destructive">
-            {humanApiError(customers.error, "Não foi possível carregar os clientes.")}
-          </p>
-        ) : visible.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-muted-foreground">
-            Nenhum cliente cadastrado. Comece pelo primeiro em "Novo cliente".
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
-                  <th className="px-4 py-2.5 font-medium">Cliente</th>
-                  <th className="px-4 py-2.5 font-medium">Sigla do SKU</th>
-                  <th className="px-4 py-2.5 font-medium">Modelo de operação</th>
-                  <th className="px-4 py-2.5 font-medium">Pacote de código</th>
-                  <th className="px-4 py-2.5 font-medium">Zona no armazém</th>
-                  <th className="px-4 py-2.5 font-medium">Portal</th>
-                  <th className="px-4 py-2.5 font-medium">Pessoas</th>
-                  <th className="px-4 py-2.5" />
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map((row) => (
-                  <tr
-                    key={row.code}
-                    className={cn(
-                      "border-b border-border/40 align-middle last:border-0",
-                      row.archived && "text-muted-foreground",
-                    )}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-foreground">{row.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {row.code}
-                        {row.paused ? " · pausado" : ""}
-                        {row.archived ? " · arquivado" : ""}
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {row.profile.skuPrefix ? (
-                        <CodeBadge>{row.profile.skuPrefix}</CodeBadge>
-                      ) : (
-                        <StatusBadge tone="warn">a definir</StatusBadge>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {row.profile.template.label}
-                      {row.profile.template.status === "building" ? (
-                        <span className="ml-1.5 text-xs text-muted-foreground">em construção</span>
-                      ) : null}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {row.profile.pack ? (
-                        <CodeBadge>{row.profile.pack.key}</CodeBadge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">sem pacote (só o modelo)</span>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {row.zone ? (
-                        zoneLabel(row.zone)
-                      ) : (
-                        <Link href="/estoque/posicoes" className="text-muted-foreground hover:underline">
-                          {zoneLabel(null)}
-                        </Link>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {row.archived ? (
-                        <StatusBadge tone="off">Arquivado</StatusBadge>
-                      ) : row.profile.portalStatus === "active" ? (
-                        <StatusBadge tone="ok">Ativo</StatusBadge>
-                      ) : (
-                        <StatusBadge tone="off">Sem portal</StatusBadge>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {peopleLabel(row.people)}
-                      {row.invitable ? (
-                        <Link
-                          href={`/configuracoes/pessoas?convidar=cliente&cliente=${encodeURIComponent(row.code)}`}
-                          className="ml-2 inline-flex items-center text-xs font-medium text-primary hover:underline"
-                        >
-                          Convidar
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </Link>
-                      ) : null}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-2 text-right">
-                      {contactsEnabled ? (
-                        <Button variant="ghost" size="sm" disabled={row.archived} onClick={() => setNotificationCustomer(row)}>
-                          <Mail className="h-4 w-4" />
-                          Avisos por e-mail
-                        </Button>
-                      ) : null}
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(row)}>
-                        <Pencil className="h-4 w-4" />
-                        Editar
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {archivedCount > 0 ? (
-          <div className="border-t border-border/60 px-4 py-2 text-xs text-muted-foreground">
-            <button
-              type="button"
-              className="font-medium text-primary hover:underline"
-              onClick={() => setShowArchived((state) => !state)}
-            >
-              {showArchived ? "Esconder arquivados" : `Mostrar ${archivedCount} arquivado${archivedCount === 1 ? "" : "s"}`}
-            </button>
-          </div>
-        ) : null}
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-lg border border-border bg-card px-5 py-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            1 · Modelo de operação (código)
-          </div>
-          <ul className="mt-3 space-y-2.5 text-sm">
-            {OPERATION_TEMPLATES.map((item) => (
-              <li key={item.key}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{item.label}</span>
-                  <StatusBadge tone={item.status === "ready" ? "ok" : "off"}>{templateStatusLabel(item)}</StatusBadge>
-                </div>
-                <div className="text-xs leading-5 text-muted-foreground">{item.summary}</div>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="rounded-lg border border-border bg-card px-5 py-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            2 · Pacote do cliente (código, opcional)
-          </div>
-          <ul className="mt-3 space-y-2.5 text-sm">
-            {OPERATION_PACKS.map((item) => (
-              <li key={item.key}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{item.label}</span>
-                  <CodeBadge>{item.key}</CodeBadge>
-                </div>
-                <div className="text-xs leading-5 text-muted-foreground">{item.summary}</div>
-              </li>
-            ))}
-            <li className="text-xs leading-5 text-muted-foreground">
-              Uma solicitação específica de um cliente vira regra no pacote dele, com teste. Quando outro
-              cliente pedir o mesmo, a regra sobe para o modelo.
-            </li>
-          </ul>
-        </div>
-        <div className="rounded-lg border border-border bg-card px-5 py-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            3 · Cadastro (aqui)
-          </div>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            O cadastro só aponta para o modelo e guarda a sigla do SKU. A zona no armazém é definida em
-            Estoque › Posições; quem entra no portal, em Pessoas e acessos. O portal do cliente mostra só os
-            módulos do modelo dele.
-          </p>
-        </div>
-      </section>
-
-      {notificationCustomer ? (
-        <SettingsCustomerNotifications
-          key={notificationCustomer.code}
-          customer={{ code: notificationCustomer.code, name: notificationCustomer.name }}
-          onClose={() => setNotificationCustomer(null)}
+    <div ref={topo} className="scroll-mt-10">
+      {openCode === null ? (
+        <GaleriaDeClientes
+          estado={estado}
+          erro={erroDaLeitura}
+          tentando={customers.isFetching}
+          onTentar={() => void customers.refetch()}
+          rows={rows}
+          filtro={filtro}
+          onFiltro={setFiltro}
+          busca={busca}
+          onBusca={setBusca}
+          zonas={zonas}
+          comModulos={PLATAFORMA_LIBERADA}
+          onNovo={openCreate}
         />
-      ) : null}
+      ) : estado === "carregando" ? (
+        <p role="status" className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-5 py-6 text-sm font-semibold text-muted-foreground">
+          <Spinner />
+          Carregando clientes…
+        </p>
+      ) : estado === "erro" ? (
+        <ErroNaLeitura mensagem={erroDaLeitura ?? "Não foi possível carregar os clientes."} tentando={customers.isFetching} onTentar={() => void customers.refetch()} />
+      ) : row ? (
+        <PaginaDoCliente
+          key={row.code}
+          row={row}
+          zonas={zonas}
+          comModulos={PLATAFORMA_LIBERADA}
+          ocupacao={{
+            estado: positions.isError || boxes.isError ? "erro" : occupancy ? "pronto" : "carregando",
+            aisles: occupancy?.aisles ?? [],
+            boxes: occupancy?.boxes ?? 0,
+            tentando: positions.isFetching || boxes.isFetching,
+            onTentar: () => {
+              void queryClient.invalidateQueries({ queryKey: POSITIONS_KEY });
+              void queryClient.invalidateQueries({ queryKey: BOXES_KEY });
+            },
+          }}
+          contatosAtivos={contatosAtivos}
+          avisos={
+            contatosAtivos !== undefined ? <SettingsCustomerNotifications customer={{ code: row.code, name: row.name }} contatos={contatos} /> : null
+          }
+          onSalvar={(patch) => saveSection(row, patch)}
+          onArquivar={() => setArchiving(row)}
+        />
+      ) : (
+        <ClienteNaoEncontrado />
+      )}
 
-      <Dialog open={dialog !== null} onOpenChange={(open) => !open && closeDialog()}>
+      <Dialog open={creating} onOpenChange={(open) => !open && !create.isPending && setCreating(false)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[780px]">
           <DialogHeader>
-            <DialogTitle>{mode === "create" ? "Novo cliente" : `Dados de ${form.name || form.code}`}</DialogTitle>
+            <DialogTitle>Novo cliente</DialogTitle>
           </DialogHeader>
           <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_240px]">
             <form
@@ -480,7 +339,7 @@ export default function SettingsCustomers() {
               className="space-y-4"
               onSubmit={(event) => {
                 event.preventDefault();
-                save.mutate();
+                create.mutate();
               }}
             >
               <div className="grid gap-3 sm:grid-cols-2">
@@ -493,19 +352,10 @@ export default function SettingsCustomers() {
                     placeholder="Itaú Unibanco"
                   />
                 </FormField>
-                <FormField
-                  id="c-code"
-                  label="Código operacional"
-                  hint={
-                    mode === "create"
-                      ? "Como o cliente aparece em todo o sistema. Não muda depois."
-                      : "Identifica o cliente em todo o sistema; não muda."
-                  }
-                >
+                <FormField id="c-code" label="Código operacional" hint="Como o cliente aparece em todo o sistema. Não muda depois.">
                   <Input
                     id="c-code"
-                    required={mode === "create"}
-                    disabled={mode === "edit"}
+                    required
                     value={form.code}
                     onChange={(event) => update({ code: event.target.value })}
                     placeholder="Itaú"
@@ -594,7 +444,11 @@ export default function SettingsCustomers() {
               >
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-medium">
                   <span>Pacote de código do cliente</span>
-                  {pack ? <CodeBadge muted={!packApplies}>{pack.file}</CodeBadge> : null}
+                  {pack ? (
+                    <span className={cn("inline-flex rounded-md px-2 py-0.5 font-mono text-xs font-medium", packApplies ? "bg-info-soft text-info-soft-foreground" : "bg-muted text-muted-foreground")}>
+                      {pack.file}
+                    </span>
+                  ) : null}
                 </div>
                 <p className="text-xs leading-5 text-muted-foreground">
                   {packApplies
@@ -606,20 +460,6 @@ export default function SettingsCustomers() {
                         : "Sem pacote, o cliente usa o modelo puro. Regra própria de um cliente entra num pacote, por PR."}
                 </p>
               </div>
-
-              {mode === "edit" ? (
-                <FormField id="c-status" label="Situação do contrato">
-                  <Select value={form.status} onValueChange={(value) => update({ status: value === "paused" ? "paused" : "active" })}>
-                    <SelectTrigger id="c-status">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Ativo</SelectItem>
-                      <SelectItem value="paused">Pausado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FormField>
-              ) : null}
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <FormField id="c-legal" label="Razão social">
@@ -676,32 +516,18 @@ export default function SettingsCustomers() {
               </p>
             </aside>
           </div>
-          <DialogFooter className="gap-2 sm:justify-between">
-            {dialog?.mode === "edit" && !dialog.row.archived ? (
-              <Button
-                type="button"
-                variant="ghost"
-                className="text-destructive hover:text-destructive"
-                onClick={() => setArchiving(dialog.row)}
-              >
-                Arquivar cliente
-              </Button>
-            ) : (
-              <span />
-            )}
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={closeDialog}>
-                Cancelar
-              </Button>
-              <Button type="submit" form="customer-form" disabled={save.isPending}>
-                {save.isPending ? "Salvando..." : mode === "create" ? "Criar cliente" : "Salvar"}
-              </Button>
-            </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" disabled={create.isPending} onClick={() => setCreating(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" form="customer-form" disabled={create.isPending}>
+              {create.isPending ? "Salvando..." : "Criar cliente"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={archiving !== null} onOpenChange={(open) => !open && setArchiving(null)}>
+      <AlertDialog open={archiving !== null} onOpenChange={(open) => !open && !archive.isPending && setArchiving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Arquivar {archiving?.name}?</AlertDialogTitle>
@@ -711,7 +537,7 @@ export default function SettingsCustomers() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={archive.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               disabled={archive.isPending}
               onClick={(event) => {

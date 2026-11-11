@@ -92,6 +92,18 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   },
 ];
 
+/**
+ * As seções da Configuração cujo conteúdo já segue a v3 (docs/mockups/README.md).
+ * A barra lateral e o cabeçalho do celular são v3 em todas; o conteúdo entra
+ * no `.v3` quando a seção é revista, como as telas do WMS (lib/wms-v3.ts).
+ * Clientes desde a proposta aprovada em 11/11/2026 (docs/mockups/ConfigClientes.dc.html).
+ */
+export const SECOES_DA_CONFIGURACAO_NA_V3: readonly string[] = ["clientes", "integracoes"];
+
+export function secaoDaConfiguracaoNaV3(sectionId: string | null): boolean {
+  return sectionId !== null && SECOES_DA_CONFIGURACAO_NA_V3.includes(sectionId);
+}
+
 export const SETTINGS_GROUP_LABEL: Record<SettingsSection["group"], string> = {
   conta: "Sua conta",
   administracao: "Administração",
