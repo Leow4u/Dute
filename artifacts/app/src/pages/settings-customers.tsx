@@ -493,7 +493,6 @@ export default function SettingsCustomers() {
                   id="c-notes"
                   value={form.notes}
                   onChange={(event) => update({ notes: event.target.value })}
-                  placeholder="Regras do contrato, ponto focal..."
                 />
               </FormField>
             </form>

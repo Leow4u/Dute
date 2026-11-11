@@ -197,7 +197,7 @@ export function portalStatusFor(template: OperationTemplateKey, requested: unkno
 export function customerFormProblem(form: CustomerForm, mode: FormMode): string | null {
   if (!form.name.trim()) return "Informe o nome do cliente.";
   if (mode === "create" && !form.code.trim()) {
-    return "Informe o código operacional: é como o cliente aparece em todo o sistema.";
+    return "Informe o código operacional do cliente.";
   }
   const prefix = skuPrefixProblem(form.sku_prefix);
   if (prefix) return prefix;
