@@ -240,4 +240,6 @@ não pedem índice composto.
     CX-000228), como decidido.
   - **Dry-run de conferência, logo depois:** "já aplicada", com o BTG-000213
     em 79 em B-03.
+  - **BTG avisada:** o Leonardo escreveu à Cristiane (BTG), em 11/11/2026,
+    com a correção do aviso de chegada de 10/11.
   - **Falta, na operação:** reimprimir a etiqueta da CX-000229.
