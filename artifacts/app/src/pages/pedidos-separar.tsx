@@ -44,7 +44,9 @@ import { fetchJson, type WarehouseOpsResponse, type WarehouseTaskItem } from "@/
 import { groupWarehouseOrders } from "@/lib/warehouse-ops/orders";
 import { hrefDoRomaneio } from "@/lib/warehouse-ops/romaneio";
 import { estadoDaLinha, idDaTarefaDeSeparacao, itemDaLinhaDeSeparacao, progressoDoPedido, separacaoComecou } from "@/lib/warehouse-ops/separacao";
+import { comTamanhoDoCatalogo } from "@/lib/warehouse-ops/tamanho-do-catalogo";
 import { useLeituraDaLista } from "@/lib/warehouse-ops/use-lista-de-separacao";
+import { useTamanhosDoCatalogo } from "@/lib/warehouse-ops/use-tamanhos-do-catalogo";
 import { useVolumesDoPedido } from "@/lib/warehouse-ops/use-volumes-do-pedido";
 import {
   avisoDosVolumes,
@@ -135,7 +137,11 @@ export default function PaginaPedidosSeparar() {
       volumes: volumesDaTarefa(data.volumes),
     }),
   );
-  const itens = linhasAoVivo.itens ?? tarefa?.items ?? SEM_ITENS;
+  const linhasDaTarefa = linhasAoVivo.itens ?? tarefa?.items ?? SEM_ITENS;
+  // O tamanho que mora só no campo Tamanho do SKU ("475ML", a capacidade do copo): a linha não o grava, e o
+  // cadastro é o mesmo que as fotos dos itens já leram. A linha e o volume saem com ele.
+  const tamanhos = useTamanhosDoCatalogo(Boolean(pickTaskId));
+  const itens = useMemo(() => comTamanhoDoCatalogo(linhasDaTarefa, tamanhos), [linhasDaTarefa, tamanhos]);
   const situacao = tarefaAoVivo.item ?? (tarefa ? { status: String(tarefa.status ?? ""), separation_started_at: tarefa.separation_started_at ?? null } : undefined);
   const lista = useLeituraDaLista(itens, codigoDoCliente);
   const progresso = useMemo(() => progressoDoPedido(itens), [itens]);

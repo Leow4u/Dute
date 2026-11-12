@@ -26,7 +26,17 @@ export type VolumeDaTarefa = {
 };
 
 /** O item dentro do volume, na ordem das linhas do pedido: o nome com o tamanho, o código do cliente e a quantidade. */
-export type ItemDoVolume = { nome: string; codigo: string; quantidade: number };
+export type ItemDoVolume = {
+  nome: string;
+  codigo: string;
+  quantidade: number;
+  /**
+   * O campo Tamanho do produto, quando a linha o traz (o do cadastro do SKU,
+   * tamanho-do-catalogo.ts): a etiqueta separa do nome o tamanho que não está
+   * no código ("475ML"), como na caixa.
+   */
+  tamanho?: string;
+};
 
 /** O volume como a bancada, a etiqueta e o romaneio o mostram. */
 export type VolumeDoPedido = {
@@ -110,11 +120,13 @@ function itemDaLinha(
   quantidade: number,
 ): ItemDaLinha {
   const nome = texto(item.name ?? item.product_name);
+  const tamanho = texto(item.size);
   return {
     nome: nomeComTamanho({ nome, codigo: item.client_item_code, tamanho: item.size }) || nome || texto(item.sku_code ?? item.sku),
     // O código do cliente; sem ele, o SKU.
     codigo: texto(item.client_item_code) || texto(item.sku_code ?? item.sku),
     quantidade,
+    ...(tamanho ? { tamanho } : {}),
     linha: Number(item.line_number) || Number.MAX_SAFE_INTEGER,
   };
 }
@@ -159,7 +171,8 @@ export function volumesDaSeparacao(volumes: readonly VolumeDaTarefa[], linhas: r
 
 /**
  * Os volumes do pedido concluído: um `packages` por volume, com os
- * `package_items` dele. O volume cancelado não entra.
+ * `package_items` dele. O volume cancelado não entra. O item não grava o
+ * tamanho: o `size` vem do cadastro do SKU (comTamanhoDoCatalogo).
  */
 export function volumesDaRemessa(pacotes: ReadonlyArray<Record<string, unknown>>, itens: ReadonlyArray<Record<string, unknown>>): VolumeDoPedido[] {
   const porPacote = new Map<string, ItemDaLinha[]>();
@@ -170,7 +183,13 @@ export function volumesDaRemessa(pacotes: ReadonlyArray<Record<string, unknown>>
     porPacote.set(pacote, [
       ...(porPacote.get(pacote) ?? []),
       itemDaLinha(
-        { product_name: texto(item.product_name), client_item_code: texto(item.client_item_code), sku_code: texto(item.sku_code), line_number: Number(item.line_number) || undefined },
+        {
+          product_name: texto(item.product_name),
+          client_item_code: texto(item.client_item_code),
+          sku_code: texto(item.sku_code),
+          size: texto(item.size) || undefined,
+          line_number: Number(item.line_number) || undefined,
+        },
         quantidade,
       ),
     ]);

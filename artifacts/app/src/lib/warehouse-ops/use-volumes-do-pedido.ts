@@ -4,6 +4,8 @@ import { collection, doc, query, where } from "firebase/firestore";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
 
 import { itemDaLinhaDeSeparacao } from "./separacao";
+import { comTamanhoDoCatalogo, type TamanhosDoCatalogo } from "./tamanho-do-catalogo";
+import { useTamanhosDoCatalogo } from "./use-tamanhos-do-catalogo";
 import { volumesDaRemessa, volumesDaSeparacao, volumesDaTarefa, type VolumeDoPedido } from "./volumes-do-pedido";
 
 /**
@@ -11,6 +13,11 @@ import { volumesDaRemessa, volumesDaSeparacao, volumesDaTarefa, type VolumeDoPed
  * tarefa de separação e das linhas dela, enquanto o pedido separa; dos
  * `packages` e `package_items`, depois de concluído. É o que a etiqueta do
  * volume, o romaneio e "Para entregar" mostram. Só leitura.
+ *
+ * O tamanho que mora só no campo Tamanho ("475ML", a capacidade do copo) vem
+ * do cadastro dos SKUs, que nem a linha nem o item do volume gravam
+ * (tamanho-do-catalogo.ts): a leitura espera por ele, para a etiqueta e o
+ * romaneio nunca saírem sem o tamanho.
  */
 
 /** O pedido com o que a etiqueta e o romaneio dizem dele. */
@@ -68,6 +75,8 @@ export function leituraDosVolumes(dados: {
   linhas: ReturnType<typeof itemDaLinhaDeSeparacao>[] | null;
   pacotes: Array<Record<string, unknown>> | null;
   itensDosPacotes: Array<Record<string, unknown>> | null;
+  /** O Tamanho de cada SKU do cadastro; undefined enquanto ele não chega (useTamanhosDoCatalogo). */
+  tamanhos: TamanhosDoCatalogo | undefined;
   erro: boolean;
   id: string | null;
 }): LeituraDosVolumes {
@@ -78,6 +87,7 @@ export function leituraDosVolumes(dados: {
   if (dados.pedido === null) return vazio("nao_encontrado");
   const concluido = Boolean(dados.remessa && REMESSA_VALIDA.has(dados.remessa.status));
   if (concluido ? !dados.pacotes || !dados.itensDosPacotes : !dados.linhas) return vazio("carregando");
+  if (!dados.tamanhos) return vazio("carregando");
   const pedido: PedidoDosVolumes = {
     id: dados.id,
     ...dados.pedido,
@@ -88,9 +98,9 @@ export function leituraDosVolumes(dados: {
     por: dados.tarefa?.por ?? "",
   };
   const volumes = concluido
-    ? volumesDaRemessa(dados.pacotes ?? [], dados.itensDosPacotes ?? [])
+    ? volumesDaRemessa(dados.pacotes ?? [], comTamanhoDoCatalogo(dados.itensDosPacotes ?? [], dados.tamanhos))
     : // O volume aberto ainda não tem etiqueta nem vai ao romaneio: só os fechados.
-      volumesDaSeparacao(volumesDaTarefa(dados.tarefa?.volumes), dados.linhas ?? []).filter((volume) => !volume.aberto);
+      volumesDaSeparacao(volumesDaTarefa(dados.tarefa?.volumes), comTamanhoDoCatalogo(dados.linhas ?? [], dados.tamanhos)).filter((volume) => !volume.aberto);
   return { estado: "pronto", pedido, volumes };
 }
 
@@ -143,6 +153,7 @@ export function useVolumesDoPedido(pedidoId: string | null): LeituraDosVolumes {
     (db) => query(collection(db, "package_items"), where("order_id", "==", id)),
     (itemId, data) => ({ ...data, id: itemId }) as Record<string, unknown>,
   );
+  const tamanhos = useTamanhosDoCatalogo(Boolean(id));
   return useMemo(
     () =>
       leituraDosVolumes({
@@ -153,8 +164,9 @@ export function useVolumesDoPedido(pedidoId: string | null): LeituraDosVolumes {
         linhas: linhas.itens,
         pacotes: pacotes.itens,
         itensDosPacotes: itensDosPacotes.itens,
+        tamanhos,
         erro: pedido.erro || remessa.erro || tarefa.erro || linhas.erro || pacotes.erro || itensDosPacotes.erro,
       }),
-    [id, pedido.item, pedido.erro, remessa.item, remessa.erro, tarefa.item, tarefa.erro, linhas.itens, linhas.erro, pacotes.itens, pacotes.erro, itensDosPacotes.itens, itensDosPacotes.erro],
+    [id, pedido.item, pedido.erro, remessa.item, remessa.erro, tarefa.item, tarefa.erro, linhas.itens, linhas.erro, pacotes.itens, pacotes.erro, itensDosPacotes.itens, itensDosPacotes.erro, tamanhos],
   );
 }

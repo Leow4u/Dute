@@ -374,7 +374,8 @@ export function volumeLabels(
   options: { printedAt?: Date; mode?: LabelMode } = {},
 ): VolumeLabelData[] {
   const content = [...volume.itens]
-    .map((item) => contentLine({ code: item.codigo, sku: "", name: item.nome, qty: item.quantidade }, sizeInName(item.nome, { codigo: item.codigo })))
+    // O tamanho à parte, do código ou do campo Tamanho ("475ML"), como na caixa: a folha A4 encurta o nome sem cortar o tamanho.
+    .map((item) => contentLine({ code: item.codigo, sku: "", name: item.nome, qty: item.quantidade }, sizeInName(item.nome, { codigo: item.codigo, tamanho: item.tamanho })))
     .sort((left, right) => right.qty - left.qty || left.name.localeCompare(right.name, "pt-BR"));
   const pages = labelChunks(content, options.mode ?? "a4");
   const base = {
