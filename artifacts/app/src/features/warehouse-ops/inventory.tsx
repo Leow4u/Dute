@@ -1878,7 +1878,7 @@ export function OpeningInventoryWorkspace() {
                       size="sm"
                       onClick={() => navigate(labelsUrl({ boxes: boxesOfSession.filter((box) => box.status === "stored").map((box) => box.code) }))}
                       disabled={!boxesOfSession.some((box) => box.status === "stored")}
-                      title="Etiquetas das caixas guardadas desta sessão, dez por folha A4"
+                      title="Etiquetas das caixas guardadas desta sessão"
                     >
                       <Printer data-icon="inline-start" />
                       Etiquetas
