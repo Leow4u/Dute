@@ -244,4 +244,19 @@ describe("os textos dos volumes", () => {
       "O volume 4 passou a ser o volume 2. Troque a etiqueta dele. O volume 1 mudou. Imprima a etiqueta dele de novo.",
     );
   });
+
+  it("o aviso do volume fechado que esvaziou e saiu, antes dos outros (parte 7a)", () => {
+    // Antes, o volume que saía sendo o de maior número saía sem aviso, e a etiqueta dele ficava na caixa.
+    expect(avisoDosVolumes({ removed_volumes: [{ number: 16 }] })).toBe("O volume 16 saiu. Tire a etiqueta dele.");
+    expect(avisoDosVolumes({ removed_volumes: [], renumbered_volumes: [], changed_volumes: [] })).toBeNull();
+    expect(
+      avisoDosVolumes({
+        renumbered_volumes: [{ from: 17, to: 15 }],
+        changed_volumes: [{ number: 14 }],
+        removed_volumes: [{ number: 15 }, { number: 16 }],
+      }),
+    ).toBe(
+      "O volume 15 saiu. Tire a etiqueta dele. O volume 16 saiu. Tire a etiqueta dele. O volume 17 passou a ser o volume 15. Troque a etiqueta dele. O volume 14 mudou. Imprima a etiqueta dele de novo.",
+    );
+  });
 });

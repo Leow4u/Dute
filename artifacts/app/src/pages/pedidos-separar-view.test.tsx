@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
+import { caixasGravadas } from "@/lib/warehouse-ops/caixas-da-separacao";
+import { separadasParaDividir } from "@/lib/warehouse-ops/divisao-em-volumes";
 import { gruposDaSeparacao, hrefDaListaDeSeparacao } from "@/lib/warehouse-ops/lista-de-separacao";
 import type { WarehouseTaskItem } from "@/lib/warehouse-ops/model";
 import { progressoDoPedido } from "@/lib/warehouse-ops/separacao";
@@ -11,7 +13,7 @@ import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
 
-import { PedidosSepararView, type EstadoDaBancada } from "./pedidos-separar-view";
+import { PedidosSepararView, acoesDoMenu, type EstadoDaBancada } from "./pedidos-separar-view";
 
 /**
  * Pedidos › Separar, a bancada do pedido (separação com caixas, partes 2 e 5;
@@ -529,5 +531,152 @@ describe("Pedidos › Separar, os volumes", () => {
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(comVolumes({ etiquetaDoVolumeHref, caixasInteiras: new Map([["pli_ord_1_04", 1]]) }))).toEqual([]);
     expect(await violacoesDeAcessibilidade(comVolumes({ operador: false }))).toEqual([]);
+  });
+});
+
+/**
+ * "Dividir em volumes" na bancada (separação com caixas, parte 7b; decisões
+ * 27 a 30; docs/mockups/WmsDividirBancada.dc.html, WmsDividirSeparada.dc.html
+ * e WmsDividirNaSeparada.dc.html). Antes, a linha de 95 un. do PED-0001 só
+ * entrava num volume: a bancada não tinha como dividi-la.
+ */
+describe("Pedidos › Separar, dividir em volumes", () => {
+  const CAIXAS_DO_POLO = [
+    { box_code: "CX-000218", qty: 54 },
+    { box_code: "CX-000219", qty: 41 },
+  ];
+  /** A prateleira A-07 das pranchas: o polo M separado, o GG por separar e o G, separado antes, no volume 15, fechado. */
+  function a07(polo: Array<{ volume_id: string; qty: number }>) {
+    return [
+      linha(64, "A-07", "Polo Masculino Piquet Preto M", "A.01.0806.005.M", "BTG-000064", 95, { ...SEPARADA, separated_qty: 95, separated_boxes: CAIXAS_DO_POLO, separated_volumes: polo }),
+      linha(90, "A-07", "Polo Masculino Piquet Preto GG", "A.01.0806.005.GG", "BTG-000090", 32),
+      linha(63, "A-07", "Polo Masculino Piquet Preto G", "A.01.0806.005.G", "BTG-000063", 20, { ...SEPARADA, separated_qty: 20, separated_volumes: [{ volume_id: "v15", qty: 20 }] }),
+    ];
+  }
+  /** WmsDividirNaSeparada: o polo inteiro no volume 16, aberto. */
+  const NA_SEPARADA = a07([{ volume_id: "v16", qty: 95 }]);
+  const DA_TAREFA_NA_SEPARADA: VolumeDaTarefa[] = [
+    { id: "v15", number: 15, status: "closed", units: 20, weight_kg: 9.4 },
+    { id: "v16", number: 16, status: "open", units: 95 },
+  ];
+  /** WmsDividirSeparada: depois de dividir, 54 no 16, fechado, e 41 no 17, aberto. */
+  const SEPARADA_EM_DOIS = a07([
+    { volume_id: "v16", qty: 54 },
+    { volume_id: "v17", qty: 41 },
+  ]);
+  const DA_TAREFA_EM_DOIS: VolumeDaTarefa[] = [
+    { id: "v15", number: 15, status: "closed", units: 20, weight_kg: 9.4 },
+    { id: "v16", number: 16, status: "closed", units: 54, weight_kg: 10.8 },
+    { id: "v17", number: 17, status: "open", units: 41 },
+  ];
+
+  function bancada(itens: WarehouseTaskItem[], daTarefa: VolumeDaTarefa[], props: Props = {}) {
+    const linhas = gruposDaSeparacao(itens, POSICOES).flatMap((grupo) => grupo.linhas);
+    return render("pronto", {
+      itens,
+      volumes: volumesDaSeparacao(daTarefa, itens),
+      caixasDaLinha: new Map(itens.filter((item) => item.separated_at).map((item) => [String(item.id), caixasGravadas(item)])),
+      paraDividir: separadasParaDividir(linhas, daTarefa),
+      onDividir: noop,
+      ...props,
+    });
+  }
+
+  function daLinha(html: string, nome: string) {
+    const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+    const item = [...dom.window.document.querySelectorAll("li")].find((candidato) => candidato.querySelector("p")?.textContent === nome);
+    const codigos = item?.querySelectorAll("p")[1];
+    const resultado = {
+      textos: textosDaTela(item?.outerHTML ?? ""),
+      botoes: [...(item?.querySelectorAll("button") ?? [])].map((botao) => botao.textContent || botao.getAttribute("aria-label")),
+      // A fileira logo embaixo dos códigos, no mesmo bloco do nome.
+      embaixo: codigos?.nextElementSibling ? textosDaTela(codigos.nextElementSibling.outerHTML) : null,
+    };
+    dom.window.close();
+    return resultado;
+  }
+
+  it("o ⋯ da linha por separar: Dividir em volumes primeiro, na linha de 2 un. ou mais; quem só consulta não tem o ⋯", () => {
+    const linhas = gruposDaSeparacao(ITENS, POSICOES, { caixas: CAIXAS, cliente: "BTG" }).flatMap((grupo) => grupo.linhas);
+    const de = (id: string) => linhas.find((candidata) => candidata.id === id)!;
+    const rotulos = (id: string, opcoes: Parameters<typeof acoesDoMenu>[1]) => acoesDoMenu(de(id), opcoes).map((item) => item.rotulo);
+    // A calça 42, por separar, com 40 un.
+    expect(rotulos("pli_ord_1_04", { operador: true, dividir: true, outraCaixa: true })).toEqual(["Dividir em volumes", "Outra caixa", "Separar menos"]);
+    expect(rotulos("pli_ord_1_04", { operador: true, dividir: true, outraCaixa: false })).toEqual(["Dividir em volumes", "Separar menos"]);
+    // O copo, com 1 un., não se divide.
+    expect(rotulos("pli_ord_1_06", { operador: true, dividir: true, outraCaixa: true })).toEqual(["Outra caixa", "Separar menos"]);
+    // Sem os volumes lidos, a bancada não oferece a divisão.
+    expect(rotulos("pli_ord_1_04", { operador: true, dividir: false, outraCaixa: false })).toEqual(["Separar menos"]);
+    // Quem só consulta (e a separação que já fechou) não tem o ⋯; a linha separada também não.
+    expect(rotulos("pli_ord_1_04", { operador: false, dividir: true, outraCaixa: true })).toEqual([]);
+    expect(rotulos("pli_ord_1_03", { operador: true, dividir: true, outraCaixa: true })).toEqual([]);
+    expect(render("pronto", { operador: false, onDividir: noop })).not.toContain("Mais ações de");
+  });
+
+  it("a linha separada no volume aberto ganha Dividir em volumes antes de Desfazer; a do volume fechado, não", () => {
+    const html = bancada(NA_SEPARADA, DA_TAREFA_NA_SEPARADA);
+    expect(daLinha(html, "Polo Masculino Piquet Preto · M").botoes).toEqual(["Dividir em volumes", "Desfazer"]);
+    expect(daLinha(html, "Polo Masculino Piquet Preto · G").botoes).toEqual(["Desfazer"]);
+    expect(daLinha(html, "Polo Masculino Piquet Preto · GG").botoes).toEqual(["Separar", "Mais ações de Polo Masculino Piquet Preto · GG"]);
+    // Depois de dividir, as 41 que ficaram no volume aberto ainda se dividem (decisão 30).
+    expect(daLinha(bancada(SEPARADA_EM_DOIS, DA_TAREFA_EM_DOIS), "Polo Masculino Piquet Preto · M").botoes).toEqual(["Dividir em volumes", "Desfazer"]);
+    // Com o volume aberto fechado, a linha não se divide mais.
+    const fechou = DA_TAREFA_NA_SEPARADA.map((volume) => ({ ...volume, status: "closed" as const }));
+    expect(daLinha(bancada(NA_SEPARADA, fechou), "Polo Masculino Piquet Preto · M").botoes).toEqual(["Desfazer"]);
+  });
+
+  it("o botão da linha separada tem 44 px no celular e o tamanho pequeno no computador", () => {
+    const dom = new JSDOM(`<!doctype html><body>${bancada(NA_SEPARADA, DA_TAREFA_NA_SEPARADA)}</body>`);
+    const classes = [...dom.window.document.querySelectorAll("button")].find((botao) => botao.textContent === "Dividir em volumes")?.className.split(/\s+/);
+    dom.window.close();
+    expect(classes).toEqual(expect.arrayContaining(["min-h-11", "lg:min-h-9"]));
+    expect(classes).not.toContain("min-h-9");
+  });
+
+  it("como Desfazer, o botão não aparece para quem só consulta, na separação que já fechou nem sem os volumes lidos", () => {
+    for (const props of [{ operador: false }, { fechada: true }, { onDividir: undefined }]) {
+      expect(textosDaTela(bancada(NA_SEPARADA, DA_TAREFA_NA_SEPARADA, props))).not.toContain("Dividir em volumes");
+    }
+  });
+
+  it("a linha com mais de duas etiquetas as mostra embaixo dos códigos: as caixas e os volumes", () => {
+    // WmsDividirSeparada: duas caixas e dois volumes.
+    expect(daLinha(bancada(SEPARADA_EM_DOIS, DA_TAREFA_EM_DOIS), "Polo Masculino Piquet Preto · M")).toEqual({
+      textos: [
+        "Polo Masculino Piquet Preto · M",
+        "A.01.0806.005.M · BTG-000064",
+        "54 de CX-000218",
+        "41 de CX-000219",
+        "Volume 16",
+        "Volume 17",
+        "95 un.",
+        "Dividir em volumes",
+        "Desfazer",
+      ],
+      botoes: ["Dividir em volumes", "Desfazer"],
+      embaixo: ["54 de CX-000218", "41 de CX-000219", "Volume 16", "Volume 17"],
+    });
+    // WmsDividirNaSeparada: duas caixas e um volume também são mais de duas.
+    expect(daLinha(bancada(NA_SEPARADA, DA_TAREFA_NA_SEPARADA), "Polo Masculino Piquet Preto · M").embaixo).toEqual(["54 de CX-000218", "41 de CX-000219", "Volume 16"]);
+  });
+
+  it("com até duas etiquetas, elas ficam à direita, como antes", () => {
+    const html = bancada(NA_SEPARADA, DA_TAREFA_NA_SEPARADA);
+    const g = daLinha(html, "Polo Masculino Piquet Preto · G");
+    expect(g.embaixo).toBeNull();
+    expect(g.textos).toEqual(["Polo Masculino Piquet Preto · G", "A.01.0806.005.G · BTG-000063", "Volume 15", "20 un.", "Desfazer"]);
+    // Uma caixa e um volume: à direita.
+    const umaCaixa = NA_SEPARADA.map((item) => (item.id === "pli_ord_1_64" ? { ...item, separated_boxes: [{ box_code: "CX-000218", qty: 95 }] } : item));
+    expect(daLinha(bancada(umaCaixa, DA_TAREFA_NA_SEPARADA), "Polo Masculino Piquet Preto · M").embaixo).toBeNull();
+  });
+
+  it("nenhum selo fica dentro de parágrafo, nem embaixo dos códigos", () => {
+    expect(bancada(SEPARADA_EM_DOIS, DA_TAREFA_EM_DOIS)).not.toMatch(/<p\b[^>]*>(?:(?!<\/p>).)*?<div\b/s);
+  });
+
+  it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
+    expect(await violacoesDeAcessibilidade(bancada(NA_SEPARADA, DA_TAREFA_NA_SEPARADA))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(bancada(SEPARADA_EM_DOIS, DA_TAREFA_EM_DOIS))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(bancada(SEPARADA_EM_DOIS, DA_TAREFA_EM_DOIS, { operador: false }))).toEqual([]);
   });
 });

@@ -279,12 +279,18 @@ export function pesoDigitado(valor: string): number | undefined | null {
 /** O mesmo teto do servidor (pick-progress.ts). */
 export const PESO_DO_VOLUME_MAXIMO_KG = 2000;
 
-/** "O volume 12 passou a ser o volume 5. Troque a etiqueta dele.": o que o desfazer avisa. */
+/**
+ * "O volume 12 passou a ser o volume 5. Troque a etiqueta dele.": o que o
+ * desfazer avisa. O volume fechado que esvaziou e saiu vem antes (parte 7a):
+ * "O volume 16 saiu. Tire a etiqueta dele."
+ */
 export function avisoDosVolumes(resposta: {
+  removed_volumes?: Array<{ number: number }>;
   renumbered_volumes?: Array<{ from: number; to: number }>;
   changed_volumes?: Array<{ number: number }>;
 }): string | null {
   const frases = [
+    ...(resposta.removed_volumes ?? []).map((volume) => `O volume ${numero.format(volume.number)} saiu. Tire a etiqueta dele.`),
     ...(resposta.renumbered_volumes ?? []).map((volume) => `O volume ${numero.format(volume.from)} passou a ser o volume ${numero.format(volume.to)}. Troque a etiqueta dele.`),
     ...(resposta.changed_volumes ?? []).map((volume) => `O volume ${numero.format(volume.number)} mudou. Imprima a etiqueta dele de novo.`),
   ];

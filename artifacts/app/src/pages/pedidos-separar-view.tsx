@@ -51,8 +51,11 @@ import {
  * volumes (parte 4): a linha separada entra no volume aberto e diz em qual
  * está ("Volume 12"); "Fechar volume" fecha com o peso, opcional, e o
  * seguinte abre sozinho; "Levar a caixa" faz da caixa que sai inteira o
- * volume. Os dados e as ações chegam por props (pages/pedidos-separar.tsx).
- * Sem legenda.
+ * volume. "Dividir em volumes" (parte 7b, decisões 27 a 30;
+ * docs/mockups/WmsDividirBancada.dc.html e WmsDividirNaSeparada.dc.html) é
+ * o primeiro item do "⋯" da linha por separar e um botão na linha já
+ * separada que ainda está no volume aberto. Os dados e as ações chegam por
+ * props (pages/pedidos-separar.tsx). Sem legenda.
  */
 
 /** Quantas caixas "Etiquetas para trocar" lista antes de "Ver as N caixas". */
@@ -61,7 +64,31 @@ const ETIQUETAS_A_VISTA = 5;
 /** Quantos volumes fechados a bancada lista antes de "Ver os N volumes". */
 const VOLUMES_A_VISTA = 2;
 
+/** Mais do que isso de etiquetas (caixas e volumes) na linha separada, e elas vão embaixo dos códigos. */
+const ETIQUETAS_AO_LADO = 2;
+
 export type EstadoDaBancada = "carregando" | "nao_encontrado" | "erro" | "concluida" | "pronto";
+
+/** Um item do "⋯" da linha por separar. */
+export type AcaoDoMenu = { acao: "dividir" | "outra" | "menos"; rotulo: string };
+
+/**
+ * O "⋯" da linha por separar: "Dividir em volumes" primeiro, na linha de 2
+ * un. ou mais (parte 7b), "Outra caixa", na linha com caixa da prateleira
+ * para escolher, e "Separar menos". Quem só consulta, e a separação que já
+ * fechou, não têm o "⋯".
+ */
+export function acoesDoMenu(
+  linha: Pick<LinhaDaLista, "quantidade" | "item">,
+  { operador, dividir, outraCaixa }: { operador: boolean; dividir: boolean; outraCaixa: boolean },
+): AcaoDoMenu[] {
+  if (!operador || estadoDaLinha(linha.item) !== "pendente") return [];
+  return [
+    ...(dividir && linha.quantidade >= 2 ? [{ acao: "dividir" as const, rotulo: "Dividir em volumes" }] : []),
+    ...(outraCaixa ? [{ acao: "outra" as const, rotulo: "Outra caixa" }] : []),
+    { acao: "menos", rotulo: "Separar menos" },
+  ];
+}
 
 const MENSAGENS: Record<Exclude<EstadoDaBancada, "pronto">, string> = {
   carregando: "Carregando",
@@ -93,12 +120,14 @@ export function PedidosSepararView({
   caixasInteiras,
   fechandoVolume = false,
   etiquetaDoVolumeHref,
+  paraDividir,
   fotoDe,
   onSeparar,
   onDesfazer,
   onSepararMenos,
   onOutraCaixa,
   onLevarACaixa,
+  onDividir,
   onFecharVolume,
   onConcluir,
 }: {
@@ -145,6 +174,11 @@ export function PedidosSepararView({
   fechandoVolume?: boolean;
   /** A etiqueta de um volume fechado. */
   etiquetaDoVolumeHref?: (volume: VolumeDoPedido) => string | null;
+  /**
+   * As linhas já separadas que ainda têm 2 un. ou mais no volume aberto:
+   * ganham "Dividir em volumes" ao lado de "Desfazer" (decisão 30).
+   */
+  paraDividir?: ReadonlySet<string>;
   fotoDe?: (item: WarehouseTaskItem) => string | undefined;
   onSeparar: (linha: LinhaDaLista) => void;
   onDesfazer: (linha: LinhaDaLista) => void;
@@ -152,6 +186,12 @@ export function PedidosSepararView({
   onOutraCaixa?: (linha: LinhaDaLista) => void;
   /** "Levar a caixa": a caixa que sai inteira vira o volume, sem reembalar. */
   onLevarACaixa?: (linha: LinhaDaLista) => void;
+  /**
+   * "Dividir em volumes" (parte 7b): na linha por separar, pelo "⋯", e na já
+   * separada de `paraDividir`. Sem ela (os volumes ainda não chegaram), a
+   * bancada não oferece a divisão.
+   */
+  onDividir?: (linha: LinhaDaLista) => void;
   /** "Fechar volume": com o peso, opcional. */
   onFecharVolume?: (volume: VolumeDoPedido, pesoKg?: number) => void;
   onConcluir: () => void;
@@ -296,11 +336,13 @@ export function PedidosSepararView({
                           caixas={caixasDaLinha?.get(linha.id)}
                           volumes={volumes ? volumesDaLinha(linha.item, volumes) : undefined}
                           inteiras={caixasInteiras?.get(linha.id) ?? 0}
+                          dividirASeparada={paraDividir?.has(linha.id) ?? false}
                           onSeparar={onSeparar}
                           onDesfazer={onDesfazer}
                           onSepararMenos={onSepararMenos}
                           onOutraCaixa={onOutraCaixa && comOutraCaixa?.has(linha.id) ? onOutraCaixa : undefined}
                           onLevarACaixa={onLevarACaixa}
+                          onDividir={onDividir}
                         />
                       ))}
                     </ul>
@@ -476,6 +518,24 @@ function EtiquetasParaTrocar({ etiquetas, href }: { etiquetas: readonly Etiqueta
   );
 }
 
+/** De onde a linha separada saiu e em quais volumes está: as caixas, e depois os volumes. */
+function EtiquetasDaLinha({ caixas, volumes }: { caixas?: readonly CaixaDaLinha[]; volumes?: readonly string[] }) {
+  return (
+    <>
+      {caixas?.map((caixa) => (
+        <span key={caixa.box_code} className="whitespace-nowrap rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs font-medium text-foreground">
+          {textoDaCaixa(caixa)}
+        </span>
+      ))}
+      {volumes?.map((volume) => (
+        <Badge key={volume} variant="outline" className="whitespace-nowrap border-success-soft-border bg-success-soft text-success-soft-foreground">
+          {volume}
+        </Badge>
+      ))}
+    </>
+  );
+}
+
 function Linha({
   linha,
   foto,
@@ -485,11 +545,13 @@ function Linha({
   caixas,
   volumes,
   inteiras,
+  dividirASeparada,
   onSeparar,
   onDesfazer,
   onSepararMenos,
   onOutraCaixa,
   onLevarACaixa,
+  onDividir,
 }: {
   linha: LinhaDaLista;
   foto?: string;
@@ -502,15 +564,27 @@ function Linha({
   volumes?: readonly string[];
   /** Quantas caixas saem inteiras nesta linha: com alguma, "Levar a caixa". */
   inteiras: number;
+  /** A linha separada que ainda tem 2 un. ou mais no volume aberto: "Dividir em volumes" ao lado de "Desfazer". */
+  dividirASeparada: boolean;
   onSeparar: (linha: LinhaDaLista) => void;
   onDesfazer: (linha: LinhaDaLista) => void;
   onSepararMenos: (linha: LinhaDaLista) => void;
   /** Só na linha com caixa na prateleira para escolher. */
   onOutraCaixa?: (linha: LinhaDaLista) => void;
   onLevarACaixa?: (linha: LinhaDaLista) => void;
+  onDividir?: (linha: LinhaDaLista) => void;
 }) {
   const estado = estadoDaLinha(linha.item);
   const pendente = estado === "pendente";
+  const etiquetas = pendente ? 0 : (caixas?.length ?? 0) + (volumes?.length ?? 0);
+  // Com mais de duas etiquetas (caixas e volumes), elas vão embaixo dos códigos, como as caixas da linha por separar.
+  const embaixo = etiquetas > ETIQUETAS_AO_LADO;
+  const menu = acoesDoMenu(linha, { operador, dividir: Boolean(onDividir), outraCaixa: Boolean(onOutraCaixa) });
+  const escolher = (acao: AcaoDoMenu["acao"]) => {
+    if (acao === "dividir") onDividir?.(linha);
+    else if (acao === "outra") onOutraCaixa?.(linha);
+    else onSepararMenos(linha);
+  };
   return (
     <li className={cn("flex flex-col gap-2.5 border-t border-border/50 px-4 py-2.5 text-sm sm:flex-row sm:items-center sm:gap-3 md:px-5", !pendente && "bg-muted/30")}>
       <div className="flex min-w-0 flex-1 flex-wrap items-start gap-x-3 gap-y-1.5 sm:flex-nowrap sm:items-center">
@@ -545,6 +619,12 @@ function Linha({
               ))}
             </p>
           ) : null}
+          {/* O selo é um bloco: a fileira embaixo dos códigos é um div, não um parágrafo. */}
+          {embaixo ? (
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <EtiquetasDaLinha caixas={caixas} volumes={volumes} />
+            </div>
+          ) : null}
           {estado === "com_diferenca" ? (
             <div className="pt-1">
               <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
@@ -553,20 +633,11 @@ function Linha({
             </div>
           ) : null}
         </div>
-        {/* De onde a linha separada saiu e em qual volume está: ao lado no computador, embaixo no celular. */}
-        {!pendente && (caixas?.length || volumes?.length) ? (
+        {/* De onde a linha separada saiu e em qual volume está: até duas, ao lado no computador e embaixo no celular. */}
+        {etiquetas > 0 && !embaixo ? (
           // O selo é um bloco: dentro de um parágrafo, o navegador o poria para fora.
           <div className="order-last flex basis-full flex-wrap items-center gap-1.5 pl-14 sm:order-none sm:basis-auto sm:flex-nowrap sm:pl-0">
-            {caixas?.map((caixa) => (
-              <span key={caixa.box_code} className="whitespace-nowrap rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs font-medium text-foreground">
-                {textoDaCaixa(caixa)}
-              </span>
-            ))}
-            {volumes?.map((volume) => (
-              <Badge key={volume} variant="outline" className="whitespace-nowrap border-success-soft-border bg-success-soft text-success-soft-foreground">
-                {volume}
-              </Badge>
-            ))}
+            <EtiquetasDaLinha caixas={caixas} volumes={volumes} />
           </div>
         ) : null}
         <span className="whitespace-nowrap font-semibold tabular-nums">{numero.format(linha.quantidade)} un.</span>
@@ -590,15 +661,26 @@ function Linha({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {onOutraCaixa ? <DropdownMenuItem onSelect={() => onOutraCaixa(linha)}>Outra caixa</DropdownMenuItem> : null}
-                <DropdownMenuItem onSelect={() => onSepararMenos(linha)}>Separar menos</DropdownMenuItem>
+                {menu.map((item) => (
+                  <DropdownMenuItem key={item.acao} onSelect={() => escolher(item.acao)}>
+                    {item.rotulo}
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         ) : (
-          <Button type="button" variant="link" className="h-auto self-start px-0 sm:shrink-0 sm:self-center" disabled={ocupada} onClick={() => onDesfazer(linha)}>
-            Desfazer
-          </Button>
+          <div className="flex items-center gap-3 self-start sm:shrink-0 sm:self-center">
+            {/* Enquanto o que a linha pôs está no volume aberto, ela ainda se divide (decisão 30); no celular, com 44 px. */}
+            {onDividir && dividirASeparada ? (
+              <Button type="button" variant="outline" size="sm" className="min-h-11 lg:min-h-9" disabled={ocupada} onClick={() => onDividir(linha)}>
+                Dividir em volumes
+              </Button>
+            ) : null}
+            <Button type="button" variant="link" className="h-auto px-0" disabled={ocupada} onClick={() => onDesfazer(linha)}>
+              Desfazer
+            </Button>
+          </div>
         )
       ) : null}
     </li>
