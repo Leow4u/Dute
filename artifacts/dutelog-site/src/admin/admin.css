@@ -644,6 +644,14 @@ body:has(.editorial-app) {
   padding: 10px 13px;
   font-size: 10px !important;
 }
+.editorial-publish-reason {
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #a19585;
+  text-align: right;
+}
 .editorial-feedback {
   padding: 0 38px;
 }
@@ -1396,6 +1404,9 @@ body:has(.editorial-app) {
   }
   .editorial-edit-actions {
     justify-content: flex-start;
+  }
+  .editorial-publish-reason {
+    text-align: left;
   }
   .editorial-edit-grid {
     padding: 0 28px 50px;

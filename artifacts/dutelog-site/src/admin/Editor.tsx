@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Image from "@tiptap/extension-image";
 import {
   Bold,
   Italic,
@@ -17,9 +15,10 @@ import {
   Heading2,
   Heading3,
 } from "lucide-react";
-import type { RichNode } from "../blog/model";
-import MediaPicker from "./MediaLibrary";
+import { editorBody, type RichNode } from "../blog/model";
 import Dialog from "./Dialog";
+import { blogEditorExtensions } from "./editor-extensions";
+import MediaPicker from "./MediaLibrary";
 
 export default function VisualEditor({
   content,
@@ -37,23 +36,7 @@ export default function VisualEditor({
   const [imageAltOpen, setImageAltOpen] = useState(false);
   const [imageAlt, setImageAlt] = useState("");
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [2, 3] },
-        codeBlock: false,
-        code: false,
-        horizontalRule: false,
-        strike: false,
-        underline: false,
-        link: {
-          openOnClick: false,
-          autolink: false,
-          linkOnPaste: false,
-          HTMLAttributes: { target: null, rel: null, class: null },
-        },
-      }),
-      Image.configure({ allowBase64: false }),
-    ],
+    extensions: blogEditorExtensions(),
     content,
     immediatelyRender: false,
     editable: !disabled,
@@ -67,7 +50,7 @@ export default function VisualEditor({
         spellcheck: "true",
       },
     },
-    onUpdate: ({ editor: current }) => onChange(current.getJSON() as RichNode),
+    onUpdate: ({ editor: current }) => onChange(editorBody(current.getJSON())),
   });
   const active = useEditorState({
     editor,
