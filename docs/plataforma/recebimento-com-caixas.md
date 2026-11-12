@@ -695,9 +695,10 @@ desenhada e aprovada antes do PR de tela.
      caixa de apoio como `null` de propósito, que para o servidor é "no piso,
      sem empilhar" (sem a chave, ele empilharia se o piso deixasse de
      caber). Teste: `destino-da-caixa.confirmar.test.tsx`, que falhava
-     antes. Até a correção chegar à produção: voltar em "Sugestão do
-     sistema" e "Tentar de novo" até a sugestão aparecer, e só então
-     escolher a prateleira.
+     antes. A correção está na produção desde a publicação de 12/11/2026
+     (PR 603, commit `2dd01de`); antes dela, o caminho era voltar em
+     "Sugestão do sistema" e "Tentar de novo" até a sugestão aparecer, e só
+     então escolher a prateleira.
    - **5d, as linhas da NF:** feita em 03/11/2026 (mockups
      `WmsRecebimentoFalta`, `WmsRecebimentoCaixa` e `WmsRecebimentoConcluir`).
      A linha a menos ganha "Marcar falta" (`falta-da-linha.tsx`): o que a NF

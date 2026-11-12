@@ -473,7 +473,9 @@ documentação de produto e operação está em `docs/`.
   sempre fecha. No servidor, `setPickLineSeparated` com `split_volumes`, o
   volume aberto e a linha como a tela os viu (a tela desatualizada recusa com
   `SEPARATION_VOLUMES_CHANGED`), e um `picking.volume_closed` por volume
-  fechado. Tela só entra com mockup aprovado. Desenho, partes e
+  fechado. A parte 7 entrou na `main` pelo PR 603 e está no `dute-prod` desde
+  a publicação manual de 12/11/2026 (commit `2dd01de`, 13:39 UTC, com todas
+  as conferências verdes). Tela só entra com mockup aprovado. Desenho, partes e
   registro em `docs/plataforma/separacao-com-caixas.md`.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os
@@ -636,6 +638,11 @@ reorganização de 19/10/2026 (`artifacts/btg-inventory` hoje é `artifacts/app`
 ## Como trabalhamos
 
 - Um problema por PR, com teste que falha antes e passa depois.
+- Chamada de callable não manda campo `undefined`: o SDK do Firebase o troca
+  por `null`, e o servidor recusa `null` no campo só `.optional()` (o defeito
+  de 11 e 12/11/2026, `docs/plataforma/separacao-com-caixas.md`, seção 5.2).
+  Onde o `null` tem sentido para o servidor (a caixa de apoio da confirmação
+  do destino é "no piso, sem empilhar"), ele vai de propósito.
 - Comando para rodar na máquina do Leonardo vai sempre com a pasta na frente:
   `cd C:\DEV\Dute` (PowerShell) antes de `firebase deploy`, dos scripts de
   `tools/` e de qualquer `git`. Comando sem a pasta já foi rodado no lugar errado.
