@@ -622,12 +622,11 @@ folha" e o "Pular etiquetas usadas"; o rolo Zebra fica como está. Uma
 revisão independente mediu as pranchas com o Manrope e com a métrica da Segoe
 UI: cinco produtos cabem por etiqueta mesmo com os nomes mais longos do
 catálogo e quantidades de quatro dígitos, e as linhas de corte caem no lugar.
-As fontes são estáticas. A CX-000229 e a CX-000138 (o conteúdo do acerto de
-03/11/2026) são casos reais, com as medidas, o peso e os SKUs da CX-000138
-ilustrativos; a CX-000142, a CX-000028, os volumes 20 e a chegada
-AVL-7C21A9F0 vêm das pranchas aprovadas; os volumes 19 e 21 e as medidas da
-CX-000229 são ilustrativos. No canvas, a primeira prancha se chama
-`Main.dc.html`; aqui, `EtiquetaA4Tela.dc.html`.
+As fontes são estáticas. A CX-000138 (o conteúdo do acerto de 03/11/2026) é
+um caso real, com as medidas, o peso e os SKUs ilustrativos; a CX-000142, a
+CX-000028, os volumes 20 e a chegada AVL-7C21A9F0 (CX-000225 a CX-000227)
+vêm das pranchas aprovadas; os volumes 19 e 21 são ilustrativos. No canvas,
+a primeira prancha se chama `Main.dc.html`; aqui, `EtiquetaA4Tela.dc.html`.
 
 | Tela | Arquivo | O que mostra |
 |---|---|---|
@@ -638,7 +637,11 @@ CX-000229 são ilustrativos. No canvas, a primeira prancha se chama
 
 No app (12/11/2026), o que ficou diferente das pranchas: a etiqueta imprime
 em Segoe UI, como as outras etiquetas (as pranchas usam o Manrope); a prévia
-da tela encolhe para caber na largura, em vez da escala fixa da prancha.
+da tela encolhe para caber na largura, em vez da escala fixa da prancha; e a
+tela Estoque › Etiquetas ainda não está na `TELAS_DO_WMS_NA_V3`
+(`lib/wms-v3.ts`): o conteúdo segue a `EtiquetaA4Tela.dc.html` (a "Saída",
+a contagem e a prévia), mas o visual é o das telas do Estoque fora da v3
+(`docs/sistema-visual.md`), sem o fundo, a letra e o botão vermelho da v3.
 
 ## Regras da v3
 

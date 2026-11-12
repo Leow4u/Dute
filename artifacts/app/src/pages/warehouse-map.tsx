@@ -182,7 +182,7 @@ export default function WarehouseMapPage() {
               variant="outline"
               onClick={() => navigate(labelsUrl({ positions: visible.map((shelf) => shelf.code) }))}
               disabled={visible.length === 0}
-              title="Etiquetas das posições em tela, dez por folha A4"
+              title="Etiquetas das posições em tela"
             >
               <Printer className="size-4" />
               Etiquetas de posição
