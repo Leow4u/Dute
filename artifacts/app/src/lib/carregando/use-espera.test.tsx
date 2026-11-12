@@ -1,0 +1,176 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { useEspera, type Espera, type OpcoesDaEspera } from "./use-espera";
+
+/**
+ * O useEspera com o relógio falso (carregamento v2, seção 3): nada antes de
+ * 300 ms, o mínimo de 500 ms quando pedido, o objeto aos 3 s, o movimento
+ * decorativo até 5 s, a demora e a volta calma aos 10 s, a desistência aos
+ * 70 s.
+ */
+
+let raiz: Root | null = null;
+let container: HTMLDivElement | null = null;
+let vistos: Espera[] = [];
+
+function Sonda({ ativa, opcoes }: { ativa: boolean; opcoes?: OpcoesDaEspera }) {
+  vistos.push(useEspera(ativa, opcoes));
+  return null;
+}
+
+function atual(): Espera {
+  return vistos[vistos.length - 1];
+}
+
+function montar(ativa: boolean, opcoes?: OpcoesDaEspera) {
+  act(() => raiz!.render(<Sonda ativa={ativa} opcoes={opcoes} />));
+}
+
+function passar(ms: number) {
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vistos = [];
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  raiz = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => raiz?.unmount());
+  container?.remove();
+  raiz = null;
+  container = null;
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+describe("a espera no relógio", () => {
+  it("parada, não mostra nada", () => {
+    montar(false);
+    passar(20_000);
+    expect(atual()).toEqual({ visivel: false, fase: "oculta", decorridoMs: 0, calmo: false, movimento: false });
+  });
+
+  it("nada antes de 300 ms; aos 300 ms o indicador entra, com movimento", () => {
+    montar(true);
+    expect(atual().visivel).toBe(false);
+    expect(atual().fase).toBe("oculta");
+    passar(299);
+    expect(atual().visivel).toBe(false);
+    expect(atual().fase).toBe("oculta");
+    passar(1);
+    expect(atual()).toEqual({ visivel: true, fase: "andamento", decorridoMs: 300, calmo: false, movimento: true });
+  });
+
+  it("a espera que acaba antes de 300 ms não pisca", () => {
+    montar(true, { segurarMinimo: true });
+    passar(250);
+    montar(false, { segurarMinimo: true });
+    passar(5_000);
+    expect(vistos.some((espera) => espera.visivel)).toBe(false);
+    expect(atual().fase).toBe("oculta");
+  });
+
+  it("com o mínimo pedido, o indicador que apareceu fica 500 ms na tela", () => {
+    montar(true, { segurarMinimo: true });
+    passar(400); // apareceu aos 300 ms
+    expect(atual().visivel).toBe(true);
+    montar(false, { segurarMinimo: true });
+    expect(atual().visivel).toBe(true);
+    expect(atual().fase).toBe("andamento");
+    passar(399); // 799 ms: 499 ms na tela
+    expect(atual().visivel).toBe(true);
+    passar(1); // 800 ms: 500 ms na tela
+    expect(atual().visivel).toBe(false);
+    expect(atual().fase).toBe("oculta");
+  });
+
+  it("sem o mínimo, o dado não espera: o indicador sai na hora", () => {
+    montar(true);
+    passar(400);
+    expect(atual().visivel).toBe(true);
+    montar(false);
+    expect(atual().visivel).toBe(false);
+    expect(atual().fase).toBe("oculta");
+  });
+
+  it("o indicador que já ficou 500 ms sai na hora, mesmo com o mínimo", () => {
+    montar(true, { segurarMinimo: true });
+    passar(900);
+    montar(false, { segurarMinimo: true });
+    expect(atual().visivel).toBe(false);
+  });
+
+  it("voltar a esperar durante o mínimo não faz o indicador piscar", () => {
+    montar(true, { segurarMinimo: true });
+    passar(400);
+    montar(false, { segurarMinimo: true });
+    passar(100);
+    montar(true, { segurarMinimo: true });
+    expect(atual().visivel).toBe(true);
+    expect(atual().fase).toBe("andamento");
+    passar(2_000);
+    expect(vistos.slice(vistos.findIndex((espera) => espera.visivel)).every((espera) => espera.visivel)).toBe(true);
+  });
+
+  it("aos 3 s o objeto, aos 5 s o fim do movimento, aos 10 s a demora calma e aos 70 s a desistência", () => {
+    montar(true);
+    passar(2_999);
+    expect(atual().fase).toBe("andamento");
+    passar(1);
+    expect(atual()).toMatchObject({ fase: "com-objeto", movimento: true, calmo: false });
+    passar(1_999);
+    expect(atual().movimento).toBe(true);
+    passar(1);
+    expect(atual()).toMatchObject({ fase: "com-objeto", movimento: false, calmo: false, decorridoMs: 5_000 });
+    passar(4_999);
+    expect(atual()).toMatchObject({ fase: "com-objeto", calmo: false });
+    passar(1);
+    expect(atual()).toMatchObject({ visivel: true, fase: "demorando", calmo: true, movimento: false, decorridoMs: 10_000 });
+    passar(59_999);
+    expect(atual().fase).toBe("demorando");
+    passar(1);
+    expect(atual()).toMatchObject({ visivel: true, fase: "sem-resposta", calmo: true, decorridoMs: 70_000 });
+  });
+
+  it("depois de 10 s, o decorrido anda a cada segundo (o 0:12 da linha)", () => {
+    montar(true);
+    passar(10_000);
+    expect(atual().decorridoMs).toBe(10_000);
+    passar(999);
+    expect(atual().decorridoMs).toBe(10_000);
+    passar(1);
+    expect(atual().decorridoMs).toBe(11_000);
+    passar(1_000);
+    expect(atual().decorridoMs).toBe(12_000);
+  });
+
+  it("a desistência pode ser outra: 180 s no chat do Agent Dute", () => {
+    montar(true, { desisteMs: 180_000 });
+    passar(70_000);
+    expect(atual().fase).toBe("demorando");
+    passar(110_000);
+    expect(atual().fase).toBe("sem-resposta");
+  });
+
+  it("cada espera começa do zero", () => {
+    montar(true);
+    passar(12_000);
+    expect(atual().fase).toBe("demorando");
+    montar(false);
+    passar(1_000);
+    montar(true);
+    expect(atual().visivel).toBe(false);
+    passar(300);
+    expect(atual()).toMatchObject({ visivel: true, fase: "andamento", calmo: false, movimento: true, decorridoMs: 300 });
+  });
+});

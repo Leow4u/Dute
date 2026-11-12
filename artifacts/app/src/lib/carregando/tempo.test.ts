@@ -1,0 +1,55 @@
+import { describe, expect, it } from "vitest";
+
+import { CARREGANDO, faseDaEspera, podeEsconder } from "./tempo";
+
+/**
+ * O relógio da espera (carregamento v2, seção 3 da especificação de
+ * 12/11/2026): uma regra só para a leitura, a ação, a linha, a abertura, o
+ * Agent Dute e o leitor de tela.
+ */
+
+describe("o relógio da espera", () => {
+  it("os tempos são os aprovados", () => {
+    expect(CARREGANDO).toEqual({
+      atrasoMs: 300,
+      minimoMs: 500,
+      objetoNaLinhaMs: 3_000,
+      movimentoMaxMs: 5_000,
+      demoraMs: 10_000,
+      desisteMs: 70_000,
+      sucessoVisivelMs: 1_000,
+      dedoMs: 700,
+    });
+  });
+
+  it("nada aparece antes de 300 ms", () => {
+    expect(faseDaEspera(0)).toBe("oculta");
+    expect(faseDaEspera(299)).toBe("oculta");
+    expect(faseDaEspera(300)).toBe("andamento");
+    expect(faseDaEspera(2_999)).toBe("andamento");
+  });
+
+  it("aos 3 s o objeto entra na linha, aos 10 s a demora e aos 70 s a desistência", () => {
+    expect(faseDaEspera(3_000)).toBe("com-objeto");
+    expect(faseDaEspera(9_999)).toBe("com-objeto");
+    expect(faseDaEspera(10_000)).toBe("demorando");
+    expect(faseDaEspera(69_999)).toBe("demorando");
+    expect(faseDaEspera(70_000)).toBe("sem-resposta");
+    expect(faseDaEspera(600_000)).toBe("sem-resposta");
+  });
+
+  it("a desistência pode ser outra: 180 s no chat do Agent Dute", () => {
+    expect(faseDaEspera(70_000, 180_000)).toBe("demorando");
+    expect(faseDaEspera(179_999, 180_000)).toBe("demorando");
+    expect(faseDaEspera(180_000, 180_000)).toBe("sem-resposta");
+  });
+
+  it("o indicador que apareceu só sai depois do mínimo de 500 ms", () => {
+    expect(podeEsconder(null, 0)).toBe(true);
+    expect(podeEsconder(null, 10_000)).toBe(true);
+    expect(podeEsconder(1_000, 1_000)).toBe(false);
+    expect(podeEsconder(1_000, 1_499)).toBe(false);
+    expect(podeEsconder(1_000, 1_500)).toBe(true);
+    expect(podeEsconder(1_000, 9_000)).toBe(true);
+  });
+});

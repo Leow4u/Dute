@@ -700,3 +700,230 @@
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* ==========================================================================
+   Carregamento (carregamento v2, aprovado em 12/11/2026): os tokens e os
+   keyframes das peças de espera. O relógio é lib/carregando/tempo.ts (os
+   tempos do JS e daqui são os mesmos); a regra do sistema visual fica em
+   docs/sistema-visual.md, "Carregamento".
+
+   Tudo o que repete anda só por transform e opacity, no compositor: nada de
+   stroke-dash, background-position nem largura em laço
+   (lib/carregando/tokens.test.ts). As cores leem os tokens do app, então o
+   escuro (azul-marinho) vem dos de sempre; a v3 não define escuro.
+   ========================================================================== */
+
+/* As curvas e a contagem grande também viram utilidade (ease-carregando-*,
+   text-contagem e text-contagem-sm), sempre emitidas. */
+@theme static {
+  --ease-carregando-entrada: cubic-bezier(0.2, 0, 0, 1);
+  --ease-carregando-saida: cubic-bezier(0.4, 0, 1, 1);
+  --ease-carregando-padrao: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* O "3" de "3 de 4": 44 px no celular e 28 px no computador, peso 800. */
+  --text-contagem: 2.75rem;
+  --text-contagem--font-weight: 800;
+  --text-contagem--line-height: 1;
+  --text-contagem-sm: 1.75rem;
+  --text-contagem-sm--font-weight: 800;
+  --text-contagem-sm--line-height: 1;
+}
+
+@theme inline {
+  --color-carregando-cor: hsl(var(--carregando-cor));
+  --color-carregando-agente: hsl(var(--carregando-agente));
+  --color-carregando-marca: hsl(var(--carregando-marca));
+  --color-carregando-esqueleto: hsl(var(--carregando-esqueleto));
+  --color-carregando-esqueleto-preto: var(--carregando-esqueleto-preto);
+  --color-carregando-brilho: var(--carregando-brilho);
+  --color-carregando-aviso: hsl(var(--carregando-aviso));
+  --color-carregando-ok: hsl(var(--carregando-ok));
+  --color-carregando-erro: hsl(var(--carregando-erro));
+}
+
+:root {
+  /* Movimento. As curvas estão no @theme acima. */
+  --carregando-t-toque: 100ms; /* o botão afunda (escala 0,97) e trava o segundo toque */
+  --carregando-t-atraso: 300ms; /* antes disso nada aparece nem é anunciado */
+  --carregando-t-minimo: 500ms; /* o mínimo na tela do indicador sozinho e do "em andamento" da ação */
+  --carregando-t-entrada: 150ms; /* a entrada do indicador (opacidade e escala 0,8 a 1), do rótulo, dos fantasmas e dos avisos */
+  --carregando-t-saida: 180ms; /* a saída de qualquer indicador e da linha de estado */
+  --carregando-t-giro: 1200ms; /* uma volta do indicador, linear; todos no mesmo compasso (useCompasso) */
+  --carregando-t-giro-calmo: 2000ms; /* a volta depois do aviso de 10 s */
+  --carregando-t-varredura: 1400ms; /* o segmento de 32% das barras (a abertura, no index.html, repete o valor) */
+  --carregando-t-brilho: 2000ms; /* 1,6 s de varredura e 0,4 s de pausa, dois ciclos, 120 ms entre cartões */
+  /* O dado chegando: opacidade e subida, em cascata de até 6 linhas. */
+  --carregando-t-chegada: 150ms;
+  --carregando-passo: 30ms;
+  --carregando-subida: 4px;
+  /* A troca do rótulo do botão, em sequência e nunca sobreposta, com o deslize de 3 px. */
+  --carregando-t-troca-sai: 80ms;
+  --carregando-t-troca-entra: 150ms;
+  --carregando-t-sucesso: 520ms; /* a caixa fecha: o contorno, a onda verde e o check com a mola */
+  --carregando-mola: cubic-bezier(0.34, 1.56, 0.64, 1); /* o check e o miolo da caixa que fecha; abaixo, o linear() */
+  --carregando-t-sucesso-visivel: 1000ms; /* "Aprovado" na tela antes de a linha sair */
+  --carregando-t-erro-visivel: 2000ms; /* "Não aprovado" no botão antes de voltar a "Aprovar" */
+  /* A linha deixa o grupo (opacidade e 6 px para cima) e as de baixo sobem por transform (FLIP). */
+  --carregando-t-sai-linha: 200ms;
+  --carregando-t-reflui: 240ms;
+  --carregando-t-destaque: 1000ms; /* o realce da linha que chegou ao grupo seguinte */
+  --carregando-t-conta: 160ms; /* a contagem que muda rola 8 px */
+  --carregando-t-listras: 600ms; /* as listras a 45° andam 16 px para trás, linear */
+  --carregando-t-arcos: 1200ms; /* os arcos do Wi-Fi em "Reconectando…", 300 ms por arco; param aos 5 s */
+  --carregando-t-pulso: 2000ms; /* o respiro do movimento reduzido (0,5 Hz) */
+  --carregando-t-abertura-sai: 260ms; /* a abertura esmaece quando o perfil chega */
+  --carregando-t-dedo: 700ms; /* a lista não se mexe se houve toque nela nesse intervalo */
+
+  /* Forma: a caixa chanfrada do "D" da marca (viewBox 24), três cantos com
+     raio 2,5 e o de baixo à direita cortado a 45°. A máscara do contorno fica
+     parada e a cabeça gira dentro dela. Os traços dão 2,25 px em 16, 2,5 px
+     em 20 (com a de 24), 3 px em 24 e 4 px em 40. */
+  --carregando-mascara-16: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M6 3.5H18A2.5 2.5 0 0 1 20.5 6V14.5L14.5 20.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5Z%27 fill=%27none%27 stroke=%27black%27 stroke-width=%273.4%27/%3E%3C/svg%3E");
+  --carregando-mascara-24: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M6 3.5H18A2.5 2.5 0 0 1 20.5 6V14.5L14.5 20.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5Z%27 fill=%27none%27 stroke=%27black%27 stroke-width=%273%27/%3E%3C/svg%3E");
+  --carregando-mascara-40: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M6 3.5H18A2.5 2.5 0 0 1 20.5 6V14.5L14.5 20.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5Z%27 fill=%27none%27 stroke=%27black%27 stroke-width=%272.4%27/%3E%3C/svg%3E");
+  /* A cabeça: 40% da volta cheia, a cauda de 25% em degradê e o vão de 35%. */
+  --carregando-cabeca: conic-gradient(from 0turn, transparent 0 35%, currentColor 60% 100%);
+  /* A opacidade do contorno inteiro: 0,16 sobre a superfície, 0,25 na barra
+     preta e 0,35 no botão de cor, que a define para os filhos. */
+  --carregando-trilho: 0.16;
+  --carregando-trilho-sobre-preto: 0.25;
+  --carregando-trilho-na-cor: 0.35;
+  /* O vale do respiro do movimento reduzido: tinta a 0,6 (4,6:1 sobre
+     #F5F5F3) e branco a 0,8 sobre a cor (3,3:1 sobre o vermelho). */
+  --carregando-piso: 0.6;
+  --carregando-piso-na-cor: 0.8;
+  --carregando-barra-linha: 4px; /* na borda de baixo da linha em andamento */
+  --carregando-barra-topo: 3px; /* no topo do cartão que relê */
+  --carregando-chanfro: 4px; /* a ponta a 45° dos segmentos de progresso */
+
+  /* Cor: cada uma tem um papel fixo. Tinta na espera; o vermelho só na
+     abertura e na ação; verde só no confirmado; o crítico só no erro; o
+     âmbar escuro na demora e na falta de rede; o violeta só no Agent Dute.
+     O esqueleto é cinza neutro, nunca rosado. */
+  --carregando-cor: var(--foreground); /* #1F2A3D; #161616 na v3; #F8FAFC no escuro */
+  --carregando-agente: var(--agent);
+  --carregando-marca: 358 81% 51%; /* #E71C23, o mesmo da --v3-marca nos dois temas */
+  --carregando-esqueleto: 214 16% 87%; /* #D9DDE3: 1,36:1 no branco, como o da v3 */
+  --carregando-brilho: hsl(var(--card) / 0.6); /* a faixa do esqueleto some sobre o cartão */
+  --carregando-aviso: var(--amber-soft-foreground); /* #8A4B00 sobre o --warning-soft; #F8CD77 no escuro */
+  --carregando-ok: var(--success);
+  --carregando-erro: var(--destructive); /* sobre o --destructive-soft */
+}
+
+/* A mola de rigidez 200 e amortecimento 0,6: pico de 9,5%, assenta em ~470 ms. */
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --carregando-mola: linear(0, 0.054 5%, 0.185 10%, 0.352 15%, 0.527 20%, 0.69 25%, 0.827 30%, 0.934 35%, 1.011 40%, 1.06 45%, 1.086 50%, 1.095 55%, 1.091 60%, 1.079 65%, 1.063 70%, 1.047 75%, 1.031 80%, 1.018 85%, 1.007 90%, 1);
+  }
+}
+
+/* Na v3 a tinta é a dela (#161616): o apelido relê o --foreground dentro do
+   .v3, porque a variável herdada da raiz ainda traria a de fora. */
+.v3 {
+  --carregando-cor: var(--foreground);
+  --carregando-esqueleto-preto: hsl(var(--v3-header-foreground) / 0.12); /* os blocos na barra preta */
+}
+
+:root:not(.dark) .v3 {
+  --carregando-esqueleto: 51 10% 86%; /* #DFDED8 */
+}
+
+.dark {
+  --carregando-esqueleto: var(--muted); /* #1D2839 */
+}
+
+/* No celular as barras engrossam. */
+@media (max-width: 767px) {
+  :root {
+    --carregando-barra-linha: 6px;
+    --carregando-barra-topo: 4px;
+  }
+}
+
+/* O indicador: a cabeça gira dentro da máscara parada; a caixa entra com
+   opacidade e escala. */
+@keyframes carregando-giro {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes carregando-entra {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+/* O movimento reduzido: o indicador para e respira até o piso. */
+@keyframes carregando-respira {
+  50% {
+    opacity: var(--carregando-piso, 0.6);
+  }
+}
+
+/* As barras: o segmento de 32% atravessa o trilho (312,5% da largura dele). */
+@keyframes carregando-varre {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(312.5%);
+  }
+}
+
+/* O esqueleto: uma faixa por cartão, inclinada a 20°, com a pausa no fim. */
+@keyframes carregando-brilho {
+  0% {
+    transform: translateX(-130%) skewX(-20deg);
+  }
+  80%,
+  100% {
+    transform: translateX(330%) skewX(-20deg);
+  }
+}
+
+/* As listras a 45° do segmento atual andam para trás. */
+@keyframes carregando-listras {
+  to {
+    transform: translateX(-16px);
+  }
+}
+
+/* Os arcos do Wi-Fi acendem um a um e, aos 5 s, ficam acesos. */
+@keyframes carregando-arco {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  20%,
+  45% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes carregando-aceso {
+  to {
+    opacity: 1;
+  }
+}
+
+/* Movimento reduzido: nada gira nem desliza, e a informação fica. Quem gira
+   para e respira (carregando-respira, em --carregando-t-pulso) com o piso de
+   contraste: --carregando-piso em tinta, --carregando-piso-na-cor no branco
+   sobre a cor. Aqui mudam os tokens das trocas: tudo só por opacidade e sem
+   mola. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --carregando-subida: 0px; /* o dado e a linha nova chegam só por opacidade */
+    --carregando-t-troca-sai: 0ms; /* as camadas do botão trocam de uma vez, sem passar pelo marrom */
+    --carregando-t-troca-entra: 0ms;
+    --carregando-t-sucesso: 0ms; /* a caixa fechada e o check aparecem prontos */
+    --carregando-t-reflui: 0ms; /* as linhas de baixo pulam para o lugar */
+    --carregando-t-conta: 0ms; /* a contagem troca sem rolar */
+    --carregando-mola: var(--ease-carregando-entrada); /* sem mola */
+  }
+}

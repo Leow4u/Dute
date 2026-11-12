@@ -38,6 +38,7 @@ import FinanceiroLayout from "./components/layout/financeiro-layout";
 import RhLayout from "./components/layout/rh-layout";
 import { AppThemeProvider } from "./components/theme/theme-provider";
 import SettingsLayout from "./components/layout/settings-layout";
+import { Anunciador } from "./lib/carregando/anunciador";
 import type { WarehouseOpsModuleKey } from "./lib/warehouse-ops/model";
 import NotFound from "./pages/not-found";
 
@@ -737,6 +738,8 @@ function AppRoutes() {
               </Suspense>
             </ChunkErrorBoundary>
             <Toaster />
+            {/* A região viva do carregamento: uma só, em toda tela, desde o início. */}
+            <Anunciador />
           </TooltipProvider>
           </ActiveCustomerProvider>
         </QueryClientProvider>
