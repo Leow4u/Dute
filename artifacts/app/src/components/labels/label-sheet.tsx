@@ -374,7 +374,9 @@ function SheetBarcodeRow({ code, info }: { code: string; info: [string, string] 
 /**
  * Os produtos em duas linhas: a quantidade e o nome com o tamanho, em letra
  * grande, e embaixo o código do cliente e o SKU. O nome comprido encurta e o
- * tamanho fica (" · XGG" nunca é cortado).
+ * tamanho fica (" · XGG" nunca é cortado). Como na prancha, a lista é uma
+ * grade (sheetContent): a quantidade numa coluna só, do tamanho da maior, e
+ * todos os nomes começam juntos ("1.200 ×" e "9 ×" na mesma etiqueta).
  */
 function SheetContentLines({ lines }: { lines: LabelContentLine[] }) {
   return (
@@ -383,11 +385,12 @@ function SheetContentLines({ lines }: { lines: LabelContentLine[] }) {
         const { name, size } = nameAndSize(line);
         const codes = lineCodes(line);
         return (
-          <div key={`${line.code}-${line.name}`} className="lbl-line" style={{ display: "flex", alignItems: "baseline", gap: "2.5mm" }}>
-            <strong style={{ flexShrink: 0, minWidth: "10mm", textAlign: "right", whiteSpace: "nowrap", fontSize: "13pt", fontWeight: 800, lineHeight: 1.15, fontVariantNumeric: "tabular-nums" }}>
+          // A linha não tem caixa própria: a quantidade e o nome são as duas células dela na grade.
+          <div key={`${line.code}-${line.name}`} className="lbl-line" style={{ display: "contents" }}>
+            <strong style={{ justifySelf: "end", whiteSpace: "nowrap", fontSize: "13pt", fontWeight: 800, lineHeight: 1.15, fontVariantNumeric: "tabular-nums" }}>
               {quantity.format(line.qty)} ×
             </strong>
-            <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", minWidth: 0, fontSize: "13pt", fontWeight: 600, lineHeight: 1.15 }}>
                 <span style={{ ...ellipsis, minWidth: 0 }}>{name}</span>
                 {size ? <span style={{ flexShrink: 0, whiteSpace: "pre" }}> · {size}</span> : null}
@@ -401,15 +404,18 @@ function SheetContentLines({ lines }: { lines: LabelContentLine[] }) {
   );
 }
 
+/** A lista de produtos: a grade da prancha (docs/mockups/EtiquetaA4Caixas.dc.html), a quantidade e o nome. */
 const sheetContent: React.CSSProperties = {
   flex: 1,
   minHeight: 0,
   overflow: "hidden",
   borderTop: `0.3mm solid ${INK}`,
   paddingTop: "1.5mm",
-  display: "flex",
-  flexDirection: "column",
-  gap: "1mm",
+  display: "grid",
+  gridTemplateColumns: "max-content minmax(0, 1fr)",
+  columnGap: "2.5mm",
+  rowGap: "1mm",
+  alignContent: "start",
 };
 
 /** O rodapé: o logo e a parte ("etiqueta 1 de 2") à esquerda, como no rolo, e o total à direita; na caixa aberta, "saldo em" embaixo dele. */
@@ -448,7 +454,7 @@ export function SheetBoxLabelCard({ label }: { label: BoxLabelData }) {
         {label.lines.length ? (
           <SheetContentLines lines={label.lines} />
         ) : (
-          <div style={{ fontSize: "11pt", fontStyle: "italic" }}>Conteúdo a lançar na contagem.</div>
+          <div style={{ gridColumn: "1 / -1", fontSize: "11pt", fontStyle: "italic" }}>Conteúdo a lançar na contagem.</div>
         )}
       </div>
       <SheetFooter part={part} units={label.units} balanceAt={label.balanceAt} />

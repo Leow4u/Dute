@@ -261,6 +261,28 @@ describe("na folha A4, a etiqueta da caixa", () => {
     dom.window.close();
   });
 
+  it("a lista é a grade da prancha: a quantidade numa coluna só, do tamanho da maior, e os nomes começam juntos", () => {
+    const grande = warehouseBoxFromRecord({ ...CAIXA_INTACTA_DE_OUTUBRO, code: "CX-000227", unit_count: 1209 });
+    const entrada = [
+      { box_code: "CX-000227", product_name: "Polo Masculino Piquet Preto", client_item_code: "A.01.0805.001.M", sku_code: "BTG-000140", counted_qty: 1200 },
+      { box_code: "CX-000227", product_name: "Polo Masculino Piquet Preto", client_item_code: "A.01.0805.001.G", sku_code: "BTG-000141", counted_qty: 9 },
+    ];
+    const { dom, lista } = etiquetas(folha(boxLabels(grande, entrada, { printedAt: AGORA })));
+    const lista0 = lista[0].querySelector(".lbl-content")!;
+    // docs/mockups/EtiquetaA4Caixas.dc.html: grid-template-columns max-content minmax(0,1fr), a quantidade justify-self end.
+    expect(lista0.getAttribute("style")).toContain("display:grid;grid-template-columns:max-content minmax(0, 1fr);column-gap:2.5mm;row-gap:1mm");
+    const linhasDaGrade = [...lista0.querySelectorAll(".lbl-line")];
+    expect(linhasDaGrade.map((linha) => linha.getAttribute("style"))).toEqual(["display:contents", "display:contents"]);
+    expect(linhasDaGrade.map((linha) => linha.firstElementChild?.textContent)).toEqual(["1.200 ×", "9 ×"]);
+    for (const linha of linhasDaGrade) {
+      const quantidade = linha.firstElementChild!.getAttribute("style")!;
+      expect(quantidade).toContain("justify-self:end");
+      // Sem largura mínima por linha: a coluna é uma só.
+      expect(quantidade).not.toContain("min-width");
+    }
+    dom.window.close();
+  });
+
   it("a caixa aberta sai com o saldo, as unidades e 'saldo em' embaixo delas, sem o peso", () => {
     const aberta = warehouseBoxFromRecord({
       code: "CX-000028",
