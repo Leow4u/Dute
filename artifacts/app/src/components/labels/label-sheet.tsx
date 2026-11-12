@@ -494,15 +494,20 @@ function pageRules(mode: LabelMode, kinds: ReadonlySet<LabelPage["kind"]>) {
   if (mode === "zebra") return `@page { size: ${LABEL_MM.width}mm ${LABEL_MM.height}mm; margin: 0; }`;
   const deitada = `${BOX_SHEET_MM.width}mm ${BOX_SHEET_MM.height}mm`;
   const emPe = `${SHEET_MM.width}mm ${SHEET_MM.height}mm`;
-  // Uma folha só de um tipo: o @page diz o tamanho dela. As duas juntas (raro): uma página com nome para cada.
-  if (kinds.has("quatro") && kinds.has("dez")) {
-    return `@page { margin: 0; }
+  // Uma folha só de um tipo (toda tela pede assim): o @page diz o tamanho dela.
+  if (!(kinds.has("quatro") && kinds.has("dez"))) return `@page { size: ${kinds.has("quatro") ? deitada : emPe}; margin: 0; }`;
+  // As duas juntas (só pelo endereço): uma página com nome para cada. O nome só vale em fluxo normal, e o
+  // .print-area é absoluto (index.css): nesta impressão, a área volta ao fluxo, o resto do app some (em vez
+  // de ficar invisível ocupando lugar) e o html e o body deixam de cortar na altura da janela.
+  return `@page { margin: 0; }
   @page etiqueta-deitada { size: ${deitada}; margin: 0; }
   @page etiqueta-em-pe { size: ${emPe}; margin: 0; }
   .lbl-folha { page: etiqueta-deitada; }
-  .lbl-sheet { page: etiqueta-em-pe; }`;
-  }
-  return `@page { size: ${kinds.has("quatro") ? deitada : emPe}; margin: 0; }`;
+  .lbl-sheet { page: etiqueta-em-pe; }
+  html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; }
+  body *:has(.lbl-print) { display: contents !important; }
+  body *:not(.lbl-print):not(.lbl-print *):not(:has(.lbl-print)) { display: none !important; }
+  .print-area.lbl-print { position: static !important; }`;
 }
 
 /** CSS das folhas e do rolo: o @page muda com a saída e com o tipo de folha, por isso vai inline. */

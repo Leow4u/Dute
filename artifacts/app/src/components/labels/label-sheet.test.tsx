@@ -401,6 +401,19 @@ describe("as folhas A4 e o rolo", () => {
     expect(juntas).toContain("@page etiqueta-deitada { size: 297mm 210mm; margin: 0; }");
     expect(juntas).toContain("@page etiqueta-em-pe { size: 210mm 297mm; margin: 0; }");
     expect(juntas).toContain(".lbl-folha { page: etiqueta-deitada; }");
+    // O nome da página só vale em fluxo normal, e o .print-area é absoluto: nas duas juntas, a área volta ao
+    // fluxo e o resto do app some (no Chromium, a página deitada e as em pé saem idênticas às de um tipo só).
+    const emFluxo = [
+      "body *:has(.lbl-print) { display: contents !important; }",
+      "body *:not(.lbl-print):not(.lbl-print *):not(:has(.lbl-print)) { display: none !important; }",
+      ".print-area.lbl-print { position: static !important; }",
+    ];
+    for (const regra of emFluxo) {
+      expect(juntas).toContain(regra);
+      // A impressão de um tipo só, a de todas as telas, fica como está.
+      expect(labelSheetCss("a4", new Set(["quatro"]))).not.toContain(regra);
+      expect(labelSheetCss("a4", new Set(["dez"]))).not.toContain(regra);
+    }
     expect(labelSheetCss("zebra", new Set(["rolo"]))).toContain("@page { size: 101.6mm 50.8mm; margin: 0; }");
     // A linha de corte das posições sai impressa (antes, só na tela).
     expect(labelSheetCss("a4")).toContain(".lbl-sheet .lbl { outline: 0.25mm dashed #000;");
