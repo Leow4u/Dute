@@ -954,7 +954,13 @@
     inline-size: var(--carregando-tamanho);
     block-size: var(--carregando-tamanho);
     overflow: hidden; /* a cabeça que gira não aumenta a área de rolagem de quem a contém */
-    forced-color-adjust: none; /* no alto contraste do Windows, o trilho e a cabeça ficam na cor do texto */
+    /* No alto contraste do Windows, o trilho e a cabeça ficam (sem o fundo
+       forçado) e o currentColor é a cor forçada de quem contém a caixa, como
+       no svg. O none sozinho levaria a tinta do tema para o fundo forçado, e a
+       caixa sumiria no preto; ele fica de reserva para quem não conhece o
+       preserve-parent-color. */
+    forced-color-adjust: none;
+    forced-color-adjust: preserve-parent-color;
     -webkit-mask: var(--carregando-mascara) center / 100% 100% no-repeat;
     mask: var(--carregando-mascara) center / 100% 100% no-repeat;
     animation: carregando-entra var(--carregando-t-entrada) var(--ease-carregando-entrada) both;

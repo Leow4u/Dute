@@ -114,6 +114,16 @@ describe("a árvore de acessibilidade", () => {
     expect(await violacoesDeAcessibilidade(`<p>${html} Carregando pedidos…</p>`)).toEqual([]);
   });
 
+  it("no alto contraste, fica na cor forçada de quem a contém, como o svg do anel", () => {
+    // Com o none sozinho, o currentColor seria a tinta do tema sobre o fundo
+    // forçado (#1F2A3D no preto do alto contraste escuro) e a caixa sumiria; o
+    // preserve-parent-color mantém o trilho e a cabeça e herda a cor forçada.
+    // O none vem antes, de reserva para quem não conhece o valor novo.
+    const corpo = regras(CSS).find((regra) => regra.seletor === ".carregando-caixa" && regra.contexto.join(" | ") === COMPONENTES.join(" | "))?.corpo ?? "";
+    const valores = [...corpo.matchAll(/forced-color-adjust:\s*([\w-]+)/g)].map((achado) => achado[1]);
+    expect(valores).toEqual(["none", "preserve-parent-color"]);
+  });
+
   it("sozinho, com aria-label, vira o aviso de status", async () => {
     const html = renderToStaticMarkup(<Spinner aria-label="Carregando pedidos" />);
     const indicador = caixa(html);
