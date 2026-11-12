@@ -760,6 +760,16 @@
   --carregando-t-troca-sai: 80ms;
   --carregando-t-troca-entra: 150ms;
   --carregando-t-sucesso: 520ms; /* a caixa fecha: o contorno, a onda verde e o check com a mola */
+  /* As partes do sucesso e do erro do botão de ação, sobrepostas nos 520 ms:
+     a cabeça completa o contorno, a onda (verde no sucesso, clara no erro)
+     nasce da caixa e cobre o botão, o check se desenha uma vez e o miolo da
+     caixa fecha com a mola no tempo que sobra. No erro, o tremor de 3 px
+     vem depois da onda. */
+  --carregando-t-contorno: 200ms;
+  --carregando-t-onda: 300ms;
+  --carregando-t-check: 200ms;
+  --carregando-t-miolo: calc(var(--carregando-t-sucesso) - var(--carregando-t-contorno) - var(--carregando-t-troca-sai));
+  --carregando-t-tremor: 240ms;
   --carregando-mola: cubic-bezier(0.34, 1.56, 0.64, 1); /* o check e o miolo da caixa que fecha; abaixo, o linear() */
   --carregando-t-sucesso-visivel: 1000ms; /* "Aprovado" na tela antes de a linha sair */
   --carregando-t-erro-visivel: 2000ms; /* "Não aprovado" no botão antes de voltar a "Aprovar" */
@@ -938,6 +948,10 @@
     --carregando-t-troca-sai: 0ms; /* as camadas do botão trocam de uma vez, sem passar pelo marrom */
     --carregando-t-troca-entra: 0ms;
     --carregando-t-sucesso: 0ms; /* a caixa fechada e o check aparecem prontos */
+    --carregando-t-contorno: 0ms;
+    --carregando-t-onda: 0ms; /* o fundo do sucesso e do erro entra de uma vez */
+    --carregando-t-check: 0ms;
+    --carregando-t-tremor: 0ms;
     --carregando-t-reflui: 0ms; /* as linhas de baixo pulam para o lugar */
     --carregando-t-conta: 0ms; /* a contagem troca sem rolar */
     --carregando-mola: var(--ease-carregando-entrada); /* sem mola */
@@ -1127,6 +1141,377 @@
     .carregando-com-brilho::after {
       animation: none;
       opacity: 0;
+    }
+  }
+}
+
+
+/* O botão de ação (components/ui/botao-de-acao.tsx; seção 5.4 e momento 3):
+   repouso, em andamento, sucesso, erro e sem resposta, com a largura do
+   rótulo mais largo. As cinco camadas ficam empilhadas na mesma célula da
+   grade; só a atual (data-atual) fica visível, herdando a visibility do
+   botão, e as outras ficam com visibility hidden. A troca é em sequência e
+   nunca sobreposta: quem sai (data-sai) some em 80 ms subindo 3 px, e só
+   então quem entra aparece em 150 ms, de 3 px abaixo. No sucesso que vem do
+   em andamento, a cabeça completa o contorno antes (--botao-acao-espera).
+   Os fundos (data-fundo) ficam atrás do texto, num recorte (data-recorte)
+   do tamanho da caixa de borda do botão: o toque (o #AD0015 do primário), a
+   onda que nasce da caixa e cobre o botão (verde no sucesso, clara no erro,
+   só por scale) e a borda do erro e do Conferir. Quando o fundo do fim já
+   cobre, o próprio botão fica sem fundo e sem borda (data-cobre; as classes
+   vêm do componente, porque as da variante são utilidades e venceriam
+   daqui), para o vermelho não vazar no raio nem a borda da variante ficar
+   dobrada. Tudo o
+   que anima é transform e opacity; o check se desenha uma vez, numa
+   transição de 200 ms do stroke-dashoffset, nunca em laço. */
+@keyframes carregando-afunda {
+  to {
+    transform: scale(0.97);
+  }
+}
+
+@keyframes carregando-solta {
+  from {
+    transform: scale(0.97);
+  }
+}
+
+/* O começo explícito: a camada que sai está escondida por baixo (opacity 0),
+   e o keyframe sem o from partiria de lá. */
+@keyframes carregando-troca-sai {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes carregando-troca-entra {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@keyframes carregando-onda {
+  from {
+    transform: scale(0);
+  }
+}
+
+/* A onda que sai volta para a caixa, sem esmaecer: o verde nunca passa por
+   cima do vermelho a meia opacidade (o marrom). */
+@keyframes carregando-onda-volta {
+  from {
+    transform: none;
+  }
+  to {
+    transform: scale(0);
+  }
+}
+
+@keyframes carregando-aparece {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes carregando-some {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes carregando-miolo {
+  from {
+    transform: scale(0.6);
+  }
+}
+
+@keyframes carregando-marca {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+@keyframes carregando-tremor {
+  25% {
+    transform: translateX(-3px);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+}
+
+@layer components {
+  .botao-acao {
+    --botao-acao-espera: 0ms;
+    --botao-acao-borda: 0px;
+  }
+
+  /* As variantes com borda (secundário, contorno e destrutivo). */
+  .botao-acao[data-borda] {
+    --botao-acao-borda: 1px;
+  }
+
+  /* No sucesso que vem do em andamento, a cabeça completa o contorno antes da troca. */
+  .botao-acao[data-camada="sucesso"][data-de="andamento"] {
+    --botao-acao-espera: var(--carregando-t-contorno);
+  }
+
+  .botao-acao-camada {
+    grid-area: 1 / 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    visibility: hidden;
+    opacity: 0;
+  }
+
+  /* inherit, nunca visible: dentro de uma linha escondida, a camada some junto. */
+  .botao-acao-camada[data-atual] {
+    visibility: inherit;
+    opacity: 1;
+  }
+
+  .botao-acao[data-de] > .botao-acao-camada[data-atual] {
+    animation: carregando-troca-entra var(--carregando-t-troca-entra) var(--ease-carregando-entrada) calc(var(--botao-acao-espera) + var(--carregando-t-troca-sai)) both;
+  }
+
+  /* Quem sai fica visível até o fim da saída, e só então sai da tela. */
+  .botao-acao > .botao-acao-camada[data-sai] {
+    animation: carregando-troca-sai var(--carregando-t-troca-sai) var(--ease-carregando-saida) var(--botao-acao-espera) both;
+    transition: visibility 0s linear calc(var(--botao-acao-espera) + var(--carregando-t-troca-sai));
+  }
+
+  .botao-acao-camada[data-camada="sucesso"] {
+    color: hsl(var(--success-foreground));
+  }
+
+  .botao-acao-camada[data-camada="erro"] {
+    color: hsl(var(--carregando-erro));
+  }
+
+  .botao-acao-camada[data-camada="sem-resposta"] {
+    color: hsl(var(--foreground));
+  }
+
+  /* O lugar do ícone: o mesmo tamanho com ou sem o indicador dentro. */
+  .botao-acao-icone {
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+
+  .botao-acao-icone > * {
+    grid-area: 1 / 1;
+  }
+
+  /* O contorno inteiro, por cima do indicador, quando a cabeça o completa no sucesso. */
+  .botao-acao-contorno {
+    fill: none;
+    stroke: currentColor;
+    opacity: 0;
+  }
+
+  .botao-acao[data-camada="sucesso"][data-de="andamento"] > .botao-acao-camada[data-sai] .botao-acao-contorno {
+    opacity: 1;
+    animation: carregando-aparece var(--carregando-t-contorno) linear both;
+  }
+
+  /* A caixa fechada do sucesso (contorno, miolo e o check vazado na cor do
+     fundo) e a caixa com o "!" do erro, paradas; só o miolo, o "!" e o check
+     entram, uma vez. */
+  .botao-acao-caixa {
+    overflow: visible;
+  }
+
+  .botao-acao-caixa > [data-parte="contorno"] {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 3;
+  }
+
+  .botao-acao-caixa > [data-parte="miolo"] {
+    fill: currentColor;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .botao-acao-caixa > [data-parte="check"] {
+    fill: none;
+    stroke: hsl(var(--carregando-ok));
+    stroke-width: 2.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+
+  .botao-acao-caixa > [data-parte="marca"] {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 3;
+    stroke-linecap: round;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .botao-acao-camada[data-atual] [data-parte="check"],
+  .botao-acao-camada[data-sai] [data-parte="check"] {
+    stroke-dashoffset: 0;
+  }
+
+  .botao-acao[data-de] > .botao-acao-camada[data-atual] [data-parte="miolo"] {
+    animation: carregando-miolo var(--carregando-t-miolo) var(--carregando-mola) calc(var(--botao-acao-espera) + var(--carregando-t-troca-sai)) both;
+  }
+
+  .botao-acao[data-de] > .botao-acao-camada[data-atual] [data-parte="check"] {
+    transition: stroke-dashoffset var(--carregando-t-check) var(--ease-carregando-entrada) calc(var(--botao-acao-espera) + var(--carregando-t-troca-sai));
+  }
+
+  .botao-acao[data-de] > .botao-acao-camada[data-atual] [data-parte="marca"] {
+    animation: carregando-marca var(--carregando-t-miolo) var(--carregando-mola) calc(var(--botao-acao-espera) + var(--carregando-t-troca-sai)) both;
+  }
+
+  /* O recorte dos fundos: a caixa de borda do botão, com o raio dele, atrás
+     do texto. */
+  .botao-acao > [data-recorte] {
+    position: absolute;
+    inset: calc(-1 * var(--botao-acao-borda));
+    z-index: -1;
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  .botao-acao [data-fundo] {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0;
+  }
+
+  /* O toque fica dentro da borda da variante. */
+  .botao-acao [data-fundo="toque"] {
+    inset: var(--botao-acao-borda);
+    transition: opacity var(--carregando-t-toque) var(--ease-carregando-entrada);
+  }
+
+  .botao-acao[data-afundado][data-camada="repouso"] [data-fundo="toque"],
+  .botao-acao[data-camada="repouso"]:active:not([aria-disabled="true"]) [data-fundo="toque"] {
+    opacity: 1;
+  }
+
+  /* A onda: um círculo do triplo da largura, com o centro na caixa
+     (--botao-acao-onda-x, medido pelo componente), que cresce só por scale. */
+  .botao-acao [data-fundo="onda"] {
+    inset: auto;
+    left: var(--botao-acao-onda-x, 50%);
+    top: 50%;
+    inline-size: 300%;
+    aspect-ratio: 1;
+    margin: -150% 0 0 -150%;
+    border-radius: 50%;
+    transform: scale(0);
+  }
+
+  .botao-acao [data-fundo="onda"][data-cor="ok"] {
+    background-color: hsl(var(--carregando-ok));
+  }
+
+  .botao-acao [data-fundo="onda"][data-cor="erro"] {
+    background-color: hsl(var(--destructive-soft));
+  }
+
+  .botao-acao [data-fundo="onda"][data-cor] {
+    opacity: 1;
+    transform: none;
+  }
+
+  .botao-acao[data-de] [data-fundo="onda"][data-cor] {
+    animation: carregando-onda var(--carregando-t-onda) var(--ease-carregando-entrada) var(--botao-acao-espera) both;
+  }
+
+  .botao-acao [data-fundo="borda"] {
+    border: 1px solid transparent;
+  }
+
+  .botao-acao [data-fundo="borda"][data-cor="erro"] {
+    border-color: hsl(var(--destructive-soft-border));
+  }
+
+  .botao-acao [data-fundo="borda"][data-cor="conferir"] {
+    background-color: hsl(var(--card));
+    border-color: hsl(var(--border));
+  }
+
+  .botao-acao:hover:not([aria-disabled="true"]) [data-fundo="borda"][data-cor="conferir"] {
+    background-color: hsl(var(--primary-soft-hover));
+  }
+
+  .botao-acao [data-fundo="borda"][data-cor] {
+    opacity: 1;
+  }
+
+  .botao-acao[data-de] [data-fundo="borda"][data-cor] {
+    animation: carregando-aparece var(--carregando-t-troca-entra) var(--ease-carregando-entrada) var(--botao-acao-espera) both;
+  }
+
+  /* Saindo do fim, a onda volta para a caixa e a borda esmaece por cima do
+     repouso (o componente devolve o fundo da variante de uma vez). */
+  .botao-acao [data-fundo][data-sai] {
+    opacity: 0;
+    transform: none;
+  }
+
+  .botao-acao [data-fundo="onda"][data-sai] {
+    opacity: 1;
+    transform: scale(0);
+  }
+
+  .botao-acao[data-de] [data-fundo="onda"][data-sai] {
+    animation: carregando-onda-volta var(--carregando-t-troca-entra) var(--ease-carregando-saida) both;
+  }
+
+  .botao-acao[data-de] [data-fundo="borda"][data-sai] {
+    animation: carregando-some var(--carregando-t-troca-entra) var(--ease-carregando-saida) both;
+  }
+
+  /* O botão: solta quando o indicador entra, treme depois da onda do erro e
+     afunda no toque (por último, para valer também sobre o tremor). */
+  .botao-acao[data-de][data-camada="andamento"] {
+    animation: carregando-solta var(--carregando-t-toque) var(--ease-carregando-entrada) both;
+  }
+
+  .botao-acao[data-de][data-camada="erro"] {
+    animation: carregando-tremor var(--carregando-t-tremor) var(--ease-carregando-padrao) var(--carregando-t-onda) both;
+  }
+
+  .botao-acao[data-afundado][data-camada],
+  .botao-acao:active:not([aria-disabled="true"]) {
+    animation: carregando-afunda var(--carregando-t-toque) var(--ease-carregando-entrada) both;
+  }
+
+  /* Movimento reduzido: sem afundar, sem soltar e sem tremor. A troca, a onda
+     e o check ficam com os tempos zerados no :root (de uma vez, sem esmaecer
+     nem passar pelo marrom entre o vermelho e o verde). */
+  @media (prefers-reduced-motion: reduce) {
+    .botao-acao[data-de][data-camada],
+    .botao-acao[data-afundado][data-camada],
+    .botao-acao:active:not([aria-disabled="true"]) {
+      animation: none;
     }
   }
 }
