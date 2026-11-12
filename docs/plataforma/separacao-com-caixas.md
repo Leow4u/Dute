@@ -671,6 +671,8 @@ direto, sem o SDK, e não pegavam. A correção é a bancada não mandar o campo
 sem valor (`semCamposVazios`, em `artifacts/app/src/lib/wms/separacao.ts`,
 com o teste que falhava antes). Até ela chegar à produção: fechar os
 volumes no computador, com o peso, e escrever o detalhe no "Separar menos".
+O mesmo defeito estava no "Confirmar destino" do Receber por caixa e foi
+corrigido em 12/11/2026 (`recebimento-com-caixas.md`, parte 5c).
 
 ## 6. Perguntas
 

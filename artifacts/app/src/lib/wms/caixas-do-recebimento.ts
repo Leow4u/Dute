@@ -412,7 +412,8 @@ export function confirmarDestino(
   input: DaCaixa & {
     location_id: string;
     orientation?: string;
-    support_box_code?: string;
+    /** A caixa de apoio, ou `null` para a base: "no piso, sem empilhar". Sem a chave, o servidor empilharia. */
+    support_box_code: string | null;
     suggestion?: { position?: string | null; reason?: string | null; alternatives?: string[]; tier?: number };
   },
 ) {
