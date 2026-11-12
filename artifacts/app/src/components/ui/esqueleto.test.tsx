@@ -9,7 +9,15 @@ import { describe, expect, it } from "vitest";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
-import { BRILHO_MS, CICLOS_DO_BRILHO, CartaoComBrilho, DEFASAGEM_DO_BRILHO_MS, Esqueleto, type FormaDoEsqueleto } from "./esqueleto";
+import {
+  BRILHO_MS,
+  CICLOS_DO_BRILHO,
+  CartaoComBrilho,
+  DEFASAGEM_DO_BRILHO_MS,
+  Esqueleto,
+  ORDEM_MAXIMA_DO_BRILHO,
+  type FormaDoEsqueleto,
+} from "./esqueleto";
 
 /**
  * O esqueleto do carregamento v2 (aprovado em 12/11/2026, seção 5.2 e
@@ -161,6 +169,19 @@ describe("o cartão com o brilho", () => {
     expect(ordem(2.7)).toBe("2");
     expect(ordem(-1)).toBe("0");
     expect(ordem(Number.NaN)).toBe("0");
+  });
+
+  it("a defasagem nunca leva o brilho além dos 5 s: do décimo cartão em diante, a ordem é a do nono", () => {
+    const ordem = (valor: number) =>
+      elemento(renderToStaticMarkup(<CartaoComBrilho ordem={valor} />), "[data-brilho]").style.getPropertyValue("--ordem");
+    expect(ordem(8)).toBe("8");
+    expect(ordem(9)).toBe("8");
+    // Com 40 × 120 ms, a faixa só começaria aos 4,8 s e andaria até os 8,4 s.
+    expect(ordem(40)).toBe("8");
+    // A última ordem com os dois ciclos inteiros dentro dos 5 s do movimento decorativo.
+    expect(ORDEM_MAXIMA_DO_BRILHO).toBe(8);
+    expect(CICLOS_DO_BRILHO * BRILHO_MS + ORDEM_MAXIMA_DO_BRILHO * DEFASAGEM_DO_BRILHO_MS).toBeLessThanOrEqual(CARREGANDO.movimentoMaxMs);
+    expect(CICLOS_DO_BRILHO * BRILHO_MS + (ORDEM_MAXIMA_DO_BRILHO + 1) * DEFASAGEM_DO_BRILHO_MS).toBeGreaterThan(CARREGANDO.movimentoMaxMs);
   });
 
   it("uma faixa por cartão, inclinada a 20°, na cor do cartão a 60%, que só anda por transform", () => {

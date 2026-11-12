@@ -1,5 +1,6 @@
 import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 
+import { CARREGANDO } from '@/lib/carregando/tempo';
 import { cn } from '@/lib/utils';
 
 /** Uma passada do brilho: 1,6 s de varredura e 0,4 s de pausa (o mesmo --carregando-t-brilho do index.css). */
@@ -8,6 +9,14 @@ export const BRILHO_MS = 2000;
 export const CICLOS_DO_BRILHO = 2;
 /** A defasagem entre um cartão e o seguinte. */
 export const DEFASAGEM_DO_BRILHO_MS = 120;
+/**
+ * A última ordem com defasagem própria (8, o nono cartão): com ela, os dois
+ * ciclos ainda terminam dentro dos 5 s do movimento decorativo (4 s + 8 × 120
+ * ms). Do décimo cartão em diante, o brilho sai junto com o do nono.
+ */
+export const ORDEM_MAXIMA_DO_BRILHO = Math.floor(
+  (CARREGANDO.movimentoMaxMs - CICLOS_DO_BRILHO * BRILHO_MS) / DEFASAGEM_DO_BRILHO_MS,
+);
 
 /**
  * As formas do esqueleto, com a anatomia da linha real (seção 4.2): `texto`,
@@ -47,13 +56,13 @@ export function Esqueleto({ forma = 'bloco', className, ...props }: EsqueletoPro
 
 export interface CartaoComBrilhoProps extends HTMLAttributes<HTMLDivElement> {
   children?: ReactNode;
-  /** A posição do cartão na tela (0, 1, 2…): cada um começa 120 ms depois do anterior. */
+  /** A posição do cartão na tela (0, 1, 2…): cada um começa 120 ms depois do anterior, até o nono. */
   ordem?: number;
 }
 
-/** A ordem como inteiro de 0 em diante; o que não é número vira 0. */
+/** A ordem como inteiro de 0 a `ORDEM_MAXIMA_DO_BRILHO`; o que não é número vira 0. */
 function ordemDoCartao(ordem: number): number {
-  return Number.isFinite(ordem) && ordem > 0 ? Math.floor(ordem) : 0;
+  return Number.isFinite(ordem) && ordem > 0 ? Math.min(Math.floor(ordem), ORDEM_MAXIMA_DO_BRILHO) : 0;
 }
 
 /**
