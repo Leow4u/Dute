@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Dividir também na linha já separada</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+button,input{font:inherit;color:inherit}
+a{color:#0054CE}a:hover{color:#003E99}
+x-dc{display:contents}
+svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ic{width:20px;height:20px;flex:0 0 auto}.ic-s{width:16px;height:16px;flex:0 0 auto}
+.app{display:flex;width:1440px;height:900px;overflow:hidden;position:relative}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:22px 14px 18px;gap:2px}
+.logo{font-weight:800;font-size:22px;letter-spacing:.04em;padding:0 10px 6px}
+.logo small{display:block;font-size:8px;letter-spacing:.18em;font-weight:700;opacity:.8;margin-top:-2px}
+.sw{display:flex;align-items:center;gap:10px;width:100%;height:44px;margin:8px 0 6px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font:800 15px Manrope,sans-serif;text-align:left;cursor:pointer}
+.cli{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px}
+.cli i{width:34px;height:34px;border-radius:9px;background:#2a2a2a;display:inline-flex;align-items:center;justify-content:center}
+.cli small{display:block;font-size:11px;color:rgba(255,255,255,.66)}
+.cli b{font-size:14px}
+.nav{display:flex;align-items:center;gap:12px;height:44px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.78);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.sbf{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 10px 0;border-top:1px solid rgba(255,255,255,.12)}
+.av{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.sbf b{display:block;font-size:14px}.sbf span{font-size:13px;color:rgba(255,255,255,.66)}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;padding:30px 44px;gap:14px;overflow:hidden;position:relative}
+.acts{display:flex;gap:8px;align-items:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;white-space:nowrap;cursor:pointer}
+.btn-p{background:#E71C23;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}
+.btn[disabled]{opacity:.45;cursor:default}
+.btn-sm{height:32px;padding:0 12px;font-size:13px}
+.btn-i{width:36px;padding:0}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.nm .badge,.badge{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;border:1px solid transparent;letter-spacing:0}
+.s-amb{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.nm .s-grn,.s-grn{background:#DDF5E4;border-color:#B6E4C4;color:#14602F}
+.bk,.bk:hover{width:40px;height:40px;border-radius:8px;border:1px solid #D4D4CF;background:#fff;display:inline-flex;align-items:center;justify-content:center;color:#161616;flex:0 0 auto}
+.hd{display:flex;align-items:center;gap:14px}
+.hd .t{flex:1;min-width:0}
+.hd h1{font-size:26px;font-weight:800;letter-spacing:-.01em;display:flex;align-items:center;gap:10px;line-height:1.2}
+.hd .t p{font-size:13.5px;color:#5F6368}
+.note{font-size:13.5px;color:#5F6368;font-weight:600}
+.pgw{display:flex;align-items:center;gap:14px;font-size:13.5px;color:#5F6368}
+.pgw b{color:#161616}
+.pg{flex:1;height:6px;border-radius:999px;background:#E8E8E4;overflow:hidden}
+.pg i{display:block;height:100%;background:#161616;border-radius:999px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:22px;flex:1;min-height:0}
+.lst{overflow:hidden}
+.gh{display:flex;align-items:center;gap:10px;height:42px;padding:0 18px;background:#FAFAF8;border-top:1px solid #E5E5E1;font-size:13.5px;color:#5F6368;font-weight:600}
+.gh.f{border-top:0}
+.gh b{font:800 15px ui-monospace,Menlo,Consolas,monospace;color:#161616}
+.gh .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+.l{display:flex;align-items:center;gap:12px;padding:7px 18px;border-top:1px solid #F0F0ED;position:relative}
+.l.p{padding:6px 18px}
+.th{width:44px;height:44px;border-radius:10px;border:1px dashed #C9C9C4;background:#fff;flex:0 0 auto}
+.nm{flex:1 1 auto;min-width:0}
+.nm b{display:block;font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nm span{display:block;font-size:13px;color:#5F6368}
+.nm .cxs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
+.nm .cx,.cx{display:inline-block;font:600 12.5px ui-monospace,Menlo,Consolas,monospace;background:#E3ECFB;color:#1E4E9C;border-radius:6px;padding:3px 7px;white-space:nowrap}
+.nm .cx.d,.cx.d{background:#F0F0ED;color:#3F403F}
+.nm .tag,.tag{display:inline-block;font-size:12px;font-weight:700;color:#8A4B00;background:#FDF0D5;border-radius:6px;padding:2px 7px}
+.qt{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:58px;text-align:right}
+.lk{background:none;border:0;padding:0;font-weight:700;font-size:13px;color:#161616;text-decoration:underline;text-underline-offset:3px;cursor:pointer;min-height:32px}
+.mn{position:absolute;right:18px;top:58px;z-index:2;width:200px;background:#fff;border:1px solid #E5E5E1;border-radius:10px;box-shadow:0 14px 36px rgba(0,0,0,.18);padding:6px;display:flex;flex-direction:column}
+.mn button{height:38px;border:0;background:none;text-align:left;padding:0 10px;border-radius:6px;font-weight:600;font-size:14px;cursor:pointer}
+.pn{display:flex;flex-direction:column;gap:12px;min-height:0}
+.pn h2{font-size:16px;font-weight:800;display:flex;align-items:baseline;gap:8px}
+.pn h2 span{font-size:13.5px;color:#5F6368;font-weight:600}
+.vo{padding:14px 16px;display:flex;flex-direction:column;gap:10px;border-color:#161616}
+.vo h3{font-size:15px;font-weight:800;display:flex;align-items:center;gap:8px}
+.vo ul{display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+.vt{display:flex;justify-content:space-between;font-weight:800;border-top:1px solid #E5E5E1;padding-top:8px}
+.fld{display:flex;flex-direction:column;gap:6px}
+.fld label{font-size:13.5px;font-weight:700}
+.inp{height:40px;border:1px solid #D4D4CF;border-radius:8px;background:#fff;padding:0 12px;font-size:14px;width:100%}
+.vr{display:flex;align-items:center;gap:12px;padding:10px 16px;border-top:1px solid #F0F0ED}
+.vr.f{border-top:0}
+.vr .t{flex:1;min-width:0}
+.vr .t b{display:block;font-size:14.5px}
+.vr .t span{display:block;font-size:13px;color:#5F6368}
+.toast{position:absolute;right:28px;bottom:28px;display:flex;align-items:center;gap:10px;background:#161616;color:#fff;border-radius:10px;padding:12px 16px;font-weight:700;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+</style>
+</helmet>
+<div class="app">
+<aside class="sb">
+  <div class="logo">DUTELOG<small>SOLUÇÕES LOGÍSTICAS</small></div>
+  <button type="button" class="sw"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>Armazenagem<svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:auto;opacity:.75"><path d="m7 9 5-5 5 5M7 15l5 5 5-5"/></svg></button>
+  <div class="cli"><i><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></i><div><small>Cliente ativo</small><b>BTG</b></div></div>
+  <a class="nav" href="#" style="color:#C9B8FB"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"/></svg>Agent Dute</a>
+  <a class="nav on" href="#" aria-current="page"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Pedidos<span class="cnt">1</span></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Estoque<svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:auto"><path d="m9 18 6-6-6-6"/></svg></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Documentos</a>
+  <div class="sbf"><span class="av">GD</span><div><b>Guilherme Dantas</b><span>Operação WMS</span></div></div>
+</aside>
+<main class="main">
+  <div class="hd">
+    <a class="bk" href="#" aria-label="Voltar a Pedidos"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+    <div class="t">
+      <h1>PED-0001 <span class="badge s-amb">em separação desde 10/11</span></h1>
+      <p>BTG Pactual · 116 itens · 3.335 un. · Para quando Seg 16/11 11:36</p>
+    </div>
+    <div class="acts">
+      <span class="note">91 itens por separar</span>
+      <button type="button" class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>Imprimir lista</button>
+      <button type="button" class="btn btn-s" disabled="{{true}}">Concluir separação</button>
+    </div>
+  </div>
+  <div class="pgw"><span><b>25 de 116 itens</b> · 1.280 de 3.335 un.</span><div class="pg" aria-hidden="true"><i style="width:22%"></i></div></div>
+  <div class="cols">
+    <div class="card lst">
+      <h3 class="gh f"><b>A-01</b>6 itens · 210 un.<span class="r"><span class="badge s-grn">separado</span><button type="button" class="btn btn-s btn-sm btn-i" aria-label="Mostrar itens de A-01" aria-expanded="false"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></span></h3>
+      <h3 class="gh"><b>A-02</b>6 itens · 235 un.<span class="r"><span class="badge s-grn">separado</span><button type="button" class="btn btn-s btn-sm btn-i" aria-label="Mostrar itens de A-02" aria-expanded="false"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></span></h3>
+      <h3 class="gh"><b>A-03</b>5 itens · 450 un.<span class="r"><span class="badge s-grn">separado</span><button type="button" class="btn btn-s btn-sm btn-i" aria-label="Mostrar itens de A-03" aria-expanded="false"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></span></h3>
+      <h3 class="gh"><b>A-04</b>3 itens · 160 un.<span class="r"><span class="badge s-grn">separado</span><button type="button" class="btn btn-s btn-sm btn-i" aria-label="Mostrar itens de A-04" aria-expanded="false"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></span></h3>
+      <h3 class="gh"><b>A-05</b>4 itens · 130 un.<span class="r"><span class="badge s-grn">separado</span><button type="button" class="btn btn-s btn-sm btn-i" aria-label="Mostrar itens de A-05" aria-expanded="false"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></span></h3>
+      <h3 class="gh"><b>A-07</b>2 itens · 127 un.<span class="r">1 de 2</span></h3>
+      <ul>
+        <li class="l"><span class="th"></span><span class="nm"><b>Polo Masculino Piquet Preto · M</b><span>A.01.0806.005.M · BTG-000064</span><span class="cxs"><span class="cx d">54 de CX-000218</span><span class="cx d">41 de CX-000219</span><span class="badge s-grn">Volume 16</span></span></span><span class="qt">95 un.</span><button type="button" class="btn btn-s btn-sm">Dividir em volumes</button><button type="button" class="lk">Desfazer</button></li>
+        <li class="l p"><span class="th"></span><span class="nm"><b>Polo Masculino Piquet Preto · GG</b><span>A.01.0806.005.GG · BTG-000090</span><span class="cxs"><span class="cx">32 de CX-000218</span><span class="tag">esvazia</span></span></span><span class="qt">32 un.</span><button type="button" class="btn btn-p">Separar</button><button type="button" class="btn btn-s btn-i" aria-label="Mais ações de Polo Masculino Piquet Preto · GG"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg></button></li>
+      </ul>
+      <h3 class="gh"><b>B-02</b>3 itens · 95 un.<span class="r">0 de 3</span></h3>
+      <ul>
+        <li class="l p"><span class="th"></span><span class="nm"><b>Camiseta Masculino Preta · M</b><span>A.01.0816.005.M · BTG-000117</span><span class="cxs"><span class="cx">30 de CX-000061</span></span></span><span class="qt">30 un.</span><button type="button" class="btn btn-s">Separar</button><button type="button" class="btn btn-s btn-i" aria-label="Mais ações de Camiseta Masculino Preta · M"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg></button></li>
+        <li class="l p"><span class="th"></span><span class="nm"><b>Camiseta Masculino Preta · G</b><span>A.01.0816.005.G · BTG-000118</span><span class="cxs"><span class="cx">20 de CX-000061</span><span class="cx">15 de CX-000062</span></span></span><span class="qt">35 un.</span><button type="button" class="btn btn-s">Separar</button><button type="button" class="btn btn-s btn-i" aria-label="Mais ações de Camiseta Masculino Preta · G"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg></button></li>
+        <li class="l p"><span class="th"></span><span class="nm"><b>Camiseta Masculino Preta · XGG</b><span>A.01.0816.005.XGG · BTG-000120</span><span class="cxs"><span class="cx">CX-000063 inteira</span></span></span><span class="qt">30 un.</span><button type="button" class="btn btn-s">Levar a caixa</button><button type="button" class="btn btn-s">Separar</button><button type="button" class="btn btn-s btn-i" aria-label="Mais ações de Camiseta Masculino Preta · XGG"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg></button></li>
+      </ul>
+    </div>
+    <div class="pn">
+      <h2>Volumes <span>15 fechados</span></h2>
+      <div class="card vo">
+        <h3>Volume 16 <span class="badge s-amb">aberto</span></h3>
+        <ul><li><b>95 ×</b> Polo Masculino Piquet Preto · M</li></ul>
+        <div class="vt"><span>No volume</span><span>95 un.</span></div>
+        <div class="fld"><label for="peso">Peso (kg)</label><input class="inp" id="peso" type="text" inputmode="decimal"></div>
+        <button type="button" class="btn btn-s">Fechar volume</button>
+      </div>
+      <div class="card">
+        <div class="vr f"><div class="t"><b>Volume 15</b><span>60 un. · 9,4 kg</span></div><button type="button" class="btn btn-s btn-sm" aria-label="Etiqueta do volume 15">Etiqueta</button></div>
+        <div class="vr"><div class="t"><b>Volume 14</b><span>82 un. · 12,1 kg</span></div><button type="button" class="btn btn-s btn-sm" aria-label="Etiqueta do volume 14">Etiqueta</button></div>
+        <div class="vr"><button type="button" class="lk">Ver os 15 volumes</button></div>
+      </div>
+      <div class="card">
+        <div class="vr f"><div class="t"><b>Etiquetas para trocar</b><span>3 caixas abertas</span></div><button type="button" class="btn btn-s btn-sm">Imprimir</button></div>
+        <div class="vr"><div class="t"><b>CX-000203</b><span>A-05 · saldo 12 un.</span></div></div>
+        <div class="vr"><div class="t"><b>CX-000218</b><span>A-07 · saldo 32 un.</span></div></div>
+        <div class="vr"><div class="t"><b>CX-000219</b><span>A-07 · saldo 19 un.</span></div></div>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

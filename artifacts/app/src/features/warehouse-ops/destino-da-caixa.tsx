@@ -399,15 +399,22 @@ export function useDestinoDaCaixa({
       caixa: CaixaDaChegada;
       candidato: SlottingCandidate;
     }) => {
+      // A sugestão do motor vai junto mesmo quando a pessoa escolheu outra
+      // prateleira. Sem ela (a consulta falhou ou não voltou), a chave não vai:
+      // o SDK do Firebase manda `undefined` como `null`, e o servidor recusa
+      // `suggestion: null` ("Campo inválido: suggestion.").
+      const sugerida = sugestaoDoConfirmar(sugestao.data ?? null);
       const tentativa = pedido("confirmar", {
         ...daChegada,
         box_code: input.caixa.code,
         expected_revision: revisao,
         location_id: input.candidato.code,
         orientation: input.candidato.placement.orientation,
-        support_box_code: input.candidato.placement.support_box_code,
-        // A sugestão do motor vai junto mesmo quando a pessoa escolheu outra prateleira.
-        suggestion: sugestaoDoConfirmar(sugestao.data ?? null),
+        // A caixa na base vai sem apoio, com o `null` de propósito: para o
+        // servidor é "no piso, sem empilhar". Sem a chave, ele empilharia se
+        // o piso deixasse de caber (warehouse-boxes.ts, `placementFor`).
+        support_box_code: input.candidato.placement.support_box_code ?? null,
+        ...(sugerida ? { suggestion: sugerida } : {}),
       });
       return confirmarDestino(tentativa.payload).then((resultado) => {
         tentativas.current.delete(tentativa.assinatura);

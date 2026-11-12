@@ -73,8 +73,8 @@ beforeEach(async () => {
   ]);
 });
 
-/** O pedido de 5 polos (A-01) e 4 bonés (A-02), aprovado e ainda por separar. */
-async function pedidoAprovado() {
+/** O pedido de 5 polos (A-01) e 4 bonés (A-02), aprovado e ainda por separar; `mais`, os itens a mais. */
+async function pedidoAprovado(mais: Array<{ sku_code: string; product_name: string; quantity: number }> = []) {
   const criado = await createCustomerRequestTransaction(
     db,
     {
@@ -86,6 +86,7 @@ async function pedidoAprovado() {
       items: [
         { sku_code: POLO, product_name: "Camiseta polo G", quantity: 5 },
         { sku_code: BONE, product_name: "Boné", quantity: 4 },
+        ...mais,
       ],
     },
     cliente,
@@ -99,7 +100,7 @@ async function pedidoAprovado() {
   const pickTaskId = String(aprovado.pick_task_id);
   const linhas = await db.collection("pick_lines").where("pick_task_id", "==", pickTaskId).get();
   const linhaDe = (sku: string) => linhas.docs.find((linha) => linha.get("sku_code") === sku)!.id;
-  return { requestId: String(criado.id), orderId, pickTaskId, linhaPolo: linhaDe(POLO), linhaBone: linhaDe(BONE) };
+  return { requestId: String(criado.id), orderId, pickTaskId, linhaPolo: linhaDe(POLO), linhaBone: linhaDe(BONE), linhaDe };
 }
 
 let chaves = 0;
@@ -1191,5 +1192,704 @@ describe("Os volumes de expedição (separação com caixas, parte 4a)", () => {
     assert.deepEqual(pacotes, ["cancelled", "cancelled"]);
     const conteudo = (await db.collection("package_items").where("order_id", "==", orderId).get()).docs.map((doc) => doc.get("status"));
     assert.deepEqual(conteudo, ["cancelled", "cancelled"]);
+  });
+});
+
+type ParteDaDivisao = { number: number; qty: number; weight_kg?: number };
+
+/**
+ * "Dividir em volumes" (parte 7a): as partes da linha e o que a tela mostrou: o volume aberto e a linha (o
+ * `separated_at` dela; null por separar). Sem `line`, a tela leu a linha agora.
+ */
+async function dividir(
+  pickTaskId: string,
+  pickLineId: string,
+  rows: ParteDaDivisao[],
+  open: { id: string | null; units: number; line?: string | null },
+  ator: OperationalActor = guilherme,
+  idempotencyKey = chave("dividir"),
+) {
+  const linha = open.line !== undefined ? open.line : ((await db.collection("pick_lines").doc(pickLineId).get()).get("separated_at") ?? null);
+  return (await setPickLineSeparated(
+    db,
+    {
+      pick_task_id: pickTaskId,
+      pick_line_id: pickLineId,
+      separated: true,
+      split_volumes: rows,
+      open_volume_id: open.id,
+      open_volume_units: open.units,
+      line_separated_at: linha,
+      idempotency_key: idempotencyKey,
+    },
+    ator,
+  )) as Record<string, unknown>;
+}
+
+/** Os recibos de uma linha, pelo tipo da operação. */
+async function recibosDaLinha(pickLineId: string) {
+  return (await db.collection("operational_operations").where("target_id", "==", pickLineId).get()).docs.map((doc) => String(doc.get("kind"))).sort();
+}
+
+/** Quantos eventos há: a recusa não grava nenhum. */
+async function quantosEventos() {
+  return (await db.collection("events").get()).size;
+}
+
+describe("Dividir a linha em volumes (parte 7a)", () => {
+  /** A-01: a CX-000001 (3 polos, a mais antiga) e a CX-000002 (4 polos e 6 de outro item); A-02: a CX-000003, com os 4 bonés e 1,2 kg. */
+  async function prateleiras() {
+    await Promise.all([
+      caixa("CX-000001", "A-01", "2026-10-22T13:00:00.000Z", 3),
+      linhaDaAbertura("CX-000001", POLO, 3, "A-01"),
+      caixa("CX-000002", "A-01", "2026-10-22T14:00:00.000Z", 10, { sku_codes: [POLO, "BTG-OUTRO"], line_count: 2 }),
+      linhaDaAbertura("CX-000002", POLO, 4, "A-01"),
+      linhaDaAbertura("CX-000002", "BTG-OUTRO", 6, "A-01"),
+      caixa("CX-000003", "A-02", "2026-11-06T13:00:00.000Z", 4, { sku_codes: [BONE], gross_weight_kg: 1.2 }),
+      linhaDaAbertura("CX-000003", BONE, 4, "A-02"),
+    ]);
+  }
+
+  const CALCA = "BTG-CALCA-42";
+
+  /** O pedido com 5 calças a mais (A-02, sem caixa): outra linha que devolve ao volume aberto as mesmas unidades. */
+  async function pedidoComCalcas() {
+    await db.collection("stock_balances").doc("bal-calca").set({
+      id: "bal-calca",
+      customer_code: BTG,
+      sku_code: CALCA,
+      client_item_code: CALCA,
+      product_name: "Calça social 42",
+      category: "UNIFORMES",
+      location_id: "A-02",
+      qty_on_hand: 5,
+      qty_reserved: 0,
+      qty_available: 5,
+      unit_cost: 40,
+    });
+    const pedido = await pedidoAprovado([{ sku_code: CALCA, product_name: "Calça social 42", quantity: 5 }]);
+    return { ...pedido, linhaCalca: pedido.linhaDe(CALCA) };
+  }
+
+  /** O que a recusa não pode mudar: a tarefa, as linhas, as caixas, os eventos e os recibos. */
+  async function retrato(orderId: string, pickTaskId: string) {
+    return {
+      tarefa: await tarefa(pickTaskId),
+      linhas: await porLinha("pick_lines", orderId),
+      caixas: await caixas(),
+      eventos: await quantosEventos(),
+      recibos: (await db.collection("operational_operations").get()).size,
+    };
+  }
+
+  /** A recusa da tela que já não mostra os volumes de agora. */
+  function volumesMudaram(erro: HttpsError) {
+    assert.deepEqual(
+      [erro.code, erro.message, (erro.details as Record<string, unknown>).code],
+      ["failed-precondition", "Os volumes mudaram. Confira e tente de novo.", "SEPARATION_VOLUMES_CHANGED"],
+    );
+  }
+
+  it("na linha por separar, separa como Separar e divide: cada parte, menos a última, fecha um volume, e a última fica aberta", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo } = await pedidoAprovado();
+    const antes = await saldos();
+
+    const dividida = await dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3, weight_kg: 0.8 }, { number: 2, qty: 2 }], { id: null, units: 0 });
+    assert.deepEqual([dividida.ok, dividida.separated, dividida.changed, dividida.expected_qty, dividida.separated_qty], [true, true, true, 5, 5]);
+    assert.deepEqual(dividida.volumes, [
+      { volume_id: "v1", number: 1, qty: 3 },
+      { volume_id: "v2", number: 2, qty: 2 },
+    ]);
+    // Para o aviso "Volume 1 fechado".
+    assert.deepEqual(dividida.closed_volumes, [{ volume_id: "v1", number: 1, units: 3, weight_kg: 0.8 }]);
+    assert.deepEqual(await volumes(pickTaskId), [
+      ["v1", 1, "closed", 3, null, 0.8],
+      ["v2", 2, "open", 2, null, null],
+    ]);
+    const depois = await tarefa(pickTaskId);
+    const pedidoNumero = String(depois.order_number);
+    const [v1] = depois.volumes as Array<Record<string, any>>;
+    assert.deepEqual([depois.volume_seq, v1!.closed_at, v1!.closed_by.name], [2, dividida.separated_at, "Guilherme Dantas"]);
+    // A separação começa como no Separar.
+    assert.deepEqual([depois.status, depois.separation_started_at], ["in_progress", dividida.separated_at]);
+    assert.equal((await eventos("picking.started")).length, 1);
+
+    // A linha guarda o mesmo que o Separar grava, com as duas partes.
+    const linha = (await porLinha("pick_lines", orderId))[POLO]!;
+    assert.deepEqual([linha.separated_qty, linha.separated_at, linha.separated_by.uid, linha.status], [5, dividida.separated_at, "wms-1", "open"]);
+    assert.deepEqual(linha.separated_volumes, [
+      { volume_id: "v1", qty: 3 },
+      { volume_id: "v2", qty: 2 },
+    ]);
+    // As caixas, como no Separar: a CX-000001 sai inteira e 2 saem da CX-000002. Nenhuma vira volume.
+    assert.deepEqual(dividida.boxes, [
+      { box_code: "CX-000001", qty: 3, whole: true },
+      { box_code: "CX-000002", qty: 2 },
+    ]);
+    assert.deepEqual(linha.separated_boxes, dividida.boxes);
+    const guardadas = await caixas();
+    assert.deepEqual(
+      [guardadas["CX-000001"]!.status, guardadas["CX-000001"]!.taken_units, guardadas["CX-000001"]!.emptied_whole, guardadas["CX-000001"]!.emptied_volume_id],
+      ["emptied", 3, true, undefined],
+    );
+    assert.deepEqual([guardadas["CX-000002"]!.status, guardadas["CX-000002"]!.taken_lines], ["stored", [{ sku_code: POLO, qty: 2 }]]);
+    assert.equal((await eventos("warehouse.box_emptied")).length, 1);
+    // A reserva e o saldo não mudam.
+    assert.deepEqual(await saldos(), antes);
+
+    // O evento da linha separada diz as duas partes; o volume que fechou grava o mesmo evento do Fechar volume.
+    const [separada] = await eventos("picking.line_separated");
+    assert.deepEqual(separada!.payload, {
+      order_id: orderId,
+      order_number: pedidoNumero,
+      pick_line_id: linhaPolo,
+      line_number: linha.line_number,
+      sku_code: POLO,
+      location_id: "A-01",
+      expected_qty: 5,
+      quantity: 5,
+      boxes: [
+        { box_code: "CX-000001", qty: 3 },
+        { box_code: "CX-000002", qty: 2 },
+      ],
+      volumes: [
+        { volume_number: 1, qty: 3 },
+        { volume_number: 2, qty: 2 },
+      ],
+    });
+    const fechados = await eventos("picking.volume_closed");
+    assert.equal(fechados.length, 1);
+    assert.deepEqual(
+      [fechados[0]!.title, fechados[0]!.description, fechados[0]!.entity_type, fechados[0]!.entity_id, fechados[0]!.customer_code, fechados[0]!.actor.uid],
+      [`Volume 1 fechado no pedido ${pedidoNumero}`, "3 un. · 0,8 kg", "pick_tasks", pickTaskId, BTG, "wms-1"],
+    );
+    assert.deepEqual(fechados[0]!.payload, { order_id: orderId, order_number: pedidoNumero, volume_id: "v1", volume_number: 1, units: 3, weight_kg: 0.8 });
+    const avisos = (await db.collection("ai_agent_inbox").get()).docs.map((doc) => doc.get("event_id"));
+    assert.equal(avisos.includes(fechados[0]!.id), false);
+    assert.equal((await eventos("picking.line_divided")).length, 0);
+    assert.deepEqual(await recibosDaLinha(linhaPolo), ["picking.line.separate"]);
+  });
+
+  it("na linha por separar, com o volume aberto já com itens, a primeira parte o completa e o fecha, com o peso em duas casas", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    // Os 4 bonés estão no volume 1, aberto.
+    await separar(pickTaskId, linhaBone, rafael);
+    assert.deepEqual(await volumes(pickTaskId), [["v1", 1, "open", 4, null, null]]);
+
+    const dividida = await dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 1, weight_kg: 1.234 }, { number: 2, qty: 4 }], { id: "v1", units: 4 });
+    assert.deepEqual(await volumes(pickTaskId), [
+      ["v1", 1, "closed", 5, null, 1.23],
+      ["v2", 2, "open", 4, null, null],
+    ]);
+    assert.deepEqual(dividida.volumes, [
+      { volume_id: "v1", number: 1, qty: 1 },
+      { volume_id: "v2", number: 2, qty: 4 },
+    ]);
+    assert.deepEqual(dividida.closed_volumes, [{ volume_id: "v1", number: 1, units: 5, weight_kg: 1.23 }]);
+    const linhas = await porLinha("pick_lines", orderId);
+    assert.deepEqual(linhas[POLO]!.separated_volumes, [
+      { volume_id: "v1", qty: 1 },
+      { volume_id: "v2", qty: 4 },
+    ]);
+    // Os bonés continuam no volume 1, que fechou com eles e uma polo.
+    assert.deepEqual(linhas[BONE]!.separated_volumes, [{ volume_id: "v1", qty: 4 }]);
+    const [fechado] = await eventos("picking.volume_closed");
+    assert.deepEqual([fechado!.description, fechado!.payload.units, fechado!.payload.weight_kg], ["5 un. · 1,23 kg", 5, 1.23]);
+  });
+
+  it("o volume aberto ou os números que a tela mostrou mudaram: recusa, e nada fica gravado", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    await separar(pickTaskId, linhaBone, rafael);
+    const antes = {
+      tarefa: await tarefa(pickTaskId),
+      linha: (await porLinha("pick_lines", orderId))[POLO],
+      caixas: await caixas(),
+      eventos: await quantosEventos(),
+      recibos: (await db.collection("operational_operations").get()).size,
+    };
+    const partes: ParteDaDivisao[] = [
+      { number: 1, qty: 3 },
+      { number: 2, qty: 2 },
+    ];
+    const tentativas: Array<[ParteDaDivisao[], { id: string | null; units: number }]> = [
+      // Outra pessoa pôs mais no volume aberto depois que a tela leu.
+      [partes, { id: "v1", units: 3 }],
+      // A tela não via volume aberto, ou via outro.
+      [partes, { id: null, units: 0 }],
+      [partes, { id: "v2", units: 4 }],
+      // Os números que o servidor daria não são os da tela.
+      [
+        [
+          { number: 2, qty: 3 },
+          { number: 3, qty: 2 },
+        ],
+        { id: "v1", units: 4 },
+      ],
+    ];
+    for (const [rows, aberto] of tentativas) {
+      const erro = await recusa(dividir(pickTaskId, linhaPolo, rows, aberto));
+      assert.deepEqual(
+        [erro.code, erro.message, (erro.details as Record<string, unknown>).code],
+        ["failed-precondition", "Os volumes mudaram. Confira e tente de novo.", "SEPARATION_VOLUMES_CHANGED"],
+        JSON.stringify(aberto),
+      );
+    }
+    // Nada fica gravado: nem a linha, nem os volumes, nem as caixas, nem evento ou recibo.
+    assert.deepEqual(await tarefa(pickTaskId), antes.tarefa);
+    assert.deepEqual((await porLinha("pick_lines", orderId))[POLO], antes.linha);
+    assert.equal(antes.linha!.separated_at, undefined);
+    assert.deepEqual(await caixas(), antes.caixas);
+    assert.equal(await quantosEventos(), antes.eventos);
+    assert.equal((await db.collection("operational_operations").get()).size, antes.recibos);
+  });
+
+  it("as partes que não somam o que se divide são recusadas", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo } = await pedidoAprovado();
+    const aMenos = await recusa(dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3 }, { number: 2, qty: 1 }], { id: null, units: 0 }));
+    assert.deepEqual(
+      [aMenos.code, aMenos.message, (aMenos.details as Record<string, unknown>).code],
+      ["failed-precondition", "As partes somam 4 un., e a linha tem 5 un.", "SEPARATION_SPLIT_MISMATCH"],
+    );
+    const aMais = await recusa(dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3 }, { number: 2, qty: 3 }], { id: null, units: 0 }));
+    assert.equal(aMais.message, "As partes somam 6 un., e a linha tem 5 un.");
+    assert.equal((await porLinha("pick_lines", orderId))[POLO]!.separated_at, undefined);
+    assert.deepEqual(await volumes(pickTaskId), []);
+    assert.equal((await caixas())["CX-000001"]!.taken_lines, undefined);
+
+    // Na linha já separada, as partes somam o que ela tem no volume aberto.
+    await separar(pickTaskId, linhaPolo);
+    const naSeparada = await recusa(dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3 }, { number: 2, qty: 3 }], { id: "v1", units: 5 }));
+    assert.deepEqual(
+      [naSeparada.message, (naSeparada.details as Record<string, unknown>).code],
+      ["As partes somam 6 un., e a linha tem 5 un. no volume aberto.", "SEPARATION_SPLIT_MISMATCH"],
+    );
+    assert.deepEqual(await volumes(pickTaskId), [["v1", 1, "open", 5, null, null]]);
+  });
+
+  it("na linha já separada, só divide o que ela pôs no volume aberto: as caixas e o separado ficam como estão", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo } = await pedidoAprovado();
+    const pedidoNumero = String((await tarefa(pickTaskId)).order_number);
+    const polo = await separar(pickTaskId, linhaPolo);
+    assert.deepEqual(await volumes(pickTaskId), [["v1", 1, "open", 5, null, null]]);
+    const caixasAntes = await caixas();
+    const linhaAntes = (await porLinha("pick_lines", orderId))[POLO]!;
+
+    // A tela leu o volume aberto antes de outra mudança: recusa sem gravar.
+    const mudou = await recusa(dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3 }, { number: 2, qty: 2 }], { id: "v1", units: 4 }));
+    assert.equal((mudou.details as Record<string, unknown>).code, "SEPARATION_VOLUMES_CHANGED");
+    assert.deepEqual(await volumes(pickTaskId), [["v1", 1, "open", 5, null, null]]);
+
+    const dividida = await dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3 }, { number: 2, qty: 2 }], { id: "v1", units: 5 });
+    assert.deepEqual(
+      [dividida.changed, dividida.separated, dividida.expected_qty, dividida.separated_qty, dividida.separated_at, dividida.boxes],
+      [true, true, 5, 5, polo.separated_at, polo.boxes],
+    );
+    assert.deepEqual(dividida.volumes, [
+      { volume_id: "v1", number: 1, qty: 3 },
+      { volume_id: "v2", number: 2, qty: 2 },
+    ]);
+    assert.deepEqual(dividida.closed_volumes, [{ volume_id: "v1", number: 1, units: 3 }]);
+    assert.deepEqual(await volumes(pickTaskId), [
+      ["v1", 1, "closed", 3, null, null],
+      ["v2", 2, "open", 2, null, null],
+    ]);
+    assert.equal((await tarefa(pickTaskId)).volume_seq, 2);
+
+    // Só os volumes da linha mudam: o separado, quem separou, quando e as caixas ficam.
+    const linha = (await porLinha("pick_lines", orderId))[POLO]!;
+    assert.deepEqual(linha.separated_volumes, [
+      { volume_id: "v1", qty: 3 },
+      { volume_id: "v2", qty: 2 },
+    ]);
+    assert.deepEqual(
+      [linha.separated_qty, linha.separated_at, linha.separated_by, linha.separated_boxes, linha.status],
+      [linhaAntes.separated_qty, linhaAntes.separated_at, linhaAntes.separated_by, linhaAntes.separated_boxes, "open"],
+    );
+    assert.deepEqual(await caixas(), caixasAntes);
+
+    // O evento da divisão, e o do volume que fechou, como no Fechar volume.
+    const [dividido] = await eventos("picking.line_divided");
+    assert.deepEqual(
+      [dividido!.title, dividido!.description, dividido!.entity_type, dividido!.entity_id, dividido!.customer_code, dividido!.actor.uid],
+      [`Linha dividida em volumes no pedido ${pedidoNumero}`, "5 un. de Camiseta polo G em 2 volumes", "pick_tasks", pickTaskId, BTG, "wms-1"],
+    );
+    assert.deepEqual(dividido!.payload, {
+      order_id: orderId,
+      order_number: pedidoNumero,
+      pick_line_id: linhaPolo,
+      line_number: linha.line_number,
+      sku_code: POLO,
+      location_id: "A-01",
+      from_volume_number: 1,
+      volumes: [
+        { volume_number: 1, qty: 3 },
+        { volume_number: 2, qty: 2 },
+      ],
+    });
+    const fechados = await eventos("picking.volume_closed");
+    assert.deepEqual(
+      fechados.map((evento) => [evento.title, evento.description, evento.payload]),
+      [[`Volume 1 fechado no pedido ${pedidoNumero}`, "3 un.", { order_id: orderId, order_number: pedidoNumero, volume_id: "v1", volume_number: 1, units: 3 }]],
+    );
+    const avisos = (await db.collection("ai_agent_inbox").get()).docs.map((doc) => doc.get("event_id"));
+    assert.equal(avisos.includes(dividido!.id), false);
+    // A linha não é separada de novo, e nenhuma caixa muda.
+    assert.equal((await eventos("picking.line_separated")).length, 1);
+    assert.equal((await eventos("warehouse.box_emptied")).length, 1);
+    assert.deepEqual(await recibosDaLinha(linhaPolo), ["picking.line.divide", "picking.line.separate"]);
+  });
+
+  it("na linha separada a menos, o volume aberto fica com os itens das outras linhas, e a diferença fica como está", async () => {
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    await separar(pickTaskId, linhaBone);
+    await separarMenos(pickTaskId, linhaPolo, 3, { shortage_reason: "falta", shortage_detail: "A-01 tinha 3" });
+    assert.deepEqual(await volumes(pickTaskId), [["v1", 1, "open", 7, null, null]]);
+
+    const dividida = await dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 1 }, { number: 2, qty: 2 }], { id: "v1", units: 7 });
+    assert.deepEqual([dividida.separated_qty, dividida.shortage_reason], [3, "falta"]);
+    // O volume 1 fecha com os 4 bonés e 1 polo; as outras 2 polos abrem o volume 2.
+    assert.deepEqual(await volumes(pickTaskId), [
+      ["v1", 1, "closed", 5, null, null],
+      ["v2", 2, "open", 2, null, null],
+    ]);
+    const linhas = await porLinha("pick_lines", orderId);
+    assert.deepEqual(
+      [linhas[POLO]!.separated_qty, linhas[POLO]!.separated_shortage_reason, linhas[POLO]!.separated_shortage_detail, linhas[POLO]!.separated_volumes],
+      [
+        3,
+        "falta",
+        "A-01 tinha 3",
+        [
+          { volume_id: "v1", qty: 1 },
+          { volume_id: "v2", qty: 2 },
+        ],
+      ],
+    );
+    assert.deepEqual(linhas[BONE]!.separated_volumes, [{ volume_id: "v1", qty: 4 }]);
+    const [dividido] = await eventos("picking.line_divided");
+    assert.deepEqual([dividido!.description, dividido!.payload.from_volume_number], ["3 un. de Camiseta polo G em 2 volumes", 1]);
+  });
+
+  it("na linha que levou a caixa inteira, só o resto no volume aberto se divide, e a caixa levada continua no volume dela", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo } = await pedidoAprovado();
+    // Volume 1: a CX-000001 inteira (3 polos); as outras 2 polos no volume 2, aberto.
+    await levarACaixa(pickTaskId, linhaPolo, [
+      { box_code: "CX-000001", qty: 3 },
+      { box_code: "CX-000002", qty: 2 },
+    ]);
+    const dividida = await dividir(pickTaskId, linhaPolo, [{ number: 2, qty: 1 }, { number: 3, qty: 1 }], { id: "v2", units: 2 });
+    assert.deepEqual(dividida.volumes, [
+      { volume_id: "v1", number: 1, qty: 3, box_code: "CX-000001" },
+      { volume_id: "v2", number: 2, qty: 1 },
+      { volume_id: "v3", number: 3, qty: 1 },
+    ]);
+    assert.deepEqual(await volumes(pickTaskId), [
+      ["v1", 1, "closed", 3, "CX-000001", null],
+      ["v2", 2, "closed", 1, null, null],
+      ["v3", 3, "open", 1, null, null],
+    ]);
+    assert.deepEqual((await porLinha("pick_lines", orderId))[POLO]!.separated_volumes, [
+      { volume_id: "v1", qty: 3 },
+      { volume_id: "v2", qty: 1 },
+      { volume_id: "v3", qty: 1 },
+    ]);
+    const [dividido] = await eventos("picking.line_divided");
+    assert.deepEqual(
+      [dividido!.description, dividido!.payload.from_volume_number, dividido!.payload.volumes],
+      [
+        "2 un. de Camiseta polo G em 2 volumes",
+        2,
+        [
+          { volume_number: 2, qty: 1 },
+          { volume_number: 3, qty: 1 },
+        ],
+      ],
+    );
+    const levada = (await caixas())["CX-000001"]!;
+    assert.deepEqual([levada.status, levada.emptied_volume_id, levada.emptied_volume_number], ["emptied", "v1", 1]);
+  });
+
+  it("depois de Fechar volume, a linha não está mais no volume aberto: dividir recusa", async () => {
+    const { pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    await separar(pickTaskId, linhaPolo);
+    await fecharVolume(pickTaskId, "v1");
+    const semAberto = await recusa(dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3 }, { number: 2, qty: 2 }], { id: "v1", units: 5 }));
+    assert.deepEqual(
+      [semAberto.code, semAberto.message, (semAberto.details as Record<string, unknown>).code],
+      ["failed-precondition", "Esta linha não está no volume aberto. Atualize e tente de novo.", "SEPARATION_LINE_NOT_IN_OPEN_VOLUME"],
+    );
+    // Com outro volume aberto (o dos bonés), a linha das polos continua fora dele.
+    await separar(pickTaskId, linhaBone);
+    const noOutro = await recusa(dividir(pickTaskId, linhaPolo, [{ number: 2, qty: 3 }, { number: 3, qty: 2 }], { id: "v2", units: 4 }));
+    assert.equal((noOutro.details as Record<string, unknown>).code, "SEPARATION_LINE_NOT_IN_OPEN_VOLUME");
+    // A linha separada a menos até zero não está em volume nenhum.
+    await separarMenos(pickTaskId, linhaBone, 0, { shortage_reason: "avaria" });
+    const zerada = await recusa(dividir(pickTaskId, linhaBone, [{ number: 2, qty: 1 }, { number: 3, qty: 1 }], { id: null, units: 0 }));
+    assert.equal((zerada.details as Record<string, unknown>).code, "SEPARATION_LINE_NOT_IN_OPEN_VOLUME");
+    assert.deepEqual(await volumes(pickTaskId), [["v1", 1, "closed", 5, null, null]]);
+    assert.equal((await eventos("picking.line_divided")).length, 0);
+  });
+
+  it("a mesma divisão de novo, com outra chave, não muda nada; com a mesma chave, devolve a mesma resposta", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo } = await pedidoAprovado();
+    const partes: ParteDaDivisao[] = [
+      { number: 1, qty: 3, weight_kg: 0.8 },
+      { number: 2, qty: 2 },
+    ];
+    // A tela leu a linha por separar e nenhum volume aberto.
+    const tela = { id: null, units: 0, line: null };
+    const primeira = await dividir(pickTaskId, linhaPolo, partes, tela, guilherme, "dividir-polo-0001");
+    assert.deepEqual(await dividir(pickTaskId, linhaPolo, partes, tela, guilherme, "dividir-polo-0001"), primeira);
+    const antes = { tarefa: await tarefa(pickTaskId), linha: (await porLinha("pick_lines", orderId))[POLO], caixas: await caixas(), eventos: await quantosEventos() };
+
+    // A resposta se perdeu, e a tela mandou de novo, com outra chave e o que tinha lido.
+    const repetida = await dividir(pickTaskId, linhaPolo, partes, tela, rafael);
+    assert.deepEqual(
+      [repetida.changed, repetida.separated, repetida.separated_qty, repetida.separated_at, repetida.boxes, repetida.volumes, repetida.closed_volumes, repetida.events],
+      [false, true, 5, primeira.separated_at, primeira.boxes, primeira.volumes, undefined, []],
+    );
+    assert.deepEqual(await tarefa(pickTaskId), antes.tarefa);
+    assert.deepEqual((await porLinha("pick_lines", orderId))[POLO], antes.linha);
+    assert.deepEqual(await caixas(), antes.caixas);
+    assert.equal(await quantosEventos(), antes.eventos);
+    // Só o recibo da repetição foi gravado.
+    assert.deepEqual(await recibosDaLinha(linhaPolo), ["picking.line.divide", "picking.line.separate"]);
+
+    // O mesmo vale depois de dividir a linha já separada.
+    await dividir(pickTaskId, linhaPolo, [{ number: 2, qty: 1 }, { number: 3, qty: 1 }], { id: "v2", units: 2 });
+    const eventosDepois = await quantosEventos();
+    const outraVez = await dividir(pickTaskId, linhaPolo, [{ number: 2, qty: 1 }, { number: 3, qty: 1 }], { id: "v2", units: 2 });
+    assert.equal(outraVez.changed, false);
+    assert.equal(await quantosEventos(), eventosDepois);
+    assert.deepEqual(await volumes(pickTaskId), [
+      ["v1", 1, "closed", 3, null, 0.8],
+      ["v2", 2, "closed", 1, null, null],
+      ["v3", 3, "open", 1, null, null],
+    ]);
+  });
+
+  it("a tela de antes recebe Os volumes mudaram, e não a conta da soma: outra pessoa dividiu a linha antes, ou a separou a menos", async () => {
+    const { orderId, pickTaskId, linhaPolo } = await pedidoAprovado();
+    await separar(pickTaskId, linhaPolo);
+    // As duas telas leram as 5 polos no volume 1, aberto.
+    const tela = { id: "v1", units: 5, line: String((await porLinha("pick_lines", orderId))[POLO]!.separated_at) };
+    await dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3 }, { number: 2, qty: 2 }], tela, rafael);
+    const antes = await retrato(orderId, pickTaskId);
+
+    // A segunda, com outras partes: o volume aberto agora é o 2, com 2 polos, e as partes não somam isso.
+    volumesMudaram(await recusa(dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 2 }, { number: 2, qty: 3 }], tela)));
+    assert.deepEqual(await retrato(orderId, pickTaskId), antes);
+
+    // A linha separada a menos depois que a tela leu: os volumes 1 e 2 saem, e as 4 polos abrem outro, que é o 1.
+    await separarMenos(pickTaskId, linhaPolo, 4, { shortage_reason: "falta" }, rafael);
+    assert.deepEqual(await volumes(pickTaskId), [["v3", 1, "open", 4, null, null]]);
+    const depois = await retrato(orderId, pickTaskId);
+    volumesMudaram(await recusa(dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3 }, { number: 2, qty: 2 }], tela)));
+    assert.deepEqual(await retrato(orderId, pickTaskId), depois);
+  });
+
+  it("a tela da linha separada não separa de novo a linha que outra pessoa desfez, mesmo com o volume aberto igual", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo, linhaBone, linhaCalca } = await pedidoComCalcas();
+    await separar(pickTaskId, linhaBone);
+    await separar(pickTaskId, linhaPolo);
+    // A tela de Dividir leu as 5 polos no volume 1, aberto com 9 un.: dividir não toca as caixas.
+    const tela = { id: "v1", units: 9, line: String((await porLinha("pick_lines", orderId))[POLO]!.separated_at) };
+    // Outra pessoa desfaz as polos e separa as calças: o volume 1 volta às 9 un.
+    await desfazer(pickTaskId, linhaPolo, rafael);
+    await separar(pickTaskId, linhaCalca, rafael);
+    assert.deepEqual(await volumes(pickTaskId), [["v1", 1, "open", 9, null, null]]);
+    const antes = await retrato(orderId, pickTaskId);
+
+    volumesMudaram(await recusa(dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3, weight_kg: 0.8 }, { number: 2, qty: 2 }], tela)));
+    // Nada fica gravado: as polos continuam por separar, e nenhuma caixa muda.
+    assert.deepEqual(await retrato(orderId, pickTaskId), antes);
+    assert.equal(antes.linhas[POLO]!.separated_at, undefined);
+    assert.equal(antes.caixas["CX-000001"]!.status, "stored");
+  });
+
+  it("a tela da linha por separar não divide a linha que outra pessoa separou, mesmo com o volume aberto igual", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo, linhaBone, linhaCalca } = await pedidoComCalcas();
+    await separar(pickTaskId, linhaBone);
+    await separar(pickTaskId, linhaCalca);
+    // A tela de Separar em 2 volumes leu as polos por separar e o volume 1 aberto com 9 un.
+    const tela = { id: "v1", units: 9, line: null };
+    // Outra pessoa separa as polos e desfaz as calças: o volume 1 volta às 9 un., agora com as polos.
+    await separar(pickTaskId, linhaPolo, rafael);
+    await desfazer(pickTaskId, linhaCalca, rafael);
+    assert.deepEqual(await volumes(pickTaskId), [["v1", 1, "open", 9, null, null]]);
+    const antes = await retrato(orderId, pickTaskId);
+
+    volumesMudaram(await recusa(dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3 }, { number: 2, qty: 2 }], tela)));
+    // Nada fica gravado: as polos continuam no volume 1, separadas por quem separou.
+    assert.deepEqual(await retrato(orderId, pickTaskId), antes);
+    assert.deepEqual([antes.linhas[POLO]!.separated_by.uid, antes.linhas[POLO]!.separated_volumes], ["wms-2", [{ volume_id: "v1", qty: 5 }]]);
+    assert.equal((await eventos("picking.line_divided")).length, 0);
+  });
+
+  it("depois de Levar a caixa, a tela de Separar em 2 volumes de antes, com os mesmos números e quantidades, não é repetição: recusa sem gravar o peso", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo } = await pedidoAprovado();
+    // A tela leu as polos por separar e nenhum volume aberto: uma parte por caixa, 3 e 2, com o peso do volume 1.
+    const tela = { id: null, units: 0, line: null };
+    // Outra pessoa leva a CX-000001: volume 1, fechado com a caixa (3 polos); as outras 2 no volume 2, aberto.
+    await levarACaixa(pickTaskId, linhaPolo, undefined, rafael);
+    assert.deepEqual(await volumes(pickTaskId), [
+      ["v1", 1, "closed", 3, "CX-000001", null],
+      ["v2", 2, "open", 2, null, null],
+    ]);
+    const antes = await retrato(orderId, pickTaskId);
+
+    volumesMudaram(await recusa(dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3, weight_kg: 0.8 }, { number: 2, qty: 2 }], tela)));
+    // Nada fica gravado: o volume 1 continua o da caixa, sem o peso da tela, e nenhum recibo da divisão.
+    assert.deepEqual(await retrato(orderId, pickTaskId), antes);
+    assert.deepEqual(await recibosDaLinha(linhaPolo), ["picking.line.separate"]);
+  });
+
+  it("Desfazer a linha dividida a tira de todos os volumes e diz o volume fechado que saiu", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo } = await pedidoAprovado();
+    await dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3, weight_kg: 0.8 }, { number: 2, qty: 2 }], { id: null, units: 0 });
+
+    const desfeita = await desfazer(pickTaskId, linhaPolo);
+    // O volume 1, fechado e com etiqueta, saiu; o 2, aberto, ainda não tinha etiqueta.
+    assert.deepEqual(desfeita.removed_volumes, [{ volume_id: "v1", number: 1 }]);
+    assert.deepEqual([desfeita.changed, desfeita.renumbered_volumes, desfeita.changed_volumes], [true, undefined, undefined]);
+    assert.deepEqual(await volumes(pickTaskId), []);
+    assert.equal((await porLinha("pick_lines", orderId))[POLO]!.separated_volumes, undefined);
+    const [desfeito] = await eventos("picking.line_unseparated");
+    assert.deepEqual(desfeito!.payload.volumes, [
+      { volume_number: 1, qty: 3 },
+      { volume_number: 2, qty: 2 },
+    ]);
+    // As caixas voltam como no Desfazer de sempre.
+    assert.deepEqual([(await caixas())["CX-000001"]!.status, (await caixas())["CX-000001"]!.taken_units], ["stored", undefined]);
+  });
+
+  it("Desfazer que esvazia volumes fechados do meio diz os que saíram, e o de maior número ocupa o lugar", async () => {
+    const { pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    await dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3 }, { number: 2, qty: 2 }], { id: null, units: 0 });
+    await fecharVolume(pickTaskId, "v2");
+    await separar(pickTaskId, linhaBone);
+    await fecharVolume(pickTaskId, "v3", 1.2);
+    assert.deepEqual(await volumes(pickTaskId), [
+      ["v1", 1, "closed", 3, null, null],
+      ["v2", 2, "closed", 2, null, null],
+      ["v3", 3, "closed", 4, null, 1.2],
+    ]);
+
+    const desfeita = await desfazer(pickTaskId, linhaPolo);
+    assert.deepEqual(desfeita.removed_volumes, [
+      { volume_id: "v1", number: 1 },
+      { volume_id: "v2", number: 2 },
+    ]);
+    assert.deepEqual(desfeita.renumbered_volumes, [{ volume_id: "v3", from: 3, to: 1 }]);
+    assert.deepEqual(await volumes(pickTaskId), [["v3", 1, "closed", 4, null, 1.2]]);
+  });
+
+  it("a conclusão depois de dividir grava um volume por volume, com a polo repartida; o lacre é um por pedido", async () => {
+    await prateleiras();
+    const { orderId, pickTaskId, linhaPolo, linhaBone } = await pedidoAprovado();
+    // Volume 1: 3 polos, fechado com 0,8 kg. Volume 2: as outras 2 polos e os bonés, ainda aberto.
+    const dividida = await dividir(pickTaskId, linhaPolo, [{ number: 1, qty: 3, weight_kg: 0.8 }, { number: 2, qty: 2 }], { id: null, units: 0 });
+    await separar(pickTaskId, linhaBone, rafael);
+    assert.deepEqual(await volumes(pickTaskId), [
+      ["v1", 1, "closed", 3, null, 0.8],
+      ["v2", 2, "open", 6, null, null],
+    ]);
+
+    const concluido = await concluir(pickTaskId, rafael, "concluir-divisao-0001");
+    const packId = `pack_${orderId}`;
+    const shipmentId = String(concluido.shipment_id);
+    const pacotes = (await db.collection("packages").where("order_id", "==", orderId).get()).docs.map((doc) => doc.data()).sort((left, right) => left.volume_number - right.volume_number);
+    assert.deepEqual(
+      pacotes.map((pacote) => [pacote.id, pacote.volume_number, pacote.volume_label, pacote.packed_units, pacote.weight_kg ?? null, pacote.package_count, pacote.seal_code, pacote.status]),
+      [
+        [`pkg_${packId}_001`, 1, "Volume 1", 3, 0.8, 2, "L-0101", "packed"],
+        [`pkg_${packId}_002`, 2, "Volume 2", 6, null, 2, "L-0101", "packed"],
+      ],
+    );
+    // O volume que a divisão fechou leva quem dividiu e quando; o aberto fecha com a conclusão.
+    assert.deepEqual(
+      pacotes.map((pacote) => [pacote.closed_at, pacote.closed_by.name]),
+      [
+        [dividida.separated_at, "Guilherme Dantas"],
+        [pacotes[1]!.closed_at, "Rafael"],
+      ],
+    );
+    const conteudo = (await db.collection("package_items").where("order_id", "==", orderId).get()).docs
+      .map((doc) => doc.data())
+      .sort((left, right) => String(left.id).localeCompare(String(right.id)));
+    assert.deepEqual(
+      conteudo.map((item) => [item.id, item.package_id, item.sku_code, item.qty_packed, item.shipment_id]),
+      [
+        [`pki_pkg_${packId}_001_01`, `pkg_${packId}_001`, POLO, 3, shipmentId],
+        [`pki_pkg_${packId}_002_01`, `pkg_${packId}_002`, POLO, 2, shipmentId],
+        [`pki_pkg_${packId}_002_02`, `pkg_${packId}_002`, BONE, 4, shipmentId],
+      ],
+    );
+    const daRemessa = await porLinha("shipment_items", orderId);
+    assert.deepEqual([daRemessa[POLO]!.qty_shipped, daRemessa[POLO]!.package_ids], [5, [`pkg_${packId}_001`, `pkg_${packId}_002`]]);
+    const remessa = (await db.collection("shipments").doc(shipmentId).get()).data() ?? {};
+    assert.deepEqual([remessa.status, remessa.total_units, remessa.package_count, remessa.volume_label, remessa.seal_code], ["ready_to_dispatch", 9, 2, "2 volumes", "L-0101"]);
+    const embalagem = (await db.collection("pack_tasks").doc(packId).get()).data() ?? {};
+    assert.deepEqual([embalagem.status, embalagem.package_count, embalagem.seal_code], ["completed", 2, "L-0101"]);
+    // Depois de concluída, a linha não se divide mais.
+    assert.equal(
+      (await recusa(dividir(pickTaskId, linhaBone, [{ number: 2, qty: 2 }, { number: 3, qty: 2 }], { id: null, units: 0 }))).message,
+      "A separação deste pedido já foi concluída.",
+    );
+  });
+
+  it("a entrada inválida é recusada antes de começar a separação", async () => {
+    const { orderId, pickTaskId, linhaPolo } = await pedidoAprovado();
+    const eventosAntes = await quantosEventos();
+    const base = {
+      pick_task_id: pickTaskId,
+      pick_line_id: linhaPolo,
+      separated: true,
+      split_volumes: [
+        { number: 1, qty: 3 },
+        { number: 2, qty: 2 },
+      ],
+      open_volume_id: null,
+      open_volume_units: 0,
+      line_separated_at: null,
+    };
+    const campos = async (entrada: Record<string, unknown>) => {
+      const erro = await recusa(setPickLineSeparated(db, { ...entrada, idempotency_key: chave("invalida") }, guilherme));
+      assert.equal(erro.code, "invalid-argument", erro.message);
+      return (erro.details as { issues: string[] }).issues;
+    };
+    assert.deepEqual(await campos({ ...base, take_boxes: true }), ["take_boxes"]);
+    assert.deepEqual(await campos({ ...base, split_volumes: [{ number: 1, qty: 5 }] }), ["split_volumes"]);
+    assert.deepEqual(
+      await campos({
+        ...base,
+        split_volumes: [
+          { number: 1, qty: 3 },
+          { number: 2, qty: 2, weight_kg: 0.5 },
+        ],
+      }),
+      ["split_volumes.1.weight_kg"],
+    );
+    assert.deepEqual(await campos({ ...base, separated: false }), ["separated"]);
+    assert.deepEqual(await campos({ pick_task_id: pickTaskId, pick_line_id: linhaPolo, separated: true, open_volume_id: "v1" }), ["open_volume_id"]);
+    assert.deepEqual(await campos({ pick_task_id: pickTaskId, pick_line_id: linhaPolo, separated: true, line_separated_at: null }), ["line_separated_at"]);
+    const { line_separated_at: _linha, ...semALinha } = base;
+    assert.deepEqual(await campos(semALinha), ["line_separated_at"]);
+    // Nada foi gravado: a separação nem começou.
+    assert.equal((await tarefa(pickTaskId)).status, "planned");
+    assert.equal((await porLinha("pick_lines", orderId))[POLO]!.separated_at, undefined);
+    assert.equal(await quantosEventos(), eventosAntes);
+    assert.deepEqual(await recibosDaLinha(linhaPolo), []);
   });
 });

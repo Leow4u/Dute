@@ -12,9 +12,11 @@ import { mensagemDoErro } from "../operacao/api";
  * separado a menos ou desfaz uma linha, e baixa a caixa: a mais antiga da
  * prateleira ou, com `boxes`, as que a pessoa informou em "Outra caixa". O
  * separado entra no volume aberto; com `take_boxes` ("Levar a caixa"), a
- * caixa que sai inteira vira o volume. `closeOrderVolume` fecha o volume
- * aberto, com o peso opcional. `completeOrderSeparation` conclui a separação
- * e a embalagem, com o lacre, numa chamada.
+ * caixa que sai inteira vira o volume. Com `split_volumes` ("Dividir em
+ * volumes", parte 7), a linha se reparte em volumes a partir do aberto.
+ * `closeOrderVolume` fecha o volume aberto, com o peso opcional.
+ * `completeOrderSeparation` conclui a separação e a embalagem, com o lacre,
+ * numa chamada.
  */
 
 export type LinhaSeparada = {
@@ -35,6 +37,10 @@ export type LinhaSeparada = {
   /** O volume fechado que mudou de número, e o fechado de que saiu uma parte: a etiqueta deles precisa sair de novo. */
   renumbered_volumes?: Array<{ volume_id: string; from: number; to: number }>;
   changed_volumes?: Array<{ volume_id: string; number: number }>;
+  /** Os volumes que "Dividir em volumes" fechou: "Volume 16 fechado". */
+  closed_volumes?: Array<{ volume_id: string; number: number; units: number; weight_kg?: number }>;
+  /** O volume fechado que esvaziou e saiu, com o número que tinha: a etiqueta dele sai junto. */
+  removed_volumes?: Array<{ volume_id: string; number: number }>;
 };
 
 export type VolumeFechado = {
@@ -56,6 +62,25 @@ export type SeparacaoConcluida = {
   seal_code: string;
 };
 
+/**
+ * O SDK do Firebase manda o campo `undefined` como `null`, e o servidor
+ * (functions/wms, pick-progress.ts) recusa `null` nos campos opcionais:
+ * "Fechar volume" sem peso e "Separar menos" sem detalhe voltavam "Entrada
+ * inválida para a separação.". O campo sem valor não vai; o `null` de
+ * propósito (o volume aberto que não existe) continua indo.
+ */
+export function semCamposVazios<T>(dados: T): T {
+  if (Array.isArray(dados)) return dados.map((item) => semCamposVazios(item)) as T;
+  if (dados && typeof dados === "object" && Object.getPrototypeOf(dados) === Object.prototype) {
+    return Object.fromEntries(
+      Object.entries(dados)
+        .filter(([, valor]) => valor !== undefined)
+        .map(([chave, valor]) => [chave, semCamposVazios(valor)]),
+    ) as T;
+  }
+  return dados;
+}
+
 async function chamarWms<T>(
   nome: "setPickLineSeparated" | "closeOrderVolume" | "completeOrderSeparation" | "recordBoxBalanceLabelPrint",
   dados: Record<string, unknown>,
@@ -63,7 +88,7 @@ async function chamarWms<T>(
   if (!firebaseApp) throw new Error("Firebase não configurado.");
   const callable = httpsCallable<Record<string, unknown>, T>(functionsDoApp(firebaseApp), nome);
   try {
-    return (await callable(dados)).data;
+    return (await callable(semCamposVazios(dados))).data;
   } catch (error) {
     throw new Error(callableSemResposta(error) ? SEM_CONEXAO : mensagemDoErro(error));
   }
@@ -80,6 +105,25 @@ export function separarLinha(input: {
   idempotency_key: string;
   boxes?: Array<{ box_code: string; qty: number }>;
   take_boxes?: boolean;
+}) {
+  return chamarWms<LinhaSeparada>("setPickLineSeparated", { ...input, separated: true });
+}
+
+/**
+ * "Dividir em volumes" (parte 7): na linha por separar, separa como
+ * "Separar" e divide; na já separada, só divide o que ela pôs no volume
+ * aberto. Cada parte, menos a última, fecha um volume; a última fica aberta.
+ * O volume aberto e a linha vão como a tela os mostrou: se mudaram, o
+ * servidor recusa sem gravar nada ("Os volumes mudaram").
+ */
+export function dividirLinha(input: {
+  pick_task_id: string;
+  pick_line_id: string;
+  idempotency_key: string;
+  split_volumes: Array<{ number: number; qty: number; weight_kg?: number }>;
+  open_volume_id: string | null;
+  open_volume_units: number;
+  line_separated_at: string | null;
 }) {
   return chamarWms<LinhaSeparada>("setPickLineSeparated", { ...input, separated: true });
 }

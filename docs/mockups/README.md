@@ -609,6 +609,31 @@ Página 3, aprovada:
 1. Pedido do Leonardo: o logo original da Dutelog nas etiquetas. Resposta:
    entra no rodapé, no lugar da palavra, em todas as etiquetas.
 
+A página 4 do mesmo canvas, "4 · Dividir em volumes", é o desenho de
+11/11/2026 para a linha que não cabe num volume
+(`docs/plataforma/separacao-com-caixas.md`, seção 11). As perguntas foram
+respondidas pelo Leonardo no mesmo dia (decisões 27 a 30 do roteiro), e as
+pranchas, atualizadas com as respostas, foram **aprovadas por ele em
+11/11/2026**. A página
+parte da linha "Polo Masculino Piquet Preto · M" do PED-0001: 95 un., 54 da
+CX-000218 e 41 da CX-000219, sem caixa de expedição para todas. A prateleira
+A-07 e os outros números são ilustrativos e fecham entre as pranchas. Os
+diálogos são interativos: todas as linhas se editam, a última também, e a
+soma sempre fecha (mexeu numa linha, a última acompanha; mexeu na última, a
+de cima acompanha); "Mais um volume", a lixeira e o peso mudam os volumes e
+o botão.
+
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| Armazenagem · Separar, o "⋯" da linha | `WmsDividirBancada.dc.html` | "Dividir em volumes" como primeiro item do "⋯" da linha por separar, antes de "Outra caixa" e "Separar menos". |
+| Armazenagem · Separar, dividir em volumes | `WmsDividirVolumes.dc.html` | O diálogo pronto para confirmar: o volume 16 com 54 un. e o peso, que fecha, e o volume 17 com o resto, 41 un., que fica aberto; "Mais um volume" e "Separar em 2 volumes". |
+| Armazenagem · Separar, depois de dividir | `WmsDividirSeparada.dc.html` | O aviso "Volume 16 fechado", o volume 16 fechado com "Etiqueta", o 17 aberto com as 41 un. e a linha com as caixas e os volumes embaixo dos códigos. |
+| Armazenagem · Separar, volume aberto já com itens | `WmsDividirComItens.dc.html` | O volume 16 já tinha 35 un.: "tem 35 un. · fecha com 55 un.", o 17 com 54 un. e a lixeira, o 18 com o resto; "Separar em 3 volumes". |
+| Armazenagem · Separar no celular, dividir | `WmsDividirCelular.dc.html` | O mesmo diálogo no celular, sem peso (decisão 17), com os botões de 44 px. |
+| Armazenagem · Separar, na linha já separada | `WmsDividirNaSeparada.dc.html` | A linha já separada inteira no volume aberto, com "Dividir em volumes" ao lado de "Desfazer" (decisão 30). |
+
+As respostas da página 4 estão nas notas do canvas e no roteiro (seção 11.6).
+
 A página "Etiqueta na folha A4" tem canvas próprio (privado,
 https://claude.ai/artifact/De4od2rngTGXkcmbJrjhmQ), feito em 11 e 12/11/2026
 a partir do pedido do Leonardo de imprimir a etiqueta na impressora comum do

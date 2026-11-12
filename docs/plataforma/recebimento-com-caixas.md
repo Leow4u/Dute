@@ -683,6 +683,21 @@ desenhada e aprovada antes do PR de tela.
      ficha volta à chegada; fechar a caixa espera a releitura da fila e
      passa direto ao destino. Testes: `destino-da-caixa.test.tsx` (textos e
      `axe`) e casos novos em `chegada-por-caixa.interacao.test.tsx`.
+     **Defeito achado em 12/11/2026, já na produção.** Com a sugestão do
+     motor fora do ar (sem resposta) ou ainda consultando, "Escolher
+     prateleira" e "Confirmar destino em …" voltavam "Não foi possível
+     confirmar o destino. Campo inválido: suggestion.": o SDK do Firebase
+     manda o campo `undefined` como `null`, e o servidor recusa
+     `suggestion: null`. É o defeito da separação
+     (`separacao-com-caixas.md`, seção 5.2), e o levantamento das outras
+     chamadas do app ao servidor não achou outro caso. A correção é a
+     confirmação não levar a sugestão que não veio e a caixa na base levar a
+     caixa de apoio como `null` de propósito, que para o servidor é "no piso,
+     sem empilhar" (sem a chave, ele empilharia se o piso deixasse de
+     caber). Teste: `destino-da-caixa.confirmar.test.tsx`, que falhava
+     antes. Até a correção chegar à produção: voltar em "Sugestão do
+     sistema" e "Tentar de novo" até a sugestão aparecer, e só então
+     escolher a prateleira.
    - **5d, as linhas da NF:** feita em 03/11/2026 (mockups
      `WmsRecebimentoFalta`, `WmsRecebimentoCaixa` e `WmsRecebimentoConcluir`).
      A linha a menos ganha "Marcar falta" (`falta-da-linha.tsx`): o que a NF

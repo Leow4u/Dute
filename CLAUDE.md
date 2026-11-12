@@ -465,7 +465,15 @@ documentação de produto e operação está em `docs/`.
   `/pedidos/separar`. As partes 2 a 5 entraram na `main` pelo PR 592, com o
   OK do Leonardo em 10/11/2026, e as seis partes estão no `dute-prod` desde a
   publicação manual do mesmo dia (commit `7512f101`, 19:52 UTC, com todas as
-  conferências verdes). Tela só entra com mockup aprovado. Desenho, partes e
+  conferências verdes). **A linha em mais de um volume (parte 7, decisões 27 a
+  30, aprovada em 11/11/2026):** "Dividir em volumes" fica no "⋯" da linha por
+  separar e, na linha já separada, ao lado de "Desfazer", enquanto o que ela
+  pôs está no volume aberto; cada volume de cima fecha, com o peso opcional
+  no computador, e o último fica aberto, com o resto; tudo se edita e a soma
+  sempre fecha. No servidor, `setPickLineSeparated` com `split_volumes`, o
+  volume aberto e a linha como a tela os viu (a tela desatualizada recusa com
+  `SEPARATION_VOLUMES_CHANGED`), e um `picking.volume_closed` por volume
+  fechado. Tela só entra com mockup aprovado. Desenho, partes e
   registro em `docs/plataforma/separacao-com-caixas.md`.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os

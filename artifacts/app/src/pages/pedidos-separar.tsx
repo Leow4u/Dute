@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { collection, doc, query, where } from "firebase/firestore";
 import { useSearch } from "wouter";
@@ -6,6 +6,7 @@ import { useSearch } from "wouter";
 import type { CaixaDaLinha } from "@workspace/dominio";
 
 import { ConcluirSeparacaoDialog } from "@/features/warehouse-ops/concluir-separacao";
+import { DividirEmVolumesDialog } from "@/features/warehouse-ops/dividir-em-volumes";
 import { OutraCaixaDialog, type OutraCaixaDaLinha } from "@/features/warehouse-ops/outra-caixa";
 import { SepararMenosDialog, type DiferencaDaLinha } from "@/features/warehouse-ops/separar-menos";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +30,15 @@ import {
   sugestaoDaLinha,
   type CaixaDaPrateleira,
 } from "@/lib/warehouse-ops/caixas-da-separacao";
+import {
+  divisaoDaLinha,
+  pedidoDaDivisao,
+  separadasParaDividir,
+  textoDosVolumesFechados,
+  type DivisaoEmVolumes,
+  type ModoDaDivisao,
+  type ParteDaDivisao,
+} from "@/lib/warehouse-ops/divisao-em-volumes";
 import { hrefDaListaDeSeparacao, pedidoDaBusca, resumoDoGrupo, type LinhaDaLista } from "@/lib/warehouse-ops/lista-de-separacao";
 import { fetchJson, type WarehouseOpsResponse, type WarehouseTaskItem } from "@/lib/warehouse-ops/model";
 import { groupWarehouseOrders } from "@/lib/warehouse-ops/orders";
@@ -45,7 +55,7 @@ import {
   volumesDaTarefa,
   type VolumeDoPedido,
 } from "@/lib/warehouse-ops/volumes-do-pedido";
-import { concluirSeparacao, desfazerLinha, fecharVolume, separarLinha, separarMenos } from "@/lib/wms/separacao";
+import { concluirSeparacao, desfazerLinha, dividirLinha, fecharVolume, separarLinha, separarMenos } from "@/lib/wms/separacao";
 
 import { PedidoSeparadoView } from "./pedido-separado-view";
 import { PedidosSepararView, type EstadoDaBancada } from "./pedidos-separar-view";
@@ -55,7 +65,11 @@ const SEM_ITENS: WarehouseTaskItem[] = [];
 type Acao =
   | { tipo: "separar" | "desfazer"; linha: LinhaDaLista }
   | { tipo: "menos"; linha: LinhaDaLista; diferenca: DiferencaDaLinha }
-  | { tipo: "outra" | "levar"; linha: LinhaDaLista; caixas: Array<{ box_code: string; qty: number }> };
+  | { tipo: "outra" | "levar"; linha: LinhaDaLista; caixas: Array<{ box_code: string; qty: number }> }
+  | { tipo: "dividir"; linha: LinhaDaLista; divisao: DivisaoEmVolumes };
+
+/** O diálogo de "Dividir em volumes" guarda só as linhas dele; o resto vem ao vivo (parte 7b). */
+type DivisaoAberta = { id: string; modo: ModoDaDivisao; partes: ParteDaDivisao[] };
 
 /**
  * Pedidos › Separar (separação com caixas, partes 2, 3b e 5): a bancada do
@@ -77,6 +91,12 @@ type Acao =
  * O pedido já separado (parte 4d) abre aqui com os volumes, as etiquetas com
  * o total e o romaneio: é onde "Confirmar separação" deixa a pessoa, e para
  * onde "Ver volumes" de Para entregar leva.
+ *
+ * "Dividir em volumes" (parte 7b) parte dos volumes da tarefa lida ao vivo,
+ * com as unidades gravadas. O diálogo guarda só as linhas dele: o volume
+ * aberto, o que as outras linhas têm nele e os números são refeitos a cada
+ * leitura, e depois de "Os volumes mudaram" ele mostra o novo estado com as
+ * mesmas quantidades.
  */
 export default function PaginaPedidosSeparar() {
   const chave = pedidoDaBusca(useSearch());
@@ -187,6 +207,7 @@ export default function PaginaPedidosSeparar() {
   const [ocupadas, setOcupadas] = useState<ReadonlySet<string>>(new Set());
   const [diferenca, setDiferenca] = useState<DiferencaDaLinha | null>(null);
   const [outraCaixa, setOutraCaixa] = useState<OutraCaixaDaLinha | null>(null);
+  const [divisao, setDivisao] = useState<DivisaoAberta | null>(null);
   const [lacre, setLacre] = useState<string | null>(null);
   // A chave da conclusão vale enquanto o diálogo está aberto: repetir continua de onde parou.
   const chaveDaConclusao = useRef<string | null>(null);
@@ -196,6 +217,30 @@ export default function PaginaPedidosSeparar() {
   const pedidoId = pedido?.orderId ?? pedido?.key ?? null;
   const doPedidoSeparado = useVolumesDoPedido(separado ? pedidoId : null);
   const caixasVazias = useMemo(() => (separado && caixasAoVivo.itens ? caixasVaziasDoPedido(itens, caixasAoVivo.itens) : []), [separado, itens, caixasAoVivo.itens]);
+
+  // "Dividir em volumes" (parte 7b): a linha separada ganha o botão enquanto tem 2 un. ou mais no volume aberto.
+  const linhasDaLista = useMemo(() => lista.grupos.flatMap((grupo) => grupo.linhas), [lista.grupos]);
+  const paraDividir = useMemo(
+    () => (volumesDaTarefaAoVivo ? separadasParaDividir(linhasDaLista, volumesDaTarefaAoVivo) : undefined),
+    [linhasDaLista, volumesDaTarefaAoVivo],
+  );
+  // O diálogo com a linha, o volume aberto, o que as outras linhas têm nele e os números de agora; as linhas, as dele.
+  const divisaoNaTela = useMemo(() => {
+    if (!divisao || !volumesDaTarefaAoVivo) return null;
+    const linha = linhasDaLista.find((candidata) => candidata.id === divisao.id);
+    return linha ? divisaoDaLinha({ linha, modo: divisao.modo, volumes: volumesDaTarefaAoVivo, caixas: caixasDaLinha.get(linha.id), partes: divisao.partes }) : null;
+  }, [divisao, volumesDaTarefaAoVivo, linhasDaLista, caixasDaLinha]);
+  // A linha que outra pessoa separou, desfez ou dividiu enquanto o diálogo estava aberto: ele fecha, e não volta sozinho.
+  useEffect(() => {
+    if (divisao && !divisaoNaTela) setDivisao(null);
+  }, [divisao, divisaoNaTela]);
+  const abrirDivisao = (linha: LinhaDaLista) => {
+    if (!volumesDaTarefaAoVivo) return;
+    const modo: ModoDaDivisao = estadoDaLinha(linha.item) === "pendente" ? "separar" : "dividir";
+    // Começa com um volume por caixa de onde a linha sai (decisão 27).
+    const inicial = divisaoDaLinha({ linha, modo, volumes: volumesDaTarefaAoVivo, caixas: caixasDaLinha.get(linha.id) });
+    if (inicial) setDivisao({ id: linha.id, modo, partes: inicial.partes });
+  };
 
   const erro = (titulo: string) => (falha: Error) => toast({ title: titulo, description: falha.message, variant: "destructive" });
 
@@ -211,6 +256,8 @@ export default function PaginaPedidosSeparar() {
       if (acao.tipo === "outra") return separarLinha({ ...entrada, boxes: acao.caixas });
       // "Levar a caixa" manda as caixas que a bancada mostrou: a que sai inteira vira o volume.
       if (acao.tipo === "levar") return separarLinha({ ...entrada, boxes: acao.caixas, take_boxes: true });
+      // "Dividir em volumes" manda as linhas do diálogo, o volume aberto e a linha como a tela os mostrou.
+      if (acao.tipo === "dividir") return dividirLinha({ ...entrada, ...pedidoDaDivisao(acao.divisao) });
       return separarLinha(entrada);
     },
     onMutate: (acao) => setOcupadas((atuais) => new Set(atuais).add(acao.linha.id)),
@@ -223,11 +270,22 @@ export default function PaginaPedidosSeparar() {
     onSuccess: (resultado, acao) => {
       if (acao.tipo === "menos") setDiferenca(null);
       if (acao.tipo === "outra") setOutraCaixa(null);
-      // O volume fechado que mudou de número ou de conteúdo: a etiqueta dele precisa sair de novo.
+      // O volume fechado que saiu, mudou de número ou de conteúdo: a etiqueta dele precisa sair de novo.
       const aviso = avisoDosVolumes(resultado);
+      if (acao.tipo === "dividir") {
+        // Fecha o diálogo desta linha; o de outra, aberto enquanto esta ia ao servidor, fica.
+        setDivisao((atual) => (atual?.id === acao.linha.id ? null : atual));
+        // "Volume 16 fechado": a etiqueta dele fica no botão do volume fechado (decisão 23).
+        const fechados = textoDosVolumesFechados(resultado.closed_volumes ?? []);
+        if (fechados) {
+          toast({ title: fechados, description: aviso ?? undefined });
+          return;
+        }
+      }
       if (aviso) toast({ title: aviso });
     },
-    onError: erro("Não foi possível gravar a linha"),
+    // A recusa ("Os volumes mudaram...") deixa o diálogo aberto: a leitura ao vivo mostra o novo estado.
+    onError: (falha, acao) => erro(acao.tipo === "dividir" ? "Não foi possível dividir a linha" : "Não foi possível gravar a linha")(falha),
   });
 
   const fechar = useMutation({
@@ -304,6 +362,11 @@ export default function PaginaPedidosSeparar() {
     );
   }
 
+  // Enquanto a divisão da linha do diálogo vai ao servidor, ele mostra o que foi mandado: a leitura ao vivo pode chegar antes da resposta.
+  // O que outra linha grava (o diálogo dela fechado no meio, "Separar" em outra) não entra neste.
+  const pendente = gravar.isPending ? gravar.variables : undefined;
+  const divisaoEnviada = pendente?.tipo === "dividir" && pendente.linha.id === divisao?.id ? pendente.divisao : null;
+
   return (
     <>
       <PedidosSepararView
@@ -335,6 +398,9 @@ export default function PaginaPedidosSeparar() {
         onLevarACaixa={(linha) =>
           gravar.mutate({ tipo: "levar", linha, caixas: (caixasDaLinha.get(linha.id) ?? []).map((caixa) => ({ box_code: caixa.box_code, qty: caixa.qty })) })
         }
+        // Sem os volumes lidos ao vivo, a bancada não sabe os números: a divisão espera por eles.
+        paraDividir={paraDividir}
+        onDividir={volumesDaTarefaAoVivo ? abrirDivisao : undefined}
         onFecharVolume={(volume, pesoKg) => fechar.mutate({ volume, pesoKg })}
         onOutraCaixa={(linha) =>
           setOutraCaixa({
@@ -373,6 +439,16 @@ export default function PaginaPedidosSeparar() {
         onConfirmar={() => {
           const linha = outraCaixa ? lista.grupos.flatMap((grupo) => grupo.linhas).find((candidata) => candidata.id === outraCaixa.id) : undefined;
           if (linha && outraCaixa) gravar.mutate({ tipo: "outra", linha, caixas: caixasParaEnviar(outraCaixa.informadas) });
+        }}
+      />
+      <DividirEmVolumesDialog
+        divisao={divisao ? (divisaoEnviada ?? divisaoNaTela) : null}
+        confirmando={Boolean(divisaoEnviada)}
+        onMudar={(nova) => setDivisao({ id: nova.id, modo: nova.modo, partes: nova.partes })}
+        onFechar={() => setDivisao(null)}
+        onConfirmar={() => {
+          const linha = divisaoNaTela ? linhasDaLista.find((candidata) => candidata.id === divisaoNaTela.id) : undefined;
+          if (linha && divisaoNaTela) gravar.mutate({ tipo: "dividir", linha, divisao: divisaoNaTela });
         }}
       />
       <ConcluirSeparacaoDialog

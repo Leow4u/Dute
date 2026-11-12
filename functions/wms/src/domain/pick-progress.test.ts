@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { HttpsError } from "firebase-functions/https";
 
-import { linhasParaConcluir, progressoDaSeparacao, separadoDaLinha, type LinhaDoProgresso } from "./pick-progress.js";
+import { entradaDaSeparacao, linhasParaConcluir, progressoDaSeparacao, separadoDaLinha, type LinhaDoProgresso } from "./pick-progress.js";
 
 /**
  * Separar com o progresso salvo (separação com caixas, partes 2a e 5): a
@@ -111,5 +111,89 @@ describe("as linhas para concluir a separação", () => {
         { pick_line_id: "pli_3", qty_picked: 0, status: "confirmed", shortage_reason: "avaria" },
       ]);
     }
+  });
+});
+
+describe("a entrada de Dividir em volumes (parte 7a)", () => {
+  const SEPARAR = { pick_task_id: "pick_1", pick_line_id: "pli_1", separated: true, idempotency_key: "dividir-000001" };
+  const DIVIDIR = {
+    ...SEPARAR,
+    split_volumes: [
+      { number: 16, qty: 54, weight_kg: 11.6 },
+      { number: 17, qty: 41 },
+    ],
+    open_volume_id: "v16",
+    open_volume_units: 35,
+    line_separated_at: null,
+  };
+
+  /** Os campos que a recusa aponta. */
+  function campos(raw: unknown): string[] {
+    const erro = recusa(() => entradaDaSeparacao(raw));
+    assert.equal(erro.code, "invalid-argument");
+    assert.equal(erro.message, "Entrada inválida para a separação.");
+    return (erro.details as { issues: string[] }).issues;
+  }
+
+  it("as partes com o volume aberto que a tela mostrou passam; sem volume aberto, ele vai como null", () => {
+    assert.deepEqual(entradaDaSeparacao(DIVIDIR), DIVIDIR);
+    const semAberto = { ...DIVIDIR, open_volume_id: null, open_volume_units: 0 };
+    assert.deepEqual(entradaDaSeparacao(semAberto), semAberto);
+    // Na linha já separada, a tela manda o `separated_at` que mostrou.
+    const naSeparada = { ...DIVIDIR, line_separated_at: "2026-11-11T14:02:00.000Z" };
+    assert.deepEqual(entradaDaSeparacao(naSeparada), naSeparada);
+    // Separar, desfazer e as outras entradas de antes continuam iguais.
+    assert.deepEqual(entradaDaSeparacao(SEPARAR), SEPARAR);
+    assert.deepEqual(entradaDaSeparacao({ ...SEPARAR, separated: false }), { ...SEPARAR, separated: false });
+  });
+
+  it("vale só para separar, sem Outra caixa, Levar a caixa nem Separar menos", () => {
+    assert.deepEqual(campos({ ...DIVIDIR, separated: false }), ["separated"]);
+    assert.deepEqual(campos({ ...DIVIDIR, take_boxes: true }), ["take_boxes"]);
+    assert.deepEqual(campos({ ...DIVIDIR, take_boxes: false }), ["take_boxes"]);
+    assert.deepEqual(campos({ ...DIVIDIR, boxes: [{ box_code: "CX-000218", qty: 54 }] }), ["boxes"]);
+    assert.deepEqual(campos({ ...DIVIDIR, separated_qty: 95 }), ["separated_qty"]);
+    assert.deepEqual(campos({ ...DIVIDIR, shortage_reason: "falta", shortage_detail: "A-07 tinha 90" }), ["shortage_reason", "shortage_detail"]);
+  });
+
+  it("leva o volume aberto e a linha que a tela mostrou, e o último volume, que fica aberto, vai sem peso", () => {
+    const { open_volume_id: _id, ...semId } = DIVIDIR;
+    assert.deepEqual(campos(semId), ["open_volume_id"]);
+    const { open_volume_units: _unidades, ...semUnidades } = DIVIDIR;
+    assert.deepEqual(campos(semUnidades), ["open_volume_units"]);
+    const { line_separated_at: _linha, ...semLinha } = DIVIDIR;
+    assert.deepEqual(campos(semLinha), ["line_separated_at"]);
+    assert.deepEqual(campos({ ...DIVIDIR, line_separated_at: " " }), ["line_separated_at"]);
+    assert.deepEqual(
+      campos({
+        ...DIVIDIR,
+        split_volumes: [
+          { number: 16, qty: 54 },
+          { number: 17, qty: 41, weight_kg: 9.8 },
+        ],
+      }),
+      ["split_volumes.1.weight_kg"],
+    );
+  });
+
+  it("de 2 a 20 partes, cada uma com o número e 1 un. ou mais, inteiros, e o peso até 2.000 kg", () => {
+    assert.deepEqual(campos({ ...DIVIDIR, split_volumes: [{ number: 16, qty: 95 }] }), ["split_volumes"]);
+    assert.deepEqual(campos({ ...DIVIDIR, split_volumes: Array.from({ length: 21 }, (_, index) => ({ number: 16 + index, qty: 1 })) }), ["split_volumes"]);
+    assert.equal(entradaDaSeparacao({ ...DIVIDIR, split_volumes: Array.from({ length: 20 }, (_, index) => ({ number: 16 + index, qty: 1 })) }).split_volumes!.length, 20);
+    assert.deepEqual(campos({ ...DIVIDIR, split_volumes: [{ number: 16, qty: 0 }, { number: 17, qty: 95 }] }), ["split_volumes.0.qty"]);
+    assert.deepEqual(campos({ ...DIVIDIR, split_volumes: [{ number: 16, qty: 54.5 }, { number: 17, qty: 40.5 }] }), ["split_volumes.0.qty", "split_volumes.1.qty"]);
+    assert.deepEqual(campos({ ...DIVIDIR, split_volumes: [{ number: 0, qty: 54 }, { number: 17, qty: 41 }] }), ["split_volumes.0.number"]);
+    assert.deepEqual(campos({ ...DIVIDIR, split_volumes: [{ number: 16, qty: 54, weight_kg: 2000.5 }, { number: 17, qty: 41 }] }), ["split_volumes.0.weight_kg"]);
+    assert.deepEqual(campos({ ...DIVIDIR, split_volumes: [{ number: 16, qty: 54, weight_kg: 0 }, { number: 17, qty: 41 }] }), ["split_volumes.0.weight_kg"]);
+    assert.deepEqual(campos({ ...DIVIDIR, split_volumes: [{ number: 16, qty: 54, box_code: "CX-000218" }, { number: 17, qty: 41 }] }), ["split_volumes.0"]);
+    assert.deepEqual(campos({ ...DIVIDIR, open_volume_units: -1 }), ["open_volume_units"]);
+  });
+
+  it("sem a divisão, o volume aberto e a linha não vêm", () => {
+    assert.deepEqual(campos({ ...SEPARAR, open_volume_id: "v16" }), ["open_volume_id"]);
+    assert.deepEqual(campos({ ...SEPARAR, open_volume_id: null }), ["open_volume_id"]);
+    assert.deepEqual(campos({ ...SEPARAR, open_volume_units: 35 }), ["open_volume_units"]);
+    assert.deepEqual(campos({ ...SEPARAR, line_separated_at: null }), ["line_separated_at"]);
+    assert.deepEqual(campos({ ...SEPARAR, separated: false, line_separated_at: "2026-11-11T14:02:00.000Z" }), ["line_separated_at"]);
   });
 });
