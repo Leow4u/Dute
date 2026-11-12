@@ -17,8 +17,8 @@ em 10/11/2026. **Na produção desde 10/11/2026** (19:52 UTC, commit
 `7512f101`): as seis partes, pela publicação manual do Leonardo (seção 5.2).
 Tela só depois do mockup aprovado (decisão 8). **Dividir a linha em mais de
 um volume (seção 11; pranchas na página 4 do canvas):** perguntas
-respondidas pelo Leonardo em 11/11/2026 (decisões 27 a 30); falta o OK das
-pranchas atualizadas com as respostas.
+respondidas e pranchas aprovadas pelo Leonardo em 11/11/2026 (decisões 27 a
+30); as partes 7a e 7b vêm a seguir.
 
 Relação com os outros desenhos: este roteiro retoma a regra 8 e a seção 5.4 do
 mapa (`docs/mapa-do-armazem-enderecamento-dirigido.md`) e revê a P8 de
@@ -802,8 +802,9 @@ coordenação.
 ## 11. A linha em mais de um volume (11/11/2026)
 
 **Situação:** as perguntas foram respondidas pelo Leonardo em 11/11/2026
-(decisões 27 a 30, seção 11.6), e as pranchas, atualizadas com as respostas;
-falta o OK delas para as partes 7a e 7b. As pranchas estão na página 4 do
+(decisões 27 a 30, seção 11.6), e as pranchas, atualizadas com as respostas,
+foram aprovadas por ele no mesmo dia; as partes 7a e 7b vêm a seguir. As
+pranchas estão na página 4 do
 canvas (https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz), com as fontes em
 `docs/mockups/WmsDividir*.dc.html` (tabela no README dos mockups).
 

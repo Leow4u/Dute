@@ -613,7 +613,8 @@ A página 4 do mesmo canvas, "4 · Dividir em volumes", é o desenho de
 11/11/2026 para a linha que não cabe num volume
 (`docs/plataforma/separacao-com-caixas.md`, seção 11). As perguntas foram
 respondidas pelo Leonardo no mesmo dia (decisões 27 a 30 do roteiro), e as
-pranchas foram atualizadas com as respostas; **falta o OK delas**. A página
+pranchas, atualizadas com as respostas, foram **aprovadas por ele em
+11/11/2026**. A página
 parte da linha "Polo Masculino Piquet Preto · M" do PED-0001: 95 un., 54 da
 CX-000218 e 41 da CX-000219, sem caixa de expedição para todas. A prateleira
 A-07 e os outros números são ilustrativos e fecham entre as pranchas. Os
