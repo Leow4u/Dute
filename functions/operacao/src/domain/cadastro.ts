@@ -85,7 +85,12 @@ export function novoId(prefixo: "col" | "vei"): string {
   return `${prefixo}_${randomBytes(8).toString("hex")}`;
 }
 
-const mensagens: z.ZodErrorMap = (issue) => {
+const mensagens: z.ZodErrorMap = (issue, ctx) => {
+  // A mensagem própria do campo (`required_error` e `invalid_type_error`, como
+  // a da capacidade do veículo) chega em `ctx.defaultError`: no Zod 3, o mapa
+  // passado ao `safeParse` roda depois dela e tem a última palavra. Ela fica,
+  // e o texto daqui só entra no lugar da mensagem padrão do Zod.
+  if (ctx.defaultError !== z.defaultErrorMap(issue, ctx).message) return { message: ctx.defaultError };
   const campo = issue.path.join(".") || "entrada";
   switch (issue.code) {
     case z.ZodIssueCode.unrecognized_keys:
@@ -465,7 +470,7 @@ const placaCampo = z
   .refine((value) => /^[A-Z]{3}[0-9]{4}$/.test(value) || /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/.test(value), "Placa inválida.");
 
 const quilos = z
-  .number({ invalid_type_error: "Informe a capacidade em quilos." })
+  .number({ required_error: "Informe a capacidade em quilos.", invalid_type_error: "Informe a capacidade em quilos." })
   .int("A capacidade em quilos é um número inteiro.")
   .min(1, "Informe a capacidade em quilos.")
   .max(80_000, "Capacidade em quilos acima do limite.");
@@ -478,7 +483,10 @@ function metrosCubicos(value: number): number {
   return centesimos / 100;
 }
 
-const metros = z.number({ invalid_type_error: "Informe a capacidade em metros cúbicos." }).transform((value) => {
+const metros = z.number({
+  required_error: "Informe a capacidade em metros cúbicos.",
+  invalid_type_error: "Informe a capacidade em metros cúbicos.",
+}).transform((value) => {
   try {
     return metrosCubicos(value);
   } catch (error) {
