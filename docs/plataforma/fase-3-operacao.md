@@ -1699,6 +1699,8 @@ deixou de parar no app (ia como NaN); os dois passaram a ir vazios.
 - **Teste:** `cadastro.test.ts`, com a capacidade vazia, com texto e sem a
   chave na criação, e vazia ou com texto na alteração. Antes,
   "capacidade_kg: tipo inválido." e "Informe capacidade_kg.".
+- **Na produção** desde a publicação manual de 12/11/2026 (PR 607, commit
+  `2dd01de`, 13:39 UTC).
 
 ### Pergunta 58: cancelar a vistoria em execução
 

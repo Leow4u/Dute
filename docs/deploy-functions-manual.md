@@ -322,6 +322,36 @@ e `cloudfunctions.functions.list`, que a `github-actions-functions` já tem
 (`roles/run.admin` e `roles/cloudfunctions.developer`). Continua rodando no
 Windows PowerShell 5.1, pelo mesmo comando.
 
+## 12/11/2026 — cota do Cloud Run numa publicação grande
+
+Na homologação, a publicação do commit `2dd01de` (PRs 603 e 607) atualizou
+130 functions de uma vez, porque o PR 603 mexe em `functions/wms`; a do PR
+606, logo antes, não tinha atualizado nenhuma (todas "No changes
+detected"). O `firebase deploy` bateu no limite de leituras por minuto da
+API do Cloud Run (HTTP 429, "Quota exceeded for quota metric 'Read
+requests' and limit 'Read requests per minute per region'"). O Firebase
+repetiu e publicou as functions, mas não conseguiu ler a política de duas
+rotinas agendadas (`runAccountRetention` e `runAgentRoutines`, "Failed to
+set invoker"): o job falhou, e o frontend não subiu.
+
+O que fazer: conferir no log que o erro é o 429 de cota, esperar alguns
+minutos e rodar de novo só os jobs que falharam ("Re-run failed jobs"), uma
+vez, enquanto o commit ainda for o HEAD da `main`. Na execução 432 do
+`homologacao.yml`, isso deixou o job verde e publicou o frontend. Mas a
+segunda tentativa pula as functions sem mudança, e as duas rotinas também:
+o invoker delas não é posto de novo, e o `check_functions_invoker.ps1` só
+confere as callables. Depois de rodar de novo, confira a política de cada
+rotina que falhou (`gcloud run services get-iam-policy <servico>
+--region southamerica-east1 --project <projeto>`; o serviço é o nome da
+function em minúsculas): ela precisa do `roles/run.invoker` para a conta de
+serviço padrão do Compute (`<número do projeto>-compute@developer.gserviceaccount.com`),
+que chama as rotinas agendadas. Na homologação de 12/11/2026, as duas
+continuaram com ele (conferido pelo Leonardo): a falha foi só ao ler a
+política. A produção, publicada depois com o mesmo commit,
+também pegou o limite (29 respostas 429, de leitura do Cloud Run e de
+alteração do Cloud Functions), mas o Firebase repetiu e publicou tudo, com
+o invoker.
+
 ## Deploy automático pelo GitHub Actions
 
 O job `Cloud Functions` em `.github/workflows/publicar.yml` publica
