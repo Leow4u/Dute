@@ -46,11 +46,16 @@ function declaracoes(corpo: string): Array<[string, string]> {
     .map((linha) => [linha.slice(0, linha.indexOf(":")).trim(), linha.slice(linha.indexOf(":") + 1).trim()]);
 }
 
-/** As variáveis de um seletor, na ordem do arquivo (a última vale). */
+/** Os seletores de uma regra, separados nas vírgulas e com os espaços juntos. */
+function seletores(regra: Regra): string[] {
+  return regra.seletor.split(",").map((parte) => parte.trim().replace(/\s+/g, " "));
+}
+
+/** As variáveis de um seletor (sozinho ou numa lista), na ordem do arquivo (a última vale). */
 function variaveis(seletor: string, contexto: string[] = []): Map<string, string> {
   const mapa = new Map<string, string>();
   for (const regra of regras(CSS)) {
-    if (regra.seletor !== seletor || regra.contexto.join(" | ") !== contexto.join(" | ")) continue;
+    if (!seletores(regra).includes(seletor) || regra.contexto.join(" | ") !== contexto.join(" | ")) continue;
     for (const [nome, valor] of declaracoes(regra.corpo)) if (nome.startsWith("--")) mapa.set(nome, valor);
   }
   return mapa;
@@ -217,8 +222,11 @@ describe("os tokens do carregamento", () => {
     expect(raiz.get("--carregando-erro")).toBe("var(--destructive)");
     expect(raiz.get("--carregando-brilho")).toBe("hsl(var(--card) / 0.6)");
     expect(raiz.get("--carregando-esqueleto")).toBe("214 16% 87%");
-    // Na v3 a tinta é a dela: o apelido relê o --foreground dentro do .v3.
-    expect(variaveis(".v3").get("--carregando-cor")).toBe("var(--foreground)");
+    // Na v3 e no .dark (também o de dentro da página, a TV), o apelido relê o token de lá.
+    for (const seletor of [".v3", ".dark"]) {
+      expect(variaveis(seletor).get("--carregando-cor"), seletor).toBe("var(--foreground)");
+      expect(variaveis(seletor).get("--carregando-brilho"), seletor).toBe("hsl(var(--card) / 0.6)");
+    }
     expect(variaveis(".v3").get("--carregando-esqueleto-preto")).toBe("hsl(var(--v3-header-foreground) / 0.12)");
     expect(variaveis(":root:not(.dark) .v3").get("--carregando-esqueleto")).toBe("51 10% 86%");
     expect(variaveis(".dark").get("--carregando-esqueleto")).toBe("var(--muted)");
@@ -272,25 +280,155 @@ function sobre(a: Rgb, b: Rgb, opacidade: number): Rgb {
   return [0, 1, 2].map((i) => opacidade * a[i] + (1 - opacidade) * b[i]) as Rgb;
 }
 
-/** Os tokens de um tema, como a cascata os deixa (a última declaração vale). */
-function tema(...camadas: Array<Map<string, string>>) {
-  const mapa = new Map<string, string>();
-  for (const camada of camadas) for (const [nome, valor] of camada) mapa.set(nome, valor);
-  const valor = (nome: string): string => {
-    const bruto = mapa.get(nome);
-    if (bruto === undefined) throw new Error(`token ausente: ${nome}`);
-    const apelido = /^var\((--[\w-]+)\)$/.exec(bruto.trim());
-    return apelido ? valor(apelido[1]) : bruto;
-  };
-  return { cor: (nome: string) => hslParaRgb(valor(nome)), numero: (nome: string) => Number(valor(nome)) };
+/*
+ * A cascata das variáveis, como o navegador faz: em cada elemento valem as
+ * regras de fora das @-regras que casam com ele (pela especificidade e, no
+ * empate, pela ordem do arquivo), e o var() de uma variável se resolve no
+ * elemento que a declara; o filho herda o valor já resolvido. Por isso o
+ * apelido declarado só na raiz levaria a tinta clara para um .dark dentro da
+ * página. O modelo entende os seletores do tema: :root, .classe, :not(.classe)
+ * e o descendente; o resto não casa.
+ */
+
+/** Um elemento da cadeia, pelas classes; o primeiro é a raiz (o html). */
+type Cadeia = string[][];
+
+function casaComposto(composto: string, cadeia: Cadeia, indice: number): boolean {
+  const partes = composto.match(/:root|:not\(\.[\w-]+\)|\.[\w-]+|[^:.]+|[:.]+/g) ?? [];
+  return partes.every((parte) => {
+    if (parte === ":root") return indice === 0;
+    const nao = /^:not\(\.([\w-]+)\)$/.exec(parte);
+    if (nao) return !cadeia[indice].includes(nao[1]);
+    if (/^\.[\w-]+$/.test(parte)) return cadeia[indice].includes(parte.slice(1));
+    return false;
+  });
 }
 
-describe("o contraste dos tokens, no claro, na v3 e no escuro", () => {
-  const claro = tema(variaveis(":root"));
-  const v3 = tema(variaveis(":root"), variaveis(".v3"), variaveis(":root:not(.dark) .v3"));
-  const escuro = tema(variaveis(":root"), variaveis(".dark"));
-  const v3Escuro = tema(variaveis(":root"), variaveis(".dark"), variaveis(".v3"));
-  const temas = { claro, v3, escuro, v3Escuro };
+function casa(seletor: string, cadeia: Cadeia, indice: number): boolean {
+  const compostos = seletor.split(" ");
+  if (!casaComposto(compostos[compostos.length - 1], cadeia, indice)) return false;
+  let acima = indice - 1;
+  for (let k = compostos.length - 2; k >= 0; k -= 1) {
+    while (acima >= 0 && !casaComposto(compostos[k], cadeia, acima)) acima -= 1;
+    if (acima < 0) return false;
+    acima -= 1;
+  }
+  return true;
+}
+
+/** A especificidade nos seletores do tema: :root e cada classe (também a de dentro do :not) contam uma vez. */
+const especificidade = (seletor: string) => (seletor.match(/:root|\.[\w-]+/g) ?? []).length;
+
+const REGRAS_DE_TOPO = regras(CSS)
+  .filter((regra) => regra.contexto.length === 0 && !regra.seletor.startsWith("@"))
+  .map((regra, ordem) => ({
+    seletores: seletores(regra),
+    ordem,
+    declaracoes: declaracoes(regra.corpo).filter(([nome]) => nome.startsWith("--")),
+  }));
+
+/** As variáveis do último elemento da cadeia, resolvidas como o navegador as deixa. */
+function computar(cadeia: Cadeia): Map<string, string> {
+  let herdado = new Map<string, string>();
+  cadeia.forEach((_, indice) => {
+    const valem = REGRAS_DE_TOPO.flatMap((regra) => {
+      const casados = regra.seletores.filter((seletor) => casa(seletor, cadeia, indice));
+      return casados.length > 0 ? [{ ...regra, peso: Math.max(...casados.map(especificidade)) }] : [];
+    }).sort((a, b) => a.peso - b.peso || a.ordem - b.ordem);
+    const declarado = new Map<string, string>();
+    for (const regra of valem) for (const [nome, valor] of regra.declaracoes) declarado.set(nome, valor);
+    const resolvido = new Map<string, string | undefined>();
+    const valor = (nome: string, pilha: string[]): string | undefined => {
+      if (resolvido.has(nome)) return resolvido.get(nome);
+      const bruto = declarado.get(nome);
+      if (bruto === undefined) return herdado.get(nome);
+      if (pilha.includes(nome)) return undefined;
+      let falta = false;
+      const pronto = bruto.replace(/var\((--[\w-]+)(?:,\s*([^()]*))?\)/g, (_trecho, outro: string, reserva?: string) => {
+        const achado = valor(outro, [...pilha, nome]) ?? reserva?.trim();
+        if (achado === undefined) falta = true;
+        return achado ?? "";
+      });
+      resolvido.set(nome, falta ? undefined : pronto);
+      return resolvido.get(nome);
+    };
+    const proprio = new Map(herdado);
+    for (const nome of declarado.keys()) {
+      const pronto = valor(nome, []);
+      if (pronto === undefined) proprio.delete(nome);
+      else proprio.set(nome, pronto);
+    }
+    herdado = proprio;
+  });
+  return herdado;
+}
+
+/** Os tokens no último elemento da cadeia. */
+function tema(cadeia: Cadeia) {
+  const mapa = computar(cadeia);
+  const valor = (nome: string): string => {
+    const achado = mapa.get(nome);
+    if (achado === undefined) throw new Error(`token ausente: ${nome}`);
+    return achado.trim();
+  };
+  return { valor, cor: (nome: string) => hslParaRgb(valor(nome)), numero: (nome: string) => Number(valor(nome)) };
+}
+
+describe("a cascata do modelo", () => {
+  it("resolve o var() no elemento que declara e herda o valor pronto", () => {
+    expect(computar([[]]).get("--carregando-cor")).toBe(computar([[]]).get("--foreground"));
+    // O --v3-marca só existe dentro do .v3.
+    expect(computar([[]]).has("--v3-marca")).toBe(false);
+    expect(computar([[], ["v3"]]).get("--v3-marca")).toBe("358 81% 51%");
+    // A v3 clara (:root:not(.dark) .v3) vence o .v3 e não vale com a raiz escura.
+    expect(computar([[], ["v3"]]).get("--foreground")).toBe("0 0% 9%");
+    expect(computar([["dark"], ["v3"]]).get("--foreground")).toBe("210 40% 98%");
+  });
+});
+
+/**
+ * Os contextos do app: o claro, a v3 e o escuro na raiz, e a TV (/tv,
+ * components/layout/tv-layout.tsx), sempre escura num .dark dentro do .v3,
+ * com a raiz no tema de quem a abre.
+ */
+const CONTEXTOS: Record<string, Cadeia> = {
+  claro: [[]],
+  v3: [[], ["v3"]],
+  escuro: [["dark"]],
+  v3Escuro: [["dark"], ["v3"]],
+  tv: [[], ["v3"], ["dark"]],
+  tvEscuro: [["dark"], ["v3"], ["dark"]],
+};
+
+describe("os apelidos de cor, em cada contexto", () => {
+  const temas = Object.fromEntries(Object.entries(CONTEXTOS).map(([nome, cadeia]) => [nome, tema(cadeia)]));
+
+  it("valem o token do app que leem, também no .dark dentro da página (a TV)", () => {
+    for (const [nome, t] of Object.entries(temas)) {
+      expect(t.valor("--carregando-cor"), `${nome} cor`).toBe(t.valor("--foreground"));
+      expect(t.valor("--carregando-agente"), `${nome} agente`).toBe(t.valor("--agent"));
+      expect(t.valor("--carregando-aviso"), `${nome} aviso`).toBe(t.valor("--amber-soft-foreground"));
+      expect(t.valor("--carregando-ok"), `${nome} ok`).toBe(t.valor("--success"));
+      expect(t.valor("--carregando-erro"), `${nome} erro`).toBe(t.valor("--destructive"));
+      expect(t.valor("--carregando-brilho"), `${nome} brilho`).toBe(`hsl(${t.valor("--card")} / 0.6)`);
+    }
+  });
+
+  it("o vermelho é o da marca da v3, e o esqueleto é o do tema de cada contexto", () => {
+    for (const nome of ["v3", "v3Escuro", "tv", "tvEscuro"]) {
+      expect(temas[nome].valor("--carregando-marca"), nome).toBe(temas[nome].valor("--v3-marca"));
+    }
+    expect(temas.claro.valor("--carregando-esqueleto")).toBe("214 16% 87%");
+    expect(temas.v3.valor("--carregando-esqueleto")).toBe("51 10% 86%");
+    for (const nome of ["escuro", "v3Escuro", "tv", "tvEscuro"]) {
+      expect(temas[nome].valor("--carregando-esqueleto"), nome).toBe(temas[nome].valor("--muted"));
+    }
+  });
+});
+
+describe("o contraste dos tokens, no claro, na v3, no escuro e na TV", () => {
+  const temas = Object.fromEntries(Object.entries(CONTEXTOS).map(([nome, cadeia]) => [nome, tema(cadeia)]));
+  const { v3, v3Escuro, tv, tvEscuro } = temas;
 
   it("a tinta no vale do respiro (0,6) ainda tem 3:1 no cartão e no fundo", () => {
     for (const [nome, t] of Object.entries(temas)) {
@@ -324,7 +462,9 @@ describe("o contraste dos tokens, no claro, na v3 e no escuro", () => {
   });
 
   it("o vermelho da marca tem 3:1 na barra preta", () => {
-    for (const t of [v3, v3Escuro]) expect(contraste(t.cor("--carregando-marca"), t.cor("--v3-header"))).toBeGreaterThanOrEqual(3);
+    for (const t of [v3, v3Escuro, tv, tvEscuro]) {
+      expect(contraste(t.cor("--carregando-marca"), t.cor("--v3-header"))).toBeGreaterThanOrEqual(3);
+    }
   });
 
   it("o esqueleto se vê no cartão, sem virar sinal", () => {

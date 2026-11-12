@@ -799,11 +799,22 @@
   /* Cor: cada uma tem um papel fixo. Tinta na espera; o vermelho só na
      abertura e na ação; verde só no confirmado; o crítico só no erro; o
      âmbar escuro na demora e na falta de rede; o violeta só no Agent Dute.
-     O esqueleto é cinza neutro, nunca rosado. */
-  --carregando-cor: var(--foreground); /* #1F2A3D; #161616 na v3; #F8FAFC no escuro */
-  --carregando-agente: var(--agent);
+     O esqueleto é cinza neutro, nunca rosado. Os apelidos que leem os
+     tokens do app estão logo abaixo. */
   --carregando-marca: 358 81% 51%; /* #E71C23, o mesmo da --v3-marca nos dois temas */
   --carregando-esqueleto: 214 16% 87%; /* #D9DDE3: 1,36:1 no branco, como o da v3 */
+}
+
+/* Os apelidos de cor se releem onde o app troca os tokens que eles leem: na
+   raiz, no .v3 (a tinta #161616) e no .dark, que também aparece dentro da
+   página (a TV, sempre escura dentro do .v3). O var() de uma variável se
+   resolve no elemento que a declara e desce pronto: declarado só na raiz,
+   levaria a tinta clara para o escuro da TV. */
+:root,
+.v3,
+.dark {
+  --carregando-cor: var(--foreground); /* #1F2A3D; #161616 na v3; #F8FAFC no escuro */
+  --carregando-agente: var(--agent);
   --carregando-brilho: hsl(var(--card) / 0.6); /* a faixa do esqueleto some sobre o cartão */
   --carregando-aviso: var(--amber-soft-foreground); /* #8A4B00 sobre o --warning-soft; #F8CD77 no escuro */
   --carregando-ok: var(--success);
@@ -817,10 +828,7 @@
   }
 }
 
-/* Na v3 a tinta é a dela (#161616): o apelido relê o --foreground dentro do
-   .v3, porque a variável herdada da raiz ainda traria a de fora. */
 .v3 {
-  --carregando-cor: var(--foreground);
   --carregando-esqueleto-preto: hsl(var(--v3-header-foreground) / 0.12); /* os blocos na barra preta */
 }
 
