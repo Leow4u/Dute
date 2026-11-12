@@ -2,20 +2,29 @@ import { describe, expect, it } from "vitest";
 
 import { warehouseBoxFromRecord } from "./warehouse-boxes";
 import {
+  BOXES_PER_SHEET,
   CONTINUATION_LABEL_LINES,
   FIRST_LABEL_LINES,
-  LABELS_PER_SHEET,
+  POSITIONS_PER_SHEET,
+  SAIDA_GUARDADA,
+  SHEET_LABEL_LINES,
   balanceContent,
   boxContent,
   boxLabels,
   boxLabelAvailability,
+  guardarSaida,
   impressoesParaRegistrar,
+  labelLines,
+  labelPages,
   labelsUrl,
-  paginate,
+  nameAndSize,
   parseLabelsQuery,
   positionLabel,
+  saidaDaTela,
+  saidaGuardada,
   saldosParaRegistrar,
   sheetMargins,
+  textoDaImpressao,
   volumeLabels,
 } from "./warehouse-labels";
 
@@ -74,6 +83,19 @@ describe("etiqueta da caixa", () => {
     expect(labels[0].lines).toEqual([]);
     expect([labels[0].part, labels[0].parts]).toEqual([1, 1]);
   });
+
+  it("separa o nome e o tamanho, para a folha A4 encurtar o nome comprido sem cortar o tamanho", () => {
+    const [linha] = boxContent(
+      [{ box_code: "CX-000012", sku_code: "BTG-000154", client_item_code: "A.01.0805.002.XGG", product_name: "Polo Masculino Piquet Azul-Marinho", counted_qty: 1 }],
+      "CX-000012",
+    );
+    expect(linha).toEqual({ code: "A.01.0805.002.XGG", sku: "BTG-000154", name: "Polo Masculino Piquet Azul-Marinho · XGG", qty: 1, size: "XGG" });
+    expect(nameAndSize(linha!)).toEqual({ name: "Polo Masculino Piquet Azul-Marinho", size: "XGG" });
+    // Tamanho único (U) e produto sem tamanho: o nome inteiro.
+    expect(nameAndSize({ name: "Copo Café G" })).toEqual({ name: "Copo Café G", size: null });
+    // Um tamanho que não está no fim do nome não é separado.
+    expect(nameAndSize({ name: "Polo · M", size: "G" })).toEqual({ name: "Polo · M", size: null });
+  });
 });
 
 /**
@@ -111,17 +133,36 @@ describe("etiqueta da caixa com todos os produtos", () => {
     });
   });
 
-  it("cinco na primeira e onze em cada continuação: 16 produtos cabem em duas etiquetas, 17 pedem a terceira", () => {
+  it("no rolo, cinco na primeira e onze em cada continuação: 16 produtos cabem em duas etiquetas, 17 pedem a terceira", () => {
     expect([FIRST_LABEL_LINES, CONTINUATION_LABEL_LINES]).toEqual([5, 11]);
-    expect(boxLabels(box, produtos(5)).map((label) => label.lines.length)).toEqual([5]);
-    expect(boxLabels(box, produtos(6)).map((label) => label.lines.length)).toEqual([5, 1]);
-    expect(boxLabels(box, produtos(16)).map((label) => label.lines.length)).toEqual([5, 11]);
-    const tres = boxLabels(box, produtos(17));
+    expect(labelLines("zebra")).toEqual({ first: 5, next: 11 });
+    const rolo = { mode: "zebra" as const };
+    expect(boxLabels(box, produtos(5), rolo).map((label) => label.lines.length)).toEqual([5]);
+    expect(boxLabels(box, produtos(6), rolo).map((label) => label.lines.length)).toEqual([5, 1]);
+    expect(boxLabels(box, produtos(16), rolo).map((label) => label.lines.length)).toEqual([5, 11]);
+    const tres = boxLabels(box, produtos(17), rolo);
     expect(tres.map((label) => [label.part, label.parts, label.lines.length])).toEqual([
       [1, 3, 5],
       [2, 3, 11],
       [3, 3, 1],
     ]);
+  });
+
+  it("na folha A4, cinco em cada etiqueta, porque cada uma é completa: 11 a 16 produtos saem em 3 ou 4 etiquetas na folha e em 2 no rolo", () => {
+    expect(SHEET_LABEL_LINES).toBe(5);
+    expect(labelLines("a4")).toEqual({ first: 5, next: 5 });
+    const folha = { mode: "a4" as const };
+    expect(boxLabels(box, produtos(5), folha).map((label) => label.lines.length)).toEqual([5]);
+    expect(boxLabels(box, produtos(11), folha).map((label) => label.lines.length)).toEqual([5, 5, 1]);
+    expect(boxLabels(box, produtos(16), folha).map((label) => [label.part, label.parts, label.lines.length])).toEqual([
+      [1, 4, 5],
+      [2, 4, 5],
+      [3, 4, 5],
+      [4, 4, 1],
+    ]);
+    expect(boxLabels(box, produtos(11), { mode: "zebra" })).toHaveLength(2);
+    // Sem a saída, vale a da folha: a de menos produtos por etiqueta, que serve às duas e nunca esconde produto.
+    expect(boxLabels(box, produtos(11)).map((label) => label.lines.length)).toEqual([5, 5, 1]);
   });
 });
 
@@ -151,28 +192,82 @@ describe("etiqueta da posição", () => {
   });
 });
 
-describe("folhas de dez", () => {
-  it("centra o bloco de duas colunas por cinco linhas na folha A4", () => {
+describe("as páginas da impressão", () => {
+  const caixa = (codigo: string) => boxLabels({ ...box, code: codigo }, [])[0]!;
+  const posicao = (codigo: string) => positionLabel({ id: codigo, code: codigo, aisle: "A", shelf: 1, length_m: 1, depth_m: 1, height_m: 1 });
+
+  it("a folha das posições centra o bloco de duas colunas por cinco linhas na A4 em pé", () => {
     expect(sheetMargins()).toEqual({ left: 3.4, top: 21.5 });
-    expect(LABELS_PER_SHEET).toBe(10);
+    expect(POSITIONS_PER_SHEET).toBe(10);
+    expect(BOXES_PER_SHEET).toBe(4);
   });
 
-  it("quebra em folhas e pula as vagas já usadas da primeira", () => {
-    const labels = Array.from({ length: 12 }, (_, index) => `L${index + 1}`);
-    const sheets = paginate(labels, 10, 3);
-    expect(sheets).toHaveLength(2);
-    expect(sheets[0]!.slice(0, 4)).toEqual([null, null, null, "L1"]);
-    expect(sheets[0]).toHaveLength(10);
-    expect(sheets[1]).toEqual(["L8", "L9", "L10", "L11", "L12"]);
-    expect(paginate([], 10, 0)).toEqual([]);
-    expect(paginate(["L1"], 10, 99)[0]!.filter(Boolean)).toEqual(["L1"]);
+  it("na folha A4, caixa e volume vão de quatro em quatro e a posição de dez em dez, depois deles; as duas nunca dividem a folha", () => {
+    const caixas = ["CX-000001", "CX-000002", "CX-000003", "CX-000004", "CX-000005"].map(caixa);
+    const posicoes = Array.from({ length: 12 }, (_, indice) => posicao(`A-${String(indice + 1).padStart(2, "0")}`));
+    const paginas = labelPages([...caixas.slice(0, 2), ...posicoes, ...caixas.slice(2)], "a4");
+    expect(paginas.map((pagina) => [pagina.kind, pagina.labels.map((etiqueta) => etiqueta.code)])).toEqual([
+      ["quatro", ["CX-000001", "CX-000002", "CX-000003", "CX-000004"]],
+      ["quatro", ["CX-000005"]],
+      ["dez", posicoes.slice(0, 10).map((etiqueta) => etiqueta.code)],
+      ["dez", ["A-11", "A-12"]],
+    ]);
+    expect(labelPages([], "a4")).toEqual([]);
+  });
+
+  it("no rolo, uma etiqueta por página, na ordem", () => {
+    expect(labelPages([caixa("CX-000001"), posicao("A-01")], "zebra")).toEqual([
+      { kind: "rolo", labels: [caixa("CX-000001")] },
+      { kind: "rolo", labels: [posicao("A-01")] },
+    ]);
+  });
+
+  it("a contagem diz as etiquetas, as folhas e o que elas levam, no plural certo; no rolo, sem folhas", () => {
+    expect(textoDaImpressao({ etiquetas: 2, folhas: 1, caixas: 2, posicoes: 0, volumes: 0, mode: "a4" })).toBe("2 etiquetas · 1 folha · 2 caixas");
+    expect(textoDaImpressao({ etiquetas: 1, folhas: 1, caixas: 1, posicoes: 0, volumes: 0, mode: "a4" })).toBe("1 etiqueta · 1 folha · 1 caixa");
+    expect(textoDaImpressao({ etiquetas: 12, folhas: 2, caixas: 0, posicoes: 12, volumes: 0, mode: "a4" })).toBe("12 etiquetas · 2 folhas · 12 posições");
+    expect(textoDaImpressao({ etiquetas: 44, folhas: 11, caixas: 0, posicoes: 0, volumes: 42, mode: "a4" })).toBe("44 etiquetas · 11 folhas · 42 volumes");
+    expect(textoDaImpressao({ etiquetas: 3, folhas: 3, caixas: 2, posicoes: 1, volumes: 0, mode: "zebra" })).toBe("3 etiquetas · 2 caixas · 1 posição");
+  });
+});
+
+describe("a saída guardada no computador", () => {
+  function armazenamento(inicial: Record<string, string> = {}) {
+    const dados = new Map(Object.entries(inicial));
+    return { getItem: (chave: string) => dados.get(chave) ?? null, setItem: (chave: string, valor: string) => void dados.set(chave, valor), dados };
+  }
+
+  it("guarda e lê a saída escolhida; valor estranho ou storage bloqueado, nenhuma", () => {
+    const local = armazenamento();
+    expect(saidaGuardada(local)).toBeNull();
+    guardarSaida("zebra", local);
+    expect(local.dados.get(SAIDA_GUARDADA)).toBe("zebra");
+    expect(saidaGuardada(local)).toBe("zebra");
+    expect(saidaGuardada(armazenamento({ [SAIDA_GUARDADA]: "laser" }))).toBeNull();
+    const bloqueado = {
+      getItem: () => {
+        throw new Error("bloqueado");
+      },
+      setItem: () => {
+        throw new Error("bloqueado");
+      },
+    };
+    expect(saidaGuardada(bloqueado)).toBeNull();
+    expect(() => guardarSaida("a4", bloqueado)).not.toThrow();
+    expect(saidaGuardada(null)).toBeNull();
+  });
+
+  it("a saída do endereço vale primeiro; sem ela, a guardada; sem nenhuma, a folha A4", () => {
+    expect(saidaDaTela({ mode: "a4" }, "zebra")).toBe("a4");
+    expect(saidaDaTela({ mode: null }, "zebra")).toBe("zebra");
+    expect(saidaDaTela({ mode: null }, null)).toBe("a4");
   });
 });
 
 describe("endereço da tela de etiquetas", () => {
-  it("vai e volta sem perder nada", () => {
-    const url = labelsUrl({ boxes: ["CX-000001", "CX-000002"], skip: 3, mode: "zebra" });
-    expect(url).toBe("/estoque/etiquetas?caixas=CX-000001%2CCX-000002&pular=3&modo=zebra");
+  it("vai e volta sem perder nada; sem 'modo', a saída fica para a tela decidir", () => {
+    const url = labelsUrl({ boxes: ["CX-000001", "CX-000002"], mode: "zebra" });
+    expect(url).toBe("/estoque/etiquetas?caixas=CX-000001%2CCX-000002&modo=zebra");
     expect(parseLabelsQuery(url.split("?")[1]!)).toEqual({
       boxes: ["CX-000001", "CX-000002"],
       positions: [],
@@ -180,19 +275,21 @@ describe("endereço da tela de etiquetas", () => {
       receipt: null,
       order: null,
       volumes: [],
-      skip: 3,
       mode: "zebra",
     });
-    expect(parseLabelsQuery("?sessao=atual&posicoes=a-01,A-01,,b-02&pular=abc")).toEqual({
+    // O "pular" saiu com a folha adesiva de dez (decisão de 11/11/2026): o endereço antigo é ignorado.
+    expect(parseLabelsQuery("?sessao=atual&posicoes=a-01,A-01,,b-02&pular=3")).toEqual({
       boxes: [],
       positions: ["A-01", "B-02"],
       session: true,
       receipt: null,
       order: null,
       volumes: [],
-      skip: 0,
-      mode: "a4",
+      mode: null,
     });
+    expect(labelsUrl({ boxes: ["CX-000001"], mode: "a4" })).toBe("/estoque/etiquetas?caixas=CX-000001&modo=a4");
+    expect(parseLabelsQuery("?modo=a4").mode).toBe("a4");
+    expect(parseLabelsQuery("?modo=laser").mode).toBeNull();
     expect(labelsUrl({})).toBe("/estoque/etiquetas");
   });
 
@@ -238,8 +335,8 @@ describe("etiqueta do volume", () => {
         closing: "12/11/2026 · 11,6 kg",
         units: 42,
         lines: [
-          { code: "A.01.0712.001.40", sku: "", name: "Calça Social Masculino Preta · 40", qty: 30 },
-          { code: "A.01.0712.001.42", sku: "", name: "Calça Social Masculino Preta · 42", qty: 12 },
+          { code: "A.01.0712.001.40", sku: "", name: "Calça Social Masculino Preta · 40", qty: 30, size: "40" },
+          { code: "A.01.0712.001.42", sku: "", name: "Calça Social Masculino Preta · 42", qty: 12, size: "42" },
         ],
         part: 1,
         parts: 1,
@@ -259,15 +356,23 @@ describe("etiqueta do volume", () => {
     expect(semData!.closing).toBe("13/11/2026 · 11,6 kg");
   });
 
-  it("o volume com mais de cinco produtos sai em etiquetas de continuação, todas com as unidades do volume inteiro", () => {
+  it("o volume com mais de cinco produtos sai em mais etiquetas, todas com as unidades do volume inteiro: no rolo, cinco e onze; na folha, cinco em cada", () => {
     const itens = Array.from({ length: 17 }, (_, indice) => ({ nome: `Produto ${String(indice + 1).padStart(2, "0")}`, codigo: `C.${indice + 1}`, quantidade: 17 - indice }));
-    const etiquetas = volumeLabels({ ...VOLUME_12, numero: 20, unidades: 153, itens }, { ...PEDIDO, total: 42 });
-    expect(etiquetas.map((etiqueta) => [etiqueta.part, etiqueta.parts, etiqueta.lines.length, etiqueta.units, etiqueta.code])).toEqual([
+    const volume = { ...VOLUME_12, numero: 20, unidades: 153, itens };
+    const rolo = volumeLabels(volume, { ...PEDIDO, total: 42 }, { mode: "zebra" });
+    expect(rolo.map((etiqueta) => [etiqueta.part, etiqueta.parts, etiqueta.lines.length, etiqueta.units, etiqueta.code])).toEqual([
       [1, 3, FIRST_LABEL_LINES, 153, "PED-0001-V20"],
       [2, 3, CONTINUATION_LABEL_LINES, 153, "PED-0001-V20"],
       [3, 3, 1, 153, "PED-0001-V20"],
     ]);
-    expect(etiquetas[1]!.lines[0]!.name).toBe("Produto 06");
+    expect(rolo[1]!.lines[0]!.name).toBe("Produto 06");
+    const folha = volumeLabels(volume, { ...PEDIDO, total: 42 }, { mode: "a4" });
+    expect(folha.map((etiqueta) => [etiqueta.part, etiqueta.parts, etiqueta.lines.length, etiqueta.units])).toEqual([
+      [1, 4, 5, 153],
+      [2, 4, 5, 153],
+      [3, 4, 5, 153],
+      [4, 4, 2, 153],
+    ]);
   });
 
   it("o endereço leva o pedido e os volumes: um, alguns ou todos", () => {
@@ -309,8 +414,8 @@ describe("etiqueta da caixa do recebimento", () => {
     // As linhas da abertura não entram: a caixa do recebimento traz o conteúdo nela.
     const [label] = boxLabels(receiptBox, [line("A", 99, { box_code: "CX-000225" })], { printedAt: new Date("2026-11-06T18:00:00Z") });
     expect(label.lines).toEqual([
-      { code: "A.01.0713.005.G", sku: "BTG-000112", name: "Polo Masculino Piquet Preto · G", qty: 12 },
-      { code: "A.01.0713.005.GG", sku: "BTG-000113", name: "POLO MASCULINO PIQUET PRETO · GG", qty: 7 },
+      { code: "A.01.0713.005.G", sku: "BTG-000112", name: "Polo Masculino Piquet Preto · G", qty: 12, size: "G" },
+      { code: "A.01.0713.005.GG", sku: "BTG-000113", name: "POLO MASCULINO PIQUET PRETO · GG", qty: 7, size: "GG" },
     ]);
     expect(label.units).toBe(19);
     expect(label.position).toBe("B-09");
@@ -387,8 +492,8 @@ describe("etiqueta da caixa aberta (separação com caixas, parte 3)", () => {
     const [label] = boxLabels(aberta, entrada, { printedAt: new Date("2026-11-13T12:00:00Z") });
     // O produto que saiu todo some; os outros vêm com o que resta, o maior primeiro.
     expect(label.lines).toEqual([
-      { code: "A.01.0712.001.44", sku: "BTG-000085", name: "Calça Social Masculino Preta · 44", qty: 5 },
-      { code: "A.01.0712.001.42", sku: "BTG-000084", name: "Calça Social Masculino Preta · 42", qty: 2 },
+      { code: "A.01.0712.001.44", sku: "BTG-000085", name: "Calça Social Masculino Preta · 44", qty: 5, size: "44" },
+      { code: "A.01.0712.001.42", sku: "BTG-000084", name: "Calça Social Masculino Preta · 42", qty: 2, size: "42" },
     ]);
     expect(label.units).toBe(7);
     expect(label.balanceAt).toBe("12/11/2026");
@@ -417,7 +522,7 @@ describe("etiqueta da caixa aberta (separação com caixas, parte 3)", () => {
       balance_at: "2026-11-12T10:00:00.000Z",
     });
     const [label] = boxLabels(recebida, []);
-    expect(label.lines).toEqual([{ code: "A.01.0816.005.G", sku: "BTG-000118", name: "Camiseta Masculino Preta · G", qty: 18 }]);
+    expect(label.lines).toEqual([{ code: "A.01.0816.005.G", sku: "BTG-000118", name: "Camiseta Masculino Preta · G", qty: 18, size: "G" }]);
     expect(label.units).toBe(18);
   });
 

@@ -331,25 +331,42 @@ por Posições (as posições filtradas). Sem gerador de PDF: a impressão é a 
 navegador, como a fatura (Imprimir → Salvar PDF). Code 128 feito no próprio
 app (`lib/code128.ts`, conjunto B, com teste do dígito verificador da norma).
 
-- Etiqueta de 101,6 × 50,8 mm, o rolo de 4 × 2 polegadas da Zebra. Na folha
-  A4 saem dez (duas colunas por cinco linhas, bloco centrado); "pular N" usa
-  uma folha adesiva já começada.
+- Duas saídas, escolhidas em "Saída" e guardadas no computador (decisões de
+  11 e 12/11/2026, pranchas `docs/mockups/EtiquetaA4*.dc.html`; antes, a
+  etiqueta era só a de 101,6 × 50,8 mm, dez por folha A4 adesiva, com
+  "pular N" para a folha começada):
+  - "Folha A4", a padrão, em papel comum, presa na caixa com fita só nas
+    bordas: a caixa e o volume em etiquetas de 148,5 × 105 mm, quatro por
+    folha deitada (duas colunas por duas linhas), com as linhas de corte
+    impressas e 7 mm livres em volta. Cada etiqueta é completa (caixa e
+    posição, ou pedido e volume, e o código de barras de 64 × 11 mm) e leva
+    até cinco produtos, cada um em duas linhas: a quantidade e o nome com o
+    tamanho em 13 pontos e, embaixo, o código do cliente e o SKU; o nome
+    comprido encurta e o tamanho fica. A posição continua com 101,6 × 50,8
+    mm, dez por folha em pé, também com as linhas de corte. A prévia da tela
+    encolhe para caber; a impressão sai em tamanho real.
+  - "Rolo Zebra": a etiqueta de 101,6 × 50,8 mm, o rolo de 4 × 2 polegadas,
+    uma por página, como antes.
 - Caixa: código em barras e em texto, posição em destaque, cliente, medidas,
-  peso, origem e data, os produtos com quantidade e o total de unidades.
-  Desde 10/11/2026 saem todos os produtos (separação com caixas, parte 6): a
-  primeira etiqueta leva até cinco e os outros vêm em etiquetas de
-  continuação do mesmo tamanho ("etiqueta 2 de 2"); antes eram quatro e "+ n
-  produto(s) no sistema". O rodapé leva o logo da Dutelog, em preto no rolo
-  da Zebra. O conteúdo vem das linhas da abertura
+  peso, origem e data ("Abertura · 22/10/2026", com " · " desde 12/11/2026
+  nas duas saídas), os produtos com quantidade e o total de unidades.
+  Desde 10/11/2026 saem todos os produtos (separação com caixas, parte 6): no
+  rolo, a primeira etiqueta leva até cinco e os outros vêm em etiquetas de
+  continuação do mesmo tamanho ("etiqueta 2 de 2", até onze cada, sem código
+  de barras); antes eram quatro e "+ n produto(s) no sistema". Na folha A4,
+  cada etiqueta leva até cinco, então uma caixa com 11 a 16 produtos sai em 3
+  ou 4 etiquetas na folha e em 2 no rolo. O rodapé leva o logo da Dutelog, em
+  preto no rolo da Zebra; na folha, o logo tem 9 mm, ao lado da parte
+  ("etiqueta 1 de 2"), e a caixa aberta põe "saldo em" embaixo do total. O
+  conteúdo vem das linhas da abertura
   da caixa, por isso a etiqueta se imprime depois de lançar os produtos. A
   caixa do recebimento (parte 6 do recebimento com caixas, 07/11/2026) traz
   o conteúdo nela, diz "Recebimento · NF 48.377" e imprime com o destino
   confirmado.
 - Posição: código em barras e em texto, zona, rua e prateleira, medidas e
   peso máximo.
-- Modo "uma por etiqueta": cada etiqueta vira uma página do tamanho dela. É o
-  caminho da Zebra no primeiro dia, pelo driver do Windows com o rolo
-  configurado. ZPL direto (Zebra Browser Print) fica para quando houver a
+- "Rolo Zebra": cada etiqueta vira uma página do tamanho dela. É o caminho da
+  Zebra, pelo driver do Windows com o rolo configurado. ZPL direto (Zebra Browser Print) fica para quando houver a
   impressora, com o mesmo conteúdo; nada da etiqueta muda.
 - "Etiqueta impressa" é evento para a caixa do recebimento (parte 6 do
   recebimento com caixas, decisão 29, 07/11/2026): a tela registra o clique
@@ -384,7 +401,7 @@ app (`lib/code128.ts`, conjunto B, com teste do dígito verificador da norma).
 | P3 | O que é "uma posição ocupada". | **Decidido para agora:** uma caixa guardada conta uma posição. O mapa só mostra o número; a fatura segue manual. Rever quando a cobrança for automatizada. |
 | P4 | Regra do mês para a cobrança. | Adiado: a cobrança não será automatizada neste primeiro momento. |
 | P5 | Modo da contagem de abertura. | **Decidido:** direcionada, reorganizando todas as posições. |
-| P6 | Etiqueta. | **Decidido:** impressa em A4, mas menor: 10 por folha, 101,6 × 50,8 mm. |
+| P6 | Etiqueta. | **Decidido em 16/10/2026:** impressa em A4, mas menor: 10 por folha, 101,6 × 50,8 mm. **Revisto em 11 e 12/11/2026:** folha A4 comum, presa com fita só nas bordas; a caixa e o volume em 148,5 × 105 mm, quatro por folha deitada, cada etiqueta completa; a posição continua com 101,6 × 50,8 mm, dez por folha; as linhas de corte saem impressas; sai o "pular"; o rolo Zebra fica como está (seção 6). |
 | P7 | "Unidades por caixa" por SKU: cadastrar ou declarar na hora. | Declarar na hora no go-live; cadastrar depois para os SKUs de giro. |
 | P8 | De qual caixa a separação retira. | **Decidido em 02/11/2026:** FIFO pela data de guarda, por prateleira e data; o sistema não diz a caixa nem baixa o conteúdo dela, e o cliente vê só a data e a quantidade. Desenho em `docs/plataforma/fifo-por-data.md`. |
 | P9 | Zonas iniciais: quais prateleiras pertencem a cada cliente. | Atribuir pela tela de Posições ("Zona da rua") antes da contagem. |

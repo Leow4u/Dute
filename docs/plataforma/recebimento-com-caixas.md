@@ -339,7 +339,8 @@ cliente, medidas, peso, origem, data, produtos e unidades), com a origem
 "Recebimento · NF 48.212" e o conteúdo vindo das linhas da caixa do
 recebimento. Sai ao confirmar o destino, caixa a caixa, e em "Etiquetas da
 chegada" (todas as caixas da chegada, dez por folha A4 ou uma por etiqueta,
-decisão 6). A etiqueta não condiciona o saldo: a impressão é do navegador e o
+decisão 6; desde 12/11/2026, na folha A4, quatro por folha, em 148,5 × 105
+mm, seção 6 de `docs/mapa-do-armazem-enderecamento-dirigido.md`). A etiqueta não condiciona o saldo: a impressão é do navegador e o
 app não sabe se saiu, até o ZPL.
 
 ### 4.7 Mapa, posições ocupadas e cobrança

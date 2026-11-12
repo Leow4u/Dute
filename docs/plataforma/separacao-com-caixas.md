@@ -187,7 +187,9 @@ no meio, a devolução) volta sem caixa. A conferência ainda não tem tela.
   reembalar. A etiqueta do volume substitui a da caixa.
 - Cada volume vira um `packages` com os `package_items` dele. O lacre fica no
   pedido.
-- **Etiqueta do volume**, no tamanho de hoje (101,6 × 50,8 mm): o pedido, o
+- **Etiqueta do volume**, no tamanho de hoje (101,6 × 50,8 mm; desde
+  12/11/2026, na folha A4, 148,5 × 105 mm, quatro por folha, seção 6 de
+  `docs/mapa-do-armazem-enderecamento-dirigido.md`): o pedido, o
   volume, o cliente, o destino, a data, o peso, os produtos com o código do
   cliente e as unidades. Sai ao fechar o volume ("Volume 12"); depois da
   conclusão, o lote sai com o total ("Volume 12 de 42") (decisão 12). Leva

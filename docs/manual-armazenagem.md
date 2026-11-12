@@ -409,18 +409,26 @@ separação tirou tudo sai da prateleira, deixa de contar em "Posições ocupada
 e fica em "Saíram desta prateleira", com a data e o pedido ("inteira em
 11/11/2026 · PED-0001" ou "vazia em 12/11/2026 · PED-0001").
 
-**A etiqueta** tem 101,6 × 50,8 mm: "Folha A4, dez por folha" ou "Uma por
-etiqueta (rolo Zebra)"; "Pular etiquetas usadas" (0 a 9) aproveita folha
-começada; "Imprimir / Salvar PDF" usa o navegador. As duas trazem o código em
-barras (Code 128) e em texto. A da caixa traz a posição, o cliente, medidas e
-peso, a origem ("Abertura", "Manual" ou "Recebimento · NF 48.377"), a data,
-os produtos com o tamanho ao lado do nome, o código do cliente e o SKU, e as
-unidades. Todos os produtos saem: a primeira etiqueta leva até 5 e, com mais,
-diz "etiqueta 1 de 2"; os outros vêm em etiquetas de continuação do mesmo
-tamanho, com a caixa, a posição, "etiqueta 2 de 2", até 11 produtos cada e as
-unidades da caixa, sem código de barras. A contagem da tela soma as de
-continuação. O rodapé de toda etiqueta leva o logo da Dutelog (na folha A4,
-nas cores dele; no rolo da Zebra, em preto). Sai da caixa guardada do cliente ativo
+**A etiqueta** sai em "Folha A4" (a padrão) ou "Rolo Zebra", escolhida em
+"Saída"; o computador guarda a escolha. "Imprimir / Salvar PDF" usa o
+navegador e a página sai em tamanho real (a prévia da tela encolhe para
+caber). Na folha A4, em papel comum, a etiqueta da caixa e a do volume têm
+148,5 × 105 mm, quatro por folha deitada, com as linhas de corte: recorte e
+prenda na caixa com fita nas bordas (ficam 7 mm livres em volta). A da posição
+tem 101,6 × 50,8 mm, dez por folha em pé, também com as linhas de corte. No
+rolo, toda etiqueta tem 101,6 × 50,8 mm, uma por página. Todas trazem o código
+em barras (Code 128) e em texto. A da caixa traz a posição, o cliente, medidas
+e peso, a origem e a data ("Abertura · 22/10/2026", "Recebimento · NF 48.377 ·
+06/11/2026" ou "Manual"), os produtos com o tamanho ao lado do nome, o código
+do cliente e o SKU, e as unidades. Todos os produtos saem. Na folha, cada
+etiqueta leva até 5, cada produto em duas linhas, e com mais a caixa sai em
+mais etiquetas, todas completas, com "etiqueta 1 de 2" ao lado do logo; o nome
+comprido encurta e o tamanho fica. No rolo, a primeira leva até 5 e diz
+"etiqueta 1 de 2"; os outros vêm em etiquetas de continuação do mesmo tamanho,
+com a caixa, a posição, "etiqueta 2 de 2", até 11 produtos cada e as unidades
+da caixa, sem código de barras. A caixa aberta traz o saldo e "saldo em" com a
+data. A contagem da tela soma todas. O rodapé de toda etiqueta leva o logo da
+Dutelog (na folha A4, nas cores dele; no rolo da Zebra, em preto). Sai da caixa guardada do cliente ativo
 (o conteúdo da abertura vem da sessão) e da caixa do recebimento com o destino
 confirmado ou guardada (o conteúdo vem da própria caixa); aberta pelo Receber,
 a tela volta ao Receber, diz a chegada e nomeia a caixa ainda sem destino. Na

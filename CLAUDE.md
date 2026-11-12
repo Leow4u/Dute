@@ -336,7 +336,10 @@ documentação de produto e operação está em `docs/`.
   no código e só entra com o cadastro vazio). A caixa é a unidade de manuseio
   (`warehouse_boxes`, código `CX-000001`); a prateleira é escolhida pelo motor
   em `functions/wms/src/domain/warehouse-boxes.ts`, nunca digitada. Etiquetas em
-  Estoque › Etiquetas (impressão do navegador, 101,6 × 50,8 mm) e o mapa em
+  Estoque › Etiquetas (impressão do navegador; "Folha A4", em papel comum, com a
+  caixa e o volume em 148,5 × 105 mm, quatro por folha deitada, e a posição em
+  101,6 × 50,8 mm, dez por folha, ou "Rolo Zebra", 101,6 × 50,8 mm; decisões de
+  11 e 12/11/2026, `docs/mockups/EtiquetaA4*.dc.html`) e o mapa em
   Estoque › Mapa (só leitura). Desenho completo e decisões em
   `docs/mapa-do-armazem-enderecamento-dirigido.md`.
   Na abertura, caixas passam por conferência (`counting`), revisão
@@ -424,9 +427,11 @@ documentação de produto e operação está em `docs/`.
   sem baixa), e "Imprimir lista" (`/pedidos/lista`, a folha A4 em
   `features/warehouse-ops/lista-de-separacao-documento.tsx`). **A parte 6 (a
   etiqueta com todos os produtos) também, para a caixa e a posição:**
-  `boxLabels` (`lib/warehouse-labels.ts`) devolve a primeira etiqueta, com até
-  cinco produtos, e as de continuação, com onze cada ("etiqueta 2 de 2"), e o
-  rodapé de toda etiqueta leva o logo da Dutelog, em preto no rolo da Zebra
+  `boxLabels` (`lib/warehouse-labels.ts`) devolve, no rolo, a primeira
+  etiqueta, com até cinco produtos, e as de continuação, com onze cada
+  ("etiqueta 2 de 2"); na folha A4, etiquetas completas de até cinco (a
+  paginação depende da saída); o rodapé de toda etiqueta leva o logo da
+  Dutelog, em preto no rolo da Zebra
   (`components/labels/label-sheet.tsx`). **As partes 2 e 5 (separar com o
   progresso salvo e "Separar menos") também:** a bancada do pedido
   (`/pedidos/separar`) grava cada linha na hora por `setPickLineSeparated`

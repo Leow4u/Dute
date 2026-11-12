@@ -634,6 +634,37 @@ o botão.
 
 As respostas da página 4 estão nas notas do canvas e no roteiro (seção 11.6).
 
+A página "Etiqueta na folha A4" tem canvas próprio (privado,
+https://claude.ai/artifact/De4od2rngTGXkcmbJrjhmQ), feito em 11 e 12/11/2026
+a partir do pedido do Leonardo de imprimir a etiqueta na impressora comum do
+escritório, em folha A4 (ele imprimia uma etiqueta de 101,6 × 50,8 mm por
+folha), e **aprovado por ele em 12/11/2026**. As decisões, na ordem: a caixa
+e o volume em etiqueta deitada; quatro por folha (a primeira versão tinha uma
+por folha, a segunda duas); o logo maior, a posição menor e a quantidade e o
+nome do produto maiores; folha comum, não adesiva, presa na caixa com fita só
+nas bordas, também para as prateleiras; saem a saída "Folha A4, dez por
+folha" e o "Pular etiquetas usadas"; o rolo Zebra fica como está. Uma
+revisão independente mediu as pranchas com o Manrope e com a métrica da Segoe
+UI: cinco produtos cabem por etiqueta mesmo com os nomes mais longos do
+catálogo e quantidades de quatro dígitos, e as linhas de corte caem no lugar.
+As fontes são estáticas. A CX-000229 e a CX-000138 (o conteúdo do acerto de
+03/11/2026) são casos reais, com as medidas, o peso e os SKUs da CX-000138
+ilustrativos; a CX-000142, a CX-000028, os volumes 20 e a chegada
+AVL-7C21A9F0 vêm das pranchas aprovadas; os volumes 19 e 21 e as medidas da
+CX-000229 são ilustrativos. No canvas, a primeira prancha se chama
+`Main.dc.html`; aqui, `EtiquetaA4Tela.dc.html`.
+
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| Estoque › Etiquetas, a chegada com três caixas | `EtiquetaA4Tela.dc.html` | "Saída" com "Folha A4" e "Rolo Zebra", sem "Pular etiquetas usadas"; a contagem "2 etiquetas · 1 folha · 2 caixas"; a folha deitada com as duas etiquetas em cima e as linhas de corte; a CX-000227, sem prateleira, no aviso. |
+| Folha A4 com quatro etiquetas de caixa | `EtiquetaA4Caixas.dc.html` | A caixa aberta (CX-000028, "saldo em" embaixo do total), os nomes mais longos (CX-000138, "Polo Masculino Piquet Azul-Marinho · XGG") e a CX-000142 em duas etiquetas completas, com "etiqueta 1 de 2" ao lado do logo. |
+| Folha A4 com volumes | `EtiquetaA4Volumes.dc.html` | Os volumes 19 a 21 do PED-0001, com o 20 em duas etiquetas, cada uma com o pedido, o volume e o código de barras; sem caixa, posição nem valor. |
+| Estoque › Etiquetas, as prateleiras | `EtiquetaA4Prateleiras.dc.html` | As etiquetas de posição continuam com 101,6 × 50,8 mm, dez por folha em pé, agora com as linhas de corte impressas; a "Saída" aberta. |
+
+No app (12/11/2026), o que ficou diferente das pranchas: a etiqueta imprime
+em Segoe UI, como as outras etiquetas (as pranchas usam o Manrope); a prévia
+da tela encolhe para caber na largura, em vez da escala fixa da prancha.
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador
