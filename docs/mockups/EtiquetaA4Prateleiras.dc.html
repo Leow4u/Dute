@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Etiquetas das prateleiras na folha A4</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+button{font:inherit;color:inherit}
+a{color:#0054CE}a:hover{color:#003E99}
+.ic{width:20px;height:20px;flex:0 0 auto}.ic-s{width:16px;height:16px;flex:0 0 auto}
+.app{display:flex;width:1440px;height:900px;overflow:hidden}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:22px 14px 18px;gap:2px}
+.logo{font-weight:800;font-size:22px;letter-spacing:.04em;padding:0 10px 6px}
+.logo small{display:block;font-size:8px;letter-spacing:.18em;font-weight:700;opacity:.8;margin-top:-2px}
+.sw{display:flex;align-items:center;gap:10px;width:100%;height:44px;margin:8px 0 6px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font:800 15px Manrope,sans-serif;text-align:left}
+.sw .ch{margin-left:auto;opacity:.75}
+.cli{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px}
+.cli .tile{width:34px;height:34px;border-radius:9px;background:#2a2a2a;display:inline-flex;align-items:center;justify-content:center}
+.cli small{display:block;font-size:11px;color:rgba(255,255,255,.6)}
+.cli b{font-size:14px}
+.nav{display:flex;align-items:center;gap:12px;height:44px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.74);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.sub{padding-left:14px}
+.sub .nav{height:40px;font-size:14px;padding-left:28px}
+.sbf{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 10px 0;border-top:1px solid rgba(255,255,255,.12)}
+.av2{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.sbf b{display:block;font-size:14px}.sbf span{font-size:13px;color:rgba(255,255,255,.6)}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;padding:30px 44px;gap:16px;overflow:hidden;position:relative}
+.back{color:#0054CE;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:14px;width:fit-content}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.ph h1{font-size:30px;font-weight:800;letter-spacing:-.01em}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;white-space:nowrap;text-decoration:none;cursor:pointer}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{color:#fff;background:#C8141B}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px}
+.muted{color:#5F6368}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13.5px;font-weight:700}
+.inp{height:40px;border:1px solid #D4D4CF;border-radius:8px;background:#fff;padding:0 12px;display:flex;align-items:center;font-size:14px}
+.menu{position:absolute;left:0;top:calc(100% + 6px);width:240px;background:#fff;border:1px solid #E5E5E1;border-radius:10px;box-shadow:0 14px 36px rgba(0,0,0,.18);padding:6px;display:flex;flex-direction:column;gap:2px}
+.opt{position:relative;display:flex;align-items:center;height:40px;padding:0 12px 0 36px;border-radius:6px;font-weight:600;font-size:14px}
+.opt.on{background:#F0F0ED;font-weight:800}
+.opt svg{position:absolute;left:11px;top:12px}
+.prev{flex:1;min-height:0;overflow:hidden;border:1px solid #E5E5E1;border-radius:12px;background:#E8E8E4;padding:16px;display:flex;justify-content:center;align-items:flex-start}
+.sheet{flex:0 0 auto;width:210mm;height:297mm;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.12);padding:21.5mm 0 0 3.4mm;display:grid;grid-template-columns:101.6mm 101.6mm;grid-auto-rows:50.8mm;align-content:start}
+.pl{width:101.6mm;height:50.8mm;padding:2.8mm 3.5mm 2.4mm;display:flex;flex-direction:column;gap:1mm;background:#fff;color:#000;outline:0.25mm dashed #000;outline-offset:-0.125mm;font-size:7pt;line-height:1.2;overflow:hidden}
+.pl .r1{display:flex;justify-content:space-between;align-items:flex-end;gap:3mm}
+.pl .cp{font-size:6pt;letter-spacing:.12em;text-transform:uppercase;line-height:1.1}
+.pl .cd{font-size:30pt;font-weight:800;line-height:1}
+.pl .zn{font-size:10pt;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl .bc{height:13mm;background:repeating-linear-gradient(90deg,#000 0 2px,#fff 2px 4px,#000 4px 5px,#fff 5px 8px,#000 8px 10px,#fff 10px 11px,#000 11px 14px,#fff 14px 16px)}
+.pl .r3{display:flex;justify-content:space-between;gap:3mm;border-top:0.2mm solid #000;padding-top:1mm}
+.pl .ft{display:flex;justify-content:space-between;align-items:center;gap:3mm;font-weight:700}
+.pl .ft img{display:block;height:3.6mm;width:auto}
+x-dc{display:contents}
+</style>
+</helmet>
+<div class="app">
+<aside class="sb">
+  <div class="logo">DUTELOG<small>SOLUÇÕES LOGÍSTICAS</small></div>
+  <button type="button" class="sw"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>Armazenagem<svg class="ic-s ch" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 9 5-5 5 5M7 15l5 5 5-5"/></svg></button>
+  <div class="cli"><span class="tile"><svg class="ic-s" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></span><div><small>Cliente ativo</small><b>BTG</b></div></div>
+  <a class="nav" href="#"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início<span class="cnt">1</span></a>
+  <a class="nav" href="#" style="color:#C9B8FB"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"/></svg>Agent Dute</a>
+  <a class="nav" href="#"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Pedidos</a>
+  <a class="nav" href="#"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Estoque</a>
+  <div class="sub">
+    <a class="nav" href="#"><svg class="ic-s" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Itens</a>
+    <a class="nav" href="#"><svg class="ic-s" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Receber</a>
+    <a class="nav" href="#"><svg class="ic-s" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>Contagem</a>
+    <a class="nav" href="#"><svg class="ic-s" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Mapa</a>
+    <a class="nav on" href="#"><svg class="ic-s" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Posições</a>
+  </div>
+  <a class="nav" href="#"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 17.5v-11"/></svg>Faturamento</a>
+  <a class="nav" href="#"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-6"/></svg>Relatórios</a>
+  <a class="nav" href="#"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Documentos</a>
+  <div class="sbf"><span class="av2">GD</span><div><b>Guilherme Dantas</b><span>Operação WMS</span></div></div>
+</aside>
+<main class="main">
+  <a class="back" href="#"><svg class="ic-s" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7M19 12H5"/></svg>Posições</a>
+  <div class="ph">
+    <h1>Etiquetas</h1>
+    <button type="button" class="btn btn-p"><svg class="ic-s" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Imprimir / Salvar PDF</button>
+  </div>
+  <div class="card" style="padding:16px 20px;display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;position:relative;z-index:2">
+    <div class="field" style="position:relative">
+      <label for="saida-posicoes">Saída</label>
+      <button id="saida-posicoes" type="button" class="inp" aria-haspopup="listbox" aria-expanded="true" style="width:240px;justify-content:space-between;border-color:#161616;box-shadow:0 0 0 3px rgba(22,22,22,.12);cursor:pointer">Folha A4<svg class="ic-s" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+      <ul class="menu" role="listbox" aria-label="Saída">
+        <li class="opt on" role="option" aria-selected="true"><svg class="ic-s" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Folha A4</li>
+        <li class="opt" role="option" aria-selected="false">Rolo Zebra</li>
+      </ul>
+    </div>
+    <div class="muted" style="padding-bottom:10px">6 etiquetas · 1 folha · 6 posições</div>
+  </div>
+  <div class="prev">
+    <div class="sheet" role="group" aria-label="Folha 1">
+      <div class="pl" role="group" aria-label="Etiqueta da posição A-01">
+        <div class="r1"><div><div class="cp">Posição</div><div class="cd">A-01</div></div><div style="text-align:right;min-width:0"><div class="cp">Zona</div><div class="zn">BTG Pactual</div><div>Rua A · prateleira 1</div></div></div>
+        <div class="bc" role="img" aria-label="Código de barras A-01"></div>
+        <div class="r3"><span>1,80 m × 0,75 m × 0,65 m</span><span>Peso máx. sem limite</span></div>
+        <div class="ft"><img src="/_blob/535cc8009735719fd90d029cba37052a" alt="Dutelog"><span>Comprimento × largura × altura livre</span></div>
+      </div>
+      <div class="pl" role="group" aria-label="Etiqueta da posição A-02">
+        <div class="r1"><div><div class="cp">Posição</div><div class="cd">A-02</div></div><div style="text-align:right;min-width:0"><div class="cp">Zona</div><div class="zn">BTG Pactual</div><div>Rua A · prateleira 2</div></div></div>
+        <div class="bc" role="img" aria-label="Código de barras A-02"></div>
+        <div class="r3"><span>1,80 m × 0,75 m × 0,65 m</span><span>Peso máx. sem limite</span></div>
+        <div class="ft"><img src="/_blob/535cc8009735719fd90d029cba37052a" alt="Dutelog"><span>Comprimento × largura × altura livre</span></div>
+      </div>
+      <div class="pl" role="group" aria-label="Etiqueta da posição A-03">
+        <div class="r1"><div><div class="cp">Posição</div><div class="cd">A-03</div></div><div style="text-align:right;min-width:0"><div class="cp">Zona</div><div class="zn">BTG Pactual</div><div>Rua A · prateleira 3</div></div></div>
+        <div class="bc" role="img" aria-label="Código de barras A-03"></div>
+        <div class="r3"><span>1,80 m × 0,75 m × 0,65 m</span><span>Peso máx. sem limite</span></div>
+        <div class="ft"><img src="/_blob/535cc8009735719fd90d029cba37052a" alt="Dutelog"><span>Comprimento × largura × altura livre</span></div>
+      </div>
+      <div class="pl" role="group" aria-label="Etiqueta da posição A-04">
+        <div class="r1"><div><div class="cp">Posição</div><div class="cd">A-04</div></div><div style="text-align:right;min-width:0"><div class="cp">Zona</div><div class="zn">BTG Pactual</div><div>Rua A · prateleira 4</div></div></div>
+        <div class="bc" role="img" aria-label="Código de barras A-04"></div>
+        <div class="r3"><span>1,80 m × 0,75 m × 1,90 m</span><span>Peso máx. sem limite</span></div>
+        <div class="ft"><img src="/_blob/535cc8009735719fd90d029cba37052a" alt="Dutelog"><span>Comprimento × largura × altura livre</span></div>
+      </div>
+      <div class="pl" role="group" aria-label="Etiqueta da posição A-05">
+        <div class="r1"><div><div class="cp">Posição</div><div class="cd">A-05</div></div><div style="text-align:right;min-width:0"><div class="cp">Zona</div><div class="zn">BTG Pactual</div><div>Rua A · prateleira 5</div></div></div>
+        <div class="bc" role="img" aria-label="Código de barras A-05"></div>
+        <div class="r3"><span>1,80 m × 0,75 m × 0,90 m</span><span>Peso máx. sem limite</span></div>
+        <div class="ft"><img src="/_blob/535cc8009735719fd90d029cba37052a" alt="Dutelog"><span>Comprimento × largura × altura livre</span></div>
+      </div>
+      <div class="pl" role="group" aria-label="Etiqueta da posição A-06">
+        <div class="r1"><div><div class="cp">Posição</div><div class="cd">A-06</div></div><div style="text-align:right;min-width:0"><div class="cp">Zona</div><div class="zn">BTG Pactual</div><div>Rua A · prateleira 6</div></div></div>
+        <div class="bc" role="img" aria-label="Código de barras A-06"></div>
+        <div class="r3"><span>1,80 m × 0,75 m × 0,90 m</span><span>Peso máx. sem limite</span></div>
+        <div class="ft"><img src="/_blob/535cc8009735719fd90d029cba37052a" alt="Dutelog"><span>Comprimento × largura × altura livre</span></div>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

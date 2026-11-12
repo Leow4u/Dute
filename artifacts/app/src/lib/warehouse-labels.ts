@@ -3,20 +3,27 @@
  * dirigido.md, seção 6) e do volume de expedição (separação com caixas,
  * parte 4c). O conteúdo é definido aqui, uma vez; o desenho fica em
  * components/labels e a impressão é do navegador (Imprimir → Salvar PDF),
- * como a fatura. A etiqueta tem 101,6 × 50,8 mm, o rolo padrão da Zebra: na
- * folha A4 cabem dez; na Zebra sai uma por etiqueta, com o mesmo conteúdo.
+ * como a fatura.
+ *
+ * Duas saídas (decisões de 11 e 12/11/2026, docs/mockups/EtiquetaA4*.dc.html):
+ * - "Folha A4", em papel comum: a caixa e o volume saem em etiquetas de
+ *   148,5 × 105 mm, quatro por folha deitada, cada uma completa, porque é
+ *   recortada e presa na caixa; a posição continua com 101,6 × 50,8 mm, dez
+ *   por folha em pé. As folhas levam as linhas de corte.
+ * - "Rolo Zebra": uma etiqueta de 101,6 × 50,8 mm por página, como sempre.
  */
 
-import { nomeComTamanho } from "@workspace/dominio";
+import { nomeComTamanho, tamanhoDoProduto } from "@workspace/dominio";
 
 import type { WarehouseBox } from "@/lib/warehouse-boxes";
 import { boxBalanceUnits, boxIsOpen, boxOriginLabel, formatBoxDimensions } from "@/lib/warehouse-boxes";
 import { type WarehousePosition, formatKilos, formatMeters } from "@/lib/warehouse-positions";
-import { pesoDoVolume, type VolumeDoPedido } from "@/lib/warehouse-ops/volumes-do-pedido";
+import { pesoDoVolume, textoDeVolumes, type VolumeDoPedido } from "@/lib/warehouse-ops/volumes-do-pedido";
 
+/** A etiqueta do rolo da Zebra, que é também a da posição na folha A4. */
 export const LABEL_MM = { width: 101.6, height: 50.8 } as const;
 
-/** Folha A4 com dez etiquetas: duas colunas por cinco linhas, sem vão; margens centram o bloco. */
+/** A folha A4 em pé das posições: dez etiquetas, duas colunas por cinco linhas, sem vão; margens centram o bloco. */
 export const SHEET_MM = {
   width: 210,
   height: 297,
@@ -26,7 +33,15 @@ export const SHEET_MM = {
   gapY: 0,
 } as const;
 
-export const LABELS_PER_SHEET = SHEET_MM.columns * SHEET_MM.rows;
+export const POSITIONS_PER_SHEET = SHEET_MM.columns * SHEET_MM.rows;
+
+/** A etiqueta da caixa e do volume na folha A4: 148,5 × 105 mm, um quarto da folha. */
+export const SHEET_LABEL_MM = { width: 148.5, height: 105 } as const;
+
+/** A folha A4 deitada da caixa e do volume: quatro etiquetas, duas colunas por duas linhas, encostadas. */
+export const BOX_SHEET_MM = { width: 297, height: 210, columns: 2, rows: 2 } as const;
+
+export const BOXES_PER_SHEET = BOX_SHEET_MM.columns * BOX_SHEET_MM.rows;
 
 export function sheetMargins() {
   const blockWidth = SHEET_MM.columns * LABEL_MM.width + (SHEET_MM.columns - 1) * SHEET_MM.gapX;
@@ -39,8 +54,13 @@ export function sheetMargins() {
 
 export type LabelMode = "a4" | "zebra";
 
-/** Uma linha da etiqueta: o código do cliente, o SKU, o nome com o tamanho (decisão 32) e a quantidade. */
-export type LabelContentLine = { code: string; sku: string; name: string; qty: number };
+/**
+ * Uma linha da etiqueta: o código do cliente, o SKU, o nome com o tamanho
+ * (decisão 32) e a quantidade. `size` é o tamanho que o nome leva no fim
+ * (" · XGG"), para a folha A4 mostrar o nome e o tamanho separados e nunca
+ * cortar o tamanho; sem tamanho, a linha não tem o campo.
+ */
+export type LabelContentLine = { code: string; sku: string; name: string; qty: number; size?: string };
 
 export type BoxLabelData = {
   kind: "box";
@@ -106,17 +126,37 @@ export type BoxContentSource = {
   sku_code?: string;
   client_item_code?: string;
   product_name?: string;
+  size?: string;
   counted_qty?: number;
 };
 
 /**
  * Toda etiqueta mostra todos os produtos (separação com caixas, decisão 13 de
- * 10/11/2026; docs/mockups/WmsEtiquetaTodosCaixa.dc.html): a primeira leva
- * até cinco e os outros saem em etiquetas de continuação do mesmo tamanho.
- * Os dois números são o que cabe no desenho de components/labels.
+ * 10/11/2026). No rolo, a primeira leva até cinco e as de continuação, do
+ * mesmo tamanho e sem código de barras, onze cada
+ * (docs/mockups/WmsEtiquetaTodosCaixa.dc.html). Na folha A4, cada etiqueta é
+ * completa e leva até cinco: uma caixa com 11 a 16 produtos sai em 3 ou 4
+ * etiquetas na folha e em 2 no rolo. Os números são o que cabe no desenho de
+ * components/labels.
  */
 export const FIRST_LABEL_LINES = 5;
 export const CONTINUATION_LABEL_LINES = 11;
+export const SHEET_LABEL_LINES = 5;
+
+/** Quantos produtos cabem na primeira etiqueta e em cada uma das outras, por saída. */
+export function labelLines(mode: LabelMode): { first: number; next: number } {
+  return mode === "zebra" ? { first: FIRST_LABEL_LINES, next: CONTINUATION_LABEL_LINES } : { first: SHEET_LABEL_LINES, next: SHEET_LABEL_LINES };
+}
+
+/** O conteúdo repartido pelas etiquetas: a primeira e as seguintes, na ordem. */
+function labelChunks<T>(content: T[], mode: LabelMode): T[][] {
+  const { first, next } = labelLines(mode);
+  const pages = [content.slice(0, first)];
+  for (let start = first; start < content.length; start += next) {
+    pages.push(content.slice(start, start + next));
+  }
+  return pages;
+}
 
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" });
 
@@ -128,6 +168,28 @@ function sortedContent(grouped: Map<string, LabelContentLine>) {
 function labelName(product: { product_name?: unknown; client_item_code?: unknown; size?: unknown }, fallback: string) {
   const nome = String(product.product_name ?? "").trim() || fallback;
   return nomeComTamanho({ nome, codigo: product.client_item_code, tamanho: product.size }) || nome;
+}
+
+/** O tamanho que o nome leva no fim, como nomeComTamanho o põe; tamanho único (U) e produto sem tamanho, nenhum. */
+function sizeInName(name: string, product: { codigo?: unknown; tamanho?: unknown }): string | null {
+  const size = tamanhoDoProduto(product);
+  if (!size || size.toUpperCase() === "U") return null;
+  return name.endsWith(` · ${size}`) && name.length > size.length + 3 ? size : null;
+}
+
+function contentLine(line: Omit<LabelContentLine, "size">, size: string | null): LabelContentLine {
+  return size ? { ...line, size } : line;
+}
+
+/**
+ * O nome e o tamanho separados, para a folha A4 encurtar o nome comprido sem
+ * cortar o tamanho ("Polo Masculino Piquet Azul-Mar… · XGG").
+ */
+export function nameAndSize(line: Pick<LabelContentLine, "name" | "size">): { name: string; size: string | null } {
+  if (line.size && line.name.endsWith(` · ${line.size}`)) {
+    return { name: line.name.slice(0, -(line.size.length + 3)), size: line.size };
+  }
+  return { name: line.name, size: null };
 }
 
 /** Agrupa as linhas da abertura por produto, maior quantidade primeiro. */
@@ -143,12 +205,19 @@ export function boxContent(lines: BoxContentSource[], boxCode: string): LabelCon
     if (current) {
       current.qty += qty;
     } else {
-      grouped.set(key, {
-        code: String(line.client_item_code || line.sku_code || key).trim(),
-        sku: String(line.sku_code ?? "").trim(),
-        name: labelName(line, key),
-        qty,
-      });
+      const name = labelName(line, key);
+      grouped.set(
+        key,
+        contentLine(
+          {
+            code: String(line.client_item_code || line.sku_code || key).trim(),
+            sku: String(line.sku_code ?? "").trim(),
+            name,
+            qty,
+          },
+          sizeInName(name, { codigo: line.client_item_code, tamanho: line.size }),
+        ),
+      );
     }
   }
   return sortedContent(grouped);
@@ -163,12 +232,19 @@ export function ownBoxContent(box: Pick<WarehouseBox, "lines">): LabelContentLin
     if (current) {
       current.qty += line.counted_qty;
     } else {
-      grouped.set(key, {
-        code: line.client_item_code || line.sku_code,
-        sku: line.sku_code,
-        name: labelName(line, line.sku_code || line.client_item_code),
-        qty: line.counted_qty,
-      });
+      const name = labelName(line, line.sku_code || line.client_item_code);
+      grouped.set(
+        key,
+        contentLine(
+          {
+            code: line.client_item_code || line.sku_code,
+            sku: line.sku_code,
+            name,
+            qty: line.counted_qty,
+          },
+          sizeInName(name, { codigo: line.client_item_code, tamanho: line.size }),
+        ),
+      );
     }
   }
   return sortedContent(grouped);
@@ -240,22 +316,25 @@ export function boxLabelAvailability(box: Pick<WarehouseBox, "code" | "status" |
 
 /**
  * As etiquetas de uma caixa: a primeira, com a posição, o código de barras e
- * até cinco produtos, e as de continuação com os outros, na mesma ordem (a
- * maior quantidade primeiro). Todas levam as unidades da caixa inteira.
+ * os primeiros produtos, e as outras com o resto, na mesma ordem (a maior
+ * quantidade primeiro). Todas levam as unidades da caixa inteira. Quantos
+ * produtos cada uma leva depende da saída (labelLines); sem a saída, vale a
+ * da folha A4, a de menos produtos por etiqueta, que serve às duas.
  *
  * A caixa aberta (docs/mockups/WmsSepararEtiquetaCaixa.dc.html) sai com o
  * saldo e "saldo em", sem o peso de entrada. A data é sempre a de entrada da
  * caixa, que é a do FIFO.
  */
-export function boxLabels(box: WarehouseBox, lines: BoxContentSource[], options: { printedAt?: Date } = {}): BoxLabelData[] {
+export function boxLabels(
+  box: WarehouseBox,
+  lines: BoxContentSource[],
+  options: { printedAt?: Date; mode?: LabelMode } = {},
+): BoxLabelData[] {
   // A caixa do recebimento traz o conteúdo nela; a da abertura, nas linhas da sessão.
   const entrada = box.lines.length ? ownBoxContent(box) : boxContent(lines, box.code);
   const aberta = (box.taken_units ?? 0) > 0;
   const content = balanceContent(entrada, box.taken_lines ?? []);
-  const pages = [content.slice(0, FIRST_LABEL_LINES)];
-  for (let start = FIRST_LABEL_LINES; start < content.length; start += CONTINUATION_LABEL_LINES) {
-    pages.push(content.slice(start, start + CONTINUATION_LABEL_LINES));
-  }
+  const pages = labelChunks(content, options.mode ?? "a4");
   const units = content.reduce((sum, line) => sum + line.qty, 0);
   const base = {
     kind: "box" as const,
@@ -285,17 +364,19 @@ export type VolumeLabelOrder = {
 
 /**
  * As etiquetas de um volume: a primeira, com o pedido, o volume, o código de
- * barras e até cinco produtos, e as de continuação com os outros (decisão
- * 13). A maior quantidade primeiro, como na caixa. Só o código do cliente.
+ * barras e os primeiros produtos, e as outras com o resto (decisão 13), com
+ * quantos cabem na saída, como a caixa. A maior quantidade primeiro. Só o
+ * código do cliente.
  */
-export function volumeLabels(volume: VolumeDoPedido, order: VolumeLabelOrder, options: { printedAt?: Date } = {}): VolumeLabelData[] {
+export function volumeLabels(
+  volume: VolumeDoPedido,
+  order: VolumeLabelOrder,
+  options: { printedAt?: Date; mode?: LabelMode } = {},
+): VolumeLabelData[] {
   const content = [...volume.itens]
-    .map((item) => ({ code: item.codigo, sku: "", name: item.nome, qty: item.quantidade }))
+    .map((item) => contentLine({ code: item.codigo, sku: "", name: item.nome, qty: item.quantidade }, sizeInName(item.nome, { codigo: item.codigo })))
     .sort((left, right) => right.qty - left.qty || left.name.localeCompare(right.name, "pt-BR"));
-  const pages = [content.slice(0, FIRST_LABEL_LINES)];
-  for (let start = FIRST_LABEL_LINES; start < content.length; start += CONTINUATION_LABEL_LINES) {
-    pages.push(content.slice(start, start + CONTINUATION_LABEL_LINES));
-  }
+  const pages = labelChunks(content, options.mode ?? "a4");
   const base = {
     kind: "volume" as const,
     code: `${order.number}-V${volume.numero}`,
@@ -322,17 +403,85 @@ export function positionLabel(position: WarehousePosition): PositionLabelData {
 }
 
 /**
- * Distribui as etiquetas em folhas de dez. `skip` pula as primeiras vagas da
- * primeira folha, para aproveitar uma folha adesiva já usada em parte; a
- * vaga pulada vem como null.
+ * Uma página da impressão: na folha A4, a de quatro etiquetas de caixa e de
+ * volume (deitada) ou a de dez de posição (em pé); no rolo, uma etiqueta.
  */
-export function paginate<T>(labels: T[], perSheet = LABELS_PER_SHEET, skip = 0): Array<Array<T | null>> {
-  const slots: Array<T | null> = [...Array<null>(Math.max(0, Math.min(skip, perSheet - 1))).fill(null), ...labels];
-  const sheets: Array<Array<T | null>> = [];
-  for (let start = 0; start < slots.length; start += perSheet) {
-    sheets.push(slots.slice(start, start + perSheet));
+export type LabelPage = { kind: "quatro" | "dez" | "rolo"; labels: LabelData[] };
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let start = 0; start < items.length; start += size) chunks.push(items.slice(start, start + size));
+  return chunks;
+}
+
+/**
+ * As páginas da impressão. Na folha A4, a caixa e o volume vão de quatro em
+ * quatro, na ordem em que chegam, e a posição, de dez em dez, depois deles:
+ * as duas nunca dividem a folha. No rolo, uma etiqueta por página.
+ */
+export function labelPages(labels: LabelData[], mode: LabelMode): LabelPage[] {
+  if (mode === "zebra") return labels.map((label) => ({ kind: "rolo" as const, labels: [label] }));
+  const grandes = labels.filter((label) => label.kind !== "position");
+  const posicoes = labels.filter((label) => label.kind === "position");
+  return [
+    ...chunk(grandes, BOXES_PER_SHEET).map((page) => ({ kind: "quatro" as const, labels: page })),
+    ...chunk(posicoes, POSITIONS_PER_SHEET).map((page) => ({ kind: "dez" as const, labels: page })),
+  ];
+}
+
+const numero = new Intl.NumberFormat("pt-BR");
+
+function plural(quantidade: number, singular: string, varios: string) {
+  return `${numero.format(quantidade)} ${quantidade === 1 ? singular : varios}`;
+}
+
+/** "2 etiquetas · 1 folha · 2 caixas": o que a impressão leva. No rolo, sem folhas. */
+export function textoDaImpressao(conta: { etiquetas: number; folhas: number; caixas: number; posicoes: number; volumes: number; mode: LabelMode }): string {
+  return [
+    plural(conta.etiquetas, "etiqueta", "etiquetas"),
+    conta.mode === "a4" ? plural(conta.folhas, "folha", "folhas") : null,
+    conta.caixas ? plural(conta.caixas, "caixa", "caixas") : null,
+    conta.posicoes ? plural(conta.posicoes, "posição", "posições") : null,
+    conta.volumes ? textoDeVolumes(conta.volumes) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** A saída escolhida neste computador (decisão de 11/11/2026): a mesa da Zebra abre no rolo, o escritório na folha. */
+export const SAIDA_GUARDADA = "dute.etiquetas.saida";
+
+type Armazenamento = Pick<Storage, "getItem" | "setItem">;
+
+/** O localStorage, ou null quando o navegador bloqueia até chegar nele. */
+function armazenamentoDoAparelho(): Armazenamento | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
   }
-  return sheets;
+}
+
+export function saidaGuardada(armazenamento: Armazenamento | null = armazenamentoDoAparelho()): LabelMode | null {
+  try {
+    const valor = armazenamento?.getItem(SAIDA_GUARDADA);
+    return valor === "zebra" || valor === "a4" ? valor : null;
+  } catch {
+    return null;
+  }
+}
+
+export function guardarSaida(mode: LabelMode, armazenamento: Armazenamento | null = armazenamentoDoAparelho()): void {
+  try {
+    armazenamento?.setItem(SAIDA_GUARDADA, mode);
+  } catch {
+    // Sem storage: a escolha vale só nesta visita, pelo endereço.
+  }
+}
+
+/** A saída da tela: a do endereço; sem ela, a guardada neste computador; sem nenhuma, a folha A4. */
+export function saidaDaTela(query: Pick<LabelsQuery, "mode">, guardada: LabelMode | null): LabelMode {
+  return query.mode ?? guardada ?? "a4";
 }
 
 export const LABELS_PATH = "/estoque/etiquetas";
@@ -348,8 +497,8 @@ export type LabelsQuery = {
   order: string | null;
   /** Os volumes do pedido, pelo número; "all", todos (o lote depois de concluir). */
   volumes: number[] | "all";
-  skip: number;
-  mode: LabelMode;
+  /** A saída pedida no endereço; sem ela, a tela usa a guardada no computador (saidaDaTela). */
+  mode: LabelMode | null;
 };
 
 /** O valor de `volumes=` que pede todos os volumes do pedido. */
@@ -371,7 +520,7 @@ function codes(value: string | null) {
 
 export function parseLabelsQuery(search: string): LabelsQuery {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  const skip = Number(params.get("pular") ?? 0);
+  const modo = params.get("modo");
   return {
     boxes: codes(params.get("caixas")),
     positions: codes(params.get("posicoes")),
@@ -379,8 +528,7 @@ export function parseLabelsQuery(search: string): LabelsQuery {
     receipt: (params.get("chegada") ?? "").trim() || null,
     order: (params.get("pedido") ?? "").trim() || null,
     volumes: volumeNumbers(params.get("volumes")),
-    skip: Number.isFinite(skip) && skip > 0 ? Math.min(Math.floor(skip), LABELS_PER_SHEET - 1) : 0,
-    mode: params.get("modo") === "zebra" ? "zebra" : "a4",
+    mode: modo === "zebra" || modo === "a4" ? modo : null,
   };
 }
 
@@ -395,8 +543,7 @@ export function labelsUrl(query: Partial<LabelsQuery>): string {
     if (query.volumes === "all") params.set("volumes", TODOS_OS_VOLUMES);
     else if (query.volumes?.length) params.set("volumes", query.volumes.join(","));
   }
-  if (query.skip) params.set("pular", String(query.skip));
-  if (query.mode === "zebra") params.set("modo", "zebra");
+  if (query.mode) params.set("modo", query.mode);
   const text = params.toString();
   return text ? `${LABELS_PATH}?${text}` : LABELS_PATH;
 }
