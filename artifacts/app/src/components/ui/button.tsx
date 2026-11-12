@@ -15,8 +15,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
+        // carregando-na-cor: o indicador dentro do botão de cor tem o trilho a 0,35 e o piso do respiro a 0,8 (index.css).
         default:
-          "bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-pressed",
+          "carregando-na-cor bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-pressed",
         secondary:
           "border border-border bg-card text-foreground hover:bg-surface-hover active:bg-surface-pressed",
         outline:

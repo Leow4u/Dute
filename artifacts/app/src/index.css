@@ -935,3 +935,102 @@
     --carregando-mola: var(--ease-carregando-entrada); /* sem mola */
   }
 }
+
+/* O indicador (components/ui/spinner.tsx; seção 5.1 e momento 1): a caixa
+   chanfrada. O contorno é a máscara parada; dentro dela, o trilho mostra o
+   contorno inteiro em currentColor na opacidade do contexto, e a cabeça (o
+   cônico de 40% cheios e 25% de cauda, maior que a caixa para cobrir os
+   cantos ao girar) gira só por transform, no passo do --compasso. Fica na
+   camada components, para a utilidade da tela poder ajustar a margem ou a
+   cor. O traço é de 2,25 px em 16, 2,5 px em 20, 3 px em 24 e 4 px em 40. */
+@layer components {
+  .carregando-caixa {
+    --carregando-tamanho: 16px;
+    --carregando-mascara: var(--carregando-mascara-16);
+    position: relative;
+    display: inline-block;
+    flex: none;
+    vertical-align: middle;
+    inline-size: var(--carregando-tamanho);
+    block-size: var(--carregando-tamanho);
+    overflow: hidden; /* a cabeça que gira não aumenta a área de rolagem de quem a contém */
+    forced-color-adjust: none; /* no alto contraste do Windows, o trilho e a cabeça ficam na cor do texto */
+    -webkit-mask: var(--carregando-mascara) center / 100% 100% no-repeat;
+    mask: var(--carregando-mascara) center / 100% 100% no-repeat;
+    animation: carregando-entra var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
+  }
+
+  .carregando-caixa[data-tamanho="20"] {
+    --carregando-tamanho: 20px;
+    --carregando-mascara: var(--carregando-mascara-24);
+  }
+
+  .carregando-caixa[data-tamanho="24"] {
+    --carregando-tamanho: 24px;
+    --carregando-mascara: var(--carregando-mascara-24);
+  }
+
+  .carregando-caixa[data-tamanho="40"] {
+    --carregando-tamanho: 40px;
+    --carregando-mascara: var(--carregando-mascara-40);
+  }
+
+  .carregando-caixa > .trilho {
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    opacity: var(--carregando-trilho);
+  }
+
+  .carregando-caixa > .cabeca {
+    position: absolute;
+    inset: -25%;
+    background: var(--carregando-cabeca);
+    animation: carregando-giro var(--carregando-t-giro) linear infinite;
+    animation-delay: var(--compasso, 0ms);
+    will-change: transform;
+  }
+
+  /* Depois do aviso de 10 s, a volta dura 2 s. */
+  .carregando-caixa[data-calmo] > .cabeca {
+    animation-duration: var(--carregando-t-giro-calmo);
+  }
+
+  /* O determinado: a cabeça não gira e o contorno fecha conforme o --p (de 0 a 1). */
+  .carregando-caixa[data-determinado] > .cabeca {
+    animation: none;
+    will-change: auto;
+    background: conic-gradient(currentColor calc(var(--p, 0) * 1turn), transparent 0);
+  }
+
+  /* Os contextos: a barra preta da v3 põe o trilho a 0,25; o botão de cor
+     (o primário, components/ui/button.tsx) põe 0,35 e o piso do respiro a
+     0,8 para os filhos. */
+  .carregando-sobre-preto,
+  .bg-v3-header {
+    --carregando-trilho: var(--carregando-trilho-sobre-preto);
+  }
+
+  .carregando-na-cor {
+    --carregando-trilho: var(--carregando-trilho-na-cor);
+    --carregando-piso: var(--carregando-piso-na-cor);
+  }
+
+  /* Movimento reduzido: a cabeça para no canto de cima à direita e a caixa
+     respira de 1 até o piso, em 2 s. */
+  @media (prefers-reduced-motion: reduce) {
+    .carregando-caixa {
+      animation: carregando-respira var(--carregando-t-pulso) ease-in-out infinite;
+    }
+
+    .carregando-caixa > .cabeca {
+      animation: none;
+      transform: rotate(0.125turn);
+      will-change: auto;
+    }
+
+    .carregando-caixa[data-determinado] > .cabeca {
+      transform: none;
+    }
+  }
+}
