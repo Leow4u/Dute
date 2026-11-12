@@ -878,9 +878,10 @@ conclusão com volumes já tem uma linha em dois
 `setPickLineSeparated` ganha `split_volumes` (de 2 a 20 linhas
 `{ number, qty, weight_kg? }`, todas, o resto inclusive, sem peso na
 última), `open_volume_id` (o volume aberto que o diálogo mostrou, ou `null`
-quando não há) e `open_volume_units` (as unidades gravadas nele). Vale só com
-`separated: true` e sem `take_boxes`, `boxes` ou `separated_qty`. Na
-transação de sempre:
+quando não há), `open_volume_units` (as unidades gravadas nele) e
+`line_separated_at` (a linha como o diálogo a viu: o `separated_at` dela,
+ou `null` na linha por separar). Vale só com `separated: true` e sem
+`take_boxes`, `boxes` ou `separated_qty`. Na transação de sempre:
 
 1. Na linha por separar, a chamada separa e divide. Na linha já separada
    (decisão 30), ela só divide o que a linha pôs no volume aberto: as caixas
@@ -889,11 +890,13 @@ transação de sempre:
    mesmas quantidades, responde `changed: false`.
 2. As linhas do diálogo somam o que se divide: na linha por separar, a
    quantidade dela; na já separada, o que ela tem no volume aberto.
-3. O volume aberto (o id e as unidades) e os números que o servidor daria
-   são os que o diálogo mostrou. Senão, recusa
-   (`SEPARATION_VOLUMES_CHANGED`, "Os volumes mudaram. Confira e tente de
-   novo.") sem gravar nada: outra pessoa pode estar separando no mesmo
-   volume aberto (seção 9).
+3. A linha, o volume aberto (o id e as unidades) e os números que o
+   servidor daria são os que o diálogo mostrou, conferidos antes da soma.
+   Senão, recusa (`SEPARATION_VOLUMES_CHANGED`, "Os volumes mudaram.
+   Confira e tente de novo.") sem gravar nada: outra pessoa pode estar
+   separando no mesmo volume aberto (seção 9), ou ter separado ou desfeito
+   a linha. A repetição só vale quando os volumes da linha vieram da mesma
+   divisão: fechados, sem caixa levada inteira e com o mesmo peso.
 4. Cada linha, menos a última: `porNoVolumeAberto` e `fecharVolume`, com o
    peso arredondado como no `closeOrderVolume`. A última:
    `porNoVolumeAberto`, que abre o volume novo.
@@ -914,6 +917,19 @@ da tela; o servidor confere a soma de novo e recusa a que não fecha.
 
 A régua `billing-callables` fica verde. Homologação no merge; produção pela
 publicação manual, com o OK do Leonardo.
+
+**Parte 7a no código (11/11/2026).** A regra sem banco em `order-volumes.ts`
+(`dividirNoVolumeAberto`, e `tirarDosVolumes` dizendo os fechados que saem)
+e a entrada em `pick-progress.ts` (`entradaDaSeparacao`, a divisão na linha
+por separar e na já separada, o `picking.line_divided` e um
+`picking.volume_closed` por volume fechado, com o mesmo evento do "Fechar
+volume"). Os testes: `order-volumes.test.ts`, `pick-progress.test.ts` (as
+recusas da entrada) e `pick-progress.integration.test.ts`, no emulador: as
+duas entradas, o volume aberto com itens, as recusas da tela desatualizada
+(o volume que mudou, a linha separada ou desfeita por outra pessoa, a soma),
+a repetição, o "Levar a caixa" antes, o desfazer com os volumes que saem e a
+conclusão com o item em dois `packages`. A régua `billing-callables` e as
+tabelas de papéis e de login seguem verdes.
 
 ### 11.6 Perguntas e respostas
 

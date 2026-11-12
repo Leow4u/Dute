@@ -15,6 +15,12 @@
  * ocupa o lugar dele, que é o que troca menos etiqueta. O volume fechado de
  * que sai uma parte continua fechado, sem o peso que tinha: a etiqueta dele
  * precisa sair de novo.
+ *
+ * "Dividir em volumes" (parte 7a, seção 11; decisões 27 a 30 de 11/11/2026):
+ * a linha que não cabe num volume se reparte em partes, a partir do volume
+ * aberto. Cada parte, menos a última, entra no volume aberto (ou abre o
+ * seguinte) e fecha, com o peso dela; a última abre o volume seguinte e fica
+ * aberta, para as próximas linhas.
  */
 
 type Row = Record<string, unknown>;
@@ -42,6 +48,12 @@ export type VolumeRenumerado = { id: string; de: number; para: number };
 
 /** O volume fechado de que saiu uma parte: o conteúdo da etiqueta mudou. */
 export type VolumeAlterado = { id: string; number: number };
+
+/** O volume fechado que esvaziou e saiu, com o número que tinha: a etiqueta dele sai junto. */
+export type VolumeRemovido = { id: string; number: number };
+
+/** Uma parte da divisão: as unidades e, no volume que fecha, o peso (opcional). */
+export type ParteDaDivisao = { qty: number; weight_kg?: number };
 
 /** O item do pedido dentro de um volume. */
 export type ItemDoVolume = { order_item_id: string; qty: number };
@@ -142,13 +154,15 @@ export function caixaViraVolume(
  * Tira dos volumes o que uma linha tinha posto neles (o "Desfazer", ou a
  * linha que muda de quantidade). O volume que fica sem unidades sai; para os
  * números continuarem de 1 a N, o de maior número ocupa o lugar do que saiu.
- * Devolve o fechado que mudou de número, para trocar a etiqueta dele, e o
- * fechado de que saiu só uma parte, que perde o peso e pede etiqueta nova.
+ * Devolve o fechado que mudou de número, para trocar a etiqueta dele, o
+ * fechado de que saiu só uma parte, que perde o peso e pede etiqueta nova, e
+ * o fechado que esvaziou e saiu, com o número que tinha: a etiqueta dele sai
+ * junto (parte 7a). O aberto que esvazia não conta: não tem etiqueta.
  */
 export function tirarDosVolumes(
   estado: EstadoDosVolumes,
   entradas: readonly NoVolume[],
-): EstadoDosVolumes & { renumerados: VolumeRenumerado[]; alterados: VolumeAlterado[] } {
+): EstadoDosVolumes & { renumerados: VolumeRenumerado[]; alterados: VolumeAlterado[]; removidos: VolumeRemovido[] } {
   const tirar = new Map<string, number>();
   for (const entrada of entradas) tirar.set(entrada.volume_id, (tirar.get(entrada.volume_id) ?? 0) + entrada.qty);
   const antes = new Map(estado.volumes.map((volume) => [volume.id, volume.number]));
@@ -176,7 +190,11 @@ export function tirarDosVolumes(
     .filter((volume) => volume.status === "closed" && antes.get(volume.id) !== volume.number)
     .map((volume) => ({ id: volume.id, de: antes.get(volume.id) ?? volume.number, para: volume.number }));
   const alterados = volumes.filter((volume) => mudaram.has(volume.id)).map((volume) => ({ id: volume.id, number: volume.number }));
-  return { seq: estado.seq, volumes: volumes.sort((left, right) => left.number - right.number), renumerados, alterados };
+  const removidos = vazios
+    .filter((volume) => volume.status === "closed")
+    .map((volume) => ({ id: volume.id, number: antes.get(volume.id) ?? volume.number }))
+    .sort((left, right) => left.number - right.number);
+  return { seq: estado.seq, volumes: volumes.sort((left, right) => left.number - right.number), renumerados, alterados, removidos };
 }
 
 /** Por que o volume não fecha, ou null. */
@@ -198,6 +216,33 @@ export function fecharVolume(estado: EstadoDosVolumes, volumeId: string, fechame
         : volume,
     ),
   };
+}
+
+/**
+ * "Dividir em volumes" (parte 7a): de duas partes em diante, cada uma com 1
+ * un. ou mais. Cada parte, menos a última, entra no volume aberto (sem ele,
+ * abre o seguinte) e fecha, com o peso dela; a última abre o volume seguinte
+ * e fica aberta. Devolve onde cada parte entrou, na ordem, e os volumes que
+ * fecharam, como ficaram.
+ */
+export function dividirNoVolumeAberto(
+  estado: EstadoDosVolumes,
+  partes: readonly ParteDaDivisao[],
+  fechamento: { at: string; by: Row },
+): EstadoDosVolumes & { entradas: NoVolume[]; fechados: VolumeDoPedido[] } {
+  let atual: EstadoDosVolumes = estado;
+  const entradas: NoVolume[] = [];
+  const fecharam: string[] = [];
+  partes.forEach((parte, index) => {
+    const posta = porNoVolumeAberto(atual, parte.qty);
+    atual = { volumes: posta.volumes, seq: posta.seq };
+    entradas.push({ volume_id: posta.volume_id, qty: parte.qty });
+    if (index === partes.length - 1) return;
+    atual = fecharVolume(atual, posta.volume_id, { weight_kg: parte.weight_kg, at: fechamento.at, by: fechamento.by });
+    fecharam.push(posta.volume_id);
+  });
+  const porId = new Map(atual.volumes.map((volume) => [volume.id, volume]));
+  return { ...atual, entradas, fechados: fecharam.map((id) => porId.get(id)!) };
 }
 
 /**

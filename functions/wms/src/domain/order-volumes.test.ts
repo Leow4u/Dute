@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   caixaViraVolume,
+  dividirNoVolumeAberto,
   fecharVolume,
   nomeDoVolume,
   porNoVolumeAberto,
@@ -151,6 +152,141 @@ describe("Desfazer", () => {
     const depois = tirarDosVolumes(quatro(), [{ volume_id: "v4", qty: 30 }]);
     assert.equal(depois.seq, 4);
     assert.equal(porNoVolumeAberto(depois, 1).volume_id, "v5");
+  });
+
+  it("o fechado de maior número que esvazia sai e vem em removidos, com o número que tinha; o aberto que esvazia não vem", () => {
+    const todosFechados = fecharVolume(quatro(), "v4", { at: AGORA, by: GUILHERME });
+    const semOUltimo = tirarDosVolumes(todosFechados, [{ volume_id: "v4", qty: 30 }]);
+    assert.deepEqual([semOUltimo.removidos, semOUltimo.renumerados], [[{ id: "v4", number: 4 }], []]);
+    // O aberto ainda não tem etiqueta: não há o que tirar.
+    assert.deepEqual(tirarDosVolumes(quatro(), [{ volume_id: "v4", qty: 30 }]).removidos, []);
+    // O fechado de que sai só uma parte fica, e não vem em removidos.
+    assert.deepEqual(tirarDosVolumes(todosFechados, [{ volume_id: "v4", qty: 10 }]).removidos, []);
+  });
+
+  it("o fechado do meio que esvazia sai e vem em removidos, e o de maior número ocupa o lugar dele", () => {
+    const todosFechados = fecharVolume(quatro(), "v4", { at: AGORA, by: GUILHERME });
+    const semACaixa = tirarDosVolumes(todosFechados, [{ volume_id: "v2", qty: 25 }]);
+    assert.deepEqual(semACaixa.removidos, [{ id: "v2", number: 2 }]);
+    assert.deepEqual(semACaixa.renumerados, [{ id: "v4", de: 4, para: 2 }]);
+    // Dois de uma vez: cada um com o número de antes, em ordem, mesmo que o último tenha passado pelo número de um deles.
+    const dois = tirarDosVolumes(todosFechados, [
+      { volume_id: "v1", qty: 42 },
+      { volume_id: "v3", qty: 50 },
+    ]);
+    assert.deepEqual(dois.removidos, [
+      { id: "v1", number: 1 },
+      { id: "v3", number: 3 },
+    ]);
+    assert.deepEqual(resumo(dois), [
+      ["v4", 1, "closed", 30, null],
+      ["v2", 2, "closed", 25, "CX-000029"],
+    ]);
+    assert.deepEqual(dois.renumerados, [{ id: "v4", de: 4, para: 1 }]);
+  });
+});
+
+describe("Dividir em volumes (parte 7a)", () => {
+  it("sem volume aberto, a primeira parte abre o volume seguinte e fecha; a última abre outro e fica aberta", () => {
+    const dividido = dividirNoVolumeAberto(VAZIO, [{ qty: 3, weight_kg: 0.8 }, { qty: 2 }], { at: AGORA, by: GUILHERME });
+    assert.deepEqual(dividido.entradas, [
+      { volume_id: "v1", qty: 3 },
+      { volume_id: "v2", qty: 2 },
+    ]);
+    assert.deepEqual(dividido.volumes, [
+      { id: "v1", number: 1, status: "closed", units: 3, weight_kg: 0.8, closed_at: AGORA, closed_by: GUILHERME },
+      { id: "v2", number: 2, status: "open", units: 2 },
+    ]);
+    assert.equal(dividido.seq, 2);
+    assert.deepEqual(dividido.fechados, [dividido.volumes[0]]);
+    // A linha seguinte entra no volume que ficou aberto.
+    assert.deepEqual(resumo(porNoVolumeAberto(dividido, 4)).at(-1), ["v2", 2, "open", 6, null]);
+  });
+
+  it("com o volume aberto já com itens de outras linhas, a primeira parte o completa e o fecha", () => {
+    // Os 4 bonés já estão no volume 1, aberto; a polo vai 1 nele e 4 no seguinte.
+    const dividido = dividirNoVolumeAberto(porNoVolumeAberto(VAZIO, 4), [{ qty: 1 }, { qty: 4 }], { at: AGORA, by: GUILHERME });
+    assert.deepEqual(resumo(dividido), [
+      ["v1", 1, "closed", 5, null],
+      ["v2", 2, "open", 4, null],
+    ]);
+    assert.deepEqual(dividido.entradas, [
+      { volume_id: "v1", qty: 1 },
+      { volume_id: "v2", qty: 4 },
+    ]);
+    assert.deepEqual(
+      dividido.fechados.map((volume) => [volume.id, volume.number, volume.units, volume.weight_kg]),
+      [["v1", 1, 5, undefined]],
+    );
+  });
+
+  it("em três partes, as duas primeiras fecham, e a última fica aberta", () => {
+    const comUmFechado = fecharVolume(porNoVolumeAberto(VAZIO, 42), "v1", { at: AGORA, by: GUILHERME });
+    // A linha de 95 polos em 54, 30 e 11.
+    const dividido = dividirNoVolumeAberto(comUmFechado, [{ qty: 54 }, { qty: 30 }, { qty: 11 }], { at: AGORA, by: RAFAEL });
+    assert.deepEqual(resumo(dividido), [
+      ["v1", 1, "closed", 42, null],
+      ["v2", 2, "closed", 54, null],
+      ["v3", 3, "closed", 30, null],
+      ["v4", 4, "open", 11, null],
+    ]);
+    assert.deepEqual(dividido.entradas, [
+      { volume_id: "v2", qty: 54 },
+      { volume_id: "v3", qty: 30 },
+      { volume_id: "v4", qty: 11 },
+    ]);
+    assert.deepEqual(
+      dividido.fechados.map((volume) => [volume.id, volume.closed_by]),
+      [
+        ["v2", RAFAEL],
+        ["v3", RAFAEL],
+      ],
+    );
+    assert.equal(dividido.seq, 4);
+  });
+
+  it("cada volume que fecha leva o peso da parte dele, que é opcional; a última parte fica aberta, sem peso", () => {
+    const dividido = dividirNoVolumeAberto(VAZIO, [{ qty: 3, weight_kg: 0.8 }, { qty: 2 }, { qty: 4, weight_kg: 1.5 }], { at: AGORA, by: GUILHERME });
+    assert.deepEqual(
+      dividido.volumes.map((volume) => [volume.id, volume.status, volume.units, volume.weight_kg ?? null]),
+      [
+        ["v1", "closed", 3, 0.8],
+        ["v2", "closed", 2, null],
+        ["v3", "open", 4, null],
+      ],
+    );
+    assert.deepEqual(
+      dividido.fechados.map((volume) => [volume.id, volume.weight_kg ?? null, volume.closed_at]),
+      [
+        ["v1", 0.8, AGORA],
+        ["v2", null, AGORA],
+      ],
+    );
+  });
+
+  it("com o aberto antes de um fechado, a primeira parte fica com o número do aberto, e a última abre depois do maior", () => {
+    let estado: EstadoDosVolumes = porNoVolumeAberto(VAZIO, 42);
+    estado = fecharVolume(estado, "v1", { at: AGORA, by: GUILHERME });
+    estado = caixaViraVolume(estado, { box_code: "CX-000029", qty: 25, at: AGORA, by: GUILHERME });
+    estado = porNoVolumeAberto(estado, 50);
+    estado = fecharVolume(estado, "v3", { at: AGORA, by: GUILHERME });
+    estado = porNoVolumeAberto(estado, 30);
+    // A caixa levada voltou à prateleira: o aberto (v4) ficou com o número 2, antes do fechado v3.
+    estado = tirarDosVolumes(estado, [{ volume_id: "v2", qty: 25 }]);
+    assert.deepEqual(resumo(estado), [
+      ["v1", 1, "closed", 42, null],
+      ["v4", 2, "open", 30, null],
+      ["v3", 3, "closed", 50, null],
+    ]);
+    const dividido = dividirNoVolumeAberto(estado, [{ qty: 5 }, { qty: 7 }], { at: AGORA, by: GUILHERME });
+    assert.deepEqual(resumo(dividido), [
+      ["v1", 1, "closed", 42, null],
+      ["v4", 2, "closed", 35, null],
+      ["v3", 3, "closed", 50, null],
+      ["v5", 4, "open", 7, null],
+    ]);
+    const numeros = dividido.entradas.map((entrada) => dividido.volumes.find((volume) => volume.id === entrada.volume_id)!.number);
+    assert.deepEqual(numeros, [2, 4]);
   });
 });
 

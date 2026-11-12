@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { FieldValue, type DocumentData, type DocumentReference, type Firestore } from "firebase-admin/firestore";
+import { FieldValue, type DocumentData, type DocumentReference, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 import { z } from "genkit";
 
@@ -13,6 +13,7 @@ import {
 import { BOX_STATUS_EMPTIED, BOX_STATUS_STORED, caixasComOItem, lerCaixasDaPrateleira, retiradoDaCaixa } from "./box-balance.js";
 import {
   caixaViraVolume,
+  dividirNoVolumeAberto,
   fecharVolume,
   porNoVolumeAberto,
   problemaParaFechar,
@@ -23,6 +24,7 @@ import {
   type EstadoDosVolumes,
   type LinhaNosVolumes,
   type NoVolume,
+  type VolumeDoPedido,
 } from "./order-volumes.js";
 import { conferirCaixasInformadas, retiradoCom, sugerirCaixas, unidadesDaCaixa, type CaixaDaLinha, type LinhaDaCaixa } from "./saldo-da-caixa.js";
 import { DETALHE_DA_DIFERENCA_MAXIMO, MOTIVOS_DA_DIFERENCA, concluiComDiferenca, type MotivoDaDiferenca } from "./short-pick.js";
@@ -71,6 +73,17 @@ import { WAREHOUSE_BOXES_COLLECTION } from "./warehouse-boxes.js";
  * `closeOrderVolume` fecha o volume aberto com o peso, opcional. "Desfazer"
  * tira a linha dos volumes. Na conclusão, cada volume vira um `packages`
  * com os itens dele; o lacre continua um por pedido.
+ *
+ * "Dividir em volumes" (parte 7a, seção 11; decisões 27 a 30): com
+ * `split_volumes`, a linha se reparte em dois ou mais volumes; cada parte,
+ * menos a última, fecha um volume (`picking.volume_closed`, como o "Fechar
+ * volume"), e a última fica aberta. Na linha por separar, a chamada separa
+ * como "Separar" e divide; na já separada, só divide o que ela pôs no volume
+ * aberto (`picking.line_divided`), sem tocar as caixas nem a diferença. O
+ * volume aberto que a tela mostrou (`open_volume_id`, `open_volume_units`),
+ * a linha como ela estava (`line_separated_at`) e os números têm de ser os
+ * de agora; senão, nada é gravado. "Desfazer" diz também o volume fechado
+ * que saiu (`removed_volumes`), para tirar a etiqueta dele.
  */
 
 export const PICK_TASKS_COLLECTION = "pick_tasks";
@@ -85,6 +98,12 @@ type Row = Record<string, unknown>;
 
 const id = z.string().trim().min(1).max(300);
 const idempotencyKey = z.string().trim().min(8).max(200);
+
+/** O peso do volume, em quilos: opcional (decisão 15), com duas casas. */
+export const PESO_DO_VOLUME_MAXIMO_KG = 2000;
+
+/** "Dividir em volumes" (parte 7a): de 2 a 20 volumes de uma vez. */
+export const PARTES_DA_DIVISAO_MAXIMO = 20;
 
 export const SetPickLineSeparatedSchema = z
   .object({
@@ -112,12 +131,39 @@ export const SetPickLineSeparatedSchema = z
      * volume, sem reembalar. Sem ele, o separado entra no volume aberto.
      */
     take_boxes: z.boolean().optional(),
+    /**
+     * "Dividir em volumes" (parte 7a): as partes da linha, na ordem, a partir
+     * do volume aberto, com o número que a tela mostrou. Cada uma, menos a
+     * última, fecha o volume, com o peso opcional; a última fica aberta, sem
+     * peso. Na linha por separar, separa e divide; na já separada, só divide
+     * o que ela pôs no volume aberto.
+     */
+    split_volumes: z
+      .array(
+        z
+          .object({
+            number: z.number().int().min(1),
+            qty: z.number().int().min(1),
+            weight_kg: z.number().positive().max(PESO_DO_VOLUME_MAXIMO_KG).optional(),
+          })
+          .strict(),
+      )
+      .min(2)
+      .max(PARTES_DA_DIVISAO_MAXIMO)
+      .optional(),
+    /** Com a divisão: o volume aberto que a tela mostrou (null sem volume aberto) e as unidades gravadas nele. */
+    open_volume_id: z.string().trim().min(1).max(20).nullable().optional(),
+    open_volume_units: z.number().nonnegative().optional(),
+    /** Com a divisão: a linha como a tela mostrou, o `separated_at` dela (null na linha por separar). */
+    line_separated_at: z.string().trim().min(1).max(40).nullable().optional(),
     idempotency_key: idempotencyKey,
   })
   .strict();
 
-/** O peso do volume, em quilos: opcional (decisão 15), com duas casas. */
-export const PESO_DO_VOLUME_MAXIMO_KG = 2000;
+export type EntradaDaSeparacao = z.infer<typeof SetPickLineSeparatedSchema>;
+
+/** As partes de "Dividir em volumes", como a tela manda. */
+type PartesDaDivisao = NonNullable<EntradaDaSeparacao["split_volumes"]>;
 
 export const CloseOrderVolumeSchema = z
   .object({
@@ -142,6 +188,35 @@ function parse<T>(schema: z.ZodType<T>, raw: unknown): T {
     throw new HttpsError("invalid-argument", "Entrada inválida para a separação.", { issues: parsed.error.issues.map((issue) => issue.path.join(".")) });
   }
   return parsed.data;
+}
+
+/**
+ * A entrada de `setPickLineSeparated`. "Dividir em volumes" (parte 7a) só
+ * vale para separar, sem "Outra caixa", "Levar a caixa" nem "Separar menos",
+ * e leva o volume aberto e a linha como a tela mostrou; o último volume fica
+ * aberto, sem peso. Sem a divisão, o volume aberto e a linha não vêm. A
+ * recusa diz os campos, como a do formato.
+ */
+export function entradaDaSeparacao(raw: unknown): EntradaDaSeparacao {
+  const input = parse(SetPickLineSeparatedSchema, raw);
+  const issues: string[] = [];
+  if (input.split_volumes) {
+    if (!input.separated) issues.push("separated");
+    for (const campo of ["take_boxes", "boxes", "separated_qty", "shortage_reason", "shortage_detail"] as const) {
+      if (input[campo] !== undefined) issues.push(campo);
+    }
+    if (input.open_volume_id === undefined) issues.push("open_volume_id");
+    if (input.open_volume_units === undefined) issues.push("open_volume_units");
+    if (input.line_separated_at === undefined) issues.push("line_separated_at");
+    const ultima = input.split_volumes.length - 1;
+    if (input.split_volumes[ultima]!.weight_kg !== undefined) issues.push(`split_volumes.${ultima}.weight_kg`);
+  } else {
+    if (input.open_volume_id !== undefined) issues.push("open_volume_id");
+    if (input.open_volume_units !== undefined) issues.push("open_volume_units");
+    if (input.line_separated_at !== undefined) issues.push("line_separated_at");
+  }
+  if (issues.length) throw new HttpsError("invalid-argument", "Entrada inválida para a separação.", { issues });
+  return input;
 }
 
 function text(value: unknown): string {
@@ -350,13 +425,258 @@ function volumesMudados(alterados: ReadonlyArray<{ id: string }>, estado: Estado
   return lista.length ? lista : undefined;
 }
 
+/** O peso do volume com duas casas, como "Fechar volume" e a divisão gravam. */
+function pesoDoVolume(peso: number | undefined): number | undefined {
+  return peso === undefined ? undefined : Math.round(peso * 100) / 100 || undefined;
+}
+
+/** De qual pedido é o volume que fechou. */
+type PedidoDoVolume = { pickTaskId: string; orderId: string; orderNumber: string; customerCode: string; occurredAt: string };
+
+/** `picking.volume_closed`: o mesmo evento no "Fechar volume" e em cada volume que a divisão fecha. */
+function eventoDoVolumeFechado(
+  transaction: Transaction,
+  db: Firestore,
+  eventId: string,
+  volume: VolumeDoPedido,
+  pedido: PedidoDoVolume,
+  actor: OperationalActor,
+) {
+  return createEvent(
+    transaction,
+    db,
+    eventId,
+    {
+      type: "picking.volume_closed",
+      title: `Volume ${volume.number} fechado no pedido ${pedido.orderNumber}`,
+      description: `${volume.units} un.${volume.weight_kg ? ` · ${String(volume.weight_kg).replace(".", ",")} kg` : ""}`,
+      severity: "info",
+      // Um pedido grande tem dezenas de volumes: o evento fica na trilha, fora da caixa de avisos.
+      inbox: false,
+      entity_type: PICK_TASKS_COLLECTION,
+      entity_id: pedido.pickTaskId,
+      customer_code: pedido.customerCode,
+      occurred_at: pedido.occurredAt,
+      payload: clean({
+        order_id: pedido.orderId || undefined,
+        order_number: pedido.orderNumber || undefined,
+        volume_id: volume.id,
+        volume_number: volume.number,
+        units: volume.units,
+        weight_kg: volume.weight_kg,
+      }),
+      source: EVENT_SOURCE,
+    },
+    actor,
+  );
+}
+
+/** Os volumes que a divisão fechou, para o aviso "Volume 16 fechado". */
+function volumesFechados(fechados: readonly VolumeDoPedido[]) {
+  return fechados.length ? fechados.map((volume) => clean({ volume_id: volume.id, number: volume.number, units: volume.units, weight_kg: volume.weight_kg })) : undefined;
+}
+
+/** A divisão pedida sobre o que a tela mostrou, e isso já mudou: a tela confere e tenta de novo. */
+function volumesMudaram() {
+  return new HttpsError("failed-precondition", "Os volumes mudaram. Confira e tente de novo.", { code: "SEPARATION_VOLUMES_CHANGED" });
+}
+
+/**
+ * A tela dividiu a linha como ela está: por separar (null) ou separada
+ * naquele instante (`separated_at`). Se outra pessoa separou ou desfez a
+ * linha depois, a divisão faria outra coisa (separar e dividir, ou só
+ * dividir): recusa sem gravar nada, como o volume aberto que mudou.
+ */
+function conferirALinhaDaTela(input: EntradaDaSeparacao, line: Row) {
+  if ((input.line_separated_at ?? null) !== (text(line.separated_at) || null)) throw volumesMudaram();
+}
+
+/**
+ * Confere a divisão pedida e divide (parte 7a). O volume aberto gravado (o id
+ * e as unidades) e os números que o servidor dá são os que a tela mostrou.
+ * Senão, recusa sem gravar nada: outra pessoa pode estar separando no mesmo
+ * volume aberto. Com a tela em dia, as partes somam o que se divide. A soma
+ * vem depois: com os volumes mudados, o que a linha tem neles também muda, e
+ * a recusa é a dos volumes. `gravados` são os volumes como a tarefa os
+ * guarda; `estado`, de onde a divisão parte.
+ */
+function dividirConferido(
+  gravados: EstadoDosVolumes,
+  estado: EstadoDosVolumes,
+  input: EntradaDaSeparacao,
+  partes: PartesDaDivisao,
+  total: { qty: number; noVolumeAberto: boolean },
+  fechamento: { at: string; by: Row },
+) {
+  const aberto = gravados.volumes.find((volume) => volume.status === "open");
+  const divisao = dividirNoVolumeAberto(
+    estado,
+    partes.map((parte) => ({ qty: parte.qty, weight_kg: pesoDoVolume(parte.weight_kg) })),
+    fechamento,
+  );
+  const numeroDe = new Map(divisao.volumes.map((volume) => [volume.id, volume.number]));
+  const comoATelaMostrou =
+    (aberto?.id ?? null) === (input.open_volume_id ?? null) &&
+    (aberto?.units ?? 0) === input.open_volume_units &&
+    divisao.entradas.every((entrada, index) => numeroDe.get(entrada.volume_id) === partes[index]!.number);
+  if (!comoATelaMostrou) throw volumesMudaram();
+  const soma = partes.reduce((acumulado, parte) => acumulado + parte.qty, 0);
+  if (soma !== total.qty) {
+    throw new HttpsError("failed-precondition", `As partes somam ${soma} un., e a linha tem ${total.qty} un.${total.noVolumeAberto ? " no volume aberto." : ""}`, {
+      code: "SEPARATION_SPLIT_MISMATCH",
+    });
+  }
+  return divisao;
+}
+
+/** O que a transação já leu da linha já separada, para dividir. */
+type LinhaParaDividir = {
+  input: EntradaDaSeparacao;
+  partes: PartesDaDivisao;
+  task: Row;
+  line: Row;
+  refs: { task: DocumentReference<DocumentData>; line: DocumentReference<DocumentData>; op: DocumentReference<DocumentData> };
+  inputHash: string;
+  occurredAt: string;
+  pedido: number;
+  produto: string;
+};
+
+/**
+ * "Dividir em volumes" na linha já separada (parte 7a, decisão 30): só o que
+ * ela pôs no volume aberto se reparte. As caixas, o separado, a diferença e o
+ * `separated_at` ficam como estão (nada de caixa é lido nem gravado), e as
+ * outras entradas da linha (a caixa levada inteira, por exemplo) também. O
+ * que a linha tem no volume aberto sai dele sem tirar o volume, e a primeira
+ * parte o completa de novo. A mesma divisão mandada de novo, com outra chave,
+ * não muda nada; a tela que mostrou a linha por separar, ou separada em outro
+ * instante, recusa.
+ */
+function dividirALinhaSeparada(transaction: Transaction, db: Firestore, linha: LinhaParaDividir, actor: OperationalActor): Row {
+  const { input, partes, task, line, refs, occurredAt } = linha;
+  const customerCode = text(task.customer_code) || text(line.customer_code);
+  const pedidoNumero = text(task.order_number) || text(line.order_number);
+  const volumesAntes = volumesDe(task);
+  const volumeAntes = new Map(volumesAntes.volumes.map((volume) => [volume.id, volume]));
+  const daLinha = volumesDaLinha(line.separated_volumes);
+  // A repetição (a resposta que se perdeu, o toque dobrado): as últimas entradas da linha, com o número de agora, já
+  // são as partes pedidas, e vieram de uma divisão: cada volume, menos o último, fechado com o peso pedido, e nenhum é
+  // caixa levada. "Levar a caixa" dá os mesmos números e quantidades, e não é a divisão: segue para as conferências.
+  const ultimas = daLinha.slice(-partes.length);
+  const repetida =
+    ultimas.length === partes.length &&
+    ultimas.every((entrada, index) => {
+      const volume = volumeAntes.get(entrada.volume_id);
+      const parte = partes[index]!;
+      if (!volume || volume.box_code || volume.number !== parte.number || entrada.qty !== parte.qty) return false;
+      return index === partes.length - 1 || (volume.status === "closed" && volume.weight_kg === pesoDoVolume(parte.weight_kg));
+    });
+
+  let volumesDepois = volumesAntes;
+  let naLinha = daLinha;
+  let fechados: VolumeDoPedido[] = [];
+  const events: unknown[] = [];
+  if (!repetida) {
+    // A linha confere depois da repetição: a divisão que separou a linha, mandada de novo, chega com ela por separar.
+    conferirALinhaDaTela(input, line);
+    const aberto = volumesAntes.volumes.find((volume) => volume.status === "open");
+    const noAberto = aberto ? daLinha.filter((entrada) => entrada.volume_id === aberto.id).reduce((soma, entrada) => soma + entrada.qty, 0) : 0;
+    if (!aberto || !(noAberto > 0)) {
+      throw new HttpsError("failed-precondition", "Esta linha não está no volume aberto. Atualize e tente de novo.", { code: "SEPARATION_LINE_NOT_IN_OPEN_VOLUME" });
+    }
+    // O volume aberto fica sem o que a linha tinha nele, mas não sai: a primeira parte o completa de novo.
+    const semALinha: EstadoDosVolumes = {
+      seq: volumesAntes.seq,
+      volumes: volumesAntes.volumes.map((volume) => (volume.id === aberto.id ? { ...volume, units: Math.max(0, volume.units - noAberto) } : volume)),
+    };
+    const divisao = dividirConferido(volumesAntes, semALinha, input, partes, { qty: noAberto, noVolumeAberto: true }, { at: occurredAt, by: actorFields(actor) });
+    volumesDepois = { volumes: divisao.volumes, seq: divisao.seq };
+    naLinha = [...daLinha.filter((entrada) => entrada.volume_id !== aberto.id), ...divisao.entradas];
+    fechados = divisao.fechados;
+    const numeroDepois = new Map(volumesDepois.volumes.map((volume) => [volume.id, volume.number]));
+
+    transaction.update(refs.line, { separated_volumes: naLinha, updated_at: FieldValue.serverTimestamp() });
+    transaction.update(refs.task, { volumes: volumesDepois.volumes, volume_seq: volumesDepois.seq, updated_at: FieldValue.serverTimestamp() });
+    const orderId = text(task.order_id) || text(line.order_id);
+    events.push(
+      createEvent(
+        transaction,
+        db,
+        `evt_${digest({ operationId: refs.op.id, suffix: "line_divided" })}`,
+        {
+          type: "picking.line_divided",
+          title: `Linha dividida em volumes no pedido ${pedidoNumero}`,
+          description: `${noAberto} un. de ${linha.produto} em ${partes.length} volumes`,
+          severity: "info",
+          // Como a linha separada: na trilha, fora da caixa de avisos.
+          inbox: false,
+          entity_type: PICK_TASKS_COLLECTION,
+          entity_id: input.pick_task_id,
+          customer_code: customerCode,
+          occurred_at: occurredAt,
+          payload: clean({
+            order_id: orderId || undefined,
+            order_number: pedidoNumero || undefined,
+            pick_line_id: input.pick_line_id,
+            line_number: quantity(line.line_number) || undefined,
+            sku_code: text(line.sku_code) || undefined,
+            client_item_code: text(line.client_item_code) || undefined,
+            location_id: text(line.location_id) || undefined,
+            from_volume_number: aberto.number,
+            volumes: divisao.entradas.map((entrada) => ({ volume_number: numeroDepois.get(entrada.volume_id), qty: entrada.qty })),
+          }),
+          source: EVENT_SOURCE,
+        },
+        actor,
+      ),
+    );
+    const doPedido: PedidoDoVolume = { pickTaskId: input.pick_task_id, orderId, orderNumber: pedidoNumero, customerCode, occurredAt };
+    for (const volume of fechados) {
+      events.push(eventoDoVolumeFechado(transaction, db, `evt_${digest({ operationId: refs.op.id, suffix: "volume_closed", volume: volume.id })}`, volume, doPedido, actor));
+    }
+  }
+
+  const anteriores = caixasGravadas(line.separated_boxes);
+  const result = clean({
+    ok: true,
+    pick_task_id: input.pick_task_id,
+    pick_line_id: input.pick_line_id,
+    separated: true,
+    changed: !repetida,
+    expected_qty: linha.pedido,
+    separated_qty: quantity(line.separated_qty),
+    shortage_reason: text(line.separated_shortage_reason) || undefined,
+    separated_at: text(line.separated_at),
+    // As caixas não mudam: as de onde a linha saiu.
+    boxes: anteriores.length ? anteriores : undefined,
+    // Em quais volumes a linha está, com o número de agora.
+    volumes: emQuaisVolumes(naLinha, volumesDepois),
+    closed_volumes: volumesFechados(fechados),
+    events,
+  });
+  transaction.create(refs.op, {
+    id: refs.op.id,
+    kind: "picking.line.divide",
+    target_id: input.pick_line_id,
+    customer_code: customerCode,
+    input_hash: linha.inputHash,
+    status: "completed",
+    actor: actorFields(actor),
+    result,
+    created_at: FieldValue.serverTimestamp(),
+    completed_at: FieldValue.serverTimestamp(),
+  });
+  return result;
+}
+
 /**
  * Separar (ou desfazer) uma linha do pedido. Idempotente pela chave e pelo
  * estado: separar a linha já separada, ou desfazer a que não está, não muda
- * nada e não grava evento.
+ * nada e não grava evento. Com `split_volumes`, a linha também se divide em
+ * volumes (parte 7a).
  */
 export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: OperationalActor) {
-  const input = parse(SetPickLineSeparatedSchema, raw);
+  const input = entradaDaSeparacao(raw);
   const taskRef = db.collection(PICK_TASKS_COLLECTION).doc(input.pick_task_id);
   const lineRef = db.collection(PICK_LINES_COLLECTION).doc(input.pick_line_id);
   const opRef = db.collection(OPERATIONS_COLLECTION).doc(`op_pick_line_${digest({ task: input.pick_task_id, line: input.pick_line_id, nonce: input.idempotency_key })}`);
@@ -403,6 +723,15 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
     const pedido = quantity(line.qty_to_pick);
     if (!(pedido > 0)) throw new HttpsError("failed-precondition", "Linha da separação sem quantidade.");
     const produto = text(line.product_name) || text(line.sku_code) || input.pick_line_id;
+    // "Dividir em volumes" na linha já separada (parte 7a, decisão 30): só os volumes mudam.
+    if (input.split_volumes && line.separated_at) {
+      return dividirALinhaSeparada(
+        transaction,
+        db,
+        { input, partes: input.split_volumes, task, line, refs: { task: taskRef, line: lineRef, op: opRef }, inputHash, occurredAt, pedido, produto },
+        actor,
+      );
+    }
     const novo = input.separated ? separadoDaLinha(pedido, input, produto) : null;
     const estava = Boolean(line.separated_at);
     // Separar de novo a linha já separada só muda algo se a quantidade, o motivo ou as caixas informadas mudaram.
@@ -413,6 +742,15 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
         text(line.separated_shortage_detail) !== (novo.detalhe ?? "")
       : estava;
     const customerCode = text(task.customer_code) || text(line.customer_code);
+    // "Dividir em volumes" na linha por separar (parte 7a): separa como
+    // "Separar", e a linha vai nos volumes pedidos em vez de ir toda no
+    // aberto. Ela ainda não está em volume nenhum: a divisão parte dos
+    // volumes gravados, e é conferida antes de ler as caixas. A tela que
+    // mostrou a linha separada recusa: outra pessoa a desfez depois.
+    if (input.split_volumes) conferirALinhaDaTela(input, line);
+    const divisao = input.split_volumes
+      ? dividirConferido(volumesDe(task), volumesDe(task), input, input.split_volumes, { qty: pedido, noVolumeAberto: false }, { at: occurredAt, by: actorFields(actor) })
+      : null;
 
     // A caixa (parte 3b): o que a linha tinha tirado volta às caixas, e o
     // novo separado sai delas de novo. Tudo lido antes de qualquer escrita.
@@ -484,7 +822,11 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
           noAberto -= caixa.qty;
         }
       }
-      if (noAberto > 0) {
+      if (divisao) {
+        // As partes da divisão: cada uma, menos a última, fechou um volume; a última ficou aberta.
+        volumesDepois = { volumes: divisao.volumes, seq: divisao.seq };
+        nosVolumes.push(...divisao.entradas);
+      } else if (noAberto > 0) {
         const aberto = porNoVolumeAberto(volumesDepois, noAberto);
         volumesDepois = { volumes: aberto.volumes, seq: aberto.seq };
         nosVolumes.push({ volume_id: aberto.volume_id, qty: noAberto });
@@ -656,6 +998,19 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
           actor,
         ),
       );
+      // Cada volume que a divisão fechou grava o mesmo evento do "Fechar volume".
+      if (divisao) {
+        const doPedido: PedidoDoVolume = {
+          pickTaskId: input.pick_task_id,
+          orderId: text(task.order_id) || text(line.order_id),
+          orderNumber: pedidoNumero,
+          customerCode,
+          occurredAt,
+        };
+        for (const volume of divisao.fechados) {
+          events.push(eventoDoVolumeFechado(transaction, db, `evt_${digest({ operationId: opRef.id, suffix: "volume_closed", volume: volume.id })}`, volume, doPedido, actor));
+        }
+      }
     }
 
     const result = clean({
@@ -676,6 +1031,10 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
       // O volume fechado que mudou de número, e o fechado de que saiu uma parte: a etiqueta deles precisa sair de novo.
       renumbered_volumes: semALinha.renumerados.length ? semALinha.renumerados.map((volume) => ({ volume_id: volume.id, from: volume.de, to: volume.para })) : undefined,
       changed_volumes: volumesMudados(semALinha.alterados, volumesDepois),
+      // O volume fechado que esvaziou e saiu, com o número que tinha: a etiqueta dele sai junto.
+      removed_volumes: semALinha.removidos.length ? semALinha.removidos.map((volume) => ({ volume_id: volume.id, number: volume.number })) : undefined,
+      // Os volumes que a divisão fechou (parte 7a).
+      closed_volumes: volumesFechados(divisao?.fechados ?? []),
       events,
     });
     transaction.create(opRef, {
@@ -706,7 +1065,7 @@ export async function closeOrderVolume(db: Firestore, raw: unknown, actor: Opera
   const opRef = db.collection(OPERATIONS_COLLECTION).doc(`op_pick_volume_${digest({ task: input.pick_task_id, volume: input.volume_id, nonce: input.idempotency_key })}`);
   const inputHash = digest(input, 64);
   const occurredAt = new Date().toISOString();
-  const weightKg = input.weight_kg === undefined ? undefined : Math.round(input.weight_kg * 100) / 100 || undefined;
+  const weightKg = pesoDoVolume(input.weight_kg);
 
   return db.runTransaction(async (transaction) => {
     const previous = await transaction.get(opRef);
@@ -728,32 +1087,12 @@ export async function closeOrderVolume(db: Firestore, raw: unknown, actor: Opera
     transaction.update(taskRef, { volumes: depois.volumes, volume_seq: depois.seq, updated_at: FieldValue.serverTimestamp() });
 
     const customerCode = text(task.customer_code);
-    const pedidoNumero = text(task.order_number);
-    const event = createEvent(
+    const event = eventoDoVolumeFechado(
       transaction,
       db,
       `evt_${digest({ operationId: opRef.id, suffix: "volume_closed" })}`,
-      {
-        type: "picking.volume_closed",
-        title: `Volume ${volume.number} fechado no pedido ${pedidoNumero}`,
-        description: `${volume.units} un.${volume.weight_kg ? ` · ${String(volume.weight_kg).replace(".", ",")} kg` : ""}`,
-        severity: "info",
-        // Um pedido grande tem dezenas de volumes: o evento fica na trilha, fora da caixa de avisos.
-        inbox: false,
-        entity_type: PICK_TASKS_COLLECTION,
-        entity_id: input.pick_task_id,
-        customer_code: customerCode,
-        occurred_at: occurredAt,
-        payload: clean({
-          order_id: text(task.order_id) || undefined,
-          order_number: pedidoNumero || undefined,
-          volume_id: volume.id,
-          volume_number: volume.number,
-          units: volume.units,
-          weight_kg: volume.weight_kg,
-        }),
-        source: EVENT_SOURCE,
-      },
+      volume,
+      { pickTaskId: input.pick_task_id, orderId: text(task.order_id), orderNumber: text(task.order_number), customerCode, occurredAt },
       actor,
     );
     const result = clean({
