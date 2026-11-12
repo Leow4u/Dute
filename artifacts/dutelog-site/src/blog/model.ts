@@ -113,6 +113,18 @@ export function parseDraft(value: unknown): BlogDraft {
   if (src && !safeImageSrc(src)) return invalid("Escolha uma capa da biblioteca do Blog.");
   return { title, slug, excerpt, category, service, cover: { src, alt: field(cover.alt, "Descrição da capa", 500) }, body: parseBody(draft.body) };
 }
+// TipTap 3 getJSON() is not the shape parseDraft stores: mark key order,
+// null class/title on links, null image attrs, and null ordered-list type.
+export function canonicalBody(body: unknown): RichNode {
+  return parseDraft({ ...emptyDraft(), body }).body;
+}
+export function editorBody(body: unknown): RichNode {
+  try { return canonicalBody(body); } catch { return body as RichNode; }
+}
+export function draftFingerprint(draft: BlogDraft): string {
+  try { return JSON.stringify({ ...draft, body: canonicalBody(draft.body) }); }
+  catch { return `invalid:${JSON.stringify(draft)}`; }
+}
 export function validatePublication(value: unknown): BlogDraft {
   const draft = parseDraft(value);
   if (!draft.title) return invalid("Preencha o título antes de publicar.");

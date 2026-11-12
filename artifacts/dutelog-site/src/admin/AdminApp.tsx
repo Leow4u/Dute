@@ -26,6 +26,7 @@ import {
 import {
   BLOG_CATEGORIES,
   BLOG_SERVICES,
+  draftFingerprint,
   emptyDraft,
   slugify,
   validatePublication,
@@ -38,9 +39,12 @@ import { loginWithPassword } from "./auth";
 import Dialog from "./Dialog";
 import VisualEditor from "./Editor";
 import MediaPicker, { MediaLibrary } from "./MediaLibrary";
+import {
+  publishActionLabel,
+  publishBlockReason,
+  saveStatusLabel,
+} from "./save-state";
 import "./admin.css";
-
-const fingerprint = (draft: BlogDraft) => JSON.stringify(draft);
 const date = (value: string) =>
   new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
@@ -165,7 +169,10 @@ export default function AdminApp() {
   >(null);
   const [leaveAction, setLeaveAction] = useState<(() => void) | null>(null);
   const busyRef = useRef(false);
-  const dirty = draft !== null && fingerprint(draft) !== saved;
+  const publishNeedsSave = useRef(false);
+  const dirty = draft !== null && draftFingerprint(draft) !== saved;
+  const needsSave = dirty || !record;
+  const publishIssue = draft ? publishBlockReason(draft) : null;
   const busy = saving || publishing;
 
   const bootstrap = useCallback(() => {
@@ -230,7 +237,7 @@ export default function AdminApp() {
       const next = emptyDraft();
       setRecord(null);
       setDraft(next);
-      setSaved(fingerprint(next));
+      setSaved(draftFingerprint(next));
       setEditorKey((value) => value + 1);
       setSlugEdited(false);
       setView("editor");
@@ -241,7 +248,7 @@ export default function AdminApp() {
     leave(() => {
       setRecord(item);
       setDraft(item.draft);
-      setSaved(fingerprint(item.draft));
+      setSaved(draftFingerprint(item.draft));
       setEditorKey((value) => value + 1);
       setSlugEdited(true);
       setView("editor");
@@ -251,30 +258,39 @@ export default function AdminApp() {
   function replaceRecord(item: BlogRecord) {
     setRecord(item);
     setDraft(item.draft);
-    setSaved(fingerprint(item.draft));
+    setSaved(draftFingerprint(item.draft));
     setItems((current) => [
       item,
       ...current.filter((entry) => entry.id !== item.id),
     ]);
   }
-  async function saveArticle() {
-    if (!draft || busyRef.current) return;
-    busyRef.current = true;
+  async function persistDraft(
+    current: BlogDraft,
+    existing: BlogRecord | null,
+  ): Promise<BlogRecord | null> {
     setSaving(true);
-    clearFeedback();
     try {
-      const { item } = await blogApi.save(draft, record);
+      const { item } = await blogApi.save(current, existing);
       replaceRecord(item);
-      setMessage(
-        "Rascunho salvo. A versão do site só muda quando você publicar.",
-      );
+      return item;
     } catch (reason) {
       setError(errorMessage(reason));
       setConflict(reason instanceof ApiError && reason.status === 409);
+      return null;
     } finally {
       setSaving(false);
-      busyRef.current = false;
     }
+  }
+  async function saveArticle() {
+    if (!draft || busyRef.current) return;
+    busyRef.current = true;
+    clearFeedback();
+    const item = await persistDraft(draft, record);
+    if (item)
+      setMessage(
+        "Rascunho salvo. A versão do site só muda quando você publicar.",
+      );
+    busyRef.current = false;
   }
   async function reloadRecord() {
     if (!record) return;
@@ -308,26 +324,41 @@ export default function AdminApp() {
     }
   }
   function requestPublish() {
-    if (!record || !draft || dirty || busy) return;
+    if (!draft || busy) return;
     try {
       validatePublication(draft);
       clearFeedback();
+      publishNeedsSave.current = dirty || !record;
       setPublishDialog("publish");
     } catch (reason) {
       setError(errorMessage(reason));
     }
   }
   async function publishArticle() {
-    if (!record || !publishDialog || busyRef.current) return;
+    if (!draft || !publishDialog || busyRef.current) return;
     const action = publishDialog;
+    if (action === "unpublish" && !record) return;
     busyRef.current = true;
     setPublishing(true);
     clearFeedback();
     try {
+      let target = record;
+      if (action === "publish") {
+        validatePublication(draft);
+        if (!target || draftFingerprint(draft) !== saved) {
+          const item = await persistDraft(draft, target);
+          if (!item) {
+            setPublishDialog(null);
+            return;
+          }
+          target = item;
+        }
+      }
+      if (!target) return;
       const { item } =
         action === "publish"
-          ? await blogApi.publish(record)
-          : await blogApi.unpublish(record);
+          ? await blogApi.publish(target)
+          : await blogApi.unpublish(target);
       replaceRecord(item);
       setPublishDialog(null);
       setMessage(
@@ -535,14 +566,12 @@ export default function AdminApp() {
                     ? "Dê forma à sua ideia."
                     : "Comece uma boa história."}
                 </h1>
-                <p className="editorial-save-state">
-                  {saving
-                    ? "Salvando…"
-                    : dirty
-                      ? "Alterações ainda não salvas"
-                      : record
-                        ? `Salvo em ${date(record.updatedAt)}`
-                        : "Novo rascunho"}
+                <p className="editorial-save-state" role="status">
+                  {saveStatusLabel({
+                    saving,
+                    dirty,
+                    savedAt: record?.updatedAt,
+                  })}
                 </p>
               </div>
               <div className="editorial-edit-actions">
@@ -567,17 +596,24 @@ export default function AdminApp() {
                 </button>
                 <button
                   className="editorial-button editorial-primary"
-                  disabled={busy || dirty || !record}
-                  title={
-                    dirty || !record
-                      ? "Salve o rascunho antes de publicar"
-                      : undefined
+                  disabled={busy || Boolean(publishIssue)}
+                  aria-describedby={
+                    publishIssue ? "publish-block-reason" : undefined
                   }
                   onClick={requestPublish}
                 >
                   <Send size={17} />{" "}
-                  {record?.publishedAt ? "Atualizar publicação" : "Publicar"}
+                  {publishActionLabel(needsSave, Boolean(record?.publishedAt))}
                 </button>
+                {publishIssue && (
+                  <p
+                    id="publish-block-reason"
+                    className="editorial-publish-reason"
+                    role="status"
+                  >
+                    {publishIssue}
+                  </p>
+                )}
               </div>
             </div>
             {(error || message) && (
@@ -650,9 +686,14 @@ export default function AdminApp() {
                   content={draft.body}
                   disabled={busy}
                   onChange={(body) =>
-                    setDraft((current) =>
-                      current ? { ...current, body } : null,
-                    )
+                    setDraft((current) => {
+                      if (
+                        !current ||
+                        JSON.stringify(current.body) === JSON.stringify(body)
+                      )
+                        return current;
+                      return { ...current, body };
+                    })
                   }
                 />
               </section>
@@ -788,11 +829,6 @@ export default function AdminApp() {
                     Salvar mantém o texto em rascunho. Você decide quando
                     publicar.
                   </p>
-                  {(dirty || !record) && (
-                    <p className="editorial-hint">
-                      Salve o rascunho antes de publicar.
-                    </p>
-                  )}
                   {record?.publishedAt && (
                     <>
                       <a
@@ -1081,13 +1117,19 @@ export default function AdminApp() {
           </div>
         </Dialog>
       )}
-      {publishDialog && record && (
+      {publishDialog &&
+        ((publishDialog === "publish" && draft) ||
+          (publishDialog === "unpublish" && record)) && (
         <Dialog
           title={
             publishDialog === "publish"
-              ? record.publishedAt
-                ? "Atualizar artigo no site?"
-                : "Publicar artigo?"
+              ? publishNeedsSave.current
+                ? record?.publishedAt
+                  ? "Salvar e atualizar o artigo?"
+                  : "Salvar e publicar o artigo?"
+                : record?.publishedAt
+                  ? "Atualizar artigo no site?"
+                  : "Publicar artigo?"
               : "Retirar artigo do ar?"
           }
           onClose={() => {
@@ -1097,13 +1139,26 @@ export default function AdminApp() {
           <div className="editorial-dialog-form">
             <p>
               {publishDialog === "publish"
-                ? "A versão salva ficará disponível para todos os visitantes do Blog."
+                ? publishNeedsSave.current
+                  ? "A versão atual será salva e ficará disponível para todos os visitantes do Blog."
+                  : "A versão salva ficará disponível para todos os visitantes do Blog."
                 : "O artigo deixará de aparecer no Blog. O rascunho continuará disponível neste painel."}
             </p>
             <div className="editorial-publish-review">
-              <strong>{record.draft.title}</strong>
-              <span>{record.draft.category}</span>
-              <small>/blog/{record.publishedSlug || record.draft.slug}/</small>
+              <strong>
+                {(publishDialog === "publish" ? draft : record?.draft)?.title}
+              </strong>
+              <span>
+                {(publishDialog === "publish" ? draft : record?.draft)?.category}
+              </span>
+              <small>
+                /blog/
+                {record?.publishedSlug ||
+                  draft?.slug ||
+                  record?.draft.slug ||
+                  "endereco-do-artigo"}
+                /
+              </small>
             </div>
             <div className="editorial-inline-actions">
               <button
@@ -1117,7 +1172,9 @@ export default function AdminApp() {
                 {publishing
                   ? "Concluindo…"
                   : publishDialog === "publish"
-                    ? "Confirmar publicação"
+                    ? publishNeedsSave.current
+                      ? publishActionLabel(true, Boolean(record?.publishedAt))
+                      : "Confirmar publicação"
                     : "Retirar do ar"}
               </button>
               <button
