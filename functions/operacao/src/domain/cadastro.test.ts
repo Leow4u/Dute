@@ -389,6 +389,26 @@ describe("veículo: placa, capacidade e edição", () => {
     }
   });
 
+  it("a capacidade em branco ou fora do padrão diz o que informar, e não o nome do campo", () => {
+    // A tela manda null quando o texto não é número ("6,5" kg, "doze" m³:
+    // capacidadeDigitada, em artifacts/app/src/lib/operacao/cadastro.ts).
+    const base = { action: "create", idempotency_key: "k1", placa: "ABC1D23", tipo: "VUC" };
+    const mensagem = (dados: Record<string, unknown>) => rejeita(() => interpretarVeiculo(dados)).message;
+    assert.equal(mensagem({ ...base, capacidade_kg: null, capacidade_m3: 12 }), "Informe a capacidade em quilos.");
+    assert.equal(mensagem({ ...base, capacidade_kg: 3500, capacidade_m3: null }), "Informe a capacidade em metros cúbicos.");
+    assert.equal(mensagem({ ...base, capacidade_kg: "6,5", capacidade_m3: 12 }), "Informe a capacidade em quilos.");
+    assert.equal(mensagem({ ...base, capacidade_m3: 12 }), "Informe a capacidade em quilos.");
+    assert.equal(mensagem({ ...base, capacidade_kg: 3500 }), "Informe a capacidade em metros cúbicos.");
+    const edicao = { action: "update", idempotency_key: "k2", id: veiculo.id, expected_edicao: 1 };
+    assert.equal(mensagem({ ...edicao, capacidade_kg: null }), "Informe a capacidade em quilos.");
+    assert.equal(mensagem({ ...edicao, capacidade_m3: null }), "Informe a capacidade em metros cúbicos.");
+    assert.equal(mensagem({ ...edicao, capacidade_kg: "6 000" }), "Informe a capacidade em quilos.");
+    assert.equal(mensagem({ ...edicao, capacidade_m3: "doze" }), "Informe a capacidade em metros cúbicos.");
+    // O campo sem mensagem própria segue com a do cadastro.
+    assert.equal(mensagem({ ...base, tipo: null, capacidade_kg: 3500, capacidade_m3: 12 }), "tipo: tipo inválido.");
+    assert.equal(mensagem({ action: "create", idempotency_key: "k1", tipo: "VUC", capacidade_kg: 3500, capacidade_m3: 12 }), "Informe placa.");
+  });
+
   it("trocar a placa sobe a edição e a placa de outro veículo é conflito", () => {
     const efeito = aplicarVeiculo(
       veiculo,

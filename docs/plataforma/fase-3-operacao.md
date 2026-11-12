@@ -1680,6 +1680,26 @@ Achada em 25/10/2026, na mesma revisão. Está na produção desde a parte
 - **Teste:** `pagina.test.tsx`, com a página de veículos e a callable de
   mentira: "6.000" kg vão como 6000 e "12,5" m³ como 12,5. Antes, 6 kg.
 
+### Correção: a capacidade em branco dizia "capacidade_kg: tipo inválido."
+
+Achada em 12/11/2026, no levantamento das chamadas do app ao servidor. Está
+na produção desde a correção de 25/10, logo acima: o campo em branco
+deixou de ir como 0, que já dava a mensagem certa, e o que não é número
+deixou de parar no app (ia como NaN); os dois passaram a ir vazios.
+
+- **O defeito.** Com "Capacidade (kg)" em branco ou fora do padrão ("6,5",
+  "6 000"), ou "Capacidade (m³)" em branco ou sem número, "Salvar" era
+  recusado, como deve, mas com "capacidade_kg: tipo inválido." no lugar de
+  "Informe a capacidade em quilos.". No Zod 3, o mapa de mensagens do
+  cadastro (`mensagens`, em `functions/operacao/src/domain/cadastro.ts`)
+  roda depois da mensagem própria do campo e passava por cima dela.
+- **A correção.** O mapa deixa a mensagem própria do campo e só troca a
+  padrão do Zod. A capacidade ganhou também a mensagem de quando falta a
+  chave. Os outros campos do cadastro seguem com as mensagens de sempre.
+- **Teste:** `cadastro.test.ts`, com a capacidade vazia, com texto e sem a
+  chave na criação, e vazia ou com texto na alteração. Antes,
+  "capacidade_kg: tipo inválido." e "Informe capacidade_kg.".
+
 ### Pergunta 58: cancelar a vistoria em execução
 
 Feita em 26/10/2026, com a decisão do Leonardo e a tela do canvas "Telas das
