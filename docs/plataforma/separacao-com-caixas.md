@@ -931,6 +931,24 @@ a repetição, o "Levar a caixa" antes, o desfazer com os volumes que saem e a
 conclusão com o item em dois `packages`. A régua `billing-callables` e as
 tabelas de papéis e de login seguem verdes.
 
+**Parte 7b no código (11/11/2026).** A conta do diálogo em
+`artifacts/app/src/lib/warehouse-ops/divisao-em-volumes.ts` (a divisão por
+caixa, os números, a soma que sempre fecha, "Mais um volume", a lixeira, o
+pedido para o servidor e o aviso "Volume 16 fechado"); o diálogo em
+`features/warehouse-ops/dividir-em-volumes.tsx`, no computador e no celular
+(sem peso, botões de 44 px, foco por dentro do −, do número e do +, o peso
+inválido em vermelho); na bancada (`pages/pedidos-separar-view.tsx` e
+`pedidos-separar.tsx`), o item do "⋯", o botão na linha já separada, as
+etiquetas embaixo dos códigos e o volume aberto e os números relidos ao
+vivo, para a recusa "Os volumes mudaram" mostrar o estado novo; e o aviso do
+volume fechado que saiu em `avisoDosVolumes`. A prancha da bancada depois de
+dividir foi feita antes da decisão 30: na tela, a linha dividida que ainda
+tem 2 un. ou mais no volume aberto ganha também "Dividir em volumes". Os
+testes: `divisao-em-volumes.test.ts`, `dividir-em-volumes.test.tsx` e
+`dividir-em-volumes.interacao.test.tsx` (a lista dos textos, o `axe` e o
+foco depois de tirar um volume), `volumes-do-pedido.test.ts` e
+`pedidos-separar-view.test.tsx`.
+
 ### 11.6 Perguntas e respostas
 
 Respondidas pelo Leonardo em 11/11/2026.
