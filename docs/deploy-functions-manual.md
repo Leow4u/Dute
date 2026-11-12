@@ -343,7 +343,11 @@ o invoker delas não é posto de novo, e o `check_functions_invoker.ps1` só
 confere as callables. Depois de rodar de novo, confira a política de cada
 rotina que falhou (`gcloud run services get-iam-policy <servico>
 --region southamerica-east1 --project <projeto>`; o serviço é o nome da
-function em minúsculas). A produção, publicada depois com o mesmo commit,
+function em minúsculas): ela precisa do `roles/run.invoker` para a conta de
+serviço padrão do Compute (`<número do projeto>-compute@developer.gserviceaccount.com`),
+que chama as rotinas agendadas. Na homologação de 12/11/2026, as duas
+continuaram com ele (conferido pelo Leonardo): a falha foi só ao ler a
+política. A produção, publicada depois com o mesmo commit,
 também pegou o limite (29 respostas 429, de leitura do Cloud Run e de
 alteração do Cloud Functions), mas o Firebase repetiu e publicou tudo, com
 o invoker.
