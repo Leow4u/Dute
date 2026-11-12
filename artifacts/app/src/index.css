@@ -701,6 +701,14 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* A altura da barra inferior do celular sem a área segura: os itens h-14 da
+   MobileTabBar (components/layout/mobile-tab-bar.tsx), que some a partir de
+   768 px. Abaixo disso, o toast fica logo acima dela (components/ui/toast.tsx,
+   decisão 9.4.5 de 06/11/2026). */
+:root {
+  --altura-da-barra-de-baixo: 3.5rem;
+}
+
 /* ==========================================================================
    Carregamento (carregamento v2, aprovado em 12/11/2026): os tokens e os
    keyframes das peças de espera. O relógio é lib/carregando/tempo.ts (os
