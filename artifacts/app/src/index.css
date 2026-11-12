@@ -880,14 +880,22 @@
   }
 }
 
-/* O esqueleto: uma faixa por cartão, inclinada a 20°, com a pausa no fim. */
+/* O esqueleto: uma faixa por cartão, inclinada a 20°, com a pausa no fim. A
+   faixa acende ao entrar e apaga antes da pausa: num bloco alto e estreito, a
+   ponta inclinada sobraria no canto, parada. */
 @keyframes carregando-brilho {
   0% {
     transform: translateX(-130%) skewX(-20deg);
+    opacity: 0;
+  }
+  15%,
+  65% {
+    opacity: 1;
   }
   80%,
   100% {
     transform: translateX(330%) skewX(-20deg);
+    opacity: 0;
   }
 }
 
@@ -1037,6 +1045,88 @@
 
     .carregando-caixa[data-determinado] > .cabeca {
       transform: none;
+    }
+  }
+}
+
+/* O esqueleto (components/ui/esqueleto.tsx e o Skeleton; seção 5.2 e momento
+   2): blocos em cinza neutro, nunca o rosado do bg-primary/10, com a anatomia
+   da linha real. São decorativos: o componente os põe sempre aria-hidden. A
+   cor é o --carregando-esqueleto (o #DFDED8 da v3, o #D9DDE3 fora dela e o
+   --muted no escuro) e, na barra preta, o branco a 12%. O brilho é do cartão
+   (.carregando-com-brilho): uma faixa só, na cor do cartão a 60%, inclinada a
+   20°, que anda por transform, faz dois ciclos e para; o --ordem dá os 120
+   ms entre um cartão e outro. Parada, a faixa não aparece. No movimento
+   reduzido, nenhum brilho. Fica na camada components, para a utilidade de
+   quem usa dar o tamanho, a largura e o raio. */
+@layer components {
+  .carregando-esqueleto {
+    display: block;
+    background-color: hsl(var(--carregando-esqueleto));
+    border-radius: 6px;
+  }
+
+  /* O título; o apoio é a mesma linha com 10 px (h-2.5). */
+  .carregando-esqueleto[data-forma="texto"] {
+    block-size: 14px;
+  }
+
+  /* A caixa do ícone da linha (QueueRow). */
+  .carregando-esqueleto[data-forma="icone"] {
+    flex: none;
+    inline-size: 44px;
+    block-size: 44px;
+    border-radius: 12px;
+  }
+
+  /* O botão-fantasma, na largura do rótulo que ele guarda. */
+  .carregando-esqueleto[data-forma="botao"] {
+    flex: none;
+    block-size: 40px;
+    border-radius: 10px;
+  }
+
+  /* O número que ainda não chegou: "Em aberto · ▪". */
+  .carregando-esqueleto[data-forma="contagem"] {
+    display: inline-block;
+    flex: none;
+    inline-size: 16px;
+    block-size: 12px;
+    border-radius: 4px;
+    vertical-align: middle;
+  }
+
+  .carregando-sobre-preto .carregando-esqueleto,
+  .bg-v3-header .carregando-esqueleto {
+    background-color: var(--carregando-esqueleto-preto);
+  }
+
+  .carregando-com-brilho {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .carregando-com-brilho::after {
+    content: "";
+    position: absolute;
+    top: -20%;
+    bottom: -20%;
+    left: 0;
+    width: 34%;
+    pointer-events: none;
+    z-index: 2;
+    background: linear-gradient(90deg, transparent, var(--carregando-brilho) 50%, transparent);
+    transform: translateX(-130%) skewX(-20deg);
+    opacity: 0;
+    animation: carregando-brilho var(--carregando-t-brilho) var(--ease-carregando-padrao) 2;
+    animation-delay: calc(var(--ordem, 0) * 120ms);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .carregando-com-brilho::after {
+      animation: none;
+      opacity: 0;
     }
   }
 }
