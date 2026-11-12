@@ -649,6 +649,28 @@ o item sem linha e o cancelamento), a linha nova na tabela de papéis,
 `warehouse-labels.test.ts`, `label-sheet.test.tsx` (a lista dos textos e o
 `axe`) e `cloud-api-warehouse.test.ts`.
 
+**O tamanho do campo Tamanho no volume (12/11/2026).** Só o app. A linha da
+separação (`pick_lines`) e o item do volume (`package_items`) não gravam o
+tamanho, e o nome no volume só levava o do fim do código do cliente: o copo
+`B.0572.003.U.B`, com Tamanho "475ML", saía "Copo Beercup em Inox" na
+bancada, na etiqueta e no romaneio. O tamanho passa a vir do cadastro do SKU
+(`lib/warehouse-ops/tamanho-do-catalogo.ts`), pela mesma leitura e pelo mesmo
+cache das fotos dos itens (`useCatalogoDeSkus`, a chave do Estoque): quem
+vem da fila de Pedidos ou da bancada não lê de novo. A bancada aplica o
+tamanho às linhas lidas ao vivo, e a linha e o volume saem com ele;
+`useVolumesDoPedido` o aplica às linhas e aos `package_items` e espera o
+cadastro, para a etiqueta e o romaneio nunca saírem sem o tamanho (se a
+leitura falha, saem como antes). A etiqueta do volume separa o tamanho do
+nome como a da caixa (`volumeLabels` com o campo Tamanho): a folha A4
+encurta o nome sem cortar o "475ML". Vale para os pedidos já abertos e os já
+concluídos, sem mudar as Functions e sem backfill. O tamanho do fim do
+código continua valendo antes do campo (`nomeComTamanho`). A lista de
+separação da fila de Pedidos e a folha impressa (`/pedidos/lista`) ainda
+mostram só o tamanho do código. Os testes passam pelo caminho de verdade,
+com os documentos no formato que o servidor grava:
+`use-volumes-do-pedido.test.ts`, `warehouse-labels.volumes.test.tsx`,
+`pedidos-romaneio.test.tsx` e `pedidos-separar.test.tsx`.
+
 ### 5.2 Na produção
 
 **10/11/2026, 19:35 a 19:52 UTC.** O Leonardo publicou o commit `7512f101`

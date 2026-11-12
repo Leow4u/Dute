@@ -12,17 +12,26 @@ async function fetchItems(url: string) {
 }
 
 /**
- * Foto do item por código (SKU interno ou código do cliente), a mesma que o
- * Estoque mostra. Usa as mesmas consultas e chaves de cache da tela de
- * Estoque, então quem já passou por lá não busca de novo.
+ * O cadastro dos SKUs, com a mesma consulta e a mesma chave de cache do
+ * Estoque: quem já passou por lá, pela fila de Pedidos ou pela bancada (as
+ * fotos dos itens) não busca de novo.
  */
-export function useItemPhotos(enabled = true) {
-  const skus = useQuery({
+export function useCatalogoDeSkus(enabled = true) {
+  return useQuery({
     queryKey: ["estoque", "skus"],
     queryFn: () => fetchItems("/api/skus?limit=2000"),
     enabled,
     staleTime: 120_000,
   });
+}
+
+/**
+ * Foto do item por código (SKU interno ou código do cliente), a mesma que o
+ * Estoque mostra. Usa as mesmas consultas e chaves de cache da tela de
+ * Estoque, então quem já passou por lá não busca de novo.
+ */
+export function useItemPhotos(enabled = true) {
+  const skus = useCatalogoDeSkus(enabled);
   const balances = useQuery({
     queryKey: ["stock-balances", "estoque"],
     queryFn: () => fetchItems("/api/stock-balances?limit=2000"),
