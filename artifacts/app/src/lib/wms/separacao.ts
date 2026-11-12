@@ -62,6 +62,25 @@ export type SeparacaoConcluida = {
   seal_code: string;
 };
 
+/**
+ * O SDK do Firebase manda o campo `undefined` como `null`, e o servidor
+ * (functions/wms, pick-progress.ts) recusa `null` nos campos opcionais:
+ * "Fechar volume" sem peso e "Separar menos" sem detalhe voltavam "Entrada
+ * inválida para a separação.". O campo sem valor não vai; o `null` de
+ * propósito (o volume aberto que não existe) continua indo.
+ */
+export function semCamposVazios<T>(dados: T): T {
+  if (Array.isArray(dados)) return dados.map((item) => semCamposVazios(item)) as T;
+  if (dados && typeof dados === "object" && Object.getPrototypeOf(dados) === Object.prototype) {
+    return Object.fromEntries(
+      Object.entries(dados)
+        .filter(([, valor]) => valor !== undefined)
+        .map(([chave, valor]) => [chave, semCamposVazios(valor)]),
+    ) as T;
+  }
+  return dados;
+}
+
 async function chamarWms<T>(
   nome: "setPickLineSeparated" | "closeOrderVolume" | "completeOrderSeparation" | "recordBoxBalanceLabelPrint",
   dados: Record<string, unknown>,
@@ -69,7 +88,7 @@ async function chamarWms<T>(
   if (!firebaseApp) throw new Error("Firebase não configurado.");
   const callable = httpsCallable<Record<string, unknown>, T>(functionsDoApp(firebaseApp), nome);
   try {
-    return (await callable(dados)).data;
+    return (await callable(semCamposVazios(dados))).data;
   } catch (error) {
     throw new Error(callableSemResposta(error) ? SEM_CONEXAO : mensagemDoErro(error));
   }

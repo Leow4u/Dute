@@ -660,6 +660,16 @@ Depois dela, os PRs 593 e 594 mudaram só este documento. Antes do PED-0001,
 falta imprimir na Zebra a etiqueta da caixa aberta (parte 3d) e a do volume
 (parte 4c).
 
+**Defeito achado em 11/11/2026, na produção desde esta publicação.** O SDK
+do Firebase manda o campo `undefined` como `null`, e as callables da
+separação recusam `null` nos campos opcionais. Por isso "Fechar volume" sem
+peso (sempre, no celular) e "Separar menos" sem detalhe voltavam "Entrada
+inválida para a separação.". Os testes de integração chamam o domínio
+direto, sem o SDK, e não pegavam. A correção é a bancada não mandar o campo
+sem valor (`semCamposVazios`, em `artifacts/app/src/lib/wms/separacao.ts`,
+com o teste que falhava antes). Até ela chegar à produção: fechar os
+volumes no computador, com o peso, e escrever o detalhe no "Separar menos".
+
 ## 6. Perguntas
 
 Todas respondidas pelo Leonardo em 10/11/2026.
