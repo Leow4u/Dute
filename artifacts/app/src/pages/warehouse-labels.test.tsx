@@ -100,6 +100,24 @@ async function abrir(busca: string) {
   expect(container.querySelector(".lbl-print"), "a prévia das etiquetas").not.toBeNull();
 }
 
+/** Escolhe a saída pelo teclado, como no Select de verdade (o jsdom não tem as APIs de ponteiro que o Radix usa). */
+async function escolherSaida(rotulo: "Folha A4" | "Rolo Zebra") {
+  Element.prototype.scrollIntoView ??= () => undefined;
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.releasePointerCapture ??= () => undefined;
+  const gatilho = container.querySelector<HTMLButtonElement>('button[role="combobox"]')!;
+  await act(async () => {
+    gatilho.focus();
+    gatilho.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+  const opcao = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((item) => item.textContent === rotulo);
+  expect(opcao, `a opção ${rotulo}`).toBeDefined();
+  await act(async () => {
+    opcao!.focus();
+    opcao!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+}
+
 const saida = () => container.querySelector('button[role="combobox"]')?.textContent?.trim();
 const contador = () => container.querySelector('button[role="combobox"]')?.closest(".flex-wrap")?.lastElementChild?.textContent;
 const etiquetasEm = (seletor: string) => container.querySelectorAll(`${seletor} .lbl[role="group"]`).length;
@@ -156,26 +174,61 @@ describe("Estoque › Etiquetas: a saída", () => {
   });
 
   it("escolher a saída guarda a escolha no computador e troca o endereço, sem nova entrada no histórico", async () => {
-    Element.prototype.scrollIntoView ??= () => undefined;
-    Element.prototype.hasPointerCapture ??= () => false;
-    Element.prototype.releasePointerCapture ??= () => undefined;
     await abrir("caixas=CX-000226");
-    const gatilho = container.querySelector<HTMLButtonElement>('button[role="combobox"]')!;
-    await act(async () => {
-      gatilho.focus();
-      gatilho.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    });
-    const rolo = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((opcao) => opcao.textContent === "Rolo Zebra");
-    expect(rolo, "a opção Rolo Zebra").toBeDefined();
-    await act(async () => {
-      rolo!.focus();
-      rolo!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    });
+    await escolherSaida("Rolo Zebra");
     expect(window.localStorage.getItem(SAIDA_GUARDADA)).toBe("zebra");
     expect(estado.navegar).toHaveBeenCalledWith("/estoque/etiquetas?caixas=CX-000226&modo=zebra", { replace: true });
     // A guardada já vale nesta tela, antes do endereço mudar.
     expect(saida()).toBe("Rolo Zebra");
     expect(etiquetasEm(".lbl-roll")).toBe(2);
+  });
+});
+
+describe("Estoque › Etiquetas: a prévia", () => {
+  it("encolhe a folha para caber na área, não cresce com os 17 px da barra de rolagem e, no rolo, fica inteira", async () => {
+    // O jsdom não faz layout: a área da prévia (a que rola para o lado) mede o que o teste disser, e o
+    // ResizeObserver falso avisa quando o teste mudar a largura.
+    let larguraDaArea = 800;
+    const avisos: Array<() => void> = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(avisar: ResizeObserverCallback) {
+          avisos.push(() => avisar([], this as unknown as ResizeObserver));
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.classList.contains("overflow-x-auto") ? larguraDaArea : 0;
+      },
+    });
+    const zoom = () => container.querySelector<HTMLElement>(".lbl-ajuste")!.style.zoom;
+    const mudarLargura = async (largura: number) => {
+      larguraDaArea = largura;
+      await act(async () => avisos.at(-1)!());
+    };
+    try {
+      await abrir("caixas=CX-000226");
+      // A folha deitada (297 mm, 1.122,5 px) em 800 px. Que isso sai antes de pintar (useLayoutEffect) só se vê
+      // no navegador: no Chromium, a primeira pintura da folha já vem no zoom final (revisão do PR 606).
+      expect(zoom()).toBe("0.712");
+      await mudarLargura(817);
+      expect(zoom()).toBe("0.712");
+      await mudarLargura(900);
+      expect(zoom()).toBe("0.801");
+      await mudarLargura(700);
+      expect(zoom()).toBe("0.623");
+      // O rolo (101,6 mm, 384 px) cabe inteiro.
+      await escolherSaida("Rolo Zebra");
+      expect(zoom()).toBe("1");
+    } finally {
+      delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+    }
   });
 });
 
