@@ -184,7 +184,8 @@ no meio, a devolução) volta sem caixa. A conferência ainda não tem tela.
   volume, o cliente, o destino, a data, o peso, os produtos com o código do
   cliente e as unidades. Sai ao fechar o volume ("Volume 12"); depois da
   conclusão, o lote sai com o total ("Volume 12 de 42") (decisão 12). Leva
-  todos os produtos, em etiquetas de continuação (seção 4.6).
+  todos os produtos: no rolo, em etiquetas de continuação; na folha A4, em
+  etiquetas completas de até cinco produtos (seção 4.6).
 - **Romaneio** em A4: o conteúdo completo de cada volume, com o código do
   cliente, a quantidade e o peso; o lacre e o total de volumes.
 - A etiqueta do volume e o romaneio vão ao cliente: não citam caixa (`CX-`),
@@ -210,13 +211,18 @@ produtos:
 
 - A primeira etiqueta fica como a de antes e leva até cinco produtos. Com
   mais, diz "etiqueta 1 de 2" ao lado do logo.
-- Os outros produtos saem em etiquetas de continuação do mesmo tamanho, onze
-  em cada: o código da caixa e a posição (no volume, o pedido e o volume),
-  "etiqueta 2 de 2" e as unidades do total. Sem código de barras.
+- No rolo da Zebra, os outros produtos saem em etiquetas de continuação do
+  mesmo tamanho, onze em cada: o código da caixa e a posição (no volume, o
+  pedido e o volume), "etiqueta 2 de 2" e as unidades do total. Sem código
+  de barras.
+- Na folha A4 (desde 12/11/2026, seção 6 de
+  `docs/mapa-do-armazem-enderecamento-dirigido.md`), cada etiqueta é
+  completa, com o código de barras e até cinco produtos, quatro por folha
+  deitada, porque cada uma é recortada: a "etiqueta 2 de 2" repete o
+  cabeçalho da primeira e traz os produtos seguintes.
 - A ordem é a de sempre, a maior quantidade primeiro.
 - Vale para a caixa da abertura, a do recebimento, a caixa aberta com o saldo
-  e o volume. A mesma folha de dez e o mesmo rolo; a contagem de etiquetas da
-  tela soma as de continuação.
+  e o volume; a contagem de etiquetas da tela soma todas.
 - O rodapé de toda etiqueta leva o logo original da Dutelog no lugar da
   palavra (decisão 16), também a de posição. Na folha A4 ele sai nas cores
   originais; no rolo da Zebra, que só imprime preto, sai em preto.

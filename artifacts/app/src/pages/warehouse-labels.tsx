@@ -21,7 +21,7 @@
  * (`?caixas=…&pedido=`), para a volta ser ao pedido.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Printer, Tags } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
@@ -59,6 +59,7 @@ import {
   saidaGuardada,
   textoDaImpressao,
   volumeLabels,
+  zoomDaPrevia,
 } from "@/lib/warehouse-labels";
 import { fetchJson, getErrorMessage } from "@/lib/warehouse-ops/model";
 import { hrefDaBancada } from "@/lib/warehouse-ops/separacao";
@@ -71,9 +72,6 @@ import { registrarEtiquetaDeSaldo } from "@/lib/wms/separacao";
 
 type PositionsResponse = { items?: WarehousePosition[] };
 
-/** Pixels por milímetro na tela (CSS: 96 px por polegada). */
-const PX_POR_MM = 96 / 25.4;
-
 /** A largura da página mais larga da impressão, em milímetros: a folha deitada, a em pé ou a etiqueta do rolo. */
 function larguraDaPagina(mode: LabelMode, pages: LabelPage[]) {
   if (mode === "zebra") return LABEL_MM.width;
@@ -82,19 +80,19 @@ function larguraDaPagina(mode: LabelMode, pages: LabelPage[]) {
 
 /**
  * Quanto a prévia encolhe para a folha caber na largura da área, sem rolar
- * para o lado; nunca aumenta. A impressão ignora (labelSheetCss).
+ * para o lado (zoomDaPrevia); nunca aumenta. A impressão ignora (labelSheetCss).
  */
 function useAjusteDaPrevia(larguraMm: number) {
   // A área só aparece depois de carregar: o ref de função mede quando ela entra.
   const [area, setArea] = useState<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState(1);
-  useEffect(() => {
+  // Antes de pintar: a prévia já aparece no tamanho certo, também ao trocar a saída.
+  useLayoutEffect(() => {
     if (!area || typeof ResizeObserver === "undefined") return;
     const medir = () => {
       const estilo = window.getComputedStyle(area);
       const livre = area.clientWidth - (parseFloat(estilo.paddingLeft) || 0) - (parseFloat(estilo.paddingRight) || 0);
-      const proximo = livre > 0 ? Math.min(1, Math.floor((livre / (larguraMm * PX_POR_MM)) * 1000) / 1000) : 1;
-      setZoom(proximo);
+      setZoom((atual) => zoomDaPrevia(atual, livre, larguraMm));
     };
     medir();
     const observador = new ResizeObserver(medir);

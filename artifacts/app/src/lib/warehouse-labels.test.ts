@@ -5,6 +5,7 @@ import {
   BOXES_PER_SHEET,
   CONTINUATION_LABEL_LINES,
   FIRST_LABEL_LINES,
+  FOLGA_DA_PREVIA_PX,
   POSITIONS_PER_SHEET,
   SAIDA_GUARDADA,
   SHEET_LABEL_LINES,
@@ -26,6 +27,7 @@ import {
   sheetMargins,
   textoDaImpressao,
   volumeLabels,
+  zoomDaPrevia,
 } from "./warehouse-labels";
 
 const box = warehouseBoxFromRecord({
@@ -261,6 +263,52 @@ describe("a saída guardada no computador", () => {
     expect(saidaDaTela({ mode: "a4" }, "zebra")).toBe("a4");
     expect(saidaDaTela({ mode: null }, "zebra")).toBe("zebra");
     expect(saidaDaTela({ mode: null }, null)).toBe("a4");
+  });
+});
+
+/**
+ * O zoom da prévia (a revisão de 12/11/2026 achou janelas em que ele ficava
+ * trocando entre dois valores: o zoom muda a altura da prévia, a altura liga
+ * e desliga a barra de rolagem, e a barra muda a largura livre).
+ */
+describe("o zoom da prévia das etiquetas", () => {
+  const DEITADA_MM = 297;
+  const emPx = (mm: number) => (mm * 96) / 25.4;
+  const BARRA_PX = 17;
+
+  it("encolhe na hora para a folha caber, nunca passa de 1 e não muda com a área ainda sem largura", () => {
+    expect(zoomDaPrevia(1, 800, DEITADA_MM)).toBe(0.712);
+    expect(zoomDaPrevia(0.5, 5000, DEITADA_MM)).toBe(1);
+    expect(zoomDaPrevia(0.712, 0, DEITADA_MM)).toBe(0.712);
+    // Do rolo de volta para a folha, e da folha para o rolo, que cabe inteiro.
+    expect(zoomDaPrevia(0.712, 800, 101.6)).toBe(1);
+  });
+
+  it("só cresce com folga: a barra de rolagem que some não basta para crescer", () => {
+    const comABarra = zoomDaPrevia(1, 800 - BARRA_PX, DEITADA_MM);
+    expect(comABarra).toBe(0.697);
+    expect(zoomDaPrevia(comABarra, 800, DEITADA_MM)).toBe(comABarra);
+    expect(zoomDaPrevia(comABarra, 800 - BARRA_PX + FOLGA_DA_PREVIA_PX + 1, DEITADA_MM)).toBe(0.734);
+  });
+
+  it("para num valor em qualquer altura de janela, com a barra que aparece quando a prévia passa da janela", () => {
+    // A prévia de uma folha deitada: o cabeçalho e a folha, que encolhe com o zoom.
+    const altura = (zoom: number) => 140 + emPx(210) * zoom;
+    for (const semABarra of [700, 900, 1100]) {
+      for (const inicio of [1, 0.3]) {
+        for (let janela = 500; janela <= 1300; janela += 1) {
+          let zoom = inicio;
+          let passos = 0;
+          for (; passos < 10; passos += 1) {
+            const livre = semABarra - (altura(zoom) > janela ? BARRA_PX : 0);
+            const proximo = zoomDaPrevia(zoom, livre, DEITADA_MM);
+            if (proximo === zoom) break;
+            zoom = proximo;
+          }
+          expect(passos, `largura ${semABarra}, zoom inicial ${inicio}, janela ${janela}`).toBeLessThan(3);
+        }
+      }
+    }
   });
 });
 

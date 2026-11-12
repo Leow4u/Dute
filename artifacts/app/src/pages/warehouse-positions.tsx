@@ -411,7 +411,7 @@ export default function WarehousePositionsPage() {
               variant="outline"
               onClick={() => navigate(labelsUrl({ positions: filtered.map((position) => position.code) }))}
               disabled={loading || filtered.length === 0}
-              title="Etiquetas das posições filtradas, dez por folha A4"
+              title="Etiquetas das posições filtradas"
             >
               <Printer className="size-4" />
               Imprimir etiquetas

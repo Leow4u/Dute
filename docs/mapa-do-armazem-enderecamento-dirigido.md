@@ -319,9 +319,10 @@ saída e movimentações. Depende das pendências P3 e P4.
 - **Caixa de expedição:** pedido ou solicitação, destinatário, volume 1/N,
   lista de SKU × quantidade, peso, data.
 - **Posição:** código da prateleira em código de barras e zona.
-- **Impressão:** o sistema gera PDF; agora em impressora comum, com gabarito de
-  etiqueta adesiva A4 a definir (pendência P6); depois ZPL para Zebra com o
-  mesmo conteúdo. "Etiqueta impressa" é evento.
+- **Impressão:** pela impressão do navegador (Imprimir → Salvar PDF), na
+  folha A4 comum, presa com fita nas bordas, ou no rolo da Zebra (pendência
+  P6, decidida em 16/10 e revista em 11 e 12/11/2026); depois ZPL para Zebra
+  com o mesmo conteúdo. "Etiqueta impressa" é evento.
 - **Leitura:** câmera do celular (a tela de contagem já é usada no celular) ou
   digitação do código. Coletor dedicado fica para depois.
 

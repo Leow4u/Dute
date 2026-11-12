@@ -419,7 +419,7 @@ tem 101,6 × 50,8 mm, dez por folha em pé, também com as linhas de corte. No
 rolo, toda etiqueta tem 101,6 × 50,8 mm, uma por página. Todas trazem o código
 em barras (Code 128) e em texto. A da caixa traz a posição, o cliente, medidas
 e peso, a origem e a data ("Abertura · 22/10/2026", "Recebimento · NF 48.377 ·
-06/11/2026" ou "Manual"), os produtos com o tamanho ao lado do nome, o código
+06/11/2026" ou "Manual · 12/11/2026"), os produtos com o tamanho ao lado do nome, o código
 do cliente e o SKU, e as unidades. Todos os produtos saem. Na folha, cada
 etiqueta leva até 5, cada produto em duas linhas, e com mais a caixa sai em
 mais etiquetas, todas completas, com "etiqueta 1 de 2" ao lado do logo; o nome

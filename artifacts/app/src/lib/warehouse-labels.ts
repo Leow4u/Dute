@@ -448,6 +448,31 @@ export function textoDaImpressao(conta: { etiquetas: number; folhas: number; cai
     .join(" · ");
 }
 
+/** Pixels por milímetro na tela (CSS: 96 px por polegada). */
+const PX_POR_MM = 96 / 25.4;
+
+/**
+ * Quanto a prévia precisa sobrar para crescer de novo, em pixels: mais que a
+ * barra de rolagem do Windows (17 px, uns 34 px com o navegador em 50%).
+ */
+export const FOLGA_DA_PREVIA_PX = 40;
+
+/**
+ * O zoom da prévia das etiquetas, para a página mais larga caber na largura
+ * livre sem rolar para o lado: encolhe na hora e nunca passa de 1. Só cresce
+ * quando sobra mais que FOLGA_DA_PREVIA_PX: o zoom muda a altura da prévia, a
+ * altura liga e desliga a barra de rolagem da tela, e a barra muda a largura
+ * livre; sem a folga, o zoom ficava trocando entre dois valores.
+ */
+export function zoomDaPrevia(atual: number, livrePx: number, larguraMm: number): number {
+  // Área ainda sem largura (escondida, ou antes do layout): fica como está.
+  if (!(livrePx > 0) || !(larguraMm > 0)) return atual;
+  const larguraPx = larguraMm * PX_POR_MM;
+  const cabe = Math.min(1, Math.floor((livrePx / larguraPx) * 1000) / 1000);
+  if (cabe <= atual) return cabe;
+  return livrePx - larguraPx * atual > FOLGA_DA_PREVIA_PX ? cabe : atual;
+}
+
 /** A saída escolhida neste computador (decisão de 11/11/2026): a mesa da Zebra abre no rolo, o escritório na folha. */
 export const SAIDA_GUARDADA = "dute.etiquetas.saida";
 

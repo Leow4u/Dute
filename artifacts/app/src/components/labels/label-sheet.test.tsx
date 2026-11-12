@@ -261,6 +261,28 @@ describe("na folha A4, a etiqueta da caixa", () => {
     dom.window.close();
   });
 
+  it("a lista é a grade da prancha: a quantidade numa coluna só, do tamanho da maior, e os nomes começam juntos", () => {
+    const grande = warehouseBoxFromRecord({ ...CAIXA_INTACTA_DE_OUTUBRO, code: "CX-000227", unit_count: 1209 });
+    const entrada = [
+      { box_code: "CX-000227", product_name: "Polo Masculino Piquet Preto", client_item_code: "A.01.0805.001.M", sku_code: "BTG-000140", counted_qty: 1200 },
+      { box_code: "CX-000227", product_name: "Polo Masculino Piquet Preto", client_item_code: "A.01.0805.001.G", sku_code: "BTG-000141", counted_qty: 9 },
+    ];
+    const { dom, lista } = etiquetas(folha(boxLabels(grande, entrada, { printedAt: AGORA })));
+    const lista0 = lista[0].querySelector(".lbl-content")!;
+    // docs/mockups/EtiquetaA4Caixas.dc.html: grid-template-columns max-content minmax(0,1fr), a quantidade justify-self end.
+    expect(lista0.getAttribute("style")).toContain("display:grid;grid-template-columns:max-content minmax(0, 1fr);column-gap:2.5mm;row-gap:1mm");
+    const linhasDaGrade = [...lista0.querySelectorAll(".lbl-line")];
+    expect(linhasDaGrade.map((linha) => linha.getAttribute("style"))).toEqual(["display:contents", "display:contents"]);
+    expect(linhasDaGrade.map((linha) => linha.firstElementChild?.textContent)).toEqual(["1.200 ×", "9 ×"]);
+    for (const linha of linhasDaGrade) {
+      const quantidade = linha.firstElementChild!.getAttribute("style")!;
+      expect(quantidade).toContain("justify-self:end");
+      // Sem largura mínima por linha: a coluna é uma só.
+      expect(quantidade).not.toContain("min-width");
+    }
+    dom.window.close();
+  });
+
   it("a caixa aberta sai com o saldo, as unidades e 'saldo em' embaixo delas, sem o peso", () => {
     const aberta = warehouseBoxFromRecord({
       code: "CX-000028",
@@ -379,6 +401,19 @@ describe("as folhas A4 e o rolo", () => {
     expect(juntas).toContain("@page etiqueta-deitada { size: 297mm 210mm; margin: 0; }");
     expect(juntas).toContain("@page etiqueta-em-pe { size: 210mm 297mm; margin: 0; }");
     expect(juntas).toContain(".lbl-folha { page: etiqueta-deitada; }");
+    // O nome da página só vale em fluxo normal, e o .print-area é absoluto: nas duas juntas, a área volta ao
+    // fluxo e o resto do app some (no Chromium, a página deitada e as em pé saem idênticas às de um tipo só).
+    const emFluxo = [
+      "body *:has(.lbl-print) { display: contents !important; }",
+      "body *:not(.lbl-print):not(.lbl-print *):not(:has(.lbl-print)) { display: none !important; }",
+      ".print-area.lbl-print { position: static !important; }",
+    ];
+    for (const regra of emFluxo) {
+      expect(juntas).toContain(regra);
+      // A impressão de um tipo só, a de todas as telas, fica como está.
+      expect(labelSheetCss("a4", new Set(["quatro"]))).not.toContain(regra);
+      expect(labelSheetCss("a4", new Set(["dez"]))).not.toContain(regra);
+    }
     expect(labelSheetCss("zebra", new Set(["rolo"]))).toContain("@page { size: 101.6mm 50.8mm; margin: 0; }");
     // A linha de corte das posições sai impressa (antes, só na tela).
     expect(labelSheetCss("a4")).toContain(".lbl-sheet .lbl { outline: 0.25mm dashed #000;");
