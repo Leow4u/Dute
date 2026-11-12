@@ -1307,6 +1307,13 @@
     color: hsl(var(--foreground));
   }
 
+  /* Fora do botão de cor (.carregando-na-cor, o primário), a espera fica em
+     tinta, como na prancha do secundário: o crítico do Recusar é só do erro, e
+     a 0,6 do respiro ele ficaria abaixo de 3:1 no escuro. */
+  .botao-acao:not(.carregando-na-cor) > .botao-acao-camada[data-camada="andamento"] {
+    color: hsl(var(--carregando-cor));
+  }
+
   /* O lugar do ícone: o mesmo tamanho com ou sem o indicador dentro. */
   .botao-acao-icone {
     display: grid;

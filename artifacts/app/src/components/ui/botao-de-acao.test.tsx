@@ -450,6 +450,101 @@ describe("o fim também é um estado", () => {
     const textos = camadas().map((camada) => camada.textContent);
     expect(textos).toEqual([TEXTOS.rotulo, TEXTOS.andamento, TEXTOS.rotulo, TEXTOS.rotulo, "Conferir"]);
   });
+
+  it("a onda nasce da caixa também quando quem sai não tem ícone (o resultado antes de 300 ms)", () => {
+    // O jsdom não mede: o botão começa em 100 px e cada ícone tem 16 px, com a camada dele em data-x.
+    const medidas = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const camada = this.closest<HTMLElement>(".botao-acao-camada");
+      const left = this.matches("button") ? 100 : camada?.dataset.camada === "sucesso" ? 140 : 120;
+      const width = this.matches("button") ? 200 : 16;
+      return { left, width, top: 0, height: 40, right: left + width, bottom: 40, x: left, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    try {
+      montar("repouso", { icone: undefined });
+      montar("andamento", { icone: undefined });
+      passar(CARREGANDO.atrasoMs - 100);
+      montar("sucesso", { icone: undefined });
+      expect(botao().getAttribute("data-de")).toBe("repouso");
+      // O repouso sem ícone não tem caixa: a onda sai da caixa fechada do sucesso, não do meio do botão.
+      expect(botao().style.getPropertyValue("--botao-acao-onda-x")).toBe("48px");
+      // Do em andamento, ela continua saindo do indicador.
+      montar("repouso", { icone: <Check /> });
+      passar(FIM_DA_TROCA_MS);
+      montar("andamento");
+      passar(CARREGANDO.atrasoMs + CARREGANDO.minimoMs);
+      montar("erro");
+      passar(0);
+      expect(botao().getAttribute("data-de")).toBe("andamento");
+      expect(botao().style.getPropertyValue("--botao-acao-onda-x")).toBe("28px");
+    } finally {
+      medidas.mockRestore();
+    }
+  });
+});
+
+describe("travado, o botão não responde ao ponteiro", () => {
+  const classes = () => Array.from(botao().classList);
+
+  it("em andamento e no sucesso, o hover e o toque da variante saem: fica o vermelho cheio, nunca o azul do --primary-pressed", () => {
+    montar("repouso");
+    expect(classes()).toEqual(expect.arrayContaining(["hover:bg-primary-hover", "active:bg-primary-pressed"]));
+    // Desde o toque, antes dos 300 ms.
+    montar("andamento");
+    expect(classes()).toEqual(expect.arrayContaining(["bg-primary", "hover:bg-primary", "active:bg-primary"]));
+    expect(classes()).not.toContain("hover:bg-primary-hover");
+    expect(classes()).not.toContain("active:bg-primary-pressed");
+    passar(CARREGANDO.atrasoMs);
+    expect(nome()).toBe(TEXTOS.andamento);
+    expect(classes()).toEqual(expect.arrayContaining(["hover:bg-primary", "active:bg-primary"]));
+    expect(classes()).not.toContain("active:bg-primary-pressed");
+    passar(CARREGANDO.minimoMs);
+    montar("sucesso");
+    passar(0);
+    expect(nome()).toBe(TEXTOS.sucesso);
+    expect(classes()).not.toContain("hover:bg-primary-hover");
+    expect(classes()).not.toContain("active:bg-primary-pressed");
+    // Coberto pela onda, o botão fica sem fundo próprio, também no hover e no toque.
+    passar(FIM_DA_TROCA_MS);
+    expect(classes()).toEqual(expect.arrayContaining(["bg-transparent", "hover:bg-transparent", "active:bg-transparent"]));
+  });
+
+  it("bloqueado (o Recusar da linha que aprova): não acende no hover nem no toque", () => {
+    montar("repouso", { variant: "destructive", bloqueado: true });
+    expect(classes()).toEqual(expect.arrayContaining(["bg-card", "hover:bg-card", "active:bg-card"]));
+    expect(classes()).not.toContain("hover:bg-destructive-soft");
+    expect(classes()).not.toContain("active:bg-destructive-soft");
+  });
+
+  it.each([
+    ["secondary", "hover:bg-surface-hover"],
+    ["outline", "hover:bg-surface-hover"],
+    ["ghost", "hover:bg-surface-hover"],
+  ] as const)("%s em andamento: sem o hover da variante", (variant, hover) => {
+    chegarEm("andamento", { variant });
+    expect(classes()).not.toContain(hover);
+    expect(classes()).not.toContain("active:bg-surface-pressed");
+  });
+
+  it("no repouso, no erro e sem resposta, o hover e o toque da variante ficam", () => {
+    for (const estado of ["repouso", "erro", "sem-resposta"] as const) {
+      chegarEm(estado);
+      if (estado !== "repouso") passar(0);
+      expect(classes(), estado).toEqual(expect.arrayContaining(["hover:bg-primary-hover", "active:bg-primary-pressed"]));
+    }
+  });
+});
+
+describe("a espera em tinta", () => {
+  it("fora do botão de cor, o em andamento fica em tinta: o crítico é só do erro", () => {
+    expect(declaradas('.botao-acao:not(.carregando-na-cor) > .botao-acao-camada[data-camada="andamento"]', COMPONENTES).get("color")).toBe(
+      "hsl(var(--carregando-cor))",
+    );
+    // O primário é o botão de cor: o indicador fica no branco dele.
+    montar("repouso");
+    expect(botao().classList.contains("carregando-na-cor")).toBe(true);
+    montar("repouso", { variant: "destructive" });
+    expect(botao().classList.contains("carregando-na-cor")).toBe(false);
+  });
 });
 
 describe("acessibilidade e textos", () => {

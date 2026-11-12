@@ -45,14 +45,33 @@ const EXCLAMACAO = "M12 7.6v4.9M12 16.2v.2";
 
 const CAMADAS: readonly EstadoDaAcao[] = ["repouso", "andamento", "sucesso", "erro", "sem-resposta"];
 
+type Variante = NonNullable<ButtonProps["variant"]>;
+
 /** O fundo do toque de cada variante do Button: o #AD0015 no primário da v3. */
-const FUNDO_DO_TOQUE: Record<NonNullable<ButtonProps["variant"]>, string> = {
+const FUNDO_DO_TOQUE: Record<Variante, string> = {
   default: "bg-primary-hover",
   secondary: "bg-surface-pressed",
   outline: "bg-surface-pressed",
   ghost: "bg-surface-pressed",
   destructive: "bg-destructive-soft",
   link: "",
+};
+
+/**
+ * Travado (em andamento, no sucesso e bloqueado), o botão não responde ao
+ * ponteiro. Com aria-disabled no lugar do disabled, o hover e o toque da
+ * variante continuariam valendo: o "Aprovando…" escurecendo no hover, o
+ * segundo toque impaciente pintando o primário com o --primary-pressed (que
+ * a v3 não redefine, e fica azul) e o Recusar bloqueado acendendo. Fica o
+ * fundo da variante: o vermelho cheio no primário.
+ */
+const PONTEIRO_TRAVADO: Record<Variante, string> = {
+  default: "hover:bg-primary active:bg-primary",
+  secondary: "hover:bg-card active:bg-card",
+  outline: "hover:bg-card active:bg-card",
+  ghost: "hover:bg-transparent active:bg-transparent",
+  destructive: "hover:bg-card active:bg-card",
+  link: "hover:no-underline",
 };
 
 interface Troca {
@@ -149,12 +168,16 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
     return () => clearTimeout(fim);
   }, [troca]);
 
-  // A onda nasce da caixa: o centro do ícone de quem sai, medido uma vez por troca.
+  // A onda nasce da caixa: o centro do ícone de quem sai, medido uma vez por
+  // troca. Sem ele (o repouso sem ícone, no resultado antes de 300 ms), a
+  // caixa de quem entra, que o sucesso e o erro sempre têm.
   const botao = React.useRef<HTMLButtonElement | null>(null);
   React.useLayoutEffect(() => {
     const elemento = botao.current;
     if (!elemento || (troca.atual !== "sucesso" && troca.atual !== "erro")) return;
-    const icone = elemento.querySelector(`.botao-acao-camada[data-camada="${troca.de ?? troca.atual}"] [data-icone]`);
+    const iconeDe = (camada: EstadoDaAcao | null) =>
+      camada ? elemento.querySelector(`.botao-acao-camada[data-camada="${camada}"] [data-icone]`) : null;
+    const icone = iconeDe(troca.de) ?? iconeDe(troca.atual);
     const fora = elemento.getBoundingClientRect();
     if (!icone || fora.width === 0) return;
     const caixa = icone.getBoundingClientRect();
@@ -259,6 +282,7 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
         grande && "[&_svg]:size-5",
         bloqueado && "opacity-45",
         className,
+        travado && PONTEIRO_TRAVADO[variant ?? "default"],
         cobre && SEM_FUNDO_PROPRIO,
         voltaDoFim && "transition-none",
       )}
