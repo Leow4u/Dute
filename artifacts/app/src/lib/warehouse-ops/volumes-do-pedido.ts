@@ -26,7 +26,13 @@ export type VolumeDaTarefa = {
 };
 
 /** O item dentro do volume, na ordem das linhas do pedido: o nome com o tamanho, o código do cliente e a quantidade. */
-export type ItemDoVolume = { nome: string; codigo: string; quantidade: number };
+export type ItemDoVolume = {
+  nome: string;
+  codigo: string;
+  quantidade: number;
+  /** O campo Tamanho do produto, quando a linha o traz: com ele, a etiqueta separa o tamanho que não está no código ("473ML"). */
+  tamanho?: string;
+};
 
 /** O volume como a bancada, a etiqueta e o romaneio o mostram. */
 export type VolumeDoPedido = {
@@ -110,11 +116,13 @@ function itemDaLinha(
   quantidade: number,
 ): ItemDaLinha {
   const nome = texto(item.name ?? item.product_name);
+  const tamanho = texto(item.size);
   return {
     nome: nomeComTamanho({ nome, codigo: item.client_item_code, tamanho: item.size }) || nome || texto(item.sku_code ?? item.sku),
     // O código do cliente; sem ele, o SKU.
     codigo: texto(item.client_item_code) || texto(item.sku_code ?? item.sku),
     quantidade,
+    ...(tamanho ? { tamanho } : {}),
     linha: Number(item.line_number) || Number.MAX_SAFE_INTEGER,
   };
 }
