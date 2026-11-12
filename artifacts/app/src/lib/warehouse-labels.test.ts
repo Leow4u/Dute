@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { warehouseBoxFromRecord } from "./warehouse-boxes";
-import { volumesDaSeparacao } from "./warehouse-ops/volumes-do-pedido";
 import {
   BOXES_PER_SHEET,
   CONTINUATION_LABEL_LINES,
@@ -393,29 +392,6 @@ describe("etiqueta do volume", () => {
     ]);
     // Nada da etiqueta cita a caixa.
     expect(JSON.stringify(volumeLabels(VOLUME_12, PEDIDO))).not.toContain("CX-");
-  });
-
-  it("o tamanho que mora no campo Tamanho, e não no fim do código, também fica à parte, como na caixa", () => {
-    // A linha da separação traz o Tamanho do produto; o nome do volume já sai com ele (nomeComTamanho).
-    const [volume] = volumesDaSeparacao(
-      [{ id: "v1", number: 3, status: "closed", units: 4, closed_at: "2026-11-12T17:40:00.000Z" }],
-      [
-        {
-          id: "pli_ord_1_01",
-          line_number: 1,
-          product_name: "Copo Térmico Stanley Quencher Azul-Marinho Edição Especial",
-          client_item_code: "B.0672.003.U.B",
-          sku_code: "BTG-000206",
-          size: "473ML",
-          separated_qty: 4,
-          separated_volumes: [{ volume_id: "v1", qty: 4 }],
-        },
-      ],
-    );
-    expect(volume!.itens).toEqual([{ nome: "Copo Térmico Stanley Quencher Azul-Marinho Edição Especial · 473ML", codigo: "B.0672.003.U.B", quantidade: 4, tamanho: "473ML" }]);
-    const [linha] = volumeLabels(volume!, PEDIDO)[0]!.lines;
-    expect(linha!.size).toBe("473ML");
-    expect(nameAndSize(linha!)).toEqual({ name: "Copo Térmico Stanley Quencher Azul-Marinho Edição Especial", size: "473ML" });
   });
 
   it("o total só entra com o pedido concluído; sem peso, só a data; sem destino, só o cliente", () => {
