@@ -709,6 +709,10 @@ Todas aprovadas "como recomendado":
 Ficam como estavam: o toast como retorno padrão (decisão 2), os 300 ms e os
 10 s (decisão 4) e as decisões do celular de 06/11.
 
+Em 13/11/2026, durante a parte 6, o Leonardo decidiu que o pedido aprovado
+entra em Para separar na posição da fila do servidor, e não no topo, como
+dizia o momento 4.
+
 ### 10.4 Implantação
 
 A especificação (o relógio, os tokens, as peças, os nove momentos, a
@@ -723,7 +727,7 @@ por PR:
 | 3 | O esqueleto neutro (`Esqueleto`, `CartaoComBrilho` e o `Skeleton` sem rosado) | PR 610 |
 | 4 | O `BotaoDeAcao` | PR 610 |
 | 5 | O toast embaixo no celular | PR 610 |
-| 6 | Pedidos como piloto: a ação por linha (`useAcaoNaLinha`), a barra da linha e os estados de 10 s e 70 s | a fazer |
+| 6 | Pedidos como piloto: a ação por linha (`useAcaoNaLinha`), a barra da linha e os estados de 10 s e 70 s | PR 610 |
 | 7 | A linha de estado nas listas (Pedidos, Receber, Estoque, Alertas) | a fazer |
 | 8 | As listas com a forma final | a fazer |
 | 9 | A abertura com a marca e a `CarregandoTela` no lugar do branco | a fazer |
@@ -738,3 +742,39 @@ Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código
 - o esqueleto fora da v3 (o portal) em `#D9DDE3`;
 - o piso do violeta do Agent Dute no movimento reduzido (0,75 no claro e 0,85
   no escuro, para manter 3:1).
+
+### 10.5 Registro das partes
+
+**Parte 6, Pedidos como piloto (PR 610, 13/11/2026).**
+
+- **A ação por linha** (`lib/carregando/use-acao-na-linha.ts`):
+  - cada linha tem o próprio estado, e o segundo toque é barrado antes de a
+    tela redesenhar;
+  - a chave de idempotência é por tentativa. Ela se repete depois do
+    "Conferir" e da falta de conexão, e só é trocada quando o servidor recusa;
+  - aos 70 s, ou no `deadline-exceeded`, a linha mostra o "Sem confirmação" e
+    o "Conferir", que relê e nunca reenvia.
+- **A barra da linha** (`components/ui/barra-de-espera.tsx`).
+- **"Para aprovar"** com o `BotaoDeAcao`, o objeto aos 3 s e a demora aos
+  10 s, no lugar do `busy` global.
+- **A saída sem salto**, com o `useListaSemSaltos` e o palco
+  (`lib/carregando/palco-sem-saltos.ts`):
+  - a linha que sai esmaece, e o cartão, os títulos e os grupos de baixo
+    refluem juntos, só por `transform`;
+  - o cartão se desenha em três pedaços, como na prancha;
+  - a regra do dedo vale para a tela inteira;
+  - o foco vai para a linha seguinte ou para o título do grupo, com o anel
+    visível;
+  - o realce vem só na linha que chegou por uma ação desta tela;
+  - Para separar e Para entregar usam o mesmo hook.
+- **Medição no Chromium:**
+  - antes, 9 peças pulavam num quadro só, até 215 px, e a linha de baixo ficava
+    cortada pelo cartão em 20 quadros;
+  - depois, nada passa da curva de 240 ms, e nenhuma linha fica cortada, no
+    claro e no escuro;
+  - no movimento reduzido, tudo pula para o lugar, como manda a especificação.
+
+Ficam para a parte 13 os diálogos de Pedidos que desabilitam o botão enquanto
+gravam ("Confirmar entrega" e "Cancelar pedido"). Fica para uma correção do
+sistema visual o anel de foco do `Button`, que o título copia: 1,91:1 no claro
+e 1,65:1 no escuro.
