@@ -747,7 +747,12 @@ Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código
 - o selo "Sem confirmação" em âmbar, porque é resultado desconhecido e não erro;
 - o esqueleto fora da v3 (o portal) em `#D9DDE3`;
 - o piso do violeta do Agent Dute no movimento reduzido (0,75 no claro e 0,85
-  no escuro, para manter 3:1).
+  no escuro, para manter 3:1);
+- a foto que fica 70 s sem um byte novo é cancelada e vira "Foto 2 não
+  enviada", com o "Tentar de novo", e não "Sem confirmação do servidor" com
+  "Conferir", como no cartão "Quando demora · escrita" da prancha: o envio
+  cancelado não tem o que conferir. A dúvida só existe na callable que vem
+  depois do último byte, e ela diz "Confira antes de tentar de novo".
 
 ### 10.5 Registro das partes
 
@@ -883,58 +888,125 @@ celular (as fotos) e o item 8 da seção 6.
 - **As fotos do celular** (`lib/envio-de-fotos.ts`, `useEnvioDeFotos`):
   - compactadas a 2000 px no lado maior (decisão 4 do celular), em JPEG,
     antes de pedir o destino; a foto pequena e leve sobe como veio, e a que
-    o navegador não abre também;
+    o navegador não abre também. Um teste confere, no Receber, na Contagem,
+    na ficha do item, na OS, no campo e no anexo do portal, que o que vai ao
+    Storage é a compactada;
   - sobem pelo `uploadBytesResumable`, uma por vez, na ordem da escolha; a
-    barra anda por evento de bytes e a contagem, por foto;
+    barra anda por evento de bytes e a contagem, por foto. A foto de até
+    256 KB vai numa requisição só, sem evento no meio: ela gira, em vez de
+    encher, até chegar;
   - a que falha fica "Foto 3 não enviada", com o próprio "Tentar de novo", e
-    não derruba as outras (o `Promise.all` perdia as que já tinham subido);
-    a que passa 70 s sem um byte novo é cancelada e fica do mesmo jeito;
+    não derruba as outras (o `Promise.all` perdia as que já tinham subido).
+    A que passa 70 s sem um byte novo é cancelada e fica do mesmo jeito; o
+    prazo para no último byte, e o que vem depois (o endereço da foto, a
+    callable da OS) tem o prazo e a mensagem dele;
   - no Receber, na Contagem e na ficha do item, a escolha leva 4 de cada vez,
     como antes, mas diz "Só 4 fotos sobem por vez." (e "Até 8 fotos por
-    produto.") no lugar do corte calado;
+    produto.") no lugar do corte calado, na tela e pelo Anunciador;
   - o diálogo da chegada avulsa e a ficha do item não fecham enquanto elas
-    sobem;
+    sobem. O campo e o botão de escolher ficam ocupados sem `disabled`, e o
+    foco fica neles;
   - na OS, no campo e no anexo do portal, só a JPEG é compactada: o nome no
-    Storage já leva a extensão, e a callable confere o tipo por ele.
-- **O `Progresso`** (`components/ui/progresso.tsx`): a contagem ("3 de 4",
-  os segmentos chanfrados, as miniaturas com o véu e a caixa determinada, o
-  selo verde, a fila tracejada, o "!" e "4 fotos enviadas") e as etapas
-  ("Etapa 1 de 2", os marcadores de 28 px e o fio). A barra de progresso tem
-  o nome e o `aria-valuetext`; o Anunciador fala "Enviando 4 fotos" e "4
-  fotos enviadas".
-- **O `AvisoDeEspera`** (`components/ui/aviso-de-espera.tsx`): aos 10 s,
-  "Demorando mais que o normal · 0:12", com "Tentar de novo" na leitura e a
-  estimativa quando o total é conhecido ("cerca de 20 s"); aos 70 s, na
-  escrita, "Sem confirmação do servidor" e "Conferir".
-- **As etapas**: Separação → Embalagem no "Concluir separação", Saída →
-  Entrega na entrega pela Dutelog, Arquivo → Cadastro em Documentos e
-  Cadastro → Arquivo → Trechos no Conhecimento. O "Voltar" fica
-  `aria-disabled`, o botão de ação mantém a largura e o diálogo não fecha; o
-  prazo sem resposta vira o "Conferir", que relê e nunca reenvia. O
-  Conhecimento, que grava direto no Firestore, ganhou o prazo de 70 s
-  (`comPrazo`).
-- **A foto por IA**: a contagem, o tempo decorrido e o "Cancelar", que para
-  de esperar sem fechar o diálogo.
-- **O `deadline-exceeded`** tem a mensagem própria ("O servidor não respondeu
-  a tempo. Confira antes de tentar de novo.") em `lib/functions-api.ts` e nas
-  callables da Operação, do WMS, do núcleo, do Comercial, do Financeiro e do
-  RH.
-- **O `useEspera`** alcança o agora ao armar o relógio: com a thread ocupada
-  no começo da espera (a foto sendo compactada), o indicador entrava só aos
-  3 s.
-- **Medição no Chromium** (harness com o Storage simulado a 1 Mbps, quatro
-  fotos de 4000 × 3000 e 2,7 MB):
+    Storage já leva a extensão, e a callable confere o tipo por ele. Na OS, a
+    foto que falha é falada uma vez, pelo Anunciador, e o motivo sai da tela
+    quando o envio recomeça.
+- **O `Progresso`** (`components/ui/progresso.tsx`):
+  - a contagem: "3 de 4", os segmentos chanfrados, as miniaturas com o véu e
+    a caixa determinada, o selo verde, a fila tracejada e o "!". A que não
+    foi enviada conta como passada ("3 de 4" com uma enviada, uma não
+    enviada e a terceira subindo);
+  - no fim, o título e o nome da barra dizem o que subiu ("4 fotos
+    enviadas", "3 fotos enviadas" com uma não enviada, "1 foto não enviada"
+    quando nenhuma subiu), e as miniaturas ficam com o selo: o bloco não
+    encolhe. No Receber, ele fica acima das fotos da linha, como na
+    Contagem, e as fotos entram embaixo dele;
+  - cada "Tentar de novo" é descrito pela foto dele, e o que sai da tela
+    leva o foco ao seguinte, ou ao título;
+  - as etapas: "Etapa 1 de 2", os marcadores de 28 px e o fio. Elas ficam na
+    tela desde o repouso, pendentes, como na prancha, e a de agora só anda
+    aos 300 ms, quando o Anunciador fala o título ("Concluindo a
+    separação"). Na caixa estreita (duas etapas no celular, três no
+    formulário do Agent Dute), o rótulo vai para baixo do marcador;
+  - a barra de progresso tem o nome e o `aria-valuetext`, que muda por item,
+    nunca por byte.
+- **O `AvisoDeEspera`** (`components/ui/aviso-de-espera.tsx`):
+  - aos 10 s, "Demorando mais que o normal · 0:12", com "Tentar de novo" na
+    leitura; aos 70 s, na escrita, "Sem confirmação do servidor" e
+    "Conferir";
+  - o lugar dele fica guardado desde o repouso, no diálogo e no bloco das
+    fotos, e ele entra sem empurrar o botão que a pessoa acabou de tocar;
+  - nas fotos, a estimativa ("cerca de 20 s") conta só a vez atual, conta
+    para baixo sem piscar e sai quando a foto que sobe está há 10 s sem um
+    byte novo (parada, ou sem rede);
+  - quando a pílula quebra em duas linhas, nenhum "·" sobra no fim da
+    primeira.
+- **As etapas nas operações longas**: Separação → Embalagem no "Concluir
+  separação", Saída → Entrega na entrega pela Dutelog, Arquivo → Cadastro em
+  Documentos e Cadastro → Arquivo → Trechos no Conhecimento.
+  - O "Voltar" e o X do diálogo ficam `aria-disabled` (o `fecharTravado` do
+    `DialogContent`), o botão de ação mantém a largura, os dois têm 44 px e
+    o diálogo não fecha.
+  - O prazo sem resposta vira o "Conferir", que relê e nunca reenvia.
+    Conferindo, o botão diz "Conferindo…", o "Sem confirmação do servidor"
+    fica e as etapas não voltam a andar.
+  - Na entrega, o "Conferir" lê a saída do pedido: entregue, segue o
+    sucesso; cancelada por outra pessoa, o diálogo fecha com "Entrega não
+    confirmada"; no resto, volta a "Confirmar entrega", com a mesma chave. O
+    fim de um pedido não passa para o diálogo de outro.
+  - Em Documentos, o arquivo que já subiu só vale de novo para o mesmo
+    arquivo, cliente e tipo: ele mora na pasta do cliente que estava ativo,
+    e o `customer_code` é a fronteira.
+  - O Conhecimento, que grava direto no Firestore, conta o prazo de 70 s de
+    cada lote gravado: a gravação lenta, mas andando, não desiste. O
+    "Conferir" lê o cadastro, o arquivo, o último pedaço e o último trecho, e
+    só com todos lá segue o sucesso, com o evento uma vez.
+- **A foto por IA**: aos 300 ms, a contagem com o tempo decorrido ao lado do
+  título, no lugar do texto de repouso, sem empurrar o "Cancelar", que para
+  de esperar sem fechar o diálogo. "Gerar" e "Aprovar" são o `BotaoDeAcao`
+  ("Gerando…", "Salvando…"), e o foco fica nele.
+- **A gestão das fotos e a ficha do Estoque**: "Atualizando fotos…" e
+  "Salvando no cadastro…" entram aos 300 ms e são falados pelo Anunciador,
+  sem `role="status"` solto. O X da ficha fica `aria-disabled` com as fotos
+  subindo.
+- **O `deadline-exceeded`** tem a mensagem própria em `lib/functions-api.ts`
+  e nas callables da Operação, do WMS, do núcleo, do Comercial, do
+  Financeiro e do RH: na escrita, "O servidor não respondeu a tempo. Confira
+  antes de tentar de novo."; na leitura, em que repetir é seguro, "O
+  servidor não respondeu a tempo. Tente de novo.".
+- **O `useEspera`** alcança o agora ao armar o relógio (com a thread ocupada
+  no começo da espera, o indicador entrava só aos 3 s), e o tique que
+  dispara um décimo de milissegundo antes do marco conta como o marco.
+- **Medição no Chromium** (harness com o Storage simulado, quatro fotos de
+  4000 × 3000 e 2,7 MB):
   - antes, as 4 subiam inteiras (10,8 MB) em 88,9 s, com "Enviando..."; a
     escolha de 6 levava 4 sem dizer; o Esc fechava o diálogo no meio;
-  - depois, 4 × 218 KB em 10,3 s, com "1 de 4" … "4 fotos enviadas"; a 300
-    kbps, aos 10 s, "Demorando mais que o normal · 0:10 · cerca de 15 s"; o
-    Esc não fecha;
-  - "Concluir separação": antes, o botão encolhia de 172 para 125 px em
-    "Registrando...", com `disabled`, e o Esc e o Voltar fechavam; depois, 172
-    px em todos os estados, "Etapa 1 de 2" aos 300 ms, o aviso aos 10 s e o
-    "Conferir" no prazo.
+  - depois, 4 × 425 KB em 15 s a 1 Mbps, com "1 de 4" … "4 fotos enviadas"
+    e o aviso aos 10 s; o bloco das fotos fica com a mesma posição e a
+    mesma altura do começo ao fim, no computador e no celular, e o foco
+    fica no campo da foto;
+  - "Concluir separação", entrega e Documentos: o botão de ação fica no
+    mesmo lugar, com 44 px, do repouso aos 70 s e no "Conferindo…"; o
+    anúncio sai entre 340 e 380 ms; no celular de 360 px, as duas etapas
+    cabem;
+  - o indicador aos 300 ms: em 900 esperas seguidas, nenhuma tardia (antes,
+    4 em 600 entravam só aos 3 s);
+  - com a foto parada e sem rede, a estimativa sai do aviso e volta quando
+    os bytes voltam, só contando para baixo; no movimento reduzido, só
+    opacidade.
 
-Ficam para depois: o progresso na tela do anexo do portal (Solicitar OS) e
-nas fotos da conclusão da OS, que já sobem compactadas e pelo envio que
-conta os bytes; o limite de 8 MB da foto da OS, conferido antes da
-compactação; e a medição num Android de verdade.
+Ficam para depois:
+
+- o progresso na tela do anexo do portal (Solicitar OS) e nas fotos da
+  conclusão da OS, que já sobem compactadas e pelo envio que conta os bytes;
+- as duas etapas do "Concluir separação" fecham juntas, porque o
+  `completeOrderSeparation` faz as duas numa chamada; a etapa de verdade pede
+  o servidor dizer o progresso, ou duas chamadas;
+- o "Cancelar" da foto por IA só para de esperar: a geração que já começou
+  termina no servidor, e o resultado é ignorado;
+- o limite de 8 MB da foto da OS, conferido antes da compactação;
+- com a foto de até 256 KB, que sobe sem eventos, e logo depois de uma parada
+  longa, a estimativa é grosseira (pode subir uma vez por foto, ou voltar
+  alta e cair em 2 a 3 s);
+- o "Tipo" de Documentos, um `Select` sem nome acessível, de antes desta
+  parte;
+- a medição num Android de verdade e no Safari.
