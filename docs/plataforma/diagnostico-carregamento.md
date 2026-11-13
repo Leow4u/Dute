@@ -1982,3 +1982,179 @@ Fica aberto:
   o item do menu e a tela), a confirmar com o Leonardo;
 - a conferência com leitor de tela de verdade, num Android médio e no
   Safari.
+
+**Parte 13f, o portal do cliente (PR 610, 13/11/2026).** A parte 13 no portal
+do cliente (seção 4.13): Pedidos, Estoque, Envios, Eventos, Faturas, o
+Relatório, o Início, Minhas OS, o comprovante e o sino. Fecha também, no
+portal, as necessidades 2, 3, 5, 8 e 10 (seção 5). As escritas, as chaves de
+idempotência e o `customer_code` como fronteira não mudam.
+
+- **O que já estava feito**: o `#D9DDE3` do esqueleto fora da v3, como token,
+  desde a parte 3; o caminhão pulsando do Enviar pedido, que virou o
+  `BotaoDeAcao` ("Enviando o pedido…") na 13a; os diálogos do Evento (Editar e
+  Excluir) e o painel "Seu pedido", também da 13a; o `Skeleton` neutro; e o
+  "Enviando anexo i de n…".
+- **A leitura do portal**, que toda tela dele espera:
+  - a tela nasce com o título e a largura dela; os blocos neutros entram aos
+    300 ms e, sob o título, "Carregando o portal…", com o anúncio; aos 10 s,
+    a demora e "Tentar de novo", que lê do zero; aos 70 s, "Sem resposta do
+    servidor." (`CarregandoNaRegiao`). Continua a espera da tela que abriu
+    ("Abrindo Estoque…"), sem anunciar de novo. O texto só para leitor de
+    tela, fora de região viva, saiu;
+  - a espera passa adiante (`passaAdiante`): a tela que chega e ainda lê o
+    que é dela ("Carregando eventos…", "Carregando as NFs dos serviços…",
+    "Carregando as OS…", "Abrindo o evento…") segue o mesmo relógio. O
+    indicador não some, a caixa não entra de novo, nada é anunciado duas
+    vezes, e a demora vem aos 10 s do começo, e não da leitura da tela. O
+    item do menu não conta essa espera como tela abrindo;
+  - a linha de estado nunca encolhe nem fica sob os blocos: os blocos cabem
+    no que sobra, sem rolar. Só o contêiner dos blocos fica `aria-busy`,
+    apontando para a linha, que fica fora dele, também aos 70 s;
+  - sem nada lido, a falha fica no lugar da tela, com "Tentar de novo" de
+    44 px; a nova tentativa fica na falha (`useLeituraComFalha`) e diz
+    "Tentando de novo…" só aos 300 ms, e pelo menos 500 ms: a que falha de
+    novo antes não pisca o botão nem muda a frase do alerta, e a primeira
+    falha nasce dizendo "Tentar de novo". Sem rede, o aviso da conexão. O
+    "Portal indisponível", com o RefreshCw girando e o botão `disabled`,
+    saiu;
+  - com o portal lido, a releitura que falha não apaga a tela (necessidade
+    8): sem rede, a faixa do topo já diz; por outro motivo, "Não foi possível
+    atualizar o portal." fica escrita em cima da tela, sem falar, com "Tentar
+    de novo". Antes, a tela inteira virava a falha, e o teste do PR 582
+    travava isso para a falha que não é de conexão; ele mudou. A estrutura em
+    volta da tela é sempre a mesma, para a frase entrar e sair sem montar a
+    tela de novo.
+- **A leitura de cada tela**:
+  - Eventos: o título fica, e sob ele "Carregando eventos…", no lugar do
+    segundo esqueleto da tela inteira. A falha tem "Tentar de novo", e a
+    releitura que falha não apaga a lista: "Não foi possível atualizar os
+    eventos." fica escrita, sem falar;
+  - Faturas nunca dizem "Nenhuma fatura fechada" antes de ler as NFs, e a
+    falha delas fica dita, com a nova tentativa;
+  - Minhas OS (as OS, as NFs e as solicitações), o sino e o comprovante leem
+    ao vivo com a nova tentativa (`useLeituraDoPortal` e
+    `useDocumentoDoPortal`): o `onSnapshot` que falha não volta sozinho, e a
+    falha fica na tela durante a nova tentativa, com "Tentando de novo…",
+    até ela responder;
+  - as datas de entrada no detalhe do produto: lendo e na falha, a seção
+    fica, com a espera ou a falha. Só no produto que tem peça nas
+    prateleiras, livre ou reservada: o zerado e o que só está em recebimento
+    não têm data, e a seção deles não nasce lendo para sumir na chegada;
+  - as rotinas do Agent Dute no Início: a falha fica dita, com "Tentar de
+    novo".
+- **O comprovante**: o "Baixar PDF" espera os endereços da assinatura e das
+  fotos, travado no código (nunca `disabled`), até a desistência dos 70 s;
+  depois, volta a sair com o que chegou, e a região diz que o servidor não
+  respondeu. A imagem que não veio fica dita, na barra e no papel ("Foto 2
+  não carregou", "Assinatura não carregou"); a que ainda chega guarda o
+  lugar à vista, fora da árvore, e a lista do leitor de tela não tem item em
+  branco.
+- **As ações**:
+  - o `BotaoDeAcao`, com o gerúndio, em Cancelar o pedido e o aviso
+    ("Cancelando…"), Avisar um envio ("Registrando o aviso…"), Baixar
+    planilha ("Gerando a planilha…"), Salvar evento ("Salvando o evento…") e
+    Solicitar OS ("Enviando a solicitação…"). Manter, Cancelar e Fechar
+    ficam `aria-disabled` desde o toque e esmaecem junto com o gerúndio, aos
+    300 ms: o `DialogCancelar` com `ocupado` segue o relógio do confirmar, e
+    a ação que responde antes não pisca o botão. Vale também para a falta da
+    linha, a guarda da área e o destino da caixa, na Armazenagem;
+  - a pergunta na linha ("Cancelar PED-0001?", `ConfirmacaoNaLinha`): ao
+    abrir, o foco vai ao "Manter", no grupo que tem a pergunta como nome; o
+    "Manter" e o sucesso devolvem o foco ao gatilho e, se ele sai depois (a
+    releitura tirou a ação da linha), ao pedido no lugar novo dele, ao
+    vizinho ou ao título. Nunca ao `body`;
+  - os produtos zerados do Estoque têm a ação de cada um (`useAcaoNaLinha`,
+    num contexto): antes, os botões dividiam o `isPending`, e no card não
+    havia trava. O "Avisado" fica até a releitura do portal, que é uma só
+    (antes, duas). O produto arquivado sai da vitrine, e o foco vai ao
+    vizinho;
+  - em Envios, o aviso não sai durante a leitura da nota (antes, saía sem os
+    itens, e o arquivo subia duas vezes), soltar um arquivo é ignorado nesse
+    tempo, a caixa violeta aparece aos 300 ms e a demora aos 10 s; Anexar,
+    Ler e Remover ficam `aria-disabled`. A área da nota é a própria região de
+    estado: sem `aria-busy` nela.
+- **Acessibilidade**:
+  - quem fala é o Anunciador: a contagem do Estoque (só quando a pessoa
+    busca), o "adicionado", "Solicitação enviada" e "Nenhum tipo encontrado".
+    A trava do portal (`carregando-v2.test.ts`) pega também o `role="status"`
+    solto, e não só o `aria-live`;
+  - quando a região sai com o foco nela (a pessoa tocou em "Tentar de novo"
+    na demora), o foco vai ao título da seção ou da tela que chegou, nunca ao
+    `body`, em qualquer tela que use a `CarregandoNaRegiao`;
+  - no celular, as ações de linha têm 48 px (Cancelar pedido, Cancelar
+    aviso, Manter, Avisar reposição, Arquivar; o gatilho de texto pelo
+    `::before`, sem mudar a linha), Anexar e Ler nota têm 44 px, e o Remover
+    do anexo tem 24 px (44 no celular) e o anel cheio do foco, com o recuo
+    (antes, 12 px e o anel a 1,9:1);
+  - o texto de apoio da caixa violeta, a demora inclusive, tem 5,7:1 no
+    escuro (antes, 3,9:1).
+- **Testes**: por área (`shared.carregando`, `shared-sem-conexao`,
+  `cancelar-no-portal`, `estoque-carregando`, `envios-carregando`,
+  `eventos-carregando`, `faturas-carregando`, `minhas-os-carregando`,
+  `comprovante-carregando`, `relatorio-carregando`, `inicio-carregando`,
+  `sino-carregando`), as leituras ao vivo com a nova tentativa
+  (`lib/portal/leitura-do-portal.test.tsx`, que pega a nova tentativa que
+  voltasse a "carregando" ou soltasse a falha antes da resposta) e a trava
+  do portal, com a lista dos textos e o axe. Contra o código de antes da
+  parte, 58 de 123 testes dela falham; contra o código da parte, 22 dos 83
+  da revisão falham. Os que passam são as travas dos textos e as guardas.
+- **Medição no Chromium** (harness com a API falsa, só 127.0.0.1):
+  - o portal lendo: "Carregando o portal…" à vista e anunciado aos 309 ms;
+    a demora e "Tentar de novo" aos 9,98 s. A 390 × 844, aos 10,2 s, a linha
+    tem 56 px e o "Tentar de novo" recebe o toque; aos 70,3 s, 170 px, com o
+    "Tentar de novo" de 324 × 44 à vista. A 1366 × 657, aos 70 s, o cartão
+    de 78 px inteiro. Antes da revisão, a linha encolhia a 24 px, os blocos
+    a cobriam, e o toque não chegava ao botão;
+  - Eventos e Faturas com o portal em 1 s e a leitura da tela em 3 s: a
+    caixa fica de 0,36 s a 3,03 s, sem quadro vazio e sem entrar de novo, e
+    a única fala é "Carregando o portal"; antes, nada de 1,05 a 1,35 s e uma
+    segunda fala. Com o portal em 8 s e os eventos em 16 s, a demora aos
+    10,03 s, dita uma vez; antes, nunca;
+  - o cancelamento com a releitura do portal que falha: a lista fica, com
+    "Não foi possível atualizar o portal." e nenhum alerta; antes, a tela
+    virava "Não foi possível carregar o portal.". O foco vai ao "Manter" ao
+    abrir e, no fim, ao gatilho; antes, ao `body` por 2,4 s;
+  - a nova tentativa do portal que falha de novo em 150 ms: o botão fica
+    "Tentar de novo" o tempo todo, sem caixa; antes, a caixa piscava por
+    cerca de 115 ms;
+  - arquivar pelo teclado: o foco fica no "Arquivando…" e, quando o produto
+    sai, vai ao card vizinho aos 1,66 s; antes, ao `body`;
+  - as datas com a resposta em 600 ms: o produto zerado nunca mostra a
+    seção (antes, 74 px de 7 a 571 ms); o que tem peça mostra a seção desde
+    o começo e "Carregando as datas…" aos 296 ms;
+  - "Tentar de novo" da demora pelo teclado: o foco fica na região e vai ao
+    título "Pedidos" quando a tela chega; antes, ao `body`;
+  - aos 0,4 s e aos 71 s, o `main` sem `aria-busy`, a linha e o alerta
+    "Sem resposta do servidor." fora de qualquer `aria-busy`;
+  - a chegada a 1440: o título da espera no lugar do título da tela (144,
+    20 em Pedidos; 32, 20 no Estoque; 80, 20 em Eventos);
+  - a 390 px, os alvos acima, e nenhuma rolagem lateral. O axe não acusa
+    nada nos estados da parte a 390 (o portal lendo inclusive, que antes
+    rolava sem nada focável), nem a 1440 no claro, fora o rodapé do
+    relatório, de antes; no escuro, a caixa violeta da nota passa, e ficam o
+    azul do primário (4,3 e 4,38:1, o token registrado na seção 4.3 da
+    especificação) e o mesmo rodapé.
+
+Fica aberto:
+
+- com `?evento=` no Estoque, "Abrindo o evento…" guarda a altura dela e,
+  quando o evento chega, sai, e a grade sobe 44 px. No caminho comum, o
+  painel do pedido abre no mesmo instante, por cima; só no "Evento não
+  encontrado" a subida fica à vista;
+- o corpo da espera do portal é genérico (os cartões e o bloco grande): o
+  título e a largura já são os da tela, o resto muda na chegada;
+- a leitura da nota fiscal em Envios segue sem prazo: aos 10 s diz que
+  demora, sem a saída dos 70 s nem cancelar;
+- o "Baixar PDF" espera os endereços das imagens, e não os bytes: na rede
+  lenta, o PDF ainda pode sair com a foto em branco;
+- o progresso nos anexos do Solicitar OS, a confirmação do "Marcar como
+  lidos" do sino, e a nova tentativa da foto do comprovante, que relê todas
+  as imagens, e não só as que faltaram;
+- "Avisar reposição" transborda a borda do botão na grade de duas e de três
+  colunas (o layout, de antes);
+- fora do portal, as telas que passam o `isFetching` cru ao `ErroNaLeitura`
+  (a tabela de preços, a central da IA, Pessoas, Clientes, as Chaves de API,
+  a conversa do Agent Dute) ainda dizem "Tentando de novo…" no toque, sem o
+  relógio; o `useTentandoNoRelogio` é a peça para elas;
+- a conferência com leitor de tela de verdade, num Android médio e no
+  Safari.
