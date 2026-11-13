@@ -31,7 +31,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -40,6 +40,7 @@ import { useOpeningInventorySession } from "@/features/warehouse-ops/opening-inv
 import { useToast } from "@/hooks/use-toast";
 import { normalizeApiRows } from "@/features/warehouse-ops/receiving";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { falhaDasLeituras } from "@/lib/carregando/falha-das-leituras";
 import { sessionBoxes, warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import {
   type LabelData,
@@ -104,6 +105,9 @@ function useAjusteDaPrevia(larguraMm: number) {
   }, [area, larguraMm]);
   return { ref: setArea, zoom };
 }
+
+/** O resumo da impressão ("12 etiquetas · 3 folhas"): o foco vai a ele quando o aviso da falha sai com ele. */
+const ID_DO_RESUMO = "etiquetas-resumo";
 
 export default function WarehouseLabelsPage() {
   // Caixas e conteúdo do cliente ativo (o mesmo da Contagem que abriu a página).
@@ -199,23 +203,22 @@ export default function WarehouseLabelsPage() {
 
   const pages = useMemo(() => labelPages(labels, mode), [labels, mode]);
   const previa = useAjusteDaPrevia(larguraDaPagina(mode, pages));
-  // A leitura que falhou sem nada lido fica na tela enquanto tenta de novo (o "Tentar de novo" não some com o foco
-  // nele); a releitura que falha (depois de registrar a impressão) não tira a prévia (carregamento v2, parte 13b).
+  // A leitura que falhou sem nada lido fica na tela enquanto tenta de novo (as cópias): o aviso e o "Tentar de novo" não
+  // somem com o foco nele, e a falta de conexão fica "Sem conexão." ou "Reconectando…", nunca o erro genérico. A
+  // releitura que falha (depois de registrar a impressão) não tira a prévia (carregamento v2, parte 13b).
   const caixasLidas = useLeituraComFalha(boxesQuery);
+  const sessaoLida = useLeituraComFalha(sessionQuery);
   const posicoesLidas = useLeituraComFalha(positionsQuery);
   const loading =
-    (wantsBoxes && (caixasLidas.isLoading || (needsSession && sessionQuery.isLoading))) ||
+    (wantsBoxes && (caixasLidas.isLoading || (needsSession && sessaoLida.isLoading))) ||
     (wantsPositions && posicoesLidas.isLoading) ||
     (fromOrder && orderVolumes.estado === "carregando");
-  const semCaixas = wantsBoxes && caixasLidas.isError && caixasLidas.data === undefined;
-  const semSessao = wantsBoxes && needsSession && sessionQuery.isError && sessionQuery.data === undefined;
-  const semPosicoes = wantsPositions && posicoesLidas.isError && posicoesLidas.data === undefined;
-  const falhouNaLeitura = semCaixas || semSessao || semPosicoes;
-  const tentarDeNovo = () => {
-    if (semCaixas) void boxesQuery.refetch();
-    if (semSessao) void sessionQuery.refetch();
-    if (semPosicoes) void positionsQuery.refetch();
-  };
+  const falhaDaLeitura = falhaDasLeituras([
+    ...(wantsBoxes ? [[boxesQuery, caixasLidas] as const] : []),
+    ...(wantsBoxes && needsSession ? [[sessionQuery, sessaoLida] as const] : []),
+    ...(wantsPositions ? [[positionsQuery, posicoesLidas] as const] : []),
+  ]);
+  const falhouNaLeitura = falhaDaLeitura !== null;
   const error =
     (wantsVolumes && orderVolumes.estado === "erro" ? new Error("Não foi possível carregar os volumes do pedido.") : null) ||
     (wantsVolumes && orderVolumes.estado === "nao_encontrado" ? new Error("Pedido não encontrado.") : null) ||
@@ -307,7 +310,8 @@ export default function WarehouseLabelsPage() {
               </Select>
             </div>
             {/* A contagem só depois de ler: nunca "0 etiquetas · 0 folhas" antes (parte 13b). */}
-            <div className="text-sm text-muted-foreground">
+            {/* O resumo recebe o foco quando o aviso da falha sai com ele, depois da nova tentativa que deu certo. */}
+            <div id={ID_DO_RESUMO} tabIndex={-1} className="text-sm text-muted-foreground">
               {loading || falhouNaLeitura
                 ? null
                 : textoDaImpressao({ etiquetas: labels.length, folhas: pages.length, caixas: boxes.length, posicoes: positions.length, volumes: volumes.length, mode })}
@@ -335,7 +339,8 @@ export default function WarehouseLabelsPage() {
             <AlertDescription>{missingVolumes.join(", ")}. A etiqueta sai do volume fechado.</AlertDescription>
           </Alert>
         ) : null}
-        {needsSession && !sessionQuery.data?.lines?.length ? (
+        {/* Só com a sessão lida: antes dela (ou com ela falhando), a nota diria que a caixa está vazia sem ter lido (parte 13b). */}
+        {needsSession && sessaoLida.data !== undefined && !sessaoLida.data.lines?.length ? (
           <Alert className="border-border bg-card">
             <AlertTitle>Conteúdo da caixa</AlertTitle>
             <AlertDescription>
@@ -345,13 +350,14 @@ export default function WarehouseLabelsPage() {
         ) : null}
       </div>
 
-      {falhouNaLeitura ? (
-        <ErroNaLeitura
+      {falhaDaLeitura ? (
+        // "Tentando de novo…" só na nova tentativa que a pessoa pede; sem rede, "Sem conexão." ou "Reconectando…".
+        <FalhaNaLeitura
           className="no-print"
+          leitura={falhaDaLeitura.leitura}
+          erro={falhaDaLeitura.erro}
           mensagem="Não consegui carregar as etiquetas."
-          // "Tentando de novo…" só com a leitura que falhou relendo.
-          tentando={(semCaixas && caixasLidas.isFetching) || (semPosicoes && posicoesLidas.isFetching) || (semSessao && sessionQuery.isFetching)}
-          onTentar={tentarDeNovo}
+          focoAoSair={ID_DO_RESUMO}
         />
       ) : error ? (
         <Alert variant="destructive" className="no-print">
@@ -361,7 +367,7 @@ export default function WarehouseLabelsPage() {
       ) : loading ? (
         // O esqueleto da prévia e, aos 300 ms, a caixa com o rótulo e o anúncio (carregamento v2, parte 13b).
         <div className="no-print flex flex-col gap-3">
-          <CarregandoNaRegiao rotulo="Carregando as etiquetas…" />
+          <CarregandoNaRegiao rotulo="Carregando etiquetas…" />
           <Skeleton className="h-96 w-full rounded-lg" />
         </div>
       ) : !wantsBoxes && !wantsPositions && !wantsVolumes ? (

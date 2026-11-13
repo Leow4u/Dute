@@ -13,11 +13,14 @@ import { textosForaDaLista } from "@/test/textos";
 /**
  * As Exceções na migração do carregamento v2 (parte 13b; diagnóstico, 4.5 e
  * necessidades 2, 3, 5 e 8). Antes de ler, nem "0 aberta(s)" nem "Nada
- * selecionado": "Carregando exceções…" aos 300 ms. A leitura que falha nunca
- * vira "Sem exceções abertas": o aviso com "Tentar de novo". O Atualizar só
- * mostra a espera quando a pessoa toca nele (a releitura automática não o
- * gira nem o desabilita), e o "Confirmar tratativa" é o BotaoDeAcao, ocupado
- * sem `disabled`. Dados sintéticos.
+ * selecionado": o selo fica no lugar, com o bloco no lugar do número, e
+ * "Carregando exceções…" aos 300 ms. A leitura que falha nunca vira "Sem
+ * exceções abertas": o aviso com "Tentar de novo", e o foco vai à linha de
+ * estado quando ele sai. O Atualizar é o das listas (o ícone vira a caixa) e
+ * só mostra a espera quando a pessoa toca nele; a releitura que ele pede e
+ * falha fica na linha de estado. O "Confirmar tratativa" é o BotaoDeAcao,
+ * ocupado sem `disabled`. Relógio simulado: a espera de 300 ms não depende da
+ * máquina. Dados sintéticos.
  */
 
 const estado = vi.hoisted(() => ({
@@ -58,20 +61,18 @@ let raiz: Root | null = null;
 let container: HTMLDivElement;
 let cliente: QueryClient;
 
+async function pausa(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
+
 async function esperar(condicao: () => boolean, oQue: string) {
   for (let volta = 0; volta < 300; volta += 1) {
     if (condicao()) return;
-    await act(async () => {
-      await new Promise((pronto) => setTimeout(pronto, 10));
-    });
+    await pausa(10);
   }
   throw new Error(`Não aconteceu: ${oQue}`);
-}
-
-async function pausa(ms: number) {
-  await act(async () => {
-    await new Promise((pronto) => setTimeout(pronto, ms));
-  });
 }
 
 const naTela = () => {
@@ -85,6 +86,8 @@ const botao = (rotulo: string) =>
   );
 
 beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(Date.parse("2026-11-13T13:42:00Z"));
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("fetch", vi.fn(servir));
   estado.atrasoMs = 20;
@@ -101,8 +104,17 @@ afterEach(() => {
   cliente.clear();
   container.remove();
   document.body.innerHTML = "";
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+
+/** O axe roda no relógio de verdade (ele espera com temporizadores próprios). */
+async function axe(html: string) {
+  vi.useRealTimers();
+  const violacoes = await violacoesDeAcessibilidade(html);
+  vi.useFakeTimers();
+  return violacoes;
+}
 
 async function montar() {
   raiz = createRoot(container);
@@ -127,9 +139,10 @@ describe("Exceções, a leitura", () => {
     expect(naTela()).toContain("Carregando exceções…");
     expect(naTela()).not.toMatch(/\b0 aberta|Nada selecionado|Sem exceções abertas/);
     expect(container.querySelector("[data-anunciador]")?.textContent).toContain("Carregando exceções");
-    expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
+    const lendo = container.innerHTML;
     await esperar(() => naTela().includes("PED-1042"), "as exceções");
     expect(naTela()).toContain("2 aberta(s)");
+    expect(await axe(lendo)).toEqual([]);
   });
 
   it("a leitura que falha nunca vira \"Sem exceções abertas\": o aviso com Tentar de novo", async () => {
@@ -138,10 +151,63 @@ describe("Exceções, a leitura", () => {
     await esperar(() => naTela().includes("Não consegui carregar as exceções."), "o aviso da falha");
     expect(naTela()).not.toMatch(/Sem exceções abertas|Nada selecionado|\b0 aberta/);
     expect(botao("Tentar de novo")).toBeTruthy();
-    expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
+    expect(await axe(container.innerHTML)).toEqual([]);
     estado.falha = false;
-    await act(async () => botao("Tentar de novo")!.click());
+    const tentar = botao("Tentar de novo")!;
+    tentar.focus();
+    await act(async () => tentar.click());
     await esperar(() => naTela().includes("PED-1042"), "as exceções depois da nova tentativa");
+    // O aviso saiu com o foco nele: o foco vai à linha de estado, que diz a hora, nunca ao body (2.4.3).
+    expect(document.activeElement).toBe(container.querySelector("[data-linha-de-estado]"));
+    expect(document.activeElement?.id).toBe("excecoes-linha-de-estado");
+  });
+
+  it("antes de ler, o selo fica no lugar com o bloco no lugar do número: nada pula quando a contagem chega", async () => {
+    estado.atrasoMs = 1_000;
+    await montar();
+    const seloAntes = container.querySelector("[data-esqueleto]")?.closest("div.inline-flex, span, div");
+    expect(container.querySelector('[data-esqueleto][data-forma="contagem"]')).not.toBeNull();
+    expect(seloAntes).not.toBeNull();
+    // O selo antes de ler é desenho, fora da árvore: quem diz a espera é "Carregando exceções…".
+    expect(container.querySelector('[data-esqueleto][data-forma="contagem"]')!.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(naTela()).not.toMatch(/\b0 aberta/);
+    // O selo vem antes do Atualizar, no mesmo lugar, antes e depois de ler.
+    const ordem = () => {
+      const atualizar = container.querySelector("button[data-atualizar]")!;
+      return atualizar.parentElement!.firstElementChild!.textContent?.includes("aberta(s)") ?? false;
+    };
+    expect(ordem()).toBe(true);
+    await esperar(() => naTela().includes("PED-1042"), "as exceções");
+    expect(naTela()).toContain("2 aberta(s)");
+    expect(ordem()).toBe(true);
+  });
+});
+
+describe("Exceções, o Atualizar das listas", () => {
+  it("é o Atualizar das listas: o ícone vira a caixa, o rótulo não muda e nunca diz \"Atualizando…\"", async () => {
+    await montar();
+    await esperar(() => naTela().includes("PED-1042"), "as exceções");
+    const atualizar = container.querySelector<HTMLButtonElement>("button[data-atualizar]");
+    expect(atualizar).not.toBeNull();
+    expect(atualizar!.textContent?.trim()).toBe("Atualizar");
+    expect(container.innerHTML).not.toContain("Atualizando…");
+    estado.atrasoMs = 800;
+    await act(async () => atualizar!.click());
+    await pausa(350);
+    expect(atualizar!.getAttribute("aria-busy")).toBe("true");
+    expect(atualizar!.textContent?.trim()).toBe("Atualizar");
+    expect(atualizar!.querySelector("[data-spinner]")).not.toBeNull();
+    await pausa(800);
+  });
+
+  it("o Atualizar tocado que falha com a lista lida: a linha de estado diz, e a lista fica", async () => {
+    await montar();
+    await esperar(() => naTela().includes("PED-1042"), "as exceções");
+    estado.falha = true;
+    await act(async () => container.querySelector<HTMLButtonElement>("button[data-atualizar]")!.click());
+    await esperar(() => /Não consegui atualizar/.test(container.querySelector("[data-linha-de-estado]")?.textContent ?? ""), "a falha na linha");
+    expect(naTela()).toContain("PED-1042");
+    expect(container.querySelector("[data-linha-de-estado]")?.textContent).toMatch(/Não consegui atualizar· lista de \d{2}:\d{2}Tentar de novo/);
   });
 });
 
@@ -149,7 +215,7 @@ describe("Exceções, o Atualizar e a tratativa", () => {
   it("a releitura automática não gira nem desabilita o Atualizar; o toque nele fica ocupado sem disabled e o foco fica", async () => {
     await montar();
     await esperar(() => naTela().includes("PED-1042"), "as exceções");
-    const atualizar = botao("Atualizar")!;
+    const atualizar = container.querySelector<HTMLButtonElement>("button[data-atualizar]")!;
     estado.atrasoMs = 800;
     // A releitura automática (o tempo real, o intervalo): começa e segue sem ninguém esperar por ela.
     await act(async () => {
@@ -190,7 +256,7 @@ describe("Exceções, o Atualizar e a tratativa", () => {
     await act(async () => confirmar.click());
     expect(estado.pendentes).toHaveLength(1);
     expect(textosForaDaLista(confirmar.outerHTML, ["Confirmar tratativa", "Confirmando…", "Conferir"])).toEqual([]);
-    expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
+    expect(await axe(container.innerHTML)).toEqual([]);
     await act(async () => estado.pendentes[0]!.responder());
     await pausa(50);
   });

@@ -31,6 +31,9 @@ const SAFRA: AlertaProposto = { ...ITAU, id: "alerta_fedcba9876543210fedcba98", 
 
 const nomes: Record<string, string> = { ITAU: "Itaú Unibanco", SAFRA: "Banco Safra" };
 
+/** A leitura que falhou sem nada lido (a `falhaDasLeituras`): a falha e a nova tentativa. */
+const falhaCom = (erro: Error) => ({ erro, leitura: { error: erro, refetch: async () => undefined } as never });
+
 function elemento(props: Partial<AlertasParadosViewProps> = {}) {
   return (
     <div className="v3">
@@ -154,7 +157,7 @@ describe("Estoque › Alertas na v3", () => {
       "Alertas de itens parados",
     ]);
     // A falha nunca vira vazio e tem a nova tentativa (parte 13b).
-    expect(textosDaTela(tela({ estado: "erro", tentar: { tentando: false, onTentar: () => undefined } }))).toEqual([
+    expect(textosDaTela(tela({ estado: "erro", falha: falhaCom(new Error("Falha no servidor")) }))).toEqual([
       "Alertas de itens parados",
       "Não consegui carregar os alertas.",
       "Tentar de novo",
@@ -173,7 +176,7 @@ describe("Estoque › Alertas na v3", () => {
     expect(await violacoesDeAcessibilidade(tela())).toEqual([]);
     expect(await violacoesDeAcessibilidade(tela({ alertas: [SAFRA, ITAU] }))).toEqual([]);
     expect(await violacoesDeAcessibilidade(tela({ ocupado: true, decidindo: "aprovar" }))).toEqual([]);
-    expect(await violacoesDeAcessibilidade(tela({ estado: "erro", tentar: { tentando: false, onTentar: () => undefined } }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(tela({ estado: "erro", falha: falhaCom(new Error("Falha no servidor")) }))).toEqual([]);
   });
 });
 
@@ -184,14 +187,13 @@ describe("Estoque › Alertas na v3", () => {
  * v2, parte 7a).
  */
 describe("Estoque › Alertas sem conexão", () => {
-  const tentar = { tentando: false, onTentar: () => undefined };
   // 13:42 UTC são 10:42 no armazém.
   const lidaEm = Date.parse("2026-11-06T13:42:00Z");
   const naConexao = (estado: EstadoDaConexao, props: Partial<AlertasParadosViewProps>) =>
     renderToStaticMarkup(<ProvedorDaConexao value={conexaoEm(estado)}>{elemento(props)}</ProvedorDaConexao>);
 
   // A leitura com a falta e a lista lida: a hora dela fica na linha de estado, sob o título (parte 7b).
-  const comFalta = { leitura: [{ ...LEITURA, isError: true, error: new SemResposta(), dataUpdatedAt: lidaEm }], semConexao: { lidaEm, ...tentar } };
+  const comFalta = { leitura: [{ ...LEITURA, isError: true, error: new SemResposta(), dataUpdatedAt: lidaEm }] };
 
   it("com a lista lida: o alerta fica, com a hora da leitura na linha de estado", () => {
     const textos = textosDaTela(naConexao("sem-conexao", comFalta));
@@ -203,7 +205,7 @@ describe("Estoque › Alertas sem conexão", () => {
   });
 
   it("sem nada lido: o aviso, nunca \"Nenhum alerta para aprovar\"", () => {
-    const semNada = { alertas: [], alerta: null, semConexao: { lidaEm: null, ...tentar } };
+    const semNada = { alertas: [], alerta: null, estado: "erro" as const, falha: falhaCom(new SemResposta()) };
     expect(textosDaTela(naConexao("sem-conexao", semNada))).toEqual(["Alertas de itens parados", "Sem conexão.", "Tentar de novo"]);
     expect(textosDaTela(naConexao("reconectando", semNada))).toEqual(["Alertas de itens parados", "Reconectando…", "Tentar de novo"]);
   });
@@ -212,7 +214,7 @@ describe("Estoque › Alertas sem conexão", () => {
     for (const estado of ["sem-conexao", "reconectando"] as const) {
       expect(await violacoesDeAcessibilidade(naConexao(estado, comFalta)), estado).toEqual([]);
       expect(
-        await violacoesDeAcessibilidade(naConexao(estado, { alertas: [], alerta: null, semConexao: { lidaEm: null, ...tentar } })),
+        await violacoesDeAcessibilidade(naConexao(estado, { alertas: [], alerta: null, estado: "erro", falha: falhaCom(new SemResposta()) })),
         estado,
       ).toEqual([]);
     }

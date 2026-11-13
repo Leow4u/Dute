@@ -6,16 +6,15 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { LayoutGrid, PackageOpen, Printer, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +28,8 @@ import { useIsDesktop } from "@/hooks/use-desktop";
 import { cn } from "@/lib/utils";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
-import { ehFaltaDeConexao, semConexaoNaLeitura } from "@/lib/conexao";
+import { falhaDasLeituras } from "@/lib/carregando/falha-das-leituras";
+import { ehFaltaDeConexao } from "@/lib/conexao";
 import { openingInventoryNotice } from "@/lib/opening-inventory";
 import { boxVolumeM3, formatVolumeM3 } from "@/lib/warehouse-volume";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
@@ -88,7 +88,6 @@ export default function WarehouseMapPage() {
   const [, navigate] = useLocation();
   const desktop = useIsDesktop();
   const { code: activeCustomerCode, active: activeCustomer } = useActiveCustomer();
-  const queryClient = useQueryClient();
   const [zone, setZone] = useState<ZoneFilter>("all");
   const [aisle, setAisle] = useState<string>(ALL);
   const [search, setSearch] = useState("");
@@ -152,33 +151,38 @@ export default function WarehouseMapPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [desktop, selectedCode]);
 
-  // O mapa lê as posições, as caixas, os saldos (a guarda por linha) e o catálogo (a busca): só entra com os quatro
-  // lidos, e nunca diz "Nenhuma prateleira" antes de ler (carregamento v2, parte 13b). A leitura que falhou sem nada
-  // lido fica na tela enquanto tenta de novo.
+  // O mapa são as posições e as caixas: só entra com as duas lidas, e nunca diz "Nenhuma posição cadastrada" antes de
+  // ler (carregamento v2, parte 13b). Os saldos (o saldo sem caixa registrada, da guarda por linha) esperam a primeira
+  // leitura, para a prateleira não parecer vazia antes dela, mas a falha deles não tira o mapa da tela; o catálogo
+  // (os nomes na busca e no painel) nem espera: o mapa entra sem ele. A leitura que falhou sem nada lido fica na tela
+  // enquanto tenta de novo (as cópias): o aviso e o "Tentar de novo" não somem com o foco nele, e a falta de conexão
+  // não vira o erro genérico na nova tentativa. Sem rede e sem nada lido, o "Sem conexão." ou o "Reconectando…" no
+  // lugar do mapa; com o mapa lido, quem diz é a linha de estado (decisão 2 do celular).
   const posicoes = useLeituraComFalha(positionsQuery);
   const caixas = useLeituraComFalha(boxesQuery);
   const saldos = useLeituraComFalha(balancesQuery);
   const catalogo = useLeituraComFalha(skusQuery);
-  const leiturasDoMapa = [posicoes, caixas, saldos, catalogo];
+  const leiturasDoMapa = [posicoes, caixas, saldos];
   const loading = leiturasDoMapa.some((leitura) => leitura.isLoading);
-  // Sem rede, o mapa que já estava fica, e a linha de estado diz de quando ele é; sem nada
-  // lido, o aviso, e não "Nenhuma posição cadastrada" (decisão 2 do celular).
-  const semRede = semConexaoNaLeitura(positionsQuery, boxesQuery, balancesQuery, skusQuery);
-  const semNadaLido = semRede !== null && semRede.lidaEm === null;
-  // Só a leitura sem nada lido troca o mapa pelo aviso: a releitura do intervalo que falha fica na linha de estado
-  // ("Não consegui atualizar · lista de 10:42"), e o mapa lido continua na tela (momento 7).
-  const falhou = !semRede && leiturasDoMapa.some((leitura) => leitura.isError && leitura.data === undefined);
-  const empty = !loading && !falhou && !semNadaLido && shelves.length === 0;
-  const relendo = leiturasDoMapa.some((leitura) => leitura.isFetching);
-  const reler = () => {
-    void queryClient.invalidateQueries({ queryKey: ["warehouse-positions", "all-pages"] });
-    void queryClient.invalidateQueries({ queryKey: ["warehouse-boxes", "all", "all-pages"] });
-    void queryClient.invalidateQueries({ queryKey: ["stock-balances", "estoque"] });
-    void queryClient.invalidateQueries({ queryKey: ["estoque", "skus"] });
-  };
-  const tentarDeNovo = () => {
-    for (const leitura of [positionsQuery, boxesQuery, balancesQuery, skusQuery]) if (leitura.data === undefined) void leitura.refetch();
-  };
+  const falhaDoMapa = falhaDasLeituras([
+    [positionsQuery, posicoes],
+    [boxesQuery, caixas],
+  ]);
+  const falhou = falhaDoMapa !== null;
+  // Os saldos e o catálogo que falharam sem nada lido: o aviso fica acima do mapa, que continua na tela.
+  const falhaDoApoio = falhou ? null : falhaDasLeituras([
+    [balancesQuery, saldos],
+    [skusQuery, catalogo],
+  ]);
+  const saldosFalharam = saldos.isError && saldos.data === undefined;
+  const catalogoFalhou = catalogo.isError && catalogo.data === undefined;
+  const mensagemDoApoio =
+    saldosFalharam && catalogoFalhou
+      ? "Não consegui carregar os saldos e o catálogo."
+      : saldosFalharam
+        ? "Não consegui carregar os saldos das prateleiras."
+        : "Não consegui carregar o catálogo.";
+  const empty = !loading && !falhou && shelves.length === 0;
   const searching = search.trim().length > 0;
 
   const panel = selected ? (
@@ -197,7 +201,7 @@ export default function WarehouseMapPage() {
       <PageHeader
         title="Mapa do armazém"
         description="Prateleiras, ocupação registrada e caixas por zona de cliente."
-        estado={<LinhaDeEstado id={ID_DA_LINHA} leitura={leiturasDoMapa} objeto="o mapa" />}
+        estado={<LinhaDeEstado id={ID_DA_LINHA} leitura={leiturasDoMapa} objeto="prateleiras" />}
         actions={
           <>
             <Button
@@ -219,34 +223,25 @@ export default function WarehouseMapPage() {
         }
       />
 
-      {/* Com o mapa lido, a falta de conexão fica na linha de estado, sob o título, e nada empurra o mapa (parte 13b). */}
-      {semNadaLido ? <BlocoSemConexao tentando={relendo} onTentar={reler} focoAoSair={ID_DA_LINHA} /> : null}
+      {/* Com o mapa lido, a falta de conexão fica na linha de estado, sob o título, e nada empurra o mapa (parte 13b). A
+          falha, com a falta de conexão no BlocoSemConexao: "Tentando de novo…" só na nova tentativa que a pessoa pede. */}
+      {falhaDoMapa ? (
+        <FalhaNaLeitura leitura={falhaDoMapa.leitura} erro={falhaDoMapa.erro} mensagem="Não consegui carregar o mapa." focoAoSair={ID_DA_LINHA} />
+      ) : null}
 
-      {falhou ? (
-        <ErroNaLeitura
-          mensagem="Não consegui carregar o mapa."
-          // "Tentando de novo…" só com a leitura que falhou relendo, não com as outras ainda chegando.
-          tentando={leiturasDoMapa.some((leitura) => leitura.isError && leitura.data === undefined && leitura.isFetching)}
-          onTentar={tentarDeNovo}
-          focoAoSair={ID_DA_LINHA}
-        />
+      {!loading && falhaDoApoio ? (
+        <FalhaNaLeitura leitura={falhaDoApoio.leitura} erro={falhaDoApoio.erro} mensagem={mensagemDoApoio} focoAoSair={ID_DA_LINHA} />
       ) : null}
 
       {showSessionStatus && sessionQuery.isError && !ehFaltaDeConexao(sessionQuery.error) ? (
-        <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
-          <AlertTitle>Situação do inventário indisponível</AlertTitle>
-          <AlertDescription className="space-y-2">
-            <p>Não foi possível confirmar se o inventário de abertura de {activeCustomer.name} está concluído.</p>
-            {/* Ocupado sem disabled: o foco fica no botão enquanto relê (parte 13b). */}
-            <BotaoDeAcao
-              variant="outline"
-              estado={sessionQuery.isFetching ? "andamento" : "repouso"}
-              rotulo="Tentar de novo"
-              andamento="Tentando de novo…"
-              onClick={() => void sessionQuery.refetch()}
-            />
-          </AlertDescription>
-        </Alert>
+        // A situação do inventário que falhou: o aviso da falha, com "Tentar de novo" (só a nova tentativa da pessoa muda
+        // o botão), e o foco vai à linha de estado quando ele sai (parte 13b).
+        <FalhaNaLeitura
+          leitura={sessionQuery}
+          erro={sessionQuery.error}
+          mensagem={`Não consegui confirmar o inventário de abertura de ${activeCustomer.name}.`}
+          focoAoSair={ID_DA_LINHA}
+        />
       ) : showSessionStatus && sessionQuery.isLoading && !loading ? (
         // A espera com a caixa aos 300 ms e o anúncio, sem região viva solta (parte 13b). Enquanto o mapa ainda lê, quem
         // diz a espera é a linha de estado: uma caixa só na tela.
@@ -275,7 +270,7 @@ export default function WarehouseMapPage() {
         </Alert>
       ) : null}
 
-      {!loading && !falhou && !semNadaLido && shelves.length > 0 ? (
+      {!loading && !falhou && shelves.length > 0 ? (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Tile
@@ -368,7 +363,10 @@ export default function WarehouseMapPage() {
                   {formatNumber(summary.boxes)} caixa(s) · {Math.round(summary.fill * 100)}% da frente
                 </Badge>
               </div>
-              {groups.length === 0 ? (
+              {groups.length === 0 && searching && catalogo.data === undefined ? (
+                // A busca por nome espera o catálogo: sem ele, "Nenhuma prateleira tem o que você buscou." seria afirmar sem ler.
+                <div className="px-4 py-10">{catalogo.isLoading ? <CarregandoNaRegiao rotulo="Carregando o catálogo…" /> : null}</div>
+              ) : groups.length === 0 ? (
                 <div className="px-4 py-10 text-center text-sm text-muted-foreground">
                   {searching ? "Nenhuma prateleira tem o que você buscou." : "Nenhuma prateleira nesta zona ou rua."}
                 </div>

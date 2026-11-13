@@ -359,7 +359,7 @@ function PhysicalLineChecklist({
             estado={isRegistering ? "andamento" : "repouso"}
             icone={<MessageSquareWarning aria-hidden="true" />}
             rotulo="Enviar evidência"
-            andamento="Registrando…"
+            andamento="Enviando…"
             bloqueado={!isRegistering && !canRegister}
             onClick={() => onOpenException(task, issueNote)}
           />
@@ -1197,7 +1197,7 @@ function ExpeditionReadinessSection({
           estado={isRegistering ? "andamento" : "repouso"}
           icone={<MessageSquareWarning aria-hidden="true" />}
           rotulo="Enviar evidência de saída"
-          andamento="Registrando…"
+          andamento="Enviando…"
           bloqueado={!isRegistering && !canRegister}
           onClick={() => onOpenException(task, issueNote)}
         />
@@ -1962,7 +1962,9 @@ export function TaskDetailPanel({
                 {advancingTaskId === task.id ? "Avançando…" : advanceGate.label}
               </Button>
             ) : null}
-            {isPutaway && canAdvance && !canSubmitAdvance && operationBlockReason ? (
+            {/* Lendo as posições, quem diz a espera é a caixa da região ("Carregando posições…" aos 300 ms): o motivo
+                do bloqueio não repete o texto seco desde 0 ms (parte 13b). O avanço continua travado até ler. */}
+            {isPutaway && canAdvance && !canSubmitAdvance && operationBlockReason && !positionsQuery.isLoading ? (
               <p className="text-sm font-semibold text-warning-soft-foreground sm:basis-full">{operationBlockReason}</p>
             ) : null}
             {showGenericExceptionAction ? (

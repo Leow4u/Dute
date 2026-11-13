@@ -27,6 +27,8 @@ const estado = vi.hoisted(() => ({
   atrasoMs: 100,
   atrasoPorCaminho: {} as Record<string, number>,
   falhaPorCaminho: {} as Record<string, boolean>,
+  /** O servidor sem resposta (503, `sem_resposta`): a falta de conexão com o aparelho conectado. */
+  faltaPorCaminho: {} as Record<string, boolean>,
 }));
 
 vi.mock("@/lib/auth", () => ({ useAppUser: () => ({ user: { uid: "u1", publicMetadata: { role: "admin" } }, isLoaded: true }) }));
@@ -65,6 +67,10 @@ function dados(caminho: string): unknown {
 async function servir(entrada: RequestInfo | URL) {
   const url = new URL(String(entrada), "http://localhost");
   await new Promise((pronto) => setTimeout(pronto, estado.atrasoPorCaminho[url.pathname] ?? estado.atrasoMs));
+  if (estado.faltaPorCaminho[url.pathname]) {
+    const erro = { error: "Sem resposta do servidor.", code: "sem_resposta" };
+    return { ok: false, status: 503, json: async () => erro, text: async () => JSON.stringify(erro) };
+  }
   if (estado.falhaPorCaminho[url.pathname]) {
     const erro = { error: "Falha no servidor" };
     return { ok: false, status: 500, json: async () => erro, text: async () => JSON.stringify(erro) };
@@ -85,6 +91,7 @@ beforeEach(() => {
   estado.atrasoMs = 100;
   estado.atrasoPorCaminho = {};
   estado.falhaPorCaminho = {};
+  estado.faltaPorCaminho = {};
   container = document.createElement("div");
   document.body.append(container);
   cliente = new QueryClient({ defaultOptions: { queries: { retry: false, networkMode: "always", refetchOnWindowFocus: false } } });
@@ -105,11 +112,11 @@ async function passar(ms: number) {
   });
 }
 
-async function montar(conteudo: ReactNode) {
+async function montar(conteudo: ReactNode, conexao: Parameters<typeof conexaoEm>[0] = "conectado") {
   raiz = createRoot(container);
   await act(async () => {
     raiz!.render(
-      <ProvedorDaConexao value={conexaoEm("conectado")}>
+      <ProvedorDaConexao value={conexaoEm(conexao)}>
         <QueryClientProvider client={cliente}>
           <Anunciador />
           {conteudo}
@@ -125,6 +132,11 @@ function naTela(): string {
   copia.querySelector("[data-anunciador]")?.remove();
   return (copia.textContent ?? "").replace(/\s+/g, " ");
 }
+
+/** Os avisos de alerta da tela (o `role="alert"`), cada um com o texto dele. */
+const alertas = () => Array.from(container.querySelectorAll('[role="alert"]')).map((no) => (no.textContent ?? "").replace(/\s+/g, " ").trim());
+/** Onde está o foco: a tag, o id e o começo do texto. */
+const foco = () => `${document.activeElement?.tagName}#${document.activeElement?.id}:${(document.activeElement?.textContent ?? "").trim().slice(0, 30)}`;
 
 /** A seção dos últimos movimentos da ficha, a parte que a espera muda (o axe olha só ela). */
 function secaoDosMovimentos(): string {
@@ -197,6 +209,87 @@ describe("a lista do Estoque só entra lida", () => {
   });
 });
 
+/**
+ * A revisão da parte 13b: a falta de conexão sem nada lido não vira o erro genérico na nova tentativa (a sozinha, do
+ * estado da conexão, e a da pessoa); a falha só das fotos não tira a lista; e a releitura do intervalo (2 min) não muda
+ * o aviso, que é um alerta e falaria de novo.
+ */
+describe("a falha da lista do Estoque", () => {
+  it("sem conexão e sem nada lido: a releitura sozinha do estado da conexão não troca o Reconectando pelo erro genérico", async () => {
+    estado.faltaPorCaminho = { "/api/stock-balances": true };
+    await montar(<Estoque />, "reconectando");
+    await passar(500);
+    expect(naTela()).toContain("Reconectando…");
+    estado.atrasoPorCaminho = { "/api/stock-balances": 3_000 };
+    // O que o estado da conexão faz na volta (estado-da-conexao.ts): relê a leitura que ficou sem resposta.
+    await act(async () => {
+      void cliente.refetchQueries({ queryKey: ["stock-balances", "estoque"] }, { cancelRefetch: false });
+    });
+    let antes = 0;
+    for (const instante of [50, 500, 1_000, 2_000, 2_900]) {
+      await passar(instante - antes);
+      antes = instante;
+      expect(naTela(), `aos ${instante} ms`).toContain("Reconectando…");
+      expect(naTela(), `aos ${instante} ms`).not.toContain("Não consegui carregar o estoque.");
+      expect(alertas(), `aos ${instante} ms`).toEqual([]);
+    }
+  });
+
+  it("sem conexão e sem nada lido: na nova tentativa da pessoa, o aviso fica com o foco no Tentar de novo", async () => {
+    estado.faltaPorCaminho = { "/api/stock-balances": true };
+    await montar(<Estoque />, "reconectando");
+    await passar(500);
+    estado.atrasoPorCaminho = { "/api/stock-balances": 3_000 };
+    const tentar = botaoPorTexto("Tentar de novo")!;
+    tentar.focus();
+    await act(async () => tentar.click());
+    let antes = 0;
+    for (const instante of [50, 500, 1_000, 2_000, 2_900]) {
+      await passar(instante - antes);
+      antes = instante;
+      expect(naTela(), `aos ${instante} ms`).not.toContain("Não consegui carregar o estoque.");
+      expect(document.activeElement?.tagName, `aos ${instante} ms`).toBe("BUTTON");
+      expect(document.activeElement?.closest("[data-falta]"), `aos ${instante} ms`).not.toBeNull();
+    }
+  });
+
+  it("a falha só das fotos não tira a lista: o saldo e o endereço ficam, sem afirmar \"Sem foto\", com o aviso das fotos", async () => {
+    estado.falhaPorCaminho = { "/api/products": true };
+    await montar(<Estoque />);
+    await passar(800);
+    const linhas = linhasDaLista();
+    expect(linhas).toHaveLength(1);
+    expect(linhas[0]).toContain("B-02");
+    expect(linhas[0]).not.toContain("Sem foto");
+    expect(naTela()).not.toContain("Não consegui carregar o estoque.");
+    expect(alertas()).toEqual(["Não consegui carregar as fotos.Tentar de novo"]);
+    // "Sem foto" não tem resposta sem as fotos: sem número no filtro dele; os outros, sim.
+    expect(contagemDoFiltro("Sem foto")).toBeNull();
+    expect(contagemDoFiltro("Todos")).toBe("1");
+    // A nova tentativa traz as fotos, e o aviso sai.
+    estado.falhaPorCaminho = {};
+    await act(async () => botaoPorTexto("Tentar de novo")!.click());
+    await passar(800);
+    expect(alertas()).toEqual([]);
+    expect(container.querySelector("button.grid img")).not.toBeNull();
+  });
+
+  it("sem ninguém tocar, a releitura do intervalo (2 min) não muda o aviso da falha", async () => {
+    estado.falhaPorCaminho = { "/api/stock-balances": true };
+    await montar(<Estoque />);
+    await passar(800);
+    expect(alertas()).toEqual(["Não consegui carregar o estoque.Tentar de novo"]);
+    estado.atrasoPorCaminho = { "/api/stock-balances": 2_000 };
+    // A releitura do intervalo começa aos 120 s e leva 2 s.
+    await passar(120_000 - 800 + 300);
+    expect(alertas()).toEqual(["Não consegui carregar o estoque.Tentar de novo"]);
+    await passar(1_000);
+    expect(alertas()).toEqual(["Não consegui carregar o estoque.Tentar de novo"]);
+    await passar(1_500);
+    expect(alertas()).toEqual(["Não consegui carregar o estoque.Tentar de novo"]);
+  });
+});
+
 const ITEM = {
   key: "000001",
   skuCode: "BTG-000001",
@@ -263,9 +356,13 @@ describe("os últimos movimentos na ficha", () => {
     expect(textosForaDaLista(container.innerHTML, [...TEXTOS_DA_FICHA, "Não consegui carregar os movimentos.", "Tentar de novo"])).toEqual([]);
     const comOAviso = secaoDosMovimentos();
     estado.falhaPorCaminho = {};
-    await act(async () => botaoPorTexto("Tentar de novo")!.click());
+    const tentar = botaoPorTexto("Tentar de novo")!;
+    tentar.focus();
+    await act(async () => tentar.click());
     await passar(500);
     expect(naTela()).toMatch(/entrada · |entrada/i);
+    // O aviso saiu com o foco nele: o foco vai ao título da seção, nunca ao body (2.4.3).
+    expect(foco()).toMatch(/^H3#movimentos-.*:Últimos movimentos$/);
     vi.useRealTimers();
     expect(await violacoesDeAcessibilidade(comOAviso)).toEqual([]);
   });

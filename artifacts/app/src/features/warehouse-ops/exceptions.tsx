@@ -32,6 +32,8 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -156,6 +158,9 @@ function taskTypeLabel(type: string) {
   return labels[type] ?? (type || "WMS");
 }
 
+/** A linha de estado sob o título: o foco vai a ela quando o aviso da falha sai com ele. */
+const ID_DA_LINHA = "excecoes-linha-de-estado";
+
 export function ExceptionWorkspace() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -177,12 +182,15 @@ export function ExceptionWorkspace() {
   });
 
   // A leitura que falhou sem nada lido fica na tela enquanto tenta de novo, e nunca vira "Sem exceções abertas"; antes
-  // de ler, nem "0 aberta(s)" nem "Nada selecionado" (carregamento v2, parte 13b). O Atualizar só mostra a espera
-  // quando a pessoa toca nele: a releitura automática não o gira nem o desabilita (momento 7).
+  // de ler, nem "0 aberta(s)" nem "Nada selecionado": o selo fica no lugar, com o bloco no lugar do número
+  // (carregamento v2, parte 13b; momento 2). O Atualizar é o das listas (o ícone que vira a caixa, 44 × 44 no
+  // celular), e só mostra a espera quando a pessoa toca nele: a releitura automática não o gira nem o desabilita
+  // (momento 7). A releitura que falha com a lista lida fica na linha de estado sob o título ("Não consegui atualizar
+  // · lista de 10:42"), e o foco vai a ela quando o aviso da falha sai com ele.
   const leitura = useLeituraComFalha(exceptionsQuery);
   const lida = exceptionsQuery.data !== undefined;
   const falhou = leitura.isError && !lida;
-  const atualizarLista = useAtualizarLista([exceptionsQuery]);
+  const atualizarLista = useAtualizarLista([leitura]);
   const exceptions = exceptionsQuery.data ?? [];
   const openExceptions = exceptions.filter((item) =>
     ["open", "in_review"].includes(item.status),
@@ -253,33 +261,32 @@ export function ExceptionWorkspace() {
               <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-destructive/20 bg-destructive/10 text-destructive">
                 <ShieldAlert className="size-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <CardTitle>Exceções operacionais</CardTitle>
+                {/* A primeira leitura fica no lugar da lista ("Carregando exceções…"): a linha só diz depois dela. */}
+                <LinhaDeEstado id={ID_DA_LINHA} leitura={[leitura]} objeto="exceções" primeiraNaLista className="mt-1" />
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {lida ? (
-                <Badge variant="outline" className="border-destructive/20 bg-destructive/10 text-destructive">
-                  {formatNumber(openExceptions.length)} aberta(s)
-                </Badge>
-              ) : null}
-              <BotaoDeAcao
+            <div className="flex flex-wrap items-center gap-2">
+              {/* O selo fica no lugar desde o começo: antes de ler, o bloco no lugar do número, e nada pula quando ele chega. */}
+              <Badge
                 variant="outline"
-                // O Atualizar com 44 px (seção 7).
-                className="min-h-11"
-                estado={atualizarLista.atualizando ? "andamento" : "repouso"}
-                icone={<RefreshCw aria-hidden="true" />}
-                rotulo="Atualizar"
-                andamento="Atualizando…"
-                bloqueado={!atualizarLista.atualizando && !lida}
-                onClick={atualizarLista.atualizar}
-              />
+                aria-hidden={lida ? undefined : true}
+                className="border-destructive/20 bg-destructive/10 text-destructive"
+              >
+                {/* O número e o bloco ocupam a mesma largura mínima (16 px): o selo não muda de tamanho quando ele chega. */}
+                <span className="inline-block min-w-4 text-center tabular-nums">
+                  {lida ? formatNumber(openExceptions.length) : falhou ? "—" : <Esqueleto forma="contagem" className="inline-block align-middle" />}
+                </span>
+                {" aberta(s)"}
+              </Badge>
+              <BotaoAtualizar atualizando={atualizarLista.atualizando} travado={leitura.isLoading} onAtualizar={atualizarLista.atualizar} />
             </div>
           </div>
         </CardHeader>
         <CardContent className="p-6">
           {falhou ? (
-            <FalhaNaLeitura leitura={exceptionsQuery} erro={leitura.error} mensagem="Não consegui carregar as exceções." />
+            <FalhaNaLeitura leitura={exceptionsQuery} erro={leitura.error} mensagem="Não consegui carregar as exceções." focoAoSair={ID_DA_LINHA} />
           ) : leitura.isLoading ? (
             <div className="space-y-3">
               <CarregandoNaRegiao rotulo="Carregando exceções…" />
@@ -405,7 +412,8 @@ export function ExceptionWorkspace() {
 
                 {/* Ocupado sem disabled: o foco fica no botão, com o gerúndio (carregamento v2, parte 13b). */}
                 <BotaoDeAcao
-                  className="w-full"
+                  // 48 px no celular (seção 7 e momento 3).
+                  className="w-full max-md:min-h-12"
                   estado={resolveException.isPending ? "andamento" : "repouso"}
                   icone={<CheckCircle2 aria-hidden="true" />}
                   rotulo="Confirmar tratativa"

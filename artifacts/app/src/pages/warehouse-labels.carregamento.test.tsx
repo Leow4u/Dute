@@ -122,7 +122,7 @@ describe("Estoque › Etiquetas: a espera", () => {
     await act(async () => {
       await new Promise((pronto) => setTimeout(pronto, 250));
     });
-    expect(naTela()).toContain("Carregando as etiquetas…");
+    expect(naTela()).toContain("Carregando etiquetas…");
     expect(container.querySelector("[data-carregando-na-regiao] [data-spinner]")?.getAttribute("aria-hidden")).toBe("true");
     await esperar(() => Boolean(container.querySelector(".lbl-print")), "a prévia");
     expect(naTela()).toContain("1 etiqueta · 1 folha · 1 caixa");

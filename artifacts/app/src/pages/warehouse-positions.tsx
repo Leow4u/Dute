@@ -10,6 +10,7 @@ import { Confirmacao } from "@/components/ui/confirmacao";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
@@ -406,6 +407,7 @@ export default function WarehousePositionsPage() {
   // nele, e a tabela vazia nunca aparece junto do aviso (carregamento v2, parte 13b). A releitura que falha com a
   // lista lida fica na linha de estado, e a tabela continua.
   const leitura = useLeituraComFalha(positionsQuery);
+  const focoQueSegue = useFocoQueSegue();
   const loading = leitura.isLoading;
   const falhou = leitura.isError && leitura.data === undefined;
   // Erro de leitura não é mapa vazio: sem isso a tela oferecia carregar o mapa inicial junto com o erro.
@@ -467,7 +469,9 @@ export default function WarehousePositionsPage() {
       {loading ? <Skeleton className="h-64 w-full rounded-lg" /> : null}
 
       {empty ? (
-        <Alert className="border-info-soft-border bg-info-soft text-info-soft-foreground [&>svg]:text-info-soft-foreground">
+        // O cadastro vazio não é alerta: sem role="alert", a troca de rótulo do botão não faz o leitor de tela reler o
+        // quadro inteiro (parte 13b).
+        <Alert role="none" className="border-info-soft-border bg-info-soft text-info-soft-foreground [&>svg]:text-info-soft-foreground">
           <LayoutGrid className="size-4" />
           <AlertTitle>Nenhuma posição cadastrada</AlertTitle>
           <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -476,15 +480,19 @@ export default function WarehousePositionsPage() {
               Se o galpão mudar depois, edite as posições ou cadastre uma rua nova.
             </span>
             {canEdit ? (
-              // Ocupado sem disabled: o foco fica no botão, com o gerúndio (parte 13b).
-              <BotaoDeAcao
-                size="sm"
-                estado={seed.isPending ? "andamento" : "repouso"}
-                icone={<LayoutGrid aria-hidden="true" />}
-                rotulo="Carregar mapa inicial"
-                andamento="Carregando o mapa…"
-                onClick={() => seed.mutate()}
-              />
+              // Ocupado sem disabled: o foco fica no botão, com o gerúndio (parte 13b). Quando o mapa entra, o quadro sai, e o
+              // foco vai à linha de estado, que diz "Atualizado às", nunca ao body.
+              <SaiComOFoco alvo={ID_DA_LINHA} pedido={focoQueSegue}>
+                <BotaoDeAcao
+                  size="sm"
+                  className="max-md:min-h-12"
+                  estado={seed.isPending ? "andamento" : "repouso"}
+                  icone={<LayoutGrid aria-hidden="true" />}
+                  rotulo="Carregar mapa inicial"
+                  andamento="Carregando mapa inicial…"
+                  onClick={() => seed.mutate()}
+                />
+              </SaiComOFoco>
             ) : null}
           </AlertDescription>
         </Alert>

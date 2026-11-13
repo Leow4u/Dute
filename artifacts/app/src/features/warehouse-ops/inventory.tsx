@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { familiaDoCodigo, nomeComTamanho, ordemDoTamanho, padronizarNome, problemaDoNome, tamanhoDoCodigo } from "@workspace/dominio";
 import {
-  AlertCircle,
   AlertTriangle,
   Camera,
   CheckCircle2,
@@ -18,7 +17,6 @@ import {
   PackageSearch,
   PlayCircle,
   Printer,
-  RefreshCw,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -28,10 +26,10 @@ import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Esqueleto } from "@/components/ui/esqueleto";
-import { Spinner } from "@/components/ui/spinner";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
 import { OpeningLineCorrection } from "./opening-line-correction";
 import { OpeningConferenceSummary } from "./opening-conference-summary";
 import { ShelfPicker, eligibleShelfPositions, isCurrentShelfPreview } from "./shelf-picker";
@@ -284,16 +282,20 @@ function NumeroPorLer({ lendo }: { lendo: boolean }) {
  */
 export function CycleCountWorkspace() {
   const { code: customerCode } = useActiveCustomer();
-  const sessionQuery = useOpeningInventorySession();
+  // A sessão que falhou fica na tela enquanto tenta de novo (a cópia): a tela não volta a "Carregando a contagem…" na
+  // nova tentativa, e o aviso com o foco nele não some (carregamento v2, parte 13b).
+  const sessionQuery = useLeituraComFalha(useOpeningInventorySession());
   const [picked, setPicked] = useState<CountMode | null>(null);
   const settled = !sessionQuery.isLoading;
+  // A sessão que falhou sem nada lido abre na abertura, onde está o aviso com "Tentar de novo": a falha nunca some
+  // atrás da outra aba (necessidade 2). Lida a sessão, a aba é a dela.
+  const sessaoFalhou = sessionQuery.isError && sessionQuery.data === undefined;
   const mode: CountMode | null =
     picked ??
     (settled
-      ? defaultCountMode(
-          sessionQuery.isError ? "completed" : sessionQuery.data?.status,
-          sessionQuery.data?.opening_required,
-        )
+      ? sessaoFalhou
+        ? "opening"
+        : defaultCountMode(sessionQuery.data?.status, sessionQuery.data?.opening_required)
       : null);
 
   return (
@@ -335,6 +337,16 @@ export function CycleCountWorkspace() {
 }
 
 const JSON_HEADERS = { "content-type": "application/json" };
+
+/**
+ * Para onde vai o foco quando o que estava com ele sai da tela (carregamento v2, seção 7): o título do cartão, o da
+ * caixa aberta, o "Guardar em" e o das caixas da sessão.
+ */
+const ID_DO_TITULO = "abertura-titulo";
+const ID_DA_CAIXA = "abertura-caixa-aberta";
+const ID_DA_NOVA_CAIXA = "abertura-nova-caixa";
+const ID_DO_GUARDAR_EM = "abertura-guardar-em";
+const ID_DAS_CAIXAS = "abertura-caixas-da-sessao";
 
 /**
  * A abertura é lançada por caixa (docs/mapa-do-armazem-enderecamento-dirigido.md,
@@ -431,6 +443,8 @@ export function OpeningInventoryWorkspace() {
 
   // A sessão que falhou fica na tela enquanto tenta de novo: o "Tentar de novo" não some com o foco nele (parte 13b).
   const sessionQuery = useLeituraComFalha(useOpeningInventorySession());
+  // A ação que dá certo tira o botão da tela: o foco vai ao que entrou no lugar, nunca ao body (parte 13b).
+  const focoQueSegue = useFocoQueSegue();
   const lookupQuery = useQuery({
     queryKey: ["opening-inventory-product-lookup", customerCode],
     staleTime: 30_000,
@@ -491,6 +505,10 @@ export function OpeningInventoryWorkspace() {
   });
   const conferenciaLida = useLeituraComFalha(conferenceQuery);
   const caixasLidas = useLeituraComFalha(boxesQuery);
+  // As caixas da sessão saem das caixas e da sessão: sem as duas lidas, nem "Caixas 0" nem "Nenhuma caixa nesta
+  // sessão." (carregamento v2, parte 13b; necessidade 3). A sessão que falhou tem o aviso dela no cartão ao lado.
+  const caixasDaSessaoLidas = caixasLidas.data !== undefined && session !== undefined;
+  const lendoCaixasDaSessao = caixasLidas.isLoading || (caixasLidas.data !== undefined && sessionQuery.isLoading);
   const currentBox = conferenceQuery.data?.box ? warehouseBoxFromRecord(conferenceQuery.data.box) : selectedBox;
   const conferenceLines = conferenceQuery.data?.lines ?? [];
   useEffect(() => {
@@ -1226,22 +1244,27 @@ export function OpeningInventoryWorkspace() {
                 <PackageOpen className="size-5" />
               </div>
               <div>
-                <CardTitle>Inventário de abertura</CardTitle>
+                {/* Recebe o foco quando o que estava com ele sai (o "Iniciar contagem", o aviso da sessão que falhou). */}
+                <CardTitle id={ID_DO_TITULO} tabIndex={-1}>Inventário de abertura</CardTitle>
                 <CardDescription className="mt-1">
                   Separe os produtos na caixa de destino, conte, revise e confirme onde guardar.
                 </CardDescription>
               </div>
             </div>
             {session?.status === "not_started" ? (
-              // A ação da sessão é o BotaoDeAcao: ocupado sem disabled, com o gerúndio (carregamento v2, parte 13b).
-              <BotaoDeAcao
-                estado={startSession.isPending ? "andamento" : "repouso"}
-                icone={<PlayCircle aria-hidden="true" />}
-                rotulo="Iniciar contagem"
-                andamento="Iniciando…"
-                onClick={() => startSession.mutate()}
-              />
-            ) : (
+              // A ação da sessão é o BotaoDeAcao: ocupado sem disabled, com o gerúndio (carregamento v2, parte 13b). Quando
+              // a sessão começa, o botão vira o selo, e o foco vai ao título do cartão, nunca ao body.
+              <SaiComOFoco alvo={ID_DO_TITULO} pedido={focoQueSegue}>
+                <BotaoDeAcao
+                  className="max-md:min-h-12"
+                  estado={startSession.isPending ? "andamento" : "repouso"}
+                  icone={<PlayCircle aria-hidden="true" />}
+                  rotulo="Iniciar contagem"
+                  andamento="Iniciando…"
+                  onClick={() => startSession.mutate()}
+                />
+              </SaiComOFoco>
+            ) : !session ? null : (
               <Badge
                 variant="outline"
                 className={cn(
@@ -1261,12 +1284,8 @@ export function OpeningInventoryWorkspace() {
             <Skeleton className="h-72 w-full rounded-lg" />
           ) : sessionQuery.isError && !session ? (
             // A falha nunca vira vazio, e a nova tentativa fica na tela enquanto tenta; a releitura que falha com a sessão
-            // lida não troca a abertura pelo aviso (parte 13b).
-            <ErroNaLeitura
-              mensagem="Não consegui carregar o inventário."
-              tentando={sessionQuery.isFetching}
-              onTentar={() => void sessionQuery.refetch()}
-            />
+            // lida não troca a abertura pelo aviso (parte 13b). Sem rede, "Sem conexão." ou "Reconectando…".
+            <FalhaNaLeitura leitura={sessionQuery} erro={sessionQuery.error} mensagem="Não consegui carregar o inventário." focoAoSair={ID_DO_TITULO} />
           ) : !sessionOpen ? (
             <Empty className="min-h-72 rounded-lg border border-dashed border-border bg-card">
               <EmptyHeader>
@@ -1289,16 +1308,20 @@ export function OpeningInventoryWorkspace() {
             <div className="space-y-6">
               {!currentBox && !legacyBoxMode ? (
                 <div className="space-y-4 rounded-lg border border-border p-5">
-                  <h3 className="text-lg font-semibold">Nova caixa de destino</h3>
+                  <h3 id={ID_DA_NOVA_CAIXA} tabIndex={-1} className="text-lg font-semibold">Nova caixa de destino</h3>
                   <p className="text-sm text-muted-foreground">Separe aqui os produtos que ficarão juntos. Modelos e tamanhos continuam identificados por seus próprios códigos.</p>
-                  <BotaoDeAcao
-                    estado={createConference.isPending ? "andamento" : "repouso"}
-                    icone={<Boxes aria-hidden="true" />}
-                    rotulo="Iniciar conferência da caixa"
-                    andamento="Iniciando…"
-                    bloqueado={!createConference.isPending && boxBusy}
-                    onClick={() => createConference.mutate()}
-                  />
+                  {/* Quando a conferência começa, o botão vira a bancada da caixa, e o foco vai ao título dela. */}
+                  <SaiComOFoco alvo={ID_DA_CAIXA} pedido={focoQueSegue}>
+                    <BotaoDeAcao
+                      className="max-md:min-h-12"
+                      estado={createConference.isPending ? "andamento" : "repouso"}
+                      icone={<Boxes aria-hidden="true" />}
+                      rotulo="Iniciar conferência da caixa"
+                      andamento="Iniciando…"
+                      bloqueado={!createConference.isPending && boxBusy}
+                      onClick={() => createConference.mutate()}
+                    />
+                  </SaiComOFoco>
                   <div className="border-t border-border pt-3">
                     <Button type="button" variant="outline" onClick={() => setLegacyBoxMode(true)} disabled={boxBusy}>Cadastrar caixa já armazenada</Button>
                     <p className="mt-2 text-sm text-muted-foreground">Para corrigir o vínculo de lançamentos que já foram feitos.</p>
@@ -1309,7 +1332,7 @@ export function OpeningInventoryWorkspace() {
                 <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <div className="text-lg font-semibold">Caixa de destino {currentBox.code}</div>
+                      <div id={ID_DA_CAIXA} tabIndex={-1} className="text-lg font-semibold">Caixa de destino {currentBox.code}</div>
                       <div className="mt-1 text-sm text-muted-foreground">{conferenceStatusLabel(currentBox)}{currentBox.location_id ? ` · ${currentBox.location_id}` : ""}</div>
                       <div className="mt-1 text-sm text-muted-foreground">
                         {formatNumber(isConferencePending(currentBox) ? currentBox.draft_line_count : currentBox.line_count)} linhas · {formatNumber(isConferencePending(currentBox) ? currentBox.draft_unit_count : currentBox.unit_count)} un.
@@ -1338,7 +1361,7 @@ export function OpeningInventoryWorkspace() {
                     </div>
                   </div>
                   {conferenciaLida.isError ? (
-                    <ErroNaLeitura mensagem="Não consegui carregar a conferência." tentando={conferenciaLida.isFetching} onTentar={() => void conferenceQuery.refetch()} />
+                    <FalhaNaLeitura leitura={conferenceQuery} erro={conferenciaLida.error} mensagem="Não consegui carregar a conferência." focoAoSair={ID_DA_CAIXA} />
                   ) : null}
                   {currentBox.status === "stored" && currentBox.opening_closed ? <p className="text-sm">Caixa fechada. Para continuar contando, inicie a próxima caixa.</p> : null}
                 </div>
@@ -1368,6 +1391,9 @@ export function OpeningInventoryWorkspace() {
                 />
               ) : null}
               {((!currentBox && legacyBoxMode) || currentBox?.status === "reviewed") ? (
+                // A guarda que dá certo tira o painel da tela (a caixa fica guardada): o foco que estava na confirmação ou numa
+                // alternativa vai ao título da caixa; o "Voltar à nova conferência", ao da nova caixa; nunca ao body (parte 13b).
+                <SaiComOFoco alvo={[ID_DA_CAIXA, ID_DA_NOVA_CAIXA]} pedido={focoQueSegue}>
                 <div className="space-y-4 rounded-lg border border-border bg-card p-4">
                   <div className="flex items-start gap-3">
                     <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-foreground">
@@ -1421,7 +1447,7 @@ export function OpeningInventoryWorkspace() {
                     <Label htmlFor="box-allow-stacking" className="leading-6">Pode empilhar esta caixa sobre outra que suporte seu peso</Label>
                   </div>
                   <div className="@container space-y-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
-                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Guardar em</div>
+                    <div id={ID_DO_GUARDAR_EM} tabIndex={-1} className="text-xs uppercase tracking-wide text-muted-foreground">Guardar em</div>
                     <div className="grid gap-2 @sm:grid-cols-2" role="group" aria-label="Escolha da prateleira">
                       <Button type="button" variant={putawayMode === "suggested" ? "default" : "outline"} aria-pressed={putawayMode === "suggested"}
                         onClick={() => choosePutawayMode("suggested")} disabled={boxBusy}>
@@ -1436,18 +1462,21 @@ export function OpeningInventoryWorkspace() {
                       <div className="space-y-3">
                         {automaticSuggestion?.position ? <p className="text-sm text-muted-foreground">Sugestão atual: {automaticSuggestion.position.code}</p> : null}
                         {prateleirasLidas.isError && prateleirasLidas.data === undefined ? (
-                          <ErroNaLeitura
+                          <FalhaNaLeitura
+                            leitura={positionsQuery}
+                            erro={prateleirasLidas.error}
                             mensagem="Não consegui carregar as prateleiras."
-                            tentando={prateleirasLidas.isFetching}
-                            onTentar={() => void positionsQuery.refetch()}
+                            focoAoSair={ID_DO_GUARDAR_EM}
                           />
                         ) : (
+                          // A releitura das posições não desliga o seletor: a lista lida continua valendo, e a prateleira
+                          // escolhida é conferida no servidor ("Conferir prateleira").
                           <ShelfPicker
                             positions={eligiblePositions}
                             value={manualLocation}
                             onSelect={previewManualPosition}
-                            disabled={!boxPayload || boxBusy || positionsQuery.isFetching}
-                            loading={positionsQuery.isLoading}
+                            disabled={!boxPayload || boxBusy}
+                            loading={prateleirasLidas.isLoading}
                           />
                         )}
                       </div>
@@ -1488,8 +1517,9 @@ export function OpeningInventoryWorkspace() {
                             <BotaoDeAcao
                               estado={guardandoEm === activeSuggestion.position.code ? "andamento" : "repouso"}
                               icone={<CheckCircle2 aria-hidden="true" />}
+                              className="max-md:min-h-12"
                               rotulo={`Confirmar guarda em ${activeSuggestion.position.code}`}
-                              andamento="Guardando…"
+                              andamento={`Guardando em ${activeSuggestion.position.code}…`}
                               bloqueado={guardandoEm !== activeSuggestion.position.code && boxBusy}
                               onClick={() => confirmPosition(activeSuggestion.position!)}
                             />
@@ -1504,19 +1534,26 @@ export function OpeningInventoryWorkspace() {
                           <div className="flex flex-wrap items-center gap-2 border-t border-primary/10 pt-3 text-xs text-muted-foreground">
                             <span>Se preferir:</span>
                             {activeSuggestion.alternatives.map((alternative) => (
-                              // Ocupado não é desabilitado: a alternativa tocada diz o gerúndio, com a caixa, e o foco fica nela.
-                              <Button key={alternative.code} type="button" size="sm" variant="outline"
-                                className={cn("h-auto flex-col items-start py-2", boxBusy && "opacity-45")}
-                                title={`${alternative.reason} ${formatBoxPlacement(alternative.placement)}`}
-                                aria-disabled={boxBusy || undefined}
-                                aria-busy={guardandoEm === alternative.code || undefined}
-                                onClick={() => confirmPosition(alternative)}>
-                                <span className="inline-flex items-center gap-1.5">
-                                  {guardandoEm === alternative.code ? <Spinner /> : null}
-                                  {guardandoEm === alternative.code ? `Guardando em ${alternative.code}…` : `Guardar em ${alternative.code}`}
+                              // A alternativa é o BotaoDeAcao (carregamento v2, momento 3): a tocada fica cheia e, aos 300
+                              // ms, diz "Guardando em A-04…" com a caixa, por pelo menos 500 ms; as outras esperam a 0,45,
+                              // aria-disabled, com a trava no confirmPosition. O encaixe fica sob o botão, como descrição.
+                              <span key={alternative.code} className="inline-flex flex-col items-start gap-1">
+                                <BotaoDeAcao
+                                  size="sm"
+                                  variant="outline"
+                                  className="max-md:min-h-12"
+                                  title={`${alternative.reason} ${formatBoxPlacement(alternative.placement)}`}
+                                  aria-describedby={`alternativa-${alternative.code}`}
+                                  estado={guardandoEm === alternative.code ? "andamento" : "repouso"}
+                                  rotulo={`Guardar em ${alternative.code}`}
+                                  andamento={`Guardando em ${alternative.code}…`}
+                                  bloqueado={guardandoEm !== alternative.code && boxBusy}
+                                  onClick={() => confirmPosition(alternative)}
+                                />
+                                <span id={`alternativa-${alternative.code}`} className="text-xs font-normal text-muted-foreground">
+                                  {formatBoxPlacement(alternative.placement)}
                                 </span>
-                                <span className="text-xs font-normal">{formatBoxPlacement(alternative.placement)}</span>
-                              </Button>
+                              </span>
                             ))}
                           </div>
                         ) : null}
@@ -1562,6 +1599,7 @@ export function OpeningInventoryWorkspace() {
                     ) : null}
                   </div>
                 </div>
+                </SaiComOFoco>
               ) : null}
 
               {currentBox && canEnterProduct ? (
@@ -1618,27 +1656,18 @@ export function OpeningInventoryWorkspace() {
                     </div>
                   </div>
 
-                  {catalogoLido.isError ? (
-                    // A falha fica na tela enquanto tenta de novo: o botão diz "Tentando de novo…" e o foco fica (parte 13b).
-                    <Alert variant="destructive" className="bg-destructive/10">
-                      <AlertCircle className="size-4" />
-                      <AlertTitle>Catálogo indisponível</AlertTitle>
-                      <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <span>
-                          O cadastro de produto novo foi bloqueado para evitar duplicidade.
-                        </span>
-                        <BotaoDeAcao
-                          variant="outline"
-                          estado={catalogoLido.isFetching ? "andamento" : "repouso"}
-                          icone={<RefreshCw aria-hidden="true" />}
-                          rotulo="Tentar de novo"
-                          andamento="Tentando de novo…"
-                          onClick={() => void lookupQuery.refetch()}
-                        />
-                      </AlertDescription>
-                    </Alert>
-                  ) : catalogoLido.isLoading || catalogoLido.isFetching ? (
-                    // A caixa e o rótulo aos 300 ms, com o anúncio: a releitura rápida não pisca (parte 13b).
+                  {catalogoLido.isError && catalogoLido.data === undefined ? (
+                    // A falha fica na tela enquanto tenta de novo, e o "Tentando de novo…" só na nova tentativa que a pessoa
+                    // pede; quando o catálogo chega, o foco vai ao código do cliente (parte 13b).
+                    <FalhaNaLeitura
+                      leitura={lookupQuery}
+                      erro={catalogoLido.error}
+                      mensagem="Não consegui carregar o catálogo. O cadastro de produto novo foi bloqueado para evitar duplicidade."
+                      focoAoSair="opening-client-code"
+                    />
+                  ) : catalogoLido.isLoading ? (
+                    // A caixa e o rótulo aos 300 ms, com o anúncio, só na primeira leitura: a releitura depois de cada
+                    // gravação não mostra nada nem fala, e o que a tela diz sobre o código segue o catálogo lido (momento 7).
                     <CarregandoNaRegiao rotulo="Verificando o catálogo…" />
                   ) : identityConflict ? (
                     <Alert variant="destructive" className="bg-destructive/10">
@@ -1877,7 +1906,8 @@ export function OpeningInventoryWorkspace() {
           </CardHeader>
           <CardContent className="min-w-0 space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              {/* Nunca "0" antes de ler (carregamento v2, parte 13b): sem a sessão, "—"; sem as caixas, o bloco no lugar do número. */}
+              {/* Nunca "0" antes de ler (carregamento v2, parte 13b): sem a sessão, "—"; as caixas da sessão precisam das caixas e
+                  da sessão lidas, e até lá o bloco no lugar do número ("—" se uma das duas falhou). */}
               <div className="rounded-md border border-border bg-card p-3">
                 <div className="text-xs text-muted-foreground">Lançamentos publicados</div>
                 <div className="mt-1 text-xl font-semibold text-foreground">{session ? formatNumber(session.line_count) : "—"}</div>
@@ -1888,7 +1918,7 @@ export function OpeningInventoryWorkspace() {
               </div>
               <div className="rounded-md border border-border bg-card p-3">
                 <div className="text-xs text-muted-foreground">Caixas</div>
-                <div className="mt-1 text-xl font-semibold text-foreground">{caixasLidas.data ? formatNumber(boxesOfSession.length) : <NumeroPorLer lendo={caixasLidas.isLoading} />}</div>
+                <div className="mt-1 text-xl font-semibold text-foreground">{caixasDaSessaoLidas ? formatNumber(boxesOfSession.length) : <NumeroPorLer lendo={lendoCaixasDaSessao} />}</div>
               </div>
               <div className="rounded-md border border-border bg-card p-3" title="Prateleiras com ao menos uma caixa guardada: a base da cobrança por posição.">
                 <div className="text-xs text-muted-foreground">Posições ocupadas</div>
@@ -1921,7 +1951,7 @@ export function OpeningInventoryWorkspace() {
             <div className="border-t border-border/70 pt-3">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-medium text-foreground">
+                  <div id={ID_DAS_CAIXAS} tabIndex={-1} className="text-sm font-medium text-foreground">
                     Caixas desta sessão
                   </div>
                   <div className="text-xs text-muted-foreground">
@@ -1942,15 +1972,15 @@ export function OpeningInventoryWorkspace() {
                       Etiquetas
                     </Button>
                   ) : null}
-                  {caixasLidas.data ? <Badge variant="outline">{formatNumber(boxesOfSession.length)}</Badge> : null}
+                  {caixasDaSessaoLidas ? <Badge variant="outline">{formatNumber(boxesOfSession.length)}</Badge> : null}
                 </div>
               </div>
               {caixasLidas.isError && caixasLidas.data === undefined ? (
-                <ErroNaLeitura mensagem="Não consegui carregar as caixas." tentando={caixasLidas.isFetching} onTentar={() => void boxesQuery.refetch()} />
-              ) : caixasLidas.isLoading ? (
-                // Nunca "Nenhuma caixa nesta sessão." antes de ler: a caixa e o rótulo aos 300 ms (parte 13b).
+                <FalhaNaLeitura leitura={boxesQuery} erro={caixasLidas.error} mensagem="Não consegui carregar as caixas." focoAoSair={ID_DAS_CAIXAS} />
+              ) : lendoCaixasDaSessao ? (
+                // Nunca "Nenhuma caixa nesta sessão." antes de ler as caixas e a sessão: a caixa e o rótulo aos 300 ms.
                 <CarregandoNaRegiao rotulo="Carregando caixas…" />
-              ) : boxesOfSession.length ? (
+              ) : !caixasDaSessaoLidas ? null : boxesOfSession.length ? (
                 <div
                   role="region"
                   aria-label="Caixas desta sessão"

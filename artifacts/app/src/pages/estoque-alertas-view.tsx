@@ -2,11 +2,12 @@ import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip as FilterChip } from "@/components/ui/chip";
 import { BarraDeEspera } from "@/components/ui/barra-de-espera";
-import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { FalhaNaLeitura, type LeituraQueFalhou } from "@/components/ui/erro-na-leitura";
 import { LinhaDeEstado, type LeituraDaLista } from "@/components/ui/linha-de-estado";
 import { PageHeader } from "@/components/ui/page-header";
 import { itensParadosEmTexto, rotuloDoAlerta, type AlertaProposto } from "@/lib/memoria/alertas";
 import { dataDoRelogio, diasEmTexto } from "@/lib/memoria/parados";
+import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
 
 /**
  * Estoque › Alertas (docs/plataforma/fase-5-memoria.md, parte 5.4e), só a
@@ -42,11 +43,14 @@ export type AlertasParadosViewProps = {
   erro: string | null;
   acoes: AcoesDosAlertas;
   /**
-   * Sem rede (decisão 2 do celular): sem nada lido, o aviso no lugar da
-   * lista (`lidaEm: null`); com a lista lida, quem diz a hora dela é a linha
-   * de estado.
+   * A leitura que falhou sem nada lido (a `falhaDasLeituras`): o aviso no
+   * lugar da lista, nunca o vazio. Na falta de conexão, "Sem conexão." ou
+   * "Reconectando…"; em outro erro, "Não consegui carregar os alertas.", com
+   * "Tentar de novo", que só diz "Tentando de novo…" na nova tentativa que a
+   * pessoa pede (carregamento v2, parte 13b). Com a lista lida, quem diz é a
+   * linha de estado.
    */
-  semConexao?: { lidaEm: number | null; tentando: boolean; onTentar: () => void } | null;
+  falha?: { leitura: LeituraQueFalhou; erro: unknown } | null;
   /**
    * A leitura dos alertas, para a linha de estado sob o título (carregamento
    * v2, parte 7b): "Carregando alertas…", "Atualizado às 10:42",
@@ -56,11 +60,16 @@ export type AlertasParadosViewProps = {
   leitura?: readonly LeituraDaLista[];
   /** A releitura da volta do app ao primeiro plano: a barra no topo do alerta e, aos 5 s, "Atualizando…". */
   voltando?: boolean;
-  /** A nova tentativa da leitura que falhou sem nada lido: a falha nunca vira vazio. */
-  tentar?: { tentando: boolean; onTentar: () => void };
 };
 
 const numero = new Intl.NumberFormat("pt-BR");
+/** A linha de estado sob o título: o foco vai a ela quando o aviso da falha sai com ele. */
+const ID_DA_LINHA = "alertas-linha-de-estado";
+/**
+ * O título do alerta na tela (ou o "Nenhum alerta para aprovar."): a decisão que dá certo troca o alerta, e o foco que
+ * estava nele vai ao título do seguinte, nunca ao body, e nunca ao "Enviar ao cliente" do outro cliente.
+ */
+const ID_DO_ALERTA = "alerta-na-tela";
 
 function Alerta({ alerta, nome, marcados, ocupado, decidindo = null, erro, acoes, voltando = false }: { alerta: AlertaProposto; nome: string } & Pick<AlertasParadosViewProps, "marcados" | "ocupado" | "decidindo" | "erro" | "acoes" | "voltando">) {
   const todos = marcados.size === alerta.itens.length;
@@ -69,10 +78,10 @@ function Alerta({ alerta, nome, marcados, ocupado, decidindo = null, erro, acoes
     if (!ocupado) fazer();
   };
   return (
-    <section aria-labelledby={`alerta-${alerta.id}`} className="relative overflow-hidden rounded-lg border border-border bg-card">
+    <section aria-labelledby={ID_DO_ALERTA} className="relative overflow-hidden rounded-lg border border-border bg-card">
       <BarraDeEspera lugar="topo" ativa={voltando} resultado="fim" />
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 px-4 py-3">
-        <h2 id={`alerta-${alerta.id}`} className="text-base font-bold text-foreground">
+        <h2 id={ID_DO_ALERTA} tabIndex={-1} className="text-base font-bold text-foreground">
           {nome}
         </h2>
         <p className="flex items-center gap-2 text-sm text-foreground/70">
@@ -120,6 +129,8 @@ function Alerta({ alerta, nome, marcados, ocupado, decidindo = null, erro, acoes
         {/* A decisão no BotaoDeAcao (carregamento v2, parte 13b): o tocado diz o gerúndio, o outro espera travado, e
             nenhum fica disabled (o foco fica no botão tocado). */}
         <BotaoDeAcao
+          // 48 px no celular (seção 7 e momento 3).
+          className="max-md:min-h-12"
           estado={decidindo === "aprovar" ? "andamento" : "repouso"}
           rotulo="Enviar ao cliente"
           andamento="Enviando…"
@@ -128,6 +139,7 @@ function Alerta({ alerta, nome, marcados, ocupado, decidindo = null, erro, acoes
         />
         <BotaoDeAcao
           variant="outline"
+          className="max-md:min-h-12"
           estado={decidindo === "descartar" ? "andamento" : "repouso"}
           rotulo="Descartar"
           andamento="Descartando…"
@@ -153,27 +165,25 @@ export function AlertasParadosView({
   ocupado,
   erro,
   acoes,
-  semConexao = null,
+  falha = null,
   leitura = [],
   voltando = false,
   decidindo = null,
-  tentar,
 }: AlertasParadosViewProps) {
+  const foco = useFocoQueSegue();
   return (
     <div className="flex flex-col gap-4 pb-24">
-      <PageHeader title="Alertas de itens parados" estado={<LinhaDeEstado leitura={leitura} objeto="alertas" pedidaPelaPessoa={voltando} />} />
+      <PageHeader title="Alertas de itens parados" estado={<LinhaDeEstado id={ID_DA_LINHA} leitura={leitura} objeto="alertas" pedidaPelaPessoa={voltando} />} />
       {/* A primeira leitura e a falta com a lista lida ficam na linha de estado, sob o título. */}
-      {estado === "carregando" ? null : semConexao && semConexao.lidaEm === null ? (
-        <BlocoSemConexao tentando={semConexao.tentando} onTentar={semConexao.onTentar} />
-      ) : estado === "erro" ? (
+      {estado === "carregando" ? null : falha ? (
         // A falha nunca vira vazio, e tem a nova tentativa (parte 13b).
-        tentar ? (
-          <ErroNaLeitura mensagem="Não consegui carregar os alertas." tentando={tentar.tentando} onTentar={tentar.onTentar} />
-        ) : (
-          <p className="text-sm text-destructive-soft-foreground">Não consegui carregar os alertas.</p>
-        )
+        <FalhaNaLeitura leitura={falha.leitura} erro={falha.erro} mensagem="Não consegui carregar os alertas." focoAoSair={ID_DA_LINHA} />
+      ) : estado === "erro" ? (
+        <p className="text-sm text-destructive-soft-foreground">Não consegui carregar os alertas.</p>
       ) : !alerta ? (
-        <p className="rounded-lg border border-border bg-card px-5 py-6 text-sm text-muted-foreground">Nenhum alerta para aprovar.</p>
+        <p id={ID_DO_ALERTA} tabIndex={-1} className="rounded-lg border border-border bg-card px-5 py-6 text-sm text-muted-foreground">
+          Nenhum alerta para aprovar.
+        </p>
       ) : (
         <>
           {alertas.some((opcao) => opcao.id !== alerta.id) ? (
@@ -185,7 +195,10 @@ export function AlertasParadosView({
               ))}
             </div>
           ) : null}
-          <Alerta alerta={alerta} nome={nomeDoCliente(alerta.customerCode)} marcados={marcados} ocupado={ocupado} decidindo={decidindo} erro={erro} acoes={acoes} voltando={voltando} />
+          {/* Um alerta por chave: o botão do alerta decidido não passa ao seguinte com o "Enviando…" (parte 13b). */}
+          <SaiComOFoco key={alerta.id} alvo={ID_DO_ALERTA} pedido={foco}>
+            <Alerta alerta={alerta} nome={nomeDoCliente(alerta.customerCode)} marcados={marcados} ocupado={ocupado} decidindo={decidindo} erro={erro} acoes={acoes} voltando={voltando} />
+          </SaiComOFoco>
         </>
       )}
     </div>

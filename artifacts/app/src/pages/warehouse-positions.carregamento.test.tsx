@@ -15,8 +15,9 @@ import { textosForaDaLista } from "@/test/textos";
  * necessidades 2 e 5). A leitura que falha sem nada lido mostra o aviso com
  * "Tentar de novo", e não a tabela vazia ("Nenhuma posição com esses
  * filtros", "0 de 0 posições") junto do alerta. "Carregar mapa inicial" é o
- * BotaoDeAcao ("Carregando o mapa…"), ocupado sem `disabled`: o foco fica
- * nele. As ações do cabeçalho esperam com `aria-disabled`. A linha de estado
+ * BotaoDeAcao ("Carregando mapa inicial…", o gerúndio do rótulo), ocupado
+ * sem `disabled`: o foco fica nele, fora de um alerta, e vai à linha de
+ * estado quando o mapa entra. As ações do cabeçalho esperam com `aria-disabled`. A linha de estado
  * sob o título diz de quando é a lista, e a releitura que falha não apaga a
  * tabela. Dados sintéticos.
  */
@@ -161,7 +162,7 @@ describe("Posições, a leitura", () => {
 });
 
 describe("Carregar mapa inicial", () => {
-  it("ocupado sem disabled: o foco fica no botão, \"Carregando o mapa…\" aos 300 ms, e o cabeçalho espera com aria-disabled", async () => {
+  it("ocupado sem disabled: o foco fica no botão, \"Carregando mapa inicial…\" aos 300 ms, e o cabeçalho espera com aria-disabled", async () => {
     estado.posicoes = [];
     await montar();
     await esperar(() => Boolean(botao("Carregar mapa inicial")), "o mapa inicial");
@@ -175,8 +176,10 @@ describe("Carregar mapa inicial", () => {
     expect(carregar.hasAttribute("disabled")).toBe(false);
     expect(carregar.getAttribute("aria-disabled")).toBe("true");
     expect(carregar.getAttribute("aria-busy")).toBe("true");
-    expect(carregar.querySelector("[data-atual]")?.textContent?.trim()).toBe("Carregando o mapa…");
+    expect(carregar.querySelector("[data-atual]")?.textContent?.trim()).toBe("Carregando mapa inicial…");
     expect(document.activeElement).toBe(carregar);
+    // O cadastro vazio não é alerta: a troca de rótulo do botão não faz o leitor de tela reler o quadro.
+    expect(carregar.closest('[role="alert"]')).toBeNull();
     for (const rotulo of ["Nova rua", "Nova posição"]) {
       const doCabecalho = botao(rotulo)!;
       expect(doCabecalho.hasAttribute("disabled"), rotulo).toBe(false);
@@ -187,11 +190,15 @@ describe("Carregar mapa inicial", () => {
     expect(estado.pendentes).toHaveLength(1);
     expect(await violacoesDeAcessibilidade(container!.innerHTML)).toEqual([]);
     expect(
-      textosForaDaLista(carregar.outerHTML, ["Carregar mapa inicial", "Carregando o mapa…", "Conferir"]),
+      textosForaDaLista(carregar.outerHTML, ["Carregar mapa inicial", "Carregando mapa inicial…", "Conferir"]),
     ).toEqual([]);
 
     estado.posicoes = [posicao("A", 1)];
     await act(async () => estado.pendentes[0]!.responder({ created: ["A-01"], updated: [] }));
     await esperar(() => Boolean(container!.querySelector("table")), "a tabela do mapa inicial");
+    // O botão saiu da tela com o foco nele: o foco vai à linha de estado, nunca ao body.
+    expect(document.activeElement).toBe(container!.querySelector("[data-linha-de-estado]"));
+    // No celular, o alvo da ação tem 48 px (seção 7).
+    expect(carregar.className).toContain("max-md:min-h-12");
   });
 });

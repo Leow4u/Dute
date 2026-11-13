@@ -11,10 +11,10 @@ import { conexaoEm } from "@/test/conexao";
 
 /**
  * O Mapa na migração do carregamento v2 (parte 13b; diagnóstico, 4.7 e
- * necessidades 2, 3 e 8). A linha de estado sob o título diz "Carregando o
- * mapa…", "Atualizado às" e a falta, no lugar da faixa que empurrava o mapa.
- * Os saldos e o catálogo entram no que o mapa espera: a busca não diz
- * "Nenhuma prateleira" antes de ler. A releitura do intervalo que falha não
+ * necessidades 2, 3 e 8). A linha de estado sob o título diz "Carregando
+ * prateleiras…", "Atualizado às" e a falta, no lugar da faixa que empurrava o
+ * mapa. Os saldos entram no que o mapa espera: a prateleira com saldo sem
+ * caixa registrada não parece vazia antes de ler. A releitura do intervalo que falha não
  * apaga o mapa (antes, ele sumia e ficava só o alerta); a primeira que falha
  * mostra o aviso com "Tentar de novo". "Verificando inventário" não é região
  * viva solta: quem fala é o Anunciador. Dados sintéticos.
@@ -125,11 +125,11 @@ async function montar() {
 }
 
 describe("o Mapa, a primeira leitura", () => {
-  it("a linha de estado diz \"Carregando o mapa…\" aos 300 ms, sem região viva solta, e o mapa só entra com os saldos e o catálogo", async () => {
+  it("a linha de estado diz \"Carregando prateleiras…\" aos 300 ms, sem região viva solta, e o mapa só entra com os saldos", async () => {
     estado.atrasoPorCaminho = { "/api/warehouse/positions": 2_500, "/api/stock-balances": 3_200, "/api/warehouse/opening-inventory/session/": 6_000 };
     await montar();
     expect(linha()).not.toBeNull();
-    await esperar(() => /Carregando o mapa…/.test(linha()?.textContent ?? ""), "o rótulo na linha de estado");
+    await esperar(() => /Carregando prateleiras…/.test(linha()?.textContent ?? ""), "o rótulo na linha de estado");
     expect(container.querySelectorAll('[role="status"]:not([data-anunciador])')).toHaveLength(0);
     // Enquanto o mapa lê, uma caixa só: a da linha de estado.
     expect(container.querySelectorAll("[data-carregando-na-regiao]")).toHaveLength(0);
