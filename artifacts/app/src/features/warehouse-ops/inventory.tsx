@@ -137,6 +137,7 @@ import {
 import { customerRows } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { ProductPhotoStudio } from "./product-photo-studio";
+import { FOTOS_POR_PRODUTO, ProgressoDasFotosDoProduto, useFotosDoProduto } from "./fotos-enviando";
 import {
   CODE_MATCH_LABEL,
   findProductByAnyCode,
@@ -351,7 +352,16 @@ export function OpeningInventoryWorkspace() {
   const [unitCost, setUnitCost] = useState("");
   const [reference, setReference] = useState("");
   const [photos, setPhotos] = useState<ProductPhoto[]>([]);
-  const [photoUploading, setPhotoUploading] = useState(false);
+  // As fotos do produto sobem compactadas e uma por vez, com a contagem (parte 11 do carregamento v2).
+  const codigoDaFoto = useRef({ clientCode, rascunho: `abertura-${Date.now()}` });
+  codigoDaFoto.current.clientCode = clientCode;
+  const fotos = useFotosDoProduto<ProductPhoto>({
+    enviarUma: (arquivo, aoProgredir, sinal) =>
+      uploadProductPhoto(arquivo, codigoDaFoto.current.clientCode.trim() || codigoDaFoto.current.rascunho, customerCode, aoProgredir, sinal),
+    aoConcluir: (enviadas) => setPhotos((current) => [...current, ...enviadas].slice(0, FOTOS_POR_PRODUTO)),
+    aoFalhar: (error) => toast({ title: "Não consegui anexar a foto", description: getErrorMessage(error), variant: "destructive" }),
+  });
+  const photoUploading = fotos.enviando;
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [createNew, setCreateNew] = useState(false);
   const [selectedProduct, setSelectedProduct] =
@@ -824,7 +834,7 @@ export function OpeningInventoryWorkspace() {
   function resetProductForm() {
     setClientCode(""); setProductName(""); setCategory(""); setGenero(""); setGrupo("");
     setBarcode(""); setBrand(""); setSize(""); setColor(""); setCountedQty(""); setUnitCost("");
-    setReference(""); setPhotos([]); setCreateNew(false); setSelectedProduct(undefined);
+    setReference(""); setPhotos([]); fotos.limpar(); setCreateNew(false); setSelectedProduct(undefined);
     setEditingDraft(undefined); setBoxAcknowledged(false);
     preenchido.current = {};
   }
@@ -1110,25 +1120,12 @@ export function OpeningInventoryWorkspace() {
     preenchido.current = {};
   }
 
-  async function addOpeningPhotos(files: FileList | null) {
-    const selected = Array.from(files ?? []).slice(0, 4);
-    if (!selected.length) return;
-    setPhotoUploading(true);
-    try {
-      const clientItemCode = clientCode.trim() || `abertura-${Date.now()}`;
-      const uploaded = await Promise.all(
-        selected.map((file) => uploadProductPhoto(file, clientItemCode, customerCode)),
-      );
-      setPhotos((current) => [...current, ...uploaded].slice(0, 8));
-    } catch (error) {
-      toast({
-        title: "Não consegui anexar a foto",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
-    } finally {
-      setPhotoUploading(false);
-    }
+  function addOpeningPhotos(files: FileList | null) {
+    const selected = Array.from(files ?? []);
+    if (!selected.length || fotos.enviando) return;
+    codigoDaFoto.current.rascunho = `abertura-${Date.now()}`;
+    const pendentes = fotos.itens.filter((item) => item.estado === "erro").length;
+    fotos.escolher(selected, FOTOS_POR_PRODUTO - photos.length - pendentes);
   }
 
   function updateBoxDraft(field: keyof BoxDraft, value: string) {
@@ -1737,12 +1734,15 @@ export function OpeningInventoryWorkspace() {
                       <Button
                         type="button"
                         variant="outline"
-                        className="shrink-0"
-                        disabled={photoUploading}
-                        onClick={() => photoInputRef.current?.click()}
+                        // Ocupado não é desabilitado: aria-disabled e a trava no toque; o foco fica no botão.
+                        className={cn("shrink-0", photoUploading && "opacity-45 hover:bg-card active:bg-card")}
+                        aria-disabled={photoUploading || undefined}
+                        onClick={() => {
+                          if (!photoUploading) photoInputRef.current?.click();
+                        }}
                       >
-                        {photoUploading ? <RefreshCw className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
-                        {photoUploading ? "Enviando..." : "Adicionar foto"}
+                        <ImagePlus className="size-4" />
+                        Adicionar foto
                       </Button>
                       {/* Fora do layout e do foco: ativar um input sr-only pode deslocar os painéis com overflow. */}
                       <input
@@ -1753,13 +1753,13 @@ export function OpeningInventoryWorkspace() {
                         capture="environment"
                         multiple
                         hidden
-                        disabled={photoUploading}
                         onChange={(event) => {
-                          void addOpeningPhotos(event.target.files);
+                          addOpeningPhotos(event.target.files);
                           event.currentTarget.value = "";
                         }}
                       />
                     </div>
+                    <ProgressoDasFotosDoProduto fotos={fotos} className="mt-4" />
                     {photos.length ? (
                       <div className="mt-4 flex flex-wrap gap-2">
                         {photos.map((photo, index) => (
@@ -2332,7 +2332,6 @@ export function ExistingCycleCountWorkspace() {
       size: "",
       color: "",
       photos: [],
-      photoUploading: false,
       quantity: countedQty || "0",
       unitCost,
       location: locationId,

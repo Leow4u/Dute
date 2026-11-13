@@ -53,7 +53,54 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** A tela que demora a rodar: a primeira renderização segura a thread por `ms` (o relógio anda junto). */
+function SondaLenta({ ms }: { ms: number }) {
+  const espera = useEspera(true);
+  vistos.push(espera);
+  if (vistos.length === 1) vi.advanceTimersByTime(ms);
+  return null;
+}
+
 describe("a espera no relógio", () => {
+  it("com a thread ocupada no começo (a foto sendo compactada), o indicador entra assim que ela solta, não só aos 3 s", () => {
+    act(() => raiz!.render(<SondaLenta ms={450} />));
+    expect(atual().visivel).toBe(true);
+    expect(atual().fase).toBe("andamento");
+    passar(3_000);
+    expect(atual().fase).toBe("com-objeto");
+  });
+
+  it("o tique que dispara um décimo de milissegundo antes do marco (o atraso fracionário truncado) não perde os 300 ms nem os 10 s", () => {
+    // O relógio do navegador: o tique lê 299,9 e, logo depois, quem arma o
+    // seguinte já lê 300,0. Só as leituras do useEspera passam pela fila.
+    let relogio = 0;
+    const fila: number[] = [];
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.spyOn(performance, "now").mockImplementation(() =>
+      fila.length && (new Error().stack ?? "").includes("use-espera") ? fila.shift()! : relogio,
+    );
+    montar(true);
+    expect(atual().visivel).toBe(false);
+    relogio = 300;
+    fila.push(299.9, 300);
+    passar(300);
+    expect(atual().visivel).toBe(true);
+    expect(atual().fase).toBe("andamento");
+    // Os marcos seguintes continuam: o objeto aos 3 s e a demora aos 10 s.
+    relogio = 3_000;
+    passar(2_700);
+    expect(atual().fase).toBe("com-objeto");
+    relogio = 5_000;
+    passar(2_000);
+    relogio = 10_000;
+    fila.push(9_999.9, 10_000);
+    passar(5_000);
+    expect(atual().fase).toBe("demorando");
+    expect(atual().calmo).toBe(true);
+    vi.restoreAllMocks();
+  });
+
   it("parada, não mostra nada", () => {
     montar(false);
     passar(20_000);
@@ -172,6 +219,21 @@ describe("a espera no relógio", () => {
     expect(atual().visivel).toBe(false);
     passar(300);
     expect(atual()).toMatchObject({ visivel: true, fase: "andamento", calmo: false, movimento: true, decorridoMs: 300 });
+  });
+
+  it("a que continua outra (desde) segue o relógio dela: o que já tinha aparecido aparece na hora", () => {
+    passar(20_000);
+    montar(true, { desde: performance.now() - 6_000 });
+    expect(atual()).toMatchObject({ visivel: true, fase: "com-objeto", decorridoMs: 6_000, movimento: false });
+    passar(4_000);
+    expect(atual()).toMatchObject({ fase: "demorando", calmo: true });
+    // O que ainda não tinha passado de 300 ms espera o resto, e não o atraso inteiro.
+    act(() => raiz!.unmount());
+    raiz = createRoot(container!);
+    montar(true, { desde: performance.now() - 200 });
+    expect(atual().visivel).toBe(false);
+    passar(100);
+    expect(atual()).toMatchObject({ visivel: true, fase: "andamento", decorridoMs: 300 });
   });
 });
 

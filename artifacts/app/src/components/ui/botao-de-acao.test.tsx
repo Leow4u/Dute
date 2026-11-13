@@ -271,6 +271,19 @@ describe("em andamento", () => {
     expect(nome()).toBe(TEXTOS.sucesso);
   });
 
+  it("o gerúndio que segura o mínimo é o da espera que estava na tela: o \"Conferindo…\" não vira o da ação", () => {
+    montar("sem-resposta");
+    montar("andamento", { andamento: "Conferindo…" });
+    passar(CARREGANDO.atrasoMs);
+    expect(nome()).toBe("Conferindo…");
+    // A leitura voltou: o estado sai do em andamento e o gerúndio volta a ser o da ação, mas o mínimo segura a camada.
+    passar(100);
+    montar("repouso", { andamento: TEXTOS.andamento });
+    expect(nome()).toBe("Conferindo…");
+    passar(CARREGANDO.minimoMs);
+    expect(nome()).toBe(TEXTOS.rotulo);
+  });
+
   it("a ação que volta antes de 300 ms não mostra o em andamento", () => {
     montar("repouso");
     montar("andamento");
@@ -506,6 +519,20 @@ describe("travado, o botão não responde ao ponteiro", () => {
     // Coberto pela onda, o botão fica sem fundo próprio, também no hover e no toque.
     passar(FIM_DA_TROCA_MS);
     expect(classes()).toEqual(expect.arrayContaining(["bg-transparent", "hover:bg-transparent", "active:bg-transparent"]));
+  });
+
+  it("em tinta (o Aprovar do painel do Agent Dute e os cartões do chat): o primário com o fundo e o texto trocados, e travado fica em tinta", () => {
+    montar("repouso", { tinta: true });
+    expect(classes()).toEqual(expect.arrayContaining(["carregando-na-cor", "bg-foreground", "text-background", "hover:bg-foreground/85"]));
+    expect(classes()).not.toContain("bg-primary");
+    expect(classes()).not.toContain("text-primary-foreground");
+    expect(botao().querySelector('[data-fundo="toque"]')?.className).toBe("bg-foreground/85");
+    montar("andamento", { tinta: true });
+    passar(CARREGANDO.atrasoMs);
+    expect(nome()).toBe(TEXTOS.andamento);
+    expect(classes()).toEqual(expect.arrayContaining(["bg-foreground", "hover:bg-foreground", "active:bg-foreground"]));
+    expect(classes()).not.toContain("hover:bg-primary");
+    expect(classes()).not.toContain("hover:bg-foreground/85");
   });
 
   it("bloqueado (o Recusar da linha que aprova): não acende no hover nem no toque", () => {

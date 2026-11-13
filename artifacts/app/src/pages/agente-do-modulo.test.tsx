@@ -40,7 +40,9 @@ describe("o Agent Dute em cada shell", () => {
   for (const modulo of MODULOS) {
     it(`${modulo}: a conversa nova com as perguntas do módulo, sem legenda e acessível`, async () => {
       const html = tela(modulo);
-      expect(textosDaTela(html)).toEqual(["Nova conversa", "Rotinas", "Carregando…", "Agent Dute", "Como posso ajudar?", ...SUGESTOES_DO_MODULO[modulo].map((sugestao) => sugestao.prompt)]);
+      // As conversas que ainda leem são linhas-fantasma, sem o "Carregando…" solto (carregamento v2).
+      expect(textosDaTela(html)).toEqual(["Nova conversa", "Rotinas", "Agent Dute", "Como posso ajudar?", ...SUGESTOES_DO_MODULO[modulo].map((sugestao) => sugestao.prompt)]);
+      expect(html).toMatch(/aria-label="Conversas recentes" aria-busy="true"/);
       expect(await violacoesDeAcessibilidade(html)).toEqual([]);
     });
   }

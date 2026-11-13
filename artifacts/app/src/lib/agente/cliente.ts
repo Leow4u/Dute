@@ -1,14 +1,15 @@
-import { collection, getDocs, limit, orderBy, query, where, type DocumentData } from "firebase/firestore";
+import { collection, limit, orderBy, query, where, type DocumentData } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 
 import { fetchChatJson, type ChatMessage, type ChatResponse } from "@/components/agent/chat";
 import type { ConversationSummary } from "../agent-chat";
 import type { Playbook } from "../agent-playbooks";
 import type { Routine } from "../agent-routines";
-import { callableSemResposta, mensagemDaFalta } from "../conexao";
+import { lerDocsDoServidor } from "../cloud-api";
+import { PRAZO_ESGOTADO, callableSemResposta, mensagemDaFalta, prazoEsgotado } from "../conexao";
 import { firebaseApp, firebaseAuth, firestore } from "../firebase";
 import { functionsDoApp } from "../firebase-functions";
-import { streamAgentDuteChat, type AgentDuteStreamChunk } from "../functions-api";
+import { resultadoDoStream, streamAgentDuteChat, type AgentDuteStreamChunk } from "../functions-api";
 import { chamarNucleo } from "../memoria/api";
 import { mensagemDoErro } from "../operacao/api";
 
@@ -172,13 +173,13 @@ function quemEsta(): string {
 
 async function conversarNoNucleo(dados: Record<string, unknown>, aoPedaco: (pedaco: AgentDuteStreamChunk) => void, sinal?: AbortSignal): Promise<ChatResponse> {
   if (!firebaseApp) throw new Error("Firebase não configurado.");
-  const callable = httpsCallable<Record<string, unknown>, ChatResponse, AgentDuteStreamChunk>(functionsDoApp(firebaseApp), "chatWithDute", { timeout: 180_000 });
+  // Sem prazo no `.stream()`: o da espera é o relógio da tela, e o stream que fecha sem o resultado vira o prazo esgotado (resultadoDoStream).
+  const callable = httpsCallable<Record<string, unknown>, ChatResponse, AgentDuteStreamChunk>(functionsDoApp(firebaseApp), "chatWithDute");
   try {
-    const { stream, data } = await callable.stream(dados, { signal: sinal });
-    for await (const pedaco of stream) aoPedaco(pedaco);
-    return await data;
+    return await resultadoDoStream(await callable.stream(dados, { signal: sinal }), aoPedaco);
   } catch (erro) {
     if (callableSemResposta(erro)) throw new Error(mensagemDaFalta());
+    if (prazoEsgotado(erro)) throw new Error(PRAZO_ESGOTADO);
     const mensagem = mensagemDoErro(erro);
     throw new Error(mensagem.startsWith("Falha interna") ? "O Agent Dute não respondeu agora. Tente de novo em instantes." : mensagem);
   }
@@ -193,14 +194,15 @@ export function clienteDoNucleo(modulo: ModuloDoAgente, customerCode: string): C
     chave: ["nucleo", modulo, customerCode],
     async conversas() {
       if (!firestore) return { conversations: [] };
-      const lidas = await getDocs(
+      // Sem rede, o Firestore responde do cache: a lista velha ou vazia viraria "Suas conversas aparecem aqui".
+      const lidas = await lerDocsDoServidor(
         query(collection(firestore, "agent_conversations"), where("user_id", "==", quemEsta()), where("customer_code", "==", customerCode), orderBy("last_message_at", "desc"), limit(CONVERSAS_LIDAS)),
       );
       return { conversations: conversasDoModulo(lidas.docs.map((doc) => ({ ...doc.data(), id: doc.id })), modulo) };
     },
     async mensagens(conversaId) {
       if (!firestore) return { messages: [] };
-      const lidas = await getDocs(
+      const lidas = await lerDocsDoServidor(
         query(
           collection(firestore, "agent_messages"),
           where("conversation_id", "==", conversaId),

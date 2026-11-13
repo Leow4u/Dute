@@ -634,6 +634,12 @@ Ficam para depois:
   operações longas (seção 6, PR 8);
 - os PRs 2 a 5 do celular.
 
+O PR 2 do celular (as telas da operação sem sinal) entrou no PR 610, com a
+parte 9 do carregamento v2 (10.5). Depois de entrar, a equipe guarda no
+aparelho os arquivos das telas que pode abrir, uma vez por versão, e o
+`ChunkErrorBoundary` separa a falta de rede, a versão nova e o erro da tela.
+Ficam para depois os PRs 3 a 5.
+
 ## 10. Carregamento v2 (12/11/2026)
 
 ### 10.1 A queixa
@@ -733,10 +739,10 @@ por PR:
 | 6 | Pedidos como piloto: a ação por linha (`useAcaoNaLinha`), a barra da linha e os estados de 10 s e 70 s | PR 610 |
 | 7 | A conexão (7a: "Reconectando…" com histerese e a releitura sozinha) e a linha de estado nas listas (7b: Pedidos, Receber, Estoque, Alertas) | PR 610 |
 | 8 | As listas com a forma final | PR 610 |
-| 9 | A abertura com a marca e a `CarregandoTela` no lugar do branco | a fazer |
+| 9 | A abertura com a marca e a `CarregandoTela` no lugar do branco | PR 610 |
 | 10 | A troca de filtro e a releitura sem apagar a lista | a fazer |
-| 11 | As operações longas: fotos com progresso e etapas | a fazer |
-| 12 | A trilha do Agent Dute | a fazer |
+| 11 | As operações longas: fotos com progresso e etapas | PR 610 |
+| 12 | A trilha do Agent Dute | PR 610 |
 | 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | a fazer |
 
 Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código:
@@ -744,7 +750,12 @@ Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código
 - o selo "Sem confirmação" em âmbar, porque é resultado desconhecido e não erro;
 - o esqueleto fora da v3 (o portal) em `#D9DDE3`;
 - o piso do violeta do Agent Dute no movimento reduzido (0,75 no claro e 0,85
-  no escuro, para manter 3:1).
+  no escuro, para manter 3:1);
+- a foto que fica 70 s sem um byte novo é cancelada e vira "Foto 2 não
+  enviada", com o "Tentar de novo", e não "Sem confirmação do servidor" com
+  "Conferir", como no cartão "Quando demora · escrita" da prancha: o envio
+  cancelado não tem o que conferir. A dúvida só existe na callable que vem
+  depois do último byte, e ela diz "Confira antes de tentar de novo".
 
 ### 10.5 Registro das partes
 
@@ -1168,3 +1179,369 @@ Fica aberto:
 - a linha ocupada (`aria-busy`) sem teste com leitor de tela de verdade
   (NVDA, JAWS, VoiceOver), e o Android médio de verdade (aceite da seção 8).
 
+**Parte 9, a abertura (PR 610, 13/11/2026).**
+
+- **A abertura** (`#abertura` no `index.html`, fora do `#root`):
+  - preta (#161616) nos dois temas, com a marca de 96 px, o trilho chanfrado
+    e a palavra a 48 px do pé, e nenhum texto visível;
+  - a marca e a palavra vêm embutidas no HTML, já sobre o preto e com a
+    paleta reduzida (cerca de 12 KB no HTML): estão na primeira pintura também no
+    primeiro acesso com sinal fraco, e o trilho entra 300 ms depois delas;
+  - o `role="status"` diz "Abrindo a Dutelog" só ao leitor de tela; sem rede,
+    "Sem conexão" aos 3 s; aos 10 s, "Demorando mais que o normal" e "Tentar
+    de novo", que recarrega; aos 70 s, "Sem resposta";
+  - o aviso que sai sobe e esmaece em 180 ms antes de o seguinte entrar, e a
+    região muda no máximo uma vez a cada 2 s, como o `Anunciador`;
+  - quando o aviso não cabe acima da palavra (o celular deitado, o zoom de
+    200%), a palavra cede o lugar;
+  - no alto contraste do Windows, ela mantém as próprias cores;
+  - enquanto ela cobre a tela, o `#root` fica inerte: nem o Tab nem o leitor
+    de tela chegam ao que está por baixo.
+- **A saída** (`fecharAbertura`, em `lib/abertura.ts`, chamada pelo
+  `AuthProvider` quando o perfil chega): o segmento completa o trilho em
+  200 ms e tudo esmaece em 260 ms, com a marca a 0,96; antes de 300 ms ou
+  com movimento reduzido, só esmaece. A barra do navegador troca para o tema
+  quando a abertura sai do documento, e não antes.
+- **A primeira pintura:** a Inter e a JetBrains Mono saíram; a Manrope chega
+  por preload com `swap`, e o service worker guarda as fontes do Google; o
+  registro do service worker usa `defer`; a folha do app vai para o corpo,
+  logo antes do `#root`; o `theme-color` e o manifest estão em #161616.
+- **A `CarregandoTela`** (`components/ui/carregando-tela.tsx`), no lugar do
+  "Carregando..." dos dois `Suspense`, dos `fallback={null}` e do `null` das
+  rotas que esperam o perfil:
+  - aos 300 ms, a caixa de 40 px e "Abrindo Faturamento…"; o nome que não é
+    substantivo vem com "a tela" ("Abrindo a tela Separar…"), e toda rota
+    tem nome;
+  - aos 10 s, a volta calma, "Demorando mais que o normal" e "Tentar de
+    novo"; aos 70 s, "Sem resposta do servidor."; tentar de novo recarrega o
+    app;
+  - nada aparece nem é anunciado enquanto a abertura está na tela, também
+    enquanto esmaece;
+  - a fronteira que confere o arquivo que não veio segue com o mesmo nome e
+    o mesmo relógio, sem anunciar de novo.
+- **As telas da equipe no aparelho** (`lib/telas-no-aparelho.ts`, o PR 2 do
+  celular):
+  - cada tela é declarada com o arquivo do próprio import
+    (`telaSobDemanda("pages/billing-hub", …)`), e o build publica o mapa
+    `telas-no-aparelho.json`, com os arquivos de cada tela e as telas de
+    dentro dela (as abas do Faturamento);
+  - cinco segundos depois de entrar, os papéis internos baixam, um por vez,
+    os arquivos das telas que abrem neste ambiente; o service worker os
+    guarda em `dute-route-chunks`, que passou a caber 400 arquivos;
+  - a guarda só baixa e nunca importa a tela: o import que falha numa
+    piscada da rede fica preso no mapa de módulos do navegador até a página
+    recarregar, e a tela aberta depois cairia em "Sem conexão." sem pedir o
+    arquivo de novo;
+  - a tela que abre larga o pedido que a guarda estava fazendo, e o arquivo
+    parado não segura a tela;
+  - o cliente não baixa nada.
+- **O `ChunkErrorBoundary`** separa a falta de rede, a versão nova (o
+  arquivo que sumiu no deploy) e o erro da própria tela. No Safari, que não
+  diz qual arquivo faltou, ele pergunta pelo próprio app: se o servidor
+  responde, é a versão nova; se não, é a falta de rede.
+- **Medição no Chromium** (build de produção com o Firebase trocado, Slow 4G
+  e CPU 4×, celular):
+  - na primeira visita, a primeira pintura caiu de cerca de 2,75 s para
+    0,65 s, já com a marca e a palavra, e o trilho entra 300 ms depois delas;
+  - na volta, a primeira pintura fica perto de 0,13 s, e o Início abre em
+    cerca de 1 s;
+  - com uma piscada da rede durante a guarda, o Mapa, o Receber e a Contagem
+    abrem com a rede de volta; com o pedido da guarda parado, o Mapa abre em
+    0,3 s;
+  - na produção, só com a Armazenagem, a guarda baixa 106 arquivos (916 KB)
+    para a operação, 66 (315 KB) para o financeiro e 138 (1,2 MB) para o
+    owner;
+  - nenhum quadro com a `CarregandoTela` por baixo da abertura que esmaece.
+
+Mudanças de configuração para conferir na homologação: o registro do service
+worker com `defer` (`injectRegister: "script-defer"`), a folha do app no
+corpo, o mapa `telas-no-aparelho.json` na raiz do build, o cache das rotas com
+400 arquivos, as fontes do Google no service worker e o manifest em #161616.
+Se a CSP ganhar `script-src`, o script da abertura e o `onload` do preload
+das fontes vão precisar de hash.
+
+Ficam para depois:
+
+- a casca com o esqueleto do Início logo depois da abertura: quando o
+  arquivo da Entrada ainda não está no aparelho, a espera é a
+  `CarregandoTela`;
+- entre a espera da rota e a de dentro da tela (as abas do Catálogo e do
+  Faturamento), ou entre o `RoleGate` e o `Suspense`, o rótulo some por até
+  300 ms e volta, porque o relógio recomeça;
+- a medição num Android de verdade e no Safari, que pode tratar a folha no
+  corpo de outro jeito.
+
+**Parte 11, as operações longas (PR 610, 13/11/2026).** É também o PR 3 do
+celular (as fotos) e o item 8 da seção 6.
+
+- **As fotos do celular** (`lib/envio-de-fotos.ts`, `useEnvioDeFotos`):
+  - compactadas a 2000 px no lado maior (decisão 4 do celular), em JPEG,
+    antes de pedir o destino; a foto pequena e leve sobe como veio, e a que
+    o navegador não abre também. Um teste confere, no Receber, na Contagem,
+    na ficha do item, na OS, no campo e no anexo do portal, que o que vai ao
+    Storage é a compactada;
+  - sobem pelo `uploadBytesResumable`, uma por vez, na ordem da escolha; a
+    barra anda por evento de bytes e a contagem, por foto. A foto de até
+    256 KB vai numa requisição só, sem evento no meio: ela gira, em vez de
+    encher, até chegar;
+  - a que falha fica "Foto 3 não enviada", com o próprio "Tentar de novo", e
+    não derruba as outras (o `Promise.all` perdia as que já tinham subido).
+    A que passa 70 s sem um byte novo é cancelada e fica do mesmo jeito; o
+    prazo para no último byte, e o que vem depois (o endereço da foto, a
+    callable da OS) tem o prazo e a mensagem dele;
+  - no Receber, na Contagem e na ficha do item, a escolha leva 4 de cada vez,
+    como antes, mas diz "Só 4 fotos sobem por vez." (e "Até 8 fotos por
+    produto.") no lugar do corte calado, na tela e pelo Anunciador;
+  - o diálogo da chegada avulsa e a ficha do item não fecham enquanto elas
+    sobem. O campo e o botão de escolher ficam ocupados sem `disabled`, e o
+    foco fica neles;
+  - na OS, no campo e no anexo do portal, só a JPEG é compactada: o nome no
+    Storage já leva a extensão, e a callable confere o tipo por ele. Na OS, a
+    foto que falha é falada uma vez, pelo Anunciador, e o motivo sai da tela
+    quando o envio recomeça.
+- **O `Progresso`** (`components/ui/progresso.tsx`):
+  - a contagem: "3 de 4", os segmentos chanfrados, as miniaturas com o véu e
+    a caixa determinada, o selo verde, a fila tracejada e o "!". A que não
+    foi enviada conta como passada ("3 de 4" com uma enviada, uma não
+    enviada e a terceira subindo);
+  - no fim, o título e o nome da barra dizem o que subiu ("4 fotos
+    enviadas", "3 fotos enviadas" com uma não enviada, "1 foto não enviada"
+    quando nenhuma subiu), e as miniaturas ficam com o selo: o bloco não
+    encolhe. No Receber, ele fica acima das fotos da linha, como na
+    Contagem, e as fotos entram embaixo dele;
+  - cada "Tentar de novo" é descrito pela foto dele, e o que sai da tela
+    leva o foco ao seguinte, ou ao título;
+  - as etapas: "Etapa 1 de 2", os marcadores de 28 px e o fio. Elas ficam na
+    tela desde o repouso, pendentes, como na prancha, e a de agora só anda
+    aos 300 ms, quando o Anunciador fala o título ("Concluindo a
+    separação"). Na caixa estreita (duas etapas no celular, três no
+    formulário do Agent Dute), o rótulo vai para baixo do marcador;
+  - a barra de progresso tem o nome e o `aria-valuetext`, que muda por item,
+    nunca por byte.
+- **O `AvisoDeEspera`** (`components/ui/aviso-de-espera.tsx`):
+  - aos 10 s, "Demorando mais que o normal · 0:12", com "Tentar de novo" na
+    leitura; aos 70 s, na escrita, "Sem confirmação do servidor" e
+    "Conferir";
+  - o lugar dele fica guardado desde o repouso, no diálogo e no bloco das
+    fotos, e ele entra sem empurrar o botão que a pessoa acabou de tocar;
+  - nas fotos, a estimativa ("cerca de 20 s") conta só a vez atual, conta
+    para baixo sem piscar e sai quando a foto que sobe está há 10 s sem um
+    byte novo (parada, ou sem rede);
+  - quando a pílula quebra em duas linhas, nenhum "·" sobra no fim da
+    primeira.
+- **As etapas nas operações longas**: Separação → Embalagem no "Concluir
+  separação", Saída → Entrega na entrega pela Dutelog, Arquivo → Cadastro em
+  Documentos e Cadastro → Arquivo → Trechos no Conhecimento.
+  - O "Voltar" e o X do diálogo ficam `aria-disabled` (o `fecharTravado` do
+    `DialogContent`), o botão de ação mantém a largura, os dois têm 44 px e
+    o diálogo não fecha.
+  - O prazo sem resposta vira o "Conferir", que relê e nunca reenvia.
+    Conferindo, o botão diz "Conferindo…", o "Sem confirmação do servidor"
+    fica e as etapas não voltam a andar.
+  - Na entrega, o "Conferir" lê a saída do pedido: entregue, segue o
+    sucesso; cancelada por outra pessoa, o diálogo fecha com "Entrega não
+    confirmada"; no resto, volta a "Confirmar entrega", com a mesma chave. O
+    fim de um pedido não passa para o diálogo de outro.
+  - Em Documentos, o arquivo que já subiu só vale de novo para o mesmo
+    arquivo, cliente e tipo: ele mora na pasta do cliente que estava ativo,
+    e o `customer_code` é a fronteira.
+  - O Conhecimento, que grava direto no Firestore, conta o prazo de 70 s de
+    cada lote gravado: a gravação lenta, mas andando, não desiste. O
+    "Conferir" lê o cadastro, o arquivo, o último pedaço e o último trecho, e
+    só com todos lá segue o sucesso, com o evento uma vez.
+- **A foto por IA**: aos 300 ms, a contagem com o tempo decorrido ao lado do
+  título, no lugar do texto de repouso, sem empurrar o "Cancelar", que para
+  de esperar sem fechar o diálogo. "Gerar" e "Aprovar" são o `BotaoDeAcao`
+  ("Gerando…", "Salvando…"), e o foco fica nele.
+- **A gestão das fotos e a ficha do Estoque**: "Atualizando fotos…" e
+  "Salvando no cadastro…" entram aos 300 ms e são falados pelo Anunciador,
+  sem `role="status"` solto. O X da ficha fica `aria-disabled` com as fotos
+  subindo.
+- **O `deadline-exceeded`** tem a mensagem própria em `lib/functions-api.ts`
+  e nas callables da Operação, do WMS, do núcleo, do Comercial, do
+  Financeiro e do RH: na escrita, "O servidor não respondeu a tempo. Confira
+  antes de tentar de novo."; na leitura, em que repetir é seguro, "O
+  servidor não respondeu a tempo. Tente de novo.".
+- **O `useEspera`** alcança o agora ao armar o relógio (com a thread ocupada
+  no começo da espera, o indicador entrava só aos 3 s), e o tique que
+  dispara um décimo de milissegundo antes do marco conta como o marco.
+- **Medição no Chromium** (harness com o Storage simulado, quatro fotos de
+  4000 × 3000 e 2,7 MB):
+  - antes, as 4 subiam inteiras (10,8 MB) em 88,9 s, com "Enviando..."; a
+    escolha de 6 levava 4 sem dizer; o Esc fechava o diálogo no meio;
+  - depois, 4 × 425 KB em 15 s a 1 Mbps, com "1 de 4" … "4 fotos enviadas"
+    e o aviso aos 10 s; o bloco das fotos fica com a mesma posição e a
+    mesma altura do começo ao fim, no computador e no celular, e o foco
+    fica no campo da foto;
+  - "Concluir separação", entrega e Documentos: o botão de ação fica no
+    mesmo lugar, com 44 px, do repouso aos 70 s e no "Conferindo…"; o
+    anúncio sai entre 340 e 380 ms; no celular de 360 px, as duas etapas
+    cabem;
+  - o indicador aos 300 ms: em 900 esperas seguidas, nenhuma tardia (antes,
+    4 em 600 entravam só aos 3 s);
+  - com a foto parada e sem rede, a estimativa sai do aviso e volta quando
+    os bytes voltam, só contando para baixo; no movimento reduzido, só
+    opacidade.
+
+Ficam para depois:
+
+- o progresso na tela do anexo do portal (Solicitar OS) e nas fotos da
+  conclusão da OS, que já sobem compactadas e pelo envio que conta os bytes;
+- as duas etapas do "Concluir separação" fecham juntas, porque o
+  `completeOrderSeparation` faz as duas numa chamada; a etapa de verdade pede
+  o servidor dizer o progresso, ou duas chamadas;
+- o "Cancelar" da foto por IA só para de esperar: a geração que já começou
+  termina no servidor, e o resultado é ignorado;
+- o limite de 8 MB da foto da OS, conferido antes da compactação;
+- com a foto de até 256 KB, que sobe sem eventos, e logo depois de uma parada
+  longa, a estimativa é grosseira (pode subir uma vez por foto, ou voltar
+  alta e cair em 2 a 3 s);
+- o "Tipo" de Documentos, um `Select` sem nome acessível, de antes desta
+  parte;
+- a medição num Android de verdade e no Safari.
+
+**Parte 12, o Agent Dute (PR 610, 13/11/2026).** O momento 9 na conversa e o
+carregamento novo nas outras telas do agente.
+
+- **A trilha** (`TrilhaDoAgente`, `components/agent/trilha-do-agente.tsx`),
+  no lugar do "Pensando…", das etiquetas soltas das consultas e do ícone
+  girando:
+  - aos 300 ms, a caixa violeta de 20 px e "Lendo a pergunta…"; depois, uma
+    linha por consulta: "Consultando o estoque…" na da vez, "Estoque" com o
+    check violeta de 16 px nas feitas. O check tem o nome "Consulta feita"
+    para o leitor de tela. A mesma ferramenta chamada de novo é outra
+    consulta, no fim. Até 4 linhas; as antigas recolhem em "+N consultas". A
+    caixa aberta tem pelo menos 300 px, e a borda direita não pula a cada
+    consulta;
+  - o texto que o modelo manda antes de uma consulta ("Vou verificar…") sai
+    da tela enquanto ela roda: quem diz o que o agente faz é a trilha;
+  - quando o texto começa, a trilha recolhe numa linha, na mesma caixa e com
+    a altura de uma linha dela: "Leu o estoque e o razão de movimentos", ou
+    "Leu o estoque, o razão de movimentos e mais 2 fontes". A recolhida
+    entra em 150 ms, e a resposta gravada mostra a mesma linha;
+  - enquanto a resposta chega, o bloco dela não encolhe, e o lugar das
+    fontes e do Copiar fica guardado: com a conversa presa no fim, nada
+    desce para depois subir de novo;
+  - as linhas entram com opacidade e 4 px e o check com a mola, só nos
+    primeiros 5 s. No reduzido, a caixa respira até o piso do violeta (0,75
+    no claro e 0,85 no escuro), e as linhas e a recolhida entram só por
+    opacidade.
+- **A demora e o prazo:**
+  - aos 10 s sem texto, "Demorando mais que o normal" e o Parar, de 44 px. O
+    texto antes de uma consulta não conta como texto. O Parar corta a
+    espera neste aparelho e devolve a pergunta e as notas ao campo, se ele
+    está vazio: o que a pessoa escreveu durante a espera fica. Parar não é
+    erro, e não sai toast;
+  - o prazo do chat é de 180 s sem notícia do servidor (`CARREGANDO.desisteDoAgenteMs`):
+    a resposta que ainda chega não é cortada. O `.stream()` da callable não
+    tem prazo próprio (o `timeout` do `httpsCallable` só vale para a chamada
+    comum), e o stream que fecha sem o resultado, quando a function cai ou
+    passa dos 180 s dela, também vira "Sem resposta do Agent Dute"
+    (`resultadoDoStream`, em `lib/functions-api.ts`);
+  - o "Tentar de novo" relê a conversa antes: se o servidor gravou a
+    resposta depois do corte, ela aparece, sem perguntar de novo nem rodar o
+    agente outra vez. Se não, a mesma pergunta, na mesma conversa, com as
+    mesmas notas, sem mexer no campo;
+  - a conversa presa no fim rola quando a demora e o "Sem resposta" chegam:
+    o Parar e o "Tentar de novo" ficam à vista, também no celular;
+  - sair da tela no meio da resposta corta a espera sem toast.
+- **As fontes** (`FontesDaResposta`): "De onde tirei: Estoque · Razão de
+  movimentos", em chips, no fim da resposta (invariante 3). Saem de
+  `tools_used`, por um catálogo que cobre as ferramentas dos dois agentes (o
+  do WMS e o do núcleo); o rascunho, a rotina e a anotação são propostas do
+  agente e não viram fonte. Na chegada, os chips e o Copiar entram em 150 ms
+  no lugar guardado.
+- **O foco e o leitor de tela:**
+  - o Enviar nunca fica `disabled`: sem texto ou esperando a resposta, ele
+    fica `aria-disabled`, e o foco não cai no body quando a resposta chega.
+    O foco que estava no Parar ou no "Tentar de novo" vai ao campo quando o
+    botão sai da tela;
+  - a resposta não fica em região viva. O Anunciador fala a primeira
+    consulta, a demora e "Resposta pronta". O anúncio que ainda esperava a
+    vez sai da fila quando a espera acaba (o `useAnuncio` devolve o
+    "retirar"): ninguém ouve "Demorando mais que o normal" depois do Parar,
+    nem "Carregando playbooks" com os playbooks já na tela;
+  - no escuro, o texto violeta usa o `--agent-strong`: o `--agent` ficaria
+    abaixo de 4,5:1 como texto.
+- **As outras telas do agente** (anotações, playbooks, rotinas, os quatro
+  cartões de rascunho, o `/agente/painel`, o painel antigo e o
+  Conhecimento): `Spinner`, `Esqueleto`, `BotaoDeAcao` (com a opção `tinta`,
+  o primário em tinta onde o desenho pede) e a decisão por linha
+  (`useAcaoNaLinha`). A região que ainda lê é a `CarregandoNaRegiao` e, nas
+  listas, a `LeituraDaLista`:
+  - as linhas-fantasma entram aos 300 ms, com o rótulo; antes, o lugar fica
+    guardado e vazio. Na barra, elas têm a forma da lista que chega (o grupo
+    e as linhas);
+  - a leitura que falhou fica na tela enquanto tenta de novo
+    (`useLeituraComFalha`, em `lib/carregando`). O react-query 5, na nova
+    tentativa sem dado, volta a leitura a "pending" e zera o erro, e o
+    "Tentar de novo" sumia com o foco nele; agora ele diz "Tentando de
+    novo…" até a leitura responder;
+  - a lista de conversas sem conexão diz "Reconectando…" ou "Sem conexão.",
+    como a conversa ao lado, e não "Não consegui carregar as conversas.";
+  - no Conhecimento, cada número sai da leitura dele: os arquivos fonte que
+    falharam não prendem os números dos documentos, e o que não carregou
+    mostra "—" ("Não carregou" para o leitor de tela);
+  - no celular, as ações da linha têm 48 px, com 8 px entre Recusar e
+    Aprovar, e o Atualizar tem 44 px;
+  - a leitura direta do Firestore que só achou o cache (o Conhecimento e as
+    conversas do núcleo) vira falta de conexão, pela mesma regra de
+    `lib/cloud-api.ts`;
+  - o painel antigo, as rotinas e os estados de falha da conversa ganharam
+    teste com a lista de textos e o axe.
+- **Medição no Chromium** (harness com o chat por fetch e NDJSON, um
+  servidor falso e 8 pares de histórico; o antes é a primeira versão desta
+  parte):
+  - a trilha aparece aos 335 ms; só `transform` e `opacity` animam, com um
+    laço só (o indicador da vez);
+  - quando o texto começa, a conversa descia 74 px e voltava a subir; agora
+    fica no lugar (4 px). Na chegada da resposta, ela subia 70 px de uma vez
+    (124 no celular); agora, 8 px (nada no celular, onde o lugar das fontes
+    entra junto com o texto);
+  - o Parar aos 10 s, no celular de 390 × 844 com histórico, ficava 46 px
+    escondido atrás do campo; agora fica 52 px acima do fim da área
+    visível, como no computador. Aos 180 s, o "Tentar de novo" ficava
+    inteiro escondido e o foco caía no body; agora fica à vista, e o foco
+    fica no Enviar;
+  - quem envia pelo Enviar continua nele quando a resposta chega (antes, o
+    foco caía no body aos 7,5 s);
+  - a caixa da trilha vai de 300 a 319 px (antes, de 191 a 319), a
+    recolhida tem 50 px e o check, 16 px;
+  - com a leitura em 150 ms, nenhum bloco-fantasma aparece; em 600 ms, eles
+    entram aos 300 ms;
+  - com a primeira consulta aos 9,5 s e o Parar aos 10,6 s, "Demorando mais
+    que o normal" era falado 900 ms depois do Parar; agora, não é falado;
+  - nas anotações, Recusar, Aprovar e Arquivar tinham 36 px no celular;
+    agora, 48 px (36 no computador);
+  - o axe não acusa nada na trilha, na recolhida, na resposta com as fontes,
+    na demora, no prazo e sem rede, no claro, no escuro e a 390 px. Com a
+    CPU 4× mais lenta e Slow 4G, nenhuma tarefa longa; o maior intervalo
+    entre quadros foi 42 ms.
+
+Esperam o OK do Leonardo:
+
+- a trilha recolhida e as fontes também nas respostas gravadas, como no
+  quadro final da prancha: nada pula quando a resposta termina, mas todo
+  histórico com leituras ganha a caixa e os chips;
+- a opção `tinta` do `BotaoDeAcao`, para o Aprovar do painel (o teste do
+  mockup trava a tinta), os cartões e a janela de rotina, que já eram
+  pretos; o diálogo de playbook e o Salvar ou Aprovar das anotações no
+  Conhecimento continuam no primário vermelho.
+
+Ficam para depois:
+
+- os números por consulta ("38 pedidos"): o stream não manda o resumo;
+- o Parar e o prazo só cortam a espera neste aparelho; a callable continua
+  no servidor e pode gravar a resposta, que aparece na próxima leitura;
+- o texto que chega antes de uma consulta ainda troca de lugar com a trilha:
+  quando ele chega, não dá para saber se é a resposta;
+- "De onde tirei:" e os chips ficam com 12 px, porque a escala de texto não
+  tem 13 px, e a borda da caixa usa o `--agent-border` do app;
+- quem envia pela tela de boas-vindas perde o foco do Enviar, porque a tela
+  troca para a conversa;
+- o "fieldset" `disabled` dos cartões e das janelas de playbook e de rotina
+  durante o envio, o Cancelar `disabled` nessas janelas e as sugestões
+  `disabled` das boas-vindas;
+- o Pessoas, o seletor de cliente e a lista de separação ainda leem o cache
+  do Firestore sem rede;
+- as ações de linha de Pedidos, o piloto, ainda têm 40 px no celular.

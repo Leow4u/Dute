@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileText, Loader2, PackagePlus, X } from "lucide-react";
+import { FileText, PackagePlus, X } from "lucide-react";
 import { useLocation } from "wouter";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import {
   draftHref,
   parseDraftSent,
@@ -213,15 +214,14 @@ export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft
         </button>
         <div className="flex items-center gap-3">
           {problem ? <span className="text-xs text-warning-soft-foreground">{problem}</span> : null}
-          <button
-            type="button"
-            disabled={Boolean(problem) || !messageId || send.isPending}
+          <BotaoDeAcao
+            tinta
+            estado={send.isPending ? "andamento" : "repouso"}
+            rotulo="Enviar aviso"
+            andamento="Enviando…"
+            bloqueado={Boolean(problem) || !messageId}
             onClick={() => send.mutate()}
-            className="inline-flex items-center gap-2 rounded-xl bg-foreground px-3.5 py-2 text-sm font-semibold text-background hover:bg-foreground/85 disabled:opacity-50"
-          >
-            {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {send.isPending ? "Enviando…" : "Enviar aviso"}
-          </button>
+          />
         </div>
       </div>
     </section>

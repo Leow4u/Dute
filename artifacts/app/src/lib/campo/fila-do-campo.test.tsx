@@ -13,12 +13,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const rede = vi.hoisted(() => ({
   chamadas: [] as Array<{ nome: string; dados: Record<string, unknown> }>,
   falhar: null as null | { code: string; message: string },
+  /** O que subiu ao Storage, na ordem. */
+  enviados: [] as Blob[],
+}));
+// A foto da fila sobe compactada (parte 11 do carregamento v2): a compactação devolve outra, com o nome dela.
+const COMPACTADA = vi.hoisted(() => new File(["jpeg-de-2000-px"], "compactada.jpg", { type: "image/jpeg" }));
+vi.mock("@/lib/envio-de-fotos", async (original) => ({
+  ...(await original<typeof import("@/lib/envio-de-fotos")>()),
+  compactarFoto: async () => COMPACTADA,
 }));
 
 vi.mock("@/lib/auth", () => ({ useAppUser: () => ({ user: { uid: "uid-carlos", fullName: "Carlos Silva" }, isLoaded: true }) }));
 // A foto sobe ao Storage antes da callable: aqui, sempre sobe.
 vi.mock("@/lib/firebase", () => ({ firebaseStorage: {} }));
-vi.mock("firebase/storage", () => ({ ref: () => ({}), uploadBytes: async () => ({}) }));
+vi.mock("firebase/storage", () => ({
+  ref: () => ({}),
+  // O envio com progresso (parte 11 do carregamento v2): a tarefa termina na hora.
+  uploadBytesResumable: (_alvo: unknown, dados: Blob) => {
+    rede.enviados.push(dados);
+    return { on: (_evento: string, _progresso: unknown, _erro: unknown, fim: () => void) => fim(), cancel: () => true };
+  },
+}));
 vi.mock("@/lib/operacao/api", async (original) => ({
   ...(await original<typeof import("@/lib/operacao/api")>()),
   chamarOperacao: async (nome: string, dados: Record<string, unknown>) => {
@@ -82,6 +97,7 @@ async function esperar(condicao: () => boolean | Promise<boolean>) {
 
 beforeEach(() => {
   rede.chamadas.length = 0;
+  rede.enviados.length = 0;
   rede.falhar = null;
   window.localStorage.clear();
   sinal(true);
@@ -153,6 +169,18 @@ describe("fila do campo no aparelho", () => {
     expect(fila!.falhas[0]).toMatchObject({ rotulo: "Foto", mensagem: "A OS já tem 200 fotos.", foto: "ft_a000000000000002" });
     // A tela da vistoria pode nem estar aberta: o rascunho guardado já sai sem ela.
     expect(lerRascunho("10230-01")?.ambientes[0].fotos).toEqual(["ft_a000000000000001"]);
+  });
+
+  it("a foto do celular sobe compactada, e a callable vem depois", async () => {
+    const armazem = armazemNoAparelho(new IDBFactory());
+    await abrirApp(armazem);
+    const arquivo = new File([new Uint8Array(2_900_000)], "IMG_0001.jpg", { type: "image/jpeg" });
+    await act(async () =>
+      fila!.enviar(registroDeFoto({ numero: "10230-01" }, { arquivo, nome: "ft_a000000000000003.jpg", contentType: "image/jpeg", instante: TOQUE.toISOString() })),
+    );
+    await esperar(() => rede.chamadas.length === 1 && fila!.pendentes.length === 0);
+    expect(rede.enviados.map((dados) => (dados as File).name)).toEqual(["compactada.jpg"]);
+    expect(rede.chamadas[0].nome).toBe("attachPhoto");
   });
 
   it("a fila que não carregou não apaga a guardada no aparelho", async () => {

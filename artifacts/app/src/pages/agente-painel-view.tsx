@@ -3,11 +3,12 @@ import { Check, CircleCheck, X } from "lucide-react";
 import { Link } from "wouter";
 
 import { CAIXA_DO_TOM, LinhaDoPrecisa, TituloDaSecao } from "@/components/inicio/inicio-do-modulo";
-import { Button } from "@/components/ui/button";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { CartaoComBrilho, Esqueleto } from "@/components/ui/esqueleto";
 import { PageHeader } from "@/components/ui/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
 import { origemDaNota } from "@/lib/agente/anotacoes";
 import type { NotaDoAgente } from "@/lib/agente/cliente";
+import type { AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
 import type { ItemDoInicio } from "@/lib/inicio-do-modulo";
 import { cn } from "@/lib/utils";
 
@@ -48,8 +49,11 @@ export type PainelDoAgenteViewProps = {
   /** As anotações para aprovar, que a linha das anotações abre aqui. */
   notas: readonly NotaDoAgente[];
   numeros: NumerosDoAgente;
-  /** Uma decisão em andamento: as anotações esperam. */
-  decidindo: boolean;
+  /**
+   * A decisão de cada anotação (carregamento v2, momento 4): aprovar uma deixa
+   * as outras livres; na anotação ocupada, a outra ação fica travada.
+   */
+  acoes: Pick<AcaoNaLinha<string>, "estado" | "ocupada">;
   decidir: (decisao: DecisaoDaNota) => void;
 };
 
@@ -79,11 +83,14 @@ export function AbasDoAgente({ abas }: { abas: readonly AbaDoAgente[] }) {
   );
 }
 
-function NotaParaAprovar({ nota, decidindo, decidir }: { nota: NotaDoAgente } & Pick<PainelDoAgenteViewProps, "decidindo" | "decidir">) {
+function NotaParaAprovar({ nota, acoes, decidir }: { nota: NotaDoAgente } & Pick<PainelDoAgenteViewProps, "acoes" | "decidir">) {
   const [texto, setTexto] = useState(nota.text);
   const [visibilidade, setVisibilidade] = useState(nota.visibility);
   const campo = `nota-${nota.id}`;
   const curta = texto.trim().length < MENOR_NOTA;
+  const ocupada = acoes.ocupada(nota.id);
+  const recusar = acoes.estado(nota.id, "reject");
+  const aprovar = acoes.estado(nota.id, "approve");
   return (
     <li className="flex flex-col gap-2.5 rounded-lg border border-agent-border bg-agent-soft p-3.5">
       <label htmlFor={campo} className="sr-only">
@@ -116,30 +123,42 @@ function NotaParaAprovar({ nota, decidindo, decidir }: { nota: NotaDoAgente } & 
           ))}
         </div>
         <div className="flex gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={decidindo} onClick={() => decidir({ id: nota.id, acao: "reject" })}>
-            <X aria-hidden="true" />
-            Recusar
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
+          <BotaoDeAcao
+            variant="outline"
             size="sm"
-            disabled={decidindo || curta}
+            // No celular, as ações da linha com 48 px (seção 7).
+            className="max-md:min-h-12"
+            estado={recusar}
+            icone={<X aria-hidden="true" />}
+            rotulo="Recusar"
+            andamento="Recusando…"
+            sucesso="Recusada"
+            erro="Não recusada"
+            bloqueado={ocupada && recusar === "repouso"}
+            onClick={() => decidir({ id: nota.id, acao: "reject" })}
+          />
+          <BotaoDeAcao
+            tinta
+            size="sm"
+            className="max-md:min-h-12"
+            estado={aprovar}
+            icone={<Check aria-hidden="true" />}
+            rotulo="Aprovar"
+            andamento="Aprovando…"
+            sucesso="Aprovada"
+            erro="Não aprovada"
+            bloqueado={(ocupada && aprovar === "repouso") || (!ocupada && curta)}
             onClick={() =>
               decidir({ id: nota.id, acao: "approve", text: texto.trim() !== nota.text ? texto.trim() : undefined, visibility: visibilidade })
             }
-            className="bg-foreground text-background hover:bg-foreground/85 active:bg-foreground/85"
-          >
-            <Check aria-hidden="true" />
-            Aprovar
-          </Button>
+          />
         </div>
       </div>
     </li>
   );
 }
 
-function LinhaDasAnotacoes({ item, notas, decidindo, decidir }: { item: ItemDoInicio } & Pick<PainelDoAgenteViewProps, "notas" | "decidindo" | "decidir">) {
+function LinhaDasAnotacoes({ item, notas, acoes, decidir }: { item: ItemDoInicio } & Pick<PainelDoAgenteViewProps, "notas" | "acoes" | "decidir">) {
   const Icone = item.icon;
   return (
     <li className="flex gap-4 border-t border-border px-5 py-4 first:border-t-0 md:px-6">
@@ -150,7 +169,7 @@ function LinhaDasAnotacoes({ item, notas, decidindo, decidir }: { item: ItemDoIn
         <p className="flex min-h-13 items-center text-base font-bold text-foreground">{item.title}</p>
         <ul className="flex flex-col gap-2.5">
           {notas.map((nota) => (
-            <NotaParaAprovar key={nota.id} nota={nota} decidindo={decidindo} decidir={decidir} />
+            <NotaParaAprovar key={nota.id} nota={nota} acoes={acoes} decidir={decidir} />
           ))}
         </ul>
       </div>
@@ -169,7 +188,20 @@ function LinhaDoNumero({ href, rotulo, valor }: { href: string; rotulo: string; 
   );
 }
 
-export function PainelDoAgenteView({ abas, carregando, falhas, linhas, notas, numeros, decidindo, decidir }: PainelDoAgenteViewProps) {
+/** A linha do "Para decidir" que ainda lê: a caixa do ícone, o título e o apoio, em blocos neutros. */
+function LinhaFantasma() {
+  return (
+    <div className="flex items-center gap-4 border-t border-border px-5 py-4 first:border-t-0 md:px-6">
+      <Esqueleto forma="icone" />
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <Esqueleto forma="texto" className="w-2/5" />
+        <Esqueleto forma="texto" className="h-2.5 w-3/5" />
+      </div>
+    </div>
+  );
+}
+
+export function PainelDoAgenteView({ abas, carregando, falhas, linhas, notas, numeros, acoes, decidir }: PainelDoAgenteViewProps) {
   return (
     <div className="flex flex-col gap-7">
       <PageHeader title="Agent Dute">
@@ -186,16 +218,16 @@ export function PainelDoAgenteView({ abas, carregando, falhas, linhas, notas, nu
         <section aria-labelledby="para-decidir" className="flex min-w-0 flex-[2.2_1_560px] flex-col gap-3.5">
           <TituloDaSecao id="para-decidir">Para decidir</TituloDaSecao>
           {carregando ? (
-            <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5">
+            <CartaoComBrilho className="rounded-lg border border-border bg-card">
               {[0, 1, 2].map((linha) => (
-                <Skeleton key={linha} className="h-14 rounded-lg" />
+                <LinhaFantasma key={linha} />
               ))}
-            </div>
+            </CartaoComBrilho>
           ) : linhas.length ? (
             <ul className="rounded-lg border border-border bg-card">
               {linhas.map((item, indice) =>
                 item.id === LINHA_DAS_ANOTACOES ? (
-                  <LinhaDasAnotacoes key={item.id} item={item} notas={notas} decidindo={decidindo} decidir={decidir} />
+                  <LinhaDasAnotacoes key={item.id} item={item} notas={notas} acoes={acoes} decidir={decidir} />
                 ) : (
                   <LinhaDoPrecisa key={item.id} item={item} principal={indice === 0} />
                 ),

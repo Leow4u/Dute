@@ -3,18 +3,22 @@
  * executa: um conceito só, uma rota só. As telas existentes renderizam
  * intactas sob abas.
  */
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { useLocation } from "wouter";
 
+import { CarregandoTela } from "@/components/ui/carregando-tela";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/ui/page-header";
 import { useAppUser } from "@/lib/auth";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { nomeDaTela } from "@/lib/document-title";
 import { SOMENTE_ARMAZENAGEM } from "@/lib/somente-armazenagem";
+import { telaSobDemanda } from "@/lib/telas-no-aparelho";
 
-const Billing = lazy(() => import("./billing"));
-const PriceList = lazy(() => import("./price-list"));
-const Contratos = lazy(() => import("./comercial/contratos"));
+// As abas chegam sob demanda e, para a equipe, ficam guardadas no aparelho junto com o Faturamento.
+const Billing = telaSobDemanda("pages/billing", () => import("./billing"));
+const PriceList = telaSobDemanda("pages/price-list", () => import("./price-list"));
+const Contratos = telaSobDemanda("pages/comercial/contratos", () => import("./comercial/contratos"));
 
 const BILLING_TABS = [
   { value: "competencia", label: "Fechamento do mês", path: "/faturamento" },
@@ -59,7 +63,8 @@ export default function BillingHub() {
         </Tabs>
       </PageHeader>
 
-      <Suspense fallback={null}>
+      {/* O mesmo nome da espera da rota: a tela não troca de nome no meio da espera. */}
+      <Suspense fallback={<CarregandoTela titulo={nomeDaTela(location)} />}>
         {tab === "competencia" ? <Billing /> : null}
         {tab === "tabela" ? <PriceList /> : null}
         {tab === "contratos" && podeManterContratos && !isLoading ? (

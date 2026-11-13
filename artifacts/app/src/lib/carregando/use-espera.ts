@@ -11,6 +11,12 @@ export interface OpcoesDaEspera {
   segurarMinimo?: boolean;
   /** A desistência: 70 s por padrão; 180 s no chat do Agent Dute e na foto por IA. */
   desisteMs?: number;
+  /**
+   * Quando a espera começou (`performance.now()`), se ela continua uma que já
+   * estava na tela: o relógio não volta ao zero, e o que já tinha aparecido
+   * aparece na hora. Lido só quando a espera começa.
+   */
+  desde?: number;
 }
 
 export interface Espera {
@@ -35,6 +41,13 @@ const PARADO: Relogio = { modo: "parado" };
 const OCULTA: Espera = { visivel: false, fase: "oculta", decorridoMs: 0, calmo: false, movimento: false };
 
 const agora = () => performance.now();
+
+/** A espera que começa agora, ou que continua a que começou em `desde`. */
+function comecar(desde: number | undefined): Relogio {
+  const instante = agora();
+  const inicio = desde !== undefined && Number.isFinite(desde) && desde <= instante ? desde : instante;
+  return { modo: "correndo", inicio, agora: instante, apareceuEm: instante - inicio >= CARREGANDO.atrasoMs ? instante : null };
+}
 
 function ligar(relogio: Relogio, instante: number): Relogio {
   if (relogio.modo === "correndo") return relogio;
@@ -91,12 +104,13 @@ function esperaDoRelogio(relogio: Relogio, desisteMs: number): Espera {
  * lido direto, que pisca ou não aparece. Nada aparece antes de 300 ms; o
  * indicador que apareceu fica pelo menos 500 ms, quando pedido; aos 3 s o
  * objeto entra na linha; aos 5 s o movimento decorativo para; aos 10 s vêm a
- * demora e a volta calma; aos 70 s, a desistência. Cada espera conta do zero.
+ * demora e a volta calma; aos 70 s, a desistência. Cada espera conta do zero,
+ * menos a que continua outra (`desde`).
  */
 export function useEspera(ativa: boolean, opcoes: OpcoesDaEspera = {}): Espera {
   const segurarMinimo = opcoes.segurarMinimo ?? false;
   const desisteMs = opcoes.desisteMs ?? CARREGANDO.desisteMs;
-  const [relogio, setRelogio] = useState<Relogio>(() => (ativa ? ligar(PARADO, agora()) : PARADO));
+  const [relogio, setRelogio] = useState<Relogio>(() => (ativa ? comecar(opcoes.desde) : PARADO));
 
   useEffect(() => {
     const instante = agora();
@@ -104,25 +118,35 @@ export function useEspera(ativa: boolean, opcoes: OpcoesDaEspera = {}): Espera {
   }, [ativa, segurarMinimo]);
 
   // Os tiques da espera que corre, nos marcos e, depois de 10 s, a cada segundo.
-  // Cada tique arma o seguinte pelo relógio, sem esperar a tela renderizar. O
-  // timer pode disparar um pouco antes do marco no relógio do performance (no
-  // Chromium, 0,2 ms antes dos 300): o marco para o qual ele foi armado vale
-  // como alcançado, e o seguinte conta dele. Senão o tique dos 300 ms não
-  // mostrava nada e a leitura seguinte, já depois dos 300, armava os 3 s.
+  // Cada tique arma o seguinte pelo relógio, sem esperar a tela renderizar.
   const corrida = relogio.modo === "correndo" ? relogio.inicio : null;
   useEffect(() => {
     if (corrida === null) return undefined;
+    // O relógio alcança o agora ao armar: o marco que passou enquanto a tela
+    // não rodava (a thread ocupada por mais de 300 ms, a foto sendo
+    // compactada) entra na hora, e não só no marco seguinte (aos 3 s).
+    setRelogio((atual) => {
+      if (atual.modo !== "correndo" || atual.inicio !== corrida) return atual;
+      const instante = agora();
+      const marco = proximoMarco(atual.agora - corrida, desisteMs);
+      return marco !== null && instante - corrida >= marco ? avancar(atual, corrida, instante) : atual;
+    });
     let tique: ReturnType<typeof setTimeout> | undefined;
-    const armar = (instante: number) => {
-      const marco = proximoMarco(instante - corrida, desisteMs);
+    // O tique foi armado para o marco: quando ele dispara, o marco chegou,
+    // mesmo que o relógio leia um décimo de milissegundo antes (o atraso
+    // fracionário do setTimeout é truncado). Sem isso, o tique lia 299,9 ms,
+    // não marcava, e quem armava o seguinte já lia 300 e pulava para os 3 s.
+    const armar = (alcancado: number) => {
+      const instante = agora();
+      const marco = proximoMarco(Math.max(instante - corrida, alcancado), desisteMs);
       if (marco === null) return;
       tique = setTimeout(() => {
         const disparo = Math.max(agora(), corrida + marco);
         setRelogio((atual) => avancar(atual, corrida, disparo));
-        armar(disparo);
+        armar(marco);
       }, Math.max(0, corrida + marco - instante));
     };
-    armar(agora());
+    armar(0);
     return () => clearTimeout(tique);
   }, [corrida, desisteMs]);
 

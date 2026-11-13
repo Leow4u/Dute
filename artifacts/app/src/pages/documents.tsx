@@ -1,8 +1,11 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, Plus, Search, UploadCloud } from "lucide-react";
 
+import { AvisoDeEspera } from "@/components/ui/aviso-de-espera";
+import { BotaoDeAcao, type EstadoDaAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { Progresso, type ItemDoProgresso } from "@/components/ui/progresso";
 import { Chip } from "@/components/ui/chip";
 import { FilterGroup, FilterPanel } from "@/components/ui/filter-panel";
 import { PageHeader } from "@/components/ui/page-header";
@@ -33,6 +36,9 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
+import { CARREGANDO } from "@/lib/carregando/tempo";
+import { desfechoDoErro } from "@/lib/carregando/use-acao-na-linha";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { canAccessModule, type ProfileRole } from "@/lib/modules";
 import { humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -94,9 +100,38 @@ async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
   });
-  const payload = (await response.json().catch(() => ({}))) as { message?: string };
-  if (!response.ok) throw new Error(payload.message || "Não foi possível concluir a operação.");
+  const payload = (await response.json().catch(() => ({}))) as { message?: string; code?: string };
+  if (!response.ok) {
+    // O código fica no erro: o prazo sem resposta (deadline-exceeded) vira o "Conferir".
+    throw Object.assign(new Error(payload.message || "Não foi possível concluir a operação."), { status: response.status, ...(payload.code ? { code: payload.code } : {}) });
+  }
   return payload as T;
+}
+
+/**
+ * As etapas de "Adicionar documento" (carregamento v2, parte 11): o arquivo
+ * sobe pelo backend (até 20 MB, numa chamada que desiste aos 70 s) e o
+ * documento é cadastrado, em duas chamadas. A etapa anda com a resposta de
+ * cada uma. Ficam no diálogo desde o repouso, pendentes, para nada entrar
+ * empurrando o botão tocado.
+ */
+export const ETAPAS_DO_DOCUMENTO = ["Arquivo", "Cadastro"] as const;
+
+/** As de antes feitas, a da vez andando enquanto a chamada dela espera (sem resposta e conferindo, pendente). */
+export function etapasDoDocumento(etapa: number, andando = true): ItemDoProgresso[] {
+  return ETAPAS_DO_DOCUMENTO.map((rotulo, indice) => ({
+    rotulo,
+    estado: indice + 1 < etapa ? "feito" : indice + 1 === etapa && andando ? "andamento" : "fila",
+  }));
+}
+
+/** O arquivo que já subiu e para quem: só vale de novo para o mesmo arquivo, cliente e tipo. */
+interface ArquivoEnviado {
+  file: File;
+  customerCode: string;
+  documentType: string;
+  entityType: string;
+  target: UploadedFile;
 }
 
 const emptyForm = { title: "", documentType: "nf_entrada", reference: "", customerVisible: false };
@@ -147,6 +182,20 @@ export default function Documents() {
   const failure = (title: string) => (error: unknown) =>
     toast({ title, description: humanApiError(error, "Tente novamente em instantes."), variant: "destructive" });
 
+  // As etapas do envio e o fim no botão: o erro por 2 s, ou o "Conferir" do
+  // prazo sem resposta. O arquivo que já subiu não sobe de novo na repetição,
+  // mas só para o mesmo cliente: o customer_code é a fronteira, e o arquivo
+  // mora na pasta do cliente que estava ativo quando subiu.
+  const [etapaDoDocumento, setEtapaDoDocumento] = useState(0);
+  const [fimDoDocumento, setFimDoDocumento] = useState<"erro" | "sem-resposta" | null>(null);
+  const [conferindoDocumento, setConferindoDocumento] = useState(false);
+  const arquivoEnviado = useRef<ArquivoEnviado | null>(null);
+  useEffect(() => {
+    // Outro cliente no menu: o arquivo do anterior não serve, e o fim do envio dele também não.
+    arquivoEnviado.current = null;
+    setFimDoDocumento(null);
+    setEtapaDoDocumento(0);
+  }, [customerCode]);
   const add = useMutation({
     mutationFn: async () => {
       if (!file) throw new Error("Escolha o arquivo.");
@@ -154,19 +203,27 @@ export default function Documents() {
       const documentType = isFinance ? "fatura" : form.documentType;
       const entityType = isFinance ? "fatura" : "operacional";
       if (file.size > 20 * 1024 * 1024) throw new Error("Arquivo grande demais. Use até 20 MB.");
+      setFimDoDocumento(null);
+      setEtapaDoDocumento(1);
       // O arquivo sobe pelo backend, que grava no Storage. O PUT na URL
       // assinada era recusado pelo Storage de produção.
-      const target = await apiJson<UploadedFile>("/api/documents/upload", {
-        method: "POST",
-        body: JSON.stringify({
-          customer_code: customerCode,
-          file_name: file.name,
-          content_type: file.type || "application/octet-stream",
-          data_base64: await fileToBase64(file),
-          document_type: documentType,
-          entity_type: entityType,
-        }),
-      });
+      const enviado = arquivoEnviado.current;
+      const target =
+        enviado && enviado.file === file && enviado.customerCode === customerCode && enviado.documentType === documentType && enviado.entityType === entityType
+          ? enviado.target
+          : await apiJson<UploadedFile>("/api/documents/upload", {
+              method: "POST",
+              body: JSON.stringify({
+                customer_code: customerCode,
+                file_name: file.name,
+                content_type: file.type || "application/octet-stream",
+                data_base64: await fileToBase64(file),
+                document_type: documentType,
+                entity_type: entityType,
+              }),
+            });
+      arquivoEnviado.current = { file, customerCode, documentType, entityType, target };
+      setEtapaDoDocumento(2);
       const shared = canPublish && form.customerVisible;
       return apiJson("/api/documents", {
         method: "POST",
@@ -193,15 +250,50 @@ export default function Documents() {
         }),
       });
     },
-    onSuccess: async () => {
-      setAdding(false);
-      setForm(emptyForm);
-      setFile(null);
-      await refresh();
-      toast({ title: "Documento adicionado" });
+    onSuccess: () => adicionado(),
+    onError: (error) => {
+      if (desfechoDoErro(error) === "sem-resposta") {
+        setFimDoDocumento("sem-resposta");
+        return;
+      }
+      setFimDoDocumento("erro");
+      failure("Documento não adicionado")(error);
     },
-    onError: failure("Documento não adicionado"),
   });
+  async function adicionado() {
+    arquivoEnviado.current = null;
+    setFimDoDocumento(null);
+    setEtapaDoDocumento(0);
+    setAdding(false);
+    setForm(emptyForm);
+    setFile(null);
+    await refresh();
+    toast({ title: "Documento adicionado" });
+  }
+  useEffect(() => {
+    if (fimDoDocumento !== "erro") return undefined;
+    const volta = setTimeout(() => setFimDoDocumento((atual) => (atual === "erro" ? null : atual)), CARREGANDO.erroVisivelMs);
+    return () => clearTimeout(volta);
+  }, [fimDoDocumento]);
+  // Conferindo, o estado continua sem resposta: o botão diz "Conferindo…", e não o envio de novo.
+  const estadoDoDocumento: EstadoDaAcao = add.isPending ? "andamento" : (fimDoDocumento ?? "repouso");
+  const esperaDoDocumento = useEspera(add.isPending);
+  const enviandoDocumento = add.isPending || conferindoDocumento;
+  /** O "Conferir" do prazo sem resposta: relê a lista e nunca reenvia. Cadastrado por lá, segue o sucesso. */
+  async function conferirDocumento() {
+    if (conferindoDocumento) return;
+    setConferindoDocumento(true);
+    try {
+      const lidos = (await apiJson<{ items?: Record<string, unknown>[] }>(documentsUrl)).items ?? [];
+      const caminho = arquivoEnviado.current?.target.storage_path;
+      if (caminho && lidos.some((documento) => documento.storage_path === caminho)) await adicionado();
+      else setFimDoDocumento(null);
+    } catch (error) {
+      failure("Não consegui conferir o documento")(error);
+    } finally {
+      setConferindoDocumento(false);
+    }
+  }
 
   const setShared = useMutation({
     mutationFn: async ({ id, shared }: { id: string; shared: boolean }) =>
@@ -381,8 +473,14 @@ export default function Documents() {
         )}
       </section>
 
-      <Dialog open={adding} onOpenChange={setAdding}>
-        <DialogContent className="sm:max-w-[480px]">
+      <Dialog
+        open={adding}
+        onOpenChange={(open) => {
+          // O envio que anda segura o diálogo.
+          if (!enviandoDocumento) setAdding(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-[480px]" fecharTravado={enviandoDocumento}>
           <DialogHeader>
             <DialogTitle>Adicionar documento</DialogTitle>
             <DialogDescription>
@@ -394,7 +492,8 @@ export default function Documents() {
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
-              add.mutate();
+              if (estadoDoDocumento === "sem-resposta") void conferirDocumento();
+              else if (!enviandoDocumento && file) add.mutate();
             }}
           >
             <button
@@ -482,13 +581,33 @@ export default function Documents() {
               <p className="text-xs text-muted-foreground">Fica só para a Dutelog. Publicar para o cliente é com a coordenação.</p>
             )}
           </form>
+          <Progresso forma="etapas" titulo="Adicionando o documento" itens={etapasDoDocumento(etapaDoDocumento, add.isPending)} />
+          <div data-lugar-do-aviso="" className="grid min-h-9 items-center">
+            {add.isPending && esperaDoDocumento.calmo ? <AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={esperaDoDocumento.decorridoMs} /> : null}
+            {estadoDoDocumento === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAdding(false)}>
+            <Button
+              variant="outline"
+              aria-disabled={enviandoDocumento || undefined}
+              className={enviandoDocumento ? "min-h-11 opacity-45 hover:bg-card active:bg-card" : "min-h-11"}
+              onClick={() => {
+                if (!enviandoDocumento) setAdding(false);
+              }}
+            >
               Cancelar
             </Button>
-            <Button type="submit" form="document-form" disabled={add.isPending || !file}>
-              {add.isPending ? "Enviando..." : "Adicionar"}
-            </Button>
+            <BotaoDeAcao
+              type="submit"
+              form="document-form"
+              className="min-h-11"
+              estado={conferindoDocumento ? "andamento" : estadoDoDocumento}
+              rotulo="Adicionar"
+              andamento={conferindoDocumento ? "Conferindo…" : "Adicionando…"}
+              sucesso="Adicionado"
+              erro="Não adicionado"
+              bloqueado={estadoDoDocumento === "repouso" && !file}
+            />
           </DialogFooter>
         </DialogContent>
       </Dialog>

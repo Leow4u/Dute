@@ -1,9 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Ban, ClipboardCheck, ClipboardPen, ImagePlus, Printer, RotateCcw } from "lucide-react";
 import { collection, doc } from "firebase/firestore";
 import { Link, useSearch } from "wouter";
 
 import { Button } from "@/components/ui/button";
+import { ProgressoDasFotos } from "@/components/ui/progresso-das-fotos";
+import { useEnvioDeFotos } from "@/lib/carregando/use-envio-de-fotos";
 import { useAppUser } from "@/lib/auth";
 import {
   andamentoInicial,
@@ -74,7 +76,23 @@ export default function PaginaOs() {
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [erroDasFotos, setErroDasFotos] = useState<string | null>(null);
-  const [enviandoFotos, setEnviandoFotos] = useState(false);
+  // As fotos anexadas sobem uma por vez, compactadas e com a contagem (parte 11 do carregamento v2).
+  // A que falha é dita pelo Anunciador ("1 foto não enviada"); o motivo fica na tela, sem outro
+  // alerta, e sai quando o "Tentar de novo" ou a escolha nova começa.
+  const [motivoDoEnvio, setMotivoDoEnvio] = useState<string | null>(null);
+  const escolhidas = useRef(new Map<File, FotoEscolhida>());
+  const envioDasFotos = useEnvioDeFotos<void>({
+    enviarUma: (arquivo, aoProgredir, sinal) => {
+      const foto = escolhidas.current.get(arquivo);
+      if (!ficha || !foto) return Promise.reject(new Error("A OS não está aberta."));
+      return enviarFoto(ficha.numero, foto, { chave: `foto:${foto.nome}` }, aoProgredir, sinal);
+    },
+    aoFalhar: (error) => setMotivoDoEnvio(mensagemDoErro(error)),
+  });
+  const enviandoFotos = envioDasFotos.enviando;
+  useEffect(() => {
+    if (enviandoFotos) setMotivoDoEnvio(null);
+  }, [enviandoFotos]);
   const chave = useRef<string>("");
   // O instante da ocorrência e da inclusão, o mesmo em cada nova tentativa do
   // painel: a chamada que já gravou se repete igual (a chave devolve o mesmo
@@ -209,19 +227,13 @@ export default function PaginaOs() {
     }
   }
 
-  async function anexar(arquivos: File[]) {
-    if (!ficha || !arquivos.length) return;
+  function anexar(arquivos: File[]) {
+    if (!ficha || !arquivos.length || enviandoFotos) return;
     const escolha = escolherFotos(arquivos, ficha.janela?.data ?? null);
     setErroDasFotos(escolha.problema);
     if (escolha.problema) return;
-    setEnviandoFotos(true);
-    try {
-      for (const foto of escolha.fotos) await enviarFoto(ficha.numero, foto, { chave: `foto:${foto.nome}` });
-    } catch (error) {
-      setErroDasFotos(mensagemDoErro(error));
-    } finally {
-      setEnviandoFotos(false);
-    }
+    for (const foto of escolha.fotos) escolhidas.current.set(foto.arquivo, foto);
+    envioDasFotos.enviar(escolha.fotos.map((foto) => foto.arquivo));
   }
 
   const recebeAndamento = ficha?.status === "agendada" || ficha?.status === "em_execucao";
@@ -378,21 +390,27 @@ export default function PaginaOs() {
               <span role="alert" className="text-sm text-destructive">
                 {erroDasFotos}
               </span>
+            ) : motivoDoEnvio ? (
+              <span className="text-sm text-destructive">{motivoDoEnvio}</span>
             ) : null}
             <label
               aria-disabled={enviandoFotos}
               className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted focus-within:ring-2 focus-within:ring-ring/40 aria-disabled:pointer-events-none aria-disabled:opacity-50"
             >
               <ImagePlus aria-hidden="true" className="size-4" />
-              {enviandoFotos ? "Enviando" : "Anexar"}
+              Anexar
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 multiple
                 className="sr-only"
-                disabled={enviandoFotos}
+                // Ocupado não é desabilitado: com disabled, o foco que estava aqui caía no corpo.
+                aria-disabled={enviandoFotos || undefined}
+                onClick={(event) => {
+                  if (enviandoFotos) event.preventDefault();
+                }}
                 onChange={(event) => {
-                  void anexar(Array.from(event.target.files ?? []));
+                  anexar(Array.from(event.target.files ?? []));
                   event.target.value = "";
                 }}
               />
@@ -400,6 +418,7 @@ export default function PaginaOs() {
           </span>
         ) : null
       }
+      envioDasFotos={<ProgressoDasFotos fotos={envioDasFotos} />}
     />
   );
 }

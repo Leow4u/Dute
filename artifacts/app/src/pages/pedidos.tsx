@@ -28,6 +28,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { AvisoDeEspera } from "@/components/ui/aviso-de-espera";
+import { Progresso, type ItemDoProgresso } from "@/components/ui/progresso";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinhaDaFila, QueueGroup, QueueRow, type CarregandoDoGrupo, type QueueTone } from "@/components/ui/queue-list";
@@ -67,7 +69,7 @@ import { useAppUser } from "@/lib/auth";
 import { useAnuncio } from "@/lib/carregando/anunciador";
 import { useContagemLembrada, type ContagensDaLista } from "@/lib/carregando/contagem-lembrada";
 import { resumoDaLista } from "@/lib/carregando/resumo-da-lista";
-import { relogioDaEspera } from "@/lib/carregando/tempo";
+import { CARREGANDO, relogioDaEspera } from "@/lib/carregando/tempo";
 import { desfechoDoErro, useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
 import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
 import { useEspera } from "@/lib/carregando/use-espera";
@@ -116,7 +118,7 @@ import {
   type EntregaDoPedido,
   type FormularioDaEntrega,
 } from "@/lib/warehouse-ops/entrega";
-import type { OrderGroup } from "@/lib/warehouse-ops/orders";
+import { groupWarehouseOrders, queueTasks, type OrderGroup } from "@/lib/warehouse-ops/orders";
 import {
   buildBalanceValidation,
   formatRequestAge,
@@ -127,6 +129,26 @@ import {
 } from "./customer-requests";
 
 const numberFormatter = new Intl.NumberFormat("pt-BR");
+
+/**
+ * As etapas da entrega pela Dutelog (carregamento v2, parte 11 e momento 6):
+ * o pedido em "Para entregar" sai (quem levou e a placa) e é entregue, em
+ * duas chamadas. A etapa anda com a resposta de cada uma. Ficam no diálogo
+ * desde o repouso, pendentes, para nada entrar empurrando o botão tocado.
+ */
+export const ETAPAS_DA_ENTREGA = ["Saída", "Entrega"] as const;
+
+/**
+ * Onde as etapas da entrega estão, pela etapa da vez (1 ou 2; 0 em repouso):
+ * as de antes feitas, a da vez andando enquanto a chamada dela espera (sem
+ * resposta, e conferindo, ela fica pendente), as de depois pendentes.
+ */
+export function etapasDaEntrega(etapa: number, andando = true): ItemDoProgresso[] {
+  return ETAPAS_DA_ENTREGA.map((rotulo, indice) => ({
+    rotulo,
+    estado: indice + 1 < etapa ? "feito" : indice + 1 === etapa && andando ? "andamento" : "fila",
+  }));
+}
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
@@ -511,11 +533,31 @@ export default function Pedidos() {
     setDialog({ kind: "entrega", order, orderId: order.orderId });
   };
 
+  // A entrega anda em etapas (a saída e a entrega), e o fim fica no botão:
+  // o erro por 2 s, ou o "Conferir" do prazo sem resposta, que relê a fila.
+  // O fim é do pedido daquele diálogo: abrir a entrega de outro começa do zero.
+  const [etapaDaEntrega, setEtapaDaEntrega] = useState(0);
+  const [fimDaEntrega, setFimDaEntrega] = useState<"erro" | "sem-resposta" | null>(null);
+  const [conferindoEntrega, setConferindoEntrega] = useState(false);
+  const zerarEntrega = () => {
+    setFimDaEntrega(null);
+    setEtapaDaEntrega(0);
+  };
+  const entregou = () => {
+    toast({ title: "Entrega confirmada. Estoque baixado." });
+    setFimDaEntrega(null);
+    setEtapaDaEntrega(0);
+    fecharDialogo("deliver");
+    setReceivedBy("");
+    refreshAll();
+  };
   const deliver = useMutation({
     mutationFn: async ({ order }: { order: OrderGroup }) => {
       const shipUid = String(order.ship?.id ?? "");
       if (!shipUid) throw new Error("Pedido sem expedição criada.");
+      setFimDaEntrega(null);
       if (order.stage === "enviar") {
+        setEtapaDaEntrega(1);
         remember("motorista", driver.trim());
         remember("placa", plate.trim());
         await advance(shipUid, "ready_to_dispatch", {
@@ -524,19 +566,75 @@ export default function Pedidos() {
           vehicle_plate: plate.trim(),
         });
       }
+      setEtapaDaEntrega(2);
       await advance(shipUid, "dispatched", {
         proof_reference: receivedBy.trim() || "Entrega própria Dutelog",
         delivery_notes: "Recebido pelo cliente.",
       });
     },
-    onSuccess: () => {
-      toast({ title: "Entrega confirmada. Estoque baixado." });
-      fecharDialogo("deliver");
-      setReceivedBy("");
-      refreshAll();
+    onSuccess: entregou,
+    onError: (error) => {
+      // Sem resposta no prazo, a etapa pode ter valido: "Conferir" relê, e a chave de cada etapa é a mesma.
+      if (desfechoDoErro(error) === "sem-resposta") {
+        setFimDaEntrega("sem-resposta");
+        return;
+      }
+      setFimDaEntrega("erro");
+      onError(error);
     },
-    onError,
   });
+  useEffect(() => {
+    if (fimDaEntrega !== "erro") return undefined;
+    const volta = setTimeout(() => setFimDaEntrega((atual) => (atual === "erro" ? null : atual)), CARREGANDO.erroVisivelMs);
+    return () => clearTimeout(volta);
+  }, [fimDaEntrega]);
+  // Conferindo, o estado continua sem resposta: o botão diz "Conferindo…", e não a entrega de novo.
+  const estadoDaEntrega: EstadoDaAcao = deliver.isPending ? "andamento" : (fimDaEntrega ?? "repouso");
+  const entregaOcupada = estadoDaEntrega === "andamento" || conferindoEntrega;
+  const esperaDaEntrega = useEspera(deliver.isPending);
+  /**
+   * O "Conferir" do prazo sem resposta: relê a fila e nunca reenvia. Entregue
+   * por lá, segue o sucesso. Cancelado por outra pessoa enquanto esperava, o
+   * diálogo fecha e diz que a entrega não valeu. No resto (ainda para
+   * entregar, ou fora da fila), volta a "Confirmar entrega": a nova tentativa
+   * leva a mesma chave de cada etapa, e a que já valeu devolve o recibo.
+   */
+  const conferirEntrega = async (order: OrderGroup) => {
+    if (conferindoEntrega) return;
+    setConferindoEntrega(true);
+    try {
+      const lida = await queryClient.fetchQuery({ queryKey: ["warehouse-ops"], queryFn: () => fetchJson<WarehouseOpsResponse>("/api/warehouse/ops"), staleTime: 0 });
+      const saida = queueTasks(lida, "expedition").find((tarefa) => String(tarefa.id) === String(order.ship?.id ?? ""));
+      const status = String(saida?.status ?? "");
+      if (status === "delivered") {
+        entregou();
+      } else if (status === "cancelled" || status === "canceled") {
+        zerarEntrega();
+        fecharDialogo("deliver");
+        toast({ title: "Entrega não confirmada", description: "O pedido foi cancelado.", variant: "destructive" });
+        refreshAll();
+      } else {
+        setFimDaEntrega(null);
+      }
+    } catch (error) {
+      onError(error);
+    } finally {
+      setConferindoEntrega(false);
+    }
+  };
+
+  /**
+   * Fecha o diálogo. A entrega que ficou sem resposta não passa para o pedido
+   * seguinte: o fim dela sai, e a fila relê para a linha dizer onde o pedido
+   * está.
+   */
+  const fecharEntregaOuDialogo = () => {
+    if (dialog?.kind === "deliver") {
+      if (fimDaEntrega === "sem-resposta") refreshAll();
+      zerarEntrega();
+    }
+    setDialog(null);
+  };
 
   // Aprovar e recusar ficam de fora: cada linha de "Para aprovar" tem o próprio estado.
   const busy = deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
@@ -842,6 +940,7 @@ export default function Pedidos() {
                                 setPlate(saida.placa);
                               }
                               lembrarDaLinha(order.key);
+                              zerarEntrega();
                               setDialog({ kind: "deliver", order });
                             }}
                           >
@@ -859,8 +958,14 @@ export default function Pedidos() {
         </div>
       )}
 
-      <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className={larguraDoDialogo} aria-describedby={undefined} onCloseAutoFocus={devolverFocoDoDialogo}>
+      <Dialog
+        open={dialog !== null}
+        onOpenChange={(open) => {
+          // A entrega que anda (ou confere) segura o diálogo: fechar não para as etapas.
+          if (!open && !(dialog?.kind === "deliver" && entregaOcupada)) fecharEntregaOuDialogo();
+        }}
+      >
+        <DialogContent className={larguraDoDialogo} aria-describedby={undefined} onCloseAutoFocus={devolverFocoDoDialogo} fecharTravado={dialog?.kind === "deliver" && entregaOcupada}>
           {dialog?.kind === "reject" ? (
             <>
               <DialogHeader>
@@ -930,20 +1035,48 @@ export default function Pedidos() {
                   />
                 </div>
               </div>
+              {dialog.order.stage === "enviar" ? (
+                <Progresso
+                  forma="etapas"
+                  titulo="Confirmando a entrega"
+                  itens={etapasDaEntrega(etapaDaEntrega, deliver.isPending)}
+                />
+              ) : null}
+              <div data-lugar-do-aviso="" className="grid min-h-9 items-center">
+                {deliver.isPending && esperaDaEntrega.calmo ? (
+                  <AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={esperaDaEntrega.decorridoMs} />
+                ) : null}
+                {estadoDaEntrega === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
+              </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  Voltar
-                </Button>
                 <Button
                   type="button"
-                  disabled={
-                    busy ||
-                    (dialog.order.stage === "enviar" && (!driver.trim() || !plate.trim()))
-                  }
-                  onClick={() => deliver.mutate({ order: dialog.order })}
+                  variant="outline"
+                  aria-disabled={entregaOcupada || undefined}
+                  className={entregaOcupada ? "min-h-11 opacity-45 hover:bg-card active:bg-card" : "min-h-11"}
+                  onClick={() => {
+                    if (!entregaOcupada) fecharEntregaOuDialogo();
+                  }}
                 >
-                  {deliver.isPending ? "Registrando..." : "Confirmar entrega"}
+                  Voltar
                 </Button>
+                <BotaoDeAcao
+                  className="min-h-11"
+                  estado={conferindoEntrega ? "andamento" : estadoDaEntrega}
+                  rotulo="Confirmar entrega"
+                  andamento={conferindoEntrega ? "Conferindo…" : "Confirmando…"}
+                  sucesso="Entregue"
+                  erro="Não confirmada"
+                  bloqueado={
+                    estadoDaEntrega === "repouso" &&
+                    (busy || (dialog.order.stage === "enviar" && (!driver.trim() || !plate.trim())))
+                  }
+                  onClick={() => {
+                    if (conferindoEntrega) return;
+                    if (estadoDaEntrega === "sem-resposta") void conferirEntrega(dialog.order);
+                    else deliver.mutate({ order: dialog.order });
+                  }}
+                />
               </DialogFooter>
             </>
           ) : dialog?.kind === "cancel" ? (

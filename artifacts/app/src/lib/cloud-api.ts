@@ -256,6 +256,15 @@ async function getDoc<A, D extends DocumentData>(referencia: DocumentReference<A
   return snapshot;
 }
 
+/**
+ * A mesma leitura para quem vai ao Firestore sem passar pelas rotas daqui (o
+ * Conhecimento e as conversas do agente do núcleo; carregamento v2, parte
+ * 12): a que só achou o cache é falta de conexão, e não a lista velha ou
+ * vazia, e o SDK que se deu por offline fica marcado, para a releitura
+ * sozinha acordá-lo (parte 7a).
+ */
+export const lerDocsDoServidor = getDocs;
+
 /** A última leitura do Firestore por aqui só achou o cache: o SDK se deu por offline. */
 let firestoreSoNoCache = false;
 let acordandoOFirestore: Promise<void> | null = null;

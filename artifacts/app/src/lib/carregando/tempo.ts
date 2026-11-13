@@ -15,7 +15,7 @@ export const CARREGANDO = {
   atrasoMs: 300,
   /** O tempo mínimo na tela do indicador sozinho e do "em andamento" da ação. O dado não espera. */
   minimoMs: 500,
-  /** O objeto entra no apoio da linha: "Aprovando pedido 1042…". */
+  /** O objeto entra no apoio da linha: "Aprovando pedido 1042…". Na abertura, sem rede, o "Sem conexão". */
   objetoNaLinhaMs: 3_000,
   /** O movimento decorativo para: o brilho do esqueleto, as barras e a trilha do agente. */
   movimentoMaxMs: 5_000,
@@ -23,6 +23,15 @@ export const CARREGANDO = {
   demoraMs: 10_000,
   /** A desistência: "Sem resposta do servidor." na leitura, "Conferir" na escrita. O chat do Agent Dute e a foto por IA esperam 180 s. */
   desisteMs: 70_000,
+  /**
+   * O prazo do chat do Agent Dute, o mesmo `timeoutSeconds` (180 s) das
+   * functions dele: "Sem resposta do Agent Dute" e "Tentar de novo". Na tela,
+   * conta da última notícia do servidor; o `.stream()` da callable não tem
+   * prazo próprio, e o stream que fecha sem o resultado é o prazo esgotado.
+   */
+  desisteDoAgenteMs: 180_000,
+  /** Sem um byte novo da foto que sobe por esse tempo, a estimativa ("cerca de 20 s") sai do aviso: a conta não vale com a foto parada. */
+  estimativaSemByteMs: 10_000,
   /** "Aprovado" fica pelo menos isso na tela, e até a releitura da lista chegar. */
   sucessoVisivelMs: 1_000,
   /** "Não aprovado" fica isso no botão antes de ele voltar a "Aprovar"; o motivo fica na linha. */
@@ -68,6 +77,21 @@ export const CARREGANDO = {
   barraSomeMs: 150,
   /** A contagem que muda (3 → 2) rola 8 px nesse tempo. */
   contaMs: 160,
+  /** O segmento da foto que sobe enche por scaleX nesse tempo, a cada evento de bytes, e nunca volta. */
+  segmentoMs: 200,
+  /** O fio entre duas etapas enche nesse tempo, quando a de antes termina. */
+  fioMs: 300,
+  /**
+   * A abertura do app (o `#abertura` do index.html) esmaece nesse tempo
+   * quando o perfil chega, com a marca recuando a 0,96 (`fecharAbertura`).
+   */
+  aberturaSaiMs: 260,
+  /** Antes de esmaecer, o segmento vermelho completa o trilho até o canto chanfrado, se o trilho já estava à vista. */
+  aberturaCompletaMs: 200,
+  /** Quando o trilho completa, o segmento que varria some nesse tempo. */
+  aberturaSegmentoSaiMs: 60,
+  /** A marca (que recua a 0,96) e a palavra saem nesse tempo, enquanto o preto abre nos 260 ms. */
+  aberturaMarcaSaiMs: 200,
   /**
    * O dado que chega no lugar das linhas-fantasma (momento 2): cada linha
    * real entra por opacidade nesse tempo, subindo 4 px (no reduzido, só a
@@ -122,4 +146,16 @@ export function podeEsconder(apareceuEm: number | null, agora: number): boolean 
 export function relogioDaEspera(decorridoMs: number): string {
   const segundos = Number.isFinite(decorridoMs) ? Math.max(0, Math.floor(decorridoMs / 1_000)) : 0;
   return `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")}`;
+}
+
+/**
+ * A estimativa do que falta, arredondada para cima ("cerca de 20 s"), no
+ * aviso de demora da operação com o total conhecido (as fotos). Até um
+ * minuto, de 5 em 5 s; depois, em minutos.
+ */
+export function estimativaDaEspera(restanteMs: number): string | null {
+  if (!Number.isFinite(restanteMs) || restanteMs <= 0) return null;
+  const segundos = Math.ceil(restanteMs / 1_000);
+  if (segundos <= 60) return `cerca de ${Math.max(5, Math.ceil(segundos / 5) * 5)} s`;
+  return `cerca de ${Math.ceil(segundos / 60)} min`;
 }

@@ -6,7 +6,7 @@ vi.mock("./firebase", () => ({ firebaseApp: {} }));
 vi.mock("./firebase-functions", () => ({ functionsDoApp: () => ({}) }));
 vi.mock("firebase/functions", () => ({ httpsCallable: () => chamar }));
 
-import { CODIGO_SEM_CONEXAO, CODIGO_SEM_RESPOSTA, SEM_CONEXAO, SEM_RESPOSTA } from "./conexao";
+import { CODIGO_SEM_CONEXAO, CODIGO_SEM_RESPOSTA, PRAZO_ESGOTADO, PRAZO_ESGOTADO_NA_LEITURA, SEM_CONEXAO, SEM_RESPOSTA } from "./conexao";
 import { callFunctionsApi } from "./functions-api";
 
 /**
@@ -69,5 +69,25 @@ describe("a ação sem rede", () => {
     const response = await callFunctionsApi(APROVAR, "POST", corpo);
     expect(response?.status).toBe(409);
     expect(await response?.json()).toEqual({ message: "A solicitação mudou em outra tela.", code: "aborted" });
+  });
+});
+
+describe("o prazo sem resposta (deadline-exceeded)", () => {
+  it("vira a mensagem em português, com o código para o Conferir", async () => {
+    // O SDK do Firebase aos 70 s: o código e a mensagem crua em inglês.
+    chamar.mockRejectedValue(Object.assign(new Error("deadline-exceeded"), { code: "functions/deadline-exceeded" }));
+    const response = await callFunctionsApi(APROVAR, "POST", corpo);
+    expect(response?.status).toBe(504);
+    expect(await response?.json()).toEqual({ message: PRAZO_ESGOTADO, code: "deadline-exceeded" });
+  });
+
+  it("na leitura, repetir é seguro: a mensagem pede para tentar de novo, e não para conferir", async () => {
+    chamar.mockRejectedValue(Object.assign(new Error("deadline-exceeded"), { code: "functions/deadline-exceeded" }));
+    for (const leitura of ["/api/system/health", "/api/agent-dute/notes", "/api/agent-dute/playbooks"]) {
+      const response = await callFunctionsApi(leitura, "GET");
+      expect(response?.status, leitura).toBe(504);
+      expect(await response?.json(), leitura).toEqual({ message: PRAZO_ESGOTADO_NA_LEITURA, code: "deadline-exceeded" });
+    }
+    expect(PRAZO_ESGOTADO_NA_LEITURA).toBe("O servidor não respondeu a tempo. Tente de novo.");
   });
 });

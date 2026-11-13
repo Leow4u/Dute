@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Spline+Sans+Mono:wght@400;500;600;700&display=swap');
+/* As fontes (Manrope, Plus Jakarta Sans e Spline Sans Mono) vêm do index.html,
+   com preload e font-display: swap: um @import aqui seguraria a primeira
+   pintura até o Google responder (carregamento v2, parte 9). */
 
 @import 'tailwindcss' source(".");
 @import 'tw-animate-css';
@@ -797,9 +799,14 @@
   --carregando-t-conta: 160ms; /* a contagem que muda rola 8 px */
   --carregando-conta-y: 8px;
   --carregando-t-listras: 600ms; /* as listras a 45° andam 16 px para trás, linear */
+  --carregando-t-segmento: 200ms; /* o segmento da foto que sobe enche por scaleX a cada evento de bytes */
+  --carregando-t-fio: 300ms; /* o fio entre duas etapas enche quando a de antes termina */
   --carregando-t-arcos: 1200ms; /* os arcos do Wi-Fi em "Reconectando…", 300 ms por arco; param aos 5 s */
   --carregando-t-pulso: 2000ms; /* o respiro do movimento reduzido (0,5 Hz) */
-  --carregando-t-abertura-sai: 260ms; /* a abertura esmaece quando o perfil chega */
+  --carregando-t-abertura-sai: 260ms; /* a abertura esmaece quando o perfil chega (o index.html repete o valor) */
+  --carregando-t-abertura-completa: 200ms; /* antes, o segmento completa o trilho, se ele já estava à vista */
+  --carregando-t-abertura-segmento-sai: 60ms; /* quando o trilho completa, o segmento que varria some */
+  --carregando-t-abertura-marca-sai: 200ms; /* a marca recua a 0,96 e sai, com a palavra, enquanto o preto abre */
   --carregando-t-dedo: 700ms; /* a lista não se mexe se houve toque nela nesse intervalo */
   --carregando-t-sem-rede: 3000ms; /* sem rede há esse tempo, o aviso é "Sem conexão" (a histerese) */
   --carregando-t-aviso-minimo: 2000ms; /* cada aviso da conexão fica pelo menos isso antes de dar lugar a outro */
@@ -824,6 +831,9 @@
      #F5F5F3) e branco a 0,8 sobre a cor (3,3:1 sobre o vermelho). */
   --carregando-piso: 0.6;
   --carregando-piso-na-cor: 0.8;
+  /* O violeta do Agent Dute no vale do respiro: 0,75 no claro (3,9:1 na caixa
+     dele) e 0,85 no escuro (3,2:1); o 0,6 da tinta ficaria abaixo de 3:1. */
+  --carregando-piso-agente: 0.75;
   --carregando-barra-linha: 4px; /* na borda de baixo da linha em andamento */
   --carregando-barra-topo: 3px; /* no topo do cartão que relê */
   --carregando-chanfro: 4px; /* a ponta a 45° dos segmentos de progresso */
@@ -870,6 +880,7 @@
 
 .dark {
   --carregando-esqueleto: var(--muted); /* #1D2839 */
+  --carregando-piso-agente: 0.85;
 }
 
 /* No celular as barras engrossam. */
@@ -2169,5 +2180,376 @@
     .carregando-barra {
       color: inherit;
     }
+  }
+}
+
+/* O progresso das operações longas (components/ui/progresso.tsx; seção 5.5
+   e momento 6). A contagem: um segmento de 8 px por item, com a ponta
+   chanfrada a 45°; o feito em tinta, o atual enchendo por scaleX (o --f, a
+   fração dos bytes, muda por evento, numa transição de 200 ms, e nunca
+   volta) com as listras a 45° andando 16 px para trás só nele, até os 5 s
+   (data-parado); o da fila só no trilho; o que falhou em crítico. As
+   miniaturas: a que sobe com o véu preto a 45% e a caixa branca
+   determinada; a da fila com o véu claro e o contorno tracejado; a que falhou
+   com o véu e a caixa com o "!". As etapas: marcadores de 28 px na caixa
+   chanfrada, unidos pelo fio de 2 px que enche em 300 ms quando a de antes
+   termina; o check da feita entra com a mola. Tudo o que anda é transform e
+   opacity. */
+@layer components {
+  .carregando-segmentos {
+    display: grid;
+    grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr));
+    gap: 4px;
+    color: hsl(var(--carregando-cor));
+    /* No alto contraste do Windows, os segmentos ficam na cor forçada de quem os contém, como a barra. */
+    forced-color-adjust: none;
+    forced-color-adjust: preserve-parent-color;
+  }
+
+  .carregando-segmentos > [data-segmento] {
+    position: relative;
+    block-size: 8px;
+    overflow: hidden;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--carregando-chanfro)), calc(100% - var(--carregando-chanfro)) 100%, 0 100%);
+  }
+
+  .carregando-segmentos > [data-segmento] > [data-parte] {
+    position: absolute;
+    inset: 0;
+    background-color: currentColor;
+  }
+
+  .carregando-segmentos > [data-segmento] > [data-parte="trilho"] {
+    opacity: 0.08;
+  }
+
+  .carregando-segmentos > [data-segmento] > [data-parte="enche"] {
+    transform: scaleX(var(--f, 0));
+    transform-origin: 0 50%;
+    transition: transform var(--carregando-t-segmento) var(--ease-carregando-padrao);
+  }
+
+  .carregando-segmentos > [data-segmento][data-estado="feito"] > [data-parte="enche"],
+  .carregando-segmentos > [data-segmento][data-estado="erro"] > [data-parte="enche"] {
+    transform: none;
+  }
+
+  .carregando-segmentos > [data-segmento][data-estado="erro"] > [data-parte="enche"] {
+    background-color: hsl(var(--carregando-erro));
+  }
+
+  /* As listras: na cor do cartão a 35%, claras sobre a tinta no claro e
+     escuras sobre a tinta clara no escuro. */
+  .carregando-segmentos > [data-segmento] > [data-parte="listras"] {
+    inset-inline-end: auto;
+    inline-size: calc(100% + 16px);
+    background: repeating-linear-gradient(45deg, hsl(var(--card) / 0.35) 0 5.657px, transparent 5.657px 11.314px);
+    animation: carregando-listras var(--carregando-t-listras) linear infinite;
+  }
+
+  .carregando-segmentos[data-parado] > [data-segmento] > [data-parte="listras"] {
+    animation: none;
+  }
+
+  .carregando-miniaturas {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .carregando-miniatura {
+    position: relative;
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    background-color: hsl(var(--muted));
+  }
+
+  .carregando-miniatura > * {
+    grid-area: 1 / 1;
+  }
+
+  .carregando-miniatura > img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .carregando-miniatura > [data-veu] {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    transition: opacity var(--carregando-t-entrada) var(--ease-carregando-entrada);
+  }
+
+  .carregando-miniatura > [data-veu="escuro"] {
+    background-color: hsl(0 0% 0% / 0.45);
+    color: hsl(0 0% 100%);
+  }
+
+  .carregando-miniatura > [data-veu="fila"] {
+    border: 2px dashed hsl(var(--muted-foreground));
+    border-radius: inherit;
+    background-color: hsl(var(--card) / 0.55);
+  }
+
+  .carregando-miniatura > [data-selo] {
+    position: absolute;
+    inset-block-start: 6px;
+    inset-inline-end: 6px;
+    display: grid;
+    place-items: center;
+    inline-size: 24px;
+    block-size: 24px;
+    border-radius: var(--radius-md);
+  }
+
+  .carregando-miniatura > [data-selo="feito"] {
+    background-color: hsl(var(--carregando-ok));
+    color: hsl(var(--success-foreground));
+    animation: carregando-marca var(--carregando-t-sucesso) var(--carregando-mola) both;
+  }
+
+  .carregando-miniatura > [data-selo="fila"] {
+    border: 1px solid hsl(var(--border));
+    background-color: hsl(var(--card));
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* A caixa fechada do fim ("4 fotos enviadas") e o marcador da etapa feita:
+     a caixa cheia na cor do texto, com o check vazado na cor do cartão; o
+     miolo e o check entram uma vez, com a mola. */
+  .carregando-caixa-cheia {
+    flex: none;
+    overflow: visible;
+  }
+
+  .carregando-caixa-cheia > [data-parte="miolo"] {
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: carregando-miolo var(--carregando-t-sucesso) var(--carregando-mola) both;
+  }
+
+  .carregando-caixa-cheia > [data-parte="check"] {
+    fill: none;
+    stroke: hsl(var(--card));
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: carregando-marca var(--carregando-t-sucesso) var(--carregando-mola) both;
+  }
+
+  .carregando-caixa-cheia[data-vazia] > [data-parte="miolo"] {
+    fill: none;
+    stroke-width: 2;
+    opacity: 0.3;
+    animation: none;
+  }
+
+  .carregando-etapas {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .carregando-marcador {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: 28px;
+    block-size: 28px;
+    flex: none;
+  }
+
+  .carregando-marcador > * {
+    grid-area: 1 / 1;
+  }
+
+  .carregando-fio {
+    position: relative;
+    flex: 1 1 auto;
+    min-inline-size: 24px;
+    block-size: 2px;
+    overflow: hidden;
+    color: hsl(var(--carregando-cor));
+    forced-color-adjust: none;
+    forced-color-adjust: preserve-parent-color;
+  }
+
+  .carregando-fio > i {
+    position: absolute;
+    inset: 0;
+    background-color: currentColor;
+  }
+
+  .carregando-fio > i[data-parte="trilho"] {
+    opacity: 0.12;
+  }
+
+  .carregando-fio > i[data-parte="enche"] {
+    transform: scaleX(0);
+    transform-origin: 0 50%;
+    transition: transform var(--carregando-t-fio) var(--ease-carregando-padrao);
+  }
+
+  .carregando-fio[data-cheio] > i[data-parte="enche"] {
+    transform: none;
+  }
+
+  /* Movimento reduzido: sem listras e sem mola; o enchimento continua, porque
+     é informação, mas de uma vez, e o fio e os selos trocam sem deslizar. */
+  @media (prefers-reduced-motion: reduce) {
+    .carregando-segmentos > [data-segmento] > [data-parte="listras"] {
+      display: none;
+    }
+
+    .carregando-segmentos > [data-segmento] > [data-parte="enche"],
+    .carregando-fio > i[data-parte="enche"] {
+      transition: none;
+    }
+
+    .carregando-miniatura > [data-selo="feito"],
+    .carregando-caixa-cheia > [data-parte="miolo"],
+    .carregando-caixa-cheia > [data-parte="check"] {
+      animation-name: carregando-aparece;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .carregando-segmentos,
+    .carregando-fio {
+      color: inherit;
+    }
+
+    .carregando-segmentos > [data-segmento] > [data-parte="listras"] {
+      display: none;
+    }
+  }
+}
+
+/* O que a revisão da parte 11 pediu ao progresso e ao aviso. O segmento da
+   foto que sobe sem os bytes medidos (a de até 256 KB vai numa requisição só,
+   sem evento no meio) não fica com cara de fila: o trilho mais forte e as
+   listras na tinta, que ficam à vista paradas depois dos 5 s. As etapas que
+   não cabem lado a lado numa caixa estreita (três, no formulário do Agent
+   Dute; duas, no celular) põem o rótulo sob o marcador. A pílula da demora quebra entre os
+   pedaços, com o "·" antes de cada um; o do começo da linha fica fora da
+   caixa e some, e nunca sobra um "·" no fim da linha. */
+@layer components {
+  .carregando-segmentos > [data-segmento][data-estado="andamento"]:not([data-medido]) > [data-parte="trilho"] {
+    opacity: 0.18;
+  }
+
+  .carregando-segmentos > [data-segmento][data-estado="andamento"]:not([data-medido]) > [data-parte="listras"] {
+    background: repeating-linear-gradient(45deg, currentColor 0 5.657px, transparent 5.657px 11.314px);
+    opacity: 0.22;
+  }
+
+  .carregando-etapas-caixa {
+    container-type: inline-size;
+  }
+
+  /* Duas etapas também não cabem no celular ("Separação" e "Embalagem" pedem
+     cerca de 300 px, e a caixa tem 276 a 360 px de largura). */
+  @container (max-width: 21rem) {
+    .carregando-etapas:not([data-n="1"]) {
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .carregando-etapas:not([data-n="1"]) > [data-etapa] {
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .carregando-etapas:not([data-n="1"]) > .carregando-fio {
+      min-inline-size: 12px;
+      margin-block-start: 13px;
+    }
+  }
+
+  @container (max-width: 26rem) {
+    .carregando-etapas:not([data-n="1"], [data-n="2"]) {
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .carregando-etapas:not([data-n="1"], [data-n="2"]) > [data-etapa] {
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .carregando-etapas:not([data-n="1"], [data-n="2"]) > .carregando-fio {
+      min-inline-size: 12px;
+      margin-block-start: 13px;
+    }
+  }
+
+  .carregando-aviso-itens {
+    display: block;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  .carregando-aviso-itens > span {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    margin-inline-start: -1em;
+  }
+
+  .carregando-aviso-itens > span > span {
+    white-space: nowrap;
+  }
+
+  .carregando-aviso-itens > span > span::before {
+    content: "·" / "";
+    display: inline-block;
+    inline-size: 1em;
+    text-align: center;
+    font-weight: 700;
+  }
+}
+
+/* A trilha do Agent Dute (components/agent/trilha-do-agente.tsx; momento 9):
+   a caixa violeta da vez, o check das consultas feitas e o aviso de 10 s. A
+   linha nova entra em 150 ms (opacidade e 4 px) e o check com a mola, só nos
+   primeiros 5 s (data-movimento): depois, a trilha para de animar e a caixa
+   da vez continua. O aviso de 10 s entra uma vez. No movimento reduzido, a caixa respira até o piso do
+   violeta, a linha entra só por opacidade (a subida é 0) e o check aparece
+   pronto (o tempo do sucesso é 0). */
+@layer components {
+  .trilha-do-agente {
+    --carregando-piso: var(--carregando-piso-agente);
+  }
+
+  .trilha-do-agente[data-movimento] .trilha-do-agente-passo {
+    animation: carregando-chega-linha var(--carregando-t-chegada) var(--ease-carregando-entrada) both;
+  }
+
+  /* O aviso de 10 s entra uma vez, como os outros avisos (um tiro, não laço). */
+  .trilha-do-agente-aviso {
+    animation: carregando-chega-linha var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
+  }
+
+  /* Quando o texto começa, a trilha recolhida entra no lugar da aberta, e na
+     chegada da resposta as fontes e o Copiar entram no lugar guardado para
+     eles: um tiro de 150 ms (opacidade e 4 px; no reduzido, só opacidade). */
+  .trilha-do-agente-recolhe,
+  .agente-chega {
+    animation: carregando-chega-linha var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
+  }
+
+  .trilha-do-agente[data-movimento] [data-passo="feita"] [data-check] {
+    animation: carregando-marca var(--carregando-t-sucesso) var(--carregando-mola) both;
   }
 }

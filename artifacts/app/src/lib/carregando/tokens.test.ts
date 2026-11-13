@@ -172,9 +172,14 @@ const MOVIMENTO: Record<string, string> = {
   "--carregando-t-conta": "160ms",
   "--carregando-conta-y": "8px",
   "--carregando-t-listras": "600ms",
+  "--carregando-t-segmento": "200ms",
+  "--carregando-t-fio": "300ms",
   "--carregando-t-arcos": "1200ms",
   "--carregando-t-pulso": "2000ms",
   "--carregando-t-abertura-sai": "260ms",
+  "--carregando-t-abertura-completa": "200ms",
+  "--carregando-t-abertura-segmento-sai": "60ms",
+  "--carregando-t-abertura-marca-sai": "200ms",
   "--carregando-t-dedo": "700ms",
   "--carregando-t-sem-rede": "3000ms",
   "--carregando-t-aviso-minimo": "2000ms",
@@ -229,6 +234,14 @@ describe("os tokens do carregamento", () => {
     expect(raiz.get("--carregando-t-saida")).toBe(`${CARREGANDO.saidaMs}ms`);
     expect(raiz.get("--carregando-t-barra-fim")).toBe(`${CARREGANDO.barraFimMs}ms`);
     expect(raiz.get("--carregando-t-barra-some")).toBe(`${CARREGANDO.barraSomeMs}ms`);
+    // As operações longas (parte 11): o segmento da foto e o fio das etapas.
+    expect(raiz.get("--carregando-t-segmento")).toBe(`${CARREGANDO.segmentoMs}ms`);
+    expect(raiz.get("--carregando-t-fio")).toBe(`${CARREGANDO.fioMs}ms`);
+    // A abertura (index.html) esmaece e, antes, completa o trilho: lib/abertura.ts conta com os mesmos tempos.
+    expect(raiz.get("--carregando-t-abertura-sai")).toBe(`${CARREGANDO.aberturaSaiMs}ms`);
+    expect(raiz.get("--carregando-t-abertura-completa")).toBe(`${CARREGANDO.aberturaCompletaMs}ms`);
+    expect(raiz.get("--carregando-t-abertura-segmento-sai")).toBe(`${CARREGANDO.aberturaSegmentoSaiMs}ms`);
+    expect(raiz.get("--carregando-t-abertura-marca-sai")).toBe(`${CARREGANDO.aberturaMarcaSaiMs}ms`);
     // A conexão (momento 8): a histerese, o mínimo de cada aviso e a espera das releituras sozinhas.
     expect(raiz.get("--carregando-t-sem-rede")).toBe(`${CARREGANDO.semRedeMs}ms`);
     expect(raiz.get("--carregando-t-aviso-minimo")).toBe(`${CARREGANDO.avisoMinimoMs}ms`);
@@ -250,6 +263,10 @@ describe("os tokens do carregamento", () => {
     expect(raiz.get("--carregando-trilho-na-cor")).toBe("0.35");
     expect(raiz.get("--carregando-piso")).toBe("0.6");
     expect(raiz.get("--carregando-piso-na-cor")).toBe("0.8");
+    // O violeta do Agent Dute (parte 12): 0,75 no claro e 0,85 no escuro, e a trilha lê o dele.
+    expect(raiz.get("--carregando-piso-agente")).toBe("0.75");
+    expect(variaveis(".dark").get("--carregando-piso-agente")).toBe("0.85");
+    expect(variaveis(".trilha-do-agente", ["@layer components"]).get("--carregando-piso")).toBe("var(--carregando-piso-agente)");
     expect(raiz.get("--carregando-barra-linha")).toBe("4px");
     expect(raiz.get("--carregando-barra-topo")).toBe("3px");
     expect(raiz.get("--carregando-chanfro")).toBe("4px");
@@ -505,6 +522,25 @@ describe("o contraste dos tokens, no claro, na v3, no escuro e na TV", () => {
     for (const [nome, t] of Object.entries(temas)) {
       expect(contraste(t.cor("--carregando-agente"), t.cor("--agent-soft")), nome).toBeGreaterThanOrEqual(3);
       expect(contraste(t.cor("--carregando-agente"), t.cor("--card")), nome).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("o violeta no vale do respiro (o piso do agente) ainda tem 3:1 na caixa dele e no cartão", () => {
+    for (const [nome, t] of Object.entries(temas)) {
+      for (const fundo of ["--agent-soft", "--card"]) {
+        const vale = sobre(t.cor("--carregando-agente"), t.cor(fundo), t.numero("--carregando-piso-agente"));
+        expect(contraste(vale, t.cor(fundo)), `${nome} ${fundo}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it("o texto violeta da trilha e dos chips tem 4,5:1 na caixa do agente (6,8:1 no claro; o --agent-strong no escuro)", () => {
+    expect(contraste(temas.v3.cor("--carregando-agente"), temas.v3.cor("--agent-soft"))).toBeGreaterThanOrEqual(6.8);
+    for (const nome of ["claro", "v3"]) {
+      expect(contraste(temas[nome].cor("--carregando-agente"), temas[nome].cor("--agent-soft")), nome).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const nome of ["escuro", "v3Escuro", "tv", "tvEscuro"]) {
+      expect(contraste(temas[nome].cor("--agent-strong"), temas[nome].cor("--agent-soft")), nome).toBeGreaterThanOrEqual(4.5);
     }
   });
 

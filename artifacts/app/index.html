@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Dutelog</title>
     <meta name="description" content="Sistema da Dutelog para armazenagem, pedidos, estoque e faturamento." />
-    <meta name="theme-color" content="#FAFAF8" />
+    <!-- O preto da abertura, igual nos dois temas; o tema do app assume quando ela sai (theme-provider.tsx). -->
+    <meta name="theme-color" content="#161616" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -20,12 +21,202 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/dutelog-mark-32.png" />
     <link rel="icon" type="image/png" sizes="64x64" href="/dutelog-mark-64.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/dutelog-mark-180.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!--
+      A abertura (carregamento v2, momento 5, decisão P4 de 12/11/2026): preta,
+      fora do #root, com a marca e a palavra em PNG e o trilho chanfrado. O CSS
+      e os dois PNG ficam aqui (embutidos, já sobre o preto e com a paleta
+      reduzida, para estarem na primeira pintura mesmo no primeiro acesso com
+      sinal fraco), sem depender do JavaScript nem da fonte, e nada de texto
+      visível na primeira pintura. O trilho aparece aos 300 ms e o segmento varre em
+      1,4 s; quando o perfil chega, lib/abertura.ts (fecharAbertura) completa o
+      trilho em 200 ms e esmaece tudo em 260 ms, com a marca a 0,96 (antes de
+      300 ms, só esmaece). Movimento só por transform e opacity; no reduzido, o
+      trilho fica inteiro em vermelho, parado, e a saída é só por opacidade. Os
+      tempos são os de lib/carregando/tempo.ts (trava em src/lib/abertura.test.ts).
+      Enquanto ela cobre a tela, o #root fica inerte; no alto contraste do
+      Windows, ela mantém as próprias cores, para o trilho e a palavra não
+      sumirem no fundo forçado.
+    -->
+    <style>
+      #abertura{position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#161616;color:#fff;font:700 15px/20px Manrope,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+      #abertura .ab-centro{position:relative;display:flex;flex-direction:column;align-items:center}
+      #abertura .ab-marca{display:block;width:96px;height:96px;border-radius:22px}
+      #abertura .ab-trilho{position:relative;width:160px;height:6px;margin-top:40px;overflow:hidden;clip-path:polygon(0 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%);animation:abertura-entra 150ms cubic-bezier(.2,0,0,1) 300ms both}
+      #abertura .ab-trilho::before{content:"";position:absolute;inset:0;background:#fff;opacity:.16}
+      #abertura .ab-seg{position:absolute;top:0;bottom:0;left:0;width:36%;background:#E71C23;clip-path:polygon(0 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%);animation:abertura-varre 1400ms cubic-bezier(.2,.55,.8,.45) 300ms infinite both}
+      #abertura .ab-completa{position:absolute;inset:0;background:#E71C23;transform:scaleX(0);transform-origin:0 50%}
+      #abertura .ab-palavra{position:absolute;left:50%;bottom:calc(48px + env(safe-area-inset-bottom, 0px));width:auto;height:24px;transform:translateX(-50%)}
+      #abertura .ab-aviso{position:absolute;top:calc(100% + 22px);left:-80px;right:-80px;display:flex;flex-direction:column;align-items:center;gap:14px;color:#F3DCA3;text-align:center}
+      #abertura .ab-avisos{display:grid;justify-items:center;margin:0}
+      #abertura .ab-linha{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;animation:abertura-aviso 150ms cubic-bezier(.2,0,0,1) both}
+      #abertura .ab-linha[data-sai]{animation:abertura-aviso-sai 180ms cubic-bezier(.4,0,1,1) both}
+      #abertura svg{flex:none;width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+      #abertura .ab-tentar{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px;border:1px solid rgba(255,255,255,.34);border-radius:10px;background:transparent;color:#fff;font:inherit;font-size:14px;cursor:pointer;animation:abertura-aviso 150ms cubic-bezier(.2,0,0,1) both}
+      #abertura .ab-tentar svg{width:16px;height:16px}
+      #abertura .ab-tentar:focus-visible{outline:2px solid #fff;outline-offset:2px}
+      #abertura [hidden]{display:none}
+      #abertura .ab-leitor{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+      #abertura[data-fechando]{pointer-events:none;animation:abertura-esmaece 260ms cubic-bezier(.4,0,1,1) var(--ab-espera, 0ms) both}
+      #abertura[data-fechando="completa"]{--ab-espera:200ms}
+      #abertura[data-apertada] .ab-palavra{visibility:hidden}
+      #abertura[data-fechando] .ab-centro{animation:abertura-recua 200ms cubic-bezier(.4,0,1,1) var(--ab-espera, 0ms) both}
+      #abertura[data-fechando] .ab-palavra{animation:abertura-esmaece 200ms cubic-bezier(.4,0,1,1) var(--ab-espera, 0ms) both}
+      #abertura[data-fechando="completa"] .ab-seg{opacity:0;transition:opacity 60ms linear}
+      #abertura[data-fechando="completa"] .ab-completa{animation:abertura-completa 200ms cubic-bezier(.2,0,0,1) both}
+      #abertura[data-fechando="cedo"] .ab-trilho{animation:none;opacity:0}
+      @keyframes abertura-entra{from{opacity:0}}
+      @keyframes abertura-varre{from{transform:translateX(-100%)}to{transform:translateX(277.8%)}}
+      @keyframes abertura-aviso{from{opacity:0;transform:translateY(4px)}}
+      @keyframes abertura-aviso-sai{to{opacity:0;transform:translateY(-4px)}}
+      @keyframes abertura-completa{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+      @keyframes abertura-recua{to{opacity:0;transform:scale(.96)}}
+      @keyframes abertura-esmaece{to{opacity:0}}
+      @media (prefers-reduced-motion: reduce){
+        #abertura .ab-seg{animation:none;width:100%}
+        #abertura .ab-linha,#abertura .ab-tentar{animation-name:abertura-entra}
+        #abertura .ab-linha[data-sai]{animation-name:abertura-esmaece}
+        #abertura[data-fechando] .ab-centro{animation-name:abertura-esmaece}
+        #abertura[data-fechando="completa"]{--ab-espera:0ms}
+        #abertura[data-fechando="completa"] .ab-completa{animation:none}
+      }
+      @media (forced-colors: active){
+        #abertura{forced-color-adjust:none}
+      }
+    </style>
+    <!--
+      As fontes não seguram a primeira pintura: a folha do Google vem por
+      preload e vira stylesheet quando chega, com font-display: swap. A Inter e
+      a JetBrains Mono, que o app não usa, saíram.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Spline+Sans+Mono:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="abertura">
+      <div class="ab-centro">
+        <img class="ab-marca" decoding="sync" src="data:image/png;base64,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" alt="" width="96" height="96" />
+        <div class="ab-trilho" aria-hidden="true"><span class="ab-seg"></span><span class="ab-completa"></span></div>
+        <div class="ab-aviso">
+          <p class="ab-avisos" role="status"><span class="ab-leitor">Abrindo a Dutelog</span><span class="ab-linha" hidden></span></p>
+          <button type="button" class="ab-tentar" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg>Tentar de novo</button>
+        </div>
+      </div>
+      <img class="ab-palavra" decoding="sync" src="data:image/png;base64,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" alt="Dutelog" width="108" height="24" />
+    </div>
+    <script>
+      // A abertura sem rede e demorando, contada de quando ela apareceu: aos
+      // 3 s sem rede, "Sem conexão"; aos 10 s, "Demorando mais que o normal" e
+      // "Tentar de novo", que recarrega; aos 70 s, "Sem resposta". Os avisos
+      // entram na mesma região de status, no máximo um a cada 2 s (como o
+      // Anunciador do app), e o botão não rouba o foco. O aviso que sai sobe e
+      // esmaece em 180 ms antes de o seguinte entrar. Quando o aviso não cabe
+      // acima da palavra (o celular deitado, o zoom de 200%), a palavra cede o
+      // lugar. Para quando lib/abertura.ts fecha a abertura.
+      (function () {
+        var abertura = document.getElementById("abertura");
+        if (!abertura) return;
+        abertura.setAttribute("data-desde", String(Math.round(performance.now())));
+        var aviso = abertura.querySelector(".ab-aviso");
+        var linha = abertura.querySelector(".ab-linha");
+        var tentar = abertura.querySelector(".ab-tentar");
+        var palavra = abertura.querySelector(".ab-palavra");
+        var ICONES = {
+          rede: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></svg>',
+          relogio: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 6v6h4"/><circle cx="12" cy="12" r="10"/></svg>'
+        };
+        // Um aviso a cada 2 s, no máximo; a saída do anterior leva 180 ms.
+        var INTERVALO_MS = 2000;
+        var SAIDA_MS = 180;
+        // 0 antes de 3 s, 1 a partir de 3 s, 2 a partir de 10 s, 3 a partir de 70 s.
+        var etapa = 0;
+        var dito = "";
+        var ditoIcone = "";
+        var querido = { texto: "", icone: "" };
+        var ditoEm = -Infinity;
+        var adiado = null;
+        var relogios = [];
+        function aberta() {
+          return abertura.isConnected && !abertura.hasAttribute("data-fechando");
+        }
+        function depois(ms, fazer) {
+          var relogio = setTimeout(fazer, ms);
+          relogios.push(relogio);
+          return relogio;
+        }
+        function apertar() {
+          var alvo = palavra.getBoundingClientRect();
+          // Sem layout (fora do navegador), nada a medir.
+          if (!alvo.height) return;
+          var comAviso = !linha.hidden || !tentar.hidden;
+          var apertada = comAviso && aviso.getBoundingClientRect().bottom + 8 > alvo.top;
+          if (apertada) abertura.setAttribute("data-apertada", "");
+          else abertura.removeAttribute("data-apertada");
+        }
+        function trocar(texto, icone) {
+          var nova = linha.cloneNode(false);
+          nova.removeAttribute("data-sai");
+          nova.innerHTML = texto ? ICONES[icone] + texto : "";
+          nova.hidden = !texto;
+          linha.parentNode.replaceChild(nova, linha);
+          linha = nova;
+          apertar();
+        }
+        function dizer(texto, icone) {
+          if (texto === dito) return;
+          var antes = dito;
+          dito = texto;
+          ditoIcone = icone;
+          // A região muda quando o texto troca: na hora, ou depois da saída do anterior.
+          ditoEm = performance.now() + (antes ? SAIDA_MS : 0);
+          if (!antes) return trocar(texto, icone);
+          linha.setAttribute("data-sai", "");
+          depois(SAIDA_MS, function () {
+            if (aberta()) trocar(dito, ditoIcone);
+          });
+        }
+        function querer(texto, icone) {
+          querido = { texto: texto, icone: icone };
+          if (adiado !== null) return;
+          var livre = ditoEm + INTERVALO_MS - performance.now();
+          if (livre <= 0) return dizer(texto, icone);
+          adiado = depois(livre, function () {
+            adiado = null;
+            if (aberta()) dizer(querido.texto, querido.icone);
+          });
+        }
+        function parar() {
+          for (var i = 0; i < relogios.length; i += 1) clearTimeout(relogios[i]);
+          window.removeEventListener("online", rever);
+          window.removeEventListener("offline", rever);
+          window.removeEventListener("resize", apertar);
+        }
+        function rever() {
+          if (!aberta()) return parar();
+          var semRede = navigator.onLine === false;
+          if (semRede && etapa >= 1) querer("Sem conexão", "rede");
+          else if (etapa >= 3) querer("Sem resposta", "relogio");
+          else if (etapa >= 2) querer("Demorando mais que o normal", "relogio");
+          else querer("", "");
+          tentar.hidden = etapa < 2;
+          apertar();
+        }
+        [3000, 10000, 70000].forEach(function (ms, indice) {
+          depois(ms, function () {
+            etapa = indice + 1;
+            rever();
+          });
+        });
+        window.addEventListener("online", rever);
+        window.addEventListener("offline", rever);
+        window.addEventListener("resize", apertar);
+        tentar.addEventListener("click", function () {
+          window.location.reload();
+        });
+      })();
+    </script>
+    <!-- Inerte enquanto a abertura cobre a tela: lib/abertura.ts solta quando ela começa a sair. -->
+    <div id="root" inert></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

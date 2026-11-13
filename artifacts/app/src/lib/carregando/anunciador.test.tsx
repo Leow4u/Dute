@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
-import { Anunciador, useAnuncio, useRetirarAnuncio } from "./anunciador";
+import { Anunciador, INTERVALO_DO_ANUNCIO_MS, useAnuncio, useRetirarAnuncio } from "./anunciador";
 import { ProvedorDaConexao, criarConexao } from "./estado-da-conexao";
 
 /**
@@ -161,6 +161,30 @@ describe("o anunciador", () => {
     act(() => retirar("3 para aprovar, 2 para separar"));
     passar(5_000);
     expect(falados).toEqual(["Carregando pedidos", "Demorando mais que o normal", "Carregando chegadas"]);
+  });
+
+  it("o anúncio que ainda espera pode ser retirado por quem pediu: a espera que acabou não é falada depois", () => {
+    falar("Carregando anotações");
+    let retirar: () => void = () => undefined;
+    act(() => {
+      retirar = (anunciar as unknown as (texto: string) => () => void)("Carregando playbooks");
+    });
+    passar(500);
+    act(() => retirar());
+    passar(INTERVALO_DO_ANUNCIO_MS);
+    expect(falados).toEqual(["Carregando anotações"]);
+    // Retirar o que já foi falado, ou o que outro pediu depois, não muda nada.
+    let retirarOJaFalado: () => void = () => undefined;
+    act(() => {
+      retirarOJaFalado = (anunciar as unknown as (texto: string) => () => void)("Demorando mais que o normal");
+    });
+    anotar();
+    act(() => {
+      (anunciar as unknown as (texto: string) => () => void)("Resposta pronta");
+      retirarOJaFalado();
+    });
+    passar(INTERVALO_DO_ANUNCIO_MS);
+    expect(falados).toEqual(["Carregando anotações", "Demorando mais que o normal", "Resposta pronta"]);
   });
 
   it("o anúncio que esperava não sai depois que o anunciador sai da página", () => {

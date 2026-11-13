@@ -17,6 +17,9 @@ describe("o relógio da espera", () => {
       movimentoMaxMs: 5_000,
       demoraMs: 10_000,
       desisteMs: 70_000,
+      // O prazo do chat do Agent Dute (parte 12), o mesmo timeout das callables dele.
+      desisteDoAgenteMs: 180_000,
+      estimativaSemByteMs: 10_000,
       sucessoVisivelMs: 1_000,
       erroVisivelMs: 2_000,
       dedoMs: 700,
@@ -39,6 +42,12 @@ describe("o relógio da espera", () => {
       chegadaMs: 150,
       passoMs: 30,
       linhasNaCascata: 6,
+      segmentoMs: 200,
+      fioMs: 300,
+      aberturaSaiMs: 260,
+      aberturaCompletaMs: 200,
+      aberturaSegmentoSaiMs: 60,
+      aberturaMarcaSaiMs: 200,
       // A conexão (momento 8): sem rede há 3 s é "Sem conexão", cada aviso fica 2 s, e a releitura sozinha vai de 2 a 30 s.
       semRedeMs: 3_000,
       avisoMinimoMs: 2_000,
