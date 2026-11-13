@@ -127,6 +127,17 @@ describe("o painel do Agent Dute", () => {
     expect(html.match(/aria-pressed="true"[^>]*>Só equipe/g)).toHaveLength(1);
   });
 
+  it("no celular, o Recusar e o Aprovar da anotação têm 48 px, com 8 px entre eles (seção 7)", () => {
+    const dom = new JSDOM(tela());
+    const botoes = [...dom.window.document.querySelectorAll<HTMLButtonElement>("button.botao-acao")].filter((botao) =>
+      /^(Recusar|Aprovar)$/.test(botao.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? ""),
+    );
+    expect(botoes.length).toBeGreaterThan(0);
+    for (const botao of botoes) expect(botao.className).toMatch(/\bmax-md:min-h-12\b/);
+    expect(botoes[0].parentElement!.className).toMatch(/\bgap-2\b/);
+    dom.window.close();
+  });
+
   it("os números levam ao Conhecimento e às rotinas; o painel é a aba aberta", () => {
     const html = tela();
     expect(html).toMatch(/aria-current="page"[^>]*>Painel</);

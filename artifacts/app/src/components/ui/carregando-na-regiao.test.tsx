@@ -82,3 +82,36 @@ describe("a região que ainda lê", () => {
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });
+
+describe("a região que ainda lê, com outras na mesma tela", () => {
+  it("o rótulo que esperava a vez no anunciador não é falado se a leitura acabou antes", () => {
+    act(() =>
+      raiz!.render(
+        <>
+          <CarregandoNaRegiao key="anotacoes" rotulo="Carregando anotações…" />
+          <CarregandoNaRegiao key="playbooks" rotulo="Carregando playbooks…" />
+          <Anunciador key="anunciador" />
+        </>,
+      ),
+    );
+    const falados: string[] = [];
+    const anotar = () => {
+      const texto = anuncio();
+      if (texto && texto !== falados[falados.length - 1]) falados.push(texto);
+    };
+    passar(CARREGANDO.atrasoMs);
+    anotar();
+    // Os playbooks chegaram antes de o anunciador estar livre: a região deles sai.
+    act(() =>
+      raiz!.render(
+        <>
+          <CarregandoNaRegiao key="anotacoes" rotulo="Carregando anotações…" />
+          <Anunciador key="anunciador" />
+        </>,
+      ),
+    );
+    passar(2_500);
+    anotar();
+    expect(falados).toEqual(["Carregando anotações"]);
+  });
+});

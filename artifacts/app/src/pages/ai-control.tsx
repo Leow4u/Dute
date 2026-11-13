@@ -63,6 +63,7 @@ import { recordCustomerCode } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { erroDaResposta } from "@/lib/erro-da-resposta";
 import { useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { ehFaltaDeConexao } from "@/lib/conexao";
 
 type EventSeverity = "info" | "attention" | "critical";
@@ -1265,6 +1266,7 @@ function OperationalNotificationsCard({
           <BotaoDeAcao
             variant="outline"
             size="sm"
+            className="max-md:min-h-11"
             estado={isSyncing ? "andamento" : "repouso"}
             icone={<RefreshCw className="h-4 w-4" />}
             rotulo="Sincronizar"
@@ -1405,6 +1407,8 @@ function OperationalNotificationsCard({
                   <BotaoDeAcao
                     size="sm"
                     variant="outline"
+                    // No celular, as ações da linha com 48 px (seção 7).
+                    className="max-md:min-h-12"
                     estado={acoes.estado(item.id, "approve")}
                     icone={<CheckCircle2 className="h-4 w-4" />}
                     rotulo="Aprovar"
@@ -1419,6 +1423,7 @@ function OperationalNotificationsCard({
                   <BotaoDeAcao
                     size="sm"
                     variant="outline"
+                    className="max-md:min-h-12"
                     estado={acoes.estado(item.id, "mark-sent")}
                     icone={<Send className="h-4 w-4" />}
                     rotulo="Enviar / registrar"
@@ -1439,6 +1444,7 @@ function OperationalNotificationsCard({
                   <BotaoDeAcao
                     size="sm"
                     variant="ghost"
+                    className="max-md:min-h-12"
                     estado={acoes.estado(item.id, "archive")}
                     icone={<Archive className="h-4 w-4" />}
                     rotulo="Arquivar"
@@ -1621,12 +1627,15 @@ export default function AiControl() {
   // O Atualizar só gira quando a pessoa toca nele (carregamento v2, momento 7): a releitura de 60 s não mexe nele.
   const [atualizando, setAtualizando] = useState(false);
 
-  const overview = useQuery({
-    queryKey: ["ai-overview"],
-    queryFn: () => fetchJson<AiOverview>("/api/ai/overview"),
-    refetchInterval: 120_000,
-    refetchOnWindowFocus: false,
-  });
+  // A leitura que falhou fica na tela enquanto tenta de novo: o "Tentar de novo" não some com o foco nele.
+  const overview = useLeituraComFalha(
+    useQuery({
+      queryKey: ["ai-overview"],
+      queryFn: () => fetchJson<AiOverview>("/api/ai/overview"),
+      refetchInterval: 120_000,
+      refetchOnWindowFocus: false,
+    }),
+  );
 
   const foundation = useQuery({
     queryKey: ["operational-foundation"],
@@ -1841,6 +1850,8 @@ export default function AiControl() {
           </Badge>
           <BotaoDeAcao
             variant="outline"
+            // O Atualizar com 44 px (seção 7).
+            className="min-h-11"
             estado={atualizando ? "andamento" : "repouso"}
             icone={<RefreshCw className="h-4 w-4" />}
             rotulo="Atualizar"
@@ -2217,6 +2228,7 @@ export default function AiControl() {
                           <BotaoDeAcao
                             variant="outline"
                             size="sm"
+                            className="max-md:min-h-12"
                             estado={alertas.estado(item.id, "resolver")}
                             icone={<CheckCircle2 className="h-4 w-4" />}
                             rotulo="Resolver"
@@ -2256,7 +2268,7 @@ export default function AiControl() {
                   value={severity}
                   onValueChange={(value: EventSeverity) => setSeverity(value)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Gravidade">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

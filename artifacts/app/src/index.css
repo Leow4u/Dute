@@ -2251,6 +2251,14 @@
     animation: carregando-chega-linha var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
   }
 
+  /* Quando o texto começa, a trilha recolhida entra no lugar da aberta, e na
+     chegada da resposta as fontes e o Copiar entram no lugar guardado para
+     eles: um tiro de 150 ms (opacidade e 4 px; no reduzido, só opacidade). */
+  .trilha-do-agente-recolhe,
+  .agente-chega {
+    animation: carregando-chega-linha var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
+  }
+
   .trilha-do-agente[data-movimento] [data-passo="feita"] [data-check] {
     animation: carregando-marca var(--carregando-t-sucesso) var(--carregando-mola) both;
   }

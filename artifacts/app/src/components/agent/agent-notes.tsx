@@ -180,7 +180,7 @@ export function AgentNotes() {
                   <BotaoDeAcao
                     variant="ghost"
                     size="sm"
-                    className="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    className="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground max-md:min-h-12"
                     estado={decide.estado(note.id, "archive")}
                     rotulo="Arquivar"
                     andamento="Arquivando…"
@@ -245,6 +245,8 @@ function PendingNote({
           <BotaoDeAcao
             variant="outline"
             size="sm"
+            // No celular, as ações da linha com 48 px (seção 7).
+            className="max-md:min-h-12"
             estado={recusar}
             icone={<X className="h-3.5 w-3.5" />}
             rotulo="Recusar"
@@ -256,6 +258,7 @@ function PendingNote({
           />
           <BotaoDeAcao
             size="sm"
+            className="max-md:min-h-12"
             estado={aprovar}
             icone={<Check className="h-3.5 w-3.5" />}
             rotulo="Aprovar"

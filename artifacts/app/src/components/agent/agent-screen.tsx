@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { ArrowDown, ArrowUp, CalendarClock, Check, Copy, FileText, MessageCircle, MessagesSquare, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Search, Sparkles, X } from "lucide-react";
@@ -10,7 +10,7 @@ import { AgentMarkdown } from "@/components/agent/markdown";
 import { FontesDaResposta, TrilhaDoAgente, TrilhaRecolhida, type ConsultaDoAgente } from "@/components/agent/trilha-do-agente";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { BlocoSemConexao, ErroNaLeitura, useFaltaNaTela } from "@/components/ui/erro-na-leitura";
 import { Esqueleto } from "@/components/ui/esqueleto";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
@@ -30,6 +30,7 @@ import {
 import { useAnuncio } from "@/lib/carregando/anunciador";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { useEspera } from "@/lib/carregando/use-espera";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { PRAZO_ESGOTADO, ehFaltaDeConexao, prazoEsgotado } from "@/lib/conexao";
 import { chaveNoAlvo } from "@/lib/agente/cliente";
 import { useClienteDoAgente } from "@/lib/agente/contexto";
@@ -61,21 +62,46 @@ type Streaming = {
   files: string[];
   /** As notas anexadas, para voltar ao campo e para o "Tentar de novo". */
   sentFiles: PendingFile[];
+  /** Cada consulta que o stream informou, na ordem, com as repetidas (a mesma ferramenta chamada de novo é outra consulta). */
   tools: string[];
+  /** A consulta da vez (a última de `tools`), ou nulo quando nenhuma está rodando. */
   runningTool: string | null;
   text: string;
   /** Mensagem do modelo a que o texto pertence; muda depois de uma consulta. */
   textIndex: number;
   /** `esperando` enquanto a resposta chega; `sem-resposta` no prazo do chat (180 s), com o "Tentar de novo". */
   estado: "esperando" | "sem-resposta";
+  /** A última notícia do servidor (`performance.now()`): o prazo do chat conta daqui. */
+  sinalEm: number;
+  /** As mensagens que a conversa já tinha quando a pergunta saiu: o "Tentar de novo" relê e vê se a resposta chegou depois. */
+  conhecidas: string[];
+  /** O "Tentar de novo" relendo a conversa antes de perguntar de novo. */
+  relendo: boolean;
 };
 
 /** A resposta não chegou no prazo do chat. */
 export const SEM_RESPOSTA_DO_AGENTE = "Sem resposta do Agent Dute";
 
-/** As consultas da trilha a partir do stream: as feitas e, por último, a da vez. */
+/**
+ * As consultas da trilha a partir do stream: as feitas e, por último, a da
+ * vez. A mesma ferramenta chamada de novo é uma consulta nova, no fim.
+ */
 export function consultasDoStream(tools: readonly string[], runningTool: string | null): ConsultaDoAgente[] {
-  return tools.map((nome) => ({ nome, estado: nome === runningTool ? "lendo" : "lida" }));
+  const ultima = tools.length - 1;
+  return tools.map((nome, indice) => ({ nome, estado: indice === ultima && nome === runningTool ? "lendo" : "lida" }));
+}
+
+/** A resposta está sendo escrita: o texto chegou e nenhuma consulta está na vez (o texto antes de uma consulta é trocado pelo da resposta). */
+function escrevendo(streaming: Pick<Streaming, "text" | "runningTool">): boolean {
+  return Boolean(streaming.text) && !streaming.runningTool;
+}
+
+/** A resposta desta pergunta foi gravada depois que a espera parou neste aparelho (o servidor continuou). */
+function respondidaDepois(mensagens: readonly ChatMessage[], streaming: Pick<Streaming, "question" | "conhecidas">): boolean {
+  const conhecidas = new Set(streaming.conhecidas);
+  const novas = mensagens.filter((mensagem) => !conhecidas.has(mensagem.id));
+  const pergunta = streaming.question.trim();
+  return novas.some((mensagem) => mensagem.role === "user" && mensagem.content.trim() === pergunta) && novas.some((mensagem) => mensagem.role === "assistant");
 }
 
 /** O campo da conversa, para onde o foco volta quando o botão em que ele estava sai da tela. */
@@ -159,6 +185,13 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
   const [files, setFiles] = useState<PendingFile[]>([]);
   const [railCollapsed, setRailCollapsed] = useRailCollapsed();
   const abortRef = useRef<AbortController | null>(null);
+  // O campo como está agora, para o que volta a ele (Parar, falha) não apagar o que a pessoa escreveu durante a espera.
+  const campoRef = useRef({ draft, files });
+  campoRef.current = { draft, files };
+  const streamingRef = useRef<Streaming | null>(null);
+  streamingRef.current = streaming;
+  // A resposta que acabou de chegar nesta tela: as fontes dela entram em 150 ms; as gravadas já estão no lugar.
+  const [chegouAgora, setChegouAgora] = useState<string | null>(null);
   // Cada envio tem a sua vez: parar, o prazo e um envio novo encerram a de antes, e o que chega dela não mexe na tela.
   const sendTurn = useRef(0);
   const anunciar = useAnuncio();
@@ -199,22 +232,34 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
     ? { files, onAttach: attachFiles, onRemove: (key) => setFiles((current) => current.filter((item) => item.key !== key)) }
     : undefined;
 
-  const conversations = useQuery<ConversationsResponse, Error>({
-    queryKey: conversationsQueryKey,
-    queryFn: () => agente.conversas(),
-  });
-  const chat = useQuery<ChatResponse, Error>({
-    queryKey: chatQueryKey(conversationId ?? ""),
-    queryFn: () => agente.mensagens(conversationId ?? ""),
-    enabled: Boolean(conversationId),
-  });
+  // A leitura que falhou fica na tela enquanto tenta de novo: o "Tentar de novo" não some com o foco nele.
+  const conversations = useLeituraComFalha(
+    useQuery<ConversationsResponse, Error>({
+      queryKey: conversationsQueryKey,
+      queryFn: () => agente.conversas(),
+    }),
+  );
+  const chat = useLeituraComFalha(
+    useQuery<ChatResponse, Error>({
+      queryKey: chatQueryKey(conversationId ?? ""),
+      queryFn: () => agente.mensagens(conversationId ?? ""),
+      enabled: Boolean(conversationId),
+    }),
+  );
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  // Saiu da tela no meio da resposta: a vez acaba aqui, e o corte não vira toast.
+  useEffect(
+    () => () => {
+      sendTurn.current += 1;
+      abortRef.current?.abort();
+    },
+    [],
+  );
 
   const waiting = streaming?.estado === "esperando";
-  // O relógio da resposta (momento 9): aos 10 s sem texto, a demora e o Parar; no prazo do chat (180 s), "Sem resposta do Agent Dute".
+  // O relógio da resposta (momento 9): aos 10 s sem texto, a demora e o Parar.
   const espera = useEspera(waiting, { desisteMs: CARREGANDO.desisteDoAgenteMs });
-  const demorando = waiting && !streaming?.text && (espera.fase === "demorando" || espera.fase === "sem-resposta");
+  const demorando = waiting && !escrevendo(streaming) && (espera.fase === "demorando" || espera.fase === "sem-resposta");
 
   /** Encerra a vez do envio de agora: o que chegar dele depois não mexe na tela. */
   function endTurn(reason: "parar" | "prazo") {
@@ -223,32 +268,79 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
     abortRef.current = null;
   }
 
-  // O prazo do chat: a espera para neste aparelho, e a pergunta fica com o "Tentar de novo".
+  /**
+   * O prazo do chat (180 s), contado da última notícia do servidor: a
+   * resposta que ainda chega não é cortada, e a function tem o prazo dela
+   * (o stream que fecha sem o resultado também vira "Sem resposta"). Sem
+   * notícia nesse tempo, a espera para neste aparelho, e a pergunta fica com
+   * o "Tentar de novo".
+   */
+  const prazoDesde = streaming?.estado === "esperando" ? streaming.sinalEm : null;
   useEffect(() => {
-    if (espera.fase !== "sem-resposta" || streaming?.estado !== "esperando") return;
-    endTurn("prazo");
-    setStreaming((current) => (current ? { ...current, estado: "sem-resposta", runningTool: null } : current));
-  }, [espera.fase, streaming?.estado]);
+    if (prazoDesde === null) return undefined;
+    const prazo = window.setTimeout(
+      () => {
+        endTurn("prazo");
+        setStreaming((current) => (current && current.estado === "esperando" ? { ...current, estado: "sem-resposta", runningTool: null } : current));
+      },
+      Math.max(0, prazoDesde + CARREGANDO.desisteDoAgenteMs - performance.now()),
+    );
+    return () => window.clearTimeout(prazo);
+  }, [prazoDesde]);
+
+  /** A pergunta e as notas voltam ao campo só se a pessoa não escreveu outra coisa nele durante a espera. */
+  function devolverAoCampo(content: string, sentFiles: PendingFile[]) {
+    const agora = campoRef.current;
+    if (agora.draft.trim() || agora.files.length) return;
+    setDraft(content);
+    setFiles(sentFiles);
+  }
 
   /**
    * Parar: corta a espera só neste aparelho (o agente só lê e não grava nada
-   * por causa disso). A pergunta e as notas voltam ao campo, e o foco também.
+   * por causa disso). A pergunta e as notas voltam ao campo, se ele está
+   * vazio, e o foco também.
    */
   function stop() {
     const current = streaming;
     if (!current || current.estado !== "esperando") return;
     endTurn("parar");
     setStreaming(null);
-    setDraft(current.content);
-    setFiles(current.sentFiles);
+    devolverAoCampo(current.content, current.sentFiles);
     window.requestAnimationFrame(focarOCampo);
   }
 
-  /** "Tentar de novo" no prazo do chat: a mesma pergunta, com as mesmas notas. */
-  function retry() {
+  /**
+   * "Tentar de novo" no prazo do chat. O servidor pode ter continuado e
+   * gravado a resposta depois que a espera parou aqui: relê a conversa antes
+   * e, se a resposta está lá, mostra ela em vez de perguntar de novo. Se não,
+   * a mesma pergunta, com as mesmas notas, sem mexer no campo.
+   */
+  async function retry() {
     const current = streaming;
-    if (!current || current.estado !== "sem-resposta") return;
-    void send(current.content, { files: current.sentFiles });
+    if (!current || current.estado !== "sem-resposta" || current.relendo) return;
+    const mesmaEspera = (atual: Streaming | null) => atual !== null && atual.conversationId === current.conversationId && atual.question === current.question && atual.estado === "sem-resposta";
+    setStreaming((atual) => (mesmaEspera(atual) ? { ...atual!, relendo: true } : atual));
+    let respondida = false;
+    try {
+      const lida = await queryClient.fetchQuery<ChatResponse>({
+        queryKey: chatQueryKey(current.conversationId),
+        queryFn: () => agente.mensagens(current.conversationId),
+        staleTime: 0,
+      });
+      respondida = respondidaDepois(lida.messages ?? [], current);
+    } catch {
+      // Sem a releitura, pergunta de novo: é o que a pessoa pediu.
+    }
+    // Saiu da conversa ou mudou de pergunta enquanto relia: nada mais.
+    if (!mesmaEspera(streamingRef.current)) return;
+    if (respondida) {
+      setStreaming(null);
+      anunciar("Resposta pronta");
+      void queryClient.invalidateQueries({ queryKey: conversationsQueryKey });
+      return;
+    }
+    void send(current.content, { files: current.sentFiles, conversa: current.conversationId, deNovo: true });
   }
 
   // Pergunta vinda da barra do Início (?q=): abre uma conversa nova e envia.
@@ -264,6 +356,7 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
     if (waiting) return;
     // A pergunta sem resposta fica para trás: a outra conversa não a mostra.
     if (streaming) setStreaming(null);
+    setChegouAgora(null);
     navigate(id ? `${basePath}?c=${encodeURIComponent(id)}` : basePath);
   }
 
@@ -272,18 +365,25 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
     navigate(`${basePath}?v=${next}`);
   }
 
-  async function send(content: string, options: { fresh?: boolean; files?: PendingFile[] } = {}) {
+  /**
+   * Envia a pergunta. `deNovo` é o "Tentar de novo": a pergunta não vem do
+   * campo, e o que a pessoa escreveu nele fica.
+   */
+  async function send(content: string, options: { fresh?: boolean; files?: PendingFile[]; conversa?: string; deNovo?: boolean } = {}) {
     const pending = options.files ?? files;
     if (pending.some((file) => file.status === "uploading")) return;
     const sentFiles = pending.filter((file) => file.status === "ready" && file.attachment);
     const attachments = sentFiles.map((file) => file.attachment!);
     const question = content.trim() || (attachments.length ? "Segue a nota fiscal em anexo." : "");
     if (!question || waiting) return;
-    const current = options.fresh ? null : conversationId;
+    const current = options.fresh ? null : (options.conversa ?? conversationId);
     const id = current ?? newConversationId();
     if (!current) navigate(`${basePath}?c=${encodeURIComponent(id)}`, { replace: Boolean(options.fresh) });
-    setDraft("");
-    setFiles([]);
+    if (!options.deNovo) {
+      setDraft("");
+      setFiles([]);
+    }
+    setChegouAgora(null);
     setStreaming({
       conversationId: id,
       question,
@@ -295,6 +395,9 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
       text: "",
       textIndex: -1,
       estado: "esperando",
+      sinalEm: performance.now(),
+      conhecidas: (queryClient.getQueryData<ChatResponse>(chatQueryKey(id))?.messages ?? []).map((mensagem) => mensagem.id),
+      relendo: false,
     });
     sendTurn.current += 1;
     const turn = sendTurn.current;
@@ -302,19 +405,17 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
     abortRef.current = controller;
     const onChunk = (chunk: AgentDuteStreamChunk) => {
       if (sendTurn.current !== turn) return;
+      const sinalEm = performance.now();
       setStreaming((current) => {
         if (!current || current.estado !== "esperando") return current;
-        if (chunk.type === "reset") return { ...current, tools: [], runningTool: null, text: "", textIndex: -1 };
+        if (chunk.type === "reset") return { ...current, tools: [], runningTool: null, text: "", textIndex: -1, sinalEm };
         if (chunk.type === "tool") {
-          return {
-            ...current,
-            tools: current.tools.includes(chunk.name) ? current.tools : [...current.tools, chunk.name],
-            runningTool: chunk.name,
-          };
+          // A mesma ferramenta de novo é outra consulta: entra no fim, como a da vez.
+          return { ...current, tools: [...current.tools, chunk.name], runningTool: chunk.name, sinalEm };
         }
         // Texto antes de uma consulta ("vou verificar…") é trocado pelo da resposta final.
         const text = chunk.index === current.textIndex ? current.text + chunk.text : chunk.text;
-        return { ...current, runningTool: null, text, textIndex: chunk.index };
+        return { ...current, runningTool: null, text, textIndex: chunk.index, sinalEm };
       });
     };
     try {
@@ -323,13 +424,17 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
         onChunk,
         controller.signal,
       );
-      // A resposta gravada entra no cache mesmo depois de parar: ela é da conversa.
-      queryClient.setQueryData<ChatResponse>(chatQueryKey(id), (previous) => ({
-        conversation: result.conversation ?? previous?.conversation,
-        messages: [...(previous?.messages ?? []), ...(result.messages ?? [])],
-      }));
+      // A resposta gravada entra no cache mesmo depois de parar: ela é da conversa (uma vez só, se uma releitura já a trouxe).
+      queryClient.setQueryData<ChatResponse>(chatQueryKey(id), (previous) => {
+        const vistas = new Set((previous?.messages ?? []).map((mensagem) => mensagem.id));
+        return {
+          conversation: result.conversation ?? previous?.conversation,
+          messages: [...(previous?.messages ?? []), ...(result.messages ?? []).filter((mensagem) => !vistas.has(mensagem.id))],
+        };
+      });
       if (sendTurn.current !== turn) return;
       setStreaming(null);
+      setChegouAgora([...(result.messages ?? [])].reverse().find((mensagem) => mensagem.role === "assistant")?.id ?? null);
       abortRef.current = null;
       // A resposta não fica em região viva: o leitor de tela ouve que ela chegou e a lê quando quiser.
       anunciar("Resposta pronta");
@@ -344,8 +449,7 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
         return;
       }
       setStreaming(null);
-      setDraft(content);
-      setFiles(sentFiles);
+      devolverAoCampo(content, sentFiles);
       toast({
         title: "Não consegui enviar agora",
         description: error instanceof Error ? error.message : "Tente de novo em instantes.",
@@ -382,7 +486,7 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
       conversations={list.filter((item) => !item.routine_id)}
       history={history}
       loading={conversations.isLoading}
-      failed={conversations.isError && conversations.data === undefined}
+      falha={conversations.isError && conversations.data === undefined ? conversations.error : null}
       retrying={conversations.isFetching}
       onRetry={() => void conversations.refetch()}
       view={view}
@@ -445,9 +549,10 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
             retrying={chat.isFetching}
             onReload={() => void chat.refetch()}
             streaming={showingStream}
+            chegouAgora={chegouAgora}
             demorando={demorando}
             onStop={stop}
-            onRetry={retry}
+            onRetry={() => void retry()}
             draft={draft}
             onDraft={setDraft}
             onSend={send}
@@ -501,7 +606,7 @@ function AgentRail({
   conversations,
   history,
   loading,
-  failed,
+  falha,
   retrying,
   onRetry,
   view,
@@ -515,8 +620,8 @@ function AgentRail({
   conversations: ConversationSummary[];
   history: RoutineHistoryItem[];
   loading: boolean;
-  /** As conversas não chegaram: erro nunca vira "Suas conversas aparecem aqui". */
-  failed: boolean;
+  /** As conversas não chegaram (nulo quando chegaram ou ainda leem): erro nunca vira "Suas conversas aparecem aqui". */
+  falha: unknown;
   retrying: boolean;
   onRetry: () => void;
   view: AgentView;
@@ -529,6 +634,15 @@ function AgentRail({
 }) {
   const [query, setQuery] = useState("");
   const groups = groupConversations(filterConversations(conversations, query), new Date());
+  // A falta de conexão diz a mesma coisa que a conversa ao lado (o estado único da conexão, momento 8).
+  const faltaNaTela = useFaltaNaTela();
+  const motivoDaFalha = !falha
+    ? null
+    : ehFaltaDeConexao(falha)
+      ? faltaNaTela === "sem-conexao"
+        ? "Sem conexão."
+        : "Reconectando…"
+      : "Não consegui carregar as conversas.";
   const unreadHistory = history.some((item) => item.id !== activeId && isUnreadRoutine(item));
   const nav = (
     <>
@@ -585,15 +699,10 @@ function AgentRail({
       </label>
       <nav aria-label="Conversas recentes" aria-busy={loading || undefined} className="min-h-0 flex-1 overflow-y-auto">
         {loading ? (
-          // As conversas chegando: as linhas-fantasma no lugar delas, sem texto (o título da barra já diz o que é).
-          <div aria-hidden="true" className="flex flex-col gap-3.5 px-2.5 py-4">
-            {["w-3/4", "w-1/2", "w-2/3"].map((largura) => (
-              <Esqueleto key={largura} forma="texto" className={largura} />
-            ))}
-          </div>
-        ) : failed ? (
+          <FantasmasDasConversas />
+        ) : motivoDaFalha ? (
           <div className="flex flex-col items-start gap-1 px-2 py-3 text-sm">
-            <p className="font-semibold text-foreground">Não consegui carregar as conversas.</p>
+            <p className="font-semibold text-foreground">{motivoDaFalha}</p>
             <Button type="button" variant="ghost" className="-ml-3 min-h-11" aria-disabled={retrying || undefined} aria-busy={retrying || undefined} onClick={() => (retrying ? undefined : onRetry())}>
               {retrying ? <Spinner /> : null}
               {retrying ? "Tentando de novo…" : "Tentar de novo"}
@@ -616,6 +725,30 @@ function AgentRail({
           {history.map((entry) => item(entry.id, entry.label, isUnreadRoutine(entry)))}
         </nav>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * As conversas chegando: o rótulo do grupo e as linhas-fantasma no lugar
+ * delas, sem texto (o título da barra já diz o que é), com a forma da lista
+ * que chega ("HOJE" e as linhas). Entram aos 300 ms; antes, o lugar fica
+ * guardado e vazio, e a leitura rápida não pisca os blocos.
+ */
+function FantasmasDasConversas() {
+  const visivel = useEspera(true).visivel;
+  return (
+    <div aria-hidden="true" data-fantasmas-da-barra="" className={cn("mb-2", !visivel && "invisible")}>
+      <div className="flex h-8 items-end px-2 pb-1">
+        <Esqueleto forma="texto" className="mb-0.5 h-2.5 w-12" />
+      </div>
+      <div className="flex flex-col">
+        {["w-3/4", "w-1/2", "w-2/3"].map((largura) => (
+          <div key={largura} className="flex min-h-9 items-center px-2.5 py-2">
+            <Esqueleto forma="texto" className={largura} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -746,11 +879,10 @@ function Composer({
             </button>
           </>
         ) : null}
-        {/* Esperando a resposta, o Enviar fica travado sem sair da ordem do foco: o estado mora na trilha. */}
+        {/* Sem o que enviar, ou esperando a resposta, o Enviar fica travado sem sair da ordem do foco: nunca `disabled`, que tiraria o foco dele quando a resposta chega. */}
         <button
           type="button"
-          disabled={!canSend && !disabled}
-          aria-disabled={disabled || undefined}
+          aria-disabled={!canSend || undefined}
           onClick={() => {
             if (canSend) onSend(value);
           }}
@@ -831,6 +963,7 @@ function Conversation({
   retrying,
   onReload,
   streaming,
+  chegouAgora,
   demorando,
   onStop,
   onRetry,
@@ -848,6 +981,8 @@ function Conversation({
   retrying: boolean;
   onReload: () => void;
   streaming: Streaming | null;
+  /** A resposta que acabou de chegar nesta tela: as fontes dela entram, as gravadas já estão no lugar. */
+  chegouAgora: string | null;
   demorando: boolean;
   onStop: () => void;
   onRetry: () => void;
@@ -876,22 +1011,28 @@ function Conversation({
     if (element) element.scrollTo({ top: element.scrollHeight, behavior });
   }
 
+  // Presa no fim, a conversa acompanha o que entra embaixo: o texto, as consultas, a demora com o Parar e o "Sem resposta" com o "Tentar de novo".
   useEffect(() => {
     if (pinned.current) scrollToBottom();
-  }, [ordered.length, streaming?.text, streaming?.tools.length, streaming?.question]);
+  }, [ordered.length, streaming?.text, streaming?.tools.length, streaming?.question, demorando, streaming?.estado]);
 
   useEffect(() => {
     pinned.current = true;
   }, [streaming?.question]);
 
-  // O botão em que o foco estava saiu da tela (o Parar, quando o texto chegou ou o prazo passou): o foco não cai no body.
+  // O botão em que o foco estava saiu da tela (o Parar, quando o texto ou a
+  // resposta chegou ou o prazo passou; o "Tentar de novo", quando a pergunta
+  // saiu de novo ou a resposta gravada apareceu): o foco não cai no body.
   const semResposta = streaming?.estado === "sem-resposta";
   const retryRef = useRef<HTMLDivElement | null>(null);
+  const tinhaBotao = useRef(false);
   useEffect(() => {
+    const tinha = tinhaBotao.current;
+    tinhaBotao.current = demorando || semResposta;
     const perdido = !document.activeElement || document.activeElement === document.body;
     if (!perdido) return;
     if (semResposta) retryRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
-    else if (!demorando && streaming) focarOCampo();
+    else if (tinha) focarOCampo();
   }, [semResposta, demorando]);
 
   return (
@@ -928,6 +1069,7 @@ function Conversation({
                 content={message.content}
                 draft={message.draft}
                 draftSent={message.draft_sent}
+                chegando={message.id === chegouAgora}
               />
             ),
           )}
@@ -937,13 +1079,14 @@ function Conversation({
               {semResposta ? (
                 <div ref={retryRef} className="mb-7 flex gap-3">
                   <AgentMark />
-                  <ErroNaLeitura mensagem={SEM_RESPOSTA_DO_AGENTE} tentando={false} onTentar={onRetry} className="min-w-0 flex-1" />
+                  <ErroNaLeitura mensagem={SEM_RESPOSTA_DO_AGENTE} tentando={streaming.relendo} onTentar={onRetry} className="min-w-0 flex-1" />
                 </div>
               ) : (
                 <AssistantMessage
                   tools={streaming.tools}
                   runningTool={streaming.runningTool}
-                  content={streaming.text}
+                  // O texto antes de uma consulta ("Vou verificar…") sai enquanto ela roda: a trilha diz o que ele faz, e a resposta vem depois.
+                  content={streaming.runningTool ? "" : streaming.text}
                   demorando={demorando}
                   onStop={onStop}
                   streaming
@@ -1003,6 +1146,11 @@ function UserMessage({ children, files = [] }: { children: ReactNode; files?: st
  * "De onde tirei" (invariante 3). A resposta não é região viva: o texto entra
  * em fluxo, sem animação por palavra, e o leitor de tela ouve "Resposta
  * pronta" quando ela chega.
+ *
+ * Enquanto chega, o bloco não encolhe: a trilha que recolhe numa linha deixa
+ * a altura dela para o texto, e a conversa presa no fim não desce e sobe de
+ * novo. Com o texto chegando, o lugar das fontes e do Copiar fica guardado
+ * (invisível), e na chegada elas entram ali, em 150 ms, sem empurrar nada.
  */
 function AssistantMessage({
   id,
@@ -1014,6 +1162,7 @@ function AssistantMessage({
   demorando = false,
   onStop,
   streaming = false,
+  chegando = false,
 }: {
   id?: string;
   content: string;
@@ -1024,18 +1173,31 @@ function AssistantMessage({
   demorando?: boolean;
   onStop?: () => void;
   streaming?: boolean;
+  /** A resposta acabou de chegar nesta tela: as fontes e o Copiar entram (opacidade e 4 px). */
+  chegando?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const names = uniqueTools(tools);
   // Escrevendo: o texto chegou e nenhuma consulta está na vez (o texto antes de uma consulta é trocado pelo da resposta).
   const writing = Boolean(content) && !runningTool;
+  const bloco = useRef<HTMLDivElement | null>(null);
+  const maior = useRef(0);
+  useLayoutEffect(() => {
+    const elemento = bloco.current;
+    if (!streaming || !elemento) return;
+    const altura = elemento.getBoundingClientRect().height;
+    if (altura > maior.current) {
+      maior.current = altura;
+      elemento.style.minHeight = `${altura}px`;
+    }
+  });
   return (
-    <div className="mb-7 flex gap-3">
+    <div ref={bloco} data-resposta-do-agente="" className="mb-7 flex gap-3">
       <AgentMark />
       <div className="min-w-0 flex-1 pt-0.5">
         {streaming ? (
           <TrilhaDoAgente
-            consultas={consultasDoStream(names, runningTool ?? null)}
+            consultas={consultasDoStream(tools ?? [], runningTool ?? null)}
             escrevendo={writing}
             demorando={demorando}
             onParar={onStop}
@@ -1047,7 +1209,19 @@ function AssistantMessage({
         {content ? (
           <AgentMarkdown content={streaming ? settleStreamingMarkdown(content) : content} />
         ) : null}
-        {!streaming && content ? <FontesDaResposta fontes={fontesDaResposta(names)} className="mt-3" /> : null}
+        {streaming && writing ? (
+          // O lugar das fontes e do Copiar, guardado enquanto o texto chega: invisível e fora da árvore.
+          <div data-lugar-das-fontes="" className="invisible">
+            <FontesDaResposta fontes={fontesDaResposta(names)} className="mt-3" />
+            <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs">
+              <Copy className="h-3.5 w-3.5" />
+              Copiar
+            </span>
+          </div>
+        ) : null}
+        {!streaming && content ? (
+          <FontesDaResposta fontes={fontesDaResposta(names)} className={cn("mt-3", chegando && "agente-chega")} />
+        ) : null}
         {!streaming && draft ? <DraftCard value={draft} messageId={id} sent={draftSent} /> : null}
         {!streaming && content ? (
           <button
@@ -1058,7 +1232,7 @@ function AssistantMessage({
                 window.setTimeout(() => setCopied(false), 1500);
               });
             }}
-            className="mt-1.5 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-muted-foreground hover:bg-muted"
+            className={cn("mt-1.5 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-muted-foreground hover:bg-muted", chegando && "agente-chega")}
           >
             {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
             {copied ? "Copiado" : "Copiar"}

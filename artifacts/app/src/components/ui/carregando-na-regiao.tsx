@@ -23,9 +23,11 @@ export function CarregandoNaRegiao({ rotulo, className }: { rotulo: string; clas
   const anunciar = useAnuncio();
   const marco = !espera.visivel ? null : espera.fase === "demorando" || espera.fase === "sem-resposta" ? "demorando" : "espera";
 
+  // A espera que acabou (a lista chegou, ou passou à demora) retira o anúncio dela, se ele ainda esperava a vez.
   useEffect(() => {
-    if (marco === "espera") anunciar(rotulo.replace(/…$/, ""));
-    else if (marco === "demorando") anunciar(DEMORANDO);
+    if (marco === "espera") return anunciar(rotulo.replace(/…$/, ""));
+    if (marco === "demorando") return anunciar(DEMORANDO);
+    return undefined;
   }, [marco, anunciar, rotulo]);
 
   return (

@@ -198,3 +198,52 @@ describe("De onde tirei", () => {
     expect(container!.querySelector("[data-fontes]")).toBeNull();
   });
 });
+
+describe("a trilha pelas medidas da prancha (momento 9) e para o leitor de tela", () => {
+  it("a consulta feita diz que acabou: o check tem o nome \"Consulta feita\"; na recolhida, ele é decorativo", () => {
+    mostrar(<TrilhaDoAgente consultas={[lida("resumo_estoque"), lendo("movimentacoes")]} escrevendo={false} demorando={false} />);
+    passar(CARREGANDO.atrasoMs);
+    const check = trilha()!.querySelector<SVGElement>('[data-passo="feita"] [data-check]')!;
+    expect(check.getAttribute("role")).toBe("img");
+    expect(check.getAttribute("aria-label")).toBe("Consulta feita");
+    expect(check.hasAttribute("aria-hidden")).toBe(false);
+    mostrar(<TrilhaRecolhida nomes={["resumo_estoque"]} />);
+    expect(container!.querySelector("[data-trilha-recolhida] [data-check]")!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("o check tem 16 px na célula de 20; a caixa aberta tem pelo menos 300 px; a recolhida tem a altura de uma linha da trilha", () => {
+    mostrar(<TrilhaDoAgente consultas={[lida("resumo_estoque"), lendo("movimentacoes")]} escrevendo={false} demorando={false} />);
+    passar(CARREGANDO.atrasoMs);
+    const check = trilha()!.querySelector<SVGElement>("[data-check]")!;
+    expect(check.getAttribute("class")).toContain("size-4");
+    expect(check.parentElement!.className).toContain("size-5");
+    expect(trilha()!.querySelector("ol")!.className).toMatch(/\bmin-w-75\b/);
+    expect(trilha()!.querySelector("li")!.className).toMatch(/\bmin-h-7\b/);
+    mostrar(<TrilhaRecolhida nomes={["resumo_estoque"]} />);
+    // A linha de dentro tem os 28 px da linha da trilha: a caixa fica com 50, como a de uma consulta.
+    const recolhida = container!.querySelector<HTMLElement>("[data-trilha-recolhida]")!;
+    expect(recolhida.className).not.toMatch(/\bmin-h-7\b/);
+    expect(recolhida.querySelector("span")!.className).toMatch(/\bmin-h-7\b/);
+  });
+
+  it("o texto violeta da vez e dos chips usa o --agent-strong no escuro (o --agent ficaria abaixo de 4,5:1)", () => {
+    mostrar(
+      <>
+        <TrilhaDoAgente consultas={[lendo("resumo_estoque")]} escrevendo={false} demorando={false} />
+        <FontesDaResposta fontes={["Estoque"]} />
+      </>,
+    );
+    passar(CARREGANDO.atrasoMs);
+    const textoDaVez = trilha()!.querySelector('[data-passo="vez"] > span:last-child')!;
+    expect(textoDaVez.className).toMatch(/\bdark:text-agent-strong\b/);
+    const chip = container!.querySelector("[data-fontes] li")!;
+    expect(chip.className).toMatch(/\bdark:text-agent-strong\b/);
+  });
+
+  it("quando o texto começa, a recolhida entra (um tiro de 150 ms); a gravada fica parada", () => {
+    mostrar(<TrilhaDoAgente consultas={[lida("resumo_estoque")]} escrevendo demorando={false} />);
+    expect(container!.querySelector("[data-trilha-recolhida]")!.className).toContain("trilha-do-agente-recolhe");
+    mostrar(<TrilhaRecolhida nomes={["resumo_estoque"]} />);
+    expect(container!.querySelector("[data-trilha-recolhida]")!.className).not.toContain("trilha-do-agente-recolhe");
+  });
+});

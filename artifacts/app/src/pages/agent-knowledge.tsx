@@ -323,6 +323,29 @@ async function emitKnowledgeEvent(input: {
   }).catch(() => undefined);
 }
 
+/**
+ * Um número do Conhecimento, pela leitura de que ele sai (carregamento v2,
+ * momento 2): antes de ler, o bloco no lugar do "0"; lido, o número; a
+ * leitura que falhou, "—" e, para o leitor de tela, "Não carregou". Os
+ * números dos documentos não esperam os arquivos fonte, nem o contrário.
+ */
+function Contador({ rotulo, leitura, valor }: { rotulo: string; leitura: { data: unknown; isError: boolean }; valor: number }) {
+  return (
+    <p data-contador={rotulo} className="text-2xl font-semibold">
+      {leitura.data !== undefined ? (
+        valor
+      ) : leitura.isError ? (
+        <>
+          <span aria-hidden="true">—</span>
+          <span className="sr-only">Não carregou</span>
+        </>
+      ) : (
+        <Esqueleto forma="contagem" className="mt-2" />
+      )}
+    </p>
+  );
+}
+
 export default function AgentKnowledge() {
   const { toast } = useToast();
   const { user } = useAppUser();
@@ -378,8 +401,6 @@ export default function AgentKnowledge() {
     );
   }, [files.data]);
 
-  // Antes de ler, nada de "0": os blocos no lugar dos números (carregamento v2, momento 2).
-  const lida = documents.data !== undefined && files.data !== undefined;
   const summary = useMemo(() => {
     const items = documents.data ?? [];
     return {
@@ -686,6 +707,8 @@ export default function AgentKnowledge() {
         actions={
           <BotaoDeAcao
             variant="outline"
+            // O Atualizar com 44 px (seção 7).
+            className="min-h-11"
             estado={atualizando ? "andamento" : "repouso"}
             icone={<RefreshCw className="h-4 w-4" />}
             rotulo="Atualizar"
@@ -713,7 +736,7 @@ export default function AgentKnowledge() {
             <Database className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm text-muted-foreground">Documentos</p>
-              <p className="text-2xl font-semibold">{lida ? summary.total : <Esqueleto forma="contagem" className="mt-2" />}</p>
+              <Contador rotulo="Documentos" leitura={documents} valor={summary.total} />
             </div>
           </CardContent>
         </Card>
@@ -722,7 +745,7 @@ export default function AgentKnowledge() {
             <ShieldCheck className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm text-muted-foreground">Consultáveis</p>
-              <p className="text-2xl font-semibold">{lida ? summary.consultable : <Esqueleto forma="contagem" className="mt-2" />}</p>
+              <Contador rotulo="Consultáveis" leitura={documents} valor={summary.consultable} />
             </div>
           </CardContent>
         </Card>
@@ -731,7 +754,7 @@ export default function AgentKnowledge() {
             <FileText className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm text-muted-foreground">Trechos</p>
-              <p className="text-2xl font-semibold">{lida ? summary.chunks : <Esqueleto forma="contagem" className="mt-2" />}</p>
+              <Contador rotulo="Trechos" leitura={documents} valor={summary.chunks} />
             </div>
           </CardContent>
         </Card>
@@ -740,7 +763,7 @@ export default function AgentKnowledge() {
             <FileCheck2 className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm text-muted-foreground">Arquivos fonte</p>
-              <p className="text-2xl font-semibold">{lida ? summary.files : <Esqueleto forma="contagem" className="mt-2" />}</p>
+              <Contador rotulo="Arquivos fonte" leitura={files} valor={summary.files} />
             </div>
           </CardContent>
         </Card>
@@ -821,6 +844,7 @@ export default function AgentKnowledge() {
                         <BotaoDeAcao
                           variant="outline"
                           size="sm"
+                          className="max-md:min-h-12"
                           estado={downloadingId === item.id ? "andamento" : "repouso"}
                           icone={<Download className="h-4 w-4" />}
                           rotulo="Baixar"

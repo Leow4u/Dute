@@ -5,13 +5,16 @@ import { useConexao } from "./estado-da-conexao";
 /** No máximo um anúncio a cada 2 s. */
 export const INTERVALO_DO_ANUNCIO_MS = 2_000;
 
-type Falar = (texto: string) => void;
+/** Fala o texto; devolve o "retirar", que tira o anúncio da fila se ele ainda espera a vez. */
+type Falar = (texto: string) => () => void;
+
+const NADA_A_RETIRAR = () => undefined;
 
 /** Os anunciadores na página; fala o último que montou (o App monta um só). */
 const regioes: Falar[] = [];
 
-function anunciar(texto: string) {
-  regioes[regioes.length - 1]?.(texto);
+function anunciar(texto: string): () => void {
+  return regioes[regioes.length - 1]?.(texto) ?? NADA_A_RETIRAR;
 }
 
 /**
@@ -19,8 +22,13 @@ function anunciar(texto: string) {
  * palavras: a entrada na espera (aos 300 ms), o aviso de 10 s, a desistência,
  * a falta de conexão e o primeiro passo do Agent Dute. Os resultados das
  * ações saem pelo toast.
+ *
+ * Devolve o "retirar": a espera que acabou antes de o anúncio dela ter a vez
+ * (a lista chegou, a pessoa tocou em Parar) o tira da fila, e o leitor de
+ * tela não ouve "Carregando playbooks" com os playbooks já na tela. O que já
+ * foi falado, ou o que outro pediu depois, não muda.
  */
-export function useAnuncio(): (texto: string) => void {
+export function useAnuncio(): (texto: string) => () => void {
   return anunciar;
 }
 
@@ -49,7 +57,8 @@ export function Anunciador() {
     let id = 0;
     let atual: string | null = null;
     let faladoEm = Number.NEGATIVE_INFINITY;
-    let pendente: string | null = null;
+    let pendente: { texto: string; vez: number } | null = null;
+    let vezes = 0;
     let espera: ReturnType<typeof setTimeout> | null = null;
 
     const dizer = (texto: string) => {
@@ -61,22 +70,27 @@ export function Anunciador() {
 
     const falar: Falar = (bruto) => {
       const texto = bruto.replace(/\s+/g, " ").trim();
-      if (!texto) return;
+      if (!texto) return NADA_A_RETIRAR;
       const instante = performance.now();
       const livreEm = faladoEm + INTERVALO_DO_ANUNCIO_MS;
       if (espera === null && instante >= livreEm) {
         dizer(texto);
-        return;
+        return NADA_A_RETIRAR;
       }
-      pendente = texto === atual ? null : texto;
+      vezes += 1;
+      const vez = vezes;
+      pendente = texto === atual ? null : { texto, vez };
       if (espera === null && pendente !== null) {
         espera = setTimeout(() => {
           espera = null;
           const proximo = pendente;
           pendente = null;
-          if (proximo !== null) dizer(proximo);
+          if (proximo !== null) dizer(proximo.texto);
         }, livreEm - instante);
       }
+      return () => {
+        if (pendente?.vez === vez) pendente = null;
+      };
     };
 
     regioes.push(falar);

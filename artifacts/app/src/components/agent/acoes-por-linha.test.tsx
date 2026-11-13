@@ -10,6 +10,8 @@ import type { Playbook } from "@/lib/agent-playbooks";
 import { Anunciador } from "@/lib/carregando/anunciador";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { SemConexao } from "@/lib/conexao";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { textosForaDaLista } from "@/test/textos";
 
 /**
  * As anotações e os playbooks do Agent Dute no carregamento v2: a decisão é
@@ -181,5 +183,121 @@ describe("os playbooks do Agent Dute", () => {
     expect(container!.querySelectorAll("button[disabled]")).toHaveLength(0);
     await act(async () => aprovarB.click());
     expect(decidir).toHaveBeenCalledTimes(2);
+  });
+});
+
+/** O que a tela de anotações pode mostrar, nos estados da leitura e da decisão (a trava contra legenda). */
+const TEXTOS_DAS_ANOTACOES: Array<string | RegExp> = [
+  "Anotações do Agent Dute",
+  "O que o agente sugeriu lembrar nas conversas. Só passa a valer depois de aprovado.",
+  "Carregando anotações…",
+  "Carregando anotações",
+  /^Para aprovar( · \d+)?$/,
+  /^Valendo( · \d+)?$/,
+  "Nenhuma sugestão esperando.",
+  "Nenhuma anotação valendo ainda.",
+  "A BTG pede a entrega na portaria até as 10h.",
+  "Nas NFs de uniformes, contar por tamanho.",
+  /^Sugerida por /,
+  /^Na conversa d/,
+  "Quem o agente considera",
+  "Cliente e equipe",
+  "Só equipe",
+  "Recusar",
+  "Recusando…",
+  "Recusada",
+  "Não recusada",
+  "Aprovar",
+  "Aprovando…",
+  "Aprovada",
+  "Não aprovada",
+  "Conferir",
+  "Conferindo…",
+  "Sem conexão.",
+  "Reconectando…",
+  "Tentar de novo",
+  "Tentando de novo…",
+  "Não foi possível carregar as anotações.",
+];
+
+/** O axe usa o relógio de verdade; os relógios falsos voltam depois. */
+async function violacoesNoRelogioDeVerdade(html: string) {
+  vi.useRealTimers();
+  try {
+    return await violacoesDeAcessibilidade(html);
+  } finally {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance", "Date"] });
+  }
+}
+
+describe("as anotações nos estados da leitura e da decisão, depois da revisão", () => {
+  it("as linhas-fantasma entram aos 300 ms, com o rótulo: antes, o lugar fica guardado e vazio", async () => {
+    await mostrar(agenteFalso({ listarNotas: () => new Promise(() => undefined) }), <AgentNotes />);
+    expect(container!.querySelector("[data-brilho]")).toBeNull();
+    expect(container!.querySelector("[data-fantasmas-guardados]")?.className).toContain("invisible");
+    await passar(CARREGANDO.atrasoMs);
+    expect(container!.querySelector("[data-brilho]")).not.toBeNull();
+    expect(container!.querySelector("[data-fantasmas-guardados]")).toBeNull();
+    expect(textosForaDaLista(container!.innerHTML, TEXTOS_DAS_ANOTACOES)).toEqual([]);
+    expect(await violacoesNoRelogioDeVerdade(container!.innerHTML)).toEqual([]);
+  });
+
+  it("o \"Tentar de novo\" da lista que falhou fica na tela enquanto tenta, com o foco nele", async () => {
+    let falhar = true;
+    const listarNotas = vi.fn(async () => {
+      await new Promise((ok) => setTimeout(ok, 400));
+      if (falhar) throw new Error("Não foi possível carregar as anotações.");
+      return { notes: NOTAS };
+    });
+    await mostrar(agenteFalso({ listarNotas }), <AgentNotes />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(textosForaDaLista(container!.innerHTML, TEXTOS_DAS_ANOTACOES)).toEqual([]);
+    expect(await violacoesNoRelogioDeVerdade(container!.innerHTML)).toEqual([]);
+    const tentar = [...container!.querySelectorAll<HTMLButtonElement>("button")].find((botao) => botao.textContent?.trim() === "Tentar de novo")!;
+    tentar.focus();
+    falhar = false;
+    await act(async () => tentar.click());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    const tentando = [...container!.querySelectorAll<HTMLButtonElement>("button")].find((botao) => botao.textContent?.trim() === "Tentando de novo…")!;
+    expect(tentando).toBeDefined();
+    expect(tentando.getAttribute("aria-busy")).toBe("true");
+    expect(document.activeElement).toBe(tentando);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(container!.textContent).toContain("A BTG pede a entrega");
+  });
+
+  it("a decisão em andamento e a falta de conexão passam na lista de textos e no axe", async () => {
+    const decidir = vi.fn(() => new Promise(() => undefined));
+    await mostrar(agenteFalso({ decidirNota: decidir }), <AgentNotes />);
+    await act(async () => botoes("Aprovar")[0].click());
+    await passar(CARREGANDO.atrasoMs);
+    expect(textosForaDaLista(container!.innerHTML, TEXTOS_DAS_ANOTACOES)).toEqual([]);
+    expect(await violacoesNoRelogioDeVerdade(container!.innerHTML)).toEqual([]);
+
+    act(() => raiz!.unmount());
+    raiz = createRoot(container!);
+    await mostrar(agenteFalso({ listarNotas: () => Promise.reject(new SemConexao()) }), <AgentNotes />);
+    await passar(0);
+    expect(textosForaDaLista(container!.innerHTML, TEXTOS_DAS_ANOTACOES)).toEqual([]);
+    expect(await violacoesNoRelogioDeVerdade(container!.innerHTML)).toEqual([]);
+  });
+
+  it("no celular, as ações da linha têm 48 px, com 8 px entre Recusar e Aprovar (seção 7)", async () => {
+    await mostrar(agenteFalso(), <AgentNotes />);
+    for (const botao of [...botoes("Recusar"), ...botoes("Aprovar")]) expect(botao.className).toMatch(/\bmax-md:min-h-12\b/);
+    expect(botoes("Aprovar")[0].parentElement!.className).toMatch(/\bgap-2\b/);
+  });
+});
+
+describe("os playbooks nos estados da leitura, depois da revisão", () => {
+  it("no celular, as ações da linha têm 48 px", async () => {
+    await mostrar(agenteFalso(), <AgentPlaybooks />);
+    for (const botao of [...botoes("Recusar"), ...botoes("Aprovar")]) expect(botao.className).toMatch(/\bmax-md:min-h-12\b/);
   });
 });

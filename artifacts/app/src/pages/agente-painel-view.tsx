@@ -126,6 +126,8 @@ function NotaParaAprovar({ nota, acoes, decidir }: { nota: NotaDoAgente } & Pick
           <BotaoDeAcao
             variant="outline"
             size="sm"
+            // No celular, as ações da linha com 48 px (seção 7).
+            className="max-md:min-h-12"
             estado={recusar}
             icone={<X aria-hidden="true" />}
             rotulo="Recusar"
@@ -138,6 +140,7 @@ function NotaParaAprovar({ nota, acoes, decidir }: { nota: NotaDoAgente } & Pick
           <BotaoDeAcao
             tinta
             size="sm"
+            className="max-md:min-h-12"
             estado={aprovar}
             icone={<Check aria-hidden="true" />}
             rotulo="Aprovar"

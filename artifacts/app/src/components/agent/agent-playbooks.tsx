@@ -260,12 +260,14 @@ export function AgentPlaybooks() {
                     </span>
                   </button>
                   <div className="flex shrink-0 gap-2">
-                    <button type="button" onClick={() => setEditing(item.id)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                    <button type="button" onClick={() => setEditing(item.id)} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "max-md:min-h-12")}>
                       <Pencil className="h-3.5 w-3.5" /> Ver e editar
                     </button>
                     <BotaoDeAcao
                       variant="outline"
                       size="sm"
+                      // No celular, as ações da linha com 48 px (seção 7).
+                      className="max-md:min-h-12"
                       estado={estadoDa(item.id, "reject")}
                       icone={<X className="h-3.5 w-3.5" />}
                       rotulo="Recusar"
@@ -277,6 +279,7 @@ export function AgentPlaybooks() {
                     />
                     <BotaoDeAcao
                       size="sm"
+                      className="max-md:min-h-12"
                       estado={estadoDa(item.id, "approve")}
                       icone={<Check className="h-3.5 w-3.5" />}
                       rotulo="Aprovar"
@@ -317,7 +320,7 @@ export function AgentPlaybooks() {
                     <BotaoDeAcao
                       variant="ghost"
                       size="sm"
-                      className="min-h-0 px-1 py-0 text-xs font-medium text-muted-foreground hover:text-foreground"
+                      className="min-h-0 px-1 py-0 text-xs font-medium text-muted-foreground hover:text-foreground max-md:min-h-12"
                       estado={estadoDa(item.id, "archive")}
                       rotulo="Arquivar"
                       andamento="Arquivando…"

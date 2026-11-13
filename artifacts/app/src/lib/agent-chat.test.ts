@@ -107,7 +107,7 @@ describe("as consultas na trilha e nas fontes (carregamento v2, momento 9)", () 
     expect(resumoDaTrilha(["resumo_estoque", "movimentacoes"])).toBe("Leu o estoque e o razão de movimentos");
     expect(resumoDaTrilha(["resumo_estoque", "listar_pedidos", "recebimentos"])).toBe("Leu o estoque, os pedidos e as chegadas");
     expect(resumoDaTrilha(["resumo_estoque", "movimentacoes", "listar_pedidos", "recebimentos", "itens_parados"])).toBe(
-      "Leu o estoque, o razão de movimentos e mais 3",
+      "Leu o estoque, o razão de movimentos e mais 3 fontes",
     );
     expect(resumoDaTrilha(["rascunho_pedido"])).toBeNull();
     expect(resumoDaTrilha([])).toBeNull();

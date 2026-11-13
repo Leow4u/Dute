@@ -34,6 +34,22 @@ vi.mock("firebase/firestore", async (original) => ({
   onSnapshot: () => () => undefined,
 }));
 
+// O stream da callable como o SDK entrega quando a function cai (ou passa do timeoutSeconds): os pedaços e o fim, sem a linha do resultado; o `data` fica pendente para sempre.
+vi.mock("../firebase-functions", () => ({ functionsDoApp: () => ({}) }));
+vi.mock("firebase/functions", () => ({
+  httpsCallable: () => {
+    const callable = () => Promise.resolve({ data: {} });
+    callable.stream = async () => ({
+      stream: (async function* () {
+        yield { type: "tool", name: "listar_pedidos" };
+      })(),
+      data: new Promise(() => undefined),
+    });
+    return callable;
+  },
+}));
+
+import { PRAZO_ESGOTADO } from "../conexao";
 import { CLIENTE_DO_WMS, chaveNoAlvo, clienteDoNucleo, conversasDoModulo, mensagensDaConversa } from "./cliente";
 
 /**
@@ -147,5 +163,15 @@ describe("as conversas do núcleo sem o servidor (carregamento v2, parte 12)", (
     await expect(nucleo.conversas()).rejects.toMatchObject({ code: expect.stringMatching(/^sem_(conexao|resposta)$/) });
     await expect(nucleo.mensagens("a")).rejects.toMatchObject({ code: expect.stringMatching(/^sem_(conexao|resposta)$/) });
     firestore.soCache = false;
+  });
+});
+
+describe("a conversa com o núcleo quando o stream fecha sem o resultado", () => {
+  it("a function que caiu ou passou do prazo dela vira o prazo esgotado, e não uma espera sem fim", async () => {
+    const pedacos: unknown[] = [];
+    const conversa = clienteDoNucleo("wms", "BTG").conversar({ message: "Quais pedidos estão atrasados?", conversation_id: "c1" }, (pedaco) => pedacos.push(pedaco));
+    const resultado = await Promise.race([conversa.then(() => "resolveu", (erro: Error) => erro.message), new Promise((ok) => setTimeout(() => ok("pendente"), 50))]);
+    expect(pedacos).toEqual([{ type: "tool", name: "listar_pedidos" }]);
+    expect(resultado).toBe(PRAZO_ESGOTADO);
   });
 });

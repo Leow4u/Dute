@@ -23,13 +23,19 @@ const estado = vi.hoisted(() => ({
   toasts: [] as Array<{ title?: string }>,
   /** O Firestore sem o servidor: responde do cache, com sucesso, como o SDK faz sem rede. */
   soCache: false,
+  /** A coleção cuja leitura falha (sem permissão), e os documentos que a base devolve. */
+  falhaEm: null as string | null,
+  documentos: [] as Array<{ id: string; data: () => Record<string, unknown> }>,
 }));
 
 vi.mock("@/lib/firebase", () => ({ firestore: {}, firebaseAuth: null }));
 vi.mock("firebase/firestore", () => ({
   collection: (_db: unknown, nome: string) => ({ nome }),
   doc: (_db: unknown, nome: string, id: string) => ({ path: `${nome}/${id}` }),
-  getDocs: async () => ({ docs: [], metadata: { fromCache: estado.soCache } }),
+  getDocs: async (fonte: { nome?: string }) => {
+    if (fonte?.nome && fonte.nome === estado.falhaEm) throw Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" });
+    return { docs: fonte?.nome === "ai_agent_knowledge" ? estado.documentos : [], metadata: { fromCache: estado.soCache } };
+  },
   where: () => ({}),
   query: () => ({}),
   serverTimestamp: () => "agora",
@@ -111,6 +117,8 @@ beforeEach(async () => {
   estado.lotes = [];
   estado.toasts = [];
   estado.soCache = false;
+  estado.falhaEm = null;
+  estado.documentos = [];
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -260,8 +268,9 @@ describe("a base do Conhecimento sem o servidor (carregamento v2, parte 12)", ()
     const falta = document.querySelector<HTMLElement>("[data-falta]");
     expect(falta).not.toBeNull();
     expect(falta!.textContent).toContain("Tentar de novo");
-    // Os números esperam a leitura: os blocos no lugar do "0".
-    expect(document.querySelectorAll('[data-esqueleto][data-forma="contagem"]')).toHaveLength(4);
+    // Os números não chegaram: nem "0", nem os blocos de quem ainda espera.
+    expect(document.querySelectorAll('[data-esqueleto][data-forma="contagem"]')).toHaveLength(0);
+    expect([...document.querySelectorAll("[data-contador]")].map((contador) => contador.textContent)).toEqual(Array(4).fill("—Não carregou"));
   });
 
   it("com o servidor, a base vazia diz que está vazia", async () => {
@@ -269,5 +278,23 @@ describe("a base do Conhecimento sem o servidor (carregamento v2, parte 12)", ()
     await passar(0);
     expect(document.body.textContent).toContain("Sem documentos na base");
     expect(document.querySelector("[data-falta]")).toBeNull();
+  });
+});
+
+describe("os contadores do Conhecimento, cada um pela leitura dele", () => {
+  it("os arquivos fonte que falharam não prendem os números dos documentos, e dizem que não carregaram", async () => {
+    estado.falhaEm = "ai_agent_knowledge_files";
+    estado.documentos = [{ id: "doc-1", data: () => ({ title: "Procedimento de recebimento", chunk_count: 7, extraction_status: "processed" }) }];
+    await act(async () => {
+      await client.resetQueries();
+    });
+    await passar(120_000);
+    const contadores = Object.fromEntries(
+      [...document.querySelectorAll<HTMLElement>("[data-contador]")].map((contador) => [contador.dataset.contador, contador.textContent]),
+    );
+    expect(contadores).toEqual({ Documentos: "1", Consultáveis: "1", Trechos: "7", "Arquivos fonte": "—Não carregou" });
+    expect(document.querySelectorAll('[data-esqueleto][data-forma="contagem"]')).toHaveLength(0);
+    const naoCarregou = document.querySelector('[data-contador="Arquivos fonte"] .sr-only');
+    expect(naoCarregou?.textContent).toBe("Não carregou");
   });
 });

@@ -218,14 +218,14 @@ function emSerie(itens: readonly string[]): string {
 /**
  * A trilha recolhida numa linha, quando o texto começa: "Leu o estoque e o
  * razão de movimentos". Até três leituras pelo nome; daí em diante, as duas
- * primeiras e "mais N". Sem leitura (só propostas, ou nenhuma consulta),
- * nulo: a trilha some.
+ * primeiras e "mais N fontes" (as mesmas dos chips de "De onde tirei"). Sem
+ * leitura (só propostas, ou nenhuma consulta), nulo: a trilha some.
  */
 export function resumoDaTrilha(nomes: readonly string[] | null | undefined): string | null {
   const objetos = [...new Set(uniqueTools(nomes).flatMap((nome) => consultaDoAgente(nome).objeto ?? []))];
   if (!objetos.length) return null;
   if (objetos.length <= 3) return `Leu ${emSerie(objetos)}`;
-  return `Leu ${objetos.slice(0, 2).join(", ")} e mais ${objetos.length - 2}`;
+  return `Leu ${objetos.slice(0, 2).join(", ")} e mais ${objetos.length - 2} fontes`;
 }
 
 /** Uma etiqueta por ferramenta, na ordem em que foram usadas. */

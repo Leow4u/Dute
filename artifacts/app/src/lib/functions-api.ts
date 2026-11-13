@@ -2,7 +2,6 @@ import { httpsCallable } from "firebase/functions";
 import { functionsDoApp } from "./firebase-functions";
 
 import { clienteDaChamada } from "./active-customer";
-import { CARREGANDO } from "./carregando/tempo";
 import { PRAZO_ESGOTADO, PRAZO_ESGOTADO_NA_LEITURA, aparelhoSemRede, callableSemResposta, corpoDaFalta, corpoSemConexao, mensagemDaFalta, prazoEsgotado } from "./conexao";
 import { firebaseApp } from "./firebase";
 
@@ -1078,8 +1077,29 @@ export type AgentDuteStreamChunk =
   | { type: "reset" };
 
 /**
+ * Lê o stream de uma callable até o fim e devolve o resultado. O SDK
+ * (`@firebase/functions` 0.13) resolve o `data` quando a linha do resultado
+ * chega, antes de o stream fechar; o `.stream()` não tem prazo próprio (o
+ * `timeout` do `httpsCallable` só vale para a chamada comum), e o stream que
+ * fecha sem a linha do resultado (a function caiu ou passou do
+ * `timeoutSeconds` dela) deixaria o `data` pendente para sempre. Aqui isso é
+ * o prazo esgotado (`deadline-exceeded`): a tela do Agent Dute mostra "Sem
+ * resposta do Agent Dute", com o "Tentar de novo".
+ */
+export async function resultadoDoStream<T, P>(resposta: { stream: AsyncIterable<P>; data: Promise<T> }, aoPedaco: (pedaco: P) => void): Promise<T> {
+  for await (const pedaco of resposta.stream) aoPedaco(pedaco);
+  const semResultado = Symbol("sem resultado");
+  // Com o resultado, o `data` já está resolvido (ou rejeitado) e ganha a corrida; pendente, o stream fechou sem ele.
+  const resultado = await Promise.race([resposta.data, Promise.resolve(semResultado)]);
+  if (resultado === semResultado) throw Object.assign(new Error(PRAZO_ESGOTADO), { code: "deadline-exceeded" });
+  return resultado as T;
+}
+
+/**
  * Conversa com o Agent Dute recebendo a resposta aos pedaços. Devolve o
  * mesmo resultado da chamada comum (conversa e as duas mensagens gravadas).
+ * O prazo da espera é o relógio da tela (`CARREGANDO.desisteDoAgenteMs`,
+ * contado da última notícia do servidor): o `.stream()` não tem prazo.
  */
 export async function streamAgentDuteChat<T>(
   payload: {
@@ -1091,15 +1111,9 @@ export async function streamAgentDuteChat<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   if (!firebaseApp) throw new Error("Firebase não configurado.");
-  const callable = httpsCallable<typeof payload, T, AgentDuteStreamChunk>(
-    functionsDoApp(firebaseApp),
-    "chatWithAgentDute",
-    { timeout: CARREGANDO.desisteDoAgenteMs },
-  );
+  const callable = httpsCallable<typeof payload, T, AgentDuteStreamChunk>(functionsDoApp(firebaseApp), "chatWithAgentDute");
   try {
-    const { stream, data } = await callable.stream(payload, { signal });
-    for await (const chunk of stream) onChunk(chunk);
-    return await data;
+    return await resultadoDoStream(await callable.stream(payload, { signal }), onChunk);
   } catch (error) {
     if (callableSemResposta(error)) throw new Error(mensagemDaFalta());
     if (prazoEsgotado(error)) throw new Error(PRAZO_ESGOTADO);

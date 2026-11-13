@@ -52,10 +52,24 @@ export function linhasDaTrilha(consultas: readonly ConsultaDoAgente[]): Linha[] 
   return [{ tipo: "recolhido", chave: "recolhidas", texto: `+${recolhidas} consultas` }, ...linhas.slice(recolhidas)];
 }
 
-/** O check violeta da consulta feita (a caixa do agente fechada). Decorativo. */
-function CheckDoAgente() {
+/** O que o check da consulta feita diz ao leitor de tela: a linha "Estoque" sozinha não diz que já foi lida. */
+export const CONSULTA_FEITA = "Consulta feita";
+
+/**
+ * O check violeta de 16 px (a caixa do agente fechada), na célula de 20 px da
+ * linha. Na linha da consulta feita, ele é o que diz que ela acabou e tem o
+ * nome "Consulta feita"; na trilha recolhida, o "Leu…" já diz, e ele é
+ * decorativo.
+ */
+function CheckDoAgente({ rotulo }: { rotulo?: string }) {
   return (
-    <svg data-check="" viewBox="0 0 24 24" className="size-5 shrink-0" aria-hidden="true" focusable="false">
+    <svg
+      data-check=""
+      viewBox="0 0 24 24"
+      className="size-4 shrink-0"
+      focusable="false"
+      {...(rotulo ? { role: "img", "aria-label": rotulo } : { "aria-hidden": true })}
+    >
       <path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -68,7 +82,7 @@ function LinhaDaTrilha({ linha, calmo }: { linha: Linha; calmo: boolean }) {
         {linha.tipo === "vez" ? (
           <Spinner tamanho={20} calmo={calmo} />
         ) : linha.tipo === "feita" ? (
-          <CheckDoAgente />
+          <CheckDoAgente rotulo={CONSULTA_FEITA} />
         ) : linha.tipo === "erro" ? (
           <CaixaDeAlerta className="size-5 text-destructive" />
         ) : (
@@ -93,7 +107,8 @@ function LinhaDaTrilha({ linha, calmo }: { linha: Linha; calmo: boolean }) {
  * A trilha recolhida numa linha, na mesma caixa violeta, quando o texto
  * começa ("Leu o estoque e o razão de movimentos"), e na resposta gravada,
  * com o mesmo desenho: a resposta que termina de chegar não muda de lugar.
- * Sem leitura, nada.
+ * A linha tem a altura de uma linha da trilha (28 px, a caixa com 50). Sem
+ * leitura, nada.
  */
 export function TrilhaRecolhida({ nomes, className }: { nomes: readonly string[] | null | undefined; className?: string }) {
   const resumo = resumoDaTrilha(nomes);
@@ -102,11 +117,11 @@ export function TrilhaRecolhida({ nomes, className }: { nomes: readonly string[]
     <p
       data-trilha-recolhida=""
       className={cn(
-        "flex w-fit min-h-7 max-w-full items-center gap-2.5 rounded-lg border border-agent-border bg-agent-soft px-3.5 py-2.5 text-sm font-semibold text-foreground",
+        "flex w-fit max-w-full items-center gap-2.5 rounded-lg border border-agent-border bg-agent-soft px-3.5 py-2.5 text-sm font-semibold text-foreground",
         className,
       )}
     >
-      <span className="flex size-5 shrink-0 items-center justify-center text-carregando-agente">
+      <span className="flex min-h-7 w-5 shrink-0 items-center justify-center text-carregando-agente">
         <CheckDoAgente />
       </span>
       <span className="min-w-0">{resumo}</span>
@@ -162,19 +177,36 @@ export function TrilhaDoAgente({ consultas, escrevendo, demorando, onParar, desd
   const visivel = espera.visivel && !escrevendo;
   const primeiroPasso = primeira ? consultaDoAgente(primeira.nome).vez : null;
 
+  // O que esperava a vez no anunciador sai da fila quando a trilha sai (o texto começou, a pessoa parou).
+  const retirarOPrimeiro = useRef<() => void>(() => undefined);
+  const retirarADemora = useRef<() => void>(() => undefined);
   useEffect(() => {
     if (!visivel || !primeiroPasso || falouOPrimeiro.current) return;
     falouOPrimeiro.current = true;
-    anunciar(falado(primeiroPasso));
+    retirarOPrimeiro.current = anunciar(falado(primeiroPasso));
   }, [visivel, primeiroPasso, anunciar]);
 
   useEffect(() => {
     if (!demorando || escrevendo || falouADemora.current) return;
     falouADemora.current = true;
-    anunciar(DEMORANDO);
+    retirarADemora.current = anunciar(DEMORANDO);
   }, [demorando, escrevendo, anunciar]);
 
-  if (escrevendo) return <TrilhaRecolhida nomes={consultas.map((consulta) => consulta.nome)} className={className} />;
+  useEffect(() => {
+    if (!escrevendo) return;
+    retirarOPrimeiro.current();
+    retirarADemora.current();
+  }, [escrevendo]);
+  useEffect(
+    () => () => {
+      retirarOPrimeiro.current();
+      retirarADemora.current();
+    },
+    [],
+  );
+
+  // A trilha recolhe numa linha: ela entra em 150 ms (opacidade e 4 px), no lugar da trilha aberta.
+  if (escrevendo) return <TrilhaRecolhida nomes={consultas.map((consulta) => consulta.nome)} className={cn("trilha-do-agente-recolhe", className)} />;
   if (!espera.visivel) return null;
 
   const calmo = espera.calmo || demorando;
@@ -184,7 +216,8 @@ export function TrilhaDoAgente({ consultas, escrevendo, demorando, onParar, desd
       data-movimento={espera.movimento ? "" : undefined}
       className={cn("trilha-do-agente flex flex-col gap-2", className)}
     >
-      <ol className="trilha-do-agente-caixa flex flex-col gap-1.5 self-start rounded-lg border border-agent-border bg-agent-soft px-3.5 py-2.5">
+      {/* A caixa tem pelo menos 300 px: a borda direita não pula a cada consulta. */}
+      <ol className="trilha-do-agente-caixa flex min-w-75 max-w-full flex-col gap-1.5 self-start rounded-lg border border-agent-border bg-agent-soft px-3.5 py-2.5">
         {linhasDaTrilha(consultas).map((linha) => (
           <LinhaDaTrilha key={linha.chave} linha={linha} calmo={calmo} />
         ))}
