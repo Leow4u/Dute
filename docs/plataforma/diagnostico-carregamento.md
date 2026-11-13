@@ -634,9 +634,12 @@ este diagnóstico:
 
 Ficam para depois:
 
-- as leituras que vão ao Firestore sem passar por `lib/cloud-api.ts` (o
+- ~~as leituras que vão ao Firestore sem passar por `lib/cloud-api.ts` (o
   seletor de cliente, Pessoas, as anotações e os playbooks do Agent Dute),
-  que sem rede ainda devolvem o cache;
+  que sem rede ainda devolvem o cache~~: feito. O seletor e Pessoas leem pelo
+  `lerDocsDoServidor` desde a parte 13e do carregamento v2 (10.5), e as
+  anotações e os playbooks, pelas callables do núcleo e pelas rotas do
+  `lib/cloud-api.ts`;
 - o `deadline-exceeded` de 70 s, que fica com a mensagem própria das
   operações longas (seção 6, PR 8);
 - os PRs 2 a 5 do celular.
@@ -750,7 +753,7 @@ por PR:
 | 10 | A troca de filtro e a releitura sem apagar a lista | a fazer |
 | 11 | As operações longas: fotos com progresso e etapas | PR 610 |
 | 12 | A trilha do Agent Dute | PR 610 |
-| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | 13a (os diálogos) no PR 610; o resto a fazer |
+| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | 13a (os diálogos) e 13e (as Configurações, o sistema e o Início) no PR 610; o resto a fazer |
 
 Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código:
 
@@ -1809,3 +1812,173 @@ Fica aberto:
   "⋯" de Pedidos fica `disabled` enquanto outra ação grava;
 - a conferência com leitor de tela de verdade, num Android médio e no
   Safari; o anel do foco do `Button` (1,91:1), da parte 6.
+
+**Parte 13e, as Configurações, o sistema e o Início (PR 610, 13/11/2026).** A
+parte 13 em Pessoas e acessos, Clientes, Chaves de API, Sistema e
+Infraestrutura, no Início dos módulos, no painel do owner e no shell (as
+seções 4.1, 4.2 e 4.10). Fecha também a pendência da 9.4.
+
+- **O que já estava feito**: Pessoas dizia "Carregando pessoas…" com o
+  `Spinner`; as Chaves de API já tinham a reticência certa e a trava por ref;
+  a parte 13a já cuidava dos diálogos (Convite, Reenviar, Remover, Revogar,
+  Clientes, Sistema, owner e Infra); o total de SKUs do Início já dizia "—"
+  sem leitura (decisão 6); o `Skeleton` já era o bloco neutro (parte 3); e o
+  painel do owner já tinha a `FaixaSemConexao` e o `BlocoSemConexao`.
+- **O shell**:
+  - o seletor do cliente ativo mostra o bloco e, aos 300 ms, a caixa de 16 px
+    no lugar da seta, nunca o cliente legado. Lendo, fica `aria-disabled`, e
+    o menu não abre;
+  - quando a lista dos clientes não vem, ele diz "Não carregou",
+    "Reconectando…" ou "Sem conexão", com o ícone de tentar de novo no lugar
+    da seta e sem dizer que abre um menu (`aria-haspopup`), e o toque tenta de
+    novo. A nova tentativa fica na falha, com "Tentando de novo", e não volta
+    ao bloco de quem carrega (`useLeituraComFalha` no provedor). No cabeçalho
+    do celular, o seletor tem 44 px;
+  - o item do menu da tela que abre mostra a caixa no lugar do contador
+    (`useRotaEsperando`), também na barra da Configuração;
+  - enquanto o "Precisa de você" lê, o contador do Início é o bloco, e nenhum
+    número aparece pela metade (antes, "Início 1" e, no quadro seguinte,
+    "Início 2"), nos cinco módulos.
+- **A pendência da 9.4, feita**: os convites de Pessoas e a lista de clientes
+  do comercial no seletor leem pelo `lerDocsDoServidor`. Sem rede, a leitura
+  que só achou o cache é falta de conexão, e o app relê sozinho (parte 7a).
+  As anotações e os playbooks do Agent Dute já liam pelas callables do núcleo
+  e pelas rotas do `lib/cloud-api.ts`.
+- **As peças**:
+  - a `CarregandoNaRegiao` ganhou a saída da tabela da seção 3 para quem sabe
+    repetir a leitura (`onTentar`): aos 10 s, "Tentar de novo" ao lado do
+    aviso da demora; aos 70 s, "Sem resposta do servidor." no `ErroNaLeitura`,
+    com "Tentar de novo". A nova tentativa recomeça o relógio, e o foco fica
+    na região. Quem usa relê do zero (`lib/carregando/reler-do-zero.ts`): o
+    react-query não recomeça a leitura sem dado que ainda lê, e o `refetch`
+    só se juntaria à presa. Está no Início, nos incidentes do Sistema, no
+    painel do owner, na Infraestrutura, em Pessoas, em Clientes e nas Chaves;
+  - a `FalhaNaSecao` (a falha de uma parte da tela) diz "Tentando de novo…"
+    só na tentativa que a pessoa pediu, até a promessa da releitura acabar: o
+    intervalo da tela não muda o botão. A frase é alerta quando a seção não
+    tem nada lido; com o que já estava lido na tela (a releitura que falhou,
+    quase sempre a automática), fica escrita, sem falar (momento 7);
+  - quando a nova tentativa dá certo e o aviso sai com o foco nele, o foco vai
+    ao título da seção ou do diálogo onde ele morava, nunca ao `body`. Vale
+    para a `FalhaNaSecao` e para o `ErroNaLeitura` sem linha de estado
+    (`lib/foco-de-volta.ts`).
+- **O Início dos módulos**:
+  - nasce com a forma final: os rótulos reais, as linhas-fantasma com a
+    anatomia da linha e, no lugar da frase, "Carregando o que precisa de
+    você…", que continua a espera da tela que abriu. O "Precisa de você"
+    aponta para essa linha (`aria-describedby`) enquanto lê;
+  - a fonte que falhou sem nada lido fica na falha enquanto é relida
+    (`useLeituraComFalha`): o "Tentar de novo" diz "Tentando de novo…", e o
+    aviso não sai da tela com o foco nele. A releitura de cada minuto não tira
+    o aviso, não mexe no foco e não fala. O toque relê todas as fontes,
+    também as anotações e os playbooks do Agent Dute. A releitura que falha
+    depois de lido fica escrita, sem falar;
+  - "Hoje no armazém" não afirma zero: lendo, o bloco do tamanho do número de
+    24 px (28 × 18); com o armazém sem leitura, "—";
+  - quem não tinha nada parado na última leitura não vê o "Precisa de você"
+    nascer lendo para sumir na chegada (a contagem lembrada guarda o zero), e
+    o que está ao lado e embaixo não salta;
+  - na chegada, as linhas reais entram por opacidade, subindo 4 px, em
+    cascata, e a frase entra por opacidade (no reduzido, só a opacidade);
+  - o aviso da fonte que falhou tem "Tentar de novo" no WMS, no Comercial e no
+    RH.
+- **Pessoas e acessos**:
+  - cancelar o convite, trocar o perfil e devolver o acesso têm a espera na
+    linha (`useAcaoNaLinha`): o gerúndio ("Cancelando o convite…"), a caixa no
+    lugar do "⋯", com `aria-busy`, e as outras linhas livres. Se a linha sai,
+    o foco vai ao vizinho;
+  - cada linha espera a própria gravação: trocar o perfil de duas pessoas
+    seguidas soltava só a última, e a primeira ficava presa (o react-query só
+    dá os avisos do pedido ao último `mutate`); a devolução tem a mutação
+    dela, e devolver o acesso de uma pessoa não trava o das outras;
+  - a ação que sai do menu o fecha: antes, ele reabria sozinho quando a ação
+    acabava. No celular, o "⋯" tem 44 px;
+  - a releitura que falha não apaga a lista, e "Não foi possível atualizar as
+    pessoas." fica escrita em cima dela, sem falar.
+- **Clientes**:
+  - nenhum "0 no portal" nem "…" antes de ler: o bloco enquanto lê e "—" na
+    falha. Na galeria, a falha das prateleiras ou das pessoas também fica
+    dita, em cima dos cartões, com "Tentar de novo";
+  - na página do cliente, "Pessoas · ▪" lendo e "Pessoas · —" na falha, com o
+    separador fora da árvore (o leitor de tela ouve "Pessoas"); a ocupação
+    que falhou fica na falha durante a nova tentativa, e a releitura que falha
+    não apaga a ocupação lida;
+  - sem rede, a página, a ocupação e as pessoas dizem a mesma falta, no aviso
+    da conexão ("Reconectando…" ou "Sem conexão."), e não o erro vermelho;
+  - o Salvar das seções é o `BotaoDeAcao`; o Cancelar fica `aria-disabled` e
+    esmaece aos 300 ms; quando o formulário fecha, o foco volta ao "Editar"
+    da seção.
+- **Chaves de API**:
+  - a leitura que não alcança a API é falta de conexão: sem nada lido, o
+    aviso da conexão, e o app relê sozinho quando a rede volta; com a lista,
+    a faixa com a hora;
+  - a releitura que falha com a lista na tela fica escrita em cima dela, sem
+    falar; a página seguinte que não veio diz "Não carregou" no botão por 2 s
+    e "Não foi possível carregar mais chaves." ao lado, falado uma vez;
+  - criando a chave, os campos ficam só para leitura (`aria-disabled`, com a
+    trava no código), nunca `disabled`: o Enter no Nome não derruba o foco;
+  - o link da documentação fica em tinta, sublinhado (o vermelho dava 4,2:1).
+- **Sistema e conta**: o "Verificar agora" só mostra a espera quando a pessoa
+  toca nele. Cada gerúndio diz o quê ("Verificando o sistema…", "Verificando
+  a infraestrutura…", "Conferindo a numeração…"), e o "Verificar agora" da
+  Infraestrutura só sublinha com o ponteiro em cima (o fundo do ghost dava
+  3,35:1 no escuro). No celular, o Verificar agora, o Ver o que muda, o
+  Numerar agora, o Carregar mais e o Sair têm 44 px.
+- **Testes**: por peça (`falha-na-secao.test.tsx`,
+  `carregando-na-regiao.test.tsx`) e por área (`inicio-do-modulo.carregando`,
+  `home.carregando`, `pessoas/acoes.carregando`, `users.carregando`,
+  `settings-customers`, `settings-integrations`, `carregando-do-sistema`,
+  `carregando-no-shell`, `active-customer-context.falta`, os Inícios do
+  Comercial e do RH), com a lista dos textos e o axe. Contra o código de antes
+  da revisão, 48 testes falham; os que ainda passam são as travas dos textos
+  que já existiam. Os testes que esperavam um tempo fixo depois dos 300 ms
+  esperam o estado chegar: com a suíte inteira rodando, eles falhavam à toa.
+- **Medição no Chromium** (harness com a API falsa, só 127.0.0.1):
+  - a nova tentativa que dá certo: o foco fica no "Tentar de novo" com
+    "Tentando de novo…" e depois vai ao título da seção (o H2 dos incidentes,
+    da ocupação e do portal, o H1 da tela), em dez casos de oito telas;
+    antes, o `body`. No seletor, o foco fica no mesmo botão;
+  - o Início com o armazém falhando sempre, o foco no "Tentar de novo" por 66
+    s: o aviso e o foco ficam, nenhuma linha-fantasma, nenhum anúncio, e a
+    releitura de 1 min falha em silêncio; antes, aos 59,7 s, o aviso sumia e o
+    foco ia ao `body`;
+  - a leitura presa em sete telas (Início, Sistema, Pessoas, Clientes,
+    Chaves, painel e Infraestrutura): "Tentar de novo" aos 11 s e "Sem
+    resposta do servidor." aos 72 s; antes, só a demora, para sempre;
+  - trocar o perfil e devolver o acesso: o menu fica fechado até o fim (4,5
+    s); antes, reabria a 3,2 s;
+  - o Início sem nada parado, na segunda visita: CLS 0 no computador e 0,0003
+    no celular; antes, 0,15 e 0,13;
+  - na chegada, a linha entra de 0 a 1 de opacidade e de 4 a 0 px em 166 ms;
+    o menu passa do bloco ao "Início 2" num quadro só;
+  - sem rede, as Chaves e a página do cliente dizem "Reconectando…" e depois
+    "Sem conexão.", e voltam sozinhas com a rede;
+  - criar a chave pelo Enter no Nome: o foco fica no campo durante o
+    "Criando…"; antes, no `body`. O Salvar da seção devolve o foco ao
+    "Editar contrato";
+  - a 390 px, nenhum dos botões da parte abaixo de 44 px; o axe não acusa nada
+    no claro, e no escuro só o branco sobre o primário azul (4,3:1, o token
+    registrado na seção 4.3 da especificação).
+
+Fica aberto:
+
+- a primeira visita ao Início de quem não tem nada parado ainda mostra o
+  "Precisa de você" lendo e o tira na chegada: sem lembrança, a forma é a de
+  duas linhas;
+- os Inícios da Operação, que lê ao vivo, e do Financeiro, que junta quatro
+  leituras, mostram a falha sem "Tentar de novo";
+- o Sistema do owner: o painel lendo ocupa uma linha e não guarda a forma, e
+  ele e a Infraestrutura empurram os incidentes quando chegam (cerca de 700 e
+  320 px);
+- os contadores dos outros itens do menu (Pedidos) só aparecem na chegada; o
+  bloco fica no Início;
+- no celular lendo, o `main` que rola fica sem nada focável até o dado chegar
+  (o axe acusa; o Chrome já deixa a rolagem focável);
+- o Cancelar convite continua sem confirmação, que pede um desenho;
+- as telas que esperam o `isLoading` do cliente ativo (Faturamento,
+  Contratos) não leem o `falhou`: com a lista que falhou, seguem com o
+  cliente legado (área 13d);
+- quando tudo lê ao mesmo tempo, aparecem três indicadores juntos (o seletor,
+  o item do menu e a tela), a confirmar com o Leonardo;
+- a conferência com leitor de tela de verdade, num Android médio e no
+  Safari.
