@@ -339,7 +339,7 @@ o Início) ou por URL.
    desabilitado, `preventDefault` nos quatro `AlertDialogAction`; a janela do
    Evento do portal só fecha depois do retorno. *Entrou na parte 13a do
    carregamento v2 (registro em 10.5), com o Cancelar `aria-disabled` no
-   lugar de desabilitado.*
+   lugar de desabilitado, o aviso dos 10 s no rodapé e a saída aos 70 s.*
 8. **Operações longas.** Fotos com contagem e `uploadBytesResumable`;
    aviso de que só quatro sobem por vez; Documentos e Conhecimento com
    etapa e tempo limite; Separado e Entrega com etapa; foto por IA com tempo
@@ -574,8 +574,11 @@ já estava decidido. O restante vira cinco PRs, um problema por PR:
    tem, e o envio mostra a contagem e o progresso (`uploadBytesResumable`).
 4. **Ação no celular** (itens 5 e 9). A trava de toque duplo, as chaves por
    tentativa, o rodapé preso nos diálogos longos e o X de 44 px. *O rodapé
-   preso e o X de 44 px entraram na parte 13a do carregamento v2 (registro
-   em 10.5); a trava de toque duplo veio com o `BotaoDeAcao` (parte 4).*
+   preso e o X de 44 px, em pé e deitado, entraram na parte 13a do
+   carregamento v2 (registro em 10.5), com o campo que recebe o foco fora de
+   trás do rodapé e o toast no topo enquanto o diálogo está aberto; a trava de
+   toque duplo veio com o `BotaoDeAcao` (parte 4). O "Sem conexão" dentro do
+   diálogo espera um desenho.*
 5. **Leitura leve e volta do segundo plano** (itens 6 e 7). O shell sem a
    releitura de 60 s no celular, o Separado com uma leitura só, e a releitura
    na volta ao app com o "atualizado às".
@@ -1630,35 +1633,64 @@ Fica aberto:
 o PR 7 da seção 6 e o PR 4 do celular (9.3), no app inteiro.
 
 - **Um jeito só de segurar o diálogo durante a ação** (`components/ui/dialog.tsx`,
-  `alert-dialog.tsx` e `sheet.tsx`), ligado pelo `ocupado` da raiz (`Dialog`,
-  `AlertDialog`, `Sheet`) ou do `DialogContent`, quando a ação mora no
-  conteúdo (o convite):
+  `alert-dialog.tsx` e `sheet.tsx`, com o estado em `dialogo-em-acao.ts`),
+  ligado pelo `ocupado` da raiz (`Dialog`, `AlertDialog`, `Sheet`) ou do
+  `DialogContent`, quando a ação mora no conteúdo (o convite):
   - o `onOpenChange(false)` não chega a quem usa, e o Esc, o toque fora e o
-    X não fecham; o conteúdo marca `data-ocupado`;
+    X não fecham; o conteúdo marca `data-ocupado`. O Esc e o toque fora, que
+    escapam sem querer, esperam também o toque aceito no confirmar, antes de
+    a ação chegar à tela: por até 300 ms, e daí quem segura é a ação. A
+    falha que volta antes disso os solta na hora. O X e o Cancelar seguem o
+    que dizem: sem `aria-disabled`, fecham;
   - o X e o Cancelar (o `DialogCancelar`, o `AlertDialogCancel`) ficam
-    `aria-disabled`, a 0,45, com a trava no código, nunca `disabled`;
+    `aria-disabled` desde o toque, com a trava no código, nunca `disabled`.
+    Eles esmaecem a 0,45 aos 300 ms, junto com o gerúndio do confirmar, e
+    ficam assim pelo menos 500 ms, como ele; a ação que volta antes dos
+    300 ms não os faz piscar. Do X, só o ícone esmaece: o anel do foco fica
+    inteiro;
   - o `AlertDialogAction` é o `BotaoDeAcao` e nunca fecha sozinho (o
     `preventDefault` mora nele): quem fecha é o sucesso; na falha, a
     confirmação fica;
   - o confirmar é o `BotaoDeAcao` em todos, com o gerúndio ("Cancelando…",
-    "Cadastrando…", "Salvando…"), e o foco fica nele durante a ação;
+    "Cadastrando…", "Salvando…"), e o foco fica nele durante a ação. O
+    destrutivo cheio é o `perigo` dele (o vermelho sólido no repouso, no toque
+    e travado): com a classe solta de antes, o confirmar travado mostrava o
+    primário com o ponteiro em cima, azul fora da v3 e no escuro;
+  - aos 10 s, o rodapé diz "Demorando mais que o normal · 0:12", em cima dos
+    botões. Aos 70 s, "Sem confirmação do servidor", e o diálogo volta a
+    fechar: a ação pode ter gravado ou não, e o confirmar segue nela. O
+    diálogo da operação longa (o `Progresso`, as fotos, o aviso da tela) não
+    repete o aviso e cuida da própria saída;
   - no fim, o foco volta ao controle que abriu o diálogo; o item do menu "⋯"
     vira o botão do menu. Se ele saiu da tela, ou sai logo depois (a linha
-    que a releitura tira), o foco vai ao `focoAoFechar` de quem usa ou ao
-    título da página, sem rolar a tela, nunca ao `body`
-    (`lib/foco-de-volta.ts`, vigia de até `CARREGANDO.desisteMs`);
+    que a releitura tira), o foco vai ao `focoAoFechar` de quem usa, ao
+    vizinho dele na ordem do Tab (o controle da linha seguinte ou, sem ela,
+    o da anterior, lidos na abertura) ou, sem nenhum, ao título da página,
+    que vem até a borda quando está fora da vista; nunca ao `body`
+    (`lib/foco-de-volta.ts`). A vigia do foco que voltou dura até
+    `CARREGANDO.desisteMs` e acaba quando a pessoa leva o foco a outro
+    lugar, também quando clica no fundo da página;
   - o `fecharTravado` da parte 11 saiu: os cinco diálogos dela (a chegada
     avulsa, a foto por IA, "Concluir separação", a entrega de Pedidos e
     Documentos) usam o `ocupado`.
-- **No celular**: o `DialogFooter` fica preso embaixo do diálogo que rola
-  (`sticky`, cobrindo até a borda, com o fio de cima), com os botões de
-  44 px, também no `AlertDialogFooter`; o X do diálogo e do painel tem 44 px,
-  e só o título deixa o lugar dele.
+- **No celular, em pé ou deitado** (a variante `celular` do `index.css`:
+  menos de 768 px de largura ou menos de 500 de altura): o `DialogFooter`
+  fica preso embaixo do diálogo que rola (`sticky`, cobrindo até a borda, com
+  o fio de cima), com os botões de 44 px, também no `AlertDialogFooter`; o X
+  do diálogo e do painel tem 44 px, e só o título deixa o lugar dele (dos dois
+  lados quando está centrado, em pé; só à direita, deitado). O campo que
+  recebe o foco não fica atrás do rodapé preso: o rodapé mede a própria
+  altura, e o diálogo a guarda como `scroll-padding` embaixo. Com um diálogo
+  aberto, o toast vai para o topo, porque embaixo ele cobria o rodapé preso,
+  com o Voltar e a nova tentativa.
 - **O que mudou, contra o código atual** (os 22 diálogos e as 4 confirmações
   da necessidade 6):
   - Pedidos: "Cancelar pedido" e "Salvar entrega" eram `disabled` e fechavam
     no meio; a recusa da solicitação fechava com "Recusando…". Agora os três
-    seguram o diálogo, com o `BotaoDeAcao` e a mesma chave na nova tentativa;
+    seguram o diálogo, com o `BotaoDeAcao` e a mesma chave na nova tentativa.
+    O diálogo que sai mostra o que mostrava até sair: antes, o fim trocava o
+    conteúdo pelo vazio, o cartão caía para uma faixa só com o X e o foco
+    ficava no `body` até ele sair;
   - Registrar exceção, Concluir inventário ("Encerrando…"), Receber retorno,
     Posições (Nova posição, Nova rua, Zona da rua), Falta da linha, Recusa
     da prateleira (e o Liberar da guarda), Guardar do RECEBIMENTO, Tabela de
@@ -1666,46 +1698,89 @@ o PR 7 da seção 6 e o PR 4 do celular (9.3), no app inteiro.
     orçamento), Infra (Tabela do faturamento), Produtos e SKUs (o cadastro e
     o Excluir ou Arquivar), Recusar solicitação: fechavam no meio da ação e
     desligavam os botões;
+  - Concluir inventário fecha no sucesso: antes, o diálogo só sumia porque a
+    aba virava "Contagem cíclica", e com a aba escolhida à mão ele ficava
+    aberto, pronto para outro envio;
+  - Infra e owner fecham quando o POST vale, e a releitura do painel segue
+    por trás: esperar por ela deixava o diálogo "Salvando…" e preso enquanto
+    o Google Cloud respondia;
   - Clientes (Novo cliente e Arquivar), Convite, Reenviar, Remover da lista e
     Revogar acesso: o Esc já não fechava em quase todos, mas o Revogar
-    fechava, e os botões `disabled` derrubavam o foco no `body`;
+    fechava, e os botões `disabled` derrubavam o foco no `body`. O Revogar e
+    o Devolver acesso são a mesma mutação: o diálogo segura só a revogação
+    daquela pessoa, e o item "Revogar acesso" espera, como o "Devolver
+    acesso", enquanto ela grava;
   - as quatro confirmações (Emitir, Remover item, Remover posição, Apagar
     rotina), pela `Confirmacao`: não fechavam mais no clique desde 06/11, mas
-    o confirmar e o Cancelar ficavam `disabled`;
+    o confirmar e o Cancelar ficavam `disabled`. Enquanto sai, ela mostra o
+    texto de quando estava aberta, e não "Remover a posição ?";
   - o portal: o Editar evento só fecha depois do retorno (antes, fechar no
-    meio desmontava a janela, e o aviso do salvo não chegava), o Excluir
-    evento segura a confirmação, e o painel "Seu pedido" do Estoque fica
-    aberto enquanto o pedido vai para a Dutelog, com o "Fechar pedido"
-    `aria-disabled` e o Enviar no `BotaoDeAcao` ("Enviando o pedido…", no
-    lugar do caminhão pulsando);
+    meio desmontava a janela, e o aviso do salvo não chegava); o Excluir
+    evento segura a confirmação e só fecha no sucesso (antes, fechava também
+    na falha); o painel "Seu pedido" do Estoque fica aberto enquanto o pedido
+    vai para a Dutelog, com o "Fechar pedido" `aria-disabled` e o Enviar no
+    `BotaoDeAcao` ("Enviando o pedido…", no lugar do caminhão pulsando), e
+    usa o jeito único: o pedido enviado tira da tela o "Pedido ·" que abriu
+    o painel, e o foco vai ao título, não ao `body`;
   - as duas outras confirmações com `AlertDialogAction` (a foto do produto e
-    "Marcar como cliente" do Comercial) passaram ao `BotaoDeAcao` também.
+    "Marcar como cliente" do Comercial) passaram ao `BotaoDeAcao` também;
+  - o Mapa do armazém, no celular: o painel da prateleira dentro do painel de
+    baixo ficou sem o "Fechar" dele, que o X de 44 px cobria; ao lado da
+    lista, ele continua;
+  - o `BotaoDeAcao` solta a trava do toque duplo quando a pessoa mexe no
+    formulário dele: o nome que a validação recusou, corrigido e salvo de
+    novo logo depois, era engolido sem aviso.
 - **O que já estava feito**: a entrega de Pedidos ("Confirmar entrega"),
   "Concluir separação", Documentos e a chegada avulsa seguravam o diálogo
   desde a parte 11, e o Esc não fechava Clientes nem Pessoas; mudaram só
   para o `ocupado`, com o X e o rodapé novos.
 - **Testes**: por peça (`components/ui/dialogo-em-acao.test.tsx`,
-  `lib/foco-de-volta.test.ts`, `confirmacao.test.tsx`): o Esc, o toque fora,
-  o X e o Cancelar não fecham durante a ação, o Cancelar e o X ficam
-  `aria-disabled`, o foco fica no botão tocado e volta ao gatilho ou ao
-  título, e o axe; por área: Pedidos (`pedidos.dialogos.test.tsx`), Posições
-  (`warehouse-positions.dialogos.test.tsx`), Documentos, Clientes e o portal
-  (`eventos-editar.test.tsx`, `estoque-envio.test.tsx`). Contra o commit
-  anterior, 26 deles falham, e o do foco de volta nem carrega.
+  `lib/foco-de-volta.test.ts`, `confirmacao.test.tsx`,
+  `botao-de-acao.test.tsx`, `toast.test.tsx`): o Esc, o toque fora, o X e o
+  Cancelar não fecham durante a ação nem logo depois do toque, o Cancelar e o
+  X ficam `aria-disabled` e esmaecem aos 300 ms, o aviso dos 10 s e a saída
+  dos 70 s, o foco fica no botão tocado e volta ao gatilho, ao vizinho ou ao
+  título, e o axe; por área: Pedidos (`pedidos.dialogos.test.tsx`, também a
+  saída sem esvaziar), Posições (`warehouse-positions.dialogos.test.tsx`),
+  Documentos, Clientes, Pessoas (`pessoas/acoes.test.tsx`), o Sistema
+  (`system/dialogos-que-gravam.test.tsx`), a Contagem
+  (`inventory-concluir.test.tsx`), o Mapa (`warehouse-map-painel.test.tsx`) e
+  o portal (`eventos-editar.test.tsx`, `eventos-excluir.test.tsx`,
+  `estoque-envio.test.tsx`). Contra o commit de antes da parte, 26 deles
+  falham, e o do foco de volta nem carrega; os da revisão da parte, 33 em 14
+  arquivos, falham contra a primeira versão dela.
 - **Medição no Chromium** (harness com a API falsa e o servidor a 3 s, só
-  127.0.0.1), antes e depois:
+  127.0.0.1, no build de produção):
   - "Cancelar pedido", "Nova rua" e "Remover a posição": antes, o foco caía
     no `body` 100 ms depois do toque, e o Esc, o toque fora, o X e o
     Cancelar fechavam os dois primeiros no meio da gravação; depois, o foco
-    fica no botão de ação ("Cancelando…") e nenhum dos quatro fecha;
-  - o fim: antes, o foco ficava no `body` em Posições (a linha removida e a
-    rua cadastrada); depois, vai ao "Nova rua" que abriu o diálogo e, na
-    posição removida, ao título "Posições";
-  - no celular de 390 × 664: o X passou de 28 para 44 px; com o diálogo
-    rolado ao topo, o botão de ação ficava fora da vista (612 a 652 px, com o
-    diálogo até 631) e passa a ficar preso a 77 px da borda de baixo, nos
-    dois diálogos longos medidos (Nova posição e Cancelar pedido), no claro
-    e no escuro.
+    fica no botão de ação ("Cancelando…") e nenhum dos quatro fecha. O Esc
+    dado de 2 a 15 ms depois do Enter, antes de a ação chegar à tela (de 13
+    a 63 ms, também com a CPU 4× mais lenta), não fecha em 15 de 15; antes,
+    fechava com a gravação andando;
+  - o esmaecer: na recusa sem rede (30 ms) e no erro aos 120 ms, o Voltar e
+    o X ficam inteiros; na ação lenta, o Voltar vai a 0,45 aos 327 ms e o
+    ícone do X, de 0,70 a 0,45 em 200 ms;
+  - com o servidor parado: aos 12 s, "Demorando mais que o normal · 0:12" em
+    cima dos botões, e aos 69,5 s, "· 1:09"; aos 70 s, a callable desiste,
+    o diálogo destrava e o toast diz "O servidor não respondeu a tempo";
+  - o fim: em Posições, o foco vai ao "Nova rua" que abriu o diálogo; na
+    posição removida do fim de uma lista de 40, rolada, ao "Editar" da
+    vizinha, à vista. No "Cancelar pedido", o diálogo que sai fica com os
+    646 px e o conteúdo, com o foco no botão, até ir ao "Separar";
+  - no celular de 390 × 664: o X passou de 28 para 44 px; o botão de ação,
+    que ficava fora da vista, fica preso a 77 px da borda de baixo; pelo Tab,
+    nenhum campo fica atrás do rodapé preso, na Nova posição e num
+    formulário de nove campos;
+  - deitado, em 844 × 390: o rodapé fica preso, com os botões de 44 px à
+    vista, e o X tem 44 px; no computador nada muda;
+  - em 390 × 844, sem rede: o toast fica de 8 a 106 px, o Voltar (712 a
+    756) fica livre, e o toque nele fecha o diálogo;
+  - o anel do foco do X tem de 4,22 a 6,04:1 contra o fundo, no claro e no
+    escuro, na v3 e fora dela; o ícone, de 5,21 a 9,31:1;
+  - o confirmar destrutivo travado, com o ponteiro em cima, fica no mesmo
+    vermelho do repouso, nos dois temas;
+  - no Mapa do celular, um "Fechar" só, de 44 px.
 
 Fica aberto:
 
@@ -1713,12 +1788,24 @@ Fica aberto:
   Chrome do Android não encolhe a página quando o teclado abre (falta o
   `interactive-widget=resizes-content` no `viewport`, que muda o app
   inteiro) e o Safari não encolhe nada;
+- o "Sem conexão" dentro do diálogo, como pede a necessidade 9 do celular
+  (9.2): por ora, com um diálogo aberto, o toast vai para o topo, e por 5 s
+  cobre o título e o X (o Voltar e a nova tentativa ficam livres). Dentro do
+  diálogo, ele pede um desenho;
+- o aviso dos 10 s entra sem lugar guardado: no computador, o diálogo
+  centrado cresce 44 px, e os botões descem 22 px (no celular, o rodapé
+  preso cresce para cima, e o botão tocado não sai do lugar). Os diálogos da
+  operação longa (parte 11) guardam o lugar;
+- o "Conferir" dos 70 s, que relê e nunca reenvia, fica com as telas que
+  sabem conferir (a entrega de Pedidos, Documentos); nas outras, "Sem
+  confirmação do servidor" e o diálogo que volta a fechar;
 - o "fieldset" `disabled` da chegada avulsa durante o envio, que desliga o
   Cancelar e o "Criar conferência"; e os diálogos fora da lista (Trocar de
   caixa, Conferir e fechar, Remover rascunho, Remover linha e caixa da
   abertura, o Comercial, a Operação e o RH), que seguram o diálogo do jeito
   antigo, com `disabled`;
 - o X do diálogo longo rola com o conteúdo, como antes;
-- entre o toque e o primeiro desenho do `isPending` (um tique), o Esc ainda
-  fecha o diálogo;
-- a conferência com leitor de tela de verdade e num Android médio.
+- o Recusar da linha (parte 4) ainda esmaece no toque, e não aos 300 ms; o
+  "⋯" de Pedidos fica `disabled` enquanto outra ação grava;
+- a conferência com leitor de tela de verdade, num Android médio e no
+  Safari; o anel do foco do `Button` (1,91:1), da parte 6.
