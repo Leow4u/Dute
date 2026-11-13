@@ -742,7 +742,7 @@ por PR:
 | 9 | A abertura com a marca e a `CarregandoTela` no lugar do branco | PR 610 |
 | 10 | A troca de filtro e a releitura sem apagar a lista | a fazer |
 | 11 | As operações longas: fotos com progresso e etapas | PR 610 |
-| 12 | A trilha do Agent Dute | a fazer |
+| 12 | A trilha do Agent Dute | PR 610 |
 | 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | a fazer |
 
 Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código:
@@ -1120,3 +1120,149 @@ Ficam para depois:
 - o "Tipo" de Documentos, um `Select` sem nome acessível, de antes desta
   parte;
 - a medição num Android de verdade e no Safari.
+
+**Parte 12, o Agent Dute (PR 610, 13/11/2026).** O momento 9 na conversa e o
+carregamento novo nas outras telas do agente.
+
+- **A trilha** (`TrilhaDoAgente`, `components/agent/trilha-do-agente.tsx`),
+  no lugar do "Pensando…", das etiquetas soltas das consultas e do ícone
+  girando:
+  - aos 300 ms, a caixa violeta de 20 px e "Lendo a pergunta…"; depois, uma
+    linha por consulta: "Consultando o estoque…" na da vez, "Estoque" com o
+    check violeta de 16 px nas feitas. O check tem o nome "Consulta feita"
+    para o leitor de tela. A mesma ferramenta chamada de novo é outra
+    consulta, no fim. Até 4 linhas; as antigas recolhem em "+N consultas". A
+    caixa aberta tem pelo menos 300 px, e a borda direita não pula a cada
+    consulta;
+  - o texto que o modelo manda antes de uma consulta ("Vou verificar…") sai
+    da tela enquanto ela roda: quem diz o que o agente faz é a trilha;
+  - quando o texto começa, a trilha recolhe numa linha, na mesma caixa e com
+    a altura de uma linha dela: "Leu o estoque e o razão de movimentos", ou
+    "Leu o estoque, o razão de movimentos e mais 2 fontes". A recolhida
+    entra em 150 ms, e a resposta gravada mostra a mesma linha;
+  - enquanto a resposta chega, o bloco dela não encolhe, e o lugar das
+    fontes e do Copiar fica guardado: com a conversa presa no fim, nada
+    desce para depois subir de novo;
+  - as linhas entram com opacidade e 4 px e o check com a mola, só nos
+    primeiros 5 s. No reduzido, a caixa respira até o piso do violeta (0,75
+    no claro e 0,85 no escuro), e as linhas e a recolhida entram só por
+    opacidade.
+- **A demora e o prazo:**
+  - aos 10 s sem texto, "Demorando mais que o normal" e o Parar, de 44 px. O
+    texto antes de uma consulta não conta como texto. O Parar corta a
+    espera neste aparelho e devolve a pergunta e as notas ao campo, se ele
+    está vazio: o que a pessoa escreveu durante a espera fica. Parar não é
+    erro, e não sai toast;
+  - o prazo do chat é de 180 s sem notícia do servidor (`CARREGANDO.desisteDoAgenteMs`):
+    a resposta que ainda chega não é cortada. O `.stream()` da callable não
+    tem prazo próprio (o `timeout` do `httpsCallable` só vale para a chamada
+    comum), e o stream que fecha sem o resultado, quando a function cai ou
+    passa dos 180 s dela, também vira "Sem resposta do Agent Dute"
+    (`resultadoDoStream`, em `lib/functions-api.ts`);
+  - o "Tentar de novo" relê a conversa antes: se o servidor gravou a
+    resposta depois do corte, ela aparece, sem perguntar de novo nem rodar o
+    agente outra vez. Se não, a mesma pergunta, na mesma conversa, com as
+    mesmas notas, sem mexer no campo;
+  - a conversa presa no fim rola quando a demora e o "Sem resposta" chegam:
+    o Parar e o "Tentar de novo" ficam à vista, também no celular;
+  - sair da tela no meio da resposta corta a espera sem toast.
+- **As fontes** (`FontesDaResposta`): "De onde tirei: Estoque · Razão de
+  movimentos", em chips, no fim da resposta (invariante 3). Saem de
+  `tools_used`, por um catálogo que cobre as ferramentas dos dois agentes (o
+  do WMS e o do núcleo); o rascunho, a rotina e a anotação são propostas do
+  agente e não viram fonte. Na chegada, os chips e o Copiar entram em 150 ms
+  no lugar guardado.
+- **O foco e o leitor de tela:**
+  - o Enviar nunca fica `disabled`: sem texto ou esperando a resposta, ele
+    fica `aria-disabled`, e o foco não cai no body quando a resposta chega.
+    O foco que estava no Parar ou no "Tentar de novo" vai ao campo quando o
+    botão sai da tela;
+  - a resposta não fica em região viva. O Anunciador fala a primeira
+    consulta, a demora e "Resposta pronta". O anúncio que ainda esperava a
+    vez sai da fila quando a espera acaba (o `useAnuncio` devolve o
+    "retirar"): ninguém ouve "Demorando mais que o normal" depois do Parar,
+    nem "Carregando playbooks" com os playbooks já na tela;
+  - no escuro, o texto violeta usa o `--agent-strong`: o `--agent` ficaria
+    abaixo de 4,5:1 como texto.
+- **As outras telas do agente** (anotações, playbooks, rotinas, os quatro
+  cartões de rascunho, o `/agente/painel`, o painel antigo e o
+  Conhecimento): `Spinner`, `Esqueleto`, `BotaoDeAcao` (com a opção `tinta`,
+  o primário em tinta onde o desenho pede) e a decisão por linha
+  (`useAcaoNaLinha`). A região que ainda lê é a `CarregandoNaRegiao` e, nas
+  listas, a `LeituraDaLista`:
+  - as linhas-fantasma entram aos 300 ms, com o rótulo; antes, o lugar fica
+    guardado e vazio. Na barra, elas têm a forma da lista que chega (o grupo
+    e as linhas);
+  - a leitura que falhou fica na tela enquanto tenta de novo
+    (`useLeituraComFalha`, em `lib/carregando`). O react-query 5, na nova
+    tentativa sem dado, volta a leitura a "pending" e zera o erro, e o
+    "Tentar de novo" sumia com o foco nele; agora ele diz "Tentando de
+    novo…" até a leitura responder;
+  - a lista de conversas sem conexão diz "Reconectando…" ou "Sem conexão.",
+    como a conversa ao lado, e não "Não consegui carregar as conversas.";
+  - no Conhecimento, cada número sai da leitura dele: os arquivos fonte que
+    falharam não prendem os números dos documentos, e o que não carregou
+    mostra "—" ("Não carregou" para o leitor de tela);
+  - no celular, as ações da linha têm 48 px, com 8 px entre Recusar e
+    Aprovar, e o Atualizar tem 44 px;
+  - a leitura direta do Firestore que só achou o cache (o Conhecimento e as
+    conversas do núcleo) vira falta de conexão, pela mesma regra de
+    `lib/cloud-api.ts`;
+  - o painel antigo, as rotinas e os estados de falha da conversa ganharam
+    teste com a lista de textos e o axe.
+- **Medição no Chromium** (harness com o chat por fetch e NDJSON, um
+  servidor falso e 8 pares de histórico; o antes é a primeira versão desta
+  parte):
+  - a trilha aparece aos 335 ms; só `transform` e `opacity` animam, com um
+    laço só (o indicador da vez);
+  - quando o texto começa, a conversa descia 74 px e voltava a subir; agora
+    fica no lugar (4 px). Na chegada da resposta, ela subia 70 px de uma vez
+    (124 no celular); agora, 8 px (nada no celular, onde o lugar das fontes
+    entra junto com o texto);
+  - o Parar aos 10 s, no celular de 390 × 844 com histórico, ficava 46 px
+    escondido atrás do campo; agora fica 52 px acima do fim da área
+    visível, como no computador. Aos 180 s, o "Tentar de novo" ficava
+    inteiro escondido e o foco caía no body; agora fica à vista, e o foco
+    fica no Enviar;
+  - quem envia pelo Enviar continua nele quando a resposta chega (antes, o
+    foco caía no body aos 7,5 s);
+  - a caixa da trilha vai de 300 a 319 px (antes, de 191 a 319), a
+    recolhida tem 50 px e o check, 16 px;
+  - com a leitura em 150 ms, nenhum bloco-fantasma aparece; em 600 ms, eles
+    entram aos 300 ms;
+  - com a primeira consulta aos 9,5 s e o Parar aos 10,6 s, "Demorando mais
+    que o normal" era falado 900 ms depois do Parar; agora, não é falado;
+  - nas anotações, Recusar, Aprovar e Arquivar tinham 36 px no celular;
+    agora, 48 px (36 no computador);
+  - o axe não acusa nada na trilha, na recolhida, na resposta com as fontes,
+    na demora, no prazo e sem rede, no claro, no escuro e a 390 px. Com a
+    CPU 4× mais lenta e Slow 4G, nenhuma tarefa longa; o maior intervalo
+    entre quadros foi 42 ms.
+
+Esperam o OK do Leonardo:
+
+- a trilha recolhida e as fontes também nas respostas gravadas, como no
+  quadro final da prancha: nada pula quando a resposta termina, mas todo
+  histórico com leituras ganha a caixa e os chips;
+- a opção `tinta` do `BotaoDeAcao`, para o Aprovar do painel (o teste do
+  mockup trava a tinta), os cartões e a janela de rotina, que já eram
+  pretos; o diálogo de playbook e o Salvar ou Aprovar das anotações no
+  Conhecimento continuam no primário vermelho.
+
+Ficam para depois:
+
+- os números por consulta ("38 pedidos"): o stream não manda o resumo;
+- o Parar e o prazo só cortam a espera neste aparelho; a callable continua
+  no servidor e pode gravar a resposta, que aparece na próxima leitura;
+- o texto que chega antes de uma consulta ainda troca de lugar com a trilha:
+  quando ele chega, não dá para saber se é a resposta;
+- "De onde tirei:" e os chips ficam com 12 px, porque a escala de texto não
+  tem 13 px, e a borda da caixa usa o `--agent-border` do app;
+- quem envia pela tela de boas-vindas perde o foco do Enviar, porque a tela
+  troca para a conversa;
+- o "fieldset" `disabled` dos cartões e das janelas de playbook e de rotina
+  durante o envio, o Cancelar `disabled` nessas janelas e as sugestões
+  `disabled` das boas-vindas;
+- o Pessoas, o seletor de cliente e a lista de separação ainda leem o cache
+  do Firestore sem rede;
+- as ações de linha de Pedidos, o piloto, ainda têm 40 px no celular.
