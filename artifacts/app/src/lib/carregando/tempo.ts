@@ -29,6 +29,16 @@ export const CARREGANDO = {
   erroVisivelMs: 2_000,
   /** A lista não tira nem põe linha se alguém tocou nela nesse intervalo. */
   dedoMs: 700,
+  /** O mais que a saída (e a chegada) espera o dedo sair da lista. */
+  dedoMaxMs: 3_000,
+  /** A linha que sai esmaece (opacidade e −6 px) nesse tempo, antes de deixar a lista. */
+  saiLinhaMs: 200,
+  /** As linhas de baixo sobem por FLIP (só transform) nesse tempo. */
+  refluiMs: 240,
+  /** O realce da linha que chegou ao grupo (a aprovada em "Para separar"). */
+  destaqueMs: 1_000,
+  /** A contagem que muda (3 → 2) rola 8 px nesse tempo. */
+  contaMs: 160,
 } as const;
 
 /**

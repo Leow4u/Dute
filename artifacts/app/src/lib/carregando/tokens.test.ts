@@ -113,6 +113,11 @@ describe("os keyframes do carregamento", () => {
         "carregando-listras",
         "carregando-arco",
         "carregando-aceso",
+        "carregando-sai-linha",
+        "carregando-chega-linha",
+        "carregando-realce",
+        "carregando-conta-sai",
+        "carregando-conta-entra",
       ]),
     );
   });
@@ -150,9 +155,11 @@ const MOVIMENTO: Record<string, string> = {
   "--carregando-t-sucesso-visivel": "1000ms",
   "--carregando-t-erro-visivel": "2000ms",
   "--carregando-t-sai-linha": "200ms",
+  "--carregando-sai-linha-y": "-6px",
   "--carregando-t-reflui": "240ms",
   "--carregando-t-destaque": "1000ms",
   "--carregando-t-conta": "160ms",
+  "--carregando-conta-y": "8px",
   "--carregando-t-listras": "600ms",
   "--carregando-t-arcos": "1200ms",
   "--carregando-t-pulso": "2000ms",
@@ -185,6 +192,10 @@ describe("os tokens do carregamento", () => {
     expect(raiz.get("--carregando-t-sucesso-visivel")).toBe(`${CARREGANDO.sucessoVisivelMs}ms`);
     expect(raiz.get("--carregando-t-erro-visivel")).toBe(`${CARREGANDO.erroVisivelMs}ms`);
     expect(raiz.get("--carregando-t-dedo")).toBe(`${CARREGANDO.dedoMs}ms`);
+    expect(raiz.get("--carregando-t-sai-linha")).toBe(`${CARREGANDO.saiLinhaMs}ms`);
+    expect(raiz.get("--carregando-t-reflui")).toBe(`${CARREGANDO.refluiMs}ms`);
+    expect(raiz.get("--carregando-t-destaque")).toBe(`${CARREGANDO.destaqueMs}ms`);
+    expect(raiz.get("--carregando-t-conta")).toBe(`${CARREGANDO.contaMs}ms`);
   });
 
   it("4.2 forma: a caixa chanfrada em três traços, a cabeça, o trilho, o piso e as barras", () => {
@@ -245,6 +256,7 @@ describe("os tokens do carregamento", () => {
       "--carregando-t-troca-sai": "0ms",
       "--carregando-t-troca-entra": "0ms",
       "--carregando-t-sucesso": "0ms",
+      "--carregando-sai-linha-y": "0px",
       "--carregando-t-reflui": "0ms",
       "--carregando-t-conta": "0ms",
       "--carregando-mola": "var(--ease-carregando-entrada)",

@@ -784,9 +784,11 @@
   --carregando-t-barra-completa: 220ms; /* a barra da linha completa por scaleX: verde no sucesso, crítico no erro */
   /* A linha deixa o grupo (opacidade e 6 px para cima) e as de baixo sobem por transform (FLIP). */
   --carregando-t-sai-linha: 200ms;
+  --carregando-sai-linha-y: -6px;
   --carregando-t-reflui: 240ms;
   --carregando-t-destaque: 1000ms; /* o realce da linha que chegou ao grupo seguinte */
   --carregando-t-conta: 160ms; /* a contagem que muda rola 8 px */
+  --carregando-conta-y: 8px;
   --carregando-t-listras: 600ms; /* as listras a 45° andam 16 px para trás, linear */
   --carregando-t-arcos: 1200ms; /* os arcos do Wi-Fi em "Reconectando…", 300 ms por arco; param aos 5 s */
   --carregando-t-pulso: 2000ms; /* o respiro do movimento reduzido (0,5 Hz) */
@@ -962,6 +964,7 @@
     --carregando-t-check: 0ms;
     --carregando-t-tremor: 0ms;
     --carregando-t-barra-completa: 0ms; /* a barra completa de uma vez */
+    --carregando-sai-linha-y: 0px; /* a linha que sai some só por opacidade */
     --carregando-t-reflui: 0ms; /* as linhas de baixo pulam para o lugar */
     --carregando-t-conta: 0ms; /* a contagem troca sem rolar */
     --carregando-mola: var(--ease-carregando-entrada); /* sem mola */
@@ -1530,6 +1533,97 @@
     .botao-acao:active:not([aria-disabled="true"]) {
       animation: none;
     }
+  }
+}
+
+/* A lista sem saltos (lib/carregando/use-lista-sem-saltos.ts; momento 4): a
+   linha que sai esmaece em 200 ms, com 6 px para cima, e fica sem toque; as
+   de baixo sobem por FLIP (o hook põe o transform de partida e o
+   data-reflui) em 240 ms. A que chega entra em 240 ms, com a subida de 4 px,
+   e o realce verde suave fica 1 s, apagando no fim. A contagem que muda (3 →
+   2) rola 8 px em 160 ms: o número velho sobe e sai, o novo sobe e entra
+   (components/ui/queue-list.tsx). No reduzido, só opacidade: a linha some
+   sem deslocamento, as de baixo pulam para o lugar (o hook não faz FLIP), o
+   realce entra e sai por opacidade e a contagem troca. */
+@keyframes carregando-sai-linha {
+  to {
+    opacity: 0;
+    transform: translateY(var(--carregando-sai-linha-y));
+  }
+}
+
+@keyframes carregando-chega-linha {
+  from {
+    opacity: 0;
+    transform: translateY(var(--carregando-subida));
+  }
+}
+
+@keyframes carregando-realce {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes carregando-conta-sai {
+  to {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--carregando-conta-y)));
+  }
+}
+
+@keyframes carregando-conta-entra {
+  from {
+    opacity: 0;
+    transform: translateY(var(--carregando-conta-y));
+  }
+}
+
+@layer components {
+  [data-na-lista="saindo"] {
+    pointer-events: none;
+    animation: carregando-sai-linha var(--carregando-t-sai-linha) var(--ease-carregando-saida) both;
+  }
+
+  [data-na-lista="chegando"] {
+    position: relative;
+    isolation: isolate;
+    /* backwards: depois de entrar, o transform volta a ser da linha (o FLIP). */
+    animation: carregando-chega-linha var(--carregando-t-reflui) var(--ease-carregando-entrada) backwards;
+  }
+
+  [data-na-lista="chegando"]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-color: hsl(var(--success-soft));
+    animation: carregando-realce var(--carregando-t-destaque) var(--ease-carregando-padrao) both;
+  }
+
+  [data-na-lista][data-reflui] {
+    transition: transform var(--carregando-t-reflui) var(--ease-carregando-padrao);
+  }
+
+  .carregando-conta {
+    display: inline-grid;
+  }
+
+  .carregando-conta > * {
+    grid-area: 1 / 1;
+  }
+
+  .carregando-conta > [data-conta="sai"] {
+    animation: carregando-conta-sai var(--carregando-t-conta) var(--ease-carregando-saida) both;
+  }
+
+  .carregando-conta > [data-conta="entra"] {
+    animation: carregando-conta-entra var(--carregando-t-conta) var(--ease-carregando-entrada) both;
   }
 }
 

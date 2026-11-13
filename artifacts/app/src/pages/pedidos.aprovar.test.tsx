@@ -406,8 +406,11 @@ describe("o resultado na linha", () => {
     await passar(CARREGANDO.sucessoVisivelMs - 200);
     expect(container!.textContent).toContain("Pedido 1042");
     expect(rotuloAtual(botao("Pedido 1042", "Aprovar"))).toBe("Aprovado");
+    // Aos 1800 ms a linha esmaece, ainda com o Aprovado, e 200 ms depois deixa a fila (parte 6c).
     await passar(200);
-    expect(container!.textContent).not.toContain("Pedido 1042");
+    expect(rotuloAtual(botao("Pedido 1042", "Aprovar"))).toBe("Aprovado");
+    await passar(CARREGANDO.saiLinhaMs + CARREGANDO.contaMs);
+    expect(grupoParaAprovar().textContent).not.toContain("Pedido 1042");
     expect(grupoParaAprovar().querySelector("h2")?.textContent).toBe("Para aprovar2");
   });
 
@@ -439,6 +442,158 @@ describe("o resultado na linha", () => {
     await passar(10);
     expect(rotuloAtual(botao("Pedido 1042", "Aprovar"))).toBe("Conferir");
     expect(estado.toast).not.toHaveBeenCalled();
+  });
+});
+
+describe("a linha que sai sem salto (parte 6c)", () => {
+  const ALTURA = 80;
+  const medirDeVerdade = Element.prototype.getBoundingClientRect;
+
+  beforeEach(() => {
+    // O jsdom não tem layout: cada linha da fila mede 80 px, na ordem em que está no grupo.
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (!this.hasAttribute("data-chave")) return medirDeVerdade.call(this);
+      const irmas = Array.from(this.parentElement?.children ?? []).filter((filho) => filho.hasAttribute("data-chave"));
+      const topo = 200 + irmas.indexOf(this) * ALTURA;
+      return { top: topo, bottom: topo + ALTURA, left: 0, right: 900, width: 900, height: ALTURA, x: 0, y: topo, toJSON: () => ({}) } as DOMRect;
+    });
+  });
+
+  function grupo(titulo: string): HTMLElement {
+    const achado = Array.from(container!.querySelectorAll("section")).find((section) => section.querySelector("h2")?.textContent?.startsWith(titulo));
+    if (!achado) throw new Error(`sem o grupo ${titulo}`);
+    return achado;
+  }
+
+  function naFila(chave: string): HTMLElement | null {
+    return container!.querySelector<HTMLElement>(`[data-chave="${chave}"]`);
+  }
+
+  /** Cada transform que o elemento teve, na ordem, desde agora. */
+  function observarTransform(alvo: HTMLElement) {
+    const valores: string[] = [];
+    const guardar = (registros: MutationRecord[]) => {
+      for (const registro of registros) valores.push(registro.oldValue ?? "");
+    };
+    const observador = new MutationObserver(guardar);
+    observador.observe(alvo, { attributes: true, attributeFilter: ["style"], attributeOldValue: true });
+    return () => {
+      guardar(observador.takeRecords());
+      observador.disconnect();
+      return [...valores.slice(1), alvo.getAttribute("style") ?? ""].filter((valor) => valor.includes("transform"));
+    };
+  }
+
+  /**
+   * Aprova a linha com o foco no Aprovar dela. A resposta chega aos 400 ms e
+   * a releitura já traz o pedido em separação; o Aprovado entra aos 800 ms e
+   * fica 1 s: aos 1800 ms a ação solta a linha. Para 1 ms antes disso.
+   */
+  async function aprovarComOFoco(titulo: string, indice: number) {
+    const aprovar = botao(titulo, "Aprovar");
+    aprovar.focus();
+    await tocar(aprovar);
+    await passar(400);
+    const id = `req_${titulo.split(" ")[1]}`;
+    estado.solicitacoes.find((item) => item.id === id)!.status = "approved";
+    estado.ops = {
+      alerts: [],
+      queues: {
+        picking: {
+          key: "picking",
+          tasks: [{ id: `pick_ord_${id}`, reference: `pick_ord_${id}`, title: `PED-${titulo.split(" ")[1]}`, status: "planned", can_advance: true, customer_request_id: id, exception_count: 0, items: [] }],
+        },
+      },
+    };
+    await act(async () => estado.decisoes[indice].responder({ ok: true }));
+    await passar(1_800 - 400 - 1);
+  }
+
+  it("depois do Aprovado, a linha esmaece com ele, sai, as de baixo sobem por FLIP, a contagem rola e o pedido entra em Para separar com o realce", async () => {
+    await aprovarComOFoco("Pedido 1042", 0);
+    expect(rotuloAtual(botao("Pedido 1042", "Aprovar"))).toBe("Aprovado");
+    // O pedido já está na releitura, mas não fica em dois grupos ao mesmo tempo.
+    expect(grupo("Para separar").textContent).not.toContain("PED-1042");
+
+    await passar(1);
+    expect(naFila("req_1042")?.dataset.naLista).toBe("saindo");
+    expect(naFila("req_1042")?.hasAttribute("inert")).toBe(true);
+    // Congelada: o Aprovado fica até ela sair.
+    expect(rotuloAtual(botao("Pedido 1042", "Aprovar"))).toBe("Aprovado");
+    expect(grupo("Para separar").textContent).not.toContain("PED-1042");
+    const transformsDa1043 = observarTransform(naFila("req_1043")!);
+
+    await passar(CARREGANDO.saiLinhaMs);
+    expect(naFila("req_1042")).toBeNull();
+    // A 1043 e a 1045 sobem 80 px só por transform.
+    expect(transformsDa1043()).toEqual([expect.stringContaining("transform: translateY(80px)")]);
+    expect(naFila("req_1043")?.hasAttribute("data-reflui")).toBe(true);
+    expect(naFila("req_1045")?.hasAttribute("data-reflui")).toBe(true);
+    // A contagem rola de 3 para 2: só o 2 fica na árvore.
+    const conta = grupoParaAprovar().querySelector("h2")!;
+    expect(conta.querySelector('[data-conta="sai"]')?.textContent).toBe("3");
+    expect(conta.querySelector('[data-conta="sai"]')?.getAttribute("aria-hidden")).toBe("true");
+    expect(conta.querySelector('[data-conta="entra"]')?.textContent).toBe("2");
+    // O pedido entra em Para separar, com o realce.
+    expect(naFila("ord_req_1042")?.dataset.naLista).toBe("chegando");
+    expect(naFila("ord_req_1042")?.textContent).toContain("PED-1042");
+
+    await passar(CARREGANDO.contaMs);
+    expect(conta.textContent).toBe("Para aprovar2");
+    await passar(CARREGANDO.destaqueMs - CARREGANDO.contaMs);
+    expect(naFila("ord_req_1042")?.dataset.naLista).toBe("parada");
+  });
+
+  it("o foco vai para o Aprovar da linha seguinte, e a nova primeira linha herda o Aprovar principal", async () => {
+    const principal = (titulo: string) => botao(titulo, "Aprovar").className.includes("bg-primary");
+    expect(principal("Pedido 1042")).toBe(true);
+    expect(principal("Pedido 1043")).toBe(false);
+
+    await aprovarComOFoco("Pedido 1042", 0);
+    expect(document.activeElement).toBe(botao("Pedido 1042", "Aprovar"));
+    await passar(1);
+    expect(document.activeElement).toBe(botao("Pedido 1043", "Aprovar"));
+
+    await passar(CARREGANDO.saiLinhaMs);
+    expect(principal("Pedido 1043")).toBe(true);
+    expect(principal("Pedido 1045")).toBe(false);
+    expect(document.activeElement).toBe(botao("Pedido 1043", "Aprovar"));
+  });
+
+  it("sem linha seguinte, o foco vai para o título do grupo", async () => {
+    await aprovarComOFoco("Pedido 1045", 0);
+    await passar(1);
+    expect(document.activeElement).toBe(grupoParaAprovar().querySelector("h2"));
+  });
+
+  it("com um toque na fila nos últimos 700 ms, a linha espera com o Aprovado e o pedido não muda de grupo", async () => {
+    await aprovarComOFoco("Pedido 1042", 0);
+    const lista = naFila("req_1043")!.parentElement!;
+    await act(async () => {
+      lista.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+
+    await passar(1);
+    expect(naFila("req_1042")?.dataset.naLista).toBe("esperando");
+    expect(rotuloAtual(botao("Pedido 1042", "Aprovar"))).toBe("Aprovado");
+    await passar(CARREGANDO.dedoMs - 2);
+    expect(naFila("req_1042")?.dataset.naLista).toBe("esperando");
+    expect(grupo("Para separar").textContent).not.toContain("PED-1042");
+
+    await passar(1);
+    expect(naFila("req_1042")?.dataset.naLista).toBe("saindo");
+    await passar(CARREGANDO.saiLinhaMs);
+    expect(naFila("req_1042")).toBeNull();
+    expect(naFila("ord_req_1042")?.dataset.naLista).toBe("chegando");
+  });
+
+  it("o axe não acusa nada com a linha saindo", async () => {
+    await aprovarComOFoco("Pedido 1042", 0);
+    await passar(1);
+    expect(naFila("req_1042")?.dataset.naLista).toBe("saindo");
+    const html = grupoParaAprovar().outerHTML;
+    vi.useRealTimers();
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });
 

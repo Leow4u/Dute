@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
+import { memo, useEffect, useState, type ReactNode, type Ref } from "react";
 import { ChevronDown, ChevronRight, type LucideIcon } from "lucide-react";
 
+import { CARREGANDO } from "@/lib/carregando/tempo";
+import type { ListaSemSaltos } from "@/lib/carregando/use-lista-sem-saltos";
 import { cn } from "@/lib/utils";
 
 /**
@@ -20,35 +22,113 @@ export const QUEUE_TONE = {
 
 export type QueueTone = keyof typeof QUEUE_TONE;
 
+/**
+ * A contagem que rola (carregamento v2, momento 4): quando muda (3 → 2), o
+ * número velho sobe e sai e o novo sobe e entra, 8 px em 160 ms; no reduzido,
+ * troca. Só o número atual fica na árvore de acessibilidade. Zero não mostra
+ * número.
+ */
+export function ContagemQueRola({ valor }: { valor: number }) {
+  const [mostrado, setMostrado] = useState(valor);
+  const [saindo, setSaindo] = useState<number | null>(null);
+  if (valor !== mostrado) {
+    setSaindo(mostrado);
+    setMostrado(valor);
+  }
+  useEffect(() => {
+    if (saindo === null) return undefined;
+    const fim = setTimeout(() => setSaindo(null), CARREGANDO.contaMs);
+    return () => clearTimeout(fim);
+  }, [saindo, mostrado]);
+  if (!mostrado && !saindo) return null;
+  return (
+    <span className="carregando-conta tabular-nums">
+      {saindo ? (
+        <span key={`sai-${saindo}`} data-conta="sai" aria-hidden="true">
+          {saindo}
+        </span>
+      ) : null}
+      {mostrado ? (
+        <span key={`entra-${mostrado}`} data-conta={saindo !== null ? "entra" : undefined}>
+          {mostrado}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 export function QueueGroup({
   title,
   hint,
   count,
   empty,
   children,
+  rolarContagem = false,
+  listaRef,
+  tituloRef,
 }: {
   title: string;
   hint?: string;
   count: number;
   empty: ReactNode;
   children: ReactNode;
+  /** A contagem rola quando muda (a fila sem saltos, carregamento v2). */
+  rolarContagem?: boolean;
+  /** O elemento das linhas: o `ref` do useListaSemSaltos. */
+  listaRef?: Ref<HTMLDivElement>;
+  /** O título, que recebe o foco quando a última linha sai com ele (o `titulo` do useListaSemSaltos). */
+  tituloRef?: Ref<HTMLHeadingElement>;
 }) {
   return (
     <section className="flex flex-col gap-2.5">
-      <h2 className="flex items-baseline gap-2 px-1">
+      <h2 ref={tituloRef} tabIndex={tituloRef ? -1 : undefined} className="flex items-baseline gap-2 px-1 focus:outline-none">
         <span className="text-base font-semibold text-foreground in-[.v3]:text-lg in-[.v3]:font-bold">{title}</span>
         <span className="text-sm text-foreground/50">
-          {[hint, count ? String(count) : null].filter(Boolean).join(" · ")}
+          {rolarContagem ? (
+            <>
+              {hint}
+              {hint && count ? " · " : null}
+              <ContagemQueRola valor={count} />
+            </>
+          ) : (
+            [hint, count ? String(count) : null].filter(Boolean).join(" · ")
+          )}
         </span>
       </h2>
       <div className="overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg">
         {count > 0 ? (
-          <div className="divide-y divide-border/60">{children}</div>
+          <div ref={listaRef} className="divide-y divide-border/60">
+            {children}
+          </div>
         ) : (
           <p className="px-5 py-4 text-sm text-muted-foreground">{empty}</p>
         )}
       </div>
     </section>
+  );
+}
+
+/** O conteúdo que, congelado, não se redesenha: fica como estava no último desenho. */
+const Congelada = memo(
+  function Congelada({ children }: { congelada: boolean; children: ReactNode }) {
+    return <>{children}</>;
+  },
+  (_antes, depois) => depois.congelada,
+);
+
+/**
+ * A linha de uma fila sem saltos (o useListaSemSaltos, carregamento v2,
+ * momento 4): o elemento com a chave e o estado na lista. A linha que espera
+ * o dedo ou que sai fica congelada: mostra o que mostrava quando deixou a
+ * fila (o "Aprovado"), mesmo sem o dado.
+ */
+export function LinhaDaFila({ lista, chave, children }: { lista: Pick<ListaSemSaltos, "linha">; chave: string; children: ReactNode }) {
+  const atributos = lista.linha(chave);
+  const naLista = atributos["data-na-lista"];
+  return (
+    <div {...atributos}>
+      <Congelada congelada={naLista === "esperando" || naLista === "saindo"}>{children}</Congelada>
+    </div>
   );
 }
 

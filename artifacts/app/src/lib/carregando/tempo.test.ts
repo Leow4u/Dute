@@ -20,6 +20,11 @@ describe("o relógio da espera", () => {
       sucessoVisivelMs: 1_000,
       erroVisivelMs: 2_000,
       dedoMs: 700,
+      dedoMaxMs: 3_000,
+      saiLinhaMs: 200,
+      refluiMs: 240,
+      destaqueMs: 1_000,
+      contaMs: 160,
     });
   });
 

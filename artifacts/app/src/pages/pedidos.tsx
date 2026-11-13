@@ -30,7 +30,7 @@ import {
 import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { PageHeader } from "@/components/ui/page-header";
-import { QueueGroup, QueueRow, type QueueTone } from "@/components/ui/queue-list";
+import { LinhaDaFila, QueueGroup, QueueRow, type QueueTone } from "@/components/ui/queue-list";
 import { Segmented } from "@/components/ui/segmented";
 import {
   Sheet,
@@ -68,6 +68,7 @@ import { useAnuncio } from "@/lib/carregando/anunciador";
 import { relogioDaEspera } from "@/lib/carregando/tempo";
 import { desfechoDoErro, useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
 import { useEspera } from "@/lib/carregando/use-espera";
+import { useListaSemSaltos } from "@/lib/carregando/use-lista-sem-saltos";
 import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { chamarOperacao, novaChave } from "@/lib/operacao/api";
 import { hojeIso } from "@/lib/operacao/fila";
@@ -288,6 +289,25 @@ export default function Pedidos() {
     () => buildOrderQueue({ requests: requests.data?.items, ops: ops.data, segurar: linhas.ocupada }),
     [ops.data, requests.data?.items, linhas],
   );
+  const loading = ops.isLoading || (decider && requests.isLoading);
+  // A linha decidida sai sem salto (carregamento v2, momento 4): depois do
+  // "Aprovado", esmaece e as de baixo sobem; sob o dedo, espera até 3 s. O
+  // pedido só entra em "Para separar" quando a linha dele deixou "Para
+  // aprovar", com o realce de 1 s: nunca nos dois grupos ao mesmo tempo.
+  const chavesParaAprovar = useMemo(() => (decider ? queue.approve.map((request) => request.id) : []), [decider, queue.approve]);
+  const paraAprovar = useListaSemSaltos(chavesParaAprovar, { pronta: !loading });
+  const naFilaDeAprovar = useMemo(() => new Set(paraAprovar.chaves), [paraAprovar.chaves]);
+  const chavesParaSeparar = useMemo(
+    () => queue.pick.filter((order) => !order.requestId || !naFilaDeAprovar.has(order.requestId)).map((order) => order.key),
+    [queue.pick, naFilaDeAprovar],
+  );
+  const paraSeparar = useListaSemSaltos(chavesParaSeparar, { pronta: !loading });
+  // A linha que sai é desenhada com o dado que ainda houver; sem ele, fica a última imagem dela.
+  const solicitacoes = useMemo(() => new Map((requests.data?.items ?? []).map((request) => [request.id, request])), [requests.data?.items]);
+  const pedidos = useMemo(
+    () => new Map([...queue.pick, ...queue.deliver, ...queue.delivered].map((order) => [order.key, order])),
+    [queue.pick, queue.deliver, queue.delivered],
+  );
   const entries = useMemo(() => queueEntries(normalizeQueues(ops.data?.queues)), [ops.data?.queues]);
   const actions = useWarehouseTaskActions({
     findEntry: (taskId) => entries.find((entry) => entry.task.id === taskId),
@@ -503,12 +523,17 @@ export default function Pedidos() {
       ) : undefined,
     };
   };
-  // Na v3, só a primeira linha da fila tem a ação principal; as outras são secundárias.
-  const principal = chaveDaPrincipal(queue, decider);
+  // Na v3, só a primeira linha da fila tem a ação principal; as outras são
+  // secundárias. É a primeira na tela: quando ela sai, a nova primeira herda.
+  const naTela = {
+    approve: paraAprovar.chaves.map((id) => ({ id })),
+    pick: paraSeparar.chaves.flatMap((key) => pedidos.get(key) ?? []),
+    deliver: queue.deliver,
+  };
+  const principal = chaveDaPrincipal(naTela, decider);
   const variante = (chave: string) => (principal === chave ? "default" : "outline");
   const openCount =
-    (decider ? queue.approve.length : 0) + queue.pick.length + queue.deliver.length;
-  const loading = ops.isLoading || (decider && requests.isLoading);
+    (decider ? paraAprovar.chaves.length : 0) + paraSeparar.chaves.length + queue.deliver.length;
   // A leitura falhou sem nada para mostrar: a tela diz isso, em vez de
   // "Nenhum pedido para…" (docs/plataforma/diagnostico-carregamento.md,
   // decisão 6 de 06/11/2026). Com a lista já lida, a falha de uma atualização
@@ -585,7 +610,10 @@ export default function Pedidos() {
           {decider ? (
             <QueueGroup
               title="Para aprovar"
-              count={queue.approve.length}
+              count={paraAprovar.chaves.length}
+              rolarContagem
+              listaRef={paraAprovar.ref}
+              tituloRef={paraAprovar.titulo}
               empty={
                 <>
                   {ordersGroupEmpty("approve")}{" "}
@@ -595,57 +623,72 @@ export default function Pedidos() {
                 </>
               }
             >
-              {queue.approve.map((request) => (
-                <LinhaParaAprovar
-                  key={request.id}
-                  request={request}
-                  validation={buildBalanceValidation(request, balances.data?.items, balances.isLoading, Boolean(balances.error))}
-                  linhas={linhas}
-                  variant={variante(`approve:${request.id}`)}
-                  onAprovar={() => decidir(request, "aprovar")}
-                  onRecusar={() => {
-                    // Sem resposta, o Recusar é o "Conferir": relê, sem abrir o diálogo.
-                    if (linhas.estado(request.id, "recusar") === "sem-resposta") {
-                      decidir(request, "recusar");
-                      return;
-                    }
-                    setRejectReason("");
-                    setDialog({ kind: "reject", request });
-                  }}
-                />
-              ))}
+              {paraAprovar.chaves.map((id) => {
+                const request = solicitacoes.get(id);
+                return (
+                  <LinhaDaFila key={id} lista={paraAprovar} chave={id}>
+                    {request ? (
+                      <LinhaParaAprovar
+                        request={request}
+                        validation={buildBalanceValidation(request, balances.data?.items, balances.isLoading, Boolean(balances.error))}
+                        linhas={linhas}
+                        variant={variante(`approve:${request.id}`)}
+                        onAprovar={() => decidir(request, "aprovar")}
+                        onRecusar={() => {
+                          // Sem resposta, o Recusar é o "Conferir": relê, sem abrir o diálogo.
+                          if (linhas.estado(request.id, "recusar") === "sem-resposta") {
+                            decidir(request, "recusar");
+                            return;
+                          }
+                          setRejectReason("");
+                          setDialog({ kind: "reject", request });
+                        }}
+                      />
+                    ) : null}
+                  </LinhaDaFila>
+                );
+              })}
             </QueueGroup>
           ) : null}
 
           <QueueGroup
             title="Para separar"
-            count={queue.pick.length}
+            count={paraSeparar.chaves.length}
+            rolarContagem
+            listaRef={paraSeparar.ref}
+            tituloRef={paraSeparar.titulo}
             empty={ordersGroupEmpty("pick")}
           >
-            {queue.pick.map((order) => (
-              <OrderRow
-                key={order.key}
-                order={order}
-                icon={Package}
-                tone="pick"
-                paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
-                lerParaQuando={!decider}
-                // O pedido por separar abre com os itens; o que já está em separação, fechado (a bancada mostra).
-                defaultOpen={!separacaoComecou(order.pick, order.pick?.items ?? [])}
-                listaHref={hrefDaListaDeSeparacao(order.key)}
-                onTreat={operador ? () => setTreating(order) : undefined}
-                {...daEntrega(order)}
-                menu={menuDo(order)}
-                // "Separar" abre a bancada do pedido; com a separação começada, "Continuar" (parte 2).
-                action={
-                  operador ? (
-                    <Button asChild variant={variante(`pick:${order.key}`)}>
-                      <Link href={hrefDaBancada(order.key)}>{separacaoComecou(order.pick, order.pick?.items ?? []) ? "Continuar" : "Separar"}</Link>
-                    </Button>
-                  ) : undefined
-                }
-              />
-            ))}
+            {paraSeparar.chaves.map((key) => {
+              const order = pedidos.get(key);
+              return (
+                <LinhaDaFila key={key} lista={paraSeparar} chave={key}>
+                  {order ? (
+                    <OrderRow
+                      order={order}
+                      icon={Package}
+                      tone="pick"
+                      paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
+                      lerParaQuando={!decider}
+                      // O pedido por separar abre com os itens; o que já está em separação, fechado (a bancada mostra).
+                      defaultOpen={!separacaoComecou(order.pick, order.pick?.items ?? [])}
+                      listaHref={hrefDaListaDeSeparacao(order.key)}
+                      onTreat={operador ? () => setTreating(order) : undefined}
+                      {...daEntrega(order)}
+                      menu={menuDo(order)}
+                      // "Separar" abre a bancada do pedido; com a separação começada, "Continuar" (parte 2).
+                      action={
+                        operador ? (
+                          <Button asChild variant={variante(`pick:${order.key}`)} data-foco-da-linha="">
+                            <Link href={hrefDaBancada(order.key)}>{separacaoComecou(order.pick, order.pick?.items ?? []) ? "Continuar" : "Separar"}</Link>
+                          </Button>
+                        ) : undefined
+                      }
+                    />
+                  ) : null}
+                </LinhaDaFila>
+              );
+            })}
           </QueueGroup>
 
           <QueueGroup
@@ -1003,6 +1046,7 @@ function LinhaParaAprovar({
               />
               <BotaoDeAcao
                 variant={variant}
+                data-foco-da-linha=""
                 estado={aprovar}
                 icone={<Check className="size-4" />}
                 rotulo="Aprovar"
