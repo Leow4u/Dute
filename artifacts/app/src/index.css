@@ -805,6 +805,10 @@
   --carregando-t-abertura-segmento-sai: 60ms; /* quando o trilho completa, o segmento que varria some */
   --carregando-t-abertura-marca-sai: 200ms; /* a marca recua a 0,96 e sai, com a palavra, enquanto o preto abre */
   --carregando-t-dedo: 700ms; /* a lista não se mexe se houve toque nela nesse intervalo */
+  --carregando-t-sem-rede: 3000ms; /* sem rede há esse tempo, o aviso é "Sem conexão" (a histerese) */
+  --carregando-t-aviso-minimo: 2000ms; /* cada aviso da conexão fica pelo menos isso antes de dar lugar a outro */
+  --carregando-t-releitura: 2000ms; /* a primeira releitura sozinha enquanto reconecta; dobra a cada vez */
+  --carregando-t-releitura-max: 30000ms; /* o teto da espera entre as releituras: 2, 4, 8, 16 e 30 s */
 
   /* Forma: a caixa chanfrada do "D" da marca (viewBox 24), três cantos com
      raio 2,5 e o de baixo à direita cortado a 45°. A máscara do contorno fica
@@ -1084,6 +1088,47 @@
 
     .carregando-caixa[data-determinado] > .cabeca {
       transform: none;
+    }
+  }
+}
+
+/* Os arcos do Wi-Fi de "Reconectando…" (components/ui/arcos-do-wifi.tsx;
+   momento 8): em tinta, o ponto sempre aceso e cada arco acendendo um a um,
+   300 ms cada, em ciclo de 1,2 s (--carregando-t-arcos), quatro vezes; aos
+   4,8 s ficam acesos (carregando-aceso). Só opacidade. No movimento reduzido,
+   acesos e parados. */
+@layer components {
+  .carregando-arcos {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .carregando-arcos > .arco-1,
+  .carregando-arcos > .arco-2,
+  .carregando-arcos > .arco-3 {
+    opacity: 0.25;
+    animation:
+      carregando-arco var(--carregando-t-arcos) linear 4,
+      carregando-aceso 1ms linear calc(var(--carregando-t-arcos) * 4) forwards;
+  }
+
+  .carregando-arcos > .arco-2 {
+    animation-delay: calc(var(--carregando-t-arcos) / 4), calc(var(--carregando-t-arcos) * 4);
+  }
+
+  .carregando-arcos > .arco-3 {
+    animation-delay: calc(var(--carregando-t-arcos) / 2), calc(var(--carregando-t-arcos) * 4);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .carregando-arcos > .arco-1,
+    .carregando-arcos > .arco-2,
+    .carregando-arcos > .arco-3 {
+      animation: none;
+      opacity: 1;
     }
   }
 }

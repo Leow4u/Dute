@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BarraDeEspera } from "@/components/ui/barra-de-espera";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
-import { SemConexao } from "@/lib/conexao";
+import { SemConexao, SemResposta } from "@/lib/conexao";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosForaDaLista } from "@/test/textos";
 
@@ -275,7 +275,12 @@ describe("o erro volta ao repouso em 2 s, e o motivo fica na linha", () => {
   });
 
   it("depois da falta de conexão, a repetição leva a mesma chave", async () => {
-    for (const falta of [new SemConexao(), Object.assign(new Error("internal"), { code: "functions/internal" })]) {
+    for (const falta of [
+      new SemConexao(),
+      Object.assign(new Error("internal"), { code: "functions/internal" }),
+      // O servidor sem resposta com o aparelho conectado (parte 7a), como o fetchJson de Pedidos o devolve.
+      Object.assign(new Error("Sem resposta do servidor."), { status: 503, data: { message: "Sem resposta do servidor.", code: "sem_resposta" } }),
+    ]) {
       const aprovar = chamada();
       await executar("1045", "aprovar", aprovar.fazer);
       await assentar(() => aprovar.ultima().rejeitar(falta));
@@ -478,6 +483,10 @@ describe("as regras puras", () => {
     expect(desfechoDoErro(Object.assign(new Error("HTTP 504"), { status: 504, data: { code: "deadline-exceeded" } }))).toBe("sem-resposta");
     expect(desfechoDoErro(new SemConexao())).toBe("incerto");
     expect(desfechoDoErro(Object.assign(new Error("Sem conexão. Tente de novo quando o sinal voltar."), { status: 503, code: "sem_conexao" }))).toBe("incerto");
+    // O servidor sem resposta com o aparelho conectado (parte 7a): continua incerto, e a repetição leva a mesma chave.
+    expect(desfechoDoErro(new SemResposta())).toBe("incerto");
+    expect(desfechoDoErro(Object.assign(new Error("Sem resposta do servidor."), { status: 503, data: { message: "Sem resposta do servidor.", code: "sem_resposta" } }))).toBe("incerto");
+    expect(desfechoDoErro(new Error("Sem resposta do servidor."))).toBe("incerto");
     expect(desfechoDoErro(Object.assign(new Error("internal"), { code: "functions/internal" }))).toBe("incerto");
     expect(desfechoDoErro(Object.assign(new Error("indisponível"), { code: "functions/unavailable" }))).toBe("incerto");
     // O servidor disse que não, antes de gravar: a tentativa acabou.

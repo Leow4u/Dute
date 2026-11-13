@@ -5,6 +5,7 @@ import { ChevronDown, WifiOff, type LucideIcon } from "lucide-react";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { SeletorDeModulo } from "@/components/layout/seletor-de-modulo";
 import { ehTelaDoAgente } from "@/lib/agente/navegacao";
+import { useConexao } from "@/lib/carregando/estado-da-conexao";
 import { isModuleGroup, isNavRouteActive, type AppModule } from "@/lib/modules";
 import { NaV3 } from "@/lib/na-v3";
 import type { ContadorDoItem } from "@/lib/resumo-do-modulo";
@@ -33,7 +34,6 @@ export type ShellDoModuloProps = {
   items: AppModule[];
   contadores?: Readonly<Record<string, ContadorDoItem>>;
   basePath: string;
-  online: boolean;
   conta: (compact: boolean) => ReactNode;
   /** Logo abaixo do seletor (na barra) e ao lado dele (no cabeçalho do celular): o cliente ativo do WMS. */
   abaixoDoSeletor?: (compact: boolean) => ReactNode;
@@ -127,6 +127,22 @@ function Contador({ contador }: { contador: ContadorDoItem | undefined }) {
   );
 }
 
+/**
+ * O aviso fixo do aparelho sem rede, no alto (carregamento v2, momento 8):
+ * pelo estado único da conexão, com a histerese, só depois de 3 s sem rede, e
+ * nunca com o aparelho conectado e o servidor sem resposta ("Reconectando…",
+ * que é da lista). Não é região viva: o Anunciador diz "Sem conexão" uma vez.
+ */
+function FaixaDoAparelhoSemRede() {
+  if (useConexao() !== "sem-conexao") return null;
+  return (
+    <p className="flex shrink-0 items-center justify-center gap-2 border-b border-warning-soft-border bg-warning-soft px-4 py-2 text-sm font-bold text-warning-soft-foreground">
+      <WifiOff className="size-4 shrink-0" aria-hidden="true" />
+      Sem conexão
+    </p>
+  );
+}
+
 export function ShellDoModulo({
   ambiente,
   atual,
@@ -134,7 +150,6 @@ export function ShellDoModulo({
   items,
   contadores,
   basePath,
-  online,
   conta,
   abaixoDoSeletor,
   conteudoV3 = true,
@@ -213,15 +228,7 @@ export function ShellDoModulo({
           </div>
           {abaixoDoSeletor ? <div className="flex h-11 items-center border-t border-v3-header-foreground/10 px-3">{abaixoDoSeletor(true)}</div> : null}
         </header>
-        {online ? null : (
-          <p
-            role="status"
-            className="flex shrink-0 items-center justify-center gap-2 border-b border-warning-soft-border bg-warning-soft px-4 py-2 text-sm font-bold text-warning-soft-foreground"
-          >
-            <WifiOff className="size-4 shrink-0" aria-hidden="true" />
-            Sem conexão
-          </p>
-        )}
+        <FaixaDoAparelhoSemRede />
         <main className="min-h-0 flex-1 overflow-auto overscroll-contain">
           {/* No WMS a tela ocupa a altura (o chat do Agent Dute, as filas); nos outros, o chat do agente também. */}
           <div className={cn("mx-auto w-full max-w-[1600px] p-4 md:p-8 lg:px-11 lg:py-9", (ambiente === "wms" || ehTelaDoAgente(location)) && "h-full")}>

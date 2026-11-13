@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import type { EstadoDaAcao } from "@/components/ui/botao-de-acao";
-import { callableSemResposta, ehSemConexao } from "@/lib/conexao";
+import { callableSemResposta, ehFaltaDeConexao } from "@/lib/conexao";
 
 import { CARREGANDO } from "./tempo";
 
@@ -71,7 +71,7 @@ export function desfechoDoErro(erro: unknown): DesfechoDoErro {
   const lido = erro as { code?: unknown; status?: unknown; data?: { code?: unknown } | null } | null;
   const codigo = String(lido?.code ?? lido?.data?.code ?? "").replace(/^functions\//, "");
   if (codigo === "deadline-exceeded") return "sem-resposta";
-  if (ehSemConexao(erro) || callableSemResposta(erro)) return "incerto";
+  if (ehFaltaDeConexao(erro) || callableSemResposta(erro)) return "incerto";
   if (RECUSAS_DO_SERVIDOR.has(codigo)) return "recusado";
   const status = typeof lido?.status === "number" ? lido.status : null;
   return status !== null && status >= 400 && status < 500 ? "recusado" : "incerto";

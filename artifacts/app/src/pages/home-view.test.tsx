@@ -2,9 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
+import { ProvedorDaConexao, type EstadoDaConexao } from "@/lib/carregando/estado-da-conexao";
 import type { HomeInboxItem } from "@/lib/home-inbox";
 import { itensDoInicioDoWms } from "@/lib/inicio-do-wms";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { conexaoEm } from "@/test/conexao";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import { InicioDoWmsView, type InicioDoWms } from "./home-view";
@@ -30,12 +32,13 @@ const PRONTO: InicioDoWms = {
   hoje: { toPick: 3, toShip: 1, inTransit: 2, openReceipts: 4, skus: 128 },
 };
 
-function render(inicio: Partial<InicioDoWms> = {}) {
-  return renderToStaticMarkup(
+function render(inicio: Partial<InicioDoWms> = {}, conexao?: EstadoDaConexao) {
+  const tela = (
     <Router ssrPath="/dashboard">
       <InicioDoWmsView nome="Sandra Melo" hoje={AGORA} inicio={{ ...PRONTO, ...inicio }} />
-    </Router>,
+    </Router>
   );
+  return renderToStaticMarkup(conexao ? <ProvedorDaConexao value={conexaoEm(conexao)}>{tela}</ProvedorDaConexao> : tela);
 }
 
 describe("Início da Armazenagem sem o total de SKUs", () => {
@@ -134,35 +137,44 @@ describe("Início da Armazenagem", () => {
   });
 });
 
-/** Sem rede (docs/plataforma/diagnostico-carregamento.md, decisão 2 do celular, de 06/11/2026). */
+/**
+ * Na falta de conexão (docs/plataforma/diagnostico-carregamento.md, decisão 2
+ * do celular, de 06/11/2026): "Sem conexão" só com o app sem conexão; com o
+ * aparelho conectado e o servidor sem resposta, "Reconectando…" (carregamento
+ * v2, parte 7a).
+ */
 describe("Início da Armazenagem sem conexão", () => {
   const tentar = { tentando: false, onTentar: () => undefined };
   // 13:42 UTC são 10:42 no armazém.
   const lidaEm = Date.parse("2026-11-06T13:42:00Z");
 
   it("com o que já estava lido: fica tudo, com a hora da leitura no lugar do aviso de falha", () => {
-    const textos = textosDaTela(render({ falhas: ["armazém"], semConexao: { lidaEm, ...tentar } }));
+    const textos = textosDaTela(render({ falhas: ["armazém"], semConexao: { lidaEm, ...tentar } }, "sem-conexao"));
     expect(textos).toContain("Sem conexão · lista de 10:42");
     expect(textos).toContain("PED-3 parado na separação");
     expect(textos).toContain("Hoje no armazém");
     expect(textos).not.toContain("Não foi possível carregar: armazém.");
+    const reconectando = textosDaTela(render({ falhas: ["armazém"], semConexao: { lidaEm, ...tentar } }, "reconectando"));
+    expect(reconectando).toEqual(expect.arrayContaining(["Reconectando…", "· lista de 10:42", "PED-3 parado na separação"]));
+    expect(reconectando.join(" ")).not.toContain("Sem conexão");
   });
 
   it("sem nada lido: o aviso, sem a frase de que nada espera e sem os números zerados", () => {
     // Sem leitura, a caixa de entrada sai vazia e os números do dia, zerados.
-    const textos = textosDaTela(
-      render({
-        itens: [],
-        falhas: ["armazém"],
-        hoje: { toPick: 0, toShip: 0, inTransit: 0, openReceipts: 0, skus: null },
-        semConexao: { lidaEm: null, ...tentar },
-      }),
-    );
-    expect(textos).toEqual(["Sexta-feira, 23 de outubro", "Bom dia, Sandra", "Sem conexão.", "Tentar de novo"]);
+    const semNada = {
+      itens: [],
+      falhas: ["armazém"],
+      hoje: { toPick: 0, toShip: 0, inTransit: 0, openReceipts: 0, skus: null },
+      semConexao: { lidaEm: null, ...tentar },
+    };
+    expect(textosDaTela(render(semNada, "sem-conexao"))).toEqual(["Sexta-feira, 23 de outubro", "Bom dia, Sandra", "Sem conexão.", "Tentar de novo"]);
+    expect(textosDaTela(render(semNada, "reconectando"))).toEqual(["Sexta-feira, 23 de outubro", "Bom dia, Sandra", "Reconectando…", "Tentar de novo"]);
   });
 
   it("passa nas regras WCAG 2.1 A e AA do axe, com a lista e sem nada lido", async () => {
-    expect(await violacoesDeAcessibilidade(render({ semConexao: { lidaEm, ...tentar } }))).toEqual([]);
-    expect(await violacoesDeAcessibilidade(render({ itens: [], semConexao: { lidaEm: null, ...tentar } }))).toEqual([]);
+    for (const estado of ["sem-conexao", "reconectando"] as const) {
+      expect(await violacoesDeAcessibilidade(render({ semConexao: { lidaEm, ...tentar } }, estado)), estado).toEqual([]);
+      expect(await violacoesDeAcessibilidade(render({ itens: [], semConexao: { lidaEm: null, ...tentar } }, estado)), estado).toEqual([]);
+    }
   });
 });

@@ -64,6 +64,17 @@ export const CARREGANDO = {
   aberturaSegmentoSaiMs: 60,
   /** A marca (que recua a 0,96) e a palavra saem nesse tempo, enquanto o preto abre nos 260 ms. */
   aberturaMarcaSaiMs: 200,
+  /**
+   * A histerese da conexão (momento 8): o aparelho sem rede há esse tempo é
+   * "Sem conexão". Antes, e com o aparelho conectado, é "Reconectando…".
+   */
+  semRedeMs: 3_000,
+  /** Cada aviso da conexão ("Reconectando…", "Sem conexão") fica pelo menos isso antes de dar lugar a outro. */
+  avisoMinimoMs: 2_000,
+  /** A primeira releitura sozinha enquanto reconecta; as seguintes dobram (2, 4, 8 e 16 s) até o teto. */
+  releituraMs: 2_000,
+  /** O teto da espera entre as releituras sozinhas: depois dos 16 s, a cada 30 s. */
+  releituraMaxMs: 30_000,
 } as const;
 
 /**

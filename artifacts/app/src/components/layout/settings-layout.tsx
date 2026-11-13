@@ -6,7 +6,7 @@ import { AccountMenu } from "@/components/layout/account-menu";
 import { ITEM, ITEM_ATUAL, ITEM_OUTRO, MarcaDoAtual } from "@/components/layout/shell-do-modulo";
 import { cn } from "@/lib/utils";
 import { useAppAuth, useAppUser } from "@/lib/auth";
-import { usePwaInstall } from "@/lib/pwa-install";
+import { useConexao } from "@/lib/carregando/estado-da-conexao";
 import { NaV3 } from "@/lib/na-v3";
 import {
   SETTINGS_GROUP_LABEL,
@@ -90,7 +90,8 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { user } = useAppUser();
   const { signOut } = useAppAuth();
-  const { isOnline } = usePwaInstall();
+  // O aparelho sem rede há 3 s, pelo estado único da conexão; o Anunciador diz "Sem conexão" (momento 8).
+  const semConexao = useConexao() === "sem-conexao";
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const role = user?.publicMetadata.role;
   const sections = getSettingsSections(role);
@@ -157,9 +158,8 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
             <AccountMenu basePath={basePath} compact cabecalho variante="v3" signOut={signOut} user={user} />
           </div>
         </header>
-        {!isOnline ? (
+        {semConexao ? (
           <div
-            role="status"
             className="flex shrink-0 items-center justify-center gap-2 border-b border-warning-soft-border bg-warning-soft/95 px-4 py-2 text-center text-xs font-medium text-warning-soft-foreground"
           >
             <WifiOff className="h-4 w-4 shrink-0" />

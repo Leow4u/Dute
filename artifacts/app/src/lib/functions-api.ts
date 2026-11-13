@@ -2,7 +2,7 @@ import { httpsCallable } from "firebase/functions";
 import { functionsDoApp } from "./firebase-functions";
 
 import { clienteDaChamada } from "./active-customer";
-import { PRAZO_ESGOTADO, PRAZO_ESGOTADO_NA_LEITURA, SEM_CONEXAO, aparelhoSemRede, callableSemResposta, corpoSemConexao, prazoEsgotado } from "./conexao";
+import { PRAZO_ESGOTADO, PRAZO_ESGOTADO_NA_LEITURA, aparelhoSemRede, callableSemResposta, corpoDaFalta, corpoSemConexao, mensagemDaFalta, prazoEsgotado } from "./conexao";
 import { firebaseApp } from "./firebase";
 
 /**
@@ -1045,8 +1045,10 @@ export async function callFunctionsApi(
     const result = await callable(await route.payload(pathname, init));
     return response(result.data, route.status ?? 200);
   } catch (error) {
-    // A chamada que não teve resposta nenhuma não é falha do servidor.
-    if (callableSemResposta(error)) return response(corpoSemConexao(), 503);
+    // A chamada que não teve resposta nenhuma não é falha do servidor: é
+    // "Sem conexão" com o aparelho sem rede e "Sem resposta do servidor." com
+    // ele conectado (carregamento v2, parte 7a).
+    if (callableSemResposta(error)) return response(corpoDaFalta(), 503);
     const { code, status } = functionsErrorStatus(error);
     const rawMessage =
       error instanceof Error
@@ -1098,7 +1100,7 @@ export async function streamAgentDuteChat<T>(
     for await (const chunk of stream) onChunk(chunk);
     return await data;
   } catch (error) {
-    if (callableSemResposta(error)) throw new Error(SEM_CONEXAO);
+    if (callableSemResposta(error)) throw new Error(mensagemDaFalta());
     if (prazoEsgotado(error)) throw new Error(PRAZO_ESGOTADO);
     const rawMessage = error instanceof Error ? error.message : "";
     throw new Error(

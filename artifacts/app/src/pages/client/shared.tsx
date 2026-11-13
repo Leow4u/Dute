@@ -13,7 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ehSemConexao } from "@/lib/conexao";
+import { ehFaltaDeConexao } from "@/lib/conexao";
 import { cn } from "@/lib/utils";
 
 type Numberish = number | string | null | undefined;
@@ -479,8 +479,9 @@ export function ClientDataBoundary({ children }: ClientDataBoundaryProps) {
 
   // Sem rede, o que já estava na tela fica: a falta de conexão na releitura
   // não troca o portal pelo erro (decisão 2 do celular). A faixa "Sem
-  // conexão" do portal já está no topo.
-  if (overview.isError && !(overview.data && ehSemConexao(overview.error))) {
+  // conexão" do portal já está no topo. Com o aparelho conectado e o
+  // servidor sem resposta, também: o app relê sozinho (parte 7a).
+  if (overview.isError && !(overview.data && ehFaltaDeConexao(overview.error))) {
     return (
       <ClientModuleError
         error={overview.error}

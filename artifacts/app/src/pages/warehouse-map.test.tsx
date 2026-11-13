@@ -130,7 +130,7 @@ describe("Mapa sem conexão", () => {
     expect(fonte).toContain("const empty = !loading && !error && !semNadaLido && shelves.length === 0;");
     expect(fonte).toMatch(/semRede\.lidaEm === null \? \(\s*<BlocoSemConexao tentando=\{relendo\} onTentar=\{reler\} \/>\s*\) : \(\s*<FaixaSemConexao lidaEm=\{semRede\.lidaEm\}/);
     // A situação do inventário sem rede não vira um segundo aviso.
-    expect(fonte).toContain("showSessionStatus && sessionQuery.isError && !ehSemConexao(sessionQuery.error)");
+    expect(fonte).toContain("showSessionStatus && sessionQuery.isError && !ehFaltaDeConexao(sessionQuery.error)");
   });
 });
 

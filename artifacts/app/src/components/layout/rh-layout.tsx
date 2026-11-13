@@ -7,7 +7,6 @@ import { ShellDoModulo } from "@/components/layout/shell-do-modulo";
 import { useAppAuth, useAppUser } from "@/lib/auth";
 import { menuDoRh } from "@/lib/modules";
 import { useOperationProfile } from "@/lib/operation-profile";
-import { usePwaInstall } from "@/lib/pwa-install";
 import { contadoresDoMenu } from "@/lib/resumo-do-modulo";
 import { useInicioDoRh } from "@/lib/rh/use-rh";
 import { moduloAberto, opcoesDoSeletor } from "@/lib/seletor-de-modulo";
@@ -23,7 +22,6 @@ export default function RhLayout({ children }: { children: ReactNode }) {
   const { user } = useAppUser();
   const { signOut } = useAppAuth();
   const { profile } = useOperationProfile();
-  const { isOnline } = usePwaInstall();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const role = user?.publicMetadata.role;
   const menu = menuDoRh(role);
@@ -42,7 +40,6 @@ export default function RhLayout({ children }: { children: ReactNode }) {
       items={menu}
       contadores={contadoresDoMenu(inicio.itens, menu, "rh-inicio")}
       basePath={basePath}
-      online={isOnline}
       conta={(compact) => (
         <AccountMenu basePath={basePath} compact={compact} cabecalho={compact} variante="v3" signOut={signOut} user={user} />
       )}

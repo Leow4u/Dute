@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
 import { Anunciador, useAnuncio } from "./anunciador";
+import { ProvedorDaConexao, criarConexao } from "./estado-da-conexao";
 
 /**
  * A região viva do carregamento (carregamento v2, seção 7): uma por tela, só
@@ -149,6 +150,41 @@ describe("o anunciador", () => {
     act(() => raiz!.render(<Quem />));
     passar(5_000);
     expect(container!.textContent).toBe("");
+  });
+});
+
+describe("a falta de conexão", () => {
+  it("diz Sem conexão uma vez, ao entrar, com a histerese; nunca Reconectando, nem a volta", () => {
+    let rede = true;
+    const conexao = criarConexao({ temRede: () => rede });
+    act(() =>
+      raiz!.render(
+        <ProvedorDaConexao value={conexao}>
+          <Anunciador />
+        </ProvedorDaConexao>,
+      ),
+    );
+    // O servidor sem resposta com o aparelho conectado: Reconectando, que não fala.
+    act(() => conexao.ficouSemResposta());
+    passar(5_000);
+    expect(falados).toEqual([]);
+    // O aparelho perde a rede: nada antes dos 3 s; aos 3 s, "Sem conexão", uma vez.
+    rede = false;
+    act(() => conexao.redeMudou());
+    passar(2_999);
+    expect(falados).toEqual([]);
+    passar(1);
+    expect(falados).toEqual(["Sem conexão"]);
+    passar(30_000);
+    // A volta da rede e a do servidor não falam.
+    rede = true;
+    act(() => conexao.redeMudou());
+    passar(3_000);
+    act(() => conexao.leuDoServidor());
+    passar(3_000);
+    expect(falados).toEqual(["Sem conexão"]);
+    expect(regiao().textContent).toBe("Sem conexão");
+    conexao.fechar();
   });
 });
 

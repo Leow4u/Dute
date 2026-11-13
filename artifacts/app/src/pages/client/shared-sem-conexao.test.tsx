@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { SEM_CONEXAO } from "@/lib/conexao";
+import { SEM_CONEXAO, SEM_RESPOSTA } from "@/lib/conexao";
 
 import { ClientDataBoundary, clientOverviewQueryKey, type ClientOverview } from "./shared";
 
@@ -34,6 +34,12 @@ function tela(erro: Error, dados: ClientOverview | undefined) {
 describe("o portal sem conexão", () => {
   it("com o que já estava lido, segue mostrando", () => {
     const html = tela(new Error(SEM_CONEXAO), OVERVIEW);
+    expect(html).toContain("Portal de BTG Pactual");
+    expect(html).not.toContain("Portal indisponível");
+  });
+
+  it("com o aparelho conectado e o servidor sem resposta, também segue mostrando (carregamento v2, parte 7a)", () => {
+    const html = tela(Object.assign(new Error(SEM_RESPOSTA), { status: 503, data: { message: SEM_RESPOSTA, code: "sem_resposta" } }), OVERVIEW);
     expect(html).toContain("Portal de BTG Pactual");
     expect(html).not.toContain("Portal indisponível");
   });

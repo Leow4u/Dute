@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const chamada = vi.hoisted(() => vi.fn());
 vi.mock("firebase/functions", () => ({ httpsCallable: () => chamada }));
@@ -49,13 +49,31 @@ describe("tentativas rejeitadas pelo servidor", () => {
   });
 });
 
-/** Sem rede (docs/plataforma/diagnostico-carregamento.md, seção 9, item 2). */
-it("a chamada sem resposta diz que faltou conexão e continua contando como resultado incerto", async () => {
-  // O SDK do Firebase, quando o fetch nem chega a uma resposta (status 0).
-  const causa = Object.assign(new Error("internal"), { code: "functions/internal" });
-  chamada.mockRejectedValueOnce(causa);
-  const falha = await iniciarCaixa({ receipt_id: "inb_teste", idempotency_key: "tentativa-1" }).catch((erro: unknown) => erro);
-  expect(falha).toMatchObject({ message: "Sem conexão. Tente de novo quando o sinal voltar.", code: "functions/internal", cause: causa });
-  // A chave da tentativa fica: o pedido pode ter chegado ao servidor.
-  expect(pedidoFoiRejeitado(falha)).toBe(false);
+/**
+ * Sem rede (docs/plataforma/diagnostico-carregamento.md, seção 9, item 2) e
+ * com o servidor sem resposta (carregamento v2, parte 7a): o texto diz qual,
+ * pelo aparelho, e as duas continuam contando como resultado incerto.
+ */
+describe("a chamada sem resposta", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("com o aparelho conectado, diz que o servidor não respondeu, não \"Sem conexão\", e conta como resultado incerto", async () => {
+    vi.stubGlobal("navigator", { onLine: true });
+    // O SDK do Firebase, quando o fetch nem chega a uma resposta (status 0).
+    const causa = Object.assign(new Error("internal"), { code: "functions/internal" });
+    chamada.mockRejectedValueOnce(causa);
+    const falha = await iniciarCaixa({ receipt_id: "inb_teste", idempotency_key: "tentativa-1" }).catch((erro: unknown) => erro);
+    expect(falha).toMatchObject({ message: "Sem resposta do servidor.", code: "functions/internal", cause: causa });
+    // A chave da tentativa fica: o pedido pode ter chegado ao servidor.
+    expect(pedidoFoiRejeitado(falha)).toBe(false);
+  });
+
+  it("com o aparelho sem rede, diz que faltou conexão e conta como resultado incerto", async () => {
+    vi.stubGlobal("navigator", { onLine: false });
+    const causa = Object.assign(new Error("Failed to fetch"), { code: "functions/internal" });
+    chamada.mockRejectedValueOnce(causa);
+    const falha = await iniciarCaixa({ receipt_id: "inb_teste", idempotency_key: "tentativa-1" }).catch((erro: unknown) => erro);
+    expect(falha).toMatchObject({ message: "Sem conexão. Tente de novo quando o sinal voltar.", code: "functions/internal", cause: causa });
+    expect(pedidoFoiRejeitado(falha)).toBe(false);
+  });
 });
