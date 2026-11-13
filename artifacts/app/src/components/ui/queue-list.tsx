@@ -36,10 +36,11 @@ export type QueueTone = keyof typeof QUEUE_TONE;
 /**
  * A contagem que rola (carregamento v2, momento 4): quando muda (3 → 2), o
  * número velho sobe e sai e o novo sobe e entra, 8 px em 160 ms; no reduzido,
- * troca. Só o número atual fica na árvore de acessibilidade. Zero não mostra
- * número.
+ * troca. Só o número atual fica na árvore de acessibilidade: o `naArvore`,
+ * quando difere do que se vê (a linha que esmaece ainda conta na tela, mas já
+ * saiu da árvore, inert). Zero não mostra número.
  */
-export function ContagemQueRola({ valor }: { valor: number }) {
+export function ContagemQueRola({ valor, naArvore = valor }: { valor: number; naArvore?: number }) {
   const [mostrado, setMostrado] = useState(valor);
   const [saindo, setSaindo] = useState<number | null>(null);
   if (valor !== mostrado) {
@@ -60,10 +61,11 @@ export function ContagemQueRola({ valor }: { valor: number }) {
         </span>
       ) : null}
       {mostrado ? (
-        <span key={`entra-${mostrado}`} data-conta={saindo !== null ? "entra" : undefined}>
+        <span key={`entra-${mostrado}`} data-conta={saindo !== null ? "entra" : undefined} aria-hidden={naArvore !== mostrado ? true : undefined}>
           {mostrado}
         </span>
       ) : null}
+      {naArvore !== mostrado && naArvore ? <span className="sr-only">{naArvore}</span> : null}
     </span>
   );
 }
@@ -82,6 +84,7 @@ export function QueueGroup({
   empty,
   children,
   rolarContagem = false,
+  contagemNaArvore,
   listaRef,
   tituloRef,
   semSaltos = false,
@@ -93,6 +96,12 @@ export function QueueGroup({
   children: ReactNode;
   /** A contagem rola quando muda (a fila sem saltos, carregamento v2). */
   rolarContagem?: boolean;
+  /**
+   * Com a contagem que rola, o número do leitor de tela, quando difere do que
+   * se vê: sem a linha que esmaece, já fora da árvore (o `quantasFicam` do
+   * useListaSemSaltos).
+   */
+  contagemNaArvore?: number;
   /** O elemento das linhas: o `ref` do useListaSemSaltos. */
   listaRef?: Ref<HTMLDivElement>;
   /** O título, que recebe o foco quando a última linha sai com ele (o `titulo` do useListaSemSaltos). */
@@ -119,7 +128,7 @@ export function QueueGroup({
             <>
               {hint}
               {hint && count ? " · " : null}
-              <ContagemQueRola valor={count} />
+              <ContagemQueRola valor={count} naArvore={contagemNaArvore} />
             </>
           ) : (
             [hint, count ? String(count) : null].filter(Boolean).join(" · ")
@@ -137,7 +146,7 @@ export function QueueGroup({
               {children}
             </div>
           ) : (
-            <p data-palco="bloco" className="px-5 py-4 text-sm text-muted-foreground">
+            <p data-palco="bloco" className="rounded-2xl bg-card px-5 py-4 text-sm text-muted-foreground in-[.v3]:rounded-lg">
               {empty}
             </p>
           )}
@@ -197,25 +206,37 @@ function semTeclaQueAciona(evento: KeyboardEvent) {
  *
  * A que espera já saiu dos dados (outra pessoa decidiu): fica à vista e no
  * mesmo lugar, mas não dispara ação. Os controles dela ficam aria-disabled,
- * com a trava aqui, nunca disabled nem inert, que tirariam o foco de quem
- * está nela.
+ * a 0,45 como o travado do BotaoDeAcao (data-trava-da-espera, no
+ * index.css), com a trava aqui, nunca disabled nem inert, que tirariam o
+ * foco de quem está nela. A trava fica enquanto ela esmaece, e sai se ela
+ * volta à fila.
  */
 export function LinhaDaFila({ lista, chave, children }: { lista: Pick<ListaSemSaltos, "linha">; chave: string; children: ReactNode }) {
   const atributos = lista.linha(chave);
   const naLista = atributos["data-na-lista"];
   const esperando = naLista === "esperando";
   const elemento = useRef<HTMLDivElement>(null);
+  // A que esperou e agora sai continua travada; a que voltou à fila, não.
+  const [esperou, setEsperou] = useState(false);
+  if (esperando !== esperou && (esperando || naLista !== "saindo")) setEsperou(esperando);
+  const travada = esperando || (naLista === "saindo" && esperou);
   useLayoutEffect(() => {
-    if (!esperando || !elemento.current) return undefined;
+    if (!travada || !elemento.current) return undefined;
     // Só os que estavam livres: o que já estava travado (o "Aprovado") fica como estava.
     const travados = Array.from(elemento.current.querySelectorAll<HTMLElement>(CONTROLES)).filter(
       (controle) => controle.getAttribute("aria-disabled") !== "true" && !controle.hasAttribute("disabled"),
     );
-    for (const controle of travados) controle.setAttribute("aria-disabled", "true");
+    for (const controle of travados) {
+      controle.setAttribute("aria-disabled", "true");
+      controle.setAttribute("data-trava-da-espera", "");
+    }
     return () => {
-      for (const controle of travados) if (controle.getAttribute("aria-disabled") === "true") controle.removeAttribute("aria-disabled");
+      for (const controle of travados) {
+        controle.removeAttribute("data-trava-da-espera");
+        if (controle.getAttribute("aria-disabled") === "true") controle.removeAttribute("aria-disabled");
+      }
     };
-  }, [esperando]);
+  }, [travada]);
   return (
     <div
       ref={elemento}

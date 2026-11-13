@@ -2,11 +2,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { Anunciador } from "@/lib/carregando/anunciador";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { gravarRefluxos, type RefluxosGravados } from "@/test/refluxo";
 import { textosForaDaLista } from "@/test/textos";
 
 /**
@@ -31,6 +32,8 @@ const estado = vi.hoisted(() => ({
   respostasDoAvanco: [] as Array<(corpo: unknown) => void>,
   decisoes: [] as Decisao[],
   leituras: [] as string[],
+  /** Com a lista, a leitura das filas espera até o teste soltar (a releitura que chega depois). */
+  opsPresas: null as Array<() => void> | null,
 }));
 
 vi.mock("@/lib/auth", () => ({ useAppUser: () => ({ user: { publicMetadata: { role: "admin" } } }) }));
@@ -73,7 +76,11 @@ function resposta(corpo: unknown, status = 200) {
 async function servir(entrada: RequestInfo | URL, init?: RequestInit) {
   const url = new URL(String(entrada), "http://localhost");
   const metodo = (init?.method ?? "GET").toUpperCase();
-  if (url.pathname === "/api/warehouse/ops") return resposta(estado.ops);
+  if (url.pathname === "/api/warehouse/ops") {
+    const presas = estado.opsPresas;
+    if (presas) await new Promise<void>((soltar) => presas.push(soltar));
+    return resposta(estado.ops);
+  }
   const avanco = url.pathname.match(/^\/api\/warehouse\/tasks\/([^/]+)\/advance$/);
   if (avanco && metodo === "POST") {
     // A entrega fica em andamento até o teste responder.
@@ -169,6 +176,7 @@ beforeEach(async () => {
   estado.leituras.length = 0;
   estado.avancos.length = 0;
   estado.respostasDoAvanco.length = 0;
+  estado.opsPresas = null;
   estado.ops = { queues: {}, alerts: [] };
   estado.solicitacoes = [solicitacao("1042", 12), solicitacao("1043", 40), solicitacao("1045", 120)];
   cliente = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -489,13 +497,22 @@ describe("a linha que sai sem salto (parte 6c)", () => {
     return null;
   }
 
+  let refluxos: RefluxosGravados;
+
   beforeEach(() => {
+    refluxos = gravarRefluxos();
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
       const caixa = noLayout(this);
       if (!caixa) return medirDeVerdade.call(this);
-      const [top, height] = caixa;
+      // O lugar no layout, mais o que falta dos refluxos que correm na peça (lineares, para o teste).
+      const [lugar, height] = caixa;
+      const top = lugar + refluxos.noMeio(this);
       return { top, bottom: top + height, left: 0, right: 900, width: 900, height, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
     });
+  });
+
+  afterEach(() => {
+    refluxos.restaurar();
   });
 
   function grupo(titulo: string): HTMLElement {
@@ -514,27 +531,10 @@ describe("a linha que sai sem salto (parte 6c)", () => {
     return peca;
   }
 
-  /** O transform de partida do refluxo: o primeiro que a peça teve, como deslocamento e escala. */
-  function partida(transforms: string[]): { anda: number; estica: number } {
-    const valor = transforms[0] ?? "";
-    const anda = /translateY\((-?[\d.]+)px\)/.exec(valor);
-    const estica = /scaleY\((-?[\d.]+)\)/.exec(valor);
-    return { anda: anda ? Number(anda[1]) : 0, estica: estica ? Number(estica[1]) : 1 };
-  }
-
-  /** Cada transform que o elemento teve, na ordem, desde agora. */
-  function observarTransform(alvo: HTMLElement) {
-    const valores: string[] = [];
-    const guardar = (registros: MutationRecord[]) => {
-      for (const registro of registros) valores.push(registro.oldValue ?? "");
-    };
-    const observador = new MutationObserver(guardar);
-    observador.observe(alvo, { attributes: true, attributeFilter: ["style"], attributeOldValue: true });
-    return () => {
-      guardar(observador.takeRecords());
-      observador.disconnect();
-      return [...valores.slice(1), alvo.getAttribute("style") ?? ""].filter((valor) => valor.includes("transform"));
-    };
+  /** De onde a peça parte nos refluxos que correm nela: o deslocamento e a escala (parada, 0 e 1). */
+  function partida(peca: HTMLElement): { anda: number; estica: number } {
+    const correndo = refluxos.correndo(peca);
+    return { anda: correndo.reduce((soma, refluxo) => soma + refluxo.anda, 0), estica: correndo.reduce((produto, refluxo) => produto * refluxo.estica, 1) };
   }
 
   /**
@@ -574,14 +574,12 @@ describe("a linha que sai sem salto (parte 6c)", () => {
     // Congelada: o Aprovado fica até ela sair.
     expect(rotuloAtual(botao("Pedido 1042", "Aprovar"))).toBe("Aprovado");
     expect(grupo("Para separar").textContent).not.toContain("PED-1042");
-    const transformsDa1043 = observarTransform(naFila("req_1043")!);
 
     await passar(CARREGANDO.saiLinhaMs);
     expect(naFila("req_1042")).toBeNull();
     // A 1043 e a 1045 sobem 80 px só por transform.
-    expect(transformsDa1043()).toEqual([expect.stringContaining("transform: translateY(80px)")]);
-    expect(naFila("req_1043")?.hasAttribute("data-reflui")).toBe(true);
-    expect(naFila("req_1045")?.hasAttribute("data-reflui")).toBe(true);
+    expect(partida(naFila("req_1043")!)).toEqual({ anda: 80, estica: 1 });
+    expect(partida(naFila("req_1045")!)).toEqual({ anda: 80, estica: 1 });
     // A contagem rola de 3 para 2: só o 2 fica na árvore.
     const conta = grupoParaAprovar().querySelector("h2")!;
     expect(conta.querySelector('[data-conta="sai"]')?.textContent).toBe("3");
@@ -617,10 +615,9 @@ describe("a linha que sai sem salto (parte 6c)", () => {
       "1043": naFila("req_1043")!,
       "1045": naFila("req_1045")!,
     };
-    const vistas = Object.fromEntries(Object.entries(observadas).map(([nome, peca]) => [nome, observarTransform(peca)]));
 
     await passar(CARREGANDO.saiLinhaMs);
-    const partidas = Object.fromEntries(Object.entries(vistas).map(([nome, ver]) => [nome, partida(ver())]));
+    const partidas = Object.fromEntries(Object.entries(observadas).map(([nome, peca]) => [nome, partida(peca)]));
     // Para aprovar perde 80 px: a base e as linhas de baixo sobem 80; o meio encolhe de 210 para 130 px, do alto.
     expect(partidas["aprovar.base"]).toEqual({ anda: 80, estica: 1 });
     expect(partidas["aprovar.topo"]).toEqual({ anda: 0, estica: 1 });
@@ -638,10 +635,11 @@ describe("a linha que sai sem salto (parte 6c)", () => {
     expect(partidas["entregar.titulo"]).toEqual({ anda: 52, estica: 1 });
     expect(partidas["entregar.topo"]).toEqual({ anda: 52, estica: 1 });
     expect(partidas["entregar.base"]).toEqual({ anda: 52, estica: 1 });
-    // As que mudaram de lugar refluem juntas, com a mesma transição; o topo de Para aprovar, que fica, não.
-    for (const [nome, peca] of Object.entries(observadas)) expect(peca.hasAttribute("data-reflui"), nome).toBe(nome !== "aprovar.topo");
+    // As que mudaram de lugar refluem juntas, no mesmo instante; o topo de Para aprovar, que fica, não.
+    for (const [nome, peca] of Object.entries(observadas)) expect(refluxos.correndo(peca).length > 0, nome).toBe(nome !== "aprovar.topo");
+    expect(new Set(refluxos.todos().map((refluxo) => refluxo.inicio)).size).toBe(1);
     // A que chega não reflui: entra, depois que o cartão chegou.
-    expect(naFila("ord_req_1042")!.style.transform).toBe("");
+    expect(refluxos.de(naFila("ord_req_1042")!)).toEqual([]);
 
     // Nenhuma linha fica fora do cartão no começo do refluxo: cada uma parte de dentro da moldura que parte com ela.
     const baseDaMoldura = noLayout(observadas["aprovar.base"])!;
@@ -657,16 +655,18 @@ describe("a linha que sai sem salto (parte 6c)", () => {
     expect(cartao.className).not.toMatch(/\boverflow-hidden\b/);
 
     await passar(CARREGANDO.refluiMs);
-    for (const [nome, peca] of Object.entries(observadas)) expect(peca.hasAttribute("data-reflui"), nome).toBe(false);
+    for (const [nome, peca] of Object.entries(observadas)) expect(refluxos.correndo(peca), nome).toEqual([]);
   });
 
-  it("o pedido aprovado por outra pessoa chega a Para separar sem o realce: a releitura não dá sinal", async () => {
+  it("só o pedido aprovado nesta tela chega com o realce; o que outra pessoa aprovou e a solicitação nova do portal, na mesma releitura, chegam sem sinal", async () => {
+    // A 1043 é aprovada aqui; enquanto isso, outra pessoa aprova a 1042 e o portal manda a 1047.
+    await tocar(botao("Pedido 1043", "Aprovar"));
     estado.solicitacoes[0].status = "approved";
+    estado.solicitacoes[1].status = "approved";
     estado.solicitacoes.push(solicitacao("1047", 8));
-    estado.ops = {
-      alerts: [],
-      queues: { picking: { key: "picking", tasks: [{ ...tarefa("pick", "req_1042", "planned"), customer_request_id: "req_1042" }] } },
-    };
+    const separacao = (id: string) => ({ ...tarefa("pick", id, "planned"), customer_request_id: id });
+    estado.ops = { alerts: [], queues: { picking: { key: "picking", tasks: [separacao("req_1042"), separacao("req_1043")] } } };
+    await act(async () => estado.decisoes[0].responder({ ok: true }));
     await reler();
     expect(naFila("req_1042")?.dataset.naLista).toBe("saindo");
     // A solicitação nova do portal chega a Para aprovar sem o realce.
@@ -674,9 +674,16 @@ describe("a linha que sai sem salto (parte 6c)", () => {
     expect(naFila("req_1047")?.hasAttribute("data-realce")).toBe(false);
 
     await passar(CARREGANDO.saiLinhaMs);
-    const chegou = grupo("Para separar").querySelector<HTMLElement>('[data-chave="ord_req_1042"]');
-    expect(chegou?.dataset.naLista).toBe("chegando");
-    expect(chegou?.hasAttribute("data-realce")).toBe(false);
+    const da1042 = grupo("Para separar").querySelector<HTMLElement>('[data-chave="ord_req_1042"]');
+    expect(da1042?.dataset.naLista).toBe("chegando");
+    expect(da1042?.hasAttribute("data-realce")).toBe(false);
+
+    // A 1043 sai depois do "Aprovado", e o pedido dela chega com o realce.
+    for (let vez = 0; vez < 60 && !naFila("ord_req_1043"); vez += 1) await passar(50);
+    const da1043 = grupo("Para separar").querySelector<HTMLElement>('[data-chave="ord_req_1043"]');
+    expect(da1043?.dataset.naLista).toBe("chegando");
+    expect(da1043?.hasAttribute("data-realce")).toBe(true);
+    expect(grupo("Para separar").querySelector('[data-chave="ord_req_1042"]')?.hasAttribute("data-realce")).toBe(false);
   });
 
   it("a linha que espera o dedo depois de outra pessoa decidir fica à vista, com o foco de quem está nela, mas não dispara ação", async () => {
@@ -696,6 +703,8 @@ describe("a linha que sai sem salto (parte 6c)", () => {
       const alvo = botao("Pedido 1042", rotulo);
       expect(alvo.getAttribute("aria-disabled"), rotulo).toBe("true");
       expect(alvo.hasAttribute("disabled"), rotulo).toBe(false);
+      // Com a cara de travado (a 0,45, sem hover nem toque: data-trava-da-espera no index.css).
+      expect(alvo.hasAttribute("data-trava-da-espera"), rotulo).toBe(true);
     }
     // Quem estava nela continua com o foco.
     expect(document.activeElement).toBe(botao("Pedido 1042", "Aprovar"));
@@ -710,9 +719,10 @@ describe("a linha que sai sem salto (parte 6c)", () => {
     expect(livre(botao("Pedido 1043", "Aprovar"))).toBe(true);
     expect(botao("Pedido 1043", "Aprovar").getAttribute("aria-disabled")).toBeNull();
 
-    // Quando o dedo sai, ela esmaece e o foco vai para a linha seguinte.
+    // Quando o dedo sai, ela esmaece, ainda com a cara de travada, e o foco vai para a linha seguinte.
     await passar(CARREGANDO.dedoMs);
     expect(naFila("req_1042")?.dataset.naLista).toBe("saindo");
+    expect(botao("Pedido 1042", "Aprovar").hasAttribute("data-trava-da-espera")).toBe(true);
     expect(document.activeElement).toBe(botao("Pedido 1043", "Aprovar"));
   });
 
@@ -736,6 +746,35 @@ describe("a linha que sai sem salto (parte 6c)", () => {
     await aprovarComOFoco("Pedido 1045", 0);
     await passar(1);
     expect(document.activeElement).toBe(grupoParaAprovar().querySelector("h2"));
+  });
+
+  it("a contagem do título no leitor de tela já não conta a linha que esmaece (inert): a última que sai deixa o grupo sem número", async () => {
+    /** O texto que o leitor de tela lê: sem o que está aria-hidden. */
+    const lido = (no: Element): string =>
+      Array.from(no.childNodes)
+        .map((filho) => (filho.nodeType === Node.TEXT_NODE ? filho.textContent : (filho as Element).getAttribute("aria-hidden") === "true" ? "" : lido(filho as Element)))
+        .join("");
+    estado.solicitacoes = [solicitacao("1042", 12), solicitacao("1043", 40)];
+    await reler();
+    await passar(CARREGANDO.chegaEsperaMs + CARREGANDO.destaqueMs);
+    const titulo = grupoParaAprovar().querySelector("h2")!;
+    expect(lido(titulo)).toBe("Para aprovar2");
+
+    // Outra pessoa aprova a 1042: na tela ainda são 2 até ela sair; no leitor de tela, já 1.
+    estado.solicitacoes[0].status = "approved";
+    await reler();
+    expect(naFila("req_1042")?.dataset.naLista).toBe("saindo");
+    expect(titulo.textContent).toContain("2");
+    expect(lido(titulo)).toBe("Para aprovar1");
+
+    // A última sai com o foco: o título recebe o foco já sem número.
+    await passar(CARREGANDO.saiLinhaMs + CARREGANDO.contaMs);
+    botao("Pedido 1043", "Aprovar").focus();
+    estado.solicitacoes[1].status = "approved";
+    await reler();
+    expect(document.activeElement).toBe(titulo);
+    expect(titulo.textContent).toContain("1");
+    expect(lido(titulo)).toBe("Para aprovar");
   });
 
   it("com um toque na fila nos últimos 700 ms, a linha espera com o Aprovado e o pedido não muda de grupo", async () => {
@@ -837,12 +876,10 @@ describe("a linha que sai sem salto (parte 6c)", () => {
     expect(emEntregar("A")?.dataset.naLista).toBe("saindo");
     expect(emEntregar("A")?.hasAttribute("inert")).toBe(true);
     expect(document.activeElement).toBe(entregue("B"));
-    const transformsDaB = observarTransform(emEntregar("B")!);
 
     await passar(CARREGANDO.saiLinhaMs);
     expect(emEntregar("A")).toBeNull();
-    expect(transformsDaB()).toEqual([expect.stringContaining("transform: translateY(80px)")]);
-    expect(emEntregar("B")?.hasAttribute("data-reflui")).toBe(true);
+    expect(partida(emEntregar("B")!)).toEqual({ anda: 80, estica: 1 });
     // A contagem rola de 2 para 1, e a única linha herda a ação principal.
     const titulo = grupo("Para entregar").querySelector("h2")!;
     expect(titulo.querySelector('[data-conta="sai"]')?.textContent).toBe("2");
@@ -892,6 +929,133 @@ describe("a linha que sai sem salto (parte 6c)", () => {
     await passar(CARREGANDO.dedoMs);
     expect(emEntregar("B")?.dataset.naLista).toBe("saindo");
     expect(document.activeElement).toBe(grupo("Para entregar").querySelector("h2"));
+  });
+
+  /** Abre a entrega do pedido pelo Entregue, com o foco nele, como pelo teclado. */
+  async function abrirEntregue(pedido: string) {
+    entregue(pedido).focus();
+    await tocar(entregue(pedido));
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  }
+
+  function noDialogo(rotulo: string): HTMLButtonElement {
+    const achado = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((item) => item.textContent === rotulo);
+    if (!achado) throw new Error(`sem ${rotulo} no diálogo`);
+    return achado;
+  }
+
+  async function confirmarEntrega() {
+    const placa = document.querySelector<HTMLInputElement>("#placa")!;
+    const definir = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    await act(async () => {
+      definir.call(placa, "ABC1D23");
+      placa.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await tocar(noDialogo("Confirmar entrega"));
+    await passar(10);
+    await act(async () => estado.respostasDoAvanco[0]({ ok: true }));
+    await passar(10);
+    await act(async () => estado.respostasDoAvanco[1]({ ok: true }));
+    await passar(10);
+  }
+
+  it("o diálogo fechado pelo Voltar devolve o foco ao Entregue da linha, e não ao corpo", async () => {
+    await paraEntregarComAeB();
+    await abrirEntregue("A");
+    await tocar(noDialogo("Voltar"));
+    await passar(20);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(entregue("A"));
+  });
+
+  it("o pedido que passou de Para separar a Para entregar devolve o foco em Para entregar, e não no Separar de outro pedido", async () => {
+    estado.solicitacoes = [];
+    estado.ops = { alerts: [], queues: { picking: { key: "picking", tasks: [tarefa("pick", "A", "planned"), tarefa("pick", "B", "planned")] } } };
+    await reler();
+    await passar(CARREGANDO.chegaEsperaMs + CARREGANDO.destaqueMs);
+    // Outra pessoa separou o A na bancada: a releitura o leva a Para entregar.
+    estado.ops = {
+      alerts: [],
+      queues: {
+        picking: { key: "picking", tasks: [tarefa("pick", "A", "completed"), tarefa("pick", "B", "planned")] },
+        expedition: { key: "expedition", tasks: [tarefa("ship", "A", "ready_to_dispatch")] },
+      },
+    };
+    await reler();
+    await passar(CARREGANDO.saiLinhaMs + CARREGANDO.refluiMs + CARREGANDO.chegaEsperaMs + CARREGANDO.destaqueMs);
+    expect(grupo("Para separar").querySelector('[data-chave="ord_A"]')).toBeNull();
+    expect(emEntregar("A")?.dataset.naLista).toBe("parada");
+
+    // Pelo Voltar, o foco volta ao Entregue do A.
+    await abrirEntregue("A");
+    await tocar(noDialogo("Voltar"));
+    await passar(20);
+    expect(document.activeElement).toBe(entregue("A"));
+
+    // Entregue, com a releitura já sem o A: o foco vai para o título de Para entregar, o grupo de onde ele saiu.
+    await abrirEntregue("A");
+    estado.ops = { alerts: [], queues: { picking: { key: "picking", tasks: [tarefa("pick", "B", "planned")] } } };
+    await confirmarEntrega();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(grupo("Para entregar").querySelector("h2"));
+  });
+
+  it("a releitura que chega depois de o diálogo fechar: o foco fica no Entregue da linha e, quando ela sai, vai para o da seguinte", async () => {
+    await paraEntregarComAeB();
+    await abrirEntregue("A");
+    // A releitura da entrega demora: o diálogo fecha antes de ela chegar.
+    estado.opsPresas = [];
+    estado.ops = { alerts: [], queues: { expedition: { key: "expedition", tasks: [tarefa("ship", "B", "ready_to_dispatch")] } } };
+    await confirmarEntrega();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(emEntregar("A")?.dataset.naLista).toBe("parada");
+    expect(document.activeElement).toBe(entregue("A"));
+
+    const presas = estado.opsPresas;
+    estado.opsPresas = null;
+    await act(async () => {
+      for (const soltar of presas) soltar();
+    });
+    await passar(50);
+    expect(emEntregar("A")?.dataset.naLista).toBe("saindo");
+    expect(document.activeElement).toBe(entregue("B"));
+    await passar(CARREGANDO.saiLinhaMs + CARREGANDO.refluiMs);
+    expect(document.activeElement).toBe(entregue("B"));
+  });
+
+  it("a recusa fechada pelo Voltar devolve o foco ao Recusar da linha", async () => {
+    const recusar = botao("Pedido 1043", "Recusar");
+    recusar.focus();
+    await tocar(recusar);
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    await tocar(noDialogo("Voltar"));
+    await passar(20);
+    expect(document.activeElement).toBe(botao("Pedido 1043", "Recusar"));
+  });
+
+  it("no celular, a linha que sai com o foco o passa ao Entregue da seguinte que se vê, e não à cópia escondida do computador", async () => {
+    // No celular (abaixo do sm), o que está dentro de um .hidden não se vê: as ações do computador.
+    Object.defineProperty(HTMLElement.prototype, "checkVisibility", {
+      configurable: true,
+      writable: true,
+      value: function checkVisibility(this: HTMLElement) {
+        return this.closest(".hidden") === null;
+      },
+    });
+    onTestFinished(() => {
+      delete (HTMLElement.prototype as { checkVisibility?: unknown }).checkVisibility;
+    });
+    await paraEntregarComAeB();
+    const visivel = (pedido: string) => {
+      const copias = Array.from(emEntregar(pedido)!.querySelectorAll<HTMLButtonElement>("button[data-foco-da-linha]"));
+      expect(copias).toHaveLength(2);
+      return copias.find((copia) => copia.closest(".hidden") === null)!;
+    };
+    visivel("A").focus();
+    estado.ops = { alerts: [], queues: { expedition: { key: "expedition", tasks: [tarefa("ship", "B", "ready_to_dispatch")] } } };
+    await reler();
+    expect(emEntregar("A")?.dataset.naLista).toBe("saindo");
+    expect(document.activeElement).toBe(visivel("B"));
   });
 
   it("a linha que sai de Para separar fica com a ação principal até sair, e só então a de baixo herda", async () => {

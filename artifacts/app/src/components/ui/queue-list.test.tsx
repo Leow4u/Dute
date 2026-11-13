@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { JSDOM } from "jsdom";
 import { Package } from "lucide-react";
 import type { ReactNode } from "react";
@@ -11,6 +13,22 @@ import { PageHeader } from "./page-header";
 import { QueueGroup, QueueRow } from "./queue-list";
 
 /** A fila do WMS (Pedidos, Receber) e o cabeçalho da página na v3 (parte 4.7c). */
+
+const CSS = readFileSync(new URL("../../index.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+
+/** As declarações da regra do index.css com exatamente esse seletor. */
+function regra(seletor: string): Record<string, string> {
+  const inicio = CSS.indexOf(`${seletor} {`);
+  if (inicio < 0) throw new Error(`sem a regra ${seletor}`);
+  const corpo = CSS.slice(CSS.indexOf("{", inicio) + 1, CSS.indexOf("}", inicio));
+  return Object.fromEntries(
+    corpo
+      .split(";")
+      .map((linha) => linha.trim())
+      .filter(Boolean)
+      .map((linha) => [linha.slice(0, linha.indexOf(":")).trim(), linha.slice(linha.indexOf(":") + 1).trim()]),
+  );
+}
 
 function fila() {
   return renderToStaticMarkup(
@@ -166,7 +184,22 @@ describe("o grupo sem saltos e o de sempre", () => {
     expect(lista.className).not.toMatch(/\boverflow-hidden\b/);
     const vazio = new JSDOM(grupo(0)).window.document.querySelector(".fila-cartao > p")!;
     expect(vazio.getAttribute("data-palco")).toBe("bloco");
+    // O vazio tem o fundo e os cantos do cartão, como as linhas.
+    expect(vazio.className.split(/\s+/)).toEqual(expect.arrayContaining(["bg-card", "rounded-2xl", "in-[.v3]:rounded-lg"]));
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("as linhas ficam dentro da borda, com o fundo do cartão: o contraste se mede contra o cartão, e não contra a página", () => {
+    // Como no cartão de sempre: a borda de 1 px por fora das linhas.
+    expect(regra(".fila-cartao")).toMatchObject({ padding: "1px" });
+    // A moldura atrás é pintada como imagem (o meio esticado), e quem mede o contraste não a lê: a linha tem o fundo.
+    expect(regra('.fila-cartao [data-chave]:not([data-na-lista="saindo"])')).toEqual({ "background-color": "hsl(var(--card))" });
+  });
+
+  it("os controles que a espera travou têm a cara do travado do BotaoDeAcao (0,45), sem hover nem toque", () => {
+    expect(regra("[data-na-lista] [data-trava-da-espera]")).toEqual({ opacity: "0.45", "pointer-events": "none" });
+    const botaoDeAcao = readFileSync(new URL("./botao-de-acao.tsx", import.meta.url), "utf8");
+    expect(botaoDeAcao).toContain('bloqueado && "opacity-45"');
   });
 
   it("o título que recebe o foco tem o anel do sistema visual no foco visível, o mesmo do botão", () => {

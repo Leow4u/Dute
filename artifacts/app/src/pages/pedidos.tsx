@@ -250,8 +250,12 @@ export default function Pedidos() {
   // Cancelar pedido (pergunta 59): a coordenação, com o motivo.
   const [cancelReason, setCancelReason] = useState("");
   const chaveDoCancelamento = useRef<string | null>(null);
-  // O pedido da linha que abriu a entrega ou o cancelamento: se ela sair enquanto o diálogo fecha, o foco não cai no corpo.
-  const linhaDoDialogo = useRef<string | null>(null);
+  // A linha que abriu o diálogo (a recusa, a entrega, o Entregue, o cancelamento) e o controle que estava com o foco:
+  // o diálogo que fecha devolve o foco a ela ou, se ela saiu, à seguinte, e nunca ao corpo.
+  const linhaDoDialogo = useRef<{ chave: string; abridor: Element | null } | null>(null);
+  const lembrarDaLinha = (chave: string) => {
+    linhaDoDialogo.current = { chave, abridor: typeof document === "undefined" ? null : document.activeElement };
+  };
   const entregas = useLeitura(
     OPERACAO_LIBERADO ? "orders:em_aberto" : null,
     (db) => query(collection(db, "orders"), where("status", "in", PEDIDOS_EM_ABERTO)),
@@ -485,7 +489,7 @@ export default function Pedidos() {
     if (!order.orderId) return;
     chaveDoCancelamento.current = null;
     setCancelReason("");
-    linhaDoDialogo.current = order.key;
+    lembrarDaLinha(order.key);
     setDialog({ kind: "cancel", order, orderId: order.orderId });
   };
   // O "⋯" do pedido ainda no armazém, só para quem decide (owner, admin e interno).
@@ -500,6 +504,7 @@ export default function Pedidos() {
     setEntregaForm(formularioDaEntrega(entregaDe(order), hojeIso()));
     setEntregaTentou(false);
     setEntregaErro(null);
+    lembrarDaLinha(order.key);
     setDialog({ kind: "entrega", order, orderId: order.orderId });
   };
 
@@ -533,14 +538,23 @@ export default function Pedidos() {
   // Aprovar e recusar ficam de fora: cada linha de "Para aprovar" tem o próprio estado.
   const busy = deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
   /**
-   * O diálogo devolve o foco ao botão que o abriu. Se a linha dele já saiu
-   * (entregue, cancelado), o foco vai para a seguinte ou para o título, pela
-   * regra da fila, e não cai no corpo da página.
+   * O diálogo devolve o foco à linha que o abriu (2.4.3), no lugar do corpo
+   * da página, onde o Radix o poria sem DialogTrigger. Com a linha ainda na
+   * fila, ao controle que o abriu ou à ação dela; quando a releitura a tirar
+   * depois, a fila leva o foco à seguinte. Se ela já saiu (entregue,
+   * cancelado), à ação da seguinte ou ao título do grupo de onde ela saiu por
+   * último: o pedido que passou de "Para separar" a "Para entregar" volta em
+   * "Para entregar".
    */
   const devolverFocoDoDialogo = (evento: Event) => {
-    const chave = linhaDoDialogo.current;
+    const aberto = linhaDoDialogo.current;
     linhaDoDialogo.current = null;
-    const destino = chave ? paraEntregar.focoDaSaida(chave) ?? paraSeparar.focoDaSaida(chave) : null;
+    if (!aberto) return;
+    const filas = [paraAprovar, paraSeparar, paraEntregar];
+    const ultimaSaida = filas
+      .map((fila) => fila.saida(aberto.chave))
+      .reduce<{ foco: HTMLElement | null; em: number } | null>((ultima, saida) => (saida && (!ultima || saida.em > ultima.em) ? saida : ultima), null);
+    const destino = filas.map((fila) => fila.focoNaLinha(aberto.chave, aberto.abridor)).find(Boolean) ?? ultimaSaida?.foco;
     if (!destino) return;
     evento.preventDefault();
     destino.focus();
@@ -651,6 +665,7 @@ export default function Pedidos() {
               title="Para aprovar"
               count={paraAprovar.chaves.length}
               rolarContagem
+              contagemNaArvore={paraAprovar.quantasFicam}
               semSaltos
               listaRef={paraAprovar.ref}
               tituloRef={paraAprovar.titulo}
@@ -681,6 +696,7 @@ export default function Pedidos() {
                             return;
                           }
                           setRejectReason("");
+                          lembrarDaLinha(request.id);
                           setDialog({ kind: "reject", request });
                         }}
                       />
@@ -695,6 +711,7 @@ export default function Pedidos() {
             title="Para separar"
             count={paraSeparar.chaves.length}
             rolarContagem
+            contagemNaArvore={paraSeparar.quantasFicam}
             semSaltos
             listaRef={paraSeparar.ref}
             tituloRef={paraSeparar.titulo}
@@ -736,6 +753,7 @@ export default function Pedidos() {
             title="Para entregar"
             count={paraEntregar.chaves.length}
             rolarContagem
+            contagemNaArvore={paraEntregar.quantasFicam}
             semSaltos
             listaRef={paraEntregar.ref}
             tituloRef={paraEntregar.titulo}
@@ -771,7 +789,7 @@ export default function Pedidos() {
                                 setDriver(saida.motorista);
                                 setPlate(saida.placa);
                               }
-                              linhaDoDialogo.current = order.key;
+                              lembrarDaLinha(order.key);
                               setDialog({ kind: "deliver", order });
                             }}
                           >

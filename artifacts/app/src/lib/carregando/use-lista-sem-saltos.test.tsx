@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { usePalcoSemSaltos } from "./palco-sem-saltos";
+import { gravarRefluxos, type RefluxosGravados } from "@/test/refluxo";
+
+import { CURVA_DO_REFLUXO, usePalcoSemSaltos } from "./palco-sem-saltos";
 import { CARREGANDO } from "./tempo";
 import { useListaSemSaltos } from "./use-lista-sem-saltos";
 
@@ -12,7 +14,9 @@ import { useListaSemSaltos } from "./use-lista-sem-saltos";
  * esmaece e as de baixo sobem por FLIP, só com transform; nada se mexe sob o
  * dedo (a saída espera até 3 s); o foco que estava na linha vai para a
  * seguinte ou para o título; no reduzido, sem deslocamento. O jsdom não tem
- * layout: cada linha mede 80 px, na ordem em que está na lista.
+ * layout: cada linha mede 80 px, na ordem em que está na lista, e o refluxo
+ * que corre soma o que falta dele (linear), como o navegador mede a peça no
+ * meio do caminho.
  */
 
 const ALTURA = 80;
@@ -20,8 +24,14 @@ const TOPO_DA_LISTA = 120;
 
 let raiz: Root | null = null;
 let container: HTMLDivElement | null = null;
+let refluxos: RefluxosGravados;
 
-function Fila({ chaves, pronta = true, realcar }: { chaves: string[]; pronta?: boolean; realcar?: (chave: string) => boolean }) {
+/** O deslocamento que os refluxos que correm na peça ainda dão agora (lineares, para o teste). */
+function noMeioDoRefluxo(peca: Element): number {
+  return refluxos.noMeio(peca);
+}
+
+function Fila({ chaves, pronta = true, realcar, celular = false }: { chaves: string[]; pronta?: boolean; realcar?: (chave: string) => boolean; celular?: boolean }) {
   const lista = useListaSemSaltos(chaves, { pronta, realcar });
   return (
     <section>
@@ -31,10 +41,20 @@ function Fila({ chaves, pronta = true, realcar }: { chaves: string[]; pronta?: b
       <div ref={lista.ref} data-lista="">
         {lista.chaves.map((chave) => (
           <div key={chave} {...lista.linha(chave)}>
-            <button type="button">Recusar {chave}</button>
-            <button type="button" data-foco-da-linha="">
-              Aprovar {chave}
-            </button>
+            {/* Como a linha do pedido: a ação do computador e, no celular, a mesma de novo, depois dos itens. */}
+            <div className={celular ? "hidden sm:flex" : undefined}>
+              <button type="button">Recusar {chave}</button>
+              <button type="button" data-foco-da-linha="">
+                Aprovar {chave}
+              </button>
+            </div>
+            {celular ? (
+              <div className="sm:hidden">
+                <button type="button" data-foco-da-linha="" data-celular="">
+                  Aprovar {chave}
+                </button>
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
@@ -42,9 +62,9 @@ function Fila({ chaves, pronta = true, realcar }: { chaves: string[]; pronta?: b
   );
 }
 
-async function desenhar(chaves: string[], pronta = true, realcar?: (chave: string) => boolean) {
+async function desenhar(chaves: string[], pronta = true, realcar?: (chave: string) => boolean, celular = false) {
   await act(async () => {
-    raiz!.render(<Fila chaves={chaves} pronta={pronta} realcar={realcar} />);
+    raiz!.render(<Fila chaves={chaves} pronta={pronta} realcar={realcar} celular={celular} />);
   });
 }
 
@@ -76,20 +96,9 @@ async function tocarNaLista() {
   });
 }
 
-/** Cada transform que o elemento teve, na ordem, até agora. */
-function observarTransform(alvo: HTMLElement) {
-  // O valor de antes de cada mudança; o primeiro é o de quando começou a observar.
-  const valores: string[] = [];
-  const guardar = (registros: MutationRecord[]) => {
-    for (const registro of registros) valores.push(registro.oldValue ?? "");
-  };
-  const observador = new MutationObserver(guardar);
-  observador.observe(alvo, { attributes: true, attributeFilter: ["style"], attributeOldValue: true });
-  return () => {
-    guardar(observador.takeRecords());
-    observador.disconnect();
-    return [...valores.slice(1), alvo.getAttribute("style") ?? ""].filter((valor) => valor.includes("transform"));
-  };
+/** De onde cada refluxo da peça partiu, na ordem. */
+function partidas(alvo: Element): number[] {
+  return refluxos.de(alvo).map((refluxo) => refluxo.anda);
 }
 
 function reduzido(ligado: boolean) {
@@ -107,11 +116,12 @@ function reduzido(ligado: boolean) {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  // A linha mede 80 px e fica no lugar dela na lista; o transform não conta (o layout).
+  refluxos = gravarRefluxos();
+  // A linha mede 80 px e fica no lugar dela na lista, mais o que falta do refluxo que corre nela.
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
     const pai = this.parentElement;
     const irmas = pai ? Array.from(pai.children).filter((filho) => filho.hasAttribute("data-chave")) : [];
-    const topo = this.hasAttribute("data-chave") ? TOPO_DA_LISTA + irmas.indexOf(this) * ALTURA : TOPO_DA_LISTA;
+    const topo = (this.hasAttribute("data-chave") ? TOPO_DA_LISTA + irmas.indexOf(this) * ALTURA : TOPO_DA_LISTA) + noMeioDoRefluxo(this);
     return { top: topo, bottom: topo + ALTURA, left: 0, right: 600, width: 600, height: ALTURA, x: 0, y: topo, toJSON: () => ({}) } as DOMRect;
   });
   container = document.createElement("div");
@@ -124,6 +134,7 @@ afterEach(() => {
   raiz = null;
   container?.remove();
   container = null;
+  refluxos.restaurar();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -148,22 +159,22 @@ describe("a linha que sai", () => {
   it("as de baixo sobem por FLIP: partem de onde estavam, só com transform, e as de cima não se mexem", async () => {
     await desenhar(["1040", "1042", "1043", "1045"]);
     await desenhar(["1040", "1043", "1045"]);
-    const transformsDa1043 = observarTransform(linha("1043")!);
-    const transformsDa1040 = observarTransform(linha("1040")!);
 
     await passar(CARREGANDO.saiLinhaMs);
     expect(naTela()).toEqual(["1040", "1043", "1045"]);
-    // A 1043 subiu 80 px: partiu de +80 px e anda para o lugar novo com a transição do data-reflui.
-    expect(transformsDa1043()).toEqual([expect.stringContaining("transform: translateY(80px)")]);
-    expect(linha("1043")!.style.transform).toBe("");
-    expect(linha("1043")!.hasAttribute("data-reflui")).toBe(true);
-    expect(linha("1045")!.hasAttribute("data-reflui")).toBe(true);
+    // A 1043 subiu 80 px: parte de +80 px e anda para o lugar novo em 240 ms, na curva padrão, só pelo translate.
+    expect(partidas(linha("1043")!)).toEqual([80]);
+    expect(partidas(linha("1045")!)).toEqual([80]);
+    const [refluxo] = refluxos.de(linha("1043")!);
+    expect(refluxo.duracao).toBe(CARREGANDO.refluiMs);
+    expect(refluxo.curva).toBe(CURVA_DO_REFLUXO);
+    expect(refluxo.quadros).toEqual([{ translate: "0 80px" }, { translate: "0 0" }]);
+    expect(linha("1043")!.getAttribute("style")).toBeNull();
     // A de cima ficou onde estava.
-    expect(transformsDa1040()).toEqual([]);
-    expect(linha("1040")!.hasAttribute("data-reflui")).toBe(false);
+    expect(partidas(linha("1040")!)).toEqual([]);
 
     await passar(CARREGANDO.refluiMs);
-    expect(linha("1043")!.hasAttribute("data-reflui")).toBe(false);
+    expect(refluxos.correndo(linha("1043")!)).toEqual([]);
   });
 
   it("a que volta às chaves antes de sair fica na lista", async () => {
@@ -177,24 +188,34 @@ describe("a linha que sai", () => {
     expect(naTela()).toEqual(["1042", "1043"]);
   });
 
-  it("duas saídas seguidas: o fim do primeiro refluxo não corta o segundo, que começou depois", async () => {
+  it("duas saídas seguidas: o segundo refluxo soma com o primeiro, que segue no relógio dele, e a peça não pula nem para", async () => {
     await desenhar(["1040", "1042", "1043", "1045", "1046"]);
     await desenhar(["1040", "1043", "1045", "1046"]);
     await passar(100);
     await desenhar(["1040", "1045", "1046"]);
-    // Aos 200 ms a 1042 sai e as de baixo sobem até os 440 ms.
+    // Aos 200 ms a 1042 sai e as de baixo sobem até os 440 ms, também a 1043, que ainda esmaece.
     await passar(100);
     expect(naTela()).toEqual(["1040", "1043", "1045", "1046"]);
-    expect(linha("1045")!.hasAttribute("data-reflui")).toBe(true);
-    // Aos 300 ms a 1043 sai, e a 1045 e a 1046 sobem de novo, até os 540 ms.
+    expect(linha("1043")?.dataset.naLista).toBe("saindo");
+    expect(partidas(linha("1043")!)).toEqual([80]);
+    expect(partidas(linha("1045")!)).toEqual([80]);
+    // Aos 300 ms a 1043 sai: a 1045 ainda estava a 80 × 140/240 px do lugar. O primeiro refluxo segue, e o
+    // segundo soma os 80 px da mudança: a peça fica onde estava, sem cancelar nem recomeçar do zero.
     await passar(100);
     expect(naTela()).toEqual(["1040", "1045", "1046"]);
-    await passar(CARREGANDO.refluiMs - 100 + 1);
-    expect(linha("1045")!.hasAttribute("data-reflui")).toBe(true);
-    expect(linha("1046")!.hasAttribute("data-reflui")).toBe(true);
-    await passar(100);
-    expect(linha("1045")!.hasAttribute("data-reflui")).toBe(false);
-    expect(linha("1046")!.hasAttribute("data-reflui")).toBe(false);
+    const [primeiro, segundo] = refluxos.de(linha("1045")!);
+    expect(primeiro).toMatchObject({ anda: 80, composicao: "replace", cancelado: false });
+    expect(segundo).toMatchObject({ composicao: "add", cancelado: false });
+    expect(segundo.anda).toBeCloseTo(80, 5);
+    expect(linha("1045")!.getBoundingClientRect().top).toBeCloseTo(TOPO_DA_LISTA + ALTURA + 80 + (80 * 140) / 240, 5);
+    expect(refluxos.correndo(linha("1046")!).map((refluxo) => Math.round(refluxo.anda))).toEqual([80, 80]);
+    // O primeiro termina aos 440 ms; o segundo, aos 540.
+    await passar(CARREGANDO.refluiMs - 100);
+    expect(refluxos.correndo(linha("1045")!)).toEqual([segundo]);
+    await passar(99);
+    expect(refluxos.correndo(linha("1045")!)).toEqual([segundo]);
+    await passar(1);
+    expect(refluxos.correndo(linha("1045")!)).toEqual([]);
   });
 
   it("a tela que sai no meio da saída não deixa relógio nem erro", async () => {
@@ -288,6 +309,25 @@ describe("a lista não se mexe sob o dedo", () => {
 });
 
 describe("o foco na linha que sai", () => {
+  it("no celular, vai para a ação da linha seguinte que se vê, não para a do computador, escondida", async () => {
+    // No celular (abaixo do sm), o que está dentro de um .hidden não se vê.
+    Object.defineProperty(HTMLElement.prototype, "checkVisibility", {
+      configurable: true,
+      writable: true,
+      value: function checkVisibility(this: HTMLElement) {
+        return this.closest(".hidden") === null;
+      },
+    });
+    onTestFinished(() => {
+      delete (HTMLElement.prototype as { checkVisibility?: unknown }).checkVisibility;
+    });
+    await desenhar(["1042", "1043", "1045"], true, undefined, true);
+    const doCelular = (chave: string) => linha(chave)!.querySelector<HTMLButtonElement>("[data-celular]")!;
+    doCelular("1042").focus();
+    await desenhar(["1043", "1045"], true, undefined, true);
+    expect(document.activeElement).toBe(doCelular("1043"));
+  });
+
   it("vai para a ação da linha seguinte", async () => {
     await desenhar(["1042", "1043", "1045"]);
     botao("Recusar 1042").focus();
@@ -313,16 +353,15 @@ describe("o foco na linha que sai", () => {
 describe("a linha que chega", () => {
   it("fica chegando enquanto espera o cartão e entra, sem realce, e as de baixo descem por FLIP, sem pular", async () => {
     await desenhar(["1043", "1045"]);
-    const transformsDa1043 = observarTransform(linha("1043")!);
     await desenhar(["1042", "1043", "1045"]);
     expect(naTela()).toEqual(["1042", "1043", "1045"]);
     expect(linha("1042")?.dataset.naLista).toBe("chegando");
     // A releitura e o tempo real não dão sinal: sem a ação nesta tela, nada de realce.
     expect(linha("1042")?.hasAttribute("data-realce")).toBe(false);
     expect(linha("1043")?.dataset.naLista).toBe("parada");
-    // A 1043 desceu 80 px: parte de onde estava e anda para o lugar novo, só por transform.
-    expect(transformsDa1043()).toEqual([expect.stringContaining("transform: translateY(-80px)")]);
-    expect(linha("1043")!.hasAttribute("data-reflui")).toBe(true);
+    // A 1043 desceu 80 px: parte de onde estava e anda para o lugar novo, só por transform; a que chega, não.
+    expect(partidas(linha("1043")!)).toEqual([-80]);
+    expect(partidas(linha("1042")!)).toEqual([]);
     await passar(CARREGANDO.chegaEsperaMs + CARREGANDO.destaqueMs - 1);
     expect(linha("1042")?.dataset.naLista).toBe("chegando");
     await passar(1);
@@ -356,11 +395,9 @@ describe("no movimento reduzido", () => {
     await desenhar(["1042", "1043", "1045"]);
     await desenhar(["1043", "1045"]);
     expect(linha("1042")?.dataset.naLista).toBe("saindo");
-    const transformsDa1043 = observarTransform(linha("1043")!);
     await passar(CARREGANDO.saiLinhaMs);
     expect(naTela()).toEqual(["1043", "1045"]);
-    expect(transformsDa1043()).toEqual([]);
-    expect(linha("1043")!.hasAttribute("data-reflui")).toBe(false);
+    expect(refluxos.todos()).toEqual([]);
   });
 });
 
@@ -401,7 +438,7 @@ describe("com o palco da tela", () => {
     );
   }
 
-  /** A posição no layout falso: as linhas e o título empilhados na ordem do palco. */
+  /** A posição no layout falso: as linhas e o título empilhados na ordem do palco, mais o refluxo que corre. */
   function noPalco(alvo: HTMLElement): DOMRect {
     const palco = container!.querySelector("[data-palco-de-teste]")!;
     let topo = 0;
@@ -411,7 +448,8 @@ describe("com o palco da tela", () => {
       if (peca === alvo) achado = [topo, altura];
       topo += altura;
     }
-    const [top, height] = achado ?? [0, 0];
+    const [lugar, height] = achado ?? [0, 0];
+    const top = lugar + noMeioDoRefluxo(alvo);
     return { top, bottom: top + height, left: 0, right: 600, width: 600, height, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
   }
 
@@ -435,15 +473,67 @@ describe("com o palco da tela", () => {
     await desenharDuas(["1042", "1043"], ["2001"]);
     await desenharDuas(["1043"], ["2001"]);
     const titulo = container!.querySelector<HTMLElement>("h2")!;
-    const transformsDoTitulo = observarTransform(titulo);
-    const transformsDa2001 = observarTransform(emB("2001")!);
 
     await passar(CARREGANDO.saiLinhaMs);
-    expect(transformsDoTitulo()).toEqual([expect.stringContaining("transform: translateY(80px)")]);
-    expect(transformsDa2001()).toEqual([expect.stringContaining("transform: translateY(80px)")]);
-    expect(titulo.hasAttribute("data-reflui")).toBe(true);
+    expect(partidas(titulo)).toEqual([80]);
+    expect(partidas(emB("2001")!)).toEqual([80]);
     await passar(CARREGANDO.refluiMs);
-    expect(titulo.hasAttribute("data-reflui")).toBe(false);
+    expect(refluxos.correndo(titulo)).toEqual([]);
+  });
+
+  it("o palco lê todas as peças antes de mexer em qualquer uma: um layout só no quadro do soltar", async () => {
+    await desenharDuas(["1042", "1043"], ["2001", "2002"]);
+    await desenharDuas(["1043"], ["2001", "2002"]);
+    // Quantos refluxos já tinham começado em cada leitura de posição.
+    const leituras: number[] = [];
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      leituras.push(refluxos.todos().length);
+      return noPalco(this);
+    });
+
+    await passar(CARREGANDO.saiLinhaMs);
+    expect(refluxos.todos().length).toBeGreaterThanOrEqual(3);
+    expect(leituras.length).toBeGreaterThan(0);
+    expect(leituras.every((quantos) => quantos === 0)).toBe(true);
+  });
+
+  it("o refluxo leva a linha que chega e a que sai, somando com o transform delas: só translate, nunca transform", async () => {
+    await desenharDuas(["1042", "1043"], ["2001"]);
+    // Chega a 2000 no topo da B, e logo a 1043 começa a sair da A.
+    await desenharDuas(["1042", "1043"], ["2000", "2001"]);
+    expect(emB("2000")?.dataset.naLista).toBe("chegando");
+    await desenharDuas(["1042"], ["2000", "2001"]);
+    await passar(50);
+    // A 1042 sai da A enquanto a 1043 esmaece embaixo dela.
+    await desenharDuas([], ["2000", "2001"]);
+    await passar(CARREGANDO.saiLinhaMs - 50);
+    // Aos 200 ms a 1043 deixa a A: a 1042, que esmaece, não se mexe (está em cima); a 2000, que chega, sobe 80.
+    expect(emB("2000")?.dataset.naLista).toBe("chegando");
+    expect(partidas(emB("2000")!).at(-1)).toBe(80);
+    await passar(50);
+    // Aos 250 ms a 1042 deixa a A: tudo abaixo sobe mais 80, também a que chega, somado ao que ela ainda subia.
+    expect(refluxos.correndo(emB("2000")!).map((refluxo) => [Math.round(refluxo.anda), refluxo.composicao])).toEqual([
+      [80, "replace"],
+      [80, "add"],
+    ]);
+    for (const refluxo of refluxos.todos()) {
+      for (const quadro of refluxo.quadros) expect(Object.keys(quadro).every((nome) => nome === "translate" || nome === "scale")).toBe(true);
+    }
+  });
+
+  it("um toque numa fila segura a outra: nada no palco se mexe sob o dedo", async () => {
+    await desenharDuas(["1042", "1043"], ["2001"]);
+    await act(async () => {
+      container!.querySelector('[data-lista="b"]')!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+    await desenharDuas(["1043"], ["2001"]);
+    const saiDaA = () => container!.querySelector<HTMLElement>('[data-lista="a"] [data-chave="1042"]');
+    expect(saiDaA()?.dataset.naLista).toBe("esperando");
+    await passar(CARREGANDO.dedoMs - 1);
+    expect(saiDaA()?.dataset.naLista).toBe("esperando");
+    expect(refluxos.todos()).toEqual([]);
+    await passar(1);
+    expect(saiDaA()?.dataset.naLista).toBe("saindo");
   });
 
   it("a linha que sai da A e entra na B reflui de uma vez, da foto de antes: quem fica no mesmo lugar não se mexe", async () => {
@@ -452,28 +542,22 @@ describe("com o palco da tela", () => {
     // Enquanto esmaece na A, ela não entra na B.
     expect(emB("1042")).toBeNull();
     const titulo = container!.querySelector<HTMLElement>("h2")!;
-    const transformsDoTitulo = observarTransform(titulo);
-    const transformsDa2001 = observarTransform(emB("2001")!);
 
     await passar(CARREGANDO.saiLinhaMs);
     expect(emB("1042")?.dataset.naLista).toBe("chegando");
     // O título sobe 80 px; a 2001, que tinha a 1042 em cima e agora tem a 1042 em cima de novo, fica onde estava.
-    expect(transformsDoTitulo()).toEqual([expect.stringContaining("transform: translateY(80px)")]);
-    expect(transformsDa2001()).toEqual([]);
+    expect(partidas(titulo)).toEqual([80]);
+    expect(partidas(emB("2001")!)).toEqual([]);
     // A que chega não reflui: ela entra.
-    expect(emB("1042")!.style.transform).toBe("");
-    expect(emB("1042")!.hasAttribute("data-reflui")).toBe(false);
+    expect(partidas(emB("1042")!)).toEqual([]);
   });
 
   it("no movimento reduzido nada desliza: o título e as linhas pulam para o lugar", async () => {
     reduzido(true);
     await desenharDuas(["1042", "1043"], ["2001"]);
     await desenharDuas(["1043"], ["2001"]);
-    const titulo = container!.querySelector<HTMLElement>("h2")!;
-    const transformsDoTitulo = observarTransform(titulo);
     await passar(CARREGANDO.saiLinhaMs);
-    expect(transformsDoTitulo()).toEqual([]);
-    expect(container!.querySelectorAll("[data-reflui]")).toHaveLength(0);
+    expect(refluxos.todos()).toEqual([]);
   });
 
   it("a tela que sai no meio do refluxo não deixa relógio", async () => {

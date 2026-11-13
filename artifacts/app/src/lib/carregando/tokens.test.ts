@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import { CURVA_DO_REFLUXO } from "./palco-sem-saltos";
 import { CARREGANDO } from "./tempo";
 
 /**
@@ -186,6 +187,8 @@ describe("os tokens do carregamento", () => {
     expect(tema.get("--ease-carregando-entrada")).toBe("cubic-bezier(0.2, 0, 0, 1)");
     expect(tema.get("--ease-carregando-saida")).toBe("cubic-bezier(0.4, 0, 1, 1)");
     expect(tema.get("--ease-carregando-padrao")).toBe("cubic-bezier(0.4, 0, 0.2, 1)");
+    // O refluxo do palco (Web Animations) anda na mesma curva.
+    expect(tema.get("--ease-carregando-padrao")).toBe(CURVA_DO_REFLUXO);
     // A mola de rigidez 200 e amortecimento 0,6 (pico de 9,5%), onde o navegador tem linear().
     const mola = variaveis(":root", ["@supports (transition-timing-function: linear(0, 1))"]).get("--carregando-mola");
     expect(junto(mola)).toBe(

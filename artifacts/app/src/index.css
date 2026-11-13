@@ -1544,15 +1544,17 @@
 /* A lista sem saltos (lib/carregando/use-lista-sem-saltos.ts e
    palco-sem-saltos.ts; momento 4): a linha que sai esmaece em 200 ms, com 6
    px para cima, e fica sem toque; as de baixo, o cartão, os títulos e os
-   grupos seguintes sobem por FLIP (o palco põe o transform de partida e o
-   data-reflui) em 240 ms. A que chega espera o cartão chegar e entra em 240
-   ms, com a subida de 4 px; só a que veio de uma ação nesta tela tem o realce
-   verde suave (data-realce), que fica 1 s e apaga no fim. A contagem que muda
-   (3 → 2) rola 8 px em 160 ms: o número velho sobe e sai, o novo sobe e entra
-   (components/ui/queue-list.tsx). No reduzido, só opacidade: a linha some
-   sem deslocamento, o resto pula para o lugar (o palco não faz FLIP), a que
-   chega esmaece desde o começo, o realce entra e sai por opacidade e a
-   contagem troca. */
+   grupos seguintes sobem por FLIP em 240 ms (o palco anima o translate de
+   cada peça, que soma com o transform destes keyframes, no tempo e na curva
+   de --carregando-t-reflui e --ease-carregando-padrao, os mesmos de
+   CARREGANDO.refluiMs e CURVA_DO_REFLUXO). A que chega espera o cartão
+   chegar e entra em 240 ms, com a subida de 4 px; só a que veio de uma
+   ação nesta tela tem o realce verde suave (data-realce), que fica 1 s e
+   apaga no fim. A contagem que muda (3 → 2) rola 8 px em 160 ms: o número
+   velho sobe e sai, o novo sobe e entra (components/ui/queue-list.tsx). No
+   reduzido, só opacidade: a linha some sem deslocamento, o resto pula para
+   o lugar (o palco não faz FLIP), a que chega esmaece desde o começo, o
+   realce entra e sai por opacidade e a contagem troca. */
 @keyframes carregando-sai-linha {
   to {
     opacity: 0;
@@ -1614,9 +1616,13 @@
     animation: carregando-realce var(--carregando-t-destaque) var(--ease-carregando-padrao) var(--carregando-t-chega-espera) both;
   }
 
-  /* As peças do palco que refluem: as linhas, os títulos e os pedaços do cartão. */
-  [data-reflui] {
-    transition: transform var(--carregando-t-reflui) var(--ease-carregando-padrao);
+  /* Os controles que a espera travou (LinhaDaFila, a linha que já saiu dos
+     dados e espera o dedo): aria-disabled a 0,45, como o travado do
+     BotaoDeAcao, e sem hover nem toque. O toque cai na linha e continua
+     contando para o dedo; a trava do teclado está no código. */
+  [data-na-lista] [data-trava-da-espera] {
+    opacity: 0.45;
+    pointer-events: none;
   }
 
   /* O cartão de uma fila sem saltos (QueueGroup com semSaltos), como na
@@ -1626,11 +1632,20 @@
      a partir do alto, 1 px por baixo de cada tampa. O cartão não recorta as
      linhas na altura: a que sobe de onde estava fica inteira, dentro da
      moldura que anda junto. A primeira e a última linha recortam o próprio
-     fundo nos cantos (o raio da lista), e a lista recorta só na largura. */
+     fundo nos cantos (o raio da lista), e a lista recorta só na largura.
+     Como no cartão de sempre, as linhas ficam dentro da borda (1 px) e têm
+     o fundo do cartão: quem mede o contraste (o axe no navegador) lê o
+     branco do cartão, e não o fundo da página. A que sai fica sem ele: ao
+     subir 6 px, não cobre a linha de cima. */
   .fila-cartao {
     --fila-tampa: 1rem;
     position: relative;
     isolation: isolate;
+    padding: 1px;
+  }
+
+  .fila-cartao [data-chave]:not([data-na-lista="saindo"]) {
+    background-color: hsl(var(--card));
   }
 
   .fila-cartao > [data-moldura] {

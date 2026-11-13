@@ -50,16 +50,27 @@ export interface ListaSemSaltos {
   titulo: RefCallback<HTMLElement>;
   /** As chaves na tela, na ordem: as de agora e as que ainda saem, no lugar de antes. */
   chaves: readonly string[];
+  /** Quantas linhas ficam na árvore de acessibilidade: as da tela menos as que saem (inert). */
+  quantasFicam: number;
   estado(chave: string): EstadoNaLista;
   /** Os atributos do elemento da linha. */
   linha(chave: string): AtributosDaLinha;
   /**
-   * Onde o foco fica quando a linha `chave` sai ou já saiu: a ação da linha
-   * seguinte que fica ou, sem ela, o título. Nulo se a linha continua na
-   * lista (ou nunca esteve nela). Para quem devolve o foco depois (o diálogo
-   * que fecha e voltaria ao botão da linha que já saiu).
+   * Para quem devolve o foco depois (o diálogo que fecha), com a linha
+   * `chave` ainda na lista (parada, chegando ou esperando): o `abridor` (o
+   * controle que abriu o diálogo), se é dela e pode receber o foco, ou a ação
+   * dela, a que se vê. Nulo se a linha não está na lista ou já está saindo.
    */
-  focoDaSaida(chave: string): HTMLElement | null;
+  focoNaLinha(chave: string, abridor?: Element | null): HTMLElement | null;
+  /**
+   * Quando a linha `chave` saiu ou começou a sair desta lista, e onde o foco
+   * fica por isso: a ação da linha seguinte que fica ou, sem ela, o título.
+   * Nulo se a linha continua na lista (ou nunca esteve nela). O `em` (o
+   * relógio do performance) escolhe, entre os grupos, o último de onde ela
+   * saiu: o pedido que passou de "Para separar" a "Para entregar" e foi
+   * entregue devolve o foco em "Para entregar".
+   */
+  saida(chave: string): { foco: HTMLElement | null; em: number } | null;
 }
 
 interface Estado {
@@ -78,6 +89,22 @@ const SAIDAS_LEMBRADAS = 20;
 
 /** O alvo do foco numa linha: a ação marcada com `data-foco-da-linha` ou, sem ela, o primeiro controle. */
 const FOCAVEIS = 'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Se o controle pode receber o foco: habilitado e à vista. A linha desenha a
+ * ação duas vezes (a do computador e a do celular, uma delas com display:
+ * none), e o foco vai para a que se vê. Sem checkVisibility (o jsdom), conta
+ * como à vista.
+ */
+function podeFocar(controle: HTMLElement): boolean {
+  if (controle.matches(":disabled")) return false;
+  return typeof controle.checkVisibility === "function" ? controle.checkVisibility() : true;
+}
+
+/** A ação da linha que recebe o foco: a marcada com `data-foco-da-linha` ou o primeiro controle, a que se vê. */
+function acaoDa(linha: HTMLElement): HTMLElement | undefined {
+  return [...linha.querySelectorAll<HTMLElement>("[data-foco-da-linha]"), ...linha.querySelectorAll<HTMLElement>(FOCAVEIS)].find(podeFocar);
+}
 
 const agora = () => performance.now();
 
@@ -117,14 +144,14 @@ function linhaDa(lista: HTMLElement, chave: string): HTMLElement | undefined {
  *
  * - A linha que sai das `chaves` fica na tela e esmaece em 200 ms (opacidade
  *   e −6 px, `data-na-lista="saindo"`, inert); depois deixa a lista, e as de
- *   baixo sobem por FLIP, só com `transform` (240 ms, `data-reflui`). Com o
- *   `palco` da tela, sobem junto o cartão, os títulos e os grupos de baixo.
+ *   baixo sobem por FLIP, só com transform (240 ms, o refluxo do palco). Com
+ *   o `palco` da tela, sobem junto o cartão, os títulos e os grupos de baixo.
  * - A que chega fica `chegando`: entra em 240 ms, depois que o cartão chegou,
  *   e só a que veio de uma ação nesta tela (`realcar`) tem o realce de 1 s.
- * - Nada sai nem entra se alguém tocou na lista nos últimos 700 ms; a espera
- *   vai até 3 s.
+ * - Nada sai nem entra se alguém tocou numa lista do palco nos últimos 700
+ *   ms; a espera vai até 3 s.
  * - Se o foco estava na linha que sai, ele vai para a ação da linha seguinte
- *   ou, sem ela, para o título do grupo.
+ *   (a que se vê) ou, sem ela, para o título do grupo.
  * - No movimento reduzido, a linha some só por opacidade e as de baixo pulam
  *   para o lugar, sem deslocamento.
  *
@@ -151,7 +178,6 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
   const montada = useRef(false);
   const lista = useRef<HTMLElement | null>(null);
   const titulo = useRef<HTMLElement | null>(null);
-  const ultimoToque = useRef<number | null>(null);
   /** Desde quando a mudança espera o dedo sair. */
   const pendenteDesde = useRef<number | null>(null);
   /** Quando cada linha que sai foi vista fora das chaves, e quando começou a esmaecer. */
@@ -169,22 +195,22 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
     return timer;
   }, []);
 
-  /** Até quando o dedo segura a lista; nulo se ela já pode mudar. */
+  /** Até quando o dedo segura a lista (um toque em qualquer lista do palco); nulo se ela já pode mudar. */
   const presaAte = useCallback((instante: number, desde: number): number | null => {
-    const toque = ultimoToque.current;
+    const toque = palco.current.ultimoToque();
     if (toque === null) return null;
     const livre = toque + CARREGANDO.dedoMs;
     const limite = desde + CARREGANDO.dedoMaxMs;
     return instante >= livre || instante >= limite ? null : Math.min(livre, limite);
   }, []);
 
-  /** A linha seguinte que fica, de cada linha que começou a sair (a mais nova no fim). */
-  const saidas = useRef(new Map<string, string | null>());
+  /** A linha seguinte que fica, de cada linha que começou a sair, e quando (a mais nova no fim). */
+  const saidas = useRef(new Map<string, { seguinte: string | null; em: number }>());
 
-  /** O foco de quem sai: a ação da linha `seguinte` ou, sem ela, o título do grupo. */
+  /** O foco de quem sai: a ação da linha `seguinte`, a que se vê, ou, sem ela, o título do grupo. */
   const destinoDoFoco = useCallback((seguinte: string | null | undefined): HTMLElement | null => {
     const linha = seguinte && lista.current ? linhaDa(lista.current, seguinte) : undefined;
-    return linha?.querySelector<HTMLElement>("[data-foco-da-linha]") ?? linha?.querySelector<HTMLElement>(FOCAVEIS) ?? titulo.current;
+    return (linha && acaoDa(linha)) ?? titulo.current;
   }, []);
 
   /** O foco que estava numa linha que sai vai para a ação da linha seguinte, ou para o título. */
@@ -192,10 +218,11 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
     (saem: readonly string[], exibidas: readonly string[], ficam: ReadonlySet<string>) => {
       const elemento = lista.current;
       const ativo = typeof document === "undefined" ? null : document.activeElement;
+      const instante = agora();
       for (const chave of saem) {
         const seguinte = exibidas.slice(exibidas.indexOf(chave) + 1).find((outra) => ficam.has(outra)) ?? null;
         saidas.current.delete(chave);
-        saidas.current.set(chave, seguinte);
+        saidas.current.set(chave, { seguinte, em: instante });
         if (saidas.current.size > SAIDAS_LEMBRADAS) saidas.current.delete(saidas.current.keys().next().value!);
         if (elemento && ativo && linhaDa(elemento, chave)?.contains(ativo)) destinoDoFoco(seguinte)?.focus();
       }
@@ -349,8 +376,9 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
     // são lidos quando a lista muda.
   }, [assinatura, estado, pronta, reconciliar]);
 
+  // O toque conta para o palco inteiro: com o palco da tela, segura também as outras filas.
   const [tocou] = useState(() => () => {
-    ultimoToque.current = agora();
+    palco.current.tocou();
   });
 
   const ref = useCallback<RefCallback<HTMLElement>>(
@@ -379,20 +407,31 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
       ref,
       titulo: tituloRef,
       chaves: estado.exibidas,
+      quantasFicam: estado.exibidas.length - estado.saindo.size,
       estado: estadoDe,
-      focoDaSaida: (chave) => {
+      focoNaLinha: (chave, abridor) => {
+        // Lido na hora: a lista pode ter andado depois deste desenho.
+        const elemento = lista.current;
+        if (!elemento || atual.current.saindo.has(chave) || !atual.current.exibidas.includes(chave)) return null;
+        const linha = linhaDa(elemento, chave);
+        if (!linha) return null;
+        if (abridor instanceof HTMLElement && abridor.isConnected && linha.contains(abridor) && podeFocar(abridor)) return abridor;
+        return acaoDa(linha) ?? titulo.current;
+      },
+      saida: (chave) => {
         // Lido na hora: a lista pode ter andado depois deste desenho.
         const naTela = new Set(atual.current.exibidas);
         const ficam = new Set(alvo.current);
-        if (!saidas.current.has(chave) || (ficam.has(chave) && naTela.has(chave))) return null;
+        const saiu = saidas.current.get(chave);
+        if (!saiu || (ficam.has(chave) && naTela.has(chave))) return null;
         // A seguinte que ainda fica; se ela também saiu, a seguinte dela.
-        let seguinte = saidas.current.get(chave) ?? null;
+        let seguinte = saiu.seguinte;
         const vistas = new Set<string>();
         while (seguinte && !(ficam.has(seguinte) && naTela.has(seguinte)) && !vistas.has(seguinte)) {
           vistas.add(seguinte);
-          seguinte = saidas.current.get(seguinte) ?? null;
+          seguinte = saidas.current.get(seguinte)?.seguinte ?? null;
         }
-        return destinoDoFoco(seguinte && ficam.has(seguinte) ? seguinte : null);
+        return { foco: destinoDoFoco(seguinte && ficam.has(seguinte) ? seguinte : null), em: saiu.em };
       },
       linha: (chave) => {
         const naLista = estadoDe(chave);
