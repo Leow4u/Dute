@@ -215,6 +215,8 @@ describe("os tokens do carregamento", () => {
     expect(CARREGANDO.refluiMs - CARREGANDO.chegaEsperaMs).toBe(60);
     expect(raiz.get("--carregando-t-destaque")).toBe(`${CARREGANDO.destaqueMs}ms`);
     expect(raiz.get("--carregando-t-conta")).toBe(`${CARREGANDO.contaMs}ms`);
+    // O texto que sai da linha de estado (parte 7b) some no tempo da troca do rótulo do botão.
+    expect(raiz.get("--carregando-t-troca-sai")).toBe(`${CARREGANDO.trocaSaiMs}ms`);
     // A conexão (momento 8): a histerese, o mínimo de cada aviso e a espera das releituras sozinhas.
     expect(raiz.get("--carregando-t-sem-rede")).toBe(`${CARREGANDO.semRedeMs}ms`);
     expect(raiz.get("--carregando-t-aviso-minimo")).toBe(`${CARREGANDO.avisoMinimoMs}ms`);

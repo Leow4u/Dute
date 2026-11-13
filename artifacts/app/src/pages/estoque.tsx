@@ -78,7 +78,10 @@ import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
 import { erroDaResposta } from "@/lib/erro-da-resposta";
 import { semConexaoNaLeitura } from "@/lib/conexao";
-import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { listaLida, useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { BarraDeEspera } from "@/components/ui/barra-de-espera";
+import { BlocoSemConexao } from "@/components/ui/erro-na-leitura";
+import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -179,6 +182,17 @@ export default function Estoque() {
     void queryClient.invalidateQueries({ queryKey: ["estoque"] });
     void queryClient.invalidateQueries({ queryKey: ["stock-balances", "estoque"] });
   };
+  // A linha de estado sob o título e o Atualizar (carregamento v2, parte 7b;
+  // o Atualizar de 44 px no celular, decisão 9.4.5): a releitura automática
+  // não mostra nada; o Atualizar só mostra a espera quando a pessoa toca
+  // nele, e relê junto os dias parado e as caixas; a volta do app ao
+  // primeiro plano relê com a barra no topo da lista.
+  const leiturasDaLista = [skus, balances, products];
+  const lida = listaLida(leiturasDaLista);
+  const atualizarLista = useAtualizarLista(leiturasDaLista, () => {
+    void queryClient.invalidateQueries({ queryKey: ["stock-age", customerCode] });
+    void queryClient.invalidateQueries({ queryKey: ["warehouse-boxes", customerCode, "estoque"] });
+  });
   const regra = regraDoModelo(activeCustomer.profile.template.key);
   const hoje = hojeEmSaoPaulo();
   const parados = useMemo(
@@ -233,6 +247,7 @@ export default function Estoque() {
     <div className="flex flex-col gap-4 pb-24">
       <PageHeader
         title={`Estoque · ${activeCustomer.name}`}
+        estado={<LinhaDeEstado leitura={leiturasDaLista} objeto="estoque" pedidaPelaPessoa={atualizarLista.voltando} />}
         actions={
           <>
             {warehouseWriter ? (
@@ -256,6 +271,13 @@ export default function Estoque() {
             {/* Sem "Novo item": produto novo nasce no Receber ou na Contagem, com
                 o SKU gerado na sigla do cliente e a duplicidade conferida ali
                 (docs/multicliente-modelos-de-operacao.md, PR 2). */}
+            {tab === "items" ? (
+              <BotaoAtualizar
+                atualizando={atualizarLista.atualizando}
+                travado={leiturasDaLista.some((leitura) => leitura.isLoading)}
+                onAtualizar={atualizarLista.atualizar}
+              />
+            ) : null}
           </>
         }
       >
@@ -310,7 +332,8 @@ export default function Estoque() {
                     key={option.value}
                     selected={filter === option.value}
                     onClick={() => setFilter(option.value)}
-                    count={option.value !== "all" || counts.all ? counts[option.value] : null}
+                    // Nenhum "0" antes da primeira leitura (carregamento v2, momento 2).
+                    count={lida && (option.value !== "all" || counts.all) ? counts[option.value] : null}
                   >
                     {option.label}
                   </FilterChip>
@@ -319,13 +342,8 @@ export default function Estoque() {
             </FilterPanel>
           </div>
 
-          {!skus.isLoading && semRede && semRede.lidaEm !== null ? (
-            <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={relendo} onTentar={reler} />
-          ) : null}
-
-          {skus.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando estoque...</p>
-          ) : semRede && semRede.lidaEm === null ? (
+          {/* A primeira leitura e a falta com a lista lida ficam na linha de estado, sob o título. */}
+          {skus.isLoading ? null : semRede && semRede.lidaEm === null ? (
             <BlocoSemConexao tentando={relendo} onTentar={reler} />
           ) : skus.error && !semRede ? (
             <p className="text-sm text-destructive">Não consegui carregar o estoque.</p>
@@ -340,6 +358,7 @@ export default function Estoque() {
                 items={visible}
                 selectedKey={panelItem?.key}
                 onSelect={toggleItem}
+                barraDoTopo={<BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} />}
               />
               {desktop && panelItem ? (
                 <section className="relative overflow-hidden rounded-lg border border-border bg-card lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">
@@ -527,10 +546,13 @@ export function ItemList({
   items,
   selectedKey,
   onSelect,
+  barraDoTopo,
 }: {
   items: StockItem[];
   selectedKey?: string;
   onSelect: (item: StockItem) => void;
+  /** A barra no topo da lista que relê na volta do app (carregamento v2, momento 7, caso 3). */
+  barraDoTopo?: ReactNode;
 }) {
   const [limit, setLimit] = useState(100);
   if (!items.length) {
@@ -543,7 +565,8 @@ export function ItemList({
   const shown = items.slice(0, limit);
   return (
     <div className="flex flex-col gap-2">
-      <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="relative overflow-hidden rounded-lg border border-border bg-card">
+        {barraDoTopo}
         <div className="hidden grid-cols-[minmax(0,1fr)_200px_64px_84px] gap-3 border-b border-border/70 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50 md:grid">
           <span>Item</span>
           <span>Endereço</span>

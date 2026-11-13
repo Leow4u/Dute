@@ -88,6 +88,7 @@ export function QueueGroup({
   listaRef,
   tituloRef,
   semSaltos = false,
+  barraDoTopo,
 }: {
   title: string;
   hint?: string;
@@ -113,6 +114,11 @@ export function QueueGroup({
    * sem cortar a linha que sobe. Sem ele, o grupo de sempre (Receber).
    */
   semSaltos?: boolean;
+  /**
+   * A barra no topo do cartão que relê (a `BarraDeEspera lugar="topo"`;
+   * carregamento v2, momento 7, caso 3): dentro do cartão, no raio dele.
+   */
+  barraDoTopo?: ReactNode;
 }) {
   return (
     <section className="flex flex-col gap-2.5">
@@ -150,9 +156,20 @@ export function QueueGroup({
               {empty}
             </p>
           )}
+          {/* A barra do topo anda com a tampa de cima e fica por cima das linhas, recortada no raio. */}
+          {barraDoTopo ? (
+            <span
+              aria-hidden="true"
+              data-palco="bloco"
+              className="pointer-events-none absolute inset-x-0 top-0 z-10 h-4 overflow-hidden rounded-t-2xl in-[.v3]:rounded-t-lg"
+            >
+              {barraDoTopo}
+            </span>
+          ) : null}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg">
+        <div className={cn("overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg", barraDoTopo ? "relative" : undefined)}>
+          {barraDoTopo}
           {count > 0 ? (
             <div ref={listaRef} className="divide-y divide-border/60">
               {children}

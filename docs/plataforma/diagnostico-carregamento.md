@@ -731,7 +731,7 @@ por PR:
 | 4 | O `BotaoDeAcao` | PR 610 |
 | 5 | O toast embaixo no celular | PR 610 |
 | 6 | Pedidos como piloto: a ação por linha (`useAcaoNaLinha`), a barra da linha e os estados de 10 s e 70 s | PR 610 |
-| 7 | A conexão (7a: "Reconectando…" com histerese e a releitura sozinha) e a linha de estado nas listas (7b: Pedidos, Receber, Estoque, Alertas) | 7a no PR 610; 7b a fazer |
+| 7 | A conexão (7a: "Reconectando…" com histerese e a releitura sozinha) e a linha de estado nas listas (7b: Pedidos, Receber, Estoque, Alertas) | PR 610 |
 | 8 | As listas com a forma final | a fazer |
 | 9 | A abertura com a marca e a `CarregandoTela` no lugar do branco | a fazer |
 | 10 | A troca de filtro e a releitura sem apagar a lista | a fazer |
@@ -888,3 +888,78 @@ Fica aberto, para a parte 7b e depois:
   linhas de Pedidos, o `aria-controls` das abas do Estoque e, no escuro, uma
   camada do `BotaoDeAcao`;
 - a conferência num Android de verdade, com a rede caindo de fato.
+
+**Parte 7b, a linha de estado nas listas (PR 610, 13/11/2026).**
+
+- **A linha de estado** (`components/ui/linha-de-estado.tsx`, no `estado` do
+  `PageHeader`): 24 px sempre reservados sob o título de Pedidos, Receber,
+  Estoque e Estoque › Alertas, e nada empurra a lista.
+  - Primeira leitura: nada antes de 300 ms; depois, a caixa de 24 px e
+    "Carregando pedidos…"; aos 10 s, a pílula âmbar "Demorando mais que o
+    normal" e "Tentar de novo", com a volta calma. O toque cancela a leitura
+    presa e lê de novo (o react-query só se juntaria a ela).
+  - Lida: "Atualizado às 10:42", com a hora da leitura mais recente da lista
+    (no Estoque, os saldos relêem a cada 2 min e o catálogo a cada 5).
+  - A falta com a lista lida, no lugar do `FaixaSemConexao` dessas quatro:
+    "Reconectando… · lista de 10:42" em tinta, com os arcos de 20 px, ou a
+    pílula "Sem conexão · lista de 10:42", com "Tentar de novo", que acorda
+    a conexão antes de reler. O `BlocoSemConexao` e a faixa do shell ficam.
+  - O texto troca em sequência (sai em 80 ms, entra em 150 ms; de uma vez no
+    movimento reduzido), e só o atual fica na árvore.
+  - O "Tentar de novo" tem 24 px de altura e o toque de 44 px pelo `::before`.
+- **O Atualizar** (`BotaoAtualizar` e `lib/carregando/use-atualizar-lista.ts`):
+  - 40 px no computador e 44 px no celular, também no Estoque (aba Itens);
+  - só mostra a espera quando a pessoa toca nele, com `aria-busy` e a trava
+    em `aria-disabled`, e no fim o Anunciador diz "Lista atualizada";
+  - na primeira leitura, fica travado (`aria-disabled`, a 0,45);
+  - a releitura automática (o intervalo da tela, o tempo real, a volta da
+    rede) não o gira nem o desabilita.
+- **A volta do app ao primeiro plano** relê a lista já lida, com a barra no
+  topo do primeiro cartão (`QueueGroup`, `barraDoTopo`; a lista do Estoque e
+  o cartão do alerta). Passados 5 s, a linha diz "Atualizando…".
+- **O Anunciador** diz "Carregando pedidos" aos 300 ms e "Demorando mais que
+  o normal" aos 10 s, só na primeira leitura. A releitura automática não fala
+  nem mexe na região viva.
+- **Nenhum "0" nem "Nenhum…" antes de ler:** o "Carregando…" no lugar da lista
+  saiu (a linha diz), e os filtros do Estoque não mostram 0 antes da primeira
+  leitura.
+- **Medição no Chromium**, num harness com dados sintéticos e o servidor
+  simulado; antes é o `4ab6cf9`:
+  - releitura automática com o servidor a 1,5 s: antes, o Atualizar de Pedidos
+    e Receber girava e ficava `disabled` por 1,5 s; depois, 0 ms. A região
+    viva não mudou nas duas;
+  - a falta com a lista lida: antes, a faixa empurrava a lista 74 px (Pedidos,
+    Receber) e 66 px (Estoque, Alertas); depois, 0 px;
+  - primeira leitura com o servidor a 12 s: antes, "Carregando pedidos..." em
+    cinza desde o primeiro quadro e nada aos 10 s; depois, a linha vazia até
+    0,29 s, "Carregando pedidos…" com o anúncio, e aos 10,0 s a pílula da
+    demora, com o anúncio;
+  - a volta do app: antes, nenhuma releitura; depois, a lista relê, e a barra
+    do topo fica de 0,32 s até a leitura voltar. Com o servidor a 7 s,
+    "Atualizando…" aos 5 s;
+  - o Atualizar tocado: antes, `disabled` e girando, sem `aria-busy` nem
+    anúncio; depois, `aria-busy` a partir de 0,32 s, nunca `disabled`, e
+    "Lista atualizada" no fim;
+  - celular: o Atualizar passou de 40 a 44 px, e o do Estoque passou a
+    existir;
+  - contraste: o calmo 5,61:1 (7,71:1 no escuro), o forte 16,57:1 (18,9:1), a
+    pílula 6,18:1 (10,66:1) e o "Tentar de novo" âmbar 6,23:1 (13,18:1);
+  - o axe-core não acusa nada na linha em nenhum estado, no claro e no
+    escuro, no computador e no celular. No Estoque, segue o `aria-controls`
+    das abas, que vem de antes;
+  - no movimento reduzido, a cabeça do indicador não gira (a caixa respira),
+    e as trocas são de uma vez.
+
+Fica aberto, para a parte 8 e depois:
+
+- a contagem em bloco, as linhas-fantasma e o anúncio do fim da primeira
+  leitura ("3 para aprovar, 2 para separar, 1 para entregar"), na parte 8;
+- a tela nunca lida ainda volta a "Carregando…" na releitura de verdade (o
+  intervalo e o "Tentar de novo" do bloco), porque o react-query põe a
+  leitura sem dado de volta em `pending`;
+- os 70 s da primeira leitura (o `ErroNaLeitura` "Sem resposta do servidor."),
+  que dependem do prazo da leitura, e a troca de filtro com a lista anterior a
+  50% e `inert` (caso 4 do momento 7), na parte 10;
+- Solicitações, o Início, o Mapa e o painel do owner seguem com o
+  `FaixaSemConexao`, e o Atualizar de Solicitações ainda gira sozinho
+  (parte 13).

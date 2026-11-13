@@ -132,6 +132,8 @@ máximo um anúncio a cada 2 s.
 | `Esqueleto` e `CartaoComBrilho` (`components/ui/esqueleto.tsx`) | Primeira leitura de tela com desenho conhecido | Blocos neutros (`--carregando-esqueleto`, nunca a cor da marca), sempre `aria-hidden`. O brilho faz dois ciclos e para. O `Skeleton` antigo já usa o mesmo bloco |
 | `BotaoDeAcao` (`components/ui/botao-de-acao.tsx`) | Ação com espera | Mantém a largura. Repouso, em andamento, sucesso (a caixa fecha em check), erro (crítico suave) e "Conferir". Durante a ação, `aria-busy` e `aria-disabled`, nunca `disabled` nem só 50% de opacidade |
 | Toast | Retorno da ação | Continua o retorno padrão. No celular, embaixo, perto do polegar, com o fechar no toque |
+| `LinhaDeEstado` (`components/ui/linha-de-estado.tsx`) | Sob o título de Pedidos, Receber, Estoque e Estoque › Alertas (`PageHeader`, `estado`) | 24 px sempre reservados: "Carregando pedidos…" com a caixa de 24 px depois de 300 ms, "Atualizado às 10:42", "Atualizando…" quando a barra do topo passa de 5 s, a pílula âmbar da demora aos 10 s, "Reconectando… · lista de 10:42" e "Sem conexão · lista de 10:42", com "Tentar de novo" (toque de 44 px). Nada empurra a lista e nada é região viva |
+| `BotaoAtualizar` | O Atualizar das listas | 40 px no computador, 44 px no celular. Só mostra a espera quando a pessoa toca nele; a releitura automática não o gira nem o desabilita. No fim do toque, "Lista atualizada" no Anunciador |
 
 **Cores com papel fixo:** tinta na espera; vermelho só na ação e na abertura;
 verde só no confirmado; `--destructive` só no erro; `#8A4B00` sobre âmbar suave

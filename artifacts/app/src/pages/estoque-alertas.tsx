@@ -8,6 +8,7 @@ import { alertaLido, alternarItem, alternarTodos, itensMarcados, type AlertaProp
 import { chamarNucleo } from "@/lib/memoria/api";
 import { erroDaResposta } from "@/lib/erro-da-resposta";
 import { semConexaoNaLeitura } from "@/lib/conexao";
+import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
 
 import { AlertasParadosView } from "./estoque-alertas-view";
 
@@ -101,6 +102,9 @@ export default function EstoqueAlertas() {
   // Sem rede, a lista lida fica com a hora dela; sem nada lido, o aviso
   // (decisão 2 do celular).
   const semRede = MEMORIA_LIBERADA ? semConexaoNaLeitura(consulta) : null;
+  // A linha de estado sob o título (carregamento v2, parte 7b); a volta do app ao primeiro plano relê com a barra no topo.
+  const leituras = MEMORIA_LIBERADA ? [consulta] : [];
+  const { voltando } = useAtualizarLista(leituras);
 
   return (
     <AlertasParadosView
@@ -110,6 +114,8 @@ export default function EstoqueAlertas() {
           ? { lidaEm: semRede.lidaEm, tentando: consulta.isFetching, onTentar: () => void queryClient.invalidateQueries({ queryKey: ["stock-alerts"] }) }
           : null
       }
+      leitura={leituras}
+      voltando={voltando}
       alertas={alertas}
       alerta={alerta}
       nomeDoCliente={nomeDoCliente}

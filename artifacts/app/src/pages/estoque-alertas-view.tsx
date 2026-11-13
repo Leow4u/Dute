@@ -1,7 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip as FilterChip } from "@/components/ui/chip";
-import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { BarraDeEspera } from "@/components/ui/barra-de-espera";
+import { BlocoSemConexao } from "@/components/ui/erro-na-leitura";
+import { LinhaDeEstado, type LeituraDaLista } from "@/components/ui/linha-de-estado";
 import { PageHeader } from "@/components/ui/page-header";
 import { itensParadosEmTexto, rotuloDoAlerta, type AlertaProposto } from "@/lib/memoria/alertas";
 import { dataDoRelogio, diasEmTexto } from "@/lib/memoria/parados";
@@ -34,18 +36,29 @@ export type AlertasParadosViewProps = {
   erro: string | null;
   acoes: AcoesDosAlertas;
   /**
-   * Sem rede (decisão 2 do celular): a lista lida fica com a hora dela
-   * (`lidaEm`), e sem nada lido vem o aviso (`lidaEm: null`).
+   * Sem rede (decisão 2 do celular): sem nada lido, o aviso no lugar da
+   * lista (`lidaEm: null`); com a lista lida, quem diz a hora dela é a linha
+   * de estado.
    */
   semConexao?: { lidaEm: number | null; tentando: boolean; onTentar: () => void } | null;
+  /**
+   * A leitura dos alertas, para a linha de estado sob o título (carregamento
+   * v2, parte 7b): "Carregando alertas…", "Atualizado às 10:42",
+   * "Reconectando…" e "Sem conexão · lista de 10:42". Sem ela (a memória
+   * desligada), a linha fica vazia.
+   */
+  leitura?: readonly LeituraDaLista[];
+  /** A releitura da volta do app ao primeiro plano: a barra no topo do alerta e, aos 5 s, "Atualizando…". */
+  voltando?: boolean;
 };
 
 const numero = new Intl.NumberFormat("pt-BR");
 
-function Alerta({ alerta, nome, marcados, ocupado, erro, acoes }: { alerta: AlertaProposto; nome: string } & Pick<AlertasParadosViewProps, "marcados" | "ocupado" | "erro" | "acoes">) {
+function Alerta({ alerta, nome, marcados, ocupado, erro, acoes, voltando = false }: { alerta: AlertaProposto; nome: string } & Pick<AlertasParadosViewProps, "marcados" | "ocupado" | "erro" | "acoes" | "voltando">) {
   const todos = marcados.size === alerta.itens.length;
   return (
-    <section aria-labelledby={`alerta-${alerta.id}`} className="overflow-hidden rounded-lg border border-border bg-card">
+    <section aria-labelledby={`alerta-${alerta.id}`} className="relative overflow-hidden rounded-lg border border-border bg-card">
+      <BarraDeEspera lugar="topo" ativa={voltando} />
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 px-4 py-3">
         <h2 id={`alerta-${alerta.id}`} className="text-base font-bold text-foreground">
           {nome}
@@ -107,16 +120,24 @@ function Alerta({ alerta, nome, marcados, ocupado, erro, acoes }: { alerta: Aler
   );
 }
 
-export function AlertasParadosView({ estado, alertas, alerta, nomeDoCliente, marcados, ocupado, erro, acoes, semConexao = null }: AlertasParadosViewProps) {
+export function AlertasParadosView({
+  estado,
+  alertas,
+  alerta,
+  nomeDoCliente,
+  marcados,
+  ocupado,
+  erro,
+  acoes,
+  semConexao = null,
+  leitura = [],
+  voltando = false,
+}: AlertasParadosViewProps) {
   return (
     <div className="flex flex-col gap-4 pb-24">
-      <PageHeader title="Alertas de itens parados" />
-      {estado !== "carregando" && semConexao && semConexao.lidaEm !== null ? (
-        <FaixaSemConexao lidaEm={semConexao.lidaEm} tentando={semConexao.tentando} onTentar={semConexao.onTentar} />
-      ) : null}
-      {estado === "carregando" ? (
-        <p className="text-sm text-muted-foreground">Carregando alertas...</p>
-      ) : semConexao && semConexao.lidaEm === null ? (
+      <PageHeader title="Alertas de itens parados" estado={<LinhaDeEstado leitura={leitura} objeto="alertas" pedidaPelaPessoa={voltando} />} />
+      {/* A primeira leitura e a falta com a lista lida ficam na linha de estado, sob o título. */}
+      {estado === "carregando" ? null : semConexao && semConexao.lidaEm === null ? (
         <BlocoSemConexao tentando={semConexao.tentando} onTentar={semConexao.onTentar} />
       ) : estado === "erro" ? (
         <p className="text-sm text-destructive-soft-foreground">Não consegui carregar os alertas.</p>
@@ -133,7 +154,7 @@ export function AlertasParadosView({ estado, alertas, alerta, nomeDoCliente, mar
               ))}
             </div>
           ) : null}
-          <Alerta alerta={alerta} nome={nomeDoCliente(alerta.customerCode)} marcados={marcados} ocupado={ocupado} erro={erro} acoes={acoes} />
+          <Alerta alerta={alerta} nome={nomeDoCliente(alerta.customerCode)} marcados={marcados} ocupado={ocupado} erro={erro} acoes={acoes} voltando={voltando} />
         </>
       )}
     </div>

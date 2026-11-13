@@ -2,6 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { ProvedorDaConexao, type EstadoDaConexao } from "@/lib/carregando/estado-da-conexao";
+import type { LeituraDaLista } from "@/lib/carregando/use-atualizar-lista";
+import { SemResposta } from "@/lib/conexao";
 import type { AlertaProposto } from "@/lib/memoria/alertas";
 import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
@@ -50,6 +52,16 @@ function tela(props: Partial<AlertasParadosViewProps> = {}) {
   return renderToStaticMarkup(elemento(props));
 }
 
+// 13:42 UTC são 10:42 no armazém.
+const LEITURA: LeituraDaLista = {
+  isLoading: false,
+  isFetching: false,
+  isError: false,
+  error: null,
+  dataUpdatedAt: Date.parse("2026-11-06T13:42:00Z"),
+  refetch: async () => ({}) as never,
+};
+
 describe("Estoque › Alertas na v3", () => {
   it("a tela está na lista da v3", () => {
     expect(telaDoWmsNaV3("/estoque/alertas")).toBe(true);
@@ -96,9 +108,19 @@ describe("Estoque › Alertas na v3", () => {
 
   it("sem alerta, carregando, com erro e com erro da decisão", () => {
     expect(textosDaTela(tela({ alertas: [], alerta: null }))).toEqual(["Alertas de itens parados", "Nenhum alerta para aprovar."]);
-    expect(textosDaTela(tela({ estado: "carregando" }))).toEqual(["Alertas de itens parados", "Carregando alertas..."]);
+    // Carregando: nada no lugar da lista, e a linha de estado só fala depois de 300 ms (parte 7b).
+    expect(textosDaTela(tela({ estado: "carregando", leitura: [{ ...LEITURA, isLoading: true, isFetching: true, dataUpdatedAt: 0 }] }))).toEqual([
+      "Alertas de itens parados",
+    ]);
     expect(textosDaTela(tela({ estado: "erro" }))).toEqual(["Alertas de itens parados", "Não consegui carregar os alertas."]);
     expect(textosDaTela(tela({ erro: "O alerta já foi decidido." })).at(-1)).toBe("O alerta já foi decidido.");
+  });
+
+  it("a linha de estado sob o título diz de quando é a lista (parte 7b)", async () => {
+    const html = tela({ leitura: [LEITURA] });
+    expect(textosDaTela(html).slice(0, 3)).toEqual(["Alertas de itens parados", "Atualizado às 10:42", "Itaú Unibanco"]);
+    expect(html).toContain('data-linha-de-estado=""');
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
@@ -120,11 +142,14 @@ describe("Estoque › Alertas sem conexão", () => {
   const naConexao = (estado: EstadoDaConexao, props: Partial<AlertasParadosViewProps>) =>
     renderToStaticMarkup(<ProvedorDaConexao value={conexaoEm(estado)}>{elemento(props)}</ProvedorDaConexao>);
 
-  it("com a lista lida: o alerta fica, com a hora da leitura", () => {
-    const textos = textosDaTela(naConexao("sem-conexao", { semConexao: { lidaEm, ...tentar } }));
+  // A leitura com a falta e a lista lida: a hora dela fica na linha de estado, sob o título (parte 7b).
+  const comFalta = { leitura: [{ ...LEITURA, isError: true, error: new SemResposta(), dataUpdatedAt: lidaEm }], semConexao: { lidaEm, ...tentar } };
+
+  it("com a lista lida: o alerta fica, com a hora da leitura na linha de estado", () => {
+    const textos = textosDaTela(naConexao("sem-conexao", comFalta));
     expect(textos.slice(0, 3)).toEqual(["Alertas de itens parados", "Sem conexão · lista de 10:42", "Tentar de novo"]);
     expect(textos).toContain("Itaú Unibanco");
-    const reconectando = textosDaTela(naConexao("reconectando", { semConexao: { lidaEm, ...tentar } }));
+    const reconectando = textosDaTela(naConexao("reconectando", comFalta));
     expect(reconectando.slice(0, 4)).toEqual(["Alertas de itens parados", "Reconectando…", "· lista de 10:42", "Tentar de novo"]);
     expect(reconectando).toContain("Itaú Unibanco");
   });
@@ -137,7 +162,7 @@ describe("Estoque › Alertas sem conexão", () => {
 
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     for (const estado of ["sem-conexao", "reconectando"] as const) {
-      expect(await violacoesDeAcessibilidade(naConexao(estado, { semConexao: { lidaEm, ...tentar } })), estado).toEqual([]);
+      expect(await violacoesDeAcessibilidade(naConexao(estado, comFalta)), estado).toEqual([]);
       expect(
         await violacoesDeAcessibilidade(naConexao(estado, { alertas: [], alerta: null, semConexao: { lidaEm: null, ...tentar } })),
         estado,

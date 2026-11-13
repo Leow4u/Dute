@@ -79,11 +79,15 @@ describe("Pedidos na v3", () => {
   it("sem rede, a lista lida fica com a hora, e sem nada lido vem o aviso, nunca o vazio (decisão 2 do celular)", () => {
     // Quem não decide não lê as solicitações: só o armazém entra na conta.
     expect(FONTE).toContain("const semRede = semConexaoNaLeitura(ops, ...(decider ? [requests] : []));");
-    const aviso = FONTE.indexOf(") : semRede && semRede.lidaEm === null ? (");
-    expect(aviso).toBeGreaterThan(FONTE.indexOf("Carregando pedidos..."));
-    expect(aviso).toBeLessThan(FONTE.indexOf(") : semLeitura ? ("));
+    expect(FONTE).toContain("const leiturasDaLista = decider ? [ops, requests] : [ops];");
+    // Na primeira leitura, nada no lugar da lista (a linha de estado diz); depois, o aviso, antes do erro e das filas.
+    expect(FONTE).toContain("{loading ? null : semRede && semRede.lidaEm === null ? (");
+    expect(FONTE.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(FONTE.indexOf(") : semLeitura ? ("));
     expect(FONTE).toMatch(/<BlocoSemConexao tentando=\{relendo\} onTentar=\{refreshAll\} \/>/);
-    expect(FONTE).toMatch(/!loading && semRede && semRede\.lidaEm !== null \? \(\s*<FaixaSemConexao lidaEm=\{semRede\.lidaEm\} tentando=\{relendo\} onTentar=\{refreshAll\} \/>/);
+    // A lista lida, com a falta: a hora dela fica na linha de estado sob o título (parte 7b), não na faixa que empurra a lista.
+    expect(FONTE).toContain('estado={<LinhaDeEstado leitura={leiturasDaLista} objeto="pedidos" pedidaPelaPessoa={atualizarLista.voltando} />}');
+    expect(FONTE).not.toContain("FaixaSemConexao");
+    expect(FONTE).not.toContain("Carregando pedidos...");
   });
 
   it("só a primeira linha da fila tem a ação principal: a primeira na tela, que a nova primeira herda quando ela sai", () => {

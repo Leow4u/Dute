@@ -10,7 +10,6 @@ import {
   MoreHorizontal,
   Package,
   Printer,
-  RefreshCw,
   Truck,
   XCircle,
   type LucideIcon,
@@ -27,7 +26,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinhaDaFila, QueueGroup, QueueRow, type QueueTone } from "@/components/ui/queue-list";
@@ -67,6 +67,7 @@ import { useAppUser } from "@/lib/auth";
 import { useAnuncio } from "@/lib/carregando/anunciador";
 import { relogioDaEspera } from "@/lib/carregando/tempo";
 import { desfechoDoErro, useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { usePalcoSemSaltos } from "@/lib/carregando/palco-sem-saltos";
 import { useListaSemSaltos } from "@/lib/carregando/use-lista-sem-saltos";
@@ -596,11 +597,20 @@ export default function Pedidos() {
   // lido, o aviso (decisão 2 do celular).
   const semRede = semConexaoNaLeitura(ops, ...(decider ? [requests] : []));
   const relendo = ops.isFetching || requests.isFetching;
+  // A linha de estado sob o título e o Atualizar (carregamento v2, parte 7b):
+  // a releitura automática de 60 s não mostra nada; o Atualizar só mostra a
+  // espera quando a pessoa toca nele; a volta do app ao primeiro plano relê
+  // com a barra no topo do primeiro cartão. Os saldos da validação relêem
+  // junto do toque.
+  const leiturasDaLista = decider ? [ops, requests] : [ops];
+  const atualizarLista = useAtualizarLista(leiturasDaLista, () => void queryClient.invalidateQueries({ queryKey: ["stock-balances"] }));
+  const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} />;
 
   return (
     <div ref={palco.ref} className="mx-auto flex max-w-5xl flex-col gap-6 pb-24">
       <PageHeader
         title="Pedidos"
+        estado={<LinhaDeEstado leitura={leiturasDaLista} objeto="pedidos" pedidaPelaPessoa={atualizarLista.voltando} />}
         actions={
           <>
             <Segmented<"open" | "delivered">
@@ -612,10 +622,7 @@ export default function Pedidos() {
                 { value: "delivered", label: "Entregues" },
               ]}
             />
-            <Button type="button" variant="outline" size="icon" onClick={refreshAll} disabled={ops.isFetching}>
-              <RefreshCw className={cn("size-4", ops.isFetching && "animate-spin")} />
-              <span className="sr-only">Atualizar</span>
-            </Button>
+            <BotaoAtualizar atualizando={atualizarLista.atualizando} travado={loading} onAtualizar={atualizarLista.atualizar} />
           </>
         }
       />
@@ -629,13 +636,8 @@ export default function Pedidos() {
         }
       />
 
-      {!loading && semRede && semRede.lidaEm !== null ? (
-        <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={relendo} onTentar={refreshAll} />
-      ) : null}
-
-      {loading ? (
-        <p className="text-sm text-muted-foreground">Carregando pedidos...</p>
-      ) : semRede && semRede.lidaEm === null ? (
+      {/* A primeira leitura e a falta com a lista lida ficam na linha de estado, sob o título. */}
+      {loading ? null : semRede && semRede.lidaEm === null ? (
         <BlocoSemConexao tentando={relendo} onTentar={refreshAll} />
       ) : semLeitura ? (
         <ErroNaLeitura
@@ -649,6 +651,7 @@ export default function Pedidos() {
             title="Entregues"
             count={queue.delivered.length}
             empty="Nenhuma entrega recente."
+            barraDoTopo={barraDoTopo}
           >
             {queue.delivered.map((order) => (
               <OrderRow key={order.key} order={order} icon={Check} tone="done" />
@@ -669,6 +672,7 @@ export default function Pedidos() {
               semSaltos
               listaRef={paraAprovar.ref}
               tituloRef={paraAprovar.titulo}
+              barraDoTopo={barraDoTopo}
               empty={
                 <>
                   {ordersGroupEmpty("approve")}{" "}
@@ -715,6 +719,7 @@ export default function Pedidos() {
             semSaltos
             listaRef={paraSeparar.ref}
             tituloRef={paraSeparar.titulo}
+            barraDoTopo={decider ? undefined : barraDoTopo}
             empty={ordersGroupEmpty("pick")}
           >
             {paraSeparar.chaves.map((key) => {

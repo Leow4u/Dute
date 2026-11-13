@@ -45,6 +45,11 @@ export const CARREGANDO = {
   chegaEsperaMs: 180,
   /** O realce da linha que chegou ao grupo (a aprovada em "Para separar"). */
   destaqueMs: 1_000,
+  /**
+   * O texto que sai da linha de estado some nesse tempo, e só então o novo
+   * entra: a troca em sequência, nunca sobreposta (o mesmo do rótulo do botão).
+   */
+  trocaSaiMs: 80,
   /** A contagem que muda (3 → 2) rola 8 px nesse tempo. */
   contaMs: 160,
   /**

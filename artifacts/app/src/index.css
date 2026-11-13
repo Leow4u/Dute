@@ -1126,6 +1126,116 @@
   }
 }
 
+/* A linha de estado das listas (components/ui/linha-de-estado.tsx; seção 5.3
+   e momentos 2, 7 e 8): 24 px sempre reservados sob o título, e nada empurra
+   a lista. As camadas ficam na mesma célula da grade: a que sai (data-sai)
+   some em 80 ms subindo 3 px, e só então a nova (data-entra="depois") entra
+   em 150 ms, de 3 px abaixo; sem nada saindo, entra na hora. No movimento
+   reduzido, de uma vez (os --carregando-t-troca-* vão a 0). O forte é a
+   tinta (15/700), o calmo é o apoio (13/600), a pílula é o âmbar do aviso
+   (--carregando-aviso sobre o --warning-soft, 6,2:1; 10,7:1 no escuro). O
+   "Tentar de novo" tem o toque estendido a 44 px pelo ::before (inset de
+   -10 px), sem mudar a altura da linha, e o foco visível na cor do texto. */
+@layer components {
+  .linha-de-estado {
+    position: relative;
+    display: grid;
+    align-items: center;
+    block-size: 24px;
+    min-inline-size: 0;
+  }
+
+  .linha-de-estado > [data-camada] {
+    grid-area: 1 / 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-inline-size: 0;
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .linha-de-estado > [data-sai] {
+    pointer-events: none;
+    animation: carregando-troca-sai var(--carregando-t-troca-sai) var(--ease-carregando-saida) both;
+  }
+
+  .linha-de-estado > [data-entra] {
+    animation: carregando-troca-entra var(--carregando-t-troca-entra) var(--ease-carregando-entrada) both;
+  }
+
+  .linha-de-estado > [data-entra="depois"] {
+    animation-delay: var(--carregando-t-troca-sai);
+  }
+
+  .linha-de-estado-forte {
+    font-size: 15px;
+    line-height: 20px;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+  }
+
+  .linha-de-estado-calmo {
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .linha-de-estado-pilula {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    block-size: 24px;
+    padding-inline: 10px;
+    border: 1px solid hsl(var(--warning-soft-border));
+    border-radius: 9999px;
+    background-color: hsl(var(--warning-soft));
+    color: hsl(var(--carregando-aviso));
+    font-size: 13px;
+    line-height: 1;
+    font-weight: 700;
+  }
+
+  .linha-de-estado-tentar {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    block-size: 24px;
+    border-radius: 4px;
+    color: hsl(var(--foreground));
+    font-size: 13px;
+    line-height: 1;
+    font-weight: 800;
+    text-decoration: underline;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+
+  .linha-de-estado-tentar[data-tom="aviso"] {
+    color: hsl(var(--carregando-aviso));
+  }
+
+  /* O toque de 44 px: 24 da linha e 10 para cima e para baixo. */
+  .linha-de-estado-tentar::before {
+    content: "";
+    position: absolute;
+    inset: -10px;
+  }
+
+  .linha-de-estado-tentar[aria-disabled="true"] {
+    text-decoration: none;
+    cursor: default;
+  }
+
+  .linha-de-estado-tentar:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+}
+
 /* O esqueleto (components/ui/esqueleto.tsx e o Skeleton; seção 5.2 e momento
    2): blocos em cinza neutro, nunca o rosado do bg-primary/10, com a anatomia
    da linha real. São decorativos: o componente os põe sempre aria-hidden. A

@@ -330,10 +330,14 @@ describe("Estoque sem conexão", () => {
 
   it("a lista lida fica com a hora; sem nada lido, o aviso; a falta de conexão não troca a lista pelo erro", () => {
     expect(fonte).toContain("const semRede = semConexaoNaLeitura(skus, balances, products);");
-    expect(fonte).toMatch(/!skus\.isLoading && semRede && semRede\.lidaEm !== null \? \(\s*<FaixaSemConexao lidaEm=\{semRede\.lidaEm\} tentando=\{relendo\} onTentar=\{reler\} \/>/);
-    const aviso = fonte.indexOf(") : semRede && semRede.lidaEm === null ? (");
-    expect(aviso).toBeGreaterThan(fonte.indexOf("Carregando estoque..."));
-    expect(aviso).toBeLessThan(fonte.indexOf("Não consegui carregar o estoque."));
+    // A lista lida, com a falta: a hora dela fica na linha de estado sob o título (parte 7b), não na faixa que empurra a lista.
+    expect(fonte).toContain("const leiturasDaLista = [skus, balances, products];");
+    expect(fonte).toContain('estado={<LinhaDeEstado leitura={leiturasDaLista} objeto="estoque" pedidaPelaPessoa={atualizarLista.voltando} />}');
+    expect(fonte).not.toContain("FaixaSemConexao");
+    expect(fonte).not.toContain("Carregando estoque...");
+    // Na primeira leitura, nada no lugar da lista (a linha de estado diz); depois, o aviso, antes do erro.
+    expect(fonte).toContain("{skus.isLoading ? null : semRede && semRede.lidaEm === null ? (");
+    expect(fonte.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(fonte.indexOf("Não consegui carregar o estoque."));
     expect(fonte).toContain(") : skus.error && !semRede ? (");
   });
 });

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Ban, Check, Forklift, Inbox, PackageOpen, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, Ban, Check, Forklift, Inbox, PackageOpen, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { BarraDeEspera } from "@/components/ui/barra-de-espera";
+import { BlocoSemConexao } from "@/components/ui/erro-na-leitura";
+import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { PageHeader } from "@/components/ui/page-header";
 import { QueueGroup, QueueRow } from "@/components/ui/queue-list";
 import { Segmented } from "@/components/ui/segmented";
@@ -27,6 +29,7 @@ import { useIsDesktop } from "@/hooks/use-desktop";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { caixasGuardadas, chegadaPorCaixa } from "@/lib/wms/caixas-do-recebimento";
 import { useAppUser } from "@/lib/auth";
+import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { canOperateWarehouse } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -213,6 +216,13 @@ export default function Receber() {
     void queryClient.invalidateQueries({ queryKey: ["customer-requests", "receber"] });
   };
   const openCount = pendingNotices.length + board.check.length + board.guardando.length + board.store.length;
+  // A linha de estado sob o título e o Atualizar (carregamento v2, parte 7b):
+  // a releitura automática de 60 s não mostra nada; o Atualizar só mostra a
+  // espera quando a pessoa toca nele; a volta do app ao primeiro plano relê
+  // com a barra no topo do primeiro cartão.
+  const leiturasDaLista = [ops, requests];
+  const atualizarLista = useAtualizarLista(leiturasDaLista);
+  const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} />;
 
   const taskPanel = selectedNotice ? (
     <NoticeCard notice={selectedNotice} />
@@ -306,6 +316,7 @@ export default function Receber() {
     <div className="flex flex-col gap-6 pb-24">
       {!fichaLarga ? <PageHeader
         title="Receber"
+        estado={<LinhaDeEstado leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando} />}
         actions={
           <>
             <Segmented<"open" | "done" | "cancelled">
@@ -328,21 +339,13 @@ export default function Receber() {
                 Chegada avulsa
               </Button>
             ) : null}
-            <Button type="button" variant="outline" size="icon" onClick={refresh} disabled={ops.isFetching}>
-              <RefreshCw className={cn("size-4", ops.isFetching && "animate-spin")} />
-              <span className="sr-only">Atualizar</span>
-            </Button>
+            <BotaoAtualizar atualizando={atualizarLista.atualizando} travado={ops.isLoading || requests.isLoading} onAtualizar={atualizarLista.atualizar} />
           </>
         }
       /> : null}
 
-      {!fichaLarga && !ops.isLoading && semRede && semRede.lidaEm !== null ? (
-        <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={ops.isFetching || requests.isFetching} onTentar={recarregar} />
-      ) : null}
-
-      {fichaLarga ? <section aria-label="Bancada de conferência" className="min-w-0">{panel}</section> : ops.isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando chegadas...</p>
-      ) : semRede && semRede.lidaEm === null ? (
+      {/* A primeira leitura e a falta com a lista lida ficam na linha de estado, sob o título. */}
+      {fichaLarga ? <section aria-label="Bancada de conferência" className="min-w-0">{panel}</section> : ops.isLoading ? null : semRede && semRede.lidaEm === null ? (
         <BlocoSemConexao tentando={ops.isFetching || requests.isFetching} onTentar={recarregar} />
       ) : ops.error && !semRede ? (
         <p className="text-sm text-destructive">
@@ -361,7 +364,7 @@ export default function Receber() {
           <div className="flex min-w-0 flex-col gap-6">
             {view !== "open" ? <p className="text-sm text-muted-foreground">Até 12 registros recentes por fila</p> : null}
             {view === "cancelled" ? (
-              <QueueGroup title="Cancelados" count={board.cancelled.length} empty="Nenhum recebimento cancelado.">
+              <QueueGroup title="Cancelados" count={board.cancelled.length} empty="Nenhum recebimento cancelado." barraDoTopo={barraDoTopo}>
                 {board.cancelled.map((entry) => (
                   <QueueRow key={entry.task.id} icon={Ban} tone="done" title={getTaskTitle(entry.task)}
                     meta={entry.queue.key === "receiving" ? receivingRowMeta(entry.task) : putawayRowMeta(entry.task)}
@@ -371,7 +374,7 @@ export default function Receber() {
               </QueueGroup>
             ) : view === "done" ? (
               <>
-                <QueueGroup title="Chegadas" count={board.chegadas.length} empty="Nenhuma chegada recebida.">
+                <QueueGroup title="Chegadas" count={board.chegadas.length} empty="Nenhuma chegada recebida." barraDoTopo={barraDoTopo}>
                   {board.chegadas.map((entry) => rowDone(entry, receivingRowMeta(entry.task)))}
                 </QueueGroup>
                 <QueueGroup title="Guardas" count={board.guardas.length} empty="Nenhuma guarda concluída.">
@@ -384,6 +387,7 @@ export default function Receber() {
                   title="Para conferir"
                   count={pendingNotices.length + board.check.length}
                   empty="Nenhuma chegada para conferir."
+                  barraDoTopo={barraDoTopo}
                 >
                   {pendingNotices.map((notice) => (
                     <QueueRow

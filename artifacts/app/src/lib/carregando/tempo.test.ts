@@ -26,6 +26,8 @@ describe("o relógio da espera", () => {
       chegaLinhaMs: 240,
       chegaEsperaMs: 180,
       destaqueMs: 1_000,
+      // O texto da linha de estado que sai (parte 7b), no tempo da troca do rótulo do botão.
+      trocaSaiMs: 80,
       contaMs: 160,
       // A conexão (momento 8): sem rede há 3 s é "Sem conexão", cada aviso fica 2 s, e a releitura sozinha vai de 2 a 30 s.
       semRedeMs: 3_000,
