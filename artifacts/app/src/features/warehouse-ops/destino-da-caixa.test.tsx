@@ -89,6 +89,16 @@ const CABECALHO = ["Guardar em", "Sugestão do sistema", "Escolher prateleira"];
 const prateleira = (code: string): WarehousePosition =>
   ({ code, customer_code: "BTG Pactual", status: "active", sequence: 3 }) as WarehousePosition;
 
+
+/** A abertura do <button> que tem o rótulo (no BotaoDeAcao, o da camada atual). */
+const tagDoBotao = (html: string, rotulo: string) =>
+  html
+    .split("<button")
+    .slice(1)
+    .map((parte) => `<button${parte.slice(0, parte.indexOf("</button>") + "</button>".length)}`)
+    .find((botao) => botao.includes(`>${rotulo}<`))
+    ?.match(/^<button[^>]*>/)?.[0] ?? "";
+
 describe("o destino da caixa fechada", () => {
   it("a sugestão do motor: a prateleira, de onde ela saiu, como a caixa fica, as alternativas, confirmar e não cabe", async () => {
     const html = render({ sugestao });
@@ -181,14 +191,27 @@ describe("não cabe aqui, na bancada", () => {
     );
 
   it("a caixa, o motivo e recusar a prateleira, só com o motivo", async () => {
+    // Sem motivo, o Recusar fica travado: aria-disabled, nunca disabled (carregamento v2, parte 13a).
     const vazio = corpo();
-    expect(vazio).toMatch(/<button[^>]*disabled=""[^>]*>Recusar B-02<\/button>/);
+    expect(tagDoBotao(vazio, "Recusar B-02")).toContain('aria-disabled="true"');
+    expect(tagDoBotao(vazio, "Recusar B-02")).not.toContain('disabled=""');
     const preenchido = corpo("Outra caixa ocupando a frente da prateleira");
-    expect(preenchido).not.toMatch(/<button[^>]*disabled=""[^>]*>Recusar B-02<\/button>/);
+    expect(tagDoBotao(preenchido, "Recusar B-02")).not.toContain("aria-disabled");
     expect(
-      textosForaDaLista(preenchido, ["Caixa CX-000132", "48 × 38 × 30 cm · 6,1 kg · GG 18 · 18 un.", "Motivo", "Cancelar", "Recusar B-02"]),
+      textosForaDaLista(preenchido, ["Caixa CX-000132", "48 × 38 × 30 cm · 6,1 kg · GG 18 · 18 un.", "Motivo", "Cancelar", "Recusar B-02", "Recusando…", "Conferir"]),
     ).toEqual([]);
     expect(await violacoesDeAcessibilidade(preenchido)).toEqual([]);
+  });
+
+  it("recusando, o Cancelar e o Recusar ficam aria-disabled, nunca disabled: o foco não cai no body", () => {
+    const html = renderToStaticMarkup(
+      <RecusaDaPrateleiraConteudo prateleira="B-02" caixa="CX-000132" detalhe="" enviando onCancelar={noop} onRecusar={noop} motivoInicial="Não cabe" />,
+    );
+    for (const rotulo of ["Cancelar", "Recusar B-02"]) {
+      expect(tagDoBotao(html, rotulo), rotulo).toContain('aria-disabled="true"');
+      expect(tagDoBotao(html, rotulo), rotulo).not.toContain('disabled=""');
+    }
+    expect(tagDoBotao(html, "Recusar B-02")).toContain('data-estado="andamento"');
   });
 });
 

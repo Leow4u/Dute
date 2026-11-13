@@ -61,7 +61,10 @@ export function ProductPhotoManager({
   const atualizando = useEspera(busy);
   const anunciar = useAnuncio();
   useEffect(() => {
-    if (atualizando.visivel) anunciar("Atualizando fotos");
+    if (!atualizando.visivel) return undefined;
+    // O que acaba antes da vez do anúncio o tira da fila do Anunciador.
+    const retirar = anunciar("Atualizando fotos");
+    return retirar;
   }, [atualizando.visivel, anunciar]);
   const selected =
     photos.find((photo) => photo.fileUrl === selectedUrl) ?? photos[0];
@@ -197,12 +200,7 @@ export function ProductPhotoManager({
             <AlertDescription role="alert">{error}</AlertDescription>
           </Alert>
         ) : null}
-        <AlertDialog
-          open={removing}
-          onOpenChange={(next) => {
-            if (!busy) setRemoving(next);
-          }}
-        >
+        <AlertDialog open={removing} ocupado={busy} onOpenChange={setRemoving}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Remover esta foto do produto?</AlertDialogTitle>
@@ -217,17 +215,17 @@ export function ProductPhotoManager({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
               <AlertDialogAction
-                disabled={busy || !selected}
-                onClick={(event) => {
-                  event.preventDefault();
+                estado={busy ? "andamento" : "repouso"}
+                rotulo="Remover foto"
+                andamento="Removendo…"
+                bloqueado={!busy && !selected}
+                onClick={() => {
                   if (selected)
                     void manage({ remove_photo_urls: [selected.fileUrl] });
                 }}
-              >
-                Remover foto
-              </AlertDialogAction>
+              />
             </AlertDialogFooter>
             {error ? (
               <p role="alert" className="text-sm text-destructive">

@@ -43,7 +43,7 @@ export function FantasmasDaLista({ linhas = 2, altura = "h-16", className }: { l
  * parte 7a); a falha do servidor nunca vira vazio, e mostra o motivo com o
  * "Tentar de novo".
  */
-export function LeituraDaLista({
+export function LeituraDaListaDoAgente({
   leitura,
   rotulo,
   fantasmas,

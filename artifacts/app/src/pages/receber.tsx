@@ -33,6 +33,7 @@ import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { resumoDaLista } from "@/lib/carregando/resumo-da-lista";
 import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
 import { BarraDaLista, ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
+import { useFalhaNaReleituraAutomatica } from "@/lib/carregando/use-leitura-com-falha";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { canOperateWarehouse } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -144,9 +145,13 @@ export default function Receber() {
   // lidas, a nova tentativa volta à primeira leitura, com as linhas-fantasma, como sempre.
   const avisos = useListaComFiltro(requests);
   const trocandoDeCliente = avisos.trocando;
+  // A falha sem nada lido fica na tela durante a releitura automática (o intervalo de 60 s): o aviso e o foco no
+  // "Tentar de novo". Só a nova tentativa que a pessoa pede volta às linhas-fantasma.
+  const opsNaTela = useFalhaNaReleituraAutomatica(ops);
+  const avisosLidos = useFalhaNaReleituraAutomatica(requests);
   const requestsNaTela = avisos.falhou && ops.data !== undefined
-    ? { ...requests, data: undefined, error: avisos.erro as Error, isError: true, isLoading: false, isPlaceholderData: false, dataUpdatedAt: 0 }
-    : requests;
+    ? { ...avisosLidos, data: undefined, error: avisos.erro as Error, isError: true, isLoading: false, isPlaceholderData: false, dataUpdatedAt: 0 }
+    : avisosLidos;
   // Os avisos na tela são do cliente da leitura: na troca, ainda os do anterior, que somem com a lista dele.
   const clienteDosAvisos = useRef(customerCode);
   if (!trocandoDeCliente) clienteDosAvisos.current = customerCode;
@@ -239,7 +244,7 @@ export default function Receber() {
   // a releitura automática de 60 s não mostra nada; o Atualizar só mostra a
   // espera quando a pessoa toca nele; a volta do app ao primeiro plano relê
   // com a barra no topo do primeiro cartão.
-  const leiturasDaLista = [ops, requestsNaTela];
+  const leiturasDaLista = [opsNaTela, requestsNaTela];
   const atualizarLista = useAtualizarLista(leiturasDaLista);
   const troca = useListaEmTroca(trocandoDeCliente);
   const barraDoTopo = <BarraDaLista ativa={atualizarLista.voltando || trocandoDeCliente} />;
@@ -253,11 +258,11 @@ export default function Receber() {
   // avisos: o aviso entra no lugar da lista na hora.
   const [listaJaLida, setListaJaLida] = useState(false);
   if (!listaJaLida && ops.data && (requests.data || requests.isError)) setListaJaLida(true);
-  const lendo = !listaJaLida && !ops.isError && (ops.isLoading || requests.isLoading);
+  const lendo = !listaJaLida && !opsNaTela.isError && (opsNaTela.isLoading || requestsNaTela.isLoading);
   const idDaLinha = useId();
   // O aviso no lugar da lista: sem nada lido das filas, ou sem os avisos do cliente (a troca que falhou). A contagem
   // do "Em aberto" fica com o bloco: sem a lista, ela seria um falso número.
-  const falhaNaTela = !lendo && !semRede && ((Boolean(ops.error) && !ops.data) || avisos.falhou);
+  const falhaNaTela = !lendo && !semRede && ((Boolean(opsNaTela.error) && !opsNaTela.data) || avisos.falhou);
   const semAListaNaTela = falhaNaTela || (!lendo && semRede !== null && semRede.lidaEm === null);
   // A contagem lembrada é do cliente que a tela vai operar: na abertura, antes de a lista dos clientes chegar, o
   // escolhido neste aparelho. Só grava com o cliente confirmado e os avisos dele lidos.

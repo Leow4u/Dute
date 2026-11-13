@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw } from "lucide-react";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Dialog,
+  DialogCancelar,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -329,7 +331,7 @@ export default function SettingsSystem() {
         </section>
       ) : null}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} ocupado={register.isPending} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Registrar incidente</DialogTitle>
@@ -381,12 +383,8 @@ export default function SettingsSystem() {
             </div>
           </form>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" form="incident-form" disabled={register.isPending}>
-              {register.isPending ? "Registrando..." : "Registrar"}
-            </Button>
+            <DialogCancelar />
+            <BotaoDeAcao type="submit" form="incident-form" estado={register.isPending ? "andamento" : "repouso"} rotulo="Registrar" andamento="Registrando…" />
           </DialogFooter>
         </DialogContent>
       </Dialog>

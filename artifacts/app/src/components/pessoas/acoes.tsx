@@ -14,7 +14,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -282,7 +283,7 @@ export function DialogosDasPessoas({ acoes }: { acoes: AcoesDasPessoas }) {
   const { resending, archiving, removing, resendInvite, archivePerson, setAccess } = acoes;
   return (
     <>
-      <Dialog open={Boolean(resending)} onOpenChange={(open) => !resendInvite.isPending && !open && acoes.setResending(null)}>
+      <Dialog open={Boolean(resending)} ocupado={resendInvite.isPending} onOpenChange={(open) => !open && acoes.setResending(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reenviar convite?</DialogTitle>
@@ -293,17 +294,18 @@ export function DialogosDasPessoas({ acoes }: { acoes: AcoesDasPessoas }) {
             <p className="mt-1 break-all text-sm font-semibold text-muted-foreground">{resending?.email}</p>
           </div>
           <DialogFooter>
-            <Button variant="outline" disabled={resendInvite.isPending} onClick={() => acoes.setResending(null)}>
-              Cancelar
-            </Button>
-            <Button disabled={resendInvite.isPending} onClick={() => resending && resendInvite.mutate(resending.id)}>
-              {resendInvite.isPending ? "Agendando..." : "Reenviar convite"}
-            </Button>
+            <DialogCancelar onClick={() => acoes.setResending(null)} />
+            <BotaoDeAcao
+              estado={resendInvite.isPending ? "andamento" : "repouso"}
+              rotulo="Reenviar convite"
+              andamento="Agendando…"
+              onClick={() => resending && resendInvite.mutate(resending.id)}
+            />
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={Boolean(archiving)} onOpenChange={(open) => !archivePerson.isPending && !open && acoes.setArchiving(null)}>
+      <AlertDialog open={Boolean(archiving)} ocupado={archivePerson.isPending} onOpenChange={(open) => !open && acoes.setArchiving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remover {archiving?.name} da lista?</AlertDialogTitle>
@@ -311,22 +313,21 @@ export function DialogosDasPessoas({ acoes }: { acoes: AcoesDasPessoas }) {
           </AlertDialogHeader>
           <p className="break-all text-sm text-muted-foreground">{archiving?.email}</p>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={archivePerson.isPending}>Manter na lista</AlertDialogCancel>
+            <AlertDialogCancel>Manter na lista</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={archivePerson.isPending}
-              onClick={(event) => {
-                event.preventDefault();
+              estado={archivePerson.isPending ? "andamento" : "repouso"}
+              rotulo="Remover da lista"
+              andamento="Removendo…"
+              onClick={() => {
                 if (archiving) archivePerson.mutate(archiving);
               }}
-            >
-              {archivePerson.isPending ? "Removendo..." : "Remover da lista"}
-            </AlertDialogAction>
+            />
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={Boolean(removing)} onOpenChange={(open) => !open && acoes.setRemoving(null)}>
+      <AlertDialog open={Boolean(removing)} ocupado={setAccess.isPending} onOpenChange={(open) => !open && acoes.setRemoving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Revogar o acesso de {removing?.name}?</AlertDialogTitle>
@@ -342,14 +343,13 @@ export function DialogosDasPessoas({ acoes }: { acoes: AcoesDasPessoas }) {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(event) => {
-                event.preventDefault();
+              estado={setAccess.isPending ? "andamento" : "repouso"}
+              rotulo="Revogar acesso"
+              andamento="Revogando…"
+              onClick={() => {
                 if (removing) setAccess.mutate({ id: removing.id, active: false, reason: acoes.reason });
               }}
-              disabled={setAccess.isPending}
-            >
-              Revogar acesso
-            </AlertDialogAction>
+            />
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

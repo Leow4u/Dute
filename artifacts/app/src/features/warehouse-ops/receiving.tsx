@@ -828,8 +828,8 @@ export function UnplannedReceiptDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!sending.current && !isPending && !fotos.enviando) onOpenChange(next); }}>
-      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl" aria-describedby={undefined} fecharTravado={fotos.enviando}>
+    <Dialog open={open} ocupado={busy || fotos.enviando} onOpenChange={(next) => { if (!sending.current) onOpenChange(next); }}>
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl" aria-describedby={undefined}>
         <DialogHeader className="flex-row flex-wrap items-center gap-2 space-y-0">
           <DialogTitle>Registrar chegada avulsa · {activeCustomer.name}</DialogTitle>
           {conferenceMode ? (

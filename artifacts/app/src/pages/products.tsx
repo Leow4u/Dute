@@ -9,7 +9,8 @@ import { ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carre
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Boxes, CircleDollarSign, Edit, PackageSearch, Plus, Tags, Trash2 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { Dialog, DialogCancelar, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
 import { useAppUser } from "@/lib/auth";
@@ -368,7 +369,7 @@ export function ProductModal({ product, showPrice = false }: { product?: any; sh
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} ocupado={createProduct.isPending || updateProduct.isPending} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {isEdit ? (
           <Button variant="ghost" size="icon" className="h-8 w-8 text-info-soft-foreground hover:text-info-soft-foreground hover:bg-info-soft">
@@ -427,10 +428,8 @@ export function ProductModal({ product, showPrice = false }: { product?: any; sh
             </div>
           </div>
           <DialogFooter className="pt-4">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button type="submit" disabled={createProduct.isPending || updateProduct.isPending}>
-              {createProduct.isPending || updateProduct.isPending ? "Salvando..." : "Salvar Produto"}
-            </Button>
+            <DialogCancelar />
+            <BotaoDeAcao type="submit" estado={createProduct.isPending || updateProduct.isPending ? "andamento" : "repouso"} rotulo="Salvar Produto" andamento="Salvando…" />
           </DialogFooter>
         </form>
       </DialogContent>
@@ -465,7 +464,7 @@ function DeleteProductButton({ id, cod_cliente }: { id: number, cod_cliente: str
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} ocupado={deleteProduct.isPending} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive-soft-foreground hover:text-destructive-soft-foreground hover:bg-destructive-soft">
           <Trash2 className="h-4 w-4" />
@@ -482,10 +481,8 @@ function DeleteProductButton({ id, cod_cliente }: { id: number, cod_cliente: str
           </p>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-          <Button type="button" variant="destructive" onClick={onDelete} disabled={deleteProduct.isPending}>
-            {deleteProduct.isPending ? "Excluindo..." : "Excluir"}
-          </Button>
+          <DialogCancelar />
+          <BotaoDeAcao variant="destructive" estado={deleteProduct.isPending ? "andamento" : "repouso"} rotulo="Excluir" andamento="Excluindo…" onClick={onDelete} />
         </DialogFooter>
       </DialogContent>
     </Dialog>

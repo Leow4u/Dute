@@ -378,7 +378,12 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
     if (!question || waiting) return;
     const current = options.fresh ? null : (options.conversa ?? conversationId);
     const id = current ?? newConversationId();
+    // A pergunta das boas-vindas troca a tela para a conversa: o campo (ou a sugestão) em que o foco estava sai da
+    // tela, e o foco iria ao body. Ele vai ao campo da conversa.
+    const ativo = typeof document === "undefined" ? null : document.activeElement;
+    const dasBoasVindas = ativo instanceof HTMLElement && ativo.closest("[data-boas-vindas]") !== null;
     if (!current) navigate(`${basePath}?c=${encodeURIComponent(id)}`, { replace: Boolean(options.fresh) });
+    if (dasBoasVindas) window.requestAnimationFrame(focarOCampo);
     if (!options.deNovo) {
       setDraft("");
       setFiles([]);
@@ -921,7 +926,7 @@ function Welcome({
   attach?: AttachControls;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-10 pt-6">
+    <div data-boas-vindas="" className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-10 pt-6">
       <AgentMark size="lg" />
       <h2 className="mt-4 text-center text-2xl font-semibold tracking-tight md:text-3xl">
         {name ? `Olá, ${name}. Como posso ajudar?` : "Como posso ajudar?"}

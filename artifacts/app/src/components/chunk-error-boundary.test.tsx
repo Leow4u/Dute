@@ -198,7 +198,7 @@ describe("ChunkErrorBoundary", () => {
         await vi.advanceTimersByTimeAsync(CARREGANDO.atrasoMs);
       });
       expect(tela()).toBe("Abrindo Pedidos…");
-      expect(anuncio()).toBe("Abrindo Pedidos…");
+      expect(anuncio()).toBe("Abrindo Pedidos");
       await act(async () => {
         await vi.advanceTimersByTimeAsync(3_000);
       });
@@ -213,7 +213,7 @@ describe("ChunkErrorBoundary", () => {
         await vi.advanceTimersByTimeAsync(CARREGANDO.atrasoMs);
       });
       expect(tela()).toBe("Abrindo Pedidos…");
-      expect(anuncio()).toBe("Abrindo Pedidos…");
+      expect(anuncio()).toBe("Abrindo Pedidos");
       // O relógio é o mesmo: aos 10 s desde o começo, a demora.
       await act(async () => {
         await vi.advanceTimersByTimeAsync(CARREGANDO.demoraMs - 3_000 - 2 * CARREGANDO.atrasoMs);

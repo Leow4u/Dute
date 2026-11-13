@@ -55,6 +55,7 @@ import { ExceptionDialog, useWarehouseTaskActions } from "@/features/warehouse-o
 import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
 import {
   Dialog,
+  DialogCancelar,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -71,6 +72,7 @@ import { useContagemLembrada, type ContagensDaLista } from "@/lib/carregando/con
 import { resumoDaLista } from "@/lib/carregando/resumo-da-lista";
 import { CARREGANDO, relogioDaEspera } from "@/lib/carregando/tempo";
 import { desfechoDoErro, useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { useFalhaNaReleituraAutomatica } from "@/lib/carregando/use-leitura-com-falha";
 import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { usePalcoSemSaltos } from "@/lib/carregando/palco-sem-saltos";
@@ -323,7 +325,11 @@ export default function Pedidos() {
     () => buildOrderQueue({ requests: requests.data?.items, ops: ops.data, segurar: linhas.ocupada }),
     [ops.data, requests.data?.items, linhas],
   );
-  const loading = ops.isLoading || (decider && requests.isLoading);
+  // A falha sem nada lido fica na tela durante a releitura automática (o intervalo de 60 s): o aviso, o "Tentar de
+  // novo" e o foco nele. Só a nova tentativa que a pessoa pede volta às linhas-fantasma.
+  const opsNaTela = useFalhaNaReleituraAutomatica(ops);
+  const requestsNaTela = useFalhaNaReleituraAutomatica(requests);
+  const loading = opsNaTela.isLoading || (decider && requestsNaTela.isLoading);
   // A linha decidida sai sem salto (carregamento v2, momento 4): depois do
   // "Aprovado", esmaece e as de baixo sobem; sob o dedo, espera até 3 s. O
   // pedido só entra em "Para separar" quando a linha dele deixou "Para
@@ -638,6 +644,12 @@ export default function Pedidos() {
 
   // Aprovar e recusar ficam de fora: cada linha de "Para aprovar" tem o próprio estado.
   const busy = deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
+  /** A ação do diálogo aberto que ainda grava: nada fecha o diálogo até ela acabar (parte 13a). */
+  const dialogoOcupado =
+    (dialog?.kind === "deliver" && entregaOcupada) ||
+    (dialog?.kind === "cancel" && cancelar.isPending) ||
+    (dialog?.kind === "entrega" && salvarEntrega.isPending) ||
+    (dialog?.kind === "reject" && linhas.estado(dialog.request.id, "recusar") === "andamento");
   /**
    * O diálogo devolve o foco à linha que o abriu (2.4.3), no lugar do corpo
    * da página, onde o Radix o poria sem DialogTrigger. Com a linha ainda na
@@ -692,7 +704,7 @@ export default function Pedidos() {
   // "Nenhum pedido para…" (docs/plataforma/diagnostico-carregamento.md,
   // decisão 6 de 06/11/2026). Com a lista já lida, a falha de uma atualização
   // não a apaga.
-  const semLeitura = (ops.isError && !ops.data) || (decider && requests.isError && !requests.data);
+  const semLeitura = (opsNaTela.isError && !ops.data) || (decider && requestsNaTela.isError && !requests.data);
   // Sem rede, a lista que já estava fica, com a hora da leitura; sem nada
   // lido, o aviso (decisão 2 do celular).
   const semRede = semConexaoNaLeitura(ops, ...(decider ? [requests] : []));
@@ -702,7 +714,7 @@ export default function Pedidos() {
   // espera quando a pessoa toca nele; a volta do app ao primeiro plano relê
   // com a barra no topo do primeiro cartão. Os saldos da validação relêem
   // junto do toque.
-  const leiturasDaLista = decider ? [ops, requests] : [ops];
+  const leiturasDaLista = decider ? [opsNaTela, requestsNaTela] : [opsNaTela];
   const atualizarLista = useAtualizarLista(leiturasDaLista, () => void queryClient.invalidateQueries({ queryKey: ["stock-balances"] }));
   const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} resultado="fim" />;
 
@@ -960,12 +972,14 @@ export default function Pedidos() {
 
       <Dialog
         open={dialog !== null}
+        // A ação que grava segura o diálogo: a entrega que anda (ou confere), o
+        // cancelamento, a entrega que salva e a recusa em andamento.
+        ocupado={dialogoOcupado}
         onOpenChange={(open) => {
-          // A entrega que anda (ou confere) segura o diálogo: fechar não para as etapas.
-          if (!open && !(dialog?.kind === "deliver" && entregaOcupada)) fecharEntregaOuDialogo();
+          if (!open) fecharEntregaOuDialogo();
         }}
       >
-        <DialogContent className={larguraDoDialogo} aria-describedby={undefined} onCloseAutoFocus={devolverFocoDoDialogo} fecharTravado={dialog?.kind === "deliver" && entregaOcupada}>
+        <DialogContent className={larguraDoDialogo} aria-describedby={undefined} onCloseAutoFocus={devolverFocoDoDialogo}>
           {dialog?.kind === "reject" ? (
             <>
               <DialogHeader>
@@ -981,9 +995,7 @@ export default function Pedidos() {
                 />
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  Voltar
-                </Button>
+                <DialogCancelar onClick={() => setDialog(null)}>Voltar</DialogCancelar>
                 <BotaoDeAcao
                   variant="destructive"
                   estado={linhas.estado(dialog.request.id, "recusar")}
@@ -1049,17 +1061,9 @@ export default function Pedidos() {
                 {estadoDaEntrega === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
               </div>
               <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  aria-disabled={entregaOcupada || undefined}
-                  className={entregaOcupada ? "min-h-11 opacity-45 hover:bg-card active:bg-card" : "min-h-11"}
-                  onClick={() => {
-                    if (!entregaOcupada) fecharEntregaOuDialogo();
-                  }}
-                >
+                <DialogCancelar className="min-h-11" onClick={fecharEntregaOuDialogo}>
                   Voltar
-                </Button>
+                </DialogCancelar>
                 <BotaoDeAcao
                   className="min-h-11"
                   estado={conferindoEntrega ? "andamento" : estadoDaEntrega}
@@ -1096,17 +1100,15 @@ export default function Pedidos() {
                 }}
               />
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  Voltar
-                </Button>
-                <Button
-                  type="button"
+                <DialogCancelar onClick={() => setDialog(null)}>Voltar</DialogCancelar>
+                <BotaoDeAcao
                   variant="destructive"
-                  disabled={!motivoValido(cancelReason) || busy}
+                  estado={cancelar.isPending ? "andamento" : "repouso"}
+                  rotulo="Cancelar pedido"
+                  andamento="Cancelando…"
+                  bloqueado={!cancelar.isPending && (!motivoValido(cancelReason) || busy)}
                   onClick={() => cancelar.mutate({ orderId: dialog.orderId, reason: cancelReason.trim() })}
-                >
-                  {cancelar.isPending ? "Cancelando..." : "Cancelar pedido"}
-                </Button>
+                />
               </DialogFooter>
             </>
           ) : dialog?.kind === "entrega" && entregaForm ? (
@@ -1141,12 +1143,15 @@ export default function Pedidos() {
                 </p>
               ) : null}
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  Voltar
-                </Button>
-                <Button type="submit" form="entrega-do-pedido" disabled={busy}>
-                  {salvarEntrega.isPending ? "Salvando..." : entregaForm.modo === "dutelog" ? "Salvar e abrir na Operação" : "Salvar entrega"}
-                </Button>
+                <DialogCancelar onClick={() => setDialog(null)}>Voltar</DialogCancelar>
+                <BotaoDeAcao
+                  type="submit"
+                  form="entrega-do-pedido"
+                  estado={salvarEntrega.isPending ? "andamento" : "repouso"}
+                  rotulo={entregaForm.modo === "dutelog" ? "Salvar e abrir na Operação" : "Salvar entrega"}
+                  andamento="Salvando…"
+                  bloqueado={!salvarEntrega.isPending && busy}
+                />
               </DialogFooter>
             </>
           ) : null}
@@ -1226,14 +1231,17 @@ function LinhaParaAprovar({
   const emAndamento = andando ? `${andando === "aprovar" ? "Aprovando" : "Recusando"} ${noMeioDaFrase(titulo)}` : null;
 
   // O leitor de tela ouve a entrada na espera (aos 300 ms), a demora e a
-  // desistência, pelo Anunciador da tela; o resultado, o toast diz.
+  // desistência, pelo Anunciador da tela; o resultado, o toast diz. A espera
+  // que acaba antes da vez do anúncio dela o tira da fila: ninguém ouve
+  // "Aprovando pedido 1042" depois do "Aprovado".
   const anunciar = useAnuncio();
   const marco = andando && espera.visivel ? (espera.fase === "demorando" ? "demorando" : "espera") : semResposta ? "sem-resposta" : null;
   const anuncioDaEspera = emAndamento ? seisPalavras(emAndamento) : null;
   useEffect(() => {
-    if (marco === "espera" && anuncioDaEspera) anunciar(anuncioDaEspera);
-    else if (marco === "demorando") anunciar("Demorando mais que o normal");
-    else if (marco === "sem-resposta") anunciar("Sem confirmação do servidor");
+    if (marco === "espera" && anuncioDaEspera) return anunciar(anuncioDaEspera);
+    if (marco === "demorando") return anunciar("Demorando mais que o normal");
+    if (marco === "sem-resposta") return anunciar("Sem confirmação do servidor");
+    return undefined;
   }, [marco, anuncioDaEspera, anunciar]);
 
   // No lugar do meta da linha: aos 3 s o objeto ("Aprovando pedido 1042…"); aos 10 s, a demora com o relógio;

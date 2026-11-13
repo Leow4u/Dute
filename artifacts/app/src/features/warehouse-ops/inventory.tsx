@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OpeningLineCorrection } from "./opening-line-correction";
@@ -46,6 +47,7 @@ import {
 } from "@/components/ui/card";
 import {
   Dialog,
+  DialogCancelar,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -2118,7 +2120,7 @@ export function OpeningInventoryWorkspace() {
         />
       ) : null}
 
-      <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
+      <Dialog open={completeDialogOpen} ocupado={completeSession.isPending} onOpenChange={setCompleteDialogOpen}>
         <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
             <DialogTitle>Concluir o inventário de abertura?</DialogTitle>
@@ -2149,31 +2151,20 @@ export function OpeningInventoryWorkspace() {
             </div>
           </div>
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setCompleteDialogOpen(false)}
-              disabled={completeSession.isPending}
-            >
-              Continuar contando
-            </Button>
-            <Button
-              type="button"
-              onClick={() => completeSession.mutate()}
-              disabled={
-                !session?.line_count ||
+            <DialogCancelar onClick={() => setCompleteDialogOpen(false)}>Continuar contando</DialogCancelar>
+            <BotaoDeAcao
+              estado={completeSession.isPending ? "andamento" : "repouso"}
+              icone={<CheckCircle2 aria-hidden="true" />}
+              rotulo="Confirmar encerramento"
+              andamento="Encerrando…"
+              bloqueado={
+                !completeSession.isPending &&
+                (!session?.line_count ||
                   pendingBoxes.length > 0 || boxesQuery.isLoading || boxesQuery.isError || conferenceBusy ||
-                completeSession.isPending ||
-                removeOpeningLine.isPending
+                  removeOpeningLine.isPending)
               }
-            >
-              {completeSession.isPending ? (
-                <RefreshCw data-icon="inline-start" className="animate-spin" />
-              ) : (
-                <CheckCircle2 data-icon="inline-start" />
-              )}
-              Confirmar encerramento
-            </Button>
+              onClick={() => completeSession.mutate()}
+            />
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -254,18 +254,20 @@ describe("Receber sem conexão", () => {
     // A lista lida, com a falta: a hora dela fica na linha de estado sob o título (parte 7b), não na faixa que empurra a lista.
     // A troca de cliente também é pedida pela pessoa: passados 5 s, "Atualizando…" (parte 10).
     expect(TELA).toContain('estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando || trocandoDeCliente} resumo={resumo} />}');
-    expect(TELA).toContain("const leiturasDaLista = [ops, requestsNaTela];");
+    // A falha fica na tela durante a releitura automática (a junção das partes 9, 11 e 12).
+    expect(TELA).toContain("const leiturasDaLista = [opsNaTela, requestsNaTela];");
     expect(TELA).not.toContain("FaixaSemConexao");
     expect(TELA).not.toContain("Carregando chegadas...");
     // Na primeira leitura, a lista com a forma final, com as linhas-fantasma (parte 8); depois, o aviso, antes do erro
     // e das filas.
     // Só a primeira leitura da tela, e a falha das filas não espera os avisos.
-    expect(TELA).toContain("const lendo = !listaJaLida && !ops.isError && (ops.isLoading || requests.isLoading);");
+    expect(TELA).toContain("const lendo = !listaJaLida && !opsNaTela.isError && (opsNaTela.isLoading || requestsNaTela.isLoading);");
     expect(TELA).toContain(": !lendo && semRede && semRede.lidaEm === null ? (");
     expect(TELA.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(TELA.indexOf("<FalhaDasChegadas focoAoSair={idDaLinha}"));
     // Só a leitura sem nada lido troca a lista pelo aviso: a releitura que falha fica na linha de estado (parte 10).
-    // Os avisos do cliente que não vieram (a troca que falhou) também (a revisão da parte 10).
-    expect(TELA).toContain("const falhaNaTela = !lendo && !semRede && ((Boolean(ops.error) && !ops.data) || avisos.falhou);");
+    // Os avisos do cliente que não vieram (a troca que falhou) também (a revisão da parte 10), e a falha fica na
+    // tela durante a releitura automática (a junção das partes 9, 11 e 12).
+    expect(TELA).toContain("const falhaNaTela = !lendo && !semRede && ((Boolean(opsNaTela.error) && !opsNaTela.data) || avisos.falhou);");
     expect(TELA).toContain(") : falhaNaTela ? (");
     expect(TELA).toContain("Não consegui carregar as chegadas.");
   });

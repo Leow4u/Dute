@@ -31,8 +31,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -130,7 +131,7 @@ export function ClienteEventos() {
 
             {editing ? <EventEditDialog event={editing} onClose={() => setEditing(null)} /> : null}
 
-            <AlertDialog open={Boolean(removing)} onOpenChange={(open) => (!open ? setRemoving(null) : null)}>
+            <AlertDialog open={Boolean(removing)} ocupado={archive.isPending} onOpenChange={(open) => (!open ? setRemoving(null) : null)}>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Excluir {removing?.name}?</AlertDialogTitle>
@@ -141,14 +142,13 @@ export function ClienteEventos() {
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
                   <AlertDialogAction
-                    disabled={archive.isPending}
-                    onClick={(click) => {
-                      click.preventDefault();
+                    estado={archive.isPending ? "andamento" : "repouso"}
+                    rotulo="Excluir"
+                    andamento="Excluindo…"
+                    onClick={() => {
                       if (removing) remove(removing);
                     }}
-                  >
-                    Excluir
-                  </AlertDialogAction>
+                  />
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -302,7 +302,7 @@ function EventCard({
 }
 
 /** Editar dados e quantidades. Item novo entra pelo Estoque (Salvar como evento). */
-function EventEditDialog({ event, onClose }: { event: ClientEvent; onClose: () => void }) {
+export function EventEditDialog({ event, onClose }: { event: ClientEvent; onClose: () => void }) {
   const save = useSaveClientEvent();
   const { toast } = useToast();
   const [form, setForm] = useState({
@@ -344,7 +344,9 @@ function EventEditDialog({ event, onClose }: { event: ClientEvent; onClose: () =
   }
 
   return (
-    <Dialog open onOpenChange={(open) => (!open ? onClose() : null)}>
+    // Só fecha depois do retorno: fechar no meio desmontava a janela, e o
+    // aviso do salvo (ou da falha) do mutate não chegava (parte 13a).
+    <Dialog open ocupado={save.isPending} onOpenChange={(open) => (!open ? onClose() : null)}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[640px]">
         <DialogHeader>
           <DialogTitle>Editar evento</DialogTitle>
@@ -439,12 +441,8 @@ function EventEditDialog({ event, onClose }: { event: ClientEvent; onClose: () =
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={!valid || save.isPending}>
-              {save.isPending ? "Salvando…" : "Salvar"}
-            </Button>
+            <DialogCancelar onClick={onClose} />
+            <BotaoDeAcao type="submit" estado={save.isPending ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando…" bloqueado={!save.isPending && !valid} />
           </DialogFooter>
         </form>
       </DialogContent>

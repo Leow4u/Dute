@@ -11,7 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { FantasmasDaLista, LeituraDaLista } from "@/components/agent/leitura-do-agente";
+import { FantasmasDaLista, LeituraDaListaDoAgente } from "@/components/agent/leitura-do-agente";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Confirmacao } from "@/components/ui/confirmacao";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -397,14 +397,14 @@ export function RoutinesPage({ role, onOpenConversation }: { role: string | unde
         {tab === "templates" ? (
           templateGrid
         ) : routines.isLoading || (routines.isError && routines.data === undefined) ? (
-          <LeituraDaLista
+          <LeituraDaListaDoAgente
             leitura={routines}
             rotulo="Carregando rotinas…"
             falha="Não consegui carregar as rotinas."
             fantasmas={<FantasmasDaLista linhas={3} altura="h-24" className="sm:grid sm:grid-cols-2 xl:grid-cols-3" />}
           >
             {null}
-          </LeituraDaLista>
+          </LeituraDaListaDoAgente>
         ) : showTemplatesInMine(list) ? (
           <>
             <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">

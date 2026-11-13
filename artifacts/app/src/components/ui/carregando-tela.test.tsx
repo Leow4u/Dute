@@ -111,7 +111,7 @@ describe("CarregandoTela", () => {
     passar(CARREGANDO.atrasoMs - 1);
     expect(anuncio()).toBe("");
     passar(1);
-    expect(anuncio()).toBe("Abrindo Pedidos…");
+    expect(anuncio()).toBe("Abrindo Pedidos");
     // Nenhuma região viva própria: só a do Anunciador.
     expect(tela().querySelector("[role], [aria-live]")).toBeNull();
   });
@@ -142,7 +142,7 @@ describe("CarregandoTela", () => {
     expect(abertura.isConnected).toBe(false);
     expect(indicador()).not.toBeNull();
     expect(tela().textContent).toBe("Abrindo Pedidos…");
-    expect(anuncio()).toBe("Abrindo Pedidos…");
+    expect(anuncio()).toBe("Abrindo Pedidos");
   });
 
   it("aos 10 s, a volta calma, \"Demorando mais que o normal\" e \"Tentar de novo\", com o anúncio", () => {
@@ -156,7 +156,7 @@ describe("CarregandoTela", () => {
       ),
     );
     passar(CARREGANDO.atrasoMs);
-    expect(anuncio()).toBe("Abrindo Estoque…");
+    expect(anuncio()).toBe("Abrindo Estoque");
     passar(CARREGANDO.demoraMs - CARREGANDO.atrasoMs - 1);
     expect(indicador()?.hasAttribute("data-calmo")).toBe(false);
     expect(tela().textContent).toBe("Abrindo Estoque…");
@@ -196,7 +196,7 @@ describe("CarregandoTela", () => {
       ),
     );
     passar(CARREGANDO.atrasoMs);
-    expect(anuncio()).toBe("Abrindo Pedidos…");
+    expect(anuncio()).toBe("Abrindo Pedidos");
     passar(5_000);
     const desde = performance.now() - 5_000 - CARREGANDO.atrasoMs;
     // Outra instância (a da fronteira), com o relógio de quando a tela começou a abrir.

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { Dialog, DialogCancelar, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -85,12 +85,8 @@ export function GuardarDaAreaConteudo({
         </div>
       </div>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancelar}>
-          Cancelar
-        </Button>
-        <Button type="button" disabled={!pode || enviando} onClick={onAbrir}>
-          Abrir a guarda
-        </Button>
+        <DialogCancelar ocupado={enviando} onClick={onCancelar} />
+        <BotaoDeAcao estado={enviando ? "andamento" : "repouso"} rotulo="Abrir a guarda" andamento="Abrindo…" bloqueado={!enviando && !pode} onClick={onAbrir} />
       </div>
     </div>
   );
@@ -162,7 +158,7 @@ export function GuardarDaAreaDialog({
   });
 
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (open ? undefined : onFechar())}>
+    <Dialog open={aberto} ocupado={abrir.isPending} onOpenChange={(open) => (open ? undefined : onFechar())}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Guardar do {locationId}</DialogTitle>

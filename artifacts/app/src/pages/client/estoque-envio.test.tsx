@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Router } from "wouter";
 
+import { INTERVALO_DO_TOQUE_MS } from "@/lib/campo/toque-unico";
 import { cartStorageKey } from "@/lib/client-cart";
 
 /**
@@ -15,7 +16,12 @@ import { cartStorageKey } from "@/lib/client-cart";
  * pedido" criava outro pedido e reservava o mesmo estoque de novo.
  */
 
-const estado = vi.hoisted(() => ({ envios: [] as Array<Record<string, unknown>>, perdidas: 0 }));
+const estado = vi.hoisted(() => ({
+  envios: [] as Array<Record<string, unknown>>,
+  perdidas: 0,
+  /** Com a lista, o envio espera até o teste soltar (o painel gravando, parte 13a). */
+  envioPreso: null as Array<() => void> | null,
+}));
 
 vi.mock("@/lib/auth", () => ({
   useAppUser: () => ({ user: { uid: "uid-ana", publicMetadata: { role: "cliente", customer_code: "BTG Pactual" } }, isLoaded: true }),
@@ -90,7 +96,16 @@ function fecharATela() {
   container = null;
 }
 
+/**
+ * O Enviar é o BotaoDeAcao (carregamento v2, parte 13a), que barra o segundo
+ * toque em menos de um segundo; a nova tentativa de quem leu a falha vem
+ * depois disso: o relógio anda um intervalo a cada envio.
+ */
+let deslocamentoDoRelogio = 0;
+const agoraDeVerdade = Date.now.bind(Date);
+
 async function enviar() {
+  deslocamentoDoRelogio += INTERVALO_DO_TOQUE_MS;
   const antes = estado.envios.length;
   await act(async () => botao("Enviar pedido para a Dutelog")!.click());
   await esperar(() => estado.envios.length > antes, "o envio");
@@ -102,8 +117,11 @@ async function enviar() {
 }
 
 beforeEach(() => {
+  deslocamentoDoRelogio = 0;
+  vi.spyOn(Date, "now").mockImplementation(() => agoraDeVerdade() + deslocamentoDoRelogio);
   estado.envios = [];
   estado.perdidas = 1;
+  estado.envioPreso = null;
   window.localStorage.clear();
   guardarPedido(2);
   vi.stubGlobal(
@@ -113,6 +131,8 @@ beforeEach(() => {
       if (url.pathname === "/api/client/overview") return json(VISAO);
       if (url.pathname === "/api/client/requests" && init?.method === "POST") {
         estado.envios.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+        const preso = estado.envioPreso;
+        if (preso) await new Promise<void>((soltar) => preso.push(soltar));
         if (estado.perdidas > 0) {
           estado.perdidas -= 1;
           // O servidor gravou o pedido; a resposta não chegou à tela.
@@ -128,6 +148,7 @@ beforeEach(() => {
 afterEach(() => {
   fecharATela();
   window.localStorage.clear();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -166,5 +187,32 @@ describe("o pedido do portal enviado de novo", () => {
     const mudado = await enviar();
     expect(mudado.idempotency_key).not.toBe(primeiro.idempotency_key);
     expect((mudado.items as Array<{ quantity: number }>)[0]?.quantity).toBe(3);
+  });
+});
+
+describe("o painel do pedido enviando (carregamento v2, parte 13a)", () => {
+  it("o Esc e o toque fora não fecham o painel, o Fechar pedido fica aria-disabled e o Enviar nunca fica disabled", async () => {
+    estado.perdidas = 0;
+    estado.envioPreso = [];
+    await abrirATela();
+    const enviar = botao("Enviar pedido para a Dutelog")!;
+    enviar.focus();
+    await act(async () => enviar.click());
+    await esperar(() => estado.envioPreso!.length === 1 && Boolean(document.querySelector('[role="dialog"][data-ocupado]')), "o pedido enviando");
+    await act(async () => {
+      enviar.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
+    });
+    const fechar = document.querySelector<HTMLButtonElement>('[aria-label="Fechar pedido"]')!;
+    expect(fechar.getAttribute("aria-disabled")).toBe("true");
+    await act(async () => fechar.click());
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(enviar.disabled).toBe(false);
+    expect(enviar.getAttribute("aria-disabled")).toBe("true");
+    expect(document.activeElement).toBe(enviar);
+    for (const soltar of estado.envioPreso!.splice(0)) soltar();
+    estado.envioPreso = null;
   });
 });

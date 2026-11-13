@@ -47,6 +47,67 @@ function soltarORoot(documento: Document | undefined): void {
   documento?.getElementById("root")?.removeAttribute("inert");
 }
 
+/**
+ * O último aviso que a região de status da abertura disse ("Sem conexão",
+ * "Demorando mais que o normal"; vazio quando ele saiu) e quando a região
+ * mudou (`performance.now()`). O script do index.html marca na abertura
+ * (`data-dito`, `data-dito-em`) e, quando ela sai, o #root guarda
+ * (`data-abertura-disse`, `data-abertura-disse-em`).
+ */
+export interface FalaDaAbertura {
+  texto: string;
+  em: number;
+}
+
+function falaMarcada(elemento: Element | null | undefined, texto: string, em: string): FalaDaAbertura | null {
+  const quando = Number(elemento?.getAttribute(em) ?? Number.NaN);
+  if (!elemento || !Number.isFinite(quando)) return null;
+  return { texto: elemento.getAttribute(texto) ?? "", em: quando };
+}
+
+/**
+ * A última fala da abertura, com ela na tela ou depois que saiu: o
+ * `Anunciador` do app espera os 2 s dela antes do primeiro anúncio (as duas
+ * regiões falam a mesma pessoa, no máximo um aviso a cada 2 s).
+ */
+export function ultimaFalaDaAbertura(documento: Document | undefined = documentoAtual()): FalaDaAbertura | null {
+  return (
+    falaMarcada(aberturaDo(documento), "data-dito", "data-dito-em") ??
+    falaMarcada(documento?.getElementById("root"), "data-abertura-disse", "data-abertura-disse-em")
+  );
+}
+
+/**
+ * A falta de conexão que o app acabou de perceber já foi dita: a abertura
+ * está na tela (ela diz "Sem conexão" na região dela, e o #root inerte não
+ * fala), ou saiu dizendo "Sem conexão" e a rede não voltou desde então. Uma
+ * vez só: a falta seguinte é outra, e o `Anunciador` a diz.
+ */
+export function aberturaDisseSemConexao(documento: Document | undefined = documentoAtual()): boolean {
+  if (aberturaNaTela(documento)) return true;
+  const root = documento?.getElementById("root");
+  if (root?.getAttribute("data-abertura-disse") !== "Sem conexão") return false;
+  root.setAttribute("data-abertura-disse", "");
+  return true;
+}
+
+/** Quando a abertura sai, o #root guarda a última fala dela; a rede que volta encerra a falta que ela disse. */
+function guardarAFala(abertura: HTMLElement, documento: Document | undefined): void {
+  const root = documento?.getElementById("root");
+  const fala = falaMarcada(abertura, "data-dito", "data-dito-em");
+  if (!root || !fala) return;
+  root.setAttribute("data-abertura-disse", fala.texto);
+  root.setAttribute("data-abertura-disse-em", String(fala.em));
+  if (fala.texto !== "Sem conexão") return;
+  documento?.defaultView?.addEventListener(
+    "online",
+    () => {
+      if (root.getAttribute("data-abertura-disse") === "Sem conexão") root.setAttribute("data-abertura-disse", "");
+    },
+    { once: true },
+  );
+}
+
 function avisar(): void {
   for (const ouvinte of [...ouvintes]) ouvinte();
 }
@@ -92,6 +153,7 @@ export function fecharAbertura(documento: Document | undefined = documentoAtual(
   if (!abertura || abertura.hasAttribute("data-fechando")) return;
   const janela = documento?.defaultView;
   const agora = janela?.performance?.now() ?? 0;
+  guardarAFala(abertura, documento);
   const saida = saidaDaAbertura(abertura, agora, movimentoReduzido(janela));
   abertura.setAttribute("data-fechando", saida);
   abertura.setAttribute("aria-hidden", "true");

@@ -41,9 +41,10 @@ export function useFotosDoProduto<T>(opcoes: OpcoesDoEnvio<T>): FotosDoProduto<T
       const levadas = arquivos.slice(0, cabem);
       const corte = arquivos.length > levadas.length ? (cabem < FOTOS_POR_VEZ ? ATE_OITO_POR_PRODUTO : SO_QUATRO_POR_VEZ) : null;
       setAviso(corte);
-      enviar(levadas);
-      // O corte também é falado, depois do começo ("Enviando 4 fotos"); sem nenhuma levada, é o único anúncio.
-      if (corte) anunciar(corte);
+      // O corte vai no anúncio do começo ("Enviando 4 de 6 fotos"): um anúncio só, que não se perde atrás de outro
+      // com a região ocupada. Sem nenhuma levada, o motivo é o único anúncio.
+      enviar(levadas, arquivos.length);
+      if (corte && levadas.length === 0) anunciar(corte);
     },
     [enviar, anunciar],
   );

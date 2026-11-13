@@ -481,6 +481,20 @@ describe("a espera da resposta, depois da revisão", () => {
     expect(document.activeElement).toBe(depois);
   });
 
+  it("a primeira pergunta de uma conversa nova, pelo campo das boas-vindas, deixa o foco no campo da conversa, e não no body", async () => {
+    await abrir();
+    expect(texto()).toContain("Como posso ajudar?");
+    campo().focus();
+    await perguntar("Quais itens estão parados há mais de 60 dias?");
+    await passar(50);
+    // A tela trocou das boas-vindas para a conversa: o campo é outro, e o foco foi com a pessoa.
+    expect(texto()).not.toContain("Como posso ajudar?");
+    expect(document.activeElement).toBe(campo());
+    await act(async () => conversas[0].responder(RESPOSTA));
+    await passar(50);
+    expect(document.activeElement).toBe(campo());
+  });
+
   it("o foco no Parar vai ao campo quando a resposta chega inteira, sem texto antes", async () => {
     await abrir();
     await perguntar("Quais itens?");

@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Ban, MessageSquareWarning, RefreshCw } from "lucide-react";
+import { Ban, MessageSquareWarning } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import {
   Dialog,
+  DialogCancelar,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -207,7 +208,7 @@ export function ExceptionDialog({
   const canSubmit = Boolean(task && (note.trim() || task.blocked_reason));
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} ocupado={isPending} onOpenChange={onOpenChange}>
       <DialogContent>
         <form className="flex flex-col gap-5" onSubmit={onSubmit}>
           <DialogHeader>
@@ -238,22 +239,15 @@ export function ExceptionDialog({
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isPending}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={!canSubmit || isPending}>
-              {isPending ? (
-                <RefreshCw data-icon="inline-start" className="animate-spin" />
-              ) : (
-                <MessageSquareWarning data-icon="inline-start" />
-              )}
-              Registrar
-            </Button>
+            <DialogCancelar onClick={() => onOpenChange(false)} />
+            <BotaoDeAcao
+              type="submit"
+              estado={isPending ? "andamento" : "repouso"}
+              icone={<MessageSquareWarning aria-hidden="true" />}
+              rotulo="Registrar"
+              andamento="Registrando…"
+              bloqueado={!isPending && !canSubmit}
+            />
           </DialogFooter>
         </form>
       </DialogContent>

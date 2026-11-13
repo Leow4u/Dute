@@ -48,8 +48,10 @@ export interface AvisoDeEsperaProps {
 export function AvisoDeEspera({ fase, tipo, desdeMs, restanteMs, tentando = false, onTentar, onConferir, className }: AvisoDeEsperaProps) {
   const anunciar = useAnuncio();
   const desistencia = tipo === "escrita" ? SEM_CONFIRMACAO_DO_SERVIDOR : SEM_RESPOSTA_DO_SERVIDOR;
+  // A espera que acaba (o aviso sai da tela) antes da vez do anúncio o tira da fila do Anunciador.
   useEffect(() => {
-    anunciar(fase === "demorando" ? DEMORANDO_MAIS : desistencia);
+    const retirar = anunciar(fase === "demorando" ? DEMORANDO_MAIS : desistencia);
+    return retirar;
   }, [fase, desistencia, anunciar]);
 
   const estimativa = fase === "demorando" && restanteMs !== undefined ? estimativaDaEspera(restanteMs) : null;

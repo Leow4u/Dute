@@ -10,7 +10,9 @@ import { describe, expect, it } from "vitest";
 describe("rótulos dos componentes de base", () => {
   it.each(["dialog.tsx", "sheet.tsx"])("%s: o fechar diz Fechar", (arquivo) => {
     const fonte = readFileSync(new URL(`./${arquivo}`, import.meta.url), "utf8");
-    expect(fonte).toContain('<span className="sr-only">Fechar</span>');
+    // O painel usa o mesmo X do diálogo (o BotaoFecharDoPainel, carregamento v2, parte 13a).
+    if (arquivo === "sheet.tsx") expect(fonte).toContain("<BotaoFecharDoPainel");
+    else expect(fonte).toContain('<span className="sr-only">Fechar</span>');
     expect(fonte).not.toMatch(/>Close</);
   });
 });

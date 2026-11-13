@@ -7,6 +7,7 @@ import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { fecharAbertura } from "@/lib/abertura";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
 import { Anunciador, INTERVALO_DO_ANUNCIO_MS, useAnuncio, useRetirarAnuncio } from "./anunciador";
@@ -134,6 +135,17 @@ describe("o anunciador", () => {
     expect(regiao().firstElementChild).not.toBe(primeiro);
   });
 
+  it("o texto que acabou de ser dito, pedido de novo dentro dos 2 s, não tira da fila o outro que espera a vez", () => {
+    // Duas esperas dizem a mesma demora; a falta de conexão, pedida entre elas, ainda é falada.
+    falar("Demorando mais que o normal");
+    passar(500);
+    falar("Sem conexão");
+    passar(500);
+    falar("Demorando mais que o normal");
+    passar(INTERVALO_DO_ANUNCIO_MS);
+    expect(falados).toEqual(["Demorando mais que o normal", "Sem conexão"]);
+  });
+
   it("ignora o texto vazio e junta os espaços", () => {
     falar("   ");
     expect(regiao().textContent).toBe("");
@@ -228,6 +240,71 @@ describe("a falta de conexão", () => {
     expect(falados).toEqual(["Sem conexão"]);
     expect(regiao().textContent).toBe("Sem conexão");
     conexao.fechar();
+  });
+});
+
+describe("a passagem da abertura para o app", () => {
+  /** A abertura e o #root do index.html, com a última fala da região dela. */
+  function aberturaQueDisse(texto: string) {
+    const abertura = document.createElement("div");
+    abertura.id = "abertura";
+    abertura.setAttribute("data-dito", texto);
+    abertura.setAttribute("data-dito-em", String(Math.round(performance.now())));
+    const root = document.createElement("div");
+    root.id = "root";
+    root.setAttribute("inert", "");
+    document.body.prepend(abertura, root);
+    return () => {
+      abertura.remove();
+      root.remove();
+    };
+  }
+
+  it("o primeiro anúncio do app espera os 2 s da última fala da abertura: as duas regiões falam a mesma pessoa", () => {
+    const tirar = aberturaQueDisse("Demorando mais que o normal");
+    try {
+      passar(1_500);
+      act(() => fecharAbertura());
+      falar("Carregando pedidos");
+      expect(regiao().textContent).toBe("");
+      passar(INTERVALO_DO_ANUNCIO_MS - 1_500 - 1);
+      expect(regiao().textContent).toBe("");
+      passar(1);
+      expect(falados).toEqual(["Carregando pedidos"]);
+    } finally {
+      tirar();
+    }
+  });
+
+  it("a falta de conexão que a abertura já disse não é dita de novo pelo app; a falta seguinte, sim", () => {
+    const tirar = aberturaQueDisse("Sem conexão");
+    try {
+      let rede = false;
+      const conexao = criarConexao({ temRede: () => rede });
+      act(() =>
+        raiz!.render(
+          <ProvedorDaConexao value={conexao}>
+            <Anunciador />
+          </ProvedorDaConexao>,
+        ),
+      );
+      act(() => fecharAbertura());
+      act(() => conexao.redeMudou());
+      passar(5_000);
+      expect(falados).toEqual([]);
+      // A rede volta e cai de novo: outra falta, dita pelo app.
+      rede = true;
+      act(() => conexao.redeMudou());
+      act(() => conexao.leuDoServidor());
+      passar(5_000);
+      rede = false;
+      act(() => conexao.redeMudou());
+      passar(5_000);
+      expect(falados).toEqual(["Sem conexão"]);
+      conexao.fechar();
+    } finally {
+      tirar();
+    }
   });
 });
 

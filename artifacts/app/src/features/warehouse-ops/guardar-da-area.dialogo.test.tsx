@@ -88,9 +88,17 @@ async function digitar(id: string, valor: string) {
   });
 }
 
+/** O botão pelo rótulo: o texto inteiro, ou a camada atual do BotaoDeAcao. */
 function botao(texto: string) {
-  return [...document.querySelectorAll("button")].find((elemento) => elemento.textContent?.trim() === texto) ?? null;
+  return (
+    [...document.querySelectorAll("button")].find(
+      (elemento) =>
+        elemento.textContent?.trim() === texto || elemento.querySelector(".botao-acao-camada[data-atual]")?.textContent?.trim() === texto,
+    ) ?? null
+  );
 }
+/** Travado (sem dado que preste ou no meio da ação): aria-disabled, nunca disabled. */
+const travado = (elemento: HTMLButtonElement | null) => elemento!.getAttribute("aria-disabled") === "true" && !elemento!.disabled;
 
 beforeEach(async () => {
   estado.abertas.length = 0;
@@ -124,7 +132,7 @@ describe("o diálogo Guardar do RECEBIMENTO na mão de quem usa", () => {
     expect(campo("guardar-quantidade")!.value).toBe("");
     await digitar("guardar-quantidade", "10");
     await digitar("guardar-motivo", "Contagem achou no RECEBIMENTO");
-    expect(botao("Abrir a guarda")!.disabled).toBe(false);
+    expect(travado(botao("Abrir a guarda"))).toBe(false);
     await act(async () => botao("Abrir a guarda")!.click());
     await esperar(() => estado.avisos.length > 0, "o aviso da guarda aberta");
     expect(estado.abertas).toHaveLength(1);
@@ -134,12 +142,12 @@ describe("o diálogo Guardar do RECEBIMENTO na mão de quem usa", () => {
 
   it("acima do sem guarda ou sem motivo, Abrir a guarda fica desligado", async () => {
     await digitar("guardar-motivo", "Contagem achou no RECEBIMENTO");
-    expect(botao("Abrir a guarda")!.disabled).toBe(false);
+    expect(travado(botao("Abrir a guarda"))).toBe(false);
     await digitar("guardar-quantidade", "25");
-    expect(botao("Abrir a guarda")!.disabled).toBe(true);
+    expect(travado(botao("Abrir a guarda"))).toBe(true);
     await digitar("guardar-quantidade", "24");
     await digitar("guardar-motivo", "");
-    expect(botao("Abrir a guarda")!.disabled).toBe(true);
+    expect(travado(botao("Abrir a guarda"))).toBe(true);
   });
 
   it("reaberto, começa de novo no sem guarda e sem motivo, com outra chave", async () => {

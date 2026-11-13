@@ -6,6 +6,7 @@ import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Spinner } from "@/components/ui/spinner";
 import { useAberturaNaTela } from "@/lib/abertura";
 import { useAnuncio } from "@/lib/carregando/anunciador";
+import { novaEsperaDaRota, useEsperaDaRotaNaTela } from "@/lib/carregando/espera-da-rota";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +53,12 @@ function recarregar() {
  * tela (`desde`, a fronteira que confere o arquivo que não veio) segue o mesmo
  * relógio e não repete o anúncio da entrada. A área reserva a altura da tela,
  * para o conteúdo não pular quando chegar.
+ *
+ * A lista que ainda lê quando a tela chega continua esta espera
+ * (`lib/carregando/espera-da-rota.ts`): o mesmo relógio, sem anunciar de novo,
+ * e o anúncio que ainda espera a vez passa a ela. Sem lista que continue, o
+ * anúncio que ainda espera a vez sai com a espera: o leitor de tela não ouve
+ * "Abrindo Estoque" com o Estoque na tela.
  */
 export function CarregandoTela({
   titulo,
@@ -65,7 +72,9 @@ export function CarregandoTela({
   desde?: number;
   onTentar?: () => void;
 }) {
-  const espera = useEspera(true, { desde });
+  const [rota] = useState(() => novaEsperaDaRota(desde));
+  useEsperaDaRotaNaTela(rota);
+  const espera = useEspera(true, { desde: rota.inicio });
   const anunciar = useAnuncio();
   const aberturaNaTela = useAberturaNaTela();
   const rotulo = rotuloDaCarregandoTela(titulo);
@@ -79,11 +88,19 @@ export function CarregandoTela({
         ? "demorando"
         : "espera";
 
-  // A desistência é um alerta (o ErroNaLeitura): o leitor de tela já a ouve.
+  // A desistência é um alerta (o ErroNaLeitura): o leitor de tela já a ouve. O anúncio que ainda espera a vez sai
+  // quando a espera muda ou acaba, menos o que a lista que continua a espera herdou.
   useEffect(() => {
-    if (marco === "espera" && !continua) anunciar(rotulo);
-    else if (marco === "demorando") anunciar(DEMORANDO);
-  }, [marco, continua, anunciar, rotulo]);
+    const entrada = marco === "espera" && !continua;
+    if (!entrada && marco !== "demorando") return undefined;
+    if (entrada) rota.entrada = true;
+    else rota.demora = true;
+    const retirar = anunciar(entrada ? rotulo.replace(/…$/, "") : DEMORANDO);
+    rota.retirar = retirar;
+    return () => {
+      if (!rota.herdada) retirar();
+    };
+  }, [marco, continua, anunciar, rotulo, rota]);
 
   if (marco === "sem-resposta") {
     return (

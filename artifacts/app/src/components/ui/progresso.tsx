@@ -130,8 +130,11 @@ export function Progresso({ forma, titulo, itens, concluido, apoio, unidade = ["
   const tentativas = useRef(new Map<number, HTMLButtonElement>());
   // As etapas falam a entrada na espera aos 300 ms; a contagem é falada por quem envia ("Enviando 4 fotos").
   const entrou = forma === "etapas" && espera.visivel;
+  // As etapas que acabam antes da vez do anúncio o tiram da fila do Anunciador.
   useEffect(() => {
-    if (entrou) anunciar(titulo);
+    if (!entrou) return undefined;
+    const retirar = anunciar(titulo);
+    return retirar;
   }, [entrou, titulo, anunciar]);
   // Antes de 300 ms o relógio ainda não mostrou nada: o movimento conta como ligado.
   const movimento = !espera.visivel || espera.movimento;

@@ -447,6 +447,40 @@ describe.each(TELAS)("$nome com a forma final na primeira leitura", (tela) => {
     expect(falas).toEqual([`Carregando ${tela.objeto}`, tela.resumo]);
   });
 
+  it("a releitura automática depois da falha deixa o aviso na tela, sem fantasmas, sem fala e com o foco no Tentar de novo", async () => {
+    estado.atrasoMs = 100;
+    estado.falhaPorCaminho = { "/api/warehouse/ops": true, "/api/customer-requests": true };
+    await montar(tela.Tela);
+    await passar(400);
+    const tentar = () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((botao) => /Tentar de novo|Tentando de novo…/.test(botao.textContent ?? ""));
+    const botao = tentar()!;
+    expect(botao).toBeDefined();
+    botao.focus();
+    const falas: string[] = [];
+    const observador = new MutationObserver(() => {
+      if (regiao().textContent) falas.push(regiao().textContent!);
+    });
+    observador.observe(regiao(), { subtree: true, childList: true, characterData: true });
+    estado.atrasoMs = 1_000;
+    // Ninguém tocou em nada: a releitura do intervalo da tela (o refetchInterval faz isto).
+    await act(async () => {
+      void cliente.refetchQueries({ queryKey: ["warehouse-ops"] });
+      void cliente.refetchQueries({ queryKey: ["customer-requests"] });
+    });
+    for (let t = 0; t < 900; t += 100) {
+      await passar(100);
+      expect(naTela(), `${t} ms`).toMatch(/Não consegui carregar/);
+      expect(container.querySelector("[data-fantasmas]"), `${t} ms`).toBeNull();
+      expect(document.activeElement, `${t} ms`).toBe(botao);
+    }
+    // Falha de novo: o aviso continua, com o foco no mesmo botão, e nada foi falado.
+    for (let t = 0; t < 3_000; t += 100) await passar(100);
+    observador.disconnect();
+    expect(naTela()).toMatch(/Não consegui carregar/);
+    expect(document.activeElement).toBe(botao);
+    expect(falas).toEqual([]);
+  });
+
   it("quem sai da tela antes do resumo leva o resumo junto: a tela seguinte não ouve a contagem desta lista", async () => {
     estado.atrasoMs = 1_000;
     await montar(tela.Tela);

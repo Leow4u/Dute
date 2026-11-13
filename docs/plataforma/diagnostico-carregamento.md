@@ -337,7 +337,9 @@ o Início) ou por URL.
    da seção 5); em Pedidos, o `busy` por linha, não global.
 7. **Diálogos.** `onOpenChange` travado enquanto `isPending`, Cancelar
    desabilitado, `preventDefault` nos quatro `AlertDialogAction`; a janela do
-   Evento do portal só fecha depois do retorno.
+   Evento do portal só fecha depois do retorno. *Entrou na parte 13a do
+   carregamento v2 (registro em 10.5), com o Cancelar `aria-disabled` no
+   lugar de desabilitado.*
 8. **Operações longas.** Fotos com contagem e `uploadBytesResumable`;
    aviso de que só quatro sobem por vez; Documentos e Conhecimento com
    etapa e tempo limite; Separado e Entrega com etapa; foto por IA com tempo
@@ -571,7 +573,9 @@ já estava decidido. O restante vira cinco PRs, um problema por PR:
 3. **Fotos do celular** (item 4). A foto passa pela compactação que o app já
    tem, e o envio mostra a contagem e o progresso (`uploadBytesResumable`).
 4. **Ação no celular** (itens 5 e 9). A trava de toque duplo, as chaves por
-   tentativa, o rodapé preso nos diálogos longos e o X de 44 px.
+   tentativa, o rodapé preso nos diálogos longos e o X de 44 px. *O rodapé
+   preso e o X de 44 px entraram na parte 13a do carregamento v2 (registro
+   em 10.5); a trava de toque duplo veio com o `BotaoDeAcao` (parte 4).*
 5. **Leitura leve e volta do segundo plano** (itens 6 e 7). O shell sem a
    releitura de 60 s no celular, o Separado com uma leitura só, e a releitura
    na volta ao app com o "atualizado às".
@@ -745,7 +749,7 @@ por PR:
 | 10 | A troca de filtro e a releitura sem apagar a lista | PR 610 |
 | 11 | As operações longas: fotos com progresso e etapas | PR 610 |
 | 12 | A trilha do Agent Dute | PR 610 |
-| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | a fazer |
+| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | 13a (os diálogos) no PR 610; o resto a fazer |
 
 Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código:
 
@@ -1056,7 +1060,9 @@ Fica aberto, para a parte 8 e depois:
   leitura ("3 para aprovar, 2 para separar, 1 para entregar"), na parte 8;
 - a tela nunca lida ainda volta a "Carregando…" na releitura de verdade (o
   intervalo e o "Tentar de novo" do bloco), porque o react-query põe a
-  leitura sem dado de volta em `pending`;
+  leitura sem dado de volta em `pending` (em Pedidos e no Receber, resolvido:
+  o "Tentar de novo" da pessoa volta à forma final na parte 8, e a releitura
+  automática deixa o aviso na tela desde a junção das partes 9, 11 e 12);
 - os 70 s da primeira leitura (o `ErroNaLeitura` "Sem resposta do servidor."),
   que dependem do prazo da leitura, e a troca de filtro com a lista anterior a
   50% e `inert` (caso 4 do momento 7), na parte 10;
@@ -1281,7 +1287,9 @@ Ficam para depois:
   `CarregandoTela`;
 - entre a espera da rota e a de dentro da tela (as abas do Catálogo e do
   Faturamento), ou entre o `RoleGate` e o `Suspense`, o rótulo some por até
-  300 ms e volta, porque o relógio recomeça;
+  300 ms e volta, porque o relógio recomeça (a primeira leitura das quatro
+  listas com a linha de estado continua a espera da rota desde a junção das
+  partes 9, 11 e 12);
 - a medição num Android de verdade e no Safari, que pode tratar a folha no
   corpo de outro jeito.
 
@@ -1517,7 +1525,9 @@ celular (as fotos) e o item 8 da seção 6.
     callable da OS) tem o prazo e a mensagem dele;
   - no Receber, na Contagem e na ficha do item, a escolha leva 4 de cada vez,
     como antes, mas diz "Só 4 fotos sobem por vez." (e "Até 8 fotos por
-    produto.") no lugar do corte calado, na tela e pelo Anunciador;
+    produto.") no lugar do corte calado, na tela e pelo Anunciador, no
+    anúncio do começo ("Enviando 4 de 6 fotos"; desde a junção das partes 9,
+    11 e 12, um anúncio só); sem nenhuma que caiba, o motivo;
   - o diálogo da chegada avulsa e a ficha do item não fecham enquanto elas
     sobem. O campo e o botão de escolher ficam ocupados sem `disabled`, e o
     foco fica neles;
@@ -1694,7 +1704,8 @@ carregamento novo nas outras telas do agente.
   Conhecimento): `Spinner`, `Esqueleto`, `BotaoDeAcao` (com a opção `tinta`,
   o primário em tinta onde o desenho pede) e a decisão por linha
   (`useAcaoNaLinha`). A região que ainda lê é a `CarregandoNaRegiao` e, nas
-  listas, a `LeituraDaLista`:
+  listas, a `LeituraDaListaDoAgente` (antes `LeituraDaLista`, o nome do tipo
+  da linha de estado):
   - as linhas-fantasma entram aos 300 ms, com o rótulo; antes, o lugar fica
     guardado e vazio. Na barra, elas têm a forma da lista que chega (o grupo
     e as linhas);
@@ -1763,11 +1774,177 @@ Ficam para depois:
   quando ele chega, não dá para saber se é a resposta;
 - "De onde tirei:" e os chips ficam com 12 px, porque a escala de texto não
   tem 13 px, e a borda da caixa usa o `--agent-border` do app;
-- quem envia pela tela de boas-vindas perde o foco do Enviar, porque a tela
-  troca para a conversa;
 - o "fieldset" `disabled` dos cartões e das janelas de playbook e de rotina
   durante o envio, o Cancelar `disabled` nessas janelas e as sugestões
   `disabled` das boas-vindas;
 - o Pessoas, o seletor de cliente e a lista de separação ainda leem o cache
   do Firestore sem rede;
 - as ações de linha de Pedidos, o piloto, ainda têm 40 px no celular.
+
+**A junção das partes 9, 11 e 12 com as 7b e 8 (PR 610, 13/11/2026).** As
+partes 9, 11 e 12 foram feitas ao mesmo tempo que as 7b e 8, numa cópia, e
+entraram pelo merge `96ea50d`. Três revisões do app junto acharam o que só
+aparece com as partes juntas; o que mudou:
+
+- **Uma espera, um relógio** (`lib/carregando/espera-da-rota.ts`): quando o
+  arquivo da tela chega e a lista ainda lê, a linha de estado e as
+  linhas-fantasma continuam a espera da `CarregandoTela`. Antes, a caixa de
+  40 px saía e, por 300 a 410 ms, a tela ficava com os cartões vazios, sem
+  indicador; a caixa de 24 px voltava em outro lugar, a demora vinha só aos
+  10 s da lista (até 19 s do toque), e a espera era anunciada duas vezes
+  ("Abrindo Pedidos…" e "Carregando pedidos"). Com a abertura ainda na tela,
+  a lista conta do zero, como antes. A `CarregandoTela` anuncia sem a
+  reticência ("Abrindo Pedidos"), como as outras falas.
+- **O anúncio da espera que acabou sai da fila**: a linha de estado retira
+  "Carregando pedidos" e a demora quando a lista chega ou a leitura falha; a
+  `CarregandoTela` retira o dela quando sai (sem lista que continue a
+  espera); a linha de "Para aprovar", o `AvisoDeEspera`, as etapas do
+  `Progresso`, "Salvando no cadastro" e "Atualizando fotos" retiram o deles
+  quando a espera acaba. Antes, "Carregando estoque" era falado 1,5 s depois
+  de a lista estar na tela, "Carregando pedidos" depois do aviso da falha e
+  "Aprovando pedido 1042" depois do "Aprovado".
+- **O Anunciador**: o texto que acabou de ser dito, pedido de novo dentro dos
+  2 s, não tira da fila o outro que espera a vez (um segundo "Demorando mais
+  que o normal" apagava o "Sem conexão"). Na passagem da abertura, o
+  primeiro anúncio do app espera os 2 s da última fala dela (o script marca
+  `data-dito` e `data-dito-em`, e o #root guarda quando ela sai), e o "Sem
+  conexão" que ela já disse não é dito de novo, até a rede voltar.
+- **A lista que falhou sem dado e é relida pelo intervalo** (Pedidos e
+  Receber, `useFalhaNaReleituraAutomatica`): o aviso fica, com "Tentando de
+  novo…" no botão e o foco nele; antes, a cada 60 s ele virava fantasmas, o
+  foco ia à linha de estado e não voltava ao botão quando a falha voltava. A
+  nova tentativa que a pessoa pede segue a regra da parte 8 (a forma final,
+  a fala e o foco na linha de estado).
+- **O Atualizar do Conhecimento e da Central da IA** passa pelo
+  `useAtualizarLista`: acorda o Firestore que se deu por offline antes de
+  reler (antes, o toque relia do cache e a falta continuava) e diz "Lista
+  atualizada".
+- **As fotos além do limite**: "Enviando 4 de 6 fotos", um anúncio só; com a
+  região ocupada, "Enviando 4 fotos" se perdia atrás de "Só 4 fotos sobem
+  por vez.".
+- **A primeira pergunta de uma conversa nova do Agent Dute**: o foco vai ao
+  campo da conversa, e não ao body (era da parte 12, em "Ficam para depois").
+- **Medição no Chromium** (os harnesses das revisões, com o Firebase e a API
+  falsos, só 127.0.0.1):
+  - Pedidos com o arquivo da tela segurado 3 s: a caixa da rota até a tela
+    chegar e, na mesma pintura, "Carregando pedidos…" e as linhas-fantasma
+    (antes, de 300 a 410 ms sem indicador); falas: "Abrindo Pedidos" e o
+    resumo. Igual no Receber e no celular de 390 px, escuro e reduzido;
+  - de Pedidos para o Estoque, com o arquivo a 800 ms e a lista a 600 ms: só
+    "Abrindo Estoque", dito enquanto a lista ainda lia (antes, "Carregando
+    estoque" 1,46 s depois da lista);
+  - aprovar com o servidor a 700 ms e a região ocupada: nada de "Aprovando
+    pedido 1042" depois do "Aprovado";
+  - a abertura com a demora: "Demorando mais que o normal" a 10,03 s e
+    "Carregando pedidos" a 12,03 s (antes, 1,5 a 1,8 s entre as duas); sem
+    rede, "Sem conexão" só pela abertura (antes, de novo pelo app a 5,9 s);
+  - as fotos com a região ocupada: "Enviando 4 de 6 fotos", a demora e "4
+    fotos enviadas";
+  - o Agent Dute: o foco fica no campo depois do Enter numa conversa nova.
+
+Fica aberto:
+
+- o resumo que esperava a vez e foi trocado por um anúncio que depois saiu da
+  fila (aprovar logo depois de a lista chegar) não volta: no Anunciador, só o
+  último pedido vale;
+- a passagem do `RoleGate` para o `Suspense` e as abas do Catálogo e do
+  Faturamento seguem com o relógio que recomeça (parte 9);
+- a conferência com leitor de tela de verdade (NVDA, VoiceOver) das falas
+  na passagem da abertura.
+
+**Parte 13a, os diálogos (PR 610, 13/11/2026).** É a necessidade 6 (seção 5),
+o PR 7 da seção 6 e o PR 4 do celular (9.3), no app inteiro.
+
+- **Um jeito só de segurar o diálogo durante a ação** (`components/ui/dialog.tsx`,
+  `alert-dialog.tsx` e `sheet.tsx`), ligado pelo `ocupado` da raiz (`Dialog`,
+  `AlertDialog`, `Sheet`) ou do `DialogContent`, quando a ação mora no
+  conteúdo (o convite):
+  - o `onOpenChange(false)` não chega a quem usa, e o Esc, o toque fora e o
+    X não fecham; o conteúdo marca `data-ocupado`;
+  - o X e o Cancelar (o `DialogCancelar`, o `AlertDialogCancel`) ficam
+    `aria-disabled`, a 0,45, com a trava no código, nunca `disabled`;
+  - o `AlertDialogAction` é o `BotaoDeAcao` e nunca fecha sozinho (o
+    `preventDefault` mora nele): quem fecha é o sucesso; na falha, a
+    confirmação fica;
+  - o confirmar é o `BotaoDeAcao` em todos, com o gerúndio ("Cancelando…",
+    "Cadastrando…", "Salvando…"), e o foco fica nele durante a ação;
+  - no fim, o foco volta ao controle que abriu o diálogo; o item do menu "⋯"
+    vira o botão do menu. Se ele saiu da tela, ou sai logo depois (a linha
+    que a releitura tira), o foco vai ao `focoAoFechar` de quem usa ou ao
+    título da página, sem rolar a tela, nunca ao `body`
+    (`lib/foco-de-volta.ts`, vigia de até `CARREGANDO.desisteMs`);
+  - o `fecharTravado` da parte 11 saiu: os cinco diálogos dela (a chegada
+    avulsa, a foto por IA, "Concluir separação", a entrega de Pedidos e
+    Documentos) usam o `ocupado`.
+- **No celular**: o `DialogFooter` fica preso embaixo do diálogo que rola
+  (`sticky`, cobrindo até a borda, com o fio de cima), com os botões de
+  44 px, também no `AlertDialogFooter`; o X do diálogo e do painel tem 44 px,
+  e só o título deixa o lugar dele.
+- **O que mudou, contra o código atual** (os 22 diálogos e as 4 confirmações
+  da necessidade 6):
+  - Pedidos: "Cancelar pedido" e "Salvar entrega" eram `disabled` e fechavam
+    no meio; a recusa da solicitação fechava com "Recusando…". Agora os três
+    seguram o diálogo, com o `BotaoDeAcao` e a mesma chave na nova tentativa;
+  - Registrar exceção, Concluir inventário ("Encerrando…"), Receber retorno,
+    Posições (Nova posição, Nova rua, Zona da rua), Falta da linha, Recusa
+    da prateleira (e o Liberar da guarda), Guardar do RECEBIMENTO, Tabela de
+    preços (o item), Sistema (Registrar incidente), owner (Preços e
+    orçamento), Infra (Tabela do faturamento), Produtos e SKUs (o cadastro e
+    o Excluir ou Arquivar), Recusar solicitação: fechavam no meio da ação e
+    desligavam os botões;
+  - Clientes (Novo cliente e Arquivar), Convite, Reenviar, Remover da lista e
+    Revogar acesso: o Esc já não fechava em quase todos, mas o Revogar
+    fechava, e os botões `disabled` derrubavam o foco no `body`;
+  - as quatro confirmações (Emitir, Remover item, Remover posição, Apagar
+    rotina), pela `Confirmacao`: não fechavam mais no clique desde 06/11, mas
+    o confirmar e o Cancelar ficavam `disabled`;
+  - o portal: o Editar evento só fecha depois do retorno (antes, fechar no
+    meio desmontava a janela, e o aviso do salvo não chegava), o Excluir
+    evento segura a confirmação, e o painel "Seu pedido" do Estoque fica
+    aberto enquanto o pedido vai para a Dutelog, com o "Fechar pedido"
+    `aria-disabled` e o Enviar no `BotaoDeAcao` ("Enviando o pedido…", no
+    lugar do caminhão pulsando);
+  - as duas outras confirmações com `AlertDialogAction` (a foto do produto e
+    "Marcar como cliente" do Comercial) passaram ao `BotaoDeAcao` também.
+- **O que já estava feito**: a entrega de Pedidos ("Confirmar entrega"),
+  "Concluir separação", Documentos e a chegada avulsa seguravam o diálogo
+  desde a parte 11, e o Esc não fechava Clientes nem Pessoas; mudaram só
+  para o `ocupado`, com o X e o rodapé novos.
+- **Testes**: por peça (`components/ui/dialogo-em-acao.test.tsx`,
+  `lib/foco-de-volta.test.ts`, `confirmacao.test.tsx`): o Esc, o toque fora,
+  o X e o Cancelar não fecham durante a ação, o Cancelar e o X ficam
+  `aria-disabled`, o foco fica no botão tocado e volta ao gatilho ou ao
+  título, e o axe; por área: Pedidos (`pedidos.dialogos.test.tsx`), Posições
+  (`warehouse-positions.dialogos.test.tsx`), Documentos, Clientes e o portal
+  (`eventos-editar.test.tsx`, `estoque-envio.test.tsx`). Contra o commit
+  anterior, 26 deles falham, e o do foco de volta nem carrega.
+- **Medição no Chromium** (harness com a API falsa e o servidor a 3 s, só
+  127.0.0.1), antes e depois:
+  - "Cancelar pedido", "Nova rua" e "Remover a posição": antes, o foco caía
+    no `body` 100 ms depois do toque, e o Esc, o toque fora, o X e o
+    Cancelar fechavam os dois primeiros no meio da gravação; depois, o foco
+    fica no botão de ação ("Cancelando…") e nenhum dos quatro fecha;
+  - o fim: antes, o foco ficava no `body` em Posições (a linha removida e a
+    rua cadastrada); depois, vai ao "Nova rua" que abriu o diálogo e, na
+    posição removida, ao título "Posições";
+  - no celular de 390 × 664: o X passou de 28 para 44 px; com o diálogo
+    rolado ao topo, o botão de ação ficava fora da vista (612 a 652 px, com o
+    diálogo até 631) e passa a ficar preso a 77 px da borda de baixo, nos
+    dois diálogos longos medidos (Nova posição e Cancelar pedido), no claro
+    e no escuro.
+
+Fica aberto:
+
+- o teclado do celular: o rodapé fica preso na altura do diálogo, mas o
+  Chrome do Android não encolhe a página quando o teclado abre (falta o
+  `interactive-widget=resizes-content` no `viewport`, que muda o app
+  inteiro) e o Safari não encolhe nada;
+- o "fieldset" `disabled` da chegada avulsa durante o envio, que desliga o
+  Cancelar e o "Criar conferência"; e os diálogos fora da lista (Trocar de
+  caixa, Conferir e fechar, Remover rascunho, Remover linha e caixa da
+  abertura, o Comercial, a Operação e o RH), que seguram o diálogo do jeito
+  antigo, com `disabled`;
+- o X do diálogo longo rola com o conteúdo, como antes;
+- entre o toque e o primeiro desenho do `isPending` (um tique), o Esc ainda
+  fecha o diálogo;
+- a conferência com leitor de tela de verdade e num Android médio.

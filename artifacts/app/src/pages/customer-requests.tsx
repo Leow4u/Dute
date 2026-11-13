@@ -12,11 +12,13 @@ import {
 import { Link } from "wouter";
 import { areaDePassagem, nomeComTamanho, problemaDoLocalDoPedido } from "@workspace/dominio";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogCancelar,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -1526,6 +1528,7 @@ export default function CustomerRequests() {
 
       <Dialog
         open={Boolean(rejecting)}
+        ocupado={transition.isPending && transition.variables?.action === "reject"}
         onOpenChange={(open) => {
           if (!open) setRejecting(null);
         }}
@@ -1544,19 +1547,15 @@ export default function CustomerRequests() {
             rows={4}
           />
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setRejecting(null)}>
-              Voltar
-            </Button>
-            <Button
-              type="button"
+            <DialogCancelar onClick={() => setRejecting(null)}>Voltar</DialogCancelar>
+            <BotaoDeAcao
               variant="destructive"
-              disabled={rejectReason.trim().length < 3 || transition.isPending}
-              onClick={() =>
-                rejecting && decide(rejecting, "reject", rejectReason.trim())
-              }
-            >
-              {transition.isPending ? "Recusando..." : "Recusar"}
-            </Button>
+              estado={transition.isPending && transition.variables?.action === "reject" ? "andamento" : "repouso"}
+              rotulo="Recusar"
+              andamento="Recusando…"
+              bloqueado={!(transition.isPending && transition.variables?.action === "reject") && (transition.isPending || rejectReason.trim().length < 3)}
+              onClick={() => rejecting && decide(rejecting, "reject", rejectReason.trim())}
+            />
           </DialogFooter>
         </DialogContent>
       </Dialog>

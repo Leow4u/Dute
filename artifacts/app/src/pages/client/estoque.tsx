@@ -30,7 +30,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Chip as UiChip } from "@/components/ui/chip";
 import { FilterGroup, FilterSheet } from "@/components/ui/filter-panel";
 import { Input } from "@/components/ui/input";
@@ -874,7 +876,7 @@ export function ClienteEstoque() {
             </section>
 
             {cartOpen ? (
-              <SideDrawer title="Seu pedido" onClose={() => setCartOpen(false)} wide={cartExpanded}>
+              <SideDrawer title="Seu pedido" onClose={() => setCartOpen(false)} wide={cartExpanded} ocupado={requestMutation.isPending || saveEvent.isPending}>
                 <CartPanel
                   cartKey={cartKey}
                   seed={cartSeed}
@@ -1529,6 +1531,7 @@ export function SideDrawer({
   onClose,
   wide = false,
   bottomSheetOnMobile = false,
+  ocupado = false,
 }: {
   children: ReactNode;
   /** O nome do diálogo para o leitor de tela: o produto aberto, ou "Seu pedido". */
@@ -1536,6 +1539,8 @@ export function SideDrawer({
   onClose: () => void;
   wide?: boolean;
   bottomSheetOnMobile?: boolean;
+  /** O envio do pedido segura o painel: o Esc e o clique fora não fecham (carregamento v2, parte 13a). */
+  ocupado?: boolean;
 }) {
   // Quem abriu o painel (o card, a linha da lista, o botão do pedido): o foco
   // volta para ele. A Radix só devolve o foco a um Dialog.Trigger, que aqui não há.
@@ -1543,8 +1548,9 @@ export function SideDrawer({
     typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null),
   );
   return (
-    <DialogPrimitive.Root
+    <Dialog
       open
+      ocupado={ocupado}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
@@ -1568,6 +1574,13 @@ export function SideDrawer({
               if (document.querySelector('[role="dialog"]')) return;
               if (opener.current?.isConnected) opener.current.focus();
             }}
+            onEscapeKeyDown={(event) => {
+              if (ocupado) event.preventDefault();
+            }}
+            onInteractOutside={(event) => {
+              if (ocupado) event.preventDefault();
+            }}
+            data-ocupado={ocupado ? "" : undefined}
             className={cn(
               "relative w-full overflow-hidden text-foreground outline-none",
               bottomSheetOnMobile
@@ -1580,7 +1593,7 @@ export function SideDrawer({
           </DialogPrimitive.Content>
         </DialogPrimitive.Overlay>
       </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+    </Dialog>
   );
 }
 
@@ -2113,15 +2126,15 @@ export function CartPanel({
           </p>
         </div>
       ) : null}
-      <Button
-        type="button"
+      <BotaoDeAcao
         className="w-full cursor-pointer"
-        disabled={isSubmitting || lines.length === 0 || outboundBlocked}
+        estado={isSubmitting ? "andamento" : "repouso"}
+        icone={<CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
+        rotulo="Enviar pedido para a Dutelog"
+        andamento="Enviando o pedido…"
+        bloqueado={!isSubmitting && (lines.length === 0 || outboundBlocked)}
         onClick={() => onSubmit({ orderName, destination, dueAt, notes })}
-      >
-        {isSubmitting ? <Truck className="h-4 w-4 animate-pulse" /> : <CheckCircle2 className="h-4 w-4" />}
-        Enviar pedido para a Dutelog
-      </Button>
+      />
       {eventDraft ? (
         <form
           className="flex flex-col gap-3 rounded-lg border border-border p-3"
@@ -2201,8 +2214,15 @@ export function CartPanel({
           </Button>
           <button
             type="button"
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
-            onClick={onClose}
+            className={cn(
+              "flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-muted max-md:h-11 max-md:w-11",
+              (isSubmitting || isSavingEvent) && "opacity-45 hover:bg-transparent",
+            )}
+            // O pedido que vai para a Dutelog segura o painel: aria-disabled, nunca disabled.
+            aria-disabled={isSubmitting || isSavingEvent || undefined}
+            onClick={() => {
+              if (!isSubmitting && !isSavingEvent) onClose();
+            }}
             aria-label="Fechar pedido"
           >
             <X className="h-4 w-4" />

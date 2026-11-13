@@ -1,6 +1,8 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 import { useRef } from "react";
 
+import { usePedidosDaPessoa } from "./pedido-da-pessoa";
+
 /** O pedaço da leitura do react-query que a falha precisa para ficar na tela. */
 export type LeituraQueFalha = Pick<
   UseQueryResult<unknown>,
@@ -32,4 +34,24 @@ export function useLeituraComFalha<L extends LeituraQueFalha>(leitura: L): L {
     falhaDeAntes.em === leitura.errorUpdatedAt;
   if (!tentandoDeNovo) return leitura;
   return { ...leitura, error: falhaDeAntes.erro, isError: true, isLoading: false };
+}
+
+/**
+ * A lista que falhou sem nada lido e é relida sem que a pessoa peça (o
+ * intervalo da tela, o tempo real): a falha fica na tela, como na
+ * `useLeituraComFalha`, com o aviso, o "Tentar de novo" e o foco nele, e a
+ * lista não volta às linhas-fantasma a cada minuto (a releitura automática não
+ * mostra nada nem fala). Só a nova tentativa que a pessoa pede
+ * (`marcarPedidoDaPessoa`, o "Tentar de novo" do aviso) volta à espera da
+ * lista: as linhas-fantasma, "Carregando pedidos" e o foco na linha de estado
+ * (Pedidos e Receber, a parte 8).
+ */
+export function useFalhaNaReleituraAutomatica<L extends LeituraQueFalha>(leitura: L): L {
+  const pedidos = usePedidosDaPessoa();
+  const comFalha = useLeituraComFalha(leitura);
+  // Quantas novas leituras a pessoa tinha pedido quando a leitura falhou: um pedido depois disso é dela.
+  const pedidosNaFalha = useRef<number | null>(null);
+  if (leitura.error != null) pedidosNaFalha.current = pedidos;
+  const pediu = pedidosNaFalha.current !== null && pedidos !== pedidosNaFalha.current;
+  return pediu ? leitura : comFalha;
 }

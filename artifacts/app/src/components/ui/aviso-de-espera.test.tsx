@@ -4,7 +4,13 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const falados = vi.hoisted(() => [] as string[]);
-vi.mock("@/lib/carregando/anunciador", () => ({ useAnuncio: () => (texto: string) => falados.push(texto) }));
+const retirados = vi.hoisted(() => [] as string[]);
+vi.mock("@/lib/carregando/anunciador", () => ({
+  useAnuncio: () => (texto: string) => {
+    falados.push(texto);
+    return () => void retirados.push(texto);
+  },
+}));
 
 import { estimativaDaEspera } from "@/lib/carregando/tempo";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
@@ -25,6 +31,7 @@ let container: HTMLDivElement | null = null;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   falados.length = 0;
+  retirados.length = 0;
   container = document.createElement("div");
   document.body.appendChild(container);
   raiz = createRoot(container);
@@ -96,6 +103,15 @@ describe("AvisoDeEspera", () => {
   it("na leitura, aos 70 s: \"Sem resposta do servidor.\" e \"Tentar de novo\"", () => {
     render(<AvisoDeEspera fase="sem-resposta" tipo="leitura" onTentar={() => undefined} />);
     expect(textosDaTela(container!.innerHTML)).toEqual(["Sem resposta do servidor.", "Tentar de novo"]);
+  });
+
+  it("o anúncio que ainda espera a vez sai da fila quando a espera acaba (o aviso sai) ou passa à desistência", () => {
+    render(<AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={10_000} />);
+    expect(retirados).toEqual([]);
+    render(<AvisoDeEspera fase="sem-resposta" tipo="escrita" onConferir={() => undefined} />);
+    expect(retirados).toEqual(["Demorando mais que o normal"]);
+    render(<p>Entrega confirmada</p>);
+    expect(retirados).toEqual(["Demorando mais que o normal", "Sem confirmação do servidor"]);
   });
 
   it("a estimativa arredonda para cima: de 5 em 5 s até um minuto, depois em minutos", () => {

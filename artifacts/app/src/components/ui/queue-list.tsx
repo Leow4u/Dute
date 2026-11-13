@@ -14,6 +14,7 @@ import {
 import { ChevronDown, ChevronRight, type LucideIcon } from "lucide-react";
 
 import { CartaoComBrilho, Esqueleto } from "@/components/ui/esqueleto";
+import { useEsperaDaRota } from "@/lib/carregando/espera-da-rota";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { useChegada } from "@/lib/carregando/use-chegada";
 import { useEspera } from "@/lib/carregando/use-espera";
@@ -286,7 +287,9 @@ export function QueueGroup({
   cascata?: number;
 }) {
   const lendo = carregando !== undefined;
-  const espera = useEspera(lendo);
+  // A primeira leitura que começa quando a tela chega segue o relógio da espera da rota, como a linha de estado.
+  const rota = useEsperaDaRota(lendo);
+  const espera = useEspera(lendo, { desde: rota?.inicio });
   const secao = useRef<HTMLElement>(null);
   const chegando = useChegada(lendo, secao);
   // As linhas-fantasma que estavam na tela quando o dado chegou: esmaecem por baixo das linhas reais.
