@@ -8,6 +8,42 @@
 /** O que a tela diz quando a leitura ou a ação não alcançou o servidor. */
 export const SEM_CONEXAO = "Sem conexão. Tente de novo quando o sinal voltar.";
 
+/**
+ * O que a tela diz quando a chamada passou do prazo sem resposta (o
+ * `deadline-exceeded` do SDK, aos 70 s; 180 s no chat e na foto por IA), no
+ * lugar do código cru em inglês. A escrita pode ter valido: conferir antes de
+ * repetir.
+ */
+export const PRAZO_ESGOTADO = "O servidor não respondeu a tempo. Confira antes de tentar de novo.";
+
+/**
+ * O prazo da escrita que não passa por callable (a gravação direta no
+ * Firestore, que sem rede espera para sempre): a promessa que não termina
+ * em `ms` rejeita com o `deadline-exceeded`, como a callable. A escrita
+ * continua por baixo; quem chama confere antes de repetir.
+ */
+export function comPrazo<T>(promessa: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolver, rejeitar) => {
+    const prazo = setTimeout(() => rejeitar(Object.assign(new Error(PRAZO_ESGOTADO), { code: "deadline-exceeded" })), ms);
+    promessa.then(
+      (valor) => {
+        clearTimeout(prazo);
+        resolver(valor);
+      },
+      (erro: unknown) => {
+        clearTimeout(prazo);
+        rejeitar(erro);
+      },
+    );
+  });
+}
+
+/** A chamada passou do prazo sem resposta: o servidor pode ter gravado ou não. */
+export function prazoEsgotado(error: unknown): boolean {
+  const code = String((error as { code?: unknown } | null)?.code ?? "").replace(/^functions\//, "");
+  return code === "deadline-exceeded";
+}
+
 /** O código da resposta de `/api/*` (status 503) quando faltou conexão. */
 export const CODIGO_SEM_CONEXAO = "sem_conexao";
 

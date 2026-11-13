@@ -122,6 +122,15 @@ export function useEspera(ativa: boolean, opcoes: OpcoesDaEspera = {}): Espera {
   const corrida = relogio.modo === "correndo" ? relogio.inicio : null;
   useEffect(() => {
     if (corrida === null) return undefined;
+    // O relógio alcança o agora ao armar: o marco que passou enquanto a tela
+    // não rodava (a thread ocupada por mais de 300 ms, a foto sendo
+    // compactada) entra na hora, e não só no marco seguinte (aos 3 s).
+    setRelogio((atual) => {
+      if (atual.modo !== "correndo" || atual.inicio !== corrida) return atual;
+      const instante = agora();
+      const marco = proximoMarco(atual.agora - corrida, desisteMs);
+      return marco !== null && instante - corrida >= marco ? avancar(atual, corrida, instante) : atual;
+    });
     let tique: ReturnType<typeof setTimeout> | undefined;
     const armar = () => {
       const instante = agora();

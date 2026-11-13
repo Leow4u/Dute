@@ -738,7 +738,7 @@ por PR:
 | 8 | As listas com a forma final | a fazer |
 | 9 | A abertura com a marca e a `CarregandoTela` no lugar do branco | PR 610 |
 | 10 | A troca de filtro e a releitura sem apagar a lista | a fazer |
-| 11 | As operações longas: fotos com progresso e etapas | a fazer |
+| 11 | As operações longas: fotos com progresso e etapas | PR 610 |
 | 12 | A trilha do Agent Dute | a fazer |
 | 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | a fazer |
 
@@ -876,3 +876,65 @@ Ficam para depois:
   300 ms e volta, porque o relógio recomeça;
 - a medição num Android de verdade e no Safari, que pode tratar a folha no
   corpo de outro jeito.
+
+**Parte 11, as operações longas (PR 610, 13/11/2026).** É também o PR 3 do
+celular (as fotos) e o item 8 da seção 6.
+
+- **As fotos do celular** (`lib/envio-de-fotos.ts`, `useEnvioDeFotos`):
+  - compactadas a 2000 px no lado maior (decisão 4 do celular), em JPEG,
+    antes de pedir o destino; a foto pequena e leve sobe como veio, e a que
+    o navegador não abre também;
+  - sobem pelo `uploadBytesResumable`, uma por vez, na ordem da escolha; a
+    barra anda por evento de bytes e a contagem, por foto;
+  - a que falha fica "Foto 3 não enviada", com o próprio "Tentar de novo", e
+    não derruba as outras (o `Promise.all` perdia as que já tinham subido);
+    a que passa 70 s sem um byte novo é cancelada e fica do mesmo jeito;
+  - no Receber, na Contagem e na ficha do item, a escolha leva 4 de cada vez,
+    como antes, mas diz "Só 4 fotos sobem por vez." (e "Até 8 fotos por
+    produto.") no lugar do corte calado;
+  - o diálogo da chegada avulsa e a ficha do item não fecham enquanto elas
+    sobem;
+  - na OS, no campo e no anexo do portal, só a JPEG é compactada: o nome no
+    Storage já leva a extensão, e a callable confere o tipo por ele.
+- **O `Progresso`** (`components/ui/progresso.tsx`): a contagem ("3 de 4",
+  os segmentos chanfrados, as miniaturas com o véu e a caixa determinada, o
+  selo verde, a fila tracejada, o "!" e "4 fotos enviadas") e as etapas
+  ("Etapa 1 de 2", os marcadores de 28 px e o fio). A barra de progresso tem
+  o nome e o `aria-valuetext`; o Anunciador fala "Enviando 4 fotos" e "4
+  fotos enviadas".
+- **O `AvisoDeEspera`** (`components/ui/aviso-de-espera.tsx`): aos 10 s,
+  "Demorando mais que o normal · 0:12", com "Tentar de novo" na leitura e a
+  estimativa quando o total é conhecido ("cerca de 20 s"); aos 70 s, na
+  escrita, "Sem confirmação do servidor" e "Conferir".
+- **As etapas**: Separação → Embalagem no "Concluir separação", Saída →
+  Entrega na entrega pela Dutelog, Arquivo → Cadastro em Documentos e
+  Cadastro → Arquivo → Trechos no Conhecimento. O "Voltar" fica
+  `aria-disabled`, o botão de ação mantém a largura e o diálogo não fecha; o
+  prazo sem resposta vira o "Conferir", que relê e nunca reenvia. O
+  Conhecimento, que grava direto no Firestore, ganhou o prazo de 70 s
+  (`comPrazo`).
+- **A foto por IA**: a contagem, o tempo decorrido e o "Cancelar", que para
+  de esperar sem fechar o diálogo.
+- **O `deadline-exceeded`** tem a mensagem própria ("O servidor não respondeu
+  a tempo. Confira antes de tentar de novo.") em `lib/functions-api.ts` e nas
+  callables da Operação, do WMS, do núcleo, do Comercial, do Financeiro e do
+  RH.
+- **O `useEspera`** alcança o agora ao armar o relógio: com a thread ocupada
+  no começo da espera (a foto sendo compactada), o indicador entrava só aos
+  3 s.
+- **Medição no Chromium** (harness com o Storage simulado a 1 Mbps, quatro
+  fotos de 4000 × 3000 e 2,7 MB):
+  - antes, as 4 subiam inteiras (10,8 MB) em 88,9 s, com "Enviando..."; a
+    escolha de 6 levava 4 sem dizer; o Esc fechava o diálogo no meio;
+  - depois, 4 × 218 KB em 10,3 s, com "1 de 4" … "4 fotos enviadas"; a 300
+    kbps, aos 10 s, "Demorando mais que o normal · 0:10 · cerca de 15 s"; o
+    Esc não fecha;
+  - "Concluir separação": antes, o botão encolhia de 172 para 125 px em
+    "Registrando...", com `disabled`, e o Esc e o Voltar fechavam; depois, 172
+    px em todos os estados, "Etapa 1 de 2" aos 300 ms, o aviso aos 10 s e o
+    "Conferir" no prazo.
+
+Ficam para depois: o progresso na tela do anexo do portal (Solicitar OS) e
+nas fotos da conclusão da OS, que já sobem compactadas e pelo envio que
+conta os bytes; o limite de 8 MB da foto da OS, conferido antes da
+compactação; e a medição num Android de verdade.

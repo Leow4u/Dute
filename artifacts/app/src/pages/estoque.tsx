@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDown,
@@ -36,6 +36,8 @@ import {
 import { type ProductPhoto, uploadProductPhoto } from "@/features/warehouse-ops/shared";
 import { ProductPhotoStudio } from "@/features/warehouse-ops/product-photo-studio";
 import { ProductPhotoManager } from "@/features/warehouse-ops/product-photo-manager";
+import { ProgressoDasFotosDoProduto, useFotosDoProduto } from "@/features/warehouse-ops/fotos-enviando";
+import { Spinner } from "@/components/ui/spinner";
 import { GuardarDaAreaDialog } from "@/features/warehouse-ops/guardar-da-area";
 import { photoContextFromRecord } from "@/features/warehouse-ops/photo-context";
 import { useToast } from "@/hooks/use-toast";
@@ -216,14 +218,24 @@ export default function Estoque() {
   // A ficha só abre quando a pessoa escolhe um item; fechada, a lista usa a
   // largura toda. Clicar de novo na mesma linha (ou no X, ou Esc) recolhe.
   const panelItem = selected;
-  const toggleItem = (item: StockItem) =>
+  // A ficha com fotos subindo não fecha: fechar cancelaria o envio (parte 11 do carregamento v2).
+  const fichaOcupada = useRef(false);
+  const recolher = () => {
+    if (!fichaOcupada.current) setSelectedKey(null);
+  };
+  const toggleItem = (item: StockItem) => {
+    if (fichaOcupada.current) return;
     setSelectedKey((current) => (current === item.key ? null : item.key));
+  };
+  const aoOcupar = useCallback((ocupada: boolean) => {
+    fichaOcupada.current = ocupada;
+  }, []);
 
   useEffect(() => {
     if (!desktop || !selectedKey) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || document.querySelector('[role="dialog"][data-state="open"]')) return;
-      if (event.key === "Escape") setSelectedKey(null);
+      if (event.key === "Escape") recolher();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -345,27 +357,27 @@ export default function Estoque() {
                 <section className="relative overflow-hidden rounded-lg border border-border bg-card lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">
                   <button
                     type="button"
-                    onClick={() => setSelectedKey(null)}
+                    onClick={recolher}
                     aria-label="Recolher ficha"
                     title="Recolher (Esc)"
                     className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     <X className="h-4 w-4" />
                   </button>
-                  <ItemCard key={panelItem.key} item={panelItem} caixas={caixasDoItem(panelItem)} rotuloDaCaixaParada={rotuloDaCaixaParada} />
+                  <ItemCard key={panelItem.key} item={panelItem} caixas={caixasDoItem(panelItem)} rotuloDaCaixaParada={rotuloDaCaixaParada} onOcupar={aoOcupar} />
                 </section>
               ) : null}
             </div>
           )}
 
           {!desktop ? (
-            <Sheet open={Boolean(selected)} onOpenChange={(open) => !open && setSelectedKey(null)}>
+            <Sheet open={Boolean(selected)} onOpenChange={(open) => !open && recolher()}>
               <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto rounded-t-lg p-0">
                 <SheetHeader className="sr-only">
                   <SheetTitle>{selected?.name ?? "Item"}</SheetTitle>
                   <SheetDescription>Ficha do item</SheetDescription>
                 </SheetHeader>
-                {selected ? <ItemCard key={selected.key} item={selected} caixas={caixasDoItem(selected)} rotuloDaCaixaParada={rotuloDaCaixaParada} /> : null}
+                {selected ? <ItemCard key={selected.key} item={selected} caixas={caixasDoItem(selected)} rotuloDaCaixaParada={rotuloDaCaixaParada} onOcupar={aoOcupar} /> : null}
               </SheetContent>
             </Sheet>
           ) : null}
@@ -631,7 +643,18 @@ function movementDate(value: unknown) {
   return Number.isNaN(date.getTime()) ? "" : dateFormatter.format(date);
 }
 
-function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caixas: CaixaParada[]; rotuloDaCaixaParada: string }) {
+function ItemCard({
+  item,
+  caixas,
+  rotuloDaCaixaParada,
+  onOcupar,
+}: {
+  item: StockItem;
+  caixas: CaixaParada[];
+  rotuloDaCaixaParada: string;
+  /** As fotos sobem ou se registram: quem mostra a ficha não a fecha. */
+  onOcupar?: (ocupada: boolean) => void;
+}) {
   const { user } = useAppUser();
   // O item listado é do cliente ativo (a lista é filtrada por ele).
   const { code: customerCode } = useActiveCustomer();
@@ -668,14 +691,11 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
     enabled: Boolean(item.skuCode),
   });
 
+  // As fotos sobem compactadas, uma por vez e com a contagem (parte 11 do
+  // carregamento v2); as enviadas entram no cadastro numa chamada só, no fim.
   const addPhotos = useMutation({
-    mutationFn: async (files: File[]) => {
-      const uploaded = await Promise.all(
-        files.slice(0, 4).map((file) =>
-          uploadProductPhoto(file, item.clientCode ?? item.skuCode, customerCode),
-        ),
-      );
-      return fetchJson("/api/catalog/photos", {
+    mutationFn: async (uploaded: ProductPhoto[]) =>
+      fetchJson("/api/catalog/photos", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -685,8 +705,7 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
           photo_urls: uploaded.map((photo) => photo.fileUrl),
           photo_storage_paths: uploaded.map((photo) => photo.storagePath),
         }),
-      });
-    },
+      }),
     onSuccess: () => {
       toast({ title: "Foto adicionada. Todos já veem no cadastro." });
       void queryClient.invalidateQueries({ queryKey: ["estoque"] });
@@ -699,6 +718,17 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
         variant: "destructive",
       }),
   });
+  const fotos = useFotosDoProduto<ProductPhoto>({
+    enviarUma: (arquivo, aoProgredir, sinal) => uploadProductPhoto(arquivo, item.clientCode ?? item.skuCode, customerCode, aoProgredir, sinal),
+    aoConcluir: (enviadas) => addPhotos.mutate(enviadas),
+    aoFalhar: (error) =>
+      toast({ title: "Não consegui adicionar a foto", description: humanApiError(error, "Tente novamente em instantes."), variant: "destructive" }),
+  });
+  const fotosOcupadas = fotos.enviando || addPhotos.isPending;
+  useEffect(() => {
+    onOcupar?.(fotosOcupadas);
+  }, [fotosOcupadas, onOcupar]);
+  useEffect(() => () => onOcupar?.(false), [onOcupar]);
 
   const photoContext = photoContextFromRecord(item.photoContext ?? item.sku);
   const photoCategory = String(item.photoContext?.category ?? item.photoContext?.categoria ?? item.sku.category ?? item.sku.categoria ?? "");
@@ -776,7 +806,7 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
                 onChange={(event) => {
                   const files = Array.from(event.target.files ?? []);
                   event.target.value = "";
-                  if (files.length) addPhotos.mutate(files);
+                  if (files.length && !fotosOcupadas) fotos.escolher(files);
                 }}
               />
               <Button
@@ -784,23 +814,26 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
                 variant={item.photos.length ? "outline" : "default"}
                 size="sm"
                 className="mt-3"
-                disabled={addPhotos.isPending}
+                disabled={fotosOcupadas}
                 onClick={() => fileRef.current?.click()}
               >
                 <Camera className="size-4" />
-                {addPhotos.isPending
-                  ? "Enviando..."
-                  : item.photos.length
-                    ? "Mais fotos"
-                    : "Adicionar foto"}
+                {item.photos.length ? "Mais fotos" : "Adicionar foto"}
               </Button>
+              <ProgressoDasFotosDoProduto fotos={fotos} className="mt-3" />
+              {addPhotos.isPending ? (
+                <p className="mt-2 flex items-center gap-2 text-sm font-bold text-foreground">
+                  <Spinner />
+                  Salvando no cadastro…
+                </p>
+              ) : null}
               {item.photos.length ? <div className="mt-2 flex flex-wrap gap-2">
                 <ProductPhotoStudio key={`${customerCode}:${item.skuCode}`} photos={productPhotos}
                   customerCode={customerCode} productName={item.name} category={photoCategory} context={photoContext}
-                  disabled={addPhotos.isPending} onApprove={approvePhotos} />
+                  disabled={fotosOcupadas} onApprove={approvePhotos} />
                 <ProductPhotoManager key={`manager:${customerCode}:${item.skuCode}`} photos={productPhotos}
                   customerCode={customerCode} productName={item.name} category={photoCategory} context={photoContext}
-                  disabled={addPhotos.isPending} onApprove={approvePhotos}
+                  disabled={fotosOcupadas} onApprove={approvePhotos}
                   onManage={(change) => savePhotoChange("/api/catalog/photos/manage", change)} />
               </div> : null}
             </>

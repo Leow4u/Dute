@@ -90,7 +90,9 @@ async function chamarWms<T>(
   try {
     return (await callable(semCamposVazios(dados))).data;
   } catch (error) {
-    throw new Error(callableSemResposta(error) ? SEM_CONEXAO : mensagemDoErro(error));
+    // O código fica no erro: o "Conferir" da conclusão depende do deadline-exceeded (o prazo sem resposta).
+    const codigo = String((error as { code?: unknown } | null)?.code ?? "").replace(/^functions\//, "");
+    throw Object.assign(new Error(callableSemResposta(error) ? SEM_CONEXAO : mensagemDoErro(error)), codigo ? { code: codigo } : {});
   }
 }
 

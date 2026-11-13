@@ -18,7 +18,11 @@ const rede = vi.hoisted(() => ({
 vi.mock("@/lib/auth", () => ({ useAppUser: () => ({ user: { uid: "uid-carlos", fullName: "Carlos Silva" }, isLoaded: true }) }));
 // A foto sobe ao Storage antes da callable: aqui, sempre sobe.
 vi.mock("@/lib/firebase", () => ({ firebaseStorage: {} }));
-vi.mock("firebase/storage", () => ({ ref: () => ({}), uploadBytes: async () => ({}) }));
+vi.mock("firebase/storage", () => ({
+  ref: () => ({}),
+  // O envio com progresso (parte 11 do carregamento v2): a tarefa termina na hora.
+  uploadBytesResumable: () => ({ on: (_evento: string, _progresso: unknown, _erro: unknown, fim: () => void) => fim(), cancel: () => true }),
+}));
 vi.mock("@/lib/operacao/api", async (original) => ({
   ...(await original<typeof import("@/lib/operacao/api")>()),
   chamarOperacao: async (nome: string, dados: Record<string, unknown>) => {

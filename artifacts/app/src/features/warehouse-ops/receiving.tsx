@@ -94,6 +94,7 @@ import { useActiveCustomer } from "@/lib/active-customer-context";
 import { RECEBIMENTO_POR_CAIXA_LIBERADO } from "@/lib/liberacao";
 import { modoDaChegadaAvulsa } from "@/lib/wms/caixas-do-recebimento";
 import { ProductPhotoStudio } from "./product-photo-studio";
+import { FOTOS_POR_PRODUTO, ProgressoDasFotosDoProduto, useFotosDoProduto } from "./fotos-enviando";
 import { photoContextFromRecord, type PhotoContext } from "./photo-context";
 import {
   barcodeKey,
@@ -144,7 +145,6 @@ export type ReceiptDraftLine = {
   size: string;
   color: string;
   photos: ProductPhoto[];
-  photoUploading: boolean;
   quantity: string;
   unitCost: string;
   location: string;
@@ -178,7 +178,6 @@ export const emptyReceiptLine = (): ReceiptDraftLine => ({
   size: "",
   color: "",
   photos: [],
-  photoUploading: false,
   quantity: "1",
   unitCost: "",
   location: "RECEBIMENTO",
@@ -520,7 +519,37 @@ export function UnplannedReceiptDialog({
   if (session.current.customerCode !== customerCode) session.current = { customerCode, revision: session.current.revision + 1 };
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  // As fotos sobem uma linha por vez (parte 11 do carregamento v2): a linha
+  // e o rascunho de quem escolheu. O resultado de um rascunho que já saiu
+  // (outro cliente, a chegada criada) não entra em nenhuma linha.
+  const linhasAtuais = useRef(lines);
+  linhasAtuais.current = lines;
+  const alvoDasFotos = useRef<{ index: number; session: typeof session.current } | null>(null);
+  const fotos = useFotosDoProduto<ProductPhoto>({
+    enviarUma: (arquivo, aoProgredir, sinal) => {
+      const alvo = alvoDasFotos.current;
+      const linha = alvo ? linhasAtuais.current[alvo.index] : undefined;
+      const clientItemCode = linha?.clientCode.trim() || linha?.sku.trim() || `rascunho-${(alvo?.index ?? 0) + 1}`;
+      return uploadProductPhoto(arquivo, clientItemCode, customerCode, aoProgredir, sinal);
+    },
+    aoConcluir: (enviadas) => {
+      const alvo = alvoDasFotos.current;
+      if (!alvo || !mounted.current || session.current !== alvo.session) return;
+      setLines((current) =>
+        current.map((currentLine, lineIndex) =>
+          lineIndex === alvo.index ? { ...currentLine, photos: [...currentLine.photos, ...enviadas].slice(0, FOTOS_POR_PRODUTO) } : currentLine,
+        ),
+      );
+    },
+    aoFalhar: (error) => {
+      if (!mounted.current) return;
+      toast({ title: "Não consegui anexar a foto", description: getErrorMessage(error), variant: "destructive" });
+    },
+  });
+  const fotosSubindoNa = (index: number) => fotos.enviando && alvoDasFotos.current?.index === index;
   function clearDraft() {
+    fotos.limpar();
+    alvoDasFotos.current = null;
     setSupplier("");
     setInvoiceNumber("");
     setNotes("");
@@ -581,6 +610,14 @@ export function UnplannedReceiptDialog({
   }
 
   function removeLine(index: number) {
+    // As fotos não enviadas da linha saem com ela; as das linhas de baixo acompanham a linha.
+    const alvo = alvoDasFotos.current;
+    if (alvo?.index === index) {
+      fotos.limpar();
+      alvoDasFotos.current = null;
+    } else if (alvo && alvo.index > index) {
+      alvoDasFotos.current = { ...alvo, index: alvo.index - 1 };
+    }
     setActiveLineIndex((current) =>
       current > index ? current - 1 : Math.min(current, Math.max(0, lines.length - 2)),
     );
@@ -591,39 +628,15 @@ export function UnplannedReceiptDialog({
     );
   }
 
-  async function addPhotos(index: number, files: FileList | null) {
-    const selected = Array.from(files ?? []).slice(0, 4);
-    if (!selected.length) return;
-    const line = lines[index];
-    const clientItemCode =
-      line?.clientCode.trim() || line?.sku.trim() || `rascunho-${index + 1}`;
-    const photoSession = session.current;
-    updateLine(index, { photoUploading: true });
-    try {
-      const uploaded = await Promise.all(
-        selected.map((file) => uploadProductPhoto(file, clientItemCode, customerCode)),
-      );
-      if (!mounted.current || session.current !== photoSession) return;
-      setLines((current) =>
-        current.map((currentLine, lineIndex) =>
-          lineIndex === index
-            ? {
-                ...currentLine,
-                photos: [...currentLine.photos, ...uploaded].slice(0, 8),
-                photoUploading: false,
-              }
-            : currentLine,
-        ),
-      );
-    } catch (error) {
-      if (!mounted.current || session.current !== photoSession) return;
-      updateLine(index, { photoUploading: false });
-      toast({
-        title: "Não consegui anexar a foto",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
-    }
+  function addPhotos(index: number, files: FileList | null) {
+    const selected = Array.from(files ?? []);
+    if (!selected.length || fotos.enviando) return;
+    const mesmaLinha = alvoDasFotos.current?.index === index && alvoDasFotos.current.session === session.current;
+    // As não enviadas de outra linha saem: o "Tentar de novo" delas levaria a foto para a linha errada.
+    if (!mesmaLinha) fotos.limpar();
+    alvoDasFotos.current = { index, session: session.current };
+    const pendentes = mesmaLinha ? fotos.itens.filter((item) => item.estado === "erro").length : 0;
+    fotos.escolher(selected, FOTOS_POR_PRODUTO - (lines[index]?.photos.length ?? 0) - pendentes);
   }
 
   // Duas linhas do mesmo produto, mesmo que por códigos diferentes (o do
@@ -674,7 +687,7 @@ export function UnplannedReceiptDialog({
               !Number.isFinite(Number(line.unitCost)) ||
               Number(line.unitCost) <= 0 ||
               line.photos.length === 0 ||
-              line.photoUploading)) ||
+              fotosSubindoNa(lines.indexOf(line)))) ||
           (!existing && !line.createNew) ||
           (existing && line.createNew) ||
           Boolean(problemaDoNomeDaLinha(line, existing))
@@ -780,7 +793,7 @@ export function UnplannedReceiptDialog({
           Number(line.unitCost) <= 0 ||
           line.photos.length === 0),
       problemaDoNome: problemaDoNomeDaLinha(line, existing),
-      photoUploading: line.photoUploading,
+      photoUploading: fotosSubindoNa(index),
     };
   });
   const canSubmit =
@@ -812,7 +825,7 @@ export function UnplannedReceiptDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!sending.current && !isPending) onOpenChange(next); }}>
+    <Dialog open={open} onOpenChange={(next) => { if (!sending.current && !isPending && !fotos.enviando) onOpenChange(next); }}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl" aria-describedby={undefined}>
         <DialogHeader className="flex-row flex-wrap items-center gap-2 space-y-0">
           <DialogTitle>Registrar chegada avulsa · {activeCustomer.name}</DialogTitle>
@@ -972,7 +985,7 @@ export function UnplannedReceiptDialog({
                           size="icon"
                           className="size-9"
                           aria-label={`Excluir linha ${index + 1}`}
-                          disabled={isPending || lines.some((item) => item.photoUploading)}
+                          disabled={isPending || fotos.enviando}
                           onClick={() => removeLine(index)}
                         >
                           <Trash2 className="size-4" />
@@ -1159,15 +1172,11 @@ export function UnplannedReceiptDialog({
                               htmlFor={`receipt-photo-${index}`}
                               className={cn(
                                 "inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted",
-                                line.photoUploading && "pointer-events-none opacity-60",
+                                fotos.enviando && "pointer-events-none opacity-60",
                               )}
                             >
-                              {line.photoUploading ? (
-                                <RefreshCw className="size-4 animate-spin" />
-                              ) : (
-                                <Camera className="size-4" />
-                              )}
-                              {line.photoUploading ? "Enviando..." : "Fotografar ou anexar"}
+                              <Camera className="size-4" />
+                              Fotografar ou anexar
                             </label>
                             <input
                               id={`receipt-photo-${index}`}
@@ -1175,9 +1184,10 @@ export function UnplannedReceiptDialog({
                               accept="image/*"
                               capture="environment"
                               multiple
+                              disabled={fotos.enviando}
                               className="sr-only"
                               onChange={(event) => {
-                                void addPhotos(index, event.target.files);
+                                addPhotos(index, event.target.files);
                                 event.currentTarget.value = "";
                               }}
                             />
@@ -1215,7 +1225,8 @@ export function UnplannedReceiptDialog({
                               ))}
                             </div>
                           ) : null}
-                          {line.photos.length ? <ProductPhotoStudio key={`${customerCode}:${index}:${line.clientCode}`} photos={line.photos} customerCode={customerCode} productName={line.product} category={line.category} context={{ ...line.photoContext, description: line.product, size: line.size || line.photoContext?.size, color: line.color || line.photoContext?.color, brand: line.brand || line.photoContext?.brand }} disabled={isPending || line.photoUploading}
+                          {alvoDasFotos.current?.index === index ? <ProgressoDasFotosDoProduto fotos={fotos} /> : null}
+                          {line.photos.length ? <ProductPhotoStudio key={`${customerCode}:${index}:${line.clientCode}`} photos={line.photos} customerCode={customerCode} productName={line.product} category={line.category} context={{ ...line.photoContext, description: line.product, size: line.size || line.photoContext?.size, color: line.color || line.photoContext?.color, brand: line.brand || line.photoContext?.brand }} disabled={isPending || fotosSubindoNa(index)}
                             onApprove={(generated, primaryUrl) => setLines((current) => current.map((entry, entryIndex) => {
                               if (entryIndex !== index) return entry;
                               const merged = [...entry.photos, ...generated];
@@ -1283,7 +1294,12 @@ export function UnplannedReceiptDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              // As fotos que sobem seguram o diálogo: aria-disabled, com a trava no código.
+              aria-disabled={fotos.enviando || undefined}
+              className={fotos.enviando ? "opacity-45 hover:bg-card active:bg-card" : undefined}
+              onClick={() => {
+                if (!fotos.enviando) onOpenChange(false);
+              }}
               disabled={busy}
             >
               Cancelar

@@ -2,7 +2,7 @@ import { httpsCallable } from "firebase/functions";
 import { functionsDoApp } from "./firebase-functions";
 
 import { clienteDaChamada } from "./active-customer";
-import { SEM_CONEXAO, aparelhoSemRede, callableSemResposta, corpoSemConexao } from "./conexao";
+import { PRAZO_ESGOTADO, SEM_CONEXAO, aparelhoSemRede, callableSemResposta, corpoSemConexao, prazoEsgotado } from "./conexao";
 import { firebaseApp } from "./firebase";
 
 /**
@@ -1052,8 +1052,9 @@ export async function callFunctionsApi(
       error instanceof Error
         ? error.message
         : "Erro ao chamar Firebase Functions.";
-    const message =
-      rawMessage === "INTERNAL" || code === "internal"
+    const message = prazoEsgotado(error)
+      ? PRAZO_ESGOTADO
+      : rawMessage === "INTERNAL" || code === "internal"
         ? "Falha interna no servidor. Tente novamente ou avise o time técnico."
         : rawMessage;
     return response(compactError({ message, code }), status);
@@ -1095,6 +1096,7 @@ export async function streamAgentDuteChat<T>(
     return await data;
   } catch (error) {
     if (callableSemResposta(error)) throw new Error(SEM_CONEXAO);
+    if (prazoEsgotado(error)) throw new Error(PRAZO_ESGOTADO);
     const rawMessage = error instanceof Error ? error.message : "";
     throw new Error(
       !rawMessage || rawMessage === "INTERNAL"

@@ -27,6 +27,8 @@ describe("o relógio da espera", () => {
       chegaEsperaMs: 180,
       destaqueMs: 1_000,
       contaMs: 160,
+      segmentoMs: 200,
+      fioMs: 300,
       aberturaSaiMs: 260,
       aberturaCompletaMs: 200,
       aberturaSegmentoSaiMs: 60,

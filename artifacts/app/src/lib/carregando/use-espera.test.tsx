@@ -53,7 +53,23 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** A tela que demora a rodar: a primeira renderização segura a thread por `ms` (o relógio anda junto). */
+function SondaLenta({ ms }: { ms: number }) {
+  const espera = useEspera(true);
+  vistos.push(espera);
+  if (vistos.length === 1) vi.advanceTimersByTime(ms);
+  return null;
+}
+
 describe("a espera no relógio", () => {
+  it("com a thread ocupada no começo (a foto sendo compactada), o indicador entra assim que ela solta, não só aos 3 s", () => {
+    act(() => raiz!.render(<SondaLenta ms={450} />));
+    expect(atual().visivel).toBe(true);
+    expect(atual().fase).toBe("andamento");
+    passar(3_000);
+    expect(atual().fase).toBe("com-objeto");
+  });
+
   it("parada, não mostra nada", () => {
     montar(false);
     passar(20_000);

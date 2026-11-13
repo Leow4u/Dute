@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Images, Loader2, Star, Trash2 } from "lucide-react";
+import { Images, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -178,8 +179,8 @@ export function ProductPhotoManager({
           </p>
         )}
         {busy ? (
-          <p role="status" className="flex items-center gap-2 text-sm">
-            <Loader2 className="size-4 animate-spin" />
+          <p className="flex items-center gap-2 text-sm font-bold">
+            <Spinner />
             Atualizando fotos…
           </p>
         ) : null}

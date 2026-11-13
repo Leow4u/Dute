@@ -170,6 +170,8 @@ const MOVIMENTO: Record<string, string> = {
   "--carregando-t-conta": "160ms",
   "--carregando-conta-y": "8px",
   "--carregando-t-listras": "600ms",
+  "--carregando-t-segmento": "200ms",
+  "--carregando-t-fio": "300ms",
   "--carregando-t-arcos": "1200ms",
   "--carregando-t-pulso": "2000ms",
   "--carregando-t-abertura-sai": "260ms",
@@ -214,6 +216,9 @@ describe("os tokens do carregamento", () => {
     expect(CARREGANDO.refluiMs - CARREGANDO.chegaEsperaMs).toBe(60);
     expect(raiz.get("--carregando-t-destaque")).toBe(`${CARREGANDO.destaqueMs}ms`);
     expect(raiz.get("--carregando-t-conta")).toBe(`${CARREGANDO.contaMs}ms`);
+    // As operações longas (parte 11): o segmento da foto e o fio das etapas.
+    expect(raiz.get("--carregando-t-segmento")).toBe(`${CARREGANDO.segmentoMs}ms`);
+    expect(raiz.get("--carregando-t-fio")).toBe(`${CARREGANDO.fioMs}ms`);
     // A abertura (index.html) esmaece e, antes, completa o trilho: lib/abertura.ts conta com os mesmos tempos.
     expect(raiz.get("--carregando-t-abertura-sai")).toBe(`${CARREGANDO.aberturaSaiMs}ms`);
     expect(raiz.get("--carregando-t-abertura-completa")).toBe(`${CARREGANDO.aberturaCompletaMs}ms`);

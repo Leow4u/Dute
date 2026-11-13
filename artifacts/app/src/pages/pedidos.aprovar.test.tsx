@@ -8,7 +8,7 @@ import { Anunciador } from "@/lib/carregando/anunciador";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { gravarRefluxos, type RefluxosGravados } from "@/test/refluxo";
-import { textosForaDaLista } from "@/test/textos";
+import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 /**
  * "Para aprovar" com a ação por linha (carregamento v2, momento 4, parte 6b;
@@ -29,7 +29,7 @@ const estado = vi.hoisted(() => ({
   solicitacoes: [] as Array<Record<string, unknown>>,
   ops: { queues: {}, alerts: [] } as Record<string, unknown>,
   avancos: [] as string[],
-  respostasDoAvanco: [] as Array<(corpo: unknown) => void>,
+  respostasDoAvanco: [] as Array<(corpo: unknown, status?: number) => void>,
   decisoes: [] as Decisao[],
   leituras: [] as string[],
   /** Com a lista, a leitura das filas espera até o teste soltar (a releitura que chega depois). */
@@ -85,7 +85,7 @@ async function servir(entrada: RequestInfo | URL, init?: RequestInit) {
   if (avanco && metodo === "POST") {
     // A entrega fica em andamento até o teste responder.
     estado.avancos.push(decodeURIComponent(avanco[1]));
-    return new Promise((resolver) => estado.respostasDoAvanco.push((corpo) => resolver(resposta(corpo))));
+    return new Promise((resolver) => estado.respostasDoAvanco.push((corpo, status) => resolver(resposta(corpo, status))));
   }
   if (url.pathname === "/api/stock-balances") return resposta({ items: [] });
   if (url.pathname === "/api/customer-requests") return resposta({ items: estado.solicitacoes.map((item) => ({ ...item })) });
@@ -275,7 +275,11 @@ describe("cada linha de Para aprovar tem a própria ação", () => {
 });
 
 describe("as outras ações da tela", () => {
-  /** A entrega do PED-0001 em andamento, com o diálogo dela fechado pelo Voltar. */
+  /**
+   * A entrega do PED-0001 em andamento (carregamento v2, parte 11): as
+   * etapas Saída → Entrega, o "Voltar" aria-disabled e o diálogo que não
+   * fecha enquanto ela anda.
+   */
   async function entregaEmAndamento() {
     estado.ops = {
       alerts: [],
@@ -298,46 +302,65 @@ describe("as outras ações da tela", () => {
       definir.call(placa, "ABC1D23");
       placa.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    const confirmar = Array.from(document.querySelectorAll('[role="dialog"] button')).find((item) => item.textContent === "Confirmar entrega") as HTMLButtonElement;
+    const confirmar = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((item) => rotuloAtual(item) === "Confirmar entrega")!;
     await tocar(confirmar);
-    await passar(10);
+    await passar(CARREGANDO.atrasoMs);
     expect(estado.avancos).toEqual(["ship_1"]);
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Registrando...");
-    const voltar = Array.from(document.querySelectorAll('[role="dialog"] button')).find((item) => item.textContent === "Voltar") as HTMLButtonElement;
-    await tocar(voltar);
-    await passar(10);
+    const dialogo = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(rotuloAtual(confirmar)).toBe("Confirmando…");
+    expect(confirmar.getAttribute("aria-busy")).toBe("true");
+    expect(dialogo.querySelector('[role="progressbar"]')?.getAttribute("aria-valuetext")).toBe("Etapa 1 de 2");
+    // Só rótulos: a etapa, as duas etapas e os números.
+    expect(textosDaTela(dialogo.querySelector('[data-progresso="etapas"]')!.outerHTML)).toEqual(["Etapa", "1", "de 2", "Saída", "2", "Entrega"]);
+    return confirmar;
   }
 
-  it("a entrega em andamento não apaga a fila de aprovar", async () => {
+  it("a entrega anda em etapas, segura o diálogo e não apaga a fila de aprovar", async () => {
     await entregaEmAndamento();
+    // O Voltar fica aria-disabled e o diálogo não fecha, nem pelo Esc.
+    const voltar = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((item) => item.textContent === "Voltar")!;
+    expect(voltar.getAttribute("aria-disabled")).toBe("true");
+    await tocar(voltar);
+    await act(async () => {
+      document.querySelector('[role="dialog"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await passar(10);
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
 
     for (const titulo of ["Pedido 1042", "Pedido 1043", "Pedido 1045"]) {
       expect(livre(botao(titulo, "Aprovar")), titulo).toBe(true);
       expect(livre(botao(titulo, "Recusar")), titulo).toBe(true);
     }
-    // O "Entregue" segue o busy de antes.
-    expect(Array.from(container!.querySelectorAll("button")).find((item) => item.textContent === "Entregue")?.hasAttribute("disabled")).toBe(true);
   });
 
-  it("a entrega que termina fecha só o diálogo dela: a recusa aberta depois fica, com o motivo", async () => {
+  it("a segunda etapa entra com a resposta da primeira, e o fim fecha o diálogo", async () => {
     await entregaEmAndamento();
-    await tocar(botao("Pedido 1042", "Recusar"));
-    const campo = document.querySelector<HTMLTextAreaElement>("#motivo-da-recusa")!;
-    const definir = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
-    await act(async () => {
-      definir.call(campo, "Cliente desistiu");
-      campo.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-
-    // A entrega grava as duas etapas e termina.
     await act(async () => estado.respostasDoAvanco[0]({ ok: true }));
     await passar(10);
+    expect(estado.avancos).toEqual(["ship_1", "ship_1"]);
+    expect(document.querySelector('[role="dialog"] [role="progressbar"]')?.getAttribute("aria-valuetext")).toBe("Etapa 2 de 2");
     await act(async () => estado.respostasDoAvanco[1]({ ok: true }));
     await passar(10);
     expect(estado.toast).toHaveBeenCalledWith({ title: "Entrega confirmada. Estoque baixado." });
+    await passar(500);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
 
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Recusar solicitação");
-    expect(document.querySelector<HTMLTextAreaElement>("#motivo-da-recusa")?.value).toBe("Cliente desistiu");
+  it("sem resposta no prazo, \"Sem confirmação do servidor\" e o Conferir, que relê a fila e não reenvia", async () => {
+    const confirmar = await entregaEmAndamento();
+    await act(async () => estado.respostasDoAvanco[0]({ message: "O servidor não respondeu a tempo. Confira antes de tentar de novo.", code: "deadline-exceeded" }, 504));
+    // O "em andamento" fica o mínimo de 500 ms na tela antes do fim.
+    await passar(CARREGANDO.minimoMs);
+    expect(rotuloAtual(confirmar)).toBe("Conferir");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Sem confirmação do servidor");
+    // Nenhum texto cru em inglês.
+    expect(document.body.textContent).not.toContain("deadline-exceeded");
+    await passar(1_000);
+    await tocar(confirmar);
+    await passar(10);
+    // Releu e o pedido continua para entregar: volta a "Confirmar entrega", sem reenviar.
+    expect(estado.avancos).toEqual(["ship_1"]);
+    expect(rotuloAtual(confirmar)).toBe("Confirmar entrega");
   });
 });
 
@@ -896,7 +919,7 @@ describe("a linha que sai sem salto (parte 6c)", () => {
       definir.call(placa, "ABC1D23");
       placa.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    const confirmar = Array.from(document.querySelectorAll('[role="dialog"] button')).find((item) => item.textContent === "Confirmar entrega") as HTMLButtonElement;
+    const confirmar = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((item) => rotuloAtual(item) === "Confirmar entrega")!;
     await tocar(confirmar);
     await passar(10);
     expect(estado.avancos).toEqual(["ship_ord_A"]);
@@ -939,7 +962,7 @@ describe("a linha que sai sem salto (parte 6c)", () => {
   }
 
   function noDialogo(rotulo: string): HTMLButtonElement {
-    const achado = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((item) => item.textContent === rotulo);
+    const achado = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((item) => rotuloAtual(item) === rotulo);
     if (!achado) throw new Error(`sem ${rotulo} no diálogo`);
     return achado;
   }

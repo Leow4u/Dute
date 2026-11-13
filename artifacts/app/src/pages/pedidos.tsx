@@ -28,6 +28,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { AvisoDeEspera } from "@/components/ui/aviso-de-espera";
+import { Progresso, type ItemDoProgresso } from "@/components/ui/progresso";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinhaDaFila, QueueGroup, QueueRow, type QueueTone } from "@/components/ui/queue-list";
@@ -65,7 +67,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
 import { useAnuncio } from "@/lib/carregando/anunciador";
-import { relogioDaEspera } from "@/lib/carregando/tempo";
+import { CARREGANDO, relogioDaEspera } from "@/lib/carregando/tempo";
 import { desfechoDoErro, useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { usePalcoSemSaltos } from "@/lib/carregando/palco-sem-saltos";
@@ -113,7 +115,7 @@ import {
   type EntregaDoPedido,
   type FormularioDaEntrega,
 } from "@/lib/warehouse-ops/entrega";
-import type { OrderGroup } from "@/lib/warehouse-ops/orders";
+import { groupWarehouseOrders, type OrderGroup } from "@/lib/warehouse-ops/orders";
 import {
   buildBalanceValidation,
   formatRequestAge,
@@ -124,6 +126,21 @@ import {
 } from "./customer-requests";
 
 const numberFormatter = new Intl.NumberFormat("pt-BR");
+
+/**
+ * As etapas da entrega pela Dutelog (carregamento v2, parte 11 e momento 6):
+ * o pedido em "Para entregar" sai (quem levou e a placa) e é entregue, em
+ * duas chamadas. A etapa anda com a resposta de cada uma.
+ */
+export const ETAPAS_DA_ENTREGA = ["Saída", "Entrega"] as const;
+
+/** Onde as etapas da entrega estão, pela etapa em andamento (1 ou 2). */
+export function etapasDaEntrega(etapa: number): ItemDoProgresso[] {
+  return ETAPAS_DA_ENTREGA.map((rotulo, indice) => ({
+    rotulo,
+    estado: indice + 1 < etapa ? "feito" : indice + 1 === etapa ? "andamento" : "fila",
+  }));
+}
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
@@ -508,11 +525,26 @@ export default function Pedidos() {
     setDialog({ kind: "entrega", order, orderId: order.orderId });
   };
 
+  // A entrega anda em etapas (a saída e a entrega), e o fim fica no botão:
+  // o erro por 2 s, ou o "Conferir" do prazo sem resposta, que relê a fila.
+  const [etapaDaEntrega, setEtapaDaEntrega] = useState(0);
+  const [fimDaEntrega, setFimDaEntrega] = useState<"erro" | "sem-resposta" | null>(null);
+  const [conferindoEntrega, setConferindoEntrega] = useState(false);
+  const entregou = () => {
+    toast({ title: "Entrega confirmada. Estoque baixado." });
+    setFimDaEntrega(null);
+    setEtapaDaEntrega(0);
+    fecharDialogo("deliver");
+    setReceivedBy("");
+    refreshAll();
+  };
   const deliver = useMutation({
     mutationFn: async ({ order }: { order: OrderGroup }) => {
       const shipUid = String(order.ship?.id ?? "");
       if (!shipUid) throw new Error("Pedido sem expedição criada.");
+      setFimDaEntrega(null);
       if (order.stage === "enviar") {
+        setEtapaDaEntrega(1);
         remember("motorista", driver.trim());
         remember("placa", plate.trim());
         await advance(shipUid, "ready_to_dispatch", {
@@ -521,19 +553,45 @@ export default function Pedidos() {
           vehicle_plate: plate.trim(),
         });
       }
+      setEtapaDaEntrega(2);
       await advance(shipUid, "dispatched", {
         proof_reference: receivedBy.trim() || "Entrega própria Dutelog",
         delivery_notes: "Recebido pelo cliente.",
       });
     },
-    onSuccess: () => {
-      toast({ title: "Entrega confirmada. Estoque baixado." });
-      fecharDialogo("deliver");
-      setReceivedBy("");
-      refreshAll();
+    onSuccess: entregou,
+    onError: (error) => {
+      // Sem resposta no prazo, a etapa pode ter valido: "Conferir" relê, e a chave de cada etapa é a mesma.
+      if (desfechoDoErro(error) === "sem-resposta") {
+        setFimDaEntrega("sem-resposta");
+        return;
+      }
+      setFimDaEntrega("erro");
+      onError(error);
     },
-    onError,
   });
+  useEffect(() => {
+    if (fimDaEntrega !== "erro") return undefined;
+    const volta = setTimeout(() => setFimDaEntrega((atual) => (atual === "erro" ? null : atual)), CARREGANDO.erroVisivelMs);
+    return () => clearTimeout(volta);
+  }, [fimDaEntrega]);
+  const estadoDaEntrega: EstadoDaAcao = deliver.isPending || conferindoEntrega ? "andamento" : (fimDaEntrega ?? "repouso");
+  const esperaDaEntrega = useEspera(deliver.isPending);
+  /** O "Conferir" do prazo sem resposta: relê a fila e nunca reenvia. Entregue por lá, segue o sucesso. */
+  const conferirEntrega = async (order: OrderGroup) => {
+    if (conferindoEntrega) return;
+    setConferindoEntrega(true);
+    try {
+      const lida = await queryClient.fetchQuery({ queryKey: ["warehouse-ops"], queryFn: () => fetchJson<WarehouseOpsResponse>("/api/warehouse/ops"), staleTime: 0 });
+      const agora = groupWarehouseOrders(lida).find((candidato) => candidato.key === order.key);
+      if (!agora || agora.stage === "entregue") entregou();
+      else setFimDaEntrega(null);
+    } catch (error) {
+      onError(error);
+    } finally {
+      setConferindoEntrega(false);
+    }
+  };
 
   // Aprovar e recusar ficam de fora: cada linha de "Para aprovar" tem o próprio estado.
   const busy = deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
@@ -807,7 +865,13 @@ export default function Pedidos() {
         </>
       )}
 
-      <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
+      <Dialog
+        open={dialog !== null}
+        onOpenChange={(open) => {
+          // A entrega que anda segura o diálogo: fechar não para as etapas.
+          if (!open && !(dialog?.kind === "deliver" && estadoDaEntrega === "andamento")) setDialog(null);
+        }}
+      >
         <DialogContent className={larguraDoDialogo} aria-describedby={undefined} onCloseAutoFocus={devolverFocoDoDialogo}>
           {dialog?.kind === "reject" ? (
             <>
@@ -878,20 +942,40 @@ export default function Pedidos() {
                   />
                 </div>
               </div>
+              {dialog.order.stage === "enviar" && esperaDaEntrega.visivel ? (
+                <Progresso forma="etapas" titulo="Confirmando a entrega" itens={etapasDaEntrega(etapaDaEntrega)} />
+              ) : null}
+              {deliver.isPending && esperaDaEntrega.calmo ? (
+                <AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={esperaDaEntrega.decorridoMs} />
+              ) : null}
+              {estadoDaEntrega === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  Voltar
-                </Button>
                 <Button
                   type="button"
-                  disabled={
-                    busy ||
-                    (dialog.order.stage === "enviar" && (!driver.trim() || !plate.trim()))
-                  }
-                  onClick={() => deliver.mutate({ order: dialog.order })}
+                  variant="outline"
+                  aria-disabled={estadoDaEntrega === "andamento" || undefined}
+                  className={estadoDaEntrega === "andamento" ? "opacity-45 hover:bg-card active:bg-card" : undefined}
+                  onClick={() => {
+                    if (estadoDaEntrega !== "andamento") setDialog(null);
+                  }}
                 >
-                  {deliver.isPending ? "Registrando..." : "Confirmar entrega"}
+                  Voltar
                 </Button>
+                <BotaoDeAcao
+                  estado={estadoDaEntrega}
+                  rotulo="Confirmar entrega"
+                  andamento="Confirmando…"
+                  sucesso="Entregue"
+                  erro="Não confirmada"
+                  bloqueado={
+                    estadoDaEntrega === "repouso" &&
+                    (busy || (dialog.order.stage === "enviar" && (!driver.trim() || !plate.trim())))
+                  }
+                  onClick={() => {
+                    if (estadoDaEntrega === "sem-resposta") void conferirEntrega(dialog.order);
+                    else deliver.mutate({ order: dialog.order });
+                  }}
+                />
               </DialogFooter>
             </>
           ) : dialog?.kind === "cancel" ? (

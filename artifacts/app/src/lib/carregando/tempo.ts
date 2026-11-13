@@ -47,6 +47,10 @@ export const CARREGANDO = {
   destaqueMs: 1_000,
   /** A contagem que muda (3 → 2) rola 8 px nesse tempo. */
   contaMs: 160,
+  /** O segmento da foto que sobe enche por scaleX nesse tempo, a cada evento de bytes, e nunca volta. */
+  segmentoMs: 200,
+  /** O fio entre duas etapas enche nesse tempo, quando a de antes termina. */
+  fioMs: 300,
   /**
    * A abertura do app (o `#abertura` do index.html) esmaece nesse tempo
    * quando o perfil chega, com a marca recuando a 0,96 (`fecharAbertura`).
@@ -91,4 +95,16 @@ export function podeEsconder(apareceuEm: number | null, agora: number): boolean 
 export function relogioDaEspera(decorridoMs: number): string {
   const segundos = Number.isFinite(decorridoMs) ? Math.max(0, Math.floor(decorridoMs / 1_000)) : 0;
   return `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")}`;
+}
+
+/**
+ * A estimativa do que falta, arredondada para cima ("cerca de 20 s"), no
+ * aviso de demora da operação com o total conhecido (as fotos). Até um
+ * minuto, de 5 em 5 s; depois, em minutos.
+ */
+export function estimativaDaEspera(restanteMs: number): string | null {
+  if (!Number.isFinite(restanteMs) || restanteMs <= 0) return null;
+  const segundos = Math.ceil(restanteMs / 1_000);
+  if (segundos <= 60) return `cerca de ${Math.max(5, Math.ceil(segundos / 5) * 5)} s`;
+  return `cerca de ${Math.ceil(segundos / 60)} min`;
 }

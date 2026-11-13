@@ -328,10 +328,11 @@ function Revisao({ ficha }: { ficha: FichaDaOs }) {
 
 const FOTOS_A_MOSTRAR = 5;
 
-function Fotos({ ficha, urls, acao }: { ficha: FichaDaOs; urls: Readonly<Record<string, string>>; acao?: ReactNode }) {
+function Fotos({ ficha, urls, acao, envio }: { ficha: FichaDaOs; urls: Readonly<Record<string, string>>; acao?: ReactNode; envio?: ReactNode }) {
   const fotos = [...ficha.fotos].sort((a, b) => b.instante.localeCompare(a.instante));
   return (
     <Cartao titulo={`Fotos · ${fotos.length}`} acao={acao}>
+      {envio ? <div className="px-5 pt-4">{envio}</div> : null}
       {fotos.length ? (
         <ul className="grid grid-cols-3 gap-2 px-5 py-4 sm:grid-cols-6">
           {fotos.slice(0, FOTOS_A_MOSTRAR).map((foto) => {
@@ -449,6 +450,7 @@ export function OsView({
   acoes,
   painel,
   anexarFotos,
+  envioDasFotos,
   acoesDaRecusa,
 }: {
   estado: EstadoDaFicha;
@@ -464,6 +466,8 @@ export function OsView({
   painel?: ReactNode;
   /** Anexar fotos à OS, no cartão das fotos (parte 3.7e). */
   anexarFotos?: ReactNode;
+  /** As fotos que sobem, com a contagem (carregamento v2, parte 11), no topo do cartão das fotos. */
+  envioDasFotos?: ReactNode;
   /** As ações da coordenação na conclusão recusada do celular (pergunta 66); sem elas, o cartão não aparece. */
   acoesDaRecusa?: ReactNode;
 }) {
@@ -539,7 +543,7 @@ export function OsView({
           <Locais ficha={ficha} />
           <Etapas ficha={ficha} />
           {ficha.tipo === "vistoria" ? null : <Itens ficha={ficha} />}
-          <Fotos ficha={ficha} urls={urls} acao={anexarFotos} />
+          <Fotos ficha={ficha} urls={urls} acao={anexarFotos} envio={envioDasFotos} />
         </div>
         <div className="flex min-w-0 flex-col gap-6">
           <Equipe ficha={ficha} />

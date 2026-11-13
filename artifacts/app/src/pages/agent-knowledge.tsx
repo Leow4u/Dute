@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   collection,
   doc,
+  getDocFromServer,
   getDocs,
   serverTimestamp,
   setDoc,
@@ -27,7 +28,14 @@ import { AgentPlaybooks } from "@/components/agent/agent-playbooks";
 import { useAppUser } from "@/lib/auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { AvisoDeEspera } from "@/components/ui/aviso-de-espera";
+import { BotaoDeAcao, type EstadoDaAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { Progresso } from "@/components/ui/progresso";
+import { CARREGANDO } from "@/lib/carregando/tempo";
+import { desfechoDoErro } from "@/lib/carregando/use-acao-na-linha";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { comPrazo } from "@/lib/conexao";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Card,
@@ -363,142 +371,24 @@ export default function AgentKnowledge() {
     };
   }, [documents.data, files.data]);
 
+  // As etapas da gravação (o cadastro, o arquivo em pedaços e os trechos de
+  // texto), com o prazo de 70 s: a gravação direta no Firestore, sem rede,
+  // esperaria para sempre (carregamento v2, parte 11). O id é o do conteúdo,
+  // então repetir regrava o mesmo documento.
+  const [etapasDoEnvio, setEtapasDoEnvio] = useState<string[]>([]);
+  const [etapaDoEnvio, setEtapaDoEnvio] = useState(0);
+  const [fimDoEnvio, setFimDoEnvio] = useState<"erro" | "sem-resposta" | null>(null);
+  const [conferindoEnvio, setConferindoEnvio] = useState(false);
+  const idDoEnvio = useRef<string | null>(null);
   const upload = useMutation({
-    mutationFn: async () => {
-      if (!firestore) throw new Error("Firestore não configurado.");
-      const db = firestore;
-      if (!file) throw new Error("Selecione um arquivo.");
-      if (file.size > maxUploadBytes) {
-        throw new Error("Arquivo acima do limite atual de 8 MB.");
-      }
-
-      const buffer = await file.arrayBuffer();
-      const hash = await sha256Hex(buffer);
-      const baseId = safeDocId(`${titleFromFile(file)}_${hash.slice(0, 16)}`);
-      const knowledgeId = baseId || `knowledge_${Date.now()}`;
-      const title = form.title.trim() || titleFromFile(file);
-      const base64 = arrayBufferToBase64(buffer);
-      const fileChunks = fileBase64Chunks(base64);
-      const nowIso = new Date().toISOString();
-      const readableText = isTextLike(file) ? await file.text() : "";
-      const chunks = readableText ? textChunks(readableText) : [];
-      const extractionStatus = readableText
-        ? "processed"
-        : "pending_processing";
-
-      await setDoc(
-        doc(firestore, knowledgeCollection, knowledgeId),
-        {
-          id: knowledgeId,
-          title,
-          document_type: form.document_type,
-          customer_code: form.customer_code.trim() || activeCustomerCode,
-          source_file_name: file.name,
-          summary:
-            form.notes.trim() ||
-            (readableText
-              ? readableText.slice(0, 700)
-              : "Arquivo anexado para processamento de conhecimento."),
-          status: "active",
-          sha256: hash,
-          chunk_count: chunks.length,
-          pages: null,
-          extraction_status: extractionStatus,
-          file_available: true,
-          file_storage_mode: "firestore_chunks",
-          download_file_id: knowledgeId,
-          content_type: file.type || "application/octet-stream",
-          size_bytes: file.size,
-          ingested_at: nowIso,
-          created_at: serverTimestamp(),
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      await setDoc(
-        doc(firestore, fileCollection, knowledgeId),
-        {
-          id: knowledgeId,
-          knowledge_id: knowledgeId,
-          file_name: file.name,
-          content_type: file.type || "application/octet-stream",
-          size_bytes: file.size,
-          sha256: hash,
-          chunk_count: fileChunks.length,
-          storage_mode: "firestore_chunks",
-          created_at: serverTimestamp(),
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      await commitInBatches(
-        fileChunks.map((chunk, index) => (batch) => {
-          batch.set(
-              doc(
-                db,
-                fileChunkCollection,
-                `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
-              ),
-            {
-              id: `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
-              knowledge_id: knowledgeId,
-              chunk_index: index,
-              data_base64: chunk,
-              created_at: serverTimestamp(),
-            },
-          );
-        }),
-      );
-
-      if (chunks.length) {
-        await commitInBatches(
-          chunks.map((chunk, index) => (batch) => {
-            batch.set(
-              doc(
-                db,
-                textChunkCollection,
-                `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
-              ),
-              {
-                id: `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
-                knowledge_id: knowledgeId,
-                chunk_index: index,
-                text: chunk,
-                source_file_name: file.name,
-                title,
-                customer_code: form.customer_code.trim() || activeCustomerCode,
-                document_type: form.document_type,
-                created_at: serverTimestamp(),
-              },
-            );
-          }),
-          50,
-        );
-      }
-
-      await emitKnowledgeEvent({
-        id: knowledgeId,
-        title,
-        customer_code: form.customer_code.trim() || activeCustomerCode,
-        file_name: file.name,
-        extraction_status: extractionStatus,
-      });
-    },
-    onSuccess: async () => {
-      setForm(initialForm);
-      setFile(null);
-      await queryClient.invalidateQueries({
-        queryKey: ["agent-knowledge-documents"],
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["agent-knowledge-files"],
-      });
-      await queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
-      toast({ title: "Conhecimento anexado ao Agent Dute" });
-    },
+    mutationFn: () => comPrazo(gravarConhecimento(), CARREGANDO.desisteMs),
+    onSuccess: () => anexado(),
     onError: (error) => {
+      if (desfechoDoErro(error) === "sem-resposta") {
+        setFimDoEnvio("sem-resposta");
+        return;
+      }
+      setFimDoEnvio("erro");
       toast({
         title: "Falha ao anexar conhecimento",
         description: error instanceof Error ? error.message : undefined,
@@ -506,6 +396,170 @@ export default function AgentKnowledge() {
       });
     },
   });
+  async function anexado() {
+    setFimDoEnvio(null);
+    setEtapaDoEnvio(0);
+    setForm(initialForm);
+    setFile(null);
+    await queryClient.invalidateQueries({
+      queryKey: ["agent-knowledge-documents"],
+    });
+    await queryClient.invalidateQueries({
+      queryKey: ["agent-knowledge-files"],
+    });
+    await queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
+    toast({ title: "Conhecimento anexado ao Agent Dute" });
+  }
+  useEffect(() => {
+    if (fimDoEnvio !== "erro") return undefined;
+    const volta = setTimeout(() => setFimDoEnvio((atual) => (atual === "erro" ? null : atual)), CARREGANDO.erroVisivelMs);
+    return () => clearTimeout(volta);
+  }, [fimDoEnvio]);
+  const estadoDoEnvio: EstadoDaAcao = upload.isPending || conferindoEnvio ? "andamento" : (fimDoEnvio ?? "repouso");
+  const esperaDoEnvio = useEspera(upload.isPending);
+  /** O "Conferir" do prazo sem resposta: lê o cadastro no servidor e nunca regrava. Gravado, segue o sucesso. */
+  async function conferirEnvio() {
+    if (conferindoEnvio || !firestore || !idDoEnvio.current) return;
+    setConferindoEnvio(true);
+    try {
+      const lido = await getDocFromServer(doc(firestore, knowledgeCollection, idDoEnvio.current));
+      if (lido.exists()) await anexado();
+      else setFimDoEnvio(null);
+    } catch (error) {
+      toast({ title: "Não consegui conferir o conhecimento", description: error instanceof Error ? error.message : undefined, variant: "destructive" });
+    } finally {
+      setConferindoEnvio(false);
+    }
+  }
+
+  async function gravarConhecimento() {
+    if (!firestore) throw new Error("Firestore não configurado.");
+    const db = firestore;
+    if (!file) throw new Error("Selecione um arquivo.");
+    if (file.size > maxUploadBytes) {
+      throw new Error("Arquivo acima do limite atual de 8 MB.");
+    }
+    setFimDoEnvio(null);
+    setEtapasDoEnvio(isTextLike(file) ? ["Cadastro", "Arquivo", "Trechos"] : ["Cadastro", "Arquivo"]);
+    setEtapaDoEnvio(1);
+
+    const buffer = await file.arrayBuffer();
+    const hash = await sha256Hex(buffer);
+    const baseId = safeDocId(`${titleFromFile(file)}_${hash.slice(0, 16)}`);
+    const knowledgeId = baseId || `knowledge_${Date.now()}`;
+    const title = form.title.trim() || titleFromFile(file);
+    const base64 = arrayBufferToBase64(buffer);
+    const fileChunks = fileBase64Chunks(base64);
+    idDoEnvio.current = knowledgeId;
+    const nowIso = new Date().toISOString();
+    const readableText = isTextLike(file) ? await file.text() : "";
+    const chunks = readableText ? textChunks(readableText) : [];
+    const extractionStatus = readableText
+      ? "processed"
+      : "pending_processing";
+
+    await setDoc(
+      doc(firestore, knowledgeCollection, knowledgeId),
+      {
+        id: knowledgeId,
+        title,
+        document_type: form.document_type,
+        customer_code: form.customer_code.trim() || activeCustomerCode,
+        source_file_name: file.name,
+        summary:
+          form.notes.trim() ||
+          (readableText
+            ? readableText.slice(0, 700)
+            : "Arquivo anexado para processamento de conhecimento."),
+        status: "active",
+        sha256: hash,
+        chunk_count: chunks.length,
+        pages: null,
+        extraction_status: extractionStatus,
+        file_available: true,
+        file_storage_mode: "firestore_chunks",
+        download_file_id: knowledgeId,
+        content_type: file.type || "application/octet-stream",
+        size_bytes: file.size,
+        ingested_at: nowIso,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    await setDoc(
+      doc(firestore, fileCollection, knowledgeId),
+      {
+        id: knowledgeId,
+        knowledge_id: knowledgeId,
+        file_name: file.name,
+        content_type: file.type || "application/octet-stream",
+        size_bytes: file.size,
+        sha256: hash,
+        chunk_count: fileChunks.length,
+        storage_mode: "firestore_chunks",
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    setEtapaDoEnvio(2);
+    await commitInBatches(
+      fileChunks.map((chunk, index) => (batch) => {
+        batch.set(
+            doc(
+              db,
+              fileChunkCollection,
+              `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
+            ),
+          {
+            id: `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
+            knowledge_id: knowledgeId,
+            chunk_index: index,
+            data_base64: chunk,
+            created_at: serverTimestamp(),
+          },
+        );
+      }),
+    );
+
+    if (chunks.length) {
+      setEtapaDoEnvio(3);
+      await commitInBatches(
+        chunks.map((chunk, index) => (batch) => {
+          batch.set(
+            doc(
+              db,
+              textChunkCollection,
+              `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
+            ),
+            {
+              id: `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
+              knowledge_id: knowledgeId,
+              chunk_index: index,
+              text: chunk,
+              source_file_name: file.name,
+              title,
+              customer_code: form.customer_code.trim() || activeCustomerCode,
+              document_type: form.document_type,
+              created_at: serverTimestamp(),
+            },
+          );
+        }),
+        50,
+      );
+    }
+
+    await emitKnowledgeEvent({
+      id: knowledgeId,
+      title,
+      customer_code: form.customer_code.trim() || activeCustomerCode,
+      file_name: file.name,
+      extraction_status: extractionStatus,
+    });
+  }
 
   async function downloadFile(item: KnowledgeDocument) {
     if (!firestore) return;
@@ -559,7 +613,8 @@ export default function AgentKnowledge() {
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    upload.mutate();
+    if (estadoDoEnvio === "sem-resposta") void conferirEnvio();
+    else if (estadoDoEnvio !== "andamento" && file) upload.mutate();
   }
 
   return (
@@ -849,18 +904,29 @@ export default function AgentKnowledge() {
                   O Agent Dute usa os trechos indexados desta coleção como contexto operacional.
                 </AlertDescription>
               </Alert>
-              <Button
+              {esperaDoEnvio.visivel && etapasDoEnvio.length ? (
+                <Progresso
+                  forma="etapas"
+                  titulo="Anexando ao Agent Dute"
+                  itens={etapasDoEnvio.map((rotulo, indice) => ({
+                    rotulo,
+                    estado: indice + 1 < etapaDoEnvio ? "feito" : indice + 1 === etapaDoEnvio ? "andamento" : "fila",
+                  }))}
+                />
+              ) : null}
+              {upload.isPending && esperaDoEnvio.calmo ? <AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={esperaDoEnvio.decorridoMs} /> : null}
+              {estadoDoEnvio === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
+              <BotaoDeAcao
                 type="submit"
                 className="w-full"
-                disabled={!file || upload.isPending}
-              >
-                {upload.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <UploadCloud className="h-4 w-4" />
-                )}
-                Anexar ao Agent Dute
-              </Button>
+                estado={estadoDoEnvio}
+                icone={<UploadCloud />}
+                rotulo="Anexar ao Agent Dute"
+                andamento="Anexando…"
+                sucesso="Anexado"
+                erro="Não anexado"
+                bloqueado={estadoDoEnvio === "repouso" && !file}
+              />
             </form>
           </CardContent>
         </Card>
