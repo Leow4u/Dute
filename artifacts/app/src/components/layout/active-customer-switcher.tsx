@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "wouter";
-import { Building2, Check, ChevronsUpDown, Plus } from "lucide-react";
+import { Building2, Check, ChevronsUpDown, Plus, RefreshCw } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -39,8 +39,10 @@ function useTextoDaFalta(erro: unknown): string {
  * bloco do esqueleto e, passados 300 ms, a caixa de 16 px no lugar da seta,
  * nunca o cliente legado como se fosse o escolhido (carregamento v2, momento
  * 1). A lista que não veio diz a falta ("Não carregou", "Reconectando…" ou
- * "Sem conexão") no lugar do nome, e o toque tenta de novo. Nos dois, o
- * gatilho é o mesmo botão, `aria-disabled` para o menu, e o foco não cai.
+ * "Sem conexão") no lugar do nome, com o ícone de tentar de novo no lugar da
+ * seta, e o toque tenta de novo: sem a lista, o botão não diz que abre um
+ * menu (sem `aria-haspopup`). Nos dois, o gatilho é o mesmo botão,
+ * `aria-disabled` para o menu, e o foco não cai. No celular, o alvo tem 44 px.
  */
 export function ActiveCustomerSwitcher({
   variant,
@@ -74,9 +76,13 @@ export function ActiveCustomerSwitcher({
   );
   const seta = espera.visivel ? (
     <Spinner tamanho={16} calmo={espera.calmo} className="shrink-0 text-v3-header-foreground" />
+  ) : falhou ? (
+    <RefreshCw className={cn("shrink-0", v3 ? "size-4 text-v3-header-foreground/70" : "size-3.5 opacity-70")} aria-hidden="true" />
   ) : (
     <ChevronsUpDown className={cn("shrink-0", v3 ? "size-4 text-v3-header-foreground/70" : "size-3.5 opacity-70")} aria-hidden="true" />
   );
+  // Sem a lista, o toque tenta de novo: o botão não diz que abre um menu (o Radix o diz; aqui, por cima).
+  const doMenu = falhou ? { "aria-haspopup": undefined, "aria-expanded": undefined } : {};
 
   const trigger = v3 ? (
     <DropdownMenuTrigger
@@ -85,6 +91,7 @@ export function ActiveCustomerSwitcher({
       aria-disabled={isLoading || tentando || undefined}
       aria-busy={espera.visivel || undefined}
       data-cliente-ativo={isLoading ? "carregando" : falhou ? "falhou" : "pronto"}
+      {...doMenu}
     >
       <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-v3-header-foreground/15 text-v3-header-foreground">
         <Building2 className="size-4" aria-hidden="true" />
@@ -97,11 +104,12 @@ export function ActiveCustomerSwitcher({
     </DropdownMenuTrigger>
   ) : (
     <DropdownMenuTrigger
-      className="flex h-10 min-w-0 max-w-full items-center gap-2 rounded-lg px-1.5 text-sm font-bold text-v3-header-foreground outline-none focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80"
+      className="flex h-11 min-w-0 max-w-full items-center gap-2 rounded-lg px-1.5 text-sm font-bold text-v3-header-foreground outline-none focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80"
       aria-label={rotulo}
       aria-disabled={isLoading || tentando || undefined}
       aria-busy={espera.visivel || undefined}
       data-cliente-ativo={isLoading ? "carregando" : falhou ? "falhou" : "pronto"}
+      {...doMenu}
     >
       <Building2 className="size-4 shrink-0" aria-hidden="true" />
       {nome}

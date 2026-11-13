@@ -1,4 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { relerDoZero } from "../carregando/reler-do-zero";
+import { useLeituraComFalha } from "../carregando/use-leitura-com-falha";
 
 import type { ItemDoInicio } from "../inicio-do-modulo";
 import type { ProfileRole } from "../modules";
@@ -27,21 +30,42 @@ async function lerPainel(): Promise<PainelDoRh> {
   return painel;
 }
 
-export type PainelDoRhNaTela = { painel: PainelDoRh | undefined; carregando: boolean; falhas: string[] };
+export type PainelDoRhNaTela = {
+  painel: PainelDoRh | undefined;
+  carregando: boolean;
+  falhas: string[];
+  /** O painel lê agora. */
+  relendo?: boolean;
+  /** Relê o painel, também o preso e o que falhou (o "Tentar de novo" do Início); a promessa acaba com ele. */
+  reler?: () => Promise<void>;
+  /** O painel que falhou já tinha sido lido: a releitura falhou, e o aviso não fala (momento 7). */
+  falhaSoNaReleitura?: boolean;
+};
 
 export function usePainelDoRh(role: ProfileRole | null | undefined, ligado = true): PainelDoRhNaTela {
   const abre = ligado && abreRh(role);
-  const leitura = useQuery({
-    queryKey: CHAVE_DO_PAINEL,
-    queryFn: lerPainel,
-    enabled: abre,
-    staleTime: UM_MINUTO,
-    refetchInterval: 5 * UM_MINUTO,
-    refetchOnWindowFocus: false,
-    retry: 1,
-  });
+  const queryClient = useQueryClient();
+  // O painel que falhou sem nada lido fica na falha enquanto é relido: o aviso e o botão não saem da tela.
+  const leitura = useLeituraComFalha(
+    useQuery({
+      queryKey: CHAVE_DO_PAINEL,
+      queryFn: lerPainel,
+      enabled: abre,
+      staleTime: UM_MINUTO,
+      refetchInterval: 5 * UM_MINUTO,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    }),
+  );
   if (!abre) return { painel: undefined, carregando: false, falhas: [] };
-  return { painel: leitura.data, carregando: leitura.isPending, falhas: leitura.isError ? ["pessoas e vencimentos"] : [] };
+  return {
+    painel: leitura.data,
+    carregando: leitura.isPending && !leitura.isError,
+    falhas: leitura.isError ? ["pessoas e vencimentos"] : [],
+    relendo: leitura.isFetching,
+    reler: () => relerDoZero(queryClient, [CHAVE_DO_PAINEL]),
+    falhaSoNaReleitura: leitura.data !== undefined,
+  };
 }
 
 export type InicioDoRh = PainelDoRhNaTela & { itens: ItemDoInicio[] };

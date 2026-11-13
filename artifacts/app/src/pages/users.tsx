@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Plus, Search } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "wouter";
@@ -11,12 +12,14 @@ import { ContagemDaAba, FiltroDeSituacao, PilhaDeAvatares } from "@/components/p
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { roleLabel } from "@/lib/access";
 import { useAppUser } from "@/lib/auth";
-import { useCustomerRecords } from "@/lib/customer-records";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { CUSTOMERS_QUERY_KEY, useCustomerRecords } from "@/lib/customer-records";
 import { buildCustomerRows, customerHref, portalScreens } from "@/lib/customer-registry";
 import { normalizeProfileRole } from "@/lib/modules";
 import { humanApiError } from "@/lib/permissions";
@@ -70,10 +73,10 @@ function Vazio({ children }: { children: ReactNode }) {
  * passados 300 ms, a caixa de 24 px com o rótulo, falado pelo Anunciador; aos
  * 10 s, a demora. Sem região viva solta.
  */
-function Carregando({ rotulo, continuaARota = false }: { rotulo: string; continuaARota?: boolean }) {
+function Carregando({ rotulo, continuaARota = false, onTentar }: { rotulo: string; continuaARota?: boolean; onTentar?: () => void }) {
   return (
     <div className="rounded-lg border border-border bg-card px-5 py-5">
-      <CarregandoNaRegiao rotulo={rotulo} continuaARota={continuaARota} />
+      <CarregandoNaRegiao rotulo={rotulo} continuaARota={continuaARota} onTentar={onTentar} />
     </div>
   );
 }
@@ -143,6 +146,7 @@ function IndiceDosClientes({ indice }: { indice: ClienteDoIndice[] }) {
 }
 
 export default function Users() {
+  const queryClient = useQueryClient();
   const { user } = useAppUser();
   const actorRole = normalizeProfileRole(user?.publicMetadata.role);
   const pessoas = usePessoas();
@@ -215,7 +219,7 @@ export default function Users() {
       </header>
 
       {pessoas.carregando ? (
-        <Carregando rotulo="Carregando pessoas…" continuaARota />
+        <Carregando rotulo="Carregando pessoas…" continuaARota onTentar={() => void pessoas.refresh()} />
       ) : pessoas.falta && pessoas.falta.lidaEm === null ? (
         <BlocoSemConexao tentando={pessoas.tentando} onTentar={() => void pessoas.refresh()} />
       ) : pessoas.erro ? (
@@ -227,6 +231,15 @@ export default function Users() {
       ) : null}
       {pessoas.falta && pessoas.falta.lidaEm !== null ? (
         <FaixaSemConexao lidaEm={pessoas.falta.lidaEm} tentando={pessoas.tentando} onTentar={() => void pessoas.refresh()} />
+      ) : pessoas.falhaNaReleitura ? (
+        // A releitura que falhou não apaga a lista lida, e a falha fica escrita em cima dela, sem falar (momento 7).
+        <FalhaNaSecao
+          mensagem="Não foi possível atualizar as pessoas."
+          alerta={false}
+          tentando={pessoas.tentando}
+          onTentar={pessoas.refresh}
+          className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+        />
       ) : null}
       {pessoas.carregando || pessoas.erro || (pessoas.falta && pessoas.falta.lidaEm === null) ? null : termo ? (
         <section aria-labelledby="pessoas-resultados" className="flex flex-col gap-4">
@@ -281,7 +294,7 @@ export default function Users() {
           </TabsContent>
           <TabsContent value="clientes" className="mt-5">
             {customers.isLoading ? (
-              <Carregando rotulo="Carregando clientes…" />
+              <Carregando rotulo="Carregando clientes…" onTentar={() => void relerDoZero(queryClient, [CUSTOMERS_QUERY_KEY])} />
             ) : customers.isError && indice.length === 0 ? (
               <ErroNaLeitura
                 mensagem={humanApiError(customers.error, "Não foi possível carregar os clientes.")}

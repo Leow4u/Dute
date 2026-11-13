@@ -66,9 +66,10 @@ export function usePessoasDoCliente(row: CustomerRow | null): PessoasDoCliente {
           acoes={acoes}
           carregando={pessoas.carregando}
           erro={pessoas.erro}
+          falhaNaReleitura={pessoas.falhaNaReleitura}
           semConexao={Boolean(pessoas.falta && pessoas.falta.lidaEm === null)}
           tentando={pessoas.tentando}
-          onTentar={() => void pessoas.refresh()}
+          onTentar={pessoas.refresh}
         />
       ) : null,
     dialogos: (
@@ -96,6 +97,7 @@ function ListaDoPortal({
   acoes,
   carregando,
   erro,
+  falhaNaReleitura = false,
   semConexao = false,
   tentando,
   onTentar,
@@ -109,13 +111,16 @@ function ListaDoPortal({
   acoes: AcoesDasPessoas;
   carregando: boolean;
   erro: boolean;
+  /** A releitura falhou com as pessoas na tela: elas ficam, e a falha em cima, sem falar. */
+  falhaNaReleitura?: boolean;
   /** Sem rede e sem nada lido: o aviso da conexão no lugar da lista. */
   semConexao?: boolean;
   tentando: boolean;
-  onTentar: () => void;
+  onTentar: () => Promise<void>;
 }) {
   const visiveis = [...ativos, ...pendentes, ...(verArquivados ? arquivados : [])];
-  // Antes de ler (e sem leitura), o bloco no lugar do número: nunca "Pessoas · 0" (carregamento v2, parte 13e).
+  // Antes de ler, o bloco no lugar do número, e sem leitura, "—": nunca "Pessoas · 0" (carregamento v2, parte 13e).
+  // O separador vai junto, fora da árvore: o leitor de tela ouve "Pessoas", e não "Pessoas ·".
   const lida = !carregando && !erro;
   const titulo = ["Pessoas", String(ativos.length), pendentes.length ? pendingInvitesLabel(pendentes.length) : null].filter(Boolean).join(" · ");
   return (
@@ -126,7 +131,11 @@ function ListaDoPortal({
             titulo
           ) : (
             <>
-              Pessoas · <Esqueleto forma="contagem" />
+              Pessoas
+              <span aria-hidden="true">
+                {" · "}
+                {erro ? "—" : <Esqueleto forma="contagem" />}
+              </span>
             </>
           )}
         </h3>
@@ -141,8 +150,11 @@ function ListaDoPortal({
           </button>
         ) : null}
       </div>
+      {falhaNaReleitura && !carregando && !erro ? (
+        <FalhaNaSecao mensagem="Não foi possível atualizar as pessoas." alerta={false} tentando={tentando} onTentar={onTentar} className="px-5 pt-2" />
+      ) : null}
       {carregando ? (
-        <CarregandoNaRegiao rotulo="Carregando pessoas…" className="px-5 pb-4 pt-2" />
+        <CarregandoNaRegiao rotulo="Carregando pessoas…" onTentar={() => void onTentar()} className="px-5 pb-4 pt-2" />
       ) : semConexao ? (
         <div className="px-5 pb-4 pt-2">
           <BlocoSemConexao tentando={tentando} onTentar={onTentar} />

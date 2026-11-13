@@ -8,6 +8,7 @@ import { useConexao, useTentarDeNovo } from "@/lib/carregando/estado-da-conexao"
 import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { horaDaLeitura } from "@/lib/conexao";
+import { segurarOFocoQueSai } from "@/lib/foco-de-volta";
 import { cn } from "@/lib/utils";
 
 /**
@@ -48,14 +49,17 @@ function useNovaTentativa(tentando: boolean, onTentar: () => void) {
  * O aviso no lugar da lista sai da tela quando a nova tentativa começa a ler
  * (a lista volta às linhas-fantasma): com o foco nele, o foco vai à linha de
  * estado da lista (`id`), que diz "Carregando pedidos…" e depois a hora, e
- * nunca ao `body` (2.4.3).
+ * nunca ao `body` (2.4.3). Sem linha de estado, ao título da seção ou do
+ * diálogo onde o aviso morava (o painel que chegou, a nova tentativa que deu
+ * certo; parte 13e).
  */
 export function useFocoAoSair(raiz: RefObject<HTMLElement | null>, id: string | undefined) {
   useLayoutEffect(() => {
     const elemento = raiz.current;
     return () => {
-      if (!id || !elemento || typeof document === "undefined" || !elemento.contains(document.activeElement)) return;
-      document.getElementById(id)?.focus({ preventScroll: true });
+      if (!elemento || typeof document === "undefined" || !elemento.contains(document.activeElement)) return;
+      if (id) document.getElementById(id)?.focus({ preventScroll: true });
+      else segurarOFocoQueSai(elemento);
     };
   }, [id, raiz]);
 }

@@ -9,6 +9,7 @@ import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { formatMoney } from "@/lib/system-dashboard";
@@ -362,6 +363,7 @@ function BillingTableDialog({ current, onClose }: { current: string | null; onCl
 
 /** Seção Infraestrutura: erros, functions e custo real. */
 export function InfraSection({ agentMonthCost }: { agentMonthCost: number | null }) {
+  const queryClient = useQueryClient();
   const leitura = useSystemInfra();
   // A nova tentativa sem dado não volta a "Consultando": a falha fica, com "Tentando de novo…".
   const infra = useLeituraComFalha(leitura);
@@ -383,22 +385,23 @@ export function InfraSection({ agentMonthCost }: { agentMonthCost: number | null
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
           {infra.data ? `verificada às ${time.format(new Date(infra.data.checked_at))}` : null}
           {/* Na primeira consulta, travado (aria-disabled): a seção já diz "Consultando o Google Cloud…". */}
+          {/* O ponteiro em cima sublinha, sem o fundo do ghost: o azul sobre ele ficaria abaixo de 4,5:1 no escuro. */}
           <BotaoDeAcao
             variant="ghost"
             size="sm"
-            className="font-semibold text-primary"
+            className="font-semibold text-primary hover:bg-transparent hover:underline active:bg-transparent max-md:min-h-11"
             icone={<RefreshCw aria-hidden="true" />}
             estado={verificando ? "andamento" : "repouso"}
             bloqueado={!verificando && infra.isLoading}
             rotulo="Verificar agora"
-            andamento="Verificando…"
+            andamento="Verificando a infraestrutura…"
             onClick={verificarAgora}
           />
         </span>
       </div>
       {infra.isLoading ? (
         <div className="rounded-lg border border-border bg-card px-5 py-4">
-          <CarregandoNaRegiao rotulo="Consultando o Google Cloud…" />
+          <CarregandoNaRegiao rotulo="Consultando o Google Cloud…" onTentar={() => void relerDoZero(queryClient, [infraKey])} />
         </div>
       ) : !infra.data ? (
         <ErroNaLeitura
@@ -412,8 +415,9 @@ export function InfraSection({ agentMonthCost }: { agentMonthCost: number | null
           {infra.isError ? (
             <FalhaNaSecao
               mensagem={`Não consegui verificar de novo: ${infra.error?.message ?? "o servidor não respondeu."}`}
+              alerta={false}
               tentando={infra.isFetching}
-              onTentar={() => void leitura.refetch()}
+              onTentar={() => leitura.refetch()}
               className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
             />
           ) : null}

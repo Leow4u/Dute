@@ -87,7 +87,8 @@ describe("o seletor do cliente ativo enquanto a lista dos clientes lê", () => {
     expect(gatilho().getAttribute("aria-disabled")).toBe("true");
     expect(gatilho().disabled).toBe(false);
     expect(container.querySelector("[data-spinner]")).toBeNull();
-    await espera(360);
+    // Espera o estado chegar, e não um tempo fixo: com a máquina ocupada, 360 ms logo depois do marco falham à toa.
+    for (let volta = 0; volta < 150 && !container.querySelector("[data-spinner]"); volta += 1) await espera(20);
     expect(container.querySelector("[data-spinner]")).not.toBeNull();
     expect(gatilho().getAttribute("aria-busy")).toBe("true");
     expect(container.textContent).not.toContain("BTG Pactual");
@@ -106,9 +107,20 @@ describe("o seletor do cliente ativo enquanto a lista dos clientes lê", () => {
     expect(container.textContent).toContain("Não carregou");
     expect(container.textContent).not.toContain("BTG Pactual");
     expect(gatilho().getAttribute("aria-label")).toBe("Cliente ativo: Não carregou. Tentar de novo");
+    // Sem a lista, o toque tenta de novo: o botão não diz que abre um menu, e o ícone é o de tentar de novo.
+    expect(gatilho().hasAttribute("aria-haspopup")).toBe(false);
+    expect(gatilho().hasAttribute("aria-expanded")).toBe(false);
+    expect(gatilho().querySelector(".lucide-refresh-cw")).not.toBeNull();
+    expect(gatilho().querySelector(".lucide-chevrons-up-down")).toBeNull();
     await tocarNoGatilho();
     expect(estado.tentar).toHaveBeenCalledTimes(1);
     expect(document.querySelector('[role="menu"]')).toBeNull();
+  });
+
+  it("no cabeçalho do celular, o seletor tem o alvo de 44 px (ele é o Tentar de novo da falha)", async () => {
+    estado.cliente = cliente({ falhou: true, erro: new Error("Falhou.") });
+    await montar("v3-cabecalho");
+    expect(gatilho().className).toContain("h-11");
   });
 
   it("sem resposta do servidor, diz Reconectando… (a falta de conexão, pelo estado único)", async () => {
@@ -120,6 +132,7 @@ describe("o seletor do cliente ativo enquanto a lista dos clientes lê", () => {
   it("lido, mostra o cliente e abre o menu", async () => {
     await montar();
     expect(container.textContent).toContain("BTG Pactual");
+    expect(gatilho().getAttribute("aria-haspopup")).toBe("menu");
     await tocarNoGatilho();
     expect(document.querySelector('[role="menu"]')).not.toBeNull();
   });
@@ -148,7 +161,8 @@ describe("o item do menu da tela que ainda abre", () => {
     );
     const item = () => container.querySelector("[data-item]")!;
     expect(item().textContent).toBe("3");
-    await espera(360);
+    // Espera o estado chegar, e não um tempo fixo: com a máquina ocupada, 360 ms logo depois do marco falham à toa.
+    for (let volta = 0; volta < 150 && !item().querySelector("[data-espera-da-rota]"); volta += 1) await espera(20);
     expect(item().querySelector("[data-espera-da-rota]")).not.toBeNull();
     expect(item().querySelector("[data-espera-da-rota]")?.getAttribute("aria-hidden")).toBe("true");
     expect(item().textContent).toBe("");
@@ -160,6 +174,20 @@ describe("o item do menu da tela que ainda abre", () => {
       ),
     );
     expect(item().textContent).toBe("3");
+  });
+
+  it("enquanto o Precisa de você lê, o contador é o bloco, fora da árvore, e nunca um número", async () => {
+    await act(async () =>
+      raiz!.render(
+        <span data-item="">
+          <ContadorOuEspera atual={false} contador={{ n: 0, lendo: true }} />
+        </span>,
+      ),
+    );
+    const bloco = container.querySelector("[data-item] [data-contador-lendo]")!;
+    expect(bloco).not.toBeNull();
+    expect(bloco.getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector("[data-item]")!.textContent).toBe("");
   });
 
   it("o item que não é o da tela fica com o contador", async () => {

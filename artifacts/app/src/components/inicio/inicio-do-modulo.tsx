@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { CartaoComBrilho, Esqueleto } from "@/components/ui/esqueleto";
 import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { FANTASMAS_SEM_LEMBRANCA, useContagemLembrada } from "@/lib/carregando/contagem-lembrada";
 import { useEsperaDaRota } from "@/lib/carregando/espera-da-rota";
+import { useChegada } from "@/lib/carregando/use-chegada";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { fraseDoInicio, type ItemDoInicio, type TomDoItem } from "@/lib/inicio-do-modulo";
 import { formatToday, greeting } from "@/lib/saudacao";
@@ -91,9 +92,17 @@ export type InicioDoModuloProps = {
    * nenhuma frase de que nada espera.
    */
   semConexao?: { lidaEm: number | null; tentando: boolean; onTentar: () => void } | null;
-  /** A nova tentativa das fontes que falharam (`falhas`): o "Tentar de novo" no aviso. */
-  tentarFalhas?: { tentando: boolean; onTentar: () => void };
+  /**
+   * A nova tentativa das leituras do Início: o "Tentar de novo" no aviso das
+   * fontes que falharam (`falhas`) e na demora da primeira leitura (10 s e
+   * 70 s). `alerta` falso quando toda fonte que falhou já tinha sido lida (a
+   * releitura que falhou): o aviso fica escrito, sem falar (momento 7).
+   */
+  tentarFalhas?: { tentando: boolean; onTentar: () => unknown; alerta?: boolean };
 };
+
+/** O id da linha que diz que o Início lê, para o "Precisa de você" apontar para ela (momento 2). */
+const ID_DA_ESPERA = "inicio-lendo";
 
 /** As formas das linhas-fantasma do "Precisa de você", em rodízio. */
 const FORMAS_DA_LINHA_FANTASMA = [
@@ -150,6 +159,14 @@ export function InicioDoModulo({ nome, hoje, noModulo, itens, carregando, falhas
   const lembrada = useContagemLembrada(`inicio:${noModulo}`, "todos", lida ? { precisa: itens.length } : null);
   const reservada = fraseDoInicio(lembrada.lembrada("precisa") ?? FANTASMAS_SEM_LEMBRANCA, noModulo);
   const fraseReservada = [reservada.destaque, reservada.resto].filter(Boolean).join(" ");
+  // Na última leitura, nada esperava a pessoa: o "Precisa de você" não nasce lendo para sumir quando ela chega vazia,
+  // e o que está ao lado e embaixo não salta (só a primeira visita, sem lembrança, pode errar).
+  const nadaNaUltima = lembrada.lembrada("precisa") === 0;
+  // A chegada (momento 2): as linhas reais entram por opacidade, com a subida de 4 px e a cascata de 30 ms.
+  const secao = useRef<HTMLElement>(null);
+  const chegando = useChegada(carregando, secao);
+  // Com uma fonte que falhou e nada na lista, a frase não diz "Nada parado": o aviso da falha fala.
+  const semFrase = semNadaLido || (falhas.length > 0 && itens.length === 0);
   return (
     <div className="flex flex-col gap-7">
       <header className="flex flex-col gap-1.5">
@@ -158,8 +175,7 @@ export function InicioDoModulo({ nome, hoje, noModulo, itens, carregando, falhas
           {greeting(hoje)}
           {primeiroNome ? `, ${primeiroNome}` : ""}
         </h1>
-        {/* Com uma fonte que falhou e nada na lista, a frase não diz "Nada parado": o aviso da falha fala. */}
-        {semNadaLido || (falhas.length > 0 && itens.length === 0) ? null : carregando ? (
+        {semFrase ? null : carregando ? (
           // No lugar da frase, com a altura dela: nunca "nada espera" antes de ler (momento 2). A frase da última
           // leitura guarda o lugar, invisível e fora da árvore (só no CSS, sem texto no documento): no celular, onde
           // ela quebra em duas linhas, nada desce quando ela chega.
@@ -170,10 +186,16 @@ export function InicioDoModulo({ nome, hoje, noModulo, itens, carregando, falhas
               data-frase={fraseReservada}
               className="invisible col-start-1 row-start-1 text-lg before:content-[attr(data-frase)]"
             />
-            <CarregandoNaRegiao rotulo="Carregando o que precisa de você…" continuaARota className="col-start-1 row-start-1 min-h-7" />
+            <CarregandoNaRegiao
+              id={ID_DA_ESPERA}
+              rotulo="Carregando o que precisa de você…"
+              continuaARota
+              onTentar={tentarFalhas ? () => void tentarFalhas.onTentar() : undefined}
+              className="col-start-1 row-start-1 min-h-7"
+            />
           </div>
         ) : (
-          <p className="text-lg text-muted-foreground">
+          <p className="text-lg text-muted-foreground" data-chegada-vazio={chegando ? "" : undefined}>
             {frase.destaque ? <strong className="font-extrabold text-destructive-soft-foreground">{frase.destaque}</strong> : null}
             {frase.destaque ? " " : null}
             {frase.resto}
@@ -193,6 +215,7 @@ export function InicioDoModulo({ nome, hoje, noModulo, itens, carregando, falhas
             mensagem={`Não foi possível carregar: ${falhas.join(", ")}.`}
             tentando={tentarFalhas.tentando}
             onTentar={tentarFalhas.onTentar}
+            alerta={tentarFalhas.alerta ?? true}
             tom="aviso"
             className="rounded-lg border border-warning-soft-border bg-warning-soft px-4 py-3"
           />
@@ -204,17 +227,19 @@ export function InicioDoModulo({ nome, hoje, noModulo, itens, carregando, falhas
       ) : null}
 
       <div className="flex flex-wrap items-start gap-7">
-        {!semNadaLido && (carregando || itens.length) ? (
+        {!semNadaLido && ((carregando && !nadaNaUltima) || itens.length) ? (
           <section
+            ref={secao}
             aria-labelledby="precisa-de-voce"
             aria-busy={carregando || undefined}
+            aria-describedby={carregando && !semFrase ? ID_DA_ESPERA : undefined}
             className="flex min-w-0 flex-[2.2_1_560px] flex-col gap-3.5"
           >
             <TituloDaSecao id="precisa-de-voce">Precisa de você</TituloDaSecao>
             {carregando ? (
               <PrecisaCarregando visivel={fantasmas} linhas={lembrada.linhas("precisa")} />
             ) : (
-              <ul className="rounded-lg border border-border bg-card">
+              <ul className="rounded-lg border border-border bg-card" data-chegada={chegando ? "" : undefined}>
                 {itens.map((item, indice) => (
                   <LinhaDoPrecisa key={item.id} item={item} principal={indice === 0} />
                 ))}

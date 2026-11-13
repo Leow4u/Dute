@@ -19,6 +19,7 @@ import {
   type ActiveCustomerOption,
 } from "./active-customer";
 import { useAppUser } from "./auth";
+import { useLeituraComFalha } from "./carregando/use-leitura-com-falha";
 import { lerDocsDoServidor } from "./cloud-api";
 import { firestore } from "./firebase";
 import { AGENTE_LIBERADO } from "./liberacao";
@@ -116,7 +117,7 @@ export function ActiveCustomerProvider({ children }: { children: ReactNode }) {
   const commercial = role === "comercial" && AGENTE_LIBERADO;
   const storageKey = activeCustomerStorageKey(user?.uid);
 
-  const profiles = useQuery({
+  const leitura = useQuery({
     queryKey: commercial ? COMMERCIAL_CUSTOMERS_QUERY_KEY : CLIENT_PROFILES_QUERY_KEY,
     enabled: internal || commercial,
     staleTime: 5 * 60_000,
@@ -134,6 +135,9 @@ export function ActiveCustomerProvider({ children }: { children: ReactNode }) {
     setStored(readStored(storageKey));
   }, [storageKey]);
 
+  // A nova tentativa sem dado não volta a "carregando": a falha fica, com "Tentando de novo", até a leitura responder
+  // (o react-query 5 a voltaria a "pending", e o seletor piscaria entre o bloco e "Não carregou").
+  const profiles = useLeituraComFalha(leitura);
   const options = useMemo(
     () => (commercial ? commercialCustomerOptions(profiles.data) : activeCustomerOptions(profiles.data)),
     [commercial, profiles.data],
@@ -148,11 +152,11 @@ export function ActiveCustomerProvider({ children }: { children: ReactNode }) {
     [storageKey],
   );
 
-  const isLoading = (internal || commercial) && profiles.isPending;
+  const isLoading = (internal || commercial) && profiles.isPending && !profiles.isError;
   const falhou = (internal || commercial) && profiles.isError && profiles.data === undefined;
   const erro = falhou ? profiles.error : null;
   const tentando = falhou && profiles.isFetching;
-  const { refetch } = profiles;
+  const { refetch } = leitura;
   const tentar = useCallback(() => {
     void refetch();
   }, [refetch]);

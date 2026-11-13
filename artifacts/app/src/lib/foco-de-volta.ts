@@ -94,6 +94,43 @@ export function focarSemRolar(elemento: HTMLElement) {
   if (foraDaVista(elemento) && typeof elemento.scrollIntoView === "function") elemento.scrollIntoView({ block: "nearest" });
 }
 
+/**
+ * O lugar do foco quando o aviso da falha sai da tela com ele (a nova
+ * tentativa que deu certo; carregamento v2, parte 13e): o título da seção ou
+ * do diálogo onde o aviso morava e, sem ele, o título da página. Dentro do
+ * diálogo, nunca fora dele.
+ */
+export function lugarDaSecao(elemento: HTMLElement): HTMLElement | null {
+  const caixa = elemento.closest<HTMLElement>('[role="dialog"], [role="alertdialog"], section, [role="region"]');
+  const titulo = caixa?.querySelector<HTMLElement>("h1, h2, h3, h4, h5, h6");
+  if (titulo) return titulo;
+  if (caixa?.matches('[role="dialog"], [role="alertdialog"]')) return caixa;
+  return lugarPadraoDoFoco(elemento.ownerDocument);
+}
+
+/**
+ * O foco que estava dentro de `elemento` quando ele sai da tela não fica no
+ * `body` (WCAG 2.4.3): depois do commit, se o foco caiu, ele vai ao `destino`
+ * (lido agora, com o elemento ainda na tela) ou, se o destino também saiu, ao
+ * título da página. Para chamar no fim do `useLayoutEffect`, que roda antes
+ * de o elemento sair.
+ */
+export function segurarOFocoQueSai(
+  elemento: HTMLElement,
+  destino: HTMLElement | null | (() => HTMLElement | null | undefined) = lugarDaSecao(elemento),
+) {
+  const documento = elemento.ownerDocument;
+  if (!elemento.contains(documento.activeElement)) return;
+  queueMicrotask(() => {
+    const ativo = documento.activeElement;
+    if (ativo && ativo !== documento.body && ativo.isConnected) return;
+    // O destino que só entra na tela com a saída (o "Editar" que volta no lugar do formulário) é lido depois dela.
+    const preferido = typeof destino === "function" ? destino() : destino;
+    const alvo = [preferido, lugarPadraoDoFoco(documento)].find(podeReceberFoco);
+    if (alvo) focarSemRolar(alvo);
+  });
+}
+
 /** O primeiro lugar que ainda pode receber o foco: o pedido por quem usa, os vizinhos e o título. */
 function destinoNoLugar(documento: Document, lugar?: () => HTMLElement | null | undefined, vizinhos: readonly HTMLElement[] = []) {
   return [lugar?.(), ...vizinhos, lugarPadraoDoFoco(documento)].find(podeReceberFoco);

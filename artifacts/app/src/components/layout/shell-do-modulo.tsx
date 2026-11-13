@@ -6,6 +6,7 @@ import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { SeletorDeModulo } from "@/components/layout/seletor-de-modulo";
 import { Spinner } from "@/components/ui/spinner";
 import { ehTelaDoAgente } from "@/lib/agente/navegacao";
+import { Esqueleto } from "@/components/ui/esqueleto";
 import { useRotaEsperando } from "@/lib/carregando/espera-da-rota";
 import { useConexao } from "@/lib/carregando/estado-da-conexao";
 import { useEspera } from "@/lib/carregando/use-espera";
@@ -131,6 +132,8 @@ export function ContadorOuEspera({ atual, contador }: { atual: boolean; contador
 }
 
 function Contador({ contador }: { contador: ContadorDoItem | undefined }) {
+  // Lendo, o bloco no lugar do número, no branco a 12% da barra preta (decorativo).
+  if (contador?.lendo) return <Esqueleto forma="contagem" data-contador-lendo="" className="ml-auto shrink-0" />;
   if (!contador || contador.n <= 0) return null;
   return (
     <span

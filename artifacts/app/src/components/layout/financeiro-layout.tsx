@@ -41,7 +41,7 @@ export default function FinanceiroLayout({ children }: { children: ReactNode }) 
       atual={moduloAberto(location) ?? { label: "Financeiro", icon: Receipt }}
       opcoes={opcoesDoSeletor(role, profile, location)}
       items={menu}
-      contadores={contadoresDoMenu(inicio.itens, menu, "financeiro-inicio")}
+      contadores={contadoresDoMenu(inicio.itens, menu, "financeiro-inicio", inicio.carregando)}
       basePath={basePath}
       abaixoDoSeletor={
         ehTelaDoAgente(location)

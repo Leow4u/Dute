@@ -41,7 +41,7 @@ export default function ComercialLayout({ children }: { children: ReactNode }) {
       atual={moduloAberto(location) ?? { label: "Comercial", icon: Briefcase }}
       opcoes={opcoesDoSeletor(role, profile, location)}
       items={menu}
-      contadores={contadoresDoMenu(inicio.itens, menu, "comercial-inicio")}
+      contadores={contadoresDoMenu(inicio.itens, menu, "comercial-inicio", inicio.carregando)}
       basePath={basePath}
       abaixoDoSeletor={
         ehTelaDoAgente(location)

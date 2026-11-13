@@ -244,6 +244,7 @@ describe("destinatários de avisos na página do cliente, em Configurações ›
     expect(secao().textContent).not.toContain("Nenhum contato cadastrado.");
     await esperar(() => expect(secao().textContent).toContain("Carregando contatos…"));
     expect(secao().textContent).not.toContain("Nenhum contato cadastrado.");
+    expect(textosForaDaLista(secao().innerHTML, ["Avisos por e-mail", "Novo contato", "Carregando contatos…"])).toEqual([]);
     await act(async () => assinatura().error());
     expect(secao().querySelector('[role="alert"]')?.textContent).toContain("Não foi possível carregar os contatos.");
     expect(secao().textContent).not.toContain("Nenhum contato cadastrado.");
@@ -396,11 +397,12 @@ describe("destinatários de avisos na página do cliente, em Configurações ›
 
   it("a seção e a edição: um diálogo só para o contato, textos previstos e acessibilidade", async () => {
     await abrir();
-    await publicar([CONTATO]);
+    await publicar([CONTATO, { ...CONTATO, id: "ct_rui", nome: "Rui Matos", email: "rui@btg.example", ativo: false }]);
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(0);
     expect(textosForaDaLista(secao().innerHTML, [
-      "Avisos por e-mail", "Novo contato", CONTATO.nome, CONTATO.email,
-      "Ativo", "Editar", "Desativar", "Desativando…", "Conferir", "Itens parados", "Produtos disponíveis em estoque", "Gestor do cliente",
+      "Avisos por e-mail", "Novo contato", CONTATO.nome, CONTATO.email, "Rui Matos", "rui@btg.example",
+      "Ativo", "Desativado", "Editar", "Desativar", "Desativando…", "Reativar", "Reativando…", "Conferir", "Itens parados",
+      "Produtos disponíveis em estoque", "Gestor do cliente",
     ])).toEqual([]);
     expect(await violacoesDeAcessibilidade(document.body.innerHTML)).toEqual([]);
     await tocar("Editar", linhaDoContato());

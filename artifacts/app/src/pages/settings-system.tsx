@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import { BUILD_COMMIT, BUILD_TIME } from "@/lib/build-info";
 import { useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { humanApiError } from "@/lib/permissions";
@@ -277,10 +278,11 @@ export default function SettingsSystem() {
         actions={
           <BotaoDeAcao
             variant="outline"
+            className="max-md:min-h-11"
             icone={<RefreshCw aria-hidden="true" />}
             estado={verificando ? "andamento" : "repouso"}
             rotulo="Verificar agora"
-            andamento="Verificando…"
+            andamento="Verificando o sistema…"
             onClick={verificarAgora}
           />
         }
@@ -313,9 +315,14 @@ export default function SettingsSystem() {
           </Button>
         </div>
         {health.isLoading ? (
-          <CarregandoNaRegiao rotulo="Carregando incidentes…" continuaARota className="px-5 py-4" />
+          <CarregandoNaRegiao
+            rotulo="Carregando incidentes…"
+            continuaARota
+            onTentar={() => void relerDoZero(queryClient, [["system-health"]])}
+            className="px-5 py-4"
+          />
         ) : health.isError && !check ? (
-          <FalhaNaSecao mensagem="Sem resposta do servidor." tentando={health.isFetching} onTentar={() => void leituraDaSaude.refetch()} className="px-5 py-4" />
+          <FalhaNaSecao mensagem="Sem resposta do servidor." tentando={health.isFetching} onTentar={() => leituraDaSaude.refetch()} className="px-5 py-4" />
         ) : incidents.length ? (
           <ul>
             {incidents.map((item) => {
@@ -373,14 +380,16 @@ export default function SettingsSystem() {
             <BotaoDeAcao
               size="sm"
               variant="outline"
+              className="max-md:min-h-11"
               estado={numerando === "ver" ? "andamento" : "repouso"}
               bloqueado={numerando === "aplicar"}
               rotulo="Ver o que muda"
-              andamento="Verificando…"
+              andamento="Conferindo a numeração…"
               onClick={() => assignNumbers.mutate(false)}
             />
             <BotaoDeAcao
               size="sm"
+              className="max-md:min-h-11"
               estado={numerando === "aplicar" ? "andamento" : "repouso"}
               bloqueado={numerando === "ver" || (numerando === null && (!numbering?.dry_run || !numbering.assigned_count))}
               rotulo="Numerar agora"

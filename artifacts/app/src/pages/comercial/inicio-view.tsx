@@ -61,6 +61,7 @@ export function InicioDoComercialView({ nome, hoje, inicio }: { nome: string; ho
       carregando={inicio.carregando}
       falhas={inicio.falhas}
       lateral={lateral}
+      tentarFalhas={inicio.reler ? { tentando: Boolean(inicio.relendo), onTentar: inicio.reler, alerta: !inicio.falhaSoNaReleitura } : undefined}
     />
   );
 }

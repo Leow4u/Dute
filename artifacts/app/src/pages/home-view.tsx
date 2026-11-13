@@ -19,18 +19,20 @@ export type InicioDoWms = {
   /** Sem rede (decisão 2 do celular): a hora da leitura na tela, ou `null` sem nada lido. */
   semConexao?: { lidaEm: number | null; tentando: boolean; onTentar: () => void } | null;
   /** A nova tentativa das fontes que falharam. */
-  tentarFalhas?: { tentando: boolean; onTentar: () => void };
+  tentarFalhas?: { tentando: boolean; onTentar: () => unknown; alerta?: boolean };
 };
 
 /**
  * O dia no armazém com a forma final desde a primeira pintura (carregamento
  * v2, parte 13e, e a prancha da abertura): o título e os rótulos reais e,
- * no lugar de cada número ainda não lido, o bloco do esqueleto; nunca o zero
- * antes de ler. O total de SKUs lê à parte (o painel): lendo, o bloco; sem
- * leitura, "—".
+ * no lugar de cada número ainda não lido, o bloco do esqueleto, do tamanho do
+ * número de 24 px (28 × 18); nunca o zero antes de ler. Sem o armazém lido (a
+ * leitura falhou), "—": o aviso da falha diz por quê. O total de SKUs lê à
+ * parte (o painel): lendo, o bloco; sem leitura, "—".
  */
 function NumerosDoArmazem({ hoje, carregando }: { hoje: HojeNoArmazem; carregando: boolean }) {
-  const numero = (valor: number) => (carregando ? <Esqueleto forma="contagem" /> : valor);
+  const bloco = <Esqueleto forma="contagem" className="h-4.5 w-7" />;
+  const numero = (valor: number) => (carregando ? bloco : hoje.lido === false ? "—" : valor);
   return (
     <section aria-labelledby="hoje-no-armazem" aria-busy={carregando || undefined} className="flex flex-col gap-3.5">
       <TituloDaSecao id="hoje-no-armazem">Hoje no armazém</TituloDaSecao>
@@ -42,7 +44,7 @@ function NumerosDoArmazem({ hoje, carregando }: { hoje: HojeNoArmazem; carregand
         <LinhaDeNumero
           ponto="bg-success-soft-foreground"
           rotulo="SKUs em estoque"
-          valor={hoje.skus !== null ? hoje.skus : hoje.skusLendo ? <Esqueleto forma="contagem" /> : "—"}
+          valor={hoje.skus !== null ? hoje.skus : hoje.skusLendo ? bloco : "—"}
         />
       </ul>
     </section>

@@ -140,7 +140,7 @@ describe("Pessoas e acessos lendo", () => {
     estado.usuariosPresos = true;
     await abrir();
     expect(container.textContent).not.toContain("Carregando pessoas…");
-    await espera(360);
+    await esperar(() => Boolean(container.textContent?.includes("Carregando pessoas…")), "a espera aos 300 ms");
     expect(container.textContent).toContain("Carregando pessoas…");
     expect(container.querySelector("[data-carregando-na-regiao] [data-spinner]")).not.toBeNull();
     expect(container.querySelector('[role="status"]')).toBeNull();
@@ -158,7 +158,7 @@ describe("Pessoas e acessos sem conexão", () => {
     expect(container.textContent).toContain("Tentar de novo");
   });
 
-  it("a releitura que falha não apaga a lista lida", async () => {
+  it("a releitura que falha não apaga a lista lida, e a falha fica escrita em cima dela, sem falar", async () => {
     await abrir();
     await esperar(() => Boolean(linhaDe("Paula Souza")), "a lista");
     estado.usuariosFalham = true;
@@ -168,6 +168,16 @@ describe("Pessoas e acessos sem conexão", () => {
     await espera(30);
     expect(linhaDe("Paula Souza")).toBeTruthy();
     expect(container.textContent).not.toContain("Não foi possível carregar as pessoas e os convites.");
+    // Erro nunca some: a falha da releitura fica escrita, com a nova tentativa, fora de região viva (momento 7).
+    const falha = container.querySelector<HTMLElement>("[data-falha-na-secao]");
+    expect(falha?.textContent).toContain("Não foi possível atualizar as pessoas.");
+    expect(falha?.querySelector('[role="alert"]')).toBeNull();
+    expect(textosForaDaLista(falha!.outerHTML, ["Não foi possível atualizar as pessoas.", "Tentar de novo", "Tentando de novo…"])).toEqual([]);
+    // A nova tentativa que dá certo tira a falha.
+    estado.usuariosFalham = false;
+    await act(async () => [...falha!.querySelectorAll("button")].find((botao) => botao.textContent === "Tentar de novo")!.click());
+    await esperar(() => !container.querySelector("[data-falha-na-secao]"), "a falha sair");
+    expect(linhaDe("Paula Souza")).toBeTruthy();
   });
 });
 
@@ -182,9 +192,10 @@ describe("a ação do menu na linha da pessoa", () => {
     const cancelar = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) => item.textContent === "Cancelar convite")!;
     await act(async () => cancelar.click());
     await esperar(() => estado.cancelamentos.length === 1, "o pedido de cancelamento");
-    await espera(360);
+    await esperar(() => Boolean(linhaDe("Paula Souza")?.textContent?.includes("Cancelando o convite…")), "o gerúndio na linha");
     const linha = linhaDe("Paula Souza")!;
     expect(linha.textContent).toContain("Cancelando o convite…");
+    expect(textosForaDaLista(linha.querySelector("[data-andamento-na-linha]")!.outerHTML, ["Cancelando o convite…"])).toEqual([]);
     const gatilho = linha.querySelector<HTMLButtonElement>('button[aria-label="Cancelando o convite de Paula Souza"]')!;
     expect(gatilho).toBeTruthy();
     expect(gatilho.getAttribute("aria-busy")).toBe("true");

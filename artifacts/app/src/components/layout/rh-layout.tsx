@@ -38,7 +38,7 @@ export default function RhLayout({ children }: { children: ReactNode }) {
       atual={moduloAberto(location) ?? { label: "RH", icon: Users }}
       opcoes={opcoesDoSeletor(role, profile, location)}
       items={menu}
-      contadores={contadoresDoMenu(inicio.itens, menu, "rh-inicio")}
+      contadores={contadoresDoMenu(inicio.itens, menu, "rh-inicio", inicio.carregando)}
       basePath={basePath}
       conta={(compact) => (
         <AccountMenu basePath={basePath} compact={compact} cabecalho={compact} variante="v3" signOut={signOut} user={user} />

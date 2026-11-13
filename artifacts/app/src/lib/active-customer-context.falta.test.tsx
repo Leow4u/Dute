@@ -114,4 +114,27 @@ describe("a lista dos clientes do seletor que não veio", () => {
     await act(async () => ultimo().tentar());
     await esperar(() => leituras.mock.calls.length === 2, "a nova leitura");
   });
+
+  it("a nova tentativa sem dado fica na falha, com tentando, e nunca volta a carregando (nem pisca o bloco)", async () => {
+    estado.papel = "admin";
+    let responder: () => void = () => undefined;
+    const leituras = vi.fn(async () => {
+      if (leituras.mock.calls.length > 1) await new Promise<void>((pronto) => (responder = pronto));
+      return new Response(JSON.stringify({ message: "Falhou." }), { status: 500 });
+    });
+    vi.stubGlobal("fetch", leituras);
+    await montar();
+    await esperar(() => ultimo().falhou, "a falha chegar");
+    const { tentar } = ultimo();
+    visto = [];
+    await act(async () => tentar());
+    await esperar(() => leituras.mock.calls.length === 2, "a nova leitura");
+    await esperar(() => visto.length > 0 && ultimo().tentando, "o tentando");
+    expect(visto.some((quem) => quem.isLoading)).toBe(false);
+    expect(ultimo().falhou).toBe(true);
+    await act(async () => responder());
+    await esperar(() => !ultimo().tentando, "a nova falha");
+    expect(ultimo().falhou).toBe(true);
+    expect(visto.some((quem) => quem.isLoading)).toBe(false);
+  });
 });

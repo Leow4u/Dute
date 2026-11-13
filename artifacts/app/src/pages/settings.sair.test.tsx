@@ -25,6 +25,8 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 import { SettingsAccount } from "./settings";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { textosForaDaLista } from "@/test/textos";
 
 let raiz: Root | null = null;
 let container: HTMLDivElement;
@@ -53,12 +55,20 @@ describe("o Sair da conta", () => {
       (botao) => botao.querySelector(".botao-acao-camada[data-atual]")?.textContent === "Sair",
     )!;
     expect(sair).toBeTruthy();
+    // No celular, o alvo de 44 px.
+    expect(sair.className).toContain("max-md:min-h-11");
     await act(async () => sair.click());
-    await act(async () => new Promise((pronto) => setTimeout(pronto, 360)));
+    // Espera o estado chegar, e não um tempo fixo: com a máquina ocupada, 360 ms logo depois do marco falham à toa.
+    for (let volta = 0; volta < 150 && sair.getAttribute("aria-busy") !== "true"; volta += 1) {
+      await act(async () => new Promise((pronto) => setTimeout(pronto, 20)));
+    }
     expect(sair.getAttribute("aria-busy")).toBe("true");
     expect(sair.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Saindo…");
     expect(sair.disabled).toBe(false);
     await act(async () => sair.click());
     expect(estado.saidas).toBe(1);
+    // O rótulo novo entra na trava dos textos (as camadas do botão também), e o andamento passa no axe.
+    expect(textosForaDaLista(sair.outerHTML, ["Sair", "Saindo…", "Conferir"])).toEqual([]);
+    expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
   });
 });

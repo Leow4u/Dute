@@ -31,9 +31,10 @@ export function itensDoInicioDoWms(items: readonly HomeInboxItem[]): ItemDoInici
   return items.map((item) => ({ ...item, icon: ICONE_DO_ITEM[item.id] ?? ICONE_DO_TOM[item.tone] }));
 }
 
-/** `skus` null enquanto o total não chegou ou quando a leitura falhou: o Início não inventa zero. */
 /**
  * Os números do dia. `skus` nulo: o total não foi lido (o painel); com
- * `skusLendo`, ainda lê, e a linha mostra o bloco, nunca o zero.
+ * `skusLendo`, ainda lê, e a linha mostra o bloco, nunca o zero. `lido`
+ * falso: o armazém não foi lido (a leitura falhou), e os quatro números do
+ * dia ficam "—", nunca o zero do resumo vazio.
  */
-export type HojeNoArmazem = HomeSummary & { skus: number | null; skusLendo?: boolean };
+export type HojeNoArmazem = HomeSummary & { skus: number | null; skusLendo?: boolean; lido?: boolean };

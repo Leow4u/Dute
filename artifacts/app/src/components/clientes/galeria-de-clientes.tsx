@@ -5,7 +5,8 @@ import { MODULO_ROTULO } from "@workspace/dominio";
 import { Codigo, Pilula, QuadroDoCliente, Selo, SeloDaSituacao } from "@/components/clientes/partes";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Esqueleto } from "@/components/ui/esqueleto";
 import { Input } from "@/components/ui/input";
 import {
@@ -46,7 +47,21 @@ export type GaleriaProps = {
   /** Módulos contratados no cartão, onde a plataforma está liberada. */
   comModulos: boolean;
   onNovo: () => void;
+  /**
+   * A nova tentativa das leituras dos números (as prateleiras e as pessoas):
+   * na falha, o aviso com "Tentar de novo" em cima dos cartões, que mostram
+   * "—"; na demora da leitura dos clientes, o "Tentar de novo" dos 10 s.
+   */
+  tentarLeituras?: { tentando: boolean; onTentar: () => unknown };
+  /** A leitura dos clientes falhou por falta de conexão: o aviso da conexão, e não o erro vermelho. */
+  semConexao?: boolean;
 };
+
+/** O que não foi lido, em palavras: a falha dos números nunca fica só no "—" dos cartões. */
+function falhaDosNumeros(zonas: GaleriaProps["zonas"], pessoas: NonNullable<GaleriaProps["pessoas"]>): string | null {
+  const fontes = [zonas === "erro" ? "as prateleiras" : null, pessoas === "erro" ? "as pessoas" : null].filter(Boolean);
+  return fontes.length ? `Não foi possível ler ${fontes.join(" e ")}.` : null;
+}
 
 const VAZIO_DO_FILTRO: Record<CustomerFilter, string> = {
   todos: "Nenhum cliente ativo",
@@ -168,7 +183,24 @@ function CartaoDoCliente({
   );
 }
 
-export function GaleriaDeClientes({ estado, erro, tentando, onTentar, rows, filtro, onFiltro, busca, onBusca, zonas, pessoas = "pronto", comModulos, onNovo }: GaleriaProps) {
+export function GaleriaDeClientes({
+  estado,
+  erro,
+  tentando,
+  onTentar,
+  rows,
+  filtro,
+  onFiltro,
+  busca,
+  onBusca,
+  zonas,
+  pessoas = "pronto",
+  comModulos,
+  onNovo,
+  tentarLeituras,
+  semConexao = false,
+}: GaleriaProps) {
+  const falhaNosNumeros = estado === "pronto" && rows.length > 0 ? falhaDosNumeros(zonas, pessoas) : null;
   const contagem = countCustomerFilters(rows);
   const visiveis = searchCustomerRows(
     rows.filter((row) => customerInFilter(row, filtro)),
@@ -220,8 +252,10 @@ export function GaleriaDeClientes({ estado, erro, tentando, onTentar, rows, filt
 
       {estado === "carregando" ? (
         <div className="rounded-lg border border-border bg-card px-5 py-5">
-          <CarregandoNaRegiao rotulo="Carregando clientes…" continuaARota />
+          <CarregandoNaRegiao rotulo="Carregando clientes…" continuaARota onTentar={onTentar} />
         </div>
+      ) : estado === "erro" && semConexao ? (
+        <BlocoSemConexao tentando={tentando} onTentar={onTentar} />
       ) : estado === "erro" ? (
         <ErroNaLeitura mensagem={erro ?? "Não foi possível carregar os clientes."} tentando={tentando} onTentar={onTentar} />
       ) : rows.length === 0 ? (
@@ -233,11 +267,21 @@ export function GaleriaDeClientes({ estado, erro, tentando, onTentar, rows, filt
           {busca.trim() ? "Nenhum cliente encontrado" : VAZIO_DO_FILTRO[filtro]}
         </p>
       ) : (
+        <>
+          {falhaNosNumeros && tentarLeituras ? (
+            <FalhaNaSecao
+              mensagem={falhaNosNumeros}
+              tentando={tentarLeituras.tentando}
+              onTentar={tentarLeituras.onTentar}
+              className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+            />
+          ) : null}
         <ul aria-label="Clientes" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {visiveis.map((row) => (
             <CartaoDoCliente key={row.code} row={row} comModulos={comModulos} zonas={zonas} pessoas={pessoas} />
           ))}
         </ul>
+        </>
       )}
     </div>
   );

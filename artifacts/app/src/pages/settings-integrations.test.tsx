@@ -5,6 +5,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 const mocks = vi.hoisted(() => ({ create: vi.fn(), revoke: vi.fn(), list: vi.fn(), capabilities: vi.fn(), role: 'cliente' }));
 vi.mock('@/lib/integracoes/api', () => ({ criarChavePessoal: mocks.create, revogarChavePessoal: mocks.revoke, listarChavesPessoais: mocks.list, obterCapabilities: mocks.capabilities, INTEGRACOES_API_BASE: 'https://example.invalid/api/v1' }));
+vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: () => undefined }) }));
 vi.mock('@/lib/auth', () => ({ useAppUser: () => ({ user: { uid: 'user', publicMetadata: { role: mocks.role } } }) }));
 import SettingsIntegrations from './settings-integrations';
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -54,11 +55,23 @@ it('lista descreve full e somente leitura como acesso da conta mesmo sem escopos
 const espera = (ms: number) => act(async () => new Promise(resolve => setTimeout(resolve, ms)));
 const camada = (button: Element | null | undefined) => button?.querySelector('.botao-acao-camada[data-atual]')?.textContent;
 
+it('as permissões lendo, no diálogo: Carregando permissões… com a caixa, sem role=status solto', async () => {
+  const { textosForaDaLista } = await import('@/test/textos');
+  mocks.capabilities.mockReturnValue(new Promise(() => undefined));
+  await render();
+  await click('Criar chave de API');
+  await wait(() => expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Carregando permissões…'));
+  const dialogo = document.querySelector('[role="dialog"]')!;
+  expect(dialogo.querySelector('[data-carregando-na-regiao] [data-spinner]')).not.toBeNull();
+  expect(textosForaDaLista(dialogo.outerHTML, ['Criar chave de API', 'Defina o nome e a permissão da sua chave pessoal.', 'Carregando permissões…', 'Fechar'])).toEqual([]);
+});
+
 it('a lista lendo: Carregando chaves… com a caixa aos 300 ms, sem role=status solto', async () => {
   mocks.list.mockReturnValue(new Promise(() => undefined));
   await act(async () => root.render(<QueryClientProvider client={client}><SettingsIntegrations /></QueryClientProvider>));
   expect(container.textContent).not.toContain('Carregando chaves…');
-  await espera(360);
+  // Espera o estado chegar, e não um tempo fixo: com a máquina ocupada, 360 ms logo depois do marco falham à toa.
+  await wait(() => expect(container.textContent).toContain('Carregando chaves…'));
   expect(container.textContent).toContain('Carregando chaves…');
   expect(container.querySelector('[data-carregando-na-regiao] [data-spinner]')).not.toBeNull();
   expect(container.querySelector('[role="status"]')).toBeNull();
@@ -77,7 +90,7 @@ it('criar: Criando… com aria-busy, o Cancelar aria-disabled e o diálogo preso
   await form();
   mocks.create.mockReturnValue(new Promise(() => undefined));
   await click('Criar chave');
-  await espera(360);
+  await wait(() => expect(document.querySelector('[role="dialog"] button[aria-busy="true"]')).not.toBeNull());
   const dialogo = document.querySelector('[role="dialog"]')!;
   const criar = dialogo.querySelector<HTMLButtonElement>('button[aria-busy="true"]')!;
   expect(camada(criar)).toBe('Criando…');
@@ -98,8 +111,10 @@ it('revogar: Revogando… com aria-busy, o Cancelar aria-disabled e a confirmaç
   await wait(() => expect(container.textContent).toContain('dute_abc…'));
   await click('Revogar');
   await click('Revogar chave');
-  await espera(360);
+  await wait(() => expect(document.querySelector('[role="alertdialog"] button[aria-busy="true"]')).not.toBeNull());
   const confirmacao = document.querySelector('[role="alertdialog"]')!;
+  const { textosForaDaLista } = await import('@/test/textos');
+  expect(textosForaDaLista(confirmacao.outerHTML, ['Revogar chave?', /^A chave Antiga perderá o acesso imediatamente\./, 'Cancelar', 'Revogar chave', 'Revogando…', 'Conferir', 'Fechar'])).toEqual([]);
   const revogar = confirmacao.querySelector<HTMLButtonElement>('button[aria-busy="true"]')!;
   expect(camada(revogar)).toBe('Revogando…');
   expect(revogar.disabled).toBe(false);
@@ -110,4 +125,80 @@ it('revogar: Revogando… com aria-busy, o Cancelar aria-disabled e a confirmaç
   expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
   await act(async () => soltar());
   await wait(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
+});
+
+const UMA_CHAVE = { id: 'b'.repeat(32), name: 'Integração', token_prefix: 'dute_int…', permission: 'full', kind: 'personal', scopes: [], created_at: null, last_used_at: null, expires_at: '2099-01-01', revoked: false, write_policy: 'scoped' };
+const TEXTOS_DA_TELA = [
+  'Chaves de API', 'Gerencie as chaves pessoais que acessam o Dute em seu nome.', 'Criar chave de API', 'Cada chave acompanha o acesso atual da sua conta.',
+  'Documentação da API', 'Buscar chave', 'Status', 'Todas', 'Ativa', 'Expirada', 'Revogada', 'Nome e chave', 'Permissão', 'Criada em', 'Validade',
+  'Último uso', 'Ações', 'Integração', 'dute_int…', 'Acesso total', 'Acompanha as permissões atuais da conta.', '—', 'Nunca', 'Revogar', 'Suas chaves de API',
+  'Carregando chaves…', 'Carregando…', 'Carregar mais', 'Não carregou', 'Não foi possível carregar mais chaves.', 'Não foi possível atualizar as chaves.',
+  'Tentar de novo', 'Tentando de novo…', 'Conferir', /^\d{2}\/\d{2}\/\d{4}, /,
+];
+
+it('a releitura que falha com a lista na tela: a lista fica, e a falha escrita em cima, sem falar', async () => {
+  const { textosForaDaLista } = await import('@/test/textos');
+  mocks.list.mockResolvedValueOnce({ data: [UMA_CHAVE], next_cursor: null }).mockRejectedValueOnce(new Error('Falhou.'));
+  await act(async () => root.render(<QueryClientProvider client={client}><SettingsIntegrations /></QueryClientProvider>));
+  await wait(() => expect(container.textContent).toContain('dute_int…'));
+  await act(async () => { await client.refetchQueries({ queryKey: ['personal-api-keys', 'user'] }).catch(() => undefined); });
+  await wait(() => expect(container.querySelector('[data-falha-na-secao]')?.textContent).toContain('Não foi possível atualizar as chaves.'));
+  expect(container.textContent).toContain('dute_int…');
+  expect(container.querySelector('[data-falha-na-secao] [role="alert"]')).toBeNull();
+  expect(textosForaDaLista(container.innerHTML, TEXTOS_DA_TELA)).toEqual([]);
+});
+
+it('a página seguinte que não veio: o botão diz Não carregou, e o motivo fica escrito, falado uma vez', async () => {
+  const { textosForaDaLista } = await import('@/test/textos');
+  const { violacoesDeAcessibilidade } = await import('@/test/acessibilidade');
+  mocks.list.mockResolvedValueOnce({ data: [UMA_CHAVE], next_cursor: 'c2' }).mockRejectedValueOnce(new Error('Falhou.'));
+  await act(async () => root.render(<QueryClientProvider client={client}><SettingsIntegrations /></QueryClientProvider>));
+  await wait(() => expect(container.textContent).toContain('dute_int…'));
+  await click('Carregar mais');
+  await wait(() => expect(container.querySelector('[role="alert"]')?.textContent).toBe('Não foi possível carregar mais chaves.'));
+  const botao = [...container.querySelectorAll('button')].find(b => b.querySelector('.botao-acao-camada[data-atual]'))!;
+  expect(camada(botao)).toBe('Não carregou');
+  expect(botao.className).toContain('max-md:min-h-11');
+  // Passados 2 s, o botão volta a Carregar mais, que tenta de novo; o motivo fica.
+  await vi.waitFor(async () => { await act(async () => {}); expect(camada(botao)).toBe('Carregar mais'); }, { timeout: 4_000 });
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe('Não foi possível carregar mais chaves.');
+  expect(textosForaDaLista(container.innerHTML, TEXTOS_DA_TELA)).toEqual([]);
+  expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
+}, 10_000);
+
+it('sem rede e sem nada lido: o aviso da conexão, e não o erro vermelho', async () => {
+  const { SemConexao } = await import('@/lib/conexao');
+  mocks.list.mockRejectedValue(new SemConexao());
+  await act(async () => root.render(<QueryClientProvider client={client}><SettingsIntegrations /></QueryClientProvider>));
+  await wait(() => expect(container.querySelector('[data-falta]')).not.toBeNull());
+  expect(container.textContent).not.toContain('Não foi possível carregar as chaves.');
+  expect(container.textContent).toMatch(/Sem conexão\.|Reconectando…/);
+});
+
+it('criar pelo Enter no campo Nome: os campos ficam só para leitura, nunca disabled, e o foco fica no campo', async () => {
+  await form();
+  let resolve!: (x: unknown) => void;
+  mocks.create.mockReturnValue(new Promise(r => resolve = r));
+  const nome = document.querySelector<HTMLInputElement>('#key-name')!;
+  nome.focus();
+  await act(async () => document.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+  expect(mocks.create).toHaveBeenCalledTimes(1);
+  expect(nome.disabled).toBe(false);
+  expect(nome.readOnly).toBe(true);
+  expect(nome.getAttribute('aria-disabled')).toBe('true');
+  expect(document.querySelector<HTMLSelectElement>('#key-permission')!.disabled).toBe(false);
+  expect(document.querySelector<HTMLInputElement>('#key-expiry')!.disabled).toBe(false);
+  expect(document.activeElement).toBe(nome);
+  // Mudar a permissão durante a criação não muda nada.
+  await value('#key-permission', 'read_only');
+  expect(document.querySelector<HTMLSelectElement>('#key-permission')!.value).toBe('full');
+  await act(async () => resolve({ id: 'a', token: 'SECRET_TEST', expires_at: '2099-01-01' }));
+});
+
+it('o link da documentação em tinta e sublinhado, nunca o vermelho de 4,2:1 sobre o fundo', async () => {
+  await render();
+  const link = [...container.querySelectorAll('a')].find(a => a.textContent?.includes('Documentação da API'))!;
+  expect(link.className).toContain('text-foreground');
+  expect(link.className).not.toContain('text-primary');
+  expect(link.className).toContain('underline');
 });

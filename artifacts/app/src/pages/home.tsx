@@ -27,9 +27,11 @@ export default function Home() {
         itens: itensDoInicioDoWms(inbox.items),
         carregando: inbox.carregando,
         falhas: inbox.falhas,
-        hoje: seesWarehouse ? { ...inbox.summary, skus, skusLendo: dashboard.data === undefined && !dashboard.isError } : null,
+        hoje: seesWarehouse
+          ? { ...inbox.summary, skus, skusLendo: dashboard.data === undefined && !dashboard.isError, lido: inbox.armazemLido }
+          : null,
         semConexao: inbox.semConexao ? { ...inbox.semConexao, tentando: inbox.relendo, onTentar: inbox.reler } : null,
-        tentarFalhas: { tentando: inbox.relendo, onTentar: inbox.reler },
+        tentarFalhas: { tentando: inbox.relendo, onTentar: inbox.reler, alerta: !inbox.falhaSoNaReleitura },
       }}
     />
   );

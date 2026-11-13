@@ -160,4 +160,17 @@ describe("Início do Comercial", () => {
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ itens: [], resumo: undefined, carregando: true }))).toEqual([]);
   });
+
+  it("a fonte que falhou: o aviso tem Tentar de novo (carregamento v2, parte 13e)", () => {
+    const html = render({ itens: [], falhas: ["contratos"], reler: async () => undefined, relendo: false });
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Não foi possível carregar: contratos.");
+    expect(textosDaTela(html)).toContain("Tentar de novo");
+  });
+
+  it("a releitura que falhou depois de lido: o aviso fica escrito, sem falar (momento 7)", () => {
+    const html = render({ falhas: ["contratos"], reler: async () => undefined, relendo: false, falhaSoNaReleitura: true });
+    expect(html).toContain("Não foi possível carregar: contratos.");
+    expect(html).not.toContain('role="alert"');
+  });
 });

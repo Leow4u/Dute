@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Router } from "wouter";
 
 import { CarregandoTela } from "@/components/ui/carregando-tela";
+import { lembrarContagens } from "@/lib/carregando/contagem-lembrada";
 import type { HomeInboxItem } from "@/lib/home-inbox";
 import { itensDoInicioDoWms } from "@/lib/inicio-do-wms";
 import { InicioDoWmsView, type InicioDoWms } from "@/pages/home-view";
@@ -52,6 +53,15 @@ afterEach(() => {
 
 const espera = (ms: number) => act(async () => new Promise((pronto) => setTimeout(pronto, ms)));
 
+/** Espera a tela chegar ao estado, em passos de 20 ms, até 3 s: com a máquina ocupada, um tempo fixo falha à toa. */
+async function ate(condicao: () => unknown, limiteMs = 3_000) {
+  const fim = Date.now() + limiteMs;
+  while (!condicao()) {
+    if (Date.now() > fim) throw new Error("A tela não chegou ao estado esperado em 3 s.");
+    await espera(20);
+  }
+}
+
 function inicio(dados: Partial<InicioDoWms> = {}) {
   return (
     <Router ssrPath="/dashboard">
@@ -94,7 +104,13 @@ describe("o Início na primeira leitura", () => {
 
   it("aos 300 ms, as linhas-fantasma e Carregando o que precisa de você…, com a caixa de 24 px", async () => {
     await act(async () => raiz!.render(inicio()));
-    await espera(360);
+    // A linha e os fantasmas têm relógios próprios: espera os dois passarem dos 300 ms (com a máquina ocupada, um
+    // tempo fixo logo depois do marco falha à toa).
+    await ate(
+      () =>
+        container.textContent?.includes("Carregando o que precisa de você…") &&
+        fantasmas().every((linha) => linha.classList.contains("opacity-100")),
+    );
     expect(container.textContent).toContain("Carregando o que precisa de você…");
     expect(container.querySelector('[data-carregando-na-regiao] [data-spinner][data-tamanho="24"]')).not.toBeNull();
     expect(fantasmas().every((linha) => linha.classList.contains("opacity-100"))).toBe(true);
@@ -110,7 +126,7 @@ describe("o Início na primeira leitura", () => {
 
   it("continua a espera da tela que abriu: sem o vão de 300 ms entre a caixa da rota e a do Início", async () => {
     await act(async () => raiz!.render(<CarregandoTela titulo="Início" />));
-    await espera(400);
+    await ate(() => container.textContent?.includes("Abrindo Início…"));
     expect(container.textContent).toContain("Abrindo Início…");
     await act(async () => raiz!.render(inicio()));
     expect(container.textContent).toContain("Carregando o que precisa de você…");
@@ -143,6 +159,57 @@ describe("o Início na primeira leitura", () => {
     expect(fantasmas()).toHaveLength(0);
     const textos = textosDaTela(container.innerHTML);
     expect(textos[textos.indexOf("SKUs em estoque") + 1]).toBe("—");
+  });
+
+  it("o armazém que falhou não afirma zero: os quatro números do dia ficam —", async () => {
+    await act(async () =>
+      raiz!.render(
+        inicio({
+          carregando: false,
+          falhas: ["armazém"],
+          hoje: { toPick: 0, toShip: 0, inTransit: 0, openReceipts: 0, skus: 7, lido: false },
+        }),
+      ),
+    );
+    const numeros = [...container.querySelectorAll('section[aria-labelledby="hoje-no-armazem"] li')].map((linha) => linha.textContent);
+    expect(numeros).toEqual(["Pedidos para separar—", "Prontos para envio—", "Em rota de entrega—", "Recebimentos em aberto—", "SKUs em estoque7"]);
+  });
+
+  it("lendo, o bloco do número tem o tamanho do número de 24 px (28 × 18), não o da contagem do título", async () => {
+    await act(async () => raiz!.render(inicio()));
+    const bloco = container.querySelector<HTMLElement>('[aria-labelledby="hoje-no-armazem"] [data-esqueleto]')!;
+    expect(bloco.className).toContain("w-7");
+    expect(bloco.className).toContain("h-4.5");
+  });
+
+  it("na segunda visita, lembrando que nada esperava, o Precisa de você não nasce lendo para sumir", async () => {
+    lembrarContagens("inicio:na Armazenagem", "todos", { precisa: 0 });
+    await act(async () => raiz!.render(inicio()));
+    await ate(() => container.textContent?.includes("Carregando o que precisa de você…"));
+    expect(container.querySelector('section[aria-labelledby="precisa-de-voce"]')).toBeNull();
+    expect(fantasmas()).toHaveLength(0);
+    expect(container.textContent).toContain("Carregando o que precisa de você…");
+    await act(async () => raiz!.render(inicio({ carregando: false, hoje: { toPick: 1, toShip: 0, inTransit: 0, openReceipts: 0, skus: 3 } })));
+    expect(container.querySelector('section[aria-labelledby="precisa-de-voce"]')).toBeNull();
+  });
+
+  it("lendo, o Precisa de você aponta para a linha que diz que lê (aria-describedby)", async () => {
+    await act(async () => raiz!.render(inicio()));
+    const secao = container.querySelector('section[aria-labelledby="precisa-de-voce"]')!;
+    const id = secao.getAttribute("aria-describedby");
+    expect(id).toBeTruthy();
+    expect(container.querySelector(`#${id}`)?.hasAttribute("data-carregando-na-regiao")).toBe(true);
+    await ate(() => container.querySelector(`#${id}`)?.textContent === "Carregando o que precisa de você…");
+    expect(container.querySelector(`#${id}`)?.textContent).toBe("Carregando o que precisa de você…");
+    await act(async () => raiz!.render(inicio({ carregando: false, itens: itensDoInicioDoWms(ITENS) })));
+    expect(container.querySelector('section[aria-labelledby="precisa-de-voce"]')!.hasAttribute("aria-describedby")).toBe(false);
+  });
+
+  it("na chegada, as linhas reais entram em cascata e a frase entra por opacidade (momento 2)", async () => {
+    await act(async () => raiz!.render(inicio()));
+    await act(async () => raiz!.render(inicio({ carregando: false, itens: itensDoInicioDoWms(ITENS) })));
+    expect(container.querySelector('section[aria-labelledby="precisa-de-voce"] ul')!.hasAttribute("data-chegada")).toBe(true);
+    expect(container.querySelector("header p[data-chegada-vazio]")).not.toBeNull();
   });
 
   it("a fonte que falhou com a lista vazia não diz Nada parado; o aviso tem Tentar de novo", async () => {

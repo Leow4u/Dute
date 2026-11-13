@@ -149,16 +149,20 @@ export function useAcoesDasPessoas({ refresh, onConvidarDeNovo }: { refresh: () 
     onError: failure("Pessoa não removida"),
   });
 
+  // O POST do acesso. A revogação (o diálogo) e a devolução (a linha) são mutações separadas: o fim de uma não fecha o
+  // diálogo da outra, e devolver o acesso de uma pessoa não trava o "Devolver acesso" das outras.
+  const postAccess = async (input: { id: string; active: boolean; reason?: string }) =>
+    jsonOrThrow(
+      await fetch(`/api/billing/users/${encodeURIComponent(input.id)}/access`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ active: input.active, reason: input.reason || undefined }),
+      }),
+      "Não foi possível alterar o acesso.",
+    );
+
   const setAccess = useMutation({
-    mutationFn: async (input: { id: string; active: boolean; reason?: string }) =>
-      jsonOrThrow(
-        await fetch(`/api/billing/users/${encodeURIComponent(input.id)}/access`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ active: input.active, reason: input.reason || undefined }),
-        }),
-        "Não foi possível alterar o acesso.",
-      ),
+    mutationFn: postAccess,
     onSuccess: async (_result, input) => {
       setRemoving(null);
       setReason("");
@@ -168,34 +172,34 @@ export function useAcoesDasPessoas({ refresh, onConvidarDeNovo }: { refresh: () 
     onError: failure("Acesso não alterado"),
   });
 
+  const restoreAccess = useMutation({
+    mutationFn: (id: string) => postAccess({ id, active: true }),
+    onSuccess: async () => {
+      await refresh();
+      toast({ title: "Acesso devolvido" });
+    },
+    onError: failure("Acesso não alterado"),
+  });
+
+  // Cada troca espera a própria gravação (a promessa da chamada, não os avisos do último pedido da mutação, que o
+  // react-query só dá ao último): trocar o perfil de duas pessoas seguidas solta as duas linhas.
   const changeRole = (person: Person, role: string) =>
-    void linhas.executar(
-      person.key,
-      "perfil",
-      () =>
-        new Promise<void>((pronto, falhou) =>
-          updateRole.mutate(
-            { id: person.id, data: { role } },
-            {
-              onSuccess: async () => {
-                await refresh();
-                toast({ title: "Perfil alterado", description: `${person.name}: ${roleLabel(role)}` });
-                pronto();
-              },
-              onError: (error) => {
-                failure("Perfil não alterado")(error);
-                falhou(error);
-              },
-            },
-          ),
-        ),
-    );
+    void linhas.executar(person.key, "perfil", async () => {
+      try {
+        await updateRole.mutateAsync({ id: person.id, data: { role } });
+      } catch (error) {
+        failure("Perfil não alterado")(error);
+        throw error;
+      }
+      await refresh();
+      toast({ title: "Perfil alterado", description: `${person.name}: ${roleLabel(role)}` });
+    });
 
   /** Cancela o convite, com a espera na linha da pessoa. O mesmo DELETE de sempre. */
   const cancelarConvite = (person: Person) => void linhas.executar(person.key, "cancelar", () => cancelInvite.mutateAsync(person.id));
 
   /** Devolve o acesso, com a espera na linha da pessoa. O mesmo POST de sempre. */
-  const devolverAcesso = (person: Person) => void linhas.executar(person.key, "devolver", () => setAccess.mutateAsync({ id: person.id, active: true }));
+  const devolverAcesso = (person: Person) => void linhas.executar(person.key, "devolver", () => restoreAccess.mutateAsync(person.id));
 
   return {
     toast,
@@ -214,6 +218,7 @@ export function useAcoesDasPessoas({ refresh, onConvidarDeNovo }: { refresh: () 
     cancelInvite,
     archivePerson,
     setAccess,
+    restoreAccess,
     changeRole,
     cancelarConvite,
     devolverAcesso,
@@ -282,11 +287,15 @@ export function MenuDaPessoa({ acoes, person }: { acoes: AcoesDasPessoas; person
   const ocupada = acoes.linhas.ocupada(person.key);
   const espera = useEspera(acao !== null, { desde: acoes.linhas.desde(person.key) ?? undefined, segurarMinimo: true });
   const gatilho = useRef<HTMLButtonElement>(null);
+  // A ação que sai do menu o fecha: a linha ocupada já o mostra fechado, e o Radix, que vê o menu fechado antes de
+  // fechá-lo, não avisaria; sem isso, o menu reabriria sozinho quando a ação acaba.
+  if (ocupada && aberto) setAberto(false);
   const self = person.kind === "user" && person.id === acoes.selfId;
   if (self || !canManagePerson(acoes.actorRole, person.role)) return null;
   // O foco que volta ao "⋯" não cai no body se a linha sair com a ação (o convite cancelado): vai ao vizinho.
   const comAEspera = (fazer: () => void) => () => {
     if (gatilho.current) vigiarFocoDeVolta(gatilho.current);
+    setAberto(false);
     fazer();
   };
   return (
@@ -303,7 +312,8 @@ export function MenuDaPessoa({ acoes, person }: { acoes: AcoesDasPessoas; person
           aria-label={acao ? `${ANDAMENTO_NA_LINHA[acao].replace(/…$/, "")} de ${person.name}` : `Ações de ${person.name}`}
           aria-disabled={ocupada || undefined}
           aria-busy={espera.visivel || undefined}
-          className={cn(ocupada && "hover:bg-transparent")}
+          // No celular, o alvo de 44 px (seção 7).
+          className={cn("max-md:size-11", ocupada && "hover:bg-transparent")}
         >
           {espera.visivel ? <Spinner tamanho={16} calmo={espera.calmo} /> : <MoreHorizontal aria-hidden="true" />}
         </Button>
@@ -340,6 +350,7 @@ export function MenuDaPessoa({ acoes, person }: { acoes: AcoesDasPessoas; person
                   value={String(normalizeProfileRole(person.role))}
                   onValueChange={(role) => {
                     if (gatilho.current) vigiarFocoDeVolta(gatilho.current);
+                    setAberto(false);
                     acoes.changeRole(person, role);
                   }}
                 >
@@ -352,7 +363,7 @@ export function MenuDaPessoa({ acoes, person }: { acoes: AcoesDasPessoas; person
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
-            {/* A mesma mutação do "Devolver acesso": enquanto ela grava, o Revogar espera (o fim de uma fecharia o diálogo da outra). */}
+            {/* Enquanto uma revogação grava, outra espera: o fim de uma fecharia o diálogo da outra. */}
             <DropdownMenuItem className="text-destructive" disabled={acoes.setAccess.isPending} onSelect={() => acoes.setRemoving(person)}>
               Revogar acesso
             </DropdownMenuItem>
@@ -360,7 +371,8 @@ export function MenuDaPessoa({ acoes, person }: { acoes: AcoesDasPessoas; person
         ) : (
           <>
             <DropdownMenuItem onSelect={() => acoes.onConvidarDeNovo(person)}>Convidar novamente</DropdownMenuItem>
-            <DropdownMenuItem disabled={acoes.setAccess.isPending} onSelect={comAEspera(() => acoes.devolverAcesso(person))}>
+            {/* A devolução de outra pessoa não trava esta: cada linha espera a dela. */}
+            <DropdownMenuItem onSelect={comAEspera(() => acoes.devolverAcesso(person))}>
               Devolver acesso
             </DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -377,8 +389,8 @@ export function MenuDaPessoa({ acoes, person }: { acoes: AcoesDasPessoas; person
 /** As confirmações: reenviar o convite, tirar da lista e revogar o acesso. */
 export function DialogosDasPessoas({ acoes }: { acoes: AcoesDasPessoas }) {
   const { resending, archiving, removing, resendInvite, archivePerson, setAccess } = acoes;
-  // O diálogo segura só a revogação desta pessoa: o "Devolver acesso" de outra, na mesma mutação, não é dele.
-  const revogando = setAccess.isPending && setAccess.variables?.active === false && setAccess.variables.id === removing?.id;
+  // O diálogo segura só a revogação desta pessoa.
+  const revogando = setAccess.isPending && setAccess.variables?.id === removing?.id;
   return (
     <>
       <Dialog open={Boolean(resending)} ocupado={resendInvite.isPending} onOpenChange={(open) => !open && acoes.setResending(null)}>

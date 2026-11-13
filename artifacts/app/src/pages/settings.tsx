@@ -91,6 +91,7 @@ export function SettingsAccount() {
             aside={
               <BotaoDeAcao
                 variant="outline"
+                className="max-md:min-h-11"
                 estado={saindo ? "andamento" : "repouso"}
                 rotulo="Sair"
                 andamento="Saindo…"

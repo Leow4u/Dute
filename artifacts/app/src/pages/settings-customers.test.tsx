@@ -100,6 +100,8 @@ let container: HTMLDivElement;
 let client: QueryClient;
 let clientes: Cliente[];
 let falharClientes: boolean;
+/** A mensagem da leitura dos clientes que falhou (a falta de conexão diz "Sem conexão…"). */
+let mensagemDaFalhaDosClientes: string;
 let falharPosicoes: boolean;
 let respostaDoPatch: { status: number; body: unknown };
 /** Com a lista, a criação do cliente espera até o teste soltar (o diálogo gravando, parte 13a). */
@@ -111,11 +113,12 @@ let posicoesPresas: boolean;
 let chamadas: Array<{ method: string; path: string; body: Record<string, unknown> | null }>;
 let assinaturas: Array<{ value: string; next: (snapshot: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }) => void }>;
 
+// Até 3 s: com a máquina ocupada (a suíte inteira), os marcos de 300 ms passam do 1 s padrão do waitFor.
 async function esperar(assertion: () => void) {
   await vi.waitFor(async () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
     assertion();
-  });
+  }, { timeout: 3_000 });
 }
 
 function botao(label: string, scope: ParentNode = document) {
@@ -234,6 +237,7 @@ beforeEach(() => {
   });
   clientes = [ITAU, SAFRA, BTG];
   falharClientes = false;
+  mensagemDaFalhaDosClientes = "Sem acesso ao cadastro.";
   falharPosicoes = false;
   respostaDoPatch = { status: 200, body: { ok: true } };
   criacaoPresa = null;
@@ -255,7 +259,7 @@ beforeEach(() => {
     const resposta = (payload: unknown, status = 200) =>
       new Response(JSON.stringify(payload), { status, headers: { "content-type": "application/json" } });
     if (path === "/api/customers" && method === "GET") {
-      return falharClientes ? resposta({ message: "Sem acesso ao cadastro." }, 500) : resposta({ items: clientes });
+      return falharClientes ? resposta({ message: mensagemDaFalhaDosClientes }, 500) : resposta({ items: clientes });
     }
     if (path === "/api/customers" && method === "POST") {
       const presa = criacaoPresa;
@@ -759,6 +763,7 @@ describe("Configurações › Clientes enquanto lê", () => {
     expect(prateleiras.querySelector("dd")!.textContent).toBe("");
     expect(prateleiras.querySelector("dd [data-esqueleto]")).not.toBeNull();
     await esperar(() => expect(secao("Armazém").textContent).toContain("Carregando a ocupação…"));
+    expect(textosForaDaLista(secao("Armazém").innerHTML, ["Armazém", "Posições", "Carregando a ocupação…"])).toEqual([]);
   });
 
   it("o Salvar da seção é o botão de ação: Salvando… com aria-busy, e o Cancelar aria-disabled, nunca disabled", async () => {
@@ -784,7 +789,84 @@ describe("Configurações › Clientes enquanto lê", () => {
     falharPosicoes = true;
     await abrirCliente(BTG.code);
     await esperar(() => expect(secao("Armazém").querySelector('[role="alert"]')?.textContent).toBe("Não foi possível ler a ocupação."));
+    expect(
+      textosForaDaLista(secao("Armazém").innerHTML, ["Armazém", "Posições", "Não foi possível ler a ocupação.", "Tentar de novo", "Tentando de novo…"]),
+    ).toEqual([]);
     const tentar = botao("Tentar de novo", secao("Armazém"))!;
     expect(tentar.disabled).toBe(false);
+    // O toque: a nova leitura fica presa, e o aviso fica na tela com "Tentando de novo…" e o foco no botão; antes,
+    // a seção voltava a "Carregando a ocupação…", e o foco caía no body.
+    posicoesPresas = true;
+    tentar.focus();
+    await act(async () => tentar.click());
+    await act(async () => new Promise((pronto) => setTimeout(pronto, 400)));
+    expect(secao("Armazém").querySelector('[role="alert"]')?.textContent).toBe("Não foi possível ler a ocupação.");
+    expect(secao("Armazém").textContent).not.toContain("Carregando a ocupação…");
+    const tentando = botao("Tentando de novo…", secao("Armazém"))!;
+    expect(tentando).toBeTruthy();
+    expect(tentando.getAttribute("aria-disabled")).toBe("true");
+    expect(tentando.disabled).toBe(false);
+    expect(document.activeElement).toBe(tentando);
+  });
+
+  it("a ocupação que volta: o foco que estava no Tentar de novo vai ao título da seção, nunca ao body", async () => {
+    falharPosicoes = true;
+    await abrirCliente(BTG.code);
+    await esperar(() => expect(botao("Tentar de novo", secao("Armazém"))).toBeTruthy());
+    falharPosicoes = false;
+    botao("Tentar de novo", secao("Armazém"))!.focus();
+    await act(async () => botao("Tentar de novo", secao("Armazém"))!.click());
+    await esperar(() => expect(secao("Armazém").textContent).toContain("Caixas guardadas"));
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.textContent).toBe("Armazém");
+  });
+
+  it("as pessoas do portal que falharam: o título não fica lendo para sempre, e o leitor de tela ouve Pessoas, sem o separador", async () => {
+    fronteiras.convites.mockRejectedValue(new Error("Falhou."));
+    await abrirCliente(BTG.code);
+    await esperar(() => expect(secao("Portal do cliente").querySelector('[role="alert"]')?.textContent).toBe("Não foi possível ler as pessoas."));
+    const falha = secao("Portal do cliente").querySelector<HTMLElement>("[data-falha-na-secao]")!;
+    expect(textosForaDaLista(falha.outerHTML, ["Não foi possível ler as pessoas.", "Tentar de novo", "Tentando de novo…"])).toEqual([]);
+    const titulo = secao("Portal do cliente").querySelector("h3")!;
+    expect(titulo.querySelector("[data-esqueleto]")).toBeNull();
+    expect(titulo.textContent).toBe("Pessoas · —");
+    // O separador e o "—" ficam fora da árvore, como o "· ▪" do Segmentado.
+    const foraDaArvore = titulo.querySelector('[aria-hidden="true"]')!;
+    expect(foraDaArvore.textContent).toBe(" · —");
+  });
+
+  it("o Salvar que grava fecha o formulário e devolve o foco ao Editar da seção, nunca ao body", async () => {
+    patchPreso = [];
+    await abrirCliente(BTG.code);
+    await tocar("Editar contrato");
+    await preencher("contrato-nome", "BTG Pactual Asset");
+    const salvar = botao("Salvar", secao("Contrato"))!;
+    salvar.focus();
+    await act(async () => salvar.click());
+    await esperar(() => expect(patchPreso!.length).toBe(1));
+    for (const soltar of patchPreso.splice(0)) soltar();
+    await esperar(() => expect(secao("Contrato").querySelector("form")).toBeNull());
+    await esperar(() => expect(document.activeElement).toBe(botao("Editar contrato", secao("Contrato"))));
+  });
+
+  it("a galeria com as prateleiras que não vieram diz a falha, com Tentar de novo, além do — nos cartões", async () => {
+    falharPosicoes = true;
+    await abrirGaleria();
+    await esperar(() => expect(container.querySelector("[data-falha-na-secao]")).not.toBeNull());
+    const falha = container.querySelector<HTMLElement>("[data-falha-na-secao]")!;
+    expect(falha.textContent).toContain("Não foi possível ler as prateleiras.");
+    expect(textosForaDaLista(falha.outerHTML, ["Não foi possível ler as prateleiras.", "Tentar de novo", "Tentando de novo…"])).toEqual([]);
+    falharPosicoes = false;
+    await tocar("Tentar de novo");
+    await esperar(() => expect(container.querySelector("[data-falha-na-secao]")).toBeNull());
+  });
+
+  it("sem rede, a página do cliente diz a falta de conexão, no aviso âmbar, e não o erro vermelho", async () => {
+    falharClientes = true;
+    mensagemDaFalhaDosClientes = "Sem conexão. Tente de novo quando o sinal voltar.";
+    await montar(`/configuracoes/clientes?cliente=${encodeURIComponent(BTG.code)}`);
+    await esperar(() => expect(container.querySelector("[data-falta]")).not.toBeNull());
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(container.textContent).toMatch(/Sem conexão\.|Reconectando…/);
   });
 });

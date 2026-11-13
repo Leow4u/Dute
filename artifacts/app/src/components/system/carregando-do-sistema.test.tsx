@@ -158,7 +158,7 @@ describe("Sistema na primeira leitura", () => {
     expect(container.querySelector(".animate-spin")).toBeNull();
     expect(
       textosForaDaLista(container.innerHTML, [
-        "Sistema", "O sistema está no ar e com a versão certa?", "Verificar agora", "Verificando…", "Conferir",
+        "Sistema", "O sistema está no ar e com a versão certa?", "Verificar agora", "Verificando…", "Verificando o sistema…", "Conferir",
         "Servidor", "Versão publicada", /^build de /, BUILD_COMMIT, "Último registro de operação",
         "Incidentes", "Registrar incidente", "Carregando incidentes…",
       ]),
@@ -181,7 +181,7 @@ describe("Sistema na primeira leitura", () => {
 });
 
 describe("o Verificar agora do Sistema", () => {
-  it("a releitura automática não o gira nem o desabilita; o toque mostra Verificando… com aria-busy", async () => {
+  it("a releitura automática não o gira nem o desabilita; o toque mostra Verificando o sistema… com aria-busy", async () => {
     // A leitura tocada fica presa: o "Verificando…" não depende de pegar a janela entre os 300 ms e a resposta.
     estado.respostas["/api/system/health"] = [json(SAUDE), lenta(SAUDE, 800), presa];
     await montar(<SettingsSystem />);
@@ -196,16 +196,17 @@ describe("o Verificar agora do Sistema", () => {
     await ate(() => cliente.isFetching() === 0);
     // O toque da pessoa.
     await act(async () => botao("Verificar agora")!.click());
-    await ate(() => container.querySelector('button[aria-busy="true"] .botao-acao-camada[data-atual]')?.textContent === "Verificando…");
+    await ate(() => container.querySelector('button[aria-busy="true"] .botao-acao-camada[data-atual]')?.textContent === "Verificando o sistema…");
     const tocado = container.querySelector<HTMLButtonElement>('button[aria-busy="true"]')!;
-    expect(tocado.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Verificando…");
+    // O gerúndio diz o quê: não é o "Verificando…" do quadro do servidor, nem o do "Ver o que muda".
+    expect(tocado.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Verificando o sistema…");
     expect(tocado.getAttribute("aria-disabled")).toBe("true");
     expect(tocado.disabled).toBe(false);
   });
 });
 
 describe("o Numerar do Sistema", () => {
-  it("Ver o que muda diz Verificando… e o Numerar agora espera, sem disabled", async () => {
+  it("Ver o que muda diz Conferindo a numeração… e o Numerar agora espera, sem disabled", async () => {
     estado.papel = "owner";
     estado.respostas["/api/system/health"] = [json(SAUDE)];
     estado.respostas["/api/system/dashboard"] = [json(PAINEL)];
@@ -214,13 +215,24 @@ describe("o Numerar do Sistema", () => {
     await montar(<SettingsSystem />);
     await ate(() => botao("Ver o que muda"));
     await act(async () => botao("Ver o que muda")!.click());
-    await ate(() => container.querySelector('button[aria-busy="true"] .botao-acao-camada[data-atual]')?.textContent === "Verificando…");
+    await ate(() => container.querySelector('button[aria-busy="true"] .botao-acao-camada[data-atual]')?.textContent === "Conferindo a numeração…");
     const ver = container.querySelector<HTMLButtonElement>('button[aria-busy="true"]')!;
-    expect(ver.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Verificando…");
+    expect(ver.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Conferindo a numeração…");
     const numerar = botao("Numerar agora")!;
     expect(numerar.getAttribute("aria-disabled")).toBe("true");
     expect(numerar.disabled).toBe(false);
     expect(ver.disabled).toBe(false);
+    const numeracao = [...container.querySelectorAll("section")].find((secao) => secao.textContent?.includes("Numerar pedidos e envios antigos"))!;
+    expect(
+      textosForaDaLista(numeracao.outerHTML, [
+        "Numerar pedidos e envios antigos", /^Dá número PED-\/ENV-/, "Ver o que muda", "Conferindo a numeração…", "Numerar agora", "Numerando…",
+        "Conferir",
+      ]),
+    ).toEqual([]);
+    // No celular, os dois e o Verificar agora têm o alvo de 44 px.
+    expect(ver.className).toContain("max-md:min-h-11");
+    expect(numerar.className).toContain("max-md:min-h-11");
+    expect(botao("Verificar agora")!.className).toContain("max-md:min-h-11");
   });
 });
 
@@ -240,11 +252,15 @@ describe("a Infraestrutura", () => {
     expect(container.textContent).toContain("Sem leitura");
     expect(container.querySelector(".bg-green-600")).toBeNull();
     expect(container.querySelector(".bg-red-600")).not.toBeNull();
+    expect(
+      textosForaDaLista(container.innerHTML, ["Erros do servidor · 24 h", "Functions", "Verificando…", "Sem leitura", "Veja a seção Infraestrutura"]),
+    ).toEqual([]);
   });
 
   it("a consulta que falhou tem Tentar de novo; a verificação que falha depois não apaga o painel", async () => {
     estado.respostas["/api/system/infra"] = [json({ message: "Sem permissão." }, 500), json(INFRA), json({ message: "Caiu." }, 500)];
     await montar(<InfraSection agentMonthCost={null} />);
+    await ate(() => container.textContent?.includes("Consultando o Google Cloud…") || container.textContent?.includes("Não consegui consultar"));
     await ate(() => container.textContent?.includes("Não consegui consultar a infraestrutura"));
     expect(container.textContent).toContain("Não consegui consultar a infraestrutura: Sem permissão.");
     await act(async () => botao("Tentar de novo")!.click());
@@ -254,6 +270,8 @@ describe("a Infraestrutura", () => {
     await ate(() => container.textContent?.includes("Não consegui verificar de novo"));
     expect(container.textContent).toContain("Erros do servidor");
     expect(container.textContent).toContain("Não consegui verificar de novo: Caiu.");
+    const falha = container.querySelector<HTMLElement>("[data-falha-na-secao]")!;
+    expect(textosForaDaLista(falha.outerHTML, ["Não consegui verificar de novo: Caiu.", "Tentar de novo", "Tentando de novo…"])).toEqual([]);
     expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
   });
 });
@@ -272,5 +290,70 @@ describe("o painel do owner", () => {
     await ate(() => container.textContent?.includes("Não consegui atualizar o painel"));
     expect(container.textContent).toContain("Agent Dute hoje");
     expect(container.textContent).toContain("Não consegui atualizar o painel: Caiu.");
+  });
+
+  it("a releitura de 1 min que falha fica escrita, sem falar; a seguinte não muda o Tentar de novo", async () => {
+    estado.respostas["/api/system/dashboard"] = [json(PAINEL), json({ message: "Caiu." }, 500), presa];
+    estado.respostas["/api/system/infra"] = [json(INFRA)];
+    await montar(<OwnerDashboard />);
+    await ate(() => container.textContent?.includes("Agent Dute hoje"));
+    // A releitura do intervalo (a pessoa não pediu): a falha fica escrita em cima do painel, sem região viva.
+    await act(async () => void cliente.refetchQueries({ queryKey: ["system-dashboard"] }));
+    await ate(() => container.textContent?.includes("Não consegui atualizar o painel"));
+    const falha = container.querySelector<HTMLElement>("[data-falha-na-secao]")!;
+    expect(falha.querySelector('[role="alert"]')).toBeNull();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(textosForaDaLista(falha.outerHTML, ["Não consegui atualizar o painel: Caiu.", "Tentar de novo", "Tentando de novo…"])).toEqual([]);
+    // A releitura automática seguinte (presa): o botão não vira "Tentando de novo…", nem fica ocupado.
+    await act(async () => void cliente.refetchQueries({ queryKey: ["system-dashboard"] }));
+    await espera(600);
+    const tentar = falha.querySelector<HTMLButtonElement>("button")!;
+    expect(tentar.textContent).toBe("Tentar de novo");
+    expect(tentar.hasAttribute("aria-busy")).toBe(false);
+    expect(tentar.hasAttribute("aria-disabled")).toBe(false);
+  });
+});
+
+describe("a nova tentativa que dá certo", () => {
+  it("nos incidentes, o foco que estava no Tentar de novo vai ao título da seção, nunca ao body", async () => {
+    estado.respostas["/api/system/health"] = [json({ message: "Falhou." }, 500), lenta(SAUDE, 200)];
+    await montar(<SettingsSystem />);
+    await ate(() => botao("Tentar de novo"));
+    botao("Tentar de novo")!.focus();
+    await act(async () => botao("Tentar de novo")!.click());
+    await ate(() => container.textContent?.includes("Nenhum incidente registrado."));
+    await espera(50);
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.textContent).toBe("Incidentes");
+  });
+
+  it("na Infraestrutura, o foco que estava no Tentar de novo não cai no body", async () => {
+    estado.respostas["/api/system/infra"] = [json({ message: "Sem permissão." }, 500), lenta(INFRA, 200)];
+    await montar(
+      <main>
+        <h1>Sistema</h1>
+        <InfraSection agentMonthCost={null} />
+      </main>,
+    );
+    await ate(() => botao("Tentar de novo"));
+    botao("Tentar de novo")!.focus();
+    await act(async () => botao("Tentar de novo")!.click());
+    await ate(() => container.textContent?.includes("Erros do servidor"));
+    await espera(50);
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.tagName).toMatch(/^H[1-6]$/);
+  });
+});
+
+describe("o Verificar agora da Infraestrutura", () => {
+  it("diz o que verifica, tem 44 px no celular e, com o ponteiro em cima, só sublinha (sem o fundo do ghost)", async () => {
+    estado.respostas["/api/system/infra"] = [json(INFRA), presa];
+    await montar(<InfraSection agentMonthCost={null} />);
+    await ate(() => container.textContent?.includes("Erros do servidor"));
+    const verificar = botao("Verificar agora")!;
+    expect(verificar.className).toContain("hover:bg-transparent");
+    expect(verificar.className).toContain("max-md:min-h-11");
+    await act(async () => verificar.click());
+    await ate(() => container.querySelector('button[aria-busy="true"] .botao-acao-camada[data-atual]')?.textContent === "Verificando a infraestrutura…");
   });
 });

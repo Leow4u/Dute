@@ -8,6 +8,7 @@ import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
 import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { useToast } from "@/hooks/use-toast";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import {
@@ -119,6 +120,7 @@ function CostSettingsDialog({ settings, onClose }: { settings: SystemDashboard["
 }
 
 export function OwnerDashboard() {
+  const queryClient = useQueryClient();
   const [editingCosts, setEditingCosts] = useState(false);
   const leitura = useQuery<SystemDashboard, Error>({
     queryKey: dashboardKey,
@@ -131,23 +133,23 @@ export function OwnerDashboard() {
   // Sem rede, o painel que já estava fica, com a hora da leitura; sem nada
   // lido, o aviso (decisão 2 do celular).
   const semRede = semConexaoNaLeitura(dashboard);
-  const reler = () => void leitura.refetch();
+  const reler = () => leitura.refetch();
 
   if (dashboard.isLoading) {
     return (
       <div className="rounded-lg border border-border bg-card px-5 py-4">
-        <CarregandoNaRegiao rotulo="Carregando o painel…" />
+        <CarregandoNaRegiao rotulo="Carregando o painel…" onTentar={() => void relerDoZero(queryClient, [dashboardKey])} />
       </div>
     );
   }
-  if (semRede && semRede.lidaEm === null) return <BlocoSemConexao tentando={dashboard.isFetching} onTentar={reler} />;
+  if (semRede && semRede.lidaEm === null) return <BlocoSemConexao tentando={dashboard.isFetching} onTentar={() => void reler()} />;
   // Erro nunca vira vazio: sem nada lido, a falha com "Tentar de novo"; com o painel lido, ele fica (abaixo).
   if (!dashboard.data) {
     return (
       <ErroNaLeitura
         mensagem={`Não consegui carregar o painel: ${dashboard.error?.message ?? "o servidor não respondeu."}`}
         tentando={dashboard.isFetching}
-        onTentar={reler}
+        onTentar={() => void reler()}
       />
     );
   }
@@ -159,11 +161,13 @@ export function OwnerDashboard() {
   return (
     <div className="space-y-4">
       {semRede && semRede.lidaEm !== null ? (
-        <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={dashboard.isFetching} onTentar={reler} />
+        <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={dashboard.isFetching} onTentar={() => void reler()} />
       ) : dashboard.isError ? (
-        // A releitura que falhou não apaga o painel lido (necessidade 8): ele fica, e a falha em cima.
+        // A releitura que falhou não apaga o painel lido (necessidade 8): ele fica, e a falha em cima, escrita e sem
+        // falar: quem relê a cada minuto é o intervalo, e a releitura automática não fala (momento 7).
         <FalhaNaSecao
           mensagem={`Não consegui atualizar o painel: ${dashboard.error?.message ?? "o servidor não respondeu."}`}
+          alerta={false}
           tentando={dashboard.isFetching}
           onTentar={reler}
           className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
