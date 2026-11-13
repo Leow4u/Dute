@@ -29,7 +29,9 @@ import { Link, useLocation, useSearch } from "wouter";
 import { LabelSheet } from "@/components/labels/label-sheet";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -37,6 +39,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useOpeningInventorySession } from "@/features/warehouse-ops/opening-inventory-status";
 import { useToast } from "@/hooks/use-toast";
 import { normalizeApiRows } from "@/features/warehouse-ops/receiving";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { sessionBoxes, warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import {
   type LabelData,
@@ -196,13 +199,24 @@ export default function WarehouseLabelsPage() {
 
   const pages = useMemo(() => labelPages(labels, mode), [labels, mode]);
   const previa = useAjusteDaPrevia(larguraDaPagina(mode, pages));
+  // A leitura que falhou sem nada lido fica na tela enquanto tenta de novo (o "Tentar de novo" não some com o foco
+  // nele); a releitura que falha (depois de registrar a impressão) não tira a prévia (carregamento v2, parte 13b).
+  const caixasLidas = useLeituraComFalha(boxesQuery);
+  const posicoesLidas = useLeituraComFalha(positionsQuery);
   const loading =
-    (wantsBoxes && (boxesQuery.isLoading || (needsSession && sessionQuery.isLoading))) ||
-    (wantsPositions && positionsQuery.isLoading) ||
+    (wantsBoxes && (caixasLidas.isLoading || (needsSession && sessionQuery.isLoading))) ||
+    (wantsPositions && posicoesLidas.isLoading) ||
     (fromOrder && orderVolumes.estado === "carregando");
+  const semCaixas = wantsBoxes && caixasLidas.isError && caixasLidas.data === undefined;
+  const semSessao = wantsBoxes && needsSession && sessionQuery.isError && sessionQuery.data === undefined;
+  const semPosicoes = wantsPositions && posicoesLidas.isError && posicoesLidas.data === undefined;
+  const falhouNaLeitura = semCaixas || semSessao || semPosicoes;
+  const tentarDeNovo = () => {
+    if (semCaixas) void boxesQuery.refetch();
+    if (semSessao) void sessionQuery.refetch();
+    if (semPosicoes) void positionsQuery.refetch();
+  };
   const error =
-    (wantsBoxes && (boxesQuery.error ?? (needsSession ? sessionQuery.error : null))) ||
-    (wantsPositions && positionsQuery.error) ||
     (wantsVolumes && orderVolumes.estado === "erro" ? new Error("Não foi possível carregar os volumes do pedido.") : null) ||
     (wantsVolumes && orderVolumes.estado === "nao_encontrado" ? new Error("Pedido não encontrado.") : null) ||
     null;
@@ -292,8 +306,11 @@ export default function WarehouseLabelsPage() {
                 </SelectContent>
               </Select>
             </div>
+            {/* A contagem só depois de ler: nunca "0 etiquetas · 0 folhas" antes (parte 13b). */}
             <div className="text-sm text-muted-foreground">
-              {textoDaImpressao({ etiquetas: labels.length, folhas: pages.length, caixas: boxes.length, posicoes: positions.length, volumes: volumes.length, mode })}
+              {loading || falhouNaLeitura
+                ? null
+                : textoDaImpressao({ etiquetas: labels.length, folhas: pages.length, caixas: boxes.length, posicoes: positions.length, volumes: volumes.length, mode })}
             </div>
           </div>
         </PageHeader>
@@ -328,13 +345,25 @@ export default function WarehouseLabelsPage() {
         ) : null}
       </div>
 
-      {error ? (
+      {falhouNaLeitura ? (
+        <ErroNaLeitura
+          className="no-print"
+          mensagem="Não consegui carregar as etiquetas."
+          // "Tentando de novo…" só com a leitura que falhou relendo.
+          tentando={(semCaixas && caixasLidas.isFetching) || (semPosicoes && posicoesLidas.isFetching) || (semSessao && sessionQuery.isFetching)}
+          onTentar={tentarDeNovo}
+        />
+      ) : error ? (
         <Alert variant="destructive" className="no-print">
           <AlertTitle>Não foi possível montar as etiquetas</AlertTitle>
           <AlertDescription>{getErrorMessage(error)}</AlertDescription>
         </Alert>
       ) : loading ? (
-        <Skeleton className="no-print h-96 w-full rounded-lg" />
+        // O esqueleto da prévia e, aos 300 ms, a caixa com o rótulo e o anúncio (carregamento v2, parte 13b).
+        <div className="no-print flex flex-col gap-3">
+          <CarregandoNaRegiao rotulo="Carregando as etiquetas…" />
+          <Skeleton className="h-96 w-full rounded-lg" />
+        </div>
       ) : !wantsBoxes && !wantsPositions && !wantsVolumes ? (
         <Empty className="no-print min-h-72 rounded-lg border border-dashed border-border bg-card">
           <EmptyHeader>

@@ -84,7 +84,9 @@ import { erroDaResposta } from "@/lib/erro-da-resposta";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { listaLida, useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
 import { BarraDeEspera } from "@/components/ui/barra-de-espera";
-import { BlocoSemConexao } from "@/components/ui/erro-na-leitura";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { BlocoSemConexao, ErroNaLeitura, FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
 
 type AnyRecord = Record<string, unknown>;
@@ -124,6 +126,9 @@ const FILTERS: Array<{ value: StockFilter; label: string }> = [
       ] as const)
     : []),
 ];
+
+/** A linha de estado sob o título: o foco vai a ela quando o aviso no lugar da lista sai com ele. */
+const ID_DA_LINHA = "estoque-linha-de-estado";
 
 export default function Estoque() {
   const queryClient = useQueryClient();
@@ -182,6 +187,18 @@ export default function Estoque() {
   // (decisão 2 do celular).
   const semRede = semConexaoNaLeitura(skus, balances, products);
   const relendo = skus.isFetching || balances.isFetching || products.isFetching;
+  // A lista mostra o catálogo, os saldos (o endereço) e as fotos: só entra com os três lidos, para nunca dizer "Sem
+  // endereço" nem "Sem foto" antes de ler (carregamento v2, parte 13b; necessidade 3). A leitura que falhou sem nada
+  // lido fica na tela enquanto tenta de novo: o aviso e o "Tentar de novo" não somem com o foco nele (necessidade 2).
+  const catalogo = useLeituraComFalha(skus);
+  const saldos = useLeituraComFalha(balances);
+  const fotosDoCatalogo = useLeituraComFalha(products);
+  const leiturasComFalha = [catalogo, saldos, fotosDoCatalogo];
+  const falhouSemNadaLido = leiturasComFalha.some((leitura) => leitura.isError && leitura.data === undefined);
+  const aindaLendo = leiturasComFalha.some((leitura) => leitura.isLoading);
+  const tentarDeNovo = () => {
+    for (const leitura of [skus, balances, products]) if (leitura.data === undefined) void leitura.refetch();
+  };
   const reler = () => {
     void queryClient.invalidateQueries({ queryKey: ["estoque"] });
     void queryClient.invalidateQueries({ queryKey: ["stock-balances", "estoque"] });
@@ -191,7 +208,7 @@ export default function Estoque() {
   // não mostra nada; o Atualizar só mostra a espera quando a pessoa toca
   // nele, e relê junto os dias parado e as caixas; a volta do app ao
   // primeiro plano relê com a barra no topo da lista.
-  const leiturasDaLista = [skus, balances, products];
+  const leiturasDaLista = leiturasComFalha;
   const lida = listaLida(leiturasDaLista);
   const atualizarLista = useAtualizarLista(leiturasDaLista, () => {
     void queryClient.invalidateQueries({ queryKey: ["stock-age", customerCode] });
@@ -226,6 +243,13 @@ export default function Estoque() {
     }
     return result;
   }, [items]);
+  // Parados e Sem giro saem dos dias parado: sem eles lidos, sem número (nunca "0" antes de ler; parte 13b).
+  const diasParadoLidos = stockAge.dataUpdatedAt > 0;
+  const contagemDoFiltro = (filtro: StockFilter): number | null => {
+    if (!lida || (filtro === "all" && !counts.all)) return null;
+    if ((filtro === "idle" || filtro === "no-turnover") && !diasParadoLidos) return null;
+    return counts[filtro];
+  };
   const visible = useMemo(
     () => items.filter((item) => matchesFilter(item, filter) && matchesSearch(item, search)),
     [filter, items, search],
@@ -264,7 +288,7 @@ export default function Estoque() {
     <div className="flex flex-col gap-4 pb-24">
       <PageHeader
         title={`Estoque · ${activeCustomer.name}`}
-        estado={<LinhaDeEstado leitura={leiturasDaLista} objeto="estoque" pedidaPelaPessoa={atualizarLista.voltando} />}
+        estado={<LinhaDeEstado id={ID_DA_LINHA} leitura={leiturasDaLista} objeto="estoque" pedidaPelaPessoa={atualizarLista.voltando} />}
         actions={
           <>
             {warehouseWriter ? (
@@ -350,7 +374,7 @@ export default function Estoque() {
                     selected={filter === option.value}
                     onClick={() => setFilter(option.value)}
                     // Nenhum "0" antes da primeira leitura (carregamento v2, momento 2).
-                    count={lida && (option.value !== "all" || counts.all) ? counts[option.value] : null}
+                    count={contagemDoFiltro(option.value)}
                   >
                     {option.label}
                   </FilterChip>
@@ -361,11 +385,17 @@ export default function Estoque() {
 
           {/* A primeira leitura e a falta com a lista lida ficam na linha de estado, sob o título; a releitura que falha
               com a lista lida também (carregamento v2, momento 7): só a leitura sem nada lido troca a lista pelo aviso. */}
-          {skus.isLoading ? null : semRede && semRede.lidaEm === null ? (
-            <BlocoSemConexao tentando={relendo} onTentar={reler} />
-          ) : skus.error && !skus.data && !semRede ? (
-            <p className="text-sm text-destructive">Não consegui carregar o estoque.</p>
-          ) : (
+          {semRede && semRede.lidaEm === null ? (
+            <BlocoSemConexao tentando={relendo} onTentar={reler} focoAoSair={ID_DA_LINHA} />
+          ) : falhouSemNadaLido && !semRede ? (
+            <ErroNaLeitura
+              mensagem="Não consegui carregar o estoque."
+              // "Tentando de novo…" só com a leitura que falhou relendo, não com as outras ainda chegando.
+              tentando={leiturasComFalha.some((leitura) => leitura.isError && leitura.data === undefined && leitura.isFetching)}
+              onTentar={tentarDeNovo}
+              focoAoSair={ID_DA_LINHA}
+            />
+          ) : aindaLendo ? null : (
             <div
               className={cn(
                 "grid grid-cols-1 gap-4",
@@ -810,6 +840,8 @@ export function ItemCard({
   }
 
   const photo = item.photos[photoIndex] ?? item.photos[0];
+  // A leitura dos movimentos que falhou fica na tela enquanto tenta de novo.
+  const movimentos = useLeituraComFalha(movements);
   const rows = movements.data?.items ?? [];
 
   return (
@@ -959,8 +991,11 @@ export function ItemCard({
         ) : null}
 
         <Section title="Últimos movimentos">
-          {movements.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando...</p>
+          {/* A espera com a caixa e o rótulo aos 300 ms, e a falha com "Tentar de novo", nunca o vazio (parte 13b). */}
+          {movimentos.isLoading ? (
+            <CarregandoNaRegiao rotulo="Carregando movimentos…" />
+          ) : movimentos.isError && movimentos.data === undefined ? (
+            <FalhaNaLeitura leitura={movements} erro={movimentos.error} mensagem="Não consegui carregar os movimentos." />
           ) : rows.length ? (
             rows.map((row, index) => {
               const quantity = Number(row.qtde ?? 0);

@@ -21,7 +21,6 @@ import {
   PackageOpen,
   PackageSearch,
   PlayCircle,
-  RefreshCw,
   Route,
   ShieldAlert,
   Sparkles,
@@ -32,7 +31,9 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Card,
@@ -351,21 +352,17 @@ function PhysicalLineChecklist({
           </div>
         </div>
         {hasIssue ? (
-          <Button
-            type="button"
+          <BotaoDeAcao
             size="sm"
             variant="outline"
             className="w-full shrink-0 sm:w-auto"
+            estado={isRegistering ? "andamento" : "repouso"}
+            icone={<MessageSquareWarning aria-hidden="true" />}
+            rotulo="Enviar evidência"
+            andamento="Registrando…"
+            bloqueado={!isRegistering && !canRegister}
             onClick={() => onOpenException(task, issueNote)}
-            disabled={!canRegister || isRegistering}
-          >
-            {isRegistering ? (
-              <RefreshCw data-icon="inline-start" className="animate-spin" />
-            ) : (
-              <MessageSquareWarning data-icon="inline-start" />
-            )}
-            Enviar evidência
-          </Button>
+          />
         ) : null}
       </div>
 
@@ -516,7 +513,8 @@ export function PutawayDetailSection({
         />
       </div>
       {positionsStatus === "loading" ? (
-        <p className="text-sm text-muted-foreground">Carregando posições.</p>
+        // A caixa e o rótulo aos 300 ms, com o anúncio, no lugar do texto seco (carregamento v2, parte 13b).
+        <CarregandoNaRegiao rotulo="Carregando posições…" />
       ) : null}
       {positionsStatus === "error" ? (
         <p className="text-sm text-destructive">Não consegui consultar as posições.</p>
@@ -718,21 +716,17 @@ function PickingDetailSection({
       </div>
 
       {hasPhysicalIssue(counts) ? (
-        <Button
-          type="button"
+        <BotaoDeAcao
           size="sm"
           variant="outline"
           className="mt-4 w-full"
+          estado={isRegistering ? "andamento" : "repouso"}
+          icone={<MessageSquareWarning aria-hidden="true" />}
+          rotulo="Registrar falta/avaria da separação"
+          andamento="Registrando…"
+          bloqueado={!isRegistering && !canRegister}
           onClick={() => onOpenException(task, issueNote)}
-          disabled={!canRegister || isRegistering}
-        >
-          {isRegistering ? (
-            <RefreshCw data-icon="inline-start" className="animate-spin" />
-          ) : (
-            <MessageSquareWarning data-icon="inline-start" />
-          )}
-          Registrar falta/avaria da separação
-        </Button>
+        />
       ) : (
         <Alert className="mt-4 border-primary/20 bg-primary/10">
           <CheckCircle2 className="size-4" />
@@ -830,21 +824,17 @@ function PackingDetailSection({
             </p>
           </div>
         </div>
-        <Button
-          type="button"
+        <BotaoDeAcao
           size="sm"
           variant={hasDivergence ? "default" : "outline"}
           className="w-full shrink-0 sm:w-auto"
+          estado={isRegistering ? "andamento" : "repouso"}
+          icone={<MessageSquareWarning aria-hidden="true" />}
+          rotulo="Registrar falta/avaria"
+          andamento="Registrando…"
+          bloqueado={!isRegistering && !canRegister}
           onClick={() => onOpenException(task, issueNote)}
-          disabled={!canRegister || isRegistering}
-        >
-          {isRegistering ? (
-            <RefreshCw data-icon="inline-start" className="animate-spin" />
-          ) : (
-            <MessageSquareWarning data-icon="inline-start" />
-          )}
-          {isRegistering ? "Registrando" : "Registrar falta/avaria"}
-        </Button>
+        />
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-4">
@@ -1200,21 +1190,17 @@ function ExpeditionReadinessSection({
       )}
 
       {hasPhysicalIssue(counts) ? (
-        <Button
-          type="button"
+        <BotaoDeAcao
           size="sm"
           variant="outline"
           className="mt-4 w-full"
+          estado={isRegistering ? "andamento" : "repouso"}
+          icone={<MessageSquareWarning aria-hidden="true" />}
+          rotulo="Enviar evidência de saída"
+          andamento="Registrando…"
+          bloqueado={!isRegistering && !canRegister}
           onClick={() => onOpenException(task, issueNote)}
-          disabled={!canRegister || isRegistering}
-        >
-          {isRegistering ? (
-            <RefreshCw data-icon="inline-start" className="animate-spin" />
-          ) : (
-            <MessageSquareWarning data-icon="inline-start" />
-          )}
-          Enviar evidência de saída
-        </Button>
+        />
       ) : null}
 
       <div className="mt-4 flex flex-col gap-2">
@@ -1668,7 +1654,7 @@ export function TaskDetailPanel({
   const putawayBlockReason = !isPutaway
     ? ""
     : positionsQuery.isLoading
-      ? "Carregando posições."
+      ? "Carregando posições…"
       : positionsQuery.isError
         ? "Não consegui consultar as posições."
         : guardDestination && "problem" in guardDestination
@@ -1980,21 +1966,17 @@ export function TaskDetailPanel({
               <p className="text-sm font-semibold text-warning-soft-foreground sm:basis-full">{operationBlockReason}</p>
             ) : null}
             {showGenericExceptionAction ? (
-              <Button
-                type="button"
+              // Registrando a exceção, o botão da tarefa é o BotaoDeAcao: ocupado sem disabled (carregamento v2, parte 13b).
+              <BotaoDeAcao
                 variant="outline"
                 size={isPutaway ? "lg" : "default"}
                 className="w-full sm:flex-1"
+                estado={registeringExceptionId === task.id ? "andamento" : "repouso"}
+                icone={<MessageSquareWarning aria-hidden="true" />}
+                rotulo="Registrar exceção"
+                andamento="Registrando…"
                 onClick={() => onOpenException(task)}
-                disabled={registeringExceptionId === task.id}
-              >
-                {registeringExceptionId === task.id ? (
-                  <RefreshCw data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <MessageSquareWarning data-icon="inline-start" />
-                )}
-                Registrar exceção
-              </Button>
+              />
             ) : null}
             {!hasVisibleAction ? (
               <div className="w-full rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">

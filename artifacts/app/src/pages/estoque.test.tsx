@@ -331,14 +331,16 @@ describe("Estoque sem conexão", () => {
   it("a lista lida fica com a hora; sem nada lido, o aviso; a falta de conexão não troca a lista pelo erro", () => {
     expect(fonte).toContain("const semRede = semConexaoNaLeitura(skus, balances, products);");
     // A lista lida, com a falta: a hora dela fica na linha de estado sob o título (parte 7b), não na faixa que empurra a lista.
-    expect(fonte).toContain("const leiturasDaLista = [skus, balances, products];");
-    expect(fonte).toContain('estado={<LinhaDeEstado leitura={leiturasDaLista} objeto="estoque" pedidaPelaPessoa={atualizarLista.voltando} />}');
+    // O catálogo, os saldos e as fotos, com a falha que fica na tela enquanto tenta de novo (parte 13b).
+    expect(fonte).toContain("const leiturasComFalha = [catalogo, saldos, fotosDoCatalogo];");
+    expect(fonte).toContain("const leiturasDaLista = leiturasComFalha;");
+    expect(fonte).toContain('estado={<LinhaDeEstado id={ID_DA_LINHA} leitura={leiturasDaLista} objeto="estoque" pedidaPelaPessoa={atualizarLista.voltando} />}');
     expect(fonte).not.toContain("FaixaSemConexao");
     expect(fonte).not.toContain("Carregando estoque...");
-    // Na primeira leitura, nada no lugar da lista (a linha de estado diz); depois, o aviso, antes do erro.
-    expect(fonte).toContain("{skus.isLoading ? null : semRede && semRede.lidaEm === null ? (");
+    // Sem nada lido e sem rede, o aviso, antes do erro; na primeira leitura, nada no lugar da lista (a linha de estado diz).
     expect(fonte.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(fonte.indexOf("Não consegui carregar o estoque."));
+    expect(fonte.indexOf("Não consegui carregar o estoque.")).toBeLessThan(fonte.indexOf(") : aindaLendo ? null : ("));
     // Só a leitura sem nada lido troca a lista pelo aviso: a releitura que falha fica na linha de estado (parte 10).
-    expect(fonte).toContain(") : skus.error && !skus.data && !semRede ? (");
+    expect(fonte).toContain(") : falhouSemNadaLido && !semRede ? (");
   });
 });

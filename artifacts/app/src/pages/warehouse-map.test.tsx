@@ -125,10 +125,12 @@ describe("Mapa sem conexão", () => {
   const fonte = readFileSync(new URL("./warehouse-map.tsx", import.meta.url), "utf8");
 
   it("o mapa lido fica com a hora; sem nada lido, o aviso, e não \"Nenhuma posição cadastrada\"", () => {
-    expect(fonte).toContain("const semRede = semConexaoNaLeitura(positionsQuery, boxesQuery);");
-    expect(fonte).toContain("const error = semRede ? null : positionsQuery.error ?? boxesQuery.error;");
-    expect(fonte).toContain("const empty = !loading && !error && !semNadaLido && shelves.length === 0;");
-    expect(fonte).toMatch(/semRede\.lidaEm === null \? \(\s*<BlocoSemConexao tentando=\{relendo\} onTentar=\{reler\} \/>\s*\) : \(\s*<FaixaSemConexao lidaEm=\{semRede\.lidaEm\}/);
+    expect(fonte).toContain("const semRede = semConexaoNaLeitura(positionsQuery, boxesQuery, balancesQuery, skusQuery);");
+    expect(fonte).toContain("const empty = !loading && !falhou && !semNadaLido && shelves.length === 0;");
+    // Com o mapa lido, a hora e a falta ficam na linha de estado sob o título, sem a faixa que empurrava o mapa (parte 13b).
+    expect(fonte).toContain('estado={<LinhaDeEstado id={ID_DA_LINHA} leitura={leiturasDoMapa} objeto="o mapa" />}');
+    expect(fonte).toContain("{semNadaLido ? <BlocoSemConexao tentando={relendo} onTentar={reler} focoAoSair={ID_DA_LINHA} /> : null}");
+    expect(fonte).not.toContain("FaixaSemConexao");
     // A situação do inventário sem rede não vira um segundo aviso.
     expect(fonte).toContain("showSessionStatus && sessionQuery.isError && !ehFaltaDeConexao(sessionQuery.error)");
   });

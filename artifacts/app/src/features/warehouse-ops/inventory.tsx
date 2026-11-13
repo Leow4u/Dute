@@ -26,7 +26,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { Spinner } from "@/components/ui/spinner";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { OpeningLineCorrection } from "./opening-line-correction";
 import { OpeningConferenceSummary } from "./opening-conference-summary";
 import { ShelfPicker, eligibleShelfPositions, isCurrentShelfPreview } from "./shelf-picker";
@@ -262,6 +267,14 @@ type PreenchidoPelaTela = Partial<Record<"tamanho" | "produto" | "categoria" | "
 const assinaturaDasFotos = (fotos: ProductPhoto[]) => fotos.map((foto) => `${foto.fileUrl}\n${foto.storagePath}`).join("\n");
 
 /**
+ * O número que ainda não foi lido (carregamento v2, parte 13b): o bloco de 16 × 12 px no lugar do número enquanto
+ * lê, como o "Em aberto · ▪" das listas; sem leitura (a falha), o traço. Nunca "0" antes de ler.
+ */
+function NumeroPorLer({ lendo }: { lendo: boolean }) {
+  return lendo ? <Esqueleto forma="contagem" className="inline-block align-middle" /> : <>—</>;
+}
+
+/**
  * A Contagem tem duas abas: o inventário de abertura (uma vez por cliente,
  * para inicializar o estoque) e a contagem cíclica (a rotina). Sem abertura
  * concluída, abre na abertura; a pessoa pode trocar. O seletor saiu em
@@ -301,7 +314,11 @@ export function CycleCountWorkspace() {
         </TabsList>
       </Tabs>
       {mode === null ? (
-        <Skeleton className="h-72 w-full rounded-lg" />
+        // O esqueleto da tela e, aos 300 ms, a caixa com o rótulo e o anúncio (carregamento v2, parte 13b).
+        <div className="flex flex-col gap-3">
+          <CarregandoNaRegiao rotulo="Carregando a contagem…" />
+          <Skeleton className="h-72 w-full rounded-lg" />
+        </div>
       ) : (
         <>
           <OpeningInventoryNotice session={sessionQuery.data} />
@@ -412,7 +429,8 @@ export function OpeningInventoryWorkspace() {
     }
   }, [productName]);
 
-  const sessionQuery = useOpeningInventorySession();
+  // A sessão que falhou fica na tela enquanto tenta de novo: o "Tentar de novo" não some com o foco nele (parte 13b).
+  const sessionQuery = useLeituraComFalha(useOpeningInventorySession());
   const lookupQuery = useQuery({
     queryKey: ["opening-inventory-product-lookup", customerCode],
     staleTime: 30_000,
@@ -444,6 +462,10 @@ export function OpeningInventoryWorkspace() {
     () => eligibleShelfPositions(positionsQuery.data?.items ?? [], customerCode),
     [positionsQuery.data?.items, customerCode],
   );
+  // As leituras que falharam ficam na tela enquanto tentam de novo: o aviso e o "Tentar de novo" não somem com o
+  // foco neles (carregamento v2, parte 13b).
+  const catalogoLido = useLeituraComFalha(lookupQuery);
+  const prateleirasLidas = useLeituraComFalha(positionsQuery);
   const lookupProducts = lookupQuery.data ?? [];
   const session = sessionQuery.data;
   const sessionLines = session?.lines ?? [];
@@ -467,6 +489,8 @@ export function OpeningInventoryWorkspace() {
       { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ customer_code: customerCode, session_id: session?.session_id }) },
     ),
   });
+  const conferenciaLida = useLeituraComFalha(conferenceQuery);
+  const caixasLidas = useLeituraComFalha(boxesQuery);
   const currentBox = conferenceQuery.data?.box ? warehouseBoxFromRecord(conferenceQuery.data.box) : selectedBox;
   const conferenceLines = conferenceQuery.data?.lines ?? [];
   useEffect(() => {
@@ -1157,6 +1181,13 @@ export function OpeningInventoryWorkspace() {
     removeConferenceLine.isPending || storeConference.isPending || resumeConference.isPending ||
     recordOpeningLine.isPending || conferenceQuery.isFetching;
   const boxBusy = suggestPosition.isPending || createBox.isPending || conferenceBusy;
+  // Qual ação está em andamento, para o botão dela dizer o gerúndio (carregamento v2, parte 13b).
+  const mudandoAConferencia = changeConferenceState.isPending ? changeConferenceState.variables : null;
+  const guardandoEm = createBox.isPending
+    ? createBox.variables?.candidate.code ?? null
+    : storeConference.isPending
+      ? storeConference.variables?.code ?? null
+      : null;
   function choosePutawayMode(mode: "suggested" | "manual") {
     suggestionGeneration.current += 1;
     setPutawayMode(mode);
@@ -1202,18 +1233,14 @@ export function OpeningInventoryWorkspace() {
               </div>
             </div>
             {session?.status === "not_started" ? (
-              <Button
-                type="button"
+              // A ação da sessão é o BotaoDeAcao: ocupado sem disabled, com o gerúndio (carregamento v2, parte 13b).
+              <BotaoDeAcao
+                estado={startSession.isPending ? "andamento" : "repouso"}
+                icone={<PlayCircle aria-hidden="true" />}
+                rotulo="Iniciar contagem"
+                andamento="Iniciando…"
                 onClick={() => startSession.mutate()}
-                disabled={startSession.isPending}
-              >
-                {startSession.isPending ? (
-                  <RefreshCw data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <PlayCircle data-icon="inline-start" />
-                )}
-                Iniciar contagem
-              </Button>
+              />
             ) : (
               <Badge
                 variant="outline"
@@ -1232,23 +1259,14 @@ export function OpeningInventoryWorkspace() {
         <CardContent className="p-6">
           {sessionQuery.isLoading ? (
             <Skeleton className="h-72 w-full rounded-lg" />
-          ) : sessionQuery.isError ? (
-            <Alert variant="destructive" className="bg-destructive/10">
-              <AlertCircle className="size-4" />
-              <AlertTitle>Não foi possível carregar o inventário</AlertTitle>
-              <AlertDescription className="mt-2 flex flex-col gap-3">
-                <span>{getErrorMessage(sessionQuery.error)}</span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-fit"
-                  onClick={() => sessionQuery.refetch()}
-                >
-                  <RefreshCw data-icon="inline-start" />
-                  Tentar novamente
-                </Button>
-              </AlertDescription>
-            </Alert>
+          ) : sessionQuery.isError && !session ? (
+            // A falha nunca vira vazio, e a nova tentativa fica na tela enquanto tenta; a releitura que falha com a sessão
+            // lida não troca a abertura pelo aviso (parte 13b).
+            <ErroNaLeitura
+              mensagem="Não consegui carregar o inventário."
+              tentando={sessionQuery.isFetching}
+              onTentar={() => void sessionQuery.refetch()}
+            />
           ) : !sessionOpen ? (
             <Empty className="min-h-72 rounded-lg border border-dashed border-border bg-card">
               <EmptyHeader>
@@ -1273,10 +1291,14 @@ export function OpeningInventoryWorkspace() {
                 <div className="space-y-4 rounded-lg border border-border p-5">
                   <h3 className="text-lg font-semibold">Nova caixa de destino</h3>
                   <p className="text-sm text-muted-foreground">Separe aqui os produtos que ficarão juntos. Modelos e tamanhos continuam identificados por seus próprios códigos.</p>
-                  <Button type="button" onClick={() => createConference.mutate()} disabled={boxBusy}>
-                    {createConference.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <Boxes data-icon="inline-start" />}
-                    Iniciar conferência da caixa
-                  </Button>
+                  <BotaoDeAcao
+                    estado={createConference.isPending ? "andamento" : "repouso"}
+                    icone={<Boxes aria-hidden="true" />}
+                    rotulo="Iniciar conferência da caixa"
+                    andamento="Iniciando…"
+                    bloqueado={!createConference.isPending && boxBusy}
+                    onClick={() => createConference.mutate()}
+                  />
                   <div className="border-t border-border pt-3">
                     <Button type="button" variant="outline" onClick={() => setLegacyBoxMode(true)} disabled={boxBusy}>Cadastrar caixa já armazenada</Button>
                     <p className="mt-2 text-sm text-muted-foreground">Para corrigir o vínculo de lançamentos que já foram feitos.</p>
@@ -1297,14 +1319,27 @@ export function OpeningInventoryWorkspace() {
                       {currentBox.status === "stored" ? <Button type="button" variant="outline" onClick={() => navigate(labelsUrl({ boxes: [currentBox.code] }))} disabled={conferenceBusy}><Printer data-icon="inline-start" />Imprimir etiqueta</Button> : null}
                       <Button type="button" variant="outline" onClick={() => requestBoxSelection()} disabled={conferenceBusy || photoUploading}>Trocar caixa</Button>
                       {currentBox.status === "stored" ? (
-                        <Button type="button" variant="outline" disabled={conferenceBusy || photoUploading || formDirty}
-                          onClick={() => currentBox.opening_closed ? changeConferenceState.mutate("reopen") : setReviewBoxOpen(true)}>
-                          {currentBox.opening_closed ? "Reabrir para ajustar" : "Revisar e fechar caixa"}
-                        </Button>
+                        currentBox.opening_closed ? (
+                          <BotaoDeAcao
+                            variant="outline"
+                            estado={mudandoAConferencia === "reopen" ? "andamento" : "repouso"}
+                            rotulo="Reabrir para ajustar"
+                            andamento="Reabrindo…"
+                            bloqueado={mudandoAConferencia !== "reopen" && (conferenceBusy || photoUploading || formDirty)}
+                            onClick={() => changeConferenceState.mutate("reopen")}
+                          />
+                        ) : (
+                          <Button type="button" variant="outline" disabled={conferenceBusy || photoUploading || formDirty}
+                            onClick={() => setReviewBoxOpen(true)}>
+                            Revisar e fechar caixa
+                          </Button>
+                        )
                       ) : null}
                     </div>
                   </div>
-                  {conferenceQuery.isError ? <Alert variant="destructive"><AlertTitle>Não consegui carregar a conferência</AlertTitle><AlertDescription><Button type="button" variant="outline" onClick={() => conferenceQuery.refetch()}>Tentar novamente</Button></AlertDescription></Alert> : null}
+                  {conferenciaLida.isError ? (
+                    <ErroNaLeitura mensagem="Não consegui carregar a conferência." tentando={conferenciaLida.isFetching} onTentar={() => void conferenceQuery.refetch()} />
+                  ) : null}
                   {currentBox.status === "stored" && currentBox.opening_closed ? <p className="text-sm">Caixa fechada. Para continuar contando, inicie a próxima caixa.</p> : null}
                 </div>
               ) : null}
@@ -1314,6 +1349,7 @@ export function OpeningInventoryWorkspace() {
                   lines={conferenceLines}
                   busy={conferenceBusy || photoUploading || formDirty}
                   resuming={resumeConference.isPending}
+                  reabrindo={mudandoAConferencia === "reopen"}
                   onEdit={editConferenceLine}
                   onRemove={setDraftToRemove}
                   onReview={() => setReviewBoxOpen(true)}
@@ -1322,7 +1358,14 @@ export function OpeningInventoryWorkspace() {
                 />
               ) : null}
               {currentBox?.status === "committing" && conferenceLines.every((line) => line.status === "pending" || line.status === "failed") ? (
-                <Button type="button" variant="outline" onClick={() => changeConferenceState.mutate("release")} disabled={conferenceBusy || formDirty}>Voltar à conferência</Button>
+                <BotaoDeAcao
+                  variant="outline"
+                  estado={mudandoAConferencia === "release" ? "andamento" : "repouso"}
+                  rotulo="Voltar à conferência"
+                  andamento="Voltando…"
+                  bloqueado={mudandoAConferencia !== "release" && (conferenceBusy || formDirty)}
+                  onClick={() => changeConferenceState.mutate("release")}
+                />
               ) : null}
               {((!currentBox && legacyBoxMode) || currentBox?.status === "reviewed") ? (
                 <div className="space-y-4 rounded-lg border border-border bg-card p-4">
@@ -1392,13 +1435,12 @@ export function OpeningInventoryWorkspace() {
                     {putawayMode === "manual" ? (
                       <div className="space-y-3">
                         {automaticSuggestion?.position ? <p className="text-sm text-muted-foreground">Sugestão atual: {automaticSuggestion.position.code}</p> : null}
-                        {positionsQuery.isError ? (
-                          <Alert variant="destructive">
-                            <AlertTitle>Não consegui carregar as prateleiras</AlertTitle>
-                            <AlertDescription>
-                              <Button type="button" variant="outline" onClick={() => positionsQuery.refetch()}>Tentar novamente</Button>
-                            </AlertDescription>
-                          </Alert>
+                        {prateleirasLidas.isError && prateleirasLidas.data === undefined ? (
+                          <ErroNaLeitura
+                            mensagem="Não consegui carregar as prateleiras."
+                            tentando={prateleirasLidas.isFetching}
+                            onTentar={() => void positionsQuery.refetch()}
+                          />
                         ) : (
                           <ShelfPicker
                             positions={eligiblePositions}
@@ -1417,10 +1459,8 @@ export function OpeningInventoryWorkspace() {
                       </Alert>
                     ) : null}
                     {suggestPosition.isPending ? (
-                      <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <RefreshCw className="size-4 animate-spin" />
-                        {putawayMode === "manual" ? "Conferindo o encaixe nesta prateleira…" : "Consultando a sugestão…"}
-                      </div>
+                      // A caixa e o rótulo aos 300 ms, com o anúncio, sem região viva solta (parte 13b).
+                      <CarregandoNaRegiao rotulo={putawayMode === "manual" ? "Conferindo o encaixe nesta prateleira…" : "Consultando a sugestão…"} />
                     ) : null}
                     {activePosition && positionsQuery.isSuccess && !positionsQuery.isFetching && boxesQuery.isSuccess && !boxesQuery.isFetching ? (
                       <ShelfVolumeSummary position={activePosition} boxes={storedBoxes} incomingBox={boxPayload ?? undefined} unconfirmed={sessionOpen} />
@@ -1445,10 +1485,14 @@ export function OpeningInventoryWorkspace() {
                             </div>
                           </div>
                           <div className="flex flex-col gap-2 @sm:items-end">
-                            <Button type="button" onClick={() => confirmPosition(activeSuggestion.position!)} disabled={boxBusy}>
-                              {createBox.isPending || storeConference.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <CheckCircle2 data-icon="inline-start" />}
-                              Confirmar guarda em {activeSuggestion.position.code}
-                            </Button>
+                            <BotaoDeAcao
+                              estado={guardandoEm === activeSuggestion.position.code ? "andamento" : "repouso"}
+                              icone={<CheckCircle2 aria-hidden="true" />}
+                              rotulo={`Confirmar guarda em ${activeSuggestion.position.code}`}
+                              andamento="Guardando…"
+                              bloqueado={guardandoEm !== activeSuggestion.position.code && boxBusy}
+                              onClick={() => confirmPosition(activeSuggestion.position!)}
+                            />
                             {putawayMode === "suggested" ? (
                               <Button type="button" variant="outline" onClick={() => setRefusing((current) => !current)} disabled={boxBusy}>
                                 Não cabe aqui
@@ -1460,10 +1504,17 @@ export function OpeningInventoryWorkspace() {
                           <div className="flex flex-wrap items-center gap-2 border-t border-primary/10 pt-3 text-xs text-muted-foreground">
                             <span>Se preferir:</span>
                             {activeSuggestion.alternatives.map((alternative) => (
-                              <Button key={alternative.code} type="button" size="sm" variant="outline" className="h-auto flex-col items-start py-2"
+                              // Ocupado não é desabilitado: a alternativa tocada diz o gerúndio, com a caixa, e o foco fica nela.
+                              <Button key={alternative.code} type="button" size="sm" variant="outline"
+                                className={cn("h-auto flex-col items-start py-2", boxBusy && "opacity-45")}
                                 title={`${alternative.reason} ${formatBoxPlacement(alternative.placement)}`}
-                                onClick={() => confirmPosition(alternative)} disabled={boxBusy}>
-                                <span>Guardar em {alternative.code}</span>
+                                aria-disabled={boxBusy || undefined}
+                                aria-busy={guardandoEm === alternative.code || undefined}
+                                onClick={() => confirmPosition(alternative)}>
+                                <span className="inline-flex items-center gap-1.5">
+                                  {guardandoEm === alternative.code ? <Spinner /> : null}
+                                  {guardandoEm === alternative.code ? `Guardando em ${alternative.code}…` : `Guardar em ${alternative.code}`}
+                                </span>
                                 <span className="text-xs font-normal">{formatBoxPlacement(alternative.placement)}</span>
                               </Button>
                             ))}
@@ -1567,15 +1618,8 @@ export function OpeningInventoryWorkspace() {
                     </div>
                   </div>
 
-                  {lookupQuery.isLoading || lookupQuery.isFetching ? (
-                    <Alert className="border-border bg-card">
-                      <RefreshCw className="size-4 animate-spin" />
-                      <AlertTitle>Verificando o catálogo</AlertTitle>
-                      <AlertDescription>
-                        Aguarde a confirmação antes de cadastrar o produto.
-                      </AlertDescription>
-                    </Alert>
-                  ) : lookupQuery.isError ? (
+                  {catalogoLido.isError ? (
+                    // A falha fica na tela enquanto tenta de novo: o botão diz "Tentando de novo…" e o foco fica (parte 13b).
                     <Alert variant="destructive" className="bg-destructive/10">
                       <AlertCircle className="size-4" />
                       <AlertTitle>Catálogo indisponível</AlertTitle>
@@ -1583,12 +1627,19 @@ export function OpeningInventoryWorkspace() {
                         <span>
                           O cadastro de produto novo foi bloqueado para evitar duplicidade.
                         </span>
-                        <Button type="button" variant="outline" onClick={() => lookupQuery.refetch()}>
-                          <RefreshCw data-icon="inline-start" />
-                          Tentar novamente
-                        </Button>
+                        <BotaoDeAcao
+                          variant="outline"
+                          estado={catalogoLido.isFetching ? "andamento" : "repouso"}
+                          icone={<RefreshCw aria-hidden="true" />}
+                          rotulo="Tentar de novo"
+                          andamento="Tentando de novo…"
+                          onClick={() => void lookupQuery.refetch()}
+                        />
                       </AlertDescription>
                     </Alert>
+                  ) : catalogoLido.isLoading || catalogoLido.isFetching ? (
+                    // A caixa e o rótulo aos 300 ms, com o anúncio: a releitura rápida não pisca (parte 13b).
+                    <CarregandoNaRegiao rotulo="Verificando o catálogo…" />
                   ) : identityConflict ? (
                     <Alert variant="destructive" className="bg-destructive/10">
                       <AlertTriangle className="size-4" />
@@ -1802,10 +1853,14 @@ export function OpeningInventoryWorkspace() {
                     <p className="text-sm leading-6 text-muted-foreground">
                       {isDraftBox ? "A contagem fica salva nesta caixa. O estoque será publicado ao confirmar a guarda." : `A contagem será publicada na caixa ${currentBox.code}, posição ${currentBox.location_id}.`}
                     </p>
-                    <Button type="submit" disabled={!canSubmit || recordOpeningLine.isPending}>
-                      {recordOpeningLine.isPending ? <RefreshCw data-icon="inline-start" className="animate-spin" /> : <CheckCircle2 data-icon="inline-start" />}
-                      {editingDraft ? "Salvar correção" : isDraftBox ? "Salvar na conferência" : `Confirmar em ${currentBox.code}`}
-                    </Button>
+                    <BotaoDeAcao
+                      type="submit"
+                      estado={recordOpeningLine.isPending ? "andamento" : "repouso"}
+                      icone={<CheckCircle2 aria-hidden="true" />}
+                      rotulo={editingDraft ? "Salvar correção" : isDraftBox ? "Salvar na conferência" : `Confirmar em ${currentBox.code}`}
+                      andamento="Salvando…"
+                      bloqueado={!recordOpeningLine.isPending && !canSubmit}
+                    />
                   </div>
                   {formDirty ? <Button type="button" variant="outline" onClick={resetProductForm} disabled={conferenceBusy || photoUploading}>{editingDraft ? "Cancelar edição" : "Limpar campos"}</Button> : null}
                 </form>
@@ -1822,26 +1877,27 @@ export function OpeningInventoryWorkspace() {
           </CardHeader>
           <CardContent className="min-w-0 space-y-3">
             <div className="grid grid-cols-2 gap-3">
+              {/* Nunca "0" antes de ler (carregamento v2, parte 13b): sem a sessão, "—"; sem as caixas, o bloco no lugar do número. */}
               <div className="rounded-md border border-border bg-card p-3">
                 <div className="text-xs text-muted-foreground">Lançamentos publicados</div>
-                <div className="mt-1 text-xl font-semibold text-foreground">{formatNumber(session?.line_count)}</div>
+                <div className="mt-1 text-xl font-semibold text-foreground">{session ? formatNumber(session.line_count) : "—"}</div>
               </div>
               <div className="rounded-md border border-border bg-card p-3">
                 <div className="text-xs text-muted-foreground">Unidades publicadas</div>
-                <div className="mt-1 text-xl font-semibold text-foreground">{formatNumber(session?.unit_count)}</div>
+                <div className="mt-1 text-xl font-semibold text-foreground">{session ? formatNumber(session.unit_count) : "—"}</div>
               </div>
               <div className="rounded-md border border-border bg-card p-3">
                 <div className="text-xs text-muted-foreground">Caixas</div>
-                <div className="mt-1 text-xl font-semibold text-foreground">{formatNumber(boxesOfSession.length)}</div>
+                <div className="mt-1 text-xl font-semibold text-foreground">{caixasLidas.data ? formatNumber(boxesOfSession.length) : <NumeroPorLer lendo={caixasLidas.isLoading} />}</div>
               </div>
               <div className="rounded-md border border-border bg-card p-3" title="Prateleiras com ao menos uma caixa guardada: a base da cobrança por posição.">
                 <div className="text-xs text-muted-foreground">Posições ocupadas</div>
-                <div className="mt-1 text-xl font-semibold text-foreground">{formatNumber(occupied)}</div>
+                <div className="mt-1 text-xl font-semibold text-foreground">{caixasLidas.data ? formatNumber(occupied) : <NumeroPorLer lendo={caixasLidas.isLoading} />}</div>
               </div>
             </div>
             <div className="rounded-md border border-border bg-card p-3">
               <div className="text-xs text-muted-foreground">Valor controlado</div>
-              <div className="mt-1 text-lg font-semibold text-foreground">{formatCurrency(coerceNumber(session?.total_cost))}</div>
+              <div className="mt-1 text-lg font-semibold text-foreground">{session ? formatCurrency(coerceNumber(session.total_cost)) : "—"}</div>
             </div>
             {pendingBoxes.length ? <Alert><AlertTitle>{pendingBoxes.length} caixa(s) por concluir</AlertTitle><AlertDescription>Conclua a guarda ou remova as caixas vazias antes de encerrar o inventário.</AlertDescription></Alert> : null}
             {sessionOpen ? (
@@ -1886,13 +1942,14 @@ export function OpeningInventoryWorkspace() {
                       Etiquetas
                     </Button>
                   ) : null}
-                  <Badge variant="outline">{formatNumber(boxesOfSession.length)}</Badge>
+                  {caixasLidas.data ? <Badge variant="outline">{formatNumber(boxesOfSession.length)}</Badge> : null}
                 </div>
               </div>
-              {boxesQuery.isError ? (
-                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                  Não consegui carregar as caixas: {getErrorMessage(boxesQuery.error)}
-                </div>
+              {caixasLidas.isError && caixasLidas.data === undefined ? (
+                <ErroNaLeitura mensagem="Não consegui carregar as caixas." tentando={caixasLidas.isFetching} onTentar={() => void boxesQuery.refetch()} />
+              ) : caixasLidas.isLoading ? (
+                // Nunca "Nenhuma caixa nesta sessão." antes de ler: a caixa e o rótulo aos 300 ms (parte 13b).
+                <CarregandoNaRegiao rotulo="Carregando caixas…" />
               ) : boxesOfSession.length ? (
                 <div
                   role="region"
@@ -1981,7 +2038,7 @@ export function OpeningInventoryWorkspace() {
                     Revise antes de encerrar a abertura.
                   </div>
                 </div>
-                <Badge variant="outline">{formatNumber(visibleLines.length)}</Badge>
+                {session ? <Badge variant="outline">{formatNumber(visibleLines.length)}</Badge> : null}
               </div>
 
               <Select value={lineBoxFilter} onValueChange={setLineBoxFilter}>
@@ -2050,11 +2107,11 @@ export function OpeningInventoryWorkspace() {
                     ))}
                   </div>
                 </div>
-              ) : (
+              ) : session ? (
                 <div className="rounded-md border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
                   Nenhum lançamento neste filtro.
                 </div>
-              )}
+              ) : null}
             </div>
           </CardContent>
         </Card>
@@ -2077,7 +2134,8 @@ export function OpeningInventoryWorkspace() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={reviewBoxOpen} onOpenChange={(open) => { if (!changeConferenceState.isPending) setReviewBoxOpen(open); }}>
+      {/* Os diálogos que gravam seguram enquanto o servidor responde (o `ocupado` da parte 13a), com o BotaoDeAcao. */}
+      <Dialog open={reviewBoxOpen} ocupado={mudandoAConferencia === "review"} onOpenChange={setReviewBoxOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Conferir e fechar {currentBox?.code}</DialogTitle>
@@ -2092,18 +2150,30 @@ export function OpeningInventoryWorkspace() {
             </div>
           </ScrollArea>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setReviewBoxOpen(false)} disabled={conferenceBusy}>Voltar à contagem</Button>
-            <Button type="button" onClick={() => changeConferenceState.mutate("review")} disabled={conferenceBusy || !reviewLines.length}>Conferido, fechar caixa</Button>
+            <DialogCancelar onClick={() => setReviewBoxOpen(false)}>Voltar à contagem</DialogCancelar>
+            <BotaoDeAcao
+              estado={mudandoAConferencia === "review" ? "andamento" : "repouso"}
+              rotulo="Conferido, fechar caixa"
+              andamento="Fechando…"
+              bloqueado={mudandoAConferencia !== "review" && (conferenceBusy || !reviewLines.length)}
+              onClick={() => changeConferenceState.mutate("review")}
+            />
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(draftToRemove)} onOpenChange={(open) => { if (!open && !removeConferenceLine.isPending) setDraftToRemove(undefined); }}>
+      <Dialog open={Boolean(draftToRemove)} ocupado={removeConferenceLine.isPending} onOpenChange={(open) => { if (!open) setDraftToRemove(undefined); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Remover item da conferência?</DialogTitle><DialogDescription>{draftToRemove?.product_name || draftToRemove?.client_item_code} · {formatNumber(draftToRemove?.counted_qty)} un. Este rascunho ainda não foi publicado no estoque.</DialogDescription></DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setDraftToRemove(undefined)} disabled={removeConferenceLine.isPending}>Manter</Button>
-            <Button type="button" variant="destructive" onClick={() => { if (draftToRemove) removeConferenceLine.mutate(draftToRemove); }} disabled={removeConferenceLine.isPending}>Remover rascunho</Button>
+            <DialogCancelar onClick={() => setDraftToRemove(undefined)}>Manter</DialogCancelar>
+            <BotaoDeAcao
+              variant="destructive"
+              estado={removeConferenceLine.isPending ? "andamento" : "repouso"}
+              rotulo="Remover rascunho"
+              andamento="Removendo…"
+              onClick={() => { if (draftToRemove) removeConferenceLine.mutate(draftToRemove); }}
+            />
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2171,8 +2241,9 @@ export function OpeningInventoryWorkspace() {
 
       <Dialog
         open={Boolean(lineToRemove)}
+        ocupado={removeOpeningLine.isPending}
         onOpenChange={(open) => {
-          if (!open && !removeOpeningLine.isPending) setLineToRemove(undefined);
+          if (!open) setLineToRemove(undefined);
         }}
       >
         <DialogContent className="sm:max-w-[520px]">
@@ -2208,37 +2279,27 @@ export function OpeningInventoryWorkspace() {
             </div>
           ) : null}
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setLineToRemove(undefined)}
-              disabled={removeOpeningLine.isPending}
-            >
-              Manter linha
-            </Button>
-            <Button
-              type="button"
+            <DialogCancelar onClick={() => setLineToRemove(undefined)}>Manter linha</DialogCancelar>
+            <BotaoDeAcao
               variant="destructive"
+              estado={removeOpeningLine.isPending ? "andamento" : "repouso"}
+              icone={<Trash2 aria-hidden="true" />}
+              rotulo="Remover para corrigir"
+              andamento="Removendo…"
+              bloqueado={!removeOpeningLine.isPending && !lineToRemove}
               onClick={() => {
                 if (lineToRemove) removeOpeningLine.mutate(lineToRemove);
               }}
-              disabled={!lineToRemove || removeOpeningLine.isPending}
-            >
-              {removeOpeningLine.isPending ? (
-                <RefreshCw data-icon="inline-start" className="animate-spin" />
-              ) : (
-                <Trash2 data-icon="inline-start" />
-              )}
-              Remover para corrigir
-            </Button>
+            />
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog
         open={Boolean(boxToRemove)}
+        ocupado={removeBox.isPending}
         onOpenChange={(open) => {
-          if (!open && !removeBox.isPending) setBoxToRemove(undefined);
+          if (!open) setBoxToRemove(undefined);
         }}
       >
         <DialogContent className="sm:max-w-[520px]">
@@ -2254,29 +2315,18 @@ export function OpeningInventoryWorkspace() {
             </div>
           ) : null}
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setBoxToRemove(undefined)}
-              disabled={removeBox.isPending}
-            >
-              Manter caixa
-            </Button>
-            <Button
-              type="button"
+            <DialogCancelar onClick={() => setBoxToRemove(undefined)}>Manter caixa</DialogCancelar>
+            <BotaoDeAcao
               variant="destructive"
+              estado={removeBox.isPending ? "andamento" : "repouso"}
+              icone={<Trash2 aria-hidden="true" />}
+              rotulo="Remover caixa"
+              andamento="Removendo…"
+              bloqueado={!removeBox.isPending && !boxToRemove}
               onClick={() => {
                 if (boxToRemove) removeBox.mutate(boxToRemove);
               }}
-              disabled={!boxToRemove || removeBox.isPending}
-            >
-              {removeBox.isPending ? (
-                <RefreshCw data-icon="inline-start" className="animate-spin" />
-              ) : (
-                <Trash2 data-icon="inline-start" />
-              )}
-              Remover caixa
-            </Button>
+            />
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2504,7 +2554,7 @@ export function ExistingCycleCountWorkspace() {
                   id="cycle-reference"
                   value={reference}
                   onChange={(event) => setReference(event.target.value)}
-                  placeholder="Auditoria, foto, inventário..."
+                  placeholder="Auditoria, foto, inventário…"
                 />
               </div>
             </div>
@@ -2529,14 +2579,15 @@ export function ExistingCycleCountWorkspace() {
                   contagem for menor que uma reserva ativa, o ajuste será bloqueado.
                 </p>
               </div>
-              <Button type="submit" disabled={!canSubmit || cycleCount.isPending}>
-                {cycleCount.isPending ? (
-                  <RefreshCw data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <CheckCircle2 data-icon="inline-start" />
-                )}
-                Registrar contagem
-              </Button>
+              {/* Ocupado sem disabled: o foco fica no botão, com o gerúndio (carregamento v2, parte 13b). */}
+              <BotaoDeAcao
+                type="submit"
+                estado={cycleCount.isPending ? "andamento" : "repouso"}
+                icone={<CheckCircle2 aria-hidden="true" />}
+                rotulo="Registrar contagem"
+                andamento="Registrando…"
+                bloqueado={!cycleCount.isPending && !canSubmit}
+              />
             </div>
           </form>
         </CardContent>

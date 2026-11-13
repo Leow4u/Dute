@@ -14,7 +14,9 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import {
   Card,
   CardContent,
@@ -29,9 +31,12 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -171,6 +176,13 @@ export function ExceptionWorkspace() {
     },
   });
 
+  // A leitura que falhou sem nada lido fica na tela enquanto tenta de novo, e nunca vira "Sem exceções abertas"; antes
+  // de ler, nem "0 aberta(s)" nem "Nada selecionado" (carregamento v2, parte 13b). O Atualizar só mostra a espera
+  // quando a pessoa toca nele: a releitura automática não o gira nem o desabilita (momento 7).
+  const leitura = useLeituraComFalha(exceptionsQuery);
+  const lida = exceptionsQuery.data !== undefined;
+  const falhou = leitura.isError && !lida;
+  const atualizarLista = useAtualizarLista([exceptionsQuery]);
   const exceptions = exceptionsQuery.data ?? [];
   const openExceptions = exceptions.filter((item) =>
     ["open", "in_review"].includes(item.status),
@@ -246,27 +258,31 @@ export function ExceptionWorkspace() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Badge variant="outline" className="border-destructive/20 bg-destructive/10 text-destructive">
-                {formatNumber(openExceptions.length)} aberta(s)
-              </Badge>
-              <Button
-                type="button"
+              {lida ? (
+                <Badge variant="outline" className="border-destructive/20 bg-destructive/10 text-destructive">
+                  {formatNumber(openExceptions.length)} aberta(s)
+                </Badge>
+              ) : null}
+              <BotaoDeAcao
                 variant="outline"
-                onClick={() => exceptionsQuery.refetch()}
-                disabled={exceptionsQuery.isFetching}
-              >
-                <RefreshCw
-                  data-icon="inline-start"
-                  className={cn(exceptionsQuery.isFetching && "animate-spin")}
-                />
-                Atualizar
-              </Button>
+                // O Atualizar com 44 px (seção 7).
+                className="min-h-11"
+                estado={atualizarLista.atualizando ? "andamento" : "repouso"}
+                icone={<RefreshCw aria-hidden="true" />}
+                rotulo="Atualizar"
+                andamento="Atualizando…"
+                bloqueado={!atualizarLista.atualizando && !lida}
+                onClick={atualizarLista.atualizar}
+              />
             </div>
           </div>
         </CardHeader>
         <CardContent className="p-6">
-          {exceptionsQuery.isLoading ? (
+          {falhou ? (
+            <FalhaNaLeitura leitura={exceptionsQuery} erro={leitura.error} mensagem="Não consegui carregar as exceções." />
+          ) : leitura.isLoading ? (
             <div className="space-y-3">
+              <CarregandoNaRegiao rotulo="Carregando exceções…" />
               <Skeleton className="h-28 rounded-lg" />
               <Skeleton className="h-28 rounded-lg" />
               <Skeleton className="h-28 rounded-lg" />
@@ -387,10 +403,14 @@ export function ExceptionWorkspace() {
                   />
                 </div>
 
-                <Button
-                  type="button"
+                {/* Ocupado sem disabled: o foco fica no botão, com o gerúndio (carregamento v2, parte 13b). */}
+                <BotaoDeAcao
                   className="w-full"
-                  disabled={!canResolve}
+                  estado={resolveException.isPending ? "andamento" : "repouso"}
+                  icone={<CheckCircle2 aria-hidden="true" />}
+                  rotulo="Confirmar tratativa"
+                  andamento="Confirmando…"
+                  bloqueado={!resolveException.isPending && !canResolve}
                   onClick={() =>
                     selectedException &&
                     resolveException.mutate({
@@ -399,16 +419,9 @@ export function ExceptionWorkspace() {
                       resolution: resolutionText.trim(),
                     })
                   }
-                >
-                  {resolveException.isPending ? (
-                    <RefreshCw data-icon="inline-start" className="animate-spin" />
-                  ) : (
-                    <CheckCircle2 data-icon="inline-start" />
-                  )}
-                  Confirmar tratativa
-                </Button>
+                />
               </>
-            ) : (
+            ) : !lida ? null : (
               <Empty className="min-h-[220px] border border-border bg-card">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">

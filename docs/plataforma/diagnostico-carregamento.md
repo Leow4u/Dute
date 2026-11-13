@@ -749,7 +749,7 @@ por PR:
 | 10 | A troca de filtro e a releitura sem apagar a lista | PR 610 |
 | 11 | As operações longas: fotos com progresso e etapas | PR 610 |
 | 12 | A trilha do Agent Dute | PR 610 |
-| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | 13a (os diálogos) no PR 610; o resto a fazer |
+| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | 13a (os diálogos) e 13b (o Estoque e o armazém) no PR 610; o resto a fazer |
 
 Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código:
 
@@ -1947,4 +1947,161 @@ Fica aberto:
 - o X do diálogo longo rola com o conteúdo, como antes;
 - entre o toque e o primeiro desenho do `isPending` (um tique), o Esc ainda
   fecha o diálogo;
+- a conferência com leitor de tela de verdade e num Android médio.
+
+**Parte 13b, o Estoque e o armazém (PR 610, 13/11/2026).** A migração das
+seções 4.4, 4.6 e 4.7 (Estoque › Itens e Alertas, a Contagem com a abertura e
+a contagem cíclica, o Mapa, as Posições e as Etiquetas) e, de 4.5, as Exceções
+e o painel da tarefa (`task-detail.tsx`). As necessidades 2, 3, 5, 8 e 10 da
+seção 5, conferidas contra o código atual.
+
+- **O que já estava feito**, e ficou: o "Retomar guarda" que só gira com a
+  guarda retomada (PR 581); no Estoque e nos Alertas, a linha de estado, o
+  Atualizar, os filtros sem "0" antes de ler e a releitura que falha na linha
+  (partes 7b, 8 e 10); as fotos da ficha e da Contagem (parte 11); os
+  diálogos de Posições, do Concluir inventário e do Guardar do RECEBIMENTO
+  (parte 13a); o "Avançar" ocupado até a releitura (parte 10); e o `Skeleton`
+  neutro nas telas de desenho fixo (parte 3).
+- **O ícone antigo girando** (17 `RefreshCw` com `animate-spin` na Contagem,
+  no painel da tarefa, nas Exceções e no "Corrigir caixa") saiu:
+  - as ações viraram o `BotaoDeAcao`, ocupado sem `disabled` e com o
+    gerúndio: "Iniciar contagem" e "Iniciar conferência da caixa"
+    ("Iniciando…"), "Confirmar guarda em B-05" ("Guardando…"), o lançamento
+    ("Salvando…"), "Reabrir para ajustar", "Reabrir conferência"
+    ("Reabrindo…"), "Voltar à conferência" ("Voltando…"), "Retomar guarda",
+    "Registrar contagem" ("Registrando…"), os cinco "Registrar"/"Enviar
+    evidência" do painel da tarefa ("Registrando…"), "Confirmar tratativa"
+    ("Confirmando…"), "Carregar mapa inicial" ("Carregando o mapa…") e, nos
+    Alertas, "Enviar ao cliente" e "Descartar" ("Enviando…", "Descartando…"),
+    cada um só com a própria espera, no lugar do "Gravando..." dos dois;
+  - a alternativa tocada do "Se preferir" diz "Guardando em B-06…" com a
+    caixa, e as outras esperam com `aria-disabled`;
+  - as esperas em bloco ("Verificando o catálogo…", "Consultando a
+    sugestão…", "Conferindo o encaixe nesta prateleira…", "Carregando
+    posições…", "Carregando movimentos…", "Carregando caixas…",
+    "Carregando exceções…", "Carregando a contagem…", "Carregando as
+    etiquetas…" e "Verificando inventário de BTG Pactual…") são a
+    `CarregandoNaRegiao`: nada antes de 300 ms, a caixa de 24 px e o anúncio
+    pelo Anunciador. Os dois `role="status"` soltos (a sugestão da abertura e
+    a verificação do Mapa) saíram; o seletor de prateleira ganhou a caixa ao
+    lado de "Carregando prateleiras…";
+  - o Atualizar das Exceções passa pelo `useAtualizarLista`: só mostra a
+    espera quando a pessoa toca nele, e a releitura automática não o gira nem
+    o desabilita (antes, girava e desligava a cada releitura).
+- **Os diálogos que a parte 13a deixou abertos na abertura** seguram como os
+  outros (o `ocupado`, o `DialogCancelar` e o `BotaoDeAcao`): Conferir e
+  fechar ("Fechando…"), Remover rascunho, Remover para corrigir e Remover
+  caixa ("Removendo…") e Corrigir caixa ("Corrigindo…", com a mesma chave na
+  nova tentativa).
+- **Erro nunca vira vazio** (necessidade 2): a leitura que falhou sem nada
+  lido mostra o aviso com "Tentar de novo", que fica na tela enquanto tenta
+  (`useLeituraComFalha`), e diz "Tentando de novo…" só com a leitura que
+  falhou relendo:
+  - Estoque: os saldos ou as fotos que falham (antes, a lista aparecia com
+    "Sem endereço" e nenhum aviso; o catálogo que falhava dizia o erro sem
+    "Tentar de novo"); os últimos movimentos da ficha (antes, "Nenhum
+    movimento registrado.");
+  - Exceções: antes, "Sem exceções abertas";
+  - Posições: antes, a tabela vazia ("Nenhuma posição com esses filtros", "0
+    de 0 posições") junto do alerta;
+  - Mapa, Etiquetas, Alertas, a sessão e a conferência da abertura, as
+    prateleiras e o catálogo da abertura e as caixas da sessão.
+- **A releitura que falha não apaga a lista** (necessidade 8): o Mapa (antes,
+  a releitura do intervalo que falhava trocava o mapa pelo alerta), as
+  Etiquetas (a releitura depois de registrar a impressão) e a abertura (a
+  sessão relida depois de cada gravação, que trocava a bancada pelo alerta)
+  ficam na tela. O
+  Mapa e as Posições ganharam a linha de estado sob o título ("Carregando o
+  mapa…", "Carregando posições…", "Atualizado às", "Não consegui atualizar ·
+  lista de", "Reconectando…", "Sem conexão"), no lugar da faixa que empurrava
+  o mapa. No Mapa, enquanto ele lê, a caixa é só a da linha: "Verificando
+  inventário" entra depois.
+- **Nunca vazio nem zero antes de ler** (necessidade 3): a lista do Estoque
+  só entra com o catálogo, os saldos e as fotos lidos, e Parados e Sem giro
+  ficam sem número até os dias parado chegarem; o painel do progresso da
+  abertura mostra o bloco no lugar de Caixas e Posições ocupadas, "—" sem a
+  sessão e "Carregando caixas…" no lugar de "Nenhuma caixa nesta sessão."; o
+  Mapa espera também os saldos e o catálogo (a busca dizia "Nenhuma
+  prateleira" antes de ler); as Exceções não dizem "0 aberta(s)" nem "Nada
+  selecionado"; as Etiquetas não dizem "0 etiquetas · 0 folhas".
+- **A reticência**: "Gravando..." e o "Auditoria, foto, inventário..." da
+  contagem cíclica viraram "…"; "Carregando posições." e "Tentar novamente"
+  passaram a "Carregando posições…" e "Tentar de novo".
+- **O toque duplo nos Alertas**: o Enviar é o mesmo botão de um alerta para o
+  seguinte, e o segundo toque dentro de 1 s é ignorado (o toque único do
+  `BotaoDeAcao`): o toque duplo não envia o alerta que acabou de entrar na
+  tela sem ninguém o ver.
+- **A trava da área** (`features/warehouse-ops/carregamento-do-armazem.test.ts`):
+  nas telas da área, nenhum `animate-spin`, `animate-pulse` ou `Loader2`,
+  nenhum `role="status"` nem `aria-live` solto e nenhum texto com três
+  pontos. A trava do app inteiro é a parte 13h.
+- **Testes**: um por tela (`estoque.carregamento`, `warehouse-map.carregamento`,
+  `warehouse-positions.carregamento`, `warehouse-labels.carregamento`,
+  `exceptions`, `inventory-carregamento`, `task-detail.carregamento`,
+  `opening-line-correction`) e os de antes atualizados (Alertas, o resumo da
+  caixa, o seletor de prateleira, o Estoque e o Mapa), com a lista de textos e
+  o axe. Contra o `e6b449d`, 45 dos 100 testes dos 17 arquivos falham.
+- **Medição no Chromium** (harness com a API falsa, só 127.0.0.1; antes é o
+  `e6b449d`):
+  - Estoque com o catálogo a 100 ms e os saldos e as fotos a 3 s: antes, as
+    linhas entravam aos 102 ms com "Sem endereço" e "Sem foto" por 2,9 s (174
+    quadros); depois, nenhum quadro com eles, e as linhas entram aos 2,99 s,
+    com os dados;
+  - os saldos que falham: antes, 3 linhas sem endereço e nenhum aviso;
+    depois, o aviso com "Tentar de novo" e nenhuma linha. Os movimentos da
+    ficha: antes, "Carregando..." seco de 11 ms a 2 s e, na falha, "Nenhum
+    movimento registrado."; depois, "Carregando movimentos…" aos 274 ms e o
+    aviso na falha;
+  - Posições na falha: antes, a tabela com "Nenhuma posição com esses
+    filtros" e "0 de 0 posições"; depois, só o aviso. "Carregar mapa
+    inicial" com o servidor a 3 s: antes, `disabled` e o foco no `body` de
+    40 ms ao fim (155 de 157 quadros), sem `aria-busy` nem rótulo, e quatro
+    botões do cabeçalho `disabled`; depois, o foco no botão em todos os
+    quadros, "Carregando o mapa…" e `aria-busy` aos 325 ms, e "Nova rua" e
+    "Nova posição" com `aria-disabled` (ficam `disabled` só os que não têm o
+    que fazer: "Imprimir etiquetas" e "Zona da rua", sem posição);
+  - Mapa: a releitura que falha apagava o mapa (o alerta no lugar); depois,
+    o mapa fica e a linha diz "Não consegui atualizar". Na primeira leitura,
+    antes, o texto "Verificando inventário…" num `role="status"` solto e
+    nada sobre o mapa; depois, "Carregando o mapa…" aos 285 ms, uma caixa só
+    e nenhuma região viva solta;
+  - Contagem com as caixas a 3 s: antes, "Caixas 0", "Posições ocupadas 0" e
+    "Nenhuma caixa nesta sessão." por 3 s (181 quadros); depois, nenhum.
+    "Iniciar conferência da caixa" com o servidor a 3 s: antes, o foco no
+    `body` de 42 ms ao fim e o `RefreshCw` girando; depois, o foco no botão,
+    a caixa chanfrada e "Iniciando…" aos 326 ms;
+  - Exceções: antes, "0 aberta(s)" e "Nada selecionado" por 2 s de leitura,
+    "Sem exceções abertas" na falha, e o Atualizar girando e `disabled` em
+    todos os quadros da releitura automática, com o foco no `body` no toque;
+    depois, nada disso, e o toque deixa o foco no botão, com `aria-busy` aos
+    305 ms;
+  - Alertas, "Enviar ao cliente" com o servidor a 3 s: antes, "Gravando..."
+    de 31 ms ao fim, o foco no `body` e as três marcas `disabled`; depois,
+    "Enviando…" aos 322 ms, o foco no botão e nenhuma marca `disabled`;
+  - Etiquetas com as caixas a 3 s: antes, "0 etiquetas · 0 folhas" em todos
+    os quadros (170); depois, nenhum;
+  - nenhuma rolagem lateral nas capturas de 1440 e 390 px; o axe-core, no
+    claro e no escuro, não acusa nada novo nas sete telas: ficam o
+    `aria-controls` das abas (Estoque e Contagem), o cabeçalho da tabela a
+    50% (Estoque, Alertas) e o primário no escuro (4,3:1), de antes desta
+    parte.
+
+Fica aberto:
+
+- as Devoluções (a `ReturnWorkspace`, no mesmo arquivo das Exceções) e a
+  espera do catálogo na contagem cíclica ("Produto ainda não localizado"
+  antes de ler) são da parte 13c (o PR 2 da seção 6);
+- na abertura, os botões vizinhos da ação em andamento (Trocar caixa,
+  Cadastrar caixa já armazenada, Não cabe aqui, Imprimir etiqueta, Abrir, o
+  Editar e o remover dos rascunhos) seguem `disabled`, também durante a
+  releitura da conferência (o `conferenceBusy` inclui o `isFetching`, que
+  guarda a revisão esperada); o botão tocado nunca fica;
+- o seletor de prateleira continua desligado durante a releitura das
+  posições, sem rótulo;
+- a "Verificando o catálogo…" reserva 24 px a cada releitura do catálogo da
+  abertura (antes, o alerta inteiro entrava na hora);
+- o Mapa e as Posições não têm Atualizar, nem a barra do topo na volta do
+  app ao primeiro plano; aos 70 s, nenhuma lista desta área diz "Sem resposta
+  do servidor.", como as outras;
+- os dias parado que falham deixam Parados e Sem giro sem número e sem aviso;
 - a conferência com leitor de tela de verdade e num Android médio.

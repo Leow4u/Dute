@@ -5,6 +5,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { WarehousePosition } from "@/lib/warehouse-positions";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 /** Selection is limited to persisted, active shelves in the current customer's zone. */
@@ -49,7 +50,10 @@ export function ShelfPicker({
         <PopoverTrigger asChild>
           <Button id={id} type="button" role="combobox" aria-expanded={open} variant="outline"
             disabled={disabled || loading} className="w-full justify-between bg-card font-normal">
-            <span>{loading ? "Carregando prateleiras…" : selected?.code || "Selecione uma prateleira"}</span>
+            <span className="inline-flex items-center gap-2">
+              {loading ? <Spinner /> : null}
+              {loading ? "Carregando prateleiras…" : selected?.code || "Selecione uma prateleira"}
+            </span>
             <ChevronsUpDown className="ml-2 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           </Button>
         </PopoverTrigger>

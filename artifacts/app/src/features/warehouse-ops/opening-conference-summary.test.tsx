@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { OpeningConferenceSummary } from "./opening-conference-summary";
@@ -30,17 +31,39 @@ describe("resumo da caixa física", () => {
   });
 
   /** Antes, o ícone girava com o formulário sujo, sem nenhuma operação (decisão 6 de 06/11/2026). */
-  it("desligado por outra coisa, o Retomar guarda não gira", () => {
+  it("desligado por outra coisa, o Retomar guarda não gira: espera com aria-disabled, sem disabled (parte 13b)", () => {
     const html = renderToStaticMarkup(<OpeningConferenceSummary {...props} busy box={warehouseBoxFromRecord({ code: "CX-000001", status: "committing" })} lines={[{ ...line, status: "failed" }]} />);
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Retomar guarda<\/button>/);
+    const retomar = botaoDe(html, "Retomar guarda");
+    expect(retomar.getAttribute("data-estado")).toBe("repouso");
+    expect(retomar.getAttribute("aria-disabled")).toBe("true");
+    expect(retomar.hasAttribute("disabled")).toBe(false);
     expect(html).not.toContain("data-spinner");
     expect(html).not.toContain("animate-spin");
   });
 
-  it("retomando, o botão gira e diz Retomando guarda…", () => {
+  it("retomando, o Retomar guarda é o BotaoDeAcao em andamento (\"Retomando guarda…\"), sem disabled", () => {
     const html = renderToStaticMarkup(<OpeningConferenceSummary {...props} resuming box={warehouseBoxFromRecord({ code: "CX-000001", status: "committing" })} lines={[{ ...line, status: "failed" }]} />);
-    expect(html).toContain("Retomando guarda…");
-    expect(html).toContain("data-spinner");
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-busy="true"/);
+    const retomar = botaoDe(html, "Retomar guarda");
+    expect(retomar.getAttribute("data-estado")).toBe("andamento");
+    expect(retomar.textContent).toContain("Retomando guarda…");
+    expect(retomar.getAttribute("aria-disabled")).toBe("true");
+    expect(retomar.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("reabrindo, o Reabrir conferência é o BotaoDeAcao em andamento (\"Reabrindo…\"), sem disabled (parte 13b)", () => {
+    const html = renderToStaticMarkup(<OpeningConferenceSummary {...props} busy reabrindo box={warehouseBoxFromRecord({ code: "CX-000001", status: "reviewed" })} lines={[line]} />);
+    const reabrir = botaoDe(html, "Reabrir conferência");
+    expect(reabrir.getAttribute("data-estado")).toBe("andamento");
+    expect(reabrir.textContent).toContain("Reabrindo…");
+    expect(reabrir.hasAttribute("disabled")).toBe(false);
   });
 });
+
+function botaoDe(html: string, rotulo: string): HTMLButtonElement {
+  const documento = new DOMParser().parseFromString(html, "text/html");
+  const achado = Array.from(documento.querySelectorAll("button")).find(
+    (botao) => (botao.querySelector('[data-camada="repouso"]') ?? botao).textContent?.trim() === rotulo,
+  );
+  if (!achado) throw new Error(`Sem o botão ${rotulo}`);
+  return achado as HTMLButtonElement;
+}

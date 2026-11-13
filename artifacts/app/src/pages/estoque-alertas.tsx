@@ -9,6 +9,7 @@ import { chamarNucleo } from "@/lib/memoria/api";
 import { erroDaResposta } from "@/lib/erro-da-resposta";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 
 import { AlertasParadosView } from "./estoque-alertas-view";
 
@@ -105,11 +106,13 @@ export default function EstoqueAlertas() {
   // A linha de estado sob o título (carregamento v2, parte 7b); a volta do app ao primeiro plano relê com a barra no topo.
   const leituras = MEMORIA_LIBERADA ? [consulta] : [];
   const { voltando } = useAtualizarLista(leituras);
+  // A leitura que falhou sem nada lido fica na tela enquanto tenta de novo: o "Tentar de novo" não some com o foco nele.
+  const comFalha = useLeituraComFalha(consulta);
 
   return (
     <AlertasParadosView
       // A releitura que falha com a lista lida não a troca pelo erro: quem diz é a linha de estado (momento 7).
-      estado={MEMORIA_LIBERADA && consulta.isLoading ? "carregando" : consulta.isError && consulta.data === undefined && !semRede ? "erro" : "pronto"}
+      estado={MEMORIA_LIBERADA && comFalha.isLoading ? "carregando" : comFalha.isError && comFalha.data === undefined && !semRede ? "erro" : "pronto"}
       semConexao={
         semRede
           ? { lidaEm: semRede.lidaEm, tentando: consulta.isFetching, onTentar: () => void queryClient.invalidateQueries({ queryKey: ["stock-alerts"] }) }
@@ -117,11 +120,14 @@ export default function EstoqueAlertas() {
       }
       leitura={leituras}
       voltando={voltando}
+      // A leitura que falhou sem nada lido: o aviso com "Tentar de novo", que fica na tela enquanto tenta (parte 13b).
+      tentar={{ tentando: comFalha.isFetching, onTentar: () => void consulta.refetch() }}
       alertas={alertas}
       alerta={alerta}
       nomeDoCliente={nomeDoCliente}
       marcados={marcados}
       ocupado={decidir.isPending}
+      decidindo={decidir.isPending ? (decidir.variables?.decisao ?? null) : null}
       erro={erro}
       acoes={{
         escolher: (id) => {

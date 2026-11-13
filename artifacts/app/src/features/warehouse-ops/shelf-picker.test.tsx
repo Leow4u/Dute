@@ -43,6 +43,8 @@ describe("prateleiras cadastradas para a guarda", () => {
     const loading = renderToStaticMarkup(<ShelfPicker positions={[]} value="" loading onSelect={() => undefined} />);
     expect(loading).toContain("Carregando prateleiras");
     expect(loading).toMatch(/<button[^>]*disabled=""/);
+    // O texto sozinho não é sinal de espera: a caixa chanfrada junto, fora da árvore (carregamento v2, parte 13b).
+    expect(loading).toMatch(/<span[^>]*aria-hidden="true"[^>]*data-spinner=""/);
     const empty = renderToStaticMarkup(<ShelfPicker positions={[]} value="" onSelect={() => undefined} />);
     expect(empty).toContain("Nenhuma prateleira ativa cadastrada");
     expect(empty).not.toContain("Criar prateleira");

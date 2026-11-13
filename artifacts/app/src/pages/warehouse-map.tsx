@@ -12,8 +12,11 @@ import { Link, useLocation } from "wouter";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
-import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/page-header";
@@ -25,6 +28,7 @@ import { ShelfVolumeSummary } from "@/features/warehouse-ops/shelf-volume-summar
 import { useIsDesktop } from "@/hooks/use-desktop";
 import { cn } from "@/lib/utils";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { ehFaltaDeConexao, semConexaoNaLeitura } from "@/lib/conexao";
 import { openingInventoryNotice } from "@/lib/opening-inventory";
 import { boxVolumeM3, formatVolumeM3 } from "@/lib/warehouse-volume";
@@ -51,11 +55,13 @@ import {
   textoDaSaida,
   zonesOf,
 } from "@/lib/warehouse-map";
-import { type AnyRecord, fetchJson, formatNumber, getErrorMessage } from "@/lib/warehouse-ops/model";
+import { type AnyRecord, fetchJson, formatNumber } from "@/lib/warehouse-ops/model";
 import { type WarehousePosition, REFERENCE_BOX, formatKilos, formatMeters } from "@/lib/warehouse-positions";
 
 type PositionsResponse = { items?: WarehousePosition[] };
 const ALL = "__all__";
+/** A linha de estado sob o título: o foco vai a ela quando o aviso no lugar do mapa sai com ele. */
+const ID_DA_LINHA = "mapa-linha-de-estado";
 const NO_CUSTOMER = "__none__";
 
 const STATE_CLASS: Record<ShelfState, string> = {
@@ -112,7 +118,8 @@ export default function WarehouseMapPage() {
     staleTime: 120_000,
     queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/skus?limit=2000"),
   });
-  const sessionQuery = useOpeningInventorySession();
+  // A situação do inventário que falhou fica na tela enquanto tenta de novo: o "Tentar de novo" não some com o foco nele.
+  const sessionQuery = useLeituraComFalha(useOpeningInventorySession());
   const openingNotice = openingInventoryNotice(sessionQuery.data);
   const showSessionStatus = zone === "all" || zone === activeCustomerCode;
   const showOpeningNotice = Boolean(openingNotice) && showSessionStatus && !sessionQuery.isError;
@@ -145,18 +152,32 @@ export default function WarehouseMapPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [desktop, selectedCode]);
 
-  const loading = positionsQuery.isLoading || boxesQuery.isLoading;
-  // Sem rede, o mapa que já estava fica, com a hora da leitura; sem nada
+  // O mapa lê as posições, as caixas, os saldos (a guarda por linha) e o catálogo (a busca): só entra com os quatro
+  // lidos, e nunca diz "Nenhuma prateleira" antes de ler (carregamento v2, parte 13b). A leitura que falhou sem nada
+  // lido fica na tela enquanto tenta de novo.
+  const posicoes = useLeituraComFalha(positionsQuery);
+  const caixas = useLeituraComFalha(boxesQuery);
+  const saldos = useLeituraComFalha(balancesQuery);
+  const catalogo = useLeituraComFalha(skusQuery);
+  const leiturasDoMapa = [posicoes, caixas, saldos, catalogo];
+  const loading = leiturasDoMapa.some((leitura) => leitura.isLoading);
+  // Sem rede, o mapa que já estava fica, e a linha de estado diz de quando ele é; sem nada
   // lido, o aviso, e não "Nenhuma posição cadastrada" (decisão 2 do celular).
-  const semRede = semConexaoNaLeitura(positionsQuery, boxesQuery);
+  const semRede = semConexaoNaLeitura(positionsQuery, boxesQuery, balancesQuery, skusQuery);
   const semNadaLido = semRede !== null && semRede.lidaEm === null;
-  const error = semRede ? null : positionsQuery.error ?? boxesQuery.error;
-  const empty = !loading && !error && !semNadaLido && shelves.length === 0;
-  const relendo = positionsQuery.isFetching || boxesQuery.isFetching;
+  // Só a leitura sem nada lido troca o mapa pelo aviso: a releitura do intervalo que falha fica na linha de estado
+  // ("Não consegui atualizar · lista de 10:42"), e o mapa lido continua na tela (momento 7).
+  const falhou = !semRede && leiturasDoMapa.some((leitura) => leitura.isError && leitura.data === undefined);
+  const empty = !loading && !falhou && !semNadaLido && shelves.length === 0;
+  const relendo = leiturasDoMapa.some((leitura) => leitura.isFetching);
   const reler = () => {
     void queryClient.invalidateQueries({ queryKey: ["warehouse-positions", "all-pages"] });
     void queryClient.invalidateQueries({ queryKey: ["warehouse-boxes", "all", "all-pages"] });
     void queryClient.invalidateQueries({ queryKey: ["stock-balances", "estoque"] });
+    void queryClient.invalidateQueries({ queryKey: ["estoque", "skus"] });
+  };
+  const tentarDeNovo = () => {
+    for (const leitura of [positionsQuery, boxesQuery, balancesQuery, skusQuery]) if (leitura.data === undefined) void leitura.refetch();
   };
   const searching = search.trim().length > 0;
 
@@ -176,6 +197,7 @@ export default function WarehouseMapPage() {
       <PageHeader
         title="Mapa do armazém"
         description="Prateleiras, ocupação registrada e caixas por zona de cliente."
+        estado={<LinhaDeEstado id={ID_DA_LINHA} leitura={leiturasDoMapa} objeto="o mapa" />}
         actions={
           <>
             <Button
@@ -197,19 +219,17 @@ export default function WarehouseMapPage() {
         }
       />
 
-      {!loading && semRede ? (
-        semRede.lidaEm === null ? (
-          <BlocoSemConexao tentando={relendo} onTentar={reler} />
-        ) : (
-          <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={relendo} onTentar={reler} />
-        )
-      ) : null}
+      {/* Com o mapa lido, a falta de conexão fica na linha de estado, sob o título, e nada empurra o mapa (parte 13b). */}
+      {semNadaLido ? <BlocoSemConexao tentando={relendo} onTentar={reler} focoAoSair={ID_DA_LINHA} /> : null}
 
-      {error ? (
-        <Alert variant="destructive">
-          <AlertTitle>Não foi possível carregar o mapa</AlertTitle>
-          <AlertDescription>{getErrorMessage(error)}</AlertDescription>
-        </Alert>
+      {falhou ? (
+        <ErroNaLeitura
+          mensagem="Não consegui carregar o mapa."
+          // "Tentando de novo…" só com a leitura que falhou relendo, não com as outras ainda chegando.
+          tentando={leiturasDoMapa.some((leitura) => leitura.isError && leitura.data === undefined && leitura.isFetching)}
+          onTentar={tentarDeNovo}
+          focoAoSair={ID_DA_LINHA}
+        />
       ) : null}
 
       {showSessionStatus && sessionQuery.isError && !ehFaltaDeConexao(sessionQuery.error) ? (
@@ -217,13 +237,20 @@ export default function WarehouseMapPage() {
           <AlertTitle>Situação do inventário indisponível</AlertTitle>
           <AlertDescription className="space-y-2">
             <p>Não foi possível confirmar se o inventário de abertura de {activeCustomer.name} está concluído.</p>
-            <Button type="button" variant="outline" disabled={sessionQuery.isFetching} onClick={() => sessionQuery.refetch()}>
-              Tentar novamente
-            </Button>
+            {/* Ocupado sem disabled: o foco fica no botão enquanto relê (parte 13b). */}
+            <BotaoDeAcao
+              variant="outline"
+              estado={sessionQuery.isFetching ? "andamento" : "repouso"}
+              rotulo="Tentar de novo"
+              andamento="Tentando de novo…"
+              onClick={() => void sessionQuery.refetch()}
+            />
           </AlertDescription>
         </Alert>
-      ) : showSessionStatus && sessionQuery.isLoading ? (
-        <p role="status" className="text-sm text-muted-foreground">Verificando inventário de {activeCustomer.name}…</p>
+      ) : showSessionStatus && sessionQuery.isLoading && !loading ? (
+        // A espera com a caixa aos 300 ms e o anúncio, sem região viva solta (parte 13b). Enquanto o mapa ainda lê, quem
+        // diz a espera é a linha de estado: uma caixa só na tela.
+        <CarregandoNaRegiao rotulo={`Verificando inventário de ${activeCustomer.name}…`} />
       ) : null}
 
       {showOpeningNotice ? (
@@ -248,7 +275,7 @@ export default function WarehouseMapPage() {
         </Alert>
       ) : null}
 
-      {!loading && !error && shelves.length > 0 ? (
+      {!loading && !falhou && !semNadaLido && shelves.length > 0 ? (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Tile

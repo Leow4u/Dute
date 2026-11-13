@@ -1,8 +1,8 @@
-import { Button } from "@/components/ui/button";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip as FilterChip } from "@/components/ui/chip";
 import { BarraDeEspera } from "@/components/ui/barra-de-espera";
-import { BlocoSemConexao } from "@/components/ui/erro-na-leitura";
+import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import { LinhaDeEstado, type LeituraDaLista } from "@/components/ui/linha-de-estado";
 import { PageHeader } from "@/components/ui/page-header";
 import { itensParadosEmTexto, rotuloDoAlerta, type AlertaProposto } from "@/lib/memoria/alertas";
@@ -32,6 +32,12 @@ export type AlertasParadosViewProps = {
   marcados: ReadonlySet<string>;
   /** A decisão em andamento: as ações esperam. */
   ocupado: boolean;
+  /**
+   * Qual decisão está em andamento: o botão dela mostra a espera
+   * ("Enviando…", "Descartando…") e o outro espera travado (carregamento v2,
+   * parte 13b).
+   */
+  decidindo?: "aprovar" | "descartar" | null;
   /** O erro da última decisão. */
   erro: string | null;
   acoes: AcoesDosAlertas;
@@ -50,12 +56,18 @@ export type AlertasParadosViewProps = {
   leitura?: readonly LeituraDaLista[];
   /** A releitura da volta do app ao primeiro plano: a barra no topo do alerta e, aos 5 s, "Atualizando…". */
   voltando?: boolean;
+  /** A nova tentativa da leitura que falhou sem nada lido: a falha nunca vira vazio. */
+  tentar?: { tentando: boolean; onTentar: () => void };
 };
 
 const numero = new Intl.NumberFormat("pt-BR");
 
-function Alerta({ alerta, nome, marcados, ocupado, erro, acoes, voltando = false }: { alerta: AlertaProposto; nome: string } & Pick<AlertasParadosViewProps, "marcados" | "ocupado" | "erro" | "acoes" | "voltando">) {
+function Alerta({ alerta, nome, marcados, ocupado, decidindo = null, erro, acoes, voltando = false }: { alerta: AlertaProposto; nome: string } & Pick<AlertasParadosViewProps, "marcados" | "ocupado" | "decidindo" | "erro" | "acoes" | "voltando">) {
   const todos = marcados.size === alerta.itens.length;
+  // Ocupado não é desabilitado (carregamento v2, seção 7): as marcas ficam aria-disabled, e o toque não muda nada.
+  const marcar = (fazer: () => void) => () => {
+    if (!ocupado) fazer();
+  };
   return (
     <section aria-labelledby={`alerta-${alerta.id}`} className="relative overflow-hidden rounded-lg border border-border bg-card">
       <BarraDeEspera lugar="topo" ativa={voltando} resultado="fim" />
@@ -73,7 +85,7 @@ function Alerta({ alerta, nome, marcados, ocupado, erro, acoes, voltando = false
         <thead>
           <tr className="border-b border-border/70 text-left text-xs font-semibold uppercase tracking-wide text-foreground/50">
             <th scope="col" className="w-10 px-4 py-2.5">
-              <Checkbox checked={todos} onCheckedChange={() => acoes.marcarTodos()} disabled={ocupado} aria-label="Todos os itens" />
+              <Checkbox checked={todos} onCheckedChange={marcar(acoes.marcarTodos)} aria-disabled={ocupado || undefined} className={ocupado ? "opacity-45" : undefined} aria-label="Todos os itens" />
             </th>
             <th scope="col" className="py-2.5 pr-3">Item</th>
             <th scope="col" className="py-2.5 pr-3 text-right">Saldo</th>
@@ -87,8 +99,9 @@ function Alerta({ alerta, nome, marcados, ocupado, erro, acoes, voltando = false
               <td className="px-4 py-2.5">
                 <Checkbox
                   checked={marcados.has(item.skuCode)}
-                  onCheckedChange={() => acoes.marcar(item.skuCode)}
-                  disabled={ocupado}
+                  onCheckedChange={marcar(() => acoes.marcar(item.skuCode))}
+                  aria-disabled={ocupado || undefined}
+                  className={ocupado ? "opacity-45" : undefined}
                   aria-label={`Enviar ${item.clientItemCode ?? item.skuCode}`}
                 />
               </td>
@@ -104,12 +117,23 @@ function Alerta({ alerta, nome, marcados, ocupado, erro, acoes, voltando = false
         </tbody>
       </table>
       <div className="flex flex-wrap items-center gap-2 border-t border-border/60 bg-muted/20 px-4 py-3">
-        <Button type="button" onClick={acoes.enviar} disabled={ocupado || marcados.size === 0}>
-          {ocupado ? "Gravando..." : "Enviar ao cliente"}
-        </Button>
-        <Button type="button" variant="outline" onClick={acoes.descartar} disabled={ocupado}>
-          Descartar
-        </Button>
+        {/* A decisão no BotaoDeAcao (carregamento v2, parte 13b): o tocado diz o gerúndio, o outro espera travado, e
+            nenhum fica disabled (o foco fica no botão tocado). */}
+        <BotaoDeAcao
+          estado={decidindo === "aprovar" ? "andamento" : "repouso"}
+          rotulo="Enviar ao cliente"
+          andamento="Enviando…"
+          bloqueado={decidindo !== "aprovar" && (ocupado || marcados.size === 0)}
+          onClick={acoes.enviar}
+        />
+        <BotaoDeAcao
+          variant="outline"
+          estado={decidindo === "descartar" ? "andamento" : "repouso"}
+          rotulo="Descartar"
+          andamento="Descartando…"
+          bloqueado={decidindo !== "descartar" && ocupado}
+          onClick={acoes.descartar}
+        />
         {erro ? (
           <p role="alert" className="text-sm font-medium text-destructive-soft-foreground">
             {erro}
@@ -132,6 +156,8 @@ export function AlertasParadosView({
   semConexao = null,
   leitura = [],
   voltando = false,
+  decidindo = null,
+  tentar,
 }: AlertasParadosViewProps) {
   return (
     <div className="flex flex-col gap-4 pb-24">
@@ -140,7 +166,12 @@ export function AlertasParadosView({
       {estado === "carregando" ? null : semConexao && semConexao.lidaEm === null ? (
         <BlocoSemConexao tentando={semConexao.tentando} onTentar={semConexao.onTentar} />
       ) : estado === "erro" ? (
-        <p className="text-sm text-destructive-soft-foreground">Não consegui carregar os alertas.</p>
+        // A falha nunca vira vazio, e tem a nova tentativa (parte 13b).
+        tentar ? (
+          <ErroNaLeitura mensagem="Não consegui carregar os alertas." tentando={tentar.tentando} onTentar={tentar.onTentar} />
+        ) : (
+          <p className="text-sm text-destructive-soft-foreground">Não consegui carregar os alertas.</p>
+        )
       ) : !alerta ? (
         <p className="rounded-lg border border-border bg-card px-5 py-6 text-sm text-muted-foreground">Nenhum alerta para aprovar.</p>
       ) : (
@@ -154,7 +185,7 @@ export function AlertasParadosView({
               ))}
             </div>
           ) : null}
-          <Alerta alerta={alerta} nome={nomeDoCliente(alerta.customerCode)} marcados={marcados} ocupado={ocupado} erro={erro} acoes={acoes} voltando={voltando} />
+          <Alerta alerta={alerta} nome={nomeDoCliente(alerta.customerCode)} marcados={marcados} ocupado={ocupado} decidindo={decidindo} erro={erro} acoes={acoes} voltando={voltando} />
         </>
       )}
     </div>
