@@ -290,6 +290,62 @@ describe("o erro volta ao repouso em 2 s, e o motivo fica na linha", () => {
     }
   });
 
+  it("a falha interna do servidor e o erro sem código não dizem se gravou: a repetição leva a mesma chave", async () => {
+    for (const falha of [
+      // O que o fetchJson de Pedidos (erroDaResposta) devolve da callable que quebrou no servidor.
+      Object.assign(new Error("Falha interna no servidor. Tente novamente ou avise o time técnico."), { status: 500, code: "internal" }),
+      Object.assign(new Error("INTERNAL"), { code: "functions/internal" }),
+      new TypeError("Failed to fetch"),
+      // A resposta 2xx que não se leu: o servidor gravou.
+      Object.assign(new Error("Unexpected end of JSON input"), { status: 200 }),
+    ]) {
+      const aprovar = chamada();
+      await executar("1045", "aprovar", aprovar.fazer);
+      await assentar(() => aprovar.ultima().rejeitar(falha));
+      expect(acoes.estado("1045", "aprovar")).toBe("erro");
+      await passar(CARREGANDO.erroVisivelMs);
+      await executar("1045", "aprovar", aprovar.fazer);
+      expect(aprovar.chaves[1], falha.message).toBe(aprovar.chaves[0]);
+      await assentar(() => aprovar.ultima().resolver(undefined));
+      await passar(CARREGANDO.sucessoVisivelMs);
+    }
+  });
+
+  it("depois dos 70 s, a falha interna que chega não tira o 'Conferir'", async () => {
+    const aprovar = chamada();
+    await executar("1042", "aprovar", aprovar.fazer);
+    await passar(CARREGANDO.desisteMs);
+    await assentar(() => aprovar.ultima().rejeitar(Object.assign(new Error("Falha interna no servidor."), { status: 500, code: "internal" })));
+    expect(acoes.estado("1042", "aprovar")).toBe("sem-resposta");
+  });
+
+  it("o sucesso de outra ação na linha encerra a chave guardada: a ação seguinte é nova, sem repetir um recibo velho", async () => {
+    // Separar, sem conexão (o servidor pode ter gravado); Desfazer vale; Separar de novo é outra tentativa.
+    const separar = chamada();
+    const desfazer = chamada();
+    await executar("1042", "separar", separar.fazer);
+    await assentar(() => separar.ultima().rejeitar(new SemConexao()));
+    await passar(CARREGANDO.erroVisivelMs);
+    await executar("1042", "desfazer", desfazer.fazer);
+    await assentar(() => desfazer.ultima().resolver(undefined));
+    await passar(CARREGANDO.sucessoVisivelMs);
+    await executar("1042", "separar", separar.fazer);
+    expect(separar.chaves).toHaveLength(2);
+    expect(separar.chaves[1]).not.toBe(separar.chaves[0]);
+  });
+
+  it("o sucesso numa linha não mexe na chave guardada de outra", async () => {
+    const a1042 = chamada();
+    const a1043 = chamada();
+    await executar("1042", "aprovar", a1042.fazer);
+    await assentar(() => a1042.ultima().rejeitar(new SemConexao()));
+    await executar("1043", "aprovar", a1043.fazer);
+    await assentar(() => a1043.ultima().resolver(undefined));
+    await passar(CARREGANDO.erroVisivelMs);
+    await executar("1042", "aprovar", a1042.fazer);
+    expect(a1042.chaves[1]).toBe(a1042.chaves[0]);
+  });
+
   it("a chave guardada é da linha e da ação: o Recusar da mesma linha leva a dele", async () => {
     const aprovar = chamada();
     const recusar = chamada();
@@ -419,14 +475,25 @@ describe("as regras puras", () => {
   it("o desfecho do erro: sem resposta, incerto (guarda a chave) ou recusado (chave nova)", () => {
     expect(desfechoDoErro(Object.assign(new Error("deadline-exceeded"), { code: "functions/deadline-exceeded" }))).toBe("sem-resposta");
     expect(desfechoDoErro(Object.assign(new Error("Tempo esgotado"), { code: "deadline-exceeded", status: 504 }))).toBe("sem-resposta");
+    expect(desfechoDoErro(Object.assign(new Error("HTTP 504"), { status: 504, data: { code: "deadline-exceeded" } }))).toBe("sem-resposta");
     expect(desfechoDoErro(new SemConexao())).toBe("incerto");
     expect(desfechoDoErro(Object.assign(new Error("Sem conexão. Tente de novo quando o sinal voltar."), { status: 503, code: "sem_conexao" }))).toBe("incerto");
     expect(desfechoDoErro(Object.assign(new Error("internal"), { code: "functions/internal" }))).toBe("incerto");
     expect(desfechoDoErro(Object.assign(new Error("indisponível"), { code: "functions/unavailable" }))).toBe("incerto");
+    // O servidor disse que não, antes de gravar: a tentativa acabou.
     expect(desfechoDoErro(RECUSA_DO_SERVIDOR)).toBe("recusado");
-    expect(desfechoDoErro(Object.assign(new Error("INTERNAL"), { code: "functions/internal" }))).toBe("recusado");
-    expect(desfechoDoErro(new Error("qualquer"))).toBe("recusado");
-    expect(desfechoDoErro(undefined)).toBe("recusado");
+    expect(desfechoDoErro(Object.assign(new Error("Já usada"), { code: "functions/already-exists" }))).toBe("recusado");
+    expect(desfechoDoErro(Object.assign(new Error("A tela mudou"), { status: 409, code: "SEPARATION_VOLUMES_CHANGED" }))).toBe("recusado");
+    expect(desfechoDoErro(Object.assign(new Error("HTTP 403"), { status: 403 }))).toBe("recusado");
+    // O que não diz se gravou: o recibo só nasce no sucesso, e repetir com a mesma chave nunca duplica.
+    expect(desfechoDoErro(Object.assign(new Error("INTERNAL"), { code: "functions/internal" }))).toBe("incerto");
+    expect(desfechoDoErro(Object.assign(new Error("Falha interna no servidor."), { status: 500, code: "internal" }))).toBe("incerto");
+    expect(desfechoDoErro(Object.assign(new Error("HTTP 502"), { status: 502 }))).toBe("incerto");
+    expect(desfechoDoErro(Object.assign(new Error("Unexpected end of JSON input"), { status: 200 }))).toBe("incerto");
+    expect(desfechoDoErro(Object.assign(new Error("cancelado"), { code: "functions/cancelled" }))).toBe("incerto");
+    expect(desfechoDoErro(new TypeError("Failed to fetch"))).toBe("incerto");
+    expect(desfechoDoErro(new Error("qualquer"))).toBe("incerto");
+    expect(desfechoDoErro(undefined)).toBe("incerto");
   });
 });
 

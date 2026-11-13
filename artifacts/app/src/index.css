@@ -1564,7 +1564,8 @@
     overflow: hidden;
     pointer-events: none;
     color: hsl(var(--carregando-cor));
-    /* No alto contraste, como o indicador: a barra fica na cor forçada de quem a contém. */
+    /* No alto contraste, como o indicador: a barra fica na cor forçada de quem
+       a contém (a cor herdada, no fim do bloco). */
     forced-color-adjust: none;
     forced-color-adjust: preserve-parent-color;
     animation: carregando-barra-entra var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
@@ -1650,6 +1651,16 @@
 
     .carregando-barra[data-estado="progresso"] > [data-parte="cheio"] {
       transition: none;
+    }
+  }
+
+  /* No alto contraste do Windows, a cor declarada acima faria o
+     preserve-parent-color valer como none: a tinta do tema ficaria sobre o
+     fundo forçado e sumiria no preto. Herdada, ela é a cor forçada de quem
+     contém a barra, como no indicador. */
+  @media (forced-colors: active) {
+    .carregando-barra {
+      color: inherit;
     }
   }
 }

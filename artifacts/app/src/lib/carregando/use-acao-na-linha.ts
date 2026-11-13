@@ -45,17 +45,36 @@ export interface AcaoNaLinha<Id extends string> {
 
 /**
  * O que o erro diz da tentativa. `sem-resposta`: o prazo acabou sem resposta
- * (o "Conferir"). `incerto`: a chamada não alcançou o servidor ou ficou sem
- * resposta dele, e pode ter valido; a repetição leva a mesma chave.
- * `recusado`: o servidor respondeu que não; a próxima tentativa é nova.
+ * (o "Conferir"). `recusado`: o servidor respondeu que não, antes de gravar;
+ * a próxima tentativa é nova. `incerto`: todo o resto, que não diz se valeu
+ * (sem conexão, sem resposta, a falha interna, o erro sem código); a
+ * repetição leva a mesma chave. Na dúvida, guardar: o recibo só nasce no
+ * sucesso, e a mesma chave nunca duplica.
  */
 export type DesfechoDoErro = "sem-resposta" | "incerto" | "recusado";
 
+/** Os códigos com que a callable diz que não antes de gravar (o 4xx da resposta de `/api/*`). */
+const RECUSAS_DO_SERVIDOR: ReadonlySet<string> = new Set([
+  "invalid-argument",
+  "failed-precondition",
+  "out-of-range",
+  "unauthenticated",
+  "permission-denied",
+  "not-found",
+  "already-exists",
+  "aborted",
+  "resource-exhausted",
+  "unimplemented",
+]);
+
 export function desfechoDoErro(erro: unknown): DesfechoDoErro {
-  const codigo = String((erro as { code?: unknown } | null)?.code ?? "").replace(/^functions\//, "");
+  const lido = erro as { code?: unknown; status?: unknown; data?: { code?: unknown } | null } | null;
+  const codigo = String(lido?.code ?? lido?.data?.code ?? "").replace(/^functions\//, "");
   if (codigo === "deadline-exceeded") return "sem-resposta";
-  if (ehSemConexao(erro) || callableSemResposta(erro) || codigo === "unavailable") return "incerto";
-  return "recusado";
+  if (ehSemConexao(erro) || callableSemResposta(erro)) return "incerto";
+  if (RECUSAS_DO_SERVIDOR.has(codigo)) return "recusado";
+  const status = typeof lido?.status === "number" ? lido.status : null;
+  return status !== null && status >= 400 && status < 500 ? "recusado" : "incerto";
 }
 
 /**
@@ -88,9 +107,6 @@ const OCUPADOS: ReadonlySet<EstadoDaAcao> = new Set(["andamento", "sucesso", "se
 
 const agora = () => performance.now();
 
-/** A chave guardada para a repetição é da linha e da ação. */
-const tentativa = (id: string, acao: string) => JSON.stringify([id, acao]);
-
 /** Chama já, e o que quebra na hora vira a rejeição. */
 function chamar<T>(fazer: () => Promise<T>): Promise<T> {
   try {
@@ -102,8 +118,25 @@ function chamar<T>(fazer: () => Promise<T>): Promise<T> {
 
 function criarLoja<Id extends string>() {
   const registros = new Map<Id, Registro>();
-  /** A chave de cada tentativa cujo resultado ficou incerto: a repetição a leva de novo. */
-  const chaves = new Map<string, string>();
+  /**
+   * A chave de cada tentativa cujo resultado ficou incerto, por linha e ação:
+   * a repetição a leva de novo. O sucesso de qualquer ação na linha encerra
+   * as da linha: a linha andou, e a próxima ação é nova (repetir a chave
+   * velha devolveria o recibo de antes, sem fazer nada).
+   */
+  const chaves = new Map<Id, Map<string, string>>();
+  const chaveDa = (id: Id, acao: string): string => {
+    let daLinha = chaves.get(id);
+    if (!daLinha) chaves.set(id, (daLinha = new Map()));
+    let chave = daLinha.get(acao);
+    if (!chave) daLinha.set(acao, (chave = crypto.randomUUID()));
+    return chave;
+  };
+  const encerrar = (id: Id, acao: string) => {
+    const daLinha = chaves.get(id);
+    daLinha?.delete(acao);
+    if (daLinha?.size === 0) chaves.delete(id);
+  };
   const ouvintes = new Set<() => void>();
   let instantaneo: ReadonlyMap<Id, Linha> = new Map();
   let vezes = 0;
@@ -174,6 +207,7 @@ function criarLoja<Id extends string>() {
   const sucesso = (id: Id, vez: number, releitura?: () => Promise<unknown>) => {
     const registro = daVez(id, vez);
     if (!registro) return;
+    chaves.delete(id);
     const fim = agora();
     let releu = !releitura;
     let cumpriu = false;
@@ -219,7 +253,6 @@ function criarLoja<Id extends string>() {
           soltar(id, vez);
           return;
         }
-        chaves.delete(tentativa(id, acao));
         sucesso(id, vez, opcoes.releitura);
       },
       // A leitura que falha não diz nada: continua sem resposta.
@@ -233,16 +266,10 @@ function criarLoja<Id extends string>() {
     if (linha?.estado === "sem-resposta" && linha.acao === acao) return conferir(id, acao, opcoes);
     if (linha && OCUPADOS.has(linha.estado)) return Promise.resolve();
 
-    const qual = tentativa(id, acao);
-    const chave = chaves.get(qual) ?? crypto.randomUUID();
-    chaves.set(qual, chave);
+    const chave = chaveDa(id, acao);
     const vez = comecar(id, acao);
     return chamar(() => fazer(chave)).then(
-      () => {
-        if (!daVez(id, vez)) return;
-        chaves.delete(qual);
-        sucesso(id, vez, opcoes.releitura);
-      },
+      () => sucesso(id, vez, opcoes.releitura),
       (erro: unknown) => {
         const registro = daVez(id, vez);
         if (!registro) return;
@@ -253,7 +280,7 @@ function criarLoja<Id extends string>() {
         }
         // Depois dos 70 s, o que ainda não diz se valeu não muda o "Conferir".
         if (desfecho === "incerto" && registro.linha.estado === "sem-resposta") return;
-        if (desfecho === "recusado") chaves.delete(qual);
+        if (desfecho === "recusado") encerrar(id, acao);
         falhou(id, vez, erro);
       },
     );
@@ -288,8 +315,10 @@ function criarLoja<Id extends string>() {
  * - O segundo toque na linha ocupada (em andamento, no sucesso ou sem
  *   resposta) não faz nada, também o de outra ação da mesma linha.
  * - A chave de idempotência é por tentativa: nova a cada ação, e a mesma na
- *   repetição quando o resultado ficou incerto (sem conexão, sem resposta do
- *   servidor) e na nova tentativa depois do "Conferir".
+ *   repetição quando o resultado ficou incerto (sem conexão, sem resposta, a
+ *   falha interna do servidor, o erro sem código) e na nova tentativa depois
+ *   do "Conferir". Só a recusa do servidor e o sucesso de uma ação na linha
+ *   encerram a chave guardada.
  * - Aos 70 s sem resposta, a linha fica sem resposta ("Conferir", que relê
  *   pelo `conferir` e nunca reenvia). A resposta que chega depois ainda vale.
  * - O sucesso fica pelo menos 1 s no botão, contado de quando ele o mostra

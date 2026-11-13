@@ -280,6 +280,13 @@ describe("o desenho e o movimento, no index.css", () => {
     expect(progresso.get("transform")).toBe("scaleX(var(--p, 0))");
   });
 
+  it("no alto contraste, fica na cor forçada de quem a contém, como o indicador, e não na tinta do tema", () => {
+    // Com a cor declarada, o preserve-parent-color vale como none: a tinta do tema ficaria sobre o fundo forçado e sumiria no preto.
+    const base = declaradas(".carregando-barra", COMPONENTES);
+    expect(base.get("forced-color-adjust")).toBe("preserve-parent-color");
+    expect(declaradas(".carregando-barra", ["@layer components", "@media (forced-colors: active)"]).get("color")).toBe("inherit");
+  });
+
   it("movimento reduzido: só opacidade na entrada, sem varredura, parada inteira a 0,6 desde o início e o verde de uma vez", () => {
     expect(declaradas(".carregando-barra", REDUZIDO).get("animation-name")).toBe("carregando-aparece");
     expect(declaradas('.carregando-barra > [data-parte="segmento"]', REDUZIDO).get("display")).toBe("none");
