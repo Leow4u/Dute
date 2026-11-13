@@ -732,7 +732,7 @@ por PR:
 | 5 | O toast embaixo no celular | PR 610 |
 | 6 | Pedidos como piloto: a ação por linha (`useAcaoNaLinha`), a barra da linha e os estados de 10 s e 70 s | PR 610 |
 | 7 | A conexão (7a: "Reconectando…" com histerese e a releitura sozinha) e a linha de estado nas listas (7b: Pedidos, Receber, Estoque, Alertas) | PR 610 |
-| 8 | As listas com a forma final | a fazer |
+| 8 | As listas com a forma final | PR 610 |
 | 9 | A abertura com a marca e a `CarregandoTela` no lugar do branco | a fazer |
 | 10 | A troca de filtro e a releitura sem apagar a lista | a fazer |
 | 11 | As operações longas: fotos com progresso e etapas | a fazer |
@@ -1053,3 +1053,118 @@ Fica aberto, para a parte 8 e depois:
   Itens; Alertas não tem Atualizar; e a volta ao primeiro plano relê sempre,
   sem tempo mínimo fora do app;
 - a conferência num Android de verdade, com a rede caindo de fato.
+
+**Parte 8, as listas com a forma final (PR 610, 13/11/2026).** A decisão P3
+de 12/11/2026, na primeira leitura de Pedidos e Receber.
+
+- **Desde 0 ms, a forma final:** os títulos reais dos grupos ("Para aprovar",
+  "Para separar"…) com o bloco de 16 × 12 px no lugar do número, o
+  segmentado "Em aberto · ▪" e o Atualizar travado. Nunca "0" nem
+  "Nenhum…" antes de ler. Os cartões já têm a altura das linhas-fantasma,
+  invisíveis até os 300 ms.
+- **Aos 300 ms**, as linhas-fantasma entram em 150 ms, com a anatomia da
+  linha real (a caixa de 44 px, o título, o apoio e os botões de 40 px), e o
+  brilho do cartão faz dois ciclos, 120 ms depois do cartão de cima. A linha
+  de estado diz "Carregando pedidos…". O contêiner da lista fica com
+  `aria-busy` e `aria-describedby` apontando para a linha de estado; os
+  fantasmas e os blocos ficam fora da árvore.
+- **A contagem lembrada** (`lib/carregando/contagem-lembrada.ts`): a última
+  contagem lida de cada grupo, por lista e por cliente, guardada no aparelho
+  (`localStorage`, com `try/catch`), dá de 1 a 5 linhas-fantasma; sem ela,
+  2. Na abertura, enquanto a lista dos clientes não chega, vale o cliente
+  escolhido no aparelho (`codeProvavel` do cliente ativo), e só se grava com
+  o cliente confirmado. Cada leitura grava por cima da anterior: quem não
+  decide não apaga a contagem de "Para aprovar". No pedido, a linha-fantasma
+  tem a linha do "Ver volumes" e, no celular, as ações no bloco de baixo,
+  como a linha real.
+- **Na chegada**, as linhas reais entram por opacidade em 150 ms, subindo 4
+  px, em cascata de 30 ms em até seis linhas, por cima dos fantasmas, que
+  esmaecem em 150 ms junto com a primeira linha do grupo. O bloco sai
+  subindo enquanto o número entra. A chegada acaba quando as animações dela
+  terminam (`useChegada`), e não num relógio: elas só começam no primeiro
+  quadro pintado, que no celular lento vem mais de 150 ms depois.
+- **O segmentado** guarda a casa de 16 px do número, onde o bloco estava, e
+  nada anda quando ele chega. No celular, cada opção tem 44 px de alvo, em
+  todos os segmentados; em Pedidos e Receber, ele ocupa a linha das ações,
+  com as opções em partes iguais e, a 320 px, sem sair da tela.
+- **O número do grupo** passou ao `--muted-foreground` (5,61:1; antes, a
+  tinta a 50%, com 3,34:1).
+- **O Anunciador** diz "Carregando pedidos" aos 300 ms e, quando a lista
+  chega, o resumo ("3 para aprovar, 2 para separar, 1 para entregar"; "2
+  para conferir, 1 para guardar" no Receber), só se disse o primeiro. O
+  resumo que ainda espera o intervalo de 2 s sai com a tela
+  (`useRetirarAnuncio`). Depois de uma falha, a releitura automática não
+  fala; a nova tentativa que a pessoa pede ("Tentar de novo" no aviso) fala
+  como a primeira (`lib/carregando/pedido-da-pessoa.ts`), e o foco vai à
+  linha de estado quando o aviso sai.
+- **Só a primeira leitura da tela.** No Receber, trocar o cliente com a lista
+  lida relê os avisos do cliente novo com a lista na tela; a troca com a
+  lista anterior a 50% é da parte 10. A leitura que falha não espera a
+  outra: o aviso entra no lugar da lista na hora, e a linha de estado fica
+  vazia.
+- **Estoque e Alertas** já não mostravam "0" antes de ler desde a parte 7b;
+  ficaram os testes que travam isso.
+- **O relógio da espera:** no Chromium, o timer dos 300 ms dispara 0,2 ms
+  antes do marco, e o tique não mostrava nada; o indicador e o anúncio só
+  vinham aos 3 s. Agora o marco do timer conta como alcançado.
+- **No movimento reduzido**, sem brilho, os blocos parados e a chegada só
+  por opacidade.
+
+- **Medição no Chromium**, num harness com dados sintéticos e o servidor a
+  2,4 s. No relógio, antes é o `0ed9003`; no resto, o `b1e3143`, o primeiro
+  desenho desta parte, e depois, a revisão:
+  - o timer adiantado: antes, 5 de 48 rodadas só mostravam a espera aos 3 s;
+    depois, nenhuma, com os fantasmas e "Carregando pedidos…" entre 330 e 370
+    ms (de 382 a 408 ms com a CPU 4× e o Slow 4G);
+  - a cascata: antes, com a CPU 4×, de 4 a 6 linhas por rodada pulavam para
+    o fim no meio da entrada (de 0,86 a 0,93 para 1 num quadro); depois, nenhuma em
+    11 rodadas a 1×, 4× e 6×, nem no reduzido, no celular e no Receber, e a
+    chegada acaba de 340 a 430 ms depois de começar;
+  - o cartão vazio: antes, de 15 a 26 quadros por rodada com um cartão sem
+    fantasma e sem linha (abaixo de 0,3 de opacidade); depois, nenhum, e o
+    mais visível dos dois nunca fica abaixo de 0,8;
+  - os saltos com a contagem lembrada exata: no computador, os títulos andam
+    0 px, e a borda de baixo de "Para entregar", 22 px antes e 0 depois; no
+    celular, "Para entregar" desce 60 px (92 antes), e as linhas-fantasma do
+    pedido têm a altura das reais (147 e 168 px). A primeira visita, sem
+    lembrança, desce 79 px por linha a mais, como a P3 previa;
+  - o segmentado: antes, andava de 7,3 a 8,2 px na chegada; depois, 0. No
+    celular, cada opção passou de 34 a 44 px (em Pedidos, 153 × 44 num
+    grupo de 306 px, como na prancha, com o Atualizar ao lado);
+  - o Receber a 320 px: antes, 337 px de largura lendo e 328 lido; depois,
+    320 nos dois;
+  - a troca de cliente no Receber: antes, a lista sumia por uns 300 ms e
+    voltava em fantasmas; depois, fica inteira, e só a linha de estado diz
+    "Carregando chegadas…";
+  - a nova tentativa depois da falha: antes, nada falado e o foco no `body`;
+    depois, "Carregando pedidos", o resumo e o foco na linha de estado;
+  - o axe-core, em 24 estados (até 300 ms, lendo e na demora × Pedidos e
+    Receber × claro e escuro × 1440 e 390 px), não acusa nada. Na lista lida
+    ficam as violações de antes: a idade da linha ("· há 25 min", a tinta a
+    45%, 2,92:1) e o primário no escuro (4,3:1).
+
+Fica aberto:
+
+- no celular, "Para aprovar" ainda cresce na chegada quando o resumo do
+  pedido quebra em duas linhas (60 px com três pedidos), o que depende do
+  texto;
+- "Para separar" com o pedido de itens abertos por padrão fica mais alto que
+  a linha-fantasma;
+- o resumo das vistas Entregues, Recebidos e Cancelados ("N entregues", "N
+  chegadas recebidas") e o vazio ("Nenhum pedido em aberto") passam das seis
+  palavras do Anunciador: a especificação só define a frase de Pedidos em
+  aberto. Fica para confirmar com o Leonardo;
+- o resumo já pedido ainda é dito quando a pessoa troca para "Entregues"
+  dentro dos 2 s do anúncio (o número é da lista em aberto);
+- na troca de cliente do Receber, até os avisos do cliente novo chegarem, o
+  "Em aberto" e "Para conferir" contam sem eles, como antes desta parte; a
+  troca com a lista anterior a 50% é da parte 10;
+- o segmentado de 44 px no celular vale para os sete que existem (Pedidos,
+  Receber, a falta da linha, a entrega do pedido, o destino da caixa, a
+  demanda nova da Operação e as faturas do portal): conferir os outros cinco
+  num celular;
+- a 320 px, os botões "Aprovar" de Pedidos ficam cortados pelo cartão, desde
+  a parte 6;
+- a linha ocupada (`aria-busy`) sem teste com leitor de tela de verdade
+  (NVDA, JAWS, VoiceOver), e o Android médio de verdade (aceite da seção 8).
+

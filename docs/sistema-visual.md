@@ -136,6 +136,23 @@ máximo um anúncio a cada 2 s.
 | `BotaoAtualizar` | O Atualizar das listas | 40 px no computador, 44 px no celular. Só mostra a espera quando a pessoa toca nele: o ícone sai em 80 ms e a caixa entra em 150 ms; no fim, a caixa sai em 180 ms e o ícone volta. A releitura automática não o gira nem o desabilita. Travado na primeira leitura, a 0,45, volta a 1 em 150 ms. No fim do toque, "Lista atualizada" no Anunciador, só com a tela ainda aberta |
 | `BarraDeEspera` (`components/ui/barra-de-espera.tsx`) | A linha em andamento e o topo do cartão que relê na volta do app | Na volta do app (`resultado="fim"`), a barra do topo completa em tinta por `scaleX` em 200 ms e esmaece em 150 ms; a que nunca apareceu sai sem nada |
 
+**As listas na primeira leitura** (`QueueGroup` com `count={null}` e
+`carregando`, momento 2): Pedidos e Receber nascem com a forma final. Desde 0
+ms, os títulos reais dos grupos, com o bloco de 16 × 12 px no lugar do número,
+e o segmentado "Em aberto · ▪"; nunca "0" nem "Nenhum…" antes de ler. Os
+cartões já têm a altura das linhas-fantasma, pela contagem lembrada da lista e
+do cliente (`lib/carregando/contagem-lembrada.ts`, de 1 a 5; sem ela, 2), e
+elas aparecem aos 300 ms, com o brilho de dois ciclos. A lista fica
+`aria-busy`, descrita pela linha de estado. Na chegada, as linhas reais entram
+por opacidade, subindo 4 px, em cascata de 30 ms em até seis, por cima dos
+fantasmas, que esmaecem junto; o número entra no lugar do bloco sem mexer o
+rótulo, e o Anunciador diz o resumo ("3 para aprovar, 2 para separar, 1 para
+entregar") só se disse "Carregando". É só a primeira leitura da tela: a
+releitura, a troca de cliente e o que muda depois andam com a lista na tela. A
+leitura que falha mostra o aviso no lugar da lista na hora, e a nova tentativa
+pedida pela pessoa volta aos fantasmas e fala de novo. No celular, cada opção
+do segmentado tem 44 px.
+
 **Cores com papel fixo:** tinta na espera; vermelho só na ação e na abertura;
 verde só no confirmado; `--destructive` só no erro; `#8A4B00` sobre âmbar suave
 na demora e na falta de rede; violeta só no Agent Dute.
