@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 
 import { Anunciador } from "@/lib/carregando/anunciador";
 import { ProvedorDaConexao, type EstadoDaConexao } from "@/lib/carregando/estado-da-conexao";
+import { CARREGANDO } from "@/lib/carregando/tempo";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { conexaoEm } from "@/test/conexao";
 import { textosForaDaLista } from "@/test/textos";
@@ -183,8 +184,14 @@ async function montar(Tela: ComponentType, conexao: EstadoDaConexao = "conectado
 
 const cabecalho = () => container.querySelector("header")!;
 const linha = () => cabecalho().querySelector<HTMLElement>("[data-linha-de-estado]");
-/** O texto que se vê na linha: só a camada atual. */
-const naLinha = () => (linha()?.querySelector("[data-camada]:not([data-sai])")?.textContent ?? "").replace(/\s+/g, " ").trim();
+/** O texto que se vê na linha: só a camada atual, sem nada do que sai (também o texto que sai dentro dela). */
+function naLinha(): string {
+  const atual = linha()?.querySelector<HTMLElement>(":scope > [data-camada]:not([data-sai])");
+  if (!atual) return "";
+  const copia = atual.cloneNode(true) as HTMLElement;
+  copia.querySelectorAll("[data-sai]").forEach((sai) => sai.remove());
+  return (copia.textContent ?? "").replace(/\s+/g, " ").trim();
+}
 /** O Atualizar, pelo nome (o texto só para o leitor de tela). */
 const atualizar = () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((botao) => botao.textContent?.trim() === "Atualizar") ?? null;
 const regiao = () => container.querySelector("[data-anunciador]")!;
@@ -219,6 +226,9 @@ describe.each(TELAS)("$nome: a linha de estado sob o título", ({ Tela, objeto, 
     }
     await passar(1_800);
     expect(naLinha()).toBe("Atualizado às 10:42");
+    // "Carregando…" sai em 180 ms, como o indicador, e deixa a árvore quando a hora acabou de entrar; depois, só os
+    // textos do cabeçalho lido.
+    await passar(CARREGANDO.saidaMs + CARREGANDO.trocaEntraMs);
     expect(textosForaDaLista(cabecalho().outerHTML, textos)).toEqual([]);
   });
 
@@ -243,17 +253,20 @@ describe.each(TELAS)("$nome: a linha de estado sob o título", ({ Tela, objeto, 
     expect(naLinha()).toBe(`Atualizado às 10:${String(42 + Math.floor((intervaloMs + 2_500) / 60_000)).padStart(2, "0")}`);
   }, 30_000);
 
-  it("a releitura automática não fala nem mexe na região viva", async () => {
+  it("a releitura automática não fala nem mexe na região viva, e a linha só troca a hora", async () => {
     const mudancas: MutationRecord[] = [];
     const observador = new MutationObserver((registros) => mudancas.push(...registros));
     let observando = false;
     await releituraAutomatica(() => {
       if (observando) return;
       observando = true;
+      // A linha lida, sob o título, antes da releitura.
+      expect(naLinha()).toBe("Atualizado às 10:42");
       observador.observe(regiao(), { subtree: true, childList: true, characterData: true, attributes: true });
     });
     observador.disconnect();
     expect(mudancas).toEqual([]);
+    expect(naLinha()).toMatch(/^Atualizado às \d\d:\d\d$/);
   }, 30_000);
 
   if (temAtualizar) {
@@ -288,6 +301,8 @@ describe.each(TELAS)("$nome: a linha de estado sob o título", ({ Tela, objeto, 
     expect(container.querySelector("main [data-falta], [data-falta]"), "sem a faixa que empurra a lista").toBeNull();
     expect(cabecalho().nextElementSibling).toBe(lista);
     expect(regiao().textContent).not.toContain("Reconectando");
+    // A hora que saiu deixa a árvore quando a falta acabou de entrar.
+    await passar(CARREGANDO.trocaSaiMs + CARREGANDO.trocaEntraMs);
     const html = semAbas();
     const permitidos = [...textos.filter((texto) => !texto.startsWith("Atualizado")), "Reconectando…", "· lista de 10:42", "Sem conexão · lista de 10:42", "Tentar de novo"];
     expect(textosForaDaLista(html, permitidos)).toEqual([]);
@@ -323,16 +338,39 @@ describe.each(TELAS)("$nome: a linha de estado sob o título", ({ Tela, objeto, 
     expect(container.querySelectorAll('[data-barra][data-lugar="topo"]')).toHaveLength(1);
     if (temAtualizar) expect(atualizar()!.querySelector("[data-spinner]")).toBeNull();
     expect(naLinha()).toBe("Atualizado às 10:42");
-    await passar(1_500);
+    // No fim, a barra completa em tinta e esmaece (momento 7), e então sai.
+    await passar(1_250);
+    expect(container.querySelector('[data-barra][data-lugar="topo"]')?.getAttribute("data-estado")).toBe("fim");
+    await passar(400);
     expect(container.querySelector('[data-barra][data-lugar="topo"]')).toBeNull();
   });
 
-  it("o cabeçalho passa no axe, lido e carregando", async () => {
+  it("o Tentar de novo da demora recomeça a lista e deixa seguir o que a tela lê além dela: nenhuma leitura fica parada sem dado", async () => {
+    estado.atrasoMs = 12_000;
+    await montar(Tela);
+    for (let t = 0; t < 10_200; t += 300) await passar(300);
+    expect(naLinha()).toBe("Demorando mais que o normalTentar de novo");
+    const tentar = Array.from(linha()!.querySelectorAll<HTMLButtonElement>(".linha-de-estado-tentar")).find((botao) => !botao.closest("[data-sai]"))!;
+    await act(async () => tentar.click());
+    for (let t = 0; t < 26_000; t += 500) await passar(500);
+    // Toda leitura da tela leu (ou ainda lê, de verdade): nenhuma cancelada e esquecida, sem dado e sem ler.
+    const paradas = cliente
+      .getQueryCache()
+      .getAll()
+      .filter((consulta) => !consulta.isDisabled() && consulta.state.data === undefined && consulta.state.fetchStatus === "idle" && consulta.state.status === "pending")
+      .map((consulta) => JSON.stringify(consulta.queryKey));
+    expect(paradas).toEqual([]);
+    expect(naLinha()).toMatch(/^Atualizado às \d\d:\d\d$/);
+  }, 30_000);
+
+  it("o cabeçalho passa no axe, lido e carregando, com a linha de estado sob o título", async () => {
     estado.atrasoMs = 2_000;
     await montar(Tela);
     await passar(400);
+    expect(naLinha()).toBe(`Carregando ${objeto}…`);
     const carregando = semAbas();
     await passar(2_000);
+    expect(naLinha()).toBe("Atualizado às 10:42");
     const lido = semAbas();
     vi.useRealTimers();
     expect(await violacoesDeAcessibilidade(carregando)).toEqual([]);

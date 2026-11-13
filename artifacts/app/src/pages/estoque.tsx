@@ -358,7 +358,7 @@ export default function Estoque() {
                 items={visible}
                 selectedKey={panelItem?.key}
                 onSelect={toggleItem}
-                barraDoTopo={<BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} />}
+                barraDoTopo={<BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} resultado="fim" />}
               />
               {desktop && panelItem ? (
                 <section className="relative overflow-hidden rounded-lg border border-border bg-card lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">

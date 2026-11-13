@@ -47,7 +47,7 @@ export interface AtualizarLista {
  * por aqui e não mostra nada; aqui ficam as duas que a pessoa pediu:
  *
  * 1. o toque no Atualizar, que só muda o próprio botão e, no fim, diz "Lista
- *    atualizada";
+ *    atualizada" (só com a tela ainda aberta);
  * 2. a volta do app ao primeiro plano (`visibilitychange`), que relê a lista
  *    já lida com a barra no topo do cartão. A lista ainda sem leitura já está
  *    lendo, e a com a falta de conexão o estado da conexão relê sozinho.
@@ -70,6 +70,15 @@ export function useAtualizarLista(leituras: readonly LeituraDaLista[], alemDaLis
   const [voltando, setVoltando] = useState(false);
   const tocou = useRef(false);
   const anunciar = useAnuncio();
+  // A tela ainda está aberta: o Anunciador é do App, e o fim do Atualizar de uma tela que a pessoa deixou não
+  // fala na tela seguinte.
+  const montada = useRef(true);
+  useEffect(() => {
+    montada.current = true;
+    return () => {
+      montada.current = false;
+    };
+  }, []);
 
   const atualizar = useCallback(() => {
     if (tocou.current) return;
@@ -79,11 +88,11 @@ export function useAtualizarLista(leituras: readonly LeituraDaLista[], alemDaLis
       alem.current?.();
       void Promise.all(ultimas.current.map((leitura) => leitura.refetch()))
         .then((resultados) => {
-          if (resultados.every((resultado) => !resultado.isError)) anunciar("Lista atualizada");
+          if (montada.current && resultados.every((resultado) => !resultado.isError)) anunciar("Lista atualizada");
         })
         .finally(() => {
           tocou.current = false;
-          setAtualizando(false);
+          if (montada.current) setAtualizando(false);
         });
     });
   }, [anunciar]);

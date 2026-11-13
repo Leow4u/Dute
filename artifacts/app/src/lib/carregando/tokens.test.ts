@@ -157,6 +157,8 @@ const MOVIMENTO: Record<string, string> = {
   "--carregando-subida": "4px",
   "--carregando-t-troca-sai": "80ms",
   "--carregando-t-troca-entra": "150ms",
+  "--carregando-t-barra-fim": "200ms",
+  "--carregando-t-barra-some": "150ms",
   "--carregando-t-sucesso": "520ms",
   "--carregando-mola": "cubic-bezier(0.34, 1.56, 0.64, 1)",
   "--carregando-t-sucesso-visivel": "1000ms",
@@ -217,6 +219,12 @@ describe("os tokens do carregamento", () => {
     expect(raiz.get("--carregando-t-conta")).toBe(`${CARREGANDO.contaMs}ms`);
     // O texto que sai da linha de estado (parte 7b) some no tempo da troca do rótulo do botão.
     expect(raiz.get("--carregando-t-troca-sai")).toBe(`${CARREGANDO.trocaSaiMs}ms`);
+    expect(raiz.get("--carregando-t-troca-entra")).toBe(`${CARREGANDO.trocaEntraMs}ms`);
+    // A espera que sai da linha de estado e do Atualizar sai no tempo de qualquer indicador; a barra do topo
+    // que voltou a ler completa e esmaece nos dela.
+    expect(raiz.get("--carregando-t-saida")).toBe(`${CARREGANDO.saidaMs}ms`);
+    expect(raiz.get("--carregando-t-barra-fim")).toBe(`${CARREGANDO.barraFimMs}ms`);
+    expect(raiz.get("--carregando-t-barra-some")).toBe(`${CARREGANDO.barraSomeMs}ms`);
     // A conexão (momento 8): a histerese, o mínimo de cada aviso e a espera das releituras sozinhas.
     expect(raiz.get("--carregando-t-sem-rede")).toBe(`${CARREGANDO.semRedeMs}ms`);
     expect(raiz.get("--carregando-t-aviso-minimo")).toBe(`${CARREGANDO.avisoMinimoMs}ms`);
@@ -281,6 +289,7 @@ describe("os tokens do carregamento", () => {
       "--carregando-subida": "0px",
       "--carregando-t-troca-sai": "0ms",
       "--carregando-t-troca-entra": "0ms",
+      "--carregando-t-barra-fim": "0ms",
       "--carregando-t-sucesso": "0ms",
       "--carregando-sai-linha-y": "0px",
       "--carregando-t-reflui": "0ms",

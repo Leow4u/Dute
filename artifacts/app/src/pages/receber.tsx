@@ -222,7 +222,7 @@ export default function Receber() {
   // com a barra no topo do primeiro cartão.
   const leiturasDaLista = [ops, requests];
   const atualizarLista = useAtualizarLista(leiturasDaLista);
-  const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} />;
+  const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} resultado="fim" />;
 
   const taskPanel = selectedNotice ? (
     <NoticeCard notice={selectedNotice} />

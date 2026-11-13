@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { QueryClientContext } from "@tanstack/react-query";
 import { Clock3, RefreshCw, WifiOff } from "lucide-react";
 
@@ -45,17 +45,34 @@ export interface LinhaDeEstadoProps {
 /**
  * "Atualizado às": a hora da leitura mais recente da lista, a última vez que
  * ela se atualizou (no Estoque, os saldos relêem a cada 2 min e o catálogo a
- * cada 5). Na falta, "lista de": a da mais antiga das que falharam, porque é
- * dela o dado mais velho na tela (o `semConexaoNaLeitura`).
+ * cada 5). Na falta, "lista de": a da mais antiga, porque é dela o dado mais
+ * velho na tela (o `semConexaoNaLeitura`).
  */
 function horaDaLista(leituras: readonly LeituraDaLista[], qual: "recente" | "antiga"): string {
   const horas = leituras.map((leitura) => leitura.dataUpdatedAt);
   return horaDaLeitura(qual === "recente" ? Math.max(...horas) : Math.min(...horas));
 }
 
-/** A camada que a linha mostra, com a chave que diz quando ela troca. */
+/** Os estados de espera: o que sai deles sai em 180 ms, como o indicador (momentos 2 e 7). */
+const ESPERAS: ReadonlySet<EstadoDaLinha["tipo"]> = new Set(["carregando", "demorando", "atualizando"]);
+
+/** O estado inteiro, com a hora: muda quando a linha troca de texto. */
 function chaveDoEstado(estado: EstadoDaLinha): string {
   return "hora" in estado ? `${estado.tipo}:${estado.hora}` : estado.tipo;
+}
+
+/**
+ * A camada de fora: a primeira leitura e a demora dela são uma camada só,
+ * com a mesma caixa, que passa à volta calma aos 10 s sem sair do lugar; só o
+ * texto troca, dentro dela (momento 2).
+ */
+function camadaDoEstado(estado: EstadoDaLinha): string {
+  return estado.tipo === "carregando" || estado.tipo === "demorando" ? "primeira" : chaveDoEstado(estado);
+}
+
+/** O "Tentar de novo" que está na tela: o da camada atual, nunca o da que sai. */
+function tentarNaTela(raiz: HTMLElement): HTMLElement | null {
+  return Array.from(raiz.querySelectorAll<HTMLElement>(".linha-de-estado-tentar")).find((botao) => !botao.closest("[data-sai]")) ?? null;
 }
 
 /**
@@ -66,7 +83,7 @@ function chaveDoEstado(estado: EstadoDaLinha): string {
  *
  * - a primeira leitura, depois de 300 ms: o indicador de 24 px e "Carregando
  *   pedidos…", com o anúncio; aos 10 s, a pílula âmbar "Demorando mais que o
- *   normal" e "Tentar de novo", com o indicador na volta calma;
+ *   normal" e "Tentar de novo", com a mesma caixa na volta calma;
  * - lida: "Atualizado às 10:42";
  * - a releitura pedida pela pessoa, com a barra do topo passando de 5 s:
  *   "Atualizando…". A releitura automática não mostra nada, não fala e não
@@ -74,15 +91,22 @@ function chaveDoEstado(estado: EstadoDaLinha): string {
  * - a falta de conexão com a lista lida (absorve o `FaixaSemConexao`):
  *   "Reconectando… · lista de 10:42" em tinta, com os arcos do Wi-Fi, ou a
  *   pílula âmbar "Sem conexão · lista de 10:42", pelo estado único da
- *   conexão; as duas com "Tentar de novo";
+ *   conexão; as duas com "Tentar de novo". "Sem conexão" também com o
+ *   aparelho sem rede e nenhuma leitura falhando ainda; na volta da rede, fica
+ *   até a leitura voltar (então "Atualizado às"), e só passa a "Reconectando…"
+ *   se o servidor ainda não respondeu depois do mínimo de 2 s do aviso;
  * - sem nada lido, nada: o aviso fica no lugar da lista.
  *
  * Não é região viva. O Anunciador diz "Carregando pedidos" aos 300 ms e
- * "Demorando mais que o normal" aos 10 s, só na primeira leitura; "Sem
- * conexão" ele diz sozinho, uma vez, e nunca "Reconectando" nem a volta. O
- * texto troca em sequência (sai em 80 ms, entra em 150 ms), e só o atual
- * fica na árvore. "Tentar de novo" tem o toque de 44 px por um `::before`
- * com `inset: -10px`, sem mudar a altura da linha. O CSS mora em index.css
+ * "Demorando mais que o normal" aos 10 s, só na primeira leitura (a releitura
+ * automática depois de uma falha não fala); "Sem conexão" ele diz sozinho,
+ * uma vez, e nunca "Reconectando" nem a volta. O texto troca em sequência
+ * (sai em 80 ms, ou em 180 ms quando sai uma espera; entra em 150 ms), e só
+ * o atual fica na árvore. Com o foco no "Tentar de novo", a troca leva o foco
+ * ao "Tentar de novo" novo ou, sem ele, à própria linha: nunca ao `body`.
+ * "Tentar de novo" tem o toque de 44 px por um `::before` com `inset: -10px`,
+ * sem mudar a altura da linha. No celular estreito, o que não cabe numa linha
+ * passa à de baixo, sem sair da tela. O CSS mora em index.css
  * (`.linha-de-estado`).
  */
 export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, className }: LinhaDeEstadoProps) {
@@ -91,35 +115,42 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, class
   const primeira = leituras.some((uma) => uma.isLoading);
   const espera = useEspera(primeira);
   const releitura = useEspera(pedidaPelaPessoa && lida && leituras.some((uma) => uma.isFetching));
-  const falta = useFaltaNaTela();
   const comFalta = leituras.filter((uma) => uma.isError && ehFaltaDeConexao(uma.error));
+  const falta = useVoltaDaRede(useFaltaNaTela(), comFalta.length > 0);
   const anunciar = useAnuncio();
   const tentarDeNovo = useTentarDeNovo();
   const cliente = useContext(QueryClientContext);
   const [tentativas, setTentativas] = useState(0);
   const novaTentativa = useEspera(tentativas > 0, { segurarMinimo: true });
+  const raiz = useRef<HTMLDivElement>(null);
 
-  const estado: EstadoDaLinha = comFalta.length
-    ? lida
-      ? { tipo: falta, hora: horaDaLista(comFalta, "antiga") }
-      : { tipo: "vazia" }
-    : primeira
-      ? espera.visivel
+  const estado: EstadoDaLinha = !lida
+    ? comFalta.length
+      ? { tipo: "vazia" }
+      : primeira && espera.visivel
         ? { tipo: espera.fase === "andamento" || espera.fase === "com-objeto" ? "carregando" : "demorando", calmo: espera.calmo }
         : { tipo: "vazia" }
-      : !lida
-        ? { tipo: "vazia" }
+    : comFalta.length
+      ? { tipo: falta, hora: horaDaLista(comFalta, "antiga") }
+      : falta === "sem-conexao"
+        ? // O aparelho sem rede há 3 s, antes de qualquer leitura falhar (momento 8).
+          { tipo: "sem-conexao", hora: horaDaLista(leituras, "antiga") }
         : releitura.visivel && !releitura.movimento
           ? { tipo: "atualizando" }
           : { tipo: "lida", hora: horaDaLista(leituras, "recente") };
 
-  // Os anúncios da primeira leitura, uma vez cada: a entrada na espera aos 300 ms e a demora aos 10 s.
-  const falados = useRef({ carregando: false, demorando: false });
+  // Os anúncios da primeira leitura, uma vez cada: a entrada na espera aos 300 ms e a demora aos 10 s. Depois
+  // que ela falhou, quem relê é a releitura automática (o intervalo da tela, a do bloco), que não fala; a conta
+  // recomeça quando a lista é lida.
+  const falados = useRef({ carregando: false, demorando: false, calado: false });
+  const falhou = !lida && leituras.some((uma) => uma.isError);
   useEffect(() => {
-    if (!primeira) {
-      falados.current = { carregando: false, demorando: false };
+    if (lida) {
+      falados.current = { carregando: false, demorando: false, calado: false };
       return;
     }
+    if (falhou) falados.current.calado = true;
+    if (falados.current.calado) return;
     if (estado.tipo === "carregando" && !falados.current.carregando) {
       falados.current.carregando = true;
       anunciar(`Carregando ${objeto}`);
@@ -127,7 +158,7 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, class
       falados.current.demorando = true;
       anunciar("Demorando mais que o normal");
     }
-  }, [anunciar, estado.tipo, objeto, primeira]);
+  }, [anunciar, estado.tipo, falhou, lida, objeto]);
 
   /**
    * A nova tentativa no relógio da espera, como a do bloco (parte 7a): acorda
@@ -140,9 +171,16 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, class
     setTentativas((quantas) => quantas + 1);
     tentarDeNovo(() => {
       // Na primeira leitura que demora, o refetch só se juntaria à leitura presa (o react-query não recomeça a
-      // leitura sem dado): ela é cancelada e lida de novo. Com a lista lida, o refetch já recomeça.
+      // leitura sem dado): ela é cancelada e lida de novo. Só as da lista: cada `refetch` é o do observador dela,
+      // e o que a tela lê além da lista (o cliente ativo, as caixas, os contadores do menu) segue lendo.
+      const daLista = new Set<unknown>(leituras.map((uma) => uma.refetch));
       const presas = primeira && cliente
-        ? cliente.cancelQueries({ type: "active", fetchStatus: "fetching", predicate: (consulta) => consulta.state.data === undefined })
+        ? cliente.cancelQueries({
+            predicate: (consulta) =>
+              consulta.state.data === undefined &&
+              consulta.state.fetchStatus === "fetching" &&
+              consulta.observers.some((observador) => daLista.has(observador.refetch)),
+          })
         : Promise.resolve();
       void presas
         .then(() => Promise.all(leituras.map((uma) => uma.refetch())))
@@ -150,14 +188,53 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, class
     });
   };
 
+  // O foco no "Tentar de novo" não cai no body quando a linha troca (de Reconectando para Sem conexão, ou a
+  // tentativa que deu certo): vai ao "Tentar de novo" da camada nova ou, sem ele, à própria linha.
+  const chave = chaveDoEstado(estado);
+  const [troca, setTroca] = useState({ chave, levarOFoco: false });
+  if (troca.chave !== chave) {
+    const ativo = typeof document === "undefined" ? null : document.activeElement;
+    setTroca({ chave, levarOFoco: Boolean(ativo && raiz.current?.contains(ativo) && ativo.classList.contains("linha-de-estado-tentar")) });
+  }
+  useLayoutEffect(() => {
+    if (!troca.levarOFoco || !raiz.current) return;
+    (tentarNaTela(raiz.current) ?? raiz.current).focus({ preventScroll: true });
+  }, [troca]);
+
   const conteudo = desenhar(estado, objeto, novaTentativa.visivel, tentar);
-  const camadas = useTrocaEmSequencia(chaveDoEstado(estado), conteudo);
+  const camadas = useTrocaEmSequencia(camadaDoEstado(estado), conteudo, ESPERAS.has(estado.tipo));
 
   return (
-    <div data-linha-de-estado="" data-estado={estado.tipo} className={cn("linha-de-estado", className)}>
-      {camadas}
+    <div ref={raiz} tabIndex={-1} data-linha-de-estado="" data-estado={estado.tipo} className={cn("linha-de-estado", className)}>
+      {camadas.map(({ chave: camada, conteudo: dentro, sai, entra }) => (
+        <p key={camada} data-camada="" data-sai={sai} data-entra={entra} aria-hidden={sai === undefined ? undefined : true} inert={sai !== undefined}>
+          {dentro}
+        </p>
+      ))}
     </div>
   );
+}
+
+/**
+ * Na volta da rede, "Sem conexão" fica até a leitura voltar (momento 8: da
+ * pílula direto para "Atualizado às 10:44"): a conexão passa a "reconectando"
+ * assim que o aparelho tem rede, antes de o servidor responder. Só se ele
+ * ainda não respondeu depois do mínimo de 2 s do aviso, a linha diz
+ * "Reconectando…".
+ */
+function useVoltaDaRede(falta: "sem-conexao" | "reconectando", comFalta: boolean): "sem-conexao" | "reconectando" {
+  const [anterior, setAnterior] = useState(falta);
+  const [segurando, setSegurando] = useState(false);
+  if (anterior !== falta) {
+    setAnterior(falta);
+    setSegurando(anterior === "sem-conexao" && falta === "reconectando");
+  }
+  useEffect(() => {
+    if (!segurando) return undefined;
+    const fim = setTimeout(() => setSegurando(false), CARREGANDO.avisoMinimoMs);
+    return () => clearTimeout(fim);
+  }, [segurando]);
+  return segurando && comFalta ? "sem-conexao" : falta;
 }
 
 /** O "Tentar de novo" da linha: texto sublinhado, com o toque estendido a 44 px. Ocupado não é desabilitado. */
@@ -171,7 +248,8 @@ function TentarDeNovo({ mostrando, aviso = false, onTentar }: { mostrando: boole
       aria-busy={mostrando || undefined}
       onClick={onTentar}
     >
-      {mostrando ? <Spinner /> : null}
+      {/* No celular, sem a caixa: a linha já tem o indicador dela, e o rótulo mais largo não sai da tela. */}
+      {mostrando ? <Spinner className="max-sm:hidden" /> : null}
       {mostrando ? "Tentando de novo…" : "Tentar de novo"}
     </button>
   );
@@ -183,21 +261,12 @@ function desenhar(estado: EstadoDaLinha, objeto: string, mostrando: boolean, onT
     case "vazia":
       return null;
     case "carregando":
-      return (
-        <>
-          <Spinner tamanho={24} calmo={estado.calmo} />
-          <span className="linha-de-estado-forte">{`Carregando ${objeto}…`}</span>
-        </>
-      );
     case "demorando":
+      // A mesma caixa nos dois: aos 10 s ela passa à volta calma no lugar, e só o texto troca (momento 2).
       return (
         <>
           <Spinner tamanho={24} calmo={estado.calmo} />
-          <span className="linha-de-estado-pilula">
-            <Clock3 className="size-3.5 shrink-0" aria-hidden="true" />
-            Demorando mais que o normal
-          </span>
-          {tentar(true)}
+          <TextoDaPrimeira tipo={estado.tipo} objeto={objeto} tentar={tentar(true)} />
         </>
       );
     case "lida":
@@ -231,44 +300,77 @@ function desenhar(estado: EstadoDaLinha, objeto: string, mostrando: boolean, onT
   }
 }
 
+/** O texto da primeira leitura, ao lado da caixa: "Carregando pedidos…" e, aos 10 s, a demora, em sequência. */
+function TextoDaPrimeira({ tipo, objeto, tentar }: { tipo: "carregando" | "demorando"; objeto: string; tentar: ReactNode }) {
+  const conteudo =
+    tipo === "carregando" ? (
+      <span className="linha-de-estado-forte">{`Carregando ${objeto}…`}</span>
+    ) : (
+      <>
+        <span className="linha-de-estado-pilula">
+          <Clock3 className="size-3.5 shrink-0" aria-hidden="true" />
+          Demorando mais que o normal
+        </span>
+        {tentar}
+      </>
+    );
+  const camadas = useTrocaEmSequencia(tipo, conteudo, false);
+  return (
+    <span data-textos="">
+      {camadas.map(({ chave, conteudo: dentro, sai, entra }) => (
+        <span key={chave} data-camada="" data-sai={sai} data-entra={entra} aria-hidden={sai === undefined ? undefined : true} inert={sai !== undefined}>
+          {dentro}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Uma camada da troca em sequência: a que sai (`sai`) ou a atual (`entra`, quando acabou de entrar). */
+export interface CamadaDaTroca {
+  chave: string;
+  conteudo: ReactNode;
+  /** A que sai: "" (80 ms) ou "espera" (a espera que acabou, 180 ms). */
+  sai?: "" | "espera";
+  /** A que entra: "" (na hora), "depois" (depois dos 80 ms) ou "depois-da-espera" (depois dos 180 ms). */
+  entra?: "" | "depois" | "depois-da-espera";
+}
+
 /**
- * A troca do texto em sequência, nunca sobreposta (momento 8): o que sai
- * some em 80 ms subindo 3 px e só então o novo entra, em 150 ms, de 3 px
- * abaixo; no movimento reduzido, de uma vez. Quem sai fica fora da árvore e
- * sem toque (`aria-hidden` e `inert`); só o atual é lido.
+ * A troca em sequência, nunca sobreposta (momento 8): o que sai some em 80
+ * ms subindo 3 px (em 180 ms quando é uma espera que acaba, `espera`, como o
+ * indicador: momentos 2 e 7) e só então o novo entra, em 150 ms, de 3 px
+ * abaixo; no movimento reduzido, de uma vez. As duas correm no relógio do
+ * CSS: a entrada guarda o atraso dela até o fim (`entra` não muda quando a
+ * outra sai), e a camada que saiu deixa a árvore só quando a nova acabou de
+ * entrar, sem cortar a saída no meio. A camada que sai guarda a chave dela, e
+ * nada dentro remonta (a caixa não recomeça a entrada); fica fora da árvore
+ * de acessibilidade e sem toque (`aria-hidden` e `inert`); só a atual é lida.
  */
-function useTrocaEmSequencia(chave: string, conteudo: ReactNode): ReactNode {
-  const [mostrada, setMostrada] = useState(chave);
-  const [saindo, setSaindo] = useState<{ chave: string; conteudo: ReactNode } | null>(null);
-  const [trocou, setTrocou] = useState(false);
+export function useTrocaEmSequencia(chave: string, conteudo: ReactNode, espera: boolean): CamadaDaTroca[] {
+  const [mostrada, setMostrada] = useState<{ chave: string; espera: boolean; entra?: CamadaDaTroca["entra"] }>({ chave, espera });
+  const [saindo, setSaindo] = useState<{ chave: string; conteudo: ReactNode; espera: boolean } | null>(null);
   const desenhado = useRef<ReactNode>(conteudo);
-  if (chave !== mostrada) {
-    setSaindo(desenhado.current === null ? null : { chave: mostrada, conteudo: desenhado.current });
-    setMostrada(chave);
-    setTrocou(true);
+  if (chave !== mostrada.chave) {
+    const sai = desenhado.current === null ? null : { chave: mostrada.chave, conteudo: desenhado.current, espera: mostrada.espera };
+    setSaindo(sai);
+    setMostrada({ chave, espera, entra: sai === null ? "" : sai.espera ? "depois-da-espera" : "depois" });
+  } else if (espera !== mostrada.espera) {
+    setMostrada({ ...mostrada, espera });
   }
   useEffect(() => {
     desenhado.current = conteudo;
   });
   useEffect(() => {
     if (saindo === null) return undefined;
-    const fim = setTimeout(() => setSaindo(null), CARREGANDO.trocaSaiMs);
+    const fim = setTimeout(() => setSaindo(null), (saindo.espera ? CARREGANDO.saidaMs : CARREGANDO.trocaSaiMs) + CARREGANDO.trocaEntraMs);
     return () => clearTimeout(fim);
   }, [saindo]);
-  return (
-    <>
-      {saindo ? (
-        <p key={`sai:${saindo.chave}`} data-camada="" data-sai="" aria-hidden="true" inert>
-          {saindo.conteudo}
-        </p>
-      ) : null}
-      {conteudo === null ? null : (
-        <p key={chave} data-camada="" data-entra={trocou ? (saindo ? "depois" : "") : undefined}>
-          {conteudo}
-        </p>
-      )}
-    </>
-  );
+  const camadas: CamadaDaTroca[] = [];
+  // A que sai vem antes, com a chave dela: o React a mantém, só com os atributos de quem sai.
+  if (saindo && saindo.chave !== chave) camadas.push({ chave: saindo.chave, conteudo: saindo.conteudo, sai: saindo.espera ? "espera" : "" });
+  if (conteudo !== null) camadas.push({ chave, conteudo, entra: mostrada.entra });
+  return camadas;
 }
 
 export interface BotaoAtualizarProps {
@@ -284,35 +386,45 @@ export interface BotaoAtualizarProps {
  * O Atualizar das listas (carregamento v2, momento 7, caso 1, e a decisão
  * 9.4.5 do celular): 40 × 40 no computador e 44 × 44 no celular, também no
  * Estoque, no lugar do puxar para atualizar. Só mostra a espera quando a
- * pessoa toca nele: passados 300 ms, a caixa de 16 px (20 px no celular) no
- * lugar do ícone, com `aria-busy`, e no mínimo 500 ms. A releitura
- * automática não o gira nem o desabilita. Ocupado não é desabilitado: o
- * toque repetido é barrado aqui, com `aria-disabled`.
+ * pessoa toca nele: passados 300 ms, o ícone sai em 80 ms e só então entra a
+ * caixa de 16 px (20 px no celular), em 150 ms, com `aria-busy`, e no mínimo
+ * 500 ms; no fim, a caixa sai em 180 ms e o ícone volta. A releitura
+ * automática não o gira nem o desabilita. Travado na primeira leitura, a
+ * 0,45, e volta a 1 em 150 ms quando a lista chega. Ocupado não é
+ * desabilitado: o toque repetido é barrado aqui, com `aria-disabled`.
  */
 export function BotaoAtualizar({ atualizando, travado = false, onAtualizar, className }: BotaoAtualizarProps) {
   const espera = useEspera(atualizando, { segurarMinimo: true });
   const ocupado = atualizando || travado;
+  const icone = espera.visivel ? (
+    <>
+      <Spinner tamanho={16} calmo={espera.calmo} className="max-md:hidden" />
+      <Spinner tamanho={20} calmo={espera.calmo} className="md:hidden" />
+    </>
+  ) : (
+    <RefreshCw aria-hidden="true" />
+  );
+  const camadas = useTrocaEmSequencia(espera.visivel ? "caixa" : "icone", icone, espera.visivel);
   return (
     <Button
       type="button"
       variant="outline"
       size="icon"
       data-atualizar=""
-      className={cn("max-md:size-11", travado && !atualizando && "opacity-45", className)}
+      className={cn("max-md:size-11 transition-[color,background-color,border-color,opacity]", travado && !atualizando && "opacity-45", className)}
       aria-disabled={ocupado || undefined}
       aria-busy={espera.visivel || undefined}
       onClick={() => {
         if (!ocupado) onAtualizar();
       }}
     >
-      {espera.visivel ? (
-        <>
-          <Spinner tamanho={16} calmo={espera.calmo} className="max-md:hidden" />
-          <Spinner tamanho={20} calmo={espera.calmo} className="md:hidden" />
-        </>
-      ) : (
-        <RefreshCw aria-hidden="true" />
-      )}
+      <span data-icones="" aria-hidden="true">
+        {camadas.map(({ chave, conteudo, sai, entra }) => (
+          <span key={chave} data-camada="" data-sai={sai} data-entra={entra}>
+            {conteudo}
+          </span>
+        ))}
+      </span>
       <span className="sr-only">Atualizar</span>
     </Button>
   );

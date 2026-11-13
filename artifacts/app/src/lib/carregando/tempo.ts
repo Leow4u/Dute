@@ -50,6 +50,22 @@ export const CARREGANDO = {
    * entra: a troca em sequência, nunca sobreposta (o mesmo do rótulo do botão).
    */
   trocaSaiMs: 80,
+  /**
+   * O texto novo entra nesse tempo, depois do que sai; só quando ele acabou
+   * de entrar a camada que saiu deixa a árvore (ela já está invisível e sem
+   * toque desde o fim da saída).
+   */
+  trocaEntraMs: 150,
+  /**
+   * A saída de um indicador e da espera da linha de estado ("Carregando
+   * pedidos…" na chegada, "Atualizando…", a caixa do Atualizar): só então o
+   * que vem depois entra.
+   */
+  saidaMs: 180,
+  /** A barra do topo do cartão que voltou a ler completa por scaleX nesse tempo, em tinta (momento 7, caso 3)... */
+  barraFimMs: 200,
+  /** ...e então esmaece nesse, e sai. */
+  barraSomeMs: 150,
   /** A contagem que muda (3 → 2) rola 8 px nesse tempo. */
   contaMs: 160,
   /**

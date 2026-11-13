@@ -176,6 +176,50 @@ describe("a barra no relógio", () => {
     expect(barra()?.dataset.estado).toBe("andamento");
   });
 
+  it("no fim da releitura do cartão (fim), completa em tinta e esmaece por 350 ms, e sai; de onde ela estava: varrendo ou parada", () => {
+    montar({ lugar: "topo", ativa: true, resultado: "fim" });
+    passar(CARREGANDO.atrasoMs);
+    expect(barra()?.dataset.estado).toBe("andamento");
+    passar(CARREGANDO.minimoMs);
+    montar({ lugar: "topo", ativa: false, resultado: "fim" });
+    expect(barra()?.dataset.estado).toBe("fim");
+    expect(barra()?.dataset.de).toBe("andamento");
+    expect(partes()).toEqual(["trilho", "cheio"]);
+    passar(CARREGANDO.barraFimMs + CARREGANDO.barraSomeMs - 1);
+    expect(barra()?.dataset.estado).toBe("fim");
+    passar(1);
+    expect(barra()).toBeNull();
+    // Parada aos 5 s, ela completa de onde está, inteira a 0,6.
+    montar({ lugar: "topo", ativa: true, resultado: "fim" });
+    passar(CARREGANDO.movimentoMaxMs);
+    expect(barra()?.dataset.estado).toBe("parada");
+    montar({ lugar: "topo", ativa: false, resultado: "fim" });
+    expect(barra()?.dataset.de).toBe("parada");
+    passar(CARREGANDO.barraFimMs + CARREGANDO.barraSomeMs);
+    expect(barra()).toBeNull();
+  });
+
+  it("no fim, a que nunca apareceu (a releitura de menos de 300 ms) sai sem completar", () => {
+    montar({ lugar: "topo", ativa: true, resultado: "fim" });
+    passar(200);
+    montar({ lugar: "topo", ativa: false, resultado: "fim" });
+    expect(barra()).toBeNull();
+    passar(CARREGANDO.barraFimMs + CARREGANDO.barraSomeMs);
+    expect(barra()).toBeNull();
+  });
+
+  it("o fim em tinta: o cheio completa por scaleX em 200 ms (de 0,3, ou da parada a 0,6), e a barra esmaece em 150 ms depois dele", () => {
+    expect(declaradas('.carregando-barra[data-estado="fim"]', COMPONENTES).get("animation")).toBe(
+      "carregando-some var(--carregando-t-barra-some) var(--ease-carregando-saida) var(--carregando-t-barra-fim) both",
+    );
+    const cheio = declaradas('.carregando-barra[data-estado="fim"] > [data-parte="cheio"]', COMPONENTES);
+    expect(cheio.get("animation")).toBe("carregando-barra-fim var(--carregando-t-barra-fim) var(--ease-carregando-padrao) both");
+    expect(cheio.has("background-color")).toBe(false);
+    expect(quadros("carregando-barra-fim")).toEqual([["from", "transform: scaleX(0.3)"]]);
+    expect(declaradas('.carregando-barra[data-estado="fim"][data-de="parada"] > [data-parte="cheio"]', COMPONENTES).get("animation-name")).toBe("carregando-barra-fim-parada");
+    expect(quadros("carregando-barra-fim-parada")).toEqual([["from", "opacity: 0.6"]]);
+  });
+
   it("determinada, enche por scaleX até o progresso, sem varrer e sem parar aos 5 s", () => {
     montar({ lugar: "topo", ativa: true, progresso: 0.25 });
     passar(CARREGANDO.atrasoMs);

@@ -604,7 +604,7 @@ export default function Pedidos() {
   // junto do toque.
   const leiturasDaLista = decider ? [ops, requests] : [ops];
   const atualizarLista = useAtualizarLista(leiturasDaLista, () => void queryClient.invalidateQueries({ queryKey: ["stock-balances"] }));
-  const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} />;
+  const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} resultado="fim" />;
 
   return (
     <div ref={palco.ref} className="mx-auto flex max-w-5xl flex-col gap-6 pb-24">

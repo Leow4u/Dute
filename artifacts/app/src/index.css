@@ -782,6 +782,9 @@
   --carregando-t-sucesso-visivel: 1000ms; /* "Aprovado" na tela antes de a linha sair */
   --carregando-t-erro-visivel: 2000ms; /* "Não aprovado" no botão antes de voltar a "Aprovar" */
   --carregando-t-barra-completa: 220ms; /* a barra da linha completa por scaleX: verde no sucesso, crítico no erro */
+  /* A barra do topo do cartão que voltou a ler completa em tinta por scaleX e esmaece (momento 7, caso 3). */
+  --carregando-t-barra-fim: 200ms;
+  --carregando-t-barra-some: 150ms;
   /* A linha deixa o grupo (opacidade e 6 px para cima) e as de baixo sobem por transform (FLIP). */
   --carregando-t-sai-linha: 200ms;
   --carregando-sai-linha-y: -6px;
@@ -972,6 +975,7 @@
     --carregando-t-check: 0ms;
     --carregando-t-tremor: 0ms;
     --carregando-t-barra-completa: 0ms; /* a barra completa de uma vez */
+    --carregando-t-barra-fim: 0ms; /* a barra do topo, já inteira, só esmaece */
     --carregando-sai-linha-y: 0px; /* a linha que sai some só por opacidade */
     --carregando-t-reflui: 0ms; /* as linhas de baixo pulam para o lugar */
     --carregando-t-chega-espera: 0ms; /* nada anda até a linha nova: ela esmaece desde o começo */
@@ -1127,45 +1131,103 @@
 }
 
 /* A linha de estado das listas (components/ui/linha-de-estado.tsx; seção 5.3
-   e momentos 2, 7 e 8): 24 px sempre reservados sob o título, e nada empurra
-   a lista. As camadas ficam na mesma célula da grade: a que sai (data-sai)
-   some em 80 ms subindo 3 px, e só então a nova (data-entra="depois") entra
-   em 150 ms, de 3 px abaixo; sem nada saindo, entra na hora. No movimento
-   reduzido, de uma vez (os --carregando-t-troca-* vão a 0). O forte é a
-   tinta (15/700), o calmo é o apoio (13/600), a pílula é o âmbar do aviso
-   (--carregando-aviso sobre o --warning-soft, 6,2:1; 10,7:1 no escuro). O
+   e momentos 2, 7 e 8): 24 px reservados sob o título, e nada empurra a
+   lista. As camadas ficam na mesma célula da grade: a que sai (data-sai)
+   some em 80 ms subindo 3 px (em 180 ms, o --carregando-t-saida, quando é
+   uma espera que acaba: data-sai="espera"), e só então a nova entra em 150
+   ms, de 3 px abaixo; sem nada saindo, entra na hora. A primeira leitura e a
+   demora dela são uma camada só, com a mesma caixa, e só o texto troca
+   dentro dela ([data-textos]). No movimento reduzido, de uma vez (os
+   --carregando-t-troca-* vão a 0, e a --linha-sai-espera também). O forte é
+   a tinta (15/700), o calmo é o apoio (13/600), a pílula é o âmbar do aviso
+   (--carregando-aviso sobre o --warning-soft, 6,2:1; 10,7:1 no escuro). Cada
+   peça fica inteira (nowrap); o que não cabe na largura passa à linha de
+   baixo e a linha cresce, sem sair da tela (no celular estreito, a demora e
+   o "Tentando de novo…"). No celular, os vãos são os da prancha (6 px). O
    "Tentar de novo" tem o toque estendido a 44 px pelo ::before (inset de
-   -10 px), sem mudar a altura da linha, e o foco visível na cor do texto. */
+   -10 px), sem mudar a altura da linha, e o foco visível na cor do texto; a
+   linha recebe o foco quando o "Tentar de novo" focado sai da tela. */
 @layer components {
+  .linha-de-estado,
+  [data-atualizar] {
+    --linha-sai-espera: var(--carregando-t-saida);
+  }
+
   .linha-de-estado {
     position: relative;
     display: grid;
     align-items: center;
-    block-size: 24px;
+    min-block-size: 24px;
     min-inline-size: 0;
+    border-radius: 4px;
   }
 
-  .linha-de-estado > [data-camada] {
+  .linha-de-estado:focus {
+    outline: none;
+  }
+
+  .linha-de-estado:focus-visible {
+    outline: 2px solid hsl(var(--foreground));
+    outline-offset: 2px;
+  }
+
+  .linha-de-estado [data-camada] {
     grid-area: 1 / 1;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    column-gap: 10px;
+    row-gap: 4px;
     min-inline-size: 0;
+    min-block-size: 24px;
     margin: 0;
     white-space: nowrap;
   }
 
-  .linha-de-estado > [data-sai] {
+  /* O texto da primeira leitura, ao lado da caixa: ocupa o resto da linha e quebra dentro dela. */
+  .linha-de-estado [data-textos] {
+    display: grid;
+    flex: 1 1 0%;
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .linha-de-estado [data-sai],
+  [data-atualizar] [data-icones] > [data-sai] {
     pointer-events: none;
     animation: carregando-troca-sai var(--carregando-t-troca-sai) var(--ease-carregando-saida) both;
   }
 
-  .linha-de-estado > [data-entra] {
+  .linha-de-estado [data-sai="espera"],
+  [data-atualizar] [data-icones] > [data-sai="espera"] {
+    animation-duration: var(--linha-sai-espera);
+  }
+
+  .linha-de-estado [data-entra],
+  [data-atualizar] [data-icones] > [data-entra] {
     animation: carregando-troca-entra var(--carregando-t-troca-entra) var(--ease-carregando-entrada) both;
   }
 
-  .linha-de-estado > [data-entra="depois"] {
+  .linha-de-estado [data-entra="depois"],
+  [data-atualizar] [data-icones] > [data-entra="depois"] {
     animation-delay: var(--carregando-t-troca-sai);
+  }
+
+  .linha-de-estado [data-entra="depois-da-espera"],
+  [data-atualizar] [data-icones] > [data-entra="depois-da-espera"] {
+    animation-delay: var(--linha-sai-espera);
+  }
+
+  /* O ícone do Atualizar e a caixa, na mesma célula: um sai e só então o outro entra (momento 7, caso 1). */
+  [data-atualizar] [data-icones] {
+    display: grid;
+    place-items: center;
+  }
+
+  [data-atualizar] [data-icones] > [data-camada] {
+    grid-area: 1 / 1;
+    display: grid;
+    place-items: center;
   }
 
   .linha-de-estado-forte {
@@ -1233,6 +1295,29 @@
   .linha-de-estado-tentar:focus-visible {
     outline: 2px solid currentColor;
     outline-offset: 2px;
+  }
+
+  /* No celular, os vãos da prancha: 6 px entre as peças e, em "Reconectando…", os arcos com 2 px a mais e o
+     "Tentar de novo" com 6. */
+  @media (max-width: 639px) {
+    .linha-de-estado [data-camada] {
+      column-gap: 6px;
+    }
+
+    .linha-de-estado[data-estado="reconectando"] [data-arcos] {
+      margin-inline-end: 2px;
+    }
+
+    .linha-de-estado[data-estado="reconectando"] .linha-de-estado-tentar {
+      margin-inline-start: 6px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .linha-de-estado,
+    [data-atualizar] {
+      --linha-sai-espera: 0ms;
+    }
   }
 }
 
@@ -1881,6 +1966,18 @@
   }
 }
 
+@keyframes carregando-barra-fim {
+  from {
+    transform: scaleX(0.3);
+  }
+}
+
+@keyframes carregando-barra-fim-parada {
+  from {
+    opacity: 0.6;
+  }
+}
+
 @layer components {
   .carregando-barra {
     position: absolute;
@@ -1957,6 +2054,23 @@
     transform: none;
     opacity: 1;
     animation: carregando-barra-completa var(--carregando-t-barra-completa) var(--ease-carregando-padrao) both;
+  }
+
+  /* O fim da releitura do cartão (momento 7, caso 3): o cheio completa em
+     tinta por scaleX em 200 ms, do segmento que varria (de 0,3) ou da barra
+     parada (de 0,6 de opacidade), e então a barra esmaece em 150 ms e sai. */
+  .carregando-barra[data-estado="fim"] {
+    animation: carregando-some var(--carregando-t-barra-some) var(--ease-carregando-saida) var(--carregando-t-barra-fim) both;
+  }
+
+  .carregando-barra[data-estado="fim"] > [data-parte="cheio"] {
+    transform: none;
+    opacity: 1;
+    animation: carregando-barra-fim var(--carregando-t-barra-fim) var(--ease-carregando-padrao) both;
+  }
+
+  .carregando-barra[data-estado="fim"][data-de="parada"] > [data-parte="cheio"] {
+    animation-name: carregando-barra-fim-parada;
   }
 
   /* Movimento reduzido: entra só por opacidade, não varre e fica parada e

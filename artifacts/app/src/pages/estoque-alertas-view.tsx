@@ -58,7 +58,7 @@ function Alerta({ alerta, nome, marcados, ocupado, erro, acoes, voltando = false
   const todos = marcados.size === alerta.itens.length;
   return (
     <section aria-labelledby={`alerta-${alerta.id}`} className="relative overflow-hidden rounded-lg border border-border bg-card">
-      <BarraDeEspera lugar="topo" ativa={voltando} />
+      <BarraDeEspera lugar="topo" ativa={voltando} resultado="fim" />
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 px-4 py-3">
         <h2 id={`alerta-${alerta.id}`} className="text-base font-bold text-foreground">
           {nome}

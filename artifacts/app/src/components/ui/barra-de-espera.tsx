@@ -1,12 +1,17 @@
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 
+import { CARREGANDO } from "@/lib/carregando/tempo";
 import { useEspera, type Espera } from "@/lib/carregando/use-espera";
 
 /** Onde a barra fica: na borda de baixo da linha em andamento ou no topo do cartão que relê. */
 export type LugarDaBarra = "linha" | "topo";
 
-/** O fim da espera que a barra mostra: completa em verde ou em crítico. */
-export type ResultadoDaBarra = "ok" | "erro";
+/**
+ * O fim da espera que a barra mostra: completa em verde (`ok`) ou em crítico
+ * (`erro`) e fica; ou completa em tinta e esmaece (`fim`, a releitura do
+ * cartão que voltou: momento 7, caso 3).
+ */
+export type ResultadoDaBarra = "ok" | "erro" | "fim";
 
 /** O que a barra desenha (data-estado): varrendo, parada aos 5 s, determinada ou completa. */
 export type EstadoDaBarra = "andamento" | "parada" | "progresso" | ResultadoDaBarra;
@@ -17,7 +22,11 @@ export interface BarraDeEsperaProps {
   ativa: boolean;
   /** De 0 a 1: enche até o valor, sem varrer. Muda por evento, nunca por quadro. */
   progresso?: number;
-  /** Depois da espera: completa em verde (`ok`) ou em crítico (`erro`). Sem ele, a barra sai. */
+  /**
+   * Depois da espera: completa em verde (`ok`) ou em crítico (`erro`); com
+   * `fim`, completa em tinta em 200 ms e esmaece em 150 ms, e sai, só se tinha
+   * aparecido. Sem ele, a barra sai.
+   */
   resultado?: ResultadoDaBarra;
 }
 
@@ -26,11 +35,18 @@ function fracao(progresso: number): number {
   return Number.isFinite(progresso) ? Math.min(1, Math.max(0, progresso)) : 0;
 }
 
-function estadoDaBarra(espera: Espera, ativa: boolean, progresso: number | undefined, resultado: ResultadoDaBarra | undefined): EstadoDaBarra | null {
+function estadoDaBarra(
+  espera: Espera,
+  ativa: boolean,
+  progresso: number | undefined,
+  resultado: ResultadoDaBarra | undefined,
+  terminando: boolean,
+): EstadoDaBarra | null {
   if (espera.visivel) {
     if (progresso !== undefined) return "progresso";
     return espera.movimento ? "andamento" : "parada";
   }
+  if (resultado === "fim") return terminando && !ativa ? "fim" : null;
   return !ativa && resultado ? resultado : null;
 }
 
@@ -45,7 +61,9 @@ function estadoDaBarra(espera: Espera, ativa: boolean, progresso: number | undef
  * tinta varre o trilho de tinta a 8%, só por `transform`; aos 5 s para
  * inteira, a 0,6. Com `resultado`, depois do mínimo de 500 ms do em andamento
  * (o mesmo do BotaoDeAcao), completa por `scaleX` em 220 ms: verde no `ok`,
- * crítico no `erro`. Com `progresso`, enche até o valor e não para aos 5 s.
+ * crítico no `erro`. Com `fim` (a releitura do cartão), quando a espera que
+ * apareceu acaba, completa em tinta por `scaleX` em 200 ms, esmaece em 150
+ * ms e sai. Com `progresso`, enche até o valor e não para aos 5 s.
  * No movimento reduzido, fica parada e inteira a 0,6 desde o começo, e o
  * verde entra de uma vez.
  *
@@ -55,7 +73,8 @@ function estadoDaBarra(espera: Espera, ativa: boolean, progresso: number | undef
  */
 export function BarraDeEspera({ lugar, ativa, progresso, resultado }: BarraDeEsperaProps) {
   const espera = useEspera(ativa, { segurarMinimo: true });
-  const estado = estadoDaBarra(espera, ativa, progresso, resultado);
+  const fim = useFimDaBarra(espera, resultado === "fim");
+  const estado = estadoDaBarra(espera, ativa, progresso, resultado, fim.terminando);
   if (estado === null) return null;
   return (
     <span
@@ -63,6 +82,7 @@ export function BarraDeEspera({ lugar, ativa, progresso, resultado }: BarraDeEsp
       data-barra=""
       data-lugar={lugar}
       data-estado={estado}
+      data-de={estado === "fim" ? fim.de : undefined}
       className="carregando-barra"
       style={estado === "progresso" ? ({ "--p": String(fracao(progresso ?? 0)) } as CSSProperties) : undefined}
     >
@@ -71,4 +91,27 @@ export function BarraDeEspera({ lugar, ativa, progresso, resultado }: BarraDeEsp
       <span data-parte="cheio" />
     </span>
   );
+}
+
+/**
+ * O fim em tinta (`resultado="fim"`): a espera que apareceu acabou, e a barra
+ * completa e esmaece por 350 ms antes de sair. A que nunca apareceu (a
+ * releitura de menos de 300 ms) sai sem nada. `de` diz de onde ela completa:
+ * do segmento que varria ou da barra parada a 0,6.
+ */
+function useFimDaBarra(espera: Espera, pedido: boolean): { terminando: boolean; de: "andamento" | "parada" } {
+  const [visivel, setVisivel] = useState(espera.visivel);
+  const [fim, setFim] = useState<{ terminando: boolean; de: "andamento" | "parada" }>({ terminando: false, de: "andamento" });
+  if (visivel !== espera.visivel) {
+    setVisivel(espera.visivel);
+    setFim(espera.visivel || !pedido ? { terminando: false, de: "andamento" } : { terminando: true, de: fim.de });
+  } else if (espera.visivel && fim.de !== (espera.movimento ? "andamento" : "parada")) {
+    setFim({ terminando: false, de: espera.movimento ? "andamento" : "parada" });
+  }
+  useEffect(() => {
+    if (!fim.terminando) return undefined;
+    const sai = setTimeout(() => setFim((atual) => ({ ...atual, terminando: false })), CARREGANDO.barraFimMs + CARREGANDO.barraSomeMs);
+    return () => clearTimeout(sai);
+  }, [fim.terminando]);
+  return fim;
 }
