@@ -198,6 +198,32 @@ describe("onde o toast aparece", () => {
     expect(classes).toContain("data-[state=open]:slide-in-from-bottom-full");
     expect(classes.filter((classe) => classe.includes("slide-in-from-top"))).toEqual([]);
   });
+
+  it("no celular sobe só o vão até a barra, aparecendo, sem passar por cima da barra de baixo", () => {
+    mostrar();
+    const classes = Array.from(avisoNaTela().classList);
+    // O slide-in-from-bottom-full sobe a altura inteira do toast (54 px) e, no
+    // celular, os primeiros quadros cobrem a barra de navegação. Abaixo de 768
+    // px ele sobe no máximo o pb-2 do viewport (8 px), como na prancha.
+    const subida = classes
+      .map((classe) => /^max-md:data-\[state=open\]:slide-in-from-bottom-(\d+)$/.exec(classe))
+      .find(Boolean);
+    expect(subida, "sem a subida própria do celular").toBeTruthy();
+    const vao = porTela(viewport()).celular.map((classe) => /^pb-(\d+)$/.exec(classe)).find(Boolean);
+    expect(Number(subida![1])).toBeLessThanOrEqual(Number(vao![1]));
+    expect(classes).toContain("max-md:data-[state=open]:fade-in-0");
+  });
+
+  it("com movimento reduzido não desliza: entra e sai de uma vez, nos dois tamanhos", () => {
+    mostrar();
+    const classes = Array.from(avisoNaTela().classList);
+    expect(classes).toEqual(
+      expect.arrayContaining([
+        "motion-reduce:data-[state=open]:animate-none",
+        "motion-reduce:data-[state=closed]:animate-none",
+      ]),
+    );
+  });
 });
 
 describe("o botão de fechar", () => {

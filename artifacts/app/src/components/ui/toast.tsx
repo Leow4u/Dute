@@ -30,8 +30,10 @@ ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
 
 const toastVariants = cva(
   // O pr-12 deixa o X de 44 px fora do texto; no computador o md:p-6 viria
-  // por cima dele, então o md:pr-12 vem junto.
-  'group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-4 pr-12 shadow-lg transition-all md:p-6 md:pr-12 data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-bottom-full',
+  // por cima dele, então o md:pr-12 vem junto. No celular o toast sobe só os
+  // 8 px do vão até a barra, aparecendo (a altura inteira passaria por cima da
+  // barra de navegação); com movimento reduzido, entra e sai sem deslizar.
+  'group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-4 pr-12 shadow-lg transition-all md:p-6 md:pr-12 data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-bottom-full max-md:data-[state=open]:fade-in-0 max-md:data-[state=open]:slide-in-from-bottom-2 motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none',
   {
     variants: {
       variant: {
