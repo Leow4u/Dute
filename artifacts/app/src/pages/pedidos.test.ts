@@ -69,7 +69,7 @@ describe("Pedidos na v3", () => {
   it("a leitura que falhou vira o erro com Tentar de novo, não o vazio das filas (decisão 6 de 06/11/2026)", () => {
     expect(FONTE).toContain("const semLeitura = (ops.isError && !ops.data) || (decider && requests.isError && !requests.data);");
     // O erro vem antes das filas e de "Entregues": sem leitura, nenhum "Nenhum pedido para…".
-    const erro = FONTE.indexOf(") : semLeitura ? (");
+    const erro = FONTE.indexOf(") : !lendo && semLeitura ? (");
     expect(erro).toBeGreaterThan(FONTE.indexOf("Carregando pedidos..."));
     expect(erro).toBeLessThan(FONTE.indexOf(') : view === "delivered" ? ('));
     expect(FONTE).toContain("const relendo = ops.isFetching || requests.isFetching;");
@@ -80,12 +80,14 @@ describe("Pedidos na v3", () => {
     // Quem não decide não lê as solicitações: só o armazém entra na conta.
     expect(FONTE).toContain("const semRede = semConexaoNaLeitura(ops, ...(decider ? [requests] : []));");
     expect(FONTE).toContain("const leiturasDaLista = decider ? [ops, requests] : [ops];");
-    // Na primeira leitura, nada no lugar da lista (a linha de estado diz); depois, o aviso, antes do erro e das filas.
-    expect(FONTE).toContain("{loading ? null : semRede && semRede.lidaEm === null ? (");
-    expect(FONTE.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(FONTE.indexOf(") : semLeitura ? ("));
+    // Na primeira leitura, a lista com a forma final, com as linhas-fantasma (parte 8); depois, o aviso, antes do erro
+    // e das filas.
+    expect(FONTE).toContain("const lendo = loading;");
+    expect(FONTE).toContain("{!lendo && semRede && semRede.lidaEm === null ? (");
+    expect(FONTE.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(FONTE.indexOf(") : !lendo && semLeitura ? ("));
     expect(FONTE).toMatch(/<BlocoSemConexao tentando=\{relendo\} onTentar=\{refreshAll\} \/>/);
     // A lista lida, com a falta: a hora dela fica na linha de estado sob o título (parte 7b), não na faixa que empurra a lista.
-    expect(FONTE).toContain('estado={<LinhaDeEstado leitura={leiturasDaLista} objeto="pedidos" pedidaPelaPessoa={atualizarLista.voltando} />}');
+    expect(FONTE).toContain('estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="pedidos" pedidaPelaPessoa={atualizarLista.voltando} resumo={resumo} />}');
     expect(FONTE).not.toContain("FaixaSemConexao");
     expect(FONTE).not.toContain("Carregando pedidos...");
   });

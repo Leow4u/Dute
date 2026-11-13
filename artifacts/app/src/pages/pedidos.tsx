@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { collection, doc, query, where } from "firebase/firestore";
 import {
@@ -65,6 +65,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
 import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useContagemLembrada, type ContagensDaLista } from "@/lib/carregando/contagem-lembrada";
+import { resumoDaLista } from "@/lib/carregando/resumo-da-lista";
 import { relogioDaEspera } from "@/lib/carregando/tempo";
 import { desfechoDoErro, useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
 import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
@@ -606,11 +608,36 @@ export default function Pedidos() {
   const atualizarLista = useAtualizarLista(leiturasDaLista, () => void queryClient.invalidateQueries({ queryKey: ["stock-balances"] }));
   const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} resultado="fim" />;
 
+  // A lista com a forma final na primeira leitura (carregamento v2, momento 2, decisão P3): os títulos reais
+  // desde 0 ms, com o bloco no lugar do número; as linhas-fantasma na altura da última contagem lida deste
+  // cliente; o contêiner aria-busy, descrito pela linha de estado. Na chegada, as linhas reais entram em
+  // cascata, e o Anunciador diz o resumo (só se disse "Carregando pedidos").
+  const lendo = loading;
+  const idDaLinha = useId();
+  const contagensLidas: ContagensDaLista | null = lida
+    ? { aprovar: chavesParaAprovar.length, separar: chavesParaSeparar.length, entregar: chavesParaEntregar.length, entregues: queue.delivered.length }
+    : null;
+  const contagem = useContagemLembrada("pedidos", cliente.code, contagensLidas);
+  const fantasmas = (grupo: string, acoes: 0 | 1 | 2, ordem: number) => (lendo ? { linhas: contagem.linhas(grupo), acoes, ordem } : undefined);
+  const resumo =
+    view === "delivered"
+      ? resumoDaLista([{ quantos: queue.delivered.length, um: "entregue", varios: "entregues" }], "Nenhuma entrega recente")
+      : resumoDaLista(
+          [
+            ...(decider ? [{ quantos: chavesParaAprovar.length, um: "para aprovar" }] : []),
+            { quantos: chavesParaSeparar.length, um: "para separar" },
+            { quantos: chavesParaEntregar.length, um: "para entregar" },
+          ],
+          "Nenhum pedido em aberto",
+        );
+  const naCascata = { separar: decider ? paraAprovar.chaves.length : 0, entregar: (decider ? paraAprovar.chaves.length : 0) + paraSeparar.chaves.length };
+  const listaOcupada = lendo ? { "aria-busy": true, "aria-describedby": idDaLinha } : {};
+
   return (
     <div ref={palco.ref} className="mx-auto flex max-w-5xl flex-col gap-6 pb-24">
       <PageHeader
         title="Pedidos"
-        estado={<LinhaDeEstado leitura={leiturasDaLista} objeto="pedidos" pedidaPelaPessoa={atualizarLista.voltando} />}
+        estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="pedidos" pedidaPelaPessoa={atualizarLista.voltando} resumo={resumo} />}
         actions={
           <>
             <Segmented<"open" | "delivered">
@@ -618,7 +645,7 @@ export default function Pedidos() {
               onChange={setView}
               aria-label="Pedidos em aberto ou entregues"
               options={[
-                { value: "open", label: `Em aberto${openCount ? ` · ${openCount}` : ""}` },
+                { value: "open", label: "Em aberto", count: lendo ? null : openCount },
                 { value: "delivered", label: "Entregues" },
               ]}
             />
@@ -636,22 +663,24 @@ export default function Pedidos() {
         }
       />
 
-      {/* A primeira leitura e a falta com a lista lida ficam na linha de estado, sob o título. */}
-      {loading ? null : semRede && semRede.lidaEm === null ? (
+      {/* A falta com a lista lida fica na linha de estado, sob o título; a primeira leitura, também, com a lista
+          na forma final, com as linhas-fantasma. */}
+      {!lendo && semRede && semRede.lidaEm === null ? (
         <BlocoSemConexao tentando={relendo} onTentar={refreshAll} />
-      ) : semLeitura ? (
+      ) : !lendo && semLeitura ? (
         <ErroNaLeitura
           mensagem="Não consegui carregar os pedidos."
           tentando={relendo}
           onTentar={refreshAll}
         />
       ) : view === "delivered" ? (
-        <>
+        <div className="flex flex-col gap-6" {...listaOcupada}>
           <QueueGroup
             title="Entregues"
-            count={queue.delivered.length}
+            count={lendo ? null : queue.delivered.length}
             empty="Nenhuma entrega recente."
             barraDoTopo={barraDoTopo}
+            carregando={fantasmas("entregues", 0, 0)}
           >
             {queue.delivered.map((order) => (
               <OrderRow key={order.key} order={order} icon={Check} tone="done" />
@@ -660,13 +689,14 @@ export default function Pedidos() {
           <Link href="/orders" className="px-1 text-sm text-primary hover:underline">
             Ver histórico completo de pedidos
           </Link>
-        </>
+        </div>
       ) : (
-        <>
+        <div className="flex flex-col gap-6" {...listaOcupada}>
           {decider ? (
             <QueueGroup
               title="Para aprovar"
-              count={paraAprovar.chaves.length}
+              count={lendo ? null : paraAprovar.chaves.length}
+              carregando={fantasmas("aprovar", 2, 0)}
               rolarContagem
               contagemNaArvore={paraAprovar.quantasFicam}
               semSaltos
@@ -713,7 +743,9 @@ export default function Pedidos() {
 
           <QueueGroup
             title="Para separar"
-            count={paraSeparar.chaves.length}
+            count={lendo ? null : paraSeparar.chaves.length}
+            carregando={fantasmas("separar", operador ? 1 : 0, decider ? 1 : 0)}
+            cascata={naCascata.separar}
             rolarContagem
             contagemNaArvore={paraSeparar.quantasFicam}
             semSaltos
@@ -756,7 +788,9 @@ export default function Pedidos() {
 
           <QueueGroup
             title="Para entregar"
-            count={paraEntregar.chaves.length}
+            count={lendo ? null : paraEntregar.chaves.length}
+            carregando={fantasmas("entregar", operador ? 1 : 0, decider ? 2 : 1)}
+            cascata={naCascata.entregar}
             rolarContagem
             contagemNaArvore={paraEntregar.quantasFicam}
             semSaltos
@@ -809,7 +843,7 @@ export default function Pedidos() {
               );
             })}
           </QueueGroup>
-        </>
+        </div>
       )}
 
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
@@ -1056,7 +1090,10 @@ function LinhaParaAprovar({
     else if (marco === "sem-resposta") anunciar("Sem confirmação do servidor");
   }, [marco, anuncioDaEspera, anunciar]);
 
-  const apoio =
+  // No lugar do meta da linha: aos 3 s o objeto ("Aprovando pedido 1042…"); aos 10 s, a demora com o relógio;
+  // depois do erro, o motivo, até a próxima ação.
+  const apoioEmAndamento = emAndamento && espera.fase === "com-objeto" ? `${emAndamento}…` : undefined;
+  const aviso =
     andando && espera.fase === "demorando" ? (
       // Em linha, para quebrar como texto no celular.
       <span className="font-bold text-amber-soft-foreground">
@@ -1065,9 +1102,7 @@ function LinhaParaAprovar({
         {" · "}
         <span className="tabular-nums">{relogioDaEspera(espera.decorridoMs)}</span>
       </span>
-    ) : emAndamento && espera.fase === "com-objeto" ? (
-      <span className="font-bold text-foreground">{`${emAndamento}…`}</span>
-    ) : motivo ? (
+    ) : motivo && !apoioEmAndamento ? (
       <span className="font-bold text-destructive">{humanApiError(motivo.erro, "Tente novamente em instantes.")}</span>
     ) : undefined;
 
@@ -1095,7 +1130,9 @@ function LinhaParaAprovar({
         title={titulo}
         badge={selo}
         meta={requestSummary(request)}
-        apoio={apoio}
+        ocupada={andando !== null}
+        apoioEmAndamento={apoioEmAndamento}
+        aviso={aviso}
         detail={linhaDoParaQuando(request.due_at)}
         age={formatRequestAge(request.created_at)}
         note={

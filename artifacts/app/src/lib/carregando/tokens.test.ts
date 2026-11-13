@@ -217,6 +217,10 @@ describe("os tokens do carregamento", () => {
     expect(CARREGANDO.refluiMs - CARREGANDO.chegaEsperaMs).toBe(60);
     expect(raiz.get("--carregando-t-destaque")).toBe(`${CARREGANDO.destaqueMs}ms`);
     expect(raiz.get("--carregando-t-conta")).toBe(`${CARREGANDO.contaMs}ms`);
+    // O dado que chega no lugar das linhas-fantasma (parte 8): 150 ms por linha, 30 ms entre elas.
+    expect(raiz.get("--carregando-t-chegada")).toBe(`${CARREGANDO.chegadaMs}ms`);
+    expect(raiz.get("--carregando-passo")).toBe(`${CARREGANDO.passoMs}ms`);
+    expect(CARREGANDO.linhasNaCascata).toBe(6);
     // O texto que sai da linha de estado (parte 7b) some no tempo da troca do rótulo do botão.
     expect(raiz.get("--carregando-t-troca-sai")).toBe(`${CARREGANDO.trocaSaiMs}ms`);
     expect(raiz.get("--carregando-t-troca-entra")).toBe(`${CARREGANDO.trocaEntraMs}ms`);

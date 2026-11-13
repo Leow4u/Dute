@@ -57,7 +57,7 @@ describe("Receber na v3", () => {
 
 
   it("a chegada por caixa recebida fica em Recebidas, por guardar, com as caixas guardadas, até a última guarda", () => {
-    expect(TELA).toContain('<QueueGroup title="Recebidas, por guardar" count={board.guardando.length} empty={null}>');
+    expect(TELA).toContain('<QueueGroup title="Recebidas, por guardar" count={lendo ? null : board.guardando.length} empty={null} carregando={fantasmas("guardando", 1)} cascata={paraConferir}>');
     expect(TELA).toContain("{caixasGuardadas(entry.task)}");
     expect(TELA).toContain("meta={guardandoRowMeta(entry.task)}");
     expect(TELA).toContain("board.check.length + board.guardando.length + board.store.length");
@@ -67,8 +67,8 @@ describe("Receber na v3", () => {
   });
 
   it("Recebidos em dois grupos, Chegadas e Guardas, cada um com o vazio dizendo o dado (06/11/2026)", () => {
-    expect(TELA).toContain('<QueueGroup title="Chegadas" count={board.chegadas.length} empty="Nenhuma chegada recebida." barraDoTopo={barraDoTopo}>');
-    expect(TELA).toContain('<QueueGroup title="Guardas" count={board.guardas.length} empty="Nenhuma guarda concluída.">');
+    expect(TELA).toContain('<QueueGroup title="Chegadas" count={lendo ? null : board.chegadas.length} empty="Nenhuma chegada recebida." barraDoTopo={barraDoTopo} carregando={fantasmas("chegadas", 0)}>');
+    expect(TELA).toContain('<QueueGroup title="Guardas" count={lendo ? null : board.guardas.length} empty="Nenhuma guarda concluída." carregando={fantasmas("guardas", 1)} cascata={board.chegadas.length}>');
     expect(TELA).toContain("rowDone(entry, receivingRowMeta(entry.task))");
     expect(TELA).toContain("rowDone(entry, putawayRowMeta(entry.task))");
     expect(TELA).not.toContain("board.done");
@@ -252,13 +252,15 @@ describe("Receber sem conexão", () => {
   it("a lista lida fica com a hora; sem nada lido, o aviso; a falta de conexão não troca a lista pelo erro", () => {
     expect(TELA).toContain("const semRede = semConexaoNaLeitura(ops, requests);");
     // A lista lida, com a falta: a hora dela fica na linha de estado sob o título (parte 7b), não na faixa que empurra a lista.
-    expect(TELA).toContain('estado={<LinhaDeEstado leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando} />}');
+    expect(TELA).toContain('estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando} resumo={resumo} />}');
     expect(TELA).toContain("const leiturasDaLista = [ops, requests];");
     expect(TELA).not.toContain("FaixaSemConexao");
     expect(TELA).not.toContain("Carregando chegadas...");
-    // Na primeira leitura, nada no lugar da lista (a linha de estado diz); depois, o aviso, antes do erro e das filas.
-    expect(TELA).toContain(": ops.isLoading ? null : semRede && semRede.lidaEm === null ? (");
+    // Na primeira leitura, a lista com a forma final, com as linhas-fantasma (parte 8); depois, o aviso, antes do erro
+    // e das filas.
+    expect(TELA).toContain("const lendo = ops.isLoading || requests.isLoading;");
+    expect(TELA).toContain(": !lendo && semRede && semRede.lidaEm === null ? (");
     expect(TELA.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(TELA.indexOf("Não consegui carregar as chegadas."));
-    expect(TELA).toContain(") : ops.error && !semRede ? (");
+    expect(TELA).toContain(") : !lendo && ops.error && !semRede ? (");
   });
 });

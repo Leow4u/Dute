@@ -39,6 +39,17 @@ export interface LinhaDeEstadoProps {
    * não mostra nada.
    */
   pedidaPelaPessoa?: boolean;
+  /**
+   * O id da linha, para a lista apontar para ela (`aria-describedby`)
+   * enquanto mostra as linhas-fantasma da primeira leitura (momento 2).
+   */
+  id?: string;
+  /**
+   * O que o Anunciador diz quando a primeira leitura termina ("3 para
+   * aprovar, 2 para separar, 1 para entregar"; momento 2), e só se ele disse
+   * "Carregando pedidos" aos 300 ms: a leitura rápida não fala nada.
+   */
+  resumo?: string;
   className?: string;
 }
 
@@ -97,9 +108,10 @@ function tentarNaTela(raiz: HTMLElement): HTMLElement | null {
  *   se o servidor ainda não respondeu depois do mínimo de 2 s do aviso;
  * - sem nada lido, nada: o aviso fica no lugar da lista.
  *
- * Não é região viva. O Anunciador diz "Carregando pedidos" aos 300 ms e
- * "Demorando mais que o normal" aos 10 s, só na primeira leitura (a releitura
- * automática depois de uma falha não fala); "Sem conexão" ele diz sozinho,
+ * Não é região viva. O Anunciador diz "Carregando pedidos" aos 300 ms,
+ * "Demorando mais que o normal" aos 10 s e, na chegada, o `resumo` da lista
+ * (só se disse o primeiro), só na primeira leitura (a releitura automática
+ * depois de uma falha não fala); "Sem conexão" ele diz sozinho,
  * uma vez, e nunca "Reconectando" nem a volta. O texto troca em sequência
  * (sai em 80 ms, ou em 180 ms quando sai uma espera; entra em 150 ms), e só
  * o atual fica na árvore. Com o foco no "Tentar de novo", a troca leva o foco
@@ -109,7 +121,7 @@ function tentarNaTela(raiz: HTMLElement): HTMLElement | null {
  * passa à de baixo, sem sair da tela. O CSS mora em index.css
  * (`.linha-de-estado`).
  */
-export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, className }: LinhaDeEstadoProps) {
+export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, id, resumo, className }: LinhaDeEstadoProps) {
   const leituras: readonly LeituraDaLista[] = Array.isArray(leitura) ? leitura : [leitura as LeituraDaLista];
   const lida = listaLida(leituras);
   const primeira = leituras.some((uma) => uma.isLoading);
@@ -139,13 +151,14 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, class
           ? { tipo: "atualizando" }
           : { tipo: "lida", hora: horaDaLista(leituras, "recente") };
 
-  // Os anúncios da primeira leitura, uma vez cada: a entrada na espera aos 300 ms e a demora aos 10 s. Depois
-  // que ela falhou, quem relê é a releitura automática (o intervalo da tela, a do bloco), que não fala; a conta
-  // recomeça quando a lista é lida.
+  // Os anúncios da primeira leitura, uma vez cada: a entrada na espera aos 300 ms, a demora aos 10 s e, quando a
+  // lista chega, o resumo dela, só se a entrada foi falada. Depois que ela falhou, quem relê é a releitura
+  // automática (o intervalo da tela, a do bloco), que não fala; a conta recomeça quando a lista é lida.
   const falados = useRef({ carregando: false, demorando: false, calado: false });
   const falhou = !lida && leituras.some((uma) => uma.isError);
   useEffect(() => {
     if (lida) {
+      if (falados.current.carregando && !falados.current.calado && resumo) anunciar(resumo);
       falados.current = { carregando: false, demorando: false, calado: false };
       return;
     }
@@ -158,7 +171,7 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, class
       falados.current.demorando = true;
       anunciar("Demorando mais que o normal");
     }
-  }, [anunciar, estado.tipo, falhou, lida, objeto]);
+  }, [anunciar, estado.tipo, falhou, lida, objeto, resumo]);
 
   /**
    * A nova tentativa no relógio da espera, como a do bloco (parte 7a): acorda
@@ -205,7 +218,7 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, class
   const camadas = useTrocaEmSequencia(camadaDoEstado(estado), conteudo, ESPERAS.has(estado.tipo));
 
   return (
-    <div ref={raiz} tabIndex={-1} data-linha-de-estado="" data-estado={estado.tipo} className={cn("linha-de-estado", className)}>
+    <div ref={raiz} id={id} tabIndex={-1} data-linha-de-estado="" data-estado={estado.tipo} className={cn("linha-de-estado", className)}>
       {camadas.map(({ chave: camada, conteudo: dentro, sai, entra }) => (
         <p key={camada} data-camada="" data-sai={sai} data-entra={entra} aria-hidden={sai === undefined ? undefined : true} inert={sai !== undefined}>
           {dentro}

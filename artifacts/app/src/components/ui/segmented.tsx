@@ -1,12 +1,39 @@
+import { Esqueleto } from "@/components/ui/esqueleto";
 import { cn } from "@/lib/utils";
 
+type OpcaoDoSegmentado<T extends string> = {
+  value: T;
+  label: string;
+  /**
+   * A contagem depois do rótulo ("Em aberto · 6"). Nula antes de ler
+   * (carregamento v2, momento 2): o bloco no lugar do número ("Em aberto ·
+   * ▪"), fora da árvore; nunca "0". Zero ou sem ela, só o rótulo.
+   */
+  count?: number | null;
+};
+
 type SegmentedProps<T extends string> = {
-  options: ReadonlyArray<{ value: T; label: string }>;
+  options: ReadonlyArray<OpcaoDoSegmentado<T>>;
   value: T;
   onChange: (value: T) => void;
   className?: string;
   "aria-label"?: string;
 };
+
+function rotuloDa<T extends string>(option: OpcaoDoSegmentado<T>) {
+  if (option.count === null) {
+    return (
+      <>
+        {option.label}
+        <span aria-hidden="true">
+          {" · "}
+          <Esqueleto forma="contagem" />
+        </span>
+      </>
+    );
+  }
+  return option.count ? `${option.label} · ${option.count}` : option.label;
+}
 
 /**
  * Alternador de visão (Em aberto / Entregues, 6 meses / 12 meses). Para
@@ -30,7 +57,7 @@ export function Segmented<T extends string>({ options, value, onChange, classNam
             value === option.value ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
           )}
         >
-          {option.label}
+          {rotuloDa(option)}
         </button>
       ))}
     </div>

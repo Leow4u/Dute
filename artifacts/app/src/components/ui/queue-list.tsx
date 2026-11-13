@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
@@ -12,7 +13,10 @@ import {
 } from "react";
 import { ChevronDown, ChevronRight, type LucideIcon } from "lucide-react";
 
+import { CartaoComBrilho, Esqueleto } from "@/components/ui/esqueleto";
 import { CARREGANDO } from "@/lib/carregando/tempo";
+import { useChegada } from "@/lib/carregando/use-chegada";
+import { useEspera } from "@/lib/carregando/use-espera";
 import type { ListaSemSaltos } from "@/lib/carregando/use-lista-sem-saltos";
 import { cn } from "@/lib/utils";
 
@@ -38,9 +42,11 @@ export type QueueTone = keyof typeof QUEUE_TONE;
  * número velho sobe e sai e o novo sobe e entra, 8 px em 160 ms; no reduzido,
  * troca. Só o número atual fica na árvore de acessibilidade: o `naArvore`,
  * quando difere do que se vê (a linha que esmaece ainda conta na tela, mas já
- * saiu da árvore, inert). Zero não mostra número.
+ * saiu da árvore, inert). Zero não mostra número. Com `entrar` (o bloco que
+ * vira número na chegada da primeira leitura, momento 2), o número entra
+ * subindo, como o que rola.
  */
-export function ContagemQueRola({ valor, naArvore = valor }: { valor: number; naArvore?: number }) {
+export function ContagemQueRola({ valor, naArvore = valor, entrar = false }: { valor: number; naArvore?: number; entrar?: boolean }) {
   const [mostrado, setMostrado] = useState(valor);
   const [saindo, setSaindo] = useState<number | null>(null);
   if (valor !== mostrado) {
@@ -61,7 +67,7 @@ export function ContagemQueRola({ valor, naArvore = valor }: { valor: number; na
         </span>
       ) : null}
       {mostrado ? (
-        <span key={`entra-${mostrado}`} data-conta={saindo !== null ? "entra" : undefined} aria-hidden={naArvore !== mostrado ? true : undefined}>
+        <span key={`entra-${mostrado}`} data-conta={saindo !== null || entrar ? "entra" : undefined} aria-hidden={naArvore !== mostrado ? true : undefined}>
           {mostrado}
         </span>
       ) : null}
@@ -77,6 +83,86 @@ export function ContagemQueRola({ valor, naArvore = valor }: { valor: number; na
 const TITULO_FOCAVEL =
   "rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
+/** A lista na primeira leitura (carregamento v2, momento 2): as linhas-fantasma que o grupo mostra antes do dado. */
+export interface CarregandoDoGrupo {
+  /** Quantas linhas-fantasma: a contagem lembrada do grupo, entre 1 e 5 (linhasDosFantasmas). */
+  linhas: number;
+  /** Quantos botões-fantasma cada linha tem, nas larguras das ações reais (Recusar e Aprovar; Separar). */
+  acoes: 0 | 1 | 2;
+  /** A posição do cartão na tela (0, 1, 2…): o brilho de cada um começa 120 ms depois do anterior. */
+  ordem?: number;
+}
+
+/**
+ * As larguras da linha-fantasma, com a do texto típico da fila, para o texto
+ * nascer em cima do bloco e não riscado por um bloco mais comprido que ele: o
+ * título de 32 a 44% da coluna e o apoio de 52 a 62% (seção 5.2), até a
+ * largura de "Pedido 1042" e do meta da linha no computador (a prancha).
+ */
+const FORMAS_DA_LINHA_FANTASMA = [
+  { titulo: "w-2/5 max-w-28", apoio: "w-3/5 max-w-72" },
+  { titulo: "w-1/3 max-w-24", apoio: "w-13/24 max-w-64" },
+  { titulo: "w-5/12 max-w-32", apoio: "w-7/12 max-w-80" },
+] as const;
+
+/** Os botões-fantasma, na largura das ações reais: Recusar e Aprovar (149 px cada, a do rótulo mais largo); uma só, Separar ou Conferir (96). */
+const BOTOES_FANTASMA: Record<1 | 2, readonly string[]> = { 1: ["w-24"], 2: ["w-37", "w-37"] };
+
+/**
+ * A linha-fantasma com a anatomia da QueueRow (seção 5.2): a caixa do ícone
+ * de 44 px, o título de 14 px e o apoio de 10 px nas mesmas linhas de texto
+ * da linha real (a mesma altura) e os botões de 40 px; no celular, os botões
+ * embaixo, na largura toda, como os da linha real. A divisória é a da lista.
+ */
+function LinhaFantasma({ indice, acoes }: { indice: number; acoes: 0 | 1 | 2 }) {
+  const forma = FORMAS_DA_LINHA_FANTASMA[indice % FORMAS_DA_LINHA_FANTASMA.length];
+  return (
+    <div data-linha-fantasma="" className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 md:px-5">
+      <div className="flex min-w-0 flex-1 items-start gap-3.5">
+        <Esqueleto forma="icone" />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="flex h-6 items-center">
+            <Esqueleto forma="texto" className={forma.titulo} />
+          </span>
+          <span className="mt-0.5 flex h-5 items-center">
+            <Esqueleto forma="texto" className={cn("h-2.5", forma.apoio)} />
+          </span>
+        </div>
+      </div>
+      {acoes ? (
+        <div className="flex shrink-0 gap-2 [&>*]:flex-1 sm:[&>*]:flex-none">
+          {BOTOES_FANTASMA[acoes].map((largura, posicao) => (
+            <Esqueleto key={posicao} forma="botao" className={largura} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * As linhas-fantasma do cartão (momento 2): desde 0 ms no cartão,
+ * invisíveis, guardando a altura; aos 300 ms (`visiveis`) entram em 150 ms e
+ * o brilho do cartão começa, dois ciclos, a 120 ms do cartão anterior. São
+ * decorativas e ficam fora da árvore de acessibilidade: quem informa é o
+ * título real e a linha de estado.
+ */
+function LinhasFantasma({ carregando, visiveis, className }: { carregando: CarregandoDoGrupo; visiveis: boolean; className?: string }) {
+  const linhas = Array.from({ length: Math.max(1, Math.floor(carregando.linhas)) }, (_, indice) => (
+    <LinhaFantasma key={indice} indice={indice} acoes={carregando.acoes} />
+  ));
+  const classes = cn("divide-y divide-border/60", className);
+  return visiveis ? (
+    <CartaoComBrilho ordem={carregando.ordem} aria-hidden="true" data-fantasmas="" data-visivel="" className={classes}>
+      {linhas}
+    </CartaoComBrilho>
+  ) : (
+    <div aria-hidden="true" data-fantasmas="" className={classes}>
+      {linhas}
+    </div>
+  );
+}
+
 export function QueueGroup({
   title,
   hint,
@@ -89,10 +175,16 @@ export function QueueGroup({
   tituloRef,
   semSaltos = false,
   barraDoTopo,
+  carregando,
+  cascata = 0,
 }: {
   title: string;
   hint?: string;
-  count: number;
+  /**
+   * Quantas linhas o grupo tem. Nulo antes de ler (momento 2): no lugar do
+   * número, o bloco ("Para aprovar ▪"), fora da árvore; nunca "0".
+   */
+  count: number | null;
   empty: ReactNode;
   children: ReactNode;
   /** A contagem rola quando muda (a fila sem saltos, carregamento v2). */
@@ -119,7 +211,51 @@ export function QueueGroup({
    * carregamento v2, momento 7, caso 3): dentro do cartão, no raio dele.
    */
   barraDoTopo?: ReactNode;
+  /**
+   * A primeira leitura (carregamento v2, momento 2, e a decisão P3): o
+   * cartão com as linhas-fantasma no lugar das linhas e do vazio ("Nenhum
+   * pedido…" nunca antes de ler). Quando ele sai, o dado chega: as linhas
+   * reais entram por opacidade, subindo 4 px, em cascata.
+   */
+  carregando?: CarregandoDoGrupo;
+  /**
+   * Na chegada, a posição da primeira linha deste grupo na cascata da tela
+   * (quantas linhas os grupos de cima têm): só as seis primeiras da tela
+   * entram uma depois da outra.
+   */
+  cascata?: number;
 }) {
+  const lendo = carregando !== undefined;
+  const espera = useEspera(lendo);
+  const chegando = useChegada(lendo);
+  const chegada = chegando ? { "data-chegada": "", style: { "--chegada-desde": String(cascata) } as CSSProperties } : {};
+  const vazioChegando = chegando ? { "data-chegada-vazio": "", style: { "--chegada-desde": String(cascata) } as CSSProperties } : {};
+  const temLinhas = count === null || count > 0;
+  // O número antes de ler é o bloco, fora da árvore; depois, o número, que entra subindo na chegada.
+  const contagem =
+    count === null ? (
+      <>
+        {hint}
+        {hint ? " · " : null}
+        <Esqueleto forma="contagem" />
+      </>
+    ) : rolarContagem ? (
+      <>
+        {hint}
+        {hint && count ? " · " : null}
+        <ContagemQueRola valor={count} naArvore={contagemNaArvore} entrar={chegando} />
+      </>
+    ) : chegando && count ? (
+      <>
+        {hint}
+        {hint ? " · " : null}
+        <span className="carregando-conta tabular-nums">
+          <span data-conta="entra">{count}</span>
+        </span>
+      </>
+    ) : (
+      [hint, count ? String(count) : null].filter(Boolean).join(" · ")
+    );
   return (
     <section className="flex flex-col gap-2.5">
       <h2
@@ -129,17 +265,7 @@ export function QueueGroup({
         className={cn("flex items-baseline gap-2 px-1 focus:outline-none", tituloRef && TITULO_FOCAVEL)}
       >
         <span className="text-base font-semibold text-foreground in-[.v3]:text-lg in-[.v3]:font-bold">{title}</span>
-        <span className="text-sm text-foreground/50">
-          {rolarContagem ? (
-            <>
-              {hint}
-              {hint && count ? " · " : null}
-              <ContagemQueRola valor={count} naArvore={contagemNaArvore} />
-            </>
-          ) : (
-            [hint, count ? String(count) : null].filter(Boolean).join(" · ")
-          )}
-        </span>
+        <span className="text-sm text-foreground/50">{contagem}</span>
       </h2>
       {semSaltos ? (
         <div className="fila-cartao">
@@ -147,12 +273,14 @@ export function QueueGroup({
           <span aria-hidden="true" data-moldura="meio" data-palco="estica" className="border-x border-border" />
           <span aria-hidden="true" data-moldura="topo" data-palco="bloco" className="rounded-t-2xl border border-b-0 border-border bg-card in-[.v3]:rounded-t-lg" />
           <span aria-hidden="true" data-moldura="base" data-palco="bloco" className="rounded-b-2xl border border-t-0 border-border bg-card in-[.v3]:rounded-b-lg" />
-          {count > 0 ? (
-            <div ref={listaRef} className="divide-y divide-border/60 overflow-x-clip rounded-2xl in-[.v3]:rounded-lg">
+          {carregando ? (
+            <LinhasFantasma carregando={carregando} visiveis={espera.visivel} className="rounded-2xl bg-card in-[.v3]:rounded-lg" />
+          ) : temLinhas ? (
+            <div ref={listaRef} className="divide-y divide-border/60 overflow-x-clip rounded-2xl in-[.v3]:rounded-lg" {...chegada}>
               {children}
             </div>
           ) : (
-            <p data-palco="bloco" className="rounded-2xl bg-card px-5 py-4 text-sm text-muted-foreground in-[.v3]:rounded-lg">
+            <p data-palco="bloco" className="rounded-2xl bg-card px-5 py-4 text-sm text-muted-foreground in-[.v3]:rounded-lg" {...vazioChegando}>
               {empty}
             </p>
           )}
@@ -170,12 +298,16 @@ export function QueueGroup({
       ) : (
         <div className={cn("overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg", barraDoTopo ? "relative" : undefined)}>
           {barraDoTopo}
-          {count > 0 ? (
-            <div ref={listaRef} className="divide-y divide-border/60">
+          {carregando ? (
+            <LinhasFantasma carregando={carregando} visiveis={espera.visivel} />
+          ) : temLinhas ? (
+            <div ref={listaRef} className="divide-y divide-border/60" {...chegada}>
               {children}
             </div>
           ) : (
-            <p className="px-5 py-4 text-sm text-muted-foreground">{empty}</p>
+            <p className="px-5 py-4 text-sm text-muted-foreground" {...vazioChegando}>
+              {empty}
+            </p>
           )}
         </div>
       )}
@@ -272,6 +404,9 @@ export function QueueRow({
   badge,
   meta,
   apoio,
+  ocupada = false,
+  apoioEmAndamento,
+  aviso,
   age,
   note,
   detail,
@@ -296,6 +431,19 @@ export function QueueRow({
    * motivo do erro. Sem ele, o meta.
    */
   apoio?: ReactNode;
+  /**
+   * A linha tem uma ação em andamento (a barra corre na borda dela; momento
+   * 4): `aria-busy` na linha até a resposta. O botão da ação diz o quê.
+   */
+  ocupada?: boolean;
+  /** O objeto aos 3 s, no lugar do meta e da idade: "Aprovando pedido 1042…", em tinta e 700 (momento 4). */
+  apoioEmAndamento?: string;
+  /**
+   * O que a linha avisa no lugar do meta e da idade: a demora aos 10 s
+   * ("Demorando mais que o normal · 0:12") ou o motivo do erro. Vem antes do
+   * apoio em andamento e do `apoio`.
+   */
+  aviso?: ReactNode;
   age?: string;
   note?: ReactNode;
   /** Uma linha de dado neutra abaixo do meta (a entrega do pedido, por exemplo). */
@@ -316,8 +464,11 @@ export function QueueRow({
       {open ? "Esconder itens" : "Ver itens"}
     </button>
   ) : null;
+  // O estado da linha no lugar do meta: o aviso, o objeto em andamento ou o apoio de quem usa.
+  const estadoDaLinha = aviso ?? (apoioEmAndamento ? <span className="font-bold text-foreground">{apoioEmAndamento}</span> : apoio);
   return (
     <div
+      aria-busy={ocupada || undefined}
       className={cn(
         "flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 md:px-5",
         className,
@@ -333,7 +484,7 @@ export function QueueRow({
             {badge ? <span className="ml-2 inline-flex align-middle">{badge}</span> : null}
           </p>
           <p className="mt-0.5 text-sm text-foreground/60">
-            {apoio ?? (
+            {estadoDaLinha ?? (
               <>
                 {meta}
                 {age ? <span className="text-foreground/45"> · {age}</span> : null}

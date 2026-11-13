@@ -295,6 +295,47 @@ describe("a linha de estado no tempo", () => {
     await axeNoFim();
   });
 
+  /** A lista com o resumo falado no fim da primeira leitura (parte 8) e o id para a lista apontar. */
+  function ListaComResumo({ atrasoMs, falha = false }: { atrasoMs: number; falha?: boolean }) {
+    const pedidos = useQuery({
+      queryKey: ["pedidos", "resumo"],
+      queryFn: () => new Promise((ok, erro) => setTimeout(() => (falha ? erro(new Error("Falha interna.")) : ok({ itens: 6 })), atrasoMs)),
+    });
+    return <LinhaDeEstado id="estado-dos-pedidos" leitura={pedidos} objeto="pedidos" resumo="3 para aprovar, 2 para separar, 1 para entregar" />;
+  }
+
+  it("na chegada da primeira leitura, o resumo da lista, depois de Carregando pedidos (um anúncio a cada 2 s); a linha leva o id que a lista aponta", async () => {
+    const falas: string[] = [];
+    await montar(<ListaComResumo atrasoMs={1_000} />);
+    const observador = new MutationObserver(() => falas.push(anuncio()));
+    observador.observe(container.querySelector("[data-anunciador]")!, { subtree: true, childList: true, characterData: true });
+    expect(linha().id).toBe("estado-dos-pedidos");
+    await passar(310);
+    await passar(800);
+    expect(naLinha()).toEqual(["Atualizado às 10:42"]);
+    // O resumo espera os 2 s do anúncio anterior.
+    expect(anuncio()).toBe("Carregando pedidos");
+    await passar(1_300);
+    expect(anuncio()).toBe("3 para aprovar, 2 para separar, 1 para entregar");
+    observador.disconnect();
+    expect(falas.filter(Boolean)).toEqual(["Carregando pedidos", "3 para aprovar, 2 para separar, 1 para entregar"]);
+  });
+
+  it("a leitura que chega antes dos 300 ms não fala nada, nem o resumo; a que falha também não diz o resumo", async () => {
+    await montar(<ListaComResumo atrasoMs={100} />);
+    await passar(3_000);
+    expect(naLinha()).toEqual(["Atualizado às 10:42"]);
+    expect(anuncio()).toBe("");
+    act(() => raiz?.unmount());
+    raiz = null;
+    cliente.clear();
+    await montar(<ListaComResumo atrasoMs={1_000} falha />);
+    await passar(310);
+    expect(anuncio()).toBe("Carregando pedidos");
+    await passar(3_200);
+    expect(anuncio()).toBe("Carregando pedidos");
+  });
+
   it("Reconectando: o Tentar de novo acorda a conexão de quem lê e só então relê; aos 300 ms, Tentando de novo…, e o toque repetido não relê", async () => {
     const passos: string[] = [];
     conexao.aoAcordar(() => {

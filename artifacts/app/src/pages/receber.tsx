@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Ban, Check, Forklift, Inbox, PackageOpen, X } from "lucide-react";
 
@@ -29,6 +29,8 @@ import { useIsDesktop } from "@/hooks/use-desktop";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { caixasGuardadas, chegadaPorCaixa } from "@/lib/wms/caixas-do-recebimento";
 import { useAppUser } from "@/lib/auth";
+import { useContagemLembrada, type ContagensDaLista } from "@/lib/carregando/contagem-lembrada";
+import { resumoDaLista } from "@/lib/carregando/resumo-da-lista";
 import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { canOperateWarehouse } from "@/lib/permissions";
@@ -224,6 +226,50 @@ export default function Receber() {
   const atualizarLista = useAtualizarLista(leiturasDaLista);
   const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} resultado="fim" />;
 
+  // A lista com a forma final na primeira leitura (carregamento v2, momento 2, decisão P3): os títulos reais
+  // desde 0 ms, com o bloco no lugar do número; as linhas-fantasma na altura da última contagem lida deste
+  // cliente; o contêiner aria-busy, descrito pela linha de estado. Os avisos de envio entram em "Para
+  // conferir": a lista espera as duas leituras. Na chegada, as linhas reais entram em cascata, e o Anunciador
+  // diz o resumo (só se disse "Carregando chegadas").
+  const lendo = ops.isLoading || requests.isLoading;
+  const idDaLinha = useId();
+  const contagensLidas: ContagensDaLista | null =
+    ops.data && requests.data
+      ? {
+          conferir: pendingNotices.length + board.check.length,
+          guardando: board.guardando.length,
+          guardar: board.store.length,
+          chegadas: board.chegadas.length,
+          guardas: board.guardas.length,
+          cancelados: board.cancelled.length,
+        }
+      : null;
+  const contagem = useContagemLembrada("receber", customerCode, contagensLidas);
+  const fantasmas = (grupo: string, ordem: number) => (lendo ? { linhas: contagem.linhas(grupo), acoes: 1 as const, ordem } : undefined);
+  // "Recebidas, por guardar" só aparece com linha: na primeira leitura, se a última leitura deste cliente tinha.
+  const comGuardando = lendo ? (contagem.lembrada("guardando") ?? 0) > 0 : board.guardando.length > 0;
+  const paraConferir = pendingNotices.length + board.check.length;
+  const resumo =
+    view === "cancelled"
+      ? resumoDaLista([{ quantos: board.cancelled.length, um: "recebimento cancelado", varios: "recebimentos cancelados" }], "Nenhum recebimento cancelado")
+      : view === "done"
+        ? resumoDaLista(
+            [
+              { quantos: board.chegadas.length, um: "chegada recebida", varios: "chegadas recebidas" },
+              { quantos: board.guardas.length, um: "guarda concluída", varios: "guardas concluídas" },
+            ],
+            "Nenhuma chegada recebida",
+          )
+        : resumoDaLista(
+            [
+              { quantos: paraConferir, um: "para conferir" },
+              { quantos: board.guardando.length, um: "recebida por guardar", varios: "recebidas por guardar" },
+              { quantos: board.store.length, um: "para guardar" },
+            ],
+            "Nenhuma chegada em aberto",
+          );
+  const listaOcupada = lendo ? { "aria-busy": true, "aria-describedby": idDaLinha } : {};
+
   const taskPanel = selectedNotice ? (
     <NoticeCard notice={selectedNotice} />
   ) : selected ? (
@@ -316,7 +362,7 @@ export default function Receber() {
     <div className="flex flex-col gap-6 pb-24">
       {!fichaLarga ? <PageHeader
         title="Receber"
-        estado={<LinhaDeEstado leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando} />}
+        estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando} resumo={resumo} />}
         actions={
           <>
             <Segmented<"open" | "done" | "cancelled">
@@ -328,7 +374,7 @@ export default function Receber() {
               }}
               aria-label="Situação das chegadas"
               options={[
-                { value: "open", label: `Em aberto${openCount ? ` · ${openCount}` : ""}` },
+                { value: "open", label: "Em aberto", count: lendo ? null : openCount },
                 { value: "done", label: "Recebidos" },
                 { value: "cancelled", label: "Cancelados" },
               ]}
@@ -339,15 +385,16 @@ export default function Receber() {
                 Chegada avulsa
               </Button>
             ) : null}
-            <BotaoAtualizar atualizando={atualizarLista.atualizando} travado={ops.isLoading || requests.isLoading} onAtualizar={atualizarLista.atualizar} />
+            <BotaoAtualizar atualizando={atualizarLista.atualizando} travado={lendo} onAtualizar={atualizarLista.atualizar} />
           </>
         }
       /> : null}
 
-      {/* A primeira leitura e a falta com a lista lida ficam na linha de estado, sob o título. */}
-      {fichaLarga ? <section aria-label="Bancada de conferência" className="min-w-0">{panel}</section> : ops.isLoading ? null : semRede && semRede.lidaEm === null ? (
+      {/* A falta com a lista lida fica na linha de estado, sob o título; a primeira leitura, também, com a lista
+          na forma final, com as linhas-fantasma. */}
+      {fichaLarga ? <section aria-label="Bancada de conferência" className="min-w-0">{panel}</section> : !lendo && semRede && semRede.lidaEm === null ? (
         <BlocoSemConexao tentando={ops.isFetching || requests.isFetching} onTentar={recarregar} />
-      ) : ops.error && !semRede ? (
+      ) : !lendo && ops.error && !semRede ? (
         <p className="text-sm text-destructive">
           Não consegui carregar as chegadas.{" "}
           <button type="button" className="font-medium underline" onClick={() => ops.refetch()}>
@@ -361,10 +408,10 @@ export default function Receber() {
             desktop && (selected || selectedNotice) && "lg:grid-cols-[minmax(0,1fr)_480px]",
           )}
         >
-          <div className="flex min-w-0 flex-col gap-6">
+          <div className="flex min-w-0 flex-col gap-6" {...listaOcupada}>
             {view !== "open" ? <p className="text-sm text-muted-foreground">Até 12 registros recentes por fila</p> : null}
             {view === "cancelled" ? (
-              <QueueGroup title="Cancelados" count={board.cancelled.length} empty="Nenhum recebimento cancelado." barraDoTopo={barraDoTopo}>
+              <QueueGroup title="Cancelados" count={lendo ? null : board.cancelled.length} empty="Nenhum recebimento cancelado." barraDoTopo={barraDoTopo} carregando={fantasmas("cancelados", 0)}>
                 {board.cancelled.map((entry) => (
                   <QueueRow key={entry.task.id} icon={Ban} tone="done" title={getTaskTitle(entry.task)}
                     meta={entry.queue.key === "receiving" ? receivingRowMeta(entry.task) : putawayRowMeta(entry.task)}
@@ -374,10 +421,10 @@ export default function Receber() {
               </QueueGroup>
             ) : view === "done" ? (
               <>
-                <QueueGroup title="Chegadas" count={board.chegadas.length} empty="Nenhuma chegada recebida." barraDoTopo={barraDoTopo}>
+                <QueueGroup title="Chegadas" count={lendo ? null : board.chegadas.length} empty="Nenhuma chegada recebida." barraDoTopo={barraDoTopo} carregando={fantasmas("chegadas", 0)}>
                   {board.chegadas.map((entry) => rowDone(entry, receivingRowMeta(entry.task)))}
                 </QueueGroup>
-                <QueueGroup title="Guardas" count={board.guardas.length} empty="Nenhuma guarda concluída.">
+                <QueueGroup title="Guardas" count={lendo ? null : board.guardas.length} empty="Nenhuma guarda concluída." carregando={fantasmas("guardas", 1)} cascata={board.chegadas.length}>
                   {board.guardas.map((entry) => rowDone(entry, putawayRowMeta(entry.task)))}
                 </QueueGroup>
               </>
@@ -385,9 +432,10 @@ export default function Receber() {
               <>
                 <QueueGroup
                   title="Para conferir"
-                  count={pendingNotices.length + board.check.length}
+                  count={lendo ? null : paraConferir}
                   empty="Nenhuma chegada para conferir."
                   barraDoTopo={barraDoTopo}
+                  carregando={fantasmas("conferir", 0)}
                 >
                   {pendingNotices.map((notice) => (
                     <QueueRow
@@ -434,8 +482,8 @@ export default function Receber() {
                   ))}
                 </QueueGroup>
 
-                {board.guardando.length ? (
-                  <QueueGroup title="Recebidas, por guardar" count={board.guardando.length} empty={null}>
+                {comGuardando ? (
+                  <QueueGroup title="Recebidas, por guardar" count={lendo ? null : board.guardando.length} empty={null} carregando={fantasmas("guardando", 1)} cascata={paraConferir}>
                     {board.guardando.map((entry) => (
                       <QueueRow
                         key={entry.task.id}
@@ -461,8 +509,10 @@ export default function Receber() {
 
                 <QueueGroup
                   title="Para guardar"
-                  count={board.store.length}
+                  count={lendo ? null : board.store.length}
                   empty="Nada para guardar."
+                  carregando={fantasmas("guardar", comGuardando ? 2 : 1)}
+                  cascata={paraConferir + board.guardando.length}
                 >
                   {board.store.map((entry) => (
                     <QueueRow

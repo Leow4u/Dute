@@ -69,6 +69,16 @@ export const CARREGANDO = {
   /** A contagem que muda (3 → 2) rola 8 px nesse tempo. */
   contaMs: 160,
   /**
+   * O dado que chega no lugar das linhas-fantasma (momento 2): cada linha
+   * real entra por opacidade nesse tempo, subindo 4 px (no reduzido, só a
+   * opacidade)...
+   */
+  chegadaMs: 150,
+  /** ...em cascata, uma linha a cada 30 ms... */
+  passoMs: 30,
+  /** ...em até seis linhas: da sétima em diante, junto com a sexta. */
+  linhasNaCascata: 6,
+  /**
    * A histerese da conexão (momento 8): o aparelho sem rede há esse tempo é
    * "Sem conexão". Antes, e com o aparelho conectado, é "Reconectando…".
    */

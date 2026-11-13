@@ -1373,6 +1373,11 @@
     background-color: var(--carregando-esqueleto-preto);
   }
 
+  /* O bloco no controle selecionado, de fundo em tinta ("Em aberto · ▪" no segmentado): a cor do texto dele a 35%. */
+  [aria-pressed="true"] .carregando-esqueleto {
+    background-color: hsl(var(--background) / 0.35);
+  }
+
   .carregando-com-brilho {
     position: relative;
     overflow: hidden;
@@ -1778,6 +1783,54 @@
     .botao-acao:active:not([aria-disabled="true"]) {
       animation: none;
     }
+  }
+}
+
+/* A lista na primeira leitura (components/ui/queue-list.tsx, QueueGroup com
+   carregando; momento 2 e a decisão P3 de 12/11/2026): desde 0 ms as
+   linhas-fantasma estão no cartão, invisíveis, guardando a altura da contagem
+   lembrada; aos 300 ms (data-visivel) entram por opacidade em 150 ms, e o
+   cartão com brilho começa ali. Na chegada, as linhas reais tomam o lugar
+   delas por opacidade em 150 ms, subindo 4 px, em cascata de 30 ms em até
+   seis linhas (data-chegada na lista; o --chegada-desde é a posição da
+   primeira linha do grupo na tela, e da sétima em diante entram com a
+   sexta); o vazio do grupo chega como a primeira linha dele. No reduzido, a
+   subida vai a 0 e só a opacidade troca, sem brilho. Vem antes da lista sem
+   saltos: a linha que sai ou chega depois manda na animação dela. */
+@layer components {
+  [data-fantasmas]:not([data-visivel]) {
+    opacity: 0;
+  }
+
+  [data-fantasmas][data-visivel] {
+    animation: carregando-aparece var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
+  }
+
+  [data-chegada] > *,
+  [data-chegada-vazio] {
+    animation: carregando-chega-linha var(--carregando-t-chegada) var(--ease-carregando-entrada) both;
+    animation-delay: calc(min(var(--chegada-desde, 0) + var(--chegada-i, 5), 5) * var(--carregando-passo));
+  }
+
+  [data-chegada] > :nth-child(1),
+  [data-chegada-vazio] {
+    --chegada-i: 0;
+  }
+
+  [data-chegada] > :nth-child(2) {
+    --chegada-i: 1;
+  }
+
+  [data-chegada] > :nth-child(3) {
+    --chegada-i: 2;
+  }
+
+  [data-chegada] > :nth-child(4) {
+    --chegada-i: 3;
+  }
+
+  [data-chegada] > :nth-child(5) {
+    --chegada-i: 4;
   }
 }
 

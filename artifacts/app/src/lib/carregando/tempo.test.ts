@@ -35,6 +35,10 @@ describe("o relógio da espera", () => {
       barraFimMs: 200,
       barraSomeMs: 150,
       contaMs: 160,
+      // O dado que chega no lugar das linhas-fantasma (momento 2): 150 ms por linha, 30 ms entre elas, até a sexta.
+      chegadaMs: 150,
+      passoMs: 30,
+      linhasNaCascata: 6,
       // A conexão (momento 8): sem rede há 3 s é "Sem conexão", cada aviso fica 2 s, e a releitura sozinha vai de 2 a 30 s.
       semRedeMs: 3_000,
       avisoMinimoMs: 2_000,

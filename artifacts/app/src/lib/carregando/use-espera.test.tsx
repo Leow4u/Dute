@@ -174,3 +174,47 @@ describe("a espera no relógio", () => {
     expect(atual()).toMatchObject({ visivel: true, fase: "andamento", calmo: false, movimento: true, decorridoMs: 300 });
   });
 });
+
+/**
+ * O timer e o relógio do performance não batem no navegador: medido no
+ * Chromium (parte 8), o timer dos 300 ms disparou com o performance em 299,8
+ * ms, e a leitura seguinte, já depois dos 300, armou o próximo marco nos 3 s.
+ * A linha de estado ficava sem "Carregando pedidos…" (e sem o anúncio) até os
+ * 3 s, enquanto as linhas-fantasma, no mesmo relógio, já tinham entrado. O
+ * marco para o qual o timer foi armado vale como alcançado.
+ */
+describe("o timer que dispara um pouco antes do marco", () => {
+  /** A primeira leitura do performance dentro de cada timer vem `antesMs` atrás do relógio, como no Chromium. */
+  function timersAdiantados(antesMs: number) {
+    const agoraFalso = performance.now.bind(performance);
+    const setTimeoutFalso = globalThis.setTimeout;
+    let atraso = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => {
+      const instante = agoraFalso() - atraso;
+      atraso = 0;
+      return instante;
+    });
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((fazer: (...argumentos: unknown[]) => void, ms?: number, ...argumentos: unknown[]) =>
+      setTimeoutFalso(() => {
+        atraso = antesMs;
+        fazer(...argumentos);
+      }, ms)) as typeof setTimeout);
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("aos 300 ms o indicador entra, mesmo com o timer 0,2 ms adiantado; e os marcos seguintes também", () => {
+    timersAdiantados(0.2);
+    montar(true);
+    passar(299);
+    expect(atual().visivel).toBe(false);
+    passar(1);
+    expect(atual()).toMatchObject({ visivel: true, fase: "andamento" });
+    passar(2_700);
+    expect(atual().fase).toBe("com-objeto");
+    passar(7_000);
+    expect(atual()).toMatchObject({ fase: "demorando", calmo: true });
+  });
+});

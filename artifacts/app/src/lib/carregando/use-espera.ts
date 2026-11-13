@@ -104,22 +104,25 @@ export function useEspera(ativa: boolean, opcoes: OpcoesDaEspera = {}): Espera {
   }, [ativa, segurarMinimo]);
 
   // Os tiques da espera que corre, nos marcos e, depois de 10 s, a cada segundo.
-  // Cada tique arma o seguinte pelo relógio, sem esperar a tela renderizar.
+  // Cada tique arma o seguinte pelo relógio, sem esperar a tela renderizar. O
+  // timer pode disparar um pouco antes do marco no relógio do performance (no
+  // Chromium, 0,2 ms antes dos 300): o marco para o qual ele foi armado vale
+  // como alcançado, e o seguinte conta dele. Senão o tique dos 300 ms não
+  // mostrava nada e a leitura seguinte, já depois dos 300, armava os 3 s.
   const corrida = relogio.modo === "correndo" ? relogio.inicio : null;
   useEffect(() => {
     if (corrida === null) return undefined;
     let tique: ReturnType<typeof setTimeout> | undefined;
-    const armar = () => {
-      const instante = agora();
+    const armar = (instante: number) => {
       const marco = proximoMarco(instante - corrida, desisteMs);
       if (marco === null) return;
       tique = setTimeout(() => {
-        const disparo = agora();
+        const disparo = Math.max(agora(), corrida + marco);
         setRelogio((atual) => avancar(atual, corrida, disparo));
-        armar();
+        armar(disparo);
       }, Math.max(0, corrida + marco - instante));
     };
-    armar();
+    armar(agora());
     return () => clearTimeout(tique);
   }, [corrida, desisteMs]);
 
