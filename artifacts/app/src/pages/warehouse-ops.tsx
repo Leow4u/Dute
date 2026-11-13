@@ -62,6 +62,10 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Progress } from "@/components/ui/progress";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { BotaoAtualizar } from "@/components/ui/linha-de-estado";
+import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -1029,6 +1033,11 @@ export default function WarehouseOps({
     refetchOnWindowFocus: false,
     enabled: activeModuleKey !== "inventory",
   });
+  // A bancada que falhou sem nada lido mostra a falha com "Tentar de novo", que fica enquanto tenta; o Atualizar é o
+  // das listas, que só mostra a espera quando a pessoa toca nele: a releitura de 60 s não o gira nem o desliga
+  // (carregamento v2, parte 13c).
+  const opsNaTela = useLeituraComFalha(ops);
+  const atualizarBancada = useAtualizarLista([opsNaTela]);
 
   const queues = useMemo(
     () => normalizeQueues(ops.data?.queues),
@@ -1111,34 +1120,16 @@ export default function WarehouseOps({
 
   const pageTitle = initialModule === "receiving" ? "Receber" : activeModule.label;
 
-  if (ops.isLoading) return <WarehouseOpsLoading />;
-
-  if (ops.error || !ops.data) {
+  if (!ops.data && opsNaTela.isError) {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader title={pageTitle} />
-
-        <Alert variant="destructive" className="bg-destructive/10">
-          <AlertCircle className="size-4" />
-          <AlertTitle>Não foi possível carregar a bancada WMS</AlertTitle>
-          <AlertDescription>
-            <div className="flex flex-col gap-4">
-              <p>{getErrorMessage(ops.error)}</p>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-fit"
-                onClick={() => ops.refetch()}
-              >
-                <RefreshCw data-icon="inline-start" />
-                Tentar novamente
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
+        <FalhaNaLeitura leitura={ops} erro={opsNaTela.error} mensagem="Não consegui carregar a bancada WMS." />
       </div>
     );
   }
+
+  if (!ops.data) return <WarehouseOpsLoading />;
 
   return (
     <div className="flex flex-col gap-6">
@@ -1149,10 +1140,7 @@ export default function WarehouseOps({
             {blockedEntries.length > 0 ? (
               <Badge variant="destructive">{formatNumber(blockedEntries.length)} bloqueio(s)</Badge>
             ) : null}
-            <Button type="button" variant="outline" onClick={() => ops.refetch()} disabled={ops.isFetching}>
-              <RefreshCw data-icon="inline-start" className={cn(ops.isFetching && "animate-spin")} />
-              Atualizar
-            </Button>
+            <BotaoAtualizar atualizando={atualizarBancada.atualizando} onAtualizar={atualizarBancada.atualizar} />
           </>
         }
       />

@@ -30,3 +30,21 @@ describe("os retornos da Operação", () => {
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
   });
 });
+
+/**
+ * A falha e a espera dos retornos (carregamento v2, parte 13c; diagnóstico,
+ * 4.5). Antes, a leitura que falhava fazia o grupo sumir (`return null`), e
+ * as linhas do pedido que não vinham ficavam em "Carregando..." para sempre,
+ * com o "Receber" travado.
+ */
+describe("os retornos que não vieram e as linhas que esperam", () => {
+  const tentar = async () => undefined;
+
+  it("a leitura que falhou mostra o aviso com Tentar de novo, no lugar do grupo que sumia", async () => {
+    const html = render({ retornos: [], falha: { tentar } });
+    expect(textosDaTela(html)).toEqual(["Retornos da Operação", "Não consegui carregar os retornos da Operação.", "Tentar de novo"]);
+    expect(html).toContain('role="alert"');
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+});

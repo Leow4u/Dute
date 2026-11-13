@@ -90,6 +90,7 @@ import {
   paraQuandoDoPedido,
 } from "@/lib/order-queue";
 import { useItemPhotos } from "@/lib/use-item-photos";
+import { Esqueleto } from "@/components/ui/esqueleto";
 import { labelsUrl } from "@/lib/warehouse-labels";
 import { etiquetasParaTrocar, textoDeEtiquetasParaTrocar } from "@/lib/warehouse-ops/caixas-da-separacao";
 import { hrefDaListaDeSeparacao, resumoDoGrupo } from "@/lib/warehouse-ops/lista-de-separacao";
@@ -678,6 +679,9 @@ export default function Pedidos() {
   /** A entrega do pedido na linha e a ação de definir (ou abrir na Operação), com a Operação liberada. */
   const daEntrega = (order: OrderGroup) => {
     if (!OPERACAO_LIBERADO || !order.orderId) return {};
+    // Antes de ler as entregas, a linha não oferece "Entrega" (o formulário abriria vazio sobre a entrega que já
+    // existe); a leitura que falhou diz, e não some (carregamento v2, parte 13c; o diagnóstico, 4.3).
+    if (entregas.itens === null) return entregas.erro ? { detail: "Não consegui carregar a entrega." } : {};
     const entrega = entregaDe(order);
     const resumo = entrega ? [resumoDaEntrega(entrega), naOperacao(entrega)].filter(Boolean).join(" · ") : null;
     return {
@@ -1592,6 +1596,9 @@ export function ItemList({ items, cliente }: { items: NonNullable<WarehouseTask[
                       loading="lazy"
                       className="size-11 shrink-0 rounded-lg bg-muted object-cover"
                     />
+                  ) : photoFor.lendo ? (
+                    // As fotos ainda chegam: o lugar fica neutro, sem afirmar "sem foto" (carregamento v2, parte 13c).
+                    <Esqueleto forma="icone" className="size-11 shrink-0" />
                   ) : (
                     <span className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground">
                       <Package className="size-4" aria-hidden="true" />

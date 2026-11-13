@@ -29,7 +29,13 @@ function campos(html: string) {
     detalhe: document.querySelector<HTMLInputElement>("#separar-menos-detalhe")?.value,
     menos: document.querySelector("button[aria-label='Menos um']")?.hasAttribute("disabled"),
     mais: document.querySelector("button[aria-label='Mais um']")?.hasAttribute("disabled"),
-    registrar: [...document.querySelectorAll("button")].find((botao) => botao.textContent?.startsWith("Registr"))?.hasAttribute("disabled"),
+    // O BotaoDeAcao (carregamento v2, parte 13c): o rótulo é o da camada atual, e travado é aria-disabled, nunca disabled.
+    registrar: (() => {
+      const botao = [...document.querySelectorAll("button")].find((candidato) =>
+        (candidato.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? candidato.textContent)?.startsWith("Registr"),
+      );
+      return botao ? botao.hasAttribute("disabled") || botao.getAttribute("aria-disabled") === "true" : undefined;
+    })(),
   };
   dom.window.close();
   return resultado;
@@ -46,6 +52,8 @@ describe("Separar menos", () => {
       "Detalhe",
       "Voltar",
       "Registrar diferença",
+      "Registrando…",
+      "Conferir",
     ]);
     expect(campos(render(LANCHEIRA))).toEqual({ separado: "1", motivo: "avaria", detalhe: "1 com o zíper quebrado", menos: false, mais: true, registrar: false });
   });
@@ -56,10 +64,15 @@ describe("Separar menos", () => {
     expect(campos(render({ ...LANCHEIRA, separado: 0, motivo: "falta" }))).toMatchObject({ separado: "0", menos: true, mais: false, registrar: false });
   });
 
-  it("gravando, o botão diz Registrando e não aceita outro clique", () => {
+  it("gravando, o botão fica em andamento, ocupado e não desabilitado, e o Voltar espera", () => {
+    // O gerúndio com a reticência única entra aos 300 ms (o BotaoDeAcao, carregamento v2, parte 13c).
     const html = render(LANCHEIRA, true);
-    expect(textosDaTela(html)).toContain("Registrando...");
+    expect(textosDaTela(html)).toContain("Registrando…");
+    expect(textosDaTela(html).join(" ")).not.toContain("...");
+    expect(html).toMatch(/<button[^>]*data-estado="andamento"[^>]*aria-disabled="true"/);
+    expect(html).not.toMatch(/<button[^>]*\sdisabled=""[^>]*data-estado="andamento"/);
     expect(campos(html).registrar).toBe(true);
+    expect(html).toMatch(/<button[^>]*aria-disabled="true"[^>]*>Voltar<\/button>/);
   });
 
   it("a linha sem endereço não deixa o separador sobrando", () => {

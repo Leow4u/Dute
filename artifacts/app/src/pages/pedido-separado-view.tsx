@@ -4,6 +4,7 @@ import { Link } from "wouter";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { textoDaEtiqueta, textoDasAbertas, textoDasVazias, type CaixaVazia, type EtiquetaParaTrocar } from "@/lib/warehouse-ops/caixas-da-separacao";
 import {
   conteudoDoVolume,
@@ -111,9 +112,12 @@ export function PedidoSeparadoView({
             </h2>
             {comVolumes ? <span className="text-sm font-semibold text-muted-foreground">{resumoDosVolumes(volumes)}</span> : null}
           </div>
-          {estado !== "pronto" ? (
-            <p role={estado === "erro" ? "alert" : undefined} className="px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
-              {estado === "erro" ? "Não foi possível carregar os volumes." : "Carregando"}
+          {/* A primeira leitura é a espera em bloco do carregamento v2 (parte 13c), no lugar do "Carregando" seco. */}
+          {estado === "carregando" ? (
+            <CarregandoNaRegiao rotulo="Carregando volumes…" className="px-5 py-6" />
+          ) : estado !== "pronto" ? (
+            <p role="alert" className="px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
+              Não foi possível carregar os volumes.
             </p>
           ) : !volumes.length ? (
             <p className="px-5 py-7 text-center text-sm font-semibold text-muted-foreground">Nenhum volume</p>

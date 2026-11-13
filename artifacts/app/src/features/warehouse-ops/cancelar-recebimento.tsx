@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Ban, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Ban } from "lucide-react";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -78,9 +78,11 @@ function SessaoDeCancelamento({ task, receipts, customerCode, onOpenChange, onCa
 
   function close(open: boolean) { if (!busy.current) onOpenChange(open); }
 
+  // O cancelamento segura o diálogo (o jeito único da parte 13a): nem o Esc, nem o toque fora, nem o X fecham, e o
+  // "Voltar" fica ocupado, não desabilitado; o confirmar é o BotaoDeAcao, com o foco nele (carregamento v2, parte 13c).
   return (
-    <Dialog open onOpenChange={close}>
-      <DialogContent className="max-w-xl" onEscapeKeyDown={(event) => { if (busy.current) event.preventDefault(); }} onPointerDownOutside={(event) => { if (busy.current) event.preventDefault(); }}>
+    <Dialog open ocupado={pending} onOpenChange={close}>
+      <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3 text-xl"><Ban className="size-6 text-muted-foreground" aria-hidden="true" />Cancelar recebimento?</DialogTitle>
           <DialogDescription>{summary}</DialogDescription>
@@ -116,8 +118,8 @@ function SessaoDeCancelamento({ task, receipts, customerCode, onOpenChange, onCa
           </div>
           {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" disabled={pending} onClick={() => close(false)}>Voltar</Button>
-            <Button type="submit" disabled={pending}>{pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}{pending ? "Cancelando…" : "Cancelar recebimento"}</Button>
+            <DialogCancelar onClick={() => close(false)}>Voltar</DialogCancelar>
+            <BotaoDeAcao type="submit" estado={pending ? "andamento" : "repouso"} rotulo="Cancelar recebimento" andamento="Cancelando…" />
           </DialogFooter>
         </form>
       </DialogContent>

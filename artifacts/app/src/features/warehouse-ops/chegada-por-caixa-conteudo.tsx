@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { ArrowLeft, Check, Package, Plus, Printer, Search } from "lucide-react";
 import { tamanhoDoProduto } from "@workspace/dominio";
 import { Badge } from "@/components/ui/badge";
+import { BotaoDeAcao, type EstadoDaAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -162,6 +163,12 @@ export type FichaDaChegadaPorCaixaProps = {
   fechando: boolean;
   rascunho: RascunhoDoFechamento;
   ocupado: boolean;
+  /**
+   * A ação em curso ("iniciar", "quantidade", "remover-produto", "fechar",
+   * "reabrir", "remover", "concluir", "desmarcar:<linha>"): o botão dela
+   * mostra a espera, com o gerúndio e o foco nele (carregamento v2, parte 13c).
+   */
+  acao?: string | null;
   /** Quem só consulta (o suporte) vê as caixas e as linhas, sem as ações. */
   podeOperar: boolean;
   podeRegistrarDivergencia: boolean;
@@ -205,6 +212,11 @@ export type FichaDaChegadaPorCaixaProps = {
    */
   onEtiquetas?: (codigos: string[]) => void;
 };
+
+/** O estado do botão da ação: em andamento só o tocado; os outros, em repouso (e ocupados, pelo `ocupado`). */
+function estadoDa(props: Pick<FichaDaChegadaPorCaixaProps, "acao">, acao: string): EstadoDaAcao {
+  return props.acao === acao ? "andamento" : "repouso";
+}
 
 export function FichaDaChegadaPorCaixaConteudo(
   props: FichaDaChegadaPorCaixaProps,
@@ -314,17 +326,13 @@ export function FichaDaChegadaPorCaixaConteudo(
           {props.erro}
         </p>
       ) : null}
-      <p
-        role="status"
-        aria-live="polite"
-        className="text-sm text-muted-foreground"
-      >
-        {props.ocupado
-          ? "Salvando… Aguarde a confirmação."
-          : props.feedback || ""}
-      </p>
+      {/* O retorno da ação fica escrito, sem região viva: quem fala é o Anunciador, e a espera é a do botão tocado
+          (carregamento v2, parte 13c). */}
+      {props.feedback && !props.ocupado ? (
+        <p className="text-sm text-muted-foreground">{props.feedback}</p>
+      ) : null}
       {props.rascunhosPendentes ? (
-        <p role="status" className="text-sm text-warning-soft-foreground">
+        <p className="text-sm text-warning-soft-foreground">
           Há quantidade não salva. Salve ou descarte a alteração antes de
           revisar.
         </p>
@@ -452,15 +460,15 @@ function Conferencia(
             </p>
           ) : null}
         </div>
-        <Button
-          type="button"
+        <BotaoDeAcao
           variant="outline"
-          disabled={ocupado}
+          estado={estadoDa(props, "iniciar")}
+          icone={<Plus aria-hidden="true" />}
+          rotulo={props.caixas.length ? "Iniciar outra caixa" : "Iniciar caixa"}
+          andamento="Iniciando…"
+          bloqueado={ocupado && props.acao !== "iniciar"}
           onClick={props.onIniciar}
-        >
-          <Plus className="size-4" aria-hidden="true" />
-          {props.caixas.length ? "Iniciar outra caixa" : "Iniciar caixa"}
-        </Button>
+        />
       </div>
       {props.caixas.length > 1 ? <Caixas props={props} /> : null}
       {!caixa ? (
@@ -566,7 +574,7 @@ function Conferencia(
               </table>
             </div>
             {!filtrados.length ? (
-              <p role="status" className="py-6 text-sm text-muted-foreground">
+              <p className="py-6 text-sm text-muted-foreground">
                 Nenhum produto da NF encontrado.
               </p>
             ) : null}
@@ -638,12 +646,13 @@ function Conferencia(
                     )}{" "}
                     un.
                   </p>
-                  <Button
+                  <BotaoDeAcao
                     type="submit"
-                    disabled={ocupado || total == null || total === salvo}
-                  >
-                    {salvo == null ? "Adicionar à caixa" : "Salvar quantidade"}
-                  </Button>
+                    estado={estadoDa(props, "quantidade")}
+                    rotulo={salvo == null ? "Adicionar à caixa" : "Salvar quantidade"}
+                    andamento={salvo == null ? "Adicionando…" : "Salvando…"}
+                    bloqueado={props.acao !== "quantidade" && (ocupado || total == null || total === salvo)}
+                  />
                   {valor.trim() && total == null ? (
                     <p className="text-sm text-destructive">
                       Informe uma quantidade maior que zero, com até três casas
@@ -667,14 +676,14 @@ function Conferencia(
                   </Button>
                 ) : null}
                 {salvo != null ? (
-                  <Button
-                    type="button"
+                  <BotaoDeAcao
                     variant="ghost"
-                    disabled={ocupado}
+                    estado={estadoDa(props, "remover-produto")}
+                    rotulo="Remover produto da caixa"
+                    andamento="Removendo…"
+                    bloqueado={ocupado && props.acao !== "remover-produto"}
                     onClick={() => props.onRemoverProduto?.(produto.id!)}
-                  >
-                    Remover produto da caixa
-                  </Button>
+                  />
                 ) : null}
               </>
             ) : (
@@ -692,14 +701,14 @@ function Conferencia(
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
         <div className="flex flex-wrap gap-2">
           {caixa ? (
-            <Button
-              type="button"
+            <BotaoDeAcao
               variant="ghost"
-              disabled={ocupado}
+              estado={estadoDa(props, "remover")}
+              rotulo="Remover caixa"
+              andamento="Removendo…"
+              bloqueado={ocupado && props.acao !== "remover"}
               onClick={props.onRemover}
-            >
-              Remover caixa
-            </Button>
+            />
           ) : null}
           <Button
             type="button"
@@ -872,13 +881,13 @@ function Fechamento(
           <span className="text-sm text-muted-foreground">
             Próxima etapa: destino
           </span>
-          <Button
-            type="button"
-            disabled={props.ocupado || !medidas?.gross_weight_kg}
+          <BotaoDeAcao
+            estado={estadoDa(props, "fechar")}
+            rotulo="Fechar caixa"
+            andamento="Fechando…"
+            bloqueado={props.acao !== "fechar" && (props.ocupado || !medidas?.gross_weight_kg)}
             onClick={props.onFechar}
-          >
-            Fechar caixa
-          </Button>
+          />
         </div>
       </footer>
     </>
@@ -916,22 +925,22 @@ function Destino(
       />
       <footer className="flex flex-wrap justify-between gap-3 border-t border-border pt-4">
         <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
+          <BotaoDeAcao
             variant="outline"
-            disabled={props.ocupado}
+            estado={estadoDa(props, "reabrir")}
+            rotulo="Reabrir para ajustar"
+            andamento="Reabrindo…"
+            bloqueado={props.ocupado && props.acao !== "reabrir"}
             onClick={props.onReabrir}
-          >
-            Reabrir para ajustar
-          </Button>
-          <Button
-            type="button"
+          />
+          <BotaoDeAcao
             variant="ghost"
-            disabled={props.ocupado}
+            estado={estadoDa(props, "remover")}
+            rotulo="Remover caixa"
+            andamento="Removendo…"
+            bloqueado={props.ocupado && props.acao !== "remover"}
             onClick={props.onRemover}
-          >
-            Remover caixa
-          </Button>
+          />
         </div>
         <Button
           type="button"
@@ -1007,6 +1016,7 @@ function Revisao(props: FichaDaChegadaPorCaixaProps) {
                     item={item}
                     podeOperar={props.podeOperar}
                     ocupado={props.ocupado}
+                    acao={props.acao}
                     onMarcarFalta={props.onMarcarFalta}
                     onDesmarcarFalta={props.onDesmarcarFalta}
                   />
@@ -1101,17 +1111,16 @@ function Revisao(props: FichaDaChegadaPorCaixaProps) {
                 </Button>
               ) : null}
             </div>
-            <Button
-              type="button"
-              disabled={
-                props.ocupado ||
-                props.rascunhosPendentes ||
-                bloqueios.length > 0
+            <BotaoDeAcao
+              estado={estadoDa(props, "concluir")}
+              rotulo="Concluir entrada"
+              andamento="Concluindo…"
+              bloqueado={
+                props.acao !== "concluir" &&
+                (props.ocupado || Boolean(props.rascunhosPendentes) || bloqueios.length > 0)
               }
               onClick={props.onConcluir}
-            >
-              Concluir entrada
-            </Button>
+            />
           </footer>
           <FaltaDaLinha
             linha={marcando}
@@ -1143,12 +1152,14 @@ function LinhaDaNfRow({
   item,
   podeOperar,
   ocupado,
+  acao,
   onMarcarFalta,
   onDesmarcarFalta,
 }: {
   item: WarehouseTaskItem;
   podeOperar: boolean;
   ocupado: boolean;
+  acao?: string | null;
   onMarcarFalta: (itemId: string) => void;
   onDesmarcarFalta: (itemId: string) => void;
 }) {
@@ -1204,16 +1215,16 @@ function LinhaDaNfRow({
             </Button>
           ) : null}
           {podeOperar && item.id && situacao.tipo === "falta_marcada" ? (
-            <Button
-              type="button"
+            <BotaoDeAcao
               size="sm"
               variant="secondary"
               aria-label={`Desmarcar a falta da linha ${linha}`}
-              disabled={ocupado}
+              estado={acao === `desmarcar:${item.id}` ? "andamento" : "repouso"}
+              rotulo="Desmarcar"
+              andamento="Desmarcando…"
+              bloqueado={ocupado && acao !== `desmarcar:${item.id}`}
               onClick={() => onDesmarcarFalta(item.id!)}
-            >
-              Desmarcar
-            </Button>
+            />
           ) : null}
         </div>
       </td>

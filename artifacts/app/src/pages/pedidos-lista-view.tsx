@@ -2,6 +2,7 @@ import { ArrowLeft, Printer } from "lucide-react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { PageHeader } from "@/components/ui/page-header";
 import { ListaDeSeparacaoDocumento } from "@/features/warehouse-ops/lista-de-separacao-documento";
 import type { FolhaDaLista } from "@/lib/warehouse-ops/lista-de-separacao";
@@ -29,7 +30,7 @@ export function PedidosListaView({
 }) {
   const mensagem =
     estado === "carregando"
-      ? "Carregando"
+      ? "Carregando o pedido…"
       : estado === "erro"
         ? "Não foi possível carregar o pedido."
         : estado === "nao_encontrado" || !folha
@@ -52,7 +53,11 @@ export function PedidosListaView({
           }
         />
       </div>
-      {mensagem ? (
+{/* A primeira leitura é a espera em bloco do carregamento v2 (parte 13c): nada antes de 300 ms, a caixa e o rótulo,
+          com o anúncio pelo Anunciador, no lugar do "Carregando" seco. */}
+      {estado === "carregando" ? (
+        <CarregandoNaRegiao rotulo="Carregando o pedido…" className="no-print rounded-lg border border-border bg-card px-5 py-6" />
+      ) : mensagem ? (
         <p role={estado === "erro" ? "alert" : undefined} className="no-print rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
           {mensagem}
         </p>

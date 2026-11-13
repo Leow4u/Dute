@@ -104,7 +104,10 @@ async function esperar(assertion: () => void) {
 }
 
 function botao(texto: string) {
-  return [...container.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent?.trim() === texto);
+  // O BotaoDeAcao empilha as camadas (repouso, em andamento, fim): o rótulo é o da camada atual (carregamento v2).
+  return [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+    (item) => (item.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? item.textContent)?.trim() === texto,
+  );
 }
 
 async function selecionar(nome: string) {
@@ -159,7 +162,15 @@ function adicionarOutraCaixa() {
   };
 }
 
+
+/** Travado: o `disabled` (o que não tem o que fazer) ou o `aria-disabled` do botão ocupado (carregamento v2, parte 13c). */
+function travado(button: HTMLButtonElement | null | undefined) {
+  return Boolean(button && (button.disabled || button.getAttribute("aria-disabled") === "true"));
+}
+
 async function clicar(texto: string) {
+  // Cada toque um segundo depois do anterior: o BotaoDeAcao ignora o segundo toque dentro de 1 s (o toque único).
+  vi.setSystemTime(Date.now() + 1_100);
   const button = botao(texto);
   expect(button, `botão ${texto}`).toBeTruthy();
   await act(async () => button!.click());
@@ -217,6 +228,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await act(async () => root.unmount());
   container.remove();
   client.clear();
@@ -298,7 +310,7 @@ describe("conferência manual por produto da NF", () => {
     await act(async () => { quantidade().dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
     expect(chamadas.lancar).not.toHaveBeenCalled();
     expect(quantidade().value).toBe("");
-    expect(botao("Salvar quantidade")?.disabled).toBe(true);
+    expect(travado(botao("Salvar quantidade"))).toBe(true);
     await enter();
     expect(chamadas.lancar).not.toHaveBeenCalled();
   });
@@ -360,7 +372,7 @@ describe("conferência manual por produto da NF", () => {
     await act(async () => { button.click(); button.click(); });
     expect(chamadas.lancar).toHaveBeenCalledTimes(1);
     expect(quantidade().disabled).toBe(true);
-    expect(button.disabled).toBe(true);
+    expect(travado(button)).toBe(true);
     const dados = chamadas.lancar.mock.calls[0]![0] as Record<string, unknown>;
     await act(async () => responder(confirmarLancamento(dados)));
     await conferirTotalSalvo(NOVO.id, 12);
@@ -376,7 +388,7 @@ describe("conferência manual por produto da NF", () => {
     await esperar(() => expect(responder).toBeTypeOf("function"));
     expect(chamadas.lancar).toHaveBeenCalledTimes(1);
     expect(quantidade().disabled).toBe(true);
-    expect(botao("Salvar quantidade")?.disabled).toBe(true);
+    expect(travado(botao("Salvar quantidade"))).toBe(true);
     await enter();
     await clicar("Salvar quantidade");
     expect(chamadas.lancar).toHaveBeenCalledTimes(1);
@@ -468,7 +480,7 @@ describe("conferência manual por produto da NF", () => {
     await digitar("12");
     await trocarCaixa("CX-000133");
     for (const acao of ["Voltar à fila", "Revisar entrada", "Revisar caixa"]) {
-      expect(botao(acao)?.disabled, acao).toBe(true);
+      expect(travado(botao(acao)), acao).toBe(true);
       await clicar(acao);
     }
     expect(chamadas.voltar).not.toHaveBeenCalled();
@@ -479,7 +491,7 @@ describe("conferência manual por produto da NF", () => {
     await clicar("Descartar alteração");
     expect(quantidade().value).toBe("");
     for (const acao of ["Voltar à fila", "Revisar entrada", "Revisar caixa"]) {
-      expect(botao(acao)?.disabled, acao).toBe(false);
+      expect(travado(botao(acao)), acao).toBe(false);
     }
     await clicar("Voltar à fila");
     expect(chamadas.voltar).toHaveBeenCalledTimes(1);

@@ -154,7 +154,8 @@ describe("o Receber para quem só consulta (o suporte)", () => {
 
   it("a ficha mostra a chegada sem Concluir entrada, Divergência, Salvar conferência nem a justificativa", () => {
     // As ações são botões; "Divergências" e "Divergência física detectada" são dados da conferência.
-    const acoes = ["Concluir entrada</button>", "Divergência</button>", "Salvar conferência</button>", "Justificativa da divergência</label>"];
+    // O BotaoDeAcao (carregamento v2, parte 13c) põe o rótulo na camada atual: o fim da camada, não o do botão.
+    const acoes = ["Concluir entrada</span>", "Divergência</span>", "Salvar conferência</span>", "Justificativa da divergência</label>"];
     const operador = fichaDaChegada(chegada);
     for (const acao of acoes) expect(operador).toContain(acao);
     const consulta = fichaDaChegada(chegada, true);

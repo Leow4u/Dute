@@ -269,6 +269,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   act(() => raiz?.unmount());
   container?.remove();
@@ -295,7 +296,15 @@ function botao(texto: string) {
   return achado as HTMLButtonElement;
 }
 
+
+/** Travado: o `disabled` (o que não tem o que fazer) ou o `aria-disabled` do botão ocupado (carregamento v2, parte 13c). */
+function travado(button: HTMLButtonElement | null | undefined) {
+  return Boolean(button && (button.disabled || button.getAttribute("aria-disabled") === "true"));
+}
+
 async function clicar(texto: string) {
+  // Cada toque um segundo depois do anterior: o BotaoDeAcao ignora o segundo toque dentro de 1 s (o toque único).
+  vi.setSystemTime(Date.now() + 1_100);
   await act(async () => {
     botao(texto).click();
   });
@@ -377,7 +386,7 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
     // A vista da caixa no lugar da chegada (mockup WmsRecebimentoFecharCaixa).
     expect(document.body.textContent).toContain("Caixa CX-000132");
     expect(document.body.textContent).not.toContain("Linhas da NF");
-    expect(botao("Fechar caixa").disabled).toBe(true);
+    expect(travado(botao("Fechar caixa"))).toBe(true);
     await digitar("fechar-length_cm", "48");
     await digitar("fechar-width_cm", "38");
     await digitar("fechar-height_cm", "30");
@@ -418,7 +427,7 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
     });
     expect(document.body.textContent).toContain("48 × 38 × 30 cm");
     expect(document.getElementById("fechar-length_cm")).toBeNull();
-    expect(botao("Reabrir para ajustar").disabled).toBe(false);
+    expect(travado(botao("Reabrir para ajustar"))).toBe(false);
     await clicar("Continuar sem prateleira");
     expect(document.body.textContent).toContain("Conferência da NF");
     expect(dados("confirmar")).toEqual([]);
@@ -465,7 +474,7 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
     expect(
       document.getElementById("fechar-tombar")!.getAttribute("aria-checked"),
     ).toBe("true");
-    expect(botao("Fechar caixa").disabled).toBe(false);
+    expect(travado(botao("Fechar caixa"))).toBe(false);
   });
 
   async function abrirCaixaFechada() {
@@ -521,8 +530,8 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
       await abrirCaixaFechada();
       const confirmar = botao("Confirmar destino em B-02");
       const outra = botao(outraAcao);
-      expect(confirmar.disabled).toBe(false);
-      expect(outra.disabled).toBe(false);
+      expect(travado(confirmar)).toBe(false);
+      expect(travado(outra)).toBe(false);
       await act(async () => {
         confirmar.click();
         confirmar.click();
@@ -531,9 +540,10 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
       await esperar(() => dados("confirmar").length === 1, "um único pedido de destino");
       expect(dados("reabrir")).toEqual([]);
       expect(dados("remover")).toEqual([]);
-      await esperar(() => confirmar.disabled && outra.disabled, "os controles ocupados durante a confirmação");
-      expect(confirmar.disabled).toBe(true);
-      expect(outra.disabled).toBe(true);
+      // Ocupados, não desabilitados: o foco fica no botão tocado (carregamento v2, parte 13c).
+      await esperar(() => travado(confirmar) && travado(outra), "os controles ocupados durante a confirmação");
+      expect(confirmar.disabled).toBe(false);
+      expect(outra.disabled).toBe(false);
       await act(async () => responder({ ok: true, status: "committing", conference_revision: 5 }));
       await esperar(
         () => Boolean(document.body.textContent?.includes("Conferência da NF")),
@@ -562,7 +572,7 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
       idempotency_key: expect.any(String),
     });
     expect(String(tentativa.idempotency_key)).not.toBe("");
-    await esperar(() => !botao("Confirmar destino em B-02").disabled, "a retentativa disponível");
+    await esperar(() => !travado(botao("Confirmar destino em B-02")), "a retentativa disponível");
     await clicar("Confirmar destino em B-02");
     await esperar(
       () => Boolean(document.body.textContent?.includes("Conferência da NF")),
@@ -741,7 +751,7 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
     });
 
     it("Concluir entrada espera a justificativa e manda o status que a tela viu", async () => {
-      expect(botao("Concluir entrada").disabled).toBe(true);
+      expect(travado(botao("Concluir entrada"))).toBe(true);
       await act(async () => {
         const campo = document.getElementById(
           "justificativa-da-divergencia",
@@ -752,7 +762,7 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
         )!.set!.call(campo, "Fornecedor envia o volume 3 na próxima NF.");
         campo.dispatchEvent(new Event("input", { bubbles: true }));
       });
-      expect(botao("Concluir entrada").disabled).toBe(false);
+      expect(travado(botao("Concluir entrada"))).toBe(false);
       await clicar("Concluir entrada");
       await esperar(
         () => dados("concluir").length === 1,

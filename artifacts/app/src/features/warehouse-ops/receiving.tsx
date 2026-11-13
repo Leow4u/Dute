@@ -1,7 +1,7 @@
 /** Receber: ficha da chegada, chegada avulsa e conferência física. */
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { problemaDoNome, tamanhoDoCodigo } from "@workspace/dominio";
 import {
   AlertCircle,
@@ -18,7 +18,6 @@ import {
   PackageOpen,
   PackageSearch,
   PlayCircle,
-  RefreshCw,
   Route,
   Sparkles,
   Trash2,
@@ -28,6 +27,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { DialogCancelar } from "@/components/ui/dialog";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import {
   Card,
   CardContent,
@@ -265,35 +267,54 @@ export function receiptIdFromTask(task: WarehouseTask) {
   return task.reference || task.id.replace(/^receiving:/, "");
 }
 
+/**
+ * O vínculo da chegada com o aviso do cliente. Vinculando, a opção tocada
+ * mostra a caixa no lugar da marca e as opções ficam ocupadas, não
+ * desabilitadas (`aria-disabled`, com a trava aqui): o foco fica na tocada
+ * (carregamento v2, parte 13c).
+ */
 function NoticeLink({
   choice,
   disabled,
+  vinculando,
   onSelect,
 }: {
   choice: NoticeLinkChoice;
   disabled?: boolean;
+  /** O aviso que está sendo vinculado ("" para nenhum); `undefined` fora do vínculo. */
+  vinculando?: string;
   onSelect?: (requestId: string | null) => void;
 }) {
+  const ocupado = Boolean(disabled) || vinculando !== undefined;
   return (
     <div className="space-y-2">
       <div className="text-sm font-semibold text-foreground">Aviso do cliente</div>
-      <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="overflow-hidden rounded-lg border border-border bg-card" aria-busy={vinculando !== undefined || undefined}>
         {choice.options.map((option) => {
           const selected = choice.selectedId === option.id;
+          const tocada = vinculando !== undefined && vinculando === (option.id || "");
           return (
             <button
               key={option.id || "none"}
               type="button"
-              disabled={disabled || !choice.editable || !onSelect}
+              disabled={!choice.editable || !onSelect}
+              aria-disabled={ocupado || undefined}
               className={cn(
                 "flex w-full items-center gap-3 border-t border-border/60 px-3 py-2.5 text-left first:border-t-0",
                 selected && "bg-primary/10",
+                ocupado && !tocada && "opacity-45",
               )}
-              onClick={() => onSelect?.(option.id || null)}
+              onClick={() => {
+                if (!ocupado) onSelect?.(option.id || null);
+              }}
             >
-              <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border-2", selected ? "border-primary" : "border-input")}>
-                {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
-              </span>
+              {tocada ? (
+                <Spinner className="shrink-0 text-foreground" />
+              ) : (
+                <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border-2", selected ? "border-primary" : "border-input")}>
+                  {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
+                </span>
+              )}
               <span className="min-w-0">
                 <span className="block text-sm font-semibold">{option.title}</span>
                 {option.detail ? <span className="block text-sm text-muted-foreground">{option.detail}</span> : null}
@@ -313,6 +334,7 @@ export function ReceivingTaskDetailCard({
   registeringExceptionId,
   noticeChoice,
   linking = false,
+  linkingId,
   onAdvance,
   onOpenException,
   onLinkNotice,
@@ -323,6 +345,8 @@ export function ReceivingTaskDetailCard({
   registeringExceptionId?: string;
   noticeChoice?: NoticeLinkChoice | null;
   linking?: boolean;
+  /** O aviso que está sendo vinculado ("" para nenhum), com o vínculo em andamento. */
+  linkingId?: string;
   onAdvance: (id: string, note?: string) => void;
   onOpenException: (task: WarehouseTask, suggestedNote?: string) => void;
   onLinkNotice?: (requestId: string | null) => void;
@@ -330,6 +354,8 @@ export function ReceivingTaskDetailCard({
   const { toast } = useToast();
   // A justificativa é da chegada aberta: quem renderiza troca a `key` com a tarefa.
   const [justificativa, setJustificativa] = useState("");
+  // Salvando a conferência, a entrada espera: concluir no meio levaria a contagem de antes (o diagnóstico, 4.5).
+  const salvandoConferencia = useIsMutating({ mutationKey: chaveDaConferencia(entry?.task.id ?? "") }) > 0;
   if (!entry) {
     return (
       <Empty className="min-h-[520px] rounded-lg border border-dashed border-border bg-card">
@@ -383,43 +409,34 @@ export function ReceivingTaskDetailCard({
             <CardTitle className="mt-3 text-xl">{getTaskTitle(task)}</CardTitle>
           </div>
           <div className="flex flex-wrap gap-2">
+            {/* Ocupado não é desabilitado: o BotaoDeAcao, com o gerúndio aos 300 ms e o foco no botão (carregamento v2,
+                parte 13c). Concluindo, até a bancada reler; salvando a conferência, a entrada espera. */}
             {canRegister ? (
-              <Button
-                type="button"
+              <BotaoDeAcao
                 variant="outline"
+                estado={registeringExceptionId === task.id ? "andamento" : "repouso"}
+                icone={<MessageSquareWarning aria-hidden="true" />}
+                rotulo="Divergência"
+                andamento="Registrando…"
                 onClick={() => onOpenException(task)}
-                disabled={registeringExceptionId === task.id}
-              >
-                {registeringExceptionId === task.id ? (
-                  <RefreshCw data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <MessageSquareWarning data-icon="inline-start" />
-                )}
-                Divergência
-              </Button>
+              />
             ) : null}
             {canAdvance ? (
-              // Ocupado não é desabilitado: enquanto conclui (até a bancada reler), `aria-disabled` e a trava aqui, para o
-              // foco ficar no botão (carregamento v2, seção 7).
-              <Button
-                type="button"
-                onClick={() => {
-                  if (advancingTaskId === task.id) return;
-                  concluir();
-                }}
-                aria-disabled={advancingTaskId === task.id || undefined}
-                aria-busy={advancingTaskId === task.id || undefined}
-              >
-                {advancingTaskId === task.id ? <Spinner data-icon="inline-start" /> : <CheckCircle2 data-icon="inline-start" />}
-                Concluir entrada
-              </Button>
+              <BotaoDeAcao
+                estado={advancingTaskId === task.id ? "andamento" : "repouso"}
+                icone={<CheckCircle2 aria-hidden="true" />}
+                rotulo="Concluir entrada"
+                andamento="Concluindo…"
+                bloqueado={advancingTaskId !== task.id && salvandoConferencia}
+                onClick={concluir}
+              />
             ) : null}
           </div>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-5 p-5">
         {noticeChoice ? (
-          <NoticeLink choice={noticeChoice} disabled={linking} onSelect={onLinkNotice} />
+          <NoticeLink choice={noticeChoice} disabled={linking && linkingId === undefined} vinculando={linking ? linkingId : undefined} onSelect={onLinkNotice} />
         ) : null}
         <div className="grid grid-cols-2 gap-3">
           <DetailField icon={Hash} label="Referência" value={task.reference || task.id} />
@@ -448,7 +465,7 @@ export function ReceivingTaskDetailCard({
           </Alert>
         ) : null}
 
-        <ReceivingConferenceSection task={task} />
+        <ReceivingConferenceSection task={task} concluindo={advancingTaskId === task.id} />
 
         {pedeJustificativa && canAdvance ? (
           <div className="flex flex-col gap-2">
@@ -590,8 +607,11 @@ export function UnplannedReceiptDialog({
   // Antes de o catálogo chegar (ou quando ele não vem), a tela não diz que o
   // produto não existe nem oferece o cadastro novo
   // (docs/plataforma/diagnostico-carregamento.md, decisão 6 de 06/11/2026).
+  // A falha fica na tela enquanto tenta de novo (o react-query zera o erro na nova tentativa sem dado): o aviso com o
+  // foco nele não vira "Verificando o catálogo…" no meio da tentativa (carregamento v2, parte 13c).
+  const catalogoNaTela = useLeituraComFalha(lookupQuery);
   const estadoDoCatalogo: "lendo" | "falhou" | "pronto" =
-    lookupQuery.data !== undefined ? "pronto" : lookupQuery.isError ? "falhou" : "lendo";
+    lookupQuery.data !== undefined ? "pronto" : catalogoNaTela.isError ? "falhou" : "lendo";
 
   function updateLine(index: number, patch: Partial<ReceiptDraftLine>) {
     setLines((current) =>
@@ -1012,6 +1032,7 @@ export function UnplannedReceiptDialog({
                               });
                             }}
                             placeholder="Cód. cliente, SKU ou barras"
+                            id={`chegada-codigo-${index}`}
                             aria-label={`Código do produto da linha ${index + 1}`}
                           />
                         </label>
@@ -1085,7 +1106,12 @@ export function UnplannedReceiptDialog({
                         </div>
                       ) : mustCreate && estadoDoCatalogo === "falhou" ? (
                         <div className="mt-3">
-                          <CatalogoIndisponivel tentando={lookupQuery.isFetching} onTentar={() => void lookupQuery.refetch()} />
+                          <CatalogoIndisponivel
+                            leitura={lookupQuery}
+                            erro={catalogoNaTela.error}
+                            mensagem="Não consegui carregar o catálogo. O cadastro de produto novo foi bloqueado para evitar duplicidade."
+                            focoAoSair={`chegada-codigo-${index}`}
+                          />
                         </div>
                       ) : mustCreate ? (
                         <div className="mt-3">
@@ -1254,7 +1280,7 @@ export function UnplannedReceiptDialog({
             <Textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              placeholder="Volumes, contato, avaria aparente, falta de NF..."
+              placeholder="Volumes, contato, avaria aparente, falta de NF…"
             />
           </div>
 
@@ -1298,30 +1324,21 @@ export function UnplannedReceiptDialog({
             </Alert>
           ) : null}
           {submitError ? <Alert variant="destructive"><AlertTitle>Não consegui criar a conferência</AlertTitle><AlertDescription>{submitError}</AlertDescription></Alert> : null}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              // As fotos que sobem seguram o diálogo: aria-disabled, com a trava no código.
-              aria-disabled={fotos.enviando || undefined}
-              className={fotos.enviando ? "opacity-45 hover:bg-card active:bg-card" : undefined}
-              onClick={() => {
-                if (!fotos.enviando) onOpenChange(false);
-              }}
-              disabled={busy}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={busy || (!retryingIntent && (!canSubmit || (duplicates.length > 0 && !duplicateConfirmed)))}>
-              {busy ? (
-                <RefreshCw data-icon="inline-start" className="animate-spin" />
-              ) : (
-                <PackageOpen data-icon="inline-start" />
-              )}
-              {retryingIntent ? "Tentar novamente" : "Criar conferência"}
-            </Button>
-          </DialogFooter>
           </fieldset>
+          {/* O rodapé fica fora do fieldset que desliga o formulário durante o envio: o Cancelar e o "Criar conferência"
+              ficam ocupados, não desabilitados, e o foco fica no botão tocado (carregamento v2, parte 13c; o que a 13a
+              deixou aberto). As fotos que sobem e o envio seguram o diálogo. */}
+          <DialogFooter>
+            <DialogCancelar onClick={() => onOpenChange(false)} />
+            <BotaoDeAcao
+              type="submit"
+              estado={busy ? "andamento" : "repouso"}
+              icone={<PackageOpen aria-hidden="true" />}
+              rotulo={retryingIntent ? "Tentar de novo" : "Criar conferência"}
+              andamento="Criando…"
+              bloqueado={!busy && (fotos.enviando || (!retryingIntent && (!canSubmit || (duplicates.length > 0 && !duplicateConfirmed))))}
+            />
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
@@ -1405,10 +1422,18 @@ function LinhaConferida({
   );
 }
 
+/** A chave da gravação da conferência da chegada: a ficha espera por ela para concluir a entrada. */
+export function chaveDaConferencia(taskId: string) {
+  return ["salvar-conferencia", taskId] as const;
+}
+
 export function ReceivingConferenceSection({
   task,
+  concluindo = false,
 }: {
   task: WarehouseTask;
+  /** A entrada está sendo concluída: a conferência espera. */
+  concluindo?: boolean;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1524,6 +1549,7 @@ export function ReceivingConferenceSection({
   }
 
   const saveConference = useMutation<unknown, Error>({
+    mutationKey: chaveDaConferencia(task.id),
     mutationFn: () =>
       fetchJson(`/api/warehouse/receipts/${encodeURIComponent(receiptIdFromTask(task))}/conference`, {
         method: "POST",
@@ -1584,19 +1610,15 @@ export function ReceivingConferenceSection({
             "created" e "checking") e por quem opera o armazém. */}
         {editavel ? (
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
+            <BotaoDeAcao
               size="sm"
+              estado={saveConference.isPending ? "andamento" : "repouso"}
+              icone={<ClipboardCheck aria-hidden="true" />}
+              rotulo="Salvar conferência"
+              andamento="Salvando…"
+              bloqueado={!saveConference.isPending && (hasInvalidLine || concluindo)}
               onClick={() => saveConference.mutate()}
-              disabled={saveConference.isPending || hasInvalidLine}
-            >
-              {saveConference.isPending ? (
-                <RefreshCw data-icon="inline-start" className="animate-spin" />
-              ) : (
-                <ClipboardCheck data-icon="inline-start" />
-              )}
-              Salvar conferência
-            </Button>
+            />
           </div>
         ) : null}
       </div>
@@ -1734,7 +1756,7 @@ export function ReceivingConferenceSection({
                 value={line?.notes ?? ""}
                 onChange={(event) => setLine(index, { notes: event.target.value })}
                 className="mt-3 min-h-16"
-                placeholder="Observação da conferência, avaria, falta ou sobra..."
+                placeholder="Observação da conferência, avaria, falta ou sobra…"
               />
             </div>
           );

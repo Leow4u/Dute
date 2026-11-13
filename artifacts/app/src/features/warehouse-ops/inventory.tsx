@@ -152,6 +152,8 @@ import {
 import {
   atributosDoProblema,
   campoDoProblemaDoNome,
+  CatalogoIndisponivel,
+  CatalogoVerificando,
   FamiliaNoCadastroCard,
   NewProductNotice,
   ProductIdentityCard,
@@ -2392,6 +2394,12 @@ export function ExistingCycleCountWorkspace() {
   });
 
   const lookupProducts = lookupQuery.data ?? [];
+  // Antes de o catálogo chegar, o produto digitado não é "ainda não localizado": a tela diz que está verificando; se
+  // ele não vem, a falha, com "Tentar de novo", que fica na tela enquanto tenta (o PR 2 da seção 6 do diagnóstico,
+  // carregamento v2, parte 13c). A contagem só ajusta produto já cadastrado: sem o catálogo, nada se registra.
+  const catalogoNaTela = useLeituraComFalha(lookupQuery);
+  const catalogoLido = lookupQuery.data !== undefined;
+  const catalogoFalhou = !catalogoLido && catalogoNaTela.isError;
   const draftLine = useMemo<ReceiptDraftLine>(
     () => ({
       sku: skuCode,
@@ -2533,6 +2541,10 @@ export function ExistingCycleCountWorkspace() {
 
             {existingProduct ? (
               <ProductIdentityCard product={existingProduct} onSelect={() => applyProduct(existingProduct)} />
+            ) : (clientCode.trim() || skuCode.trim() || productName.trim()) && catalogoFalhou ? (
+              <CatalogoIndisponivel leitura={lookupQuery} erro={catalogoNaTela.error} focoAoSair="cycle-client-code" />
+            ) : (clientCode.trim() || skuCode.trim() || productName.trim()) && !catalogoLido ? (
+              <CatalogoVerificando />
             ) : clientCode.trim() || skuCode.trim() || productName.trim() ? (
               <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
                 <AlertTriangle className="size-4" />

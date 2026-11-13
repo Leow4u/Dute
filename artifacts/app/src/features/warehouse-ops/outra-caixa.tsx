@@ -1,7 +1,8 @@
 import { Minus, Plus } from "lucide-react";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { separadoNasCaixas, somaDasInformadas, textoDaCandidata, type CaixaDaPrateleira, type CaixasInformadas } from "@/lib/warehouse-ops/caixas-da-separacao";
 
 /**
@@ -94,13 +95,19 @@ export function OutraCaixaConteudo({
           {numero.format(somaDasInformadas(linha.informadas))} de {numero.format(esperado)} un.
         </span>
       </p>
+      {/* Confirmando, o diálogo fica: o Voltar espera ocupado, e o confirmar é o BotaoDeAcao, com o gerúndio e o foco nele
+          (carregamento v2, parte 13c). */}
       <DialogFooter>
-        <Button type="button" variant="outline" onClick={onVoltar}>
+        <DialogCancelar ocupado={confirmando} onClick={onVoltar}>
           Voltar
-        </Button>
-        <Button type="button" disabled={confirmando || !caixasFecham(linha)} onClick={onConfirmar}>
-          {confirmando ? "Confirmando..." : "Confirmar caixas"}
-        </Button>
+        </DialogCancelar>
+        <BotaoDeAcao
+          estado={confirmando ? "andamento" : "repouso"}
+          rotulo="Confirmar caixas"
+          andamento="Confirmando…"
+          bloqueado={!confirmando && !caixasFecham(linha)}
+          onClick={onConfirmar}
+        />
       </DialogFooter>
     </div>
   );
@@ -121,7 +128,7 @@ export function OutraCaixaDialog({
   onConfirmar: () => void;
 }) {
   return (
-    <Dialog open={Boolean(linha)} onOpenChange={(open) => (open ? undefined : onFechar())}>
+    <Dialog open={Boolean(linha)} ocupado={Boolean(confirmando)} onOpenChange={(open) => (open ? undefined : onFechar())}>
       <DialogContent className="sm:max-w-lg" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>De qual caixa saiu?</DialogTitle>

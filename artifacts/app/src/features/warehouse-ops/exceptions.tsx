@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   MessageSquareWarning,
-  RefreshCw,
   RotateCcw,
   ShieldAlert,
   Sparkles,
@@ -66,7 +65,9 @@ import {
   normalizeApiRows,
   normalizeProductKey,
 } from "@/features/warehouse-ops/receiving";
-import { ProductIdentityCard } from "./product-identity";
+import { CatalogoIndisponivel, CatalogoVerificando, ProductIdentityCard } from "./product-identity";
+import { desfechoDoErro, useAcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
 import { LEGACY_CUSTOMER_CODE, customerRows, recordCustomerCode } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 
@@ -534,6 +535,13 @@ export function ReturnWorkspace() {
   });
 
   const productLookup = lookupQuery.data ?? [];
+  // Antes de o catálogo chegar, a linha digitada não diz "não localizado" nem manda não criar SKU duplicado: diz que
+  // está verificando; se ele não vem, a falha, com "Tentar de novo", que fica na tela enquanto tenta (o PR 2 da seção
+  // 6 do diagnóstico, carregamento v2, parte 13c). A devolução só aceita produto já cadastrado: sem o catálogo, nada
+  // se registra.
+  const catalogoNaTela = useLeituraComFalha(lookupQuery);
+  const catalogoLido = lookupQuery.data !== undefined;
+  const catalogoFalhou = !catalogoLido && catalogoNaTela.isError;
   const pendingReturnLinesQuery = useQuery({
     queryKey: ["returns-pending", customerCode],
     staleTime: 20_000,
@@ -580,6 +588,7 @@ export function ReturnWorkspace() {
     return { duplicateInDraft, existing };
   });
   const canCreate =
+    catalogoLido &&
     lines.some((line) => line.clientCode.trim() || line.sku.trim()) &&
     lineIssues.every((issue) => !issue.duplicateInDraft && Boolean(issue.existing));
 
@@ -694,12 +703,14 @@ export function ReturnWorkspace() {
     },
   });
 
-  const setDisposition = useMutation<
-    unknown,
-    Error,
-    { line: CreatedReturnLine; draft: ReturnDispositionDraft }
-  >({
-    mutationFn: ({ line, draft }) =>
+  // A disposição é por linha (carregamento v2, parte 13c): cada linha tem a espera dela, e a outra linha não apaga
+  // junto. A chave de idempotência é por tentativa: repete depois da falta de conexão e do "Conferir", e muda só
+  // quando o servidor recusa. Registrada, a linha vira "Disposição registrada", e o foco vai a ela.
+  const disposicao = useAcaoNaLinha<string>();
+  const focoQueSegue = useFocoQueSegue();
+  const pendentesDaTriagem = useLeituraComFalha(pendingReturnLinesQuery);
+  function registrarDisposicao(line: CreatedReturnLine, draft: ReturnDispositionDraft) {
+    void disposicao.executar(line.itemId, "dispor", (chave) =>
       fetchJson(
         `/api/warehouse/returns/items/${encodeURIComponent(line.itemId)}/disposition`,
         {
@@ -713,41 +724,43 @@ export function ReturnWorkspace() {
             notes: draft.notes.trim() || undefined,
             expected_status: "pending_disposition",
             occurred_at: new Date().toISOString(),
-            idempotency_key: crypto.randomUUID(),
+            idempotency_key: chave,
           }),
         },
+      ).then(
+        (resultado) => {
+          setCreatedLines((current) => {
+            const marcada = { ...line, status: "disposition_set" as const, disposition: draft.disposition };
+            return current.some((item) => item.itemId === line.itemId)
+              ? current.map((item) => (item.itemId === line.itemId ? marcada : item))
+              : [marcada, ...current];
+          });
+          void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
+          void queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
+          void queryClient.invalidateQueries({ queryKey: ["returns-pending"] });
+          toast({
+            title: "Disposição registrada",
+            description:
+              draft.disposition === "available"
+                ? "O item voltou para o estoque disponível com ledger auditado."
+                : "O item ficou fora do estoque disponível e entrou na memória operacional.",
+          });
+          return resultado;
+        },
+        (error: unknown) => {
+          // Sem resposta, a linha fica com o "Conferir"; o resto, o toast também diz.
+          if (desfechoDoErro(error) !== "sem-resposta") {
+            toast({
+              title: "Não consegui registrar a disposição",
+              description: getErrorMessage(error),
+              variant: "destructive",
+            });
+          }
+          throw error;
+        },
       ),
-    onSuccess: (_result, variables) => {
-      setCreatedLines((current) =>
-        current.map((line) =>
-          line.itemId === variables.line.itemId
-            ? {
-                ...line,
-                status: "disposition_set",
-                disposition: variables.draft.disposition,
-              }
-            : line,
-        ),
-      );
-      void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-      void queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
-      void queryClient.invalidateQueries({ queryKey: ["returns-pending"] });
-      toast({
-        title: "Disposição registrada",
-        description:
-          variables.draft.disposition === "available"
-            ? "O item voltou para o estoque disponível com ledger auditado."
-            : "O item ficou fora do estoque disponível e entrou na memória operacional.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Não consegui registrar a disposição",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
-    },
-  });
+    );
+  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -782,7 +795,7 @@ export function ReturnWorkspace() {
                   id="return-source"
                   value={source}
                   onChange={(event) => setSource(event.target.value)}
-                  placeholder="Loja, unidade, cliente..."
+                  placeholder="Loja, unidade, cliente…"
                 />
               </div>
               <div className="space-y-2">
@@ -791,7 +804,7 @@ export function ReturnWorkspace() {
                   id="return-reference"
                   value={reference}
                   onChange={(event) => setReference(event.target.value)}
-                  placeholder="Pedido, protocolo, romaneio..."
+                  placeholder="Pedido, protocolo, romaneio…"
                 />
               </div>
             </div>
@@ -818,6 +831,8 @@ export function ReturnWorkspace() {
                   const issue = lineIssues[index];
                   const existing = issue?.existing;
                   const hasKey = Boolean(line.clientCode.trim() || line.sku.trim());
+                  // "Não localizado" só depois de ler o catálogo.
+                  const naoLocalizado = hasKey && !existing && catalogoLido;
                   return (
                     <div
                       key={index}
@@ -827,7 +842,7 @@ export function ReturnWorkspace() {
                           ? "border-destructive/25 bg-destructive/5"
                           : existing
                             ? "border-primary/25 bg-primary/5"
-                            : hasKey
+                            : naoLocalizado
                               ? "border-warning-soft-border bg-warning-soft/70"
                               : "border-border",
                       )}
@@ -845,9 +860,13 @@ export function ReturnWorkspace() {
                             <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
                               cadastro localizado
                             </Badge>
-                          ) : hasKey ? (
+                          ) : naoLocalizado ? (
                             <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
                               não localizado
+                            </Badge>
+                          ) : hasKey ? (
+                            <Badge variant="outline" className="border-border bg-card text-muted-foreground">
+                              {catalogoFalhou ? "sem catálogo" : "verificando o catálogo"}
                             </Badge>
                           ) : null}
                         </div>
@@ -864,6 +883,7 @@ export function ReturnWorkspace() {
                       </div>
                       <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.6fr_96px_120px]">
                         <Input
+                          id={`return-client-code-${index}`}
                           value={line.clientCode}
                           onChange={(event) =>
                             updateLine(index, { clientCode: event.target.value })
@@ -908,7 +928,16 @@ export function ReturnWorkspace() {
                         <div className="mt-3">
                           <ProductIdentityCard product={existing} onSelect={() => applyExistingProduct(index, existing)} />
                         </div>
-                      ) : hasKey ? (
+                      ) : hasKey && catalogoFalhou ? (
+                        <CatalogoIndisponivel
+                          leitura={lookupQuery}
+                          erro={catalogoNaTela.error}
+                          focoAoSair={`return-client-code-${index}`}
+                          className="mt-3"
+                        />
+                      ) : hasKey && !catalogoLido ? (
+                        <CatalogoVerificando className="mt-3" />
+                      ) : naoLocalizado ? (
                         <Alert className="mt-3 border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
                           <AlertTriangle className="size-4" />
                           <AlertTitle>Não crie SKU duplicado</AlertTitle>
@@ -930,7 +959,7 @@ export function ReturnWorkspace() {
                 id="return-notes"
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
-                placeholder="Condição física, contato, foto, motivo da devolução..."
+                placeholder="Condição física, contato, foto, motivo da devolução…"
               />
             </div>
 
@@ -939,14 +968,15 @@ export function ReturnWorkspace() {
                 Criar devolução não altera saldo. O estoque só muda quando a
                 disposição for “volta para disponível”.
               </p>
-              <Button type="submit" disabled={!canCreate || createReturn.isPending}>
-                {createReturn.isPending ? (
-                  <RefreshCw data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <RotateCcw data-icon="inline-start" />
-                )}
-                Registrar devolução
-              </Button>
+              {/* Ocupado não é desabilitado: o foco fica no botão, com o gerúndio (carregamento v2, parte 13c). */}
+              <BotaoDeAcao
+                type="submit"
+                estado={createReturn.isPending ? "andamento" : "repouso"}
+                icone={<RotateCcw aria-hidden="true" />}
+                rotulo="Registrar devolução"
+                andamento="Registrando…"
+                bloqueado={!createReturn.isPending && !canCreate}
+              />
             </div>
           </form>
         </CardContent>
@@ -1059,7 +1089,7 @@ export function ReturnWorkspace() {
                                 },
                               }))
                             }
-                            placeholder="Foto, avaria, motivo, orientação..."
+                            placeholder="Foto, avaria, motivo, orientação…"
                           />
                           {needsNotes && draft.notes.trim().length < 6 ? (
                             <p className="text-xs leading-5 text-warning-soft-foreground">
@@ -1068,36 +1098,40 @@ export function ReturnWorkspace() {
                             </p>
                           ) : null}
                         </div>
-                        <Button
-                          type="button"
-                          className="w-full"
-                          disabled={
-                            !canSubmitDisposition ||
-                            setDisposition.isPending
-                          }
-                          onClick={() =>
-                            setDisposition.mutate({ line, draft })
-                          }
-                        >
-                          {setDisposition.isPending &&
-                          setDisposition.variables?.line.itemId === line.itemId ? (
-                            <RefreshCw data-icon="inline-start" className="animate-spin" />
-                          ) : (
-                            <CheckCircle2 data-icon="inline-start" />
-                          )}
-                          Registrar disposição
-                        </Button>
+                        <SaiComOFoco alvo={`disposicao-${line.itemId}`} pedido={focoQueSegue}>
+                          <BotaoDeAcao
+                            className="w-full"
+                            estado={disposicao.estado(line.itemId, "dispor")}
+                            icone={<CheckCircle2 aria-hidden="true" />}
+                            rotulo="Registrar disposição"
+                            andamento="Registrando…"
+                            bloqueado={!disposicao.ocupada(line.itemId) && !canSubmitDisposition}
+                            onClick={() => registrarDisposicao(line, draft)}
+                          />
+                        </SaiComOFoco>
                       </div>
                     ) : (
-                      <div className="mt-3 rounded-md border border-primary/20 bg-card px-3 py-2 text-sm text-muted-foreground">
+                      <div
+                        id={`disposicao-${line.itemId}`}
+                        tabIndex={-1}
+                        className="mt-3 rounded-md border border-primary/20 bg-card px-3 py-2 text-sm text-muted-foreground"
+                      >
                         Disposição registrada: {line.disposition}.
                       </div>
                     )}
                   </div>
                 );
               })
+            ) : pendentesDaTriagem.isError && pendingReturnLinesQuery.data === undefined ? (
+              // A leitura que falhou nunca vira "Nenhuma devolução recém registrada" (carregamento v2, parte 13c).
+              <FalhaNaLeitura
+                leitura={pendingReturnLinesQuery}
+                erro={pendentesDaTriagem.error}
+                mensagem="Não consegui carregar as devoluções pendentes."
+              />
             ) : pendingReturnLinesQuery.isLoading ? (
               <div className="space-y-3">
+                <CarregandoNaRegiao rotulo="Carregando devoluções…" />
                 <Skeleton className="h-28 rounded-lg" />
                 <Skeleton className="h-28 rounded-lg" />
               </div>

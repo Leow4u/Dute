@@ -97,7 +97,10 @@ async function digitarLetraALetra(seletor: string, valor: string) {
 }
 
 function botao(texto: string) {
-  return Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === texto);
+  // O BotaoDeAcao empilha as camadas: o rótulo é o da camada atual (carregamento v2).
+  return Array.from(document.querySelectorAll("button")).find(
+    (button) => (button.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? button.textContent)?.trim() === texto,
+  );
 }
 
 async function clicar(texto: string) {
@@ -185,7 +188,7 @@ describe("a chegada avulsa: o Tamanho do produto novo pelo código", () => {
 describe("a chegada avulsa: o nome do produto novo no padrão", () => {
   it("o nome com o tamanho desliga o envio, com a mensagem na linha", async () => {
     await linhaDeProdutoNovo("Polo Masculino Piquet Preto XG");
-    expect(enviar().disabled).toBe(true);
+    expect(enviar().getAttribute("aria-disabled")).toBe("true");
     await esperar(() => Boolean(document.getElementById("receipt-line-0-product-problema")), "a mensagem do nome");
     expect(document.getElementById("receipt-line-0-product-problema")!.textContent).toBe(
       "O tamanho XG fica no campo Tamanho. O nome é o mesmo em todos os tamanhos de A.01.0806.005.",
@@ -200,7 +203,7 @@ describe("a chegada avulsa: o nome do produto novo no padrão", () => {
     expect(props.onCreate).not.toHaveBeenCalled();
 
     await digitar(PRODUTO, "Polo Masculino Piquet Preto");
-    expect(enviar().disabled).toBe(false);
+    expect(enviar().getAttribute("aria-disabled")).toBeNull();
     expect(document.getElementById("receipt-line-0-product-problema")).toBeNull();
     expect(linha().textContent).toContain("Produto novo confirmado");
 
@@ -217,9 +220,9 @@ describe("a chegada avulsa: o nome do produto novo no padrão", () => {
 
   it("o Tamanho que contradiz o código desliga o envio, com a mensagem embaixo do Tamanho", async () => {
     await linhaDeProdutoNovo("Polo Masculino Piquet Preto");
-    expect(enviar().disabled).toBe(false);
+    expect(enviar().getAttribute("aria-disabled")).toBeNull();
     await digitar(TAMANHO, "G");
-    expect(enviar().disabled).toBe(true);
+    expect(enviar().getAttribute("aria-disabled")).toBe("true");
     await esperar(() => Boolean(document.getElementById("receipt-line-0-size-problema")), "a mensagem do Tamanho");
     expect(document.getElementById("receipt-line-0-size-problema")!.textContent).toBe(
       "O código A.01.0806.005.XG é do tamanho XG, e o Tamanho informado é G.",

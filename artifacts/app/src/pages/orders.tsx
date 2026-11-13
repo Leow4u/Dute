@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { type Order, useListOrders, useUpdateOrder, getListOrdersQueryKey } from "@workspace/api-client-react";
 import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Esqueleto } from "@/components/ui/esqueleto";
 import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
@@ -48,6 +49,10 @@ export default function Orders() {
   const idDaLinha = useId();
 
   const orders = data?.items ?? [];
+  // Antes da primeira leitura (e com ela falhando), os números ficam em "—": nunca zero antes de ler
+  // (carregamento v2, parte 13c; o diagnóstico, necessidade 3).
+  const lido = data !== undefined && !lista.falhou;
+  const numeroLido = (valor: number) => (lido ? formatStockNumber(valor) : "—");
   const stats = useMemo(() => {
     return orders.reduce(
       (acc, order) => {
@@ -74,30 +79,31 @@ export default function Orders() {
       eyebrow="Estoque"
       title="Pedidos"
       icon={<Truck className="h-6 w-6" />}
-      // A casa do estado da lista, sob o título, sem empurrar a lista (a primeira leitura ainda é da tabela; parte 13).
-      estado={<LinhaDeEstado id={idDaLinha} leitura={leitura} objeto="pedidos" primeiraNaLista />}
+      // A casa do estado da lista, sob o título, sem empurrar a lista: "Carregando pedidos…" na primeira leitura, com as
+      // linhas-fantasma no lugar da tabela (carregamento v2, parte 13c).
+      estado={<LinhaDeEstado id={idDaLinha} leitura={leitura} objeto="pedidos" />}
     >
       <StockMetricsGrid>
         <StockMetricCard
           label="Pedidos / linhas"
-          value={formatStockNumber(data?.total ?? 0)}
+          value={numeroLido(data?.total ?? 0)}
           icon={<ClipboardList className="h-5 w-5" />}
           tone="blue"
         />
         <StockMetricCard
           label="Itens solicitados"
-          value={formatStockNumber(stats.items)}
+          value={numeroLido(stats.items)}
           icon={<Boxes className="h-5 w-5" />}
         />
         <StockMetricCard
           label="Em aberto"
-          value={formatStockNumber(stats.pending + stats.picking)}
+          value={numeroLido(stats.pending + stats.picking)}
           icon={<PackageCheck className="h-5 w-5" />}
           tone={stats.pending + stats.picking ? "amber" : "default"}
         />
         <StockMetricCard
           label="Concluídos"
-          value={formatStockNumber(stats.done)}
+          value={numeroLido(stats.done)}
           icon={<CheckCircle2 className="h-5 w-5" />}
         />
       </StockMetricsGrid>
@@ -142,11 +148,20 @@ export default function Orders() {
                   <th className="px-4 py-3 font-medium text-center">Atualizar Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-border" {...(isLoading ? { "aria-busy": true, "aria-describedby": idDaLinha } : {})}>
                 {isLoading ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Carregando pedidos...</td>
-                  </tr>
+                  // As linhas-fantasma da primeira leitura; quem diz é a linha de estado sob o título (momento 2).
+                  [0, 1, 2, 3].map((ordem) => (
+                    <tr key={ordem} aria-hidden="true">
+                      <td className="px-5 py-4"><Esqueleto forma="texto" className="w-16" /></td>
+                      <td className="px-4 py-4"><Esqueleto forma="texto" className="w-20" /></td>
+                      <td className="px-4 py-4"><Esqueleto forma="texto" className="w-28" /></td>
+                      <td className="px-4 py-4"><Esqueleto forma="texto" className="w-36" /></td>
+                      <td className="px-4 py-4"><Esqueleto forma="texto" className="mx-auto w-24" /></td>
+                      <td className="px-4 py-4"><Esqueleto forma="texto" className="mx-auto w-16" /></td>
+                      <td className="px-4 py-4"><Esqueleto forma="botao" className="mx-auto w-28" /></td>
+                    </tr>
+                  ))
                 ) : data?.items?.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Nenhum pedido encontrado.</td>

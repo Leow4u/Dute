@@ -207,7 +207,8 @@ export default function PaginaPedidosSeparar() {
     .filter(Boolean)
     .join(" · ");
 
-  const [ocupadas, setOcupadas] = useState<ReadonlySet<string>>(new Set());
+  // As linhas com uma gravação em curso e a ação de cada uma: o botão tocado mostra a espera (carregamento v2, parte 13c).
+  const [ocupadas, setOcupadas] = useState<ReadonlyMap<string, Acao["tipo"]>>(new Map());
   const [diferenca, setDiferenca] = useState<DiferencaDaLinha | null>(null);
   const [outraCaixa, setOutraCaixa] = useState<OutraCaixaDaLinha | null>(null);
   const [divisao, setDivisao] = useState<DivisaoAberta | null>(null);
@@ -266,10 +267,10 @@ export default function PaginaPedidosSeparar() {
       if (acao.tipo === "dividir") return dividirLinha({ ...entrada, ...pedidoDaDivisao(acao.divisao) });
       return separarLinha(entrada);
     },
-    onMutate: (acao) => setOcupadas((atuais) => new Set(atuais).add(acao.linha.id)),
+    onMutate: (acao) => setOcupadas((atuais) => new Map(atuais).set(acao.linha.id, acao.tipo)),
     onSettled: (_resultado, _falha, acao) =>
       setOcupadas((atuais) => {
-        const proximas = new Set(atuais);
+        const proximas = new Map(atuais);
         proximas.delete(acao.linha.id);
         return proximas;
       }),
@@ -467,7 +468,7 @@ export default function PaginaPedidosSeparar() {
       />
       <SepararMenosDialog
         diferenca={diferenca}
-        registrando={gravar.isPending}
+        registrando={Boolean(diferenca && ocupadas.get(diferenca.id) === "menos")}
         onMudar={setDiferenca}
         onFechar={() => setDiferenca(null)}
         onRegistrar={() => {
@@ -477,7 +478,7 @@ export default function PaginaPedidosSeparar() {
       />
       <OutraCaixaDialog
         linha={outraCaixa}
-        confirmando={gravar.isPending}
+        confirmando={Boolean(outraCaixa && ocupadas.get(outraCaixa.id) === "outra")}
         onMudar={setOutraCaixa}
         onFechar={() => setOutraCaixa(null)}
         onConfirmar={() => {

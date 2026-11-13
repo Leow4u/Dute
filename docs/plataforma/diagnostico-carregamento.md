@@ -321,7 +321,9 @@ o Início) ou por URL.
 2. **Chegada avulsa, Devoluções e Contagem cíclica.** Esperar
    `lookupQuery` antes de `mustCreate` e de "não localizado", com o mesmo
    "Verificando o catálogo" da abertura; com erro, dizer que o catálogo não
-   veio e bloquear o "produto novo".
+   veio e bloquear o "produto novo". *A chegada avulsa entrou no PR 581; as
+   Devoluções e a contagem cíclica, na parte 13c do carregamento v2 (registro
+   em 10.5).*
 3. **Erro nunca vira vazio.** Pedidos e Receber ganham `error` próprio (e
    os avisos de Receber, `isLoading`); Exceções, Posições, histórico do item,
    Produtos, Movimentações, Retornos, conversa e Conhecimento do agente idem.
@@ -749,7 +751,7 @@ por PR:
 | 10 | A troca de filtro e a releitura sem apagar a lista | PR 610 |
 | 11 | As operações longas: fotos com progresso e etapas | PR 610 |
 | 12 | A trilha do Agent Dute | PR 610 |
-| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | 13a (os diálogos) e 13b (o Estoque e o armazém) no PR 610; o resto a fazer |
+| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | 13a (os diálogos), 13b (o Estoque e o armazém) e 13c (Receber, Operações, Pedidos e Solicitações) no PR 610; o resto a fazer |
 
 Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código:
 
@@ -2226,4 +2228,180 @@ Fica aberto:
   app ao primeiro plano; aos 70 s, nenhuma lista desta área diz "Sem resposta
   do servidor.", como as outras;
 - os dias parado que falham deixam Parados e Sem giro sem número e sem aviso;
+- a conferência com leitor de tela de verdade e num Android médio.
+
+**Parte 13c, Receber, Operações, Pedidos e Solicitações (PR 610, 13/11/2026).**
+A migração das seções 4.3 e 4.5 que as partes 6 a 13b não cobriram: o Receber
+(a ficha por linha, a chegada avulsa, a chegada por caixa, o destino e a guarda
+da caixa, o cancelamento e o Guardar do RECEBIMENTO), as Operações (a bancada,
+que hoje só abre na Qualidade), as Devoluções e os Retornos da Operação, o que
+sobrava de Pedidos (a bancada de separação, o romaneio, a lista de separação,
+o pedido separado, a entrega e as fotos), o Pedidos legado e as Solicitações.
+Fecha também o PR 2 da seção 6. As necessidades 2, 3, 5, 8 e 10 da seção 5,
+conferidas contra o código atual.
+
+- **O que já estava feito**, e ficou: a lista do Receber com a linha de estado,
+  os avisos com a falha e a troca de cliente (partes 7b, 8 e 10); a chegada
+  avulsa que espera o catálogo (PR 581) e as fotos dela (parte 11); "Para
+  aprovar" com a ação por linha (parte 6); o "Avançar" e o "Concluir entrada"
+  ocupados até a releitura (parte 10); os diálogos de Pedidos, da falta da
+  linha, da recusa da prateleira, do Guardar do RECEBIMENTO, do Registrar
+  exceção e do Receber retorno (parte 13a); e o painel da tarefa e as Exceções
+  (parte 13b). O alerta de erro da guarda já era `role="alert"` (o do `Alert`).
+- **O PR 2 da seção 6** (necessidade 1): as Devoluções e a contagem cíclica
+  esperam o catálogo antes de dizer "não localizado" ou "Produto ainda não
+  localizado", com a mesma espera da chegada avulsa e da abertura. As peças
+  `CatalogoVerificando` e `CatalogoIndisponivel`
+  (`features/warehouse-ops/product-identity.tsx`) passaram ao carregamento
+  v2: a espera em bloco (`CarregandoNaRegiao`, sem o `role="status"` solto) e
+  a `FalhaNaLeitura`, que fica na tela enquanto tenta de novo, diz "Sem
+  conexão." ou "Reconectando…" na falta de conexão e leva o foco ao código
+  digitado quando o catálogo chega. Com o catálogo falhando, a linha diz "sem
+  catálogo", e nada se registra (as duas telas só aceitam produto já
+  cadastrado). Na chegada avulsa, a falha também vem da cópia
+  (`useLeituraComFalha`): antes, "Tentar de novo" sumia com o foco nele e
+  voltava a "Verificando o catálogo".
+- **O ícone antigo girando** (o `RefreshCw` e o `Loader2` com `animate-spin`)
+  saiu da área, e as ações viraram o `BotaoDeAcao`, ocupado sem `disabled` e
+  com o gerúndio: "Salvar conferência" ("Salvando…"), "Divergência"
+  ("Registrando…"), "Concluir entrada" ("Concluindo…"), "Criar conferência"
+  ("Criando…", com o rodapé fora do `fieldset` que desligava o Cancelar e o
+  envio, o que a 13a deixou aberto), "Cancelar recebimento" ("Cancelando…"),
+  "Confirmar destino em B-02" ("Confirmando…"), "Concluir guarda em B-02"
+  ("Guardando em B-02…"), "Registrar devolução" e "Registrar disposição"
+  ("Registrando…"), "Encerrar" e "Aprovar e separar" ("Encerrando…",
+  "Aprovando…", no lugar dos três pontos), "Registrar diferença" e "Confirmar
+  caixas" (que seguram o diálogo, como os da 13a), "Fechar volume"
+  ("Fechando…") e, na bancada de separação, "Separar", "Levar a caixa" e
+  "Desfazer" ("Separando…", "Levando…", "Desfazendo…"). Na chegada por caixa,
+  "Iniciar caixa", "Adicionar à caixa" e "Salvar quantidade", "Remover produto
+  da caixa", "Remover caixa", "Fechar caixa", "Reabrir para ajustar",
+  "Concluir entrada" e "Desmarcar" mostram a espera de cada um (a ação em
+  curso fica num estado da tela, fora da chave de idempotência). O Atualizar
+  das Solicitações e da bancada de Operações é o das listas
+  (`BotaoAtualizar` com o `useAtualizarLista`): a releitura automática não o
+  gira nem o desliga. A caixa do "Conferindo saldo" das Solicitações é o
+  `Spinner`.
+- **A ação por linha** (necessidade 5): a disposição das Devoluções é o
+  `useAcaoNaLinha` (antes, a espera de uma linha desligava todas), com a chave
+  por tentativa; registrada, o foco vai à linha registrada. A bancada de
+  separação guarda a ação de cada linha (o `ocupadas` virou um mapa), e o
+  "Separar menos" e o "Outra caixa" só esperam a gravação da linha deles, não
+  a de qualquer linha. A linha que muda de estado leva o foco ao botão que
+  entra no lugar ("Separar" vira "Desfazer", e o contrário). O vínculo do
+  aviso no Receber mostra a caixa na opção tocada, e as outras esperam com
+  `aria-disabled`. "Concluir entrada" espera a conferência que salva, e a
+  conferência espera a entrada que conclui (antes, a entrada concluía com a
+  contagem de antes).
+- **Nenhuma região viva solta**: os `role="status"` e o `aria-live` da
+  chegada por caixa saíram; o retorno ("Quantidade salva nesta caixa") fica
+  escrito e o Anunciador diz a primeira frase dele; a espera é a do botão.
+  "Consultando a sugestão…" e "Conferindo o encaixe nesta prateleira…" são a
+  `CarregandoNaRegiao`.
+- **Erro nunca vira vazio nem some** (necessidade 2): as pendentes das
+  Devoluções que falham não dizem mais "Nenhuma devolução recém registrada";
+  os Retornos da Operação que falham não somem (o aviso com "Tentar de novo",
+  que assina a leitura ao vivo de novo e fica até ela responder), e as linhas
+  do retorno que falham não ficam em "Carregando..." para sempre; a sugestão
+  do destino que falha fica na tela enquanto tenta de novo; o Guardar do
+  RECEBIMENTO diz o motivo, com "Tentar de novo"; a bancada de Operações é a
+  `FalhaNaLeitura`; as Solicitações sem nada lido mostram a falha com "Tentar
+  de novo", e a entrega dos pedidos que não carregou diz "Não consegui
+  carregar a entrega.".
+- **A releitura que falha não apaga a lista** (necessidade 8): nas
+  Solicitações, a releitura que falhava trocava a fila lida por "Não consegui
+  carregar a fila."; agora a fila fica, e a linha de estado sob o título diz
+  "Não consegui atualizar · lista de 10:42" (a falta de conexão também, no
+  lugar da `FaixaSemConexao`). A sugestão do destino já lida não sai mais da
+  tela na releitura.
+- **Nunca vazio nem zero antes de ler** (necessidade 3): o Pedidos legado
+  mostra "—" nos quatro cartões até ler (antes, "0" por toda a leitura e na
+  falha), com as linhas-fantasma e "Carregando pedidos…" na linha de estado,
+  no lugar do texto seco numa célula; a foto dos itens de Pedidos e das
+  Solicitações fica neutra até as três leituras chegarem (antes, o ícone de
+  "sem foto"); a linha do pedido em "Para entregar" só oferece a entrega
+  depois de ler as entregas (antes, "Entrega" no lugar de "Alterar entrega",
+  e o formulário abria vazio sobre a entrega que existia); o endereço da
+  prateleira na guarda tem o lugar reservado até chegar. As Solicitações têm
+  a linha de estado ("Carregando solicitações…") e os cartões-fantasma, no
+  lugar de "Carregando solicitações...". A bancada de separação, o romaneio,
+  a lista de separação e os volumes do pedido separado trocaram o
+  "Carregando" seco pela espera em bloco ("Carregando o pedido…",
+  "Carregando volumes…").
+- **A reticência**: os rótulos e os placeholders da área com três pontos
+  passaram a "…", e "Tentar novamente" a "Tentar de novo".
+- **A trava da área** (`features/warehouse-ops/carregamento-do-recebimento.test.ts`):
+  nos 31 arquivos da área, nenhum `animate-spin`, `animate-pulse` ou
+  `Loader2`, nenhum `role="status"` nem `aria-live` solto (os cartões de
+  identificação de `product-identity.tsx`, que não são espera, ficam fora; o
+  catálogo, não), nenhum texto ou placeholder com três pontos e nenhum
+  "Carregando" seco. A trava do app inteiro é a parte 13h.
+- **Testes**: novos nas Devoluções e na contagem cíclica
+  (`devolucoes-e-contagem.carregamento`), na ficha da chegada
+  (`receiving.carregamento`), nas Solicitações
+  (`customer-requests.carregamento`), no Pedidos legado e na bancada de
+  Operações (`orders.carregamento`), no Guardar do RECEBIMENTO
+  (`guardar-da-area.carregamento`), na entrega de Pedidos
+  (`pedidos.entrega-lida`), nos Retornos, nas fotos dos itens e nas vistas de
+  Pedidos; os de antes atualizados (a chegada por caixa, o destino e a guarda,
+  o cancelamento, o "Separar menos", o "Outra caixa", a bancada de separação,
+  a chegada avulsa, o catálogo e o Receber), com a lista de textos (as
+  camadas do `BotaoDeAcao` incluídas) e o axe. Contra o `67ff53c`, 57 dos 287
+  testes dos 29 arquivos novos ou mudados falham.
+- **Medição no Chromium** (harness com a API falsa, só 127.0.0.1; antes é o
+  `67ff53c`):
+  - Devoluções com o catálogo a 3 s: antes, "não localizado" e "Não crie SKU
+    duplicado" em 160 de 193 quadros (de 15 ms a 2,7 s); depois, nenhum, e
+    "Verificando o catálogo…" de 310 ms até o catálogo chegar. Com o catálogo
+    falhando: antes, "não localizado" e nenhum aviso; depois, "Não consegui
+    carregar o catálogo." com "Tentar de novo";
+  - contagem cíclica com o catálogo a 3 s: antes, "Produto ainda não
+    localizado" em 161 quadros; depois, nenhum, e "Verificando o catálogo…"
+    aos 295 ms;
+  - "Registrar disposição" com o servidor a 3 s: antes, o foco no `body` em
+    173 de 175 quadros, o botão tocado e o da outra linha `disabled` o tempo
+    todo e o ícone girando; depois, o foco no botão, "Registrando…" aos
+    307 ms, a outra linha livre e nada girando;
+  - Solicitações a 390 px com a leitura a 2,5 s: antes, "Carregando
+    solicitações..." de 1 ms ao fim; depois, "Carregando solicitações…" na
+    linha de estado aos 285 ms, os cartões-fantasma e nenhuma rolagem
+    lateral. A releitura que falha: antes, a fila sumia ("Não consegui
+    carregar a fila."); depois, ela fica, e a linha diz "Não consegui
+    atualizar". "Aprovar e separar" com o servidor a 3 s: antes, o foco no
+    `body` em 174 quadros, "Aprovando..." e os dois botões `disabled`;
+    depois, o foco no botão, "Aprovando…" aos 318 ms e nenhum `disabled`;
+  - a ficha da chegada, "Salvar conferência" com o servidor a 3 s: antes, o
+    foco no `body` em 173 de 175 quadros, o ícone girando e "Concluir
+    entrada" livre em todos os quadros; depois, o foco no botão, "Salvando…"
+    aos 320 ms e "Concluir entrada" ocupado (livre só no primeiro quadro, o do
+    toque);
+  - Pedidos legado com a leitura a 2,5 s: antes, os quatro cartões em "0" e
+    "Carregando pedidos..." em todos os quadros; depois, "—" e "Carregando
+    pedidos…" na linha de estado aos 253 ms;
+  - o axe-core nas Devoluções esperando o catálogo: nada no claro; no
+    escuro, o mesmo contraste do primário de antes desta parte (4 nós, os
+    botões de disposição).
+
+Fica aberto:
+
+- a `idempotency_key` nova a cada toque no "Salvar conferência" da ficha por
+  linha (4.5): mudar é mudar a escrita, e esta parte não muda;
+- na chegada por caixa e na bancada de separação, os vizinhos da ação em
+  andamento (a seleção da caixa, "Revisar caixa", "Revisar entrada", "Editar
+  conteúdo", "Marcar falta", o "⋯" e "Dividir em volumes") seguem `disabled`
+  durante a ação, como na abertura (13b); o botão tocado nunca fica. O toque
+  repetido dentro de 1 s do `BotaoDeAcao` também vale ali (a nova tentativa
+  logo depois de uma falha espera o segundo);
+- os Retornos da Operação que voltam a ler depois da falha e não têm retorno
+  somem com o foco no aviso: o foco não tem para onde ir na tela;
+- a mensagem da falha do romaneio, da lista de separação, da bancada de
+  separação e do pedido separado ("Não foi possível carregar o pedido.")
+  continua sem "Tentar de novo": vem da leitura ao vivo, que não relê sozinha;
+- a foto dos itens que não veio (a leitura das fotos que falhou) volta ao
+  "sem foto", sem aviso;
+- os `role="status"` dos cartões de identificação (o produto novo e a
+  família), que não são espera, ficam como estavam;
+- o foco que segue o botão que entra no lugar na bancada de separação
+  ("Separar" vira "Desfazer") não tem teste nem medição no navegador; o da
+  disposição registrada tem;
 - a conferência com leitor de tela de verdade e num Android médio.

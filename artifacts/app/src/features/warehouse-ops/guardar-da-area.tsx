@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Dialog, DialogCancelar, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -123,6 +126,9 @@ export function GuardarDaAreaDialog({
     enabled: aberto && Boolean(customerCode && skuCode && locationId),
     staleTime: 0,
   });
+  // A falha fica no diálogo enquanto tenta de novo, com "Tentar de novo"; antes, o texto da falha sem a nova tentativa
+  // e o "Carregando..." seco (carregamento v2, parte 13c).
+  const guardaNaTela = useLeituraComFalha(guarda);
   useEffect(() => {
     if (!aberto) return;
     chave.current = crypto.randomUUID();
@@ -176,10 +182,14 @@ export function GuardarDaAreaDialog({
             onCancelar={onFechar}
             onAbrir={() => abrir.mutate()}
           />
-        ) : guarda.isError ? (
-          <p className="text-sm text-destructive-soft-foreground">{guarda.error instanceof Error ? guarda.error.message : String(guarda.error)}</p>
+        ) : guardaNaTela.isError ? (
+          <FalhaNaLeitura
+            leitura={guarda}
+            erro={guardaNaTela.error}
+            mensagem={[`Não consegui carregar o saldo do ${locationId}.`, guardaNaTela.error instanceof Error ? guardaNaTela.error.message : ""].filter(Boolean).join(" ")}
+          />
         ) : (
-          <p className="text-sm text-muted-foreground">Carregando...</p>
+          <CarregandoNaRegiao rotulo="Carregando o saldo…" />
         )}
       </DialogContent>
     </Dialog>

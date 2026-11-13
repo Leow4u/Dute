@@ -234,7 +234,7 @@ export function ExceptionDialog({
               id="warehouse-exception-note"
               value={note}
               onChange={(event) => onNoteChange(event.target.value)}
-              placeholder="Divergência, falta, avaria, documento pendente..."
+              placeholder="Divergência, falta, avaria, documento pendente…"
             />
           </div>
 

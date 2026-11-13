@@ -315,6 +315,7 @@ export default function Receber() {
       actions={actions}
       noticeChoice={noticeChoice}
       linking={linkNotice.isPending}
+      linkingId={linkNotice.isPending ? (linkNotice.variables?.requestId ?? "") : undefined}
       onLinkNotice={
         operador && noticeChoice?.editable
           ? (requestId) => linkNotice.mutate({ receiptId: selected.task.id, requestId })
@@ -711,6 +712,7 @@ function TaskPanel({
   actions,
   noticeChoice,
   linking,
+  linkingId,
   onLinkNotice,
   lineConfirmations,
   onLineConfirmationChange,
@@ -722,6 +724,7 @@ function TaskPanel({
   actions: ReturnType<typeof useWarehouseTaskActions>;
   noticeChoice: NoticeLinkChoice | null;
   linking: boolean;
+  linkingId?: string;
   onLinkNotice?: (requestId: string | null) => void;
   lineConfirmations: LineConfirmationMap;
   onLineConfirmationChange: Parameters<typeof TaskDetailPanel>[0]["onLineConfirmationChange"];
@@ -750,6 +753,7 @@ function TaskPanel({
         alerts={alerts}
         noticeChoice={noticeChoice}
         linking={linking}
+        linkingId={linkingId}
         advancingTaskId={actions.advancingTaskId}
         registeringExceptionId={actions.registeringExceptionId}
         onAdvance={(id, note) => actions.advanceTask.mutate({ id, note })}

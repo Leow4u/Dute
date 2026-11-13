@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -32,8 +32,12 @@ import { useItemPhotos } from "@/lib/use-item-photos";
 import { cn } from "@/lib/utils";
 import { recordCustomerCode } from "@/lib/active-customer";
 import { erroDaResposta } from "@/lib/erro-da-resposta";
-import { semConexaoNaLeitura } from "@/lib/conexao";
-import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { Spinner } from "@/components/ui/spinner";
+import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 
 export type CustomerRequest = {
   id: string;
@@ -1222,9 +1226,14 @@ export default function CustomerRequests() {
     refetchInterval: 120_000,
     retry: 1,
   });
-  // Sem rede, a fila que já estava fica, com a hora da leitura; sem nada
-  // lido, o aviso (decisão 2 do celular).
-  const semRede = semConexaoNaLeitura(requests);
+  // A lista do carregamento v2 (parte 13c): a linha de estado sob o título diz "Carregando solicitações…", a hora da
+  // leitura e a releitura que falha com a fila lida ("Não consegui atualizar · lista de 10:42"; a falta de conexão
+  // também), sem apagar a fila. Sem nada lido, a falha no lugar da fila, com "Tentar de novo", que fica enquanto
+  // tenta. O Atualizar é o das listas: só mostra a espera quando a pessoa toca nele.
+  const requestsNaTela = useLeituraComFalha(requests);
+  const filaFalhou = requestsNaTela.isError && requests.data === undefined;
+  const atualizarLista = useAtualizarLista([requestsNaTela], () => void stockBalances.refetch());
+  const idDaLinha = useId();
 
   const transition = useMutation<
     TransitionResponse,
@@ -1391,17 +1400,11 @@ export default function CustomerRequests() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold text-foreground">Solicitações</h1>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => requests.refetch()}
-            disabled={requests.isFetching}
-          >
-            <RefreshCw className={cn("size-4", requests.isFetching && "animate-spin")} />
-            <span className="sr-only">Atualizar</span>
-          </Button>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold text-foreground">Solicitações</h1>
+            <LinhaDeEstado id={idDaLinha} leitura={[requestsNaTela]} objeto="solicitações" className="mt-1" />
+          </div>
+          <BotaoAtualizar atualizando={atualizarLista.atualizando} travado={requestsNaTela.isLoading} onAtualizar={atualizarLista.atualizar} />
         </div>
         <div className="grid grid-cols-3 rounded-xl bg-muted p-1 lg:flex" role="tablist">
           {tabs.map((option) => (
@@ -1447,19 +1450,19 @@ export default function CustomerRequests() {
               className="pl-9"
             />
           </div>
-          {!requests.isLoading && semRede && semRede.lidaEm !== null ? (
-            <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={requests.isFetching} onTentar={() => void requests.refetch()} />
-          ) : null}
-          {requests.isLoading ? (
-            <p className="px-1 py-6 text-sm text-muted-foreground">
-              Carregando solicitações...
-            </p>
-          ) : semRede && semRede.lidaEm === null ? (
-            <BlocoSemConexao tentando={requests.isFetching} onTentar={() => void requests.refetch()} />
-          ) : requests.error && !semRede ? (
-            <p className="px-1 py-6 text-sm text-destructive">
-              Não consegui carregar a fila.
-            </p>
+          {filaFalhou ? (
+            <FalhaNaLeitura leitura={requests} erro={requestsNaTela.error} mensagem="Não consegui carregar as solicitações." focoAoSair={idDaLinha} />
+          ) : requests.data === undefined ? (
+            // A primeira leitura: os cartões-fantasma no lugar da fila, e quem diz é a linha de estado (momento 2).
+            <div className="flex flex-col gap-3" aria-busy="true" aria-describedby={idDaLinha}>
+              {[0, 1, 2].map((ordem) => (
+                <div key={ordem} className="flex flex-col gap-2.5 rounded-2xl border border-border bg-card px-4 py-3.5">
+                  <Esqueleto forma="texto" className="w-4/5" />
+                  <Esqueleto forma="texto" className="h-2.5 w-2/5" />
+                  <Esqueleto forma="texto" className="h-2.5 w-1/3" />
+                </div>
+              ))}
+            </div>
           ) : visible.length === 0 ? (
             <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
               {tab === "decide" && !search ? (
@@ -1673,7 +1676,8 @@ function RequestDetail({
 
       <div className={cn("mx-5 mt-4 flex gap-3 rounded-2xl border p-4 md:mx-6", style.box)}>
         <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-xl", style.icon)}>
-          <style.Icon className={cn("size-4", verdict.tone === "checking" && "animate-spin")} aria-hidden="true" />
+          {/* Conferindo o saldo: a caixa do carregamento, no lugar do ícone girando (carregamento v2, parte 13c). */}
+          {verdict.tone === "checking" ? <Spinner /> : <style.Icon className="size-4" aria-hidden="true" />}
         </div>
         <div className="min-w-0">
           <p className="font-semibold text-foreground">{verdict.title}</p>
@@ -1748,6 +1752,9 @@ function RequestDetail({
                             loading="lazy"
                             className="size-10 shrink-0 rounded-lg bg-muted object-cover"
                           />
+                        ) : photoFor.lendo ? (
+                          // As fotos ainda chegam: o lugar fica neutro, sem afirmar "sem foto" (carregamento v2, parte 13c).
+                          <Esqueleto forma="icone" className="size-10 shrink-0" />
                         ) : (
                           <span className="size-10 shrink-0 rounded-lg border border-dashed border-border" />
                         )}
@@ -1792,31 +1799,40 @@ function RequestDetail({
                 : "Aprovar libera quando todos os itens tiverem saldo."}
           </p>
           <div className="flex shrink-0 gap-2">
+            {/* Ocupado não é desabilitado: o botão tocado mostra a espera, com o gerúndio e o foco nele; os outros esperam
+                com aria-disabled (carregamento v2, parte 13c). */}
             {status === "approved" ? (
-              <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
-                <Archive className="size-4" />
-                {pendingAction === "close" ? "Encerrando..." : "Encerrar"}
-              </Button>
+              <BotaoDeAcao
+                variant="outline"
+                estado={pendingAction === "close" ? "andamento" : "repouso"}
+                icone={<Archive aria-hidden="true" />}
+                rotulo="Encerrar"
+                andamento="Encerrando…"
+                bloqueado={busy && pendingAction !== "close"}
+                onClick={onClose}
+              />
             ) : (
               <>
                 <Button
                   type="button"
                   variant="outline"
-                  className="text-destructive hover:text-destructive"
-                  disabled={busy}
-                  onClick={onReject}
+                  className={cn("text-destructive hover:text-destructive", busy && "opacity-45 hover:bg-card active:bg-card")}
+                  aria-disabled={busy || undefined}
+                  onClick={() => {
+                    if (!busy) onReject();
+                  }}
                 >
-                  <XCircle className="size-4" />
+                  <XCircle className="size-4" aria-hidden="true" />
                   Recusar com motivo
                 </Button>
-                <Button
-                  type="button"
-                  disabled={busy || !validation.canApprove}
+                <BotaoDeAcao
+                  estado={pendingAction === "approve" ? "andamento" : "repouso"}
+                  icone={<CheckCircle2 aria-hidden="true" />}
+                  rotulo={approveLabel}
+                  andamento="Aprovando…"
+                  bloqueado={pendingAction !== "approve" && (busy || !validation.canApprove)}
                   onClick={onApprove}
-                >
-                  <CheckCircle2 className="size-4" />
-                  {pendingAction === "approve" ? "Aprovando..." : approveLabel}
-                </Button>
+                />
               </>
             )}
           </div>

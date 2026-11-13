@@ -1,7 +1,8 @@
 import { Minus, Plus } from "lucide-react";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -105,13 +106,19 @@ export function SepararMenosConteudo({
         <Label htmlFor="separar-menos-detalhe">Detalhe</Label>
         <Input id="separar-menos-detalhe" value={diferenca.detalhe} maxLength={300} onChange={(event) => onMudar({ ...diferenca, detalhe: event.target.value })} />
       </div>
+      {/* Registrando, o diálogo fica: o Voltar espera ocupado, e o registrar é o BotaoDeAcao, com o gerúndio e o foco
+          nele (carregamento v2, parte 13c). */}
       <DialogFooter>
-        <Button type="button" variant="outline" onClick={onVoltar}>
+        <DialogCancelar ocupado={registrando} onClick={onVoltar}>
           Voltar
-        </Button>
-        <Button type="button" disabled={registrando || !diferencaValida(diferenca.pedido, diferenca.separado, diferenca.motivo)} onClick={onRegistrar}>
-          {registrando ? "Registrando..." : "Registrar diferença"}
-        </Button>
+        </DialogCancelar>
+        <BotaoDeAcao
+          estado={registrando ? "andamento" : "repouso"}
+          rotulo="Registrar diferença"
+          andamento="Registrando…"
+          bloqueado={!registrando && !diferencaValida(diferenca.pedido, diferenca.separado, diferenca.motivo)}
+          onClick={onRegistrar}
+        />
       </DialogFooter>
     </div>
   );
@@ -132,7 +139,7 @@ export function SepararMenosDialog({
   onRegistrar: () => void;
 }) {
   return (
-    <Dialog open={Boolean(diferenca)} onOpenChange={(open) => (open ? undefined : onFechar())}>
+    <Dialog open={Boolean(diferenca)} ocupado={Boolean(registrando)} onOpenChange={(open) => (open ? undefined : onFechar())}>
       <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Separar menos</DialogTitle>

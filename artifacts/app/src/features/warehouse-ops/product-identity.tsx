@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, ImageOff, PackageSearch, RefreshCw } from "lucide-react";
+import { CheckCircle2, ImageOff, PackageSearch } from "lucide-react";
 import { problemaDoNome, type ProblemaDoNome } from "@workspace/dominio";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FalhaNaLeitura, type LeituraQueFalhou } from "@/components/ui/erro-na-leitura";
 import { Label } from "@/components/ui/label";
-import { Spinner } from "@/components/ui/spinner";
 import type { ProductLookupItem } from "./shared";
 
 export function ProductIdentityCard({
@@ -221,31 +222,38 @@ export function useProblemaAoParar<T extends { mensagem: string }>(problema: T |
 /**
  * O catálogo do cliente ainda não chegou: a tela não diz que o produto não
  * existe nem oferece o cadastro novo antes de ler
- * (docs/plataforma/diagnostico-carregamento.md, decisão 6 de 06/11/2026).
+ * (docs/plataforma/diagnostico-carregamento.md, decisão 6 de 06/11/2026). É a
+ * espera em bloco do carregamento v2 (parte 13c): nada antes de 300 ms, a
+ * caixa de 24 px e "Verificando o catálogo…", com o anúncio pelo Anunciador;
+ * sem região viva solta. A mesma na chegada avulsa, nas Devoluções e na
+ * contagem cíclica; a abertura usa a mesma `CarregandoNaRegiao`.
  */
-export function CatalogoVerificando() {
-  return (
-    <div role="status" className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-4 text-sm font-medium text-foreground">
-      <Spinner />
-      Verificando o catálogo…
-    </div>
-  );
+export function CatalogoVerificando({ className }: { className?: string }) {
+  return <CarregandoNaRegiao rotulo="Verificando o catálogo…" className={className} />;
 }
 
-/** O catálogo não veio: a falha na linha, com a nova tentativa, e o cadastro novo continua bloqueado. */
-export function CatalogoIndisponivel({ tentando, onTentar }: { tentando: boolean; onTentar: () => void }) {
-  return (
-    <div role="alert" className="@container rounded-lg border border-destructive/30 bg-destructive/10 p-4">
-      <div className="flex flex-col gap-3 @sm:flex-row @sm:items-center @sm:justify-between">
-        <p className="flex items-center gap-2 text-sm font-medium text-destructive">
-          <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
-          Não consegui carregar o catálogo.
-        </p>
-        <Button type="button" size="sm" variant="outline" className="shrink-0" disabled={tentando} aria-busy={tentando || undefined} onClick={onTentar}>
-          {tentando ? <Spinner /> : <RefreshCw className="size-4" aria-hidden="true" />}
-          {tentando ? "Tentando de novo…" : "Tentar de novo"}
-        </Button>
-      </div>
-    </div>
-  );
+/**
+ * O catálogo não veio: a falha no lugar do cadastro achado, com a nova
+ * tentativa, e nada de "não localizado" nem de cadastro novo, que fica
+ * bloqueado (o PR 2 da seção 6 do diagnóstico, parte 13c). É a
+ * `FalhaNaLeitura`: a falha fica na tela enquanto tenta de novo (`erro`, da
+ * cópia da `useLeituraComFalha`), "Tentando de novo…" só na nova tentativa que
+ * a pessoa pede, a falta de conexão como "Sem conexão." ou "Reconectando…" e,
+ * quando o catálogo chega com o foco no aviso, o foco vai ao código digitado
+ * (`focoAoSair`).
+ */
+export function CatalogoIndisponivel({
+  leitura,
+  erro,
+  mensagem = "Não consegui carregar o catálogo.",
+  focoAoSair,
+  className,
+}: {
+  leitura: LeituraQueFalhou;
+  erro?: unknown;
+  mensagem?: string;
+  focoAoSair?: string;
+  className?: string;
+}) {
+  return <FalhaNaLeitura leitura={leitura} erro={erro} mensagem={mensagem} focoAoSair={focoAoSair} className={className} />;
 }
