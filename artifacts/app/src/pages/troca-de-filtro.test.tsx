@@ -216,7 +216,15 @@ async function buscar(texto: string) {
 /** A lista que está trocando: aria-busy e inert, só neste caso. */
 const listaEmTroca = () => container.querySelector<HTMLElement>('[data-lista-em-troca][aria-busy="true"][inert]');
 const barraDoTopo = () => container.querySelector('.carregando-barra[data-lugar="topo"]');
-const texto = () => container.textContent ?? "";
+/** O texto da tela sem a camada que sai da linha de estado (ela troca em sequência, e a que sai fica fora da árvore). */
+const texto = () => {
+  const copia = container.cloneNode(true) as HTMLElement;
+  copia.querySelectorAll("[data-sai]").forEach((sai) => sai.remove());
+  return copia.textContent ?? "";
+};
+/** O que a linha de estado da tela diz agora (a camada atual). */
+const linhaDeEstado = () =>
+  container.querySelector<HTMLElement>("[data-linha-de-estado] > [data-camada]:not([data-sai])")?.textContent?.replace(/\s+/g, " ").trim() ?? "";
 
 type Tela = {
   nome: string;
@@ -347,7 +355,7 @@ describe("a troca e a releitura que falham", () => {
   it.each([
     { nome: "Produtos", Tela: Products, caminho: "/api/products", naLista: "Polo Masculino Piquet Preto 1" },
     { nome: "Fechamento", Tela: Billing, caminho: "/api/billing/periods/", naLista: "Posição palete 2026-10" },
-  ])("$nome: a releitura que falha não apaga a lista; a faixa diz Não consegui atualizar · lista de 10:42", async ({ Tela, caminho, naLista }) => {
+  ])("$nome: a releitura que falha não apaga a lista; a linha de estado diz Não consegui atualizar · lista de 10:42", async ({ Tela, caminho, naLista }) => {
     await montar(Tela);
     await passar(300);
     expect(texto()).toContain(naLista);
@@ -358,14 +366,14 @@ describe("a troca e a releitura que falham", () => {
     });
     await passar(100);
     expect(texto()).toContain(naLista);
-    expect(texto()).toContain("Não consegui atualizar");
-    expect(texto()).toContain("· lista de 10:42");
+    expect(linhaDeEstado()).toBe("Não consegui atualizar· lista de 10:42Tentar de novo");
     expect(texto()).not.toContain("Não consegui carregar");
     expect(listaEmTroca()).toBeNull();
-    // Tentar de novo relê e, de volta, a faixa sai.
+    // Tentar de novo relê e, de volta, a linha diz a hora da lista nova.
     estado.falhas.clear();
     await act(async () => botao("Tentar de novo").click());
     await passar(200);
+    expect(linhaDeEstado()).toBe("Atualizado às 10:45");
     expect(texto()).not.toContain("Não consegui atualizar");
     expect(texto()).toContain(naLista);
   });
@@ -432,5 +440,167 @@ describe("Movimentações: a paginação na troca", () => {
     // A página 3 pede o cursor que a página 2 devolveu, e não o da página 1, que ficou na tela durante a troca.
     expect(estado.leituras.at(-1)).toContain("cursor=2");
     expect(texto()).toContain(MOVIMENTOS[2].produto);
+  });
+});
+
+/** A revisão da parte 10: o que a troca e a releitura faziam de errado no navegador e no leitor de tela. */
+describe("a revisão da troca e da releitura", () => {
+  const produtosEmPaginas = (quantos: number) =>
+    vi.mocked(fetch).mockImplementation(async (entrada) => {
+      const url = new URL(String(entrada), "http://localhost");
+      estado.leituras.push(`${url.pathname}${url.search}`);
+      await new Promise((pronto) => setTimeout(pronto, estado.atrasos["/api/products"] ?? 30));
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      const limite = Number(url.searchParams.get("limit") ?? 50);
+      const todos = Array.from({ length: quantos }, (_, i) => ({ ...PRODUTOS[i % PRODUTOS.length], id: i + 1, cod_cliente: `A.${String(i + 1).padStart(3, "0")}`, produto: `${NOMES[i % 3]} ${i + 1}` }));
+      return new Response(JSON.stringify({ items: todos.slice(offset, offset + limite), total: todos.length }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+
+  it("a releitura que falha não empurra a lista: o estado fica na linha reservada sob o título, sem faixa nova acima do cartão", async () => {
+    await montar(Products);
+    await passar(300);
+    const cartao = container.querySelector("table")!.closest("section")!;
+    const antesDoCartao = cartao.previousElementSibling;
+    // A linha já está na tela, reservada, antes de qualquer falha.
+    const linha = container.querySelector("header [data-linha-de-estado]");
+    expect(linha).not.toBeNull();
+    estado.falhas.add("/api/products");
+    await act(async () => void cliente.invalidateQueries());
+    await passar(100);
+    expect(linhaDeEstado()).toBe("Não consegui atualizar· lista de 10:42Tentar de novo");
+    expect(container.querySelector("header [data-linha-de-estado]")).toBe(linha);
+    expect(cartao.previousElementSibling).toBe(antesDoCartao);
+  });
+
+  it("a troca que passa de 5 s diz Atualizando… sob o título; aos 10 s, a demora com Tentar de novo, dita uma vez, que relê", async () => {
+    await montar(Products);
+    await passar(300);
+    estado.atrasos["/api/products"] = 30_000;
+    await buscar("camisa");
+    await passar(4_500);
+    expect(linhaDeEstado()).toBe("Atualizado às 10:42");
+    await passar(700);
+    expect(listaEmTroca()).not.toBeNull();
+    expect(linhaDeEstado()).toBe("Atualizando…");
+    await passar(5_000);
+    expect(linhaDeEstado()).toBe("Demorando mais que o normalTentar de novo");
+    await passar(2_000);
+    expect(container.querySelector("[data-anunciador]")?.textContent).toBe("Demorando mais que o normal");
+    // Tentar de novo larga a leitura presa e lê de novo a busca nova; a lista anterior segue na tela até ela chegar.
+    estado.atrasos["/api/products"] = 100;
+    const pedidas = estado.leituras.length;
+    const tentar = Array.from(container.querySelectorAll<HTMLButtonElement>("[data-linha-de-estado] .linha-de-estado-tentar")).find((b) => !b.closest("[data-sai]"))!;
+    await act(async () => tentar.click());
+    await passar(400);
+    expect(estado.leituras.length).toBeGreaterThan(pedidas);
+    expect(estado.leituras.at(-1)).toContain("search=camisa");
+    expect(texto()).toContain("Camisa Social Branca 2");
+    expect(listaEmTroca()).toBeNull();
+  });
+
+  it("a busca que falha: sem falsos zeros na contagem, a releitura automática não mexe no aviso, e o Tentar de novo que dá certo leva o foco à linha de estado", async () => {
+    await montar(Products);
+    await passar(300);
+    estado.falhas.add("/api/products");
+    await buscar("camisa");
+    await passar(100);
+    expect(texto()).toContain("Não consegui carregar os produtos.");
+    expect(texto()).not.toContain("Exibindo 0 de 0");
+    expect(texto()).not.toContain("0 produto(s) nesta página");
+    const alerta = () => container.querySelector('[role="alert"]')?.textContent?.replace(/\s+/g, " ").trim();
+    expect(alerta()).toBe("Não consegui carregar os produtos.Tentar de novo");
+    // A releitura automática (o tempo real invalida a lista): o alerta não troca de texto, e não fala de novo.
+    estado.atrasos["/api/products"] = 1_000;
+    await act(async () => void cliente.invalidateQueries({ queryKey: ["/api/products"] }));
+    await passar(500);
+    expect(alerta()).toBe("Não consegui carregar os produtos.Tentar de novo");
+    await passar(1_000);
+    // A pessoa tenta de novo e dá certo: o aviso sai, e o foco vai à linha de estado, nunca ao body.
+    estado.falhas.clear();
+    estado.atrasos["/api/products"] = 300;
+    const tentar = botao("Tentar de novo");
+    tentar.focus();
+    await act(async () => tentar.click());
+    await passar(100);
+    expect(alerta()).toBe("Não consegui carregar os produtos.Tentando de novo…");
+    await passar(400);
+    expect(texto()).not.toContain("Não consegui carregar");
+    expect(document.activeElement).toBe(container.querySelector("[data-linha-de-estado]"));
+  });
+
+  it("a paginação nas pontas: o Próximo que chega à última página e o Anterior que volta à primeira ficam com o foco, aria-disabled e sem disabled", async () => {
+    produtosEmPaginas(70);
+    await montar(Products);
+    await passar(600);
+    estado.atrasos["/api/products"] = 400;
+    const proximo = botao("Próximo");
+    proximo.focus();
+    await act(async () => proximo.click());
+    await passar(500);
+    expect(texto()).toContain("Polo Masculino Piquet Preto 52");
+    expect(document.activeElement).toBe(proximo);
+    expect(proximo.hasAttribute("disabled")).toBe(false);
+    expect(proximo.getAttribute("aria-disabled")).toBe("true");
+    // Indisponível na última página: o toque não pede outra.
+    const pedidas = estado.leituras.length;
+    await act(async () => proximo.click());
+    await passar(500);
+    expect(estado.leituras.length).toBe(pedidas);
+    const anterior = botao("Anterior");
+    anterior.focus();
+    await act(async () => anterior.click());
+    await passar(500);
+    expect(texto()).toContain("Polo Masculino Piquet Preto 1");
+    expect(document.activeElement).toBe(anterior);
+    expect(anterior.hasAttribute("disabled")).toBe(false);
+    expect(anterior.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("a página nova que chega com o topo do cartão acima da tela traz o começo dela à vista", async () => {
+    produtosEmPaginas(70);
+    await montar(Products);
+    await passar(600);
+    const cartao = container.querySelector("table")!.closest("section")!;
+    const rolar = vi.fn();
+    cartao.scrollIntoView = rolar;
+    cartao.getBoundingClientRect = () => ({ top: -1_700, bottom: 900, left: 0, right: 1_400, width: 1_400, height: 2_600, x: 0, y: -1_700, toJSON: () => ({}) });
+    estado.atrasos["/api/products"] = 400;
+    await act(async () => botao("Próximo").click());
+    await passar(100);
+    // Durante a troca, nada rola: a pessoa está no pé, vendo a lista anterior esmaecer.
+    expect(rolar).not.toHaveBeenCalled();
+    await passar(400);
+    expect(rolar).toHaveBeenCalledTimes(1);
+    expect(rolar).toHaveBeenCalledWith({ block: "start" });
+  });
+});
+
+describe("Relatórios de estoque: a primeira leitura que falha", () => {
+  it("Tentar de novo segue com o aviso e Tentando de novo…, sem Carregando..., e o foco fica no botão", async () => {
+    let falhas = 1;
+    vi.mocked(fetch).mockImplementation(async (entrada) => {
+      const url = new URL(String(entrada), "http://localhost");
+      const skus = url.pathname === "/api/skus";
+      await new Promise((pronto) => setTimeout(pronto, skus && falhas === 0 ? 1_500 : 30));
+      if (skus && falhas > 0) {
+        falhas -= 1;
+        return new Response(JSON.stringify({ message: "Falha interna no servidor." }), { status: 500, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ items: [] }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    await montar(Reports);
+    await passar(300);
+    await act(async () => botao(/^Posição de estoque/).click());
+    await passar(200);
+    const tentar = botao("Tentar de novo");
+    tentar.focus();
+    await act(async () => tentar.click());
+    await passar(400);
+    expect(texto()).toContain("Falha interna no servidor.");
+    expect(texto()).toContain("Tentando de novo…");
+    expect(texto()).not.toContain("Carregando...");
+    expect(document.activeElement).toBe(botao("Tentando de novo…"));
+    await passar(1_500);
+    expect(texto()).not.toContain("Falha interna no servidor.");
   });
 });

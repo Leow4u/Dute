@@ -65,6 +65,16 @@ describe("a linha de estado, parada", () => {
     expect(textosDaTela(html)).toEqual(["Não consegui atualizar", "· lista de 10:42", "Tentar de novo"]);
   });
 
+  it("sem a hora (a aba Histórico, sob a linha do Estoque): lida, vazia; a releitura que falha, sim", () => {
+    expect(textosDaTela(conectada(<LinhaDeEstado leitura={leitura()} objeto="movimentações" semHora />))).toEqual([]);
+    const falhou = leitura({ isError: true, error: new Error("Falha interna no servidor.") });
+    expect(textosDaTela(conectada(<LinhaDeEstado leitura={falhou} objeto="movimentações" semHora />))).toEqual([
+      "Não consegui atualizar",
+      "· lista de 10:42",
+      "Tentar de novo",
+    ]);
+  });
+
   it("a primeira leitura que falha continua sem nada na linha: o aviso fica no lugar da lista", () => {
     const html = conectada(<LinhaDeEstado leitura={leitura({ isError: true, error: new Error("Falha"), dataUpdatedAt: 0 })} objeto="pedidos" />);
     expect(textosDaTela(html)).toEqual([]);
@@ -140,5 +150,67 @@ describe("o Atualizar tocado que falha", () => {
     expect(container.querySelector("[data-anunciador]")?.textContent).toBe("Não consegui atualizar");
     const linha = container.querySelector<HTMLElement>("[data-linha-de-estado] > [data-camada]:not([data-sai])")!;
     expect(textosDaTela(linha.outerHTML)).toEqual(["Não consegui atualizar", "· lista de 10:42", "Tentar de novo"]);
+  });
+
+  it("nas telas que ainda dizem a primeira leitura na tabela (primeiraNaLista), a linha fica vazia e calada enquanto ela lê", async () => {
+    function Lendo() {
+      const produtos = useQuery({ queryKey: ["produtos"], queryFn: () => new Promise((ok) => setTimeout(() => ok({ itens: 1 }), 2_000)) });
+      return <LinhaDeEstado leitura={produtos} objeto="produtos" primeiraNaLista />;
+    }
+    raiz = createRoot(container);
+    await act(async () => {
+      raiz!.render(
+        <ProvedorDaConexao value={conexao}>
+          <QueryClientProvider client={cliente}>
+            <Anunciador />
+            <Lendo />
+          </QueryClientProvider>
+        </ProvedorDaConexao>,
+      );
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(container.querySelector("[data-linha-de-estado]")?.getAttribute("data-estado")).toBe("vazia");
+    expect(container.querySelector("[data-anunciador]")?.textContent).toBe("");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    expect(container.querySelector("[data-linha-de-estado]")?.getAttribute("data-estado")).toBe("lida");
+  });
+
+  it("o Tentar de novo da linha que falha de novo depois que a pessoa saiu da tela não fala na tela seguinte", async () => {
+    falhar = false;
+    raiz = createRoot(container);
+    const montar = (tela: ReactElement) =>
+      act(async () => {
+        raiz!.render(
+          <ProvedorDaConexao value={conexao}>
+            <QueryClientProvider client={cliente}>
+              <Anunciador />
+              {tela}
+            </QueryClientProvider>
+          </ProvedorDaConexao>,
+        );
+      });
+    await montar(<Lista />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    falhar = true;
+    await act(async () => void cliente.invalidateQueries());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+    });
+    const regiao = () => container.querySelector("[data-anunciador]")?.textContent;
+    expect(regiao()).toBe("");
+    const tentar = Array.from(container.querySelectorAll<HTMLButtonElement>(".linha-de-estado-tentar")).find((botao) => !botao.closest("[data-sai]"))!;
+    await act(async () => tentar.click());
+    // A pessoa sai da tela antes de a leitura responder (e falhar de novo).
+    await montar(<p>Outra tela</p>);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+    });
+    expect(regiao()).toBe("");
   });
 });

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { type Order, useListOrders, useUpdateOrder, getListOrdersQueryKey } from "@workspace/api-client-react";
 import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { FaixaDaReleitura, FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
-import { useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { Badge } from "@/components/ui/badge";
 import { Boxes, CheckCircle2, ClipboardList, PackageCheck, Truck } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -44,6 +45,7 @@ export default function Orders() {
   const { data, isLoading } = leitura;
   const lista = useListaComFiltro(leitura);
   const troca = useListaEmTroca(lista.trocando);
+  const idDaLinha = useId();
 
   const orders = data?.items ?? [];
   const stats = useMemo(() => {
@@ -72,6 +74,8 @@ export default function Orders() {
       eyebrow="Estoque"
       title="Pedidos"
       icon={<Truck className="h-6 w-6" />}
+      // A casa do estado da lista, sob o título, sem empurrar a lista (a primeira leitura ainda é da tabela; parte 13).
+      estado={<LinhaDeEstado id={idDaLinha} leitura={leitura} objeto="pedidos" primeiraNaLista />}
     >
       <StockMetricsGrid>
         <StockMetricCard
@@ -120,13 +124,12 @@ export default function Orders() {
         </StockFilterChip>
       </StockToolbar>
 
-      <FaixaDaReleitura leituras={[leitura]} />
-
-      <StockTableCard trocando={lista.trocando}>
+      <StockTableCard trocando={lista.trocando} pagina={page}>
           {lista.falhou ? (
-            <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar os pedidos." className="rounded-none border-0" />
+            <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar os pedidos." className="rounded-none border-0" focoAoSair={idDaLinha} />
           ) : (
           <div className="overflow-x-auto" {...troca.props}>
+            <ConteudoEmTroca trocando={lista.trocando}>
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card">
                 <tr>
@@ -190,6 +193,7 @@ export default function Orders() {
                 )}
               </tbody>
             </table>
+            </ConteudoEmTroca>
           </div>
           )}
           
@@ -197,6 +201,7 @@ export default function Orders() {
             page={page}
             isLoading={isLoading}
             ocupada={lista.trocando}
+            semContagem={lista.falhou}
             count={data?.items?.length || 0}
             total={data?.total || 0}
             limit={limit}

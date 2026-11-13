@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { type Product, useListProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, getListProductsQueryKey } from "@workspace/api-client-react";
 import { tamanhoDoCodigo } from "@workspace/dominio";
 import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { FaixaDaReleitura, FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
-import { useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Boxes, CircleDollarSign, Edit, PackageSearch, Plus, Tags, Trash2 } from "lucide-react";
@@ -88,6 +89,7 @@ export default function Products() {
   const { data, isLoading } = leitura;
   const lista = useListaComFiltro(leitura);
   const troca = useListaEmTroca(lista.trocando);
+  const idDaLinha = useId();
 
   const products = data?.items ?? [];
   const categoryOptions = useMemo(() => {
@@ -126,6 +128,9 @@ export default function Products() {
       title="Produtos"
       icon={<PackageSearch className="h-6 w-6" />}
       actions={catalogWriter ? <ProductModal showPrice={showPrice} /> : undefined}
+      // A casa do estado da lista, sob o título: "Atualizado às", a troca que passa de 5 s, a releitura que falha e a
+      // falta de conexão, sem empurrar a lista (a primeira leitura ainda diz "Carregando..." na tabela; parte 13).
+      estado={<LinhaDeEstado id={idDaLinha} leitura={leitura} objeto="produtos" primeiraNaLista />}
     >
       {/* "Peças na página" era soma do recorte visível — número que muda ao
           paginar e não sustenta decisão nenhuma. */}
@@ -157,12 +162,13 @@ export default function Products() {
         search={search}
         onSearchChange={setSearch}
         placeholder="Buscar por cod. cliente, produto, categoria, cor ou tamanho"
-        resultText={`${formatStockNumber(filteredProducts.length)} produto(s) nesta página`}
+        // A página que não chegou não tem contagem: o aviso está no lugar da lista, e "0" seria um falso zero.
+        resultText={lista.falhou ? undefined : `${formatStockNumber(filteredProducts.length)} produto(s) nesta página`}
       >
         <StockFilterChip
           active={categoryFilter === "todos"}
           onClick={() => setCategoryFilter("todos")}
-          count={products.length}
+          count={lista.falhou ? undefined : products.length}
         >
           Todas categorias
         </StockFilterChip>
@@ -178,13 +184,12 @@ export default function Products() {
         ))}
       </StockToolbar>
 
-      <FaixaDaReleitura leituras={[leitura]} />
-
-      <StockTableCard trocando={lista.trocando}>
+      <StockTableCard trocando={lista.trocando} pagina={page}>
           {lista.falhou ? (
-            <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar os produtos." className="rounded-none border-0" />
+            <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar os produtos." className="rounded-none border-0" focoAoSair={idDaLinha} />
           ) : (
           <div className="overflow-x-auto" {...troca.props}>
+            <ConteudoEmTroca trocando={lista.trocando}>
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card">
                 <tr>
@@ -250,6 +255,7 @@ export default function Products() {
                 )}
               </tbody>
             </table>
+            </ConteudoEmTroca>
           </div>
           )}
           
@@ -257,6 +263,7 @@ export default function Products() {
             page={page}
             isLoading={isLoading}
             ocupada={lista.trocando}
+            semContagem={lista.falhou}
             count={data?.items?.length || 0}
             total={data?.total || 0}
             limit={limit}

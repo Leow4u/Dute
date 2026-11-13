@@ -33,6 +33,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Card,
   CardContent,
@@ -1957,19 +1958,22 @@ export function TaskDetailPanel({
             )}
           >
             {canAdvance ? (
+              // Ocupado não é desabilitado: enquanto avança (até a bancada reler), `aria-disabled` e a trava aqui, para o
+              // foco ficar no botão (carregamento v2, seção 7).
               <Button
                 type="button"
                 size={isPutaway ? "lg" : "default"}
                 className="w-full sm:flex-1"
-                onClick={() => onAdvance(task.id, operationForAdvance, advanceNote)}
-                disabled={advancingTaskId === task.id || !canSubmitAdvance}
+                onClick={() => {
+                  if (advancingTaskId === task.id) return;
+                  onAdvance(task.id, operationForAdvance, advanceNote);
+                }}
+                disabled={advancingTaskId !== task.id && !canSubmitAdvance}
+                aria-disabled={advancingTaskId === task.id || undefined}
+                aria-busy={advancingTaskId === task.id || undefined}
               >
-                {advancingTaskId === task.id ? (
-                  <RefreshCw data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <PlayCircle data-icon="inline-start" />
-                )}
-                {advancingTaskId === task.id ? "Avançando" : advanceGate.label}
+                {advancingTaskId === task.id ? <Spinner data-icon="inline-start" /> : <PlayCircle data-icon="inline-start" />}
+                {advancingTaskId === task.id ? "Avançando…" : advanceGate.label}
               </Button>
             ) : null}
             {isPutaway && canAdvance && !canSubmitAdvance && operationBlockReason ? (

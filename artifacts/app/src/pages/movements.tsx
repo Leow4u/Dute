@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   type Movement,
   type MovementInput,
@@ -9,8 +9,9 @@ import {
 import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { nomeComTamanho } from "@workspace/dominio";
 import { Button } from "@/components/ui/button";
-import { FaixaDaReleitura, FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
-import { useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { Input } from "@/components/ui/input";
 import { ArrowDownRight, ArrowUpRight, Plus } from "lucide-react";
 import {
@@ -169,6 +170,13 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
   const { data, isLoading, isPlaceholderData } = leitura;
   const lista = useListaComFiltro(leitura);
   const troca = useListaEmTroca(lista.trocando);
+  const idDaLinha = useId();
+  // A casa do estado da lista, sem empurrar a lista: sob o título; na aba Histórico do Estoque, logo acima dela,
+  // sem a hora (a linha do Estoque, sob o título, já diz uma), só com o que muda. A primeira leitura ainda é da
+  // tabela (parte 13).
+  const linhaDeEstado = (
+    <LinhaDeEstado id={idDaLinha} leitura={leitura} objeto="movimentações" primeiraNaLista semHora={embedded} />
+  );
 
   // Keep cursor stack in sync when server returns next_cursor (extra field).
   // A página anterior que ainda está na tela (placeholderData) não é desta página: o cursor dela é o desta.
@@ -219,13 +227,14 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
         </StockFilterChip>
       </StockToolbar>
 
-      <FaixaDaReleitura leituras={[leitura]} />
+      {embedded ? linhaDeEstado : null}
 
-      <StockTableCard trocando={lista.trocando}>
+      <StockTableCard trocando={lista.trocando} pagina={page}>
           {lista.falhou ? (
-            <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar as movimentações." className="rounded-none border-0" />
+            <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar as movimentações." className="rounded-none border-0" focoAoSair={idDaLinha} />
           ) : (
           <div {...troca.props}>
+          <ConteudoEmTroca trocando={lista.trocando}>
           <ul className="divide-y divide-border md:hidden">
             {isLoading ? (
               <li className="px-4 py-8 text-center text-sm text-muted-foreground">Carregando movimentações...</li>
@@ -320,6 +329,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
               </tbody>
             </table>
           </div>
+          </ConteudoEmTroca>
           </div>
           )}
 
@@ -327,6 +337,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
             page={page}
             isLoading={isLoading}
             ocupada={lista.trocando}
+            semContagem={lista.falhou}
             count={data?.items?.length || 0}
             total={total}
             limit={limit}
@@ -347,6 +358,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
     <StockPageShell
       title="Histórico de movimentos"
       actions={canOperateWarehouse(user?.publicMetadata.role) ? <MovementModal /> : undefined}
+      estado={linhaDeEstado}
     >
       {content}
     </StockPageShell>

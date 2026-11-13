@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { FaixaDaReleitura, FalhaNaLeitura, type LeituraQueFalhou } from "@/components/ui/erro-na-leitura";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { LinhaDeEstado, type LeituraDaLista } from "@/components/ui/linha-de-estado";
 import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -32,7 +33,8 @@ import {
   toExcelCsv,
   type ReportResult,
 } from "@/lib/reports";
-import { BarraDaLista, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { BarraDaLista, ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { buildStockItems } from "@/lib/stock-items";
 import { cn } from "@/lib/utils";
 import {
@@ -228,22 +230,30 @@ export default function Reports() {
   const needsStock = selected?.id === "position" || selected?.id === "below-minimum" || selected?.id === "idle";
   const canReadStock = canAccessModule(role, OPERATIONS_READERS);
 
-  // Mesmas chaves e endereços da tela Estoque: o cache é compartilhado.
-  const skus = useQuery({
-    queryKey: ["estoque", "skus"],
-    queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/skus?limit=2000"),
-    enabled: canReadStock,
-  });
-  const balances = useQuery({
-    queryKey: ["stock-balances", "estoque"],
-    queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/stock-balances?limit=2000"),
-    enabled: canReadStock,
-  });
-  const products = useQuery({
-    queryKey: ["estoque", "products"],
-    queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/products?limit=2000"),
-    enabled: canReadStock,
-  });
+  // Mesmas chaves e endereços da tela Estoque: o cache é compartilhado. A leitura que falhou sem dado segue com o
+  // aviso e "Tentando de novo…" enquanto a pessoa tenta de novo (o react-query a voltaria a "Carregando...", e o
+  // botão sumiria com o foco nele).
+  const skus = useLeituraComFalha(
+    useQuery({
+      queryKey: ["estoque", "skus"],
+      queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/skus?limit=2000"),
+      enabled: canReadStock,
+    }),
+  );
+  const balances = useLeituraComFalha(
+    useQuery({
+      queryKey: ["stock-balances", "estoque"],
+      queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/stock-balances?limit=2000"),
+      enabled: canReadStock,
+    }),
+  );
+  const products = useLeituraComFalha(
+    useQuery({
+      queryKey: ["estoque", "products"],
+      queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/products?limit=2000"),
+      enabled: canReadStock,
+    }),
+  );
   const items = useMemo(
     () =>
       buildStockItems({
@@ -258,14 +268,16 @@ export default function Reports() {
   const stockFalha = [skus, balances, products].find((leitura) => leitura.isError && leitura.data === undefined) ?? null;
   const stockError = stockFalha?.error ?? null;
 
-  const sinceGoLive = useQuery({
-    queryKey: ["reports", "movements", "since-go-live"],
-    queryFn: () =>
-      fetchJson<{ items: AnyRecord[]; capped: boolean }>(
-        `/api/reports/movements?from=${encodeURIComponent(GO_LIVE)}&to=${encodeURIComponent(new Date(Date.now() + 86_400_000).toISOString())}`,
-      ),
-    enabled: selected?.id === "idle",
-  });
+  const sinceGoLive = useLeituraComFalha(
+    useQuery({
+      queryKey: ["reports", "movements", "since-go-live"],
+      queryFn: () =>
+        fetchJson<{ items: AnyRecord[]; capped: boolean }>(
+          `/api/reports/movements?from=${encodeURIComponent(GO_LIVE)}&to=${encodeURIComponent(new Date(Date.now() + 86_400_000).toISOString())}`,
+        ),
+      enabled: selected?.id === "idle",
+    }),
+  );
   // O período lê no servidor: na troca, a prévia anterior fica, a 50% e inert, até a nova chegar (carregamento v2,
   // momento 7, caso 4); a releitura que falha não a apaga, e a troca que falha mostra o aviso no lugar dela.
   const movements = useQuery({
@@ -294,6 +306,7 @@ export default function Reports() {
   // O período da prévia na tela: na troca, ainda o anterior ("Nada neste filtro" diz de qual).
   const periodoNaTela = useRef(period);
   if (!trocando) periodoNaTela.current = period;
+  const idDaLinha = useId();
 
   const stockCounts = useMemo(
     () =>
@@ -371,8 +384,8 @@ export default function Reports() {
     return `dutelog-${selected.file}-${suffix}.csv`;
   };
 
-  // As leituras da prévia: a releitura que falha com ela na tela fica na faixa, e a falha sem ela, no aviso.
-  const leiturasDaPrevia: LeituraQueFalhou[] =
+  // As leituras da prévia: a releitura que falha com ela na tela fica na linha de estado, e a falha sem ela, no aviso.
+  const leiturasDaPrevia: Array<LeituraDaLista & { data?: unknown }> =
     selected.id === "movements"
       ? [movements]
       : selected.id === "requests"
@@ -408,6 +421,9 @@ export default function Reports() {
       <PageHeader
         title="Relatórios"
         description="Escolha um relatório, confira a prévia e baixe a planilha. Ela abre direto no Excel."
+        // A casa do estado da prévia, sob o título, sem empurrar a prévia (a primeira leitura ainda diz "Carregando..."
+        // no lugar dela; parte 13).
+        estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaPrevia} objeto="relatório" primeiraNaLista />}
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[270px_minmax(0,1fr)]">
@@ -522,9 +538,8 @@ export default function Reports() {
             </div>
           ) : null}
 
-          <FaixaDaReleitura leituras={leiturasDaPrevia} className="mx-5 mb-4" />
-
           <div className="flex flex-1 flex-col" {...troca.props}>
+          <ConteudoEmTroca trocando={trocando}>
           {report ? (
             <div className="grid grid-cols-1 border-y border-border/60 sm:grid-cols-3">
               {report.summary.map((entry) => (
@@ -552,6 +567,7 @@ export default function Reports() {
               erro={state.error}
               mensagem={state.error instanceof Error ? state.error.message : "Não foi possível carregar o relatório."}
               className="m-5 mt-0"
+              focoAoSair={idDaLinha}
             />
           ) : report && report.rows.length ? (
             <div className="overflow-x-auto">
@@ -623,6 +639,7 @@ export default function Reports() {
               ) : null}
             </div>
           ) : null}
+          </ConteudoEmTroca>
           </div>
         </section>
       </div>

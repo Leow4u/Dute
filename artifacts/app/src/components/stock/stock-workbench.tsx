@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -32,14 +32,16 @@ type StockPageShellProps = {
   /** Sem título a tela é uma aba de outra (Estoque › Histórico): só as ações. */
   title?: string;
   actions?: ReactNode;
+  /** A linha de estado da lista, sob o título (a `LinhaDeEstado`; carregamento v2, seção 5.3). */
+  estado?: ReactNode;
   children: ReactNode;
 };
 
-export function StockPageShell({ eyebrow, title, actions, children }: StockPageShellProps) {
+export function StockPageShell({ eyebrow, title, actions, estado, children }: StockPageShellProps) {
   return (
     <div className="space-y-6">
       {title ? (
-        <PageHeader title={title} description={eyebrow} actions={actions} />
+        <PageHeader title={title} description={eyebrow} actions={actions} estado={estado} />
       ) : actions ? (
         <div className="flex flex-wrap items-center justify-end gap-3">{actions}</div>
       ) : null}
@@ -181,10 +183,23 @@ export function StockFilterChip({
  * O cartão da tabela. Com `trocando` (a troca de filtro, busca ou página;
  * carregamento v2, momento 7, caso 4), a barra no topo dele até a lista nova
  * chegar; a lista anterior, a 50% e inert, é a da tela (useListaEmTroca).
+ *
+ * Com `pagina`, a página nova que chega com o topo do cartão acima da tela
+ * (a pessoa tocou em "Próximo" no pé de uma página longa) traz o começo dela
+ * à vista, de uma vez: a pessoa lê a página nova do começo, como quando a
+ * lista recolhia.
  */
-export function StockTableCard({ children, trocando }: { children: ReactNode; trocando?: boolean }) {
+export function StockTableCard({ children, trocando, pagina }: { children: ReactNode; trocando?: boolean; pagina?: number }) {
+  const cartao = useRef<HTMLElement>(null);
+  const paginaVista = useRef(pagina);
+  useEffect(() => {
+    if (trocando || pagina === undefined || paginaVista.current === pagina) return;
+    paginaVista.current = pagina;
+    const elemento = cartao.current;
+    if (elemento && elemento.getBoundingClientRect().top < 0) elemento.scrollIntoView({ block: "start" });
+  }, [pagina, trocando]);
   return (
-    <section className="relative overflow-hidden rounded-lg border border-border bg-card">
+    <section ref={cartao} className="relative scroll-mt-4 overflow-hidden rounded-lg border border-border bg-card">
       {trocando !== undefined ? <BarraDaLista ativa={trocando} /> : null}
       {children}
     </section>
@@ -208,6 +223,8 @@ type StockTablePaginationProps = {
    * o foco ficar em quem a pessoa tocou.
    */
   ocupada?: boolean;
+  /** A página não chegou (o aviso está no lugar da lista): sem o "Exibindo 0 de 0", que seria um falso zero. */
+  semContagem?: boolean;
 };
 
 export function StockTablePagination({
@@ -221,23 +238,33 @@ export function StockTablePagination({
   label,
   hasMore,
   ocupada = false,
+  semContagem = false,
 }: StockTablePaginationProps) {
   const canGoNext = hasMore ?? count >= limit;
+  // Na ponta (a primeira ou a última página), o botão fica indisponível com `aria-disabled`, e não `disabled`: o
+  // botão que leva à ponta tem o foco quando ela chega, e o `disabled` o mandaria ao body (2.4.3).
+  const semAnterior = page === 0 || isLoading;
+  const semProximo = !canGoNext || isLoading;
   return (
     <div className="flex flex-col gap-3 border-t border-border/80 bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-sm text-muted-foreground">
-        Exibindo <span className="font-medium text-foreground">{count}</span> de{" "}
-        <span className="font-medium text-foreground">{total}</span> {label}
-      </p>
+      {semContagem ? (
+        <span aria-hidden="true" />
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Exibindo <span className="font-medium text-foreground">{count}</span> de{" "}
+          <span className="font-medium text-foreground">{total}</span> {label}
+        </p>
+      )}
       <div className="flex gap-2">
         <Button
           variant="outline"
           size="sm"
           onClick={() => {
-            if (!ocupada) onPrevious();
+            if (!ocupada && !semAnterior) onPrevious();
           }}
-          disabled={page === 0 || isLoading}
-          aria-disabled={ocupada || undefined}
+          aria-disabled={ocupada || semAnterior || undefined}
+          data-indisponivel={semAnterior || undefined}
+          className="data-[indisponivel]:opacity-50"
         >
           Anterior
         </Button>
@@ -245,10 +272,11 @@ export function StockTablePagination({
           variant="outline"
           size="sm"
           onClick={() => {
-            if (!ocupada) onNext();
+            if (!ocupada && !semProximo) onNext();
           }}
-          disabled={!canGoNext || isLoading}
-          aria-disabled={ocupada || undefined}
+          aria-disabled={ocupada || semProximo || undefined}
+          data-indisponivel={semProximo || undefined}
+          className="data-[indisponivel]:opacity-50"
         >
           Próximo
         </Button>

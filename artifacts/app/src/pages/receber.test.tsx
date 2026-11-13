@@ -250,11 +250,11 @@ describe("histórico de cancelamento", () => {
 /** Sem rede (docs/plataforma/diagnostico-carregamento.md, decisão 2 do celular, de 06/11/2026). */
 describe("Receber sem conexão", () => {
   it("a lista lida fica com a hora; sem nada lido, o aviso; a falta de conexão não troca a lista pelo erro", () => {
-    expect(TELA).toContain("const semRede = semConexaoNaLeitura(ops, requests);");
+    expect(TELA).toContain("const semRede = semConexaoNaLeitura(ops, requestsNaTela);");
     // A lista lida, com a falta: a hora dela fica na linha de estado sob o título (parte 7b), não na faixa que empurra a lista.
     // A troca de cliente também é pedida pela pessoa: passados 5 s, "Atualizando…" (parte 10).
     expect(TELA).toContain('estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando || trocandoDeCliente} resumo={resumo} />}');
-    expect(TELA).toContain("const leiturasDaLista = [ops, requests];");
+    expect(TELA).toContain("const leiturasDaLista = [ops, requestsNaTela];");
     expect(TELA).not.toContain("FaixaSemConexao");
     expect(TELA).not.toContain("Carregando chegadas...");
     // Na primeira leitura, a lista com a forma final, com as linhas-fantasma (parte 8); depois, o aviso, antes do erro
@@ -264,7 +264,9 @@ describe("Receber sem conexão", () => {
     expect(TELA).toContain(": !lendo && semRede && semRede.lidaEm === null ? (");
     expect(TELA.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(TELA.indexOf("<FalhaDasChegadas focoAoSair={idDaLinha}"));
     // Só a leitura sem nada lido troca a lista pelo aviso: a releitura que falha fica na linha de estado (parte 10).
-    expect(TELA).toContain(") : !lendo && ops.error && !ops.data && !semRede ? (");
+    // Os avisos do cliente que não vieram (a troca que falhou) também (a revisão da parte 10).
+    expect(TELA).toContain("const falhaNaTela = !lendo && !semRede && ((Boolean(ops.error) && !ops.data) || avisos.falhou);");
+    expect(TELA).toContain(") : falhaNaTela ? (");
     expect(TELA).toContain("Não consegui carregar as chegadas.");
   });
 });

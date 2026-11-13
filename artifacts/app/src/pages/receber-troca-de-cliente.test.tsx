@@ -38,7 +38,7 @@ const cliente = vi.hoisted(() => {
     },
   };
 });
-const estado = vi.hoisted(() => ({ atrasoDosAvisos: 30 }));
+const estado = vi.hoisted(() => ({ atrasoDosAvisos: 30, avisosQueFalham: new Set<string>() }));
 
 vi.mock("@/lib/auth", () => ({ useAppUser: () => ({ user: { publicMetadata: { role: "admin" } } }) }));
 vi.mock("@/lib/active-customer-context", async () => {
@@ -89,6 +89,10 @@ async function servir(entrada: RequestInfo | URL) {
   const url = new URL(String(entrada), "http://localhost");
   const avisosDoCliente = url.pathname === "/api/customer-requests";
   await new Promise((pronto) => setTimeout(pronto, avisosDoCliente ? estado.atrasoDosAvisos : 30));
+  if (avisosDoCliente && estado.avisosQueFalham.has(url.searchParams.get("customer_code") ?? "")) {
+    const erro = { message: "Falha interna no servidor." };
+    return { ok: false, status: 500, json: async () => erro, text: async () => JSON.stringify(erro) };
+  }
   const corpo = avisosDoCliente
     ? avisos(url.searchParams.get("customer_code") ?? "")
     : url.pathname === "/api/warehouse/ops"
@@ -109,6 +113,7 @@ beforeEach(() => {
   window.localStorage.clear();
   cliente.trocar("BTG");
   estado.atrasoDosAvisos = 30;
+  estado.avisosQueFalham = new Set();
   container = document.createElement("div");
   document.body.append(container);
   consultas = new QueryClient({ defaultOptions: { queries: { retry: false, networkMode: "always", refetchOnWindowFocus: false } } });
@@ -193,5 +198,56 @@ describe("Receber: trocar o cliente mantém a lista anterior", () => {
     vi.useRealTimers();
     const violacoesAntes = await violacoesDeAcessibilidade(antes);
     expect((await violacoesDeAcessibilidade(naTroca)).filter((violacao) => !violacoesAntes.includes(violacao))).toEqual([]);
+  });
+});
+
+describe("Receber: a revisão da troca de cliente", () => {
+  const botao = (texto: string) =>
+    Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((item) => item.textContent?.replace(/\s+/g, " ").trim() === texto);
+  // Só a chegada do armazém tem "Conferir" (o aviso tem "Ver").
+  const conferirDaChegada = () => botao("Conferir");
+
+  it("na troca, só os avisos do cliente anterior ficam inert; a chegada do armazém, que a troca não relê, segue com o toque", async () => {
+    await montar();
+    await passar(500);
+    estado.atrasoDosAvisos = 4_000;
+    await act(async () => cliente.trocar("ITAU"));
+    await passar(300);
+    expect(listaEmTroca()!.textContent).toContain("AV-BTG-1 · Malharia Sul");
+    expect(listaEmTroca()!.textContent).not.toContain("NF 4410");
+    const conferir = conferirDaChegada();
+    expect(conferir).toBeDefined();
+    expect(conferir!.closest("[inert]")).toBeNull();
+    await passar(4_000);
+    expect(listaEmTroca()).toBeNull();
+  });
+
+  it("a troca que falha mostra o aviso no lugar da lista, nunca o vazio; a nova tentativa segue com o aviso, e os avisos do novo chegam", async () => {
+    await montar();
+    await passar(500);
+    estado.avisosQueFalham.add("ITAU");
+    await act(async () => cliente.trocar("ITAU"));
+    await passar(200);
+    expect(container.textContent).toContain("Não consegui carregar as chegadas.");
+    expect(botao("Tentar de novo")).toBeDefined();
+    expect(container.textContent).not.toContain("AV-BTG-1");
+    expect(container.textContent).not.toContain("Para conferir");
+    // O "Em aberto" não conta sem os avisos: fica com o bloco, fora da árvore.
+    expect(container.querySelector('[aria-label="Situação das chegadas"]')?.textContent).not.toMatch(/Em aberto\s*·?\s*\d/);
+    estado.avisosQueFalham.clear();
+    estado.atrasoDosAvisos = 1_000;
+    const tentar = botao("Tentar de novo")!;
+    tentar.focus();
+    await act(async () => tentar.click());
+    await passar(100);
+    // Os avisos do cliente anterior não voltam por baixo: o aviso fica, ocupado e com o foco.
+    expect(container.textContent).toContain("Não consegui carregar as chegadas.");
+    expect(container.textContent).not.toContain("AV-BTG-1");
+    expect(botao("Tentando de novo…")?.getAttribute("aria-disabled")).toBe("true");
+    expect(document.activeElement).toBe(botao("Tentando de novo…"));
+    await passar(1_000);
+    expect(container.textContent).not.toContain("Não consegui carregar as chegadas.");
+    expect(container.textContent).toContain("AV-ITAU-1 · Fornecedor Itaú");
+    expect(document.activeElement).toBe(linha());
   });
 });

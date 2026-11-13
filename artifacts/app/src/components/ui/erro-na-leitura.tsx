@@ -1,11 +1,10 @@
-import { useLayoutEffect, useRef, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { AlertCircle, RefreshCw, WifiOff } from "lucide-react";
 
 import { ArcosDoWifi } from "@/components/ui/arcos-do-wifi";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useAnuncio } from "@/lib/carregando/anunciador";
 import { useConexao, useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
 import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { useEspera } from "@/lib/carregando/use-espera";
@@ -234,7 +233,7 @@ export function FaixaSemConexao({
 }
 
 /** O pedaço da leitura do react-query que a falha da lista precisa. */
-export type LeituraQueFalhou = Pick<UseQueryResult<unknown>, "data" | "error" | "isError" | "isFetching" | "dataUpdatedAt" | "refetch">;
+export type LeituraQueFalhou = Pick<UseQueryResult<unknown>, "error" | "refetch">;
 
 /**
  * A leitura que falhou sem nada da lista dela para mostrar (a primeira, ou a
@@ -242,75 +241,43 @@ export type LeituraQueFalhou = Pick<UseQueryResult<unknown>, "data" | "error" | 
  * falta de conexão, o `BlocoSemConexao`; em outro erro, o `ErroNaLeitura`,
  * com a `mensagem` ("Não consegui carregar os produtos."). "Tentar de novo"
  * relê a leitura.
+ *
+ * "Tentando de novo…" só na nova tentativa que a pessoa pediu: a releitura
+ * automática (o tempo real, o intervalo da tela) não mexe no aviso, que é um
+ * alerta e falaria de novo. Quando a nova tentativa dá certo e o aviso sai
+ * com o foco nele, o foco vai à linha de estado da tela (`focoAoSair`),
+ * nunca ao `body`.
  */
 export function FalhaNaLeitura({
   leitura,
   erro = leitura.error,
   mensagem,
   className,
+  focoAoSair,
 }: {
-  leitura: Pick<LeituraQueFalhou, "error" | "isFetching" | "refetch">;
+  leitura: LeituraQueFalhou;
   /** A falha que fica na tela enquanto tenta de novo (a `useListaComFiltro`): o react-query zera o erro na nova tentativa. */
   erro?: unknown;
   mensagem: string;
   className?: string;
+  /** O id da linha de estado da tela, que recebe o foco quando o aviso sai com ele. */
+  focoAoSair?: string;
 }) {
-  const reler = () => void leitura.refetch();
-  if (ehFaltaDeConexao(erro)) return <BlocoSemConexao tentando={leitura.isFetching} onTentar={reler} className={className} />;
-  return <ErroNaLeitura mensagem={mensagem} tentando={leitura.isFetching} onTentar={reler} className={className} />;
-}
-
-/**
- * A releitura que falhou com a lista na tela, nas telas sem a linha de estado
- * (Relatórios, Fechamento e as telas legadas; carregamento v2, momento 7:
- * "uma releitura com erro nunca apaga a lista"). A lista lida fica, e esta
- * faixa diz de quando ela é: na falta de conexão, a faixa da conexão
- * ("Reconectando… · lista de 10:42" ou "Sem conexão · lista de 10:42"); em
- * outro erro, "Não consegui atualizar · lista de 10:42", com o ícone em
- * crítico. As duas com "Tentar de novo" (toque de 44 px), que relê as
- * leituras da lista. Sem falha com a lista na tela, nada.
- *
- * Não é região viva: a releitura automática não fala. Quando a pessoa tenta
- * de novo e a leitura falha outra vez, o Anunciador diz "Não consegui
- * atualizar".
- */
-export function FaixaDaReleitura({ leituras, className }: { leituras: readonly LeituraQueFalhou[]; className?: string }) {
-  const anunciar = useAnuncio();
-  const comFalha = leituras.filter((leitura) => leitura.isError && leitura.data !== undefined);
-  if (!comFalha.length) return null;
-  const tentando = leituras.some((leitura) => leitura.isFetching);
-  const lidaEm = Math.min(...comFalha.map((leitura) => leitura.dataUpdatedAt));
+  const [tentativas, setTentativas] = useState(0);
+  const montada = useRef(true);
+  useEffect(() => {
+    montada.current = true;
+    return () => {
+      montada.current = false;
+    };
+  }, []);
   const reler = () => {
-    void Promise.all(leituras.map((leitura) => leitura.refetch())).then((resultados) => {
-      if (resultados.some((resultado) => resultado.isError && !ehFaltaDeConexao(resultado.error))) anunciar("Não consegui atualizar");
+    setTentativas((quantas) => quantas + 1);
+    void leitura.refetch().finally(() => {
+      if (montada.current) setTentativas((quantas) => quantas - 1);
     });
   };
-  if (comFalha.some((leitura) => ehFaltaDeConexao(leitura.error))) {
-    return <FaixaSemConexao lidaEm={lidaEm} tentando={tentando} onTentar={reler} className={className} />;
-  }
-  return <FaixaNaoAtualizou lidaEm={lidaEm} tentando={tentando} onTentar={reler} className={className} />;
-}
-
-/** "Não consegui atualizar · lista de 10:42": a releitura falhou por outro motivo que não a conexão. */
-function FaixaNaoAtualizou({ lidaEm, tentando, onTentar, className }: { lidaEm: number; tentando: boolean; onTentar: () => void; className?: string }) {
-  const { mostrando, tentar } = useNovaTentativa(tentando, onTentar);
-  return (
-    <div data-falha="" className={cn("flex flex-wrap items-center gap-x-3 rounded-lg border border-border bg-card py-0.5 pl-4 pr-1 text-sm text-foreground", className)}>
-      <AlertCircle className="size-4 shrink-0 text-destructive" aria-hidden="true" />
-      <span className="flex flex-1 flex-wrap items-baseline gap-x-1.5">
-        <span className="font-bold">Não consegui atualizar</span>
-        <span className="text-xs font-semibold text-muted-foreground">{`· lista de ${horaDaLeitura(lidaEm)}`}</span>
-      </span>
-      <button
-        type="button"
-        aria-disabled={mostrando || undefined}
-        aria-busy={mostrando || undefined}
-        onClick={tentar}
-        className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 font-extrabold underline underline-offset-4 aria-disabled:no-underline"
-      >
-        {mostrando ? <Spinner /> : null}
-        {mostrando ? "Tentando de novo…" : "Tentar de novo"}
-      </button>
-    </div>
-  );
+  const tentando = tentativas > 0;
+  if (ehFaltaDeConexao(erro)) return <BlocoSemConexao tentando={tentando} onTentar={reler} className={className} focoAoSair={focoAoSair} />;
+  return <ErroNaLeitura mensagem={mensagem} tentando={tentando} onTentar={reler} className={className} focoAoSair={focoAoSair} />;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type AnimationEvent } from "react";
+import { memo, useEffect, useMemo, useState, type AnimationEvent, type ReactNode } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 
 import { BarraDeEspera } from "@/components/ui/barra-de-espera";
@@ -51,24 +51,30 @@ export interface PropsDaListaEmTroca {
   onAnimationEnd: (evento: AnimationEvent<HTMLElement>) => void;
 }
 
-/** A animação da chegada da lista nova (index.css): opacidade e 4 px, em 150 ms; no reduzido, só opacidade. */
-const ANIMACAO_DA_CHEGADA = "carregando-chega-linha";
+/**
+ * A animação da chegada da lista nova (index.css): a subida de 4 px, em 150
+ * ms (nada no reduzido); a opacidade volta a 1 por uma transição, de onde a
+ * lista anterior estava.
+ */
+const ANIMACAO_DA_CHEGADA = "carregando-chega-troca";
 
 /**
  * A troca de filtro, mês ou cliente (carregamento v2, momento 7, caso 4):
  * com o `placeholderData` (a lista anterior fica), enquanto a nova não chega,
  * a lista anterior fica a 50% e `inert`, com `aria-busy`, que só vale neste
- * caso. Quem lê a lista ouve que ela está ocupada, e nada nela recebe toque
- * nem foco: a lista é de outro filtro. A barra do topo do cartão
- * (`BarraDaLista`) fica fora deste contêiner ou dentro dele: o CSS esmaece
- * tudo menos o caminho até ela (index.css, `[data-lista-em-troca]`), e ela
- * fica inteira.
+ * caso, como na prancha. Nada nela recebe toque nem foco: a lista é de outro
+ * filtro. O `inert` também a tira da árvore de acessibilidade, e com ela o
+ * `aria-busy` (no Chromium, a lista some para o leitor de tela até a nova
+ * chegar); quem diz que ela está atualizando é a linha de estado, aos 5 s. A
+ * barra do topo do cartão (`BarraDaLista`) fica fora deste contêiner ou
+ * dentro dele: o CSS esmaece tudo menos o caminho até ela (index.css,
+ * `[data-lista-em-troca]`), e ela fica inteira.
  *
- * Na chegada, a lista nova entra por opacidade, subindo 4 px, em 150 ms
- * (`data-chegou`, só opacidade no reduzido), e o atributo sai quando a
- * animação dela termina: no celular lento, o primeiro quadro pintado vem
- * depois do efeito. Sem animação no ambiente (o jsdom), um relógio folgado
- * tira o atributo.
+ * Na chegada, a lista nova volta a 1 da opacidade em que a anterior estava,
+ * subindo 4 px, em 150 ms (`data-chegou`, só opacidade no reduzido): nunca
+ * passa por 0, e a troca rápida não pisca. O atributo sai quando a subida
+ * termina: no celular lento, o primeiro quadro pintado vem depois do efeito.
+ * Sem animação no ambiente (o jsdom), um relógio folgado tira o atributo.
  *
  * O foco fica onde a pessoa tocou (o filtro, o mês, a paginação): eles ficam
  * fora deste contêiner.
@@ -114,3 +120,18 @@ export function BarraDaLista({ ativa }: { ativa: boolean }) {
     </span>
   );
 }
+
+/**
+ * O conteúdo da lista que troca (o corpo da tabela, as linhas): enquanto a
+ * nova não chega, ele fica como estava no último desenho, sem se redesenhar.
+ * A lista na tela é a anterior, `inert`, e nada nela muda até a chegada; o
+ * toque que troca o filtro responde em um quadro, sem refazer a tabela
+ * inteira (antes, o toque redesenhava as 50 linhas duas vezes, e a resposta
+ * passava de 100 ms com a CPU 4× mais lenta). Na chegada, desenha a nova.
+ */
+export const ConteudoEmTroca = memo(
+  function ConteudoEmTroca({ children }: { trocando: boolean; children: ReactNode }) {
+    return <>{children}</>;
+  },
+  (_antes, depois) => depois.trocando,
+);

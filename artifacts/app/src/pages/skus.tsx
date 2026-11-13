@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { type Sku, useListSkus, useCreateSku, useUpdateSku, useDeleteSku, getListSkusQueryKey } from "@workspace/api-client-react";
 import { tamanhoDoCodigo } from "@workspace/dominio";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { FaixaDaReleitura, FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
-import { useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, ArrowRight, Boxes, ClipboardCheck, Edit, Layers, MapPin, PackageCheck, PackagePlus, Plus, Trash2 } from "lucide-react";
@@ -92,6 +93,7 @@ export default function Skus() {
   const { data, isLoading } = leitura;
   const lista = useListaComFiltro(leitura);
   const troca = useListaEmTroca(lista.trocando);
+  const idDaLinha = useId();
 
   const skus = data?.items ?? [];
 
@@ -189,6 +191,8 @@ export default function Skus() {
       title="SKUs e saldos"
       icon={<Layers className="h-6 w-6" />}
       actions={catalogWriter ? <SkuModal /> : undefined}
+      // A casa do estado da lista, sob o título, sem empurrar a lista (a primeira leitura ainda é da tabela; parte 13).
+      estado={<LinhaDeEstado id={idDaLinha} leitura={leitura} objeto="SKUs" primeiraNaLista />}
     >
       {/* "SKUs carregados" era contagem técnica da página, não decisão de
           estoque — o total já aparece na paginação da tabela. */}
@@ -215,29 +219,29 @@ export default function Skus() {
         search={search}
         onSearchChange={setSearch}
         placeholder="Buscar por cod. cliente, SKU interno, produto ou localização"
-        resultText={`${formatStockNumber(filteredSkus.length)} SKU(s) exibido(s) nesta página.`}
+        // A página que não chegou não tem contagem: o aviso está no lugar da lista, e "0" seria um falso zero.
+        resultText={lista.falhou ? undefined : `${formatStockNumber(filteredSkus.length)} SKU(s) exibido(s) nesta página.`}
       >
-        <StockFilterChip active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} count={skus.length}>
+        <StockFilterChip active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} count={lista.falhou ? undefined : skus.length}>
           Todos
         </StockFilterChip>
-        <StockFilterChip active={quickFilter === "baixo"} onClick={() => setQuickFilter("baixo")} count={stats.low}>
+        <StockFilterChip active={quickFilter === "baixo"} onClick={() => setQuickFilter("baixo")} count={lista.falhou ? undefined : stats.low}>
           Baixo estoque
         </StockFilterChip>
-        <StockFilterChip active={quickFilter === "zerado"} onClick={() => setQuickFilter("zerado")} count={stats.zero}>
+        <StockFilterChip active={quickFilter === "zerado"} onClick={() => setQuickFilter("zerado")} count={lista.falhou ? undefined : stats.zero}>
           Zerados
         </StockFilterChip>
-        <StockFilterChip active={quickFilter === "sem-local"} onClick={() => setQuickFilter("sem-local")} count={stats.noLocation}>
+        <StockFilterChip active={quickFilter === "sem-local"} onClick={() => setQuickFilter("sem-local")} count={lista.falhou ? undefined : stats.noLocation}>
           Sem endereço
         </StockFilterChip>
       </StockToolbar>
 
-      <FaixaDaReleitura leituras={[leitura]} />
-
-      <StockTableCard trocando={lista.trocando}>
+      <StockTableCard trocando={lista.trocando} pagina={page}>
           {lista.falhou ? (
-            <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar os SKUs." className="rounded-none border-0" />
+            <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar os SKUs." className="rounded-none border-0" focoAoSair={idDaLinha} />
           ) : (
           <div className="overflow-x-auto" {...troca.props}>
+            <ConteudoEmTroca trocando={lista.trocando}>
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card">
                 <tr>
@@ -335,6 +339,7 @@ export default function Skus() {
                 )}
               </tbody>
             </table>
+            </ConteudoEmTroca>
           </div>
           )}
           
@@ -342,6 +347,7 @@ export default function Skus() {
             page={page}
             isLoading={isLoading}
             ocupada={lista.trocando}
+            semContagem={lista.falhou}
             count={data?.items?.length || 0}
             total={data?.total || 0}
             limit={limit}

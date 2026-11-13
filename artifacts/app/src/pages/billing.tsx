@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   useGetBillingPeriod,
   getGetBillingPeriodQueryKey,
@@ -15,7 +15,8 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Confirmacao } from "@/components/ui/confirmacao";
-import { FaixaDaReleitura, FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { useToast } from "@/hooks/use-toast";
 import { CABECALHO_DO_CLIENTE } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
@@ -121,6 +122,7 @@ export default function Billing() {
   // O mês do que está na tela: na troca, ainda o anterior, que a tela continua dizendo qual é.
   const mesNaTela = useRef(competencia);
   if (!lista.trocando) mesNaTela.current = competencia;
+  const idDaLinha = useId();
   const { data: periodsData } = useListBillingPeriods({
     query: { queryKey: [...getListBillingPeriodsQueryKey(), cliente], enabled: !carregandoCliente },
     request: doCliente,
@@ -291,13 +293,17 @@ export default function Billing() {
         </label>
       </div>
 
+      {/* A casa do estado do mês, logo abaixo dos meses, sempre reservada: "Atualizado às", a troca que passa de 5 s,
+          a releitura que falha e a falta de conexão, sem empurrar o mês (a primeira leitura ainda diz "Calculando…" no
+          lugar dele; parte 13). */}
+      <LinhaDeEstado id={idDaLinha} leitura={leitura} objeto="competência" primeiraNaLista />
+
       {lista.falhou ? (
-        <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem={humanApiError(lista.erro, "Não consegui calcular a competência.")} />
+        <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem={humanApiError(lista.erro, "Não consegui calcular a competência.")} focoAoSair={idDaLinha} />
       ) : isLoading || !data ? (
         <p className="text-sm text-muted-foreground">Calculando {competenciaLabel(competencia)}...</p>
       ) : (
         <>
-        <FaixaDaReleitura leituras={[leitura]} />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]" {...troca.props}>
           <section className="relative overflow-hidden rounded-lg border border-border bg-card">
             <BarraDaLista ativa={lista.trocando} />

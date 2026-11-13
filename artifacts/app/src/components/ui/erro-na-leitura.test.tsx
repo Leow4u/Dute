@@ -9,7 +9,7 @@ import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { conexaoEm } from "@/test/conexao";
 import { textosDaTela } from "@/test/textos";
 
-import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao } from "./erro-na-leitura";
+import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao, FalhaNaLeitura, type LeituraQueFalhou } from "./erro-na-leitura";
 
 /** A tela com o app no estado de conexão pedido. */
 function naConexao(estado: EstadoDaConexao, elemento: ReactElement) {
@@ -247,4 +247,61 @@ describe("a nova tentativa no relógio da espera", () => {
       expect(botao().textContent).toBe("Tentar de novo");
     });
   }
+});
+
+/** O aviso da leitura que falhou sem a lista dela (a primeira, ou a troca de filtro que falhou; carregamento v2, parte 10). */
+describe("a falha na leitura", () => {
+  const falhou = (erro: unknown, refetch: () => Promise<never> = vi.fn(async () => ({}) as never)) =>
+    ({ error: erro, refetch }) as unknown as LeituraQueFalhou;
+
+  it("o aviso no lugar da lista, com Tentar de novo de 44 px, como alerta; textos e axe", async () => {
+    const html = naConexao(
+      "conectado",
+      <FalhaNaLeitura leitura={falhou(new Error("Falha interna no servidor."))} mensagem="Não consegui carregar os produtos." />,
+    );
+    expect(textosDaTela(html)).toEqual(["Não consegui carregar os produtos.", "Tentar de novo"]);
+    expect(html).toContain('role="alert"');
+    expect(html).toMatch(/<button[^>]*class="[^"]*min-h-11/);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("na falta de conexão, o bloco da conexão, sem alerta", async () => {
+    const semRede = Object.assign(new Error("Sem conexão."), { code: "sem_conexao" });
+    const html = naConexao("sem-conexao", <FalhaNaLeitura leitura={falhou(semRede)} mensagem="Não consegui carregar os produtos." />);
+    expect(textosDaTela(html)).toEqual(["Sem conexão.", "Tentar de novo"]);
+    expect(html).not.toContain('role="alert"');
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("Tentando de novo… só na nova tentativa que a pessoa pediu, até a leitura responder; ocupado, não desabilitado; axe", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    let responder: () => void = () => undefined;
+    const refetch = vi.fn(() => new Promise<never>((pronto) => (responder = () => pronto(undefined as never))));
+    const container = document.createElement("div");
+    document.body.append(container);
+    const raiz: Root = createRoot(container);
+    act(() =>
+      raiz.render(
+        <ProvedorDaConexao value={conexaoEm("conectado")}>
+          <FalhaNaLeitura leitura={falhou(new Error("Falha interna no servidor."), refetch)} mensagem="Não consegui carregar os produtos." />
+        </ProvedorDaConexao>,
+      ),
+    );
+    const botao = container.querySelector("button")!;
+    expect(botao.textContent).toBe("Tentar de novo");
+    await act(async () => botao.click());
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(textosDaTela(container.innerHTML)).toEqual(["Não consegui carregar os produtos.", "Tentando de novo…"]);
+    expect(botao.hasAttribute("disabled")).toBe(false);
+    expect(botao.getAttribute("aria-disabled")).toBe("true");
+    expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
+    // O toque repetido, com a leitura a caminho, não lê de novo.
+    await act(async () => botao.click());
+    expect(refetch).toHaveBeenCalledTimes(1);
+    await act(async () => responder());
+    expect(botao.textContent).toBe("Tentar de novo");
+    act(() => raiz.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  });
 });

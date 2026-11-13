@@ -32,7 +32,7 @@ import { useContagemLembrada, type ContagensDaLista } from "@/lib/carregando/con
 import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { resumoDaLista } from "@/lib/carregando/resumo-da-lista";
 import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
-import { BarraDaLista, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
+import { BarraDaLista, ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { canOperateWarehouse } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -139,7 +139,14 @@ export default function Receber() {
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
   });
-  const trocandoDeCliente = requests.isPlaceholderData;
+  // A troca de cliente que falha (os avisos do novo não vieram) mostra o aviso no lugar da lista, também na nova
+  // tentativa (o react-query voltaria os avisos do cliente anterior por baixo): erro nunca vira vazio. Sem as filas
+  // lidas, a nova tentativa volta à primeira leitura, com as linhas-fantasma, como sempre.
+  const avisos = useListaComFiltro(requests);
+  const trocandoDeCliente = avisos.trocando;
+  const requestsNaTela = avisos.falhou && ops.data !== undefined
+    ? { ...requests, data: undefined, error: avisos.erro as Error, isError: true, isLoading: false, isPlaceholderData: false, dataUpdatedAt: 0 }
+    : requests;
   // Os avisos na tela são do cliente da leitura: na troca, ainda os do anterior, que somem com a lista dele.
   const clienteDosAvisos = useRef(customerCode);
   if (!trocandoDeCliente) clienteDosAvisos.current = customerCode;
@@ -221,17 +228,18 @@ export default function Receber() {
   // Sem rede, a lista que já estava fica, com a hora da leitura; sem nada
   // lido, o aviso. A falta de conexão não troca a lista pelo erro
   // (decisão 2 do celular).
-  const semRede = semConexaoNaLeitura(ops, requests);
-  const recarregar = () => {
-    refresh();
-    void queryClient.invalidateQueries({ queryKey: ["customer-requests", "receber"] });
-  };
+  const semRede = semConexaoNaLeitura(ops, requestsNaTela);
+  const recarregar = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] }),
+      queryClient.invalidateQueries({ queryKey: ["customer-requests", "receber"] }),
+    ]);
   const openCount = pendingNotices.length + board.check.length + board.guardando.length + board.store.length;
   // A linha de estado sob o título e o Atualizar (carregamento v2, parte 7b):
   // a releitura automática de 60 s não mostra nada; o Atualizar só mostra a
   // espera quando a pessoa toca nele; a volta do app ao primeiro plano relê
   // com a barra no topo do primeiro cartão.
-  const leiturasDaLista = [ops, requests];
+  const leiturasDaLista = [ops, requestsNaTela];
   const atualizarLista = useAtualizarLista(leiturasDaLista);
   const troca = useListaEmTroca(trocandoDeCliente);
   const barraDoTopo = <BarraDaLista ativa={atualizarLista.voltando || trocandoDeCliente} />;
@@ -247,6 +255,10 @@ export default function Receber() {
   if (!listaJaLida && ops.data && (requests.data || requests.isError)) setListaJaLida(true);
   const lendo = !listaJaLida && !ops.isError && (ops.isLoading || requests.isLoading);
   const idDaLinha = useId();
+  // O aviso no lugar da lista: sem nada lido das filas, ou sem os avisos do cliente (a troca que falhou). A contagem
+  // do "Em aberto" fica com o bloco: sem a lista, ela seria um falso número.
+  const falhaNaTela = !lendo && !semRede && ((Boolean(ops.error) && !ops.data) || avisos.falhou);
+  const semAListaNaTela = falhaNaTela || (!lendo && semRede !== null && semRede.lidaEm === null);
   // A contagem lembrada é do cliente que a tela vai operar: na abertura, antes de a lista dos clientes chegar, o
   // escolhido neste aparelho. Só grava com o cliente confirmado e os avisos dele lidos.
   const contagensLidas: ContagensDaLista | null =
@@ -284,7 +296,9 @@ export default function Receber() {
             ],
             "Nenhuma chegada em aberto",
           );
-  const listaOcupada = lendo ? { "aria-busy": true, "aria-describedby": idDaLinha } : troca.props;
+  // Na troca de cliente, só os avisos são do cliente anterior: eles ficam a 50% e inert, e as chegadas e guardas do
+  // armazém, que a troca não relê, seguem com o toque.
+  const listaOcupada = lendo ? { "aria-busy": true, "aria-describedby": idDaLinha } : {};
 
   const taskPanel = selectedNotice ? (
     <NoticeCard notice={selectedNotice} />
@@ -391,7 +405,7 @@ export default function Receber() {
               aria-label="Situação das chegadas"
               cheioNoCelular
               options={[
-                { value: "open", label: "Em aberto", count: lendo ? null : openCount },
+                { value: "open", label: "Em aberto", count: lendo || semAListaNaTela ? null : openCount },
                 { value: "done", label: "Recebidos" },
                 { value: "cancelled", label: "Cancelados" },
               ]}
@@ -411,7 +425,7 @@ export default function Receber() {
           na forma final, com as linhas-fantasma. */}
       {fichaLarga ? <section aria-label="Bancada de conferência" className="min-w-0">{panel}</section> : !lendo && semRede && semRede.lidaEm === null ? (
         <BlocoSemConexao tentando={ops.isFetching || requests.isFetching} onTentar={recarregar} focoAoSair={idDaLinha} />
-      ) : !lendo && ops.error && !ops.data && !semRede ? (
+      ) : falhaNaTela ? (
         <FalhaDasChegadas focoAoSair={idDaLinha} onTentar={recarregar} />
       ) : (
         <div
@@ -449,6 +463,9 @@ export default function Receber() {
                   barraDoTopo={barraDoTopo}
                   carregando={fantasmas("conferir", 0)}
                 >
+                  {pendingNotices.length ? (
+                  <div className="divide-y divide-border/60" {...troca.props}>
+                  <ConteudoEmTroca trocando={trocandoDeCliente}>
                   {pendingNotices.map((notice) => (
                     <QueueRow
                       key={notice.id}
@@ -476,6 +493,9 @@ export default function Receber() {
                       }
                     />
                   ))}
+                  </ConteudoEmTroca>
+                  </div>
+                  ) : null}
                   {board.check.map((entry) => (
                     <QueueRow
                       key={entry.task.id}
@@ -752,21 +772,42 @@ function TaskPanel({
  * nova tentativa é pedida pela pessoa (a linha de estado fala de novo), e o
  * foco vai à linha de estado quando o aviso sai da tela.
  */
-function FalhaDasChegadas({ focoAoSair, onTentar }: { focoAoSair: string; onTentar: () => void }) {
+/**
+ * As chegadas não vieram (as filas, ou os avisos do cliente): o aviso no lugar
+ * da lista, com "Tentar de novo". Na nova tentativa que não tira o aviso da
+ * tela (os avisos do cliente), o botão diz "Tentando de novo…", ocupado e não
+ * desabilitado; quando o aviso sai com o foco nele, o foco vai à linha de
+ * estado.
+ */
+function FalhaDasChegadas({ focoAoSair, onTentar }: { focoAoSair: string; onTentar: () => Promise<unknown> }) {
   const raiz = useRef<HTMLParagraphElement>(null);
   useFocoAoSair(raiz, focoAoSair);
+  const [tentando, setTentando] = useState(false);
+  const montada = useRef(true);
+  useEffect(() => {
+    montada.current = true;
+    return () => {
+      montada.current = false;
+    };
+  }, []);
   return (
     <p ref={raiz} className="text-sm text-destructive">
       Não consegui carregar as chegadas.{" "}
       <button
         type="button"
-        className="font-medium underline"
+        className="font-medium underline aria-disabled:no-underline"
+        aria-disabled={tentando || undefined}
+        aria-busy={tentando || undefined}
         onClick={() => {
+          if (tentando) return;
           marcarPedidoDaPessoa();
-          onTentar();
+          setTentando(true);
+          void onTentar().finally(() => {
+            if (montada.current) setTentando(false);
+          });
         }}
       >
-        Tentar de novo
+        {tentando ? "Tentando de novo…" : "Tentar de novo"}
       </button>
     </p>
   );
