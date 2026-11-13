@@ -13,6 +13,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogCancelar,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -475,12 +476,11 @@ export default function Documents() {
 
       <Dialog
         open={adding}
-        onOpenChange={(open) => {
-          // O envio que anda segura o diálogo.
-          if (!enviandoDocumento) setAdding(open);
-        }}
+        // O envio que anda segura o diálogo.
+        ocupado={enviandoDocumento}
+        onOpenChange={setAdding}
       >
-        <DialogContent className="sm:max-w-[480px]" fecharTravado={enviandoDocumento}>
+        <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Adicionar documento</DialogTitle>
             <DialogDescription>
@@ -587,16 +587,7 @@ export default function Documents() {
             {estadoDoDocumento === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              aria-disabled={enviandoDocumento || undefined}
-              className={enviandoDocumento ? "min-h-11 opacity-45 hover:bg-card active:bg-card" : "min-h-11"}
-              onClick={() => {
-                if (!enviandoDocumento) setAdding(false);
-              }}
-            >
-              Cancelar
-            </Button>
+            <DialogCancelar className="min-h-11" onClick={() => setAdding(false)} />
             <BotaoDeAcao
               type="submit"
               form="document-form"

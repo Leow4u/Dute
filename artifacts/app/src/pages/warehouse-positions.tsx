@@ -5,9 +5,10 @@ import { useLocation } from "wouter";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Confirmacao } from "@/components/ui/confirmacao";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/page-header";
@@ -624,7 +625,7 @@ export default function WarehousePositionsPage() {
         </div>
       ) : null}
 
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+      <Dialog open={formOpen} ocupado={save.isPending} onOpenChange={setFormOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <form onSubmit={submitForm} className="flex flex-col gap-4">
             <DialogHeader>
@@ -696,18 +697,19 @@ export default function WarehousePositionsPage() {
               <Textarea id="pos-notes" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} rows={2} maxLength={500} placeholder="Ex.: prateleira avariada, medida a confirmar" />
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={save.isPending}>
-                {editing ? "Salvar posição" : "Cadastrar posição"}
-              </Button>
+              <DialogCancelar />
+              <BotaoDeAcao
+                type="submit"
+                estado={save.isPending ? "andamento" : "repouso"}
+                rotulo={editing ? "Salvar posição" : "Cadastrar posição"}
+                andamento={editing ? "Salvando…" : "Cadastrando…"}
+              />
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={aisleOpen} onOpenChange={setAisleOpen}>
+      <Dialog open={aisleOpen} ocupado={createAisle.isPending} onOpenChange={setAisleOpen}>
         <DialogContent className="sm:max-w-lg">
           <form onSubmit={submitAisle} className="flex flex-col gap-4">
             <DialogHeader>
@@ -752,18 +754,14 @@ export default function WarehousePositionsPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setAisleOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={createAisle.isPending}>
-                Cadastrar rua
-              </Button>
+              <DialogCancelar />
+              <BotaoDeAcao type="submit" estado={createAisle.isPending ? "andamento" : "repouso"} rotulo="Cadastrar rua" andamento="Cadastrando…" />
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={zoneOpen} onOpenChange={setZoneOpen}>
+      <Dialog open={zoneOpen} ocupado={save.isPending} onOpenChange={setZoneOpen}>
         <DialogContent className="sm:max-w-md">
           <form onSubmit={submitZone} className="flex flex-col gap-4">
             <DialogHeader>
@@ -790,12 +788,8 @@ export default function WarehousePositionsPage() {
               <CustomerSelect id="zone-customer" value={zoneCustomer} onChange={setZoneCustomer} customers={customers} />
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setZoneOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={save.isPending || !zoneAisle}>
-                Aplicar à rua
-              </Button>
+              <DialogCancelar />
+              <BotaoDeAcao type="submit" estado={save.isPending ? "andamento" : "repouso"} rotulo="Aplicar à rua" andamento="Aplicando…" bloqueado={!save.isPending && !zoneAisle} />
             </DialogFooter>
           </form>
         </DialogContent>

@@ -71,6 +71,8 @@ describe("o que voltou do pedido", () => {
       "Observação",
       "Voltar",
       "Receber",
+      "Recebendo…",
+      "Conferir",
       "Fechar",
     ]);
     expect(dialogo.textContent).not.toContain("· U");

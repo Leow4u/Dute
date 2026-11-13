@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, ArrowRight, Boxes, ClipboardCheck, Edit, Layers, MapPin, PackageCheck, PackagePlus, Plus, Trash2 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { Dialog, DialogCancelar, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
 import { useAppUser } from "@/lib/auth";
@@ -442,7 +443,7 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} ocupado={createSku.isPending || updateSku.isPending} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger ? trigger : isEdit ? (
           <Button variant="ghost" size="icon" className="h-8 w-8 text-info-soft-foreground hover:text-info-soft-foreground hover:bg-info-soft">
@@ -583,10 +584,8 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
           </div>
 
           <DialogFooter className="pt-4 border-t border-border">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button type="submit" disabled={createSku.isPending || updateSku.isPending}>
-              {createSku.isPending || updateSku.isPending ? "Salvando..." : "Salvar SKU"}
-            </Button>
+            <DialogCancelar />
+            <BotaoDeAcao type="submit" estado={createSku.isPending || updateSku.isPending ? "andamento" : "repouso"} rotulo="Salvar SKU" andamento="Salvando…" />
           </DialogFooter>
         </form>
       </DialogContent>
@@ -621,7 +620,7 @@ export function DeleteSkuButton({ id, cod_btg, trigger }: { id: number, cod_btg:
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} ocupado={deleteSku.isPending} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger ?? (
           <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive-soft-foreground hover:text-destructive-soft-foreground hover:bg-destructive-soft">
@@ -640,10 +639,8 @@ export function DeleteSkuButton({ id, cod_btg, trigger }: { id: number, cod_btg:
           </p>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-          <Button type="button" variant="destructive" onClick={onDelete} disabled={deleteSku.isPending}>
-            {deleteSku.isPending ? "Arquivando..." : "Arquivar"}
-          </Button>
+          <DialogCancelar />
+          <BotaoDeAcao variant="destructive" estado={deleteSku.isPending ? "andamento" : "repouso"} rotulo="Arquivar" andamento="Arquivando…" onClick={onDelete} />
         </DialogFooter>
       </DialogContent>
     </Dialog>

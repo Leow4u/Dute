@@ -55,6 +55,7 @@ import { ExceptionDialog, useWarehouseTaskActions } from "@/features/warehouse-o
 import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
 import {
   Dialog,
+  DialogCancelar,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -643,6 +644,12 @@ export default function Pedidos() {
 
   // Aprovar e recusar ficam de fora: cada linha de "Para aprovar" tem o próprio estado.
   const busy = deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
+  /** A ação do diálogo aberto que ainda grava: nada fecha o diálogo até ela acabar (parte 13a). */
+  const dialogoOcupado =
+    (dialog?.kind === "deliver" && entregaOcupada) ||
+    (dialog?.kind === "cancel" && cancelar.isPending) ||
+    (dialog?.kind === "entrega" && salvarEntrega.isPending) ||
+    (dialog?.kind === "reject" && linhas.estado(dialog.request.id, "recusar") === "andamento");
   /**
    * O diálogo devolve o foco à linha que o abriu (2.4.3), no lugar do corpo
    * da página, onde o Radix o poria sem DialogTrigger. Com a linha ainda na
@@ -965,12 +972,14 @@ export default function Pedidos() {
 
       <Dialog
         open={dialog !== null}
+        // A ação que grava segura o diálogo: a entrega que anda (ou confere), o
+        // cancelamento, a entrega que salva e a recusa em andamento.
+        ocupado={dialogoOcupado}
         onOpenChange={(open) => {
-          // A entrega que anda (ou confere) segura o diálogo: fechar não para as etapas.
-          if (!open && !(dialog?.kind === "deliver" && entregaOcupada)) fecharEntregaOuDialogo();
+          if (!open) fecharEntregaOuDialogo();
         }}
       >
-        <DialogContent className={larguraDoDialogo} aria-describedby={undefined} onCloseAutoFocus={devolverFocoDoDialogo} fecharTravado={dialog?.kind === "deliver" && entregaOcupada}>
+        <DialogContent className={larguraDoDialogo} aria-describedby={undefined} onCloseAutoFocus={devolverFocoDoDialogo}>
           {dialog?.kind === "reject" ? (
             <>
               <DialogHeader>
@@ -986,9 +995,7 @@ export default function Pedidos() {
                 />
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  Voltar
-                </Button>
+                <DialogCancelar onClick={() => setDialog(null)}>Voltar</DialogCancelar>
                 <BotaoDeAcao
                   variant="destructive"
                   estado={linhas.estado(dialog.request.id, "recusar")}
@@ -1054,17 +1061,9 @@ export default function Pedidos() {
                 {estadoDaEntrega === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
               </div>
               <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  aria-disabled={entregaOcupada || undefined}
-                  className={entregaOcupada ? "min-h-11 opacity-45 hover:bg-card active:bg-card" : "min-h-11"}
-                  onClick={() => {
-                    if (!entregaOcupada) fecharEntregaOuDialogo();
-                  }}
-                >
+                <DialogCancelar className="min-h-11" onClick={fecharEntregaOuDialogo}>
                   Voltar
-                </Button>
+                </DialogCancelar>
                 <BotaoDeAcao
                   className="min-h-11"
                   estado={conferindoEntrega ? "andamento" : estadoDaEntrega}
@@ -1101,17 +1100,15 @@ export default function Pedidos() {
                 }}
               />
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  Voltar
-                </Button>
-                <Button
-                  type="button"
+                <DialogCancelar onClick={() => setDialog(null)}>Voltar</DialogCancelar>
+                <BotaoDeAcao
                   variant="destructive"
-                  disabled={!motivoValido(cancelReason) || busy}
+                  estado={cancelar.isPending ? "andamento" : "repouso"}
+                  rotulo="Cancelar pedido"
+                  andamento="Cancelando…"
+                  bloqueado={!cancelar.isPending && (!motivoValido(cancelReason) || busy)}
                   onClick={() => cancelar.mutate({ orderId: dialog.orderId, reason: cancelReason.trim() })}
-                >
-                  {cancelar.isPending ? "Cancelando..." : "Cancelar pedido"}
-                </Button>
+                />
               </DialogFooter>
             </>
           ) : dialog?.kind === "entrega" && entregaForm ? (
@@ -1146,12 +1143,15 @@ export default function Pedidos() {
                 </p>
               ) : null}
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  Voltar
-                </Button>
-                <Button type="submit" form="entrega-do-pedido" disabled={busy}>
-                  {salvarEntrega.isPending ? "Salvando..." : entregaForm.modo === "dutelog" ? "Salvar e abrir na Operação" : "Salvar entrega"}
-                </Button>
+                <DialogCancelar onClick={() => setDialog(null)}>Voltar</DialogCancelar>
+                <BotaoDeAcao
+                  type="submit"
+                  form="entrega-do-pedido"
+                  estado={salvarEntrega.isPending ? "andamento" : "repouso"}
+                  rotulo={entregaForm.modo === "dutelog" ? "Salvar e abrir na Operação" : "Salvar entrega"}
+                  andamento="Salvando…"
+                  bloqueado={!salvarEntrega.isPending && busy}
+                />
               </DialogFooter>
             </>
           ) : null}

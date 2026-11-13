@@ -40,7 +40,8 @@ describe("Pedidos na v3", () => {
     expect(FONTE).toContain("decider && pedidoCancelavel(order) ? (");
     expect(FONTE.match(/menu=\{menuDo\(order\)\}/g)).toHaveLength(2);
     expect(FONTE).toContain("aria-label={`Mais ações do pedido ${order.orderNumber}`}");
-    expect(FONTE).toMatch(/disabled=\{!motivoValido\(cancelReason\) \|\| busy\}/);
+    // O Cancelar pedido é o BotaoDeAcao: travado sem motivo, e nunca disabled no meio da ação (parte 13a).
+    expect(FONTE).toMatch(/bloqueado=\{!cancelar\.isPending && \(!motivoValido\(cancelReason\) \|\| busy\)\}/);
   });
 
   it("Separar abre a bancada do pedido, e Continuar depois da primeira linha; a fila não conclui mais a separação (separação com caixas, parte 2)", () => {

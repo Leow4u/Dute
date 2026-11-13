@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, RefreshCw, Settings2 } from "lucide-react";
 
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { formatMoney } from "@/lib/system-dashboard";
 import {
@@ -315,7 +316,7 @@ function BillingTableDialog({ current, onClose }: { current: string | null; onCl
     onError: (error: Error) => toast({ title: "Não consegui salvar", description: error.message, variant: "destructive" }),
   });
   return (
-    <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
+    <Dialog open ocupado={save.isPending} onOpenChange={(open) => (!open ? onClose() : undefined)}>
       <DialogContent className="max-w-lg bg-card">
         <DialogHeader>
           <DialogTitle>Tabela do faturamento</DialogTitle>
@@ -336,17 +337,8 @@ function BillingTableDialog({ current, onClose }: { current: string | null; onCl
           <span className="text-xs font-normal text-muted-foreground">Deixe em branco para esconder o custo real.</span>
         </label>
         <DialogFooter className="gap-2">
-          <button type="button" onClick={onClose} className="rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
-            Cancelar
-          </button>
-          <button
-            type="button"
-            disabled={save.isPending}
-            onClick={() => save.mutate()}
-            className="rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background hover:bg-foreground/85 disabled:opacity-50"
-          >
-            {save.isPending ? "Salvando…" : "Salvar"}
-          </button>
+          <DialogCancelar className="rounded-xl" onClick={onClose} />
+          <BotaoDeAcao tinta className="rounded-xl" estado={save.isPending ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando…" onClick={() => save.mutate()} />
         </DialogFooter>
       </DialogContent>
     </Dialog>

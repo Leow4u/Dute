@@ -4,7 +4,8 @@ import { collection, query, where } from "firebase/firestore";
 import { Undo2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { QueueGroup, QueueRow } from "@/components/ui/queue-list";
@@ -79,7 +80,7 @@ export function RetornosView({ retornos, aberto, acoes, somenteConsulta = false 
           />
         ))}
       </QueueGroup>
-      <Dialog open={aberto !== null} onOpenChange={(open) => !open && acoes.fechar()}>
+      <Dialog open={aberto !== null} ocupado={aberto?.enviando ?? false} onOpenChange={(open) => !open && acoes.fechar()}>
         <DialogContent className="sm:max-w-[520px]">
           {aberto ? (
             <>
@@ -117,12 +118,14 @@ export function RetornosView({ retornos, aberto, acoes, somenteConsulta = false 
                 </p>
               ) : null}
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={acoes.fechar}>
-                  Voltar
-                </Button>
-                <Button type="button" disabled={aberto.enviando || aberto.linhas === null} onClick={acoes.receber}>
-                  {aberto.enviando ? "Recebendo..." : "Receber"}
-                </Button>
+                <DialogCancelar onClick={acoes.fechar}>Voltar</DialogCancelar>
+                <BotaoDeAcao
+                  estado={aberto.enviando ? "andamento" : "repouso"}
+                  rotulo="Receber"
+                  andamento="Recebendo…"
+                  bloqueado={!aberto.enviando && aberto.linhas === null}
+                  onClick={acoes.receber}
+                />
               </DialogFooter>
             </>
           ) : null}

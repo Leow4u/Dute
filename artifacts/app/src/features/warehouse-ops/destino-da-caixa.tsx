@@ -4,7 +4,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { Dialog, DialogCancelar, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Segmented } from "@/components/ui/segmented";
@@ -202,7 +203,7 @@ export type RecusaDaPrateleiraProps = {
 /** "Não cabe aqui": o motivo, e a prateleira sai da escolha desta caixa. */
 export function RecusaDaPrateleira({ prateleira, caixa, detalhe, enviando, acao = "Recusar", onCancelar, onRecusar }: RecusaDaPrateleiraProps) {
   return (
-    <Dialog open={Boolean(prateleira)} onOpenChange={(aberto) => (aberto ? undefined : onCancelar())}>
+    <Dialog open={Boolean(prateleira)} ocupado={enviando} onOpenChange={(aberto) => (aberto ? undefined : onCancelar())}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Não cabe em {prateleira}</DialogTitle>
@@ -253,12 +254,14 @@ export function RecusaDaPrateleiraConteudo({
         <Input id="nao-cabe-motivo" maxLength={300} value={motivo} onChange={(event) => setMotivo(event.target.value)} />
       </div>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancelar}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={!motivo.trim() || enviando}>
-          {acao} {prateleira}
-        </Button>
+        <DialogCancelar ocupado={enviando} onClick={onCancelar} />
+        <BotaoDeAcao
+          type="submit"
+          estado={enviando ? "andamento" : "repouso"}
+          rotulo={`${acao} ${prateleira}`}
+          andamento={acao === "Liberar" ? "Liberando…" : "Recusando…"}
+          bloqueado={!enviando && !motivo.trim()}
+        />
       </div>
     </form>
   );

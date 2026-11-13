@@ -39,7 +39,14 @@ function corpo(quantidade: string, motivo: string) {
   );
 }
 
-const abrir = (html: string) => html.match(/<button[^>]*>Abrir a guarda<\/button>/)?.[0] ?? "";
+/** A abertura do <button> "Abrir a guarda" (o BotaoDeAcao, pela camada atual). */
+const abrir = (html: string) =>
+  html
+    .split("<button")
+    .slice(1)
+    .map((parte) => `<button${parte.slice(0, parte.indexOf("</button>") + "</button>".length)}`)
+    .find((botao) => botao.includes(">Abrir a guarda<"))
+    ?.match(/^<button[^>]*>/)?.[0] ?? "";
 
 describe("o diálogo Guardar do RECEBIMENTO", () => {
   it("mostra o livre na área, as guardas abertas e o que está sem guarda", () => {
@@ -47,13 +54,14 @@ describe("o diálogo Guardar do RECEBIMENTO", () => {
     expect(html).toContain("Livre no RECEBIMENTO</th>");
     expect(html).toMatch(/Em guardas abertas<\/th><td[^>]*>6<\/td>/);
     expect(html).toMatch(/Sem guarda<\/th><td[^>]*>24<\/td>/);
-    expect(abrir(html)).not.toContain('disabled=""');
+    expect(abrir(html)).not.toContain("aria-disabled");
   });
 
-  it("Abrir a guarda só com a quantidade até o sem guarda e o motivo", () => {
-    expect(abrir(corpo("25", "Contagem achou no RECEBIMENTO"))).toContain('disabled=""');
-    expect(abrir(corpo("24", ""))).toContain('disabled=""');
-    expect(abrir(corpo("", "Contagem achou no RECEBIMENTO"))).toContain('disabled=""');
+  it("Abrir a guarda só com a quantidade até o sem guarda e o motivo: travado com aria-disabled, nunca disabled", () => {
+    for (const [quantidade, motivo] of [["25", "Contagem achou no RECEBIMENTO"], ["24", ""], ["", "Contagem achou no RECEBIMENTO"]]) {
+      expect(abrir(corpo(quantidade, motivo))).toContain('aria-disabled="true"');
+      expect(abrir(corpo(quantidade, motivo))).not.toContain('disabled=""');
+    }
   });
 
   it("mostra só rótulos, dados e ações e passa no axe", async () => {
@@ -72,6 +80,8 @@ describe("o diálogo Guardar do RECEBIMENTO", () => {
         "Motivo",
         "Cancelar",
         "Abrir a guarda",
+        "Abrindo…",
+        "Conferir",
       ]),
     ).toEqual([]);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);

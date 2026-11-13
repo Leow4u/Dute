@@ -305,24 +305,16 @@ export function MarcarClienteDialog({
   onConfirmar,
 }: BaseProps & { cadastro: CadastroComercial | null; onConfirmar: () => void }) {
   return (
-    <AlertDialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <AlertDialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <AlertDialogContent className="v3">
         <AlertDialogHeader>
           <AlertDialogTitle>Marcar {cadastro?.nome ?? ""} como cliente?</AlertDialogTitle>
         </AlertDialogHeader>
         <Erro erro={erro} />
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={ocupado}>Cancelar</AlertDialogCancel>
-          <AlertDialogAction
-            disabled={ocupado}
-            onClick={(event) => {
-              // A página fecha o diálogo quando a callable responde.
-              event.preventDefault();
-              onConfirmar();
-            }}
-          >
-            {ocupado ? "Salvando..." : "Marcar como cliente"}
-          </AlertDialogAction>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          {/* A página fecha o diálogo quando a callable responde. */}
+          <AlertDialogAction estado={ocupado ? "andamento" : "repouso"} rotulo="Marcar como cliente" andamento="Salvando…" onClick={onConfirmar} />
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

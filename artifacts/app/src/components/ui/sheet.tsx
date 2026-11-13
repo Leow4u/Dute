@@ -2,12 +2,16 @@
 
 import * as React from 'react';
 import * as SheetPrimitive from '@radix-ui/react-dialog';
+import { BotaoFecharDoPainel, Dialog, useConteudoEmAcao } from '@/components/ui/dialog';
 import { useNaV3 } from '@/lib/na-v3';
 import { cn } from '@/lib/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { X } from 'lucide-react';
 
-const Sheet = SheetPrimitive.Root;
+/**
+ * O painel é um diálogo: o `ocupado` da raiz o segura enquanto a ação grava
+ * (carregamento v2, parte 13a), e o X tem 44 px no celular.
+ */
+const Sheet = Dialog;
 
 const SheetTrigger = SheetPrimitive.Trigger;
 
@@ -51,25 +55,28 @@ const sheetVariants = cva(
 
 interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
-    VariantProps<typeof sheetVariants> {}
+    VariantProps<typeof sheetVariants> {
+  /** O lugar do foco quando o controle que abriu o painel saiu da tela. Sem ele, o título da página. */
+  focoAoFechar?: () => HTMLElement | null | undefined;
+}
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = 'right', className, children, ...props }, ref) => {
+>(({ side = 'right', className, children, onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, onInteractOutside, focoAoFechar, ...props }, ref) => {
   const naV3 = useNaV3();
+  const { travado, travas } = useConteudoEmAcao({ onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, onInteractOutside, focoAoFechar });
   return (
     <SheetPortal>
       <SheetOverlay />
       <SheetPrimitive.Content
         ref={ref}
         className={cn(sheetVariants({ side }), naV3 && 'v3', className)}
+        data-ocupado={travado ? '' : undefined}
         {...props}
+        {...travas}
       >
-        <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Fechar</span>
-        </SheetPrimitive.Close>
+        <BotaoFecharDoPainel travado={travado} className="right-4 top-4 z-10 max-md:right-2 max-md:top-2" />
         {children}
       </SheetPrimitive.Content>
     </SheetPortal>

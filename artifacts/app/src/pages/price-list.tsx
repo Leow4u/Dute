@@ -11,6 +11,7 @@ import {
   type PriceListItem,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogCancelar, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Confirmacao } from "@/components/ui/confirmacao";
 import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
@@ -263,7 +264,7 @@ export default function PriceList() {
         )}
       </section>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} ocupado={create.isPending || update.isPending} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editId != null ? "Editar item" : "Novo item"}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
@@ -317,8 +318,8 @@ export default function PriceList() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={create.isPending || update.isPending}>Salvar</Button>
+            <DialogCancelar />
+            <BotaoDeAcao estado={create.isPending || update.isPending ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando…" onClick={handleSubmit} />
           </DialogFooter>
         </DialogContent>
       </Dialog>

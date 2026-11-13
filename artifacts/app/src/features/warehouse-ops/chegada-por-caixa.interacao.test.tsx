@@ -287,8 +287,9 @@ async function esperar(condicao: () => boolean, oQue: string) {
 }
 
 function botao(texto: string) {
+  // O texto inteiro, ou a camada atual do BotaoDeAcao (o confirmar dos diálogos, parte 13a).
   const achado = [...document.querySelectorAll("button")].find(
-    (elemento) => elemento.textContent?.trim() === texto,
+    (elemento) => elemento.textContent?.trim() === texto || elemento.querySelector(".botao-acao-camada[data-atual]")?.textContent?.trim() === texto,
   );
   if (!achado) throw new Error(`Sem o botão ${texto}`);
   return achado as HTMLButtonElement;
@@ -632,7 +633,9 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
   it("Não cabe aqui pede o motivo, recusa a prateleira com a revisão e traz outra sugestão", async () => {
     await abrirCaixaFechada();
     await clicar("Não cabe aqui");
-    expect(botao("Recusar B-02").disabled).toBe(true);
+    // Sem motivo, travado: aria-disabled, nunca disabled (parte 13a).
+    expect(botao("Recusar B-02").getAttribute("aria-disabled")).toBe("true");
+    expect(botao("Recusar B-02").disabled).toBe(false);
     await digitar(
       "nao-cabe-motivo",
       "Outra caixa ocupando a frente da prateleira",

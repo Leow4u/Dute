@@ -101,6 +101,8 @@ let clientes: Cliente[];
 let falharClientes: boolean;
 let falharPosicoes: boolean;
 let respostaDoPatch: { status: number; body: unknown };
+/** Com a lista, a criação do cliente espera até o teste soltar (o diálogo gravando, parte 13a). */
+let criacaoPresa: Array<() => void> | null;
 let chamadas: Array<{ method: string; path: string; body: Record<string, unknown> | null }>;
 let assinaturas: Array<{ value: string; next: (snapshot: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }) => void }>;
 
@@ -113,7 +115,11 @@ async function esperar(assertion: () => void) {
 
 function botao(label: string, scope: ParentNode = document) {
   return [...scope.querySelectorAll<HTMLButtonElement>("button")].find(
-    (button) => button.textContent?.trim() === label || button.getAttribute("aria-label") === label,
+    (button) =>
+      button.textContent?.trim() === label ||
+      button.getAttribute("aria-label") === label ||
+      // O confirmar dos diálogos é o BotaoDeAcao (parte 13a): o rótulo é o da camada atual.
+      button.querySelector(".botao-acao-camada[data-atual]")?.textContent?.trim() === label,
   );
 }
 
@@ -225,6 +231,7 @@ beforeEach(() => {
   falharClientes = false;
   falharPosicoes = false;
   respostaDoPatch = { status: 200, body: { ok: true } };
+  criacaoPresa = null;
   chamadas = [];
   assinaturas = [];
   fronteiras.pessoas.mockReset().mockReturnValue({ data: { items: PESSOAS }, isLoading: false });
@@ -244,6 +251,8 @@ beforeEach(() => {
       return falharClientes ? resposta({ message: "Sem acesso ao cadastro." }, 500) : resposta({ items: clientes });
     }
     if (path === "/api/customers" && method === "POST") {
+      const presa = criacaoPresa;
+      if (presa) await new Promise<void>((soltar) => presa.push(soltar));
       clientes = [...clientes, { ...(body as Cliente), id: String(body!.code) }];
       return resposta({ ok: true });
     }
@@ -292,7 +301,7 @@ const TEXTOS_DO_NOVO_CLIENTE = [
   `O que o modelo ${UNIFORMES.label} define`, `O que o modelo ${INSUMOS.label} define`, "Pronto", "Em construção",
   // A ficha do modelo (rótulo e valor) é dado: vem do código do modelo, em lib/operations/templates.
   ...[UNIFORMES, INSUMOS].flatMap((modelo) => modelo.defines.flatMap(({ label, value }) => [label, value])),
-  "Cancelar", "Criar cliente", "Fechar",
+  "Cancelar", "Criar cliente", "Criando…", "Conferir", "Fechar",
 ];
 
 describe("Configurações › Clientes, a galeria", () => {
@@ -400,6 +409,36 @@ describe("Configurações › Clientes, a galeria", () => {
     const criacao = chamadas.find((chamada) => chamada.method === "POST")!;
     expect(criacao.body).toMatchObject({ code: "INTER", name: "Banco Inter", sku_prefix: "BANCO", operation_template: "uniformes", modules: ["wms", "financeiro"] });
     expect(window.location.search).toBe("?cliente=INTER");
+  });
+
+  it("'Novo cliente' gravando: o Esc, o toque fora, o X e o Cancelar não fecham, e o Cancelar fica aria-disabled (parte 13a)", async () => {
+    criacaoPresa = [];
+    await abrirGaleria();
+    await tocar("Novo cliente");
+    await preencher("c-name", "Banco Inter");
+    await preencher("c-code", "INTER");
+    await tocar("Criar cliente");
+    await esperar(() => {
+      expect(criacaoPresa).toHaveLength(1);
+      expect(dialogo().hasAttribute("data-ocupado")).toBe(true);
+    });
+    await act(async () => {
+      (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
+    });
+    for (const rotulo of ["Fechar", "Cancelar"]) {
+      const elemento = botao(rotulo, dialogo())!;
+      expect(elemento.getAttribute("aria-disabled"), rotulo).toBe("true");
+      expect(elemento.disabled, rotulo).toBe(false);
+      await act(async () => elemento.click());
+    }
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(botao("Criar cliente", dialogo())!.disabled).toBe(false);
+    expect(await violacoesDeAcessibilidade(dialogo().outerHTML)).toEqual([]);
+    for (const soltar of criacaoPresa!.splice(0)) soltar();
+    await esperar(() => expect(container.querySelector("h1#cliente-titulo")?.textContent).toContain("Banco Inter"));
   });
 
   it("'Novo cliente' só tem rótulos, dados e ações: o pacote é o arquivo ou 'Nenhum', e sem violação de acessibilidade", async () => {
@@ -603,7 +642,7 @@ describe("Configurações › Clientes, as pessoas do portal", () => {
     expect(
       textosForaDaLista(dialogo().innerHTML, [
         "Convidar para o portal · BTG", "Nome", "E-mail", "Perfil", "Cliente", "Telas do portal",
-        "Agent Dute, Início, Estoque, Eventos, Envios para a Dutelog, Pedidos, Faturas, Documentos", "Cancelar", "Enviar convite", "Fechar",
+        "Agent Dute, Início, Estoque, Eventos, Envios para a Dutelog, Pedidos, Faturas, Documentos", "Cancelar", "Enviar convite", "Enviando…", "Conferir", "Fechar",
       ]),
     ).toEqual([]);
     expect(await violacoesDeAcessibilidade(document.body.innerHTML)).toEqual([]);

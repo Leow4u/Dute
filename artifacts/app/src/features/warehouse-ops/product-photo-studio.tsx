@@ -212,8 +212,8 @@ export function ProductPhotoStudio({
   return (
     <Dialog
       open={open}
+      ocupado={busy || saving}
       onOpenChange={(next) => {
-        if (busy || saving) return;
         if (next) {
           const source =
             photos.find((photo) => photo.fileUrl === sourceUrl) ??
@@ -241,16 +241,7 @@ export function ProductPhotoStudio({
           {triggerLabel || "Foto profissional com Agent Dute"}
         </Button>
       </DialogTrigger>
-      <DialogContent
-        className="sm:max-w-2xl"
-        fecharTravado={busy || saving}
-        onEscapeKeyDown={(event) => {
-          if (busy || saving) event.preventDefault();
-        }}
-        onPointerDownOutside={(event) => {
-          if (busy || saving) event.preventDefault();
-        }}
-      >
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Fotos com Agent Dute</DialogTitle>
           <DialogDescription>

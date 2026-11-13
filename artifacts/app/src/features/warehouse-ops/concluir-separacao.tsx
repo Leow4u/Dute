@@ -186,8 +186,8 @@ export function ConcluirSeparacaoDialog({
   // Concluindo (e conferindo), o diálogo não fecha: nem o Esc, nem o clique fora, nem o X, que fica aria-disabled.
   const ocupado = atual === "andamento" || atual === "sucesso" || conferindo;
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (open || ocupado ? undefined : onFechar())}>
-      <DialogContent className="sm:max-w-xl" aria-describedby={undefined} fecharTravado={ocupado}>
+    <Dialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (open ? undefined : onFechar())}>
+      <DialogContent className="sm:max-w-xl" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{pedido}: concluir separação</DialogTitle>
         </DialogHeader>

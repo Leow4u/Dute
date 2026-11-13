@@ -24,6 +24,8 @@ const estado = vi.hoisted(() => ({
   cadastroSemResposta: false,
   /** A leitura da lista espera até o teste soltar (o Conferir em andamento). */
   listaPresa: null as Array<() => void> | null,
+  /** O envio do arquivo espera até o teste soltar (o diálogo gravando). */
+  envioPreso: null as Array<() => void> | null,
   /** O que a lista devolve. */
   lista: [] as Array<Record<string, unknown>>,
   toasts: [] as unknown[],
@@ -55,6 +57,8 @@ async function servir(entrada: RequestInfo | URL, init?: RequestInit) {
   const corpo = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null;
   estado.chamadas.push({ url, metodo, corpo });
   if (url.startsWith("/api/documents/upload") && metodo === "POST") {
+    const preso = estado.envioPreso;
+    if (preso) await new Promise<void>((soltar) => preso.push(soltar));
     const pasta = String(corpo?.customer_code).replace(/\s+/g, "_");
     return resposta({
       file_name: "nf.pdf",
@@ -128,6 +132,7 @@ beforeEach(async () => {
   estado.cadastroFalha = true;
   estado.cadastroSemResposta = false;
   estado.listaPresa = null;
+  estado.envioPreso = null;
   estado.lista = [];
   estado.toasts = [];
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -279,5 +284,32 @@ describe("as etapas, o aviso e o Conferir", () => {
     await esperar(() => !dialogo(), "o diálogo fechado");
     expect(estado.chamadas.filter((c) => c.url === "/api/documents" && c.metodo === "POST")).toHaveLength(1);
     expect(estado.toasts).toContainEqual({ title: "Documento adicionado" });
+  });
+});
+
+describe("o diálogo gravando (carregamento v2, parte 13a)", () => {
+  it("com o arquivo subindo, o Esc e o toque fora não fecham, o X e o Cancelar ficam aria-disabled e o X tem 44 px no celular", async () => {
+    estado.envioPreso = [];
+    await clicar(botao("Adicionar documento"), "Adicionar documento");
+    await escolherArquivo();
+    await clicar(botao("Adicionar"), "Adicionar");
+    await esperar(() => estado.envioPreso!.length === 1 && Boolean(dialogo()?.hasAttribute("data-ocupado")), "o arquivo subindo");
+    await act(async () => {
+      (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
+    });
+    await clicar(noDialogo("Fechar"), "Fechar");
+    await clicar(noDialogo("Cancelar"), "Cancelar");
+    expect(dialogo()).not.toBeNull();
+    for (const rotulo of ["Fechar", "Cancelar"]) {
+      expect(noDialogo(rotulo)?.getAttribute("aria-disabled"), rotulo).toBe("true");
+      expect(noDialogo(rotulo)?.disabled, rotulo).toBe(false);
+    }
+    expect(noDialogo("Fechar")?.className).toContain("max-md:size-11");
+    expect(document.activeElement).not.toBe(document.body);
+    for (const soltar of estado.envioPreso!.splice(0)) soltar();
+    estado.envioPreso = null;
   });
 });

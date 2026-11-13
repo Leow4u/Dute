@@ -18,9 +18,10 @@ import { GaleriaDeClientes } from "@/components/clientes/galeria-de-clientes";
 import { ClienteNaoEncontrado, PaginaDoCliente } from "@/components/clientes/pagina-do-cliente";
 import { Codigo } from "@/components/clientes/partes";
 import { usePessoasDoCliente } from "@/components/pessoas/do-cliente";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -327,7 +328,7 @@ export default function SettingsCustomers() {
 
       {pessoasDoCliente.dialogos}
 
-      <Dialog open={creating} onOpenChange={(open) => !open && !create.isPending && setCreating(false)}>
+      <Dialog open={creating} ocupado={create.isPending} onOpenChange={(open) => !open && setCreating(false)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[780px]">
           <DialogHeader>
             <DialogTitle>Novo cliente</DialogTitle>
@@ -488,17 +489,13 @@ export default function SettingsCustomers() {
             </aside>
           </div>
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" disabled={create.isPending} onClick={() => setCreating(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" form="customer-form" disabled={create.isPending}>
-              {create.isPending ? "Salvando..." : "Criar cliente"}
-            </Button>
+            <DialogCancelar onClick={() => setCreating(false)} />
+            <BotaoDeAcao type="submit" form="customer-form" estado={create.isPending ? "andamento" : "repouso"} rotulo="Criar cliente" andamento="Criando…" />
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={archiving !== null} onOpenChange={(open) => !open && !archive.isPending && setArchiving(null)}>
+      <AlertDialog open={archiving !== null} ocupado={archive.isPending} onOpenChange={(open) => !open && setArchiving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Arquivar {archiving?.name}?</AlertDialogTitle>
@@ -508,16 +505,15 @@ export default function SettingsCustomers() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={archive.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              disabled={archive.isPending}
-              onClick={(event) => {
-                event.preventDefault();
+              estado={archive.isPending ? "andamento" : "repouso"}
+              rotulo="Arquivar"
+              andamento="Arquivando…"
+              onClick={() => {
                 if (archiving) archive.mutate(archiving);
               }}
-            >
-              {archive.isPending ? "Arquivando..." : "Arquivar"}
-            </AlertDialogAction>
+            />
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
