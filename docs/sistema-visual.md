@@ -152,7 +152,11 @@ só achou o cache, o `unavailable`, a callable sem resposta), é
 4, 8, 16 e 30 s. "Sem conexão", na pílula âmbar, só com o aparelho sem rede há
 3 s ou com duas leituras seguidas sem resposta sem rede. Só sai do aviso
 depois de uma leitura que deu certo, e cada aviso fica pelo menos 2 s. A ação
-sem rede continua recusada na hora.
+sem rede continua recusada na hora. A releitura sozinha é em silêncio: a tela
+não muda enquanto ela lê, e o dado que chega espera o dedo. Antes de reler, e
+no "Tentar de novo", o app acorda o SDK do Firestore que se deu por offline. A
+faixa "Sem conexão" do shell segue o mesmo estado, sem região viva: quem diz
+"Sem conexão", uma vez, é o `Anunciador`.
 
 ## O que vem depois (plano da auditoria)
 

@@ -658,10 +658,13 @@ confirmou a queixa:
 O PR 581 parou nas seis primeiras correções, e as peças que levariam o
 indicador ao app inteiro (seção 6, PR 1) não foram feitas.
 
-O mesmo levantamento achou uma regressão do PR 582. Quando o Firestore demora
-mais de 10 s para voltar depois de uma queda curta, a leitura vem do cache, e
-a tela diz "Sem conexão." com o aparelho conectado. Ela não se refaz sozinha
-até a próxima releitura. Fica para um PR próprio.
+O mesmo levantamento achou uma regressão do PR 582. Quando o Firestore
+demorava mais de 10 s para voltar depois de uma queda curta, a leitura vinha
+do cache, e a tela dizia "Sem conexão." com o aparelho conectado. Ela não se
+refazia sozinha até a próxima releitura. A parte 7 corrigiu (7a, registro em
+10.5): com o aparelho conectado, a tela diz "Reconectando…" e relê sozinha em
+2, 4, 8, 16 e 30 s, sem mexer no que está na tela, e se refaz assim que o
+servidor responde. "Sem conexão" fica para o aparelho sem rede há 3 s.
 
 ### 10.2 As três direções e a avaliação
 
@@ -800,25 +803,88 @@ registrada em 10.1.
 - **O estado único** (`lib/carregando/estado-da-conexao.ts`), ligado ao
   react-query no `main.tsx`: "Reconectando" com o aparelho conectado; "Sem
   conexão" depois de 3 s sem rede ou de duas leituras seguidas sem resposta
-  sem rede; só sai depois de uma leitura que deu certo; cada aviso fica pelo
-  menos 2 s. Enquanto reconecta, relê sozinho em 2, 4, 8, 16 e 30 s; relê
-  também quando a rede ou o servidor voltam. Os tempos novos são tokens
-  `--carregando-t-*` e constantes de `CARREGANDO`, travados um contra o outro.
-- **As telas de hoje:** o `FaixaSemConexao` e o `BlocoSemConexao` dizem
+  sem rede; cada aviso fica pelo menos 2 s. Só sai depois que uma leitura que
+  tinha ficado sem resposta dá certo: a leitura do cache do Firestore feita
+  fora do `lib/cloud-api.ts` (os clientes do seletor, os convites) dá certo
+  sem o servidor e não conta. Enquanto reconecta, relê sozinho em 2, 4, 8, 16
+  e 30 s; relê também quando a rede ou o servidor voltam. Sem nada com a falta
+  na tela, a releitura para, e a próxima falta recomeça dos 2 s. Os tempos
+  novos são tokens `--carregando-t-*` e constantes de `CARREGANDO`, travados
+  um contra o outro.
+- **A releitura sozinha não mexe na tela** (momento 7): ela chama a leitura
+  sem passar pelo estado do react-query, que punha a leitura sem dado de volta
+  em "carregando" e a com dado em `isFetching`. Na tela ainda não lida, o
+  bloco "Reconectando…" e o foco do teclado nele ficam; na lista lida, o
+  Atualizar não gira nem se desabilita; o alerta da falha não é dito de novo a
+  cada volta. O dado que chega entra direto, sem passar por "carregando", e
+  espera o dedo (nada muda se houve toque nos últimos 700 ms, até 3 s). Se o
+  servidor responde com outro erro, a leitura de verdade mostra qual. A
+  leitura paginada (`useInfiniteQuery`) continua relendo de verdade.
+- **O SDK do Firestore acordado:** depois de uma falha, o SDK só tenta o
+  servidor no relógio dele, que cresce até 60 s, e até lá responde do cache;
+  a releitura e o "Tentar de novo" não alcançavam o servidor. Antes de reler,
+  sozinho ou pelo toque, o app desliga e religa a rede do SDK, o que ele mesmo
+  faz quando o aparelho volta à rede, e só quando a última leitura achou só o
+  cache e o aparelho tem rede (`acordarFirestore`). Enquanto o SDK está
+  offline, o app escuta o próprio perfil, que o login já escuta, e relê na
+  hora em que ele chega do servidor (`aoVoltarOFirestore`).
+- **As telas:** o `FaixaSemConexao` e o `BlocoSemConexao` dizem
   "Reconectando…", em tinta e com os arcos do Wi-Fi, quando não é falta de
-  rede, e "Sem conexão" só com o app sem conexão. A faixa deixou de ser
-  região viva ("Reconectando" não fala), e o "Tentando de novo…" entra no
-  relógio da espera, para a releitura sozinha não piscar o botão. O botão de
-  `ErroNaLeitura` fica `aria-disabled` enquanto tenta, nunca `disabled`.
-- **Medição no Chromium, depois, com o mesmo roteiro:** com o host recusado,
-  nenhum "Sem conexão": "Reconectando…" por 14,6 s, e a lista se refez
-  sozinha 3,4 s depois da volta. Com `context.setOffline`, "Reconectando…"
-  de 1,2 s a 2,9 s, "Sem conexão" aos 3,0 s e, na volta, a lista refeita em
-  2,2 s. A queda de 1,5 s ficou só em "Reconectando…" e se refez 1,3 s depois
-  da volta. No escuro, no movimento reduzido (os arcos acesos e parados) e no
-  celular (o "Tentar de novo" com 44 px), a mesma faixa; numa tela ainda não
-  lida, o bloco "Reconectando…".
+  rede, e "Sem conexão" só com o app sem conexão, na pílula com o
+  `--carregando-aviso` (6,2:1). A faixa "Sem conexão" do shell (os módulos, a
+  Configuração e o portal) segue o mesmo estado: só entra depois de 3 s sem
+  rede, e nunca com o aparelho conectado. Nenhuma faixa nem o bloco é região
+  viva: o `Anunciador` diz "Sem conexão" uma vez, ao entrar, e não fala
+  "Reconectando" nem a volta. O "Tentando de novo…" entra no relógio da
+  espera (300 ms, mínimo de 500 ms), e a trava do toque segue o que o botão
+  diz: `aria-disabled` e travado juntos, nunca `disabled`. O "Tentar de novo"
+  do bloco e do `ErroNaLeitura` tem 44 px de altura.
+- **Medição no Chromium**, com o app de verdade, os emuladores e o seed
+  fictício; antes é o primeiro commit desta parte, e depois, com a correção:
+  - Estoque nunca lido, com o host do Firestore recusado, por 40 s: antes, o
+    bloco "Reconectando…" saía e dava lugar a "Carregando estoque..." aos
+    2,4 s e aos 18,4 s; depois, ficou parado de 0,4 s a 40 s.
+  - O foco do teclado, por 40 s de releituras sozinhas: antes, caiu no
+    `body` aos 1,1 s ("Tentar de novo" do bloco do Estoque) e aos 1,8 s
+    (Atualizar de Pedidos); depois, ficou nos dois.
+  - Configuração › Clientes nunca lida, por 75 s: antes, o alerta "Sem
+    resposta do servidor." entrou seis vezes; depois, uma.
+  - A volta do servidor depois de 40 s fora: tocando em "Tentar de novo" a
+    cada segundo, a faixa saiu 10,5 s depois da volta, antes, e 1,0 s depois,
+    com a correção; sem tocar, 33,2 s antes e 2,0 s e 3,0 s depois. Numa queda
+    de 15 s, sem tocar, 6,0 s antes e 1,0 s depois.
+  - A queda de 1,5 s da rede do aparelho: antes, a faixa do shell dizia "Sem
+    conexão" de 20 ms a 1,5 s, ao mesmo tempo que a lista dizia
+    "Reconectando…"; depois, nenhum "Sem conexão", e a lista se refez 0,16 s
+    depois da volta. Sem rede por 6 s, a faixa do shell e a pílula entram
+    juntas aos 3,0 s e saem na volta; a lista se refaz em 0,15 s (antes,
+    2,1 s).
+  - A regra do dedo na saída da faixa: com toques a cada 150 ms que param
+    antes de o dado chegar, a faixa saiu 0,73 s depois do último toque; com
+    toques seguidos, no limite de 3 s.
+  - A pílula "Sem conexão" tem 6,18:1 no claro e 10,66:1 no escuro, e o
+    botão do bloco, 44 px no computador e no celular. O axe-core não acusa
+    nada na faixa nem no bloco, no claro, no escuro e no celular.
 
-Fica para a parte 7b a linha de estado, com o "Atualizado às" e a fala única
-do "Sem conexão" pelo `Anunciador` (hoje, quem fala é a faixa do shell, que
-aparece com o aparelho sem rede).
+Fica aberto, para a parte 7b e depois:
+
+- a linha de estado, com altura reservada, o "Atualizado às", as medidas da
+  prancha (a linha de 24 px e os arcos de 20 px) e a troca do texto em
+  sequência; até lá, a faixa que sai ainda sobe a lista 74 px de uma vez
+  (agora esperando o dedo);
+- o Atualizar de Pedidos, Receber e Solicitações ainda fica `disabled` e gira
+  na releitura de 60 s do intervalo, e a tela nunca lida de Pedidos ainda
+  passa por "Carregando…" nesse intervalo e na volta da rede, que o
+  `refetchOnReconnect` relê de verdade. O toque no "Tentar de novo" do bloco
+  também troca o bloco pelo carregando;
+- as callables chamadas fora do react-query (`lib/wms`, o agente e a memória)
+  não alimentam o estado da conexão, e só o Firestore lido pelo
+  `lib/cloud-api.ts` é acordado: a callable sem resposta segue a releitura de
+  2 a 30 s;
+- as telas que mostram a falta no `ErroNaLeitura` genérico (como a
+  Configuração › Clientes) seguem com o alerta, e sem rede ele diz "Sem
+  conexão" junto com o `Anunciador`;
+- o axe-core acusa, desde antes desta parte, o contraste do "há N min" das
+  linhas de Pedidos, o `aria-controls` das abas do Estoque e, no escuro, uma
+  camada do `BotaoDeAcao`;
+- a conferência num Android de verdade, com a rede caindo de fato.
