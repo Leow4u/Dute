@@ -183,6 +183,7 @@ describe("os tokens do carregamento", () => {
     expect(raiz.get("--carregando-t-atraso")).toBe(`${CARREGANDO.atrasoMs}ms`);
     expect(raiz.get("--carregando-t-minimo")).toBe(`${CARREGANDO.minimoMs}ms`);
     expect(raiz.get("--carregando-t-sucesso-visivel")).toBe(`${CARREGANDO.sucessoVisivelMs}ms`);
+    expect(raiz.get("--carregando-t-erro-visivel")).toBe(`${CARREGANDO.erroVisivelMs}ms`);
     expect(raiz.get("--carregando-t-dedo")).toBe(`${CARREGANDO.dedoMs}ms`);
   });
 

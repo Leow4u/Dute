@@ -25,6 +25,8 @@ export const CARREGANDO = {
   desisteMs: 70_000,
   /** "Aprovado" fica pelo menos isso na tela, e até a releitura da lista chegar. */
   sucessoVisivelMs: 1_000,
+  /** "Não aprovado" fica isso no botão antes de ele voltar a "Aprovar"; o motivo fica na linha. */
+  erroVisivelMs: 2_000,
   /** A lista não tira nem põe linha se alguém tocou nela nesse intervalo. */
   dedoMs: 700,
 } as const;

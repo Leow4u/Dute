@@ -781,6 +781,7 @@
   --carregando-mola: cubic-bezier(0.34, 1.56, 0.64, 1); /* o check e o miolo da caixa que fecha; abaixo, o linear() */
   --carregando-t-sucesso-visivel: 1000ms; /* "Aprovado" na tela antes de a linha sair */
   --carregando-t-erro-visivel: 2000ms; /* "Não aprovado" no botão antes de voltar a "Aprovar" */
+  --carregando-t-barra-completa: 220ms; /* a barra da linha completa por scaleX: verde no sucesso, crítico no erro */
   /* A linha deixa o grupo (opacidade e 6 px para cima) e as de baixo sobem por transform (FLIP). */
   --carregando-t-sai-linha: 200ms;
   --carregando-t-reflui: 240ms;
@@ -960,6 +961,7 @@
     --carregando-t-onda: 0ms; /* o fundo do sucesso e do erro entra de uma vez */
     --carregando-t-check: 0ms;
     --carregando-t-tremor: 0ms;
+    --carregando-t-barra-completa: 0ms; /* a barra completa de uma vez */
     --carregando-t-reflui: 0ms; /* as linhas de baixo pulam para o lugar */
     --carregando-t-conta: 0ms; /* a contagem troca sem rolar */
     --carregando-mola: var(--ease-carregando-entrada); /* sem mola */
@@ -1527,6 +1529,127 @@
     .botao-acao[data-afundado][data-camada],
     .botao-acao:active:not([aria-disabled="true"]) {
       animation: none;
+    }
+  }
+}
+
+/* A barra de espera (components/ui/barra-de-espera.tsx; seção 5.5 e momento
+   4): na borda de baixo da linha em andamento (4 px; 6 px no celular) ou no
+   topo do cartão que relê (3 px; 4 px no celular). Entra em 150 ms, de 25%
+   da altura; um segmento de 32% em tinta varre o trilho de tinta a 8%, só
+   por transform (carregando-varre); aos 5 s o componente a marca parada
+   (data-estado="parada") e ela fica inteira a 0,6. No sucesso completa em
+   verde e no erro em crítico, por scaleX em 220 ms; a determinada enche por
+   scaleX(--p), que muda por evento. Quem a contém é position: relative. */
+@keyframes carregando-barra-entra {
+  from {
+    opacity: 0;
+    transform: scaleY(0.25);
+  }
+}
+
+@keyframes carregando-barra-completa {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@layer components {
+  .carregando-barra {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    display: block;
+    overflow: hidden;
+    pointer-events: none;
+    color: hsl(var(--carregando-cor));
+    /* No alto contraste, como o indicador: a barra fica na cor forçada de quem a contém. */
+    forced-color-adjust: none;
+    forced-color-adjust: preserve-parent-color;
+    animation: carregando-barra-entra var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
+  }
+
+  .carregando-barra[data-lugar="linha"] {
+    bottom: 0;
+    block-size: var(--carregando-barra-linha);
+    transform-origin: 50% 100%;
+  }
+
+  .carregando-barra[data-lugar="topo"] {
+    top: 0;
+    block-size: var(--carregando-barra-topo);
+    transform-origin: 50% 0;
+  }
+
+  .carregando-barra > [data-parte] {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    background-color: currentColor;
+  }
+
+  .carregando-barra > [data-parte="trilho"] {
+    right: 0;
+    opacity: 0.08;
+  }
+
+  .carregando-barra > [data-parte="segmento"] {
+    inline-size: 32%;
+    animation: carregando-varre var(--carregando-t-varredura) var(--ease-carregando-padrao) infinite;
+  }
+
+  .carregando-barra > [data-parte="cheio"] {
+    right: 0;
+    transform: scaleX(0);
+    transform-origin: 0 50%;
+  }
+
+  .carregando-barra[data-estado="parada"] > [data-parte="cheio"] {
+    transform: none;
+    opacity: 0.6;
+  }
+
+  .carregando-barra[data-estado="progresso"] > [data-parte="cheio"] {
+    transform: scaleX(var(--p, 0));
+    transition: transform var(--carregando-t-entrada) var(--ease-carregando-padrao);
+  }
+
+  .carregando-barra[data-estado="ok"] > [data-parte="cheio"] {
+    background-color: hsl(var(--carregando-ok));
+  }
+
+  .carregando-barra[data-estado="erro"] > [data-parte="cheio"] {
+    background-color: hsl(var(--carregando-erro));
+  }
+
+  .carregando-barra[data-estado="ok"] > [data-parte="cheio"],
+  .carregando-barra[data-estado="erro"] > [data-parte="cheio"] {
+    transform: none;
+    opacity: 1;
+    animation: carregando-barra-completa var(--carregando-t-barra-completa) var(--ease-carregando-padrao) both;
+  }
+
+  /* Movimento reduzido: entra só por opacidade, não varre e fica parada e
+     inteira a 0,6 desde o começo; o verde e o crítico entram de uma vez (o
+     --carregando-t-barra-completa vai a 0 no :root). */
+  @media (prefers-reduced-motion: reduce) {
+    .carregando-barra {
+      animation-name: carregando-aparece;
+    }
+
+    .carregando-barra > [data-parte="segmento"] {
+      display: none;
+    }
+
+    .carregando-barra[data-estado="andamento"] > [data-parte="cheio"] {
+      transform: none;
+      opacity: 0.6;
+    }
+
+    .carregando-barra[data-estado="progresso"] > [data-parte="cheio"] {
+      transition: none;
     }
   }
 }
