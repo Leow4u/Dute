@@ -28,6 +28,7 @@ const estado = vi.hoisted(() => ({
   solicitacoes: [] as Array<Record<string, unknown>>,
   ops: { queues: {}, alerts: [] } as Record<string, unknown>,
   avancos: [] as string[],
+  respostasDoAvanco: [] as Array<(corpo: unknown) => void>,
   decisoes: [] as Decisao[],
   leituras: [] as string[],
 }));
@@ -75,9 +76,9 @@ async function servir(entrada: RequestInfo | URL, init?: RequestInit) {
   if (url.pathname === "/api/warehouse/ops") return resposta(estado.ops);
   const avanco = url.pathname.match(/^\/api\/warehouse\/tasks\/([^/]+)\/advance$/);
   if (avanco && metodo === "POST") {
-    // A entrega fica em andamento até o fim do teste.
+    // A entrega fica em andamento até o teste responder.
     estado.avancos.push(decodeURIComponent(avanco[1]));
-    return new Promise(() => undefined);
+    return new Promise((resolver) => estado.respostasDoAvanco.push((corpo) => resolver(resposta(corpo))));
   }
   if (url.pathname === "/api/stock-balances") return resposta({ items: [] });
   if (url.pathname === "/api/customer-requests") return resposta({ items: estado.solicitacoes.map((item) => ({ ...item })) });
@@ -167,6 +168,7 @@ beforeEach(async () => {
   estado.decisoes.length = 0;
   estado.leituras.length = 0;
   estado.avancos.length = 0;
+  estado.respostasDoAvanco.length = 0;
   estado.ops = { queues: {}, alerts: [] };
   estado.solicitacoes = [solicitacao("1042", 12), solicitacao("1043", 40), solicitacao("1045", 120)];
   cliente = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -265,7 +267,8 @@ describe("cada linha de Para aprovar tem a própria ação", () => {
 });
 
 describe("as outras ações da tela", () => {
-  it("a entrega em andamento não apaga a fila de aprovar", async () => {
+  /** A entrega do PED-0001 em andamento, com o diálogo dela fechado pelo Voltar. */
+  async function entregaEmAndamento() {
     estado.ops = {
       alerts: [],
       queues: {
@@ -295,6 +298,10 @@ describe("as outras ações da tela", () => {
     const voltar = Array.from(document.querySelectorAll('[role="dialog"] button')).find((item) => item.textContent === "Voltar") as HTMLButtonElement;
     await tocar(voltar);
     await passar(10);
+  }
+
+  it("a entrega em andamento não apaga a fila de aprovar", async () => {
+    await entregaEmAndamento();
 
     for (const titulo of ["Pedido 1042", "Pedido 1043", "Pedido 1045"]) {
       expect(livre(botao(titulo, "Aprovar")), titulo).toBe(true);
@@ -302,6 +309,27 @@ describe("as outras ações da tela", () => {
     }
     // O "Entregue" segue o busy de antes.
     expect(Array.from(container!.querySelectorAll("button")).find((item) => item.textContent === "Entregue")?.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("a entrega que termina fecha só o diálogo dela: a recusa aberta depois fica, com o motivo", async () => {
+    await entregaEmAndamento();
+    await tocar(botao("Pedido 1042", "Recusar"));
+    const campo = document.querySelector<HTMLTextAreaElement>("#motivo-da-recusa")!;
+    const definir = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    await act(async () => {
+      definir.call(campo, "Cliente desistiu");
+      campo.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    // A entrega grava as duas etapas e termina.
+    await act(async () => estado.respostasDoAvanco[0]({ ok: true }));
+    await passar(10);
+    await act(async () => estado.respostasDoAvanco[1]({ ok: true }));
+    await passar(10);
+    expect(estado.toast).toHaveBeenCalledWith({ title: "Entrega confirmada. Estoque baixado." });
+
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Recusar solicitação");
+    expect(document.querySelector<HTMLTextAreaElement>("#motivo-da-recusa")?.value).toBe("Cliente desistiu");
   });
 });
 
@@ -456,6 +484,30 @@ describe("a recusa pelo diálogo, com o estado da linha", () => {
     expect(recusar.getAttribute("aria-disabled")).toBe("true");
     await tocar(recusar);
     expect(estado.decisoes).toHaveLength(0);
+  });
+
+  it("no Não recusado, sem o motivo, o Recusar do diálogo também não chama nada", async () => {
+    await tocar(botao("Pedido 1042", "Recusar"));
+    await digitarMotivo("Cliente desistiu");
+    await tocar(recusarDoDialogo());
+    await act(async () => estado.decisoes[0].responder({ message: "Solicitação bloqueada.", code: "failed-precondition" }, 400));
+    await passar(10);
+    expect(rotuloAtual(recusarDoDialogo())).toBe("Não recusado");
+
+    // Passado o toque único, e ainda no Não recusado, a pessoa apaga o motivo.
+    await passar(1_100);
+    await digitarMotivo("");
+    const recusar = recusarDoDialogo();
+    expect(rotuloAtual(recusar)).toBe("Não recusado");
+    expect(recusar.getAttribute("aria-disabled")).toBe("true");
+    await tocar(recusar);
+    expect(estado.decisoes).toHaveLength(1);
+
+    // Com o motivo de novo, a recusa sai.
+    await digitarMotivo("Cliente desistiu do pedido");
+    await tocar(recusarDoDialogo());
+    expect(estado.decisoes).toHaveLength(2);
+    expect(estado.decisoes[1].corpo.reason).toBe("Cliente desistiu do pedido");
   });
 });
 

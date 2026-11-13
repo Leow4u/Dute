@@ -19,7 +19,7 @@ import { Link } from "wouter";
 
 import { Badge, badgeVariants } from "@/components/ui/badge";
 import { BarraDeEspera } from "@/components/ui/barra-de-espera";
-import { BotaoDeAcao, CaixaDeAlerta } from "@/components/ui/botao-de-acao";
+import { BotaoDeAcao, CaixaDeAlerta, type EstadoDaAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -203,6 +203,17 @@ export function noMeioDaFrase(titulo: string): string {
   return /^\p{Lu}\p{Ll}/u.test(titulo) ? titulo.charAt(0).toLocaleLowerCase("pt-BR") + titulo.slice(1) : titulo;
 }
 
+/**
+ * O Recusar do diálogo fica travado sem o motivo (de 3 letras) no repouso e
+ * também no "Não recusado", quando o botão volta a responder; e pela outra
+ * ação da linha. Em andamento e no sucesso o botão já se trava, e o
+ * "Conferir" (sem resposta) só relê, sem o motivo.
+ */
+function recusaTravada(estado: EstadoDaAcao, ocupada: boolean, motivo: string): boolean {
+  if (estado === "repouso") return ocupada || motivo.trim().length < 3;
+  return estado === "erro" && motivo.trim().length < 3;
+}
+
 /** O anúncio do leitor de tela tem até seis palavras. */
 function seisPalavras(texto: string): string {
   return texto.split(/\s+/).filter(Boolean).slice(0, 6).join(" ");
@@ -299,6 +310,13 @@ export default function Pedidos() {
   const refreshAll = () => {
     void releitura();
   };
+  /**
+   * Fecha o diálogo da ação que terminou, e só ele. Com a ação por linha, a
+   * recusa de uma solicitação pode abrir o diálogo dela enquanto a entrega
+   * ou o cancelamento ainda grava, e o fim deles não a fecha.
+   */
+  const fecharDialogo = (kind: NonNullable<DialogState>["kind"]) =>
+    setDialog((atual) => (atual?.kind === kind ? null : atual));
 
   const onError = (error: unknown) =>
     toast({
@@ -392,7 +410,7 @@ export default function Pedidos() {
     },
     onSuccess: (aberta) => {
       chaveDaEntrega.current = null;
-      setDialog(null);
+      fecharDialogo("entrega");
       toast({ title: aberta ? `Demanda ${aberta.numero} aberta na Operação` : "Entrega salva" });
       refreshAll();
     },
@@ -411,7 +429,7 @@ export default function Pedidos() {
     onSuccess: () => {
       chaveDoCancelamento.current = null;
       toast({ title: "Pedido cancelado" });
-      setDialog(null);
+      fecharDialogo("cancel");
       setCancelReason("");
       refreshAll();
     },
@@ -459,7 +477,7 @@ export default function Pedidos() {
     },
     onSuccess: () => {
       toast({ title: "Entrega confirmada. Estoque baixado." });
-      setDialog(null);
+      fecharDialogo("deliver");
       setReceivedBy("");
       refreshAll();
     },
@@ -702,10 +720,11 @@ export default function Pedidos() {
                   andamento="Recusando…"
                   sucesso="Recusado"
                   erro="Não recusado"
-                  bloqueado={
-                    (rejectReason.trim().length < 3 || linhas.ocupada(dialog.request.id)) &&
-                    linhas.estado(dialog.request.id, "recusar") === "repouso"
-                  }
+                  bloqueado={recusaTravada(
+                    linhas.estado(dialog.request.id, "recusar"),
+                    linhas.ocupada(dialog.request.id),
+                    rejectReason,
+                  )}
                   onClick={() => decidir(dialog.request, "recusar", rejectReason.trim())}
                 />
               </DialogFooter>
