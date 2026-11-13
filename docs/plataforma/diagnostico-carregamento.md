@@ -2381,6 +2381,128 @@ conferidas contra o código atual.
   - o axe-core nas Devoluções esperando o catálogo: nada no claro; no
     escuro, o mesmo contraste do primário de antes desta parte (4 nós, os
     botões de disposição).
+- **A revisão (13/11/2026)**, com o que a lógica, o navegador e o leitor de
+  tela mostraram:
+  - **A repetição da disposição é a mesma tentativa.** A chave da disposição
+    se repete depois da falha incerta (o `useAcaoNaLinha`), mas o corpo
+    levava um `occurred_at` novo a cada toque, e o servidor, que compara o
+    conteúdo inteiro com o da chave, recusava a repetição como "outro
+    conteúdo" em vez de devolver o recibo. Agora a tentativa guarda o
+    `occurred_at` da primeira vez, e a repetição manda o mesmo corpo. A
+    callable e o resto do corpo não mudam. Na recusa, o botão diz "Não
+    registrada" por 2 s e o motivo fica na linha até a próxima ação; aos 3 s,
+    a linha diz "Registrando a disposição de Polo…"; aos 10 s, "Demorando mais
+    que o normal · 0:12"; o Anunciador diz a espera, a demora e a desistência.
+    A linha registrada diz a disposição em português ("Volta para
+    disponível", e não "available");
+  - **A bancada de Operações diz o estado dela.** O título e a linha de estado
+    ficam desde a primeira leitura: "Carregando tarefas…" aos 300 ms, com o
+    anúncio e a região ocupada apontando para ela; lida, "Atualizado às"; a
+    releitura que falha com a bancada lida, "Não consegui atualizar · lista
+    de 10:42", com "Tentar de novo" (antes, a bancada velha ficava sem nenhum
+    sinal, e só o Anunciador dizia, quando a pessoa tocava no Atualizar);
+  - **A entrada espera a releitura da conferência.** "Salvar conferência" só
+    acaba quando a bancada relê: até lá, "Concluir entrada" espera, porque a
+    chegada na ficha ainda é a de antes (sem a divergência que pede a
+    justificativa). A gravação e a chave seguem as de antes;
+  - **A falha é da leitura em que aconteceu.** Nos Retornos da Operação, a
+    falha dos itens do pedido A não aparece mais no pedido B aberto em
+    seguida: B espera os itens dele ("Carregando itens…"). A nova assinatura
+    da leitura ao vivo virou uma peça (`lib/operacao/nova-assinatura.ts`), que
+    a entrega dos pedidos também usa: a entrega que não carregou diz "Não
+    consegui carregar a entrega." com "Tentar de novo" na linha, que assina de
+    novo e fica até a resposta; quando ela chega, o foco vai à entrega;
+  - **Nada aparece antes de 300 ms.** Os cartões-fantasma das Solicitações e
+    as linhas-fantasma do Pedidos legado ficam no lugar, invisíveis, e entram
+    aos 300 ms, com o brilho; a leitura rápida não pisca nada. Os fantasmas
+    têm a altura do dado (o cartão de 98 px, a linha de 61 px) e o legado
+    reserva quantas linhas a última leitura trouxe, entre 1 e 5. A caixa do
+    vínculo do aviso e a do "Conferindo o saldo" (agora em tinta) também
+    esperam os 300 ms; vinculando, a opção diz "Vinculando…", que entra no
+    nome dela, e o Anunciador diz. Nos cartões do Pedidos legado, o bloco no
+    lugar do número enquanto lê, e "—" só na falha; a paginação não diz
+    "Exibindo 0 de 0" antes de ler. O bloco no lugar da foto e do endereço
+    ficou como estava: é o lugar de um dado dentro da linha real, como o
+    bloco da contagem, que entra com a estrutura;
+  - **O catálogo.** "Verificando o catálogo…" que apareceu fica o mínimo de
+    500 ms antes de a falha tomar o lugar (`useFalhaDoCatalogo`, nas
+    Devoluções, na contagem cíclica e na chegada avulsa). Nas Devoluções, o
+    aviso da falha é um só, na primeira linha com código (antes, um por linha,
+    cada um com o próprio "Tentar de novo"), e a linha não tem mais o selo
+    "verificando o catálogo", que piscava antes dos 300 ms e repetia a caixa.
+    O campo do código diz "Código do cliente da linha 1" e "Cód. cliente";
+  - **O foco nunca cai no `body`.** Aprovada ou encerrada a solicitação, o
+    foco vai ao título da seguinte no detalhe (sem ela, à linha de estado);
+    separada a última linha de uma prateleira, que se fecha, ao botão do
+    grupo; o "Tentar de novo" que dá certo leva ao título "Guardar em" (o
+    destino da caixa), à linha de estado (a bancada) e ao título "Disposição
+    física" (as devoluções pendentes); a entrada por caixa concluída, ao
+    título "Detalhes do recebimento"; a falta desmarcada, ao "Marcar falta"
+    que entra no lugar, que espera com `aria-disabled` em vez de `disabled`;
+  - **O leitor de tela ouve uma vez.** O "Desmarcar" tem o nome do rótulo na
+    tela ("Desmarcar", "Desmarcando…"), e a linha vem pela descrição (antes, o
+    `aria-label` fixo escondia a espera). Na chegada por caixa, o resultado
+    que o toast diz (a entrada concluída) não é repetido pelo Anunciador; o
+    destino confirmado, a busca sem produto e a quantidade não salva, que
+    tinham a região viva solta, são ditos pelo Anunciador quando aparecem;
+  - **O Guardar da área.** A recusa do servidor (a área não é de passagem, o
+    item sem saldo livre) diz o motivo sem "Tentar de novo", porque a nova
+    tentativa não muda nada; a falha de leitura segue com ele. O título e o
+    aviso dizem "da EXPEDICAO";
+  - **O celular.** As ações de linha migradas têm 48 px: "Separar", "Levar a
+    caixa", "Desfazer", "Registrar disposição", "Aprovar e separar",
+    "Recusar com motivo" e os dois "Concluir entrada". Na bancada de
+    separação, o "Levar a caixa" fica numa linha dele, e o "Separar" e o "⋯"
+    (48 × 48) na de baixo: lado a lado, o "⋯" encolhia a 18 px. O texto do
+    "Desfazer" volta ao lado em que a linha alinha (à esquerda no celular, à
+    direita no computador), dentro da largura do rótulo mais largo;
+  - **Os testes.** Os gerúndios da bancada de separação entram na lista do
+    teste (antes, o teste aceitava qualquer camada terminada em "…": um
+    gerúndio errado passava); o Pedidos legado lendo, a bancada lendo e
+    falhando, o Guardar lendo, falhando e recusado, a ficha salvando e a
+    entrega que falhou ganharam a lista de textos. Contra o `5cd002a`, 28 dos
+    108 testes dos 10 arquivos novos ou mudados reprovam; a troca de
+    "Levando…" por outro gerúndio reprova a lista nova e passava na de antes.
+- **Medição da revisão no Chromium**, no harness com a API falsa (só
+  127.0.0.1):
+  - "Aprovar e separar" pelo teclado, a 1440 e a 390 px: o foco no botão
+    durante a espera e, no fim, no título da solicitação seguinte (antes, no
+    `body` de 2,3 s em diante);
+  - destino da caixa: depois do "Tentar de novo" que dá certo, o foco no
+    título "Guardar em" (antes, no `body` de 3,4 s a 7 s); bancada de
+    Operações: "Carregando tarefas" anunciado aos 345 ms e, depois da nova
+    tentativa, o foco na linha de estado; com a bancada lida e a releitura
+    falhando, "Não consegui atualizar · lista de 19:15" sob o título;
+  - a disposição recusada: "Não registrada" no botão de 3,06 s a 4,5 s e
+    "Saldo insuficiente" na linha depois que o botão volta, a 6,5:1 no claro
+    e 5,5:1 no escuro; o anúncio "Registrando a disposição" aos 349 ms;
+  - o vínculo do aviso com o servidor a 150 ms: nenhuma caixa (antes, de 28 a
+    149 ms); a 3 s, a caixa aos ~380 ms, o nome "Aviso 0412 · Loja Faria
+    Lima Vinculando…" e o anúncio aos 355 ms; o saldo a 400 ms: nenhuma caixa
+    (antes, de 168 a 427 ms); a 2 s, a caixa em tinta, rgb(31, 42, 61);
+  - o catálogo que falha aos 420 ms, nas Devoluções e na contagem cíclica:
+    "Verificando o catálogo…" de ~330 a ~805 ms, e só então a falha (antes,
+    cortado aos 408 ms, ainda entrando); com duas linhas digitadas, um aviso
+    só, e o foco volta ao código quando o catálogo chega;
+  - Pedidos legado com a leitura a 2,5 s: os cartões no bloco, as linhas-
+    fantasma invisíveis até ~300 ms depois da montagem e a 61 px, como a
+    linha real (antes, quatro de 73 px desde o primeiro quadro, e a tabela
+    encolhia de 292 a 122 px na chegada); com a leitura a 150 ms, nenhum
+    fantasma visível. Solicitações a 390 px: o cartão-fantasma com 98 px,
+    como o real, no mesmo lugar (antes, 84 px);
+  - o foco em dez casos (a última linha da prateleira, a outra linha, o
+    Levar a caixa, o destino, a bancada, as devoluções pendentes, as
+    Solicitações, o catálogo da cíclica e o das Devoluções, a disposição):
+    nunca no `body`; a entrada por caixa concluída: o foco no título e só o
+    toast falando; o "Desmarcar": o nome "Desmarcando…" na espera, a
+    descrição "2 · TESTE-000002" e o foco no "Marcar falta" no fim;
+  - a 390 px, a linha da Lancheira com o "Levar a caixa" de 324 × 48, o
+    "Separar" de 268 × 48 e o "⋯" de 48 × 48 (antes, 18 × 40, fora do
+    cartão); o "Desfazer" com o texto em x = 33 a 390 px e terminando em
+    1375 a 1440 px, como antes desta parte; os "Concluir entrada" com 48 px;
+  - o axe-core em 19 estados, no claro e no escuro: as mesmas violações de
+    antes desta revisão, nenhuma nova; no movimento reduzido, nada gira nem
+    desliza nos estados novos.
 
 Fica aberto:
 
@@ -2388,10 +2510,16 @@ Fica aberto:
   linha (4.5): mudar é mudar a escrita, e esta parte não muda;
 - na chegada por caixa e na bancada de separação, os vizinhos da ação em
   andamento (a seleção da caixa, "Revisar caixa", "Revisar entrada", "Editar
-  conteúdo", "Marcar falta", o "⋯" e "Dividir em volumes") seguem `disabled`
-  durante a ação, como na abertura (13b); o botão tocado nunca fica. O toque
-  repetido dentro de 1 s do `BotaoDeAcao` também vale ali (a nova tentativa
-  logo depois de uma falha espera o segundo);
+  conteúdo", o "⋯" e "Dividir em volumes") seguem `disabled` durante a ação,
+  como na abertura (13b); o botão tocado nunca fica, e o "Marcar falta"
+  passou a `aria-disabled`. O toque repetido dentro de 1 s do `BotaoDeAcao`
+  também vale ali (a nova tentativa logo depois de uma falha espera o
+  segundo);
+- a chave da disposição é por tentativa (o `useAcaoNaLinha`), e não mais um
+  UUID novo a cada toque: a repetição depois da falha incerta devolve o
+  recibo. A pessoa que muda a nota ou o endereço entre as duas tentativas
+  manda outro conteúdo com a mesma chave, e o servidor recusa se a primeira
+  tiver gravado; vale confirmar com o Leonardo;
 - os Retornos da Operação que voltam a ler depois da falha e não têm retorno
   somem com o foco no aviso: o foco não tem para onde ir na tela;
 - a mensagem da falha do romaneio, da lista de separação, da bancada de
@@ -2401,7 +2529,8 @@ Fica aberto:
   "sem foto", sem aviso;
 - os `role="status"` dos cartões de identificação (o produto novo e a
   família), que não são espera, ficam como estavam;
-- o foco que segue o botão que entra no lugar na bancada de separação
-  ("Separar" vira "Desfazer") não tem teste nem medição no navegador; o da
-  disposição registrada tem;
+- a linha da disposição recusada cresce uma linha com o motivo (o cartão de
+  baixo desce 20 px);
+- a entrega dos pedidos e os Retornos da Operação não têm medição no
+  navegador: o harness simula a leitura ao vivo; os testes cobrem;
 - a conferência com leitor de tela de verdade e num Android médio.
