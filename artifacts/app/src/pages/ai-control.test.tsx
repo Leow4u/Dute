@@ -5,8 +5,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Anunciador } from "@/lib/carregando/anunciador";
+import { ProvedorDaConexao } from "@/lib/carregando/estado-da-conexao";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { conexaoEm } from "@/test/conexao";
 import { textosForaDaLista } from "@/test/textos";
 
 /**
@@ -191,6 +193,32 @@ describe("o painel antigo do Agent Dute lendo e na falha", () => {
     await passar(400);
     expect(container!.textContent).not.toContain("Não consegui carregar a central da IA agora.");
     expect(respostas.leituras).toBe(2);
+  });
+
+  it("o Atualizar acorda o Firestore antes de reler, como o das listas, e no fim diz \"Lista atualizada\"", async () => {
+    respostas.overview = "ok";
+    const conexao = conexaoEm("conectado");
+    const acordarFirestore = vi.fn(() => Promise.resolve());
+    conexao.aoAcordar(acordarFirestore);
+    const consulta = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () =>
+      raiz!.render(
+        <ProvedorDaConexao value={conexao}>
+          <QueryClientProvider client={consulta}>
+            <AiControl />
+            <Anunciador />
+          </QueryClientProvider>
+        </ProvedorDaConexao>,
+      ),
+    );
+    await passar(2_500);
+    const lidas = respostas.leituras;
+    const atualizar = [...container!.querySelectorAll<HTMLButtonElement>("button.botao-acao")].find((item) => item.querySelector(".botao-acao-camada[data-atual]")?.textContent === "Atualizar")!;
+    await act(async () => atualizar.click());
+    expect(acordarFirestore).toHaveBeenCalledTimes(1);
+    await passar(1_000);
+    expect(respostas.leituras).toBe(lidas + 1);
+    expect(container!.querySelector("[data-anunciador]")?.textContent).toBe("Lista atualizada");
   });
 
   it("lido, o painel passa no axe, e o Atualizar tem 44 px", async () => {

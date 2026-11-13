@@ -23,7 +23,7 @@ import {
 
 import { AgentNotes } from "@/components/agent/agent-notes";
 import { AgentPlaybooks } from "@/components/agent/agent-playbooks";
-import { FantasmasDaLista, LeituraDaLista } from "@/components/agent/leitura-do-agente";
+import { FantasmasDaLista, LeituraDaListaDoAgente } from "@/components/agent/leitura-do-agente";
 import { Esqueleto } from "@/components/ui/esqueleto";
 import { lerDocsDoServidor } from "@/lib/cloud-api";
 import { useAppUser } from "@/lib/auth";
@@ -34,6 +34,7 @@ import { BotaoDeAcao, type EstadoDaAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { Progresso } from "@/components/ui/progresso";
 import { CARREGANDO } from "@/lib/carregando/tempo";
+import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
 import { desfechoDoErro } from "@/lib/carregando/use-acao-na-linha";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { comPrazoSemAvanco } from "@/lib/conexao";
@@ -359,8 +360,6 @@ export default function AgentKnowledge() {
   const [form, setForm] = useState<UploadFormState>(initialForm);
   const [file, setFile] = useState<File | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  // O Atualizar só gira quando a pessoa toca nele (carregamento v2, momento 7): a releitura sozinha não mexe nele.
-  const [atualizando, setAtualizando] = useState(false);
 
   const documents = useQuery({
     queryKey: ["agent-knowledge-documents"],
@@ -394,6 +393,9 @@ export default function AgentKnowledge() {
       );
     },
   });
+  // O Atualizar das listas (carregamento v2, momento 7): só gira quando a pessoa toca nele, acorda o Firestore que se
+  // deu por offline antes de reler (a leitura daqui é a do servidor, e o cache não vale) e, no fim, "Lista atualizada".
+  const atualizarLista = useAtualizarLista([documents, files]);
 
   const filesByKnowledge = useMemo(() => {
     return new Map(
@@ -709,14 +711,11 @@ export default function AgentKnowledge() {
             variant="outline"
             // O Atualizar com 44 px (seção 7).
             className="min-h-11"
-            estado={atualizando ? "andamento" : "repouso"}
+            estado={atualizarLista.atualizando ? "andamento" : "repouso"}
             icone={<RefreshCw className="h-4 w-4" />}
             rotulo="Atualizar"
             andamento="Atualizando…"
-            onClick={() => {
-              setAtualizando(true);
-              void Promise.allSettled([documents.refetch(), files.refetch()]).then(() => setAtualizando(false));
-            }}
+            onClick={atualizarLista.atualizar}
           />
         }
       />
@@ -771,7 +770,7 @@ export default function AgentKnowledge() {
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-4">
-          <LeituraDaLista
+          <LeituraDaListaDoAgente
             leitura={documents}
             rotulo="Carregando documentos…"
             falha="Não foi possível carregar os documentos."
@@ -871,7 +870,7 @@ export default function AgentKnowledge() {
               </EmptyHeader>
             </Empty>
           )}
-          </LeituraDaLista>
+          </LeituraDaListaDoAgente>
         </div>
 
         <Card className="h-fit">

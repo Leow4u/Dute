@@ -90,10 +90,17 @@ afterEach(() => {
 });
 
 describe("as fotos do produto", () => {
-  it("o limite da escolha também é falado: seis escolhidas, \"Só 4 fotos sobem por vez.\" depois de \"Enviando 4 fotos\"", async () => {
+  it("o limite da escolha também é falado, no mesmo anúncio do começo: seis escolhidas, \"Enviando 4 de 6 fotos\"", async () => {
+    // Um anúncio só: com a região ocupada, só o último pedido vale, e o começo do envio não se perde atrás do limite.
     await passo(() => fotos!.escolher(["1", "2", "3", "4", "5", "6"].map((nome) => foto(`${nome}.jpg`))));
     expect(container!.textContent).toContain(SO_QUATRO_POR_VEZ);
-    expect(falados).toEqual(["Enviando 4 fotos", SO_QUATRO_POR_VEZ]);
+    expect(falados).toEqual(["Enviando 4 de 6 fotos"]);
+  });
+
+  it("com vaga para menos de 4, o começo diz quantas das escolhidas sobem", async () => {
+    await passo(() => fotos!.escolher(["1", "2", "3"].map((nome) => foto(`${nome}.jpg`)), 2));
+    expect(container!.textContent).toContain(ATE_OITO_POR_PRODUTO);
+    expect(falados).toEqual(["Enviando 2 de 3 fotos"]);
   });
 
   it("o produto que já tem 8 fotos: nada sobe, e o leitor de tela ouve por quê", async () => {

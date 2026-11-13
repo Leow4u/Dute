@@ -206,6 +206,9 @@ describe("o envio das fotos, uma por vez", () => {
 describe("as frases e a estimativa", () => {
   it("o começo e o fim, no singular e no plural", () => {
     expect(anuncioDoComeco(1)).toBe("Enviando 1 foto");
+    expect(anuncioDoComeco(4, 6)).toBe("Enviando 4 de 6 fotos");
+    expect(anuncioDoComeco(1, 3)).toBe("Enviando 1 de 3 fotos");
+    expect(anuncioDoComeco(4, 4)).toBe("Enviando 4 fotos");
     expect(anuncioDoFim(4, 0)).toBe("4 fotos enviadas");
     expect(anuncioDoFim(1, 0)).toBe("1 foto enviada");
     expect(anuncioDoFim(2, 2)).toBe("2 fotos não enviadas");

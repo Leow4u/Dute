@@ -274,6 +274,30 @@ describe("cada linha de Para aprovar tem a própria ação", () => {
   });
 });
 
+describe("o anúncio da espera da linha", () => {
+  it("a aprovação que acaba antes da vez do anúncio dela não é anunciada depois do resultado", async () => {
+    const falados: string[] = [];
+    const ouvir = async (ms: number) => {
+      for (let feito = 0; feito < ms; feito += 50) {
+        await passar(50);
+        const texto = anuncio();
+        if (texto && texto !== falados[falados.length - 1]) falados.push(texto);
+      }
+    };
+    // A 1043 aprova primeiro e ocupa a região; a 1042 pede o anúncio dela, que espera a vez.
+    await tocar(botao("Pedido 1043", "Aprovar"));
+    await ouvir(500);
+    await tocar(botao("Pedido 1042", "Aprovar"));
+    await ouvir(1_000);
+    expect(falados).toEqual(["Aprovando pedido 1043"]);
+    // A 1042 é aprovada antes da vez do anúncio: o toast diz o resultado, e a região não diz "Aprovando" depois.
+    const aprovacao = estado.decisoes.find((decisao) => decisao.id === "req_1042")!;
+    await act(async () => aprovacao.responder({ ...estado.solicitacoes[0], status: "approved" }));
+    await ouvir(3_000);
+    expect(falados).toEqual(["Aprovando pedido 1043"]);
+  });
+});
+
 describe("as outras ações da tela", () => {
   /**
    * A entrega do PED-0001 em andamento (carregamento v2, parte 11): as

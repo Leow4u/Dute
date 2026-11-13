@@ -33,6 +33,7 @@ import { useContagemLembrada, type ContagensDaLista } from "@/lib/carregando/con
 import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { resumoDaLista } from "@/lib/carregando/resumo-da-lista";
 import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { useFalhaNaReleituraAutomatica } from "@/lib/carregando/use-leitura-com-falha";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { canOperateWarehouse } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -136,6 +137,10 @@ export default function Receber() {
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
   });
+  // A falha sem nada lido fica na tela durante a releitura automática (o intervalo de 60 s): o aviso e o foco no
+  // "Tentar de novo". Só a nova tentativa que a pessoa pede volta às linhas-fantasma.
+  const opsNaTela = useFalhaNaReleituraAutomatica(ops);
+  const requestsNaTela = useFalhaNaReleituraAutomatica(requests);
   const notices = useMemo(
     () => openShipmentNotices(requests.data?.items ?? []).filter((notice) => notice.customer_code === customerCode),
     [requests.data?.items, customerCode],
@@ -223,7 +228,7 @@ export default function Receber() {
   // a releitura automática de 60 s não mostra nada; o Atualizar só mostra a
   // espera quando a pessoa toca nele; a volta do app ao primeiro plano relê
   // com a barra no topo do primeiro cartão.
-  const leiturasDaLista = [ops, requests];
+  const leiturasDaLista = [opsNaTela, requestsNaTela];
   const atualizarLista = useAtualizarLista(leiturasDaLista);
   const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} resultado="fim" />;
 
@@ -236,7 +241,7 @@ export default function Receber() {
   // avisos: o aviso entra no lugar da lista na hora.
   const [listaJaLida, setListaJaLida] = useState(false);
   if (!listaJaLida && ops.data && (requests.data || requests.isError)) setListaJaLida(true);
-  const lendo = !listaJaLida && !ops.isError && (ops.isLoading || requests.isLoading);
+  const lendo = !listaJaLida && !opsNaTela.isError && (opsNaTela.isLoading || requestsNaTela.isLoading);
   const idDaLinha = useId();
   // A contagem lembrada é do cliente que a tela vai operar: na abertura, antes de a lista dos clientes chegar, o
   // escolhido neste aparelho. Só grava com o cliente confirmado e os avisos dele lidos.
@@ -402,7 +407,7 @@ export default function Receber() {
           na forma final, com as linhas-fantasma. */}
       {fichaLarga ? <section aria-label="Bancada de conferência" className="min-w-0">{panel}</section> : !lendo && semRede && semRede.lidaEm === null ? (
         <BlocoSemConexao tentando={ops.isFetching || requests.isFetching} onTentar={recarregar} focoAoSair={idDaLinha} />
-      ) : !lendo && ops.error && !semRede ? (
+      ) : !lendo && opsNaTela.error && !semRede ? (
         <FalhaDasChegadas focoAoSair={idDaLinha} onTentar={recarregar} />
       ) : (
         <div

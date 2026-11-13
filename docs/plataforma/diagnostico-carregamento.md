@@ -1042,7 +1042,9 @@ Fica aberto, para a parte 8 e depois:
   leitura ("3 para aprovar, 2 para separar, 1 para entregar"), na parte 8;
 - a tela nunca lida ainda volta a "Carregando…" na releitura de verdade (o
   intervalo e o "Tentar de novo" do bloco), porque o react-query põe a
-  leitura sem dado de volta em `pending`;
+  leitura sem dado de volta em `pending` (em Pedidos e no Receber, resolvido:
+  o "Tentar de novo" da pessoa volta à forma final na parte 8, e a releitura
+  automática deixa o aviso na tela desde a junção das partes 9, 11 e 12);
 - os 70 s da primeira leitura (o `ErroNaLeitura` "Sem resposta do servidor."),
   que dependem do prazo da leitura, e a troca de filtro com a lista anterior a
   50% e `inert` (caso 4 do momento 7), na parte 10;
@@ -1267,7 +1269,9 @@ Ficam para depois:
   `CarregandoTela`;
 - entre a espera da rota e a de dentro da tela (as abas do Catálogo e do
   Faturamento), ou entre o `RoleGate` e o `Suspense`, o rótulo some por até
-  300 ms e volta, porque o relógio recomeça;
+  300 ms e volta, porque o relógio recomeça (a primeira leitura das quatro
+  listas com a linha de estado continua a espera da rota desde a junção das
+  partes 9, 11 e 12);
 - a medição num Android de verdade e no Safari, que pode tratar a folha no
   corpo de outro jeito.
 
@@ -1291,7 +1295,9 @@ celular (as fotos) e o item 8 da seção 6.
     callable da OS) tem o prazo e a mensagem dele;
   - no Receber, na Contagem e na ficha do item, a escolha leva 4 de cada vez,
     como antes, mas diz "Só 4 fotos sobem por vez." (e "Até 8 fotos por
-    produto.") no lugar do corte calado, na tela e pelo Anunciador;
+    produto.") no lugar do corte calado, na tela e pelo Anunciador, no
+    anúncio do começo ("Enviando 4 de 6 fotos"; desde a junção das partes 9,
+    11 e 12, um anúncio só); sem nenhuma que caiba, o motivo;
   - o diálogo da chegada avulsa e a ficha do item não fecham enquanto elas
     sobem. O campo e o botão de escolher ficam ocupados sem `disabled`, e o
     foco fica neles;
@@ -1468,7 +1474,8 @@ carregamento novo nas outras telas do agente.
   Conhecimento): `Spinner`, `Esqueleto`, `BotaoDeAcao` (com a opção `tinta`,
   o primário em tinta onde o desenho pede) e a decisão por linha
   (`useAcaoNaLinha`). A região que ainda lê é a `CarregandoNaRegiao` e, nas
-  listas, a `LeituraDaLista`:
+  listas, a `LeituraDaListaDoAgente` (antes `LeituraDaLista`, o nome do tipo
+  da linha de estado):
   - as linhas-fantasma entram aos 300 ms, com o rótulo; antes, o lugar fica
     guardado e vazio. Na barra, elas têm a forma da lista que chega (o grupo
     e as linhas);
@@ -1537,11 +1544,80 @@ Ficam para depois:
   quando ele chega, não dá para saber se é a resposta;
 - "De onde tirei:" e os chips ficam com 12 px, porque a escala de texto não
   tem 13 px, e a borda da caixa usa o `--agent-border` do app;
-- quem envia pela tela de boas-vindas perde o foco do Enviar, porque a tela
-  troca para a conversa;
 - o "fieldset" `disabled` dos cartões e das janelas de playbook e de rotina
   durante o envio, o Cancelar `disabled` nessas janelas e as sugestões
   `disabled` das boas-vindas;
 - o Pessoas, o seletor de cliente e a lista de separação ainda leem o cache
   do Firestore sem rede;
 - as ações de linha de Pedidos, o piloto, ainda têm 40 px no celular.
+
+**A junção das partes 9, 11 e 12 com as 7b e 8 (PR 610, 13/11/2026).** As
+partes 9, 11 e 12 foram feitas ao mesmo tempo que as 7b e 8, numa cópia, e
+entraram pelo merge `96ea50d`. Três revisões do app junto acharam o que só
+aparece com as partes juntas; o que mudou:
+
+- **Uma espera, um relógio** (`lib/carregando/espera-da-rota.ts`): quando o
+  arquivo da tela chega e a lista ainda lê, a linha de estado e as
+  linhas-fantasma continuam a espera da `CarregandoTela`. Antes, a caixa de
+  40 px saía e, por 300 a 410 ms, a tela ficava com os cartões vazios, sem
+  indicador; a caixa de 24 px voltava em outro lugar, a demora vinha só aos
+  10 s da lista (até 19 s do toque), e a espera era anunciada duas vezes
+  ("Abrindo Pedidos…" e "Carregando pedidos"). Com a abertura ainda na tela,
+  a lista conta do zero, como antes. A `CarregandoTela` anuncia sem a
+  reticência ("Abrindo Pedidos"), como as outras falas.
+- **O anúncio da espera que acabou sai da fila**: a linha de estado retira
+  "Carregando pedidos" e a demora quando a lista chega ou a leitura falha; a
+  `CarregandoTela` retira o dela quando sai (sem lista que continue a
+  espera); a linha de "Para aprovar", o `AvisoDeEspera`, as etapas do
+  `Progresso`, "Salvando no cadastro" e "Atualizando fotos" retiram o deles
+  quando a espera acaba. Antes, "Carregando estoque" era falado 1,5 s depois
+  de a lista estar na tela, "Carregando pedidos" depois do aviso da falha e
+  "Aprovando pedido 1042" depois do "Aprovado".
+- **O Anunciador**: o texto que acabou de ser dito, pedido de novo dentro dos
+  2 s, não tira da fila o outro que espera a vez (um segundo "Demorando mais
+  que o normal" apagava o "Sem conexão"). Na passagem da abertura, o
+  primeiro anúncio do app espera os 2 s da última fala dela (o script marca
+  `data-dito` e `data-dito-em`, e o #root guarda quando ela sai), e o "Sem
+  conexão" que ela já disse não é dito de novo, até a rede voltar.
+- **A lista que falhou sem dado e é relida pelo intervalo** (Pedidos e
+  Receber, `useFalhaNaReleituraAutomatica`): o aviso fica, com "Tentando de
+  novo…" no botão e o foco nele; antes, a cada 60 s ele virava fantasmas, o
+  foco ia à linha de estado e não voltava ao botão quando a falha voltava. A
+  nova tentativa que a pessoa pede segue a regra da parte 8 (a forma final,
+  a fala e o foco na linha de estado).
+- **O Atualizar do Conhecimento e da Central da IA** passa pelo
+  `useAtualizarLista`: acorda o Firestore que se deu por offline antes de
+  reler (antes, o toque relia do cache e a falta continuava) e diz "Lista
+  atualizada".
+- **As fotos além do limite**: "Enviando 4 de 6 fotos", um anúncio só; com a
+  região ocupada, "Enviando 4 fotos" se perdia atrás de "Só 4 fotos sobem
+  por vez.".
+- **A primeira pergunta de uma conversa nova do Agent Dute**: o foco vai ao
+  campo da conversa, e não ao body (era da parte 12, em "Ficam para depois").
+- **Medição no Chromium** (os harnesses das revisões, com o Firebase e a API
+  falsos, só 127.0.0.1):
+  - Pedidos com o arquivo da tela segurado 3 s: a caixa da rota até a tela
+    chegar e, na mesma pintura, "Carregando pedidos…" e as linhas-fantasma
+    (antes, de 300 a 410 ms sem indicador); falas: "Abrindo Pedidos" e o
+    resumo. Igual no Receber e no celular de 390 px, escuro e reduzido;
+  - de Pedidos para o Estoque, com o arquivo a 800 ms e a lista a 600 ms: só
+    "Abrindo Estoque", dito enquanto a lista ainda lia (antes, "Carregando
+    estoque" 1,46 s depois da lista);
+  - aprovar com o servidor a 700 ms e a região ocupada: nada de "Aprovando
+    pedido 1042" depois do "Aprovado";
+  - a abertura com a demora: "Demorando mais que o normal" a 10,03 s e
+    "Carregando pedidos" a 12,03 s (antes, 1,5 a 1,8 s entre as duas); sem
+    rede, "Sem conexão" só pela abertura (antes, de novo pelo app a 5,9 s);
+  - as fotos com a região ocupada: "Enviando 4 de 6 fotos", a demora e "4
+    fotos enviadas";
+  - o Agent Dute: o foco fica no campo depois do Enter numa conversa nova.
+
+Fica aberto:
+
+- o resumo que esperava a vez e foi trocado por um anúncio que depois saiu da
+  fila (aprovar logo depois de a lista chegar) não volta: no Anunciador, só o
+  último pedido vale;
+- a passagem do `RoleGate` para o `Suspense` e as abas do Catálogo e do
+  Faturamento seguem com o relógio que recomeça (parte 9);
+- a conferência com leitor de tela de verdade (NVDA, VoiceOver) das falas
+  na passagem da abertura.

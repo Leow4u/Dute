@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
 
-import { aberturaAberta, aberturaNaTela, duracaoDaSaida, fecharAbertura, FOLGA_DA_SAIDA_MS, saidaDaAbertura } from "./abertura";
+import { aberturaAberta, aberturaDisseSemConexao, aberturaNaTela, duracaoDaSaida, fecharAbertura, FOLGA_DA_SAIDA_MS, saidaDaAbertura, ultimaFalaDaAbertura } from "./abertura";
 import { folhasDepoisDaAbertura } from "./abertura-no-build";
 import { INTERVALO_DO_ANUNCIO_MS } from "./carregando/anunciador";
 import { CARREGANDO } from "./carregando/tempo";
@@ -485,6 +485,30 @@ describe("o script da abertura: sem rede aos 3 s, demorando aos 10 s", () => {
     vi.advanceTimersByTime(10_000);
     expect(linha().textContent).toBe("Sem conexão");
     expect(tentar().hidden).toBe(false);
+  });
+
+  it("marca a última fala e quando a região mudou, e o #root a guarda quando a abertura sai: o Anunciador do app lê", () => {
+    navegador.onLine = false;
+    montar();
+    expect(ultimaFalaDaAbertura()).toBeNull();
+    vi.advanceTimersByTime(3_000);
+    expect(ultimaFalaDaAbertura()).toEqual({ texto: "Sem conexão", em: 3_000 });
+    fecharAbertura();
+    document.getElementById("abertura")!.remove();
+    expect(ultimaFalaDaAbertura()).toEqual({ texto: "Sem conexão", em: 3_000 });
+    // A falta que ela disse é dita uma vez só: o app não a repete, e a seguinte é dele.
+    expect(aberturaDisseSemConexao()).toBe(true);
+    expect(aberturaDisseSemConexao()).toBe(false);
+  });
+
+  it("a rede que volta depois de a abertura sair encerra a falta que ela disse", () => {
+    navegador.onLine = false;
+    montar();
+    vi.advanceTimersByTime(3_000);
+    fecharAbertura();
+    document.getElementById("abertura")!.remove();
+    window.dispatchEvent(new Event("online"));
+    expect(aberturaDisseSemConexao()).toBe(false);
   });
 
   it("a rede que oscila não faz a região falar mais de uma vez a cada 2 s", () => {

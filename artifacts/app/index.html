@@ -169,6 +169,9 @@
           ditoIcone = icone;
           // A região muda quando o texto troca: na hora, ou depois da saída do anterior.
           ditoEm = performance.now() + (antes ? SAIDA_MS : 0);
+          // O app lê a última fala (lib/abertura.ts): o Anunciador espera os 2 s dela e não repete "Sem conexão".
+          abertura.setAttribute("data-dito", texto);
+          abertura.setAttribute("data-dito-em", String(Math.round(ditoEm)));
           if (!antes) return trocar(texto, icone);
           linha.setAttribute("data-sai", "");
           depois(SAIDA_MS, function () {

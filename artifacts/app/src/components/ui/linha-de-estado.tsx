@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useFaltaNaTela } from "@/components/ui/erro-na-leitura";
 import { Spinner } from "@/components/ui/spinner";
 import { useAnuncio, useRetirarAnuncio } from "@/lib/carregando/anunciador";
+import { useEsperaDaRota } from "@/lib/carregando/espera-da-rota";
 import { useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
 import { usePedidosDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { CARREGANDO } from "@/lib/carregando/tempo";
@@ -129,7 +130,9 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, id, r
   const leituras: readonly LeituraDaLista[] = Array.isArray(leitura) ? leitura : [leitura as LeituraDaLista];
   const lida = listaLida(leituras);
   const primeira = leituras.some((uma) => uma.isLoading);
-  const espera = useEspera(primeira);
+  // A primeira leitura que começa quando a tela chega continua a espera da rota: o mesmo relógio, sem vão.
+  const rota = useEsperaDaRota(primeira, true);
+  const espera = useEspera(primeira, { desde: rota?.inicio });
   const releitura = useEspera(pedidaPelaPessoa && lida && leituras.some((uma) => uma.isFetching));
   const comFalta = leituras.filter((uma) => uma.isError && ehFaltaDeConexao(uma.error));
   const falta = useVoltaDaRede(useFaltaNaTela(), comFalta.length > 0);
@@ -164,14 +167,23 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, id, r
   // lista chega, o resumo dela, só se a entrada foi falada. Depois que ela falhou, quem relê é a releitura
   // automática (o intervalo da tela, a do bloco), que não fala; a conta recomeça quando a lista é lida, ou quando a
   // pessoa pede de novo ("Tentar de novo"): a nova tentativa dela começa a ler e fala como a primeira.
-  const falados = useRef({ carregando: false, demorando: false, calado: false, pedido: false });
+  // A espera que continua a da rota já teve a entrada (e a demora) anunciada por ela: não anuncia de novo, e o
+  // resumo é dito na chegada, como se esta linha tivesse dito "Carregando".
+  const falados = useRef({ carregando: rota?.entrada ?? false, demorando: rota?.demora ?? false, calado: false, pedido: false });
   const pedidoVisto = useRef(pedidosDaPessoa);
   // O que esta linha mandou dizer: quando ela sai da tela, o que ainda espera o intervalo do Anunciador sai junto.
   const ditos = useRef(new Set<string>());
+  // Os anúncios da espera que ainda podem esperar a vez ("Carregando pedidos", a demora e o da rota que esta linha
+  // continua): quando a espera acaba (a lista chegou, a leitura falhou), saem da fila. O leitor de tela não ouve
+  // "Carregando estoque" com a lista já na tela, nem depois do aviso da falha.
+  const daEspera = useRef<Array<() => void>>(rota ? [() => rota.retirar?.()] : []);
   useEffect(() => {
     const dizer = (texto: string) => {
       ditos.current.add(texto);
-      anunciar(texto);
+      return anunciar(texto);
+    };
+    const acabouAEspera = () => {
+      for (const retirar of daEspera.current.splice(0)) retirar();
     };
     if (pedidosDaPessoa !== pedidoVisto.current) {
       pedidoVisto.current = pedidosDaPessoa;
@@ -179,25 +191,30 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, id, r
       if (!lida && falados.current.calado) falados.current.pedido = true;
     }
     if (lida) {
+      acabouAEspera();
       if (falados.current.carregando && !falados.current.calado && resumo) dizer(resumo);
       falados.current = { carregando: false, demorando: false, calado: false, pedido: false };
       return;
     }
-    if (falhou) falados.current.calado = true;
-    else if (falados.current.pedido) falados.current = { carregando: false, demorando: false, calado: false, pedido: false };
+    if (falhou) {
+      acabouAEspera();
+      falados.current.calado = true;
+    } else if (falados.current.pedido) falados.current = { carregando: false, demorando: false, calado: false, pedido: false };
     if (falados.current.calado) return;
     if (estado.tipo === "carregando" && !falados.current.carregando) {
       falados.current.carregando = true;
-      dizer(`Carregando ${objeto}`);
+      daEspera.current.push(dizer(`Carregando ${objeto}`));
     } else if (estado.tipo === "demorando" && !falados.current.demorando) {
       falados.current.demorando = true;
-      dizer("Demorando mais que o normal");
+      daEspera.current.push(dizer("Demorando mais que o normal"));
     }
   }, [anunciar, estado.tipo, falhou, lida, objeto, pedidosDaPessoa, resumo]);
   useEffect(() => {
     const pedidos = ditos.current;
+    const espera = daEspera.current;
     return () => {
       for (const texto of pedidos) retirarAnuncio(texto);
+      for (const retirar of espera.splice(0)) retirar();
     };
   }, [retirarAnuncio]);
 

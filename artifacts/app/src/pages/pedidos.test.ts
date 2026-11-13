@@ -67,7 +67,10 @@ describe("Pedidos na v3", () => {
   });
 
   it("a leitura que falhou vira o erro com Tentar de novo, não o vazio das filas (decisão 6 de 06/11/2026)", () => {
-    expect(FONTE).toContain("const semLeitura = (ops.isError && !ops.data) || (decider && requests.isError && !requests.data);");
+    // A falha fica na tela durante a releitura automática (a junção das partes 9, 11 e 12): a conta usa a leitura que a segura.
+    expect(FONTE).toContain("const opsNaTela = useFalhaNaReleituraAutomatica(ops);");
+    expect(FONTE).toContain("const requestsNaTela = useFalhaNaReleituraAutomatica(requests);");
+    expect(FONTE).toContain("const semLeitura = (opsNaTela.isError && !ops.data) || (decider && requestsNaTela.isError && !requests.data);");
     // O erro vem antes das filas e de "Entregues": sem leitura, nenhum "Nenhum pedido para…".
     const erro = FONTE.indexOf(") : !lendo && semLeitura ? (");
     expect(erro).toBeGreaterThan(FONTE.indexOf("<BlocoSemConexao tentando={relendo}"));
@@ -80,7 +83,7 @@ describe("Pedidos na v3", () => {
   it("sem rede, a lista lida fica com a hora, e sem nada lido vem o aviso, nunca o vazio (decisão 2 do celular)", () => {
     // Quem não decide não lê as solicitações: só o armazém entra na conta.
     expect(FONTE).toContain("const semRede = semConexaoNaLeitura(ops, ...(decider ? [requests] : []));");
-    expect(FONTE).toContain("const leiturasDaLista = decider ? [ops, requests] : [ops];");
+    expect(FONTE).toContain("const leiturasDaLista = decider ? [opsNaTela, requestsNaTela] : [opsNaTela];");
     // Na primeira leitura, a lista com a forma final, com as linhas-fantasma (parte 8); depois, o aviso, antes do erro
     // e das filas.
     // A leitura que falhou sem dado não espera a outra: o aviso entra na hora.

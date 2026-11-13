@@ -5,7 +5,7 @@ import { Check, NotebookPen, Plus, X } from "lucide-react";
 import { origemDaNota } from "@/lib/agente/anotacoes";
 import { CHAVE_DAS_ANOTACOES, chaveNoAlvo, type AcaoDaRevisao, type ClienteDoAgente, type NotaDoAgente } from "@/lib/agente/cliente";
 import { useClienteDoAgente } from "@/lib/agente/contexto";
-import { LeituraDaLista } from "@/components/agent/leitura-do-agente";
+import { LeituraDaListaDoAgente } from "@/components/agent/leitura-do-agente";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { useToast } from "@/hooks/use-toast";
 import { useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
@@ -149,7 +149,7 @@ export function AgentNotes() {
 
       {agente.anotacoes.escrever ? <NewNote escrever={agente.anotacoes.escrever} /> : null}
 
-      <LeituraDaLista leitura={notes} rotulo="Carregando anotações…" falha="Não foi possível carregar as anotações." className="mt-4">
+      <LeituraDaListaDoAgente leitura={notes} rotulo="Carregando anotações…" falha="Não foi possível carregar as anotações." className="mt-4">
         <>
           <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Para aprovar{pending.length ? ` · ${pending.length}` : ""}
@@ -195,7 +195,7 @@ export function AgentNotes() {
             <p className="mt-1 text-sm text-muted-foreground">Nenhuma anotação valendo ainda.</p>
           )}
         </>
-      </LeituraDaLista>
+      </LeituraDaListaDoAgente>
     </section>
   );
 }

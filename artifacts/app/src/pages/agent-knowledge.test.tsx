@@ -4,7 +4,10 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { Anunciador } from "@/lib/carregando/anunciador";
+import { ProvedorDaConexao } from "@/lib/carregando/estado-da-conexao";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { conexaoEm } from "@/test/conexao";
 import { textosForaDaLista } from "@/test/textos";
 
 /**
@@ -278,6 +281,38 @@ describe("a base do Conhecimento sem o servidor (carregamento v2, parte 12)", ()
     await passar(0);
     expect(document.body.textContent).toContain("Sem documentos na base");
     expect(document.querySelector("[data-falta]")).toBeNull();
+  });
+});
+
+describe("o Atualizar do Conhecimento, como o das listas", () => {
+  it("acorda o Firestore que se deu por offline antes de reler, e no fim diz \"Lista atualizada\"", async () => {
+    const conexao = conexaoEm("conectado");
+    // O SDK que se deu por offline responde do cache até ser acordado.
+    estado.soCache = true;
+    const acordarFirestore = vi.fn(async () => {
+      estado.soCache = false;
+    });
+    conexao.aoAcordar(acordarFirestore);
+    await act(async () =>
+      raiz!.render(
+        <ProvedorDaConexao value={conexao}>
+          <QueryClientProvider client={client}>
+            <AgentKnowledge />
+            <Anunciador />
+          </QueryClientProvider>
+        </ProvedorDaConexao>,
+      ),
+    );
+    await passar(3_000);
+    await act(async () => {
+      botao("Atualizar")!.click();
+    });
+    expect(acordarFirestore).toHaveBeenCalledTimes(1);
+    await passar(100);
+    await drenar();
+    expect(document.body.textContent).toContain("Sem documentos na base");
+    expect(document.querySelector("[data-falta]")).toBeNull();
+    expect(document.querySelector("[data-anunciador]")?.textContent).toBe("Lista atualizada");
   });
 });
 

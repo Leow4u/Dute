@@ -4,7 +4,7 @@ import { BookOpenCheck, Check, Pencil, Plus, X } from "lucide-react";
 
 import { chaveNoAlvo, type AcaoDaRevisao } from "@/lib/agente/cliente";
 import { useClienteDoAgente } from "@/lib/agente/contexto";
-import { FantasmasDaLista, LeituraDaLista } from "@/components/agent/leitura-do-agente";
+import { FantasmasDaLista, LeituraDaListaDoAgente } from "@/components/agent/leitura-do-agente";
 import { BotaoDeAcao, type EstadoDaAcao } from "@/components/ui/botao-de-acao";
 import { buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -216,7 +216,7 @@ export function AgentPlaybooks() {
         </button>
       </header>
 
-      <LeituraDaLista
+      <LeituraDaListaDoAgente
         leitura={playbooks}
         rotulo="Carregando playbooks…"
         falha="Não foi possível carregar os playbooks."
@@ -336,7 +336,7 @@ export function AgentPlaybooks() {
             <p className="mt-1 text-sm text-muted-foreground">Nenhum playbook valendo ainda.</p>
           )}
         </>
-      </LeituraDaLista>
+      </LeituraDaListaDoAgente>
 
       {editing && (editing === "new" || open) ? <PlaybookDialog key={editing} playbook={open} onClose={() => setEditing(null)} /> : null}
     </section>

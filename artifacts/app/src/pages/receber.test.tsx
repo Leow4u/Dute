@@ -253,16 +253,17 @@ describe("Receber sem conexão", () => {
     expect(TELA).toContain("const semRede = semConexaoNaLeitura(ops, requests);");
     // A lista lida, com a falta: a hora dela fica na linha de estado sob o título (parte 7b), não na faixa que empurra a lista.
     expect(TELA).toContain('estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando} resumo={resumo} />}');
-    expect(TELA).toContain("const leiturasDaLista = [ops, requests];");
+    // A falha fica na tela durante a releitura automática (a junção das partes 9, 11 e 12).
+    expect(TELA).toContain("const leiturasDaLista = [opsNaTela, requestsNaTela];");
     expect(TELA).not.toContain("FaixaSemConexao");
     expect(TELA).not.toContain("Carregando chegadas...");
     // Na primeira leitura, a lista com a forma final, com as linhas-fantasma (parte 8); depois, o aviso, antes do erro
     // e das filas.
     // Só a primeira leitura da tela, e a falha das filas não espera os avisos.
-    expect(TELA).toContain("const lendo = !listaJaLida && !ops.isError && (ops.isLoading || requests.isLoading);");
+    expect(TELA).toContain("const lendo = !listaJaLida && !opsNaTela.isError && (opsNaTela.isLoading || requestsNaTela.isLoading);");
     expect(TELA).toContain(": !lendo && semRede && semRede.lidaEm === null ? (");
     expect(TELA.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(TELA.indexOf("<FalhaDasChegadas focoAoSair={idDaLinha}"));
-    expect(TELA).toContain(") : !lendo && ops.error && !semRede ? (");
+    expect(TELA).toContain(") : !lendo && opsNaTela.error && !semRede ? (");
     expect(TELA).toContain("Não consegui carregar as chegadas.");
   });
 });

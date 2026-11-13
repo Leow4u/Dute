@@ -777,7 +777,10 @@ export function ItemCard({
   const salvando = useEspera(addPhotos.isPending);
   const anunciar = useAnuncio();
   useEffect(() => {
-    if (salvando.visivel) anunciar("Salvando no cadastro");
+    if (!salvando.visivel) return undefined;
+    // O que acaba antes da vez do anúncio o tira da fila do Anunciador.
+    const retirar = anunciar("Salvando no cadastro");
+    return retirar;
   }, [salvando.visivel, anunciar]);
   useEffect(() => () => onOcupar?.(false), [onOcupar]);
 

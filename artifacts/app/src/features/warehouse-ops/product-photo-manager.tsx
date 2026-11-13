@@ -61,7 +61,10 @@ export function ProductPhotoManager({
   const atualizando = useEspera(busy);
   const anunciar = useAnuncio();
   useEffect(() => {
-    if (atualizando.visivel) anunciar("Atualizando fotos");
+    if (!atualizando.visivel) return undefined;
+    // O que acaba antes da vez do anúncio o tira da fila do Anunciador.
+    const retirar = anunciar("Atualizando fotos");
+    return retirar;
   }, [atualizando.visivel, anunciar]);
   const selected =
     photos.find((photo) => photo.fileUrl === selectedUrl) ?? photos[0];

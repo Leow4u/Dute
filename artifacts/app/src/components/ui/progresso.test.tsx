@@ -7,9 +7,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const falados = vi.hoisted(() => [] as string[]);
-// O anunciador de verdade é estável, como este.
+const retirados = vi.hoisted(() => [] as string[]);
+// O anunciador de verdade é estável, como este, e devolve o "retirar".
 const anunciar = vi.hoisted(() => (texto: string) => {
   falados.push(texto);
+  return () => void retirados.push(texto);
 });
 vi.mock("@/lib/carregando/anunciador", () => ({ useAnuncio: () => anunciar }));
 
@@ -33,6 +35,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance", "Date"] });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   falados.length = 0;
+  retirados.length = 0;
   container = document.createElement("div");
   document.body.appendChild(container);
   raiz = createRoot(container);
@@ -260,6 +263,10 @@ describe("Progresso · etapas", () => {
     expect(falados).toEqual(["Concluindo a separação"]);
     act(() => vi.advanceTimersByTime(CARREGANDO.demoraMs));
     expect(falados).toEqual(["Concluindo a separação"]);
+    // As etapas acabam: o anúncio que ainda esperasse a vez sai da fila do Anunciador.
+    expect(retirados).toEqual([]);
+    render(<Progresso forma="etapas" titulo="Concluindo a separação" itens={etapas.map((item) => ({ ...item, estado: "feito" as const }))} />);
+    expect(retirados).toEqual(["Concluindo a separação"]);
   });
 
   it("três etapas marcam a caixa para a forma estreita (os rótulos sob os marcadores, quando não cabem lado a lado)", () => {

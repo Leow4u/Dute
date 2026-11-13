@@ -71,6 +71,7 @@ import { useContagemLembrada, type ContagensDaLista } from "@/lib/carregando/con
 import { resumoDaLista } from "@/lib/carregando/resumo-da-lista";
 import { CARREGANDO, relogioDaEspera } from "@/lib/carregando/tempo";
 import { desfechoDoErro, useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { useFalhaNaReleituraAutomatica } from "@/lib/carregando/use-leitura-com-falha";
 import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { usePalcoSemSaltos } from "@/lib/carregando/palco-sem-saltos";
@@ -323,7 +324,11 @@ export default function Pedidos() {
     () => buildOrderQueue({ requests: requests.data?.items, ops: ops.data, segurar: linhas.ocupada }),
     [ops.data, requests.data?.items, linhas],
   );
-  const loading = ops.isLoading || (decider && requests.isLoading);
+  // A falha sem nada lido fica na tela durante a releitura automática (o intervalo de 60 s): o aviso, o "Tentar de
+  // novo" e o foco nele. Só a nova tentativa que a pessoa pede volta às linhas-fantasma.
+  const opsNaTela = useFalhaNaReleituraAutomatica(ops);
+  const requestsNaTela = useFalhaNaReleituraAutomatica(requests);
+  const loading = opsNaTela.isLoading || (decider && requestsNaTela.isLoading);
   // A linha decidida sai sem salto (carregamento v2, momento 4): depois do
   // "Aprovado", esmaece e as de baixo sobem; sob o dedo, espera até 3 s. O
   // pedido só entra em "Para separar" quando a linha dele deixou "Para
@@ -692,7 +697,7 @@ export default function Pedidos() {
   // "Nenhum pedido para…" (docs/plataforma/diagnostico-carregamento.md,
   // decisão 6 de 06/11/2026). Com a lista já lida, a falha de uma atualização
   // não a apaga.
-  const semLeitura = (ops.isError && !ops.data) || (decider && requests.isError && !requests.data);
+  const semLeitura = (opsNaTela.isError && !ops.data) || (decider && requestsNaTela.isError && !requests.data);
   // Sem rede, a lista que já estava fica, com a hora da leitura; sem nada
   // lido, o aviso (decisão 2 do celular).
   const semRede = semConexaoNaLeitura(ops, ...(decider ? [requests] : []));
@@ -702,7 +707,7 @@ export default function Pedidos() {
   // espera quando a pessoa toca nele; a volta do app ao primeiro plano relê
   // com a barra no topo do primeiro cartão. Os saldos da validação relêem
   // junto do toque.
-  const leiturasDaLista = decider ? [ops, requests] : [ops];
+  const leiturasDaLista = decider ? [opsNaTela, requestsNaTela] : [opsNaTela];
   const atualizarLista = useAtualizarLista(leiturasDaLista, () => void queryClient.invalidateQueries({ queryKey: ["stock-balances"] }));
   const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} resultado="fim" />;
 
@@ -1226,14 +1231,17 @@ function LinhaParaAprovar({
   const emAndamento = andando ? `${andando === "aprovar" ? "Aprovando" : "Recusando"} ${noMeioDaFrase(titulo)}` : null;
 
   // O leitor de tela ouve a entrada na espera (aos 300 ms), a demora e a
-  // desistência, pelo Anunciador da tela; o resultado, o toast diz.
+  // desistência, pelo Anunciador da tela; o resultado, o toast diz. A espera
+  // que acaba antes da vez do anúncio dela o tira da fila: ninguém ouve
+  // "Aprovando pedido 1042" depois do "Aprovado".
   const anunciar = useAnuncio();
   const marco = andando && espera.visivel ? (espera.fase === "demorando" ? "demorando" : "espera") : semResposta ? "sem-resposta" : null;
   const anuncioDaEspera = emAndamento ? seisPalavras(emAndamento) : null;
   useEffect(() => {
-    if (marco === "espera" && anuncioDaEspera) anunciar(anuncioDaEspera);
-    else if (marco === "demorando") anunciar("Demorando mais que o normal");
-    else if (marco === "sem-resposta") anunciar("Sem confirmação do servidor");
+    if (marco === "espera" && anuncioDaEspera) return anunciar(anuncioDaEspera);
+    if (marco === "demorando") return anunciar("Demorando mais que o normal");
+    if (marco === "sem-resposta") return anunciar("Sem confirmação do servidor");
+    return undefined;
   }, [marco, anuncioDaEspera, anunciar]);
 
   // No lugar do meta da linha: aos 3 s o objeto ("Aprovando pedido 1042…"); aos 10 s, a demora com o relógio;

@@ -43,8 +43,12 @@ export interface EnvioDeFotos<T> {
   itens: readonly FotoNoEnvio<T>[];
   /** Alguma foto ainda espera ou sobe: o diálogo não fecha, e a escolha nova espera. */
   enviando: boolean;
-  /** Põe as fotos na fila. As enviadas da vez anterior saem da lista; as não enviadas ficam, com o "Tentar de novo". */
-  enviar: (arquivos: readonly File[]) => void;
+  /**
+   * Põe as fotos na fila. As enviadas da vez anterior saem da lista; as não
+   * enviadas ficam, com o "Tentar de novo". `escolhidas`: quantas a pessoa
+   * escolheu, quando o limite levou menos ("Enviando 4 de 6 fotos").
+   */
+  enviar: (arquivos: readonly File[], escolhidas?: number) => void;
   /** Põe a foto não enviada de volta na fila. */
   tentarDeNovo: (chave: string) => void;
   /** Esvazia a lista (a tela trocou de produto ou de rascunho); a que sobe é cancelada e não é entregue. */
@@ -55,9 +59,13 @@ function plural(n: number, um: string, varios: string) {
   return `${n} ${n === 1 ? um : varios}`;
 }
 
-/** "Enviando 4 fotos": o começo, pelo Anunciador. */
-export function anuncioDoComeco(total: number): string {
-  return `Enviando ${plural(total, "foto", "fotos")}`;
+/**
+ * "Enviando 4 fotos": o começo, pelo Anunciador. Com menos que as escolhidas
+ * (o limite da escolha), "Enviando 4 de 6 fotos": o limite vai no mesmo
+ * anúncio, que não se perde atrás de outro quando a região está ocupada.
+ */
+export function anuncioDoComeco(total: number, escolhidas = total): string {
+  return escolhidas > total ? `Enviando ${total} de ${plural(escolhidas, "foto", "fotos")}` : `Enviando ${plural(total, "foto", "fotos")}`;
 }
 
 /** "4 fotos enviadas", ou quantas não foram: o fim, pelo Anunciador. */
@@ -221,7 +229,7 @@ export function useEnvioDeFotos<T>(opcoes: OpcoesDoEnvio<T>): EnvioDeFotos<T> {
   }, [enviando, itens, anunciar]);
 
   const enviar = useCallback(
-    (arquivos: readonly File[]) => {
+    (arquivos: readonly File[], escolhidas?: number) => {
       if (arquivos.length === 0) return;
       vezes.current += 1;
       const vez = vezes.current;
@@ -241,7 +249,7 @@ export function useEnvioDeFotos<T>(opcoes: OpcoesDoEnvio<T>): EnvioDeFotos<T> {
         for (const item of lista) if (item.estado === "feito") soltar(item.miniatura);
         return [...ficam, ...novos];
       });
-      anunciar(anuncioDoComeco(novos.length));
+      anunciar(anuncioDoComeco(novos.length, escolhidas));
     },
     [anunciar],
   );

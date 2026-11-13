@@ -63,6 +63,7 @@ import { recordCustomerCode } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { erroDaResposta } from "@/lib/erro-da-resposta";
 import { useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { ehFaltaDeConexao } from "@/lib/conexao";
 
@@ -1624,8 +1625,6 @@ export default function AiControl() {
   const { code: activeCustomerCode } = useActiveCustomer();
   const [note, setNote] = useState("");
   const [severity, setSeverity] = useState<EventSeverity>("info");
-  // O Atualizar só gira quando a pessoa toca nele (carregamento v2, momento 7): a releitura de 60 s não mexe nele.
-  const [atualizando, setAtualizando] = useState(false);
 
   // A leitura que falhou fica na tela enquanto tenta de novo: o "Tentar de novo" não some com o foco nele.
   const overview = useLeituraComFalha(
@@ -1674,6 +1673,9 @@ export default function AiControl() {
     refetchOnWindowFocus: false,
     retry: 1,
   });
+  // O Atualizar das listas (carregamento v2, momento 7): só gira quando a pessoa toca nele (a releitura de 60 s não
+  // mexe nele), acorda a conexão de quem lê antes de reler e, no fim, "Lista atualizada".
+  const atualizarLista = useAtualizarLista([overview, foundation, warehouseOps, customerRequests, notifications]);
 
   const createNote = useMutation({
     mutationFn: async () =>
@@ -1852,20 +1854,11 @@ export default function AiControl() {
             variant="outline"
             // O Atualizar com 44 px (seção 7).
             className="min-h-11"
-            estado={atualizando ? "andamento" : "repouso"}
+            estado={atualizarLista.atualizando ? "andamento" : "repouso"}
             icone={<RefreshCw className="h-4 w-4" />}
             rotulo="Atualizar"
             andamento="Atualizando…"
-            onClick={() => {
-              setAtualizando(true);
-              void Promise.allSettled([
-                overview.refetch(),
-                foundation.refetch(),
-                warehouseOps.refetch(),
-                customerRequests.refetch(),
-                notifications.refetch(),
-              ]).then(() => setAtualizando(false));
-            }}
+            onClick={atualizarLista.atualizar}
           />
         </div>
       </div>

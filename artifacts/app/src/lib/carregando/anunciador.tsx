@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+import { aberturaDisseSemConexao, ultimaFalaDaAbertura } from "../abertura";
+
 import { useConexao } from "./estado-da-conexao";
 
 /** No máximo um anúncio a cada 2 s. */
@@ -64,8 +66,11 @@ export function useRetirarAnuncio(): (texto: string) => void {
  *
  * No máximo um anúncio a cada 2 s. O que chega dentro do intervalo espera o
  * fim dele, e só o último vale: o leitor de tela não fica lendo frase velha.
- * O mesmo texto dentro do intervalo não repete; depois dele, entra como texto
- * novo e é falado de novo.
+ * O mesmo texto dentro do intervalo não repete, nem tira da fila o outro que
+ * espera a vez; depois dele, entra como texto novo e é falado de novo.
+ *
+ * Na passagem da abertura (momento 5), o primeiro anúncio espera os 2 s da
+ * última fala da região dela, e a falta que ela já disse não é dita de novo.
  *
  * A falta de conexão ela diz sozinha, pelo estado único da conexão (momento
  * 8): "Sem conexão" uma vez, ao entrar, já com a histerese dos 3 s; nunca
@@ -96,15 +101,20 @@ export function Anunciador() {
       const texto = normalizar(bruto);
       if (!texto) return NADA_A_RETIRAR;
       const instante = performance.now();
-      const livreEm = faladoEm + INTERVALO_DO_ANUNCIO_MS;
+      // A região da abertura e a do app falam a mesma pessoa: o primeiro anúncio do app espera os 2 s da última fala
+      // da abertura.
+      const livreEm = Math.max(faladoEm, ultimaFalaDaAbertura()?.em ?? Number.NEGATIVE_INFINITY) + INTERVALO_DO_ANUNCIO_MS;
       if (espera === null && instante >= livreEm) {
         dizer(texto);
         return NADA_A_RETIRAR;
       }
+      // O texto que acabou de ser dito não repete, e não tira da fila o outro que espera a vez (o "Sem conexão"
+      // pedido entre duas esperas que dizem a mesma demora).
+      if (texto === atual) return NADA_A_RETIRAR;
       vezes += 1;
       const vez = vezes;
-      pendente = texto === atual ? null : { texto, vez };
-      if (espera === null && pendente !== null) {
+      pendente = { texto, vez };
+      if (espera === null) {
         espera = setTimeout(() => {
           espera = null;
           const proximo = pendente;
@@ -132,7 +142,9 @@ export function Anunciador() {
   }, []);
 
   useEffect(() => {
-    if (conexao === "sem-conexao" && conexaoAntes.current !== "sem-conexao") anunciar("Sem conexão");
+    // A falta que a abertura já disse na região dela não é dita de novo (a abertura na tela, ou a que saiu dizendo
+    // "Sem conexão" sem a rede voltar).
+    if (conexao === "sem-conexao" && conexaoAntes.current !== "sem-conexao" && !aberturaDisseSemConexao()) anunciar("Sem conexão");
     conexaoAntes.current = conexao;
   }, [conexao]);
 
