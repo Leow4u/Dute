@@ -11,6 +11,12 @@ export interface OpcoesDaEspera {
   segurarMinimo?: boolean;
   /** A desistência: 70 s por padrão; 180 s no chat do Agent Dute e na foto por IA. */
   desisteMs?: number;
+  /**
+   * Quando a espera começou (`performance.now()`), se ela continua uma que já
+   * estava na tela: o relógio não volta ao zero, e o que já tinha aparecido
+   * aparece na hora. Lido só quando a espera começa.
+   */
+  desde?: number;
 }
 
 export interface Espera {
@@ -35,6 +41,13 @@ const PARADO: Relogio = { modo: "parado" };
 const OCULTA: Espera = { visivel: false, fase: "oculta", decorridoMs: 0, calmo: false, movimento: false };
 
 const agora = () => performance.now();
+
+/** A espera que começa agora, ou que continua a que começou em `desde`. */
+function comecar(desde: number | undefined): Relogio {
+  const instante = agora();
+  const inicio = desde !== undefined && Number.isFinite(desde) && desde <= instante ? desde : instante;
+  return { modo: "correndo", inicio, agora: instante, apareceuEm: instante - inicio >= CARREGANDO.atrasoMs ? instante : null };
+}
 
 function ligar(relogio: Relogio, instante: number): Relogio {
   if (relogio.modo === "correndo") return relogio;
@@ -91,12 +104,13 @@ function esperaDoRelogio(relogio: Relogio, desisteMs: number): Espera {
  * lido direto, que pisca ou não aparece. Nada aparece antes de 300 ms; o
  * indicador que apareceu fica pelo menos 500 ms, quando pedido; aos 3 s o
  * objeto entra na linha; aos 5 s o movimento decorativo para; aos 10 s vêm a
- * demora e a volta calma; aos 70 s, a desistência. Cada espera conta do zero.
+ * demora e a volta calma; aos 70 s, a desistência. Cada espera conta do zero,
+ * menos a que continua outra (`desde`).
  */
 export function useEspera(ativa: boolean, opcoes: OpcoesDaEspera = {}): Espera {
   const segurarMinimo = opcoes.segurarMinimo ?? false;
   const desisteMs = opcoes.desisteMs ?? CARREGANDO.desisteMs;
-  const [relogio, setRelogio] = useState<Relogio>(() => (ativa ? ligar(PARADO, agora()) : PARADO));
+  const [relogio, setRelogio] = useState<Relogio>(() => (ativa ? comecar(opcoes.desde) : PARADO));
 
   useEffect(() => {
     const instante = agora();

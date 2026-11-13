@@ -1,6 +1,7 @@
 import { Suspense, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { collection, getCountFromServer } from "firebase/firestore";
+import { useLocation } from "wouter";
 
 import { CarregandoTela } from "@/components/ui/carregando-tela";
 import { useToast } from "@/hooks/use-toast";
@@ -10,6 +11,7 @@ import { routinesKey } from "@/lib/agent-routines";
 import { CHAVE_DAS_ANOTACOES, chaveNoAlvo, clienteDoNucleo } from "@/lib/agente/cliente";
 import { abreAgenteDoNucleo, revisaODoAgente } from "@/lib/agente/navegacao";
 import { useAppUser } from "@/lib/auth";
+import { nomeDaTela } from "@/lib/document-title";
 import { firestore } from "@/lib/firebase";
 import type { HomeInboxItem } from "@/lib/home-inbox";
 import { itensDoInicioDoWms } from "@/lib/inicio-do-wms";
@@ -29,7 +31,7 @@ import { PainelDoAgenteView, type AbaDoAgente, type DecisaoDaNota } from "./agen
  * fica o painel antigo (pages/ai-control.tsx).
  */
 
-const PainelAntigo = telaSobDemanda(() => import("./ai-control"));
+const PainelAntigo = telaSobDemanda("pages/ai-control", () => import("./ai-control"));
 
 /** As linhas do "Precisa de você" que são do agente: o alerta de itens parados, as anotações e os playbooks para aprovar. */
 export const LINHAS_DO_AGENTE: readonly string[] = ["stock-alerts", "agent-notes", "agent-playbooks"];
@@ -105,10 +107,12 @@ function PainelDoAgente({ role }: { role: ProfileRole }) {
 
 export default function PainelDoAgentePage() {
   const { user } = useAppUser();
+  const [location] = useLocation();
   const role = user?.publicMetadata.role;
   if (!role || !abreAgenteDoNucleo(role)) {
+    // O mesmo nome da espera da rota: a tela não troca de nome no meio da espera.
     return (
-      <Suspense fallback={<CarregandoTela titulo="Painel" />}>
+      <Suspense fallback={<CarregandoTela titulo={nomeDaTela(location)} />}>
         <PainelAntigo />
       </Suspense>
     );

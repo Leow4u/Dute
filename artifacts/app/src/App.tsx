@@ -38,126 +38,128 @@ import NotFound from "./pages/not-found";
 import { telaSobDemanda } from "./lib/telas-no-aparelho";
 
 // As telas chegam sob demanda e, para a equipe, ficam guardadas no aparelho
-// depois de entrar (lib/telas-no-aparelho.ts): abrem sem sinal.
-const Home = telaSobDemanda(() => import("./pages/home"));
-const EntradaPage = telaSobDemanda(() => import("./pages/entrada"));
-const Catalog = telaSobDemanda(() => import("./pages/catalog"));
-const Movements = telaSobDemanda(() => import("./pages/movements"));
-const Orders = telaSobDemanda(() => import("./pages/orders"));
-const Reports = telaSobDemanda(() => import("./pages/reports"));
-const BillingHub = telaSobDemanda(() => import("./pages/billing-hub"));
-const BillingInvoice = telaSobDemanda(() => import("./pages/billing-invoice"));
-const Users = telaSobDemanda(() => import("./pages/users"));
-const SettingsCustomers = telaSobDemanda(() => import("./pages/settings-customers"));
-const SettingsIntegrations = telaSobDemanda(() => import("./pages/settings-integrations"));
-const Documents = telaSobDemanda(() => import("./pages/documents"));
-const Settings = telaSobDemanda(() => import("./pages/settings"));
-const SettingsAccount = telaSobDemanda(() =>
+// depois de entrar (lib/telas-no-aparelho.ts): abrem sem sinal. O primeiro
+// argumento é o arquivo do import, a partir de src: a chave da tela no mapa
+// do build.
+const Home = telaSobDemanda("pages/home", () => import("./pages/home"));
+const EntradaPage = telaSobDemanda("pages/entrada", () => import("./pages/entrada"));
+const Catalog = telaSobDemanda("pages/catalog", () => import("./pages/catalog"));
+const Movements = telaSobDemanda("pages/movements", () => import("./pages/movements"));
+const Orders = telaSobDemanda("pages/orders", () => import("./pages/orders"));
+const Reports = telaSobDemanda("pages/reports", () => import("./pages/reports"));
+const BillingHub = telaSobDemanda("pages/billing-hub", () => import("./pages/billing-hub"));
+const BillingInvoice = telaSobDemanda("pages/billing-invoice", () => import("./pages/billing-invoice"));
+const Users = telaSobDemanda("pages/users", () => import("./pages/users"));
+const SettingsCustomers = telaSobDemanda("pages/settings-customers", () => import("./pages/settings-customers"));
+const SettingsIntegrations = telaSobDemanda("pages/settings-integrations", () => import("./pages/settings-integrations"));
+const Documents = telaSobDemanda("pages/documents", () => import("./pages/documents"));
+const Settings = telaSobDemanda("pages/settings", () => import("./pages/settings"));
+const SettingsAccount = telaSobDemanda("pages/settings", () =>
   import("./pages/settings").then((m) => ({ default: m.SettingsAccount })),
 );
-const SettingsApp = telaSobDemanda(() =>
+const SettingsApp = telaSobDemanda("pages/settings", () =>
   import("./pages/settings").then((m) => ({ default: m.SettingsApp })),
 );
 // Com o agente do núcleo, o painel novo na v3; fora dele, o antigo (pages/ai-control.tsx).
-const PainelDoAgente = telaSobDemanda(() => import("./pages/agente-painel"));
-const AgentePage = telaSobDemanda(() => import("./pages/agente"));
+const PainelDoAgente = telaSobDemanda("pages/agente-painel", () => import("./pages/agente-painel"));
+const AgentePage = telaSobDemanda("pages/agente", () => import("./pages/agente"));
 // O Agent Dute no shell de cada módulo (parte 5.5j): só com a liberação dele.
-const AgenteDoComercial = telaSobDemanda(() => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDoComercial })));
-const AgenteDaOperacao = telaSobDemanda(() => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDaOperacao })));
-const AgenteDoFinanceiro = telaSobDemanda(() => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDoFinanceiro })));
-const AgentKnowledge = telaSobDemanda(() => import("./pages/agent-knowledge"));
-const SettingsSystem = telaSobDemanda(() => import("./pages/settings-system"));
-const CustomerRequests = telaSobDemanda(() => import("./pages/customer-requests"));
-const WarehouseOps = telaSobDemanda(() => import("./pages/warehouse-ops"));
-const Receber = telaSobDemanda(() => import("./pages/receber"));
-const WmsInventoryPage = telaSobDemanda(() => import("./pages/wms-inventory"));
-const WarehousePositionsPage = telaSobDemanda(() => import("./pages/warehouse-positions"));
-const WarehouseLabelsPage = telaSobDemanda(() => import("./pages/warehouse-labels"));
-const EstoqueAlertas = telaSobDemanda(() => import("./pages/estoque-alertas"));
-const WarehouseMapPage = telaSobDemanda(() => import("./pages/warehouse-map"));
-const Pedidos = telaSobDemanda(() => import("./pages/pedidos"));
-const PedidosLista = telaSobDemanda(() => import("./pages/pedidos-lista"));
-const PedidosRomaneio = telaSobDemanda(() => import("./pages/pedidos-romaneio"));
-const PedidosSeparar = telaSobDemanda(() => import("./pages/pedidos-separar"));
-const Estoque = telaSobDemanda(() => import("./pages/estoque"));
-const WmsReturnsPage = telaSobDemanda(() => import("./pages/wms-returns"));
-const ClienteAssistente = telaSobDemanda(() =>
+const AgenteDoComercial = telaSobDemanda("pages/agente-do-modulo", () => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDoComercial })));
+const AgenteDaOperacao = telaSobDemanda("pages/agente-do-modulo", () => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDaOperacao })));
+const AgenteDoFinanceiro = telaSobDemanda("pages/agente-do-modulo", () => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDoFinanceiro })));
+const AgentKnowledge = telaSobDemanda("pages/agent-knowledge", () => import("./pages/agent-knowledge"));
+const SettingsSystem = telaSobDemanda("pages/settings-system", () => import("./pages/settings-system"));
+const CustomerRequests = telaSobDemanda("pages/customer-requests", () => import("./pages/customer-requests"));
+const WarehouseOps = telaSobDemanda("pages/warehouse-ops", () => import("./pages/warehouse-ops"));
+const Receber = telaSobDemanda("pages/receber", () => import("./pages/receber"));
+const WmsInventoryPage = telaSobDemanda("pages/wms-inventory", () => import("./pages/wms-inventory"));
+const WarehousePositionsPage = telaSobDemanda("pages/warehouse-positions", () => import("./pages/warehouse-positions"));
+const WarehouseLabelsPage = telaSobDemanda("pages/warehouse-labels", () => import("./pages/warehouse-labels"));
+const EstoqueAlertas = telaSobDemanda("pages/estoque-alertas", () => import("./pages/estoque-alertas"));
+const WarehouseMapPage = telaSobDemanda("pages/warehouse-map", () => import("./pages/warehouse-map"));
+const Pedidos = telaSobDemanda("pages/pedidos", () => import("./pages/pedidos"));
+const PedidosLista = telaSobDemanda("pages/pedidos-lista", () => import("./pages/pedidos-lista"));
+const PedidosRomaneio = telaSobDemanda("pages/pedidos-romaneio", () => import("./pages/pedidos-romaneio"));
+const PedidosSeparar = telaSobDemanda("pages/pedidos-separar", () => import("./pages/pedidos-separar"));
+const Estoque = telaSobDemanda("pages/estoque", () => import("./pages/estoque"));
+const WmsReturnsPage = telaSobDemanda("pages/wms-returns", () => import("./pages/wms-returns"));
+const ClienteAssistente = telaSobDemanda("pages/client", () =>
   import("./pages/client").then((m) => ({ default: m.ClienteAssistente })),
 );
-const ClienteDocumentos = telaSobDemanda(() =>
+const ClienteDocumentos = telaSobDemanda("pages/client", () =>
   import("./pages/client").then((m) => ({ default: m.ClienteDocumentos })),
 );
-const ClienteEstoque = telaSobDemanda(() =>
+const ClienteEstoque = telaSobDemanda("pages/client", () =>
   import("./pages/client").then((m) => ({ default: m.ClienteEstoque })),
 );
-const ClienteEventos = telaSobDemanda(() =>
+const ClienteEventos = telaSobDemanda("pages/client", () =>
   import("./pages/client").then((m) => ({ default: m.ClienteEventos })),
 );
-const ClienteServicos = telaSobDemanda(() =>
+const ClienteServicos = telaSobDemanda("pages/client", () =>
   import("./pages/client").then((m) => ({ default: m.ClienteServicos })),
 );
-const ClienteComprovante = telaSobDemanda(() =>
+const ClienteComprovante = telaSobDemanda("pages/client", () =>
   import("./pages/client").then((m) => ({ default: m.ClienteComprovante })),
 );
-const ClienteFaturas = telaSobDemanda(() =>
+const ClienteFaturas = telaSobDemanda("pages/client", () =>
   import("./pages/client").then((m) => ({ default: m.ClienteFaturas })),
 );
-const ClienteFatura = telaSobDemanda(() =>
+const ClienteFatura = telaSobDemanda("pages/client", () =>
   import("./pages/client").then((m) => ({ default: m.ClienteFatura })),
 );
-const ClienteRelatorio = telaSobDemanda(() =>
+const ClienteRelatorio = telaSobDemanda("pages/client", () =>
   import("./pages/client").then((m) => ({ default: m.ClienteRelatorio })),
 );
-const ClienteInicio = telaSobDemanda(() =>
+const ClienteInicio = telaSobDemanda("pages/client", () =>
   import("./pages/client").then((m) => ({ default: m.ClienteInicio })),
 );
-const ClientePedidos = telaSobDemanda(() =>
+const ClientePedidos = telaSobDemanda("pages/client", () =>
   import("./pages/client").then((m) => ({ default: m.ClientePedidos })),
 );
-const ClienteEnvios = telaSobDemanda(() =>
+const ClienteEnvios = telaSobDemanda("pages/client", () =>
   import("./pages/client").then((m) => ({ default: m.ClienteEnvios })),
 );
-const ComercialClientes = telaSobDemanda(() => import("./pages/comercial/clientes"));
-const ComercialInicio = telaSobDemanda(() => import("./pages/comercial/inicio"));
-const FinanceiroInicio = telaSobDemanda(() => import("./pages/financeiro/inicio"));
-const FinanceiroAFaturar = telaSobDemanda(() => import("./pages/financeiro/a-faturar"));
-const FinanceiroAReceber = telaSobDemanda(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroAReceber })));
-const FinanceiroVencidos = telaSobDemanda(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroVencidos })));
-const FinanceiroPagos = telaSobDemanda(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroPagos })));
-const FinanceiroFaturas = telaSobDemanda(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroFaturas })));
-const FinanceiroNf = telaSobDemanda(() => import("./pages/financeiro/nf"));
-const FinanceiroEmissoes = telaSobDemanda(() => import("./pages/financeiro/emissoes"));
-const FinanceiroRelatorios = telaSobDemanda(() => import("./pages/financeiro/relatorios"));
-const RhInicio = telaSobDemanda(() => import("./pages/rh/inicio"));
-const RhPessoas = telaSobDemanda(() => import("./pages/rh/pessoas"));
-const RhFicha = telaSobDemanda(() => import("./pages/rh/ficha"));
-const RhExportacao = telaSobDemanda(() => import("./pages/rh/exportacao"));
-const FinanceiroContratos = telaSobDemanda(() => import("./pages/financeiro/contratos"));
-const FinanceiroAutorizacoes = telaSobDemanda(() => import("./pages/financeiro/autorizacoes"));
-const ComercialOrcamentos = telaSobDemanda(() => import("./pages/comercial/orcamentos"));
-const ComercialOrcamento = telaSobDemanda(() => import("./pages/comercial/orcamento"));
-const ComercialDocumento = telaSobDemanda(() => import("./pages/comercial/documento"));
-const ComercialAprovar = telaSobDemanda(() => import("./pages/comercial/aprovar"));
-const ComercialContratos = telaSobDemanda(() => import("./pages/comercial/contratos"));
-const ComercialAutorizacoes = telaSobDemanda(() => import("./pages/comercial/autorizacoes"));
-const ComercialMedicoes = telaSobDemanda(() => import("./pages/comercial/medicoes"));
-const OperacaoInicio = telaSobDemanda(() => import("./pages/operacao/inicio"));
-const OperacaoHoje = telaSobDemanda(() => import("./pages/operacao/hoje"));
-const OperacaoAgenda = telaSobDemanda(() => import("./pages/operacao/agenda"));
-const OperacaoDemandas = telaSobDemanda(() => import("./pages/operacao/demandas"));
-const OperacaoDemanda = telaSobDemanda(() => import("./pages/operacao/demanda"));
-const OperacaoDemandaNova = telaSobDemanda(() => import("./pages/operacao/demanda-nova"));
-const OperacaoPlanejar = telaSobDemanda(() => import("./pages/operacao/planejar"));
-const OperacaoOs = telaSobDemanda(() => import("./pages/operacao/os"));
-const OperacaoOsImpressao = telaSobDemanda(() => import("./pages/operacao/os-impressao"));
-const OperacaoRevisao = telaSobDemanda(() => import("./pages/operacao/revisao"));
-const OperacaoRelatorios = telaSobDemanda(() => import("./pages/operacao/relatorios"));
-const CampoHoje = telaSobDemanda(() => import("./pages/campo/hoje"));
-const CampoOs = telaSobDemanda(() => import("./pages/campo/os"));
-const CampoConcluir = telaSobDemanda(() => import("./pages/campo/concluir"));
-const TvDaSala = telaSobDemanda(() => import("./pages/tv/tv"));
-const OperacaoColaboradores = telaSobDemanda(() => import("./pages/operacao/colaboradores"));
-const OperacaoVeiculos = telaSobDemanda(() => import("./pages/operacao/veiculos"));
+const ComercialClientes = telaSobDemanda("pages/comercial/clientes", () => import("./pages/comercial/clientes"));
+const ComercialInicio = telaSobDemanda("pages/comercial/inicio", () => import("./pages/comercial/inicio"));
+const FinanceiroInicio = telaSobDemanda("pages/financeiro/inicio", () => import("./pages/financeiro/inicio"));
+const FinanceiroAFaturar = telaSobDemanda("pages/financeiro/a-faturar", () => import("./pages/financeiro/a-faturar"));
+const FinanceiroAReceber = telaSobDemanda("pages/financeiro/faturas", () => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroAReceber })));
+const FinanceiroVencidos = telaSobDemanda("pages/financeiro/faturas", () => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroVencidos })));
+const FinanceiroPagos = telaSobDemanda("pages/financeiro/faturas", () => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroPagos })));
+const FinanceiroFaturas = telaSobDemanda("pages/financeiro/faturas", () => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroFaturas })));
+const FinanceiroNf = telaSobDemanda("pages/financeiro/nf", () => import("./pages/financeiro/nf"));
+const FinanceiroEmissoes = telaSobDemanda("pages/financeiro/emissoes", () => import("./pages/financeiro/emissoes"));
+const FinanceiroRelatorios = telaSobDemanda("pages/financeiro/relatorios", () => import("./pages/financeiro/relatorios"));
+const RhInicio = telaSobDemanda("pages/rh/inicio", () => import("./pages/rh/inicio"));
+const RhPessoas = telaSobDemanda("pages/rh/pessoas", () => import("./pages/rh/pessoas"));
+const RhFicha = telaSobDemanda("pages/rh/ficha", () => import("./pages/rh/ficha"));
+const RhExportacao = telaSobDemanda("pages/rh/exportacao", () => import("./pages/rh/exportacao"));
+const FinanceiroContratos = telaSobDemanda("pages/financeiro/contratos", () => import("./pages/financeiro/contratos"));
+const FinanceiroAutorizacoes = telaSobDemanda("pages/financeiro/autorizacoes", () => import("./pages/financeiro/autorizacoes"));
+const ComercialOrcamentos = telaSobDemanda("pages/comercial/orcamentos", () => import("./pages/comercial/orcamentos"));
+const ComercialOrcamento = telaSobDemanda("pages/comercial/orcamento", () => import("./pages/comercial/orcamento"));
+const ComercialDocumento = telaSobDemanda("pages/comercial/documento", () => import("./pages/comercial/documento"));
+const ComercialAprovar = telaSobDemanda("pages/comercial/aprovar", () => import("./pages/comercial/aprovar"));
+const ComercialContratos = telaSobDemanda("pages/comercial/contratos", () => import("./pages/comercial/contratos"));
+const ComercialAutorizacoes = telaSobDemanda("pages/comercial/autorizacoes", () => import("./pages/comercial/autorizacoes"));
+const ComercialMedicoes = telaSobDemanda("pages/comercial/medicoes", () => import("./pages/comercial/medicoes"));
+const OperacaoInicio = telaSobDemanda("pages/operacao/inicio", () => import("./pages/operacao/inicio"));
+const OperacaoHoje = telaSobDemanda("pages/operacao/hoje", () => import("./pages/operacao/hoje"));
+const OperacaoAgenda = telaSobDemanda("pages/operacao/agenda", () => import("./pages/operacao/agenda"));
+const OperacaoDemandas = telaSobDemanda("pages/operacao/demandas", () => import("./pages/operacao/demandas"));
+const OperacaoDemanda = telaSobDemanda("pages/operacao/demanda", () => import("./pages/operacao/demanda"));
+const OperacaoDemandaNova = telaSobDemanda("pages/operacao/demanda-nova", () => import("./pages/operacao/demanda-nova"));
+const OperacaoPlanejar = telaSobDemanda("pages/operacao/planejar", () => import("./pages/operacao/planejar"));
+const OperacaoOs = telaSobDemanda("pages/operacao/os", () => import("./pages/operacao/os"));
+const OperacaoOsImpressao = telaSobDemanda("pages/operacao/os-impressao", () => import("./pages/operacao/os-impressao"));
+const OperacaoRevisao = telaSobDemanda("pages/operacao/revisao", () => import("./pages/operacao/revisao"));
+const OperacaoRelatorios = telaSobDemanda("pages/operacao/relatorios", () => import("./pages/operacao/relatorios"));
+const CampoHoje = telaSobDemanda("pages/campo/hoje", () => import("./pages/campo/hoje"));
+const CampoOs = telaSobDemanda("pages/campo/os", () => import("./pages/campo/os"));
+const CampoConcluir = telaSobDemanda("pages/campo/concluir", () => import("./pages/campo/concluir"));
+const TvDaSala = telaSobDemanda("pages/tv/tv", () => import("./pages/tv/tv"));
+const OperacaoColaboradores = telaSobDemanda("pages/operacao/colaboradores", () => import("./pages/operacao/colaboradores"));
+const OperacaoVeiculos = telaSobDemanda("pages/operacao/veiculos", () => import("./pages/operacao/veiculos"));
 import { useRole } from "./hooks/use-role";
 import { AuthProvider, useAppUser } from "./lib/auth";
 import { ActiveCustomerProvider } from "./lib/active-customer-context";
@@ -188,7 +190,7 @@ import { MENSAGEM_DA_RECUPERACAO, problemaDaRecuperacao } from "./lib/recuperar-
 import { layoutDaRota, type LayoutDaRota } from "./lib/ambientes";
 import { LEGACY_SETTINGS_REDIRECTS } from "./lib/settings-nav";
 import { nomeDaTela } from "./lib/document-title";
-import { agendarGuardaDasTelas, telasDoPapel } from "./lib/telas-no-aparelho";
+import { abreATela, agendarGuardaDasTelas, telasDoPapel } from "./lib/telas-no-aparelho";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -477,7 +479,7 @@ const WmsCountRedirect = () => <Redirect to="/wms/contagem" />;
 // As etapas antigas (putaway, picking, packing, expedição, exceções) viraram
 // redirects: a guarda vive no Receber e o pedido inteiro em Pedidos, onde
 // "Tratar" abre a tarefa bloqueada.
-const WmsQuality = () => <WmsModuleScreen module="quality" />;
+const WmsQuality = abreATela(() => <WmsModuleScreen module="quality" />, WarehouseOps);
 const ClientRequestsRedirect = () => <Redirect to="/portal/recebimentos" />;
 const ClientAgentRedirect = () => <Redirect to="/portal/agente" />;
 const ClientInvoicesRedirect = () => <Redirect to="/portal/faturas" />;
@@ -654,7 +656,7 @@ function ProtectedRoute({
         return (
           <RoleGate appRoles={appRoles} profileRoles={profileRoles} path={rest.path}>
             <Layout>
-              <ChunkErrorBoundary>
+              <ChunkErrorBoundary titulo={titulo}>
                 <Suspense fallback={<CarregandoTela titulo={titulo} />}>
                   <Component params={params} />
                 </Suspense>
@@ -676,12 +678,11 @@ function GuardarTelasNoAparelho() {
   const papel = isLoaded ? user?.publicMetadata.role : undefined;
   useEffect(() => {
     if (!papel) return undefined;
+    // Só as rotas deste ambiente: na produção, os módulos pausados ficam de fora.
     const rotas = PROTECTED_ROUTES.filter((route) => rotaDisponivelNaArmazenagem(route.path));
-    return agendarGuardaDasTelas(
-      papel,
-      telasDoPapel(rotas, papel),
-      PROTECTED_ROUTES.map((route) => route.component),
-    );
+    // A Entrada não tem rota própria: abre em "/" onde a plataforma está liberada.
+    const extras = PLATAFORMA_LIBERADA ? [EntradaPage] : [];
+    return agendarGuardaDasTelas(papel, telasDoPapel(rotas, papel, extras));
   }, [papel]);
   return null;
 }

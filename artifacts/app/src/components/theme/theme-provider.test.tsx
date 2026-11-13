@@ -53,15 +53,27 @@ afterEach(() => {
 });
 
 describe("a cor da barra do navegador", () => {
-  it("fica no preto da abertura enquanto ela cobre a tela, e vai para o tema quando ela sai", () => {
-    const abertura = document.createElement("div");
-    abertura.id = "abertura";
-    document.body.prepend(abertura);
-    act(() => raiz!.render(<AppThemeProvider>app</AppThemeProvider>));
-    expect(cor()).toBe("#161616");
-    act(() => fecharAbertura());
-    // Sem perfil (o login), o tema é o claro.
-    expect(cor()).toBe(themeColorFor("light"));
+  it("fica no preto da abertura enquanto ela cobre a tela e esmaece, e vai para o tema quando ela sai", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    try {
+      const abertura = document.createElement("div");
+      abertura.id = "abertura";
+      document.body.prepend(abertura);
+      act(() => raiz!.render(<AppThemeProvider>app</AppThemeProvider>));
+      expect(cor()).toBe("#161616");
+      act(() => fecharAbertura());
+      // Esmaecendo, a abertura preta ainda está na tela: a barra não clareia por cima dela.
+      expect(abertura.isConnected).toBe(true);
+      expect(cor()).toBe("#161616");
+      act(() => {
+        abertura.dispatchEvent(Object.assign(new Event("animationend", { bubbles: true }), { animationName: "abertura-esmaece" }));
+      });
+      expect(abertura.isConnected).toBe(false);
+      // Sem perfil (o login), o tema é o claro.
+      expect(cor()).toBe(themeColorFor("light"));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("sem abertura, acompanha o tema desde o começo", () => {

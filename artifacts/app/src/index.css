@@ -800,6 +800,8 @@
   --carregando-t-pulso: 2000ms; /* o respiro do movimento reduzido (0,5 Hz) */
   --carregando-t-abertura-sai: 260ms; /* a abertura esmaece quando o perfil chega (o index.html repete o valor) */
   --carregando-t-abertura-completa: 200ms; /* antes, o segmento completa o trilho, se ele já estava à vista */
+  --carregando-t-abertura-segmento-sai: 60ms; /* quando o trilho completa, o segmento que varria some */
+  --carregando-t-abertura-marca-sai: 200ms; /* a marca recua a 0,96 e sai, com a palavra, enquanto o preto abre */
   --carregando-t-dedo: 700ms; /* a lista não se mexe se houve toque nela nesse intervalo */
 
   /* Forma: a caixa chanfrada do "D" da marca (viewBox 24), três cantos com

@@ -29,6 +29,8 @@ describe("o relógio da espera", () => {
       contaMs: 160,
       aberturaSaiMs: 260,
       aberturaCompletaMs: 200,
+      aberturaSegmentoSaiMs: 60,
+      aberturaMarcaSaiMs: 200,
     });
   });
 

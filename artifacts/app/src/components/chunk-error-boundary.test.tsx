@@ -7,6 +7,9 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { Anunciador } from "@/lib/carregando/anunciador";
+import { CARREGANDO } from "@/lib/carregando/tempo";
+import { telaSobDemanda } from "@/lib/telas-no-aparelho";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosForaDaLista } from "@/test/textos";
 
@@ -49,7 +52,7 @@ function ambiente(online: boolean, resposta: number | "falha" | "nunca"): Ambien
     if (resposta === "nunca") return new Promise<{ status: number }>(() => undefined);
     return { status: resposta };
   });
-  return { online, sondar, prazoMs: 50 };
+  return { online, sondar, prazoMs: 50, raiz: "/" };
 }
 
 describe("o que falhou", () => {
@@ -73,15 +76,17 @@ describe("o que falhou", () => {
     ["com rede e o arquivo lá (sinal fraco)", FIREFOX, true, 200, "sem-conexao"],
     ["com rede e a pergunta sem resposta", CHROME, true, "falha", "sem-conexao"],
     ["com rede e a pergunta que não volta", CHROME, true, "nunca", "sem-conexao"],
-    ["no Safari, que não diz o arquivo, com rede", SAFARI, true, 200, "versao-nova"],
+    ["no Safari, que não diz o arquivo, com o servidor respondendo", SAFARI, true, 200, "versao-nova"],
+    ["no Safari, com o aparelho \"conectado\" e o servidor fora de alcance", SAFARI, true, "falha", "sem-conexao"],
+    ["no Safari, com a pergunta que não volta (sinal fraco)", SAFARI, true, "nunca", "sem-conexao"],
     ["a própria tela quebrou", DA_TELA, true, 200, "erro-de-tela"],
     ["a própria tela quebrou, sem rede", DA_TELA, false, 200, "erro-de-tela"],
   ])("%s", async (_caso, erro, online, resposta, esperado) => {
     const meio = ambiente(online, resposta);
     expect(await classificarFalha(erro, meio)).toBe(esperado);
-    // Só pergunta ao servidor quando precisa desempatar, e pergunta pelo arquivo que faltou.
-    if (online && falhaDeArquivo(erro) && enderecoDoArquivo(erro)) {
-      expect(meio.sondar).toHaveBeenCalledWith(enderecoDoArquivo(erro));
+    // Só pergunta ao servidor quando precisa desempatar: pelo arquivo que faltou ou, sem ele, pelo app.
+    if (online && falhaDeArquivo(erro)) {
+      expect(meio.sondar).toHaveBeenCalledWith(enderecoDoArquivo(erro) ?? "/");
     } else {
       expect(meio.sondar).not.toHaveBeenCalled();
     }
@@ -164,6 +169,59 @@ describe("ChunkErrorBoundary", () => {
     });
     expect(container!.querySelector("[data-carregando-tela]")).not.toBeNull();
     expect(container!.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("enquanto confere, segue com o nome da tela e o relógio de quando ela começou a abrir, sem anunciar de novo", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance", "Date"] });
+    try {
+      let falhar: (erro: unknown) => void = () => undefined;
+      const Pedidos = telaSobDemanda("pages/pedidos", () => new Promise<{ default: () => null }>((_, recusar) => (falhar = recusar)));
+      const { Suspense } = await import("react");
+      const { CarregandoTela } = await import("@/components/ui/carregando-tela");
+      const meio = ambiente(true, "nunca");
+      meio.prazoMs = 8_000;
+      const anuncio = () => document.querySelector("[data-anunciador]")?.textContent ?? "";
+      const tela = () => container!.querySelector("[data-carregando-tela]")?.textContent;
+      await act(async () => {
+        raiz!.render(
+          <>
+            <ChunkErrorBoundary titulo="Pedidos" ambiente={() => meio}>
+              <Suspense fallback={<CarregandoTela titulo="Pedidos" />}>
+                <Pedidos />
+              </Suspense>
+            </ChunkErrorBoundary>
+            <Anunciador />
+          </>,
+        );
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(CARREGANDO.atrasoMs);
+      });
+      expect(tela()).toBe("Abrindo Pedidos…");
+      expect(anuncio()).toBe("Abrindo Pedidos…");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_000);
+      });
+      // O arquivo não veio; a sonda ainda não respondeu.
+      await act(async () => {
+        falhar(CHROME);
+        await Promise.resolve();
+      });
+      // O rótulo não some, não troca de nome e não é anunciado de novo.
+      expect(tela()).toBe("Abrindo Pedidos…");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(CARREGANDO.atrasoMs);
+      });
+      expect(tela()).toBe("Abrindo Pedidos…");
+      expect(anuncio()).toBe("Abrindo Pedidos…");
+      // O relógio é o mesmo: aos 10 s desde o começo, a demora.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(CARREGANDO.demoraMs - 3_000 - 2 * CARREGANDO.atrasoMs);
+      });
+      expect(tela()).toContain("Demorando mais que o normal");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("sem falha, mostra a tela", async () => {

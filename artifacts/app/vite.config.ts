@@ -6,6 +6,7 @@ import { defineConfig, type Plugin } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 import { folhasDepoisDaAbertura } from "./src/lib/abertura-no-build";
+import { pluginDoMapaDasTelas } from "./src/lib/telas-no-aparelho-no-build";
 
 const rawPort = process.env.PORT ?? "5173";
 
@@ -48,10 +49,12 @@ function folhaDepoisDaAbertura(): Plugin {
   };
 }
 
+const buildCommit = gitBuildCommit();
+
 export default defineConfig({
   base: basePath,
   define: {
-    __BUILD_COMMIT__: JSON.stringify(gitBuildCommit()),
+    __BUILD_COMMIT__: JSON.stringify(buildCommit),
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
   envDir: path.resolve(import.meta.dirname, "..", ".."),
@@ -59,6 +62,13 @@ export default defineConfig({
     react(),
     tailwindcss({ optimize: false }),
     folhaDepoisDaAbertura(),
+    // Os arquivos de cada tela, para a equipe guardá-las no aparelho sem
+    // importá-las (src/lib/telas-no-aparelho.ts). Fica fora do precache.
+    pluginDoMapaDasTelas({
+      src: path.resolve(import.meta.dirname, "src"),
+      versao: buildCommit || "desconhecida",
+      nome: "telas-no-aparelho.json",
+    }),
     VitePWA({
       registerType: "autoUpdate",
       // Com defer, o registro do service worker não para a leitura do HTML: a

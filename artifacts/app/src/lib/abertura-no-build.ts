@@ -13,7 +13,7 @@ export function folhasDepoisDaAbertura(html: string): string {
   const folhas = html.match(FOLHA_DO_APP) ?? [];
   if (folhas.length === 0) return html;
   const semFolhas = html.replace(FOLHA_DO_APP, "");
-  const raiz = semFolhas.search(/[ \t]*<div id="root">/);
+  const raiz = semFolhas.search(/[ \t]*<div id="root"[\s>]/);
   const abertura = semFolhas.indexOf('<div id="abertura"');
   if (raiz < 0 || abertura < 0 || abertura > raiz) {
     throw new Error("index.html sem a abertura antes do #root: a folha do app não tem onde ficar.");

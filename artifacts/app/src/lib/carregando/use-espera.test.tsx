@@ -173,4 +173,19 @@ describe("a espera no relógio", () => {
     passar(300);
     expect(atual()).toMatchObject({ visivel: true, fase: "andamento", calmo: false, movimento: true, decorridoMs: 300 });
   });
+
+  it("a que continua outra (desde) segue o relógio dela: o que já tinha aparecido aparece na hora", () => {
+    passar(20_000);
+    montar(true, { desde: performance.now() - 6_000 });
+    expect(atual()).toMatchObject({ visivel: true, fase: "com-objeto", decorridoMs: 6_000, movimento: false });
+    passar(4_000);
+    expect(atual()).toMatchObject({ fase: "demorando", calmo: true });
+    // O que ainda não tinha passado de 300 ms espera o resto, e não o atraso inteiro.
+    act(() => raiz!.unmount());
+    raiz = createRoot(container!);
+    montar(true, { desde: performance.now() - 200 });
+    expect(atual().visivel).toBe(false);
+    passar(100);
+    expect(atual()).toMatchObject({ visivel: true, fase: "andamento", decorridoMs: 300 });
+  });
 });

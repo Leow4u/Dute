@@ -9,11 +9,12 @@ import { useLocation } from "wouter";
 
 import { CarregandoTela } from "@/components/ui/carregando-tela";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { nomeDaTela } from "@/lib/document-title";
 import { telaSobDemanda } from "@/lib/telas-no-aparelho";
 
 // As abas chegam sob demanda e, para a equipe, ficam guardadas no aparelho junto com o Catálogo.
-const Products = telaSobDemanda(() => import("./products"));
-const Skus = telaSobDemanda(() => import("./skus"));
+const Products = telaSobDemanda("pages/products", () => import("./products"));
+const Skus = telaSobDemanda("pages/skus", () => import("./skus"));
 
 const CATALOG_TABS = [
   { value: "cadastro", label: "Cadastro", path: "/catalogo" },
@@ -49,7 +50,8 @@ export default function Catalog() {
         </TabsList>
       </Tabs>
 
-      <Suspense fallback={<CarregandoTela titulo={CATALOG_TABS.find((item) => item.value === tab)?.label} />}>
+      {/* O mesmo nome da espera da rota: a tela não troca de nome no meio da espera. */}
+      <Suspense fallback={<CarregandoTela titulo={nomeDaTela(location)} />}>
         {tab === "cadastro" ? <Products /> : null}
         {tab === "saldos" ? <Skus /> : null}
       </Suspense>

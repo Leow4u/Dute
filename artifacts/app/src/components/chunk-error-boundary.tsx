@@ -3,6 +3,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { CarregandoTela } from "@/components/ui/carregando-tela";
+import { inicioDoCarregamento } from "@/lib/telas-no-aparelho";
 import { cn } from "@/lib/utils";
 
 /**
@@ -39,6 +40,8 @@ export interface AmbienteDaFalha {
   sondar: (endereco: string) => Promise<{ status: number }>;
   /** Quanto esperar a resposta: no sinal fraco ela pode não vir. */
   prazoMs?: number;
+  /** O endereço do app, perguntado quando o navegador não diz qual arquivo faltou (o Safari). */
+  raiz?: string;
 }
 
 const PRAZO_DA_SONDA_MS = 8_000;
@@ -50,17 +53,8 @@ export function falhaImediata(erro: unknown, online: boolean): FalhaDaTela | nul
   return null;
 }
 
-/**
- * Separa os três casos. Com o aparelho conectado, o servidor desempata: o
- * arquivo que sumiu (404) é de uma versão antiga; o que existe, ou a pergunta
- * que não volta, é sinal fraco.
- */
-export async function classificarFalha(erro: unknown, ambiente: AmbienteDaFalha): Promise<FalhaDaTela> {
-  const imediata = falhaImediata(erro, ambiente.online);
-  if (imediata) return imediata;
-  const endereco = enderecoDoArquivo(erro);
-  // O Safari não diz qual arquivo faltou: com rede, o mais provável é a versão nova.
-  if (!endereco) return "versao-nova";
+/** A pergunta ao servidor, com o prazo: no sinal fraco ela pode não voltar (nulo). */
+async function perguntar(ambiente: AmbienteDaFalha, endereco: string): Promise<number | null> {
   let prazo: ReturnType<typeof setTimeout> | undefined;
   try {
     const resposta = await Promise.race([
@@ -69,18 +63,38 @@ export async function classificarFalha(erro: unknown, ambiente: AmbienteDaFalha)
         prazo = setTimeout(() => recusar(new Error("sem resposta")), ambiente.prazoMs ?? PRAZO_DA_SONDA_MS);
       }),
     ]);
-    return resposta.status === 404 || resposta.status === 410 ? "versao-nova" : "sem-conexao";
+    return resposta.status;
   } catch {
-    return "sem-conexao";
+    return null;
   } finally {
     clearTimeout(prazo);
   }
+}
+
+/**
+ * Separa os três casos. Com o aparelho conectado, o servidor desempata: o
+ * arquivo que sumiu (404) é de uma versão antiga; o que existe, ou a pergunta
+ * que não volta, é sinal fraco. Quando o navegador não diz qual arquivo faltou
+ * (o Safari), pergunta pelo próprio app: se o servidor responde, o mais
+ * provável é a versão nova; se não, falta rede.
+ */
+export async function classificarFalha(erro: unknown, ambiente: AmbienteDaFalha): Promise<FalhaDaTela> {
+  const imediata = falhaImediata(erro, ambiente.online);
+  if (imediata) return imediata;
+  const endereco = enderecoDoArquivo(erro);
+  if (!endereco) {
+    const status = await perguntar(ambiente, ambiente.raiz ?? "/");
+    return status !== null && status < 500 ? "versao-nova" : "sem-conexao";
+  }
+  const status = await perguntar(ambiente, endereco);
+  return status === 404 || status === 410 ? "versao-nova" : "sem-conexao";
 }
 
 function ambienteDoNavegador(): AmbienteDaFalha {
   return {
     online: typeof navigator === "undefined" || navigator.onLine !== false,
     sondar: (endereco) => fetch(endereco, { method: "HEAD", cache: "no-store" }),
+    raiz: import.meta.env.BASE_URL,
   };
 }
 
@@ -128,21 +142,26 @@ export function AvisoDaFalha({ falha, onRecarregar }: { falha: FalhaDaTela; onRe
   );
 }
 
-type Estado = { falha: FalhaDaTela | "conferindo" | null };
+type Estado = { falha: FalhaDaTela | "conferindo" | null; desde?: number };
 
 /**
  * A tela que não abre não fica branca. Um deploy troca o nome de todos os
  * arquivos, e a aba aberta desde antes pede um que não existe mais; sem sinal,
  * a tela que ainda não está no aparelho não chega; e a tela pode quebrar. Cada
- * caso tem o seu aviso. Enquanto o servidor desempata, a `CarregandoTela`.
+ * caso tem o seu aviso. Enquanto o servidor desempata, a mesma `CarregandoTela`
+ * da espera, com o nome da tela e o relógio de quando ela começou a abrir:
+ * o rótulo não some nem troca, e a entrada não é anunciada de novo.
  */
-export class ChunkErrorBoundary extends Component<{ children: ReactNode; ambiente?: () => AmbienteDaFalha }, Estado> {
+export class ChunkErrorBoundary extends Component<
+  { children: ReactNode; titulo?: string | null; ambiente?: () => AmbienteDaFalha },
+  Estado
+> {
   state: Estado = { falha: null };
 
   private montado = false;
 
   static getDerivedStateFromError(erro: unknown): Estado {
-    return { falha: falhaDeArquivo(erro) ? "conferindo" : "erro-de-tela" };
+    return { falha: falhaDeArquivo(erro) ? "conferindo" : "erro-de-tela", desde: inicioDoCarregamento(erro) };
   }
 
   componentDidMount() {
@@ -163,7 +182,7 @@ export class ChunkErrorBoundary extends Component<{ children: ReactNode; ambient
   render() {
     const { falha } = this.state;
     if (falha === null) return this.props.children;
-    if (falha === "conferindo") return <CarregandoTela />;
+    if (falha === "conferindo") return <CarregandoTela titulo={this.props.titulo} desde={this.state.desde} />;
     return <AvisoDaFalha falha={falha} />;
   }
 }

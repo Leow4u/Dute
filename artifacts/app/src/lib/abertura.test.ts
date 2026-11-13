@@ -9,8 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
 
-import { aberturaAberta, duracaoDaSaida, fecharAbertura, FOLGA_DA_SAIDA_MS, saidaDaAbertura } from "./abertura";
+import { aberturaAberta, aberturaNaTela, duracaoDaSaida, fecharAbertura, FOLGA_DA_SAIDA_MS, saidaDaAbertura } from "./abertura";
 import { folhasDepoisDaAbertura } from "./abertura-no-build";
+import { INTERVALO_DO_ANUNCIO_MS } from "./carregando/anunciador";
 import { CARREGANDO } from "./carregando/tempo";
 
 /**
@@ -92,6 +93,20 @@ function declarado(css: string, seletor: string, contexto: string[] = []): Map<s
 
 const REDUZIDO = ["@media (prefers-reduced-motion: reduce)"];
 
+/** A largura e a altura do PNG embutido (o cabeçalho IHDR). */
+function dimensoesDoPng(src: string): [number, number] {
+  const prefixo = "data:image/png;base64,";
+  expect(src.startsWith(prefixo), src.slice(0, 40)).toBe(true);
+  const bytes = Buffer.from(src.slice(prefixo.length), "base64");
+  expect(bytes.subarray(1, 4).toString("latin1")).toBe("PNG");
+  return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+}
+
+/** Os tokens de tempo do index.css (`--carregando-t-*`), pelo valor. */
+const TOKENS = new Map(
+  [...INDEX_CSS.matchAll(/(--carregando-t-[\w-]+):\s*([^;]+);/g)].map(([, nome, valor]) => [nome, valor.trim()]),
+);
+
 describe("a abertura no index.html", () => {
   it("fica fora do #root, como irmão dele e antes dele, para o React nunca apagá-la", () => {
     const documento = pagina();
@@ -131,16 +146,20 @@ describe("a abertura no index.html", () => {
     expect(textosDaTela(abertura.outerHTML)).toEqual(["Abrindo a Dutelog", "Tentar de novo"]);
   });
 
-  it("usa os PNG reais: a marca de 96 px decorativa e a palavra \"Dutelog\" com 24 px", () => {
+  it("traz a marca de 96 px decorativa e a palavra \"Dutelog\" com 24 px embutidas: nenhuma das duas espera a rede", () => {
     const abertura = pagina().getElementById("abertura")!;
     const marca = abertura.querySelector<HTMLImageElement>("img.ab-marca")!;
-    expect(marca.getAttribute("src")).toBe("/dutelog-mark-180.png");
+    // A marca de 180 px (a de dutelog-mark-180.png, já sobre o preto e com a paleta reduzida), mostrada em 96.
+    expect(dimensoesDoPng(marca.getAttribute("src")!)).toEqual([180, 180]);
     expect(marca.getAttribute("alt")).toBe("");
     expect([marca.getAttribute("width"), marca.getAttribute("height")]).toEqual(["96", "96"]);
     const palavra = abertura.querySelector<HTMLImageElement>("img.ab-palavra")!;
-    expect(palavra.getAttribute("src")).toBe("/dutelog-logo-light.png");
+    // A palavra clara em 3×, para ficar nítida também no celular de tela densa.
+    expect(dimensoesDoPng(palavra.getAttribute("src")!)).toEqual([324, 72]);
     expect(palavra.getAttribute("alt")).toBe("Dutelog");
-    expect(palavra.getAttribute("height")).toBe("24");
+    expect([palavra.getAttribute("width"), palavra.getAttribute("height")]).toEqual(["108", "24"]);
+    // As duas juntas pesam pouco: o HTML continua leve na primeira pintura.
+    expect(marca.getAttribute("src")!.length + palavra.getAttribute("src")!.length).toBeLessThan(12_000);
     const css = estiloDaAbertura();
     expect(declarado(css, "#abertura .ab-marca").get("border-radius")).toBe("22px");
     expect(declarado(css, "#abertura .ab-palavra").get("height")).toBe("24px");
@@ -184,6 +203,71 @@ describe("a abertura no index.html", () => {
     const semComentarios = INDEX_CSS.replace(/\/\*[\s\S]*?\*\//g, "");
     expect(semComentarios).not.toMatch(/@import\s+(?:url\()?['"]?https?:/);
     for (const estilo of documento.querySelectorAll("style")) expect(estilo.textContent).not.toMatch(/@import/);
+  });
+
+  it("cada tempo do CSS da abertura é um token do relógio, e o script usa os mesmos", () => {
+    const css = estiloDaAbertura();
+    // Toda duração e todo atraso escritos no CSS, com a regra em que aparecem.
+    const tempos = regras(css)
+      .filter((regra) => !regra.contexto.some((fora) => fora.startsWith("@keyframes")))
+      .flatMap((regra) =>
+        declaracoes(regra.corpo)
+          .filter(([nome]) => nome === "animation" || nome === "transition" || nome === "--ab-espera")
+          .flatMap(([, valor]) => [...valor.matchAll(/(\d+)ms/g)].map(([, ms]) => Number(ms))),
+      );
+    const doRelogio = new Set([
+      0,
+      CARREGANDO.atrasoMs,
+      CARREGANDO.aberturaSaiMs,
+      CARREGANDO.aberturaCompletaMs,
+      CARREGANDO.aberturaMarcaSaiMs,
+      CARREGANDO.aberturaSegmentoSaiMs,
+      parseInt(TOKENS.get("--carregando-t-entrada")!, 10),
+      parseInt(TOKENS.get("--carregando-t-saida")!, 10),
+      parseInt(TOKENS.get("--carregando-t-varredura")!, 10),
+    ]);
+    expect(tempos.filter((ms) => !doRelogio.has(ms))).toEqual([]);
+    // Cada um no seu lugar.
+    expect(declarado(css, "#abertura[data-fechando] .ab-centro").get("animation")).toMatch(
+      new RegExp(`^abertura-recua ${CARREGANDO.aberturaMarcaSaiMs}ms `),
+    );
+    expect(declarado(css, "#abertura[data-fechando] .ab-palavra").get("animation")).toMatch(
+      new RegExp(`^abertura-esmaece ${CARREGANDO.aberturaMarcaSaiMs}ms `),
+    );
+    expect(declarado(css, '#abertura[data-fechando="completa"] .ab-seg').get("transition")).toBe(
+      `opacity ${CARREGANDO.aberturaSegmentoSaiMs}ms linear`,
+    );
+    expect(declarado(css, "#abertura .ab-linha").get("animation")).toMatch(new RegExp(`^abertura-aviso ${TOKENS.get("--carregando-t-entrada")} `));
+    expect(declarado(css, "#abertura .ab-tentar").get("animation")).toMatch(new RegExp(`^abertura-aviso ${TOKENS.get("--carregando-t-entrada")} `));
+    expect(declarado(css, "#abertura .ab-linha[data-sai]").get("animation")).toMatch(
+      new RegExp(`^abertura-aviso-sai ${TOKENS.get("--carregando-t-saida")} `),
+    );
+    // O script: a saída do aviso e o intervalo entre avisos, os mesmos do CSS e do Anunciador.
+    const script = scriptDaAbertura();
+    expect(`${/var SAIDA_MS = (\d+);/.exec(script)?.[1]}ms`).toBe(TOKENS.get("--carregando-t-saida"));
+    expect(Number(/var INTERVALO_MS = (\d+);/.exec(script)?.[1])).toBe(INTERVALO_DO_ANUNCIO_MS);
+  });
+
+  it("o aviso que sai sobe e esmaece (só opacidade no reduzido)", () => {
+    const css = estiloDaAbertura();
+    const sai = regras(css).filter((regra) => regra.contexto.includes("@keyframes abertura-aviso-sai"));
+    expect(sai.flatMap((regra) => declaracoes(regra.corpo))).toEqual([
+      ["opacity", "0"],
+      ["transform", "translateY(-4px)"],
+    ]);
+    expect(declarado(css, "#abertura .ab-linha[data-sai]", REDUZIDO).get("animation-name")).toBe("abertura-esmaece");
+  });
+
+  it("no alto contraste do Windows, mantém as próprias cores: o trilho e a palavra não somem no fundo forçado", () => {
+    expect(declarado(estiloDaAbertura(), "#abertura", ["@media (forced-colors: active)"]).get("forced-color-adjust")).toBe("none");
+  });
+
+  it("quando o aviso não cabe acima da palavra (o celular deitado), a palavra cede o lugar", () => {
+    expect(declarado(estiloDaAbertura(), "#abertura[data-apertada] .ab-palavra").get("visibility")).toBe("hidden");
+  });
+
+  it("enquanto ela cobre a tela, o #root fica inerte: nem o Tab nem o leitor de tela chegam ao que está por baixo", () => {
+    expect(pagina().getElementById("root")?.hasAttribute("inert")).toBe(true);
   });
 
   it("o movimento: em laço só transform e opacity, nos tempos do relógio", () => {
@@ -279,6 +363,12 @@ describe("no build, nada antes da abertura segura a primeira pintura", () => {
     expect(folhasDepoisDaAbertura(html)).toBe(html);
   });
 
+  it("com o #root inerte (o index.html real), a folha também fica logo antes dele", () => {
+    const html = folhasDepoisDaAbertura(DO_BUILD.replace('<div id="root"></div>', '<div id="root" inert></div>'));
+    const folha = new JSDOM(html).window.document.body.querySelector('link[rel="stylesheet"]');
+    expect(folha?.nextElementSibling?.id).toBe("root");
+  });
+
   it("sem a abertura antes do #root, o build falha em vez de servir a folha no lugar errado", () => {
     expect(() => folhasDepoisDaAbertura(DO_BUILD.replace('<div id="abertura">', '<div id="outra">'))).toThrow(/abertura/);
     // Sem folha do app (o desenvolvimento, em que o Vite põe o CSS pelo JavaScript), nada muda.
@@ -293,11 +383,11 @@ describe("no build, nada antes da abertura segura a primeira pintura", () => {
     expect(VITE).toContain('injectRegister: "script-defer"');
   });
 
-  it("a marca vem com prioridade, antes do JavaScript; no <head>, nenhum script que pare a leitura", () => {
+  it("a abertura não pede nada à rede; no <head>, nenhum script que pare a leitura", () => {
     const documento = pagina();
-    const marca = documento.querySelector('link[rel="preload"][as="image"]');
-    expect(marca?.getAttribute("href")).toBe("/dutelog-mark-180.png");
-    expect(marca?.getAttribute("fetchpriority")).toBe("high");
+    // A marca e a palavra vêm embutidas: nenhum pedido de imagem disputa a rede com o JavaScript.
+    expect(documento.querySelector('link[rel="preload"][as="image"]')).toBeNull();
+    for (const imagem of documento.querySelectorAll("#abertura img")) expect(imagem.getAttribute("src")).toMatch(/^data:image\/png;base64,/);
     const bloqueiam = [...documento.head.querySelectorAll("script[src]")].filter(
       (script) => script.getAttribute("type") !== "module" && !script.hasAttribute("defer") && !script.hasAttribute("async"),
     );
@@ -366,31 +456,94 @@ describe("o script da abertura: sem rede aos 3 s, demorando aos 10 s", () => {
     expect(recarregar).toHaveBeenCalledTimes(1);
   });
 
-  it("sem rede, \"Sem conexão\" aos 3 s, e sai quando a rede volta", () => {
+  it("sem rede, \"Sem conexão\" aos 3 s; quando a rede volta, ele sobe e esmaece, no máximo um aviso a cada 2 s", () => {
     navegador.onLine = false;
     montar();
     vi.advanceTimersByTime(2_999);
     expect(linha().hidden).toBe(true);
     vi.advanceTimersByTime(1);
     expect(linha().textContent).toBe("Sem conexão");
+    expect(linha().hasAttribute("data-sai")).toBe(false);
     expect(tentar().hidden).toBe(true);
+    // A rede volta logo: o aviso fica até completar 2 s na região, e então sai em 180 ms.
+    vi.advanceTimersByTime(500);
     navegador.onLine = true;
     window.dispatchEvent(new Event("online"));
+    expect(linha().textContent).toBe("Sem conexão");
+    vi.advanceTimersByTime(INTERVALO_DO_ANUNCIO_MS - 500);
+    expect(linha().textContent).toBe("Sem conexão");
+    expect(linha().hasAttribute("data-sai")).toBe(true);
+    vi.advanceTimersByTime(180);
     expect(linha().hidden).toBe(true);
+    expect(linha().hasAttribute("data-sai")).toBe(false);
+    // Cai de novo depois de 2 s: entra uma linha nova (a entrada roda outra vez).
+    vi.advanceTimersByTime(INTERVALO_DO_ANUNCIO_MS);
     navegador.onLine = false;
     window.dispatchEvent(new Event("offline"));
     expect(linha().textContent).toBe("Sem conexão");
     // Aos 10 s sem rede, continua "Sem conexão", agora com "Tentar de novo".
-    vi.advanceTimersByTime(7_000);
+    vi.advanceTimersByTime(10_000);
     expect(linha().textContent).toBe("Sem conexão");
     expect(tentar().hidden).toBe(false);
   });
 
-  it("aos 70 s, \"Sem resposta\"", () => {
+  it("a rede que oscila não faz a região falar mais de uma vez a cada 2 s", () => {
+    navegador.onLine = false;
     montar();
-    vi.advanceTimersByTime(70_000);
+    vi.advanceTimersByTime(3_000);
+    const falas: string[] = [];
+    const regiao = document.querySelector('#abertura [role="status"]')!;
+    const observador = new MutationObserver(() => falas.push(regiao.textContent ?? ""));
+    observador.observe(regiao, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["hidden"] });
+    const trocas: number[] = [];
+    let ultimo = linha().hidden ? "" : linha().textContent;
+    for (let passo = 0; passo < 12; passo += 1) {
+      navegador.onLine = !navegador.onLine;
+      window.dispatchEvent(new Event(navegador.onLine ? "online" : "offline"));
+      for (let ms = 0; ms < 400; ms += 20) {
+        vi.advanceTimersByTime(20);
+        const agora = linha().hidden ? "" : linha().textContent;
+        if (agora !== ultimo) {
+          trocas.push(performance.now());
+          ultimo = agora;
+        }
+      }
+    }
+    observador.disconnect();
+    // Em 4,8 s de rede oscilando a cada 400 ms, no máximo três textos novos na região.
+    expect(trocas.length).toBeLessThanOrEqual(3);
+    for (let i = 1; i < trocas.length; i += 1) expect(trocas[i] - trocas[i - 1]).toBeGreaterThanOrEqual(INTERVALO_DO_ANUNCIO_MS);
+  });
+
+  it("aos 70 s, \"Sem resposta\", depois que \"Demorando mais que o normal\" sai", () => {
+    montar();
+    vi.advanceTimersByTime(10_000);
+    expect(linha().textContent).toBe("Demorando mais que o normal");
+    vi.advanceTimersByTime(60_000);
+    expect(linha().hasAttribute("data-sai")).toBe(true);
+    vi.advanceTimersByTime(180);
     expect(linha().textContent).toBe("Sem resposta");
+    expect(linha().hasAttribute("data-sai")).toBe(false);
     expect(tentar().hidden).toBe(false);
+  });
+
+  it("quando o aviso e o botão não cabem acima da palavra, a palavra cede o lugar; com espaço, fica", () => {
+    const abertura = montar();
+    const palavra = abertura.querySelector<HTMLElement>(".ab-palavra")!;
+    const aviso = abertura.querySelector<HTMLElement>(".ab-aviso")!;
+    let topoDaPalavra = 318;
+    palavra.getBoundingClientRect = () => ({ top: topoDaPalavra, height: 24, bottom: topoDaPalavra + 24 }) as DOMRect;
+    aviso.getBoundingClientRect = () => ({ top: 273, height: 93, bottom: 366 }) as DOMRect;
+    // Sem aviso, nada a ceder.
+    vi.advanceTimersByTime(9_999);
+    expect(abertura.hasAttribute("data-apertada")).toBe(false);
+    // O celular deitado (844 × 390): o botão iria até 366 px e a palavra começa em 318.
+    vi.advanceTimersByTime(1);
+    expect(abertura.hasAttribute("data-apertada")).toBe(true);
+    // Girou para em pé: a palavra desce para 772 px e volta.
+    topoDaPalavra = 772;
+    window.dispatchEvent(new Event("resize"));
+    expect(abertura.hasAttribute("data-apertada")).toBe(false);
   });
 
   it("o axe, na primeira pintura e com o aviso e o botão à vista", async () => {
@@ -498,17 +651,35 @@ describe("fecharAbertura", () => {
     }
   });
 
-  it("é idempotente: a segunda chamada não refaz a saída", () => {
+  it("é idempotente: a segunda chamada, no meio do esmaecer, não refaz a saída nem adia o fim", () => {
     const abertura = comAbertura(0);
     fecharAbertura();
     expect(abertura.getAttribute("data-fechando")).toBe("cedo");
-    vi.advanceTimersByTime(1_000);
+    // No meio do esmaecer, com o trilho já "à vista": sem a trava, a saída viraria "completa" e ganharia outro prazo.
+    vi.advanceTimersByTime(100);
     abertura.setAttribute("data-desde", "-5000");
     fecharAbertura();
     expect(abertura.getAttribute("data-fechando")).toBe("cedo");
-    vi.advanceTimersByTime(CARREGANDO.aberturaSaiMs + FOLGA_DA_SAIDA_MS);
+    vi.advanceTimersByTime(CARREGANDO.aberturaSaiMs + FOLGA_DA_SAIDA_MS - 100);
     expect(abertura.isConnected).toBe(false);
     expect(() => fecharAbertura()).not.toThrow();
+  });
+
+  it("solta o #root na hora em que começa a sair; sem a abertura, solta do mesmo jeito", () => {
+    const abertura = comAbertura(0);
+    const raiz = document.getElementById("root")!;
+    raiz.setAttribute("inert", "");
+    expect(aberturaNaTela()).toBe(true);
+    fecharAbertura();
+    expect(raiz.hasAttribute("inert")).toBe(false);
+    // Esmaecendo, ela ainda está na tela.
+    expect(aberturaNaTela()).toBe(true);
+    vi.advanceTimersByTime(CARREGANDO.aberturaSaiMs + FOLGA_DA_SAIDA_MS);
+    expect(abertura.isConnected).toBe(false);
+    expect(aberturaNaTela()).toBe(false);
+    document.body.innerHTML = '<div id="root" inert></div>';
+    fecharAbertura();
+    expect(document.getElementById("root")!.hasAttribute("inert")).toBe(false);
   });
 
   it("sem a abertura (os testes, a demo), não faz nada", () => {

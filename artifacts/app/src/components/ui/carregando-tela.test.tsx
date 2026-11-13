@@ -24,7 +24,13 @@ import { CarregandoTela, rotuloDaCarregandoTela } from "./carregando-tela";
  * que deixavam a tela em branco.
  */
 
-const TEXTOS = ["Abrindo Faturamento…", "Abrindo a Dutelog…"];
+const TEXTOS = [
+  "Abrindo Faturamento…",
+  "Abrindo a Dutelog…",
+  "Demorando mais que o normal",
+  "Tentar de novo",
+  "Sem resposta do servidor.",
+];
 
 let raiz: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -80,6 +86,19 @@ describe("CarregandoTela", () => {
     expect(rotuloDaCarregandoTela(nomeDaTela("/rota-que-nao-existe"))).toBe("Abrindo a Dutelog…");
   });
 
+  it("o nome que não é substantivo (verbo, artigo, \"Hoje\") vem com \"a tela\" antes", () => {
+    expect(rotuloDaCarregandoTela("Separar")).toBe("Abrindo a tela Separar…");
+    expect(rotuloDaCarregandoTela("Receber")).toBe("Abrindo a tela Receber…");
+    expect(rotuloDaCarregandoTela("A faturar")).toBe("Abrindo a tela A faturar…");
+    expect(rotuloDaCarregandoTela("A receber")).toBe("Abrindo a tela A receber…");
+    expect(rotuloDaCarregandoTela("Hoje")).toBe("Abrindo a tela Hoje…");
+    expect(rotuloDaCarregandoTela("Planejar OS")).toBe("Abrindo a tela Planejar OS…");
+    // Os substantivos entram direto.
+    expect(rotuloDaCarregandoTela("Agenda")).toBe("Abrindo Agenda…");
+    expect(rotuloDaCarregandoTela("Aplicativo no celular")).toBe("Abrindo Aplicativo no celular…");
+    expect(rotuloDaCarregandoTela("Orçamentos")).toBe("Abrindo Orçamentos…");
+  });
+
   it("anuncia uma vez aos 300 ms, pela região do Anunciador", () => {
     act(() =>
       raiz!.render(
@@ -97,7 +116,7 @@ describe("CarregandoTela", () => {
     expect(tela().querySelector("[role], [aria-live]")).toBeNull();
   });
 
-  it("com a abertura na tela, não anuncia (ela já diz \"Abrindo a Dutelog\"); quando ela sai, anuncia", () => {
+  it("com a abertura na tela, também enquanto ela esmaece, não desenha nem anuncia; quando ela sai, aparece e anuncia", () => {
     const abertura = document.createElement("div");
     abertura.id = "abertura";
     document.body.prepend(abertura);
@@ -110,18 +129,91 @@ describe("CarregandoTela", () => {
       ),
     );
     passar(1_000);
-    expect(indicador()).not.toBeNull();
+    // Por baixo da abertura, nada: nem a caixa, nem o rótulo na árvore do leitor de tela.
+    expect(indicador()).toBeNull();
+    expect(tela().textContent).toBe("");
     expect(anuncio()).toBe("");
     act(() => fecharAbertura());
+    // Esmaecendo, a abertura ainda cobre a tela: a caixa não aparece por baixo dela.
+    expect(abertura.isConnected).toBe(true);
+    expect(indicador()).toBeNull();
+    expect(anuncio()).toBe("");
+    passar(CARREGANDO.aberturaCompletaMs + CARREGANDO.aberturaSaiMs + 100);
+    expect(abertura.isConnected).toBe(false);
+    expect(indicador()).not.toBeNull();
+    expect(tela().textContent).toBe("Abrindo Pedidos…");
     expect(anuncio()).toBe("Abrindo Pedidos…");
   });
 
-  it("depois de 10 s, a volta fica calma", () => {
-    act(() => raiz!.render(<CarregandoTela titulo="Estoque" />));
-    passar(CARREGANDO.demoraMs - 1);
+  it("aos 10 s, a volta calma, \"Demorando mais que o normal\" e \"Tentar de novo\", com o anúncio", () => {
+    const tentar = vi.fn();
+    act(() =>
+      raiz!.render(
+        <>
+          <CarregandoTela titulo="Estoque" onTentar={tentar} />
+          <Anunciador />
+        </>,
+      ),
+    );
+    passar(CARREGANDO.atrasoMs);
+    expect(anuncio()).toBe("Abrindo Estoque…");
+    passar(CARREGANDO.demoraMs - CARREGANDO.atrasoMs - 1);
     expect(indicador()?.hasAttribute("data-calmo")).toBe(false);
+    expect(tela().textContent).toBe("Abrindo Estoque…");
+    expect(tela().querySelector("button")).toBeNull();
     passar(1);
     expect(indicador()?.hasAttribute("data-calmo")).toBe(true);
+    expect(tela().textContent).toBe("Abrindo Estoque…Demorando mais que o normalTentar de novo");
+    expect(anuncio()).toBe("Demorando mais que o normal");
+    const botao = tela().querySelector("button")!;
+    expect(botao.className).toContain("min-h-11");
+    act(() => botao.click());
+    expect(tentar).toHaveBeenCalledTimes(1);
+  });
+
+  it("aos 70 s, desiste: \"Sem resposta do servidor.\" com \"Tentar de novo\", no alerta da leitura", () => {
+    const tentar = vi.fn();
+    act(() => raiz!.render(<CarregandoTela titulo="Estoque" onTentar={tentar} />));
+    passar(CARREGANDO.desisteMs - 1);
+    expect(tela().querySelector('[role="alert"]')).toBeNull();
+    passar(1);
+    const alerta = tela().querySelector('[role="alert"]')!;
+    expect(alerta.textContent).toBe("Sem resposta do servidor.Tentar de novo");
+    expect(indicador()).toBeNull();
+    // O alvo de 44 px no "Tentar de novo".
+    expect(tela().className).toContain("[&_button]:min-h-11");
+    act(() => alerta.querySelector("button")!.click());
+    expect(tentar).toHaveBeenCalledTimes(1);
+  });
+
+  it("a que continua uma espera (desde) segue o mesmo relógio: aparece na hora e não repete o anúncio da entrada", () => {
+    act(() =>
+      raiz!.render(
+        <>
+          <CarregandoTela titulo="Pedidos" />
+          <Anunciador />
+        </>,
+      ),
+    );
+    passar(CARREGANDO.atrasoMs);
+    expect(anuncio()).toBe("Abrindo Pedidos…");
+    passar(5_000);
+    const desde = performance.now() - 5_000 - CARREGANDO.atrasoMs;
+    // Outra instância (a da fronteira), com o relógio de quando a tela começou a abrir.
+    act(() =>
+      raiz!.render(
+        <>
+          <CarregandoTela key="continua" titulo="Pedidos" desde={desde} />
+          <Anunciador />
+        </>,
+      ),
+    );
+    expect(tela().textContent).toBe("Abrindo Pedidos…");
+    passar(CARREGANDO.demoraMs - 5_000 - CARREGANDO.atrasoMs - 1);
+    expect(tela().textContent).toBe("Abrindo Pedidos…");
+    passar(1);
+    expect(tela().textContent).toContain("Demorando mais que o normal");
+    expect(anuncio()).toBe("Demorando mais que o normal");
   });
 
   it("é o fallback que abre a tela sob demanda: some quando a tela chega", async () => {
@@ -142,17 +234,25 @@ describe("CarregandoTela", () => {
     expect(container!.textContent).toBe("Fechamento do mês");
   });
 
-  it("os textos da lista e o axe", async () => {
+  it("os textos da lista e o axe, em cada estado", async () => {
     act(() => raiz!.render(<CarregandoTela titulo="Faturamento" />));
     passar(CARREGANDO.atrasoMs);
     act(() => raiz!.render(<CarregandoTela />));
     expect(textosForaDaLista(container!.innerHTML, TEXTOS)).toEqual([]);
     act(() => raiz!.render(<CarregandoTela titulo="Faturamento" />));
     expect(textosForaDaLista(container!.innerHTML, TEXTOS)).toEqual([]);
-    const html = container!.innerHTML;
+    const abrindo = container!.innerHTML;
+    passar(CARREGANDO.demoraMs);
+    expect(textosForaDaLista(container!.innerHTML, TEXTOS)).toEqual([]);
+    const demorando = container!.innerHTML;
+    passar(CARREGANDO.desisteMs);
+    expect(textosForaDaLista(container!.innerHTML, TEXTOS)).toEqual([]);
+    const semResposta = container!.innerHTML;
     // O axe usa o relógio de verdade.
     vi.useRealTimers();
-    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    expect(await violacoesDeAcessibilidade(abrindo)).toEqual([]);
+    expect(await violacoesDeAcessibilidade(demorando)).toEqual([]);
+    expect(await violacoesDeAcessibilidade(semResposta)).toEqual([]);
   });
 });
 
@@ -188,13 +288,27 @@ describe("a CarregandoTela no lugar do branco", () => {
     },
   );
 
-  it.each([
-    ["pages/billing-hub.tsx", '<CarregandoTela titulo="Faturamento" />'],
-    ["pages/catalog.tsx", "<CarregandoTela titulo={"],
-    ["pages/agente-painel.tsx", '<CarregandoTela titulo="Painel" />'],
-  ])("%s espera com a CarregandoTela, não com fallback={null}", (arquivo, esperado) => {
-    const codigo = fonte(arquivo);
-    expect(codigo).not.toMatch(/fallback=\{null\}/);
-    expect(codigo).toContain(`<Suspense fallback={${esperado}`);
+  it.each(["pages/billing-hub.tsx", "pages/catalog.tsx", "pages/agente-painel.tsx"])(
+    "%s espera com a CarregandoTela e o mesmo nome da rota, não com fallback={null}",
+    (arquivo) => {
+      const codigo = fonte(arquivo);
+      expect(codigo).not.toMatch(/fallback=\{null\}/);
+      // O nome da aba, o mesmo da espera de fora: a tela não troca de nome no meio da espera.
+      expect(codigo).toContain("<Suspense fallback={<CarregandoTela titulo={nomeDaTela(location)} />}>");
+    },
+  );
+
+  it("a fronteira das rotas confere o arquivo com o mesmo nome da tela", () => {
+    expect(corpoDaFuncao(APP, "ProtectedRoute")).toContain("<ChunkErrorBoundary titulo={titulo}>");
+  });
+
+  it("toda rota tem nome: a espera nunca diz \"Abrindo a Dutelog…\" com o app aberto", () => {
+    const caminhos = [...APP.matchAll(/protectedRoute\(\s*"([^"]+)"/g)].map(([, caminho]) => caminho);
+    expect(caminhos.length).toBeGreaterThan(100);
+    expect(caminhos.filter((caminho) => nomeDaTela(caminho) === null)).toEqual([]);
+    expect(rotuloDaCarregandoTela(nomeDaTela("/operacao/os"))).toBe("Abrindo OS…");
+    expect(rotuloDaCarregandoTela(nomeDaTela("/campo/os"))).toBe("Abrindo OS em execução…");
+    expect(rotuloDaCarregandoTela(nomeDaTela("/pedidos/separar"))).toBe("Abrindo a tela Separar…");
+    expect(rotuloDaCarregandoTela(nomeDaTela("/financeiro/a-faturar"))).toBe("Abrindo a tela A faturar…");
   });
 });

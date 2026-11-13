@@ -54,6 +54,10 @@ export const CARREGANDO = {
   aberturaSaiMs: 260,
   /** Antes de esmaecer, o segmento vermelho completa o trilho até o canto chanfrado, se o trilho já estava à vista. */
   aberturaCompletaMs: 200,
+  /** Quando o trilho completa, o segmento que varria some nesse tempo. */
+  aberturaSegmentoSaiMs: 60,
+  /** A marca (que recua a 0,96) e a palavra saem nesse tempo, enquanto o preto abre nos 260 ms. */
+  aberturaMarcaSaiMs: 200,
 } as const;
 
 /**
