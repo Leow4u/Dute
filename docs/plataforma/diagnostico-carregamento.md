@@ -757,7 +757,19 @@ Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código
   enviada", com o "Tentar de novo", e não "Sem confirmação do servidor" com
   "Conferir", como no cartão "Quando demora · escrita" da prancha: o envio
   cancelado não tem o que conferir. A dúvida só existe na callable que vem
-  depois do último byte, e ela diz "Confira antes de tentar de novo".
+  depois do último byte, e ela diz "Confira antes de tentar de novo";
+- a releitura que falha por erro do servidor, com o aparelho conectado e a
+  lista lida, diz "Não consegui atualizar · lista de 10:42", com "Tentar de
+  novo", e não "Reconectando…" (parte 10). O momento 8 fala do servidor que
+  "demora ou falha", mas o "Reconectando…" relê sozinho, e o erro do servidor
+  não passa sozinho. No Fechamento, "lista de" fala da competência;
+- a lista que troca de filtro fica `inert` e com `aria-busy`, como na prancha
+  (parte 10). No Chromium, o `inert` a tira da árvore de acessibilidade, e o
+  `aria-busy` nunca chega ao leitor de tela: para ele, a lista some até a nova
+  chegar. Quem diz que ela está atualizando é a linha de estado, aos 5 s
+  ("Atualizando…", sem região viva) e aos 10 s (a demora, dita pelo
+  Anunciador). Deixar a lista fora do `inert` exporia ao leitor e ao teclado
+  uma lista de outro filtro.
 
 ### 10.5 Registro das partes
 
@@ -1289,10 +1301,11 @@ plano).
   - a barra do topo do cartão (`BarraDaLista`, a `BarraDeEspera` com o fim em
     tinta) entra aos 300 ms, inteira: o CSS esmaece tudo dentro da lista
     menos o caminho até ela, desde o começo da troca;
-  - aos 5 s, onde a tela tem a linha de estado (o Receber), ela diz
-    "Atualizando…"; até lá, a hora da lista na tela. A troca não fala;
-  - na chegada, a lista nova entra por opacidade, subindo 4 px, em 150 ms (só
-    opacidade no reduzido);
+  - aos 5 s, a linha de estado diz "Atualizando…"; até lá, a hora da lista
+    na tela. Aos 10 s, a demora, com "Tentar de novo". A troca não fala até a
+    demora;
+  - na chegada, a lista nova volta a 1 da opacidade em que a anterior estava,
+    subindo 4 px, em 150 ms (só opacidade no reduzido);
   - o filtro, a busca e a paginação ficam fora do que fica inerte, e o foco
     fica onde a pessoa tocou. "Anterior" e "Próximo" ficam ocupados com
     `aria-disabled`, sem `disabled`, até a página chegar, e o cursor das
@@ -1317,13 +1330,14 @@ plano).
   lista pelo aviso de erro; Pedidos dizia "Atualizado às 10:42" como se nada
   tivesse falhado; Produtos, SKUs, Movimentações e Pedidos legado não diziam
   nada. Agora só a leitura sem nada lido troca a lista pelo aviso:
-  - nas quatro listas com a linha de estado, ela diz "Não consegui atualizar
-    · lista de 10:42", com "Tentar de novo" (o ícone em crítico, o texto em
-    tinta, como o "Reconectando…");
-  - nas telas sem a linha (Relatórios, o Fechamento e as legadas), a
-    `FaixaDaReleitura`, logo acima da lista, diz o mesmo, ou a falta de
-    conexão ("Reconectando… · lista de 10:42", "Sem conexão · lista de
-    10:42"), que essas telas não mostravam;
+  - a linha de estado diz "Não consegui atualizar · lista de 10:42", com
+    "Tentar de novo" (o ícone em crítico, o texto em tinta, como o
+    "Reconectando…"). Além das quatro listas que já tinham a linha, ela entrou
+    sob o título de Produtos, SKUs, Movimentações, Pedidos legado e
+    Relatórios, e logo abaixo dos meses no Fechamento (a decisão 5:
+    "Atualizado às" sempre sob o título das listas). Essas telas também
+    passaram a dizer a falta de conexão ("Reconectando… · lista de 10:42",
+    "Sem conexão · lista de 10:42"), que não mostravam;
   - a releitura automática não fala. Quem tocou em Atualizar ou em "Tentar de
     novo" e viu falhar de novo ouve "Não consegui atualizar".
 - **O "Avançar" só volta depois da releitura** (o item 9 da seção 6 e a
@@ -1371,25 +1385,116 @@ plano).
     botões de ícone sem nome (100 em Produtos), as barras de progresso sem
     nome (50 em Pedidos legado) e o contraste; no escuro, o primário (4,3:1).
 
+- **A revisão (13/11/2026)**, com o que o navegador e o leitor de tela
+  mostraram:
+  - **A faixa saiu; a linha de estado entrou.** A `FaixaDaReleitura`, que
+    entrava logo acima da lista nas telas sem a linha, empurrava a lista 74 px
+    em Produtos e 66 px no Fechamento e nos Relatórios quando entrava, e de
+    novo quando saía, também na falta de conexão. Agora o estado dessas seis
+    telas mora na linha reservada (acima), e nada empurra a lista. A primeira
+    leitura delas ainda diz "Carregando..." na tabela, e a linha fica vazia e
+    calada até a lista chegar (`primeiraNaLista`). Na aba Histórico do
+    Estoque, a linha das movimentações fica reservada logo acima da lista, sem
+    a hora (a do Estoque, sob o título, é a dos itens; `semHora`): ela só diz
+    a troca que passa de 5 s, a demora, a falha e a falta de conexão;
+  - **A troca que demora.** Aos 5 s, "Atualizando…" nas sete telas (antes, só
+    no Receber; nas outras, a barra parada e nenhum texto). Aos 10 s, a pílula
+    "Demorando mais que o normal" com "Tentar de novo", como na primeira
+    leitura, dita uma vez pelo Anunciador (antes, a troca ficava parada no
+    estado dos 5 s para sempre). O "Tentar de novo" larga a leitura presa e lê
+    de novo o filtro novo, com a lista anterior na tela até ela chegar;
+  - **O toque.** A lista anterior não se redesenha enquanto a nova não chega
+    (`ConteudoEmTroca`): antes, o toque refazia a tabela inteira duas vezes. Com
+    a CPU 4× mais lenta, o primeiro quadro que muda depois do toque em
+    "Próximo" (Produtos, 50 linhas, o build de produção) passou de 150 a 171
+    ms para 102 a 116 ms no computador, e de 137 a 154 ms para 83 a 98 ms no
+    celular; o script nos primeiros 250 ms, de 94 para 21 ms. O que resta é o
+    recálculo de estilo do `inert` e do esmaecer na tabela inteira (cerca de
+    45 ms com a CPU 4×), que a troca pede;
+  - **A chegada sem piscar.** A lista nova volta a 1 da opacidade em que a
+    anterior estava, por uma transição, e sobe 4 px por `transform`
+    (`carregando-chega-troca`): nunca passa por 0. Antes, ela ia de 0,5 a 0 em
+    um quadro, o cartão ficava vazio por 2 ou 3 quadros, e a troca rápida
+    piscava. Com o servidor a 150 ms, a opacidade agora vai de 0,50 a 0,60,
+    0,87, 0,92… e 1; a 40 ms, de 1 a 0,90, 0,99 e 1;
+  - **A paginação.** Nas pontas, "Anterior" e "Próximo" ficam indisponíveis
+    com `aria-disabled` (a 50%), sem `disabled`: o foco fica no botão quando a
+    última ou a primeira página chega (antes, ia ao `body`). A página nova que
+    chega com o topo do cartão acima da tela o traz à vista, de uma vez, e a
+    pessoa lê a página do começo (antes, ficava no pé, vendo o fim da página
+    nova: no Chromium, a primeira linha visível era a A.085, e agora é a
+    A.051);
+  - **O aviso da troca que falha** (`FalhaNaLeitura`). "Tentando de novo…" só
+    na nova tentativa que a pessoa pede: a releitura automática não mexe mais
+    no aviso, que é um alerta e era lido de novo sem ninguém tocar. Quando a
+    nova tentativa dá certo, o foco vai à linha de estado, e não ao `body`. Ao
+    lado do aviso, nada de "Exibindo 0 de 0", "0 produto(s) nesta página" ou
+    as contagens dos filtros;
+  - **Os Relatórios de estoque.** A primeira leitura que falha segue com o
+    aviso e "Tentando de novo…" na nova tentativa; antes, o aviso virava
+    "Carregando..." e o foco caía no `body`;
+  - **O Receber.** A troca de cliente que falha mostra "Não consegui carregar
+    as chegadas." com "Tentar de novo" no lugar da lista; antes, a lista
+    ficava sem os avisos, a linha vazia, e "Para conferir" contava sem eles.
+    Na nova tentativa, "Tentando de novo…", sem os avisos do cliente anterior
+    por baixo, e o "Em aberto" fica com o bloco enquanto o aviso está na tela.
+    Na troca, só os avisos do cliente anterior ficam a 50% e `inert`: as
+    chegadas e as guardas do armazém, que a troca não relê, seguem com o
+    toque;
+  - **O "Não consegui atualizar"** que a pessoa pediu só é dito com a tela
+    aberta, e o que ainda espera o intervalo do Anunciador sai com ela;
+  - **O "Avançar" e o "Concluir entrada"**, que agora esperam a releitura,
+    ficam ocupados com `aria-disabled`, a caixa do indicador e "Avançando…",
+    sem `disabled`: antes, o foco caía no `body` e ficava lá durante toda a
+    releitura.
+- **Medição da revisão no Chromium**, no mesmo tipo de harness, com o
+  `5ad56f4` como antes:
+  - a releitura que falha e a falta de conexão de verdade
+    (`context.setOffline`): 0 px de salto em Produtos, Fechamento e Relatórios
+    (antes, 74, 66 e 66 px);
+  - a troca nas sete telas, com o servidor a 2,5 s: nenhum quadro sem lista,
+    a lista a 0,5 aos 150 ms, e só os 4 px da subida na chegada;
+  - na troca longa (80 s): "Atualizando…" aos 5,6 s, "Demorando mais que o
+    normal" com "Tentar de novo" aos 10,3 s, e "Atualizado às" na chegada;
+  - o foco: depois do "Tentar de novo" que dá certo, na linha de estado;
+    na última página e na primeira, no botão;
+  - o Receber: os três avisos do cliente anterior a 0,5 e `inert`, as duas
+    chegadas a 1 e com o toque; a troca que falha com o aviso, "Tentando de
+    novo…" e, na volta, "Atualizado às";
+  - o axe-core, nas sete telas, no claro, no escuro e no celular, em
+    repouso, na troca, com a releitura que falhou, em "Tentando de novo…" e
+    com o aviso da troca que falhou: nenhuma regra nova. As que aparecem são
+    de antes desta parte.
+
 Fica aberto:
 
-- na aba Histórico do Estoque, a linha de estado continua dizendo a hora dos
-  itens, e não a do histórico, e por isso não diz "Atualizando…" aos 5 s da
-  troca de tipo ou de página;
+- na aba Histórico do Estoque, a linha sob o título continua dizendo a hora
+  dos itens; a das movimentações fica na linha delas, acima da lista, só com
+  o que muda;
+- a decisão do `inert` com o `aria-busy` na lista que troca e a frase "Não
+  consegui atualizar" esperam a confirmação do Leonardo (10.4);
+- aos 70 s, a troca segue com "Demorando mais que o normal" e "Tentar de
+  novo", como a primeira leitura das listas: a saída dos 70 s ("Sem resposta
+  do servidor.") não existe em nenhuma lista;
+- o toque em "Próximo" ainda leva de 102 a 116 ms no computador com a CPU 4×
+  mais lenta, pelo recálculo de estilo do `inert` na tabela inteira;
 - durante a troca, os números fora da lista (os cartões de Produtos, SKUs e
   Pedidos legado, o "Exibindo 50 de 120" da paginação, a contagem do
   relatório no menu dos Relatórios e o "Em aberto · N" do Receber) ficam com
-  os da lista anterior, inteiros, até a nova chegar;
+  os da lista anterior, inteiros, até a nova chegar; e, com a busca que
+  falhou, o cartão "Produtos cadastrados" ainda diz 0;
 - no Fechamento, os cartões dos meses do cliente novo dizem "Em aberto" até a
   lista dos períodos chegar (o falso vazio de 4.8, de antes desta parte);
 - a primeira leitura dessas seis telas segue com "Carregando..." em texto (a
   migração, parte 13);
-- "Anterior" e "Próximo" ocupados não mudam de aspecto: quem diz é a lista a
-  50% e a barra;
+- "Anterior" e "Próximo" ocupados na troca não mudam de aspecto: quem diz é a
+  lista a 50% e a barra. Na paginação do pé de uma página longa, a barra do
+  topo fica fora da tela durante a troca;
 - o `realtime-sync` relê a fila do armazém quando as tarefas mudam: na
   conclusão da separação, a releitura dela e a do app podem somar duas
   leituras (a segunda cancela a primeira). O harness não tem o Firestore, e
-  isso não foi medido;
+  isso não foi medido; o "Avançar" ocupado também não foi medido no
+  navegador (o harness não tem bancada com tarefa que avança);
 - a conferência num Android de verdade e com leitor de tela de verdade.
 
 **Parte 11, as operações longas (PR 610, 13/11/2026).** É também o PR 3 do

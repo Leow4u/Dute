@@ -132,7 +132,7 @@ máximo um anúncio a cada 2 s.
 | `Esqueleto` e `CartaoComBrilho` (`components/ui/esqueleto.tsx`) | Primeira leitura de tela com desenho conhecido | Blocos neutros (`--carregando-esqueleto`, nunca a cor da marca), sempre `aria-hidden`. O brilho faz dois ciclos e para. O `Skeleton` antigo já usa o mesmo bloco |
 | `BotaoDeAcao` (`components/ui/botao-de-acao.tsx`) | Ação com espera | Mantém a largura. Repouso, em andamento, sucesso (a caixa fecha em check), erro (crítico suave) e "Conferir". Durante a ação, `aria-busy` e `aria-disabled`, nunca `disabled` nem só 50% de opacidade |
 | Toast | Retorno da ação | Continua o retorno padrão. No celular, embaixo, perto do polegar, com o fechar no toque |
-| `LinhaDeEstado` (`components/ui/linha-de-estado.tsx`) | Sob o título de Pedidos, Receber, Estoque e Estoque › Alertas (`PageHeader`, `estado`), numa fila só dela, a 6 px do título no computador e a 2 px no celular, sempre abaixo das ações | 24 px sempre reservados: "Carregando pedidos…" com a caixa de 24 px depois de 300 ms; aos 10 s, a mesma caixa na volta calma e a pílula âmbar da demora; "Atualizado às 10:42"; "Atualizando…" quando a barra do topo passa de 5 s (a volta do app e a troca de filtro, mês ou cliente); "Reconectando… · lista de 10:42" e "Sem conexão · lista de 10:42" (também com o aparelho sem rede há 3 s, antes de qualquer leitura falhar), e "Não consegui atualizar · lista de 10:42" quando a releitura falha por outro motivo, com a lista lida, todos com "Tentar de novo" (toque de 44 px). O texto troca em sequência: o que sai some em 80 ms (180 ms quando é uma espera) e só então o novo entra, em 150 ms. Nada é região viva, e a releitura automática não fala. Com o foco no "Tentar de novo", a troca leva o foco ao novo ou à própria linha, nunca ao `body`. No celular estreito, o que não cabe passa à linha de baixo, sem rolagem lateral. As ações do cabeçalho ficam por cima do toque estendido e nunca o perdem para ele |
+| `LinhaDeEstado` (`components/ui/linha-de-estado.tsx`) | Sob o título de Pedidos, Receber, Estoque, Estoque › Alertas, Produtos, SKUs, Movimentações, Pedidos legado e Relatórios (`PageHeader`, `estado`), numa fila só dela, a 6 px do título no computador e a 2 px no celular, sempre abaixo das ações; no Fechamento, logo abaixo dos meses; na aba Histórico do Estoque, logo acima da lista, sem a hora (`semHora`) | 24 px sempre reservados: "Carregando pedidos…" com a caixa de 24 px depois de 300 ms (nas telas que ainda dizem "Carregando..." na tabela, a linha fica vazia até a lista chegar: `primeiraNaLista`); aos 10 s, a mesma caixa na volta calma e a pílula âmbar da demora; "Atualizado às 10:42"; "Atualizando…" quando a barra do topo passa de 5 s (a volta do app e a troca de filtro, mês ou cliente) e, aos 10 s, a demora com "Tentar de novo", dita uma vez; "Reconectando… · lista de 10:42" e "Sem conexão · lista de 10:42" (também com o aparelho sem rede há 3 s, antes de qualquer leitura falhar), e "Não consegui atualizar · lista de 10:42" quando a releitura falha por outro motivo, com a lista lida, todos com "Tentar de novo" (toque de 44 px). O texto troca em sequência: o que sai some em 80 ms (180 ms quando é uma espera) e só então o novo entra, em 150 ms. Nada é região viva, e a releitura automática não fala. Com o foco no "Tentar de novo", a troca leva o foco ao novo ou à própria linha, nunca ao `body`. No celular estreito, o que não cabe passa à linha de baixo, sem rolagem lateral. As ações do cabeçalho ficam por cima do toque estendido e nunca o perdem para ele |
 | `BotaoAtualizar` | O Atualizar das listas | 40 px no computador, 44 px no celular. Só mostra a espera quando a pessoa toca nele: o ícone sai em 80 ms e a caixa entra em 150 ms; no fim, a caixa sai em 180 ms e o ícone volta. A releitura automática não o gira nem o desabilita. Travado na primeira leitura, a 0,45, volta a 1 em 150 ms. No fim do toque, "Lista atualizada" no Anunciador, só com a tela ainda aberta |
 | `BarraDeEspera` (`components/ui/barra-de-espera.tsx`) | A linha em andamento e o topo do cartão que relê na volta do app | Na volta do app (`resultado="fim"`), a barra do topo completa em tinta por `scaleX` em 200 ms e esmaece em 150 ms; a que nunca apareceu sai sem nada |
 | `CarregandoTela` (`components/ui/carregando-tela.tsx`) | A tela que ainda abre: o arquivo dela, o perfil, o cliente | Aos 300 ms, a caixa de 40 px e "Abrindo Faturamento…" (o nome da aba; o que não é substantivo vem com "a tela": "Abrindo a tela Separar…"). Aos 10 s, "Demorando mais que o normal" e "Tentar de novo"; aos 70 s, "Sem resposta do servidor."; tentar de novo recarrega. Nunca o branco nem o `fallback={null}`. Nada aparece por baixo da abertura |
@@ -165,21 +165,30 @@ do segmentado tem 44 px.
 e a troca de cliente no Receber), trocar a busca, a página, o tipo, o
 período, o mês ou o cliente mantém a lista anterior (`placeholderData`), a 50%
 em 150 ms, `inert` e com `aria-busy`, que só vale neste caso, com a
-`BarraDaLista` no topo do cartão aos 300 ms, inteira; aos 5 s, onde a tela tem
-a linha de estado, ela diz "Atualizando…". Nada de "Carregando..." no lugar da
-lista, e a tela não pula. Na chegada, a lista nova entra por opacidade,
-subindo 4 px, em 150 ms (só opacidade no reduzido). O filtro, a busca e a
-paginação ficam fora do que fica inerte, e a paginação fica ocupada com
-`aria-disabled`, sem `disabled`: o foco fica onde a pessoa tocou. A troca que
-falha mostra o aviso no lugar da lista (`FalhaNaLeitura`, com "Tentar de
-novo", que segue no aviso enquanto tenta), nunca o vazio nem a lista do
-filtro anterior. **A releitura que falha nunca apaga a lista**: a lista lida
-fica, e o erro vai para a linha de estado ("Não consegui atualizar · lista de
-10:42") ou, nas telas sem ela, para a `FaixaDaReleitura`, logo acima da lista
-(a mesma frase, ou a da falta de conexão). Só a leitura sem nada lido troca a
-lista pelo aviso. A releitura automática não fala; quem tocou em Atualizar ou
-em "Tentar de novo" e viu falhar de novo ouve "Não consegui atualizar". O
-"Avançar" da bancada só volta depois da releitura. No celular, o shell da
+`BarraDaLista` no topo do cartão aos 300 ms, inteira; aos 5 s, a linha de
+estado diz "Atualizando…" e, aos 10 s, "Demorando mais que o normal", com
+"Tentar de novo". Nada de "Carregando..." no lugar da lista, e a tela não
+pula. Enquanto a nova não chega, a lista anterior não se redesenha
+(`ConteudoEmTroca`): o toque responde sem refazer a tabela. Na chegada, a
+lista nova volta a 1 da opacidade em que a anterior estava, por transição,
+subindo 4 px, em 150 ms (só opacidade no reduzido): nunca passa por 0, e a
+troca rápida não pisca. Na troca de cliente do Receber, só os avisos do
+cliente anterior ficam a 50% e inertes; o que a troca não relê segue com o
+toque. O filtro, a busca e a paginação ficam fora do que fica inerte, e a
+paginação fica ocupada com `aria-disabled`, sem `disabled`, também nas pontas
+(a primeira e a última página, a 50%): o foco fica onde a pessoa tocou. A
+página nova que chega com o topo do cartão acima da tela o traz à vista. A
+troca que falha mostra o aviso no lugar da lista (`FalhaNaLeitura`, com
+"Tentar de novo", que segue no aviso enquanto tenta), nunca o vazio, a lista
+do filtro anterior nem um zero ao lado; "Tentando de novo…" só na nova
+tentativa que a pessoa pede, e, quando ela dá certo, o foco vai à linha de
+estado. **A releitura que falha nunca apaga a lista nem a empurra**: a lista
+lida fica, e o erro vai para a linha de estado ("Não consegui atualizar ·
+lista de 10:42", ou a falta de conexão), sempre reservada. Só a leitura sem
+nada lido troca a lista pelo aviso. A releitura automática não fala; quem
+tocou em Atualizar ou em "Tentar de novo" e viu falhar de novo ouve "Não
+consegui atualizar", só com a tela aberta. O "Avançar" da bancada só volta
+depois da releitura e, até lá, fica ocupado, sem `disabled`. No celular, o shell da
 Armazenagem não lê o armazém (os contadores só aparecem no menu lateral), e o
 "Conferir" da separação lê a fila uma vez.
 
