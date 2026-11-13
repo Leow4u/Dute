@@ -121,7 +121,7 @@ export function DestinoDaCaixa({ estado, ocupado, confirmando = false, onModo, o
   return (
     <section aria-labelledby="guardar-em" className="@container flex flex-col gap-4 rounded-lg border border-border bg-muted/40 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 id="guardar-em" className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Guardar em</h3>
+        <h3 id="guardar-em" tabIndex={-1} className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Guardar em</h3>
         <Segmented<ModoDoDestino> aria-label="Escolha da prateleira" options={MODOS} value={estado.modo} onChange={onModo} />
       </div>
 
@@ -152,6 +152,8 @@ export function DestinoDaCaixa({ estado, ocupado, confirmando = false, onModo, o
           leitura={{ error: null, refetch: async () => onTentarDeNovo() as never }}
           erro={estado.falhaDaSugestao ?? new Error(erro)}
           mensagem={`Não consegui consultar a sugestão. ${erro}`}
+          /* A sugestão que chega tira o aviso com o foco nele: o foco vai ao título do painel, nunca ao body. */
+          focoAoSair="guardar-em"
         />
       ) : erro ? (
         <Alert variant="destructive">

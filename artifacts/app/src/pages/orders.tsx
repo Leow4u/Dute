@@ -6,6 +6,9 @@ import { Esqueleto } from "@/components/ui/esqueleto";
 import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
+import { useContagemLembrada } from "@/lib/carregando/contagem-lembrada";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Boxes, CheckCircle2, ClipboardList, PackageCheck, Truck } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -49,10 +52,14 @@ export default function Orders() {
   const idDaLinha = useId();
 
   const orders = data?.items ?? [];
-  // Antes da primeira leitura (e com ela falhando), os números ficam em "—": nunca zero antes de ler
-  // (carregamento v2, parte 13c; o diagnóstico, necessidade 3).
+  // Antes da primeira leitura, o bloco no lugar de cada número; com ela falhando, "—": nunca zero antes de ler, e a
+  // leitura não se confunde com a falha (carregamento v2, parte 13c; momento 2 e o diagnóstico, necessidade 3).
   const lido = data !== undefined && !lista.falhou;
-  const numeroLido = (valor: number) => (lido ? formatStockNumber(valor) : "—");
+  const numeroLido = (valor: number) =>
+    lido ? formatStockNumber(valor) : lista.falhou ? "—" : <Esqueleto forma="contagem" />;
+  // As linhas-fantasma entram aos 300 ms, quantas a última leitura deixou (entre 1 e 5; sem ela, 2), com o brilho.
+  const fantasmas = useEspera(isLoading);
+  const contagem = useContagemLembrada("pedidos-legado", "todos", data ? { linhas: orders.length } : null);
   const stats = useMemo(() => {
     return orders.reduce(
       (acc, order) => {
@@ -151,17 +158,27 @@ export default function Orders() {
               <tbody className="divide-y divide-border" {...(isLoading ? { "aria-busy": true, "aria-describedby": idDaLinha } : {})}>
                 {isLoading ? (
                   // As linhas-fantasma da primeira leitura; quem diz é a linha de estado sob o título (momento 2).
-                  [0, 1, 2, 3].map((ordem) => (
-                    <tr key={ordem} aria-hidden="true">
-                      <td className="px-5 py-4"><Esqueleto forma="texto" className="w-16" /></td>
-                      <td className="px-4 py-4"><Esqueleto forma="texto" className="w-20" /></td>
-                      <td className="px-4 py-4"><Esqueleto forma="texto" className="w-28" /></td>
-                      <td className="px-4 py-4"><Esqueleto forma="texto" className="w-36" /></td>
-                      <td className="px-4 py-4"><Esqueleto forma="texto" className="mx-auto w-24" /></td>
-                      <td className="px-4 py-4"><Esqueleto forma="texto" className="mx-auto w-16" /></td>
-                      <td className="px-4 py-4"><Esqueleto forma="botao" className="mx-auto w-28" /></td>
-                    </tr>
-                  ))
+                  Array.from({ length: contagem.linhas("linhas") }, (_, ordem) => {
+                    // A mesma altura da linha real (o cliente em duas linhas, 36 px, e o seletor do status): nada pula na chegada.
+                    const brilho = fantasmas.visivel && "carregando-com-brilho";
+                    const celula = "flex h-9 items-center";
+                    return (
+                      <tr key={ordem} aria-hidden="true" data-fantasmas="" data-visivel={fantasmas.visivel ? "" : undefined}>
+                        <td className="px-5 py-3"><span className={celula}><Esqueleto forma="texto" className={cn("w-16", brilho)} /></span></td>
+                        <td className="px-4 py-3"><span className={celula}><Esqueleto forma="texto" className={cn("w-20", brilho)} /></span></td>
+                        <td className="px-4 py-3">
+                          <span className="flex h-9 flex-col justify-center gap-1.5">
+                            <Esqueleto forma="texto" className={cn("w-28", brilho)} />
+                            <Esqueleto forma="texto" className={cn("h-2.5 w-16", brilho)} />
+                          </span>
+                        </td>
+                        <td className="px-4 py-3"><span className={celula}><Esqueleto forma="texto" className={cn("w-36", brilho)} /></span></td>
+                        <td className="px-4 py-3"><span className={cn(celula, "justify-center")}><Esqueleto forma="texto" className={cn("w-24", brilho)} /></span></td>
+                        <td className="px-4 py-3"><span className={cn(celula, "justify-center")}><Esqueleto forma="texto" className={cn("w-16", brilho)} /></span></td>
+                        <td className="px-4 py-3"><span className={cn(celula, "justify-center")}><Esqueleto forma="botao" className={cn("h-8 w-28", brilho)} /></span></td>
+                      </tr>
+                    );
+                  })
                 ) : data?.items?.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Nenhum pedido encontrado.</td>
@@ -216,7 +233,8 @@ export default function Orders() {
             page={page}
             isLoading={isLoading}
             ocupada={lista.trocando}
-            semContagem={lista.falhou}
+            /* Sem a leitura, nem "Exibindo 0 de 0": a contagem só depois de ler (necessidade 3). */
+            semContagem={lista.falhou || data === undefined}
             count={data?.items?.length || 0}
             total={data?.total || 0}
             limit={limit}

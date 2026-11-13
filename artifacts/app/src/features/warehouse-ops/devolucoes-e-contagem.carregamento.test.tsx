@@ -28,7 +28,8 @@ const estado = vi.hoisted(() => ({
   atrasoDoCatalogoMs: 20,
   catalogoFalha: false,
   pendentesFalham: false,
-  pendentes: [] as Array<{ caminho: string; corpo: Record<string, unknown>; responder: () => void }>,
+  pendentesFalhamVezes: 0,
+  pendentes: [] as Array<{ caminho: string; corpo: Record<string, unknown>; responder: (resposta?: Response) => void }>,
 }));
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => undefined }) }));
@@ -56,7 +57,7 @@ async function servir(entrada: RequestInfo | URL, init?: RequestInit) {
       estado.pendentes.push({
         caminho: url.pathname,
         corpo: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
-        responder: () => resolver(json({ ok: true })),
+        responder: (resposta?: Response) => resolver(resposta ?? json({ ok: true })),
       }),
     );
   }
@@ -66,7 +67,13 @@ async function servir(entrada: RequestInfo | URL, init?: RequestInit) {
     return json({ items: url.pathname === "/api/skus" ? SKUS : [] });
   }
   await espera(20);
-  if (url.pathname === "/api/return-items") return estado.pendentesFalham ? json({ error: "Falha" }, 500) : json({ items: PENDENTES });
+  if (url.pathname === "/api/return-items") {
+    if (estado.pendentesFalhamVezes > 0) {
+      estado.pendentesFalhamVezes -= 1;
+      return json({ error: "Falha" }, 500);
+    }
+    return estado.pendentesFalham ? json({ error: "Falha" }, 500) : json({ items: PENDENTES });
+  }
   if (url.pathname === "/api/returns") return json({ items: [{ id: "ret1", source: "Loja Faria Lima", customer_code: "BTG" }] });
   throw new Error(`API inesperada: ${metodo} ${url.pathname}`);
 }
@@ -117,6 +124,7 @@ beforeEach(() => {
   estado.atrasoDoCatalogoMs = 20;
   estado.catalogoFalha = false;
   estado.pendentesFalham = false;
+  estado.pendentesFalhamVezes = 0;
   estado.pendentes.length = 0;
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -161,9 +169,12 @@ describe("Devoluções, o catálogo antes de \"não localizado\"", () => {
     await montar(<ReturnWorkspace />);
     await digitar("#return-client-code-0", "A.01.0806.004.GG");
     expect(naTela()).not.toMatch(/não localizado|Não crie SKU duplicado/);
+    // Antes de 300 ms, nada: nem a caixa, nem um selo que diga o mesmo (o selo piscava no catálogo rápido).
+    expect(naTela()).not.toMatch(/verificando o catálogo/i);
     await pausa(350);
     expect(naTela()).toContain("Verificando o catálogo…");
-    expect(naTela()).toContain("verificando o catálogo");
+    // A espera é dita uma vez: a caixa, sem o selo repetindo na linha.
+    expect(naTela()).not.toContain("verificando o catálogo");
     expect(naTela()).not.toMatch(/não localizado|Não crie SKU duplicado/);
     const registrar = botoes("Registrar devolução")[0]!;
     expect(registrar.getAttribute("aria-disabled")).toBe("true");
@@ -173,7 +184,7 @@ describe("Devoluções, o catálogo antes de \"não localizado\"", () => {
     // Só rótulos, dados e ações (a trava contra legenda), e o axe.
     expect(
       textosForaDaLista(container.querySelector("form")!.outerHTML, [
-        "Origem", "Referência", "Itens devolvidos", "Adicionar linha", "Linha 1", "verificando o catálogo", "Verificando o catálogo…",
+        "Origem", "Referência", "Itens devolvidos", "Adicionar linha", "Linha 1", "Verificando o catálogo…",
         "Observações", "Criar devolução não altera saldo. O estoque só muda quando a disposição for “volta para disponível”.",
         "Registrar devolução", "Registrando…", "Conferir",
       ]),
@@ -241,9 +252,106 @@ describe("Devoluções, as pendentes e a disposição", () => {
     expect(segunda!.getAttribute("aria-busy")).toBeNull();
 
     await act(async () => estado.pendentes[0]!.responder());
-    await esperar(() => naTela().includes("Disposição registrada: available."), "a linha registrada");
+    // A linha registrada diz a disposição em português, como as opções, e não o valor gravado ("available").
+    await esperar(() => naTela().includes("Disposição registrada: Volta para disponível."), "a linha registrada");
+    expect(naTela()).not.toContain("available");
     // O botão saiu com o foco: o foco vai à linha registrada, nunca ao body.
     expect(document.activeElement?.id).toBe("disposicao-ri1");
+  });
+
+  it("a repetição depois da falha incerta leva a mesma chave e o mesmo corpo, com o occurred_at da primeira tentativa", async () => {
+    await montar(<ReturnWorkspace />);
+    await esperar(() => botoes("Registrar disposição").length === 2, "as duas pendentes");
+    await act(async () => botoes("Registrar disposição")[0]!.click());
+    expect(estado.pendentes).toHaveLength(1);
+    // A falha interna não diz se gravou: a nova tentativa repete a chave.
+    await act(async () => estado.pendentes[0]!.responder(json({ error: "internal" }, 500)));
+    await pausa(3_500);
+    await act(async () => botoes("Registrar disposição")[0]!.click());
+    expect(estado.pendentes).toHaveLength(2);
+    const [primeira, segunda] = estado.pendentes.map((pedido) => pedido.corpo);
+    expect(segunda!.idempotency_key).toBe(primeira!.idempotency_key);
+    // O servidor compara o conteúdo inteiro com o da chave: um occurred_at novo seria "outro conteúdo".
+    expect(segunda).toEqual(primeira);
+  });
+
+  it("a recusa diz \"Não registrada\" no botão por 2 s e deixa o motivo na linha; a espera longa diz o objeto aos 3 s e a demora aos 10 s", async () => {
+    await montar(<ReturnWorkspace />);
+    await esperar(() => botoes("Registrar disposição").length === 2, "as duas pendentes");
+    await act(async () => botoes("Registrar disposição")[0]!.click());
+    await pausa(350);
+    expect(naTela()).not.toContain("Registrando a disposição de");
+    await pausa(3_000);
+    expect(naTela()).toContain("Registrando a disposição de Polo Masculino Piquet Preto · GG…");
+    await pausa(7_000);
+    expect(naTela()).toMatch(/Demorando mais que o normal · 0:1\d/);
+    expect(naTela()).not.toContain("Registrando a disposição de");
+    const naDemora = container.innerHTML;
+
+    await act(async () => estado.pendentes[0]!.responder(json({ error: "Este item de devolução já possui disposição registrada." }, 409)));
+    await pausa(50);
+    const botao = container.querySelector<HTMLButtonElement>('button[data-estado="erro"]')!;
+    expect(botao.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Não registrada");
+    expect(naTela()).toContain("Este item de devolução já possui disposição registrada.");
+    await pausa(2_100);
+    // O botão volta a "Registrar disposição", e o motivo fica na linha até a próxima ação.
+    expect(botao.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Registrar disposição");
+    expect(naTela()).toContain("Este item de devolução já possui disposição registrada.");
+    expect(textosForaDaLista(naDemora, [
+      "Devoluções", "produto existente obrigatório", "A.01.0806.004.GG · 2 un.", "A.01.0806.004.G · 1 un.", "·", "0:10",
+      "Origem", "Referência", "Itens devolvidos", "Adicionar linha", "Linha 1", "Observações",
+      "Criar devolução não altera saldo. O estoque só muda quando a disposição for “volta para disponível”.",
+      "Registrar devolução", "Registrando…", "Conferir", "Disposição física", "Polo Masculino Piquet Preto · GG",
+      "Polo Masculino Piquet Preto · G", "pendente", "Volta para disponível", "Quarentena", "Avaria", "Descarte",
+      "Endereço de retorno", "Nota da triagem", "Registrar disposição", "Não registrada", "Demorando mais que o normal",
+      "Agent Dute acompanha",
+      "Quarentena, avaria e descarte geram atenção operacional. Retorno para disponível gera movimento de entrada auditado.",
+    ])).toEqual([]);
+    expect(await axe(container.innerHTML)).toEqual([]);
+  });
+
+  it("a nova tentativa das pendentes que dá certo leva o foco ao título da disposição, nunca ao body", async () => {
+    estado.pendentesFalhamVezes = 1;
+    await montar(<ReturnWorkspace />);
+    await esperar(() => naTela().includes("Não consegui carregar as devoluções pendentes."), "a falha das pendentes");
+    const tentar = botoes("Tentar de novo")[0]!;
+    tentar.focus();
+    await act(async () => tentar.click());
+    await esperar(() => botoes("Registrar disposição").length === 2, "as pendentes depois da nova tentativa");
+    expect(document.activeElement?.id).toBe("disposicao-fisica");
+  });
+});
+
+describe("Devoluções, o catálogo em várias linhas e a falha que chega logo depois da espera", () => {
+  it("com o catálogo falhando e duas linhas digitadas, o aviso é um só, com um \"Tentar de novo\"", async () => {
+    estado.catalogoFalha = true;
+    await montar(<ReturnWorkspace />);
+    await act(async () => botoes("Adicionar linha")[0]!.click());
+    await digitar("#return-client-code-0", "A.01.0806.004.GG");
+    await digitar("#return-client-code-1", "A.01.0806.004.G");
+    await esperar(() => naTela().includes("Não consegui carregar o catálogo."), "a falha do catálogo");
+    const avisos = Array.from(container.querySelectorAll('[role="alert"]')).filter((aviso) => aviso.textContent?.includes("catálogo"));
+    expect(avisos).toHaveLength(1);
+    expect(botoes("Tentar de novo")).toHaveLength(1);
+    // As duas linhas dizem que estão sem catálogo; o campo tem nome.
+    expect(naTela().match(/sem catálogo/g)).toHaveLength(2);
+    expect(container.querySelector("#return-client-code-1")?.getAttribute("aria-label")).toBe("Código do cliente da linha 2");
+  });
+
+  it("\"Verificando o catálogo…\" que apareceu fica o mínimo de 500 ms antes de a falha tomar o lugar", async () => {
+    estado.catalogoFalha = true;
+    estado.atrasoDoCatalogoMs = 420;
+    await montar(<ReturnWorkspace />);
+    await digitar("#return-client-code-0", "A.01.0806.004.GG");
+    await pausa(330);
+    expect(naTela()).toContain("Verificando o catálogo…");
+    // A falha chega aos ~420 ms: a caixa que apareceu aos 300 ms fica até os 800 ms.
+    await pausa(200);
+    expect(naTela()).toContain("Verificando o catálogo…");
+    expect(naTela()).not.toContain("Não consegui carregar o catálogo.");
+    await pausa(350);
+    expect(naTela()).toContain("Não consegui carregar o catálogo.");
+    expect(naTela()).not.toContain("Verificando o catálogo…");
   });
 });
 

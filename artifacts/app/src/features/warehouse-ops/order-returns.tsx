@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { collection, query, where } from "firebase/firestore";
 import { Undo2 } from "lucide-react";
@@ -17,6 +17,7 @@ import { useActiveCustomer } from "@/lib/active-customer-context";
 import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { novaChave } from "@/lib/operacao/api";
 import { useLeitura } from "@/lib/operacao/leitura";
+import { useNovaAssinatura } from "@/lib/operacao/nova-assinatura";
 import { humanApiError } from "@/lib/permissions";
 import {
   codigosDaLinha,
@@ -187,18 +188,19 @@ export function RetornosDaOperacao({ somenteConsulta = false }: { somenteConsult
   const { code: customerCode } = useActiveCustomer();
   // A leitura ao vivo que falha não se refaz sozinha: "Tentar de novo" assina de novo (a chave muda), e a falha fica na
   // tela até a nova responder (carregamento v2, parte 13c).
-  const retornosAoVivo = useNovaAssinatura();
+  const retornosAoVivo = useNovaAssinatura(OPERACAO_LIBERADO ? "orders:retorno_a_receber" : null);
   const leitura = useLeitura(
-    OPERACAO_LIBERADO ? `orders:retorno_a_receber#${retornosAoVivo.vez}` : null,
+    retornosAoVivo.chave,
     (db) => query(collection(db, "orders"), where("retorno.status", "==", "a_receber")),
     retornoAReceber,
   );
   const retornos = (leitura.itens ?? []).filter((item) => item.customerCode === customerCode).sort((a, b) => (a.chegouEm ?? "").localeCompare(b.chegouEm ?? ""));
   const [aberto, setAberto] = useState<{ retorno: RetornoAReceber; voltou: Record<string, string>; notas: string; tentou: boolean; erro: string | null; enviando: boolean } | null>(null);
   const chave = useRef<string | null>(null);
-  const linhasAoVivo = useNovaAssinatura();
+  // A falha das linhas é do pedido aberto: a do pedido A não aparece no B.
+  const linhasAoVivo = useNovaAssinatura(aberto ? `order_items:${aberto.retorno.orderId}` : null);
   const linhas = useLeitura(
-    aberto ? `order_items:${aberto.retorno.orderId}#${linhasAoVivo.vez}` : null,
+    linhasAoVivo.chave,
     (db) => query(collection(db, "order_items"), where("order_id", "==", aberto?.retorno.orderId ?? "-")),
     linhaDoRetorno,
   );
@@ -249,39 +251,4 @@ export function RetornosDaOperacao({ somenteConsulta = false }: { somenteConsult
       }}
     />
   );
-}
-
-/**
- * A nova tentativa de uma leitura ao vivo (`useLeitura`), que não se refaz
- * sozinha depois de recusada: `vez` entra na chave e assina de novo. A falha
- * fica na tela enquanto a nova assinatura não responde (o "Tentando de novo…"
- * da `FalhaNaLeitura`), e a promessa de `tentar` acaba na resposta.
- */
-function useNovaAssinatura() {
-  const [vez, setVez] = useState(0);
-  const [falhaNaTela, setFalhaNaTela] = useState(false);
-  const esperando = useRef<(() => void) | null>(null);
-  const ultima = useRef<{ itens: unknown[] | null; erro: boolean }>({ itens: null, erro: false });
-  useEffect(() => {
-    const { itens, erro } = ultima.current;
-    if (erro) setFalhaNaTela(true);
-    else if (itens !== null) setFalhaNaTela(false);
-    if ((erro || itens !== null) && esperando.current) {
-      esperando.current();
-      esperando.current = null;
-    }
-  });
-  return {
-    vez,
-    tentar: () =>
-      new Promise<void>((pronto) => {
-        esperando.current = pronto;
-        setVez((atual) => atual + 1);
-      }),
-    /** Anota a leitura de agora e diz se a falha está na tela (a de agora, ou a de antes enquanto tenta de novo). */
-    falhou: (leitura: { itens: unknown[] | null; erro: boolean }) => {
-      ultima.current = leitura;
-      return leitura.erro || (falhaNaTela && leitura.itens === null);
-    },
-  };
 }

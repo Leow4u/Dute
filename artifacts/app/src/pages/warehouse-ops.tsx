@@ -63,7 +63,7 @@ import {
 } from "@/components/ui/empty";
 import { Progress } from "@/components/ui/progress";
 import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
-import { BotaoAtualizar } from "@/components/ui/linha-de-estado";
+import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { Input } from "@/components/ui/input";
@@ -342,13 +342,14 @@ function WmsModuleEmptyState({ module }: { module: WarehouseOpsModule }) {
   );
 }
 
-function WarehouseOpsLoading() {
+/**
+ * A bancada na primeira leitura: os blocos com a forma dela, sob o título real
+ * e a linha de estado, que diz "Carregando tarefas…" aos 300 ms e é quem a
+ * região ocupada aponta (carregamento v2, parte 13c).
+ */
+function WarehouseOpsLoading({ estado }: { estado: string }) {
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <Skeleton className="h-11 w-72 rounded-lg" />
-        <Skeleton className="h-4 w-full max-w-[560px]" />
-      </div>
+    <div className="flex flex-col gap-6" aria-busy="true" aria-describedby={estado}>
       <Skeleton className="h-20 rounded-lg" />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {[1, 2, 3, 4, 5].map((item) => (
@@ -1007,6 +1008,9 @@ function AgentAlertsPanel({
   );
 }
 
+/** A linha de estado da bancada, que recebe o foco quando o aviso da falha sai com ele. */
+const ID_DA_LINHA_DA_BANCADA = "linha-de-estado-da-bancada";
+
 type WarehouseOpsProps = {
   initialModule?: WarehouseOpsModuleKey;
 };
@@ -1120,30 +1124,45 @@ export default function WarehouseOps({
 
   const pageTitle = initialModule === "receiving" ? "Receber" : activeModule.label;
 
+  // O título e a linha de estado ficam desde o começo: "Carregando tarefas…" na primeira leitura, "Atualizado às" e a
+  // releitura que falha com a bancada lida ("Não consegui atualizar · lista de 10:42"), que nunca apaga a bancada
+  // (carregamento v2, parte 13c; momentos 2 e 7). Quando o aviso da falha sai com o foco nele, o foco vai à linha.
+  const cabecalho = (
+    <PageHeader
+      title={pageTitle}
+      estado={<LinhaDeEstado id={ID_DA_LINHA_DA_BANCADA} leitura={[opsNaTela]} objeto="tarefas" />}
+      actions={
+        <>
+          {blockedEntries.length > 0 ? (
+            <Badge variant="destructive">{formatNumber(blockedEntries.length)} bloqueio(s)</Badge>
+          ) : null}
+          <BotaoAtualizar atualizando={atualizarBancada.atualizando} travado={!ops.data} onAtualizar={atualizarBancada.atualizar} />
+        </>
+      }
+    />
+  );
+
   if (!ops.data && opsNaTela.isError) {
     return (
       <div className="flex flex-col gap-6">
-        <PageHeader title={pageTitle} />
-        <FalhaNaLeitura leitura={ops} erro={opsNaTela.error} mensagem="Não consegui carregar a bancada WMS." />
+        {cabecalho}
+        <FalhaNaLeitura leitura={ops} erro={opsNaTela.error} mensagem="Não consegui carregar a bancada WMS." focoAoSair={ID_DA_LINHA_DA_BANCADA} />
       </div>
     );
   }
 
-  if (!ops.data) return <WarehouseOpsLoading />;
+  if (!ops.data) {
+    return (
+      <div className="flex flex-col gap-6">
+        {cabecalho}
+        <WarehouseOpsLoading estado={ID_DA_LINHA_DA_BANCADA} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title={pageTitle}
-        actions={
-          <>
-            {blockedEntries.length > 0 ? (
-              <Badge variant="destructive">{formatNumber(blockedEntries.length)} bloqueio(s)</Badge>
-            ) : null}
-            <BotaoAtualizar atualizando={atualizarBancada.atualizando} onAtualizar={atualizarBancada.atualizar} />
-          </>
-        }
-      />
+      {cabecalho}
 
       {activeModule.key === "returns" ? (
         <ReturnWorkspace />

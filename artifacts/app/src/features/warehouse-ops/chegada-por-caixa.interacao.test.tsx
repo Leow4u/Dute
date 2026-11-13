@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { Anunciador } from "@/lib/carregando/anunciador";
 import type { TaskQueueEntry } from "@/lib/warehouse-ops/model";
 
 /**
@@ -259,6 +260,7 @@ beforeEach(async () => {
   await act(async () => {
     raiz!.render(
       <QueryClientProvider client={cliente}>
+        <Anunciador />
         <FichaDaChegadaPorCaixa
           entry={entry}
           onOpenException={() => undefined}
@@ -267,6 +269,9 @@ beforeEach(async () => {
     );
   });
 });
+
+/** O que o Anunciador disse (a região viva única da tela). */
+const falado = () => document.querySelector("[data-anunciador]")?.textContent ?? "";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -599,6 +604,7 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
       // A releitura publica a revisão nova, como a consulta que alimenta a fila.
       raiz!.render(
         <QueryClientProvider client={cliente}>
+          <Anunciador />
           <FichaDaChegadaPorCaixa entry={atualizada} onOpenException={() => undefined} />
         </QueryClientProvider>,
       );
@@ -740,6 +746,7 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
       await act(async () => {
         raiz!.render(
           <QueryClientProvider client={new QueryClient()}>
+            <Anunciador />
             <FichaDaChegadaPorCaixa
               entry={pronta}
               onOpenException={() => undefined}
@@ -791,6 +798,65 @@ describe("a bancada da chegada por caixa na mão de quem usa", () => {
         receipt_id: RECEIPT,
         inbound_item_id: `${RECEIPT}_01`,
       });
+    });
+
+    it("o nome do Desmarcar é o rótulo na tela, e a linha vem pela descrição; desmarcada, o foco vai ao Marcar falta que entra no lugar", async () => {
+      const desmarcar = botao("Desmarcar");
+      // Sem aria-label fixo: o nome acessível é a camada atual ("Desmarcar", "Desmarcando…").
+      expect(desmarcar.getAttribute("aria-label")).toBeNull();
+      const descricao = document.getElementById(desmarcar.getAttribute("aria-describedby") ?? "");
+      expect(descricao?.textContent).toBe("1 · BTG-000086");
+      desmarcar.focus();
+      await clicar("Desmarcar");
+      await esperar(() => !document.body.textContent?.includes("Desmarcar"), "a falta desmarcada");
+      await esperar(() => document.activeElement !== document.body, "o foco depois de desmarcar");
+      expect(document.activeElement?.id).toBe(`marcar-falta-${RECEIPT}_01`);
+    });
+
+    it("a entrada concluída: o toast diz, o Anunciador não repete, e o foco vai ao título, nunca ao body", async () => {
+      await act(async () => {
+        const campo = document.getElementById("justificativa-da-divergencia") as HTMLTextAreaElement;
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(campo, "Fornecedor envia o volume 3 na próxima NF.");
+        campo.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      botao("Concluir entrada").focus();
+      await clicar("Concluir entrada");
+      await esperar(() => estado.avisos.some((aviso) => aviso.title === "Entrada concluída"), "o aviso");
+      await esperar(() => document.activeElement !== document.body, "o foco depois de concluir");
+      expect(document.activeElement?.tagName).toBe("H2");
+      expect(document.activeElement?.textContent).toBe("Detalhes do recebimento");
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      expect(falado()).not.toContain("Entrada concluída");
+    });
+  });
+
+  describe("o que o leitor de tela ouve, sem região viva solta", () => {
+    it("o destino confirmado é dito pelo Anunciador", async () => {
+      await act(async () => {
+        [...document.querySelectorAll("button")].find((elemento) => elemento.textContent?.includes("CX-000131"))!.click();
+      });
+      await esperar(() => Boolean(document.body.textContent?.includes("Confirmar destino em B-02")), "a sugestão B-02");
+      await clicar("Confirmar destino em B-02");
+      await esperar(() => falado().includes("Destino confirmado"), "o anúncio do destino");
+      expect(document.querySelectorAll('[role="status"]:not([data-anunciador]), [aria-live]:not([data-anunciador])')).toHaveLength(0);
+    });
+
+    it("a busca sem resultado é dita pelo Anunciador", async () => {
+      await digitar("caixa-busca", "BTG-000999");
+      await esperar(() => falado().includes("Nenhum produto da NF encontrado"), "o anúncio da busca");
+    });
+
+    it("a quantidade não salva é dita pelo Anunciador quando aparece", async () => {
+      await act(async () => {
+        [...document.querySelectorAll("button")]
+          .find((elemento) => elemento.getAttribute("aria-pressed") === "false" && elemento.textContent?.startsWith("A.01.0806.004.GG"))!
+          .click();
+      });
+      await digitar("caixa-quantidade", "19");
+      await esperar(() => Boolean(document.body.textContent?.includes("Há quantidade não salva")), "o aviso escrito");
+      await esperar(() => falado().includes("Há quantidade não salva"), "o anúncio da quantidade não salva");
     });
   });
 });

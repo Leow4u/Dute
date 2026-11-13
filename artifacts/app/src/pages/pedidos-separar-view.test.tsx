@@ -14,18 +14,26 @@ import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela as textosComAsCamadas } from "@/test/textos";
 
 /**
- * O BotaoDeAcao (carregamento v2, parte 13c) empilha as camadas do botão: só
- * a atual está na tela; as outras (o gerúndio "Separando…" e o "Conferir")
- * ficam fora da árvore até a vez delas. Os textos da tela são os da camada
- * atual, e as outras só podem ser o gerúndio ou o "Conferir".
+ * As camadas escondidas do BotaoDeAcao nesta tela (carregamento v2, parte
+ * 13c): o gerúndio de cada ação e o "Conferir" entram na lista do teste, como
+ * todo texto. Uma camada com outro texto (um gerúndio errado) reprova.
+ */
+const CAMADAS_DA_BANCADA = ["Separando…", "Levando…", "Desfazendo…", "Fechando…", "Concluindo…", "Conferir"];
+
+/**
+ * O BotaoDeAcao empilha as camadas do botão: só a atual está na tela; as
+ * outras ficam fora da árvore até a vez delas. Os textos da tela são os da
+ * camada atual, e as outras precisam estar na lista das camadas (ou repetir o
+ * rótulo da atual, como o sucesso e o erro sem texto próprio).
  */
 function textosDaTela(html: string): string[] {
   const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
   const ocultas = [...dom.window.document.querySelectorAll(".botao-acao-camada:not([data-atual])")];
   for (const camada of ocultas) {
     const texto = camada.textContent?.trim() ?? "";
-    if (texto && texto !== "Conferir" && !texto.endsWith("…") && !camada.closest("button")?.querySelector(".botao-acao-camada[data-atual]")?.textContent?.includes(texto)) {
-      throw new Error(`Camada fora da vez com texto que não é gerúndio: ${texto}`);
+    const atual = camada.closest("button")?.querySelector(".botao-acao-camada[data-atual]")?.textContent?.trim();
+    if (texto && !CAMADAS_DA_BANCADA.includes(texto) && texto !== atual) {
+      throw new Error(`Camada fora da lista da bancada: ${texto}`);
     }
     camada.remove();
   }
@@ -224,6 +232,26 @@ describe("Pedidos › Separar, a bancada do pedido", () => {
     const separar = [...dom.window.document.querySelectorAll("button")].filter((candidato) => rotuloDo(candidato) === "Separar");
     expect(separar.map((candidato) => candidato.getAttribute("aria-disabled") === "true")).toEqual([true, false]);
     expect(separar.map((candidato) => candidato.hasAttribute("disabled"))).toEqual([false, false]);
+    dom.window.close();
+  });
+
+  it("no celular: as ações da linha com 48 px, o \"⋯\" que não encolhe, o Levar a caixa numa linha dele e o Desfazer alinhado ao lado da linha", () => {
+    // O BotaoDeAcao tem a largura do rótulo mais largo e não encolhe: lado a lado com o Levar a caixa e o Separar, o "⋯"
+    // encolhia a 18 px (parte 13c). A medida de verdade é a do navegador; aqui, as classes que a garantem.
+    const dom = new JSDOM(
+      `<!doctype html><body>${render("pronto", { onLevarACaixa: noop, caixasInteiras: new Map([["pli_ord_1_04", 1]]) })}</body>`,
+    );
+    const todos = [...dom.window.document.querySelectorAll("button")];
+    const porRotulo = (texto: string) => todos.filter((candidato) => rotuloDo(candidato) === texto);
+    const mais = todos.find((candidato) => candidato.getAttribute("aria-label")?.startsWith("Mais ações de Calça Social Masculino Preta · 42"))!;
+    expect(mais.className).toContain("shrink-0");
+    expect(mais.className).toContain("max-md:size-12");
+    expect(porRotulo("Levar a caixa")[0]!.className).toContain("max-sm:basis-full");
+    for (const rotulo of ["Levar a caixa", "Separar", "Desfazer"]) {
+      expect(porRotulo(rotulo)[0]!.className, rotulo).toContain("max-md:min-h-12");
+    }
+    expect(porRotulo("Desfazer")[0]!.className).toContain("justify-items-start");
+    expect(porRotulo("Desfazer")[0]!.className).toContain("sm:justify-items-end");
     dom.window.close();
   });
 

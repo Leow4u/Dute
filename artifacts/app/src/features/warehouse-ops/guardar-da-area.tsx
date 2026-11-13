@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Dialog, DialogCancelar, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { desfechoDoErro } from "@/lib/carregando/use-acao-na-linha";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +21,11 @@ import { abrirGuardaDaArea, podeAbrirGuarda, verGuardaDaArea, type GuardaDaArea 
  */
 
 const numero = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
+
+/** "do RECEBIMENTO", "da EXPEDICAO": o artigo da área. */
+export function daArea(locationId: string): string {
+  return `${locationId.toUpperCase() === "EXPEDICAO" ? "da" : "do"} ${locationId}`;
+}
 
 /** O corpo do diálogo, sem a busca nem o envio. */
 export function GuardarDaAreaConteudo({
@@ -167,7 +174,7 @@ export function GuardarDaAreaDialog({
     <Dialog open={aberto} ocupado={abrir.isPending} onOpenChange={(open) => (open ? undefined : onFechar())}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Guardar do {locationId}</DialogTitle>
+          <DialogTitle>Guardar {daArea(locationId)}</DialogTitle>
         </DialogHeader>
         {guarda.data ? (
           <GuardarDaAreaConteudo
@@ -182,11 +189,17 @@ export function GuardarDaAreaDialog({
             onCancelar={onFechar}
             onAbrir={() => abrir.mutate()}
           />
+        ) : guardaNaTela.isError && desfechoDoErro(guardaNaTela.error) === "recusado" ? (
+          // O servidor recusou (a área não é de passagem, o item sem saldo livre): tentar de novo não muda nada, e o
+          // motivo não é uma falha de leitura.
+          <Alert variant="destructive">
+            <AlertDescription>{guardaNaTela.error instanceof Error ? guardaNaTela.error.message : String(guardaNaTela.error)}</AlertDescription>
+          </Alert>
         ) : guardaNaTela.isError ? (
           <FalhaNaLeitura
             leitura={guarda}
             erro={guardaNaTela.error}
-            mensagem={[`Não consegui carregar o saldo do ${locationId}.`, guardaNaTela.error instanceof Error ? guardaNaTela.error.message : ""].filter(Boolean).join(" ")}
+            mensagem={[`Não consegui carregar o saldo ${daArea(locationId)}.`, guardaNaTela.error instanceof Error ? guardaNaTela.error.message : ""].filter(Boolean).join(" ")}
           />
         ) : (
           <CarregandoNaRegiao rotulo="Carregando o saldo…" />

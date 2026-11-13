@@ -29,6 +29,8 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { DialogCancelar } from "@/components/ui/dialog";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import {
   Card,
@@ -109,6 +111,7 @@ import {
   campoDoProblemaDoNome,
   CatalogoIndisponivel,
   CatalogoVerificando,
+  useFalhaDoCatalogo,
   NewProductNotice,
   ProductIdentityCard,
   seguirSugestao,
@@ -268,10 +271,12 @@ export function receiptIdFromTask(task: WarehouseTask) {
 }
 
 /**
- * O vínculo da chegada com o aviso do cliente. Vinculando, a opção tocada
- * mostra a caixa no lugar da marca e as opções ficam ocupadas, não
- * desabilitadas (`aria-disabled`, com a trava aqui): o foco fica na tocada
- * (carregamento v2, parte 13c).
+ * O vínculo da chegada com o aviso do cliente. Vinculando, as opções ficam
+ * ocupadas, não desabilitadas (`aria-disabled`, com a trava aqui): o foco fica
+ * na tocada (carregamento v2, parte 13c). Aos 300 ms (e por pelo menos 500
+ * ms), a tocada mostra a caixa no lugar da marca e diz "Vinculando…", que entra
+ * no nome dela, e o Anunciador diz "Vinculando o aviso"; o vínculo rápido não
+ * pisca nada.
  */
 function NoticeLink({
   choice,
@@ -286,6 +291,15 @@ function NoticeLink({
   onSelect?: (requestId: string | null) => void;
 }) {
   const ocupado = Boolean(disabled) || vinculando !== undefined;
+  const espera = useEspera(vinculando !== undefined, { segurarMinimo: true });
+  // A opção tocada fica a mesma enquanto a caixa segura o mínimo, depois da resposta.
+  const tocadaNaTela = useRef<string | undefined>(undefined);
+  if (vinculando !== undefined) tocadaNaTela.current = vinculando;
+  const anunciar = useAnuncio();
+  useEffect(() => {
+    if (vinculando !== undefined && espera.visivel) return anunciar("Vinculando o aviso");
+    return undefined;
+  }, [anunciar, espera.visivel, vinculando]);
   return (
     <div className="space-y-2">
       <div className="text-sm font-semibold text-foreground">Aviso do cliente</div>
@@ -293,6 +307,7 @@ function NoticeLink({
         {choice.options.map((option) => {
           const selected = choice.selectedId === option.id;
           const tocada = vinculando !== undefined && vinculando === (option.id || "");
+          const esperando = espera.visivel && tocadaNaTela.current === (option.id || "");
           return (
             <button
               key={option.id || "none"}
@@ -308,7 +323,7 @@ function NoticeLink({
                 if (!ocupado) onSelect?.(option.id || null);
               }}
             >
-              {tocada ? (
+              {esperando ? (
                 <Spinner className="shrink-0 text-foreground" />
               ) : (
                 <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border-2", selected ? "border-primary" : "border-input")}>
@@ -317,7 +332,11 @@ function NoticeLink({
               )}
               <span className="min-w-0">
                 <span className="block text-sm font-semibold">{option.title}</span>
-                {option.detail ? <span className="block text-sm text-muted-foreground">{option.detail}</span> : null}
+                {esperando ? (
+                  <span className="block text-sm font-bold text-foreground">Vinculando…</span>
+                ) : option.detail ? (
+                  <span className="block text-sm text-muted-foreground">{option.detail}</span>
+                ) : null}
               </span>
             </button>
           );
@@ -423,6 +442,7 @@ export function ReceivingTaskDetailCard({
             ) : null}
             {canAdvance ? (
               <BotaoDeAcao
+                className="max-md:min-h-12"
                 estado={advancingTaskId === task.id ? "andamento" : "repouso"}
                 icone={<CheckCircle2 aria-hidden="true" />}
                 rotulo="Concluir entrada"
@@ -610,8 +630,14 @@ export function UnplannedReceiptDialog({
   // A falha fica na tela enquanto tenta de novo (o react-query zera o erro na nova tentativa sem dado): o aviso com o
   // foco nele não vira "Verificando o catálogo…" no meio da tentativa (carregamento v2, parte 13c).
   const catalogoNaTela = useLeituraComFalha(lookupQuery);
-  const estadoDoCatalogo: "lendo" | "falhou" | "pronto" =
-    lookupQuery.data !== undefined ? "pronto" : catalogoNaTela.isError ? "falhou" : "lendo";
+  const catalogoLido = lookupQuery.data !== undefined;
+  const linhaAberta = lines[activeLineIndex];
+  // "Verificando o catálogo…" que apareceu na linha aberta fica o mínimo de 500 ms antes de a falha tomar o lugar.
+  const catalogoFalhou = useFalhaDoCatalogo(
+    !catalogoLido && catalogoNaTela.isError,
+    !catalogoLido && Boolean(linhaAberta && (linhaAberta.clientCode.trim() || linhaAberta.sku.trim())),
+  );
+  const estadoDoCatalogo: "lendo" | "falhou" | "pronto" = catalogoLido ? "pronto" : catalogoFalhou ? "falhou" : "lendo";
 
   function updateLine(index: number, patch: Partial<ReceiptDraftLine>) {
     setLines((current) =>
@@ -1576,8 +1602,10 @@ export function ReceivingConferenceSection({
           ? "Divergência registrada. Revise antes de concluir a entrada."
           : "Agora a entrada pode ser concluída para atualizar o estoque.",
       });
-      void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
       void queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
+      // A gravação só acaba quando a bancada relê: até lá, "Concluir entrada" espera, porque a chegada na ficha ainda
+      // é a de antes (sem a divergência que pede a justificativa).
+      return queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
     },
     onError: (error) => {
       toast({

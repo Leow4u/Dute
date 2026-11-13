@@ -1,10 +1,11 @@
 /** Exception and return workspaces for warehouse ops. */
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CheckCircle2,
+  Clock3,
   MessageSquareWarning,
   RotateCcw,
   ShieldAlert,
@@ -65,8 +66,12 @@ import {
   normalizeApiRows,
   normalizeProductKey,
 } from "@/features/warehouse-ops/receiving";
-import { CatalogoIndisponivel, CatalogoVerificando, ProductIdentityCard } from "./product-identity";
-import { desfechoDoErro, useAcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { CatalogoIndisponivel, CatalogoVerificando, ProductIdentityCard, useFalhaDoCatalogo } from "./product-identity";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { relogioDaEspera } from "@/lib/carregando/tempo";
+import { desfechoDoErro, useAcaoNaLinha, type MotivoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { humanApiError } from "@/lib/permissions";
 import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
 import { LEGACY_CUSTOMER_CODE, customerRows, recordCustomerCode } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
@@ -98,6 +103,64 @@ export type ReturnDispositionDraft = {
   location: string;
   notes: string;
 };
+
+/** O nome de cada disposição na tela: o valor gravado fica em inglês, e a tela diz em português. */
+const ROTULO_DA_DISPOSICAO: Record<ReturnDispositionDraft["disposition"], string> = {
+  available: "Volta para disponível",
+  quarantine: "Quarentena",
+  damaged: "Avaria",
+  discard: "Descarte",
+};
+
+function rotuloDaDisposicao(valor: string | undefined): string {
+  return (valor && ROTULO_DA_DISPOSICAO[valor as ReturnDispositionDraft["disposition"]]) || valor || "";
+}
+
+/**
+ * O apoio da linha da disposição (carregamento v2, momento 4): aos 3 s, o
+ * objeto ("Registrando a disposição de Polo…"); aos 10 s, a demora com o
+ * relógio; sem resposta aos 70 s, que o servidor não confirmou; depois da
+ * recusa, o motivo, até a próxima ação na linha. O leitor de tela ouve a
+ * entrada na espera, a demora e a desistência pelo Anunciador; o resultado, o
+ * toast diz. Não é região viva.
+ */
+function ApoioDaDisposicao({
+  andando,
+  semResposta,
+  motivo,
+  produto,
+}: {
+  andando: boolean;
+  semResposta: boolean;
+  motivo: MotivoNaLinha | null;
+  produto: string;
+}) {
+  const espera = useEspera(andando);
+  const anunciar = useAnuncio();
+  const marco = andando && espera.visivel ? (espera.fase === "demorando" ? "demorando" : "espera") : semResposta ? "sem-resposta" : null;
+  useEffect(() => {
+    if (marco === "espera") return anunciar("Registrando a disposição");
+    if (marco === "demorando") return anunciar("Demorando mais que o normal");
+    if (marco === "sem-resposta") return anunciar("Sem confirmação do servidor");
+    return undefined;
+  }, [marco, anunciar]);
+  if (andando && espera.fase === "demorando") {
+    return (
+      <p className="text-sm font-bold text-amber-soft-foreground">
+        <Clock3 className="mr-1.5 inline size-3.5 align-middle" aria-hidden="true" />
+        <span>Demorando mais que o normal</span>
+        {" · "}
+        <span className="tabular-nums">{relogioDaEspera(espera.decorridoMs)}</span>
+      </p>
+    );
+  }
+  if (andando && espera.fase === "com-objeto") {
+    return <p className="text-sm font-bold text-foreground">Registrando a disposição de {produto}…</p>;
+  }
+  if (semResposta) return <p className="text-sm font-bold text-amber-soft-foreground">Sem confirmação do servidor.</p>;
+  if (motivo) return <p className="text-sm font-bold text-destructive">{humanApiError(motivo.erro, "Tente novamente em instantes.")}</p>;
+  return null;
+}
 
 function apiDateText(value: unknown) {
   if (typeof value === "string") return value;
@@ -541,7 +604,9 @@ export function ReturnWorkspace() {
   // se registra.
   const catalogoNaTela = useLeituraComFalha(lookupQuery);
   const catalogoLido = lookupQuery.data !== undefined;
-  const catalogoFalhou = !catalogoLido && catalogoNaTela.isError;
+  // O aviso do catálogo é um só, o da primeira linha com código: a falha é do catálogo, não da linha.
+  const linhaDoCatalogo = lines.findIndex((line) => Boolean(line.clientCode.trim() || line.sku.trim()));
+  const catalogoFalhou = useFalhaDoCatalogo(!catalogoLido && catalogoNaTela.isError, !catalogoLido && linhaDoCatalogo >= 0);
   const pendingReturnLinesQuery = useQuery({
     queryKey: ["returns-pending", customerCode],
     staleTime: 20_000,
@@ -709,9 +774,14 @@ export function ReturnWorkspace() {
   const disposicao = useAcaoNaLinha<string>();
   const focoQueSegue = useFocoQueSegue();
   const pendentesDaTriagem = useLeituraComFalha(pendingReturnLinesQuery);
+  // A repetição leva o mesmo corpo da tentativa: o servidor compara o conteúdo inteiro com o da chave, e um
+  // `occurred_at` novo recusaria a repetição como outro conteúdo, em vez de devolver o recibo.
+  const momentoDaTentativa = useRef(new Map<string, string>());
   function registrarDisposicao(line: CreatedReturnLine, draft: ReturnDispositionDraft) {
-    void disposicao.executar(line.itemId, "dispor", (chave) =>
-      fetchJson(
+    void disposicao.executar(line.itemId, "dispor", (chave) => {
+      const occurredAt = momentoDaTentativa.current.get(chave) ?? new Date().toISOString();
+      momentoDaTentativa.current.set(chave, occurredAt);
+      return fetchJson(
         `/api/warehouse/returns/items/${encodeURIComponent(line.itemId)}/disposition`,
         {
           method: "POST",
@@ -723,12 +793,13 @@ export function ReturnWorkspace() {
             unit_cost: line.unitCost || undefined,
             notes: draft.notes.trim() || undefined,
             expected_status: "pending_disposition",
-            occurred_at: new Date().toISOString(),
+            occurred_at: occurredAt,
             idempotency_key: chave,
           }),
         },
       ).then(
         (resultado) => {
+          momentoDaTentativa.current.delete(chave);
           setCreatedLines((current) => {
             const marcada = { ...line, status: "disposition_set" as const, disposition: draft.disposition };
             return current.some((item) => item.itemId === line.itemId)
@@ -758,8 +829,8 @@ export function ReturnWorkspace() {
           }
           throw error;
         },
-      ),
-    );
+      );
+    });
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -864,9 +935,10 @@ export function ReturnWorkspace() {
                             <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
                               não localizado
                             </Badge>
-                          ) : hasKey ? (
+                          ) : hasKey && catalogoFalhou ? (
+                            // A espera não tem selo: a caixa "Verificando o catálogo…" aparece aos 300 ms e diz.
                             <Badge variant="outline" className="border-border bg-card text-muted-foreground">
-                              {catalogoFalhou ? "sem catálogo" : "verificando o catálogo"}
+                              sem catálogo
                             </Badge>
                           ) : null}
                         </div>
@@ -884,11 +956,12 @@ export function ReturnWorkspace() {
                       <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.6fr_96px_120px]">
                         <Input
                           id={`return-client-code-${index}`}
+                          aria-label={`Código do cliente da linha ${index + 1}`}
                           value={line.clientCode}
                           onChange={(event) =>
                             updateLine(index, { clientCode: event.target.value })
                           }
-                          placeholder="Cod. cliente"
+                          placeholder="Cód. cliente"
                         />
                         <Input
                           value={line.sku}
@@ -928,14 +1001,14 @@ export function ReturnWorkspace() {
                         <div className="mt-3">
                           <ProductIdentityCard product={existing} onSelect={() => applyExistingProduct(index, existing)} />
                         </div>
-                      ) : hasKey && catalogoFalhou ? (
+                      ) : index === linhaDoCatalogo && catalogoFalhou ? (
                         <CatalogoIndisponivel
                           leitura={lookupQuery}
                           erro={catalogoNaTela.error}
                           focoAoSair={`return-client-code-${index}`}
                           className="mt-3"
                         />
-                      ) : hasKey && !catalogoLido ? (
+                      ) : index === linhaDoCatalogo && !catalogoLido ? (
                         <CatalogoVerificando className="mt-3" />
                       ) : naoLocalizado ? (
                         <Alert className="mt-3 border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
@@ -985,7 +1058,9 @@ export function ReturnWorkspace() {
       <div className="flex flex-col gap-4">
         <Card className="rounded-lg border-border/80 bg-card">
           <CardHeader>
-            <CardTitle className="text-base">Disposição física</CardTitle>
+            <CardTitle id="disposicao-fisica" tabIndex={-1} className="text-base">
+              Disposição física
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {visibleReturnLines.length ? (
@@ -1029,12 +1104,7 @@ export function ReturnWorkspace() {
                     {!isDone ? (
                       <div className="mt-4 space-y-3">
                         <div className="grid grid-cols-2 gap-2">
-                          {[
-                            ["available", "Volta para disponível"],
-                            ["quarantine", "Quarentena"],
-                            ["damaged", "Avaria"],
-                            ["discard", "Descarte"],
-                          ].map(([value, label]) => (
+                          {Object.entries(ROTULO_DA_DISPOSICAO).map(([value, label]) => (
                             <Button
                               key={value}
                               type="button"
@@ -1100,15 +1170,22 @@ export function ReturnWorkspace() {
                         </div>
                         <SaiComOFoco alvo={`disposicao-${line.itemId}`} pedido={focoQueSegue}>
                           <BotaoDeAcao
-                            className="w-full"
+                            className="w-full max-md:min-h-12"
                             estado={disposicao.estado(line.itemId, "dispor")}
                             icone={<CheckCircle2 aria-hidden="true" />}
                             rotulo="Registrar disposição"
                             andamento="Registrando…"
+                            erro="Não registrada"
                             bloqueado={!disposicao.ocupada(line.itemId) && !canSubmitDisposition}
                             onClick={() => registrarDisposicao(line, draft)}
                           />
                         </SaiComOFoco>
+                        <ApoioDaDisposicao
+                          andando={disposicao.estado(line.itemId, "dispor") === "andamento"}
+                          semResposta={disposicao.estado(line.itemId, "dispor") === "sem-resposta"}
+                          motivo={disposicao.motivo(line.itemId)}
+                          produto={line.productName}
+                        />
                       </div>
                     ) : (
                       <div
@@ -1116,7 +1193,7 @@ export function ReturnWorkspace() {
                         tabIndex={-1}
                         className="mt-3 rounded-md border border-primary/20 bg-card px-3 py-2 text-sm text-muted-foreground"
                       >
-                        Disposição registrada: {line.disposition}.
+                        Disposição registrada: {rotuloDaDisposicao(line.disposition)}.
                       </div>
                     )}
                   </div>
@@ -1128,6 +1205,7 @@ export function ReturnWorkspace() {
                 leitura={pendingReturnLinesQuery}
                 erro={pendentesDaTriagem.error}
                 mensagem="Não consegui carregar as devoluções pendentes."
+                focoAoSair="disposicao-fisica"
               />
             ) : pendingReturnLinesQuery.isLoading ? (
               <div className="space-y-3">

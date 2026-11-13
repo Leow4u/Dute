@@ -71,6 +71,9 @@ export function FichaDaChegadaPorCaixa(props: FichaProps) {
   );
 }
 
+/** As ações cujo resultado o toast diz: o Anunciador não repete (carregamento v2, seção 7). */
+const RETORNO_NO_TOAST: ReadonlySet<string> = new Set(["concluir"]);
+
 function FichaDaChegadaEstado({
   entry,
   registeringExceptionId,
@@ -249,6 +252,8 @@ function FichaDaChegadaEstado({
     onConfirmado: () => {
       setEtapa(4);
       setFeedback("Destino confirmado. Revise a entrada antes de concluir.");
+      // O retorno da ação, como os do executar: o Anunciador diz a primeira frase (o foco vai ao título da etapa).
+      anunciar("Destino confirmado");
       setErro("");
     },
     falhou,
@@ -289,7 +294,8 @@ function FichaDaChegadaEstado({
       await releitura();
       if (!montada.current) return;
       setFeedback(mensagem);
-      anunciar(mensagem.split(". ")[0]!.replace(/\.$/, ""));
+      // O resultado que já sai no toast (a entrada concluída) não é dito de novo: o leitor de tela ouviria duas vezes.
+      if (!RETORNO_NO_TOAST.has(nome)) anunciar(mensagem.split(". ")[0]!.replace(/\.$/, ""));
       avancar?.();
     } catch (error) {
       if (!montada.current) return;

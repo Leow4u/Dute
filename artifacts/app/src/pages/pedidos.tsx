@@ -81,6 +81,8 @@ import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { chamarOperacao, novaChave } from "@/lib/operacao/api";
 import { hojeIso } from "@/lib/operacao/fila";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { useNovaAssinatura } from "@/lib/operacao/nova-assinatura";
+import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
 import {
   buildOrderQueue,
   chaveDaPrincipal,
@@ -284,11 +286,17 @@ export default function Pedidos() {
   const lembrarDaLinha = (chave: string) => {
     linhaDoDialogo.current = { chave, abridor: typeof document === "undefined" ? null : document.activeElement };
   };
+  // A leitura ao vivo das entregas que falha não se refaz sozinha: "Tentar de novo", na linha, assina de novo, e a
+  // falha fica até a nova responder (carregamento v2, parte 13c). Quando ela chega, o foco vai à entrega da linha.
+  const entregasAoVivo = useNovaAssinatura(OPERACAO_LIBERADO ? "orders:em_aberto" : null);
+  const [tentandoEntregas, setTentandoEntregas] = useState(false);
+  const focoDaEntrega = useFocoQueSegue();
   const entregas = useLeitura(
-    OPERACAO_LIBERADO ? "orders:em_aberto" : null,
+    entregasAoVivo.chave,
     (db) => query(collection(db, "orders"), where("status", "in", PEDIDOS_EM_ABERTO)),
     (id, data) => ({ id, entrega: entregaDoPedido(data) }),
   );
+  const entregasFalharam = entregasAoVivo.falhou(entregas);
   const entregaPorPedido = useMemo(() => new Map((entregas.itens ?? []).map((item) => [item.id, item.entrega])), [entregas.itens]);
   const entregaDe = (order: OrderGroup): EntregaDoPedido | null => (order.orderId ? entregaPorPedido.get(order.orderId) ?? null : null);
 
@@ -681,13 +689,32 @@ export default function Pedidos() {
     if (!OPERACAO_LIBERADO || !order.orderId) return {};
     // Antes de ler as entregas, a linha não oferece "Entrega" (o formulário abriria vazio sobre a entrega que já
     // existe); a leitura que falhou diz, e não some (carregamento v2, parte 13c; o diagnóstico, 4.3).
-    if (entregas.itens === null) return entregas.erro ? { detail: "Não consegui carregar a entrega." } : {};
+    if (entregas.itens === null) {
+      if (!entregasFalharam) return {};
+      return {
+        detail: "Não consegui carregar a entrega.",
+        secondary: operador ? (
+          <SaiComOFoco alvo={`entrega-${order.key}`} pedido={focoDaEntrega}>
+            <BotaoDeAcao
+              variant="outline"
+              estado={tentandoEntregas ? "andamento" : "repouso"}
+              rotulo="Tentar de novo"
+              andamento="Tentando de novo…"
+              onClick={() => {
+                setTentandoEntregas(true);
+                void entregasAoVivo.tentar().finally(() => setTentandoEntregas(false));
+              }}
+            />
+          </SaiComOFoco>
+        ) : undefined,
+      };
+    }
     const entrega = entregaDe(order);
     const resumo = entrega ? [resumoDaEntrega(entrega), naOperacao(entrega)].filter(Boolean).join(" · ") : null;
     return {
       detail: resumo,
       secondary: operador ? (
-        <Button type="button" variant="outline" disabled={busy} onClick={() => abrirEntrega(order)}>
+        <Button id={`entrega-${order.key}`} type="button" variant="outline" disabled={busy} onClick={() => abrirEntrega(order)}>
           {faltaAbrirNaOperacao(entrega) ? "Abrir na Operação" : entrega ? "Alterar entrega" : "Entrega"}
         </Button>
       ) : undefined,

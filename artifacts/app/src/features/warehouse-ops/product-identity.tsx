@@ -6,6 +6,7 @@ import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FalhaNaLeitura, type LeituraQueFalhou } from "@/components/ui/erro-na-leitura";
 import { Label } from "@/components/ui/label";
+import { useEspera } from "@/lib/carregando/use-espera";
 import type { ProductLookupItem } from "./shared";
 
 export function ProductIdentityCard({
@@ -256,4 +257,17 @@ export function CatalogoIndisponivel({
   className?: string;
 }) {
   return <FalhaNaLeitura leitura={leitura} erro={erro} mensagem={mensagem} focoAoSair={focoAoSair} className={className} />;
+}
+
+/**
+ * A falha do catálogo na tela (o PR 2 da seção 6 do diagnóstico, parte 13c):
+ * o "Verificando o catálogo…" que já apareceu fica o mínimo de 500 ms antes de
+ * a falha tomar o lugar dele (o relógio da espera, seção 3), e a pessoa não vê
+ * a caixa piscar e virar o alerta. A falha que chega antes de 300 ms entra na
+ * hora. `esperando`: a tela mostra a espera do catálogo (há código digitado e
+ * ele ainda não chegou). O catálogo que chega não espera nada.
+ */
+export function useFalhaDoCatalogo(falhou: boolean, esperando: boolean): boolean {
+  const espera = useEspera(esperando && !falhou, { segurarMinimo: true });
+  return falhou && !espera.visivel;
 }

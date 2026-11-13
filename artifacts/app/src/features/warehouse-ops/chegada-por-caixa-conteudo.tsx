@@ -8,6 +8,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
 import { cn } from "@/lib/utils";
 import {
   boxDraftToPayload,
@@ -247,6 +249,21 @@ export function FichaDaChegadaPorCaixaConteudo(
     if (etapaAnterior.current !== etapa) tituloRef.current?.focus();
     etapaAnterior.current = etapa;
   }, [etapa]);
+  // A entrada concluída tira as ações da ficha ("Concluir entrada" sai com o foco): o foco vai ao título, que passa a
+  // "Detalhes do recebimento", e nunca fica no body (carregamento v2, seção 7).
+  const operavaAntes = useRef(props.podeOperar);
+  useEffect(() => {
+    const perdeuOFoco = typeof document !== "undefined" && (document.activeElement === null || document.activeElement === document.body);
+    if (operavaAntes.current && !props.podeOperar && perdeuOFoco) tituloRef.current?.focus();
+    operavaAntes.current = props.podeOperar;
+  }, [props.podeOperar]);
+  // O que explica por que Revisar, Voltar e Concluir esperam é dito uma vez, quando aparece (antes, uma região viva).
+  const anunciar = useAnuncio();
+  const rascunhosPendentes = Boolean(props.rascunhosPendentes);
+  useEffect(() => {
+    if (rascunhosPendentes) return anunciar("Há quantidade não salva");
+    return undefined;
+  }, [anunciar, rascunhosPendentes]);
   return (
     <div className="@container flex min-w-0 flex-col gap-5">
       {props.onBack ? (
@@ -430,6 +447,13 @@ function Conferencia(
       item.barcode,
     ].some((valor) => valor?.toLocaleLowerCase("pt-BR").includes(busca)),
   );
+  // O resultado da busca sem nada é dito uma vez, quando aparece (antes, uma região viva solta).
+  const anunciar = useAnuncio();
+  const nadaAchado = Boolean(busca) && filtrados.length === 0;
+  useEffect(() => {
+    if (nadaAchado) return anunciar("Nenhum produto da NF encontrado");
+    return undefined;
+  }, [anunciar, nadaAchado]);
   const produto = itens.find((item) => item.id === props.produtoSelecionado);
   const salvo = caixa?.lines.find(
     (linha) => linha.inbound_item_id === produto?.id,
@@ -1112,6 +1136,7 @@ function Revisao(props: FichaDaChegadaPorCaixaProps) {
               ) : null}
             </div>
             <BotaoDeAcao
+              className="max-md:min-h-12"
               estado={estadoDa(props, "concluir")}
               rotulo="Concluir entrada"
               andamento="Concluindo…"
@@ -1168,10 +1193,13 @@ function LinhaDaNfRow({
   const linha = item.line_number ?? "";
   const semMarca =
     situacao.tipo === "faltam" || situacao.tipo === "marca_velha";
+  // Desmarcada a falta, "Desmarcar" sai com o foco: ele vai ao "Marcar falta" que entra no lugar, ou à linha.
+  const focoQueSegue = useFocoQueSegue();
+  const idDaLinha = `linha-da-nf-${item.id ?? linha}`;
   return (
     <tr className="border-t border-border/60">
       <td className="px-2 py-2 align-middle">
-        <span className="block font-bold">
+        <span id={idDaLinha} tabIndex={-1} className="block font-bold">
           {item.line_number ? `${item.line_number} · ${nome}` : nome}
         </span>
         <span className="block text-muted-foreground">
@@ -1203,28 +1231,36 @@ function LinhaDaNfRow({
             </span>
           ) : null}
           {podeOperar && item.id && semMarca ? (
+            // Ocupado não é desabilitado: o foco pode chegar a ele quando a falta é desmarcada (aria-disabled e a trava).
             <Button
+              id={`marcar-falta-${item.id}`}
               type="button"
               size="sm"
               variant="secondary"
               aria-label={`Marcar falta na linha ${linha}`}
-              disabled={ocupado}
-              onClick={() => onMarcarFalta(item.id!)}
+              aria-disabled={ocupado || undefined}
+              className={cn(ocupado && "opacity-45 hover:bg-card active:bg-card")}
+              onClick={() => {
+                if (!ocupado) onMarcarFalta(item.id!);
+              }}
             >
               Marcar falta
             </Button>
           ) : null}
           {podeOperar && item.id && situacao.tipo === "falta_marcada" ? (
-            <BotaoDeAcao
-              size="sm"
-              variant="secondary"
-              aria-label={`Desmarcar a falta da linha ${linha}`}
-              estado={acao === `desmarcar:${item.id}` ? "andamento" : "repouso"}
-              rotulo="Desmarcar"
-              andamento="Desmarcando…"
-              bloqueado={ocupado && acao !== `desmarcar:${item.id}`}
-              onClick={() => onDesmarcarFalta(item.id!)}
-            />
+            // O nome é o rótulo que está na tela ("Desmarcar", "Desmarcando…"); a linha vem pela descrição.
+            <SaiComOFoco alvo={[`marcar-falta-${item.id}`, idDaLinha]} pedido={focoQueSegue}>
+              <BotaoDeAcao
+                size="sm"
+                variant="secondary"
+                aria-describedby={idDaLinha}
+                estado={acao === `desmarcar:${item.id}` ? "andamento" : "repouso"}
+                rotulo="Desmarcar"
+                andamento="Desmarcando…"
+                bloqueado={ocupado && acao !== `desmarcar:${item.id}`}
+                onClick={() => onDesmarcarFalta(item.id!)}
+              />
+            </SaiComOFoco>
           ) : null}
         </div>
       </td>

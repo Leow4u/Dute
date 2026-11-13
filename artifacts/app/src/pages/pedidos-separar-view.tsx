@@ -310,6 +310,7 @@ export function PedidosSepararView({
               const nome = grupo.posicao || "sem endereço";
               const doGrupo = progressoDoGrupo(grupo);
               const aberta = !doGrupo.completo || abertas.has(grupo.posicao);
+              const idDoGrupo = `grupo-${grupo.posicao || "sem-endereco"}`;
               return (
                 <section key={grupo.posicao || "sem-endereco"} className="border-t border-border/60 first:border-t-0">
                   <h2 className="flex min-h-12 items-center gap-2.5 px-4 py-2 text-sm font-medium text-muted-foreground md:px-5">
@@ -322,6 +323,7 @@ export function PedidosSepararView({
                             separado
                           </Badge>
                           <Button
+                            id={idDoGrupo}
                             type="button"
                             variant="outline"
                             size="icon"
@@ -356,6 +358,7 @@ export function PedidosSepararView({
                           ocupada={ocupadas?.has(linha.id) ?? false}
                           acao={ocupadas && "get" in ocupadas ? ocupadas.get(linha.id) : undefined}
                           focoQueSegue={focoQueSegue}
+                          grupo={idDoGrupo}
                           caixas={caixasDaLinha?.get(linha.id)}
                           volumes={volumes ? volumesDaLinha(linha.item, volumes) : undefined}
                           inteiras={caixasInteiras?.get(linha.id) ?? 0}
@@ -567,6 +570,7 @@ function Linha({
   ocupada,
   acao,
   focoQueSegue,
+  grupo,
   caixas,
   volumes,
   inteiras,
@@ -587,6 +591,11 @@ function Linha({
   acao?: string;
   /** O foco que segue o botão que entra no lugar quando a linha muda de estado. */
   focoQueSegue?: ReturnType<typeof useFocoQueSegue>;
+  /**
+   * O id do botão do grupo da prateleira: separada a última linha, o grupo se
+   * fecha e o "Desfazer" não aparece, e o foco vai a ele.
+   */
+  grupo?: string;
   /** De qual caixa a linha sai (ou saiu); undefined sem a leitura das caixas. */
   caixas?: readonly CaixaDaLinha[];
   /** Em quais volumes a linha separada está: "Volume 12". */
@@ -673,14 +682,16 @@ function Linha({
       </div>
       {operador ? (
         pendente ? (
-          <SaiComOFoco alvo={`desfazer-${linha.id}`} pedido={focoQueSegue ?? semFoco}>
-          <div className="flex items-center gap-2 sm:shrink-0">
+          <SaiComOFoco alvo={grupo ? [`desfazer-${linha.id}`, grupo] : `desfazer-${linha.id}`} pedido={focoQueSegue ?? semFoco}>
+          {/* No celular, "Levar a caixa" fica numa linha só dele, e "Separar" e o "⋯" na de baixo: lado a lado, os três
+              não cabem, e o "⋯" encolhia abaixo do toque. */}
+          <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap">
             {/* A caixa que sai inteira pode virar o volume, sem reembalar. Ocupado não é desabilitado: o botão tocado
                 mostra a espera, com o gerúndio, e o foco fica nele; o outro espera com aria-disabled (parte 13c). */}
             {onLevarACaixa && inteiras > 0 ? (
               <BotaoDeAcao
                 variant="outline"
-                className="flex-1 sm:flex-none"
+                className="flex-1 max-sm:basis-full max-md:min-h-12 sm:flex-none"
                 estado={acao === "levar" ? "andamento" : "repouso"}
                 rotulo={inteiras === 1 ? "Levar a caixa" : "Levar as caixas"}
                 andamento="Levando…"
@@ -691,7 +702,7 @@ function Linha({
             <BotaoDeAcao
               id={`separar-${linha.id}`}
               variant={principal ? "default" : "outline"}
-              className="flex-1 sm:flex-none"
+              className="flex-1 max-md:min-h-12 sm:flex-none"
               estado={acao === "separar" ? "andamento" : "repouso"}
               rotulo="Separar"
               andamento="Separando…"
@@ -700,7 +711,7 @@ function Linha({
             />
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
-                <Button type="button" variant="outline" size="icon" disabled={ocupada} aria-label={`Mais ações de ${linha.nome || linha.codigos}`}>
+                <Button type="button" variant="outline" size="icon" className="shrink-0 max-md:size-12" disabled={ocupada} aria-label={`Mais ações de ${linha.nome || linha.codigos}`}>
                   <MoreHorizontal className="size-4" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
@@ -726,7 +737,9 @@ function Linha({
               <BotaoDeAcao
                 id={`desfazer-${linha.id}`}
                 variant="link"
-                className="h-auto px-0"
+                /* O texto fica no lado em que a linha alinha: à esquerda no celular, à direita no computador (a largura é a
+                   do rótulo mais largo, "Desfazendo…"). */
+                className="h-auto justify-items-start px-0 max-md:min-h-12 sm:justify-items-end"
                 estado={acao === "desfazer" ? "andamento" : "repouso"}
                 rotulo="Desfazer"
                 andamento="Desfazendo…"

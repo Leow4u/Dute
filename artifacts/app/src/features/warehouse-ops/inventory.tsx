@@ -154,6 +154,7 @@ import {
   campoDoProblemaDoNome,
   CatalogoIndisponivel,
   CatalogoVerificando,
+  useFalhaDoCatalogo,
   FamiliaNoCadastroCard,
   NewProductNotice,
   ProductIdentityCard,
@@ -2399,7 +2400,9 @@ export function ExistingCycleCountWorkspace() {
   // carregamento v2, parte 13c). A contagem só ajusta produto já cadastrado: sem o catálogo, nada se registra.
   const catalogoNaTela = useLeituraComFalha(lookupQuery);
   const catalogoLido = lookupQuery.data !== undefined;
-  const catalogoFalhou = !catalogoLido && catalogoNaTela.isError;
+  const digitouProduto = Boolean(clientCode.trim() || skuCode.trim() || productName.trim());
+  // "Verificando o catálogo…" que apareceu fica o mínimo de 500 ms antes de a falha tomar o lugar.
+  const catalogoFalhou = useFalhaDoCatalogo(!catalogoLido && catalogoNaTela.isError, !catalogoLido && digitouProduto);
   const draftLine = useMemo<ReceiptDraftLine>(
     () => ({
       sku: skuCode,

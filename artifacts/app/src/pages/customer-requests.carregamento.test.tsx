@@ -27,6 +27,7 @@ import { textosForaDaLista } from "@/test/textos";
 
 const estado = vi.hoisted(() => ({
   atrasoMs: 20,
+  atrasoDoSaldoMs: 20,
   falha: false,
   decisoes: [] as Array<{ caminho: string; responder: () => void }>,
 }));
@@ -62,6 +63,7 @@ async function servir(entrada: RequestInfo | URL, init?: RequestInit) {
   await new Promise((pronto) => setTimeout(pronto, estado.atrasoMs));
   if (url.pathname === "/api/customer-requests") return estado.falha ? json({ error: "Falha no servidor" }, 500) : json({ items: [FARIA_LIMA] });
   if (url.pathname === "/api/stock-balances") {
+    await new Promise((pronto) => setTimeout(pronto, estado.atrasoDoSaldoMs));
     return json({ items: [{ sku_code: "BTG-000101", customer_code: "BTG Pactual", qty_on_hand: 100, qty_reserved: 0, qty_available: 100 }] });
   }
   return json({});
@@ -104,6 +106,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(servir));
   window.history.replaceState(null, "", "/solicitacoes");
   estado.atrasoMs = 20;
+  estado.atrasoDoSaldoMs = 20;
   estado.falha = false;
   estado.decisoes.length = 0;
   container = document.createElement("div");
@@ -150,7 +153,14 @@ describe("Solicitações, a fila", () => {
     await montar();
     expect(naTela()).not.toContain("Carregando solicitações...");
     expect(naTela()).not.toMatch(/Nenhuma solicitação/);
+    // Antes de 300 ms, os cartões-fantasma ficam no lugar sem aparecer, e sem o brilho.
+    const fantasmas = () => Array.from(container.querySelectorAll("[data-fantasmas]"));
+    expect(fantasmas()).toHaveLength(3);
+    expect(fantasmas().some((cartao) => cartao.hasAttribute("data-visivel"))).toBe(false);
+    expect(container.querySelector(".carregando-com-brilho")).toBeNull();
     await pausa(350);
+    // Aos 300 ms entram, cada um com o brilho do cartão.
+    expect(fantasmas().every((cartao) => cartao.hasAttribute("data-visivel") && cartao.classList.contains("carregando-com-brilho"))).toBe(true);
     expect(container.querySelector("[data-linha-de-estado]")?.textContent).toContain("Carregando solicitações…");
     expect(naTela()).not.toContain("...");
     expect(naTela()).not.toMatch(/Nenhuma solicitação/);
@@ -218,5 +228,29 @@ describe("Solicitações, a decisão", () => {
     expect(recusar.getAttribute("aria-disabled")).toBe("true");
     expect(recusar.disabled).toBe(false);
     await act(async () => estado.decisoes[0]!.responder());
+  });
+
+  it("aprovada, a solicitação sai do detalhe, e o foco não cai no body: vai ao título do detalhe ou, sem próxima, à linha de estado", async () => {
+    await montar();
+    await esperar(() => Boolean(botao("Aprovar e separar")) && botao("Aprovar e separar")!.getAttribute("aria-disabled") === null, "o saldo conferido");
+    const aprovar = botao("Aprovar e separar")!;
+    aprovar.focus();
+    await act(async () => aprovar.click());
+    await act(async () => estado.decisoes[0]!.responder());
+    await pausa(800);
+    expect(document.activeElement).not.toBe(document.body);
+    const ativo = document.activeElement as HTMLElement | null;
+    expect(ativo?.id === "detalhe-da-solicitacao" || ativo?.hasAttribute("data-linha-de-estado")).toBe(true);
+  });
+
+  it("conferindo o saldo, a caixa entra aos 300 ms, em tinta, e a conferência rápida não pisca", async () => {
+    estado.atrasoDoSaldoMs = 2_000;
+    await montar();
+    await esperar(() => naTela().includes("Conferindo o saldo"), "a conferência do saldo");
+    const caixa = () => Array.from(container.querySelectorAll("[data-spinner]")).find((item) => !item.closest("[data-linha-de-estado]") && !item.closest("button"));
+    expect(caixa()).toBeUndefined();
+    await pausa(350);
+    expect(caixa()).toBeDefined();
+    expect(caixa()!.getAttribute("class")).toContain("text-foreground");
   });
 });

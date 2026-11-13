@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Anunciador } from "@/lib/carregando/anunciador";
+import { textosForaDaLista } from "@/test/textos";
 
 /**
  * A entrega do pedido em "Para entregar" antes de as entregas chegarem
@@ -15,14 +16,23 @@ import { Anunciador } from "@/lib/carregando/anunciador";
  * as entregas, e a falha diz que não carregou. Dados sintéticos.
  */
 
-const estado = vi.hoisted(() => ({ entregas: { itens: null as unknown[] | null, erro: false } }));
+const estado = vi.hoisted(() => ({
+  entregas: { itens: null as unknown[] | null, erro: false },
+  /** O que a nova assinatura (a chave com a vez 1 ou mais) devolve; sem ela, a mesma de antes. */
+  daNovaAssinatura: null as { itens: unknown[] | null; erro: boolean } | null,
+  chaves: [] as string[],
+}));
 
 vi.mock("@/lib/liberacao", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/liberacao")>()), OPERACAO_LIBERADO: true }));
 vi.mock("@/lib/auth", () => ({ useAppUser: () => ({ user: { publicMetadata: { role: "admin" } } }) }));
 vi.mock("@/lib/active-customer-context", () => ({ useActiveCustomer: () => ({ active: { code: "BTG", name: "BTG Pactual" }, code: "BTG" }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => undefined }) }));
 vi.mock("@/lib/operacao/leitura", () => ({
-  useLeitura: (chave: string | null) => (chave === "orders:em_aberto" ? estado.entregas : { itens: [], erro: false }),
+  useLeitura: (chave: string | null) => {
+    if (!chave?.startsWith("orders:em_aberto")) return { itens: [], erro: false };
+    if (!estado.chaves.includes(chave)) estado.chaves.push(chave);
+    return !chave.endsWith("#0") && estado.daNovaAssinatura ? estado.daNovaAssinatura : estado.entregas;
+  },
   useDocumento: () => ({ item: undefined, erro: false }),
 }));
 vi.mock("@/features/warehouse-ops/opening-inventory-status", () => ({
@@ -74,6 +84,8 @@ beforeEach(() => {
     }),
   );
   estado.entregas = { itens: null, erro: false };
+  estado.daNovaAssinatura = null;
+  estado.chaves.length = 0;
   container = document.createElement("div");
   document.body.appendChild(container);
 });
@@ -112,10 +124,24 @@ describe("a entrega do pedido antes de ler as entregas", () => {
     expect(botoes()).toContain("Entrega");
   });
 
-  it("a leitura que falhou diz que não carregou, e não oferece a entrega", async () => {
+  it("a leitura que falhou diz que não carregou, não oferece a entrega e oferece a nova tentativa, que assina de novo", async () => {
     estado.entregas = { itens: null, erro: true };
     await montar();
     expect(naTela()).toContain("Não consegui carregar a entrega.");
     expect(botoes()).not.toContain("Entrega");
+    const tentar = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (botao) => botao.querySelector(".botao-acao-camada[data-atual]")?.textContent === "Tentar de novo",
+    );
+    expect(tentar).toBeDefined();
+    // Só rótulos, dados e ações na linha da entrega que falhou (as camadas do botão incluídas).
+    const linha = tentar!.closest("li") ?? tentar!.parentElement!.parentElement!;
+    expect(textosForaDaLista(linha.outerHTML, ["Não consegui carregar a entrega.", "Tentar de novo", "Tentando de novo…", "Conferir", "Etiquetas dos volumes", "Romaneio", "Entregue"]).filter((texto) => !texto.includes("PED-0001"))).toEqual([]);
+    tentar!.focus();
+    estado.daNovaAssinatura = { itens: [], erro: false };
+    await act(async () => tentar!.click());
+    await esperar(() => botoes().includes("Entrega"), "a entrega depois da nova tentativa");
+    expect(estado.chaves).toContain("orders:em_aberto#1");
+    // O botão saiu com o foco: ele vai à entrega que entrou no lugar, nunca ao body.
+    expect(document.activeElement?.textContent).toBe("Entrega");
   });
 });
