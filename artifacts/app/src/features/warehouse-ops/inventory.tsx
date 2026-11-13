@@ -656,6 +656,9 @@ export function OpeningInventoryWorkspace() {
         },
       ),
     onSuccess: () => {
+      // Quem fecha o diálogo é o sucesso (carregamento v2, parte 13a): a troca
+      // da aba para a contagem cíclica não vale quando a pessoa escolheu a aba.
+      setCompleteDialogOpen(false);
       setActiveBox(undefined);
       queryClient.invalidateQueries({ queryKey: ["opening-inventory-session"] });
       toast({

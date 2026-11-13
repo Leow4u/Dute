@@ -160,16 +160,19 @@ export default function WarehouseMapPage() {
   };
   const searching = search.trim().length > 0;
 
-  const panel = selected ? (
-    <ShelfPanel
-      key={selected.code}
-      shelf={selected}
-      lines={sessionLines}
-      skuIndex={skuIndex}
-      onClose={() => setSelectedCode(null)}
-      onLabels={(url) => navigate(url)}
-    />
-  ) : null;
+  // Ao lado da lista, o painel tem o "Fechar" dele; no painel de baixo (Sheet), o X de 44 px é o do Sheet.
+  const painel = (noSheet: boolean) =>
+    selected ? (
+      <ShelfPanel
+        key={selected.code}
+        shelf={selected}
+        lines={sessionLines}
+        skuIndex={skuIndex}
+        onClose={noSheet ? undefined : () => setSelectedCode(null)}
+        onLabels={(url) => navigate(url)}
+      />
+    ) : null;
+  const panel = painel(false);
 
   return (
     <div className="flex flex-col gap-6 pb-24">
@@ -380,7 +383,7 @@ export default function WarehouseMapPage() {
                   <SheetTitle>{selected?.code ?? "Prateleira"}</SheetTitle>
                   <SheetDescription>Caixas e ocupação da prateleira</SheetDescription>
                 </SheetHeader>
-                {panel}
+                {painel(true)}
               </SheetContent>
             </Sheet>
           ) : null}
@@ -579,7 +582,7 @@ export function SaidasDaPrateleira({ shelf }: { shelf: Pick<Shelf, "saidas"> }) 
   );
 }
 
-function ShelfPanel({
+export function ShelfPanel({
   shelf,
   lines,
   skuIndex,
@@ -589,7 +592,8 @@ function ShelfPanel({
   shelf: Shelf;
   lines: BoxContentSource[];
   skuIndex: SkuIndex;
-  onClose: () => void;
+  /** O "Fechar" do painel ao lado da lista; no Sheet, sem ele (o X do Sheet fecha). */
+  onClose?: () => void;
   onLabels: (url: string) => void;
 }) {
   const { position } = shelf;
@@ -599,7 +603,8 @@ function ShelfPanel({
   const reserved = shelf.volumeBoxes.filter((box) => box.status === "committing");
   return (
     <section className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
-      <div className="flex items-start justify-between gap-3">
+      {/* No Sheet, o cabeçalho deixa o canto para o X de 44 px dele. */}
+      <div className={cn("flex items-start justify-between gap-3", !onClose && "pr-10")}>
         <div className="min-w-0">
           <h2 className="text-xl font-semibold text-foreground">{shelf.code}</h2>
           <p className="text-xs text-muted-foreground">
@@ -609,9 +614,11 @@ function ShelfPanel({
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className={cn(STATE_CLASS[shelf.state], "max-w-40 whitespace-normal border text-center")}>{SHELF_STATE_LABELS[shelf.state]}</Badge>
-          <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Fechar">
-            <X className="size-4" />
-          </Button>
+          {onClose ? (
+            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Fechar">
+              <X className="size-4" />
+            </Button>
+          ) : null}
         </div>
       </div>
       <ShelfVolumeSummary title="Volume da prateleira" position={position} boxes={shelf.volumeBoxes} unconfirmed={shelf.boxes.length === 0} />

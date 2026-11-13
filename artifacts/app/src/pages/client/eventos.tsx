@@ -75,11 +75,14 @@ export function ClienteEventos() {
   const [removing, setRemoving] = useState<ClientEvent | null>(null);
 
   function remove(event: ClientEvent) {
+    // Quem fecha a confirmação é o sucesso; na falha, ela fica, com o aviso (parte 13a).
     archive.mutate(event.id, {
-      onSuccess: () => toast({ title: "Evento excluído", description: event.name }),
+      onSuccess: () => {
+        setRemoving(null);
+        toast({ title: "Evento excluído", description: event.name });
+      },
       onError: (error) =>
         toast({ title: "Não foi possível excluir", description: error instanceof Error ? error.message : "", variant: "destructive" }),
-      onSettled: () => setRemoving(null),
     });
   }
 

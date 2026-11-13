@@ -8,6 +8,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* O celular, em pé ou deitado (carregamento v2, parte 13a): a tela estreita
+   ou a baixa. Nele, o rodapé do diálogo longo fica preso embaixo e o X e os
+   botões do rodapé têm 44 px (components/ui/dialog.tsx). Deitado, o celular
+   tem mais de 768 px de largura e menos de 500 de altura. */
+@custom-variant celular {
+  @media (width < 48rem), (height < 31.25rem) {
+    @slot;
+  }
+}
+
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -709,6 +719,16 @@
    decisão 9.4.5 de 06/11/2026). */
 :root {
   --altura-da-barra-de-baixo: 3.5rem;
+}
+
+/* Com um diálogo aberto no celular, o toast vai para o topo: embaixo ele
+   cobriria o rodapé preso do diálogo, com o Voltar e a nova tentativa
+   (carregamento v2, parte 13a). Fecha no X dele, como sempre. */
+@media (width < 48rem), (height < 31.25rem) {
+  body:has([role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]) [data-avisos] {
+    top: calc(env(safe-area-inset-top) + 0.5rem);
+    bottom: auto;
+  }
 }
 
 /* ==========================================================================

@@ -3,7 +3,7 @@ import { CARREGANDO } from "@/lib/carregando/tempo";
 /**
  * O foco que volta quando o diálogo fecha (carregamento v2, parte 13a; WCAG
  * 2.4.3): ao controle que abriu o diálogo e, se ele saiu da tela, ao lugar
- * certo dela. Nunca ao `body`, onde o Radix o deixa quando o gatilho sumiu (a
+ * certo dela (o vizinho dele ou o título). Nunca ao `body`, onde o Radix o deixa quando o gatilho sumiu (a
  * linha removida, o item do menu "⋯" que fechou) e de onde o Tab recomeça do
  * topo da página.
  */
@@ -36,8 +36,32 @@ export function podeReceberFoco(elemento: HTMLElement | null | undefined): eleme
 }
 
 /**
- * O lugar certo da tela quando o gatilho saiu: o título da página (o `h1` da
- * área principal), que recebe o foco sem rolar. Sem título, a área principal.
+ * Os vizinhos do controle na ordem do Tab, lidos quando o diálogo abre: o
+ * seguinte e o anterior, fora dos diálogos e dos menus. Quando o controle sai
+ * da tela (a linha removida), o foco vai ao vizinho que ficou, perto de onde a
+ * pessoa estava: o controle da linha seguinte ou, sem ela, o da anterior
+ * (carregamento v2, momento 4). Quem está escondido agora (o menu aberto
+ * esconde o resto da tela) é conferido só no fim.
+ */
+export function vizinhosDoFoco(alvo: HTMLElement): HTMLElement[] {
+  // O controle dentro de outro diálogo (o "Ver pedido" do painel que dá lugar a outro) não tem vizinho na página.
+  if (alvo.closest('[role="dialog"], [role="alertdialog"]')) return [];
+  const documento = alvo.ownerDocument;
+  const fila = Array.from(documento.querySelectorAll<HTMLElement>(FOCAVEL)).filter(
+    (elemento) =>
+      elemento === alvo ||
+      (elemento.tabIndex >= 0 &&
+        !(elemento as HTMLButtonElement).disabled &&
+        !elemento.closest('[role="dialog"], [role="alertdialog"], [role="menu"], [inert], [hidden]')),
+  );
+  const lugar = fila.indexOf(alvo);
+  if (lugar < 0) return [];
+  return [fila[lugar + 1], fila[lugar - 1]].filter((elemento): elemento is HTMLElement => Boolean(elemento));
+}
+
+/**
+ * O lugar certo da tela quando o gatilho saiu e não há vizinho: o título da
+ * página (o `h1` da área principal). Sem título, a área principal.
  */
 export function lugarPadraoDoFoco(documento: Document = document): HTMLElement | null {
   return (
@@ -47,13 +71,32 @@ export function lugarPadraoDoFoco(documento: Document = document): HTMLElement |
   );
 }
 
-/** Põe o foco no elemento; o que não é focável por natureza (o título) recebe `tabindex="-1"`. Não rola a tela. */
+/** Fora da vista: inteiro acima do topo ou abaixo do fim da janela. */
+function foraDaVista(elemento: HTMLElement): boolean {
+  const caixa = elemento.getBoundingClientRect();
+  const janela = elemento.ownerDocument.defaultView;
+  const altura = janela?.innerHeight ?? 0;
+  return caixa.bottom < 0 || (altura > 0 && caixa.top > altura);
+}
+
+/**
+ * Põe o foco no elemento; o que não é focável por natureza (o título) recebe
+ * `tabindex="-1"`. Não rola a tela, salvo o que está fora da vista (o título
+ * da lista longa e rolada): ele vem até a borda mais perto, para o foco
+ * aparecer (WCAG 2.4.7).
+ */
 export function focarSemRolar(elemento: HTMLElement) {
   if (!elemento.matches(FOCAVEL)) {
     elemento.setAttribute("tabindex", "-1");
     elemento.setAttribute("data-foco-de-volta", "");
   }
   elemento.focus({ preventScroll: true });
+  if (foraDaVista(elemento) && typeof elemento.scrollIntoView === "function") elemento.scrollIntoView({ block: "nearest" });
+}
+
+/** O primeiro lugar que ainda pode receber o foco: o pedido por quem usa, os vizinhos e o título. */
+function destinoNoLugar(documento: Document, lugar?: () => HTMLElement | null | undefined, vizinhos: readonly HTMLElement[] = []) {
+  return [lugar?.(), ...vizinhos, lugarPadraoDoFoco(documento)].find(podeReceberFoco);
 }
 
 let vigiaAtual: (() => void) | null = null;
@@ -61,21 +104,33 @@ let vigiaAtual: (() => void) | null = null;
 /**
  * Fica de olho no controle que recebeu o foco de volta: se ele sair da tela
  * com o foco (a linha que a releitura tirou depois do sucesso), o foco vai
- * para o lugar certo, e não fica no `body`. A vigia acaba quando o foco vai
- * para outro lugar, ou depois de `CARREGANDO.desisteMs`, o prazo da releitura.
+ * para o lugar certo, e não fica no `body`. A vigia acaba quando o foco sai
+ * dele, para outro controle ou para um lugar sem foco (o clique no fundo da
+ * página), ou depois de `CARREGANDO.desisteMs`, o prazo da releitura.
  */
 export function vigiarFocoDeVolta(alvo: HTMLElement, lugar?: () => HTMLElement | null | undefined) {
   vigiaAtual?.();
   const documento = alvo.ownerDocument;
   if (typeof MutationObserver === "undefined") return;
+  const vizinhos = vizinhosDoFoco(alvo);
   const parar = () => {
     observador.disconnect();
     documento.removeEventListener("focusin", aoFocar, true);
+    alvo.removeEventListener("focusout", aoSair);
     clearTimeout(prazo);
     if (vigiaAtual === parar) vigiaAtual = null;
   };
   const aoFocar = (evento: FocusEvent) => {
     if (evento.target !== alvo) parar();
+  };
+  // O foco saiu do controle que continua na tela: a pessoa agiu, e a vigia
+  // acaba. Na saída pela remoção (o Chrome avisa o blur antes de tirar o
+  // controle), ele já não está na tela quando a conferência roda, e quem
+  // cuida é o observador.
+  const aoSair = () => {
+    queueMicrotask(() => {
+      if (alvo.isConnected) parar();
+    });
   };
   const observador = new MutationObserver(() => {
     if (alvo.isConnected) return;
@@ -85,11 +140,12 @@ export function vigiarFocoDeVolta(alvo: HTMLElement, lugar?: () => HTMLElement |
       return;
     }
     parar();
-    const destino = [lugar?.(), lugarPadraoDoFoco(documento)].find(podeReceberFoco);
+    const destino = destinoNoLugar(documento, lugar, vizinhos);
     if (destino) focarSemRolar(destino);
   });
   observador.observe(documento.body, { childList: true, subtree: true });
   documento.addEventListener("focusin", aoFocar, true);
+  alvo.addEventListener("focusout", aoSair);
   const prazo = setTimeout(parar, CARREGANDO.desisteMs);
   vigiaAtual = parar;
 }
@@ -97,12 +153,18 @@ export function vigiarFocoDeVolta(alvo: HTMLElement, lugar?: () => HTMLElement |
 /**
  * O fim do diálogo (o `onCloseAutoFocus` do Radix): se quem usa o diálogo não
  * levou o foco a outro lugar, ele volta ao controle que abriu; se esse saiu,
- * ao `lugar` pedido ou ao padrão. Depois, a vigia segura o caso em que o
- * controle sai logo depois (a linha removida pela releitura).
+ * ao `lugar` pedido, ao vizinho dele que ficou (lido na abertura) ou ao
+ * título. Depois, a vigia segura o caso em que o controle sai logo depois (a
+ * linha removida pela releitura).
  */
-export function devolverFocoAoFechar(evento: Event, abridor: HTMLElement | null, lugar?: () => HTMLElement | null | undefined) {
+export function devolverFocoAoFechar(
+  evento: Event,
+  abridor: HTMLElement | null,
+  lugar?: () => HTMLElement | null | undefined,
+  vizinhos: readonly HTMLElement[] = [],
+) {
   if (evento.defaultPrevented || typeof document === "undefined") return;
-  const destino = podeReceberFoco(abridor) ? abridor : [lugar?.(), lugarPadraoDoFoco()].find(podeReceberFoco);
+  const destino = podeReceberFoco(abridor) ? abridor : destinoNoLugar(document, lugar, vizinhos);
   if (!destino) return;
   evento.preventDefault();
   if (destino === abridor) destino.focus({ preventScroll: true });

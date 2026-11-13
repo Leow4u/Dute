@@ -308,10 +308,12 @@ function BillingTableDialog({ current, onClose }: { current: string | null; onCl
   const [table, setTable] = useState(current ?? "");
   const save = useMutation({
     mutationFn: () => fetchJson("/api/system/infra-settings", { method: "POST", body: JSON.stringify({ billing_table: table.trim() || null }) }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: infraKey });
+    // O que gravou fecha o diálogo na hora; a releitura do painel (que consulta
+    // o Google Cloud e pode demorar) segue por trás, sem segurar o diálogo.
+    onSuccess: () => {
       toast({ title: table.trim() ? "Tabela do faturamento salva" : "Tabela do faturamento removida" });
       onClose();
+      void queryClient.invalidateQueries({ queryKey: infraKey });
     },
     onError: (error: Error) => toast({ title: "Não consegui salvar", description: error.message, variant: "destructive" }),
   });

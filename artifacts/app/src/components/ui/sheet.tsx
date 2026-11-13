@@ -56,7 +56,7 @@ const sheetVariants = cva(
 interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
     VariantProps<typeof sheetVariants> {
-  /** O lugar do foco quando o controle que abriu o painel saiu da tela. Sem ele, o título da página. */
+  /** O lugar do foco quando o controle que abriu o painel saiu da tela. Sem ele, o vizinho do controle ou o título da página. */
   focoAoFechar?: () => HTMLElement | null | undefined;
 }
 
@@ -65,7 +65,7 @@ const SheetContent = React.forwardRef<
   SheetContentProps
 >(({ side = 'right', className, children, onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, onInteractOutside, focoAoFechar, ...props }, ref) => {
   const naV3 = useNaV3();
-  const { travado, travas } = useConteudoEmAcao({ onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, onInteractOutside, focoAoFechar });
+  const { travado, esmaecido, travas } = useConteudoEmAcao({ onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, onInteractOutside, focoAoFechar });
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -76,7 +76,7 @@ const SheetContent = React.forwardRef<
         {...props}
         {...travas}
       >
-        <BotaoFecharDoPainel travado={travado} className="right-4 top-4 z-10 max-md:right-2 max-md:top-2" />
+        <BotaoFecharDoPainel travado={travado} esmaecido={esmaecido} className="right-4 top-4 z-10 celular:right-2 celular:top-2" />
         {children}
       </SheetPrimitive.Content>
     </SheetPortal>

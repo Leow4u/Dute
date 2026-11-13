@@ -32,7 +32,7 @@ import {
 
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
-import { Dialog } from "@/components/ui/dialog";
+import { Dialog, useConteudoEmAcao } from "@/components/ui/dialog";
 import { Chip as UiChip } from "@/components/ui/chip";
 import { FilterGroup, FilterSheet } from "@/components/ui/filter-panel";
 import { Input } from "@/components/ui/input";
@@ -876,7 +876,14 @@ export function ClienteEstoque() {
             </section>
 
             {cartOpen ? (
-              <SideDrawer title="Seu pedido" onClose={() => setCartOpen(false)} wide={cartExpanded} ocupado={requestMutation.isPending || saveEvent.isPending}>
+              <SideDrawer
+                title="Seu pedido"
+                onClose={() => setCartOpen(false)}
+                wide={cartExpanded}
+                ocupado={requestMutation.isPending || saveEvent.isPending}
+                // O pedido enviado esvazia o pedido, e o "Pedido ·" do celular sai da tela: o foco vai ao título.
+                focoAoFechar={() => document.querySelector<HTMLElement>("main h1")}
+              >
                 <CartPanel
                   cartKey={cartKey}
                   seed={cartSeed}
@@ -1532,6 +1539,7 @@ export function SideDrawer({
   wide = false,
   bottomSheetOnMobile = false,
   ocupado = false,
+  focoAoFechar,
 }: {
   children: ReactNode;
   /** O nome do diálogo para o leitor de tela: o produto aberto, ou "Seu pedido". */
@@ -1541,12 +1549,9 @@ export function SideDrawer({
   bottomSheetOnMobile?: boolean;
   /** O envio do pedido segura o painel: o Esc e o clique fora não fecham (carregamento v2, parte 13a). */
   ocupado?: boolean;
+  /** O lugar do foco quando quem abriu o painel saiu da tela (o "Pedido ·" do pedido enviado). */
+  focoAoFechar?: () => HTMLElement | null | undefined;
 }) {
-  // Quem abriu o painel (o card, a linha da lista, o botão do pedido): o foco
-  // volta para ele. A Radix só devolve o foco a um Dialog.Trigger, que aqui não há.
-  const opener = useRef<HTMLElement | null>(
-    typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null),
-  );
   return (
     <Dialog
       open
@@ -1555,6 +1560,41 @@ export function SideDrawer({
         if (!open) onClose();
       }}
     >
+      <ConteudoDoPainelLateral title={title} wide={wide} bottomSheetOnMobile={bottomSheetOnMobile} focoAoFechar={focoAoFechar}>
+        {children}
+      </ConteudoDoPainelLateral>
+    </Dialog>
+  );
+}
+
+/**
+ * O conteúdo do painel lateral, com o jeito único do diálogo em ação (parte
+ * 13a): o Esc e o clique fora não fecham durante o envio, e o foco volta a
+ * quem abriu o painel (o card, a linha da lista, o botão do pedido) ou, se ele
+ * saiu da tela, ao `focoAoFechar`, nunca ao body.
+ */
+function ConteudoDoPainelLateral({
+  children,
+  title,
+  wide,
+  bottomSheetOnMobile,
+  focoAoFechar,
+}: {
+  children: ReactNode;
+  title: string;
+  wide: boolean;
+  bottomSheetOnMobile: boolean;
+  focoAoFechar?: () => HTMLElement | null | undefined;
+}) {
+  const { travado, travas } = useConteudoEmAcao({
+    // Abriu outro painel no lugar (o "Ver pedido"): o foco fica nele.
+    onCloseAutoFocus: (event) => {
+      if (document.querySelector('[role="dialog"]')) event.preventDefault();
+    },
+    focoAoFechar,
+  });
+  return (
+    <>
       <DialogPrimitive.Portal>
         {/* Fundo escuro sem desfoque e painel opaco: atrás há uma vitrine de
             fotos, e o painel translúcido ficava ilegível. */}
@@ -1568,19 +1608,8 @@ export function SideDrawer({
         >
           <DialogPrimitive.Content
             aria-describedby={undefined}
-            onCloseAutoFocus={(event) => {
-              event.preventDefault();
-              // Abriu outro painel no lugar (o "Ver pedido"): o foco fica nele.
-              if (document.querySelector('[role="dialog"]')) return;
-              if (opener.current?.isConnected) opener.current.focus();
-            }}
-            onEscapeKeyDown={(event) => {
-              if (ocupado) event.preventDefault();
-            }}
-            onInteractOutside={(event) => {
-              if (ocupado) event.preventDefault();
-            }}
-            data-ocupado={ocupado ? "" : undefined}
+            {...travas}
+            data-ocupado={travado ? "" : undefined}
             className={cn(
               "relative w-full overflow-hidden text-foreground outline-none",
               bottomSheetOnMobile
@@ -1593,7 +1622,7 @@ export function SideDrawer({
           </DialogPrimitive.Content>
         </DialogPrimitive.Overlay>
       </DialogPrimitive.Portal>
-    </Dialog>
+    </>
   );
 }
 

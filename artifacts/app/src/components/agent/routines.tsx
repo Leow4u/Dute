@@ -302,7 +302,7 @@ function RoutineCard({ routine, onEdit, onOpenConversation }: { routine: Routine
         descricao="Ela para de rodar. As respostas que já chegaram continuam na conversa da rotina."
         confirmar="Apagar"
         confirmando="Apagando…"
-        classeDoConfirmar="bg-red-700 text-white hover:bg-red-800"
+        perigo
         onConfirmar={() => remove.mutate(undefined, { onSuccess: () => setConfirmDelete(false) })}
         onFechar={() => setConfirmDelete(false)}
       />

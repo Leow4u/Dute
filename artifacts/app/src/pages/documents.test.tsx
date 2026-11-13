@@ -307,7 +307,7 @@ describe("o diálogo gravando (carregamento v2, parte 13a)", () => {
       expect(noDialogo(rotulo)?.getAttribute("aria-disabled"), rotulo).toBe("true");
       expect(noDialogo(rotulo)?.disabled, rotulo).toBe(false);
     }
-    expect(noDialogo("Fechar")?.className).toContain("max-md:size-11");
+    expect(noDialogo("Fechar")?.className).toContain("celular:size-11");
     expect(document.activeElement).not.toBe(document.body);
     for (const soltar of estado.envioPreso!.splice(0)) soltar();
     estado.envioPreso = null;

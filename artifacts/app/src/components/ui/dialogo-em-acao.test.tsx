@@ -3,6 +3,7 @@ import { act, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { CARREGANDO } from "@/lib/carregando/tempo";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
 
@@ -18,6 +19,7 @@ import {
 } from "./alert-dialog";
 import { BotaoDeAcao } from "./botao-de-acao";
 import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./dialog";
+import { Progresso } from "./progresso";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "./sheet";
 
 /**
@@ -175,16 +177,36 @@ describe("o Dialog em ação", () => {
     expect(document.activeElement).toBe(cancelar);
   });
 
-  it("no celular, o X tem 44 px e o rodapé fica preso embaixo, cobrindo até a borda", async () => {
+  it("no celular, em pé ou deitado, o X tem 44 px e o rodapé fica preso embaixo, cobrindo até a borda", async () => {
     await montar(<DialogoDoTeste ocupado={false} aoMudar={() => {}} />);
     const x = botao("Fechar", dialogo()!)!;
-    expect(x.className).toContain("max-md:size-11");
+    // O celular é a tela estreita ou a baixa (index.css): deitado, ele passa de 768 px de largura.
+    expect(x.className).toContain("celular:size-11");
     const rodape = dialogo()!.querySelector("[data-rodape-do-dialogo]")!;
-    for (const classe of ["max-md:sticky", "max-md:-bottom-6", "max-md:-mb-6", "max-md:pb-6", "max-md:bg-card", "max-md:[&_button]:min-h-11"]) {
+    for (const classe of ["celular:sticky", "celular:-bottom-6", "celular:-mb-6", "celular:pb-6", "celular:bg-card", "celular:[&_button]:min-h-11"]) {
       expect(rodape.className, classe).toContain(classe);
     }
     // O título não passa por baixo do X de 44 px.
-    expect(dialogo()!.querySelector("h2")!.parentElement!.className).toContain("max-md:[&>h2]:px-7");
+    const cabecalho = dialogo()!.querySelector("h2")!.parentElement!.className;
+    expect(cabecalho).toContain("celular:[&>h2]:pr-7");
+    // Em pé, centrado, o recuo é dos dois lados; deitado, alinhado à esquerda, o título começa com o resto.
+    expect(cabecalho).toContain("max-sm:[&>h2]:pl-7");
+    for (const classe of ["max-md:size-11", "max-md:sticky"]) expect(dialogo()!.outerHTML, classe).not.toContain(classe);
+  });
+
+  it("no celular, o campo com o foco não fica atrás do rodapé preso: o diálogo guarda embaixo a altura do rodapé", async () => {
+    const altura = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(133);
+    await montar(<DialogoDoTeste ocupado={false} aoMudar={() => {}} />);
+    altura.mockRestore();
+    expect(dialogo()!.className).toContain("celular:scroll-pb-[var(--altura-do-rodape,0px)]");
+    expect(dialogo()!.style.getPropertyValue("--altura-do-rodape")).toBe("133px");
+  });
+
+  it("o anel do foco do X é o cheio, com o recuo, e só o ícone esmaece", async () => {
+    await montar(<DialogoDoTeste ocupado={false} aoMudar={() => {}} />);
+    const x = botao("Fechar", dialogo()!)!;
+    for (const classe of ["focus-visible:ring-ring", "focus-visible:ring-offset-2", "[&_svg]:opacity-70"]) expect(x.className, classe).toContain(classe);
+    expect(x.className).not.toMatch(/ring-ring\/\d+|(?:^|\s)opacity-70/);
   });
 
   it("os textos do diálogo em ação são os rótulos, e passa no axe parado e gravando", async () => {
@@ -274,7 +296,8 @@ describe("o painel (Sheet) em ação", () => {
     expect(aoMudar).not.toHaveBeenCalled();
     expect(x.getAttribute("aria-disabled")).toBe("true");
     expect(x.disabled).toBe(false);
-    expect(x.className).toContain("max-md:size-11");
+    expect(x.className).toContain("celular:size-11");
+    expect(x.className).toContain("focus-visible:ring-offset-2");
     await montar(<Painel ocupado={false} aoMudar={aoMudar} />);
     await esc();
     expect(aoMudar).toHaveBeenCalledWith(false);
@@ -333,5 +356,150 @@ describe("a confirmação (AlertDialog) em ação", () => {
     await esc();
     await clicar(botao("Cancelar", dialogo()!));
     expect(aoMudar.mock.calls).toEqual([[false], [false]]);
+  });
+});
+
+describe("o tempo do diálogo em ação", () => {
+  async function passar(ms: number) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  }
+
+  /** O diálogo com a ação de verdade: o toque liga o `ocupado` depois de `atrasoMs`, e a ação acaba quando o teste manda. */
+  function Tela({ aoMudar, comProgresso = false }: { aoMudar: (aberto: boolean) => void; comProgresso?: boolean }) {
+    const [ocupado, setOcupado] = useState(false);
+    return (
+      <Dialog open ocupado={ocupado} onOpenChange={aoMudar}>
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Nova rua</DialogTitle>
+          </DialogHeader>
+          {comProgresso ? <Progresso forma="etapas" titulo="Confirmando a entrega" itens={[{ rotulo: "Saída", estado: ocupado ? "andamento" : "fila" }]} /> : null}
+          <DialogFooter>
+            <DialogCancelar onClick={() => aoMudar(false)} />
+            <BotaoDeAcao
+              estado={ocupado ? "andamento" : "repouso"}
+              rotulo="Cadastrar rua"
+              andamento="Cadastrando…"
+              onClick={() => {
+                tela.ligar = () => setOcupado(true);
+                tela.desligar = () => setOcupado(false);
+              }}
+            />
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+  const tela: { ligar: () => void; desligar: () => void } = { ligar: () => {}, desligar: () => {} };
+
+  async function abrir(no: ReactNode) {
+    vi.useFakeTimers();
+    await act(async () => raiz!.render(no));
+    await passar(0);
+  }
+
+  const esmaecido = (elemento: HTMLElement) => /(?:^|\s)opacity-45(?:\s|$)/.test(elemento.className) || /\[&_svg\]:opacity-45/.test(elemento.className);
+
+  it("o Esc e o toque fora logo depois do toque no confirmar não fecham, antes de a ação chegar à tela; a falha rápida os solta", async () => {
+    const aoMudar = vi.fn();
+    await abrir(<Tela aoMudar={aoMudar} />);
+    await clicar(botao("Cadastrar rua", dialogo()!));
+    // A ação ainda não chegou à tela (o isPending demora um desenho): o Esc e o toque fora, que escapam sem querer, não fecham.
+    await esc();
+    await tocarFora();
+    expect(aoMudar).not.toHaveBeenCalled();
+    // A ação chega e falha logo: o Esc volta a fechar, sem esperar os 300 ms do toque.
+    await act(async () => tela.ligar());
+    await passar(50);
+    await act(async () => tela.desligar());
+    await passar(0);
+    await esc();
+    expect(aoMudar).toHaveBeenCalledWith(false);
+  });
+
+  it("o X e o Cancelar seguem só o que dizem: sem aria-disabled, eles fecham, também logo depois do toque", async () => {
+    const aoMudar = vi.fn();
+    await abrir(<Tela aoMudar={aoMudar} />);
+    await clicar(botao("Cadastrar rua", dialogo()!));
+    const cancelar = botao("Cancelar", dialogo()!)!;
+    expect(cancelar.hasAttribute("aria-disabled")).toBe(false);
+    await clicar(cancelar);
+    expect(aoMudar).toHaveBeenCalledWith(false);
+  });
+
+  it("o toque que não começou ação nenhuma (a validação recusou) solta o diálogo aos 300 ms", async () => {
+    const aoMudar = vi.fn();
+    await abrir(<Tela aoMudar={aoMudar} />);
+    await clicar(botao("Cadastrar rua", dialogo()!));
+    await esc();
+    expect(aoMudar).not.toHaveBeenCalled();
+    await passar(CARREGANDO.atrasoMs);
+    await esc();
+    expect(aoMudar).toHaveBeenCalledWith(false);
+  });
+
+  it("o X e o Cancelar ficam aria-disabled no toque e esmaecem aos 300 ms, com o gerúndio; a ação curta não pisca", async () => {
+    await abrir(<Tela aoMudar={() => {}} />);
+    await clicar(botao("Cadastrar rua", dialogo()!));
+    await act(async () => tela.ligar());
+    const x = botao("Fechar", dialogo()!)!;
+    const cancelar = botao("Cancelar", dialogo()!)!;
+    await passar(100);
+    for (const elemento of [x, cancelar]) {
+      expect(elemento.getAttribute("aria-disabled")).toBe("true");
+      expect(esmaecido(elemento), elemento.textContent ?? "").toBe(false);
+    }
+    await passar(CARREGANDO.atrasoMs - 100);
+    expect(botao("Cadastrando…", dialogo()!)).toBeTruthy();
+    for (const elemento of [x, cancelar]) expect(esmaecido(elemento), elemento.textContent ?? "").toBe(true);
+
+    // A que volta antes dos 300 ms nunca esmaece os vizinhos.
+    await act(async () => tela.desligar());
+    await passar(CARREGANDO.minimoMs);
+    await clicar(botao("Cadastrar rua", dialogo()!));
+    await act(async () => tela.ligar());
+    await passar(120);
+    expect(esmaecido(x)).toBe(false);
+    await act(async () => tela.desligar());
+    await passar(CARREGANDO.atrasoMs);
+    expect(esmaecido(x)).toBe(false);
+    expect(x.hasAttribute("aria-disabled")).toBe(false);
+  });
+
+  it("aos 10 s, o rodapé diz que demora; aos 70 s, que não houve confirmação, e o diálogo volta a fechar", async () => {
+    const aoMudar = vi.fn();
+    await abrir(<Tela aoMudar={aoMudar} />);
+    await clicar(botao("Cadastrar rua", dialogo()!));
+    await act(async () => tela.ligar());
+    await passar(CARREGANDO.demoraMs - 100);
+    expect(dialogo()!.querySelector("[data-aviso-de-espera]")).toBeNull();
+    await passar(2_100);
+    const rodape = dialogo()!.querySelector("[data-rodape-do-dialogo]")!;
+    expect(rodape.querySelector('[data-aviso-de-espera="demorando"]')?.textContent).toBe("Demorando mais que o normal0:12");
+    // Em cima dos botões: no DOM, antes deles (o último botão continua o último).
+    expect(rodape.firstElementChild?.hasAttribute("data-aviso-de-espera")).toBe(true);
+    await esc();
+    expect(aoMudar).not.toHaveBeenCalled();
+
+    await passar(CARREGANDO.desisteMs - 12_000);
+    expect(rodape.querySelector('[data-aviso-de-espera="sem-resposta"]')?.textContent).toBe("Sem confirmação do servidor");
+    // O confirmar segue na ação; o X e o Cancelar voltam a fechar.
+    expect(botao("Cadastrando…", dialogo()!)!.getAttribute("aria-disabled")).toBe("true");
+    expect(botao("Cancelar", dialogo()!)!.hasAttribute("aria-disabled")).toBe(false);
+    await esc();
+    expect(aoMudar).toHaveBeenCalledWith(false);
+  });
+
+  it("o diálogo da operação longa (com o progresso dela) não repete o aviso nem solta aos 70 s", async () => {
+    const aoMudar = vi.fn();
+    await abrir(<Tela aoMudar={aoMudar} comProgresso />);
+    await clicar(botao("Cadastrar rua", dialogo()!));
+    await act(async () => tela.ligar());
+    await passar(CARREGANDO.desisteMs + 1_000);
+    expect(dialogo()!.querySelector("[data-rodape-do-dialogo] [data-aviso-de-espera]")).toBeNull();
+    await esc();
+    expect(aoMudar).not.toHaveBeenCalled();
   });
 });

@@ -2,7 +2,7 @@ import * as React from 'react';
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import { BotaoDeAcao, type BotaoDeAcaoProps } from '@/components/ui/botao-de-acao';
 import { buttonVariants } from '@/components/ui/button';
-import { CLASSE_DO_TRAVADO, DialogoEmAcao, useConteudoEmAcao, useDialogoEmAcao } from '@/components/ui/dialog';
+import { AvisoDaAcaoDoDialogo, CLASSE_DO_ESMAECIDO, CLASSE_DO_TRAVADO, DialogoEmAcao, useConteudoEmAcao, useDialogoEmAcao, useEstadoEmAcao } from '@/components/ui/dialog';
 import { useNaV3 } from '@/lib/na-v3';
 import { cn } from '@/lib/utils';
 
@@ -15,14 +15,15 @@ type AlertDialogProps = React.ComponentProps<typeof AlertDialogPrimitive.Root> &
 };
 
 function AlertDialog({ ocupado = false, onOpenChange, ...props }: AlertDialogProps) {
+  const valor = useEstadoEmAcao(ocupado);
+  const { segura } = valor;
   const aoMudar = React.useCallback(
     (aberto: boolean) => {
-      if (!aberto && ocupado) return;
+      if (!aberto && segura()) return;
       onOpenChange?.(aberto);
     },
-    [onOpenChange, ocupado],
+    [onOpenChange, segura],
   );
-  const valor = React.useMemo(() => ({ ocupado }), [ocupado]);
   return (
     <DialogoEmAcao.Provider value={valor}>
       <AlertDialogPrimitive.Root {...props} onOpenChange={aoMudar} />
@@ -52,7 +53,7 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content> & {
-    /** O lugar do foco quando o controle que abriu a confirmação saiu da tela. Sem ele, o título da página. */
+    /** O lugar do foco quando o controle que abriu a confirmação saiu da tela. Sem ele, o vizinho do controle ou o título da página. */
     focoAoFechar?: () => HTMLElement | null | undefined;
   }
 >(({ className, onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, focoAoFechar, ...props }, ref) => {
@@ -95,16 +96,21 @@ AlertDialogHeader.displayName = 'AlertDialogHeader';
 
 const AlertDialogFooter = ({
   className,
+  children,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      // No celular, os dois botões com 44 px.
-      'flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 max-md:[&_button]:min-h-11',
+      // No celular (também deitado), os dois botões com 44 px. Com a ação
+      // demorando, o aviso da espera entra em cima deles (o mesmo do DialogFooter).
+      'flex flex-col-reverse sm:flex-row sm:flex-wrap sm:justify-end sm:space-x-2 max-sm:gap-2 sm:gap-y-2 celular:[&_button]:min-h-11',
       className,
     )}
     {...props}
-  />
+  >
+    <AvisoDaAcaoDoDialogo />
+    {children}
+  </div>
 );
 AlertDialogFooter.displayName = 'AlertDialogFooter';
 
@@ -150,14 +156,15 @@ const AlertDialogCancel = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Cancel>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel>
 >(({ className, onClick, ...props }, ref) => {
-  const travado = Boolean(useDialogoEmAcao()?.ocupado);
+  const dialogo = useDialogoEmAcao();
+  const travado = Boolean(dialogo?.ocupado);
   return (
     <AlertDialogPrimitive.Cancel
       ref={ref}
       {...props}
       aria-disabled={travado || undefined}
       onClick={(evento) => {
-        if (travado) {
+        if (travado || dialogo?.segura()) {
           evento.preventDefault();
           return;
         }
@@ -165,8 +172,8 @@ const AlertDialogCancel = React.forwardRef<
       }}
       className={cn(
         buttonVariants({ variant: 'outline' }),
-        'mt-2 sm:mt-0',
         travado && cn(CLASSE_DO_TRAVADO, 'hover:bg-card active:bg-card'),
+        dialogo?.esmaecido && CLASSE_DO_ESMAECIDO,
         className,
       )}
     />

@@ -257,7 +257,8 @@ export function MenuDaPessoa({ acoes, person }: { acoes: AcoesDasPessoas; person
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive" onSelect={() => acoes.setRemoving(person)}>
+            {/* A mesma mutação do "Devolver acesso": enquanto ela grava, o Revogar espera (o fim de uma fecharia o diálogo da outra). */}
+            <DropdownMenuItem className="text-destructive" disabled={acoes.setAccess.isPending} onSelect={() => acoes.setRemoving(person)}>
               Revogar acesso
             </DropdownMenuItem>
           </>
@@ -281,6 +282,8 @@ export function MenuDaPessoa({ acoes, person }: { acoes: AcoesDasPessoas; person
 /** As confirmações: reenviar o convite, tirar da lista e revogar o acesso. */
 export function DialogosDasPessoas({ acoes }: { acoes: AcoesDasPessoas }) {
   const { resending, archiving, removing, resendInvite, archivePerson, setAccess } = acoes;
+  // O diálogo segura só a revogação desta pessoa: o "Devolver acesso" de outra, na mesma mutação, não é dele.
+  const revogando = setAccess.isPending && setAccess.variables?.active === false && setAccess.variables.id === removing?.id;
   return (
     <>
       <Dialog open={Boolean(resending)} ocupado={resendInvite.isPending} onOpenChange={(open) => !open && acoes.setResending(null)}>
@@ -315,7 +318,7 @@ export function DialogosDasPessoas({ acoes }: { acoes: AcoesDasPessoas }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Manter na lista</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              perigo
               estado={archivePerson.isPending ? "andamento" : "repouso"}
               rotulo="Remover da lista"
               andamento="Removendo…"
@@ -327,7 +330,7 @@ export function DialogosDasPessoas({ acoes }: { acoes: AcoesDasPessoas }) {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={Boolean(removing)} ocupado={setAccess.isPending} onOpenChange={(open) => !open && acoes.setRemoving(null)}>
+      <AlertDialog open={Boolean(removing)} ocupado={revogando} onOpenChange={(open) => !open && acoes.setRemoving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Revogar o acesso de {removing?.name}?</AlertDialogTitle>
@@ -342,8 +345,9 @@ export function DialogosDasPessoas({ acoes }: { acoes: AcoesDasPessoas }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              estado={setAccess.isPending ? "andamento" : "repouso"}
+              perigo
+              estado={revogando ? "andamento" : "repouso"}
+              bloqueado={!revogando && setAccess.isPending}
               rotulo="Revogar acesso"
               andamento="Revogando…"
               onClick={() => {

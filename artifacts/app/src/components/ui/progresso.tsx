@@ -3,6 +3,7 @@ import { Check, Clock3, RefreshCw } from "lucide-react";
 
 import { CaixaDeAlerta } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { useAvisoProprioNoDialogo } from "@/components/ui/dialogo-em-acao";
 import { Spinner } from "@/components/ui/spinner";
 import { useAnuncio } from "@/lib/carregando/anunciador";
 import { useEspera } from "@/lib/carregando/use-espera";
@@ -125,6 +126,8 @@ export function Progresso({ forma, titulo, itens, concluido, apoio, unidade = ["
   const ativo = itens.some((item) => item.estado === "andamento" || (forma === "contagem" && item.estado === "fila"));
   const espera = useEspera(ativo);
   const anunciar = useAnuncio();
+  // Num diálogo, a operação longa mostra a própria espera: o rodapé não repete o aviso (parte 13a).
+  useAvisoProprioNoDialogo();
   const id = useId();
   const cabecalho = useRef<HTMLParagraphElement | null>(null);
   const tentativas = useRef(new Map<number, HTMLButtonElement>());

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { CircleAlert, Clock3, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useAvisoProprioNoDialogo } from "@/components/ui/dialogo-em-acao";
 import { Spinner } from "@/components/ui/spinner";
 import { useAnuncio } from "@/lib/carregando/anunciador";
 import { estimativaDaEspera, relogioDaEspera } from "@/lib/carregando/tempo";
@@ -28,6 +29,8 @@ export interface AvisoDeEsperaProps {
   onTentar?: () => void;
   onConferir?: () => void;
   className?: string;
+  /** O aviso que o próprio rodapé do diálogo põe (parte 13a): não conta como aviso próprio da tela. */
+  doRodapeDoDialogo?: boolean;
 }
 
 /**
@@ -45,8 +48,10 @@ export interface AvisoDeEsperaProps {
  * Os botões têm 44 px. O Anunciador fala o aviso e a desistência, uma vez
  * cada; o relógio nunca.
  */
-export function AvisoDeEspera({ fase, tipo, desdeMs, restanteMs, tentando = false, onTentar, onConferir, className }: AvisoDeEsperaProps) {
+export function AvisoDeEspera({ fase, tipo, desdeMs, restanteMs, tentando = false, onTentar, onConferir, className, doRodapeDoDialogo = false }: AvisoDeEsperaProps) {
   const anunciar = useAnuncio();
+  // Dentro de um diálogo, o aviso da tela tira o do rodapé (parte 13a).
+  useAvisoProprioNoDialogo(!doRodapeDoDialogo);
   const desistencia = tipo === "escrita" ? SEM_CONFIRMACAO_DO_SERVIDOR : SEM_RESPOSTA_DO_SERVIDOR;
   // A espera que acaba (o aviso sai da tela) antes da vez do anúncio o tira da fila do Anunciador.
   useEffect(() => {

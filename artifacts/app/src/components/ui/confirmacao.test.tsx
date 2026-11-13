@@ -110,6 +110,30 @@ describe("a confirmação que espera a resposta", () => {
     expect(props.onConfirmar).not.toHaveBeenCalled();
   });
 
+  it("enquanto sai, o texto é o de quando estava aberta: quem chama já limpou o que ela confirmava", async () => {
+    await montar({ titulo: "Remover a posição A-03?" });
+    const textos: string[] = [];
+    const observador = new MutationObserver((registros) => {
+      for (const registro of registros) {
+        if (registro.type === "characterData") textos.push((registro.target as Text).data);
+        for (const no of Array.from(registro.addedNodes)) textos.push(no.textContent ?? "");
+      }
+    });
+    observador.observe(document.body, { subtree: true, childList: true, characterData: true });
+    // Quem chama fecha e limpa a posição na mesma hora: antes, a saída mostrava "Remover a posição ?".
+    await montar({ aberta: false, titulo: "Remover a posição ?" });
+    observador.disconnect();
+    expect(textos.join(" | ")).not.toContain("Remover a posição ?");
+  });
+
+  it("o perigo chega ao confirmar: o vermelho sólido, que travado não muda com o ponteiro em cima", async () => {
+    await montar({ perigo: true, ocupada: true });
+    const confirmar = document.querySelector<HTMLButtonElement>(".botao-acao")!;
+    expect(confirmar.className).toContain("bg-red-700");
+    expect(confirmar.className).toContain("hover:bg-red-700");
+    expect(confirmar.className).not.toContain("hover:bg-primary");
+  });
+
   it("passa nas regras WCAG 2.1 A e AA do axe, parada e em andamento", async () => {
     await montar();
     expect(await violacoesDeAcessibilidade(document.querySelector('[role="alertdialog"]')!.outerHTML)).toEqual([]);
@@ -147,5 +171,8 @@ describe("as quatro confirmações usam a que espera a resposta", () => {
     expect(rotinas).toMatch(/<Confirmacao[\s\S]*?ocupada=\{remove\.isPending\}[\s\S]*?confirmando="Apagando…"/);
     expect(rotinas).not.toContain("<AlertDialogAction");
     expect(rotinas).toContain("remove.mutate(undefined, { onSuccess: () => setConfirmDelete(false) })");
+    // O vermelho do Apagar é o perigo do BotaoDeAcao, que travado não fica no do primário com o ponteiro em cima.
+    expect(rotinas).toMatch(/<Confirmacao[\s\S]*?\n\s*perigo\n/);
+    expect(rotinas).not.toContain("classeDoConfirmar");
   });
 });

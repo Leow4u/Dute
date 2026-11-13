@@ -1,6 +1,7 @@
 import { useRef } from "react";
 
 import { AvisoDeEspera } from "@/components/ui/aviso-de-espera";
+import { useAvisoProprioNoDialogo } from "@/components/ui/dialogo-em-acao";
 import { Progresso } from "@/components/ui/progresso";
 import { estimativaEstavel, restanteDoEnvio, restanteExibido, type EnvioDeFotos, type EstimativaNaTela } from "@/lib/carregando/use-envio-de-fotos";
 import { useEspera } from "@/lib/carregando/use-espera";
@@ -33,6 +34,8 @@ export function ProgressoDasFotos<T>({ fotos, aviso, className }: { fotos: Envio
   const demorando = fotos.enviando && espera.calmo;
   const conta = demorando ? restanteDoEnvio(fotos.itens, espera.decorridoMs, performance.now()) : undefined;
   estimativa.current = estimativaEstavel(estimativa.current, conta, espera.decorridoMs);
+  // Num diálogo, as fotos que sobem têm a própria espera: o rodapé não repete o aviso (parte 13a).
+  useAvisoProprioNoDialogo(fotos.itens.length > 0 || Boolean(aviso));
   if (fotos.itens.length === 0 && !aviso) return null;
   const feitas = fotos.itens.filter((item) => item.estado === "feito").length;
   const falhas = fotos.itens.filter((item) => item.estado === "erro").length;

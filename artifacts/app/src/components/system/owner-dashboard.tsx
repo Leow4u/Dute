@@ -72,10 +72,12 @@ function CostSettingsDialog({ settings, onClose }: { settings: SystemDashboard["
         method: "POST",
         body: JSON.stringify({ input_per_million: parse(input), output_per_million: parse(output), monthly_budget: parse(budget) || null }),
       }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: dashboardKey });
+    // O que gravou fecha o diálogo na hora; a releitura do painel segue por
+    // trás, sem segurar o diálogo.
+    onSuccess: () => {
       toast({ title: "Preços e orçamento salvos" });
       onClose();
+      void queryClient.invalidateQueries({ queryKey: dashboardKey });
     },
     onError: (error: Error) => toast({ title: "Não consegui salvar", description: error.message, variant: "destructive" }),
   });
