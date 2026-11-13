@@ -9,7 +9,6 @@ import { useAtalhoDoAgente } from "@/hooks/use-atalho-do-agente";
 import { useAppAuth, useAppUser } from "@/lib/auth";
 import { getNavigationForProfileRole, INTERNAL_ROLES } from "@/lib/modules";
 import { useOperationProfile } from "@/lib/operation-profile";
-import { usePwaInstall } from "@/lib/pwa-install";
 import { contadoresDoMenu } from "@/lib/resumo-do-modulo";
 import { moduloAberto, opcoesDoSeletor } from "@/lib/seletor-de-modulo";
 import { rememberReturnPath } from "@/lib/settings-nav";
@@ -29,7 +28,6 @@ export default function WmsLayout({ children }: { children: ReactNode }) {
   const { user } = useAppUser();
   const { signOut } = useAppAuth();
   const { profile } = useOperationProfile();
-  const { isOnline } = usePwaInstall();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const role = user?.publicMetadata.role;
   const menu = getNavigationForProfileRole(role, profile);
@@ -51,7 +49,6 @@ export default function WmsLayout({ children }: { children: ReactNode }) {
       items={menu}
       contadores={contadoresDoMenu(inicio.items, menu, "home")}
       basePath={basePath}
-      online={isOnline}
       conteudoV3={telaDoWmsNaV3(location)}
       abaixoDoSeletor={
         comClienteAtivo

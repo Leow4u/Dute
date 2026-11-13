@@ -36,7 +36,7 @@ import { isAgentScreen } from "@/lib/agent-chat";
 import { useAppAuth, useAppUser } from "@/lib/auth";
 import { sinoDisponivelNoPortal } from "@/lib/portal/avisos";
 import { useOperationProfile } from "@/lib/operation-profile";
-import { usePwaInstall } from "@/lib/pwa-install";
+import { useConexao } from "@/lib/carregando/estado-da-conexao";
 import { rememberReturnPath } from "@/lib/settings-nav";
 
 function RouteDropdownItem({
@@ -278,7 +278,8 @@ function LayoutDoPortal({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { user } = useAppUser();
   const { signOut } = useAppAuth();
-  const { isOnline } = usePwaInstall();
+  // O aparelho sem rede há 3 s, pelo estado único da conexão; o Anunciador diz "Sem conexão" (momento 8).
+  const semConexao = useConexao() === "sem-conexao";
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   // No portal, o modelo de operação do cliente decide quais módulos existem.
   const operation = useOperationProfile();
@@ -453,9 +454,8 @@ function LayoutDoPortal({ children }: { children: ReactNode }) {
             <AccountMenu basePath={basePath} compact cabecalho signOut={signOut} user={user} />
           </div>
         </header>
-        {!isOnline ? (
+        {semConexao ? (
           <div
-            role="status"
             className="flex shrink-0 items-center justify-center gap-2 border-b border-warning-soft-border bg-warning-soft/95 px-4 py-2 text-center text-xs font-medium text-warning-soft-foreground"
           >
             <WifiOff className="h-4 w-4 shrink-0" />

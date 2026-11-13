@@ -14,7 +14,7 @@ import { CARREGANDO } from "./tempo";
 
 let rede = true;
 let conexao: Conexao;
-let reler: ReturnType<typeof vi.fn<(sondar: boolean) => void>>;
+let reler: ReturnType<typeof vi.fn<() => boolean>>;
 /** Cada mudança do estado, com o instante. */
 let historico: Array<{ t: number; estado: EstadoDaConexao }>;
 let zero = 0;
@@ -31,14 +31,12 @@ function aparelho(temRede: boolean) {
   conexao.redeMudou();
 }
 
-/** O `sondar` de cada releitura. */
-const releituras = () => reler.mock.calls.map(([sondar]) => sondar);
-
 beforeEach(() => {
   vi.useFakeTimers();
   zero = performance.now();
   rede = true;
-  reler = vi.fn<(sondar: boolean) => void>();
+  // Por padrão, sempre há o que reler (uma leitura com a falta na tela).
+  reler = vi.fn<() => boolean>(() => true);
   conexao = criarConexao({ temRede: () => rede });
   conexao.aoReler(reler);
   historico = [];
@@ -63,7 +61,10 @@ describe("com o aparelho conectado e o servidor sem resposta", () => {
     conexao.ficouSemResposta(agora());
     expect(conexao.estado()).toBe("reconectando");
     // Cada releitura sozinha falha de novo, por dois minutos.
-    reler.mockImplementation(() => conexao.ficouSemResposta(agora()));
+    reler.mockImplementation(() => {
+      conexao.ficouSemResposta(agora());
+      return true;
+    });
     for (let s = 0; s < 120; s += 1) {
       passar(1_000);
       expect(conexao.estado()).toBe("reconectando");
@@ -76,12 +77,45 @@ describe("com o aparelho conectado e o servidor sem resposta", () => {
     reler.mockImplementation(() => {
       instantes.push(agora());
       conexao.ficouSemResposta(agora());
+      return true;
     });
     conexao.ficouSemResposta(agora());
     passar(120_000);
     expect(instantes).toEqual([2_000, 6_000, 14_000, 30_000, 60_000, 90_000, 120_000]);
-    // A releitura sozinha sonda: sem nada com a falta, relê o resto para saber se o servidor voltou.
-    expect(releituras().every((sondar) => sondar === true)).toBe(true);
+  });
+
+  it("sem nada com a falta para reler, a releitura sozinha para; a próxima falta recomeça dos 2 s", () => {
+    const instantes: number[] = [];
+    let haFalta = true;
+    reler.mockImplementation(() => {
+      instantes.push(agora());
+      return haFalta;
+    });
+    conexao.ficouSemResposta(agora());
+    passar(6_000);
+    expect(instantes).toEqual([2_000, 6_000]);
+    // A tela com a falta saiu: a releitura das 14 s não acha nada e para.
+    haFalta = false;
+    passar(60_000);
+    expect(instantes).toEqual([2_000, 6_000, 14_000]);
+    // Outra leitura fica sem resposta: recomeça dos 2 s, e não dos 16.
+    haFalta = true;
+    const desde = agora();
+    conexao.ficouSemResposta(agora());
+    passar(6_000);
+    expect(instantes.slice(3).map((t) => t - desde)).toEqual([2_000, 6_000]);
+    expect(conexao.estado()).toBe("reconectando");
+  });
+
+  it("acorda a conexão de quem lê só com o aparelho com rede", () => {
+    const espera = Promise.resolve();
+    const acordar = vi.fn<() => Promise<void> | null>(() => espera);
+    expect(conexao.acordar()).toBeNull();
+    conexao.aoAcordar(acordar);
+    expect(conexao.acordar()).toBe(espera);
+    rede = false;
+    expect(conexao.acordar()).toBeNull();
+    expect(acordar).toHaveBeenCalledTimes(1);
   });
 
   it("a volta limpa o aviso: a leitura que deu certo leva ao conectado e relê o que ficou sem ler", () => {
@@ -94,8 +128,8 @@ describe("com o aparelho conectado e o servidor sem resposta", () => {
       { t: 0, estado: "reconectando" },
       { t: 2_000, estado: "conectado" },
     ]);
-    // O servidor voltou: relê o que ainda está com a falta, sem sondar o resto.
-    expect(reler).toHaveBeenLastCalledWith(false);
+    // O servidor voltou: relê na hora o que ainda está com a falta.
+    expect(reler).toHaveBeenCalledTimes(2);
     // E não relê mais sozinho.
     reler.mockClear();
     passar(120_000);
@@ -170,6 +204,24 @@ describe("a histerese", () => {
     expect(conexao.estado()).toBe("sem-conexao");
   });
 
+  it("a rede que muda esquece as falhas: a de antes da piscada não conta com a de depois", () => {
+    aparelho(false);
+    conexao.ficouSemResposta(agora());
+    passar(500);
+    aparelho(true);
+    passar(100);
+    aparelho(false);
+    passar(100);
+    // Uma só desde que a rede caiu de novo: "Sem conexão" só aos 3 s dessa queda (3,6 s).
+    conexao.ficouSemResposta(agora());
+    passar(2_000);
+    expect(conexao.estado()).toBe("reconectando");
+    passar(899);
+    expect(conexao.estado()).toBe("reconectando");
+    passar(1);
+    expect(conexao.estado()).toBe("sem-conexao");
+  });
+
   it("com o aparelho conectado, as falhas seguidas nunca são Sem conexão", () => {
     for (let vez = 0; vez < 10; vez += 1) {
       conexao.ficouSemResposta(agora());
@@ -186,7 +238,7 @@ describe("a histerese", () => {
     aparelho(true);
     expect(conexao.estado()).toBe("reconectando");
     // A volta da rede relê na hora o que ficou sem ler.
-    expect(reler).toHaveBeenCalledWith(false);
+    expect(reler).toHaveBeenCalledTimes(1);
     passar(30_000);
     expect(conexao.estado()).toBe("reconectando");
     conexao.leuDoServidor();
@@ -238,6 +290,7 @@ describe("a histerese", () => {
     reler.mockImplementation(() => {
       instantes.push(agora() - desde);
       conexao.ficouSemResposta(agora());
+      return true;
     });
     passar(14_000);
     expect(instantes).toEqual([2_000, 6_000, 14_000]);

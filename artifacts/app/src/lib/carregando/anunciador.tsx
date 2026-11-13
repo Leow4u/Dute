@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { useConexao } from "./estado-da-conexao";
 
 /** No máximo um anúncio a cada 2 s. */
 export const INTERVALO_DO_ANUNCIO_MS = 2_000;
@@ -32,9 +34,16 @@ export function useAnuncio(): (texto: string) => void {
  * fim dele, e só o último vale: o leitor de tela não fica lendo frase velha.
  * O mesmo texto dentro do intervalo não repete; depois dele, entra como texto
  * novo e é falado de novo.
+ *
+ * A falta de conexão ela diz sozinha, pelo estado único da conexão (momento
+ * 8): "Sem conexão" uma vez, ao entrar, já com a histerese dos 3 s; nunca
+ * "Reconectando", nem a volta, para não oscilar. As faixas e o bloco da falta
+ * não são região viva.
  */
 export function Anunciador() {
   const [anuncio, setAnuncio] = useState<{ id: number; texto: string } | null>(null);
+  const conexao = useConexao();
+  const conexaoAntes = useRef<typeof conexao>("conectado");
 
   useEffect(() => {
     let id = 0;
@@ -77,6 +86,11 @@ export function Anunciador() {
       if (espera !== null) clearTimeout(espera);
     };
   }, []);
+
+  useEffect(() => {
+    if (conexao === "sem-conexao" && conexaoAntes.current !== "sem-conexao") anunciar("Sem conexão");
+    conexaoAntes.current = conexao;
+  }, [conexao]);
 
   return (
     <div role="status" aria-live="polite" aria-atomic="true" className="sr-only" data-anunciador="">

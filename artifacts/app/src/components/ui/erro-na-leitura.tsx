@@ -3,7 +3,7 @@ import { AlertCircle, RefreshCw, WifiOff } from "lucide-react";
 import { ArcosDoWifi } from "@/components/ui/arcos-do-wifi";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useConexao } from "@/lib/carregando/estado-da-conexao";
+import { useConexao, useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { horaDaLeitura } from "@/lib/conexao";
 import { cn } from "@/lib/utils";
@@ -25,15 +25,19 @@ export function useFaltaNaTela(forcada?: FaltaNaTela): FaltaNaTela {
 
 /**
  * A nova tentativa no relógio da espera: "Tentando de novo…" só depois de
- * 300 ms, e pelo menos 500 ms. A releitura sozinha, que acaba antes, não pisca
- * o botão; enquanto lê, o segundo toque não faz nada.
+ * 300 ms, e pelo menos 500 ms; a leitura que acaba antes não pisca o botão. A
+ * trava do toque segue o que o botão diz: enquanto ele diz "Tentando de
+ * novo…" (`aria-disabled`), o toque não faz nada; enquanto diz "Tentar de
+ * novo", o toque tenta. Antes de reler, acorda a conexão de quem lê, para o
+ * toque alcançar o servidor.
  */
 function useNovaTentativa(tentando: boolean, onTentar: () => void) {
   const mostrando = useEspera(tentando, { segurarMinimo: true }).visivel;
+  const tentarDeNovo = useTentarDeNovo();
   return {
     mostrando,
     tentar: () => {
-      if (!tentando) onTentar();
+      if (!mostrando) tentarDeNovo(onTentar);
     },
   };
 }
@@ -44,7 +48,9 @@ function useNovaTentativa(tentando: boolean, onTentar: () => void) {
  * (docs/plataforma/diagnostico-carregamento.md; mockup
  * docs/mockups/WmsCarregandoPedidosErro.dc.html). Na falta de conexão, o
  * ícone e o tom dizem qual (`falta`): o Wi-Fi cortado no âmbar para "Sem
- * conexão", os arcos em tinta, sem alerta, para "Reconectando…".
+ * conexão", os arcos em tinta para "Reconectando…". Nenhuma das duas é
+ * alerta: "Reconectando" não fala, para não oscilar, e "Sem conexão" é dito
+ * uma vez pelo Anunciador (momento 8).
  *
  * Ocupado não é desabilitado: o botão fica `aria-disabled` enquanto tenta, e o
  * toque repetido é barrado aqui.
@@ -66,8 +72,8 @@ export function ErroNaLeitura({
   const Icone = falta === "sem-conexao" ? WifiOff : AlertCircle;
   return (
     <div
-      // "Reconectando" não fala: oscilaria (momento 8). O resto é alerta.
-      role={reconectando ? undefined : "alert"}
+      // A falta de conexão não é alerta: "Reconectando" não fala, e "Sem conexão" o Anunciador diz uma vez (momento 8).
+      role={falta ? undefined : "alert"}
       data-falta={falta}
       className={cn(
         "flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center sm:gap-4 sm:px-5",
@@ -80,7 +86,7 @@ export function ErroNaLeitura({
           reconectando
             ? "bg-muted text-foreground"
             : falta === "sem-conexao"
-              ? "bg-warning-soft text-warning-soft-foreground"
+              ? "bg-warning-soft text-carregando-aviso"
               : "bg-destructive-soft text-destructive",
         )}
       >
@@ -90,6 +96,8 @@ export function ErroNaLeitura({
       <Button
         type="button"
         variant="outline"
+        // "Tentar de novo" com a área de toque de 44 px (seção 7).
+        className="min-h-11"
         aria-disabled={tentando || undefined}
         aria-busy={tentando || undefined}
         onClick={() => {
@@ -135,10 +143,10 @@ export function BlocoSemConexao({
 /**
  * Na falta de conexão, com a lista já lida: ela fica na tela, marcada com a
  * hora da última leitura (decisão 2 do celular; momento 8 do carregamento
- * v2). "Sem conexão · lista de 10:42" na pílula âmbar, ou "Reconectando… ·
- * lista de 10:42" em tinta, com os arcos do Wi-Fi, pelo estado único da
- * conexão. Não é região viva: "Reconectando" não fala, e "Sem conexão" já é
- * dito pela faixa do shell, que aparece com o aparelho sem rede.
+ * v2). "Sem conexão · lista de 10:42" na pílula âmbar (o --carregando-aviso,
+ * 6,2:1), ou "Reconectando… · lista de 10:42" em tinta, com os arcos do
+ * Wi-Fi, pelo estado único da conexão. Não é região viva: "Reconectando" não
+ * fala, e "Sem conexão" o Anunciador diz uma vez, ao entrar.
  */
 export function FaixaSemConexao({
   lidaEm,
@@ -163,7 +171,7 @@ export function FaixaSemConexao({
       className={cn(
         "flex flex-wrap items-center gap-x-3 rounded-lg border py-0.5 pl-4 pr-1 text-sm",
         semConexao
-          ? "border-warning-soft-border bg-warning-soft font-bold text-warning-soft-foreground"
+          ? "border-warning-soft-border bg-warning-soft font-bold text-carregando-aviso"
           : "border-border bg-card text-foreground",
         className,
       )}

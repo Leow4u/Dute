@@ -1,9 +1,24 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { readDocs } = vi.hoisted(() => ({ readDocs: vi.fn() }));
+const { readDocs, disableNetwork, enableNetwork, ordem, escutar, sessao } = vi.hoisted(() => {
+  const ordem: string[] = [];
+  return {
+    ordem,
+    sessao: { usuario: null as null | { uid: string } },
+    escutar: vi.fn(),
+    readDocs: vi.fn(),
+    disableNetwork: vi.fn(async () => void ordem.push("desliga")),
+    enableNetwork: vi.fn(async () => void ordem.push("liga")),
+  };
+});
 
-vi.mock("./firebase", () => ({ firebaseAuth: null, firestore: {} }));
+vi.mock("./firebase", () => ({
+  get firebaseAuth() {
+    return sessao.usuario ? { currentUser: sessao.usuario } : null;
+  },
+  firestore: {},
+}));
 vi.mock("./functions-api", () => ({ callFunctionsApi: vi.fn(async () => null) }));
 vi.mock("firebase/firestore", async (importOriginal) => {
   const original = await importOriginal<typeof import("firebase/firestore")>();
@@ -18,11 +33,14 @@ vi.mock("firebase/firestore", async (importOriginal) => {
     startAfter: () => ({ tipo: "outra" }),
     documentId: () => "__name__",
     getDocs: readDocs,
+    disableNetwork,
+    enableNetwork,
+    onSnapshot: escutar,
   };
 });
 
 import { criarConexao, ligarConexaoDoApp, type Conexao, type EstadoDaConexao } from "./carregando/estado-da-conexao";
-import { installCloudApi } from "./cloud-api";
+import { acordarFirestore, aoVoltarOFirestore, installCloudApi } from "./cloud-api";
 import { CODIGO_SEM_CONEXAO, CODIGO_SEM_RESPOSTA, SEM_CONEXAO, SEM_RESPOSTA } from "./conexao";
 
 /**
@@ -76,6 +94,11 @@ beforeEach(() => {
   rede = true;
   lidas = [];
   readDocs.mockReset();
+  disableNetwork.mockClear();
+  enableNetwork.mockClear();
+  ordem.length = 0;
+  escutar.mockReset();
+  sessao.usuario = null;
   vi.stubGlobal("navigator", {
     get onLine() {
       return rede;
@@ -167,6 +190,88 @@ describe("o aparelho sem rede", () => {
     expect(leitura.getCurrentResult().error).toBeNull();
     await vi.advanceTimersByTimeAsync(2_000);
     expect(conexao.estado()).toBe("conectado");
+    deixar();
+  });
+});
+
+describe("acordar o SDK do Firestore que se deu por offline", () => {
+  it("só depois de uma leitura do cache, e só com o aparelho com rede: desliga e religa a rede do SDK, uma vez por vez", async () => {
+    // Uma leitura do servidor: nada a acordar.
+    readDocs.mockResolvedValue(DO_SERVIDOR);
+    await janela.fetch("/api/products?limit=50");
+    expect(acordarFirestore()).toBeNull();
+    // Uma do cache: acorda, e dois pedidos juntos acordam uma vez só.
+    readDocs.mockResolvedValue(DO_CACHE);
+    await janela.fetch("/api/products?limit=50");
+    const primeiro = acordarFirestore();
+    expect(primeiro).not.toBeNull();
+    expect(acordarFirestore()).toBe(primeiro);
+    await primeiro;
+    expect(ordem).toEqual(["desliga", "liga"]);
+    // Sem rede, não há o que acordar: o próprio SDK tenta quando a rede volta.
+    rede = false;
+    expect(acordarFirestore()).toBeNull();
+    rede = true;
+    // A leitura do servidor que vem depois tira a marca.
+    readDocs.mockResolvedValue(DO_SERVIDOR);
+    await janela.fetch("/api/products?limit=50");
+    expect(acordarFirestore()).toBeNull();
+  });
+
+  it("a releitura sozinha acorda o SDK antes de ler, e a volta do servidor aparece na releitura seguinte", async () => {
+    desligar();
+    desligar = ligarConexaoDoApp(cliente, conexao, janela, undefined, { acordar: acordarFirestore });
+    readDocs.mockImplementation(async () => {
+      ordem.push("lê");
+      return DO_CACHE;
+    });
+    const { leitura, deixar } = observar();
+    await vi.advanceTimersByTimeAsync(2_100);
+    expect(ordem).toEqual(["lê", "desliga", "liga", "lê"]);
+    // O servidor voltou: a releitura dos 6 s, depois de acordar o SDK, lê dele.
+    readDocs.mockImplementation(async () => {
+      ordem.push("lê");
+      return DO_SERVIDOR;
+    });
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(ordem).toEqual(["lê", "desliga", "liga", "lê", "desliga", "liga", "lê"]);
+    expect(leitura.getCurrentResult().error).toBeNull();
+    expect(leitura.getCurrentResult().data.items).toHaveLength(1);
+    deixar();
+  });
+});
+
+describe("a volta do SDK do Firestore", () => {
+  it("com o SDK offline, escuta o perfil até ele chegar do servidor, e o app relê na hora, sem esperar a releitura sozinha", async () => {
+    sessao.usuario = { uid: "u-teste" };
+    const deixarDeEscutar = vi.fn();
+    let avisar: (perfil: { metadata: { fromCache: boolean } }) => void = () => undefined;
+    escutar.mockImplementation((_referencia: unknown, _opcoes: unknown, proximo: typeof avisar) => {
+      avisar = proximo;
+      return deixarDeEscutar;
+    });
+    desligar();
+    desligar = ligarConexaoDoApp(cliente, conexao, janela, undefined, { acordar: acordarFirestore, aoVoltar: aoVoltarOFirestore });
+    readDocs.mockResolvedValue(DO_CACHE);
+    const { leitura, deixar } = observar();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(leitura.getCurrentResult().error).not.toBeNull();
+    // Escuta o próprio perfil, com as mudanças de metadados.
+    expect(escutar).toHaveBeenCalledTimes(1);
+    expect(escutar.mock.calls[0][0]).toEqual({ path: "users", id: "u-teste" });
+    expect(escutar.mock.calls[0][1]).toEqual({ includeMetadataChanges: true });
+    // Ainda do cache: nada.
+    avisar({ metadata: { fromCache: true } });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(lidas).toHaveLength(1);
+    // O SDK voltou ao servidor aos 0,3 s: o app relê na hora, e a lista chega.
+    readDocs.mockResolvedValue(DO_SERVIDOR);
+    avisar({ metadata: { fromCache: false } });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(deixarDeEscutar).toHaveBeenCalledTimes(1);
+    expect(lidas).toHaveLength(2);
+    expect(leitura.getCurrentResult().error).toBeNull();
+    expect(leitura.getCurrentResult().data.items).toHaveLength(1);
     deixar();
   });
 });
