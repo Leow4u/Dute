@@ -25,7 +25,7 @@ import { ShelfVolumeSummary } from "@/features/warehouse-ops/shelf-volume-summar
 import { useIsDesktop } from "@/hooks/use-desktop";
 import { cn } from "@/lib/utils";
 import { useActiveCustomer } from "@/lib/active-customer-context";
-import { ehSemConexao, semConexaoNaLeitura } from "@/lib/conexao";
+import { ehFaltaDeConexao, semConexaoNaLeitura } from "@/lib/conexao";
 import { openingInventoryNotice } from "@/lib/opening-inventory";
 import { boxVolumeM3, formatVolumeM3 } from "@/lib/warehouse-volume";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
@@ -212,7 +212,7 @@ export default function WarehouseMapPage() {
         </Alert>
       ) : null}
 
-      {showSessionStatus && sessionQuery.isError && !ehSemConexao(sessionQuery.error) ? (
+      {showSessionStatus && sessionQuery.isError && !ehFaltaDeConexao(sessionQuery.error) ? (
         <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
           <AlertTitle>Situação do inventário indisponível</AlertTitle>
           <AlertDescription className="space-y-2">

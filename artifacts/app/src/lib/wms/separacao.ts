@@ -1,6 +1,6 @@
 import { httpsCallable } from "firebase/functions";
 
-import { SEM_CONEXAO, callableSemResposta } from "../conexao";
+import { callableSemResposta, mensagemDaFalta } from "../conexao";
 import { firebaseApp } from "../firebase";
 import { functionsDoApp } from "../firebase-functions";
 import { mensagemDoErro } from "../operacao/api";
@@ -90,7 +90,7 @@ async function chamarWms<T>(
   try {
     return (await callable(semCamposVazios(dados))).data;
   } catch (error) {
-    throw new Error(callableSemResposta(error) ? SEM_CONEXAO : mensagemDoErro(error));
+    throw new Error(callableSemResposta(error) ? mensagemDaFalta() : mensagemDoErro(error));
   }
 }
 

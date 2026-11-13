@@ -1,6 +1,6 @@
 import { httpsCallable } from "firebase/functions";
 
-import { SEM_CONEXAO, callableSemResposta } from "../conexao";
+import { callableSemResposta, mensagemDaFalta } from "../conexao";
 import { firebaseApp } from "../firebase";
 import { functionsDoApp } from "../firebase-functions";
 import { mensagemDoErro } from "../operacao/api";
@@ -347,8 +347,9 @@ async function chamarWms<T>(nome: NomeDaCallable, dados: Record<string, unknown>
   } catch (error) {
     // A UI precisa distinguir recusa do servidor de resposta perdida no transporte:
     // só a primeira permite substituir a chave da tentativa após reler a revisão.
-    // A perdida diz "Sem conexão", não "Falha interna no servidor".
-    const mensagem = callableSemResposta(error) ? SEM_CONEXAO : mensagemDoErro(error);
+    // A perdida diz "Sem conexão" (ou "Sem resposta do servidor." com o
+    // aparelho conectado), não "Falha interna no servidor".
+    const mensagem = callableSemResposta(error) ? mensagemDaFalta() : mensagemDoErro(error);
     throw Object.assign(new Error(mensagem, { cause: error }), {
       code: String((error as { code?: unknown } | null)?.code ?? ""),
     });

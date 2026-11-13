@@ -728,7 +728,7 @@ por PR:
 | 4 | O `BotaoDeAcao` | PR 610 |
 | 5 | O toast embaixo no celular | PR 610 |
 | 6 | Pedidos como piloto: a ação por linha (`useAcaoNaLinha`), a barra da linha e os estados de 10 s e 70 s | PR 610 |
-| 7 | A linha de estado nas listas (Pedidos, Receber, Estoque, Alertas) | a fazer |
+| 7 | A conexão (7a: "Reconectando…" com histerese e a releitura sozinha) e a linha de estado nas listas (7b: Pedidos, Receber, Estoque, Alertas) | 7a no PR 610; 7b a fazer |
 | 8 | As listas com a forma final | a fazer |
 | 9 | A abertura com a marca e a `CarregandoTela` no lugar do branco | a fazer |
 | 10 | A troca de filtro e a releitura sem apagar a lista | a fazer |
@@ -778,3 +778,47 @@ Ficam para a parte 13 os diálogos de Pedidos que desabilitam o botão enquanto
 gravam ("Confirmar entrega" e "Cancelar pedido"). Fica para uma correção do
 sistema visual o anel de foco do `Button`, que o título copia: 1,91:1 no claro
 e 1,65:1 no escuro.
+
+**Parte 7a, a conexão (PR 610, 13/11/2026).** Corrige a regressão do PR 582
+registrada em 10.1.
+
+- **A causa, confirmada no Chromium com os emuladores:** o `getDocs` e o
+  `getDoc` de `lib/cloud-api.ts` tratavam toda leitura do cache como "Sem
+  conexão". Com o host do Firestore recusado, o SDK se deu por offline aos
+  15 s e respondeu do cache com o aparelho conectado: Pedidos disse "Sem
+  conexão · lista de 02:03" por 58,5 s e só se refez 50 s depois da volta,
+  na releitura de 60 s. Com `context.setOffline` por 20 s, o
+  `refetchOnReconnect` releu cedo demais, ainda do cache, e o aviso ficou
+  até o fim da observação (40 s depois da volta); numa queda de 1,5 s, o
+  "Sem conexão" entrou em 0,36 s e também ficou.
+- **As duas faltas** (`lib/conexao.ts`): o aparelho sem rede é "Sem conexão"
+  (`sem_conexao`); conectado, o cache, o `unavailable` e a callable sem
+  resposta (o `internal`/`internal`) são o servidor sem resposta
+  (`sem_resposta`, "Sem resposta do servidor."). A ação sem rede continua
+  recusada na hora, e o resultado incerto da `useAcaoNaLinha` não muda: a
+  repetição leva a mesma chave.
+- **O estado único** (`lib/carregando/estado-da-conexao.ts`), ligado ao
+  react-query no `main.tsx`: "Reconectando" com o aparelho conectado; "Sem
+  conexão" depois de 3 s sem rede ou de duas leituras seguidas sem resposta
+  sem rede; só sai depois de uma leitura que deu certo; cada aviso fica pelo
+  menos 2 s. Enquanto reconecta, relê sozinho em 2, 4, 8, 16 e 30 s; relê
+  também quando a rede ou o servidor voltam. Os tempos novos são tokens
+  `--carregando-t-*` e constantes de `CARREGANDO`, travados um contra o outro.
+- **As telas de hoje:** o `FaixaSemConexao` e o `BlocoSemConexao` dizem
+  "Reconectando…", em tinta e com os arcos do Wi-Fi, quando não é falta de
+  rede, e "Sem conexão" só com o app sem conexão. A faixa deixou de ser
+  região viva ("Reconectando" não fala), e o "Tentando de novo…" entra no
+  relógio da espera, para a releitura sozinha não piscar o botão. O botão de
+  `ErroNaLeitura` fica `aria-disabled` enquanto tenta, nunca `disabled`.
+- **Medição no Chromium, depois, com o mesmo roteiro:** com o host recusado,
+  nenhum "Sem conexão": "Reconectando…" por 14,6 s, e a lista se refez
+  sozinha 3,4 s depois da volta. Com `context.setOffline`, "Reconectando…"
+  de 1,2 s a 2,9 s, "Sem conexão" aos 3,0 s e, na volta, a lista refeita em
+  2,2 s. A queda de 1,5 s ficou só em "Reconectando…" e se refez 1,3 s depois
+  da volta. No escuro, no movimento reduzido (os arcos acesos e parados) e no
+  celular (o "Tentar de novo" com 44 px), a mesma faixa; numa tela ainda não
+  lida, o bloco "Reconectando…".
+
+Fica para a parte 7b a linha de estado, com o "Atualizado às" e a fala única
+do "Sem conexão" pelo `Anunciador` (hoje, quem fala é a faixa do shell, que
+aparece com o aparelho sem rede).

@@ -1,10 +1,20 @@
+// @vitest-environment jsdom
+import { act, type ReactElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { ProvedorDaConexao, type EstadoDaConexao } from "@/lib/carregando/estado-da-conexao";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { conexaoEm } from "@/test/conexao";
 import { textosDaTela } from "@/test/textos";
 
 import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao } from "./erro-na-leitura";
+
+/** A tela com o app no estado de conexão pedido. */
+function naConexao(estado: EstadoDaConexao, elemento: ReactElement) {
+  return renderToStaticMarkup(<ProvedorDaConexao value={conexaoEm(estado)}>{elemento}</ProvedorDaConexao>);
+}
 
 /** Erro nunca vira vazio (docs/plataforma/diagnostico-carregamento.md, decisão 6 de 06/11/2026). */
 
@@ -18,53 +28,162 @@ describe("o erro na leitura", () => {
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
-  it("tentando de novo: o botão gira, muda o rótulo e fica desligado", async () => {
+  it("tentando de novo: o botão gira e muda o rótulo; ocupado, não desabilitado", async () => {
     const html = renderToStaticMarkup(
       <ErroNaLeitura mensagem="Não consegui carregar os pedidos." tentando onTentar={() => undefined} />,
     );
     expect(textosDaTela(html)).toEqual(["Não consegui carregar os pedidos.", "Tentando de novo…"]);
-    expect(html).toMatch(/<button[^>]*disabled=""/);
+    expect(html).not.toMatch(/<button[^>]*disabled=""/);
+    expect(html).toContain('aria-disabled="true"');
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain("data-spinner");
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });
 
-/** Sem rede (docs/plataforma/diagnostico-carregamento.md, decisão 2 do celular, de 06/11/2026). */
+/**
+ * As duas faltas (carregamento v2, momento 8; parte 7a): "Sem conexão" só
+ * com o app sem conexão (o aparelho sem rede há 3 s); com o aparelho
+ * conectado e o servidor sem resposta, "Reconectando…", em tinta, com os
+ * arcos do Wi-Fi e sem falar.
+ */
 
-describe("sem conexão e sem nada lido", () => {
-  it("o aviso no lugar da lista, com o ícone da rede e a nova tentativa", async () => {
-    const html = renderToStaticMarkup(<BlocoSemConexao tentando={false} onTentar={() => undefined} />);
+describe("na falta de conexão, sem nada lido", () => {
+  it("com o app sem conexão: o aviso âmbar no lugar da lista, com o Wi-Fi cortado, como alerta", async () => {
+    const html = naConexao("sem-conexao", <BlocoSemConexao tentando={false} onTentar={() => undefined} />);
     expect(textosDaTela(html)).toEqual(["Sem conexão.", "Tentar de novo"]);
     expect(html).toContain('role="alert"');
     expect(html).toContain("lucide-wifi-off");
+    expect(html).toContain("bg-warning-soft");
     expect(html).not.toContain("lucide-circle-alert");
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
+
+  it("com o aparelho conectado e o servidor sem resposta: Reconectando…, sem dizer Sem conexão e sem falar", async () => {
+    for (const estado of ["reconectando", "conectado"] as const) {
+      const html = naConexao(estado, <BlocoSemConexao tentando={false} onTentar={() => undefined} />);
+      expect(textosDaTela(html), estado).toEqual(["Reconectando…", "Tentar de novo"]);
+      expect(html, estado).not.toContain("Sem conexão");
+      expect(html, estado).not.toContain('role="alert"');
+      expect(html, estado).toContain("data-arcos");
+      expect(html, estado).not.toContain("bg-warning-soft");
+      expect(await violacoesDeAcessibilidade(html), estado).toEqual([]);
+    }
+  });
+
+  it("sem provedor, lê a conexão do app", () => {
+    expect(textosDaTela(renderToStaticMarkup(<BlocoSemConexao tentando={false} onTentar={() => undefined} />))).toEqual([
+      "Reconectando…",
+      "Tentar de novo",
+    ]);
+  });
 });
 
-describe("sem conexão com a lista já lida", () => {
+describe("na falta de conexão, com a lista já lida", () => {
   // 13:42 UTC são 10:42 no armazém.
   const lidaEm = Date.parse("2026-11-06T13:42:00Z");
+  const faixa = () => <FaixaSemConexao lidaEm={lidaEm} tentando={false} onTentar={() => undefined} />;
 
-  it("a faixa diz desde quando é a lista que está na tela", async () => {
-    const html = renderToStaticMarkup(<FaixaSemConexao lidaEm={lidaEm} tentando={false} onTentar={() => undefined} />);
+  it("com o app sem conexão: a pílula âmbar diz desde quando é a lista", async () => {
+    const html = naConexao("sem-conexao", faixa());
     expect(textosDaTela(html)).toEqual(["Sem conexão · lista de 10:42", "Tentar de novo"]);
-    expect(html).toContain('role="status"');
+    expect(html).toContain("bg-warning-soft");
+    expect(html).toContain("lucide-wifi-off");
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
-  it("tentando de novo: gira e fica desligada", async () => {
-    const html = renderToStaticMarkup(<FaixaSemConexao lidaEm={lidaEm} tentando onTentar={() => undefined} />);
-    expect(textosDaTela(html)).toEqual(["Sem conexão · lista de 10:42", "Tentando de novo…"]);
-    expect(html).toMatch(/<button[^>]*disabled=""/);
-    expect(html).toContain('aria-busy="true"');
-    expect(html).toContain("data-spinner");
+  it("com o aparelho conectado e o servidor sem resposta: Reconectando… em tinta, com os arcos", async () => {
+    const html = naConexao("reconectando", faixa());
+    expect(textosDaTela(html)).toEqual(["Reconectando…", "· lista de 10:42", "Tentar de novo"]);
+    expect(html).not.toContain("Sem conexão");
+    expect(html).not.toContain("bg-warning-soft");
+    expect(html).not.toContain("lucide-wifi-off");
+    expect(html).toContain("data-arcos");
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("não é região viva: Reconectando não fala, e Sem conexão já é dito pela faixa do shell", () => {
+    for (const estado of ["sem-conexao", "reconectando"] as const) {
+      const html = naConexao(estado, faixa());
+      expect(html, estado).not.toMatch(/role="(status|alert)"|aria-live/);
+    }
   });
 
   it("o toque da nova tentativa tem 44 px de altura", () => {
-    const html = renderToStaticMarkup(<FaixaSemConexao lidaEm={lidaEm} tentando={false} onTentar={() => undefined} />);
+    const html = naConexao("sem-conexao", faixa());
     expect(html).toMatch(/<button[^>]*class="[^"]*min-h-11/);
   });
+});
+
+describe("a nova tentativa no relógio da espera", () => {
+  let raiz: Root | null = null;
+  let container: HTMLDivElement | null = null;
+
+  afterEach(() => {
+    act(() => raiz?.unmount());
+    container?.remove();
+    raiz = null;
+    container = null;
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  function montar(elemento: ReactElement) {
+    vi.useFakeTimers();
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    container = document.createElement("div");
+    document.body.append(container);
+    raiz = createRoot(container);
+    act(() => raiz!.render(elemento));
+  }
+
+  function botao() {
+    return container!.querySelector("button")!;
+  }
+
+  function passar(ms: number) {
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  }
+
+  const lidaEm = Date.parse("2026-11-06T13:42:00Z");
+
+  for (const [nome, peca] of [
+    ["a faixa", (tentando: boolean, onTentar: () => void) => <FaixaSemConexao lidaEm={lidaEm} tentando={tentando} onTentar={onTentar} />],
+    ["o bloco", (tentando: boolean, onTentar: () => void) => <BlocoSemConexao tentando={tentando} onTentar={onTentar} />],
+  ] as const) {
+    it(`${nome}: a releitura sozinha, que acaba antes de 300 ms, não pisca o botão`, () => {
+      const onTentar = vi.fn();
+      montar(peca(false, onTentar));
+      act(() => raiz!.render(peca(true, onTentar)));
+      passar(250);
+      act(() => raiz!.render(peca(false, onTentar)));
+      passar(1_000);
+      expect(botao().textContent).toBe("Tentar de novo");
+      expect(botao().hasAttribute("aria-busy")).toBe(false);
+    });
+
+    it(`${nome}: a que demora mostra "Tentando de novo…" aos 300 ms, ocupada e não desabilitada, e o toque repetido não relê`, () => {
+      const onTentar = vi.fn();
+      montar(peca(false, onTentar));
+      act(() => botao().click());
+      expect(onTentar).toHaveBeenCalledTimes(1);
+      act(() => raiz!.render(peca(true, onTentar)));
+      passar(299);
+      expect(botao().textContent).toBe("Tentar de novo");
+      passar(1);
+      expect(botao().textContent).toBe("Tentando de novo…");
+      expect(botao().getAttribute("aria-busy")).toBe("true");
+      expect(botao().getAttribute("aria-disabled")).toBe("true");
+      expect(botao().disabled).toBe(false);
+      act(() => botao().click());
+      expect(onTentar).toHaveBeenCalledTimes(1);
+      // Pelo menos 500 ms na tela, mesmo que a leitura acabe logo.
+      act(() => raiz!.render(peca(false, onTentar)));
+      expect(botao().textContent).toBe("Tentando de novo…");
+      passar(500);
+      expect(botao().textContent).toBe("Tentar de novo");
+    });
+  }
 });

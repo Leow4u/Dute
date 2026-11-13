@@ -22,7 +22,7 @@ import {
 import { PAPEIS_DO_WMS, estagioDoCadastro, isPapel, livreParaOCliente, modulosContratados } from "@workspace/dominio";
 import { clienteDaChamada, LEGACY_CUSTOMER_CODE } from "./active-customer";
 import { periodBelongsToCustomer } from "./billing-scope";
-import { SemConexao, corpoSemConexao, firestoreSemConexao } from "./conexao";
+import { corpoDaFalta, faltaDeAgora, firestoreSemConexao } from "./conexao";
 import { leiturasDoPortal } from "./operations";
 import { canListUsers, canSeeCatalogPrice, canSeeMerchandiseValue } from "./permissions";
 import { firebaseAuth, firestore } from "./firebase";
@@ -235,17 +235,19 @@ function json(data: unknown, status = 200): Response {
  * da memória, vazio ou pela metade, e a tela afirmava "Nenhum…"
  * (docs/plataforma/diagnostico-carregamento.md, seção 9, item 1). Toda
  * leitura daqui passa por estas duas, e a que não veio do servidor é falta de
- * conexão.
+ * conexão. Qual das duas, diz o aparelho: o SDK também responde do cache com
+ * o aparelho conectado, quando o servidor demora mais de 10 s a voltar, e
+ * isso é o servidor sem resposta, não "Sem conexão" (parte 7a).
  */
 async function getDocs<A, D extends DocumentData>(consulta: Query<A, D>): Promise<QuerySnapshot<A, D>> {
   const snapshot = await lerDocsDoFirestore(consulta);
-  if (snapshot.metadata?.fromCache === true) throw new SemConexao();
+  if (snapshot.metadata?.fromCache === true) throw faltaDeAgora();
   return snapshot;
 }
 
 async function getDoc<A, D extends DocumentData>(referencia: DocumentReference<A, D>): Promise<DocumentSnapshot<A, D>> {
   const snapshot = await lerDocDoFirestore(referencia);
-  if (snapshot.metadata?.fromCache === true) throw new SemConexao();
+  if (snapshot.metadata?.fromCache === true) throw faltaDeAgora();
   return snapshot;
 }
 
@@ -3234,7 +3236,7 @@ export function installCloudApi() {
 
       return await route(url.pathname, method, url.searchParams, init);
     } catch (error) {
-      if (firestoreSemConexao(error)) return json(corpoSemConexao(), 503);
+      if (firestoreSemConexao(error)) return json(corpoDaFalta(error), 503);
       return json(
         {
           message:

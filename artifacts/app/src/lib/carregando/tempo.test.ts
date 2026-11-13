@@ -27,6 +27,11 @@ describe("o relógio da espera", () => {
       chegaEsperaMs: 180,
       destaqueMs: 1_000,
       contaMs: 160,
+      // A conexão (momento 8): sem rede há 3 s é "Sem conexão", cada aviso fica 2 s, e a releitura sozinha vai de 2 a 30 s.
+      semRedeMs: 3_000,
+      avisoMinimoMs: 2_000,
+      releituraMs: 2_000,
+      releituraMaxMs: 30_000,
     });
   });
 

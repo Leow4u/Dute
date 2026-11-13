@@ -5,7 +5,7 @@ import { fetchChatJson, type ChatMessage, type ChatResponse } from "@/components
 import type { ConversationSummary } from "../agent-chat";
 import type { Playbook } from "../agent-playbooks";
 import type { Routine } from "../agent-routines";
-import { SEM_CONEXAO, callableSemResposta } from "../conexao";
+import { callableSemResposta, mensagemDaFalta } from "../conexao";
 import { firebaseApp, firebaseAuth, firestore } from "../firebase";
 import { functionsDoApp } from "../firebase-functions";
 import { streamAgentDuteChat, type AgentDuteStreamChunk } from "../functions-api";
@@ -178,7 +178,7 @@ async function conversarNoNucleo(dados: Record<string, unknown>, aoPedaco: (peda
     for await (const pedaco of stream) aoPedaco(pedaco);
     return await data;
   } catch (erro) {
-    if (callableSemResposta(erro)) throw new Error(SEM_CONEXAO);
+    if (callableSemResposta(erro)) throw new Error(mensagemDaFalta());
     const mensagem = mensagemDoErro(erro);
     throw new Error(mensagem.startsWith("Falha interna") ? "O Agent Dute não respondeu agora. Tente de novo em instantes." : mensagem);
   }

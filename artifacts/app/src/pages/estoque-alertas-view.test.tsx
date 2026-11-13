@@ -1,9 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { ProvedorDaConexao, type EstadoDaConexao } from "@/lib/carregando/estado-da-conexao";
 import type { AlertaProposto } from "@/lib/memoria/alertas";
 import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { conexaoEm } from "@/test/conexao";
 import { textosDaTela } from "@/test/textos";
 
 import { AlertasParadosView, type AlertasParadosViewProps } from "./estoque-alertas-view";
@@ -26,8 +28,8 @@ const SAFRA: AlertaProposto = { ...ITAU, id: "alerta_fedcba9876543210fedcba98", 
 
 const nomes: Record<string, string> = { ITAU: "Itaú Unibanco", SAFRA: "Banco Safra" };
 
-function tela(props: Partial<AlertasParadosViewProps> = {}) {
-  return renderToStaticMarkup(
+function elemento(props: Partial<AlertasParadosViewProps> = {}) {
+  return (
     <div className="v3">
       <AlertasParadosView
         estado="pronto"
@@ -40,8 +42,12 @@ function tela(props: Partial<AlertasParadosViewProps> = {}) {
         acoes={{ escolher: () => undefined, marcar: () => undefined, marcarTodos: () => undefined, enviar: () => undefined, descartar: () => undefined }}
         {...props}
       />
-    </div>,
+    </div>
   );
+}
+
+function tela(props: Partial<AlertasParadosViewProps> = {}) {
+  return renderToStaticMarkup(elemento(props));
 }
 
 describe("Estoque › Alertas na v3", () => {
@@ -101,28 +107,41 @@ describe("Estoque › Alertas na v3", () => {
   });
 });
 
-/** Sem rede (docs/plataforma/diagnostico-carregamento.md, decisão 2 do celular, de 06/11/2026). */
+/**
+ * Na falta de conexão (docs/plataforma/diagnostico-carregamento.md, decisão 2
+ * do celular, de 06/11/2026): "Sem conexão" só com o app sem conexão; com o
+ * aparelho conectado e o servidor sem resposta, "Reconectando…" (carregamento
+ * v2, parte 7a).
+ */
 describe("Estoque › Alertas sem conexão", () => {
   const tentar = { tentando: false, onTentar: () => undefined };
   // 13:42 UTC são 10:42 no armazém.
   const lidaEm = Date.parse("2026-11-06T13:42:00Z");
+  const naConexao = (estado: EstadoDaConexao, props: Partial<AlertasParadosViewProps>) =>
+    renderToStaticMarkup(<ProvedorDaConexao value={conexaoEm(estado)}>{elemento(props)}</ProvedorDaConexao>);
 
   it("com a lista lida: o alerta fica, com a hora da leitura", () => {
-    const textos = textosDaTela(tela({ semConexao: { lidaEm, ...tentar } }));
+    const textos = textosDaTela(naConexao("sem-conexao", { semConexao: { lidaEm, ...tentar } }));
     expect(textos.slice(0, 3)).toEqual(["Alertas de itens parados", "Sem conexão · lista de 10:42", "Tentar de novo"]);
     expect(textos).toContain("Itaú Unibanco");
+    const reconectando = textosDaTela(naConexao("reconectando", { semConexao: { lidaEm, ...tentar } }));
+    expect(reconectando.slice(0, 4)).toEqual(["Alertas de itens parados", "Reconectando…", "· lista de 10:42", "Tentar de novo"]);
+    expect(reconectando).toContain("Itaú Unibanco");
   });
 
   it("sem nada lido: o aviso, nunca \"Nenhum alerta para aprovar\"", () => {
-    expect(textosDaTela(tela({ alertas: [], alerta: null, semConexao: { lidaEm: null, ...tentar } }))).toEqual([
-      "Alertas de itens parados",
-      "Sem conexão.",
-      "Tentar de novo",
-    ]);
+    const semNada = { alertas: [], alerta: null, semConexao: { lidaEm: null, ...tentar } };
+    expect(textosDaTela(naConexao("sem-conexao", semNada))).toEqual(["Alertas de itens parados", "Sem conexão.", "Tentar de novo"]);
+    expect(textosDaTela(naConexao("reconectando", semNada))).toEqual(["Alertas de itens parados", "Reconectando…", "Tentar de novo"]);
   });
 
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
-    expect(await violacoesDeAcessibilidade(tela({ semConexao: { lidaEm, ...tentar } }))).toEqual([]);
-    expect(await violacoesDeAcessibilidade(tela({ alertas: [], alerta: null, semConexao: { lidaEm: null, ...tentar } }))).toEqual([]);
+    for (const estado of ["sem-conexao", "reconectando"] as const) {
+      expect(await violacoesDeAcessibilidade(naConexao(estado, { semConexao: { lidaEm, ...tentar } })), estado).toEqual([]);
+      expect(
+        await violacoesDeAcessibilidade(naConexao(estado, { alertas: [], alerta: null, semConexao: { lidaEm: null, ...tentar } })),
+        estado,
+      ).toEqual([]);
+    }
   });
 });

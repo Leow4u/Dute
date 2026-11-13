@@ -174,6 +174,10 @@ const MOVIMENTO: Record<string, string> = {
   "--carregando-t-pulso": "2000ms",
   "--carregando-t-abertura-sai": "260ms",
   "--carregando-t-dedo": "700ms",
+  "--carregando-t-sem-rede": "3000ms",
+  "--carregando-t-aviso-minimo": "2000ms",
+  "--carregando-t-releitura": "2000ms",
+  "--carregando-t-releitura-max": "30000ms",
 };
 
 const CAIXA = "M6 3.5H18A2.5 2.5 0 0 1 20.5 6V14.5L14.5 20.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5Z";
@@ -211,6 +215,11 @@ describe("os tokens do carregamento", () => {
     expect(CARREGANDO.refluiMs - CARREGANDO.chegaEsperaMs).toBe(60);
     expect(raiz.get("--carregando-t-destaque")).toBe(`${CARREGANDO.destaqueMs}ms`);
     expect(raiz.get("--carregando-t-conta")).toBe(`${CARREGANDO.contaMs}ms`);
+    // A conexão (momento 8): a histerese, o mínimo de cada aviso e a espera das releituras sozinhas.
+    expect(raiz.get("--carregando-t-sem-rede")).toBe(`${CARREGANDO.semRedeMs}ms`);
+    expect(raiz.get("--carregando-t-aviso-minimo")).toBe(`${CARREGANDO.avisoMinimoMs}ms`);
+    expect(raiz.get("--carregando-t-releitura")).toBe(`${CARREGANDO.releituraMs}ms`);
+    expect(raiz.get("--carregando-t-releitura-max")).toBe(`${CARREGANDO.releituraMaxMs}ms`);
   });
 
   it("4.2 forma: a caixa chanfrada em três traços, a cabeça, o trilho, o piso e as barras", () => {

@@ -47,6 +47,17 @@ export const CARREGANDO = {
   destaqueMs: 1_000,
   /** A contagem que muda (3 → 2) rola 8 px nesse tempo. */
   contaMs: 160,
+  /**
+   * A histerese da conexão (momento 8): o aparelho sem rede há esse tempo é
+   * "Sem conexão". Antes, e com o aparelho conectado, é "Reconectando…".
+   */
+  semRedeMs: 3_000,
+  /** Cada aviso da conexão ("Reconectando…", "Sem conexão") fica pelo menos isso antes de dar lugar a outro. */
+  avisoMinimoMs: 2_000,
+  /** A primeira releitura sozinha enquanto reconecta; as seguintes dobram (2, 4, 8 e 16 s) até o teto. */
+  releituraMs: 2_000,
+  /** O teto da espera entre as releituras sozinhas: depois dos 16 s, a cada 30 s. */
+  releituraMaxMs: 30_000,
 } as const;
 
 /**

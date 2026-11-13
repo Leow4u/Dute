@@ -145,6 +145,15 @@ branco sobre o vermelho), e o rótulo diz o estado.
 **Texto:** gerúndio com o objeto ("Carregando pedidos…", "Aprovando…"), com o
 caractere único "…". O texto sozinho, sem o indicador, não é sinal de espera.
 
+**Conexão** (`lib/carregando/estado-da-conexao.ts`, momento 8): um estado só
+para o app. Com o aparelho conectado e o servidor sem resposta (a leitura que
+só achou o cache, o `unavailable`, a callable sem resposta), é
+"Reconectando…", em tinta, com os arcos do Wi-Fi, e o app relê sozinho em 2,
+4, 8, 16 e 30 s. "Sem conexão", na pílula âmbar, só com o aparelho sem rede há
+3 s ou com duas leituras seguidas sem resposta sem rede. Só sai do aviso
+depois de uma leitura que deu certo, e cada aviso fica pelo menos 2 s. A ação
+sem rede continua recusada na hora.
+
 ## O que vem depois (plano da auditoria)
 
 As sete PRs da auditoria de 09/10/2026 estão em `main`. O relatório completo
