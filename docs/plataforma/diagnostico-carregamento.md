@@ -634,6 +634,12 @@ Ficam para depois:
   operações longas (seção 6, PR 8);
 - os PRs 2 a 5 do celular.
 
+O PR 2 do celular (as telas da operação sem sinal) entrou no PR 610, com a
+parte 9 do carregamento v2 (10.5). Depois de entrar, a equipe guarda no
+aparelho os arquivos das telas que pode abrir, uma vez por versão, e o
+`ChunkErrorBoundary` separa a falta de rede, a versão nova e o erro da tela.
+Ficam para depois os PRs 3 a 5.
+
 ## 10. Carregamento v2 (12/11/2026)
 
 ### 10.1 A queixa
@@ -730,7 +736,7 @@ por PR:
 | 6 | Pedidos como piloto: a ação por linha (`useAcaoNaLinha`), a barra da linha e os estados de 10 s e 70 s | PR 610 |
 | 7 | A linha de estado nas listas (Pedidos, Receber, Estoque, Alertas) | a fazer |
 | 8 | As listas com a forma final | a fazer |
-| 9 | A abertura com a marca e a `CarregandoTela` no lugar do branco | a fazer |
+| 9 | A abertura com a marca e a `CarregandoTela` no lugar do branco | PR 610 |
 | 10 | A troca de filtro e a releitura sem apagar a lista | a fazer |
 | 11 | As operações longas: fotos com progresso e etapas | a fazer |
 | 12 | A trilha do Agent Dute | a fazer |
@@ -778,3 +784,95 @@ Ficam para a parte 13 os diálogos de Pedidos que desabilitam o botão enquanto
 gravam ("Confirmar entrega" e "Cancelar pedido"). Fica para uma correção do
 sistema visual o anel de foco do `Button`, que o título copia: 1,91:1 no claro
 e 1,65:1 no escuro.
+
+**Parte 9, a abertura (PR 610, 13/11/2026).**
+
+- **A abertura** (`#abertura` no `index.html`, fora do `#root`):
+  - preta (#161616) nos dois temas, com a marca de 96 px, o trilho chanfrado
+    e a palavra a 48 px do pé, e nenhum texto visível;
+  - a marca e a palavra vêm embutidas no HTML, já sobre o preto e com a
+    paleta reduzida (cerca de 12 KB no HTML): estão na primeira pintura também no
+    primeiro acesso com sinal fraco, e o trilho entra 300 ms depois delas;
+  - o `role="status"` diz "Abrindo a Dutelog" só ao leitor de tela; sem rede,
+    "Sem conexão" aos 3 s; aos 10 s, "Demorando mais que o normal" e "Tentar
+    de novo", que recarrega; aos 70 s, "Sem resposta";
+  - o aviso que sai sobe e esmaece em 180 ms antes de o seguinte entrar, e a
+    região muda no máximo uma vez a cada 2 s, como o `Anunciador`;
+  - quando o aviso não cabe acima da palavra (o celular deitado, o zoom de
+    200%), a palavra cede o lugar;
+  - no alto contraste do Windows, ela mantém as próprias cores;
+  - enquanto ela cobre a tela, o `#root` fica inerte: nem o Tab nem o leitor
+    de tela chegam ao que está por baixo.
+- **A saída** (`fecharAbertura`, em `lib/abertura.ts`, chamada pelo
+  `AuthProvider` quando o perfil chega): o segmento completa o trilho em
+  200 ms e tudo esmaece em 260 ms, com a marca a 0,96; antes de 300 ms ou
+  com movimento reduzido, só esmaece. A barra do navegador troca para o tema
+  quando a abertura sai do documento, e não antes.
+- **A primeira pintura:** a Inter e a JetBrains Mono saíram; a Manrope chega
+  por preload com `swap`, e o service worker guarda as fontes do Google; o
+  registro do service worker usa `defer`; a folha do app vai para o corpo,
+  logo antes do `#root`; o `theme-color` e o manifest estão em #161616.
+- **A `CarregandoTela`** (`components/ui/carregando-tela.tsx`), no lugar do
+  "Carregando..." dos dois `Suspense`, dos `fallback={null}` e do `null` das
+  rotas que esperam o perfil:
+  - aos 300 ms, a caixa de 40 px e "Abrindo Faturamento…"; o nome que não é
+    substantivo vem com "a tela" ("Abrindo a tela Separar…"), e toda rota
+    tem nome;
+  - aos 10 s, a volta calma, "Demorando mais que o normal" e "Tentar de
+    novo"; aos 70 s, "Sem resposta do servidor."; tentar de novo recarrega o
+    app;
+  - nada aparece nem é anunciado enquanto a abertura está na tela, também
+    enquanto esmaece;
+  - a fronteira que confere o arquivo que não veio segue com o mesmo nome e
+    o mesmo relógio, sem anunciar de novo.
+- **As telas da equipe no aparelho** (`lib/telas-no-aparelho.ts`, o PR 2 do
+  celular):
+  - cada tela é declarada com o arquivo do próprio import
+    (`telaSobDemanda("pages/billing-hub", …)`), e o build publica o mapa
+    `telas-no-aparelho.json`, com os arquivos de cada tela e as telas de
+    dentro dela (as abas do Faturamento);
+  - cinco segundos depois de entrar, os papéis internos baixam, um por vez,
+    os arquivos das telas que abrem neste ambiente; o service worker os
+    guarda em `dute-route-chunks`, que passou a caber 400 arquivos;
+  - a guarda só baixa e nunca importa a tela: o import que falha numa
+    piscada da rede fica preso no mapa de módulos do navegador até a página
+    recarregar, e a tela aberta depois cairia em "Sem conexão." sem pedir o
+    arquivo de novo;
+  - a tela que abre larga o pedido que a guarda estava fazendo, e o arquivo
+    parado não segura a tela;
+  - o cliente não baixa nada.
+- **O `ChunkErrorBoundary`** separa a falta de rede, a versão nova (o
+  arquivo que sumiu no deploy) e o erro da própria tela. No Safari, que não
+  diz qual arquivo faltou, ele pergunta pelo próprio app: se o servidor
+  responde, é a versão nova; se não, é a falta de rede.
+- **Medição no Chromium** (build de produção com o Firebase trocado, Slow 4G
+  e CPU 4×, celular):
+  - na primeira visita, a primeira pintura caiu de cerca de 2,75 s para
+    0,65 s, já com a marca e a palavra, e o trilho entra 300 ms depois delas;
+  - na volta, a primeira pintura fica perto de 0,13 s, e o Início abre em
+    cerca de 1 s;
+  - com uma piscada da rede durante a guarda, o Mapa, o Receber e a Contagem
+    abrem com a rede de volta; com o pedido da guarda parado, o Mapa abre em
+    0,3 s;
+  - na produção, só com a Armazenagem, a guarda baixa 106 arquivos (916 KB)
+    para a operação, 66 (315 KB) para o financeiro e 138 (1,2 MB) para o
+    owner;
+  - nenhum quadro com a `CarregandoTela` por baixo da abertura que esmaece.
+
+Mudanças de configuração para conferir na homologação: o registro do service
+worker com `defer` (`injectRegister: "script-defer"`), a folha do app no
+corpo, o mapa `telas-no-aparelho.json` na raiz do build, o cache das rotas com
+400 arquivos, as fontes do Google no service worker e o manifest em #161616.
+Se a CSP ganhar `script-src`, o script da abertura e o `onload` do preload
+das fontes vão precisar de hash.
+
+Ficam para depois:
+
+- a casca com o esqueleto do Início logo depois da abertura: quando o
+  arquivo da Entrada ainda não está no aparelho, a espera é a
+  `CarregandoTela`;
+- entre a espera da rota e a de dentro da tela (as abas do Catálogo e do
+  Faturamento), ou entre o `RoleGate` e o `Suspense`, o rótulo some por até
+  300 ms e volta, porque o relógio recomeça;
+- a medição num Android de verdade e no Safari, que pode tratar a folha no
+  corpo de outro jeito.
