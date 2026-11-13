@@ -893,7 +893,8 @@ Fica aberto, para a parte 7b e depois:
 
 - **A linha de estado** (`components/ui/linha-de-estado.tsx`, no `estado` do
   `PageHeader`): 24 px sempre reservados sob o título de Pedidos, Receber,
-  Estoque e Estoque › Alertas, e nada empurra a lista.
+  Estoque e Estoque › Alertas, numa fila só dela, sempre abaixo das ações, e
+  nada empurra a lista.
   - Primeira leitura: nada antes de 300 ms; depois, a caixa de 24 px e
     "Carregando pedidos…"; aos 10 s, a pílula âmbar "Demorando mais que o
     normal" e "Tentar de novo", com a volta calma. O toque cancela a leitura
@@ -950,6 +951,80 @@ Fica aberto, para a parte 7b e depois:
   - no movimento reduzido, a cabeça do indicador não gira (a caixa respira),
     e as trocas são de uma vez.
 
+- **A revisão** achou defeitos que esta parte trazia, corrigidos no mesmo
+  PR:
+  - **O celular:** a linha não quebrava e passava da tela (a 390 px, o
+    "Tentando de novo…" saía 46 px pela direita, e a 320 px todos os avisos
+    rolavam de lado). Agora cada peça fica inteira e o que não cabe passa à
+    linha de baixo; no celular, os vãos são os de 6 px da prancha, e o
+    "Tentando de novo…" não leva a caixa pequena (a linha já tem a dela).
+  - **O cabeçalho:** a linha corria por baixo das ações nas larguras do meio,
+    e o toque estendido do "Tentar de novo" roubava a borda de baixo delas (o
+    clique em "Recebidos" relia a lista em vez de trocar a aba). Agora a linha
+    tem fila própria, abaixo das ações, que ficam por cima do toque estendido;
+    a coluna do título não fica mais estreita que o título, e as ações quebram
+    em duas linhas antes de cobri-lo.
+  - **O foco:** na troca de "Reconectando…" para "Sem conexão", e quando o
+    "Tentar de novo" dava certo, o foco caía no `body`. Agora vai ao "Tentar
+    de novo" novo ou, sem ele, à própria linha, com o contorno visível.
+  - **O "Tentar de novo" da demora** cancelava todas as leituras sem dado da
+    tela, e só a lista era lida de novo: o cliente ativo ficava carregando para
+    sempre (o Faturamento não lia mais), e as caixas e os dias parado do
+    Estoque ficavam presos. Agora ele cancela só as leituras da lista.
+  - **A fala:** com a falta e nada lido, a releitura de 60 s voltava a dizer
+    "Carregando pedidos" a cada minuto. Depois de uma falha, a releitura não
+    fala, até a lista ser lida. O "Lista atualizada" do Atualizar tocado não
+    sai mais na tela seguinte quando a pessoa sai antes do fim.
+  - **A rede:** com o aparelho sem rede e nenhuma leitura falhando, a linha
+    ficava em "Atualizado às" até a releitura seguinte (até 2 min). Agora a
+    pílula "Sem conexão" entra aos 3 s, com o estado da conexão. Na volta da
+    rede, "Sem conexão" fica até a leitura voltar e vai direto a "Atualizado
+    às", como na prancha do momento 8; se o servidor não responde em 2 s,
+    "Reconectando…".
+  - **Os fins da espera, como nas pranchas:** aos 10 s, a caixa fica no lugar
+    e só o texto troca; na chegada, a espera sai em 180 ms; o Atualizar
+    travado volta a 1 em 150 ms; o ícone do Atualizar e a caixa trocam em
+    sequência; a barra do topo da volta do app completa em tinta e esmaece. A
+    entrada do texto novo guarda o atraso dela até o fim, e a camada que saiu
+    só deixa a árvore quando o novo acabou de entrar (antes, o que saía era
+    cortado no meio e o novo aparecia de uma vez). O tempo de entrada virou a
+    constante `trocaEntraMs`, travada contra o `--carregando-t-troca-entra`.
+  - **Os testes:** o teste da releitura de 60 s estourava os 5 s sob carga e
+    derrubava os seguintes; a releitura automática que passa de 5 s não
+    tinha teste; e dois testes das telas passavam sem a linha.
+- **Medição da revisão no Chromium**, no mesmo harness; antes é o `a62f9a1`:
+  - rolagem lateral, nas quatro telas, em 8 estados e 9 larguras de 320 a
+    1440 px (288 medidas): antes, a 390 px, 5 px na demora e 56 px no
+    "Tentando de novo…"; depois, nenhuma vinda da linha, e o "Tentar de novo"
+    sempre dentro da tela. A 390 px, "Reconectando…" e "Sem conexão" cabem
+    numa linha; a demora e o "Tentando de novo…" ocupam duas;
+  - toque das ações: antes, o toque estendido capturava até 15% de
+    "Recebidos" (Receber, 1024 px), e o clique na borda de baixo não trocava a
+    aba e relia duas vezes; depois, nenhum ponto de nenhuma ação vai para o
+    "Tentar de novo", e o mesmo clique troca a aba sem reler;
+  - foco: antes, o `body` nas quatro telas; depois, o "Tentar de novo" na
+    troca de aviso e a linha, com contorno de 2 px, quando a tentativa dá
+    certo (na falta e na demora), e o Tab seguinte segue a ordem da tela;
+  - aos 10 s: antes, a caixa sumia e voltava em cerca de 100 ms; depois, a
+    mesma caixa, inteira, em todos os quadros, e o texto sai em 80 ms e entra
+    em cerca de 150 ms;
+  - na chegada: a espera sai em cerca de 190 ms e a hora entra em seguida, em
+    cerca de 150 ms, sem as duas visíveis juntas; o Atualizar vai de 0,45 a 1
+    em cerca de 140 ms;
+  - a barra do topo da volta: antes, sumia num quadro; depois, completa de
+    0,3 a 1 em cerca de 185 ms (da parada, de 0,6 de opacidade a 1) e esmaece
+    em cerca de 170 ms. No movimento reduzido, não varre: fica inteira e só
+    esmaece, e as trocas são de uma vez;
+  - a rede: sem rede e sem leitura, a pílula entrou aos 57 s antes e aos 3,0 s
+    depois; na volta, "Sem conexão" foi a "Atualizado às" em 0,42 s, sem
+    passar por "Reconectando…" (antes, 0,44 s nele); com o servidor ainda
+    fora, "Reconectando…" aos 2,0 s a 2,4 s;
+  - os dois arquivos de teste da parte, quatro vezes em paralelo: antes, 4
+    falhas por tempo em cada rodada; depois, todos verdes, o mais lento em
+    2,8 s;
+  - o axe-core, em 96 estados (6 estados × 4 telas × claro e escuro × 1440 e
+    390 px), não acusa nada na linha nem no cabeçalho.
+
 Fica aberto, para a parte 8 e depois:
 
 - a contagem em bloco, as linhas-fantasma e o anúncio do fim da primeira
@@ -962,4 +1037,19 @@ Fica aberto, para a parte 8 e depois:
   50% e `inert` (caso 4 do momento 7), na parte 10;
 - Solicitações, o Início, o Mapa e o painel do owner seguem com o
   `FaixaSemConexao`, e o Atualizar de Solicitações ainda gira sozinho
-  (parte 13).
+  (parte 13);
+- no celular de 390 px, o "Tentando de novo…" de "Reconectando…" passa à
+  linha de baixo e desce a lista 24 px enquanto aparece; de 320 a 360 px,
+  também o próprio "Reconectando…" (e "Sem conexão" a 320 px). A demora
+  ocupa duas linhas, mas ainda sem lista embaixo;
+- de 640 a 1024 px, quando o "Tentar de novo" fica sob as ações, a parte de
+  cima do toque estendido é delas: ali o toque dele tem de 36 a 39 px de
+  altura;
+- o Receber a 320 px rola 9 px de lado pelas ações do cabeçalho, desde antes
+  desta parte;
+- escolhas para confirmar com o Leonardo: "Atualizado às" mostra a leitura
+  mais recente da lista, e "lista de", a mais antiga das que falharam (ou de
+  todas, com o aparelho sem rede); no Estoque, o Atualizar fica só na aba
+  Itens; Alertas não tem Atualizar; e a volta ao primeiro plano relê sempre,
+  sem tempo mínimo fora do app;
+- a conferência num Android de verdade, com a rede caindo de fato.
