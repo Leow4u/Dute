@@ -115,7 +115,7 @@ import {
   type EntregaDoPedido,
   type FormularioDaEntrega,
 } from "@/lib/warehouse-ops/entrega";
-import { groupWarehouseOrders, type OrderGroup } from "@/lib/warehouse-ops/orders";
+import { groupWarehouseOrders, queueTasks, type OrderGroup } from "@/lib/warehouse-ops/orders";
 import {
   buildBalanceValidation,
   formatRequestAge,
@@ -130,15 +130,20 @@ const numberFormatter = new Intl.NumberFormat("pt-BR");
 /**
  * As etapas da entrega pela Dutelog (carregamento v2, parte 11 e momento 6):
  * o pedido em "Para entregar" sai (quem levou e a placa) e é entregue, em
- * duas chamadas. A etapa anda com a resposta de cada uma.
+ * duas chamadas. A etapa anda com a resposta de cada uma. Ficam no diálogo
+ * desde o repouso, pendentes, para nada entrar empurrando o botão tocado.
  */
 export const ETAPAS_DA_ENTREGA = ["Saída", "Entrega"] as const;
 
-/** Onde as etapas da entrega estão, pela etapa em andamento (1 ou 2). */
-export function etapasDaEntrega(etapa: number): ItemDoProgresso[] {
+/**
+ * Onde as etapas da entrega estão, pela etapa da vez (1 ou 2; 0 em repouso):
+ * as de antes feitas, a da vez andando enquanto a chamada dela espera (sem
+ * resposta, e conferindo, ela fica pendente), as de depois pendentes.
+ */
+export function etapasDaEntrega(etapa: number, andando = true): ItemDoProgresso[] {
   return ETAPAS_DA_ENTREGA.map((rotulo, indice) => ({
     rotulo,
-    estado: indice + 1 < etapa ? "feito" : indice + 1 === etapa ? "andamento" : "fila",
+    estado: indice + 1 < etapa ? "feito" : indice + 1 === etapa && andando ? "andamento" : "fila",
   }));
 }
 
@@ -527,9 +532,14 @@ export default function Pedidos() {
 
   // A entrega anda em etapas (a saída e a entrega), e o fim fica no botão:
   // o erro por 2 s, ou o "Conferir" do prazo sem resposta, que relê a fila.
+  // O fim é do pedido daquele diálogo: abrir a entrega de outro começa do zero.
   const [etapaDaEntrega, setEtapaDaEntrega] = useState(0);
   const [fimDaEntrega, setFimDaEntrega] = useState<"erro" | "sem-resposta" | null>(null);
   const [conferindoEntrega, setConferindoEntrega] = useState(false);
+  const zerarEntrega = () => {
+    setFimDaEntrega(null);
+    setEtapaDaEntrega(0);
+  };
   const entregou = () => {
     toast({ title: "Entrega confirmada. Estoque baixado." });
     setFimDaEntrega(null);
@@ -575,22 +585,52 @@ export default function Pedidos() {
     const volta = setTimeout(() => setFimDaEntrega((atual) => (atual === "erro" ? null : atual)), CARREGANDO.erroVisivelMs);
     return () => clearTimeout(volta);
   }, [fimDaEntrega]);
-  const estadoDaEntrega: EstadoDaAcao = deliver.isPending || conferindoEntrega ? "andamento" : (fimDaEntrega ?? "repouso");
+  // Conferindo, o estado continua sem resposta: o botão diz "Conferindo…", e não a entrega de novo.
+  const estadoDaEntrega: EstadoDaAcao = deliver.isPending ? "andamento" : (fimDaEntrega ?? "repouso");
+  const entregaOcupada = estadoDaEntrega === "andamento" || conferindoEntrega;
   const esperaDaEntrega = useEspera(deliver.isPending);
-  /** O "Conferir" do prazo sem resposta: relê a fila e nunca reenvia. Entregue por lá, segue o sucesso. */
+  /**
+   * O "Conferir" do prazo sem resposta: relê a fila e nunca reenvia. Entregue
+   * por lá, segue o sucesso. Cancelado por outra pessoa enquanto esperava, o
+   * diálogo fecha e diz que a entrega não valeu. No resto (ainda para
+   * entregar, ou fora da fila), volta a "Confirmar entrega": a nova tentativa
+   * leva a mesma chave de cada etapa, e a que já valeu devolve o recibo.
+   */
   const conferirEntrega = async (order: OrderGroup) => {
     if (conferindoEntrega) return;
     setConferindoEntrega(true);
     try {
       const lida = await queryClient.fetchQuery({ queryKey: ["warehouse-ops"], queryFn: () => fetchJson<WarehouseOpsResponse>("/api/warehouse/ops"), staleTime: 0 });
-      const agora = groupWarehouseOrders(lida).find((candidato) => candidato.key === order.key);
-      if (!agora || agora.stage === "entregue") entregou();
-      else setFimDaEntrega(null);
+      const saida = queueTasks(lida, "expedition").find((tarefa) => String(tarefa.id) === String(order.ship?.id ?? ""));
+      const status = String(saida?.status ?? "");
+      if (status === "delivered") {
+        entregou();
+      } else if (status === "cancelled" || status === "canceled") {
+        zerarEntrega();
+        fecharDialogo("deliver");
+        toast({ title: "Entrega não confirmada", description: "O pedido foi cancelado.", variant: "destructive" });
+        refreshAll();
+      } else {
+        setFimDaEntrega(null);
+      }
     } catch (error) {
       onError(error);
     } finally {
       setConferindoEntrega(false);
     }
+  };
+
+  /**
+   * Fecha o diálogo. A entrega que ficou sem resposta não passa para o pedido
+   * seguinte: o fim dela sai, e a fila relê para a linha dizer onde o pedido
+   * está.
+   */
+  const fecharEntregaOuDialogo = () => {
+    if (dialog?.kind === "deliver") {
+      if (fimDaEntrega === "sem-resposta") refreshAll();
+      zerarEntrega();
+    }
+    setDialog(null);
   };
 
   // Aprovar e recusar ficam de fora: cada linha de "Para aprovar" tem o próprio estado.
@@ -848,6 +888,7 @@ export default function Pedidos() {
                                 setPlate(saida.placa);
                               }
                               lembrarDaLinha(order.key);
+                              zerarEntrega();
                               setDialog({ kind: "deliver", order });
                             }}
                           >
@@ -868,11 +909,11 @@ export default function Pedidos() {
       <Dialog
         open={dialog !== null}
         onOpenChange={(open) => {
-          // A entrega que anda segura o diálogo: fechar não para as etapas.
-          if (!open && !(dialog?.kind === "deliver" && estadoDaEntrega === "andamento")) setDialog(null);
+          // A entrega que anda (ou confere) segura o diálogo: fechar não para as etapas.
+          if (!open && !(dialog?.kind === "deliver" && entregaOcupada)) fecharEntregaOuDialogo();
         }}
       >
-        <DialogContent className={larguraDoDialogo} aria-describedby={undefined} onCloseAutoFocus={devolverFocoDoDialogo}>
+        <DialogContent className={larguraDoDialogo} aria-describedby={undefined} onCloseAutoFocus={devolverFocoDoDialogo} fecharTravado={dialog?.kind === "deliver" && entregaOcupada}>
           {dialog?.kind === "reject" ? (
             <>
               <DialogHeader>
@@ -942,29 +983,36 @@ export default function Pedidos() {
                   />
                 </div>
               </div>
-              {dialog.order.stage === "enviar" && esperaDaEntrega.visivel ? (
-                <Progresso forma="etapas" titulo="Confirmando a entrega" itens={etapasDaEntrega(etapaDaEntrega)} />
+              {dialog.order.stage === "enviar" ? (
+                <Progresso
+                  forma="etapas"
+                  titulo="Confirmando a entrega"
+                  itens={etapasDaEntrega(etapaDaEntrega, deliver.isPending)}
+                />
               ) : null}
-              {deliver.isPending && esperaDaEntrega.calmo ? (
-                <AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={esperaDaEntrega.decorridoMs} />
-              ) : null}
-              {estadoDaEntrega === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
+              <div data-lugar-do-aviso="" className="grid min-h-9 items-center">
+                {deliver.isPending && esperaDaEntrega.calmo ? (
+                  <AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={esperaDaEntrega.decorridoMs} />
+                ) : null}
+                {estadoDaEntrega === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
+              </div>
               <DialogFooter>
                 <Button
                   type="button"
                   variant="outline"
-                  aria-disabled={estadoDaEntrega === "andamento" || undefined}
-                  className={estadoDaEntrega === "andamento" ? "opacity-45 hover:bg-card active:bg-card" : undefined}
+                  aria-disabled={entregaOcupada || undefined}
+                  className={entregaOcupada ? "min-h-11 opacity-45 hover:bg-card active:bg-card" : "min-h-11"}
                   onClick={() => {
-                    if (estadoDaEntrega !== "andamento") setDialog(null);
+                    if (!entregaOcupada) fecharEntregaOuDialogo();
                   }}
                 >
                   Voltar
                 </Button>
                 <BotaoDeAcao
-                  estado={estadoDaEntrega}
+                  className="min-h-11"
+                  estado={conferindoEntrega ? "andamento" : estadoDaEntrega}
                   rotulo="Confirmar entrega"
-                  andamento="Confirmando…"
+                  andamento={conferindoEntrega ? "Conferindo…" : "Confirmando…"}
                   sucesso="Entregue"
                   erro="Não confirmada"
                   bloqueado={
@@ -972,6 +1020,7 @@ export default function Pedidos() {
                     (busy || (dialog.order.stage === "enviar" && (!driver.trim() || !plate.trim())))
                   }
                   onClick={() => {
+                    if (conferindoEntrega) return;
                     if (estadoDaEntrega === "sem-resposta") void conferirEntrega(dialog.order);
                     else deliver.mutate({ order: dialog.order });
                   }}

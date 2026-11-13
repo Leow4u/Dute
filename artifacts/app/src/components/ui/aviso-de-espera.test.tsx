@@ -47,7 +47,8 @@ const botoes = () => [...container!.querySelectorAll("button")];
 describe("AvisoDeEspera", () => {
   it("na escrita, aos 10 s: só o aviso com o relógio, e a estimativa quando o total é conhecido", async () => {
     render(<AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={12_400} restanteMs={16_200} />);
-    expect(textosDaTela(container!.innerHTML)).toEqual(["Demorando mais que o normal", "·", "0:12", "cerca de 20 s"]);
+    // O "·" não é texto: é o separador de cada pedaço, que some no começo da linha quando a pílula quebra.
+    expect(textosDaTela(container!.innerHTML)).toEqual(["Demorando mais que o normal", "0:12", "cerca de 20 s"]);
     expect(botoes()).toEqual([]);
     expect(falados).toEqual(["Demorando mais que o normal"]);
     // O relógio é só visual: nenhuma região viva no aviso.
@@ -58,7 +59,7 @@ describe("AvisoDeEspera", () => {
   it("na leitura, aos 10 s, com \"Tentar de novo\" de 44 px", async () => {
     const tentar = vi.fn();
     render(<AvisoDeEspera fase="demorando" tipo="leitura" desdeMs={10_000} onTentar={tentar} />);
-    expect(textosDaTela(container!.innerHTML)).toEqual(["Demorando mais que o normal", "·", "0:10", "Tentar de novo"]);
+    expect(textosDaTela(container!.innerHTML)).toEqual(["Demorando mais que o normal", "0:10", "Tentar de novo"]);
     expect(botoes()[0].className).toContain("min-h-11");
     act(() => botoes()[0].click());
     expect(tentar).toHaveBeenCalledTimes(1);
@@ -80,6 +81,16 @@ describe("AvisoDeEspera", () => {
     act(() => botoes()[0].click());
     expect(conferir).toHaveBeenCalledTimes(1);
     expect(await violacoesDeAcessibilidade(container!.innerHTML)).toEqual([]);
+  });
+
+  it("no celular, a pílula quebra entre os pedaços, nunca deixando o \"·\" sozinho no fim da linha", () => {
+    render(<AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={12_400} restanteMs={4_000} />);
+    const itens = container!.querySelector(".carregando-aviso-itens");
+    expect(itens).not.toBeNull();
+    // Cada pedaço inteiro, sem quebra dentro: "Demorando mais que o normal", "0:12" e "cerca de 5 s".
+    const pedacos = [...itens!.querySelectorAll(":scope > span > span")].map((pedaco) => pedaco.textContent);
+    expect(pedacos).toEqual(["Demorando mais que o normal", "0:12", "cerca de 5 s"]);
+    expect(container!.textContent).not.toContain("·");
   });
 
   it("na leitura, aos 70 s: \"Sem resposta do servidor.\" e \"Tentar de novo\"", () => {

@@ -24,10 +24,15 @@ vi.mock("@/lib/warehouse-ops/model", async (importOriginal) => {
   };
 });
 
+import { CARREGANDO } from "@/lib/carregando/tempo";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { textosForaDaLista } from "@/test/textos";
+
 import { ProductPhotoStudio } from "./product-photo-studio";
 
 let raiz: Root | null = null;
 let container: HTMLDivElement | null = null;
+let aprovacao: (() => void) | null = null;
 
 const FOTOS = [
   { fileName: "a.jpg", fileUrl: "https://example.com/a.jpg", storagePath: "p/a.jpg" },
@@ -41,7 +46,21 @@ beforeEach(() => {
   container = document.createElement("div");
   document.body.appendChild(container);
   raiz = createRoot(container);
-  act(() => raiz!.render(<ProductPhotoStudio photos={FOTOS} customerCode="BTG Pactual" productName="Polo Masculino Piquet Preto" onApprove={() => undefined} />));
+  aprovacao = null;
+  act(() =>
+    raiz!.render(
+      <ProductPhotoStudio
+        photos={FOTOS}
+        customerCode="BTG Pactual"
+        productName="Polo Masculino Piquet Preto"
+        onApprove={() =>
+          new Promise<void>((resolver) => {
+            aprovacao = resolver;
+          })
+        }
+      />,
+    ),
+  );
 });
 
 afterEach(() => {
@@ -54,7 +73,13 @@ afterEach(() => {
 });
 
 const dialogo = () => document.querySelector<HTMLElement>('[role="dialog"]');
-const botao = (texto: string) => Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((item) => item.textContent?.trim() === texto)!;
+/** O botão pelo rótulo na tela: a camada atual do botão de ação, ou o texto do botão comum. */
+const botao = (texto: string) =>
+  Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
+    (item) => (item.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? item.textContent)?.trim() === texto,
+  )!;
+const principal = () => dialogo()!.querySelector<HTMLButtonElement>(".botao-acao")!;
+const GERADA = { fileName: "g.jpg", fileUrl: "https://example.com/g.jpg", storagePath: "p/g.jpg" };
 
 async function gerarDuas() {
   act(() => botao("Foto profissional com Agent Dute").click());
@@ -67,6 +92,7 @@ async function gerarDuas() {
 describe("a foto por IA: o tempo decorrido e o Cancelar", () => {
   it("gerando, a contagem e o relógio que anda a cada segundo, sem região viva solta", async () => {
     await gerarDuas();
+    act(() => vi.advanceTimersByTime(CARREGANDO.atrasoMs));
     const barra = dialogo()!.querySelector<HTMLElement>('[role="progressbar"]')!;
     expect(barra.getAttribute("aria-label")).toBe("Gerando com o Agent Dute");
     expect(barra.getAttribute("aria-valuetext")).toBe("1 de 2 fotos");
@@ -93,5 +119,68 @@ describe("a foto por IA: o tempo decorrido e o Cancelar", () => {
     // Parado, o Cancelar volta a fechar.
     await act(async () => botao("Cancelar").click());
     expect(dialogo()).toBeNull();
+  });
+
+  it("nada entra antes de 300 ms, e o progresso entra no lugar guardado: o Cancelar não sai do lugar", async () => {
+    act(() => botao("Foto profissional com Agent Dute").click());
+    const lugar = () => dialogo()!.querySelector<HTMLElement>("[data-lugar-da-geracao]")!;
+    expect(lugar()).not.toBeNull();
+    expect(lugar().className).toContain("min-h-16");
+    await act(async () => botao("Gerar foto").click());
+    expect(dialogo()!.querySelector('[role="progressbar"]')).toBeNull();
+    act(() => vi.advanceTimersByTime(CARREGANDO.atrasoMs));
+    expect(lugar().querySelector('[role="progressbar"]')?.getAttribute("aria-valuetext")).toBe("1 de 1 foto");
+    // O texto de repouso e o progresso ficam na mesma célula: só um na tela e na árvore.
+    expect(lugar().querySelectorAll(":scope > [aria-hidden='true']")).toHaveLength(1);
+  });
+
+  it("gerar e aprovar ficam ocupados sem disabled: o foco fica no botão, que diz \"Gerando…\" e \"Salvando…\"", async () => {
+    act(() => botao("Foto profissional com Agent Dute").click());
+    principal().focus();
+    await act(async () => principal().click());
+    act(() => vi.advanceTimersByTime(CARREGANDO.atrasoMs));
+    expect(principal().querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Gerando…");
+    expect(principal().getAttribute("aria-busy")).toBe("true");
+    expect(principal().getAttribute("aria-disabled")).toBe("true");
+    expect(principal().hasAttribute("disabled")).toBe(false);
+    expect(document.activeElement).toBe(principal());
+    const mesmo = principal();
+    await act(async () => geracoes[0](GERADA));
+    act(() => vi.advanceTimersByTime(CARREGANDO.minimoMs));
+    // O mesmo botão vira o "Aprovar": o foco continua nele.
+    expect(principal()).toBe(mesmo);
+    expect(principal().querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Aprovar foto");
+    expect(document.activeElement).toBe(mesmo);
+    act(() => vi.advanceTimersByTime(1_000));
+    await act(async () => principal().click());
+    act(() => vi.advanceTimersByTime(CARREGANDO.atrasoMs));
+    expect(principal().querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Salvando…");
+    expect(principal().hasAttribute("disabled")).toBe(false);
+    expect(document.activeElement).toBe(mesmo);
+    await act(async () => aprovacao?.());
+  });
+
+  it("o X fica aria-disabled gerando e salvando, e o Cancelar tem 44 px", async () => {
+    act(() => botao("Foto profissional com Agent Dute").click());
+    const fechar = () => botao("Fechar");
+    expect(fechar().hasAttribute("aria-disabled")).toBe(false);
+    expect(botao("Cancelar").className).toContain("min-h-11");
+    await act(async () => principal().click());
+    expect(fechar().getAttribute("aria-disabled")).toBe("true");
+    expect(fechar().hasAttribute("disabled")).toBe(false);
+    act(() => fechar().click());
+    expect(dialogo()).not.toBeNull();
+  });
+
+  it("o diálogo passa no axe gerando e com a proposta, e a espera só tem rótulos e dados", async () => {
+    const TEXTOS = ["Gerando com o Agent Dute", /^\d:\d\d$/, /^\d$/, /^de \d$/, "Cancelar", "Gerar foto", "Gerando…", "Aprovar foto", "Salvando…", /^Gerar \d fotos$/, "Aprovar fotos", "Conferir"];
+    act(() => botao("Foto profissional com Agent Dute").click());
+    await act(async () => principal().click());
+    act(() => vi.advanceTimersByTime(CARREGANDO.atrasoMs));
+    const espera = () =>
+      [dialogo()!.querySelector("[data-lugar-da-geracao] [data-progresso]"), principal().parentElement].map((no) => no?.outerHTML ?? "").join("");
+    expect(textosForaDaLista(espera(), TEXTOS)).toEqual([]);
+    vi.useRealTimers();
+    expect(await violacoesDeAcessibilidade(dialogo()!.outerHTML)).toEqual([]);
   });
 });

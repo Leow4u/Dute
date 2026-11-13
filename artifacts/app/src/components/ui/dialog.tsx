@@ -29,8 +29,15 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    /**
+     * A operação que anda segura o diálogo (carregamento v2, parte 11): o X
+     * "Fechar" fica aria-disabled e esmaecido, como o Voltar, e o toque nele
+     * não faz nada. Nunca `disabled`: o foco que estava nele não cai no corpo.
+     */
+    fecharTravado?: boolean;
+  }
+>(({ className, children, fecharTravado = false, ...props }, ref) => {
   const naV3 = useNaV3();
   return (
     <DialogPortal>
@@ -45,7 +52,16 @@ const DialogContent = React.forwardRef<
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full p-1.5 opacity-70 transition-[background-color,opacity] duration-200 hover:bg-surface-hover hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+        <DialogPrimitive.Close
+          aria-disabled={fecharTravado || undefined}
+          onClick={(event) => {
+            if (fecharTravado) event.preventDefault();
+          }}
+          className={cn(
+            'absolute right-4 top-4 rounded-full p-1.5 opacity-70 transition-[background-color,opacity] duration-200 hover:bg-surface-hover hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground',
+            fecharTravado && 'opacity-45 hover:bg-transparent hover:opacity-45',
+          )}
+        >
           <X className="h-4 w-4" />
           <span className="sr-only">Fechar</span>
         </DialogPrimitive.Close>

@@ -2,7 +2,7 @@ import { httpsCallable } from "firebase/functions";
 import { functionsDoApp } from "./firebase-functions";
 
 import { clienteDaChamada } from "./active-customer";
-import { PRAZO_ESGOTADO, SEM_CONEXAO, aparelhoSemRede, callableSemResposta, corpoSemConexao, prazoEsgotado } from "./conexao";
+import { PRAZO_ESGOTADO, PRAZO_ESGOTADO_NA_LEITURA, SEM_CONEXAO, aparelhoSemRede, callableSemResposta, corpoSemConexao, prazoEsgotado } from "./conexao";
 import { firebaseApp } from "./firebase";
 
 /**
@@ -1052,8 +1052,11 @@ export async function callFunctionsApi(
       error instanceof Error
         ? error.message
         : "Erro ao chamar Firebase Functions.";
+    // O prazo sem resposta: na escrita, conferir antes de repetir; na leitura, repetir é seguro.
     const message = prazoEsgotado(error)
-      ? PRAZO_ESGOTADO
+      ? method.toUpperCase() === "GET"
+        ? PRAZO_ESGOTADO_NA_LEITURA
+        : PRAZO_ESGOTADO
       : rawMessage === "INTERNAL" || code === "internal"
         ? "Falha interna no servidor. Tente novamente ou avise o time técnico."
         : rawMessage;

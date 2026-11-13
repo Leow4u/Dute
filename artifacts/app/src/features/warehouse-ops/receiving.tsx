@@ -826,7 +826,7 @@ export function UnplannedReceiptDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!sending.current && !isPending && !fotos.enviando) onOpenChange(next); }}>
-      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl" aria-describedby={undefined}>
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl" aria-describedby={undefined} fecharTravado={fotos.enviando}>
         <DialogHeader className="flex-row flex-wrap items-center gap-2 space-y-0">
           <DialogTitle>Registrar chegada avulsa · {activeCustomer.name}</DialogTitle>
           {conferenceMode ? (
@@ -1184,8 +1184,12 @@ export function UnplannedReceiptDialog({
                               accept="image/*"
                               capture="environment"
                               multiple
-                              disabled={fotos.enviando}
+                              // Ocupado não é desabilitado: com disabled, o foco que estava aqui caía no corpo.
+                              aria-disabled={fotos.enviando || undefined}
                               className="sr-only"
+                              onClick={(event) => {
+                                if (fotos.enviando) event.preventDefault();
+                              }}
                               onChange={(event) => {
                                 addPhotos(index, event.target.files);
                                 event.currentTarget.value = "";
@@ -1195,6 +1199,8 @@ export function UnplannedReceiptDialog({
                               {line.photos.length}/8 foto(s)
                             </span>
                           </div>
+                          {/* O progresso fica acima das fotos da linha, como na Contagem: no fim, elas entram embaixo dele, e ele não sai do lugar. */}
+                          {alvoDasFotos.current?.index === index ? <ProgressoDasFotosDoProduto fotos={fotos} /> : null}
                           {line.photos.length ? (
                             <div className="flex flex-wrap gap-2">
                               {line.photos.map((photo, photoIndex) => (
@@ -1225,7 +1231,6 @@ export function UnplannedReceiptDialog({
                               ))}
                             </div>
                           ) : null}
-                          {alvoDasFotos.current?.index === index ? <ProgressoDasFotosDoProduto fotos={fotos} /> : null}
                           {line.photos.length ? <ProductPhotoStudio key={`${customerCode}:${index}:${line.clientCode}`} photos={line.photos} customerCode={customerCode} productName={line.product} category={line.category} context={{ ...line.photoContext, description: line.product, size: line.size || line.photoContext?.size, color: line.color || line.photoContext?.color, brand: line.brand || line.photoContext?.brand }} disabled={isPending || fotosSubindoNa(index)}
                             onApprove={(generated, primaryUrl) => setLines((current) => current.map((entry, entryIndex) => {
                               if (entryIndex !== index) return entry;

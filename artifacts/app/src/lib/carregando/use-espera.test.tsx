@@ -70,6 +70,37 @@ describe("a espera no relógio", () => {
     expect(atual().fase).toBe("com-objeto");
   });
 
+  it("o tique que dispara um décimo de milissegundo antes do marco (o atraso fracionário truncado) não perde os 300 ms nem os 10 s", () => {
+    // O relógio do navegador: o tique lê 299,9 e, logo depois, quem arma o
+    // seguinte já lê 300,0. Só as leituras do useEspera passam pela fila.
+    let relogio = 0;
+    const fila: number[] = [];
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.spyOn(performance, "now").mockImplementation(() =>
+      fila.length && (new Error().stack ?? "").includes("use-espera") ? fila.shift()! : relogio,
+    );
+    montar(true);
+    expect(atual().visivel).toBe(false);
+    relogio = 300;
+    fila.push(299.9, 300);
+    passar(300);
+    expect(atual().visivel).toBe(true);
+    expect(atual().fase).toBe("andamento");
+    // Os marcos seguintes continuam: o objeto aos 3 s e a demora aos 10 s.
+    relogio = 3_000;
+    passar(2_700);
+    expect(atual().fase).toBe("com-objeto");
+    relogio = 5_000;
+    passar(2_000);
+    relogio = 10_000;
+    fila.push(9_999.9, 10_000);
+    passar(5_000);
+    expect(atual().fase).toBe("demorando");
+    expect(atual().calmo).toBe(true);
+    vi.restoreAllMocks();
+  });
+
   it("parada, não mostra nada", () => {
     montar(false);
     passar(20_000);

@@ -1,10 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { Progresso } from "@/components/ui/progresso";
-import { Spinner } from "@/components/ui/spinner";
 import { useAnuncio } from "@/lib/carregando/anunciador";
 import { relogioDaEspera } from "@/lib/carregando/tempo";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -66,10 +68,13 @@ function ouCancelar<T>(promessa: Promise<T>, sinal: AbortSignal): Promise<T> {
 /**
  * The generated preview is never added to the catalog until a person approves.
  *
- * Gerando (carregamento v2, parte 11): a contagem das fotos ("1 de 2"), o
- * tempo decorrido ("0:12", só visual; a foto por IA leva dezenas de segundos
- * e desiste aos 180 s) e o "Cancelar", que para de esperar. O diálogo não
- * fecha enquanto gera nem enquanto salva.
+ * Gerando (carregamento v2, parte 11): aos 300 ms, a contagem das fotos
+ * ("1 de 2") com o tempo decorrido ao lado do título ("0:12", só visual; a
+ * foto por IA leva dezenas de segundos e desiste aos 180 s), no lugar do
+ * texto de repouso, na mesma célula: nada empurra o "Cancelar", que para de
+ * esperar. "Gerar" e "Aprovar" são o mesmo botão de ação ("Gerando…",
+ * "Salvando…"), ocupado sem `disabled`, e o foco fica nele. O diálogo não
+ * fecha enquanto gera nem enquanto salva, e o X diz que está travado.
  */
 export function ProductPhotoStudio({
   photos,
@@ -100,6 +105,9 @@ export function ProductPhotoStudio({
   const [inicio, setInicio] = useState<number | null>(null);
   const [agora, setAgora] = useState(0);
   const anunciar = useAnuncio();
+  // Nada aparece antes de 300 ms: o progresso entra no lugar do texto de repouso.
+  const espera = useEspera(busy);
+  const gerandoNaTela = busy && espera.visivel;
   // O relógio do decorrido anda a cada segundo enquanto gera.
   useEffect(() => {
     if (!busy) return undefined;
@@ -235,6 +243,7 @@ export function ProductPhotoStudio({
       </DialogTrigger>
       <DialogContent
         className="sm:max-w-2xl"
+        fecharTravado={busy || saving}
         onEscapeKeyDown={(event) => {
           if (busy || saving) event.preventDefault();
         }}
@@ -448,39 +457,42 @@ export function ProductPhotoStudio({
             </label>
           </div>
         )}
-        <p className="text-sm text-muted-foreground">
-          Confira cores, estampas, logos e formato antes de aprovar. Os
-          originais são preservados.
-        </p>
-        {error ? (
-          <Alert variant="destructive">
-            <AlertDescription role="alert">{error}</AlertDescription>
-          </Alert>
-        ) : null}
-        {busy ? (
-          <div className="grid gap-2">
+        {/* O texto de repouso e o progresso da geração na mesma célula, da altura do maior: o Cancelar não sai do lugar. */}
+        <div data-lugar-da-geracao="" className="grid min-h-16 items-start">
+          <p
+            aria-hidden={gerandoNaTela || undefined}
+            className={cn("text-sm text-muted-foreground [grid-area:1/1]", gerandoNaTela && "invisible")}
+          >
+            Confira cores, estampas, logos e formato antes de aprovar. Os
+            originais são preservados.
+          </p>
+          {gerandoNaTela ? (
             <Progresso
               forma="contagem"
               titulo="Gerando com o Agent Dute"
+              className="[grid-area:1/1]"
+              apoio={
+                <span className="text-sm font-bold tabular-nums text-muted-foreground">
+                  {relogioDaEspera(inicio === null ? 0 : agora - inicio)}
+                </span>
+              }
               itens={chosen.slice(0, capacity).map((_, indice) => ({
                 rotulo: `Foto ${indice + 1}`,
                 estado: indice < geradas ? "feito" : indice === geradas ? "andamento" : "fila",
               }))}
             />
-            <p className="text-sm font-bold tabular-nums text-muted-foreground">
-              {relogioDaEspera(inicio === null ? 0 : agora - inicio)}
-            </p>
-          </div>
-        ) : saving ? (
-          <p className="flex items-center gap-2 text-sm font-bold text-foreground">
-            <Spinner />
-            Salvando fotos aprovadas…
-          </p>
+          ) : null}
+        </div>
+        {error ? (
+          <Alert variant="destructive">
+            <AlertDescription role="alert">{error}</AlertDescription>
+          </Alert>
         ) : null}
         <div className="flex flex-wrap justify-end gap-2">
           <Button
             type="button"
             variant="outline"
+            className={saving ? "min-h-11 opacity-45 hover:bg-card active:bg-card" : "min-h-11"}
             // Gerando, "Cancelar" para a geração (o diálogo fica, com o que já veio); salvando, espera.
             aria-disabled={saving || undefined}
             onClick={() => {
@@ -491,30 +503,25 @@ export function ProductPhotoStudio({
           >
             Cancelar
           </Button>
-          {previews.length ? (
-            <Button
-              type="button"
-              disabled={busy || saving}
+          {/* "Gerar" e "Aprovar" são o mesmo botão (a mesma posição): a troca não tira o foco de quem o tocou. */}
+          {previews.length && !busy ? (
+            <BotaoDeAcao
+              className="min-h-11"
+              estado={saving ? "andamento" : "repouso"}
+              rotulo={`Aprovar ${previews.length > 1 ? "fotos" : "foto"}`}
+              andamento="Salvando…"
               onClick={() => void approve()}
-            >
-              {saving ? <Spinner data-icon="inline-start" /> : null}
-              Aprovar {previews.length > 1 ? "fotos" : "foto"}
-            </Button>
+            />
           ) : (
-            <Button
-              type="button"
-              disabled={
-                busy ||
-                saving ||
-                !chosen.length ||
-                chosen.length > capacity ||
-                (mode === "mannequin" && !mannequin)
-              }
+            <BotaoDeAcao
+              className="min-h-11"
+              estado={busy ? "andamento" : "repouso"}
+              icone={<Sparkles />}
+              rotulo={`Gerar ${chosen.length > 1 ? `${chosen.length} fotos` : "foto"}`}
+              andamento="Gerando…"
+              bloqueado={!busy && (saving || !chosen.length || chosen.length > capacity || (mode === "mannequin" && !mannequin))}
               onClick={() => void generate()}
-            >
-              {busy ? <Spinner data-icon="inline-start" /> : <Sparkles data-icon="inline-start" />}
-              Gerar {chosen.length > 1 ? `${chosen.length} fotos` : "foto"}
-            </Button>
+            />
           )}
         </div>
       </DialogContent>

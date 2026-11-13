@@ -65,21 +65,16 @@ export function AvisoDeEspera({ fase, tipo, desdeMs, restanteMs, tentando = fals
   return (
     <div data-aviso-de-espera={fase} className={cn("flex flex-wrap items-center gap-3", className)}>
       {fase === "demorando" ? (
-        <span className="inline-flex min-h-9 flex-wrap items-center gap-x-1.5 rounded-md border border-warning-soft-border bg-warning-soft px-3 text-sm font-bold text-amber-soft-foreground">
-          <Clock3 className="mr-0.5 size-4" aria-hidden="true" />
-          <span>{DEMORANDO_MAIS}</span>
-          {desdeMs !== undefined ? (
-            <>
-              <span aria-hidden="true">·</span>
-              <span className="font-extrabold tabular-nums">{relogioDaEspera(desdeMs)}</span>
-            </>
-          ) : null}
-          {estimativa ? (
-            <>
-              <span aria-hidden="true">·</span>
-              <span>{estimativa}</span>
-            </>
-          ) : null}
+        <span className="inline-flex min-h-9 items-center gap-2 rounded-md border border-warning-soft-border bg-warning-soft px-3 py-1.5 text-sm font-bold text-amber-soft-foreground">
+          <Clock3 className="size-4 flex-none" aria-hidden="true" />
+          {/* Os pedaços com o "·" antes de cada um (index.css): quando a pílula quebra, o do começo da linha some. */}
+          <span className="carregando-aviso-itens">
+            <span>
+              <span>{DEMORANDO_MAIS}</span>
+              {desdeMs !== undefined ? <span className="font-extrabold tabular-nums">{relogioDaEspera(desdeMs)}</span> : null}
+              {estimativa ? <span>{estimativa}</span> : null}
+            </span>
+          </span>
         </span>
       ) : (
         <span className="inline-flex min-h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-bold text-foreground">

@@ -339,7 +339,8 @@ export default function PaginaPedidosSeparar() {
     const volta = setTimeout(() => setFimDaConclusao((atual) => (atual === "erro" ? null : atual)), CARREGANDO.erroVisivelMs);
     return () => clearTimeout(volta);
   }, [fimDaConclusao]);
-  const estadoDaConclusao: EstadoDaAcao = concluir.isPending || conferindo ? "andamento" : (fimDaConclusao ?? "repouso");
+  // Conferindo, o estado continua sem resposta: o diálogo mostra "Conferindo…", não a conclusão de novo.
+  const estadoDaConclusao: EstadoDaAcao = concluir.isPending ? "andamento" : (fimDaConclusao ?? "repouso");
   /** O "Conferir" do prazo sem resposta: relê a fila e nunca reenvia. Concluído por lá, segue o sucesso. */
   const conferirConclusao = async () => {
     if (conferindo) return;
@@ -497,6 +498,7 @@ export default function PaginaPedidosSeparar() {
         caixas={caixasDoDialogo}
         lacre={lacre ?? ""}
         estado={estadoDaConclusao}
+        conferindo={conferindo}
         onLacre={setLacre}
         onFechar={() => {
           setLacre(null);

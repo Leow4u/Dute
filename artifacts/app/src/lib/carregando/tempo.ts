@@ -23,6 +23,8 @@ export const CARREGANDO = {
   demoraMs: 10_000,
   /** A desistência: "Sem resposta do servidor." na leitura, "Conferir" na escrita. O chat do Agent Dute e a foto por IA esperam 180 s. */
   desisteMs: 70_000,
+  /** Sem um byte novo da foto que sobe por esse tempo, a estimativa ("cerca de 20 s") sai do aviso: a conta não vale com a foto parada. */
+  estimativaSemByteMs: 10_000,
   /** "Aprovado" fica pelo menos isso na tela, e até a releitura da lista chegar. */
   sucessoVisivelMs: 1_000,
   /** "Não aprovado" fica isso no botão antes de ele voltar a "Aprovar"; o motivo fica na linha. */

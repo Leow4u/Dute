@@ -17,6 +17,7 @@ describe("o relógio da espera", () => {
       movimentoMaxMs: 5_000,
       demoraMs: 10_000,
       desisteMs: 70_000,
+      estimativaSemByteMs: 10_000,
       sucessoVisivelMs: 1_000,
       erroVisivelMs: 2_000,
       dedoMs: 700,

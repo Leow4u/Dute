@@ -271,6 +271,19 @@ describe("em andamento", () => {
     expect(nome()).toBe(TEXTOS.sucesso);
   });
 
+  it("o gerúndio que segura o mínimo é o da espera que estava na tela: o \"Conferindo…\" não vira o da ação", () => {
+    montar("sem-resposta");
+    montar("andamento", { andamento: "Conferindo…" });
+    passar(CARREGANDO.atrasoMs);
+    expect(nome()).toBe("Conferindo…");
+    // A leitura voltou: o estado sai do em andamento e o gerúndio volta a ser o da ação, mas o mínimo segura a camada.
+    passar(100);
+    montar("repouso", { andamento: TEXTOS.andamento });
+    expect(nome()).toBe("Conferindo…");
+    passar(CARREGANDO.minimoMs);
+    expect(nome()).toBe(TEXTOS.rotulo);
+  });
+
   it("a ação que volta antes de 300 ms não mostra o em andamento", () => {
     montar("repouso");
     montar("andamento");

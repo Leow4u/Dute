@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Ban, ClipboardCheck, ClipboardPen, ImagePlus, Printer, RotateCcw } from "lucide-react";
 import { collection, doc } from "firebase/firestore";
 import { Link, useSearch } from "wouter";
@@ -77,6 +77,9 @@ export default function PaginaOs() {
   const [erro, setErro] = useState<string | null>(null);
   const [erroDasFotos, setErroDasFotos] = useState<string | null>(null);
   // As fotos anexadas sobem uma por vez, compactadas e com a contagem (parte 11 do carregamento v2).
+  // A que falha é dita pelo Anunciador ("1 foto não enviada"); o motivo fica na tela, sem outro
+  // alerta, e sai quando o "Tentar de novo" ou a escolha nova começa.
+  const [motivoDoEnvio, setMotivoDoEnvio] = useState<string | null>(null);
   const escolhidas = useRef(new Map<File, FotoEscolhida>());
   const envioDasFotos = useEnvioDeFotos<void>({
     enviarUma: (arquivo, aoProgredir, sinal) => {
@@ -84,9 +87,12 @@ export default function PaginaOs() {
       if (!ficha || !foto) return Promise.reject(new Error("A OS não está aberta."));
       return enviarFoto(ficha.numero, foto, { chave: `foto:${foto.nome}` }, aoProgredir, sinal);
     },
-    aoFalhar: (error) => setErroDasFotos(mensagemDoErro(error)),
+    aoFalhar: (error) => setMotivoDoEnvio(mensagemDoErro(error)),
   });
   const enviandoFotos = envioDasFotos.enviando;
+  useEffect(() => {
+    if (enviandoFotos) setMotivoDoEnvio(null);
+  }, [enviandoFotos]);
   const chave = useRef<string>("");
   // O instante da ocorrência e da inclusão, o mesmo em cada nova tentativa do
   // painel: a chamada que já gravou se repete igual (a chave devolve o mesmo
@@ -384,6 +390,8 @@ export default function PaginaOs() {
               <span role="alert" className="text-sm text-destructive">
                 {erroDasFotos}
               </span>
+            ) : motivoDoEnvio ? (
+              <span className="text-sm text-destructive">{motivoDoEnvio}</span>
             ) : null}
             <label
               aria-disabled={enviandoFotos}
@@ -396,7 +404,11 @@ export default function PaginaOs() {
                 accept="image/jpeg,image/png,image/webp"
                 multiple
                 className="sr-only"
-                disabled={enviandoFotos}
+                // Ocupado não é desabilitado: com disabled, o foco que estava aqui caía no corpo.
+                aria-disabled={enviandoFotos || undefined}
+                onClick={(event) => {
+                  if (enviandoFotos) event.preventDefault();
+                }}
                 onChange={(event) => {
                   anexar(Array.from(event.target.files ?? []));
                   event.target.value = "";

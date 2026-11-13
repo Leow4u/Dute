@@ -16,24 +16,28 @@ import type { CaixasDoPedido } from "@/lib/warehouse-ops/caixas-da-separacao";
  * (parte 4) e as caixas de onde ele saiu: as inteiras, as abertas e as
  * vazias. Sem legenda.
  *
- * Concluindo (carregamento v2, parte 11 e momento 6): aos 300 ms, "Etapa 1
- * de 2" com Separação → Embalagem; o botão "Concluindo…" mantém a largura e
- * o "Voltar" fica aria-disabled, como o diálogo, que não fecha. As duas
- * etapas correm numa chamada só (completeOrderSeparation): a tela não sabe
- * quando a primeira termina, e as duas fecham juntas na resposta. Aos 10 s,
- * "Demorando mais que o normal · 0:12"; sem resposta aos 70 s, "Sem
- * confirmação do servidor" e o botão vira "Conferir", que relê o pedido e
- * nunca reenvia (a chave da conclusão é a mesma).
+ * Concluindo (carregamento v2, parte 11 e momento 6): "Etapa 1 de 2" com
+ * Separação → Embalagem fica no diálogo desde o repouso, pendente, como na
+ * prancha, e o lugar do aviso também: nada entra empurrando o botão tocado.
+ * Aos 300 ms a Separação anda e o leitor de tela ouve "Concluindo a
+ * separação"; o botão "Concluindo…" mantém a largura, o "Voltar" e o X
+ * ficam aria-disabled e o diálogo não fecha. As duas etapas correm numa
+ * chamada só (completeOrderSeparation): a tela não sabe quando a primeira
+ * termina, e as duas fecham juntas na resposta. Aos 10 s, "Demorando mais
+ * que o normal · 0:12"; sem resposta aos 70 s, "Sem confirmação do servidor"
+ * e o botão vira "Conferir", que relê o pedido e nunca reenvia (a chave da
+ * conclusão é a mesma). Conferindo, o botão diz "Conferindo…", o aviso fica
+ * e as etapas não voltam a andar: nada foi reenviado.
  */
 
 /** As etapas que a conclusão percorre, na ordem do servidor. */
 export const ETAPAS_DA_CONCLUSAO = ["Separação", "Embalagem"] as const;
 
-/** Onde as etapas estão: andando na primeira até a resposta, as duas feitas no sucesso. */
+/** Onde as etapas estão: as duas feitas no sucesso; a primeira andando até a resposta; pendentes no resto. */
 export function etapasDaConclusao(estado: EstadoDaAcao): ItemDoProgresso[] {
   return ETAPAS_DA_CONCLUSAO.map((rotulo, indice) => ({
     rotulo,
-    estado: estado === "sucesso" ? "feito" : indice === 0 ? "andamento" : "fila",
+    estado: estado === "sucesso" ? "feito" : estado === "andamento" && indice === 0 ? "andamento" : "fila",
   }));
 }
 
@@ -46,6 +50,7 @@ export function ConcluirSeparacaoConteudo({
   lacre,
   confirmando = false,
   estado,
+  conferindo = false,
   onLacre,
   onVoltar,
   onConfirmar,
@@ -62,6 +67,8 @@ export function ConcluirSeparacaoConteudo({
   confirmando?: boolean;
   /** O estado da conclusão no botão: em andamento, sucesso, erro ou sem resposta (o "Conferir"). */
   estado?: EstadoDaAcao;
+  /** O "Conferir" relendo o pedido, com o estado ainda sem resposta: a leitura não é a escrita. */
+  conferindo?: boolean;
   onLacre: (lacre: string) => void;
   onVoltar: () => void;
   onConfirmar: () => void;
@@ -70,9 +77,11 @@ export function ConcluirSeparacaoConteudo({
 }) {
   const atual: EstadoDaAcao = estado ?? (confirmando ? "andamento" : "repouso");
   const espera = useEspera(atual === "andamento");
-  const ocupado = atual === "andamento" || atual === "sucesso";
-  const comEtapas = (atual === "andamento" && espera.visivel) || atual === "sucesso";
+  const ocupado = atual === "andamento" || atual === "sucesso" || conferindo;
+  // A Separação anda com a conclusão (o Progresso só a mostra andando aos 300 ms); conferindo, que só relê, ficam pendentes.
+  const etapas = etapasDaConclusao(atual);
   const acionar = () => {
+    if (conferindo) return;
     if (atual === "sem-resposta") onConferir?.();
     else if (!ocupado && lacre.trim()) onConfirmar();
   };
@@ -111,15 +120,17 @@ export function ConcluirSeparacaoConteudo({
         <Label htmlFor="concluir-separacao-lacre">Número do lacre</Label>
         <Input id="concluir-separacao-lacre" value={lacre} maxLength={60} readOnly={ocupado} onChange={(event) => onLacre(event.target.value)} autoFocus />
       </div>
-      {comEtapas ? <Progresso forma="etapas" titulo="Concluindo a separação" itens={etapasDaConclusao(atual)} /> : null}
-      {atual === "andamento" && espera.calmo ? <AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={espera.decorridoMs} /> : null}
-      {atual === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
+      <Progresso forma="etapas" titulo="Concluindo a separação" itens={etapas} />
+      <div data-lugar-do-aviso="" className="grid min-h-9 items-center">
+        {atual === "andamento" && espera.calmo ? <AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={espera.decorridoMs} /> : null}
+        {atual === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
+      </div>
       <DialogFooter>
         <Button
           type="button"
           variant="outline"
           aria-disabled={ocupado || undefined}
-          className={ocupado ? "opacity-45 hover:bg-card active:bg-card" : undefined}
+          className={ocupado ? "min-h-11 opacity-45 hover:bg-card active:bg-card" : "min-h-11"}
           onClick={() => {
             if (!ocupado) onVoltar();
           }}
@@ -128,9 +139,10 @@ export function ConcluirSeparacaoConteudo({
         </Button>
         <BotaoDeAcao
           type="button"
-          estado={atual}
+          className="min-h-11"
+          estado={conferindo ? "andamento" : atual}
           rotulo="Confirmar separação"
-          andamento="Concluindo…"
+          andamento={conferindo ? "Conferindo…" : "Concluindo…"}
           sucesso="Concluído"
           erro="Não concluído"
           bloqueado={atual === "repouso" && !lacre.trim()}
@@ -150,6 +162,7 @@ export function ConcluirSeparacaoDialog({
   lacre,
   confirmando,
   estado,
+  conferindo = false,
   onLacre,
   onFechar,
   onConfirmar,
@@ -163,17 +176,18 @@ export function ConcluirSeparacaoDialog({
   lacre: string;
   confirmando?: boolean;
   estado?: EstadoDaAcao;
+  conferindo?: boolean;
   onLacre: (lacre: string) => void;
   onFechar: () => void;
   onConfirmar: () => void;
   onConferir?: () => void;
 }) {
   const atual: EstadoDaAcao = estado ?? (confirmando ? "andamento" : "repouso");
-  // Concluindo, o diálogo não fecha: nem o Esc, nem o clique fora, nem o X.
-  const ocupado = atual === "andamento" || atual === "sucesso";
+  // Concluindo (e conferindo), o diálogo não fecha: nem o Esc, nem o clique fora, nem o X, que fica aria-disabled.
+  const ocupado = atual === "andamento" || atual === "sucesso" || conferindo;
   return (
     <Dialog open={aberto} onOpenChange={(open) => (open || ocupado ? undefined : onFechar())}>
-      <DialogContent className="sm:max-w-xl" aria-describedby={undefined}>
+      <DialogContent className="sm:max-w-xl" aria-describedby={undefined} fecharTravado={ocupado}>
         <DialogHeader>
           <DialogTitle>{pedido}: concluir separação</DialogTitle>
         </DialogHeader>
@@ -183,6 +197,7 @@ export function ConcluirSeparacaoDialog({
           caixas={caixas}
           lacre={lacre}
           estado={atual}
+          conferindo={conferindo}
           onLacre={onLacre}
           onVoltar={onFechar}
           onConfirmar={onConfirmar}

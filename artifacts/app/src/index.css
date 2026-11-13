@@ -2096,3 +2096,87 @@
     }
   }
 }
+
+/* O que a revisão da parte 11 pediu ao progresso e ao aviso. O segmento da
+   foto que sobe sem os bytes medidos (a de até 256 KB vai numa requisição só,
+   sem evento no meio) não fica com cara de fila: o trilho mais forte e as
+   listras na tinta, que ficam à vista paradas depois dos 5 s. As etapas que
+   não cabem lado a lado numa caixa estreita (três, no formulário do Agent
+   Dute; duas, no celular) põem o rótulo sob o marcador. A pílula da demora quebra entre os
+   pedaços, com o "·" antes de cada um; o do começo da linha fica fora da
+   caixa e some, e nunca sobra um "·" no fim da linha. */
+@layer components {
+  .carregando-segmentos > [data-segmento][data-estado="andamento"]:not([data-medido]) > [data-parte="trilho"] {
+    opacity: 0.18;
+  }
+
+  .carregando-segmentos > [data-segmento][data-estado="andamento"]:not([data-medido]) > [data-parte="listras"] {
+    background: repeating-linear-gradient(45deg, currentColor 0 5.657px, transparent 5.657px 11.314px);
+    opacity: 0.22;
+  }
+
+  .carregando-etapas-caixa {
+    container-type: inline-size;
+  }
+
+  /* Duas etapas também não cabem no celular ("Separação" e "Embalagem" pedem
+     cerca de 300 px, e a caixa tem 276 a 360 px de largura). */
+  @container (max-width: 21rem) {
+    .carregando-etapas:not([data-n="1"]) {
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .carregando-etapas:not([data-n="1"]) > [data-etapa] {
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .carregando-etapas:not([data-n="1"]) > .carregando-fio {
+      min-inline-size: 12px;
+      margin-block-start: 13px;
+    }
+  }
+
+  @container (max-width: 26rem) {
+    .carregando-etapas:not([data-n="1"], [data-n="2"]) {
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .carregando-etapas:not([data-n="1"], [data-n="2"]) > [data-etapa] {
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .carregando-etapas:not([data-n="1"], [data-n="2"]) > .carregando-fio {
+      min-inline-size: 12px;
+      margin-block-start: 13px;
+    }
+  }
+
+  .carregando-aviso-itens {
+    display: block;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  .carregando-aviso-itens > span {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    margin-inline-start: -1em;
+  }
+
+  .carregando-aviso-itens > span > span {
+    white-space: nowrap;
+  }
+
+  .carregando-aviso-itens > span > span::before {
+    content: "·" / "";
+    display: inline-block;
+    inline-size: 1em;
+    text-align: center;
+    font-weight: 700;
+  }
+}

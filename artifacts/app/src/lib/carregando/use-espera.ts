@@ -132,17 +132,21 @@ export function useEspera(ativa: boolean, opcoes: OpcoesDaEspera = {}): Espera {
       return marco !== null && instante - corrida >= marco ? avancar(atual, corrida, instante) : atual;
     });
     let tique: ReturnType<typeof setTimeout> | undefined;
-    const armar = () => {
+    // O tique foi armado para o marco: quando ele dispara, o marco chegou,
+    // mesmo que o relógio leia um décimo de milissegundo antes (o atraso
+    // fracionário do setTimeout é truncado). Sem isso, o tique lia 299,9 ms,
+    // não marcava, e quem armava o seguinte já lia 300 e pulava para os 3 s.
+    const armar = (alcancado: number) => {
       const instante = agora();
-      const marco = proximoMarco(instante - corrida, desisteMs);
+      const marco = proximoMarco(Math.max(instante - corrida, alcancado), desisteMs);
       if (marco === null) return;
       tique = setTimeout(() => {
-        const disparo = agora();
+        const disparo = Math.max(agora(), corrida + marco);
         setRelogio((atual) => avancar(atual, corrida, disparo));
-        armar();
+        armar(marco);
       }, Math.max(0, corrida + marco - instante));
     };
-    armar();
+    armar(0);
     return () => clearTimeout(tique);
   }, [corrida, desisteMs]);
 

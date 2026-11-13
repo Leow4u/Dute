@@ -170,6 +170,10 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
   ref,
 ) {
   const espera = useEspera(estado === "andamento", { segurarMinimo: true });
+  // O gerúndio fica o da espera que está na tela: o "Conferindo…" que segura o
+  // mínimo de 500 ms depois da leitura não vira o "Confirmando…" da ação.
+  const gerundio = React.useRef(andamento);
+  if (estado === "andamento") gerundio.current = andamento;
   const [troca, setTroca] = React.useState<Troca>(() => ({ atual: camadaDe(estado, false, "repouso"), de: null }));
   const atual = camadaDe(estado, espera.visivel, troca.atual);
   if (atual !== troca.atual) setTroca({ atual, de: troca.atual });
@@ -247,7 +251,7 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
             <path d={CAIXA} />
           </svg>
         </span>
-        {andamento}
+        {gerundio.current}
       </>
     ),
     sucesso: (

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 
 import { ProgressoDasFotos } from "@/components/ui/progresso-das-fotos";
+import { useAnuncio } from "@/lib/carregando/anunciador";
 import { useEnvioDeFotos, type EnvioDeFotos, type OpcoesDoEnvio } from "@/lib/carregando/use-envio-de-fotos";
 import { FOTOS_POR_VEZ } from "@/lib/envio-de-fotos";
 
@@ -27,20 +28,24 @@ export interface FotosDoProduto<T> extends EnvioDeFotos<T> {
  * As fotos do produto no WMS (Receber, Contagem e a ficha do item;
  * carregamento v2, parte 11): compactadas e uma de cada vez, com a contagem e
  * os bytes, a que falha com o próprio "Tentar de novo", e o limite de 4 por
- * escolha dito na tela, no lugar do corte calado.
+ * escolha dito na tela e pelo Anunciador, no lugar do corte calado.
  */
 export function useFotosDoProduto<T>(opcoes: OpcoesDoEnvio<T>): FotosDoProduto<T> {
   const envio = useEnvioDeFotos(opcoes);
   const [aviso, setAviso] = useState<string | null>(null);
+  const anunciar = useAnuncio();
   const { enviar } = envio;
   const escolher = useCallback(
     (arquivos: readonly File[], vagas: number = FOTOS_POR_VEZ) => {
       const cabem = Math.max(0, Math.min(FOTOS_POR_VEZ, Math.floor(vagas)));
       const levadas = arquivos.slice(0, cabem);
-      setAviso(arquivos.length > levadas.length ? (cabem < FOTOS_POR_VEZ ? ATE_OITO_POR_PRODUTO : SO_QUATRO_POR_VEZ) : null);
+      const corte = arquivos.length > levadas.length ? (cabem < FOTOS_POR_VEZ ? ATE_OITO_POR_PRODUTO : SO_QUATRO_POR_VEZ) : null;
+      setAviso(corte);
       enviar(levadas);
+      // O corte também é falado, depois do começo ("Enviando 4 fotos"); sem nenhuma levada, é o único anúncio.
+      if (corte) anunciar(corte);
     },
-    [enviar],
+    [enviar, anunciar],
   );
   return useMemo(() => ({ ...envio, aviso, escolher }), [envio, aviso, escolher]);
 }

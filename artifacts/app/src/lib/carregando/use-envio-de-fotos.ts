@@ -16,6 +16,11 @@ export interface FotoNoEnvio<T> {
   estado: EstadoDaFoto;
   /** A fração dos bytes enviados da foto que sobe; só cresce. */
   fracao: number;
+  /** A vez em que entrou na fila (a escolha, ou o "Tentar de novo"): a estimativa conta só a vez atual. */
+  vez: number;
+  /** Quando começou a subir e quando chegou o último byte novo (`performance.now()`): a estimativa sai com a foto parada. */
+  comecouEm: number | null;
+  byteEm: number | null;
   resultado?: T;
   erro?: unknown;
 }
@@ -60,17 +65,53 @@ export function anuncioDoFim(feitas: number, falhas: number): string {
   return falhas > 0 ? plural(falhas, "foto não enviada", "fotos não enviadas") : plural(feitas, "foto enviada", "fotos enviadas");
 }
 
+type ItemDaEstimativa = Pick<FotoNoEnvio<unknown>, "estado" | "fracao"> & Partial<Pick<FotoNoEnvio<unknown>, "vez" | "comecouEm" | "byteEm">>;
+
 /**
  * Quanto falta, pelo que já subiu: o tempo decorrido dividido pela parte
- * feita da vez (as enviadas mais a fração da que sobe). Sem nada enviado
- * ainda, não há estimativa.
+ * feita da vez atual (as enviadas nela mais a fração da que sobe); as
+ * enviadas numa vez anterior não contam, porque o decorrido é desta vez.
+ * Sem nada enviado ainda, não há estimativa; com `agoraMs`, também não há
+ * quando a foto que sobe está há 10 s sem um byte novo (parada, ou sem rede).
  */
-export function restanteDoEnvio(itens: readonly Pick<FotoNoEnvio<unknown>, "estado" | "fracao">[], decorridoMs: number): number | undefined {
-  const davez = itens.filter((item) => item.estado !== "erro");
-  if (davez.length === 0 || !(decorridoMs > 0)) return undefined;
+export function restanteDoEnvio(itens: readonly ItemDaEstimativa[], decorridoMs: number, agoraMs?: number): number | undefined {
+  const ativos = itens.filter((item) => item.estado === "fila" || item.estado === "andamento");
+  if (ativos.length === 0 || !(decorridoMs > 0)) return undefined;
+  const vez = Math.max(...ativos.map((item) => item.vez ?? 0));
+  const davez = itens.filter((item) => (item.vez ?? 0) === vez && item.estado !== "erro");
+  const subindo = itens.find((item) => item.estado === "andamento");
+  const ultimoByte = subindo ? (subindo.byteEm ?? subindo.comecouEm ?? null) : null;
+  if (agoraMs !== undefined && ultimoByte !== null && agoraMs - ultimoByte >= CARREGANDO.estimativaSemByteMs) return undefined;
   const feito = davez.reduce((soma, item) => soma + (item.estado === "feito" ? 1 : item.estado === "andamento" ? item.fracao : 0), 0);
   if (!(feito > 0) || feito >= davez.length) return undefined;
   return (decorridoMs * (davez.length - feito)) / feito;
+}
+
+/** A estimativa na tela: o valor e quando ele entrou (no relógio da espera). */
+export interface EstimativaNaTela {
+  ms: number;
+  em: number;
+}
+
+/** O que a estimativa na tela diz agora: ela conta para baixo desde que entrou. */
+export function restanteExibido(estimativa: EstimativaNaTela | null, agoraMs: number): number | undefined {
+  return estimativa ? Math.max(0, estimativa.ms - (agoraMs - estimativa.em)) : undefined;
+}
+
+/**
+ * A estimativa que não pisca. Entre dois eventos de bytes, o decorrido anda
+ * e a fração não, e a conta sobe; no evento, ela cai: "55 s", "50 s", "55 s"
+ * em décimos de segundo. A da tela conta para baixo, e a conta nova só entra
+ * quando é menor que ela, quando sobe de verdade (mais de um quarto e 5 s) ou
+ * quando a da tela já chegou a zero.
+ */
+export function estimativaEstavel(anterior: EstimativaNaTela | null, restanteMs: number | undefined, agoraMs: number): EstimativaNaTela | null {
+  if (restanteMs === undefined || !Number.isFinite(restanteMs)) return null;
+  const contando = restanteExibido(anterior, agoraMs);
+  if (contando === undefined || contando <= 0 || restanteMs <= contando || restanteMs > contando * 1.25 + 5_000) {
+    return { ms: restanteMs, em: agoraMs };
+  }
+  return anterior;
 }
 
 function miniaturaDe(arquivo: File): string | null {
@@ -103,6 +144,7 @@ export function useEnvioDeFotos<T>(opcoes: OpcoesDoEnvio<T>): EnvioDeFotos<T> {
   const anunciar = useAnuncio();
   const subindo = useRef<{ chave: string; parar: AbortController } | null>(null);
   const entregues = useRef(new Set<string>());
+  const vezes = useRef(0);
   const vivo = useRef(true);
 
   useEffect(() => {
@@ -127,15 +169,17 @@ export function useEnvioDeFotos<T>(opcoes: OpcoesDoEnvio<T>): EnvioDeFotos<T> {
     if (!item) return;
     const parar = new AbortController();
     subindo.current = { chave: item.chave, parar };
-    mudar(item.chave, (atual) => ({ ...atual, estado: "andamento", fracao: 0, erro: undefined }));
+    mudar(item.chave, (atual) => ({ ...atual, estado: "andamento", fracao: 0, comecouEm: performance.now(), byteEm: null, erro: undefined }));
     const paradaMs = ultimas.current.paradaMs ?? CARREGANDO.desisteMs;
-    let prazo = setTimeout(() => parar.abort(), paradaMs);
+    let prazo: ReturnType<typeof setTimeout> | undefined = setTimeout(() => parar.abort(), paradaMs);
     const aoProgredir = (fracao: number) => {
       if (parar.signal.aborted || !Number.isFinite(fracao)) return;
-      clearTimeout(prazo);
-      prazo = setTimeout(() => parar.abort(), paradaMs);
       const limitada = Math.min(1, Math.max(0, fracao));
-      mudar(item.chave, (atual) => (atual.estado === "andamento" && limitada > atual.fracao ? { ...atual, fracao: limitada } : atual));
+      clearTimeout(prazo);
+      // O último byte subiu: o que vem depois (o endereço da foto, a callable da OS) tem o próprio prazo.
+      prazo = limitada >= 1 ? undefined : setTimeout(() => parar.abort(), paradaMs);
+      const instante = performance.now();
+      mudar(item.chave, (atual) => (atual.estado === "andamento" && limitada > atual.fracao ? { ...atual, fracao: limitada, byteEm: instante } : atual));
     };
     let resultado: Promise<T>;
     try {
@@ -179,12 +223,17 @@ export function useEnvioDeFotos<T>(opcoes: OpcoesDoEnvio<T>): EnvioDeFotos<T> {
   const enviar = useCallback(
     (arquivos: readonly File[]) => {
       if (arquivos.length === 0) return;
+      vezes.current += 1;
+      const vez = vezes.current;
       const novos = arquivos.map<FotoNoEnvio<T>>((arquivo) => ({
         chave: crypto.randomUUID(),
         arquivo,
         miniatura: miniaturaDe(arquivo),
         estado: "fila",
         fracao: 0,
+        vez,
+        comecouEm: null,
+        byteEm: null,
       }));
       setItens((lista) => {
         // As enviadas da vez anterior já estão na tela; as não enviadas continuam com o "Tentar de novo".
@@ -199,7 +248,11 @@ export function useEnvioDeFotos<T>(opcoes: OpcoesDoEnvio<T>): EnvioDeFotos<T> {
 
   const tentarDeNovo = useCallback(
     (chave: string) => {
-      mudar(chave, (item) => (item.estado === "erro" ? { ...item, estado: "fila", fracao: 0, erro: undefined } : item));
+      // Com outras na fila, a foto entra na vez delas; sem nenhuma, começa uma vez nova.
+      const ativas = atuais.current.filter((item) => item.estado === "fila" || item.estado === "andamento");
+      if (ativas.length === 0) vezes.current += 1;
+      const vez = ativas.length ? Math.max(...ativas.map((item) => item.vez)) : vezes.current;
+      mudar(chave, (item) => (item.estado === "erro" ? { ...item, estado: "fila", fracao: 0, vez, comecouEm: null, byteEm: null, erro: undefined } : item));
       anunciar(anuncioDoComeco(1));
     },
     [mudar, anunciar],

@@ -1,9 +1,10 @@
-import type { CSSProperties } from "react";
+import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from "react";
 import { Check, Clock3, RefreshCw } from "lucide-react";
 
 import { CaixaDeAlerta } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { useAnuncio } from "@/lib/carregando/anunciador";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +15,12 @@ export interface ItemDoProgresso {
   /** "Foto 3", "Separação". Sem ele, a foto leva o número da posição. */
   rotulo?: string;
   estado: EstadoDoItemDoProgresso;
-  /** De 0 a 1: a parte feita do item em andamento (os bytes da foto). Muda por evento, nunca por quadro. */
+  /**
+   * De 0 a 1: a parte feita do item em andamento (os bytes da foto). Muda por
+   * evento, nunca por quadro. Sem ela (ou em 0), os bytes ainda não foram
+   * medidos: a foto de até 256 KB sobe numa requisição só, sem evento no
+   * meio, e o item gira em vez de encher.
+   */
   fracao?: number;
   /** A miniatura da foto (o object URL local), na contagem. */
   miniatura?: string | null;
@@ -28,8 +34,10 @@ export interface ProgressoProps {
   /** O nome da operação: "Enviando fotos", "Concluindo a separação". É o nome da barra de progresso. */
   titulo: string;
   itens: readonly ItemDoProgresso[];
-  /** O fim da contagem, com a caixa fechada: "4 fotos enviadas". */
+  /** O fim da contagem: "4 fotos enviadas", com a caixa fechada quando nenhuma falhou. É também o nome da barra no fim. */
   concluido?: string;
+  /** Ao lado do título, só visual e fora de região viva: o "0:12" da foto por IA. */
+  apoio?: ReactNode;
   /** O que se conta, no singular e no plural: "3 de 4 fotos". */
   unidade?: readonly [string, string];
   className?: string;
@@ -61,11 +69,20 @@ function fracao(valor: number | undefined): number {
   return valor !== undefined && Number.isFinite(valor) ? Math.min(1, Math.max(0, valor)) : 0;
 }
 
-/** O número que a contagem mostra: as feitas mais a que está em andamento ("3 de 4" com duas enviadas e a terceira subindo). */
+/** Os bytes do item já foram medidos: ele enche pela fração; antes disso, gira. */
+function medido(item: Pick<ItemDoProgresso, "fracao">): boolean {
+  return fracao(item.fracao) > 0;
+}
+
+/**
+ * O número que a contagem mostra: as que já passaram (enviadas ou não) mais
+ * a que está em andamento ("3 de 4" com uma enviada, uma não enviada e a
+ * terceira subindo).
+ */
 export function numeroDaContagem(itens: readonly Pick<ItemDoProgresso, "estado">[]): number {
-  const feitos = itens.filter((item) => item.estado === "feito").length;
+  const passadas = itens.filter((item) => item.estado === "feito" || item.estado === "erro").length;
   const andando = itens.some((item) => item.estado === "andamento") ? 1 : 0;
-  return Math.min(itens.length, feitos + andando);
+  return Math.min(itens.length, passadas + andando);
 }
 
 /** A etapa atual: a primeira que não terminou (a última, quando todas terminaram). */
@@ -85,21 +102,37 @@ export function numeroDaEtapa(itens: readonly Pick<ItemDoProgresso, "estado">[])
  *   pelos bytes, com as listras até os 5 s, o da fila só no trilho); as
  *   miniaturas com o véu e a caixa determinada, o selo verde da enviada, o
  *   contorno da fila e a caixa com o "!" da que falhou, com o próprio "Tentar
- *   de novo". No fim, a caixa fechada e o `concluido` ("4 fotos enviadas").
- *   As miniaturas das enviadas saem quando a vez acaba: elas já estão na tela.
+ *   de novo". O item sem os bytes medidos gira, em vez de encher. No fim, o
+ *   `concluido` ("4 fotos enviadas"), com a caixa fechada quando nenhuma
+ *   falhou, e as miniaturas ficam com o selo verde, como na prancha: o bloco
+ *   não encolhe no fim.
  * - `etapas`: "Etapa 1 de 2" e os marcadores de 28 px (a feita cheia com o
  *   check, a atual com o indicador, a pendente em contorno com o número),
- *   unidos pelo fio que enche quando a de antes termina.
+ *   unidos pelo fio que enche quando a de antes termina. Mora na tela desde o
+ *   repouso, com as etapas pendentes, para nada empurrar o botão tocado; o
+ *   Anunciador fala o título aos 300 ms da espera. Com mais de duas etapas
+ *   numa caixa estreita, os rótulos vão para baixo dos marcadores.
  *
- * A barra de progresso (`role="progressbar"`) tem o título como nome e o
- * `aria-valuetext` ("3 de 4 fotos", "Etapa 1 de 2"), que muda por item, nunca
- * por byte. O resto é decorativo. O começo e o fim são falados pelo
- * Anunciador, por quem conduz a operação.
+ * A barra de progresso (`role="progressbar"`) tem o título como nome (no fim
+ * da contagem, o `concluido`) e o `aria-valuetext` ("3 de 4 fotos", "Etapa 1
+ * de 2"), que muda por item, nunca por byte. O resto é decorativo. Cada
+ * "Tentar de novo" é descrito pela foto dele ("Foto 3 não enviada"), e o
+ * que sai da tela leva o foco ao seguinte, ou ao título.
  */
-export function Progresso({ forma, titulo, itens, concluido, unidade = ["foto", "fotos"], className }: ProgressoProps) {
+export function Progresso({ forma, titulo, itens, concluido, apoio, unidade = ["foto", "fotos"], className }: ProgressoProps) {
   const total = itens.length;
-  const ativo = itens.some((item) => item.estado === "andamento" || item.estado === "fila");
+  // Nas etapas, em repouso todas ficam pendentes: espera só a que anda. Na contagem, a da fila também espera.
+  const ativo = itens.some((item) => item.estado === "andamento" || (forma === "contagem" && item.estado === "fila"));
   const espera = useEspera(ativo);
+  const anunciar = useAnuncio();
+  const id = useId();
+  const cabecalho = useRef<HTMLParagraphElement | null>(null);
+  const tentativas = useRef(new Map<number, HTMLButtonElement>());
+  // As etapas falam a entrada na espera aos 300 ms; a contagem é falada por quem envia ("Enviando 4 fotos").
+  const entrou = forma === "etapas" && espera.visivel;
+  useEffect(() => {
+    if (entrou) anunciar(titulo);
+  }, [entrou, titulo, anunciar]);
   // Antes de 300 ms o relógio ainda não mostrou nada: o movimento conta como ligado.
   const movimento = !espera.visivel || espera.movimento;
   if (total === 0) return null;
@@ -123,12 +156,13 @@ export function Progresso({ forma, titulo, itens, concluido, unidade = ["foto", 
             <span className="text-muted-foreground">de {total}</span>
           </span>
         </p>
-        <div className="rounded-xl border border-border bg-background px-4 py-3.5">
-          <div className="carregando-etapas">
+        <div className="carregando-etapas-caixa rounded-xl border border-border bg-background px-4 py-3.5">
+          <div className="carregando-etapas" data-n={total}>
             {itens.map((item, indice) => (
               <Etapa
                 key={item.rotulo ?? indice}
-                item={item}
+                // Nada aparece antes de 300 ms: até lá, a etapa que anda fica como estava, pendente.
+                item={item.estado === "andamento" && !espera.visivel ? { ...item, estado: "fila" } : item}
                 numero={indice + 1}
                 calmo={espera.calmo}
                 fio={indice > 0 ? itens[indice - 1].estado === "feito" : null}
@@ -141,31 +175,47 @@ export function Progresso({ forma, titulo, itens, concluido, unidade = ["foto", 
   }
 
   const numero = numeroDaContagem(itens);
-  const feitos = itens.filter((item) => item.estado === "feito").length;
-  const terminou = !ativo && feitos === total;
-  const mostradas = itens
-    .map((item, indice) => ({ item, rotulo: item.rotulo ?? `Foto ${indice + 1}` }))
-    .filter(({ item }) => ativo || item.estado !== "feito");
+  const semFalha = itens.every((item) => item.estado === "feito");
+  // A vez acabou (nada espera nem sobe): o título diz o que subiu, mesmo com uma não enviada.
+  const terminou = !ativo && Boolean(concluido);
+  const nome = terminou && concluido ? concluido : titulo;
+  const mostradas = itens.map((item, indice) => ({ item, indice, rotulo: item.rotulo ?? `Foto ${indice + 1}` }));
   const comMiniatura = mostradas.filter(({ item }) => item.miniatura);
   const falhas = mostradas.filter(({ item }) => item.estado === "erro" && item.onTentar);
   const [um, varios] = unidade;
+  /**
+   * O "Tentar de novo" sai da tela quando a foto volta à fila: o foco vai,
+   * antes, ao da próxima não enviada, ou ao título (2.4.3), e não cai no corpo.
+   */
+  const tentar = (indice: number, fazer: () => void) => {
+    const proximo = falhas.find((falha) => falha.indice !== indice);
+    const destino = (proximo ? tentativas.current.get(proximo.indice) : undefined) ?? cabecalho.current;
+    destino?.focus();
+    fazer();
+  };
 
   return (
     <div data-progresso="contagem" className={cn("grid gap-3", className)}>
       <div className="flex min-h-11 items-end justify-between gap-3">
-        <p className="flex min-h-7 items-center gap-2.5 text-base font-bold text-foreground">
+        <p
+          ref={cabecalho}
+          tabIndex={-1}
+          data-titulo=""
+          className="flex min-h-7 flex-wrap items-center gap-x-2.5 text-base font-bold text-foreground outline-none"
+        >
           {terminou && concluido ? (
             <>
-              <CaixaCheia tamanho={20} className="text-success" />
+              {semFalha ? <CaixaCheia tamanho={20} className="text-success" /> : null}
               {concluido}
             </>
           ) : (
             titulo
           )}
+          {apoio}
         </p>
         <p
           role="progressbar"
-          aria-label={titulo}
+          aria-label={nome}
           aria-valuemin={0}
           aria-valuemax={total}
           aria-valuenow={numero}
@@ -187,6 +237,7 @@ export function Progresso({ forma, titulo, itens, concluido, unidade = ["foto", 
             key={indice}
             data-segmento=""
             data-estado={item.estado}
+            data-medido={item.estado === "andamento" && medido(item) ? "" : undefined}
             style={item.estado === "andamento" ? ({ "--f": String(fracao(item.fracao)) } as CSSProperties) : undefined}
           >
             <span data-parte="trilho" />
@@ -209,7 +260,7 @@ export function Progresso({ forma, titulo, itens, concluido, unidade = ["foto", 
                 </>
               ) : item.estado === "andamento" ? (
                 <span data-veu="escuro">
-                  <Spinner tamanho={24} progresso={fracao(item.fracao)} className="carregando-sobre-preto" />
+                  <Spinner tamanho={24} progresso={medido(item) ? fracao(item.fracao) : undefined} calmo={espera.calmo} className="carregando-sobre-preto" />
                 </span>
               ) : item.estado === "erro" ? (
                 <span data-veu="escuro">
@@ -224,10 +275,20 @@ export function Progresso({ forma, titulo, itens, concluido, unidade = ["foto", 
           ))}
         </div>
       ) : null}
-      {falhas.map(({ item, rotulo }) => (
+      {falhas.map(({ item, indice, rotulo }) => (
         <div key={rotulo} className="flex flex-wrap items-center gap-3">
-          <p className="text-sm font-bold text-foreground">{`${rotulo} não enviada`}</p>
-          <Button type="button" variant="outline" className="min-h-11" onClick={item.onTentar}>
+          <p id={`${id}-falha-${indice}`} className="text-sm font-bold text-foreground">{`${rotulo} não enviada`}</p>
+          <Button
+            ref={(botao) => {
+              if (botao) tentativas.current.set(indice, botao);
+              else tentativas.current.delete(indice);
+            }}
+            type="button"
+            variant="outline"
+            className="min-h-11"
+            aria-describedby={`${id}-falha-${indice}`}
+            onClick={() => (item.onTentar ? tentar(indice, item.onTentar) : undefined)}
+          >
             <RefreshCw className="size-4" aria-hidden="true" />
             Tentar de novo
           </Button>

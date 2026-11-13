@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Images, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -21,6 +21,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { getErrorMessage } from "@/lib/warehouse-ops/model";
 import { ProductPhotoStudio } from "./product-photo-studio";
 import { type PhotoContext, isGeneratedPhoto } from "./photo-context";
@@ -55,6 +57,12 @@ export function ProductPhotoManager({
   const [removing, setRemoving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // "Atualizando fotos…" entra aos 300 ms, como toda espera, e o Anunciador o fala: nada de role="status" solto.
+  const atualizando = useEspera(busy);
+  const anunciar = useAnuncio();
+  useEffect(() => {
+    if (atualizando.visivel) anunciar("Atualizando fotos");
+  }, [atualizando.visivel, anunciar]);
   const selected =
     photos.find((photo) => photo.fileUrl === selectedUrl) ?? photos[0];
   const primary = selected?.fileUrl === photos[0]?.fileUrl;
@@ -178,7 +186,7 @@ export function ProductPhotoManager({
             Nenhuma foto vinculada. Anexe uma foto na ficha do produto.
           </p>
         )}
-        {busy ? (
+        {busy && atualizando.visivel ? (
           <p className="flex items-center gap-2 text-sm font-bold">
             <Spinner />
             Atualizando fotos…

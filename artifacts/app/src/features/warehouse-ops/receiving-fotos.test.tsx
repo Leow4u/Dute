@@ -48,7 +48,8 @@ vi.mock("@/lib/active-customer-context", () => ({
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => undefined }) }));
 
-import { textosDaTela } from "@/test/textos";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import { UnplannedReceiptDialog } from "./receiving";
 
@@ -162,5 +163,59 @@ describe("as fotos da chegada avulsa", () => {
     expect(cancelar().hasAttribute("aria-disabled")).toBe(false);
     await act(async () => cancelar().click());
     expect(props.onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("o campo da foto não fica disabled enquanto sobem: aria-disabled, e o foco fica nele, sem cair no corpo", async () => {
+    await linhaDeProdutoNovo();
+    const entrada = document.querySelector<HTMLInputElement>("#receipt-photo-0")!;
+    entrada.focus();
+    Object.defineProperty(entrada, "files", { value: [new File(["foto"], "foto-1.jpg", { type: "image/jpeg" })], configurable: true });
+    await act(async () => {
+      entrada.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(entrada.hasAttribute("disabled")).toBe(false);
+    expect(entrada.getAttribute("aria-disabled")).toBe("true");
+    expect(document.activeElement).toBe(entrada);
+    // A escolha nova, enquanto sobem, não entra.
+    const clique = new MouseEvent("click", { bubbles: true, cancelable: true });
+    entrada.dispatchEvent(clique);
+    expect(clique.defaultPrevented).toBe(true);
+    await soltar(0);
+    expect(entrada.hasAttribute("aria-disabled")).toBe(false);
+  });
+
+  it("o X do diálogo também diz que está travado enquanto as fotos sobem", async () => {
+    await escolherFotos(1);
+    const fechar = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((botao) => botao.textContent?.trim() === "Fechar")!;
+    expect(fechar.getAttribute("aria-disabled")).toBe("true");
+    expect(fechar.hasAttribute("disabled")).toBe(false);
+    await act(async () => fechar.click());
+    expect(props.onOpenChange).not.toHaveBeenCalled();
+    await soltar(0);
+    expect(fechar.hasAttribute("aria-disabled")).toBe(false);
+  });
+
+  it("no fim, as fotos entram na linha embaixo do progresso, e o progresso não sai do lugar", async () => {
+    await escolherFotos(2);
+    await soltar(0);
+    await soltar(1);
+    await esperar(() => Boolean(document.querySelector('img[src="https://example.com/foto-2.jpg"]')), "as fotos na linha");
+    const bloco = document.querySelector("[data-fotos-enviando]")!;
+    const fotoDaLinha = document.querySelector('img[src="https://example.com/foto-1.jpg"]')!;
+    // O bloco vem antes da grade da linha no documento: o que entra depois dele não o empurra.
+    expect(bloco.compareDocumentPosition(fotoDaLinha) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(bloco.textContent).toContain("2 fotos enviadas");
+  });
+
+  it("o bloco das fotos passa no axe e só tem rótulos e dados, subindo, no fim e com uma não enviada", async () => {
+    const TEXTOS = ["Só 4 fotos sobem por vez.", "Enviando fotos", /^\d$/, /^de \d$/, /^\d fotos? enviadas?$/, /^Foto \d não enviada$/, "Tentar de novo"];
+    await escolherFotos(2);
+    const bloco = () => document.querySelector("[data-fotos-enviando]")!.outerHTML;
+    expect(textosForaDaLista(bloco(), TEXTOS)).toEqual([]);
+    expect(await violacoesDeAcessibilidade(bloco())).toEqual([]);
+    await soltar(0);
+    await soltar(1);
+    expect(textosForaDaLista(bloco(), TEXTOS)).toEqual([]);
+    expect(await violacoesDeAcessibilidade(bloco())).toEqual([]);
   });
 });

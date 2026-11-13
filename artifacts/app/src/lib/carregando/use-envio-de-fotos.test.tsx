@@ -9,7 +9,16 @@ vi.mock("./anunciador", () => ({ useAnuncio: () => (texto: string) => falados.pu
 import { EnvioCancelado, FOTO_PARADA } from "@/lib/envio-de-fotos";
 
 import { CARREGANDO } from "./tempo";
-import { anuncioDoComeco, anuncioDoFim, restanteDoEnvio, useEnvioDeFotos, type EnvioDeFotos, type OpcoesDoEnvio } from "./use-envio-de-fotos";
+import {
+  anuncioDoComeco,
+  anuncioDoFim,
+  estimativaEstavel,
+  restanteDoEnvio,
+  restanteExibido,
+  useEnvioDeFotos,
+  type EnvioDeFotos,
+  type OpcoesDoEnvio,
+} from "./use-envio-de-fotos";
 
 /**
  * O envio das fotos (carregamento v2, parte 11 e momento 6): uma por vez, na
@@ -140,6 +149,41 @@ describe("o envio das fotos, uma por vez", () => {
     expect((falhas[0] as Error).message).toBe(FOTO_PARADA);
   });
 
+  it("o prazo de 70 s sem byte novo para no último byte: a callable que vem depois fica com o próprio prazo e a própria mensagem", async () => {
+    await passo(() => envio!.enviar([foto("1.jpg")]));
+    // Os bytes acabam na hora; a callable seguinte (o attachPhoto da OS) passa do prazo dela aos 70 s.
+    await passo(() => pendentes[0].aoProgredir(1));
+    await passo(() => vi.advanceTimersByTime(CARREGANDO.desisteMs + 50));
+    expect(pendentes[0].sinal.aborted).toBe(false);
+    const prazo = Object.assign(new Error("O servidor não respondeu a tempo. Confira antes de tentar de novo."), { code: "functions/deadline-exceeded" });
+    await passo(() => pendentes[0].rejeitar(prazo));
+    expect(estados()).toEqual(["erro"]);
+    expect(envio!.itens[0].erro).toBe(prazo);
+    expect(falhas).toEqual([prazo]);
+  });
+
+  it("a estimativa do \"Tentar de novo\" conta só a vez atual, e não as enviadas antes", async () => {
+    await passo(() => envio!.enviar([foto("1.jpg"), foto("2.jpg")]));
+    await passo(() => pendentes[0].resolver("u1"));
+    await passo(() => pendentes[1].rejeitar(new Error("falhou")));
+    await passo(() => envio!.tentarDeNovo(envio!.itens[1].chave));
+    await passo(() => pendentes[2].aoProgredir(0.5));
+    // Metade da foto em 10 s: faltam 10 s, e não 3 s (contando a enviada antes como feita nesta vez).
+    expect(restanteDoEnvio(envio!.itens, 10_000)).toBeCloseTo(10_000);
+  });
+
+  it("sem um byte novo há 10 s (a foto parada, sem rede), a estimativa sai: a conta não vale", async () => {
+    await passo(() => envio!.enviar([foto("1.jpg"), foto("2.jpg")]));
+    await passo(() => vi.advanceTimersByTime(1_000));
+    await passo(() => pendentes[0].aoProgredir(0.3));
+    expect(restanteDoEnvio(envio!.itens, 11_000, performance.now())).toBeGreaterThan(0);
+    await passo(() => vi.advanceTimersByTime(CARREGANDO.estimativaSemByteMs));
+    expect(restanteDoEnvio(envio!.itens, 21_000, performance.now())).toBeUndefined();
+    // O byte que volta traz a estimativa de volta.
+    await passo(() => pendentes[0].aoProgredir(0.6));
+    expect(restanteDoEnvio(envio!.itens, 21_000, performance.now())).toBeGreaterThan(0);
+  });
+
   it("a escolha nova tira da lista as enviadas da vez anterior e guarda as não enviadas", async () => {
     await passo(() => envio!.enviar([foto("1.jpg"), foto("2.jpg")]));
     await passo(() => pendentes[0].resolver("u1"));
@@ -177,5 +221,24 @@ describe("as frases e a estimativa", () => {
     ];
     expect(restanteDoEnvio(itens, 10_000)).toBeCloseTo(6_000);
     expect(restanteDoEnvio([{ estado: "andamento", fracao: 0 }], 10_000)).toBeUndefined();
+  });
+
+  it("o número mostrado conta para baixo e não pisca: a conta nova entra quando baixa ou quando sobe de verdade", () => {
+    let estimativa = estimativaEstavel(null, 55_000, 33_000);
+    expect(restanteExibido(estimativa, 33_000)).toBe(55_000);
+    // O evento de bytes baixa a conta: entra.
+    estimativa = estimativaEstavel(estimativa, 50_000, 34_000);
+    expect(restanteExibido(estimativa, 34_000)).toBe(50_000);
+    // O segundo seguinte a sobe um pouco (o decorrido andou, a fração não): fica a que conta para baixo.
+    estimativa = estimativaEstavel(estimativa, 55_000, 34_030);
+    expect(restanteExibido(estimativa, 34_030)).toBe(49_970);
+    estimativa = estimativaEstavel(estimativa, 54_000, 35_000);
+    expect(restanteExibido(estimativa, 35_000)).toBe(49_000);
+    // A rede que ficou bem mais lenta muda a conta.
+    estimativa = estimativaEstavel(estimativa, 90_000, 36_000);
+    expect(restanteExibido(estimativa, 36_000)).toBe(90_000);
+    // Sem conta, sem número.
+    expect(estimativaEstavel(estimativa, undefined, 37_000)).toBeNull();
+    expect(restanteExibido(null, 37_000)).toBeUndefined();
   });
 });

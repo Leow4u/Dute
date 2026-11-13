@@ -35,7 +35,7 @@ import { Progresso } from "@/components/ui/progresso";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { desfechoDoErro } from "@/lib/carregando/use-acao-na-linha";
 import { useEspera } from "@/lib/carregando/use-espera";
-import { comPrazo } from "@/lib/conexao";
+import { comPrazoSemAvanco } from "@/lib/conexao";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Card,
@@ -269,13 +269,30 @@ function sortDocuments(items: KnowledgeDocument[]) {
 async function commitInBatches(
   operations: Array<(batch: ReturnType<typeof writeBatch>) => void>,
   size = 10,
+  /** A cada lote gravado: o prazo da gravação conta de cada avanço. */
+  aoGravarLote?: () => void,
 ) {
   if (!firestore) throw new Error("Firestore não configurado.");
   for (let index = 0; index < operations.length; index += size) {
     const batch = writeBatch(firestore);
     operations.slice(index, index + size).forEach((operation) => operation(batch));
     await batch.commit();
+    aoGravarLote?.();
   }
+}
+
+/** A gravação da vez: o id, quantos pedaços do arquivo e trechos do texto ela escreve, e o evento dela. */
+interface EnvioDoConhecimento {
+  id: string;
+  pedacos: number;
+  trechos: number;
+  evento: Parameters<typeof emitKnowledgeEvent>[0];
+  eventoSaiu: boolean;
+}
+
+/** O id do pedaço n (de 1 em diante) do conhecimento: o mesmo na gravação e no "Conferir". */
+function idDoPedaco(knowledgeId: string, numero: number): string {
+  return `${knowledgeId}_${String(numero).padStart(4, "0")}`;
 }
 
 async function emitKnowledgeEvent(input: {
@@ -372,16 +389,19 @@ export default function AgentKnowledge() {
   }, [documents.data, files.data]);
 
   // As etapas da gravação (o cadastro, o arquivo em pedaços e os trechos de
-  // texto), com o prazo de 70 s: a gravação direta no Firestore, sem rede,
-  // esperaria para sempre (carregamento v2, parte 11). O id é o do conteúdo,
-  // então repetir regrava o mesmo documento.
-  const [etapasDoEnvio, setEtapasDoEnvio] = useState<string[]>([]);
+  // texto), com o prazo de 70 s contado de cada lote gravado: a gravação
+  // direta no Firestore, sem rede, esperaria para sempre, e a lenta, mas
+  // andando, não desiste (carregamento v2, parte 11). Ficam no formulário
+  // desde o repouso. O id é o do conteúdo, então repetir regrava o mesmo
+  // documento.
+  const etapasDoEnvio = file && isTextLike(file) ? ["Cadastro", "Arquivo", "Trechos"] : ["Cadastro", "Arquivo"];
   const [etapaDoEnvio, setEtapaDoEnvio] = useState(0);
   const [fimDoEnvio, setFimDoEnvio] = useState<"erro" | "sem-resposta" | null>(null);
   const [conferindoEnvio, setConferindoEnvio] = useState(false);
-  const idDoEnvio = useRef<string | null>(null);
+  /** O que a gravação da vez escreve (para o "Conferir" saber o último pedaço) e o evento, que sai uma vez só. */
+  const envioDaVez = useRef<EnvioDoConhecimento | null>(null);
   const upload = useMutation({
-    mutationFn: () => comPrazo(gravarConhecimento(), CARREGANDO.desisteMs),
+    mutationFn: () => comPrazoSemAvanco((avancou) => gravarConhecimento(avancou), CARREGANDO.desisteMs),
     onSuccess: () => anexado(),
     onError: (error) => {
       if (desfechoDoErro(error) === "sem-resposta") {
@@ -415,16 +435,33 @@ export default function AgentKnowledge() {
     const volta = setTimeout(() => setFimDoEnvio((atual) => (atual === "erro" ? null : atual)), CARREGANDO.erroVisivelMs);
     return () => clearTimeout(volta);
   }, [fimDoEnvio]);
-  const estadoDoEnvio: EstadoDaAcao = upload.isPending || conferindoEnvio ? "andamento" : (fimDoEnvio ?? "repouso");
+  // Conferindo, o estado continua sem resposta: o botão diz "Conferindo…", e não a gravação de novo.
+  const estadoDoEnvio: EstadoDaAcao = upload.isPending ? "andamento" : (fimDoEnvio ?? "repouso");
   const esperaDoEnvio = useEspera(upload.isPending);
-  /** O "Conferir" do prazo sem resposta: lê o cadastro no servidor e nunca regrava. Gravado, segue o sucesso. */
+  /**
+   * O "Conferir" do prazo sem resposta: lê no servidor o cadastro, o arquivo,
+   * o último pedaço e o último trecho, e nunca regrava. A gravação é em
+   * ordem: com o último lá, está tudo lá, e segue o sucesso (com o evento, se
+   * a gravação por baixo ainda não o mandou). Pela metade, volta a "Anexar".
+   */
   async function conferirEnvio() {
-    if (conferindoEnvio || !firestore || !idDoEnvio.current) return;
+    const vez = envioDaVez.current;
+    if (conferindoEnvio || !firestore || !vez) return;
     setConferindoEnvio(true);
     try {
-      const lido = await getDocFromServer(doc(firestore, knowledgeCollection, idDoEnvio.current));
-      if (lido.exists()) await anexado();
-      else setFimDoEnvio(null);
+      const db = firestore;
+      const lidos = await Promise.all([
+        getDocFromServer(doc(db, knowledgeCollection, vez.id)),
+        getDocFromServer(doc(db, fileCollection, vez.id)),
+        ...(vez.pedacos ? [getDocFromServer(doc(db, fileChunkCollection, idDoPedaco(vez.id, vez.pedacos)))] : []),
+        ...(vez.trechos ? [getDocFromServer(doc(db, textChunkCollection, idDoPedaco(vez.id, vez.trechos)))] : []),
+      ]);
+      if (lidos.every((lido) => lido.exists())) {
+        await emitirUmaVez(vez);
+        await anexado();
+      } else {
+        setFimDoEnvio(null);
+      }
     } catch (error) {
       toast({ title: "Não consegui conferir o conhecimento", description: error instanceof Error ? error.message : undefined, variant: "destructive" });
     } finally {
@@ -432,7 +469,14 @@ export default function AgentKnowledge() {
     }
   }
 
-  async function gravarConhecimento() {
+  /** O evento da gravação sai uma vez: pela gravação que terminou por baixo ou pelo "Conferir", o que vier antes. */
+  function emitirUmaVez(vez: EnvioDoConhecimento): Promise<void> {
+    if (vez.eventoSaiu) return Promise.resolve();
+    vez.eventoSaiu = true;
+    return emitKnowledgeEvent(vez.evento);
+  }
+
+  async function gravarConhecimento(avancou: () => void) {
     if (!firestore) throw new Error("Firestore não configurado.");
     const db = firestore;
     if (!file) throw new Error("Selecione um arquivo.");
@@ -440,7 +484,6 @@ export default function AgentKnowledge() {
       throw new Error("Arquivo acima do limite atual de 8 MB.");
     }
     setFimDoEnvio(null);
-    setEtapasDoEnvio(isTextLike(file) ? ["Cadastro", "Arquivo", "Trechos"] : ["Cadastro", "Arquivo"]);
     setEtapaDoEnvio(1);
 
     const buffer = await file.arrayBuffer();
@@ -450,13 +493,26 @@ export default function AgentKnowledge() {
     const title = form.title.trim() || titleFromFile(file);
     const base64 = arrayBufferToBase64(buffer);
     const fileChunks = fileBase64Chunks(base64);
-    idDoEnvio.current = knowledgeId;
     const nowIso = new Date().toISOString();
     const readableText = isTextLike(file) ? await file.text() : "";
     const chunks = readableText ? textChunks(readableText) : [];
     const extractionStatus = readableText
       ? "processed"
       : "pending_processing";
+    const vez: EnvioDoConhecimento = {
+      id: knowledgeId,
+      pedacos: fileChunks.length,
+      trechos: chunks.length,
+      evento: {
+        id: knowledgeId,
+        title,
+        customer_code: form.customer_code.trim() || activeCustomerCode,
+        file_name: file.name,
+        extraction_status: extractionStatus,
+      },
+      eventoSaiu: false,
+    };
+    envioDaVez.current = vez;
 
     await setDoc(
       doc(firestore, knowledgeCollection, knowledgeId),
@@ -504,6 +560,7 @@ export default function AgentKnowledge() {
       },
       { merge: true },
     );
+    avancou();
 
     setEtapaDoEnvio(2);
     await commitInBatches(
@@ -512,10 +569,10 @@ export default function AgentKnowledge() {
             doc(
               db,
               fileChunkCollection,
-              `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
+              idDoPedaco(knowledgeId, index + 1),
             ),
           {
-            id: `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
+            id: idDoPedaco(knowledgeId, index + 1),
             knowledge_id: knowledgeId,
             chunk_index: index,
             data_base64: chunk,
@@ -523,6 +580,8 @@ export default function AgentKnowledge() {
           },
         );
       }),
+      10,
+      avancou,
     );
 
     if (chunks.length) {
@@ -533,10 +592,10 @@ export default function AgentKnowledge() {
             doc(
               db,
               textChunkCollection,
-              `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
+              idDoPedaco(knowledgeId, index + 1),
             ),
             {
-              id: `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
+              id: idDoPedaco(knowledgeId, index + 1),
               knowledge_id: knowledgeId,
               chunk_index: index,
               text: chunk,
@@ -549,16 +608,11 @@ export default function AgentKnowledge() {
           );
         }),
         50,
+        avancou,
       );
     }
 
-    await emitKnowledgeEvent({
-      id: knowledgeId,
-      title,
-      customer_code: form.customer_code.trim() || activeCustomerCode,
-      file_name: file.name,
-      extraction_status: extractionStatus,
-    });
+    await emitirUmaVez(vez);
   }
 
   async function downloadFile(item: KnowledgeDocument) {
@@ -613,6 +667,7 @@ export default function AgentKnowledge() {
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (conferindoEnvio) return;
     if (estadoDoEnvio === "sem-resposta") void conferirEnvio();
     else if (estadoDoEnvio !== "andamento" && file) upload.mutate();
   }
@@ -904,25 +959,25 @@ export default function AgentKnowledge() {
                   O Agent Dute usa os trechos indexados desta coleção como contexto operacional.
                 </AlertDescription>
               </Alert>
-              {esperaDoEnvio.visivel && etapasDoEnvio.length ? (
-                <Progresso
-                  forma="etapas"
-                  titulo="Anexando ao Agent Dute"
-                  itens={etapasDoEnvio.map((rotulo, indice) => ({
-                    rotulo,
-                    estado: indice + 1 < etapaDoEnvio ? "feito" : indice + 1 === etapaDoEnvio ? "andamento" : "fila",
-                  }))}
-                />
-              ) : null}
-              {upload.isPending && esperaDoEnvio.calmo ? <AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={esperaDoEnvio.decorridoMs} /> : null}
-              {estadoDoEnvio === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
+              <Progresso
+                forma="etapas"
+                titulo="Anexando ao Agent Dute"
+                itens={etapasDoEnvio.map((rotulo, indice) => ({
+                  rotulo,
+                  estado: indice + 1 < etapaDoEnvio ? "feito" : indice + 1 === etapaDoEnvio && upload.isPending ? "andamento" : "fila",
+                }))}
+              />
+              <div data-lugar-do-aviso="" className="grid min-h-9 items-center">
+                {upload.isPending && esperaDoEnvio.calmo ? <AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={esperaDoEnvio.decorridoMs} /> : null}
+                {estadoDoEnvio === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
+              </div>
               <BotaoDeAcao
                 type="submit"
-                className="w-full"
-                estado={estadoDoEnvio}
+                className="min-h-11 w-full"
+                estado={conferindoEnvio ? "andamento" : estadoDoEnvio}
                 icone={<UploadCloud />}
                 rotulo="Anexar ao Agent Dute"
-                andamento="Anexando…"
+                andamento={conferindoEnvio ? "Conferindo…" : "Anexando…"}
                 sucesso="Anexado"
                 erro="Não anexado"
                 bloqueado={estadoDoEnvio === "repouso" && !file}

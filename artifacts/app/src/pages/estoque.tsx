@@ -57,6 +57,8 @@ import {
   type StockItem,
 } from "@/lib/stock-items";
 import { cn } from "@/lib/utils";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useEspera } from "@/lib/carregando/use-espera";
 import Movements, { MovementModal } from "./movements";
 import { DeleteSkuButton, SkuModal } from "./skus";
 import { areaDePassagem, regraDoModelo, rotuloDaEtiqueta } from "@workspace/dominio";
@@ -219,7 +221,9 @@ export default function Estoque() {
   // largura toda. Clicar de novo na mesma linha (ou no X, ou Esc) recolhe.
   const panelItem = selected;
   // A ficha com fotos subindo não fecha: fechar cancelaria o envio (parte 11 do carregamento v2).
+  // O ref trava na hora; o estado diz ao "Recolher ficha" que ele está travado.
   const fichaOcupada = useRef(false);
+  const [fichaTravada, setFichaTravada] = useState(false);
   const recolher = () => {
     if (!fichaOcupada.current) setSelectedKey(null);
   };
@@ -229,6 +233,7 @@ export default function Estoque() {
   };
   const aoOcupar = useCallback((ocupada: boolean) => {
     fichaOcupada.current = ocupada;
+    setFichaTravada(ocupada);
   }, []);
 
   useEffect(() => {
@@ -355,15 +360,7 @@ export default function Estoque() {
               />
               {desktop && panelItem ? (
                 <section className="relative overflow-hidden rounded-lg border border-border bg-card lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">
-                  <button
-                    type="button"
-                    onClick={recolher}
-                    aria-label="Recolher ficha"
-                    title="Recolher (Esc)"
-                    className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  <BotaoRecolherFicha travado={fichaTravada} onRecolher={recolher} />
                   <ItemCard key={panelItem.key} item={panelItem} caixas={caixasDoItem(panelItem)} rotuloDaCaixaParada={rotuloDaCaixaParada} onOcupar={aoOcupar} />
                 </section>
               ) : null}
@@ -643,7 +640,32 @@ function movementDate(value: unknown) {
   return Number.isNaN(date.getTime()) ? "" : dateFormatter.format(date);
 }
 
-function ItemCard({
+/**
+ * O X da ficha. Com as fotos subindo, a ficha não recolhe (parte 11 do
+ * carregamento v2): o X fica aria-disabled e esmaecido, e o toque nele não
+ * faz nada. Nunca `disabled`: o foco que estava nele não cai no corpo.
+ */
+export function BotaoRecolherFicha({ travado, onRecolher }: { travado: boolean; onRecolher: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (!travado) onRecolher();
+      }}
+      aria-label="Recolher ficha"
+      aria-disabled={travado || undefined}
+      title="Recolher (Esc)"
+      className={cn(
+        "absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+        travado && "opacity-45 hover:bg-transparent hover:text-muted-foreground",
+      )}
+    >
+      <X className="h-4 w-4" />
+    </button>
+  );
+}
+
+export function ItemCard({
   item,
   caixas,
   rotuloDaCaixaParada,
@@ -728,6 +750,12 @@ function ItemCard({
   useEffect(() => {
     onOcupar?.(fotosOcupadas);
   }, [fotosOcupadas, onOcupar]);
+  // "Salvando no cadastro…" entra aos 300 ms, como toda espera, e o leitor de tela ouve (não há role="status" solto).
+  const salvando = useEspera(addPhotos.isPending);
+  const anunciar = useAnuncio();
+  useEffect(() => {
+    if (salvando.visivel) anunciar("Salvando no cadastro");
+  }, [salvando.visivel, anunciar]);
   useEffect(() => () => onOcupar?.(false), [onOcupar]);
 
   const photoContext = photoContextFromRecord(item.photoContext ?? item.sku);
@@ -813,15 +841,18 @@ function ItemCard({
                 type="button"
                 variant={item.photos.length ? "outline" : "default"}
                 size="sm"
-                className="mt-3"
-                disabled={fotosOcupadas}
-                onClick={() => fileRef.current?.click()}
+                // Ocupado não é desabilitado: aria-disabled e a trava no clique; o foco fica no botão.
+                className={cn("mt-3", fotosOcupadas && "opacity-45")}
+                aria-disabled={fotosOcupadas || undefined}
+                onClick={() => {
+                  if (!fotosOcupadas) fileRef.current?.click();
+                }}
               >
                 <Camera className="size-4" />
                 {item.photos.length ? "Mais fotos" : "Adicionar foto"}
               </Button>
               <ProgressoDasFotosDoProduto fotos={fotos} className="mt-3" />
-              {addPhotos.isPending ? (
+              {addPhotos.isPending && salvando.visivel ? (
                 <p className="mt-2 flex items-center gap-2 text-sm font-bold text-foreground">
                   <Spinner />
                   Salvando no cadastro…

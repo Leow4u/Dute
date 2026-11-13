@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { PRAZO_ESGOTADO, comPrazo, prazoEsgotado } from "./conexao";
+import { PRAZO_ESGOTADO, comPrazo, comPrazoSemAvanco, prazoEsgotado } from "./conexao";
 import { mensagemDoErro as mensagemDoComercial } from "./comercial/api";
 import { mensagemDoErro as mensagemDoFinanceiro } from "./financeiro/api";
 import { mensagemDoErro as mensagemDaOperacao } from "./operacao/api";
@@ -44,6 +44,60 @@ describe("o prazo sem resposta, em português", () => {
       expect(prazoEsgotado(erro)).toBe(true);
       expect((erro as Error).message).toBe(PRAZO_ESGOTADO);
       await expect(comPrazo(Promise.resolve(7), 70_000)).resolves.toBe(7);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a gravação em lotes que anda não desiste: o prazo conta de cada avanço, não do começo", async () => {
+    vi.useFakeTimers();
+    try {
+      let avancar: () => void = () => undefined;
+      let terminar: () => void = () => undefined;
+      const esperando = comPrazoSemAvanco<string>(
+        (avancou) =>
+          new Promise<string>((resolver) => {
+            avancar = avancou;
+            terminar = () => resolver("gravado");
+          }),
+        70_000,
+      ).catch((erro: unknown) => erro);
+      // Um lote a cada 40 s: passa dos 70 s do começo sem desistir.
+      await vi.advanceTimersByTimeAsync(40_000);
+      avancar();
+      await vi.advanceTimersByTimeAsync(40_000);
+      avancar();
+      await vi.advanceTimersByTimeAsync(40_000);
+      terminar();
+      await expect(esperando).resolves.toBe("gravado");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a gravação que para de andar desiste 70 s depois do último avanço, com o deadline-exceeded", async () => {
+    vi.useFakeTimers();
+    try {
+      let avancar: () => void = () => undefined;
+      const esperando = comPrazoSemAvanco<void>(
+        (avancou) => {
+          avancar = avancou;
+          return new Promise<void>(() => undefined);
+        },
+        70_000,
+      ).catch((erro: unknown) => erro);
+      await vi.advanceTimersByTimeAsync(30_000);
+      avancar();
+      await vi.advanceTimersByTimeAsync(69_999);
+      let terminou = false;
+      void esperando.then(() => (terminou = true));
+      await Promise.resolve();
+      expect(terminou).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(prazoEsgotado(await esperando)).toBe(true);
+      // O avanço que chega depois da desistência não arma prazo nenhum.
+      avancar();
+      expect(vi.getTimerCount()).toBe(0);
     } finally {
       vi.useRealTimers();
     }

@@ -16,6 +16,56 @@ export const SEM_CONEXAO = "Sem conexão. Tente de novo quando o sinal voltar.";
  */
 export const PRAZO_ESGOTADO = "O servidor não respondeu a tempo. Confira antes de tentar de novo.";
 
+/** O mesmo prazo na leitura, em que repetir é seguro: tentar de novo, sem conferir. */
+export const PRAZO_ESGOTADO_NA_LEITURA = "O servidor não respondeu a tempo. Tente de novo.";
+
+function prazoDaEscrita(): Error {
+  return Object.assign(new Error(PRAZO_ESGOTADO), { code: "deadline-exceeded" });
+}
+
+/**
+ * O prazo da escrita que anda em pedaços (os lotes do arquivo no Firestore,
+ * que crescem com ele): conta de cada avanço, e não do começo. A gravação
+ * lenta, mas andando, nunca desiste; a que para fica 70 s sem avançar e
+ * rejeita com o `deadline-exceeded`. A escrita continua por baixo; quem chama
+ * confere antes de repetir.
+ */
+export function comPrazoSemAvanco<T>(fazer: (avancou: () => void) => Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolver, rejeitar) => {
+    let terminou = false;
+    let prazo: ReturnType<typeof setTimeout> | undefined;
+    const armar = () => {
+      clearTimeout(prazo);
+      prazo = setTimeout(() => {
+        terminou = true;
+        rejeitar(prazoDaEscrita());
+      }, ms);
+    };
+    const avancou = () => {
+      if (!terminou) armar();
+    };
+    armar();
+    let promessa: Promise<T>;
+    try {
+      promessa = Promise.resolve(fazer(avancou));
+    } catch (erro) {
+      promessa = Promise.reject(erro);
+    }
+    promessa.then(
+      (valor) => {
+        terminou = true;
+        clearTimeout(prazo);
+        resolver(valor);
+      },
+      (erro: unknown) => {
+        terminou = true;
+        clearTimeout(prazo);
+        rejeitar(erro);
+      },
+    );
+  });
+}
+
 /**
  * O prazo da escrita que não passa por callable (a gravação direta no
  * Firestore, que sem rede espera para sempre): a promessa que não termina
@@ -24,7 +74,7 @@ export const PRAZO_ESGOTADO = "O servidor não respondeu a tempo. Confira antes 
  */
 export function comPrazo<T>(promessa: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolver, rejeitar) => {
-    const prazo = setTimeout(() => rejeitar(Object.assign(new Error(PRAZO_ESGOTADO), { code: "deadline-exceeded" })), ms);
+    const prazo = setTimeout(() => rejeitar(prazoDaEscrita()), ms);
     promessa.then(
       (valor) => {
         clearTimeout(prazo);

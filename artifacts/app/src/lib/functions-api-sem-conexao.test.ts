@@ -6,7 +6,7 @@ vi.mock("./firebase", () => ({ firebaseApp: {} }));
 vi.mock("./firebase-functions", () => ({ functionsDoApp: () => ({}) }));
 vi.mock("firebase/functions", () => ({ httpsCallable: () => chamar }));
 
-import { CODIGO_SEM_CONEXAO, PRAZO_ESGOTADO, SEM_CONEXAO } from "./conexao";
+import { CODIGO_SEM_CONEXAO, PRAZO_ESGOTADO, PRAZO_ESGOTADO_NA_LEITURA, SEM_CONEXAO } from "./conexao";
 import { callFunctionsApi } from "./functions-api";
 
 /**
@@ -67,5 +67,15 @@ describe("o prazo sem resposta (deadline-exceeded)", () => {
     const response = await callFunctionsApi(APROVAR, "POST", corpo);
     expect(response?.status).toBe(504);
     expect(await response?.json()).toEqual({ message: PRAZO_ESGOTADO, code: "deadline-exceeded" });
+  });
+
+  it("na leitura, repetir é seguro: a mensagem pede para tentar de novo, e não para conferir", async () => {
+    chamar.mockRejectedValue(Object.assign(new Error("deadline-exceeded"), { code: "functions/deadline-exceeded" }));
+    for (const leitura of ["/api/system/health", "/api/agent-dute/notes", "/api/agent-dute/playbooks"]) {
+      const response = await callFunctionsApi(leitura, "GET");
+      expect(response?.status, leitura).toBe(504);
+      expect(await response?.json(), leitura).toEqual({ message: PRAZO_ESGOTADO_NA_LEITURA, code: "deadline-exceeded" });
+    }
+    expect(PRAZO_ESGOTADO_NA_LEITURA).toBe("O servidor não respondeu a tempo. Tente de novo.");
   });
 });

@@ -1734,9 +1734,12 @@ export function OpeningInventoryWorkspace() {
                       <Button
                         type="button"
                         variant="outline"
-                        className="shrink-0"
-                        disabled={photoUploading}
-                        onClick={() => photoInputRef.current?.click()}
+                        // Ocupado não é desabilitado: aria-disabled e a trava no toque; o foco fica no botão.
+                        className={cn("shrink-0", photoUploading && "opacity-45 hover:bg-card active:bg-card")}
+                        aria-disabled={photoUploading || undefined}
+                        onClick={() => {
+                          if (!photoUploading) photoInputRef.current?.click();
+                        }}
                       >
                         <ImagePlus className="size-4" />
                         Adicionar foto
@@ -1750,7 +1753,6 @@ export function OpeningInventoryWorkspace() {
                         capture="environment"
                         multiple
                         hidden
-                        disabled={photoUploading}
                         onChange={(event) => {
                           addOpeningPhotos(event.target.files);
                           event.currentTarget.value = "";
