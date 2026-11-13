@@ -6,9 +6,11 @@ import {
   useCreateMovement,
   getListMovementsQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { nomeComTamanho } from "@workspace/dominio";
 import { Button } from "@/components/ui/button";
+import { FaixaDaReleitura, FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { Input } from "@/components/ui/input";
 import { ArrowDownRight, ArrowUpRight, Plus } from "lucide-react";
 import {
@@ -156,18 +158,26 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
     ...(page > 0 && cursors[page - 1] ? { cursor: cursors[page - 1] } : {}),
   };
 
-  const { data, isLoading } = useListMovements(listParams, {
+  // O tipo, a busca e a página leem no servidor: a lista anterior fica, a 50% e inert, até a nova chegar
+  // (carregamento v2, momento 7, caso 4); a releitura que falha não a apaga, e a troca que falha mostra o aviso.
+  const leitura = useListMovements(listParams, {
     query: {
       queryKey: getListMovementsQueryKey(listParams),
+      placeholderData: keepPreviousData,
     },
   });
+  const { data, isLoading, isPlaceholderData } = leitura;
+  const lista = useListaComFiltro(leitura);
+  const troca = useListaEmTroca(lista.trocando);
 
   // Keep cursor stack in sync when server returns next_cursor (extra field).
+  // A página anterior que ainda está na tela (placeholderData) não é desta página: o cursor dela é o desta.
   useEffect(() => {
+    if (isPlaceholderData) return;
     const next = (data as { next_cursor?: string } | undefined)?.next_cursor;
     if (!next || page < cursors.length) return;
     setCursors((prev) => (prev[page] === next ? prev : [...prev.slice(0, page), next]));
-  }, [data, page, cursors]);
+  }, [data, isPlaceholderData, page, cursors]);
 
   const movements = data?.items ?? [];
   const total = data?.total || 0;
@@ -209,7 +219,13 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
         </StockFilterChip>
       </StockToolbar>
 
-      <StockTableCard>
+      <FaixaDaReleitura leituras={[leitura]} />
+
+      <StockTableCard trocando={lista.trocando}>
+          {lista.falhou ? (
+            <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar as movimentações." className="rounded-none border-0" />
+          ) : (
+          <div {...troca.props}>
           <ul className="divide-y divide-border md:hidden">
             {isLoading ? (
               <li className="px-4 py-8 text-center text-sm text-muted-foreground">Carregando movimentações...</li>
@@ -304,10 +320,13 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
               </tbody>
             </table>
           </div>
+          </div>
+          )}
 
           <StockTablePagination
             page={page}
             isLoading={isLoading}
+            ocupada={lista.trocando}
             count={data?.items?.length || 0}
             total={total}
             limit={limit}

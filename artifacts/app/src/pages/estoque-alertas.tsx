@@ -108,7 +108,8 @@ export default function EstoqueAlertas() {
 
   return (
     <AlertasParadosView
-      estado={MEMORIA_LIBERADA && consulta.isLoading ? "carregando" : consulta.isError && !semRede ? "erro" : "pronto"}
+      // A releitura que falha com a lista lida não a troca pelo erro: quem diz é a linha de estado (momento 7).
+      estado={MEMORIA_LIBERADA && consulta.isLoading ? "carregando" : consulta.isError && consulta.data === undefined && !semRede ? "erro" : "pronto"}
       semConexao={
         semRede
           ? { lidaEm: semRede.lidaEm, tentando: consulta.isFetching, onTentar: () => void queryClient.invalidateQueries({ queryKey: ["stock-alerts"] }) }

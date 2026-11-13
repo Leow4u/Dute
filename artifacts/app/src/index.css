@@ -2183,6 +2183,25 @@
   }
 }
 
+/* A lista que troca de filtro, mês ou cliente (lib/carregando/use-lista-em-troca.tsx;
+   momento 7, caso 4): enquanto a nova não chega, a anterior fica a 50%, em
+   150 ms. Esmaece tudo dentro do contêiner menos o caminho até a barra do
+   topo do cartão ([data-barra-da-lista], sempre na árvore), que fica inteira:
+   em cada nível do caminho, só os irmãos dele. Na chegada, a lista nova entra
+   por opacidade, subindo 4 px (só opacidade no reduzido, pelo
+   --carregando-subida), em 150 ms. Só opacity e transform. */
+@layer components {
+  :is([data-lista-em-troca][data-trocando], [data-lista-em-troca][data-trocando] :has([data-barra-da-lista]))
+    > :not([data-barra-da-lista], :has([data-barra-da-lista])) {
+    opacity: 0.5;
+    transition: opacity var(--carregando-t-entrada) var(--ease-carregando-entrada);
+  }
+
+  [data-lista-em-troca][data-chegou] {
+    animation: carregando-chega-linha var(--carregando-t-chegada) var(--ease-carregando-entrada) both;
+  }
+}
+
 /* O progresso das operações longas (components/ui/progresso.tsx; seção 5.5
    e momento 6). A contagem: um segmento de 8 px por item, com a ponta
    chanfrada a 45°; o feito em tinta, o atual enchendo por scaleX (o --f, a

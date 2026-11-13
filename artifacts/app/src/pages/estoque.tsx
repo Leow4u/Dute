@@ -359,10 +359,11 @@ export default function Estoque() {
             </FilterPanel>
           </div>
 
-          {/* A primeira leitura e a falta com a lista lida ficam na linha de estado, sob o título. */}
+          {/* A primeira leitura e a falta com a lista lida ficam na linha de estado, sob o título; a releitura que falha
+              com a lista lida também (carregamento v2, momento 7): só a leitura sem nada lido troca a lista pelo aviso. */}
           {skus.isLoading ? null : semRede && semRede.lidaEm === null ? (
             <BlocoSemConexao tentando={relendo} onTentar={reler} />
-          ) : skus.error && !semRede ? (
+          ) : skus.error && !skus.data && !semRede ? (
             <p className="text-sm text-destructive">Não consegui carregar o estoque.</p>
           ) : (
             <div

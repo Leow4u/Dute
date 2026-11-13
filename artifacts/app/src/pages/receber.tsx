@@ -1,10 +1,9 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Ban, Check, Forklift, Inbox, PackageOpen, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BarraDeEspera } from "@/components/ui/barra-de-espera";
 import { BlocoSemConexao, useFocoAoSair } from "@/components/ui/erro-na-leitura";
 import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { PageHeader } from "@/components/ui/page-header";
@@ -33,6 +32,7 @@ import { useContagemLembrada, type ContagensDaLista } from "@/lib/carregando/con
 import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { resumoDaLista } from "@/lib/carregando/resumo-da-lista";
 import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { BarraDaLista, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { canOperateWarehouse } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -127,6 +127,8 @@ export default function Receber() {
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
   });
+  // Trocar o cliente lê os avisos dele no servidor: a lista anterior fica, a 50% e inert, com a barra no topo do
+  // primeiro cartão, até os avisos do novo chegarem (carregamento v2, momento 7, caso 4).
   const requests = useQuery({
     queryKey: ["customer-requests", "receber", customerCode],
     queryFn: () =>
@@ -135,10 +137,16 @@ export default function Receber() {
       ),
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   });
+  const trocandoDeCliente = requests.isPlaceholderData;
+  // Os avisos na tela são do cliente da leitura: na troca, ainda os do anterior, que somem com a lista dele.
+  const clienteDosAvisos = useRef(customerCode);
+  if (!trocandoDeCliente) clienteDosAvisos.current = customerCode;
+  const codigoDosAvisos = clienteDosAvisos.current;
   const notices = useMemo(
-    () => openShipmentNotices(requests.data?.items ?? []).filter((notice) => notice.customer_code === customerCode),
-    [requests.data?.items, customerCode],
+    () => openShipmentNotices(requests.data?.items ?? []).filter((notice) => notice.customer_code === codigoDosAvisos),
+    [requests.data?.items, codigoDosAvisos],
   );
   const noticeById = useMemo(() => new Map(notices.map((notice) => [notice.id, notice])), [notices]);
   const queues = useMemo(() => normalizeQueues(ops.data?.queues), [ops.data?.queues]);
@@ -225,7 +233,8 @@ export default function Receber() {
   // com a barra no topo do primeiro cartão.
   const leiturasDaLista = [ops, requests];
   const atualizarLista = useAtualizarLista(leiturasDaLista);
-  const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} resultado="fim" />;
+  const troca = useListaEmTroca(trocandoDeCliente);
+  const barraDoTopo = <BarraDaLista ativa={atualizarLista.voltando || trocandoDeCliente} />;
 
   // A lista com a forma final na primeira leitura (carregamento v2, momento 2, decisão P3): os títulos reais
   // desde 0 ms, com o bloco no lugar do número; as linhas-fantasma na altura da última contagem lida deste
@@ -241,7 +250,7 @@ export default function Receber() {
   // A contagem lembrada é do cliente que a tela vai operar: na abertura, antes de a lista dos clientes chegar, o
   // escolhido neste aparelho. Só grava com o cliente confirmado e os avisos dele lidos.
   const contagensLidas: ContagensDaLista | null =
-    ops.data && requests.data && !clienteCarregando
+    ops.data && requests.data && !requests.isPlaceholderData && !clienteCarregando
       ? {
           conferir: pendingNotices.length + board.check.length,
           guardando: board.guardando.length,
@@ -275,7 +284,7 @@ export default function Receber() {
             ],
             "Nenhuma chegada em aberto",
           );
-  const listaOcupada = lendo ? { "aria-busy": true, "aria-describedby": idDaLinha } : {};
+  const listaOcupada = lendo ? { "aria-busy": true, "aria-describedby": idDaLinha } : troca.props;
 
   const taskPanel = selectedNotice ? (
     <NoticeCard notice={selectedNotice} />
@@ -369,7 +378,7 @@ export default function Receber() {
     <div className="flex flex-col gap-6 pb-24">
       {!fichaLarga ? <PageHeader
         title="Receber"
-        estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando} resumo={resumo} />}
+        estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando || trocandoDeCliente} resumo={resumo} />}
         actions={
           <>
             <Segmented<"open" | "done" | "cancelled">
@@ -402,7 +411,7 @@ export default function Receber() {
           na forma final, com as linhas-fantasma. */}
       {fichaLarga ? <section aria-label="Bancada de conferência" className="min-w-0">{panel}</section> : !lendo && semRede && semRede.lidaEm === null ? (
         <BlocoSemConexao tentando={ops.isFetching || requests.isFetching} onTentar={recarregar} focoAoSair={idDaLinha} />
-      ) : !lendo && ops.error && !semRede ? (
+      ) : !lendo && ops.error && !ops.data && !semRede ? (
         <FalhaDasChegadas focoAoSair={idDaLinha} onTentar={recarregar} />
       ) : (
         <div

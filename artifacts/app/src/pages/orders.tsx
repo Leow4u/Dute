@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { type Order, useListOrders, useUpdateOrder, getListOrdersQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { FaixaDaReleitura, FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { Badge } from "@/components/ui/badge";
 import { Boxes, CheckCircle2, ClipboardList, PackageCheck, Truck } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -33,10 +35,15 @@ export default function Orders() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const { data, isLoading } = useListOrders(
+  // O status, a busca e a página leem no servidor: a lista anterior fica, a 50% e inert, até a nova chegar
+  // (carregamento v2, momento 7, caso 4); a releitura que falha não a apaga, e a troca que falha mostra o aviso.
+  const leitura = useListOrders(
     { num_pedido: debouncedSearch || undefined, status: statusFilter || undefined, limit, offset: page * limit },
-    { query: { queryKey: getListOrdersQueryKey({ num_pedido: debouncedSearch || undefined, status: statusFilter || undefined, limit, offset: page * limit }) } }
+    { query: { queryKey: getListOrdersQueryKey({ num_pedido: debouncedSearch || undefined, status: statusFilter || undefined, limit, offset: page * limit }), placeholderData: keepPreviousData } }
   );
+  const { data, isLoading } = leitura;
+  const lista = useListaComFiltro(leitura);
+  const troca = useListaEmTroca(lista.trocando);
 
   const orders = data?.items ?? [];
   const stats = useMemo(() => {
@@ -113,8 +120,13 @@ export default function Orders() {
         </StockFilterChip>
       </StockToolbar>
 
-      <StockTableCard>
-          <div className="overflow-x-auto">
+      <FaixaDaReleitura leituras={[leitura]} />
+
+      <StockTableCard trocando={lista.trocando}>
+          {lista.falhou ? (
+            <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar os pedidos." className="rounded-none border-0" />
+          ) : (
+          <div className="overflow-x-auto" {...troca.props}>
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card">
                 <tr>
@@ -179,10 +191,12 @@ export default function Orders() {
               </tbody>
             </table>
           </div>
+          )}
           
           <StockTablePagination
             page={page}
             isLoading={isLoading}
+            ocupada={lista.trocando}
             count={data?.items?.length || 0}
             total={data?.total || 0}
             limit={limit}

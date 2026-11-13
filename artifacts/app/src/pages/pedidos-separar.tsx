@@ -303,14 +303,19 @@ export default function PaginaPedidosSeparar() {
     onError: erro("Não foi possível fechar o volume"),
   });
 
-  const concluido = async () => {
+  /**
+   * O fim da separação. A fila do armazém é lida uma vez (a leitura leve no
+   * celular, carregamento v2, parte 10): pela conclusão, que relê; pelo
+   * "Conferir", que já leu (`jaLida`) e não lê de novo.
+   */
+  const concluido = async ({ jaLida = false }: { jaLida?: boolean } = {}) => {
     toast({ title: "Separado. O pedido está pronto para entrega." });
     setLacre(null);
     setFimDaConclusao(null);
     chaveDaConclusao.current = null;
     // A pessoa fica no pedido separado: é dali que saem as etiquetas com o total e o romaneio.
     setConcluiuAgora(true);
-    await queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
+    if (!jaLida) await queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
   };
 
   const concluir = useMutation({
@@ -320,7 +325,7 @@ export default function PaginaPedidosSeparar() {
       setFimDaConclusao(null);
       return concluirSeparacao({ pick_task_id: pickTaskId, seal_code: (lacre ?? "").trim(), idempotency_key: chaveDaConclusao.current });
     },
-    onSuccess: concluido,
+    onSuccess: () => concluido(),
     onError: (falha: Error) => {
       // Sem resposta no prazo, a conclusão pode ter valido: "Conferir" relê, e a chave fica a mesma.
       if (prazoEsgotado(falha)) {
@@ -348,7 +353,7 @@ export default function PaginaPedidosSeparar() {
     try {
       const lida = await queryClient.fetchQuery({ queryKey: ["warehouse-ops"], queryFn: () => fetchJson<WarehouseOpsResponse>("/api/warehouse/ops"), staleTime: 0 });
       const agora = chave ? groupWarehouseOrders(lida).find((order) => order.key === chave) : undefined;
-      if (agora && agora.stage !== "separar") await concluido();
+      if (agora && agora.stage !== "separar") await concluido({ jaLida: true });
       else setFimDaConclusao(null);
     } catch (falha) {
       erro("Não foi possível conferir a separação")(falha as Error);

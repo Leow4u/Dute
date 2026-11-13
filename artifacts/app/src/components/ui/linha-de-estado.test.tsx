@@ -115,9 +115,9 @@ describe("a linha de estado, parada em cada estado", () => {
     }
   });
 
-  it("a releitura com a lista lida e o erro que não é falta de conexão: a lista fica, com a hora dela", () => {
+  it("a releitura com a lista lida e o erro que não é falta de conexão: a lista fica, e a linha diz que não atualizou, com a hora dela (parte 10)", () => {
     const html = naConexao("conectado", <LinhaDeEstado leitura={leitura({ isError: true, error: new Error("Falha interna.") })} objeto="pedidos" />);
-    expect(textosDaTela(html)).toEqual(["Atualizado às 10:42"]);
+    expect(textosDaTela(html)).toEqual(["Não consegui atualizar", "· lista de 10:42", "Tentar de novo"]);
   });
 
   it("a linha tem 24 px sempre reservados, e o Tentar de novo tem o toque de 44 px por um ::before, sem mudar a altura", () => {

@@ -252,7 +252,8 @@ describe("Receber sem conexão", () => {
   it("a lista lida fica com a hora; sem nada lido, o aviso; a falta de conexão não troca a lista pelo erro", () => {
     expect(TELA).toContain("const semRede = semConexaoNaLeitura(ops, requests);");
     // A lista lida, com a falta: a hora dela fica na linha de estado sob o título (parte 7b), não na faixa que empurra a lista.
-    expect(TELA).toContain('estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando} resumo={resumo} />}');
+    // A troca de cliente também é pedida pela pessoa: passados 5 s, "Atualizando…" (parte 10).
+    expect(TELA).toContain('estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando || trocandoDeCliente} resumo={resumo} />}');
     expect(TELA).toContain("const leiturasDaLista = [ops, requests];");
     expect(TELA).not.toContain("FaixaSemConexao");
     expect(TELA).not.toContain("Carregando chegadas...");
@@ -262,7 +263,8 @@ describe("Receber sem conexão", () => {
     expect(TELA).toContain("const lendo = !listaJaLida && !ops.isError && (ops.isLoading || requests.isLoading);");
     expect(TELA).toContain(": !lendo && semRede && semRede.lidaEm === null ? (");
     expect(TELA.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(TELA.indexOf("<FalhaDasChegadas focoAoSair={idDaLinha}"));
-    expect(TELA).toContain(") : !lendo && ops.error && !semRede ? (");
+    // Só a leitura sem nada lido troca a lista pelo aviso: a releitura que falha fica na linha de estado (parte 10).
+    expect(TELA).toContain(") : !lendo && ops.error && !ops.data && !semRede ? (");
     expect(TELA).toContain("Não consegui carregar as chegadas.");
   });
 });

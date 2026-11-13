@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { FaixaDaReleitura, FalhaNaLeitura, type LeituraQueFalhou } from "@/components/ui/erro-na-leitura";
 import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -31,6 +32,7 @@ import {
   toExcelCsv,
   type ReportResult,
 } from "@/lib/reports";
+import { BarraDaLista, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { buildStockItems } from "@/lib/stock-items";
 import { cn } from "@/lib/utils";
 import {
@@ -252,7 +254,9 @@ export default function Reports() {
     [balances.data?.items, products.data?.items, skus.data?.items],
   );
   const stockLoading = skus.isLoading || balances.isLoading || products.isLoading;
-  const stockError = skus.error ?? balances.error ?? products.error;
+  // Só a leitura sem dado é falha da lista: a releitura que falha com o estoque lido não o apaga (a faixa diz).
+  const stockFalha = [skus, balances, products].find((leitura) => leitura.isError && leitura.data === undefined) ?? null;
+  const stockError = stockFalha?.error ?? null;
 
   const sinceGoLive = useQuery({
     queryKey: ["reports", "movements", "since-go-live"],
@@ -262,6 +266,8 @@ export default function Reports() {
       ),
     enabled: selected?.id === "idle",
   });
+  // O período lê no servidor: na troca, a prévia anterior fica, a 50% e inert, até a nova chegar (carregamento v2,
+  // momento 7, caso 4); a releitura que falha não a apaga, e a troca que falha mostra o aviso no lugar dela.
   const movements = useQuery({
     queryKey: ["reports", "movements", period.from, period.to],
     queryFn: () =>
@@ -269,6 +275,7 @@ export default function Reports() {
         `/api/reports/movements?from=${encodeURIComponent(period.from)}&to=${encodeURIComponent(period.to)}`,
       ),
     enabled: selected?.id === "movements",
+    placeholderData: keepPreviousData,
   });
   const requests = useQuery({
     queryKey: ["reports", "requests", period.from, period.to],
@@ -277,7 +284,16 @@ export default function Reports() {
         `/api/reports/requests?from=${encodeURIComponent(period.from)}&to=${encodeURIComponent(period.to)}`,
       ),
     enabled: selected?.id === "requests",
+    placeholderData: keepPreviousData,
   });
+  const listaDasMovimentacoes = useListaComFiltro(movements);
+  const listaDosPedidos = useListaComFiltro(requests);
+  const porPeriodo = selected?.id === "movements" ? listaDasMovimentacoes : selected?.id === "requests" ? listaDosPedidos : null;
+  const trocando = porPeriodo?.trocando ?? false;
+  const troca = useListaEmTroca(trocando);
+  // O período da prévia na tela: na troca, ainda o anterior ("Nada neste filtro" diz de qual).
+  const periodoNaTela = useRef(period);
+  if (!trocando) periodoNaTela.current = period;
 
   const stockCounts = useMemo(
     () =>
@@ -308,7 +324,7 @@ export default function Reports() {
     }
     if (selected.id === "idle") {
       const loading = stockLoading || sinceGoLive.isLoading;
-      const error = stockError ?? sinceGoLive.error;
+      const error = stockError ?? (sinceGoLive.data === undefined ? sinceGoLive.error : null);
       if (loading || error || !sinceGoLive.data) return { loading, error, capped: false, report: null };
       return {
         loading: false,
@@ -318,8 +334,10 @@ export default function Reports() {
       };
     }
     const source = selected.id === "movements" ? movements : requests;
-    if (source.isLoading || source.error || !source.data) {
-      return { loading: source.isLoading, error: source.error, capped: false, report: null };
+    const lista = selected.id === "movements" ? listaDasMovimentacoes : listaDosPedidos;
+    if (lista.falhou) return { loading: false, error: lista.erro, capped: false, report: null };
+    if (source.isLoading || !source.data) {
+      return { loading: source.isLoading, error: null, capped: false, report: null };
     }
     return {
       loading: false,
@@ -330,7 +348,7 @@ export default function Reports() {
           ? movementsReport(source.data.items)
           : requestsReport(source.data.items, requestHelpers),
     };
-  }, [idleDays, items, movements, requests, selected, sinceGoLive, stockError, stockLoading]);
+  }, [idleDays, items, listaDasMovimentacoes, listaDosPedidos, movements, requests, selected, sinceGoLive, stockError, stockLoading]);
 
   if (!selected) {
     return <p className="text-sm text-muted-foreground">Nenhum relatório disponível para o seu perfil.</p>;
@@ -353,8 +371,25 @@ export default function Reports() {
     return `dutelog-${selected.file}-${suffix}.csv`;
   };
 
+  // As leituras da prévia: a releitura que falha com ela na tela fica na faixa, e a falha sem ela, no aviso.
+  const leiturasDaPrevia: LeituraQueFalhou[] =
+    selected.id === "movements"
+      ? [movements]
+      : selected.id === "requests"
+        ? [requests]
+        : selected.id === "idle"
+          ? [skus, balances, products, sinceGoLive]
+          : [skus, balances, products];
+  const leituraQueFalhou =
+    selected.id === "movements"
+      ? movements
+      : selected.id === "requests"
+        ? requests
+        : leiturasDaPrevia.find((leitura) => leitura.isError && leitura.data === undefined) ?? leiturasDaPrevia[0];
+
   const handleDownload = () => {
-    if (!report) return;
+    // Na troca, a prévia na tela é do período anterior: a planilha sairia com o nome do novo.
+    if (!report || trocando) return;
     if (!report.rows.length) {
       toast({ title: "Nada para baixar", description: "O relatório está vazio neste filtro." });
       return;
@@ -428,13 +463,14 @@ export default function Reports() {
           ))}
         </nav>
 
-        <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
+        <section className="relative flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
+          <BarraDaLista ativa={trocando} />
           <div className="flex flex-wrap items-start justify-between gap-3 px-5 pb-3 pt-5">
             <div className="min-w-0 max-w-2xl">
               <h2 className="text-lg font-semibold">{selected.title}</h2>
               <p className="mt-0.5 text-sm text-muted-foreground">{selected.description}</p>
             </div>
-            <Button onClick={handleDownload} disabled={!report}>
+            <Button onClick={handleDownload} disabled={!report} aria-disabled={trocando || undefined}>
               <Download className="mr-2 h-4 w-4" />
               Baixar planilha
             </Button>
@@ -486,6 +522,9 @@ export default function Reports() {
             </div>
           ) : null}
 
+          <FaixaDaReleitura leituras={leiturasDaPrevia} className="mx-5 mb-4" />
+
+          <div className="flex flex-1 flex-col" {...troca.props}>
           {report ? (
             <div className="grid grid-cols-1 border-y border-border/60 sm:grid-cols-3">
               {report.summary.map((entry) => (
@@ -508,9 +547,12 @@ export default function Reports() {
           {state.loading ? (
             <p className="px-5 py-8 text-sm text-muted-foreground">Carregando...</p>
           ) : state.error ? (
-            <p className="px-5 py-8 text-sm text-destructive">
-              {state.error instanceof Error ? state.error.message : "Não foi possível carregar o relatório."}
-            </p>
+            <FalhaNaLeitura
+              leitura={leituraQueFalhou}
+              erro={state.error}
+              mensagem={state.error instanceof Error ? state.error.message : "Não foi possível carregar o relatório."}
+              className="m-5 mt-0"
+            />
           ) : report && report.rows.length ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -562,7 +604,7 @@ export default function Reports() {
             </div>
           ) : report ? (
             <p className="px-5 py-8 text-sm text-muted-foreground">
-              Nada neste filtro{usesPeriod ? ` (${period.label})` : ""}.
+              Nada neste filtro{usesPeriod ? ` (${periodoNaTela.current.label})` : ""}.
             </p>
           ) : null}
 
@@ -581,6 +623,7 @@ export default function Reports() {
               ) : null}
             </div>
           ) : null}
+          </div>
         </section>
       </div>
     </div>

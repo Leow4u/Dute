@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Chip } from "@/components/ui/chip";
 import { FilterGroup, FilterPanel } from "@/components/ui/filter-panel";
 import { PageHeader } from "@/components/ui/page-header";
+import { BarraDaLista } from "@/lib/carregando/use-lista-em-troca";
 import { cn } from "@/lib/utils";
 
 const numberFormatter = new Intl.NumberFormat("pt-BR");
@@ -176,9 +177,15 @@ export function StockFilterChip({
   );
 }
 
-export function StockTableCard({ children }: { children: ReactNode }) {
+/**
+ * O cartão da tabela. Com `trocando` (a troca de filtro, busca ou página;
+ * carregamento v2, momento 7, caso 4), a barra no topo dele até a lista nova
+ * chegar; a lista anterior, a 50% e inert, é a da tela (useListaEmTroca).
+ */
+export function StockTableCard({ children, trocando }: { children: ReactNode; trocando?: boolean }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-border bg-card">
+    <section className="relative overflow-hidden rounded-lg border border-border bg-card">
+      {trocando !== undefined ? <BarraDaLista ativa={trocando} /> : null}
       {children}
     </section>
   );
@@ -195,6 +202,12 @@ type StockTablePaginationProps = {
   label: string;
   /** Preferir o has_more do servidor: `count` já vem pós-filtro em memória. */
   hasMore?: boolean;
+  /**
+   * A página nova ainda não chegou (a lista anterior na tela): os botões
+   * ficam ocupados, com `aria-disabled` e a trava aqui, sem `disabled`, para
+   * o foco ficar em quem a pessoa tocou.
+   */
+  ocupada?: boolean;
 };
 
 export function StockTablePagination({
@@ -207,6 +220,7 @@ export function StockTablePagination({
   onNext,
   label,
   hasMore,
+  ocupada = false,
 }: StockTablePaginationProps) {
   const canGoNext = hasMore ?? count >= limit;
   return (
@@ -219,16 +233,22 @@ export function StockTablePagination({
         <Button
           variant="outline"
           size="sm"
-          onClick={onPrevious}
+          onClick={() => {
+            if (!ocupada) onPrevious();
+          }}
           disabled={page === 0 || isLoading}
+          aria-disabled={ocupada || undefined}
         >
           Anterior
         </Button>
         <Button
           variant="outline"
           size="sm"
-          onClick={onNext}
+          onClick={() => {
+            if (!ocupada) onNext();
+          }}
           disabled={!canGoNext || isLoading}
+          aria-disabled={ocupada || undefined}
         >
           Próximo
         </Button>

@@ -638,7 +638,9 @@ O PR 2 do celular (as telas da operação sem sinal) entrou no PR 610, com a
 parte 9 do carregamento v2 (10.5). Depois de entrar, a equipe guarda no
 aparelho os arquivos das telas que pode abrir, uma vez por versão, e o
 `ChunkErrorBoundary` separa a falta de rede, a versão nova e o erro da tela.
-Ficam para depois os PRs 3 a 5.
+O PR 3 do celular (as fotos) entrou com a parte 11, e o PR 5 (a leitura leve
+e a volta do segundo plano), com a parte 10 (10.5). O PR 4 (a ação no
+celular) não tem registro próprio.
 
 ## 10. Carregamento v2 (12/11/2026)
 
@@ -740,7 +742,7 @@ por PR:
 | 7 | A conexão (7a: "Reconectando…" com histerese e a releitura sozinha) e a linha de estado nas listas (7b: Pedidos, Receber, Estoque, Alertas) | PR 610 |
 | 8 | As listas com a forma final | PR 610 |
 | 9 | A abertura com a marca e a `CarregandoTela` no lugar do branco | PR 610 |
-| 10 | A troca de filtro e a releitura sem apagar a lista | a fazer |
+| 10 | A troca de filtro e a releitura sem apagar a lista | PR 610 |
 | 11 | As operações longas: fotos com progresso e etapas | PR 610 |
 | 12 | A trilha do Agent Dute | PR 610 |
 | 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | a fazer |
@@ -1270,6 +1272,125 @@ Ficam para depois:
   300 ms e volta, porque o relógio recomeça;
 - a medição num Android de verdade e no Safari, que pode tratar a folha no
   corpo de outro jeito.
+
+**Parte 10, a troca de filtro e a releitura (PR 610, 13/11/2026).** O momento
+7 (casos 3 e 4) e a releitura do momento 8. Entraram aqui o item 9 da seção 6
+(a atualização) e o PR 5 do celular (9.3: a leitura leve e a volta do segundo
+plano).
+
+- **A troca de filtro, mês ou cliente** (`lib/carregando/use-lista-em-troca.tsx`),
+  com `placeholderData: keepPreviousData` nas listas com filtro no servidor:
+  Produtos e SKUs (a busca e a página), Movimentações (o tipo, a busca e a
+  página, também na aba Histórico do Estoque), Pedidos legado (o status, a
+  busca e a página), Relatórios (o período), o Fechamento do mês (o mês e o
+  cliente) e o Receber (a troca de cliente, que a parte 8 deixou para cá):
+  - a lista anterior fica, a 50% em 150 ms, `inert` e com `aria-busy`, que só
+    vale neste caso. Nada de "Carregando..." no lugar dela, e a tela não pula;
+  - a barra do topo do cartão (`BarraDaLista`, a `BarraDeEspera` com o fim em
+    tinta) entra aos 300 ms, inteira: o CSS esmaece tudo dentro da lista
+    menos o caminho até ela, desde o começo da troca;
+  - aos 5 s, onde a tela tem a linha de estado (o Receber), ela diz
+    "Atualizando…"; até lá, a hora da lista na tela. A troca não fala;
+  - na chegada, a lista nova entra por opacidade, subindo 4 px, em 150 ms (só
+    opacidade no reduzido);
+  - o filtro, a busca e a paginação ficam fora do que fica inerte, e o foco
+    fica onde a pessoa tocou. "Anterior" e "Próximo" ficam ocupados com
+    `aria-disabled`, sem `disabled`, até a página chegar, e o cursor das
+    Movimentações não pega o da página que ainda está na tela (antes, o
+    `disabled` tirava o foco do botão; com a página anterior na tela, o cursor
+    seguinte seria o dela);
+  - nos Relatórios, o "Baixar planilha" fica ocupado na troca: a prévia na
+    tela é do período anterior, e a planilha sairia com o nome do novo. "Nada
+    neste filtro" diz o período da prévia; no Fechamento, o cartão do total
+    diz o mês que está na tela;
+  - no Receber, os avisos do cliente anterior ficam até os do novo chegarem
+    (antes, sumiam na hora, e "Para conferir" contava sem eles), e a contagem
+    lembrada do cliente novo não é gravada com os do anterior;
+  - a troca que falha mostra o aviso no lugar da lista (`FalhaNaLeitura`: o
+    `ErroNaLeitura` ou, na falta de conexão, o `BlocoSemConexao`), nunca o
+    vazio. A nova tentativa segue com o aviso e "Tentando de novo…" (o
+    react-query voltaria a lista do filtro anterior por baixo,
+    `useListaComFiltro`). Antes, a busca de Produtos que falhava deixava a
+    tabela vazia e "Produtos cadastrados 0".
+- **A releitura que falha nunca apaga a lista** (momentos 7 e 8). Antes, o
+  Receber, o Estoque, os Alertas, os Relatórios e o Fechamento trocavam a
+  lista pelo aviso de erro; Pedidos dizia "Atualizado às 10:42" como se nada
+  tivesse falhado; Produtos, SKUs, Movimentações e Pedidos legado não diziam
+  nada. Agora só a leitura sem nada lido troca a lista pelo aviso:
+  - nas quatro listas com a linha de estado, ela diz "Não consegui atualizar
+    · lista de 10:42", com "Tentar de novo" (o ícone em crítico, o texto em
+    tinta, como o "Reconectando…");
+  - nas telas sem a linha (Relatórios, o Fechamento e as legadas), a
+    `FaixaDaReleitura`, logo acima da lista, diz o mesmo, ou a falta de
+    conexão ("Reconectando… · lista de 10:42", "Sem conexão · lista de
+    10:42"), que essas telas não mostravam;
+  - a releitura automática não fala. Quem tocou em Atualizar ou em "Tentar de
+    novo" e viu falhar de novo ouve "Não consegui atualizar".
+- **O "Avançar" só volta depois da releitura** (o item 9 da seção 6 e a
+  linha "Tratar" de 4.3): a mutação de `useWarehouseTaskActions` espera a
+  bancada voltar. Antes, o botão voltava ativo com a tarefa ainda na etapa
+  antiga, até a releitura chegar.
+- **A leitura leve no celular** (o PR 5 do celular):
+  - abaixo de 768 px, onde o menu lateral com os contadores não aparece, o
+    shell da Armazenagem não lê o armazém (`/api/warehouse/ops`, até cerca
+    de 9.900 documentos) nem o relê a cada 60 s; cada tela lê o que mostra. O
+    menu lateral volta a ler quando aparece;
+  - o "Conferir" da separação que acha o pedido concluído usa a leitura que
+    acabou de fazer, e não lê a fila de novo (antes, duas leituras);
+  - a volta do app ao primeiro plano já relia as listas, com a barra no topo
+    e "Atualizado às" (parte 7b): nada a mais aqui.
+- **Medição no Chromium**, num harness com dados sintéticos e o servidor
+  simulado (a troca com o servidor a 2,5 s; antes é o `96ea50d`):
+  - a troca, nas sete telas: antes, a lista sumia por toda a espera (150
+    quadros de 151, cerca de 2,5 s), no lugar dela "Carregando..." ou
+    "Calculando…", e a tela encolhia de uma vez (de 2.265 a 2.965 px nas
+    listas legadas, 230 px nos Relatórios, 291 px no Fechamento e 315 px no
+    Receber, onde os avisos sumiam); depois, a lista anterior em todos os
+    quadros, nenhum "Carregando", `aria-busy` e `inert` em todos, a 0,5
+    depois de 150 ms, a barra do topo entre 287 e 338 ms, e 0 px de salto até
+    a chegada. No celular de 390 px, antes de 471 a 3.165 px; depois, 0 px.
+    No movimento reduzido, a mesma forma, com a barra parada e inteira;
+  - a chegada: a lista nova vai de 0 a 1 em cerca de 140 ms, e a barra
+    completa em tinta e esmaece;
+  - no Receber, com o servidor a 6,5 s: antes, "Carregando chegadas…" e os
+    avisos fora por todo o tempo; depois, "Atualizado às" e, a 5,22 s da
+    troca, "Atualizando…";
+  - a releitura que falha (um erro 500): antes, o Receber, o Fechamento e os
+    Relatórios ficavam com 0 linhas e o aviso de erro, e o Estoque com "Não
+    consegui carregar o estoque."; Produtos seguia sem dizer nada. Depois, as
+    mesmas linhas na tela (3, 2, 8 e 50), com "Não consegui atualizar · lista
+    de" na linha de estado ou na faixa (o "· lista de" com 6,07:1 no claro e
+    7,36:1 no escuro). A busca de Produtos que falhava deixava a tabela vazia;
+    agora, o aviso com "Tentar de novo";
+  - o shell no celular, em 3 min numa tela que não lê o armazém: antes, 1
+    leitura de `/api/warehouse/ops` ao abrir e 3 no intervalo; depois, 0 e 0.
+    No computador, segue 1 e 3;
+  - o axe-core no Chromium, com o contraste, no claro e no escuro: nenhuma
+    violação nova na troca (a lista `inert` sai da árvore) nem com as faixas
+    de falha. As que existem são de antes desta parte: nas telas legadas, os
+    botões de ícone sem nome (100 em Produtos), as barras de progresso sem
+    nome (50 em Pedidos legado) e o contraste; no escuro, o primário (4,3:1).
+
+Fica aberto:
+
+- na aba Histórico do Estoque, a linha de estado continua dizendo a hora dos
+  itens, e não a do histórico, e por isso não diz "Atualizando…" aos 5 s da
+  troca de tipo ou de página;
+- durante a troca, os números fora da lista (os cartões de Produtos, SKUs e
+  Pedidos legado, o "Exibindo 50 de 120" da paginação, a contagem do
+  relatório no menu dos Relatórios e o "Em aberto · N" do Receber) ficam com
+  os da lista anterior, inteiros, até a nova chegar;
+- no Fechamento, os cartões dos meses do cliente novo dizem "Em aberto" até a
+  lista dos períodos chegar (o falso vazio de 4.8, de antes desta parte);
+- a primeira leitura dessas seis telas segue com "Carregando..." em texto (a
+  migração, parte 13);
+- "Anterior" e "Próximo" ocupados não mudam de aspecto: quem diz é a lista a
+  50% e a barra;
+- o `realtime-sync` relê a fila do armazém quando as tarefas mudam: na
+  conclusão da separação, a releitura dela e a do app podem somar duas
+  leituras (a segunda cancela a primeira). O harness não tem o Firestore, e
+  isso não foi medido;
+- a conferência num Android de verdade e com leitor de tela de verdade.
 
 **Parte 11, as operações longas (PR 610, 13/11/2026).** É também o PR 3 do
 celular (as fotos) e o item 8 da seção 6.

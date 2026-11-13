@@ -338,6 +338,7 @@ describe("Estoque sem conexão", () => {
     // Na primeira leitura, nada no lugar da lista (a linha de estado diz); depois, o aviso, antes do erro.
     expect(fonte).toContain("{skus.isLoading ? null : semRede && semRede.lidaEm === null ? (");
     expect(fonte.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(fonte.indexOf("Não consegui carregar o estoque."));
-    expect(fonte).toContain(") : skus.error && !semRede ? (");
+    // Só a leitura sem nada lido troca a lista pelo aviso: a releitura que falha fica na linha de estado (parte 10).
+    expect(fonte).toContain(") : skus.error && !skus.data && !semRede ? (");
   });
 });

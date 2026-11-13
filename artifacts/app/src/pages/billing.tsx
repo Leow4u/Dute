@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useGetBillingPeriod,
   getGetBillingPeriodQueryKey,
@@ -8,17 +8,19 @@ import {
   usePayBillingInvoice,
   useListBillingPeriods,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, CheckCircle2, Clock3, FileText, Save, Send, TriangleAlert } from "lucide-react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Confirmacao } from "@/components/ui/confirmacao";
+import { FaixaDaReleitura, FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { useToast } from "@/hooks/use-toast";
 import { CABECALHO_DO_CLIENTE } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
+import { BarraDaLista, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { acaoDaArmazenagem } from "@/lib/financeiro/armazenagem";
 import { humanApiError } from "@/lib/permissions";
 import {
@@ -106,11 +108,19 @@ export default function Billing() {
   const { code: cliente, isLoading: carregandoCliente } = useActiveCustomer();
   const doCliente = useMemo(() => ({ headers: { [CABECALHO_DO_CLIENTE]: cliente } }), [cliente]);
 
-  const { data: raw, isLoading, error } = useGetBillingPeriod(competencia, {
-    query: { queryKey: [...getGetBillingPeriodQueryKey(competencia), cliente], enabled: !carregandoCliente },
+  // Trocar o mês ou o cliente lê no servidor: o mês anterior fica, a 50% e inert, até o novo chegar (carregamento
+  // v2, momento 7, caso 4); a releitura que falha não o apaga (a faixa diz), e a troca que falha mostra o aviso.
+  const leitura = useGetBillingPeriod(competencia, {
+    query: { queryKey: [...getGetBillingPeriodQueryKey(competencia), cliente], enabled: !carregandoCliente, placeholderData: keepPreviousData },
     request: doCliente,
   });
+  const { data: raw, isLoading } = leitura;
   const data = raw as unknown as Period | undefined;
+  const lista = useListaComFiltro(leitura);
+  const troca = useListaEmTroca(lista.trocando);
+  // O mês do que está na tela: na troca, ainda o anterior, que a tela continua dizendo qual é.
+  const mesNaTela = useRef(competencia);
+  if (!lista.trocando) mesNaTela.current = competencia;
   const { data: periodsData } = useListBillingPeriods({
     query: { queryKey: [...getListBillingPeriodsQueryKey(), cliente], enabled: !carregandoCliente },
     request: doCliente,
@@ -239,7 +249,7 @@ export default function Billing() {
   const acao = acaoDaArmazenagem(status, data?.fatura_id, user?.publicMetadata.role);
   const statusMeta = STATUS_META[status] ?? STATUS_META.aberto;
   const canEmit = aberto && data?.emission?.can_emit === true && !dirty;
-  const monthName = competenciaLabel(competencia).split(" de ")[0];
+  const monthName = competenciaLabel(mesNaTela.current).split(" de ")[0];
 
   return (
     <div className="space-y-4">
@@ -281,15 +291,16 @@ export default function Billing() {
         </label>
       </div>
 
-      {error ? (
-        <p className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          {humanApiError(error, "Não consegui calcular a competência.")}
-        </p>
+      {lista.falhou ? (
+        <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem={humanApiError(lista.erro, "Não consegui calcular a competência.")} />
       ) : isLoading || !data ? (
         <p className="text-sm text-muted-foreground">Calculando {competenciaLabel(competencia)}...</p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <section className="overflow-hidden rounded-lg border border-border bg-card">
+        <>
+        <FaixaDaReleitura leituras={[leitura]} />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]" {...troca.props}>
+          <section className="relative overflow-hidden rounded-lg border border-border bg-card">
+            <BarraDaLista ativa={lista.trocando} />
             <div className="flex items-baseline justify-between px-5 pb-2 pt-4">
               <h2 className="text-sm font-semibold">Cobrado automaticamente</h2>
               <span className="text-xs text-muted-foreground">calculado pelo sistema</span>
@@ -406,7 +417,7 @@ export default function Billing() {
             <div className="rounded-lg border-2 border-primary bg-card p-5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-muted-foreground">
-                  {competenciaLabel(competencia)} · {aberto ? "total previsto" : "total"}
+                  {competenciaLabel(mesNaTela.current)} · {aberto ? "total previsto" : "total"}
                 </span>
                 <span
                   className={cn(
@@ -475,7 +486,7 @@ export default function Billing() {
                   </Button>
                 ) : null}
                 <Button asChild variant="outline">
-                  <Link href={`/faturamento/fatura?competencia=${competencia}`}>
+                  <Link href={`/faturamento/fatura?competencia=${mesNaTela.current}`}>
                     <FileText className="mr-2 h-4 w-4" />
                     {aberto ? "Ver prévia da fatura (PDF)" : "Ver fatura (PDF)"}
                   </Link>
@@ -527,6 +538,7 @@ export default function Billing() {
             </div>
           </aside>
         </div>
+        </>
       )}
     </div>
   );

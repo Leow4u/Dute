@@ -43,10 +43,12 @@ export function useWarehouseTaskActions({
   const [exceptionTaskId, setExceptionTaskId] = useState<string>();
   const [exceptionNote, setExceptionNote] = useState("");
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-    queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
-  };
+  /** Relê a bancada e o painel do agente; a promessa resolve quando as releituras voltam (com ou sem erro). */
+  const invalidate = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] }),
+      queryClient.invalidateQueries({ queryKey: ["ai-overview"] }),
+    ]);
 
   const advanceTask = useMutation<unknown, Error, AdvanceTaskPayload>({
     mutationFn: ({ id: taskId, operation, note }) => {
@@ -62,12 +64,14 @@ export function useWarehouseTaskActions({
         }),
       });
     },
+    // O "Avançar" só volta depois da releitura (carregamento v2, parte 10; o diagnóstico, seção 6, item 9): a
+    // mutação fica pendente até a bancada voltar, e o botão não volta ativo com a tarefa ainda na etapa antiga.
     onSuccess: () => {
-      invalidate();
       toast({
         title: "Tarefa avançada",
         description: "A bancada WMS foi atualizada com a próxima etapa.",
       });
+      return invalidate();
     },
     onError: (error) => {
       toast({
@@ -106,7 +110,7 @@ export function useWarehouseTaskActions({
       setExceptionOpen(false);
       setExceptionTaskId(undefined);
       setExceptionNote("");
-      invalidate();
+      void invalidate();
       toast({
         title: "Exceção registrada",
         description: "O evento operacional foi enviado para a memória da IA.",
