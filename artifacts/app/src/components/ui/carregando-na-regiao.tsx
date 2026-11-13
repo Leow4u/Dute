@@ -5,9 +5,10 @@ import { DEMORANDO, SEM_RESPOSTA } from "@/components/ui/carregando-tela";
 import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Spinner } from "@/components/ui/spinner";
 import { useAnuncio } from "@/lib/carregando/anunciador";
-import { useEsperaDaRota } from "@/lib/carregando/espera-da-rota";
+import { novaEsperaDaRota, useEsperaDaRota, useEsperaDaRotaNaTela, type EsperaDaRota } from "@/lib/carregando/espera-da-rota";
 import { useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
 import { useEspera } from "@/lib/carregando/use-espera";
+import { segurarOFocoQueSai } from "@/lib/foco-de-volta";
 import { cn } from "@/lib/utils";
 
 /**
@@ -35,17 +36,30 @@ import { cn } from "@/lib/utils";
  * e sem anunciar de novo a entrada ("Abrindo Início") nem a demora que ela já
  * anunciou. O anúncio da rota que ainda espera a vez passa a esta região, que
  * o retira quando sai.
+ *
+ * Com `passaAdiante` (a leitura que toda tela de uma área espera antes da
+ * própria, como a do portal do cliente), a região é, ela também, a espera que
+ * a próxima região continua: quando a tela chega e ainda lê o que é dela
+ * ("Carregando eventos…"), o indicador não some, o relógio é o mesmo, e o que
+ * já foi anunciado não é anunciado de novo.
+ *
+ * Quando a leitura chega e a região sai com o foco nela (a pessoa tocou em
+ * "Tentar de novo"), o foco vai ao título da seção ou da tela que chegou,
+ * nunca ao `body` (WCAG 2.4.3).
  */
 export function CarregandoNaRegiao({
   rotulo,
   className,
   continuaARota = false,
+  passaAdiante = false,
   onTentar,
   id,
 }: {
   rotulo: string;
   className?: string;
   continuaARota?: boolean;
+  /** A próxima região que entra lendo continua esta espera (a leitura da área antes da da tela). */
+  passaAdiante?: boolean;
   /** Repete a leitura: "Tentar de novo" aos 10 s e a desistência aos 70 s. */
   onTentar?: () => void;
   /** O id da região, para a lista que lê apontar para ela (`aria-describedby`; momento 2). */
@@ -68,6 +82,13 @@ export function CarregandoNaRegiao({
     levarOFoco.current = false;
     raiz.current?.focus({ preventScroll: true });
   }, [tentativa]);
+  // A leitura chegou e a região sai com o foco: ele vai ao título de onde ela morava, não ao `body`.
+  useLayoutEffect(() => {
+    const elemento = raiz.current;
+    return () => {
+      if (elemento) segurarOFocoQueSai(elemento);
+    };
+  }, []);
   return (
     <div
       ref={raiz}
@@ -79,15 +100,50 @@ export function CarregandoNaRegiao({
         className,
       )}
     >
-      <EsperaDaRegiao key={tentativa} rotulo={rotulo} continuaARota={continuaARota && tentativa === 0} onTentar={tentar} />
+      <EsperaDaRegiao
+        key={tentativa}
+        rotulo={rotulo}
+        continuaARota={continuaARota && tentativa === 0}
+        passaAdiante={passaAdiante}
+        onTentar={tentar}
+      />
     </div>
   );
 }
 
+/**
+ * A espera que a região passa adiante: o mesmo começo e o que a espera que ela
+ * continua já anunciou, com o anúncio que ainda espera a vez.
+ */
+function esperaQuePassaAdiante(rota: EsperaDaRota | null): EsperaDaRota {
+  const espera = novaEsperaDaRota(rota?.inicio);
+  espera.daRegiao = true;
+  if (rota) {
+    espera.entrada = rota.entrada;
+    espera.demora = rota.demora;
+    espera.retirar = rota.retirar;
+  }
+  return espera;
+}
+
 /** Uma espera da região: a primeira, ou a que a pessoa pediu de novo (o relógio volta ao zero). */
-function EsperaDaRegiao({ rotulo, continuaARota, onTentar }: { rotulo: string; continuaARota: boolean; onTentar?: () => void }) {
+function EsperaDaRegiao({
+  rotulo,
+  continuaARota,
+  passaAdiante,
+  onTentar,
+}: {
+  rotulo: string;
+  continuaARota: boolean;
+  passaAdiante: boolean;
+  onTentar?: () => void;
+}) {
   const rota = useEsperaDaRota(continuaARota, true);
-  const espera = useEspera(true, { desde: rota?.inicio });
+  const [propria] = useState(() => (passaAdiante ? esperaQuePassaAdiante(rota) : null));
+  useEsperaDaRotaNaTela(propria);
+  const espera = useEspera(true, { desde: propria?.inicio ?? rota?.inicio });
+  // A espera que continua outra já à vista (a do portal, que passa à da tela): a caixa não entra de novo.
+  const [continua] = useState(() => Boolean(rota) && espera.visivel);
   const anunciar = useAnuncio();
   const marco = !espera.visivel
     ? null
@@ -97,15 +153,29 @@ function EsperaDaRegiao({ rotulo, continuaARota, onTentar }: { rotulo: string; c
         ? "demorando"
         : "espera";
 
-  // A espera que acabou (a lista chegou, ou passou à demora) retira o anúncio dela, se ele ainda esperava a vez.
-  // A desistência é um alerta (o ErroNaLeitura): o leitor de tela já a ouve.
+  // A espera que acabou (a lista chegou, ou passou à demora) retira o anúncio dela, se ele ainda esperava a vez,
+  // menos o que a região que continua esta espera herdou. A desistência é um alerta (o ErroNaLeitura): o leitor de
+  // tela já a ouve.
   useEffect(() => {
-    if (marco === "espera") return rota?.entrada ? undefined : anunciar(rotulo.replace(/…$/, ""));
-    if (marco === "demorando") return rota?.demora ? undefined : anunciar(DEMORANDO);
-    return undefined;
-  }, [marco, anunciar, rotulo, rota]);
-  // O anúncio da rota que esta região herdou sai com ela.
-  useEffect(() => () => rota?.retirar?.(), [rota]);
+    if (marco !== "espera" && marco !== "demorando") return undefined;
+    if (marco === "espera" ? rota?.entrada : rota?.demora) return undefined;
+    const retirar = anunciar(marco === "espera" ? rotulo.replace(/…$/, "") : DEMORANDO);
+    if (propria) {
+      if (marco === "espera") propria.entrada = true;
+      else propria.demora = true;
+      propria.retirar = retirar;
+    }
+    return () => {
+      if (!propria?.herdada) retirar();
+    };
+  }, [marco, anunciar, rotulo, rota, propria]);
+  // O anúncio da rota que esta região herdou sai com ela, se não passou adiante.
+  useEffect(
+    () => () => {
+      if (!propria?.herdada) rota?.retirar?.();
+    },
+    [rota, propria],
+  );
 
   if (!espera.visivel) return null;
   if (marco === "sem-resposta" && onTentar) {
@@ -114,7 +184,7 @@ function EsperaDaRegiao({ rotulo, continuaARota, onTentar }: { rotulo: string; c
   return (
     <>
       <span className="flex items-center gap-2.5">
-        <Spinner tamanho={24} calmo={espera.calmo} className="text-foreground" />
+        <Spinner tamanho={24} calmo={espera.calmo} className="text-foreground" data-continua={continua ? "" : undefined} />
         <span className="text-sm font-bold text-foreground">{rotulo}</span>
       </span>
       {marco === "demorando" ? (

@@ -4,9 +4,7 @@ import { nomeSemTamanho, tamanhoDoProduto } from "@workspace/dominio";
 import { ArrowLeft, Check, ChevronRight, PackageOpen, Truck } from "lucide-react";
 import { Link } from "wouter";
 
-import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
-import { DialogCancelar } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { ORDER_STEPS, orderStepIndex, splitOrders, type OrderView } from "@/lib/orders";
@@ -14,6 +12,7 @@ import { orderProofs, type PortalDocument } from "@/lib/portal-documents";
 import { variantLabel } from "@/lib/stock-variants";
 import { cn } from "@/lib/utils";
 
+import { ConfirmacaoNaLinha } from "./confirmacao-na-linha";
 import { DocumentList } from "./documentos";
 import { ClientDataBoundary, clientOverviewQueryKey, getOrders, getRequests } from "./shared";
 
@@ -31,7 +30,7 @@ const integer = new Intl.NumberFormat("pt-BR");
 export function ClientePedidos() {
   const [selected, setSelected] = useState<string | null>(null);
   return (
-    <ClientDataBoundary>
+    <ClientDataBoundary titulo="Pedidos" largura="max-w-6xl">
       {(overview) => {
         const { active, history } = splitOrders(
           (overview.request_history ?? getRequests(overview)) as Record<string, unknown>[],
@@ -100,6 +99,7 @@ function OrderList({ active, history, onOpen }: { active: OrderView[]; history: 
               <li key={view.id} className="border-b border-border/50 last:border-0">
                 <button
                   type="button"
+                  data-pedido={view.id}
                   className="flex w-full items-center justify-between gap-4 px-5 py-3 text-left text-sm hover:bg-muted/40"
                   onClick={() => onOpen(view.id)}
                 >
@@ -176,7 +176,7 @@ function ActiveCard({ view, onOpen }: { view: OrderView; onOpen: () => void }) {
   return (
     <article className="rounded-lg border border-border bg-card px-5 py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <button type="button" className="group text-left" onClick={onOpen}>
+        <button type="button" data-pedido={view.id} className="group text-left" onClick={onOpen}>
           <span className="font-semibold group-hover:underline">{view.number}</span>
           <span className="ml-2 text-sm text-muted-foreground">{[view.title, view.summary].filter(Boolean).join(" · ")}</span>
         </button>
@@ -241,30 +241,27 @@ function CancelOrder({ view }: { view: OrderView }) {
       toast({ title: "Não foi possível cancelar", description: error instanceof Error ? error.message : "", variant: "destructive" });
     },
   });
-  if (!confirming) {
-    return (
-      <button type="button" className="font-medium text-muted-foreground hover:text-destructive-soft-foreground hover:underline" onClick={() => setConfirming(true)}>
-        Cancelar pedido
-      </button>
-    );
-  }
-  // Cancelando, o botão diz o gerúndio aos 300 ms, sem desabilitar, e o "Manter" fica travado no código (parte 13f).
+  // A pergunta na linha, com o foco que nunca cai no body (parte 13f): no fim, o pedido no lugar novo dele.
   return (
-    <span className="inline-flex items-center gap-2">
-      Cancelar {view.number}?
-      <BotaoDeAcao
-        size="sm"
-        variant="destructive"
-        estado={cancel.isPending ? "andamento" : "repouso"}
-        rotulo="Cancelar pedido"
-        andamento="Cancelando…"
-        onClick={() => cancel.mutate()}
-      />
-      <DialogCancelar size="sm" variant="ghost" ocupado={cancel.isPending} onClick={() => setConfirming(false)}>
-        Manter
-      </DialogCancelar>
-    </span>
+    <ConfirmacaoNaLinha
+      aberta={confirming}
+      ocupada={cancel.isPending}
+      gatilho="Cancelar pedido"
+      pergunta={`Cancelar ${view.number}?`}
+      confirmar="Cancelar pedido"
+      andamento="Cancelando…"
+      onAbrir={() => setConfirming(true)}
+      onManter={() => setConfirming(false)}
+      onConfirmar={() => cancel.mutate()}
+      classeDoGatilho="font-medium text-muted-foreground hover:text-destructive-soft-foreground hover:underline"
+      lugarDepois={() => abrirDoPedido(view.id)}
+    />
   );
+}
+
+/** O botão que abre o pedido, na lista em andamento ou na de entregues e cancelados. */
+function abrirDoPedido(id: string): HTMLElement | null {
+  return [...document.querySelectorAll<HTMLElement>("[data-pedido]")].find((elemento) => elemento.dataset.pedido === id) ?? null;
 }
 
 // ------------------------------------------------------------------ detalhe

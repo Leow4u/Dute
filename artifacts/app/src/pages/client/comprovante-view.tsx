@@ -4,9 +4,10 @@ import { ArrowLeft, Download } from "lucide-react";
 import { ComprovanteDocumento } from "@/components/portal/comprovante-documento";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { ErroNaLeitura, useTentandoNoRelogio } from "@/components/ui/erro-na-leitura";
 import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import type { ComprovanteDaOs } from "@/lib/portal/comprovante";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { cn } from "@/lib/utils";
 
 /**
@@ -16,8 +17,9 @@ import { cn } from "@/lib/utils";
  *
  * No carregamento v2 (parte 13f): lendo, a caixa e "Carregando o
  * comprovante…" aos 300 ms; a falha com "Tentar de novo"; o "Baixar PDF" espera
- * a assinatura e as fotos (travado no código, nunca disabled), e a imagem que
- * não veio fica dita, na barra e no papel, nunca some.
+ * os endereços da assinatura e das fotos (travado no código, nunca disabled)
+ * até a desistência dos 70 s, e a imagem que não veio fica dita, na barra e no
+ * papel, nunca some.
  */
 
 export type EstadoDoComprovante = "carregando" | "sem_comprovante" | "erro" | "pronto";
@@ -60,8 +62,13 @@ export function ComprovanteView({
         ? `A OS ${numero} ainda não tem comprovante.`
         : null;
   const pronto = estado === "pronto" && Boolean(comprovante);
-  // As imagens ainda chegando: o PDF sairia sem elas.
-  const esperaAsFotos = pronto && Boolean(fotos?.lendo);
+  // As imagens ainda chegando: o PDF sairia sem elas. A trava tem prazo: aos 70 s, a desistência da espera, o PDF
+  // volta a sair com o que chegou, e a região diz que o servidor não respondeu, com "Tentar de novo".
+  const lendoAsFotos = pronto && Boolean(fotos?.lendo);
+  const desistiu = useEspera(lendoAsFotos).fase === "sem-resposta";
+  // A nova tentativa no relógio: a que falha de novo antes de 300 ms não pisca o botão.
+  const tentandoOComprovante = useTentandoNoRelogio(Boolean(leitura?.tentando));
+  const esperaAsFotos = lendoAsFotos && !desistiu;
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-6 text-foreground md:px-8">
       <div className="no-print flex flex-wrap items-center gap-3">
@@ -73,7 +80,7 @@ export function ComprovanteView({
         </Button>
         <h1 className="text-xl font-bold tracking-tight">Comprovante da OS {numero}</h1>
         <div className="ml-auto flex flex-wrap items-center gap-3">
-          {esperaAsFotos ? <CarregandoNaRegiao rotulo="Carregando as fotos…" onTentar={fotos?.onTentar} /> : null}
+          {lendoAsFotos ? <CarregandoNaRegiao rotulo="Carregando as fotos…" onTentar={fotos?.onTentar} /> : null}
           <Button
             type="button"
             onClick={() => {
@@ -100,7 +107,7 @@ export function ComprovanteView({
         <CarregandoNaRegiao rotulo="Carregando o comprovante…" continuaARota onTentar={leitura?.onTentar} className="rounded-lg border border-border bg-card px-5 py-7" />
       ) : estado === "erro" ? (
         leitura ? (
-          <ErroNaLeitura mensagem="Não foi possível carregar o comprovante." tentando={leitura.tentando} onTentar={leitura.onTentar} />
+          <ErroNaLeitura mensagem="Não foi possível carregar o comprovante." tentando={tentandoOComprovante} onTentar={leitura.onTentar} />
         ) : (
           <p role="alert" className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
             Não foi possível carregar o comprovante.

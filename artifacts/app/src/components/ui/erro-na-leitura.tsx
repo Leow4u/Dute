@@ -27,6 +27,16 @@ export function useFaltaNaTela(forcada?: FaltaNaTela): FaltaNaTela {
 }
 
 /**
+ * O "Tentando de novo…" no relógio da espera, para quem passa ao
+ * `ErroNaLeitura` a leitura crua (o `isFetching`): só depois de 300 ms, e pelo
+ * menos 500 ms. A nova tentativa que falha de novo antes não pisca o botão nem
+ * muda a frase do alerta (carregamento v2, parte 13f).
+ */
+export function useTentandoNoRelogio(tentando: boolean): boolean {
+  return useEspera(tentando, { segurarMinimo: true }).visivel;
+}
+
+/**
  * A nova tentativa no relógio da espera: "Tentando de novo…" só depois de
  * 300 ms, e pelo menos 500 ms; a leitura que acaba antes não pisca o botão. A
  * trava do toque segue o que o botão diz: enquanto ele diz "Tentando de
@@ -35,7 +45,7 @@ export function useFaltaNaTela(forcada?: FaltaNaTela): FaltaNaTela {
  * toque alcançar o servidor.
  */
 function useNovaTentativa(tentando: boolean, onTentar: () => void) {
-  const mostrando = useEspera(tentando, { segurarMinimo: true }).visivel;
+  const mostrando = useTentandoNoRelogio(tentando);
   const tentarDeNovo = useTentarDeNovo();
   return {
     mostrando,

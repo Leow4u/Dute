@@ -68,7 +68,7 @@ export function ClienteRelatorio() {
   });
 
   return (
-    <ClientDataBoundary>
+    <ClientDataBoundary largura="max-w-[860px]">
       {(overview) => {
         const invoices = closedInvoices((overview.invoice_history ?? getInvoices(overview)) as Record<string, unknown>[]);
         const deliveries = deliveriesByMonth((overview.order_tracking ?? getOrders(overview)) as Record<string, unknown>[]);

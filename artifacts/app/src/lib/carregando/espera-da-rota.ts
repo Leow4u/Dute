@@ -26,6 +26,12 @@ export interface EsperaDaRota {
   retirar: (() => void) | null;
   /** Uma lista continuou esta espera: o anúncio que ainda espera a vez é dela. */
   herdada: boolean;
+  /**
+   * A espera é de uma região da tela que já chegou (a leitura do portal), e
+   * não do arquivo de uma tela: a região seguinte a continua, mas o item do
+   * menu não mostra a caixa por ela (`useRotaEsperando`).
+   */
+  daRegiao?: boolean;
 }
 
 /** As esperas de rota na tela agora; a última é a que a tela que chega continua. */
@@ -51,7 +57,7 @@ function ouvirAsEsperas(ouvinte: () => void): () => void {
  * (carregamento v2, momento 1; o relógio dos 300 ms é de quem mostra).
  */
 export function useRotaEsperando(): boolean {
-  return useSyncExternalStore(ouvirAsEsperas, () => naTela.length > 0, () => false);
+  return useSyncExternalStore(ouvirAsEsperas, () => naTela.some((espera) => !espera.daRegiao), () => false);
 }
 
 /** A espera de rota que começa agora, ou que continua a que começou em `desde`. */
@@ -61,9 +67,13 @@ export function novaEsperaDaRota(desde?: number): EsperaDaRota {
   return { inicio, entrada: false, demora: false, retirar: null, herdada: false };
 }
 
-/** A `CarregandoTela` está na tela com esta espera, desde o commit em que entrou até o em que sai. */
-export function useEsperaDaRotaNaTela(espera: EsperaDaRota): void {
+/**
+ * A `CarregandoTela` (ou a região que passa a espera adiante) está na tela com
+ * esta espera, desde o commit em que entrou até o em que sai. Sem espera, nada.
+ */
+export function useEsperaDaRotaNaTela(espera: EsperaDaRota | null): void {
   useLayoutEffect(() => {
+    if (!espera) return undefined;
     naTela.push(espera);
     avisarOsOuvintes();
     return () => {

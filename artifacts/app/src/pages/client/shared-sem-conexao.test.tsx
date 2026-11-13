@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { SEM_CONEXAO, SEM_RESPOSTA } from "@/lib/conexao";
+import { textosForaDaLista } from "@/test/textos";
 
 import { ClientDataBoundary, clientOverviewQueryKey, type ClientOverview } from "./shared";
 
@@ -10,7 +11,8 @@ import { ClientDataBoundary, clientOverviewQueryKey, type ClientOverview } from 
  * O portal sem rede (docs/plataforma/diagnostico-carregamento.md, decisão 2
  * do celular, de 06/11/2026): sem conexão na releitura, o que já estava na
  * tela fica, e não vira a falha. Sem nada lido, o aviso da conexão no lugar
- * do portal (carregamento v2, momento 8, parte 13f).
+ * do portal (carregamento v2, momento 8, parte 13f). A releitura que falha por
+ * outro motivo também não apaga o que já estava lido (necessidade 8).
  */
 
 const OVERVIEW = { customer: { code: "BTG", name: "BTG Pactual" } } as unknown as ClientOverview;
@@ -52,9 +54,19 @@ describe("o portal sem conexão", () => {
     expect(html).not.toContain("Não foi possível carregar o portal.");
   });
 
-  it("a falha que não é de conexão continua no lugar do portal", () => {
-    const html = tela(new Error("Missing or insufficient permissions."), OVERVIEW);
+  it("sem nada lido, a falha que não é de conexão fica no lugar do portal", () => {
+    const html = tela(new Error("Missing or insufficient permissions."), undefined);
     expect(html).toContain("Não foi possível carregar o portal.");
     expect(html).not.toContain("Portal de BTG Pactual");
+  });
+
+  it("com o portal lido, a releitura que falha sem ser de conexão não apaga a tela: fica escrita em cima, sem falar (necessidade 8)", () => {
+    const html = tela(new Error("Falha interna no servidor."), OVERVIEW);
+    expect(html).toContain("Portal de BTG Pactual");
+    expect(html).toContain("Não foi possível atualizar o portal.");
+    expect(html).toContain("Tentar de novo");
+    expect(html).not.toContain("Não foi possível carregar o portal.");
+    expect(html).not.toContain('role="alert"');
+    expect(textosForaDaLista(html, ["Portal de BTG Pactual", "Não foi possível atualizar o portal.", "Tentar de novo"])).toEqual([]);
   });
 });

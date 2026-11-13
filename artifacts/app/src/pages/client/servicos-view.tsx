@@ -1,4 +1,4 @@
-import type { FormEvent, ReactNode } from "react";
+import { useEffect, type FormEvent, type ReactNode } from "react";
 import { formatarReais } from "@workspace/dominio";
 import { Check, FileText, Paperclip, Plus, Search, X } from "lucide-react";
 import { Link } from "wouter";
@@ -7,11 +7,12 @@ import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { DialogCancelar } from "@/components/ui/dialog";
-import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { ErroNaLeitura, useTentandoNoRelogio } from "@/components/ui/erro-na-leitura";
 import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useAnuncio } from "@/lib/carregando/anunciador";
 import type { SituacaoDaCobranca } from "@/lib/financeiro/faturas";
 import { hrefDoComprovante } from "@/lib/portal/comprovante";
 import { SITUACAO_NO_PORTAL_ROTULO, type CobrancaDaOs, type NumerosDoPortal, type OsDoPortal, type SituacaoNoPortal } from "@/lib/portal/servicos";
@@ -223,12 +224,15 @@ function Painel({ os, cobranca, onFechar }: { os: OsDoPortal; cobranca: Cobranca
 }
 
 function Solicitacoes({ lista, enviada }: { lista: SolicitacaoDoPortal[]; enviada: boolean }) {
+  // A confirmação à vista; o leitor de tela a ouve pelo Anunciador, a região viva da tela (seção 7).
+  const anunciar = useAnuncio();
+  useEffect(() => (enviada ? anunciar("Solicitação enviada") : undefined), [enviada, anunciar]);
   return (
     <section aria-label="Solicitações" className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex flex-wrap items-center gap-3 border-b border-muted px-5 py-3.5">
         <h2 className="text-base font-extrabold">Solicitações</h2>
         {enviada ? (
-          <p role="status" className="text-sm font-bold text-success-soft-foreground">
+          <p className="text-sm font-bold text-success-soft-foreground">
             Solicitação enviada
           </p>
         ) : null}
@@ -368,6 +372,8 @@ function Formulario({ pedido, acoes }: { pedido: PedidoNaTela; acoes: ServicosVi
 }
 
 export function ServicosView({ estado, leitura, falhas = [], os, numeros, aPagarCents, cobrancas, busca, aberta, solicitacoes, pedido, acoes }: ServicosViewProps) {
+  // A nova tentativa no relógio: a que falha de novo antes de 300 ms não pisca o botão (parte 13f).
+  const tentandoAsOs = useTentandoNoRelogio(Boolean(leitura?.tentando));
   const termo = semAcento(busca.trim());
   const lista = termo ? os.filter((item) => [item.numero, item.servicos, item.origem ?? "", item.destino ?? ""].some((campo) => semAcento(campo).includes(termo))) : os;
   let conteudo: ReactNode;
@@ -375,7 +381,7 @@ export function ServicosView({ estado, leitura, falhas = [], os, numeros, aPagar
   if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando as OS…" continuaARota onTentar={leitura?.onTentar} className="px-5 py-7" />;
   else if (estado === "erro")
     conteudo = leitura ? (
-      <ErroNaLeitura mensagem="Não foi possível carregar as OS." tentando={leitura.tentando} onTentar={leitura.onTentar} className="rounded-none border-0" />
+      <ErroNaLeitura mensagem="Não foi possível carregar as OS." tentando={tentandoAsOs} onTentar={leitura.onTentar} className="rounded-none border-0" />
     ) : (
       <p role="alert" className="px-5 py-7 text-center text-sm font-bold text-muted-foreground">
         Não foi possível carregar as OS.

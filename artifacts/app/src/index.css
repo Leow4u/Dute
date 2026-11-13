@@ -1045,6 +1045,15 @@
     animation: carregando-entra var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
   }
 
+  /* A caixa que continua uma espera já à vista (a leitura do portal que passa à
+     da tela, carregamento v2, parte 13f) não entra de novo: o indicador não
+     some e volta. No movimento reduzido, a caixa segue respirando. */
+  @media (prefers-reduced-motion: no-preference) {
+    .carregando-caixa[data-continua] {
+      animation: none;
+    }
+  }
+
   .carregando-caixa[data-tamanho="20"] {
     --carregando-tamanho: 20px;
     --carregando-mascara: var(--carregando-mascara-24);

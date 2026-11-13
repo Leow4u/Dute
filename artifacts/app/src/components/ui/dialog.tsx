@@ -363,12 +363,18 @@ DialogFooter.displayName = 'DialogFooter';
  * O Cancelar (ou Voltar) do diálogo: com a ação gravando, fica
  * `aria-disabled` e não responde, e o foco fica nele; esmaece com o gerúndio
  * do confirmar. Sem `onClick`, fecha o diálogo; com ele, quem usa decide.
+ *
+ * Com `ocupado` (a ação que mora fora de um diálogo, como a confirmação na
+ * linha), o mesmo relógio do confirmar: travado já no toque, esmaecido só aos
+ * 300 ms e pelo menos 500 ms, junto com o gerúndio do `BotaoDeAcao`. A ação
+ * que responde antes não pisca o botão.
  */
 const DialogCancelar = React.forwardRef<HTMLButtonElement, ButtonProps & { ocupado?: boolean }>(
   ({ ocupado, onClick, className, variant = 'outline', type = 'button', children = 'Cancelar', ...props }, ref) => {
     const dialogo = useDialogoEmAcao();
-    const travado = ocupado ?? Boolean(dialogo?.ocupado);
-    const esmaecido = ocupado ?? Boolean(dialogo?.esmaecido);
+    const proprio = useEspera(Boolean(ocupado), { segurarMinimo: true }).visivel;
+    const travado = ocupado === undefined ? Boolean(dialogo?.ocupado) : ocupado || proprio;
+    const esmaecido = ocupado === undefined ? Boolean(dialogo?.esmaecido) : proprio;
     const botao = (
       <Button
         ref={ref}

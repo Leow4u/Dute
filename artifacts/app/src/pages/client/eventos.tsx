@@ -35,7 +35,7 @@ import {
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { BlocoSemConexao, ErroNaLeitura, useTentandoNoRelogio } from "@/components/ui/erro-na-leitura";
 import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -74,6 +74,8 @@ export function ClienteEventos() {
   const leitura = useClientEvents();
   // A nova tentativa sem dado fica na falha, com "Tentando de novo…" e o foco no botão (parte 13f).
   const events = useLeituraComFalha(leitura);
+  // A nova tentativa no relógio: a que falha de novo antes de 300 ms não pisca o botão (parte 13f).
+  const tentandoOsEventos = useTentandoNoRelogio(leitura.isFetching && events.isError && !events.data);
   const queryClient = useQueryClient();
   const archive = useArchiveClientEvent();
   const { toast } = useToast();
@@ -95,7 +97,7 @@ export function ClienteEventos() {
   }
 
   return (
-    <ClientDataBoundary>
+    <ClientDataBoundary titulo="Eventos">
       {(overview) => {
         const products = groupInventoryProducts(getInventoryItems(overview));
         const list = sortEvents(events.data ?? []);
@@ -119,7 +121,7 @@ export function ClienteEventos() {
               ) : (
                 <ErroNaLeitura
                   mensagem="Não foi possível carregar os eventos."
-                  tentando={leitura.isFetching}
+                  tentando={tentandoOsEventos}
                   onTentar={() => void leitura.refetch()}
                 />
               )

@@ -55,7 +55,7 @@ export function ClienteFaturas() {
   const nfsLidas = !comFaturas || !codigo || nfs !== null;
   const hoje = hojeIso(new Date());
   return (
-    <ClientDataBoundary>
+    <ClientDataBoundary titulo="Faturas" largura="max-w-6xl">
       {(overview) => {
         const invoices = closedInvoices(getInvoiceHistory(overview));
         const deliveries = deliveriesByMonth((overview.order_tracking ?? getOrders(overview)) as Record<string, unknown>[]);

@@ -299,7 +299,9 @@ describe("Solicitar OS (parte 4.4b)", () => {
       "Fora da área atendida",
       "Não atendida",
     ]);
-    expect(secao).toMatch(/<p role="status"[^>]*>Solicitação enviada<\/p>/);
+    // À vista, sem região viva solta: o Anunciador diz (carregamento v2, seção 7).
+    expect(secao).toMatch(/<p [^>]*>Solicitação enviada<\/p>/);
+    expect(secao).not.toContain('role="status"');
     expect(textosDaTela(render({ solicitacoes: [], aberta: null }))).not.toContain("Solicitações");
   });
 

@@ -127,7 +127,8 @@ export function ComprovanteDocumento({
         <Secao titulo="Fotos do final">
           <ul className="grid grid-cols-3 gap-2 p-2">
             {fotos.map((foto, indice) => (
-              <li key={foto.caminho} className="break-inside-avoid">
+              // A foto que ainda chega guarda o lugar à vista, fora da árvore: o leitor de tela não ouve item em branco.
+              <li key={foto.caminho} className="break-inside-avoid" aria-hidden={!foto.url && !foto.faltou ? true : undefined}>
                 {foto.url ? (
                   <img src={foto.url} alt={`Foto do final ${indice + 1}`} className="aspect-[4/3] w-full rounded-[4px] object-cover" />
                 ) : foto.faltou ? (

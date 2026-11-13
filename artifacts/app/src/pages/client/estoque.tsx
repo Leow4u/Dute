@@ -68,6 +68,7 @@ import {
   type StoredCart,
 } from "@/lib/client-cart";
 import { cartFromEvent, eventDateFromDueAt, eventDestination, eventDueAt, eventNotes } from "@/lib/client-events";
+import { vigiarFocoDeVolta } from "@/lib/foco-de-volta";
 import {
   overviewLine,
   productGender,
@@ -400,8 +401,7 @@ export function ClienteEstoque() {
               ? "Some da vitrine e fica em Arquivados. Se o saldo voltar, ele reaparece."
               : "O produto aparece de novo na vitrine.",
       });
-
-      void invalidateClientData(queryClient);
+      // A releitura é a do `useAcaoNaLinha` (`releitura`), uma só: aqui ela leria o portal duas vezes.
     },
     onError: (error) => {
       toast({
@@ -417,7 +417,7 @@ export function ClienteEstoque() {
 
   return (
     <AcoesDosProdutos.Provider value={acoesDosProdutos}>
-    <ClientDataBoundary>
+    <ClientDataBoundary titulo="Estoque" largura="max-w-[1720px]">
       {(overview) => {
         const rawItems = getInventoryItems(overview);
         const products = groupInventoryProducts(rawItems);
@@ -634,6 +634,7 @@ export function ClienteEstoque() {
         }
 
         // A mesma mutação e a mesma chave de idempotência de sempre (reposicoesNaVisita); a espera é por produto.
+        // A releitura depois do sucesso é uma só, a do `useAcaoNaLinha`: o "Avisado" fica até ela chegar.
         function requestReplenishment(product: StockProduct) {
           void acoesDosProdutos.executar(product.key, "restock", () => productActionMutation.mutateAsync({ action: "restock", product }), {
             releitura: () => invalidateClientData(queryClient),
@@ -642,7 +643,15 @@ export function ClienteEstoque() {
 
         function requestArchive(product: StockProduct) {
           const action = product.archived ? "restore" : "archive";
-          void acoesDosProdutos.executar(product.key, "archive", () => productActionMutation.mutateAsync({ action, product }));
+          // O produto que sai da vitrine leva o botão com o foco: ele vai ao vizinho, nunca ao body (WCAG 2.4.3).
+          // No painel do detalhe, quem cuida é o painel, que devolve o foco a quem o abriu.
+          const tocado = document.activeElement;
+          if (tocado instanceof HTMLElement && tocado !== document.body && !tocado.closest('[role="dialog"]')) {
+            vigiarFocoDeVolta(tocado);
+          }
+          void acoesDosProdutos.executar(product.key, "archive", () => productActionMutation.mutateAsync({ action, product }), {
+            releitura: () => invalidateClientData(queryClient),
+          });
         }
 
         /** Guarda o pedido montado como evento: itens, "Entregar em" como local e as observações. */
@@ -2346,7 +2355,9 @@ type ProductDetailProps = {
 /**
  * O detalhe com as datas de entrada do item, lidas quando o painel abre. Lendo
  * e na falha, a seção fica, com a espera ou a falha e a nova tentativa: antes,
- * ela sumia nos dois, e a falha parecia o item sem data (parte 13f).
+ * ela sumia nos dois, e a falha parecia o item sem data (parte 13f). Só no
+ * produto que tem peça nas prateleiras: o zerado não tem data, e a seção dele
+ * não nasce lendo para sumir na chegada.
  */
 function ProductDetailWithDates(props: ProductDetailProps) {
   const queryClient = useQueryClient();
@@ -2362,15 +2373,30 @@ function ProductDetailWithDates(props: ProductDetailProps) {
     <ProductDetailPanel
       {...props}
       datasDeEntrada={leitura.data ?? []}
-      leituraDasDatas={{
-        lendo: datas.isLoading,
-        falhou: datas.isError && !leitura.data,
-        tentando: leitura.isFetching,
-        onTentar: () => leitura.refetch(),
-        onTentarDoZero: () => void relerDoZero(queryClient, [chave]),
-      }}
+      leituraDasDatas={
+        // O produto sem peça na prateleira não tem data: a seção não nasce lendo para sumir na chegada.
+        podeTerDatas(props.product)
+          ? {
+              lendo: datas.isLoading,
+              falhou: datas.isError && !leitura.data,
+              tentando: leitura.isFetching,
+              onTentar: () => leitura.refetch(),
+              onTentarDoZero: () => void relerDoZero(queryClient, [chave]),
+            }
+          : undefined
+      }
     />
   );
+}
+
+/**
+ * O produto pode ter datas de entrada: há peça nas prateleiras, livre ou
+ * reservada (as datas são só das prateleiras, e o RECEBIMENTO e a EXPEDICAO
+ * ficam de fora; functions/wms/src/domain/datas-do-estoque.ts). O zerado e o
+ * que só está em recebimento não têm: a seção deles não aparece lendo.
+ */
+export function podeTerDatas(product: Pick<StockProduct, "available" | "reserved" | "receiving" | "total">): boolean {
+  return (product.available > 0 || product.reserved > 0) && product.total > product.receiving;
 }
 
 /**
@@ -2809,7 +2835,8 @@ function ZeroStockActions({
       <BotaoDeAcao
         variant="outline"
         size={compact ? "sm" : "default"}
-        className={cn("cursor-pointer", !compact && "min-h-11")}
+        // No celular, a ação da linha tem 48 px (seção 7); no detalhe, 44.
+        className={cn("cursor-pointer", compact ? "max-md:min-h-12" : "min-h-11")}
         estado={repor}
         icone={<Truck className="h-4 w-4" aria-hidden="true" />}
         rotulo="Avisar reposição"
@@ -2821,7 +2848,7 @@ function ZeroStockActions({
       <BotaoDeAcao
         variant="ghost"
         size={compact ? "sm" : "default"}
-        className={cn("cursor-pointer text-muted-foreground", !compact && "min-h-11")}
+        className={cn("cursor-pointer text-muted-foreground", compact ? "max-md:min-h-12" : "min-h-11")}
         estado={arquivo}
         icone={<Archive className="h-4 w-4" aria-hidden="true" />}
         rotulo={archived ? "Devolver à vitrine" : "Arquivar"}

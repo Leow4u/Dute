@@ -32,6 +32,7 @@ import { envioDoPedido, type EnvioDoPedido } from "@/lib/client-cart";
 import { ATTACHMENT_LIMIT_HINT, isAcceptedAttachment, prepareAttachment, uploadAttachment } from "@/lib/shipment-files";
 import { cn } from "@/lib/utils";
 
+import { ConfirmacaoNaLinha } from "./confirmacao-na-linha";
 import {
   ClientDataBoundary,
   clientOverviewQueryKey,
@@ -66,7 +67,7 @@ export function ClienteEnvios() {
     if (wantsDraft) navigate("/portal/recebimentos", { replace: true });
   }, [wantsDraft, navigate]);
   return (
-    <ClientDataBoundary>
+    <ClientDataBoundary titulo={creating ? "Avisar um envio" : "Envios para a Dutelog"} largura="max-w-6xl">
       {(overview) =>
         creating ? (
           <ShipmentForm overview={overview} initial={initial} onClose={() => setCreating(false)} />
@@ -246,27 +247,20 @@ function OnTheWayCard({ view }: { view: ShipmentView }) {
         ) : null}
         <span>{view.detail}</span>
         {view.canCancel ? (
-          confirming ? (
-            <span className="ml-auto inline-flex items-center gap-2">
-              Cancelar este aviso?
-              {/* Cancelando, o gerúndio aos 300 ms, sem desabilitar, e o "Manter" travado no código (parte 13f). */}
-              <BotaoDeAcao
-                size="sm"
-                variant="destructive"
-                estado={cancel.isPending ? "andamento" : "repouso"}
-                rotulo="Cancelar aviso"
-                andamento="Cancelando…"
-                onClick={() => cancel.mutate()}
-              />
-              <DialogCancelar size="sm" variant="ghost" ocupado={cancel.isPending} onClick={() => setConfirming(false)}>
-                Manter
-              </DialogCancelar>
-            </span>
-          ) : (
-            <button type="button" className="ml-auto font-medium text-primary hover:underline" onClick={() => setConfirming(true)}>
-              Cancelar aviso
-            </button>
-          )
+          // A pergunta na linha, com o foco que nunca cai no body (parte 13f).
+          <ConfirmacaoNaLinha
+            aberta={confirming}
+            ocupada={cancel.isPending}
+            gatilho="Cancelar aviso"
+            pergunta="Cancelar este aviso?"
+            confirmar="Cancelar aviso"
+            andamento="Cancelando…"
+            onAbrir={() => setConfirming(true)}
+            onManter={() => setConfirming(false)}
+            onConfirmar={() => cancel.mutate()}
+            classeDoGatilho="ml-auto font-medium text-primary hover:underline"
+            className="ml-auto"
+          />
         ) : null}
       </div>
     </article>
@@ -780,8 +774,8 @@ function InvoiceDrop({
   // Ocupado não é desabilitado: o foco fica no botão, e o toque é barrado aqui.
   const travaDoAnexo = ocupado || ocupada;
   return (
+    // A seção é a própria região de estado ("Lendo a nota…"): nunca aria-busy nela (seção 7).
     <section
-      aria-busy={ocupada || undefined}
       className="rounded-lg border-[1.5px] border-dashed border-agent-soft-border bg-agent-soft p-5"
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
@@ -803,7 +797,8 @@ function InvoiceDrop({
           <h2 className="font-semibold text-agent-strong">
             {preparing ? "Preparando o arquivo…" : reading ? "Lendo a nota…" : read ? "Nota lida pelo Agent Dute" : "Comece pela nota fiscal ou pedido"}
           </h2>
-          <p className="text-sm text-agent">
+          {/* No escuro, o violeta do texto sobre o fundo violeta dava 3,9:1; o --agent-muted dá 5,7:1. */}
+          <p className="text-sm text-agent dark:text-agent-muted">
             {ocupada && demorando
               ? DEMORANDO
               : preparing
@@ -821,7 +816,7 @@ function InvoiceDrop({
               type="button"
               size="sm"
               variant="outline"
-              className={cn("rounded-lg border-agent-soft-border bg-card", travaDoAnexo && "opacity-45 hover:bg-card")}
+              className={cn("rounded-lg border-agent-soft-border bg-card max-md:min-h-11", travaDoAnexo && "opacity-45 hover:bg-card")}
               aria-disabled={travaDoAnexo || undefined}
               onClick={() => {
                 if (!travaDoAnexo) onRead();
@@ -834,7 +829,8 @@ function InvoiceDrop({
           <Button
             type="button"
             size="sm"
-            className={cn("rounded-lg bg-agent text-agent-foreground hover:bg-agent-hover", travaDoAnexo && "opacity-45 hover:bg-agent")}
+            // No celular, 44 px (seção 7).
+            className={cn("rounded-lg bg-agent text-agent-foreground hover:bg-agent-hover max-md:min-h-11", travaDoAnexo && "opacity-45 hover:bg-agent")}
             aria-disabled={travaDoAnexo || undefined}
             onClick={() => {
               if (!travaDoAnexo) onPick();
@@ -855,7 +851,11 @@ function InvoiceDrop({
                 type="button"
                 aria-label={`Remover ${file.name}`}
                 aria-disabled={travaDoAnexo || undefined}
-                className={cn("rounded outline-none focus-visible:ring-2 focus-visible:ring-ring/40", travaDoAnexo && "opacity-45")}
+                // 24 px de alvo (44 no celular, pelo ::before) e o anel cheio do foco, com o recuo (3:1).
+                className={cn(
+                  "relative inline-grid size-6 shrink-0 place-items-center rounded outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-md:before:absolute max-md:before:-inset-2.5 max-md:before:content-['']",
+                  travaDoAnexo && "opacity-45",
+                )}
                 onClick={() => {
                   if (!travaDoAnexo) onRemove(index);
                 }}

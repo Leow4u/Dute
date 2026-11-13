@@ -7,7 +7,7 @@ import { Router } from "wouter";
 
 import { Anunciador } from "@/lib/carregando/anunciador";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosForaDaLista } from "@/test/textos";
+import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 /**
  * O Estoque do portal no carregamento v2 (parte 13f). Antes:
@@ -24,17 +24,25 @@ import { textosForaDaLista } from "@/test/textos";
  * Dados sintéticos.
  */
 
-const estado = vi.hoisted(() => ({ envios: 0, eventosPresos: false }));
+const estado = vi.hoisted(() => ({
+  envios: 0,
+  eventosPresos: false,
+  avisoGrava: false,
+  leiturasDoPortal: 0,
+  arquivados: new Set<string>(),
+  comPolo: false,
+  datasEm: 0,
+}));
 
 vi.mock("@/lib/auth", () => ({
   useAppUser: () => ({ user: { uid: "uid-ana", publicMetadata: { role: "cliente", customer_code: "ACME" } }, isLoaded: true }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => undefined }) }));
 
-import { CartPanel, ClienteEstoque, MarketplaceToolbar, ProductDetailPanel, groupInventoryProducts } from "./estoque";
+import { CartPanel, ClienteEstoque, MarketplaceToolbar, ProductDetailPanel, groupInventoryProducts, podeTerDatas } from "./estoque";
 
-const AZUL = { sku_code: "ACME-000001", client_item_code: "TOA-AZUL", product_name: "Toalha Azul", category: "Toalha", qty_on_hand: 0, qty_available: 0 };
-const VERDE = { sku_code: "ACME-000002", client_item_code: "TOA-VERDE", product_name: "Toalha Verde", category: "Toalha", qty_on_hand: 0, qty_available: 0 };
+const AZUL = { id: "inv_azul", sku_code: "ACME-000001", client_item_code: "TOA-AZUL", product_name: "Toalha Azul", category: "Toalha", qty_on_hand: 0, qty_available: 0 };
+const VERDE = { id: "inv_verde", sku_code: "ACME-000002", client_item_code: "TOA-VERDE", product_name: "Toalha Verde", category: "Toalha", qty_on_hand: 0, qty_available: 0 };
 const POLO = { sku_code: "ACME-000003", client_item_code: "POLO-M", product_name: "Polo Azul", category: "Polo", qty_on_hand: 12, qty_available: 12 };
 const VISAO = { customer: { code: "ACME", name: "ACME" }, inventory: { items: [AZUL, VERDE] } };
 
@@ -48,6 +56,11 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   estado.envios = 0;
   estado.eventosPresos = false;
+  estado.avisoGrava = false;
+  estado.leiturasDoPortal = 0;
+  estado.arquivados = new Set();
+  estado.comPolo = false;
+  estado.datasEm = 0;
   window.localStorage.clear();
   vi.stubGlobal("ResizeObserver", class {
     observe() {}
@@ -58,11 +71,26 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (entrada: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(entrada), window.location.origin);
-      if (url.pathname === "/api/client/overview") return json(VISAO);
+      if (url.pathname === "/api/client/overview") {
+        estado.leiturasDoPortal += 1;
+        const itens = [AZUL, VERDE, ...(estado.comPolo ? [POLO] : [])].map((item) =>
+          "id" in item && estado.arquivados.has(String(item.id)) ? { ...item, client_archived: true } : item,
+        );
+        return json({ ...VISAO, inventory: { items: itens } });
+      }
       if (url.pathname === "/api/client/events") return estado.eventosPresos ? presa() : json({ events: [] });
       if (url.pathname === "/api/client/requests" && init?.method === "POST") {
         estado.envios += 1;
-        return presa();
+        return estado.avisoGrava ? json({ id: `creq_${estado.envios}` }) : presa();
+      }
+      if (url.pathname.startsWith("/api/client/inventory/dates/")) {
+        await new Promise((pronto) => setTimeout(pronto, estado.datasEm));
+        return json({ datas: url.pathname.endsWith(POLO.sku_code) ? [{ desde: "2026-10-20", pecas: 12 }] : [] });
+      }
+      const arquivo = /^\/api\/client\/inventory\/([^/]+)\/archive$/.exec(url.pathname);
+      if (arquivo && init?.method === "POST") {
+        estado.arquivados.add(decodeURIComponent(arquivo[1]!));
+        return json({ ok: true });
       }
       return json({});
     }),
@@ -295,5 +323,97 @@ describe("a contagem do resultado", () => {
     expect(anunciado()).toBe("");
     await montar(barra(1, "polo"));
     await ate(() => anunciado().includes("1 item encontrado"));
+  });
+});
+
+describe("revisão da parte 13f, no Estoque", () => {
+  it("o produto arquivado, no detalhe: Devolver à vitrine, com o gerúndio e o fim nos rótulos da lista", async () => {
+    const [arquivado] = groupInventoryProducts([{ ...AZUL, client_archived: true } as Parameters<typeof groupInventoryProducts>[0][number]]);
+    expect(arquivado!.archived).toBe(true);
+    await montar(
+      <ProductDetailPanel
+        product={arquivado!}
+        cart={{}}
+        draftQuantity={1}
+        isPending={false}
+        onClose={() => undefined}
+        onDraftQuantityChange={() => undefined}
+        onAdd={() => undefined}
+        onReplenish={() => undefined}
+        onArchive={() => undefined}
+      />,
+    );
+    const rodape = container.querySelector<HTMLElement>('[data-testid="detalhe-rodape"]')!;
+    expect(textosDaTela(rodape.outerHTML)).toEqual(expect.arrayContaining(["Devolver à vitrine", "Devolvendo…", "Devolvido"]));
+    expect(
+      textosForaDaLista(rodape.outerHTML, [
+        "Avisar reposição",
+        "Avisando…",
+        "Avisado",
+        "Devolver à vitrine",
+        "Devolvendo…",
+        "Devolvido",
+        "Conferir",
+        /pe(ç|c)as? no pedido|Ver pedido|Adicionar|^\d+$/,
+      ]),
+    ).toEqual([]);
+  });
+
+  it("o Avisar reposição que dá certo lê o portal uma vez só", async () => {
+    estado.avisoGrava = true;
+    await montar(<ClienteEstoque />);
+    await ate(() => card("Toalha Azul"));
+    const antes = estado.leiturasDoPortal;
+    await act(async () => botao("Avisar reposição", card("Toalha Azul"))!.click());
+    await ate(() => botao("Avisado", card("Toalha Azul")));
+    await espera(300);
+    expect(estado.envios).toBe(1);
+    expect(estado.leiturasDoPortal - antes).toBe(1);
+  });
+
+  it("o produto arquivado sai da vitrine e o foco vai ao vizinho, nunca ao body", async () => {
+    await montar(<ClienteEstoque />);
+    await ate(() => card("Toalha Azul") && card("Toalha Verde"));
+    const arquivar = botao("Arquivar", card("Toalha Azul"))!;
+    arquivar.focus();
+    await act(async () => arquivar.click());
+    await ate(() => !card("Toalha Azul"), 4_000);
+    expect(document.activeElement).not.toBe(document.body);
+    expect(card("Toalha Verde").contains(document.activeElement)).toBe(true);
+  });
+
+  it("no celular, as ações do produto no card têm 48 px", async () => {
+    await montar(<ClienteEstoque />);
+    await ate(() => card("Toalha Azul"));
+    for (const rotulo of ["Avisar reposição", "Arquivar"]) expect(botao(rotulo, card("Toalha Azul"))!.className).toContain("max-md:min-h-12");
+  });
+
+  it("só o produto com peça na prateleira, livre ou reservada, pode ter datas", () => {
+    const [polo] = groupInventoryProducts([POLO]);
+    const [azul] = groupInventoryProducts([AZUL]);
+    expect(podeTerDatas(polo!)).toBe(true);
+    expect(podeTerDatas(azul!)).toBe(false);
+    expect(podeTerDatas({ available: 0, reserved: 0, receiving: 5, total: 5 })).toBe(false);
+    expect(podeTerDatas({ available: 0, reserved: 3, receiving: 0, total: 3 })).toBe(true);
+  });
+
+  it("o produto sem peça na prateleira não mostra a seção das datas lendo para sumir; o que tem, mostra", async () => {
+    estado.comPolo = true;
+    estado.datasEm = 450;
+    await montar(<ClienteEstoque />);
+    await ate(() => card("Toalha Azul") && card("Polo Azul"));
+    const abrir = (nome: string) =>
+      [...card(nome).querySelectorAll<HTMLButtonElement>("button")].find(
+        (item) => item.getAttribute("aria-label") === `Ver detalhes de ${nome}` || item.textContent?.trim() === nome,
+      )!;
+    await act(async () => abrir("Toalha Azul").click());
+    await ate(() => document.body.textContent?.includes("Detalhe do produto"));
+    let apareceu = false;
+    for (let vez = 0; vez < 30; vez += 1) {
+      apareceu ||= Boolean(document.body.textContent?.includes("Por data de entrada"));
+      await espera(25);
+    }
+    expect(apareceu).toBe(false);
+    expect(document.body.textContent).not.toContain("Carregando as datas…");
   });
 });

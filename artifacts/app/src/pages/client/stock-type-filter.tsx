@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAnuncio } from "@/lib/carregando/anunciador";
 import { cn } from "@/lib/utils";
 
 type StockTypeFilterProps = {
@@ -38,6 +39,10 @@ export function StockTypeFilter({ categories, selectedValues, onChange, resetKey
     ? selectedValues.filter((value) => !firstTypes.some((category) => category.value === value)).length
     : 0;
   const listId = `${id}-types`;
+  // A busca que não acha nenhum tipo é dita pelo Anunciador, a região viva da tela, e não por uma região viva solta.
+  const nenhum = Boolean(query) && visibleTypes.length === 0;
+  const anunciar = useAnuncio();
+  useEffect(() => (nenhum ? anunciar("Nenhum tipo encontrado") : undefined), [nenhum, anunciar]);
   const hiddenSelectionId = `${id}-hidden-selection`;
 
   return (
@@ -75,7 +80,7 @@ export function StockTypeFilter({ categories, selectedValues, onChange, resetKey
             </div>
           );
         })}
-        {visibleTypes.length === 0 ? <p role="status" className="py-3 text-sm text-muted-foreground">Nenhum tipo encontrado.</p> : null}
+        {visibleTypes.length === 0 ? <p className="py-3 text-sm text-muted-foreground">Nenhum tipo encontrado.</p> : null}
       </div>
       {!query && types.length > 3 ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

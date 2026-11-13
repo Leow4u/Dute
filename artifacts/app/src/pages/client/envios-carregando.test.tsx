@@ -197,6 +197,24 @@ describe("a nota em leitura", () => {
     expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
   });
 
+  it("a área da nota é a região de estado: sem aria-busy nela; o Remover tem 24 px, 44 no celular, e o anel cheio do foco (revisão da parte 13f)", async () => {
+    estado.leituraPresa = true;
+    await anexar([nota()]);
+    await ate(() => container.querySelector("section [data-spinner]"));
+    const secao = botao("Remover nota.pdf")!.closest("section")!;
+    expect(container.querySelector("[aria-busy='true'] h2")).toBeNull();
+    expect(secao.hasAttribute("aria-busy")).toBe(false);
+    const remover = botao("Remover nota.pdf")!;
+    expect(remover.className).toContain("size-6");
+    expect(remover.className).toContain("max-md:before:-inset-2.5");
+    expect(remover.className).toContain("focus-visible:ring-ring");
+    expect(remover.className).toContain("focus-visible:ring-offset-2");
+    expect(remover.className).not.toContain("ring-ring/40");
+    expect(botao("Anexar outro")!.className).toContain("max-md:min-h-11");
+    // O texto de apoio da caixa violeta (a demora inclusive) com 4,5:1 no escuro.
+    expect(secao.querySelector("h2 + p")!.className).toContain("dark:text-agent-muted");
+  });
+
   it("aos 10 s de leitura, a demora dita na área da nota", async () => {
     estado.leituraPresa = true;
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "performance", "Date"] });

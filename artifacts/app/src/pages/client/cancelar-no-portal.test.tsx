@@ -156,3 +156,90 @@ describe("Cancelar no portal", () => {
     await conferirCancelamento("Cancelar aviso", "Cancelar este aviso?");
   });
 });
+
+const PEDIDO = {
+  request_history: [
+    {
+      id: "creq_1",
+      type: "retirada",
+      request_number: "PED-0001",
+      title: "Uniformes",
+      status: "open",
+      created_at: "2026-11-04T12:00:00Z",
+      items: [{ client_item_code: "POLO-M", product_name: "Polo M", quantity: 3 }],
+    },
+  ],
+  order_tracking: [],
+};
+
+const AVISO = {
+  customer: { code: "ACME" },
+  requests: [
+    {
+      id: "creq_2",
+      type: "recebimento",
+      request_number: "ENV-0001",
+      title: "Envio de Fornecedor",
+      supplier: "Fornecedor",
+      status: "open",
+      created_at: "2026-11-04T12:00:00Z",
+      items: [{ client_item_code: "POLO-M", product_name: "Polo M", quantity: 3 }],
+    },
+  ],
+};
+
+describe("Cancelar no portal, o tempo e o foco (revisão da parte 13f)", () => {
+  it("o Manter não pisca quando o cancelamento responde antes de 300 ms: travado no toque, esmaecido só com o gerúndio", async () => {
+    dados.overview = PEDIDO;
+    await montar(<ClientePedidos />);
+    await act(async () => botao("Cancelar pedido")!.click());
+    await ate(() => container.textContent?.includes("Cancelar PED-0001?"));
+    await act(async () => botao("Cancelar pedido")!.click());
+    await ate(() => botao("Manter")?.getAttribute("aria-disabled") === "true");
+    const manter = botao("Manter")!;
+    let esmaeceu = manter.className.includes("opacity-45");
+    await act(async () => dados.cancelamentos[0]!(false));
+    for (let vez = 0; vez < 10; vez += 1) {
+      await espera(40);
+      esmaeceu ||= (botao("Manter")?.className ?? "").includes("opacity-45");
+    }
+    expect(esmaeceu).toBe(false);
+    expect(botao("Manter")!.hasAttribute("aria-disabled")).toBe(false);
+  });
+
+  for (const [tela, overview, gatilho, pergunta] of [
+    ["o pedido", PEDIDO, "Cancelar pedido", "Cancelar PED-0001?"],
+    ["o aviso de envio", AVISO, "Cancelar aviso", "Cancelar este aviso?"],
+  ] as const) {
+    it(`${tela}: ao abrir, o foco vai ao Manter, no grupo com a pergunta; o Manter e o sucesso devolvem o foco ao gatilho, nunca ao body`, async () => {
+      dados.overview = overview;
+      await montar(tela === "o pedido" ? <ClientePedidos /> : <ClienteEnvios />);
+      const abrir = botao(gatilho)!;
+      abrir.focus();
+      await act(async () => abrir.click());
+      const manter = botao("Manter")!;
+      expect(document.activeElement).toBe(manter);
+      const grupo = manter.closest<HTMLElement>('[role="group"]')!;
+      expect(document.getElementById(grupo.getAttribute("aria-labelledby")!)?.textContent).toBe(pergunta);
+      // No celular, as ações da linha têm 48 px.
+      expect(manter.className).toContain("max-md:min-h-12");
+      expect(botao(gatilho)!.className).toContain("max-md:min-h-12");
+      expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
+
+      await act(async () => manter.click());
+      expect(document.activeElement?.textContent).toBe(gatilho);
+      expect(document.activeElement).not.toBe(document.body);
+      // O gatilho de texto tem o toque estendido a 48 px no celular, sem mudar a linha.
+      expect(document.activeElement!.className).toContain("max-md:before:-inset-y-4");
+
+      await act(async () => botao(gatilho)!.click());
+      const confirmar = botao(gatilho)!;
+      confirmar.focus();
+      await act(async () => confirmar.click());
+      await act(async () => dados.cancelamentos[0]!(true));
+      await ate(() => !container.textContent?.includes(pergunta));
+      expect(document.activeElement).not.toBe(document.body);
+      expect(document.activeElement?.textContent).toBe(gatilho);
+    });
+  }
+});

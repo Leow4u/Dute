@@ -48,6 +48,7 @@ const lenta = (corpo: unknown, ms: number) => () =>
   new Promise<Response>((pronto) => setTimeout(() => pronto(new Response(JSON.stringify(corpo), { status: 200 })), ms));
 
 let raiz: Root | null = null;
+let ultimoCliente: QueryClient | null = null;
 let container: HTMLDivElement;
 
 beforeEach(async () => {
@@ -87,6 +88,7 @@ async function ate(condicao: () => unknown, limiteMs = 3_000) {
 
 async function montar() {
   const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  ultimoCliente = cliente;
   await act(async () =>
     raiz!.render(
       <QueryClientProvider client={cliente}>
@@ -123,7 +125,7 @@ describe("Eventos lendo", () => {
 
 describe("Eventos que não carregaram", () => {
   it("dizem que não carregaram, com 'Tentar de novo'; a nova tentativa fica no aviso e traz a lista", async () => {
-    estado.respostas = [json({ message: "Falha interna" }, 500), lenta({ events: [EVENTO] }, 600)];
+    estado.respostas = [json({ message: "Falha interna" }, 500), lenta({ events: [EVENTO] }, 1_500)];
     await montar();
     await ate(() => botao("Tentar de novo"));
     expect(container.textContent).toContain("Não foi possível carregar os eventos.");
@@ -133,12 +135,34 @@ describe("Eventos que não carregaram", () => {
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
 
     await act(async () => botao("Tentar de novo")!.click());
-    await espera(100);
+    // No relógio da espera: no toque, ainda "Tentar de novo"; "Tentando de novo…" só aos 300 ms (a nova tentativa que
+    // falha antes não pisca o botão).
+    // (o react-query avisa a leitura nova num setTimeout: 30 ms bastam para o botão cru já dizer "Tentando".)
+    await espera(30);
+    expect(botao("Tentando de novo…")).toBeUndefined();
+    expect(botao("Tentar de novo")).toBeTruthy();
+    expect(container.textContent).not.toContain("Carregando eventos…");
+    await ate(() => botao("Tentando de novo…"));
     const tentando = botao("Tentando de novo…");
     expect(tentando).toBeTruthy();
     expect(tentando!.hasAttribute("disabled")).toBe(false);
     expect(container.textContent).not.toContain("Carregando eventos…");
     await ate(() => container.textContent?.includes("Feira de Investimentos"));
     expect(container.textContent).not.toContain("Não foi possível carregar os eventos.");
+  });
+});
+
+describe("Eventos que não se atualizaram (revisão da parte 13f)", () => {
+  it("a releitura que falha não apaga a lista: a frase fica escrita em cima dela, sem falar, com Tentar de novo", async () => {
+    estado.respostas = [json({ events: [EVENTO] }), json({ message: "Falha interna" }, 500)];
+    await montar();
+    await ate(() => container.textContent?.includes("Feira de Investimentos"));
+    await act(async () => ultimoCliente!.invalidateQueries());
+    await ate(() => container.textContent?.includes("Não foi possível atualizar os eventos."));
+    expect(container.textContent).toContain("Feira de Investimentos");
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    const falha = container.querySelector<HTMLElement>("[data-falha-na-secao]")!;
+    expect(textosForaDaLista(falha.outerHTML, ["Não foi possível atualizar os eventos.", "Tentar de novo"])).toEqual([]);
+    expect(await violacoesDeAcessibilidade(falha.outerHTML)).toEqual([]);
   });
 });

@@ -7,7 +7,7 @@ import { Router } from "wouter";
 import { fichaDaLeitura } from "@/lib/operacao/ficha-da-os";
 import { comprovanteDaOs } from "@/lib/portal/comprovante";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosForaDaLista } from "@/test/textos";
+import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import { ComprovanteView, type FotosDoComprovante } from "./comprovante-view";
 
@@ -142,4 +142,54 @@ describe("as imagens do papel", () => {
     expect(impressoes).toBe(1);
     expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
   });
+
+  it("a espera das fotos tem prazo: aos 70 s, a desistência, e o Baixar PDF volta a sair com o que chegou", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "performance", "Date"] });
+    try {
+      let impressoes = 0;
+      await montar(
+        tela({ lendo: true, falharam: [], tentando: false, onTentar: () => undefined }, {}, () => {
+          impressoes += 1;
+        }),
+      );
+      await act(async () => vi.advanceTimersByTime(11_000));
+      expect(baixar().getAttribute("aria-disabled")).toBe("true");
+      await act(async () => vi.advanceTimersByTime(60_000));
+      expect(container.textContent).toContain("Sem resposta do servidor.");
+      expect(baixar().hasAttribute("aria-disabled")).toBe(false);
+      await act(async () => baixar().click());
+      expect(impressoes).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("lendo, o lugar da foto que chega fica fora da árvore: a lista não tem item em branco para o leitor de tela", async () => {
+    await montar(tela({ lendo: true, falharam: [], tentando: false, onTentar: () => undefined }));
+    const itens = [...container.querySelectorAll<HTMLLIElement>("article ul li")].filter((item) => !item.querySelector("img") && !item.textContent?.trim());
+    expect(itens.length).toBeGreaterThan(0);
+    for (const item of itens) expect(item.getAttribute("aria-hidden")).toBe("true");
+    await ate(() => container.textContent?.includes("Carregando as fotos…"));
+    expect(
+      textosForaDaLista(container.innerHTML, ["Minhas OS", "Comprovante da OS 10045-01", "Baixar PDF", "Carregando as fotos…"].concat(textosDoPapel())),
+    ).toEqual([]);
+  });
+
+  it("as que não vieram, a assinatura e a foto, ficam ditas com os rótulos da lista", async () => {
+    await montar(tela({ lendo: false, falharam: [ASSINATURA, FOTO], tentando: false, onTentar: () => undefined }));
+    expect(container.textContent).toContain("2 imagens do comprovante não carregaram.");
+    expect(
+      textosForaDaLista(
+        container.innerHTML,
+        ["Minhas OS", "Comprovante da OS 10045-01", "Baixar PDF", "2 imagens do comprovante não carregaram.", "Tentar de novo", "Assinatura não carregou", "Foto 1 não carregou"].concat(textosDoPapel()),
+      ),
+    ).toEqual([]);
+    expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
+  });
 });
+
+/** Os textos do papel do comprovante (o documento, que tem o teste dele), menos os da falha, que vêm da lista. */
+function textosDoPapel(): string[] {
+  const papel = container.querySelector("article");
+  return papel ? textosDaTela(papel.outerHTML).filter((texto) => !/não carregou/.test(texto)) : [];
+}

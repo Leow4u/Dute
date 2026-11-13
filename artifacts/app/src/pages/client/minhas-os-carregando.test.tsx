@@ -130,6 +130,35 @@ describe("Minhas OS lendo e na falha", () => {
   });
 });
 
+describe("as solicitações que não carregaram (revisão da parte 13f)", () => {
+  it("a falha das solicitações fica dita, com Tentar de novo, e os rótulos são os da lista", async () => {
+    let solicitacoes = 0;
+    await montar(
+      <ServicosView
+        {...props({
+          estado: "erro",
+          leitura: { tentando: false, onTentar: () => undefined },
+          falhas: [{ mensagem: "Não foi possível carregar as solicitações.", tentando: false, onTentar: () => (solicitacoes += 1) }],
+        })}
+      />,
+    );
+    expect(container.textContent).toContain("Não foi possível carregar as solicitações.");
+    const tentar = [...container.querySelectorAll<HTMLButtonElement>("button")].filter((item) => item.textContent?.trim() === "Tentar de novo");
+    await act(async () => tentar[0]!.click());
+    expect(solicitacoes).toBe(1);
+    expect(
+      textosForaDaLista(container.innerHTML, [
+        "Minhas OS",
+        "Não foi possível carregar as solicitações.",
+        "Não foi possível carregar as OS.",
+        "Tentar de novo",
+        "Tentando de novo…",
+      ]),
+    ).toEqual([]);
+    expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
+  });
+});
+
 describe("Solicitar OS enviando", () => {
   it("o Enviar solicitação diz o gerúndio aos 300 ms, sem desabilitar, e o Fechar fica travado", async () => {
     let fechou = 0;

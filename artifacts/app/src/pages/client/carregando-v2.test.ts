@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
  * gira o Loader2 ou o RefreshCw (`animate-spin`) nem pulsa (`animate-pulse`)
  * por conta própria; a espera é o `Spinner`, o `Esqueleto`, a
  * `CarregandoNaRegiao` e o `BotaoDeAcao`. Nenhuma tem região viva solta
- * (`aria-live`): quem fala é o `Anunciador`, um por tela. Os rótulos usam a
+ * (`aria-live`, `role="status"`): quem fala é o `Anunciador`, um por tela. Os rótulos usam a
  * reticência de um caractere, e o botão que espera uma ação nunca fica
  * `disabled` (o foco cairia no `body`): `aria-disabled`, com a trava no código.
  */
@@ -40,7 +40,8 @@ describe("o portal do cliente no carregamento v2", () => {
   });
 
   it("nenhuma região viva solta: quem fala é o Anunciador", () => {
-    expect(ocorrencias(/aria-live/)).toEqual([]);
+    // Nem aria-live nem os papéis que já são regiões vivas (status, log, alert é a falha e fica de fora).
+    expect(ocorrencias(/aria-live|role=["'{](?:status|log|marquee|timer)\b/)).toEqual([]);
   });
 
   it("a reticência é o caractere único, nunca três pontos", () => {
