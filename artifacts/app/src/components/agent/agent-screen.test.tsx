@@ -11,7 +11,7 @@ import type { ClienteDoAgente, PedidoDaConversa } from "@/lib/agente/cliente";
 import { ProvedorDoAgente } from "@/lib/agente/contexto";
 import { Anunciador, INTERVALO_DO_ANUNCIO_MS } from "@/lib/carregando/anunciador";
 import { CARREGANDO } from "@/lib/carregando/tempo";
-import { PRAZO_ESGOTADO } from "@/lib/conexao";
+import { PRAZO_ESGOTADO, SemConexao, SemResposta } from "@/lib/conexao";
 import type { AgentDuteStreamChunk } from "@/lib/functions-api";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
@@ -41,12 +41,12 @@ type Conversa = {
 
 let conversas: Conversa[] = [];
 
-function agenteFalso(): ClienteDoAgente {
+function agenteFalso(sobre: Partial<Pick<ClienteDoAgente, "conversas" | "mensagens">> = {}): ClienteDoAgente {
   return {
     alvo: { tipo: "wms" },
     chave: ["teste"],
-    conversas: async () => ({ conversations: [] }),
-    mensagens: async () => ({ messages: [] }),
+    conversas: sobre.conversas ?? (async () => ({ conversations: [] })),
+    mensagens: sobre.mensagens ?? (async () => ({ messages: [] })),
     conversar: (pedido, aoPedaco, sinal) =>
       new Promise<ChatResponse>((responder, falhar) => {
         conversas.push({ pedido, aoPedaco, sinal, responder, falhar });
@@ -81,14 +81,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function abrir() {
-  const local = memoryLocation({ path: "/agente" });
+async function abrir(cliente: ClienteDoAgente = agenteFalso(), caminho = "/agente") {
+  const local = memoryLocation({ path: caminho });
   const consulta = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () =>
     raiz!.render(
       <QueryClientProvider client={consulta}>
         <Router hook={local.hook} searchHook={local.searchHook}>
-          <ProvedorDoAgente cliente={agenteFalso()}>
+          <ProvedorDoAgente cliente={cliente}>
             <div className="v3">
               <AgentScreen basePath="/agente" suggestions={[{ prompt: "Quais itens estão parados há mais de 60 dias?", hint: "" }]} placeholder="Pergunte" />
             </div>
@@ -254,6 +254,26 @@ describe("a resposta do Agent Dute chegando", () => {
     await act(async () => conversas[0].falhar(new Error("O Agent Dute não respondeu agora. Tente de novo em instantes.")));
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Não consegui enviar agora", variant: "destructive" }));
     expect(container!.querySelector<HTMLTextAreaElement>("[data-agent-input]")!.value).toBe("Quais pedidos estão atrasados?");
+  });
+});
+
+describe("as leituras da conversa que não chegaram", () => {
+  it("a lista de conversas que falhou diz que falhou, com o Tentar de novo, e nunca \"Suas conversas aparecem aqui\"", async () => {
+    const conversas = vi.fn(() => Promise.reject(new SemResposta()));
+    await abrir(agenteFalso({ conversas }));
+    await passar(0);
+    expect(texto()).not.toContain("Suas conversas aparecem aqui.");
+    expect(texto()).toContain("Não consegui carregar as conversas.");
+    await act(async () => botao("Tentar de novo")!.click());
+    expect(conversas).toHaveBeenCalledTimes(2);
+  });
+
+  it("a conversa que não chegou do servidor mostra a falta, e não a tela de boas-vindas", async () => {
+    await abrir(agenteFalso({ mensagens: () => Promise.reject(new SemConexao()) }), "/agente?c=dute_1");
+    await passar(0);
+    expect(texto()).not.toContain("Como posso ajudar?");
+    expect(container!.querySelector("[data-falta]")).not.toBeNull();
+    expect(botao("Tentar de novo")).toBeDefined();
   });
 });
 

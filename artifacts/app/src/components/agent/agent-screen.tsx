@@ -10,7 +10,7 @@ import { AgentMarkdown } from "@/components/agent/markdown";
 import { FontesDaResposta, TrilhaDoAgente, TrilhaRecolhida, type ConsultaDoAgente } from "@/components/agent/trilha-do-agente";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Esqueleto } from "@/components/ui/esqueleto";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
@@ -30,7 +30,7 @@ import {
 import { useAnuncio } from "@/lib/carregando/anunciador";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { useEspera } from "@/lib/carregando/use-espera";
-import { PRAZO_ESGOTADO, prazoEsgotado } from "@/lib/conexao";
+import { PRAZO_ESGOTADO, ehFaltaDeConexao, prazoEsgotado } from "@/lib/conexao";
 import { chaveNoAlvo } from "@/lib/agente/cliente";
 import { useClienteDoAgente } from "@/lib/agente/contexto";
 import { useAppUser } from "@/lib/auth";
@@ -365,7 +365,9 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
   }, [active?.id, active?.last_message_at]);
   const messages = conversationId ? (chat.data?.messages ?? []) : [];
   const showingStream = streaming && streaming.conversationId === conversationId ? streaming : null;
-  const empty = !conversationId || (!chat.isLoading && messages.length === 0 && !showingStream);
+  // A conversa que não chegou do servidor (sem rede, o Firestore só acharia o cache) não vira a tela de boas-vindas.
+  const chatFailed = Boolean(conversationId) && chat.isError && chat.data === undefined && !showingStream;
+  const empty = !conversationId || (!chat.isLoading && !chatFailed && messages.length === 0 && !showingStream);
   const title =
     view === "rotinas"
       ? "Rotinas"
@@ -380,6 +382,9 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
       conversations={list.filter((item) => !item.routine_id)}
       history={history}
       loading={conversations.isLoading}
+      failed={conversations.isError && conversations.data === undefined}
+      retrying={conversations.isFetching}
+      onRetry={() => void conversations.refetch()}
       view={view}
       activeId={conversationId}
       onOpen={openConversation}
@@ -436,6 +441,9 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
           <Conversation
             messages={messages}
             loading={chat.isLoading}
+            failure={chatFailed ? chat.error : null}
+            retrying={chat.isFetching}
+            onReload={() => void chat.refetch()}
             streaming={showingStream}
             demorando={demorando}
             onStop={stop}
@@ -493,6 +501,9 @@ function AgentRail({
   conversations,
   history,
   loading,
+  failed,
+  retrying,
+  onRetry,
   view,
   activeId,
   onOpen,
@@ -504,6 +515,10 @@ function AgentRail({
   conversations: ConversationSummary[];
   history: RoutineHistoryItem[];
   loading: boolean;
+  /** As conversas não chegaram: erro nunca vira "Suas conversas aparecem aqui". */
+  failed: boolean;
+  retrying: boolean;
+  onRetry: () => void;
   view: AgentView;
   activeId: string | null;
   onOpen: (id: string | null) => void;
@@ -575,6 +590,14 @@ function AgentRail({
             {["w-3/4", "w-1/2", "w-2/3"].map((largura) => (
               <Esqueleto key={largura} forma="texto" className={largura} />
             ))}
+          </div>
+        ) : failed ? (
+          <div className="flex flex-col items-start gap-1 px-2 py-3 text-sm">
+            <p className="font-semibold text-foreground">Não consegui carregar as conversas.</p>
+            <Button type="button" variant="ghost" className="-ml-3 min-h-11" aria-disabled={retrying || undefined} aria-busy={retrying || undefined} onClick={() => (retrying ? undefined : onRetry())}>
+              {retrying ? <Spinner /> : null}
+              {retrying ? "Tentando de novo…" : "Tentar de novo"}
+            </Button>
           </div>
         ) : groups.length === 0 ? (
           <p className="px-2 py-3 text-sm text-muted-foreground">{query ? "Nenhuma conversa encontrada." : "Suas conversas aparecem aqui."}</p>
@@ -804,6 +827,9 @@ function Welcome({
 function Conversation({
   messages,
   loading,
+  failure,
+  retrying,
+  onReload,
   streaming,
   demorando,
   onStop,
@@ -817,6 +843,10 @@ function Conversation({
 }: {
   messages: ChatMessage[];
   loading: boolean;
+  /** A conversa não chegou do servidor; nulo quando chegou ou ainda lê. */
+  failure: unknown;
+  retrying: boolean;
+  onReload: () => void;
   streaming: Streaming | null;
   demorando: boolean;
   onStop: () => void;
@@ -878,6 +908,13 @@ function Conversation({
       >
         <div className="mx-auto w-full max-w-[780px] px-4 pb-6 pt-6 md:px-7">
           {loading && !streaming ? <CarregandoNaRegiao rotulo="Carregando a conversa…" /> : null}
+          {failure ? (
+            ehFaltaDeConexao(failure) ? (
+              <BlocoSemConexao tentando={retrying} onTentar={onReload} />
+            ) : (
+              <ErroNaLeitura mensagem="Não consegui carregar a conversa." tentando={retrying} onTentar={onReload} />
+            )
+          ) : null}
           {ordered.map((message) =>
             message.role === "user" ? (
               <UserMessage key={message.id} files={(message.attachments ?? []).map((file) => file.file_name)}>
