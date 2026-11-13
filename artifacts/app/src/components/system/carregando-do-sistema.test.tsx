@@ -112,7 +112,7 @@ const espera = (ms: number) => act(async () => new Promise((pronto) => setTimeou
  * Espera a tela chegar ao estado, em passos de 20 ms, até 3 s. Os marcos (os 300 ms da caixa, a resposta da
  * leitura) dependem do relógio de verdade: com a máquina ocupada, um tempo fixo logo depois do marco falha à toa.
  */
-async function ate(condicao: () => boolean | null | undefined, limiteMs = 3_000) {
+async function ate(condicao: () => unknown, limiteMs = 3_000) {
   const fim = Date.now() + limiteMs;
   while (!condicao()) {
     if (Date.now() > fim) throw new Error("A tela não chegou ao estado esperado em 3 s.");
