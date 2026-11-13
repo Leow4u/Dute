@@ -90,8 +90,10 @@ describe("o Início carregando", () => {
     const host = document.createElement("div");
     host.innerHTML = html;
     const blocos = Array.from(host.querySelectorAll("[data-esqueleto]"));
-    // As três linhas do "Precisa de você" e o bloco do dia no armazém.
-    expect(blocos).toHaveLength(4);
+    // Desde a parte 13e, a forma final: as linhas-fantasma do "Precisa de você" (sem contagem lembrada, 2, cada
+    // uma com a caixa, o título, o apoio e o botão) e o bloco no lugar de cada número do dia ainda não lido.
+    expect(host.querySelectorAll("[data-linha-fantasma]")).toHaveLength(2);
+    expect(blocos).toHaveLength(2 * 4 + 4);
     expect(blocos.every((achado) => achado.getAttribute("aria-hidden") === "true")).toBe(true);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });

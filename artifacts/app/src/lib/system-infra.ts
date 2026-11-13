@@ -55,9 +55,17 @@ type Tile = { value: string; detail: string; tone: "ok" | "warn" | "bad" };
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
-/** Quadros do topo: erros de 24 h e functions. */
-export function infraTiles(infra: SystemInfra | undefined, loading: boolean): { errors: Tile; functions: Tile } {
-  const waiting: Tile = { value: loading ? "Verificando…" : "—", detail: "", tone: "ok" };
+/**
+ * Quadros do topo: erros de 24 h e functions. Sem a leitura, nada é
+ * afirmado: lendo, "Verificando…" (o quadro põe a caixa no lugar do ponto);
+ * com a leitura que falhou, "Sem leitura" em vermelho, nunca o verde.
+ */
+export function infraTiles(infra: SystemInfra | undefined, loading: boolean, falhou = false): { errors: Tile; functions: Tile } {
+  const waiting: Tile = loading
+    ? { value: "Verificando…", detail: "", tone: "ok" }
+    : falhou
+      ? { value: "Sem leitura", detail: "Veja a seção Infraestrutura", tone: "bad" }
+      : { value: "—", detail: "", tone: "warn" };
   if (!infra) return { errors: waiting, functions: waiting };
 
   let errors: Tile;

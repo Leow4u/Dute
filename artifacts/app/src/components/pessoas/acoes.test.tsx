@@ -58,6 +58,10 @@ function acoes(extra: Record<string, unknown>) {
     onConvidarDeNovo: () => undefined,
     toast: () => undefined,
     setAccess: parado,
+    // Nenhuma ação do menu em andamento (parte 13e).
+    linhas: { estado: () => "repouso", ocupada: () => false, desde: () => null, motivo: () => null, executar: async () => undefined },
+    cancelarConvite: () => undefined,
+    devolverAcesso: () => undefined,
     ...extra,
   } as unknown as AcoesDasPessoas;
 }

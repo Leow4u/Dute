@@ -38,6 +38,7 @@ vi.mock("firebase/firestore", async (original) => ({
 
 import SettingsCustomers from "./settings-customers";
 import { operationTemplate } from "@/lib/operations";
+import { INTERVALO_DO_TOQUE_MS } from "@/lib/campo/toque-unico";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosForaDaLista } from "@/test/textos";
 
@@ -103,6 +104,10 @@ let falharPosicoes: boolean;
 let respostaDoPatch: { status: number; body: unknown };
 /** Com a lista, a criação do cliente espera até o teste soltar (o diálogo gravando, parte 13a). */
 let criacaoPresa: Array<() => void> | null;
+/** Com a lista, a gravação da seção espera até o teste soltar (o Salvar em andamento, parte 13e). */
+let patchPreso: Array<() => void> | null;
+/** As posições não respondem (a zona ainda lendo, parte 13e). */
+let posicoesPresas: boolean;
 let chamadas: Array<{ method: string; path: string; body: Record<string, unknown> | null }>;
 let assinaturas: Array<{ value: string; next: (snapshot: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }) => void }>;
 
@@ -232,6 +237,8 @@ beforeEach(() => {
   falharPosicoes = false;
   respostaDoPatch = { status: 200, body: { ok: true } };
   criacaoPresa = null;
+  patchPreso = null;
+  posicoesPresas = false;
   chamadas = [];
   assinaturas = [];
   fronteiras.pessoas.mockReset().mockReturnValue({ data: { items: PESSOAS }, isLoading: false });
@@ -256,9 +263,14 @@ beforeEach(() => {
       clientes = [...clientes, { ...(body as Cliente), id: String(body!.code) }];
       return resposta({ ok: true });
     }
-    if (path.startsWith("/api/customers/") && method === "PATCH") return resposta(respostaDoPatch.body, respostaDoPatch.status);
+    if (path.startsWith("/api/customers/") && method === "PATCH") {
+      const presa = patchPreso;
+      if (presa) await new Promise<void>((soltar) => presa.push(soltar));
+      return resposta(respostaDoPatch.body, respostaDoPatch.status);
+    }
     if (path.startsWith("/api/customers/") && method === "DELETE") return resposta({ ok: true });
     if (path === "/api/warehouse/positions") {
+      if (posicoesPresas) return new Promise<Response>(() => undefined);
       return falharPosicoes ? resposta({ message: "Falhou." }, 500) : resposta({ items: POSICOES, has_more: false });
     }
     if (path === "/api/warehouse/boxes") return resposta({ items: CAIXAS, has_more: false });
@@ -481,6 +493,8 @@ const TEXTOS_DA_PAGINA_BTG = [
   "Contrato", "Razão social", "Banco BTG Pactual S.A.", "CNPJ", "12.345.678/0001-90", "Contato principal", "Ana Souza", "ana@btg.example",
   "Observações internas", "Retirada às terças.",
   "Novo contato", "Gestor do cliente", "Itens parados", "Desativar",
+  // As camadas do botão de ação da linha (BotaoDeAcao, parte 13e): o gerúndio e o "Conferir" ficam escondidos.
+  "Desativando…", "Conferir",
 ];
 
 describe("Configurações › Clientes, a página do cliente", () => {
@@ -519,7 +533,7 @@ describe("Configurações › Clientes, a página do cliente", () => {
     expect((document.getElementById("operacao-sigla") as HTMLInputElement).value).toBe("BTG");
     expect(textosForaDaLista(secao("Operação").innerHTML, [
       "Operação", "Modelo de operação", "Uniformes e materiais", "Sigla do SKU", "Módulos contratados", "Armazenagem", "Operação",
-      "Financeiro", "Cancelar", "Salvar",
+      "Financeiro", "Cancelar", "Salvar", "Salvando…", "Conferir",
       // As opções do seletor do modelo (o <select> que o Radix guarda para o formulário).
       "Mobiliário (em construção)", "Insumos internos (em construção)",
     ])).toEqual([]);
@@ -551,6 +565,9 @@ describe("Configurações › Clientes, a página do cliente", () => {
     await esperar(() => expect(secao("Contrato").querySelector('[role="alert"]')?.textContent).toBe("Falha do servidor."));
     expect((document.getElementById("contrato-nome") as HTMLInputElement).value).toBe("BTG Pactual Asset");
     respostaDoPatch = { status: 200, body: { ok: true } };
+    // O Salvar é o botão de ação (parte 13e): o segundo toque dentro de 1 s é o toque duplo, e a nova tentativa
+    // vem depois dele.
+    await act(async () => new Promise((pronto) => setTimeout(pronto, INTERVALO_DO_TOQUE_MS)));
     await tocar("Salvar", secao("Contrato"));
     await esperar(() => expect(secao("Contrato").querySelector("form")).toBeNull());
     expect(patches().at(-1)!.body).toMatchObject({ name: "BTG Pactual Asset", sku_prefix: "BTG", primary_contact_email: "ana@btg.example" });
@@ -697,5 +714,77 @@ describe("Configurações › Clientes, as pessoas do portal", () => {
     await esperar(() => expect(secao("Portal do cliente").querySelector('[role="alert"]')?.textContent).toBe("Não foi possível ler as pessoas."));
     await tocar("Tentar de novo", secao("Portal do cliente"));
     await esperar(() => expect(secao("Portal do cliente").textContent).toContain("Pessoas · 2 · 1 convite pendente"));
+  });
+});
+
+/**
+ * O carregamento v2 nas páginas de Clientes (parte 13e): nenhum número antes
+ * de ler (antes, "0 no portal" e "Pessoas · 0" enquanto as pessoas liam, e
+ * "…" no lugar das prateleiras), a espera com a caixa e o rótulo, e o Salvar
+ * da seção como o botão de ação, sem `disabled`.
+ */
+describe("Configurações › Clientes enquanto lê", () => {
+  const LENDO = { data: undefined, isLoading: true, isPending: true, isFetching: true, isError: false, error: null };
+
+  it("a galeria não afirma quantas pessoas entram no portal antes de ler as pessoas", async () => {
+    fronteiras.pessoas.mockReturnValue(LENDO);
+    await abrirGaleria();
+    const btg = cartoes().find((cartao) => cartao.textContent?.includes("BTG Pactual"))!;
+    const noPortal = [...btg.querySelectorAll("dl > div")].find((item) => item.textContent?.includes("no portal"))!;
+    expect(noPortal.querySelector('[data-esqueleto][data-forma="contagem"]')).not.toBeNull();
+    expect(noPortal.querySelector("dd")!.textContent).toBe("");
+    expect(btg.textContent).not.toMatch(/\d+ no portal/);
+  });
+
+  it("a página do cliente: o bloco no lugar do número de pessoas, Pessoas · ▪ e a espera aos 300 ms", async () => {
+    fronteiras.pessoas.mockReturnValue(LENDO);
+    await abrirCliente(BTG.code);
+    const cabecalho = container.querySelector("h1#cliente-titulo")!.closest("section")!;
+    const pessoas = [...cabecalho.querySelectorAll("dl > div")].find((item) => item.textContent?.includes("pessoas no portal"))!;
+    expect(pessoas.querySelector("dd [data-esqueleto]")).not.toBeNull();
+    expect(pessoas.querySelector("dd")!.textContent).toBe("");
+    const portal = secao("Portal do cliente");
+    expect(portal.textContent).not.toContain("Pessoas · 0");
+    expect(portal.querySelector("h3 [data-esqueleto]")).not.toBeNull();
+    await esperar(() => expect(portal.textContent).toContain("Carregando pessoas…"));
+    expect(portal.querySelector('[role="status"]')).toBeNull();
+    expect(portal.querySelector("[data-carregando-na-regiao] [data-spinner]")).not.toBeNull();
+  });
+
+  it("as prateleiras lendo: o bloco, nunca a reticência solta", async () => {
+    posicoesPresas = true;
+    await abrirCliente(BTG.code);
+    const cabecalho = container.querySelector("h1#cliente-titulo")!.closest("section")!;
+    const prateleiras = [...cabecalho.querySelectorAll("dl > div")].find((item) => item.textContent?.includes("prateleiras"))!;
+    expect(prateleiras.querySelector("dd")!.textContent).toBe("");
+    expect(prateleiras.querySelector("dd [data-esqueleto]")).not.toBeNull();
+    await esperar(() => expect(secao("Armazém").textContent).toContain("Carregando a ocupação…"));
+  });
+
+  it("o Salvar da seção é o botão de ação: Salvando… com aria-busy, e o Cancelar aria-disabled, nunca disabled", async () => {
+    patchPreso = [];
+    await abrirCliente(BTG.code);
+    await tocar("Editar contrato");
+    await preencher("contrato-nome", "BTG Pactual Asset");
+    await tocar("Salvar", secao("Contrato"));
+    await esperar(() => expect(secao("Contrato").querySelector('button[aria-busy="true"]')).not.toBeNull());
+    const salvar = secao("Contrato").querySelector<HTMLButtonElement>('button[aria-busy="true"]')!;
+    expect(salvar.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Salvando…");
+    expect(salvar.disabled).toBe(false);
+    const cancelar = botao("Cancelar", secao("Contrato"))!;
+    expect(cancelar.getAttribute("aria-disabled")).toBe("true");
+    expect(cancelar.disabled).toBe(false);
+    await act(async () => cancelar.click());
+    expect(secao("Contrato").querySelector("form")).not.toBeNull();
+    for (const soltar of patchPreso.splice(0)) soltar();
+    await esperar(() => expect(secao("Contrato").querySelector("form")).toBeNull());
+  });
+
+  it("a ocupação que falhou: Tentar de novo com aria-disabled enquanto tenta, nunca disabled", async () => {
+    falharPosicoes = true;
+    await abrirCliente(BTG.code);
+    await esperar(() => expect(secao("Armazém").querySelector('[role="alert"]')?.textContent).toBe("Não foi possível ler a ocupação."));
+    const tentar = botao("Tentar de novo", secao("Armazém"))!;
+    expect(tentar.disabled).toBe(false);
   });
 });

@@ -4,8 +4,11 @@ import { AlertTriangle, Settings2 } from "lucide-react";
 
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { useToast } from "@/hooks/use-toast";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import {
   dashboardKey,
@@ -117,21 +120,36 @@ function CostSettingsDialog({ settings, onClose }: { settings: SystemDashboard["
 
 export function OwnerDashboard() {
   const [editingCosts, setEditingCosts] = useState(false);
-  const dashboard = useQuery<SystemDashboard, Error>({
+  const leitura = useQuery<SystemDashboard, Error>({
     queryKey: dashboardKey,
     queryFn: () => fetchJson<SystemDashboard>("/api/system/dashboard"),
     refetchInterval: 60_000,
   });
+  // A nova tentativa sem dado não volta a "Carregando o painel…": a falha fica, com "Tentando de novo…".
+  const dashboard = useLeituraComFalha(leitura);
 
   // Sem rede, o painel que já estava fica, com a hora da leitura; sem nada
   // lido, o aviso (decisão 2 do celular).
   const semRede = semConexaoNaLeitura(dashboard);
-  const reler = () => void dashboard.refetch();
+  const reler = () => void leitura.refetch();
 
-  if (dashboard.isLoading) return <p className="text-sm text-muted-foreground">Carregando o painel…</p>;
+  if (dashboard.isLoading) {
+    return (
+      <div className="rounded-lg border border-border bg-card px-5 py-4">
+        <CarregandoNaRegiao rotulo="Carregando o painel…" />
+      </div>
+    );
+  }
   if (semRede && semRede.lidaEm === null) return <BlocoSemConexao tentando={dashboard.isFetching} onTentar={reler} />;
-  if (!dashboard.data || (dashboard.isError && !semRede)) {
-    return <p className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-4 text-sm text-destructive-soft-foreground">Não consegui carregar o painel: {dashboard.error?.message}</p>;
+  // Erro nunca vira vazio: sem nada lido, a falha com "Tentar de novo"; com o painel lido, ele fica (abaixo).
+  if (!dashboard.data) {
+    return (
+      <ErroNaLeitura
+        mensagem={`Não consegui carregar o painel: ${dashboard.error?.message ?? "o servidor não respondeu."}`}
+        tentando={dashboard.isFetching}
+        onTentar={reler}
+      />
+    );
   }
   const data = dashboard.data;
   const { usage, routines } = data;
@@ -142,6 +160,14 @@ export function OwnerDashboard() {
     <div className="space-y-4">
       {semRede && semRede.lidaEm !== null ? (
         <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={dashboard.isFetching} onTentar={reler} />
+      ) : dashboard.isError ? (
+        // A releitura que falhou não apaga o painel lido (necessidade 8): ele fica, e a falha em cima.
+        <FalhaNaSecao
+          mensagem={`Não consegui atualizar o painel: ${dashboard.error?.message ?? "o servidor não respondeu."}`}
+          tentando={dashboard.isFetching}
+          onTentar={reler}
+          className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+        />
       ) : null}
       {usage.month.over_budget ? (
         <p className="flex items-start gap-2 rounded-md border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm text-warning-soft-foreground" role="alert">

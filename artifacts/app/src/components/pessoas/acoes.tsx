@@ -31,9 +31,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
 import { assignableRoles, canManagePerson, roleLabel } from "@/lib/access";
 import { useAppUser } from "@/lib/auth";
+import { useAcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { vigiarFocoDeVolta } from "@/lib/foco-de-volta";
 import { normalizeProfileRole } from "@/lib/modules";
 import { humanApiError } from "@/lib/permissions";
 import type { Person } from "@/lib/pessoas";
@@ -45,7 +49,22 @@ import { cn } from "@/lib/utils";
  * revogar o acesso de quem entra; convidar de novo, devolver o acesso e tirar
  * da lista quem saiu. Cada pedido repetido depois de uma falha leva o mesmo
  * recibo (idempotency_key), e o servidor recusa o que o papel não pode.
+ *
+ * O que sai direto do menu (cancelar o convite, trocar o perfil, devolver o
+ * acesso) tem a espera na própria linha (carregamento v2, parte 13e;
+ * `useAcaoNaLinha`): passados 300 ms, o "⋯" vira a caixa de 16 px e o
+ * gerúndio diz o quê ("Cancelando o convite…"), só naquela pessoa; o menu
+ * dela não abre de novo até a ação voltar, e as outras linhas seguem livres.
  */
+
+/** As ações que saem direto do menu, com o gerúndio que a linha mostra. */
+export const ANDAMENTO_NA_LINHA = {
+  cancelar: "Cancelando o convite…",
+  perfil: "Trocando o perfil…",
+  devolver: "Devolvendo o acesso…",
+} as const;
+
+export type AcaoDoMenu = keyof typeof ANDAMENTO_NA_LINHA;
 
 export async function jsonOrThrow(response: Response, fallback: string) {
   const payload = (await response.json().catch(() => ({}))) as { message?: string };
@@ -76,6 +95,7 @@ export function useAcoesDasPessoas({ refresh, onConvidarDeNovo }: { refresh: () 
   const [removing, setRemoving] = useState<Person | null>(null);
   const [reason, setReason] = useState("");
   const resendAttempts = useRef(new Map<string, string>());
+  const linhas = useAcaoNaLinha<string>();
 
   const failure = (title: string) => (error: unknown) =>
     toast({ title, description: humanApiError(error, "Tente novamente em instantes."), variant: "destructive" });
@@ -149,16 +169,33 @@ export function useAcoesDasPessoas({ refresh, onConvidarDeNovo }: { refresh: () 
   });
 
   const changeRole = (person: Person, role: string) =>
-    updateRole.mutate(
-      { id: person.id, data: { role } },
-      {
-        onSuccess: async () => {
-          await refresh();
-          toast({ title: "Perfil alterado", description: `${person.name}: ${roleLabel(role)}` });
-        },
-        onError: failure("Perfil não alterado"),
-      },
+    void linhas.executar(
+      person.key,
+      "perfil",
+      () =>
+        new Promise<void>((pronto, falhou) =>
+          updateRole.mutate(
+            { id: person.id, data: { role } },
+            {
+              onSuccess: async () => {
+                await refresh();
+                toast({ title: "Perfil alterado", description: `${person.name}: ${roleLabel(role)}` });
+                pronto();
+              },
+              onError: (error) => {
+                failure("Perfil não alterado")(error);
+                falhou(error);
+              },
+            },
+          ),
+        ),
     );
+
+  /** Cancela o convite, com a espera na linha da pessoa. O mesmo DELETE de sempre. */
+  const cancelarConvite = (person: Person) => void linhas.executar(person.key, "cancelar", () => cancelInvite.mutateAsync(person.id));
+
+  /** Devolve o acesso, com a espera na linha da pessoa. O mesmo POST de sempre. */
+  const devolverAcesso = (person: Person) => void linhas.executar(person.key, "devolver", () => setAccess.mutateAsync({ id: person.id, active: true }));
 
   return {
     toast,
@@ -178,6 +215,9 @@ export function useAcoesDasPessoas({ refresh, onConvidarDeNovo }: { refresh: () 
     archivePerson,
     setAccess,
     changeRole,
+    cancelarConvite,
+    devolverAcesso,
+    linhas,
     onConvidarDeNovo,
   };
 }
@@ -186,7 +226,7 @@ export type AcoesDasPessoas = ReturnType<typeof useAcoesDasPessoas>;
 
 /** O e-mail do convite ainda está na fila: reenviar agora só repetiria o envio (salvo o reconvite a recuperar). */
 function reenvioBloqueado(acoes: AcoesDasPessoas, person: Person): boolean {
-  return (person.emailStatus === "pending" && !person.loginPreparationPending) || acoes.resendInvite.isPending;
+  return (person.emailStatus === "pending" && !person.loginPreparationPending) || acoes.resendInvite.isPending || acoes.linhas.ocupada(person.key);
 }
 
 /** "Reenviar" na linha do convite, para quem pode cuidar dele; confirma antes de enviar. */
@@ -208,15 +248,64 @@ export function BotaoReenviar({ acoes, person, className }: { acoes: AcoesDasPes
   );
 }
 
+/** A ação do menu em andamento nesta linha, ou nula. */
+function acaoEmAndamento(acoes: AcoesDasPessoas, person: Person): AcaoDoMenu | null {
+  for (const acao of Object.keys(ANDAMENTO_NA_LINHA) as AcaoDoMenu[]) {
+    if (acoes.linhas.estado(person.key, acao) === "andamento") return acao;
+  }
+  return null;
+}
+
+/**
+ * A espera da ação do menu na linha: passados 300 ms (e pelo menos 500 ms), o
+ * gerúndio com o objeto ("Cancelando o convite…"), na ponta da linha. A caixa
+ * fica no lugar do "⋯" (`MenuDaPessoa`).
+ */
+export function AndamentoNaLinha({ acoes, person, className }: { acoes: AcoesDasPessoas; person: Person; className?: string }) {
+  const acao = acaoEmAndamento(acoes, person);
+  const ultima = useRef<AcaoDoMenu | null>(acao);
+  if (acao) ultima.current = acao;
+  const espera = useEspera(acao !== null, { desde: acoes.linhas.desde(person.key) ?? undefined, segurarMinimo: true });
+  if (!espera.visivel || !ultima.current) return null;
+  return (
+    <span data-andamento-na-linha="" className={cn("shrink-0 text-sm font-bold text-foreground", className)}>
+      {ANDAMENTO_NA_LINHA[ultima.current]}
+    </span>
+  );
+}
+
 /** As ações da pessoa no menu "…"; sem menu para a própria pessoa e para quem o papel não deixa mexer. */
 export function MenuDaPessoa({ acoes, person }: { acoes: AcoesDasPessoas; person: Person }) {
+  const [aberto, setAberto] = useState(false);
+  const acao = acaoEmAndamento(acoes, person);
+  // A linha ocupada (em andamento, ou no fim que segura a releitura) não abre o menu de novo.
+  const ocupada = acoes.linhas.ocupada(person.key);
+  const espera = useEspera(acao !== null, { desde: acoes.linhas.desde(person.key) ?? undefined, segurarMinimo: true });
+  const gatilho = useRef<HTMLButtonElement>(null);
   const self = person.kind === "user" && person.id === acoes.selfId;
   if (self || !canManagePerson(acoes.actorRole, person.role)) return null;
+  // O foco que volta ao "⋯" não cai no body se a linha sair com a ação (o convite cancelado): vai ao vizinho.
+  const comAEspera = (fazer: () => void) => () => {
+    if (gatilho.current) vigiarFocoDeVolta(gatilho.current);
+    fazer();
+  };
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      open={aberto && !ocupada}
+      onOpenChange={(quer) => setAberto(quer && !ocupada)}
+    >
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="icon" aria-label={`Ações de ${person.name}`}>
-          <MoreHorizontal aria-hidden="true" />
+        <Button
+          ref={gatilho}
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={acao ? `${ANDAMENTO_NA_LINHA[acao].replace(/…$/, "")} de ${person.name}` : `Ações de ${person.name}`}
+          aria-disabled={ocupada || undefined}
+          aria-busy={espera.visivel || undefined}
+          className={cn(ocupada && "hover:bg-transparent")}
+        >
+          {espera.visivel ? <Spinner tamanho={16} calmo={espera.calmo} /> : <MoreHorizontal aria-hidden="true" />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -237,7 +326,7 @@ export function MenuDaPessoa({ acoes, person }: { acoes: AcoesDasPessoas; person
             >
               Copiar link do convite
             </DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive" onSelect={() => acoes.cancelInvite.mutate(person.id)}>
+            <DropdownMenuItem className="text-destructive" onSelect={comAEspera(() => acoes.cancelarConvite(person))}>
               Cancelar convite
             </DropdownMenuItem>
           </>
@@ -247,7 +336,13 @@ export function MenuDaPessoa({ acoes, person }: { acoes: AcoesDasPessoas; person
               <DropdownMenuSubTrigger>Trocar perfil</DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 <DropdownMenuLabel>Perfil de {person.name}</DropdownMenuLabel>
-                <DropdownMenuRadioGroup value={String(normalizeProfileRole(person.role))} onValueChange={(role) => acoes.changeRole(person, role)}>
+                <DropdownMenuRadioGroup
+                  value={String(normalizeProfileRole(person.role))}
+                  onValueChange={(role) => {
+                    if (gatilho.current) vigiarFocoDeVolta(gatilho.current);
+                    acoes.changeRole(person, role);
+                  }}
+                >
                   {acoes.roles.map((role) => (
                     <DropdownMenuRadioItem key={role} value={role}>
                       {roleLabel(role)}
@@ -265,7 +360,7 @@ export function MenuDaPessoa({ acoes, person }: { acoes: AcoesDasPessoas; person
         ) : (
           <>
             <DropdownMenuItem onSelect={() => acoes.onConvidarDeNovo(person)}>Convidar novamente</DropdownMenuItem>
-            <DropdownMenuItem disabled={acoes.setAccess.isPending} onSelect={() => acoes.setAccess.mutate({ id: person.id, active: true })}>
+            <DropdownMenuItem disabled={acoes.setAccess.isPending} onSelect={comAEspera(() => acoes.devolverAcesso(person))}>
               Devolver acesso
             </DropdownMenuItem>
             <DropdownMenuSeparator />

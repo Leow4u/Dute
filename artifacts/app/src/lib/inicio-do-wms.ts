@@ -32,4 +32,8 @@ export function itensDoInicioDoWms(items: readonly HomeInboxItem[]): ItemDoInici
 }
 
 /** `skus` null enquanto o total não chegou ou quando a leitura falhou: o Início não inventa zero. */
-export type HojeNoArmazem = HomeSummary & { skus: number | null };
+/**
+ * Os números do dia. `skus` nulo: o total não foi lido (o painel); com
+ * `skusLendo`, ainda lê, e a linha mostra o bloco, nunca o zero.
+ */
+export type HojeNoArmazem = HomeSummary & { skus: number | null; skusLendo?: boolean };

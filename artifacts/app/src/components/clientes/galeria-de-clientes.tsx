@@ -4,9 +4,10 @@ import { MODULO_ROTULO } from "@workspace/dominio";
 
 import { Codigo, Pilula, QuadroDoCliente, Selo, SeloDaSituacao } from "@/components/clientes/partes";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { Esqueleto } from "@/components/ui/esqueleto";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 import {
   CUSTOMER_FILTERS,
   CUSTOMER_FILTER_LABEL,
@@ -40,6 +41,8 @@ export type GaleriaProps = {
   onBusca: (busca: string) => void;
   /** A leitura das posições (a zona de cada cliente): sem ela, a zona não é afirmada. */
   zonas: "carregando" | "erro" | "pronto";
+  /** A leitura das pessoas (quantas entram no portal): sem ela, nunca "0 no portal". */
+  pessoas?: "carregando" | "erro" | "pronto";
   /** Módulos contratados no cartão, onde a plataforma está liberada. */
   comModulos: boolean;
   onNovo: () => void;
@@ -85,7 +88,26 @@ function zonaCurta(row: CustomerRow): string {
   return `${row.zone.positions === 1 ? "prateleira" : "prateleiras"} · ${ruasDaZona(row.zone.aisles)}`;
 }
 
-function CartaoDoCliente({ row, comModulos, zonas }: { row: CustomerRow; comModulos: boolean; zonas: GaleriaProps["zonas"] }) {
+/**
+ * O número que ainda não foi lido (carregamento v2, parte 13e): o bloco do
+ * esqueleto enquanto lê, "—" quando a leitura falhou; nunca o zero nem a
+ * reticência solta.
+ */
+export function ValorNaoLido({ estado }: { estado: "carregando" | "erro" }) {
+  return estado === "carregando" ? <Esqueleto forma="contagem" /> : <>—</>;
+}
+
+function CartaoDoCliente({
+  row,
+  comModulos,
+  zonas,
+  pessoas,
+}: {
+  row: CustomerRow;
+  comModulos: boolean;
+  zonas: GaleriaProps["zonas"];
+  pessoas: NonNullable<GaleriaProps["pessoas"]>;
+}) {
   const { profile } = row;
   const semPortal = profile.template.portal === null;
   const prateleiras = row.zone && row.zone.positions > 0 ? row.zone.positions : null;
@@ -110,8 +132,8 @@ function CartaoDoCliente({ row, comModulos, zonas }: { row: CustomerRow; comModu
           {profile.template.status === "building" ? <Selo tom="amber">{templateStatusLabel(profile.template)}</Selo> : null}
         </p>
         <dl className="hidden grid-cols-3 gap-3 border-t border-border/60 pt-4 sm:grid">
-          <Numero valor={zonaLida ? (prateleiras ?? "—") : zonas === "carregando" ? "…" : "—"} rotulo={zonaLida ? zonaCurta(row) : "prateleiras"} />
-          <Numero valor={semPortal ? "—" : row.people} rotulo={semPortal ? "sem portal" : "no portal"} />
+          <Numero valor={zonaLida ? (prateleiras ?? "—") : <ValorNaoLido estado={zonas} />} rotulo={zonaLida ? zonaCurta(row) : "prateleiras"} />
+          <Numero valor={semPortal ? "—" : pessoas === "pronto" ? row.people : <ValorNaoLido estado={pessoas} />} rotulo={semPortal ? "sem portal" : "no portal"} />
           <Numero
             valor={profile.skuPrefix ? <Codigo destaque>{profile.skuPrefix}</Codigo> : <Selo tom="warn">A definir</Selo>}
             rotulo="sigla do SKU"
@@ -121,7 +143,7 @@ function CartaoDoCliente({ row, comModulos, zonas }: { row: CustomerRow; comModu
           <span className="min-w-0 flex-1">
             {[
               !zonaLida ? null : prateleiras === null ? "Zona a definir" : `${prateleiras} ${prateleiras === 1 ? "prateleira" : "prateleiras"}`,
-              semPortal ? null : `${row.people} no portal`,
+              semPortal || pessoas !== "pronto" ? null : `${row.people} no portal`,
               profile.skuPrefix ? null : "sigla a definir",
             ]
               .filter(Boolean)
@@ -146,7 +168,7 @@ function CartaoDoCliente({ row, comModulos, zonas }: { row: CustomerRow; comModu
   );
 }
 
-export function GaleriaDeClientes({ estado, erro, tentando, onTentar, rows, filtro, onFiltro, busca, onBusca, zonas, comModulos, onNovo }: GaleriaProps) {
+export function GaleriaDeClientes({ estado, erro, tentando, onTentar, rows, filtro, onFiltro, busca, onBusca, zonas, pessoas = "pronto", comModulos, onNovo }: GaleriaProps) {
   const contagem = countCustomerFilters(rows);
   const visiveis = searchCustomerRows(
     rows.filter((row) => customerInFilter(row, filtro)),
@@ -197,10 +219,9 @@ export function GaleriaDeClientes({ estado, erro, tentando, onTentar, rows, filt
       </header>
 
       {estado === "carregando" ? (
-        <p role="status" className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-5 py-6 text-sm font-semibold text-muted-foreground">
-          <Spinner />
-          Carregando clientes…
-        </p>
+        <div className="rounded-lg border border-border bg-card px-5 py-5">
+          <CarregandoNaRegiao rotulo="Carregando clientes…" continuaARota />
+        </div>
       ) : estado === "erro" ? (
         <ErroNaLeitura mensagem={erro ?? "Não foi possível carregar os clientes."} tentando={tentando} onTentar={onTentar} />
       ) : rows.length === 0 ? (
@@ -214,7 +235,7 @@ export function GaleriaDeClientes({ estado, erro, tentando, onTentar, rows, filt
       ) : (
         <ul aria-label="Clientes" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {visiveis.map((row) => (
-            <CartaoDoCliente key={row.code} row={row} comModulos={comModulos} zonas={zonas} />
+            <CartaoDoCliente key={row.code} row={row} comModulos={comModulos} zonas={zonas} pessoas={pessoas} />
           ))}
         </ul>
       )}

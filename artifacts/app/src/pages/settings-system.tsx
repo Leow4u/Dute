@@ -2,8 +2,13 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw } from "lucide-react";
 
+import { AvisoDeEspera } from "@/components/ui/aviso-de-espera";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { Spinner } from "@/components/ui/spinner";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Dialog,
@@ -27,6 +32,9 @@ import { OwnerDashboard } from "@/components/system/owner-dashboard";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import { BUILD_COMMIT, BUILD_TIME } from "@/lib/build-info";
+import { useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { INTERNAL_CUSTOMER_CODE } from "@/lib/active-customer";
@@ -85,37 +93,57 @@ function dateTime(value: string | null | undefined) {
   });
 }
 
+/**
+ * O quadro do topo. Lendo, o valor ainda não é afirmado (carregamento v2,
+ * parte 13e): o bloco do esqueleto e, passados 300 ms, a caixa de 16 px com o
+ * gerúndio no lugar do ponto ("Verificando…"); nunca o ponto verde nem o
+ * cinza parado de quem já respondeu.
+ */
 function Tile({
   label,
   value,
   detail,
   dot,
   mono,
+  lendo,
 }: {
   label: string;
   value: string;
   detail?: string | null;
-  dot?: "ok" | "bad" | "wait";
+  dot?: "ok" | "bad";
   mono?: boolean;
+  /** A primeira leitura do valor: o `visivel` da espera dela. */
+  lendo?: { visivel: boolean; calmo: boolean };
 }) {
   return (
     <div className="rounded-lg border border-border bg-card px-5 py-4">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div
         className={cn(
-          "mt-1.5 flex items-center gap-2 text-lg font-semibold",
+          "mt-1.5 flex min-h-7 items-center gap-2 text-lg font-semibold",
           mono && "font-mono text-base",
         )}
       >
-        {dot ? (
-          <span
-            className={cn(
-              "inline-block h-2.5 w-2.5 shrink-0 rounded-full",
-              dot === "ok" ? "bg-green-600" : dot === "bad" ? "bg-red-600" : "bg-slate-300",
-            )}
-          />
-        ) : null}
-        <span className="min-w-0 truncate">{value}</span>
+        {lendo ? (
+          lendo.visivel ? (
+            <>
+              <Spinner tamanho={16} calmo={lendo.calmo} className="text-foreground" />
+              <span className="min-w-0 truncate">{value}</span>
+            </>
+          ) : (
+            <Esqueleto forma="texto" className="w-24" />
+          )
+        ) : (
+          <>
+            {dot ? (
+              <span
+                aria-hidden="true"
+                className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full", dot === "ok" ? "bg-green-600" : "bg-red-600")}
+              />
+            ) : null}
+            <span className="min-w-0 truncate">{value}</span>
+          </>
+        )}
       </div>
       {detail ? <div className="mt-0.5 text-xs text-muted-foreground">{detail}</div> : null}
     </div>
@@ -139,7 +167,7 @@ export default function SettingsSystem() {
   const isOwner = user?.publicMetadata.role === "owner";
   const [numbering, setNumbering] = useState<NumberingResult | null>(null);
 
-  const health = useQuery({
+  const leituraDaSaude = useQuery({
     queryKey: ["system-health"],
     queryFn: async (): Promise<Check> => {
       const started = performance.now();
@@ -149,6 +177,21 @@ export default function SettingsSystem() {
     retry: false,
     refetchInterval: 120_000,
   });
+  // A nova tentativa sem dado não volta a "Verificando": a falha fica na tela até a leitura responder.
+  const health = useLeituraComFalha(leituraDaSaude);
+  const primeiraLeitura = useEspera(health.isLoading);
+
+  // "Verificar agora" só mostra a espera quando a pessoa toca nele: a releitura de 2 min não o gira nem o
+  // desabilita (carregamento v2, momento 7). Antes de reler, acorda a conexão de quem lê.
+  const [verificando, setVerificando] = useState(false);
+  const tentarDeNovo = useTentarDeNovo();
+  const verificarAgora = () => {
+    if (verificando) return;
+    setVerificando(true);
+    tentarDeNovo(() => {
+      void leituraDaSaude.refetch().finally(() => setVerificando(false));
+    });
+  };
 
   const register = useMutation({
     mutationFn: async () => {
@@ -207,18 +250,22 @@ export default function SettingsSystem() {
   });
 
   const check = health.data;
-  const serverValue = health.isFetching && !check
-    ? "Verificando"
+  const serverValue = health.isLoading
+    ? "Verificando…"
     : health.isError
       ? "Sem resposta"
       : "Respondendo";
-  const serverDot = health.isFetching && !check ? "wait" : health.isError ? "bad" : "ok";
+  const serverDot = health.isError ? "bad" : "ok";
   const serverDetail = health.isError
     ? humanApiError(health.error, "O servidor não respondeu.")
     : check
       ? `verificado ${dateTime(check.checked_at) ?? "agora"} · ${check.round_trip_ms} ms`
       : null;
   const builtAt = dateTime(BUILD_TIME);
+  // A numeração que roda agora: "ver" (o que muda) ou "aplicar".
+  const numerando = assignNumbers.isPending ? (assignNumbers.variables ? "aplicar" : "ver") : null;
+  // A numeração em massa sem resposta: aos 10 s, "Demorando mais que o normal · 0:12" embaixo dos botões.
+  const esperaDaNumeracao = useEspera(assignNumbers.isPending);
   const lastEventAt = dateTime(check?.last_event?.occurred_at);
   const incidents = check?.incidents ?? [];
 
@@ -228,15 +275,19 @@ export default function SettingsSystem() {
         title="Sistema"
         description="O sistema está no ar e com a versão certa?"
         actions={
-          <Button variant="outline" onClick={() => health.refetch()} disabled={health.isFetching}>
-            <RefreshCw className={cn("mr-2 h-4 w-4", health.isFetching && "animate-spin")} />
-            Verificar agora
-          </Button>
+          <BotaoDeAcao
+            variant="outline"
+            icone={<RefreshCw aria-hidden="true" />}
+            estado={verificando ? "andamento" : "repouso"}
+            rotulo="Verificar agora"
+            andamento="Verificando…"
+            onClick={verificarAgora}
+          />
         }
       />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Tile label="Servidor" value={serverValue} detail={serverDetail} dot={serverDot} />
+        <Tile label="Servidor" value={serverValue} detail={serverDetail} dot={serverDot} lendo={health.isLoading ? primeiraLeitura : undefined} />
         <Tile
           label="Versão publicada"
           value={BUILD_COMMIT}
@@ -247,6 +298,7 @@ export default function SettingsSystem() {
           label="Último registro de operação"
           value={lastEventAt ?? (check ? "Nenhum" : "—")}
           detail={check?.last_event?.title || (check ? "ledger de eventos vazio" : null)}
+          lendo={health.isLoading ? { visivel: false, calmo: false } : undefined}
         />
       </div>
 
@@ -261,7 +313,9 @@ export default function SettingsSystem() {
           </Button>
         </div>
         {health.isLoading ? (
-          <p className="px-5 py-4 text-sm text-muted-foreground">Carregando...</p>
+          <CarregandoNaRegiao rotulo="Carregando incidentes…" continuaARota className="px-5 py-4" />
+        ) : health.isError && !check ? (
+          <FalhaNaSecao mensagem="Sem resposta do servidor." tentando={health.isFetching} onTentar={() => void leituraDaSaude.refetch()} className="px-5 py-4" />
         ) : incidents.length ? (
           <ul>
             {incidents.map((item) => {
@@ -295,9 +349,7 @@ export default function SettingsSystem() {
             })}
           </ul>
         ) : (
-          <p className="px-5 py-4 text-sm text-muted-foreground">
-            {health.isError ? "Sem resposta do servidor." : "Nenhum incidente registrado."}
-          </p>
+          <p className="px-5 py-4 text-sm text-muted-foreground">Nenhum incidente registrado.</p>
         )}
       </section>
 
@@ -316,18 +368,34 @@ export default function SettingsSystem() {
                 : "."}
             </p>
           ) : null}
-          <div className="mt-3 flex gap-2">
-            <Button size="sm" variant="outline" disabled={assignNumbers.isPending} onClick={() => assignNumbers.mutate(false)}>
-              Ver o que muda
-            </Button>
-            <Button
+          <div className="mt-3 flex flex-wrap gap-2">
+            {/* Ocupado não é desabilitado (parte 13e): o tocado diz o quê, e o outro espera (aria-disabled). */}
+            <BotaoDeAcao
               size="sm"
-              disabled={assignNumbers.isPending || !numbering?.dry_run || !numbering.assigned_count}
+              variant="outline"
+              estado={numerando === "ver" ? "andamento" : "repouso"}
+              bloqueado={numerando === "aplicar"}
+              rotulo="Ver o que muda"
+              andamento="Verificando…"
+              onClick={() => assignNumbers.mutate(false)}
+            />
+            <BotaoDeAcao
+              size="sm"
+              estado={numerando === "aplicar" ? "andamento" : "repouso"}
+              bloqueado={numerando === "ver" || (numerando === null && (!numbering?.dry_run || !numbering.assigned_count))}
+              rotulo="Numerar agora"
+              andamento="Numerando…"
               onClick={() => assignNumbers.mutate(true)}
-            >
-              Numerar agora
-            </Button>
+            />
           </div>
+          {esperaDaNumeracao.fase === "demorando" || esperaDaNumeracao.fase === "sem-resposta" ? (
+            <AvisoDeEspera
+              className="mt-3"
+              fase={esperaDaNumeracao.fase}
+              tipo={numerando === "aplicar" ? "escrita" : "leitura"}
+              desdeMs={esperaDaNumeracao.decorridoMs}
+            />
+          ) : null}
         </section>
       ) : null}
 

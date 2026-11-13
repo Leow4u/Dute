@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { SettingsSectionList } from "@/components/layout/settings-layout";
@@ -47,6 +48,8 @@ export function SettingsAccount() {
   const { signOut } = useAppAuth();
   const role = user?.publicMetadata.role;
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+  // Sair espera a sessão encerrar: o botão diz "Saindo…" e não sai duas vezes (carregamento v2, parte 13e).
+  const [saindo, setSaindo] = useState(false);
 
   return (
     <div>
@@ -86,13 +89,16 @@ export function SettingsAccount() {
             label="Sair da conta"
             value="Encerra a sessão neste dispositivo"
             aside={
-              <Button
-                type="button"
+              <BotaoDeAcao
                 variant="outline"
-                onClick={() => signOut({ redirectUrl: basePath || "/" })}
-              >
-                Sair
-              </Button>
+                estado={saindo ? "andamento" : "repouso"}
+                rotulo="Sair"
+                andamento="Saindo…"
+                onClick={() => {
+                  setSaindo(true);
+                  void signOut({ redirectUrl: basePath || "/" }).catch(() => setSaindo(false));
+                }}
+              />
             }
           />
         </section>

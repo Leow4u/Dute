@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { collection, getDocs } from "firebase/firestore";
+import { collection } from "firebase/firestore";
 
 import {
   LEGACY_CUSTOMER_CODE,
@@ -19,6 +19,7 @@ import {
   type ActiveCustomerOption,
 } from "./active-customer";
 import { useAppUser } from "./auth";
+import { lerDocsDoServidor } from "./cloud-api";
 import { firestore } from "./firebase";
 import { AGENTE_LIBERADO } from "./liberacao";
 import { INTERNAL_ROLES } from "./modules";
@@ -36,9 +37,15 @@ import { fetchJson } from "./warehouse-ops/model";
 export const CLIENT_PROFILES_QUERY_KEY = ["client-profiles"];
 const COMMERCIAL_CUSTOMERS_QUERY_KEY = ["active-customer-commercial"];
 
+/**
+ * Pelo `lib/cloud-api.ts`: sem rede, a leitura que só achou o cache é falta de
+ * conexão, e não a lista velha ou vazia (diagnóstico, 9.4; carregamento v2,
+ * parte 13e), e o SDK que se deu por offline fica marcado, para a releitura
+ * sozinha acordá-lo (parte 7a).
+ */
 async function readCommercialCustomers(): Promise<CustomerProfileRecord[]> {
   if (!firestore) return [];
-  const snapshot = await getDocs(collection(firestore, "customers"));
+  const snapshot = await lerDocsDoServidor(collection(firestore, "customers"));
   return snapshot.docs.map((doc) => ({ ...(doc.data() as CustomerProfileRecord), id: doc.id }));
 }
 
@@ -48,6 +55,17 @@ export type ActiveCustomerState = {
   code: string;
   setCode: (code: string) => void;
   isLoading: boolean;
+  /**
+   * A lista dos clientes não veio e não há nada lido: o seletor mostra a
+   * falta, nunca o cliente legado como se fosse o escolhido (carregamento v2,
+   * parte 13e). A falta de conexão o app relê sozinho (parte 7a).
+   */
+  falhou: boolean;
+  /** O erro da leitura que falhou, para dizer qual é a falta. */
+  erro: unknown;
+  /** Lê a lista de novo (o "Tentar de novo" do seletor); `tentando` enquanto lê. */
+  tentar: () => void;
+  tentando: boolean;
   /**
    * O cliente que a tela vai operar: enquanto a lista dos clientes não chegou
    * (`isLoading`), o escolhido neste aparelho, que o `code` ainda não
@@ -66,6 +84,10 @@ const ActiveCustomerContext = createContext<ActiveCustomerState>({
   code: LEGACY_CUSTOMER_CODE,
   setCode: () => undefined,
   isLoading: false,
+  falhou: false,
+  erro: null,
+  tentar: () => undefined,
+  tentando: false,
   codeProvavel: LEGACY_CUSTOMER_CODE,
 });
 
@@ -127,6 +149,13 @@ export function ActiveCustomerProvider({ children }: { children: ReactNode }) {
   );
 
   const isLoading = (internal || commercial) && profiles.isPending;
+  const falhou = (internal || commercial) && profiles.isError && profiles.data === undefined;
+  const erro = falhou ? profiles.error : null;
+  const tentando = falhou && profiles.isFetching;
+  const { refetch } = profiles;
+  const tentar = useCallback(() => {
+    void refetch();
+  }, [refetch]);
   const guardado = stored?.trim() || null;
   const value = useMemo<ActiveCustomerState>(
     () => ({
@@ -135,9 +164,13 @@ export function ActiveCustomerProvider({ children }: { children: ReactNode }) {
       code: active.code,
       setCode,
       isLoading,
+      falhou,
+      erro,
+      tentar,
+      tentando,
       codeProvavel: isLoading && guardado ? guardado : active.code,
     }),
-    [active, guardado, isLoading, options, setCode],
+    [active, erro, falhou, guardado, isLoading, options, setCode, tentando, tentar],
   );
 
   return <ActiveCustomerContext.Provider value={value}>{children}</ActiveCustomerContext.Provider>;

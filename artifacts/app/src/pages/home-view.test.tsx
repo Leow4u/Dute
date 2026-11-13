@@ -117,7 +117,20 @@ describe("Início da Armazenagem", () => {
   });
 
   it("carregando não diz que não há nada; erro diz o que não carregou", () => {
-    expect(textosDaTela(render({ itens: [], carregando: true }))).toEqual(["Sexta-feira, 23 de outubro", "Bom dia, Sandra", "Precisa de você"]);
+    // A forma final desde 0 ms (parte 13e): os títulos e os rótulos reais, sem nenhum número antes de ler.
+    expect(textosDaTela(render({ itens: [], carregando: true }))).toEqual([
+      "Sexta-feira, 23 de outubro",
+      "Bom dia, Sandra",
+      "Precisa de você",
+      "Hoje no armazém",
+      "Pedidos para separar",
+      "Prontos para envio",
+      "Em rota de entrega",
+      "Recebimentos em aberto",
+      "SKUs em estoque",
+      // O total de SKUs é outra leitura (o painel), que aqui já chegou.
+      "128",
+    ]);
     expect(render({ falhas: ["armazém", "solicitações"] })).toMatch(/<p role="alert"[^>]*>Não foi possível carregar: armazém, solicitações\.<\/p>/);
   });
 

@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { DEMORANDO } from "@/components/ui/carregando-tela";
 import { Spinner } from "@/components/ui/spinner";
 import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useEsperaDaRota } from "@/lib/carregando/espera-da-rota";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { cn } from "@/lib/utils";
 
@@ -17,18 +18,36 @@ import { cn } from "@/lib/utils";
  *
  * A altura da linha fica reservada desde 0 ms, para o conteúdo de baixo não
  * pular quando o indicador entra.
+ *
+ * Com `continuaARota` (a região que é a primeira leitura da tela, como o
+ * Início), a região que entra lendo continua a espera da `CarregandoTela`
+ * (lib/carregando/espera-da-rota.ts): o mesmo relógio, sem o vão de 300 ms,
+ * e sem anunciar de novo a entrada ("Abrindo Início") nem a demora que ela já
+ * anunciou. O anúncio da rota que ainda espera a vez passa a esta região, que
+ * o retira quando sai.
  */
-export function CarregandoNaRegiao({ rotulo, className }: { rotulo: string; className?: string }) {
-  const espera = useEspera(true);
+export function CarregandoNaRegiao({
+  rotulo,
+  className,
+  continuaARota = false,
+}: {
+  rotulo: string;
+  className?: string;
+  continuaARota?: boolean;
+}) {
+  const rota = useEsperaDaRota(continuaARota, true);
+  const espera = useEspera(true, { desde: rota?.inicio });
   const anunciar = useAnuncio();
   const marco = !espera.visivel ? null : espera.fase === "demorando" || espera.fase === "sem-resposta" ? "demorando" : "espera";
 
   // A espera que acabou (a lista chegou, ou passou à demora) retira o anúncio dela, se ele ainda esperava a vez.
   useEffect(() => {
-    if (marco === "espera") return anunciar(rotulo.replace(/…$/, ""));
-    if (marco === "demorando") return anunciar(DEMORANDO);
+    if (marco === "espera") return rota?.entrada ? undefined : anunciar(rotulo.replace(/…$/, ""));
+    if (marco === "demorando") return rota?.demora ? undefined : anunciar(DEMORANDO);
     return undefined;
-  }, [marco, anunciar, rotulo]);
+  }, [marco, anunciar, rotulo, rota]);
+  // O anúncio da rota que esta região herdou sai com ela.
+  useEffect(() => () => rota?.retirar?.(), [rota]);
 
   return (
     <div data-carregando-na-regiao="" className={cn("flex min-h-6 flex-wrap items-center gap-x-3 gap-y-2", className)}>

@@ -3,16 +3,18 @@ import { Link } from "wouter";
 import { Archive, ChevronRight, Mail, Map as MapIcon, MoreHorizontal, Pencil } from "lucide-react";
 import { MODULOS_CONTRATAVEIS, MODULO_ROTULO, type ModuloContratavel } from "@workspace/dominio";
 
-import { ruasDaZona } from "@/components/clientes/galeria-de-clientes";
+import { ruasDaZona, ValorNaoLido } from "@/components/clientes/galeria-de-clientes";
 import { Codigo, Pilula, QuadroDoCliente, Selo, SeloDaSituacao } from "@/components/clientes/partes";
 import type { PessoasDoCliente } from "@/components/pessoas/do-cliente";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import {
   CUSTOMERS_PATH,
@@ -36,6 +38,7 @@ import {
   type OperationTemplateKey,
   type PortalStatus,
 } from "@/lib/operations";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { cn } from "@/lib/utils";
 
 /**
@@ -64,6 +67,8 @@ export type PaginaDoClienteProps = {
   row: CustomerRow;
   /** A leitura das posições (a zona do cliente): sem ela, a zona não é afirmada. */
   zonas: "carregando" | "erro" | "pronto";
+  /** A leitura das pessoas (quantas entram no portal): sem ela, nunca "0 pessoas no portal". */
+  pessoasLidas?: "carregando" | "erro" | "pronto";
   ocupacao: OcupacaoDaZona;
   /** Contatos ativos de aviso: undefined fora do Comercial; null carregando. */
   contatosAtivos: number | null | undefined;
@@ -146,6 +151,8 @@ function FormularioDaSecao({
   onSalvar: () => void;
   children: ReactNode;
 }) {
+  // O Cancelar esmaece junto com o gerúndio do Salvar, aos 300 ms: a gravação rápida não o faz piscar.
+  const esmaecido = useEspera(salvando, { segurarMinimo: true }).visivel;
   return (
     <form
       aria-label={rotulo}
@@ -161,13 +168,19 @@ function FormularioDaSecao({
         </p>
       ) : null}
       <div className="flex justify-end gap-2.5 px-5 pb-5 pt-3">
-        <Button type="button" variant="ghost" disabled={salvando} onClick={onCancelar}>
+        {/* Ocupado não é desabilitado: o Cancelar fica aria-disabled, e o Salvar é o botão de ação (parte 13e). */}
+        <Button
+          type="button"
+          variant="ghost"
+          aria-disabled={salvando || undefined}
+          className={cn(salvando && "hover:bg-transparent", esmaecido && "opacity-45")}
+          onClick={() => {
+            if (!salvando) onCancelar();
+          }}
+        >
           Cancelar
         </Button>
-        <Button type="submit" disabled={salvando} aria-busy={salvando || undefined}>
-          {salvando ? <Spinner /> : null}
-          {salvando ? "Salvando…" : "Salvar"}
-        </Button>
+        <BotaoDeAcao type="submit" estado={salvando ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando…" />
       </div>
     </form>
   );
@@ -235,7 +248,13 @@ function Numero({ valor, rotulo }: { valor: ReactNode; rotulo: string }) {
   );
 }
 
-function Cabecalho({ row, zonas, contatosAtivos, onArquivar }: Pick<PaginaDoClienteProps, "row" | "zonas" | "contatosAtivos" | "onArquivar">) {
+function Cabecalho({
+  row,
+  zonas,
+  pessoasLidas = "pronto",
+  contatosAtivos,
+  onArquivar,
+}: Pick<PaginaDoClienteProps, "row" | "zonas" | "pessoasLidas" | "contatosAtivos" | "onArquivar">) {
   const { profile, customer } = row;
   const desde = customerSince(customer);
   const arquivavel = !row.archived && customerHasStorage(customer);
@@ -303,9 +322,12 @@ function Cabecalho({ row, zonas, contatosAtivos, onArquivar }: Pick<PaginaDoClie
         {zonas === "pronto" ? (
           <Numero valor={prateleiras ? prateleiras.positions : "—"} rotulo={ruas ? `prateleiras · ${ruas}` : "zona a definir"} />
         ) : (
-          <Numero valor={zonas === "carregando" ? "…" : "—"} rotulo="prateleiras" />
+          <Numero valor={<ValorNaoLido estado={zonas} />} rotulo="prateleiras" />
         )}
-        <Numero valor={profile.template.portal === null ? "—" : row.people} rotulo={profile.template.portal === null ? "sem portal" : "pessoas no portal"} />
+        <Numero
+          valor={profile.template.portal === null ? "—" : pessoasLidas === "pronto" ? row.people : <ValorNaoLido estado={pessoasLidas} />}
+          rotulo={profile.template.portal === null ? "sem portal" : "pessoas no portal"}
+        />
         {contatosAtivos !== undefined ? <Numero valor={contatosAtivos ?? "—"} rotulo="contatos de aviso" /> : null}
         <Numero valor={profile.skuPrefix ?? "—"} rotulo={profile.skuPrefix ? "sigla do SKU" : "sigla do SKU a definir"} />
       </dl>
@@ -428,21 +450,15 @@ function SecaoArmazem({ row, zonas, ocupacao }: Pick<PaginaDoClienteProps, "row"
         </Dados>
       ) : null}
       {zonas === "carregando" || (temZona && ocupacao.estado === "carregando") ? (
-        <p role="status" className="flex items-center gap-2.5 border-border/60 px-5 py-3 text-sm font-semibold text-muted-foreground [dl+&]:border-t">
-          <Spinner />
-          Carregando a ocupação…
-        </p>
+        <CarregandoNaRegiao rotulo="Carregando a ocupação…" className="border-border/60 px-5 py-3 [dl+&]:border-t" />
       ) : null}
       {zonas === "erro" || (temZona && ocupacao.estado === "erro") ? (
-        <div className="flex flex-wrap items-center gap-3 border-border/60 px-5 py-3 [dl+&]:border-t">
-          <p role="alert" className="text-sm font-semibold text-destructive">
-            Não foi possível ler a ocupação.
-          </p>
-          <Button type="button" variant="outline" size="sm" disabled={ocupacao.tentando} onClick={ocupacao.onTentar}>
-            {ocupacao.tentando ? <Spinner /> : null}
-            Tentar de novo
-          </Button>
-        </div>
+        <FalhaNaSecao
+          mensagem="Não foi possível ler a ocupação."
+          tentando={ocupacao.tentando}
+          onTentar={ocupacao.onTentar}
+          className="border-border/60 px-5 py-3 [dl+&]:border-t"
+        />
       ) : null}
     </Secao>
   );
@@ -624,7 +640,7 @@ export function PaginaDoCliente(props: PaginaDoClienteProps) {
           {row.name}
         </span>
       </nav>
-      <Cabecalho row={row} zonas={props.zonas} contatosAtivos={props.contatosAtivos} onArquivar={props.onArquivar} />
+      <Cabecalho row={row} zonas={props.zonas} pessoasLidas={props.pessoasLidas} contatosAtivos={props.contatosAtivos} onArquivar={props.onArquivar} />
       <div className="grid items-start gap-5 xl:grid-cols-2">
         <SecaoOperacao row={row} comModulos={props.comModulos} recebimentoPorCaixa={props.recebimentoPorCaixa} onSalvar={props.onSalvar} />
         <SecaoArmazem row={row} zonas={props.zonas} ocupacao={props.ocupacao} />

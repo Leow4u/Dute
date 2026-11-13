@@ -1,5 +1,5 @@
 import { InicioDoModulo, LinhaDeNumero, TituloDaSecao } from "@/components/inicio/inicio-do-modulo";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Esqueleto } from "@/components/ui/esqueleto";
 import type { ItemDoInicio } from "@/lib/inicio-do-modulo";
 import type { HojeNoArmazem } from "@/lib/inicio-do-wms";
 
@@ -18,18 +18,32 @@ export type InicioDoWms = {
   hoje: HojeNoArmazem | null;
   /** Sem rede (decisão 2 do celular): a hora da leitura na tela, ou `null` sem nada lido. */
   semConexao?: { lidaEm: number | null; tentando: boolean; onTentar: () => void } | null;
+  /** A nova tentativa das fontes que falharam. */
+  tentarFalhas?: { tentando: boolean; onTentar: () => void };
 };
 
-function NumerosDoArmazem({ hoje }: { hoje: HojeNoArmazem }) {
+/**
+ * O dia no armazém com a forma final desde a primeira pintura (carregamento
+ * v2, parte 13e, e a prancha da abertura): o título e os rótulos reais e,
+ * no lugar de cada número ainda não lido, o bloco do esqueleto; nunca o zero
+ * antes de ler. O total de SKUs lê à parte (o painel): lendo, o bloco; sem
+ * leitura, "—".
+ */
+function NumerosDoArmazem({ hoje, carregando }: { hoje: HojeNoArmazem; carregando: boolean }) {
+  const numero = (valor: number) => (carregando ? <Esqueleto forma="contagem" /> : valor);
   return (
-    <section aria-labelledby="hoje-no-armazem" className="flex flex-col gap-3.5">
+    <section aria-labelledby="hoje-no-armazem" aria-busy={carregando || undefined} className="flex flex-col gap-3.5">
       <TituloDaSecao id="hoje-no-armazem">Hoje no armazém</TituloDaSecao>
       <ul className="rounded-lg border border-border bg-card">
-        <LinhaDeNumero ponto="bg-warning-soft-foreground" rotulo="Pedidos para separar" valor={hoje.toPick} />
-        <LinhaDeNumero ponto="bg-info-soft-foreground" rotulo="Prontos para envio" valor={hoje.toShip} />
-        <LinhaDeNumero ponto="bg-muted-foreground" rotulo="Em rota de entrega" valor={hoje.inTransit} />
-        <LinhaDeNumero ponto="bg-warning-soft-foreground" rotulo="Recebimentos em aberto" valor={hoje.openReceipts} />
-        <LinhaDeNumero ponto="bg-success-soft-foreground" rotulo="SKUs em estoque" valor={hoje.skus ?? "—"} />
+        <LinhaDeNumero ponto="bg-warning-soft-foreground" rotulo="Pedidos para separar" valor={numero(hoje.toPick)} />
+        <LinhaDeNumero ponto="bg-info-soft-foreground" rotulo="Prontos para envio" valor={numero(hoje.toShip)} />
+        <LinhaDeNumero ponto="bg-muted-foreground" rotulo="Em rota de entrega" valor={numero(hoje.inTransit)} />
+        <LinhaDeNumero ponto="bg-warning-soft-foreground" rotulo="Recebimentos em aberto" valor={numero(hoje.openReceipts)} />
+        <LinhaDeNumero
+          ponto="bg-success-soft-foreground"
+          rotulo="SKUs em estoque"
+          valor={hoje.skus !== null ? hoje.skus : hoje.skusLendo ? <Esqueleto forma="contagem" /> : "—"}
+        />
       </ul>
     </section>
   );
@@ -38,9 +52,7 @@ function NumerosDoArmazem({ hoje }: { hoje: HojeNoArmazem }) {
 export function InicioDoWmsView({ nome, hoje, inicio }: { nome: string; hoje: Date; inicio: InicioDoWms }) {
   // Sem rede e sem nada lido, os números seriam zeros falsos: ficam de fora.
   const semNadaLido = inicio.semConexao?.lidaEm === null;
-  const lateral = inicio.hoje && !semNadaLido ? (
-    inicio.carregando ? <Skeleton className="h-80 rounded-lg" /> : <NumerosDoArmazem hoje={inicio.hoje} />
-  ) : null;
+  const lateral = inicio.hoje && !semNadaLido ? <NumerosDoArmazem hoje={inicio.hoje} carregando={inicio.carregando} /> : null;
   return (
     <InicioDoModulo
       nome={nome}
@@ -51,6 +63,7 @@ export function InicioDoWmsView({ nome, hoje, inicio }: { nome: string; hoje: Da
       falhas={inicio.falhas}
       lateral={lateral}
       semConexao={inicio.semConexao ?? null}
+      tentarFalhas={inicio.tentarFalhas}
     />
   );
 }

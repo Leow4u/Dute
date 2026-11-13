@@ -80,8 +80,16 @@ async function esperar(assertion: () => void) {
   });
 }
 
+/** O botão pelo rótulo; o botão de ação (BotaoDeAcao), pela camada que está na tela. */
 function botao(label: string, scope: ParentNode = document) {
-  return [...scope.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.trim() === label);
+  return [...scope.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => button.textContent?.trim() === label || button.querySelector(".botao-acao-camada[data-atual]")?.textContent?.trim() === label,
+  );
+}
+
+/** O segundo toque do botão de ação dentro de 1 s é o toque duplo (BotaoDeAcao): a nova ação vem depois. */
+async function depoisDoToqueDuplo() {
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 1_000)));
 }
 
 async function tocar(label: string, scope: ParentNode = document) {
@@ -232,7 +240,9 @@ describe("destinatários de avisos na página do cliente, em Configurações ›
 
   it("distingue carregamento, erro e lista vazia; tentar novamente refaz a leitura", async () => {
     await abrir();
-    expect(secao().textContent).toContain("Carregando contatos…");
+    // A espera aparece aos 300 ms (carregamento v2, parte 13e), e nunca o "Nenhum…" antes de ler.
+    expect(secao().textContent).not.toContain("Nenhum contato cadastrado.");
+    await esperar(() => expect(secao().textContent).toContain("Carregando contatos…"));
     expect(secao().textContent).not.toContain("Nenhum contato cadastrado.");
     await act(async () => assinatura().error());
     expect(secao().querySelector('[role="alert"]')?.textContent).toContain("Não foi possível carregar os contatos.");
@@ -301,6 +311,7 @@ describe("destinatários de avisos na página do cliente, em Configurações ›
     expect(desativacao).toMatchObject({ customer_code: CLIENTE.code, contato_id: CONTATO.id, nome: CONTATO.nome, ativo: false });
     expect(desativacao).not.toHaveProperty("avisos");
     await publicar([{ ...CONTATO, ativo: false }]);
+    await depoisDoToqueDuplo();
     await tocar("Reativar", linhaDoContato());
     expect(payload()).toMatchObject({ customer_code: CLIENTE.code, contato_id: CONTATO.id, ativo: true });
     expect(payload()).not.toHaveProperty("avisos");
@@ -341,6 +352,7 @@ describe("destinatários de avisos na página do cliente, em Configurações ›
     await tocar("Desativar", linhaDoContato());
     const primeira = payload();
     expect(secao().textContent).toContain("Falha ao desativar.");
+    await depoisDoToqueDuplo();
     let concluir!: (result: unknown) => void;
     fronteiras.chamar.mockImplementationOnce(() => new Promise((resolve) => { concluir = resolve; }));
     const button = botao("Desativar", linhaDoContato())!;
@@ -369,7 +381,7 @@ describe("destinatários de avisos na página do cliente, em Configurações ›
     await render(OUTRO_CLIENTE);
     expect(antiga.parar).toHaveBeenCalledTimes(1);
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(0);
-    expect(secao().textContent).toContain("Carregando contatos…");
+    await esperar(() => expect(secao().textContent).toContain("Carregando contatos…"));
     expect(secao().textContent).not.toContain(CONTATO.nome);
     expect(secao().textContent).not.toContain("Falha do Itaú.");
     expect(document.getElementById("contato-nome")).toBeNull();
@@ -388,7 +400,7 @@ describe("destinatários de avisos na página do cliente, em Configurações ›
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(0);
     expect(textosForaDaLista(secao().innerHTML, [
       "Avisos por e-mail", "Novo contato", CONTATO.nome, CONTATO.email,
-      "Ativo", "Editar", "Desativar", "Itens parados", "Produtos disponíveis em estoque", "Gestor do cliente",
+      "Ativo", "Editar", "Desativar", "Desativando…", "Conferir", "Itens parados", "Produtos disponíveis em estoque", "Gestor do cliente",
     ])).toEqual([]);
     expect(await violacoesDeAcessibilidade(document.body.innerHTML)).toEqual([]);
     await tocar("Editar", linhaDoContato());
@@ -402,5 +414,27 @@ describe("destinatários de avisos na página do cliente, em Configurações ›
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(0);
     expect(secao().textContent).toContain(CONTATO.nome);
     expect(fronteiras.chamar).not.toHaveBeenCalled();
+  });
+  it("desativar: só a linha tocada diz Desativando…, com aria-busy; o resto espera com aria-disabled, nunca disabled (parte 13e)", async () => {
+    await abrir();
+    const OUTRO_CONTATO = { ...CONTATO, id: "ct_bia", nome: "Bia Costa", email: "bia@cliente.example" };
+    await publicar([CONTATO, OUTRO_CONTATO]);
+    let concluir!: (result: unknown) => void;
+    fronteiras.chamar.mockImplementationOnce(() => new Promise((resolve) => { concluir = resolve; }));
+    await tocar("Desativar", linhaDoContato());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 360)));
+    const tocado = linhaDoContato().querySelector<HTMLButtonElement>('button[aria-busy="true"]')!;
+    expect(tocado.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Desativando…");
+    expect(tocado.disabled).toBe(false);
+    const outro = botao("Desativar", linhaDoContato(OUTRO_CONTATO.nome))!;
+    expect(outro.getAttribute("aria-disabled")).toBe("true");
+    expect(outro.disabled).toBe(false);
+    expect(outro.hasAttribute("aria-busy")).toBe(false);
+    const editar = botao("Editar", linhaDoContato())!;
+    expect(editar.getAttribute("aria-disabled")).toBe("true");
+    expect(editar.disabled).toBe(false);
+    await act(async () => editar.click());
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+    await act(async () => concluir({ data: { contato_id: CONTATO.id } }));
   });
 });

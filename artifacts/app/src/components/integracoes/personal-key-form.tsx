@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { BotaoDeAcao } from '@/components/ui/botao-de-acao';
+import { DialogCancelar } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { criarChavePessoal } from '@/lib/integracoes/api';
@@ -31,6 +32,7 @@ export function PersonalKeyForm({ capabilities, onCreated, onCancel, onPendingCh
     {permission === 'custom' && <fieldset className="max-h-52 space-y-3 overflow-auto rounded-md border p-3"><legend className="px-1 text-sm font-medium">Permissões disponíveis</legend>{capabilities.scopes.map(scope => <label key={scope} className="flex items-start gap-2 text-sm"><input type="checkbox" disabled={pending} checked={scopes.includes(scope)} onChange={e => setScopes(current => e.target.checked ? [...current, scope] : current.filter(s => s !== scope))} />{PERMISSOES.find(p => p.value === scope)?.label ?? scope}</label>)}</fieldset>}
     <div className="space-y-2"><Label htmlFor="key-expiry">Validade em dias (opcional)</Label><Input id="key-expiry" type="number" min={1} max={90} value={days} onChange={e => setDays(e.target.value)} disabled={pending} /><p className="text-xs text-muted-foreground">Padrão e máximo de 90 dias.</p></div>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={pending} onClick={onCancel}>Cancelar</Button><Button type="submit" disabled={pending}>{pending ? 'Criando…' : 'Criar chave'}</Button></div>
+    {/* Ocupado não é desabilitado (parte 13e): o Cancelar segue o diálogo em ação, e o Criar é o botão de ação. */}
+    <div className="flex justify-end gap-2"><DialogCancelar onClick={onCancel} /><BotaoDeAcao type="submit" estado={pending ? 'andamento' : 'repouso'} rotulo="Criar chave" andamento="Criando…" /></div>
   </form>;
 }

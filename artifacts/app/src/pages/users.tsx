@@ -9,10 +9,10 @@ import { usePessoas } from "@/components/pessoas/dados";
 import { ListaDePessoas } from "@/components/pessoas/lista";
 import { ContagemDaAba, FiltroDeSituacao, PilhaDeAvatares } from "@/components/pessoas/partes";
 import { Button } from "@/components/ui/button";
-import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { roleLabel } from "@/lib/access";
 import { useAppUser } from "@/lib/auth";
@@ -65,12 +65,16 @@ function Vazio({ children }: { children: ReactNode }) {
   );
 }
 
-function Carregando({ children }: { children: ReactNode }) {
+/**
+ * A lista que ainda lê (carregamento v2, momento 1): o cartão no lugar dela e,
+ * passados 300 ms, a caixa de 24 px com o rótulo, falado pelo Anunciador; aos
+ * 10 s, a demora. Sem região viva solta.
+ */
+function Carregando({ rotulo, continuaARota = false }: { rotulo: string; continuaARota?: boolean }) {
   return (
-    <p role="status" className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-5 py-6 text-sm font-semibold text-muted-foreground">
-      <Spinner />
-      {children}
-    </p>
+    <div className="rounded-lg border border-border bg-card px-5 py-5">
+      <CarregandoNaRegiao rotulo={rotulo} continuaARota={continuaARota} />
+    </div>
   );
 }
 
@@ -211,14 +215,20 @@ export default function Users() {
       </header>
 
       {pessoas.carregando ? (
-        <Carregando>Carregando pessoas…</Carregando>
+        <Carregando rotulo="Carregando pessoas…" continuaARota />
+      ) : pessoas.falta && pessoas.falta.lidaEm === null ? (
+        <BlocoSemConexao tentando={pessoas.tentando} onTentar={() => void pessoas.refresh()} />
       ) : pessoas.erro ? (
         <ErroNaLeitura
           mensagem="Não foi possível carregar as pessoas e os convites."
           tentando={pessoas.tentando}
           onTentar={() => void pessoas.refresh()}
         />
-      ) : termo ? (
+      ) : null}
+      {pessoas.falta && pessoas.falta.lidaEm !== null ? (
+        <FaixaSemConexao lidaEm={pessoas.falta.lidaEm} tentando={pessoas.tentando} onTentar={() => void pessoas.refresh()} />
+      ) : null}
+      {pessoas.carregando || pessoas.erro || (pessoas.falta && pessoas.falta.lidaEm === null) ? null : termo ? (
         <section aria-labelledby="pessoas-resultados" className="flex flex-col gap-4">
           <h2 id="pessoas-resultados" className="flex items-center border-b border-border pb-2.5 text-base font-extrabold">
             Resultados
@@ -271,7 +281,7 @@ export default function Users() {
           </TabsContent>
           <TabsContent value="clientes" className="mt-5">
             {customers.isLoading ? (
-              <Carregando>Carregando clientes…</Carregando>
+              <Carregando rotulo="Carregando clientes…" />
             ) : customers.isError && indice.length === 0 ? (
               <ErroNaLeitura
                 mensagem={humanApiError(customers.error, "Não foi possível carregar os clientes.")}

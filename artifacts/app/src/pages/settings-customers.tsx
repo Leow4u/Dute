@@ -26,7 +26,7 @@ import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -272,6 +272,8 @@ export default function SettingsCustomers() {
 
   const estado = customers.isLoading ? "carregando" : customers.isError ? "erro" : "pronto";
   const zonas = positions.isSuccess ? "pronto" : positions.isError ? "erro" : "carregando";
+  // Quantas pessoas entram no portal: sem a leitura das pessoas, o número não é afirmado (nunca "0 no portal").
+  const pessoasLidas = users.data !== undefined ? "pronto" : users.isError ? "erro" : "carregando";
   const erroDaLeitura = customers.isError ? humanApiError(customers.error, "Não foi possível carregar os clientes.") : null;
 
   return (
@@ -288,14 +290,14 @@ export default function SettingsCustomers() {
           busca={busca}
           onBusca={setBusca}
           zonas={zonas}
+          pessoas={pessoasLidas}
           comModulos={PLATAFORMA_LIBERADA}
           onNovo={openCreate}
         />
       ) : estado === "carregando" ? (
-        <p role="status" className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-5 py-6 text-sm font-semibold text-muted-foreground">
-          <Spinner />
-          Carregando clientes…
-        </p>
+        <div className="rounded-lg border border-border bg-card px-5 py-5">
+          <CarregandoNaRegiao rotulo="Carregando clientes…" continuaARota />
+        </div>
       ) : estado === "erro" ? (
         <ErroNaLeitura mensagem={erroDaLeitura ?? "Não foi possível carregar os clientes."} tentando={customers.isFetching} onTentar={() => void customers.refetch()} />
       ) : row ? (
@@ -303,6 +305,7 @@ export default function SettingsCustomers() {
           key={row.code}
           row={row}
           zonas={zonas}
+          pessoasLidas={pessoasLidas}
           comModulos={PLATAFORMA_LIBERADA}
           ocupacao={{
             estado: positions.isError || boxes.isError ? "erro" : occupancy ? "pronto" : "carregando",

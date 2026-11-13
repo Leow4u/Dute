@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useState, useSyncExternalStore } from "react";
 
 import { aberturaNaTela } from "../abertura";
 
@@ -31,6 +31,29 @@ export interface EsperaDaRota {
 /** As esperas de rota na tela agora; a última é a que a tela que chega continua. */
 const naTela: EsperaDaRota[] = [];
 
+/** Quem quer saber quando uma espera de rota entra ou sai da tela (o item do menu, `useRotaEsperando`). */
+const ouvintes = new Set<() => void>();
+
+function avisarOsOuvintes() {
+  for (const ouvinte of ouvintes) ouvinte();
+}
+
+function ouvirAsEsperas(ouvinte: () => void): () => void {
+  ouvintes.add(ouvinte);
+  return () => {
+    ouvintes.delete(ouvinte);
+  };
+}
+
+/**
+ * Alguma tela ainda abre (a `CarregandoTela` está na tela): o item do menu
+ * tocado mostra a caixa de 16 px no lugar do contador enquanto a tela baixa
+ * (carregamento v2, momento 1; o relógio dos 300 ms é de quem mostra).
+ */
+export function useRotaEsperando(): boolean {
+  return useSyncExternalStore(ouvirAsEsperas, () => naTela.length > 0, () => false);
+}
+
 /** A espera de rota que começa agora, ou que continua a que começou em `desde`. */
 export function novaEsperaDaRota(desde?: number): EsperaDaRota {
   const agora = performance.now();
@@ -42,9 +65,11 @@ export function novaEsperaDaRota(desde?: number): EsperaDaRota {
 export function useEsperaDaRotaNaTela(espera: EsperaDaRota): void {
   useLayoutEffect(() => {
     naTela.push(espera);
+    avisarOsOuvintes();
     return () => {
       const posicao = naTela.indexOf(espera);
       if (posicao >= 0) naTela.splice(posicao, 1);
+      avisarOsOuvintes();
     };
   }, [espera]);
 }
