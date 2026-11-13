@@ -67,8 +67,14 @@ export default function BillingHub() {
       <Suspense fallback={<CarregandoTela titulo={nomeDaTela(location)} />}>
         {tab === "competencia" ? <Billing /> : null}
         {tab === "tabela" ? <PriceList /> : null}
-        {tab === "contratos" && podeManterContratos && !isLoading ? (
-          <Contratos key={code} rotaBase="/faturamento/contratos" clienteCodigo={code} />
+        {tab === "contratos" && podeManterContratos ? (
+          // A aba é do cliente ativo: enquanto ele lê, a espera da tela que abre, nunca a aba em branco (carregamento
+          // v2, parte 13d).
+          isLoading ? (
+            <CarregandoTela titulo={nomeDaTela(location)} />
+          ) : (
+            <Contratos key={code} rotaBase="/faturamento/contratos" clienteCodigo={code} />
+          )
         ) : null}
       </Suspense>
     </div>

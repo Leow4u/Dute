@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useId, useState } from "react";
 import {
   useListPriceList,
   getListPriceListQueryKey,
@@ -22,7 +22,9 @@ import {
   Dialog, DialogCancelar, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Confirmacao } from "@/components/ui/confirmacao";
-import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +33,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { useContagemLembrada } from "@/lib/carregando/contagem-lembrada";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { cn } from "@/lib/utils";
 import { MoreHorizontal, Plus } from "lucide-react";
 import { GRUPOS, AUTO_LABELS, fmtBRL } from "@/lib/billing-format";
@@ -58,6 +63,18 @@ export default function PriceList() {
   const { data } = lista;
   const leituraDaConfig = useGetBillingConfig();
   const config = leituraDaConfig.data;
+  // A falha sem nada lido fica na tela enquanto a pessoa tenta de novo (a cópia): o aviso não volta a "carregando"
+  // nem sai com o foco no "Tentar de novo"; a releitura que falha com a tabela lida fica na linha de estado
+  // (carregamento v2, parte 13d).
+  const tabela = useLeituraComFalha(lista);
+  const cobranca = useLeituraComFalha(leituraDaConfig);
+  const lendoATabela = data === undefined && !tabela.isError;
+  const lendoACobranca = config === undefined && !cobranca.isError;
+  const idDaLinha = useId();
+  // As linhas-fantasma e os blocos da cobrança entram aos 300 ms, quantas linhas a última leitura trouxe (de 1 a 5).
+  const fantasmas = useEspera(lendoATabela);
+  const fantasmasDaCobranca = useEspera(lendoACobranca);
+  const contagem = useContagemLembrada("tabela-de-precos", "todos", data ? { linhas: data.items?.length ?? 0 } : null);
 
   const create = useCreatePriceListItem();
   const update = useUpdatePriceListItem();
@@ -70,18 +87,21 @@ export default function PriceList() {
   const [editLigado, setEditLigado] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [removing, setRemoving] = useState<PriceListItem | null>(null);
+  // "Salvar cobrança" segue ocupado até a configuração voltar lida: os campos se refazem com ela.
+  const [relendoACobranca, setRelendoACobranca] = useState(false);
 
   // Config form
   const [rate, setRate] = useState("");
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
-  useEffect(() => {
-    if (config) {
-      setRate(String((config.ad_valorem_rate || 0) * 100));
-      setNome(config.cliente_nome || "");
-      setEmail(config.cliente_email || "");
-    }
-  }, [config]);
+  // Os campos nascem com a configuração lida, no mesmo desenho em que ela chega: nem um quadro com eles vazios.
+  const [configVista, setConfigVista] = useState<typeof config>(undefined);
+  if (config && config !== configVista) {
+    setConfigVista(config);
+    setRate(String((config.ad_valorem_rate || 0) * 100));
+    setNome(config.cliente_nome || "");
+    setEmail(config.cliente_email || "");
+  }
 
   const refetch = () => qc.invalidateQueries({ queryKey: getListPriceListQueryKey() });
 
@@ -129,10 +149,15 @@ export default function PriceList() {
   };
 
   const handleSaveConfig = () => {
+    if (saveConfig.isPending || relendoACobranca) return;
     saveConfig.mutate(
       { data: { ad_valorem_rate: Number(rate || 0) / 100, cliente_nome: nome, cliente_email: email } },
       {
-        onSuccess: () => { toast({ title: "Configurações salvas" }); qc.invalidateQueries({ queryKey: getGetBillingConfigQueryKey() }); },
+        onSuccess: () => {
+          toast({ title: "Configurações salvas" });
+          setRelendoACobranca(true);
+          void qc.invalidateQueries({ queryKey: getGetBillingConfigQueryKey() }).finally(() => setRelendoACobranca(false));
+        },
         onError: () => toast({ title: "Erro ao salvar configurações", variant: "destructive" }),
       },
     );
@@ -143,8 +168,13 @@ export default function PriceList() {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
       <section className="overflow-hidden rounded-lg border border-border bg-card">
-        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-5 py-3">
-          <h2 className="text-sm font-semibold">Serviços e valores</h2>
+        <div className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold">Serviços e valores</h2>
+            {/* A casa do estado da tabela, sob o título: "Carregando serviços…" na primeira leitura, com as
+                linhas-fantasma no lugar dela; "Atualizado às" e a releitura que falha, sem apagar a tabela. */}
+            <LinhaDeEstado id={idDaLinha} leitura={lista} objeto="serviços" className="mt-1" />
+          </div>
           <Button size="sm" onClick={openNew}>
             <Plus className="h-4 w-4" />
             Novo item
@@ -162,19 +192,29 @@ export default function PriceList() {
                 <th className="w-12 px-3 py-2.5" />
               </tr>
             </thead>
-            <tbody>
-              {lista.isLoading ? (
-                <tr>
-                  <td colSpan={6} className="px-5 py-6 text-sm text-muted-foreground">
-                    Carregando serviços...
-                  </td>
-                </tr>
-              ) : lista.isError && !data ? (
+            <tbody {...(lendoATabela ? { "aria-busy": true, "aria-describedby": idDaLinha } : {})}>
+              {tabela.isError && data === undefined ? (
                 <tr>
                   <td colSpan={6} className="p-3">
-                    <ErroNaLeitura mensagem="Não consegui carregar a tabela." tentando={lista.isFetching} onTentar={() => void lista.refetch()} />
+                    <FalhaNaLeitura leitura={lista} erro={tabela.error} mensagem="Não consegui carregar a tabela." focoAoSair={idDaLinha} />
                   </td>
                 </tr>
+              ) : data === undefined ? (
+                // As linhas-fantasma da primeira leitura, com a altura da linha real; quem diz é a linha de estado.
+                Array.from({ length: contagem.linhas("linhas") }, (_, ordem) => {
+                  const brilho = fantasmas.visivel ? "carregando-com-brilho" : undefined;
+                  const celula = "flex h-10 items-center";
+                  return (
+                    <tr key={ordem} aria-hidden="true" data-fantasmas="" data-visivel={fantasmas.visivel ? "" : undefined} className="border-b border-border/40 last:border-0">
+                      <td className="px-5 py-3"><span className={celula}><Esqueleto forma="texto" className={cn("w-36", brilho)} /></span></td>
+                      <td className="px-3 py-3"><span className={celula}><Esqueleto forma="texto" className={cn("w-24", brilho)} /></span></td>
+                      <td className="px-3 py-3"><span className={celula}><Esqueleto forma="texto" className={cn("w-14", brilho)} /></span></td>
+                      <td className="px-3 py-3"><span className={cn(celula, "justify-end")}><Esqueleto forma="texto" className={cn("w-16", brilho)} /></span></td>
+                      <td className="px-3 py-3"><span className={celula}><Esqueleto forma="texto" className={cn("w-16", brilho)} /></span></td>
+                      <td className="px-3 py-3"><span className={cn(celula, "justify-end")}><Esqueleto forma="bloco" className={cn("size-8", brilho)} /></span></td>
+                    </tr>
+                  );
+                })
               ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-6 text-sm text-muted-foreground">
@@ -231,35 +271,39 @@ export default function PriceList() {
         </div>
       </section>
 
-      <section className="h-fit rounded-lg border border-border bg-card">
+      {/* A cobrança só se mostra lida: antes, os campos vazios e apagados pareciam uma taxa vazia, e um clique gravava
+          a taxa 0. Lendo, o esqueleto dos campos e a seção ocupada; na falha, o aviso com "Tentar de novo". */}
+      <section className="h-fit rounded-lg border border-border bg-card" aria-busy={lendoACobranca || undefined}>
         <h2 className="border-b border-border/60 px-5 py-3.5 text-sm font-semibold">Cobrança</h2>
-        {!config && leituraDaConfig.isError ? (
+        {cobranca.isError && config === undefined ? (
           <div className="p-3">
-            <ErroNaLeitura
-              className="sm:flex-col sm:items-start"
-              mensagem="Não consegui carregar a cobrança."
-              tentando={leituraDaConfig.isFetching}
-              onTentar={() => void leituraDaConfig.refetch()}
-            />
+            <FalhaNaLeitura className="sm:flex-col sm:items-start" leitura={leituraDaConfig} erro={cobranca.error} mensagem="Não consegui carregar a cobrança." />
           </div>
+        ) : config === undefined ? (
+          <EsqueletoDaCobranca visivel={fantasmasDaCobranca.visivel} />
         ) : (
         <div className="space-y-4 p-5">
           <div className="space-y-1.5">
             <Label htmlFor="billing-rate">Taxa ad valorem (%)</Label>
-            <Input id="billing-rate" type="number" step="0.001" value={rate} onChange={(e) => setRate(e.target.value)} disabled={!config} />
+            <Input id="billing-rate" type="number" step="0.001" value={rate} onChange={(e) => setRate(e.target.value)} />
             <p className="text-xs text-muted-foreground">Aplicada sobre o valor total do estoque.</p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="billing-name">Nome do cliente</Label>
-            <Input id="billing-name" value={nome} onChange={(e) => setNome(e.target.value)} disabled={!config} />
+            <Input id="billing-name" value={nome} onChange={(e) => setNome(e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="billing-email">E-mail para envio da fatura</Label>
-            <Input id="billing-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@empresa.com" disabled={!config} />
+            <Input id="billing-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@empresa.com" />
           </div>
-          <Button variant="outline" className="w-full" onClick={handleSaveConfig} disabled={!config || saveConfig.isPending}>
-            {saveConfig.isPending ? "Salvando..." : "Salvar cobrança"}
-          </Button>
+          <BotaoDeAcao
+            variant="outline"
+            className="w-full"
+            estado={saveConfig.isPending || relendoACobranca ? "andamento" : "repouso"}
+            rotulo="Salvar cobrança"
+            andamento="Salvando…"
+            onClick={handleSaveConfig}
+          />
         </div>
         )}
       </section>
@@ -285,7 +329,7 @@ export default function PriceList() {
             </div>
             <div className="space-y-1.5">
               <Label>Unidade</Label>
-              <Input value={form.unidade} onChange={(e) => setForm((s) => ({ ...s, unidade: e.target.value }))} placeholder="palete, caixa..." />
+              <Input value={form.unidade} onChange={(e) => setForm((s) => ({ ...s, unidade: e.target.value }))} placeholder="palete, caixa…" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="price-list-valor">Valor unitário (R$)</Label>
@@ -334,6 +378,39 @@ export default function PriceList() {
         onConfirmar={() => { if (removing) handleDelete(removing.id); }}
         onFechar={() => setRemoving(null)}
       />
+    </div>
+  );
+}
+
+/**
+ * A cobrança ainda lendo (carregamento v2, parte 13d): os rótulos reais e os
+ * blocos no lugar dos campos e do botão, na altura deles, que entram aos 300
+ * ms com o brilho. Nada é campo: fica fora da árvore de acessibilidade, e a
+ * seção em volta diz que está ocupada.
+ */
+function EsqueletoDaCobranca({ visivel }: { visivel: boolean }) {
+  const brilho = visivel ? "carregando-com-brilho" : undefined;
+  const bloco = (largura: string) => (
+    <span data-fantasmas="" data-visivel={visivel ? "" : undefined} className="block">
+      <Esqueleto forma="bloco" className={cn("h-10", largura, brilho)} />
+    </span>
+  );
+  return (
+    <div className="space-y-4 p-5" aria-hidden="true">
+      <div className="space-y-1.5">
+        <span className="text-sm font-medium leading-none">Taxa ad valorem (%)</span>
+        {bloco("w-full")}
+        <span className="block h-4" />
+      </div>
+      <div className="space-y-1.5">
+        <span className="text-sm font-medium leading-none">Nome do cliente</span>
+        {bloco("w-full")}
+      </div>
+      <div className="space-y-1.5">
+        <span className="text-sm font-medium leading-none">E-mail para envio da fatura</span>
+        {bloco("w-full")}
+      </div>
+      {bloco("w-full")}
     </div>
   );
 }

@@ -4,7 +4,12 @@ import { tamanhoDoCodigo } from "@workspace/dominio";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { Esqueleto } from "@/components/ui/esqueleto";
 import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { useContagemLembrada } from "@/lib/carregando/contagem-lembrada";
+import { falhaDasLeituras } from "@/lib/carregando/falha-das-leituras";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +36,8 @@ import {
   StockTableCard,
   StockTablePagination,
   StockToolbar,
+  LinhaFantasmaDaTabela,
+  type ColunaFantasma,
 } from "@/components/stock/stock-workbench";
 
 const skuSchema = z.object({
@@ -97,6 +104,11 @@ export default function Skus() {
   const idDaLinha = useId();
 
   const skus = data?.items ?? [];
+  // Antes da primeira leitura, o bloco no lugar de cada número e do resumo da página; com ela falhando, "—": nunca
+  // zero antes de ler (carregamento v2, parte 13d; necessidade 3).
+  const lido = data !== undefined && !lista.falhou;
+  const fantasmas = useEspera(isLoading);
+  const contagem = useContagemLembrada("skus", "todos", lido && !lista.trocando ? { linhas: skus.length } : null);
 
   // Endereço mora no SALDO (stock_balances.location_id) — é lá que a
   // contagem de abertura grava rua/prateleira/caixa. Os campos rua/
@@ -118,6 +130,12 @@ export default function Skus() {
     refetchInterval: 120_000,
     refetchOnWindowFocus: false,
   });
+  // O endereço só se afirma com os saldos lidos: antes, nenhuma linha diz "Sem endereço" (o lugar fica neutro), e a
+  // falha deles não tira a lista, mas diz que os endereços não vieram, com "Tentar de novo" (a cópia fica na tela
+  // enquanto tenta). A releitura de 2 min que falha com os saldos lidos não muda nada na tela.
+  const saldos = useLeituraComFalha(balancesQuery);
+  const enderecosLidos = balancesQuery.data !== undefined;
+  const falhaDosEnderecos = lido ? falhaDasLeituras([[balancesQuery, saldos]]) : null;
 
   const balancesBySku = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -135,6 +153,7 @@ export default function Skus() {
     return map;
   }, [balancesQuery.data]);
 
+  /** Os endereços do SKU; nulo enquanto os saldos não foram lidos (a tela não sabe e não afirma). */
   const locationsForSku = (sku: {
     cod_btg?: string | null;
     cod_cliente?: string | null;
@@ -142,7 +161,8 @@ export default function Skus() {
     prateleira?: string | null;
     caixa?: string | null;
     endereco?: string | null;
-  }) => {
+  }): string[] | null => {
+    if (!enderecosLidos) return null;
     const fromBalances =
       balancesBySku.get(String(sku.cod_btg ?? "").trim()) ??
       balancesBySku.get(String(sku.cod_cliente ?? "").trim()) ??
@@ -170,19 +190,19 @@ export default function Skus() {
         acc.reserved += reserved;
         if (current <= 0) acc.zero += 1;
         if (current > 0 && current <= 10) acc.low += 1;
-        if (!locationsForSku(sku).length) acc.noLocation += 1;
+        if (locationsForSku(sku)?.length === 0) acc.noLocation += 1;
         return acc;
       },
       { physical: 0, available: 0, reserved: 0, low: 0, zero: 0, noLocation: 0 },
     );
-  }, [skus, balancesBySku]);
+  }, [skus, balancesBySku, enderecosLidos]);
 
   const filteredSkus = skus.filter((sku) => {
     const current = Number(sku.estoque_atual ?? 0);
-    const hasLocation = locationsForSku(sku).length > 0;
+    const hasLocation = (locationsForSku(sku)?.length ?? 0) > 0;
     if (quickFilter === "baixo") return current > 0 && current <= 10;
     if (quickFilter === "zerado") return current <= 0;
-    if (quickFilter === "sem-local") return !hasLocation;
+    if (quickFilter === "sem-local") return enderecosLidos && !hasLocation;
     return true;
   });
 
@@ -192,27 +212,35 @@ export default function Skus() {
       title="SKUs e saldos"
       icon={<Layers className="h-6 w-6" />}
       actions={catalogWriter ? <SkuModal /> : undefined}
-      // A casa do estado da lista, sob o título, sem empurrar a lista (a primeira leitura ainda é da tabela; parte 13).
-      estado={<LinhaDeEstado id={idDaLinha} leitura={leitura} objeto="SKUs" primeiraNaLista />}
+      // A casa do estado da lista, sob o título, sem empurrar a lista: "Carregando SKUs…" na primeira leitura, com as
+      // linhas-fantasma no lugar da tabela (carregamento v2, parte 13d).
+      estado={<LinhaDeEstado id={idDaLinha} leitura={leitura} objeto="SKUs" />}
     >
       {/* "SKUs carregados" era contagem técnica da página, não decisão de
           estoque — o total já aparece na paginação da tabela. */}
       <StockMetricsGrid>
         <StockMetricCard
           label="Saldo físico"
-          value={formatStockNumber(stats.physical)}
+          value={lido ? formatStockNumber(stats.physical) : lista.falhou ? "—" : <Esqueleto forma="contagem" />}
           icon={<Boxes className="h-5 w-5" />}
         />
         <StockMetricCard
           label="Disponível"
-          value={formatStockNumber(stats.available)}
+          value={lido ? formatStockNumber(stats.available) : lista.falhou ? "—" : <Esqueleto forma="contagem" />}
           icon={<PackageCheck className="h-5 w-5" />}
         />
+        {/* "Atenção" conta os sem endereço: só com os saldos lidos. */}
         <StockMetricCard
           label="Atenção"
-          value={formatStockNumber(stats.low + stats.zero + stats.noLocation)}
+          value={
+            lido && enderecosLidos
+              ? formatStockNumber(stats.low + stats.zero + stats.noLocation)
+              : lista.falhou || falhaDosEnderecos
+                ? "—"
+                : <Esqueleto forma="contagem" />
+          }
           icon={<AlertTriangle className="h-5 w-5" />}
-          tone={stats.low + stats.zero + stats.noLocation ? "amber" : "default"}
+          tone={lido && enderecosLidos && stats.low + stats.zero + stats.noLocation ? "amber" : "default"}
         />
       </StockMetricsGrid>
 
@@ -221,18 +249,24 @@ export default function Skus() {
         onSearchChange={setSearch}
         placeholder="Buscar por cod. cliente, SKU interno, produto ou localização"
         // A página que não chegou não tem contagem: o aviso está no lugar da lista, e "0" seria um falso zero.
-        resultText={lista.falhou ? undefined : `${formatStockNumber(filteredSkus.length)} SKU(s) exibido(s) nesta página.`}
+        resultText={
+          lista.falhou ? undefined : lido ? (
+            `${formatStockNumber(filteredSkus.length)} SKU(s) exibido(s) nesta página.`
+          ) : (
+            <span className="flex h-5 items-center"><Esqueleto forma="texto" className="w-48" /></span>
+          )
+        }
       >
-        <StockFilterChip active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} count={lista.falhou ? undefined : skus.length}>
+        <StockFilterChip active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} count={lido ? skus.length : undefined}>
           Todos
         </StockFilterChip>
-        <StockFilterChip active={quickFilter === "baixo"} onClick={() => setQuickFilter("baixo")} count={lista.falhou ? undefined : stats.low}>
+        <StockFilterChip active={quickFilter === "baixo"} onClick={() => setQuickFilter("baixo")} count={lido ? stats.low : undefined}>
           Baixo estoque
         </StockFilterChip>
-        <StockFilterChip active={quickFilter === "zerado"} onClick={() => setQuickFilter("zerado")} count={lista.falhou ? undefined : stats.zero}>
+        <StockFilterChip active={quickFilter === "zerado"} onClick={() => setQuickFilter("zerado")} count={lido ? stats.zero : undefined}>
           Zerados
         </StockFilterChip>
-        <StockFilterChip active={quickFilter === "sem-local"} onClick={() => setQuickFilter("sem-local")} count={lista.falhou ? undefined : stats.noLocation}>
+        <StockFilterChip active={quickFilter === "sem-local"} onClick={() => setQuickFilter("sem-local")} count={lido && enderecosLidos ? stats.noLocation : undefined}>
           Sem endereço
         </StockFilterChip>
       </StockToolbar>
@@ -241,6 +275,10 @@ export default function Skus() {
           {lista.falhou ? (
             <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar os SKUs." className="rounded-none border-0" focoAoSair={idDaLinha} />
           ) : (
+          <>
+          {falhaDosEnderecos ? (
+            <FalhaNaLeitura leitura={falhaDosEnderecos.leitura} erro={falhaDosEnderecos.erro} mensagem="Não consegui carregar os endereços." className="m-3" focoAoSair={idDaLinha} />
+          ) : null}
           <div className="overflow-x-auto" {...troca.props}>
             <ConteudoEmTroca trocando={lista.trocando}>
             <table className="w-full text-sm text-left">
@@ -255,11 +293,12 @@ export default function Skus() {
                   <th className="px-4 py-3 font-medium text-center">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-border" {...(isLoading ? { "aria-busy": true, "aria-describedby": idDaLinha } : {})}>
                 {isLoading ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Carregando SKUs...</td>
-                  </tr>
+                  // As linhas-fantasma da primeira leitura, na altura da linha real; quem diz é a linha de estado.
+                  Array.from({ length: contagem.linhas("linhas") }, (_, ordem) => (
+                    <LinhaFantasmaDaTabela key={ordem} visivel={fantasmas.visivel} larguras={FANTASMA_DOS_SKUS} />
+                  ))
                 ) : data?.items?.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Nenhum SKU encontrado.</td>
@@ -272,7 +311,7 @@ export default function Skus() {
                       (sku as any).estoque_disponivel ?? Math.max(0, current - reserved),
                     );
                     const isLow = current > 0 && current <= 10;
-                    const noLocation = !locationsForSku(sku).length;
+                    const enderecos = locationsForSku(sku);
 
                     return (
                       <tr key={sku.id} className="hover:bg-muted/80 transition-colors">
@@ -300,16 +339,21 @@ export default function Skus() {
                           </Badge>
                         </td>
                         <td className="px-4 py-2">
-                          {locationsForSku(sku).length ? (
+                          {enderecos === null ? (
+                            // Os saldos ainda não chegaram (ou falharam): o lugar do endereço fica neutro, nunca "Sem endereço".
+                            falhaDosEnderecos ? (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            ) : (
+                              <span className="flex h-6 items-center"><Esqueleto forma="texto" className="h-3 w-20" /></span>
+                            )
+                          ) : enderecos.length ? (
                             <div
                               className="flex items-center gap-1.5 text-xs font-medium text-info-soft-foreground bg-info-soft px-2 py-1 rounded w-fit border border-info-soft-border"
-                              title={locationsForSku(sku).join(" · ")}
+                              title={enderecos.join(" · ")}
                             >
-                              <MapPin className="h-3 w-3" />
-                              {locationsForSku(sku)[0]}
-                              {locationsForSku(sku).length > 1
-                                ? " +" + (locationsForSku(sku).length - 1)
-                                : ""}
+                              <MapPin className="h-3 w-3" aria-hidden="true" />
+                              {enderecos[0]}
+                              {enderecos.length > 1 ? " +" + (enderecos.length - 1) : ""}
                             </div>
                           ) : (
                             <span className="text-xs text-warning-soft-foreground">Sem endereço</span>
@@ -342,13 +386,15 @@ export default function Skus() {
             </table>
             </ConteudoEmTroca>
           </div>
+          </>
           )}
           
           <StockTablePagination
             page={page}
             isLoading={isLoading}
             ocupada={lista.trocando}
-            semContagem={lista.falhou}
+            /* Sem a leitura, nem "Exibindo 0 de 0": a contagem só depois de ler (necessidade 3). */
+            semContagem={lista.falhou || data === undefined}
             count={data?.items?.length || 0}
             total={data?.total || 0}
             limit={limit}
@@ -466,8 +512,8 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
     <Dialog open={open} ocupado={createSku.isPending || updateSku.isPending} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger ? trigger : isEdit ? (
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-info-soft-foreground hover:text-info-soft-foreground hover:bg-info-soft">
-            <Edit className="h-4 w-4" />
+          <Button variant="ghost" size="icon" aria-label={`Editar ${sku.cod_btg}`} className="h-8 w-8 text-info-soft-foreground hover:text-info-soft-foreground hover:bg-info-soft">
+            <Edit className="h-4 w-4" aria-hidden="true" />
           </Button>
         ) : (
           <Button>
@@ -643,8 +689,8 @@ export function DeleteSkuButton({ id, cod_btg, trigger }: { id: number, cod_btg:
     <Dialog open={open} ocupado={deleteSku.isPending} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger ?? (
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive-soft-foreground hover:text-destructive-soft-foreground hover:bg-destructive-soft">
-            <Trash2 className="h-4 w-4" />
+          <Button variant="ghost" size="icon" aria-label={`Arquivar ${cod_btg}`} className="h-8 w-8 text-destructive-soft-foreground hover:text-destructive-soft-foreground hover:bg-destructive-soft">
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
           </Button>
         )}
       </DialogTrigger>
@@ -666,3 +712,6 @@ export function DeleteSkuButton({ id, cod_btg, trigger }: { id: number, cod_btg:
     </Dialog>
   );
 }
+
+/** A largura do bloco de cada coluna da linha-fantasma dos SKUs. */
+const FANTASMA_DOS_SKUS: readonly ColunaFantasma[] = ["w-28", "w-24", "w-44", "w-14", "w-20", "w-12", "acoes"];

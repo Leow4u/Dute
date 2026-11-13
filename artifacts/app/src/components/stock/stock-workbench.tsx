@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Chip } from "@/components/ui/chip";
+import { Esqueleto } from "@/components/ui/esqueleto";
 import { FilterGroup, FilterPanel } from "@/components/ui/filter-panel";
 import { PageHeader } from "@/components/ui/page-header";
 import { BarraDaLista } from "@/lib/carregando/use-lista-em-troca";
@@ -111,7 +112,8 @@ type StockToolbarProps = {
   search: string;
   onSearchChange: (value: string) => void;
   placeholder: string;
-  resultText?: string;
+  /** O resumo da página; lendo, o bloco no lugar dele (a linha fica guardada e nada pula na chegada). */
+  resultText?: ReactNode;
   /** O que está filtrado ("Entrada"); vazio quando é "Todos". */
   filterSummary?: string;
   /** Rótulo do grupo de chips no painel do celular. */
@@ -282,5 +284,36 @@ export function StockTablePagination({
         </Button>
       </div>
     </div>
+  );
+}
+
+/** A largura do bloco de cada coluna da linha-fantasma ("w-28"); "acoes" são os dois botões de 32 px. */
+export type ColunaFantasma = string;
+
+/**
+ * A linha-fantasma da primeira leitura das tabelas do Catálogo (carregamento
+ * v2, parte 13d; momento 2): os blocos na altura da linha real, que entram aos
+ * 300 ms com o brilho (o `data-visivel`); fora da árvore de acessibilidade.
+ * Quem diz o que lê é a linha de estado sob o título.
+ */
+export function LinhaFantasmaDaTabela({ visivel, larguras }: { visivel: boolean; larguras: readonly ColunaFantasma[] }) {
+  const brilho = visivel ? "carregando-com-brilho" : undefined;
+  return (
+    <tr aria-hidden="true" data-fantasmas="" data-visivel={visivel ? "" : undefined}>
+      {larguras.map((largura, coluna) => (
+        <td key={coluna} className={coluna < 2 ? "px-5 py-3" : "px-4 py-2"}>
+          {largura === "acoes" ? (
+            <span className="flex h-9 items-center justify-center gap-2">
+              <Esqueleto forma="bloco" className={cn("size-8", brilho)} />
+              <Esqueleto forma="bloco" className={cn("size-8", brilho)} />
+            </span>
+          ) : (
+            <span className="flex h-9 items-center">
+              <Esqueleto forma="texto" className={cn(largura, brilho)} />
+            </span>
+          )}
+        </td>
+      ))}
+    </tr>
   );
 }

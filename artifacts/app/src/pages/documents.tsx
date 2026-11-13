@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MoreHorizontal, Plus, Search, UploadCloud } from "lucide-react";
+import { Clock3, MoreHorizontal, Plus, Search, UploadCloud } from "lucide-react";
 
 import { AvisoDeEspera } from "@/components/ui/aviso-de-espera";
 import { BotaoDeAcao, type EstadoDaAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { Progresso, type ItemDoProgresso } from "@/components/ui/progresso";
 import { Chip } from "@/components/ui/chip";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { Spinner } from "@/components/ui/spinner";
 import { FilterGroup, FilterPanel } from "@/components/ui/filter-panel";
 import { PageHeader } from "@/components/ui/page-header";
 import {
@@ -37,9 +41,13 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
-import { CARREGANDO } from "@/lib/carregando/tempo";
-import { desfechoDoErro } from "@/lib/carregando/use-acao-na-linha";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useContagemLembrada } from "@/lib/carregando/contagem-lembrada";
+import { CARREGANDO, relogioDaEspera } from "@/lib/carregando/tempo";
+import { desfechoDoErro, useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
 import { useEspera } from "@/lib/carregando/use-espera";
+import { useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { canAccessModule, type ProfileRole } from "@/lib/modules";
 import { humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -137,6 +145,38 @@ interface ArquivoEnviado {
 
 const emptyForm = { title: "", documentType: "nf_entrada", reference: "", customerVisible: false };
 
+/** As ações do menu de cada documento, cada uma com a espera dela na linha (carregamento v2, parte 13d). */
+type AcaoDoDocumento = "conhecimento" | "aprovar" | "recusar" | "mostrar" | "ocultar" | "arquivar";
+
+/** O que a lista relida mostra quando a ação valeu: o "Conferir" dos 70 s sem resposta relê e nunca reenvia. */
+const VALEU: Record<AcaoDoDocumento, (row: DocumentRow) => boolean> = {
+  conhecimento: (row) => row.knowledge !== "none" && row.knowledge !== "rejected",
+  aprovar: (row) => row.knowledge === "active",
+  recusar: (row) => row.knowledge === "rejected",
+  mostrar: (row) => row.audience === "btg",
+  ocultar: (row) => row.audience === "internal",
+  arquivar: (row) => row.audience === "archived",
+};
+
+/** O gerúndio da ação, com o documento a partir dos 3 s ("Arquivando NF 48213…"; momento 4). */
+function gerundioDa(acao: AcaoDoDocumento, documento?: string): string {
+  const de = documento ? ` ${documento}` : "";
+  switch (acao) {
+    case "conhecimento":
+      return `Enviando${de} para o Conhecimento…`;
+    case "aprovar":
+      return `Aprovando${de} para o Conhecimento…`;
+    case "recusar":
+      return `Recusando${de} para o Conhecimento…`;
+    case "mostrar":
+      return `Mostrando${de} para o cliente…`;
+    case "ocultar":
+      return `Ocultando${de} do cliente…`;
+    case "arquivar":
+      return `Arquivando${de}…`;
+  }
+}
+
 export default function Documents() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -147,7 +187,9 @@ export default function Documents() {
   const canApprove = canAccessModule(role, KNOWLEDGE_APPROVERS);
   const isFinance = role === "financeiro";
   // O documento novo é do cliente ativo; a biblioteca lista todos.
-  const { code: customerCode, active: activeCustomer } = useActiveCustomer();
+  // O documento novo vai para o cliente ativo: enquanto ele lê, "Adicionar documento" espera (o código ainda seria o
+  // do cliente padrão; o customer_code é a fronteira).
+  const { code: customerCode, active: activeCustomer, isLoading: carregandoCliente } = useActiveCustomer();
 
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<DocumentKind | "all">("all");
@@ -163,12 +205,25 @@ export default function Documents() {
     queryFn: async () =>
       (await apiJson<{ items?: Record<string, unknown>[] }>(documentsUrl)).items ?? [],
   });
+  const lerAvisos = canAccessModule(role, REQUEST_READERS);
   const requests = useQuery({
     queryKey: ["documents", "request-attachments"],
     queryFn: async () =>
       (await apiJson<{ items?: Record<string, unknown>[] }>("/api/customer-requests?limit=500")).items ?? [],
-    enabled: canAccessModule(role, REQUEST_READERS),
+    enabled: lerAvisos,
   });
+  // A primeira leitura tem a forma final (as linhas-fantasma) e a linha de estado; a falha sem nada lido fica na tela
+  // enquanto a pessoa tenta de novo (as cópias), e a releitura que falha com a lista lida fica na linha de estado, sem
+  // apagar a lista. Os avisos de chegada (as NFs do cliente) que falham não somem calados: o aviso fica acima da lista
+  // (carregamento v2, parte 13d).
+  const documentos = useLeituraComFalha(documents);
+  const avisos = useLeituraComFalha(requests);
+  const documentosFalharam = documentos.isError && documents.data === undefined;
+  const avisosFalharam = lerAvisos && avisos.isError && requests.data === undefined;
+  const lendo = !documentosFalharam && (documents.data === undefined || (lerAvisos && requests.data === undefined && !avisosFalharam));
+  const leiturasDaLista = lerAvisos ? [documents, requests] : [documents];
+  const idDaLinha = useId();
+  const fantasmas = useEspera(lendo);
 
   const rows = useMemo(
     () => buildDocumentRows(documents.data ?? [], requests.data ?? []),
@@ -178,6 +233,7 @@ export default function Documents() {
     () => rows.filter((row) => matchesDocumentFilters(row, { search, kind, audience })),
     [audience, kind, rows, search],
   );
+  const contagem = useContagemLembrada("documentos", "todos", lendo || documentosFalharam ? null : { linhas: rows.length });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["operational-documents"] });
   const failure = (title: string) => (error: unknown) =>
@@ -296,75 +352,123 @@ export default function Documents() {
     }
   }
 
-  const setShared = useMutation({
-    mutationFn: async ({ id, shared }: { id: string; shared: boolean }) =>
-      apiJson(`/api/documents/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          customer_visible: shared,
-          visibility: shared ? "customer" : "internal",
-          status: shared ? "published" : "internal",
-        }),
-      }),
-    onSuccess: async (_result, input) => {
-      await refresh();
-      toast({ title: input.shared ? "O cliente agora vê o documento" : "Documento só para a Dutelog" });
-    },
-    onError: failure("Visibilidade não alterada"),
-  });
+  // As ações do menu de cada documento são por linha (carregamento v2, parte 13d; momento 4): a linha tocada mostra a
+  // espera dela, as outras seguem livres, e o segundo toque na linha ocupada não grava de novo. As chamadas são as
+  // de sempre. Aos 70 s sem resposta, "Conferir" relê a lista e nunca reenvia.
+  const acoes = useAcaoNaLinha<string>();
+  // O documento arquivado sai da lista ("Todos" não mostra os arquivados): o foco que estava no "⋯" dele vai à linha
+  // de estado, nunca ao body.
+  const focoQueSegue = useFocoQueSegue();
+  /** O que a lista relida diz da ação: valeu ou não. */
+  const conferirNaLista = (id: string, valeu: (row: DocumentRow) => boolean) => async () => {
+    const lidos = (await apiJson<{ items?: Record<string, unknown>[] }>(documentsUrl)).items ?? [];
+    const row = buildDocumentRows(lidos, []).find((item) => item.documentId === id);
+    return Boolean(row && valeu(row));
+  };
+  /** O "Conferir" da linha sem resposta: relê a lista, e a ação que valeu segue o sucesso; a que não valeu volta. */
+  const conferir = (row: DocumentRow, acao: AcaoDoDocumento) => {
+    const id = row.documentId;
+    if (!id) return;
+    void acoes.executar(id, acao, () => Promise.resolve(), { releitura: refresh, conferir: conferirNaLista(id, VALEU[acao]) });
+  };
+  const naLinha = (
+    row: DocumentRow,
+    acao: AcaoDoDocumento,
+    chamada: (id: string) => Promise<unknown>,
+    deuCerto: (resultado: unknown) => void,
+    titulo: string,
+  ) => {
+    const id = row.documentId;
+    if (!id) return;
+    void acoes.executar(
+      id,
+      acao,
+      () =>
+        chamada(id).then(
+          (resultado) => {
+            deuCerto(resultado);
+            return resultado;
+          },
+          (erro: unknown) => {
+            // Sem resposta no prazo, quem diz é a linha ("Sem confirmação do servidor" e "Conferir").
+            if (desfechoDoErro(erro) !== "sem-resposta") failure(titulo)(erro);
+            throw erro;
+          },
+        ),
+      { releitura: refresh, conferir: conferirNaLista(id, VALEU[acao]) },
+    );
+  };
 
-  const archive = useMutation({
-    mutationFn: async (id: string) =>
-      apiJson(`/api/documents/${encodeURIComponent(id)}`, { method: "DELETE" }),
-    onSuccess: async () => {
-      await refresh();
-      toast({ title: "Documento arquivado" });
-    },
-    onError: failure("Documento não arquivado"),
-  });
+  const setShared = (row: DocumentRow, shared: boolean) =>
+    naLinha(
+      row,
+      shared ? "mostrar" : "ocultar",
+      (id) =>
+        apiJson(`/api/documents/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            customer_visible: shared,
+            visibility: shared ? "customer" : "internal",
+            status: shared ? "published" : "internal",
+          }),
+        }),
+      () => toast({ title: shared ? "O cliente agora vê o documento" : "Documento só para a Dutelog" }),
+      "Visibilidade não alterada",
+    );
+
+  const archive = (row: DocumentRow) =>
+    naLinha(
+      row,
+      "arquivar",
+      (id) => apiJson(`/api/documents/${encodeURIComponent(id)}`, { method: "DELETE" }),
+      () => toast({ title: "Documento arquivado" }),
+      "Documento não arquivado",
+    );
 
   // "Enviar para o Conhecimento": extrai o texto e liga à base do Agent
   // Dute. Tipos sensíveis voltam "aguardando aprovação" (regra do backend);
   // aprovar é de uma pessoa, nunca automático.
-  const sendToKnowledge = useMutation({
-    mutationFn: async (id: string) =>
-      apiJson<{ message?: string; content_extraction_status?: string; knowledge_status?: string }>(
-        `/api/documents/${encodeURIComponent(id)}/extract`,
-        { method: "POST", body: JSON.stringify({}) },
-      ),
-    onSuccess: async (payload) => {
-      await refresh();
-      const reading =
-        payload.content_extraction_status === "pending_ocr" ||
-        payload.content_extraction_status === "pending_visual_ocr";
-      toast({
-        title: reading
-          ? "Lendo o arquivo"
-          : payload.knowledge_status === "pending_approval"
-            ? "Aguardando aprovação para o Conhecimento"
-            : payload.knowledge_status === "active"
-              ? "Documento no Conhecimento do Agent Dute"
-              : "Nada para levar ao Conhecimento",
-        description: payload.message,
-      });
-    },
-    onError: failure("Não foi enviado ao Conhecimento"),
-  });
+  const sendToKnowledge = (row: DocumentRow) =>
+    naLinha(
+      row,
+      "conhecimento",
+      (id) =>
+        apiJson<{ message?: string; content_extraction_status?: string; knowledge_status?: string }>(
+          `/api/documents/${encodeURIComponent(id)}/extract`,
+          { method: "POST", body: JSON.stringify({}) },
+        ),
+      (resultado) => {
+        const payload = resultado as { message?: string; content_extraction_status?: string; knowledge_status?: string };
+        const reading =
+          payload.content_extraction_status === "pending_ocr" ||
+          payload.content_extraction_status === "pending_visual_ocr";
+        toast({
+          title: reading
+            ? "Lendo o arquivo"
+            : payload.knowledge_status === "pending_approval"
+              ? "Aguardando aprovação para o Conhecimento"
+              : payload.knowledge_status === "active"
+                ? "Documento no Conhecimento do Agent Dute"
+                : "Nada para levar ao Conhecimento",
+          description: payload.message,
+        });
+      },
+      "Não foi enviado ao Conhecimento",
+    );
 
-  const decideKnowledge = useMutation({
-    mutationFn: async ({ id, approve }: { id: string; approve: boolean }) =>
-      apiJson(`/api/documents/${encodeURIComponent(id)}/knowledge/${approve ? "approve" : "reject"}`, {
-        method: "POST",
-        body: JSON.stringify({}),
-      }),
-    onSuccess: async (_payload, input) => {
-      await refresh();
-      toast({ title: input.approve ? "Aprovado para o Conhecimento" : "Recusado para o Conhecimento" });
-    },
-    onError: failure("Decisão não registrada"),
-  });
+  const decideKnowledge = (row: DocumentRow, approve: boolean) =>
+    naLinha(
+      row,
+      approve ? "aprovar" : "recusar",
+      (id) =>
+        apiJson(`/api/documents/${encodeURIComponent(id)}/knowledge/${approve ? "approve" : "reject"}`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        }),
+      () => toast({ title: approve ? "Aprovado para o Conhecimento" : "Recusado para o Conhecimento" }),
+      "Decisão não registrada",
+    );
 
-  const loading = documents.isLoading || requests.isLoading;
   const filterSummary =
     [
       kind !== "all" ? KIND_FILTERS.find((option) => option.value === kind)?.label : null,
@@ -378,8 +482,17 @@ export default function Documents() {
       <PageHeader
         title="Documentos"
         description="NFs, comprovantes e contratos do cliente ativo"
+        // A casa do estado da lista, sob o título: "Carregando documentos…" na primeira leitura, com as linhas-fantasma;
+        // "Atualizado às" e a releitura que falha, sem apagar a lista (carregamento v2, parte 13d).
+        estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="documentos" />}
         actions={
-          <Button onClick={() => setAdding(true)}>
+          <Button
+            aria-disabled={carregandoCliente || undefined}
+            className={cn(carregandoCliente && "opacity-45")}
+            onClick={() => {
+              if (!carregandoCliente) setAdding(true);
+            }}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Adicionar documento
           </Button>
@@ -416,11 +529,16 @@ export default function Documents() {
       </div>
 
       <section className="overflow-hidden rounded-lg border border-border bg-card">
-        {loading ? (
-          <p className="p-6 text-sm text-muted-foreground">Carregando documentos...</p>
-        ) : documents.error ? (
-          <p className="p-6 text-sm text-destructive">{humanApiError(documents.error, "Não foi possível carregar.")}</p>
-        ) : visible.length ? (
+        {documentosFalharam ? (
+          <FalhaNaLeitura leitura={documents} erro={documentos.error} mensagem="Não consegui carregar os documentos." className="m-3" focoAoSair={idDaLinha} />
+        ) : lendo ? (
+          <DocumentosLendo visivel={fantasmas.visivel} linhas={contagem.linhas("linhas")} idDaLinha={idDaLinha} />
+        ) : (
+          <>
+          {avisosFalharam ? (
+            <FalhaNaLeitura leitura={requests} erro={avisos.error} mensagem="Não consegui carregar as NFs dos avisos de chegada." className="m-3" focoAoSair={idDaLinha} />
+          ) : null}
+          {visible.length ? (
           <>
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[720px] text-sm">
@@ -442,10 +560,14 @@ export default function Documents() {
                     canPublish={canPublish}
                     canSend={canSend}
                     canApprove={canApprove}
-                    onSend={() => row.documentId && sendToKnowledge.mutate(row.documentId)}
-                    onDecide={(approve) => row.documentId && decideKnowledge.mutate({ id: row.documentId, approve })}
-                    onShare={(shared) => row.documentId && setShared.mutate({ id: row.documentId, shared })}
-                    onArchive={() => row.documentId && archive.mutate(row.documentId)}
+                    acoes={acoes}
+                    onConferir={(acao) => conferir(row, acao)}
+                    focoQueSegue={focoQueSegue}
+                    alvoDoFoco={idDaLinha}
+                    onSend={() => sendToKnowledge(row)}
+                    onDecide={(approve) => decideKnowledge(row, approve)}
+                    onShare={(shared) => setShared(row, shared)}
+                    onArchive={() => archive(row)}
                   />
                 ))}
               </tbody>
@@ -459,18 +581,27 @@ export default function Documents() {
                 canPublish={canPublish}
                 canSend={canSend}
                 canApprove={canApprove}
-                onSend={() => row.documentId && sendToKnowledge.mutate(row.documentId)}
-                onDecide={(approve) => row.documentId && decideKnowledge.mutate({ id: row.documentId, approve })}
-                onShare={(shared) => row.documentId && setShared.mutate({ id: row.documentId, shared })}
-                onArchive={() => row.documentId && archive.mutate(row.documentId)}
+                acoes={acoes}
+                onConferir={(acao) => conferir(row, acao)}
+                focoQueSegue={focoQueSegue}
+                alvoDoFoco={idDaLinha}
+                onSend={() => sendToKnowledge(row)}
+                onDecide={(approve) => decideKnowledge(row, approve)}
+                onShare={(shared) => setShared(row, shared)}
+                onArchive={() => archive(row)}
               />
             ))}
           </ul>
           </>
-        ) : (
+        ) : rows.length ? (
+          <p className="p-6 text-sm text-muted-foreground">Nenhum documento neste filtro.</p>
+        ) : avisosFalharam ? null : (
+          // Sem os avisos de chegada lidos, "nenhum documento" seria um falso vazio: o aviso da falha já diz.
           <p className="p-6 text-sm text-muted-foreground">
-            {rows.length ? "Nenhum documento neste filtro." : "Nenhum documento ainda. As NFs anexadas pelo cliente no aviso de chegada aparecem aqui."}
+            Nenhum documento ainda. As NFs anexadas pelo cliente no aviso de chegada aparecem aqui.
           </p>
+        )}
+          </>
         )}
       </section>
 
@@ -493,7 +624,7 @@ export default function Documents() {
             onSubmit={(event) => {
               event.preventDefault();
               if (estadoDoDocumento === "sem-resposta") void conferirDocumento();
-              else if (!enviandoDocumento && file) add.mutate();
+              else if (!enviandoDocumento && file && !carregandoCliente) add.mutate();
             }}
           >
             <button
@@ -597,7 +728,7 @@ export default function Documents() {
               andamento={conferindoDocumento ? "Conferindo…" : "Adicionando…"}
               sucesso="Adicionado"
               erro="Não adicionado"
-              bloqueado={estadoDoDocumento === "repouso" && !file}
+              bloqueado={estadoDoDocumento === "repouso" && (!file || carregandoCliente)}
             />
           </DialogFooter>
         </DialogContent>
@@ -619,6 +750,13 @@ type DocumentLineProps = {
   canPublish: boolean;
   canSend: boolean;
   canApprove: boolean;
+  /** A ação de cada linha (useAcaoNaLinha): a linha tocada espera, as outras seguem livres. */
+  acoes: AcaoNaLinha<string>;
+  /** O "Conferir" da linha sem resposta aos 70 s. */
+  onConferir: (acao: AcaoDoDocumento) => void;
+  /** Para onde vai o foco quando a linha sai da lista com ele dentro (useFocoQueSegue). */
+  focoQueSegue: MutableRefObject<readonly string[] | null>;
+  alvoDoFoco: string;
   onSend: () => void;
   onDecide: (approve: boolean) => void;
   onShare: (shared: boolean) => void;
@@ -637,13 +775,50 @@ function knowledgeTone(state: KnowledgeState) {
   return state === "pending" ? "text-warning-soft-foreground" : state === "active" ? "text-primary" : "text-muted-foreground";
 }
 
-function DocumentActions({ row, canPublish, canSend, canApprove, onSend, onDecide, onShare, onArchive }: DocumentLineProps) {
+const ACOES_DO_DOCUMENTO: readonly AcaoDoDocumento[] = ["conhecimento", "aprovar", "recusar", "mostrar", "ocultar", "arquivar"];
+
+/** A ação da linha que está na tela (em andamento, sem resposta ou com o motivo da falha), se houver. */
+function acaoNaTela(acoes: AcaoNaLinha<string>, row: DocumentRow): { acao: AcaoDoDocumento; estado: EstadoDaAcao } | null {
+  const id = row.documentId;
+  if (!id) return null;
+  for (const acao of ACOES_DO_DOCUMENTO) {
+    const estado = acoes.estado(id, acao);
+    if (estado !== "repouso") return { acao, estado };
+  }
+  const motivo = acoes.motivo(id);
+  return motivo ? { acao: motivo.acao as AcaoDoDocumento, estado: "repouso" } : null;
+}
+
+function DocumentActions({ row, canPublish, canSend, canApprove, acoes, focoQueSegue, alvoDoFoco, onSend, onDecide, onShare, onArchive }: DocumentLineProps) {
   const manageable = row.source === "document" && row.audience !== "archived";
+  // Ocupado não é desabilitado: o "⋯" da linha que grava fica na ordem do foco, com a caixa no lugar do ícone aos 300
+  // ms, e não abre; o segundo toque não grava de novo.
+  const ocupada = row.documentId ? acoes.ocupada(row.documentId) : false;
+  const naTela = acaoNaTela(acoes, row);
+  const andando = naTela?.estado === "andamento";
+  const espera = useEspera(andando);
+  const [aberto, setAberto] = useState(false);
+  // A linha que sai com o foco no "⋯" (o documento arquivado) pede o foco para a linha de estado.
+  const gatilho = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => {
+    const elemento = gatilho.current;
+    return () => {
+      if (elemento && typeof document !== "undefined" && elemento === document.activeElement) focoQueSegue.current = [alvoDoFoco];
+    };
+  }, [alvoDoFoco, focoQueSegue]);
   return (
-    <DropdownMenu>
+    <DropdownMenu open={aberto && !ocupada} onOpenChange={(abrir) => setAberto(abrir && !ocupada)}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={`Ações de ${row.title}`}>
-          <MoreHorizontal className="h-4 w-4" />
+        <Button
+          ref={gatilho}
+          variant="ghost"
+          size="icon"
+          aria-label={andando && naTela ? gerundioDa(naTela.acao, row.title) : `Ações de ${row.title}`}
+          aria-disabled={ocupada || undefined}
+          aria-busy={(andando && espera.visivel) || undefined}
+          className={cn(ocupada && "hover:bg-transparent")}
+        >
+          {andando && espera.visivel ? <Spinner calmo={espera.calmo} /> : <MoreHorizontal className="h-4 w-4" aria-hidden="true" />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -683,6 +858,61 @@ function DocumentActions({ row, canPublish, canSend, canApprove, onSend, onDecid
   );
 }
 
+/**
+ * O apoio da linha cuja ação grava (carregamento v2, momento 4): aos 300 ms,
+ * o gerúndio ("Arquivando…"); aos 3 s, com o documento ("Arquivando NF
+ * 48213…"); aos 10 s, a demora com o relógio; sem resposta aos 70 s, o aviso e
+ * "Conferir", que relê a lista e nunca reenvia; depois da falha, o motivo, até
+ * a próxima ação na linha. O leitor de tela ouve a espera, a demora e a
+ * desistência pelo Anunciador; o resultado, o toast diz. Não é região viva.
+ */
+function ApoioDaAcao({ row, acoes, onConferir }: { row: DocumentRow; acoes: AcaoNaLinha<string>; onConferir: (acao: AcaoDoDocumento) => void }) {
+  const naTela = acaoNaTela(acoes, row);
+  const andando = naTela?.estado === "andamento";
+  const semResposta = naTela?.estado === "sem-resposta";
+  const espera = useEspera(andando);
+  const anunciar = useAnuncio();
+  const marco = andando && espera.visivel ? (espera.fase === "demorando" ? "demorando" : "espera") : semResposta ? "sem-resposta" : null;
+  const falado = naTela ? gerundioDa(naTela.acao, row.title).replace(/…$/, "") : "";
+  useEffect(() => {
+    if (marco === "espera") return anunciar(falado);
+    if (marco === "demorando") return anunciar("Demorando mais que o normal");
+    if (marco === "sem-resposta") return anunciar("Sem confirmação do servidor");
+    return undefined;
+  }, [marco, anunciar, falado]);
+  if (!naTela || !row.documentId) return null;
+  if (andando && espera.visivel) {
+    if (espera.fase === "demorando" || espera.fase === "sem-resposta") {
+      return (
+        <div className="mt-0.5 text-xs font-bold text-amber-soft-foreground">
+          <Clock3 className="mr-1 inline size-3.5 align-[-2px]" aria-hidden="true" />
+          <span>Demorando mais que o normal</span>
+          {" · "}
+          <span className="tabular-nums">{relogioDaEspera(espera.decorridoMs)}</span>
+        </div>
+      );
+    }
+    return (
+      <div className="mt-0.5 text-xs font-bold text-foreground">
+        {espera.fase === "com-objeto" ? gerundioDa(naTela.acao, row.title) : gerundioDa(naTela.acao)}
+      </div>
+    );
+  }
+  if (semResposta) {
+    return (
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs font-bold text-amber-soft-foreground">
+        <span>Sem confirmação do servidor.</span>
+        <Button type="button" variant="outline" size="sm" className="h-8 max-sm:min-h-11" onClick={() => onConferir(naTela.acao)}>
+          Conferir
+        </Button>
+      </div>
+    );
+  }
+  const motivo = acoes.motivo(row.documentId);
+  if (motivo) return <div className="mt-0.5 text-xs font-bold text-destructive">{humanApiError(motivo.erro, "Tente novamente em instantes.")}</div>;
+  return null;
+}
+
 function DocumentLine(props: DocumentLineProps) {
   const { row } = props;
   const date = row.date ? dateFormatter.format(row.date) : "—";
@@ -695,6 +925,7 @@ function DocumentLine(props: DocumentLineProps) {
         {KNOWLEDGE_LABEL[row.knowledge] ? (
           <div className={cn("mt-0.5 text-xs font-medium", knowledgeTone(row.knowledge))}>{KNOWLEDGE_LABEL[row.knowledge]}</div>
         ) : null}
+        <ApoioDaAcao row={row} acoes={props.acoes} onConferir={props.onConferir} />
       </td>
       <td className="px-3 py-3">{row.typeLabel}</td>
       <td className="px-3 py-3">{row.linkedTo || <span className="text-muted-foreground">—</span>}</td>
@@ -729,8 +960,73 @@ function DocumentCard(props: DocumentLineProps) {
         {KNOWLEDGE_LABEL[row.knowledge] ? (
           <div className={cn("mt-1 text-xs font-medium", knowledgeTone(row.knowledge))}>{KNOWLEDGE_LABEL[row.knowledge]}</div>
         ) : null}
+        <ApoioDaAcao row={row} acoes={props.acoes} onConferir={props.onConferir} />
       </div>
       <DocumentActions {...props} />
     </li>
+  );
+}
+
+/**
+ * A lista ainda lendo (carregamento v2, parte 13d; momento 2): a tabela com o
+ * cabeçalho real e as linhas-fantasma (no celular, os cartões), na altura das
+ * reais, que entram aos 300 ms com o brilho. Quem diz o que lê é a linha de
+ * estado, que descreve a lista ocupada; os blocos ficam fora da árvore de
+ * acessibilidade.
+ */
+function DocumentosLendo({ visivel, linhas, idDaLinha }: { visivel: boolean; linhas: number; idDaLinha: string }) {
+  const brilho = visivel ? "carregando-com-brilho" : undefined;
+  const fantasma = { "aria-hidden": true, "data-fantasmas": "", "data-visivel": visivel ? "" : undefined } as const;
+  return (
+    <>
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[720px] text-sm">
+          <thead>
+            <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-foreground/50">
+              <th className="px-5 py-2.5 font-semibold">Documento</th>
+              <th className="px-3 py-2.5 font-semibold">Tipo</th>
+              <th className="px-3 py-2.5 font-semibold">Vinculado a</th>
+              <th className="px-3 py-2.5 font-semibold">Quem vê</th>
+              <th className="px-3 py-2.5 font-semibold">Data</th>
+              <th className="w-12 px-3 py-2.5" />
+            </tr>
+          </thead>
+          <tbody aria-busy="true" aria-describedby={idDaLinha}>
+            {Array.from({ length: linhas }, (_, ordem) => (
+              <tr key={ordem} {...fantasma} className="border-b border-border/40 last:border-0">
+                <td className="px-5 py-3">
+                  <span className="flex h-10 flex-col justify-center gap-1.5">
+                    <Esqueleto forma="texto" className={cn("w-40", brilho)} />
+                    <Esqueleto forma="texto" className={cn("h-2.5 w-28", brilho)} />
+                  </span>
+                </td>
+                <td className="px-3 py-3"><Esqueleto forma="texto" className={cn("w-20", brilho)} /></td>
+                <td className="px-3 py-3"><Esqueleto forma="texto" className={cn("w-24", brilho)} /></td>
+                <td className="px-3 py-3"><Esqueleto forma="texto" className={cn("w-20", brilho)} /></td>
+                <td className="px-3 py-3"><Esqueleto forma="texto" className={cn("w-14", brilho)} /></td>
+                <td className="px-3 py-3"><Esqueleto forma="bloco" className={cn("ml-auto size-8", brilho)} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <ul className="divide-y divide-border md:hidden" aria-busy="true" aria-describedby={idDaLinha}>
+        {Array.from({ length: linhas }, (_, ordem) => (
+          // O cartão do celular, na anatomia do real: o nome, a origem, o selo com o tipo e a data, e o vínculo.
+          <li key={ordem} {...fantasma} className="flex items-start gap-2 px-4 py-3">
+            <span className="min-w-0 flex-1">
+              <span className="flex h-5 items-center"><Esqueleto forma="texto" className={cn("w-44", brilho)} /></span>
+              <span className="flex h-4 items-center"><Esqueleto forma="texto" className={cn("h-2.5 w-28", brilho)} /></span>
+              <span className="mt-2 flex h-5 items-center gap-2">
+                <Esqueleto forma="bloco" className={cn("h-5 w-20", brilho)} />
+                <Esqueleto forma="texto" className={cn("h-2.5 w-24", brilho)} />
+              </span>
+              <span className="mt-1 flex h-4 items-center"><Esqueleto forma="texto" className={cn("h-2.5 w-32", brilho)} /></span>
+            </span>
+            <Esqueleto forma="bloco" className={cn("size-10", brilho)} />
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

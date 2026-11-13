@@ -316,17 +316,32 @@ export default function SettingsSystem() {
                 : "."}
             </p>
           ) : null}
-          <div className="mt-3 flex gap-2">
-            <Button size="sm" variant="outline" disabled={assignNumbers.isPending} onClick={() => assignNumbers.mutate(false)}>
-              Ver o que muda
-            </Button>
-            <Button
+          {/* Cada botão espera com o próprio gerúndio, ocupado sem disabled; o outro espera travado, com aria-disabled
+              (carregamento v2, parte 13d). "Numerar agora" sem a prévia não tem o que fazer: travado do mesmo jeito. */}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <BotaoDeAcao
               size="sm"
-              disabled={assignNumbers.isPending || !numbering?.dry_run || !numbering.assigned_count}
-              onClick={() => assignNumbers.mutate(true)}
-            >
-              Numerar agora
-            </Button>
+              variant="outline"
+              estado={assignNumbers.isPending && assignNumbers.variables === false ? "andamento" : "repouso"}
+              bloqueado={assignNumbers.isPending && assignNumbers.variables === true}
+              rotulo="Ver o que muda"
+              andamento="Vendo o que muda…"
+              onClick={() => {
+                if (!assignNumbers.isPending) assignNumbers.mutate(false);
+              }}
+            />
+            <BotaoDeAcao
+              size="sm"
+              estado={assignNumbers.isPending && assignNumbers.variables === true ? "andamento" : "repouso"}
+              bloqueado={
+                (assignNumbers.isPending && assignNumbers.variables === false) || !numbering?.dry_run || !numbering.assigned_count
+              }
+              rotulo="Numerar agora"
+              andamento="Numerando…"
+              onClick={() => {
+                if (!assignNumbers.isPending && numbering?.dry_run && numbering.assigned_count) assignNumbers.mutate(true);
+              }}
+            />
           </div>
         </section>
       ) : null}

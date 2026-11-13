@@ -12,6 +12,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { Esqueleto } from "@/components/ui/esqueleto";
 import { LinhaDeEstado, type LeituraDaLista } from "@/components/ui/linha-de-estado";
 import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,8 @@ import {
   toExcelCsv,
   type ReportResult,
 } from "@/lib/reports";
+import { useContagemLembrada } from "@/lib/carregando/contagem-lembrada";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { BarraDaLista, ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { buildStockItems } from "@/lib/stock-items";
@@ -67,6 +70,8 @@ const REPORTS: Array<{
   title: string;
   hint: string;
   description: string;
+  /** O que a linha de estado diz que lê: "Carregando a posição de estoque…" (carregamento v2, parte 13d). */
+  objeto: string;
   icon: LucideIcon;
   roles: ProfileRole[];
   preview: string[];
@@ -77,6 +82,7 @@ const REPORTS: Array<{
     group: "Estoque",
     title: "Posição de estoque",
     hint: "Saldo e valor de cada item",
+    objeto: "a posição de estoque",
     description: "Saldo de cada item, onde está e quanto vale. Os mesmos números da tela Estoque.",
     icon: Boxes,
     roles: OPERATIONS_READERS,
@@ -88,6 +94,7 @@ const REPORTS: Array<{
     group: "Estoque",
     title: "Abaixo do mínimo",
     hint: "Itens para repor",
+    objeto: "itens abaixo do mínimo",
     description: "Itens com saldo igual ou abaixo do mínimo cadastrado na ficha. Item sem mínimo não entra.",
     icon: AlertTriangle,
     roles: OPERATIONS_READERS,
@@ -99,6 +106,7 @@ const REPORTS: Array<{
     group: "Estoque",
     title: "Itens parados",
     hint: "Sem entrada nem saída",
+    objeto: "itens parados",
     description:
       "Itens com saldo que não entram nem saem há muito tempo. Ocupam posição e pesam no Ad Valorem: bom assunto para conversar com o cliente.",
     icon: Clock3,
@@ -111,6 +119,7 @@ const REPORTS: Array<{
     group: "Operação",
     title: "Movimentações",
     hint: "Entradas, saídas e ajustes",
+    objeto: "movimentações",
     description: "Tudo que entrou, saiu ou foi ajustado no estoque, com o saldo antes e depois e quem fez.",
     icon: ArrowLeftRight,
     roles: LEDGER_READERS,
@@ -122,6 +131,7 @@ const REPORTS: Array<{
     group: "Operação",
     title: "Pedidos",
     hint: "Pedidos e avisos",
+    objeto: "pedidos",
     description: "O que os clientes pediram no período: quem pediu, o que aconteceu e quem decidiu.",
     icon: Truck,
     roles: OPERATIONS_READERS,
@@ -363,6 +373,13 @@ export default function Reports() {
     };
   }, [idleDays, items, listaDasMovimentacoes, listaDosPedidos, movements, requests, selected, sinceGoLive, stockError, stockLoading]);
 
+  // A prévia que lê entra com a forma final aos 300 ms (o resumo e as linhas-fantasma), quantas linhas a última
+  // leitura de cada relatório mostrou (até as 8 da prévia; sem lembrança, 2): a caixa da prévia não encolhe e cresce
+  // na chegada (parte 13d).
+  const fantasmas = useEspera(state.loading);
+  const linhasDaPrevia = state.report && !trocando && selected ? { [selected.id]: Math.min(PREVIEW_ROWS, state.report.rows.length) } : null;
+  const contagem = useContagemLembrada("relatorios", "todos", linhasDaPrevia);
+
   if (!selected) {
     return <p className="text-sm text-muted-foreground">Nenhum relatório disponível para o seu perfil.</p>;
   }
@@ -410,9 +427,12 @@ export default function Reports() {
     download(fileName(), toExcelCsv(report));
   };
 
-  const countFor = (id: ReportId) => {
+  // O número da lateral: lido, o número; lendo, o bloco no lugar dele (a casa fica guardada, e o número entra sem
+  // mexer o item); sem leitura, nada.
+  const countFor = (id: ReportId): number | "lendo" | undefined => {
     if (id === selected.id && report) return report.rows.length;
-    if (id === "position" || id === "below-minimum") return stockCounts?.[id];
+    if (id === selected.id && state.loading) return "lendo";
+    if (id === "position" || id === "below-minimum") return stockCounts?.[id] ?? (canReadStock && stockLoading && !stockError ? "lendo" : undefined);
     return undefined;
   };
 
@@ -421,9 +441,9 @@ export default function Reports() {
       <PageHeader
         title="Relatórios"
         description="Escolha um relatório, confira a prévia e baixe a planilha. Ela abre direto no Excel."
-        // A casa do estado da prévia, sob o título, sem empurrar a prévia (a primeira leitura ainda diz "Carregando..."
-        // no lugar dela; parte 13).
-        estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaPrevia} objeto="relatório" primeiraNaLista />}
+        // A casa do estado da prévia, sob o título, sem empurrar a prévia: "Carregando a posição de estoque…" na
+        // primeira leitura, com a forma final da prévia no lugar dela (carregamento v2, parte 13d).
+        estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaPrevia} objeto={selected.objeto} />}
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[270px_minmax(0,1fr)]">
@@ -460,7 +480,11 @@ export default function Reports() {
                       <span className="block text-sm font-semibold">{item.title}</span>
                       <span className="block truncate text-xs text-muted-foreground">{item.hint}</span>
                     </span>
-                    {count !== undefined ? (
+                    {count === "lendo" ? (
+                      <span aria-hidden="true" className="inline-flex h-5 items-center rounded-full bg-muted px-2">
+                        <Esqueleto forma="contagem" />
+                      </span>
+                    ) : count !== undefined ? (
                       <span
                         className={cn(
                           "rounded-full px-2 py-0.5 text-xs font-semibold",
@@ -560,7 +584,13 @@ export default function Reports() {
           ) : null}
 
           {state.loading ? (
-            <p className="px-5 py-8 text-sm text-muted-foreground">Carregando...</p>
+            <PreviaLendo
+              visivel={fantasmas.visivel}
+              // A prévia mostra até 8 linhas: a lembrada vai até elas (sem lembrança, 2), para a caixa não crescer na chegada.
+              linhas={Math.min(PREVIEW_ROWS, Math.max(1, contagem.lembrada(selected.id) ?? contagem.linhas(selected.id)))}
+              colunas={selected.preview.length}
+              idDaLinha={idDaLinha}
+            />
           ) : state.error ? (
             <FalhaNaLeitura
               leitura={leituraQueFalhou}
@@ -642,6 +672,51 @@ export default function Reports() {
           </ConteudoEmTroca>
           </div>
         </section>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A prévia ainda lendo (carregamento v2, parte 13d; momento 2): o resumo com
+ * os três blocos e as linhas-fantasma da tabela, na altura das reais, que
+ * entram aos 300 ms com o brilho. Quem diz o que lê é a linha de estado, que
+ * descreve a região ocupada; os blocos ficam fora da árvore de acessibilidade.
+ */
+function PreviaLendo({ visivel, linhas, colunas, idDaLinha }: { visivel: boolean; linhas: number; colunas: number; idDaLinha: string }) {
+  const brilho = visivel ? "carregando-com-brilho" : undefined;
+  const fantasmas = { "aria-hidden": true, "data-fantasmas": "", "data-visivel": visivel ? "" : undefined } as const;
+  return (
+    <div className="flex flex-col" aria-busy="true" aria-describedby={idDaLinha}>
+      <div className="grid grid-cols-1 border-y border-border/60 sm:grid-cols-3" {...fantasmas}>
+        {[0, 1, 2].map((ordem) => (
+          <div key={ordem} className="border-b border-border/60 px-5 py-3 last:border-0 sm:border-b-0 sm:border-r">
+            <span className="flex h-4 items-center">
+              <Esqueleto forma="texto" className={cn("h-2.5 w-24", brilho)} />
+            </span>
+            <span className="mt-0.5 flex h-7 items-center">
+              <Esqueleto forma="texto" className={cn("h-5 w-16", brilho)} />
+            </span>
+          </div>
+        ))}
+      </div>
+      <div {...fantasmas}>
+        <div className="flex h-9 items-center gap-6 bg-muted/40 px-4">
+          {Array.from({ length: colunas }, (_, coluna) => (
+            <Esqueleto key={coluna} forma="texto" className={cn("h-2.5 w-14", brilho)} />
+          ))}
+        </div>
+        {Array.from({ length: linhas }, (_, ordem) => (
+          <div key={ordem} className="flex h-[41px] items-center gap-6 border-b border-border/40 px-4 last:border-0">
+            {Array.from({ length: colunas }, (_, coluna) => (
+              <Esqueleto key={coluna} forma="texto" className={cn(coluna === 1 ? "w-32" : "w-14", brilho)} />
+            ))}
+          </div>
+        ))}
+      </div>
+      {/* O rodapé da prévia ("Prévia: 8 de 12 linhas…"), na altura dele. */}
+      <div className="flex h-[41px] items-center border-t border-border/60 px-5" {...fantasmas}>
+        <Esqueleto forma="texto" className={cn("h-2.5 w-64 max-w-full", brilho)} />
       </div>
     </div>
   );
