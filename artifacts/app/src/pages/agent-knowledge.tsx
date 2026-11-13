@@ -4,7 +4,6 @@ import {
   collection,
   doc,
   getDocFromServer,
-  getDocs,
   serverTimestamp,
   setDoc,
   where,
@@ -17,7 +16,6 @@ import {
   Download,
   FileCheck2,
   FileText,
-  Loader2,
   RefreshCw,
   ShieldCheck,
   UploadCloud,
@@ -25,6 +23,9 @@ import {
 
 import { AgentNotes } from "@/components/agent/agent-notes";
 import { AgentPlaybooks } from "@/components/agent/agent-playbooks";
+import { FantasmasDaLista, LeituraDaLista } from "@/components/agent/leitura-do-agente";
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { lerDocsDoServidor } from "@/lib/cloud-api";
 import { useAppUser } from "@/lib/auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -335,12 +336,15 @@ export default function AgentKnowledge() {
   const [form, setForm] = useState<UploadFormState>(initialForm);
   const [file, setFile] = useState<File | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  // O Atualizar só gira quando a pessoa toca nele (carregamento v2, momento 7): a releitura sozinha não mexe nele.
+  const [atualizando, setAtualizando] = useState(false);
 
   const documents = useQuery({
     queryKey: ["agent-knowledge-documents"],
     queryFn: async (): Promise<KnowledgeDocument[]> => {
       if (!firestore) return [];
-      const snapshot = await getDocs(collection(firestore, knowledgeCollection));
+      // Sem rede, o Firestore responde do cache: a base velha ou vazia viraria "Sem documentos na base".
+      const snapshot = await lerDocsDoServidor(collection(firestore, knowledgeCollection));
       return sortDocuments(
         snapshot.docs.map(
           (item) =>
@@ -357,7 +361,7 @@ export default function AgentKnowledge() {
     queryKey: ["agent-knowledge-files"],
     queryFn: async (): Promise<KnowledgeFile[]> => {
       if (!firestore) return [];
-      const snapshot = await getDocs(collection(firestore, fileCollection));
+      const snapshot = await lerDocsDoServidor(collection(firestore, fileCollection));
       return snapshot.docs.map(
         (item) =>
           ({
@@ -374,6 +378,8 @@ export default function AgentKnowledge() {
     );
   }, [files.data]);
 
+  // Antes de ler, nada de "0": os blocos no lugar dos números (carregamento v2, momento 2).
+  const lida = documents.data !== undefined && files.data !== undefined;
   const summary = useMemo(() => {
     const items = documents.data ?? [];
     return {
@@ -630,7 +636,7 @@ export default function AgentKnowledge() {
 
     setDownloadingId(item.id);
     try {
-      const snapshot = await getDocs(
+      const snapshot = await lerDocsDoServidor(
         query(
           collection(firestore, fileChunkCollection),
           where("knowledge_id", "==", linkedFile.id),
@@ -678,18 +684,17 @@ export default function AgentKnowledge() {
         title="Conhecimento"
         description="O que o Agent Dute sabe da operação: anotações, playbooks e documentos aprovados"
         actions={
-          <Button
-            type="button"
+          <BotaoDeAcao
             variant="outline"
+            estado={atualizando ? "andamento" : "repouso"}
+            icone={<RefreshCw className="h-4 w-4" />}
+            rotulo="Atualizar"
+            andamento="Atualizando…"
             onClick={() => {
-              documents.refetch();
-              files.refetch();
+              setAtualizando(true);
+              void Promise.allSettled([documents.refetch(), files.refetch()]).then(() => setAtualizando(false));
             }}
-            disabled={documents.isFetching || files.isFetching}
-          >
-            <RefreshCw className={cn("h-4 w-4", (documents.isFetching || files.isFetching) && "animate-spin")} />
-            Atualizar
-          </Button>
+          />
         }
       />
 
@@ -708,7 +713,7 @@ export default function AgentKnowledge() {
             <Database className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm text-muted-foreground">Documentos</p>
-              <p className="text-2xl font-semibold">{summary.total}</p>
+              <p className="text-2xl font-semibold">{lida ? summary.total : <Esqueleto forma="contagem" className="mt-2" />}</p>
             </div>
           </CardContent>
         </Card>
@@ -717,7 +722,7 @@ export default function AgentKnowledge() {
             <ShieldCheck className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm text-muted-foreground">Consultáveis</p>
-              <p className="text-2xl font-semibold">{summary.consultable}</p>
+              <p className="text-2xl font-semibold">{lida ? summary.consultable : <Esqueleto forma="contagem" className="mt-2" />}</p>
             </div>
           </CardContent>
         </Card>
@@ -726,7 +731,7 @@ export default function AgentKnowledge() {
             <FileText className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm text-muted-foreground">Trechos</p>
-              <p className="text-2xl font-semibold">{summary.chunks}</p>
+              <p className="text-2xl font-semibold">{lida ? summary.chunks : <Esqueleto forma="contagem" className="mt-2" />}</p>
             </div>
           </CardContent>
         </Card>
@@ -735,7 +740,7 @@ export default function AgentKnowledge() {
             <FileCheck2 className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm text-muted-foreground">Arquivos fonte</p>
-              <p className="text-2xl font-semibold">{summary.files}</p>
+              <p className="text-2xl font-semibold">{lida ? summary.files : <Esqueleto forma="contagem" className="mt-2" />}</p>
             </div>
           </CardContent>
         </Card>
@@ -743,16 +748,13 @@ export default function AgentKnowledge() {
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-4">
-          {documents.isLoading ? (
-            <Card>
-              <CardContent className="flex min-h-[240px] items-center justify-center gap-3">
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                <span className="text-sm text-muted-foreground">
-                  Carregando base de conhecimento...
-                </span>
-              </CardContent>
-            </Card>
-          ) : documents.data?.length ? (
+          <LeituraDaLista
+            leitura={documents}
+            rotulo="Carregando documentos…"
+            falha="Não foi possível carregar os documentos."
+            fantasmas={<FantasmasDaLista linhas={2} altura="h-60" className="lg:grid lg:grid-cols-2 lg:gap-4" />}
+          >
+          {documents.data?.length ? (
             <div className="grid gap-4 lg:grid-cols-2">
               {documents.data.map((item) => {
                 const linkedFile =
@@ -816,20 +818,16 @@ export default function AgentKnowledge() {
                         <span className="text-xs text-muted-foreground">
                           {formatDate(item.ingested_at ?? item.created_at)}
                         </span>
-                        <Button
-                          type="button"
+                        <BotaoDeAcao
                           variant="outline"
                           size="sm"
-                          disabled={!canDownload || downloadingId === item.id}
-                          onClick={() => downloadFile(item)}
-                        >
-                          {downloadingId === item.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Download className="h-4 w-4" />
-                          )}
-                          Baixar
-                        </Button>
+                          estado={downloadingId === item.id ? "andamento" : "repouso"}
+                          icone={<Download className="h-4 w-4" />}
+                          rotulo="Baixar"
+                          andamento="Baixando…"
+                          bloqueado={!canDownload}
+                          onClick={() => void downloadFile(item)}
+                        />
                       </div>
                     </CardContent>
                   </Card>
@@ -849,6 +847,7 @@ export default function AgentKnowledge() {
               </EmptyHeader>
             </Empty>
           )}
+          </LeituraDaLista>
         </div>
 
         <Card className="h-fit">

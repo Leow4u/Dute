@@ -13,7 +13,9 @@ import {
   parseInline,
   parseMarkdown,
   settleStreamingMarkdown,
-  toolLabel,
+  consultaDoAgente,
+  fontesDaResposta,
+  resumoDaTrilha,
   uniqueTools,
 } from "./agent-chat";
 
@@ -54,15 +56,61 @@ describe("texto chegando", () => {
   });
 });
 
-describe("consultas feitas", () => {
-  it("rótulo em português e sem repetição", () => {
-    expect(toolLabel("buscar_itens")).toBe("Buscou itens no estoque");
-    expect(toolLabel("listar_pedidos", true)).toBe("Consultando os pedidos");
-    expect(toolLabel("desconhecida")).toBe("Consultou os dados");
-    expect(toolLabel("tarefas_armazem", true)).toBe("Consultando as tarefas do armazém");
-    expect(toolLabel("previa_faturamento")).toBe("Calculou a prévia da fatura");
-    expect(toolLabel("conversas_anteriores")).toBe("Procurou nas conversas anteriores");
+describe("as consultas na trilha e nas fontes (carregamento v2, momento 9)", () => {
+  it("a da vez no gerúndio com a reticência de um caractere; a feita pelo nome do que leu", () => {
+    expect(consultaDoAgente("resumo_estoque")).toEqual({ vez: "Consultando o estoque…", feita: "Estoque", objeto: "o estoque", fonte: "Estoque" });
+    expect(consultaDoAgente("movimentacoes")).toEqual({
+      vez: "Consultando o razão de movimentos…",
+      feita: "Razão de movimentos",
+      objeto: "o razão de movimentos",
+      fonte: "Razão de movimentos",
+    });
+    expect(consultaDoAgente("listar_pedidos").vez).toBe("Consultando os pedidos…");
+    expect(consultaDoAgente("recebimentos").feita).toBe("Chegadas");
+    expect(consultaDoAgente("tarefas_armazem").vez).toBe("Consultando as tarefas do armazém…");
+    expect(consultaDoAgente("previa_faturamento").vez).toBe("Calculando a prévia da fatura…");
+    expect(consultaDoAgente("conversas_anteriores").feita).toBe("Conversas anteriores");
+    expect(consultaDoAgente("desconhecida")).toEqual({ vez: "Consultando os dados…", feita: "Dados", objeto: "os dados", fonte: "Dados" });
+    // O nome que é de Object não vira consulta.
+    expect(consultaDoAgente("toString").feita).toBe("Dados");
     expect(uniqueTools(["buscar_itens", "movimentacoes", "buscar_itens"])).toEqual(["buscar_itens", "movimentacoes"]);
+  });
+
+  it("toda ferramenta dos dois agentes tem rótulo próprio, com a reticência de um caractere e sem os três pontos", () => {
+    const ferramentas = [
+      // functions/wms/src/domain/agent-dute.ts (AGENT_TOOL_NAMES)
+      "resumo_estoque", "buscar_itens", "listar_pedidos", "ver_pedido", "movimentacoes", "faturas", "documentos",
+      "conversas_anteriores", "sugerir_anotacao", "sugerir_rotina", "consultar_playbook", "rascunho_pedido", "rascunho_envio",
+      "fila_solicitacoes", "recebimentos", "tarefas_armazem", "enderecos", "eventos", "previa_faturamento",
+      // functions/core/src/domain/agente-*.ts (FERRAMENTAS_DO_AGENTE)
+      "itens_parados", "demandas", "ver_demanda", "agenda", "ver_os", "tempo_dos_itens",
+      "orcamentos", "ver_orcamento", "lpu", "orcamentos_parecidos", "a_receber",
+    ];
+    for (const nome of ferramentas) {
+      const consulta = consultaDoAgente(nome);
+      expect(consulta.feita, nome).not.toBe("Dados");
+      expect(consulta.vez, nome).toMatch(/^\S.*[^.]…$/);
+      expect(consulta.vez, nome).not.toContain("...");
+      expect(consulta.feita, nome).not.toMatch(/…|\.\.\./);
+    }
+  });
+
+  it("De onde tirei: só as leituras, na ordem e sem repetir; o rascunho e a rotina não são fonte", () => {
+    expect(fontesDaResposta(["resumo_estoque", "movimentacoes", "resumo_estoque"])).toEqual(["Estoque", "Razão de movimentos"]);
+    expect(fontesDaResposta(["buscar_itens", "rascunho_pedido", "sugerir_rotina", "sugerir_anotacao", "rascunho_envio"])).toEqual(["Itens do estoque"]);
+    expect(fontesDaResposta(["rascunho_pedido"])).toEqual([]);
+    expect(fontesDaResposta(undefined)).toEqual([]);
+  });
+
+  it("a trilha recolhida numa linha diz o que leu", () => {
+    expect(resumoDaTrilha(["resumo_estoque"])).toBe("Leu o estoque");
+    expect(resumoDaTrilha(["resumo_estoque", "movimentacoes"])).toBe("Leu o estoque e o razão de movimentos");
+    expect(resumoDaTrilha(["resumo_estoque", "listar_pedidos", "recebimentos"])).toBe("Leu o estoque, os pedidos e as chegadas");
+    expect(resumoDaTrilha(["resumo_estoque", "movimentacoes", "listar_pedidos", "recebimentos", "itens_parados"])).toBe(
+      "Leu o estoque, o razão de movimentos e mais 3",
+    );
+    expect(resumoDaTrilha(["rascunho_pedido"])).toBeNull();
+    expect(resumoDaTrilha([])).toBeNull();
   });
 });
 

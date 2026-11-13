@@ -521,6 +521,20 @@ describe("travado, o botão não responde ao ponteiro", () => {
     expect(classes()).toEqual(expect.arrayContaining(["bg-transparent", "hover:bg-transparent", "active:bg-transparent"]));
   });
 
+  it("em tinta (o Aprovar do painel do Agent Dute e os cartões do chat): o primário com o fundo e o texto trocados, e travado fica em tinta", () => {
+    montar("repouso", { tinta: true });
+    expect(classes()).toEqual(expect.arrayContaining(["carregando-na-cor", "bg-foreground", "text-background", "hover:bg-foreground/85"]));
+    expect(classes()).not.toContain("bg-primary");
+    expect(classes()).not.toContain("text-primary-foreground");
+    expect(botao().querySelector('[data-fundo="toque"]')?.className).toBe("bg-foreground/85");
+    montar("andamento", { tinta: true });
+    passar(CARREGANDO.atrasoMs);
+    expect(nome()).toBe(TEXTOS.andamento);
+    expect(classes()).toEqual(expect.arrayContaining(["bg-foreground", "hover:bg-foreground", "active:bg-foreground"]));
+    expect(classes()).not.toContain("hover:bg-primary");
+    expect(classes()).not.toContain("hover:bg-foreground/85");
+  });
+
   it("bloqueado (o Recusar da linha que aprova): não acende no hover nem no toque", () => {
     montar("repouso", { variant: "destructive", bloqueado: true });
     expect(classes()).toEqual(expect.arrayContaining(["bg-card", "hover:bg-card", "active:bg-card"]));

@@ -1,27 +1,36 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
-import { ArrowDown, ArrowUp, CalendarClock, Check, Copy, FileText, Loader2, MessageCircle, MessagesSquare, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Search, Sparkles, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, Check, Copy, FileText, MessageCircle, MessagesSquare, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Search, Sparkles, X } from "lucide-react";
 
 import type { ChatMessage, ChatResponse } from "@/components/agent/chat";
 import { DraftCard } from "@/components/agent/draft-card";
 import { RoutinesPage, useRoutines } from "@/components/agent/routines";
 import { AgentMarkdown } from "@/components/agent/markdown";
+import { FontesDaResposta, TrilhaDoAgente, TrilhaRecolhida, type ConsultaDoAgente } from "@/components/agent/trilha-do-agente";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { Esqueleto } from "@/components/ui/esqueleto";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
 import {
   agentView,
   filterConversations,
+  fontesDaResposta,
   groupConversations,
   newConversationId,
   settleStreamingMarkdown,
-  toolLabel,
   uniqueTools,
   type AgentView,
   type ConversationSummary,
   type Suggestion,
 } from "@/lib/agent-chat";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { CARREGANDO } from "@/lib/carregando/tempo";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { PRAZO_ESGOTADO, prazoEsgotado } from "@/lib/conexao";
 import { chaveNoAlvo } from "@/lib/agente/cliente";
 import { useClienteDoAgente } from "@/lib/agente/contexto";
 import { useAppUser } from "@/lib/auth";
@@ -46,14 +55,33 @@ type ConversationsResponse = { conversations: ConversationSummary[] };
 type Streaming = {
   conversationId: string;
   question: string;
+  /** O que a pessoa escreveu, que volta ao campo se ela parar de esperar. */
+  content: string;
   /** Nomes das notas anexadas nesta pergunta. */
   files: string[];
+  /** As notas anexadas, para voltar ao campo e para o "Tentar de novo". */
+  sentFiles: PendingFile[];
   tools: string[];
   runningTool: string | null;
   text: string;
   /** Mensagem do modelo a que o texto pertence; muda depois de uma consulta. */
   textIndex: number;
+  /** `esperando` enquanto a resposta chega; `sem-resposta` no prazo do chat (180 s), com o "Tentar de novo". */
+  estado: "esperando" | "sem-resposta";
 };
+
+/** A resposta não chegou no prazo do chat. */
+export const SEM_RESPOSTA_DO_AGENTE = "Sem resposta do Agent Dute";
+
+/** As consultas da trilha a partir do stream: as feitas e, por último, a da vez. */
+export function consultasDoStream(tools: readonly string[], runningTool: string | null): ConsultaDoAgente[] {
+  return tools.map((nome) => ({ nome, estado: nome === runningTool ? "lendo" : "lida" }));
+}
+
+/** O campo da conversa, para onde o foco volta quando o botão em que ele estava sai da tela. */
+function focarOCampo() {
+  document.querySelector<HTMLTextAreaElement>("[data-agent-input]")?.focus();
+}
 
 const conversationsKey = ["agent-dute-conversations"] as const;
 
@@ -131,6 +159,9 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
   const [files, setFiles] = useState<PendingFile[]>([]);
   const [railCollapsed, setRailCollapsed] = useRailCollapsed();
   const abortRef = useRef<AbortController | null>(null);
+  // Cada envio tem a sua vez: parar, o prazo e um envio novo encerram a de antes, e o que chega dela não mexe na tela.
+  const sendTurn = useRef(0);
+  const anunciar = useAnuncio();
   const agente = useClienteDoAgente();
   // A nota anexada vai no aviso de envio: só o cliente, na conversa da Armazenagem.
   const canAttach = user?.publicMetadata.role === "cliente" && (agente.alvo.tipo === "wms" || agente.alvo.modulo === "wms");
@@ -180,17 +211,59 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
+  const waiting = streaming?.estado === "esperando";
+  // O relógio da resposta (momento 9): aos 10 s sem texto, a demora e o Parar; no prazo do chat (180 s), "Sem resposta do Agent Dute".
+  const espera = useEspera(waiting, { desisteMs: CARREGANDO.desisteDoAgenteMs });
+  const demorando = waiting && !streaming?.text && (espera.fase === "demorando" || espera.fase === "sem-resposta");
+
+  /** Encerra a vez do envio de agora: o que chegar dele depois não mexe na tela. */
+  function endTurn(reason: "parar" | "prazo") {
+    sendTurn.current += 1;
+    abortRef.current?.abort(reason);
+    abortRef.current = null;
+  }
+
+  // O prazo do chat: a espera para neste aparelho, e a pergunta fica com o "Tentar de novo".
+  useEffect(() => {
+    if (espera.fase !== "sem-resposta" || streaming?.estado !== "esperando") return;
+    endTurn("prazo");
+    setStreaming((current) => (current ? { ...current, estado: "sem-resposta", runningTool: null } : current));
+  }, [espera.fase, streaming?.estado]);
+
+  /**
+   * Parar: corta a espera só neste aparelho (o agente só lê e não grava nada
+   * por causa disso). A pergunta e as notas voltam ao campo, e o foco também.
+   */
+  function stop() {
+    const current = streaming;
+    if (!current || current.estado !== "esperando") return;
+    endTurn("parar");
+    setStreaming(null);
+    setDraft(current.content);
+    setFiles(current.sentFiles);
+    window.requestAnimationFrame(focarOCampo);
+  }
+
+  /** "Tentar de novo" no prazo do chat: a mesma pergunta, com as mesmas notas. */
+  function retry() {
+    const current = streaming;
+    if (!current || current.estado !== "sem-resposta") return;
+    void send(current.content, { files: current.sentFiles });
+  }
+
   // Pergunta vinda da barra do Início (?q=): abre uma conversa nova e envia.
   const handledQuestion = useRef<string | null>(null);
   useEffect(() => {
-    if (!askedFromOutside || streaming || handledQuestion.current === askedFromOutside) return;
+    if (!askedFromOutside || waiting || handledQuestion.current === askedFromOutside) return;
     handledQuestion.current = askedFromOutside;
     void send(askedFromOutside, { fresh: true });
   }, [askedFromOutside]);
 
   function openConversation(id: string | null) {
     setMobileRail(false);
-    if (streaming) return;
+    if (waiting) return;
+    // A pergunta sem resposta fica para trás: a outra conversa não a mostra.
+    if (streaming) setStreaming(null);
     navigate(id ? `${basePath}?c=${encodeURIComponent(id)}` : basePath);
   }
 
@@ -199,23 +272,38 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
     navigate(`${basePath}?v=${next}`);
   }
 
-  async function send(content: string, options: { fresh?: boolean } = {}) {
-    if (files.some((file) => file.status === "uploading")) return;
-    const sentFiles = files.filter((file) => file.status === "ready" && file.attachment);
+  async function send(content: string, options: { fresh?: boolean; files?: PendingFile[] } = {}) {
+    const pending = options.files ?? files;
+    if (pending.some((file) => file.status === "uploading")) return;
+    const sentFiles = pending.filter((file) => file.status === "ready" && file.attachment);
     const attachments = sentFiles.map((file) => file.attachment!);
     const question = content.trim() || (attachments.length ? "Segue a nota fiscal em anexo." : "");
-    if (!question || streaming) return;
+    if (!question || waiting) return;
     const current = options.fresh ? null : conversationId;
     const id = current ?? newConversationId();
     if (!current) navigate(`${basePath}?c=${encodeURIComponent(id)}`, { replace: Boolean(options.fresh) });
     setDraft("");
     setFiles([]);
-    setStreaming({ conversationId: id, question, files: sentFiles.map((file) => file.name), tools: [], runningTool: null, text: "", textIndex: -1 });
+    setStreaming({
+      conversationId: id,
+      question,
+      content,
+      files: sentFiles.map((file) => file.name),
+      sentFiles,
+      tools: [],
+      runningTool: null,
+      text: "",
+      textIndex: -1,
+      estado: "esperando",
+    });
+    sendTurn.current += 1;
+    const turn = sendTurn.current;
     const controller = new AbortController();
     abortRef.current = controller;
     const onChunk = (chunk: AgentDuteStreamChunk) => {
+      if (sendTurn.current !== turn) return;
       setStreaming((current) => {
-        if (!current) return current;
+        if (!current || current.estado !== "esperando") return current;
         if (chunk.type === "reset") return { ...current, tools: [], runningTool: null, text: "", textIndex: -1 };
         if (chunk.type === "tool") {
           return {
@@ -235,12 +323,27 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
         onChunk,
         controller.signal,
       );
+      // A resposta gravada entra no cache mesmo depois de parar: ela é da conversa.
       queryClient.setQueryData<ChatResponse>(chatQueryKey(id), (previous) => ({
         conversation: result.conversation ?? previous?.conversation,
         messages: [...(previous?.messages ?? []), ...(result.messages ?? [])],
       }));
+      if (sendTurn.current !== turn) return;
+      setStreaming(null);
+      abortRef.current = null;
+      // A resposta não fica em região viva: o leitor de tela ouve que ela chegou e a lê quando quiser.
+      anunciar("Resposta pronta");
       await queryClient.invalidateQueries({ queryKey: conversationsQueryKey });
     } catch (error) {
+      // Parou ou passou do prazo: quem encerrou a vez já cuidou da tela.
+      if (sendTurn.current !== turn) return;
+      abortRef.current = null;
+      if (prazoEsgotado(error) || (error instanceof Error && error.message === PRAZO_ESGOTADO)) {
+        sendTurn.current += 1;
+        setStreaming((current) => (current ? { ...current, estado: "sem-resposta", runningTool: null } : current));
+        return;
+      }
+      setStreaming(null);
       setDraft(content);
       setFiles(sentFiles);
       toast({
@@ -248,9 +351,6 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
         description: error instanceof Error ? error.message : "Tente de novo em instantes.",
         variant: "destructive",
       });
-    } finally {
-      setStreaming(null);
-      abortRef.current = null;
     }
   }
 
@@ -326,7 +426,7 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
             suggestions={suggestions}
             intro={intro}
             placeholder={placeholder}
-            disabled={Boolean(streaming)}
+            disabled={waiting}
             draft={draft}
             onDraft={setDraft}
             onSend={send}
@@ -337,10 +437,13 @@ export function AgentScreen({ basePath, suggestions, intro, placeholder, actions
             messages={messages}
             loading={chat.isLoading}
             streaming={showingStream}
+            demorando={demorando}
+            onStop={stop}
+            onRetry={retry}
             draft={draft}
             onDraft={setDraft}
             onSend={send}
-            busy={Boolean(streaming)}
+            busy={waiting}
             attach={attach}
             aviso={aviso}
           />
@@ -465,9 +568,14 @@ function AgentRail({
           className="min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
         />
       </label>
-      <nav aria-label="Conversas recentes" className="min-h-0 flex-1 overflow-y-auto">
+      <nav aria-label="Conversas recentes" aria-busy={loading || undefined} className="min-h-0 flex-1 overflow-y-auto">
         {loading ? (
-          <p className="px-2 py-3 text-sm text-muted-foreground">Carregando…</p>
+          // As conversas chegando: as linhas-fantasma no lugar delas, sem texto (o título da barra já diz o que é).
+          <div aria-hidden="true" className="flex flex-col gap-3.5 px-2.5 py-4">
+            {["w-3/4", "w-1/2", "w-2/3"].map((largura) => (
+              <Esqueleto key={largura} forma="texto" className={largura} />
+            ))}
+          </div>
         ) : groups.length === 0 ? (
           <p className="px-2 py-3 text-sm text-muted-foreground">{query ? "Nenhuma conversa encontrada." : "Suas conversas aparecem aqui."}</p>
         ) : (
@@ -559,7 +667,7 @@ function Composer({
               )}
             >
               {file.status === "uploading" ? (
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+                <Spinner />
               ) : (
                 <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
               )}
@@ -615,17 +723,21 @@ function Composer({
             </button>
           </>
         ) : null}
+        {/* Esperando a resposta, o Enviar fica travado sem sair da ordem do foco: o estado mora na trilha. */}
         <button
           type="button"
-          disabled={!canSend}
-          onClick={() => onSend(value)}
+          disabled={!canSend && !disabled}
+          aria-disabled={disabled || undefined}
+          onClick={() => {
+            if (canSend) onSend(value);
+          }}
           aria-label="Enviar"
           className={cn(
             "grid h-9 w-9 place-items-center rounded-xl transition-colors",
             canSend ? "bg-foreground text-background hover:bg-foreground/85" : "bg-muted text-muted-foreground",
           )}
         >
-          {disabled ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+          <ArrowUp className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -693,6 +805,9 @@ function Conversation({
   messages,
   loading,
   streaming,
+  demorando,
+  onStop,
+  onRetry,
   draft,
   onDraft,
   onSend,
@@ -703,6 +818,9 @@ function Conversation({
   messages: ChatMessage[];
   loading: boolean;
   streaming: Streaming | null;
+  demorando: boolean;
+  onStop: () => void;
+  onRetry: () => void;
   draft: string;
   onDraft: (value: string) => void;
   onSend: (value: string) => void;
@@ -736,6 +854,16 @@ function Conversation({
     pinned.current = true;
   }, [streaming?.question]);
 
+  // O botão em que o foco estava saiu da tela (o Parar, quando o texto chegou ou o prazo passou): o foco não cai no body.
+  const semResposta = streaming?.estado === "sem-resposta";
+  const retryRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const perdido = !document.activeElement || document.activeElement === document.body;
+    if (!perdido) return;
+    if (semResposta) retryRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    else if (!demorando && streaming) focarOCampo();
+  }, [semResposta, demorando]);
+
   return (
     <>
       <div
@@ -749,11 +877,7 @@ function Conversation({
         }}
       >
         <div className="mx-auto w-full max-w-[780px] px-4 pb-6 pt-6 md:px-7">
-          {loading && !streaming ? (
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Carregando a conversa…
-            </p>
-          ) : null}
+          {loading && !streaming ? <CarregandoNaRegiao rotulo="Carregando a conversa…" /> : null}
           {ordered.map((message) =>
             message.role === "user" ? (
               <UserMessage key={message.id} files={(message.attachments ?? []).map((file) => file.file_name)}>
@@ -773,12 +897,21 @@ function Conversation({
           {streaming ? (
             <>
               <UserMessage files={streaming.files}>{streaming.question}</UserMessage>
-              <AssistantMessage
-                tools={streaming.tools}
-                runningTool={streaming.runningTool}
-                content={streaming.text}
-                streaming
-              />
+              {semResposta ? (
+                <div ref={retryRef} className="mb-7 flex gap-3">
+                  <AgentMark />
+                  <ErroNaLeitura mensagem={SEM_RESPOSTA_DO_AGENTE} tentando={false} onTentar={onRetry} className="min-w-0 flex-1" />
+                </div>
+              ) : (
+                <AssistantMessage
+                  tools={streaming.tools}
+                  runningTool={streaming.runningTool}
+                  content={streaming.text}
+                  demorando={demorando}
+                  onStop={onStop}
+                  streaming
+                />
+              )}
             </>
           ) : null}
         </div>
@@ -826,6 +959,14 @@ function UserMessage({ children, files = [] }: { children: ReactNode; files?: st
   );
 }
 
+/**
+ * A resposta do Agent Dute. Enquanto chega, a trilha (momento 9) diz o que ele
+ * está lendo e, quando o texto começa, recolhe numa linha; a resposta gravada
+ * mostra a mesma linha, para nada mudar de lugar quando ela termina. No fim,
+ * "De onde tirei" (invariante 3). A resposta não é região viva: o texto entra
+ * em fluxo, sem animação por palavra, e o leitor de tela ouve "Resposta
+ * pronta" quando ela chega.
+ */
 function AssistantMessage({
   id,
   content,
@@ -833,6 +974,8 @@ function AssistantMessage({
   runningTool,
   draft,
   draftSent,
+  demorando = false,
+  onStop,
   streaming = false,
 }: {
   id?: string;
@@ -841,44 +984,33 @@ function AssistantMessage({
   draft?: unknown;
   draftSent?: unknown;
   runningTool?: string | null;
+  demorando?: boolean;
+  onStop?: () => void;
   streaming?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const names = uniqueTools(tools);
+  // Escrevendo: o texto chegou e nenhuma consulta está na vez (o texto antes de uma consulta é trocado pelo da resposta).
+  const writing = Boolean(content) && !runningTool;
   return (
     <div className="mb-7 flex gap-3">
       <AgentMark />
       <div className="min-w-0 flex-1 pt-0.5">
-        {names.length ? (
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {names.map((name) => {
-              const running = streaming && name === runningTool;
-              return (
-                <span
-                  key={name}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/50 px-2.5 py-0.5 text-xs text-muted-foreground"
-                >
-                  {running ? (
-                    <Loader2 className="h-3 w-3 animate-spin text-agent-accent" />
-                  ) : (
-                    <Check className="h-3 w-3 text-success-soft-foreground" />
-                  )}
-                  {toolLabel(name, running)}
-                </span>
-              );
-            })}
-          </div>
-        ) : null}
+        {streaming ? (
+          <TrilhaDoAgente
+            consultas={consultasDoStream(names, runningTool ?? null)}
+            escrevendo={writing}
+            demorando={demorando}
+            onParar={onStop}
+            className={content ? "mb-2" : undefined}
+          />
+        ) : (
+          <TrilhaRecolhida nomes={names} className="mb-2" />
+        )}
         {content ? (
-          <div className={cn(streaming && "agent-streaming")}>
-            <AgentMarkdown content={streaming ? settleStreamingMarkdown(content) : content} />
-          </div>
-        ) : streaming ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {names.length ? "Organizando a resposta…" : "Pensando…"}
-          </p>
+          <AgentMarkdown content={streaming ? settleStreamingMarkdown(content) : content} />
         ) : null}
+        {!streaming && content ? <FontesDaResposta fontes={fontesDaResposta(names)} className="mt-3" /> : null}
         {!streaming && draft ? <DraftCard value={draft} messageId={id} sent={draftSent} /> : null}
         {!streaming && content ? (
           <button

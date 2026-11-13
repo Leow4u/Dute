@@ -249,6 +249,10 @@ describe("os tokens do carregamento", () => {
     expect(raiz.get("--carregando-trilho-na-cor")).toBe("0.35");
     expect(raiz.get("--carregando-piso")).toBe("0.6");
     expect(raiz.get("--carregando-piso-na-cor")).toBe("0.8");
+    // O violeta do Agent Dute (parte 12): 0,75 no claro e 0,85 no escuro, e a trilha lê o dele.
+    expect(raiz.get("--carregando-piso-agente")).toBe("0.75");
+    expect(variaveis(".dark").get("--carregando-piso-agente")).toBe("0.85");
+    expect(variaveis(".trilha-do-agente", ["@layer components"]).get("--carregando-piso")).toBe("var(--carregando-piso-agente)");
     expect(raiz.get("--carregando-barra-linha")).toBe("4px");
     expect(raiz.get("--carregando-barra-topo")).toBe("3px");
     expect(raiz.get("--carregando-chanfro")).toBe("4px");
@@ -503,6 +507,25 @@ describe("o contraste dos tokens, no claro, na v3, no escuro e na TV", () => {
     for (const [nome, t] of Object.entries(temas)) {
       expect(contraste(t.cor("--carregando-agente"), t.cor("--agent-soft")), nome).toBeGreaterThanOrEqual(3);
       expect(contraste(t.cor("--carregando-agente"), t.cor("--card")), nome).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("o violeta no vale do respiro (o piso do agente) ainda tem 3:1 na caixa dele e no cartão", () => {
+    for (const [nome, t] of Object.entries(temas)) {
+      for (const fundo of ["--agent-soft", "--card"]) {
+        const vale = sobre(t.cor("--carregando-agente"), t.cor(fundo), t.numero("--carregando-piso-agente"));
+        expect(contraste(vale, t.cor(fundo)), `${nome} ${fundo}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it("o texto violeta da trilha e dos chips tem 4,5:1 na caixa do agente (6,8:1 no claro; o --agent-strong no escuro)", () => {
+    expect(contraste(temas.v3.cor("--carregando-agente"), temas.v3.cor("--agent-soft"))).toBeGreaterThanOrEqual(6.8);
+    for (const nome of ["claro", "v3"]) {
+      expect(contraste(temas[nome].cor("--carregando-agente"), temas[nome].cor("--agent-soft")), nome).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const nome of ["escuro", "v3Escuro", "tv", "tvEscuro"]) {
+      expect(contraste(temas[nome].cor("--agent-strong"), temas[nome].cor("--agent-soft")), nome).toBeGreaterThanOrEqual(4.5);
     }
   });
 

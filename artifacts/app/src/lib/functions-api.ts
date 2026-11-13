@@ -2,6 +2,7 @@ import { httpsCallable } from "firebase/functions";
 import { functionsDoApp } from "./firebase-functions";
 
 import { clienteDaChamada } from "./active-customer";
+import { CARREGANDO } from "./carregando/tempo";
 import { PRAZO_ESGOTADO, PRAZO_ESGOTADO_NA_LEITURA, aparelhoSemRede, callableSemResposta, corpoDaFalta, corpoSemConexao, mensagemDaFalta, prazoEsgotado } from "./conexao";
 import { firebaseApp } from "./firebase";
 
@@ -1093,7 +1094,7 @@ export async function streamAgentDuteChat<T>(
   const callable = httpsCallable<typeof payload, T, AgentDuteStreamChunk>(
     functionsDoApp(firebaseApp),
     "chatWithAgentDute",
-    { timeout: 180_000 },
+    { timeout: CARREGANDO.desisteDoAgenteMs },
   );
   try {
     const { stream, data } = await callable.stream(payload, { signal });

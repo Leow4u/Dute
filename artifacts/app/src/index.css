@@ -828,6 +828,9 @@
      #F5F5F3) e branco a 0,8 sobre a cor (3,3:1 sobre o vermelho). */
   --carregando-piso: 0.6;
   --carregando-piso-na-cor: 0.8;
+  /* O violeta do Agent Dute no vale do respiro: 0,75 no claro (3,9:1 na caixa
+     dele) e 0,85 no escuro (3,2:1); o 0,6 da tinta ficaria abaixo de 3:1. */
+  --carregando-piso-agente: 0.75;
   --carregando-barra-linha: 4px; /* na borda de baixo da linha em andamento */
   --carregando-barra-topo: 3px; /* no topo do cartão que relê */
   --carregando-chanfro: 4px; /* a ponta a 45° dos segmentos de progresso */
@@ -874,6 +877,7 @@
 
 .dark {
   --carregando-esqueleto: var(--muted); /* #1D2839 */
+  --carregando-piso-agente: 0.85;
 }
 
 /* No celular as barras engrossam. */
@@ -2223,5 +2227,31 @@
     inline-size: 1em;
     text-align: center;
     font-weight: 700;
+  }
+}
+
+/* A trilha do Agent Dute (components/agent/trilha-do-agente.tsx; momento 9):
+   a caixa violeta da vez, o check das consultas feitas e o aviso de 10 s. A
+   linha nova entra em 150 ms (opacidade e 4 px) e o check com a mola, só nos
+   primeiros 5 s (data-movimento): depois, a trilha para de animar e a caixa
+   da vez continua. O aviso de 10 s entra uma vez. No movimento reduzido, a caixa respira até o piso do
+   violeta, a linha entra só por opacidade (a subida é 0) e o check aparece
+   pronto (o tempo do sucesso é 0). */
+@layer components {
+  .trilha-do-agente {
+    --carregando-piso: var(--carregando-piso-agente);
+  }
+
+  .trilha-do-agente[data-movimento] .trilha-do-agente-passo {
+    animation: carregando-chega-linha var(--carregando-t-chegada) var(--ease-carregando-entrada) both;
+  }
+
+  /* O aviso de 10 s entra uma vez, como os outros avisos (um tiro, não laço). */
+  .trilha-do-agente-aviso {
+    animation: carregando-chega-linha var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
+  }
+
+  .trilha-do-agente[data-movimento] [data-passo="feita"] [data-check] {
+    animation: carregando-marca var(--carregando-t-sucesso) var(--carregando-mola) both;
   }
 }

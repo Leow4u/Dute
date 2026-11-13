@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CheckCircle2, Loader2 } from "lucide-react";
+import { CalendarClock, CheckCircle2 } from "lucide-react";
+
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
 import { chaveNoAlvo } from "@/lib/agente/cliente";
 import { useClienteDoAgente } from "@/lib/agente/contexto";
@@ -71,15 +73,14 @@ export function RoutineDraftCard({ draft, messageId, sent: sentValue }: { draft:
       ) : null}
       <div className="flex flex-wrap items-center justify-end gap-3 px-4 py-3">
         {problem ? <span className="text-xs text-warning-soft-foreground">{problem}</span> : null}
-        <button
-          type="button"
-          disabled={Boolean(problem) || !messageId || create.isPending}
+        <BotaoDeAcao
+          tinta
+          estado={create.isPending ? "andamento" : "repouso"}
+          rotulo="Criar rotina"
+          andamento="Criando…"
+          bloqueado={Boolean(problem) || !messageId}
           onClick={() => create.mutate(form)}
-          className="inline-flex items-center gap-2 rounded-xl bg-foreground px-3.5 py-2 text-sm font-semibold text-background hover:bg-foreground/85 disabled:opacity-50"
-        >
-          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {create.isPending ? "Criando…" : "Criar rotina"}
-        </button>
+        />
       </div>
     </section>
   );

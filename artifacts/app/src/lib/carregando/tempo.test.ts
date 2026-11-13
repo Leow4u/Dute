@@ -17,6 +17,8 @@ describe("o relógio da espera", () => {
       movimentoMaxMs: 5_000,
       demoraMs: 10_000,
       desisteMs: 70_000,
+      // O prazo do chat do Agent Dute (parte 12), o mesmo timeout das callables dele.
+      desisteDoAgenteMs: 180_000,
       estimativaSemByteMs: 10_000,
       sucessoVisivelMs: 1_000,
       erroVisivelMs: 2_000,

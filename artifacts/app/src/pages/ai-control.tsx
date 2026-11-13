@@ -34,7 +34,11 @@ import {
 import { useAppUser } from "@/lib/auth";
 import { canSeeCatalogPrice } from "@/lib/permissions";
 import { Badge } from "@/components/ui/badge";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { CartaoComBrilho, Esqueleto } from "@/components/ui/esqueleto";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,6 +62,8 @@ import { cn } from "@/lib/utils";
 import { recordCustomerCode } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { erroDaResposta } from "@/lib/erro-da-resposta";
+import { useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { ehFaltaDeConexao } from "@/lib/conexao";
 
 type EventSeverity = "info" | "attention" | "critical";
 
@@ -652,7 +658,7 @@ function isDueWithin(value?: string | null, hours = 4) {
 function payloadSummary(payload?: Record<string, unknown>) {
   const keys = Object.keys(payload ?? {});
   if (!keys.length) return "Sem payload";
-  return keys.slice(0, 4).join(", ") + (keys.length > 4 ? "..." : "");
+  return keys.slice(0, 4).join(", ") + (keys.length > 4 ? "…" : "");
 }
 
 function warehouseQueues(queues?: WarehouseOpsResponse["queues"]) {
@@ -1109,18 +1115,31 @@ function MetricCard({
   );
 }
 
+/**
+ * O painel antigo que ainda lê (carregamento v2): o título real e a caixa com
+ * "Carregando o painel…" depois de 300 ms, e os blocos neutros com a forma
+ * dos cartões, no lugar das divs rosadas que pulsavam sem texto.
+ */
 function AiLoading() {
   return (
-    <div className="space-y-6 animate-pulse">
-      <div className="h-8 w-72 rounded-md bg-primary/10" />
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Painel do Agent Dute</h1>
+        <CarregandoNaRegiao rotulo="Carregando o painel…" />
+      </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {[1, 2, 3, 4].map((item) => (
-          <div key={item} className="h-36 rounded-lg bg-primary/10" />
+        {[0, 1, 2, 3].map((ordem) => (
+          <CartaoComBrilho key={ordem} ordem={ordem} className="rounded-lg">
+            <Esqueleto className="h-36 rounded-lg" />
+          </CartaoComBrilho>
         ))}
       </div>
       <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
-        <div className="h-[520px] rounded-lg bg-primary/10" />
-        <div className="h-[520px] rounded-lg bg-primary/10" />
+        {[4, 5].map((ordem) => (
+          <CartaoComBrilho key={ordem} ordem={ordem} className="rounded-lg">
+            <Esqueleto className="h-[520px] rounded-lg" />
+          </CartaoComBrilho>
+        ))}
       </div>
     </div>
   );
@@ -1193,14 +1212,15 @@ function OperationalNotificationsCard({
   notifications,
   isLoading,
   isSyncing,
-  isDeciding,
+  acoes,
   onSync,
   onDecide,
 }: {
   notifications: OperationalNotification[];
   isLoading: boolean;
   isSyncing: boolean;
-  isDeciding: boolean;
+  /** A decisão é por notificação (carregamento v2, momento 4): aprovar uma deixa as outras livres. */
+  acoes: Pick<AcaoNaLinha<string>, "estado" | "ocupada">;
   onSync: () => void;
   onDecide: (
     id: string,
@@ -1242,22 +1262,20 @@ function OperationalNotificationsCard({
               Notificações do Agent Dute
             </CardTitle>
           </div>
-          <Button
+          <BotaoDeAcao
             variant="outline"
             size="sm"
+            estado={isSyncing ? "andamento" : "repouso"}
+            icone={<RefreshCw className="h-4 w-4" />}
+            rotulo="Sincronizar"
+            andamento="Sincronizando…"
             onClick={onSync}
-            disabled={isSyncing}
-          >
-            <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
-            Sincronizar
-          </Button>
+          />
         </div>
       </CardHeader>
       <CardContent className="space-y-3 pt-5">
         {isLoading ? (
-          <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-            Carregando notificações operacionais...
-          </div>
+          <CarregandoNaRegiao rotulo="Carregando notificações…" className="rounded-lg border border-border bg-card p-4" />
         ) : visibleNotifications.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center">
             <MailCheck className="mx-auto h-5 w-5 text-muted-foreground" />
@@ -1384,20 +1402,30 @@ function OperationalNotificationsCard({
               ) : null}
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 {item.status === "draft" ? (
-                  <Button
+                  <BotaoDeAcao
                     size="sm"
                     variant="outline"
+                    estado={acoes.estado(item.id, "approve")}
+                    icone={<CheckCircle2 className="h-4 w-4" />}
+                    rotulo="Aprovar"
+                    andamento="Aprovando…"
+                    sucesso="Aprovada"
+                    erro="Não aprovada"
+                    bloqueado={acoes.ocupada(item.id) && acoes.estado(item.id, "approve") === "repouso"}
                     onClick={() => onDecide(item.id, "approve")}
-                    disabled={isDeciding}
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Aprovar
-                  </Button>
+                  />
                 ) : null}
                 {item.status === "approved" ? (
-                  <Button
+                  <BotaoDeAcao
                     size="sm"
                     variant="outline"
+                    estado={acoes.estado(item.id, "mark-sent")}
+                    icone={<Send className="h-4 w-4" />}
+                    rotulo="Enviar / registrar"
+                    andamento="Enviando…"
+                    sucesso="Enviada"
+                    erro="Não enviada"
+                    bloqueado={!canSend || (acoes.ocupada(item.id) && acoes.estado(item.id, "mark-sent") === "repouso")}
                     onClick={() =>
                       onDecide(item.id, "mark-sent", {
                         recipients,
@@ -1405,22 +1433,21 @@ function OperationalNotificationsCard({
                         body: deliveryDraft.body.trim(),
                       })
                     }
-                    disabled={isDeciding || !canSend}
-                  >
-                    <Send className="h-4 w-4" />
-                    Enviar / registrar
-                  </Button>
+                  />
                 ) : null}
                 {item.status !== "sent" ? (
-                  <Button
+                  <BotaoDeAcao
                     size="sm"
                     variant="ghost"
+                    estado={acoes.estado(item.id, "archive")}
+                    icone={<Archive className="h-4 w-4" />}
+                    rotulo="Arquivar"
+                    andamento="Arquivando…"
+                    sucesso="Arquivada"
+                    erro="Não arquivada"
+                    bloqueado={acoes.ocupada(item.id) && acoes.estado(item.id, "archive") === "repouso"}
                     onClick={() => onDecide(item.id, "archive")}
-                    disabled={isDeciding}
-                  >
-                    <Archive className="h-4 w-4" />
-                    Arquivar
-                  </Button>
+                  />
                 ) : null}
               </div>
             </div>
@@ -1591,6 +1618,8 @@ export default function AiControl() {
   const { code: activeCustomerCode } = useActiveCustomer();
   const [note, setNote] = useState("");
   const [severity, setSeverity] = useState<EventSeverity>("info");
+  // O Atualizar só gira quando a pessoa toca nele (carregamento v2, momento 7): a releitura de 60 s não mexe nele.
+  const [atualizando, setAtualizando] = useState(false);
 
   const overview = useQuery({
     queryKey: ["ai-overview"],
@@ -1665,19 +1694,32 @@ export default function AiControl() {
     },
   });
 
-  const resolveInsight = useMutation({
-    mutationFn: async (id: string) =>
-      fetchJson(`/api/ai/inbox/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ status: "resolved" }),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["ai-overview"] });
-      qc.invalidateQueries({ queryKey: ["warehouse-ops"] });
-      toast({ title: "Alerta resolvido" });
-    },
-  });
+  const alertas = useAcaoNaLinha<string>();
+  const resolveInsight = (id: string) =>
+    void alertas.executar(
+      id,
+      "resolver",
+      () =>
+        fetchJson(`/api/ai/inbox/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status: "resolved" }),
+        }).then(
+          (resultado) => {
+            toast({ title: "Alerta resolvido" });
+            return resultado;
+          },
+          // O resolveInsight não dizia nada na falha (diagnóstico, 4.12).
+          (erro: unknown) => {
+            toast({ title: "Não foi possível resolver o alerta", variant: "destructive" });
+            throw erro;
+          },
+        ),
+      {
+        releitura: () =>
+          Promise.all([qc.invalidateQueries({ queryKey: ["ai-overview"] }), qc.invalidateQueries({ queryKey: ["warehouse-ops"] })]),
+      },
+    );
 
   const syncNotifications = useMutation({
     mutationFn: async () =>
@@ -1706,33 +1748,35 @@ export default function AiControl() {
     },
   });
 
-  const decideNotification = useMutation({
-    mutationFn: async ({
+  // A decisão é por notificação, e o alerta se resolve um a um (carregamento v2, momento 4).
+  const notificacoes = useAcaoNaLinha<string>();
+  const decideNotification = (id: string, action: NotificationDecisionAction, payload?: NotificationDecisionPayload) =>
+    void notificacoes.executar(
       id,
       action,
-      payload,
-    }: {
-      id: string;
-      action: NotificationDecisionAction;
-      payload?: NotificationDecisionPayload;
-    }) =>
-      fetchJson(`/api/agent-dute/notifications/${encodeURIComponent(id)}/${action}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload ?? {}),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agent-operational-notifications"] });
-      qc.invalidateQueries({ queryKey: ["ai-overview"] });
-      toast({ title: "Notificação atualizada" });
-    },
-    onError: () => {
-      toast({
-        title: "Erro ao atualizar notificação",
-        variant: "destructive",
-      });
-    },
-  });
+      () =>
+        fetchJson(`/api/agent-dute/notifications/${encodeURIComponent(id)}/${action}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload ?? {}),
+        }).then(
+          (resultado) => {
+            toast({ title: "Notificação atualizada" });
+            return resultado;
+          },
+          (erro: unknown) => {
+            toast({ title: "Erro ao atualizar notificação", variant: "destructive" });
+            throw erro;
+          },
+        ),
+      {
+        releitura: () =>
+          Promise.all([
+            qc.invalidateQueries({ queryKey: ["agent-operational-notifications"] }),
+            qc.invalidateQueries({ queryKey: ["ai-overview"] }),
+          ]),
+      },
+    );
 
   const sources = useMemo(
     () => overview.data?.sources.join(", ") ?? "",
@@ -1742,10 +1786,12 @@ export default function AiControl() {
   if (overview.isLoading) return <AiLoading />;
 
   if (overview.error || !overview.data) {
-    return (
-      <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
-        Não consegui carregar a central da IA agora.
-      </div>
+    // Erro nunca vira vazio, e a falta de conexão diz qual é (parte 7a).
+    const reler = () => void overview.refetch();
+    return ehFaltaDeConexao(overview.error) ? (
+      <BlocoSemConexao tentando={overview.isFetching} onTentar={reler} />
+    ) : (
+      <ErroNaLeitura mensagem="Não consegui carregar a central da IA agora." tentando={overview.isFetching} onTentar={reler} />
     );
   }
 
@@ -1793,36 +1839,23 @@ export default function AiControl() {
             <Radio className="mr-1 h-3 w-3" />
             Monitorando
           </Badge>
-          <Button
+          <BotaoDeAcao
             variant="outline"
+            estado={atualizando ? "andamento" : "repouso"}
+            icone={<RefreshCw className="h-4 w-4" />}
+            rotulo="Atualizar"
+            andamento="Atualizando…"
             onClick={() => {
-              overview.refetch();
-              foundation.refetch();
-              warehouseOps.refetch();
-              customerRequests.refetch();
-              notifications.refetch();
+              setAtualizando(true);
+              void Promise.allSettled([
+                overview.refetch(),
+                foundation.refetch(),
+                warehouseOps.refetch(),
+                customerRequests.refetch(),
+                notifications.refetch(),
+              ]).then(() => setAtualizando(false));
             }}
-            disabled={
-              overview.isFetching ||
-              foundation.isFetching ||
-              warehouseOps.isFetching ||
-              customerRequests.isFetching ||
-              notifications.isFetching
-            }
-          >
-            <RefreshCw
-              className={cn(
-                "h-4 w-4",
-                (overview.isFetching ||
-                  foundation.isFetching ||
-                  warehouseOps.isFetching ||
-                  customerRequests.isFetching ||
-                  notifications.isFetching) &&
-                  "animate-spin",
-              )}
-            />
-            Atualizar
-          </Button>
+          />
         </div>
       </div>
 
@@ -2140,11 +2173,9 @@ export default function AiControl() {
             notifications={notifications.data?.items ?? []}
             isLoading={notifications.isLoading}
             isSyncing={syncNotifications.isPending}
-            isDeciding={decideNotification.isPending}
+            acoes={notificacoes}
             onSync={() => syncNotifications.mutate()}
-            onDecide={(id, action, payload) =>
-              decideNotification.mutate({ id, action, payload })
-            }
+            onDecide={decideNotification}
           />
 
           <Card>
@@ -2183,15 +2214,17 @@ export default function AiControl() {
                           {item.customer_code || "Operação"}
                         </span>
                         {!isDerived ? (
-                          <Button
+                          <BotaoDeAcao
                             variant="outline"
                             size="sm"
-                            onClick={() => resolveInsight.mutate(item.id)}
-                            disabled={resolveInsight.isPending}
-                          >
-                            <CheckCircle2 className="h-4 w-4" />
-                            Resolver
-                          </Button>
+                            estado={alertas.estado(item.id, "resolver")}
+                            icone={<CheckCircle2 className="h-4 w-4" />}
+                            rotulo="Resolver"
+                            andamento="Resolvendo…"
+                            sucesso="Resolvido"
+                            erro="Não resolvido"
+                            onClick={() => resolveInsight(item.id)}
+                          />
                         ) : (
                           <Badge variant="outline">derivado</Badge>
                         )}
@@ -2214,7 +2247,7 @@ export default function AiControl() {
                   id="ai-note"
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
-                  placeholder="Ex.: o cliente avisou que amanhã chegará remessa urgente para conferência..."
+                  placeholder="Ex.: o cliente avisou que amanhã chegará remessa urgente para conferência…"
                   rows={4}
                 />
               </div>
@@ -2232,13 +2265,14 @@ export default function AiControl() {
                     <SelectItem value="critical">Crítico</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button
+                <BotaoDeAcao
+                  estado={createNote.isPending ? "andamento" : "repouso"}
+                  icone={<Send className="h-4 w-4" />}
+                  rotulo="Registrar"
+                  andamento="Registrando…"
+                  bloqueado={!note.trim()}
                   onClick={() => createNote.mutate()}
-                  disabled={!note.trim() || createNote.isPending}
-                >
-                  <Send className="h-4 w-4" />
-                  Registrar
-                </Button>
+                />
               </div>
             </CardContent>
           </Card>

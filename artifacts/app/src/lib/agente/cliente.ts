@@ -1,10 +1,12 @@
-import { collection, getDocs, limit, orderBy, query, where, type DocumentData } from "firebase/firestore";
+import { collection, limit, orderBy, query, where, type DocumentData } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 
 import { fetchChatJson, type ChatMessage, type ChatResponse } from "@/components/agent/chat";
 import type { ConversationSummary } from "../agent-chat";
 import type { Playbook } from "../agent-playbooks";
 import type { Routine } from "../agent-routines";
+import { CARREGANDO } from "../carregando/tempo";
+import { lerDocsDoServidor } from "../cloud-api";
 import { callableSemResposta, mensagemDaFalta } from "../conexao";
 import { firebaseApp, firebaseAuth, firestore } from "../firebase";
 import { functionsDoApp } from "../firebase-functions";
@@ -172,7 +174,7 @@ function quemEsta(): string {
 
 async function conversarNoNucleo(dados: Record<string, unknown>, aoPedaco: (pedaco: AgentDuteStreamChunk) => void, sinal?: AbortSignal): Promise<ChatResponse> {
   if (!firebaseApp) throw new Error("Firebase não configurado.");
-  const callable = httpsCallable<Record<string, unknown>, ChatResponse, AgentDuteStreamChunk>(functionsDoApp(firebaseApp), "chatWithDute", { timeout: 180_000 });
+  const callable = httpsCallable<Record<string, unknown>, ChatResponse, AgentDuteStreamChunk>(functionsDoApp(firebaseApp), "chatWithDute", { timeout: CARREGANDO.desisteDoAgenteMs });
   try {
     const { stream, data } = await callable.stream(dados, { signal: sinal });
     for await (const pedaco of stream) aoPedaco(pedaco);
@@ -193,14 +195,15 @@ export function clienteDoNucleo(modulo: ModuloDoAgente, customerCode: string): C
     chave: ["nucleo", modulo, customerCode],
     async conversas() {
       if (!firestore) return { conversations: [] };
-      const lidas = await getDocs(
+      // Sem rede, o Firestore responde do cache: a lista velha ou vazia viraria "Suas conversas aparecem aqui".
+      const lidas = await lerDocsDoServidor(
         query(collection(firestore, "agent_conversations"), where("user_id", "==", quemEsta()), where("customer_code", "==", customerCode), orderBy("last_message_at", "desc"), limit(CONVERSAS_LIDAS)),
       );
       return { conversations: conversasDoModulo(lidas.docs.map((doc) => ({ ...doc.data(), id: doc.id })), modulo) };
     },
     async mensagens(conversaId) {
       if (!firestore) return { messages: [] };
-      const lidas = await getDocs(
+      const lidas = await lerDocsDoServidor(
         query(
           collection(firestore, "agent_messages"),
           where("conversation_id", "==", conversaId),

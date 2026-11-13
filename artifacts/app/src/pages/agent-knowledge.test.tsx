@@ -21,13 +21,15 @@ const estado = vi.hoisted(() => ({
   gravados: [] as string[],
   lotes: [] as Array<{ ids: string[]; soltar: () => void; feito: boolean }>,
   toasts: [] as Array<{ title?: string }>,
+  /** O Firestore sem o servidor: responde do cache, com sucesso, como o SDK faz sem rede. */
+  soCache: false,
 }));
 
-vi.mock("@/lib/firebase", () => ({ firestore: {} }));
+vi.mock("@/lib/firebase", () => ({ firestore: {}, firebaseAuth: null }));
 vi.mock("firebase/firestore", () => ({
   collection: (_db: unknown, nome: string) => ({ nome }),
   doc: (_db: unknown, nome: string, id: string) => ({ path: `${nome}/${id}` }),
-  getDocs: async () => ({ docs: [] }),
+  getDocs: async () => ({ docs: [], metadata: { fromCache: estado.soCache } }),
   where: () => ({}),
   query: () => ({}),
   serverTimestamp: () => "agora",
@@ -108,6 +110,7 @@ beforeEach(async () => {
   estado.gravados = [];
   estado.lotes = [];
   estado.toasts = [];
+  estado.soCache = false;
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -243,5 +246,28 @@ describe("o prazo de 70 s no Conhecimento", () => {
     expect(document.querySelector('[data-progresso="etapas"] [role="progressbar"]')?.getAttribute("aria-valuetext")).toBe("Etapa 1 de 3");
     expect(document.querySelector(".carregando-etapas")?.getAttribute("data-n")).toBe("3");
     expect(textosForaDaLista(partesDaEspera(), TEXTOS_DA_ESPERA)).toEqual([]);
+  });
+});
+
+describe("a base do Conhecimento sem o servidor (carregamento v2, parte 12)", () => {
+  it("a leitura que só achou o cache é falta de conexão, e nunca \"Sem documentos na base\" nem os contadores em 0", async () => {
+    estado.soCache = true;
+    await act(async () => {
+      await client.resetQueries();
+    });
+    await passar(0);
+    expect(document.body.textContent).not.toContain("Sem documentos na base");
+    const falta = document.querySelector<HTMLElement>("[data-falta]");
+    expect(falta).not.toBeNull();
+    expect(falta!.textContent).toContain("Tentar de novo");
+    // Os números esperam a leitura: os blocos no lugar do "0".
+    expect(document.querySelectorAll('[data-esqueleto][data-forma="contagem"]')).toHaveLength(4);
+  });
+
+  it("com o servidor, a base vazia diz que está vazia", async () => {
+    // O react-query avisa a tela pelo relógio (setTimeout 0).
+    await passar(0);
+    expect(document.body.textContent).toContain("Sem documentos na base");
+    expect(document.querySelector("[data-falta]")).toBeNull();
   });
 });

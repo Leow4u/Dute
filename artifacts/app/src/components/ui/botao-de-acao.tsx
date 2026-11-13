@@ -26,6 +26,13 @@ export interface BotaoDeAcaoProps extends Omit<ButtonProps, "children" | "disabl
   conferir?: string;
   /** Travado por outra ação (o Recusar da linha que aprova): aria-disabled a 0,45, sem disabled. */
   bloqueado?: boolean;
+  /**
+   * O primário em tinta, no lugar do vermelho, onde o desenho aprovado pede
+   * (o Aprovar do painel do Agent Dute e os cartões do chat, que não disputam
+   * com a ação principal da tela). Usa o primário (o indicador no branco, com
+   * o trilho a 0,35) com o fundo e o texto trocados.
+   */
+  tinta?: boolean;
 }
 
 /**
@@ -59,6 +66,11 @@ export function CaixaDeAlerta({ className }: { className?: string }) {
 }
 
 type Variante = NonNullable<ButtonProps["variant"]>;
+
+/** O primário em tinta: o fundo e o texto trocados, também no hover e no toque. */
+const TINTA = "bg-foreground text-background hover:bg-foreground/85 active:bg-foreground/85";
+const TOQUE_DA_TINTA = "bg-foreground/85";
+const PONTEIRO_TRAVADO_DA_TINTA = "hover:bg-foreground active:bg-foreground";
 
 /** O fundo do toque de cada variante do Button: o #AD0015 no primário da v3. */
 const FUNDO_DO_TOQUE: Record<Variante, string> = {
@@ -160,7 +172,8 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
     erro,
     conferir = "Conferir",
     bloqueado = false,
-    variant,
+    tinta = false,
+    variant: varianteDada,
     size,
     className,
     type = "button",
@@ -201,6 +214,8 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
     elemento.style.setProperty("--botao-acao-onda-x", `${Math.round(caixa.left + caixa.width / 2 - fora.left)}px`);
   }, [troca]);
 
+  // A tinta é o primário com outra cor: o indicador fica no texto do botão.
+  const variant = tinta ? "default" : varianteDada;
   const juntarRef = React.useCallback(
     (no: HTMLButtonElement | null) => {
       botao.current = no;
@@ -295,8 +310,9 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
         "botao-acao relative isolate inline-grid place-items-center",
         grande && "[&_svg]:size-5",
         bloqueado && "opacity-45",
+        tinta && TINTA,
         className,
-        travado && PONTEIRO_TRAVADO[variant ?? "default"],
+        travado && (tinta ? PONTEIRO_TRAVADO_DA_TINTA : PONTEIRO_TRAVADO[variant ?? "default"]),
         cobre && SEM_FUNDO_PROPRIO,
         voltaDoFim && "transition-none",
       )}
@@ -311,7 +327,7 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
       onClick={aoClicar}
     >
       <span aria-hidden="true" data-recorte="">
-        <span data-fundo="toque" className={FUNDO_DO_TOQUE[variant ?? "default"]} />
+        <span data-fundo="toque" className={tinta ? TOQUE_DA_TINTA : FUNDO_DO_TOQUE[variant ?? "default"]} />
         <span data-fundo="onda" data-cor={onda.cor} data-sai={onda.sai ? "" : undefined} />
         <span data-fundo="borda" data-cor={borda.cor} data-sai={borda.sai ? "" : undefined} />
       </span>

@@ -1,3 +1,4 @@
+import { JSDOM } from "jsdom";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
@@ -58,7 +59,7 @@ const PRONTO: PainelDoAgenteViewProps = {
   linhas: linhasDoPainel(ITENS),
   notas: NOTAS,
   numeros: { anotacoes: 14, playbooks: 0, documentos: 23, rotinas: 2 },
-  decidindo: false,
+  acoes: { estado: () => "repouso", ocupada: () => false },
   decidir: () => undefined,
 };
 
@@ -89,8 +90,16 @@ describe("o painel do Agent Dute", () => {
       "Na conversa da equipe com Guilherme · 03/11",
       "Cliente e equipe",
       "Só equipe",
+      // As camadas do botão de ação (carregamento v2): só a atual fica na árvore de acessibilidade.
       "Recusar",
+      "Recusando…",
+      "Recusada",
+      "Não recusada",
+      "Conferir",
       "Aprovar",
+      "Aprovando…",
+      "Aprovada",
+      "Não aprovada",
       "Nas NFs de uniformes, contar por tamanho: a nota vem agrupada por modelo.",
       "Na conversa de Renata · 31/10",
       "7 playbooks para aprovar",
@@ -125,14 +134,31 @@ describe("o painel do Agent Dute", () => {
     expect(html).toContain('href="/agente?v=rotinas"');
   });
 
-  it("decidindo, as anotações esperam", () => {
-    const html = tela({ decidindo: true });
-    expect(html.match(/disabled=""[^>]*>(?:<svg[^>]*>.*?<\/svg>)?(?:Recusar|Aprovar)/g)).toHaveLength(4);
+  it("a decisão é por anotação: a que aprova trava o Recusar dela, e a outra fica livre; nada fica disabled", async () => {
+    const [primeira, segunda] = NOTAS;
+    const html = tela({
+      acoes: {
+        estado: (id, acao) => (id === primeira.id && acao === "approve" ? "andamento" : "repouso"),
+        ocupada: (id) => id === primeira.id,
+      },
+    });
+    const dom = new JSDOM(html).window.document;
+    const botoes = [...dom.querySelectorAll("button.botao-acao")];
+    expect(botoes).toHaveLength(4);
+    expect(botoes.map((botao) => botao.getAttribute("aria-disabled"))).toEqual(["true", "true", null, null]);
+    expect(dom.querySelectorAll("button[disabled]")).toHaveLength(0);
+    expect(botoes[0].className).toContain("opacity-45");
+    expect(botoes[2].closest("li")?.textContent).toContain(segunda.text.slice(0, 20));
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
-  it("carregando, sem linha nem número", () => {
-    const textos = textosDaTela(tela({ carregando: true, numeros: { anotacoes: null, playbooks: null, documentos: null, rotinas: null } }));
+  it("carregando: as linhas-fantasma em blocos neutros, sem o rosado, sem linha nem número", () => {
+    const html = tela({ carregando: true, numeros: { anotacoes: null, playbooks: null, documentos: null, rotinas: null } });
+    const textos = textosDaTela(html);
     expect(textos).toEqual(["Agent Dute", "Conversa", "Painel", "Conhecimento", "Para decidir", "No agente", "Anotações valendo", "—", "Playbooks valendo", "Documentos", "Suas rotinas"]);
+    expect(html).not.toMatch(/bg-primary\/10|animate-pulse/);
+    expect(html.match(/data-esqueleto=""[^>]*aria-hidden="true"|aria-hidden="true"[^>]*data-esqueleto=""/g)?.length).toBe(9);
+    expect(html).toContain("data-brilho");
   });
 
   it("nada para decidir", () => {
