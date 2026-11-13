@@ -267,6 +267,13 @@ documentação de produto e operação está em `docs/`.
   `axe` (`src/test/acessibilidade.ts`, WCAG 2.1 A e AA). O "Precisa de você"
   de cada Início é a única regra de contagem: a entrada e o menu contam por
   ela (`lib/resumo-do-modulo.ts`).
+- **Carregamento v2 (aprovado em 12/11/2026):** a espera tem forma e lugar,
+  pelo relógio de `lib/carregando/tempo.ts` (300 ms para aparecer, 500 ms de
+  mínimo, 10 s de demora, 70 s de desistência). O indicador é a caixa chanfrada
+  do `Spinner`, em tinta; o esqueleto é neutro (`Esqueleto`); a ação com espera
+  usa o `BotaoDeAcao`, nunca só o `disabled` a 50%. Regra em
+  `docs/sistema-visual.md`, "Carregamento"; decisões e plano das partes 6 a 13
+  em `docs/plataforma/diagnostico-carregamento.md`, seção 10.
 - **Operação e campo nunca veem valores.** Preço só para `owner`, `admin`,
   `financeiro` e `comercial`; o cliente vê os das próprias OS e faturas.
 

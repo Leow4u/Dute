@@ -99,6 +99,52 @@ painel e não a da janela.
 - Cor fixa (`bg-white`, `text-slate-900`) continua proibida pelo teste de
   tema: é o que quebra o escuro.
 
+## Carregamento
+
+Aprovado pelo Leonardo em 12/11/2026 ("como recomendado"): a espera tem forma
+e lugar, e qualquer quadro parado se lê como "carregando". Desenho completo,
+os nove momentos e as decisões em
+`docs/plataforma/diagnostico-carregamento.md`, seção 10; pranchas em
+`docs/mockups/WmsCarregandoV2*.dc.html`.
+
+**O relógio** (`lib/carregando/tempo.ts`, `CARREGANDO`), igual para lista,
+botão, linha, abertura e Agent Dute:
+
+| Tempo | O que acontece |
+| --- | --- |
+| 0 a 100 ms | O toque responde (o botão afunda) e trava o segundo toque |
+| 300 ms | Entra o indicador, com o rótulo no gerúndio e o anúncio. Antes disso, nada |
+| 500 ms | Mínimo na tela do indicador sozinho e do "em andamento". O dado nunca espera |
+| 3 s | O objeto entra na linha ("Aprovando pedido 1042…") |
+| 5 s | O movimento decorativo para (brilho, listras, barras). O indicador da região continua |
+| 10 s | "Demorando mais que o normal" e a volta calma (2 s por volta) |
+| 70 s | A saída: "Tentar de novo" na leitura, "Conferir" na escrita (180 s no chat) |
+
+`useEspera(ativa)` devolve a fase pronta (visível, calmo, movimento) e
+`useAnuncio()` fala na região de status do `Anunciador`, uma por tela, no
+máximo um anúncio a cada 2 s.
+
+**As peças:**
+
+| Peça | Onde | Regra |
+| --- | --- | --- |
+| `Spinner` (`components/ui/spinner.tsx`) | Todo indicador | A caixa chanfrada (o canto de 45° do "D" da marca), em tinta (`currentColor`). Tamanhos 16 (texto e botão), 20 (botão do celular e Agent Dute), 24 (linha de estado) e 40 (módulo sem esqueleto). `calmo` depois de 10 s, `progresso` de 0 a 1 para o determinado. Sem `aria-label` fica fora da árvore; com ele, vira `role="status"` |
+| `Esqueleto` e `CartaoComBrilho` (`components/ui/esqueleto.tsx`) | Primeira leitura de tela com desenho conhecido | Blocos neutros (`--carregando-esqueleto`, nunca a cor da marca), sempre `aria-hidden`. O brilho faz dois ciclos e para. O `Skeleton` antigo já usa o mesmo bloco |
+| `BotaoDeAcao` (`components/ui/botao-de-acao.tsx`) | Ação com espera | Mantém a largura. Repouso, em andamento, sucesso (a caixa fecha em check), erro (crítico suave) e "Conferir". Durante a ação, `aria-busy` e `aria-disabled`, nunca `disabled` nem só 50% de opacidade |
+| Toast | Retorno da ação | Continua o retorno padrão. No celular, embaixo, perto do polegar, com o fechar no toque |
+
+**Cores com papel fixo:** tinta na espera; vermelho só na ação e na abertura;
+verde só no confirmado; `--destructive` só no erro; `#8A4B00` sobre âmbar suave
+na demora e na falta de rede; violeta só no Agent Dute.
+
+**Movimento:** em laço, só `transform` e `opacity` (trava em
+`lib/carregando/tokens.test.ts`). Com `prefers-reduced-motion`, nada gira nem
+desliza: o indicador para e respira com piso de contraste (0,6 em tinta, 0,8 em
+branco sobre o vermelho), e o rótulo diz o estado.
+
+**Texto:** gerúndio com o objeto ("Carregando pedidos…", "Aprovando…"), com o
+caractere único "…". O texto sozinho, sem o indicador, não é sinal de espera.
+
 ## O que vem depois (plano da auditoria)
 
 As sete PRs da auditoria de 09/10/2026 estão em `main`. O relatório completo

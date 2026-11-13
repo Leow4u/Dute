@@ -633,3 +633,108 @@ Ficam para depois:
 - o `deadline-exceeded` de 70 s, que fica com a mensagem própria das
   operações longas (seção 6, PR 8);
 - os PRs 2 a 5 do celular.
+
+## 10. Carregamento v2 (12/11/2026)
+
+### 10.1 A queixa
+
+Em 12/11/2026, depois de ver as primeiras correções na produção, o Leonardo
+disse: "O problema não é só não aparecer… mas sim aparecer assim de forma
+simples… com texto e … no final… Eu quero algo mais bonito… tanta coisa legal
+acontecendo hoje em UI design, e o nosso sistema tem esses spinner mega
+simples… Às vezes nem dá pra ver o spinner escrito carregando…".
+
+O app rodando, com a leitura atrasada em 3 s e as ações seguradas por 6 s,
+confirmou a queixa:
+
+- a abertura fica 100% em branco até o perfil chegar;
+- as listas mostram só o texto cinza "Carregando pedidos..." no canto;
+- dos cerca de 263 botões de ação com espera, 174 só ficam a 50% de opacidade,
+  sem ícone nem rótulo. Em Pedidos, aprovar uma linha apaga os botões das três
+  linhas, e em Posições os cinco botões apagam;
+- o anel aprovado em 06/11 (16 px, cinza, trilho a 20%) só está em 9 deles;
+- o esqueleto é vermelho a 10% e fica rosado.
+
+O PR 581 parou nas seis primeiras correções, e as peças que levariam o
+indicador ao app inteiro (seção 6, PR 1) não foram feitas.
+
+O mesmo levantamento achou uma regressão do PR 582. Quando o Firestore demora
+mais de 10 s para voltar depois de uma queda curta, a leitura vem do cache, e
+a tela diz "Sem conexão." com o aparelho conectado. Ela não se refaz sozinha
+até a próxima releitura. Fica para um PR próprio.
+
+### 10.2 As três direções e a avaliação
+
+Três direções foram desenhadas com os mesmos nove momentos:
+
+- **A · Marca em movimento:** a caixa chanfrada do "D", com sucesso em verde;
+- **B · Silêncio premium:** esqueleto fiel e texto com brilho;
+- **C · Galpão em primeiro lugar:** linha de estado, barra grossa na linha e
+  contagens grandes.
+
+Três lentes as avaliaram, e a soma foi ponderada em design 40%, acessibilidade
+e operação 35% e engenharia 25%:
+
+| Direção | Design | Acessibilidade e operação | Engenharia | Total |
+| --- | --- | --- | --- | --- |
+| C | 6,92 | 7,40 | 7,60 | 7,26 |
+| A | 8,00 | 6,40 | 5,20 | 6,74 |
+| B | 6,25 | 6,00 | 5,20 | 5,90 |
+
+A recomendada é a C com a caixa chanfrada da A, em tinta, refeita só com
+`transform` (a máscara parada e o gradiente cônico girando), mais os
+acabamentos da B. As pranchas das três direções e da recomendada estão no
+canvas "Carregamento v2 · Dutelog". As da recomendada também estão em
+`docs/mockups/WmsCarregandoV2*.dc.html`.
+
+### 10.3 Decisões do Leonardo (12/11/2026)
+
+Todas aprovadas "como recomendado":
+
+1. **Direção:** a recomendada (C com a caixa da A e os acabamentos da B).
+2. **Indicador:** a caixa chanfrada em tinta. Substitui o anel da decisão 5 de
+   06/11. Se não passar no aceite num Android médio, o mesmo `Spinner` volta a
+   um anel grosso, com a mesma API.
+3. **Listas na primeira leitura:** a forma final, com os títulos reais, a
+   contagem em bloco, as linhas-fantasma e a linha de estado "Carregando
+   pedidos…". Substitui a decisão 1 de 06/11.
+4. **Abertura:** preta, com os PNG reais da marca e da palavra e o trilho
+   chanfrado, sem texto na primeira pintura. Ajusta a decisão 3.
+5. **"Atualizado às 10:42"** sempre sob o título das listas, no mesmo lugar
+   de "Carregando…", "Reconectando…" e "Sem conexão".
+6. **Reticência:** continua ("Carregando pedidos…", "Aprovando…").
+7. **Sucesso:** festa média. A onda verde nasce da caixa e cobre o botão, o
+   check entra com mola e tudo dura cerca de meio segundo.
+
+Ficam como estavam: o toast como retorno padrão (decisão 2), os 300 ms e os
+10 s (decisão 4) e as decisões do celular de 06/11.
+
+### 10.4 Implantação
+
+A especificação (o relógio, os tokens, as peças, os nove momentos, a
+acessibilidade e o aceite) segue o desenho das pranchas, e a regra curta está
+em `docs/sistema-visual.md`, seção "Carregamento". O plano é este, um problema
+por PR:
+
+| Parte | O que é | Situação |
+| --- | --- | --- |
+| 1 | O relógio da espera (`lib/carregando`), os tokens e keyframes `--carregando-*` e o `Anunciador` | PR 610 |
+| 2 | A caixa chanfrada no `Spinner` | PR 610 |
+| 3 | O esqueleto neutro (`Esqueleto`, `CartaoComBrilho` e o `Skeleton` sem rosado) | PR 610 |
+| 4 | O `BotaoDeAcao` | PR 610 |
+| 5 | O toast embaixo no celular | PR 610 |
+| 6 | Pedidos como piloto: a ação por linha (`useAcaoNaLinha`), a barra da linha e os estados de 10 s e 70 s | a fazer |
+| 7 | A linha de estado nas listas (Pedidos, Receber, Estoque, Alertas) | a fazer |
+| 8 | As listas com a forma final | a fazer |
+| 9 | A abertura com a marca e a `CarregandoTela` no lugar do branco | a fazer |
+| 10 | A troca de filtro e a releitura sem apagar a lista | a fazer |
+| 11 | As operações longas: fotos com progresso e etapas | a fazer |
+| 12 | A trilha do Agent Dute | a fazer |
+| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | a fazer |
+
+Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código:
+
+- o selo "Sem confirmação" em âmbar, porque é resultado desconhecido e não erro;
+- o esqueleto fora da v3 (o portal) em `#D9DDE3`;
+- o piso do violeta do Agent Dute no movimento reduzido (0,75 no claro e 0,85
+  no escuro, para manter 3:1).
