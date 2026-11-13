@@ -89,7 +89,8 @@ describe("Pedidos na v3", () => {
   it("só a primeira linha da fila tem a ação principal: a primeira na tela, que a nova primeira herda quando ela sai", () => {
     expect(FONTE).toContain("const principal = chaveDaPrincipal(naTela, decider);");
     expect(FONTE).toContain("approve: paraAprovar.chaves.map((id) => ({ id })),");
-    expect(FONTE).toContain("pick: paraSeparar.chaves.flatMap((key) => pedidos.get(key) ?? []),");
+    expect(FONTE).toContain("pick: paraSeparar.chaves.map((key) => ({ key })),");
+    expect(FONTE).toContain("deliver: paraEntregar,");
     for (const chave of ["approve:${request.id}", "pick:${order.key}", "deliver:${order.key}"]) {
       expect(FONTE).toContain(`variant={variante(\`${chave}\`)}`);
     }

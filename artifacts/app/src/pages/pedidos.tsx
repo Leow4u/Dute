@@ -294,14 +294,20 @@ export default function Pedidos() {
   // "Aprovado", esmaece e as de baixo sobem; sob o dedo, espera até 3 s. O
   // pedido só entra em "Para separar" quando a linha dele deixou "Para
   // aprovar", com o realce de 1 s: nunca nos dois grupos ao mesmo tempo.
+  // A primeira leitura com dado entra de uma vez, também a que vem depois de
+  // uma falha ou sem rede: ela não chega, aparece.
+  const lida = Boolean(ops.data) && (!decider || Boolean(requests.data));
   const chavesParaAprovar = useMemo(() => (decider ? queue.approve.map((request) => request.id) : []), [decider, queue.approve]);
-  const paraAprovar = useListaSemSaltos(chavesParaAprovar, { pronta: !loading });
+  const paraAprovar = useListaSemSaltos(chavesParaAprovar, { pronta: lida });
   const naFilaDeAprovar = useMemo(() => new Set(paraAprovar.chaves), [paraAprovar.chaves]);
   const chavesParaSeparar = useMemo(
     () => queue.pick.filter((order) => !order.requestId || !naFilaDeAprovar.has(order.requestId)).map((order) => order.key),
     [queue.pick, naFilaDeAprovar],
   );
-  const paraSeparar = useListaSemSaltos(chavesParaSeparar, { pronta: !loading });
+  const paraSeparar = useListaSemSaltos(chavesParaSeparar, { pronta: lida });
+  // Do mesmo jeito, o pedido separado só entra em "Para entregar" quando a linha dele deixou "Para separar".
+  const naFilaDeSeparar = useMemo(() => new Set(paraSeparar.chaves), [paraSeparar.chaves]);
+  const paraEntregar = useMemo(() => queue.deliver.filter((order) => !naFilaDeSeparar.has(order.key)), [queue.deliver, naFilaDeSeparar]);
   // A linha que sai é desenhada com o dado que ainda houver; sem ele, fica a última imagem dela.
   const solicitacoes = useMemo(() => new Map((requests.data?.items ?? []).map((request) => [request.id, request])), [requests.data?.items]);
   const pedidos = useMemo(
@@ -527,13 +533,13 @@ export default function Pedidos() {
   // secundárias. É a primeira na tela: quando ela sai, a nova primeira herda.
   const naTela = {
     approve: paraAprovar.chaves.map((id) => ({ id })),
-    pick: paraSeparar.chaves.flatMap((key) => pedidos.get(key) ?? []),
-    deliver: queue.deliver,
+    pick: paraSeparar.chaves.map((key) => ({ key })),
+    deliver: paraEntregar,
   };
   const principal = chaveDaPrincipal(naTela, decider);
   const variante = (chave: string) => (principal === chave ? "default" : "outline");
   const openCount =
-    (decider ? paraAprovar.chaves.length : 0) + paraSeparar.chaves.length + queue.deliver.length;
+    (decider ? paraAprovar.chaves.length : 0) + paraSeparar.chaves.length + paraEntregar.length;
   // A leitura falhou sem nada para mostrar: a tela diz isso, em vez de
   // "Nenhum pedido para…" (docs/plataforma/diagnostico-carregamento.md,
   // decisão 6 de 06/11/2026). Com a lista já lida, a falha de uma atualização
@@ -693,10 +699,10 @@ export default function Pedidos() {
 
           <QueueGroup
             title="Para entregar"
-            count={queue.deliver.length}
+            count={paraEntregar.length}
             empty={ordersGroupEmpty("deliver")}
           >
-            {queue.deliver.map((order) => (
+            {paraEntregar.map((order) => (
               <OrderRow
                 key={order.key}
                 order={order}

@@ -176,6 +176,26 @@ describe("a linha que sai", () => {
     expect(naTela()).toEqual(["1042", "1043"]);
   });
 
+  it("duas saídas seguidas: o fim do primeiro refluxo não corta o segundo, que começou depois", async () => {
+    await desenhar(["1040", "1042", "1043", "1045", "1046"]);
+    await desenhar(["1040", "1043", "1045", "1046"]);
+    await passar(100);
+    await desenhar(["1040", "1045", "1046"]);
+    // Aos 200 ms a 1042 sai e as de baixo sobem até os 440 ms.
+    await passar(100);
+    expect(naTela()).toEqual(["1040", "1043", "1045", "1046"]);
+    expect(linha("1045")!.hasAttribute("data-reflui")).toBe(true);
+    // Aos 300 ms a 1043 sai, e a 1045 e a 1046 sobem de novo, até os 540 ms.
+    await passar(100);
+    expect(naTela()).toEqual(["1040", "1045", "1046"]);
+    await passar(CARREGANDO.refluiMs - 100 + 1);
+    expect(linha("1045")!.hasAttribute("data-reflui")).toBe(true);
+    expect(linha("1046")!.hasAttribute("data-reflui")).toBe(true);
+    await passar(100);
+    expect(linha("1045")!.hasAttribute("data-reflui")).toBe(false);
+    expect(linha("1046")!.hasAttribute("data-reflui")).toBe(false);
+  });
+
   it("a tela que sai no meio da saída não deixa relógio nem erro", async () => {
     await desenhar(["1042", "1043"]);
     await desenhar(["1043"]);
@@ -223,6 +243,46 @@ describe("a lista não se mexe sob o dedo", () => {
     expect(naTela()).toEqual(["1043"]);
     await passar(CARREGANDO.dedoMs);
     expect(naTela()).toEqual(["1042", "1043"]);
+  });
+
+  it("a linha que voltou às chaves enquanto esperava o dedo, se sair de novo, espera o dedo do zero", async () => {
+    await desenhar(["1042", "1043", "1045"]);
+    await tocarNaLista();
+    await desenhar(["1043", "1045"]);
+    expect(linha("1042")?.dataset.naLista).toBe("esperando");
+    await desenhar(["1042", "1043", "1045"]);
+    expect(linha("1042")?.dataset.naLista).toBe("parada");
+    await passar(10_000);
+
+    // Sai de novo, e o dedo toca no meio do esmaecimento: o fim dele espera.
+    await desenhar(["1043", "1045"]);
+    expect(linha("1042")?.dataset.naLista).toBe("saindo");
+    await passar(100);
+    await tocarNaLista();
+    await passar(CARREGANDO.saiLinhaMs - 100);
+    expect(naTela()).toEqual(["1042", "1043", "1045"]);
+    await passar(CARREGANDO.dedoMs - CARREGANDO.saiLinhaMs + 100);
+    expect(naTela()).toEqual(["1043", "1045"]);
+  });
+
+  it("a linha que volta às chaves enquanto o dedo segura o fim do esmaecimento não deixa a lista", async () => {
+    await desenhar(["1042", "1043", "1045"]);
+    await desenhar(["1043", "1045"]);
+    // Um toque a cada 600 ms, dos 100 aos 2 500 ms: o fim do esmaecimento espera até os 3 s.
+    await passar(100);
+    for (let vez = 0; vez < 4; vez += 1) {
+      await tocarNaLista();
+      await passar(600);
+    }
+    await tocarNaLista();
+    await passar(400);
+    // Aos 2 900 ms ela volta, e o dedo ainda segura a lista até os 3 200 ms.
+    await desenhar(["1042", "1043", "1045"]);
+    await passar(101);
+    expect(naTela()).toEqual(["1042", "1043", "1045"]);
+    await passar(200);
+    expect(naTela()).toEqual(["1042", "1043", "1045"]);
+    expect(linha("1042")?.dataset.naLista).toBe("parada");
   });
 });
 

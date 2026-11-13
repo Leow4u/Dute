@@ -595,6 +595,98 @@ describe("a linha que sai sem salto (parte 6c)", () => {
     vi.useRealTimers();
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
+
+  /** Uma tarefa do pedido A: a separação ou a expedição pronta para sair. */
+  const tarefa = (fila: "pick" | "ship", pedido: string, status: string) => ({
+    id: `${fila}_ord_${pedido}`,
+    reference: `${fila}_ord_${pedido}`,
+    title: `PED-${pedido}`,
+    status,
+    can_advance: status !== "completed",
+    exception_count: 0,
+    items: [],
+  });
+
+  async function reler() {
+    await act(async () => {
+      await cliente.invalidateQueries();
+    });
+    await passar(50);
+  }
+
+  it("o pedido que sai de Para separar só entra em Para entregar quando a linha dele saiu, nunca nos dois grupos", async () => {
+    estado.ops = { alerts: [], queues: { picking: { key: "picking", tasks: [tarefa("pick", "A", "planned")] } } };
+    await reler();
+    await passar(CARREGANDO.destaqueMs);
+    expect(grupo("Para separar").textContent).toContain("PED-A");
+
+    estado.ops = {
+      alerts: [],
+      queues: {
+        picking: { key: "picking", tasks: [tarefa("pick", "A", "completed")] },
+        expedition: { key: "expedition", tasks: [tarefa("ship", "A", "ready_to_dispatch")] },
+      },
+    };
+    await reler();
+    expect(naFila("ord_A")?.dataset.naLista).toBe("saindo");
+    expect(grupo("Para entregar").textContent).not.toContain("PED-A");
+    expect(grupo("Para entregar").querySelector("h2")?.textContent).toBe("Para entregar");
+
+    await passar(CARREGANDO.saiLinhaMs);
+    expect(naFila("ord_A")).toBeNull();
+    expect(grupo("Para entregar").textContent).toContain("PED-A");
+    expect(grupo("Para entregar").querySelector("h2")?.textContent).toBe("Para entregar1");
+  });
+
+  it("a linha que sai de Para separar fica com a ação principal até sair, e só então a de baixo herda", async () => {
+    estado.solicitacoes = [];
+    estado.ops = { alerts: [], queues: { picking: { key: "picking", tasks: [tarefa("pick", "A", "planned"), tarefa("pick", "B", "planned")] } } };
+    await reler();
+    await passar(CARREGANDO.destaqueMs);
+    const separar = (pedido: string) => naFila(`ord_${pedido}`)!.querySelector<HTMLElement>("a[data-foco-da-linha]")!;
+    expect(separar("A").className).toContain("bg-primary");
+    expect(separar("B").className).not.toContain("bg-primary");
+
+    // O pedido A foi cancelado: sai de todas as filas.
+    estado.ops = { alerts: [], queues: { picking: { key: "picking", tasks: [tarefa("pick", "B", "planned")] } } };
+    await reler();
+    expect(naFila("ord_A")?.dataset.naLista).toBe("saindo");
+    expect(separar("B").className).not.toContain("bg-primary");
+
+    await passar(CARREGANDO.saiLinhaMs);
+    expect(naFila("ord_A")).toBeNull();
+    expect(separar("B").className).toContain("bg-primary");
+  });
+
+  it("a primeira leitura com dado entra de uma vez, sem realce, também depois de uma falha", async () => {
+    act(() => raiz?.unmount());
+    cliente.clear();
+    estado.ops = { alerts: [], queues: { picking: { key: "picking", tasks: [tarefa("pick", "A", "planned")] } } };
+    let falhar = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (entrada: RequestInfo | URL, init?: RequestInit) => {
+        if (falhar && new URL(String(entrada), "http://localhost").pathname === "/api/warehouse/ops") return resposta({ message: "Falha interna." }, 500);
+        return servir(entrada, init);
+      }),
+    );
+    raiz = createRoot(container!);
+    await act(async () => {
+      raiz!.render(
+        <QueryClientProvider client={cliente}>
+          <Anunciador />
+          <Pedidos />
+        </QueryClientProvider>,
+      );
+    });
+    await passar(50);
+    expect(container!.textContent).toContain("Não consegui carregar os pedidos.");
+
+    falhar = false;
+    await reler();
+    expect(grupo("Para separar").textContent).toContain("PED-A");
+    for (const chave of ["req_1042", "req_1043", "req_1045", "ord_A"]) expect(naFila(chave)?.dataset.naLista, chave).toBe("parada");
+  });
 });
 
 describe("a recusa pelo diálogo, com o estado da linha", () => {

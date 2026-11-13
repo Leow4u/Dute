@@ -127,6 +127,8 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
   const saiuEm = useRef(new Map<string, number>());
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   const espera = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Cada refluxo marca as linhas com a sua vez: o fim de um não tira a transição do seguinte. */
+  const refluxos = useRef(0);
 
   const agendar = useCallback((fazer: () => void, ms: number) => {
     const timer = setTimeout(() => {
@@ -181,12 +183,15 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
       if (!movidas.length) return;
       // O navegador assenta o ponto de partida antes da transição.
       void elemento.getBoundingClientRect();
+      refluxos.current += 1;
+      const vez = String(refluxos.current);
       for (const linha of movidas) {
-        linha.setAttribute("data-reflui", "");
+        linha.setAttribute("data-reflui", vez);
         linha.style.transform = "";
       }
+      // Só a marca desta vez sai: a linha que um refluxo seguinte levou continua a transição dele.
       agendar(() => {
-        for (const linha of movidas) if (!linha.style.transform) linha.removeAttribute("data-reflui");
+        for (const linha of movidas) if (linha.getAttribute("data-reflui") === vez) linha.removeAttribute("data-reflui");
       }, CARREGANDO.refluiMs);
     },
     [agendar],
@@ -197,7 +202,9 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
     const instante = agora();
     // Quando cada uma termina de esmaecer (com 2 ms de folga entre o relógio do timer e o do performance).
     const fimDe = (chave: string) => (saiuEm.current.get(chave) ?? instante - CARREGANDO.saiLinhaMs) + CARREGANDO.saiLinhaMs - 2;
-    const saindo = [...atual.current.saindo];
+    // A que voltou às chaves fica: quem a devolve à lista é a reconciliação, quando o dedo sair.
+    const naAlvo = new Set(alvo.current);
+    const saindo = [...atual.current.saindo].filter((chave) => !naAlvo.has(chave));
     const prontas = saindo.filter((chave) => fimDe(chave) <= instante);
     const depois = saindo.filter((chave) => fimDe(chave) > instante);
     if (depois.length) agendar(soltar, Math.min(...depois.map(fimDe)) - instante + 2);
@@ -243,6 +250,8 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
     }
     const naAlvo = new Set(desejadas);
     const naTela = new Set(tela.exibidas);
+    // A que voltou às chaves antes de sair esquece a espera: se sair de novo, o dedo conta do zero.
+    for (const chave of removidaEm.current.keys()) if (naAlvo.has(chave) && !tela.saindo.has(chave)) removidaEm.current.delete(chave);
     const novas = desejadas.filter((chave) => !naTela.has(chave));
     const removidas = tela.exibidas.filter((chave) => !naAlvo.has(chave) && !tela.saindo.has(chave));
     const voltaram = [...tela.saindo].filter((chave) => naAlvo.has(chave));
