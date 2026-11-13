@@ -85,6 +85,13 @@ export function ClienteServicos() {
     <main className="h-full min-h-0 w-full overflow-y-auto">
       <ServicosView
         estado={estado}
+        leitura={{ tentando: leituraDasOs.tentando, onTentar: leituraDasOs.tentar }}
+        falhas={[
+          ...(leituraDasNfs.erro ? [{ mensagem: "Não foi possível carregar as NFs das OS.", tentando: leituraDasNfs.tentando, onTentar: leituraDasNfs.tentar }] : []),
+          ...(leituraDasSolicitacoes.erro
+            ? [{ mensagem: "Não foi possível carregar as solicitações.", tentando: leituraDasSolicitacoes.tentando, onTentar: leituraDasSolicitacoes.tentar }]
+            : []),
+        ]}
         os={os}
         numeros={numerosDasOs(os)}
         aPagarCents={leituras?.faturas && leituraDasNfs.nfs ? aPagar(nfs, hoje) : null}

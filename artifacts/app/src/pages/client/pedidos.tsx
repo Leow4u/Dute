@@ -1,10 +1,12 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { nomeSemTamanho, tamanhoDoProduto } from "@workspace/dominio";
-import { ArrowLeft, Check, ChevronRight, Loader2, PackageOpen, Truck } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, PackageOpen, Truck } from "lucide-react";
 import { Link } from "wouter";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { DialogCancelar } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { ORDER_STEPS, orderStepIndex, splitOrders, type OrderView } from "@/lib/orders";
@@ -246,16 +248,21 @@ function CancelOrder({ view }: { view: OrderView }) {
       </button>
     );
   }
+  // Cancelando, o botão diz o gerúndio aos 300 ms, sem desabilitar, e o "Manter" fica travado no código (parte 13f).
   return (
     <span className="inline-flex items-center gap-2">
       Cancelar {view.number}?
-      <Button type="button" size="sm" variant="destructive" disabled={cancel.isPending} onClick={() => cancel.mutate()}>
-        {cancel.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-        Cancelar pedido
-      </Button>
-      <Button type="button" size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+      <BotaoDeAcao
+        size="sm"
+        variant="destructive"
+        estado={cancel.isPending ? "andamento" : "repouso"}
+        rotulo="Cancelar pedido"
+        andamento="Cancelando…"
+        onClick={() => cancel.mutate()}
+      />
+      <DialogCancelar size="sm" variant="ghost" ocupado={cancel.isPending} onClick={() => setConfirming(false)}>
         Manter
-      </Button>
+      </DialogCancelar>
     </span>
   );
 }

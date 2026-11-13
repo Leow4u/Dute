@@ -1,10 +1,8 @@
 import type { ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, RefreshCw, SearchX, type LucideIcon } from "lucide-react";
+import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
+import { SearchX, type LucideIcon } from "lucide-react";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -12,7 +10,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useEsperaDaRota } from "@/lib/carregando/espera-da-rota";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { ehFaltaDeConexao } from "@/lib/conexao";
 import { cn } from "@/lib/utils";
 
@@ -470,8 +474,18 @@ type ClientDataBoundaryProps = {
   children: (overview: ClientOverview) => ReactNode;
 };
 
+/**
+ * A leitura do portal que toda tela dele espera (carregamento v2, parte 13f).
+ * Lendo, a forma da tela e, aos 300 ms, "Carregando o portal…" à vista, com
+ * o anúncio (`ClientModuleLoading`). Sem nada lido, a falha fica no lugar da
+ * tela, com "Tentar de novo"; a nova tentativa fica na falha, com "Tentando
+ * de novo…" e o foco no botão, sem voltar ao esqueleto (`useLeituraComFalha`).
+ * Sem rede e sem nada lido, o aviso da conexão ("Sem conexão." ou
+ * "Reconectando…", momento 8).
+ */
 export function ClientDataBoundary({ children }: ClientDataBoundaryProps) {
-  const overview = useClientOverview();
+  const leitura = useClientOverview();
+  const overview = useLeituraComFalha(leitura);
 
   if (overview.isLoading) {
     return <ClientModuleLoading />;
@@ -484,10 +498,10 @@ export function ClientDataBoundary({ children }: ClientDataBoundaryProps) {
   if (overview.isError && !(overview.data && ehFaltaDeConexao(overview.error))) {
     return (
       <ClientModuleError
-        error={overview.error}
-        isRetrying={overview.isFetching}
-        onRetry={() => {
-          void overview.refetch();
+        semConexao={ehFaltaDeConexao(overview.error)}
+        tentando={leitura.isFetching}
+        onTentar={() => {
+          void leitura.refetch();
         }}
       />
     );
@@ -553,71 +567,96 @@ export function ClientModuleShell({
 }
 
 type ClientModuleLoadingProps = {
-  title?: string;
+  /** O gerúndio do que a tela lê, com a reticência de um caractere: "Carregando eventos…". */
+  rotulo?: string;
+  /** As leituras que o "Tentar de novo" da demora lê de novo do zero; sem elas, a do portal. */
+  chaves?: readonly QueryKey[];
 };
 
-export function ClientModuleLoading({
-  title = "Carregando portal do cliente",
-}: ClientModuleLoadingProps) {
+/** O id da linha que diz que o portal lê, para a tela que espera apontar para ela (momento 2). */
+const ID_DA_ESPERA_DO_PORTAL = "portal-lendo";
+
+/**
+ * O portal lendo (carregamento v2, parte 13f; o portal é tela de desenho fixo,
+ * decisão 1 de 06/11/2026): a forma da tela com os blocos neutros, que entram
+ * aos 300 ms (o `#D9DDE3` fora da v3, sempre `aria-hidden`), e, sob o título,
+ * a caixa de 24 px com o rótulo à vista e o anúncio na região do
+ * `Anunciador` (`CarregandoNaRegiao`): aos 10 s, a demora e "Tentar de novo",
+ * que lê de novo do zero; aos 70 s, "Sem resposta do servidor.". Continua a
+ * espera da tela que abriu ("Abrindo Estoque…"), sem anunciar de novo. No
+ * lugar do texto só para leitor de tela, que não estava em região viva.
+ */
+export function ClientModuleLoading({ rotulo = "Carregando o portal…", chaves = [clientOverviewQueryKey] }: ClientModuleLoadingProps) {
+  const queryClient = useQueryClient();
+  const rota = useEsperaDaRota(true);
+  const blocos = useEspera(true, { desde: rota?.inicio }).visivel;
   return (
-    <main className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-background px-4 py-5 sm:px-6 lg:px-8">
+    <main
+      aria-busy="true"
+      aria-describedby={ID_DA_ESPERA_DO_PORTAL}
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-background px-4 py-5 sm:px-6 lg:px-8"
+    >
       <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-5 overflow-auto overscroll-contain">
-        <div className="flex items-center gap-4 border-b border-border/70 pb-5">
-          <Skeleton className="h-12 w-12 rounded-2xl" />
-          <div className="w-full max-w-xl space-y-3">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-8 w-2/3" />
-            <Skeleton className="h-4 w-full" />
+        <div
+          className={cn(
+            "flex flex-col gap-5 transition-opacity duration-150 motion-reduce:transition-none",
+            blocos ? "opacity-100" : "opacity-0",
+          )}
+        >
+          <div className="flex items-center gap-4 border-b border-border/70 pb-5">
+            <Skeleton className="h-12 w-12 rounded-2xl" />
+            <div className="w-full max-w-xl space-y-3">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-8 w-2/3" />
+              <Skeleton className="h-4 w-full" />
+            </div>
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-4">
-          {[0, 1, 2, 3].map((item) => (
-            <Skeleton key={item} className="h-32 rounded-lg" />
-          ))}
+        <CarregandoNaRegiao
+          id={ID_DA_ESPERA_DO_PORTAL}
+          rotulo={rotulo}
+          continuaARota
+          onTentar={() => void relerDoZero(queryClient, chaves)}
+        />
+        <div
+          className={cn(
+            "flex flex-col gap-5 transition-opacity duration-150 motion-reduce:transition-none",
+            blocos ? "opacity-100" : "opacity-0",
+          )}
+        >
+          <div className="grid gap-4 md:grid-cols-4">
+            {[0, 1, 2, 3].map((item) => (
+              <Skeleton key={item} className="h-32 rounded-lg" />
+            ))}
+          </div>
+          <Skeleton className="h-80 rounded-lg" />
         </div>
-        <Skeleton className="h-80 rounded-lg" />
-        <span className="sr-only">{title}</span>
       </div>
     </main>
   );
 }
 
 type ClientModuleErrorProps = {
-  error: Error;
-  isRetrying: boolean;
-  onRetry: () => void;
+  /** A falta de conexão (o aparelho sem rede ou o servidor sem resposta), sem nada lido. */
+  semConexao: boolean;
+  tentando: boolean;
+  onTentar: () => void;
 };
 
-function ClientModuleError({
-  error,
-  isRetrying,
-  onRetry,
-}: ClientModuleErrorProps) {
+/**
+ * O portal que não carregou, sem nada lido: a falha no lugar da tela, com a
+ * nova tentativa (`ErroNaLeitura`), ou o aviso da conexão. "Tentar de novo"
+ * tem 44 px, e, ocupado, fica `aria-disabled`, nunca `disabled`.
+ */
+function ClientModuleError({ semConexao, tentando, onTentar }: ClientModuleErrorProps) {
   return (
     <main className="flex h-full min-h-0 w-full items-center justify-center overflow-hidden bg-background px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto max-h-full max-w-3xl overflow-auto overscroll-contain">
-        <Alert variant="destructive" className="bg-card">
-          <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Portal indisponível</AlertTitle>
-          <AlertDescription className="space-y-4">
-            <p>
-              {error.message ||
-                "Não foi possível carregar os dados do cliente."}
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onRetry}
-              disabled={isRetrying}
-            >
-              <RefreshCw
-                className={cn("h-4 w-4", isRetrying ? "animate-spin" : "")}
-              />
-              Tentar novamente
-            </Button>
-          </AlertDescription>
-        </Alert>
+      <div className="mx-auto w-full max-w-3xl">
+        {semConexao ? (
+          <BlocoSemConexao tentando={tentando} onTentar={onTentar} />
+        ) : (
+          <ErroNaLeitura mensagem="Não foi possível carregar o portal." tentando={tentando} onTentar={onTentar} />
+        )}
       </div>
     </main>
   );

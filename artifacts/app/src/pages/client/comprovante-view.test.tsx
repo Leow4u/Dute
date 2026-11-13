@@ -110,7 +110,8 @@ describe("o comprovante da OS no portal", () => {
   });
 
   it("carregando, sem comprovante e com erro, o PDF fica desligado", () => {
-    expect(textosDaTela(render("carregando", null))).toContain("Carregando");
+    // Lendo, nada antes dos 300 ms; depois, a caixa e "Carregando o comprovante…" (comprovante-carregando.test.tsx).
+    expect(textosDaTela(render("carregando", null))).toEqual(["Minhas OS", "Comprovante da OS 10045-01", "Baixar PDF"]);
     expect(textosDaTela(render("sem_comprovante", null))).toContain("A OS 10045-01 ainda não tem comprovante.");
     expect(render("erro", null)).toMatch(/role="alert"[^>]*>Não foi possível carregar o comprovante\./);
     for (const estado of ["carregando", "sem_comprovante", "erro"] as const) expect(render(estado, null)).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?Baixar PDF/);

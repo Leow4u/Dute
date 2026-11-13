@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
@@ -32,7 +32,8 @@ import {
 
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
-import { Dialog, useConteudoEmAcao } from "@/components/ui/dialog";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { Dialog, DialogCancelar, useConteudoEmAcao } from "@/components/ui/dialog";
 import { Chip as UiChip } from "@/components/ui/chip";
 import { FilterGroup, FilterSheet } from "@/components/ui/filter-panel";
 import { Input } from "@/components/ui/input";
@@ -49,6 +50,10 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { cartFromDraft, dueAtFromDraft, takeDraft } from "@/lib/agent-draft";
 import { useAppUser } from "@/lib/auth";
 import {
@@ -77,9 +82,9 @@ import {
 import { cn } from "@/lib/utils";
 import { displayName, groupFamilies, variantLabel, type Family } from "@/lib/stock-variants";
 
-import { DatasDeEntrada, buscarDatasDeEntrada, type DataDeEntrada } from "./datas-de-entrada";
+import { DatasDeEntrada, buscarDatasDeEntrada, type DataDeEntrada, type LeituraDasDatas } from "./datas-de-entrada";
 import { StockTypeFilter } from "./stock-type-filter";
-import { useClientEvents, useSaveClientEvent } from "./events-api";
+import { clientEventsQueryKey, useClientEvents, useSaveClientEvent } from "./events-api";
 import {
   ClientDataBoundary,
   useClientOverview,
@@ -166,6 +171,15 @@ const stockSortOptions: Array<{
   { value: "menor-saldo", label: "Menor saldo" },
   { value: "nome", label: "Nome: A-Z" },
 ];
+
+/**
+ * A ação de cada produto zerado (Avisar reposição, Arquivar, Devolver à
+ * vitrine), no card, na lista e no detalhe (carregamento v2, parte 13f): cada
+ * produto tem a própria espera (`useAcaoNaLinha`), com o gerúndio no botão,
+ * e os outros produtos ficam livres. No lugar do `isPending` compartilhado,
+ * que apagava os dois botões do detalhe juntos e não chegava ao card.
+ */
+const AcoesDosProdutos = createContext<AcaoNaLinha<string> | null>(null);
 
 export function ClienteEstoque() {
   const overviewQuery = useClientOverview();
@@ -347,6 +361,7 @@ export function ClienteEstoque() {
     },
   });
 
+  const acoesDosProdutos = useAcaoNaLinha<string>();
   const productActionMutation = useMutation({
     mutationFn: async (command: ProductActionCommand) => {
       if (command.action === "restock") {
@@ -401,6 +416,7 @@ export function ClienteEstoque() {
   });
 
   return (
+    <AcoesDosProdutos.Provider value={acoesDosProdutos}>
     <ClientDataBoundary>
       {(overview) => {
         const rawItems = getInventoryItems(overview);
@@ -413,6 +429,13 @@ export function ClienteEstoque() {
           <DraftLoader products={products} onLoad={applyDraft} />
         ) : wantsEvent && (eventsQuery.data || eventsQuery.isError) ? (
           <DraftLoader key="evento" products={products} onLoad={applyEvent} />
+        ) : wantsEvent && eventsQuery.isLoading ? (
+          // "Usar no pedido" espera o evento: aos 300 ms, a caixa e o rótulo, nunca nada (parte 13f).
+          <CarregandoNaRegiao
+            rotulo="Abrindo o evento…"
+            continuaARota
+            onTentar={() => void relerDoZero(queryClient, [clientEventsQueryKey])}
+          />
         ) : null;
         const cartQuantity = cartLines.reduce(
           (sum, line) => sum + line.quantity,
@@ -610,15 +633,16 @@ export function ClienteEstoque() {
           });
         }
 
+        // A mesma mutação e a mesma chave de idempotência de sempre (reposicoesNaVisita); a espera é por produto.
         function requestReplenishment(product: StockProduct) {
-          productActionMutation.mutate({ action: "restock", product });
+          void acoesDosProdutos.executar(product.key, "restock", () => productActionMutation.mutateAsync({ action: "restock", product }), {
+            releitura: () => invalidateClientData(queryClient),
+          });
         }
 
         function requestArchive(product: StockProduct) {
-          productActionMutation.mutate({
-            action: product.archived ? "restore" : "archive",
-            product,
-          });
+          const action = product.archived ? "restore" : "archive";
+          void acoesDosProdutos.executar(product.key, "archive", () => productActionMutation.mutateAsync({ action, product }));
         }
 
         /** Guarda o pedido montado como evento: itens, "Entregar em" como local e as observações. */
@@ -911,7 +935,6 @@ export function ClienteEstoque() {
                   family={selectedFamily}
                   cart={cart}
                   draftQuantity={getDraftQuantity(selectedProduct)}
-                  isPending={productActionMutation.isPending}
                   adicionado={
                     adicionadoNoDetalhe?.key === selectedProduct.key
                       ? adicionadoNoDetalhe.quantidade
@@ -957,6 +980,7 @@ export function ClienteEstoque() {
         );
       }}
     </ClientDataBoundary>
+    </AcoesDosProdutos.Provider>
   );
 }
 
@@ -1074,6 +1098,19 @@ export function MarketplaceToolbar({
       : stockFilter === "baixo" ? "abaixo do mínimo"
         : stockFilter === "arquivados" ? (resultCount === 1 ? "arquivado" : "arquivados")
           : (resultCount === 1 ? "encontrado" : "encontrados");
+  const textoDoResultado = `${formatNumber(resultCount)} ${resultCount === 1 ? "item" : "itens"} ${resultSuffix}`;
+  // O resultado da busca e dos filtros, dito pelo Anunciador quando a pessoa muda a busca ou um filtro; a
+  // releitura do estoque, que também muda a contagem, não fala (momento 7). Antes, uma região viva solta.
+  const anunciar = useAnuncio();
+  const consulta = `${searchTerm}|${stockFilter}|${categoryFilters.join(",")}`;
+  const ultimaConsulta = useRef(consulta);
+  useEffect(() => {
+    if (ultimaConsulta.current === consulta) return undefined;
+    ultimaConsulta.current = consulta;
+    return anunciar(textoDoResultado);
+    // Só a consulta da pessoa fala; a contagem que muda sozinha, não.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [consulta, anunciar]);
 
   return (
     <>
@@ -1152,8 +1189,8 @@ export function MarketplaceToolbar({
         </div>
       </section>
       <div data-testid="stock-results-toolbar" className="flex flex-wrap items-center justify-between gap-3">
-        <p role="status" aria-live="polite" className="text-sm font-semibold">
-          {formatNumber(resultCount)} {resultCount === 1 ? "item" : "itens"} {resultSuffix}
+        <p data-testid="stock-results-count" className="text-sm font-semibold">
+          {textoDoResultado}
         </p>
         <div className="hidden flex-wrap items-center gap-3 md:flex">
           <CatalogSelect ariaLabel="Ordenar produtos" icon={ArrowDownWideNarrow} value={sortMode} onChange={(value) => onSortModeChange(value as StockSort)} options={stockSortOptions.map((option) => ({ ...option, label: `Ordenar: ${option.label}` }))} />
@@ -1498,6 +1535,7 @@ export function StockList({
                       </>
                     ) : (
                       <ZeroStockActions
+                        chave={product.key}
                         compact
                         archived={product.archived}
                         onReplenish={() => onReplenish(product)}
@@ -1847,6 +1885,7 @@ export function FamilyCard({
             </div>
           ) : (
             <ZeroStockActions
+              chave={product.key}
               compact
               archived={product.archived}
               onReplenish={() => onReplenish(product)}
@@ -2169,7 +2208,7 @@ export function CartPanel({
           className="flex flex-col gap-3 rounded-lg border border-border p-3"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!eventDraft.name.trim()) return;
+            if (!eventDraft.name.trim() || isSavingEvent) return;
             onSaveEvent({ destination, notes }, eventDraft, () => setEventDraft(null));
           }}
         >
@@ -2200,12 +2239,20 @@ export function CartPanel({
             />
           </div>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" className="cursor-pointer" onClick={() => setEventDraft(null)}>
+            {/* Gravando, o Cancelar fica travado no código e o Salvar diz o gerúndio aos 300 ms (parte 13f). */}
+            <DialogCancelar variant="ghost" size="sm" className="cursor-pointer" ocupado={isSavingEvent} onClick={() => setEventDraft(null)}>
               Cancelar
-            </Button>
-            <Button type="submit" variant="outline" size="sm" className="cursor-pointer" disabled={!eventDraft.name.trim() || isSavingEvent}>
-              {isSavingEvent ? "Salvando…" : "Salvar evento"}
-            </Button>
+            </DialogCancelar>
+            <BotaoDeAcao
+              type="submit"
+              variant="outline"
+              size="sm"
+              className="cursor-pointer"
+              estado={isSavingEvent ? "andamento" : "repouso"}
+              rotulo="Salvar evento"
+              andamento="Salvando o evento…"
+              bloqueado={!isSavingEvent && !eventDraft.name.trim()}
+            />
           </div>
         </form>
       ) : (
@@ -2279,7 +2326,8 @@ type ProductDetailProps = {
   family?: Family<StockProduct> | null;
   cart: Record<string, number>;
   draftQuantity: number;
-  isPending: boolean;
+  /** Sem uso desde a parte 13f: a espera da ação é por produto (`AcoesDosProdutos`). */
+  isPending?: boolean;
   /** Quantas peças este painel acabou de pôr no pedido; sem nada, a confirmação não aparece. */
   adicionado?: number | null;
   onClose: () => void;
@@ -2291,16 +2339,38 @@ type ProductDetailProps = {
   onArchive: () => void;
   /** As datas de entrada do item (FIFO por data, parte 5); sem elas, a seção não aparece. */
   datasDeEntrada?: readonly DataDeEntrada[];
+  /** A leitura das datas: lendo e na falha, a seção fica, com a espera ou a falha (parte 13f). */
+  leituraDasDatas?: LeituraDasDatas;
 };
 
-/** O detalhe com as datas de entrada do item, lidas quando o painel abre; sem elas, o detalhe de sempre. */
+/**
+ * O detalhe com as datas de entrada do item, lidas quando o painel abre. Lendo
+ * e na falha, a seção fica, com a espera ou a falha e a nova tentativa: antes,
+ * ela sumia nos dois, e a falha parecia o item sem data (parte 13f).
+ */
 function ProductDetailWithDates(props: ProductDetailProps) {
-  const datas = useQuery({
-    queryKey: ["client-stock-dates", props.product.sku],
+  const queryClient = useQueryClient();
+  const chave = ["client-stock-dates", props.product.sku] as const;
+  const leitura = useQuery({
+    queryKey: chave,
     queryFn: () => buscarDatasDeEntrada(props.product.sku),
     staleTime: 60_000,
   });
-  return <ProductDetailPanel {...props} datasDeEntrada={datas.data ?? []} />;
+  // A nova tentativa sem dado fica na falha, com "Tentando de novo…" e o foco no botão.
+  const datas = useLeituraComFalha(leitura);
+  return (
+    <ProductDetailPanel
+      {...props}
+      datasDeEntrada={leitura.data ?? []}
+      leituraDasDatas={{
+        lendo: datas.isLoading,
+        falhou: datas.isError && !leitura.data,
+        tentando: leitura.isFetching,
+        onTentar: () => leitura.refetch(),
+        onTentarDoZero: () => void relerDoZero(queryClient, [chave]),
+      }}
+    />
+  );
 }
 
 /**
@@ -2313,7 +2383,6 @@ export function ProductDetailPanel({
   family = null,
   cart,
   draftQuantity,
-  isPending,
   adicionado = null,
   onClose,
   onDraftQuantityChange,
@@ -2323,7 +2392,11 @@ export function ProductDetailPanel({
   onReplenish,
   onArchive,
   datasDeEntrada = [],
+  leituraDasDatas,
 }: ProductDetailProps) {
+  // A confirmação do que o painel pôs no pedido, dita pelo Anunciador, a região viva da tela (parte 13f).
+  const anunciar = useAnuncio();
+  useEffect(() => (adicionado ? anunciar(pecasAdicionadas(adicionado)) : undefined), [adicionado, anunciar]);
   const tamanhoId = useId();
   const liveAvailable = liveAvailableForProduct(product, cart);
   const status = productStatus(product, liveAvailable);
@@ -2418,7 +2491,7 @@ export function ProductDetailPanel({
           ) : null}
         </div>
 
-        <DatasDeEntrada datas={datasDeEntrada} />
+        <DatasDeEntrada datas={datasDeEntrada} leitura={leituraDasDatas} />
 
         {aviso ? (
           <div
@@ -2432,7 +2505,7 @@ export function ProductDetailPanel({
       </div>
 
       <div data-testid="detalhe-rodape" className="@container shrink-0 border-t border-border bg-card px-5 py-4">
-        {/* O status existe desde o início, vazio: o leitor de tela anuncia quando ele muda. */}
+        {/* A confirmação à vista; o leitor de tela a ouve pelo Anunciador, a região viva da tela (parte 13f). */}
         <div
           className={cn(
             "flex items-center justify-between gap-3",
@@ -2441,7 +2514,7 @@ export function ProductDetailPanel({
               : null,
           )}
         >
-          <p role="status" className="flex items-center gap-2 text-sm font-semibold">
+          <p data-testid="detalhe-adicionado" className="flex items-center gap-2 text-sm font-semibold">
             {adicionado ? (
               <>
                 <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -2481,7 +2554,7 @@ export function ProductDetailPanel({
           </div>
         ) : (
           <ZeroStockActions
-            disabled={isPending}
+            chave={product.key}
             archived={product.archived}
             onReplenish={onReplenish}
             onArchive={onArchive}
@@ -2705,18 +2778,25 @@ function QuantityStepper({
 }
 
 function ZeroStockActions({
+  chave,
   compact = false,
-  disabled = false,
   archived = false,
   onReplenish,
   onArchive,
 }: {
+  /** O produto (a chave dele), para a espera ser só dele (`AcoesDosProdutos`). */
+  chave: string;
   compact?: boolean;
-  disabled?: boolean;
   archived?: boolean;
   onReplenish: () => void;
   onArchive: () => void;
 }) {
+  // Cada produto espera a própria ação, com o gerúndio no botão aos 300 ms; a outra ação dele trava no código
+  // (aria-disabled), nunca disabled, e os outros produtos ficam livres (carregamento v2, parte 13f).
+  const acoes = useContext(AcoesDosProdutos);
+  const repor = acoes?.estado(chave, "restock") ?? "repouso";
+  const arquivo = acoes?.estado(chave, "archive") ?? "repouso";
+  const ocupado = acoes?.ocupada(chave) ?? false;
   // Fora do card, no rodapé do detalhe: lado a lado quando o painel tem
   // largura (@sm, pelo @container do rodapé), um embaixo do outro no celular.
   return (
@@ -2726,28 +2806,30 @@ function ZeroStockActions({
         compact ? "grid-cols-2" : "grid-cols-1 @sm:grid-cols-2",
       )}
     >
-      <Button
-        type="button"
+      <BotaoDeAcao
         variant="outline"
         size={compact ? "sm" : "default"}
         className={cn("cursor-pointer", !compact && "min-h-11")}
-        disabled={disabled}
+        estado={repor}
+        icone={<Truck className="h-4 w-4" aria-hidden="true" />}
+        rotulo="Avisar reposição"
+        andamento="Avisando…"
+        sucesso="Avisado"
+        bloqueado={ocupado && repor === "repouso"}
         onClick={onReplenish}
-      >
-        <Truck className="h-4 w-4" />
-        Avisar reposição
-      </Button>
-      <Button
-        type="button"
+      />
+      <BotaoDeAcao
         variant="ghost"
         size={compact ? "sm" : "default"}
         className={cn("cursor-pointer text-muted-foreground", !compact && "min-h-11")}
-        disabled={disabled}
+        estado={arquivo}
+        icone={<Archive className="h-4 w-4" aria-hidden="true" />}
+        rotulo={archived ? "Devolver à vitrine" : "Arquivar"}
+        andamento={archived ? "Devolvendo…" : "Arquivando…"}
+        sucesso={archived ? "Devolvido" : "Arquivado"}
+        bloqueado={ocupado && arquivo === "repouso"}
         onClick={onArchive}
-      >
-        <Archive className="h-4 w-4" />
-        {archived ? "Devolver à vitrine" : "Arquivar"}
-      </Button>
+      />
     </div>
   );
 }

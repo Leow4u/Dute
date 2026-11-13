@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowLeft, Download, Loader2, Printer } from "lucide-react";
+import { ArrowLeft, Download, Printer } from "lucide-react";
 import { Link } from "wouter";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
@@ -103,10 +104,17 @@ export function ClienteRelatorio() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="rounded-xl" disabled={!report || download.isPending} onClick={() => download.mutate()}>
-                    {download.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                    Baixar planilha
-                  </Button>
+                  {/* A planilha que o servidor gera: o gerúndio aos 300 ms, sem desabilitar (carregamento v2, parte 13f). */}
+                  <BotaoDeAcao
+                    variant="outline"
+                    className="rounded-xl"
+                    estado={download.isPending ? "andamento" : "repouso"}
+                    icone={<Download className="h-4 w-4" aria-hidden="true" />}
+                    rotulo="Baixar planilha"
+                    andamento="Gerando a planilha…"
+                    bloqueado={!report}
+                    onClick={() => download.mutate()}
+                  />
                   <Button className="rounded-xl" disabled={!report} onClick={() => window.print()}>
                     <Printer className="h-4 w-4" />
                     Salvar PDF

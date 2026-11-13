@@ -9,7 +9,8 @@ import { ClientDataBoundary, clientOverviewQueryKey, type ClientOverview } from 
 /**
  * O portal sem rede (docs/plataforma/diagnostico-carregamento.md, decisão 2
  * do celular, de 06/11/2026): sem conexão na releitura, o que já estava na
- * tela fica, e não vira "Portal indisponível".
+ * tela fica, e não vira a falha. Sem nada lido, o aviso da conexão no lugar
+ * do portal (carregamento v2, momento 8, parte 13f).
  */
 
 const OVERVIEW = { customer: { code: "BTG", name: "BTG Pactual" } } as unknown as ClientOverview;
@@ -35,24 +36,25 @@ describe("o portal sem conexão", () => {
   it("com o que já estava lido, segue mostrando", () => {
     const html = tela(new Error(SEM_CONEXAO), OVERVIEW);
     expect(html).toContain("Portal de BTG Pactual");
-    expect(html).not.toContain("Portal indisponível");
+    expect(html).not.toContain("Não foi possível carregar o portal.");
   });
 
   it("com o aparelho conectado e o servidor sem resposta, também segue mostrando (carregamento v2, parte 7a)", () => {
     const html = tela(Object.assign(new Error(SEM_RESPOSTA), { status: 503, data: { message: SEM_RESPOSTA, code: "sem_resposta" } }), OVERVIEW);
     expect(html).toContain("Portal de BTG Pactual");
-    expect(html).not.toContain("Portal indisponível");
+    expect(html).not.toContain("Não foi possível carregar o portal.");
   });
 
   it("sem nada lido, diz que faltou conexão no lugar do portal", () => {
     const html = tela(new Error(SEM_CONEXAO), undefined);
-    expect(html).toContain("Portal indisponível");
-    expect(html).toContain(SEM_CONEXAO);
+    expect(html).toMatch(/Reconectando…|Sem conexão\./);
+    expect(html).toContain("Tentar de novo");
+    expect(html).not.toContain("Não foi possível carregar o portal.");
   });
 
   it("a falha que não é de conexão continua no lugar do portal", () => {
     const html = tela(new Error("Missing or insufficient permissions."), OVERVIEW);
-    expect(html).toContain("Portal indisponível");
+    expect(html).toContain("Não foi possível carregar o portal.");
     expect(html).not.toContain("Portal de BTG Pactual");
   });
 });
