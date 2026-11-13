@@ -173,6 +173,7 @@ const MOVIMENTO: Record<string, string> = {
   "--carregando-t-arcos": "1200ms",
   "--carregando-t-pulso": "2000ms",
   "--carregando-t-abertura-sai": "260ms",
+  "--carregando-t-abertura-completa": "200ms",
   "--carregando-t-dedo": "700ms",
 };
 
@@ -211,6 +212,9 @@ describe("os tokens do carregamento", () => {
     expect(CARREGANDO.refluiMs - CARREGANDO.chegaEsperaMs).toBe(60);
     expect(raiz.get("--carregando-t-destaque")).toBe(`${CARREGANDO.destaqueMs}ms`);
     expect(raiz.get("--carregando-t-conta")).toBe(`${CARREGANDO.contaMs}ms`);
+    // A abertura (index.html) esmaece e, antes, completa o trilho: lib/abertura.ts conta com os mesmos tempos.
+    expect(raiz.get("--carregando-t-abertura-sai")).toBe(`${CARREGANDO.aberturaSaiMs}ms`);
+    expect(raiz.get("--carregando-t-abertura-completa")).toBe(`${CARREGANDO.aberturaCompletaMs}ms`);
   });
 
   it("4.2 forma: a caixa chanfrada em três traços, a cabeça, o trilho, o piso e as barras", () => {

@@ -123,6 +123,11 @@ function screenLabel(path: string, depth = 0): string | null {
   return null;
 }
 
+/** O nome da tela do caminho ("Faturamento", "Pedidos"), ou nulo quando não é uma tela conhecida. */
+export function nomeDaTela(path: string): string | null {
+  return screenLabel(cleanPath(path));
+}
+
 /** Título da aba para o caminho atual. Sem tela conhecida, só a marca. */
 export function documentTitleForPath(path: string): string {
   const label = screenLabel(cleanPath(path));

@@ -8,15 +8,7 @@ import {
   Redirect,
 } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import {
-  Component,
-  lazy,
-  Suspense,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -25,6 +17,8 @@ import { PasswordInput } from "@/components/password-input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AuthShell } from "@/components/auth-shell";
+import { ChunkErrorBoundary } from "@/components/chunk-error-boundary";
+import { CarregandoTela } from "@/components/ui/carregando-tela";
 import PortalDesligadoPage from "@/pages/portal-desligado";
 import ConvitePage from "@/pages/convite";
 
@@ -41,158 +35,129 @@ import SettingsLayout from "./components/layout/settings-layout";
 import { Anunciador } from "./lib/carregando/anunciador";
 import type { WarehouseOpsModuleKey } from "./lib/warehouse-ops/model";
 import NotFound from "./pages/not-found";
+import { telaSobDemanda } from "./lib/telas-no-aparelho";
 
-/**
- * Um deploy troca o hash de todos os chunks. Com registerType "autoUpdate" +
- * skipWaiting, uma aba aberta desde antes do deploy pede um chunk que não
- * existe mais ao navegar — o import dinâmico rejeita, passa por cima do
- * Suspense e a tela fica branca. Aqui isso vira um convite a recarregar.
- */
-class ChunkErrorBoundary extends Component<
-  { children: ReactNode },
-  { failed: boolean }
-> {
-  state = { failed: false };
-
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-
-  render() {
-    if (!this.state.failed) return this.props.children;
-    return (
-      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-        <p>
-          Nao foi possivel carregar esta tela. Uma nova versao pode ter sido
-          publicada.
-        </p>
-        <Button type="button" onClick={() => window.location.reload()}>
-          Recarregar
-        </Button>
-      </div>
-    );
-  }
-}
-
-const Home = lazy(() => import("./pages/home"));
-const EntradaPage = lazy(() => import("./pages/entrada"));
-const Catalog = lazy(() => import("./pages/catalog"));
-const Movements = lazy(() => import("./pages/movements"));
-const Orders = lazy(() => import("./pages/orders"));
-const Reports = lazy(() => import("./pages/reports"));
-const BillingHub = lazy(() => import("./pages/billing-hub"));
-const BillingInvoice = lazy(() => import("./pages/billing-invoice"));
-const Users = lazy(() => import("./pages/users"));
-const SettingsCustomers = lazy(() => import("./pages/settings-customers"));
-const SettingsIntegrations = lazy(() => import("./pages/settings-integrations"));
-const Documents = lazy(() => import("./pages/documents"));
-const Settings = lazy(() => import("./pages/settings"));
-const SettingsAccount = lazy(() =>
+// As telas chegam sob demanda e, para a equipe, ficam guardadas no aparelho
+// depois de entrar (lib/telas-no-aparelho.ts): abrem sem sinal.
+const Home = telaSobDemanda(() => import("./pages/home"));
+const EntradaPage = telaSobDemanda(() => import("./pages/entrada"));
+const Catalog = telaSobDemanda(() => import("./pages/catalog"));
+const Movements = telaSobDemanda(() => import("./pages/movements"));
+const Orders = telaSobDemanda(() => import("./pages/orders"));
+const Reports = telaSobDemanda(() => import("./pages/reports"));
+const BillingHub = telaSobDemanda(() => import("./pages/billing-hub"));
+const BillingInvoice = telaSobDemanda(() => import("./pages/billing-invoice"));
+const Users = telaSobDemanda(() => import("./pages/users"));
+const SettingsCustomers = telaSobDemanda(() => import("./pages/settings-customers"));
+const SettingsIntegrations = telaSobDemanda(() => import("./pages/settings-integrations"));
+const Documents = telaSobDemanda(() => import("./pages/documents"));
+const Settings = telaSobDemanda(() => import("./pages/settings"));
+const SettingsAccount = telaSobDemanda(() =>
   import("./pages/settings").then((m) => ({ default: m.SettingsAccount })),
 );
-const SettingsApp = lazy(() =>
+const SettingsApp = telaSobDemanda(() =>
   import("./pages/settings").then((m) => ({ default: m.SettingsApp })),
 );
 // Com o agente do núcleo, o painel novo na v3; fora dele, o antigo (pages/ai-control.tsx).
-const PainelDoAgente = lazy(() => import("./pages/agente-painel"));
-const AgentePage = lazy(() => import("./pages/agente"));
+const PainelDoAgente = telaSobDemanda(() => import("./pages/agente-painel"));
+const AgentePage = telaSobDemanda(() => import("./pages/agente"));
 // O Agent Dute no shell de cada módulo (parte 5.5j): só com a liberação dele.
-const AgenteDoComercial = lazy(() => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDoComercial })));
-const AgenteDaOperacao = lazy(() => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDaOperacao })));
-const AgenteDoFinanceiro = lazy(() => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDoFinanceiro })));
-const AgentKnowledge = lazy(() => import("./pages/agent-knowledge"));
-const SettingsSystem = lazy(() => import("./pages/settings-system"));
-const CustomerRequests = lazy(() => import("./pages/customer-requests"));
-const WarehouseOps = lazy(() => import("./pages/warehouse-ops"));
-const Receber = lazy(() => import("./pages/receber"));
-const WmsInventoryPage = lazy(() => import("./pages/wms-inventory"));
-const WarehousePositionsPage = lazy(() => import("./pages/warehouse-positions"));
-const WarehouseLabelsPage = lazy(() => import("./pages/warehouse-labels"));
-const EstoqueAlertas = lazy(() => import("./pages/estoque-alertas"));
-const WarehouseMapPage = lazy(() => import("./pages/warehouse-map"));
-const Pedidos = lazy(() => import("./pages/pedidos"));
-const PedidosLista = lazy(() => import("./pages/pedidos-lista"));
-const PedidosRomaneio = lazy(() => import("./pages/pedidos-romaneio"));
-const PedidosSeparar = lazy(() => import("./pages/pedidos-separar"));
-const Estoque = lazy(() => import("./pages/estoque"));
-const WmsReturnsPage = lazy(() => import("./pages/wms-returns"));
-const ClienteAssistente = lazy(() =>
+const AgenteDoComercial = telaSobDemanda(() => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDoComercial })));
+const AgenteDaOperacao = telaSobDemanda(() => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDaOperacao })));
+const AgenteDoFinanceiro = telaSobDemanda(() => import("./pages/agente-do-modulo").then((m) => ({ default: m.AgenteDoFinanceiro })));
+const AgentKnowledge = telaSobDemanda(() => import("./pages/agent-knowledge"));
+const SettingsSystem = telaSobDemanda(() => import("./pages/settings-system"));
+const CustomerRequests = telaSobDemanda(() => import("./pages/customer-requests"));
+const WarehouseOps = telaSobDemanda(() => import("./pages/warehouse-ops"));
+const Receber = telaSobDemanda(() => import("./pages/receber"));
+const WmsInventoryPage = telaSobDemanda(() => import("./pages/wms-inventory"));
+const WarehousePositionsPage = telaSobDemanda(() => import("./pages/warehouse-positions"));
+const WarehouseLabelsPage = telaSobDemanda(() => import("./pages/warehouse-labels"));
+const EstoqueAlertas = telaSobDemanda(() => import("./pages/estoque-alertas"));
+const WarehouseMapPage = telaSobDemanda(() => import("./pages/warehouse-map"));
+const Pedidos = telaSobDemanda(() => import("./pages/pedidos"));
+const PedidosLista = telaSobDemanda(() => import("./pages/pedidos-lista"));
+const PedidosRomaneio = telaSobDemanda(() => import("./pages/pedidos-romaneio"));
+const PedidosSeparar = telaSobDemanda(() => import("./pages/pedidos-separar"));
+const Estoque = telaSobDemanda(() => import("./pages/estoque"));
+const WmsReturnsPage = telaSobDemanda(() => import("./pages/wms-returns"));
+const ClienteAssistente = telaSobDemanda(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteAssistente })),
 );
-const ClienteDocumentos = lazy(() =>
+const ClienteDocumentos = telaSobDemanda(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteDocumentos })),
 );
-const ClienteEstoque = lazy(() =>
+const ClienteEstoque = telaSobDemanda(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteEstoque })),
 );
-const ClienteEventos = lazy(() =>
+const ClienteEventos = telaSobDemanda(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteEventos })),
 );
-const ClienteServicos = lazy(() =>
+const ClienteServicos = telaSobDemanda(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteServicos })),
 );
-const ClienteComprovante = lazy(() =>
+const ClienteComprovante = telaSobDemanda(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteComprovante })),
 );
-const ClienteFaturas = lazy(() =>
+const ClienteFaturas = telaSobDemanda(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteFaturas })),
 );
-const ClienteFatura = lazy(() =>
+const ClienteFatura = telaSobDemanda(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteFatura })),
 );
-const ClienteRelatorio = lazy(() =>
+const ClienteRelatorio = telaSobDemanda(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteRelatorio })),
 );
-const ClienteInicio = lazy(() =>
+const ClienteInicio = telaSobDemanda(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteInicio })),
 );
-const ClientePedidos = lazy(() =>
+const ClientePedidos = telaSobDemanda(() =>
   import("./pages/client").then((m) => ({ default: m.ClientePedidos })),
 );
-const ClienteEnvios = lazy(() =>
+const ClienteEnvios = telaSobDemanda(() =>
   import("./pages/client").then((m) => ({ default: m.ClienteEnvios })),
 );
-const ComercialClientes = lazy(() => import("./pages/comercial/clientes"));
-const ComercialInicio = lazy(() => import("./pages/comercial/inicio"));
-const FinanceiroInicio = lazy(() => import("./pages/financeiro/inicio"));
-const FinanceiroAFaturar = lazy(() => import("./pages/financeiro/a-faturar"));
-const FinanceiroAReceber = lazy(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroAReceber })));
-const FinanceiroVencidos = lazy(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroVencidos })));
-const FinanceiroPagos = lazy(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroPagos })));
-const FinanceiroFaturas = lazy(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroFaturas })));
-const FinanceiroNf = lazy(() => import("./pages/financeiro/nf"));
-const FinanceiroEmissoes = lazy(() => import("./pages/financeiro/emissoes"));
-const FinanceiroRelatorios = lazy(() => import("./pages/financeiro/relatorios"));
-const RhInicio = lazy(() => import("./pages/rh/inicio"));
-const RhPessoas = lazy(() => import("./pages/rh/pessoas"));
-const RhFicha = lazy(() => import("./pages/rh/ficha"));
-const RhExportacao = lazy(() => import("./pages/rh/exportacao"));
-const FinanceiroContratos = lazy(() => import("./pages/financeiro/contratos"));
-const FinanceiroAutorizacoes = lazy(() => import("./pages/financeiro/autorizacoes"));
-const ComercialOrcamentos = lazy(() => import("./pages/comercial/orcamentos"));
-const ComercialOrcamento = lazy(() => import("./pages/comercial/orcamento"));
-const ComercialDocumento = lazy(() => import("./pages/comercial/documento"));
-const ComercialAprovar = lazy(() => import("./pages/comercial/aprovar"));
-const ComercialContratos = lazy(() => import("./pages/comercial/contratos"));
-const ComercialAutorizacoes = lazy(() => import("./pages/comercial/autorizacoes"));
-const ComercialMedicoes = lazy(() => import("./pages/comercial/medicoes"));
-const OperacaoInicio = lazy(() => import("./pages/operacao/inicio"));
-const OperacaoHoje = lazy(() => import("./pages/operacao/hoje"));
-const OperacaoAgenda = lazy(() => import("./pages/operacao/agenda"));
-const OperacaoDemandas = lazy(() => import("./pages/operacao/demandas"));
-const OperacaoDemanda = lazy(() => import("./pages/operacao/demanda"));
-const OperacaoDemandaNova = lazy(() => import("./pages/operacao/demanda-nova"));
-const OperacaoPlanejar = lazy(() => import("./pages/operacao/planejar"));
-const OperacaoOs = lazy(() => import("./pages/operacao/os"));
-const OperacaoOsImpressao = lazy(() => import("./pages/operacao/os-impressao"));
-const OperacaoRevisao = lazy(() => import("./pages/operacao/revisao"));
-const OperacaoRelatorios = lazy(() => import("./pages/operacao/relatorios"));
-const CampoHoje = lazy(() => import("./pages/campo/hoje"));
-const CampoOs = lazy(() => import("./pages/campo/os"));
-const CampoConcluir = lazy(() => import("./pages/campo/concluir"));
-const TvDaSala = lazy(() => import("./pages/tv/tv"));
-const OperacaoColaboradores = lazy(() => import("./pages/operacao/colaboradores"));
-const OperacaoVeiculos = lazy(() => import("./pages/operacao/veiculos"));
+const ComercialClientes = telaSobDemanda(() => import("./pages/comercial/clientes"));
+const ComercialInicio = telaSobDemanda(() => import("./pages/comercial/inicio"));
+const FinanceiroInicio = telaSobDemanda(() => import("./pages/financeiro/inicio"));
+const FinanceiroAFaturar = telaSobDemanda(() => import("./pages/financeiro/a-faturar"));
+const FinanceiroAReceber = telaSobDemanda(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroAReceber })));
+const FinanceiroVencidos = telaSobDemanda(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroVencidos })));
+const FinanceiroPagos = telaSobDemanda(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroPagos })));
+const FinanceiroFaturas = telaSobDemanda(() => import("./pages/financeiro/faturas").then((tela) => ({ default: tela.FinanceiroFaturas })));
+const FinanceiroNf = telaSobDemanda(() => import("./pages/financeiro/nf"));
+const FinanceiroEmissoes = telaSobDemanda(() => import("./pages/financeiro/emissoes"));
+const FinanceiroRelatorios = telaSobDemanda(() => import("./pages/financeiro/relatorios"));
+const RhInicio = telaSobDemanda(() => import("./pages/rh/inicio"));
+const RhPessoas = telaSobDemanda(() => import("./pages/rh/pessoas"));
+const RhFicha = telaSobDemanda(() => import("./pages/rh/ficha"));
+const RhExportacao = telaSobDemanda(() => import("./pages/rh/exportacao"));
+const FinanceiroContratos = telaSobDemanda(() => import("./pages/financeiro/contratos"));
+const FinanceiroAutorizacoes = telaSobDemanda(() => import("./pages/financeiro/autorizacoes"));
+const ComercialOrcamentos = telaSobDemanda(() => import("./pages/comercial/orcamentos"));
+const ComercialOrcamento = telaSobDemanda(() => import("./pages/comercial/orcamento"));
+const ComercialDocumento = telaSobDemanda(() => import("./pages/comercial/documento"));
+const ComercialAprovar = telaSobDemanda(() => import("./pages/comercial/aprovar"));
+const ComercialContratos = telaSobDemanda(() => import("./pages/comercial/contratos"));
+const ComercialAutorizacoes = telaSobDemanda(() => import("./pages/comercial/autorizacoes"));
+const ComercialMedicoes = telaSobDemanda(() => import("./pages/comercial/medicoes"));
+const OperacaoInicio = telaSobDemanda(() => import("./pages/operacao/inicio"));
+const OperacaoHoje = telaSobDemanda(() => import("./pages/operacao/hoje"));
+const OperacaoAgenda = telaSobDemanda(() => import("./pages/operacao/agenda"));
+const OperacaoDemandas = telaSobDemanda(() => import("./pages/operacao/demandas"));
+const OperacaoDemanda = telaSobDemanda(() => import("./pages/operacao/demanda"));
+const OperacaoDemandaNova = telaSobDemanda(() => import("./pages/operacao/demanda-nova"));
+const OperacaoPlanejar = telaSobDemanda(() => import("./pages/operacao/planejar"));
+const OperacaoOs = telaSobDemanda(() => import("./pages/operacao/os"));
+const OperacaoOsImpressao = telaSobDemanda(() => import("./pages/operacao/os-impressao"));
+const OperacaoRevisao = telaSobDemanda(() => import("./pages/operacao/revisao"));
+const OperacaoRelatorios = telaSobDemanda(() => import("./pages/operacao/relatorios"));
+const CampoHoje = telaSobDemanda(() => import("./pages/campo/hoje"));
+const CampoOs = telaSobDemanda(() => import("./pages/campo/os"));
+const CampoConcluir = telaSobDemanda(() => import("./pages/campo/concluir"));
+const TvDaSala = telaSobDemanda(() => import("./pages/tv/tv"));
+const OperacaoColaboradores = telaSobDemanda(() => import("./pages/operacao/colaboradores"));
+const OperacaoVeiculos = telaSobDemanda(() => import("./pages/operacao/veiculos"));
 import { useRole } from "./hooks/use-role";
 import { AuthProvider, useAppUser } from "./lib/auth";
 import { ActiveCustomerProvider } from "./lib/active-customer-context";
@@ -222,6 +187,8 @@ import { RealtimeSyncBridge } from "./lib/realtime-sync";
 import { MENSAGEM_DA_RECUPERACAO, problemaDaRecuperacao } from "./lib/recuperar-senha";
 import { layoutDaRota, type LayoutDaRota } from "./lib/ambientes";
 import { LEGACY_SETTINGS_REDIRECTS } from "./lib/settings-nav";
+import { nomeDaTela } from "./lib/document-title";
+import { agendarGuardaDasTelas, telasDoPapel } from "./lib/telas-no-aparelho";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -376,7 +343,7 @@ function QueryClientCacheInvalidator() {
 function RoleHome() {
   const { role, isLoaded } = useRole();
   const { user } = useAppUser();
-  if (!isLoaded) return null;
+  if (!isLoaded) return <CarregandoTela />;
   const profileRole = user?.publicMetadata.role;
   // Papel do perfil decide a aterrissagem (wms → bancada, financeiro →
   // faturamento); o appRole agregado fica de fallback.
@@ -401,7 +368,7 @@ function EntradaPorModulo() {
   const { user } = useAppUser();
   const operation = useOperationProfile();
   const role = user?.publicMetadata.role;
-  if (role === "cliente" && operation.isLoading) return null;
+  if (role === "cliente" && operation.isLoading) return <CarregandoTela />;
   const decision = entrada(role, operation.profile);
   if (decision.kind === "redirect") return <Redirect to={decision.to} />;
   return (
@@ -413,7 +380,7 @@ function EntradaPorModulo() {
 
 function HomeRedirect() {
   const { user, isLoaded } = useAppUser();
-  if (!isLoaded) return null;
+  if (!isLoaded) return <CarregandoTela />;
   if (!user) return <SignInPage />;
   // Fora da liberação (produção), a aterrissagem por papel de sempre.
   return PLATAFORMA_LIBERADA ? <EntradaPorModulo /> : <RoleHome />;
@@ -433,7 +400,8 @@ function RoleGate({
   const { role, isLoaded } = useRole();
   const { user } = useAppUser();
   const operation = useOperationProfile();
-  if (!isLoaded) return null;
+  const titulo = path ? nomeDaTela(path) : null;
+  if (!isLoaded) return <CarregandoTela titulo={titulo} />;
   if (!role || !appRoles.includes(role)) return <Redirect to="/" />;
   if (!canAccessModule(user?.publicMetadata.role, profileRoles)) {
     return <Redirect to="/" />;
@@ -441,7 +409,7 @@ function RoleGate({
   if (role === "cliente") {
     // Espera a primeira leitura do perfil para não abrir a tela e tirar em
     // seguida.
-    if (operation.isLoading) return null;
+    if (operation.isLoading) return <CarregandoTela titulo={titulo} />;
     // O cliente arquivado ou "Sem portal" (pergunta 69): a pessoa vê só a
     // tela do portal desligado, com Sair.
     if (operation.profile?.portalDesligado) return <PortalDesligadoPage />;
@@ -676,23 +644,18 @@ function ProtectedRoute({
 }: any) {
   const Layout = LAYOUT_DA_ROTA[layout as LayoutDaRota] ?? AppLayout;
   const { user, isLoaded } = useAppUser();
+  const titulo = nomeDaTela(rest.path);
 
   return (
     <Route {...rest}>
       {(params) => {
-        if (!isLoaded) return null;
+        if (!isLoaded) return <CarregandoTela titulo={titulo} />;
         if (!user) return <Redirect to="/sign-in" />;
         return (
           <RoleGate appRoles={appRoles} profileRoles={profileRoles} path={rest.path}>
             <Layout>
               <ChunkErrorBoundary>
-                <Suspense
-                  fallback={
-                    <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
-                      Carregando...
-                    </div>
-                  }
-                >
+                <Suspense fallback={<CarregandoTela titulo={titulo} />}>
                   <Component params={params} />
                 </Suspense>
               </ChunkErrorBoundary>
@@ -704,25 +667,39 @@ function ProtectedRoute({
   );
 }
 
+/**
+ * Depois de entrar, a equipe guarda no aparelho as telas que pode abrir, para
+ * abrirem sem sinal (lib/telas-no-aparelho.ts). Uma vez por versão do app.
+ */
+function GuardarTelasNoAparelho() {
+  const { user, isLoaded } = useAppUser();
+  const papel = isLoaded ? user?.publicMetadata.role : undefined;
+  useEffect(() => {
+    if (!papel) return undefined;
+    const rotas = PROTECTED_ROUTES.filter((route) => rotaDisponivelNaArmazenagem(route.path));
+    return agendarGuardaDasTelas(
+      papel,
+      telasDoPapel(rotas, papel),
+      PROTECTED_ROUTES.map((route) => route.component),
+    );
+  }, [papel]);
+  return null;
+}
+
 function AppRoutes() {
   return (
     <AuthProvider>
       <AppThemeProvider>
         <QueryClientProvider client={queryClient}>
           <QueryClientCacheInvalidator />
+          <GuardarTelasNoAparelho />
           <RealtimeSyncBridge />
           {/* Cliente ativo da área interna (lib/active-customer.ts). */}
           <ActiveCustomerProvider>
           <TooltipProvider>
             <ChunkErrorBoundary>
               <DocumentTitle />
-              <Suspense
-                fallback={
-                  <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-                    Carregando...
-                  </div>
-                }
-              >
+              <Suspense fallback={<CarregandoTela className="min-h-dvh" />}>
                 <Switch>
                   <Route path="/" component={HomeRedirect} />
                   <Route path="/sign-in/*?" component={SignInPage} />

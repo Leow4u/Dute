@@ -1,7 +1,8 @@
-import { lazy, Suspense, useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { collection, getCountFromServer } from "firebase/firestore";
 
+import { CarregandoTela } from "@/components/ui/carregando-tela";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { playbooksKey } from "@/lib/agent-playbooks";
@@ -14,6 +15,7 @@ import type { HomeInboxItem } from "@/lib/home-inbox";
 import { itensDoInicioDoWms } from "@/lib/inicio-do-wms";
 import type { ItemDoInicio } from "@/lib/inicio-do-modulo";
 import { canAccessModule, getRouteProfileRoles, type ProfileRole } from "@/lib/modules";
+import { telaSobDemanda } from "@/lib/telas-no-aparelho";
 import { useInicioDoWms } from "@/lib/use-inicio-do-wms";
 
 import { PainelDoAgenteView, type AbaDoAgente, type DecisaoDaNota } from "./agente-painel-view";
@@ -27,7 +29,7 @@ import { PainelDoAgenteView, type AbaDoAgente, type DecisaoDaNota } from "./agen
  * fica o painel antigo (pages/ai-control.tsx).
  */
 
-const PainelAntigo = lazy(() => import("./ai-control"));
+const PainelAntigo = telaSobDemanda(() => import("./ai-control"));
 
 /** As linhas do "Precisa de você" que são do agente: o alerta de itens parados, as anotações e os playbooks para aprovar. */
 export const LINHAS_DO_AGENTE: readonly string[] = ["stock-alerts", "agent-notes", "agent-playbooks"];
@@ -106,7 +108,7 @@ export default function PainelDoAgentePage() {
   const role = user?.publicMetadata.role;
   if (!role || !abreAgenteDoNucleo(role)) {
     return (
-      <Suspense fallback={null}>
+      <Suspense fallback={<CarregandoTela titulo="Painel" />}>
         <PainelAntigo />
       </Suspense>
     );

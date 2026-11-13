@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Dutelog</title>
     <meta name="description" content="Sistema da Dutelog para armazenagem, pedidos, estoque e faturamento." />
-    <meta name="theme-color" content="#FAFAF8" />
+    <!-- O preto da abertura, igual nos dois temas; o tema do app assume quando ela sai (theme-provider.tsx). -->
+    <meta name="theme-color" content="#161616" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -20,11 +21,135 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/dutelog-mark-32.png" />
     <link rel="icon" type="image/png" sizes="64x64" href="/dutelog-mark-64.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/dutelog-mark-180.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!--
+      A abertura (carregamento v2, momento 5, decisão P4 de 12/11/2026): preta,
+      fora do #root, com a marca e a palavra em PNG e o trilho chanfrado. O CSS
+      fica aqui, sem depender do JavaScript nem da fonte, e nada de texto visível
+      na primeira pintura. O trilho aparece aos 300 ms e o segmento varre em
+      1,4 s; quando o perfil chega, lib/abertura.ts (fecharAbertura) completa o
+      trilho em 200 ms e esmaece tudo em 260 ms, com a marca a 0,96 (antes de
+      300 ms, só esmaece). Movimento só por transform e opacity; no reduzido, o
+      trilho fica inteiro em vermelho, parado, e a saída é só por opacidade. Os
+      tempos são os de lib/carregando/tempo.ts (trava em src/lib/abertura.test.ts).
+    -->
+    <style>
+      #abertura{position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#161616;color:#fff;font:700 15px/20px Manrope,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+      #abertura .ab-centro{position:relative;display:flex;flex-direction:column;align-items:center}
+      #abertura .ab-marca{display:block;width:96px;height:96px;border-radius:22px}
+      #abertura .ab-trilho{position:relative;width:160px;height:6px;margin-top:40px;overflow:hidden;clip-path:polygon(0 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%);animation:abertura-entra 150ms cubic-bezier(.2,0,0,1) 300ms both}
+      #abertura .ab-trilho::before{content:"";position:absolute;inset:0;background:#fff;opacity:.16}
+      #abertura .ab-seg{position:absolute;top:0;bottom:0;left:0;width:36%;background:#E71C23;clip-path:polygon(0 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%);animation:abertura-varre 1400ms cubic-bezier(.2,.55,.8,.45) 300ms infinite both}
+      #abertura .ab-completa{position:absolute;inset:0;background:#E71C23;transform:scaleX(0);transform-origin:0 50%}
+      #abertura .ab-palavra{position:absolute;left:50%;bottom:calc(48px + env(safe-area-inset-bottom, 0px));width:auto;height:24px;transform:translateX(-50%)}
+      #abertura .ab-aviso{position:absolute;top:calc(100% + 22px);left:-80px;right:-80px;display:flex;flex-direction:column;align-items:center;gap:14px;color:#F3DCA3;text-align:center}
+      #abertura .ab-avisos{display:grid;justify-items:center;margin:0}
+      #abertura .ab-linha{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;animation:abertura-aviso 150ms cubic-bezier(.2,0,0,1) both}
+      #abertura svg{flex:none;width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+      #abertura .ab-tentar{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px;border:1px solid rgba(255,255,255,.34);border-radius:10px;background:transparent;color:#fff;font:inherit;font-size:14px;cursor:pointer;animation:abertura-aviso 150ms cubic-bezier(.2,0,0,1) both}
+      #abertura .ab-tentar svg{width:16px;height:16px}
+      #abertura .ab-tentar:focus-visible{outline:2px solid #fff;outline-offset:2px}
+      #abertura [hidden]{display:none}
+      #abertura .ab-leitor{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+      #abertura[data-fechando]{pointer-events:none;animation:abertura-esmaece 260ms cubic-bezier(.4,0,1,1) var(--ab-espera, 0ms) both}
+      #abertura[data-fechando="completa"]{--ab-espera:200ms}
+      #abertura[data-fechando] .ab-centro{animation:abertura-recua 200ms cubic-bezier(.4,0,1,1) var(--ab-espera, 0ms) both}
+      #abertura[data-fechando] .ab-palavra{animation:abertura-esmaece 200ms cubic-bezier(.4,0,1,1) var(--ab-espera, 0ms) both}
+      #abertura[data-fechando="completa"] .ab-seg{opacity:0;transition:opacity 60ms linear}
+      #abertura[data-fechando="completa"] .ab-completa{animation:abertura-completa 200ms cubic-bezier(.2,0,0,1) both}
+      #abertura[data-fechando="cedo"] .ab-trilho{animation:none;opacity:0}
+      @keyframes abertura-entra{from{opacity:0}}
+      @keyframes abertura-varre{from{transform:translateX(-100%)}to{transform:translateX(277.8%)}}
+      @keyframes abertura-aviso{from{opacity:0;transform:translateY(4px)}}
+      @keyframes abertura-completa{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+      @keyframes abertura-recua{to{opacity:0;transform:scale(.96)}}
+      @keyframes abertura-esmaece{to{opacity:0}}
+      @media (prefers-reduced-motion: reduce){
+        #abertura .ab-seg{animation:none;width:100%}
+        #abertura .ab-linha,#abertura .ab-tentar{animation-name:abertura-entra}
+        #abertura[data-fechando] .ab-centro{animation-name:abertura-esmaece}
+        #abertura[data-fechando="completa"]{--ab-espera:0ms}
+        #abertura[data-fechando="completa"] .ab-completa{animation:none}
+      }
+    </style>
+    <!--
+      As fontes não seguram a primeira pintura: a folha do Google vem por
+      preload e vira stylesheet quando chega, com font-display: swap. A Inter e
+      a JetBrains Mono, que o app não usa, saíram.
+    -->
+    <!-- A marca chega antes do JavaScript, que disputa a rede no primeiro acesso. -->
+    <link rel="preload" as="image" href="/dutelog-mark-180.png" fetchpriority="high" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Spline+Sans+Mono:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
   </head>
   <body>
+    <div id="abertura">
+      <div class="ab-centro">
+        <img class="ab-marca" src="/dutelog-mark-180.png" alt="" width="96" height="96" fetchpriority="high" />
+        <div class="ab-trilho" aria-hidden="true"><span class="ab-seg"></span><span class="ab-completa"></span></div>
+        <div class="ab-aviso">
+          <p class="ab-avisos" role="status"><span class="ab-leitor">Abrindo a Dutelog</span><span class="ab-linha" hidden></span></p>
+          <button type="button" class="ab-tentar" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg>Tentar de novo</button>
+        </div>
+      </div>
+      <img class="ab-palavra" src="/dutelog-logo-light.png" alt="Dutelog" height="24" />
+    </div>
+    <script>
+      // A abertura sem rede e demorando, contada de quando ela apareceu: aos
+      // 3 s sem rede, "Sem conexão"; aos 10 s, "Demorando mais que o normal" e
+      // "Tentar de novo", que recarrega; aos 70 s, "Sem resposta". Os avisos
+      // entram na mesma região de status, e o botão não rouba o foco. Para
+      // quando lib/abertura.ts fecha a abertura.
+      (function () {
+        var abertura = document.getElementById("abertura");
+        if (!abertura) return;
+        abertura.setAttribute("data-desde", String(Math.round(performance.now())));
+        var linha = abertura.querySelector(".ab-linha");
+        var tentar = abertura.querySelector(".ab-tentar");
+        var ICONES = {
+          rede: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></svg>',
+          relogio: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 6v6h4"/><circle cx="12" cy="12" r="10"/></svg>'
+        };
+        // 0 antes de 3 s, 1 a partir de 3 s, 2 a partir de 10 s, 3 a partir de 70 s.
+        var etapa = 0;
+        var dito = "";
+        var relogios = [];
+        function aberta() {
+          return abertura.isConnected && !abertura.hasAttribute("data-fechando");
+        }
+        function dizer(texto, icone) {
+          if (texto === dito) return;
+          dito = texto;
+          linha.innerHTML = texto ? ICONES[icone] + texto : "";
+          linha.hidden = !texto;
+        }
+        function parar() {
+          for (var i = 0; i < relogios.length; i += 1) clearTimeout(relogios[i]);
+          window.removeEventListener("online", rever);
+          window.removeEventListener("offline", rever);
+        }
+        function rever() {
+          if (!aberta()) return parar();
+          var semRede = navigator.onLine === false;
+          if (semRede && etapa >= 1) dizer("Sem conexão", "rede");
+          else if (etapa >= 3) dizer("Sem resposta", "relogio");
+          else if (etapa >= 2) dizer("Demorando mais que o normal", "relogio");
+          else dizer("", "");
+          tentar.hidden = etapa < 2;
+        }
+        [3000, 10000, 70000].forEach(function (ms, indice) {
+          relogios.push(setTimeout(function () {
+            etapa = indice + 1;
+            rever();
+          }, ms));
+        });
+        window.addEventListener("online", rever);
+        window.addEventListener("offline", rever);
+        tentar.addEventListener("click", function () {
+          window.location.reload();
+        });
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

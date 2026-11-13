@@ -4,13 +4,16 @@
  * renderizadas intactas sob abas. O Mapa do armazém saiu daqui em 16/10/2026:
  * vive em Estoque › Mapa, com as posições cadastradas e as caixas guardadas.
  */
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { useLocation } from "wouter";
 
+import { CarregandoTela } from "@/components/ui/carregando-tela";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { telaSobDemanda } from "@/lib/telas-no-aparelho";
 
-const Products = lazy(() => import("./products"));
-const Skus = lazy(() => import("./skus"));
+// As abas chegam sob demanda e, para a equipe, ficam guardadas no aparelho junto com o Catálogo.
+const Products = telaSobDemanda(() => import("./products"));
+const Skus = telaSobDemanda(() => import("./skus"));
 
 const CATALOG_TABS = [
   { value: "cadastro", label: "Cadastro", path: "/catalogo" },
@@ -46,7 +49,7 @@ export default function Catalog() {
         </TabsList>
       </Tabs>
 
-      <Suspense fallback={null}>
+      <Suspense fallback={<CarregandoTela titulo={CATALOG_TABS.find((item) => item.value === tab)?.label} />}>
         {tab === "cadastro" ? <Products /> : null}
         {tab === "saldos" ? <Skus /> : null}
       </Suspense>

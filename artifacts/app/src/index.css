@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Spline+Sans+Mono:wght@400;500;600;700&display=swap');
+/* As fontes (Manrope, Plus Jakarta Sans e Spline Sans Mono) vêm do index.html,
+   com preload e font-display: swap: um @import aqui seguraria a primeira
+   pintura até o Google responder (carregamento v2, parte 9). */
 
 @import 'tailwindcss' source(".");
 @import 'tw-animate-css';
@@ -796,7 +798,8 @@
   --carregando-t-listras: 600ms; /* as listras a 45° andam 16 px para trás, linear */
   --carregando-t-arcos: 1200ms; /* os arcos do Wi-Fi em "Reconectando…", 300 ms por arco; param aos 5 s */
   --carregando-t-pulso: 2000ms; /* o respiro do movimento reduzido (0,5 Hz) */
-  --carregando-t-abertura-sai: 260ms; /* a abertura esmaece quando o perfil chega */
+  --carregando-t-abertura-sai: 260ms; /* a abertura esmaece quando o perfil chega (o index.html repete o valor) */
+  --carregando-t-abertura-completa: 200ms; /* antes, o segmento completa o trilho, se ele já estava à vista */
   --carregando-t-dedo: 700ms; /* a lista não se mexe se houve toque nela nesse intervalo */
 
   /* Forma: a caixa chanfrada do "D" da marca (viewBox 24), três cantos com

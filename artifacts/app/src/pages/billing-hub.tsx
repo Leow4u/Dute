@@ -3,18 +3,21 @@
  * executa: um conceito só, uma rota só. As telas existentes renderizam
  * intactas sob abas.
  */
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { useLocation } from "wouter";
 
+import { CarregandoTela } from "@/components/ui/carregando-tela";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/ui/page-header";
 import { useAppUser } from "@/lib/auth";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { SOMENTE_ARMAZENAGEM } from "@/lib/somente-armazenagem";
+import { telaSobDemanda } from "@/lib/telas-no-aparelho";
 
-const Billing = lazy(() => import("./billing"));
-const PriceList = lazy(() => import("./price-list"));
-const Contratos = lazy(() => import("./comercial/contratos"));
+// As abas chegam sob demanda e, para a equipe, ficam guardadas no aparelho junto com o Faturamento.
+const Billing = telaSobDemanda(() => import("./billing"));
+const PriceList = telaSobDemanda(() => import("./price-list"));
+const Contratos = telaSobDemanda(() => import("./comercial/contratos"));
 
 const BILLING_TABS = [
   { value: "competencia", label: "Fechamento do mês", path: "/faturamento" },
@@ -59,7 +62,7 @@ export default function BillingHub() {
         </Tabs>
       </PageHeader>
 
-      <Suspense fallback={null}>
+      <Suspense fallback={<CarregandoTela titulo="Faturamento" />}>
         {tab === "competencia" ? <Billing /> : null}
         {tab === "tabela" ? <PriceList /> : null}
         {tab === "contratos" && podeManterContratos && !isLoading ? (

@@ -1,6 +1,7 @@
 import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes";
 import { useEffect, type ReactNode } from "react";
 
+import { useAberturaAberta } from "@/lib/abertura";
 import { useAppUser } from "@/lib/auth";
 import {
   DEFAULT_THEME,
@@ -37,17 +38,23 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** Barra do navegador no celular acompanha o fundo do tema em uso. */
+/**
+ * Barra do navegador no celular acompanha o fundo do tema em uso. Enquanto a
+ * abertura cobre a tela, fica no preto dela (o theme-color do index.html),
+ * para a barra não clarear sobre a abertura.
+ */
 function ThemeColorSync() {
   const { resolvedTheme, forcedTheme } = useTheme();
+  const aberturaAberta = useAberturaAberta();
 
   useEffect(() => {
+    if (aberturaAberta) return;
     const theme = forcedTheme === "dark" || (!forcedTheme && resolvedTheme === "dark")
       ? "dark"
       : "light";
     const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
     if (meta) meta.content = themeColorFor(theme);
-  }, [resolvedTheme, forcedTheme]);
+  }, [resolvedTheme, forcedTheme, aberturaAberta]);
 
   return null;
 }
