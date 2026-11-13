@@ -107,6 +107,18 @@ afterEach(() => {
 });
 
 const espera = (ms: number) => act(async () => new Promise((pronto) => setTimeout(pronto, ms)));
+
+/**
+ * Espera a tela chegar ao estado, em passos de 20 ms, até 3 s. Os marcos (os 300 ms da caixa, a resposta da
+ * leitura) dependem do relógio de verdade: com a máquina ocupada, um tempo fixo logo depois do marco falha à toa.
+ */
+async function ate(condicao: () => boolean | null | undefined, limiteMs = 3_000) {
+  const fim = Date.now() + limiteMs;
+  while (!condicao()) {
+    if (Date.now() > fim) throw new Error("A tela não chegou ao estado esperado em 3 s.");
+    await espera(20);
+  }
+}
 let cliente: QueryClient;
 
 async function montar(tela: ReactNode) {
@@ -131,7 +143,8 @@ describe("Sistema na primeira leitura", () => {
     await montar(<SettingsSystem />);
     expect(quadro("Servidor").querySelector("[data-esqueleto]")).not.toBeNull();
     expect(quadro("Servidor").textContent).not.toContain("Verificando");
-    await espera(360);
+    // Cada região tem o seu relógio: a caixa do servidor e a dos incidentes passam dos 300 ms quase juntas.
+    await ate(() => quadro("Servidor").textContent?.includes("Verificando…") && container.textContent?.includes("Carregando incidentes…"));
     expect(quadro("Servidor").textContent).toContain("Verificando…");
     expect(quadro("Servidor").querySelector("[data-spinner]")).not.toBeNull();
     expect(quadro("Servidor").querySelector(".bg-slate-300, .bg-green-600")).toBeNull();
@@ -156,32 +169,34 @@ describe("Sistema na primeira leitura", () => {
   it("sem resposta e sem nada lido: a falha com Tentar de novo no lugar dos incidentes", async () => {
     estado.respostas["/api/system/health"] = [json({ message: "Falhou." }, 500)];
     await montar(<SettingsSystem />);
-    await espera(60);
+    await ate(() => quadro("Servidor").textContent?.includes("Sem resposta"));
     expect(quadro("Servidor").textContent).toContain("Sem resposta");
     const incidentes = container.querySelector("section")!;
     expect(incidentes.querySelector('[role="alert"]')?.textContent).toBe("Sem resposta do servidor.");
     expect(botao("Tentar de novo")).toBeTruthy();
     await act(async () => botao("Tentar de novo")!.click());
-    await espera(30);
+    await ate(() => estado.leituras["/api/system/health"] === 2);
     expect(estado.leituras["/api/system/health"]).toBe(2);
   });
 });
 
 describe("o Verificar agora do Sistema", () => {
   it("a releitura automática não o gira nem o desabilita; o toque mostra Verificando… com aria-busy", async () => {
-    estado.respostas["/api/system/health"] = [json(SAUDE), lenta(SAUDE, 800), lenta(SAUDE, 800)];
+    // A leitura tocada fica presa: o "Verificando…" não depende de pegar a janela entre os 300 ms e a resposta.
+    estado.respostas["/api/system/health"] = [json(SAUDE), lenta(SAUDE, 800), presa];
     await montar(<SettingsSystem />);
-    await espera(40);
+    await ate(() => quadro("Servidor").textContent?.includes("Respondendo"));
     expect(quadro("Servidor").textContent).toContain("Respondendo");
     // A releitura automática (o intervalo de 2 min): nada muda no botão.
     await act(async () => void cliente.invalidateQueries({ queryKey: ["system-health"] }));
     await espera(400);
     expect(botao("Verificar agora")!.hasAttribute("aria-busy")).toBe(false);
     expect(botao("Verificar agora")!.disabled).toBe(false);
-    await espera(500);
+    // A releitura automática termina antes do toque, para o toque não pegar carona nela.
+    await ate(() => cliente.isFetching() === 0);
     // O toque da pessoa.
     await act(async () => botao("Verificar agora")!.click());
-    await espera(360);
+    await ate(() => container.querySelector('button[aria-busy="true"] .botao-acao-camada[data-atual]')?.textContent === "Verificando…");
     const tocado = container.querySelector<HTMLButtonElement>('button[aria-busy="true"]')!;
     expect(tocado.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Verificando…");
     expect(tocado.getAttribute("aria-disabled")).toBe("true");
@@ -197,9 +212,9 @@ describe("o Numerar do Sistema", () => {
     estado.respostas["/api/system/infra"] = [json(INFRA)];
     estado.respostas["/api/system/request-numbers"] = [presa];
     await montar(<SettingsSystem />);
-    await espera(40);
+    await ate(() => botao("Ver o que muda"));
     await act(async () => botao("Ver o que muda")!.click());
-    await espera(360);
+    await ate(() => container.querySelector('button[aria-busy="true"] .botao-acao-camada[data-atual]')?.textContent === "Verificando…");
     const ver = container.querySelector<HTMLButtonElement>('button[aria-busy="true"]')!;
     expect(ver.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Verificando…");
     const numerar = botao("Numerar agora")!;
@@ -213,7 +228,7 @@ describe("a Infraestrutura", () => {
   it("os quadros lendo não mostram o ponto verde; sem leitura, Sem leitura em vermelho", async () => {
     estado.respostas["/api/system/infra"] = [presa];
     await montar(<InfraTiles />);
-    await espera(360);
+    await ate(() => container.textContent?.includes("Verificando…"));
     expect(container.textContent).toContain("Verificando…");
     expect(container.querySelector(".bg-green-600")).toBeNull();
     expect(container.querySelector("[data-spinner]")).not.toBeNull();
@@ -221,7 +236,7 @@ describe("a Infraestrutura", () => {
     raiz = createRoot(container);
     estado.respostas["/api/system/infra"] = [json({ message: "Sem permissão." }, 500)];
     await montar(<InfraTiles />);
-    await espera(60);
+    await ate(() => container.textContent?.includes("Sem leitura"));
     expect(container.textContent).toContain("Sem leitura");
     expect(container.querySelector(".bg-green-600")).toBeNull();
     expect(container.querySelector(".bg-red-600")).not.toBeNull();
@@ -230,13 +245,13 @@ describe("a Infraestrutura", () => {
   it("a consulta que falhou tem Tentar de novo; a verificação que falha depois não apaga o painel", async () => {
     estado.respostas["/api/system/infra"] = [json({ message: "Sem permissão." }, 500), json(INFRA), json({ message: "Caiu." }, 500)];
     await montar(<InfraSection agentMonthCost={null} />);
-    await espera(60);
+    await ate(() => container.textContent?.includes("Não consegui consultar a infraestrutura"));
     expect(container.textContent).toContain("Não consegui consultar a infraestrutura: Sem permissão.");
     await act(async () => botao("Tentar de novo")!.click());
-    await espera(60);
+    await ate(() => container.textContent?.includes("Erros do servidor"));
     expect(container.textContent).toContain("Erros do servidor");
     await act(async () => void cliente.refetchQueries({ queryKey: ["system-infra"] }));
-    await espera(60);
+    await ate(() => container.textContent?.includes("Não consegui verificar de novo"));
     expect(container.textContent).toContain("Erros do servidor");
     expect(container.textContent).toContain("Não consegui verificar de novo: Caiu.");
     expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
@@ -248,13 +263,13 @@ describe("o painel do owner", () => {
     estado.respostas["/api/system/dashboard"] = [lenta(PAINEL, 500), json({ message: "Caiu." }, 500)];
     estado.respostas["/api/system/infra"] = [json(INFRA)];
     await montar(<OwnerDashboard />);
-    await espera(360);
+    await ate(() => container.textContent?.includes("Carregando o painel…"));
     expect(container.textContent).toContain("Carregando o painel…");
     expect(container.querySelector("[data-carregando-na-regiao] [data-spinner]")).not.toBeNull();
-    await espera(300);
+    await ate(() => container.textContent?.includes("Agent Dute hoje"));
     expect(container.textContent).toContain("Agent Dute hoje");
     await act(async () => void cliente.refetchQueries({ queryKey: ["system-dashboard"] }));
-    await espera(60);
+    await ate(() => container.textContent?.includes("Não consegui atualizar o painel"));
     expect(container.textContent).toContain("Agent Dute hoje");
     expect(container.textContent).toContain("Não consegui atualizar o painel: Caiu.");
   });
