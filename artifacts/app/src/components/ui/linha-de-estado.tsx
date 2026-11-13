@@ -6,8 +6,9 @@ import { ArcosDoWifi } from "@/components/ui/arcos-do-wifi";
 import { Button } from "@/components/ui/button";
 import { useFaltaNaTela } from "@/components/ui/erro-na-leitura";
 import { Spinner } from "@/components/ui/spinner";
-import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useAnuncio, useRetirarAnuncio } from "@/lib/carregando/anunciador";
 import { useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
+import { usePedidosDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { listaLida, type LeituraDaLista } from "@/lib/carregando/use-atualizar-lista";
 import { useEspera } from "@/lib/carregando/use-espera";
@@ -111,8 +112,11 @@ function tentarNaTela(raiz: HTMLElement): HTMLElement | null {
  * Não é região viva. O Anunciador diz "Carregando pedidos" aos 300 ms,
  * "Demorando mais que o normal" aos 10 s e, na chegada, o `resumo` da lista
  * (só se disse o primeiro), só na primeira leitura (a releitura automática
- * depois de uma falha não fala); "Sem conexão" ele diz sozinho,
- * uma vez, e nunca "Reconectando" nem a volta. O texto troca em sequência
+ * depois de uma falha não fala; a que a pessoa pede com "Tentar de novo",
+ * sim); "Sem conexão" ele diz sozinho, uma vez, e nunca "Reconectando" nem a
+ * volta. O que a linha pediu e o Anunciador ainda não disse sai com ela da
+ * tela. Com a leitura que falhou sem nada lido, a linha fica vazia: o aviso
+ * está no lugar da lista. O texto troca em sequência
  * (sai em 80 ms, ou em 180 ms quando sai uma espera; entra em 150 ms), e só
  * o atual fica na árvore. Com o foco no "Tentar de novo", a troca leva o foco
  * ao "Tentar de novo" novo ou, sem ele, à própria linha: nunca ao `body`.
@@ -130,14 +134,19 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, id, r
   const comFalta = leituras.filter((uma) => uma.isError && ehFaltaDeConexao(uma.error));
   const falta = useVoltaDaRede(useFaltaNaTela(), comFalta.length > 0);
   const anunciar = useAnuncio();
+  const retirarAnuncio = useRetirarAnuncio();
+  const pedidosDaPessoa = usePedidosDaPessoa();
   const tentarDeNovo = useTentarDeNovo();
   const cliente = useContext(QueryClientContext);
   const [tentativas, setTentativas] = useState(0);
   const novaTentativa = useEspera(tentativas > 0, { segurarMinimo: true });
   const raiz = useRef<HTMLDivElement>(null);
 
+  // A leitura que falhou sem nada lido: o aviso está no lugar da lista (o `ErroNaLeitura`, o `BlocoSemConexao`), e a
+  // linha não diz "Carregando" ao lado dele, nem enquanto a outra leitura da lista ainda lê.
+  const falhou = !lida && leituras.some((uma) => uma.isError);
   const estado: EstadoDaLinha = !lida
-    ? comFalta.length
+    ? comFalta.length || falhou
       ? { tipo: "vazia" }
       : primeira && espera.visivel
         ? { tipo: espera.fase === "andamento" || espera.fase === "com-objeto" ? "carregando" : "demorando", calmo: espera.calmo }
@@ -153,25 +162,44 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, id, r
 
   // Os anúncios da primeira leitura, uma vez cada: a entrada na espera aos 300 ms, a demora aos 10 s e, quando a
   // lista chega, o resumo dela, só se a entrada foi falada. Depois que ela falhou, quem relê é a releitura
-  // automática (o intervalo da tela, a do bloco), que não fala; a conta recomeça quando a lista é lida.
-  const falados = useRef({ carregando: false, demorando: false, calado: false });
-  const falhou = !lida && leituras.some((uma) => uma.isError);
+  // automática (o intervalo da tela, a do bloco), que não fala; a conta recomeça quando a lista é lida, ou quando a
+  // pessoa pede de novo ("Tentar de novo"): a nova tentativa dela começa a ler e fala como a primeira.
+  const falados = useRef({ carregando: false, demorando: false, calado: false, pedido: false });
+  const pedidoVisto = useRef(pedidosDaPessoa);
+  // O que esta linha mandou dizer: quando ela sai da tela, o que ainda espera o intervalo do Anunciador sai junto.
+  const ditos = useRef(new Set<string>());
   useEffect(() => {
+    const dizer = (texto: string) => {
+      ditos.current.add(texto);
+      anunciar(texto);
+    };
+    if (pedidosDaPessoa !== pedidoVisto.current) {
+      pedidoVisto.current = pedidosDaPessoa;
+      // Só o pedido depois da falha conta: é ele que tira a linha do silêncio.
+      if (!lida && falados.current.calado) falados.current.pedido = true;
+    }
     if (lida) {
-      if (falados.current.carregando && !falados.current.calado && resumo) anunciar(resumo);
-      falados.current = { carregando: false, demorando: false, calado: false };
+      if (falados.current.carregando && !falados.current.calado && resumo) dizer(resumo);
+      falados.current = { carregando: false, demorando: false, calado: false, pedido: false };
       return;
     }
     if (falhou) falados.current.calado = true;
+    else if (falados.current.pedido) falados.current = { carregando: false, demorando: false, calado: false, pedido: false };
     if (falados.current.calado) return;
     if (estado.tipo === "carregando" && !falados.current.carregando) {
       falados.current.carregando = true;
-      anunciar(`Carregando ${objeto}`);
+      dizer(`Carregando ${objeto}`);
     } else if (estado.tipo === "demorando" && !falados.current.demorando) {
       falados.current.demorando = true;
-      anunciar("Demorando mais que o normal");
+      dizer("Demorando mais que o normal");
     }
-  }, [anunciar, estado.tipo, falhou, lida, objeto, resumo]);
+  }, [anunciar, estado.tipo, falhou, lida, objeto, pedidosDaPessoa, resumo]);
+  useEffect(() => {
+    const pedidos = ditos.current;
+    return () => {
+      for (const texto of pedidos) retirarAnuncio(texto);
+    };
+  }, [retirarAnuncio]);
 
   /**
    * A nova tentativa no relógio da espera, como a do bloco (parte 7a): acorda

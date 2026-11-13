@@ -70,7 +70,8 @@ describe("Pedidos na v3", () => {
     expect(FONTE).toContain("const semLeitura = (ops.isError && !ops.data) || (decider && requests.isError && !requests.data);");
     // O erro vem antes das filas e de "Entregues": sem leitura, nenhum "Nenhum pedido para…".
     const erro = FONTE.indexOf(") : !lendo && semLeitura ? (");
-    expect(erro).toBeGreaterThan(FONTE.indexOf("Carregando pedidos..."));
+    expect(erro).toBeGreaterThan(FONTE.indexOf("<BlocoSemConexao tentando={relendo}"));
+    expect(FONTE.indexOf("<BlocoSemConexao tentando={relendo}")).toBeGreaterThan(-1);
     expect(erro).toBeLessThan(FONTE.indexOf(') : view === "delivered" ? ('));
     expect(FONTE).toContain("const relendo = ops.isFetching || requests.isFetching;");
     expect(FONTE).toMatch(/<ErroNaLeitura\s+mensagem="Não consegui carregar os pedidos\."\s+tentando=\{relendo\}\s+onTentar=\{refreshAll\}/);
@@ -82,10 +83,13 @@ describe("Pedidos na v3", () => {
     expect(FONTE).toContain("const leiturasDaLista = decider ? [ops, requests] : [ops];");
     // Na primeira leitura, a lista com a forma final, com as linhas-fantasma (parte 8); depois, o aviso, antes do erro
     // e das filas.
-    expect(FONTE).toContain("const lendo = loading;");
+    // A leitura que falhou sem dado não espera a outra: o aviso entra na hora.
+    expect(FONTE).toContain("const lendo = loading && !semLeitura;");
     expect(FONTE).toContain("{!lendo && semRede && semRede.lidaEm === null ? (");
     expect(FONTE.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(FONTE.indexOf(") : !lendo && semLeitura ? ("));
-    expect(FONTE).toMatch(/<BlocoSemConexao tentando=\{relendo\} onTentar=\{refreshAll\} \/>/);
+    // A nova tentativa leva o foco à linha de estado quando o aviso sai.
+    expect(FONTE).toMatch(/<BlocoSemConexao tentando=\{relendo\} onTentar=\{refreshAll\} focoAoSair=\{idDaLinha\} \/>/);
+    expect(FONTE).toMatch(/<ErroNaLeitura\s+mensagem="Não consegui carregar os pedidos\."\s+tentando=\{relendo\}\s+onTentar=\{refreshAll\}\s+focoAoSair=\{idDaLinha\}/);
     // A lista lida, com a falta: a hora dela fica na linha de estado sob o título (parte 7b), não na faixa que empurra a lista.
     expect(FONTE).toContain('estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="pedidos" pedidaPelaPessoa={atualizarLista.voltando} resumo={resumo} />}');
     expect(FONTE).not.toContain("FaixaSemConexao");

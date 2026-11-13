@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
-import { Anunciador, useAnuncio } from "./anunciador";
+import { Anunciador, useAnuncio, useRetirarAnuncio } from "./anunciador";
 import { ProvedorDaConexao, criarConexao } from "./estado-da-conexao";
 
 /**
@@ -21,12 +21,15 @@ import { ProvedorDaConexao, criarConexao } from "./estado-da-conexao";
 let raiz: Root | null = null;
 let container: HTMLDivElement | null = null;
 let anunciar: (texto: string) => void = () => undefined;
+let retirar: (texto: string) => void = () => undefined;
 let falados: string[] = [];
 
 function Quem() {
   const anuncio = useAnuncio();
+  const retirarAnuncio = useRetirarAnuncio();
   useEffect(() => {
     anunciar = anuncio;
+    retirar = retirarAnuncio;
   });
   return null;
 }
@@ -76,6 +79,7 @@ afterEach(() => {
   raiz = null;
   container = null;
   anunciar = () => undefined;
+  retirar = () => undefined;
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -142,6 +146,21 @@ describe("o anunciador", () => {
     expect(() => falar("Carregando pedidos")).not.toThrow();
     passar(5_000);
     expect(container!.textContent).toBe("");
+  });
+
+  it("quem sai da tela retira o que pediu e ainda espera o intervalo: o que já foi dito fica, e o texto de outro segue", () => {
+    falar("Carregando pedidos");
+    falar("3 para aprovar,  2 para separar");
+    act(() => retirar("3 para aprovar, 2 para separar"));
+    passar(5_000);
+    expect(falados).toEqual(["Carregando pedidos"]);
+    // Retirar o que já foi dito, ou o que não é o que espera, não muda nada.
+    falar("Demorando mais que o normal");
+    falar("Carregando chegadas");
+    act(() => retirar("Demorando mais que o normal"));
+    act(() => retirar("3 para aprovar, 2 para separar"));
+    passar(5_000);
+    expect(falados).toEqual(["Carregando pedidos", "Demorando mais que o normal", "Carregando chegadas"]);
   });
 
   it("o anúncio que esperava não sai depois que o anunciador sai da página", () => {

@@ -48,6 +48,14 @@ export type ActiveCustomerState = {
   code: string;
   setCode: (code: string) => void;
   isLoading: boolean;
+  /**
+   * O cliente que a tela vai operar: enquanto a lista dos clientes não chegou
+   * (`isLoading`), o escolhido neste aparelho, que o `code` ainda não
+   * confirma (até lá ele é o padrão); depois, o `code`. Só para o que pode
+   * errar sem dano, como a altura das linhas-fantasma da primeira leitura
+   * (lib/carregando/contagem-lembrada.ts): nunca para ler ou gravar dado.
+   */
+  codeProvavel: string;
 };
 
 const FALLBACK_OPTIONS = activeCustomerOptions([]);
@@ -58,6 +66,7 @@ const ActiveCustomerContext = createContext<ActiveCustomerState>({
   code: LEGACY_CUSTOMER_CODE,
   setCode: () => undefined,
   isLoading: false,
+  codeProvavel: LEGACY_CUSTOMER_CODE,
 });
 
 function readStored(key: string): string | null {
@@ -117,15 +126,18 @@ export function ActiveCustomerProvider({ children }: { children: ReactNode }) {
     [storageKey],
   );
 
+  const isLoading = (internal || commercial) && profiles.isPending;
+  const guardado = stored?.trim() || null;
   const value = useMemo<ActiveCustomerState>(
     () => ({
       options,
       active,
       code: active.code,
       setCode,
-      isLoading: (internal || commercial) && profiles.isPending,
+      isLoading,
+      codeProvavel: isLoading && guardado ? guardado : active.code,
     }),
-    [active, commercial, internal, options, profiles.isPending, setCode],
+    [active, guardado, isLoading, options, setCode],
   );
 
   return <ActiveCustomerContext.Provider value={value}>{children}</ActiveCustomerContext.Provider>;

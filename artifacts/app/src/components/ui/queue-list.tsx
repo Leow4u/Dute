@@ -44,9 +44,21 @@ export type QueueTone = keyof typeof QUEUE_TONE;
  * quando difere do que se vê (a linha que esmaece ainda conta na tela, mas já
  * saiu da árvore, inert). Zero não mostra número. Com `entrar` (o bloco que
  * vira número na chegada da primeira leitura, momento 2), o número entra
- * subindo, como o que rola.
+ * subindo, como o que rola, e com `deBloco` o bloco sai subindo no mesmo
+ * lugar, como o número velho.
  */
-export function ContagemQueRola({ valor, naArvore = valor, entrar = false }: { valor: number; naArvore?: number; entrar?: boolean }) {
+export function ContagemQueRola({
+  valor,
+  naArvore = valor,
+  entrar = false,
+  deBloco = false,
+}: {
+  valor: number;
+  naArvore?: number;
+  entrar?: boolean;
+  /** Na chegada (`entrar`), o bloco que estava no lugar do número sai subindo enquanto ele entra (momento 2). */
+  deBloco?: boolean;
+}) {
   const [mostrado, setMostrado] = useState(valor);
   const [saindo, setSaindo] = useState<number | null>(null);
   if (valor !== mostrado) {
@@ -58,12 +70,17 @@ export function ContagemQueRola({ valor, naArvore = valor, entrar = false }: { v
     const fim = setTimeout(() => setSaindo(null), CARREGANDO.contaMs);
     return () => clearTimeout(fim);
   }, [saindo, mostrado]);
-  if (!mostrado && !saindo) return null;
+  const blocoSaindo = entrar && deBloco && saindo === null;
+  if (!mostrado && !saindo && !blocoSaindo) return null;
   return (
     <span className="carregando-conta tabular-nums">
       {saindo ? (
         <span key={`sai-${saindo}`} data-conta="sai" aria-hidden="true">
           {saindo}
+        </span>
+      ) : blocoSaindo ? (
+        <span key="bloco" data-conta="sai" aria-hidden="true">
+          <Esqueleto forma="contagem" />
         </span>
       ) : null}
       {mostrado ? (
@@ -91,6 +108,13 @@ export interface CarregandoDoGrupo {
   acoes: 0 | 1 | 2;
   /** A posição do cartão na tela (0, 1, 2…): o brilho de cada um começa 120 ms depois do anterior. */
   ordem?: number;
+  /** A linha do atalho sob o apoio, como o "Ver volumes" do pedido em "Para entregar". */
+  atalho?: boolean;
+  /**
+   * No celular, as ações num bloco abaixo da linha, como as do pedido
+   * (OrderRow), e não dentro dela: 16 px a mais entre o texto e os botões.
+   */
+  acoesAbaixo?: boolean;
 }
 
 /**
@@ -111,13 +135,19 @@ const BOTOES_FANTASMA: Record<1 | 2, readonly string[]> = { 1: ["w-24"], 2: ["w-
 /**
  * A linha-fantasma com a anatomia da QueueRow (seção 5.2): a caixa do ícone
  * de 44 px, o título de 14 px e o apoio de 10 px nas mesmas linhas de texto
- * da linha real (a mesma altura) e os botões de 40 px; no celular, os botões
- * embaixo, na largura toda, como os da linha real. A divisória é a da lista.
+ * da linha real (a mesma altura), a linha do atalho quando a real tem uma
+ * ("Ver volumes") e os botões de 40 px; no celular, os botões embaixo, na
+ * largura toda, como os da linha real, e no bloco abaixo dela quando é o
+ * pedido. A divisória é a da lista.
  */
-function LinhaFantasma({ indice, acoes }: { indice: number; acoes: 0 | 1 | 2 }) {
+function LinhaFantasma({ indice, carregando }: { indice: number; carregando: CarregandoDoGrupo }) {
   const forma = FORMAS_DA_LINHA_FANTASMA[indice % FORMAS_DA_LINHA_FANTASMA.length];
+  const { acoes, atalho = false, acoesAbaixo = false } = carregando;
   return (
-    <div data-linha-fantasma="" className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 md:px-5">
+    <div
+      data-linha-fantasma=""
+      className={cn("flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 md:px-5", acoes && acoesAbaixo && "max-sm:gap-7")}
+    >
       <div className="flex min-w-0 flex-1 items-start gap-3.5">
         <Esqueleto forma="icone" />
         <div className="flex min-w-0 flex-1 flex-col">
@@ -127,6 +157,11 @@ function LinhaFantasma({ indice, acoes }: { indice: number; acoes: 0 | 1 | 2 }) 
           <span className="mt-0.5 flex h-5 items-center">
             <Esqueleto forma="texto" className={cn("h-2.5", forma.apoio)} />
           </span>
+          {atalho ? (
+            <span className="mt-1.5 flex h-4 items-center">
+              <Esqueleto forma="texto" className="h-2.5 w-20" />
+            </span>
+          ) : null}
         </div>
       </div>
       {acoes ? (
@@ -143,17 +178,42 @@ function LinhaFantasma({ indice, acoes }: { indice: number; acoes: 0 | 1 | 2 }) 
 /**
  * As linhas-fantasma do cartão (momento 2): desde 0 ms no cartão,
  * invisíveis, guardando a altura; aos 300 ms (`visiveis`) entram em 150 ms e
- * o brilho do cartão começa, dois ciclos, a 120 ms do cartão anterior. São
- * decorativas e ficam fora da árvore de acessibilidade: quem informa é o
- * título real e a linha de estado.
+ * o brilho do cartão começa, dois ciclos, a 120 ms do cartão anterior. Na
+ * chegada (`saindo`), o mesmo elemento sai do fluxo e fica por baixo das
+ * linhas reais, recortado no cartão, e esmaece em 150 ms junto com a
+ * primeira linha do grupo na cascata: a troca é por opacidade, sem quadro com
+ * o cartão vazio. São decorativas e ficam fora da árvore de acessibilidade:
+ * quem informa é o título real e a linha de estado.
  */
-function LinhasFantasma({ carregando, visiveis, className }: { carregando: CarregandoDoGrupo; visiveis: boolean; className?: string }) {
+function LinhasFantasma({
+  carregando,
+  visiveis,
+  saindo = false,
+  cascata = 0,
+  className,
+}: {
+  carregando: CarregandoDoGrupo;
+  visiveis: boolean;
+  saindo?: boolean;
+  /** Na saída, a posição da primeira linha do grupo na cascata: os fantasmas esmaecem junto com ela. */
+  cascata?: number;
+  className?: string;
+}) {
   const linhas = Array.from({ length: Math.max(1, Math.floor(carregando.linhas)) }, (_, indice) => (
-    <LinhaFantasma key={indice} indice={indice} acoes={carregando.acoes} />
+    <LinhaFantasma key={indice} indice={indice} carregando={carregando} />
   ));
   const classes = cn("divide-y divide-border/60", className);
   return visiveis ? (
-    <CartaoComBrilho ordem={carregando.ordem} aria-hidden="true" data-fantasmas="" data-visivel="" className={classes}>
+    <CartaoComBrilho
+      ordem={carregando.ordem}
+      aria-hidden="true"
+      data-fantasmas=""
+      data-visivel=""
+      data-saindo={saindo ? "" : undefined}
+      inert={saindo || undefined}
+      style={saindo ? ({ "--chegada-desde": String(cascata) } as CSSProperties) : undefined}
+      className={classes}
+    >
       {linhas}
     </CartaoComBrilho>
   ) : (
@@ -227,7 +287,15 @@ export function QueueGroup({
 }) {
   const lendo = carregando !== undefined;
   const espera = useEspera(lendo);
-  const chegando = useChegada(lendo);
+  const secao = useRef<HTMLElement>(null);
+  const chegando = useChegada(lendo, secao);
+  // As linhas-fantasma que estavam na tela quando o dado chegou: esmaecem por baixo das linhas reais.
+  const naChegada = useRef<{ carregando: CarregandoDoGrupo; visiveis: boolean } | null>(null);
+  useLayoutEffect(() => {
+    if (carregando) naChegada.current = { carregando, visiveis: espera.visivel };
+    else if (!chegando) naChegada.current = null;
+  });
+  const fantasmasSaindo = chegando && naChegada.current?.visiveis ? naChegada.current.carregando : null;
   const chegada = chegando ? { "data-chegada": "", style: { "--chegada-desde": String(cascata) } as CSSProperties } : {};
   const vazioChegando = chegando ? { "data-chegada-vazio": "", style: { "--chegada-desde": String(cascata) } as CSSProperties } : {};
   const temLinhas = count === null || count > 0;
@@ -243,21 +311,24 @@ export function QueueGroup({
       <>
         {hint}
         {hint && count ? " · " : null}
-        <ContagemQueRola valor={count} naArvore={contagemNaArvore} entrar={chegando} />
+        <ContagemQueRola valor={count} naArvore={contagemNaArvore} entrar={chegando} deBloco />
       </>
-    ) : chegando && count ? (
+    ) : chegando ? (
       <>
         {hint}
-        {hint ? " · " : null}
+        {hint && count ? " · " : null}
         <span className="carregando-conta tabular-nums">
-          <span data-conta="entra">{count}</span>
+          <span data-conta="sai" aria-hidden="true">
+            <Esqueleto forma="contagem" />
+          </span>
+          {count ? <span data-conta="entra">{count}</span> : null}
         </span>
       </>
     ) : (
       [hint, count ? String(count) : null].filter(Boolean).join(" · ")
     );
   return (
-    <section className="flex flex-col gap-2.5">
+    <section ref={secao} className="flex flex-col gap-2.5">
       <h2
         ref={tituloRef}
         tabIndex={tituloRef ? -1 : undefined}
@@ -265,7 +336,7 @@ export function QueueGroup({
         className={cn("flex items-baseline gap-2 px-1 focus:outline-none", tituloRef && TITULO_FOCAVEL)}
       >
         <span className="text-base font-semibold text-foreground in-[.v3]:text-lg in-[.v3]:font-bold">{title}</span>
-        <span className="text-sm text-foreground/50">{contagem}</span>
+        <span className="text-sm text-muted-foreground">{contagem}</span>
       </h2>
       {semSaltos ? (
         <div className="fila-cartao">
@@ -275,7 +346,10 @@ export function QueueGroup({
           <span aria-hidden="true" data-moldura="base" data-palco="bloco" className="rounded-b-2xl border border-t-0 border-border bg-card in-[.v3]:rounded-b-lg" />
           {carregando ? (
             <LinhasFantasma carregando={carregando} visiveis={espera.visivel} className="rounded-2xl bg-card in-[.v3]:rounded-lg" />
-          ) : temLinhas ? (
+          ) : fantasmasSaindo ? (
+            <LinhasFantasma carregando={fantasmasSaindo} visiveis saindo cascata={cascata} className="absolute inset-px rounded-2xl bg-card in-[.v3]:rounded-lg" />
+          ) : null}
+          {carregando ? null : temLinhas ? (
             <div ref={listaRef} className="divide-y divide-border/60 overflow-x-clip rounded-2xl in-[.v3]:rounded-lg" {...chegada}>
               {children}
             </div>
@@ -296,11 +370,14 @@ export function QueueGroup({
           ) : null}
         </div>
       ) : (
-        <div className={cn("overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg", barraDoTopo ? "relative" : undefined)}>
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg">
           {barraDoTopo}
           {carregando ? (
             <LinhasFantasma carregando={carregando} visiveis={espera.visivel} />
-          ) : temLinhas ? (
+          ) : fantasmasSaindo ? (
+            <LinhasFantasma carregando={fantasmasSaindo} visiveis saindo cascata={cascata} className="absolute inset-0" />
+          ) : null}
+          {carregando ? null : temLinhas ? (
             <div ref={listaRef} className="divide-y divide-border/60" {...chegada}>
               {children}
             </div>

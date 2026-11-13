@@ -101,6 +101,26 @@ describe("o grupo antes de ler", () => {
     expect(html).toContain("[&amp;&gt;*]:flex-1 sm:[&amp;&gt;*]:flex-none");
   });
 
+  it("a linha-fantasma do pedido tem a anatomia dele: a linha do atalho (Ver volumes) e, no celular, as ações no bloco de baixo", () => {
+    const pedido = renderToStaticMarkup(
+      <QueueGroup title="Para entregar" count={null} empty="" carregando={{ linhas: 1, acoes: 1, atalho: true, acoesAbaixo: true }}>
+        {null}
+      </QueueGroup>,
+    );
+    // O atalho: 6 px acima e a linha de 16 px do texto pequeno, como o "Ver volumes" (mt-1.5 e text-xs).
+    expect(pedido).toContain('<span class="mt-1.5 flex h-4 items-center"><span aria-hidden="true" data-esqueleto="" data-forma="texto" class="carregando-esqueleto h-2.5 w-20"></span></span>');
+    // No celular, o bloco das ações do pedido fica 16 px mais abaixo que o da linha de sempre (o py-4 da linha antes dele).
+    expect(pedido).toContain("flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 md:px-5 max-sm:gap-7");
+    const fila = grupo(false);
+    expect(fila).not.toContain("max-sm:gap-7");
+    expect(fila).not.toContain("h-2.5 w-20");
+  });
+
+  it("o número do grupo tem contraste de texto (4,5:1): o --muted-foreground, e não a tinta a 50%", () => {
+    expect(grupo(false)).toContain('<span class="text-sm text-muted-foreground">');
+    expect(grupo(false)).not.toContain("text-foreground/50");
+  });
+
   it("sem ação, a linha-fantasma não tem botão; com uma, um", () => {
     const sem = renderToStaticMarkup(<QueueGroup title="Entregues" count={null} empty="" carregando={{ linhas: 1, acoes: 0 }}>{null}</QueueGroup>);
     const uma = renderToStaticMarkup(<QueueGroup title="Para separar" count={null} empty="" carregando={{ linhas: 2, acoes: 1 }}>{null}</QueueGroup>);
@@ -117,8 +137,31 @@ describe("o grupo antes de ler", () => {
     const aberto = lendo.querySelector("button")!;
     expect(naArvore(aberto)).toBe("Em aberto");
     expect(aberto.querySelector('[aria-hidden="true"] [data-esqueleto][data-forma="contagem"]')).not.toBeNull();
-    expect(textosDaTela(opcoes(6))).toEqual(["Em aberto · 6", "Entregues"]);
+    // O número fica na casa do bloco, de 16 px, e o rótulo não anda quando ele chega (a prancha, .conta-seg).
+    expect(textosDaTela(opcoes(6))).toEqual(["Em aberto ·", "6", "Entregues"]);
+    expect(new DOMParser().parseFromString(opcoes(6), "text/html").querySelector("button")!.textContent).toBe("Em aberto · 6");
+    const casa = (count: number | null) => new DOMParser().parseFromString(opcoes(count), "text/html").querySelector("button span.min-w-4");
+    expect(casa(null)?.className).toBe(casa(6)?.className);
+    expect(casa(6)?.className).toContain("inline-grid min-w-4 justify-items-start");
     expect(textosDaTela(opcoes(0))).toEqual(["Em aberto", "Entregues"]);
+    // No celular, 44 px de alvo em cada opção (seção 7): o grupo tem 44 px sem borda nem respiro que ocupem lugar (o
+    // contorno é por dentro), e a opção marcada é a pílula 3 px para dentro, desenhada só no miolo (a borda
+    // transparente também é toque).
+    const html = new DOMParser().parseFromString(opcoes(6), "text/html");
+    const doGrupo = html.querySelector('[role="group"]')!.className.split(" ");
+    expect(doGrupo).toEqual(expect.arrayContaining(["max-md:h-11", "max-md:border-0", "max-md:p-0", "max-md:gap-0", "max-md:inset-ring", "max-md:inset-ring-border"]));
+    for (const opcao of html.querySelectorAll("button")) {
+      expect(opcao.className.split(" ")).toEqual(expect.arrayContaining(["h-full", "max-md:border-3", "max-md:border-transparent", "max-md:bg-clip-padding"]));
+    }
+    // Pedidos e Receber: no celular o segmentado ocupa a linha das ações, com as opções em partes iguais, e no estreito
+    // aperta a margem em vez de sair da tela (320 px).
+    const cheio = new DOMParser().parseFromString(
+      renderToStaticMarkup(<Segmented value="open" onChange={() => undefined} cheioNoCelular options={[{ value: "open", label: "Em aberto", count: null }, { value: "done", label: "Recebidos" }]} />),
+      "text/html",
+    );
+    expect(cheio.querySelector('[role="group"]')!.className.split(" ")).toEqual(expect.arrayContaining(["max-sm:flex", "max-sm:min-w-fit", "max-sm:flex-1"]));
+    for (const opcao of cheio.querySelectorAll("button")) expect(opcao.className.split(" ")).toEqual(expect.arrayContaining(["max-sm:flex-1", "max-sm:px-1"]));
+    expect(doGrupo).not.toContain("max-sm:flex-1");
     // No controle selecionado, de fundo em tinta, o bloco fica na cor do texto dele.
     expect(regra('[aria-pressed="true"] .carregando-esqueleto')["background-color"]).toBe("hsl(var(--background) / 0.35)");
   });
@@ -195,12 +238,21 @@ describe("o grupo no tempo: os fantasmas aos 300 ms e a chegada", () => {
     desenhar(<Lista lendo />);
     await passar(1_000);
     desenhar(<Lista lendo={false} />);
-    expect(container.querySelector("[data-fantasmas]")).toBeNull();
-    expect(container.querySelector('h2 [data-forma="contagem"]')).toBeNull();
+    // Os fantasmas que estavam na tela ficam por baixo das linhas reais, fora do fluxo e da árvore, e esmaecem
+    // (data-saindo): nenhum quadro com o cartão vazio.
+    const saindo = [...container.querySelectorAll<HTMLElement>("[data-fantasmas]")];
+    expect(saindo).toHaveLength(3);
+    expect(saindo.every((cartao) => cartao.hasAttribute("data-saindo") && cartao.hasAttribute("data-visivel") && cartao.getAttribute("aria-hidden") === "true")).toBe(true);
+    expect(saindo.every((cartao) => cartao.classList.contains("absolute"))).toBe(true);
+    expect(saindo.map((cartao) => cartao.querySelectorAll("[data-linha-fantasma]").length)).toEqual([3, 2, 1]);
+    expect(saindo.map((cartao) => cartao.style.getPropertyValue("--chegada-desde"))).toEqual(["0", "3", "3"]);
+    // Por baixo: as linhas reais vêm depois no cartão.
+    for (const cartao of saindo) expect(cartao.compareDocumentPosition(cartao.parentElement!.querySelector("[data-chegada], [data-chegada-vazio]")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const titulos = [...container.querySelectorAll("h2")].map((titulo) => titulo.textContent);
     expect(titulos).toEqual(["Para aprovar3", "Para separar", "Para entregar1"]);
-    // O número entra subindo, como o que rola.
+    // O número entra subindo, como o que rola, e o bloco sai subindo no mesmo lugar, fora da árvore.
     expect(container.querySelector('h2 [data-conta="entra"]')?.textContent).toBe("3");
+    expect([...container.querySelectorAll('h2 [data-forma="contagem"]')].every((bloco) => bloco.closest('[data-conta="sai"][aria-hidden="true"]'))).toBe(true);
     const listas = [...container.querySelectorAll<HTMLElement>("[data-chegada]")];
     expect(listas).toHaveLength(2);
     expect(listas.map((lista) => lista.style.getPropertyValue("--chegada-desde"))).toEqual(["0", "3"]);
@@ -212,6 +264,59 @@ describe("o grupo no tempo: os fantasmas aos 300 ms e a chegada", () => {
     await passar(DURACAO_DA_CHEGADA_MS);
     expect(container.querySelector("[data-chegada], [data-chegada-vazio]")).toBeNull();
     expect(container.querySelector('h2 [data-conta="entra"]')).toBeNull();
+    expect(container.querySelector("[data-fantasmas], h2 [data-forma=\"contagem\"]")).toBeNull();
+  });
+
+  it("a chegada acaba com as animações dela, não num relógio: a cascata que começou tarde (o celular lento) não é cortada", async () => {
+    // O navegador: as animações da chegada nascem no primeiro quadro pintado, que no celular lento vem depois dos
+    // 300 ms do relógio. Aqui elas terminam aos 700 ms; até lá, a lista segue com a cascata e os fantasmas por baixo.
+    let terminar: () => void = () => undefined;
+    const terminou = new Promise<void>((pronto) => {
+      terminar = pronto;
+    });
+    const animacoes: Array<{ animationName: string; playState: string; finished: Promise<void> }> = [];
+    const daChegada = (nome: string) => {
+      const animacao = { animationName: nome, playState: "running", finished: terminou.then(() => undefined) };
+      animacoes.push(animacao);
+      return animacao;
+    };
+    vi.stubGlobal("requestAnimationFrame", (quadro: FrameRequestCallback) => setTimeout(() => quadro(performance.now()), 16) as unknown as number);
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => clearTimeout(id));
+    const original = Object.getOwnPropertyDescriptor(Element.prototype, "getAnimations");
+    Object.defineProperty(Element.prototype, "getAnimations", {
+      configurable: true,
+      value(this: Element) {
+        // As linhas que entram, o número que entra e os fantasmas que esmaecem; o brilho, que não é da chegada, segue.
+        const vivas = animacoes.filter((animacao) => animacao.playState !== "finished");
+        return vivas.length ? [...vivas, { animationName: "carregando-brilho", playState: "running", finished: new Promise(() => undefined) }] : [];
+      },
+    });
+    try {
+      desenhar(<Lista lendo />);
+      await passar(1_000);
+      daChegada("carregando-chega-linha");
+      daChegada("carregando-conta-entra");
+      daChegada("carregando-some");
+      desenhar(<Lista lendo={false} />);
+      await passar(DURACAO_DA_CHEGADA_MS + 100);
+      expect(container.querySelectorAll("[data-chegada]")).toHaveLength(2);
+      expect(container.querySelectorAll("[data-fantasmas][data-saindo]")).toHaveLength(3);
+      for (const animacao of animacoes) animacao.playState = "finished";
+      terminar();
+      await passar(50);
+      expect(container.querySelector("[data-chegada], [data-chegada-vazio], [data-fantasmas]")).toBeNull();
+    } finally {
+      if (original) Object.defineProperty(Element.prototype, "getAnimations", original);
+      else delete (Element.prototype as { getAnimations?: unknown }).getAnimations;
+    }
+  });
+
+  it("a chegada antes dos 300 ms não tem fantasma para esmaecer: as linhas entram direto", async () => {
+    desenhar(<Lista lendo />);
+    await passar(CARREGANDO.atrasoMs - 50);
+    desenhar(<Lista lendo={false} />);
+    expect(container.querySelector("[data-fantasmas]")).toBeNull();
+    expect(container.querySelectorAll("[data-chegada]")).toHaveLength(2);
   });
 
   it("o grupo que sempre teve o dado não chega: nada de cascata (a releitura e a lista sem saltos)", async () => {
@@ -223,6 +328,13 @@ describe("o grupo no tempo: os fantasmas aos 300 ms e a chegada", () => {
   it("a cascata e a entrada dos fantasmas no CSS: só opacidade e a subida de 4 px, 30 ms por linha, até a sexta", () => {
     expect(regra("[data-fantasmas]:not([data-visivel])")).toEqual({ opacity: "0" });
     expect(regra("[data-fantasmas][data-visivel]").animation).toBe("carregando-aparece var(--carregando-t-entrada) var(--ease-carregando-entrada) both");
+    // Na chegada, os fantasmas esmaecem em 150 ms por baixo das linhas reais, só por opacidade, e não recebem toque.
+    expect(regra("[data-fantasmas][data-visivel][data-saindo]")).toEqual({
+      "pointer-events": "none",
+      animation: "carregando-some var(--carregando-t-chegada) var(--ease-carregando-saida) both",
+      // Junto com a primeira linha do grupo na cascata: o cartão de baixo não fica vazio esperando a vez dela.
+      "animation-delay": "calc(min(var(--chegada-desde, 0), 5) * var(--carregando-passo))",
+    });
     const chegada = regra("[data-chegada] > *,\n  [data-chegada-vazio]");
     expect(chegada.animation).toBe("carregando-chega-linha var(--carregando-t-chegada) var(--ease-carregando-entrada) both");
     expect(chegada["animation-delay"]).toBe(

@@ -132,8 +132,8 @@ describe("o grupo sem saltos e o de sempre", () => {
     expect(comLinha).toBe(
       '<section class="flex flex-col gap-2.5"><h2 class="flex items-baseline gap-2 px-1 focus:outline-none">' +
         '<span class="text-base font-semibold text-foreground in-[.v3]:text-lg in-[.v3]:font-bold">Para conferir</span>' +
-        '<span class="text-sm text-foreground/50">1</span></h2>' +
-        '<div class="overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg"><div class="divide-y divide-border/60"><p>linha</p></div></div></section>',
+        '<span class="text-sm text-muted-foreground">1</span></h2>' +
+        '<div class="relative overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg"><div class="divide-y divide-border/60"><p>linha</p></div></div></section>',
     );
     const vazio = renderToStaticMarkup(
       <QueueGroup title="Para guardar" count={0} empty="Nada para guardar.">
@@ -143,8 +143,8 @@ describe("o grupo sem saltos e o de sempre", () => {
     expect(vazio).toBe(
       '<section class="flex flex-col gap-2.5"><h2 class="flex items-baseline gap-2 px-1 focus:outline-none">' +
         '<span class="text-base font-semibold text-foreground in-[.v3]:text-lg in-[.v3]:font-bold">Para guardar</span>' +
-        '<span class="text-sm text-foreground/50"></span></h2>' +
-        '<div class="overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg"><p class="px-5 py-4 text-sm text-muted-foreground">Nada para guardar.</p></div></section>',
+        '<span class="text-sm text-muted-foreground"></span></h2>' +
+        '<div class="relative overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg"><p class="px-5 py-4 text-sm text-muted-foreground">Nada para guardar.</p></div></section>',
     );
   });
 

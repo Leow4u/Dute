@@ -27,7 +27,11 @@ const estado = vi.hoisted(() => ({
   /** O atraso de cada caminho; sem ele, o `atrasoMs`. */
   atrasoMs: 2_000,
   atrasoPorCaminho: {} as Record<string, number>,
+  /** O caminho que responde 500, com a mensagem. */
+  falhaPorCaminho: {} as Record<string, boolean>,
   cliente: "BTG",
+  /** A lista dos clientes ainda não chegou: o ativo é o padrão, e o provável é o guardado no aparelho. */
+  clienteGuardado: null as string | null,
   papel: "admin",
 }));
 
@@ -41,7 +45,8 @@ vi.mock("@/lib/active-customer-context", async () => {
   return {
     useActiveCustomer: () => {
       const active = options.find((opcao) => opcao.code === estado.cliente) ?? options[0];
-      return { active, code: active.code, options, setCode: () => undefined, isLoading: false };
+      const isLoading = estado.clienteGuardado !== null;
+      return { active, code: active.code, options, setCode: () => undefined, isLoading, codeProvavel: estado.clienteGuardado ?? active.code };
     },
   };
 });
@@ -120,6 +125,10 @@ function dados(caminho: string): unknown {
 async function servir(entrada: RequestInfo | URL) {
   const url = new URL(String(entrada), "http://localhost");
   await new Promise((pronto) => setTimeout(pronto, estado.atrasoPorCaminho[url.pathname] ?? estado.atrasoMs));
+  if (estado.falhaPorCaminho[url.pathname]) {
+    const erro = { error: "Falha no servidor" };
+    return { ok: false, status: 500, json: async () => erro, text: async () => JSON.stringify(erro) };
+  }
   const corpo = dados(url.pathname);
   return { ok: true, status: 200, json: async () => corpo, text: async () => JSON.stringify(corpo) };
 }
@@ -135,7 +144,9 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(servir));
   estado.atrasoMs = 2_000;
   estado.atrasoPorCaminho = {};
+  estado.falhaPorCaminho = {};
   estado.cliente = "BTG";
+  estado.clienteGuardado = null;
   estado.papel = "admin";
   window.localStorage.clear();
   container = document.createElement("div");
@@ -166,6 +177,11 @@ async function passar(ms: number) {
 
 async function montar(Tela: ComponentType) {
   raiz = createRoot(container);
+  await redesenhar(Tela);
+}
+
+/** Desenha de novo a tela (o cliente ativo do mock lê o estado a cada desenho), ou outra no lugar dela. */
+async function redesenhar(Tela: ComponentType) {
   await act(async () => {
     raiz!.render(
       <ProvedorDaConexao value={conexaoEm("conectado")}>
@@ -285,13 +301,16 @@ describe.each(TELAS)("$nome com a forma final na primeira leitura", (tela) => {
     await passar(2_000 - CARREGANDO.atrasoMs);
     expect(numeros()).toEqual(tela.numeros);
     expect(segmento().textContent).toBe(tela.emAberto);
-    expect(container.querySelector("[data-fantasmas], [data-linha-fantasma]")).toBeNull();
+    // Os fantasmas ficam por baixo das linhas reais e esmaecem enquanto elas entram: nenhum cartão vazio.
+    const saindo = [...container.querySelectorAll("[data-fantasmas]")];
+    expect(saindo).toHaveLength(tela.titulos.length);
+    expect(saindo.every((cartao) => cartao.hasAttribute("data-saindo") && cartao.getAttribute("aria-hidden") === "true")).toBe(true);
     expect(lista()).toBeNull();
     // As linhas reais entram em cascata: cada grupo a partir da posição da primeira linha dele.
     const chegando = [...container.querySelectorAll<HTMLElement>("[data-chegada]")];
     expect(chegando.map((elemento) => elemento.style.getPropertyValue("--chegada-desde"))).toEqual(tela.cascata);
     await passar(DURACAO_DA_CHEGADA_MS);
-    expect(container.querySelector("[data-chegada]")).toBeNull();
+    expect(container.querySelector("[data-chegada], [data-fantasmas], [data-linha-fantasma]")).toBeNull();
     // O resumo espera os 2 s do anúncio de Carregando.
     await passar(500);
     expect(regiao().textContent).toBe(tela.resumo);
@@ -356,8 +375,13 @@ describe.each(TELAS)("$nome com a forma final na primeira leitura", (tela) => {
 
   it("só rótulos e passa no axe: antes do dado, com os fantasmas e depois", async () => {
     await montar(tela.Tela);
+    // Aos 0 ms os fantasmas guardam a altura, invisíveis; aos 300 ms estão na tela: o axe olha os dois.
+    expect(fantasmasPorGrupo()).toEqual(tela.titulos.map(() => 2));
+    expect(container.querySelector("[data-fantasmas][data-visivel]")).toBeNull();
     const aos0 = container.innerHTML;
     await passar(CARREGANDO.atrasoMs + 10);
+    expect(container.querySelectorAll("[data-fantasmas][data-visivel]")).toHaveLength(tela.titulos.length);
+    expect(lista()?.getAttribute("aria-describedby")).toBe(linha().id);
     const aos300 = container.innerHTML;
     const permitidos = ["Pedidos", "Receber", `Carregando ${tela.objeto}…`, `Carregando ${tela.objeto}`, "Em aberto", "·", "Entregues", "Recebidos", "Cancelados", "Chegada avulsa", "Atualizar", ...tela.titulos];
     expect(textosForaDaLista(aos0, permitidos)).toEqual([]);
@@ -368,6 +392,109 @@ describe.each(TELAS)("$nome com a forma final na primeira leitura", (tela) => {
     expect(await violacoesDeAcessibilidade(aos0)).toEqual([]);
     expect(await violacoesDeAcessibilidade(aos300)).toEqual([]);
     expect(await violacoesDeAcessibilidade(lida)).toEqual([]);
+  });
+
+  it("na abertura, antes de a lista dos clientes chegar, a contagem lembrada é a do cliente guardado no aparelho, e nada se grava com o provisório", async () => {
+    window.localStorage.setItem(`dute:contagem-lembrada:${tela.lista}:ACME`, JSON.stringify(Object.fromEntries(Object.keys(tela.lembrada).map((grupo) => [grupo, grupo === "guardando" ? 0 : 1]))));
+    window.localStorage.setItem(`dute:contagem-lembrada:${tela.lista}:BTG`, JSON.stringify(Object.fromEntries(Object.keys(tela.lembrada).map((grupo) => [grupo, 4]))));
+    const daBtg = window.localStorage.getItem(`dute:contagem-lembrada:${tela.lista}:BTG`);
+    // O provedor ainda não confirmou a ACME: o ativo é o padrão (a BTG), e o provável é a ACME, guardada no aparelho.
+    estado.clienteGuardado = "ACME";
+    await montar(tela.Tela);
+    expect(fantasmasPorGrupo()).toEqual(tela.titulos.map(() => 1));
+    await passar(2_500);
+    expect(numeros()).toEqual(tela.numeros);
+    // A leitura do cliente provisório não vira a lembrança de ninguém.
+    expect(window.localStorage.getItem(`dute:contagem-lembrada:${tela.lista}:BTG`)).toBe(daBtg);
+  });
+
+  it("a leitura que falhou não espera a outra: o aviso entra no lugar da lista na hora, e a linha de estado fica vazia", async () => {
+    estado.atrasoPorCaminho = { "/api/warehouse/ops": 100, "/api/customer-requests": 5_000 };
+    estado.falhaPorCaminho = { "/api/warehouse/ops": true };
+    await montar(tela.Tela);
+    await passar(400);
+    expect(naTela()).toMatch(/Não consegui carregar/);
+    expect(container.querySelector("[data-fantasmas]")).toBeNull();
+    expect(lista()).toBeNull();
+    expect(naArvore(linha())).toBe("");
+  });
+
+  it("a nova tentativa pedida pela pessoa depois da falha fala Carregando e o resumo, e o foco vai à linha de estado", async () => {
+    estado.atrasoMs = 100;
+    // As duas leituras da lista falham: a nova tentativa relê as duas.
+    estado.falhaPorCaminho = { "/api/warehouse/ops": true, "/api/customer-requests": true };
+    await montar(tela.Tela);
+    await passar(400);
+    const tentar = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((botao) => botao.textContent?.trim() === "Tentar de novo")!;
+    expect(tentar).toBeDefined();
+    const falas: string[] = [];
+    const observador = new MutationObserver(() => {
+      if (regiao().textContent) falas.push(regiao().textContent!);
+    });
+    observador.observe(regiao(), { subtree: true, childList: true, characterData: true });
+    estado.falhaPorCaminho = {};
+    estado.atrasoMs = 1_000;
+    tentar.focus();
+    await act(async () => {
+      tentar.click();
+    });
+    await passar(10);
+    // O aviso saiu com o foco nele: o foco está na linha de estado, que descreve a lista, e não no body.
+    expect(document.activeElement).toBe(linha());
+    for (let t = 0; t < 4_000; t += 100) await passar(100);
+    observador.disconnect();
+    expect(numeros()).toEqual(tela.numeros);
+    expect(falas).toEqual([`Carregando ${tela.objeto}`, tela.resumo]);
+  });
+
+  it("quem sai da tela antes do resumo leva o resumo junto: a tela seguinte não ouve a contagem desta lista", async () => {
+    estado.atrasoMs = 1_000;
+    await montar(tela.Tela);
+    await passar(CARREGANDO.atrasoMs + 10);
+    await passar(900);
+    // A lista chegou a 1 s, e o resumo espera os 2 s do anúncio de Carregando: a pessoa sai antes.
+    expect(regiao().textContent).toBe(`Carregando ${tela.objeto}`);
+    expect(numeros()).toEqual(tela.numeros);
+    await redesenhar(() => <p>Outra tela</p>);
+    for (let t = 0; t < 3_000; t += 100) await passar(100);
+    expect(regiao().textContent).toBe(`Carregando ${tela.objeto}`);
+  });
+});
+
+describe("Receber: o cliente trocado com a lista lida", () => {
+  it("a lista fica na tela, sem voltar às linhas-fantasma, enquanto os avisos do cliente novo chegam", async () => {
+    estado.atrasoMs = 100;
+    await montar(Receber);
+    await passar(1_000);
+    const lidas = titulosInteiros();
+    expect(lidas).toEqual(["Para conferir2", "Para guardar1"]);
+    estado.atrasoMs = 2_000;
+    estado.cliente = "ACME";
+    await redesenhar(Receber);
+    for (const instante of [16, 300, 1_200]) {
+      await passar(instante === 16 ? 16 : instante - (instante === 300 ? 16 : 300));
+      expect(container.querySelector("[data-fantasmas]"), `aos ${instante} ms`).toBeNull();
+      expect(container.querySelectorAll("section h2").length, `aos ${instante} ms`).toBe(2);
+      expect(naTela(), `aos ${instante} ms`).toContain("Guarda NF 4409");
+    }
+  });
+});
+
+describe("Pedidos: a contagem lembrada no aparelho de mais de uma pessoa", () => {
+  it("quem não decide não grava Para aprovar: quem decide, no mesmo aparelho e cliente, abre com a contagem dele", async () => {
+    estado.atrasoMs = 30;
+    await montar(Pedidos);
+    await passar(500);
+    desmontar();
+    estado.papel = "wms";
+    await montar(Pedidos);
+    await passar(500);
+    expect(JSON.parse(window.localStorage.getItem("dute:contagem-lembrada:pedidos:BTG") ?? "null")).toEqual({ aprovar: 3, separar: 2, entregar: 1, entregues: 0 });
+    desmontar();
+    estado.papel = "admin";
+    estado.atrasoMs = 2_000;
+    await montar(Pedidos);
+    expect(fantasmasPorGrupo()).toEqual([3, 2, 1]);
   });
 });
 

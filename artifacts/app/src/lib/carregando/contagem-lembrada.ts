@@ -52,11 +52,16 @@ export function lerContagens(lista: string, cliente: string): ContagensDaLista |
   }
 }
 
-/** Guarda a contagem lida. Sem o armazenamento do aparelho, nada: a próxima visita usa as duas linhas. */
+/**
+ * Guarda a contagem lida, por cima da que estava: o grupo que quem leu não vê
+ * ("Para aprovar", para quem não decide) fica com a última contagem de quem
+ * o viu, no aparelho que mais de uma pessoa usa. Sem o armazenamento do
+ * aparelho, nada: a próxima visita usa as duas linhas.
+ */
 export function lembrarContagens(lista: string, cliente: string, contagens: ContagensDaLista): void {
   if (!cliente) return;
   try {
-    window.localStorage.setItem(chaveDa(lista, cliente), JSON.stringify(contagens));
+    window.localStorage.setItem(chaveDa(lista, cliente), JSON.stringify({ ...lerContagens(lista, cliente), ...contagens }));
   } catch {
     // O armazenamento indisponível não pode travar a lista.
   }

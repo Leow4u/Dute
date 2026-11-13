@@ -3,6 +3,7 @@ import type { Query, QueryClient, QueryFunctionContext } from "@tanstack/react-q
 
 import { aparelhoSemRede, ehFaltaDeConexao } from "@/lib/conexao";
 
+import { marcarPedidoDaPessoa } from "./pedido-da-pessoa";
 import { CARREGANDO } from "./tempo";
 
 /**
@@ -259,6 +260,8 @@ export function useConexao(): EstadoDaConexao {
 export function useTentarDeNovo(): (reler: () => void) => void {
   const conexao = useContext(ContextoDaConexao);
   return (fazer) => {
+    // A pessoa pediu: a linha de estado fala a nova leitura (lib/carregando/pedido-da-pessoa.ts).
+    marcarPedidoDaPessoa();
     const acordando = conexao.acordar();
     if (acordando) void acordando.then(fazer, fazer);
     else fazer();

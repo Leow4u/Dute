@@ -258,9 +258,11 @@ describe("Receber sem conexão", () => {
     expect(TELA).not.toContain("Carregando chegadas...");
     // Na primeira leitura, a lista com a forma final, com as linhas-fantasma (parte 8); depois, o aviso, antes do erro
     // e das filas.
-    expect(TELA).toContain("const lendo = ops.isLoading || requests.isLoading;");
+    // Só a primeira leitura da tela, e a falha das filas não espera os avisos.
+    expect(TELA).toContain("const lendo = !listaJaLida && !ops.isError && (ops.isLoading || requests.isLoading);");
     expect(TELA).toContain(": !lendo && semRede && semRede.lidaEm === null ? (");
-    expect(TELA.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(TELA.indexOf("Não consegui carregar as chegadas."));
+    expect(TELA.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(TELA.indexOf("<FalhaDasChegadas focoAoSair={idDaLinha}"));
     expect(TELA).toContain(") : !lendo && ops.error && !semRede ? (");
+    expect(TELA).toContain("Não consegui carregar as chegadas.");
   });
 });

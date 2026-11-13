@@ -7,11 +7,26 @@ export const INTERVALO_DO_ANUNCIO_MS = 2_000;
 
 type Falar = (texto: string) => void;
 
+interface Regiao {
+  falar: Falar;
+  /** Tira o texto que ainda espera o intervalo, se for ele; o que já foi dito fica. */
+  retirar: (texto: string) => void;
+}
+
 /** Os anunciadores na página; fala o último que montou (o App monta um só). */
-const regioes: Falar[] = [];
+const regioes: Regiao[] = [];
+
+/** O texto como a região o guarda: os espaços em sequência viram um. */
+function normalizar(bruto: string): string {
+  return bruto.replace(/\s+/g, " ").trim();
+}
 
 function anunciar(texto: string) {
-  regioes[regioes.length - 1]?.(texto);
+  regioes[regioes.length - 1]?.falar(texto);
+}
+
+function retirar(texto: string) {
+  regioes[regioes.length - 1]?.retirar(texto);
 }
 
 /**
@@ -22,6 +37,15 @@ function anunciar(texto: string) {
  */
 export function useAnuncio(): (texto: string) => void {
   return anunciar;
+}
+
+/**
+ * Tira o anúncio que ainda não foi dito (o que espera o intervalo de 2 s):
+ * quem sai da tela leva o que pediu, e a tela seguinte não ouve o resumo de
+ * outra lista. O que já foi dito não muda.
+ */
+export function useRetirarAnuncio(): (texto: string) => void {
+  return retirar;
 }
 
 /**
@@ -60,7 +84,7 @@ export function Anunciador() {
     };
 
     const falar: Falar = (bruto) => {
-      const texto = bruto.replace(/\s+/g, " ").trim();
+      const texto = normalizar(bruto);
       if (!texto) return;
       const instante = performance.now();
       const livreEm = faladoEm + INTERVALO_DO_ANUNCIO_MS;
@@ -79,9 +103,15 @@ export function Anunciador() {
       }
     };
 
-    regioes.push(falar);
+    const regiao: Regiao = {
+      falar,
+      retirar: (bruto) => {
+        if (pendente !== null && pendente === normalizar(bruto)) pendente = null;
+      },
+    };
+    regioes.push(regiao);
     return () => {
-      const posicao = regioes.indexOf(falar);
+      const posicao = regioes.indexOf(regiao);
       if (posicao >= 0) regioes.splice(posicao, 1);
       if (espera !== null) clearTimeout(espera);
     };

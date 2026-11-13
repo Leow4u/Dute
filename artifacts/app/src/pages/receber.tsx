@@ -5,7 +5,7 @@ import { AlertTriangle, Ban, Check, Forklift, Inbox, PackageOpen, X } from "luci
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BarraDeEspera } from "@/components/ui/barra-de-espera";
-import { BlocoSemConexao } from "@/components/ui/erro-na-leitura";
+import { BlocoSemConexao, useFocoAoSair } from "@/components/ui/erro-na-leitura";
 import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { PageHeader } from "@/components/ui/page-header";
 import { QueueGroup, QueueRow } from "@/components/ui/queue-list";
@@ -30,6 +30,7 @@ import { useActiveCustomer } from "@/lib/active-customer-context";
 import { caixasGuardadas, chegadaPorCaixa } from "@/lib/wms/caixas-do-recebimento";
 import { useAppUser } from "@/lib/auth";
 import { useContagemLembrada, type ContagensDaLista } from "@/lib/carregando/contagem-lembrada";
+import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { resumoDaLista } from "@/lib/carregando/resumo-da-lista";
 import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
 import { semConexaoNaLeitura } from "@/lib/conexao";
@@ -81,7 +82,7 @@ import { formatRequestAge } from "./customer-requests";
 export default function Receber() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { code: customerCode } = useActiveCustomer();
+  const { code: customerCode, isLoading: clienteCarregando, codeProvavel } = useActiveCustomer();
   // O suporte consulta: sem chegada avulsa, sem conferir, concluir ou guardar.
   const { user } = useAppUser();
   const operador = canOperateWarehouse(user?.publicMetadata.role);
@@ -230,11 +231,17 @@ export default function Receber() {
   // desde 0 ms, com o bloco no lugar do número; as linhas-fantasma na altura da última contagem lida deste
   // cliente; o contêiner aria-busy, descrito pela linha de estado. Os avisos de envio entram em "Para
   // conferir": a lista espera as duas leituras. Na chegada, as linhas reais entram em cascata, e o Anunciador
-  // diz o resumo (só se disse "Carregando chegadas").
-  const lendo = ops.isLoading || requests.isLoading;
+  // diz o resumo (só se disse "Carregando chegadas"). Só a primeira leitura da tela: trocar o cliente com a
+  // lista lida relê os avisos dele com a lista na tela (a lista nunca some). A falha das filas não espera os
+  // avisos: o aviso entra no lugar da lista na hora.
+  const [listaJaLida, setListaJaLida] = useState(false);
+  if (!listaJaLida && ops.data && (requests.data || requests.isError)) setListaJaLida(true);
+  const lendo = !listaJaLida && !ops.isError && (ops.isLoading || requests.isLoading);
   const idDaLinha = useId();
+  // A contagem lembrada é do cliente que a tela vai operar: na abertura, antes de a lista dos clientes chegar, o
+  // escolhido neste aparelho. Só grava com o cliente confirmado e os avisos dele lidos.
   const contagensLidas: ContagensDaLista | null =
-    ops.data && requests.data
+    ops.data && requests.data && !clienteCarregando
       ? {
           conferir: pendingNotices.length + board.check.length,
           guardando: board.guardando.length,
@@ -244,7 +251,7 @@ export default function Receber() {
           cancelados: board.cancelled.length,
         }
       : null;
-  const contagem = useContagemLembrada("receber", customerCode, contagensLidas);
+  const contagem = useContagemLembrada("receber", codeProvavel ?? customerCode, contagensLidas);
   const fantasmas = (grupo: string, ordem: number) => (lendo ? { linhas: contagem.linhas(grupo), acoes: 1 as const, ordem } : undefined);
   // "Recebidas, por guardar" só aparece com linha: na primeira leitura, se a última leitura deste cliente tinha.
   const comGuardando = lendo ? (contagem.lembrada("guardando") ?? 0) > 0 : board.guardando.length > 0;
@@ -373,6 +380,7 @@ export default function Receber() {
                 setSelectedNoticeId(null);
               }}
               aria-label="Situação das chegadas"
+              cheioNoCelular
               options={[
                 { value: "open", label: "Em aberto", count: lendo ? null : openCount },
                 { value: "done", label: "Recebidos" },
@@ -393,14 +401,9 @@ export default function Receber() {
       {/* A falta com a lista lida fica na linha de estado, sob o título; a primeira leitura, também, com a lista
           na forma final, com as linhas-fantasma. */}
       {fichaLarga ? <section aria-label="Bancada de conferência" className="min-w-0">{panel}</section> : !lendo && semRede && semRede.lidaEm === null ? (
-        <BlocoSemConexao tentando={ops.isFetching || requests.isFetching} onTentar={recarregar} />
+        <BlocoSemConexao tentando={ops.isFetching || requests.isFetching} onTentar={recarregar} focoAoSair={idDaLinha} />
       ) : !lendo && ops.error && !semRede ? (
-        <p className="text-sm text-destructive">
-          Não consegui carregar as chegadas.{" "}
-          <button type="button" className="font-medium underline" onClick={() => ops.refetch()}>
-            Tentar de novo
-          </button>
-        </p>
+        <FalhaDasChegadas focoAoSair={idDaLinha} onTentar={recarregar} />
       ) : (
         <div
           className={cn(
@@ -732,5 +735,30 @@ function TaskPanel({
       onAdvance={(id, operation, note) => actions.advanceTask.mutate({ id, operation, note })}
       onOpenException={actions.exception.openFor}
     />
+  );
+}
+
+/**
+ * As chegadas que a tela não conseguiu ler: o motivo e "Tentar de novo". A
+ * nova tentativa é pedida pela pessoa (a linha de estado fala de novo), e o
+ * foco vai à linha de estado quando o aviso sai da tela.
+ */
+function FalhaDasChegadas({ focoAoSair, onTentar }: { focoAoSair: string; onTentar: () => void }) {
+  const raiz = useRef<HTMLParagraphElement>(null);
+  useFocoAoSair(raiz, focoAoSair);
+  return (
+    <p ref={raiz} className="text-sm text-destructive">
+      Não consegui carregar as chegadas.{" "}
+      <button
+        type="button"
+        className="font-medium underline"
+        onClick={() => {
+          marcarPedidoDaPessoa();
+          onTentar();
+        }}
+      >
+        Tentar de novo
+      </button>
+    </p>
   );
 }

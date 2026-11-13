@@ -1,9 +1,11 @@
+import { useLayoutEffect, useRef, type RefObject } from "react";
 import { AlertCircle, RefreshCw, WifiOff } from "lucide-react";
 
 import { ArcosDoWifi } from "@/components/ui/arcos-do-wifi";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useConexao, useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
+import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { horaDaLeitura } from "@/lib/conexao";
 import { cn } from "@/lib/utils";
@@ -43,6 +45,22 @@ function useNovaTentativa(tentando: boolean, onTentar: () => void) {
 }
 
 /**
+ * O aviso no lugar da lista sai da tela quando a nova tentativa começa a ler
+ * (a lista volta às linhas-fantasma): com o foco nele, o foco vai à linha de
+ * estado da lista (`id`), que diz "Carregando pedidos…" e depois a hora, e
+ * nunca ao `body` (2.4.3).
+ */
+export function useFocoAoSair(raiz: RefObject<HTMLElement | null>, id: string | undefined) {
+  useLayoutEffect(() => {
+    const elemento = raiz.current;
+    return () => {
+      if (!id || !elemento || typeof document === "undefined" || !elemento.contains(document.activeElement)) return;
+      document.getElementById(id)?.focus({ preventScroll: true });
+    };
+  }, [id, raiz]);
+}
+
+/**
  * A leitura falhou e a tela não tem nada para mostrar: a falha no lugar da
  * lista, com a nova tentativa. Erro nunca vira vazio
  * (docs/plataforma/diagnostico-carregamento.md; mockup
@@ -53,7 +71,9 @@ function useNovaTentativa(tentando: boolean, onTentar: () => void) {
  * uma vez pelo Anunciador (momento 8).
  *
  * Ocupado não é desabilitado: o botão fica `aria-disabled` enquanto tenta, e o
- * toque repetido é barrado aqui.
+ * toque repetido é barrado aqui. A nova tentativa é pedida pela pessoa: a
+ * linha de estado fala de novo ("Carregando pedidos" e o resumo), e o foco
+ * vai a ela (`focoAoSair`) quando o aviso sai.
  */
 export function ErroNaLeitura({
   mensagem,
@@ -61,17 +81,23 @@ export function ErroNaLeitura({
   onTentar,
   className,
   falta,
+  focoAoSair,
 }: {
   mensagem: string;
   tentando: boolean;
   onTentar: () => void;
   className?: string;
   falta?: FaltaNaTela;
+  /** O id da linha de estado da lista, que recebe o foco quando o aviso sai com ele. */
+  focoAoSair?: string;
 }) {
   const reconectando = falta === "reconectando";
   const Icone = falta === "sem-conexao" ? WifiOff : AlertCircle;
+  const raiz = useRef<HTMLDivElement>(null);
+  useFocoAoSair(raiz, focoAoSair);
   return (
     <div
+      ref={raiz}
       // A falta de conexão não é alerta: "Reconectando" não fala, e "Sem conexão" o Anunciador diz uma vez (momento 8).
       role={falta ? undefined : "alert"}
       data-falta={falta}
@@ -101,7 +127,9 @@ export function ErroNaLeitura({
         aria-disabled={tentando || undefined}
         aria-busy={tentando || undefined}
         onClick={() => {
-          if (!tentando) onTentar();
+          if (tentando) return;
+          marcarPedidoDaPessoa();
+          onTentar();
         }}
       >
         {tentando ? <Spinner /> : <RefreshCw className="size-4" aria-hidden="true" />}
@@ -121,11 +149,14 @@ export function BlocoSemConexao({
   onTentar,
   className,
   falta,
+  focoAoSair,
 }: {
   tentando: boolean;
   onTentar: () => void;
   className?: string;
   falta?: FaltaNaTela;
+  /** O id da linha de estado da lista, que recebe o foco quando o aviso sai com ele. */
+  focoAoSair?: string;
 }) {
   const naTela = useFaltaNaTela(falta);
   const { mostrando, tentar } = useNovaTentativa(tentando, onTentar);
@@ -136,6 +167,7 @@ export function BlocoSemConexao({
       tentando={mostrando}
       onTentar={tentar}
       className={className}
+      focoAoSair={focoAoSair}
     />
   );
 }

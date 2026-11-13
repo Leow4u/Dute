@@ -58,6 +58,13 @@ describe("a contagem guardada no aparelho", () => {
     expect(lerContagens("pedidos", "")).toBeNull();
   });
 
+  it("a leitura nova grava por cima da que estava: o grupo que quem leu não vê fica com a contagem de quem o viu", () => {
+    lembrarContagens("pedidos", "BTG", { aprovar: 3, separar: 2, entregar: 1 });
+    // Quem não decide não vê "Para aprovar": grava só os grupos dele, no mesmo aparelho.
+    lembrarContagens("pedidos", "BTG", { separar: 4, entregar: 0 });
+    expect(lerContagens("pedidos", "BTG")).toEqual({ aprovar: 3, separar: 4, entregar: 0 });
+  });
+
   it("o guardado estragado não vale: só ficam os números inteiros de zero para cima", () => {
     window.localStorage.setItem("dute:contagem-lembrada:pedidos:BTG", "{nao é json");
     expect(lerContagens("pedidos", "BTG")).toBeNull();

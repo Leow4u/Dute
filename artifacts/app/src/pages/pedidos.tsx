@@ -30,7 +30,7 @@ import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura"
 import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { PageHeader } from "@/components/ui/page-header";
-import { LinhaDaFila, QueueGroup, QueueRow, type QueueTone } from "@/components/ui/queue-list";
+import { LinhaDaFila, QueueGroup, QueueRow, type CarregandoDoGrupo, type QueueTone } from "@/components/ui/queue-list";
 import { Segmented } from "@/components/ui/segmented";
 import {
   Sheet,
@@ -233,7 +233,7 @@ export default function Pedidos() {
   // O suporte consulta: sem separar, entregar, tratar nem definir a entrega.
   const operador = canOperateWarehouse(user?.publicMetadata.role);
   const openingSession = useOpeningInventorySession();
-  const { active: cliente } = useActiveCustomer();
+  const { active: cliente, isLoading: clienteCarregando, codeProvavel } = useActiveCustomer();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [view, setView] = useState<"open" | "delivered">("open");
@@ -612,13 +612,24 @@ export default function Pedidos() {
   // desde 0 ms, com o bloco no lugar do número; as linhas-fantasma na altura da última contagem lida deste
   // cliente; o contêiner aria-busy, descrito pela linha de estado. Na chegada, as linhas reais entram em
   // cascata, e o Anunciador diz o resumo (só se disse "Carregando pedidos").
-  const lendo = loading;
+  // A leitura que falhou sem dado não espera a outra: o aviso entra no lugar da lista na hora.
+  const lendo = loading && !semLeitura;
   const idDaLinha = useId();
-  const contagensLidas: ContagensDaLista | null = lida
-    ? { aprovar: chavesParaAprovar.length, separar: chavesParaSeparar.length, entregar: chavesParaEntregar.length, entregues: queue.delivered.length }
-    : null;
-  const contagem = useContagemLembrada("pedidos", cliente.code, contagensLidas);
-  const fantasmas = (grupo: string, acoes: 0 | 1 | 2, ordem: number) => (lendo ? { linhas: contagem.linhas(grupo), acoes, ordem } : undefined);
+  // A contagem lembrada é do cliente que a tela vai operar: na abertura, antes de a lista dos clientes chegar, o
+  // escolhido neste aparelho. Só grava com o cliente confirmado, e só os grupos que quem vê tem: "Para aprovar"
+  // fica com a contagem de quem decide.
+  const contagensLidas: ContagensDaLista | null =
+    lida && !clienteCarregando
+      ? {
+          ...(decider ? { aprovar: chavesParaAprovar.length } : {}),
+          separar: chavesParaSeparar.length,
+          entregar: chavesParaEntregar.length,
+          entregues: queue.delivered.length,
+        }
+      : null;
+  const contagem = useContagemLembrada("pedidos", codeProvavel ?? cliente.code, contagensLidas);
+  const fantasmas = (grupo: string, acoes: 0 | 1 | 2, ordem: number, forma: Pick<CarregandoDoGrupo, "atalho" | "acoesAbaixo"> = {}) =>
+    lendo ? { linhas: contagem.linhas(grupo), acoes, ordem, ...forma } : undefined;
   const resumo =
     view === "delivered"
       ? resumoDaLista([{ quantos: queue.delivered.length, um: "entregue", varios: "entregues" }], "Nenhuma entrega recente")
@@ -644,6 +655,7 @@ export default function Pedidos() {
               value={view}
               onChange={setView}
               aria-label="Pedidos em aberto ou entregues"
+              cheioNoCelular
               options={[
                 { value: "open", label: "Em aberto", count: lendo ? null : openCount },
                 { value: "delivered", label: "Entregues" },
@@ -666,12 +678,13 @@ export default function Pedidos() {
       {/* A falta com a lista lida fica na linha de estado, sob o título; a primeira leitura, também, com a lista
           na forma final, com as linhas-fantasma. */}
       {!lendo && semRede && semRede.lidaEm === null ? (
-        <BlocoSemConexao tentando={relendo} onTentar={refreshAll} />
+        <BlocoSemConexao tentando={relendo} onTentar={refreshAll} focoAoSair={idDaLinha} />
       ) : !lendo && semLeitura ? (
         <ErroNaLeitura
           mensagem="Não consegui carregar os pedidos."
           tentando={relendo}
           onTentar={refreshAll}
+          focoAoSair={idDaLinha}
         />
       ) : view === "delivered" ? (
         <div className="flex flex-col gap-6" {...listaOcupada}>
@@ -744,7 +757,7 @@ export default function Pedidos() {
           <QueueGroup
             title="Para separar"
             count={lendo ? null : paraSeparar.chaves.length}
-            carregando={fantasmas("separar", operador ? 1 : 0, decider ? 1 : 0)}
+            carregando={fantasmas("separar", operador ? 1 : 0, decider ? 1 : 0, { acoesAbaixo: true })}
             cascata={naCascata.separar}
             rolarContagem
             contagemNaArvore={paraSeparar.quantasFicam}
@@ -789,7 +802,7 @@ export default function Pedidos() {
           <QueueGroup
             title="Para entregar"
             count={lendo ? null : paraEntregar.chaves.length}
-            carregando={fantasmas("entregar", operador ? 1 : 0, decider ? 2 : 1)}
+            carregando={fantasmas("entregar", operador ? 1 : 0, decider ? 2 : 1, { atalho: true, acoesAbaixo: true })}
             cascata={naCascata.entregar}
             rolarContagem
             contagemNaArvore={paraEntregar.quantasFicam}

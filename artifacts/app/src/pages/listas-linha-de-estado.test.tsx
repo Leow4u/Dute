@@ -123,13 +123,13 @@ type Tela = {
 };
 
 const TELAS: Tela[] = [
-  { nome: "Pedidos", Tela: Pedidos, objeto: "pedidos", intervaloMs: 60_000, cabecalho: ["Pedidos", "Atualizado às 10:42", "Em aberto · 2", "Entregues", "Atualizar"], atualizar: true },
+  { nome: "Pedidos", Tela: Pedidos, objeto: "pedidos", intervaloMs: 60_000, cabecalho: ["Pedidos", "Atualizado às 10:42", "Em aberto ·", "2", "Entregues", "Atualizar"], atualizar: true },
   {
     nome: "Receber",
     Tela: Receber,
     objeto: "chegadas",
     intervaloMs: 60_000,
-    cabecalho: ["Receber", "Atualizado às 10:42", "Em aberto · 1", "Recebidos", "Cancelados", "Chegada avulsa", "Atualizar"],
+    cabecalho: ["Receber", "Atualizado às 10:42", "Em aberto ·", "1", "Recebidos", "Cancelados", "Chegada avulsa", "Atualizar"],
     atualizar: true,
   },
   { nome: "Estoque", Tela: Estoque, objeto: "estoque", intervaloMs: 120_000, cabecalho: ["Estoque · BTG Pactual", "Atualizado às 10:42", "Contagem", "Atualizar", "Itens · 1", "Histórico"], atualizar: true },

@@ -1794,9 +1794,12 @@
    delas por opacidade em 150 ms, subindo 4 px, em cascata de 30 ms em até
    seis linhas (data-chegada na lista; o --chegada-desde é a posição da
    primeira linha do grupo na tela, e da sétima em diante entram com a
-   sexta); o vazio do grupo chega como a primeira linha dele. No reduzido, a
-   subida vai a 0 e só a opacidade troca, sem brilho. Vem antes da lista sem
-   saltos: a linha que sai ou chega depois manda na animação dela. */
+   sexta), por cima dos fantasmas, que esmaecem em 150 ms (data-saindo); o
+   vazio do grupo chega como a primeira linha dele. A chegada acaba quando
+   as animações dela terminam (lib/carregando/use-chegada.ts), não num
+   relógio que corre antes da pintura. No reduzido, a subida vai a 0 e só a
+   opacidade troca, sem brilho. Vem antes da lista sem saltos: a linha que
+   sai ou chega depois manda na animação dela. */
 @layer components {
   [data-fantasmas]:not([data-visivel]) {
     opacity: 0;
@@ -1804,6 +1807,16 @@
 
   [data-fantasmas][data-visivel] {
     animation: carregando-aparece var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
+  }
+
+  /* Na chegada, as linhas-fantasma que estavam na tela ficam por baixo das
+     reais, fora do fluxo e recortadas no cartão, e esmaecem enquanto elas
+     entram, junto com a primeira linha do grupo na cascata (o mesmo
+     --chegada-desde): o cartão nunca fica vazio entre os dois. */
+  [data-fantasmas][data-visivel][data-saindo] {
+    pointer-events: none;
+    animation: carregando-some var(--carregando-t-chegada) var(--ease-carregando-saida) both;
+    animation-delay: calc(min(var(--chegada-desde, 0), 5) * var(--carregando-passo));
   }
 
   [data-chegada] > *,
