@@ -68,6 +68,7 @@ import { useAnuncio } from "@/lib/carregando/anunciador";
 import { relogioDaEspera } from "@/lib/carregando/tempo";
 import { desfechoDoErro, useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
 import { useEspera } from "@/lib/carregando/use-espera";
+import { usePalcoSemSaltos } from "@/lib/carregando/palco-sem-saltos";
 import { useListaSemSaltos } from "@/lib/carregando/use-lista-sem-saltos";
 import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { chamarOperacao, novaChave } from "@/lib/operacao/api";
@@ -249,6 +250,8 @@ export default function Pedidos() {
   // Cancelar pedido (pergunta 59): a coordenação, com o motivo.
   const [cancelReason, setCancelReason] = useState("");
   const chaveDoCancelamento = useRef<string | null>(null);
+  // O pedido da linha que abriu a entrega ou o cancelamento: se ela sair enquanto o diálogo fecha, o foco não cai no corpo.
+  const linhaDoDialogo = useRef<string | null>(null);
   const entregas = useLeitura(
     OPERACAO_LIBERADO ? "orders:em_aberto" : null,
     (db) => query(collection(db, "orders"), where("status", "in", PEDIDOS_EM_ABERTO)),
@@ -285,6 +288,8 @@ export default function Pedidos() {
   const linhas = useAcaoNaLinha<string>();
   // O toast do sucesso sai uma vez por decisão, venha da resposta ou do "Conferir".
   const avisadas = useRef(new Set<string>());
+  // As solicitações aprovadas nesta tela: o pedido delas chega a "Para separar" com o realce.
+  const aprovadasAqui = useRef(new Set<string>());
   const queue = useMemo(
     () => buildOrderQueue({ requests: requests.data?.items, ops: ops.data, segurar: linhas.ocupada }),
     [ops.data, requests.data?.items, linhas],
@@ -293,27 +298,40 @@ export default function Pedidos() {
   // A linha decidida sai sem salto (carregamento v2, momento 4): depois do
   // "Aprovado", esmaece e as de baixo sobem; sob o dedo, espera até 3 s. O
   // pedido só entra em "Para separar" quando a linha dele deixou "Para
-  // aprovar", com o realce de 1 s: nunca nos dois grupos ao mesmo tempo.
+  // aprovar": nunca nos dois grupos ao mesmo tempo. O palco da tela leva
+  // junto o cartão, os títulos e os grupos de baixo, e a saída e a chegada
+  // refluem de uma vez. Só o pedido aprovado nesta tela chega com o realce; o
+  // que chega pela releitura ou pelo tempo real, sem sinal (momento 7).
   // A primeira leitura com dado entra de uma vez, também a que vem depois de
   // uma falha ou sem rede: ela não chega, aparece.
+  const palco = usePalcoSemSaltos();
   const lida = Boolean(ops.data) && (!decider || Boolean(requests.data));
-  const chavesParaAprovar = useMemo(() => (decider ? queue.approve.map((request) => request.id) : []), [decider, queue.approve]);
-  const paraAprovar = useListaSemSaltos(chavesParaAprovar, { pronta: lida });
-  const naFilaDeAprovar = useMemo(() => new Set(paraAprovar.chaves), [paraAprovar.chaves]);
-  const chavesParaSeparar = useMemo(
-    () => queue.pick.filter((order) => !order.requestId || !naFilaDeAprovar.has(order.requestId)).map((order) => order.key),
-    [queue.pick, naFilaDeAprovar],
-  );
-  const paraSeparar = useListaSemSaltos(chavesParaSeparar, { pronta: lida });
-  // Do mesmo jeito, o pedido separado só entra em "Para entregar" quando a linha dele deixou "Para separar".
-  const naFilaDeSeparar = useMemo(() => new Set(paraSeparar.chaves), [paraSeparar.chaves]);
-  const paraEntregar = useMemo(() => queue.deliver.filter((order) => !naFilaDeSeparar.has(order.key)), [queue.deliver, naFilaDeSeparar]);
   // A linha que sai é desenhada com o dado que ainda houver; sem ele, fica a última imagem dela.
   const solicitacoes = useMemo(() => new Map((requests.data?.items ?? []).map((request) => [request.id, request])), [requests.data?.items]);
   const pedidos = useMemo(
     () => new Map([...queue.pick, ...queue.deliver, ...queue.delivered].map((order) => [order.key, order])),
     [queue.pick, queue.deliver, queue.delivered],
   );
+  const chavesParaAprovar = useMemo(() => (decider ? queue.approve.map((request) => request.id) : []), [decider, queue.approve]);
+  const paraAprovar = useListaSemSaltos(chavesParaAprovar, { pronta: lida, palco });
+  const naFilaDeAprovar = useMemo(() => new Set(paraAprovar.chaves), [paraAprovar.chaves]);
+  const chavesParaSeparar = useMemo(
+    () => queue.pick.filter((order) => !order.requestId || !naFilaDeAprovar.has(order.requestId)).map((order) => order.key),
+    [queue.pick, naFilaDeAprovar],
+  );
+  const aprovadoAqui = (key: string) => {
+    const requestId = pedidos.get(key)?.requestId;
+    return Boolean(requestId && aprovadasAqui.current.has(requestId));
+  };
+  const paraSeparar = useListaSemSaltos(chavesParaSeparar, { pronta: lida, palco, realcar: aprovadoAqui });
+  // Do mesmo jeito, o pedido separado só entra em "Para entregar" quando a linha dele deixou "Para separar";
+  // e o entregue (ou o que a releitura tirou) sai dela sem salto.
+  const naFilaDeSeparar = useMemo(() => new Set(paraSeparar.chaves), [paraSeparar.chaves]);
+  const chavesParaEntregar = useMemo(
+    () => queue.deliver.filter((order) => !naFilaDeSeparar.has(order.key)).map((order) => order.key),
+    [queue.deliver, naFilaDeSeparar],
+  );
+  const paraEntregar = useListaSemSaltos(chavesParaEntregar, { pronta: lida, palco });
   const entries = useMemo(() => queueEntries(normalizeQueues(ops.data?.queues)), [ops.data?.queues]);
   const actions = useWarehouseTaskActions({
     findEntry: (taskId) => entries.find((entry) => entry.task.id === taskId),
@@ -357,6 +375,7 @@ export default function Pedidos() {
     if (avisadas.current.has(marca)) return;
     avisadas.current.add(marca);
     if (acao === "aprovar") {
+      aprovadasAqui.current.add(request.id);
       toast({ title: `${requestTitle(request)} aprovado` });
       return;
     }
@@ -466,6 +485,7 @@ export default function Pedidos() {
     if (!order.orderId) return;
     chaveDoCancelamento.current = null;
     setCancelReason("");
+    linhaDoDialogo.current = order.key;
     setDialog({ kind: "cancel", order, orderId: order.orderId });
   };
   // O "⋯" do pedido ainda no armazém, só para quem decide (owner, admin e interno).
@@ -512,6 +532,19 @@ export default function Pedidos() {
 
   // Aprovar e recusar ficam de fora: cada linha de "Para aprovar" tem o próprio estado.
   const busy = deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
+  /**
+   * O diálogo devolve o foco ao botão que o abriu. Se a linha dele já saiu
+   * (entregue, cancelado), o foco vai para a seguinte ou para o título, pela
+   * regra da fila, e não cai no corpo da página.
+   */
+  const devolverFocoDoDialogo = (evento: Event) => {
+    const chave = linhaDoDialogo.current;
+    linhaDoDialogo.current = null;
+    const destino = chave ? paraEntregar.focoDaSaida(chave) ?? paraSeparar.focoDaSaida(chave) : null;
+    if (!destino) return;
+    evento.preventDefault();
+    destino.focus();
+  };
   // A tabela do cancelamento pede um diálogo mais largo.
   const larguraDoDialogo = cn("sm:max-w-[440px]", dialog?.kind === "cancel" && "sm:max-w-[560px]");
 
@@ -534,12 +567,12 @@ export default function Pedidos() {
   const naTela = {
     approve: paraAprovar.chaves.map((id) => ({ id })),
     pick: paraSeparar.chaves.map((key) => ({ key })),
-    deliver: paraEntregar,
+    deliver: paraEntregar.chaves.map((key) => ({ key })),
   };
   const principal = chaveDaPrincipal(naTela, decider);
   const variante = (chave: string) => (principal === chave ? "default" : "outline");
   const openCount =
-    (decider ? paraAprovar.chaves.length : 0) + paraSeparar.chaves.length + paraEntregar.length;
+    (decider ? paraAprovar.chaves.length : 0) + paraSeparar.chaves.length + paraEntregar.chaves.length;
   // A leitura falhou sem nada para mostrar: a tela diz isso, em vez de
   // "Nenhum pedido para…" (docs/plataforma/diagnostico-carregamento.md,
   // decisão 6 de 06/11/2026). Com a lista já lida, a falha de uma atualização
@@ -551,7 +584,7 @@ export default function Pedidos() {
   const relendo = ops.isFetching || requests.isFetching;
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 pb-24">
+    <div ref={palco.ref} className="mx-auto flex max-w-5xl flex-col gap-6 pb-24">
       <PageHeader
         title="Pedidos"
         actions={
@@ -618,6 +651,7 @@ export default function Pedidos() {
               title="Para aprovar"
               count={paraAprovar.chaves.length}
               rolarContagem
+              semSaltos
               listaRef={paraAprovar.ref}
               tituloRef={paraAprovar.titulo}
               empty={
@@ -661,6 +695,7 @@ export default function Pedidos() {
             title="Para separar"
             count={paraSeparar.chaves.length}
             rolarContagem
+            semSaltos
             listaRef={paraSeparar.ref}
             tituloRef={paraSeparar.titulo}
             empty={ordersGroupEmpty("pick")}
@@ -699,51 +734,63 @@ export default function Pedidos() {
 
           <QueueGroup
             title="Para entregar"
-            count={paraEntregar.length}
+            count={paraEntregar.chaves.length}
+            rolarContagem
+            semSaltos
+            listaRef={paraEntregar.ref}
+            tituloRef={paraEntregar.titulo}
             empty={ordersGroupEmpty("deliver")}
           >
-            {paraEntregar.map((order) => (
-              <OrderRow
-                key={order.key}
-                order={order}
-                icon={Truck}
-                tone="deliver"
-                paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
-                lerParaQuando={!decider}
-                onTreat={operador ? () => setTreating(order) : undefined}
-                {...(order.stage === "enviar" ? daEntrega(order) : {})}
-                volumes={volumesDoPedidoNaFila(order)}
-                menu={menuDo(order)}
-                action={
-                  operador ? (
-                    <Button
-                      type="button"
-                      variant={variante(`deliver:${order.key}`)}
-                      disabled={busy}
-                      onClick={() => {
-                        setReceivedBy("");
-                        // Na retirada pelo cliente, quem leva e a placa vêm da entrega do pedido.
-                        const saida = saidaPelaEntrega(entregaDe(order));
-                        if (saida) {
-                          setDriver(saida.motorista);
-                          setPlate(saida.placa);
-                        }
-                        setDialog({ kind: "deliver", order });
-                      }}
-                    >
-                      <Check className="size-4" />
-                      Entregue
-                    </Button>
-                  ) : undefined
-                }
-              />
-            ))}
+            {paraEntregar.chaves.map((key) => {
+              const order = pedidos.get(key);
+              return (
+                <LinhaDaFila key={key} lista={paraEntregar} chave={key}>
+                  {order ? (
+                    <OrderRow
+                      order={order}
+                      icon={Truck}
+                      tone="deliver"
+                      paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
+                      lerParaQuando={!decider}
+                      onTreat={operador ? () => setTreating(order) : undefined}
+                      {...(order.stage === "enviar" ? daEntrega(order) : {})}
+                      volumes={volumesDoPedidoNaFila(order)}
+                      menu={menuDo(order)}
+                      action={
+                        operador ? (
+                          <Button
+                            type="button"
+                            variant={variante(`deliver:${order.key}`)}
+                            disabled={busy}
+                            data-foco-da-linha=""
+                            onClick={() => {
+                              setReceivedBy("");
+                              // Na retirada pelo cliente, quem leva e a placa vêm da entrega do pedido.
+                              const saida = saidaPelaEntrega(entregaDe(order));
+                              if (saida) {
+                                setDriver(saida.motorista);
+                                setPlate(saida.placa);
+                              }
+                              linhaDoDialogo.current = order.key;
+                              setDialog({ kind: "deliver", order });
+                            }}
+                          >
+                            <Check className="size-4" />
+                            Entregue
+                          </Button>
+                        ) : undefined
+                      }
+                    />
+                  ) : null}
+                </LinhaDaFila>
+              );
+            })}
           </QueueGroup>
         </>
       )}
 
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className={larguraDoDialogo} aria-describedby={undefined}>
+        <DialogContent className={larguraDoDialogo} aria-describedby={undefined} onCloseAutoFocus={devolverFocoDoDialogo}>
           {dialog?.kind === "reject" ? (
             <>
               <DialogHeader>

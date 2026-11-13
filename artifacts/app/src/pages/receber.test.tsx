@@ -36,6 +36,12 @@ describe("Receber na v3", () => {
     expect(telaDoWmsNaV3("/wms/receber")).toBe(true);
   });
 
+  it("os grupos são os de sempre: o cartão sem saltos de Pedidos (carregamento v2, parte 6c) não entra aqui sem querer", () => {
+    expect(TELA).toContain("<QueueGroup");
+    expect(TELA).not.toContain("semSaltos");
+    expect(TELA).not.toContain("useListaSemSaltos");
+  });
+
   it("sem legenda: sem a dica dos grupos, o vazio diz o dado e o rótulo do aviso não é vermelho", () => {
     expect(TELA).not.toMatch(/\bhint=/);
     expect(TELA).toContain('empty="Nenhuma chegada para conferir."');

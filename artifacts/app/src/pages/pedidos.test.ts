@@ -90,7 +90,7 @@ describe("Pedidos na v3", () => {
     expect(FONTE).toContain("const principal = chaveDaPrincipal(naTela, decider);");
     expect(FONTE).toContain("approve: paraAprovar.chaves.map((id) => ({ id })),");
     expect(FONTE).toContain("pick: paraSeparar.chaves.map((key) => ({ key })),");
-    expect(FONTE).toContain("deliver: paraEntregar,");
+    expect(FONTE).toContain("deliver: paraEntregar.chaves.map((key) => ({ key })),");
     for (const chave of ["approve:${request.id}", "pick:${order.key}", "deliver:${order.key}"]) {
       expect(FONTE).toContain(`variant={variante(\`${chave}\`)}`);
     }

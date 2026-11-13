@@ -1,4 +1,15 @@
-import { memo, useEffect, useState, type ReactNode, type Ref } from "react";
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+  type Ref,
+  type SyntheticEvent,
+} from "react";
 import { ChevronDown, ChevronRight, type LucideIcon } from "lucide-react";
 
 import { CARREGANDO } from "@/lib/carregando/tempo";
@@ -57,6 +68,13 @@ export function ContagemQueRola({ valor }: { valor: number }) {
   );
 }
 
+/**
+ * O anel do título que recebe o foco quando a última linha sai com ele: o
+ * mesmo do Button (o token --ring), só no foco visível.
+ */
+const TITULO_FOCAVEL =
+  "rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
 export function QueueGroup({
   title,
   hint,
@@ -66,6 +84,7 @@ export function QueueGroup({
   rolarContagem = false,
   listaRef,
   tituloRef,
+  semSaltos = false,
 }: {
   title: string;
   hint?: string;
@@ -78,10 +97,22 @@ export function QueueGroup({
   listaRef?: Ref<HTMLDivElement>;
   /** O título, que recebe o foco quando a última linha sai com ele (o `titulo` do useListaSemSaltos). */
   tituloRef?: Ref<HTMLHeadingElement>;
+  /**
+   * O grupo de uma fila sem saltos, no palco da tela (usePalcoSemSaltos;
+   * carregamento v2, momento 4): o título e o cartão sobem e descem por
+   * transform, e o cartão, em três pedaços como na prancha, encolhe e estica
+   * sem cortar a linha que sobe. Sem ele, o grupo de sempre (Receber).
+   */
+  semSaltos?: boolean;
 }) {
   return (
     <section className="flex flex-col gap-2.5">
-      <h2 ref={tituloRef} tabIndex={tituloRef ? -1 : undefined} className="flex items-baseline gap-2 px-1 focus:outline-none">
+      <h2
+        ref={tituloRef}
+        tabIndex={tituloRef ? -1 : undefined}
+        data-palco={semSaltos ? "bloco" : undefined}
+        className={cn("flex items-baseline gap-2 px-1 focus:outline-none", tituloRef && TITULO_FOCAVEL)}
+      >
         <span className="text-base font-semibold text-foreground in-[.v3]:text-lg in-[.v3]:font-bold">{title}</span>
         <span className="text-sm text-foreground/50">
           {rolarContagem ? (
@@ -95,15 +126,33 @@ export function QueueGroup({
           )}
         </span>
       </h2>
-      <div className="overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg">
-        {count > 0 ? (
-          <div ref={listaRef} className="divide-y divide-border/60">
-            {children}
-          </div>
-        ) : (
-          <p className="px-5 py-4 text-sm text-muted-foreground">{empty}</p>
-        )}
-      </div>
+      {semSaltos ? (
+        <div className="fila-cartao">
+          {/* A moldura em três pedaços, atrás das linhas: o meio primeiro, as tampas por cima dele. */}
+          <span aria-hidden="true" data-moldura="meio" data-palco="estica" className="border-x border-border" />
+          <span aria-hidden="true" data-moldura="topo" data-palco="bloco" className="rounded-t-2xl border border-b-0 border-border bg-card in-[.v3]:rounded-t-lg" />
+          <span aria-hidden="true" data-moldura="base" data-palco="bloco" className="rounded-b-2xl border border-t-0 border-border bg-card in-[.v3]:rounded-b-lg" />
+          {count > 0 ? (
+            <div ref={listaRef} className="divide-y divide-border/60 overflow-x-clip rounded-2xl in-[.v3]:rounded-lg">
+              {children}
+            </div>
+          ) : (
+            <p data-palco="bloco" className="px-5 py-4 text-sm text-muted-foreground">
+              {empty}
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg">
+          {count > 0 ? (
+            <div ref={listaRef} className="divide-y divide-border/60">
+              {children}
+            </div>
+          ) : (
+            <p className="px-5 py-4 text-sm text-muted-foreground">{empty}</p>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -116,18 +165,64 @@ const Congelada = memo(
   (_antes, depois) => depois.congelada,
 );
 
+/** Os controles da linha que a espera trava. */
+const CONTROLES = 'button, a[href], input, select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])';
+
+/** As teclas que acionam um botão ou abrem um menu. */
+const TECLAS_QUE_ACIONAM = new Set(["Enter", " ", "ArrowDown", "ArrowUp"]);
+
+/** O toque que chega à linha que espera não aciona nada: nem o clique, nem o link. */
+function semAcao(evento: SyntheticEvent) {
+  evento.preventDefault();
+  evento.stopPropagation();
+}
+
+/**
+ * O dedo continua contando para a regra da lista (o evento segue), mas o menu
+ * que abre no pointerdown não abre.
+ */
+function semAbrir(evento: PointerEvent) {
+  evento.preventDefault();
+}
+
+function semTeclaQueAciona(evento: KeyboardEvent) {
+  if (TECLAS_QUE_ACIONAM.has(evento.key)) evento.preventDefault();
+}
+
 /**
  * A linha de uma fila sem saltos (o useListaSemSaltos, carregamento v2,
  * momento 4): o elemento com a chave e o estado na lista. A linha que espera
  * o dedo ou que sai fica congelada: mostra o que mostrava quando deixou a
  * fila (o "Aprovado"), mesmo sem o dado.
+ *
+ * A que espera já saiu dos dados (outra pessoa decidiu): fica à vista e no
+ * mesmo lugar, mas não dispara ação. Os controles dela ficam aria-disabled,
+ * com a trava aqui, nunca disabled nem inert, que tirariam o foco de quem
+ * está nela.
  */
 export function LinhaDaFila({ lista, chave, children }: { lista: Pick<ListaSemSaltos, "linha">; chave: string; children: ReactNode }) {
   const atributos = lista.linha(chave);
   const naLista = atributos["data-na-lista"];
+  const esperando = naLista === "esperando";
+  const elemento = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!esperando || !elemento.current) return undefined;
+    // Só os que estavam livres: o que já estava travado (o "Aprovado") fica como estava.
+    const travados = Array.from(elemento.current.querySelectorAll<HTMLElement>(CONTROLES)).filter(
+      (controle) => controle.getAttribute("aria-disabled") !== "true" && !controle.hasAttribute("disabled"),
+    );
+    for (const controle of travados) controle.setAttribute("aria-disabled", "true");
+    return () => {
+      for (const controle of travados) if (controle.getAttribute("aria-disabled") === "true") controle.removeAttribute("aria-disabled");
+    };
+  }, [esperando]);
   return (
-    <div {...atributos}>
-      <Congelada congelada={naLista === "esperando" || naLista === "saindo"}>{children}</Congelada>
+    <div
+      ref={elemento}
+      {...atributos}
+      {...(esperando ? { onClickCapture: semAcao, onPointerDownCapture: semAbrir, onKeyDownCapture: semTeclaQueAciona } : {})}
+    >
+      <Congelada congelada={esperando || naLista === "saindo"}>{children}</Congelada>
     </div>
   );
 }

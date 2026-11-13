@@ -23,6 +23,8 @@ describe("o relógio da espera", () => {
       dedoMaxMs: 3_000,
       saiLinhaMs: 200,
       refluiMs: 240,
+      chegaLinhaMs: 240,
+      chegaEsperaMs: 180,
       destaqueMs: 1_000,
       contaMs: 160,
     });

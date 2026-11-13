@@ -126,6 +126,12 @@ describe("os keyframes do carregamento", () => {
     expect(foraDoCompositor(CSS)).toEqual([]);
   });
 
+  it("o realce verde só na linha que chegou por uma ação nesta tela (data-realce), nunca na releitura", () => {
+    const comRealce = regras(CSS).filter((regra) => declaracoes(regra.corpo).some(([nome, valor]) => nome === "animation" && /\bcarregando-realce\b/.test(valor)));
+    expect(comRealce.length).toBeGreaterThan(0);
+    for (const regra of comRealce) for (const seletor of seletores(regra)) expect(seletor).toContain("[data-realce]");
+  });
+
   it("o respiro do movimento reduzido desce só até o piso de contraste", () => {
     const respira = regras(CSS).filter((regra) => regra.contexto.some((fora) => /keyframes\s+carregando-respira$/.test(fora)));
     expect(respira.map((regra) => [regra.seletor, declaracoes(regra.corpo)])).toEqual([
@@ -157,6 +163,8 @@ const MOVIMENTO: Record<string, string> = {
   "--carregando-t-sai-linha": "200ms",
   "--carregando-sai-linha-y": "-6px",
   "--carregando-t-reflui": "240ms",
+  "--carregando-t-chega-linha": "240ms",
+  "--carregando-t-chega-espera": "180ms",
   "--carregando-t-destaque": "1000ms",
   "--carregando-t-conta": "160ms",
   "--carregando-conta-y": "8px",
@@ -194,6 +202,10 @@ describe("os tokens do carregamento", () => {
     expect(raiz.get("--carregando-t-dedo")).toBe(`${CARREGANDO.dedoMs}ms`);
     expect(raiz.get("--carregando-t-sai-linha")).toBe(`${CARREGANDO.saiLinhaMs}ms`);
     expect(raiz.get("--carregando-t-reflui")).toBe(`${CARREGANDO.refluiMs}ms`);
+    expect(raiz.get("--carregando-t-chega-linha")).toBe(`${CARREGANDO.chegaLinhaMs}ms`);
+    expect(raiz.get("--carregando-t-chega-espera")).toBe(`${CARREGANDO.chegaEsperaMs}ms`);
+    // A que chega começa 60 ms antes do fim do refluxo, quando o cartão já chegou (a prancha).
+    expect(CARREGANDO.refluiMs - CARREGANDO.chegaEsperaMs).toBe(60);
     expect(raiz.get("--carregando-t-destaque")).toBe(`${CARREGANDO.destaqueMs}ms`);
     expect(raiz.get("--carregando-t-conta")).toBe(`${CARREGANDO.contaMs}ms`);
   });
@@ -258,9 +270,12 @@ describe("os tokens do carregamento", () => {
       "--carregando-t-sucesso": "0ms",
       "--carregando-sai-linha-y": "0px",
       "--carregando-t-reflui": "0ms",
+      "--carregando-t-chega-espera": "0ms",
       "--carregando-t-conta": "0ms",
       "--carregando-mola": "var(--ease-carregando-entrada)",
     });
+    // A linha nova não desliza, mas esmaece em 240 ms: a entrada fica, só por opacidade (a subida é 0).
+    expect(variaveis(":root", ["@media (prefers-reduced-motion: reduce)"]).has("--carregando-t-chega-linha")).toBe(false);
   });
 });
 

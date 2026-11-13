@@ -1,9 +1,10 @@
+import { JSDOM } from "jsdom";
 import { Package } from "lucide-react";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
 import { PageHeader } from "./page-header";
@@ -94,5 +95,93 @@ describe("a fila e o cabeçalho na v3", () => {
     expect(comApoio).not.toContain("há 25 min");
     expect(linha()).toMatch(/<p class="mt-0\.5 text-sm text-foreground\/60">Retirada · BTG Pactual · 12 un\.<span class="text-foreground\/45"> · há 25 min<\/span><\/p>/);
     expect(await violacoesDeAcessibilidade(comApoio)).toEqual([]);
+  });
+});
+
+/**
+ * O grupo da fila sem saltos (carregamento v2, momento 4, parte 6c): o título
+ * e o cartão sobem com o palco, e o cartão, em três pedaços como na prancha,
+ * encolhe e estica só por transform. Receber usa o grupo de sempre, que não
+ * muda.
+ */
+describe("o grupo sem saltos e o de sempre", () => {
+  it("sem semSaltos, o grupo é o de antes, byte a byte (Receber, Retornos da Operação)", () => {
+    const comLinha = renderToStaticMarkup(
+      <QueueGroup title="Para conferir" count={1} empty="Nenhuma chegada para conferir.">
+        <p>linha</p>
+      </QueueGroup>,
+    );
+    expect(comLinha).toBe(
+      '<section class="flex flex-col gap-2.5"><h2 class="flex items-baseline gap-2 px-1 focus:outline-none">' +
+        '<span class="text-base font-semibold text-foreground in-[.v3]:text-lg in-[.v3]:font-bold">Para conferir</span>' +
+        '<span class="text-sm text-foreground/50">1</span></h2>' +
+        '<div class="overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg"><div class="divide-y divide-border/60"><p>linha</p></div></div></section>',
+    );
+    const vazio = renderToStaticMarkup(
+      <QueueGroup title="Para guardar" count={0} empty="Nada para guardar.">
+        {null}
+      </QueueGroup>,
+    );
+    expect(vazio).toBe(
+      '<section class="flex flex-col gap-2.5"><h2 class="flex items-baseline gap-2 px-1 focus:outline-none">' +
+        '<span class="text-base font-semibold text-foreground in-[.v3]:text-lg in-[.v3]:font-bold">Para guardar</span>' +
+        '<span class="text-sm text-foreground/50"></span></h2>' +
+        '<div class="overflow-hidden rounded-2xl border border-border bg-card in-[.v3]:rounded-lg"><p class="px-5 py-4 text-sm text-muted-foreground">Nada para guardar.</p></div></section>',
+    );
+  });
+
+  it("com semSaltos, o cartão em três pedaços atrás das linhas, fora da árvore, sem recortar a altura; o título e o vazio andam com o palco", async () => {
+    const grupo = (count: number) =>
+      renderToStaticMarkup(
+        <div className="v3">
+          <QueueGroup title="Para separar" count={count} empty="Nenhum pedido para separar." semSaltos rolarContagem>
+            <div data-chave="ord_1" data-na-lista="parada">
+              <QueueRow icon={Package} tone="pick" title="PED-0001" meta="2 itens · 14 un." actions={<Button type="button">Separar</Button>} />
+            </div>
+          </QueueGroup>
+        </div>,
+      );
+    const html = grupo(1);
+    const doc = new JSDOM(html).window.document;
+    const titulo = doc.querySelector("h2")!;
+    expect(titulo.getAttribute("data-palco")).toBe("bloco");
+    const cartao = titulo.nextElementSibling!;
+    expect(cartao.className).toBe("fila-cartao");
+    // A moldura: o meio estica, as tampas andam; nenhuma vai para o leitor de tela.
+    const pecas = Array.from(cartao.querySelectorAll(":scope > [data-moldura]"));
+    expect(pecas.map((peca) => [peca.getAttribute("data-moldura"), peca.getAttribute("data-palco"), peca.getAttribute("aria-hidden")])).toEqual([
+      ["meio", "estica", "true"],
+      ["topo", "bloco", "true"],
+      ["base", "bloco", "true"],
+    ]);
+    // Os cantos são os do cartão de sempre.
+    expect(pecas[1].className).toContain("rounded-t-2xl");
+    expect(pecas[1].className).toContain("in-[.v3]:rounded-t-lg");
+    expect(pecas[2].className).toContain("rounded-b-2xl");
+    expect(pecas[2].className).toContain("in-[.v3]:rounded-b-lg");
+    // O cartão não recorta a altura (a linha que sobe fica inteira); a lista recorta só a largura.
+    expect(cartao.className).not.toContain("overflow-hidden");
+    const lista = cartao.querySelector(":scope > div")!;
+    expect(lista.className).toContain("overflow-x-clip");
+    expect(lista.className).not.toMatch(/\boverflow-hidden\b/);
+    const vazio = new JSDOM(grupo(0)).window.document.querySelector(".fila-cartao > p")!;
+    expect(vazio.getAttribute("data-palco")).toBe("bloco");
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("o título que recebe o foco tem o anel do sistema visual no foco visível, o mesmo do botão", () => {
+    const html = renderToStaticMarkup(
+      <QueueGroup title="Para aprovar" count={0} empty="Nenhum pedido para aprovar." tituloRef={() => undefined}>
+        {null}
+      </QueueGroup>,
+    );
+    const titulo = new JSDOM(html).window.document.querySelector("h2")!;
+    expect(titulo.getAttribute("tabindex")).toBe("-1");
+    const classes = titulo.className.split(/\s+/);
+    const anel = buttonVariants()
+      .split(/\s+/)
+      .filter((classe) => classe.startsWith("focus-visible:"));
+    expect(anel).toEqual(expect.arrayContaining(["focus-visible:ring-2", "focus-visible:ring-ring/40"]));
+    for (const classe of anel) expect(classes, classe).toContain(classe);
   });
 });

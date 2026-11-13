@@ -35,6 +35,14 @@ export const CARREGANDO = {
   saiLinhaMs: 200,
   /** As linhas de baixo sobem por FLIP (só transform) nesse tempo. */
   refluiMs: 240,
+  /** A linha que chega a um grupo entra nesse tempo: opacidade e 4 px; no reduzido, só opacidade. */
+  chegaLinhaMs: 240,
+  /**
+   * A que chega espera o cartão chegar antes de entrar: começa 60 ms antes do
+   * fim do refluxo, e nunca aparece fora do cartão que ainda anda. No
+   * reduzido, que não desliza, entra na hora.
+   */
+  chegaEsperaMs: 180,
   /** O realce da linha que chegou ao grupo (a aprovada em "Para separar"). */
   destaqueMs: 1_000,
   /** A contagem que muda (3 → 2) rola 8 px nesse tempo. */

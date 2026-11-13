@@ -1,12 +1,14 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type RefCallback } from "react";
 import { flushSync } from "react-dom";
 
+import { criarPalco, type PalcoSemSaltos } from "./palco-sem-saltos";
 import { CARREGANDO } from "./tempo";
 
 /**
- * Onde a linha está na lista: `parada`; `chegando`, no realce de 1 s depois de
- * entrar; `esperando`, já fora das chaves, mas na tela enquanto alguém toca a
- * lista; `saindo`, esmaecendo nos 200 ms antes de deixar a lista.
+ * Onde a linha está na lista: `parada`; `chegando`, entrando (e, se veio de
+ * uma ação nesta tela, no realce de 1 s); `esperando`, já fora das chaves, mas
+ * na tela enquanto alguém toca a lista; `saindo`, esmaecendo nos 200 ms antes
+ * de deixar a lista.
  */
 export type EstadoNaLista = "parada" | "chegando" | "esperando" | "saindo";
 
@@ -14,6 +16,8 @@ export type EstadoNaLista = "parada" | "chegando" | "esperando" | "saindo";
 export interface AtributosDaLinha {
   "data-chave": string;
   "data-na-lista": EstadoNaLista;
+  /** O realce de 1 s: só na linha que chegou por uma ação feita nesta tela. */
+  "data-realce"?: "";
   /** A linha que sai não recebe foco nem toque, e sai da árvore de acessibilidade. */
   inert?: boolean;
 }
@@ -25,6 +29,18 @@ export interface OpcoesDaLista {
    * chega e sai sem salto. Pronta por padrão.
    */
   pronta?: boolean;
+  /**
+   * O palco da tela (usePalcoSemSaltos): com ele, o refluxo leva junto o
+   * cartão, os títulos e os grupos de baixo, e a saída de uma fila e a
+   * chegada na outra refluem de uma vez. Sem ele, só as linhas desta lista.
+   */
+  palco?: PalcoSemSaltos;
+  /**
+   * Se a linha que chega ganha o realce de 1 s: só a que veio de uma ação
+   * feita nesta tela (o pedido que esta pessoa aprovou). A releitura e o
+   * tempo real não dão sinal (momento 7). Sem a função, nenhuma tem realce.
+   */
+  realcar?: (chave: string) => boolean;
 }
 
 export interface ListaSemSaltos {
@@ -37,6 +53,13 @@ export interface ListaSemSaltos {
   estado(chave: string): EstadoNaLista;
   /** Os atributos do elemento da linha. */
   linha(chave: string): AtributosDaLinha;
+  /**
+   * Onde o foco fica quando a linha `chave` sai ou já saiu: a ação da linha
+   * seguinte que fica ou, sem ela, o título. Nulo se a linha continua na
+   * lista (ou nunca esteve nela). Para quem devolve o foco depois (o diálogo
+   * que fecha e voltaria ao botão da linha que já saiu).
+   */
+  focoDaSaida(chave: string): HTMLElement | null;
 }
 
 interface Estado {
@@ -44,9 +67,14 @@ interface Estado {
   exibidas: readonly string[];
   saindo: ReadonlySet<string>;
   chegando: ReadonlySet<string>;
+  /** As que chegaram por uma ação nesta tela, com o realce. */
+  realcadas: ReadonlySet<string>;
 }
 
 const VAZIO: ReadonlySet<string> = new Set();
+
+/** Quantas saídas a lista lembra, para devolver o foco de quem fecha depois. */
+const SAIDAS_LEMBRADAS = 20;
 
 /** O alvo do foco numa linha: a ação marcada com `data-foco-da-linha` ou, sem ela, o primeiro controle. */
 const FOCAVEIS = 'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -83,18 +111,16 @@ function linhaDa(lista: HTMLElement, chave: string): HTMLElement | undefined {
   return linhasDa(lista).find((linha) => linha.dataset.chave === chave);
 }
 
-function movimentoReduzido(): boolean {
-  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 /**
  * A lista sem saltos do carregamento v2 (aprovado em 12/11/2026, seção 9 e
  * momento 4), no lugar da linha que some de uma vez:
  *
  * - A linha que sai das `chaves` fica na tela e esmaece em 200 ms (opacidade
  *   e −6 px, `data-na-lista="saindo"`, inert); depois deixa a lista, e as de
- *   baixo sobem por FLIP, só com `transform` (240 ms, `data-reflui`).
- * - A que chega fica `chegando` por 1 s: entra em 240 ms e tem o realce.
+ *   baixo sobem por FLIP, só com `transform` (240 ms, `data-reflui`). Com o
+ *   `palco` da tela, sobem junto o cartão, os títulos e os grupos de baixo.
+ * - A que chega fica `chegando`: entra em 240 ms, depois que o cartão chegou,
+ *   e só a que veio de uma ação nesta tela (`realcar`) tem o realce de 1 s.
  * - Nada sai nem entra se alguém tocou na lista nos últimos 700 ms; a espera
  *   vai até 3 s.
  * - Se o foco estava na linha que sai, ele vai para a ação da linha seguinte
@@ -109,7 +135,13 @@ function movimentoReduzido(): boolean {
  */
 export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLista = {}): ListaSemSaltos {
   const pronta = opcoes.pronta ?? true;
-  const [estado, setEstado] = useState<Estado>(() => ({ exibidas: [...chaves], saindo: VAZIO, chegando: VAZIO }));
+  const [estado, setEstado] = useState<Estado>(() => ({ exibidas: [...chaves], saindo: VAZIO, chegando: VAZIO, realcadas: VAZIO }));
+  // Sem o palco da tela, a lista é o próprio palco: refluem só as linhas dela.
+  const [proprio] = useState(criarPalco);
+  const palco = useRef<PalcoSemSaltos>(opcoes.palco ?? proprio);
+  const realcar = useRef(opcoes.realcar);
+  /** A lista mudou de lugar (chegou ou reordenou): o refluxo vem quando o desenho novo estiver no DOM. */
+  const refluirDepois = useRef(false);
 
   const alvo = useRef(chaves);
   const atual = useRef(estado);
@@ -127,8 +159,6 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
   const saiuEm = useRef(new Map<string, number>());
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   const espera = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** Cada refluxo marca as linhas com a sua vez: o fim de um não tira a transição do seguinte. */
-  const refluxos = useRef(0);
 
   const agendar = useCallback((fazer: () => void, ms: number) => {
     const timer = setTimeout(() => {
@@ -148,53 +178,29 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
     return instante >= livre || instante >= limite ? null : Math.min(livre, limite);
   }, []);
 
-  /** O foco que estava numa linha que sai vai para a ação da linha seguinte, ou para o título. */
-  const tirarFoco = useCallback((saem: readonly string[], exibidas: readonly string[], ficam: ReadonlySet<string>) => {
-    const elemento = lista.current;
-    const ativo = typeof document === "undefined" ? null : document.activeElement;
-    if (!elemento || !ativo) return;
-    for (const chave of saem) {
-      if (!linhaDa(elemento, chave)?.contains(ativo)) continue;
-      const seguinte = exibidas.slice(exibidas.indexOf(chave) + 1).find((outra) => ficam.has(outra));
-      const linha = seguinte ? linhaDa(elemento, seguinte) : undefined;
-      const destino = linha?.querySelector<HTMLElement>("[data-foco-da-linha]") ?? linha?.querySelector<HTMLElement>(FOCAVEIS) ?? titulo.current;
-      destino?.focus();
-      return;
-    }
+  /** A linha seguinte que fica, de cada linha que começou a sair (a mais nova no fim). */
+  const saidas = useRef(new Map<string, string | null>());
+
+  /** O foco de quem sai: a ação da linha `seguinte` ou, sem ela, o título do grupo. */
+  const destinoDoFoco = useCallback((seguinte: string | null | undefined): HTMLElement | null => {
+    const linha = seguinte && lista.current ? linhaDa(lista.current, seguinte) : undefined;
+    return linha?.querySelector<HTMLElement>("[data-foco-da-linha]") ?? linha?.querySelector<HTMLElement>(FOCAVEIS) ?? titulo.current;
   }, []);
 
-  /** As de baixo sobem por FLIP: partem de onde estavam (`antes`) e vão ao lugar novo só por transform. */
-  const refluir = useCallback(
-    (elemento: HTMLElement, antes: ReadonlyMap<string, number>) => {
-      const linhas = linhasDa(elemento).filter((linha) => linha.dataset.naLista !== "saindo");
-      for (const linha of linhas) {
-        linha.removeAttribute("data-reflui");
-        linha.style.transform = "";
+  /** O foco que estava numa linha que sai vai para a ação da linha seguinte, ou para o título. */
+  const tirarFoco = useCallback(
+    (saem: readonly string[], exibidas: readonly string[], ficam: ReadonlySet<string>) => {
+      const elemento = lista.current;
+      const ativo = typeof document === "undefined" ? null : document.activeElement;
+      for (const chave of saem) {
+        const seguinte = exibidas.slice(exibidas.indexOf(chave) + 1).find((outra) => ficam.has(outra)) ?? null;
+        saidas.current.delete(chave);
+        saidas.current.set(chave, seguinte);
+        if (saidas.current.size > SAIDAS_LEMBRADAS) saidas.current.delete(saidas.current.keys().next().value!);
+        if (elemento && ativo && linhaDa(elemento, chave)?.contains(ativo)) destinoDoFoco(seguinte)?.focus();
       }
-      const deltas = linhas.map((linha) => {
-        const de = antes.get(linha.dataset.chave ?? "");
-        return de === undefined ? 0 : de - linha.getBoundingClientRect().top;
-      });
-      const movidas = linhas.filter((linha, indice) => {
-        if (Math.abs(deltas[indice]) < 0.5) return false;
-        linha.style.transform = `translateY(${deltas[indice]}px)`;
-        return true;
-      });
-      if (!movidas.length) return;
-      // O navegador assenta o ponto de partida antes da transição.
-      void elemento.getBoundingClientRect();
-      refluxos.current += 1;
-      const vez = String(refluxos.current);
-      for (const linha of movidas) {
-        linha.setAttribute("data-reflui", vez);
-        linha.style.transform = "";
-      }
-      // Só a marca desta vez sai: a linha que um refluxo seguinte levou continua a transição dele.
-      agendar(() => {
-        for (const linha of movidas) if (linha.getAttribute("data-reflui") === vez) linha.removeAttribute("data-reflui");
-      }, CARREGANDO.refluiMs);
     },
-    [agendar],
+    [destinoDoFoco],
   );
 
   /** A linha que esmaeceu deixa a lista; as de baixo sobem por FLIP. */
@@ -215,25 +221,29 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
       agendar(soltar, ate - instante);
       return;
     }
-    const elemento = lista.current;
-    const antes = elemento && !movimentoReduzido() ? new Map(linhasDa(elemento).map((linha) => [linha.dataset.chave ?? "", linha.getBoundingClientRect().top])) : null;
     const saem = new Set(prontas);
     for (const chave of prontas) {
       saiuEm.current.delete(chave);
       removidaEm.current.delete(chave);
     }
+    // A foto antes, o refluxo depois: o que mudou em cascata (a linha que entra na fila seguinte) vai junto.
+    palco.current.antes();
     flushSync(() =>
       setEstado((anterior) => ({
+        ...anterior,
         exibidas: anterior.exibidas.filter((chave) => !saem.has(chave)),
         saindo: semAs(anterior.saindo, saem),
-        chegando: anterior.chegando,
       })),
     );
-    if (antes && lista.current) refluir(lista.current, antes);
-  }, [agendar, presaAte, refluir]);
+    palco.current.depois();
+  }, [agendar, presaAte]);
 
-  /** Leva a tela às chaves: o que saiu esmaece, o que chegou entra; sob o dedo, espera. */
-  const reconciliar = useCallback(() => {
+  /**
+   * Leva a tela às chaves: o que saiu esmaece, o que chegou entra; sob o dedo,
+   * espera. Do relógio (`doRelogio`), o desenho novo entra na hora, para o
+   * refluxo partir da foto que acabou de ser tirada.
+   */
+  const reconciliar = useCallback((doRelogio = false) => {
     if (!montada.current) return;
     const desejadas = alvo.current;
     const tela = atual.current;
@@ -244,7 +254,7 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
       removidaEm.current.clear();
       saiuEm.current.clear();
       if (!iguais(tela.exibidas, desejadas) || tela.saindo.size || tela.chegando.size) {
-        setEstado({ exibidas: [...desejadas], saindo: VAZIO, chegando: VAZIO });
+        setEstado({ exibidas: [...desejadas], saindo: VAZIO, chegando: VAZIO, realcadas: VAZIO });
       }
       return;
     }
@@ -271,7 +281,7 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
       if (espera.current === null) {
         espera.current = agendar(() => {
           espera.current = null;
-          reconciliar();
+          reconciliar(true);
         }, ate - instante);
       }
       return;
@@ -284,14 +294,28 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
       removidaEm.current.delete(chave);
     }
     for (const chave of removidas) saiuEm.current.set(chave, instante);
-    setEstado({
+    const comRealce = novas.filter((chave) => realcar.current?.(chave) === true);
+    const proximo: Estado = {
       exibidas: juntar(desejadas, tela.exibidas, saindo),
       saindo: saindo.size ? saindo : VAZIO,
       chegando: semAs(new Set([...tela.chegando, ...novas]), saindo),
-    });
+      realcadas: semAs(new Set([...tela.realcadas, ...comRealce]), saindo),
+    };
+    // A que chega (ou a ordem nova) muda o lugar das outras: elas refluem quando o desenho novo estiver no DOM.
+    const mudaDeLugar = novas.length > 0 || reordenou;
+    if (mudaDeLugar) {
+      palco.current.antes();
+      refluirDepois.current = true;
+    }
+    if (doRelogio) flushSync(() => setEstado(proximo));
+    else setEstado(proximo);
     if (removidas.length) agendar(soltar, CARREGANDO.saiLinhaMs);
     if (novas.length) {
-      agendar(() => setEstado((anterior) => ({ ...anterior, chegando: semAs(anterior.chegando, novas) })), CARREGANDO.destaqueMs);
+      // A que chega fica chegando enquanto entra (depois do cartão) e o realce corre.
+      agendar(
+        () => setEstado((anterior) => ({ ...anterior, chegando: semAs(anterior.chegando, novas), realcadas: semAs(anterior.realcadas, novas) })),
+        CARREGANDO.chegaEsperaMs + CARREGANDO.destaqueMs,
+      );
     }
   }, [agendar, presaAte, soltar, tirarFoco]);
 
@@ -304,16 +328,25 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
       for (const timer of pendentes) clearTimeout(timer);
       pendentes.clear();
       espera.current = null;
+      proprio.encerrar();
     };
-  }, []);
+  }, [proprio]);
 
   const assinatura = chaves.join("\u0000");
   useLayoutEffect(() => {
     alvo.current = chaves;
     atual.current = estado;
     estaPronta.current = pronta;
+    realcar.current = opcoes.realcar;
+    palco.current = opcoes.palco ?? proprio;
+    // O desenho da linha que chegou já está no DOM: o palco reflui da foto tirada antes dele.
+    if (refluirDepois.current) {
+      refluirDepois.current = false;
+      palco.current.depois();
+    }
     reconciliar();
-    // As chaves entram pela assinatura: a mesma lista em outro array não muda nada.
+    // As chaves entram pela assinatura: a mesma lista em outro array não muda nada. O realce e o palco
+    // são lidos quando a lista muda.
   }, [assinatura, estado, pronta, reconciliar]);
 
   const [tocou] = useState(() => () => {
@@ -325,9 +358,10 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
       if (lista.current === no) return;
       lista.current?.removeEventListener("pointerdown", tocou, true);
       lista.current = no;
+      proprio.ref(no);
       no?.addEventListener("pointerdown", tocou, true);
     },
-    [tocou],
+    [proprio, tocou],
   );
 
   const tituloRef = useCallback<RefCallback<HTMLElement>>((no) => {
@@ -346,11 +380,30 @@ export function useListaSemSaltos(chaves: readonly string[], opcoes: OpcoesDaLis
       titulo: tituloRef,
       chaves: estado.exibidas,
       estado: estadoDe,
+      focoDaSaida: (chave) => {
+        // Lido na hora: a lista pode ter andado depois deste desenho.
+        const naTela = new Set(atual.current.exibidas);
+        const ficam = new Set(alvo.current);
+        if (!saidas.current.has(chave) || (ficam.has(chave) && naTela.has(chave))) return null;
+        // A seguinte que ainda fica; se ela também saiu, a seguinte dela.
+        let seguinte = saidas.current.get(chave) ?? null;
+        const vistas = new Set<string>();
+        while (seguinte && !(ficam.has(seguinte) && naTela.has(seguinte)) && !vistas.has(seguinte)) {
+          vistas.add(seguinte);
+          seguinte = saidas.current.get(seguinte) ?? null;
+        }
+        return destinoDoFoco(seguinte && ficam.has(seguinte) ? seguinte : null);
+      },
       linha: (chave) => {
         const naLista = estadoDe(chave);
-        return { "data-chave": chave, "data-na-lista": naLista, ...(naLista === "saindo" ? { inert: true } : {}) };
+        return {
+          "data-chave": chave,
+          "data-na-lista": naLista,
+          ...(naLista === "chegando" && estado.realcadas.has(chave) ? { "data-realce": "" as const } : {}),
+          ...(naLista === "saindo" ? { inert: true } : {}),
+        };
       },
     };
     // A assinatura diz quando as chaves mudaram.
-  }, [assinatura, estado, ref, tituloRef]);
+  }, [assinatura, estado, ref, tituloRef, destinoDoFoco]);
 }

@@ -786,7 +786,11 @@
   --carregando-t-sai-linha: 200ms;
   --carregando-sai-linha-y: -6px;
   --carregando-t-reflui: 240ms;
-  --carregando-t-destaque: 1000ms; /* o realce da linha que chegou ao grupo seguinte */
+  /* A linha que chega entra em 240 ms (no reduzido, só por opacidade) depois
+     que o cartão chegou: 60 ms antes do fim do refluxo, nunca fora dele. */
+  --carregando-t-chega-linha: 240ms;
+  --carregando-t-chega-espera: 180ms;
+  --carregando-t-destaque: 1000ms; /* o realce da linha que chegou ao grupo seguinte por uma ação nesta tela */
   --carregando-t-conta: 160ms; /* a contagem que muda rola 8 px */
   --carregando-conta-y: 8px;
   --carregando-t-listras: 600ms; /* as listras a 45° andam 16 px para trás, linear */
@@ -966,6 +970,7 @@
     --carregando-t-barra-completa: 0ms; /* a barra completa de uma vez */
     --carregando-sai-linha-y: 0px; /* a linha que sai some só por opacidade */
     --carregando-t-reflui: 0ms; /* as linhas de baixo pulam para o lugar */
+    --carregando-t-chega-espera: 0ms; /* nada anda até a linha nova: ela esmaece desde o começo */
     --carregando-t-conta: 0ms; /* a contagem troca sem rolar */
     --carregando-mola: var(--ease-carregando-entrada); /* sem mola */
   }
@@ -1536,15 +1541,18 @@
   }
 }
 
-/* A lista sem saltos (lib/carregando/use-lista-sem-saltos.ts; momento 4): a
-   linha que sai esmaece em 200 ms, com 6 px para cima, e fica sem toque; as
-   de baixo sobem por FLIP (o hook põe o transform de partida e o
-   data-reflui) em 240 ms. A que chega entra em 240 ms, com a subida de 4 px,
-   e o realce verde suave fica 1 s, apagando no fim. A contagem que muda (3 →
-   2) rola 8 px em 160 ms: o número velho sobe e sai, o novo sobe e entra
+/* A lista sem saltos (lib/carregando/use-lista-sem-saltos.ts e
+   palco-sem-saltos.ts; momento 4): a linha que sai esmaece em 200 ms, com 6
+   px para cima, e fica sem toque; as de baixo, o cartão, os títulos e os
+   grupos seguintes sobem por FLIP (o palco põe o transform de partida e o
+   data-reflui) em 240 ms. A que chega espera o cartão chegar e entra em 240
+   ms, com a subida de 4 px; só a que veio de uma ação nesta tela tem o realce
+   verde suave (data-realce), que fica 1 s e apaga no fim. A contagem que muda
+   (3 → 2) rola 8 px em 160 ms: o número velho sobe e sai, o novo sobe e entra
    (components/ui/queue-list.tsx). No reduzido, só opacidade: a linha some
-   sem deslocamento, as de baixo pulam para o lugar (o hook não faz FLIP), o
-   realce entra e sai por opacidade e a contagem troca. */
+   sem deslocamento, o resto pula para o lugar (o palco não faz FLIP), a que
+   chega esmaece desde o começo, o realce entra e sai por opacidade e a
+   contagem troca. */
 @keyframes carregando-sai-linha {
   to {
     opacity: 0;
@@ -1592,22 +1600,77 @@
   [data-na-lista="chegando"] {
     position: relative;
     isolation: isolate;
-    /* backwards: depois de entrar, o transform volta a ser da linha (o FLIP). */
-    animation: carregando-chega-linha var(--carregando-t-reflui) var(--ease-carregando-entrada) backwards;
+    /* backwards: invisível enquanto o cartão chega; depois de entrar, o transform volta a ser da linha (o FLIP). */
+    animation: carregando-chega-linha var(--carregando-t-chega-linha) var(--ease-carregando-entrada) var(--carregando-t-chega-espera) backwards;
   }
 
-  [data-na-lista="chegando"]::before {
+  [data-na-lista="chegando"][data-realce]::before {
     content: "";
     position: absolute;
     inset: 0;
     z-index: -1;
     pointer-events: none;
     background-color: hsl(var(--success-soft));
-    animation: carregando-realce var(--carregando-t-destaque) var(--ease-carregando-padrao) both;
+    animation: carregando-realce var(--carregando-t-destaque) var(--ease-carregando-padrao) var(--carregando-t-chega-espera) both;
   }
 
-  [data-na-lista][data-reflui] {
+  /* As peças do palco que refluem: as linhas, os títulos e os pedaços do cartão. */
+  [data-reflui] {
     transition: transform var(--carregando-t-reflui) var(--ease-carregando-padrao);
+  }
+
+  /* O cartão de uma fila sem saltos (QueueGroup com semSaltos), como na
+     prancha aprovada: três pedaços atrás das linhas, para o palco encolher e
+     esticar o cartão só por transform. O topo e a base, com os cantos (os
+     raios vêm das classes do cartão), andam; o meio anda e estica por scaleY
+     a partir do alto, 1 px por baixo de cada tampa. O cartão não recorta as
+     linhas na altura: a que sobe de onde estava fica inteira, dentro da
+     moldura que anda junto. A primeira e a última linha recortam o próprio
+     fundo nos cantos (o raio da lista), e a lista recorta só na largura. */
+  .fila-cartao {
+    --fila-tampa: 1rem;
+    position: relative;
+    isolation: isolate;
+  }
+
+  .fila-cartao > [data-moldura] {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .fila-cartao > [data-moldura="topo"] {
+    top: 0;
+    block-size: var(--fila-tampa);
+  }
+
+  /* O fundo do meio é o do cartão, pintado como imagem: com a cor de fundo,
+     o Chromium trata o pedaço esticado como camada opaca e deixa um fio
+     escuro de 1 px na borda durante o scaleY. */
+  .fila-cartao > [data-moldura="meio"] {
+    top: calc(var(--fila-tampa) - 1px);
+    bottom: calc(var(--fila-tampa) - 1px);
+    transform-origin: 50% 0;
+    background-image: linear-gradient(hsl(var(--card)), hsl(var(--card)));
+  }
+
+  .fila-cartao > [data-moldura="base"] {
+    bottom: 0;
+    block-size: var(--fila-tampa);
+  }
+
+  .fila-cartao [data-chave]:first-child {
+    border-top-left-radius: inherit;
+    border-top-right-radius: inherit;
+    overflow: clip;
+  }
+
+  .fila-cartao [data-chave]:last-child {
+    border-bottom-left-radius: inherit;
+    border-bottom-right-radius: inherit;
+    overflow: clip;
   }
 
   .carregando-conta {
