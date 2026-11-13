@@ -54,3 +54,12 @@ export function faseDaEspera(decorridoMs: number, desisteMs: number = CARREGANDO
 export function podeEsconder(apareceuEm: number | null, agora: number): boolean {
   return apareceuEm === null || agora - apareceuEm >= CARREGANDO.minimoMs;
 }
+
+/**
+ * O relógio da demora, só visual ("Demorando mais que o normal · 0:12"): os
+ * minutos e os segundos desde o começo da espera. Nunca fica em região viva.
+ */
+export function relogioDaEspera(decorridoMs: number): string {
+  const segundos = Number.isFinite(decorridoMs) ? Math.max(0, Math.floor(decorridoMs / 1_000)) : 0;
+  return `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")}`;
+}

@@ -66,9 +66,16 @@ function requestTime(value: unknown) {
 export function buildOrderQueue<R extends QueueRequest>({
   requests,
   ops,
+  segurar,
 }: {
   requests?: R[];
   ops?: WarehouseOpsResponse;
+  /**
+   * A solicitação já decidida que a tela ainda segura em "Para aprovar":
+   * a da linha com a ação ocupada (o "Aprovado" do botão fica 1 s e até a
+   * releitura chegar, carregamento v2). Quem a solta é a ação da linha.
+   */
+  segurar?: (id: string) => boolean;
 }): OrderQueue<R> {
   const orders = groupWarehouseOrders(ops);
   // Exceções primeiro: são as que travam o armazém.
@@ -78,7 +85,7 @@ export function buildOrderQueue<R extends QueueRequest>({
 
   return {
     approve: (requests ?? [])
-      .filter((request) => isAwaitingDecision(request.status))
+      .filter((request) => isAwaitingDecision(request.status) || segurar?.(request.id) === true)
       .sort(
         (left, right) =>
           priorityWeight(left.priority) - priorityWeight(right.priority) ||

@@ -45,6 +45,19 @@ const EXCLAMACAO = "M12 7.6v4.9M12 16.2v.2";
 
 const CAMADAS: readonly EstadoDaAcao[] = ["repouso", "andamento", "sucesso", "erro", "sem-resposta"];
 
+/**
+ * A caixa chanfrada com o "!": o ícone do erro no botão e no selo da linha
+ * ("Não aprovado", carregamento v2, momento 4). Decorativa.
+ */
+export function CaixaDeAlerta({ className }: { className?: string }) {
+  return (
+    <svg className={cn("botao-acao-caixa", className)} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path data-parte="contorno" d={CAIXA} />
+      <path data-parte="marca" d={EXCLAMACAO} />
+    </svg>
+  );
+}
+
 type Variante = NonNullable<ButtonProps["variant"]>;
 
 /** O fundo do toque de cada variante do Button: o #AD0015 no primário da v3. */
@@ -252,10 +265,7 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
     erro: (
       <>
         <span data-icone="" className={lugarDoIcone}>
-          <svg className="botao-acao-caixa" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path data-parte="contorno" d={CAIXA} />
-            <path data-parte="marca" d={EXCLAMACAO} />
-          </svg>
+          <CaixaDeAlerta />
         </span>
         {erro ?? rotulo}
       </>

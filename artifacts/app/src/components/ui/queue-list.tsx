@@ -58,6 +58,7 @@ export function QueueRow({
   title,
   badge,
   meta,
+  apoio,
   age,
   note,
   detail,
@@ -76,6 +77,12 @@ export function QueueRow({
   /** Um selo ao lado do título ("sem prateleira", "0 de 2 caixas guardadas"). */
   badge?: ReactNode;
   meta: string;
+  /**
+   * O estado da linha no lugar do meta e da idade (carregamento v2, momento
+   * 4): o objeto aos 3 s ("Aprovando pedido 1042…"), a demora aos 10 s e o
+   * motivo do erro. Sem ele, o meta.
+   */
+  apoio?: ReactNode;
   age?: string;
   note?: ReactNode;
   /** Uma linha de dado neutra abaixo do meta (a entrega do pedido, por exemplo). */
@@ -113,8 +120,12 @@ export function QueueRow({
             {badge ? <span className="ml-2 inline-flex align-middle">{badge}</span> : null}
           </p>
           <p className="mt-0.5 text-sm text-foreground/60">
-            {meta}
-            {age ? <span className="text-foreground/45"> · {age}</span> : null}
+            {apoio ?? (
+              <>
+                {meta}
+                {age ? <span className="text-foreground/45"> · {age}</span> : null}
+              </>
+            )}
           </p>
           {detail ? <p className="mt-1 text-sm text-foreground/75">{detail}</p> : null}
           {note ? (

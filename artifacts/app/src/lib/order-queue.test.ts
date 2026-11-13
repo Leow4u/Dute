@@ -62,6 +62,17 @@ describe("fila de pedidos", () => {
     expect(queue.delivered.map((order) => order.orderNumber)).toEqual(["PED-5"]);
   });
 
+  it("a solicitação já decidida fica em aprovar enquanto a tela a segura, no mesmo lugar", () => {
+    const requests = [
+      { id: "r-1042", status: "approved", created_at: "2026-11-13T09:00:00Z" },
+      { id: "r-1043", status: "open", created_at: "2026-11-13T09:05:00Z" },
+      { id: "r-1041", status: "rejected", created_at: "2026-11-13T08:00:00Z" },
+    ];
+    expect(buildOrderQueue({ requests }).approve.map((request) => request.id)).toEqual(["r-1043"]);
+    const segurada = buildOrderQueue({ requests, segurar: (id) => id === "r-1042" });
+    expect(segurada.approve.map((request) => request.id)).toEqual(["r-1042", "r-1043"]);
+  });
+
   it("não quebra sem dados", () => {
     expect(buildOrderQueue({})).toEqual({ approve: [], pick: [], deliver: [], delivered: [] });
   });

@@ -1,4 +1,5 @@
 import { Package } from "lucide-react";
+import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -76,5 +77,22 @@ describe("a fila e o cabeçalho na v3", () => {
     expect(semAtalho).toMatch(/<button type="button" class="inline-flex[^"]* mt-1\.5">.*Esconder itens<\/button>/s);
     expect(semAtalho).not.toContain("Imprimir lista");
     expect(await violacoesDeAcessibilidade(comAtalho)).toEqual([]);
+  });
+
+  it("o apoio opcional toma o lugar do meta e da idade, sem mudar a linha sem apoio", async () => {
+    const linha = (apoio?: ReactNode) =>
+      renderToStaticMarkup(
+        <div className="v3">
+          <QueueGroup title="Para aprovar" count={1} empty="Nenhum pedido para aprovar.">
+            <QueueRow icon={Package} tone="approve" title="Pedido 1042" meta="Retirada · BTG Pactual · 12 un." age="há 25 min" apoio={apoio} />
+          </QueueGroup>
+        </div>,
+      );
+    const comApoio = linha(<span className="font-bold text-foreground">Aprovando pedido 1042…</span>);
+    expect(comApoio).toMatch(/<p class="mt-0\.5 text-sm text-foreground\/60"><span class="font-bold text-foreground">Aprovando pedido 1042…<\/span><\/p>/);
+    expect(comApoio).not.toContain("Retirada");
+    expect(comApoio).not.toContain("há 25 min");
+    expect(linha()).toMatch(/<p class="mt-0\.5 text-sm text-foreground\/60">Retirada · BTG Pactual · 12 un\.<span class="text-foreground\/45"> · há 25 min<\/span><\/p>/);
+    expect(await violacoesDeAcessibilidade(comApoio)).toEqual([]);
   });
 });

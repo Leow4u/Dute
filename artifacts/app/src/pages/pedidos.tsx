@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { collection, doc, query, where } from "firebase/firestore";
 import {
@@ -6,6 +6,7 @@ import {
   Check,
   ChevronRight,
   ClipboardCheck,
+  Clock3,
   MoreHorizontal,
   Package,
   Printer,
@@ -16,7 +17,9 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeVariants } from "@/components/ui/badge";
+import { BarraDeEspera } from "@/components/ui/barra-de-espera";
+import { BotaoDeAcao, CaixaDeAlerta } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -61,6 +64,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { relogioDaEspera } from "@/lib/carregando/tempo";
+import { desfechoDoErro, useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { chamarOperacao, novaChave } from "@/lib/operacao/api";
 import { hojeIso } from "@/lib/operacao/fila";
@@ -68,6 +75,7 @@ import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import {
   buildOrderQueue,
   chaveDaPrincipal,
+  isAwaitingDecision,
   linhaDoParaQuando,
   ordersGroupEmpty,
   paraQuandoDoPedido,
@@ -182,6 +190,24 @@ type DialogState =
   | { kind: "cancel"; order: OrderGroup; orderId: string }
   | null;
 
+/** As duas ações de "Para aprovar": cada linha tem o próprio estado (carregamento v2, momento 4). */
+type AcaoDaSolicitacao = "aprovar" | "recusar";
+
+const ROTA_DA_ACAO: Record<AcaoDaSolicitacao, "approve" | "reject"> = { aprovar: "approve", recusar: "reject" };
+
+/**
+ * O título no meio da frase ("Aprovando pedido 1042…"): a primeira palavra
+ * comum perde a maiúscula; a sigla e o número (PED-0043) ficam como estão.
+ */
+export function noMeioDaFrase(titulo: string): string {
+  return /^\p{Lu}\p{Ll}/u.test(titulo) ? titulo.charAt(0).toLocaleLowerCase("pt-BR") + titulo.slice(1) : titulo;
+}
+
+/** O anúncio do leitor de tela tem até seis palavras. */
+function seisPalavras(texto: string): string {
+  return texto.split(/\s+/).filter(Boolean).slice(0, 6).join(" ");
+}
+
 /** Os pedidos de saída que ainda não saíram: a entrega de cada um (parte 4.5c). */
 const PEDIDOS_EM_ABERTO = ["PENDENTE", "SEPARACAO", "EM_EXPEDICAO"];
 
@@ -241,9 +267,15 @@ export default function Pedidos() {
     retry: 1,
   });
 
+  // Aprovar e recusar por linha (carregamento v2, momento 4): aprovar a 1042
+  // deixa as outras livres, e a linha decidida fica na fila enquanto o botão
+  // diz "Aprovado" (1 s e até a releitura chegar).
+  const linhas = useAcaoNaLinha<string>();
+  // O toast do sucesso sai uma vez por decisão, venha da resposta ou do "Conferir".
+  const avisadas = useRef(new Set<string>());
   const queue = useMemo(
-    () => buildOrderQueue({ requests: requests.data?.items, ops: ops.data }),
-    [ops.data, requests.data?.items],
+    () => buildOrderQueue({ requests: requests.data?.items, ops: ops.data, segurar: linhas.ocupada }),
+    [ops.data, requests.data?.items, linhas],
   );
   const entries = useMemo(() => queueEntries(normalizeQueues(ops.data?.queues)), [ops.data?.queues]);
   const actions = useWarehouseTaskActions({
@@ -258,56 +290,76 @@ export default function Pedidos() {
     ? entries.find((entry) => entry.task.id === treatingTask.id)
     : undefined;
 
+  const releitura = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] }),
+      queryClient.invalidateQueries({ queryKey: ["customer-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["stock-balances"] }),
+    ]);
   const refreshAll = () => {
-    void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-    void queryClient.invalidateQueries({ queryKey: ["customer-requests"] });
-    void queryClient.invalidateQueries({ queryKey: ["stock-balances"] });
+    void releitura();
   };
 
-  const onError = (error: Error) =>
+  const onError = (error: unknown) =>
     toast({
       title: "Não consegui atualizar o pedido",
       description: humanApiError(error, "Tente novamente em instantes."),
       variant: "destructive",
     });
 
-  const decide = useMutation({
-    mutationFn: ({
-      request,
-      action,
-      reason,
-    }: {
-      request: CustomerRequest;
-      action: "approve" | "reject";
-      reason?: string;
-    }) => {
-      const expected = String(request.status || "open").toLowerCase();
-      return fetchJson(
-        `/api/customer-requests/${encodeURIComponent(request.id)}/${action}`,
-        {
+  /** O retorno da decisão que valeu: o toast, uma vez, e a recusa fecha o diálogo dela. */
+  const decisaoValeu = (request: CustomerRequest, acao: AcaoDaSolicitacao) => {
+    const marca = `${request.id}:${acao}`;
+    if (avisadas.current.has(marca)) return;
+    avisadas.current.add(marca);
+    if (acao === "aprovar") {
+      toast({ title: `${requestTitle(request)} aprovado` });
+      return;
+    }
+    toast({ title: "Solicitação recusada." });
+    setDialog((atual) => (atual?.kind === "reject" && atual.request.id === request.id ? null : atual));
+  };
+
+  /** O "Conferir" dos 70 s: relê a solicitação e nunca reenvia. */
+  const conferirDecisao = async (request: CustomerRequest, acao: AcaoDaSolicitacao) => {
+    const atual = await fetchJson<CustomerRequest>(`/api/customer-requests/${encodeURIComponent(request.id)}`);
+    const status = String(atual.status ?? "").toLowerCase();
+    const valeu = acao === "aprovar" ? status === "approved" || status === "closed" : status === "rejected";
+    if (valeu) decisaoValeu(request, acao);
+    // Decidida por outra pessoa: a lista se atualiza, e a linha sai.
+    else if (!isAwaitingDecision(atual.status)) refreshAll();
+    return valeu;
+  };
+
+  /**
+   * Aprovar ou recusar pela callable de sempre, com a chave de idempotência
+   * da tentativa que a linha dá: a mesma depois do "Conferir" e quando o
+   * resultado ficou incerto. A linha ocupada não chama de novo.
+   */
+  const decidir = (request: CustomerRequest, acao: AcaoDaSolicitacao, reason?: string) => {
+    const expected = String(request.status || "open").toLowerCase();
+    void linhas.executar(
+      request.id,
+      acao,
+      (chave) =>
+        fetchJson(`/api/customer-requests/${encodeURIComponent(request.id)}/${ROTA_DA_ACAO[acao]}`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            expected_status: expected,
-            reason,
-            idempotency_key: `${request.id}:${action}:${expected}`,
-          }),
-        },
-      );
-    },
-    onSuccess: (_result, variables) => {
-      toast({
-        title:
-          variables.action === "approve"
-            ? "Aprovado. O pedido foi para separação."
-            : "Solicitação recusada.",
-      });
-      setDialog(null);
-      setRejectReason("");
-      refreshAll();
-    },
-    onError,
-  });
+          body: JSON.stringify({ expected_status: expected, reason, idempotency_key: chave }),
+        }).then(
+          (resultado) => {
+            decisaoValeu(request, acao);
+            return resultado;
+          },
+          (erro: unknown) => {
+            // Sem resposta, a linha fica com o "Conferir"; o resto, o toast também diz.
+            if (desfechoDoErro(erro) !== "sem-resposta") onError(erro);
+            throw erro;
+          },
+        ),
+      { conferir: () => conferirDecisao(request, acao), releitura },
+    );
+  };
 
   // Mesmas chamadas da antiga tela "Separar e enviar": cada etapa do WMS
   // continua gravada no backend; a tela só encadeia.
@@ -414,7 +466,8 @@ export default function Pedidos() {
     onError,
   });
 
-  const busy = decide.isPending || deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
+  // Aprovar e recusar ficam de fora: cada linha de "Para aprovar" tem o próprio estado.
+  const busy = deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
   // A tabela do cancelamento pede um diálogo mais largo.
   const larguraDoDialogo = cn("sm:max-w-[440px]", dialog?.kind === "cancel" && "sm:max-w-[560px]");
 
@@ -524,66 +577,25 @@ export default function Pedidos() {
                 </>
               }
             >
-              {queue.approve.map((request) => {
-                const validation = buildBalanceValidation(
-                  request,
-                  balances.data?.items,
-                  balances.isLoading,
-                  Boolean(balances.error),
-                );
-                return (
-                  <QueueRow
-                    key={request.id}
-                    icon={ClipboardCheck}
-                    tone="approve"
-                    title={requestTitle(request)}
-                    meta={requestSummary(request)}
-                    detail={linhaDoParaQuando(request.due_at)}
-                    age={formatRequestAge(request.created_at)}
-                    note={
-                      validation.canApprove ? undefined : (
-                        <>
-                          <AlertTriangle className="size-3.5" />
-                          {validation.detail}
-                        </>
-                      )
+              {queue.approve.map((request) => (
+                <LinhaParaAprovar
+                  key={request.id}
+                  request={request}
+                  validation={buildBalanceValidation(request, balances.data?.items, balances.isLoading, Boolean(balances.error))}
+                  linhas={linhas}
+                  variant={variante(`approve:${request.id}`)}
+                  onAprovar={() => decidir(request, "aprovar")}
+                  onRecusar={() => {
+                    // Sem resposta, o Recusar é o "Conferir": relê, sem abrir o diálogo.
+                    if (linhas.estado(request.id, "recusar") === "sem-resposta") {
+                      decidir(request, "recusar");
+                      return;
                     }
-                    actions={
-                      validation.canApprove ? (
-                        <>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="text-destructive hover:text-destructive"
-                            disabled={busy}
-                            onClick={() => {
-                              setRejectReason("");
-                              setDialog({ kind: "reject", request });
-                            }}
-                          >
-                            Recusar
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={variante(`approve:${request.id}`)}
-                            disabled={busy}
-                            onClick={() => decide.mutate({ request, action: "approve" })}
-                          >
-                            <Check className="size-4" />
-                            Aprovar
-                          </Button>
-                        </>
-                      ) : (
-                        <Button asChild variant="outline">
-                          <Link href={`/solicitacoes?id=${encodeURIComponent(request.id)}`}>
-                            Ver itens
-                          </Link>
-                        </Button>
-                      )
-                    }
-                  />
-                );
-              })}
+                    setRejectReason("");
+                    setDialog({ kind: "reject", request });
+                  }}
+                />
+              ))}
             </QueueGroup>
           ) : null}
 
@@ -683,20 +695,19 @@ export default function Pedidos() {
                 <Button type="button" variant="outline" onClick={() => setDialog(null)}>
                   Voltar
                 </Button>
-                <Button
-                  type="button"
+                <BotaoDeAcao
                   variant="destructive"
-                  disabled={rejectReason.trim().length < 3 || busy}
-                  onClick={() =>
-                    decide.mutate({
-                      request: dialog.request,
-                      action: "reject",
-                      reason: rejectReason.trim(),
-                    })
+                  estado={linhas.estado(dialog.request.id, "recusar")}
+                  rotulo="Recusar"
+                  andamento="Recusando…"
+                  sucesso="Recusado"
+                  erro="Não recusado"
+                  bloqueado={
+                    (rejectReason.trim().length < 3 || linhas.ocupada(dialog.request.id)) &&
+                    linhas.estado(dialog.request.id, "recusar") === "repouso"
                   }
-                >
-                  Recusar
-                </Button>
+                  onClick={() => decidir(dialog.request, "recusar", rejectReason.trim())}
+                />
               </DialogFooter>
             </>
           ) : dialog?.kind === "deliver" ? (
@@ -856,6 +867,141 @@ export default function Pedidos() {
         onNoteChange={actions.exception.setNote}
         onSubmit={(event) => actions.exception.submit(event, treatingEntry)}
       />
+    </div>
+  );
+}
+
+const SELO = cn(badgeVariants({ variant: "outline" }), "gap-1");
+
+/**
+ * A linha de "Para aprovar" com a ação por linha (carregamento v2, momento 4;
+ * a prancha aprovada em 12/11/2026). O Aprovar vai a "Aprovando…", com a
+ * barra na borda de baixo, e o Recusar da linha fica aria-disabled; as outras
+ * linhas seguem livres. Aos 3 s o apoio diz o objeto ("Aprovando pedido
+ * 1042…"); aos 10 s, a demora com o relógio, sem "Tentar de novo" (repetir
+ * duplicaria); aos 70 s, o selo "Sem confirmação" e o "Conferir", que relê. O
+ * erro fica na linha, com o selo e o motivo, até a próxima ação.
+ */
+function LinhaParaAprovar({
+  request,
+  validation,
+  linhas,
+  variant,
+  onAprovar,
+  onRecusar,
+}: {
+  request: CustomerRequest;
+  validation: ReturnType<typeof buildBalanceValidation>;
+  linhas: AcaoNaLinha<string>;
+  variant: "default" | "outline";
+  onAprovar: () => void;
+  onRecusar: () => void;
+}) {
+  const aprovar = linhas.estado(request.id, "aprovar");
+  const recusar = linhas.estado(request.id, "recusar");
+  const ocupada = linhas.ocupada(request.id);
+  const motivo = linhas.motivo(request.id);
+  const andando: AcaoDaSolicitacao | null = aprovar === "andamento" ? "aprovar" : recusar === "andamento" ? "recusar" : null;
+  const semResposta = aprovar === "sem-resposta" || recusar === "sem-resposta";
+  const espera = useEspera(andando !== null);
+  const titulo = requestTitle(request);
+  const emAndamento = andando ? `${andando === "aprovar" ? "Aprovando" : "Recusando"} ${noMeioDaFrase(titulo)}` : null;
+
+  // O leitor de tela ouve a entrada na espera (aos 300 ms), a demora e a
+  // desistência, pelo Anunciador da tela; o resultado, o toast diz.
+  const anunciar = useAnuncio();
+  const marco = andando && espera.visivel ? (espera.fase === "demorando" ? "demorando" : "espera") : semResposta ? "sem-resposta" : null;
+  const anuncioDaEspera = emAndamento ? seisPalavras(emAndamento) : null;
+  useEffect(() => {
+    if (marco === "espera" && anuncioDaEspera) anunciar(anuncioDaEspera);
+    else if (marco === "demorando") anunciar("Demorando mais que o normal");
+    else if (marco === "sem-resposta") anunciar("Sem confirmação do servidor");
+  }, [marco, anuncioDaEspera, anunciar]);
+
+  const apoio =
+    andando && espera.fase === "demorando" ? (
+      // Em linha, para quebrar como texto no celular.
+      <span className="font-bold text-amber-soft-foreground">
+        <Clock3 className="mr-1.5 inline size-3.5 align-middle" aria-hidden="true" />
+        <span>Demorando mais que o normal</span>
+        {" · "}
+        <span className="tabular-nums">{relogioDaEspera(espera.decorridoMs)}</span>
+      </span>
+    ) : emAndamento && espera.fase === "com-objeto" ? (
+      <span className="font-bold text-foreground">{`${emAndamento}…`}</span>
+    ) : motivo ? (
+      <span className="font-bold text-destructive">{humanApiError(motivo.erro, "Tente novamente em instantes.")}</span>
+    ) : undefined;
+
+  const selo = semResposta ? (
+    <span className={cn(SELO, "border-warning-soft-border bg-warning-soft text-amber-soft-foreground")}>
+      <Clock3 className="size-3.5" aria-hidden="true" />
+      Sem confirmação
+    </span>
+  ) : motivo ? (
+    <span className={cn(SELO, "border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground")}>
+      <CaixaDeAlerta className="size-3.5" />
+      {motivo.acao === "aprovar" ? "Não aprovado" : "Não recusado"}
+    </span>
+  ) : undefined;
+
+  const resultado = aprovar === "sucesso" || recusar === "sucesso" ? "ok" : aprovar === "erro" || recusar === "erro" ? "erro" : undefined;
+  // A linha ocupada mantém os botões, mesmo que a releitura mude a validação do saldo.
+  const comAcoes = validation.canApprove || ocupada;
+
+  return (
+    <div className="relative">
+      <QueueRow
+        icon={ClipboardCheck}
+        tone="approve"
+        title={titulo}
+        badge={selo}
+        meta={requestSummary(request)}
+        apoio={apoio}
+        detail={linhaDoParaQuando(request.due_at)}
+        age={formatRequestAge(request.created_at)}
+        note={
+          comAcoes ? undefined : (
+            <>
+              <AlertTriangle className="size-3.5" />
+              {validation.detail}
+            </>
+          )
+        }
+        actions={
+          comAcoes ? (
+            <>
+              <BotaoDeAcao
+                variant="outline"
+                className="text-destructive hover:text-destructive"
+                estado={recusar}
+                rotulo="Recusar"
+                andamento="Recusando…"
+                sucesso="Recusado"
+                erro="Não recusado"
+                bloqueado={ocupada && recusar === "repouso"}
+                onClick={onRecusar}
+              />
+              <BotaoDeAcao
+                variant={variant}
+                estado={aprovar}
+                icone={<Check className="size-4" />}
+                rotulo="Aprovar"
+                andamento="Aprovando…"
+                sucesso="Aprovado"
+                erro="Não aprovado"
+                bloqueado={ocupada && aprovar === "repouso"}
+                onClick={onAprovar}
+              />
+            </>
+          ) : (
+            <Button asChild variant="outline">
+              <Link href={`/solicitacoes?id=${encodeURIComponent(request.id)}`}>Ver itens</Link>
+            </Button>
+          )
+        }
+      />
+      <BarraDeEspera lugar="linha" ativa={andando !== null} resultado={resultado} />
     </div>
   );
 }

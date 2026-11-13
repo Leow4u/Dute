@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CARREGANDO, faseDaEspera, podeEsconder } from "./tempo";
+import { CARREGANDO, faseDaEspera, podeEsconder, relogioDaEspera } from "./tempo";
 
 /**
  * O relógio da espera (carregamento v2, seção 3 da especificação de
@@ -52,5 +52,14 @@ describe("o relógio da espera", () => {
     expect(podeEsconder(1_000, 1_499)).toBe(false);
     expect(podeEsconder(1_000, 1_500)).toBe(true);
     expect(podeEsconder(1_000, 9_000)).toBe(true);
+  });
+
+  it("o relógio da demora conta minutos e segundos, sem casa decimal", () => {
+    expect(relogioDaEspera(10_000)).toBe("0:10");
+    expect(relogioDaEspera(12_999)).toBe("0:12");
+    expect(relogioDaEspera(69_999)).toBe("1:09");
+    expect(relogioDaEspera(600_000)).toBe("10:00");
+    expect(relogioDaEspera(-5)).toBe("0:00");
+    expect(relogioDaEspera(Number.NaN)).toBe("0:00");
   });
 });
