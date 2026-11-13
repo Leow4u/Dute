@@ -2085,6 +2085,127 @@ seção 5, conferidas contra o código atual.
     `aria-controls` das abas (Estoque e Contagem), o cabeçalho da tabela a
     50% (Estoque, Alertas) e o primário no escuro (4,3:1), de antes desta
     parte.
+- **A revisão (13/11/2026)**, com o que a lógica, o navegador e o leitor de
+  tela mostraram:
+  - **A falha vem da cópia.** O Estoque, o Mapa, os Alertas e as Etiquetas
+    juntam as leituras que falharam sem nada lido numa só para a
+    `FalhaNaLeitura` (`lib/carregando/falha-das-leituras.ts`), a partir das
+    cópias da `useLeituraComFalha`. Antes, a falta de conexão saía da leitura
+    crua, cujo erro o react-query zera na nova tentativa: com o servidor sem
+    resposta e nada lido, a releitura sozinha do estado da conexão (e o
+    "Tentar de novo" do bloco) trocava o "Reconectando…" por "Não consegui
+    carregar o estoque.", com o alerta, e no Estoque o foco saía do botão.
+    Agora o "Reconectando…" fica até a leitura responder;
+  - **"Tentando de novo…" só quando a pessoa pede.** Nenhuma tela da área usa
+    mais o `ErroNaLeitura` direto, com o `isFetching` da leitura (a trava da
+    área reprova): a releitura do intervalo (2 min no Estoque, no Mapa e nos
+    Alertas) e a que segue uma gravação não mudam o aviso, que é um alerta e
+    era lido de novo duas vezes. Nas Etiquetas e na abertura, a falta de
+    conexão sem nada lido volta a ser "Sem conexão." ou "Reconectando…", e
+    não o erro genérico;
+  - **A leitura de apoio não tira a lista.** No Estoque, a falha só das fotos
+    deixa a lista com o saldo e o endereço, e acima dela "Não consegui
+    carregar as fotos." com "Tentar de novo"; as linhas não afirmam "Sem foto"
+    (o lugar da foto fica neutro), e o filtro Sem foto fica sem número e sem
+    lista até ler. A primeira leitura continua esperando as fotos. No Mapa, o
+    mapa são as posições e as caixas: os saldos esperam a primeira leitura
+    (a prateleira com saldo sem caixa registrada não parece vazia), mas a
+    falha deles não tira o mapa ("Não consegui carregar os saldos das
+    prateleiras."); o catálogo nem espera, e a busca por nome diz "Carregando
+    o catálogo…" até ele chegar, no lugar de "Nenhuma prateleira tem o que
+    você buscou.";
+  - **O foco nunca cai no `body`.** Quando a nova tentativa dá certo e o aviso
+    sai com o foco nele, o foco vai à linha de estado (Exceções, Alertas e a
+    situação do inventário no Mapa), ao resumo da impressão (Etiquetas), ao
+    título da seção (os últimos movimentos da ficha) e, na abertura, ao
+    título das caixas da sessão, da caixa aberta, do "Guardar em" ou do
+    cartão. Quando a ação dá certo e o botão sai da tela, o foco vai ao que
+    entrou no lugar (`SaiComOFoco` e `useFocoQueSegue`, em
+    `lib/carregando/use-foco-que-segue.tsx`): "Iniciar conferência da caixa"
+    e a guarda, ao título da caixa; "Iniciar contagem", ao título do cartão;
+    "Voltar à nova conferência", ao da nova caixa; "Carregar mapa inicial", à
+    linha de estado das Posições;
+  - **A abertura não afirma o que não leu.** As caixas da sessão precisam das
+    caixas e da sessão lidas: até lá, o bloco no lugar do número e
+    "Carregando caixas…"; sem a sessão, "—" e nada na lista, e o cabeçalho
+    não diz "sessão concluída". Na Contagem, a sessão que falha abre na aba
+    da abertura, onde está o aviso (antes, a tela abria na contagem cíclica e
+    a falha não aparecia); na nova tentativa, a tela não volta a "Carregando
+    a contagem…". Nas Etiquetas, a nota "Conteúdo da caixa" só aparece com a
+    sessão lida;
+  - **Os Alertas.** Cada alerta tem a chave dele: o "Enviando…" do decidido
+    não passa ao seguinte (antes, com a resposta entre 300 e 800 ms, o alerta
+    do outro cliente entrava com o Enviar ocupado e o toque ignorado). O foco
+    vai ao título do alerta seguinte, e não ao Enviar do outro cliente. O
+    toque repetido do mesmo gesto, no segundo depois da decisão, continua
+    sem efeito, agora de propósito, na tela (o `toqueRepetido`);
+  - **As Exceções.** O selo fica no lugar desde o começo, com o bloco no lugar
+    do número e a mesma largura: o Atualizar não pula quando a contagem chega
+    (antes, 86,7 px no celular). O Atualizar é o das listas (o
+    `BotaoAtualizar`, 44 × 44 no celular, em que só o ícone vira a caixa), e
+    a linha de estado sob o título do cartão diz "Atualizado às" e "Não
+    consegui atualizar · lista de" quando o toque falha com a lista lida
+    (antes, só o leitor de tela ficava sabendo). O teste delas passou ao
+    relógio simulado: a espera de 300 ms dependia da máquina e reprovou a
+    suíte uma vez;
+  - **As esperas feitas à mão.** A alternativa do "Se preferir" é o
+    `BotaoDeAcao`: a tocada fica cheia e diz "Guardando em A-04…" com a caixa
+    aos 300 ms, por pelo menos 500 ms, e as outras esperam a 0,45. O seletor
+    de prateleira espera com `aria-disabled`, sem o `disabled` a 50%, a caixa
+    entra aos 300 ms, e a releitura das posições não o desliga mais. A
+    releitura do catálogo depois de cada gravação não mostra a espera nem
+    fala: só a primeira leitura diz "Verificando o catálogo…". Na guarda,
+    "Carregando posições…" aparece uma vez, a da região;
+  - **Nenhum botão que troca de rótulo dentro de um alerta.** A "Situação do
+    inventário indisponível" do Mapa e o "Catálogo indisponível" da abertura
+    viraram o aviso da falha ("Não consegui confirmar o inventário de
+    abertura de BTG Pactual.", "Não consegui carregar o catálogo. O cadastro
+    de produto novo foi bloqueado para evitar duplicidade."), e o quadro
+    "Nenhuma posição cadastrada" das Posições deixou de ser alerta;
+  - **Os rótulos.** O gerúndio é o do próprio verbo: "Enviar evidência" diz
+    "Enviando…"; "Carregar mapa inicial", "Carregando mapa inicial…";
+    "Confirmar guarda em B-05", "Guardando em B-05…", como a alternativa. A
+    linha do Mapa diz "Carregando prateleiras…" (o objeto no plural, como nas
+    outras listas), e a espera das Etiquetas, "Carregando etiquetas…";
+  - **O toque no celular.** As ações migradas têm 48 px no celular:
+    "Carregar mapa inicial", "Iniciar contagem", "Iniciar conferência da
+    caixa", "Confirmar guarda", as alternativas, "Confirmar tratativa",
+    "Enviar ao cliente" e "Descartar". Os "Tentar de novo" são os do aviso
+    da falha, de 44 px;
+  - **Testes**: novos no Estoque, no Mapa (`warehouse-map.falhas`), nos
+    Alertas (`estoque-alertas.falhas`), nas Etiquetas
+    (`warehouse-labels.falhas`), na abertura (`inventory-falhas`), nas
+    Exceções, no seletor e no painel da tarefa, com a lista de textos dos
+    estados novos, e a trava da área reprova o `ErroNaLeitura` direto e o
+    gerúndio de outro verbo. Contra o `c8eaa31`, 48 dos 107 testes dos 15
+    arquivos mudados reprovam (um só em cascata: sozinho, passa).
+- **Medição da revisão no Chromium**, no mesmo harness (a API falsa, só
+  127.0.0.1):
+  - a releitura do intervalo com a leitura falhando, no Estoque, no Mapa e
+    nos Alertas: 181 quadros seguidos com "Tentar de novo" e o foco nele, sem
+    "Tentando de novo…" (antes, a troca a cada releitura);
+  - Alertas com o servidor a 400 ms: de 482 ms em diante, o alerta seguinte
+    com "Enviar ao cliente" em repouso e o foco no título dele (antes,
+    "Enviando…" no alerta seguinte até 881 ms);
+  - Estoque com só as fotos falhando: as 4 linhas, com o endereço e o saldo,
+    e o aviso das fotos (antes, nenhuma linha);
+  - Etiquetas sem rede: "Sem conexão." e, na volta, "Reconectando…" e as
+    etiquetas; as caixas da abertura sem rede: "Reconectando…";
+  - o foco depois do "Tentar de novo" que dá certo, em dez casos (Exceções,
+    Etiquetas, Alertas, caixas e sessão da abertura, Estoque, Mapa, situação
+    do inventário, Posições e movimentos): sempre no que ficou, nunca no
+    `body`; depois de "Iniciar conferência da caixa", "Iniciar contagem",
+    "Carregar mapa inicial" e da guarda, no que entrou no lugar;
+  - a alternativa tocada: cheia e "Guardando em A-04…" com a caixa aos
+    ~300 ms do toque, o texto a 14,4:1 (antes, 2,6:1, a 0,45), e as outras a
+    0,45; o seletor esperando: sem `disabled`, a caixa aos ~300 ms do toque,
+    o rótulo a 5,3:1 no claro e 7,4:1 no escuro (antes, 3,1:1);
+  - Exceções a 390 × 844 com a leitura a 3 s: o Atualizar parado em x =
+    133,7 do começo ao fim, com 44 × 44 e a caixa de 20 px;
+  - a Contagem com a sessão falhando abre na aba da abertura, com o aviso,
+    sem tocar;
+  - nenhuma rolagem lateral a 390 px, e o axe-core, no claro e no escuro, com
+    as mesmas violações de antes desta parte, nenhuma nova.
 
 Fica aberto:
 
@@ -2096,10 +2217,11 @@ Fica aberto:
   Editar e o remover dos rascunhos) seguem `disabled`, também durante a
   releitura da conferência (o `conferenceBusy` inclui o `isFetching`, que
   guarda a revisão esperada); o botão tocado nunca fica;
-- o seletor de prateleira continua desligado durante a releitura das
-  posições, sem rótulo;
-- a "Verificando o catálogo…" reserva 24 px a cada releitura do catálogo da
-  abertura (antes, o alerta inteiro entrava na hora);
+- o toque repetido nos Alertas, no segundo depois de uma decisão, não decide
+  o alerta seguinte: é proteção de propósito, mas muda o comportamento, e
+  vale confirmar com o Leonardo;
+- no painel da guarda, "Não consegui consultar as posições." ainda é texto
+  seco, sem "Tentar de novo";
 - o Mapa e as Posições não têm Atualizar, nem a barra do topo na volta do
   app ao primeiro plano; aos 70 s, nenhuma lista desta área diz "Sem resposta
   do servidor.", como as outras;
