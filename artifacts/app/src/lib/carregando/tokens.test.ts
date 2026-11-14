@@ -666,8 +666,75 @@ describe("o fundo do primário, em cada contexto", () => {
     }
   });
 
-  it("o --primary do escuro, com o branco, ficava abaixo de 4,5:1 (o que a parte 13k corrige)", () => {
-    expect(contraste(temas.escuro.cor("--primary-foreground"), temas.escuro.cor("--primary"))).toBeLessThan(4.5);
+  it("no escuro, o hover e o toque descem do fundo, e não do texto: 6 e 12 pontos de luz, o mesmo matiz", () => {
+    for (const nome of ["escuro", "v3Escuro", "tv", "tvEscuro"]) {
+      const [matiz, saturacao, luz] = temas[nome].valor("--primary-fundo").split(/\s+/);
+      for (const [token, passo] of [["--primary-hover", 6], ["--primary-pressed", 12]] as const) {
+        const [m, s, l] = temas[nome].valor(token).split(/\s+/);
+        expect([m, s, Number.parseFloat(l)], `${nome} ${token}`).toEqual([matiz, saturacao, Number.parseFloat(luz) - passo]);
+      }
+    }
+  });
+
+  it("o hover e o toque são da cor do fundo em todos os contextos: o toque da v3 é o vermelho dela, nunca o azul da raiz", () => {
+    const matizDe = (valor: string) => Number.parseFloat(valor.split(/\s+/)[0]);
+    const distancia = (a: number, b: number) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b));
+    for (const [nome, t] of Object.entries(temas)) {
+      const doFundo = matizDe(t.valor("--primary-fundo"));
+      for (const token of ["--primary-hover", "--primary-pressed"]) {
+        expect(distancia(matizDe(t.valor(token)), doFundo), `${nome} ${token}`).toBeLessThanOrEqual(10);
+      }
+    }
+    // A v3 afunda no #AD0015 (especificação, 4.1: o toque é o --primary-hover).
+    expect(temas.v3.valor("--primary-pressed")).toBe(temas.v3.valor("--primary-hover"));
+  });
+
+  it("a borda do fundo cheio (border-primary-fundo) lê o --primary-fundo: sem o aro do --primary em volta do preenchimento", () => {
+    // A borda do --primary em volta do fundo do escuro ficava 1,14:1 mais clara que ele. O par cheio está travado em
+    // trava.test.ts.
+    expect(variaveis("@theme inline").get("--border-color-primary-fundo")).toBe("hsl(var(--primary-fundo))");
+  });
+});
+
+/**
+ * O fundo do destrutivo (revisão da parte 13k): o toast de erro é o único
+ * `bg-destructive` com texto, e no escuro o --destructive, claro para ser
+ * lido como texto, dava 3,30:1 com o branco dele. O `bg-destructive` lê o
+ * --destructive-fundo pelo `--background-color-destructive`, como o do
+ * primário; o `text-destructive` e a borda seguem o --destructive. No claro,
+ * é o próprio --destructive; no escuro, o mesmo vermelho, mais fundo.
+ */
+describe("o fundo do destrutivo, em cada contexto", () => {
+  const temas = Object.fromEntries(Object.entries(CONTEXTOS).map(([nome, cadeia]) => [nome, tema(cadeia)]));
+
+  it("o bg-destructive lê o --destructive-fundo, e o text-destructive segue o --destructive", () => {
+    const doTema = variaveis("@theme inline");
+    expect(doTema.get("--background-color-destructive")).toBe("hsl(var(--destructive-fundo))");
+    expect(doTema.get("--border-color-destructive-fundo")).toBe("hsl(var(--destructive-fundo))");
+    expect(doTema.get("--color-destructive")).toBe("hsl(var(--destructive))");
+    for (const nome of ["claro", "v3"]) expect(temas[nome].valor("--destructive-fundo"), nome).toBe(temas[nome].valor("--destructive"));
+    for (const nome of ["escuro", "v3Escuro", "tv", "tvEscuro"]) {
+      const [matiz, saturacao] = temas[nome].valor("--destructive-fundo").split(/\s+/);
+      const [matizDoTexto, saturacaoDoTexto] = temas[nome].valor("--destructive").split(/\s+/);
+      expect([matiz, saturacao], nome).toEqual([matizDoTexto, saturacaoDoTexto]);
+    }
+  });
+
+  it("o texto do toast de erro tem 4,5:1 sobre o fundo, o título e a descrição (a 0,9), em todos os contextos", () => {
+    for (const [nome, t] of Object.entries(temas)) {
+      const texto = t.cor("--destructive-foreground");
+      const fundo = t.cor("--destructive-fundo");
+      expect(contraste(texto, fundo), `${nome} título`).toBeGreaterThanOrEqual(4.5);
+      expect(contraste(sobre(texto, fundo, 0.9), fundo), `${nome} descrição`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("o fundo cheio se destaca do fundo e do cartão (3:1)", () => {
+    for (const [nome, t] of Object.entries(temas)) {
+      for (const fundo of ["--background", "--card"]) {
+        expect(contraste(t.cor("--destructive-fundo"), t.cor(fundo)), `${nome} ${fundo}`).toBeGreaterThanOrEqual(3);
+      }
+    }
   });
 });
 

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { SemConexao, SemResposta } from "@/lib/conexao";
 
-import { criarTentativaDaEscrita } from "./tentativa-da-escrita";
+import { avisoDoErroDaEscrita, criarTentativaDaEscrita } from "./tentativa-da-escrita";
 
 /**
  * A tentativa de uma escrita de formulário (carregamento v2, parte 13k): a
@@ -108,6 +108,41 @@ describe("a tentativa da escrita", () => {
     expect(enviados.map((corpo) => corpo.idempotency_key)).toEqual(["chave-1", "chave-2"]);
   });
 
+  it("repete diz se o próximo envio do pedido leva a chave guardada: só depois do resultado incerto, e até ele se resolver", async () => {
+    const tentativa = criarTentativaDaEscrita(() => "chave");
+    expect(tentativa.repete({ contagem: 10 })).toBe(false);
+    // A primeira ainda no ar: o botão tocado continua o mesmo, e não vira "Tentar de novo" antes do resultado.
+    let soltar: (erro: unknown) => void = () => undefined;
+    const noAr = tentativa.enviar({ contagem: 10 }, () => ({ contagem: 10 }), () => new Promise((_pronto, falhar) => (soltar = falhar)));
+    expect(tentativa.repete({ contagem: 10 })).toBe(false);
+    soltar(new SemConexao());
+    await noAr.catch(() => undefined);
+    expect(tentativa.repete({ contagem: 10 })).toBe(true);
+    // Outro pedido não repete; o de antes, sim, enquanto a tentativa é a mesma.
+    expect(tentativa.repete({ contagem: 12 })).toBe(false);
+    // A repetição no ar continua sendo a repetição.
+    let soltarDeNovo: (erro: unknown) => void = () => undefined;
+    const deNovo = tentativa.enviar({ contagem: 10 }, () => ({ contagem: 10 }), () => new Promise((_pronto, falhar) => (soltarDeNovo = falhar)));
+    expect(tentativa.repete({ contagem: 10 })).toBe(true);
+    soltarDeNovo(recusa());
+    await deNovo.catch(() => undefined);
+    // A recusa encerra: o próximo envio é outra tentativa.
+    expect(tentativa.repete({ contagem: 10 })).toBe(false);
+  });
+
+  it("repete fica falso depois do sucesso e depois de esquecer", async () => {
+    const { tentativa, enviar, responder } = cenario();
+    responder([new SemConexao()]);
+    await enviar(10);
+    expect(tentativa.repete({ contagem: 10 })).toBe(true);
+    await enviar(10);
+    expect(tentativa.repete({ contagem: 10 })).toBe(false);
+    responder([new SemConexao()]);
+    await enviar(10);
+    tentativa.esquecer();
+    expect(tentativa.repete({ contagem: 10 })).toBe(false);
+  });
+
   it("o que quebra na hora vira a rejeição, e a tentativa fica para a repetição", async () => {
     const tentativa = criarTentativaDaEscrita(() => "chave");
     const chaves: string[] = [];
@@ -118,5 +153,17 @@ describe("a tentativa da escrita", () => {
     await expect(tentativa.enviar({ a: 1 }, () => ({ a: 1 }), quebra)).rejects.toThrow("quebrou");
     await expect(tentativa.enviar({ a: 1 }, () => ({ a: 1 }), quebra)).rejects.toThrow("quebrou");
     expect(chaves).toEqual(["chave", "chave"]);
+  });
+});
+
+describe("o aviso do erro da escrita", () => {
+  it("a recusa diz que não gravou, em vermelho; o resultado incerto diz que não houve confirmação, sem o vermelho", () => {
+    expect(avisoDoErroDaEscrita(recusa(), "Não consegui registrar a contagem")).toEqual({
+      title: "Não consegui registrar a contagem",
+      variant: "destructive",
+    });
+    for (const incerto of [new SemConexao(), new SemResposta(), Object.assign(new Error("deadline"), { code: "deadline-exceeded" }), new Error("sem código")]) {
+      expect(avisoDoErroDaEscrita(incerto, "Não consegui registrar a contagem")).toEqual({ title: "Sem confirmação do servidor" });
+    }
   });
 });

@@ -45,8 +45,12 @@
   /* O fundo do primário (parte 13k): o bg-primary (também com opacidade, no
      hover:bg-primary e no toque) lê o --primary-fundo, pelo namespace do fundo
      do Tailwind, que vem antes do --color-*; o text-primary, a borda e o anel
-     seguem o --primary. No escuro, o branco do botão primário ia a 4,30:1. */
+     seguem o --primary. No escuro, o branco do botão primário ia a 4,30:1. A
+     borda do fundo cheio (o Checkbox marcado, as etapas) é a border-primary-
+     fundo, pelo namespace da borda: com a do texto, ficava um aro mais claro
+     em volta do preenchimento (lib/carregando/trava.test.ts). */
   --background-color-primary: hsl(var(--primary-fundo));
+  --border-color-primary-fundo: hsl(var(--primary-fundo));
 
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
@@ -62,6 +66,11 @@
 
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
+  /* O fundo do destrutivo, como o do primário (revisão da parte 13k): o toast
+     de erro é o bg-destructive com texto, e no escuro o --destructive, claro
+     para ser lido como texto, dava 3,30:1 com o texto dele. */
+  --background-color-destructive: hsl(var(--destructive-fundo));
+  --border-color-destructive-fundo: hsl(var(--destructive-fundo));
   --color-destructive-border: var(--destructive-border);
 
   --color-success: hsl(var(--success));
@@ -439,6 +448,9 @@
   --muted-foreground: 213 5% 39%; /* #5F6368 */
   --primary: 358 81% 51%; /* #E71C23: ação principal e alerta */
   --primary-hover: 353 100% 34%; /* #AD0015 */
+  /* O toque afunda no mesmo #AD0015 (especificação do carregamento, 4.1):
+     sem ele, o active:bg-primary-pressed do Button pintava o azul da raiz. */
+  --primary-pressed: 353 100% 34%;
   --ring: 358 81% 51%;
 }
 
@@ -460,16 +472,21 @@
    primário (o bg-primary, parte 13k): no claro e na v3, o próprio --primary;
    no escuro, o mesmo azul mais fundo, com 4,9:1 para o branco do botão (o
    --primary dava 4,3:1). Um token só não servia aos dois (diagnóstico, seção
-   10.5, partes 13h e 13k). Relidos na v3, onde o --primary muda. */
+   10.5, partes 13h e 13k). Relidos na v3, onde o --primary muda. O fundo do
+   destrutivo é igual: no claro, o próprio --destructive; no escuro, o mesmo
+   vermelho mais fundo, com 5,4:1 para o texto do toast de erro (o
+   --destructive, legível como texto, dava 3,3:1). */
 :root,
 :root:not(.dark) .v3 {
   --primary-texto: var(--primary);
   --primary-fundo: var(--primary);
+  --destructive-fundo: var(--destructive);
 }
 
 .dark {
   --primary-texto: 217 85% 65%;
   --primary-fundo: 217 85% 51%;
+  --destructive-fundo: 3 80% 44%;
 }
 
 /* Documento de impressão (fatura, relatório do portal) é papel: fica claro

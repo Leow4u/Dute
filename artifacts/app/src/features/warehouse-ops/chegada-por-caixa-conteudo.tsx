@@ -321,7 +321,7 @@ export function FichaDaChegadaPorCaixaConteudo(
                 className={cn(
                   "flex size-7 shrink-0 items-center justify-center rounded-full border",
                   etapa === index + 1 &&
-                    "border-primary bg-primary text-primary-foreground",
+                    "border-primary-fundo bg-primary text-primary-foreground",
                 )}
               >
                 {index + 1 < etapa ? (

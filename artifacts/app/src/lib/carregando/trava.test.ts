@@ -345,3 +345,53 @@ describe("o foco sem anel (revisão da parte 13h)", () => {
     expect(problemas).toEqual([]);
   });
 });
+
+/*
+ * A borda do fundo cheio (revisão da parte 13k). O `bg-primary` e o
+ * `bg-destructive` leem o fundo (`--primary-fundo`, `--destructive-fundo`),
+ * mais fundo que o texto no escuro; o `border-primary` e o
+ * `border-destructive` seguem o texto. Onde os dois se juntam (o Checkbox
+ * marcado, as etapas, o toast de erro), a borda ficava 1 px mais clara que o
+ * preenchimento, um aro em volta dele. O preenchimento com borda usa a borda
+ * do fundo (`border-primary-fundo`, `border-destructive-fundo`), na mesma
+ * variante do fundo.
+ */
+
+/** As classes de fundo cheio com a borda do texto no mesmo trecho, sem a borda do fundo na mesma variante. */
+function aroEmVoltaDoFundo(texto: string): string[] {
+  const classes = texto.split(/\s+/).filter(Boolean);
+  const partes = (classe: string) => {
+    const corte = classe.lastIndexOf(":");
+    return { variante: corte < 0 ? "" : classe.slice(0, corte + 1), utilidade: classe.slice(corte + 1) };
+  };
+  const problemas: string[] = [];
+  for (const cor of ["primary", "destructive"]) {
+    if (!classes.some((classe) => partes(classe).utilidade === `border-${cor}`)) continue;
+    for (const classe of classes) {
+      const { variante, utilidade } = partes(classe);
+      if (utilidade === `bg-${cor}` && !classes.includes(`${variante}border-${cor}-fundo`)) problemas.push(classe);
+    }
+  }
+  return problemas;
+}
+
+describe("a borda do fundo cheio (revisão da parte 13k)", () => {
+  it("a regra acha o fundo cheio com a borda do texto, na variante dele", () => {
+    expect(aroEmVoltaDoFundo("rounded-full border-2 border-primary bg-primary")).toEqual(["bg-primary"]);
+    expect(aroEmVoltaDoFundo("rounded-full border-2 border-primary-fundo bg-primary")).toEqual([]);
+    expect(aroEmVoltaDoFundo("border border-primary data-[state=checked]:bg-primary")).toEqual(["data-[state=checked]:bg-primary"]);
+    expect(aroEmVoltaDoFundo("border border-primary data-[state=checked]:border-primary-fundo data-[state=checked]:bg-primary")).toEqual([]);
+    expect(aroEmVoltaDoFundo("group border-destructive bg-destructive text-destructive-foreground")).toEqual(["bg-destructive"]);
+    // A borda translúcida e o fundo translúcido não fazem o aro.
+    expect(aroEmVoltaDoFundo("border-primary/20 bg-primary/10 text-primary")).toEqual([]);
+    expect(aroEmVoltaDoFundo("border-primary bg-primary/5")).toEqual([]);
+  });
+
+  it("nenhum fundo cheio do app tem a borda do texto em volta", () => {
+    const achados = TRECHOS.flatMap((trecho) => {
+      const problemas = aroEmVoltaDoFundo(trecho.texto);
+      return problemas.length ? [`${trecho.onde} ${problemas.join(", ")}`] : [];
+    });
+    expect(achados).toEqual([]);
+  });
+});

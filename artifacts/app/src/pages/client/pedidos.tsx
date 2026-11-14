@@ -146,7 +146,7 @@ function Steps({ view, withDates = false }: { view: OrderView; withDates?: boole
               <span
                 className={cn(
                   "relative flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
-                  (done || current) && "border-primary bg-primary",
+                  (done || current) && "border-primary-fundo bg-primary",
                   current && "ring-4 ring-primary/10",
                   !done && !current && "border-border bg-card",
                 )}

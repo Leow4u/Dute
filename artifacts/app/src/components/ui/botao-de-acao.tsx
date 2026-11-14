@@ -138,9 +138,9 @@ const FUNDO_DO_TOQUE: Record<Variante, string> = {
  * Travado (em andamento, no sucesso e bloqueado), o botão não responde ao
  * ponteiro. Com aria-disabled no lugar do disabled, o hover e o toque da
  * variante continuariam valendo: o "Aprovando…" escurecendo no hover, o
- * segundo toque impaciente pintando o primário com o --primary-pressed (que
- * a v3 não redefine, e fica azul) e o Recusar bloqueado acendendo. Fica o
- * fundo da variante: o vermelho cheio no primário.
+ * segundo toque impaciente pintando o primário com o --primary-pressed e o
+ * Recusar bloqueado acendendo. Fica o fundo da variante: o vermelho cheio no
+ * primário.
  */
 const PONTEIRO_TRAVADO: Record<Variante, string> = {
   default: "hover:bg-primary active:bg-primary",

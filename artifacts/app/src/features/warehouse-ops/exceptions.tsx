@@ -70,7 +70,7 @@ import { CatalogoIndisponivel, CatalogoVerificando, ProductIdentityCard, useFalh
 import { useAnuncio } from "@/lib/carregando/anunciador";
 import { relogioDaEspera } from "@/lib/carregando/tempo";
 import { desfechoDoErro, useAcaoNaLinha, type MotivoNaLinha } from "@/lib/carregando/use-acao-na-linha";
-import { useTentativaDaEscrita } from "@/lib/carregando/tentativa-da-escrita";
+import { avisoDoErroDaEscrita, useTentativaDaEscrita } from "@/lib/carregando/tentativa-da-escrita";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { humanApiError } from "@/lib/permissions";
 import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
@@ -686,12 +686,13 @@ export function ReturnWorkspace() {
   // A devolução nasce com o id tirado da chave (createReturnReceipt): com uma chave nova a cada toque, a repetição
   // depois de um resultado incerto criava a segunda devolução. A tentativa guarda a chave e o corpo da primeira (o
   // `received_at` dela) até o servidor responder ou recusar, ou até a pessoa mudar o formulário (carregamento v2,
-  // parte 13k).
+  // parte 13k). Depois do resultado incerto, o botão diz "Tentar de novo" enquanto o pedido é o mesmo.
   const tentativaDaDevolucao = useTentativaDaEscrita();
+  const pedidoDaDevolucao = { customerCode, source, reference, notes, lines };
   const createReturn = useMutation<ReturnReceiptResult, Error>({
     mutationFn: () =>
       tentativaDaDevolucao.enviar(
-        { customerCode, source, reference, notes, lines },
+        pedidoDaDevolucao,
         () => ({
           customer_code: customerCode,
           source: source.trim() || defaultSource,
@@ -768,11 +769,7 @@ export function ReturnWorkspace() {
       });
     },
     onError: (error) => {
-      toast({
-        title: "Não consegui registrar a devolução",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast({ ...avisoDoErroDaEscrita(error, "Não consegui registrar a devolução"), description: getErrorMessage(error) });
     },
   });
 
@@ -1053,7 +1050,8 @@ export function ReturnWorkspace() {
                 type="submit"
                 estado={createReturn.isPending ? "andamento" : "repouso"}
                 icone={<RotateCcw aria-hidden="true" />}
-                rotulo="Registrar devolução"
+                className="max-md:min-h-11"
+                rotulo={tentativaDaDevolucao.repete(pedidoDaDevolucao) ? "Tentar de novo" : "Registrar devolução"}
                 andamento="Registrando…"
                 bloqueado={!createReturn.isPending && !canCreate}
               />
