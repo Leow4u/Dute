@@ -2,14 +2,14 @@ import { Pencil, Trash2 } from "lucide-react";
 import { nomeComTamanho } from "@workspace/dominio";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { conferenceCanEditLine, type OpeningConferenceLine } from "@/lib/opening-conference";
 import type { WarehouseBox } from "@/lib/warehouse-boxes";
 import { formatNumber } from "@/lib/warehouse-ops/model";
 
 export function OpeningConferenceSummary({
-  box, lines, busy, resuming, onEdit, onRemove, onReview, onReopen, onResume,
+  box, lines, busy, resuming, reabrindo = false, onEdit, onRemove, onReview, onReopen, onResume,
 }: {
   box: WarehouseBox;
   lines: OpeningConferenceLine[];
@@ -21,6 +21,8 @@ export function OpeningConferenceSummary({
    * (docs/plataforma/diagnostico-carregamento.md, decisão 6 de 06/11/2026).
    */
   resuming: boolean;
+  /** A conferência revisada está sendo reaberta agora (carregamento v2, parte 13b). */
+  reabrindo?: boolean;
   onEdit: (line: OpeningConferenceLine) => void;
   onRemove: (line: OpeningConferenceLine) => void;
   onReview: () => void;
@@ -65,12 +67,26 @@ export function OpeningConferenceSummary({
       ) : <p className="text-sm text-muted-foreground">Conte os produtos que estão nesta caixa de destino.</p>}
       <div className="flex flex-wrap gap-2">
         {box.status === "counting" ? <Button type="button" onClick={onReview} disabled={busy || !lines.length}>Revisar e fechar caixa</Button> : null}
-        {box.status === "reviewed" ? <Button type="button" variant="outline" onClick={onReopen} disabled={busy}>Reabrir conferência</Button> : null}
+        {/* As ações que gravam são o BotaoDeAcao (carregamento v2, parte 13b): a tocada diz o gerúndio, ocupada sem
+            disabled (o foco fica nela), e a que espera outra coisa fica aria-disabled. */}
+        {box.status === "reviewed" ? (
+          <BotaoDeAcao
+            variant="outline"
+            estado={reabrindo ? "andamento" : "repouso"}
+            rotulo="Reabrir conferência"
+            andamento="Reabrindo…"
+            bloqueado={!reabrindo && busy}
+            onClick={onReopen}
+          />
+        ) : null}
         {committing ? (
-          <Button type="button" onClick={onResume} disabled={busy || resuming} aria-busy={resuming || undefined}>
-            {resuming ? <Spinner /> : null}
-            {resuming ? "Retomando guarda…" : "Retomar guarda"}
-          </Button>
+          <BotaoDeAcao
+            estado={resuming ? "andamento" : "repouso"}
+            rotulo="Retomar guarda"
+            andamento="Retomando guarda…"
+            bloqueado={!resuming && busy}
+            onClick={onResume}
+          />
         ) : null}
       </div>
     </section>

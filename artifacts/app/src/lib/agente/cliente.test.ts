@@ -19,6 +19,37 @@ vi.mock("@/components/agent/chat", () => ({
   }),
 }));
 
+const firestore = vi.hoisted(() => ({ soCache: false, docs: [] as Array<{ id: string; data: () => Record<string, unknown> }> }));
+
+vi.mock("../firebase", () => ({ firebaseApp: {}, firebaseAuth: { currentUser: { uid: "uid-ana" } }, firestore: {} }));
+vi.mock("firebase/firestore", async (original) => ({
+  ...(await original<typeof import("firebase/firestore")>()),
+  collection: (_db: unknown, nome: string) => ({ nome }),
+  query: (...partes: unknown[]) => ({ partes }),
+  where: () => ({}),
+  orderBy: () => ({}),
+  limit: () => ({}),
+  // Sem o servidor, o SDK responde do cache, com sucesso.
+  getDocs: async () => ({ docs: firestore.docs, metadata: { fromCache: firestore.soCache } }),
+  onSnapshot: () => () => undefined,
+}));
+
+// O stream da callable como o SDK entrega quando a function cai (ou passa do timeoutSeconds): os pedaços e o fim, sem a linha do resultado; o `data` fica pendente para sempre.
+vi.mock("../firebase-functions", () => ({ functionsDoApp: () => ({}) }));
+vi.mock("firebase/functions", () => ({
+  httpsCallable: () => {
+    const callable = () => Promise.resolve({ data: {} });
+    callable.stream = async () => ({
+      stream: (async function* () {
+        yield { type: "tool", name: "listar_pedidos" };
+      })(),
+      data: new Promise(() => undefined),
+    });
+    return callable;
+  },
+}));
+
+import { PRAZO_ESGOTADO } from "../conexao";
 import { CLIENTE_DO_WMS, chaveNoAlvo, clienteDoNucleo, conversasDoModulo, mensagensDaConversa } from "./cliente";
 
 /**
@@ -119,5 +150,28 @@ describe("o agente do WMS", () => {
     expect(CLIENTE_DO_WMS.anotacoes.sugerir).toBeNull();
     expect(CLIENTE_DO_WMS.anotacoes.escrever).toBeNull();
     expect(chamadas.nucleo).toEqual([]);
+  });
+});
+
+describe("as conversas do núcleo sem o servidor (carregamento v2, parte 12)", () => {
+  it("a leitura que só achou o cache é falta de conexão, e não a lista velha ou vazia", async () => {
+    const nucleo = clienteDoNucleo("wms", "BTG");
+    firestore.docs = [{ id: "a", data: () => ({ title: "Estoque", last_message_at: "2026-11-13T10:00:00.000Z" }) }];
+    firestore.soCache = false;
+    expect((await nucleo.conversas()).conversations.map((conversa) => conversa.id)).toEqual(["a"]);
+    firestore.soCache = true;
+    await expect(nucleo.conversas()).rejects.toMatchObject({ code: expect.stringMatching(/^sem_(conexao|resposta)$/) });
+    await expect(nucleo.mensagens("a")).rejects.toMatchObject({ code: expect.stringMatching(/^sem_(conexao|resposta)$/) });
+    firestore.soCache = false;
+  });
+});
+
+describe("a conversa com o núcleo quando o stream fecha sem o resultado", () => {
+  it("a function que caiu ou passou do prazo dela vira o prazo esgotado, e não uma espera sem fim", async () => {
+    const pedacos: unknown[] = [];
+    const conversa = clienteDoNucleo("wms", "BTG").conversar({ message: "Quais pedidos estão atrasados?", conversation_id: "c1" }, (pedaco) => pedacos.push(pedaco));
+    const resultado = await Promise.race([conversa.then(() => "resolveu", (erro: Error) => erro.message), new Promise((ok) => setTimeout(() => ok("pendente"), 50))]);
+    expect(pedacos).toEqual([{ type: "tool", name: "listar_pedidos" }]);
+    expect(resultado).toBe(PRAZO_ESGOTADO);
   });
 });

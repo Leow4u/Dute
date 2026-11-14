@@ -107,7 +107,12 @@ afterEach(() => {
 describe("o Registrar movimentação enviado de novo", () => {
   it("depois da resposta perdida, a nova tentativa repete a chave", async () => {
     const primeiro = await registrar();
+    // O registrar é o BotaoDeAcao (carregamento v2, parte 13h): o segundo toque dentro de 1 s é o toque repetido,
+    // ignorado. A pessoa tenta de novo depois da falha.
+    const depois = Date.now() + 1_500;
+    const relogio = vi.spyOn(Date, "now").mockReturnValue(depois);
     const segundo = await registrar();
+    relogio.mockRestore();
 
     expect(typeof primeiro.idempotency_key).toBe("string");
     expect(String(primeiro.idempotency_key).length).toBeGreaterThan(0);

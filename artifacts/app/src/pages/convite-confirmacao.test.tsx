@@ -34,7 +34,10 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 function erro(code: string, message: string) { return Object.assign(new Error(message), { code }); }
 async function montar() { await act(async () => root.render(<ConvitePage />)); }
 async function clicar(texto: string) {
-  const button = [...container.querySelectorAll("button")].find((node) => node.textContent?.trim() === texto);
+  // O BotaoDeAcao tem as camadas empilhadas: o nome é o da camada à vista (carregamento v2, parte 13h).
+  const button = [...container.querySelectorAll("button")].find(
+    (node) => (node.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? node.textContent)?.trim() === texto,
+  );
   expect(button).toBeTruthy();
   await act(async () => button!.click());
 }
@@ -130,7 +133,11 @@ describe("confirmação personalizada do e-mail do convite", () => {
     expect(container.textContent).toContain("Seu e-mail ainda não foi confirmado.");
     expect(mocks.aceitar).not.toHaveBeenCalled();
     mocks.usuario.emailVerified = true;
+    // O segundo toque do mesmo botão dentro de 1 s é o toque repetido, que o BotaoDeAcao ignora: a pessoa volta depois.
+    const depois = Date.now() + 1_500;
+    const relogio = vi.spyOn(Date, "now").mockReturnValue(depois);
     await clicar("Já confirmei");
+    relogio.mockRestore();
     expect(mocks.usuario.getIdToken).toHaveBeenCalledWith(true);
     expect(mocks.aceitar).toHaveBeenCalledWith({ token: TOKEN, nome: "Ana" });
     expect(mocks.usuario.getIdToken.mock.invocationCallOrder[0]).toBeLessThan(mocks.aceitar.mock.invocationCallOrder[0]);

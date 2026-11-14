@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarClock,
-  Loader2,
   MessageSquareText,
   MoreVertical,
   Pause,
@@ -12,6 +11,8 @@ import {
   Trash2,
 } from "lucide-react";
 
+import { FantasmasDaLista, LeituraDaListaDoAgente } from "@/components/agent/leitura-do-agente";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Confirmacao } from "@/components/ui/confirmacao";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -21,6 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
 import { chaveNoAlvo } from "@/lib/agente/cliente";
 import { useClienteDoAgente } from "@/lib/agente/contexto";
@@ -55,7 +57,7 @@ import { cn } from "@/lib/utils";
  */
 
 const field =
-  "w-full min-w-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15";
+  "w-full min-w-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm focus:outline-hidden focus:border-primary focus:ring-2 focus:ring-primary/15";
 
 export function useRoutines() {
   const agente = useClienteDoAgente();
@@ -199,14 +201,14 @@ function RoutineDialog({ routine, initial, open, onClose }: { routine: Routine |
             <button type="button" onClick={onClose} disabled={save.isPending} className="rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
               Cancelar
             </button>
-            <button
-              type="button"
-              disabled={Boolean(problem) || save.isPending}
+            <BotaoDeAcao
+              tinta
+              estado={save.isPending ? "andamento" : "repouso"}
+              rotulo={routine ? "Salvar" : "Criar"}
+              andamento={routine ? "Salvando…" : "Criando…"}
+              bloqueado={Boolean(problem)}
               onClick={() => save.mutate(form)}
-              className="rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background hover:bg-foreground/85 disabled:opacity-50"
-            >
-              {save.isPending ? "Salvando…" : routine ? "Salvar" : "Criar"}
-            </button>
+            />
           </div>
         </DialogFooter>
       </DialogContent>
@@ -241,6 +243,8 @@ function RoutineCard({ routine, onEdit, onOpenConversation }: { routine: Routine
     onError: failed("Não consegui apagar a rotina"),
   });
   const busy = run.isPending || toggle.isPending || remove.isPending;
+  // Ocupado não é desabilitado: o "⋯" fica na ordem do foco, com a caixa no lugar do ícone, e não abre.
+  const [menuOpen, setMenuOpen] = useState(false);
   const state = !routine.active ? "Pausada" : routine.last_status === "failed" ? "Falhou na última vez" : "Ativa";
 
   return (
@@ -260,13 +264,14 @@ function RoutineCard({ routine, onEdit, onOpenConversation }: { routine: Routine
         </span>
         {routine.active ? <span className="text-xs text-muted-foreground">{routineStatusLine(routine)}</span> : null}
       </button>
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen && !busy} onOpenChange={(next) => setMenuOpen(next && !busy)}>
         <DropdownMenuTrigger
           aria-label={`Opções da rotina ${routine.name}`}
-          disabled={busy}
+          aria-disabled={busy || undefined}
+          aria-busy={busy || undefined}
           className="absolute right-1.5 top-1.5 grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted data-[state=open]:bg-muted"
         >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
+          {busy ? <Spinner /> : <MoreVertical className="h-4 w-4" />}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuItem onSelect={() => run.mutate()}>
@@ -297,7 +302,7 @@ function RoutineCard({ routine, onEdit, onOpenConversation }: { routine: Routine
         descricao="Ela para de rodar. As respostas que já chegaram continuam na conversa da rotina."
         confirmar="Apagar"
         confirmando="Apagando…"
-        classeDoConfirmar="bg-red-700 text-white hover:bg-red-800"
+        perigo
         onConfirmar={() => remove.mutate(undefined, { onSuccess: () => setConfirmDelete(false) })}
         onFechar={() => setConfirmDelete(false)}
       />
@@ -391,10 +396,15 @@ export function RoutinesPage({ role, onOpenConversation }: { role: string | unde
 
         {tab === "templates" ? (
           templateGrid
-        ) : routines.isLoading ? (
-          <p className="text-sm text-muted-foreground">Carregando…</p>
-        ) : routines.isError ? (
-          <p className="text-sm text-destructive-soft-foreground">Não consegui carregar as rotinas.</p>
+        ) : routines.isLoading || (routines.isError && routines.data === undefined) ? (
+          <LeituraDaListaDoAgente
+            leitura={routines}
+            rotulo="Carregando rotinas…"
+            falha="Não consegui carregar as rotinas."
+            fantasmas={<FantasmasDaLista linhas={3} altura="h-24" className="sm:grid sm:grid-cols-2 xl:grid-cols-3" />}
+          >
+            {null}
+          </LeituraDaListaDoAgente>
         ) : showTemplatesInMine(list) ? (
           <>
             <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">

@@ -78,9 +78,9 @@ export function ContaCabecalho({ user, name, email, papel }: { user: AppUser | n
 
 const GATILHO_V3 = {
   rodape:
-    "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left outline-none transition-colors hover:bg-v3-header-foreground/10 focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
+    "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left focus-visible:outline-hidden transition-colors hover:bg-v3-header-foreground/10 focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
   compacto:
-    "flex size-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
+    "flex size-11 items-center justify-center rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
 };
 
 export function AccountMenu({
@@ -115,7 +115,7 @@ export function AccountMenu({
       ) : (
         <DropdownMenuTrigger
           className={cn(
-            "flex items-center gap-3 rounded-xl text-sm font-medium text-sidebar-foreground/80 outline-none transition-colors duration-200 hover:bg-card hover:text-sidebar-foreground",
+            "flex items-center gap-3 rounded-xl text-sm font-medium text-sidebar-foreground/80 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco duration-200 hover:bg-card hover:text-sidebar-foreground",
             compact ? "h-11 w-11 justify-center" : "w-full px-2 py-2",
           )}
         >

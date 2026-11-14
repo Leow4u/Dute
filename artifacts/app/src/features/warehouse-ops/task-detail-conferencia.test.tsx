@@ -84,7 +84,11 @@ async function abrir(tarefa: WarehouseTask, fila: QueueKey) {
   return onAdvance;
 }
 
-const botoes = (texto: string) => [...document.querySelectorAll("button")].filter((item) => item.textContent?.trim() === texto);
+// O texto do botão comum, ou a camada atual do BotaoDeAcao (o Avançar, desde a parte 13i do carregamento v2).
+const botoes = (texto: string) =>
+  [...document.querySelectorAll("button")].filter(
+    (item) => (item.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? item.textContent)?.trim() === texto,
+  );
 
 async function conferirTodasAsLinhas() {
   for (const ok of botoes("OK").filter((item) => item.getAttribute("aria-pressed") === "false")) {
@@ -96,6 +100,7 @@ async function avancar() {
   const [botao] = botoes(AVANCAR);
   if (!botao) throw new Error("Sem o botão de avançar");
   expect(botao.disabled).toBe(false);
+  expect(botao.getAttribute("aria-disabled")).toBeNull();
   await act(async () => botao.click());
 }
 

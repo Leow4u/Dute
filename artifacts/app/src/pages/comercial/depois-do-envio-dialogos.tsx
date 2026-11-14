@@ -1,11 +1,13 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LeituraPendenteNaRegiao } from "@/components/ui/leitura-pendente";
 import { Textarea } from "@/components/ui/textarea";
 import { vigenciaDoContrato, type ContatoResumo, type ContratoResumo } from "@/lib/comercial/clientes";
+import type { LeituraPendente } from "@/lib/carregando/leitura-pendente";
 import {
   LINK_MAXIMO,
   MOTIVOS_DE_REVISAO,
@@ -24,6 +26,7 @@ import {
 import { VARIANTES, rotuloDoContato } from "@/lib/comercial/montar";
 import type { EtapaDemanda } from "@/lib/comercial/orcamentos";
 import { cn } from "@/lib/utils";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
 /**
  * Os diálogos das ações depois do envio (parte 12b de
@@ -35,7 +38,7 @@ import { cn } from "@/lib/utils";
  */
 
 const CAMPO_SELECT =
-  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
+  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
 
 type Problemas = Record<string, string>;
 
@@ -179,6 +182,7 @@ export function CorpoDoDialogo({
   onForm,
   problemas,
   contatos,
+  leituraDosContatos,
   contratos = [],
   motivosDePerda,
   hoje,
@@ -189,6 +193,8 @@ export function CorpoDoDialogo({
   onForm: (muda: (form: FormDoDialogo) => FormDoDialogo) => void;
   problemas: Problemas;
   contatos: ReadonlyArray<Pick<ContatoResumo, "id" | "nome" | "empresa">>;
+  /** Os contatos ainda lendo, ou a leitura que falhou: a espera ou a falha sob o campo, nunca "Nenhum contato". */
+  leituraDosContatos?: LeituraPendente;
   /** Os contratos do cliente, para o Orçar execução da direta da Operação. */
   contratos?: readonly ContratoResumo[];
   motivosDePerda: readonly Motivo[];
@@ -220,13 +226,23 @@ export function CorpoDoDialogo({
             aria-invalid={Boolean(problemas.contato)}
             className={CAMPO_SELECT}
           >
-            <option value="">{contatos.length ? "Escolher…" : "Nenhum contato"}</option>
+            {/* "Nenhum contato" só com a leitura feita (carregamento v2, parte 13i). */}
+            <option value="">{contatos.length || leituraDosContatos ? "Escolher…" : "Nenhum contato"}</option>
             {contatos.map((contato) => (
               <option key={contato.id} value={contato.id}>
                 {rotuloDoContato(contato)}
               </option>
             ))}
           </select>
+          {leituraDosContatos && !contatos.length ? (
+            <LeituraPendenteNaRegiao
+              leitura={leituraDosContatos}
+              carregando="Carregando os contatos…"
+              falha="Não foi possível carregar os contatos."
+              className="justify-start"
+              focoAoSair="resposta-contato"
+            />
+          ) : null}
         </Campo>
         <Campo id="resposta-link" rotulo="Link do e-mail" problema={problemas.link}>
           <Input
@@ -362,6 +378,8 @@ export type DialogoDepoisDoEnvioProps = {
   contatoId: string | null;
   /** Os contatos do cliente do orçamento. */
   contatos: ReadonlyArray<Pick<ContatoResumo, "id" | "nome" | "empresa">>;
+  /** Os contatos ainda lendo, ou a leitura que falhou. */
+  leituraDosContatos?: LeituraPendente;
   /** Os contratos que o cliente pode usar (Orçar execução da direta da Operação). */
   contratos?: readonly ContratoResumo[];
   /** O contrato que abre escolhido: o vigente do cliente, ou o da demanda. */
@@ -410,7 +428,7 @@ export function DialogoDepoisDoEnvio(props: DialogoDepoisDoEnvioProps) {
   const problemas = problemasDoDialogo(acao, form, { agora, hoje, envioEm, contatos, comprometida, contratos });
   const mostrados = tentou ? problemas : {};
   return (
-    <Dialog open onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <Dialog open ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <DialogContent className="v3 max-w-md">
         <form
           className="grid gap-4"
@@ -429,6 +447,7 @@ export function DialogoDepoisDoEnvio(props: DialogoDepoisDoEnvioProps) {
             onForm={(muda) => setForm((atual) => (atual ? muda(atual) : atual))}
             problemas={mostrados}
             contatos={contatos}
+            leituraDosContatos={props.leituraDosContatos}
             contratos={contratos}
             motivosDePerda={motivosDePerdaPermitidos(comprometida)}
             hoje={hoje}
@@ -443,12 +462,8 @@ export function DialogoDepoisDoEnvio(props: DialogoDepoisDoEnvioProps) {
             </p>
           ) : null}
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onCancelar} disabled={ocupado}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={ocupado}>
-              {ocupado ? "Gravando..." : "Confirmar"}
-            </Button>
+            <DialogCancelar onClick={onCancelar} />
+            <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} rotulo="Confirmar" andamento="Gravando…" />
           </DialogFooter>
         </form>
       </DialogContent>

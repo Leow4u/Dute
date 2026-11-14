@@ -170,7 +170,10 @@ async function remontar(ajuste: () => void) {
 }
 
 function botao(texto: string) {
-  return Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === texto);
+  // O BotaoDeAcao empilha as camadas: o rótulo é o da camada atual (carregamento v2).
+  return Array.from(document.querySelectorAll("button")).find(
+    (button) => (button.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? button.textContent)?.trim() === texto,
+  );
 }
 
 function linha(numero: number) {
@@ -191,13 +194,14 @@ describe("antes de o catálogo chegar", () => {
     });
     await digitar("Código do produto da linha 1", "A.01.0806.090.GG");
     const texto = () => document.body.textContent ?? "";
-    expect(texto()).toContain("Verificando o catálogo…");
+    // A espera em bloco entra aos 300 ms, como as outras do carregamento v2 (parte 13c).
+    await esperar(() => texto().includes("Verificando o catálogo…"), "a espera do catálogo");
     expect(linha(1).textContent).toContain("Verificando o catálogo");
     expect(texto()).not.toContain("Produto não localizado pelo código informado");
     expect(botao("Cadastrar como novo")).toBeUndefined();
     expect(texto()).toContain("Produtos existentes—");
     expect(texto()).toContain("Novos cadastros—");
-    expect(botao("Criar conferência")!.disabled).toBe(true);
+    expect(botao("Criar conferência")!.getAttribute("aria-disabled")).toBe("true");
 
     estado.segurar = null;
     await act(async () => soltar());
@@ -216,7 +220,7 @@ describe("antes de o catálogo chegar", () => {
     expect(linha(1).textContent).toContain("Sem catálogo");
     expect(botao("Cadastrar como novo")).toBeUndefined();
     expect(document.body.textContent).not.toContain("Produto não localizado pelo código informado");
-    expect(botao("Criar conferência")!.disabled).toBe(true);
+    expect(botao("Criar conferência")!.getAttribute("aria-disabled")).toBe("true");
 
     estado.falhar = false;
     await act(async () => botao("Tentar de novo")!.click());

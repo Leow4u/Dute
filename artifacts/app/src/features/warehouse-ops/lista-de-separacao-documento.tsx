@@ -95,6 +95,8 @@ export function ListaDeSeparacaoDocumento({ folha }: { folha: FolhaDaLista }) {
         <Campo rotulo="Pedido">{folha.resumo}</Campo>
         <Campo rotulo="Impressa em">{folha.impressaEm}</Campo>
         <Campo rotulo="Por">{folha.por || "—"}</Campo>
+        {/* A ordem que não chegou: a das prateleiras é a do código, e o papel diz (revisão da parte 13m). */}
+        {folha.ordemDasPrateleiras ? <Campo rotulo="Ordem das prateleiras">{folha.ordemDasPrateleiras}</Campo> : null}
       </div>
 
       <table className="w-full table-fixed border-collapse">
@@ -146,7 +148,8 @@ export function ListaDeSeparacaoDocumento({ folha }: { folha: FolhaDaLista }) {
                   <Codigos partes={linha.codigos.split(" · ")} />
                 </td>
                 <td className={TD}>
-                  <Codigos partes={linha.caixas} />
+                  {/* Sem as caixas lidas, a célula diz no papel que a caixa não chegou, e não o branco de quem não tem caixa. */}
+                  {linha.caixas.length ? <Codigos partes={linha.caixas} /> : (folha.caixaQueNaoChegou ?? null)}
                 </td>
                 <td className={`${TD} text-right text-[12.5px] font-extrabold tabular-nums`}>{numero.format(linha.quantidade)}</td>
                 <td className={TD}>

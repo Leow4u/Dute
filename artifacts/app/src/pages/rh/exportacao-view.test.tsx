@@ -4,7 +4,8 @@ import { Router } from "wouter";
 
 import { exportacoesLidas } from "@/lib/rh/exportacao";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { textosVisiveis, travadoNoHtml } from "@/test/botoes";
+import { textosForaDaLista } from "@/test/textos";
 
 import { ExportacaoView, type EstadoDaLista, type PropsDaExportacao } from "./exportacao-view";
 
@@ -50,7 +51,7 @@ function render(extra: Partial<PropsDaExportacao> = {}, estado: EstadoDaLista = 
 
 describe("Exportação do RH", () => {
   it("o rh gera pela competência; cada versão com as contagens, quem gerou e as duas planilhas", () => {
-    expect(textosDaTela(render())).toEqual([
+    expect(textosVisiveis(render())).toEqual([
       "Exportação",
       "Gerar",
       "Competência",
@@ -75,16 +76,16 @@ describe("Exportação do RH", () => {
 
   it("o rh vê quem está sem a data de admissão, com o link da ficha, abaixo do Gerar", () => {
     const html = render({ semAdmissao: SEM_ADMISSAO });
-    expect(textosDaTela(html).slice(0, 8)).toEqual(["Exportação", "Gerar", "Competência", "Gerar exportação", "Sem data de admissão", "2", "Bruno Sales", "Rafael Teixeira"]);
+    expect(textosVisiveis(html).slice(0, 8)).toEqual(["Exportação", "Gerar", "Competência", "Gerar exportação", "Sem data de admissão", "2", "Bruno Sales", "Rafael Teixeira"]);
     expect(html).toContain('href="/rh/ficha?colaborador=col_bbbbbbbbbbbbbbbb"');
     expect(html).toMatch(/<ul aria-labelledby="sem-admissao"/);
     // Sem ninguém, a lista não aparece; owner e admin não veem o Gerar nem a lista.
-    expect(textosDaTela(render())).not.toContain("Sem data de admissão");
-    expect(textosDaTela(render({ grava: false, semAdmissao: SEM_ADMISSAO }))).not.toContain("Sem data de admissão");
+    expect(textosVisiveis(render())).not.toContain("Sem data de admissão");
+    expect(textosVisiveis(render({ grava: false, semAdmissao: SEM_ADMISSAO }))).not.toContain("Sem data de admissão");
   });
 
   it("owner e admin só baixam: sem o Gerar", () => {
-    const textos = textosDaTela(render({ grava: false }));
+    const textos = textosVisiveis(render({ grava: false }));
     expect(textos).not.toContain("Gerar exportação");
     expect(textos).not.toContain("Competência");
     expect(textos).toContain("Baixar exames");
@@ -95,21 +96,28 @@ describe("Exportação do RH", () => {
   });
 
   it("a competência fora do intervalo e a tela ocupada travam o Gerar", () => {
-    expect(render({ competencia: "2026-11" })).toMatch(/<button[^>]*disabled=""[^>]*>Gerar exportação/);
-    expect(render({ ocupado: true })).toMatch(/<button[^>]*disabled=""[^>]*>Gerar exportação/);
-    expect(render()).not.toMatch(/<button[^>]*disabled=""[^>]*>Gerar exportação/);
+    // Travado com aria-disabled e a trava no código, sem o disabled que tira o foco (parte 13g).
+    expect(travadoNoHtml(render({ competencia: "2026-11" }), "Gerar exportação")).toBe(true);
+    expect(travadoNoHtml(render({ ocupado: true }), "Gerar exportação")).toBe(true);
+    expect(travadoNoHtml(render(), "Gerar exportação")).toBe(false);
+    expect(render({ ocupado: true })).not.toMatch(/<button[^>]*disabled=""[^>]*>/);
   });
 
   it("o aviso da geração, a falha e os vazios são frases de dados", () => {
-    expect(textosDaTela(render({ aviso: "Setembro de 2026: versão 1 gerada" }))).toContain("Setembro de 2026: versão 1 gerada");
+    expect(textosVisiveis(render({ aviso: "Setembro de 2026: versão 1 gerada" }))).toContain("Setembro de 2026: versão 1 gerada");
     expect(render({ falha: "Só o RH grava no RH." })).toContain('role="alert"');
-    expect(textosDaTela(render({ exportacoes: [] }))).toContain("Nenhuma exportação");
-    expect(textosDaTela(render({}, "erro"))).toContain("Não foi possível carregar as exportações.");
-    expect(textosDaTela(render({}, "carregando"))).toContain("Carregando...");
+    expect(textosVisiveis(render({ exportacoes: [] }))).toContain("Nenhuma exportação");
+    expect(textosVisiveis(render({}, "erro"))).toContain("Não foi possível carregar as exportações.");
+    // Lendo, a caixa da região (o rótulo aos 300 ms) e nunca o vazio nem o zero.
+    expect(render({}, "carregando")).toContain("data-carregando-na-regiao");
+    expect(textosVisiveis(render({}, "carregando"))).not.toContain("Nenhuma exportação");
+    expect(textosVisiveis(render({}, "carregando"))).not.toContain("0");
   });
 
   it("só rótulos, dados e ações: nenhum texto fora da lista", () => {
     const permitidos = [
+      // O gerúndio e o "Conferir" do BotaoDeAcao, nas camadas escondidas; o "—" da contagem na falha e o "Tentar de novo" (parte 13g).
+      /^(Gerando a exportação…|Baixando…|Conferir)$/,
       "Exportação",
       "Gerar",
       "Competência",
@@ -123,7 +131,8 @@ describe("Exportação do RH", () => {
       "Baixar colaboradores",
       /^[A-ZÇ][a-zç]+ de \d{4}: (versão \d+ gerada|nada mudou desde a versão \d+)$/,
       "Só o RH grava no RH.",
-      "Carregando...",
+      "—",
+      "Tentar de novo",
       "Nenhuma exportação",
       "Não foi possível carregar as exportações.",
       "Sem data de admissão",

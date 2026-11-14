@@ -2,6 +2,8 @@ import { useId } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { DialogCancelar } from "@/components/ui/dialog";
 
 /**
  * Reabrir a OS revisada (parte 3.10b): só owner e admin. A OS volta a Em
@@ -42,12 +44,8 @@ export function ReabrirView({
         </p>
       ) : null}
       <div className="flex flex-wrap justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onCancelar} disabled={ocupado}>
-          Cancelar
-        </Button>
-        <Button type="button" onClick={onReabrir} disabled={ocupado}>
-          Reabrir OS
-        </Button>
+        <DialogCancelar variant="ghost" ocupado={ocupado} onClick={onCancelar} />
+        <BotaoDeAcao estado={ocupado ? "andamento" : "repouso"} rotulo="Reabrir OS" andamento="Reabrindo a OS…" onClick={onReabrir} />
       </div>
     </section>
   );

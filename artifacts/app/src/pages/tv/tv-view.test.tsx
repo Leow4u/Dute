@@ -148,7 +148,8 @@ describe("TV da sala", () => {
   });
 
   it("carregando, erro e sem conexão (segue com o último quadro)", () => {
-    expect(textosDaTela(render({ estado: "carregando", painel: null, atualizadoEm: null }))).toContain("Carregando");
+    // Lendo: nada escrito antes de 300 ms; depois, a caixa de 40 px e "Carregando o quadro…" (parte 13g).
+    expect(textosDaTela(render({ estado: "carregando", painel: null, atualizadoEm: null }))).not.toContain("Carregando");
     expect(textosDaTela(render({ estado: "erro", painel: null, atualizadoEm: null }))).toContain("Não foi possível carregar o quadro.");
     const semConexao = textosDaTela(render({ semConexao: true }));
     expect(semConexao).toContain("Sem conexão · atualizado às 14:31");

@@ -6,6 +6,7 @@ import { documentoDaOs } from "@/lib/operacao/os-documento";
 import { fichaDaLeitura, type FichaDaOs } from "@/lib/operacao/ficha-da-os";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import { OsImpressaoView } from "./os-impressao-view";
 
@@ -150,5 +151,18 @@ describe("OS impressa", () => {
   it("não tem problema de acessibilidade", async () => {
     expect(await violacoesDeAcessibilidade(render(AGENDADA, "Agendada"))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render(CONCLUIDA, "Em revisão", "https://example.test/a.png"))).toEqual([]);
+  });
+});
+
+describe("A OS impressa sem conexão (carregamento v2, parte 13j)", () => {
+  it("o aviso, a faixa (fora do papel) e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    const documento = documentoDaOs(AGENDADA, { cliente: "Itaú Unibanco S.A.", titulo: "Mudança do 5º andar", status: "Agendada", agora: AGORA });
+    expect(
+      await estadosDaFalta((leitura, situacao) => (
+        <Router ssrPath="/operacao/os/impressao">
+          <OsImpressaoView estado={situacao} numero="10045-01" documento={situacao === "pronto" ? documento : null} urlDaAssinatura={null} onImprimir={noop} leitura={leitura} />
+        </Router>
+      )),
+    ).toEqual(rotulosDaFalta({ mensagem: "Não foi possível carregar a OS.", objeto: "OS" }));
   });
 });

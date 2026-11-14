@@ -344,8 +344,8 @@ describe("os textos da divisão", () => {
   });
 
   it("o botão diz em quantos volumes: Separar na linha por separar, Dividir na já separada", () => {
-    expect([textoDoBotaoDaDivisao("separar", 2), textoDoBotaoDaDivisao("separar", 3, true)]).toEqual(["Separar em 2 volumes", "Separando..."]);
-    expect([textoDoBotaoDaDivisao("dividir", 3), textoDoBotaoDaDivisao("dividir", 2, true)]).toEqual(["Dividir em 3 volumes", "Dividindo..."]);
+    expect([textoDoBotaoDaDivisao("separar", 2), textoDoBotaoDaDivisao("separar", 3, true)]).toEqual(["Separar em 2 volumes", "Separando…"]);
+    expect([textoDoBotaoDaDivisao("dividir", 3), textoDoBotaoDaDivisao("dividir", 2, true)]).toEqual(["Dividir em 3 volumes", "Dividindo…"]);
   });
 
   it("o aviso depois de confirmar, dos volumes que fecharam", () => {

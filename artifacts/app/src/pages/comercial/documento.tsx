@@ -13,7 +13,7 @@ import {
   type DocumentoDoOrcamento,
   type ParametrosDoDocumento,
 } from "@/lib/comercial/documento";
-import { useDocumento, useNomes } from "@/lib/comercial/leitura";
+import { novaTentativaDe, useDocumento, useNomes } from "@/lib/comercial/leitura";
 
 import { DocumentoView } from "./documento-view";
 
@@ -112,6 +112,7 @@ function Documento({ parametros }: { parametros: ParametrosDoDocumento }) {
   return (
     <DocumentoView
       estado={estado}
+      leitura={novaTentativaDe([quote, demanda, revisao])}
       documento={documento}
       voltar={voltarDoDocumento({ numero, de: parametros.de, enviado: congelada })}
       onImprimir={() => window.print()}

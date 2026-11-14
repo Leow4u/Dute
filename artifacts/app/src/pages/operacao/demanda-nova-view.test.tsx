@@ -6,6 +6,7 @@ import { formularioVazio, type FormularioDaDemanda } from "@/lib/operacao/demand
 import { hrefDaDemanda } from "@/lib/operacao/navegacao";
 import { formularioDaSolicitacao, solicitacaoDaOperacao } from "@/lib/operacao/solicitacoes";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { acoesPrincipais } from "@/test/botoes";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import { DemandaNovaView, type PainelDaSolicitacao } from "./demanda-nova-view";
@@ -95,6 +96,8 @@ describe("Nova demanda direta", () => {
   it("sem legenda: só rótulos, dados e ações", () => {
     expect(
       textosForaDaLista(render(), [
+        // O gerúndio e o "Conferir" do BotaoDeAcao, nas camadas escondidas (parte 13g).
+        /^(Abrindo a demanda…|Recusando a solicitação…|Conferir)$/,
         /^(Hoje|Nova demanda|Pedido|Cliente|Título|Quem pediu|Telefone|Canal|Recebida em|Hora|Executar até|Hora limite|Tipo|Corrigir)$/,
         /^(Escolha|Itaú Unibanco|Telefone|WhatsApp|E-mail|Portal|Paraquedas)$/,
         /^(Locais|Origem|Destino|Andar ou sala|Sem local cadastrado|Faria Lima)$/,
@@ -161,8 +164,6 @@ describe("atender a solicitação do portal (parte 4.4c)", () => {
     };
   }
   const form = formularioDaSolicitacao(solicitacao, AGORA);
-  const PRINCIPAL = /<button[^>]*class="[^"]*bg-primary text-primary-foreground[^"]*"[^>]*>[\s\S]*?<\/button>/g;
-
   it("o formulário vem preenchido, o canal é o portal, recebida em e o cliente não mudam; ao lado, a solicitação com os anexos", () => {
     const html = render({ form, solicitacao: painel() });
     const secao = html.slice(html.indexOf('<section aria-label="Solicitação do portal"'));
@@ -189,7 +190,7 @@ describe("atender a solicitação do portal (parte 4.4c)", () => {
     expect(html).toMatch(/<select[^>]*id="demanda-cliente"[^>]*disabled=""|<select[^>]*disabled=""[^>]*id="demanda-cliente"/);
     expect(html).not.toContain('aria-label="Canal"');
     expect(textosDaTela(html)).toContain("Portal");
-    expect((html.match(PRINCIPAL) ?? []).map((botao) => textosDaTela(botao).join(" "))).toEqual(["Abrir demanda"]);
+    expect(acoesPrincipais(html)).toEqual(["Abrir demanda"]);
   });
 
   it("recusar pede o motivo, que o cliente lê; o problema e o erro dizem o que é", () => {
@@ -197,12 +198,14 @@ describe("atender a solicitação do portal (parte 4.4c)", () => {
     const textos = textosDaTela(html);
     for (const texto of ["Motivo", "Diga ao cliente o motivo.", "A solicitação foi recusada.", "Recusar solicitação", "Voltar"]) expect(textos, texto).toContain(texto);
     expect(html).toMatch(/<textarea[^>]*aria-invalid="true"[^>]*aria-describedby="recusa-motivo-problema"/);
-    expect((html.match(PRINCIPAL) ?? []).map((botao) => textosDaTela(botao).join(" "))).toEqual(["Abrir demanda"]);
+    expect(acoesPrincipais(html)).toEqual(["Abrir demanda"]);
   });
 
   it("a solicitação já atendida leva à demanda e não se recusa mais", () => {
     const html = render({ solicitacao: painel({ resolvida: "Já virou a demanda 10050", solicitacao: { ...solicitacao, status: "aceita", demanda: "10050" } }) });
-    expect(html).toMatch(new RegExp(`<p role="status"[^>]*><a[^>]*href="${hrefDaDemanda("10050").replace(/[?]/g, "\\?")}"[^>]*>Já virou a demanda 10050</a></p>`));
+    // Sem região viva solta: quem diz que a solicitação foi resolvida é o Anunciador (parte 13g).
+    expect(html).not.toContain('role="status"');
+    expect(html).toMatch(new RegExp(`<p class="[^"]*"><a[^>]*href="${hrefDaDemanda("10050").replace(/[?]/g, "\\?")}"[^>]*>Já virou a demanda 10050</a></p>`));
     expect(textosDaTela(html)).not.toContain("Recusar");
     // Sem a solicitação ativa, o canal volta a ser escolhido.
     expect(html).toContain('aria-label="Canal"');

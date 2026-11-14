@@ -60,11 +60,15 @@ export function useItemPhotos(enabled = true) {
     return map;
   }, [balances.data?.items, products.data?.items, skus.data?.items]);
 
-  return (...codes: Array<string | null | undefined>) => {
+  const fotoDe = (...codes: Array<string | null | undefined>) => {
     for (const code of codes) {
       const photo = code ? byCode.get(String(code).trim()) : undefined;
       if (photo) return photo;
     }
     return undefined;
   };
+  // As leituras ainda não chegaram: quem mostra a foto não afirma "sem foto" antes de ler (carregamento v2, parte 13c;
+  // o diagnóstico, 4.3). O lugar da foto fica neutro até lá.
+  const naoLeu = (leitura: { data: unknown; isError: boolean }) => leitura.data === undefined && !leitura.isError;
+  return Object.assign(fotoDe, { lendo: enabled && (naoLeu(skus) || naoLeu(balances) || naoLeu(products)) });
 }

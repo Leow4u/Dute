@@ -37,6 +37,22 @@ const EXTRA_RULES: TitleRule[] = [
   { path: "/movements", label: "Histórico de movimentos" },
   { path: "/catalogo", label: "Produtos", exact: true },
   { path: "/catalogo/saldos", label: "SKUs e saldos" },
+  // As fichas e os passos dos módulos, abertos pela fila (com ?numero=):
+  // sem nome, a aba dizia só "Dutelog" e a espera, "Abrindo a Dutelog…".
+  { path: "/operacao/demanda", label: "Demanda" },
+  { path: "/operacao/nova-demanda", label: "Nova demanda" },
+  { path: "/operacao/planejar", label: "Planejar OS" },
+  { path: "/operacao/os", label: "OS" },
+  { path: "/operacao/os/impressao", label: "Imprimir OS" },
+  { path: "/campo", label: "Minhas OS", exact: true },
+  { path: "/campo/os", label: "OS em execução" },
+  { path: "/campo/concluir", label: "Concluir OS" },
+  { path: "/tv", label: "TV da sala" },
+  { path: "/comercial/orcamento", label: "Montar orçamento" },
+  { path: "/comercial/orcamento/documento", label: "Documento do orçamento" },
+  { path: "/comercial/aprovar", label: "Aprovar" },
+  { path: "/financeiro/nf", label: "Via comercial da NF" },
+  { path: "/rh/ficha", label: "Ficha do colaborador" },
   { path: SETTINGS_ROOT, label: "Minha conta", exact: true },
   ...SETTINGS_SECTIONS.map((section) => ({
     path: section.href,
@@ -121,6 +137,11 @@ function screenLabel(path: string, depth = 0): string | null {
   const alias = PATH_ALIASES[path];
   if (alias && alias !== path) return screenLabel(cleanPath(alias), depth + 1);
   return null;
+}
+
+/** O nome da tela do caminho ("Faturamento", "Pedidos"), ou nulo quando não é uma tela conhecida. */
+export function nomeDaTela(path: string): string | null {
+  return screenLabel(cleanPath(path));
 }
 
 /** Título da aba para o caminho atual. Sem tela conhecida, só a marca. */

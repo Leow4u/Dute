@@ -48,10 +48,16 @@ async function esperar(condicao: () => boolean, oQue: string) {
   throw new Error(`Não aconteceu: ${oQue}`);
 }
 
-const avisar = () => [...document.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Avisar reposição") ?? null;
+/** O "Avisar reposição" é o botão de ação: pela camada que está na tela. */
+const avisar = () =>
+  [...document.querySelectorAll("button")].find(
+    (item) => item.querySelector(".botao-acao-camada[data-atual]")?.textContent?.trim() === "Avisar reposição",
+  ) ?? null;
 
 async function tocarEmAvisar() {
   const antes = estado.envios.length;
+  // O "Avisar reposição" é o botão de ação (parte 13f): o segundo toque dentro de 1 s é barrado (toque único).
+  if (antes > 0) await act(async () => new Promise((pronto) => setTimeout(pronto, 1_050)));
   await act(async () => avisar()!.click());
   await esperar(() => estado.envios.length > antes, "o aviso");
   await act(async () => {

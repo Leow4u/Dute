@@ -6,6 +6,7 @@ import { Router } from "wouter";
 import { avisoDoPortal, type AvisoDoPortal } from "@/lib/portal/avisos";
 
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { textosDaTela } from "@/test/textos";
 
 import { BotaoDoSino, ListaDeAvisos } from "./sino";
 
@@ -83,8 +84,10 @@ describe("a lista de avisos", () => {
 
   it("sem avisos, carregando e com erro", () => {
     expect(textos(lista({ avisos: [] }))).toEqual(["Avisos", "Nenhum aviso."]);
-    expect(textos(lista({ avisos: null }))).toEqual(["Avisos", "Carregando..."]);
-    expect(textos(lista({ avisos: null, erro: true }))).toEqual(["Avisos", "Não foi possível carregar."]);
+    // Lendo, nada antes dos 300 ms; depois, a caixa e "Carregando os avisos…" (sino-carregando.test.tsx).
+    expect(textos(lista({ avisos: null }))).toEqual(["Avisos"]);
+    expect(textos(lista({ avisos: null, erro: true }))).toEqual(["Avisos", "Não foi possível carregar os avisos."]);
+    expect(textosDaTela(lista({ avisos: null, erro: true, onTentar: () => undefined }))).toEqual(["Avisos", "Não foi possível carregar os avisos.", "Tentar de novo"]);
   });
 
   it("sem violações de acessibilidade", async () => {

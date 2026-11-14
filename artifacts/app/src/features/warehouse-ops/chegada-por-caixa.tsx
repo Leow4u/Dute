@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useAnuncio } from "@/lib/carregando/anunciador";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { boxDraftToPayload } from "@/lib/warehouse-boxes";
 import { labelsUrl } from "@/lib/warehouse-labels";
@@ -70,6 +71,9 @@ export function FichaDaChegadaPorCaixa(props: FichaProps) {
   );
 }
 
+/** As ações cujo resultado o toast diz: o Anunciador não repete (carregamento v2, seção 7). */
+const RETORNO_NO_TOAST: ReadonlySet<string> = new Set(["concluir"]);
+
 function FichaDaChegadaEstado({
   entry,
   registeringExceptionId,
@@ -105,6 +109,10 @@ function FichaDaChegadaEstado({
   const [recebida, setRecebida] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [feedback, setFeedback] = useState("");
+  // A ação em curso, para o botão tocado mostrar a espera dele (carregamento v2, parte 13c); o retorno ("Quantidade
+  // salva nesta caixa") o Anunciador diz, no lugar da região viva solta que a ficha tinha.
+  const [acao, setAcao] = useState<string | null>(null);
+  const anunciar = useAnuncio();
   const [erro, setErro] = useState("");
   const trava = useRef(false);
   const tentativas = useRef(new Map<string, Record<string, unknown>>());
@@ -244,6 +252,8 @@ function FichaDaChegadaEstado({
     onConfirmado: () => {
       setEtapa(4);
       setFeedback("Destino confirmado. Revise a entrada antes de concluir.");
+      // O retorno da ação, como os do executar: o Anunciador diz a primeira frase (o foco vai ao título da etapa).
+      anunciar("Destino confirmado");
       setErro("");
     },
     falhou,
@@ -259,10 +269,13 @@ function FichaDaChegadaEstado({
     aplicar: (resultado: Resultado) => void,
     mensagem: string,
     avancar?: () => void,
+    /** O botão que mostra a espera; sem ele, o da ação (`nome`). Não entra na chave da tentativa. */
+    naTela?: string,
   ) {
     if (!podeOperar || trava.current || destino.ocupado) return;
     trava.current = true;
     setEnviando(true);
+    setAcao(naTela ?? nome);
     setErro("");
     const assinatura = JSON.stringify([
       nome,
@@ -281,6 +294,8 @@ function FichaDaChegadaEstado({
       await releitura();
       if (!montada.current) return;
       setFeedback(mensagem);
+      // O resultado que já sai no toast (a entrada concluída) não é dito de novo: o leitor de tela ouviria duas vezes.
+      if (!RETORNO_NO_TOAST.has(nome)) anunciar(mensagem.split(". ")[0]!.replace(/\.$/, ""));
       avancar?.();
     } catch (error) {
       if (!montada.current) return;
@@ -291,7 +306,10 @@ function FichaDaChegadaEstado({
       falhou(tituloDoErro)(error);
     } finally {
       trava.current = false;
-      if (montada.current) setEnviando(false);
+      if (montada.current) {
+        setEnviando(false);
+        setAcao(null);
+      }
     }
   }
   const daCaixa = (alvo: CaixaDaChegada) => ({
@@ -357,6 +375,8 @@ function FichaDaChegadaEstado({
         descartar(itemId, caixa.code);
       },
       remover ? "Produto removido da caixa." : "Quantidade salva nesta caixa.",
+      undefined,
+      remover ? "remover-produto" : "quantidade",
     );
   };
   const selecionar = (code: string) => {
@@ -405,6 +425,7 @@ function FichaDaChegadaEstado({
       fechando={etapa === 2}
       rascunho={rascunho}
       ocupado={ocupado}
+      acao={acao}
       podeOperar={podeOperar}
       podeRegistrarDivergencia={
         podeOperar &&
@@ -634,6 +655,8 @@ function FichaDaChegadaEstado({
           desmarcarFalta,
           () => setFaltas((atual) => ({ ...atual, [id]: null })),
           "Falta desmarcada.",
+          undefined,
+          `desmarcar:${id}`,
         )
       }
       onEtiquetas={(codigos) =>

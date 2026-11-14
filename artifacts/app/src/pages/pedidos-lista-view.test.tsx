@@ -197,7 +197,6 @@ describe("Pedidos › Lista de separação", () => {
 
   it("carregando, pedido não encontrado e erro: a mensagem no lugar da folha, com Imprimir desligado", () => {
     for (const [estado, mensagem] of [
-      ["carregando", "Carregando"],
       ["nao_encontrado", "Pedido não encontrado"],
       ["erro", "Não foi possível carregar o pedido."],
     ] as const) {
@@ -231,5 +230,73 @@ describe("Pedidos › Lista de separação", () => {
     expect(await violacoesDeAcessibilidade(render("pronto", FOLHA))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render("nao_encontrado", null))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render("erro", null))).toEqual([]);
+  });
+});
+
+describe("a lista de separação carregando (carregamento v2, parte 13c)", () => {
+  it("a espera em bloco no lugar da folha, sem o \"Carregando\" seco, e Imprimir desligado", async () => {
+    const html = render("carregando", null);
+    expect(textosDaTela(html)).toEqual(["Pedidos", "Lista de separação", "Imprimir"]);
+    expect(html).toContain("data-carregando-na-regiao");
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*Imprimir<\/button>/s);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+});
+
+/** Como no romaneio (parte 13m): a caixa que rola a folha a 390 px recebe o foco do teclado, com o nome e o anel. */
+describe("Pedidos › Lista de separação, a folha que rola (parte 13m)", () => {
+  it("a caixa que rola a folha é uma região com nome, no Tab, com o anel", () => {
+    const caixa = new JSDOM(render("pronto", FOLHA)).window.document.querySelector<HTMLElement>(".overflow-x-auto")!;
+    expect(caixa.getAttribute("role")).toBe("region");
+    expect(caixa.getAttribute("tabindex")).toBe("0");
+    expect(caixa.getAttribute("aria-label")).toBe("Folha da lista de separação");
+    expect(caixa.className).toContain("focus-visible:ring-foco");
+  });
+});
+
+/**
+ * A folha impressa sem as caixas e sem a ordem das prateleiras (revisão da
+ * parte 13m): antes, a coluna Caixa saía em branco, igual à da linha que não
+ * tem caixa, e nada dizia que a ordem podia não ser a de caminhada. Agora a
+ * célula diz "caixa não carregada", e o cabeçalho, "Ordem das prateleiras: não
+ * carregada", no próprio papel.
+ */
+describe("Pedidos › Lista de separação, a folha sem as caixas e sem a ordem (revisão da parte 13m)", () => {
+  const SEM_CAIXAS = folhaDaLista({
+    numero: "PED-0001",
+    cliente: "BTG Pactual",
+    destino: "Agência Faria Lima",
+    paraQuando: "2026-11-16T14:36:00.000Z",
+    por: "Guilherme Dantas",
+    agora: AGORA,
+    caixasNaoCarregadas: true,
+    ordemNaoCarregada: true,
+    grupos: gruposDaSeparacao(ITENS),
+  });
+
+  it("a coluna Caixa diz que a caixa não chegou, em cada linha; o cabeçalho diz a ordem", () => {
+    const dom = new JSDOM(render("pronto", SEM_CAIXAS));
+    const papel = dom.window.document.querySelector(".print-area")!;
+    const caixas = [...papel.querySelectorAll("tbody tr:not(:first-child)")].map((linha) => linha.querySelectorAll("td")[3]?.textContent);
+    expect(caixas).toEqual(["caixa não carregada", "caixa não carregada", "caixa não carregada", "caixa não carregada"]);
+    const rotulo = [...papel.querySelectorAll("span")].find((elemento) => elemento.textContent === "Ordem das prateleiras");
+    expect(rotulo?.nextElementSibling?.textContent).toBe("não carregada");
+    dom.window.close();
+  });
+
+  it("com as caixas lidas, a linha sem caixa fica em branco e o cabeçalho não ganha o campo", () => {
+    const textos = textosDaTela(render("pronto", FOLHA));
+    expect(textos).not.toContain("caixa não carregada");
+    expect(textos).not.toContain("Ordem das prateleiras");
+  });
+
+  it("só rótulos e dados, e o axe sem violação", async () => {
+    const html = render("pronto", SEM_CAIXAS);
+    expect(textosDaTela(html).filter((texto) => !textosDaTela(render("pronto", { ...SEM_CAIXAS, caixaQueNaoChegou: undefined, ordemDasPrateleiras: undefined })).includes(texto))).toEqual([
+      "Ordem das prateleiras",
+      "não carregada",
+      "caixa não carregada",
+    ]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });

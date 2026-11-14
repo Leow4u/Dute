@@ -22,7 +22,7 @@ function Sonda() {
 function shell(conteudoV3: boolean) {
   return renderToStaticMarkup(
     <Router ssrPath="/pedidos">
-      <ShellDoModulo ambiente="wms" atual={{ label: "Armazenagem", icon: Boxes }} opcoes={[]} items={[]} basePath="" online conteudoV3={conteudoV3} conta={() => null}>
+      <ShellDoModulo ambiente="wms" atual={{ label: "Armazenagem", icon: Boxes }} opcoes={[]} items={[]} basePath="" conteudoV3={conteudoV3} conta={() => null}>
         <Sonda />
       </ShellDoModulo>
     </Router>,

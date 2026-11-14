@@ -1,5 +1,6 @@
-import { ref, uploadBytes } from "firebase/storage";
+import { ref } from "firebase/storage";
 
+import { compactarFoto, enviarComProgresso } from "../envio-de-fotos";
 import { firebaseStorage } from "../firebase";
 import { instanteDaFoto, nomeDaFoto, problemaDaFoto } from "./andamento";
 import { chamarOperacao } from "./api";
@@ -9,6 +10,10 @@ import { chamarOperacao } from "./api";
  * (parte 3.7c): o storage.rules libera o envio, e attachPhoto confere o
  * arquivo antes de gravar. O nome e o instante saem na escolha do arquivo,
  * para a mesma tentativa repetir o mesmo arquivo e a mesma chave.
+ *
+ * A foto JPEG do celular sobe compactada a 2000 px no lado maior, e o envio
+ * conta os bytes (carregamento v2, parte 11). A PNG e a WebP sobem como
+ * vieram: o nome já leva a extensão, e o tipo precisa conferir com ele.
  */
 
 export type FotoEscolhida = { arquivo: File; nome: string; instante: string };
@@ -29,9 +34,12 @@ export async function enviarFoto(
   numero: string,
   foto: FotoEscolhida,
   contexto: { chave: string; ocorrencia?: string | null; etapa?: string | null; linha?: string | null },
+  aoProgredir?: (fracao: number) => void,
+  sinal?: AbortSignal,
 ): Promise<void> {
   if (!firebaseStorage) throw new Error("Firebase não configurado.");
-  await uploadBytes(ref(firebaseStorage, `os/${numero}/fotos/${foto.nome}`), foto.arquivo, { contentType: foto.arquivo.type }).catch((error: unknown) => {
+  const arquivo = await compactarFoto(foto.arquivo, { manterTipo: true });
+  await enviarComProgresso(ref(firebaseStorage, `os/${numero}/fotos/${foto.nome}`), arquivo, { contentType: arquivo.type }, aoProgredir, sinal).catch((error: unknown) => {
     // A mesma foto já subiu numa tentativa anterior: o storage.rules não deixa sobrescrever.
     if ((error as { code?: string })?.code !== "storage/unauthorized") throw error;
   });
@@ -53,7 +61,9 @@ export async function enviarFoto(
  */
 export async function enviarAssinatura(numero: string, assinatura: { arquivo: Blob; nome: string; contentType: string }): Promise<void> {
   if (!firebaseStorage) throw new Error("Firebase não configurado.");
-  await uploadBytes(ref(firebaseStorage, `os/${numero}/assinatura/${assinatura.nome}`), assinatura.arquivo, { contentType: assinatura.contentType }).catch((error: unknown) => {
+  // A foto da via assinada, quando JPEG, sobe compactada; a assinatura no dedo (PNG) sobe como veio.
+  const arquivo = assinatura.arquivo instanceof File ? await compactarFoto(assinatura.arquivo, { manterTipo: true }) : assinatura.arquivo;
+  await enviarComProgresso(ref(firebaseStorage, `os/${numero}/assinatura/${assinatura.nome}`), arquivo, { contentType: assinatura.contentType }).catch((error: unknown) => {
     if ((error as { code?: string })?.code !== "storage/unauthorized") throw error;
   });
 }

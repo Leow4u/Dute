@@ -81,6 +81,7 @@ vi.mock("@/hooks/use-toast", () => ({
 
 import Users from "./users";
 import { ROLE_INFO } from "@/lib/access";
+import { INTERVALO_DO_TOQUE_MS } from "@/lib/campo/toque-unico";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosForaDaLista } from "@/test/textos";
 
@@ -176,20 +177,30 @@ function itemDoMenu(texto: string) {
   );
 }
 
+/**
+ * O Reenviar convite é o BotaoDeAcao (parte 13a), que barra o segundo toque
+ * em menos de um segundo; quem lê a falha e tenta de novo leva mais que isso:
+ * o relógio anda um intervalo a cada confirmação.
+ */
+let deslocamentoDoRelogio = 0;
+const agoraDeVerdade = Date.now.bind(Date);
+
 async function confirmarReenvio() {
+  deslocamentoDoRelogio += INTERVALO_DO_TOQUE_MS;
   await esperar(
     () => document.querySelector('[role="dialog"]') !== null,
     "a confirmação do destinatário",
   );
   const button = [
     ...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'),
-  ].find((item) => item.textContent === "Reenviar convite");
+  ].find((item) => (item.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? item.textContent) === "Reenviar convite");
   await act(async () => button!.click());
 }
 
 function botao(texto: string, scope: ParentNode = document) {
   return [...scope.querySelectorAll<HTMLButtonElement>("button")].find(
-    (item) => item.textContent === texto,
+    // O confirmar dos diálogos é o BotaoDeAcao (parte 13a): o rótulo é o da camada atual.
+    (item) => item.textContent === texto || item.querySelector(".botao-acao-camada[data-atual]")?.textContent === texto,
   );
 }
 
@@ -261,6 +272,8 @@ function dialogo() {
 }
 
 beforeEach(() => {
+  deslocamentoDoRelogio = 0;
+  vi.spyOn(Date, "now").mockImplementation(() => agoraDeVerdade() + deslocamentoDoRelogio);
   estado.convites = [];
   estado.notificacoes = [];
   estado.linkCopiado = "";
@@ -353,6 +366,7 @@ afterEach(() => {
   container?.remove();
   raiz = null;
   container = null;
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
   window.history.replaceState({}, "", "/");
@@ -487,7 +501,7 @@ describe("Pessoas e acessos, a tela", () => {
     expect(dialogo().querySelector("#invite-perfil-interno")!.getAttribute("aria-checked")).toBe("true");
     expect(dialogo().querySelector('label[for="invite-perfil-interno"]')!.textContent).toContain(MODULO_ROTULO.wms);
     expect(
-      textosForaDaLista(dialogo().innerHTML, ["Convidar para a equipe", "Nome", "E-mail", "Perfil", ...PERFIS, ...MODULOS, "Cancelar", "Enviar convite", "Fechar"]),
+      textosForaDaLista(dialogo().innerHTML, ["Convidar para a equipe", "Nome", "E-mail", "Perfil", ...PERFIS, ...MODULOS, "Cancelar", "Enviar convite", "Enviando…", "Conferir", "Fechar"]),
     ).toEqual([]);
     expect(await violacoesDeAcessibilidade(document.body.innerHTML)).toEqual([]);
     await act(async () => dialogo().querySelector<HTMLButtonElement>("#invite-perfil-wms")!.click());
@@ -509,10 +523,12 @@ describe("Pessoas e acessos, a tela", () => {
     await digitar("invite-nome", "Juliana Prado");
     await digitar("invite-email", "juliana@btg.com.br");
     await esperar(() => dialogo().querySelector("select") !== null, "a lista de clientes");
-    expect(criar()!.disabled).toBe(true);
+    // Sem o cliente, o Enviar convite fica travado: aria-disabled, nunca disabled (parte 13a).
+    expect(criar()!.getAttribute("aria-disabled")).toBe("true");
+    expect(criar()!.disabled).toBe(false);
     await escolher("BTG Pactual", dialogo());
     expect(dialogo().textContent).toContain("Telas do portal");
-    expect(criar()!.disabled).toBe(false);
+    expect(criar()!.hasAttribute("aria-disabled")).toBe(false);
     await tentarCriar();
     await esperar(() => estado.convites.length > 0, "o convite enviado");
     expect(estado.convites[0]).toMatchObject({ role: "cliente", customer_code: "BTG Pactual" });
@@ -607,7 +623,7 @@ describe("Pessoas e acessos, a tela", () => {
 describe("o cliente do convite", () => {
   it("o endereço de Clientes abre o convite do portal com o cliente, sem legenda", async () => {
     await abrirOConvite("?convidar=cliente&cliente=Itau");
-    expect(criar()!.textContent).toBe("Enviar convite");
+    expect(criar()!.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Enviar convite");
     expect(dialogo().textContent).toContain("Convidar para o portal");
     expect(dialogo().textContent).not.toContain("O convite chega por e-mail");
   });
@@ -646,7 +662,7 @@ describe("o cliente do convite", () => {
 
   it("sem cliente escolhido, o convite não sai com o primeiro da lista", async () => {
     await abrirOConvite("?convidar=cliente");
-    expect(criar()!.disabled).toBe(true);
+    expect(criar()!.getAttribute("aria-disabled")).toBe("true");
     await tentarCriar();
     expect(estado.convites).toEqual([]);
   });

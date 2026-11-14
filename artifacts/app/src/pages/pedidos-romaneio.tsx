@@ -2,7 +2,7 @@ import { doc } from "firebase/firestore";
 import { useSearch } from "wouter";
 
 import { useActiveCustomer } from "@/lib/active-customer-context";
-import { useDocumento } from "@/lib/operacao/leitura";
+import { juntarTentativas, novaTentativaDe, useDocumento } from "@/lib/operacao/leitura";
 import { pedidoDaBusca } from "@/lib/warehouse-ops/lista-de-separacao";
 import { folhaDoRomaneio } from "@/lib/warehouse-ops/romaneio";
 import { hrefDaBancada } from "@/lib/warehouse-ops/separacao";
@@ -29,6 +29,9 @@ export default function PaginaPedidosRomaneio() {
     (_id, data) => ({ paraQuando: data.due_at as unknown }),
   );
   const esperandoSolicitacao = Boolean(solicitacaoId) && solicitacao.item === undefined && !solicitacao.erro;
+  // "Tentar de novo" (na demora, na desistência e na falha, e no aviso da conexão): assina de novo o que ainda não
+  // chegou, os volumes ou o prazo, também o prazo que falhou (revisão da parte 13l).
+  const tentar = () => Promise.all([leitura.tentar(), solicitacaoId && solicitacao.item === undefined ? solicitacao.tentar() : undefined]);
 
   const estado: EstadoDoRomaneio =
     leitura.estado !== "pronto" ? leitura.estado : !pedido?.concluido ? "em_separacao" : esperandoSolicitacao ? "carregando" : "pronto";
@@ -39,6 +42,8 @@ export default function PaginaPedidosRomaneio() {
           cliente: clientes.find((cliente) => cliente.code === pedido.clienteCodigo)?.name || pedido.clienteCodigo,
           destino: pedido.destino,
           paraQuando: solicitacao.item?.paraQuando,
+          // O prazo que não chegou: o papel diz, no campo, em vez do traço de sem prazo (parte 13m).
+          prazoNaoCarregado: Boolean(solicitacaoId) && solicitacao.erro,
           lacre: pedido.lacre,
           separadoDe: pedido.separadoDe,
           separadoAte: pedido.separadoAte,
@@ -51,8 +56,11 @@ export default function PaginaPedidosRomaneio() {
       estado={estado}
       folha={folha}
       voltar={pedido && pedidoId ? { href: hrefDaBancada(pedidoId), rotulo: pedido.numero || "Pedidos" } : null}
+      // A frase diz o que falta, em qualquer falta; sem conexão, o aviso da conexão diz por quê (revisão da parte 13l).
       avisos={solicitacao.erro ? ["Não foi possível carregar o prazo do pedido."] : []}
       onImprimir={() => window.print()}
+      onTentar={tentar}
+      leitura={{ ...juntarTentativas(leitura.aoVivo, novaTentativaDe([solicitacao])), tentar }}
     />
   );
 }

@@ -64,7 +64,11 @@ async function esperar(condicao: () => boolean, oQue: string) {
 
 const tituloDoDetalhe = () => container!.querySelector("h2")?.textContent ?? "";
 const lista = () => container!.querySelector("section")?.textContent ?? "";
-const botao = (texto: string) => [...container!.querySelectorAll("button")].find((item) => item.textContent?.trim() === texto) ?? null;
+// O BotaoDeAcao empilha as camadas: o rótulo é o da camada atual (carregamento v2).
+const botao = (texto: string) =>
+  [...container!.querySelectorAll("button")].find(
+    (item) => (item.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? item.textContent)?.trim() === texto,
+  ) ?? null;
 
 async function abrir() {
   await act(async () =>

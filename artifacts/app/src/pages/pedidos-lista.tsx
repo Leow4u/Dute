@@ -1,13 +1,16 @@
 import { useMemo, useState } from "react";
 import { flushSync } from "react-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { doc } from "firebase/firestore";
 import { useSearch } from "wouter";
 
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
-import { useDocumento } from "@/lib/operacao/leitura";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { faltaDaConsulta, useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { juntarTentativas, novaTentativaDe, useDocumento } from "@/lib/operacao/leitura";
 import { folhaDaLista, pedidoDaBusca } from "@/lib/warehouse-ops/lista-de-separacao";
+import { fraseDoQueNaoChegou } from "@/lib/warehouse-ops/o-que-nao-chegou";
 import { fetchJson, type WarehouseOpsResponse, type WarehouseTaskItem } from "@/lib/warehouse-ops/model";
 import { groupWarehouseOrders } from "@/lib/warehouse-ops/orders";
 import { useLeituraDaLista } from "@/lib/warehouse-ops/use-lista-de-separacao";
@@ -34,6 +37,9 @@ export default function PaginaPedidosLista() {
     queryFn: () => fetchJson<WarehouseOpsResponse>("/api/warehouse/ops"),
     refetchOnWindowFocus: false,
   });
+  // A fila que falhou sem nada lido fica na falha enquanto tenta de novo: o aviso não sai e volta no mesmo quadro, e o
+  // foco fica no "Tentar de novo" (revisão da parte 13l).
+  const opsNaTela = useLeituraComFalha(ops);
   const pedido = useMemo(() => (chave ? groupWarehouseOrders(ops.data).find((order) => order.key === chave) : undefined), [chave, ops.data]);
   const tarefa = pedido?.pick ?? pedido?.pack ?? pedido?.ship;
   const itens = tarefa?.items ?? SEM_ITENS;
@@ -52,9 +58,9 @@ export default function PaginaPedidosLista() {
 
   const estado: EstadoDaLista = !chave
     ? "nao_encontrado"
-    : ops.isLoading
+    : opsNaTela.isLoading
       ? "carregando"
-      : ops.isError && !ops.data
+      : opsNaTela.isError && !opsNaTela.data
         ? "erro"
         : !pedido
           ? "nao_encontrado"
@@ -68,6 +74,11 @@ export default function PaginaPedidosLista() {
           cliente: clientes.find((cliente) => cliente.code === codigoDoCliente)?.name || codigoDoCliente,
           destino: solicitacao.item?.destino,
           paraQuando: solicitacao.item?.paraQuando,
+          // O destino e o prazo que não chegaram: o papel diz, nos campos, em vez do traço (parte 13m).
+          solicitacaoNaoCarregada: Boolean(solicitacaoId) && solicitacao.erro,
+          // A caixa e a ordem das prateleiras que não chegaram também (revisão da parte 13m).
+          caixasNaoCarregadas: lista.semCaixas,
+          ordemNaoCarregada: lista.semPosicoes,
           por: user?.fullName,
           agora,
           grupos: lista.grupos,
@@ -76,12 +87,25 @@ export default function PaginaPedidosLista() {
   const avisos = [
     lista.semPosicoes ? "Não foi possível carregar a ordem das prateleiras." : null,
     lista.semCaixas ? "Não foi possível carregar as caixas." : null,
-    solicitacao.erro ? "Não foi possível carregar o destino do pedido." : null,
+    // A frase diz o que falta, em qualquer falta; sem conexão, o aviso da conexão diz por quê (revisão da parte 13l). O
+    // destino e o prazo, como o papel (revisão da parte 13m).
+    solicitacao.erro ? fraseDoQueNaoChegou(["o destino", "o prazo do pedido"]) : null,
   ].filter((aviso): aviso is string => Boolean(aviso));
+  // "Tentar de novo" (na demora, na desistência e na falha, e no aviso da conexão): lê do zero a fila, as prateleiras e
+  // as caixas que ainda leem (o react-query não recomeça a leitura presa sem dado), e assina de novo a solicitação que
+  // não chegou, também a que falhou (revisão da parte 13l).
+  const queryClient = useQueryClient();
+  const tentar = () =>
+    Promise.all([
+      relerDoZero(queryClient, [["warehouse-ops"], ["warehouse-positions"], ["warehouse-boxes"], ["opening-inventory-lines"]]),
+      solicitacaoId && solicitacao.item === undefined ? solicitacao.tentar() : undefined,
+    ]);
   const imprimir = () => {
     // A hora entra na folha antes de o navegador abrir a impressão.
     flushSync(() => setAgora(new Date()));
     window.print();
   };
-  return <PedidosListaView estado={estado} folha={folha} avisos={avisos} onImprimir={imprimir} />;
+  // A fila (a consulta) e o destino (a escuta), com o que falta a cada um (parte 13l).
+  const leitura = { ...juntarTentativas(novaTentativaDe([solicitacao]), { tentando: false, tentar, ...faltaDaConsulta(opsNaTela) }), tentar };
+  return <PedidosListaView estado={estado} folha={folha} avisos={avisos} onImprimir={imprimir} onTentar={tentar} leitura={leitura} />;
 }

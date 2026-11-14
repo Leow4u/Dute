@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ArrowRight } from "lucide-react";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -58,7 +58,8 @@ export function OpeningLineCorrection({
   });
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !move.isPending) onClose(); }}>
+    // Enquanto grava, o diálogo segura: o Esc, o toque fora, o X e o "Voltar" não fecham (carregamento v2, parte 13b).
+    <Dialog open ocupado={move.isPending} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Corrigir caixa do lançamento</DialogTitle>
@@ -96,11 +97,14 @@ export function OpeningLineCorrection({
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose} disabled={move.isPending}>Voltar</Button>
-          <Button type="button" onClick={() => move.mutate()} disabled={!canMove || move.isPending}>
-            {move.isPending ? <RefreshCw className="mr-2 size-4 animate-spin" /> : null}
-            Confirmar correção
-          </Button>
+          <DialogCancelar onClick={onClose}>Voltar</DialogCancelar>
+          <BotaoDeAcao
+            estado={move.isPending ? "andamento" : "repouso"}
+            rotulo="Confirmar correção"
+            andamento="Corrigindo…"
+            bloqueado={!move.isPending && !canMove}
+            onClick={() => move.mutate()}
+          />
         </DialogFooter>
       </DialogContent>
     </Dialog>

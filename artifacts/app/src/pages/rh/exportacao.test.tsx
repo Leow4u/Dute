@@ -74,6 +74,10 @@ vi.mock("@/lib/rh/api", () => ({
 }));
 
 import RhExportacao from "./exportacao";
+import { depoisDoToqueDuplo, rotuloDoBotao } from "@/test/botoes";
+
+/** Cada toque pula o intervalo do toque duplo do BotaoDeAcao: o repetido é outro pedido da pessoa. */
+const relogios: Array<() => void> = [];
 
 let raiz: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -90,6 +94,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  while (relogios.length > 0) relogios.pop()!();
   act(() => raiz?.unmount());
   container?.remove();
 });
@@ -113,8 +118,9 @@ async function montar() {
 }
 
 async function clicar(rotulo: string) {
-  const botao = [...container!.querySelectorAll("button")].find((item) => item.textContent === rotulo);
+  const botao = [...container!.querySelectorAll("button")].find((item) => rotuloDoBotao(item) === rotulo);
   if (!botao) throw new Error(`Botão "${rotulo}" não encontrado.`);
+  relogios.push(depoisDoToqueDuplo());
   await act(async () => {
     botao.click();
   });
@@ -147,7 +153,9 @@ describe("a exportação do RH com as callables", () => {
 
     estado.falhar = false;
     await clicar("Gerar exportação");
-    expect(container!.querySelector('[role="status"]')?.textContent).toBe("Setembro de 2026: versão 2 gerada");
+    // O aviso fica escrito, sem região viva solta (parte 13g).
+    expect(container!.textContent).toContain("Setembro de 2026: versão 2 gerada");
+    expect(container!.querySelector('[role="status"]')).toBeNull();
     await clicar("Gerar exportação");
     expect(geracoes()).toEqual([
       ["k-1", "2026-09"],

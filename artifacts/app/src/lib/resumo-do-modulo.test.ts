@@ -61,6 +61,12 @@ describe("resumo do módulo para o card da entrada", () => {
 });
 
 describe("contadores do menu do módulo", () => {
+  it("enquanto o Precisa de você lê, o Início mostra o bloco, e nenhum número sai pela metade (carregamento v2, parte 13e)", () => {
+    expect(contadoresDoMenu(COMERCIAL, menuDoComercial("owner", true), "comercial-inicio", true)).toEqual({
+      "comercial-inicio": { n: 0, lendo: true },
+    });
+  });
+
   it("Comercial: o Início conta todas as linhas; cada tela, as linhas que levam a ela", () => {
     const contadores = contadoresDoMenu(COMERCIAL, menuDoComercial("owner", true), "comercial-inicio");
     expect(contadores).toEqual({

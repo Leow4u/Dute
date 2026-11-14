@@ -4,6 +4,8 @@ import { Link } from "wouter";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FaixaAoVivo, FalhaNaLeitura, erroDaLeituraAoVivo, type LeituraAoVivoNaTela } from "@/components/ui/erro-na-leitura";
 import { textoDaEtiqueta, textoDasAbertas, textoDasVazias, type CaixaVazia, type EtiquetaParaTrocar } from "@/lib/warehouse-ops/caixas-da-separacao";
 import {
   conteudoDoVolume,
@@ -13,6 +15,8 @@ import {
   textoVerVolumes,
   type VolumeDoPedido,
 } from "@/lib/warehouse-ops/volumes-do-pedido";
+
+import { FraseDoApoio, type ApoioQueNaoChegou } from "./pedidos-separar-view";
 
 /**
  * O pedido separado (separação com caixas, parte 4d;
@@ -42,6 +46,9 @@ export function PedidoSeparadoView({
   etiquetas = [],
   etiquetasHref,
   vazias = [],
+  onTentar,
+  leitura,
+  apoio,
 }: {
   /** "PED-0001" */
   numero: string;
@@ -60,11 +67,20 @@ export function PedidoSeparadoView({
   etiquetasHref?: string | null;
   /** As caixas que o pedido esvaziou. */
   vazias?: readonly CaixaVazia[];
+  /** Lê os volumes de novo (a leitura ao vivo): "Tentar de novo" na demora, na desistência e na falha. */
+  onTentar?: () => Promise<unknown>;
+  /** O que falta às leituras dos volumes (parte 13l): a conexão, com a hora do que ficou na tela, ou o servidor. */
+  leitura?: LeituraAoVivoNaTela;
+  /**
+   * A leitura de apoio que não chegou (as caixas, que dão as etiquetas para trocar e as vazias, e o prazo): a frase,
+   * com o "Tentar de novo", na coluna do lado, como na bancada (revisão da parte 13m).
+   */
+  apoio?: ApoioQueNaoChegou | null;
 }) {
   const [todos, setTodos] = useState(false);
   const visiveis = todos ? volumes : volumes.slice(0, VOLUMES_A_VISTA);
   const comVolumes = estado === "pronto" && volumes.length > 0;
-  const comLateral = etiquetas.length > 0 || vazias.length > 0;
+  const comLateral = etiquetas.length > 0 || vazias.length > 0 || Boolean(apoio);
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-5 pb-24">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -103,6 +119,8 @@ export function PedidoSeparadoView({
         ) : null}
       </header>
 
+      {/* Os volumes lidos, sem conexão: ficam, com a hora (parte 13l). */}
+      {estado === "pronto" && leitura ? <FaixaAoVivo leitura={leitura} objeto="pedido" /> : null}
       <div className={comLateral ? "grid gap-5 lg:grid-cols-[minmax(0,1fr)_372px] lg:items-start" : undefined}>
         <section aria-labelledby="volumes-do-pedido" className="overflow-hidden rounded-lg border border-border bg-card">
           <div className="flex items-baseline gap-2.5 border-b border-border bg-muted/40 px-4 py-3 md:px-5">
@@ -111,9 +129,19 @@ export function PedidoSeparadoView({
             </h2>
             {comVolumes ? <span className="text-sm font-semibold text-muted-foreground">{resumoDosVolumes(volumes)}</span> : null}
           </div>
-          {estado !== "pronto" ? (
-            <p role={estado === "erro" ? "alert" : undefined} className="px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
-              {estado === "erro" ? "Não foi possível carregar os volumes." : "Carregando"}
+          {/* A primeira leitura é a espera em bloco do carregamento v2 (parte 13c), no lugar do "Carregando" seco, com a
+              saída da leitura ao vivo, que relê: "Tentar de novo" aos 10 s e a desistência aos 70 s. */}
+          {estado === "carregando" ? (
+            <CarregandoNaRegiao rotulo="Carregando volumes…" onTentar={onTentar} className="px-5 py-6" />
+          ) : estado !== "pronto" && onTentar ? (
+            <FalhaNaLeitura
+              leitura={{ error: erroDaLeituraAoVivo(leitura?.falta), refetch: onTentar }}
+              mensagem="Não foi possível carregar os volumes."
+              className="rounded-none border-0"
+            />
+          ) : estado !== "pronto" ? (
+            <p role="alert" className="px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
+              Não foi possível carregar os volumes.
             </p>
           ) : !volumes.length ? (
             <p className="px-5 py-7 text-center text-sm font-semibold text-muted-foreground">Nenhum volume</p>
@@ -202,6 +230,7 @@ export function PedidoSeparadoView({
                 </ul>
               </section>
             ) : null}
+            {apoio ? <FraseDoApoio apoio={apoio} /> : null}
           </div>
         ) : null}
       </div>

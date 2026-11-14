@@ -283,6 +283,24 @@ do `Loader2` e do `RefreshCw` girando de hoje (pergunta 5, aprovado).
 | Estoque › Itens, fotos do item | `WmsCarregandoFotos.dc.html` | "Enviando 3 de 4" com o progresso, as fotos já enviadas e as que passaram de 4. |
 | Receber, a atualização falhou | `WmsCarregandoReceberAtualizar.dc.html` | A lista de 10:42 fica na tela, com "Não consegui atualizar" e "Tentar de novo". |
 
+A página "Carregamento v2" tem canvas próprio (privado,
+https://claude.ai/artifact/CLb5KjWymnMA7yM2ZNctm1), feito em 12/11/2026
+depois de o Leonardo achar o carregamento "mega simples": a prancha "Hoje",
+as três direções (A · Marca em movimento, B · Silêncio premium e C · Galpão
+em primeiro lugar) e a recomendada, aprovada "como recomendado" no mesmo dia
+(decisões em `docs/plataforma/diagnostico-carregamento.md`, seção 10; regra
+em `docs/sistema-visual.md`, "Carregamento"). A recomendada é a C com a caixa
+chanfrada da A como indicador único, em tinta. As fontes abaixo são as dela;
+os PNG da marca são os uploads do canvas (`/_blob/`). As pranchas rodam em
+laço, só com CSS, e param com `prefers-reduced-motion`.
+
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| As peças | `WmsCarregandoV2Pecas.dc.html` | Os nove momentos com a régua de tempo: o indicador nos quatro tamanhos e fundos, a lista com a forma final, o botão nos cinco estados, a linha em andamento, a abertura, a operação longa, o segundo plano, o "Reconectando…" e o Agent Dute. |
+| Pedidos | `WmsCarregandoV2Pedidos.dc.html` | A tela inteira em laço de 12 s: a primeira leitura, os dados chegando, "Aprovando…" só na linha 1042, "Aprovado", o toast e a linha mudando de grupo. |
+| Celular | `WmsCarregandoV2Celular.dc.html` | Pedidos no celular: a caixa de 20 px no botão, a barra de 6 px na linha, o toast embaixo e o "Reconectando…" na linha de estado. |
+| Abertura | `WmsCarregandoV2Abertura.dc.html` | A abertura preta com os PNG da marca e o trilho chanfrado, "Sem conexão" aos 3 s, a demora aos 10 s e a saída para o Início. |
+
 A página "Catálogo · nome sem tamanho" tem canvas próprio (privado,
 https://claude.ai/artifact/KsF8UuJqi2akHLxDaiMCWw), feito em 06/11/2026 para
 o Leonardo avaliar a padronização do nome do produto: hoje cada tamanho é um

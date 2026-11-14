@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -13,6 +13,7 @@ import {
   type FormDaTabela,
   type ItemDaTabelaForm,
 } from "@/lib/comercial/tabela-do-contrato";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
 type MudaFormulario = (muda: (atual: FormDaTabela) => FormDaTabela) => void;
 
@@ -120,8 +121,8 @@ export function TabelaDoContratoDialog({ aberto, contratoNome, inicioDoContrato,
   };
 
   return (
-    <Dialog open={aberto} onOpenChange={(open) => { if (!open && !ocupado) onCancelar(); }}>
-      <DialogContent className="v3 max-h-screen max-w-4xl overflow-y-auto" onEscapeKeyDown={(event) => { if (ocupado) event.preventDefault(); }} onPointerDownOutside={(event) => { if (ocupado) event.preventDefault(); }}>
+    <Dialog open={aberto} ocupado={ocupado} onOpenChange={(open) => { if (!open) onCancelar(); }}>
+      <DialogContent className="v3 max-h-screen max-w-4xl overflow-y-auto">
         <form className="grid gap-4" onSubmit={(event) => {
           event.preventDefault();
           if (ocupado) return;
@@ -139,8 +140,8 @@ export function TabelaDoContratoDialog({ aberto, contratoNome, inicioDoContrato,
           }} />
           {problema || erro ? <p role="alert" className="rounded-md border border-destructive-soft-border bg-destructive-soft px-3 py-2 text-sm font-semibold text-destructive-soft-foreground">{problema || erro}</p> : null}
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onCancelar} disabled={ocupado}>Cancelar</Button>
-            <Button type="submit" disabled={ocupado}>{ocupado ? "Salvando..." : "Salvar tabela"}</Button>
+            <DialogCancelar onClick={onCancelar} />
+            <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} rotulo="Salvar tabela" andamento="Salvando a tabela…" />
           </DialogFooter>
         </form>
       </DialogContent>

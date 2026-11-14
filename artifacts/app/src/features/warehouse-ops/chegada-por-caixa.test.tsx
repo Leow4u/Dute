@@ -1,3 +1,4 @@
+import { JSDOM } from "jsdom";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -162,13 +163,26 @@ const RESUMO_DA_CAIXA = [
   "Caixa CX-000132", "Conteúdo da caixa", "Produto", "Quantidade", "POLO MASCULINO PIQUET PRETO GG", "A.01.0806.004.GG", "18 un.", "Total na caixa: 18 un.",
 ];
 const AVISO_DA_REVISAO = "Ao concluir a entrada, as caixas seguem para a fila de guarda física. Caixas sem prateleira terão o destino definido na guarda.";
+/**
+ * A tag de abertura do botão pelo rótulo: o do texto, ou o da camada atual do
+ * BotaoDeAcao, que empilha as camadas (carregamento v2, parte 13c).
+ */
 function tagDoBotao(html: string, texto: string) {
-  const tag = html.match(new RegExp(`<button[^>]*>${texto}</button>`))?.[0];
+  const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+  const botao = [...dom.window.document.querySelectorAll("button")].find(
+    (candidato) => (candidato.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? candidato.textContent)?.trim() === texto,
+  );
+  const tag = botao?.outerHTML.match(/^<button[^>]*>/)?.[0];
+  dom.window.close();
   expect(tag, `botão ${texto}`).toBeTruthy();
   return tag!;
 }
+/** Travado: o `disabled` (o que não tem o que fazer) ou o `aria-disabled` da ação que espera (parte 13c). */
+const TRAVADO = /(^|\s)disabled=""|aria-disabled="true"/;
+/** As camadas do BotaoDeAcao que ficam fora da árvore: o gerúndio e o "Conferir" (carregamento v2, parte 13c). */
+const CAMADAS_DAS_ACOES = ["Iniciando…", "Adicionando…", "Salvando…", "Removendo…", "Fechando…", "Reabrindo…", "Concluindo…", "Desmarcando…", "Confirmando…", "Conferir"];
 async function conferirTextosEAcessibilidade(html: string, textos: string[]) {
-  expect(textosForaDaLista(html, textos)).toEqual([]);
+  expect(textosForaDaLista(html, [...textos, ...CAMADAS_DAS_ACOES])).toEqual([]);
   expect(await violacoesDeAcessibilidade(html)).toEqual([]);
 }
 
@@ -193,17 +207,17 @@ describe("a conferência em quatro etapas", () => {
   it("produto novo começa vazio, existente mostra total e a revisão espera salvar ou descartar", () => {
     const novo = render({ produtoSelecionado: `${RECEIPT}_01` });
     expect(novo).toMatch(/<input[^>]*id="caixa-quantidade"[^>]*value=""/);
-    expect(tagDoBotao(novo, "Adicionar à caixa")).toContain('disabled=""');
+    expect(tagDoBotao(novo, "Adicionar à caixa")).toMatch(TRAVADO);
     expect(novo).toContain("Quantidade ainda não adicionada.");
     const existente = render({ produtoSelecionado: `${RECEIPT}_02` });
     expect(existente).toMatch(/<input[^>]*id="caixa-quantidade"[^>]*value="18"/);
     expect(existente).toContain("Salvo nesta caixa: 18 un.");
-    expect(tagDoBotao(existente, "Salvar quantidade")).toContain('disabled=""');
+    expect(tagDoBotao(existente, "Salvar quantidade")).toMatch(TRAVADO);
     expect(existente).toContain("Remover produto da caixa");
     const editando = render({ produtoSelecionado: `${RECEIPT}_02`, quantidades: { [`${RECEIPT}_02`]: "20" }, rascunhosPendentes: true, onBack: () => undefined });
-    expect(tagDoBotao(editando, "Salvar quantidade")).not.toContain('disabled=""');
-    expect(tagDoBotao(editando, "Revisar caixa")).toContain('disabled=""');
-    expect(tagDoBotao(editando, "Revisar entrada")).toContain('disabled=""');
+    expect(tagDoBotao(editando, "Salvar quantidade")).not.toMatch(TRAVADO);
+    expect(tagDoBotao(editando, "Revisar caixa")).toMatch(TRAVADO);
+    expect(tagDoBotao(editando, "Revisar entrada")).toMatch(TRAVADO);
     expect(editando).toContain("Descartar alteração");
     expect(editando).toContain("Há quantidade não salva. Salve ou descarte a alteração antes de revisar.");
   });
@@ -220,10 +234,10 @@ describe("a conferência em quatro etapas", () => {
 
   it("fechamento mantém conteúdo, medidas, peso e orientação e confirma somente com dados válidos", async () => {
     const vazio = render({ fechando: true });
-    expect(tagDoBotao(vazio, "Fechar caixa")).toContain('disabled=""');
+    expect(tagDoBotao(vazio, "Fechar caixa")).toMatch(TRAVADO);
     expect(vazio).not.toContain("Volume");
     const preenchido = render({ fechando: true, rascunho: { length_cm: "48", width_cm: "38", height_cm: "30", weight_kg: "6,1", content: "", tombar: true, empilhar: false } });
-    expect(tagDoBotao(preenchido, "Fechar caixa")).not.toContain('disabled=""');
+    expect(tagDoBotao(preenchido, "Fechar caixa")).not.toMatch(TRAVADO);
     expect(preenchido).toMatch(/<input[^>]*id="fechar-length_cm"[^>]*value="48"/);
     expect(preenchido).toMatch(/<button[^>]*aria-checked="true"[^>]*id="fechar-tombar"/);
     expect(preenchido).not.toContain("Produtos da NF");
@@ -252,7 +266,7 @@ describe("a conferência em quatro etapas", () => {
 
   it("revisão mantém Concluir entrada bloqueado por caixa aberta e linha sem falta marcada", () => {
     const html = render({ etapa: 4 });
-    expect(tagDoBotao(html, "Concluir entrada")).toContain('disabled=""');
+    expect(tagDoBotao(html, "Concluir entrada")).toMatch(TRAVADO);
     expect(html).toContain("CX-000132 em conferência · linha 1 sem falta marcada");
     expect(html).not.toContain("Justificativa da divergência");
     expect(html).toContain("Marcar falta");
@@ -263,10 +277,10 @@ describe("a conferência em quatro etapas", () => {
     const marcada = { ...task, items: [{ ...task.items![0]!, shortage: { qty: 12, boxed_qty: 29, expected_qty: 41, reason: "avaria", detail: "Volume 3 molhado" } }, task.items![1]!] };
     const fechada = caixa("CX-000132", "reviewed", [linha(`${RECEIPT}_02`, 2, "GG", 18)], { length_m: 0.48, width_m: 0.38, height_m: 0.3, gross_weight_kg: 6.1 });
     const semJustificativa = render({ task: marcada, caixas: [caixas[0]!, fechada], selecionada: null });
-    expect(tagDoBotao(semJustificativa, "Concluir entrada")).toContain('disabled=""');
+    expect(tagDoBotao(semJustificativa, "Concluir entrada")).toMatch(TRAVADO);
     expect(semJustificativa).toMatch(/<label[^>]*for="justificativa-da-divergencia"[^>]*>Justificativa da divergência<\/label>/);
     const pronta = render({ task: marcada, caixas: [caixas[0]!, fechada], selecionada: null, justificativa: "Fornecedor envia o volume 3 na próxima NF." });
-    expect(tagDoBotao(pronta, "Concluir entrada")).not.toContain('disabled=""');
+    expect(tagDoBotao(pronta, "Concluir entrada")).not.toMatch(TRAVADO);
     expect(pronta).not.toContain("Sem caixa");
     await conferirTextosEAcessibilidade(semJustificativa, [
       ...CABECALHO, ...CAIXAS, ...LINHAS_DA_NF.filter((texto) => !["faltam 12", "Sem caixa"].includes(texto)), "2 caixas", "59 un. conferidas", "Há divergências na conferência", "Caixas e destinos",

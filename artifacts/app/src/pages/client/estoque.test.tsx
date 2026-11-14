@@ -241,7 +241,12 @@ describe("em recebimento no estoque do portal (parte 7d)", () => {
   const linhas = (html: string) => {
     const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
     const resultado = [...dom.window.document.querySelectorAll("tbody tr")].map((linha) => {
-      const celulas = [...linha.querySelectorAll("td")].map((celula) => celula.textContent?.trim() ?? "");
+      // O botão de ação (parte 13f) leva as camadas escondidas: vale a que está na tela.
+      const celulas = [...linha.querySelectorAll("td")].map((celula) => {
+        const copia = celula.cloneNode(true) as Element;
+        copia.querySelectorAll(".botao-acao-camada:not([data-atual])").forEach((camada) => camada.remove());
+        return copia.textContent?.trim() ?? "";
+      });
       return { codigo: celulas[0], disponivel: celulas[2], recebimento: celulas[3], reservado: celulas[4], pedido: celulas[5] };
     });
     dom.window.close();
@@ -312,7 +317,8 @@ describe("em recebimento no estoque do portal (parte 7d)", () => {
     expect(textosDaTela(html)).toEqual([
       "Código", "Produto", "Disponível", "Em recebimento", "Reservado", "Pedido",
       "B.02.0110.001.42", "Calça social · 42", "Calça", "64", "0", "12", "Adicionar",
-      "A.01.0806.005.GG", "Camisa polo manga longa · GG", "Polo", "24", "Avisar reposição", "Arquivar",
+      // As camadas do botão de ação entram na lista (o andamento, o sucesso e o "Conferir"; parte 13f).
+      "A.01.0806.005.GG", "Camisa polo manga longa · GG", "Polo", "24", "Avisar reposição", "Avisando…", "Avisado", "Conferir", "Arquivar", "Arquivando…", "Arquivado",
     ]);
     // Uma linha por tamanho: o nome com o tamanho também no contador.
     expect(html).toContain('title="Calça social · 42"');
@@ -323,7 +329,7 @@ describe("em recebimento no estoque do portal (parte 7d)", () => {
   it("o card do produto só chegando: o selo, a linha do em recebimento e os botões de hoje; textos e axe", async () => {
     const html = card([polo]);
     expect(textosDaTela(html)).toEqual([
-      "Em recebimento", "Polo · A.01.0806.005", "Camisa polo manga longa · GG", "Sem saldo no momento", "24", "em recebimento", "Avisar reposição", "Arquivar",
+      "Em recebimento", "Polo · A.01.0806.005", "Camisa polo manga longa · GG", "Sem saldo no momento", "24", "em recebimento", "Avisar reposição", "Avisando…", "Avisado", "Conferir", "Arquivar", "Arquivando…", "Arquivado",
     ]);
     expect(html).toContain('text-info-soft-foreground">24</span> em recebimento');
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
@@ -338,7 +344,7 @@ describe("em recebimento no estoque do portal (parte 7d)", () => {
     const pp: InventoryItem = { ...polo, sku_code: "BTG-000200", client_item_code: "A.01.0806.005.PP", product_name: "Camisa polo manga longa PP", qty_on_hand: 0, qty_receiving: 0 };
     expect(textosDaTela(card([pp, polo]))).toEqual([
       "Em recebimento", "Polo · A.01.0806.005", "Camisa polo manga longa", "PP", "esgotado", "GG", "em recebimento",
-      "Sem saldo no momento", "24", "em recebimento neste tamanho", "Avisar reposição", "Arquivar",
+      "Sem saldo no momento", "24", "em recebimento neste tamanho", "Avisar reposição", "Avisando…", "Avisado", "Conferir", "Arquivar", "Arquivando…", "Arquivado",
     ]);
     // Com um tamanho com saldo, o card abre nele, sem o selo; o tamanho chegando continua dizendo que está em recebimento.
     const m: InventoryItem = { ...polo, sku_code: "BTG-000199", client_item_code: "A.01.0806.005.M", product_name: "Camisa polo manga longa M", qty_on_hand: 10, qty_available: 10, qty_receiving: 0 };
@@ -356,7 +362,7 @@ describe("em recebimento no estoque do portal (parte 7d)", () => {
       "Detalhe do produto", "PO", "Polo", "A.01.0806.005.GG", "Camisa polo manga longa · GG", "Em recebimento",
       "Disponível para pedido", "0", "No pedido", "24", "Total físico",
       "Há peças deste produto em recebimento na Dutelog: entram no disponível para pedido depois da guarda.",
-      "Avisar reposição", "Arquivar",
+      "Avisar reposição", "Avisando…", "Avisado", "Conferir", "Arquivar", "Arquivando…", "Arquivado",
     ]);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
@@ -434,7 +440,11 @@ describe("o detalhe do produto que rola (docs/mockups/PortalDetalhe*.dc.html, 04
     expect([...rodape!.querySelectorAll("button")].map((botao) => botao.textContent)).toContain("Adicionar ao pedido");
     // Sem saldo, "Avisar reposição" e "Arquivar" também ficam no rodapé.
     const semSaldo = montar(detalhe({ product: groupInventoryProducts([camisa])[0]! })).body.firstElementChild!;
-    expect([...semSaldo.children[2]!.querySelectorAll("button")].map((botao) => botao.textContent)).toEqual(["Avisar reposição", "Arquivar"]);
+    expect(
+      [...semSaldo.children[2]!.querySelectorAll("button")].map(
+        (botao) => botao.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? botao.textContent,
+      ),
+    ).toEqual(["Avisar reposição", "Arquivar"]);
     expect(semSaldo.children[1]!.textContent).not.toContain("Avisar reposição");
   });
 
@@ -531,11 +541,12 @@ describe("o detalhe do produto que rola (docs/mockups/PortalDetalhe*.dc.html, 04
   it("depois de adicionar, o painel segue aberto com a confirmação e o Ver pedido; textos e axe", async () => {
     const html = detalhe({ cart: { [toalha.key]: 10 }, adicionado: 10, onOpenCart: noop });
     const rodape = montar(html).querySelector('[data-testid="detalhe-rodape"]')!;
-    expect(rodape.querySelector('[role="status"]')?.textContent).toBe("10 peças adicionadas ao pedido");
+    expect(rodape.querySelector('[data-testid="detalhe-adicionado"]')?.textContent).toBe("10 peças adicionadas ao pedido");
     expect([...rodape.querySelectorAll("button")].map((botao) => botao.textContent)).toContain("Ver pedido");
-    expect(montar(detalhe({ adicionado: 1, onOpenCart: noop })).querySelector('[role="status"]')?.textContent).toBe("1 peça adicionada ao pedido");
-    // Antes de adicionar, o status existe e fica vazio: o leitor de tela anuncia quando ele muda.
-    expect(montar(detalhe()).querySelector('[data-testid="detalhe-rodape"] [role="status"]')?.textContent).toBe("");
+    expect(montar(detalhe({ adicionado: 1, onOpenCart: noop })).querySelector('[data-testid="detalhe-adicionado"]')?.textContent).toBe("1 peça adicionada ao pedido");
+    // Antes de adicionar, a confirmação fica vazia; o leitor de tela a ouve pelo Anunciador (parte 13f).
+    expect(montar(detalhe()).querySelector('[data-testid="detalhe-rodape"] [data-testid="detalhe-adicionado"]')?.textContent).toBe("");
+    expect(montar(detalhe()).querySelector('[data-testid="detalhe-rodape"] [role="status"]')).toBeNull();
     expect(textosForaDaLista(html, [
       "Detalhe do produto", "C.0659.001.U", "Toalha de academia", "Toalha",
       "Disponível para pedido", "662", "No pedido", "10", "Total físico", "672",
@@ -613,7 +624,7 @@ describe("barra e resultados do estoque", () => {
     expect(documento.querySelector('[aria-label="Formato de visualização"]')).not.toBeNull();
     expect(documento.querySelector('[role="switch"]')).not.toBeNull();
     expect(documento.querySelector('[aria-label="Ordenar produtos"]')).not.toBeNull();
-    expect(documento.querySelector('[role="status"]')?.textContent).toBe("3 itens encontrados");
+    expect(documento.querySelector('[data-testid="stock-results-count"]')?.textContent).toBe("3 itens encontrados");
     expect(documento.querySelector('[aria-label^="Abrir pedido"]')).toBeNull();
     dom.window.close();
   });

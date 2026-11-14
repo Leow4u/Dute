@@ -1,7 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { type Order, useListOrders, useUpdateOrder, getListOrdersQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
+import { useContagemLembrada } from "@/lib/carregando/contagem-lembrada";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Boxes, CheckCircle2, ClipboardList, PackageCheck, Truck } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -33,12 +40,26 @@ export default function Orders() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const { data, isLoading } = useListOrders(
+  // O status, a busca e a página leem no servidor: a lista anterior fica, a 50% e inert, até a nova chegar
+  // (carregamento v2, momento 7, caso 4); a releitura que falha não a apaga, e a troca que falha mostra o aviso.
+  const leitura = useListOrders(
     { num_pedido: debouncedSearch || undefined, status: statusFilter || undefined, limit, offset: page * limit },
-    { query: { queryKey: getListOrdersQueryKey({ num_pedido: debouncedSearch || undefined, status: statusFilter || undefined, limit, offset: page * limit }) } }
+    { query: { queryKey: getListOrdersQueryKey({ num_pedido: debouncedSearch || undefined, status: statusFilter || undefined, limit, offset: page * limit }), placeholderData: keepPreviousData } }
   );
+  const { data, isLoading } = leitura;
+  const lista = useListaComFiltro(leitura);
+  const troca = useListaEmTroca(lista.trocando);
+  const idDaLinha = useId();
 
   const orders = data?.items ?? [];
+  // Antes da primeira leitura, o bloco no lugar de cada número; com ela falhando, "—": nunca zero antes de ler, e a
+  // leitura não se confunde com a falha (carregamento v2, parte 13c; momento 2 e o diagnóstico, necessidade 3).
+  const lido = data !== undefined && !lista.falhou;
+  const numeroLido = (valor: number) =>
+    lido ? formatStockNumber(valor) : lista.falhou ? "—" : <Esqueleto forma="contagem" />;
+  // As linhas-fantasma entram aos 300 ms, quantas a última leitura deixou (entre 1 e 5; sem ela, 2), com o brilho.
+  const fantasmas = useEspera(isLoading);
+  const contagem = useContagemLembrada("pedidos-legado", "todos", data ? { linhas: orders.length } : null);
   const stats = useMemo(() => {
     return orders.reduce(
       (acc, order) => {
@@ -65,28 +86,31 @@ export default function Orders() {
       eyebrow="Estoque"
       title="Pedidos"
       icon={<Truck className="h-6 w-6" />}
+      // A casa do estado da lista, sob o título, sem empurrar a lista: "Carregando pedidos…" na primeira leitura, com as
+      // linhas-fantasma no lugar da tabela (carregamento v2, parte 13c).
+      estado={<LinhaDeEstado id={idDaLinha} leitura={leitura} objeto="pedidos" />}
     >
       <StockMetricsGrid>
         <StockMetricCard
           label="Pedidos / linhas"
-          value={formatStockNumber(data?.total ?? 0)}
+          value={numeroLido(data?.total ?? 0)}
           icon={<ClipboardList className="h-5 w-5" />}
           tone="blue"
         />
         <StockMetricCard
           label="Itens solicitados"
-          value={formatStockNumber(stats.items)}
+          value={numeroLido(stats.items)}
           icon={<Boxes className="h-5 w-5" />}
         />
         <StockMetricCard
           label="Em aberto"
-          value={formatStockNumber(stats.pending + stats.picking)}
+          value={numeroLido(stats.pending + stats.picking)}
           icon={<PackageCheck className="h-5 w-5" />}
           tone={stats.pending + stats.picking ? "amber" : "default"}
         />
         <StockMetricCard
           label="Concluídos"
-          value={formatStockNumber(stats.done)}
+          value={numeroLido(stats.done)}
           icon={<CheckCircle2 className="h-5 w-5" />}
         />
       </StockMetricsGrid>
@@ -113,8 +137,12 @@ export default function Orders() {
         </StockFilterChip>
       </StockToolbar>
 
-      <StockTableCard>
-          <div className="overflow-x-auto">
+      <StockTableCard trocando={lista.trocando} pagina={page}>
+          {lista.falhou ? (
+            <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar os pedidos." className="rounded-none border-0" focoAoSair={idDaLinha} />
+          ) : (
+          <div className="overflow-x-auto" {...troca.props}>
+            <ConteudoEmTroca trocando={lista.trocando}>
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card">
                 <tr>
@@ -127,11 +155,30 @@ export default function Orders() {
                   <th className="px-4 py-3 font-medium text-center">Atualizar Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-border" {...(isLoading ? { "aria-busy": true, "aria-describedby": idDaLinha } : {})}>
                 {isLoading ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Carregando pedidos...</td>
-                  </tr>
+                  // As linhas-fantasma da primeira leitura; quem diz é a linha de estado sob o título (momento 2).
+                  Array.from({ length: contagem.linhas("linhas") }, (_, ordem) => {
+                    // A mesma altura da linha real (o cliente em duas linhas, 36 px, e o seletor do status): nada pula na chegada.
+                    const brilho = fantasmas.visivel && "carregando-com-brilho";
+                    const celula = "flex h-9 items-center";
+                    return (
+                      <tr key={ordem} aria-hidden="true" data-fantasmas="" data-visivel={fantasmas.visivel ? "" : undefined}>
+                        <td className="px-5 py-3"><span className={celula}><Esqueleto forma="texto" className={cn("w-16", brilho)} /></span></td>
+                        <td className="px-4 py-3"><span className={celula}><Esqueleto forma="texto" className={cn("w-20", brilho)} /></span></td>
+                        <td className="px-4 py-3">
+                          <span className="flex h-9 flex-col justify-center gap-1.5">
+                            <Esqueleto forma="texto" className={cn("w-28", brilho)} />
+                            <Esqueleto forma="texto" className={cn("h-2.5 w-16", brilho)} />
+                          </span>
+                        </td>
+                        <td className="px-4 py-3"><span className={celula}><Esqueleto forma="texto" className={cn("w-36", brilho)} /></span></td>
+                        <td className="px-4 py-3"><span className={cn(celula, "justify-center")}><Esqueleto forma="texto" className={cn("w-24", brilho)} /></span></td>
+                        <td className="px-4 py-3"><span className={cn(celula, "justify-center")}><Esqueleto forma="texto" className={cn("w-16", brilho)} /></span></td>
+                        <td className="px-4 py-3"><span className={cn(celula, "justify-center")}><Esqueleto forma="botao" className={cn("h-8 w-28", brilho)} /></span></td>
+                      </tr>
+                    );
+                  })
                 ) : data?.items?.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Nenhum pedido encontrado.</td>
@@ -178,11 +225,16 @@ export default function Orders() {
                 )}
               </tbody>
             </table>
+            </ConteudoEmTroca>
           </div>
+          )}
           
           <StockTablePagination
             page={page}
             isLoading={isLoading}
+            ocupada={lista.trocando}
+            /* Sem a leitura, nem "Exibindo 0 de 0": a contagem só depois de ler (necessidade 3). */
+            semContagem={lista.falhou || data === undefined}
             count={data?.items?.length || 0}
             total={data?.total || 0}
             limit={limit}

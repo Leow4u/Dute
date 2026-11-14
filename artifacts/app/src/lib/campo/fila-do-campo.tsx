@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ref, uploadBytes } from "firebase/storage";
+import { ref } from "firebase/storage";
 
 import { useAppUser } from "../auth";
+import { compactarFoto, enviarComProgresso } from "../envio-de-fotos";
 import { firebaseStorage } from "../firebase";
 import { chamarOperacao, mensagemDoErro, novaChave } from "../operacao/api";
 import { adiado, avisoDaFila, destinoDoErro, enfileirar, faltaParaEnviar, fotoDoRegistro, registroNovo, type FalhaDaFila, type NovoRegistro, type RegistroNaFila } from "./fila";
@@ -48,7 +49,9 @@ function useOnline(): boolean {
 async function enviarRegistro(registro: RegistroNaFila): Promise<void> {
   if (registro.foto) {
     if (!firebaseStorage) throw new Error("Firebase não configurado.");
-    await uploadBytes(ref(firebaseStorage, registro.foto.caminho), registro.foto.arquivo, { contentType: registro.foto.contentType }).catch((error: unknown) => {
+    // A foto JPEG do celular sobe compactada a 2000 px no lado maior (parte 11 do carregamento v2), com o mesmo nome.
+    const arquivo = registro.foto.arquivo instanceof File ? await compactarFoto(registro.foto.arquivo, { manterTipo: true }) : registro.foto.arquivo;
+    await enviarComProgresso(ref(firebaseStorage, registro.foto.caminho), arquivo, { contentType: registro.foto.contentType }).catch((error: unknown) => {
       // Já subiu numa tentativa anterior: o storage.rules não deixa sobrescrever.
       if ((error as { code?: string })?.code !== "storage/unauthorized") throw error;
     });

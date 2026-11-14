@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { Dialog, DialogCancelar, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { desfechoDoErro } from "@/lib/carregando/use-acao-na-linha";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +21,11 @@ import { abrirGuardaDaArea, podeAbrirGuarda, verGuardaDaArea, type GuardaDaArea 
  */
 
 const numero = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
+
+/** "do RECEBIMENTO", "da EXPEDICAO": o artigo da área. */
+export function daArea(locationId: string): string {
+  return `${locationId.toUpperCase() === "EXPEDICAO" ? "da" : "do"} ${locationId}`;
+}
 
 /** O corpo do diálogo, sem a busca nem o envio. */
 export function GuardarDaAreaConteudo({
@@ -85,12 +95,8 @@ export function GuardarDaAreaConteudo({
         </div>
       </div>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancelar}>
-          Cancelar
-        </Button>
-        <Button type="button" disabled={!pode || enviando} onClick={onAbrir}>
-          Abrir a guarda
-        </Button>
+        <DialogCancelar ocupado={enviando} onClick={onCancelar} />
+        <BotaoDeAcao estado={enviando ? "andamento" : "repouso"} rotulo="Abrir a guarda" andamento="Abrindo…" bloqueado={!enviando && !pode} onClick={onAbrir} />
       </div>
     </div>
   );
@@ -127,6 +133,9 @@ export function GuardarDaAreaDialog({
     enabled: aberto && Boolean(customerCode && skuCode && locationId),
     staleTime: 0,
   });
+  // A falha fica no diálogo enquanto tenta de novo, com "Tentar de novo"; antes, o texto da falha sem a nova tentativa
+  // e o "Carregando..." seco (carregamento v2, parte 13c).
+  const guardaNaTela = useLeituraComFalha(guarda);
   useEffect(() => {
     if (!aberto) return;
     chave.current = crypto.randomUUID();
@@ -162,10 +171,10 @@ export function GuardarDaAreaDialog({
   });
 
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (open ? undefined : onFechar())}>
+    <Dialog open={aberto} ocupado={abrir.isPending} onOpenChange={(open) => (open ? undefined : onFechar())}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Guardar do {locationId}</DialogTitle>
+          <DialogTitle>Guardar {daArea(locationId)}</DialogTitle>
         </DialogHeader>
         {guarda.data ? (
           <GuardarDaAreaConteudo
@@ -180,10 +189,20 @@ export function GuardarDaAreaDialog({
             onCancelar={onFechar}
             onAbrir={() => abrir.mutate()}
           />
-        ) : guarda.isError ? (
-          <p className="text-sm text-destructive-soft-foreground">{guarda.error instanceof Error ? guarda.error.message : String(guarda.error)}</p>
+        ) : guardaNaTela.isError && desfechoDoErro(guardaNaTela.error) === "recusado" ? (
+          // O servidor recusou (a área não é de passagem, o item sem saldo livre): tentar de novo não muda nada, e o
+          // motivo não é uma falha de leitura.
+          <Alert variant="destructive">
+            <AlertDescription>{guardaNaTela.error instanceof Error ? guardaNaTela.error.message : String(guardaNaTela.error)}</AlertDescription>
+          </Alert>
+        ) : guardaNaTela.isError ? (
+          <FalhaNaLeitura
+            leitura={guarda}
+            erro={guardaNaTela.error}
+            mensagem={[`Não consegui carregar o saldo ${daArea(locationId)}.`, guardaNaTela.error instanceof Error ? guardaNaTela.error.message : ""].filter(Boolean).join(" ")}
+          />
         ) : (
-          <p className="text-sm text-muted-foreground">Carregando...</p>
+          <CarregandoNaRegiao rotulo="Carregando o saldo…" />
         )}
       </DialogContent>
     </Dialog>

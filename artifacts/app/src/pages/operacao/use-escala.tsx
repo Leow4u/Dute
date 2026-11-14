@@ -31,7 +31,7 @@ export function useEscala({
   const [aberta, setAberta] = useState<{ numero: string; edicao: number } | null>(null);
   const [agenda, setAgenda] = useState<AgendaEmEdicao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [ocupado, setOcupado] = useState(false);
+  const [ocupado, setOcupado] = useState<"agendar" | "cancelar" | null>(null);
   const chaves = useRef(new Map<string, string>());
   const os = lista.find((item) => item.numero === aberta?.numero) ?? null;
 
@@ -43,8 +43,8 @@ export function useEscala({
     return nova;
   }
 
-  async function gravar(escopo: string, dados: Record<string, unknown>) {
-    setOcupado(true);
+  async function gravar(escopo: string, dados: Record<string, unknown>, acao: "agendar" | "cancelar") {
+    setOcupado(acao);
     setErro(null);
     try {
       await chamarOperacao("saveServiceOrder", { ...dados, idempotency_key: chaveDe(escopo) });
@@ -53,7 +53,7 @@ export function useEscala({
     } catch (error) {
       setErro(mensagemDoErro(error));
     } finally {
-      setOcupado(false);
+      setOcupado(null);
     }
   }
 
@@ -77,6 +77,7 @@ export function useEscala({
       titulo: `${os.status === "agendada" ? "Reagendar" : "Escalar"} OS ${os.numero}`,
       cliente: nomesClientes[os.customer_code] || os.customer_code,
       onFechar: fechar,
+      ocupado: ocupado !== null,
       conteudo: (
         <EscalaDaOs
           os={os}
@@ -88,7 +89,8 @@ export function useEscala({
             .map((veiculo) => ({ id: veiculo.id, placa: veiculo.placa, tipo: veiculo.tipo, ativo: veiculo.ativo, revisaoEm: veiculo.revisaoEm || null }))}
           agenda={agenda}
           onAgenda={setAgenda}
-          ocupado={ocupado}
+          ocupado={ocupado !== null}
+          emAndamento={ocupado}
           erro={erro}
           onSalvar={() => {
             if (os.demandaFora) return;
@@ -97,7 +99,7 @@ export function useEscala({
               numero: os.numero,
               expected_edicao: aberta.edicao,
               ...pedidoDeAgenda(agenda),
-            });
+            }, "agendar");
           }}
           onCancelar={() => {
             void gravar(`cancel:${os.numero}:${aberta.edicao}:${agenda.motivo.trim()}`, {
@@ -105,7 +107,7 @@ export function useEscala({
               numero: os.numero,
               expected_edicao: aberta.edicao,
               motivo: agenda.motivo.trim(),
-            });
+            }, "cancelar");
           }}
         />
       ),

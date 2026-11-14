@@ -1,0 +1,136 @@
+import type { UseQueryResult } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+
+import { ehFaltaDeConexao } from "../conexao";
+
+import { usePedidosDaPessoa } from "./pedido-da-pessoa";
+
+/** O pedaço da leitura do react-query que a falha precisa para ficar na tela. */
+export type LeituraQueFalha = Pick<
+  UseQueryResult<unknown>,
+  "data" | "error" | "errorUpdatedAt" | "errorUpdateCount" | "isError" | "isLoading" | "isFetching"
+>;
+
+/**
+ * A leitura que falhou e ainda não tem dado, enquanto tenta de novo. O
+ * react-query 5, na nova tentativa sem dado, volta o status a "pending" e
+ * zera o erro: a tela que pergunta pelo carregando antes da falha trocaria o
+ * bloco com o "Tentar de novo" pela caixa "Carregando…", e o botão sumiria
+ * com o foco nele (WCAG 2.4.3). Aqui a falha fica na tela, com o erro de
+ * antes e o `isFetching` ("Tentando de novo…"), até a leitura responder: o
+ * dado entra, ou a falha nova toma o lugar da velha.
+ *
+ * Só vale para o erro desta leitura: a chave nova (outra conversa) começa sem
+ * falha e mostra o carregando como sempre.
+ */
+export function useLeituraComFalha<L extends LeituraQueFalha>(leitura: L): L {
+  const ultima = useRef<{ em: number; erro: unknown } | null>(null);
+  if (leitura.error != null) ultima.current = { em: leitura.errorUpdatedAt, erro: leitura.error };
+  const falhaDeAntes = ultima.current;
+  const tentandoDeNovo =
+    leitura.data === undefined &&
+    leitura.error == null &&
+    leitura.isFetching &&
+    leitura.errorUpdateCount > 0 &&
+    falhaDeAntes !== null &&
+    falhaDeAntes.em === leitura.errorUpdatedAt;
+  if (!tentandoDeNovo) return leitura;
+  return { ...leitura, error: falhaDeAntes.erro, isError: true, isLoading: false };
+}
+
+/**
+ * A lista que falhou sem nada lido e é relida sem que a pessoa peça (o
+ * intervalo da tela, o tempo real): a falha fica na tela, como na
+ * `useLeituraComFalha`, com o aviso, o "Tentar de novo" e o foco nele, e a
+ * lista não volta às linhas-fantasma a cada minuto (a releitura automática não
+ * mostra nada nem fala). Só a nova tentativa que a pessoa pede
+ * (`marcarPedidoDaPessoa`, o "Tentar de novo" do aviso) volta à espera da
+ * lista: as linhas-fantasma, "Carregando pedidos" e o foco na linha de estado
+ * (Pedidos e Receber, a parte 8).
+ */
+export function useFalhaNaReleituraAutomatica<L extends LeituraQueFalha>(leitura: L): L {
+  const pedidos = usePedidosDaPessoa();
+  const comFalha = useLeituraComFalha(leitura);
+  // Quantas novas leituras a pessoa tinha pedido quando a leitura falhou: um pedido depois disso é dela.
+  const pedidosNaFalha = useRef<number | null>(null);
+  if (leitura.error != null) pedidosNaFalha.current = pedidos;
+  const pediu = pedidosNaFalha.current !== null && pedidos !== pedidosNaFalha.current;
+  return pediu ? leitura : comFalha;
+}
+
+/** O pedaço de cada consulta de um `useQueries` que a nova tentativa precisa. */
+export type ConsultaQueTenta = Pick<UseQueryResult<unknown>, "isError" | "refetch">;
+
+/**
+ * A nova tentativa das consultas de um `useQueries` (as fontes da via da NF, o
+ * rateio dos Relatórios), como a `useLeituraComFalha` faz com uma consulta: o
+ * react-query 5 volta a consulta sem dado a "pending" e zera o erro na nova
+ * leitura, e o aviso sairia da tela com o foco nele. Aqui `erro` fica até as
+ * consultas que falharam responderem de novo, com `tentando`; só as que
+ * falharam relêem.
+ */
+export function useConsultasComFalha(consultas: ReadonlyArray<ConsultaQueTenta>): { erro: boolean; tentando: boolean; tentar: () => void } {
+  const [tentando, setTentando] = useState(false);
+  const montado = useRef(true);
+  useEffect(() => {
+    montado.current = true;
+    return () => {
+      montado.current = false;
+    };
+  }, []);
+  const falhou = consultas.some((consulta) => consulta.isError);
+  return {
+    erro: falhou || tentando,
+    tentando,
+    tentar: () => {
+      const falharam = consultas.filter((consulta) => consulta.isError);
+      if (!falharam.length || tentando) return;
+      setTentando(true);
+      void Promise.allSettled(falharam.map((consulta) => consulta.refetch())).then(() => {
+        if (montado.current) setTentando(false);
+      });
+    },
+  };
+}
+
+/**
+ * O que falta à consulta do react-query (a callable das emissões, a das
+ * baixas), no formato da leitura ao vivo (parte 13l): a conexão, com a hora da
+ * lista lida (`lidaEm`), ou o servidor; `falhou` quando falhou sem nada lido.
+ * É o que a `juntarTentativas` e a `FalhaAoVivo` leem.
+ */
+export function faltaDaConsulta(consulta: Pick<UseQueryResult<unknown>, "isError" | "error" | "data" | "dataUpdatedAt">): {
+  falta: "conexao" | "servidor" | null;
+  lidaEm: number | null;
+  falhou: boolean;
+} {
+  if (!consulta.isError) return { falta: null, lidaEm: null, falhou: false };
+  const lida = consulta.data !== undefined;
+  if (!ehFaltaDeConexao(consulta.error)) return { falta: "servidor", lidaEm: null, falhou: !lida };
+  return { falta: "conexao", lidaEm: lida ? consulta.dataUpdatedAt : null, falhou: !lida };
+}
+
+/**
+ * A nova tentativa que a pessoa pede de uma consulta do react-query que
+ * falhou (a callable das emissões, a das baixas; revisão da parte 13l). Só
+ * ela é "tentando": a releitura automática (o intervalo da tela, a releitura
+ * sozinha do app) não muda o "Tentar de novo" do aviso da conexão nem trava o
+ * toque. O `tentar` relê só a que falhou (a lida fica como está) e devolve a
+ * promessa da leitura, para o aviso contar até ela responder. Recebe a
+ * consulta como a tela a vê (a `useLeituraComFalha`, que segura o erro na
+ * nova tentativa).
+ */
+export function useTentativaPedida(consulta: Pick<UseQueryResult<unknown>, "isError" | "refetch">): {
+  tentando: boolean;
+  tentar: () => Promise<unknown> | undefined;
+} {
+  const [pedidas, setPedidas] = useState(0);
+  return {
+    tentando: pedidas > 0,
+    tentar: () => {
+      if (!consulta.isError) return undefined;
+      setPedidas((quantas) => quantas + 1);
+      return consulta.refetch().finally(() => setPedidas((quantas) => quantas - 1));
+    },
+  };
+}

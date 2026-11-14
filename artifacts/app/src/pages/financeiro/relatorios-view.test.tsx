@@ -7,6 +7,7 @@ import { faturaDoFinanceiro } from "@/lib/financeiro/faturas";
 import { nfsEmAberto, resumoAReceber, resumoDaReceitaPorServico, tabelaAReceber, tabelaDaReceitaPorServico } from "@/lib/financeiro/relatorios";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import { RelatoriosDoFinanceiroView, hrefDoRelatorioDoFinanceiro, type RelatoriosDoFinanceiroViewProps } from "./relatorios-view";
 
@@ -19,8 +20,8 @@ const FATURAS = [
 const ABERTAS = nfsEmAberto(FATURAS);
 const noop = () => undefined;
 
-function render(props: Partial<RelatoriosDoFinanceiroViewProps> = {}) {
-  return renderToStaticMarkup(
+function tela(props: Partial<RelatoriosDoFinanceiroViewProps> = {}) {
+  return (
     <Router ssrPath="/financeiro/relatorios">
       <RelatoriosDoFinanceiroView
         relatorio="a_receber"
@@ -34,8 +35,12 @@ function render(props: Partial<RelatoriosDoFinanceiroViewProps> = {}) {
         acoes={{ mudarFiltro: noop, exportar: noop, imprimir: noop }}
         {...props}
       />
-    </Router>,
+    </Router>
   );
+}
+
+function render(props: Partial<RelatoriosDoFinanceiroViewProps> = {}) {
+  return renderToStaticMarkup(tela(props));
 }
 
 describe("Relatórios do Financeiro", () => {
@@ -87,5 +92,13 @@ describe("Relatórios do Financeiro", () => {
 
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
+  });
+});
+
+describe("Os Relatórios do Financeiro sem conexão (carregamento v2, parte 13j)", () => {
+  it("o aviso, a faixa com a hora do relatório e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(await estadosDaFalta((leitura, situacao) => tela({ estado: situacao, leitura }))).toEqual(
+      rotulosDaFalta({ mensagem: "Não foi possível carregar o relatório.", objeto: "relatório" }),
+    );
   });
 });

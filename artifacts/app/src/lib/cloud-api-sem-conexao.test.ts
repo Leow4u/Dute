@@ -26,15 +26,20 @@ vi.mock("firebase/firestore", async (importOriginal) => {
   };
 });
 
-import { CODIGO_SEM_CONEXAO, SEM_CONEXAO } from "./conexao";
+import { CODIGO_SEM_CONEXAO, CODIGO_SEM_RESPOSTA, SEM_CONEXAO, SEM_RESPOSTA } from "./conexao";
 import { installCloudApi } from "./cloud-api";
 
 /**
  * Sem rede, o Firestore não falha: devolve com sucesso o cache da memória,
  * vazio ou pela metade (docs/plataforma/diagnostico-carregamento.md, seção 9,
  * item 1; medido no celular: /api/products com 0 itens em 4 ms, e o servidor
- * tem 6). A leitura que não veio do servidor responde "Sem conexão".
+ * tem 6). A leitura que não veio do servidor responde "Sem conexão" com o
+ * aparelho sem rede, e "Sem resposta do servidor." com ele conectado: o SDK
+ * também responde do cache quando o servidor demora mais de 10 s a voltar
+ * (seção 10.1; carregamento v2, parte 7a).
  */
+
+let rede = false;
 
 function document(id: string, data: Record<string, unknown>) {
   return { id, data: () => data, get: (field: string) => data[field] };
@@ -50,6 +55,12 @@ beforeEach(() => {
   readDoc.mockReset();
   countDocs.mockReset();
   countDocs.mockResolvedValue({ data: () => ({ count: 2 }) });
+  rede = false;
+  vi.stubGlobal("navigator", {
+    get onLine() {
+      return rede;
+    },
+  });
   vi.stubGlobal("window", {
     fetch: vi.fn(),
     location: { origin: "https://dute.test" },
@@ -91,5 +102,27 @@ describe("a leitura sem rede", () => {
     const response = await window.fetch("/api/warehouse/boxes?limit=1");
     expect(response.status).toBe(200);
     expect((await response.json()).items.map((item: { code: string }) => item.code)).toEqual(["CX-000001"]);
+  });
+});
+
+describe("a leitura com o aparelho conectado e o SDK offline", () => {
+  beforeEach(() => {
+    rede = true;
+  });
+
+  it("o que só veio do cache é o servidor sem resposta, não \"Sem conexão\"", async () => {
+    readDocs.mockResolvedValue(doCache([document("CX-000001", { code: "CX-000001", status: "stored" })]));
+    const response = await window.fetch("/api/warehouse/boxes?limit=1");
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ message: SEM_RESPOSTA, code: CODIGO_SEM_RESPOSTA });
+  });
+
+  it("o unavailable do SDK que se acha offline também", async () => {
+    readDoc.mockRejectedValue(Object.assign(new Error("Failed to get document because the client is offline."), { code: "unavailable" }));
+    countDocs.mockRejectedValue(Object.assign(new Error("Failed to get count result because the client is offline."), { code: "unavailable" }));
+    readDocs.mockResolvedValue({ docs: [], metadata: { fromCache: false } });
+    const response = await window.fetch("/api/dashboard");
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ message: SEM_RESPOSTA, code: CODIGO_SEM_RESPOSTA });
   });
 });

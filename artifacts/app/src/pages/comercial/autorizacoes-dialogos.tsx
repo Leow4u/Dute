@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { LinhaAutorizada, LinhaDoPrazoVencido } from "@/lib/comercial/autorizacoes";
 import { dataBr } from "@/lib/comercial/clientes";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
 /**
  * Cancelar a autorização registrada por engano (recordAuthorization, cancel):
@@ -34,8 +35,9 @@ export function CancelarAutorizacaoDialog({
   return (
     <Dialog
       open={autorizacao !== null}
+      ocupado={ocupado}
       onOpenChange={(aberto) => {
-        if (!aberto && !ocupado) onVoltar();
+        if (!aberto) onVoltar();
       }}
     >
       <DialogContent className="v3 max-w-md">
@@ -62,12 +64,8 @@ export function CancelarAutorizacaoDialog({
           </p>
         ) : null}
         <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" onClick={onVoltar} disabled={ocupado}>
-            Voltar
-          </Button>
-          <Button type="button" variant="destructive" onClick={() => onConfirmar(motivo)} disabled={ocupado}>
-            Cancelar autorização
-          </Button>
+          <DialogCancelar onClick={onVoltar}>Voltar</DialogCancelar>
+          <BotaoDeAcao variant="destructive" estado={ocupado ? "andamento" : "repouso"} rotulo="Cancelar autorização" andamento="Cancelando a autorização…" onClick={() => onConfirmar(motivo)} />
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -101,8 +99,9 @@ export function PerderPorPrazoDialog({
   return (
     <Dialog
       open={linha !== null}
+      ocupado={ocupado}
       onOpenChange={(aberto) => {
-        if (!aberto && !ocupado) onVoltar();
+        if (!aberto) onVoltar();
       }}
     >
       <DialogContent className="v3 max-w-md">
@@ -120,12 +119,8 @@ export function PerderPorPrazoDialog({
           </p>
         ) : null}
         <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" onClick={onVoltar} disabled={ocupado}>
-            Voltar
-          </Button>
-          <Button type="button" variant="destructive" onClick={() => onConfirmar(nota)} disabled={ocupado}>
-            Perder por prazo
-          </Button>
+          <DialogCancelar onClick={onVoltar}>Voltar</DialogCancelar>
+          <BotaoDeAcao variant="destructive" estado={ocupado ? "andamento" : "repouso"} rotulo="Perder por prazo" andamento="Registrando a perda…" onClick={() => onConfirmar(nota)} />
         </DialogFooter>
       </DialogContent>
     </Dialog>

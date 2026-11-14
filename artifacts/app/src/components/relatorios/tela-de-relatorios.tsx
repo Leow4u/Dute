@@ -3,7 +3,12 @@ import { Download, Printer } from "lucide-react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { CartaoComBrilho, Esqueleto } from "@/components/ui/esqueleto";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
+import { useEsperaDaRota } from "@/lib/carregando/espera-da-rota";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 import { formatarReais } from "@workspace/dominio";
 import type { CelulaDoRelatorio, NumeroDoResumo, TabelaDeRelatorio } from "@/lib/relatorios";
 import { cn } from "@/lib/utils";
@@ -32,7 +37,48 @@ export type TelaDeRelatoriosProps = {
   tabela: TabelaDeRelatorio | null;
   vazio: string;
   acoes: { exportar: () => void; imprimir: () => void };
+  /** A nova tentativa das leituras do relatório (parte 13g): "Tentar de novo" na falha, aos 10 s e aos 70 s. */
+  leitura?: NovaTentativa;
 };
+
+/**
+ * O relatório que ainda lê (carregamento v2, parte 13g), no lugar do bloco
+ * rosado: a linha "Carregando o relatório…" sob o título, que continua a
+ * espera da tela, e, aos 300 ms, os números e as linhas da tabela em blocos
+ * neutros, com o brilho de dois ciclos. Os blocos são decorativos e ficam
+ * fora da árvore: quem diz que lê é a linha, que fica fora de qualquer
+ * `aria-busy`.
+ */
+function RelatorioCarregando({ leitura }: { leitura: NovaTentativa }) {
+  // Os blocos seguem o relógio da linha, que continua a espera da tela que abriu.
+  const rota = useEsperaDaRota(true);
+  const visivel = useEspera(true, { desde: rota?.inicio }).visivel;
+  return (
+    <>
+      <CarregandoNaRegiao rotulo="Carregando o relatório…" continuaARota onTentar={leitura.tentar} />
+      <div aria-hidden="true" className={cn("flex flex-col gap-5 transition-opacity duration-150 motion-reduce:transition-none", visivel ? "opacity-100" : "opacity-0")}>
+        <div className="@container">
+          <div className="grid grid-cols-2 gap-3 @3xl:grid-cols-4">
+          {[0, 1, 2, 3].map((indice) => (
+            <CartaoComBrilho key={indice} ordem={indice} className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-5 py-4">
+              <Esqueleto forma="texto" className="h-2.5 w-2/3" />
+              <Esqueleto forma="bloco" className="h-6 w-1/3" />
+            </CartaoComBrilho>
+          ))}
+          </div>
+        </div>
+        <CartaoComBrilho ordem={4} className="rounded-lg border border-border bg-card">
+          {[0, 1, 2, 3, 4].map((indice) => (
+            <div key={indice} className="flex items-center gap-4 border-t border-border px-5 py-3.5 first:border-t-0">
+              <Esqueleto forma="texto" className={indice % 2 ? "w-1/4" : "w-1/3"} />
+              <Esqueleto forma="texto" className="ml-auto w-16" />
+            </div>
+          ))}
+        </CartaoComBrilho>
+      </div>
+    </>
+  );
+}
 
 /**
  * As colunas dos números do período, pela largura da tela do relatório (não da
@@ -114,7 +160,21 @@ function Tabela({ tabela, vazio }: { tabela: TabelaDeRelatorio; vazio: string })
   );
 }
 
-export function TelaDeRelatorios({ rotuloDaLista, relatorios, atual, titulo, subtitulo, filtros, estado, problema, resumo, tabela, vazio, acoes }: TelaDeRelatoriosProps) {
+export function TelaDeRelatorios({
+  rotuloDaLista,
+  relatorios,
+  atual,
+  titulo,
+  subtitulo,
+  filtros,
+  estado,
+  problema,
+  resumo,
+  tabela,
+  vazio,
+  acoes,
+  leitura = SEM_NOVA_TENTATIVA,
+}: TelaDeRelatoriosProps) {
   const pronto = estado === "pronto" && !problema && tabela;
   return (
     <div className="flex flex-col gap-6">
@@ -139,7 +199,7 @@ export function TelaDeRelatorios({ rotuloDaLista, relatorios, atual, titulo, sub
             href={item.href}
             aria-current={item.id === atual ? "page" : undefined}
             className={cn(
-              "flex min-h-11 items-center rounded-md px-3.5 text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+              "flex min-h-11 items-center rounded-md px-3.5 text-sm font-semibold focus-visible:outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-foco",
               item.id === atual ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
@@ -157,7 +217,9 @@ export function TelaDeRelatorios({ rotuloDaLista, relatorios, atual, titulo, sub
             </p>
           ) : null}
         </div>
-        <section aria-labelledby="titulo-do-relatorio" className="print-area flex flex-col gap-5">
+        {/* O papel claro da impressão (print-area) só com o relatório lido: a espera e a falha ficam nas cores do
+            tema, como no resto da tela, e não somem no escuro (o rótulo da espera em tinta clara sobre o fundo escuro). */}
+        <section aria-labelledby="titulo-do-relatorio" className={cn("flex flex-col gap-5", pronto && "print-area")} data-relatorio="">
           <div className="flex flex-col gap-1">
             <h2 id="titulo-do-relatorio" className="text-2xl font-extrabold tracking-tight">
               {titulo}
@@ -165,13 +227,16 @@ export function TelaDeRelatorios({ rotuloDaLista, relatorios, atual, titulo, sub
             <p className="text-sm font-semibold text-muted-foreground">{subtitulo}</p>
           </div>
           {estado === "erro" ? (
-            <p role="alert" className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-4 py-3 text-sm font-semibold text-destructive-soft-foreground">
-              Não foi possível carregar.
-            </p>
+            <FalhaAoVivo
+              leitura={leitura}
+              mensagem="Não foi possível carregar o relatório."
+              className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-4 py-3"
+            />
           ) : estado === "carregando" ? (
-            <Skeleton className="h-64 rounded-lg" />
+            <RelatorioCarregando leitura={leitura} />
           ) : pronto ? (
             <>
+              <FaixaAoVivo leitura={leitura} objeto="relatório" className="no-print" />
               {resumo ? (
                 <div className="@container">
                   <dl className={cn("grid gap-3", colunasDoResumo(resumo))}>
@@ -200,4 +265,4 @@ export function dataBr(dia: string): string {
 }
 
 export const CAMPO_SELECT =
-  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25";
+  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/25";

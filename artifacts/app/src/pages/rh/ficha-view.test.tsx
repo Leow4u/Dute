@@ -5,7 +5,8 @@ import { Router } from "wouter";
 import { fichaLida, type FichaDoRh } from "@/lib/rh/ficha";
 import { comCategoria, formularioDoRegistro, formularioDoVinculo, formularioNovo } from "@/lib/rh/formulario";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { textosVisiveis } from "@/test/botoes";
+import { textosForaDaLista } from "@/test/textos";
 
 import { FichaView, type AcoesDaFicha, type FichaViewProps } from "./ficha-view";
 
@@ -63,6 +64,10 @@ function render(extra: Partial<FichaViewProps> = {}, ficha: FichaDoRh | undefine
 }
 
 const PERMITIDOS = [
+
+  // O gerúndio e o "Conferir" do BotaoDeAcao, nas camadas escondidas; o "—" da contagem na falha e o "Tentar de novo" (parte 13g).
+
+  /^(Salvando…|Salvando as datas…|Arquivando…|Conferir)$/,
   "Ficha",
   "Ana Souza",
   "Montadora · Própria",
@@ -116,7 +121,7 @@ const PERMITIDOS = [
 
 describe("a ficha da pessoa no RH", () => {
   it("owner e admin leem: os vigentes, o resultado, o prazo, o histórico e o arquivo, sem ações de gravar", () => {
-    expect(textosDaTela(render())).toEqual([
+    expect(textosVisiveis(render())).toEqual([
       "Ana Souza",
       "Montadora · Própria",
       "Admissão 03/02/2025",
@@ -146,7 +151,7 @@ describe("a ficha da pessoa no RH", () => {
 
   it("o rh inclui, altera, anexa e arquiva; a única ação principal é Novo registro", () => {
     const html = render({ grava: true });
-    const textos = textosDaTela(html);
+    const textos = textosVisiveis(html);
     expect(textos).toEqual(expect.arrayContaining(["Novo registro", "Alterar", "Anexar arquivo", "Trocar arquivo", "Arquivar", "Abrir arquivo"]));
     expect(html.match(/bg-primary text-primary-foreground/g)?.length).toBe(1);
     expect(html).toMatch(/<input[^>]*type="file"[^>]*accept="application\/pdf,image\/jpeg,image\/png,image\/webp"/);
@@ -154,38 +159,38 @@ describe("a ficha da pessoa no RH", () => {
 
   it("o formulário: o exame pede o resultado; alterar não troca a categoria nem o tipo", () => {
     const novo = render({ grava: true, formulario: comCategoria(formularioNovo("k"), "exame") });
-    expect(textosDaTela(novo)).toEqual(expect.arrayContaining(["Novo registro", "Categoria", "Tipo", "Feito em", "Vence em", "Resultado", "Salvar", "Cancelar"]));
+    expect(textosVisiveis(novo)).toEqual(expect.arrayContaining(["Novo registro", "Categoria", "Tipo", "Feito em", "Vence em", "Resultado", "Salvar", "Cancelar"]));
     expect(novo).not.toMatch(/<button[^>]*>Novo registro<\/button>/);
     const alterando = render({ grava: true, formulario: formularioDoRegistro("k", FICHA.registros[2]) });
-    expect(textosDaTela(alterando)).toContain("Alterar registro");
+    expect(textosVisiveis(alterando)).toContain("Alterar registro");
     expect(alterando).toMatch(/<select[^>]*id="registro-categoria"[^>]*disabled=""/);
     expect(alterando).toMatch(/<select[^>]*id="registro-tipo"[^>]*disabled=""/);
     // O formulário não aparece para quem não grava, mesmo aberto.
-    expect(textosDaTela(render({ grava: false, formulario: formularioNovo("k") }))).not.toContain("Salvar");
+    expect(textosVisiveis(render({ grava: false, formulario: formularioNovo("k") }))).not.toContain("Salvar");
   });
 
   it("as datas do vínculo: o rh abre o formulário ao lado de Novo registro; owner e admin só leem a linha", () => {
     const html = render({ grava: true });
-    expect(textosDaTela(html).slice(0, 5)).toEqual(["Ana Souza", "Datas do vínculo", "Novo registro", "Montadora · Própria", "Admissão 03/02/2025"]);
+    expect(textosVisiveis(html).slice(0, 5)).toEqual(["Ana Souza", "Datas do vínculo", "Novo registro", "Montadora · Própria", "Admissão 03/02/2025"]);
     expect(html.match(/bg-primary text-primary-foreground/g)?.length).toBe(1);
-    expect(textosDaTela(render())).not.toContain("Datas do vínculo");
+    expect(textosVisiveis(render())).not.toContain("Datas do vínculo");
 
     const aberto = render({ grava: true, vinculo: formularioDoVinculo("k", { admissao: "2025-02-03", desligamento: "2026-10-31", edicao: 1 }) });
-    expect(textosDaTela(aberto)).toEqual(expect.arrayContaining(["Datas do vínculo", "Admissão", "Desligamento", "Salvar", "Cancelar"]));
+    expect(textosVisiveis(aberto)).toEqual(expect.arrayContaining(["Datas do vínculo", "Admissão", "Desligamento", "Salvar", "Cancelar"]));
     expect(aberto).not.toMatch(/<button[^>]*>(Novo registro|Datas do vínculo)<\/button>/);
     expect(aberto).toMatch(/<input[^>]*id="vinculo-admissao"[^>]*value="2025-02-03"/);
     expect(aberto).toMatch(/<input[^>]*id="vinculo-desligamento"[^>]*min="2025-02-03"[^>]*value="2026-10-31"/);
     // Com o formulário das datas aberto, as gravações das linhas esperam.
     expect(aberto).toMatch(/<button[^>]*disabled=""[^>]*>Arquivar<\/button>/);
-    expect(textosDaTela(render({ grava: false, vinculo: formularioDoVinculo("k", null) }))).not.toContain("Desligamento");
+    expect(textosVisiveis(render({ grava: false, vinculo: formularioDoVinculo("k", null) }))).not.toContain("Desligamento");
   });
 
   it("com o desligamento, a linha leva as duas datas; sem as datas, nada; o freelancer e o terceiro não têm as datas", () => {
     const desligada = { ...FICHA, datas_do_vinculo: { admissao: "2025-02-03", desligamento: "2026-10-31", edicao: 2 } };
-    expect(textosDaTela(render({}, desligada))).toContain("Admissão 03/02/2025 · Desligamento 31/10/2026");
-    expect(textosDaTela(render({ grava: true }, { ...FICHA, datas_do_vinculo: null })).slice(0, 4)).toEqual(["Ana Souza", "Datas do vínculo", "Novo registro", "Montadora · Própria"]);
+    expect(textosVisiveis(render({}, desligada))).toContain("Admissão 03/02/2025 · Desligamento 31/10/2026");
+    expect(textosVisiveis(render({ grava: true }, { ...FICHA, datas_do_vinculo: null })).slice(0, 4)).toEqual(["Ana Souza", "Datas do vínculo", "Novo registro", "Montadora · Própria"]);
     for (const vinculo of ["freelancer", "terceiro"]) {
-      const textos = textosDaTela(render({ grava: true }, { ...desligada, colaborador: { ...FICHA.colaborador, vinculo } }));
+      const textos = textosVisiveis(render({ grava: true }, { ...desligada, colaborador: { ...FICHA.colaborador, vinculo } }));
       expect(textos).not.toContain("Datas do vínculo");
       expect(textos.some((texto) => texto.startsWith("Admissão"))).toBe(false);
     }
@@ -193,17 +198,19 @@ describe("a ficha da pessoa no RH", () => {
 
   it("arquivar pede a confirmação na linha; a falha do servidor aparece como veio", () => {
     const html = render({ grava: true, arquivando: "reg_3", falha: "O vencimento vem depois da data do registro." });
-    expect(textosDaTela(html)).toEqual(expect.arrayContaining(["Confirmar arquivamento", "Voltar", "O vencimento vem depois da data do registro."]));
+    expect(textosVisiveis(html)).toEqual(expect.arrayContaining(["Confirmar arquivamento", "Voltar", "O vencimento vem depois da data do registro."]));
     expect(html).toMatch(/role="alert"/);
   });
 
   it("quem não está ativo leva a marca; a categoria vazia diz que não há registro; carregando e erro", () => {
     const inativa = fichaLida({ hoje: "2026-10-23", colaborador: { id: ANA, nome: "Ana Souza", funcao: "Montadora", vinculo: "proprio", ativo: false }, registros: [] })!;
-    const textos = textosDaTela(render({}, inativa));
+    const textos = textosVisiveis(render({}, inativa));
     expect(textos).toContain("Inativo");
     expect(textos).toEqual(expect.arrayContaining(["Nenhum documento", "Nenhum exame", "Nenhum treinamento"]));
-    expect(textosDaTela(render({ estado: "carregando" }, undefined))).toEqual(["Ficha", "Carregando..."]);
-    expect(textosDaTela(render({ estado: "erro", erro: "Colaborador não encontrado." }, undefined))).toEqual(["Ficha", "Colaborador não encontrado."]);
+    // Lendo, a caixa da região (o rótulo aos 300 ms), sem o "Carregando..." de três pontos (parte 13g).
+    expect(textosVisiveis(render({ estado: "carregando" }, undefined))).toEqual(["Ficha"]);
+    expect(render({ estado: "carregando" }, undefined)).toContain("data-carregando-na-regiao");
+    expect(textosVisiveis(render({ estado: "erro", erro: "Colaborador não encontrado." }, undefined))).toEqual(["Ficha", "Colaborador não encontrado."]);
   });
 
   it("só rótulos, dados e ações: nenhum texto fora da lista", () => {

@@ -6,6 +6,11 @@ import { linhasCompactas, pontosDeConferir } from "@/lib/comercial/aprovar";
 import { linhasGravadas } from "@/lib/comercial/documento";
 
 import { AprovarView, type AprovarViewProps, type CartaoDaAprovacao } from "./aprovar-view";
+import { acoesPrincipais, semCamadasEscondidas, travadoNoHtml } from "@/test/botoes";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { DEZ_E_QUARENTA_E_DOIS, estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
+import { conexaoEm } from "@/test/conexao";
+import { ProvedorDaConexao } from "@/lib/carregando/estado-da-conexao";
 
 /**
  * Aprovar no celular (docs/mockups/ComAprovarCelular.dc.html), só a
@@ -69,7 +74,7 @@ function render(overrides: Partial<AprovarViewProps> = {}) {
 
 /** Textos visíveis, na ordem: o que a pessoa lê na tela. */
 function texts(html: string) {
-  return html
+  return semCamadasEscondidas(html)
     .split(/<[^>]+>/)
     .map((text) => text.replace(/&amp;/g, "&").replace(/ /g, " ").trim())
     .filter(Boolean);
@@ -139,8 +144,7 @@ describe("aprovar no celular", () => {
   it("identidade v3 e uma ação principal só: Aprovar, no rodapé que fica à vista", () => {
     const html = render();
     expect(html).toMatch(/^<div class="v3 /);
-    expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
-    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>.*?Aprovar<\/button>/);
+    expect(acoesPrincipais(html)).toEqual(["Aprovar"]);
     expect(html).toMatch(/<footer class="sticky bottom-0/);
   });
 
@@ -178,7 +182,8 @@ describe("aprovar no celular", () => {
     expect(lista.slice(-2)).toEqual(["Aprovado 17:05", "Próximo"]);
     expect(lista).toContain("Para enviar");
     for (const acao of ["Aprovar", "Devolver", "Aprovar e enviar"]) expect(lista).not.toContain(acao);
-    expect(html).toContain('role="status"');
+    // Sem região viva solta: quem diz a confirmação é o Anunciador (parte 13g).
+    expect(html).not.toContain('role="status"');
   });
 
   it("o orçamento da tela saiu da fila: o cartão fica, o aviso e Próximo; nada que grave", () => {
@@ -188,7 +193,7 @@ describe("aprovar no celular", () => {
     expect(lista.slice(-2)).toEqual(["O orçamento 10045 – RV01 saiu da fila", "Próximo"]);
     for (const acao of ["Aprovar", "Devolver", "Aprovar e enviar"]) expect(lista).not.toContain(acao);
     expect(html).not.toContain("bg-primary text-primary-foreground");
-    expect(html).toContain('role="status"');
+    expect(html).not.toContain('role="status"');
   });
 
   it("o orçamento da tela mudou (editado e mandado de novo): Recarregar, sem Aprovar", () => {
@@ -212,9 +217,10 @@ describe("aprovar no celular", () => {
 
   it("gravando: nenhuma ação do rodapé responde", () => {
     const html = render({ ocupado: true });
-    for (const acao of ["Devolver", "Aprovar", "Aprovar e enviar"]) {
-      expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>(?:<svg[^>]*>.*?</svg>)?${acao}</button>`));
-    }
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:<svg[^>]*>.*?<\/svg>)?Devolver<\/button>/);
+    // Aprovar e Aprovar e enviar são o BotaoDeAcao: travados por aria-disabled, com a trava no código, nunca disabled (parte 13g).
+    for (const acao of ["Devolver", "Aprovar", "Aprovar e enviar"]) expect(travadoNoHtml(html, acao)).toBe(true);
+    expect(html).toMatch(/aria-disabled="true"/);
   });
 
   it("erro do servidor aparece em alerta", () => {
@@ -222,13 +228,60 @@ describe("aprovar no celular", () => {
   });
 
   it("carregando, vazio e erro não se confundem", () => {
-    expect(texts(render({ estado: "carregando", cartao: null, posicao: { indice: 0, total: 0 } }))).toContain("Carregando...");
+    // Lendo: nada escrito antes de 300 ms; a região da espera guarda o lugar (parte 13g).
+    const carregando = render({ estado: "carregando", cartao: null, posicao: { indice: 0, total: 0 } });
+    expect(texts(carregando)).toEqual(["Para aprovar"]);
+    expect(carregando).toContain("data-carregando-na-regiao");
     expect(texts(render({ estado: "vazio", cartao: null, posicao: { indice: 0, total: 0 } }))).toEqual([
       "Para aprovar",
       "Nenhum orçamento para aprovar",
     ]);
-    expect(texts(render({ estado: "erro", cartao: null, posicao: { indice: 0, total: 0 } }))).toContain(
+    expect(texts(render({ estado: "erro", cartao: null, posicao: { indice: 0, total: 0 } })).slice(-2)).toEqual([
       "Não foi possível carregar os orçamentos.",
-    );
+      "Tentar de novo",
+    ]);
+  });
+});
+
+describe("aprovar no celular: acessibilidade (revisão da parte 13g)", () => {
+  it("o axe não acusa nada no cartão, aprovando e com a confirmação no lugar dos botões", async () => {
+    expect(await violacoesDeAcessibilidade(render())).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ ocupado: true, emAndamento: "aprovar" }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ confirmacao: "Aprovado 14:20" }))).toEqual([]);
+  });
+
+  it("a confirmação toma o lugar dos botões: o Próximo é o destino do foco que estava no Aprovar", () => {
+    expect(render({ confirmacao: "Aprovado 14:20" })).toMatch(/<button[^>]*data-depois-de-aprovar=""[^>]*>Próximo/);
+  });
+});
+
+describe("Para aprovar sem conexão (carregamento v2, parte 13j)", () => {
+  const tela = (overrides: Partial<AprovarViewProps>) => (
+    <Router ssrPath="/comercial/aprovar">
+      <AprovarView {...props(overrides)} />
+    </Router>
+  );
+
+  it("o aviso, a faixa e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(
+      await estadosDaFalta((leitura, situacao) =>
+        tela(situacao === "erro" ? { estado: "erro", cartao: null, posicao: { indice: 0, total: 0 }, leitura } : { leitura }),
+      ),
+    ).toEqual(rotulosDaFalta({ mensagem: "Não foi possível carregar os orçamentos." }));
+  });
+
+  it("a fila lida e vazia, sem conexão: o vazio fica, com a faixa que diz de quando ele é (revisão da 13j)", async () => {
+    const vazia = (leitura: AprovarViewProps["leitura"]) => tela({ estado: "vazio", cartao: null, posicao: { indice: 0, total: 0 }, leitura });
+    const lida = { tentando: false, tentar: () => undefined, falta: "conexao" as const, lidaEm: DEZ_E_QUARENTA_E_DOIS };
+    for (const estado of ["sem-conexao", "reconectando"] as const) {
+      const html = renderToStaticMarkup(<ProvedorDaConexao value={conexaoEm(estado)}>{vazia(lida)}</ProvedorDaConexao>);
+      expect(texts(html), estado).toEqual([
+        "Para aprovar",
+        ...(estado === "sem-conexao" ? ["Sem conexão · lista de 10:42"] : ["Reconectando…", "· lista de 10:42"]),
+        "Tentar de novo",
+        "Nenhum orçamento para aprovar",
+      ]);
+      expect(await violacoesDeAcessibilidade(html), estado).toEqual([]);
+    }
   });
 });

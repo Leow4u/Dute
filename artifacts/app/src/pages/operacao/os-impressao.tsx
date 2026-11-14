@@ -5,7 +5,7 @@ import { rotuloDoStatusDaOs } from "@/components/operacao/partes";
 import { fichaDaLeitura } from "@/lib/operacao/ficha-da-os";
 import { clienteDaLeitura, nomesPorCodigo } from "@/lib/operacao/fila";
 import { demandaDoHoje } from "@/lib/operacao/hoje";
-import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { novaTentativaDe, useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { fichaDaBusca } from "@/lib/operacao/navegacao";
 import { documentoDaOs } from "@/lib/operacao/os-documento";
 import { useUrlsDasFotos } from "@/lib/operacao/use-urls-das-fotos";
@@ -36,5 +36,5 @@ export default function PaginaOsImpressao() {
         agora: new Date(),
       })
     : null;
-  return <OsImpressaoView estado={estado} numero={numero} documento={documento} urlDaAssinatura={assinatura ? (urls[assinatura] ?? null) : null} onImprimir={() => window.print()} />;
+  return <OsImpressaoView estado={estado} leitura={novaTentativaDe([os])} numero={numero} documento={documento} urlDaAssinatura={assinatura ? (urls[assinatura] ?? null) : null} onImprimir={() => window.print()} />;
 }

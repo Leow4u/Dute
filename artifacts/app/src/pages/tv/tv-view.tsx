@@ -1,5 +1,11 @@
+import { useEffect, useState } from "react";
 import { ClipboardList, Package, Truck, Wrench, type LucideIcon } from "lucide-react";
 
+import { DEMORANDO } from "@/components/ui/carregando-tela";
+import { Spinner } from "@/components/ui/spinner";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useEsperaDaRota } from "@/lib/carregando/espera-da-rota";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { dataDaTv, horaDaTv, type CartaoDaTv, type IconeDaOs, type PainelDaTv, type TomDoSelo } from "@/lib/tv/quadro";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +30,41 @@ export type TvViewProps = {
   porColuna: number;
   basePath: string;
 };
+
+/**
+ * O quadro que ainda lê (carregamento v2, parte 13g), no lugar do
+ * "Carregando" cinza: aos 300 ms, a caixa de 40 px e "Carregando o quadro…",
+ * do tamanho que se lê do outro lado da sala; aos 10 s, a volta calma e
+ * "Demorando mais que o normal". A TV não tem botão: quem tenta de novo é a
+ * própria releitura do quadro. A caixa é decorativa; o texto diz.
+ */
+function QuadroCarregando() {
+  // A espera continua a da rota ("Abrindo TV da sala…"): o mesmo relógio, sem o vão de 300 ms entre uma caixa e a
+  // outra, e sem anunciar de novo o que ela já anunciou.
+  const rota = useEsperaDaRota(true, true);
+  const espera = useEspera(true, { desde: rota?.inicio });
+  const [continua] = useState(() => Boolean(rota) && espera.visivel);
+  const anunciar = useAnuncio();
+  const demorando = espera.fase === "demorando" || espera.fase === "sem-resposta";
+  useEffect(() => {
+    if (!espera.visivel) return undefined;
+    if (demorando ? rota?.demora : rota?.entrada) return undefined;
+    return anunciar(demorando ? DEMORANDO : "Carregando o quadro");
+  }, [espera.visivel, demorando, anunciar, rota]);
+  // O anúncio da rota que esta espera herdou sai com ela.
+  useEffect(() => () => rota?.retirar?.(), [rota]);
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-5">
+      {espera.visivel ? (
+        <>
+          <Spinner tamanho={40} calmo={espera.calmo} className="text-foreground" data-continua={continua ? "" : undefined} />
+          <p className="text-3xl font-bold text-foreground">Carregando o quadro…</p>
+          {demorando ? <p className="text-2xl font-bold text-amber-soft-foreground">{DEMORANDO}</p> : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 const ICONE: Record<IconeDaOs, LucideIcon> = { transporte: Truck, montagem: Wrench, armazenagem: Package, vistoria: ClipboardList };
 
@@ -152,7 +193,7 @@ export function TvView({ estado, painel, agora, atualizadoEm, semConexao, porCol
       </header>
 
       {estado === "carregando" ? (
-        <p className="flex flex-1 items-center justify-center text-3xl font-bold text-muted-foreground">Carregando</p>
+        <QuadroCarregando />
       ) : !painel ? (
         <p role="alert" className="flex flex-1 items-center justify-center text-3xl font-bold text-destructive-soft-foreground">
           Não foi possível carregar o quadro.

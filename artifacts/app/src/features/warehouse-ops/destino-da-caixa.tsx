@@ -4,10 +4,15 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { Dialog, DialogCancelar, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Segmented } from "@/components/ui/segmented";
+import { cn } from "@/lib/utils";
 import { formatBoxPlacement, tierLabel, type SlottingCandidate, type SuggestionResult } from "@/lib/warehouse-boxes";
 import type { WarehousePosition } from "@/lib/warehouse-positions";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
@@ -32,6 +37,8 @@ export type DestinoDaCaixaEstado = {
   sugestao: SuggestionResult | null;
   carregandoSugestao: boolean;
   erroSugestao: string | null;
+  /** O erro da sugestão como veio (a falta de conexão vira "Sem conexão." ou "Reconectando…"); fica enquanto tenta de novo. */
+  falhaDaSugestao?: unknown;
   /** As prateleiras ativas da zona do cliente, sem as já recusadas para esta caixa. */
   prateleiras: WarehousePosition[];
   carregandoPrateleiras: boolean;
@@ -93,15 +100,18 @@ const MODOS = [
 export type DestinoDaCaixaProps = {
   estado: DestinoDaCaixaEstado;
   ocupado: boolean;
+  /** O destino está sendo confirmado: o "Confirmar destino" mostra a espera dele; as outras ações, ocupadas. */
+  confirmando?: boolean;
   onModo: (modo: ModoDoDestino) => void;
   onEscolher: (codigo: string) => void;
   onConfirmar: (candidato: SlottingCandidate) => void;
   onNaoCabe: (codigo: string) => void;
-  onTentarDeNovo: () => void;
+  /** Relê a sugestão; a promessa acaba quando ela responde ("Tentando de novo…" até lá). */
+  onTentarDeNovo: () => unknown;
 };
 
 /** O painel "Guardar em" da caixa fechada. */
-export function DestinoDaCaixa({ estado, ocupado, onModo, onEscolher, onConfirmar, onNaoCabe, onTentarDeNovo }: DestinoDaCaixaProps) {
+export function DestinoDaCaixa({ estado, ocupado, confirmando = false, onModo, onEscolher, onConfirmar, onNaoCabe, onTentarDeNovo }: DestinoDaCaixaProps) {
   const candidato = candidatoDoDestino(estado);
   const sugestao = estado.modo === "sugestao";
   const alternativas = sugestao ? estado.sugestao?.alternatives ?? [] : [];
@@ -111,7 +121,7 @@ export function DestinoDaCaixa({ estado, ocupado, onModo, onEscolher, onConfirma
   return (
     <section aria-labelledby="guardar-em" className="@container flex flex-col gap-4 rounded-lg border border-border bg-muted/40 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 id="guardar-em" className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Guardar em</h3>
+        <h3 id="guardar-em" tabIndex={-1} className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Guardar em</h3>
         <Segmented<ModoDoDestino> aria-label="Escolha da prateleira" options={MODOS} value={estado.modo} onChange={onModo} />
       </div>
 
@@ -132,21 +142,23 @@ export function DestinoDaCaixa({ estado, ocupado, onModo, onEscolher, onConfirma
         )
       ) : null}
 
+      {/* A espera em bloco do carregamento v2 (parte 13c): nada antes de 300 ms, a caixa e o rótulo, com o anúncio pelo
+          Anunciador, no lugar do texto seco num role="status" solto. A sugestão que não veio é a FalhaNaLeitura: fica
+          na tela enquanto tenta de novo, com "Tentando de novo…", e a falta de conexão diz qual. */}
       {carregando ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          {sugestao ? "Consultando a sugestão…" : "Conferindo o encaixe nesta prateleira…"}
-        </p>
+        <CarregandoNaRegiao rotulo={sugestao ? "Consultando a sugestão…" : "Conferindo o encaixe nesta prateleira…"} />
+      ) : erro && sugestao ? (
+        <FalhaNaLeitura
+          leitura={{ error: null, refetch: async () => onTentarDeNovo() as never }}
+          erro={estado.falhaDaSugestao ?? new Error(erro)}
+          mensagem={`Não consegui consultar a sugestão. ${erro}`}
+          /* A sugestão que chega tira o aviso com o foco nele: o foco vai ao título do painel, nunca ao body. */
+          focoAoSair="guardar-em"
+        />
       ) : erro ? (
         <Alert variant="destructive">
-          <AlertTitle>{sugestao ? "Não foi possível consultar a sugestão" : "Prateleira não serve"}</AlertTitle>
-          <AlertDescription className="flex flex-col items-start gap-2">
-            <span>{erro}</span>
-            {sugestao ? (
-              <Button type="button" size="sm" variant="outline" onClick={onTentarDeNovo}>
-                Tentar de novo
-              </Button>
-            ) : null}
-          </AlertDescription>
+          <AlertTitle>Prateleira não serve</AlertTitle>
+          <AlertDescription>{erro}</AlertDescription>
         </Alert>
       ) : candidato ? (
         <div className="flex flex-col gap-4 @lg:flex-row @lg:items-start @lg:justify-between">
@@ -167,12 +179,27 @@ export function DestinoDaCaixa({ estado, ocupado, onModo, onEscolher, onConfirma
               </div>
             ) : null}
           </div>
+          {/* Ocupado não é desabilitado: o confirmar é o BotaoDeAcao, com o gerúndio e o foco nele; as outras ações
+              esperam com aria-disabled (carregamento v2, parte 13c). */}
           <div className="flex flex-col gap-2 @lg:items-end">
-            <Button type="button" disabled={ocupado} onClick={() => onConfirmar(candidato)}>
-              Confirmar destino em {candidato.code}
-            </Button>
+            <BotaoDeAcao
+              className="max-md:min-h-12"
+              estado={confirmando ? "andamento" : "repouso"}
+              rotulo={`Confirmar destino em ${candidato.code}`}
+              andamento="Confirmando…"
+              bloqueado={!confirmando && ocupado}
+              onClick={() => onConfirmar(candidato)}
+            />
             {sugestao ? (
-              <Button type="button" variant="outline" disabled={ocupado} onClick={() => onNaoCabe(candidato.code)}>
+              <Button
+                type="button"
+                variant="outline"
+                className={cn("max-md:min-h-12", ocupado && "opacity-45 hover:bg-card active:bg-card")}
+                aria-disabled={ocupado || undefined}
+                onClick={() => {
+                  if (!ocupado) onNaoCabe(candidato.code);
+                }}
+              >
                 Não cabe aqui
               </Button>
             ) : null}
@@ -202,7 +229,7 @@ export type RecusaDaPrateleiraProps = {
 /** "Não cabe aqui": o motivo, e a prateleira sai da escolha desta caixa. */
 export function RecusaDaPrateleira({ prateleira, caixa, detalhe, enviando, acao = "Recusar", onCancelar, onRecusar }: RecusaDaPrateleiraProps) {
   return (
-    <Dialog open={Boolean(prateleira)} onOpenChange={(aberto) => (aberto ? undefined : onCancelar())}>
+    <Dialog open={Boolean(prateleira)} ocupado={enviando} onOpenChange={(aberto) => (aberto ? undefined : onCancelar())}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Não cabe em {prateleira}</DialogTitle>
@@ -253,12 +280,14 @@ export function RecusaDaPrateleiraConteudo({
         <Input id="nao-cabe-motivo" maxLength={300} value={motivo} onChange={(event) => setMotivo(event.target.value)} />
       </div>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancelar}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={!motivo.trim() || enviando}>
-          {acao} {prateleira}
-        </Button>
+        <DialogCancelar ocupado={enviando} onClick={onCancelar} />
+        <BotaoDeAcao
+          type="submit"
+          estado={enviando ? "andamento" : "repouso"}
+          rotulo={`${acao} ${prateleira}`}
+          andamento={acao === "Liberar" ? "Liberando…" : "Recusando…"}
+          bloqueado={!enviando && !motivo.trim()}
+        />
       </div>
     </form>
   );
@@ -324,6 +353,8 @@ export function useDestinoDaCaixa({
     retry: false,
     staleTime: 0,
   });
+  // A sugestão que falhou fica na tela enquanto tenta de novo (a nova tentativa sem dado zera o erro no react-query).
+  const sugestaoNaTela = useLeituraComFalha(sugestao);
   const posicoes = useQuery({
     queryKey: ["warehouse-positions", "all-pages"],
     staleTime: 30_000,
@@ -365,14 +396,16 @@ export function useDestinoDaCaixa({
     ? {
         modo,
         sugestao: sugestao.data ?? null,
-        carregandoSugestao: sugestao.isFetching,
-        erroSugestao: mensagem(sugestao.error),
+        // Só a leitura sem nada na tela espera: a releitura da sugestão já lida não a tira da tela.
+        carregandoSugestao: sugestao.data === undefined && sugestao.isFetching && !sugestaoNaTela.isError,
+        erroSugestao: mensagem(sugestaoNaTela.error),
+        falhaDaSugestao: sugestaoNaTela.error ?? undefined,
         prateleiras,
         carregandoPrateleiras: posicoes.isLoading,
         erroPrateleiras: mensagem(posicoes.error),
         escolhida,
         previa: previa.data?.position ?? null,
-        carregandoPrevia: previa.isFetching,
+        carregandoPrevia: previa.data === undefined && previa.isFetching,
         erroPrevia: mensagem(previa.error),
       }
     : destinoVazio();
@@ -498,6 +531,7 @@ export function useDestinoDaCaixa({
     limpar,
     ocupado: confirmar.isPending || recusar.isPending,
     acoes: {
+      confirmando: confirmar.isPending,
       onModo: setModo,
       onEscolher: setEscolhida,
       onConfirmar: (candidato: SlottingCandidate) => {
@@ -506,7 +540,7 @@ export function useDestinoDaCaixa({
         confirmar.mutate({ caixa, candidato });
       },
       onNaoCabe: setRecusando,
-      onTentarDeNovo: () => void sugestao.refetch(),
+      onTentarDeNovo: () => sugestao.refetch(),
     } satisfies Omit<DestinoDaCaixaProps, "estado" | "ocupado">,
     onCancelarRecusa: () => setRecusando(null),
     onRecusar: (motivo: string) => {

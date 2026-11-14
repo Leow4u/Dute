@@ -40,7 +40,7 @@ vi.mock("firebase/functions", () => ({
       if (dados.location_id) {
         return { data: { ok: true, position: noPiso(String(dados.location_id), 3, "Prateleira selecionada manualmente."), alternatives: [], rejected: null, checked: 1 } };
       }
-      // A sugestão sem resposta, como o celular sem sinal.
+      // A sugestão sem resposta, com o aparelho conectado (o jsdom diz que está).
       if (estado.sugestaoFora) throw Object.assign(new Error("internal"), { code: "functions/internal" });
       return { data: { ok: true, position: noPiso("B-02", 1, "Já tem BTG-000086 nesta prateleira e ainda cabe."), alternatives: [noPiso("B-03", 2, "A mais próxima de B-02.")], rejected: null, checked: 43 } };
     }
@@ -166,7 +166,7 @@ describe("Confirmar destino com a prateleira escolhida", () => {
   it("sem a sugestão do sistema, o pedido não leva a sugestão vazia e a caixa no piso vai sem apoio", async () => {
     await abrirACaixa();
     await esperar(() => Boolean(destino?.estado.erroSugestao), "a sugestão fora do ar");
-    expect(destino!.estado.erroSugestao).toBe("Sem conexão. Tente de novo quando o sinal voltar.");
+    expect(destino!.estado.erroSugestao).toBe("Sem resposta do servidor.");
 
     await confirmarNaPrateleiraEscolhida();
 

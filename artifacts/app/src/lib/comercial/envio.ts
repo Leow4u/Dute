@@ -20,6 +20,12 @@ export const ROTULO_DO_ENVIO: Record<AcaoDeEnvio, string> = {
   approve_and_send: "Aprovar e enviar",
 };
 
+/** O gerúndio do envio, no botão enquanto ele grava (carregamento v2, parte 13g). */
+export const ANDAMENTO_DO_ENVIO: Record<AcaoDeEnvio, string> = {
+  send: "Enviando ao cliente…",
+  approve_and_send: "Aprovando e enviando…",
+};
+
 /** O que advanceQuote devolve (AdvanceQuoteResult): a RV enviada e a situação depois. */
 export type ResultadoDoEnvio = { rv: number; status: StatusOrcamento | string; edicao: number; etapa?: string };
 

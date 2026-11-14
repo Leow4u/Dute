@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { useFalhaNaReleituraAutomatica } from "@/lib/carregando/use-leitura-com-falha";
 import { chamarOperacao } from "@/lib/operacao/api";
 import { RELEITURA_MS, RELOGIO_MS, painelDaTv, quadroLido } from "@/lib/tv/quadro";
 
@@ -87,7 +88,10 @@ export default function Tv() {
     retry: 2,
   });
   const painel = useMemo(() => (leitura.data ? painelDaTv(leitura.data, agora) : null), [leitura.data, agora]);
-  const estado: EstadoDaTv = leitura.data ? "pronto" : leitura.isError ? "erro" : "carregando";
+  // Sem quadro lido, a falha fica na tela durante a releitura dos 30 s: a TV não volta a "Carregando o quadro…" nem
+  // fala a cada ciclo (a releitura automática não mostra nada nem fala; momento 7).
+  const comFalha = useFalhaNaReleituraAutomatica(leitura);
+  const estado: EstadoDaTv = leitura.data ? "pronto" : comFalha.isError ? "erro" : "carregando";
   return (
     <TvView
       estado={estado}

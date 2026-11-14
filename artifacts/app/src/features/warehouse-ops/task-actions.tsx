@@ -1,11 +1,12 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Ban, MessageSquareWarning, RefreshCw } from "lucide-react";
+import { Ban, MessageSquareWarning } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import {
   Dialog,
+  DialogCancelar,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { desfechoDoErro } from "@/lib/carregando/use-acao-na-linha";
 import { type SavedLineCodes } from "@/lib/product-match";
 import {
   type AdvanceTaskPayload,
@@ -43,10 +45,12 @@ export function useWarehouseTaskActions({
   const [exceptionTaskId, setExceptionTaskId] = useState<string>();
   const [exceptionNote, setExceptionNote] = useState("");
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-    queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
-  };
+  /** Relê a bancada e o painel do agente; a promessa resolve quando as releituras voltam (com ou sem erro). */
+  const invalidate = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] }),
+      queryClient.invalidateQueries({ queryKey: ["ai-overview"] }),
+    ]);
 
   const advanceTask = useMutation<unknown, Error, AdvanceTaskPayload>({
     mutationFn: ({ id: taskId, operation, note }) => {
@@ -62,12 +66,14 @@ export function useWarehouseTaskActions({
         }),
       });
     },
+    // O "Avançar" só volta depois da releitura (carregamento v2, parte 10; o diagnóstico, seção 6, item 9): a
+    // mutação fica pendente até a bancada voltar, e o botão não volta ativo com a tarefa ainda na etapa antiga.
     onSuccess: () => {
-      invalidate();
       toast({
         title: "Tarefa avançada",
         description: "A bancada WMS foi atualizada com a próxima etapa.",
       });
+      return invalidate();
     },
     onError: (error) => {
       toast({
@@ -78,12 +84,31 @@ export function useWarehouseTaskActions({
     },
   });
 
+  /**
+   * A tentativa de cada exceção, pela tarefa, pela fila e pela nota que a
+   * pessoa escreveu (carregamento v2, parte 13i; a necessidade 5 do celular):
+   * a repetição depois de um resultado incerto (sem resposta, sem conexão) leva
+   * a mesma chave e o mesmo corpo, e o servidor devolve o recibo da primeira,
+   * se ela valeu. O corpo fica o da primeira tentativa: a tarefa relida (a
+   * contagem de exceções que a primeira já subiu) não muda o pedido. A chave é
+   * nova quando a exceção é registrada, quando o servidor recusa ou quando a
+   * nota muda. Antes, o corpo ia sem chave, e a rota punha uma nova a cada
+   * chamada: nada no servidor barrava a segunda exceção.
+   *
+   * A tentativa é a do diálogo aberto, como a conclusão da separação: o diálogo
+   * que abre de novo é outro pedido. Sem isso, a exceção nova da mesma tarefa,
+   * com a mesma nota (o diálogo abre com o bloqueio atual), sairia com a chave
+   * e o corpo de uma tentativa incerta antiga, e o servidor devolveria o recibo
+   * dela sem gravar nada.
+   */
+  const tentativasDaExcecao = useRef(new Map<string, Record<string, unknown>>());
+
   const registerException = useMutation<unknown, Error, ExceptionPayload>({
-    mutationFn: ({ task, queue, note }) =>
-      fetchJson(`/api/warehouse/tasks/${encodeURIComponent(task.id)}/exception`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+    mutationFn: ({ task, queue, note }) => {
+      const assinatura = JSON.stringify([task.id, queue, note ?? ""]);
+      let corpo = tentativasDaExcecao.current.get(assinatura);
+      if (!corpo) {
+        corpo = {
           note: note || task.blocked_reason || "Exceção registrada na bancada WMS.",
           severity:
             task.priority === "critical" || task.blocked_reason
@@ -100,13 +125,30 @@ export function useWarehouseTaskActions({
             blocked_reason: task.blocked_reason,
             exception_count: task.exception_count,
           },
-        }),
-      }),
+          idempotency_key: crypto.randomUUID(),
+        };
+        tentativasDaExcecao.current.set(assinatura, corpo);
+      }
+      return fetchJson(`/api/warehouse/tasks/${encodeURIComponent(task.id)}/exception`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(corpo),
+      }).then(
+        (resultado) => {
+          tentativasDaExcecao.current.delete(assinatura);
+          return resultado;
+        },
+        (erro: unknown) => {
+          if (desfechoDoErro(erro) === "recusado") tentativasDaExcecao.current.delete(assinatura);
+          throw erro;
+        },
+      );
+    },
     onSuccess: () => {
       setExceptionOpen(false);
       setExceptionTaskId(undefined);
       setExceptionNote("");
-      invalidate();
+      void invalidate();
       toast({
         title: "Exceção registrada",
         description: "O evento operacional foi enviado para a memória da IA.",
@@ -137,6 +179,7 @@ export function useWarehouseTaskActions({
   const exceptionEntry = exceptionTaskId ? findEntry(exceptionTaskId) : undefined;
 
   function openFor(task: WarehouseTask, suggestedNote?: string) {
+    tentativasDaExcecao.current.clear();
     setExceptionTaskId(task.id);
     setExceptionNote(suggestedNote || task.blocked_reason || "");
     setExceptionOpen(true);
@@ -203,7 +246,7 @@ export function ExceptionDialog({
   const canSubmit = Boolean(task && (note.trim() || task.blocked_reason));
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} ocupado={isPending} onOpenChange={onOpenChange}>
       <DialogContent>
         <form className="flex flex-col gap-5" onSubmit={onSubmit}>
           <DialogHeader>
@@ -229,27 +272,20 @@ export function ExceptionDialog({
               id="warehouse-exception-note"
               value={note}
               onChange={(event) => onNoteChange(event.target.value)}
-              placeholder="Divergência, falta, avaria, documento pendente..."
+              placeholder="Divergência, falta, avaria, documento pendente…"
             />
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isPending}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={!canSubmit || isPending}>
-              {isPending ? (
-                <RefreshCw data-icon="inline-start" className="animate-spin" />
-              ) : (
-                <MessageSquareWarning data-icon="inline-start" />
-              )}
-              Registrar
-            </Button>
+            <DialogCancelar onClick={() => onOpenChange(false)} />
+            <BotaoDeAcao
+              type="submit"
+              estado={isPending ? "andamento" : "repouso"}
+              icone={<MessageSquareWarning aria-hidden="true" />}
+              rotulo="Registrar"
+              andamento="Registrando…"
+              bloqueado={!isPending && !canSubmit}
+            />
           </DialogFooter>
         </form>
       </DialogContent>

@@ -54,7 +54,11 @@ async function esperar(condicao: () => boolean, oQue: string) {
   throw new Error(`Não aconteceu: ${oQue}`);
 }
 
-const botao = (texto: string) => [...document.querySelectorAll("button")].find((item) => item.textContent?.trim() === texto) ?? null;
+/** O botão pelo rótulo; o botão de ação (o Enviar aviso), pela camada que está na tela. */
+const botao = (texto: string) =>
+  [...document.querySelectorAll("button")].find(
+    (item) => item.textContent?.trim() === texto || item.querySelector(".botao-acao-camada[data-atual]")?.textContent?.trim() === texto,
+  ) ?? null;
 
 async function digitar(campo: HTMLInputElement | null, valor: string) {
   if (!campo) throw new Error("Sem o campo");
@@ -75,12 +79,14 @@ async function anexar(arquivos: File[]) {
 
 async function enviarAviso() {
   const antes = estado.avisos.length;
+  // O Enviar aviso é o botão de ação: o segundo toque dentro de 1 s é barrado (toque único).
+  if (antes > 0) await act(async () => new Promise((pronto) => setTimeout(pronto, 1_050)));
   await act(async () => botao("Enviar aviso")!.click());
   await esperar(() => estado.avisos.length > antes, "o aviso");
   // A falha devolve o botão; o aviso que deu certo fecha o formulário.
   await esperar(() => {
     const enviar = botao("Enviar aviso");
-    return enviar ? !enviar.disabled : botao("Avisar um envio") !== null;
+    return enviar ? enviar.getAttribute("aria-busy") !== "true" : botao("Avisar um envio") !== null;
   }, "o fim do envio");
   return estado.avisos.at(-1)!;
 }
@@ -150,6 +156,8 @@ describe("o aviso de envio enviado de novo", () => {
       new File([new Uint8Array([37, 80, 68, 70])], "romaneio.pdf", { type: "application/pdf" }),
     ]);
     await esperar(() => estado.anexos.length === 1, "a leitura da nota");
+    // O aviso espera a leitura da nota acabar (parte 13f): ela ainda preencheria o formulário.
+    await esperar(() => !document.body.textContent?.includes("Lendo a nota…"), "o fim da leitura da nota");
 
     const primeiro = await enviarAviso();
     const segundo = await enviarAviso();

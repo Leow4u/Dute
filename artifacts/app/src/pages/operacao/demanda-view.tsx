@@ -30,6 +30,9 @@ import { ROTA_DEMANDAS, hrefDaFichaDaOs, hrefDoPlano, hrefDoPlanoDaVistoria } fr
 import { cn } from "@/lib/utils";
 
 import { Etapa } from "./demandas-view";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
  * Operação › Demanda (docs/plataforma/fase-3-operacao.md, parte 3.5b;
@@ -411,6 +414,7 @@ export function DemandaView({
   prazo,
   erro,
   vistoria = null,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDaDemanda;
   numero: string | null;
@@ -425,6 +429,8 @@ export function DemandaView({
   erro: string | null;
   /** A vistoria que se pode abrir: o dia da visita técnica, "" sem dia, ou null (parte 3.11c). */
   vistoria?: string | null;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   const voltar = (
     <Link
@@ -439,14 +445,8 @@ export function DemandaView({
     return (
       <section className="flex flex-col gap-4">
         {voltar}
-        {estado === "carregando" ? (
-          <p className="text-sm text-muted-foreground">Carregando</p>
-        ) : null}
-        {estado === "erro" ? (
-          <p role="alert" className="text-sm text-destructive">
-            Não foi possível carregar a demanda.
-          </p>
-        ) : null}
+        {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a demanda…" continuaARota onTentar={leitura.tentar} /> : null}
+        {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a demanda." /> : null}
         {estado === "nao_encontrada" || (estado === "pronto" && !demanda) ? (
           <p className="text-sm text-muted-foreground">
             {numero
@@ -466,6 +466,7 @@ export function DemandaView({
   return (
     <section className="flex flex-col gap-6">
       {voltar}
+      <FaixaAoVivo leitura={leitura} objeto="demanda" />
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">

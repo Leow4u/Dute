@@ -7,7 +7,12 @@ import { faturaDoFinanceiro, type FaturaDoFinanceiro } from "@/lib/financeiro/fa
 import { itensDoInicioDoFinanceiro } from "@/lib/financeiro/inicio";
 import { ROTA_A_FATURAR, ROTA_A_RECEBER, ROTA_VENCIDOS } from "@/lib/financeiro/navegacao";
 import type { InicioDoFinanceiro } from "@/lib/financeiro/use-a-faturar";
+import { ProvedorDaConexao, type EstadoDaConexao } from "@/lib/carregando/estado-da-conexao";
+import type { NovaTentativa } from "@/lib/operacao/leitura";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { textosVisiveis } from "@/test/botoes";
+import { conexaoEm } from "@/test/conexao";
+import { DEZ_E_QUARENTA_E_DOIS } from "@/test/sem-conexao";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import { InicioDoFinanceiroView } from "./inicio-view";
@@ -62,7 +67,7 @@ const FATURAS = [
   fatura("1203", { status: "paga", recebido_cents: 100_000, paga_em: "2026-10-15" }),
 ];
 
-function render(inicio: Partial<InicioDoFinanceiro> = {}, nome = "Carla Mendes") {
+function render(inicio: Partial<InicioDoFinanceiro> = {}, nome = "Carla Mendes", conexao: EstadoDaConexao = "conectado") {
   const completo: InicioDoFinanceiro = {
     itens: itensDoInicioDoFinanceiro(LINHAS, FATURAS, new Date("2026-10-23T12:00:00.000Z")),
     linhas: LINHAS,
@@ -72,15 +77,17 @@ function render(inicio: Partial<InicioDoFinanceiro> = {}, nome = "Carla Mendes")
     ...inicio,
   };
   return renderToStaticMarkup(
-    <Router ssrPath="/financeiro">
-      <InicioDoFinanceiroView nome={nome} hoje={HOJE} inicio={completo} />
-    </Router>,
+    <ProvedorDaConexao value={conexaoEm(conexao)}>
+      <Router ssrPath="/financeiro">
+        <InicioDoFinanceiroView nome={nome} hoje={HOJE} inicio={completo} />
+      </Router>
+    </ProvedorDaConexao>,
   );
 }
 
 describe("Início do Financeiro", () => {
   it("data, saudação, quantas coisas esperam, o que precisa de você e os números, o mais urgente primeiro", () => {
-    expect(textosDaTela(render())).toEqual([
+    expect(textosVisiveis(render())).toEqual([
       "Sexta-feira, 23 de outubro",
       "Bom dia, Carla",
       "4 coisas",
@@ -159,14 +166,33 @@ describe("Início do Financeiro", () => {
   });
 
   it("carregando não diz que não há nada; erro diz o que não carregou", () => {
-    expect(textosDaTela(render({ itens: [], linhas: undefined, faturas: undefined, carregando: true }))).toEqual(["Sexta-feira, 23 de outubro", "Bom dia, Carla", "Precisa de você"]);
+    // Lendo, a lateral já tem a forma final: os rótulos e os blocos no lugar dos números, nunca o zero (parte 13g).
+    const lendo = render({ itens: [], linhas: undefined, faturas: undefined, carregando: true });
+    expect(textosVisiveis(lendo)).toEqual([
+      "Sexta-feira, 23 de outubro",
+      "Bom dia, Carla",
+      "Precisa de você",
+      "A faturar",
+      "Prontas para faturar",
+      "Aguardando autorização",
+      "Sem valor para faturar",
+      "Abrir a fila",
+      "A receber",
+      "A vencer",
+      "Vencidas",
+      "Para enviar",
+      "Abrir A receber",
+    ]);
+    expect(lendo).toContain('data-forma="contagem"');
+    expect(lendo).not.toContain("animate-pulse");
+    expect(textosVisiveis(lendo)).not.toContain("0");
     const erro = render({ itens: [], linhas: undefined, faturas: undefined, falhas: ["autorizações"] });
     expect(erro).toMatch(/<p role="alert"[^>]*>Não foi possível carregar: autorizações\.<\/p>/);
-    expect(textosDaTela(erro)).not.toContain("Prontas para faturar");
+    expect(textosVisiveis(erro)).not.toContain("Prontas para faturar");
   });
 
   it("nada parado: a frase diz, e os números continuam", () => {
-    const textos = textosDaTela(render({ itens: [], linhas: [], faturas: [] }));
+    const textos = textosVisiveis(render({ itens: [], linhas: [], faturas: [] }));
     expect(textos).toContain("Nada parado no Financeiro.");
     expect(textos).not.toContain("Precisa de você");
     expect(textos).toContain("Prontas para faturar");
@@ -175,5 +201,47 @@ describe("Início do Financeiro", () => {
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ itens: [], linhas: undefined, faturas: undefined, carregando: true }))).toEqual([]);
+  });
+});
+
+/**
+ * O Início do Financeiro sem conexão (revisão da parte 13l). A leitura das
+ * faturas, das emissões e das baixas passou a levar a falta na 13l, mas o
+ * Início não a lia: sem rede, ele dizia "Não foi possível carregar:
+ * faturas." como se o servidor tivesse recusado, enquanto o Início da
+ * Operação já dizia "Sem conexão.". Agora ele escolhe como o da Operação: sem
+ * nada lido, o aviso da conexão no lugar do "Precisa de você"; com tudo lido,
+ * o que estava fica, com a hora; o erro do servidor segue no aviso das fontes.
+ * Dados sintéticos.
+ */
+describe("Início do Financeiro sem conexão (revisão da parte 13l)", () => {
+  const noop = () => undefined;
+  const semConexao = (lidaEm: number | null = null): NovaTentativa => ({ tentando: false, tentar: noop, falta: "conexao", lidaEm, falhou: lidaEm === null });
+  const SEM_NADA = { itens: [], linhas: undefined, faturas: undefined, falhas: ["faturas"] };
+
+  it("sem nada lido: o aviso da conexão no lugar do que precisa de você, e não a falha das faturas", async () => {
+    for (const estado of ["sem-conexao", "reconectando"] as const) {
+      const html = render({ ...SEM_NADA, releitura: semConexao() }, "Carla Mendes", estado);
+      const textos = textosDaTela(html);
+      expect(textos).toContain(estado === "sem-conexao" ? "Sem conexão." : "Reconectando…");
+      expect(textos).toContain("Tentar de novo");
+      expect(html).not.toContain("Não foi possível carregar");
+      expect(textosForaDaLista(html, [/^Sexta-feira/, /^Bom dia/, "Sem conexão.", "Reconectando…", "Tentar de novo"])).toEqual([]);
+      expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    }
+  });
+
+  it("lido: o que estava fica, com a hora da lista", async () => {
+    const html = render({ releitura: semConexao(DEZ_E_QUARENTA_E_DOIS) }, "Carla Mendes", "sem-conexao");
+    expect(textosDaTela(html)).toContain("Sem conexão · lista de 10:42");
+    expect(textosVisiveis(html)).toContain("Prontas para faturar");
+    expect(html).not.toContain("Não foi possível carregar");
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("o erro do servidor segue no aviso das fontes", () => {
+    const html = render({ ...SEM_NADA, releitura: { tentando: false, tentar: noop, falta: "servidor", lidaEm: null, falhou: true } });
+    expect(html).toContain("Não foi possível carregar: faturas.");
+    expect(html).not.toMatch(/Sem conexão|Reconectando/);
   });
 });

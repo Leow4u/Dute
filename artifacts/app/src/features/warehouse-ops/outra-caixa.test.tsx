@@ -54,7 +54,13 @@ function campos(html: string) {
   const resultado = {
     "CX-000061": de("CX-000061"),
     "CX-000062": de("CX-000062"),
-    confirmar: [...document.querySelectorAll("button")].find((botao) => botao.textContent?.startsWith("Confirma"))?.hasAttribute("disabled"),
+    // O BotaoDeAcao (carregamento v2, parte 13c): o rótulo é o da camada atual, e travado é aria-disabled, nunca disabled.
+    confirmar: (() => {
+      const botao = [...document.querySelectorAll("button")].find((candidato) =>
+        (candidato.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? candidato.textContent)?.startsWith("Confirma"),
+      );
+      return botao ? botao.hasAttribute("disabled") || botao.getAttribute("aria-disabled") === "true" : undefined;
+    })(),
   };
   dom.window.close();
   return resultado;
@@ -74,6 +80,8 @@ describe("Outra caixa", () => {
       "35 de 35 un.",
       "Voltar",
       "Confirmar caixas",
+      "Confirmando…",
+      "Conferir",
     ]);
     expect(campos(render(CAMISETA))).toEqual({
       "CX-000061": { valor: "0", menos: true, mais: false },
@@ -96,10 +104,14 @@ describe("Outra caixa", () => {
     expect(caixasFecham(poucas)).toBe(true);
   });
 
-  it("gravando, o botão diz Confirmando e não aceita outro clique", () => {
+  it("gravando, o botão fica em andamento, ocupado e não desabilitado, e o Voltar espera", () => {
+    // O gerúndio com a reticência única entra aos 300 ms (o BotaoDeAcao, carregamento v2, parte 13c).
     const html = render(CAMISETA, true);
-    expect(textosDaTela(html)).toContain("Confirmando...");
+    expect(textosDaTela(html)).toContain("Confirmando…");
+    expect(textosDaTela(html).join(" ")).not.toContain("...");
+    expect(html).toMatch(/<button[^>]*data-estado="andamento"[^>]*aria-disabled="true"/);
     expect(campos(html).confirmar).toBe(true);
+    expect(html).toMatch(/<button[^>]*aria-disabled="true"[^>]*>Voltar<\/button>/);
   });
 
   it("a linha sem endereço não deixa o separador sobrando", () => {

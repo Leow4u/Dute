@@ -14,6 +14,11 @@ import { medicaoDoDoc } from "@/lib/comercial/medicoes-exemplo";
 import { ROTA_MEDICOES, TELAS_DO_COMERCIAL } from "@/lib/comercial/navegacao";
 
 import { MedicoesView, type MedicoesViewProps } from "./medicoes-view";
+import { semCamadasEscondidas, travadoNoHtml } from "@/test/botoes";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { DEZ_E_QUARENTA_E_DOIS, estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
+import { conexaoEm } from "@/test/conexao";
+import { ProvedorDaConexao } from "@/lib/carregando/estado-da-conexao";
 
 /**
  * Tela de Medições (docs/mockups/ComMedicaoMensal.dc.html), parte 16b: só
@@ -97,7 +102,7 @@ function render(overrides: Partial<MedicoesViewProps> = {}) {
 
 /** Textos visíveis, na ordem: o que a pessoa lê na tela. */
 function texts(html: string) {
-  return html
+  return semCamadasEscondidas(html)
     .replace(/<span class="sr-only">[^<]*<\/span>/g, "")
     .split(/<[^>]+>/)
     .map((text) => text.trim())
@@ -251,11 +256,12 @@ describe("tela de medições", () => {
 
   it("os botões do cabeçalho: enviar fica desabilitado sem linhas; exportar também", () => {
     const vazia = render({ medicao: lida({ linhas: [], total_cents: 0, marcas: {} }) });
-    const botao = (html: string, rotulo: string) => html.match(new RegExp(`<button[^>]*>(?:(?!</button>)[\\s\\S])*${rotulo}</button>`))?.[0] ?? "";
-    expect(botao(vazia, "Enviar ao cliente")).toMatch(/ disabled=""/);
-    expect(botao(vazia, "Exportar Diário de Bordo")).toMatch(/ disabled=""/);
-    expect(botao(render(), "Enviar ao cliente")).not.toMatch(/ disabled=""/);
-    expect(botao(render({ ocupado: true }), "Enviar ao cliente")).toMatch(/ disabled=""/);
+    // O Enviar é o BotaoDeAcao: travado por aria-disabled, com a trava no código, nunca disabled (parte 13g).
+    expect(travadoNoHtml(vazia, "Enviar ao cliente")).toBe(true);
+    expect(travadoNoHtml(vazia, "Exportar Diário de Bordo")).toBe(true);
+    expect(travadoNoHtml(render(), "Enviar ao cliente")).toBe(false);
+    expect(travadoNoHtml(render({ ocupado: true }), "Enviar ao cliente")).toBe(true);
+    expect(render({ ocupado: true })).not.toMatch(/<button[^>]*disabled=""[^>]*data-estado/);
     expect(texts(vazia)).toEqual(expect.arrayContaining(["Nenhuma OS nesta medição", "Total · 0 demandas"]));
   });
 
@@ -344,13 +350,16 @@ describe("tela de medições: marcas e estados", () => {
   });
 
   it("carregando e erro nunca viram medição vazia", () => {
-    expect(texts(render({ medicao: "carregando" })).slice(CABECALHO_E_COMPETENCIAS.length)).toEqual(["Carregando..."]);
-    expect(texts(render({ medicao: "erro" })).slice(CABECALHO_E_COMPETENCIAS.length)).toEqual(["Não foi possível carregar a medição."]);
-    expect(texts(render({ estado: "carregando", contrato: null, medicao: "carregando", chips: [] }))).toEqual([
-      "Medições",
-      "Carregando...",
-    ]);
-    expect(texts(render({ estado: "erro", contrato: null, medicao: "carregando", chips: [] })).slice(1)).toEqual(["Não foi possível carregar os contratos."]);
+    // Lendo: nada escrito antes de 300 ms; a região da espera guarda o lugar (parte 13g).
+    const medicaoLendo = render({ medicao: "carregando" });
+    expect(texts(medicaoLendo).slice(CABECALHO_E_COMPETENCIAS.length)).toEqual([]);
+    expect(medicaoLendo).toContain("data-carregando-na-regiao");
+    expect(texts(render({ medicao: "erro" })).slice(CABECALHO_E_COMPETENCIAS.length)).toEqual(["Não foi possível carregar a medição.", "Tentar de novo"]);
+    expect(render({ medicao: "erro" })).toMatch(/role="alert"[^>]*>Não foi possível carregar a medição\./);
+    const contratosLendo = render({ estado: "carregando", contrato: null, medicao: "carregando", chips: [] });
+    expect(texts(contratosLendo)).toEqual(["Medições"]);
+    expect(contratosLendo).toContain("data-carregando-na-regiao");
+    expect(texts(render({ estado: "erro", contrato: null, medicao: "carregando", chips: [] })).slice(1)).toEqual(["Não foi possível carregar os contratos.", "Tentar de novo"]);
   });
 
   it("sem contrato por medição mensal, diz que não há", () => {
@@ -363,5 +372,47 @@ describe("tela de medições: marcas e estados", () => {
     const t = texts(render({ tabelas: "erro" }));
     expect(t).toEqual(expect.arrayContaining(["Demandas do mês", "Resumo por item"]));
     expect(t).not.toContain("LPU Safra 2026");
+  });
+});
+
+describe("medições: a falha da medição tem saída, e o axe (revisão da parte 13g)", () => {
+  it("a medição que falhou diz a falha com Tentar de novo, que assina de novo a leitura", () => {
+    const html = render({ medicao: "erro", leituraDaMedicao: { tentando: false, tentar: () => undefined } });
+    expect(html).toMatch(/<p role="alert"[^>]*>Não foi possível carregar a medição\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
+  });
+
+  it("o axe não acusa nada na medição, lendo e na falha", async () => {
+    expect(await violacoesDeAcessibilidade(render())).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ medicao: "carregando" }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ medicao: "erro" }))).toEqual([]);
+  });
+});
+
+describe("Medições sem conexão (carregamento v2, parte 13j)", () => {
+  const tela = (overrides: Partial<MedicoesViewProps>) => (
+    <Router ssrPath={ROTA_MEDICOES}>
+      <MedicoesView {...props(overrides)} />
+    </Router>
+  );
+
+  it("o aviso, a faixa e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(await estadosDaFalta((leitura, situacao) => tela(situacao === "erro" ? { estado: "erro", leitura } : { leitura }))).toEqual(
+      rotulosDaFalta({ mensagem: "Não foi possível carregar os contratos." }),
+    );
+  });
+
+  it("a lista lida e vazia, sem conexão: o vazio fica, com a faixa que diz de quando ele é (revisão da 13j)", async () => {
+    const lida = { tentando: false, tentar: () => undefined, falta: "conexao" as const, lidaEm: DEZ_E_QUARENTA_E_DOIS };
+    for (const estado of ["sem-conexao", "reconectando"] as const) {
+      const html = renderToStaticMarkup(
+        <ProvedorDaConexao value={conexaoEm(estado)}>{tela({ contratos: [], contrato: null, medicao: null, leitura: lida })}</ProvedorDaConexao>,
+      );
+      expect(texts(html).slice(-4), estado).toEqual([
+        ...(estado === "sem-conexao" ? ["Medições", "Sem conexão · lista de 10:42"] : ["Reconectando…", "· lista de 10:42"]),
+        "Tentar de novo",
+        "Nenhum contrato cobra por medição mensal",
+      ]);
+      expect(await violacoesDeAcessibilidade(html), estado).toEqual([]);
+    }
   });
 });

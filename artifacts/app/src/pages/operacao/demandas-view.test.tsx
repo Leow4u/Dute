@@ -99,7 +99,9 @@ describe("Demandas", () => {
 
   it("vazio, carregando e erro", () => {
     expect(textosDaTela(lista({ linhas: [] }))).toContain("Nenhuma demanda");
-    expect(textosDaTela(lista({ estado: "carregando" }))).toContain("Carregando");
+    // Lendo: nada escrito antes de 300 ms; a região da espera (a caixa e o gerúndio) guarda o lugar (parte 13g).
+    expect(textosDaTela(lista({ estado: "carregando" }))).not.toContain("Carregando");
+    expect(lista({ estado: "carregando" })).toContain("data-carregando-na-regiao");
     expect(textosDaTela(lista({ estado: "erro" }))).toContain("Não foi possível carregar as demandas.");
   });
 
@@ -218,7 +220,9 @@ describe("Demanda", () => {
 
   it("não encontrada, carregando e erro", () => {
     expect(textosDaTela(ficha({ estado: "nao_encontrada", demanda: null }))).toContain("Demanda 10053 não encontrada");
-    expect(textosDaTela(ficha({ estado: "carregando", demanda: null }))).toContain("Carregando");
+    // Lendo: nada escrito antes de 300 ms; a região da espera (a caixa e o gerúndio) guarda o lugar (parte 13g).
+    expect(textosDaTela(ficha({ estado: "carregando", demanda: null }))).not.toContain("Carregando");
+    expect(ficha({ estado: "carregando", demanda: null })).toContain("data-carregando-na-regiao");
     expect(textosDaTela(ficha({ estado: "erro", demanda: null }))).toContain("Não foi possível carregar a demanda.");
   });
 

@@ -1,5 +1,5 @@
 import { httpsCallable } from "firebase/functions";
-import { SEM_CONEXAO, callableSemResposta } from "../conexao";
+import { callableSemResposta, mensagemDaFalta } from "../conexao";
 import { firebaseApp } from "../firebase";
 import { functionsDoApp } from "../firebase-functions";
 import { mensagemDoErro } from "../operacao/api";
@@ -64,6 +64,6 @@ export async function cancelarRecebimento(input: CancelarRecebimentoInput): Prom
   try {
     return (await httpsCallable<CancelarRecebimentoInput, CancelarRecebimentoResult>(functionsDoApp(firebaseApp), "cancelInboundReceipt")(input)).data;
   } catch (error) {
-    throw new Error(callableSemResposta(error) ? SEM_CONEXAO : mensagemDoErro(error));
+    throw new Error(callableSemResposta(error) ? mensagemDaFalta() : mensagemDoErro(error));
   }
 }

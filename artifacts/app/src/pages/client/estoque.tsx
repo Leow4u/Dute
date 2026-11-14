@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
@@ -30,7 +30,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { Dialog, DialogCancelar, useConteudoEmAcao } from "@/components/ui/dialog";
 import { Chip as UiChip } from "@/components/ui/chip";
 import { FilterGroup, FilterSheet } from "@/components/ui/filter-panel";
 import { Input } from "@/components/ui/input";
@@ -47,6 +50,10 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { cartFromDraft, dueAtFromDraft, takeDraft } from "@/lib/agent-draft";
 import { useAppUser } from "@/lib/auth";
 import {
@@ -61,6 +68,7 @@ import {
   type StoredCart,
 } from "@/lib/client-cart";
 import { cartFromEvent, eventDateFromDueAt, eventDestination, eventDueAt, eventNotes } from "@/lib/client-events";
+import { vigiarFocoDeVolta } from "@/lib/foco-de-volta";
 import {
   overviewLine,
   productGender,
@@ -75,9 +83,9 @@ import {
 import { cn } from "@/lib/utils";
 import { displayName, groupFamilies, variantLabel, type Family } from "@/lib/stock-variants";
 
-import { DatasDeEntrada, buscarDatasDeEntrada, type DataDeEntrada } from "./datas-de-entrada";
+import { DatasDeEntrada, buscarDatasDeEntrada, type DataDeEntrada, type LeituraDasDatas } from "./datas-de-entrada";
 import { StockTypeFilter } from "./stock-type-filter";
-import { useClientEvents, useSaveClientEvent } from "./events-api";
+import { clientEventsQueryKey, useClientEvents, useSaveClientEvent } from "./events-api";
 import {
   ClientDataBoundary,
   useClientOverview,
@@ -164,6 +172,15 @@ const stockSortOptions: Array<{
   { value: "menor-saldo", label: "Menor saldo" },
   { value: "nome", label: "Nome: A-Z" },
 ];
+
+/**
+ * A ação de cada produto zerado (Avisar reposição, Arquivar, Devolver à
+ * vitrine), no card, na lista e no detalhe (carregamento v2, parte 13f): cada
+ * produto tem a própria espera (`useAcaoNaLinha`), com o gerúndio no botão,
+ * e os outros produtos ficam livres. No lugar do `isPending` compartilhado,
+ * que apagava os dois botões do detalhe juntos e não chegava ao card.
+ */
+const AcoesDosProdutos = createContext<AcaoNaLinha<string> | null>(null);
 
 export function ClienteEstoque() {
   const overviewQuery = useClientOverview();
@@ -345,6 +362,7 @@ export function ClienteEstoque() {
     },
   });
 
+  const acoesDosProdutos = useAcaoNaLinha<string>();
   const productActionMutation = useMutation({
     mutationFn: async (command: ProductActionCommand) => {
       if (command.action === "restock") {
@@ -383,8 +401,7 @@ export function ClienteEstoque() {
               ? "Some da vitrine e fica em Arquivados. Se o saldo voltar, ele reaparece."
               : "O produto aparece de novo na vitrine.",
       });
-
-      void invalidateClientData(queryClient);
+      // A releitura é a do `useAcaoNaLinha` (`releitura`), uma só: aqui ela leria o portal duas vezes.
     },
     onError: (error) => {
       toast({
@@ -399,7 +416,8 @@ export function ClienteEstoque() {
   });
 
   return (
-    <ClientDataBoundary>
+    <AcoesDosProdutos.Provider value={acoesDosProdutos}>
+    <ClientDataBoundary titulo="Estoque" largura="max-w-[1720px]">
       {(overview) => {
         const rawItems = getInventoryItems(overview);
         const products = groupInventoryProducts(rawItems);
@@ -411,6 +429,13 @@ export function ClienteEstoque() {
           <DraftLoader products={products} onLoad={applyDraft} />
         ) : wantsEvent && (eventsQuery.data || eventsQuery.isError) ? (
           <DraftLoader key="evento" products={products} onLoad={applyEvent} />
+        ) : wantsEvent && eventsQuery.isLoading ? (
+          // "Usar no pedido" espera o evento: aos 300 ms, a caixa e o rótulo, nunca nada (parte 13f).
+          <CarregandoNaRegiao
+            rotulo="Abrindo o evento…"
+            continuaARota
+            onTentar={() => void relerDoZero(queryClient, [clientEventsQueryKey])}
+          />
         ) : null;
         const cartQuantity = cartLines.reduce(
           (sum, line) => sum + line.quantity,
@@ -608,14 +633,24 @@ export function ClienteEstoque() {
           });
         }
 
+        // A mesma mutação e a mesma chave de idempotência de sempre (reposicoesNaVisita); a espera é por produto.
+        // A releitura depois do sucesso é uma só, a do `useAcaoNaLinha`: o "Avisado" fica até ela chegar.
         function requestReplenishment(product: StockProduct) {
-          productActionMutation.mutate({ action: "restock", product });
+          void acoesDosProdutos.executar(product.key, "restock", () => productActionMutation.mutateAsync({ action: "restock", product }), {
+            releitura: () => invalidateClientData(queryClient),
+          });
         }
 
         function requestArchive(product: StockProduct) {
-          productActionMutation.mutate({
-            action: product.archived ? "restore" : "archive",
-            product,
+          const action = product.archived ? "restore" : "archive";
+          // O produto que sai da vitrine leva o botão com o foco: ele vai ao vizinho, nunca ao body (WCAG 2.4.3).
+          // No painel do detalhe, quem cuida é o painel, que devolve o foco a quem o abriu.
+          const tocado = document.activeElement;
+          if (tocado instanceof HTMLElement && tocado !== document.body && !tocado.closest('[role="dialog"]')) {
+            vigiarFocoDeVolta(tocado);
+          }
+          void acoesDosProdutos.executar(product.key, "archive", () => productActionMutation.mutateAsync({ action, product }), {
+            releitura: () => invalidateClientData(queryClient),
           });
         }
 
@@ -766,7 +801,7 @@ export function ClienteEstoque() {
                 variant="outline"
                 className={cn(
                   "hidden h-10 shrink-0 gap-2 rounded-lg px-3 font-medium md:inline-flex",
-                  cartQuantity > 0 && "border-primary/20 bg-info-soft text-primary hover:bg-primary/10 active:bg-primary/15 dark:text-info-soft-foreground",
+                  cartQuantity > 0 && "border-primary/20 bg-info-soft text-primary-texto hover:bg-primary/10 active:bg-primary/15 dark:text-info-soft-foreground",
                 )}
                 aria-expanded={cartOpen}
                 aria-label={`Abrir pedido de abastecimento com ${formatNumber(cartQuantity)} ${cartQuantity === 1 ? "peça" : "peças"}`}
@@ -874,7 +909,14 @@ export function ClienteEstoque() {
             </section>
 
             {cartOpen ? (
-              <SideDrawer title="Seu pedido" onClose={() => setCartOpen(false)} wide={cartExpanded}>
+              <SideDrawer
+                title="Seu pedido"
+                onClose={() => setCartOpen(false)}
+                wide={cartExpanded}
+                ocupado={requestMutation.isPending || saveEvent.isPending}
+                // O pedido enviado esvazia o pedido, e o "Pedido ·" do celular sai da tela: o foco vai ao título.
+                focoAoFechar={() => document.querySelector<HTMLElement>("main h1")}
+              >
                 <CartPanel
                   cartKey={cartKey}
                   seed={cartSeed}
@@ -902,7 +944,6 @@ export function ClienteEstoque() {
                   family={selectedFamily}
                   cart={cart}
                   draftQuantity={getDraftQuantity(selectedProduct)}
-                  isPending={productActionMutation.isPending}
                   adicionado={
                     adicionadoNoDetalhe?.key === selectedProduct.key
                       ? adicionadoNoDetalhe.quantidade
@@ -948,6 +989,7 @@ export function ClienteEstoque() {
         );
       }}
     </ClientDataBoundary>
+    </AcoesDosProdutos.Provider>
   );
 }
 
@@ -958,7 +1000,7 @@ function OpeningInventoryState({
 }) {
   return (
     <div className="flex min-h-[360px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-card px-6 py-12 text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-lg border border-border bg-card text-primary">
+      <span className="flex h-14 w-14 items-center justify-center rounded-lg border border-border bg-card text-primary-texto">
         <Package className="h-6 w-6" aria-hidden="true" />
       </span>
       <h2 className="mt-5 text-lg font-semibold text-foreground">
@@ -1065,6 +1107,19 @@ export function MarketplaceToolbar({
       : stockFilter === "baixo" ? "abaixo do mínimo"
         : stockFilter === "arquivados" ? (resultCount === 1 ? "arquivado" : "arquivados")
           : (resultCount === 1 ? "encontrado" : "encontrados");
+  const textoDoResultado = `${formatNumber(resultCount)} ${resultCount === 1 ? "item" : "itens"} ${resultSuffix}`;
+  // O resultado da busca e dos filtros, dito pelo Anunciador quando a pessoa muda a busca ou um filtro; a
+  // releitura do estoque, que também muda a contagem, não fala (momento 7). Antes, uma região viva solta.
+  const anunciar = useAnuncio();
+  const consulta = `${searchTerm}|${stockFilter}|${categoryFilters.join(",")}`;
+  const ultimaConsulta = useRef(consulta);
+  useEffect(() => {
+    if (ultimaConsulta.current === consulta) return undefined;
+    ultimaConsulta.current = consulta;
+    return anunciar(textoDoResultado);
+    // Só a consulta da pessoa fala; a contagem que muda sozinha, não.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [consulta, anunciar]);
 
   return (
     <>
@@ -1093,7 +1148,7 @@ export function MarketplaceToolbar({
                 type="button"
                 variant="outline"
                 aria-label={activeFilterCount ? `Filtros, ${activeFilterCount} ${activeFilterCount === 1 ? "ativo" : "ativos"}` : "Filtros"}
-                className={cn("hidden h-11 shrink-0 gap-2 md:inline-flex", (filtersOpen || activeFilterCount > 0) && "border-primary bg-info-soft text-primary")}
+                className={cn("hidden h-11 shrink-0 gap-2 md:inline-flex", (filtersOpen || activeFilterCount > 0) && "border-primary bg-info-soft text-primary-texto")}
               >
                 <SlidersHorizontal aria-hidden="true" />
                 Filtros
@@ -1119,7 +1174,7 @@ export function MarketplaceToolbar({
               </div>
               <div className="shrink-0 space-y-2 border-t border-border px-5 py-3">
                 <p className="flex items-center gap-2 text-xs text-muted-foreground"><Info className="h-4 w-4 shrink-0" aria-hidden="true" />Filtros aplicados automaticamente</p>
-                <Button type="button" variant="ghost" size="sm" className="-ml-3 text-primary" disabled={!hasActiveFilters} onClick={onClearFilters}>
+                <Button type="button" variant="ghost" size="sm" className="-ml-3 text-primary-texto" disabled={!hasActiveFilters} onClick={onClearFilters}>
                   Limpar filtros
                 </Button>
               </div>
@@ -1143,8 +1198,8 @@ export function MarketplaceToolbar({
         </div>
       </section>
       <div data-testid="stock-results-toolbar" className="flex flex-wrap items-center justify-between gap-3">
-        <p role="status" aria-live="polite" className="text-sm font-semibold">
-          {formatNumber(resultCount)} {resultCount === 1 ? "item" : "itens"} {resultSuffix}
+        <p data-testid="stock-results-count" className="text-sm font-semibold">
+          {textoDoResultado}
         </p>
         <div className="hidden flex-wrap items-center gap-3 md:flex">
           <CatalogSelect ariaLabel="Ordenar produtos" icon={ArrowDownWideNarrow} value={sortMode} onChange={(value) => onSortModeChange(value as StockSort)} options={stockSortOptions.map((option) => ({ ...option, label: `Ordenar: ${option.label}` }))} />
@@ -1234,7 +1289,7 @@ export function ActiveFilterChips({ filters, onRemove }: { filters: CatalogFilte
   return (
     <div className="flex flex-wrap gap-2">
       {filters.map((filter) => (
-        <Button key={filter.key} type="button" variant="outline" size="sm" aria-label={`Tirar o filtro ${filter.label}`} onClick={() => onRemove(filter.key)} className={cn("border-primary/25 bg-primary/10 text-primary", filter.key === "situacao" && "md:hidden")}>
+        <Button key={filter.key} type="button" variant="outline" size="sm" aria-label={`Tirar o filtro ${filter.label}`} onClick={() => onRemove(filter.key)} className={cn("border-primary/25 bg-primary/10 text-primary-texto", filter.key === "situacao" && "md:hidden")}>
           {filter.label}<X aria-hidden="true" />
         </Button>
       ))}
@@ -1318,14 +1373,14 @@ function CatalogSelect({
   disabled?: boolean;
 }) {
   return (
-    <label className={cn("flex h-11 min-w-44 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus-within:ring-2 focus-within:ring-ring", disabled && "opacity-60")}>
+    <label className={cn("flex h-11 min-w-44 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco", disabled && "opacity-60")}>
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       <select
         aria-label={ariaLabel}
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 cursor-pointer appearance-none bg-transparent text-base font-medium text-foreground outline-none disabled:cursor-default md:text-sm"
+        className="min-w-0 flex-1 cursor-pointer appearance-none bg-transparent text-base font-medium text-foreground focus-visible:outline-hidden disabled:cursor-default md:text-sm"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -1446,7 +1501,7 @@ export function StockList({
                   <div className="mt-1 flex flex-wrap gap-2">
                     <StockBadge status={status} />
                     {cart[product.key] ? (
-                      <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                      <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs text-primary-texto">
                         {formatNumber(cart[product.key])} no pedido
                       </span>
                     ) : null}
@@ -1489,6 +1544,7 @@ export function StockList({
                       </>
                     ) : (
                       <ZeroStockActions
+                        chave={product.key}
                         compact
                         archived={product.archived}
                         onReplenish={() => onReplenish(product)}
@@ -1529,6 +1585,8 @@ export function SideDrawer({
   onClose,
   wide = false,
   bottomSheetOnMobile = false,
+  ocupado = false,
+  focoAoFechar,
 }: {
   children: ReactNode;
   /** O nome do diálogo para o leitor de tela: o produto aberto, ou "Seu pedido". */
@@ -1536,19 +1594,54 @@ export function SideDrawer({
   onClose: () => void;
   wide?: boolean;
   bottomSheetOnMobile?: boolean;
+  /** O envio do pedido segura o painel: o Esc e o clique fora não fecham (carregamento v2, parte 13a). */
+  ocupado?: boolean;
+  /** O lugar do foco quando quem abriu o painel saiu da tela (o "Pedido ·" do pedido enviado). */
+  focoAoFechar?: () => HTMLElement | null | undefined;
 }) {
-  // Quem abriu o painel (o card, a linha da lista, o botão do pedido): o foco
-  // volta para ele. A Radix só devolve o foco a um Dialog.Trigger, que aqui não há.
-  const opener = useRef<HTMLElement | null>(
-    typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null),
-  );
   return (
-    <DialogPrimitive.Root
+    <Dialog
       open
+      ocupado={ocupado}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
     >
+      <ConteudoDoPainelLateral title={title} wide={wide} bottomSheetOnMobile={bottomSheetOnMobile} focoAoFechar={focoAoFechar}>
+        {children}
+      </ConteudoDoPainelLateral>
+    </Dialog>
+  );
+}
+
+/**
+ * O conteúdo do painel lateral, com o jeito único do diálogo em ação (parte
+ * 13a): o Esc e o clique fora não fecham durante o envio, e o foco volta a
+ * quem abriu o painel (o card, a linha da lista, o botão do pedido) ou, se ele
+ * saiu da tela, ao `focoAoFechar`, nunca ao body.
+ */
+function ConteudoDoPainelLateral({
+  children,
+  title,
+  wide,
+  bottomSheetOnMobile,
+  focoAoFechar,
+}: {
+  children: ReactNode;
+  title: string;
+  wide: boolean;
+  bottomSheetOnMobile: boolean;
+  focoAoFechar?: () => HTMLElement | null | undefined;
+}) {
+  const { travado, travas } = useConteudoEmAcao({
+    // Abriu outro painel no lugar (o "Ver pedido"): o foco fica nele.
+    onCloseAutoFocus: (event) => {
+      if (document.querySelector('[role="dialog"]')) event.preventDefault();
+    },
+    focoAoFechar,
+  });
+  return (
+    <>
       <DialogPrimitive.Portal>
         {/* Fundo escuro sem desfoque e painel opaco: atrás há uma vitrine de
             fotos, e o painel translúcido ficava ilegível. */}
@@ -1562,14 +1655,10 @@ export function SideDrawer({
         >
           <DialogPrimitive.Content
             aria-describedby={undefined}
-            onCloseAutoFocus={(event) => {
-              event.preventDefault();
-              // Abriu outro painel no lugar (o "Ver pedido"): o foco fica nele.
-              if (document.querySelector('[role="dialog"]')) return;
-              if (opener.current?.isConnected) opener.current.focus();
-            }}
+            {...travas}
+            data-ocupado={travado ? "" : undefined}
             className={cn(
-              "relative w-full overflow-hidden text-foreground outline-none",
+              "relative w-full overflow-hidden text-foreground focus:outline-hidden",
               bottomSheetOnMobile
                 ? "flex max-h-[88dvh] flex-col rounded-t-xl bg-card shadow-lg md:h-full md:max-h-none md:max-w-[440px] md:rounded-xl"
                 : cn("h-full rounded-lg", wide ? "max-w-[1200px]" : "max-w-[440px]"),
@@ -1580,7 +1669,7 @@ export function SideDrawer({
           </DialogPrimitive.Content>
         </DialogPrimitive.Overlay>
       </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+    </>
   );
 }
 
@@ -1805,6 +1894,7 @@ export function FamilyCard({
             </div>
           ) : (
             <ZeroStockActions
+              chave={product.key}
               compact
               archived={product.archived}
               onReplenish={() => onReplenish(product)}
@@ -1858,7 +1948,7 @@ function VariantButtons({
               "flex cursor-pointer flex-col items-center rounded-md border leading-tight transition",
               large ? "min-h-11 min-w-[52px] justify-center px-2.5 py-1" : "min-w-[44px] px-2 py-1",
               active
-                ? "border-primary bg-primary/10 text-primary"
+                ? "border-primary bg-primary/10 text-primary-texto"
                 : "border-border text-foreground hover:border-primary/40",
               semPeca && !active && "text-muted-foreground/60",
             )}
@@ -2113,21 +2203,21 @@ export function CartPanel({
           </p>
         </div>
       ) : null}
-      <Button
-        type="button"
+      <BotaoDeAcao
         className="w-full cursor-pointer"
-        disabled={isSubmitting || lines.length === 0 || outboundBlocked}
+        estado={isSubmitting ? "andamento" : "repouso"}
+        icone={<CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
+        rotulo="Enviar pedido para a Dutelog"
+        andamento="Enviando o pedido…"
+        bloqueado={!isSubmitting && (lines.length === 0 || outboundBlocked)}
         onClick={() => onSubmit({ orderName, destination, dueAt, notes })}
-      >
-        {isSubmitting ? <Truck className="h-4 w-4 animate-pulse" /> : <CheckCircle2 className="h-4 w-4" />}
-        Enviar pedido para a Dutelog
-      </Button>
+      />
       {eventDraft ? (
         <form
           className="flex flex-col gap-3 rounded-lg border border-border p-3"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!eventDraft.name.trim()) return;
+            if (!eventDraft.name.trim() || isSavingEvent) return;
             onSaveEvent({ destination, notes }, eventDraft, () => setEventDraft(null));
           }}
         >
@@ -2158,12 +2248,20 @@ export function CartPanel({
             />
           </div>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" className="cursor-pointer" onClick={() => setEventDraft(null)}>
+            {/* Gravando, o Cancelar fica travado no código e o Salvar diz o gerúndio aos 300 ms (parte 13f). */}
+            <DialogCancelar variant="ghost" size="sm" className="cursor-pointer" ocupado={isSavingEvent} onClick={() => setEventDraft(null)}>
               Cancelar
-            </Button>
-            <Button type="submit" variant="outline" size="sm" className="cursor-pointer" disabled={!eventDraft.name.trim() || isSavingEvent}>
-              {isSavingEvent ? "Salvando…" : "Salvar evento"}
-            </Button>
+            </DialogCancelar>
+            <BotaoDeAcao
+              type="submit"
+              variant="outline"
+              size="sm"
+              className="cursor-pointer"
+              estado={isSavingEvent ? "andamento" : "repouso"}
+              rotulo="Salvar evento"
+              andamento="Salvando o evento…"
+              bloqueado={!isSavingEvent && !eventDraft.name.trim()}
+            />
           </div>
         </form>
       ) : (
@@ -2201,8 +2299,15 @@ export function CartPanel({
           </Button>
           <button
             type="button"
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
-            onClick={onClose}
+            className={cn(
+              "flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-muted max-md:h-11 max-md:w-11",
+              (isSubmitting || isSavingEvent) && "opacity-45 hover:bg-transparent",
+            )}
+            // O pedido que vai para a Dutelog segura o painel: aria-disabled, nunca disabled.
+            aria-disabled={isSubmitting || isSavingEvent || undefined}
+            onClick={() => {
+              if (!isSubmitting && !isSavingEvent) onClose();
+            }}
             aria-label="Fechar pedido"
           >
             <X className="h-4 w-4" />
@@ -2230,7 +2335,8 @@ type ProductDetailProps = {
   family?: Family<StockProduct> | null;
   cart: Record<string, number>;
   draftQuantity: number;
-  isPending: boolean;
+  /** Sem uso desde a parte 13f: a espera da ação é por produto (`AcoesDosProdutos`). */
+  isPending?: boolean;
   /** Quantas peças este painel acabou de pôr no pedido; sem nada, a confirmação não aparece. */
   adicionado?: number | null;
   onClose: () => void;
@@ -2242,16 +2348,55 @@ type ProductDetailProps = {
   onArchive: () => void;
   /** As datas de entrada do item (FIFO por data, parte 5); sem elas, a seção não aparece. */
   datasDeEntrada?: readonly DataDeEntrada[];
+  /** A leitura das datas: lendo e na falha, a seção fica, com a espera ou a falha (parte 13f). */
+  leituraDasDatas?: LeituraDasDatas;
 };
 
-/** O detalhe com as datas de entrada do item, lidas quando o painel abre; sem elas, o detalhe de sempre. */
+/**
+ * O detalhe com as datas de entrada do item, lidas quando o painel abre. Lendo
+ * e na falha, a seção fica, com a espera ou a falha e a nova tentativa: antes,
+ * ela sumia nos dois, e a falha parecia o item sem data (parte 13f). Só no
+ * produto que tem peça nas prateleiras: o zerado não tem data, e a seção dele
+ * não nasce lendo para sumir na chegada.
+ */
 function ProductDetailWithDates(props: ProductDetailProps) {
-  const datas = useQuery({
-    queryKey: ["client-stock-dates", props.product.sku],
+  const queryClient = useQueryClient();
+  const chave = ["client-stock-dates", props.product.sku] as const;
+  const leitura = useQuery({
+    queryKey: chave,
     queryFn: () => buscarDatasDeEntrada(props.product.sku),
     staleTime: 60_000,
   });
-  return <ProductDetailPanel {...props} datasDeEntrada={datas.data ?? []} />;
+  // A nova tentativa sem dado fica na falha, com "Tentando de novo…" e o foco no botão.
+  const datas = useLeituraComFalha(leitura);
+  return (
+    <ProductDetailPanel
+      {...props}
+      datasDeEntrada={leitura.data ?? []}
+      leituraDasDatas={
+        // O produto sem peça na prateleira não tem data: a seção não nasce lendo para sumir na chegada.
+        podeTerDatas(props.product)
+          ? {
+              lendo: datas.isLoading,
+              falhou: datas.isError && !leitura.data,
+              tentando: leitura.isFetching,
+              onTentar: () => leitura.refetch(),
+              onTentarDoZero: () => void relerDoZero(queryClient, [chave]),
+            }
+          : undefined
+      }
+    />
+  );
+}
+
+/**
+ * O produto pode ter datas de entrada: há peça nas prateleiras, livre ou
+ * reservada (as datas são só das prateleiras, e o RECEBIMENTO e a EXPEDICAO
+ * ficam de fora; functions/wms/src/domain/datas-do-estoque.ts). O zerado e o
+ * que só está em recebimento não têm: a seção deles não aparece lendo.
+ */
+export function podeTerDatas(product: Pick<StockProduct, "available" | "reserved" | "receiving" | "total">): boolean {
+  return (product.available > 0 || product.reserved > 0) && product.total > product.receiving;
 }
 
 /**
@@ -2264,7 +2409,6 @@ export function ProductDetailPanel({
   family = null,
   cart,
   draftQuantity,
-  isPending,
   adicionado = null,
   onClose,
   onDraftQuantityChange,
@@ -2274,7 +2418,11 @@ export function ProductDetailPanel({
   onReplenish,
   onArchive,
   datasDeEntrada = [],
+  leituraDasDatas,
 }: ProductDetailProps) {
+  // A confirmação do que o painel pôs no pedido, dita pelo Anunciador, a região viva da tela (parte 13f).
+  const anunciar = useAnuncio();
+  useEffect(() => (adicionado ? anunciar(pecasAdicionadas(adicionado)) : undefined), [adicionado, anunciar]);
   const tamanhoId = useId();
   const liveAvailable = liveAvailableForProduct(product, cart);
   const status = productStatus(product, liveAvailable);
@@ -2369,7 +2517,7 @@ export function ProductDetailPanel({
           ) : null}
         </div>
 
-        <DatasDeEntrada datas={datasDeEntrada} />
+        <DatasDeEntrada datas={datasDeEntrada} leitura={leituraDasDatas} />
 
         {aviso ? (
           <div
@@ -2383,7 +2531,7 @@ export function ProductDetailPanel({
       </div>
 
       <div data-testid="detalhe-rodape" className="@container shrink-0 border-t border-border bg-card px-5 py-4">
-        {/* O status existe desde o início, vazio: o leitor de tela anuncia quando ele muda. */}
+        {/* A confirmação à vista; o leitor de tela a ouve pelo Anunciador, a região viva da tela (parte 13f). */}
         <div
           className={cn(
             "flex items-center justify-between gap-3",
@@ -2392,7 +2540,7 @@ export function ProductDetailPanel({
               : null,
           )}
         >
-          <p role="status" className="flex items-center gap-2 text-sm font-semibold">
+          <p data-testid="detalhe-adicionado" className="flex items-center gap-2 text-sm font-semibold">
             {adicionado ? (
               <>
                 <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -2432,7 +2580,7 @@ export function ProductDetailPanel({
           </div>
         ) : (
           <ZeroStockActions
-            disabled={isPending}
+            chave={product.key}
             archived={product.archived}
             onReplenish={onReplenish}
             onArchive={onArchive}
@@ -2542,7 +2690,7 @@ function ProductVisual({
       >
         <div
           className={cn(
-            "flex items-center justify-center border border-border bg-card text-primary",
+            "flex items-center justify-center border border-border bg-card text-primary-texto",
             compact ? "h-12 w-12 rounded-lg" : "h-20 w-20 rounded-lg",
           )}
         >
@@ -2656,18 +2804,25 @@ function QuantityStepper({
 }
 
 function ZeroStockActions({
+  chave,
   compact = false,
-  disabled = false,
   archived = false,
   onReplenish,
   onArchive,
 }: {
+  /** O produto (a chave dele), para a espera ser só dele (`AcoesDosProdutos`). */
+  chave: string;
   compact?: boolean;
-  disabled?: boolean;
   archived?: boolean;
   onReplenish: () => void;
   onArchive: () => void;
 }) {
+  // Cada produto espera a própria ação, com o gerúndio no botão aos 300 ms; a outra ação dele trava no código
+  // (aria-disabled), nunca disabled, e os outros produtos ficam livres (carregamento v2, parte 13f).
+  const acoes = useContext(AcoesDosProdutos);
+  const repor = acoes?.estado(chave, "restock") ?? "repouso";
+  const arquivo = acoes?.estado(chave, "archive") ?? "repouso";
+  const ocupado = acoes?.ocupada(chave) ?? false;
   // Fora do card, no rodapé do detalhe: lado a lado quando o painel tem
   // largura (@sm, pelo @container do rodapé), um embaixo do outro no celular.
   return (
@@ -2677,28 +2832,31 @@ function ZeroStockActions({
         compact ? "grid-cols-2" : "grid-cols-1 @sm:grid-cols-2",
       )}
     >
-      <Button
-        type="button"
+      <BotaoDeAcao
         variant="outline"
         size={compact ? "sm" : "default"}
-        className={cn("cursor-pointer", !compact && "min-h-11")}
-        disabled={disabled}
+        // No celular, a ação da linha tem 48 px (seção 7); no detalhe, 44.
+        className={cn("cursor-pointer", compact ? "max-md:min-h-12" : "min-h-11")}
+        estado={repor}
+        icone={<Truck className="h-4 w-4" aria-hidden="true" />}
+        rotulo="Avisar reposição"
+        andamento="Avisando…"
+        sucesso="Avisado"
+        bloqueado={ocupado && repor === "repouso"}
         onClick={onReplenish}
-      >
-        <Truck className="h-4 w-4" />
-        Avisar reposição
-      </Button>
-      <Button
-        type="button"
+      />
+      <BotaoDeAcao
         variant="ghost"
         size={compact ? "sm" : "default"}
-        className={cn("cursor-pointer text-muted-foreground", !compact && "min-h-11")}
-        disabled={disabled}
+        className={cn("cursor-pointer text-muted-foreground", compact ? "max-md:min-h-12" : "min-h-11")}
+        estado={arquivo}
+        icone={<Archive className="h-4 w-4" aria-hidden="true" />}
+        rotulo={archived ? "Devolver à vitrine" : "Arquivar"}
+        andamento={archived ? "Devolvendo…" : "Arquivando…"}
+        sucesso={archived ? "Devolvido" : "Arquivado"}
+        bloqueado={ocupado && arquivo === "repouso"}
         onClick={onArchive}
-      >
-        <Archive className="h-4 w-4" />
-        {archived ? "Devolver à vitrine" : "Arquivar"}
-      </Button>
+      />
     </div>
   );
 }
@@ -2722,7 +2880,7 @@ function ViewModeButton({
       className={cn(
         "flex h-10 cursor-pointer items-center gap-2 rounded-md px-3 text-sm transition",
         active
-          ? "bg-card text-primary"
+          ? "bg-card text-primary-texto"
           : "text-muted-foreground hover:bg-card",
       )}
     >

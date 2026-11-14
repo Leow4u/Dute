@@ -28,7 +28,7 @@ import {
 } from "@/lib/comercial/autorizacoes";
 import { cadastroDoDocumento, hojeLocal, type Carga } from "@/lib/comercial/clientes";
 import { contratoDoRegistro, nomesDosClientes } from "@/lib/comercial/contratos";
-import { useLeitura } from "@/lib/comercial/leitura";
+import { novaTentativaDe, useLeitura } from "@/lib/comercial/leitura";
 import { firestore } from "@/lib/firebase";
 
 import { CancelarAutorizacaoDialog, PerderPorPrazoDialog } from "./autorizacoes-dialogos";
@@ -215,12 +215,14 @@ export default function ComercialAutorizacoesPage({ somenteLeitura = false }: { 
       <AutorizacoesView
         somenteLeitura={somenteLeitura}
         estado={estado}
+        leitura={novaTentativaDe([demandas])}
         linhas={linhas}
         filtro={filtro}
         busca={busca}
         painel={{ aberto, marcadas, form, resultado, erro }}
         contratos={contratos.itens ?? []}
         autorizadas={autorizadas}
+        leituraDasAutorizadas={autorizacoes}
         vencidos={vencidos}
         hoje={hoje}
         ocupado={ocupado}

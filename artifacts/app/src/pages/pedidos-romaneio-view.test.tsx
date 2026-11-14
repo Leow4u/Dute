@@ -174,7 +174,6 @@ describe("Pedidos › Romaneio", () => {
 
   it("carregando, não encontrado, erro e pedido em separação: a mensagem no lugar da folha, e Imprimir desligado", () => {
     for (const [estado, mensagem] of [
-      ["carregando", "Carregando"],
       ["nao_encontrado", "Pedido não encontrado"],
       ["erro", "Não foi possível carregar o pedido."],
       ["em_separacao", "Pedido em separação"],
@@ -198,5 +197,42 @@ describe("Pedidos › Romaneio", () => {
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(render("pronto", FOLHA))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render("em_separacao", null))).toEqual([]);
+  });
+});
+
+describe("o romaneio carregando (carregamento v2, parte 13c)", () => {
+  it("a espera em bloco no lugar da folha, sem o \"Carregando\" seco, e Imprimir desligado", async () => {
+    const html = render("carregando", null);
+    expect(textosDaTela(html)).toEqual(["Pedidos", "Romaneio", "Imprimir"]);
+    expect(html).toContain("data-carregando-na-regiao");
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>.*Imprimir<\/button>/s);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+});
+
+/**
+ * Os dois achados do axe no romaneio, de antes do carregamento v2 (parte
+ * 13m): o link de volta em vermelho, abaixo de 4,5:1 no fundo da v3 (o
+ * `text-primary`, 4,2:1), e, a 390 px, a folha A4 que rola para o lado sem
+ * receber o foco (scrollable-region-focusable): quem usa o teclado não a
+ * rolava. O jsdom não mede a cor nem a rolagem; o Chromium mediu (diagnóstico,
+ * 10.5, parte 13m). Aqui, a regra de cada um.
+ */
+describe("Pedidos › Romaneio, o link de volta e a folha que rola (parte 13m)", () => {
+  const dom = () => new JSDOM(render("pronto", FOLHA, { voltar: { href: "/pedidos/separar?pedido=ord_1", rotulo: "PED-0001" } })).window.document;
+
+  it("o link de volta usa o primário como texto (text-primary-texto), e não o text-primary", () => {
+    const link = dom().querySelector<HTMLAnchorElement>('a[href="/pedidos/separar?pedido=ord_1"]')!;
+    const classes = link.className.split(/\s+/);
+    expect(classes).toContain("text-primary-texto");
+    expect(classes).not.toContain("text-primary");
+  });
+
+  it("a caixa que rola a folha recebe o foco do teclado, com o nome e o anel", () => {
+    const caixa = dom().querySelector<HTMLElement>(".overflow-x-auto")!;
+    expect(caixa.getAttribute("role")).toBe("region");
+    expect(caixa.getAttribute("tabindex")).toBe("0");
+    expect(caixa.getAttribute("aria-label")).toBe("Folha do romaneio");
+    expect(caixa.className).toContain("focus-visible:ring-foco");
   });
 });

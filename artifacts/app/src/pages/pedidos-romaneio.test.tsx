@@ -26,7 +26,9 @@ vi.mock("wouter", async (original) => ({
 }));
 vi.mock("@/lib/active-customer-context", () => ({ useActiveCustomer: () => ({ code: "BTG", options: [{ code: "BTG", name: "BTG Pactual" }] }) }));
 // O Firestore ao vivo devolve os documentos gravados; o mapeamento é o da tela.
-vi.mock("@/lib/operacao/leitura", () => ({
+// A junção das tentativas é a de verdade (parte 13l); as escutas são as do teste.
+vi.mock("@/lib/operacao/leitura", async (original) => ({
+  ...(await original<object>()),
   useLeitura: (chave: string | null, _consulta: unknown, mapear: (id: string, data: Record<string, unknown>) => unknown) => {
     const docs = chave ? estado.consultas[chave] : undefined;
     return { itens: docs ? docs.map((data) => mapear(String(data.id), data)).filter((item) => item !== null) : null, erro: false };
@@ -125,6 +127,7 @@ describe("Pedidos › Romaneio: o tamanho que mora só no campo Tamanho", () => 
   it("enquanto o cadastro não chega, o romaneio espera: não sai sem o tamanho", () => {
     const html = pagina(new QueryClient());
     expect(produtosDaFolha(html)).toEqual([]);
-    expect(html).toContain("Carregando");
+    // A espera do carregamento v2: a região está na tela desde 0 ms, e o rótulo ("Carregando o pedido…") entra aos 300 ms.
+    expect(html).toContain("data-carregando-na-regiao");
   });
 });

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { collection, doc, query, where } from "firebase/firestore";
 
-import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { novaTentativaDe, useDocumento, useLeitura, type NovaTentativa } from "@/lib/operacao/leitura";
 
 import { itemDaLinhaDeSeparacao } from "./separacao";
 import { comTamanhoDoCatalogo, type TamanhosDoCatalogo } from "./tamanho-do-catalogo";
@@ -47,6 +47,24 @@ export type LeituraDosVolumes = {
   pedido: PedidoDosVolumes | null;
   volumes: VolumeDoPedido[];
 };
+
+/**
+ * Uma das leituras ao vivo do pedido, para a nova tentativa: `ativa` quando
+ * tem chave (a de agora, pelo estado do pedido), e `semResposta` quando falhou
+ * ou ainda não chegou.
+ */
+export type LeituraQueTenta = { ativa: boolean; semResposta: boolean; tentar: () => Promise<void> };
+
+/**
+ * A nova tentativa do "Tentar de novo" (carregamento v2, junção das partes 10
+ * e 13; a leitura ao vivo relê desde a parte 13g): assina de novo só as
+ * leituras ativas que falharam ou não chegaram (as lidas ficam na tela, e a
+ * sem chave nunca responderia), e a promessa acaba quando todas elas
+ * respondem.
+ */
+export function tentarOsQueFaltam(leituras: readonly LeituraQueTenta[]): Promise<void> {
+  return Promise.all(leituras.filter((leitura) => leitura.ativa && leitura.semResposta).map((leitura) => leitura.tentar())).then(() => undefined);
+}
 
 function texto(valor: unknown): string {
   return String(valor ?? "").trim();
@@ -104,7 +122,12 @@ export function leituraDosVolumes(dados: {
   return { estado: "pronto", pedido, volumes };
 }
 
-export function useVolumesDoPedido(pedidoId: string | null): LeituraDosVolumes {
+/**
+ * `aoVivo`: a nova tentativa com o que falta às leituras (parte 13l): a
+ * conexão, sem nada lido ou com a hora do que ficou na tela, ou o servidor,
+ * para a tela escolher o aviso da conexão, a faixa ou a falha.
+ */
+export function useVolumesDoPedido(pedidoId: string | null): LeituraDosVolumes & { tentar: () => Promise<void>; aoVivo: NovaTentativa } {
   const id = texto(pedidoId) || null;
   const pedido = useDocumento(
     id ? `orders/${id}:volumes` : null,
@@ -154,7 +177,7 @@ export function useVolumesDoPedido(pedidoId: string | null): LeituraDosVolumes {
     (itemId, data) => ({ ...data, id: itemId }) as Record<string, unknown>,
   );
   const tamanhos = useTamanhosDoCatalogo(Boolean(id));
-  return useMemo(
+  const lida = useMemo(
     () =>
       leituraDosVolumes({
         id,
@@ -169,4 +192,14 @@ export function useVolumesDoPedido(pedidoId: string | null): LeituraDosVolumes {
       }),
     [id, pedido.item, pedido.erro, remessa.item, remessa.erro, tarefa.item, tarefa.erro, linhas.itens, linhas.erro, pacotes.itens, pacotes.erro, itensDosPacotes.itens, itensDosPacotes.erro, tamanhos],
   );
+  const tentar = () =>
+    tentarOsQueFaltam([
+      { ativa: Boolean(id), semResposta: pedido.erro || pedido.item === undefined, tentar: pedido.tentar },
+      { ativa: Boolean(id), semResposta: remessa.erro || remessa.item === undefined, tentar: remessa.tentar },
+      { ativa: Boolean(id), semResposta: tarefa.erro || tarefa.item === undefined, tentar: tarefa.tentar },
+      { ativa: Boolean(id && emSeparacao), semResposta: linhas.erro || linhas.itens === null, tentar: linhas.tentar },
+      { ativa: Boolean(id && concluido), semResposta: pacotes.erro || pacotes.itens === null, tentar: pacotes.tentar },
+      { ativa: Boolean(id && concluido), semResposta: itensDosPacotes.erro || itensDosPacotes.itens === null, tentar: itensDosPacotes.tentar },
+    ]);
+  return { ...lida, tentar, aoVivo: { ...novaTentativaDe([pedido, remessa, tarefa, linhas, pacotes, itensDosPacotes]), tentar } };
 }

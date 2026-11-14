@@ -112,7 +112,7 @@ describe("pedir outro tamanho sem fechar o detalhe", () => {
       await abrir(filtro);
       expect(tamanhos()).toEqual(["P", "M", "G"]);
       await clicar(botao("Adicionar ao pedido", detalhe()));
-      expect(detalhe().querySelector('[role="status"]')?.textContent).toBe("1 peça adicionada ao pedido");
+      expect(detalhe().querySelector('[data-testid="detalhe-adicionado"]')?.textContent).toBe("1 peça adicionada ao pedido");
       expect(tamanhos()).toEqual(["P", "M", "G"]);
 
       await clicar(botao("M1 disp.", detalhe()));

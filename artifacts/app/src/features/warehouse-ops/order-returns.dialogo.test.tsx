@@ -3,8 +3,10 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { ProvedorDaConexao, type EstadoDaConexao } from "@/lib/carregando/estado-da-conexao";
 import { linhaDoRetorno, type LinhaDoRetorno } from "@/lib/warehouse-ops/retorno";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { conexaoEm } from "@/test/conexao";
 import { textosDaTela } from "@/test/textos";
 
 import { RetornosView } from "./order-returns";
@@ -38,7 +40,7 @@ afterEach(async () => {
   container = null;
 });
 
-async function abrir() {
+async function abrir(aberto: Partial<NonNullable<Parameters<typeof RetornosView>[0]["aberto"]>> = {}, extra: Partial<Parameters<typeof RetornosView>[0]["acoes"]> = {}) {
   container = document.createElement("div");
   document.body.appendChild(container);
   raiz = createRoot(container);
@@ -46,8 +48,8 @@ async function abrir() {
     raiz!.render(
       <RetornosView
         retornos={[RETORNO]}
-        aberto={{ retorno: RETORNO, linhas: LINHAS, notas: "", problema: null, erro: null, enviando: false }}
-        acoes={acoes}
+        aberto={{ retorno: RETORNO, linhas: LINHAS, notas: "", problema: null, erro: null, enviando: false, ...aberto }}
+        acoes={{ ...acoes, ...extra }}
       />,
     );
   });
@@ -71,6 +73,8 @@ describe("o que voltou do pedido", () => {
       "Observação",
       "Voltar",
       "Receber",
+      "Recebendo…",
+      "Conferir",
       "Fechar",
     ]);
     expect(dialogo.textContent).not.toContain("· U");
@@ -80,4 +84,73 @@ describe("o que voltou do pedido", () => {
     const dialogo = await abrir();
     expect(await violacoesDeAcessibilidade(dialogo.outerHTML)).toEqual([]);
   });
+});
+
+/**
+ * As linhas do pedido que esperam e as que não vieram (carregamento v2, parte
+ * 13c; diagnóstico, 4.5). Antes, as linhas que falhavam ficavam em
+ * "Carregando..." para sempre, com o "Receber" travado.
+ */
+describe("as linhas do retorno que esperam e as que não vieram", () => {
+  it("chegando: a espera em bloco, sem o \"Carregando...\" seco", async () => {
+    const dialogo = await abrir({ linhas: null });
+    expect(dialogo.textContent).not.toContain("Carregando...");
+    expect(dialogo.querySelector("[data-carregando-na-regiao]")).not.toBeNull();
+  });
+
+  it("não vieram: o aviso com Tentar de novo, nunca a espera para sempre", async () => {
+    const dialogo = await abrir({ linhas: null, linhasFalharam: true }, { tentarLinhas: async () => undefined });
+    expect(dialogo.textContent).toContain("Não consegui carregar os itens do pedido.");
+    expect(dialogo.querySelector('[role="alert"]')).not.toBeNull();
+    expect([...dialogo.querySelectorAll("button")].some((botao) => botao.textContent?.includes("Tentar de novo"))).toBe(true);
+    expect(dialogo.querySelector("[data-carregando-na-regiao]")).toBeNull();
+    expect(await violacoesDeAcessibilidade(dialogo.outerHTML)).toEqual([]);
+  });
+});
+
+/**
+ * Os itens do pedido no diálogo, sem conexão (carregamento v2, parte 13l;
+ * revisão da parte 13l, que pediu a trava dos textos e o axe dos estados da
+ * falta). Sem nada lido e sem conexão, o aviso da conexão no lugar dos itens,
+ * sem falar (o Anunciador diz "Sem conexão" uma vez); o erro do servidor, a
+ * frase de antes, que é alerta. Só os rótulos da falta entram. Dados
+ * sintéticos.
+ */
+describe("os itens do pedido no diálogo, sem conexão", () => {
+  const CABECALHO = ["PED-0118: o que voltou", "Observação", "Voltar", "Receber", "Recebendo…", "Conferir", "Fechar"];
+
+  async function abrirNa(conexao: EstadoDaConexao, falta: "conexao" | "servidor") {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    raiz = createRoot(container);
+    await act(async () => {
+      raiz!.render(
+        <ProvedorDaConexao value={conexaoEm(conexao)}>
+          <RetornosView
+            retornos={[RETORNO]}
+            aberto={{ retorno: RETORNO, linhas: null, linhasFalharam: true, faltaDasLinhas: falta, notas: "", problema: null, erro: null, enviando: false }}
+            acoes={{ ...acoes, tentarLinhas: async () => undefined }}
+          />
+        </ProvedorDaConexao>,
+      );
+    });
+    const dialogo = document.querySelector('[role="dialog"]');
+    if (!dialogo) throw new Error("O diálogo não abriu.");
+    return dialogo;
+  }
+
+  for (const [conexao, falta, aviso] of [
+    ["sem-conexao", "conexao", "Sem conexão."],
+    ["reconectando", "conexao", "Reconectando…"],
+    ["conectado", "servidor", "Não consegui carregar os itens do pedido."],
+  ] as const) {
+    it(`${conexao}: ${aviso}`, async () => {
+      const dialogo = await abrirNa(conexao, falta);
+      const [titulo, ...resto] = CABECALHO;
+      expect(textosDaTela(dialogo.outerHTML)).toEqual([titulo, aviso, "Tentar de novo", ...resto]);
+      // Só o erro do servidor é alerta: a falta de conexão não fala (momento 8).
+      expect(dialogo.querySelectorAll('[role="alert"]').length).toBe(falta === "servidor" ? 1 : 0);
+      expect(await violacoesDeAcessibilidade(dialogo.outerHTML)).toEqual([]);
+    });
+  }
 });

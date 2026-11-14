@@ -4,7 +4,10 @@ import { MODELO_DE_AVISO_ROTULO, type ModeloDeAviso } from "@workspace/dominio";
 import { Pencil, Plus } from "lucide-react";
 
 import { Selo } from "@/components/clientes/partes";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { BlocoSemConexao, FaixaAoVivo } from "@/components/ui/erro-na-leitura";
 import { chamarComercial, novaChave } from "@/lib/comercial/api";
 import {
   contatoDoDocumento,
@@ -14,12 +17,15 @@ import {
   type FormContato,
 } from "@/lib/comercial/clientes";
 import { useLeitura, type Leitura } from "@/lib/comercial/leitura";
+import type { LeituraAoVivo } from "@/lib/operacao/leitura";
+import { cn } from "@/lib/utils";
 import { ContatoDialog } from "./comercial/clientes-dialogos";
 
 const MODELOS_DO_ESTOQUE: readonly ModeloDeAviso[] = ["estoque_parado", "estoque_disponivel"];
 
 export type ContatosDeAviso = {
-  leitura: Leitura<ContatoResumo>;
+  /** Com o que falta (a conexão, com a hora da lista lida, ou o servidor) e a nova tentativa (parte 13l). */
+  leitura: Leitura<ContatoResumo> & Partial<LeituraAoVivo>;
   /** Os contatos do cliente, os ativos primeiro, por nome. */
   lista: ContatoResumo[];
   reler: () => void;
@@ -63,11 +69,15 @@ export default function SettingsCustomerNotifications({ customer, contatos }: Pr
 function CustomerNotificationsSection({ customer, contatos }: Props) {
   const [editor, setEditor] = useState<{ contato: ContatoResumo | null; chave: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // O contato que desativa ou reativa agora: só a linha dele mostra a espera (carregamento v2, parte 13e).
+  const [alternando, setAlternando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [confirmacao, setConfirmacao] = useState("");
   const gravando = useRef(false);
   const alternancias = useRef(new Map<string, { ativo: boolean; chave: string }>());
   const { leitura, lista } = contatos;
+  // A escuta como o aviso da conexão a lê: "Tentar de novo" assina de novo e acaba na resposta (parte 13l).
+  const aoVivo = { tentando: leitura.tentando ?? false, tentar: leitura.tentar ?? contatos.reler, falta: leitura.falta ?? null, lidaEm: leitura.lidaEm ?? null };
   const empresas = [...new Set([customer.name, ...lista.flatMap((contato) => (contato.empresa ? [contato.empresa] : []))])];
 
   function abrirEditor(contato: ContatoResumo | null) {
@@ -120,11 +130,12 @@ function CustomerNotificationsSection({ customer, contatos }: Props) {
       alternancias.current.set(contato.id, tentativa);
     }
     // Resposta perdida: a retentativa usa a mesma chave, até o sucesso.
+    setAlternando(contato.id);
     void gravar(
       payloadAtivoContato(customer.code, contato, ativo, tentativa.chave),
       ativo ? "Contato reativado" : "Contato desativado",
       () => alternancias.current.delete(contato.id),
-    );
+    ).finally(() => setAlternando(null));
   }
 
   return (
@@ -138,7 +149,12 @@ function CustomerNotificationsSection({ customer, contatos }: Props) {
           Novo contato
         </Button>
       </div>
-      {leitura.erro ? (
+      {/* A lista lida, sem conexão: ela fica, com a hora (parte 13l). */}
+      {!leitura.erro && leitura.itens !== null ? <FaixaAoVivo leitura={aoVivo} className="mx-5 mt-3" /> : null}
+      {leitura.erro && aoVivo.falta === "conexao" ? (
+        // Sem conexão e sem nada lido: o aviso da conexão no lugar da lista, e não a falha (parte 13l).
+        <BlocoSemConexao tentando={aoVivo.tentando} onTentar={() => aoVivo.tentar()} className="rounded-none border-0" />
+      ) : leitura.erro ? (
         <div className="flex flex-wrap items-center gap-3 px-5 py-4">
           <p role="alert" className="text-sm font-semibold text-destructive">
             Não foi possível carregar os contatos.
@@ -148,9 +164,7 @@ function CustomerNotificationsSection({ customer, contatos }: Props) {
           </Button>
         </div>
       ) : leitura.itens === null ? (
-        <p role="status" className="px-5 py-4 text-sm font-semibold text-muted-foreground">
-          Carregando contatos…
-        </p>
+        <CarregandoNaRegiao rotulo="Carregando contatos…" className="px-5 py-4" />
       ) : lista.length ? (
         <ul className="divide-y divide-border/60">
           {lista.map((contato) => {
@@ -183,13 +197,27 @@ function CustomerNotificationsSection({ customer, contatos }: Props) {
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
                   <Selo tom={contato.ativo ? "ok" : "off"}>{contato.ativo ? "Ativo" : "Desativado"}</Selo>
-                  <Button type="button" variant="ghost" size="sm" disabled={ocupado} onClick={() => abrirEditor(contato)}>
+                  {/* Ocupado não é desabilitado: o foco fica no botão tocado, e os outros esperam (aria-disabled). */}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-disabled={ocupado || undefined}
+                    className={cn(ocupado && "opacity-45 hover:bg-transparent")}
+                    onClick={() => abrirEditor(contato)}
+                  >
                     <Pencil aria-hidden="true" />
                     Editar
                   </Button>
-                  <Button type="button" variant="ghost" size="sm" disabled={ocupado} onClick={() => alternarContato(contato)}>
-                    {contato.ativo ? "Desativar" : "Reativar"}
-                  </Button>
+                  <BotaoDeAcao
+                    variant="ghost"
+                    size="sm"
+                    estado={alternando === contato.id ? "andamento" : "repouso"}
+                    bloqueado={ocupado && alternando !== contato.id}
+                    rotulo={contato.ativo ? "Desativar" : "Reativar"}
+                    andamento={contato.ativo ? "Desativando…" : "Reativando…"}
+                    onClick={() => alternarContato(contato)}
+                  />
                 </div>
               </li>
             );

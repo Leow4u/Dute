@@ -40,6 +40,8 @@ vi.mock("@/lib/memoria/api", () => ({
   },
 }));
 
+import { INTERVALO_DO_TOQUE_MS } from "@/lib/campo/toque-unico";
+
 import EstoqueAlertas from "./estoque-alertas";
 
 const alerta = (id: string, cliente: string) => ({
@@ -65,7 +67,9 @@ async function esperar(condicao: () => boolean, oQue: string) {
 }
 
 const naTela = () => document.querySelector("section h2")?.textContent ?? null;
-const botao = (texto: string) => [...document.querySelectorAll("button")].find((item) => item.textContent?.trim() === texto) ?? null;
+/** O botão pelo rótulo; no BotaoDeAcao (parte 13b), pela camada de repouso. */
+const botao = (texto: string) =>
+  [...document.querySelectorAll("button")].find((item) => (item.querySelector('[data-camada="repouso"]') ?? item).textContent?.trim() === texto) ?? null;
 // O chip do cliente leva a contagem de itens depois do nome.
 const chip = (nome: string) => [...document.querySelectorAll('[role="group"] button')].find((item) => item.textContent?.startsWith(nome)) as HTMLButtonElement | undefined;
 
@@ -143,6 +147,21 @@ describe("o alerta do detalhe", () => {
   it("depois da própria decisão, o detalhe passa ao próximo", async () => {
     expect((await enviarAoCliente()).alerta_id).toBe("al_alfa");
     await esperar(() => naTela() === "Beta Brindes", "o próximo alerta na tela");
+    // O segundo toque no mesmo lugar dentro de 1 s é ignorado (o BotaoDeAcao, parte 13b): o toque duplo não envia o
+    // alerta seguinte sem ninguém o ver.
+    await act(async () => {
+      await new Promise((pronto) => setTimeout(pronto, INTERVALO_DO_TOQUE_MS));
+    });
     expect((await enviarAoCliente()).alerta_id).toBe("al_beta");
+  });
+
+  it("o toque duplo no Enviar não envia o alerta seguinte, que acabou de entrar na tela", async () => {
+    await act(async () => botao("Enviar ao cliente")!.click());
+    await esperar(() => naTela() === "Beta Brindes", "o próximo alerta na tela");
+    await act(async () => botao("Enviar ao cliente")!.click());
+    await act(async () => {
+      await new Promise((pronto) => setTimeout(pronto, 50));
+    });
+    expect(estado.decisoes.map((decisao) => decisao.alerta_id)).toEqual(["al_alfa"]);
   });
 });

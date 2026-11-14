@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Images, Loader2, Star, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Images, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { getErrorMessage } from "@/lib/warehouse-ops/model";
 import { ProductPhotoStudio } from "./product-photo-studio";
 import { type PhotoContext, isGeneratedPhoto } from "./photo-context";
@@ -54,6 +57,15 @@ export function ProductPhotoManager({
   const [removing, setRemoving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // "Atualizando fotos…" entra aos 300 ms, como toda espera, e o Anunciador o fala: nada de role="status" solto.
+  const atualizando = useEspera(busy);
+  const anunciar = useAnuncio();
+  useEffect(() => {
+    if (!atualizando.visivel) return undefined;
+    // O que acaba antes da vez do anúncio o tira da fila do Anunciador.
+    const retirar = anunciar("Atualizando fotos");
+    return retirar;
+  }, [atualizando.visivel, anunciar]);
   const selected =
     photos.find((photo) => photo.fileUrl === selectedUrl) ?? photos[0];
   const primary = selected?.fileUrl === photos[0]?.fileUrl;
@@ -177,9 +189,9 @@ export function ProductPhotoManager({
             Nenhuma foto vinculada. Anexe uma foto na ficha do produto.
           </p>
         )}
-        {busy ? (
-          <p role="status" className="flex items-center gap-2 text-sm">
-            <Loader2 className="size-4 animate-spin" />
+        {busy && atualizando.visivel ? (
+          <p className="flex items-center gap-2 text-sm font-bold">
+            <Spinner />
             Atualizando fotos…
           </p>
         ) : null}
@@ -188,12 +200,7 @@ export function ProductPhotoManager({
             <AlertDescription role="alert">{error}</AlertDescription>
           </Alert>
         ) : null}
-        <AlertDialog
-          open={removing}
-          onOpenChange={(next) => {
-            if (!busy) setRemoving(next);
-          }}
-        >
+        <AlertDialog open={removing} ocupado={busy} onOpenChange={setRemoving}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Remover esta foto do produto?</AlertDialogTitle>
@@ -208,17 +215,17 @@ export function ProductPhotoManager({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
               <AlertDialogAction
-                disabled={busy || !selected}
-                onClick={(event) => {
-                  event.preventDefault();
+                estado={busy ? "andamento" : "repouso"}
+                rotulo="Remover foto"
+                andamento="Removendo…"
+                bloqueado={!busy && !selected}
+                onClick={() => {
                   if (selected)
                     void manage({ remove_photo_urls: [selected.fileUrl] });
                 }}
-              >
-                Remover foto
-              </AlertDialogAction>
+              />
             </AlertDialogFooter>
             {error ? (
               <p role="alert" className="text-sm text-destructive">

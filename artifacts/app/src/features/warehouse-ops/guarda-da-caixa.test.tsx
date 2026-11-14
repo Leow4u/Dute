@@ -122,6 +122,8 @@ describe("a guarda da caixa", () => {
         "Rua B · prateleira 02 · zona BTG Pactual",
         ...CONTEUDO,
         "Concluir guarda em B-02",
+        "Guardando em B-02…",
+        "Conferir",
         "Não cabe aqui",
       ]),
     ).toEqual([]);
@@ -131,7 +133,10 @@ describe("a guarda da caixa", () => {
 
   it("sem prateleira: o selo, o guardar em da bancada e concluir a guarda desligado até o destino (decisão 14)", async () => {
     const html = render({ task: guarda(caixa("reviewed", "")) });
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Concluir guarda<\/button>/);
+    // Sem destino, o "Concluir guarda" espera com aria-disabled, nunca disabled (carregamento v2, parte 13c).
+    const concluir = html.match(/<button[^>]*>(?:(?!<\/button>).)*?data-atual="">Concluir guarda<\/span>/)?.[0] ?? "";
+    expect(concluir).toContain('aria-disabled="true"');
+    expect(concluir).not.toMatch(/\sdisabled=""/);
     expect(html).not.toContain("Não cabe aqui");
     expect(
       textosForaDaLista(html, [
@@ -145,6 +150,8 @@ describe("a guarda da caixa", () => {
         "Escolher prateleira",
         ...CONTEUDO,
         "Concluir guarda",
+        "Guardando…",
+        "Conferir",
       ]),
     ).toEqual([]);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
@@ -185,6 +192,8 @@ describe("a etiqueta na guarda", () => {
         "Rua B · prateleira 02 · zona BTG Pactual",
         ...CONTEUDO,
         "Concluir guarda em B-02",
+        "Guardando em B-02…",
+        "Conferir",
         "Não cabe aqui",
         "Imprimir etiqueta",
       ]),
@@ -250,6 +259,8 @@ describe("a etiqueta na guarda", () => {
         "Etiqueta impressa com B-02 · 14:32",
         ...CONTEUDO,
         "Concluir guarda em B-05",
+        "Guardando em B-05…",
+        "Conferir",
         "Não cabe aqui",
         "Imprimir etiqueta",
         "Timeline",

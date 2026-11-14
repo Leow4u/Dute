@@ -47,13 +47,13 @@ export function MobileTabBar({ activeModuleId, modules, variante = "padrao" }: M
 
   const itemClassName = (active: boolean) =>
     cn(
-      "flex h-14 min-w-0 flex-col items-center justify-center gap-1 text-xs font-medium outline-none transition-colors duration-150",
+      "flex h-14 min-w-0 flex-col items-center justify-center gap-1 text-xs font-medium transition-colors duration-150",
       v3
         ? cn(
-            "font-bold focus-visible:bg-v3-header-foreground/10",
+            "font-bold focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-v3-header-foreground/80 focus-visible:bg-v3-header-foreground/10",
             active ? "text-v3-header-foreground [&>svg]:text-v3-marca" : "text-v3-header-foreground/70",
           )
-        : cn("focus-visible:bg-surface-hover", active ? "text-primary" : "text-muted-foreground"),
+        : cn("focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foco focus-visible:bg-surface-hover", active ? "text-primary" : "text-muted-foreground"),
     );
 
   return (

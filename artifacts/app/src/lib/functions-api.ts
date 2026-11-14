@@ -2,7 +2,7 @@ import { httpsCallable } from "firebase/functions";
 import { functionsDoApp } from "./firebase-functions";
 
 import { clienteDaChamada } from "./active-customer";
-import { SEM_CONEXAO, aparelhoSemRede, callableSemResposta, corpoSemConexao } from "./conexao";
+import { PRAZO_ESGOTADO, PRAZO_ESGOTADO_NA_LEITURA, aparelhoSemRede, callableSemResposta, corpoDaFalta, corpoSemConexao, mensagemDaFalta, prazoEsgotado } from "./conexao";
 import { firebaseApp } from "./firebase";
 
 /**
@@ -1045,15 +1045,21 @@ export async function callFunctionsApi(
     const result = await callable(await route.payload(pathname, init));
     return response(result.data, route.status ?? 200);
   } catch (error) {
-    // A chamada que não teve resposta nenhuma não é falha do servidor.
-    if (callableSemResposta(error)) return response(corpoSemConexao(), 503);
+    // A chamada que não teve resposta nenhuma não é falha do servidor: é
+    // "Sem conexão" com o aparelho sem rede e "Sem resposta do servidor." com
+    // ele conectado (carregamento v2, parte 7a).
+    if (callableSemResposta(error)) return response(corpoDaFalta(), 503);
     const { code, status } = functionsErrorStatus(error);
     const rawMessage =
       error instanceof Error
         ? error.message
         : "Erro ao chamar Firebase Functions.";
-    const message =
-      rawMessage === "INTERNAL" || code === "internal"
+    // O prazo sem resposta: na escrita, conferir antes de repetir; na leitura, repetir é seguro.
+    const message = prazoEsgotado(error)
+      ? method.toUpperCase() === "GET"
+        ? PRAZO_ESGOTADO_NA_LEITURA
+        : PRAZO_ESGOTADO
+      : rawMessage === "INTERNAL" || code === "internal"
         ? "Falha interna no servidor. Tente novamente ou avise o time técnico."
         : rawMessage;
     return response(compactError({ message, code }), status);
@@ -1071,8 +1077,29 @@ export type AgentDuteStreamChunk =
   | { type: "reset" };
 
 /**
+ * Lê o stream de uma callable até o fim e devolve o resultado. O SDK
+ * (`@firebase/functions` 0.13) resolve o `data` quando a linha do resultado
+ * chega, antes de o stream fechar; o `.stream()` não tem prazo próprio (o
+ * `timeout` do `httpsCallable` só vale para a chamada comum), e o stream que
+ * fecha sem a linha do resultado (a function caiu ou passou do
+ * `timeoutSeconds` dela) deixaria o `data` pendente para sempre. Aqui isso é
+ * o prazo esgotado (`deadline-exceeded`): a tela do Agent Dute mostra "Sem
+ * resposta do Agent Dute", com o "Tentar de novo".
+ */
+export async function resultadoDoStream<T, P>(resposta: { stream: AsyncIterable<P>; data: Promise<T> }, aoPedaco: (pedaco: P) => void): Promise<T> {
+  for await (const pedaco of resposta.stream) aoPedaco(pedaco);
+  const semResultado = Symbol("sem resultado");
+  // Com o resultado, o `data` já está resolvido (ou rejeitado) e ganha a corrida; pendente, o stream fechou sem ele.
+  const resultado = await Promise.race([resposta.data, Promise.resolve(semResultado)]);
+  if (resultado === semResultado) throw Object.assign(new Error(PRAZO_ESGOTADO), { code: "deadline-exceeded" });
+  return resultado as T;
+}
+
+/**
  * Conversa com o Agent Dute recebendo a resposta aos pedaços. Devolve o
  * mesmo resultado da chamada comum (conversa e as duas mensagens gravadas).
+ * O prazo da espera é o relógio da tela (`CARREGANDO.desisteDoAgenteMs`,
+ * contado da última notícia do servidor): o `.stream()` não tem prazo.
  */
 export async function streamAgentDuteChat<T>(
   payload: {
@@ -1084,17 +1111,12 @@ export async function streamAgentDuteChat<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   if (!firebaseApp) throw new Error("Firebase não configurado.");
-  const callable = httpsCallable<typeof payload, T, AgentDuteStreamChunk>(
-    functionsDoApp(firebaseApp),
-    "chatWithAgentDute",
-    { timeout: 180_000 },
-  );
+  const callable = httpsCallable<typeof payload, T, AgentDuteStreamChunk>(functionsDoApp(firebaseApp), "chatWithAgentDute");
   try {
-    const { stream, data } = await callable.stream(payload, { signal });
-    for await (const chunk of stream) onChunk(chunk);
-    return await data;
+    return await resultadoDoStream(await callable.stream(payload, { signal }), onChunk);
   } catch (error) {
-    if (callableSemResposta(error)) throw new Error(SEM_CONEXAO);
+    if (callableSemResposta(error)) throw new Error(mensagemDaFalta());
+    if (prazoEsgotado(error)) throw new Error(PRAZO_ESGOTADO);
     const rawMessage = error instanceof Error ? error.message : "";
     throw new Error(
       !rawMessage || rawMessage === "INTERNAL"

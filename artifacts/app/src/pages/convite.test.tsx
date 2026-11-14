@@ -9,7 +9,7 @@ vi.mock("@/lib/firebase", () => ({ firebaseConfigError: null, firebaseAuth: null
 
 import type { ConviteLido } from "@/lib/convite";
 
-import { ConviteView, type AcoesDoConvite, type TelaDoConvite } from "./convite";
+import { ConviteView, type AcaoDoConviteComEspera, type AcoesDoConvite, type TelaDoConvite } from "./convite";
 
 const CONVITE: ConviteLido = {
   token: "3f9c2a7be1d04c58a6f1e2d3c4b5a69788aa",
@@ -21,6 +21,7 @@ const CONVITE: ConviteLido = {
 
 const NADA = () => undefined;
 const ACOES: AcoesDoConvite = {
+  lerDeNovo: NADA,
   nome: NADA,
   senha: NADA,
   aceitar: NADA,
@@ -33,7 +34,7 @@ const ACOES: AcoesDoConvite = {
   voltarAoSistema: NADA,
 };
 
-function render(estado: TelaDoConvite, extra: { erro?: string | null; ocupado?: boolean } = {}) {
+function render(estado: TelaDoConvite, extra: { erro?: string | null; ocupado?: boolean | AcaoDoConviteComEspera } = {}) {
   return renderToStaticMarkup(
     <ConviteView estado={estado} nome="Ana Ribeiro" senha="" erro={extra.erro ?? null} ocupado={extra.ocupado ?? false} acoes={ACOES} />,
   );
@@ -49,7 +50,7 @@ describe("aceitar convite com o e-mail confirmado (pergunta 68)", () => {
     expect(html).toContain('value="ana.ribeiro@itau.com.br"');
     expect(html).toContain("Perfil do convite: Cliente · Itaú Unibanco");
     expect(html).toMatch(/<input[^>]*type="password"/);
-    expect(html).toMatch(/<button[^>]*type="submit"[^>]*>Aceitar convite<\/button>/);
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*data-estado="repouso"[^>]*>.*?data-atual="">Aceitar convite</);
     expect(
       textosForaDaLista(html, [
         "Aceitar convite",
@@ -58,6 +59,9 @@ describe("aceitar convite com o e-mail confirmado (pergunta 68)", () => {
         "E-mail",
         "Perfil do convite: Cliente · Itaú Unibanco",
         "Senha",
+        // O BotaoDeAcao tem as camadas escondidas: o gerúndio e o Conferir (carregamento v2, parte 13h).
+        "Aceitando…",
+        "Conferir",
         "Já tenho conta",
         RODAPE,
       ]),
@@ -75,7 +79,10 @@ describe("aceitar convite com o e-mail confirmado (pergunta 68)", () => {
         "ana.ribeiro@itau.com.br",
         ".",
         "Já confirmei",
+        "Conferindo…",
         "Reenviar e-mail",
+        "Reenviando…",
+        "Conferir",
         "Sair",
         RODAPE,
       ]),
@@ -95,7 +102,7 @@ describe("aceitar convite com o e-mail confirmado (pergunta 68)", () => {
     expect(html).not.toContain("Enviamos um link");
     expect(html).toContain("Reenviar e-mail");
     expect(html).toContain('role="alert"');
-    expect(textosForaDaLista(html, ["Confirme seu e-mail", "Confirme o endereço", "ana.ribeiro@itau.com.br", ".", "Não foi possível enviar o e-mail de confirmação.", "Já confirmei", "Reenviar e-mail", "Sair", RODAPE])).toEqual([]);
+    expect(textosForaDaLista(html, ["Confirme seu e-mail", "Confirme o endereço", "ana.ribeiro@itau.com.br", ".", "Não foi possível enviar o e-mail de confirmação.", "Já confirmei", "Conferindo…", "Reenviar e-mail", "Reenviando…", "Conferir", "Sair", RODAPE])).toEqual([]);
   });
 
   it("passo 3: e-mail confirmado, o perfil e Entrar, um link que recarrega o app", () => {
@@ -117,16 +124,30 @@ describe("aceitar convite com o e-mail confirmado (pergunta 68)", () => {
         "Você já está conectado",
         "joao@dutelog.com.br",
         "Sair e continuar com o convite",
+        "Saindo…",
+        "Conferir",
         "Voltar ao sistema",
         RODAPE,
       ]),
     ).toEqual([]);
-    expect(textosForaDaLista(render({ tela: "carregando" }), ["Validando convite", "Conferindo seu convite...", RODAPE])).toEqual([]);
+    // Lendo o convite, nada antes de 300 ms (a CarregandoNaRegiao), e nunca "Conferindo seu convite..." de três pontos.
+    const lendo = render({ tela: "carregando" });
+    expect(textosForaDaLista(lendo, ["Validando convite", RODAPE])).toEqual([]);
+    expect(lendo).toContain("data-carregando-na-regiao");
+    expect(lendo).not.toContain('role="status"');
   });
 
-  it("ocupado, o botão diz o que está fazendo e não aceita outro clique", () => {
-    expect(render({ tela: "formulario", convite: CONVITE }, { ocupado: true })).toMatch(/<button[^>]*type="submit"[^>]*disabled=""[^>]*>Aceitando...<\/button>/);
-    expect(render({ tela: "confirmar", convite: CONVITE, reenviado: false, enviado: true }, { ocupado: true })).toContain("Conferindo...");
+  it("ocupado, o botão diz o que está fazendo e não aceita outro clique, sem desabilitar (carregamento v2, parte 13h)", () => {
+    const aceitando = render({ tela: "formulario", convite: CONVITE }, { ocupado: "aceitar" });
+    expect(aceitando).toMatch(/<button[^>]*type="submit"[^>]*data-estado="andamento"[^>]*aria-disabled="true"/);
+    expect(aceitando).not.toMatch(/<button[^>]*\sdisabled=""/);
+    expect(aceitando).toContain("Aceitando…");
+    // A ação em andamento diz o gerúndio; a outra espera travada, sem dizer o que não está fazendo.
+    const reenviando = render({ tela: "confirmar", convite: CONVITE, reenviado: false, enviado: true }, { ocupado: "reenviar" });
+    const estados = [...reenviando.matchAll(/<button[^>]*data-estado="(\w+)"[^>]*aria-disabled="true"[^>]*>.*?data-atual="">([^<]+)</g)].map((m) => `${m[2]}:${m[1]}`);
+    expect(estados).toEqual(["Já confirmei:repouso", "Reenviar e-mail:andamento"]);
+    expect(reenviando).not.toMatch(/<button[^>]*\sdisabled=""/);
+    expect(render({ tela: "outra_conta", email: "joao@dutelog.com.br" }, { ocupado: "sairDaOutraConta" })).toMatch(/data-estado="andamento"[^>]*aria-disabled="true"[^>]*>.*Saindo…/);
   });
 
   it("passa no axe (WCAG 2.1 A e AA) em cada passo", async () => {

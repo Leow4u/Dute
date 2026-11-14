@@ -2,8 +2,16 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, RefreshCw, Settings2 } from "lucide-react";
 
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { formatMoney } from "@/lib/system-dashboard";
 import {
   errorsToShow,
@@ -43,14 +51,21 @@ export function useSystemInfra() {
   });
 }
 
-/** Os dois quadros de saúde que entram na faixa do topo. */
+/**
+ * Os dois quadros de saúde que entram na faixa do topo. Lendo, a caixa de 16
+ * px no lugar do ponto, aos 300 ms (nunca o ponto verde de quem já
+ * respondeu); sem leitura, "Sem leitura" com o ponto vermelho, nunca o
+ * travessão com o verde (carregamento v2, parte 13e).
+ */
 export function InfraTiles() {
-  const infra = useSystemInfra();
-  const tiles = infraTiles(infra.data, infra.isLoading);
+  const infra = useLeituraComFalha(useSystemInfra());
+  const espera = useEspera(infra.isLoading);
+  const tiles = infraTiles(infra.data, infra.isLoading, infra.isError && !infra.data);
+  const lendo = infra.isLoading ? espera : undefined;
   return (
     <>
-      <Health label="Erros do servidor · 24 h" {...tiles.errors} />
-      <Health label="Functions" {...tiles.functions} />
+      <Health label="Erros do servidor · 24 h" {...tiles.errors} lendo={lendo} />
+      <Health label="Functions" {...tiles.functions} lendo={lendo} />
     </>
   );
 }
@@ -131,7 +146,7 @@ function ErrorsPanel({ infra }: { infra: SystemInfra }) {
           </ul>
           {hidden > 0 ? (
             <div className="border-t border-border/40 px-5 py-2.5 text-right text-xs">
-              <button type="button" onClick={() => setShowAll(!showAll)} className="font-semibold text-primary hover:underline">
+              <button type="button" onClick={() => setShowAll(!showAll)} className="font-semibold text-primary-texto hover:underline">
                 {showAll ? "mostrar só os 5 mais recentes" : `ver todos (${errors.groups.length})`}
               </button>
             </div>
@@ -216,7 +231,7 @@ function FunctionsPanel({ infra }: { infra: SystemInfra }) {
         <span>
           {functions.ok} ok{functions.last_deploy_at ? ` · último deploy ${dayTime.format(new Date(functions.last_deploy_at))}` : ""}
         </span>
-        <button type="button" onClick={() => setShowAll(!showAll)} className="font-semibold text-primary hover:underline">
+        <button type="button" onClick={() => setShowAll(!showAll)} className="font-semibold text-primary-texto hover:underline">
           {showAll ? "só as com problema" : "ver todas"}
         </button>
       </div>
@@ -227,7 +242,7 @@ function FunctionsPanel({ infra }: { infra: SystemInfra }) {
 function BillingPanel({ infra, agentMonthCost, onConfigure }: { infra: SystemInfra; agentMonthCost: number | null; onConfigure: () => void }) {
   const billing = infra.billing;
   const configure = (
-    <button type="button" onClick={onConfigure} className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+    <button type="button" onClick={onConfigure} className="flex items-center gap-1.5 text-sm font-medium text-primary-texto hover:underline">
       <Settings2 className="h-4 w-4" aria-hidden="true" /> Tabela
     </button>
   );
@@ -236,7 +251,7 @@ function BillingPanel({ infra, agentMonthCost, onConfigure }: { infra: SystemInf
       <Panel title="Custo real do Google Cloud">
         <div className="flex flex-col gap-2 px-5 py-4 text-sm">
           <p>Mostra o valor cobrado no mês, por serviço, a partir da exportação do faturamento para o BigQuery.</p>
-          <button type="button" onClick={onConfigure} className="self-start font-semibold text-primary hover:underline">
+          <button type="button" onClick={onConfigure} className="self-start font-semibold text-primary-texto hover:underline">
             Informar a tabela do faturamento
           </button>
         </div>
@@ -307,15 +322,17 @@ function BillingTableDialog({ current, onClose }: { current: string | null; onCl
   const [table, setTable] = useState(current ?? "");
   const save = useMutation({
     mutationFn: () => fetchJson("/api/system/infra-settings", { method: "POST", body: JSON.stringify({ billing_table: table.trim() || null }) }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: infraKey });
+    // O que gravou fecha o diálogo na hora; a releitura do painel (que consulta
+    // o Google Cloud e pode demorar) segue por trás, sem segurar o diálogo.
+    onSuccess: () => {
       toast({ title: table.trim() ? "Tabela do faturamento salva" : "Tabela do faturamento removida" });
       onClose();
+      void queryClient.invalidateQueries({ queryKey: infraKey });
     },
     onError: (error: Error) => toast({ title: "Não consegui salvar", description: error.message, variant: "destructive" }),
   });
   return (
-    <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
+    <Dialog open ocupado={save.isPending} onOpenChange={(open) => (!open ? onClose() : undefined)}>
       <DialogContent className="max-w-lg bg-card">
         <DialogHeader>
           <DialogTitle>Tabela do faturamento</DialogTitle>
@@ -336,17 +353,8 @@ function BillingTableDialog({ current, onClose }: { current: string | null; onCl
           <span className="text-xs font-normal text-muted-foreground">Deixe em branco para esconder o custo real.</span>
         </label>
         <DialogFooter className="gap-2">
-          <button type="button" onClick={onClose} className="rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
-            Cancelar
-          </button>
-          <button
-            type="button"
-            disabled={save.isPending}
-            onClick={() => save.mutate()}
-            className="rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background hover:bg-foreground/85 disabled:opacity-50"
-          >
-            {save.isPending ? "Salvando…" : "Salvar"}
-          </button>
+          <DialogCancelar className="rounded-xl" onClick={onClose} />
+          <BotaoDeAcao tinta className="rounded-xl" estado={save.isPending ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando…" onClick={() => save.mutate()} />
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -355,31 +363,64 @@ function BillingTableDialog({ current, onClose }: { current: string | null; onCl
 
 /** Seção Infraestrutura: erros, functions e custo real. */
 export function InfraSection({ agentMonthCost }: { agentMonthCost: number | null }) {
-  const infra = useSystemInfra();
+  const queryClient = useQueryClient();
+  const leitura = useSystemInfra();
+  // A nova tentativa sem dado não volta a "Consultando": a falha fica, com "Tentando de novo…".
+  const infra = useLeituraComFalha(leitura);
   const [editingTable, setEditingTable] = useState(false);
+  // "Verificar agora" só mostra a espera quando a pessoa toca nele (carregamento v2, momento 7).
+  const [verificando, setVerificando] = useState(false);
+  const tentarDeNovo = useTentarDeNovo();
+  const verificarAgora = () => {
+    if (verificando) return;
+    setVerificando(true);
+    tentarDeNovo(() => {
+      void leitura.refetch().finally(() => setVerificando(false));
+    });
+  };
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Infraestrutura</p>
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
           {infra.data ? `verificada às ${time.format(new Date(infra.data.checked_at))}` : null}
-          <button
-            type="button"
-            onClick={() => infra.refetch()}
-            disabled={infra.isFetching}
-            className="flex items-center gap-1 font-semibold text-primary hover:underline disabled:opacity-60"
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", infra.isFetching && "animate-spin")} aria-hidden="true" />
-            Verificar agora
-          </button>
+          {/* Na primeira consulta, travado (aria-disabled): a seção já diz "Consultando o Google Cloud…". */}
+          {/* O ponteiro em cima sublinha, sem o fundo do ghost: o azul sobre ele ficaria abaixo de 4,5:1 no escuro. */}
+          <BotaoDeAcao
+            variant="ghost"
+            size="sm"
+            className="font-semibold text-primary-texto hover:bg-transparent hover:underline active:bg-transparent max-md:min-h-11"
+            icone={<RefreshCw aria-hidden="true" />}
+            estado={verificando ? "andamento" : "repouso"}
+            bloqueado={!verificando && infra.isLoading}
+            rotulo="Verificar agora"
+            andamento="Verificando a infraestrutura…"
+            onClick={verificarAgora}
+          />
         </span>
       </div>
       {infra.isLoading ? (
-        <p className="rounded-lg border border-border bg-card px-5 py-4 text-sm text-muted-foreground">Consultando o Google Cloud…</p>
-      ) : infra.isError || !infra.data ? (
-        <p className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-4 text-sm text-destructive-soft-foreground">Não consegui consultar a infraestrutura: {infra.error?.message}</p>
+        <div className="rounded-lg border border-border bg-card px-5 py-4">
+          <CarregandoNaRegiao rotulo="Consultando o Google Cloud…" onTentar={() => void relerDoZero(queryClient, [infraKey])} />
+        </div>
+      ) : !infra.data ? (
+        <ErroNaLeitura
+          mensagem={`Não consegui consultar a infraestrutura: ${infra.error?.message ?? "o servidor não respondeu."}`}
+          tentando={infra.isFetching}
+          onTentar={() => void leitura.refetch()}
+        />
       ) : (
         <div className="space-y-4">
+          {/* A verificação que falhou não apaga o painel lido: ele fica, com a hora dele, e a falha em cima. */}
+          {infra.isError ? (
+            <FalhaNaSecao
+              mensagem={`Não consegui verificar de novo: ${infra.error?.message ?? "o servidor não respondeu."}`}
+              alerta={false}
+              tentando={infra.isFetching}
+              onTentar={() => leitura.refetch()}
+              className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+            />
+          ) : null}
           <ErrorsPanel infra={infra.data} />
           <LatencyPanel infra={infra.data} />
           <div className="grid items-start gap-4 lg:grid-cols-2">

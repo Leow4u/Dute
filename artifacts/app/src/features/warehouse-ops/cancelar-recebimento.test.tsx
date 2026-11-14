@@ -29,19 +29,25 @@ beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   host = document.createElement("div"); document.body.appendChild(host); root = createRoot(host);
 });
-afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); });
+afterEach(async () => { vi.useRealTimers(); await act(async () => root.unmount()); client.clear(); host.remove(); });
 
 async function render(selected: WarehouseTask | null = task, customerCode = "CLIENTE-A") {
   await act(async () => root.render(<QueryClientProvider client={client}><CancelarRecebimentoDialog task={selected} receipts={[task, original, { ...original, id: "receiving:outro", reference: "outro", customer: "CLIENTE-B", receipt_number: "OUTRO-CLIENTE" }]} customerCode={customerCode} onOpenChange={closed} onCancelled={cancelled} /></QueryClientProvider>));
 }
-function button(text: string) { return [...document.querySelectorAll<HTMLButtonElement>("button")].find((element) => element.textContent?.trim() === text)!; }
+// O BotaoDeAcao (carregamento v2, parte 13c) empilha as camadas: o rótulo é o da camada atual.
+function button(text: string) {
+  return [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+    (element) => (element.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? element.textContent)?.trim() === text,
+  )!;
+}
 async function select(id: string, value: string) {
   await act(async () => { const input = document.getElementById(id) as HTMLSelectElement; input.value = value; input.dispatchEvent(new Event("change", { bubbles: true })); });
 }
 async function fillNote(value: string) {
   await act(async () => { const input = document.getElementById("cancelar-observacao")!; Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
 }
-async function submit() { await act(async () => button("Cancelar recebimento").click()); }
+// Cada envio um segundo depois do anterior: o BotaoDeAcao ignora o segundo toque dentro de 1 s (o toque único).
+async function submit() { vi.setSystemTime(Date.now() + 1_100); await act(async () => button("Cancelar recebimento").click()); }
 
 describe("confirmação de cancelamento", () => {
   it("identifica a chegada e só oferece originais do cliente, com textos e acessibilidade", async () => {
@@ -50,7 +56,7 @@ describe("confirmação de cancelamento", () => {
     expect(document.body.textContent).not.toContain("OUTRO-CLIENTE");
     expect(textosForaDaLista(document.body.innerHTML, [
       "Cancelar recebimento?", "AVL-DUPLO · NF 046143 · 71 unidades", "Motivo", "Duplicado", "Lançamento incorreto", "Outro",
-      "Recebimento original", "Selecione o recebimento", "AVL-ORIGINAL · NF 046143 · 71 un.", "Observação", "Voltar", "Cancelar recebimento", "Fechar",
+      "Recebimento original", "Selecione o recebimento", "AVL-ORIGINAL · NF 046143 · 71 un.", "Observação", "Voltar", "Cancelar recebimento", "Cancelando…", "Conferir", "Fechar",
       "Este recebimento sai da fila e permanece no histórico.", "O recebimento original será mantido.",
     ])).toEqual([]);
     expect(await violacoesDeAcessibilidade(document.body.innerHTML)).toEqual([]);
@@ -84,6 +90,13 @@ describe("confirmação de cancelamento", () => {
     expect(api.cancelar).toHaveBeenCalledTimes(1);
     await act(async () => button("Fechar").click());
     expect(closed).not.toHaveBeenCalled();
+    // O diálogo fica: o Esc não fecha, e o Voltar e o confirmar ficam ocupados, não desabilitados (parte 13c).
+    await act(async () => { document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    expect(closed).not.toHaveBeenCalled();
+    expect(button("Voltar").getAttribute("aria-disabled")).toBe("true");
+    expect(button("Voltar").disabled).toBe(false);
+    expect(button("Cancelar recebimento").getAttribute("aria-disabled")).toBe("true");
+    expect(button("Cancelar recebimento").disabled).toBe(false);
     await act(async () => done({ ok: true, receipt_id: task.reference, status: "cancelled" }));
     expect(cancelled).toHaveBeenCalledTimes(1);
   });

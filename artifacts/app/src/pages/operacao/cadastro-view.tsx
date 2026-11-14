@@ -19,6 +19,10 @@ import {
   type VeiculoDaLista,
   type Vinculo,
 } from "@/lib/operacao/cadastro";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
 export type EstadoDaLista = "carregando" | "erro" | "pronto";
 
@@ -138,6 +142,8 @@ function Moldura({
   busca,
   onBusca,
   children,
+  carregando,
+  leitura,
 }: {
   titulo: string;
   estado: EstadoDaLista;
@@ -148,6 +154,9 @@ function Moldura({
   busca: string;
   onBusca: (value: string) => void;
   children: ReactNode;
+  /** "Carregando os colaboradores…". */
+  carregando: string;
+  leitura: NovaTentativa;
 }) {
   return (
     <section className="flex flex-col gap-6">
@@ -159,8 +168,9 @@ function Moldura({
       <Campo id={`${titulo}-busca`} rotulo="Busca">
         <Input id={`${titulo}-busca`} value={busca} onChange={(event) => onBusca(event.target.value)} />
       </Campo>
-      {estado === "carregando" ? <p className="text-sm text-muted-foreground">Carregando</p> : null}
-      {estado === "erro" ? <p role="alert" className="text-sm text-destructive">Não foi possível carregar o cadastro.</p> : null}
+      {estado === "carregando" ? <CarregandoNaRegiao rotulo={carregando} continuaARota onTentar={leitura.tentar} /> : null}
+      {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar o cadastro." /> : null}
+      {estado === "pronto" ? <FaixaAoVivo leitura={leitura} /> : null}
       {estado === "pronto" && !children ? <p className="text-sm text-muted-foreground">{vazio}</p> : null}
       {estado === "pronto" ? children : null}
     </section>
@@ -203,7 +213,9 @@ export function ColaboradoresView({
   onSalvar,
   onAtivo,
   ocupado,
+  emAndamento = null,
   erro,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDaLista;
   itens: ColaboradorDaLista[];
@@ -218,7 +230,11 @@ export function ColaboradoresView({
   onSalvar: () => void;
   onAtivo: (ativo: boolean) => void;
   ocupado: boolean;
+  /** Qual ação grava: Salvar ou Desativar/Reativar (cada botão diz a sua). */
+  emAndamento?: "salvar" | "ativo" | null;
   erro: string | null;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   const visiveis = itens.filter((item) => buscaInclui(`${item.nome} ${item.funcao} ${item.cpf} ${item.telefone} ${item.empresa}`, busca));
   if (ficha) {
@@ -232,7 +248,7 @@ export function ColaboradoresView({
       >
         <header className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold text-foreground">{editando ? editando.nome : "Novo colaborador"}</h1>
-          <Button type="submit" disabled={ocupado}>Salvar</Button>
+          <BotaoDeAcao type="submit" estado={ocupado && emAndamento !== "ativo" ? "andamento" : "repouso"} bloqueado={ocupado && emAndamento === "ativo"} rotulo="Salvar" andamento="Salvando…" focoAoSair />
         </header>
         {erro ? <p role="alert" className="text-sm text-destructive">{erro}</p> : null}
         <Campo id="colaborador-nome" rotulo="Nome">
@@ -293,16 +309,22 @@ export function ColaboradoresView({
         <div className="flex flex-wrap gap-3">
           <Button type="button" variant="secondary" onClick={onFechar}>Voltar</Button>
           {editando ? (
-            <Button type="button" variant="secondary" disabled={ocupado} onClick={() => onAtivo(!editando.ativo)}>
-              {editando.ativo ? "Desativar" : "Reativar"}
-            </Button>
+            <BotaoDeAcao
+              variant="secondary"
+              estado={ocupado && emAndamento === "ativo" ? "andamento" : "repouso"}
+              bloqueado={ocupado && emAndamento !== "ativo"}
+              rotulo={editando.ativo ? "Desativar" : "Reativar"}
+              andamento={editando.ativo ? "Desativando…" : "Reativando…"}
+              focoAoSair
+              onClick={() => onAtivo(!editando.ativo)}
+            />
           ) : null}
         </div>
       </form>
     );
   }
   return (
-    <Moldura titulo="Colaboradores" estado={estado} erro={erro} vazio="Nenhum colaborador" novo="Novo colaborador" onNovo={onNovo} busca={busca} onBusca={onBusca}>
+    <Moldura titulo="Colaboradores" carregando="Carregando os colaboradores…" leitura={leitura} estado={estado} erro={erro} vazio="Nenhum colaborador" novo="Novo colaborador" onNovo={onNovo} busca={busca} onBusca={onBusca}>
       {visiveis.length ? (
         <ul className="overflow-hidden rounded-lg border border-border bg-card">
           {visiveis.map((item) => (
@@ -328,7 +350,9 @@ export function VeiculosView({
   onSalvar,
   onAtivo,
   ocupado,
+  emAndamento = null,
   erro,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDaLista;
   itens: VeiculoDaLista[];
@@ -343,7 +367,11 @@ export function VeiculosView({
   onSalvar: () => void;
   onAtivo: (ativo: boolean) => void;
   ocupado: boolean;
+  /** Qual ação grava: Salvar ou Desativar/Reativar (cada botão diz a sua). */
+  emAndamento?: "salvar" | "ativo" | null;
   erro: string | null;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   const visiveis = itens.filter((item) => buscaInclui(`${item.placa} ${item.tipo} ${item.modelo} ${item.empresa}`, busca));
   if (ficha) {
@@ -357,7 +385,7 @@ export function VeiculosView({
       >
         <header className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold text-foreground">{editando ? editando.placa : "Novo veículo"}</h1>
-          <Button type="submit" disabled={ocupado}>Salvar</Button>
+          <BotaoDeAcao type="submit" estado={ocupado && emAndamento !== "ativo" ? "andamento" : "repouso"} bloqueado={ocupado && emAndamento === "ativo"} rotulo="Salvar" andamento="Salvando…" focoAoSair />
         </header>
         {erro ? <p role="alert" className="text-sm text-destructive">{erro}</p> : null}
         <Campo id="veiculo-placa" rotulo="Placa">
@@ -396,16 +424,22 @@ export function VeiculosView({
         <div className="flex flex-wrap gap-3">
           <Button type="button" variant="secondary" onClick={onFechar}>Voltar</Button>
           {editando ? (
-            <Button type="button" variant="secondary" disabled={ocupado} onClick={() => onAtivo(!editando.ativo)}>
-              {editando.ativo ? "Desativar" : "Reativar"}
-            </Button>
+            <BotaoDeAcao
+              variant="secondary"
+              estado={ocupado && emAndamento === "ativo" ? "andamento" : "repouso"}
+              bloqueado={ocupado && emAndamento !== "ativo"}
+              rotulo={editando.ativo ? "Desativar" : "Reativar"}
+              andamento={editando.ativo ? "Desativando…" : "Reativando…"}
+              focoAoSair
+              onClick={() => onAtivo(!editando.ativo)}
+            />
           ) : null}
         </div>
       </form>
     );
   }
   return (
-    <Moldura titulo="Veículos" estado={estado} erro={erro} vazio="Nenhum veículo" novo="Novo veículo" onNovo={onNovo} busca={busca} onBusca={onBusca}>
+    <Moldura titulo="Veículos" carregando="Carregando os veículos…" leitura={leitura} estado={estado} erro={erro} vazio="Nenhum veículo" novo="Novo veículo" onNovo={onNovo} busca={busca} onBusca={onBusca}>
       {visiveis.length ? (
         <ul className="overflow-hidden rounded-lg border border-border bg-card">
           {visiveis.map((item) => (

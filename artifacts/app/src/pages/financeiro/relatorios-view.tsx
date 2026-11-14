@@ -1,4 +1,5 @@
 import { CAMPO_SELECT, TelaDeRelatorios, dataBr } from "@/components/relatorios/tela-de-relatorios";
+import type { NovaTentativa } from "@/lib/operacao/leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ROTA_RELATORIOS_DO_FINANCEIRO } from "@/lib/financeiro/navegacao";
@@ -27,6 +28,8 @@ export type RelatoriosDoFinanceiroViewProps = {
   hoje: string;
   clientes: ReadonlyArray<{ code: string; nome: string }>;
   estado: "carregando" | "erro" | "pronto";
+  /** A nova tentativa das leituras (parte 13g). */
+  leitura?: NovaTentativa;
   problema: string | null;
   resumo: NumeroDoResumo[] | null;
   tabela: TabelaDeRelatorio | null;
@@ -37,7 +40,7 @@ export type RelatoriosDoFinanceiroViewProps = {
   };
 };
 
-export function RelatoriosDoFinanceiroView({ relatorio, filtro, hoje, clientes, estado, problema, resumo, tabela, acoes }: RelatoriosDoFinanceiroViewProps) {
+export function RelatoriosDoFinanceiroView({ relatorio, filtro, hoje, clientes, estado, leitura, problema, resumo, tabela, acoes }: RelatoriosDoFinanceiroViewProps) {
   const cliente = filtro.cliente ? (clientes.find((item) => item.code === filtro.cliente)?.nome ?? filtro.cliente) : null;
   const posicao = relatorio === "a_receber";
   return (
@@ -75,6 +78,7 @@ export function RelatoriosDoFinanceiroView({ relatorio, filtro, hoje, clientes, 
         </div>
       }
       estado={estado}
+      leitura={leitura}
       problema={problema}
       resumo={resumo}
       tabela={tabela}

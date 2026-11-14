@@ -27,6 +27,10 @@ import {
 import { cn } from "@/lib/utils";
 
 import type { LocalDaFicha } from "./demanda-view";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
 /**
  * Operação › Planejar OS (docs/plataforma/fase-3-operacao.md, parte 3.6a;
@@ -522,6 +526,7 @@ function Resumo({
   problemas,
   erro,
   ocupado,
+  agendando,
   voltar,
   onGravar,
   vistoria,
@@ -534,6 +539,8 @@ function Resumo({
   problemas: readonly string[];
   erro: string | null;
   ocupado: boolean;
+  /** Com `ocupado`: grava agendando (Agendar) ou o rascunho (Salvar rascunho). */
+  agendando: boolean;
   voltar: string;
   onGravar: (agendar: boolean) => void;
   vistoria: boolean;
@@ -585,12 +592,23 @@ function Resumo({
           ))}
         </ul>
       ) : null}
-      <Button type="button" disabled={ocupado} className="w-full" onClick={() => onGravar(true)}>
-        Agendar
-      </Button>
-      <Button type="button" variant="outline" disabled={ocupado} className="w-full" onClick={() => onGravar(false)}>
-        Salvar rascunho
-      </Button>
+      <BotaoDeAcao
+        estado={ocupado && agendando ? "andamento" : "repouso"}
+        bloqueado={ocupado && !agendando}
+        rotulo="Agendar"
+        andamento="Agendando…"
+        className="w-full"
+        onClick={() => onGravar(true)}
+      />
+      <BotaoDeAcao
+        variant="outline"
+        estado={ocupado && !agendando ? "andamento" : "repouso"}
+        bloqueado={ocupado && agendando}
+        rotulo="Salvar rascunho"
+        andamento="Salvando o rascunho…"
+        className="w-full"
+        onClick={() => onGravar(false)}
+      />
       <Button asChild variant="ghost" className="w-full">
         <Link href={voltar}>Cancelar</Link>
       </Button>
@@ -617,6 +635,7 @@ export function PlanejarView({
   alertas,
   problemas,
   ocupado,
+  agendando = true,
   erro,
   onGravar,
   vistoria = false,
@@ -625,6 +644,7 @@ export function PlanejarView({
   ignoradas,
   onUsarSugestao,
   onIgnorarSugestao,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDoPlano;
   numero: string | null;
@@ -644,6 +664,8 @@ export function PlanejarView({
   alertas: readonly string[];
   problemas: readonly string[];
   ocupado: boolean;
+  /** Com `ocupado`: grava agendando, ou só o rascunho. */
+  agendando?: boolean;
   erro: string | null;
   /** Agendar (com a janela) ou salvar o rascunho (Para agendar). */
   onGravar: (agendar: boolean) => void;
@@ -656,6 +678,8 @@ export function PlanejarView({
   ignoradas?: readonly boolean[];
   onUsarSugestao?: (indice: number) => void;
   onIgnorarSugestao?: (indice: number) => void;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   const voltar = numero ? hrefDaDemanda(numero) : "/operacao/demandas";
   const linkDeVolta = (
@@ -668,12 +692,8 @@ export function PlanejarView({
     return (
       <section className="flex flex-col gap-4">
         {linkDeVolta}
-        {estado === "carregando" ? <p className="text-sm text-muted-foreground">Carregando</p> : null}
-        {estado === "erro" ? (
-          <p role="alert" className="text-sm text-destructive">
-            Não foi possível carregar a demanda.
-          </p>
-        ) : null}
+        {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a demanda…" continuaARota onTentar={leitura.tentar} /> : null}
+        {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a demanda." /> : null}
         {estado === "nao_encontrada" ? <p className="text-sm text-muted-foreground">{numero ? `Demanda ${numero} não encontrada` : "Demanda não encontrada"}</p> : null}
         {estado === "sem_saldo" ? <p className="text-sm text-muted-foreground">Todo o saldo da demanda já está em OS</p> : null}
         {estado === "indisponivel" && motivo ? <p className="text-sm text-muted-foreground">{motivo}</p> : null}
@@ -683,6 +703,7 @@ export function PlanejarView({
   return (
     <section className="flex flex-col gap-6">
       {linkDeVolta}
+      <FaixaAoVivo leitura={leitura} objeto="demanda" />
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
@@ -740,6 +761,7 @@ export function PlanejarView({
           problemas={problemas}
           erro={erro}
           ocupado={ocupado}
+          agendando={agendando}
           voltar={voltar}
           onGravar={onGravar}
           vistoria={vistoria}

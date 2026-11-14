@@ -1,12 +1,15 @@
 import {
   Timestamp,
   collection,
+  disableNetwork,
   doc,
   documentId,
+  enableNetwork,
   getCountFromServer,
   getDoc as lerDocDoFirestore,
   getDocs as lerDocsDoFirestore,
   limit as fsLimit,
+  onSnapshot,
   orderBy,
   query,
   startAfter,
@@ -22,7 +25,8 @@ import {
 import { PAPEIS_DO_WMS, estagioDoCadastro, isPapel, livreParaOCliente, modulosContratados } from "@workspace/dominio";
 import { clienteDaChamada, LEGACY_CUSTOMER_CODE } from "./active-customer";
 import { periodBelongsToCustomer } from "./billing-scope";
-import { SemConexao, corpoSemConexao, firestoreSemConexao } from "./conexao";
+import { firestoreRespondeu, firestoreSoNoCache, ouvirRespostasDoFirestore } from "./carregando/respostas-do-firestore";
+import { aparelhoSemRede, corpoDaFalta, faltaDeAgora, firestoreSemConexao } from "./conexao";
 import { leiturasDoPortal } from "./operations";
 import { canListUsers, canSeeCatalogPrice, canSeeMerchandiseValue } from "./permissions";
 import { firebaseAuth, firestore } from "./firebase";
@@ -235,18 +239,106 @@ function json(data: unknown, status = 200): Response {
  * da memória, vazio ou pela metade, e a tela afirmava "Nenhum…"
  * (docs/plataforma/diagnostico-carregamento.md, seção 9, item 1). Toda
  * leitura daqui passa por estas duas, e a que não veio do servidor é falta de
- * conexão.
+ * conexão. Qual das duas, diz o aparelho: o SDK também responde do cache com
+ * o aparelho conectado, quando o servidor demora mais de 10 s a voltar, e
+ * isso é o servidor sem resposta, não "Sem conexão" (parte 7a).
  */
 async function getDocs<A, D extends DocumentData>(consulta: Query<A, D>): Promise<QuerySnapshot<A, D>> {
   const snapshot = await lerDocsDoFirestore(consulta);
-  if (snapshot.metadata?.fromCache === true) throw new SemConexao();
-  return snapshot;
+  return doServidor(snapshot);
 }
 
 async function getDoc<A, D extends DocumentData>(referencia: DocumentReference<A, D>): Promise<DocumentSnapshot<A, D>> {
   const snapshot = await lerDocDoFirestore(referencia);
-  if (snapshot.metadata?.fromCache === true) throw new SemConexao();
+  return doServidor(snapshot);
+}
+
+/** A regra única (lib/carregando/respostas-do-firestore.ts): a resposta só do cache é a falta; a do servidor, a volta. */
+function doServidor<S extends { metadata?: { fromCache?: boolean } }>(snapshot: S): S {
+  const soDoCache = snapshot.metadata?.fromCache === true;
+  firestoreRespondeu(!soDoCache);
+  if (soDoCache) throw faltaDeAgora();
   return snapshot;
+}
+
+/**
+ * A mesma leitura para quem vai ao Firestore sem passar pelas rotas daqui (o
+ * Conhecimento e as conversas do agente do núcleo; carregamento v2, parte
+ * 12): a que só achou o cache é falta de conexão, e não a lista velha ou
+ * vazia, e o SDK que se deu por offline fica marcado, para a releitura
+ * sozinha acordá-lo (parte 7a).
+ */
+export const lerDocsDoServidor = getDocs;
+
+/** O mesmo, para um documento (o Início do Comercial; parte 13i). */
+export const lerDocDoServidor = getDoc;
+
+let acordandoOFirestore: Promise<void> | null = null;
+const quemEsperaAVolta = new Set<() => void>();
+let deixarDeEsperarAVolta: (() => void) | null = null;
+
+// O SDK que se deu por offline, por uma leitura daqui ou por uma escuta ao vivo (parte 13j): espera a volta dele.
+ouvirRespostasDoFirestore(() => {
+  if (firestoreSoNoCache()) esperarAVoltaDoFirestore();
+});
+
+function pararDeEsperarAVolta() {
+  deixarDeEsperarAVolta?.();
+  deixarDeEsperarAVolta = null;
+}
+
+/**
+ * Com o SDK offline, escuta o próprio perfil (que o login já escuta, então
+ * não custa outra leitura) até ele chegar do servidor: é o SDK que voltou, e
+ * quem espera relê na hora, sem esperar a próxima releitura sozinha.
+ */
+function esperarAVoltaDoFirestore() {
+  const uid = firebaseAuth?.currentUser?.uid;
+  if (deixarDeEsperarAVolta || !firestore || !uid || !quemEsperaAVolta.size) return;
+  deixarDeEsperarAVolta = onSnapshot(
+    doc(firestore, "users", uid),
+    { includeMetadataChanges: true },
+    (perfil) => {
+      if (perfil.metadata.fromCache) return;
+      pararDeEsperarAVolta();
+      firestoreRespondeu(true);
+      for (const ouvinte of [...quemEsperaAVolta]) ouvinte();
+    },
+    () => pararDeEsperarAVolta(),
+  );
+}
+
+/** Avisa quando o SDK do Firestore, que se deu por offline, voltou a ouvir o servidor. Devolve quem desliga. */
+export function aoVoltarOFirestore(ouvinte: () => void): () => void {
+  quemEsperaAVolta.add(ouvinte);
+  if (firestoreSoNoCache()) esperarAVoltaDoFirestore();
+  return () => {
+    quemEsperaAVolta.delete(ouvinte);
+    if (!quemEsperaAVolta.size) pararDeEsperarAVolta();
+  };
+}
+
+/**
+ * Acorda o SDK do Firestore que se deu por offline (carregamento v2, parte
+ * 7a). Depois de uma falha, ele só tenta o servidor de novo no relógio dele,
+ * que cresce até 60 s, e até lá toda leitura responde do cache: a releitura
+ * sozinha e o "Tentar de novo" não alcançariam o servidor. Desligar e religar
+ * a rede do SDK é o que ele mesmo faz quando o aparelho volta à rede: tenta o
+ * servidor na hora, e as escutas continuam. Só com o SDK offline e o aparelho
+ * com rede; nulo quando não há o que acordar. Uma vez por vez.
+ */
+export function acordarFirestore(): Promise<void> | null {
+  if (!firestore || !firestoreSoNoCache() || aparelhoSemRede()) return null;
+  const sdk = firestore;
+  acordandoOFirestore ??= (async () => {
+    try {
+      await disableNetwork(sdk);
+      await enableNetwork(sdk);
+    } finally {
+      acordandoOFirestore = null;
+    }
+  })();
+  return acordandoOFirestore;
 }
 
 function toIso(value: unknown): string {
@@ -3234,7 +3326,11 @@ export function installCloudApi() {
 
       return await route(url.pathname, method, url.searchParams, init);
     } catch (error) {
-      if (firestoreSemConexao(error)) return json(corpoSemConexao(), 503);
+      if (firestoreSemConexao(error)) {
+        // O `unavailable` do SDK que se acha offline também pede para acordá-lo.
+        firestoreRespondeu(false);
+        return json(corpoDaFalta(error), 503);
+      }
       return json(
         {
           message:

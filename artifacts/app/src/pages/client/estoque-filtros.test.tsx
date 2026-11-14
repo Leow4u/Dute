@@ -100,7 +100,7 @@ async function selecionar(nome: string, valor: string, escopo: ParentNode = docu
 }
 
 function resultado() {
-  return document.querySelector('[data-testid="stock-results-toolbar"] [role="status"]')?.textContent;
+  return document.querySelector('[data-testid="stock-results-toolbar"] [data-testid="stock-results-count"]')?.textContent;
 }
 
 function cards() {

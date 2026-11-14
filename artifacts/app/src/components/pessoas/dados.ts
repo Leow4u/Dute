@@ -1,8 +1,12 @@
 import { getListBillingUsersQueryKey, useListBillingUsers } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { collection, getDocs } from "firebase/firestore";
+import { collection } from "firebase/firestore";
 import { useEffect, useMemo, useRef } from "react";
 
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { lerDocsDoServidor } from "@/lib/cloud-api";
+import { ehFaltaDeConexao, semConexaoNaLeitura, type LeituraNaTela } from "@/lib/conexao";
 import { firestore } from "@/lib/firebase";
 import { buildPeople, type Invite, type Person } from "@/lib/pessoas";
 
@@ -11,6 +15,14 @@ import { buildPeople, type Invite, type Person } from "@/lib/pessoas";
  * convites pendentes (Firestore). A página de Pessoas e a página do cliente
  * leem pela mesma chave. Convite aceito vira pessoa ativa: quando o convite
  * que estava pendente aparece usado, a lista de perfis é lida de novo.
+ *
+ * Os convites leem o Firestore pelo `lib/cloud-api.ts` (carregamento v2,
+ * parte 13e; diagnóstico, 9.4): sem rede, a leitura que só achou o cache é
+ * falta de conexão, e não a lista velha ou vazia, e o app relê sozinho (parte
+ * 7a). A falha só toma o lugar da lista quando não há nada lido; com a lista
+ * na tela, a releitura que falha (os convites a cada 30 s) não a apaga: a
+ * falta de conexão fica na faixa com a hora da leitura (`falta`), e a outra
+ * falha, escrita em cima da lista (`falhaNaReleitura`), sem falar.
  */
 
 export const INVITES_QUERY_KEY = ["invites"] as const;
@@ -25,7 +37,7 @@ export function usePessoas({ convites = true }: { convites?: boolean } = {}) {
     refetchInterval: (query) => (query.state.data?.some((invite) => invite.status === "pending") ? 30_000 : false),
     queryFn: async (): Promise<Invite[]> => {
       if (!firestore) return [];
-      const snapshot = await getDocs(collection(firestore, "invites"));
+      const snapshot = await lerDocsDoServidor(collection(firestore, "invites"));
       return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Invite);
     },
   });
@@ -43,15 +55,29 @@ export function usePessoas({ convites = true }: { convites?: boolean } = {}) {
     [users.data, invites.data],
   );
 
-  const refresh = async () => {
-    await Promise.all([qc.invalidateQueries({ queryKey: getListBillingUsersQueryKey() }), invites.refetch()]);
-  };
+  // Relê do zero também a leitura presa (o "Tentar de novo" da demora): o react-query não recomeça a que lê sem dado.
+  const refresh = () => relerDoZero(qc, [getListBillingUsersQueryKey(), ...(convites ? [INVITES_QUERY_KEY] : [])]);
+
+  // A nova tentativa sem dado não volta a "carregando": a falha fica na tela, com "Tentando de novo…".
+  const usuarios = useLeituraComFalha(users);
+  const convitesLidos = useLeituraComFalha(invites);
+  const leituras = [usuarios, ...(convites ? [convitesLidos] : [])];
+  // Sem nada lido, a falha toma o lugar da lista; lida, a releitura que falha não a apaga.
+  const semNada = leituras.some((leitura) => leitura.isError && leitura.data === undefined);
+  const falta = semConexaoNaLeitura(...(leituras as LeituraNaTela[]));
+  // A releitura que falhou com a lista na tela (fora a falta de conexão, que tem a faixa): a lista fica, e a falha
+  // também (erro nunca some).
+  const falhaNaReleitura =
+    !semNada && !falta && leituras.some((leitura) => leitura.isError && leitura.data !== undefined && !ehFaltaDeConexao(leitura.error));
 
   return {
     people,
-    carregando: Boolean(users.isLoading || invites.isLoading),
-    erro: Boolean(users.isError || invites.isError),
-    tentando: Boolean(users.isFetching || invites.isFetching),
+    carregando: !semNada && leituras.some((leitura) => leitura.isLoading),
+    erro: semNada,
+    /** A falta de conexão: a hora da lista na tela, ou `null` sem nada lido; sem falta, `null`. */
+    falta,
+    falhaNaReleitura,
+    tentando: leituras.some((leitura) => leitura.isFetching),
     refresh,
   };
 }

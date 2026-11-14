@@ -1,6 +1,6 @@
 import { httpsCallable } from "firebase/functions";
 
-import { SEM_CONEXAO, callableSemResposta } from "../conexao";
+import { callableSemResposta, mensagemDaFalta } from "../conexao";
 import { firebaseApp } from "../firebase";
 import { functionsDoApp } from "../firebase-functions";
 import { mensagemDoErro } from "../operacao/api";
@@ -41,7 +41,9 @@ async function chamarWms<T>(nome: "previewAreaPutaway" | "openAreaPutaway", dado
   try {
     return (await callable(dados)).data;
   } catch (error) {
-    throw new Error(callableSemResposta(error) ? SEM_CONEXAO : mensagemDoErro(error));
+    // O código da callable fica no erro: quem mostra separa a recusa do servidor (nova tentativa não resolve) da falha.
+    const codigo = (error as { code?: unknown } | null)?.code;
+    throw Object.assign(new Error(callableSemResposta(error) ? mensagemDaFalta() : mensagemDoErro(error)), typeof codigo === "string" ? { code: codigo } : {});
   }
 }
 

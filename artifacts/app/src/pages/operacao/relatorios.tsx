@@ -5,7 +5,7 @@ import { useSearch } from "wouter";
 import { useAppUser } from "@/lib/auth";
 import { MEMORIA_LIBERADA } from "@/lib/liberacao";
 import { RELATORIO_DO_ACERTO, ROTULO_DO_ACERTO, resumoDoAcerto, sugestaoDoAcerto, tabelaDoAcerto, veAcerto } from "@/lib/memoria/acerto";
-import { useLeitura } from "@/lib/operacao/leitura";
+import { novaTentativaDe, useLeitura } from "@/lib/operacao/leitura";
 import {
   RELATORIOS_DA_OPERACAO,
   RELATORIO_ROTULO,
@@ -113,6 +113,7 @@ export default function OperacaoRelatorios() {
       filtro={filtro}
       clientes={clientes}
       estado={estado}
+      leitura={novaTentativaDe(leituras)}
       problema={problema}
       resumo={resumo}
       tabela={tabela}

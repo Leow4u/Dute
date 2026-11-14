@@ -1,4 +1,8 @@
 import { Search } from "lucide-react";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { NumeroLido } from "@/components/ui/numero-lido";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 import type { ReactNode } from "react";
 import { Link } from "wouter";
 
@@ -35,7 +39,7 @@ function Linha({ colaborador, primeira }: { colaborador: ColaboradorNoPainel; pr
     <li className={cn(!primeira && "border-t border-muted")}>
       <Link
         href={hrefDaFicha(colaborador.id)}
-        className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-3.5 gap-y-1.5 px-5 py-3.5 text-left outline-none transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-3.5 gap-y-1.5 px-5 py-3.5 text-left focus-visible:outline-hidden transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foco"
       >
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="text-base font-extrabold">{colaborador.nome}</span>
@@ -67,28 +71,51 @@ function Lista({ colaboradores }: { colaboradores: readonly ColaboradorNoPainel[
   );
 }
 
-function Secao({ id, titulo, total, children }: { id: string; titulo: string; total: number; children: ReactNode }) {
+function Secao({ id, titulo, total, estado = "pronto", children }: { id: string; titulo: string; total: number; estado?: EstadoDaTela; children: ReactNode }) {
   return (
     <section aria-labelledby={id} className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex items-center gap-3.5 border-b border-border px-5 py-3.5">
         <h2 id={id} className="text-base font-extrabold">
           {titulo}
         </h2>
-        <Contador>{total}</Contador>
+        <Contador>
+          <NumeroLido estado={estado}>{total}</NumeroLido>
+        </Contador>
       </div>
       {children}
     </section>
   );
 }
 
-export function PessoasView({ estado, colaboradores, busca, onBusca }: { estado: EstadoDaTela; colaboradores: readonly ColaboradorNoPainel[]; busca: string; onBusca: (valor: string) => void }) {
+export function PessoasView({
+  estado,
+  colaboradores,
+  busca,
+  onBusca,
+  leitura = SEM_NOVA_TENTATIVA,
+  falhaNaReleitura = false,
+}: {
+  estado: EstadoDaTela;
+  colaboradores: readonly ColaboradorNoPainel[];
+  busca: string;
+  onBusca: (valor: string) => void;
+  /** A nova tentativa da leitura do painel (parte 13g). */
+  leitura?: NovaTentativa;
+  /**
+   * O painel já lido não se atualizou (a releitura do intervalo ou a de depois
+   * de gravar falhou): a lista fica, e a frase fica escrita em cima dela, sem
+   * falar, com "Tentar de novo" (necessidade 8; momento 7).
+   */
+  falhaNaReleitura?: boolean;
+}) {
   const ativas = colaboradores.filter((colaborador) => colaborador.ativo);
   const inativas = colaboradores.filter((colaborador) => !colaborador.ativo);
   const lista = ativas.filter((colaborador) => buscaInclui(colaborador, busca));
   const listaDasInativas = estado === "pronto" ? inativas.filter((colaborador) => buscaInclui(colaborador, busca)) : [];
   let conteudo;
-  if (estado === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
-  else if (estado === "erro") conteudo = <Vazio>Não foi possível carregar as pessoas.</Vazio>;
+  if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando as pessoas…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
+  else if (estado === "erro")
+    conteudo = <FalhaNaSecao mensagem="Não foi possível carregar as pessoas." tentando={leitura.tentando} onTentar={leitura.tentar} className="px-5 py-7" />;
   else if (!ativas.length) conteudo = <Vazio>Nenhuma pessoa ativa</Vazio>;
   else if (!lista.length) conteudo = <Vazio>Nenhuma pessoa encontrada</Vazio>;
   else conteudo = <Lista colaboradores={lista} />;
@@ -101,7 +128,16 @@ export function PessoasView({ estado, colaboradores, busca, onBusca }: { estado:
           <Input type="search" aria-label="Buscar" placeholder="Buscar nome ou função" value={busca} onChange={(evento) => onBusca(evento.target.value)} className="pl-9" />
         </label>
       </header>
-      <Secao id="ativas" titulo="Ativas" total={ativas.length}>
+      {estado === "pronto" && falhaNaReleitura ? (
+        <FalhaNaSecao
+          mensagem="Não foi possível atualizar as pessoas."
+          alerta={false}
+          tentando={leitura.tentando}
+          onTentar={leitura.tentar}
+          className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+        />
+      ) : null}
+      <Secao id="ativas" titulo="Ativas" total={ativas.length} estado={estado}>
         {conteudo}
       </Secao>
       {listaDasInativas.length ? (

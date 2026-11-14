@@ -34,6 +34,9 @@ import {
 import { buscarNoCatalogo, type ItemDoCatalogo } from "@/lib/operacao/demanda-direta";
 import { ETAPA_ROTULO, horaDe, type EtapaDaOs, type FichaDaOs } from "@/lib/operacao/ficha-da-os";
 import { cn } from "@/lib/utils";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
  * Campo › OS em execução (parte 3.8b; docs/mockups/Campo2Execucao.dc.html e
@@ -67,7 +70,7 @@ export function BotaoDeFoto({ rotulo, onFotos, variante = "outline" }: { rotulo:
   return (
     <label
       className={cn(
-        "inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold focus-within:ring-2 focus-within:ring-ring/40",
+        "inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco",
         variante === "primario" ? "bg-primary text-primary-foreground hover:bg-primary-hover" : "border border-border bg-card text-foreground hover:bg-muted",
       )}
     >
@@ -109,7 +112,7 @@ function Local({ ficha }: { ficha: FichaDaOs }) {
                   target="_blank"
                   rel="noreferrer"
                   aria-label={`Abrir no Maps: ${local.rotulo}`}
-                  className="inline-flex min-h-11 shrink-0 items-center rounded text-sm font-semibold text-primary underline-offset-4 hover:underline"
+                  className="inline-flex min-h-11 shrink-0 items-center rounded text-sm font-semibold text-primary-texto underline-offset-4 hover:underline"
                 >
                   Abrir no Maps
                 </a>
@@ -275,7 +278,7 @@ function Itens({
                 </span>
               </div>
               {emExecucao && cheio && item.previsto > 0 ? (
-                <button type="button" onClick={() => onIncluir(item.id)} className="self-end rounded text-sm font-semibold text-primary underline-offset-4 hover:underline">
+                <button type="button" onClick={() => onIncluir(item.id)} className="self-end rounded text-sm font-semibold text-primary-texto underline-offset-4 hover:underline">
                   Além do planejado · Incluir
                 </button>
               ) : null}
@@ -588,6 +591,7 @@ export function CampoOsView({
   agora,
   onRegistrar,
   onFotos,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDaOsNoCampo;
   numero: string;
@@ -601,6 +605,8 @@ export function CampoOsView({
   agora: () => Date;
   onRegistrar: (novo: NovoRegistro) => void;
   onFotos: (arquivos: File[], extra: ExtraDaFoto) => void;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   const [incluir, setIncluir] = useState<{ linha: string | null } | null>(null);
   const [ocorrencia, setOcorrencia] = useState(false);
@@ -615,12 +621,8 @@ export function CampoOsView({
       <div className="flex flex-col gap-4">
         {voltar}
         <h1 className="text-2xl font-bold tracking-tight text-foreground">OS {numero}</h1>
-        {estado === "carregando" ? <p className="text-sm text-muted-foreground">Carregando</p> : null}
-        {estado === "erro" ? (
-          <p role="alert" className="text-sm text-destructive">
-            Não foi possível carregar a OS.
-          </p>
-        ) : null}
+        {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a OS…" continuaARota onTentar={leitura.tentar} /> : null}
+        {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a OS." /> : null}
         {estado === "nao_encontrada" ? <p className="text-sm text-muted-foreground">OS {numero} não encontrada</p> : null}
       </div>
     );
@@ -648,6 +650,7 @@ export function CampoOsView({
           {ficha.clienteNome ?? ficha.customerCode} · Demanda {ficha.demanda}
         </p>
       </header>
+      <FaixaAoVivo leitura={leitura} objeto="OS" />
       {primeira || janela ? (
         <dl className="grid grid-cols-2 gap-2">
           {primeira ? (

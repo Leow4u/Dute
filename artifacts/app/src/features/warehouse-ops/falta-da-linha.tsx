@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { Dialog, DialogCancelar, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Segmented } from "@/components/ui/segmented";
@@ -86,12 +86,8 @@ export function FaltaDaLinhaConteudo({
         <Input id="falta-detalhe" maxLength={300} value={detalhe} onChange={(event) => setDetalhe(event.target.value)} />
       </div>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancelar}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={enviando}>
-          Marcar falta de {numero.format(falta)} un.
-        </Button>
+        <DialogCancelar ocupado={enviando} onClick={onCancelar} />
+        <BotaoDeAcao type="submit" estado={enviando ? "andamento" : "repouso"} rotulo={`Marcar falta de ${numero.format(falta)} un.`} andamento="Marcando…" />
       </div>
     </form>
   );
@@ -100,7 +96,7 @@ export function FaltaDaLinhaConteudo({
 export function FaltaDaLinha(props: Omit<FaltaDaLinhaProps, "linha"> & { linha: WarehouseTaskItem | null }) {
   const { linha } = props;
   return (
-    <Dialog open={Boolean(linha)} onOpenChange={(aberto) => (aberto ? undefined : props.onCancelar())}>
+    <Dialog open={Boolean(linha)} ocupado={props.enviando} onOpenChange={(aberto) => (aberto ? undefined : props.onCancelar())}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Marcar falta · linha {linha?.line_number ?? ""}</DialogTitle>

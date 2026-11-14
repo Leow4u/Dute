@@ -18,6 +18,16 @@ const linha = {
   boxed_qty: 29,
 };
 
+
+/** A abertura do <button> que tem o rótulo (no BotaoDeAcao, o da camada atual). */
+const tagDoBotao = (html: string, rotulo: string) =>
+  html
+    .split("<button")
+    .slice(1)
+    .map((parte) => `<button${parte.slice(0, parte.indexOf("</button>") + "</button>".length)}`)
+    .find((botao) => botao.includes(`>${rotulo}<`))
+    ?.match(/^<button[^>]*>/)?.[0] ?? "";
+
 describe("marcar a falta da linha da NF", () => {
   it("o que a NF pede, o que está nas caixas e a falta; o motivo, o detalhe e marcar a falta da quantidade", async () => {
     const noop = () => undefined;
@@ -40,16 +50,22 @@ describe("marcar a falta da linha da NF", () => {
         "Detalhe",
         "Cancelar",
         "Marcar falta de 12 un.",
+        "Marcando…",
+        "Conferir",
       ]),
     ).toEqual([]);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
-  it("enviando, o botão desliga", () => {
+  it("enviando, o Cancelar e o Marcar ficam aria-disabled, nunca disabled: o foco não cai no body", () => {
     const noop = () => undefined;
     const html = renderToStaticMarkup(
       <FaltaDaLinhaConteudo linha={linha} nf={41} emCaixas={29} falta={12} enviando onCancelar={noop} onMarcar={noop} />,
     );
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Marcar falta de 12 un.<\/button>/);
+    for (const rotulo of ["Cancelar", "Marcar falta de 12 un."]) {
+      expect(tagDoBotao(html, rotulo), rotulo).toContain('aria-disabled="true"');
+      expect(tagDoBotao(html, rotulo), rotulo).not.toContain('disabled=""');
+    }
+    expect(tagDoBotao(html, "Marcar falta de 12 un.")).toContain('data-estado="andamento"');
   });
 });

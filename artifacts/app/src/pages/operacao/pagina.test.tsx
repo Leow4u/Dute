@@ -19,7 +19,13 @@ vi.mock("@/lib/operacao/api", async (original) => ({
   },
 }));
 
-vi.mock("@/lib/operacao/leitura", () => ({ useLeitura: () => ({ itens: [], erro: false }) }));
+vi.mock("@/lib/operacao/leitura", () => ({
+  // A nova tentativa das leituras ao vivo (carregamento v2, parte 13g): sem efeito aqui.
+  novaTentativaDe: () => ({ tentando: false, tentar: () => undefined }),
+  juntarTentativas: () => ({ tentando: false, tentar: () => undefined }),
+  SEM_NOVA_TENTATIVA: { tentando: false, tentar: () => undefined },
+  useLeitura: () => ({ itens: [], erro: false }),
+}));
 
 import { PaginaVeiculos } from "./pagina";
 

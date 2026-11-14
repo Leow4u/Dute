@@ -38,9 +38,6 @@ const PAPER_FILES = new Set([
   "pages/client/relatorio.tsx",
 ]);
 
-/** Padrão shadcn: texto do toast destrutivo sobre fundo destructive. */
-const VENDOR_FILES = new Set(["components/ui/toast.tsx"]);
-
 const NEUTRAL = "slate|gray|zinc|neutral|stone";
 const HUES =
   "red|rose|pink|fuchsia|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple";
@@ -84,7 +81,7 @@ function violations(): string[] {
   const found: string[] = [];
   for (const file of sourceFiles(SRC)) {
     const rel = relative(SRC, file).split("\\").join("/");
-    if (PAPER_FILES.has(rel) || VENDOR_FILES.has(rel)) continue;
+    if (PAPER_FILES.has(rel)) continue;
     readFileSync(file, "utf8")
       .split("\n")
       .forEach((line, index) => {
@@ -152,7 +149,7 @@ describe("cores e forma do tema", () => {
 
   it("as exceções de papel ainda existem (senão a lista está velha)", () => {
     const files = new Set(sourceFiles(SRC).map((file) => relative(SRC, file).split("\\").join("/")));
-    for (const paper of [...PAPER_FILES, ...VENDOR_FILES]) {
+    for (const paper of PAPER_FILES) {
       expect(files.has(paper), paper).toBe(true);
     }
   });

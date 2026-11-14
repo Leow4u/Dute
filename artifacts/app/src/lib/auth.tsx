@@ -19,6 +19,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 
+import { fecharAbertura } from "./abertura";
 import { firebaseAuth, firestore } from "./firebase";
 import { profileAccess } from "./access";
 import { type ProfileRole } from "./modules";
@@ -258,6 +259,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unsubscribeAuth();
     };
   }, []);
+
+  // As rotas param de esperar quando a sessão e o perfil chegam: a abertura
+  // do index.html sai e mostra o app (carregamento v2, momento 5).
+  useEffect(() => {
+    if (state.isLoaded) fecharAbertura();
+  }, [state.isLoaded]);
 
   const value = useMemo(() => state, [state]);
 

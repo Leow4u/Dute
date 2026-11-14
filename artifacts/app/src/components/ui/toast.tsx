@@ -12,8 +12,17 @@ const ToastViewport = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Viewport
     ref={ref}
+    // Com um diálogo aberto no celular, o index.css leva os avisos para o topo (parte 13a).
+    data-avisos=""
     className={cn(
-      'fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]',
+      // Celular (abaixo de 768 px, decisão 9.4.5 de 06/11/2026): embaixo,
+      // perto do polegar, 8 px acima da barra de navegação (MobileTabBar,
+      // --altura-da-barra-de-baixo) e da área segura, a 16 px dos lados. Só o
+      // toast segura o toque; a faixa em volta deixa a lista responder.
+      'pointer-events-none fixed left-0 right-0 z-[100] flex max-h-screen w-full flex-col px-4 pb-2',
+      'bottom-[calc(var(--altura-da-barra-de-baixo)+env(safe-area-inset-bottom))]',
+      // Computador: onde sempre esteve, embaixo à direita.
+      'md:left-auto md:bottom-0 md:max-w-[420px] md:p-4',
       className,
     )}
     {...props}
@@ -22,13 +31,17 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
 
 const toastVariants = cva(
-  'group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full',
+  // O pr-12 deixa o X de 44 px fora do texto; no computador o md:p-6 viria
+  // por cima dele, então o md:pr-12 vem junto. No celular o toast sobe só os
+  // 8 px do vão até a barra, aparecendo (a altura inteira passaria por cima da
+  // barra de navegação); com movimento reduzido, entra e sai sem deslizar.
+  'group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-4 pr-12 shadow-lg transition-all md:p-6 md:pr-12 data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-bottom-full max-md:data-[state=open]:fade-in-0 max-md:data-[state=open]:slide-in-from-bottom-2 motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none',
   {
     variants: {
       variant: {
         default: 'border bg-background text-foreground',
         destructive:
-          'destructive group border-destructive bg-destructive text-destructive-foreground',
+          'destructive group border-destructive-fundo bg-destructive text-destructive-foreground',
       },
     },
     defaultVariants: {
@@ -59,7 +72,7 @@ const ToastAction = React.forwardRef<
   <ToastPrimitives.Action
     ref={ref}
     className={cn(
-      'inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 group-[.destructive]:border-muted/40 group-[.destructive]:hover:border-destructive/30 group-[.destructive]:hover:bg-destructive group-[.destructive]:hover:text-destructive-foreground group-[.destructive]:focus:ring-destructive',
+      'inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-hidden focus:ring-2 focus:ring-foco focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 group-[.destructive]:border-muted/40 group-[.destructive]:hover:border-destructive/30 group-[.destructive]:hover:bg-destructive group-[.destructive]:hover:text-destructive-foreground group-[.destructive]:focus:ring-destructive',
       className,
     )}
     {...props}
@@ -74,13 +87,16 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      'absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600',
+      // Sempre à vista, sem depender do hover, que não existe no toque; o
+      // alvo tem 44 px e o ícone, 16.
+      'absolute right-1 top-1 inline-flex size-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco group-[.destructive]:text-destructive-foreground group-[.destructive]:hover:bg-destructive-foreground/10 group-[.destructive]:hover:text-destructive-foreground group-[.destructive]:focus-visible:ring-destructive-foreground',
       className,
     )}
     toast-close=""
     {...props}
   >
-    <X className="h-4 w-4" />
+    <X className="size-4" aria-hidden="true" />
+    <span className="sr-only">Fechar</span>
   </ToastPrimitives.Close>
 ));
 ToastClose.displayName = ToastPrimitives.Close.displayName;

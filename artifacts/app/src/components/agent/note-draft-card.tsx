@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Loader2, NotebookPen } from "lucide-react";
+import { CheckCircle2, NotebookPen } from "lucide-react";
+
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
 import { parseDraftSent, type NoteDraft } from "@/lib/agent-draft";
 import { chaveNoAlvo } from "@/lib/agente/cliente";
@@ -50,15 +52,14 @@ export function NoteDraftCard({ draft, messageId, sent }: { draft: NoteDraft; me
         </p>
       ) : null}
       <div className="flex justify-end px-4 py-3">
-        <button
-          type="button"
-          disabled={!messageId || send.isPending}
+        <BotaoDeAcao
+          tinta
+          estado={send.isPending ? "andamento" : "repouso"}
+          rotulo="Sugerir anotação"
+          andamento="Enviando…"
+          bloqueado={!messageId}
           onClick={() => send.mutate()}
-          className="inline-flex items-center gap-2 rounded-xl bg-foreground px-3.5 py-2 text-sm font-semibold text-background hover:bg-foreground/85 disabled:opacity-50"
-        >
-          {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-          {send.isPending ? "Enviando…" : "Sugerir anotação"}
-        </button>
+        />
       </div>
     </section>
   );

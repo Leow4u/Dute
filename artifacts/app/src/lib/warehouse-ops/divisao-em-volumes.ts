@@ -336,7 +336,7 @@ export function textoDaParte(divisao: Pick<DivisaoEmVolumes, "aberto" | "partes"
 
 /** "Separar em 2 volumes" na linha por separar; "Dividir em 2 volumes" na já separada. */
 export function textoDoBotaoDaDivisao(modo: ModoDaDivisao, volumes: number, confirmando = false): string {
-  if (confirmando) return modo === "separar" ? "Separando..." : "Dividindo...";
+  if (confirmando) return modo === "separar" ? "Separando…" : "Dividindo…";
   return `${modo === "separar" ? "Separar" : "Dividir"} em ${numero.format(volumes)} volumes`;
 }
 

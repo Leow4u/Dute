@@ -4,7 +4,8 @@ import { Router } from "wouter";
 
 import { painelLido } from "@/lib/rh/ficha";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { textosVisiveis } from "@/test/botoes";
+import { textosForaDaLista } from "@/test/textos";
 
 import { PessoasView, type EstadoDaTela } from "./pessoas-view";
 
@@ -36,7 +37,7 @@ function render(estado: EstadoDaTela = "pronto", busca = "", colaboradores = PAI
 
 describe("Pessoas do RH", () => {
   it("cada pessoa ativa com a função, o vínculo, as datas do próprio, o próximo vencimento e as marcas da ficha", () => {
-    expect(textosDaTela(render())).toEqual([
+    expect(textosVisiveis(render())).toEqual([
       "Pessoas",
       "Ativas",
       "4",
@@ -68,22 +69,24 @@ describe("Pessoas do RH", () => {
     expect(html).toContain('href="/rh/ficha?colaborador=col_eeeeeeeeeeeeeeee"');
     expect(html.indexOf("Eva Melo")).toBeGreaterThan(html.indexOf("Inativas na Operação"));
     // A busca filtra as duas listas; sem ninguém inativo, a seção some.
-    expect(textosDaTela(render("pronto", "eva"))).toEqual(["Pessoas", "Ativas", "4", "Nenhuma pessoa encontrada", "Inativas na Operação", "1", "Eva Melo", "Ajudante · Própria · Admissão 10/03/2024", "Sem registro"]);
-    expect(textosDaTela(render("pronto", "motor"))).not.toContain("Inativas na Operação");
-    expect(textosDaTela(render("pronto", "", PAINEL.colaboradores.filter((colaborador) => colaborador.ativo)))).not.toContain("Inativas na Operação");
-    expect(textosDaTela(render("carregando"))).not.toContain("Inativas na Operação");
+    expect(textosVisiveis(render("pronto", "eva"))).toEqual(["Pessoas", "Ativas", "4", "Nenhuma pessoa encontrada", "Inativas na Operação", "1", "Eva Melo", "Ajudante · Própria · Admissão 10/03/2024", "Sem registro"]);
+    expect(textosVisiveis(render("pronto", "motor"))).not.toContain("Inativas na Operação");
+    expect(textosVisiveis(render("pronto", "", PAINEL.colaboradores.filter((colaborador) => colaborador.ativo)))).not.toContain("Inativas na Operação");
+    expect(textosVisiveis(render("carregando"))).not.toContain("Inativas na Operação");
   });
 
   it("a busca filtra por nome ou função; o vazio é uma frase de dados", () => {
-    expect(textosDaTela(render("pronto", "motor"))).toContain("Bruno Lima");
-    expect(textosDaTela(render("pronto", "motor"))).not.toContain("Ana Souza");
-    expect(textosDaTela(render("pronto", "zzz"))).toContain("Nenhuma pessoa encontrada");
-    expect(textosDaTela(render("pronto", "", []))).toContain("Nenhuma pessoa ativa");
-    expect(textosDaTela(render("erro"))).toContain("Não foi possível carregar as pessoas.");
+    expect(textosVisiveis(render("pronto", "motor"))).toContain("Bruno Lima");
+    expect(textosVisiveis(render("pronto", "motor"))).not.toContain("Ana Souza");
+    expect(textosVisiveis(render("pronto", "zzz"))).toContain("Nenhuma pessoa encontrada");
+    expect(textosVisiveis(render("pronto", "", []))).toContain("Nenhuma pessoa ativa");
+    expect(textosVisiveis(render("erro"))).toContain("Não foi possível carregar as pessoas.");
   });
 
   it("só rótulos, dados e ações: nenhum texto fora da lista", () => {
     const permitidos = [
+      // O gerúndio e o "Conferir" do BotaoDeAcao, nas camadas escondidas; o "—" da contagem na falha e o "Tentar de novo" (parte 13g).
+      /^(—|Tentar de novo)$/,
       "Pessoas",
       "Ativas",
       /^\d+$/,

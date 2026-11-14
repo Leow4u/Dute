@@ -109,4 +109,10 @@ describe("Início do RH", () => {
   it("acessibilidade: WCAG 2.1 A e AA", async () => {
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
   });
+
+  it("o painel que falhou: o aviso tem Tentar de novo (carregamento v2, parte 13e)", () => {
+    const html = render({ painel: undefined, itens: [], falhas: ["pessoas e vencimentos"], reler: async () => undefined, relendo: false });
+    expect(html).toContain("Não foi possível carregar: pessoas e vencimentos.");
+    expect(textosDaTela(html)).toContain("Tentar de novo");
+  });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { toolLabel } from "./agent-chat";
+import { consultaDoAgente } from "./agent-chat";
 import { playbookPayload, groupPlaybooks, playbookProblem, stepsFromText, stepsToText, type Playbook } from "./agent-playbooks";
 import { functionRoute } from "./functions-api";
 
@@ -53,6 +53,6 @@ describe("playbooks na tela Conhecimento", () => {
     const groups = groupPlaybooks([{ ...base, id: "b", title: "B", status: "active" }, base, { ...base, id: "c", title: "A", status: "active" }]);
     expect(groups.pending.map((item) => item.id)).toEqual(["pb_1"]);
     expect(groups.active.map((item) => item.title)).toEqual(["A", "B"]);
-    expect(toolLabel("consultar_playbook")).toBe("Seguiu um playbook da coordenação");
+    expect(consultaDoAgente("consultar_playbook")).toMatchObject({ vez: "Abrindo o playbook…", feita: "Playbook da coordenação" });
   });
 });

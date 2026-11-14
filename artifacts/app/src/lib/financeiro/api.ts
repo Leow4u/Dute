@@ -2,6 +2,7 @@ import { httpsCallable } from "firebase/functions";
 
 import { firebaseApp } from "../firebase";
 import { functionsDoApp } from "../firebase-functions";
+import { PRAZO_ESGOTADO, callableSemResposta, mensagemDaFalta, prazoEsgotado } from "../conexao";
 
 /**
  * Escrita do Financeiro: só pelas callables de functions/financeiro (região
@@ -34,6 +35,7 @@ export function novaChave(): string {
 
 /** Mensagem do erro da callable: a do servidor (em português) ou uma genérica para "internal". */
 export function mensagemDoErro(error: unknown): string {
+  if (prazoEsgotado(error)) return PRAZO_ESGOTADO;
   const code = String((error as { code?: unknown })?.code ?? "").replace(/^functions\//, "");
   const message = error instanceof Error ? error.message : "";
   if (!message || message === "INTERNAL" || code === "internal") {
@@ -48,6 +50,8 @@ export async function chamarFinanceiro<T = Record<string, unknown>>(nome: Callab
   try {
     return (await callable(dados)).data;
   } catch (error) {
-    throw new Error(mensagemDoErro(error));
+    // A falta de conexão fica dita como falta ("Sem conexão."): a leitura que falhou por ela é relida sozinha quando a
+    // rede volta (lib/carregando/estado-da-conexao.ts), e a gravação repete com a mesma chave.
+    throw new Error(callableSemResposta(error) ? mensagemDaFalta() : mensagemDoErro(error));
   }
 }

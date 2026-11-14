@@ -2,6 +2,9 @@ import { ArrowLeft, Printer } from "lucide-react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { BlocoSemConexao, FaixaAoVivo, FalhaNaLeitura, erroDaLeituraAoVivo, type LeituraAoVivoNaTela } from "@/components/ui/erro-na-leitura";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { PageHeader } from "@/components/ui/page-header";
 import { ListaDeSeparacaoDocumento } from "@/features/warehouse-ops/lista-de-separacao-documento";
 import type { FolhaDaLista } from "@/lib/warehouse-ops/lista-de-separacao";
@@ -20,16 +23,26 @@ export function PedidosListaView({
   folha,
   avisos = [],
   onImprimir,
+  onTentar,
+  leitura,
 }: {
   estado: EstadoDaLista;
   folha: FolhaDaLista | null;
   /** A leitura que falhou (as posições, as caixas, o destino): a folha sai sem esse dado, e a tela diz qual. */
   avisos?: readonly string[];
   onImprimir: () => void;
+  /** Lê de novo o que ainda não chegou: "Tentar de novo" na demora, na desistência e na falha. */
+  onTentar?: () => Promise<unknown>;
+  /**
+   * O que falta às leituras (parte 13l): sem conexão e sem nada lido, o aviso
+   * da conexão no lugar da falha; com a lista lida, a faixa com a hora; o
+   * destino que não chegou sem conexão, o aviso da conexão.
+   */
+  leitura?: LeituraAoVivoNaTela;
 }) {
   const mensagem =
     estado === "carregando"
-      ? "Carregando"
+      ? "Carregando o pedido…"
       : estado === "erro"
         ? "Não foi possível carregar o pedido."
         : estado === "nao_encontrado" || !folha
@@ -38,7 +51,7 @@ export function PedidosListaView({
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-5 pb-24">
       <div className="no-print flex flex-col gap-4">
-        <Link href="/pedidos" className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-primary">
+        <Link href="/pedidos" className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-primary-texto">
           <ArrowLeft className="size-4" aria-hidden="true" />
           Pedidos
         </Link>
@@ -52,19 +65,51 @@ export function PedidosListaView({
           }
         />
       </div>
-      {mensagem ? (
+{/* A primeira leitura é a espera em bloco do carregamento v2 (parte 13c): nada antes de 300 ms, a caixa e o rótulo,
+          com o anúncio pelo Anunciador, no lugar do "Carregando" seco. Ela continua a espera da rota, como o romaneio, e
+          tem a saída: "Tentar de novo" aos 10 s e a desistência aos 70 s; a falha também tenta de novo. */}
+      {estado === "carregando" ? (
+        <CarregandoNaRegiao rotulo="Carregando o pedido…" continuaARota onTentar={onTentar} className="no-print rounded-lg border border-border bg-card px-5 py-6" />
+      ) : estado === "erro" && onTentar ? (
+        <FalhaNaLeitura leitura={{ error: erroDaLeituraAoVivo(leitura?.falta), refetch: onTentar }} mensagem="Não foi possível carregar o pedido." className="no-print" />
+      ) : mensagem ? (
         <p role={estado === "erro" ? "alert" : undefined} className="no-print rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
           {mensagem}
         </p>
       ) : folha ? (
         <>
-          {avisos.map((aviso) => (
-            <p key={aviso} role="alert" className="no-print rounded-lg border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm font-semibold text-warning-soft-foreground">
-              {aviso}
-            </p>
-          ))}
-          {/* A folha tem a largura do A4; no celular, a caixa rola para o lado em vez de espremer a tabela. */}
-          <div className="overflow-x-auto rounded-lg border border-border bg-muted p-4">
+          {/* Sem conexão: a lista lida fica, com a hora; o que não chegou (o destino), o aviso da conexão (parte 13l). */}
+          {leitura ? <FaixaAoVivo leitura={leitura} className="no-print" /> : null}
+          {leitura?.falta === "conexao" && leitura.lidaEm == null ? (
+            <BlocoSemConexao tentando={leitura.tentando} onTentar={() => leitura.tentar()} className="no-print" />
+          ) : null}
+          {/* A frase do que não chegou, no âmbar da faixa. A recusa do servidor não volta sozinha: a frase tem o "Tentar de
+              novo", que assina de novo o que não chegou; sem conexão, o "Tentar de novo" é o do aviso da conexão, logo
+              acima (revisão da parte 13m). */}
+          {avisos.map((aviso) =>
+            onTentar && leitura?.falta !== "conexao" ? (
+              <FalhaNaSecao
+                key={aviso}
+                mensagem={aviso}
+                tom="aviso"
+                tentando={leitura?.tentando ?? false}
+                onTentar={onTentar}
+                className="no-print rounded-lg border border-warning-soft-border bg-warning-soft px-4 py-3"
+              />
+            ) : (
+              <p key={aviso} role="alert" className="no-print rounded-lg border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm font-semibold text-carregando-aviso">
+                {aviso}
+              </p>
+            ),
+          )}
+          {/* A folha tem a largura do A4; no celular, a caixa rola para o lado em vez de espremer a tabela, e recebe o foco
+              do teclado para rolar (scrollable-region-focusable; parte 13m, como no romaneio). */}
+          <div
+            role="region"
+            aria-label="Folha da lista de separação"
+            tabIndex={0}
+            className="overflow-x-auto rounded-lg border border-border bg-muted p-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
+          >
             <ListaDeSeparacaoDocumento folha={folha} />
           </div>
         </>

@@ -77,7 +77,7 @@ export function Filtro({
         value={valor}
         onChange={(event) => onChange(event.target.value)}
         className={cn(
-          "h-9 appearance-none rounded-full border bg-card pl-3.5 pr-9 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+          "h-9 appearance-none rounded-full border bg-card pl-3.5 pr-9 text-sm font-medium text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
           valor ? "border-foreground" : "border-border",
         )}
       >

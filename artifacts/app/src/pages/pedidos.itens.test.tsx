@@ -183,3 +183,27 @@ describe("os itens do pedido em Pedidos", () => {
     expect(await violacoesDeAcessibilidade(lista([POLO_GG, CALCA_42], cliente, "BTG"))).toEqual([]);
   });
 });
+
+/**
+ * A foto que ainda chega (carregamento v2, parte 13c; diagnóstico, 4.3): antes
+ * de as três leituras das fotos chegarem, a linha mostrava o ícone de "sem
+ * foto", como se o item não tivesse foto. Agora o lugar fica neutro, o bloco
+ * do esqueleto, fora da árvore; com as leituras lidas, o "sem foto" volta.
+ */
+describe("a foto do item antes de ler", () => {
+  it("o lugar da foto fica neutro até as leituras chegarem, sem afirmar \"sem foto\"", () => {
+    const html = lista([POLO_GG]);
+    expect(html).toContain("data-esqueleto");
+    expect(html).not.toContain("border-dashed");
+  });
+
+  it("lidas as leituras, o item sem foto mostra o \"sem foto\"", () => {
+    const cliente = new QueryClient();
+    cliente.setQueryData(["estoque", "skus"], { items: [] });
+    cliente.setQueryData(["stock-balances", "estoque"], { items: [] });
+    cliente.setQueryData(["estoque", "products"], { items: [] });
+    const html = lista([POLO_GG], cliente);
+    expect(html).not.toContain("data-esqueleto");
+    expect(html).toContain("border-dashed");
+  });
+});

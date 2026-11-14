@@ -3,10 +3,13 @@ import { collection, doc, limit, orderBy, query, where } from "firebase/firestor
 import { Bell } from "lucide-react";
 import { Link } from "wouter";
 
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAppUser } from "@/lib/auth";
 import { chamarOperacao } from "@/lib/operacao/api";
-import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { useDocumento } from "@/lib/operacao/leitura";
+import { useLeituraDoPortal } from "@/lib/portal/leitura-do-portal";
 import { SOMENTE_ARMAZENAGEM } from "@/lib/somente-armazenagem";
 import {
   AVISOS_NO_SINO,
@@ -38,7 +41,7 @@ export const BotaoDoSino = forwardRef<HTMLButtonElement, BotaoDoSinoProps>(funct
       type="button"
       aria-label={rotuloDoSino(novos)}
       className={cn(
-        "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/80 outline-none transition-colors duration-200 hover:bg-card hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring",
+        "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/80 focus-visible:outline-hidden transition-colors duration-200 hover:bg-card hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-foco",
         className,
       )}
       {...props}
@@ -56,18 +59,28 @@ export type ListaDeAvisosProps = {
   vistosAte: Date | null;
   agora: Date;
   onEscolher?: () => void;
+  /** A nova tentativa da leitura que falhou (carregamento v2, parte 13f). */
+  tentando?: boolean;
+  onTentar?: () => void;
+  /** O que falta: a conexão (sem nada lido, o aviso da conexão) ou o servidor (parte 13j). */
+  falta?: "conexao" | "servidor" | null;
 };
 
-export function ListaDeAvisos({ avisos, erro, vistosAte, agora, onEscolher }: ListaDeAvisosProps) {
+export function ListaDeAvisos({ avisos, erro, vistosAte, agora, onEscolher, tentando = false, onTentar, falta = null }: ListaDeAvisosProps) {
   return (
     <div className="flex max-h-[min(28rem,70dvh)] flex-col">
       <h2 className="border-b border-border/60 px-4 py-3 text-sm font-semibold text-foreground">Avisos</h2>
       {erro ? (
-        <p role="alert" className="px-4 py-6 text-sm text-destructive">
-          Não foi possível carregar.
-        </p>
+        onTentar ? (
+          <FalhaAoVivo leitura={{ tentando, tentar: onTentar, falta }} mensagem="Não foi possível carregar os avisos." className="px-4 py-6" semCartao estreito />
+        ) : (
+          <p role="alert" className="px-4 py-6 text-sm text-destructive">
+            Não foi possível carregar os avisos.
+          </p>
+        )
       ) : avisos === null ? (
-        <p className="px-4 py-6 text-sm text-muted-foreground">Carregando...</p>
+        // Lendo, a caixa e o rótulo aos 300 ms, no lugar do texto seco (carregamento v2, parte 13f).
+        <CarregandoNaRegiao rotulo="Carregando os avisos…" onTentar={onTentar} className="px-4 py-6" />
       ) : !avisos.length ? (
         <p className="px-4 py-6 text-sm text-muted-foreground">Nenhum aviso.</p>
       ) : (
@@ -79,7 +92,7 @@ export function ListaDeAvisos({ avisos, erro, vistosAte, agora, onEscolher }: Li
                 <Link
                   href={aviso.link}
                   onClick={onEscolher}
-                  className="flex gap-3 rounded-lg px-3 py-2.5 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex gap-3 rounded-lg px-3 py-2.5 focus-visible:outline-hidden transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-foco"
                 >
                   <span aria-hidden="true" className={cn("mt-1.5 size-2 shrink-0 rounded-full", novo ? "bg-primary" : "bg-transparent")} />
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -105,7 +118,7 @@ export function SinoDoPortal({ lado = "right", className }: { lado?: "right" | "
   const { user } = useAppUser();
   const uid = user?.uid ?? null;
   const codigo = user?.publicMetadata.role === "cliente" ? (user.publicMetadata.customer_code ?? null) : null;
-  const leitura = useLeitura(
+  const leitura = useLeituraDoPortal(
     codigo ? `client_notifications:${codigo}:${SOMENTE_ARMAZENAGEM ? "armazenagem" : "plataforma"}` : null,
     (db) => query(collection(db, "client_notifications"), where("customer_code", "==", codigo ?? "-"), orderBy("created_at", "desc"), limit(AVISOS_NO_SINO)),
     // Até 20 documentos recentes; os modelos pausados saem antes da lista e do contador.
@@ -145,7 +158,16 @@ export function SinoDoPortal({ lado = "right", className }: { lado?: "right" | "
         <BotaoDoSino novos={novos} className={className} />
       </PopoverTrigger>
       <PopoverContent side={lado} align="end" collisionPadding={16} className="w-[min(22rem,calc(100vw-2rem))] p-0">
-        <ListaDeAvisos avisos={leitura.itens} erro={leitura.erro} vistosAte={vistosAoAbrir} agora={new Date()} onEscolher={() => setAberto(false)} />
+        <ListaDeAvisos
+          avisos={leitura.itens}
+          erro={leitura.erro}
+          tentando={leitura.tentando}
+          onTentar={leitura.tentar}
+          falta={leitura.falta}
+          vistosAte={vistosAoAbrir}
+          agora={new Date()}
+          onEscolher={() => setAberto(false)}
+        />
       </PopoverContent>
     </Popover>
   );

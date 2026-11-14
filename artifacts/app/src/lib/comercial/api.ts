@@ -2,6 +2,7 @@ import { httpsCallable } from "firebase/functions";
 import { functionsDoApp } from "../firebase-functions";
 
 import { firebaseApp } from "../firebase";
+import { PRAZO_ESGOTADO, prazoEsgotado } from "../conexao";
 
 /**
  * Escrita do Comercial: só pelas callables de functions/comercial (região
@@ -54,6 +55,7 @@ export function novaChave(): string {
 
 /** Mensagem do erro da callable: a do servidor (em português) ou uma genérica para "internal". */
 export function mensagemDoErro(error: unknown): string {
+  if (prazoEsgotado(error)) return PRAZO_ESGOTADO;
   const code = codigoDoErro(error);
   const message = error instanceof Error ? error.message : "";
   if (!message || message === "INTERNAL" || code === "internal") {

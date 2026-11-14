@@ -513,7 +513,7 @@ export const LINE_RESOLUTION_COPY: Record<
     label: "OK físico",
     shortLabel: "OK",
     description: "Linha contada e pronta para seguir.",
-    className: "border-primary/20 bg-primary/10 text-primary",
+    className: "border-primary/20 bg-primary/10 text-primary-texto",
   },
   shortage: {
     label: "Falta física",
@@ -815,7 +815,7 @@ export function priorityClass(priority?: string | null) {
   if (priority === "low") {
     return "border-border bg-card text-muted-foreground";
   }
-  return "border-primary/20 bg-primary/10 text-primary";
+  return "border-primary/20 bg-primary/10 text-primary-texto";
 }
 
 export function statusLabel(status?: string | null) {
@@ -837,7 +837,7 @@ export function statusLabel(status?: string | null) {
 export function statusClass(status?: string | null) {
   const normalized = normalizeStatus(status);
   if (TERMINAL_STATUSES.has(normalized)) {
-    return "border-primary/20 bg-primary/10 text-primary";
+    return "border-primary/20 bg-primary/10 text-primary-texto";
   }
   if (["checking", "in_progress", "dispatched"].includes(normalized)) {
     return "border-warning-soft-border bg-warning-soft text-warning-soft-foreground";
@@ -852,7 +852,7 @@ export function alertClass(severity?: string | null) {
   if (severity === "attention") {
     return "border-warning-soft-border bg-warning-soft text-warning-soft-foreground";
   }
-  return "border-primary/20 bg-primary/10 text-primary";
+  return "border-primary/20 bg-primary/10 text-primary-texto";
 }
 
 export function getErrorMessage(error: unknown) {
@@ -1094,7 +1094,7 @@ export function queueSlaState(queue: NormalizedQueue) {
   if (queue.pending > 0) {
     return {
       label: "SLA em curso",
-      className: "border-primary/20 bg-primary/10 text-primary",
+      className: "border-primary/20 bg-primary/10 text-primary-texto",
     };
   }
   return {

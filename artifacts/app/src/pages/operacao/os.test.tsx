@@ -48,6 +48,10 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/operacao/leitura", () => ({
+  // A nova tentativa das leituras ao vivo (carregamento v2, parte 13g): sem efeito aqui.
+  novaTentativaDe: () => ({ tentando: false, tentar: () => undefined }),
+  juntarTentativas: () => ({ tentando: false, tentar: () => undefined }),
+  SEM_NOVA_TENTATIVA: { tentando: false, tentar: () => undefined },
   useDocumento: (chave: string | null, _referencia: unknown, mapear: (id: string, dados: Record<string, unknown>) => unknown) => {
     if (chave === `service_orders/${NUMERO}`) {
       return {
@@ -88,12 +92,13 @@ vi.mock("@/lib/operacao/enviar-foto", async (original) => ({
 }));
 
 import PaginaOs from "./os";
+import { depoisDoToqueDuplo, rotuloDoBotao } from "@/test/botoes";
 
 let raiz: Root | null = null;
 let container: HTMLDivElement | null = null;
 
 async function clicar(texto: string) {
-  const botao = [...container!.querySelectorAll("button")].find((item) => item.textContent?.trim() === texto);
+  const botao = [...container!.querySelectorAll("button")].find((item) => rotuloDoBotao(item) === texto);
   if (!botao) throw new Error(`Sem o botão ${texto}`);
   await act(async () => botao.click());
 }
@@ -149,12 +154,12 @@ describe("tentar de novo o andamento", () => {
     expect(ocorrencias[1]).toEqual(ocorrencias[0]);
     expect(container!.textContent).not.toContain("A chave de idempotência já foi usada com outro conteúdo.");
     // Gravou: o painel fechou e o botão voltou.
-    expect([...container!.querySelectorAll("button")].some((botao) => botao.textContent?.trim() === "Registrar andamento")).toBe(true);
+    expect([...container!.querySelectorAll("button")].some((botao) => rotuloDoBotao(botao) === "Registrar andamento")).toBe(true);
   });
 });
 
 describe("cancelar a vistoria (pergunta 58)", () => {
-  const botoes = () => [...container!.querySelectorAll("button")].map((botao) => botao.textContent?.trim());
+  const botoes = () => [...container!.querySelectorAll("button")].map((botao) => rotuloDoBotao(botao));
 
   it("a coordenação cancela a vistoria em execução com o motivo; sem o motivo, a tela pede", async () => {
     estado.os = { tipo: "vistoria", servicos: ["vistoria"] };
@@ -169,7 +174,10 @@ describe("cancelar a vistoria (pergunta 58)", () => {
     expect(estado.chamadas).toEqual([]);
 
     await descrever("O local estava fechado; o cliente não recebeu a equipe.");
+    // O Cancelar vistoria é o BotaoDeAcao, que ignora o segundo toque dentro de 1 s: o motivo leva mais que isso.
+    const voltarORelogio = depoisDoToqueDuplo();
     await clicar("Cancelar vistoria");
+    voltarORelogio();
     expect(estado.chamadas).toHaveLength(1);
     const [{ nome, dados }] = estado.chamadas;
     expect(nome).toBe("saveServiceOrder");
@@ -250,7 +258,7 @@ describe("a conclusão recusada do campo (pergunta 66)", () => {
       fotos: [{ id: "ft_0000000000000001", caminho: `os/${NUMERO}/fotos/ft_0000000000000001.jpg`, etapa: "fim", instante: "2026-10-25T14:40:00.000Z", canal: "celular" }],
     };
     await act(async () => raiz!.render(<PaginaOs />));
-    expect([...container!.querySelectorAll("button")].map((botao) => botao.textContent?.trim())).not.toContain("Anexar à conclusão");
+    expect([...container!.querySelectorAll("button")].map((botao) => rotuloDoBotao(botao))).not.toContain("Anexar à conclusão");
     await clicar("Concluir com estes dados");
     const campos = [...container!.querySelectorAll<HTMLInputElement>("input")];
     expect(campos.map((campo) => campo.value)).toEqual(expect.arrayContaining(["Renata Campos", "Facilities"]));

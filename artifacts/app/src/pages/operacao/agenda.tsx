@@ -6,7 +6,7 @@ import { agendaDaSemana, dataValida, inicioDaSemana, proximaSemana, semanaAnteri
 import { colaboradorDaLeitura, veiculoDaLeitura } from "@/lib/operacao/cadastro";
 import { clienteDaLeitura, comDemanda, demandaDaFila, hojeIso, nomesPorCodigo, osDaLeitura } from "@/lib/operacao/fila";
 import { demandaDoHoje } from "@/lib/operacao/hoje";
-import { useLeitura } from "@/lib/operacao/leitura";
+import { novaTentativaDe, useLeitura } from "@/lib/operacao/leitura";
 import { ROTA_AGENDA, hrefDaSemana, semanaDaBusca } from "@/lib/operacao/navegacao";
 
 import { AgendaView, type EstadoDaAgenda } from "./agenda-view";
@@ -56,6 +56,7 @@ export default function PaginaAgenda() {
   return (
     <AgendaView
       estado={estadoDe([ordens, pessoas, veiculos, demandas, clientes])}
+      leitura={novaTentativaDe([ordens, pessoas, veiculos, demandas, clientes])}
       agenda={agenda}
       titulo={tituloDaSemana(agenda.dias)}
       semana={{

@@ -142,6 +142,47 @@ describe("a entrada no app", () => {
     expect(tela()).toBe("carregando");
   });
 
+  it("a abertura do index.html fica até a sessão e o perfil chegarem, e sai quando as rotas param de esperar", async () => {
+    const abertura = document.createElement("div");
+    abertura.id = "abertura";
+    document.body.prepend(abertura);
+    try {
+      let ler: (valor: unknown) => void = () => undefined;
+      firebase.getDoc.mockReturnValue(new Promise((resolve) => (ler = resolve)));
+      await abrirApp();
+      await act(async () => {
+        void firebase.aoMudarSessao!(USUARIO);
+        await Promise.resolve();
+      });
+      // Com a sessão, mas sem o perfil, as rotas ainda esperam: a abertura fica.
+      expect(tela()).toBe("carregando");
+      expect(abertura.hasAttribute("data-fechando")).toBe(false);
+      await act(async () => {
+        ler(foto({ role: "campo", nome: "Carlos Silva" }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(tela()).toBe("campo:Carlos Silva");
+      expect(abertura.hasAttribute("data-fechando")).toBe(true);
+    } finally {
+      abertura.remove();
+    }
+  });
+
+  it("sem sessão, a abertura sai para o login", async () => {
+    const abertura = document.createElement("div");
+    abertura.id = "abertura";
+    document.body.prepend(abertura);
+    try {
+      await abrirApp();
+      expect(abertura.hasAttribute("data-fechando")).toBe(false);
+      await act(() => firebase.aoMudarSessao!(null));
+      expect(tela()).toBe("fora");
+      expect(abertura.hasAttribute("data-fechando")).toBe(true);
+    } finally {
+      abertura.remove();
+    }
+  });
+
   it("o logout esquece os perfis guardados no aparelho", async () => {
     window.localStorage.setItem(CHAVE, JSON.stringify({ role: "campo" }));
     window.localStorage.setItem("dute.perfil.outra", JSON.stringify({ role: "admin" }));

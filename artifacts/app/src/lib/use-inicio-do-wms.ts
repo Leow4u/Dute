@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useActiveCustomer } from "./active-customer-context";
+import { relerDoZero } from "./carregando/reler-do-zero";
+import { useLeituraComFalha } from "./carregando/use-leitura-com-falha";
 import { semConexaoNaLeitura, type LeituraNaTela } from "./conexao";
 import { playbooksKey } from "./agent-playbooks";
 import { CHAVE_DAS_ANOTACOES, chaveNoAlvo, clienteDoNucleo } from "./agente/cliente";
@@ -30,8 +32,13 @@ export type InicioDoWms = HomeInbox & {
    * há nada lido (decisão 2 do celular). Sem falta de conexão, `null`.
    */
   semConexao: { lidaEm: number | null } | null;
+  /** O armazém foi lido: sem ele, os números do dia não são afirmados (nem o zero). */
+  armazemLido: boolean;
+  /** Toda fonte que falhou já tinha sido lida: foi a releitura que falhou, e o aviso não fala (momento 7). */
+  falhaSoNaReleitura: boolean;
   relendo: boolean;
-  reler: () => void;
+  /** Relê todas as fontes, também a presa e a que falhou (o "Tentar de novo"); a promessa acaba com elas. */
+  reler: () => Promise<void>;
 };
 
 /**
@@ -49,14 +56,14 @@ export function useInicioDoWms(role: ProfileRole | null | undefined, ligado = tr
   const { code } = useActiveCustomer();
   const queryClient = useQueryClient();
   const agente = useMemo(() => clienteDoNucleo("wms", code), [code]);
-  const ops = useQuery({
+  const leituraDoArmazem = useQuery({
     queryKey: ["warehouse-ops"],
     queryFn: () => fetchJson<WarehouseOpsResponse>("/api/warehouse/ops"),
     enabled: seesWarehouse,
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
   });
-  const requests = useQuery({
+  const leituraDasSolicitacoes = useQuery({
     queryKey: ["customer-requests", "home"],
     queryFn: () => fetchJson<{ items?: HomeRequest[] }>("/api/customer-requests?limit=200"),
     enabled: seesRequests,
@@ -64,7 +71,7 @@ export function useInicioDoWms(role: ProfileRole | null | undefined, ligado = tr
     refetchOnWindowFocus: false,
   });
   // A mesma chave da tela Estoque › Alertas: a decisão lá atualiza o Início.
-  const alerts = useQuery({
+  const leituraDosAlertas = useQuery({
     queryKey: ["stock-alerts"],
     queryFn: () => fetchJson<{ items?: Record<string, unknown>[] }>("/api/stock-alerts"),
     enabled: seesAlerts,
@@ -72,20 +79,27 @@ export function useInicioDoWms(role: ProfileRole | null | undefined, ligado = tr
     refetchOnWindowFocus: false,
   });
   // As mesmas chaves do Conhecimento e do painel do agente: a decisão lá atualiza o Início.
-  const notes = useQuery({
+  const leituraDasAnotacoes = useQuery({
     queryKey: chaveNoAlvo(agente, CHAVE_DAS_ANOTACOES),
     queryFn: () => agente.anotacoes.listar(),
     enabled: decidesAgent,
     refetchInterval: 120_000,
     refetchOnWindowFocus: false,
   });
-  const playbooks = useQuery({
+  const leituraDosPlaybooks = useQuery({
     queryKey: chaveNoAlvo(agente, playbooksKey),
     queryFn: () => agente.playbooks.listar(),
     enabled: decidesAgent,
     refetchInterval: 120_000,
     refetchOnWindowFocus: false,
   });
+  // A fonte que falhou sem nada lido fica na falha enquanto é relida (o "Tentar de novo" e o intervalo de cada uma):
+  // o react-query 5 a voltaria a "carregando", e o aviso com o botão sairia da tela com o foco nele, a cada minuto.
+  const ops = useLeituraComFalha(leituraDoArmazem);
+  const requests = useLeituraComFalha(leituraDasSolicitacoes);
+  const alerts = useLeituraComFalha(leituraDosAlertas);
+  const notes = useLeituraComFalha(leituraDasAnotacoes);
+  const playbooks = useLeituraComFalha(leituraDosPlaybooks);
   const agentDecisions: HomeAgentDecisions | undefined = decidesAgent
     ? {
         notes: (notes.data?.notes ?? []).filter((nota) => nota.status === "pending").map((nota) => nota.text),
@@ -105,12 +119,24 @@ export function useInicioDoWms(role: ProfileRole | null | undefined, ligado = tr
   return {
     ...inbox,
     semConexao: semConexaoNaLeitura(...leiturasDaApi),
-    relendo: ops.isFetching || requests.isFetching || alerts.isFetching,
-    reler: () => {
-      void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-      void queryClient.invalidateQueries({ queryKey: ["customer-requests", "home"] });
-      void queryClient.invalidateQueries({ queryKey: ["stock-alerts"] });
-    },
+    armazemLido: seesWarehouse && ops.data !== undefined,
+    falhaSoNaReleitura: [
+      seesWarehouse ? ops : null,
+      seesRequests ? requests : null,
+      seesAlerts ? alerts : null,
+      decidesAgent ? notes : null,
+      decidesAgent ? playbooks : null,
+    ].every((leitura) => !leitura || !leitura.isError || leitura.data !== undefined),
+    relendo:
+      ops.isFetching || requests.isFetching || alerts.isFetching || (decidesAgent && (notes.isFetching || playbooks.isFetching)),
+    // Também as anotações e os playbooks do Agent Dute: a fonte que falhou é a que precisa ser relida.
+    reler: () =>
+      relerDoZero(queryClient, [
+        ["warehouse-ops"],
+        ["customer-requests", "home"],
+        ["stock-alerts"],
+        ...(decidesAgent ? [chaveNoAlvo(agente, CHAVE_DAS_ANOTACOES), chaveNoAlvo(agente, playbooksKey)] : []),
+      ]),
     carregando:
       (seesWarehouse && ops.isLoading) || (seesRequests && requests.isLoading) || (seesAlerts && alerts.isLoading) || (decidesAgent && (notes.isLoading || playbooks.isLoading)),
     falhas: [

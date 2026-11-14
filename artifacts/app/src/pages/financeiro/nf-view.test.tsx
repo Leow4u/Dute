@@ -1,11 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 import { Router } from "wouter";
 
 import { faturaDoFinanceiro } from "@/lib/financeiro/faturas";
 import { chaveDaRevisao, demonstrativoDaNf } from "@/lib/financeiro/nf-documento";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosDaTela } from "@/test/textos";
+import { textosVisiveis } from "@/test/botoes";
 
 import { NfView, type EstadoDaVia } from "./nf-view";
 
@@ -56,7 +57,7 @@ const PRINCIPAL = /<button[^>]*class="[^"]*bg-primary text-primary-foreground[^"
 
 describe("via comercial da NF", () => {
   it("a barra e o papel, na ordem, sem legenda", () => {
-    expect(textosDaTela(render())).toEqual([
+    expect(textosVisiveis(render())).toEqual([
       "Faturas",
       "Via comercial da NF 1234",
       "Imprimir",
@@ -101,15 +102,17 @@ describe("via comercial da NF", () => {
     const html = render();
     const principais = html.match(PRINCIPAL) ?? [];
     expect(principais).toHaveLength(1);
-    expect(textosDaTela(principais[0] ?? "")).toEqual(["Imprimir"]);
+    expect(textosVisiveis(principais[0] ?? "")).toEqual(["Imprimir"]);
     expect(html).toContain(`href="/financeiro/faturas?nf=${FATURA.id}"`);
     expect(html).toMatch(/<div class="no-print /);
     expect(html).toMatch(/<article aria-label="NF 1234" class="print-area /);
   });
 
   it("carregando, não encontrada e erro dizem o que é, e Imprimir fica desligado", () => {
-    expect(textosDaTela(render("carregando"))).toEqual(["Faturas", "Via comercial", "Imprimir", "Carregando..."]);
-    expect(textosDaTela(render("nao_encontrada"))).toEqual(["Faturas", "Via comercial", "Imprimir", "NF não encontrada"]);
+    // Lendo, a caixa da região (o rótulo aos 300 ms), sem o "Carregando..." de três pontos (parte 13g).
+    expect(textosVisiveis(render("carregando"))).toEqual(["Faturas", "Via comercial", "Imprimir"]);
+    expect(render("carregando")).toContain("data-carregando-na-regiao");
+    expect(textosVisiveis(render("nao_encontrada"))).toEqual(["Faturas", "Via comercial", "Imprimir", "NF não encontrada"]);
     expect(render("erro")).toMatch(/<p role="alert"[^>]*>Não foi possível carregar a NF\.<\/p>/);
     expect(render("carregando")).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?Imprimir/);
   });
@@ -117,5 +120,26 @@ describe("via comercial da NF", () => {
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
     expect(await violacoesDeAcessibilidade(render("carregando"))).toEqual([]);
+  });
+});
+
+/** Sem a NF lida, o título é o da via, sem o número (como antes da parte). */
+function semODocumento(rotulos: ReturnType<typeof rotulosDaFalta>) {
+  for (const nome of ["sem nada lido, sem conexão", "sem nada lido, reconectando", "erro do servidor"] as const) rotulos[nome].novos.unshift("Via comercial");
+  return rotulos;
+}
+
+/** Sem conexão (carregamento v2, parte 13l): o aviso da conexão, a faixa com a hora da NF lida e o erro do servidor. */
+describe("Financeiro › Via comercial da NF sem conexão", () => {
+  it("os estados da falta", async () => {
+    const documento = DOCUMENTO;
+    if (!documento) throw new Error("documento ilegível no teste");
+    expect(
+      await estadosDaFalta((leitura, situacao) => (
+        <Router ssrPath="/financeiro/faturas/nf">
+          <NfView estado={situacao} documento={situacao === "pronto" ? documento : null} voltar="/financeiro/faturas" onImprimir={() => undefined} leitura={leitura} />
+        </Router>
+      )),
+    ).toEqual(semODocumento(rotulosDaFalta({ mensagem: "Não foi possível carregar a NF.", objeto: "NF" })));
   });
 });

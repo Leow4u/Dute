@@ -151,7 +151,10 @@ async function esperar(condicao: () => boolean, oQue: string) {
 }
 
 function botao(texto: string) {
-  const achado = [...document.querySelectorAll("button")].find((elemento) => elemento.textContent?.trim() === texto);
+  // O texto inteiro, ou a camada atual do BotaoDeAcao (o confirmar dos diálogos, parte 13a).
+  const achado = [...document.querySelectorAll("button")].find(
+    (elemento) => elemento.textContent?.trim() === texto || elemento.querySelector(".botao-acao-camada[data-atual]")?.textContent?.trim() === texto,
+  );
   if (!achado) throw new Error(`Sem o botão ${texto}`);
   return achado as HTMLButtonElement;
 }
@@ -194,7 +197,9 @@ describe("a guarda da caixa na mão de quem guarda", () => {
     await montar(entrada("committing", "B-02"));
     await clicar("Não cabe aqui");
     expect(document.body.textContent).toContain("Não cabe em B-02");
-    expect(botao("Liberar B-02").disabled).toBe(true);
+    // Sem motivo, travado: aria-disabled, nunca disabled (parte 13a).
+    expect(botao("Liberar B-02").getAttribute("aria-disabled")).toBe("true");
+    expect(botao("Liberar B-02").disabled).toBe(false);
     await act(async () => {
       const campo = document.getElementById("nao-cabe-motivo") as HTMLInputElement;
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(campo, "Outra caixa ocupando a frente");
@@ -212,7 +217,9 @@ describe("a guarda da caixa na mão de quem guarda", () => {
 
   it("sem prateleira, a guarda pede a sugestão e confirma o destino, como a bancada", async () => {
     await montar(entrada("reviewed", ""));
-    expect(botao("Concluir guarda").disabled).toBe(true);
+    // Sem destino, o "Concluir guarda" espera com aria-disabled, nunca disabled (carregamento v2, parte 13c).
+    expect(botao("Concluir guarda").getAttribute("aria-disabled")).toBe("true");
+    expect(botao("Concluir guarda").disabled).toBe(false);
     await esperar(() => Boolean(document.body.textContent?.includes("Confirmar destino em B-03")), "a sugestão");
     expect(dados("sugerir")[0]).toEqual({ receipt_id: RECEIPT, customer_code: "BTG Pactual", box_code: "CX-000131" });
     await clicar("Confirmar destino em B-03");

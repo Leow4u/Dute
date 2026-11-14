@@ -70,7 +70,7 @@ export function FilterSheet({ count, onClear, children, className }: FilterSheet
         type="button"
         variant="outline"
         size="icon"
-        className={cn("relative h-11 w-11 shrink-0", count > 0 && "border-primary/25 bg-primary/10 text-primary", className)}
+        className={cn("relative h-11 w-11 shrink-0", count > 0 && "border-primary/25 bg-primary/10 text-primary-texto", className)}
         aria-label={count > 0 ? `Filtros, ${count} ${count === 1 ? "ativo" : "ativos"}` : "Filtros"}
         aria-expanded={open}
         onClick={() => setOpen(true)}

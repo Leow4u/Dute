@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 import type { Person } from "@/lib/pessoas";
-import { BotaoReenviar, MenuDaPessoa, type AcoesDasPessoas } from "./acoes";
+import { AndamentoNaLinha, BotaoReenviar, MenuDaPessoa, type AcoesDasPessoas } from "./acoes";
 import { NomeDaPessoa, SeloDoPerfil, SituacaoDaPessoa } from "./partes";
 
 /**
@@ -92,6 +92,7 @@ export function ListaDePessoas({
               <SituacaoDaPessoa person={person} />
             </div>
             <div className={cn("col-start-2 row-start-1 flex items-center justify-end gap-2", ACOES_LARGO[modo])}>
+              <AndamentoNaLinha acoes={acoes} person={person} />
               <BotaoReenviar acoes={acoes} person={person} className={REENVIAR_ESTREITO[modo]} />
               <MenuDaPessoa acoes={acoes} person={person} />
             </div>

@@ -228,6 +228,21 @@ describe("a folha da lista de separação", () => {
     expect(folhaDaLista({ numero: "PED-0002", paraQuando: "sem data", agora: new Date("2026-11-10T17:20:00.000Z"), grupos: [] }).paraQuando).toBe("");
   });
 
+  it("o destino e o prazo que não chegaram: os campos dizem, no papel, em vez do traço (parte 13m)", () => {
+    const folha = folhaDaLista({ numero: "PED-0002", solicitacaoNaoCarregada: true, agora: new Date("2026-11-10T17:20:00.000Z"), grupos: [] });
+    expect(folha).toMatchObject({ destino: "destino não carregado", paraQuando: "prazo não carregado" });
+  });
+
+  it("as caixas e a ordem das prateleiras que não chegaram: o papel diz, na coluna e no cabeçalho (revisão da parte 13m)", () => {
+    const agora = new Date("2026-11-10T17:20:00.000Z");
+    const folha = folhaDaLista({ numero: "PED-0002", caixasNaoCarregadas: true, ordemNaoCarregada: true, agora, grupos });
+    expect(folha).toMatchObject({ caixaQueNaoChegou: "caixa não carregada", ordemDasPrateleiras: "não carregada" });
+    // Com as duas lidas, nada muda: a linha sem caixa fica em branco, e o cabeçalho não ganha campo.
+    const lida = folhaDaLista({ numero: "PED-0002", agora, grupos });
+    expect(lida).not.toHaveProperty("caixaQueNaoChegou");
+    expect(lida).not.toHaveProperty("ordemDasPrateleiras");
+  });
+
   it("a hora da impressão sai com dois dígitos e sem vírgula", () => {
     expect(impressaEmTexto(new Date("2026-01-05T12:07:00.000Z"))).toBe("05/01/2026 09:07");
     expect(impressaEmTexto(new Date("2026-01-05T03:00:00.000Z"))).toBe("05/01/2026 00:00");

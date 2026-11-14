@@ -29,9 +29,12 @@ describe("a nova anotação no Conhecimento", () => {
 
   it("o texto, quem o agente considera (só a equipe, de saída) e salvar, que espera o texto", async () => {
     const html = comAgente(nucleo, <NewNote escrever={nucleo.anotacoes.escrever!} />);
-    expect(textosDaTela(html)).toEqual(["Nova anotação", "Cliente e equipe", "Só equipe", "Salvar"]);
+    // As camadas do botão de ação (carregamento v2) ficam no DOM; só a atual fica na árvore de acessibilidade.
+    expect(textosDaTela(html)).toEqual(["Nova anotação", "Cliente e equipe", "Só equipe", "Salvar", "Salvando…", "Salva", "Não salva", "Conferir"]);
     expect(html).toMatch(/aria-pressed="true"[^>]*>Só equipe/);
-    expect(html).toMatch(/<button type="submit" disabled=""/);
+    // Sem o texto, o Salvar fica travado sem sair da ordem do foco: aria-disabled, nunca disabled.
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*aria-disabled="true"/);
+    expect(html).not.toMatch(/<button[^>]*disabled=""/);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 

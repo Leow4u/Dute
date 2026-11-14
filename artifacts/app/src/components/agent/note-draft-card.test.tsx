@@ -32,7 +32,7 @@ describe("o cartão da anotação", () => {
 
   it("o texto e uma ação, sem legenda e acessível", async () => {
     const html = cartao(nucleo);
-    expect(textosDaTela(html)).toEqual(["Anotação para a coordenação", "Entregas na Paulista só pela manhã", "Sugerir anotação"]);
+    expect(textosDaTela(html)).toEqual(["Anotação para a coordenação", "Entregas na Paulista só pela manhã", "Sugerir anotação", "Enviando…", "Conferir"]);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 

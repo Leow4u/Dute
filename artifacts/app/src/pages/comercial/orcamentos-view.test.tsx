@@ -6,8 +6,10 @@ import { contratoDoDocumento, type ContratoResumo } from "@/lib/comercial/client
 import { acoesDepoisDoEnvio } from "@/lib/comercial/depois-do-envio";
 import { itemDaFila, type ItemDaFila } from "@/lib/comercial/orcamentos";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { textosDaTela } from "@/test/textos";
 
 import { FilaView, LinhaDaFila, type ContextoDaFila, type FilaViewProps } from "./orcamentos-view";
+import { semCamadasEscondidas } from "@/test/botoes";
 
 /**
  * Fila de orçamentos (docs/mockups/ComFila.dc.html), só a apresentação: sem
@@ -173,7 +175,7 @@ function render(overrides: Partial<FilaViewProps> = {}) {
 
 /** Textos visíveis, na ordem: o que a pessoa lê na tela. */
 function texts(html: string) {
-  return html
+  return semCamadasEscondidas(html)
     .replace(/<span class="sr-only">[^<]*<\/span>/g, "")
     .split(/<[^>]+>/)
     .map((text) => text.replace(/&amp;/g, "&").replace(/ /g, " ").trim())
@@ -357,10 +359,13 @@ describe("fila de orçamentos", () => {
       envio: { acao: "send", ocupado: false, erro: null, onEnviar: (orc, acao) => enviados.push([orc.numero, acao]) },
     });
     expect(texts(html).slice(-3)).toEqual(["Enviar ao cliente", "Abrir orçamento", "Prévia do PDF"]);
+    // O envio é o BotaoDeAcao: o gerúndio e o "Conferir" são camadas escondidas do botão, e entram na trava contra legenda (parte 13g).
+    expect(textosDaTela(html).filter((texto) => !texts(html).includes(texto))).toEqual(expect.arrayContaining(["Enviando ao cliente…", "Conferir"]));
     expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
-    // Enviando: o botão não responde; a recusa do servidor aparece em alerta na ficha.
+    // Enviando: o botão não responde (aria-disabled, com a trava no código, nunca disabled); a recusa do servidor aparece em alerta na ficha.
     const enviando = render({ selecionado: aprovado, itens: [aprovado], envio: { acao: "send", ocupado: true, erro: null, onEnviar: noop } });
-    expect(enviando).toMatch(/<button[^>]*disabled=""[^>]*>(?:<svg[^>]*>.*?<\/svg>)?Enviar ao cliente<\/button>/);
+    expect(enviando).toMatch(/<button[^>]*data-estado="andamento"[^>]*aria-disabled="true"/);
+    expect(enviando).not.toMatch(/<button[^>]*disabled=""[^>]*>[^]*?Enviar ao cliente/);
     const recusado = render({
       selecionado: aprovado,
       itens: [aprovado],
@@ -382,10 +387,15 @@ describe("fila de orçamentos", () => {
   it("vazio, carregando e erro não se confundem", () => {
     expect(texts(render({ itens: [], selecionado: null })).slice(CABECALHO.length)).toEqual(["Nenhum orçamento"]);
     expect(texts(render({ busca: "zzz", selecionado: null })).slice(CABECALHO.length)).toEqual(["Nenhum orçamento"]);
-    expect(texts(render({ estado: "carregando", itens: [], selecionado: null })).slice(CABECALHO.length)).toEqual(["Carregando..."]);
-    expect(texts(render({ estado: "erro", itens: [], selecionado: null })).slice(CABECALHO.length)).toEqual([
-      "Não foi possível carregar os orçamentos.",
-    ]);
+    // Lendo: nada escrito antes de 300 ms (a caixa entra com o relógio), e as contagens são o bloco, nunca o zero (parte 13g).
+    const carregando = render({ estado: "carregando", itens: [], selecionado: null });
+    expect(texts(carregando)).toEqual(CABECALHO.filter((texto) => !/^\d+$/.test(texto)));
+    expect(carregando).toContain("data-carregando-na-regiao");
+    expect(carregando.match(/data-esqueleto=""[^>]*data-forma="contagem"/g)?.length).toBe(CABECALHO.filter((texto) => /^\d+$/.test(texto)).length);
+    // Na falha, a frase e o "Tentar de novo"; as contagens, "—".
+    const erro = texts(render({ estado: "erro", itens: [], selecionado: null }));
+    expect(erro.slice(-2)).toEqual(["Não foi possível carregar os orçamentos.", "Tentar de novo"]);
+    expect(erro).not.toContain("0");
   });
 
   it("a busca filtra a lista e as contagens continuam as da fila inteira", () => {

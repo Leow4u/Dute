@@ -21,6 +21,10 @@ vi.mock("@/lib/comercial/api", async (original) => ({
   },
 }));
 vi.mock("@/lib/comercial/leitura", () => ({
+  // A nova tentativa das leituras ao vivo (carregamento v2, parte 13g): sem efeito aqui.
+  novaTentativaDe: () => ({ tentando: false, tentar: () => undefined }),
+  juntarTentativas: () => ({ tentando: false, tentar: () => undefined }),
+  SEM_NOVA_TENTATIVA: { tentando: false, tentar: () => undefined },
   useLeitura: (chave: string | null, _consulta: unknown, mapear: (id: string, dados: Registro) => unknown) => {
     const fonte = chave === "contracts"
       ? [{ id: "ct_itau", dados: { customer_code: "ITAU", nome: "Serviços Itaú", vigente_de: "2026-01-01", status: "vigente", edicao: 1 } }]
@@ -33,6 +37,7 @@ vi.mock("@/lib/comercial/leitura", () => ({
 }));
 
 import ComercialContratosPage from "./contratos";
+import { depoisDoToqueDuplo, rotuloDoBotao } from "@/test/botoes";
 
 let raiz: Root;
 let container: HTMLDivElement;
@@ -53,7 +58,7 @@ afterEach(() => {
 });
 
 async function clicar(rotulo: string) {
-  const botao = [...document.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent?.trim() === rotulo);
+  const botao = [...document.querySelectorAll<HTMLButtonElement>("button")].find((item) => rotuloDoBotao(item) === rotulo);
   expect(botao, rotulo).toBeDefined();
   await act(async () => botao!.click());
 }
@@ -83,7 +88,10 @@ describe("tabela criada na ficha do contrato", () => {
     campo("tabela-item-1-unidade", "UN");
     campo("tabela-item-1-preco", "12,50");
     estado.falhar = false;
+    // O Salvar é o BotaoDeAcao, que ignora o segundo toque dentro de 1 s (o toque duplo): a nova tentativa vem depois.
+    const voltarORelogio = depoisDoToqueDuplo();
     await clicar("Salvar tabela");
+    voltarORelogio();
     expect(estado.chamadas[0]).toMatchObject({ nome: "saveContractPriceTable", dados: { contrato_id: "ct_itau", itens: [{ codigo: "3.05", descricao: "Armazenagem", unidade: "UN", preco: "12.50" }] } });
     expect(container.querySelector('[aria-label="Tabelas de preço"]')?.textContent).toContain("Armazenagem 2026");
     expect(window.location.pathname).toBe("/faturamento/contratos");
@@ -111,7 +119,10 @@ describe("tabela criada na ficha do contrato", () => {
       vigente_de: null, vigente_ate: null, itens: [{ codigo: "3.05", descricao: "Transporte de cadeira", unidade: "UN", preco: "12.3456" }],
     } });
     estado.falhar = false;
+    // O Salvar é o BotaoDeAcao, que ignora o segundo toque dentro de 1 s (o toque duplo): a nova tentativa vem depois.
+    const voltarORelogio = depoisDoToqueDuplo();
     await clicar("Salvar tabela");
+    voltarORelogio();
     expect(estado.chamadas).toHaveLength(2);
     expect(estado.chamadas[1]).toEqual(estado.chamadas[0]);
     expect(document.querySelector('[role="dialog"]')).toBeNull();

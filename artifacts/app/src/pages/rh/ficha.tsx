@@ -41,10 +41,13 @@ export default function RhFicha() {
   const [vinculo, setVinculo] = useState<FormularioDoVinculo | null>(null);
   const [arquivando, setArquivando] = useState<{ id: string; chave: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // Qual ação grava: só o botão dela diz o gerúndio (parte 13g).
+  const [emAndamento, setEmAndamento] = useState<string | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
 
-  async function gravar(acao: () => Promise<unknown>, depois: () => void = () => undefined) {
+  async function gravar(acao: () => Promise<unknown>, depois: () => void = () => undefined, qual: string | null = null) {
     setOcupado(true);
+    setEmAndamento(qual);
     setFalha(null);
     try {
       await acao();
@@ -59,6 +62,7 @@ export default function RhFicha() {
         queryClient.invalidateQueries({ queryKey: CHAVE_DO_PAINEL }),
       ]);
       setOcupado(false);
+      setEmAndamento(null);
     }
   }
 
@@ -78,7 +82,7 @@ export default function RhFicha() {
     editar: setFormulario,
     salvar: () => {
       if (!formulario || !colaboradorId) return;
-      void gravar(() => chamarRh("saveRhRecord", pedidoDoFormulario(formulario, colaboradorId)), () => setFormulario(null));
+      void gravar(() => chamarRh("saveRhRecord", pedidoDoFormulario(formulario, colaboradorId)), () => setFormulario(null), "salvar");
     },
     fechar: () => {
       setFalha(null);
@@ -96,6 +100,7 @@ export default function RhFicha() {
       void gravar(
         () => chamarRh("archiveRhRecord", { idempotency_key: arquivando.chave, id: registro.id, expected_edicao: registro.edicao }),
         () => setArquivando(null),
+        `arquivar:${registro.id}`,
       );
     },
     desistir: () => setArquivando(null),
@@ -116,7 +121,7 @@ export default function RhFicha() {
           content_type: arquivo.type,
           expected_edicao: registro.edicao,
         });
-      });
+      }, undefined, `anexar:${registro.id}`);
     },
     abrirArquivo: (registro: RegistroDoRh) => {
       // A aba abre no clique (o navegador bloqueia a que abre depois da espera) e recebe a URL quando ela chega.
@@ -142,7 +147,7 @@ export default function RhFicha() {
     editarVinculo: setVinculo,
     salvarVinculo: () => {
       if (!vinculo || !colaboradorId) return;
-      void gravar(() => chamarRh("saveRhVinculo", pedidoDoVinculo(vinculo, colaboradorId)), () => setVinculo(null));
+      void gravar(() => chamarRh("saveRhVinculo", pedidoDoVinculo(vinculo, colaboradorId)), () => setVinculo(null), "vinculo");
     },
     fecharVinculo: () => {
       setFalha(null);
@@ -150,7 +155,8 @@ export default function RhFicha() {
     },
   };
 
-  const estado: EstadoDaFicha = !colaboradorId || leitura.erro ? "erro" : leitura.ficha ? "pronto" : "carregando";
+  // A ficha lida fica na tela quando a releitura de depois de gravar falha: só o aviso entra em cima dela.
+  const estado: EstadoDaFicha = !colaboradorId ? "erro" : leitura.ficha ? "pronto" : leitura.erro ? "erro" : "carregando";
   return (
     <FichaView
       estado={estado}
@@ -161,6 +167,9 @@ export default function RhFicha() {
       vinculo={vinculo}
       arquivando={arquivando?.id ?? null}
       ocupado={ocupado}
+      emAndamento={emAndamento}
+      leitura={colaboradorId ? leitura.releitura : undefined}
+      falhaNaReleitura={Boolean(colaboradorId && leitura.ficha && leitura.erro)}
       falha={falha}
       acoes={acoes}
     />

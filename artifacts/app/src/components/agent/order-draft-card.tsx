@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, ClipboardCheck, Loader2, Minus, Plus, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardCheck, Minus, Plus, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import {
   draftFromOrderForm,
   draftHref,
@@ -44,7 +45,7 @@ const sentFormat = new Intl.DateTimeFormat("pt-BR", {
 });
 
 export const field =
-  "w-full min-w-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15";
+  "w-full min-w-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm focus:outline-hidden focus:border-primary focus:ring-2 focus:ring-primary/15";
 
 function useAvailableBySku() {
   const overview = useClientOverview();
@@ -89,7 +90,7 @@ export function SentNotice({
         {at && !Number.isNaN(at.getTime()) ? <span className="text-xs text-muted-foreground">em {sentFormat.format(at)}</span> : null}
       </div>
       <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
-      <Link href={href} className="mt-1.5 inline-block text-sm font-medium text-primary hover:underline">
+      <Link href={href} className="mt-1.5 inline-block text-sm font-medium text-primary-texto hover:underline">
         {linkLabel} ›
       </Link>
     </section>
@@ -179,7 +180,7 @@ export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: O
                   value={line.quantidade}
                   onChange={(event) => setQuantity(index, Math.floor(Number(event.target.value.replace(/\D/g, "")) || 1))}
                   disabled={send.isPending}
-                  className="h-8 w-12 bg-card text-center tabular-nums outline-none"
+                  className="h-8 w-12 bg-card text-center tabular-nums focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foco"
                 />
                 <button
                   type="button"
@@ -284,21 +285,20 @@ export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: O
             saveDraft(next);
             navigate(draftHref(next));
           }}
-          className="text-sm font-medium text-primary hover:underline"
+          className="text-sm font-medium text-primary-texto hover:underline"
         >
           Abrir no Estoque para adicionar itens
         </button>
         <div className="flex items-center gap-3">
           {problem ? <span className="text-xs text-warning-soft-foreground">{problem}</span> : null}
-          <button
-            type="button"
-            disabled={Boolean(problem) || !messageId || send.isPending}
+          <BotaoDeAcao
+            tinta
+            estado={send.isPending ? "andamento" : "repouso"}
+            rotulo="Enviar pedido"
+            andamento="Enviando…"
+            bloqueado={Boolean(problem) || !messageId}
             onClick={() => send.mutate()}
-            className="inline-flex items-center gap-2 rounded-xl bg-foreground px-3.5 py-2 text-sm font-semibold text-background hover:bg-foreground/85 disabled:opacity-50"
-          >
-            {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {send.isPending ? "Enviando…" : "Enviar pedido"}
-          </button>
+          />
         </div>
       </div>
     </section>

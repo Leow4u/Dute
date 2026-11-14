@@ -19,6 +19,8 @@ import {
 import { PAPEL_ROTULO } from "@/lib/operacao/cadastro";
 import { MEIO_ROTULO, itensDaFicha, type EtapaDaOs, type FichaDaOs, type MeioDoEscritorio } from "@/lib/operacao/ficha-da-os";
 import { cn } from "@/lib/utils";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { DialogCancelar } from "@/components/ui/dialog";
 
 /**
  * "Registrar andamento" na ficha da OS (parte 3.7e; docs/mockups/OpOS.dc.html):
@@ -141,7 +143,7 @@ function Arquivos({ nomes, rotulo, multiplos = true, onEscolher, onTirar }: { no
         </span>
       ))}
       {multiplos || !nomes.length ? (
-        <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted focus-within:ring-2 focus-within:ring-ring/40">
+        <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco">
           <ImagePlus aria-hidden="true" className="size-4" />
           {rotulo}
           <input
@@ -210,7 +212,7 @@ function Conclusao({ ficha, form, onForm, anexos, prefixo }: { ficha: FichaDaOs;
             <label
               key={aceite}
               className={cn(
-                "inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm font-semibold focus-within:ring-2 focus-within:ring-ring/40",
+                "inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm font-semibold focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco",
                 form.aceite === aceite ? "border-foreground bg-muted text-foreground" : "border-border text-muted-foreground hover:text-foreground",
               )}
             >
@@ -299,7 +301,7 @@ export function AndamentoView({
               aria-pressed={form.tipo === tipo}
               onClick={() => onForm({ ...form, tipo })}
               className={cn(
-                "h-8 rounded px-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+                "h-8 rounded px-3 text-sm font-semibold focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
                 form.tipo === tipo ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -405,12 +407,13 @@ export function AndamentoView({
       ) : null}
 
       <div className="flex flex-wrap justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onCancelar} disabled={ocupado}>
-          Cancelar
-        </Button>
-        <Button type="button" onClick={onRegistrar} disabled={ocupado}>
-          {form.tipo === "conclusao" ? "Concluir OS" : "Registrar"}
-        </Button>
+        <DialogCancelar variant="ghost" ocupado={ocupado} onClick={onCancelar} />
+        <BotaoDeAcao
+          estado={ocupado ? "andamento" : "repouso"}
+          rotulo={form.tipo === "conclusao" ? "Concluir OS" : "Registrar"}
+          andamento={form.tipo === "conclusao" ? "Concluindo a OS…" : "Registrando…"}
+          onClick={onRegistrar}
+        />
       </div>
     </section>
   );

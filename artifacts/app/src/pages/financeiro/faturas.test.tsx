@@ -52,6 +52,7 @@ vi.mock("@/lib/financeiro/use-baixas", () => ({
 }));
 
 import { FinanceiroAReceber } from "./faturas";
+import { rotuloDoBotao } from "@/test/botoes";
 
 function nf(extra: Record<string, unknown> = {}) {
   return faturaDoFinanceiro(NF, {
@@ -105,7 +106,7 @@ async function digitar(id: string, valor: string) {
 }
 
 async function clicar(texto: string) {
-  const botao = [...container!.querySelectorAll("button")].find((item) => item.textContent?.trim() === texto);
+  const botao = [...container!.querySelectorAll("button")].find((item) => rotuloDoBotao(item) === texto);
   if (!botao) throw new Error(`Sem o botão ${texto}`);
   await act(async () => botao.click());
   await esperar();

@@ -1,7 +1,9 @@
-import { lazy, Suspense, useMemo } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Suspense, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { collection, getCountFromServer } from "firebase/firestore";
+import { useLocation } from "wouter";
 
+import { CarregandoTela } from "@/components/ui/carregando-tela";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { playbooksKey } from "@/lib/agent-playbooks";
@@ -9,11 +11,14 @@ import { routinesKey } from "@/lib/agent-routines";
 import { CHAVE_DAS_ANOTACOES, chaveNoAlvo, clienteDoNucleo } from "@/lib/agente/cliente";
 import { abreAgenteDoNucleo, revisaODoAgente } from "@/lib/agente/navegacao";
 import { useAppUser } from "@/lib/auth";
+import { useAcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { nomeDaTela } from "@/lib/document-title";
 import { firestore } from "@/lib/firebase";
 import type { HomeInboxItem } from "@/lib/home-inbox";
 import { itensDoInicioDoWms } from "@/lib/inicio-do-wms";
 import type { ItemDoInicio } from "@/lib/inicio-do-modulo";
 import { canAccessModule, getRouteProfileRoles, type ProfileRole } from "@/lib/modules";
+import { telaSobDemanda } from "@/lib/telas-no-aparelho";
 import { useInicioDoWms } from "@/lib/use-inicio-do-wms";
 
 import { PainelDoAgenteView, type AbaDoAgente, type DecisaoDaNota } from "./agente-painel-view";
@@ -27,7 +32,7 @@ import { PainelDoAgenteView, type AbaDoAgente, type DecisaoDaNota } from "./agen
  * fica o painel antigo (pages/ai-control.tsx).
  */
 
-const PainelAntigo = lazy(() => import("./ai-control"));
+const PainelAntigo = telaSobDemanda("pages/ai-control", () => import("./ai-control"));
 
 /** As linhas do "Precisa de você" que são do agente: o alerta de itens parados, as anotações e os playbooks para aprovar. */
 export const LINHAS_DO_AGENTE: readonly string[] = ["stock-alerts", "agent-notes", "agent-playbooks"];
@@ -72,14 +77,25 @@ function PainelDoAgente({ role }: { role: ProfileRole }) {
   const playbooks = useQuery({ queryKey: chaveNoAlvo(agente, playbooksKey), queryFn: () => agente.playbooks.listar(), enabled: decide });
   const rotinas = useQuery({ queryKey: chaveNoAlvo(agente, routinesKey), queryFn: () => agente.rotinas.listar() });
   const documentos = useQuery({ queryKey: CHAVE_DOS_DOCUMENTOS, queryFn: contarDocumentos, enabled: decide });
-  const decidir = useMutation({
-    mutationFn: ({ id, acao, text, visibility }: DecisaoDaNota) => agente.anotacoes.decidir(id, acao, { text, visibility }),
-    onSuccess: (_resultado, decisao) => {
-      toast({ title: decisao.acao === "approve" ? "Anotação aprovada: o Agent Dute passa a considerar" : "Anotação recusada" });
-      void queryClient.invalidateQueries({ queryKey: chaveDasNotas });
-    },
-    onError: (erro) => toast({ title: "Não foi possível salvar", description: erro instanceof Error ? erro.message : "", variant: "destructive" }),
-  });
+  // A decisão é por anotação (carregamento v2, momento 4): aprovar uma deixa as outras livres.
+  const acoes = useAcaoNaLinha<string>();
+  const decidir = ({ id, acao, text, visibility }: DecisaoDaNota) =>
+    void acoes.executar(
+      id,
+      acao,
+      () =>
+        agente.anotacoes.decidir(id, acao, { text, visibility }).then(
+          (resultado) => {
+            toast({ title: acao === "approve" ? "Anotação aprovada: o Agent Dute passa a considerar" : "Anotação recusada" });
+            return resultado;
+          },
+          (erro: unknown) => {
+            toast({ title: "Não foi possível salvar", description: erro instanceof Error ? erro.message : "", variant: "destructive" });
+            throw erro;
+          },
+        ),
+      { releitura: () => queryClient.invalidateQueries({ queryKey: chaveDasNotas }) },
+    );
 
   const lista = notas.data?.notes ?? [];
   return (
@@ -95,18 +111,20 @@ function PainelDoAgente({ role }: { role: ProfileRole }) {
         documentos: documentos.data ?? null,
         rotinas: rotinas.data ? rotinas.data.routines.length : null,
       }}
-      decidindo={decidir.isPending}
-      decidir={(decisao) => decidir.mutate(decisao)}
+      acoes={acoes}
+      decidir={decidir}
     />
   );
 }
 
 export default function PainelDoAgentePage() {
   const { user } = useAppUser();
+  const [location] = useLocation();
   const role = user?.publicMetadata.role;
   if (!role || !abreAgenteDoNucleo(role)) {
+    // O mesmo nome da espera da rota: a tela não troca de nome no meio da espera.
     return (
-      <Suspense fallback={null}>
+      <Suspense fallback={<CarregandoTela titulo={nomeDaTela(location)} />}>
         <PainelAntigo />
       </Suspense>
     );

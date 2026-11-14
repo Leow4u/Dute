@@ -124,6 +124,8 @@ describe("Registrar andamento", () => {
         /^(Além do planejado|Item|Item avulso|Quantidade|Quem pediu no local|Motivo|Tirar)$/,
         /^(Informado por|Ninguém da equipe|Carlos Silva · Líder|João Pereira · Motorista|Meio|Sem meio|Telefone|WhatsApp|Presencial)$/,
         /^(Cancelar|Registrar)$/,
+        // O gerúndio e o "Conferir" do BotaoDeAcao, nas camadas escondidas (parte 13g).
+        /^(Registrando…|Conferir)$/,
       ]),
     ).toEqual([]);
   });
@@ -136,6 +138,7 @@ describe("Registrar andamento", () => {
         /^(Aceite|Via assinada no papel|Sem aceite no local|Responsável do cliente|Cargo|Via assinada)$/,
         /^(Informado por|Ninguém da equipe|Carlos Silva · Líder|João Pereira · Motorista|Meio|Sem meio|Telefone|WhatsApp|Presencial)$/,
         /^(Cancelar|Concluir OS)$/,
+        /^(Concluindo a OS…|Conferir)$/,
       ]),
     ).toEqual([]);
   });

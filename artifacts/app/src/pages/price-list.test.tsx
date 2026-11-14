@@ -50,9 +50,10 @@ beforeEach(() => {
 });
 
 describe("a Tabela de preços antes de ler", () => {
-  it("carregando, diz que está carregando e não que a tabela está vazia", () => {
+  it("carregando, mostra as linhas-fantasma (a linha de estado diz \"Carregando serviços…\") e não que a tabela está vazia", () => {
     const html = tela();
-    expect(html).toContain("Carregando serviços...");
+    expect(html).not.toContain("Carregando serviços...");
+    expect(html).toContain("data-fantasmas");
     expect(html).not.toContain("Nenhum serviço na tabela");
   });
 
@@ -69,11 +70,13 @@ describe("a Tabela de preços antes de ler", () => {
     expect(tela()).toContain("Nenhum serviço na tabela");
   });
 
-  it("a cobrança só salva depois de a configuração chegar", () => {
-    expect(tela()).toMatch(/<button[^>]*disabled=""[^>]*>Salvar cobrança<\/button>/);
-    expect(tela()).toMatch(/<input[^>]*id="billing-rate"[^>]*disabled=""/);
+  it("a cobrança só aparece, e só salva, depois de a configuração chegar: antes, o esqueleto, nunca os campos vazios", () => {
+    // Carregamento v2, parte 13d: os campos vazios e apagados pareciam uma taxa vazia.
+    expect(tela()).not.toContain('id="billing-rate"');
+    expect(tela()).not.toContain("Salvar cobrança");
     estado.config = { data: CONFIG, isLoading: false, isError: false, isFetching: false, refetch: () => undefined };
-    expect(tela()).not.toMatch(/<button[^>]*disabled=""[^>]*>Salvar cobrança<\/button>/);
+    expect(tela()).toContain("Salvar cobrança");
+    expect(tela()).toMatch(/<input[^>]*id="billing-rate"/);
     expect(tela()).not.toMatch(/<input[^>]*id="billing-rate"[^>]*disabled=""/);
   });
 

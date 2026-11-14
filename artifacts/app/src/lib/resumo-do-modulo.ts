@@ -8,8 +8,12 @@ import { isNavRouteActive, type AppModule } from "./modules";
 
 type ItemContado = { tone: string; title: string; href: string };
 
-/** O número ao lado de um item do menu do módulo; vermelho só no alerta. */
-export type ContadorDoItem = { n: number; alerta?: boolean };
+/**
+ * O número ao lado de um item do menu do módulo; vermelho só no alerta. `lendo`:
+ * o "Precisa de você" ainda lê, e o item mostra o bloco no lugar do número
+ * (carregamento v2, a prancha da abertura), nunca um número pela metade.
+ */
+export type ContadorDoItem = { n: number; alerta?: boolean; lendo?: boolean };
 
 export type ResumoDoModulo = {
   /** Quantas linhas o "Precisa de você" do módulo tem. */
@@ -36,13 +40,17 @@ function caminho(href: string): string {
 /**
  * Contador de cada item do menu do módulo: o Início conta todas as linhas;
  * cada outra tela conta as linhas cuja ação leva a ela. Item sem linha fica
- * sem contador.
+ * sem contador. Enquanto o "Precisa de você" lê (`carregando`), o Início
+ * mostra o bloco, e nenhum número aparece pela metade (uma fonte lida e a
+ * outra não: "Início 1" e, no quadro seguinte, "Início 2").
  */
 export function contadoresDoMenu(
   itens: readonly ItemContado[],
   menu: readonly AppModule[],
   inicioId: string,
+  carregando = false,
 ): Record<string, ContadorDoItem> {
+  if (carregando) return { [inicioId]: { n: 0, lendo: true } };
   const contadores: Record<string, ContadorDoItem> = {};
   const somar = (id: string, item: ItemContado) => {
     const atual = contadores[id] ?? { n: 0, alerta: false };

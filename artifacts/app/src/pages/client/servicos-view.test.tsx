@@ -203,8 +203,14 @@ describe("Minhas OS", () => {
     const semFaturas = textosDaTela(render({ aPagarCents: null, cobrancas: new Map(), aberta: null }));
     expect(semFaturas).not.toContain("A pagar");
     expect(semFaturas.some((texto) => texto.startsWith("NF "))).toBe(false);
-    expect(textosDaTela(render({ estado: "carregando", os: [], aberta: null }))).toEqual(["Minhas OS", "Carregando..."]);
+    // Lendo, nada antes dos 300 ms (a caixa e "Carregando as OS…" entram depois; minhas-os-carregando.test.tsx).
+    expect(textosDaTela(render({ estado: "carregando", os: [], aberta: null }))).toEqual(["Minhas OS"]);
     expect(textosDaTela(render({ estado: "erro", os: [], aberta: null }))).toEqual(["Minhas OS", "Não foi possível carregar as OS."]);
+    expect(textosDaTela(render({ estado: "erro", os: [], aberta: null, leitura: { tentando: false, onTentar: () => undefined } }))).toEqual([
+      "Minhas OS",
+      "Não foi possível carregar as OS.",
+      "Tentar de novo",
+    ]);
     expect(textosDaTela(render({ os: [], numeros: { emAndamento: 0, agendadas: 0, concluidas: 0 }, aberta: null }))).toContain("Nenhuma OS ainda");
     expect(textosDaTela(render({ busca: "nada assim", aberta: null }))).toContain("Nenhuma OS encontrada");
     expect(textosDaTela(render({ busca: "paulista", aberta: null })).filter((texto) => texto.startsWith("OS "))).toHaveLength(3);
@@ -218,6 +224,8 @@ describe("Minhas OS", () => {
 
 describe("Solicitar OS (parte 4.4b)", () => {
   const principais = (html: string) => (html.match(/<button[^>]*class="[^"]*bg-primary text-primary-foreground[^"]*"[^>]*>[\s\S]*?<\/button>/g) ?? []).map((botao) => textosDaTela(botao).join(" "));
+  /** Do botão de ação, só a camada do repouso (a primeira): as outras ficam escondidas. */
+  const camadaNaTela = (texto: string) => texto.split(" Enviando a solicitação…")[0];
 
   it("com a Operação liberada, Solicitar OS é a única ação principal; sem ela, não aparece", () => {
     expect(principais(render({ pedido: pedido({ aberto: false }) }))).toEqual(["Solicitar OS"]);
@@ -240,9 +248,12 @@ describe("Solicitar OS (parte 4.4b)", () => {
       "Destino",
       "O que será feito",
       "Anexar nota fiscal ou documento",
+      // As camadas do botão de ação entram na lista (parte 13f).
       "Enviar solicitação",
+      "Enviando a solicitação…",
+      "Conferir",
     ]);
-    expect(principais(html)).toEqual(["Enviar solicitação"]);
+    expect(principais(html).map(camadaNaTela)).toEqual(["Enviar solicitação"]);
     // O painel da OS aberta dá lugar ao formulário.
     expect(html).not.toContain('aria-label="OS 10045-01"');
     expect(html).toContain('min="2026-10-23"');
@@ -262,9 +273,10 @@ describe("Solicitar OS (parte 4.4b)", () => {
     expect(html).toMatch(/<input[^>]*aria-invalid="true"[^>]*aria-describedby="solicitar-origem-problema"[^>]*id="solicitar-origem"|<input[^>]*id="solicitar-origem"[^>]*aria-invalid="true"/);
     expect(html).toContain('aria-label="Tirar NF 4498.pdf"');
     expect(html).toMatch(/<p role="alert"[^>]*>A Operação não está no contrato do seu acesso\.<\/p>/);
+    // Enviando, o botão de ação nunca fica disabled; o gerúndio entra aos 300 ms (minhas-os-carregando.test.tsx).
     const enviando = render({ pedido: pedido({ enviando: true }) });
-    expect(principais(enviando)).toEqual(["Enviando..."]);
-    expect(enviando).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
+    expect(enviando).not.toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
+    expect(enviando).toMatch(/<button[^>]*type="submit"[^>]*aria-disabled="true"/);
     const cheio = Array.from({ length: 3 }, (_, indice) => ({ arquivo, nome: `an_000000000000000${indice}.pdf`, rotulo: `Doc ${indice}` }));
     expect(textosDaTela(render({ pedido: pedido({}, { anexos: cheio }) }))).not.toContain("Anexar nota fiscal ou documento");
   });
@@ -287,7 +299,9 @@ describe("Solicitar OS (parte 4.4b)", () => {
       "Fora da área atendida",
       "Não atendida",
     ]);
-    expect(secao).toMatch(/<p role="status"[^>]*>Solicitação enviada<\/p>/);
+    // À vista, sem região viva solta: o Anunciador diz (carregamento v2, seção 7).
+    expect(secao).toMatch(/<p [^>]*>Solicitação enviada<\/p>/);
+    expect(secao).not.toContain('role="status"');
     expect(textosDaTela(render({ solicitacoes: [], aberta: null }))).not.toContain("Solicitações");
   });
 

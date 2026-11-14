@@ -7,7 +7,7 @@ import { escopoComSaldo } from "@/lib/operacao/demandas";
 import { fichaDaLeitura, servicosEmTexto } from "@/lib/operacao/ficha-da-os";
 import { clienteDaLeitura, hojeIso, nomesPorCodigo, osDaLeitura } from "@/lib/operacao/fila";
 import { demandaDoHoje } from "@/lib/operacao/hoje";
-import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { novaTentativaDe, useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { ROTA_REVISAO, osDaBusca } from "@/lib/operacao/navegacao";
 import { linhasParaRevisar, osDaVezNaRevisao, paraRevisar, pedidoDaRevisao, problemasDaRevisao, revisaoInicial, type FormularioDaRevisao } from "@/lib/operacao/revisao";
 import { useUrlsDasFotos } from "@/lib/operacao/use-urls-das-fotos";
@@ -84,6 +84,7 @@ export default function PaginaRevisao() {
   return (
     <RevisaoView
       estado={estado}
+      leitura={novaTentativaDe([emRevisao])}
       cartoes={cartoes}
       selecionada={numero}
       os={ficha ? { ficha, cliente: nomes[ficha.customerCode] || ficha.clienteNome || ficha.customerCode, linhas, direta, urls, hoje: hojeIso() } : null}

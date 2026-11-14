@@ -184,3 +184,30 @@ describe("as linhas da separação na ficha (padrão do nome, 06/11/2026)", () =
     expect(markup).not.toContain("BTG-000125");
   });
 });
+
+describe("o Avançar enquanto a tarefa avança (carregamento v2, a revisão da parte 10 e a parte 13i)", () => {
+  // O relógio (nada antes de 300 ms, a caixa e "Avançando…" aos 300 ms, o mínimo e a demora) está em task-detail.avancar.test.tsx.
+  it("ocupado, não desabilitado: o BotaoDeAcao em andamento, aria-disabled e afundado em 0 ms, com Avançando… na camada da espera", () => {
+    const queue = normalizeQueues({ putaway: { key: "putaway", name: "Guarda", tasks: [guardTask] } }).find((entry) => entry.key === "putaway")!;
+    const markup = renderToStaticMarkup(
+      <QueryClientProvider client={new QueryClient()}>
+        <TaskDetailPanel
+          entry={{ task: queue.tasks[0]!, queue }}
+          alerts={[]}
+          lineConfirmations={{}}
+          onLineConfirmationChange={() => undefined}
+          onAdvance={() => undefined}
+          onOpenException={() => undefined}
+          advancingTaskId={guardTask.id}
+        />
+      </QueryClientProvider>,
+    );
+    const botao = markup.match(/<button[^>]*>(?:(?!<\/button>).)*Avançando(?:(?!<\/button>).)*<\/button>/)?.[0] ?? "";
+    expect(botao).toContain("Avançando…");
+    expect(botao).toContain('data-estado="andamento"');
+    expect(botao).toContain('aria-disabled="true"');
+    expect(botao).toContain("data-afundado");
+    expect(botao).not.toMatch(/<button[^>]* disabled=""/);
+    expect(botao).not.toContain("animate-spin");
+  });
+});
