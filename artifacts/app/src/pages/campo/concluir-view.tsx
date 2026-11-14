@@ -23,6 +23,9 @@ import type { NovoRegistro, RegistroNaFila } from "@/lib/campo/fila";
 import { ROTA_CAMPO, hrefDaOsNoCampo } from "@/lib/campo/navegacao";
 import { horaDe, type EtapaDaOs, type FichaDaOs } from "@/lib/operacao/ficha-da-os";
 import { cn } from "@/lib/utils";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
  * Campo › Concluir OS (parte 3.9b; docs/mockups/Campo2Concluir.dc.html): os
@@ -69,6 +72,7 @@ export function CampoConcluirView({
   agora,
   onConcluir,
   onFotos,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDaConclusao;
   numero: string;
@@ -80,6 +84,8 @@ export function CampoConcluirView({
   agora: () => Date;
   onConcluir: (novo: NovoRegistro) => void;
   onFotos: (arquivos: File[], extra: { etapa: EtapaDaOs }) => void;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   const id = useId();
   const [aceite, setAceite] = useState<AceiteNoCampo>("assinatura");
@@ -111,11 +117,9 @@ export function CampoConcluirView({
       <div className="flex flex-col gap-4">
         {voltar}
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Concluir OS {numero}</h1>
-        {estado === "carregando" ? <p className="text-sm text-muted-foreground">Carregando</p> : null}
+        {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a OS…" continuaARota onTentar={leitura.tentar} /> : null}
         {estado === "erro" ? (
-          <p role="alert" className="text-sm text-destructive">
-            Não foi possível carregar a OS.
-          </p>
+          <FalhaNaSecao mensagem="Não foi possível carregar a OS." tentando={leitura.tentando} onTentar={leitura.tentar} />
         ) : null}
         {estado === "nao_encontrada" ? <p className="text-sm text-muted-foreground">OS {numero} não encontrada</p> : null}
       </div>

@@ -4,7 +4,7 @@ import { useSearch } from "wouter";
 import { escopoComSaldo, etapaNaOperacao, demandaDaOperacao, osDaDemanda } from "@/lib/operacao/demandas";
 import { clienteDaLeitura, nomesPorCodigo, osDaLeitura } from "@/lib/operacao/fila";
 import { linhasComSaldo, prazoDaDemanda } from "@/lib/operacao/hoje";
-import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { novaTentativaDe, useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { demandaDaBusca } from "@/lib/operacao/navegacao";
 import { problemaParaAbrirVistoria } from "@/lib/operacao/vistoria";
 
@@ -71,6 +71,7 @@ export default function PaginaDemanda() {
   return (
     <DemandaView
       estado={estado}
+      leitura={novaTentativaDe([demanda, ordens])}
       numero={numero}
       demanda={ficha}
       cliente={ficha ? nomesPorCodigo(clientes.itens ?? [])[ficha.customerCode] || ficha.customerCode : ""}

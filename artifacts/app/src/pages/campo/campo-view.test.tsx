@@ -180,7 +180,9 @@ describe("OS em execução no celular", () => {
     const textos = textosDaTela(renderOs({ ficha: { ...FICHA, status: "em_revisao" } }));
     expect(textos).toContain("OS concluída");
     expect(textos).not.toContain("Tirar foto");
-    expect(textosDaTela(renderOs({ estado: "carregando", ficha: null }))).toContain("Carregando");
+    // Lendo: nada escrito antes de 300 ms; a região da espera (a caixa e o gerúndio) guarda o lugar (parte 13g).
+    expect(textosDaTela(renderOs({ estado: "carregando", ficha: null }))).not.toContain("Carregando");
+    expect(renderOs({ estado: "carregando", ficha: null })).toContain("data-carregando-na-regiao");
     expect(textosDaTela(renderOs({ estado: "nao_encontrada", ficha: null }))).toContain("OS 10211-01 não encontrada");
   });
 

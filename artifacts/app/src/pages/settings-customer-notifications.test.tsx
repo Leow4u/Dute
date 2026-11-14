@@ -265,7 +265,9 @@ describe("destinatários de avisos na página do cliente, em Configurações ›
     expect((document.getElementById("contato-nome") as HTMLInputElement).value).toBe("");
     expect((document.getElementById("contato-email") as HTMLInputElement).value).toBe("");
     await preencher("contato-nome", "Novo contato");
-    expect(botao("Salvar contato", dialogo())?.disabled).toBe(true);
+    // O diálogo do contato é o do Comercial (parte 13g): o Salvar sem e-mail espera com aria-disabled, sem o disabled que tira o foco.
+    expect(botao("Salvar contato", dialogo())?.getAttribute("aria-disabled")).toBe("true");
+    expect(botao("Salvar contato", dialogo())?.disabled).toBe(false);
     expect((document.getElementById("contato-email") as HTMLInputElement).required).toBe(true);
     await preencher("contato-email", "novo@cliente.example");
     expect(dialogo().querySelectorAll('[role="checkbox"]')).toHaveLength(2);
@@ -409,7 +411,7 @@ describe("destinatários de avisos na página do cliente, em Configurações ›
     expect(textosForaDaLista(dialogo().innerHTML, [
       `Editar ${CONTATO.nome} · ${CLIENTE.name}`, "Fechar", "Nome", "Empresa", "Papel", "—", "Gestor do cliente",
       "Gerenciadora", "Financeiro", "Outro", "E-mail", "Telefone", "Avisos por e-mail", "Itens parados",
-      "Produtos disponíveis em estoque", "Cancelar", "Salvar contato",
+      "Produtos disponíveis em estoque", "Cancelar", "Salvar contato", "Salvando o contato…", "Conferir",
     ])).toEqual([]);
     expect(await violacoesDeAcessibilidade(document.body.innerHTML)).toEqual([]);
     await tocar("Cancelar", dialogo());

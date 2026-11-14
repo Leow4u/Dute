@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
 import { BookOpen, Check, MapPin, Paperclip, Plus, RotateCcw, Send, TriangleAlert } from "lucide-react";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
 import { dataBr, type CadastroComercial, type Carga } from "@/lib/comercial/clientes";
 import { nomeDoCliente, nomesDosClientes, type Contrato } from "@/lib/comercial/contratos";
 import {
@@ -71,6 +75,13 @@ export type MedicoesViewProps = {
   tabelas: Carga<TabelaDaLinha>;
   /** Uma gravação em andamento: as ações esperam. */
   ocupado: boolean;
+  /**
+   * Qual ação grava ("abrir", "enviar", "reabrir", "aplicar:<linha>"): o botão
+   * dela diz o gerúndio, e os outros ficam travados sem sumir (parte 13g).
+   */
+  emAndamento?: string | null;
+  /** A nova tentativa das leituras (parte 13g). */
+  leitura?: NovaTentativa;
   /** A medição mudou enquanto a pessoa agia: a mensagem do servidor, com os dados já recarregados. */
   aviso: string | null;
   acoes: AcoesDasMedicoes;
@@ -230,12 +241,28 @@ function Cabecalho(props: MedicoesViewProps & { medicao: Medicao | null; cliente
   const status = medicao?.status ?? null;
   const permitidas = status ? acoesDaMedicao(status, linhas.length) : null;
   const nomesDaTabela = medicao ? nomesDasTabelas(linhas, tabelas) : [];
-  const principal = (rotulo: string, aoClicar: () => void, opcoes: { desabilitado?: boolean; icone?: ReactNode } = {}) => (
-    <Button type="button" onClick={aoClicar} disabled={ocupado || opcoes.desabilitado}>
-      {opcoes.icone}
-      {rotulo}
-    </Button>
-  );
+  const emAndamento = props.emAndamento ?? null;
+  // A ação principal: com `acao` (a que grava daqui), o gerúndio enquanto grava; sem ela (a que abre um diálogo), só abre.
+  const principal = (
+    rotulo: string,
+    aoClicar: () => void,
+    opcoes: { desabilitado?: boolean; icone?: ReactNode; acao?: string; andamento?: string } = {},
+  ) =>
+    opcoes.acao && opcoes.andamento ? (
+      <BotaoDeAcao
+        estado={emAndamento === opcoes.acao ? "andamento" : "repouso"}
+        bloqueado={Boolean(opcoes.desabilitado) || (ocupado && emAndamento !== opcoes.acao)}
+        icone={opcoes.icone}
+        rotulo={rotulo}
+        andamento={opcoes.andamento}
+        onClick={aoClicar}
+      />
+    ) : (
+      <Button type="button" onClick={aoClicar} disabled={ocupado || opcoes.desabilitado}>
+        {opcoes.icone}
+        {rotulo}
+      </Button>
+    );
   return (
     <section
       aria-label={`Medição ${cliente} ${rotuloDaCompetencia(competencia)}`}
@@ -255,7 +282,7 @@ function Cabecalho(props: MedicoesViewProps & { medicao: Medicao | null; cliente
               Exportar Diário de Bordo
             </Button>
           ) : null}
-          {status === "rascunho" ? principal("Enviar ao cliente", acoes.enviar, { desabilitado: !permitidas?.podeEnviar, icone: <Send aria-hidden="true" /> }) : null}
+          {status === "rascunho" ? principal("Enviar ao cliente", acoes.enviar, { desabilitado: !permitidas?.podeEnviar, icone: <Send aria-hidden="true" />, acao: "enviar", andamento: "Enviando ao cliente…" }) : null}
           {status === "enviada" ? (
             <>
               <Marcador>Enviada {dataHoraCurta(medicao?.enviada_em ?? null) ?? ""}</Marcador>
@@ -265,13 +292,13 @@ function Cabecalho(props: MedicoesViewProps & { medicao: Medicao | null; cliente
               {principal("Registrar aprovação", acoes.aprovar)}
             </>
           ) : null}
-          {status === "contestada" ? principal("Reabrir", acoes.reabrir, { icone: <RotateCcw aria-hidden="true" /> }) : null}
+          {status === "contestada" ? principal("Reabrir", acoes.reabrir, { icone: <RotateCcw aria-hidden="true" />, acao: "reabrir", andamento: "Reabrindo…" }) : null}
           {status === "aprovada" ? (
             <Marcador href={medicao?.aprovacao?.link && linkDoAnexo(medicao.aprovacao.link)}>
               Aprovada {dataHoraCurta(medicao?.aprovada_em ?? null) ?? ""}
             </Marcador>
           ) : null}
-          {status === null ? principal("Abrir medição", acoes.abrir) : null}
+          {status === null ? principal("Abrir medição", acoes.abrir, { acao: "abrir", andamento: "Abrindo a medição…" }) : null}
         </div>
       </div>
       <div className="flex flex-wrap gap-5">
@@ -291,7 +318,19 @@ function Cabecalho(props: MedicoesViewProps & { medicao: Medicao | null; cliente
 
 // --- Linhas -------------------------------------------------------------------------------------
 
-function LinhaDaTabela({ linha, editavel, ocupado, acoes }: { linha: LinhaDaMedicao; editavel: boolean; ocupado: boolean; acoes: AcoesDasMedicoes }) {
+function LinhaDaTabela({
+  linha,
+  editavel,
+  ocupado,
+  emAndamento,
+  acoes,
+}: {
+  linha: LinhaDaMedicao;
+  editavel: boolean;
+  ocupado: boolean;
+  emAndamento: string | null;
+  acoes: AcoesDasMedicoes;
+}) {
   const marcas = marcasDaLinha(linha);
   const itens = veiculoEAjudantes(linha);
   const aplicar = itemParaAplicar(linha);
@@ -335,9 +374,15 @@ function LinhaDaTabela({ linha, editavel, ocupado, acoes }: { linha: LinhaDaMedi
         ) : null}
         {editavel && aplicar?.lpu_item_id ? (
           <div className="mt-1.5 flex">
-            <Button type="button" variant="outline" size="sm" disabled={ocupado} onClick={() => acoes.aplicar(linha.id, aplicar.lpu_item_id as string)}>
-              {rotuloDoAplicar(linha)}
-            </Button>
+            <BotaoDeAcao
+              variant="outline"
+              size="sm"
+              estado={emAndamento === `aplicar:${linha.id}` ? "andamento" : "repouso"}
+              bloqueado={ocupado && emAndamento !== `aplicar:${linha.id}`}
+              rotulo={rotuloDoAplicar(linha)}
+              andamento="Aplicando a tarifa…"
+              onClick={() => acoes.aplicar(linha.id, aplicar.lpu_item_id as string)}
+            />
           </div>
         ) : null}
       </td>
@@ -366,7 +411,21 @@ function LinhaDaTabela({ linha, editavel, ocupado, acoes }: { linha: LinhaDaMedi
   );
 }
 
-function Linhas({ medicao, editavel, ocupado, acoes, nomesDaTabela }: { medicao: Medicao; editavel: boolean; ocupado: boolean; acoes: AcoesDasMedicoes; nomesDaTabela: string[] }) {
+function Linhas({
+  medicao,
+  editavel,
+  ocupado,
+  emAndamento,
+  acoes,
+  nomesDaTabela,
+}: {
+  medicao: Medicao;
+  editavel: boolean;
+  ocupado: boolean;
+  emAndamento: string | null;
+  acoes: AcoesDasMedicoes;
+  nomesDaTabela: string[];
+}) {
   const n = medicao.linhas.length;
   return (
     <section aria-label="Demandas do mês" className="flex min-w-0 flex-[2.4_1_36rem] flex-col gap-3 overflow-hidden rounded-lg border border-border bg-card">
@@ -397,7 +456,7 @@ function Linhas({ medicao, editavel, ocupado, acoes, nomesDaTabela }: { medicao:
             </thead>
             <tbody>
               {medicao.linhas.map((linha) => (
-                <LinhaDaTabela key={linha.id} linha={linha} editavel={editavel} ocupado={ocupado} acoes={acoes} />
+                <LinhaDaTabela key={linha.id} linha={linha} editavel={editavel} ocupado={ocupado} emAndamento={emAndamento} acoes={acoes} />
               ))}
             </tbody>
           </table>
@@ -530,7 +589,7 @@ function Corpo(props: MedicoesViewProps & { medicao: Medicao }) {
     <>
       <Contestacao medicao={medicao} />
       <div className="flex flex-wrap items-start gap-5">
-        <Linhas medicao={medicao} editavel={editavel} ocupado={ocupado} acoes={acoes} nomesDaTabela={nomesDasTabelas(medicao.linhas, tabelas)} />
+        <Linhas medicao={medicao} editavel={editavel} ocupado={ocupado} emAndamento={props.emAndamento ?? null} acoes={acoes} nomesDaTabela={nomesDasTabelas(medicao.linhas, tabelas)} />
         <div className="flex min-w-0 flex-[1_1_20rem] flex-col gap-5">
           <Resumo medicao={medicao} />
           <Anexos medicao={medicao} editavel={editavel} ocupado={ocupado} acoes={acoes} />
@@ -545,8 +604,10 @@ export function MedicoesView(props: MedicoesViewProps) {
   const { estado, contratos, contrato, clientes, medicao, aviso, telas } = props;
   const cliente = contrato ? nomeDoCliente(nomesDosClientes(clientes), contrato.dados.customer_code) : "";
   let conteudo: ReactNode;
-  if (estado === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
-  else if (estado === "erro") conteudo = <Vazio>Não foi possível carregar os contratos.</Vazio>;
+  const leitura = props.leitura ?? SEM_NOVA_TENTATIVA;
+  if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando os contratos…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
+  else if (estado === "erro")
+    conteudo = <FalhaNaSecao mensagem="Não foi possível carregar os contratos." tentando={leitura.tentando} onTentar={leitura.tentar} className="px-5 py-7" />;
   else if (contratos.length === 0 || !contrato) conteudo = <Vazio>Nenhum contrato cobra por medição mensal</Vazio>;
   else {
     conteudo = (
@@ -558,8 +619,12 @@ export function MedicoesView(props: MedicoesViewProps) {
             {aviso}
           </div>
         ) : null}
-        {medicao === "carregando" ? <Vazio>Carregando...</Vazio> : null}
-        {medicao === "erro" ? <Vazio>Não foi possível carregar a medição.</Vazio> : null}
+        {medicao === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a medição…" className="px-5 py-7" /> : null}
+        {medicao === "erro" ? (
+          <p role="alert" className="px-5 py-7 text-center text-sm font-bold text-destructive">
+            Não foi possível carregar a medição.
+          </p>
+        ) : null}
         {medicao === null || (typeof medicao === "object" && medicao !== null) ? (
           <>
             <Cabecalho {...props} medicao={medicao} cliente={cliente} />

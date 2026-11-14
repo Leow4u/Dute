@@ -22,6 +22,9 @@ import { TIPOS_DA_DEMANDA, TIPO_ROTULO, prazoDaDemanda, type TipoDaDemanda } fro
 import { ROTA_HOJE, hrefDaDemanda } from "@/lib/operacao/navegacao";
 import { pedidoEmTexto, type SolicitacaoDaOperacao } from "@/lib/operacao/solicitacoes";
 import { cn } from "@/lib/utils";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { DialogCancelar } from "@/components/ui/dialog";
+import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
 
 /**
  * Operação › Nova demanda direta (docs/plataforma/fase-3-operacao.md, parte
@@ -113,6 +116,8 @@ function LinhaDoItem({
 
 function PainelDoPortal({ painel }: { painel: PainelDaSolicitacao }) {
   const { solicitacao, recusa } = painel;
+  // A solicitação resolvida aqui (Recusada): o Anunciador diz, sem região viva solta.
+  useAnunciarAoMudar(painel.resolvida);
   const linhas: Array<[string, ReactNode]> = [
     ["Cliente", solicitacao.cliente],
     ["Contato", [solicitacao.contato.nome, solicitacao.contato.email].filter(Boolean).join(" · ") || "—"],
@@ -156,7 +161,7 @@ function PainelDoPortal({ painel }: { painel: PainelDaSolicitacao }) {
         ) : null}
       </dl>
       {painel.resolvida ? (
-        <p role="status" className="text-sm font-semibold text-foreground">
+        <p className="text-sm font-semibold text-foreground">
           {solicitacao.demanda ? <Link href={hrefDaDemanda(solicitacao.demanda)} className="underline underline-offset-4">{painel.resolvida}</Link> : painel.resolvida}
         </p>
       ) : recusa.aberta ? (
@@ -181,12 +186,16 @@ function PainelDoPortal({ painel }: { painel: PainelDaSolicitacao }) {
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="destructive" disabled={recusa.ocupado} onClick={painel.onConfirmarRecusa}>
-              Recusar solicitação
-            </Button>
-            <Button type="button" variant="ghost" onClick={painel.onVoltar}>
+            <BotaoDeAcao
+              variant="destructive"
+              estado={recusa.ocupado ? "andamento" : "repouso"}
+              rotulo="Recusar solicitação"
+              andamento="Recusando a solicitação…"
+              onClick={painel.onConfirmarRecusa}
+            />
+            <DialogCancelar variant="ghost" ocupado={recusa.ocupado} onClick={painel.onVoltar}>
               Voltar
-            </Button>
+            </DialogCancelar>
           </div>
         </div>
       ) : (
@@ -257,9 +266,7 @@ function Resumo({
           ))}
         </ul>
       ) : null}
-      <Button type="submit" form="nova-demanda" disabled={ocupado} className="w-full">
-        Abrir demanda
-      </Button>
+      <BotaoDeAcao type="submit" form="nova-demanda" estado={ocupado ? "andamento" : "repouso"} rotulo="Abrir demanda" andamento="Abrindo a demanda…" className="w-full" />
       <Button asChild variant="ghost" className="w-full">
         <Link href={ROTA_HOJE}>Cancelar</Link>
       </Button>

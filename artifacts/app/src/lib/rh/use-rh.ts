@@ -4,6 +4,7 @@ import { relerDoZero } from "../carregando/reler-do-zero";
 import { useLeituraComFalha } from "../carregando/use-leitura-com-falha";
 
 import type { ItemDoInicio } from "../inicio-do-modulo";
+import type { NovaTentativa } from "../operacao/leitura";
 import type { ProfileRole } from "../modules";
 import { chamarRh } from "./api";
 import { exportacoesLidas, type ExportacaoNaLista } from "./exportacao";
@@ -76,11 +77,18 @@ export function useInicioDoRh(role: ProfileRole | null | undefined, ligado = tru
   return { ...leitura, itens: leitura.painel && !leitura.falhas.length ? itensDoInicioDoRh(leitura.painel.vencimentos) : [] };
 }
 
-export type FichaNaTela = { ficha: FichaDoRh | undefined; carregando: boolean; erro: string | null };
+export type FichaNaTela = {
+  ficha: FichaDoRh | undefined;
+  carregando: boolean;
+  erro: string | null;
+  /** A nova tentativa (parte 13g): relê do zero, e a falha fica na tela até a resposta. */
+  releitura?: NovaTentativa;
+};
 
 export function useFichaDoRh(role: ProfileRole | null | undefined, colaboradorId: string | null): FichaNaTela {
   const abre = abreRh(role) && Boolean(colaboradorId);
-  const leitura = useQuery({
+  const queryClient = useQueryClient();
+  const consulta = useQuery({
     queryKey: chaveDaFicha(colaboradorId ?? ""),
     queryFn: async () => {
       const ficha = fichaLida(await chamarRh("getRhFicha", { colaborador_id: colaboradorId }));
@@ -92,18 +100,32 @@ export function useFichaDoRh(role: ProfileRole | null | undefined, colaboradorId
     refetchOnWindowFocus: false,
     retry: 1,
   });
+  // A ficha que falhou fica na falha enquanto é relida: o aviso e o botão não saem da tela.
+  const leitura = useLeituraComFalha(consulta);
   if (!abre) return { ficha: undefined, carregando: false, erro: null };
-  return { ficha: leitura.data, carregando: leitura.isPending, erro: leitura.isError ? (leitura.error as Error).message : null };
+  return {
+    ficha: leitura.data,
+    carregando: leitura.isPending && !leitura.isError,
+    erro: leitura.isError ? (leitura.error as Error).message : null,
+    releitura: { tentando: leitura.isError && leitura.isFetching, tentar: () => void relerDoZero(queryClient, [chaveDaFicha(colaboradorId ?? "")]) },
+  };
 }
 
 export const CHAVE_DAS_EXPORTACOES = ["rh", "exportacoes"] as const;
 
-export type ExportacoesNaTela = { exportacoes: ExportacaoNaLista[] | undefined; carregando: boolean; erro: string | null };
+export type ExportacoesNaTela = {
+  exportacoes: ExportacaoNaLista[] | undefined;
+  carregando: boolean;
+  erro: string | null;
+  /** A nova tentativa (parte 13g): relê do zero, e a falha fica na tela até a resposta. */
+  releitura?: NovaTentativa;
+};
 
 /** As versões mais novas da exportação para a contabilidade (parte 8.3). */
 export function useExportacoesDoRh(role: ProfileRole | null | undefined): ExportacoesNaTela {
   const abre = abreRh(role);
-  const leitura = useQuery({
+  const queryClient = useQueryClient();
+  const consulta = useQuery({
     queryKey: CHAVE_DAS_EXPORTACOES,
     queryFn: async () => {
       const lidas = exportacoesLidas(await chamarRh("listRhExports", {}));
@@ -115,6 +137,12 @@ export function useExportacoesDoRh(role: ProfileRole | null | undefined): Export
     refetchOnWindowFocus: false,
     retry: 1,
   });
+  const leitura = useLeituraComFalha(consulta);
   if (!abre) return { exportacoes: undefined, carregando: false, erro: null };
-  return { exportacoes: leitura.data, carregando: leitura.isPending, erro: leitura.isError ? (leitura.error as Error).message : null };
+  return {
+    exportacoes: leitura.data,
+    carregando: leitura.isPending && !leitura.isError,
+    erro: leitura.isError ? (leitura.error as Error).message : null,
+    releitura: { tentando: leitura.isError && leitura.isFetching, tentar: () => void relerDoZero(queryClient, [CHAVE_DAS_EXPORTACOES]) },
+  };
 }

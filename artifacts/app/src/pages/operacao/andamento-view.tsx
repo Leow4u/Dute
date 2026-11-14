@@ -19,6 +19,8 @@ import {
 import { PAPEL_ROTULO } from "@/lib/operacao/cadastro";
 import { MEIO_ROTULO, itensDaFicha, type EtapaDaOs, type FichaDaOs, type MeioDoEscritorio } from "@/lib/operacao/ficha-da-os";
 import { cn } from "@/lib/utils";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { DialogCancelar } from "@/components/ui/dialog";
 
 /**
  * "Registrar andamento" na ficha da OS (parte 3.7e; docs/mockups/OpOS.dc.html):
@@ -405,12 +407,13 @@ export function AndamentoView({
       ) : null}
 
       <div className="flex flex-wrap justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onCancelar} disabled={ocupado}>
-          Cancelar
-        </Button>
-        <Button type="button" onClick={onRegistrar} disabled={ocupado}>
-          {form.tipo === "conclusao" ? "Concluir OS" : "Registrar"}
-        </Button>
+        <DialogCancelar variant="ghost" ocupado={ocupado} onClick={onCancelar} />
+        <BotaoDeAcao
+          estado={ocupado ? "andamento" : "repouso"}
+          rotulo={form.tipo === "conclusao" ? "Concluir OS" : "Registrar"}
+          andamento={form.tipo === "conclusao" ? "Concluindo a OS…" : "Registrando…"}
+          onClick={onRegistrar}
+        />
       </div>
     </section>
   );

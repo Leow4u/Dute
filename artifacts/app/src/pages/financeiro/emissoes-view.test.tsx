@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 import { baixasLidas, type BaixaDoFinanceiro } from "@/lib/financeiro/baixas";
 import { emissoesLidas, type EmissaoDoFinanceiro } from "@/lib/financeiro/emissoes";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { textosVisiveis } from "@/test/botoes";
+import { textosForaDaLista } from "@/test/textos";
 
 import { EmissoesView, type EmissoesViewProps } from "./emissoes-view";
 
@@ -142,7 +143,7 @@ function secao(html: string, titulo: string): string {
 describe("Financeiro › Emissões", () => {
   it("as que precisam de você, as em andamento e as concluídas, sem legenda", () => {
     const html = render();
-    expect(textosDaTela(html)).toEqual([
+    expect(textosVisiveis(html)).toEqual([
       "Emissões",
       "Precisam de você",
       "2",
@@ -179,6 +180,8 @@ describe("Financeiro › Emissões", () => {
       "Desistida",
     ]);
     const permitidos = [
+      // O gerúndio e o "Conferir" do BotaoDeAcao, nas camadas escondidas; o "—" da contagem na falha e o "Tentar de novo" (parte 13g).
+      /^(Retomando…|Desistindo…|Dispensando…|Conferir)$/,
       /^(Emissões|Precisam de você|Em andamento|Concluídas)$/,
       /^\d+$/,
       /^(Itaú Unibanco|Banco Safra|BTG Pactual|Banco Inter|C6 Bank)$/,
@@ -195,8 +198,8 @@ describe("Financeiro › Emissões", () => {
     ];
     expect(textosForaDaLista(html, permitidos)).toEqual([]);
     // Cada seção conta as dela.
-    expect(textosDaTela(secao(html, "Precisam de você")).slice(0, 2)).toEqual(["Precisam de você", "2"]);
-    expect(textosDaTela(secao(html, "Concluídas")).slice(0, 2)).toEqual(["Concluídas", "2"]);
+    expect(textosVisiveis(secao(html, "Precisam de você")).slice(0, 2)).toEqual(["Precisam de você", "2"]);
+    expect(textosVisiveis(secao(html, "Concluídas")).slice(0, 2)).toEqual(["Concluídas", "2"]);
   });
 
   it("identidade v3 e nenhuma ação principal: as ações são da linha, com o cliente no nome acessível", () => {
@@ -207,15 +210,15 @@ describe("Financeiro › Emissões", () => {
     expect(precisam).toContain('aria-label="Tentar de novo, Itaú Unibanco"');
     expect(precisam).toContain('aria-label="Desistir, Banco Safra"');
     // As em andamento e as concluídas não têm ação: a rotina anda sozinha.
-    expect(textosDaTela(secao(html, "Em andamento"))).not.toContain("Tentar de novo");
-    expect(textosDaTela(secao(html, "Concluídas"))).not.toContain("Desistir");
+    expect(textosVisiveis(secao(html, "Em andamento"))).not.toContain("Tentar de novo");
+    expect(textosVisiveis(secao(html, "Concluídas"))).not.toContain("Desistir");
     // A NFS-e autorizada abre o PDF da Omie em outra aba.
     expect(html).toMatch(/<a[^>]*href="https:\/\/app\.omie\.com\.br\/nfse\/1234\.pdf"[^>]*target="_blank"[^>]*rel="noreferrer"/);
   });
 
   it("a OS cancelada na Omie só se desiste; a autorizada sem PDF não tem link", () => {
     const html = render({ emissoes: [CANCELADA, { ...AUTORIZADA, urlPdf: null }] });
-    const textos = textosDaTela(html);
+    const textos = textosVisiveis(html);
     expect(textos).toEqual(expect.arrayContaining(["OS cancelada na Omie", "A OS foi cancelada na Omie.", "Desistir"]));
     expect(textos).not.toContain("Tentar de novo");
     expect(textos).not.toContain("Abrir a NFS-e");
@@ -225,13 +228,13 @@ describe("Financeiro › Emissões", () => {
 
   it("a rejeitada sem mensagem da prefeitura mostra a mensagem da emissão", () => {
     const html = render({ emissoes: [{ ...REJEITADA, mensagens: [], mensagem: "A prefeitura recusou a NFS-e." }] });
-    expect(textosDaTela(html)).toContain("A prefeitura recusou a NFS-e.");
+    expect(textosVisiveis(html)).toContain("A prefeitura recusou a NFS-e.");
   });
 
   it("desistir pede a confirmação na linha; as outras linhas seguem com as ações delas", () => {
     const html = render({ desistindo: PARADA.id });
     const precisam = secao(html, "Precisam de você");
-    expect(textosDaTela(precisam)).toEqual(expect.arrayContaining(["Confirmar desistência", "Voltar", "Tentar de novo", "Desistir"]));
+    expect(textosVisiveis(precisam)).toEqual(expect.arrayContaining(["Confirmar desistência", "Voltar", "Tentar de novo", "Desistir"]));
     expect(precisam).not.toContain('aria-label="Desistir, Banco Safra"');
     expect(precisam).toContain('aria-label="Desistir, Itaú Unibanco"');
     // A confirmação é a única ação vermelha da tela.
@@ -239,21 +242,27 @@ describe("Financeiro › Emissões", () => {
     expect(html.match(PRINCIPAL) ?? []).toHaveLength(0);
     // Ocupada, nenhuma ação da tela responde.
     const ocupada = render({ desistindo: PARADA.id, ocupado: true });
-    expect((ocupada.match(/<button[^>]*>/g) ?? []).every((botao) => /disabled=""/.test(botao))).toBe(true);
+    // O em andamento e os travados por ele: aria-disabled, sem o disabled que tira o foco (parte 13g).
+    expect((ocupada.match(/<button[^>]*>/g) ?? []).every((botao) => /disabled=""|aria-disabled="true"/.test(botao))).toBe(true);
   });
 
   it("o aviso e a falha da ação; carregando, erro e vazio dizem o que é", () => {
-    expect(render({ aviso: "Banco Safra: emissão retomada" })).toMatch(/<p role="status"[^>]*>Banco Safra: emissão retomada<\/p>/);
+    // Sem região viva solta: o aviso fica escrito, e quem fala é o Anunciador (parte 13g).
+    expect(render({ aviso: "Banco Safra: emissão retomada" })).toMatch(/<p class="[^"]*">Banco Safra: emissão retomada<\/p>/);
+    expect(render({ aviso: "Banco Safra: emissão retomada" })).not.toContain('role="status"');
     expect(render({ falha: "A emissão mudou. Abra de novo." })).toMatch(/<p role="alert"[^>]*>A emissão mudou\. Abra de novo\.<\/p>/);
-    expect(textosDaTela(render({ estado: "carregando", emissoes: [] }))).toEqual(["Emissões", "Carregando..."]);
-    expect(textosDaTela(render({ estado: "erro", emissoes: [] }))).toEqual(["Emissões", "Não foi possível carregar as emissões."]);
-    expect(textosDaTela(render({ emissoes: [] }))).toEqual(["Emissões", "Nenhuma emissão"]);
+    // Lendo, a caixa da região (o rótulo aos 300 ms), nunca o vazio.
+    const lendo = render({ estado: "carregando", emissoes: [] });
+    expect(textosVisiveis(lendo)).toEqual(["Emissões"]);
+    expect(lendo).toContain("data-carregando-na-regiao");
+    expect(textosVisiveis(render({ estado: "erro", emissoes: [] }))).toEqual(["Emissões", "Não foi possível carregar as emissões.", "Tentar de novo"]);
+    expect(textosVisiveis(render({ emissoes: [] }))).toEqual(["Emissões", "Nenhuma emissão"]);
   });
 
   it("as baixas abertas na Omie, a parada primeiro, com o motivo e a mensagem, logo depois das emissões que precisam de você", () => {
     const html = render({ emissoes: [REJEITADA, NA_PREFEITURA], baixas: [BAIXA_NA_FILA, BAIXA_PARADA] });
     const secaoDasBaixas = secao(html, "Baixas na Omie");
-    expect(textosDaTela(secaoDasBaixas)).toEqual([
+    expect(textosVisiveis(secaoDasBaixas)).toEqual([
       "Baixas na Omie",
       "2",
       "Itaú Unibanco · NF 815",
@@ -274,6 +283,7 @@ describe("Financeiro › Emissões", () => {
     expect(titulos).toEqual(["Precisam de você", "Baixas na Omie", "Em andamento"]);
     expect(
       textosForaDaLista(secaoDasBaixas, [
+        /^(Retomando…|Desistindo…|Dispensando…|Conferir)$/,
         "Baixas na Omie",
         /^\d+$/,
         /^(Itaú Unibanco|Banco Safra) · NF \d+$/,
@@ -290,14 +300,14 @@ describe("Financeiro › Emissões", () => {
     expect(secaoDasBaixas).toContain('aria-label="Dispensar, Itaú Unibanco · NF 815"');
     expect(html.match(PRINCIPAL) ?? []).toHaveLength(0);
     // Só as baixas, sem emissão: a tela não diz que está vazia.
-    const soBaixas = textosDaTela(render({ emissoes: [], baixas: [BAIXA_NA_FILA] }));
+    const soBaixas = textosVisiveis(render({ emissoes: [], baixas: [BAIXA_NA_FILA] }));
     expect(soBaixas).toContain("Baixas na Omie");
     expect(soBaixas).not.toContain("Nenhuma emissão");
   });
 
   it("dispensar a baixa pede a confirmação na linha", () => {
     const html = render({ emissoes: [], baixas: [BAIXA_PARADA], dispensando: BAIXA_PARADA.id });
-    const textos = textosDaTela(html);
+    const textos = textosVisiveis(html);
     expect(textos).toEqual(expect.arrayContaining(["Confirmar dispensa", "Voltar"]));
     expect(textos).not.toContain("Dispensar");
     expect(html.match(/border-destructive\/40/g) ?? []).toHaveLength(1);
@@ -309,7 +319,7 @@ describe("Financeiro › Emissões", () => {
       motivo_da_parada: "dispensada_e_estornada",
       mensagem: "O pagamento foi estornado na Dute depois de a baixa ser resolvida à mão na Omie. Desfaça lá o recebimento, se ele foi lançado, e dispense.",
     });
-    const textos = textosDaTela(secao(render({ emissoes: [], baixas: [estornada] }), "Baixas na Omie"));
+    const textos = textosVisiveis(secao(render({ emissoes: [], baixas: [estornada] }), "Baixas na Omie"));
     expect(textos).toEqual(expect.arrayContaining(["Estornada depois de dispensada", "Parada", "Dispensar"]));
     expect(textos).not.toContain("Tentar de novo");
   });

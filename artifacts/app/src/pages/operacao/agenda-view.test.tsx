@@ -167,7 +167,9 @@ describe("Agenda", () => {
   });
 
   it("carregando, erro e sem ninguém", () => {
-    expect(textosDaTela(render({ estado: "carregando" }))).toContain("Carregando");
+    // Lendo: nada escrito antes de 300 ms; a região da espera (a caixa e o gerúndio) guarda o lugar (parte 13g).
+    expect(textosDaTela(render({ estado: "carregando" }))).not.toContain("Carregando");
+    expect(render({ estado: "carregando" })).toContain("data-carregando-na-regiao");
     expect(textosDaTela(render({ estado: "erro" }))).toContain("Não foi possível carregar a agenda.");
     const vazia = { ...AGENDA, grupos: [], semEquipe: [], porDia: {} };
     expect(textosDaTela(render({ agenda: vazia }))).toContain("Nenhum colaborador ou veículo ativo");

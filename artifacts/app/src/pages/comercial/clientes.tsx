@@ -24,7 +24,7 @@ import {
   type LocalResumo,
   type Segmento,
 } from "@/lib/comercial/clientes";
-import { carga, useLeitura } from "@/lib/comercial/leitura";
+import { carga, novaTentativaDe, useLeitura } from "@/lib/comercial/leitura";
 import { useAppUser } from "@/lib/auth";
 import { firestore } from "@/lib/firebase";
 
@@ -84,6 +84,8 @@ export default function ComercialClientesPage() {
   const [dialogo, setDialogo] = useState<Dialogo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // A linha que grava direto (Desativar, Reativar): o botão dela diz o gerúndio (parte 13g).
+  const [emAndamento, setEmAndamento] = useState<string | null>(null);
   const hoje = hojeLocal();
 
   const cadastros = useLeitura("customers", (db) => collection(db, "customers"), cadastroDoDocumento);
@@ -130,8 +132,10 @@ export default function ComercialClientesPage() {
     dados: Record<string, unknown>,
     sucesso: string,
     depois?: (resultado: Record<string, unknown>) => void,
+    linha: string | null = null,
   ) {
     setOcupado(true);
+    setEmAndamento(linha);
     setErro(null);
     try {
       const resultado = await chamarComercial(nome, dados);
@@ -144,6 +148,7 @@ export default function ComercialClientesPage() {
       else toast({ title: "Não foi possível salvar", description: mensagem, variant: "destructive" });
     } finally {
       setOcupado(false);
+      setEmAndamento(null);
     }
   }
 
@@ -163,6 +168,8 @@ export default function ComercialClientesPage() {
     <>
       <ClientesView
         estado={estado}
+        leitura={novaTentativaDe([cadastros])}
+        emAndamento={emAndamento}
         cadastros={lista}
         contratos={carga(contratos)}
         hoje={hoje}
@@ -192,6 +199,8 @@ export default function ComercialClientesPage() {
               "saveCustomerLocation",
               payloadAtivoLocal(selecionado.code, local, !local.ativo, novaChave()),
               local.ativo ? "Local desativado" : "Local reativado",
+              undefined,
+              `local:${local.id}`,
             );
           },
           novoContato: () => abrir({ tipo: "contato", chave: novaChave(), contato: null }),
@@ -202,6 +211,8 @@ export default function ComercialClientesPage() {
               "saveCustomerContact",
               payloadAtivoContato(selecionado.code, contato, !contato.ativo, novaChave()),
               contato.ativo ? "Contato desativado" : "Contato reativado",
+              undefined,
+              `contato:${contato.id}`,
             );
           },
         }}

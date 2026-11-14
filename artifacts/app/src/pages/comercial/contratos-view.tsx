@@ -3,6 +3,10 @@ import { alertasDoContrato, type TipoAlerta } from "@workspace/dominio";
 import { CalendarX, Clock, FileText, FolderOpen, Pencil, Plus, RefreshCw, Table2, TrendingUp, type LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { NumeroLido } from "@/components/ui/numero-lido";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
 import { dataBr, type CadastroComercial, type Carga } from "@/lib/comercial/clientes";
 import {
   aditivosEmOrdem,
@@ -58,6 +62,8 @@ export type ContratosViewProps = {
   aditivos: Carga<Aditivo>;
   /** Uma gravação em andamento: as ações esperam. */
   ocupado: boolean;
+  /** A nova tentativa da leitura dos contratos (parte 13g). */
+  leitura?: NovaTentativa;
   acoes: AcoesDosContratos;
   /** Telas do Comercial que já existem (barra de abas); o padrão é a do app. */
   telas?: readonly string[];
@@ -100,9 +106,18 @@ function Vazio({ children }: { children: ReactNode }) {
   return <p className="px-5 py-7 text-center text-sm font-bold text-muted-foreground">{children}</p>;
 }
 
-/** Carregando ou erro no lugar da lista: a tela não afirma vazio sem ter lido. */
-function SemLeitura({ carga }: { carga: "carregando" | "erro" }) {
-  return <Vazio>{carga === "erro" ? "Não foi possível carregar." : "Carregando..."}</Vazio>;
+/**
+ * Carregando ou erro no lugar da lista: a tela não afirma vazio sem ter lido
+ * (carregamento v2, parte 13g). Lendo, a caixa e "Carregando as tabelas…" aos
+ * 300 ms; na falha, a frase como alerta.
+ */
+function SemLeitura({ carga, objeto }: { carga: "carregando" | "erro"; objeto: string }) {
+  if (carga === "carregando") return <CarregandoNaRegiao rotulo={`Carregando ${objeto}…`} className="px-5 py-7" />;
+  return (
+    <p role="alert" className="px-5 py-7 text-center text-sm font-bold text-destructive">
+      Não foi possível carregar {objeto}.
+    </p>
+  );
 }
 
 function Rotulo({ children }: { children: ReactNode }) {
@@ -128,11 +143,13 @@ const ROTULO_DO_FILTRO: Record<FiltroDaLista, string> = { vigentes: "Vigentes", 
 
 function Lista(props: ContratosViewProps) {
   const { estado, contratos, clientes, hoje, filtro, onFiltro, selecionado, onSelecionar, ocupado, acoes, somenteLeitura } = props;
+  const leitura = props.leitura ?? SEM_NOVA_TENTATIVA;
   const contagem = contarFiltros(contratos);
   const outro: FiltroDaLista = filtro === "vigentes" ? "encerrados" : "vigentes";
   let conteudo: ReactNode;
-  if (estado === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
-  else if (estado === "erro") conteudo = <Vazio>Não foi possível carregar os contratos.</Vazio>;
+  if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando os contratos…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
+  else if (estado === "erro")
+    conteudo = <FalhaNaSecao mensagem="Não foi possível carregar os contratos." tentando={leitura.tentando} onTentar={leitura.tentar} className="px-5 py-7" />;
   else {
     const itens = listaDeContratos(contratos, nomesDosClientes(clientes), filtro, hoje);
     conteudo = itens.length ? (
@@ -173,7 +190,9 @@ function Lista(props: ContratosViewProps) {
           <FileText className="size-4" />
         </span>
         <h2 className="text-sm font-extrabold uppercase tracking-wider">{ROTULO_DO_FILTRO[filtro]}</h2>
-        <Contador>{contagem[filtro]}</Contador>
+        <Contador>
+          <NumeroLido estado={estado}>{contagem[filtro]}</NumeroLido>
+        </Contador>
         {somenteLeitura ? null : (
           <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={acoes.novoContrato} disabled={ocupado}>
             <Plus aria-hidden="true" />
@@ -382,7 +401,7 @@ function Tabelas({ tabelas, hoje, ocupado, onAdicionar }: { tabelas: Carga<Tabel
         ) : null}
       </CabecalhoDoCartao>
       {!Array.isArray(tabelas) ? (
-        <SemLeitura carga={tabelas} />
+        <SemLeitura carga={tabelas} objeto="as tabelas" />
       ) : tabelas.length === 0 ? (
         <Vazio>Nenhuma tabela</Vazio>
       ) : (
@@ -435,7 +454,7 @@ function Aditivos({ aditivos }: { aditivos: Carga<Aditivo> }) {
         contagem={Array.isArray(aditivos) ? aditivos.length : undefined}
       />
       {!Array.isArray(aditivos) ? (
-        <SemLeitura carga={aditivos} />
+        <SemLeitura carga={aditivos} objeto="os aditivos" />
       ) : aditivos.length === 0 ? (
         <Vazio>Nenhum aditivo</Vazio>
       ) : (

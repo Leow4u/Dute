@@ -26,7 +26,7 @@ import {
 import { contatoDoDocumento, dataBr, localDoDocumento } from "@/lib/comercial/clientes";
 import { hrefDoDocumento } from "@/lib/comercial/documento";
 import { chaveDaIntencao, enviarEAbrirDocumento, type ResultadoDoEnvio, type TentativaDeChamada } from "@/lib/comercial/envio";
-import { useDocumento, useLeitura, useNomes } from "@/lib/comercial/leitura";
+import { novaTentativaDe, useDocumento, useLeitura, useNomes } from "@/lib/comercial/leitura";
 import { classificarErro, payloadAvancar } from "@/lib/comercial/montar";
 import { TIPO_RV_ROTULO, hrefDoOrcamento, type EtapaDemanda } from "@/lib/comercial/orcamentos";
 
@@ -94,6 +94,8 @@ export default function ComercialAprovarPage() {
   const [visto, setVisto] = useState<VistoNaAprovacao | null>(null);
   const [decidido, setDecidido] = useState<Decidido | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // Qual das duas grava: Aprovar ou Aprovar e enviar (o Devolver mora no diálogo dele).
+  const [emAndamento, setEmAndamento] = useState<"aprovar" | "aprovar_e_enviar" | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [devolvendo, setDevolvendo] = useState(false);
   /** A chave da intenção: repetir a mesma chamada (rede caiu) reaproveita a chave; outra chamada, chave nova. */
@@ -239,14 +241,22 @@ export default function ComercialAprovarPage() {
         confirmacao={decidido ? confirmacaoDaAcao(decidido.acao, decidido.em, autor) : null}
         parado={parado}
         ocupado={ocupado}
+        emAndamento={emAndamento}
+        leitura={novaTentativaDe([demandas, orcamentos])}
         aviso={aviso}
         handlers={{
           anterior: () => irPara(posicao.anterior),
           proximo: () => irPara(proximo),
           recarregar: () => irPara(acompanhado.numero),
-          aprovar: () => void avancar("approve"),
+          aprovar: () => {
+            setEmAndamento("aprovar");
+            void avancar("approve").finally(() => setEmAndamento(null));
+          },
           devolver: () => setDevolvendo(true),
-          aprovarEEnviar: () => void aprovarEEnviar(),
+          aprovarEEnviar: () => {
+            setEmAndamento("aprovar_e_enviar");
+            void aprovarEEnviar().finally(() => setEmAndamento(null));
+          },
         }}
       />
       <DevolverDialog

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
+  DialogCancelar,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -43,6 +44,7 @@ import {
   type FormContrato,
   type TabelaDoContrato,
 } from "@/lib/comercial/contratos";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
 /**
  * Diálogos da aba Contratos: Registrar aditivo (recordAditivo) e Novo
@@ -135,15 +137,11 @@ function Adicionar({ children, onClick, disabled }: { children: ReactNode; onCli
   );
 }
 
-function Rodape({ ocupado, rotulo, onCancelar }: { ocupado: boolean; rotulo: string; onCancelar: () => void }) {
+function Rodape({ ocupado, rotulo, andamento, onCancelar }: { ocupado: boolean; rotulo: string; andamento: string; onCancelar: () => void }) {
   return (
     <DialogFooter className="gap-2">
-      <Button type="button" variant="outline" onClick={onCancelar} disabled={ocupado}>
-        Cancelar
-      </Button>
-      <Button type="submit" disabled={ocupado}>
-        {ocupado ? "Salvando..." : rotulo}
-      </Button>
+      <DialogCancelar onClick={onCancelar} />
+      <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} rotulo={rotulo} andamento={andamento} />
     </DialogFooter>
   );
 }
@@ -184,7 +182,7 @@ export function RegistrarAditivoDialog({
   const comVigencia = ADITIVOS_COM_VIGENCIA.includes(form.tipo);
 
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <Dialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <DialogContent className="v3 max-h-[90vh] max-w-lg overflow-y-auto">
         <form
           className="grid gap-4"
@@ -278,7 +276,7 @@ export function RegistrarAditivoDialog({
             <Textarea id="aditivo-observacao" value={form.observacao} onChange={muda("observacao")} maxLength={2000} />
           </Campo>
           <Erro erro={problema ?? erro} />
-          <Rodape ocupado={ocupado} rotulo="Registrar aditivo" onCancelar={onCancelar} />
+          <Rodape ocupado={ocupado} rotulo="Registrar aditivo" andamento="Registrando o aditivo…" onCancelar={onCancelar} />
         </form>
       </DialogContent>
     </Dialog>
@@ -327,7 +325,7 @@ export function ContratoDialog({
   const opcoesDeCliente = clientes.filter((cliente) => cliente.estagio === "cliente").sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <Dialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <DialogContent className="v3 max-h-[90vh] max-w-2xl overflow-y-auto">
         <form
           className="grid gap-4"
@@ -639,7 +637,7 @@ export function ContratoDialog({
           ) : null}
 
           <Erro erro={problema ?? erro} />
-          <Rodape ocupado={ocupado} rotulo={editando ? "Salvar" : "Criar contrato"} onCancelar={onCancelar} />
+          <Rodape ocupado={ocupado} rotulo={editando ? "Salvar" : "Criar contrato"} andamento={editando ? "Salvando…" : "Criando o contrato…"} onCancelar={onCancelar} />
         </form>
       </DialogContent>
     </Dialog>

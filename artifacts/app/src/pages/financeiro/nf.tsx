@@ -7,7 +7,7 @@ import { faturaDoFinanceiro, type FaturaDoFinanceiro } from "@/lib/financeiro/fa
 import { lerDocumento } from "@/lib/financeiro/ler-documento";
 import { ROTA_FATURAS, hrefDaNf, nfDaBusca } from "@/lib/financeiro/navegacao";
 import { chaveDaRevisao, demonstrativoDaNf, type FontesDoDemonstrativo } from "@/lib/financeiro/nf-documento";
-import { useDocumento } from "@/lib/operacao/leitura";
+import { juntarTentativas, novaTentativaDe, useDocumento } from "@/lib/operacao/leitura";
 
 import { NfView, type EstadoDaVia } from "./nf-view";
 
@@ -62,5 +62,12 @@ export default function FinanceiroNfPage() {
     };
   }, [documento?.nomeDoArquivo]);
 
-  return <NfView estado={estado} documento={documento} voltar={id ? hrefDaNf(ROTA_FATURAS, id) : ROTA_FATURAS} onImprimir={() => window.print()} />;
+  const novaTentativa = juntarTentativas(novaTentativaDe([leitura]), {
+    tentando: erroNasFontes && lidas.some((consulta) => consulta.isFetching),
+    tentar: () => {
+      for (const consulta of lidas) if (consulta.isError) void consulta.refetch();
+    },
+  });
+
+  return <NfView estado={estado} leitura={novaTentativa} documento={documento} voltar={id ? hrefDaNf(ROTA_FATURAS, id) : ROTA_FATURAS} onImprimir={() => window.print()} />;
 }

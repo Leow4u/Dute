@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { useLeituraComFalha } from "../carregando/use-leitura-com-falha";
 import { OMIE_LIBERADA } from "../liberacao";
 import type { ProfileRole } from "../modules";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "../operacao/leitura";
 import { chamarFinanceiro } from "./api";
 import { emissoesLidas, type EmissaoDoFinanceiro } from "./emissoes";
 import { abreFinanceiro } from "./navegacao";
@@ -15,7 +17,13 @@ import { abreFinanceiro } from "./navegacao";
 
 export const CHAVE_DAS_EMISSOES = ["financeiro", "emissoes"] as const;
 
-export type LeituraDasEmissoes = { emissoes: EmissaoDoFinanceiro[] | undefined; carregando: boolean; falhas: string[] };
+export type LeituraDasEmissoes = {
+  emissoes: EmissaoDoFinanceiro[] | undefined;
+  carregando: boolean;
+  falhas: string[];
+  /** A nova tentativa (parte 13g): relê, e a falha fica na tela até a resposta. */
+  releitura: NovaTentativa;
+};
 
 export function useEmissoesDoFinanceiro(role: ProfileRole | null | undefined, ligado = true, omie: boolean = OMIE_LIBERADA): LeituraDasEmissoes {
   const abre = ligado && omie && abreFinanceiro(role);
@@ -33,6 +41,13 @@ export function useEmissoesDoFinanceiro(role: ProfileRole | null | undefined, li
     retry: 1,
   });
   // Fora da liberação, não há emissão: a lista vazia deixa o Início contar o resto.
-  if (!abre) return { emissoes: [], carregando: false, falhas: [] };
-  return { emissoes: leitura.data, carregando: leitura.isPending, falhas: leitura.isError ? ["emissões"] : [] };
+  // A nova tentativa sem dado volta o react-query a "pending": a falha fica na tela até a resposta.
+  const comFalha = useLeituraComFalha(leitura);
+  if (!abre) return { emissoes: [], carregando: false, falhas: [], releitura: SEM_NOVA_TENTATIVA };
+  return {
+    emissoes: comFalha.data,
+    carregando: comFalha.isPending && !comFalha.isError,
+    falhas: comFalha.isError ? ["emissões"] : [],
+    releitura: { tentando: comFalha.isError && comFalha.isFetching, tentar: () => void leitura.refetch() },
+  };
 }

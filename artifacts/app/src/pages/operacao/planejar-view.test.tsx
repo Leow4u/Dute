@@ -7,6 +7,7 @@ import type { ColaboradorDaLista, VeiculoDaLista } from "@/lib/operacao/cadastro
 import type { DemandaDaOperacao, LinhaDoSaldo } from "@/lib/operacao/demandas";
 import { dividir, planoInicial, restantes, vistoriaInicial, type FormularioDoPlano } from "@/lib/operacao/planejar";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { acoesPrincipais } from "@/test/botoes";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import { PlanejarView } from "./planejar-view";
@@ -159,6 +160,8 @@ describe("Planejar OS", () => {
   it("sem legenda: só rótulos, dados e ações", () => {
     expect(
       textosForaDaLista(render(COM_EQUIPE), [
+        // O gerúndio e o "Conferir" do BotaoDeAcao, nas camadas escondidas (parte 13g).
+        /^(Agendando…|Salvando o rascunho…|Conferir)$/,
         /^(Demanda 10045|Planejar OS · Demanda 10045|Planejada|Itaú Unibanco|·|Mudança do 5º andar)$/,
         /^(Quando|Mais uma OS|Data|Início|Fim)$/,
         /^(Itens do saldo|Igualar ao saldo|Cadeira Flexform|Mesa de trabalho|Saldo 160 un|Saldo 60 un|Nesta OS|Restante|0)$/,
@@ -173,7 +176,9 @@ describe("Planejar OS", () => {
   });
 
   it("carregando, erro, não encontrada e sem saldo", () => {
-    expect(textosDaTela(render(COM_EQUIPE, { estado: "carregando", form: null }))).toContain("Carregando");
+    // Lendo: nada escrito antes de 300 ms; a região da espera (a caixa e o gerúndio) guarda o lugar (parte 13g).
+    expect(textosDaTela(render(COM_EQUIPE, { estado: "carregando", form: null }))).not.toContain("Carregando");
+    expect(render(COM_EQUIPE, { estado: "carregando", form: null })).toContain("data-carregando-na-regiao");
     expect(textosDaTela(render(COM_EQUIPE, { estado: "erro", form: null }))).toContain("Não foi possível carregar a demanda.");
     expect(textosDaTela(render(COM_EQUIPE, { estado: "nao_encontrada", demanda: null, form: null }))).toContain("Demanda 10045 não encontrada");
     expect(textosDaTela(render(COM_EQUIPE, { estado: "sem_saldo", form: null }))).toContain("Todo o saldo da demanda já está em OS");
@@ -198,7 +203,8 @@ describe("a duração sugerida (parte 5.2b)", () => {
   };
   const pronta = (sugestao: Sugestao = SUGESTAO): SugestaoNaTela => ({ chave: "k", estado: "pronto", sugestao });
   const comSugestao = (extra: Partial<Parameters<typeof PlanejarView>[0]> = {}) => render(COM_EQUIPE, { sugestoes: [pronta()], ignoradas: [false], onUsarSugestao: noop, onIgnorarSugestao: noop, ...extra });
-  const principais = (html: string) => (html.match(/<button[^>]*class="[^"]*bg-primary text-primary-foreground[^"]*"[^>]*>[\s\S]*?<\/button>/g) ?? []).map((botao) => textosDaTela(botao).join(" "));
+  // O rótulo da camada atual do BotaoDeAcao: o gerúndio e o "Conferir" ficam escondidos (parte 13g).
+  const principais = (html: string) => acoesPrincipais(html);
 
   it("no Quando, a duração com a equipe, a base de cada item com as OS, o item sem base e o aviso do plano otimista", () => {
     const html = comSugestao();

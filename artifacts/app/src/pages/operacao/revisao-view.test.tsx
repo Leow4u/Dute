@@ -6,6 +6,7 @@ import type { LinhaDoSaldo } from "@/lib/operacao/demandas";
 import { fichaDaLeitura, servicosEmTexto, type FichaDaOs } from "@/lib/operacao/ficha-da-os";
 import { linhasParaRevisar, paraRevisar, revisaoInicial, type FormularioDaRevisao } from "@/lib/operacao/revisao";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { semCamadasEscondidas } from "@/test/botoes";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import { ReabrirView } from "./reabrir-view";
@@ -136,6 +137,8 @@ describe("Revisão", () => {
   it("sem legenda: só rótulos, dados e ações", () => {
     expect(
       textosForaDaLista(render(DECIDIDO), [
+        // O gerúndio e o "Conferir" do BotaoDeAcao, nas camadas escondidas (parte 13g).
+        /^(Concluindo a revisão…|Conferir)$/,
         /^(Revisão|Para revisar|1|OS 10045-01|2 divergências|Itaú Unibanco · Demanda 10045|Transporte e montagem|Assinada 17:52 por Renata Campos)$/,
         /^(Em revisão|Demanda 10045|·|Itaú Unibanco|hoje 07:30–18:00|líder Carlos Silva|Concluída em campo .+|Ver OS|Imprimir)$/,
         /^(Fotos · 1|Assinatura|Renata Campos · 17:52|Equipe e horários|10h15|contra 10h30 planejadas · 1 pessoa|Itens com divergência|2|\+10 Cadeira · −2 Mesa)$/,
@@ -162,7 +165,9 @@ describe("Revisão", () => {
 describe("Reabrir a OS", () => {
   it("o motivo e a confirmação, sem problema de acessibilidade", async () => {
     const html = renderToStaticMarkup(<ReabrirView motivo="" onMotivo={noop} problema="Informe o motivo da reabertura." erro={null} ocupado={false} onCancelar={noop} onReabrir={noop} />);
-    expect(textosDaTela(html)).toEqual(["Reabrir OS", "Motivo", "Informe o motivo da reabertura.", "Cancelar"]);
+    expect(textosDaTela(semCamadasEscondidas(html))).toEqual(["Reabrir OS", "Motivo", "Informe o motivo da reabertura.", "Cancelar"]);
+    // O Reabrir OS é o BotaoDeAcao: o gerúndio e o "Conferir" nas camadas escondidas (parte 13g).
+    expect(textosDaTela(html)).toEqual(expect.arrayContaining(["Reabrindo a OS…", "Conferir"]));
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });

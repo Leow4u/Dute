@@ -145,8 +145,14 @@ describe("Início do Comercial", () => {
   });
 
   it("carregando não diz que não há nada; erro diz o que não carregou", () => {
-    const carregando = textosDaTela(render({ itens: [], resumo: undefined, carregando: true }));
-    expect(carregando).toEqual(["Sexta-feira, 23 de outubro", "Bom dia, Guilherme", "Precisa de você"]);
+    // Lendo: o lado já tem a forma final (os títulos e os rótulos reais), com o bloco no lugar de cada número e nunca o zero (parte 13g).
+    const lendo = render({ itens: [], resumo: undefined, carregando: true });
+    const carregando = textosDaTela(lendo);
+    expect(carregando.slice(0, 3)).toEqual(["Sexta-feira, 23 de outubro", "Bom dia, Guilherme", "Precisa de você"]);
+    expect(carregando).toEqual(expect.arrayContaining(["Orçamentos por etapa", "Abrir a fila", "Enviados", "Fechados", "Perdidos"]));
+    expect(carregando.filter((texto) => /^\d+$/.test(texto))).toEqual([]);
+    expect(lendo).not.toContain("animate-pulse");
+    expect(lendo.match(/data-esqueleto=""[^>]*data-forma="contagem"/g)?.length).toBeGreaterThanOrEqual(3);
     const erro = render({ falhas: ["medições", "orçamentos por etapa"], resumo: undefined });
     expect(erro).toMatch(/<p role="alert"[^>]*>Não foi possível carregar: medições, orçamentos por etapa\.<\/p>/);
     expect(textosDaTela(erro)).not.toContain("Orçamentos por etapa");

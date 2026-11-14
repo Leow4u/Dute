@@ -11,5 +11,7 @@ export default function RhPessoas() {
   const leitura = usePainelDoRh(user?.publicMetadata.role);
   const [busca, setBusca] = useState("");
   const estado: EstadoDaTela = leitura.falhas.length ? "erro" : leitura.painel ? "pronto" : "carregando";
-  return <PessoasView estado={estado} colaboradores={leitura.painel?.colaboradores ?? []} busca={busca} onBusca={setBusca} />;
+  // A nova tentativa relê do zero, e a falha fica na tela até a resposta (usePainelDoRh).
+  const novaTentativa = { tentando: Boolean(leitura.falhas.length && leitura.relendo), tentar: () => void leitura.reler?.() };
+  return <PessoasView estado={estado} leitura={novaTentativa} colaboradores={leitura.painel?.colaboradores ?? []} busca={busca} onBusca={setBusca} />;
 }

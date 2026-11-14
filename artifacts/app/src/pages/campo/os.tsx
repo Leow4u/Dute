@@ -9,7 +9,7 @@ import { registroDeFoto } from "@/lib/campo/os-no-campo";
 import { itemDoCatalogo } from "@/lib/operacao/demanda-direta";
 import { escolherFotos } from "@/lib/operacao/enviar-foto";
 import { fichaDaLeitura } from "@/lib/operacao/ficha-da-os";
-import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { novaTentativaDe, useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { useUrlsDasFotos } from "@/lib/operacao/use-urls-das-fotos";
 
 import { CampoOsView, type EstadoDaOsNoCampo, type ExtraDaFoto } from "./os-view";
@@ -60,6 +60,7 @@ export default function PaginaCampoOs() {
   return (
     <CampoOsView
       estado={estado}
+      leitura={novaTentativaDe([os])}
       numero={numero}
       ficha={ficha}
       uid={user?.uid ?? null}

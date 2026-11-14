@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { useLeituraComFalha } from "../carregando/use-leitura-com-falha";
 import { OMIE_LIBERADA } from "../liberacao";
 import type { ProfileRole } from "../modules";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "../operacao/leitura";
 import { chamarFinanceiro } from "./api";
 import { baixasLidas, type BaixaDoFinanceiro } from "./baixas";
 import { abreFinanceiro } from "./navegacao";
@@ -15,7 +17,13 @@ import { abreFinanceiro } from "./navegacao";
 
 export const CHAVE_DAS_BAIXAS = ["financeiro", "baixas"] as const;
 
-export type LeituraDasBaixas = { baixas: BaixaDoFinanceiro[] | undefined; carregando: boolean; falhas: string[] };
+export type LeituraDasBaixas = {
+  baixas: BaixaDoFinanceiro[] | undefined;
+  carregando: boolean;
+  falhas: string[];
+  /** A nova tentativa (parte 13g): relê, e a falha fica na tela até a resposta. */
+  releitura: NovaTentativa;
+};
 
 export function useBaixasDoFinanceiro(role: ProfileRole | null | undefined, ligado = true, omie: boolean = OMIE_LIBERADA): LeituraDasBaixas {
   const abre = ligado && omie && abreFinanceiro(role);
@@ -33,8 +41,15 @@ export function useBaixasDoFinanceiro(role: ProfileRole | null | undefined, liga
     retry: 1,
   });
   // Fora da liberação, não há baixa: a lista vazia deixa o Início contar o resto.
-  if (!abre) return { baixas: [], carregando: false, falhas: [] };
-  return { baixas: leitura.data, carregando: leitura.isPending, falhas: leitura.isError ? ["baixas"] : [] };
+  // A nova tentativa sem dado volta o react-query a "pending": a falha fica na tela até a resposta.
+  const comFalha = useLeituraComFalha(leitura);
+  if (!abre) return { baixas: [], carregando: false, falhas: [], releitura: SEM_NOVA_TENTATIVA };
+  return {
+    baixas: comFalha.data,
+    carregando: comFalha.isPending && !comFalha.isError,
+    falhas: comFalha.isError ? ["baixas"] : [],
+    releitura: { tentando: comFalha.isError && comFalha.isFetching, tentar: () => void leitura.refetch() },
+  };
 }
 
 /**
@@ -57,6 +72,13 @@ export function useBaixasDaNf(role: ProfileRole | null | undefined, faturaId: st
     refetchOnWindowFocus: false,
     retry: 1,
   });
-  if (!abre) return { baixas: [], carregando: false, falhas: [] };
-  return { baixas: leitura.data, carregando: leitura.isPending, falhas: leitura.isError ? ["baixas"] : [] };
+  // A nova tentativa sem dado volta o react-query a "pending": a falha fica na tela até a resposta.
+  const comFalha = useLeituraComFalha(leitura);
+  if (!abre) return { baixas: [], carregando: false, falhas: [], releitura: SEM_NOVA_TENTATIVA };
+  return {
+    baixas: comFalha.data,
+    carregando: comFalha.isPending && !comFalha.isError,
+    falhas: comFalha.isError ? ["baixas"] : [],
+    releitura: { tentando: comFalha.isError && comFalha.isFetching, tentar: () => void leitura.refetch() },
+  };
 }

@@ -33,6 +33,10 @@ vi.mock("@/lib/comercial/api", async (original) => ({
 }));
 
 vi.mock("@/lib/comercial/leitura", () => ({
+  // A nova tentativa das leituras ao vivo (carregamento v2, parte 13g): sem efeito aqui.
+  novaTentativaDe: () => ({ tentando: false, tentar: () => undefined }),
+  juntarTentativas: () => ({ tentando: false, tentar: () => undefined }),
+  SEM_NOVA_TENTATIVA: { tentando: false, tentar: () => undefined },
   useLeitura: (chave: string | null, _consulta: unknown, mapear: (id: string, dados: Registro) => unknown) => {
     const fonte = chave === "demands" ? estado.demandas : chave === "quotes" ? estado.orcamentos : [];
     return { itens: fonte.map((dados) => mapear(String(dados.numero), dados)).filter(Boolean), erro: false };
@@ -42,6 +46,7 @@ vi.mock("@/lib/comercial/leitura", () => ({
 }));
 
 import ComercialOrcamentosPage from "./orcamentos";
+import { rotuloDoBotao } from "@/test/botoes";
 
 function demanda(numero: string, extra: Registro = {}): Registro {
   return {
@@ -104,7 +109,7 @@ function naFicha(): string {
 }
 
 function botao(texto: string): HTMLButtonElement | undefined {
-  return [...container!.querySelectorAll<HTMLButtonElement>('aside[aria-label="Orçamento selecionado"] button')].find((item) => item.textContent?.trim() === texto);
+  return [...container!.querySelectorAll<HTMLButtonElement>('aside[aria-label="Orçamento selecionado"] button')].find((item) => rotuloDoBotao(item) === texto);
 }
 
 beforeEach(() => {

@@ -6,6 +6,7 @@ import { linhasCompactas, pontosDeConferir } from "@/lib/comercial/aprovar";
 import { linhasGravadas } from "@/lib/comercial/documento";
 
 import { AprovarView, type AprovarViewProps, type CartaoDaAprovacao } from "./aprovar-view";
+import { acoesPrincipais, semCamadasEscondidas, travadoNoHtml } from "@/test/botoes";
 
 /**
  * Aprovar no celular (docs/mockups/ComAprovarCelular.dc.html), só a
@@ -69,7 +70,7 @@ function render(overrides: Partial<AprovarViewProps> = {}) {
 
 /** Textos visíveis, na ordem: o que a pessoa lê na tela. */
 function texts(html: string) {
-  return html
+  return semCamadasEscondidas(html)
     .split(/<[^>]+>/)
     .map((text) => text.replace(/&amp;/g, "&").replace(/ /g, " ").trim())
     .filter(Boolean);
@@ -139,8 +140,7 @@ describe("aprovar no celular", () => {
   it("identidade v3 e uma ação principal só: Aprovar, no rodapé que fica à vista", () => {
     const html = render();
     expect(html).toMatch(/^<div class="v3 /);
-    expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
-    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>.*?Aprovar<\/button>/);
+    expect(acoesPrincipais(html)).toEqual(["Aprovar"]);
     expect(html).toMatch(/<footer class="sticky bottom-0/);
   });
 
@@ -178,7 +178,8 @@ describe("aprovar no celular", () => {
     expect(lista.slice(-2)).toEqual(["Aprovado 17:05", "Próximo"]);
     expect(lista).toContain("Para enviar");
     for (const acao of ["Aprovar", "Devolver", "Aprovar e enviar"]) expect(lista).not.toContain(acao);
-    expect(html).toContain('role="status"');
+    // Sem região viva solta: quem diz a confirmação é o Anunciador (parte 13g).
+    expect(html).not.toContain('role="status"');
   });
 
   it("o orçamento da tela saiu da fila: o cartão fica, o aviso e Próximo; nada que grave", () => {
@@ -188,7 +189,7 @@ describe("aprovar no celular", () => {
     expect(lista.slice(-2)).toEqual(["O orçamento 10045 – RV01 saiu da fila", "Próximo"]);
     for (const acao of ["Aprovar", "Devolver", "Aprovar e enviar"]) expect(lista).not.toContain(acao);
     expect(html).not.toContain("bg-primary text-primary-foreground");
-    expect(html).toContain('role="status"');
+    expect(html).not.toContain('role="status"');
   });
 
   it("o orçamento da tela mudou (editado e mandado de novo): Recarregar, sem Aprovar", () => {
@@ -212,9 +213,10 @@ describe("aprovar no celular", () => {
 
   it("gravando: nenhuma ação do rodapé responde", () => {
     const html = render({ ocupado: true });
-    for (const acao of ["Devolver", "Aprovar", "Aprovar e enviar"]) {
-      expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>(?:<svg[^>]*>.*?</svg>)?${acao}</button>`));
-    }
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:<svg[^>]*>.*?<\/svg>)?Devolver<\/button>/);
+    // Aprovar e Aprovar e enviar são o BotaoDeAcao: travados por aria-disabled, com a trava no código, nunca disabled (parte 13g).
+    for (const acao of ["Devolver", "Aprovar", "Aprovar e enviar"]) expect(travadoNoHtml(html, acao)).toBe(true);
+    expect(html).toMatch(/aria-disabled="true"/);
   });
 
   it("erro do servidor aparece em alerta", () => {
@@ -222,13 +224,17 @@ describe("aprovar no celular", () => {
   });
 
   it("carregando, vazio e erro não se confundem", () => {
-    expect(texts(render({ estado: "carregando", cartao: null, posicao: { indice: 0, total: 0 } }))).toContain("Carregando...");
+    // Lendo: nada escrito antes de 300 ms; a região da espera guarda o lugar (parte 13g).
+    const carregando = render({ estado: "carregando", cartao: null, posicao: { indice: 0, total: 0 } });
+    expect(texts(carregando)).toEqual(["Para aprovar"]);
+    expect(carregando).toContain("data-carregando-na-regiao");
     expect(texts(render({ estado: "vazio", cartao: null, posicao: { indice: 0, total: 0 } }))).toEqual([
       "Para aprovar",
       "Nenhum orçamento para aprovar",
     ]);
-    expect(texts(render({ estado: "erro", cartao: null, posicao: { indice: 0, total: 0 } }))).toContain(
+    expect(texts(render({ estado: "erro", cartao: null, posicao: { indice: 0, total: 0 } })).slice(-2)).toEqual([
       "Não foi possível carregar os orçamentos.",
-    );
+      "Tentar de novo",
+    ]);
   });
 });

@@ -118,7 +118,11 @@ describe("Relatórios da Operação", () => {
       expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*?Excel<\/button>/);
       expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*?PDF<\/button>/);
     }
-    expect(render({ estado: "erro", tabela: null })).toContain("Não foi possível carregar.");
+    // A falha diz o que não carregou, com "Tentar de novo"; lendo, a região da espera e os blocos, sem o bloco rosado (parte 13g).
+    expect(textosDaTela(render({ estado: "erro", tabela: null }))).toEqual(expect.arrayContaining(["Não foi possível carregar o relatório.", "Tentar de novo"]));
+    const lendo = render({ estado: "carregando", tabela: null });
+    expect(lendo).toContain("data-carregando-na-regiao");
+    expect(lendo).not.toContain("animate-pulse");
   });
 
   it("sem OS no período, a tabela diz que não há", () => {

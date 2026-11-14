@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,6 +28,7 @@ import {
   type TabelaDaLinha,
 } from "@/lib/comercial/medicoes";
 import { dataHoraLocal, instanteComFuso } from "@/lib/comercial/montar";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
 /**
  * Diálogos da aba Medições: a linha (incluir, editar e retirar a OS, por
@@ -177,6 +178,8 @@ export function LinhaDialog({
   const [problemas, setProblemas] = useState<string[]>([]);
   const [termo, setTermo] = useState("");
   const [confirmaRetirada, setConfirmaRetirada] = useState(false);
+  // Qual dos dois grava: a retirada ou o salvar (cada botão diz o seu gerúndio).
+  const [retirando, setRetirando] = useState(false);
   useEffect(() => {
     if (aberto) {
       setForm(inicial);
@@ -185,6 +188,9 @@ export function LinhaDialog({
       setConfirmaRetirada(false);
     }
   }, [aberto, inicial]);
+  useEffect(() => {
+    if (!ocupado) setRetirando(false);
+  }, [ocupado]);
 
   const tabela = useMemo(
     () =>
@@ -203,7 +209,7 @@ export function LinhaDialog({
   const semTabela = Array.isArray(tabelas) && !tabela;
 
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <Dialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <DialogContent className="v3 max-h-[90vh] max-w-3xl overflow-y-auto">
         <form
           className="grid gap-4"
@@ -358,12 +364,18 @@ export function LinhaDialog({
             {editando && onRetirar ? (
               confirmaRetirada ? (
                 <span className="flex flex-wrap gap-2">
-                  <Button type="button" variant="destructive" onClick={onRetirar} disabled={ocupado}>
-                    Confirmar retirada
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => setConfirmaRetirada(false)} disabled={ocupado}>
-                    Manter
-                  </Button>
+                  <BotaoDeAcao
+                    variant="destructive"
+                    estado={ocupado && retirando ? "andamento" : "repouso"}
+                    bloqueado={ocupado && !retirando}
+                    rotulo="Confirmar retirada"
+                    andamento="Retirando a OS…"
+                    onClick={() => {
+                      setRetirando(true);
+                      onRetirar();
+                    }}
+                  />
+                  <DialogCancelar onClick={() => setConfirmaRetirada(false)}>Manter</DialogCancelar>
                 </span>
               ) : (
                 <Button type="button" variant="destructive" onClick={() => setConfirmaRetirada(true)} disabled={ocupado}>
@@ -374,12 +386,8 @@ export function LinhaDialog({
               <span />
             )}
             <span className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={onCancelar} disabled={ocupado}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={ocupado}>
-                {ocupado ? "Salvando..." : "Salvar"}
-              </Button>
+              <DialogCancelar onClick={onCancelar} />
+              <BotaoDeAcao type="submit" estado={ocupado && !retirando ? "andamento" : "repouso"} bloqueado={ocupado && retirando} rotulo="Salvar" andamento="Salvando…" />
             </span>
           </DialogFooter>
         </form>
@@ -410,7 +418,7 @@ export function AnexoDialog({
   if (!linha) return null;
   const pronto = nome.trim().length > 0 && referencia.trim().length > 0;
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <Dialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <DialogContent className="v3 max-w-md">
         <form
           className="grid gap-4"
@@ -430,12 +438,8 @@ export function AnexoDialog({
           </Campo>
           <Erro erro={erro} />
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onCancelar} disabled={ocupado}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={ocupado || !pronto}>
-              {ocupado ? "Salvando..." : "Anexar"}
-            </Button>
+            <DialogCancelar onClick={onCancelar} />
+            <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} bloqueado={!pronto} rotulo="Anexar" andamento="Anexando…" />
           </DialogFooter>
         </form>
       </DialogContent>
@@ -471,7 +475,7 @@ export function AprovarDialog({ aberto, ocupado, erro, onCancelar, onConfirmar }
     }
   }, [aberto]);
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <Dialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <DialogContent className="v3 max-w-md">
         <form
           className="grid gap-4"
@@ -494,12 +498,8 @@ export function AprovarDialog({ aberto, ocupado, erro, onCancelar, onConfirmar }
           <Problemas problemas={problema ? [problema] : []} />
           <Erro erro={erro} />
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onCancelar} disabled={ocupado}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={ocupado}>
-              {ocupado ? "Registrando..." : "Registrar aprovação"}
-            </Button>
+            <DialogCancelar onClick={onCancelar} />
+            <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} rotulo="Registrar aprovação" andamento="Registrando a aprovação…" />
           </DialogFooter>
         </form>
       </DialogContent>
@@ -520,7 +520,7 @@ export function ContestarDialog({ aberto, ocupado, erro, onCancelar, onConfirmar
     }
   }, [aberto]);
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <Dialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <DialogContent className="v3 max-w-md">
         <form
           className="grid gap-4"
@@ -543,12 +543,8 @@ export function ContestarDialog({ aberto, ocupado, erro, onCancelar, onConfirmar
           <Problemas problemas={problema ? [problema] : []} />
           <Erro erro={erro} />
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onCancelar} disabled={ocupado}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={ocupado || !nota.trim()}>
-              {ocupado ? "Registrando..." : "Registrar contestação"}
-            </Button>
+            <DialogCancelar onClick={onCancelar} />
+            <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} bloqueado={!nota.trim()} rotulo="Registrar contestação" andamento="Registrando a contestação…" />
           </DialogFooter>
         </form>
       </DialogContent>

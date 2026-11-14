@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { collection, doc, getDoc, query, where, type DocumentData } from "firebase/firestore";
 
@@ -6,7 +6,7 @@ import { contratoDoDocumento } from "../comercial/clientes";
 import { firestore } from "../firebase";
 import type { ItemDoInicio } from "../inicio-do-modulo";
 import type { ProfileRole } from "../modules";
-import { useLeitura } from "../operacao/leitura";
+import { juntarTentativas, novaTentativaDe, useLeitura, type NovaTentativa } from "../operacao/leitura";
 import {
   ETAPAS_DA_FILA,
   autorizacaoDoFinanceiro,
@@ -55,6 +55,12 @@ export type FilaDoFinanceiro = {
   carregando: boolean;
   /** As leituras que falharam, em palavras ("demandas", "autorizações", "valores"). */
   falhas: string[];
+  /**
+   * A nova tentativa (parte 13g): assina de novo as leituras ao vivo que
+   * falharam e relê as que vêm por consulta; a falha fica na tela até elas
+   * responderem.
+   */
+  releitura: NovaTentativa;
 };
 
 async function lerDocumento(caminho: string): Promise<DocumentData | null> {
@@ -128,18 +134,40 @@ export function useFilaDoFinanceiro(role: ProfileRole | null | undefined, ligado
     })),
   });
 
-  if (!abre) return { linhas: undefined, carregando: false, falhas: [] };
+  // A nova tentativa das consultas: o react-query volta a leitura sem dado a "pending", e a falha de antes fica na
+  // tela até elas responderem (o aviso não sai com o foco nele).
+  const [tentandoConsultas, setTentandoConsultas] = useState(false);
+  const falhasDeAntes = useRef<string[]>([]);
+  const consultas = [...autorizacoes, ...documentos];
+  const consultasLendo = consultas.some((leitura) => leitura.isFetching);
+  useEffect(() => {
+    if (tentandoConsultas && !consultasLendo) setTentandoConsultas(false);
+  }, [tentandoConsultas, consultasLendo]);
+  const aoVivo = novaTentativaDe([demandas, periodos, medicoes]);
+  const releitura = juntarTentativas(aoVivo, {
+    tentando: tentandoConsultas,
+    tentar: () => {
+      const falharam = consultas.filter((leitura) => leitura.isError);
+      if (!falharam.length) return;
+      setTentandoConsultas(true);
+      for (const leitura of falharam) void leitura.refetch();
+    },
+  });
 
-  const falhas = [
+  if (!abre) return { linhas: undefined, carregando: false, falhas: [], releitura };
+
+  const falhasAgora = [
     demandas.erro ? "demandas" : null,
     periodos.erro ? "armazenagem" : null,
     medicoes.erro ? "medições" : null,
     autorizacoes.some((leitura) => leitura.isError) ? "autorizações" : null,
     documentos.some((leitura) => leitura.isError) ? "valores" : null,
   ].filter((falha): falha is string => falha !== null);
+  if (falhasAgora.length) falhasDeAntes.current = falhasAgora;
+  const falhas = falhasAgora.length ? falhasAgora : tentandoConsultas && consultasLendo ? falhasDeAntes.current : [];
   const pendente =
     lidas === null || periodos.itens === null || daMedicao === null || autorizacoes.some((leitura) => leitura.isPending) || documentos.some((leitura) => leitura.isPending);
-  if (falhas.length || pendente || !lidas || !periodos.itens || !daMedicao) return { linhas: undefined, carregando: !falhas.length && pendente, falhas };
+  if (falhas.length || pendente || !lidas || !periodos.itens || !daMedicao) return { linhas: undefined, carregando: !falhas.length && pendente, falhas, releitura };
 
   const porId = new Map<string, AutorizacaoDoFinanceiro>();
   ids.forEach((id, indice) => {
@@ -163,7 +191,7 @@ export function useFilaDoFinanceiro(role: ProfileRole | null | undefined, ligado
     ...periodos.itens.map(linhaDaArmazenagem),
     ...daMedicao.map((medicao) => linhaDaMedicao(medicao, porNumero, porId, medicao.contratoId ? (rotuloDoContrato.get(medicao.contratoId) ?? null) : null)),
   ];
-  return { linhas, carregando: false, falhas: [] };
+  return { linhas, carregando: false, falhas: [], releitura };
 }
 
 export type InicioDoFinanceiro = {
@@ -172,6 +200,8 @@ export type InicioDoFinanceiro = {
   faturas: FaturaDoFinanceiro[] | undefined;
   carregando: boolean;
   falhas: string[];
+  /** A nova tentativa das quatro leituras (parte 13g): o "Tentar de novo" do Início. */
+  releitura?: NovaTentativa;
 };
 
 /**
@@ -193,5 +223,6 @@ export function useInicioDoFinanceiro(role: ProfileRole | null | undefined, agor
     faturas: cobranca.faturas,
     carregando: !falhas.length && (fila.carregando || cobranca.carregando || emissoes.carregando || baixas.carregando),
     falhas,
+    releitura: juntarTentativas(fila.releitura, cobranca.releitura, emissoes.releitura, baixas.releitura),
   };
 }

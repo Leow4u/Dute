@@ -3,6 +3,7 @@ import { Ban, ClipboardCheck, ClipboardPen, ImagePlus, Printer, RotateCcw } from
 import { collection, doc } from "firebase/firestore";
 import { Link, useSearch } from "wouter";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { ProgressoDasFotos } from "@/components/ui/progresso-das-fotos";
 import { useEnvioDeFotos } from "@/lib/carregando/use-envio-de-fotos";
@@ -21,7 +22,7 @@ import { enviarAssinatura, enviarFoto, escolherFotos, type FotoEscolhida } from 
 import { acoesDaRecusa, fichaDaLeitura, recusaPendente } from "@/lib/operacao/ficha-da-os";
 import { clienteDaLeitura, hojeIso, nomesPorCodigo } from "@/lib/operacao/fila";
 import { demandaDoHoje } from "@/lib/operacao/hoje";
-import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { novaTentativaDe, useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { useUrlsDasFotos } from "@/lib/operacao/use-urls-das-fotos";
 import { fichaDaBusca, hrefDaImpressaoDaOs, hrefDaRevisao } from "@/lib/operacao/navegacao";
 
@@ -146,10 +147,12 @@ export default function PaginaOs() {
 
   const recusa = ficha && coordena ? recusaPendente(ficha) : null;
   const [erroDaRecusa, setErroDaRecusa] = useState<string | null>(null);
+  const [resolvendo, setResolvendo] = useState<"anexar" | "dispensar" | null>(null);
 
   async function resolver(acao: "anexar" | "dispensar") {
     if (!ficha || !recusa) return;
     setOcupado(true);
+    setResolvendo(acao);
     setErroDaRecusa(null);
     try {
       // A chave é da recusa: repetir depois de perder a resposta devolve o mesmo resultado.
@@ -158,6 +161,7 @@ export default function PaginaOs() {
       setErroDaRecusa(mensagemDoErro(error));
     } finally {
       setOcupado(false);
+      setResolvendo(null);
     }
   }
 
@@ -240,6 +244,7 @@ export default function PaginaOs() {
   return (
     <OsView
       estado={estado}
+      leitura={novaTentativaDe([os])}
       numero={numero}
       ficha={ficha}
       cabecalho={{
@@ -363,18 +368,27 @@ export default function PaginaOs() {
         ficha && recusa ? (
           <>
             {acoesDaRecusa(ficha).includes("anexar") ? (
-              <Button type="button" onClick={() => void resolver("anexar")} disabled={ocupado}>
-                Anexar à conclusão
-              </Button>
+              <BotaoDeAcao
+                estado={resolvendo === "anexar" ? "andamento" : "repouso"}
+                bloqueado={ocupado && resolvendo !== "anexar"}
+                rotulo="Anexar à conclusão"
+                andamento="Anexando à conclusão…"
+                onClick={() => void resolver("anexar")}
+              />
             ) : null}
             {acoesDaRecusa(ficha).includes("concluir") && !form ? (
               <Button type="button" onClick={concluirComDados} disabled={ocupado}>
                 Concluir com estes dados
               </Button>
             ) : null}
-            <Button type="button" variant="ghost" onClick={() => void resolver("dispensar")} disabled={ocupado}>
-              Dispensar
-            </Button>
+            <BotaoDeAcao
+              variant="ghost"
+              estado={resolvendo === "dispensar" ? "andamento" : "repouso"}
+              bloqueado={ocupado && resolvendo !== "dispensar"}
+              rotulo="Dispensar"
+              andamento="Dispensando…"
+              onClick={() => void resolver("dispensar")}
+            />
             {erroDaRecusa ? (
               <span role="alert" className="text-sm text-destructive">
                 {erroDaRecusa}

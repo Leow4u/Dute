@@ -1,9 +1,11 @@
 import { useEffect, type ReactNode } from "react";
-import { CloudOff, RefreshCw, X } from "lucide-react";
+import { CloudOff, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 import { AccountMenu } from "@/components/layout/account-menu";
+import { Spinner } from "@/components/ui/spinner";
 import { useAppAuth, useAppUser } from "@/lib/auth";
+import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
 import { FilaDoCampoProvider, useFilaDoCampo } from "@/lib/campo/fila-do-campo";
 import { ROTA_CAMPO } from "@/lib/campo/navegacao";
 import { rememberReturnPath } from "@/lib/settings-nav";
@@ -14,21 +16,25 @@ import { cn } from "@/lib/utils";
  * lateral. No topo, o aviso da fila quando há registro esperando ou sem
  * sinal ("Sem sinal · 4 registros guardados"), e as falhas que a callable
  * recusou. É dado, não legenda.
+ *
+ * Enviando o que a fila guardou, a caixa do carregamento gira no lugar do
+ * ícone (parte 13g). A faixa não é região viva: o Anunciador diz uma vez que
+ * a fila começou a enviar; a falta de sinal ele já diz ("Sem conexão").
  */
 
 function AvisoDaFila() {
   const { aviso, online, falhas, dispensarFalha } = useFilaDoCampo();
+  useAnunciarAoMudar(aviso && online ? "Enviando os registros guardados" : null);
   return (
     <>
       {aviso ? (
         <p
-          role="status"
           className={cn(
             "flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold",
             online ? "bg-info-soft text-info-soft-foreground" : "bg-amber-soft text-amber-soft-foreground",
           )}
         >
-          {online ? <RefreshCw aria-hidden="true" className="size-4" /> : <CloudOff aria-hidden="true" className="size-4" />}
+          {online ? <Spinner /> : <CloudOff aria-hidden="true" className="size-4" />}
           {aviso}
         </p>
       ) : null}

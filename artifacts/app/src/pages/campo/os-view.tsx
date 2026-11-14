@@ -34,6 +34,9 @@ import {
 import { buscarNoCatalogo, type ItemDoCatalogo } from "@/lib/operacao/demanda-direta";
 import { ETAPA_ROTULO, horaDe, type EtapaDaOs, type FichaDaOs } from "@/lib/operacao/ficha-da-os";
 import { cn } from "@/lib/utils";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
  * Campo › OS em execução (parte 3.8b; docs/mockups/Campo2Execucao.dc.html e
@@ -588,6 +591,7 @@ export function CampoOsView({
   agora,
   onRegistrar,
   onFotos,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDaOsNoCampo;
   numero: string;
@@ -601,6 +605,8 @@ export function CampoOsView({
   agora: () => Date;
   onRegistrar: (novo: NovoRegistro) => void;
   onFotos: (arquivos: File[], extra: ExtraDaFoto) => void;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   const [incluir, setIncluir] = useState<{ linha: string | null } | null>(null);
   const [ocorrencia, setOcorrencia] = useState(false);
@@ -615,11 +621,9 @@ export function CampoOsView({
       <div className="flex flex-col gap-4">
         {voltar}
         <h1 className="text-2xl font-bold tracking-tight text-foreground">OS {numero}</h1>
-        {estado === "carregando" ? <p className="text-sm text-muted-foreground">Carregando</p> : null}
+        {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a OS…" continuaARota onTentar={leitura.tentar} /> : null}
         {estado === "erro" ? (
-          <p role="alert" className="text-sm text-destructive">
-            Não foi possível carregar a OS.
-          </p>
+          <FalhaNaSecao mensagem="Não foi possível carregar a OS." tentando={leitura.tentando} onTentar={leitura.tentar} />
         ) : null}
         {estado === "nao_encontrada" ? <p className="text-sm text-muted-foreground">OS {numero} não encontrada</p> : null}
       </div>

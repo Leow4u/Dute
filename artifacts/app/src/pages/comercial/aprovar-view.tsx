@@ -2,7 +2,12 @@ import type { ReactNode } from "react";
 import { Link } from "wouter";
 import { Check, ChevronLeft, ChevronRight, FileText, RefreshCw, Send, TriangleAlert, Undo2 } from "lucide-react";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
 import type { AvisoDoCartaoParado, LinhaCompacta, PontoDeConferir } from "@/lib/comercial/aprovar";
 import { ORIGEM_ROTULO, type EtapaDemanda } from "@/lib/comercial/orcamentos";
 import { cn } from "@/lib/utils";
@@ -60,6 +65,10 @@ export type AprovarViewProps = {
    */
   parado: AvisoDoCartaoParado | null;
   ocupado: boolean;
+  /** Qual ação grava daqui: "aprovar" ou "aprovar_e_enviar" (o botão dela diz o gerúndio; parte 13g). */
+  emAndamento?: "aprovar" | "aprovar_e_enviar" | null;
+  /** A nova tentativa das leituras da fila (parte 13g). */
+  leitura?: NovaTentativa;
   aviso: string | null;
   handlers: {
     anterior: () => void;
@@ -223,11 +232,14 @@ function Linhas({ linhas, cartao }: { linhas: LinhaCompacta[]; cartao: CartaoDaA
 
 function Rodape(props: AprovarViewProps) {
   const { confirmacao, parado, ocupado, handlers } = props;
+  const emAndamento = props.emAndamento ?? null;
+  // O resultado e o cartão parado ficam escritos; o Anunciador os diz uma vez, sem região viva solta.
+  useAnunciarAoMudar(confirmacao ?? parado?.texto ?? null);
   return (
     <footer className="sticky bottom-0 z-10 -mx-5 -mb-5 flex flex-col gap-1.5 border-t border-border bg-card px-4 pb-5 pt-3 md:mx-0 md:mb-0 md:rounded-lg md:border">
       {!confirmacao && parado ? (
         <div className="flex min-h-13 items-center gap-2">
-          <span role="status" className="inline-flex items-center gap-2 text-base font-extrabold text-amber-soft-foreground">
+          <span className="inline-flex items-center gap-2 text-base font-extrabold text-amber-soft-foreground">
             <TriangleAlert className="size-5 shrink-0" aria-hidden="true" />
             {parado.texto}
           </span>
@@ -245,7 +257,7 @@ function Rodape(props: AprovarViewProps) {
         </div>
       ) : confirmacao ? (
         <div className="flex min-h-13 items-center gap-2">
-          <span role="status" className="inline-flex items-center gap-2 text-base font-extrabold text-success-soft-foreground">
+          <span className="inline-flex items-center gap-2 text-base font-extrabold text-success-soft-foreground">
             <Check className="size-5" aria-hidden="true" />
             {confirmacao}
           </span>
@@ -261,15 +273,27 @@ function Rodape(props: AprovarViewProps) {
               <Undo2 aria-hidden="true" />
               Devolver
             </Button>
-            <Button type="button" className="min-h-13 flex-1 text-base" onClick={handlers.aprovar} disabled={ocupado}>
-              <Check aria-hidden="true" />
-              Aprovar
-            </Button>
+            <BotaoDeAcao
+              className="min-h-13 flex-1 text-base"
+              estado={emAndamento === "aprovar" ? "andamento" : "repouso"}
+              bloqueado={ocupado && emAndamento !== "aprovar"}
+              icone={<Check aria-hidden="true" />}
+              rotulo="Aprovar"
+              andamento="Aprovando…"
+              onClick={handlers.aprovar}
+            />
           </div>
-          <Button type="button" variant="ghost" size="sm" className="self-center" onClick={handlers.aprovarEEnviar} disabled={ocupado}>
-            <Send aria-hidden="true" />
-            Aprovar e enviar
-          </Button>
+          <BotaoDeAcao
+            variant="ghost"
+            size="sm"
+            className="self-center"
+            estado={emAndamento === "aprovar_e_enviar" ? "andamento" : "repouso"}
+            bloqueado={ocupado && emAndamento !== "aprovar_e_enviar"}
+            icone={<Send aria-hidden="true" />}
+            rotulo="Aprovar e enviar"
+            andamento="Aprovando e enviando…"
+            onClick={handlers.aprovarEEnviar}
+          />
         </>
       )}
     </footer>
@@ -278,12 +302,12 @@ function Rodape(props: AprovarViewProps) {
 
 export function AprovarView(props: AprovarViewProps) {
   const { estado, posicao, cartao, aviso, handlers } = props;
+  const leitura = props.leitura ?? SEM_NOVA_TENTATIVA;
+  const caixa = "rounded-lg border border-border bg-card px-5 py-7";
   const mensagem =
-    estado === "carregando"
-      ? "Carregando..."
-      : estado === "erro"
-        ? "Não foi possível carregar os orçamentos."
-        : !cartao && props.parado
+    estado === "carregando" || estado === "erro"
+      ? null
+      : !cartao && props.parado
           ? props.parado.texto
           : estado === "vazio" || !cartao
             ? "Nenhum orçamento para aprovar"
@@ -312,8 +336,12 @@ export function AprovarView(props: AprovarViewProps) {
           {aviso}
         </p>
       ) : null}
-      {mensagem || !cartao ? (
-        <p className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-bold text-muted-foreground">{mensagem}</p>
+      {estado === "carregando" ? (
+        <CarregandoNaRegiao rotulo="Carregando os orçamentos…" continuaARota onTentar={leitura.tentar} className={caixa} />
+      ) : estado === "erro" ? (
+        <FalhaNaSecao mensagem="Não foi possível carregar os orçamentos." tentando={leitura.tentando} onTentar={leitura.tentar} className={caixa} />
+      ) : mensagem || !cartao ? (
+        <p className={cn(caixa, "text-center text-sm font-bold text-muted-foreground")}>{mensagem}</p>
       ) : (
         <>
           <Cartao cartao={cartao} />

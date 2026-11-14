@@ -3,6 +3,10 @@ import { ArrowLeft, Printer } from "lucide-react";
 
 import { OrcamentoDocumento } from "@/components/comercial/orcamento-documento";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
+import { cn } from "@/lib/utils";
 import type { DocumentoDoOrcamento } from "@/lib/comercial/documento";
 
 /**
@@ -18,17 +22,14 @@ export type DocumentoViewProps = {
   /** Para onde voltar: a montagem do orçamento ou a aprovação (lib/comercial/documento.ts, voltarDoDocumento). */
   voltar: { href: string; rotulo: string } | null;
   onImprimir: () => void;
+  /** A nova tentativa das leituras do documento (parte 13g). */
+  leitura?: NovaTentativa;
 };
 
-export function DocumentoView({ estado, documento, voltar, onImprimir }: DocumentoViewProps) {
-  const mensagem =
-    estado === "carregando"
-      ? "Carregando..."
-      : estado === "erro"
-        ? "Não foi possível carregar o orçamento."
-        : estado === "nao_encontrado" || !documento
-          ? "Orçamento não encontrado"
-          : null;
+export function DocumentoView({ estado, documento, voltar, onImprimir, leitura = SEM_NOVA_TENTATIVA }: DocumentoViewProps) {
+  const caixa = "rounded-lg border border-border bg-card px-5 py-7";
+  const mensagem = estado === "carregando" || estado === "erro" ? null : estado === "nao_encontrado" || !documento ? "Orçamento não encontrado" : null;
+  const pronto = estado === "pronto" && Boolean(documento) && !mensagem;
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <div className="no-print flex flex-wrap items-center gap-3">
@@ -41,13 +42,17 @@ export function DocumentoView({ estado, documento, voltar, onImprimir }: Documen
           </Button>
         ) : null}
         {documento ? <h1 className="text-xl font-extrabold tabular-nums tracking-tight">{documento.titulo}</h1> : null}
-        <Button type="button" className="ml-auto" onClick={onImprimir} disabled={!documento || Boolean(mensagem)}>
+        <Button type="button" className="ml-auto" onClick={onImprimir} disabled={!pronto}>
           <Printer aria-hidden="true" />
           Imprimir / Salvar PDF
         </Button>
       </div>
-      {mensagem ? (
-        <p className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-bold text-muted-foreground">{mensagem}</p>
+      {estado === "carregando" ? (
+        <CarregandoNaRegiao rotulo="Carregando o orçamento…" continuaARota onTentar={leitura.tentar} className={caixa} />
+      ) : estado === "erro" ? (
+        <FalhaNaSecao mensagem="Não foi possível carregar o orçamento." tentando={leitura.tentando} onTentar={leitura.tentar} className={caixa} />
+      ) : mensagem ? (
+        <p className={cn(caixa, "text-center text-sm font-bold text-muted-foreground")}>{mensagem}</p>
       ) : documento ? (
         // O papel tem a largura do A4; no celular, a caixa rola para o lado em vez de espremer a tabela.
         <div className="overflow-x-auto rounded-lg border border-border">

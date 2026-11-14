@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { hrefDaOsNoCampo } from "@/lib/campo/navegacao";
 import type { CartaoDoCampo, MinhasOs } from "@/lib/campo/os-no-campo";
 import { cn } from "@/lib/utils";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
  * Campo › Minhas OS (parte 3.8b; docs/mockups/Campo2Hoje.dc.html): agora,
@@ -83,7 +86,20 @@ function LinhaCurta({ cartao, data }: { cartao: CartaoDoCampo; data: string }) {
   );
 }
 
-export function CampoHojeView({ estado, dia, ola, lista }: { estado: EstadoDoCampo; dia: string; ola: string; lista: MinhasOs }) {
+export function CampoHojeView({
+  estado,
+  dia,
+  ola,
+  lista,
+  leitura = SEM_NOVA_TENTATIVA,
+}: {
+  estado: EstadoDoCampo;
+  dia: string;
+  ola: string;
+  lista: MinhasOs;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
+}) {
   const vazio = !lista.agora.length && !lista.depois.length && !lista.feito.length;
   return (
     <div className="flex flex-col gap-6">
@@ -91,11 +107,9 @@ export function CampoHojeView({ estado, dia, ola, lista }: { estado: EstadoDoCam
         <span className="text-sm text-muted-foreground">{dia}</span>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">{ola}</h1>
       </header>
-      {estado === "carregando" ? <p className="text-sm text-muted-foreground">Carregando</p> : null}
+      {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando suas OS…" continuaARota onTentar={leitura.tentar} /> : null}
       {estado === "erro" ? (
-        <p role="alert" className="text-sm text-destructive">
-          Não foi possível carregar suas OS.
-        </p>
+        <FalhaNaSecao mensagem="Não foi possível carregar suas OS." tentando={leitura.tentando} onTentar={leitura.tentar} />
       ) : null}
       {estado === "pronto" && vazio ? <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">Nenhuma OS para você</p> : null}
       {estado === "pronto" && lista.agora.length ? (

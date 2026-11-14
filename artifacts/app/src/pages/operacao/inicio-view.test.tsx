@@ -186,11 +186,14 @@ describe("Início da Operação", () => {
   });
 
   it("carregando não diz que não há nada; erro diz o que não carregou", () => {
-    expect(textosDaTela(render({ itens: [], numeros: undefined, equipe: undefined, carregando: true }))).toEqual([
-      "Sexta-feira, 23 de outubro",
-      "Bom dia, Leonardo",
-      "Precisa de você",
-    ]);
+    // Lendo: o lado já tem a forma final (os títulos e os rótulos reais), com o bloco no lugar de cada número e nunca o zero (parte 13g).
+    const lendo = render({ itens: [], numeros: undefined, equipe: undefined, carregando: true });
+    const textos = textosDaTela(lendo);
+    expect(textos.slice(0, 3)).toEqual(["Sexta-feira, 23 de outubro", "Bom dia, Leonardo", "Precisa de você"]);
+    expect(textos).toEqual(expect.arrayContaining(["Hoje na operação", "Agendadas hoje", "Para agendar", "Próximos dias", "Equipe hoje"]));
+    expect(textos.filter((texto) => /^\d+$/.test(texto))).toEqual([]);
+    expect(textos).not.toContain("Nenhum colaborador ativo");
+    expect(lendo.match(/data-esqueleto=""[^>]*data-forma="contagem"/g)?.length).toBe(3);
     const erro = render({ itens: [], numeros: undefined, equipe: undefined, falhas: ["ordens de serviço"] });
     expect(erro).toMatch(/<p role="alert"[^>]*>Não foi possível carregar: ordens de serviço\.<\/p>/);
   });

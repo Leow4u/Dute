@@ -41,7 +41,7 @@ export function PaginaColaboradores() {
   const [busca, setBusca] = useState("");
   const [aberta, setAberta] = useState<(FichaAberta<FichaColaborador> & { pessoa: ColaboradorDaLista | null }) | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [ocupado, setOcupado] = useState(false);
+  const [ocupado, setOcupado] = useState<"salvar" | "ativo" | null>(null);
 
   // O Início leva direto à ficha (/operacao/colaboradores?id=col_...): abre
   // quando o cadastro chega, uma vez por pedido.
@@ -54,8 +54,8 @@ export function PaginaColaboradores() {
     if (pessoa) setAberta({ chave: novaChave(), pessoa, valores: fichaDoColaborador(pessoa) });
   }, [pedido, leitura.itens]);
 
-  async function gravar(dados: Record<string, unknown>) {
-    setOcupado(true);
+  async function gravar(dados: Record<string, unknown>, acao: "salvar" | "ativo" = "salvar") {
+    setOcupado(acao);
     setErro(null);
     try {
       await chamarOperacao("saveCollaborator", dados);
@@ -63,7 +63,7 @@ export function PaginaColaboradores() {
     } catch (error) {
       setErro(mensagemDoErro(error));
     } finally {
-      setOcupado(false);
+      setOcupado(null);
     }
   }
 
@@ -88,7 +88,9 @@ export function PaginaColaboradores() {
         setErro(null);
         setAberta(null);
       }}
-      ocupado={ocupado}
+      ocupado={ocupado !== null}
+      emAndamento={ocupado}
+      leitura={leitura}
       erro={erro}
       onSalvar={() => {
         if (!aberta) return;
@@ -139,7 +141,7 @@ export function PaginaColaboradores() {
           id: pessoa.id,
           expected_edicao: pessoa.edicao,
           ativo,
-        });
+        }, "ativo");
       }}
     />
   );
@@ -151,7 +153,7 @@ export function PaginaVeiculos() {
   const [busca, setBusca] = useState("");
   const [aberta, setAberta] = useState<(FichaAberta<FichaVeiculo> & { veiculo: VeiculoDaLista | null }) | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [ocupado, setOcupado] = useState(false);
+  const [ocupado, setOcupado] = useState<"salvar" | "ativo" | null>(null);
 
   // O Início leva direto à ficha (/operacao/veiculos?id=vei_..., parte 3.13b):
   // abre quando o cadastro chega, uma vez por pedido.
@@ -164,8 +166,8 @@ export function PaginaVeiculos() {
     if (veiculo) setAberta({ chave: novaChave(), veiculo, valores: fichaDoVeiculo(veiculo) });
   }, [pedido, leitura.itens]);
 
-  async function gravar(dados: Record<string, unknown>) {
-    setOcupado(true);
+  async function gravar(dados: Record<string, unknown>, acao: "salvar" | "ativo" = "salvar") {
+    setOcupado(acao);
     setErro(null);
     try {
       await chamarOperacao("saveVehicle", dados);
@@ -173,7 +175,7 @@ export function PaginaVeiculos() {
     } catch (error) {
       setErro(mensagemDoErro(error));
     } finally {
-      setOcupado(false);
+      setOcupado(null);
     }
   }
 
@@ -198,7 +200,9 @@ export function PaginaVeiculos() {
         setErro(null);
         setAberta(null);
       }}
-      ocupado={ocupado}
+      ocupado={ocupado !== null}
+      emAndamento={ocupado}
+      leitura={leitura}
       erro={erro}
       onSalvar={() => {
         if (!aberta) return;
@@ -242,7 +246,7 @@ export function PaginaVeiculos() {
           id: veiculo.id,
           expected_edicao: veiculo.edicao,
           ativo,
-        });
+        }, "ativo");
       }}
     />
   );

@@ -4,7 +4,7 @@ import type { ItemDoInicio } from "../inicio-do-modulo";
 import type { ProfileRole } from "../modules";
 import { colaboradorDaLeitura, veiculoDaLeitura } from "./cadastro";
 import { clienteDaLeitura, comDemanda, demandaDaFila, hojeIso, nomesPorCodigo, osDaLeitura } from "./fila";
-import { useLeitura } from "./leitura";
+import { novaTentativaDe, useLeitura, type NovaTentativa } from "./leitura";
 import { abreOperacao } from "./navegacao";
 import { solicitacaoDaOperacao } from "./solicitacoes";
 import {
@@ -25,6 +25,8 @@ export type InicioDaOperacao = {
   carregando: boolean;
   /** As leituras que falharam, em palavras ("ordens de serviço", "colaboradores"). */
   falhas: string[];
+  /** A nova tentativa das leituras que falharam ou não chegaram (parte 13g): assina de novo só essas. */
+  releitura?: NovaTentativa;
 };
 
 /**
@@ -81,5 +83,6 @@ export function useInicioDaOperacao(role: ProfileRole | null | undefined, agora:
     equipe: abre && ordens.itens && demandas.itens && pessoas.itens ? equipeDeHoje(entrada) : undefined,
     carregando,
     falhas,
+    releitura: novaTentativaDe(leituras.map(({ leitura }) => leitura)),
   };
 }
