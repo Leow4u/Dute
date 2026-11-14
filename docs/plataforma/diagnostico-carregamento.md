@@ -317,7 +317,10 @@ o Início) ou por URL.
    `Carregando` para listas, fichas e os dois `Suspense`; `Button` com a
    prop `carregando`; `Skeleton` com `aria-busy` e rótulo. A trava de
    textos (`src/test/textos.ts`) continua valendo: "Carregando…" entra na
-   lista da tela; o `aria-label` não é texto.
+   lista da tela; o `aria-label` não é texto. *Entrou nas partes 1 a 5 do
+   carregamento v2 (PR 610), com o desenho novo da seção 10: o relógio, a
+   caixa chanfrada, o `Esqueleto`, o `BotaoDeAcao` e o toast; a regra está em
+   `docs/sistema-visual.md`, "Carregamento".*
 2. **Chegada avulsa, Devoluções e Contagem cíclica.** Esperar
    `lookupQuery` antes de `mustCreate` e de "não localizado", com o mesmo
    "Verificando o catálogo" da abertura; com erro, dizer que o catálogo não
@@ -327,16 +330,25 @@ o Início) ou por URL.
 3. **Erro nunca vira vazio.** Pedidos e Receber ganham `error` próprio (e
    os avisos de Receber, `isLoading`); Exceções, Posições, histórico do item,
    Produtos, Movimentações, Retornos, conversa e Conhecimento do agente idem.
+   *Entrou nas partes 7b e 8 (Pedidos e Receber), 10 (a releitura que falha
+   não apaga a lista), 12 (a conversa e o Conhecimento) e 13b a 13h (as
+   outras telas, área por área), todas no PR 610.*
 4. **Falsos vazios e zeros.** Painel da abertura, Tabela de preços (e o
    formulário de Cobrança só editável com `config`), cartões do Fechamento,
    Início (SKUs), Estoque (endereço, foto, Parados), Pedidos legado, SKUs,
-   Clientes, Faturas do portal, Conhecimento, painel antigo.
+   Clientes, Faturas do portal, Conhecimento, painel antigo. *Entrou na
+   parte 8 (a contagem em bloco antes de ler) e nas partes 13b a 13g, por
+   área, no PR 610.*
 5. **Abertura.** Marca e spinner em CSS puro no `index.html`;
    `<Carregando />` no lugar do `null` em `HomeRedirect`, `ProtectedRoute` e
    `RoleGate` e dos `fallback={null}` (Faturamento, Catálogo, painel
-   antigo); "Sem sinal" depois de 3 s sem rede.
+   antigo); "Sem sinal" depois de 3 s sem rede. *Entrou na parte 9 do
+   carregamento v2 (PR 610), com a abertura preta da decisão 4 de 12/11 e a
+   `CarregandoTela`.*
 6. **Botão em ação.** `carregando={...}` nos botões que só apagam (item 5
-   da seção 5); em Pedidos, o `busy` por linha, não global.
+   da seção 5); em Pedidos, o `busy` por linha, não global. *Entrou como o
+   `BotaoDeAcao` (parte 4) e o `useAcaoNaLinha` (parte 6, Pedidos), e nas
+   outras telas nas partes 13b a 13h, no PR 610.*
 7. **Diálogos.** `onOpenChange` travado enquanto `isPending`, Cancelar
    desabilitado, `preventDefault` nos quatro `AlertDialogAction`; a janela do
    Evento do portal só fecha depois do retorno. *Entrou na parte 13a do
@@ -346,14 +358,18 @@ o Início) ou por URL.
    aviso de que só quatro sobem por vez; Documentos e Conhecimento com
    etapa e tempo limite; Separado e Entrega com etapa; foto por IA com tempo
    decorrido e cancelar; mensagem própria para `deadline-exceeded`.
+   *Entrou na parte 11 do carregamento v2 (PR 610).*
 9. **Atualização.** `placeholderData` nas listas com filtro; sinal discreto
    no refetch automático; erro de refetch não apaga a lista; o "Retomar
    guarda" só gira com operação de verdade; o Avançar só volta depois da
-   releitura.
+   releitura. *Entrou nas partes 7b (a linha de estado e o Atualizar que só
+   gira quando tocado) e 10 (a troca de filtro, a releitura que falha e o
+   Avançar), no PR 610.*
 10. **Mecânica.** Os 65 `RefreshCw`/`Loader2` viram `Spinner`; `role`,
     `aria-hidden` e `aria-busy` onde falta; a validação de saldo troca o
     ícone de alerta pelo spinner; os textos de teste atualizam (6 testes do
-    WMS travam "Carregando").
+    WMS travam "Carregando"). *Entrou nas partes 13b a 13g, e a parte 13h
+    trava o resultado (`lib/carregando/trava.test.ts`), no PR 610.*
 
 Os PRs 1 e 2 vêm antes dos outros; 3 a 10 não dependem entre si.
 
@@ -568,12 +584,15 @@ já estava decidido. O restante vira cinco PRs, um problema por PR:
 1. **Sem conexão na leitura e na ação** (itens 1 e 2). A leitura pausada ou
    vinda só do cache, com o aparelho sem rede, vira erro de conexão, e a ação
    é recusada na hora (decisão 1). A falha de rede da chamada vira "Sem conexão", e o
-   toast de Pedidos para de mostrar o JSON.
+   toast de Pedidos para de mostrar o JSON. *Entrou no PR 582; a parte 7a do
+   carregamento v2 (PR 610) corrigiu o falso "Sem conexão" que ele trouxe.*
 2. **Telas da operação sem sinal** (item 3). Depois de entrar, os papéis
    internos aquecem o cache das telas que usam, e o `ChunkErrorBoundary`
-   distingue falta de rede, versão nova e erro de tela.
+   distingue falta de rede, versão nova e erro de tela. *Entrou na parte 9
+   do carregamento v2 (PR 610).*
 3. **Fotos do celular** (item 4). A foto passa pela compactação que o app já
    tem, e o envio mostra a contagem e o progresso (`uploadBytesResumable`).
+   *Entrou na parte 11 do carregamento v2 (PR 610).*
 4. **Ação no celular** (itens 5 e 9). A trava de toque duplo, as chaves por
    tentativa, o rodapé preso nos diálogos longos e o X de 44 px. *O rodapé
    preso e o X de 44 px, em pé e deitado, entraram na parte 13a do
@@ -583,7 +602,8 @@ já estava decidido. O restante vira cinco PRs, um problema por PR:
    diálogo espera um desenho.*
 5. **Leitura leve e volta do segundo plano** (itens 6 e 7). O shell sem a
    releitura de 60 s no celular, o Separado com uma leitura só, e a releitura
-   na volta ao app com o "atualizado às".
+   na volta ao app com o "atualizado às". *Entrou nas partes 7b (a volta ao
+   app) e 10 (a leitura leve), no PR 610.*
 
 O PR 1 vem antes dos outros. Sem ele, o erro de Pedidos e a espera da chegada
 avulsa do PR 581 não aparecem no celular sem sinal, porque a leitura não
