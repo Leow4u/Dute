@@ -188,7 +188,15 @@ export function respostaDaEscuta(escuta: EscutaAoVivo, snapshot: RespostaDoSnaps
  * `tentando`), para o aviso não sair com o foco nele nem a tela voltar a
  * "carregando" (como a `useLeituraComFalha`).
  */
-export type NovaTentativa = { tentando: boolean; tentar: () => void } & Partial<FaltaAoVivo>;
+export type NovaTentativa = {
+  tentando: boolean;
+  tentar: () => void;
+  /**
+   * Alguma das leituras falhou sem nada lido: a falta é a dela, e não a da
+   * lista que ficou na tela (a `juntarTentativas` junta as faltas por aqui).
+   */
+  falhou?: boolean;
+} & Partial<FaltaAoVivo>;
 
 /**
  * A nova tentativa de uma leitura ao vivo de verdade: a promessa de `tentar`
@@ -442,8 +450,8 @@ function semResposta(leitura: LeituraQueTenta): boolean {
  * sem falha, a de conexão das lidas (a lista fica, com "lista de 10:42", a
  * hora da mais antiga).
  */
-function faltaDe(leituras: ReadonlyArray<{ erro?: boolean } & Partial<FaltaAoVivo>>): FaltaAoVivo {
-  const falhas = leituras.filter((leitura) => leitura.erro !== false);
+function faltaDe(leituras: ReadonlyArray<{ erro: boolean } & Partial<FaltaAoVivo>>): FaltaAoVivo {
+  const falhas = leituras.filter((leitura) => leitura.erro);
   const falta: FaltaDaLeitura = falhas.some((leitura) => leitura.falta === "conexao")
     ? "conexao"
     : falhas.some((leitura) => leitura.falta === "servidor")
@@ -468,8 +476,18 @@ export function novaTentativaDe(leituras: ReadonlyArray<LeituraQueTenta>): NovaT
     tentar: () => {
       for (const leitura of leituras) if (semResposta(leitura)) leitura.tentar?.();
     },
+    falhou: leituras.some((leitura) => leitura.erro),
     ...faltaDe(leituras),
   };
+}
+
+/**
+ * A tentativa falhou sem nada lido. A que não diz (a das consultas do
+ * react-query, montada à mão) falhou quando a falta é a do servidor, ou a da
+ * conexão sem a hora do que ficou na tela.
+ */
+function falhouSemNadaLido(tentativa: NovaTentativa): boolean {
+  return tentativa.falhou ?? (tentativa.falta === "servidor" || (tentativa.falta === "conexao" && tentativa.lidaEm == null));
 }
 
 /**
@@ -484,6 +502,8 @@ export function juntarTentativas(...tentativas: ReadonlyArray<NovaTentativa>): N
     tentar: () => {
       for (const tentativa of tentativas) tentativa.tentar();
     },
-    ...faltaDe(tentativas),
+    // A mesma regra da `novaTentativaDe`: a lida que só perdeu o servidor não é falha (revisão da parte 13j).
+    falhou: tentativas.some(falhouSemNadaLido),
+    ...faltaDe(tentativas.map((tentativa) => ({ erro: falhouSemNadaLido(tentativa), falta: tentativa.falta, lidaEm: tentativa.lidaEm }))),
   };
 }

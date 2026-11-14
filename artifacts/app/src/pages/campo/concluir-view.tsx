@@ -132,7 +132,7 @@ export function CampoConcluirView({
           {ficha.clienteNome ?? ficha.customerCode} · Demanda {ficha.demanda}
         </p>
       </header>
-      <FaixaAoVivo leitura={leitura} />
+      <FaixaAoVivo leitura={leitura} objeto="OS" />
     </>
   );
 

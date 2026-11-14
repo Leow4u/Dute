@@ -9,6 +9,7 @@ import { dividir, planoInicial, restantes, vistoriaInicial, type FormularioDoPla
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { acoesPrincipais } from "@/test/botoes";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import { PlanejarView } from "./planejar-view";
 
@@ -53,8 +54,8 @@ const VEICULOS = [
   { id: "vei_fgh", placa: "FGH-2B34", tipo: "Truck", resumo: "8000 kg · 45 m³", dono: "terceiro", empresa: "Rota Sul", ativo: true },
 ] as VeiculoDaLista[];
 
-function render(form: FormularioDoPlano, extra: Partial<Parameters<typeof PlanejarView>[0]> = {}) {
-  return renderToStaticMarkup(
+function tela(form: FormularioDoPlano, extra: Partial<Parameters<typeof PlanejarView>[0]> = {}) {
+  return (
     <Router ssrPath="/operacao/planejar">
       <PlanejarView
         estado="pronto"
@@ -79,8 +80,12 @@ function render(form: FormularioDoPlano, extra: Partial<Parameters<typeof Planej
         onGravar={noop}
         {...extra}
       />
-    </Router>,
+    </Router>
   );
+}
+
+function render(form: FormularioDoPlano, extra: Partial<Parameters<typeof PlanejarView>[0]> = {}) {
+  return renderToStaticMarkup(tela(form, extra));
 }
 
 const COM_EQUIPE: FormularioDoPlano = {
@@ -253,5 +258,13 @@ describe("Planejar vistoria (parte 3.11c)", () => {
   it("indisponível: mostra por que a demanda não recebe vistoria", () => {
     const html = render(vistoriaInicial("2026-10-28"), { estado: "indisponivel", vistoria: true, motivo: "A demanda já tem a vistoria 10045-01 em aberto." });
     expect(textosDaTela(html)).toEqual(["Demanda 10045", "A demanda já tem a vistoria 10045-01 em aberto."]);
+  });
+});
+
+describe("Planejar sem conexão (carregamento v2, parte 13j)", () => {
+  it("o aviso, a faixa e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(await estadosDaFalta((leitura, situacao) => tela(COM_EQUIPE, { estado: situacao, leitura }))).toEqual(
+      rotulosDaFalta({ mensagem: "Não foi possível carregar a demanda.", objeto: "demanda" }),
+    );
   });
 });

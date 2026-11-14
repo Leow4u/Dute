@@ -352,7 +352,11 @@ export function AprovarView(props: AprovarViewProps) {
       ) : estado === "erro" ? (
         <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar os orçamentos." className={caixa} />
       ) : mensagem || !cartao ? (
-        <p className={cn(caixa, "text-center text-sm font-bold text-muted-foreground")}>{mensagem}</p>
+        <>
+          {/* A fila lida e vazia, sem conexão: o vazio pode ser velho, e a faixa diz de quando ele é. */}
+          <FaixaAoVivo leitura={leitura} />
+          <p className={cn(caixa, "text-center text-sm font-bold text-muted-foreground")}>{mensagem}</p>
+        </>
       ) : (
         <>
           <FaixaAoVivo leitura={leitura} />

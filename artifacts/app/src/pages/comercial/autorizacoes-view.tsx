@@ -252,7 +252,10 @@ function Fila({ estado, linhas, filtro, busca, painel, acoes, marcando, leitura 
     <section aria-label="Executados aguardando autorização" className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-b border-border px-5 py-3.5">
         <h2 className="text-base font-extrabold">Executados aguardando autorização</h2>
-        <Contador>{contagem.todas}</Contador>
+        <Contador>
+          {/* Sem a fila lida, nunca o zero: "—" na falha (a revisão da parte 13j achou o 0 no aviso da falta). */}
+          <NumeroLido estado={estado}>{contagem.todas}</NumeroLido>
+        </Contador>
         <div role="group" aria-label="Dias desde a execução" className="inline-flex flex-wrap gap-0.5 rounded-lg bg-muted p-1 sm:ml-auto">
           {FILTROS_DE_IDADE.map((opcao) => (
             <button

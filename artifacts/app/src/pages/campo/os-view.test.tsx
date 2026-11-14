@@ -6,6 +6,7 @@ import { Router } from "wouter";
 
 import { registroNovo, type RegistroNaFila } from "@/lib/campo/fila";
 import { fichaDaLeitura, type FichaDaOs } from "@/lib/operacao/ficha-da-os";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import { CampoOsView } from "./os-view";
 
@@ -110,5 +111,30 @@ describe("o toque duplo no celular", () => {
     await tocar(botao("Entrada de Diego Alves"));
     await tocar(botao("Saída de Diego Alves"));
     expect(registrados.map((registro) => [registro.dados.colaborador_id, registro.dados.tipo])).toEqual([[DIEGO, "entrada"]]);
+  });
+});
+
+describe("A OS no campo sem conexão (carregamento v2, parte 13j)", () => {
+  it("o aviso, a faixa com a hora da OS e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(
+      await estadosDaFalta((leitura, situacao) => (
+        <Router ssrPath="/campo/os">
+          <CampoOsView
+            estado={situacao}
+            numero="10211-01"
+            ficha={situacao === "pronto" ? FICHA : null}
+            uid="uid-carlos"
+            pendentes={[]}
+            urls={{}}
+            catalogo={[]}
+            erroDasFotos={null}
+            agora={() => instante}
+            onRegistrar={() => undefined}
+            onFotos={() => undefined}
+            leitura={leitura}
+          />
+        </Router>
+      )),
+    ).toEqual(rotulosDaFalta({ mensagem: "Não foi possível carregar a OS.", objeto: "OS" }));
   });
 });

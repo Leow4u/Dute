@@ -8,6 +8,7 @@ import { ROTA_CONTRATOS, TELAS_DO_COMERCIAL } from "@/lib/comercial/navegacao";
 import { LEGACY_CUSTOMER_CODE } from "@/lib/operations";
 
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import { ContratosView, type ContratosViewProps } from "./contratos-view";
 import { semCamadasEscondidas } from "@/test/botoes";
@@ -368,5 +369,17 @@ describe("Contratos: as tabelas e os aditivos que falham têm saída (revisão d
     const html = render({ tabelas: "erro", aditivos: "erro", releituras: { tabelas: { tentando: false, tentar: () => undefined }, aditivos: { tentando: false, tentar: () => undefined } } });
     expect(html).toMatch(/<p role="alert"[^>]*>Não foi possível carregar as tabelas\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
     expect(html).toMatch(/<p role="alert"[^>]*>Não foi possível carregar os aditivos\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
+  });
+});
+
+describe("Contratos sem conexão (carregamento v2, parte 13j)", () => {
+  it("o aviso, a faixa e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(
+      await estadosDaFalta((leitura, situacao) => (
+        <Router ssrPath={ROTA_CONTRATOS}>
+          <ContratosView {...props(situacao === "erro" ? { estado: "erro", leitura } : { leitura })} />
+        </Router>
+      )),
+    ).toEqual(rotulosDaFalta({ mensagem: "Não foi possível carregar os contratos." }));
   });
 });

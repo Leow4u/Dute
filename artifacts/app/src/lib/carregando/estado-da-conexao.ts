@@ -180,6 +180,15 @@ export function criarConexao(opcoes: OpcoesDaConexao = {}): Conexao {
       // Sem rede, nada vem do servidor: o que deu certo foi outra coisa.
       if (!temRede()) return;
       esquecerFalhas();
+      devendoAVolta.delete(conexao);
+      if (temFaltaDeFora(conexao)) {
+        // Uma escuta ao vivo segue sem o servidor (a callable voltou, e o SDK do Firestore ainda está só no cache): o
+        // estado fica em "Reconectando", e a releitura sozinha continua acordando o SDK (revisão da parte 13j).
+        alvo = "reconectando";
+        if (relogioDaReleitura === null) armarReleitura();
+        aplicar();
+        return;
+      }
       alvo = "conectado";
       pararReleitura();
       aplicar();
@@ -266,14 +275,25 @@ export function useConexaoDaTela(): Conexao {
 export interface LeituraDeFora {
   /** Ficou sem o servidor; `inicio` é desde quando ela o esperava, no relógio da conexão (para contar só as seguidas). */
   ficouSemResposta(inicio?: number): void;
-  /** O servidor respondeu: se ela estava com a falta, a conexão fica sabendo que ele voltou. */
+  /**
+   * O servidor respondeu: se ela estava com a falta (ou outra escuta saiu da
+   * tela com ela antes da volta), a conexão fica sabendo que ele voltou.
+   */
   leuDoServidor(): void;
-  /** Saiu da tela: deixa de contar como falta. */
+  /** Saiu da tela: deixa de contar como falta; com ela, a conexão espera a volta da próxima resposta do servidor. */
   fechar(): void;
 }
 
 /** As leituras de fora do react-query com a falta agora, por conexão. */
 const faltasDeFora = new WeakMap<Conexao, Set<object>>();
+
+/**
+ * As conexões que devem a volta a uma escuta que saiu da tela com a falta (a
+ * assinatura que o "Tentar de novo" trocou, a tela que a pessoa deixou): a
+ * próxima resposta do servidor a uma escuta, ou a volta do SDK, diz que ele
+ * voltou. Outra leitura que deu certo paga a dívida.
+ */
+const devendoAVolta = new WeakSet<Conexao>();
 
 function faltasDe(conexao: Conexao): Set<object> {
   let faltas = faltasDeFora.get(conexao);
@@ -291,10 +311,12 @@ export function leituraDeFora(conexao: Conexao = conexaoDoApp): LeituraDeFora {
       conexao.ficouSemResposta(inicio);
     },
     leuDoServidor: () => {
-      if (faltasDe(conexao).delete(marca)) conexao.leuDoServidor();
+      // A falta desta escuta, ou a de uma que saiu da tela antes de ver a volta: o servidor respondeu.
+      if (faltasDe(conexao).delete(marca) || devendoAVolta.has(conexao)) conexao.leuDoServidor();
     },
     fechar: () => {
-      faltasDe(conexao).delete(marca);
+      // Saiu da tela com a falta: deixa de contar, e a conexão fica devendo a volta (revisão da parte 13j).
+      if (faltasDe(conexao).delete(marca)) devendoAVolta.add(conexao);
     },
   };
 }
@@ -464,7 +486,11 @@ export function ligarConexaoDoApp(
   };
   conexao.aoAcordar(opcoes.acordar ?? null);
   conexao.aoReler(reler);
-  const deixarAVolta = opcoes.aoVoltar?.(() => void reler());
+  const deixarAVolta = opcoes.aoVoltar?.(() => {
+    // O SDK voltou a ouvir o servidor: é a volta que a escuta que saiu da tela com a falta não chegou a ver.
+    if (devendoAVolta.has(conexao)) conexao.leuDoServidor();
+    void reler();
+  });
   const deixar = queryClient.getQueryCache().subscribe((evento) => {
     if (evento.type !== "updated") return;
     const acao = evento.action;

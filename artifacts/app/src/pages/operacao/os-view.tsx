@@ -498,7 +498,7 @@ export function OsView({
   return (
     <section className="flex flex-col gap-6">
       {voltar}
-      <FaixaAoVivo leitura={leitura} />
+      <FaixaAoVivo leitura={leitura} objeto="OS" />
       <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

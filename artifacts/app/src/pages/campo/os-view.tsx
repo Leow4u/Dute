@@ -650,7 +650,7 @@ export function CampoOsView({
           {ficha.clienteNome ?? ficha.customerCode} · Demanda {ficha.demanda}
         </p>
       </header>
-      <FaixaAoVivo leitura={leitura} />
+      <FaixaAoVivo leitura={leitura} objeto="OS" />
       {primeira || janela ? (
         <dl className="grid grid-cols-2 gap-2">
           {primeira ? (

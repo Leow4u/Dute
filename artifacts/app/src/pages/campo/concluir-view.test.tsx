@@ -9,6 +9,7 @@ import type { NovoRegistro } from "@/lib/campo/fila";
 import { fichaDaLeitura, type FichaDaOs } from "@/lib/operacao/ficha-da-os";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import { CampoConcluirView } from "./concluir-view";
 import { CampoOsView } from "./os-view";
@@ -50,12 +51,16 @@ const FICHA = fichaDaLeitura("10211-01", {
   fotos: [{ id: "ft_f000000000000001", caminho: "os/10211-01/fotos/ft_f000000000000001.jpg", etapa: "fim", instante: "2026-10-20T20:46:00.000Z" }],
 }) as FichaDaOs;
 
-function render(extra: Partial<Parameters<typeof CampoConcluirView>[0]> = {}) {
-  return renderToStaticMarkup(
+function tela(extra: Partial<Parameters<typeof CampoConcluirView>[0]> = {}) {
+  return (
     <Router ssrPath="/campo/concluir">
       <CampoConcluirView estado="pronto" numero="10211-01" ficha={FICHA} uid="uid-carlos" pendentes={[]} urls={{}} erroDasFotos={null} agora={() => AGORA} onConcluir={noop} onFotos={noop} {...extra} />
-    </Router>,
+    </Router>
   );
+}
+
+function render(extra: Partial<Parameters<typeof CampoConcluirView>[0]> = {}) {
+  return renderToStaticMarkup(tela(extra));
 }
 
 // O jsdom não desenha: o quadro de assinatura fica sem contexto, como num navegador sem canvas.
@@ -210,5 +215,13 @@ describe("a OS no celular leva à conclusão", () => {
     expect(renderOs("uid-carlos")).toContain('href="/campo/concluir?numero=10211-01"');
     expect(textosDaTela(renderOs("uid-carlos"))).toContain("Concluir OS");
     expect(textosDaTela(renderOs("uid-diego"))).not.toContain("Concluir OS");
+  });
+});
+
+describe("Concluir OS sem conexão (carregamento v2, parte 13j)", () => {
+  it("o aviso, a faixa e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(await estadosDaFalta((leitura, situacao) => tela({ estado: situacao, leitura, ...(situacao === "erro" ? { ficha: null } : {}) }))).toEqual(
+      rotulosDaFalta({ mensagem: "Não foi possível carregar a OS.", objeto: "OS" }),
+    );
   });
 });

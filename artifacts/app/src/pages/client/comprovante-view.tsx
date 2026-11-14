@@ -103,8 +103,13 @@ export function ComprovanteView({
           className="no-print rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
         />
       ) : null}
-      {estado === "pronto" && leitura ? (
-        <FaixaAoVivo leitura={{ tentando: leitura.tentando, tentar: leitura.onTentar, falta: leitura.falta, lidaEm: leitura.lidaEm }} className="no-print" />
+      {/* A OS lida sem conexão, com o comprovante ou sem ele: o que a tela diz pode ser velho, e a faixa diz de quando é. */}
+      {(estado === "pronto" || estado === "sem_comprovante") && leitura ? (
+        <FaixaAoVivo
+          leitura={{ tentando: leitura.tentando, tentar: leitura.onTentar, falta: leitura.falta, lidaEm: leitura.lidaEm }}
+          objeto={pronto ? "comprovante" : "OS"}
+          className="no-print"
+        />
       ) : null}
       {estado === "carregando" ? (
         <CarregandoNaRegiao rotulo="Carregando o comprovante…" continuaARota onTentar={leitura?.onTentar} className="rounded-lg border border-border bg-card px-5 py-7" />

@@ -18,6 +18,7 @@ import { contratoDoRegistro } from "@/lib/comercial/contratos";
 import { ROTA_AUTORIZACOES, TELAS_DO_COMERCIAL } from "@/lib/comercial/navegacao";
 
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import { AutorizacoesView, type AutorizacoesViewProps } from "./autorizacoes-view";
 import { semCamadasEscondidas, travadoNoHtml } from "@/test/botoes";
@@ -544,5 +545,32 @@ describe("Autorizações: a leitura das autorizadas que falha tem saída (revis�
   it("a falha diz o que não carregou com Tentar de novo, e lendo a região tem a saída dos 10 s", () => {
     expect(render({ autorizadas: "erro", leituraDasAutorizadas: { tentando: false, tentar: () => undefined } })).toMatch(/<p role="alert"[^>]*>Não foi possível carregar as autorizações\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
     expect(render({ autorizadas: "carregando", leituraDasAutorizadas: { tentando: false, tentar: () => undefined } })).toMatch(/<div tabindex="-1"[^>]*data-carregando-na-regiao=""/);
+  });
+});
+
+describe("Autorizações sem conexão (carregamento v2, parte 13j)", () => {
+  const tela = (overrides: Partial<AutorizacoesViewProps>) => (
+    <Router ssrPath={ROTA_AUTORIZACOES}>
+      <AutorizacoesView {...props(overrides)} />
+    </Router>
+  );
+
+  it("a fila: o aviso, a faixa e a falha do servidor põem só os rótulos da falta, sem legenda; as contagens sem a fila lida dizem —, nunca 0; axe", async () => {
+    const esperado = rotulosDaFalta({ mensagem: "Não foi possível carregar a fila." });
+    for (const nome of ["sem nada lido, sem conexão", "sem nada lido, reconectando", "erro do servidor"] as const) esperado[nome].novos.unshift("—");
+    expect(
+      await estadosDaFalta((leitura, situacao) =>
+        tela(situacao === "erro" ? { estado: "erro", linhas: [], painel: { ...props().painel, aberto: false, marcadas: [] }, leitura } : { leitura }),
+      ),
+    ).toEqual(esperado);
+  });
+
+  it("as autorizadas: o aviso e a falha do servidor no lugar da lista; a lida não repete a faixa da fila", async () => {
+    const esperado = rotulosDaFalta({ mensagem: "Não foi possível carregar as autorizações." });
+    expect(await estadosDaFalta((leitura, situacao) => tela(situacao === "erro" ? { autorizadas: "erro", leituraDasAutorizadas: leitura } : { leituraDasAutorizadas: leitura }))).toEqual({
+      ...esperado,
+      "lida, sem conexão": { novos: [], axe: [] },
+      "lida, reconectando": { novos: [], axe: [] },
+    });
   });
 });

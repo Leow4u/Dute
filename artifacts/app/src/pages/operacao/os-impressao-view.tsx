@@ -50,7 +50,7 @@ export function OsImpressaoView({
           Imprimir
         </Button>
       </div>
-      {estado === "pronto" ? <FaixaAoVivo leitura={leitura} className="no-print" /> : null}
+      {estado === "pronto" ? <FaixaAoVivo leitura={leitura} objeto="OS" className="no-print" /> : null}
       {estado === "carregando" ? (
         <CarregandoNaRegiao rotulo="Carregando a OS…" continuaARota onTentar={leitura.tentar} className="rounded-lg border border-border bg-card px-5 py-7" />
       ) : estado === "erro" ? (

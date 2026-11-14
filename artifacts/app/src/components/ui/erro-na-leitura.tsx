@@ -7,6 +7,7 @@ import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { Spinner } from "@/components/ui/spinner";
 import { useConexao, useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
 import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
+import { CARREGANDO } from "@/lib/carregando/tempo";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { ehFaltaDeConexao, horaDaLeitura } from "@/lib/conexao";
 import { focoPerdido, lugarDaSecao, podeReceberFoco, segurarOFocoQueSai } from "@/lib/foco-de-volta";
@@ -28,6 +29,35 @@ export function useFaltaNaTela(forcada?: FaltaNaTela): FaltaNaTela {
 }
 
 /**
+ * Na volta da rede, "Sem conexão" fica até a leitura voltar (momento 8: da
+ * pílula direto para a lista em dia): a conexão passa a "reconectando" assim
+ * que o aparelho tem rede, antes de o servidor responder. Só se ele ainda não
+ * respondeu depois do mínimo de 2 s do aviso, a peça diz "Reconectando…". A
+ * linha de estado, o aviso no lugar da lista e a faixa da lista lida seguem a
+ * mesma regra (revisão da parte 13j).
+ */
+export function useVoltaDaRede(falta: FaltaNaTela, comFalta: boolean): FaltaNaTela {
+  const [anterior, setAnterior] = useState(falta);
+  const [segurando, setSegurando] = useState(false);
+  if (anterior !== falta) {
+    setAnterior(falta);
+    setSegurando(anterior === "sem-conexao" && falta === "reconectando");
+  }
+  useEffect(() => {
+    if (!segurando) return undefined;
+    const fim = setTimeout(() => setSegurando(false), CARREGANDO.avisoMinimoMs);
+    return () => clearTimeout(fim);
+  }, [segurando]);
+  return segurando && comFalta ? "sem-conexao" : falta;
+}
+
+/** A falta que a peça mostra enquanto está na tela: a do estado único, com a volta da rede segurada; ou a `forcada`. */
+function useFaltaDaPeca(forcada?: FaltaNaTela): FaltaNaTela {
+  const naTela = useVoltaDaRede(useFaltaNaTela(), true);
+  return forcada ?? naTela;
+}
+
+/**
  * O "Tentando de novo…" no relógio da espera, para quem passa ao
  * `ErroNaLeitura` a leitura crua (o `isFetching`): só depois de 300 ms, e pelo
  * menos 500 ms. A nova tentativa que falha de novo antes não pisca o botão nem
@@ -43,15 +73,41 @@ export function useTentandoNoRelogio(tentando: boolean): boolean {
  * trava do toque segue o que o botão diz: enquanto ele diz "Tentando de
  * novo…" (`aria-disabled`), o toque não faz nada; enquanto diz "Tentar de
  * novo", o toque tenta. Antes de reler, acorda a conexão de quem lê, para o
- * toque alcançar o servidor.
+ * toque alcançar o servidor; o pedido conta como tentando desde o toque, com
+ * o SDK sendo acordado, até a releitura responder (a lista ao vivo já lida
+ * não assina de novo: o toque é o despertar do SDK, e a escuta volta sozinha
+ * quando ele volta a ouvir o servidor; revisão da parte 13j).
  */
-function useNovaTentativa(tentando: boolean, onTentar: () => void) {
-  const mostrando = useTentandoNoRelogio(tentando);
+function useNovaTentativa(tentando: boolean, onTentar: () => unknown) {
+  const [pedidos, setPedidos] = useState(0);
+  const montada = useRef(true);
+  useEffect(() => {
+    montada.current = true;
+    return () => {
+      montada.current = false;
+    };
+  }, []);
+  const mostrando = useTentandoNoRelogio(tentando || pedidos > 0);
   const tentarDeNovo = useTentarDeNovo();
   return {
     mostrando,
     tentar: () => {
-      if (!mostrando) tentarDeNovo(onTentar);
+      if (mostrando) return;
+      setPedidos((quantos) => quantos + 1);
+      const acabou = () => {
+        if (montada.current) setPedidos((quantos) => quantos - 1);
+      };
+      tentarDeNovo(() => {
+        let resposta: unknown;
+        try {
+          resposta = onTentar();
+        } finally {
+          // A releitura que devolve a promessa conta até responder; a outra já pediu o que tinha de pedir.
+          if (resposta && typeof (resposta as PromiseLike<unknown>).then === "function") {
+            void Promise.resolve(resposta).catch(() => undefined).finally(acabou);
+          } else acabou();
+        }
+      });
     },
   };
 }
@@ -192,7 +248,7 @@ export function BlocoSemConexao({
   /** O id da linha de estado da lista, que recebe o foco quando o aviso sai com ele. */
   focoAoSair?: string;
 }) {
-  const naTela = useFaltaNaTela(falta);
+  const naTela = useFaltaDaPeca(falta);
   const { mostrando, tentar } = useNovaTentativa(tentando, onTentar);
   return (
     <ErroNaLeitura
@@ -211,8 +267,17 @@ export function BlocoSemConexao({
  * hora da última leitura (decisão 2 do celular; momento 8 do carregamento
  * v2). "Sem conexão · lista de 10:42" na pílula âmbar (o --carregando-aviso,
  * 6,2:1), ou "Reconectando… · lista de 10:42" em tinta, com os arcos do
- * Wi-Fi, pelo estado único da conexão. Não é região viva: "Reconectando" não
- * fala, e "Sem conexão" o Anunciador diz uma vez, ao entrar.
+ * Wi-Fi, pelo estado único da conexão; na volta da rede, "Sem conexão" fica
+ * até a leitura voltar. `objeto` diz o que está na tela: a lista, ou o
+ * documento ("Sem conexão · OS de 10:42"). Não é região viva:
+ * "Reconectando" não fala, e "Sem conexão" o Anunciador diz uma vez, ao
+ * entrar.
+ *
+ * A faixa é baixa (o "Tentar de novo" é o da linha de estado, de 24 px, com o
+ * toque de 44 px pelo ::before), e a frase fica inteira: o que não cabe na
+ * largura é o "Tentar de novo", que passa à linha de baixo (revisão da parte
+ * 13j). Com o foco no "Tentar de novo", a faixa que sai o leva ao título da
+ * seção, nunca ao `body`.
  */
 export function FaixaSemConexao({
   lidaEm,
@@ -220,22 +285,32 @@ export function FaixaSemConexao({
   onTentar,
   className,
   falta,
+  objeto = "lista",
+  focoAoSair,
 }: {
   lidaEm: number;
   tentando: boolean;
-  onTentar: () => void;
+  onTentar: () => unknown;
   className?: string;
   falta?: FaltaNaTela;
+  /** O que está na tela: "lista" (o padrão), "OS", "demanda", "orçamento", "comprovante". */
+  objeto?: string;
+  /** O id de quem recebe o foco quando a faixa sai com ele; sem ele, o título da seção. */
+  focoAoSair?: string;
 }) {
-  const naTela = useFaltaNaTela(falta);
+  const naTela = useFaltaDaPeca(falta);
   const { mostrando, tentar } = useNovaTentativa(tentando, onTentar);
+  const raiz = useRef<HTMLDivElement>(null);
+  useFocoAoSair(raiz, focoAoSair);
   const semConexao = naTela === "sem-conexao";
   const hora = horaDaLeitura(lidaEm);
   return (
     <div
+      ref={raiz}
       data-falta={naTela}
+      data-faixa-sem-conexao=""
       className={cn(
-        "flex flex-wrap items-center gap-x-3 rounded-lg border py-0.5 pl-4 pr-1 text-sm",
+        "flex flex-wrap items-center gap-x-2 rounded-lg border py-1 pl-3 pr-2 text-sm",
         semConexao
           ? "border-warning-soft-border bg-warning-soft font-bold text-carregando-aviso"
           : "border-border bg-card text-foreground",
@@ -244,21 +319,23 @@ export function FaixaSemConexao({
     >
       {semConexao ? <WifiOff className="size-4 shrink-0" aria-hidden="true" /> : <ArcosDoWifi />}
       {semConexao ? (
-        <span className="flex-1">{`Sem conexão · lista de ${hora}`}</span>
+        <span className="min-w-0 flex-auto whitespace-nowrap">{`Sem conexão · ${objeto} de ${hora}`}</span>
       ) : (
-        <span className="flex flex-1 flex-wrap items-baseline gap-x-1.5">
+        <span className="flex min-w-0 flex-auto items-baseline gap-x-1.5 whitespace-nowrap">
           <span className="font-bold">Reconectando…</span>
-          <span className="text-xs font-semibold text-muted-foreground">{`· lista de ${hora}`}</span>
+          <span className="text-xs font-semibold text-muted-foreground">{`· ${objeto} de ${hora}`}</span>
         </span>
       )}
       <button
         type="button"
+        data-tom={semConexao ? "aviso" : undefined}
         aria-disabled={mostrando || undefined}
         aria-busy={mostrando || undefined}
         onClick={tentar}
-        className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 font-extrabold underline underline-offset-4 aria-disabled:no-underline"
+        className="linha-de-estado-tentar"
       >
-        {mostrando ? <Spinner /> : null}
+        {/* No celular, sem a caixa: o rótulo mais largo cabe sem empurrar a frase. */}
+        {mostrando ? <Spinner className="max-sm:hidden" /> : null}
         {mostrando ? "Tentando de novo…" : "Tentar de novo"}
       </button>
     </div>
@@ -380,7 +457,7 @@ export function FalhaAoVivo({
     return (
       <BlocoSemConexao
         tentando={leitura.tentando}
-        onTentar={() => void leitura.tentar()}
+        onTentar={() => leitura.tentar()}
         className={cn(semCartao && "rounded-none border-0", estreito && "sm:flex-col sm:items-stretch sm:gap-3 sm:px-4")}
         focoAoSair={focoAoSair}
       />
@@ -390,13 +467,40 @@ export function FalhaAoVivo({
 }
 
 /**
+ * A hora que o aviso mostra, com a histerese do momento 8: ele fica pelo
+ * menos 2 s depois de entrar, e a falta que volta nesse tempo não recomeça a
+ * conta. O soluço do servidor (a vista que cai no cache e volta em 300 ms)
+ * não pisca o aviso nem empurra a lista duas vezes seguidas.
+ */
+function useAvisoQueFica(lidaEm: number | null): number | null {
+  const [aviso, setAviso] = useState<{ desde: number; lidaEm: number } | null>(() =>
+    lidaEm === null ? null : { desde: performance.now(), lidaEm },
+  );
+  if (lidaEm !== null && aviso?.lidaEm !== lidaEm) setAviso({ desde: aviso?.desde ?? performance.now(), lidaEm });
+  useEffect(() => {
+    if (lidaEm !== null || aviso === null) return undefined;
+    const resta = aviso.desde + CARREGANDO.avisoMinimoMs - performance.now();
+    if (resta <= 0) {
+      setAviso(null);
+      return undefined;
+    }
+    const fim = setTimeout(() => setAviso(null), resta);
+    return () => clearTimeout(fim);
+  }, [lidaEm, aviso]);
+  return lidaEm ?? aviso?.lidaEm ?? null;
+}
+
+/**
  * A lista ao vivo já lida, sem conexão (parte 13j; decisão 2 do celular): ela
  * fica na tela, e a faixa diz "Sem conexão · lista de 10:42" (ou
  * "Reconectando… · lista de 10:42"), com "Tentar de novo", que acorda o SDK:
  * a escuta volta sozinha quando ele volta a ouvir o servidor. Sem a falta de
- * conexão com a lista lida, nada.
+ * conexão com a lista lida, nada. Fica pelo menos 2 s na tela (revisão da
+ * parte 13j). `objeto` é o que a tela mostra, nas fichas de um documento só:
+ * "Sem conexão · OS de 10:42".
  */
-export function FaixaAoVivo({ leitura, className }: { leitura: LeituraAoVivoNaTela; className?: string }) {
-  if (leitura.falta !== "conexao" || leitura.lidaEm == null) return null;
-  return <FaixaSemConexao lidaEm={leitura.lidaEm} tentando={leitura.tentando} onTentar={() => void leitura.tentar()} className={className} />;
+export function FaixaAoVivo({ leitura, objeto, className }: { leitura: LeituraAoVivoNaTela; objeto?: string; className?: string }) {
+  const lidaEm = useAvisoQueFica(leitura.falta === "conexao" && leitura.lidaEm != null ? leitura.lidaEm : null);
+  if (lidaEm === null) return null;
+  return <FaixaSemConexao lidaEm={lidaEm} objeto={objeto} tentando={leitura.tentando} onTentar={() => leitura.tentar()} className={className} />;
 }

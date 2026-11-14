@@ -703,7 +703,7 @@ export function PlanejarView({
   return (
     <section className="flex flex-col gap-6">
       {linkDeVolta}
-      <FaixaAoVivo leitura={leitura} />
+      <FaixaAoVivo leitura={leitura} objeto="demanda" />
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">

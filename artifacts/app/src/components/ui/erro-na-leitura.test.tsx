@@ -9,7 +9,7 @@ import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { conexaoEm } from "@/test/conexao";
 import { textosDaTela } from "@/test/textos";
 
-import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao, FalhaNaLeitura, type LeituraQueFalhou } from "./erro-na-leitura";
+import { BlocoSemConexao, ErroNaLeitura, FaixaAoVivo, FaixaSemConexao, FalhaNaLeitura, type LeituraAoVivoNaTela, type LeituraQueFalhou } from "./erro-na-leitura";
 
 /** A tela com o app no estado de conexão pedido. */
 function naConexao(estado: EstadoDaConexao, elemento: ReactElement) {
@@ -123,9 +123,203 @@ describe("na falta de conexão, com a lista já lida", () => {
     }
   });
 
-  it("o toque da nova tentativa tem 44 px de altura", () => {
-    const html = naConexao("sem-conexao", faixa());
-    expect(html).toMatch(/<button[^>]*class="[^"]*min-h-11/);
+  it("o toque da nova tentativa tem 44 px de altura, sem a faixa crescer: o da linha de estado, estendido pelo ::before", () => {
+    for (const estado of ["sem-conexao", "reconectando"] as const) {
+      const html = naConexao(estado, faixa());
+      // A `.linha-de-estado-tentar` (index.css): 24 px na faixa e o toque de 44 px por um ::before com inset de -10 px.
+      expect(html, estado).toMatch(/<button[^>]*class="[^"]*linha-de-estado-tentar/);
+      expect(html, estado).not.toContain("min-h-11");
+    }
+  });
+
+  it("a frase fica inteira: o que não cabe é o Tentar de novo, que passa à linha de baixo (revisão da 13j)", () => {
+    const sem = naConexao("sem-conexao", faixa());
+    expect(sem).toMatch(/<span[^>]*class="[^"]*whitespace-nowrap[^"]*">Sem conexão · lista de 10:42<\/span>/);
+    const reconectando = naConexao("reconectando", faixa());
+    expect(reconectando).toMatch(/<span[^>]*class="[^"]*whitespace-nowrap[^"]*"><span[^>]*>Reconectando…<\/span><span[^>]*>· lista de 10:42<\/span><\/span>/);
+  });
+
+  it("diz o que está na tela: a lista, ou a OS, a demanda, o orçamento (revisão da 13j)", async () => {
+    const os = (estado: EstadoDaConexao) => naConexao(estado, <FaixaSemConexao lidaEm={lidaEm} objeto="OS" tentando={false} onTentar={() => undefined} />);
+    expect(textosDaTela(os("sem-conexao"))).toEqual(["Sem conexão · OS de 10:42", "Tentar de novo"]);
+    expect(textosDaTela(os("reconectando"))).toEqual(["Reconectando…", "· OS de 10:42", "Tentar de novo"]);
+    expect(await violacoesDeAcessibilidade(os("sem-conexao"))).toEqual([]);
+  });
+});
+
+/**
+ * A faixa da lista ao vivo (revisão da parte 13j): a histerese do momento 8.
+ * Cada aviso fica pelo menos 2 s antes de dar lugar a outro (o soluço do
+ * servidor não pisca a faixa nem empurra a lista duas vezes seguidas); na
+ * volta da rede, "Sem conexão" fica até a leitura voltar, sem passar por
+ * "Reconectando…"; o foco no "Tentar de novo" nunca cai no body quando ela
+ * sai; e o toque diz "Tentando de novo…" enquanto o SDK é acordado.
+ */
+describe("a faixa da lista ao vivo (revisão da 13j)", () => {
+  let raiz: Root | null = null;
+  let container: HTMLElement | null = null;
+  const lidaEm = Date.parse("2026-11-06T13:42:00Z");
+  const noop = () => undefined;
+
+  afterEach(() => {
+    act(() => raiz?.unmount());
+    container?.remove();
+    raiz = null;
+    container = null;
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  function montar(elemento: ReactElement, tag: "div" | "main" = "div") {
+    if (!vi.isFakeTimers()) vi.useFakeTimers();
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    container = document.createElement(tag);
+    document.body.append(container);
+    raiz = createRoot(container);
+    act(() => raiz!.render(elemento));
+  }
+
+  const passar = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  const faixaNaTela = () => container!.querySelector("[data-falta]:not([data-falha-na-leitura])");
+  const ao = (leitura: Partial<LeituraAoVivoNaTela>): LeituraAoVivoNaTela => ({ tentando: false, tentar: noop, falta: null, lidaEm: null, ...leitura });
+
+  it("fica pelo menos 2 s: o soluço do servidor não a pisca", () => {
+    const conexao = conexaoEm("reconectando");
+    const tela = (leitura: LeituraAoVivoNaTela) => (
+      <ProvedorDaConexao value={conexao}>
+        <FaixaAoVivo leitura={leitura} />
+      </ProvedorDaConexao>
+    );
+    montar(tela(ao({})));
+    expect(faixaNaTela()).toBeNull();
+    act(() => raiz!.render(tela(ao({ falta: "conexao", lidaEm }))));
+    expect(faixaNaTela()?.textContent).toContain("· lista de 10:42");
+    // O servidor responde 300 ms depois: a faixa fica até completar os 2 s.
+    passar(300);
+    act(() => raiz!.render(tela(ao({}))));
+    expect(faixaNaTela()?.textContent).toContain("· lista de 10:42");
+    passar(1_699);
+    expect(faixaNaTela()).not.toBeNull();
+    // A queda que volta dentro dos 2 s não recomeça a conta nem tira a faixa.
+    act(() => raiz!.render(tela(ao({ falta: "conexao", lidaEm }))));
+    act(() => raiz!.render(tela(ao({}))));
+    passar(1);
+    expect(faixaNaTela()).toBeNull();
+    // A que fica mais de 2 s sai com a leitura que voltou.
+    act(() => raiz!.render(tela(ao({ falta: "conexao", lidaEm }))));
+    passar(2_500);
+    act(() => raiz!.render(tela(ao({}))));
+    expect(faixaNaTela()).toBeNull();
+  });
+
+  for (const [nome, peca] of [
+    ["a faixa", (falta: boolean) => <FaixaAoVivo leitura={ao(falta ? { falta: "conexao", lidaEm } : {})} />],
+    ["o bloco", (falta: boolean) => (falta ? <BlocoSemConexao tentando={false} onTentar={noop} /> : null)],
+  ] as const) {
+    it(`${nome}: na volta da rede, Sem conexão fica até a leitura voltar, sem passar por Reconectando`, () => {
+      let rede = false;
+      vi.useFakeTimers();
+      const conexao = criarConexao({ temRede: () => rede });
+      const tela = (falta: boolean) => <ProvedorDaConexao value={conexao}>{peca(falta)}</ProvedorDaConexao>;
+      montar(tela(true));
+      // Sem rede há 6 s: o "Sem conexão" já completou os 2 s do aviso.
+      passar(6_000);
+      expect(conexao.estado()).toBe("sem-conexao");
+      expect(container!.textContent).toMatch(/^Sem conexão/);
+      // A rede volta: o estado único passa a "Reconectando" (o servidor ainda não respondeu)…
+      rede = true;
+      act(() => conexao.redeMudou());
+      expect(conexao.estado()).toBe("reconectando");
+      // …e a peça segue em "Sem conexão" até a leitura voltar, 1,2 s depois, e sai dali direto.
+      for (const ms of [0, 600, 1_199]) {
+        if (ms) passar(ms === 600 ? 600 : 599);
+        expect(container!.textContent, `${ms} ms depois da volta da rede`).toMatch(/^Sem conexão/);
+      }
+      passar(1);
+      act(() => raiz!.render(tela(false)));
+      expect(container!.textContent).toBe("");
+      passar(2_000);
+      expect(container!.textContent).toBe("");
+      conexao.fechar();
+    });
+
+    it(`${nome}: na volta da rede sem o servidor, Reconectando… só depois dos 2 s do aviso`, () => {
+      let rede = false;
+      vi.useFakeTimers();
+      const conexao = criarConexao({ temRede: () => rede });
+      montar(<ProvedorDaConexao value={conexao}>{peca(true)}</ProvedorDaConexao>);
+      passar(6_000);
+      rede = true;
+      act(() => conexao.redeMudou());
+      passar(1_999);
+      expect(container!.textContent).toMatch(/^Sem conexão/);
+      passar(1);
+      expect(container!.textContent).toMatch(/^Reconectando…/);
+      conexao.fechar();
+    });
+  }
+
+  it("com o foco no Tentar de novo, a faixa que sai leva o foco ao título da seção, nunca ao body", async () => {
+    const conexao = conexaoEm("sem-conexao");
+    const tela = (falta: boolean) => (
+      <ProvedorDaConexao value={conexao}>
+        <section>
+          <h1>Demandas</h1>
+          <FaixaAoVivo leitura={ao(falta ? { falta: "conexao", lidaEm } : {})} />
+          <ul>
+            <li>10045</li>
+          </ul>
+        </section>
+      </ProvedorDaConexao>
+    );
+    montar(tela(true), "main");
+    const botao = faixaNaTela()!.querySelector("button")!;
+    act(() => botao.focus());
+    expect(document.activeElement).toBe(botao);
+    passar(2_000);
+    act(() => raiz!.render(tela(false)));
+    await act(async () => undefined);
+    expect(faixaNaTela()).toBeNull();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.textContent).toBe("Demandas");
+  });
+
+  it("o Tentar de novo diz Tentando de novo… enquanto acorda o SDK, ocupado e não desabilitado; o toque repetido não acorda de novo", async () => {
+    let acordou: (() => void) | null = null;
+    const acordar = vi.fn(() => new Promise<void>((pronto) => (acordou = pronto)));
+    const conexao = criarConexao({ temRede: () => true });
+    conexao.aoAcordar(acordar);
+    const tentar = vi.fn();
+    montar(
+      <ProvedorDaConexao value={conexao}>
+        <FaixaAoVivo leitura={ao({ falta: "conexao", lidaEm, tentar })} />
+      </ProvedorDaConexao>,
+    );
+    const botao = faixaNaTela()!.querySelector("button")!;
+    act(() => botao.click());
+    expect(acordar).toHaveBeenCalledTimes(1);
+    passar(299);
+    expect(botao.textContent).toBe("Tentar de novo");
+    passar(1);
+    expect(botao.textContent).toBe("Tentando de novo…");
+    expect(botao.getAttribute("aria-busy")).toBe("true");
+    expect(botao.getAttribute("aria-disabled")).toBe("true");
+    expect(botao.disabled).toBe(false);
+    act(() => botao.click());
+    expect(acordar).toHaveBeenCalledTimes(1);
+    passar(5_000);
+    expect(botao.textContent).toBe("Tentando de novo…");
+    await act(async () => {
+      acordou!();
+      await Promise.resolve();
+    });
+    expect(tentar).toHaveBeenCalledTimes(1);
+    passar(500);
+    expect(botao.textContent).toBe("Tentar de novo");
+    conexao.fechar();
   });
 });
 

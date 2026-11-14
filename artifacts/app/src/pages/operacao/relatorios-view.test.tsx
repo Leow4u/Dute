@@ -6,6 +6,7 @@ import { RELATORIO_DO_ACERTO, resumoDoAcerto, sugestaoDoAcerto, tabelaDoAcerto }
 import { RELATORIOS_DA_OPERACAO, filtroInicial, osDoRelatorio, resumoDasOs, tabelaDaEquipe, tabelaPorPeriodo, type OsDoRelatorio } from "@/lib/operacao/relatorios";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import { RelatoriosView, hrefDoRelatorio, resumoDasOsEmTexto, type RelatoriosViewProps } from "./relatorios-view";
 
@@ -34,7 +35,7 @@ const OSS: OsDoRelatorio[] = [os("10050-01"), os("10050-02", { status: "cancelad
 const FILTRO = { ...filtroInicial("2026-10-23"), de: "2026-10-01" };
 const noop = () => undefined;
 
-function render(props: Partial<RelatoriosViewProps> = {}) {
+function tela(props: Partial<RelatoriosViewProps> = {}) {
   const base: RelatoriosViewProps = {
     relatorio: "periodo",
     filtro: FILTRO,
@@ -45,11 +46,15 @@ function render(props: Partial<RelatoriosViewProps> = {}) {
     tabela: tabelaPorPeriodo(OSS, "semana"),
     acoes: { mudarFiltro: noop, exportar: noop, imprimir: noop },
   };
-  return renderToStaticMarkup(
+  return (
     <Router ssrPath="/operacao/relatorios">
       <RelatoriosView {...base} {...props} />
-    </Router>,
+    </Router>
   );
+}
+
+function render(props: Partial<RelatoriosViewProps> = {}) {
+  return renderToStaticMarkup(tela(props));
 }
 
 describe("Relatórios da Operação", () => {
@@ -174,3 +179,10 @@ describe("o acerto da memória (parte 5.6)", () => {
   });
 });
 
+describe("Os Relatórios da Operação sem conexão (carregamento v2, parte 13j)", () => {
+  it("o aviso, a faixa com a hora do relatório e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(await estadosDaFalta((leitura, situacao) => tela({ estado: situacao, leitura }))).toEqual(
+      rotulosDaFalta({ mensagem: "Não foi possível carregar o relatório.", objeto: "relatório" }),
+    );
+  });
+});

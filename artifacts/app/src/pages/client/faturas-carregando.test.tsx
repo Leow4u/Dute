@@ -5,7 +5,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Router } from "wouter";
 
+import { ProvedorDaConexao, type EstadoDaConexao } from "@/lib/carregando/estado-da-conexao";
 import { resolveOperationProfile } from "@/lib/operations";
+import { conexaoEm } from "@/test/conexao";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosForaDaLista } from "@/test/textos";
 
@@ -18,7 +20,14 @@ import { textosForaDaLista } from "@/test/textos";
  */
 
 const estado = vi.hoisted(() => ({
-  nfs: { nfs: null as unknown[] | null, erro: false, tentando: false, tentar: () => undefined as void },
+  nfs: { nfs: null as unknown[] | null, erro: false, tentando: false, tentar: () => undefined as void } as {
+    nfs: unknown[] | null;
+    erro: boolean;
+    tentando: boolean;
+    tentar: () => void;
+    falta?: "conexao" | "servidor" | null;
+    lidaEm?: number | null;
+  },
   tentativas: 0,
 }));
 
@@ -71,15 +80,17 @@ async function ate(condicao: () => unknown, limiteMs = 3_000) {
   }
 }
 
-async function montar(nfs: typeof estado.nfs) {
+async function montar(nfs: typeof estado.nfs, conexao: EstadoDaConexao = "conectado") {
   estado.nfs = nfs;
   await act(async () =>
     raiz!.render(
-      <QueryClientProvider client={new QueryClient()}>
-        <Router>
-          <ClienteFaturas />
-        </Router>
-      </QueryClientProvider>,
+      <ProvedorDaConexao value={conexaoEm(conexao)}>
+        <QueryClientProvider client={new QueryClient()}>
+          <Router>
+            <ClienteFaturas />
+          </Router>
+        </QueryClientProvider>
+      </ProvedorDaConexao>,
     ),
   );
 }
@@ -122,5 +133,22 @@ describe("Faturas do portal antes de ler as NFs", () => {
   it("lidas e sem nenhuma, aí sim o vazio", async () => {
     await montar({ nfs: [], erro: false, tentando: false, tentar: () => undefined });
     expect(container.textContent).toContain(VAZIO);
+  });
+});
+
+describe("Faturas do portal sem conexão (carregamento v2, parte 13j)", () => {
+  it("as NFs sem conexão: o aviso da conexão, nunca a falha da seção nem o vazio; só os rótulos da falta; axe", async () => {
+    for (const conexao of ["sem-conexao", "reconectando"] as const) {
+      // Uma tela por estado da conexão: a mesma tela que passa de "Sem conexão" a "Reconectando" segura o aviso 2 s.
+      act(() => raiz?.unmount());
+      raiz = createRoot(container);
+      await montar({ nfs: null, erro: true, tentando: false, tentar: () => undefined, falta: "conexao", lidaEm: null }, conexao);
+      const aviso = conexao === "sem-conexao" ? "Sem conexão." : "Reconectando…";
+      expect(container.textContent, conexao).toContain(aviso);
+      expect(container.textContent, conexao).not.toMatch(/Não foi possível carregar as NFs|Nenhuma fatura fechada ainda/);
+      const html = container.innerHTML;
+      expect(textosForaDaLista(html, ["Faturas", DESCRICAO, aviso, "Tentar de novo"]), conexao).toEqual([]);
+      expect(await violacoesDeAcessibilidade(html), conexao).toEqual([]);
+    }
   });
 });

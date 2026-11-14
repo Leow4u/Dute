@@ -4,7 +4,7 @@ import { AlertCircle, Clock3, RefreshCw, WifiOff } from "lucide-react";
 
 import { ArcosDoWifi } from "@/components/ui/arcos-do-wifi";
 import { Button } from "@/components/ui/button";
-import { useFaltaNaTela } from "@/components/ui/erro-na-leitura";
+import { useFaltaNaTela, useVoltaDaRede } from "@/components/ui/erro-na-leitura";
 import { Spinner } from "@/components/ui/spinner";
 import { useAnuncio, useRetirarAnuncio } from "@/lib/carregando/anunciador";
 import { useEsperaDaRota } from "@/lib/carregando/espera-da-rota";
@@ -347,28 +347,6 @@ export function LinhaDeEstado({
       ))}
     </div>
   );
-}
-
-/**
- * Na volta da rede, "Sem conexão" fica até a leitura voltar (momento 8: da
- * pílula direto para "Atualizado às 10:44"): a conexão passa a "reconectando"
- * assim que o aparelho tem rede, antes de o servidor responder. Só se ele
- * ainda não respondeu depois do mínimo de 2 s do aviso, a linha diz
- * "Reconectando…".
- */
-function useVoltaDaRede(falta: "sem-conexao" | "reconectando", comFalta: boolean): "sem-conexao" | "reconectando" {
-  const [anterior, setAnterior] = useState(falta);
-  const [segurando, setSegurando] = useState(false);
-  if (anterior !== falta) {
-    setAnterior(falta);
-    setSegurando(anterior === "sem-conexao" && falta === "reconectando");
-  }
-  useEffect(() => {
-    if (!segurando) return undefined;
-    const fim = setTimeout(() => setSegurando(false), CARREGANDO.avisoMinimoMs);
-    return () => clearTimeout(fim);
-  }, [segurando]);
-  return segurando && comFalta ? "sem-conexao" : falta;
 }
 
 /** O "Tentar de novo" da linha: texto sublinhado, com o toque estendido a 44 px. Ocupado não é desabilitado. */

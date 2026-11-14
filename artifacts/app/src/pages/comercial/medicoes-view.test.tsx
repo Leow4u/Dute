@@ -16,6 +16,9 @@ import { ROTA_MEDICOES, TELAS_DO_COMERCIAL } from "@/lib/comercial/navegacao";
 import { MedicoesView, type MedicoesViewProps } from "./medicoes-view";
 import { semCamadasEscondidas, travadoNoHtml } from "@/test/botoes";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { DEZ_E_QUARENTA_E_DOIS, estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
+import { conexaoEm } from "@/test/conexao";
+import { ProvedorDaConexao } from "@/lib/carregando/estado-da-conexao";
 
 /**
  * Tela de Medições (docs/mockups/ComMedicaoMensal.dc.html), parte 16b: só
@@ -382,5 +385,34 @@ describe("medições: a falha da medição tem saída, e o axe (revisão da part
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ medicao: "carregando" }))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ medicao: "erro" }))).toEqual([]);
+  });
+});
+
+describe("Medições sem conexão (carregamento v2, parte 13j)", () => {
+  const tela = (overrides: Partial<MedicoesViewProps>) => (
+    <Router ssrPath={ROTA_MEDICOES}>
+      <MedicoesView {...props(overrides)} />
+    </Router>
+  );
+
+  it("o aviso, a faixa e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(await estadosDaFalta((leitura, situacao) => tela(situacao === "erro" ? { estado: "erro", leitura } : { leitura }))).toEqual(
+      rotulosDaFalta({ mensagem: "Não foi possível carregar os contratos." }),
+    );
+  });
+
+  it("a lista lida e vazia, sem conexão: o vazio fica, com a faixa que diz de quando ele é (revisão da 13j)", async () => {
+    const lida = { tentando: false, tentar: () => undefined, falta: "conexao" as const, lidaEm: DEZ_E_QUARENTA_E_DOIS };
+    for (const estado of ["sem-conexao", "reconectando"] as const) {
+      const html = renderToStaticMarkup(
+        <ProvedorDaConexao value={conexaoEm(estado)}>{tela({ contratos: [], contrato: null, medicao: null, leitura: lida })}</ProvedorDaConexao>,
+      );
+      expect(texts(html).slice(-4), estado).toEqual([
+        ...(estado === "sem-conexao" ? ["Medições", "Sem conexão · lista de 10:42"] : ["Reconectando…", "· lista de 10:42"]),
+        "Tentar de novo",
+        "Nenhum contrato cobra por medição mensal",
+      ]);
+      expect(await violacoesDeAcessibilidade(html), estado).toEqual([]);
+    }
   });
 });

@@ -6,6 +6,9 @@ import { EMISSOR_DO_DOCUMENTO, cabecalhoDoEmissor } from "@/lib/comercial/emisso
 import { fichaDaLeitura } from "@/lib/operacao/ficha-da-os";
 import { comprovanteDaOs } from "@/lib/portal/comprovante";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { DEZ_E_QUARENTA_E_DOIS, estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
+import { conexaoEm } from "@/test/conexao";
+import { ProvedorDaConexao } from "@/lib/carregando/estado-da-conexao";
 import { textosDaTela } from "@/test/textos";
 
 import { ComprovanteView, type EstadoDoComprovante } from "./comprovante-view";
@@ -119,5 +122,42 @@ describe("o comprovante da OS no portal", () => {
 
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
+  });
+});
+
+describe("O comprovante sem conexão (carregamento v2, parte 13j)", () => {
+  const tela = (estado: EstadoDoComprovante, leitura: { tentando: boolean; tentar: () => void; falta: "conexao" | "servidor" | null; lidaEm: number | null }) => (
+    <Router ssrPath="/portal/servicos/comprovante">
+      <ComprovanteView
+        estado={estado}
+        numero="10045-01"
+        comprovante={estado === "pronto" ? COMPROVANTE : null}
+        urls={URLS}
+        onBaixar={() => undefined}
+        leitura={{ tentando: leitura.tentando, onTentar: leitura.tentar, falta: leitura.falta, lidaEm: leitura.lidaEm }}
+      />
+    </Router>
+  );
+
+  it("o aviso, a faixa com a hora do comprovante e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(await estadosDaFalta((leitura, situacao) => tela(situacao, leitura))).toEqual(
+      rotulosDaFalta({ mensagem: "Não foi possível carregar o comprovante.", objeto: "comprovante" }),
+    );
+  });
+
+  it("a OS lida sem comprovante, sem conexão: o que a tela diz pode ser velho, e a faixa diz de quando é a OS (revisão da 13j)", async () => {
+    const lida = { tentando: false, tentar: () => undefined, falta: "conexao" as const, lidaEm: DEZ_E_QUARENTA_E_DOIS };
+    for (const estado of ["sem-conexao", "reconectando"] as const) {
+      const html = renderToStaticMarkup(<ProvedorDaConexao value={conexaoEm(estado)}>{tela("sem_comprovante", lida)}</ProvedorDaConexao>);
+      expect(textosDaTela(html), estado).toEqual([
+        "Minhas OS",
+        "Comprovante da OS 10045-01",
+        "Baixar PDF",
+        ...(estado === "sem-conexao" ? ["Sem conexão · OS de 10:42"] : ["Reconectando…", "· OS de 10:42"]),
+        "Tentar de novo",
+        "A OS 10045-01 ainda não tem comprovante.",
+      ]);
+      expect(await violacoesDeAcessibilidade(html), estado).toEqual([]);
+    }
   });
 });

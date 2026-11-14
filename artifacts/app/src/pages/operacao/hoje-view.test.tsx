@@ -9,6 +9,7 @@ import { solicitacaoDaOperacao } from "@/lib/operacao/solicitacoes";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { travadoNoHtml } from "@/test/botoes";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import { HojeView } from "./hoje-view";
 
@@ -75,8 +76,8 @@ function quadro() {
   });
 }
 
-function render(extra: Partial<Parameters<typeof HojeView>[0]> = {}) {
-  return renderToStaticMarkup(
+function tela(extra: Partial<Parameters<typeof HojeView>[0]> = {}) {
+  return (
     <Router ssrPath="/operacao/hoje">
     <HojeView
       estado="pronto"
@@ -92,8 +93,12 @@ function render(extra: Partial<Parameters<typeof HojeView>[0]> = {}) {
       escala={null}
       {...extra}
     />
-    </Router>,
+    </Router>
   );
+}
+
+function render(extra: Partial<Parameters<typeof HojeView>[0]> = {}) {
+  return renderToStaticMarkup(tela(extra));
 }
 
 describe("Hoje", () => {
@@ -304,5 +309,13 @@ describe("a solicitação do portal em Para planejar (parte 4.4c)", () => {
 
   it("não tem problema de acessibilidade", async () => {
     expect(await violacoesDeAcessibilidade(comSolicitacao())).toEqual([]);
+  });
+});
+
+describe("Hoje da Operação sem conexão (carregamento v2, parte 13j)", () => {
+  it("o aviso, a faixa e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(await estadosDaFalta((leitura, situacao) => tela({ estado: situacao, leitura }))).toEqual(
+      rotulosDaFalta({ mensagem: "Não foi possível carregar o Hoje." }),
+    );
   });
 });

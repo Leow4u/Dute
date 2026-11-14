@@ -236,7 +236,7 @@ export function TelaDeRelatorios({
             <RelatorioCarregando leitura={leitura} />
           ) : pronto ? (
             <>
-              <FaixaAoVivo leitura={leitura} className="no-print" />
+              <FaixaAoVivo leitura={leitura} objeto="relatório" className="no-print" />
               {resumo ? (
                 <div className="@container">
                   <dl className={cn("grid gap-3", colunasDoResumo(resumo))}>

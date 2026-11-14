@@ -7,6 +7,7 @@ import { acoesDepoisDoEnvio, type ItemParaAcoes } from "@/lib/comercial/depois-d
 import { acoesDoOrcamento, adicionarDaTabela, catalogoDaTabela, formDoOrcamento, type FormOrcamento } from "@/lib/comercial/montar";
 import { vistoriaDaDemanda } from "@/lib/comercial/vistoria-da-operacao";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import {
   EstadoDoOrcamento,
@@ -814,5 +815,35 @@ describe("Orçamento: a tabela que não veio tem saída (revisão da parte 13g)"
     expect(info).toContain("Os preços foram recalculados pela tabela vigente.");
     expect(info).not.toMatch(/role="status"/);
     expect(render({ aviso: { tipo: "erro", texto: "Falta o contato." } })).toMatch(/<p role="alert"[^>]*>Falta o contato\.<\/p>/);
+  });
+});
+
+describe("O orçamento sem conexão (carregamento v2, parte 13j)", () => {
+  it("a montagem lida, a falha sem nada lido e a do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    const esperado = rotulosDaFalta({ mensagem: "Não foi possível carregar o orçamento.", objeto: "orçamento" });
+    // Sem o orçamento lido, a tela é a do aviso, com o título dela.
+    for (const nome of ["sem nada lido, sem conexão", "sem nada lido, reconectando", "erro do servidor"] as const) esperado[nome].novos.unshift("Orçamento");
+    expect(
+      await estadosDaFalta((leitura, situacao) =>
+        situacao === "erro" ? (
+          <EstadoDoOrcamento estado="erro" leitura={leitura} />
+        ) : (
+          <Router ssrPath="/comercial/orcamento">
+            <MontarView {...props({ leitura })} />
+          </Router>
+        ),
+      ),
+    ).toEqual(esperado);
+  });
+
+  it("a tabela que não veio: o aviso da conexão ou a falha do servidor no lugar da busca; a lida não põe faixa", async () => {
+    const esperado = rotulosDaFalta({ mensagem: "Não foi possível carregar a tabela." });
+    expect(
+      await estadosDaFalta((leitura, situacao) => (
+        <Router ssrPath="/comercial/orcamento">
+          <MontarView {...props({ catalogo: situacao === "erro" ? "erro" : CATALOGO, leituraDoCatalogo: leitura })} />
+        </Router>
+      )),
+    ).toEqual({ ...esperado, "lida, sem conexão": { novos: [], axe: [] }, "lida, reconectando": { novos: [], axe: [] } });
   });
 });

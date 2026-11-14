@@ -47,7 +47,7 @@ export function DocumentoView({ estado, documento, voltar, onImprimir, leitura =
           Imprimir / Salvar PDF
         </Button>
       </div>
-      {pronto ? <FaixaAoVivo leitura={leitura} className="no-print" /> : null}
+      {pronto ? <FaixaAoVivo leitura={leitura} objeto="orçamento" className="no-print" /> : null}
       {estado === "carregando" ? (
         <CarregandoNaRegiao rotulo="Carregando o orçamento…" continuaARota onTentar={leitura.tentar} className={caixa} />
       ) : estado === "erro" ? (

@@ -5,6 +5,7 @@ import { Router } from "wouter";
 import { fichaDaLeitura, historicoDaOs, type FichaDaOs } from "@/lib/operacao/ficha-da-os";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import { OsView } from "./os-view";
 
@@ -78,8 +79,8 @@ const CONCLUIDA = fichaDaLeitura("10045-01", {
   },
 }) as FichaDaOs;
 
-function render(extra: Partial<Parameters<typeof OsView>[0]> = {}) {
-  return renderToStaticMarkup(
+function tela(extra: Partial<Parameters<typeof OsView>[0]> = {}) {
+  return (
     <Router ssrPath="/operacao/os">
       <OsView
         estado="pronto"
@@ -90,8 +91,12 @@ function render(extra: Partial<Parameters<typeof OsView>[0]> = {}) {
         urls={{ "os/10045-01/fotos/ft_0000000000000001.jpg": "https://example.test/foto.jpg" }}
         {...extra}
       />
-    </Router>,
+    </Router>
   );
+}
+
+function render(extra: Partial<Parameters<typeof OsView>[0]> = {}) {
+  return renderToStaticMarkup(tela(extra));
 }
 
 describe("OS", () => {
@@ -356,5 +361,13 @@ describe("a OS de vistoria (parte 3.11d)", () => {
     for (const ausente of ["Concluir", "Revisar", "Itens", "Revisada"]) expect(textos, ausente).not.toContain(ausente);
     expect(html).not.toMatch(/R\$|preço/i);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+});
+
+describe("A OS sem conexão (carregamento v2, parte 13j)", () => {
+  it("o aviso, a faixa e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(await estadosDaFalta((leitura, situacao) => tela({ estado: situacao, leitura, ...(situacao === "erro" ? { ficha: null } : {}) }))).toEqual(
+      rotulosDaFalta({ mensagem: "Não foi possível carregar a OS.", objeto: "OS" }),
+    );
   });
 });

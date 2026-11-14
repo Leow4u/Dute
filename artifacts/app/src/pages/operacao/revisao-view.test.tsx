@@ -8,6 +8,7 @@ import { linhasParaRevisar, paraRevisar, revisaoInicial, type FormularioDaRevisa
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { semCamadasEscondidas } from "@/test/botoes";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import { ReabrirView } from "./reabrir-view";
 import { RevisaoView } from "./revisao-view";
@@ -52,8 +53,8 @@ const SALDO: LinhaDoSaldo[] = [
 const LINHAS = linhasParaRevisar(FICHA, SALDO, false);
 const CARTOES = paraRevisar([FICHA], { ITAU: "Itaú Unibanco" }, servicosEmTexto);
 
-function render(form: FormularioDaRevisao = revisaoInicial(LINHAS), extra: Partial<Parameters<typeof RevisaoView>[0]> = {}) {
-  return renderToStaticMarkup(
+function tela(form: FormularioDaRevisao = revisaoInicial(LINHAS), extra: Partial<Parameters<typeof RevisaoView>[0]> = {}) {
+  return (
     <Router ssrPath="/operacao/revisao">
       <RevisaoView
         estado="pronto"
@@ -68,8 +69,12 @@ function render(form: FormularioDaRevisao = revisaoInicial(LINHAS), extra: Parti
         onConcluir={noop}
         {...extra}
       />
-    </Router>,
+    </Router>
   );
+}
+
+function render(form: FormularioDaRevisao = revisaoInicial(LINHAS), extra: Partial<Parameters<typeof RevisaoView>[0]> = {}) {
+  return renderToStaticMarkup(tela(form, extra));
 }
 
 const DECIDIDO: FormularioDaRevisao = {
@@ -169,5 +174,13 @@ describe("Reabrir a OS", () => {
     // O Reabrir OS é o BotaoDeAcao: o gerúndio e o "Conferir" nas camadas escondidas (parte 13g).
     expect(textosDaTela(html)).toEqual(expect.arrayContaining(["Reabrindo a OS…", "Conferir"]));
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+});
+
+describe("Revisão sem conexão (carregamento v2, parte 13j)", () => {
+  it("o aviso, a faixa e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(await estadosDaFalta((leitura, situacao) => tela(undefined, { estado: situacao, leitura }))).toEqual(
+      rotulosDaFalta({ mensagem: "Não foi possível carregar as OS para revisar." }),
+    );
   });
 });

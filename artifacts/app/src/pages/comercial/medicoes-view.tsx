@@ -614,7 +614,14 @@ export function MedicoesView(props: MedicoesViewProps) {
   if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando os contratos…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
   else if (estado === "erro")
     conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar os contratos." className="px-5 py-7" />;
-  else if (contratos.length === 0 || !contrato) conteudo = <Vazio>Nenhum contrato cobra por medição mensal</Vazio>;
+  else if (contratos.length === 0 || !contrato)
+    conteudo = (
+      <>
+        {/* A lista lida e vazia, sem conexão: o vazio pode ser velho, e a faixa diz de quando ele é. */}
+        <FaixaAoVivo leitura={leitura} />
+        <Vazio>Nenhum contrato cobra por medição mensal</Vazio>
+      </>
+    );
   else {
     conteudo = (
       <>

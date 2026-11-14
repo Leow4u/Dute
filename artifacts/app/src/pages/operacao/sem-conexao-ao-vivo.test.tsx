@@ -34,14 +34,16 @@ vi.mock("firebase/firestore", async (original) => ({
 }));
 
 import { ProvedorDaConexao, type EstadoDaConexao } from "@/lib/carregando/estado-da-conexao";
-import { SEM_FILTRO_DE_DEMANDAS } from "@/lib/operacao/demandas";
+import { SEM_FILTRO_DE_DEMANDAS, type DemandaDaOperacao } from "@/lib/operacao/demandas";
 import type { NovaTentativa } from "@/lib/operacao/leitura";
 import type { InicioDaOperacao } from "@/lib/operacao/use-inicio";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { conexaoEm } from "@/test/conexao";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 import { textosForaDaLista } from "@/test/textos";
 
 import PaginaDemandas from "./demandas";
+import { DemandaView } from "./demanda-view";
 import { DemandasView } from "./demandas-view";
 import { InicioDaOperacaoView } from "./inicio-view";
 import { OsView } from "./os-view";
@@ -213,5 +215,50 @@ describe("Operação › Demandas, da escuta à tela", () => {
     for (const assinatura of sdk.assinaturas) act(() => assinatura.proximo(lista([], true)));
     expect(container.textContent).toContain("Nenhuma demanda");
     expect(container.textContent).toMatch(/Sem conexão · lista de \d\d:\d\d/);
+  });
+});
+
+describe("Operação › Demanda sem conexão (revisão da 13j)", () => {
+  const DEMANDA: DemandaDaOperacao = {
+    numero: "10045",
+    customerCode: "ITAU",
+    titulo: "Troca de cadeiras",
+    tipo: "planejada",
+    entrada: "direta",
+    etapa: "para_planejar",
+    executarAte: null,
+    osNumeros: [],
+    escopo: [{ id: "ln_1", item: "Cadeira Flexform", quantidade: "40", unidade: "UN" }],
+    fora: null,
+    visitaTecnica: null,
+    escopoRv: null,
+    recebidaEm: "2026-11-13T12:00:00.000Z",
+    canal: null,
+    pedidoPor: null,
+    origem: null,
+    destino: null,
+  };
+
+  it("a ficha da demanda: o aviso, a faixa com a hora da demanda e a falha do servidor, só com os rótulos da falta; axe", async () => {
+    expect(
+      await estadosDaFalta((leitura, situacao) => (
+        <Router ssrPath="/operacao/demanda">
+          <DemandaView
+            estado={situacao}
+            numero="10045"
+            demanda={situacao === "pronto" ? DEMANDA : null}
+            cliente="Itaú Unibanco"
+            etapa="para_planejar"
+            escopo={[]}
+            ordens={[]}
+            linhasComSaldo={0}
+            locais={[]}
+            prazo={null}
+            erro={null}
+            leitura={leitura}
+          />
+        </Router>
+      )),
+    ).toEqual(rotulosDaFalta({ mensagem: "Não foi possível carregar a demanda.", objeto: "demanda" }));
   });
 });

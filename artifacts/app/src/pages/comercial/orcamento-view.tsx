@@ -1578,7 +1578,7 @@ export function MontarView(props: MontarViewProps) {
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <Cabecalho {...props} totalCents={totais.total} />
-      {props.leitura ? <FaixaAoVivo leitura={props.leitura} /> : null}
+      {props.leitura ? <FaixaAoVivo leitura={props.leitura} objeto="orçamento" /> : null}
       {props.desatualizado && props.sujo ? (
         <p
           role="alert"

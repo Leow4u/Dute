@@ -8,6 +8,9 @@ import { linhasGravadas } from "@/lib/comercial/documento";
 import { AprovarView, type AprovarViewProps, type CartaoDaAprovacao } from "./aprovar-view";
 import { acoesPrincipais, semCamadasEscondidas, travadoNoHtml } from "@/test/botoes";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { DEZ_E_QUARENTA_E_DOIS, estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
+import { conexaoEm } from "@/test/conexao";
+import { ProvedorDaConexao } from "@/lib/carregando/estado-da-conexao";
 
 /**
  * Aprovar no celular (docs/mockups/ComAprovarCelular.dc.html), só a
@@ -249,5 +252,36 @@ describe("aprovar no celular: acessibilidade (revisão da parte 13g)", () => {
 
   it("a confirmação toma o lugar dos botões: o Próximo é o destino do foco que estava no Aprovar", () => {
     expect(render({ confirmacao: "Aprovado 14:20" })).toMatch(/<button[^>]*data-depois-de-aprovar=""[^>]*>Próximo/);
+  });
+});
+
+describe("Para aprovar sem conexão (carregamento v2, parte 13j)", () => {
+  const tela = (overrides: Partial<AprovarViewProps>) => (
+    <Router ssrPath="/comercial/aprovar">
+      <AprovarView {...props(overrides)} />
+    </Router>
+  );
+
+  it("o aviso, a faixa e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(
+      await estadosDaFalta((leitura, situacao) =>
+        tela(situacao === "erro" ? { estado: "erro", cartao: null, posicao: { indice: 0, total: 0 }, leitura } : { leitura }),
+      ),
+    ).toEqual(rotulosDaFalta({ mensagem: "Não foi possível carregar os orçamentos." }));
+  });
+
+  it("a fila lida e vazia, sem conexão: o vazio fica, com a faixa que diz de quando ele é (revisão da 13j)", async () => {
+    const vazia = (leitura: AprovarViewProps["leitura"]) => tela({ estado: "vazio", cartao: null, posicao: { indice: 0, total: 0 }, leitura });
+    const lida = { tentando: false, tentar: () => undefined, falta: "conexao" as const, lidaEm: DEZ_E_QUARENTA_E_DOIS };
+    for (const estado of ["sem-conexao", "reconectando"] as const) {
+      const html = renderToStaticMarkup(<ProvedorDaConexao value={conexaoEm(estado)}>{vazia(lida)}</ProvedorDaConexao>);
+      expect(texts(html), estado).toEqual([
+        "Para aprovar",
+        ...(estado === "sem-conexao" ? ["Sem conexão · lista de 10:42"] : ["Reconectando…", "· lista de 10:42"]),
+        "Tentar de novo",
+        "Nenhum orçamento para aprovar",
+      ]);
+      expect(await violacoesDeAcessibilidade(html), estado).toEqual([]);
+    }
   });
 });

@@ -9,6 +9,7 @@ import { OrcamentoDocumento } from "@/components/comercial/orcamento-documento";
 import { DocumentoView, type DocumentoViewProps } from "./documento-view";
 import { semCamadasEscondidas } from "@/test/botoes";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 /**
  * O documento A4 do orçamento (docs/mockups/ComDocumento.dc.html), só a
@@ -219,5 +220,23 @@ describe("documento A4 do orçamento", () => {
 describe("documento do orçamento: acessibilidade (revisão da parte 13g)", () => {
   it("o axe não acusa nada no documento", async () => {
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
+  });
+});
+
+describe("O documento do orçamento sem conexão (carregamento v2, parte 13j)", () => {
+  it("o aviso, a faixa (fora do papel) e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(
+      await estadosDaFalta((leitura, situacao) => (
+        <Router ssrPath="/comercial/orcamento/documento">
+          <DocumentoView
+            estado={situacao}
+            documento={situacao === "pronto" ? documento(false) : null}
+            voltar={{ href: "/comercial/orcamento?numero=10045", rotulo: "Orçamento" }}
+            onImprimir={() => undefined}
+            leitura={leitura}
+          />
+        </Router>
+      )),
+    ).toEqual(rotulosDaFalta({ mensagem: "Não foi possível carregar o orçamento.", objeto: "orçamento" }));
   });
 });

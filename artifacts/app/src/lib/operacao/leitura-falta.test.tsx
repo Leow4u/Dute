@@ -345,3 +345,154 @@ describe("o portal usa a nova tentativa da useLeitura, sem outra por cima", () =
     expect(daChave("avisos")).toHaveLength(2);
   });
 });
+
+/**
+ * A revisão da parte 13j: a escuta e o estado único da conexão andam juntos.
+ * A leitura do react-query que volta (a callable) não tira o "Reconectando"
+ * enquanto uma escuta segue sem o servidor, e a releitura sozinha continua
+ * acordando o SDK; a nova tentativa que deu certo, e a escuta que saiu da tela
+ * com a falta, devolvem o estado a "conectado" na próxima resposta do servidor.
+ */
+describe("a escuta e o estado único da conexão, juntos (revisão da 13j)", () => {
+  const passar = async (ms: number) => {
+    await act(async () => {
+      vi.advanceTimersByTime(ms);
+      await Promise.resolve();
+    });
+  };
+
+  it("a callable que volta não desliga o despertar das escutas que seguem sem o servidor", async () => {
+    vi.useFakeTimers();
+    const m = await carregar();
+    const conexao = m.conexao.criarConexao({ temRede: () => !semRede });
+    const acordar = vi.fn(() => Promise.resolve());
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const desligar = m.conexao.ligarConexaoDoApp(queryClient, conexao, window, undefined, { acordar });
+    const { vistos } = montarListas(m, ["ordens"], (filhos) => <m.conexao.ProvedorDaConexao value={conexao}>{filhos}</m.conexao.ProvedorDaConexao>);
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], false)));
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], true)));
+    // Uma callable que tinha ficado sem resposta volta: o servidor das callables respondeu, o do Firestore não.
+    const { SemResposta } = await import("../conexao");
+    let vez = 0;
+    const opcoes = { queryKey: ["callable"], queryFn: async () => (vez++ === 0 ? Promise.reject(new SemResposta()) : "ok") };
+    await act(async () => void (await queryClient.fetchQuery(opcoes).catch(() => undefined)));
+    await act(async () => void (await queryClient.fetchQuery({ ...opcoes, staleTime: 0 }).catch(() => undefined)));
+    const antes = acordar.mock.calls.length;
+    for (const segundos of [2, 4, 8, 16, 30]) await passar(segundos * 1_000);
+    expect(vistos.ordens!.falta).toBe("conexao");
+    expect(conexao.estado()).toBe("reconectando");
+    expect(acordar.mock.calls.length - antes).toBeGreaterThanOrEqual(4);
+    // O servidor do Firestore volta: aí sim, conectado, e a releitura para.
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], false)));
+    await passar(2_000);
+    expect(conexao.estado()).toBe("conectado");
+    const depois = acordar.mock.calls.length;
+    await passar(120_000);
+    expect(acordar.mock.calls.length).toBe(depois);
+    desligar();
+    conexao.fechar();
+  });
+
+  it("o Tentar de novo que deu certo devolve o estado único a conectado", async () => {
+    vi.useFakeTimers();
+    const m = await carregar();
+    const conexao = m.conexao.criarConexao({ temRede: () => !semRede });
+    const desligar = m.conexao.ligarConexaoDoApp(new QueryClient(), conexao, window, undefined, { acordar: () => Promise.resolve() });
+    const { vistos } = montarListas(m, ["ordens"], (filhos) => <m.conexao.ProvedorDaConexao value={conexao}>{filhos}</m.conexao.ProvedorDaConexao>);
+    // A primeira visita com o SDK offline: a resposta vazia do cache é a falta.
+    act(() => daChave("ordens")[0]!.proximo(lista([], true)));
+    expect(vistos.ordens!.falta).toBe("conexao");
+    expect(conexao.estado()).toBe("reconectando");
+    await act(async () => {
+      vistos.ordens!.tentar();
+      await Promise.resolve();
+    });
+    // A nova assinatura ouve o servidor: a lista chega, e o estado único fica sabendo.
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1", "OS-2"], false)));
+    expect(vistos.ordens!.itens).toEqual(["OS-1", "OS-2"]);
+    await passar(2_000);
+    expect(conexao.estado()).toBe("conectado");
+    desligar();
+    conexao.fechar();
+  });
+
+  it("a escuta que sai da tela com a falta: a próxima escuta que ouve o servidor devolve o conectado; a volta do SDK também", async () => {
+    vi.useFakeTimers();
+    const m = await carregar();
+    const conexao = m.conexao.criarConexao({ temRede: () => !semRede });
+    const desligar = m.conexao.ligarConexaoDoApp(new QueryClient(), conexao, window, undefined, { acordar: () => Promise.resolve() });
+    const { trocar } = montarListas(m, ["ordens"], (filhos) => <m.conexao.ProvedorDaConexao value={conexao}>{filhos}</m.conexao.ProvedorDaConexao>);
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], false)));
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], true)));
+    expect(conexao.estado()).toBe("reconectando");
+    // A pessoa vai para outra tela, com outra escuta, que ouve o servidor.
+    trocar(["pessoas"]);
+    act(() => daChave("pessoas")[0]!.proximo(lista(["Ana"], false)));
+    await passar(2_000);
+    expect(conexao.estado()).toBe("conectado");
+    desligar();
+    conexao.fechar();
+
+    // Sem outra escuta: quando o SDK volta a ouvir o servidor (o perfil, no app), o estado volta.
+    const outra = m.conexao.criarConexao({ temRede: () => !semRede });
+    let voltou: (() => void) | null = null;
+    const desligarOutra = m.conexao.ligarConexaoDoApp(new QueryClient(), outra, window, undefined, {
+      acordar: () => Promise.resolve(),
+      aoVoltar: (ouvinte) => {
+        voltou = ouvinte;
+        return () => undefined;
+      },
+    });
+    trocar([]);
+    const segunda = montarListas(m, ["ordens"], (filhos) => <m.conexao.ProvedorDaConexao value={outra}>{filhos}</m.conexao.ProvedorDaConexao>);
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], false)));
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], true)));
+    expect(outra.estado()).toBe("reconectando");
+    segunda.trocar([]);
+    act(() => voltou!());
+    await passar(2_000);
+    expect(outra.estado()).toBe("conectado");
+    desligarOutra();
+    outra.fechar();
+  });
+
+  it("a volta devida não sobra: depois de outra leitura que deu certo, a escuta em dia não tira o Reconectando de uma callable", async () => {
+    vi.useFakeTimers();
+    const m = await carregar();
+    const conexao = m.conexao.criarConexao({ temRede: () => !semRede });
+    const { trocar } = montarListas(m, ["ordens"], (filhos) => <m.conexao.ProvedorDaConexao value={conexao}>{filhos}</m.conexao.ProvedorDaConexao>);
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], false)));
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], true)));
+    trocar(["pessoas"]);
+    // Uma leitura que tinha falhado volta (a dívida da escuta que saiu fica paga) e, depois, uma callable fica sem resposta.
+    conexao.leuDoServidor();
+    await passar(2_000);
+    expect(conexao.estado()).toBe("conectado");
+    conexao.ficouSemResposta();
+    expect(conexao.estado()).toBe("reconectando");
+    // A escuta que ouve o servidor não diz nada da callable.
+    act(() => daChave("pessoas")[0]!.proximo(lista(["Ana"], false)));
+    await passar(2_000);
+    expect(conexao.estado()).toBe("reconectando");
+    conexao.fechar();
+  });
+});
+
+describe("a tela que junta as tentativas de várias leituras (revisão da 13j)", () => {
+  it("a juntarTentativas classifica a falta como a novaTentativaDe: a lida sem o servidor não é falha", async () => {
+    const m = await carregar();
+    const noop = () => undefined;
+    const lida = { itens: [], erro: false, falta: "conexao" as const, lidaEm: 1_000, tentando: false, tentar: noop };
+    const recusada = { itens: null, erro: true, falta: "servidor" as const, lidaEm: null, tentando: false, tentar: noop };
+    const semNada = { itens: null, erro: true, falta: "conexao" as const, lidaEm: null, tentando: false, tentar: noop };
+    const porNova = m.leitura.novaTentativaDe([lida, recusada]);
+    const porJuntar = m.leitura.juntarTentativas(m.leitura.novaTentativaDe([lida]), m.leitura.novaTentativaDe([recusada]));
+    expect(porNova.falta).toBe("servidor");
+    expect(porJuntar.falta).toBe("servidor");
+    // Sem nada lido sem conexão vem antes do servidor; sem falha, a das lidas, com a hora.
+    expect(m.leitura.juntarTentativas(m.leitura.novaTentativaDe([recusada]), m.leitura.novaTentativaDe([semNada])).falta).toBe("conexao");
+    expect(m.leitura.juntarTentativas(m.leitura.novaTentativaDe([lida]), { tentando: false, tentar: noop })).toMatchObject({ falta: "conexao", lidaEm: 1_000 });
+    // A junção de junções classifica do mesmo jeito.
+    expect(m.leitura.juntarTentativas(porJuntar, m.leitura.novaTentativaDe([lida])).falta).toBe("servidor");
+  });
+});
