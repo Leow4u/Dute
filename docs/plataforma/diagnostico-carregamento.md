@@ -4119,7 +4119,8 @@ Fica aberto:
     quando a pessoa muda o pedido. Só a última tentativa fica: a contagem que
     vai de 10 a 12 e volta a 10 é outra contagem (com a chave dos 10, o
     servidor devolveria o recibo deles e o saldo ficaria em 12). Na caixa, a
-    sugestão do motor vai no corpo da primeira e não muda a tentativa.
+    sugestão do motor vai no corpo da primeira e não muda a tentativa (*o
+    encaixe também, desde a revisão abaixo*).
   - **Seguras pelo servidor sem a chave**, sem mudança:
     - resolver ou cancelar a exceção (`resolveWarehouseException`): a
       transação confere o status atual (`open` ou `in_review`), e a
@@ -4179,7 +4180,10 @@ Fica aberto:
   - o axe (WCAG 2.1 A e AA) no escuro: antes, o branco sobre o primário em
     Pedidos, Receber, Início e no Estoque do portal, e o `text-primary` do
     portal; depois, só o `text-primary` do portal. No claro, nada, antes e
-    depois.
+    depois (*nessas telas; a medição não passou pela conferência, pela
+    devolução nem pela contagem, onde o axe acusa, nos dois temas, os selos
+    de `text-primary` sobre `bg-primary/10`, de antes: ver a revisão
+    abaixo*).
 - **Testes**: as quatro escritas e a chegada avulsa na tela
   (`features/warehouse-ops/escritas-por-tentativa.test.tsx`: a repetição
   depois do resultado incerto, minutos depois, leva a mesma chave e o mesmo
@@ -4188,7 +4192,8 @@ Fica aberto:
   e o fundo do primário (`tokens.test.ts`). Contra o código de antes, 17 dos
   20 testes novos falham (a peça não existia; nas telas, 6 de 8); os que
   passam guardam o que já valia (a chave nova depois do sucesso e na
-  contagem que volta ao valor de antes, e o 4,30:1 do `--primary`). A suíte
+  contagem que volta ao valor de antes, e o 4,30:1 do `--primary`, *que a
+  revisão abaixo trocou*). A suíte
   do app fica em 483 arquivos e 5.438 testes (antes, 481 e 5.418). Numa das
   rodadas, com a máquina cheia, o "cancelar o convite" de `users.carregando`
   falhou uma vez e passou nas outras quatro (sozinho, três de três): de antes,
@@ -4201,7 +4206,118 @@ Fica aberto:
   `--primary` do escuro já não estraga o branco do botão, mas muda as
   bordas, os ícones e os links do escuro e pede a medição das telas;
 - no escuro, a etapa atual da chegada por caixa tem a borda (`border-primary`,
-  55%) um pouco mais clara que o fundo (51%), a 1 px;
+  55%) um pouco mais clara que o fundo (51%), a 1 px (*resolvido na revisão
+  abaixo, ali, no Checkbox e nas etapas do portal*);
 - a conferência e o lançamento da abertura, a correção da caixa e o
   cancelamento do recebimento ainda não trocam a chave em toda recusa (só
   com outro pedido): não grava duas vezes, mas foge da regra curta.
+
+**A revisão da parte 13k (14/11/2026).** Três revisões (a lógica e o tempo,
+a tela no Chromium e o leitor de tela) acharam o que a parte deixou; cada
+achado foi reproduzido e corrigido com o teste que falha antes:
+
+- **A conferência relida.** A ficha que a bancada relê (o intervalo de 60 s
+  do Receber, a volta da rede, o Atualizar) refazia as linhas da conferência
+  com a observação e o código da etiqueta vazios e com o custo no texto do
+  número (o "12.50" digitado voltava "12.5"). Depois de uma conferência que
+  valeu sem resposta, a repetição era outro pedido: chave nova, o status
+  relido ("checking"), e o servidor, que aceita outra conferência na chegada
+  em conferência, gravava de novo as linhas e o evento. Agora a releitura da
+  mesma chegada guarda o que só a pessoa tem (a observação e o código, por
+  linha), outra chegada recomeça as linhas, e o pedido é o que vai ao
+  servidor, normalizado (o número, e não o texto do campo).
+- **A caixa perguntada de novo.** O encaixe que o motor devolve (a
+  orientação e a caixa de apoio) entrava no pedido da caixa já armazenada.
+  Depois de uma guarda que valeu sem resposta, o "Onde guardar?" devolvia a
+  mesma prateleira com a caixa empilhada sobre a nova, e a chave nova
+  cadastrava a segunda caixa. O encaixe vai só no corpo da primeira, como a
+  sugestão.
+- **O resultado incerto diz que não houve confirmação.** Nas quatro escritas,
+  o aviso da resposta perdida era o da recusa ("Não consegui registrar a
+  devolução", em vermelho), e quem lê que falhou tende a corrigir o
+  formulário antes de tentar de novo, o que troca a chave. Agora o resultado
+  incerto diz "Sem confirmação do servidor", sem o vermelho, e o botão diz
+  "Tentar de novo" (na caixa, "Tentar de novo em A-03") enquanto o pedido é
+  o mesmo, como no diálogo da chegada avulsa; a recusa diz que não gravou, em
+  vermelho, e o botão volta ao rótulo dele. A peça ganhou o `repete(pedido)`
+  e o `avisoDoErroDaEscrita`. "Tentar de novo" tem 44 px no celular (seção 7
+  da especificação): os botões da devolução, da contagem e da conferência
+  passam a 44 px lá (eram 40, 40 e 36).
+- **O aro em volta do fundo cheio.** No escuro, o `border-primary` (55%) junto
+  do `bg-primary` (51%) deixava um aro 1 px mais claro que o preenchimento
+  (1,14:1): no Checkbox marcado, nas etapas do pedido e dos envios do portal
+  e na etapa da chegada por caixa. O preenchimento com borda usa a borda do
+  fundo, a `border-primary-fundo` (`--border-color-primary-fundo` no
+  `@theme`), na mesma variante do fundo. A borda sozinha (o campo com foco,
+  o cartão escolhido) continua no `--primary`: a 51%, ela ficaria com 2,6:1
+  contra a borda do campo do escuro. A trava nova, em `trava.test.ts`:
+  nenhum fundo cheio com a borda do texto no mesmo trecho.
+- **O toast de erro no escuro.** O `bg-destructive` com texto é o toast de
+  erro, e no escuro o `--destructive`, claro para ser lido como texto, dava
+  3,30:1 no título e 2,94:1 na descrição (a 0,9). Como no primário, o
+  `bg-destructive` lê o `--destructive-fundo` (`--background-color-destructive`):
+  no claro, o próprio `--destructive`; no escuro, o mesmo vermelho mais
+  fundo, `3 80% 44%` (`#CA1F16`), com 5,40:1 no título, 4,59:1 na descrição
+  e 3,3:1 contra o cartão. O texto e a borda do erro (o campo inválido)
+  seguem o `--destructive`, e o toast usa a `border-destructive-fundo`.
+- **O toque da v3.** A v3 clara redefinia o `--primary` e o
+  `--primary-hover`, mas não o `--primary-pressed`, e o
+  `active:bg-primary-pressed` do `Button` pintava o azul da raiz (`#1B44A1`)
+  sobre o botão vermelho. O toque da v3 é o `#AD0015` do hover (especificação,
+  4.1: o botão afunda no `--primary-hover`). A trava confere que o hover e o
+  toque são da cor do fundo em todos os contextos.
+- **Os testes que não provavam nada.** Três testes da parte passavam no
+  código de antes. Os dois das telas guardam as bordas da regra (a chave nova
+  depois do sucesso; a contagem que volta ao valor de antes): o código de
+  antes passava porque trocava a chave a cada toque, e cada um reprova uma
+  implementação errada (a que não encerra a tentativa no sucesso; a que
+  guarda todas as tentativas). O terceiro só fixava o 4,30:1 do `--primary`
+  e saiu; no lugar, o hover e o toque do escuro descem do fundo (6 e 12
+  pontos de luz), que falha antes da parte.
+- **A prancha.** A prancha aprovada das peças
+  (`docs/mockups/WmsCarregandoV2Pecas.dc.html`, momento 1, "Escuro do app")
+  e a tabela 4.3 da especificação mostram o botão do escuro em `#2B75EE`,
+  "4,3:1 no azul", e as outras pranchas `WmsCarregandoV2*` usam o mesmo azul.
+  Ficaram para trás: o app pinta `#1869EC` (4,92:1), e a cor vale pelo
+  token, travada em `tokens.test.ts`. As pranchas não mudam, porque são as
+  aprovadas.
+- **No Chromium** (harness com a API falsa, só 127.0.0.1; antes = `c5c8746`,
+  depois = esta revisão):
+  - a conferência relida depois da resposta perdida: antes, duas gravações
+    com a observação, com o código e com o custo 12,50 (a segunda com chave
+    nova e "checking") e a observação apagada no campo; depois, uma gravação
+    nos quatro casos (com e sem o que só a pessoa tem), a observação no
+    campo e o botão em "Tentar de novo";
+  - a caixa perguntada de novo, com a caixa de apoio na segunda resposta do
+    motor: antes, duas chaves; depois, uma, com o corpo da primeira;
+  - o resultado incerto nas quatro escritas, nos dois temas: "Sem
+    confirmação do servidor" sem o vermelho (18,9:1 no escuro), o botão em
+    "Tentar de novo" com o foco nele pelo teclado; na recusa, o título
+    vermelho e o rótulo de volta. A 390 px, no escuro, o "Tentar de novo"
+    tem 44 px na devolução, na contagem e na conferência e 48 na caixa, sem
+    rolagem lateral;
+  - no escuro, o Checkbox marcado e as três etapas com a borda igual ao
+    fundo, `#1869EC` (antes, `#2B75EE` em volta, 1,14:1). O toast de erro em
+    `#CA1F16`, com 5,40:1 no título e 4,59:1 na descrição (antes, `#EC5851`,
+    3,30:1 e 2,94:1), e o axe deixa de acusá-lo; no claro, o toast continua
+    `#B4271D` (6,46:1);
+  - na v3 clara, o toque do "Aprovar" em `#AD0014`, com 7,54:1 (antes, o azul
+    `#1B44A1`); fora da v3, nada muda.
+- **Testes**: contra o `c5c8746`, 17 dos 20 testes novos dos quatro arquivos
+  (`escritas-por-tentativa`, `tentativa-da-escrita`, `tokens` e `trava`)
+  falham; os que passam são a releitura de outra chegada (que recomeça as
+  linhas, de antes), o hover e o toque que descem do fundo (que falha contra
+  o `921ba83`, antes da parte) e a regra da trava sobre exemplos. A suíte do
+  app fica em 483 arquivos e 5.457 testes (antes, 483 e 5.438).
+
+Fica aberto:
+
+- os selos de `text-primary` sobre `bg-primary/10` ("OK físico",
+  "produto existente obrigatório", "cadastro localizado", "Cadastro
+  encontrado", "ajuste auditado") ficam abaixo de 4,5:1 nos dois temas: de
+  3,6 a 4,2:1 na v3 clara e de 3,9 a 4,2:1 no escuro. É de antes da parte e
+  vale para os selos do app inteiro: pede o primário como texto sobre o
+  tom, e a medição das telas;
+- o `text-primary` no cartão escuro (4,39:1) segue aberto, como acima;
+- as pranchas `WmsCarregandoV2*` e a especificação (4.3) com o azul de
+  antes no escuro.

@@ -47,9 +47,20 @@ Sombra só em overlay (`shadow-lg` em diálogo e menu) e no painel flutuante
   o `primary`. No claro e na v3, é o próprio `primary` (o vermelho da marca);
   no escuro, o mesmo azul mais fundo (`#1869EC`), com 4,9:1 para o branco do
   botão, que no `primary` tinha 4,3:1 (parte 13k; travado em
-  `lib/carregando/tokens.test.ts`). O hover e o toque do escuro descem junto.
+  `lib/carregando/tokens.test.ts`). O hover e o toque do escuro descem junto;
+  na v3, o toque é o do hover (`#AD0015`), nunca o azul da raiz.
   Fundo do primário com texto é sempre `bg-primary` com
-  `text-primary-foreground`: nunca `hsl(var(--primary))` à mão.
+  `text-primary-foreground`: nunca `hsl(var(--primary))` à mão. O fundo cheio
+  com borda (o Checkbox marcado, as etapas) usa a `border-primary-fundo`, na
+  mesma variante do fundo: a `border-primary` em volta dele faz um aro mais
+  claro no escuro (travado em `lib/carregando/trava.test.ts`). A borda
+  sozinha (o campo com foco, o cartão escolhido) segue a `border-primary`.
+- `--destructive-fundo` é o fundo do destrutivo, como o do primário (revisão
+  da parte 13k): o `bg-destructive` (o toast de erro) o lê pelo
+  `--background-color-destructive`; no claro, o próprio `destructive`; no
+  escuro, o mesmo vermelho mais fundo (`#CA1F16`, 5,4:1 para o texto do
+  toast; o `destructive`, legível como texto, dava 3,3:1). O texto e a borda
+  do erro seguem o `destructive`; o toast usa a `border-destructive-fundo`.
 - `agent-*` é a identidade do Agent Dute (violeta).
 - `gender-fem-*` e `gender-masc-*` só no chip de gênero do Estoque do portal
   (FEM rosa, MASC azul-petróleo; `docs/mockups/PortalEstoqueGenero.dc.html`).
@@ -213,7 +224,14 @@ vale, quando o servidor recusa (o 4xx, os códigos de recusa de
 fica. Na linha, é o `useAcaoNaLinha`; no formulário, a
 `useTentativaDaEscrita` (`lib/carregando/tentativa-da-escrita.ts`), com o
 pedido (os campos como a pessoa os deixou) e o corpo montado só na primeira
-vez. Nunca `crypto.randomUUID()` a cada toque, nem a escrita sem chave que a
+vez. O pedido é o que vai ao servidor, normalizado (o número, e não o texto
+do campo), sem o que vem do motor (o encaixe da caixa) nem o que a releitura
+muda; a releitura da ficha não apaga o que só a pessoa tem (a observação, o
+código da etiqueta). Depois do resultado incerto, a tela diz "Sem
+confirmação do servidor", sem o vermelho da recusa, e o botão diz "Tentar de
+novo" enquanto o pedido é o mesmo (`repete` e `avisoDoErroDaEscrita`), com
+44 px no celular; a recusa diz que não gravou, e o botão volta ao rótulo
+dele. Nunca `crypto.randomUUID()` a cada toque, nem a escrita sem chave que a
 rota completa com uma nova. A transição que confere o status atual no
 servidor (resolver a exceção, concluir o inventário) já recusa a repetição e
 não precisa dela.
