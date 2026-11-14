@@ -865,7 +865,16 @@ Escolhas que esperam a confirmação do Leonardo, sem bloquear o código:
   vermelho da marca um tom mais fundo (`358 81% 44%`, `#CB151B`), e não o
   `#E71C23` do botão: o do botão dava 4,2:1 no fundo da v3 e 3,6 a 3,9:1 nos
   selos do primário. Os links da fila, o link de volta das folhas e os selos
-  ficam mais escuros que o botão; o botão não muda (13m).
+  ficam mais escuros que o botão; o botão não muda (13m). Desde a revisão
+  da 13m, todo link do primário (também o `variant="link"` do botão) é esse
+  tom;
+- a frase da leitura de apoio da bancada de Separar e do pedido separado
+  ("Não foi possível carregar as caixas e o prazo do pedido.") mora na
+  coluna do lado, depois dos volumes e das etiquetas para trocar: no
+  computador, ao lado da lista; no celular, depois dela, e numa lista longa
+  só aparece no fim. Assim ela não empurra o "Separar" quando entra nem
+  quando sai. Trazê-la para o alto sem empurrar a lista pede o lugar
+  reservado, a mesma decisão da faixa (revisão da 13m).
 
 Pedem desenho: o "Sem conexão" dentro do diálogo (13a) e a confirmação do
 Cancelar convite (13e). E o aceite do indicador num Android médio de verdade,
@@ -4874,7 +4883,8 @@ com as peças que já existiam (nenhuma peça nova):
   falta. O aviso da conexão (sem hora) ou a faixa ("Sem conexão · pedido de
   10:42") seguem dizendo por quê; o erro do servidor, que antes não dizia
   nada, também fica com a frase. As linhas que não chegaram ao vivo seguem
-  as da fila e não entram na frase.
+  as da fila e não entram na frase (*desde a revisão da parte, a frase mora
+  na coluna do lado, com o "Tentar de novo", e não fala na volta da rede*).
 - **O "Para quando" que não veio, em Pedidos.** Para quem não lê a lista das
   solicitações (o armazém), o prazo que o servidor recusou diz "Prazo não
   carregado" no lugar do "Para quando" (antes, a linha ficava calada, como
@@ -4973,7 +4983,8 @@ Fica aberto:
   em número na conferência, o "pronto para packing" e os outros textos do
   WMS em `text-primary` sobre o cartão) segue em 4,39:1 no escuro; a trava
   pega o selo em que o tom e o texto estão na mesma classe, e não o painel
-  com o tom por fora (como o "Cadastro encontrado", trocado à mão);
+  com o tom por fora (como o "Cadastro encontrado", trocado à mão) (*os
+  links, resolvidos na revisão da parte; o texto que não é link segue*);
 - na bancada, as linhas que não chegaram ao vivo seguem as da fila sem frase
   própria (o aviso da conexão, sem hora, diz a falta);
 - o resto que espera o Leonardo ou pede desenho, como antes: a faixa que
@@ -4981,3 +4992,121 @@ Fica aberto:
   não se resolve (na lista da 10.4), e o servidor que cai com a escuta
   aberta (o limite do SDK, acima);
 - o aceite num Android médio e a conferência com leitor de tela de verdade.
+
+**A revisão da parte 13m (14/11/2026).** Três revisões (a lógica e o tempo, a
+tela no Chromium e o leitor de tela) acharam o que a parte deixou; cada achado
+foi reproduzido e corrigido com o teste que falha antes:
+
+- **A frase da bancada sai de cima da lista.** A frase da leitura de apoio
+  entrava acima da lista quando ela já estava na tela e empurrava o
+  "Separar": 66 px a 1440 e 86 px a 390, uns 75 ms depois da lista com a
+  recusa do servidor, e de 0,2 a 2 s depois sem rede; na volta da rede, a
+  lista subia de novo. Agora a frase mora na coluna do lado, depois dos
+  volumes e das etiquetas para trocar: no computador, ao lado da lista; no
+  celular, depois dela. O "Separar" não sai do lugar quando ela entra nem
+  quando sai.
+- **A recusa do servidor tem saída.** Na bancada, no romaneio e na lista, a
+  frase da recusa do servidor ficava sem "Tentar de novo", e a escuta
+  recusada não volta sozinha: com o servidor de volta, a frase e o "prazo não
+  carregado" do papel ficavam. Agora a frase tem o "Tentar de novo" (a
+  `FalhaNaSecao`), que assina de novo só o que falhou. Sem conexão, no
+  romaneio e na lista, o "Tentar de novo" é o do aviso da conexão, logo
+  acima; na bancada, a frase tem o dela, porque mora longe do aviso.
+- **A frase da bancada não fala na volta da rede.** Ela era um alerta que
+  trocava de nó a cada mudança: na volta da rede, as caixas voltavam antes
+  do prazo, e o leitor de tela ouvia "Não foi possível carregar o prazo do
+  pedido." sem ninguém pedir; sem conexão, eram duas regiões vivas ao mesmo
+  tempo. Agora a frase não é região viva: o Anunciador diz só a recusa do
+  servidor que entra, uma vez (`useAnunciarARecusa`, em
+  `lib/warehouse-ops/o-que-nao-chegou.ts`); a falta de conexão ele já diz, e
+  a frase que encolhe ou sai não fala.
+- **O mesmo âmbar da faixa.** A frase usava o âmbar mais fraco dos avisos
+  (`warning-soft-foreground`, 4,51:1), sem ícone, logo abaixo da faixa
+  (6,2:1). Agora a frase da leitura de apoio (na bancada, no romaneio e na
+  lista) e a da fonte do Início que não carregou (a `FalhaNaSecao` no tom do
+  aviso) usam a tinta da faixa, o `--carregando-aviso`: 6,18:1 no claro e
+  10,66:1 no escuro.
+- **O pedido separado diz o que não chegou.** Na mesma rota da bancada, o
+  pedido já separado lê as caixas (as etiquetas para trocar e as vazias) e o
+  prazo, e, quando elas falhavam, o prazo sumia do resumo sem aviso. Agora
+  ele tem a mesma frase, na coluna do lado, com o "Tentar de novo".
+- **A tela e o papel da lista dizem as mesmas faltas.** Com a solicitação
+  recusada, a tela dizia só o destino, e o papel, o destino e o prazo. Agora
+  a frase diz "Não foi possível carregar o destino e o prazo do pedido.". E
+  o papel sem as caixas saía com a coluna Caixa em branco, igual à da linha
+  que não tem caixa, e nada dizia que a ordem das prateleiras podia não ser
+  a de caminhada: agora a célula diz "caixa não carregada", e o cabeçalho
+  ganha "Ordem das prateleiras: não carregada".
+- **As Etiquetas não contam o que não leram.** Com os volumes que não
+  chegaram, o resumo dizia "0 etiquetas · 0 folhas" ao lado do aviso. Agora a
+  contagem só aparece com os volumes lidos, como já era com as caixas e as
+  posições.
+- **Emissões diz a lista recusada.** A frase do servidor dizia sempre "as
+  emissões", também quando a recusada era a das baixas. Agora diz "as
+  baixas", "as emissões" ou "as emissões e as baixas".
+- **Todo link do primário a 4,5:1.** O link em `text-primary` seguia abaixo de
+  4,5:1 fora do portal e dos selos: o "Ver histórico completo de pedidos" de
+  Pedidos › Entregues (4,22:1 no fundo da v3 clara, acusado pelo axe), os
+  links dos rascunhos do Agent Dute (4,27:1 no portal escuro e 4,40:1 na v3
+  clara) e os da Operação, do campo, do Comercial e do sistema. Agora todo
+  link do primário (o texto com o sublinhado, também o `variant="link"` do
+  botão) é o `text-primary-texto`, travado em `trava.test.ts`.
+- **No Chromium** (o harness da revisão, com as telas de verdade, o SDK de
+  verdade e um emulador do Firestore só em 127.0.0.1, dados sintéticos; antes
+  = `7d7f631`):
+  - a bancada com o servidor recusando as caixas e o prazo, a 1440 px:
+    antes, o primeiro "Separar" descia de 212 para 278 px aos 198 ms, e a
+    frase entrava acima da lista, como alerta (1104 × 46 px, 4,51:1), sem
+    saída; depois, o "Separar" fica em 212 px, a frase entra na coluna do
+    lado (338 × 40 px) aos 332 ms, sem região viva, a 6,18:1, e o "Tentar de
+    novo" (149 × 36 px; 44 px no celular), com as regras abertas, traz o
+    prazo de volta ao resumo em 66 ms; o foco vai ao título, nunca ao
+    `body`. A 390 px no escuro, o "Separar" só desce com a linha do volume
+    aberto, como antes, e a frase entra depois da lista, a 10,66:1;
+  - a bancada sem rede: antes, a faixa (+54 px) e, 1,6 s depois, a frase (+66
+    px); depois, só a faixa, e a frase entra na coluna do lado sem mover o
+    "Separar", a 1440 e a 390 px;
+  - o pedido separado com as caixas e o prazo recusados: antes, nada; depois,
+    a frase na coluna do lado, e o toque traz o prazo de volta ao resumo em
+    54 ms;
+  - o romaneio e a lista com a solicitação recusada: antes, a frase sem saída,
+    e 10 s depois de as regras abrirem o papel seguia com "prazo não
+    carregado"; depois, o "Tentar de novo" traz o prazo em 30 a 50 ms, e a
+    lista diz "o destino e o prazo do pedido";
+  - a lista impressa sem as caixas e sem a ordem (o PDF, pelo `pdftotext`):
+    antes, a coluna Caixa em branco; depois, "caixa não carregada" em cada
+    linha e "Ordem das prateleiras: não carregada" no cabeçalho, com a recusa
+    do servidor e sem rede;
+  - as Etiquetas com os volumes recusados: antes, "0 etiquetas · 0 folhas";
+    depois, o resumo vazio, e o aviso com o "Tentar de novo";
+  - Emissões com as baixas recusadas: antes, "Não foi possível atualizar as
+    emissões."; depois, "…as baixas.", também ao lado de "Reconectando…" das
+    emissões, e "…as emissões e as baixas." com as duas recusadas;
+  - o contraste: o "Ver histórico completo de pedidos" de 4,22 para 5,30:1 no
+    claro (6,55:1 no escuro); os links dos rascunhos do Agent Dute de 4,27
+    para 6,08:1 no portal escuro e de 4,40 para 5,52:1 na v3 clara (no portal
+    claro, 5,82:1, como antes);
+  - o axe-core (WCAG 2.1 A e AA): antes, o link de Pedidos › Entregues;
+    depois, nada na bancada, no pedido separado, no romaneio, na lista, nas
+    Etiquetas, em Pedidos › Entregues e nos rascunhos, nos dois temas, a 1440
+    e a 390 px.
+- **Testes**: 32 testes novos ou mudados; contra o código da parte, 28
+  falham. Os quatro que passam nos dois guardam o que deve continuar igual:
+  o romaneio sem conexão, que não repete o "Tentar de novo" do aviso; a
+  folha com as caixas lidas, sem o campo novo; e as Etiquetas com os volumes
+  lidos, sem conexão e reconectando. A suíte do app fica em 499 arquivos e
+  5.648 testes (antes, 498 e 5.625).
+
+Fica aberto:
+
+- no celular, a frase da bancada e do pedido separado fica depois da lista:
+  numa lista longa, ela só aparece no fim (o Anunciador diz a recusa do
+  servidor, e a faixa, no alto, a falta de conexão); trazê-la para o alto
+  sem empurrar a lista pede o lugar reservado (na lista da 10.4);
+- o `text-primary` que não é link (o número do "OK físico" na conferência, o
+  "pronto para packing" no cartão e os outros textos do WMS) segue em 4,39:1
+  no cartão escuro e em 4,2:1 no fundo da v3 clara;
+- o resto, como antes: a faixa que empurra a lista, o "Sem conexão" dentro do
+  diálogo e o "Reconectando" que não se resolve (na lista da 10.4), o
+  servidor que cai com a escuta aberta (o limite do SDK) e o aceite num
+  Android médio e com leitor de tela de verdade.

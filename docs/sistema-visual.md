@@ -46,9 +46,10 @@ Sombra só em overlay (`shadow-lg` em diálogo e menu) e no painel flutuante
   no muted e no selo do primário (o tom a 10% e a 5%), nos dois temas
   (`lib/carregando/tokens.test.ts`). O texto sobre o tom do primário (o selo
   `bg-primary/10`, o painel `bg-primary/5`), o texto do primário no portal e
-  o link de volta das folhas (o romaneio, a lista, as etiquetas) são o
-  `text-primary-texto`; o `text-primary` fica para a borda, o ícone e o
-  hover (travado em `lib/carregando/trava.test.ts`).
+  todo link do primário (o texto com o sublinhado, também o `variant="link"`
+  do botão e o link de volta das folhas) são o `text-primary-texto`; o
+  `text-primary` fica para a borda, o ícone e o hover (travado em
+  `lib/carregando/trava.test.ts`).
 - `--primary-fundo` é o fundo do primário: o `bg-primary` o lê pelo
   `--background-color-primary` do `@theme` (o namespace do fundo vem antes do
   `--color-*`), sem classe nova, e o `text-primary`, a borda e o anel seguem
@@ -393,19 +394,30 @@ Etiquetas), a falta de conexão vira o aviso da conexão pela `FalhaNaLeitura`
 tela; a fila que falhou sem nada lido fica na falha enquanto tenta de novo
 (`useLeituraComFalha`), e o foco fica no "Tentar de novo"; com o que está
 lido, a `FaixaAoVivo` ("romaneio de", "pedido de"). A leitura de apoio que não
-chegou (o prazo do romaneio, o destino da lista; na bancada, os volumes, as
-caixas e o prazo, numa frase só: "Não foi possível carregar as caixas e o
-prazo do pedido.") segue com a frase que diz o que falta, em qualquer falta, e
-o aviso da conexão (ou a faixa) diz por quê, com o "Tentar de novo" que assina
-de novo o que não chegou. Na folha impressa, o campo do dado que não chegou
-diz isso no papel ("prazo não carregado", "destino não carregado"), e não o
-"—" de quem não tem o dado, e o Imprimir segue liberado (parte 13m). O erro do
-servidor da leitura no lugar da lista tem sempre o "Tentar de novo" (os
-volumes das Etiquetas, pela `FalhaNaLeitura`). Em Pedidos, o "Para quando" que
+chegou (o prazo do romaneio, o destino e o prazo da lista; na bancada, os
+volumes, as caixas e o prazo, e no pedido separado, as caixas e o prazo, numa
+frase só: "Não foi possível carregar as caixas e o prazo do pedido.") segue
+com a frase que diz o que falta, em qualquer falta, na tinta da faixa (o
+`--carregando-aviso` sobre o âmbar suave), e o aviso da conexão (ou a faixa)
+diz por quê. A recusa do servidor não volta sozinha: a frase tem o "Tentar de
+novo" (a `FalhaNaSecao`), que assina de novo só o que falhou; sem conexão, o
+"Tentar de novo" é o do aviso da conexão. Na bancada e no pedido separado, a
+frase mora na coluna do lado, depois dos volumes e das etiquetas (no celular,
+depois da lista), nunca acima da lista, e tem sempre o "Tentar de novo"; ela
+não é região viva: o Anunciador diz só a recusa do servidor que entra, uma
+vez, e a frase que muda ou sai sozinha não fala (revisão da parte 13m). Na
+folha impressa, o campo do dado que não chegou diz isso no papel ("prazo não
+carregado", "destino não carregado", a caixa como "caixa não carregada" e,
+no cabeçalho, "Ordem das prateleiras: não carregada"), e não o "—" ou o
+branco de quem não tem o dado, e o Imprimir segue liberado (parte 13m). O
+erro do servidor da leitura no lugar da lista tem sempre o "Tentar de novo"
+(os volumes das Etiquetas, pela `FalhaNaLeitura`), e a contagem das Etiquetas
+só aparece com tudo lido. Em Pedidos, o "Para quando" que
 o servidor recusou diz "Prazo não carregado" na linha, e o Atualizar da tela o
 assina de novo; sem conexão, a linha não repete o estado da conexão. Com uma
 lista sem conexão e outra recusada pelo servidor (Emissões), a faixa e a frase
-do servidor ficam juntas. Onde a tela tem a
+do servidor ficam juntas, e a frase diz a lista recusada ("Não foi possível
+atualizar as baixas."). Onde a tela tem a
 `LinhaDeEstado` (Pedidos), a leitura ao vivo que a lista mostra junto (as
 entregas) entra por `aoVivo`: a linha diz a falta, com a hora mais antiga do
 que está na tela, e o "Tentar de novo" dela assina de novo; o pedido não
