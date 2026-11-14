@@ -5,7 +5,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { CartaoComBrilho, Esqueleto } from "@/components/ui/esqueleto";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { useEsperaDaRota } from "@/lib/carregando/espera-da-rota";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
@@ -227,16 +227,16 @@ export function TelaDeRelatorios({
             <p className="text-sm font-semibold text-muted-foreground">{subtitulo}</p>
           </div>
           {estado === "erro" ? (
-            <FalhaNaSecao
+            <FalhaAoVivo
+              leitura={leitura}
               mensagem="Não foi possível carregar o relatório."
-              tentando={leitura.tentando}
-              onTentar={leitura.tentar}
               className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-4 py-3"
             />
           ) : estado === "carregando" ? (
             <RelatorioCarregando leitura={leitura} />
           ) : pronto ? (
             <>
+              <FaixaAoVivo leitura={leitura} className="no-print" />
               {resumo ? (
                 <div className="@container">
                   <dl className={cn("grid gap-3", colunasDoResumo(resumo))}>

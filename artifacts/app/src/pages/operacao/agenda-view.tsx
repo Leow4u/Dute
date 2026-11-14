@@ -10,7 +10,7 @@ import { resumoDoDiaEmPartes, type Agenda, type DiaDaAgenda, type GrupoDaAgenda,
 import { ROTA_NOVA_DEMANDA, hrefDaDemanda, hrefDaFichaDaOs } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
@@ -307,9 +307,8 @@ export function AgendaView({
       </header>
 
       {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a agenda…" continuaARota onTentar={leitura.tentar} /> : null}
-      {estado === "erro" ? (
-        <FalhaNaSecao mensagem="Não foi possível carregar a agenda." tentando={leitura.tentando} onTentar={leitura.tentar} />
-      ) : null}
+      {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a agenda." /> : null}
+      {estado === "pronto" ? <FaixaAoVivo leitura={leitura} /> : null}
       {erro && !escala ? (
         <p role="alert" className="text-sm text-destructive">
           {erro}

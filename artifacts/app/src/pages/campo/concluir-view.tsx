@@ -24,7 +24,7 @@ import { ROTA_CAMPO, hrefDaOsNoCampo } from "@/lib/campo/navegacao";
 import { horaDe, type EtapaDaOs, type FichaDaOs } from "@/lib/operacao/ficha-da-os";
 import { cn } from "@/lib/utils";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
@@ -118,21 +118,22 @@ export function CampoConcluirView({
         {voltar}
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Concluir OS {numero}</h1>
         {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a OS…" continuaARota onTentar={leitura.tentar} /> : null}
-        {estado === "erro" ? (
-          <FalhaNaSecao mensagem="Não foi possível carregar a OS." tentando={leitura.tentando} onTentar={leitura.tentar} />
-        ) : null}
+        {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a OS." /> : null}
         {estado === "nao_encontrada" ? <p className="text-sm text-muted-foreground">OS {numero} não encontrada</p> : null}
       </div>
     );
   }
 
   const cabecalho = (
-    <header className="flex flex-col gap-1">
-      <h1 className="text-2xl font-bold tracking-tight text-foreground">Concluir OS {ficha.numero}</h1>
-      <p className="text-sm text-muted-foreground">
-        {ficha.clienteNome ?? ficha.customerCode} · Demanda {ficha.demanda}
-      </p>
-    </header>
+    <>
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Concluir OS {ficha.numero}</h1>
+        <p className="text-sm text-muted-foreground">
+          {ficha.clienteNome ?? ficha.customerCode} · Demanda {ficha.demanda}
+        </p>
+      </header>
+      <FaixaAoVivo leitura={leitura} />
+    </>
   );
 
   if (enviada || ficha.status === "em_revisao" || ficha.status === "revisada") {

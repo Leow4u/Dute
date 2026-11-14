@@ -1,6 +1,7 @@
 import { collection, query, where } from "firebase/firestore";
 
 import { fichaDaLeitura, type FichaDaOs } from "../operacao/ficha-da-os";
+import type { FaltaAoVivo } from "../operacao/leitura";
 import { useLeituraDoPortal } from "./leitura-do-portal";
 import { nfDoPortal, type NfDoPortal } from "./servicos";
 import { solicitacaoDoPortal, type SolicitacaoDoPortal } from "./solicitacao";
@@ -14,8 +15,8 @@ import { solicitacaoDoPortal, type SolicitacaoDoPortal } from "./solicitacao";
  * fica na tela (`tentando`; carregamento v2, parte 13f).
  */
 
-/** A nova tentativa da leitura que falhou. */
-type NovaTentativa = { tentando: boolean; tentar: () => void };
+/** A nova tentativa da leitura que falhou, e o que falta: a conexão ou o servidor (parte 13j). */
+type NovaTentativa = { tentando: boolean; tentar: () => void } & FaltaAoVivo;
 
 export function useOsDoCliente(customerCode: string | null | undefined, ligado: boolean): { os: FichaDaOs[] | null; erro: boolean } & NovaTentativa {
   const codigo = customerCode?.trim() || null;
@@ -24,7 +25,7 @@ export function useOsDoCliente(customerCode: string | null | undefined, ligado: 
     (db) => query(collection(db, "service_orders"), where("customer_code", "==", codigo)),
     fichaDaLeitura,
   );
-  return { os: leitura.itens, erro: leitura.erro, tentando: leitura.tentando, tentar: leitura.tentar };
+  return { os: leitura.itens, erro: leitura.erro, tentando: leitura.tentando, tentar: leitura.tentar, falta: leitura.falta, lidaEm: leitura.lidaEm };
 }
 
 export function useNfsDoCliente(customerCode: string | null | undefined, ligado: boolean): { nfs: NfDoPortal[] | null; erro: boolean } & NovaTentativa {
@@ -34,7 +35,7 @@ export function useNfsDoCliente(customerCode: string | null | undefined, ligado:
     (db) => query(collection(db, "client_faturas"), where("customer_code", "==", codigo)),
     nfDoPortal,
   );
-  return { nfs: leitura.itens, erro: leitura.erro, tentando: leitura.tentando, tentar: leitura.tentar };
+  return { nfs: leitura.itens, erro: leitura.erro, tentando: leitura.tentando, tentar: leitura.tentar, falta: leitura.falta, lidaEm: leitura.lidaEm };
 }
 
 /** As solicitações de OS do cliente pelo portal (parte 4.4b), ao vivo, pelo código do cliente da conta. */
@@ -45,5 +46,5 @@ export function useSolicitacoesDoCliente(customerCode: string | null | undefined
     (db) => query(collection(db, "service_requests"), where("customer_code", "==", codigo)),
     solicitacaoDoPortal,
   );
-  return { solicitacoes: leitura.itens, erro: leitura.erro, tentando: leitura.tentando, tentar: leitura.tentar };
+  return { solicitacoes: leitura.itens, erro: leitura.erro, tentando: leitura.tentando, tentar: leitura.tentar, falta: leitura.falta, lidaEm: leitura.lidaEm };
 }

@@ -20,7 +20,7 @@ import {
   type Vinculo,
 } from "@/lib/operacao/cadastro";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
@@ -169,7 +169,8 @@ function Moldura({
         <Input id={`${titulo}-busca`} value={busca} onChange={(event) => onBusca(event.target.value)} />
       </Campo>
       {estado === "carregando" ? <CarregandoNaRegiao rotulo={carregando} continuaARota onTentar={leitura.tentar} /> : null}
-      {estado === "erro" ? <FalhaNaSecao mensagem="Não foi possível carregar o cadastro." tentando={leitura.tentando} onTentar={leitura.tentar} /> : null}
+      {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar o cadastro." /> : null}
+      {estado === "pronto" ? <FaixaAoVivo leitura={leitura} /> : null}
       {estado === "pronto" && !children ? <p className="text-sm text-muted-foreground">{vazio}</p> : null}
       {estado === "pronto" ? children : null}
     </section>

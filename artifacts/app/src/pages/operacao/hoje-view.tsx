@@ -26,7 +26,7 @@ import { hrefDeAtender, pedidoEmTexto, rotaDaSolicitacao } from "@/lib/operacao/
 import { ROTA_NOVA_DEMANDA, hrefDaDemanda, hrefDaFichaDaOs, hrefDoPlano, hrefDoPlanoDaVistoria } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
@@ -331,9 +331,8 @@ export function HojeView({
       </div>
 
       {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando o Hoje…" continuaARota onTentar={leitura.tentar} /> : null}
-      {estado === "erro" ? (
-        <FalhaNaSecao mensagem="Não foi possível carregar o Hoje." tentando={leitura.tentando} onTentar={leitura.tentar} />
-      ) : null}
+      {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar o Hoje." /> : null}
+      {estado === "pronto" ? <FaixaAoVivo leitura={leitura} /> : null}
       {erro && !escala ? (
         <p role="alert" className="text-sm text-destructive">
           {erro}

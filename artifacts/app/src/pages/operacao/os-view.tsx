@@ -27,7 +27,7 @@ import type { TipoDaDemanda } from "@/lib/operacao/hoje";
 import { ROTA_HOJE, hrefDaDemanda, hrefDaOs } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
@@ -489,9 +489,7 @@ export function OsView({
         {voltar}
         <h1 className="text-3xl font-bold tracking-tight text-foreground">OS {numero}</h1>
         {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a OS…" continuaARota onTentar={leitura.tentar} /> : null}
-        {estado === "erro" ? (
-          <FalhaNaSecao mensagem="Não foi possível carregar a OS." tentando={leitura.tentando} onTentar={leitura.tentar} />
-        ) : null}
+        {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a OS." /> : null}
         {estado === "nao_encontrada" ? <p className="text-sm text-muted-foreground">OS {numero} não encontrada</p> : null}
       </section>
     );
@@ -500,6 +498,7 @@ export function OsView({
   return (
     <section className="flex flex-col gap-6">
       {voltar}
+      <FaixaAoVivo leitura={leitura} />
       <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

@@ -3,6 +3,7 @@ import { AlertCircle, RefreshCw, WifiOff } from "lucide-react";
 
 import { ArcosDoWifi } from "@/components/ui/arcos-do-wifi";
 import { Button } from "@/components/ui/button";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { Spinner } from "@/components/ui/spinner";
 import { useConexao, useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
 import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
@@ -331,4 +332,71 @@ export function FalhaNaLeitura({
       focoAoSair={focoAoSair}
     />
   );
+}
+
+/**
+ * A leitura ao vivo como a tela a vê (a `useLeitura` da Operação, a do
+ * Comercial, a do portal, ou a `novaTentativaDe` das que a tela junta): a nova
+ * tentativa e o que falta (carregamento v2, parte 13j).
+ */
+export type LeituraAoVivoNaTela = {
+  tentando: boolean;
+  tentar: () => unknown;
+  /** "conexao": o aparelho sem rede ou o SDK só no cache; "servidor": a escuta recusada. */
+  falta?: "conexao" | "servidor" | null;
+  /** Com a falta de conexão e a lista lida: a hora até a qual ela estava em dia. */
+  lidaEm?: number | null;
+};
+
+/**
+ * A leitura ao vivo que falhou sem nada lido, no lugar da seção (parte 13j),
+ * como a `FalhaNaLeitura` faz com o react-query: na falta de conexão, o
+ * `BlocoSemConexao` ("Sem conexão." ou "Reconectando…", pelo estado único da
+ * conexão), com "Tentar de novo", que acorda o SDK antes de assinar de novo;
+ * no erro do servidor (a permissão, outro erro), a `FalhaNaSecao` com a
+ * `mensagem`, como antes. `semCartao` tira a borda do bloco quando a seção já
+ * é um cartão (o lugar da lista dentro dele); `estreito` o empilha também no
+ * computador, onde a seção é estreita (a lista lateral de 320 a 384 px, o
+ * sino), para o "Tentar de novo" não sair dela.
+ */
+export function FalhaAoVivo({
+  leitura,
+  mensagem,
+  className,
+  semCartao = false,
+  estreito = false,
+  focoAoSair,
+}: {
+  leitura: LeituraAoVivoNaTela;
+  /** A frase do erro do servidor: "Não foi possível carregar as demandas." */
+  mensagem: string;
+  /** A classe da `FalhaNaSecao` (o espaço dela no lugar da lista). */
+  className?: string;
+  semCartao?: boolean;
+  estreito?: boolean;
+  focoAoSair?: string;
+}) {
+  if (leitura.falta === "conexao") {
+    return (
+      <BlocoSemConexao
+        tentando={leitura.tentando}
+        onTentar={() => void leitura.tentar()}
+        className={cn(semCartao && "rounded-none border-0", estreito && "sm:flex-col sm:items-stretch sm:gap-3 sm:px-4")}
+        focoAoSair={focoAoSair}
+      />
+    );
+  }
+  return <FalhaNaSecao mensagem={mensagem} tentando={leitura.tentando} onTentar={leitura.tentar} className={className} focoAoSair={focoAoSair} />;
+}
+
+/**
+ * A lista ao vivo já lida, sem conexão (parte 13j; decisão 2 do celular): ela
+ * fica na tela, e a faixa diz "Sem conexão · lista de 10:42" (ou
+ * "Reconectando… · lista de 10:42"), com "Tentar de novo", que acorda o SDK:
+ * a escuta volta sozinha quando ele volta a ouvir o servidor. Sem a falta de
+ * conexão com a lista lida, nada.
+ */
+export function FaixaAoVivo({ leitura, className }: { leitura: LeituraAoVivoNaTela; className?: string }) {
+  if (leitura.falta !== "conexao" || leitura.lidaEm == null) return null;
+  return <FaixaSemConexao lidaEm={leitura.lidaEm} tentando={leitura.tentando} onTentar={() => void leitura.tentar()} className={className} />;
 }

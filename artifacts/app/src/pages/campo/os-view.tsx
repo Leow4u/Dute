@@ -35,7 +35,7 @@ import { buscarNoCatalogo, type ItemDoCatalogo } from "@/lib/operacao/demanda-di
 import { ETAPA_ROTULO, horaDe, type EtapaDaOs, type FichaDaOs } from "@/lib/operacao/ficha-da-os";
 import { cn } from "@/lib/utils";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
@@ -622,9 +622,7 @@ export function CampoOsView({
         {voltar}
         <h1 className="text-2xl font-bold tracking-tight text-foreground">OS {numero}</h1>
         {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a OS…" continuaARota onTentar={leitura.tentar} /> : null}
-        {estado === "erro" ? (
-          <FalhaNaSecao mensagem="Não foi possível carregar a OS." tentando={leitura.tentando} onTentar={leitura.tentar} />
-        ) : null}
+        {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a OS." /> : null}
         {estado === "nao_encontrada" ? <p className="text-sm text-muted-foreground">OS {numero} não encontrada</p> : null}
       </div>
     );
@@ -652,6 +650,7 @@ export function CampoOsView({
           {ficha.clienteNome ?? ficha.customerCode} · Demanda {ficha.demanda}
         </p>
       </header>
+      <FaixaAoVivo leitura={leitura} />
       {primeira || janela ? (
         <dl className="grid grid-cols-2 gap-2">
           {primeira ? (

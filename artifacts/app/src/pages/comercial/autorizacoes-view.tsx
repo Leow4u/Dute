@@ -6,7 +6,7 @@ import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { DialogCancelar } from "@/components/ui/dialog";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { NumeroLido } from "@/components/ui/numero-lido";
 import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
@@ -223,7 +223,7 @@ function Fila({ estado, linhas, filtro, busca, painel, acoes, marcando, leitura 
   if (estado === "carregando")
     conteudo = <CarregandoNaRegiao rotulo="Carregando os executados…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
   else if (estado === "erro")
-    conteudo = <FalhaNaSecao mensagem="Não foi possível carregar a fila." tentando={leitura.tentando} onTentar={leitura.tentar} className="px-5 py-7" />;
+    conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a fila." className="px-5 py-7" semCartao />;
   else if (!linhas.length) conteudo = <Vazio>Nenhum executado aguardando autorização</Vazio>;
   else if (!grupos.length) conteudo = <Vazio>{busca.trim() ? "Nenhum executado encontrado" : "Nenhum executado nesta faixa"}</Vazio>;
   else {
@@ -417,9 +417,7 @@ function Autorizadas({ autorizadas, ocupado, acoes, somenteLeitura, leituraDasAu
   let conteudo: ReactNode;
   if (autorizadas === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando as autorizações…" onTentar={leitura.tentar} className="px-5 py-7" />;
   else if (autorizadas === "erro")
-    conteudo = (
-      <FalhaNaSecao mensagem="Não foi possível carregar as autorizações." tentando={leitura.tentando} onTentar={leitura.tentar} className="justify-center px-5 py-7" />
-    );
+    conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar as autorizações." className="justify-center px-5 py-7" semCartao />;
   else if (!lista?.length) conteudo = <Vazio>Nenhuma autorização a faturar</Vazio>;
   else {
     conteudo = lista.map((linha, indice) => (
@@ -545,6 +543,7 @@ export function AutorizacoesView(props: AutorizacoesViewProps) {
           ) : null}
         </div>
       </header>
+      {estado === "pronto" && props.leitura ? <FaixaAoVivo leitura={props.leitura} /> : null}
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <Fila {...props} marcando={painelAberto} />
         {painelAberto ? <Painel {...props} /> : null}

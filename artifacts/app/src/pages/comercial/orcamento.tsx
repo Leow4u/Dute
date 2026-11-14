@@ -552,6 +552,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
         locais={ordenarLocais(locais.itens ?? [])}
         catalogo={catalogo}
         leituraDoCatalogo={tabela}
+        leitura={leituraDoOrcamento}
         ocupado={travado || depois.ocupado}
         emAndamento={emAndamento}
         aviso={aviso ?? (depois.aviso?.numero === numero ? { tipo: "erro", texto: depois.aviso.mensagem } : null)}

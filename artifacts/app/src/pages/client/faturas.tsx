@@ -5,7 +5,7 @@ import { Link } from "wouter";
 import { NfsDosServicos } from "@/components/portal/nfs-dos-servicos";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { PageHeader } from "@/components/ui/page-header";
 import { Segmented } from "@/components/ui/segmented";
 import { agentAskHref } from "@/lib/agent-chat";
@@ -92,10 +92,9 @@ export function ClienteFaturas() {
               <NfsDosServicos nfs={nfs ?? []} hoje={hoje} />
               {leituraDasNfs.erro ? (
                 // A falha das NFs nunca vira o vazio (necessidade 2): dita, com a nova tentativa.
-                <FalhaNaSecao
+                <FalhaAoVivo
+                  leitura={leituraDasNfs}
                   mensagem="Não foi possível carregar as NFs dos serviços."
-                  tentando={leituraDasNfs.tentando}
-                  onTentar={leituraDasNfs.tentar}
                   className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
                 />
               ) : lendoNfs ? (

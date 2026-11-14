@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 
 import { Etapa } from "./demandas-view";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
@@ -446,9 +446,7 @@ export function DemandaView({
       <section className="flex flex-col gap-4">
         {voltar}
         {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a demanda…" continuaARota onTentar={leitura.tentar} /> : null}
-        {estado === "erro" ? (
-          <FalhaNaSecao mensagem="Não foi possível carregar a demanda." tentando={leitura.tentando} onTentar={leitura.tentar} />
-        ) : null}
+        {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a demanda." /> : null}
         {estado === "nao_encontrada" || (estado === "pronto" && !demanda) ? (
           <p className="text-sm text-muted-foreground">
             {numero
@@ -468,6 +466,7 @@ export function DemandaView({
   return (
     <section className="flex flex-col gap-6">
       {voltar}
+      <FaixaAoVivo leitura={leitura} />
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">

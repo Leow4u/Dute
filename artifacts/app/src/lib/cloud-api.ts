@@ -25,6 +25,7 @@ import {
 import { PAPEIS_DO_WMS, estagioDoCadastro, isPapel, livreParaOCliente, modulosContratados } from "@workspace/dominio";
 import { clienteDaChamada, LEGACY_CUSTOMER_CODE } from "./active-customer";
 import { periodBelongsToCustomer } from "./billing-scope";
+import { firestoreRespondeu, firestoreSoNoCache, ouvirRespostasDoFirestore } from "./carregando/respostas-do-firestore";
 import { aparelhoSemRede, corpoDaFalta, faltaDeAgora, firestoreSemConexao } from "./conexao";
 import { leiturasDoPortal } from "./operations";
 import { canListUsers, canSeeCatalogPrice, canSeeMerchandiseValue } from "./permissions";
@@ -244,15 +245,19 @@ function json(data: unknown, status = 200): Response {
  */
 async function getDocs<A, D extends DocumentData>(consulta: Query<A, D>): Promise<QuerySnapshot<A, D>> {
   const snapshot = await lerDocsDoFirestore(consulta);
-  marcarSoNoCache(snapshot.metadata?.fromCache === true);
-  if (firestoreSoNoCache) throw faltaDeAgora();
-  return snapshot;
+  return doServidor(snapshot);
 }
 
 async function getDoc<A, D extends DocumentData>(referencia: DocumentReference<A, D>): Promise<DocumentSnapshot<A, D>> {
   const snapshot = await lerDocDoFirestore(referencia);
-  marcarSoNoCache(snapshot.metadata?.fromCache === true);
-  if (firestoreSoNoCache) throw faltaDeAgora();
+  return doServidor(snapshot);
+}
+
+/** A regra única (lib/carregando/respostas-do-firestore.ts): a resposta só do cache é a falta; a do servidor, a volta. */
+function doServidor<S extends { metadata?: { fromCache?: boolean } }>(snapshot: S): S {
+  const soDoCache = snapshot.metadata?.fromCache === true;
+  firestoreRespondeu(!soDoCache);
+  if (soDoCache) throw faltaDeAgora();
   return snapshot;
 }
 
@@ -268,16 +273,14 @@ export const lerDocsDoServidor = getDocs;
 /** O mesmo, para um documento (o Início do Comercial; parte 13i). */
 export const lerDocDoServidor = getDoc;
 
-/** A última leitura do Firestore por aqui só achou o cache: o SDK se deu por offline. */
-let firestoreSoNoCache = false;
 let acordandoOFirestore: Promise<void> | null = null;
 const quemEsperaAVolta = new Set<() => void>();
 let deixarDeEsperarAVolta: (() => void) | null = null;
 
-function marcarSoNoCache(soNoCache: boolean) {
-  firestoreSoNoCache = soNoCache;
-  if (soNoCache) esperarAVoltaDoFirestore();
-}
+// O SDK que se deu por offline, por uma leitura daqui ou por uma escuta ao vivo (parte 13j): espera a volta dele.
+ouvirRespostasDoFirestore(() => {
+  if (firestoreSoNoCache()) esperarAVoltaDoFirestore();
+});
 
 function pararDeEsperarAVolta() {
   deixarDeEsperarAVolta?.();
@@ -298,7 +301,7 @@ function esperarAVoltaDoFirestore() {
     (perfil) => {
       if (perfil.metadata.fromCache) return;
       pararDeEsperarAVolta();
-      firestoreSoNoCache = false;
+      firestoreRespondeu(true);
       for (const ouvinte of [...quemEsperaAVolta]) ouvinte();
     },
     () => pararDeEsperarAVolta(),
@@ -308,7 +311,7 @@ function esperarAVoltaDoFirestore() {
 /** Avisa quando o SDK do Firestore, que se deu por offline, voltou a ouvir o servidor. Devolve quem desliga. */
 export function aoVoltarOFirestore(ouvinte: () => void): () => void {
   quemEsperaAVolta.add(ouvinte);
-  if (firestoreSoNoCache) esperarAVoltaDoFirestore();
+  if (firestoreSoNoCache()) esperarAVoltaDoFirestore();
   return () => {
     quemEsperaAVolta.delete(ouvinte);
     if (!quemEsperaAVolta.size) pararDeEsperarAVolta();
@@ -325,7 +328,7 @@ export function aoVoltarOFirestore(ouvinte: () => void): () => void {
  * com rede; nulo quando não há o que acordar. Uma vez por vez.
  */
 export function acordarFirestore(): Promise<void> | null {
-  if (!firestore || !firestoreSoNoCache || aparelhoSemRede()) return null;
+  if (!firestore || !firestoreSoNoCache() || aparelhoSemRede()) return null;
   const sdk = firestore;
   acordandoOFirestore ??= (async () => {
     try {
@@ -3325,7 +3328,7 @@ export function installCloudApi() {
     } catch (error) {
       if (firestoreSemConexao(error)) {
         // O `unavailable` do SDK que se acha offline também pede para acordá-lo.
-        marcarSoNoCache(true);
+        firestoreRespondeu(false);
         return json(corpoDaFalta(error), 503);
       }
       return json(

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { doc, getDoc, onSnapshot, type DocumentData, type Firestore, type Query } from "firebase/firestore";
+import { doc, getDoc, type DocumentData, type DocumentSnapshot } from "firebase/firestore";
 
 import { useAppUser } from "../auth";
 import { firestore } from "../firebase";
-import { ESCUTA_COM_METADADOS, abrirEscuta, fecharEscuta, respostaLida, useNovaTentativa, type NovaTentativa } from "../operacao/leitura";
+import { useEscutaAoVivo, useLeitura, type LeituraAoVivo } from "../operacao/leitura";
 
-export { SEM_NOVA_TENTATIVA, novaTentativaDe, type NovaTentativa } from "../operacao/leitura";
+export { SEM_NOVA_TENTATIVA, novaTentativaDe, type FaltaAoVivo, type FaltaDaLeitura, type NovaTentativa } from "../operacao/leitura";
 import type { Carga } from "./clientes";
 
 /**
@@ -13,53 +13,15 @@ import type { Carga } from "./clientes";
  * montagem do orçamento): coleção (ou consulta) e documento ao vivo, para a
  * tela ver o que a callable gravou sem recarregar,
  * e o nome de quem fez cada passo. As regras abrem a leitura a owner, admin e
- * comercial; a escrita é só das callables (lib/comercial/api.ts).
+ * comercial; a escrita é só das callables (lib/comercial/api.ts). A escuta é
+ * a mesma da Operação (`useEscutaAoVivo`; parte 13j), com a falta e a nova
+ * tentativa.
  */
 
 export type Leitura<T> = { itens: T[] | null; erro: boolean };
 
 /** Coleção (ou consulta) ao vivo. Chave null: nada a ler ainda. */
-export function useLeitura<T>(
-  chave: string | null,
-  consulta: (db: Firestore) => Query<DocumentData>,
-  mapear: (id: string, data: DocumentData) => T | null,
-): Leitura<T> & NovaTentativa {
-  const nova = useNovaTentativa(chave);
-  const { assinatura } = nova;
-  const [estado, setEstado] = useState<Leitura<T> & { chave: string | null }>({ chave: null, itens: null, erro: false });
-  useEffect(() => {
-    if (!assinatura) return undefined;
-    if (!firestore) {
-      setEstado({ chave: assinatura, itens: null, erro: true });
-      return undefined;
-    }
-    const alvo = consulta(firestore);
-    const escuta = abrirEscuta(alvo);
-    const parar = onSnapshot(
-      alvo,
-      ESCUTA_COM_METADADOS,
-      (snapshot) => {
-        // Só o cache, sem nada lido e sem rede: a falta de conexão, nunca a lista vazia (parte 13i).
-        if (!respostaLida(escuta, snapshot)) return setEstado({ chave: assinatura, itens: null, erro: true });
-        setEstado({
-          chave: assinatura,
-          itens: snapshot.docs.map((row) => mapear(row.id, row.data())).filter((item): item is T => item !== null),
-          erro: false,
-        });
-      },
-      () => setEstado({ chave: assinatura, itens: null, erro: true }),
-    );
-    return () => {
-      fecharEscuta(escuta);
-      parar();
-    };
-    // A consulta e o mapeamento dependem só da chave (e da tentativa).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assinatura]);
-  const leitura = estado.chave === assinatura ? estado : { itens: null, erro: false };
-  const tentando = nova.tentando(leitura.erro, leitura.itens !== null);
-  return { itens: leitura.itens, erro: leitura.erro || tentando, tentando, tentar: nova.tentar };
-}
+export { useLeitura };
 
 /** A leitura como a tela mostra: erro e carregando nunca viram lista vazia. */
 export function carga<T>(leitura: Leitura<T>): Carga<T> {
@@ -73,42 +35,11 @@ export type LeituraDoDocumento = {
 };
 
 /** Um documento ao vivo ("demands/10045"). Caminho null: nada a ler. */
-export function useDocumento(caminho: string | null): LeituraDoDocumento & NovaTentativa {
-  const nova = useNovaTentativa(caminho);
-  const { assinatura } = nova;
-  const [estado, setEstado] = useState<LeituraDoDocumento & { caminho: string | null }>({
-    caminho: null,
-    dados: undefined,
-    erro: false,
-  });
-  useEffect(() => {
-    if (!caminho || !assinatura) return undefined;
-    if (!firestore) {
-      setEstado({ caminho: assinatura, dados: undefined, erro: true });
-      return undefined;
-    }
-    const alvo = doc(firestore, caminho);
-    const escuta = abrirEscuta(alvo);
-    const parar = onSnapshot(
-      alvo,
-      ESCUTA_COM_METADADOS,
-      (snapshot) => {
-        // Só o cache, sem nada lido e sem rede: a falta de conexão, nunca "não existe" (parte 13i).
-        if (!respostaLida(escuta, snapshot)) return setEstado({ caminho: assinatura, dados: undefined, erro: true });
-        setEstado({ caminho: assinatura, dados: snapshot.exists() ? snapshot.data() : null, erro: false });
-      },
-      () => setEstado({ caminho: assinatura, dados: undefined, erro: true }),
-    );
-    return () => {
-      fecharEscuta(escuta);
-      parar();
-    };
-    // O caminho está na assinatura (com a tentativa).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assinatura]);
-  const leitura = estado.caminho === assinatura ? estado : { dados: undefined, erro: false };
-  const tentando = nova.tentando(leitura.erro, leitura.dados !== undefined);
-  return { dados: leitura.dados, erro: leitura.erro || tentando, tentando, tentar: nova.tentar };
+export function useDocumento(caminho: string | null): LeituraDoDocumento & LeituraAoVivo {
+  const leitura = useEscutaAoVivo(caminho, (db) => doc(db, caminho ?? "-"), (snapshot: DocumentSnapshot<DocumentData>) =>
+    snapshot.exists() ? snapshot.data() : null,
+  );
+  return { dados: leitura.valor, erro: leitura.erro, tentando: leitura.tentando, tentar: leitura.tentar, falta: leitura.falta, lidaEm: leitura.lidaEm };
 }
 
 /**

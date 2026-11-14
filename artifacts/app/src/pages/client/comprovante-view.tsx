@@ -4,7 +4,7 @@ import { ArrowLeft, Download } from "lucide-react";
 import { ComprovanteDocumento } from "@/components/portal/comprovante-documento";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { ErroNaLeitura, useTentandoNoRelogio } from "@/components/ui/erro-na-leitura";
+import { BlocoSemConexao, ErroNaLeitura, FaixaAoVivo, useTentandoNoRelogio } from "@/components/ui/erro-na-leitura";
 import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import type { ComprovanteDaOs } from "@/lib/portal/comprovante";
 import { useEspera } from "@/lib/carregando/use-espera";
@@ -51,8 +51,8 @@ export function ComprovanteView({
   comprovante: ComprovanteDaOs | null;
   urls: Readonly<Record<string, string>>;
   onBaixar: () => void;
-  /** A nova tentativa da leitura da OS. */
-  leitura?: { tentando: boolean; onTentar: () => void };
+  /** A nova tentativa da leitura da OS, e o que falta: a conexão (com a hora do lido) ou o servidor (parte 13j). */
+  leitura?: { tentando: boolean; onTentar: () => void; falta?: "conexao" | "servidor" | null; lidaEm?: number | null };
   fotos?: FotosDoComprovante;
 }) {
   const mensagem =
@@ -103,10 +103,15 @@ export function ComprovanteView({
           className="no-print rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
         />
       ) : null}
+      {estado === "pronto" && leitura ? (
+        <FaixaAoVivo leitura={{ tentando: leitura.tentando, tentar: leitura.onTentar, falta: leitura.falta, lidaEm: leitura.lidaEm }} className="no-print" />
+      ) : null}
       {estado === "carregando" ? (
         <CarregandoNaRegiao rotulo="Carregando o comprovante…" continuaARota onTentar={leitura?.onTentar} className="rounded-lg border border-border bg-card px-5 py-7" />
       ) : estado === "erro" ? (
-        leitura ? (
+        leitura?.falta === "conexao" ? (
+          <BlocoSemConexao tentando={leitura.tentando} onTentar={leitura.onTentar} />
+        ) : leitura ? (
           <ErroNaLeitura mensagem="Não foi possível carregar o comprovante." tentando={tentandoOComprovante} onTentar={leitura.onTentar} />
         ) : (
           <p role="alert" className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">

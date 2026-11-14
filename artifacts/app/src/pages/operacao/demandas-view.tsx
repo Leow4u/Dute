@@ -15,7 +15,7 @@ import { ENTRADAS_DA_DEMANDA, ENTRADA_ROTULO, TIPOS_DA_DEMANDA, TIPO_ROTULO, ent
 import { ROTA_NOVA_DEMANDA, hrefDaDemanda } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
@@ -138,9 +138,8 @@ export function DemandasView({
       </div>
 
       {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando as demandas…" continuaARota onTentar={leitura.tentar} /> : null}
-      {estado === "erro" ? (
-        <FalhaNaSecao mensagem="Não foi possível carregar as demandas." tentando={leitura.tentando} onTentar={leitura.tentar} />
-      ) : null}
+      {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar as demandas." /> : null}
+      {estado === "pronto" ? <FaixaAoVivo leitura={leitura} /> : null}
       {estado === "pronto" && linhas.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">Nenhuma demanda</p>
       ) : null}

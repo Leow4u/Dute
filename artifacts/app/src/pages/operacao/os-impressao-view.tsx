@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { hrefDaFichaDaOs } from "@/lib/operacao/navegacao";
 import type { DocumentoDaOs } from "@/lib/operacao/os-documento";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
@@ -50,15 +50,11 @@ export function OsImpressaoView({
           Imprimir
         </Button>
       </div>
+      {estado === "pronto" ? <FaixaAoVivo leitura={leitura} className="no-print" /> : null}
       {estado === "carregando" ? (
         <CarregandoNaRegiao rotulo="Carregando a OS…" continuaARota onTentar={leitura.tentar} className="rounded-lg border border-border bg-card px-5 py-7" />
       ) : estado === "erro" ? (
-        <FalhaNaSecao
-          mensagem="Não foi possível carregar a OS."
-          tentando={leitura.tentando}
-          onTentar={leitura.tentar}
-          className="rounded-lg border border-border bg-card px-5 py-7"
-        />
+        <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a OS." className="rounded-lg border border-border bg-card px-5 py-7" />
       ) : mensagem ? (
         <p className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">{mensagem}</p>
       ) : documento ? (

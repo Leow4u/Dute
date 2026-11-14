@@ -5,7 +5,7 @@ import { Check, ChevronLeft, ChevronRight, FileText, RefreshCw, Send, TriangleAl
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
 import type { AvisoDoCartaoParado, LinhaCompacta, PontoDeConferir } from "@/lib/comercial/aprovar";
@@ -350,11 +350,12 @@ export function AprovarView(props: AprovarViewProps) {
       {estado === "carregando" ? (
         <CarregandoNaRegiao rotulo="Carregando os orçamentos…" continuaARota onTentar={leitura.tentar} className={caixa} />
       ) : estado === "erro" ? (
-        <FalhaNaSecao mensagem="Não foi possível carregar os orçamentos." tentando={leitura.tentando} onTentar={leitura.tentar} className={caixa} />
+        <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar os orçamentos." className={caixa} />
       ) : mensagem || !cartao ? (
         <p className={cn(caixa, "text-center text-sm font-bold text-muted-foreground")}>{mensagem}</p>
       ) : (
         <>
+          <FaixaAoVivo leitura={leitura} />
           <Cartao cartao={cartao} />
           {props.conferir.length ? <Conferir pontos={props.conferir} /> : null}
           <Linhas linhas={props.linhas} cartao={cartao} />

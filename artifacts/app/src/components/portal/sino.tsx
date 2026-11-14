@@ -4,7 +4,7 @@ import { Bell } from "lucide-react";
 import { Link } from "wouter";
 
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAppUser } from "@/lib/auth";
 import { chamarOperacao } from "@/lib/operacao/api";
@@ -62,15 +62,17 @@ export type ListaDeAvisosProps = {
   /** A nova tentativa da leitura que falhou (carregamento v2, parte 13f). */
   tentando?: boolean;
   onTentar?: () => void;
+  /** O que falta: a conexão (sem nada lido, o aviso da conexão) ou o servidor (parte 13j). */
+  falta?: "conexao" | "servidor" | null;
 };
 
-export function ListaDeAvisos({ avisos, erro, vistosAte, agora, onEscolher, tentando = false, onTentar }: ListaDeAvisosProps) {
+export function ListaDeAvisos({ avisos, erro, vistosAte, agora, onEscolher, tentando = false, onTentar, falta = null }: ListaDeAvisosProps) {
   return (
     <div className="flex max-h-[min(28rem,70dvh)] flex-col">
       <h2 className="border-b border-border/60 px-4 py-3 text-sm font-semibold text-foreground">Avisos</h2>
       {erro ? (
         onTentar ? (
-          <FalhaNaSecao mensagem="Não foi possível carregar os avisos." tentando={tentando} onTentar={onTentar} className="px-4 py-6" />
+          <FalhaAoVivo leitura={{ tentando, tentar: onTentar, falta }} mensagem="Não foi possível carregar os avisos." className="px-4 py-6" semCartao estreito />
         ) : (
           <p role="alert" className="px-4 py-6 text-sm text-destructive">
             Não foi possível carregar os avisos.
@@ -161,6 +163,7 @@ export function SinoDoPortal({ lado = "right", className }: { lado?: "right" | "
           erro={leitura.erro}
           tentando={leitura.tentando}
           onTentar={leitura.tentar}
+          falta={leitura.falta}
           vistosAte={vistosAoAbrir}
           agora={new Date()}
           onEscolher={() => setAberto(false)}

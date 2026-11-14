@@ -4,7 +4,7 @@ import { CalendarX, Clock, FileText, FolderOpen, Pencil, Plus, RefreshCw, Table2
 
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { NumeroLido } from "@/components/ui/numero-lido";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
 import { dataBr, type CadastroComercial, type Carga } from "@/lib/comercial/clientes";
@@ -117,7 +117,7 @@ function Vazio({ children }: { children: ReactNode }) {
  */
 function SemLeitura({ carga, objeto, leitura = SEM_NOVA_TENTATIVA }: { carga: "carregando" | "erro"; objeto: string; leitura?: NovaTentativa }) {
   if (carga === "carregando") return <CarregandoNaRegiao rotulo={`Carregando ${objeto}…`} onTentar={leitura.tentar} className="px-5 py-7" />;
-  return <FalhaNaSecao mensagem={`Não foi possível carregar ${objeto}.`} tentando={leitura.tentando} onTentar={leitura.tentar} className="justify-center px-5 py-7" />;
+  return <FalhaAoVivo leitura={leitura} mensagem={`Não foi possível carregar ${objeto}.`} className="justify-center px-5 py-7" semCartao />;
 }
 
 function Rotulo({ children }: { children: ReactNode }) {
@@ -149,7 +149,7 @@ function Lista(props: ContratosViewProps) {
   let conteudo: ReactNode;
   if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando os contratos…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
   else if (estado === "erro")
-    conteudo = <FalhaNaSecao mensagem="Não foi possível carregar os contratos." tentando={leitura.tentando} onTentar={leitura.tentar} className="px-5 py-7" />;
+    conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar os contratos." className="px-5 py-7" semCartao estreito />;
   else {
     const itens = listaDeContratos(contratos, nomesDosClientes(clientes), filtro, hoje);
     conteudo = itens.length ? (
@@ -576,6 +576,7 @@ export function ContratosView(props: ContratosViewProps) {
       <header className="flex flex-wrap items-center gap-4">
         <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Contratos</h1>
       </header>
+      {estado === "pronto" && props.leitura ? <FaixaAoVivo leitura={props.leitura} /> : null}
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <Lista {...props} />
         {estado === "pronto" && selecionado ? <Ficha {...props} selecionado={selecionado} /> : null}

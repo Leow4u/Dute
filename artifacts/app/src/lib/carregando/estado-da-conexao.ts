@@ -252,6 +252,58 @@ export function useConexao(): EstadoDaConexao {
   return useSyncExternalStore(conexao.assinar, conexao.estado, conexao.estado);
 }
 
+/** A conexão da tela (a do app, ou a do provedor), para quem lê fora do react-query avisar a falta. */
+export function useConexaoDaTela(): Conexao {
+  return useContext(ContextoDaConexao);
+}
+
+/**
+ * Uma leitura de fora do react-query (a escuta ao vivo do Firestore; parte
+ * 13j) no estado único da conexão, como o react-query faz pelas leituras do
+ * `lib/cloud-api.ts`: a escuta que fica sem o servidor conta como a leitura
+ * sem resposta, uma vez por queda, e a que volta a ouvi-lo diz que ele voltou.
+ */
+export interface LeituraDeFora {
+  /** Ficou sem o servidor; `inicio` é desde quando ela o esperava, no relógio da conexão (para contar só as seguidas). */
+  ficouSemResposta(inicio?: number): void;
+  /** O servidor respondeu: se ela estava com a falta, a conexão fica sabendo que ele voltou. */
+  leuDoServidor(): void;
+  /** Saiu da tela: deixa de contar como falta. */
+  fechar(): void;
+}
+
+/** As leituras de fora do react-query com a falta agora, por conexão. */
+const faltasDeFora = new WeakMap<Conexao, Set<object>>();
+
+function faltasDe(conexao: Conexao): Set<object> {
+  let faltas = faltasDeFora.get(conexao);
+  if (!faltas) faltasDeFora.set(conexao, (faltas = new Set()));
+  return faltas;
+}
+
+export function leituraDeFora(conexao: Conexao = conexaoDoApp): LeituraDeFora {
+  const marca = {};
+  return {
+    ficouSemResposta: (inicio) => {
+      const faltas = faltasDe(conexao);
+      if (faltas.has(marca)) return;
+      faltas.add(marca);
+      conexao.ficouSemResposta(inicio);
+    },
+    leuDoServidor: () => {
+      if (faltasDe(conexao).delete(marca)) conexao.leuDoServidor();
+    },
+    fechar: () => {
+      faltasDe(conexao).delete(marca);
+    },
+  };
+}
+
+/** Alguma leitura de fora do react-query está com a falta nesta conexão. */
+export function temFaltaDeFora(conexao: Conexao): boolean {
+  return (faltasDeFora.get(conexao)?.size ?? 0) > 0;
+}
+
 /**
  * O "Tentar de novo" de quem mostra a falta: acorda a conexão de quem lê (o
  * SDK do Firestore que se deu por offline) e só então relê, para o toque
@@ -387,8 +439,10 @@ export interface OpcoesDaLigacao {
  * em silêncio as leituras com a falta (também na hora em que quem lê volta a
  * ouvir o servidor). Só a volta de uma leitura que tinha ficado sem resposta
  * conta: a que leu do cache do Firestore sem passar pelo `lib/cloud-api.ts`
- * dá certo sem o servidor. O toque na tela vale para a regra do dedo.
- * Devolve quem desliga.
+ * dá certo sem o servidor. As escutas ao vivo do Firestore avisam a conexão
+ * por conta própria (`leituraDeFora`; parte 13j): com só elas na falta, a
+ * releitura sozinha acorda o SDK, e a escuta volta quando ele volta a ouvir o
+ * servidor. O toque na tela vale para a regra do dedo. Devolve quem desliga.
  */
 export function ligarConexaoDoApp(
   queryClient: QueryClient,
@@ -401,7 +455,13 @@ export function ligarConexaoDoApp(
   /** As leituras cuja última ida ficou sem resposta. */
   const semResposta = new WeakSet<Query>();
   let ultimoToque = Number.NEGATIVE_INFINITY;
-  const reler = () => relerFaltas(queryClient, { conexao, agora, ultimoToque: () => ultimoToque });
+  const reler = () => {
+    if (relerFaltas(queryClient, { conexao, agora, ultimoToque: () => ultimoToque })) return true;
+    if (!temFaltaDeFora(conexao)) return false;
+    // A escuta ao vivo volta sozinha quando o SDK volta a ouvir o servidor: basta acordá-lo (parte 13j).
+    void conexao.acordar();
+    return true;
+  };
   conexao.aoAcordar(opcoes.acordar ?? null);
   conexao.aoReler(reler);
   const deixarAVolta = opcoes.aoVoltar?.(() => void reler());

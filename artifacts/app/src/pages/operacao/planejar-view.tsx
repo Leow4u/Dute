@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 
 import type { LocalDaFicha } from "./demanda-view";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
@@ -693,9 +693,7 @@ export function PlanejarView({
       <section className="flex flex-col gap-4">
         {linkDeVolta}
         {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a demanda…" continuaARota onTentar={leitura.tentar} /> : null}
-        {estado === "erro" ? (
-          <FalhaNaSecao mensagem="Não foi possível carregar a demanda." tentando={leitura.tentando} onTentar={leitura.tentar} />
-        ) : null}
+        {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a demanda." /> : null}
         {estado === "nao_encontrada" ? <p className="text-sm text-muted-foreground">{numero ? `Demanda ${numero} não encontrada` : "Demanda não encontrada"}</p> : null}
         {estado === "sem_saldo" ? <p className="text-sm text-muted-foreground">Todo o saldo da demanda já está em OS</p> : null}
         {estado === "indisponivel" && motivo ? <p className="text-sm text-muted-foreground">{motivo}</p> : null}
@@ -705,6 +703,7 @@ export function PlanejarView({
   return (
     <section className="flex flex-col gap-6">
       {linkDeVolta}
+      <FaixaAoVivo leitura={leitura} />
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">

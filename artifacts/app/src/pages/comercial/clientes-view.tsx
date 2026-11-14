@@ -5,7 +5,7 @@ import { Box, FileText, Pencil, Plus, Search, Target, UserCheck } from "lucide-r
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { NumeroLido } from "@/components/ui/numero-lido";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
 import { Input } from "@/components/ui/input";
@@ -148,7 +148,7 @@ function Vazio({ children }: { children: ReactNode }) {
  */
 function SemLeitura({ carga, objeto, leitura = SEM_NOVA_TENTATIVA }: { carga: "carregando" | "erro"; objeto: string; leitura?: NovaTentativa }) {
   if (carga === "carregando") return <CarregandoNaRegiao rotulo={`Carregando ${objeto}…`} onTentar={leitura.tentar} className="px-5 py-7" />;
-  return <FalhaNaSecao mensagem={`Não foi possível carregar ${objeto}.`} tentando={leitura.tentando} onTentar={leitura.tentar} className="justify-center px-5 py-7" />;
+  return <FalhaAoVivo leitura={leitura} mensagem={`Não foi possível carregar ${objeto}.`} className="justify-center px-5 py-7" semCartao />;
 }
 
 /**
@@ -297,7 +297,7 @@ function Lista(props: ClientesViewProps) {
   let conteudo: ReactNode;
   if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando o cadastro…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
   else if (estado === "erro")
-    conteudo = <FalhaNaSecao mensagem="Não foi possível carregar o cadastro." tentando={leitura.tentando} onTentar={leitura.tentar} className="px-5 py-7" />;
+    conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar o cadastro." className="px-5 py-7" semCartao estreito />;
   else {
     const { clientes, prospects } = filtrarCadastros(cadastros, segmento, busca);
     const linha = (cadastro: CadastroComercial) => (
@@ -659,6 +659,7 @@ export function ClientesView(props: ClientesViewProps) {
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <Cabecalho {...props} />
+      {estado === "pronto" && props.leitura ? <FaixaAoVivo leitura={props.leitura} /> : null}
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
         <Lista {...props} />
         {estado === "pronto" && selecionado ? <Ficha {...props} selecionado={selecionado} /> : null}

@@ -4,7 +4,7 @@ import { BookOpen, Check, MapPin, Paperclip, Plus, RotateCcw, Send, TriangleAler
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
 import { dataBr, type CadastroComercial, type Carga } from "@/lib/comercial/clientes";
 import { nomeDoCliente, nomesDosClientes, type Contrato } from "@/lib/comercial/contratos";
@@ -613,11 +613,12 @@ export function MedicoesView(props: MedicoesViewProps) {
   const leitura = props.leitura ?? SEM_NOVA_TENTATIVA;
   if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando os contratos…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
   else if (estado === "erro")
-    conteudo = <FalhaNaSecao mensagem="Não foi possível carregar os contratos." tentando={leitura.tentando} onTentar={leitura.tentar} className="px-5 py-7" />;
+    conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar os contratos." className="px-5 py-7" />;
   else if (contratos.length === 0 || !contrato) conteudo = <Vazio>Nenhum contrato cobra por medição mensal</Vazio>;
   else {
     conteudo = (
       <>
+        <FaixaAoVivo leitura={leitura} />
         {contratos.length > 1 ? <SeletorDeContrato contratos={contratos} contrato={contrato} clientes={clientes} onContrato={props.onContrato} /> : null}
         <Competencias chips={props.chips} competencia={props.competencia} onCompetencia={props.onCompetencia} />
         {aviso ? (
@@ -627,12 +628,7 @@ export function MedicoesView(props: MedicoesViewProps) {
         ) : null}
         {medicao === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a medição…" onTentar={props.leituraDaMedicao?.tentar} className="px-5 py-7" /> : null}
         {medicao === "erro" ? (
-          <FalhaNaSecao
-            mensagem="Não foi possível carregar a medição."
-            tentando={props.leituraDaMedicao?.tentando ?? false}
-            onTentar={props.leituraDaMedicao?.tentar ?? SEM_NOVA_TENTATIVA.tentar}
-            className="justify-center px-5 py-7"
-          />
+          <FalhaAoVivo leitura={props.leituraDaMedicao ?? SEM_NOVA_TENTATIVA} mensagem="Não foi possível carregar a medição." className="justify-center px-5 py-7" />
         ) : null}
         {medicao === null || (typeof medicao === "object" && medicao !== null) ? (
           <>

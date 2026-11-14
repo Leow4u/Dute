@@ -7,8 +7,7 @@ import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { DialogCancelar } from "@/components/ui/dialog";
-import { ErroNaLeitura, useTentandoNoRelogio } from "@/components/ui/erro-na-leitura";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { BlocoSemConexao, ErroNaLeitura, FaixaAoVivo, FalhaAoVivo, useTentandoNoRelogio } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,8 +55,16 @@ export type PedidoNaTela = {
   hoje: string;
 };
 
-/** A nova tentativa de uma leitura que falhou (carregamento v2, parte 13f). */
-export type NovaTentativaNaTela = { tentando: boolean; onTentar: () => void };
+/**
+ * A nova tentativa de uma leitura que falhou (carregamento v2, parte 13f), e
+ * o que falta: a conexão (com a hora da lista lida) ou o servidor (parte 13j).
+ */
+export type NovaTentativaNaTela = { tentando: boolean; onTentar: () => void; falta?: "conexao" | "servidor" | null; lidaEm?: number | null };
+
+/** A leitura da tela como as peças da leitura ao vivo a pedem. */
+function aoVivo(leitura: NovaTentativaNaTela) {
+  return { tentando: leitura.tentando, tentar: leitura.onTentar, falta: leitura.falta, lidaEm: leitura.lidaEm };
+}
 
 /** A falha de uma leitura de apoio (as NFs, as solicitações): dita na tela, nunca o vazio. */
 export type FalhaDeApoio = NovaTentativaNaTela & { mensagem: string };
@@ -380,7 +387,10 @@ export function ServicosView({ estado, leitura, falhas = [], os, numeros, aPagar
   // Lendo, a caixa e o rótulo aos 300 ms; na falha, a nova tentativa (carregamento v2, parte 13f).
   if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando as OS…" continuaARota onTentar={leitura?.onTentar} className="px-5 py-7" />;
   else if (estado === "erro")
-    conteudo = leitura ? (
+    conteudo = leitura?.falta === "conexao" ? (
+      // Sem conexão: o aviso da conexão no lugar da lista, "Sem conexão." ou "Reconectando…" (parte 13j).
+      <BlocoSemConexao tentando={leitura.tentando} onTentar={leitura.onTentar} className="rounded-none border-0" />
+    ) : leitura ? (
       <ErroNaLeitura mensagem="Não foi possível carregar as OS." tentando={tentandoAsOs} onTentar={leitura.onTentar} className="rounded-none border-0" />
     ) : (
       <p role="alert" className="px-5 py-7 text-center text-sm font-bold text-muted-foreground">
@@ -413,15 +423,16 @@ export function ServicosView({ estado, leitura, falhas = [], os, numeros, aPagar
           {aPagarCents !== null ? <Numero rotulo="A pagar" valor={formatarReais(aPagarCents)} /> : null}
         </section>
       ) : null}
+      {estado === "pronto" && leitura ? <FaixaAoVivo leitura={aoVivo(leitura)} /> : null}
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-5">
-          {falhas.map((falha) => (
-            // A leitura de apoio que falhou fica dita, nunca some (necessidade 2).
-            <FalhaNaSecao
+          {/* A falta de conexão das leituras de apoio já está dita pela das OS (o aviso no lugar da lista ou a faixa). */}
+          {falhas.filter((falha) => !(falha.falta === "conexao" && leitura?.falta === "conexao")).map((falha) => (
+            // A leitura de apoio que falhou fica dita, nunca some (necessidade 2); sem conexão, o aviso da conexão.
+            <FalhaAoVivo
               key={falha.mensagem}
+              leitura={aoVivo(falha)}
               mensagem={falha.mensagem}
-              tentando={falha.tentando}
-              onTentar={falha.onTentar}
               className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
             />
           ))}

@@ -4049,11 +4049,11 @@ Fica aberto:
   falha da seção ("Não foi possível carregar…", com "Tentar de novo"), e não o
   `BlocoSemConexao` nem "Sem conexão · lista de 10:42": as leituras ao vivo
   não dizem de que tipo é a falha, e ligar isso tela a tela são uns 38
-  lugares;
+  lugares (*resolvido na parte 13j*);
 - a regra só vale com o aparelho sem rede: conectado, com o SDK que se deu
   por offline (o servidor sem resposta por 10 s), o cache vale como lido; e
   as leituras ao vivo não avisam o estado único da conexão (a volta vem da
-  própria escuta);
+  própria escuta) (*resolvido na parte 13j*);
 - a leitura do catálogo nas medições tem teste só da função, não da tela;
 - no Avançar, a saída dos 70 s é o prazo da callable, com o toast; o botão
   não tem "Conferir";
@@ -4067,7 +4067,127 @@ Fica aberto:
 - outras escritas ainda geram uma chave nova a cada chamada: resolver a
   exceção, o inventário, o recebimento e a chegada por caixa;
 - a `useLeituraDoPortal` (13f) ainda tenta de novo por cima da `useLeitura`
-  (13g), que já tenta (vem da junção);
+  (13g), que já tenta (vem da junção) (*resolvido na parte 13j*);
 - a paginação indisponível, a 0,5, leva o anel do foco junto na opacidade;
 - a guarda da caixa não foi vista no navegador, e seguem o aceite num Android
   médio e a conferência com leitor de tela de verdade.
+
+**Parte 13j, o Sem conexão nas telas ao vivo (PR 610, 14/11/2026).** Fecha os
+três itens que a 13i deixou abertos sobre as leituras ao vivo (o `onSnapshot`
+da Operação, do Comercial, do campo e do portal):
+
+- **A regra única** (`lib/carregando/respostas-do-firestore.ts`): a resposta
+  só do cache é a falta, a do servidor é a volta. O sinal do SDK só no cache
+  (`firestoreRespondeu`) saiu do `lib/cloud-api.ts`, que o usa do mesmo jeito
+  (o `getDocs`, o `getDoc`, o `unavailable`, o perfil que espera a volta e o
+  `acordarFirestore`), e a escuta ao vivo passa a usá-lo também: a escuta
+  que fica só no cache deixa o app acordar o SDK e esperar a volta pelo
+  perfil, o que antes só a leitura do cloud-api fazia.
+- **A escuta alimenta o estado único da conexão** (`leituraDeFora`, em
+  `estado-da-conexao.ts`), como o react-query faz pelas leituras do
+  cloud-api: a escuta que perde o servidor conta como a leitura sem resposta,
+  uma vez por queda (as que caem juntas contam uma), e a que volta a ouvi-lo
+  diz que ele voltou. Com só as escutas na falta, a releitura sozinha acorda
+  o SDK em 2, 4, 8, 16 e 30 s; a escuta volta sozinha quando ele volta. A
+  escuta que sai da tela deixa de contar.
+- **A falta na leitura** (`falta: "conexao" | "servidor" | null` e
+  `lidaEm`): a `useLeitura` e a `useDocumento` da Operação, e por elas o
+  Comercial (que passou a usar a mesma escuta, `useEscutaAoVivo`, em vez da
+  cópia), o campo, o portal e o Financeiro. A conexão é o aparelho sem rede
+  ou o SDK só no cache, sem nada lido (`erro`) ou com o que já estava na tela
+  (com a hora em que ela deixou de estar em dia); o servidor é a escuta
+  recusada (a permissão, outro erro). `erro` e `tentando` não mudaram; na
+  nova tentativa, a falta é a da falha que ela repete. A `novaTentativaDe` e a
+  `juntarTentativas` levam a falta da tela: entre as que falharam sem nada
+  lido, a conexão antes do servidor; sem falha, a das lidas, com a hora da
+  mais antiga.
+- **A resposta só do cache também com o aparelho conectado.** A vista que
+  estava em dia e cai no cache (o SDK se deu por offline, com ou sem rede) é
+  a lista lida com a falta. Sem nada lido, com o SDK só no cache, é a falta
+  de conexão, e não mais a lista que o cache tiver; a primeira resposta vazia
+  do cache também (o SDK só a entrega quando se dá por offline). O cache que
+  chega antes do servidor, com o aparelho conectado e o SDK em dia, segue
+  valendo, e vira a falta se o aparelho perde a rede ou se outra leitura
+  acha o SDK só no cache. Seguem as exceções da 13i: a vista que outra escuta
+  aberta já leu do servidor e o documento no cache (agora, com a falta e a
+  hora).
+- **As telas** escolhem a peça que já existe (`FalhaAoVivo` e `FaixaAoVivo`,
+  em `components/ui/erro-na-leitura.tsx`, como a `FalhaNaLeitura` faz com o
+  react-query): sem nada lido e sem conexão, o `BlocoSemConexao` no lugar da
+  seção ("Sem conexão." ou "Reconectando…", com "Tentar de novo", que acorda
+  o SDK antes de assinar de novo; dentro de um cartão, sem outra borda; nas
+  seções estreitas, empilhado também no computador); com a lista lida, ela
+  fica, e o `FaixaSemConexao` acima dela diz "Sem conexão · lista de 10:42";
+  o erro do servidor segue com a `FalhaNaSecao`. Nenhuma destas telas tem a
+  `LinhaDeEstado`.
+  - Operação: Demandas, Hoje, Agenda, Revisão, os cadastros, a ficha da OS e
+    a da demanda, o Planejar, a impressão da OS (a faixa fora do papel), os
+    Relatórios (a tela comum, que vale também para os do Financeiro) e o
+    Início (o aviso no lugar do "Precisa de você", ou a faixa).
+  - Comercial: Orçamentos, Para aprovar, o documento, a montagem do
+    orçamento (e a tabela dela), Clientes (e os locais, os contatos e os
+    contratos da ficha), Contratos (e as tabelas e os aditivos), Medições (e a
+    medição) e Autorizações (a fila e as autorizadas).
+  - Campo: Minhas OS, a OS e o Concluir.
+  - Portal: Minhas OS (as NFs e as solicitações sem conexão não repetem o
+    aviso que as OS já dão), o comprovante, as NFs das Faturas e o sino.
+- **O portal** usa a nova tentativa da `useLeitura` (13g), sem outra por cima:
+  a `useLeituraDoPortal` e a `useDocumentoDoPortal` são a `useLeitura` e a
+  `useDocumento`, com um `#n` só na assinatura, e o `tentar` sem promessa,
+  como antes. O pedido chega também à outra leitura da mesma chave que ainda
+  não leu.
+- **Medição no Chromium** (harness com as telas de verdade, o SDK de verdade e
+  um emulador do Firestore só em 127.0.0.1, dados sintéticos; antes =
+  `921ba83`; uma tela de cada área: Demandas, Orçamentos, Minhas OS do campo e
+  Minhas OS do portal, a 1440 px):
+  - a primeira visita sem rede: antes, "Não foi possível carregar as
+    demandas." (os orçamentos, suas OS) de 0,05 s até o fim, e no portal três
+    falhas empilhadas (as NFs, as solicitações e as OS); depois,
+    "Reconectando…" a partir de 0,06 s e "Sem conexão." aos 3,0 s, nas quatro,
+    e no portal um aviso só;
+  - a lista lida e a rede que cai por 6 s: antes, nada muda na tela; depois,
+    a faixa "Reconectando… · lista de 05:51" 20 a 30 ms depois da queda e
+    "Sem conexão · lista de 05:51" aos 3,0 s, com a lista no lugar; na volta,
+    a faixa sai 60 a 90 ms depois, com a lista em dia;
+  - o aparelho conectado e o servidor fora desde antes de abrir as Demandas:
+    antes, "Nenhuma demanda" de 0,06 s até 32,8 s (a lista vazia que não era),
+    e a lista 5,9 s depois da volta do servidor; depois, "Reconectando…"
+    (nunca "Sem conexão") até a volta, e a lista 0,31 s depois dela (o SDK
+    acordado);
+  - o servidor que cai com a escuta já aberta (o emulador parado): nas duas
+    versões, nada muda em 30 s: o canal do SDK (WebChannel) tenta de novo
+    por conta própria e não diz ao SDK que caiu, e ele não se dá por offline;
+  - o axe-core (WCAG 2.1 A e AA, com o contraste), com o aviso e com a faixa,
+    no claro e no escuro, a 1440 e a 390 px: nada das peças; no escuro, só o
+    branco sobre o primário (4,3:1: "Nova demanda", "Novo orçamento", "Abrir
+    OS"), igual antes e com a rede (a 13k cuida dele). O "Tentar de novo" tem
+    44 px de altura no aviso e na faixa, e nada rola para o lado a 390 px;
+  - as seções estreitas: no sino (350 px), o "Tentar de novo" do aviso em
+    linha saía da caixa; empilhado, fica dentro, como na lista dos Contratos
+    (318 px) e na dos Clientes (384 px).
+- **Testes**: sete arquivos novos, 42 testes; contra o código de antes, 36
+  falham; os que passam guardam o que deve continuar igual (o erro do servidor
+  com a falha da seção, a escuta que sai da tela sem acordar o SDK). A suíte
+  do app fica em 488 arquivos e 5.460 testes (antes, 481 e 5.418).
+
+Fica aberto:
+
+- o Financeiro (A faturar, Faturas, a NF, Emissões) já recebe a `falta` da
+  mesma leitura, mas as telas seguem com a `FalhaNaSecao`; os Relatórios dele
+  já mostram pela tela comum;
+- as listas dos formulários (`LeituraPendente`: os clientes do Novo orçamento,
+  os contatos, o catálogo da Nova demanda) seguem com a falha da seção: o
+  "Sem conexão" dentro do diálogo pede desenho (13a);
+- as telas do WMS com escuta (Pedidos › separar, a lista, o romaneio, as
+  devoluções, os avisos do cliente) seguem como estavam;
+- na volta da rede, o `FaixaSemConexao` passa por "Reconectando…" por 30 a
+  65 ms antes de sair: a peça não segura o "Sem conexão" até a leitura voltar,
+  como a `LinhaDeEstado`; e a faixa que entra e sai empurra a lista (não
+  reserva a altura);
+- o servidor que cai com a escuta aberta e o aparelho conectado não aparece:
+  o SDK não se dá por offline (acima);
+- a escuta que o `onSnapshot` recusa não volta sozinha: o "Tentar de novo"
+  assina de novo;
+- o cache que valeu antes do servidor, com o aparelho conectado e nenhuma
+  outra leitura que ache o SDK só no cache, fica como lido;
+- o aceite num Android médio e a conferência com leitor de tela de verdade.

@@ -25,7 +25,7 @@ import { AcoesDepoisDoEnvio } from "@/components/comercial/acoes-depois-do-envio
 import { Button } from "@/components/ui/button";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
 import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
 import { Input } from "@/components/ui/input";
@@ -148,6 +148,8 @@ export type MontarViewProps = {
   catalogo: ItemDaTabela[] | "carregando" | "erro";
   /** A nova tentativa da leitura da tabela de preços do orçamento. */
   leituraDoCatalogo?: NovaTentativa;
+  /** A leitura ao vivo do orçamento e da demanda: lida e sem conexão, a faixa com a hora (parte 13j). */
+  leitura?: NovaTentativa;
   /** Uma gravação em andamento: a tela fica travada até ela voltar. */
   ocupado: boolean;
   /**
@@ -1229,11 +1231,7 @@ function Itens(props: MontarViewProps) {
           {/* A tabela que ainda não veio: a busca espera por ela, e a espera aparece aqui (parte 13g). */}
           {catalogo === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a tabela…" onTentar={props.leituraDoCatalogo?.tentar} /> : null}
           {catalogo === "erro" ? (
-            <FalhaNaSecao
-              mensagem="Não foi possível carregar a tabela."
-              tentando={props.leituraDoCatalogo?.tentando ?? false}
-              onTentar={props.leituraDoCatalogo?.tentar ?? SEM_NOVA_TENTATIVA.tentar}
-            />
+            <FalhaAoVivo leitura={props.leituraDoCatalogo ?? SEM_NOVA_TENTATIVA} mensagem="Não foi possível carregar a tabela." />
           ) : null}
         </div>
       ) : null}
@@ -1580,6 +1578,7 @@ export function MontarView(props: MontarViewProps) {
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <Cabecalho {...props} totalCents={totais.total} />
+      {props.leitura ? <FaixaAoVivo leitura={props.leitura} /> : null}
       {props.desatualizado && props.sujo ? (
         <p
           role="alert"
@@ -1644,7 +1643,7 @@ export function EstadoDoOrcamento({
       {estado === "carregando" ? (
         <CarregandoNaRegiao rotulo="Carregando o orçamento…" continuaARota onTentar={leitura.tentar} className={caixa} />
       ) : estado === "erro" ? (
-        <FalhaNaSecao mensagem="Não foi possível carregar o orçamento." tentando={leitura.tentando} onTentar={leitura.tentar} className={caixa} />
+        <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar o orçamento." className={caixa} />
       ) : (
         <p className={cn(caixa, "text-center text-sm font-bold text-muted-foreground")}>Orçamento não encontrado</p>
       )}

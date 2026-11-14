@@ -79,6 +79,22 @@ function EquipeDeHoje({ equipe }: { equipe: PessoaDeHoje[] | null }) {
   );
 }
 
+/**
+ * A falta de conexão das leituras ao vivo do Início (carregamento v2, parte
+ * 13j): sem nada lido, o aviso no lugar do "Precisa de você"; com tudo lido, o
+ * que estava fica, com "Sem conexão · lista de 10:42". O erro do servidor
+ * segue no aviso das fontes que falharam.
+ */
+function semConexaoDo(inicio: InicioDaOperacao) {
+  const releitura = inicio.releitura;
+  if (!releitura || releitura.falta !== "conexao") return null;
+  return {
+    lidaEm: inicio.falhas.length ? null : (releitura.lidaEm ?? null),
+    tentando: releitura.tentando,
+    onTentar: () => void releitura.tentar(),
+  };
+}
+
 export function InicioDaOperacaoView({ nome, hoje, inicio }: { nome: string; hoje: Date; inicio: InicioDaOperacao }) {
   // Lendo, a forma final com os blocos (nunca o zero nem o bloco rosado); sem leitura, o aviso da falha diz.
   const lendo = inicio.carregando && !inicio.falhas.length;
@@ -98,6 +114,7 @@ export function InicioDaOperacaoView({ nome, hoje, inicio }: { nome: string; hoj
       carregando={inicio.carregando}
       falhas={inicio.falhas}
       lateral={lateral}
+      semConexao={semConexaoDo(inicio)}
       tentarFalhas={inicio.releitura ? { tentando: inicio.releitura.tentando, onTentar: inicio.releitura.tentar } : undefined}
     />
   );

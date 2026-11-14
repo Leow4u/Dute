@@ -4,7 +4,7 @@ import { ArrowLeft, Printer } from "lucide-react";
 import { OrcamentoDocumento } from "@/components/comercial/orcamento-documento";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
 import { cn } from "@/lib/utils";
 import type { DocumentoDoOrcamento } from "@/lib/comercial/documento";
@@ -47,10 +47,11 @@ export function DocumentoView({ estado, documento, voltar, onImprimir, leitura =
           Imprimir / Salvar PDF
         </Button>
       </div>
+      {pronto ? <FaixaAoVivo leitura={leitura} className="no-print" /> : null}
       {estado === "carregando" ? (
         <CarregandoNaRegiao rotulo="Carregando o orçamento…" continuaARota onTentar={leitura.tentar} className={caixa} />
       ) : estado === "erro" ? (
-        <FalhaNaSecao mensagem="Não foi possível carregar o orçamento." tentando={leitura.tentando} onTentar={leitura.tentar} className={caixa} />
+        <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar o orçamento." className={caixa} />
       ) : mensagem ? (
         <p className={cn(caixa, "text-center text-sm font-bold text-muted-foreground")}>{mensagem}</p>
       ) : documento ? (

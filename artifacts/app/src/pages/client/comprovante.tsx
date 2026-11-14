@@ -31,7 +31,7 @@ export function ClienteComprovante() {
         comprovante={comprovante}
         urls={fotos.urls}
         onBaixar={() => window.print()}
-        leitura={{ tentando: os.tentando, onTentar: os.tentar }}
+        leitura={{ tentando: os.tentando, onTentar: os.tentar, falta: os.falta, lidaEm: os.lidaEm }}
         fotos={{ lendo: fotos.lendo, falharam: fotos.falharam, tentando: fotos.tentando, onTentar: fotos.tentar }}
       />
     </main>

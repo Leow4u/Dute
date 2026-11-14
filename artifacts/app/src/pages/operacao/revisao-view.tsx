@@ -26,7 +26,7 @@ import {
 } from "@/lib/operacao/revisao";
 import { cn } from "@/lib/utils";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
@@ -408,9 +408,8 @@ export function RevisaoView({
     <section className="flex flex-col gap-6">
       <h1 className="text-3xl font-bold tracking-tight text-foreground">Revisão</h1>
       {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando as OS para revisar…" continuaARota onTentar={leitura.tentar} /> : null}
-      {estado === "erro" ? (
-        <FalhaNaSecao mensagem="Não foi possível carregar as OS para revisar." tentando={leitura.tentando} onTentar={leitura.tentar} />
-      ) : null}
+      {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar as OS para revisar." /> : null}
+      {estado === "pronto" ? <FaixaAoVivo leitura={leitura} /> : null}
       {estado === "pronto" ? (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
           <Lista cartoes={cartoes} selecionada={selecionada} />

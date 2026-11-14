@@ -299,12 +299,28 @@ não muda enquanto ela lê, e o dado que chega espera o dedo. Antes de reler, e
 no "Tentar de novo", o app acorda o SDK do Firestore que se deu por offline. A
 faixa "Sem conexão" do shell segue o mesmo estado, sem região viva: quem diz
 "Sem conexão", uma vez, é o `Anunciador` (antes do app, a região da abertura;
-o `Anunciador` não repete o que ela já disse). As leituras ao vivo da Operação
-e do Comercial (`useLeitura`, `useDocumento`; por elas, o campo, o portal e o
-Financeiro) não aceitam o cache como lido com o aparelho sem rede e nada lido:
-é a falha da seção, com "Tentar de novo". O cache vale quando outra escuta
+o `Anunciador` não repete o que ela já disse).
+
+**As leituras ao vivo sem rede** (parte 13j; `useLeitura` e `useDocumento` da
+Operação, e por elas o Comercial, o campo, o portal e o Financeiro): a
+resposta só do cache é a falta de conexão, pela mesma regra do
+`lib/cloud-api.ts` (`lib/carregando/respostas-do-firestore.ts`), com o
+aparelho sem rede ou com o SDK do Firestore que se deu por offline; a escuta
+avisa o estado único da conexão (uma vez por queda) e, com ela na falta, a
+releitura sozinha acorda o SDK. A leitura diz o que falta (`falta`:
+`"conexao"` ou `"servidor"`, e `lidaEm`), e a tela escolhe a peça que já
+existe: sem nada lido e sem conexão, o `BlocoSemConexao` no lugar da lista
+("Sem conexão." ou "Reconectando…", com "Tentar de novo", que acorda o SDK
+antes de assinar de novo; dentro de um cartão, sem outra borda); com a lista
+lida, ela fica, e o `FaixaSemConexao` acima dela diz "Sem conexão · lista de
+10:42", a hora em que ela deixou de estar em dia (`FaixaAoVivo`); o erro do
+servidor (a permissão, outro erro) segue com a `FalhaNaSecao`
+(`FalhaAoVivo` escolhe). A leitura de apoio sem conexão não repete o aviso
+que a lista principal já dá. O cache vale como lido quando outra escuta
 aberta da mesma consulta já leu do servidor (o shell e a página) ou quando o
-documento está nele (o cache é só de memória).
+documento está nele (o cache é só de memória), com a falta e a hora; com o
+aparelho conectado e o SDK em dia, o cache que chega antes do servidor vale,
+e vira a falta se o SDK se der por offline depois.
 
 ## O que vem depois (plano da auditoria)
 

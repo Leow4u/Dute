@@ -8,7 +8,7 @@ import { hrefDaOsNoCampo } from "@/lib/campo/navegacao";
 import type { CartaoDoCampo, MinhasOs } from "@/lib/campo/os-no-campo";
 import { cn } from "@/lib/utils";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
@@ -108,9 +108,8 @@ export function CampoHojeView({
         <h1 className="text-2xl font-bold tracking-tight text-foreground">{ola}</h1>
       </header>
       {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando suas OS…" continuaARota onTentar={leitura.tentar} /> : null}
-      {estado === "erro" ? (
-        <FalhaNaSecao mensagem="Não foi possível carregar suas OS." tentando={leitura.tentando} onTentar={leitura.tentar} />
-      ) : null}
+      {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar suas OS." /> : null}
+      {estado === "pronto" ? <FaixaAoVivo leitura={leitura} /> : null}
       {estado === "pronto" && vazio ? <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">Nenhuma OS para você</p> : null}
       {estado === "pronto" && lista.agora.length ? (
         <Secao titulo="Agora">
