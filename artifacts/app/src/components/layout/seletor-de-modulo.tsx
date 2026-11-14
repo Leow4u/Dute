@@ -20,9 +20,9 @@ import { cn } from "@/lib/utils";
 export type VarianteDoSeletor = "v3" | "v3-cabecalho";
 
 const GATILHO: Record<VarianteDoSeletor, string> = {
-  v3: "flex h-11 w-full items-center gap-2.5 rounded-lg border border-v3-header-foreground/15 bg-v3-header-foreground/5 px-3 text-left text-base font-extrabold text-v3-header-foreground outline-none transition-colors hover:bg-v3-header-foreground/10 focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
+  v3: "flex h-11 w-full items-center gap-2.5 rounded-lg border border-v3-header-foreground/15 bg-v3-header-foreground/5 px-3 text-left text-base font-extrabold text-v3-header-foreground focus-visible:outline-hidden transition-colors hover:bg-v3-header-foreground/10 focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
   "v3-cabecalho":
-    "flex h-11 min-w-0 items-center gap-2 rounded-lg px-1 text-left text-xl font-extrabold tracking-tight text-v3-header-foreground outline-none focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
+    "flex h-11 min-w-0 items-center gap-2 rounded-lg px-1 text-left text-xl font-extrabold tracking-tight text-v3-header-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
 };
 
 const SO_NOME: Record<VarianteDoSeletor, string> = {

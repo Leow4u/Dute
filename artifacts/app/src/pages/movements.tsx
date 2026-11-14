@@ -8,9 +8,12 @@ import {
 } from "@workspace/api-client-react";
 import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { nomeComTamanho } from "@workspace/dominio";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
 import { ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { Input } from "@/components/ui/input";
 import { ArrowDownRight, ArrowUpRight, Plus } from "lucide-react";
@@ -21,6 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
+  DialogCancelar,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
@@ -125,6 +129,7 @@ export function payloadDaMovimentacao(
  */
 export default function Movements({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAppUser();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("todos");
@@ -232,13 +237,21 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
       <StockTableCard trocando={lista.trocando} pagina={page}>
           {lista.falhou ? (
             <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar as movimentações." className="rounded-none border-0" focoAoSair={idDaLinha} />
+          ) : isLoading ? (
+            // A primeira leitura fica no lugar da lista (a linha de estado só diz depois dela, `primeiraNaLista`): nada
+            // antes de 300 ms, depois a caixa e "Carregando movimentações…", com a demora e a saída (parte 13h).
+            <CarregandoNaRegiao
+              rotulo="Carregando movimentações…"
+              continuaARota
+              focoAoSair={idDaLinha}
+              onTentar={() => relerDoZero(queryClient, [["/api/movements"]])}
+              className="justify-center px-4 py-8"
+            />
           ) : (
           <div {...troca.props}>
           <ConteudoEmTroca trocando={lista.trocando}>
           <ul className="divide-y divide-border md:hidden">
-            {isLoading ? (
-              <li className="px-4 py-8 text-center text-sm text-muted-foreground">Carregando movimentações...</li>
-            ) : movements.length === 0 ? (
+            {movements.length === 0 ? (
               <li className="px-4 py-8 text-center text-sm text-muted-foreground">Nenhuma movimentação encontrada.</li>
             ) : (
               movements.map((mov: Movement) => <MovementCard key={mov.id} movement={mov} />)
@@ -260,13 +273,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={columnCount} className="px-4 py-8 text-center text-muted-foreground">
-                      Carregando movimentações...
-                    </td>
-                  </tr>
-                ) : data?.items?.length === 0 ? (
+                {data?.items?.length === 0 ? (
                   <tr>
                     <td colSpan={columnCount} className="px-4 py-8 text-center text-muted-foreground">
                       Nenhuma movimentação encontrada.
@@ -495,6 +502,7 @@ export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; tr
   return (
     <Dialog
       open={open}
+      ocupado={createMovement.isPending}
       onOpenChange={(aberto) => {
         // Cada registro abre com a hora de agora, não a de quando a tela montou.
         if (aberto) setValue("data", agoraNoCampo(new Date()));
@@ -619,18 +627,15 @@ export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; tr
             </div>
           </div>
           <DialogFooter className="pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={createMovement.isPending}>
-              {createMovement.isPending
-                ? "Salvando..."
-                : "Registrar Movimentação"}
-            </Button>
+            {/* Registrando, o diálogo fica (parte 13a): o Cancelar espera ocupado, e o registrar é o BotaoDeAcao, com o
+                gerúndio aos 300 ms e o foco nele, nunca disabled (carregamento v2, parte 13h). */}
+            <DialogCancelar onClick={() => setOpen(false)} />
+            <BotaoDeAcao
+              type="submit"
+              estado={createMovement.isPending ? "andamento" : "repouso"}
+              rotulo="Registrar Movimentação"
+              andamento="Registrando…"
+            />
           </DialogFooter>
         </form>
       </DialogContent>

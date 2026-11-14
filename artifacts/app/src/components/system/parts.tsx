@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 /** Peças comuns do painel do sistema (custo do Agent Dute e infraestrutura). */
 
 export const field =
-  "w-full min-w-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15";
+  "w-full min-w-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm focus:outline-hidden focus:border-primary focus:ring-2 focus:ring-primary/15";
 
 export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });

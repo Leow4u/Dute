@@ -38,6 +38,11 @@ Sombra só em overlay (`shadow-lg` em diálogo e menu) e no painel flutuante
 - `destructive` só para bloqueio e crítico. Saída de estoque não é erro.
 - `warning-soft` atenção, `success-soft` concluído, `info-soft` em andamento,
   `muted` para tipo e categoria.
+- `primary-texto` é o primário como texto no cartão (o "Ver itens" e o "Ver
+  volumes" da fila): o próprio `primary` no claro; no escuro, mais claro
+  (6,3:1 no cartão), porque o azul do botão, como texto, dá 4,4:1. O branco
+  sobre o botão primário do escuro (4,3:1) está aberto
+  (`docs/plataforma/diagnostico-carregamento.md`, 10.5, parte 13h).
 - `agent-*` é a identidade do Agent Dute (violeta).
 - `gender-fem-*` e `gender-masc-*` só no chip de gênero do Estoque do portal
   (FEM rosa, MASC azul-petróleo; `docs/mockups/PortalEstoqueGenero.dc.html`).
@@ -48,6 +53,19 @@ Sombra só em overlay (`shadow-lg` em diálogo e menu) e no painel flutuante
 `Button` tem um primário por tela (`default`), `secondary`/`outline` com
 borda, `ghost` e `destructive` com borda. Tamanhos `sm` 36, padrão 40, `lg`
 44. Não crie `<button>` com classes próprias para o que o `Button` já faz.
+
+**O anel do foco** (WCAG 1.4.11 e 2.4.7; carregamento v2, parte 13h):
+`focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco`,
+com `ring-offset-2 ring-offset-background` no `Button` e no título dos grupos
+da fila. O `--foco` é o `--ring` cheio: 4,2:1 no fundo e 4,6:1 no cartão da
+v3; 4,6:1 e 4,4:1 no escuro (a 40%, o anel antigo dava 1,91:1 e 1,65:1). O
+`outline-hidden` deixa, nas cores forçadas, o contorno de 2 px que o sistema
+pinta: lá a sombra do anel some, e o `outline-none` do Tailwind v4 tirava os
+dois. Nunca o `--ring` translúcido nem o `outline-none` junto do anel. Ficam
+com outra cor só o anel na barra preta (o branco dela a 80%), o do toast
+crítico e o halo claro do campo cujo foco é a borda cheia
+(`focus-visible:border-primary`). Trava em `lib/carregando/trava.test.ts`; o
+contraste do token, em `lib/carregando/tokens.test.ts`.
 
 ## Celular (abaixo de 768px)
 
@@ -82,7 +100,8 @@ borda, `ghost` e `destructive` com borda. Tamanhos `sm` 36, padrão 40, `lg`
 
 `QueueGroup` + `QueueRow` (`components/ui/queue-list.tsx`): grupos com
 título, apoio e contagem; linhas com ícone em tom suave, título, apoio, nota
-e ações. A ficha do item abre ao lado no desktop (`useIsDesktop`) e num sheet
+e ações. A idade ("há 25 min") vai no tom do apoio (`text-foreground/60`,
+4,7:1 no branco da v3), e o "Ver itens" é `text-primary-texto`. A ficha do item abre ao lado no desktop (`useIsDesktop`) e num sheet
 no celular. Seções que vivem dentro de um painel estreito usam `@container`
 e variantes `@md:`/`@xl:` em vez de `md:`/`xl:`, para seguir a largura do
 painel e não a da janela.
@@ -231,6 +250,15 @@ branco sobre o vermelho), e o rótulo diz o estado.
 
 **Texto:** gerúndio com o objeto ("Carregando pedidos…", "Aprovando…"), com o
 caractere único "…". O texto sozinho, sem o indicador, não é sinal de espera.
+
+**A trava** (`lib/carregando/trava.test.ts`, parte 13h): lê o texto do código
+do app (os literais, os modelos e o texto do JSX, pelo parser do TypeScript;
+sem os comentários e os testes) e reprova, com a lista do que achou,
+`animate-spin` fora do `Spinner`, `animate-pulse` fora do `Esqueleto` e do
+`Skeleton`, e "..." de três pontos em qualquer texto; no `index.css`, o
+`@apply` e a `animation` com `spin` ou `pulse`. Sem exceções. Reprova também
+o anel do foco apagado (ver "Botões"). Botão que grava é o `BotaoDeAcao`;
+leitura sem a forma da lista, a `CarregandoNaRegiao`.
 
 **Conexão** (`lib/carregando/estado-da-conexao.ts`, momento 8): um estado só
 para o app. Com o aparelho conectado e o servidor sem resposta (a leitura que

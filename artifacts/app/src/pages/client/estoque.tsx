@@ -1373,7 +1373,7 @@ function CatalogSelect({
   disabled?: boolean;
 }) {
   return (
-    <label className={cn("flex h-11 min-w-44 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus-within:ring-2 focus-within:ring-ring", disabled && "opacity-60")}>
+    <label className={cn("flex h-11 min-w-44 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco", disabled && "opacity-60")}>
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       <select
         aria-label={ariaLabel}

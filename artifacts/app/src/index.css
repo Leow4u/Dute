@@ -24,6 +24,8 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
+  /* O anel do foco, cheio (parte 13h): ring-foco. */
+  --color-foco: hsl(var(--foco));
 
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
@@ -38,6 +40,8 @@
   --color-primary-border: var(--primary-border);
   --color-primary-hover: hsl(var(--primary-hover));
   --color-primary-pressed: hsl(var(--primary-pressed));
+  /* O primário como texto no cartão (o "Ver itens" da fila). */
+  --color-primary-texto: hsl(var(--primary-texto));
 
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
@@ -429,6 +433,32 @@
   --primary: 358 81% 51%; /* #E71C23: ação principal e alerta */
   --primary-hover: 353 100% 34%; /* #AD0015 */
   --ring: 358 81% 51%;
+}
+
+/* O anel do foco (WCAG 1.4.11 e 2.4.7; carregamento v2, parte 13h): o --ring
+   cheio, nunca a 40% (1,91:1 no claro da v3 e 1,65:1 no escuro). Tem 3:1 ou
+   mais no fundo, no cartão e no muted de cada tema, e o contorno das cores
+   forçadas vem do outline-hidden de quem o usa (lib/carregando/tokens.test.ts
+   e trava.test.ts). Relido onde o --ring muda: na raiz, na v3 e no .dark, que
+   também aparece dentro da página (a TV). */
+:root,
+.v3,
+.dark {
+  --foco: var(--ring);
+}
+
+/* O primário como texto no cartão (o "Ver itens" da fila): no claro, o
+   próprio --primary (4,58:1 no branco da v3); no escuro, o azul do botão
+   daria 4,4:1 no cartão, e o texto vai mais claro (6,3:1). O branco sobre o
+   botão do escuro (4,3:1) pediria o azul mais escuro: um token só não serve
+   aos dois (diagnóstico, seção 10.5, parte 13h). */
+:root,
+:root:not(.dark) .v3 {
+  --primary-texto: var(--primary);
+}
+
+.dark {
+  --primary-texto: 217 85% 65%;
 }
 
 /* Documento de impressão (fatura, relatório do portal) é papel: fica claro

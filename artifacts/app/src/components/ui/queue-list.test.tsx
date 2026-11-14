@@ -111,7 +111,7 @@ describe("a fila e o cabeçalho na v3", () => {
     expect(comApoio).toMatch(/<p class="mt-0\.5 text-sm text-foreground\/60"><span class="font-bold text-foreground">Aprovando pedido 1042…<\/span><\/p>/);
     expect(comApoio).not.toContain("Retirada");
     expect(comApoio).not.toContain("há 25 min");
-    expect(linha()).toMatch(/<p class="mt-0\.5 text-sm text-foreground\/60">Retirada · BTG Pactual · 12 un\.<span class="text-foreground\/45"> · há 25 min<\/span><\/p>/);
+    expect(linha()).toMatch(/<p class="mt-0\.5 text-sm text-foreground\/60">Retirada · BTG Pactual · 12 un\.<span> · há 25 min<\/span><\/p>/);
     expect(await violacoesDeAcessibilidade(comApoio)).toEqual([]);
   });
 });
@@ -214,7 +214,33 @@ describe("o grupo sem saltos e o de sempre", () => {
     const anel = buttonVariants()
       .split(/\s+/)
       .filter((classe) => classe.startsWith("focus-visible:"));
-    expect(anel).toEqual(expect.arrayContaining(["focus-visible:ring-2", "focus-visible:ring-ring/40"]));
+    // O anel cheio do --foco (3:1 nos dois temas) e o contorno das cores forçadas (carregamento v2, parte 13h).
+    expect(anel).toEqual(expect.arrayContaining(["focus-visible:outline-hidden", "focus-visible:ring-2", "focus-visible:ring-foco"]));
     for (const classe of anel) expect(classes, classe).toContain(classe);
+  });
+});
+
+describe("o contraste da linha da fila (carregamento v2, parte 13h)", () => {
+  const linha = renderToStaticMarkup(
+    <div className="v3">
+      <QueueGroup title="Para aprovar" count={1} empty="Nenhum pedido para aprovar.">
+        <QueueRow icon={Package} tone="approve" title="Pedido 1042" meta="Entrega · BTG Pactual · 2 itens · 40 un." age="há 25 min" onToggle={() => undefined} open={false} />
+      </QueueGroup>
+    </div>,
+  );
+  const documento = new JSDOM(linha).window.document;
+
+  it("a idade tem o tom do apoio (4,74:1 no branco da v3), e não a tinta a 45% (2,92:1)", () => {
+    const apoio = [...documento.querySelectorAll("p")].find((p) => p.textContent?.includes("há 25 min"))!;
+    expect(apoio.className.split(/\s+/)).toContain("text-foreground/60");
+    expect(apoio.innerHTML).not.toMatch(/text-foreground\/(?:[1-5]\d)(?!\d)/);
+    expect(apoio.textContent).toBe("Entrega · BTG Pactual · 2 itens · 40 un. · há 25 min");
+  });
+
+  it("o Ver itens é o primário como texto (o --primary-texto: 6,3:1 no cartão escuro, onde o --primary dava 4,4:1)", () => {
+    const ver = [...documento.querySelectorAll("button")].find((botao) => botao.textContent === "Ver itens")!;
+    const classes = ver.className.split(/\s+/);
+    expect(classes).toContain("text-primary-texto");
+    expect(classes).not.toContain("text-primary");
   });
 });

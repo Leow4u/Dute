@@ -104,7 +104,7 @@ const TOM_DO_RESULTADO: Record<ResultadoDoExame, string> = { apto: TOM_OK, apto_
 
 const ROTULO_DE_CAMPO = "block text-xs font-bold text-muted-foreground";
 const CAMPO_SELECT =
-  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
+  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
 
 /** "Vence em 9 dias", "Venceu há 22 dias": o prazo do registro dentro da janela do Início. */
 function prazoNaFicha(dias: number): string {
@@ -193,7 +193,7 @@ function AnexarArquivo({ registro, anexando, travado, acoes }: { registro: Regis
     <label
       htmlFor={entrada}
       className={cn(
-        "inline-flex h-8 cursor-pointer items-center rounded-md px-3 text-sm font-medium hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring",
+        "inline-flex h-8 cursor-pointer items-center rounded-md px-3 text-sm font-medium hover:bg-surface-hover focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco",
         travado && "pointer-events-none",
         travado && !anexando && !espera.visivel && "opacity-50",
       )}

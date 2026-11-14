@@ -45,7 +45,7 @@ const sentFormat = new Intl.DateTimeFormat("pt-BR", {
 });
 
 export const field =
-  "w-full min-w-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15";
+  "w-full min-w-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm focus:outline-hidden focus:border-primary focus:ring-2 focus:ring-primary/15";
 
 function useAvailableBySku() {
   const overview = useClientOverview();

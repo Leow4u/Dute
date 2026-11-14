@@ -257,7 +257,7 @@ export function BotaoFecharDoPainel({ travado, esmaecido = travado, className }:
         if (travado || dialogo?.segura()) event.preventDefault();
       }}
       className={cn(
-        'absolute inline-grid place-items-center rounded-full p-1.5 transition-[background-color] duration-200 hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none data-[state=open]:text-muted-foreground celular:size-11 celular:p-0 celular:[&_svg]:size-5',
+        'absolute inline-grid place-items-center rounded-full p-1.5 transition-[background-color] duration-200 hover:bg-surface-hover focus:outline-hidden focus-visible:ring-2 focus-visible:ring-foco focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none data-[state=open]:text-muted-foreground celular:size-11 celular:p-0 celular:[&_svg]:size-5',
         // O ícone esmaece, e o anel do foco fica inteiro.
         '[&_svg]:opacity-70 [&_svg]:transition-opacity [&_svg]:duration-200 hover:[&_svg]:opacity-100',
         travado && CLASSE_DO_TRAVADO,

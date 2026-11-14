@@ -409,7 +409,7 @@ export default function PaginaOs() {
             ) : null}
             <label
               aria-disabled={enviandoFotos}
-              className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted focus-within:ring-2 focus-within:ring-ring/40 aria-disabled:pointer-events-none aria-disabled:opacity-50"
+              className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco aria-disabled:pointer-events-none aria-disabled:opacity-50"
             >
               <ImagePlus aria-hidden="true" className="size-4" />
               Anexar

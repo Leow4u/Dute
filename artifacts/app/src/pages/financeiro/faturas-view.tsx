@@ -131,7 +131,7 @@ const TOM_DA_BAIXA: Record<EtapaDaBaixa, string> = {
 
 const ROTULO_DE_CAMPO = "block text-xs font-bold text-muted-foreground";
 const CAMPO_SELECT =
-  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
+  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
 
 const VAZIO_DO_FILTRO: Record<FiltroDeFaturas, string> = {
   a_receber: "Nenhuma NF a receber",
@@ -192,7 +192,7 @@ function Linha({ fatura, hoje, aberta, primeira, onAbrir }: { fatura: FaturaDoFi
       aria-pressed={aberta}
       onClick={() => onAbrir(fatura.id)}
       className={cn(
-        "grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-3.5 gap-y-1.5 px-5 py-3.5 text-left outline-none transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+        "grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-3.5 gap-y-1.5 px-5 py-3.5 text-left focus-visible:outline-hidden transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foco",
         !primeira && "border-t border-muted",
         aberta && "bg-info-soft",
       )}

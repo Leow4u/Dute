@@ -1989,7 +1989,7 @@ export function OpeningInventoryWorkspace() {
                   role="region"
                   aria-label="Caixas desta sessão"
                   tabIndex={0}
-                  className="h-[220px] min-w-0 overflow-y-auto pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  className="h-[220px] min-w-0 overflow-y-auto pr-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
                 >
                   <div className="space-y-2">
                     {boxesOfSession.map((box) => {
@@ -2087,7 +2087,7 @@ export function OpeningInventoryWorkspace() {
                   role="region"
                   aria-label="Lançamentos conferidos"
                   tabIndex={0}
-                  className="h-[300px] min-w-0 overflow-y-auto pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  className="h-[300px] min-w-0 overflow-y-auto pr-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
                 >
                   <div className="space-y-2">
                     {visibleLines.map((line) => (

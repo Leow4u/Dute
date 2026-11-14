@@ -1,9 +1,7 @@
-import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
 import {
   Switch,
   Route,
   Link,
-  useLocation,
   Router as WouterRouter,
   Redirect,
 } from "wouter";
@@ -11,16 +9,11 @@ import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { PasswordInput } from "@/components/password-input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AuthShell } from "@/components/auth-shell";
 import { ChunkErrorBoundary } from "@/components/chunk-error-boundary";
 import { CarregandoTela } from "@/components/ui/carregando-tela";
 import PortalDesligadoPage from "@/pages/portal-desligado";
 import ConvitePage from "@/pages/convite";
+import SignInPage from "@/pages/entrar";
 
 import { DocumentTitle } from "./components/document-title";
 import AppLayout from "./components/layout/app-layout";
@@ -172,7 +165,6 @@ import { soComFinanceiroLiberado } from "./lib/financeiro/navegacao";
 import { soComRhLiberado } from "./lib/rh/navegacao";
 import { entrada } from "./lib/platform-modules";
 import { portalModulesFor } from "./lib/operations";
-import { firebaseAuth, firebaseConfigError } from "./lib/firebase";
 import {
   canAccessModule,
   getHomePathForAppRole,
@@ -186,141 +178,12 @@ import {
 } from "./lib/modules";
 import { queryClient } from "./lib/queryClient";
 import { RealtimeSyncBridge } from "./lib/realtime-sync";
-import { MENSAGEM_DA_RECUPERACAO, problemaDaRecuperacao } from "./lib/recuperar-senha";
 import { layoutDaRota, type LayoutDaRota } from "./lib/ambientes";
 import { LEGACY_SETTINGS_REDIRECTS } from "./lib/settings-nav";
 import { nomeDaTela } from "./lib/document-title";
 import { abreATela, agendarGuardaDasTelas, telasDoPapel } from "./lib/telas-no-aparelho";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-type AuthFormState = {
-  email: string;
-  senha: string;
-  error: string | null;
-  loading: boolean;
-};
-
-const initialAuthState: AuthFormState = {
-  email: "",
-  senha: "",
-  error: null,
-  loading: false,
-};
-
-function SignInPage() {
-  const [, setLocation] = useLocation();
-  const { user, isLoaded, accessDenied, accessRemoved } = useAppUser();
-  const [form, setForm] = useState<AuthFormState>(initialAuthState);
-
-  if (isLoaded && user) return <Redirect to="/" />;
-
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!firebaseAuth) return;
-
-    setForm((current) => ({ ...current, loading: true, error: null }));
-    try {
-      await signInWithEmailAndPassword(
-        firebaseAuth,
-        form.email.trim(),
-        form.senha,
-      );
-      window.location.assign(basePath || "/");
-    } catch (error) {
-      setForm((current) => ({
-        ...current,
-        loading: false,
-        error:
-          error instanceof Error ? error.message : "Não foi possível entrar.",
-      }));
-    }
-  }
-
-  async function resetPassword() {
-    if (!firebaseAuth) return;
-    const problema = problemaDaRecuperacao(form.email);
-    if (problema) {
-      setForm((current) => ({ ...current, error: problema }));
-      return;
-    }
-    try {
-      await sendPasswordResetEmail(firebaseAuth, form.email.trim());
-      setForm((current) => ({ ...current, error: MENSAGEM_DA_RECUPERACAO.enviada }));
-    } catch {
-      setForm((current) => ({ ...current, error: MENSAGEM_DA_RECUPERACAO.falhou }));
-    }
-  }
-
-  return (
-    <AuthShell title="Entrar">
-      <form onSubmit={submit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="email">E-mail</Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            value={form.email}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, email: event.target.value }))
-            }
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="senha">Senha</Label>
-          <PasswordInput
-            id="senha"
-            autoComplete="current-password"
-            value={form.senha}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, senha: event.target.value }))
-            }
-            required
-          />
-        </div>
-        {form.error ? (
-          <Alert
-            variant={
-              form.error.includes("recuperação") ? "default" : "destructive"
-            }
-          >
-            <AlertDescription>{form.error}</AlertDescription>
-          </Alert>
-        ) : null}
-        {accessDenied ? (
-          <Alert variant="destructive">
-            <AlertDescription>
-              {accessRemoved
-                ? "Seu acesso foi removido. Se precisar voltar a usar o sistema, fale com a administração da Dutelog."
-                : "Seu e-mail ainda não tem convite ativo para acessar o sistema."}
-            </AlertDescription>
-          </Alert>
-        ) : null}
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={form.loading || Boolean(firebaseConfigError)}
-        >
-          {form.loading ? "Entrando..." : "Entrar"}
-        </Button>
-      </form>
-      <div className="mt-5 flex items-center justify-between border-t border-[var(--auth-line)] pt-4 text-sm">
-        <button
-          type="button"
-          className="font-medium text-[var(--auth-accent)] transition-opacity hover:opacity-80"
-          onClick={resetPassword}
-        >
-          Esqueci minha senha
-        </button>
-        <span className="text-[var(--auth-muted)]" title="Contas criadas apenas com link de convite">
-          Acesso por convite
-        </span>
-      </div>
-    </AuthShell>
-  );
-}
 
 function QueryClientCacheInvalidator() {
   const { user, isLoaded } = useAppUser();

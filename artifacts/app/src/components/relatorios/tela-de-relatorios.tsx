@@ -199,7 +199,7 @@ export function TelaDeRelatorios({
             href={item.href}
             aria-current={item.id === atual ? "page" : undefined}
             className={cn(
-              "flex min-h-11 items-center rounded-md px-3.5 text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+              "flex min-h-11 items-center rounded-md px-3.5 text-sm font-semibold focus-visible:outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-foco",
               item.id === atual ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
@@ -265,4 +265,4 @@ export function dataBr(dia: string): string {
 }
 
 export const CAMPO_SELECT =
-  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25";
+  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/25";

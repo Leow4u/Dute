@@ -13,7 +13,9 @@ import { useLocation } from "wouter";
 
 import { AuthShell } from "@/components/auth-shell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAppUser } from "@/lib/auth";
@@ -46,6 +48,9 @@ export type TelaDoConvite =
   | { tela: "formulario"; convite: ConviteLido }
   | { tela: "confirmar"; convite: ConviteLido; reenviado: boolean; enviado: boolean }
   | { tela: "confirmado"; convite: ConviteLido };
+
+/** A ação com espera em andamento: o botão dela diz o gerúndio, e os outros esperam travados. */
+export type AcaoDoConviteComEspera = "aceitar" | "jaConfirmei" | "reenviar" | "sair" | "sairDaOutraConta";
 
 export type AcoesDoConvite = {
   nome: (valor: string) => void;
@@ -80,15 +85,19 @@ export function ConviteView({
   nome: string;
   senha: string;
   erro: string | null;
-  ocupado: boolean;
+  /** A ação em andamento (ou `true`, qualquer uma): ocupado não é desabilitado, o botão dela diz o gerúndio. */
+  ocupado: boolean | AcaoDoConviteComEspera;
   acoes: AcoesDoConvite;
 }) {
+  // Carregamento v2 (parte 13h): o botão da ação em andamento é o BotaoDeAcao, com o gerúndio aos 300 ms, aria-busy e
+  // aria-disabled, e o foco fica nele; os outros esperam travados (aria-disabled), nunca disabled.
+  const emAndamento = (acao: AcaoDoConviteComEspera) => (ocupado === true || ocupado === acao ? "andamento" : "repouso");
+  const travado = Boolean(ocupado);
   if (estado.tela === "carregando") {
+    // A espera tem forma e lugar: nada antes de 300 ms; depois, a caixa e o gerúndio, ditos pelo Anunciador.
     return (
       <AuthShell title="Validando convite">
-        <p role="status" className="text-center text-sm text-muted-foreground">
-          Conferindo seu convite...
-        </p>
+        <CarregandoNaRegiao rotulo="Conferindo seu convite…" className="justify-center" />
       </AuthShell>
     );
   }
@@ -116,9 +125,13 @@ export function ConviteView({
         <div className="space-y-4">
           <p className="break-all font-semibold">{estado.email}</p>
           <Erro erro={erro} />
-          <Button type="button" className="w-full" disabled={ocupado} onClick={acoes.sairDaOutraConta}>
-            {ocupado ? "Saindo..." : "Sair e continuar com o convite"}
-          </Button>
+          <BotaoDeAcao
+            className="w-full"
+            estado={emAndamento("sairDaOutraConta")}
+            rotulo="Sair e continuar com o convite"
+            andamento="Saindo…"
+            onClick={acoes.sairDaOutraConta}
+          />
           <Button type="button" variant="outline" className="w-full" onClick={acoes.voltarAoSistema}>
             Voltar ao sistema
           </Button>
@@ -143,12 +156,23 @@ export function ConviteView({
             </p>
           ) : null}
           <Erro erro={erro} />
-          <Button type="button" className="w-full" disabled={ocupado} onClick={acoes.jaConfirmei}>
-            {ocupado ? "Conferindo..." : "Já confirmei"}
-          </Button>
-          <Button type="button" variant="outline" className="w-full" disabled={ocupado} onClick={acoes.reenviar}>
-            Reenviar e-mail
-          </Button>
+          <BotaoDeAcao
+            className="w-full"
+            estado={emAndamento("jaConfirmei")}
+            rotulo="Já confirmei"
+            andamento="Conferindo…"
+            bloqueado={travado && emAndamento("jaConfirmei") === "repouso"}
+            onClick={acoes.jaConfirmei}
+          />
+          <BotaoDeAcao
+            variant="outline"
+            className="w-full"
+            estado={ocupado === "reenviar" ? "andamento" : "repouso"}
+            rotulo="Reenviar e-mail"
+            andamento="Reenviando…"
+            bloqueado={travado && ocupado !== "reenviar"}
+            onClick={acoes.reenviar}
+          />
           <button type="button" className="w-full text-sm font-medium text-primary hover:underline" onClick={acoes.sair}>
             Sair
           </button>
@@ -212,9 +236,14 @@ export function ConviteView({
           />
         </div>
         <Erro erro={erro} />
-        <Button type="submit" className="w-full" disabled={ocupado || Boolean(firebaseConfigError)}>
-          {ocupado ? "Aceitando..." : "Aceitar convite"}
-        </Button>
+        <BotaoDeAcao
+          type="submit"
+          className="w-full"
+          estado={emAndamento("aceitar")}
+          rotulo="Aceitar convite"
+          andamento="Aceitando…"
+          bloqueado={Boolean(firebaseConfigError)}
+        />
       </form>
       <button type="button" className="mt-4 w-full text-sm font-medium text-primary hover:underline" onClick={acoes.jaTenhoConta}>
         Já tenho conta
@@ -254,7 +283,7 @@ export default function ConvitePage() {
   const [nome, setNome] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState<string | null>(null);
-  const [ocupado, setOcupado] = useState(false);
+  const [ocupado, setOcupado] = useState<AcaoDoConviteComEspera | false>(false);
   const [reenviado, setReenviado] = useState(false);
   const [enviado, setEnviado] = useState(false);
   // O "Aceitar convite" cria a conta, e a conta nova muda a sessão no meio dele.
@@ -321,9 +350,9 @@ export default function ConvitePage() {
     if (enviar) await solicitarConfirmacao(usuario);
   }
 
-  async function executar(acao: () => Promise<void>) {
+  async function executar(qual: AcaoDoConviteComEspera, acao: () => Promise<void>) {
     emAndamento.current = true;
-    setOcupado(true);
+    setOcupado(qual);
     setErro(null);
     try {
       await acao();
@@ -339,7 +368,7 @@ export default function ConvitePage() {
   const contaDoConvite = firebaseUser && convite && !user && (firebaseUser.email ?? "").toLowerCase() === convite.email ? firebaseUser : null;
   useEffect(() => {
     if (!contaDoConvite || passo !== "formulario" || emAndamento.current) return;
-    void executar(() => seguir(contaDoConvite, false));
+    void executar("aceitar", () => seguir(contaDoConvite, false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contaDoConvite, passo]);
 
@@ -347,7 +376,7 @@ export default function ConvitePage() {
     nome: setNome,
     senha: setSenha,
     aceitar: () =>
-      void executar(async () => {
+      void executar("aceitar", async () => {
         if (!firebaseAuth || !convite) return;
         let usuario: User;
         try {
@@ -360,7 +389,7 @@ export default function ConvitePage() {
         await seguir(usuario, true);
       }),
     jaConfirmei: () =>
-      void executar(async () => {
+      void executar("jaConfirmei", async () => {
         const usuario = firebaseAuth?.currentUser;
         if (!usuario) {
           setPasso("formulario");
@@ -374,13 +403,13 @@ export default function ConvitePage() {
         await aceitarConfirmado(usuario);
       }),
     reenviar: () =>
-      void executar(async () => {
+      void executar("reenviar", async () => {
         const usuario = firebaseAuth?.currentUser;
         if (!usuario || !convite) return;
         await solicitarConfirmacao(usuario, true);
       }),
     sair: () =>
-      void executar(async () => {
+      void executar("sair", async () => {
         if (firebaseAuth) await signOut(firebaseAuth);
         setSenha("");
         setEnviado(false);
@@ -390,7 +419,7 @@ export default function ConvitePage() {
     jaTenhoConta: () => setLocation("/sign-in"),
     voltarAoLogin: () => setLocation("/sign-in"),
     sairDaOutraConta: () =>
-      void executar(async () => {
+      void executar("sairDaOutraConta", async () => {
         if (firebaseAuth) await signOut(firebaseAuth);
       }),
     voltarAoSistema: () => setLocation("/"),

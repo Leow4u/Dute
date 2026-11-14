@@ -945,7 +945,7 @@ export function UnplannedReceiptDialog({
                       aria-controls="receipt-product-editor"
                       onClick={() => setActiveLineIndex(index)}
                       className={cn(
-                        "w-full rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        "w-full rounded-lg border p-4 text-left transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
                         activeLineIndex === index ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-muted",
                       )}
                     >

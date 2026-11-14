@@ -131,7 +131,7 @@ function CartaoDoCliente({
     <li>
       <Link
         href={customerHref(row.code)}
-        className="group flex h-full flex-col gap-4 rounded-lg border border-border bg-card p-4 text-foreground outline-none transition-colors hover:border-foreground/30 focus-visible:ring-2 focus-visible:ring-ring/40 sm:p-5"
+        className="group flex h-full flex-col gap-4 rounded-lg border border-border bg-card p-4 text-foreground focus-visible:outline-hidden transition-colors hover:border-foreground/30 focus-visible:ring-2 focus-visible:ring-foco sm:p-5"
       >
         <div className="flex items-start gap-3.5">
           <QuadroDoCliente row={row} />

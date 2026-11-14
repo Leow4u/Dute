@@ -561,7 +561,7 @@ function Conferencia(
                           type="button"
                           disabled={ocupado || !item.id}
                           aria-pressed={item.id === produto?.id}
-                          className="w-full rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                          className="w-full rounded text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco disabled:opacity-50"
                           onClick={() => item.id && props.onProduto?.(item.id)}
                         >
                           <span className="block font-bold">

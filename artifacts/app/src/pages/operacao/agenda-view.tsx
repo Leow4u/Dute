@@ -173,7 +173,7 @@ function Bloco({ os, selecionada, onSelecionar }: { os: OsNaAgenda; selecionada:
       aria-pressed={ativa}
       onClick={() => onSelecionar(ativa ? null : os.numero)}
       className={cn(
-        "flex w-full min-w-0 flex-col items-start rounded-md border border-l-4 px-2 py-1 text-left transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+        "flex w-full min-w-0 flex-col items-start rounded-md border border-l-4 px-2 py-1 text-left transition-opacity focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
         COR_DO_STATUS[os.status],
         ativa ? "ring-2 ring-foreground" : selecionada ? "opacity-60" : null,
       )}
@@ -209,7 +209,7 @@ function Grupo({
             type="button"
             aria-expanded={aberto}
             onClick={() => setAberto(!aberto)}
-            className="sticky left-0 flex h-9 items-center gap-2 px-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40"
+            className="sticky left-0 flex h-9 items-center gap-2 px-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foco"
           >
             <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform", aberto ? null : "-rotate-90")} />
             {grupo.titulo}

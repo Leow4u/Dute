@@ -88,7 +88,7 @@ export default function CampoLayout({ children }: { children: ReactNode }) {
       <div className="flex min-h-dvh flex-col bg-background">
         <header className="sticky top-0 z-20 border-b border-border bg-card">
           <div className="mx-auto flex h-14 w-full max-w-xl items-center justify-between gap-3 px-4">
-            <Link href={ROTA_CAMPO} className="flex items-center gap-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+            <Link href={ROTA_CAMPO} className="flex items-center gap-2 rounded focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco">
               <img src={`${basePath}/dutelog-mark-180.png`} alt="" aria-hidden="true" className="size-8 rounded-lg" />
               <span className="text-base font-bold text-foreground">Minhas OS</span>
             </Link>

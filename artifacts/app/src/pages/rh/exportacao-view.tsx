@@ -107,7 +107,7 @@ function SemAdmissao({ pessoas }: { pessoas: readonly PessoaSemAdmissao[] }) {
       <ul aria-labelledby="sem-admissao" className="flex flex-wrap gap-x-4 gap-y-2">
         {pessoas.map((pessoa) => (
           <li key={pessoa.id}>
-            <Link href={hrefDaFicha(pessoa.id)} className="rounded text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Link href={hrefDaFicha(pessoa.id)} className="rounded text-sm font-bold underline underline-offset-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco">
               {pessoa.nome}
             </Link>
           </li>

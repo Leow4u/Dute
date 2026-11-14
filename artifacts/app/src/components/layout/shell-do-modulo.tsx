@@ -48,7 +48,7 @@ export type ShellDoModuloProps = {
 
 // O item da barra preta, também na barra da Configuração (settings-layout.tsx).
 export const ITEM =
-  "relative flex h-12 w-full shrink-0 items-center gap-3 rounded-lg px-3.5 text-left text-base font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80";
+  "relative flex h-12 w-full shrink-0 items-center gap-3 rounded-lg px-3.5 text-left text-base font-semibold focus-visible:outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80";
 export const ITEM_ATUAL = "bg-v3-header-foreground/15 text-v3-header-foreground";
 export const ITEM_OUTRO = "text-v3-header-foreground/75 hover:bg-v3-header-foreground/10 hover:text-v3-header-foreground";
 
@@ -100,7 +100,7 @@ function GrupoDoMenu({
                   href={route.href ?? "/"}
                   aria-current={atual ? "page" : undefined}
                   className={cn(
-                    "relative flex h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
+                    "relative flex h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-semibold focus-visible:outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
                     atual ? ITEM_ATUAL : ITEM_OUTRO,
                   )}
                 >
@@ -201,7 +201,7 @@ export function ShellDoModulo({
         aria-label={atual.label}
         className="v3 hidden min-h-0 w-62 shrink-0 flex-col bg-v3-header px-3.5 pb-4 pt-6 font-sans text-v3-header-foreground md:flex"
       >
-        <Link href="/" className="mb-5 block self-start rounded-md px-3 outline-none focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80">
+        <Link href="/" className="mb-5 block self-start rounded-md px-3 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80">
           <img src={`${basePath}/dutelog-logo-light.png`} alt="Dutelog Soluções Logísticas" className="h-8 w-auto" />
         </Link>
         <SeletorDeModulo atual={atual} opcoes={opcoes} variante="v3" />

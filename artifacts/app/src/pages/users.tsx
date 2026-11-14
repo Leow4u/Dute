@@ -83,7 +83,7 @@ function Carregando({ rotulo, continuaARota = false, onTentar }: { rotulo: strin
 
 function linkDoCliente(code: string, nome: string) {
   return (
-    <Link href={customerHref(code)} className="rounded font-bold text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+    <Link href={customerHref(code)} className="rounded font-bold text-foreground underline underline-offset-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco">
       {nome}
     </Link>
   );
@@ -108,7 +108,7 @@ function IndiceDosClientes({ indice }: { indice: ClienteDoIndice[] }) {
           <li key={linha.code}>
             <Link
               href={customerHref(linha.code)}
-              className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 px-4 py-3.5 text-foreground outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 sm:px-5 ${COLUNAS_DO_INDICE}`}
+              className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 px-4 py-3.5 text-foreground focus-visible:outline-hidden transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foco sm:px-5 ${COLUNAS_DO_INDICE}`}
             >
               <span className="flex min-w-0 items-center gap-3.5">
                 <QuadroDoCliente row={linha} tamanho="pequeno" />

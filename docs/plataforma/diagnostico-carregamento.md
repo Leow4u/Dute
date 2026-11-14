@@ -757,7 +757,7 @@ por PR:
 | 10 | A troca de filtro e a releitura sem apagar a lista | PR 610 |
 | 11 | As operações longas: fotos com progresso e etapas | PR 610 |
 | 12 | A trilha do Agent Dute | PR 610 |
-| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | 13a (os diálogos), 13b (o Estoque e o armazém), 13c (Receber, Operações, Pedidos e Solicitações), 13d (o Faturamento, os Relatórios, os Documentos e o Catálogo), 13e (as Configurações, o sistema e o Início), 13f (o portal) e 13g (o Comercial, a Operação, o campo, a TV, o Financeiro e o RH, com a revisão a fazer) no PR 610; a trava a fazer |
+| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | PR 610 |
 
 Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código:
 
@@ -3505,3 +3505,130 @@ Fica aberto:
   "Tentando de novo…" na hora;
 - o diálogo "Cancelar pedido" de Pedidos diz o nome do cliente ativo, e não
   o do pedido.
+
+**Parte 13h, a trava, o anel de foco e o aceite (PR 610, 14/11/2026).** A
+última parte da seção 10.4: ela trava o que as anteriores fizeram, corrige o
+anel do foco e os contrastes da fila que as revisões da parte 6 acharam, e
+refaz o aceite do indicador (seção 8 da especificação) no Chromium.
+
+- **A trava** (`lib/carregando/trava.test.ts`): lê o texto do código do app
+  pelo parser do TypeScript (os literais, os modelos e o texto do JSX; os
+  comentários e os testes ficam de fora) e reprova, com a lista do que
+  achou, `animate-spin` fora do `Spinner`, `animate-pulse` fora do
+  `Esqueleto` e do `Skeleton`, e "..." de três pontos em qualquer texto; no
+  `index.css`, o `@apply` e a `animation` com `spin` ou `pulse`. Vale com
+  zero exceções. No estado de antes, não havia `animate-spin` nem
+  `animate-pulse` (só num comentário do `Skeleton`), mas sobravam dez textos
+  de três pontos, migrados agora:
+  - a entrada (`/sign-in`): "Entrando..." com o botão `disabled`. A
+    `SignInPage` saiu do `App.tsx` para `pages/entrar.tsx`, para ter teste, e
+    o "Entrar" é o `BotaoDeAcao` ("Entrando…" aos 300 ms, o foco fica nele, o
+    segundo Enter não entra de novo);
+  - o convite: "Conferindo seu convite..." numa região viva solta virou a
+    `CarregandoNaRegiao`; "Saindo...", "Conferindo..." e "Aceitando..." com
+    `disabled` viraram o `BotaoDeAcao`. O ocupado diz qual ação anda: a do
+    botão diz o gerúndio, e as outras esperam `aria-disabled` (antes, o
+    "Reenviar e-mail" fazia o "Já confirmei" dizer "Conferindo...");
+  - as Movimentações (Estoque › Histórico e a rota antiga): "Carregando
+    movimentações..." aparecia na hora, duas vezes (a lista do celular e a
+    tabela), e nunca tinha saída. Agora é uma `CarregandoNaRegiao` só, no
+    lugar da lista, que continua a espera da rota, com a demora, o "Tentar de
+    novo" (`relerDoZero`) e o foco que sai para a linha de estado. O
+    "Registrar Movimentação" é o `BotaoDeAcao` ("Registrando…"), num diálogo
+    `ocupado` com o `DialogCancelar`, como a 13a;
+  - o "Dividir em volumes": "Separando..." e "Dividindo..." num botão
+    `disabled`. O confirmar é o `BotaoDeAcao` e o Voltar, o `DialogCancelar`
+    ocupado, como o "Separar menos" da 13c.
+- **O anel do foco** (WCAG 1.4.11 e 2.4.7). O `ring-ring/40` do `Button` e
+  das peças que o copiavam (o título dos grupos da fila, a
+  `CarregandoNaRegiao`, o chip, o segmentado, as abas, os links de Pessoas e
+  Clientes, as linhas do campo e da Operação) tinha 1,91:1 no claro da v3 e
+  1,65:1 no escuro, e o `outline-none` do Tailwind v4 o tirava também das
+  cores forçadas, onde a sombra do anel some. Agora:
+  - o token `--foco` (`ring-foco`) é o `--ring` cheio, relido na raiz, na v3
+    e no `.dark` (a TV), com 3:1 ou mais no fundo, no cartão, no popover, no
+    muted, no secundário, no `primary-soft` e na lateral, em todos os
+    contextos (`tokens.test.ts`);
+  - todo anel de foco do app usa o `ring-foco` e o `outline-hidden` da
+    variante do foco, que deixa nas cores forçadas o contorno de 2 px que o
+    sistema pinta: 93 classes em 70 arquivos, mudadas por um script e
+    conferidas uma a uma. Ficam com outra cor só o anel na barra preta (o
+    branco dela a 80%, 11,6:1), o do toast crítico (a cor do texto dele) e o
+    halo claro do campo cujo foco é a borda cheia (`border-primary`). A
+    borda do foco dos campos do Agent Dute e do painel do sistema, a 60%, vai
+    à cheia. A trava reprova o anel com o `--ring` translúcido, o
+    `outline-none` junto do anel e o anel sem o `outline-hidden`.
+- **Os contrastes da fila** (as linhas da `QueueRow`):
+  - "há 25 min" ia em tinta a 45% (2,92:1 no claro e 4,38:1 no escuro, pelo
+    axe) e passa ao tom do apoio, como na prancha (4,67:1 e 6,86:1);
+  - o "Ver itens", e na mesma linha o "Ver volumes" e o "Ver solicitações"
+    do grupo vazio, usam o token novo `--primary-texto` (`text-primary-texto`):
+    o próprio `--primary` no claro (4,57:1 no branco da v3) e, no escuro,
+    `217 85% 65%` (6,25:1 no cartão; o `--primary`, como texto, dava 4,39:1);
+  - o branco sobre o botão primário do escuro fica em 4,30:1, aberto (abaixo).
+- **No Chromium** (harness com a API falsa servida pela rede, só 127.0.0.1;
+  antes = `dae1a03`, depois = esta parte):
+  - o anel, nos recortes a 2x com e sem o foco: antes, 1,91:1 no fundo
+    `#F6F6F4` e 1,94:1 no cartão (claro), 1,65:1 e 1,67:1 (escuro); depois,
+    4,22:1 e 4,57:1 (claro), 4,60:1 e 4,39:1 (escuro), no Aprovar, no
+    Recusar, no chip, no fantasma e no título "Para aprovar";
+  - nas cores forçadas emuladas: antes, o Aprovar, o chip, o segmentado, o
+    fantasma e o título do grupo não mudavam um pixel com o foco (o Recusar
+    só pela borda); depois, todos ganham o contorno sólido de 2 px (11,3:1 no
+    claro e 8,7:1 no escuro, nas cores do sistema);
+  - as Movimentações: antes, "Carregando movimentações..." de 0 ms aos 11 s,
+    sem caixa, sem demora e sem saída; depois, nada até 300 ms, a caixa e
+    "Carregando movimentações…" aos 400 ms, e aos 11 s "Demorando mais que o
+    normal" com "Tentar de novo". O Registrar gravando: antes `disabled`,
+    "Salvando...", o foco no `body` e o Esc fechava o diálogo; depois
+    "Registrando…", `aria-busy` e `aria-disabled`, o foco no botão, o
+    Cancelar `aria-disabled` e o Esc não fecha.
+- **O aceite do indicador** (seção 8, refeito em Pedidos, no app de
+  verdade):
+  1. em 20 quadros parados ao acaso, entre 0,5 e 3,5 s, a caixa de 24 px da
+     linha de estado ("Carregando pedidos…", no fundo `#F6F6F4`) tem de 400 a
+     434 px com 3:1 ou mais, a 2x (o piso é 120), e a de 16 px no "Aprovando…"
+     vermelho, de 155 a 170 (o piso é 40);
+  2. com a thread principal ocupada por 2.001 ms (o screencast do
+     Chromium), a caixa produz 111 quadros, 110 distintos (o piso é 30);
+  3. com a CPU 4x mais lenta e a Slow 4G do DevTools (562,5 ms, 180 kB/s e
+     84 kB/s), com a API na rede: Pedidos carregando por 4 s dá 241 quadros,
+     nenhum acima de 33 ms (o maior, 17 ms) e nenhum quadro longo
+     (`long-animation-frame`); o INP do Aprovar, em três linhas, é de 112, 80
+     e 96 ms (antes, 128, 88 e 96): abaixo dos 200 ms;
+  4. o axe (WCAG 2.1 A e AA) em Pedidos lendo, lida e aprovando, no claro e
+     no escuro, só acusa o branco sobre o primário do escuro (4,3:1). Antes,
+     também a idade (nos dois temas) e o "Ver itens" do escuro.
+
+  Os itens 1, 2 e 3 passam no Chromium: o `Spinner` fica na caixa chanfrada.
+  **O Android médio de verdade fica pendente**: a emulação da CPU e da rede
+  não substitui o aparelho (a decisão 2 de 12/11 pede o aceite nele).
+- **Testes**: a trava (os três padrões, o anel e a leitura do código), o
+  token do anel e o do primário como texto, a linha da fila, a entrada
+  (`pages/entrar.test.tsx`), as Movimentações
+  (`pages/movements.carregamento.test.tsx`), o convite e o "Dividir em
+  volumes". Contra o código de antes, 23 dos 101 testes dos oito arquivos da
+  parte falham (e a entrada não tem o que importar); os que passam são o que
+  já valia. A suíte do app fica em 473 arquivos e 5.335 testes (antes, 470 e
+  5.313).
+
+Fica aberto:
+
+- o branco sobre o botão primário do escuro, 4,30:1 (o `#2B75EE`). Um token
+  só não serve aos dois: o branco pede o azul com luminância até 0,183, e o
+  azul como texto no cartão escuro pede 0,200 ou mais. O `--primary-texto`
+  começa a separação, mas o fundo do botão é o `--primary` em 143 classes e
+  o texto, em 153: escurecer o `--primary` do escuro (para `217 85% 50%`,
+  5,07:1 com o branco) pede a medição nas telas principais e um PR próprio;
+- o resto do `text-primary` do app no cartão escuro (4,39:1) e o vermelho da
+  v3 como texto no fundo `#F5F5F3` (4,2:1, como o "Ver histórico completo de
+  pedidos"): só a fila passou ao `--primary-texto`;
+- nas Movimentações, a primeira leitura ainda não tem a forma final (as
+  linhas-fantasma), e o rodapé diz "Exibindo 0 de 0 movimentações" enquanto
+  lê;
+- no convite, o "Link reenviado." continua um `role="status"` solto, e o
+  "Esqueci minha senha" da entrada não tem espera;
+- a trava cobre o anel de foco; o foco que é só cor de fundo (os itens dos
+  menus do Radix, com `outline-none` e `focus:bg-*`) continua sem contorno
+  nas cores forçadas;
+- o aceite num Android médio de verdade.

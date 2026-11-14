@@ -99,7 +99,7 @@ export function Segmented<T extends string>({ options, value, onChange, cheioNoC
           aria-pressed={value === option.value}
           onClick={() => onChange(option.value)}
           className={cn(
-            "h-full whitespace-nowrap rounded-sm px-3 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+            "h-full whitespace-nowrap rounded-sm px-3 text-sm font-medium transition-colors duration-150 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
             "max-md:rounded-md max-md:border-3 max-md:border-transparent max-md:bg-clip-padding max-md:px-2",
             cheioNoCelular && "max-sm:flex-1 max-sm:px-1",
             value === option.value ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",

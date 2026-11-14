@@ -86,7 +86,7 @@ export function ActiveCustomerSwitcher({
 
   const trigger = v3 ? (
     <DropdownMenuTrigger
-      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left outline-none transition-colors hover:bg-v3-header-foreground/10 focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80"
+      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left focus-visible:outline-hidden transition-colors hover:bg-v3-header-foreground/10 focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80"
       aria-label={rotulo}
       aria-disabled={isLoading || tentando || undefined}
       aria-busy={espera.visivel || undefined}
@@ -104,7 +104,7 @@ export function ActiveCustomerSwitcher({
     </DropdownMenuTrigger>
   ) : (
     <DropdownMenuTrigger
-      className="flex h-11 min-w-0 max-w-full items-center gap-2 rounded-lg px-1.5 text-sm font-bold text-v3-header-foreground outline-none focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80"
+      className="flex h-11 min-w-0 max-w-full items-center gap-2 rounded-lg px-1.5 text-sm font-bold text-v3-header-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80"
       aria-label={rotulo}
       aria-disabled={isLoading || tentando || undefined}
       aria-busy={espera.visivel || undefined}

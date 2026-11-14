@@ -205,8 +205,8 @@ describe("o Dialog em ação", () => {
   it("o anel do foco do X é o cheio, com o recuo, e só o ícone esmaece", async () => {
     await montar(<DialogoDoTeste ocupado={false} aoMudar={() => {}} />);
     const x = botao("Fechar", dialogo()!)!;
-    for (const classe of ["focus-visible:ring-ring", "focus-visible:ring-offset-2", "[&_svg]:opacity-70"]) expect(x.className, classe).toContain(classe);
-    expect(x.className).not.toMatch(/ring-ring\/\d+|(?:^|\s)opacity-70/);
+    for (const classe of ["focus-visible:ring-foco", "focus-visible:ring-offset-2", "[&_svg]:opacity-70"]) expect(x.className, classe).toContain(classe);
+    expect(x.className).not.toMatch(/ring-ring|(?:^|\s)opacity-70/);
   });
 
   it("os textos do diálogo em ação são os rótulos, e passa no axe parado e gravando", async () => {

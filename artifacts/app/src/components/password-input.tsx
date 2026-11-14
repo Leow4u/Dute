@@ -21,7 +21,7 @@ export function PasswordInput({ className, disabled, ...props }: Omit<ComponentP
         aria-controls={props.id}
         disabled={disabled}
         onClick={() => setVisible((current) => !current)}
-        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-md text-[var(--auth-text)] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-md text-[var(--auth-text)] transition-opacity hover:opacity-80 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco disabled:cursor-not-allowed disabled:opacity-50"
       >
         {visible ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
       </button>

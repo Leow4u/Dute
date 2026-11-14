@@ -244,7 +244,7 @@ export function BotaoReenviar({ acoes, person, className }: { acoes: AcoesDasPes
       disabled={reenvioBloqueado(acoes, person)}
       onClick={() => acoes.setResending(person)}
       className={cn(
-        "shrink-0 rounded text-sm font-bold text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:text-muted-foreground disabled:no-underline",
+        "shrink-0 rounded text-sm font-bold text-foreground underline underline-offset-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco disabled:text-muted-foreground disabled:no-underline",
         className,
       )}
     >

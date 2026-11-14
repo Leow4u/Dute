@@ -274,7 +274,7 @@ export function CampoConcluirView({
             </li>
           ))}
           <li>
-            <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-input bg-card text-xs font-semibold text-foreground focus-within:ring-2 focus-within:ring-ring/40">
+            <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-input bg-card text-xs font-semibold text-foreground focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco">
               <Camera aria-hidden="true" className="size-5 text-primary" />
               Tirar foto
               <input

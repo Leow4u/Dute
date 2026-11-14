@@ -170,7 +170,7 @@ function LineResolutionControls({
             aria-pressed={isActive}
             className={cn(
               "flex min-h-9 items-center justify-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-[background-color,border-color,color,box-shadow]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+              "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
               isActive
                 ? `${copy.className}`
                 : "border-border bg-card text-muted-foreground hover:bg-card",

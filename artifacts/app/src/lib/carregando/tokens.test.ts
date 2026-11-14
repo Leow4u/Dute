@@ -566,3 +566,61 @@ describe("o contraste dos tokens, no claro, na v3, no escuro e na TV", () => {
     }
   });
 });
+
+/**
+ * O anel do foco (parte 13h; WCAG 1.4.11 e 2.4.7). O --ring a 40% do Button e
+ * das peças que o copiavam tinha 1,91:1 no claro da v3 e 1,65:1 no escuro. O
+ * --foco é o anel cheio: 3:1 ou mais em toda superfície onde um foco aparece,
+ * em todos os contextos do app (a classe é a ring-foco, travada em
+ * trava.test.ts).
+ */
+describe("o anel do foco, em cada contexto", () => {
+  const temas = Object.fromEntries(Object.entries(CONTEXTOS).map(([nome, cadeia]) => [nome, tema(cadeia)]));
+  const SUPERFICIES = ["--background", "--card", "--popover", "--muted", "--secondary", "--primary-soft", "--sidebar"];
+
+  it("vira utilidade (ring-foco) e lê o --ring do contexto, também no .dark dentro da página", () => {
+    expect(variaveis("@theme inline").get("--color-foco")).toBe("hsl(var(--foco))");
+    for (const [nome, t] of Object.entries(temas)) expect(t.valor("--foco"), nome).toBe(t.valor("--ring"));
+  });
+
+  it("tem 3:1 ou mais no fundo, no cartão, no muted e na superfície escolhida", () => {
+    for (const [nome, t] of Object.entries(temas)) {
+      for (const fundo of SUPERFICIES) {
+        expect(contraste(t.cor("--foco"), t.cor(fundo)), `${nome} ${fundo}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it("o antigo, a 40% no cartão, ficava abaixo de 3:1 (o que a parte 13h corrige)", () => {
+    for (const nome of ["v3", "escuro"]) {
+      const t = temas[nome];
+      expect(contraste(sobre(t.cor("--ring"), t.cor("--card"), 0.4), t.cor("--card")), nome).toBeLessThan(2);
+    }
+  });
+});
+
+/**
+ * O primário como texto no cartão (o "Ver itens" da fila, parte 13h): 4,5:1
+ * em todos os contextos. O --primary do escuro, como texto, dava 4,4:1 no
+ * cartão.
+ */
+describe("o primário como texto, em cada contexto", () => {
+  const temas = Object.fromEntries(Object.entries(CONTEXTOS).map(([nome, cadeia]) => [nome, tema(cadeia)]));
+
+  it("vira utilidade (text-primary-texto): o próprio --primary no claro e na v3", () => {
+    expect(variaveis("@theme inline").get("--color-primary-texto")).toBe("hsl(var(--primary-texto))");
+    for (const nome of ["claro", "v3"]) expect(temas[nome].valor("--primary-texto"), nome).toBe(temas[nome].valor("--primary"));
+  });
+
+  it("tem 4,5:1 no cartão e no popover", () => {
+    for (const [nome, t] of Object.entries(temas)) {
+      for (const fundo of ["--card", "--popover"]) {
+        expect(contraste(t.cor("--primary-texto"), t.cor(fundo)), `${nome} ${fundo}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("o --primary do escuro, como texto no cartão, ficava abaixo de 4,5:1", () => {
+    expect(contraste(temas.escuro.cor("--primary"), temas.escuro.cor("--card"))).toBeLessThan(4.5);
+  });
+});

@@ -144,7 +144,7 @@ function ListaDoPortal({
             type="button"
             aria-expanded={verArquivados}
             onClick={onVerArquivados}
-            className="rounded text-sm font-bold text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="rounded text-sm font-bold text-foreground underline underline-offset-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
           >
             {`Arquivados · ${arquivados.length}`}
           </button>

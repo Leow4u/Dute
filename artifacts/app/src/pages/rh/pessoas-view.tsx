@@ -39,7 +39,7 @@ function Linha({ colaborador, primeira }: { colaborador: ColaboradorNoPainel; pr
     <li className={cn(!primeira && "border-t border-muted")}>
       <Link
         href={hrefDaFicha(colaborador.id)}
-        className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-3.5 gap-y-1.5 px-5 py-3.5 text-left outline-none transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-3.5 gap-y-1.5 px-5 py-3.5 text-left focus-visible:outline-hidden transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foco"
       >
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="text-base font-extrabold">{colaborador.nome}</span>

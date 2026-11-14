@@ -671,7 +671,7 @@ export function PaginaDoCliente(props: PaginaDoClienteProps) {
   return (
     <div className="flex flex-col gap-5">
       <nav aria-label="Caminho" className="flex items-center gap-1.5 text-sm font-bold text-muted-foreground">
-        <Link href={CUSTOMERS_PATH} className="rounded text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+        <Link href={CUSTOMERS_PATH} className="rounded text-foreground underline underline-offset-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco">
           Clientes
         </Link>
         <ChevronRight className="size-4" aria-hidden="true" />
@@ -696,7 +696,7 @@ export function ClienteNaoEncontrado() {
   return (
     <div className="flex flex-col gap-5">
       <nav aria-label="Caminho" className="flex items-center gap-1.5 text-sm font-bold">
-        <Link href={CUSTOMERS_PATH} className="rounded text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+        <Link href={CUSTOMERS_PATH} className="rounded text-foreground underline underline-offset-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco">
           Clientes
         </Link>
       </nav>

@@ -41,7 +41,7 @@ export const BotaoDoSino = forwardRef<HTMLButtonElement, BotaoDoSinoProps>(funct
       type="button"
       aria-label={rotuloDoSino(novos)}
       className={cn(
-        "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/80 outline-none transition-colors duration-200 hover:bg-card hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring",
+        "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/80 focus-visible:outline-hidden transition-colors duration-200 hover:bg-card hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-foco",
         className,
       )}
       {...props}
@@ -90,7 +90,7 @@ export function ListaDeAvisos({ avisos, erro, vistosAte, agora, onEscolher, tent
                 <Link
                   href={aviso.link}
                   onClick={onEscolher}
-                  className="flex gap-3 rounded-lg px-3 py-2.5 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex gap-3 rounded-lg px-3 py-2.5 focus-visible:outline-hidden transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-foco"
                 >
                   <span aria-hidden="true" className={cn("mt-1.5 size-2 shrink-0 rounded-full", novo ? "bg-primary" : "bg-transparent")} />
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">

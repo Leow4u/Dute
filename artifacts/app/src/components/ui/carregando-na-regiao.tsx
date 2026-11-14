@@ -95,7 +95,7 @@ export function CarregandoNaRegiao({
       tabIndex={onTentar ? -1 : undefined}
       data-carregando-na-regiao=""
       className={cn(
-        "flex min-h-6 flex-wrap items-center gap-x-3 gap-y-2 rounded outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+        "flex min-h-6 flex-wrap items-center gap-x-3 gap-y-2 rounded focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
         className,
       )}
     >

@@ -189,7 +189,7 @@ function CartaoDaOs({
           <button
             type="button"
             onClick={() => onAbrir(os)}
-            className="rounded text-sm font-semibold tabular-nums text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="rounded text-sm font-semibold tabular-nums text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
           >
             OS {os.numero}
           </button>

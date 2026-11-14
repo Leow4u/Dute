@@ -70,7 +70,7 @@ export function BotaoDeFoto({ rotulo, onFotos, variante = "outline" }: { rotulo:
   return (
     <label
       className={cn(
-        "inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold focus-within:ring-2 focus-within:ring-ring/40",
+        "inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco",
         variante === "primario" ? "bg-primary text-primary-foreground hover:bg-primary-hover" : "border border-border bg-card text-foreground hover:bg-muted",
       )}
     >

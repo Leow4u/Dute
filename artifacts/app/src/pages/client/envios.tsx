@@ -853,7 +853,7 @@ function InvoiceDrop({
                 aria-disabled={travaDoAnexo || undefined}
                 // 24 px de alvo (44 no celular, pelo ::before) e o anel cheio do foco, com o recuo (3:1).
                 className={cn(
-                  "relative inline-grid size-6 shrink-0 place-items-center rounded outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-md:before:absolute max-md:before:-inset-2.5 max-md:before:content-['']",
+                  "relative inline-grid size-6 shrink-0 place-items-center rounded focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco focus-visible:ring-offset-2 focus-visible:ring-offset-background max-md:before:absolute max-md:before:-inset-2.5 max-md:before:content-['']",
                   travaDoAnexo && "opacity-45",
                 )}
                 onClick={() => {

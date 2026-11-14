@@ -89,7 +89,7 @@ const TOM_OK = "border-success-soft-border bg-success-soft text-success-soft-for
 
 const ROTULO_DE_CAMPO = "block text-xs font-bold text-muted-foreground";
 const CAMPO_SELECT =
-  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
+  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
 
 /** Centavos em reais; o valor ainda não lido aparece como traço. */
 function reais(centavos: number | null): string {
@@ -308,7 +308,7 @@ function Painel({ linhas, painel, hoje, ocupado, omie = false, acoes }: AFaturar
               <label
                 key={via}
                 className={cn(
-                  "inline-flex min-h-10 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-bold focus-within:ring-2 focus-within:ring-ring/40",
+                  "inline-flex min-h-10 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-bold focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco",
                   form.via === via ? "border-foreground bg-muted text-foreground" : "border-border text-muted-foreground hover:text-foreground",
                 )}
               >

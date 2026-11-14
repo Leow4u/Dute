@@ -309,7 +309,7 @@ function WmsModuleSnapshot({
           {activeTask && activeQueue ? (
             <button
               type="button"
-              className="mt-2 flex w-full min-w-0 items-center justify-between gap-3 text-left text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+              className="mt-2 flex w-full min-w-0 items-center justify-between gap-3 text-left text-sm font-semibold text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
               onClick={() => onSelectTask(activeTask.id)}
             >
               <span className="truncate">
@@ -539,8 +539,8 @@ function PhysicalFlowMap({
                 <button
                   type="button"
                   className={cn(
-                    "soft-panel flex h-full min-h-[178px] w-full min-w-0 flex-col rounded-lg p-4 text-left outline-none transition-[border-color,box-shadow,background-color]",
-                    "focus-visible:ring-2 focus-visible:ring-ring/30",
+                    "soft-panel flex h-full min-h-[178px] w-full min-w-0 flex-col rounded-lg p-4 text-left transition-[border-color,box-shadow,background-color]",
+                    "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
                     activeTask && "cursor-pointer hover:border-primary/30",
                     isSelected &&
                       "border-primary/35 bg-primary/5",
@@ -638,8 +638,8 @@ function TaskListItem({
       role="button"
       tabIndex={0}
       className={cn(
-        "soft-panel flex min-w-0 cursor-pointer flex-col gap-3 rounded-lg p-4 outline-none transition-[border-color,box-shadow,background-color]",
-        "focus-visible:ring-2 focus-visible:ring-ring/30",
+        "soft-panel flex min-w-0 cursor-pointer flex-col gap-3 rounded-lg p-4 transition-[border-color,box-shadow,background-color]",
+        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
         isSelected && "border-primary/35 bg-primary/5",
         task.blocked_reason && "border-destructive/20 bg-destructive/5",
       )}
@@ -881,7 +881,7 @@ function BlockedTasksPanel({
                 type="button"
                 className={cn(
                   "min-w-0 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-left transition-[border-color,box-shadow,background-color]",
-                  "hover:border-destructive/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+                  "hover:border-destructive/35 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
                   selectedTaskId === task.id && "bg-destructive/10",
                 )}
                 onClick={() => onSelectTask(task.id)}

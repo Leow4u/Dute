@@ -102,7 +102,7 @@ function NotaParaAprovar({ nota, acoes, decidir }: { nota: NotaDoAgente } & Pick
         onChange={(evento) => setTexto(evento.target.value)}
         maxLength={TAMANHO_DA_NOTA}
         rows={2}
-        className="w-full resize-none rounded-md border border-border bg-card px-3 py-2 text-sm leading-6 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="w-full resize-none rounded-md border border-border bg-card px-3 py-2 text-sm leading-6 text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
       />
       <p className="text-sm text-muted-foreground">{origemDaNota(nota)}</p>
       <div className="flex flex-wrap items-center justify-between gap-2.5">

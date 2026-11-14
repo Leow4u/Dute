@@ -70,7 +70,7 @@ function LinhaCurta({ cartao, data }: { cartao: CartaoDoCampo; data: string }) {
   return (
     <Link
       href={hrefDaOsNoCampo(cartao.numero)}
-      className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+      className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 hover:bg-muted/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
     >
       <span className="flex w-14 shrink-0 flex-col items-center">
         <span className="text-xs text-muted-foreground">{data}</span>

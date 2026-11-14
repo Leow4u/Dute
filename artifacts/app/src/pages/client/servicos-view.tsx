@@ -147,7 +147,7 @@ function Linha({ os, cobranca, aberta, primeira, onAbrir }: { os: OsDoPortal; co
       aria-pressed={aberta}
       onClick={() => onAbrir(os.numero)}
       className={cn(
-        "grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-3.5 gap-y-1.5 px-5 py-3.5 text-left outline-none transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+        "grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-3.5 gap-y-1.5 px-5 py-3.5 text-left focus-visible:outline-hidden transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foco",
         !primeira && "border-t border-muted",
         aberta && "bg-info-soft",
       )}
@@ -338,7 +338,7 @@ function Formulario({ pedido, acoes }: { pedido: PedidoNaTela; acoes: ServicosVi
           </span>
         ))}
         {form.anexos.length < MAX_ANEXOS ? (
-          <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-semibold hover:bg-muted focus-within:ring-2 focus-within:ring-ring/40">
+          <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-semibold hover:bg-muted focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco">
             <Paperclip aria-hidden="true" className="size-4" />
             Anexar nota fiscal ou documento
             <input

@@ -18,7 +18,7 @@ export type CancelarRecebimentoDialogProps = {
 };
 
 const numero = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
-const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco disabled:opacity-50";
 
 /** Uma sessão por cliente/chegada: resposta de uma sessão anterior não altera a nova. */
 export function CancelarRecebimentoDialog(props: CancelarRecebimentoDialogProps) {

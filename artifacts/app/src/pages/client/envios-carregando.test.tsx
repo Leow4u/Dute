@@ -207,7 +207,7 @@ describe("a nota em leitura", () => {
     const remover = botao("Remover nota.pdf")!;
     expect(remover.className).toContain("size-6");
     expect(remover.className).toContain("max-md:before:-inset-2.5");
-    expect(remover.className).toContain("focus-visible:ring-ring");
+    expect(remover.className).toContain("focus-visible:ring-foco");
     expect(remover.className).toContain("focus-visible:ring-offset-2");
     expect(remover.className).not.toContain("ring-ring/40");
     expect(botao("Anexar outro")!.className).toContain("max-md:min-h-11");

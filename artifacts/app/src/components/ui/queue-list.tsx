@@ -96,10 +96,11 @@ export function ContagemQueRola({
 
 /**
  * O anel do título que recebe o foco quando a última linha sai com ele: o
- * mesmo do Button (o token --ring), só no foco visível.
+ * mesmo do Button (o token --foco, cheio, com o contorno das cores
+ * forçadas), só no foco visível.
  */
 const TITULO_FOCAVEL =
-  "rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  "rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 /** A lista na primeira leitura (carregamento v2, momento 2): as linhas-fantasma que o grupo mostra antes do dado. */
 export interface CarregandoDoGrupo {
@@ -538,7 +539,8 @@ export function QueueRow({
     <button
       type="button"
       onClick={onToggle}
-      className={cn("inline-flex items-center gap-1 text-xs font-medium text-primary", !aoLadoDoToggle && "mt-1.5")}
+      // O primário como texto: o --primary do escuro dava 4,4:1 no cartão (parte 13h).
+      className={cn("inline-flex items-center gap-1 text-xs font-medium text-primary-texto", !aoLadoDoToggle && "mt-1.5")}
     >
       {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
       {open ? "Esconder itens" : "Ver itens"}
@@ -567,7 +569,8 @@ export function QueueRow({
             {estadoDaLinha ?? (
               <>
                 {meta}
-                {age ? <span className="text-foreground/45"> · {age}</span> : null}
+                {/* A idade no tom do apoio, como na prancha: a 45% ela tinha 2,92:1 (parte 13h). */}
+                {age ? <span> · {age}</span> : null}
               </>
             )}
           </p>

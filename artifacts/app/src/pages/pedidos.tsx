@@ -865,7 +865,7 @@ export default function Pedidos() {
               empty={
                 <>
                   {ordersGroupEmpty("approve")}{" "}
-                  <Link href="/solicitacoes" className="font-semibold text-primary hover:underline">
+                  <Link href="/solicitacoes" className="font-semibold text-primary-texto hover:underline">
                     Ver solicitações
                   </Link>
                 </>
@@ -1489,7 +1489,7 @@ export function OrderRow({
         // (docs/mockups/WmsSepararListaCelular.dc.html).
         aoLadoDoToggle={
           volumes ? (
-            <Link href={volumes.verHref} className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+            <Link href={volumes.verHref} className="inline-flex items-center gap-1 text-xs font-medium text-primary-texto">
               <ChevronRight className="size-3.5" aria-hidden="true" />
               Ver volumes
             </Link>

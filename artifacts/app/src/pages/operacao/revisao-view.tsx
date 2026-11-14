@@ -127,7 +127,7 @@ function Opcoes({ id, rotulo, opcoes, valor, onValor }: { id: string; rotulo: st
         <label
           key={opcao}
           className={cn(
-            "inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm font-semibold focus-within:ring-2 focus-within:ring-ring/40",
+            "inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm font-semibold focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco",
             valor === opcao ? "border-foreground bg-muted text-foreground" : "border-border text-muted-foreground hover:text-foreground",
           )}
         >
