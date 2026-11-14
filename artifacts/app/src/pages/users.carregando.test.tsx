@@ -192,7 +192,13 @@ describe("a ação do menu na linha da pessoa", () => {
     const cancelar = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) => item.textContent === "Cancelar convite")!;
     await act(async () => cancelar.click());
     await esperar(() => estado.cancelamentos.length === 1, "o pedido de cancelamento");
-    await esperar(() => Boolean(linhaDe("Paula Souza")?.textContent?.includes("Cancelando o convite…")), "o gerúndio na linha");
+    // O gerúndio na linha e a caixa no ⋯ entram cada um no seu relógio de 300 ms: espera os dois, não um quadro entre eles.
+    await esperar(
+      () =>
+        Boolean(linhaDe("Paula Souza")?.textContent?.includes("Cancelando o convite…")) &&
+        linhaDe("Paula Souza")?.querySelector('button[aria-label="Cancelando o convite de Paula Souza"]')?.getAttribute("aria-busy") === "true",
+      "o gerúndio na linha e a caixa no ⋯",
+    );
     const linha = linhaDe("Paula Souza")!;
     expect(linha.textContent).toContain("Cancelando o convite…");
     expect(textosForaDaLista(linha.querySelector("[data-andamento-na-linha]")!.outerHTML, ["Cancelando o convite…"])).toEqual([]);

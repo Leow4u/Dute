@@ -216,7 +216,7 @@ function OnTheWayCard({ view }: { view: ShipmentView }) {
                 <span
                   className={cn(
                     "h-3 w-3 shrink-0 rounded-full border-2",
-                    done && "border-primary bg-primary",
+                    done && "border-primary-fundo bg-primary",
                     current && "border-primary bg-card ring-4 ring-primary/15",
                     !done && !current && "border-border bg-card",
                   )}

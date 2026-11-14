@@ -30,6 +30,7 @@ import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Esqueleto } from "@/components/ui/esqueleto";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
+import { avisoDoErroDaEscrita, useTentativaDaEscrita } from "@/lib/carregando/tentativa-da-escrita";
 import { OpeningLineCorrection } from "./opening-line-correction";
 import { OpeningConferenceSummary } from "./opening-conference-summary";
 import { ShelfPicker, eligibleShelfPositions, isCurrentShelfPreview } from "./shelf-picker";
@@ -773,21 +774,32 @@ export function OpeningInventoryWorkspace() {
     },
   });
 
+  // A caixa nasce com o código tirado do contador, e o recibo é pela chave (createWarehouseBox): com uma chave nova a
+  // cada toque, a repetição depois de um resultado incerto cadastrava a segunda caixa na mesma prateleira. A tentativa
+  // é a caixa, a prateleira e a recusa que a pessoa escolheu; o que vem do motor (o encaixe e a sugestão) vai no corpo
+  // da primeira e não muda a tentativa: perguntada de novo, depois de uma guarda que valeu, a mesma prateleira volta
+  // com a caixa empilhada sobre a nova (carregamento v2, parte 13k). Depois do resultado incerto, o botão da
+  // prateleira diz "Tentar de novo em A-03".
+  const tentativaDaCaixa = useTentativaDaEscrita();
+  const pedidoDaCaixa = (candidate: SlottingCandidate) => ({
+    customer_code: customerCode,
+    session_id: session?.session_id,
+    ...boxPayload,
+    location_id: candidate.code,
+    allow_tilt: allowTilt,
+    allow_stacking: allowStacking,
+    refusal,
+  });
   const createBox = useMutation<CreateBoxResult, Error, { candidate: SlottingCandidate }>({
     mutationFn: ({ candidate }) => {
       if (!boxPayload) {
         throw new Error("Informe comprimento, largura e altura da caixa em centímetros.");
       }
-      return fetchJson<CreateBoxResult>("/api/warehouse/boxes", {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({
-          customer_code: customerCode,
-          session_id: session?.session_id,
-          ...boxPayload,
-          location_id: candidate.code,
-          allow_tilt: allowTilt,
-          allow_stacking: allowStacking,
+      const pedido = pedidoDaCaixa(candidate);
+      return tentativaDaCaixa.enviar(
+        pedido,
+        () => ({
+          ...pedido,
           orientation: candidate.placement.orientation,
           support_box_code: candidate.placement.support_box_code ?? null,
           suggestion: automaticSuggestion
@@ -797,10 +809,14 @@ export function OpeningInventoryWorkspace() {
                 alternatives: automaticSuggestion.alternatives.map((item) => item.code),
               }
             : undefined,
-          refusal,
-          idempotency_key: crypto.randomUUID(),
         }),
-      });
+        (corpo) =>
+          fetchJson<CreateBoxResult>("/api/warehouse/boxes", {
+            method: "POST",
+            headers: JSON_HEADERS,
+            body: JSON.stringify(corpo),
+          }),
+      );
     },
     onSuccess: (result) => {
       const box = warehouseBoxFromRecord(result.box);
@@ -820,12 +836,7 @@ export function OpeningInventoryWorkspace() {
         description: "Caixa física cadastrada. Use Corrigir caixa para vincular os lançamentos existentes.",
       });
     },
-    onError: (error) =>
-      toast({
-        title: "Não consegui guardar a caixa",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      }),
+    onError: (error) => toast({ ...avisoDoErroDaEscrita(error, "Não consegui guardar a caixa"), description: getErrorMessage(error) }),
   });
 
   const removeBox = useMutation<unknown, Error, WarehouseBox>({
@@ -1230,6 +1241,9 @@ export function OpeningInventoryWorkspace() {
     });
   }
 
+  /** O rótulo da guarda na prateleira: depois do resultado incerto da caixa nova, "Tentar de novo em A-03". */
+  const rotuloDaGuarda = (candidate: SlottingCandidate, rotulo: string) =>
+    !currentBox && tentativaDaCaixa.repete(pedidoDaCaixa(candidate)) ? `Tentar de novo em ${candidate.code}` : rotulo;
   function confirmPosition(candidate: SlottingCandidate) {
     if (!activeSuggestion || boxBusy) return;
     if (putawayMode === "manual" && candidate.code !== manualLocation) return;
@@ -1522,7 +1536,7 @@ export function OpeningInventoryWorkspace() {
                               estado={guardandoEm === activeSuggestion.position.code ? "andamento" : "repouso"}
                               icone={<CheckCircle2 aria-hidden="true" />}
                               className="max-md:min-h-12"
-                              rotulo={`Confirmar guarda em ${activeSuggestion.position.code}`}
+                              rotulo={rotuloDaGuarda(activeSuggestion.position, `Confirmar guarda em ${activeSuggestion.position.code}`)}
                               andamento={`Guardando em ${activeSuggestion.position.code}…`}
                               bloqueado={guardandoEm !== activeSuggestion.position.code && boxBusy}
                               onClick={() => confirmPosition(activeSuggestion.position!)}
@@ -1549,7 +1563,7 @@ export function OpeningInventoryWorkspace() {
                                   title={`${alternative.reason} ${formatBoxPlacement(alternative.placement)}`}
                                   aria-describedby={`alternativa-${alternative.code}`}
                                   estado={guardandoEm === alternative.code ? "andamento" : "repouso"}
-                                  rotulo={`Guardar em ${alternative.code}`}
+                                  rotulo={rotuloDaGuarda(alternative, `Guardar em ${alternative.code}`)}
                                   andamento={`Guardando em ${alternative.code}…`}
                                   bloqueado={guardandoEm !== alternative.code && boxBusy}
                                   onClick={() => confirmPosition(alternative)}
@@ -2435,12 +2449,18 @@ export function ExistingCycleCountWorkspace() {
     parsedCount >= 0 &&
     reason.trim().length >= 3;
 
+  // A contagem com uma chave nova a cada toque gravava, na repetição depois de um resultado incerto, outra contagem e
+  // outro evento, e por cima do que mudou no saldo entre as duas. A tentativa guarda a chave e o corpo da primeira (o
+  // `occurred_at` dela) até o servidor responder ou recusar, ou até a pessoa mudar o formulário; a contagem que muda
+  // e volta ao valor de antes é outra (carregamento v2, parte 13k). Depois do resultado incerto, o botão diz "Tentar de
+  // novo" enquanto o pedido é o mesmo.
+  const tentativaDaContagem = useTentativaDaEscrita();
+  const pedidoDaContagem = { customerCode, clientCode, skuCode, productName, locationId, countedQty, unitCost, reason, reference };
   const cycleCount = useMutation<CycleCountResult, Error>({
     mutationFn: () =>
-      fetchJson<CycleCountResult>("/api/warehouse/cycle-counts", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+      tentativaDaContagem.enviar(
+        pedidoDaContagem,
+        () => ({
           customer_code: customerCode,
           sku_code: existingProduct?.skuCode || skuCode.trim(),
           client_item_code: existingProduct?.clientCode || clientCode.trim(),
@@ -2453,9 +2473,14 @@ export function ExistingCycleCountWorkspace() {
           reason: reason.trim(),
           reference: reference.trim() || undefined,
           occurred_at: new Date().toISOString(),
-          idempotency_key: crypto.randomUUID(),
         }),
-      }),
+        (corpo) =>
+          fetchJson<CycleCountResult>("/api/warehouse/cycle-counts", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(corpo),
+          }),
+      ),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
       queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
@@ -2474,11 +2499,7 @@ export function ExistingCycleCountWorkspace() {
       setReference("");
     },
     onError: (error) => {
-      toast({
-        title: "Não consegui registrar a contagem",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast({ ...avisoDoErroDaEscrita(error, "Não consegui registrar a contagem"), description: getErrorMessage(error) });
     },
   });
 
@@ -2630,7 +2651,8 @@ export function ExistingCycleCountWorkspace() {
                 type="submit"
                 estado={cycleCount.isPending ? "andamento" : "repouso"}
                 icone={<CheckCircle2 aria-hidden="true" />}
-                rotulo="Registrar contagem"
+                className="max-md:min-h-11"
+                rotulo={tentativaDaContagem.repete(pedidoDaContagem) ? "Tentar de novo" : "Registrar contagem"}
                 andamento="Registrando…"
                 bloqueado={!cycleCount.isPending && !canSubmit}
               />

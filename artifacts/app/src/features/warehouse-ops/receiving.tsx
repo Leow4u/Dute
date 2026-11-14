@@ -32,6 +32,8 @@ import { DialogCancelar } from "@/components/ui/dialog";
 import { useAnuncio } from "@/lib/carregando/anunciador";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { avisoDoErroDaEscrita, useTentativaDaEscrita } from "@/lib/carregando/tentativa-da-escrita";
+import { desfechoDoErro } from "@/lib/carregando/use-acao-na-linha";
 import {
   Card,
   CardContent,
@@ -785,16 +787,20 @@ export function UnplannedReceiptDialog({
       intent.current = { signature: draftSignature, payload: { ...draft, received_at: new Date().toISOString(), idempotency_key: crypto.randomUUID() } };
     }
     const submittedSession = session.current;
+    const submittedIntent = intent.current!;
     sending.current = true;
     setSubmitting(true);
     setSubmitError("");
     try {
-      await onCreate(intent.current!.payload);
+      await onCreate(submittedIntent.payload);
       if (mounted.current && session.current === submittedSession) {
         clearDraft();
         onOpenChange(false);
       }
     } catch (error) {
+      // A recusa do servidor encerra a intenção (nada foi gravado): o próximo envio revalida e leva chave nova. O
+      // resultado incerto a guarda, e a repetição manda o mesmo pedido (carregamento v2, parte 13k).
+      if (desfechoDoErro(error) === "recusado" && intent.current === submittedIntent) intent.current = null;
       if (mounted.current && session.current === submittedSession) setSubmitError(getErrorMessage(error));
     } finally {
       if (mounted.current && session.current === submittedSession) {
@@ -1448,6 +1454,22 @@ function LinhaConferida({
   );
 }
 
+/** As linhas da conferência como a ficha as traz: o físico só da linha já conferida, e sem a observação nem o código. */
+function linhasDaConferencia(items: NonNullable<WarehouseTask["items"]>) {
+  return items.map((item) => ({
+    id: item.id || "",
+    receivedQty:
+      typeof item.received_qty === "number" &&
+      ["ok", "short", "over", "divergent"].includes(normalizeStatus(item.conference_status))
+        ? String(item.received_qty)
+        : "",
+    location: item.location || "RECEBIMENTO",
+    unitCost: typeof item.unit_cost === "number" && item.unit_cost > 0 ? String(item.unit_cost) : "",
+    notes: "",
+    code: "",
+  }));
+}
+
 /** A chave da gravação da conferência da chegada: a ficha espera por ela para concluir a entrada. */
 export function chaveDaConferencia(taskId: string) {
   return ["salvar-conferencia", taskId] as const;
@@ -1463,45 +1485,24 @@ export function ReceivingConferenceSection({
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [lines, setLines] = useState(() =>
-    (task.items ?? []).map((item) => ({
-      id: item.id || "",
-      receivedQty:
-        typeof item.received_qty === "number" &&
-        ["ok", "short", "over", "divergent"].includes(
-          normalizeStatus(item.conference_status),
-        )
-          ? String(item.received_qty)
-          : "",
-      location: item.location || "RECEBIMENTO",
-      unitCost:
-        typeof item.unit_cost === "number" && item.unit_cost > 0
-          ? String(item.unit_cost)
-          : "",
-      notes: "",
-      code: "",
-    })),
-  );
+  const [lines, setLines] = useState(() => linhasDaConferencia(task.items ?? []));
+  // A releitura da ficha (o intervalo de 60 s do Receber, a volta da rede, o Atualizar) traz as linhas do servidor, mas
+  // não apaga o que só a pessoa tem: a observação e o código da etiqueta não voltam na ficha. Sem isso, a conferência
+  // que valeu sem resposta, relida, virava outro pedido (chave nova) e gravava de novo (carregamento v2, parte 13k).
+  // Outra chegada recomeça as linhas.
+  const chegadaDasLinhas = useRef(task.id);
   useEffect(() => {
-    setLines(
-      (task.items ?? []).map((item) => ({
-        id: item.id || "",
-        receivedQty:
-          typeof item.received_qty === "number" &&
-          ["ok", "short", "over", "divergent"].includes(
-            normalizeStatus(item.conference_status),
-          )
-            ? String(item.received_qty)
-            : "",
-        location: item.location || "RECEBIMENTO",
-        unitCost:
-          typeof item.unit_cost === "number" && item.unit_cost > 0
-            ? String(item.unit_cost)
-            : "",
-        notes: "",
-        code: "",
-      })),
-    );
+    const mesmaChegada = chegadaDasLinhas.current === task.id;
+    chegadaDasLinhas.current = task.id;
+    setLines((atuais) => {
+      const daFicha = linhasDaConferencia(task.items ?? []);
+      if (!mesmaChegada) return daFicha;
+      const digitadas = new Map(atuais.filter((linha) => linha.id).map((linha) => [linha.id, linha]));
+      return daFicha.map((linha) => {
+        const antes = digitadas.get(linha.id);
+        return antes ? { ...linha, notes: antes.notes, code: antes.code } : linha;
+      });
+    });
   }, [task.id, task.items]);
 
   const conferenceRows = (task.items ?? []).map((item, index) => {
@@ -1574,27 +1575,41 @@ export function ReceivingConferenceSection({
     );
   }
 
+  // A conferência com uma chave nova a cada toque gravava de novo, na repetição depois de um resultado incerto, as
+  // quantidades e o evento (a chegada já em conferência aceita outra). A tentativa é a chegada e as linhas que vão ao
+  // servidor, normalizadas (o custo 12,50 relido como 12,5 é o mesmo pedido); o corpo é o da primeira, com o status que
+  // a tela viu, e o servidor devolve o recibo dela, mesmo com a ficha relida (carregamento v2, parte 13k). Depois do
+  // resultado incerto, o botão diz "Tentar de novo" enquanto o pedido é o mesmo.
+  const tentativaDaConferencia = useTentativaDaEscrita();
+  const linhasParaGravar = lines
+    .filter((line) => line.id)
+    .map((line) => ({
+      inbound_item_id: line.id,
+      received_qty: Number(line.receivedQty),
+      location_id: line.location,
+      unit_cost: line.unitCost.trim() ? Number(line.unitCost) : undefined,
+      notes: line.notes || undefined,
+      client_item_code: line.code.trim() || undefined,
+    }));
+  const pedidoDaConferencia = { receiptId: receiptIdFromTask(task), lines: linhasParaGravar };
   const saveConference = useMutation<unknown, Error>({
     mutationKey: chaveDaConferencia(task.id),
-    mutationFn: () =>
-      fetchJson(`/api/warehouse/receipts/${encodeURIComponent(receiptIdFromTask(task))}/conference`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+    mutationFn: () => {
+      const { receiptId } = pedidoDaConferencia;
+      return tentativaDaConferencia.enviar(
+        pedidoDaConferencia,
+        () => ({
           expected_status: normalizeStatus(task.status),
-          idempotency_key: crypto.randomUUID(),
-          lines: lines
-            .filter((line) => line.id)
-            .map((line) => ({
-              inbound_item_id: line.id,
-              received_qty: Number(line.receivedQty),
-              location_id: line.location,
-              unit_cost: line.unitCost.trim() ? Number(line.unitCost) : undefined,
-              notes: line.notes || undefined,
-              client_item_code: line.code.trim() || undefined,
-            })),
+          lines: linhasParaGravar,
         }),
-      }),
+        (corpo) =>
+          fetchJson(`/api/warehouse/receipts/${encodeURIComponent(receiptId)}/conference`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(corpo),
+          }),
+      );
+    },
     onSuccess: () => {
       toast({
         title: "Conferência salva",
@@ -1608,11 +1623,7 @@ export function ReceivingConferenceSection({
       return queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
     },
     onError: (error) => {
-      toast({
-        title: "Não foi possível salvar a conferência",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast({ ...avisoDoErroDaEscrita(error, "Não foi possível salvar a conferência"), description: getErrorMessage(error) });
     },
   });
 
@@ -1642,7 +1653,8 @@ export function ReceivingConferenceSection({
               size="sm"
               estado={saveConference.isPending ? "andamento" : "repouso"}
               icone={<ClipboardCheck aria-hidden="true" />}
-              rotulo="Salvar conferência"
+              className="max-md:min-h-11"
+              rotulo={tentativaDaConferencia.repete(pedidoDaConferencia) ? "Tentar de novo" : "Salvar conferência"}
               andamento="Salvando…"
               bloqueado={!saveConference.isPending && (hasInvalidLine || concluindo)}
               onClick={() => saveConference.mutate()}

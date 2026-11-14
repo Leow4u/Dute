@@ -40,9 +40,27 @@ Sombra só em overlay (`shadow-lg` em diálogo e menu) e no painel flutuante
   `muted` para tipo e categoria.
 - `primary-texto` é o primário como texto no cartão (o "Ver itens" e o "Ver
   volumes" da fila): o próprio `primary` no claro; no escuro, mais claro
-  (6,3:1 no cartão), porque o azul do botão, como texto, dá 4,4:1. O branco
-  sobre o botão primário do escuro (4,3:1) está aberto
-  (`docs/plataforma/diagnostico-carregamento.md`, 10.5, parte 13h).
+  (6,3:1 no cartão), porque o azul do botão, como texto, dá 4,4:1.
+- `--primary-fundo` é o fundo do primário: o `bg-primary` o lê pelo
+  `--background-color-primary` do `@theme` (o namespace do fundo vem antes do
+  `--color-*`), sem classe nova, e o `text-primary`, a borda e o anel seguem
+  o `primary`. No claro e na v3, é o próprio `primary` (o vermelho da marca);
+  no escuro, o mesmo azul mais fundo (`#1869EC`), com 4,9:1 para o branco do
+  botão, que no `primary` tinha 4,3:1 (parte 13k; travado em
+  `lib/carregando/tokens.test.ts`). O hover e o toque do escuro descem junto;
+  na v3, o toque é o do hover (`#AD0015`), nunca o azul da raiz.
+  Fundo do primário com texto é sempre `bg-primary` com
+  `text-primary-foreground`: nunca `hsl(var(--primary))` à mão. O fundo cheio
+  com borda (o Checkbox marcado, as etapas) usa a `border-primary-fundo`, na
+  mesma variante do fundo: a `border-primary` em volta dele faz um aro mais
+  claro no escuro (travado em `lib/carregando/trava.test.ts`). A borda
+  sozinha (o campo com foco, o cartão escolhido) segue a `border-primary`.
+- `--destructive-fundo` é o fundo do destrutivo, como o do primário (revisão
+  da parte 13k): o `bg-destructive` (o toast de erro) o lê pelo
+  `--background-color-destructive`; no claro, o próprio `destructive`; no
+  escuro, o mesmo vermelho mais fundo (`#CA1F16`, 5,4:1 para o texto do
+  toast; o `destructive`, legível como texto, dava 3,3:1). O texto e a borda
+  do erro seguem o `destructive`; o toast usa a `border-destructive-fundo`.
 - `agent-*` é a identidade do Agent Dute (violeta).
 - `gender-fem-*` e `gender-masc-*` só no chip de gênero do Estoque do portal
   (FEM rosa, MASC azul-petróleo; `docs/mockups/PortalEstoqueGenero.dc.html`).
@@ -194,6 +212,29 @@ cliente fica `aria-disabled`.
 | `FalhaNaSecao` (`components/ui/falha-na-secao.tsx`) | A falha de uma parte da tela, na própria seção | A frase e "Tentar de novo" (44 px no celular). "Tentando de novo…" só na tentativa que a pessoa pediu, até a promessa da releitura acabar; o intervalo da tela não muda o botão. A frase é alerta sem nada lido; com o que já estava lido na tela (`alerta={false}`), fica escrita, sem falar. Quando a nova tentativa dá certo, o foco vai ao campo pedido (`focoAoSair`: a busca de onde a pessoa vinha) ou ao título da seção ou do diálogo, nunca ao `body` (também no `ErroNaLeitura` sem linha de estado). A leitura por trás fica na falha durante a nova tentativa (`useLeituraComFalha`), para o aviso não sair da tela com o foco nele |
 | `LeituraPendenteNaRegiao` (`components/ui/leitura-pendente.tsx`; `lib/carregando/leitura-pendente.ts`) | A lista do formulário que ainda não leu: os clientes do Novo orçamento, o catálogo da Nova demanda, os contatos da resposta do orçamento | Lendo, a `CarregandoNaRegiao` ("Carregando clientes…", aos 300 ms); na falha, a `FalhaNaSecao` com "Tentar de novo". O "Nenhum…" só com a leitura feita. O foco que estava na espera vai ao "Tentar de novo" da falha; quando a leitura chega, ao campo de onde a pessoa vinha (`focoAoSair`) |
 | Abertura (`#abertura` no `index.html`, `lib/abertura.ts`) | A entrada no app, até o perfil chegar | Preta nos dois temas, fora do `#root`, com a marca e a palavra embutidas e o trilho chanfrado aos 300 ms, sem texto visível. "Sem conexão" aos 3 s, "Demorando mais que o normal" e "Tentar de novo" aos 10 s, "Sem resposta" aos 70 s, na região de status dela, um aviso a cada 2 s. Na passagem para o app, o `Anunciador` espera os 2 s da última fala dela e não repete o "Sem conexão" que ela já disse. Sai pela `fecharAbertura()`: o trilho completa (200 ms) e tudo esmaece (260 ms). Enquanto ela cobre a tela, o `#root` fica inerte |
+
+**A chave por tentativa** (parte 13k): toda escrita leva a
+`idempotency_key` da tentativa, e o servidor guarda o recibo por ela. A
+repetição depois de um resultado incerto (sem conexão, sem resposta, a falha
+interna, o erro sem código) leva a mesma chave e o mesmo corpo da primeira,
+com a hora, o status e a revisão que ela viu: se a primeira valeu, o servidor
+devolve o recibo, e nada grava duas vezes. A chave é nova quando a escrita
+vale, quando o servidor recusa (o 4xx, os códigos de recusa de
+`desfechoDoErro`) ou quando a pessoa muda o pedido; só a última tentativa
+fica. Na linha, é o `useAcaoNaLinha`; no formulário, a
+`useTentativaDaEscrita` (`lib/carregando/tentativa-da-escrita.ts`), com o
+pedido (os campos como a pessoa os deixou) e o corpo montado só na primeira
+vez. O pedido é o que vai ao servidor, normalizado (o número, e não o texto
+do campo), sem o que vem do motor (o encaixe da caixa) nem o que a releitura
+muda; a releitura da ficha não apaga o que só a pessoa tem (a observação, o
+código da etiqueta). Depois do resultado incerto, a tela diz "Sem
+confirmação do servidor", sem o vermelho da recusa, e o botão diz "Tentar de
+novo" enquanto o pedido é o mesmo (`repete` e `avisoDoErroDaEscrita`), com
+44 px no celular; a recusa diz que não gravou, e o botão volta ao rótulo
+dele. Nunca `crypto.randomUUID()` a cada toque, nem a escrita sem chave que a
+rota completa com uma nova. A transição que confere o status atual no
+servidor (resolver a exceção, concluir o inventário) já recusa a repetição e
+não precisa dela.
 
 **As listas na primeira leitura** (`QueueGroup` com `count={null}` e
 `carregando`, momento 2): Pedidos e Receber nascem com a forma final. Desde 0
