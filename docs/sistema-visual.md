@@ -67,6 +67,20 @@ crítico e o halo claro do campo cujo foco é a borda cheia
 (`focus-visible:border-primary`). Trava em `lib/carregando/trava.test.ts`; o
 contraste do token, em `lib/carregando/tokens.test.ts`.
 
+**O foco sem anel** também se vê (revisão da parte 13h). O contorno do
+navegador só sai de cena com outro sinal no mesmo lugar: o anel, a borda
+cheia (`focus-visible:outline-hidden focus-visible:border-primary`; a 40%,
+50% ou 60%, ela fica abaixo de 3:1) ou, nos itens dos menus do Radix e do
+cmdk, o fundo realçado com `focus:outline-hidden`. Nunca o `outline-none`,
+que o tira também das cores forçadas, e nunca o `outline-hidden` sem a
+variante do foco, que lá desenha o contorno em todo item. O campo sem
+moldura dentro de uma caixa mostra o foco na caixa (`focus-within`), e os
+títulos que recebem o foco do código, o anel do título da fila. Na barra de
+baixo do celular, o anel vai por dentro (`ring-inset`). No `index.css`,
+nenhum `:focus-visible` apaga o contorno: a capa de entrada usa o
+transparente (`outline: 2px solid transparent`). A trava lista os que mostram
+o foco em outro lugar, com o porquê.
+
 ## Celular (abaixo de 768px)
 
 - Navegação pela barra inferior (`MobileTabBar`): até quatro destinos fixos
@@ -257,8 +271,18 @@ sem os comentários e os testes) e reprova, com a lista do que achou,
 `animate-spin` fora do `Spinner`, `animate-pulse` fora do `Esqueleto` e do
 `Skeleton`, e "..." de três pontos em qualquer texto; no `index.css`, o
 `@apply` e a `animation` com `spin` ou `pulse`. Sem exceções. Reprova também
-o anel do foco apagado (ver "Botões"). Botão que grava é o `BotaoDeAcao`;
-leitura sem a forma da lista, a `CarregandoNaRegiao`.
+o anel do foco apagado e o foco sem sinal (ver "Botões"). Botão que grava é o
+`BotaoDeAcao`; leitura sem a forma da lista, a `CarregandoNaRegiao`, que
+reserva a linha dentro do recuo de quem a usa (`box-content`).
+
+**Na capa de entrada** (`.auth-cover`, sempre escura, nos dois temas), a
+tinta e o aviso da espera são os dela: a capa relê o `--carregando-cor` (o
+texto dela) e o `--carregando-aviso` (o âmbar do escuro), e o toque dos
+botões escuros é o fundo do hover dela. Peça de espera que pinta com cor
+própria usa a tinta da espera (`text-carregando-cor`), nunca o
+`text-foreground`, que na capa é a tinta do tema claro (1,31:1 no cartão).
+Os controles da capa têm 44 px, e o branco do botão principal fica sobre o
+`--auth-accent-fundo` (4,95:1).
 
 **Conexão** (`lib/carregando/estado-da-conexao.ts`, momento 8): um estado só
 para o app. Com o aparelho conectado e o servidor sem resposta (a leitura que

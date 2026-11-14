@@ -3630,5 +3630,116 @@ Fica aberto:
   "Esqueci minha senha" da entrada não tem espera;
 - a trava cobre o anel de foco; o foco que é só cor de fundo (os itens dos
   menus do Radix, com `outline-none` e `focus:bg-*`) continua sem contorno
-  nas cores forçadas;
+  nas cores forçadas (a revisão abaixo resolveu);
 - o aceite num Android médio de verdade.
+
+**A revisão da parte 13h (14/11/2026).** Três revisões (a lógica e o tempo,
+a tela no Chromium e o leitor de tela) acharam o que a parte deixou; cada
+achado foi reproduzido e corrigido com o teste que falha antes:
+
+- **A capa de entrada é escura também para a espera.** A entrada e o convite
+  moram na capa (`.auth-cover`), sempre escura, mas as peças do carregamento
+  leem os tokens do tema. No claro, que é o tema padrão, "Conferindo seu
+  convite…" e a caixa saíam em `#1F2A3D` sobre o cartão `#101112` (1,31:1;
+  antes da parte, o texto solto tinha 3,59:1), e o "Reenviando…", a 1,12:1.
+  A capa relê a tinta e o aviso da espera (`--carregando-cor`, o texto dela,
+  e `--carregando-aviso`, o âmbar do escuro), e a `CarregandoNaRegiao` pinta
+  a caixa e o rótulo com a tinta da espera (`text-carregando-cor`), que fora
+  da capa é o `--foreground` de sempre. O toque dos botões escuros da capa é
+  o fundo do hover dela: antes, de 0 a 300 ms, o "Reenviar e-mail" ficava com
+  o `#E4E7EC` sob o texto claro, e o "Já confirmei" piscava azul cheio.
+- **O convite.** A leitura tem a saída da seção 3: aos 10 s, "Tentar de
+  novo", que lê o convite de novo; aos 70 s, "Sem resposta do servidor." com
+  "Tentar de novo". Antes, a espera não acabava. O envio do e-mail que segue
+  o "Aceitar convite" é a espera do "Reenviar e-mail", que diz "Enviando…",
+  com `aria-busy`: antes, a tela "Confirme seu e-mail" esperava o envio sem
+  sinal nenhum, com os dois botões travados em repouso. E, quando a tela
+  troca (o "Aceitar convite", o "Já confirmei" que confirmou, o "Sair e
+  continuar com o convite"), o foco que estava nela vai ao título da capa, e
+  não ao `body`.
+- **A capa no celular e nas cores forçadas.** Os campos e os botões têm 44
+  px (eram 42), e o "Esqueci minha senha", 44 (era 20). O branco do "Entrar"
+  e do "Aceitar convite" fica sobre o acento mais fundo
+  (`--auth-accent-fundo`, `#1D6AE5`, 4,95:1; no `#3F8CFF`, 3,28:1); como
+  texto e borda no cartão, o acento continua o `#3F8CFF`. O campo com o foco
+  tem o contorno transparente, que nas cores forçadas o sistema pinta: a
+  regra da capa com `outline: none` vencia o `outline-hidden`, e lá só
+  sobravam o cursor e a borda.
+- **O foco sem anel.** A trava só via a classe com a cor de um anel, e o
+  foco feito de outro jeito escapava. Agora ela reprova também, com a lista:
+  o `outline-none` em qualquer classe; a borda do foco translúcida (a 40%,
+  50% ou 60%, abaixo de 3:1); o `outline-hidden` sem a variante do foco (nas
+  cores forçadas, o contorno ficaria sempre); e quem esconde o contorno sem
+  outro sinal no mesmo lugar (o anel, a borda cheia ou, nos itens dos menus
+  do Radix e do cmdk, o fundo realçado). Os que mostram o foco em outro
+  lugar estão numa lista curta, com o porquê: o campo sem moldura dentro da
+  caixa que acende com o foco de dentro e os painéis que passam o foco para
+  dentro. No `index.css`, nenhum `:focus-visible` apaga o contorno. O que
+  ela achou foi corrigido: o menu lateral (os links do portal, o da área
+  interna, o "Recolher menu" e a conta), que não mudava um pixel com o foco,
+  e a barra de baixo do celular, só com o fundo, ganharam o anel; os campos
+  do Agent Dute, do Envios e do Início do portal ganharam a borda cheia; a
+  quantidade do pedido do Agent Dute, o anel por dentro; os itens dos menus,
+  o contorno das cores forçadas no item com foco; o painel das abas e os
+  títulos que recebem o foco do código, o anel do título da fila.
+- **As Movimentações.** A `CarregandoNaRegiao` reserva a linha dentro do
+  recuo de quem a usa (`box-content`): com o `py-8`, a região tinha 64 px e
+  ia a 88 quando a caixa entrava, e o rodapé descia 24 px aos 300 ms (o
+  mesmo no sino, no pedido separado, no romaneio, na separação, nas pessoas
+  do cliente e nas notificações). No celular, a demora que quebra a linha
+  fica centralizada, como a primeira. A nova tentativa que falha leva o foco
+  ao "Tentar de novo" da falha que entra no lugar, e não à linha de estado,
+  ainda vazia (em toda região e falha, pelo `useFocoAoSair`). O cabeçalho da
+  tabela vai no tom do apoio (a tinta a 50% tinha 3,4:1), o código do
+  produto no `--primary-texto` (4,38:1 no escuro), e o "Tipo de
+  Movimentação" do diálogo Registrar tem nome (o rótulo não apontava para o
+  campo).
+- **Os textos e o axe** da demora e da desistência do convite e das
+  Movimentações e do diálogo Registrar, em repouso e registrando, estão nos
+  testes das telas.
+- **No Chromium** (harness com a API falsa, só 127.0.0.1):
+  - "Conferindo seu convite…" e a caixa em `#F7F8F8` sobre `#101112`, nos
+    dois temas; o "Reenviando…", 15,2:1. O axe no convite lendo não acusa
+    nada (antes, o contraste de 1,31:1). Aos 11 s, a pílula da demora com
+    6,2:1 e o "Tentar de novo" em `#F8CD77`, 12,6:1; aos 72 s, "Sem resposta
+    do servidor." com "Tentar de novo". O toque pelo teclado deixa o foco na
+    região e, quando o convite chega, no título "Aceitar convite";
+  - nas três trocas de tela do convite, o foco vai ao título (antes, ao
+    `body`);
+  - a 390 px, todos os controles da capa com 44 px; o "Entrando…" com
+    4,95:1; nas cores forçadas, o campo de e-mail com o contorno sólido de 2
+    px (antes, nenhum);
+  - o Tab no menu do portal: os dez links e a conta mudam cerca de 1.270
+    pixels com o foco, 5,25:1 no claro e 4,6:1 no escuro, e o contorno
+    sólido de 2 px nas cores forçadas (antes, nenhum pixel nos três modos).
+    A "Nova anotação": a borda com 3,62:1 no claro e 3,01:1 no escuro (antes,
+    1,6:1 e 1,27:1) e o contorno nas cores forçadas (antes, só o cursor);
+  - as Movimentações com a API em 1,6 s: a região tem 88 px desde o começo,
+    e o rodapé fica em y=329 quando a caixa entra (antes, de 305 a 329, com o
+    `layout-shift` aos 564 ms); a 390 px, a demora fica no meio, com 55 px de
+    cada lado (antes, à esquerda). Lidas, o axe não acusa nada no claro
+    (antes, o cabeçalho); no escuro, só o branco sobre o primário (aberto);
+  - com o react-query de verdade, a nova tentativa que falha termina com o
+    foco no "Tentar de novo" da falha (antes, na linha de estado vazia), e o
+    convite com o envio pendurado diz "Enviando…", com `aria-busy`.
+- **Testes**: contra o código da parte, 16 dos 75 testes dos sete arquivos
+  com testes novos falham; os que passam são o que já valia (o foco que vai
+  à linha de estado quando a lista chega, a troca de tela sem o foco nela, a
+  regra da trava). A suíte do app fica em 474 arquivos e 5.355 testes
+  (antes, 473 e 5.335).
+
+Fica aberto:
+
+- o controle travado (o `BotaoDeAcao` bloqueado a 0,45, a paginação
+  indisponível a 0,5) leva o anel junto na opacidade: 2,07:1 no claro e
+  1,81:1 no escuro no "Dividir em volumes" com o peso inválido. O 1.4.11
+  isenta o componente inativo, e o foco continua visível; separar o anel da
+  opacidade pede outro desenho do travado;
+- na capa, aos 70 s, a desistência é o cartão claro do `ErroNaLeitura`, com
+  o texto em linhas curtas;
+- no celular, aos 10 s, a demora das Movimentações quebra a linha e empurra o
+  rodapé 64 px: é o aviso que entra;
+- seguem abertos o branco sobre o primário do escuro, o resto do
+  `text-primary` no cartão escuro, a forma final da primeira leitura das
+  Movimentações, o "Link reenviado." solto, o "Esqueci minha senha" sem
+  espera e o aceite num Android médio de verdade.
