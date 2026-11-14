@@ -197,7 +197,6 @@ describe("Pedidos › Lista de separação", () => {
 
   it("carregando, pedido não encontrado e erro: a mensagem no lugar da folha, com Imprimir desligado", () => {
     for (const [estado, mensagem] of [
-      ["carregando", "Carregando"],
       ["nao_encontrado", "Pedido não encontrado"],
       ["erro", "Não foi possível carregar o pedido."],
     ] as const) {
@@ -231,5 +230,15 @@ describe("Pedidos › Lista de separação", () => {
     expect(await violacoesDeAcessibilidade(render("pronto", FOLHA))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render("nao_encontrado", null))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render("erro", null))).toEqual([]);
+  });
+});
+
+describe("a lista de separação carregando (carregamento v2, parte 13c)", () => {
+  it("a espera em bloco no lugar da folha, sem o \"Carregando\" seco, e Imprimir desligado", async () => {
+    const html = render("carregando", null);
+    expect(textosDaTela(html)).toEqual(["Pedidos", "Lista de separação", "Imprimir"]);
+    expect(html).toContain("data-carregando-na-regiao");
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*Imprimir<\/button>/s);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });

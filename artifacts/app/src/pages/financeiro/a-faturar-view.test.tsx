@@ -14,7 +14,8 @@ import {
   type LinhaAFaturar,
 } from "@/lib/financeiro/a-faturar";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { textosVisiveis } from "@/test/botoes";
+import { textosForaDaLista } from "@/test/textos";
 
 import { AFaturarView, type AFaturarViewProps } from "./a-faturar-view";
 
@@ -149,8 +150,10 @@ const FECHADO = { aberto: false, marcadas: [], form: formInicial(HOJE, null), re
 
 describe("A faturar", () => {
   it("sem legenda: a fila, o painel e as que esperam só têm rótulos, dados e ações", () => {
-    expect(textosDaTela(render())).toEqual(["A faturar", ...PRONTAS, ...PAINEL, ...ESPERANDO]);
+    expect(textosVisiveis(render())).toEqual(["A faturar", ...PRONTAS, ...PAINEL, ...ESPERANDO]);
     const permitidos = [
+      // O gerúndio e o "Conferir" do BotaoDeAcao, nas camadas escondidas; o "—" da contagem na falha e o "Tentar de novo" (parte 13g).
+      /^(Registrando a NF…|Emitindo pela Omie…|Conferir)$/,
       "A faturar",
       "Prontas para faturar",
       "Esperando",
@@ -175,7 +178,7 @@ describe("A faturar", () => {
     expect(html).toMatch(/^<div class="v3 /);
     const principais = html.match(PRINCIPAL) ?? [];
     expect(principais).toHaveLength(1);
-    expect(textosDaTela(principais[0] ?? "")).toEqual(["Registrar NF"]);
+    expect(textosVisiveis(principais[0] ?? "")).toEqual(["Registrar NF"]);
   });
 
   it("com uma demanda do Itaú marcada, só as prontas do Itaú têm caixa; a do Safra espera outra NF", () => {
@@ -186,7 +189,7 @@ describe("A faturar", () => {
     expect(caixa("10046")).toContain('aria-checked="false"');
     const painel = secao(render(), "Registrar NF");
     expect(painel).toContain('aria-label="Tirar 10045 – RV02"');
-    expect(textosDaTela(painel)).toContain("R$ 12.345,00");
+    expect(textosVisiveis(painel)).toContain("R$ 12.345,00");
     // A que espera nunca tem caixa.
     expect(secao(render(), "Esperando")).not.toContain("Incluir");
   });
@@ -202,24 +205,30 @@ describe("A faturar", () => {
     const html = render({ painel: { ...FECHADO, resultado: "NF 1234 registrada: 1 demanda faturada · R$ 12.345,00" } });
     expect(html).not.toContain("Incluir");
     expect(html.match(PRINCIPAL) ?? []).toHaveLength(0);
-    const textos = textosDaTela(html);
+    const textos = textosVisiveis(html);
     expect(textos.slice(0, 3)).toEqual(["A faturar", "Registrar NF", "NF 1234 registrada: 1 demanda faturada · R$ 12.345,00"]);
-    expect(html).toMatch(/<div role="status"[^>]*>[\s\S]*NF 1234 registrada/);
+    // Sem região viva solta: a confirmação fica escrita, e quem fala é o toast, uma vez (revisão da parte 13g).
+    expect(html).not.toContain('role="status"');
+    expect(html).toMatch(/<div class="[^"]*bg-success-soft[^"]*"[^>]*>[\s\S]*NF 1234 registrada/);
   });
 
   it("carregando, erro e fila vazia dizem o que é, sem botão de registrar", () => {
-    expect(textosDaTela(render({ estado: "carregando", linhas: [], painel: FECHADO }))).toEqual(["A faturar", "Prontas para faturar", "0", "Carregando..."]);
-    expect(textosDaTela(render({ estado: "erro", linhas: [], painel: FECHADO }))).toEqual(["A faturar", "Prontas para faturar", "0", "Não foi possível carregar a fila."]);
-    expect(textosDaTela(render({ linhas: [], painel: FECHADO }))).toEqual(["A faturar", "Prontas para faturar", "0", "Nada a faturar"]);
+    // Lendo: nada escrito antes de 300 ms, e a contagem é o bloco, nunca o zero; na falha, "—" e "Tentar de novo" (parte 13g).
+    const lendo = render({ estado: "carregando", linhas: [], painel: FECHADO });
+    expect(textosVisiveis(lendo)).toEqual(["A faturar", "Prontas para faturar"]);
+    expect(lendo).toContain("data-carregando-na-regiao");
+    expect(lendo).toMatch(/data-esqueleto=""[^>]*data-forma="contagem"/);
+    expect(textosVisiveis(render({ estado: "erro", linhas: [], painel: FECHADO }))).toEqual(["A faturar", "Prontas para faturar", "—", "Não foi possível carregar a fila.", "Tentar de novo"]);
+    expect(textosVisiveis(render({ linhas: [], painel: FECHADO }))).toEqual(["A faturar", "Prontas para faturar", "0", "Nada a faturar"]);
   });
 
   it("a busca filtra as prontas e as que esperam", () => {
-    const textos = textosDaTela(render({ busca: "safra", painel: FECHADO }));
+    const textos = textosVisiveis(render({ busca: "safra", painel: FECHADO }));
     expect(textos).toContain("10060");
     expect(textos).toContain("10050");
     expect(textos).not.toContain("10046");
     expect(textos).not.toContain("10047 – RV02");
-    expect(textosDaTela(render({ busca: "nada assim", painel: FECHADO }))).toContain("Nada encontrado");
+    expect(textosVisiveis(render({ busca: "nada assim", painel: FECHADO }))).toContain("Nada encontrado");
   });
 
   it("passa nas regras WCAG 2.1 A e AA do axe, com o painel aberto e fechado", async () => {
@@ -232,10 +241,10 @@ describe("A faturar", () => {
       competenciaDoFinanceiro("ITAU__2026-09", { customer_code: "ITAU", competencia: "2026-09", status: "emitido", emitido_em: "2026-10-02T12:00:00.000Z", invoice_snapshot: { total_cents: 750_800 } })!,
     );
     const html = render({ linhas: [...LINHAS, armazenagem], painel: { ...props().painel, marcadas: ["10045", "ITAU__2026-09"] } });
-    const prontas = textosDaTela(secao(html, "Prontas para faturar"));
+    const prontas = textosVisiveis(secao(html, "Prontas para faturar"));
     expect(prontas.slice(0, 3)).toEqual(["Prontas para faturar", "4", "R$ 22.853,00"]);
     expect(prontas).toEqual(expect.arrayContaining(["Itaú Unibanco", "3", "R$ 22.353,00", "Armazenagem 09/2026", "Fatura do WMS · Emitida na Armazenagem", "R$ 7.508,00", "21 dias"]));
-    const painel = textosDaTela(secao(html, "Registrar NF"));
+    const painel = textosVisiveis(secao(html, "Registrar NF"));
     expect(painel).toEqual(expect.arrayContaining(["Na NF", "2", "Armazenagem 09/2026", "R$ 7.508,00", "R$ 19.853,00"]));
     expect(html).toContain('aria-label="Tirar Armazenagem 09/2026"');
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
@@ -250,33 +259,35 @@ describe("A faturar com a NFS-e pela Omie (parte 7.4e)", () => {
 
   it("o painel escolhe a via; pela Omie, só o vencimento, a forma e a observação, e a ação é Emitir pela Omie", () => {
     const painel = secao(omie(), "Faturar");
-    const textos = textosDaTela(painel);
+    const textos = textosVisiveis(painel);
     expect(textos.slice(0, 6)).toEqual(["Faturar", "Cliente", "Itaú Unibanco", "Como a NF sai", "Pela Omie", "Emitida fora"]);
     for (const fora of ["Número da NF", "Série", "Emissão"]) expect(textos).not.toContain(fora);
     expect(painel).toMatch(/id="nf-vencimento"[^>]*min="2026-10-23"|min="2026-10-23"[^>]*id="nf-vencimento"/);
     const principais = omie().match(PRINCIPAL) ?? [];
     expect(principais).toHaveLength(1);
-    expect(textosDaTela(principais[0] ?? "")).toEqual(["Emitir pela Omie"]);
+    expect(textosVisiveis(principais[0] ?? "")).toEqual(["Emitir pela Omie"]);
   });
 
   it("emitida fora (o CT-e), o painel volta a pedir a NF e a ação é Registrar NF", () => {
     const html = omie({ ...pelaOmie, via: "fora", numero: "77" });
-    const textos = textosDaTela(secao(html, "Faturar"));
+    const textos = textosVisiveis(secao(html, "Faturar"));
     for (const campo of ["Número da NF", "Série", "Emissão", "Vencimento"]) expect(textos).toContain(campo);
-    expect(textosDaTela((html.match(PRINCIPAL) ?? [])[0] ?? "")).toEqual(["Registrar NF"]);
+    expect(textosVisiveis((html.match(PRINCIPAL) ?? [])[0] ?? "")).toEqual(["Registrar NF"]);
   });
 
   it("a demanda reservada espera Na emissão da NFS-e, sem caixa; fechado, o cabeçalho abre Faturar", () => {
     const esperando = secao(omie(), "Esperando");
-    expect(textosDaTela(esperando)).toContain("Na emissão da NFS-e");
+    expect(textosVisiveis(esperando)).toContain("Na emissão da NFS-e");
     expect(esperando).not.toContain("Incluir");
     const fechado = render({ omie: true, painel: FECHADO });
-    expect(textosDaTela(fechado)).toContain("Faturar");
+    expect(textosVisiveis(fechado)).toContain("Faturar");
     expect(fechado.match(PRINCIPAL) ?? []).toHaveLength(0);
   });
 
   it("sem legenda e no axe, pela Omie e emitida fora", async () => {
     const permitidos = [
+      // O gerúndio e o "Conferir" do BotaoDeAcao, nas camadas escondidas; o "—" da contagem na falha e o "Tentar de novo" (parte 13g).
+      /^(Registrando a NF…|Emitindo pela Omie…|Conferir)$/,
       "A faturar",
       "Prontas para faturar",
       "Esperando",
@@ -362,7 +373,7 @@ describe("a medição aprovada em A faturar (pergunta 64)", () => {
   it("a medição é uma linha pelo total aprovado; no painel, a NF linha por linha; a que espera diz a demanda pendente", async () => {
     const html = comMedicao(["ctr_safra_2026-10"]);
     // Sem repetir: o total do grupo e o da linha são o mesmo texto.
-    expect(textosDaTela(secao(html, "Prontas para faturar"))).toEqual([
+    expect(textosVisiveis(secao(html, "Prontas para faturar"))).toEqual([
       "Prontas para faturar",
       "1",
       "R$ 41.200,00",
@@ -372,7 +383,7 @@ describe("a medição aprovada em A faturar (pergunta 64)", () => {
       "3 demandas e equipe fixa",
       "2 dias",
     ]);
-    const painel = textosDaTela(secao(html, "Registrar NF"));
+    const painel = textosVisiveis(secao(html, "Registrar NF"));
     expect(painel.slice(painel.indexOf("Na NF"))).toEqual([
       "Na NF",
       "1",
@@ -393,7 +404,7 @@ describe("a medição aprovada em A faturar (pergunta 64)", () => {
       "Total da NF",
       "Cancelar",
     ]);
-    expect(textosDaTela(secao(html, "Esperando"))).toEqual([
+    expect(textosVisiveis(secao(html, "Esperando"))).toEqual([
       "Esperando",
       "1",
       "Medição 09/2026",
@@ -403,6 +414,8 @@ describe("a medição aprovada em A faturar (pergunta 64)", () => {
       "Demanda pendente",
     ]);
     const permitidos = [
+      // O gerúndio e o "Conferir" do BotaoDeAcao, nas camadas escondidas; o "—" da contagem na falha e o "Tentar de novo" (parte 13g).
+      /^(Registrando a NF…|Emitindo pela Omie…|Conferir)$/,
       "A faturar",
       "Prontas para faturar",
       "Esperando",

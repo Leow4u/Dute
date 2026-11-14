@@ -2,7 +2,14 @@ import type { ReactNode } from "react";
 import { formatarReais } from "@workspace/dominio";
 import { AlertTriangle, Check, Clock, FileText, Plus, Search, X } from "lucide-react";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { DialogCancelar } from "@/components/ui/dialog";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
+import { NumeroLido } from "@/components/ui/numero-lido";
+import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -81,6 +88,10 @@ export type AutorizacoesViewProps = {
   hoje: string;
   /** Uma gravação em andamento: as ações esperam. */
   ocupado: boolean;
+  /** A nova tentativa da leitura da fila (parte 13g). */
+  leitura?: NovaTentativa;
+  /** A nova tentativa da leitura das autorizadas a faturar. */
+  leituraDasAutorizadas?: NovaTentativa;
   acoes: AcoesDasAutorizacoes;
   /** Telas do Comercial que já existem (barra de abas); o padrão é a do app. */
   telas?: readonly string[];
@@ -127,11 +138,14 @@ function Vazio({ children }: { children: ReactNode }) {
   return <p className="px-5 py-7 text-center text-sm font-bold text-muted-foreground">{children}</p>;
 }
 
-/** Conferência e confirmação: verde quando confere, âmbar quando diverge. */
+/**
+ * Conferência e confirmação: verde quando confere, âmbar quando diverge. Fica
+ * escrita, sem região viva solta: quem fala é o Anunciador (parte 13g).
+ */
 function Caixa({ tom, children }: { tom: "ok" | "diverge"; children: ReactNode }) {
   const Icone = tom === "ok" ? Check : AlertTriangle;
   return (
-    <div role="status" className={cn("flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm font-bold", tom === "ok" ? TOM_OK : TOM_ESPERANDO)}>
+    <div className={cn("flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm font-bold", tom === "ok" ? TOM_OK : TOM_ESPERANDO)}>
       <Icone aria-hidden="true" className="size-4.5 shrink-0" />
       {children}
     </div>
@@ -201,13 +215,15 @@ function Linha({
   );
 }
 
-function Fila({ estado, linhas, filtro, busca, painel, acoes, marcando }: AutorizacoesViewProps & { marcando: boolean }) {
+function Fila({ estado, linhas, filtro, busca, painel, acoes, marcando, leitura = SEM_NOVA_TENTATIVA }: AutorizacoesViewProps & { marcando: boolean }) {
   const contagem = contarPorFaixa(linhas, busca);
   const grupos = gruposDaFila(linhas, filtro, busca);
   const marcadas = linhasMarcadas(linhas, painel.marcadas);
   let conteudo: ReactNode;
-  if (estado === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
-  else if (estado === "erro") conteudo = <Vazio>Não foi possível carregar a fila.</Vazio>;
+  if (estado === "carregando")
+    conteudo = <CarregandoNaRegiao rotulo="Carregando os executados…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
+  else if (estado === "erro")
+    conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a fila." className="px-5 py-7" semCartao />;
   else if (!linhas.length) conteudo = <Vazio>Nenhum executado aguardando autorização</Vazio>;
   else if (!grupos.length) conteudo = <Vazio>{busca.trim() ? "Nenhum executado encontrado" : "Nenhum executado nesta faixa"}</Vazio>;
   else {
@@ -236,7 +252,10 @@ function Fila({ estado, linhas, filtro, busca, painel, acoes, marcando }: Autori
     <section aria-label="Executados aguardando autorização" className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-b border-border px-5 py-3.5">
         <h2 className="text-base font-extrabold">Executados aguardando autorização</h2>
-        <Contador>{contagem.todas}</Contador>
+        <Contador>
+          {/* Sem a fila lida, nunca o zero: "—" na falha (a revisão da parte 13j achou o 0 no aviso da falta). */}
+          <NumeroLido estado={estado}>{contagem.todas}</NumeroLido>
+        </Contador>
         <div role="group" aria-label="Dias desde a execução" className="inline-flex flex-wrap gap-0.5 rounded-lg bg-muted p-1 sm:ml-auto">
           {FILTROS_DE_IDADE.map((opcao) => (
             <button
@@ -250,7 +269,9 @@ function Fila({ estado, linhas, filtro, busca, painel, acoes, marcando }: Autori
               )}
             >
               {ROTULO_DO_FILTRO[opcao]}
-              <span className="text-xs font-semibold tabular-nums text-muted-foreground">{contagem[opcao]}</span>
+              <span className="text-xs font-semibold tabular-nums text-muted-foreground">
+                <NumeroLido estado={estado}>{contagem[opcao]}</NumeroLido>
+              </span>
             </button>
           ))}
         </div>
@@ -271,6 +292,7 @@ function Painel({ linhas, painel, contratos, hoje, ocupado, acoes }: Autorizacoe
   const codigo = form.codigoServico ?? contrato?.codigoServico ?? "";
   const soma = somaDasLinhas(marcadas);
   const conferencia = conferenciaDoValor(form.valor, soma);
+  useAnunciarAoMudar(conferencia?.texto);
   const campo =
     <K extends keyof FormAutorizacao>(nome: K) =>
     (evento: { target: { value: string } }) =>
@@ -377,13 +399,15 @@ function Painel({ linhas, painel, contratos, hoje, ocupado, acoes }: Autorizacoe
         </p>
       ) : null}
       <div className="flex flex-wrap gap-2.5">
-        <Button type="button" onClick={acoes.registrar} disabled={ocupado || marcadas.length === 0}>
-          <Check aria-hidden="true" />
-          Registrar autorização
-        </Button>
-        <Button type="button" variant="outline" onClick={acoes.fecharPainel} disabled={ocupado}>
-          Cancelar
-        </Button>
+        <BotaoDeAcao
+          estado={ocupado ? "andamento" : "repouso"}
+          bloqueado={marcadas.length === 0}
+          icone={<Check aria-hidden="true" />}
+          rotulo="Registrar autorização"
+          andamento="Registrando a autorização…"
+          onClick={acoes.registrar}
+        />
+        <DialogCancelar ocupado={ocupado} onClick={acoes.fecharPainel} />
       </div>
     </section>
   );
@@ -391,11 +415,12 @@ function Painel({ linhas, painel, contratos, hoje, ocupado, acoes }: Autorizacoe
 
 // --- Autorizadas, a faturar ----------------------------------------------------------------
 
-function Autorizadas({ autorizadas, ocupado, acoes, somenteLeitura }: AutorizacoesViewProps) {
+function Autorizadas({ autorizadas, ocupado, acoes, somenteLeitura, leituraDasAutorizadas: leitura = SEM_NOVA_TENTATIVA }: AutorizacoesViewProps) {
   const lista = Array.isArray(autorizadas) ? autorizadas : null;
   let conteudo: ReactNode;
-  if (autorizadas === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
-  else if (autorizadas === "erro") conteudo = <Vazio>Não foi possível carregar as autorizações.</Vazio>;
+  if (autorizadas === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando as autorizações…" onTentar={leitura.tentar} className="px-5 py-7" />;
+  else if (autorizadas === "erro")
+    conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar as autorizações." className="justify-center px-5 py-7" semCartao />;
   else if (!lista?.length) conteudo = <Vazio>Nenhuma autorização a faturar</Vazio>;
   else {
     conteudo = lista.map((linha, indice) => (
@@ -494,6 +519,8 @@ function PrazoVencido({ vencidos, ocupado, acoes, somenteLeitura }: Autorizacoes
 export function AutorizacoesView(props: AutorizacoesViewProps) {
   const { estado, linhas, busca, painel, ocupado, acoes, telas, somenteLeitura } = props;
   const temFila = estado === "pronto" && linhas.length > 0;
+  // A confirmação do registro fica escrita; o Anunciador a diz uma vez.
+  useAnunciarAoMudar(painel.resultado);
   const painelAberto = painel.aberto && temFila && !somenteLeitura;
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
@@ -519,6 +546,7 @@ export function AutorizacoesView(props: AutorizacoesViewProps) {
           ) : null}
         </div>
       </header>
+      {estado === "pronto" && props.leitura ? <FaixaAoVivo leitura={props.leitura} /> : null}
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <Fila {...props} marcando={painelAberto} />
         {painelAberto ? <Painel {...props} /> : null}

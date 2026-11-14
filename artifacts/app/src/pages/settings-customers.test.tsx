@@ -38,6 +38,7 @@ vi.mock("firebase/firestore", async (original) => ({
 
 import SettingsCustomers from "./settings-customers";
 import { operationTemplate } from "@/lib/operations";
+import { INTERVALO_DO_TOQUE_MS } from "@/lib/campo/toque-unico";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosForaDaLista } from "@/test/textos";
 
@@ -99,21 +100,36 @@ let container: HTMLDivElement;
 let client: QueryClient;
 let clientes: Cliente[];
 let falharClientes: boolean;
+/** A mensagem da leitura dos clientes que falhou (a falta de conexão diz "Sem conexão…"). */
+let mensagemDaFalhaDosClientes: string;
 let falharPosicoes: boolean;
 let respostaDoPatch: { status: number; body: unknown };
+/** Com a lista, a criação do cliente espera até o teste soltar (o diálogo gravando, parte 13a). */
+let criacaoPresa: Array<() => void> | null;
+/** Com a lista, a gravação da seção espera até o teste soltar (o Salvar em andamento, parte 13e). */
+let patchPreso: Array<() => void> | null;
+/** As posições não respondem (a zona ainda lendo, parte 13e). */
+let posicoesPresas: boolean;
+/** A leitura dos clientes espera a vez: cada uma fica aqui até o teste a soltar. */
+let clientesPresos: Array<() => void> | null;
 let chamadas: Array<{ method: string; path: string; body: Record<string, unknown> | null }>;
 let assinaturas: Array<{ value: string; next: (snapshot: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }) => void }>;
 
+// Até 3 s: com a máquina ocupada (a suíte inteira), os marcos de 300 ms passam do 1 s padrão do waitFor.
 async function esperar(assertion: () => void) {
   await vi.waitFor(async () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
     assertion();
-  });
+  }, { timeout: 3_000 });
 }
 
 function botao(label: string, scope: ParentNode = document) {
   return [...scope.querySelectorAll<HTMLButtonElement>("button")].find(
-    (button) => button.textContent?.trim() === label || button.getAttribute("aria-label") === label,
+    (button) =>
+      button.textContent?.trim() === label ||
+      button.getAttribute("aria-label") === label ||
+      // O confirmar dos diálogos é o BotaoDeAcao (parte 13a): o rótulo é o da camada atual.
+      button.querySelector(".botao-acao-camada[data-atual]")?.textContent?.trim() === label,
   );
 }
 
@@ -223,13 +239,20 @@ beforeEach(() => {
   });
   clientes = [ITAU, SAFRA, BTG];
   falharClientes = false;
+  mensagemDaFalhaDosClientes = "Sem acesso ao cadastro.";
   falharPosicoes = false;
   respostaDoPatch = { status: 200, body: { ok: true } };
+  criacaoPresa = null;
+  patchPreso = null;
+  posicoesPresas = false;
+  clientesPresos = null;
   chamadas = [];
   assinaturas = [];
   fronteiras.pessoas.mockReset().mockReturnValue({ data: { items: PESSOAS }, isLoading: false });
   fronteiras.convites.mockReset().mockResolvedValue({ docs: CONVITES.map(({ id, ...data }) => ({ id, data: () => data })) });
-  fronteiras.escutar.mockReset().mockImplementation((consulta: { constraints: Array<{ value: string }> }, next: (typeof assinaturas)[number]["next"]) => {
+  // A escuta pede as mudanças de metadados (as opções antes do next, desde a parte 13i do carregamento v2).
+  fronteiras.escutar.mockReset().mockImplementation((consulta: { constraints: Array<{ value: string }> }, ...resto: unknown[]) => {
+    const next = (typeof resto[0] === "function" ? resto[0] : resto[1]) as (typeof assinaturas)[number]["next"];
     assinaturas.push({ value: consulta.constraints[0]!.value, next });
     return () => undefined;
   });
@@ -241,15 +264,24 @@ beforeEach(() => {
     const resposta = (payload: unknown, status = 200) =>
       new Response(JSON.stringify(payload), { status, headers: { "content-type": "application/json" } });
     if (path === "/api/customers" && method === "GET") {
-      return falharClientes ? resposta({ message: "Sem acesso ao cadastro." }, 500) : resposta({ items: clientes });
+      const presa = clientesPresos;
+      if (presa) await new Promise<void>((soltar) => presa.push(soltar));
+      return falharClientes ? resposta({ message: mensagemDaFalhaDosClientes }, 500) : resposta({ items: clientes });
     }
     if (path === "/api/customers" && method === "POST") {
+      const presa = criacaoPresa;
+      if (presa) await new Promise<void>((soltar) => presa.push(soltar));
       clientes = [...clientes, { ...(body as Cliente), id: String(body!.code) }];
       return resposta({ ok: true });
     }
-    if (path.startsWith("/api/customers/") && method === "PATCH") return resposta(respostaDoPatch.body, respostaDoPatch.status);
+    if (path.startsWith("/api/customers/") && method === "PATCH") {
+      const presa = patchPreso;
+      if (presa) await new Promise<void>((soltar) => presa.push(soltar));
+      return resposta(respostaDoPatch.body, respostaDoPatch.status);
+    }
     if (path.startsWith("/api/customers/") && method === "DELETE") return resposta({ ok: true });
     if (path === "/api/warehouse/positions") {
+      if (posicoesPresas) return new Promise<Response>(() => undefined);
       return falharPosicoes ? resposta({ message: "Falhou." }, 500) : resposta({ items: POSICOES, has_more: false });
     }
     if (path === "/api/warehouse/boxes") return resposta({ items: CAIXAS, has_more: false });
@@ -292,7 +324,7 @@ const TEXTOS_DO_NOVO_CLIENTE = [
   `O que o modelo ${UNIFORMES.label} define`, `O que o modelo ${INSUMOS.label} define`, "Pronto", "Em construção",
   // A ficha do modelo (rótulo e valor) é dado: vem do código do modelo, em lib/operations/templates.
   ...[UNIFORMES, INSUMOS].flatMap((modelo) => modelo.defines.flatMap(({ label, value }) => [label, value])),
-  "Cancelar", "Criar cliente", "Fechar",
+  "Cancelar", "Criar cliente", "Criando…", "Conferir", "Fechar",
 ];
 
 describe("Configurações › Clientes, a galeria", () => {
@@ -402,6 +434,36 @@ describe("Configurações › Clientes, a galeria", () => {
     expect(window.location.search).toBe("?cliente=INTER");
   });
 
+  it("'Novo cliente' gravando: o Esc, o toque fora, o X e o Cancelar não fecham, e o Cancelar fica aria-disabled (parte 13a)", async () => {
+    criacaoPresa = [];
+    await abrirGaleria();
+    await tocar("Novo cliente");
+    await preencher("c-name", "Banco Inter");
+    await preencher("c-code", "INTER");
+    await tocar("Criar cliente");
+    await esperar(() => {
+      expect(criacaoPresa).toHaveLength(1);
+      expect(dialogo().hasAttribute("data-ocupado")).toBe(true);
+    });
+    await act(async () => {
+      (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
+    });
+    for (const rotulo of ["Fechar", "Cancelar"]) {
+      const elemento = botao(rotulo, dialogo())!;
+      expect(elemento.getAttribute("aria-disabled"), rotulo).toBe("true");
+      expect(elemento.disabled, rotulo).toBe(false);
+      await act(async () => elemento.click());
+    }
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(botao("Criar cliente", dialogo())!.disabled).toBe(false);
+    expect(await violacoesDeAcessibilidade(dialogo().outerHTML)).toEqual([]);
+    for (const soltar of criacaoPresa!.splice(0)) soltar();
+    await esperar(() => expect(container.querySelector("h1#cliente-titulo")?.textContent).toContain("Banco Inter"));
+  });
+
   it("'Novo cliente' só tem rótulos, dados e ações: o pacote é o arquivo ou 'Nenhum', e sem violação de acessibilidade", async () => {
     await abrirGaleria();
     await tocar("Novo cliente");
@@ -442,6 +504,8 @@ const TEXTOS_DA_PAGINA_BTG = [
   "Contrato", "Razão social", "Banco BTG Pactual S.A.", "CNPJ", "12.345.678/0001-90", "Contato principal", "Ana Souza", "ana@btg.example",
   "Observações internas", "Retirada às terças.",
   "Novo contato", "Gestor do cliente", "Itens parados", "Desativar",
+  // As camadas do botão de ação da linha (BotaoDeAcao, parte 13e): o gerúndio e o "Conferir" ficam escondidos.
+  "Desativando…", "Conferir",
 ];
 
 describe("Configurações › Clientes, a página do cliente", () => {
@@ -480,7 +544,7 @@ describe("Configurações › Clientes, a página do cliente", () => {
     expect((document.getElementById("operacao-sigla") as HTMLInputElement).value).toBe("BTG");
     expect(textosForaDaLista(secao("Operação").innerHTML, [
       "Operação", "Modelo de operação", "Uniformes e materiais", "Sigla do SKU", "Módulos contratados", "Armazenagem", "Operação",
-      "Financeiro", "Cancelar", "Salvar",
+      "Financeiro", "Cancelar", "Salvar", "Salvando…", "Conferir",
       // As opções do seletor do modelo (o <select> que o Radix guarda para o formulário).
       "Mobiliário (em construção)", "Insumos internos (em construção)",
     ])).toEqual([]);
@@ -512,6 +576,9 @@ describe("Configurações › Clientes, a página do cliente", () => {
     await esperar(() => expect(secao("Contrato").querySelector('[role="alert"]')?.textContent).toBe("Falha do servidor."));
     expect((document.getElementById("contrato-nome") as HTMLInputElement).value).toBe("BTG Pactual Asset");
     respostaDoPatch = { status: 200, body: { ok: true } };
+    // O Salvar é o botão de ação (parte 13e): o segundo toque dentro de 1 s é o toque duplo, e a nova tentativa
+    // vem depois dele.
+    await act(async () => new Promise((pronto) => setTimeout(pronto, INTERVALO_DO_TOQUE_MS)));
     await tocar("Salvar", secao("Contrato"));
     await esperar(() => expect(secao("Contrato").querySelector("form")).toBeNull());
     expect(patches().at(-1)!.body).toMatchObject({ name: "BTG Pactual Asset", sku_prefix: "BTG", primary_contact_email: "ana@btg.example" });
@@ -603,7 +670,7 @@ describe("Configurações › Clientes, as pessoas do portal", () => {
     expect(
       textosForaDaLista(dialogo().innerHTML, [
         "Convidar para o portal · BTG", "Nome", "E-mail", "Perfil", "Cliente", "Telas do portal",
-        "Agent Dute, Início, Estoque, Eventos, Envios para a Dutelog, Pedidos, Faturas, Documentos", "Cancelar", "Enviar convite", "Fechar",
+        "Agent Dute, Início, Estoque, Eventos, Envios para a Dutelog, Pedidos, Faturas, Documentos", "Cancelar", "Enviar convite", "Enviando…", "Conferir", "Fechar",
       ]),
     ).toEqual([]);
     expect(await violacoesDeAcessibilidade(document.body.innerHTML)).toEqual([]);
@@ -658,5 +725,188 @@ describe("Configurações › Clientes, as pessoas do portal", () => {
     await esperar(() => expect(secao("Portal do cliente").querySelector('[role="alert"]')?.textContent).toBe("Não foi possível ler as pessoas."));
     await tocar("Tentar de novo", secao("Portal do cliente"));
     await esperar(() => expect(secao("Portal do cliente").textContent).toContain("Pessoas · 2 · 1 convite pendente"));
+  });
+});
+
+/**
+ * O carregamento v2 nas páginas de Clientes (parte 13e): nenhum número antes
+ * de ler (antes, "0 no portal" e "Pessoas · 0" enquanto as pessoas liam, e
+ * "…" no lugar das prateleiras), a espera com a caixa e o rótulo, e o Salvar
+ * da seção como o botão de ação, sem `disabled`.
+ */
+describe("Configurações › Clientes enquanto lê", () => {
+  const LENDO = { data: undefined, isLoading: true, isPending: true, isFetching: true, isError: false, error: null };
+
+  it("a galeria não afirma quantas pessoas entram no portal antes de ler as pessoas", async () => {
+    fronteiras.pessoas.mockReturnValue(LENDO);
+    await abrirGaleria();
+    const btg = cartoes().find((cartao) => cartao.textContent?.includes("BTG Pactual"))!;
+    const noPortal = [...btg.querySelectorAll("dl > div")].find((item) => item.textContent?.includes("no portal"))!;
+    expect(noPortal.querySelector('[data-esqueleto][data-forma="contagem"]')).not.toBeNull();
+    expect(noPortal.querySelector("dd")!.textContent).toBe("");
+    expect(btg.textContent).not.toMatch(/\d+ no portal/);
+  });
+
+  it("a página do cliente: o bloco no lugar do número de pessoas, Pessoas · ▪ e a espera aos 300 ms", async () => {
+    fronteiras.pessoas.mockReturnValue(LENDO);
+    await abrirCliente(BTG.code);
+    const cabecalho = container.querySelector("h1#cliente-titulo")!.closest("section")!;
+    const pessoas = [...cabecalho.querySelectorAll("dl > div")].find((item) => item.textContent?.includes("pessoas no portal"))!;
+    expect(pessoas.querySelector("dd [data-esqueleto]")).not.toBeNull();
+    expect(pessoas.querySelector("dd")!.textContent).toBe("");
+    const portal = secao("Portal do cliente");
+    expect(portal.textContent).not.toContain("Pessoas · 0");
+    expect(portal.querySelector("h3 [data-esqueleto]")).not.toBeNull();
+    await esperar(() => expect(portal.textContent).toContain("Carregando pessoas…"));
+    expect(portal.querySelector('[role="status"]')).toBeNull();
+    expect(portal.querySelector("[data-carregando-na-regiao] [data-spinner]")).not.toBeNull();
+  });
+
+  it("as prateleiras lendo: o bloco, nunca a reticência solta", async () => {
+    posicoesPresas = true;
+    await abrirCliente(BTG.code);
+    const cabecalho = container.querySelector("h1#cliente-titulo")!.closest("section")!;
+    const prateleiras = [...cabecalho.querySelectorAll("dl > div")].find((item) => item.textContent?.includes("prateleiras"))!;
+    expect(prateleiras.querySelector("dd")!.textContent).toBe("");
+    expect(prateleiras.querySelector("dd [data-esqueleto]")).not.toBeNull();
+    await esperar(() => expect(secao("Armazém").textContent).toContain("Carregando a ocupação…"));
+    expect(textosForaDaLista(secao("Armazém").innerHTML, ["Armazém", "Posições", "Carregando a ocupação…"])).toEqual([]);
+  });
+
+  it("o Salvar da seção é o botão de ação: Salvando… com aria-busy, e o Cancelar aria-disabled, nunca disabled", async () => {
+    patchPreso = [];
+    await abrirCliente(BTG.code);
+    await tocar("Editar contrato");
+    await preencher("contrato-nome", "BTG Pactual Asset");
+    await tocar("Salvar", secao("Contrato"));
+    await esperar(() => expect(secao("Contrato").querySelector('button[aria-busy="true"]')).not.toBeNull());
+    const salvar = secao("Contrato").querySelector<HTMLButtonElement>('button[aria-busy="true"]')!;
+    expect(salvar.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Salvando…");
+    expect(salvar.disabled).toBe(false);
+    const cancelar = botao("Cancelar", secao("Contrato"))!;
+    expect(cancelar.getAttribute("aria-disabled")).toBe("true");
+    expect(cancelar.disabled).toBe(false);
+    await act(async () => cancelar.click());
+    expect(secao("Contrato").querySelector("form")).not.toBeNull();
+    for (const soltar of patchPreso.splice(0)) soltar();
+    await esperar(() => expect(secao("Contrato").querySelector("form")).toBeNull());
+  });
+
+  it("a ocupação que falhou: Tentar de novo com aria-disabled enquanto tenta, nunca disabled", async () => {
+    falharPosicoes = true;
+    await abrirCliente(BTG.code);
+    await esperar(() => expect(secao("Armazém").querySelector('[role="alert"]')?.textContent).toBe("Não foi possível ler a ocupação."));
+    expect(
+      textosForaDaLista(secao("Armazém").innerHTML, ["Armazém", "Posições", "Não foi possível ler a ocupação.", "Tentar de novo", "Tentando de novo…"]),
+    ).toEqual([]);
+    const tentar = botao("Tentar de novo", secao("Armazém"))!;
+    expect(tentar.disabled).toBe(false);
+    // O toque: a nova leitura fica presa, e o aviso fica na tela com "Tentando de novo…" e o foco no botão; antes,
+    // a seção voltava a "Carregando a ocupação…", e o foco caía no body.
+    posicoesPresas = true;
+    tentar.focus();
+    await act(async () => tentar.click());
+    await act(async () => new Promise((pronto) => setTimeout(pronto, 400)));
+    expect(secao("Armazém").querySelector('[role="alert"]')?.textContent).toBe("Não foi possível ler a ocupação.");
+    expect(secao("Armazém").textContent).not.toContain("Carregando a ocupação…");
+    const tentando = botao("Tentando de novo…", secao("Armazém"))!;
+    expect(tentando).toBeTruthy();
+    expect(tentando.getAttribute("aria-disabled")).toBe("true");
+    expect(tentando.disabled).toBe(false);
+    expect(document.activeElement).toBe(tentando);
+  });
+
+  it("a ocupação que volta: o foco que estava no Tentar de novo vai ao título da seção, nunca ao body", async () => {
+    falharPosicoes = true;
+    await abrirCliente(BTG.code);
+    await esperar(() => expect(botao("Tentar de novo", secao("Armazém"))).toBeTruthy());
+    falharPosicoes = false;
+    botao("Tentar de novo", secao("Armazém"))!.focus();
+    await act(async () => botao("Tentar de novo", secao("Armazém"))!.click());
+    await esperar(() => expect(secao("Armazém").textContent).toContain("Caixas guardadas"));
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.textContent).toBe("Armazém");
+  });
+
+  it("as pessoas do portal que falharam: o título não fica lendo para sempre, e o leitor de tela ouve Pessoas, sem o separador", async () => {
+    fronteiras.convites.mockRejectedValue(new Error("Falhou."));
+    await abrirCliente(BTG.code);
+    await esperar(() => expect(secao("Portal do cliente").querySelector('[role="alert"]')?.textContent).toBe("Não foi possível ler as pessoas."));
+    const falha = secao("Portal do cliente").querySelector<HTMLElement>("[data-falha-na-secao]")!;
+    expect(textosForaDaLista(falha.outerHTML, ["Não foi possível ler as pessoas.", "Tentar de novo", "Tentando de novo…"])).toEqual([]);
+    const titulo = secao("Portal do cliente").querySelector("h3")!;
+    expect(titulo.querySelector("[data-esqueleto]")).toBeNull();
+    expect(titulo.textContent).toBe("Pessoas · —");
+    // O separador e o "—" ficam fora da árvore, como o "· ▪" do Segmentado.
+    const foraDaArvore = titulo.querySelector('[aria-hidden="true"]')!;
+    expect(foraDaArvore.textContent).toBe(" · —");
+  });
+
+  it("o Salvar que grava fecha o formulário e devolve o foco ao Editar da seção, nunca ao body", async () => {
+    patchPreso = [];
+    await abrirCliente(BTG.code);
+    await tocar("Editar contrato");
+    await preencher("contrato-nome", "BTG Pactual Asset");
+    const salvar = botao("Salvar", secao("Contrato"))!;
+    salvar.focus();
+    await act(async () => salvar.click());
+    await esperar(() => expect(patchPreso!.length).toBe(1));
+    for (const soltar of patchPreso.splice(0)) soltar();
+    await esperar(() => expect(secao("Contrato").querySelector("form")).toBeNull());
+    await esperar(() => expect(document.activeElement).toBe(botao("Editar contrato", secao("Contrato"))));
+  });
+
+  it("a galeria com as prateleiras que não vieram diz a falha, com Tentar de novo, além do — nos cartões", async () => {
+    falharPosicoes = true;
+    await abrirGaleria();
+    await esperar(() => expect(container.querySelector("[data-falha-na-secao]")).not.toBeNull());
+    const falha = container.querySelector<HTMLElement>("[data-falha-na-secao]")!;
+    expect(falha.textContent).toContain("Não foi possível ler as prateleiras.");
+    expect(textosForaDaLista(falha.outerHTML, ["Não foi possível ler as prateleiras.", "Tentar de novo", "Tentando de novo…"])).toEqual([]);
+    falharPosicoes = false;
+    await tocar("Tentar de novo");
+    await esperar(() => expect(container.querySelector("[data-falha-na-secao]")).toBeNull());
+  });
+
+  it("sem rede, a página do cliente diz a falta de conexão, no aviso âmbar, e não o erro vermelho", async () => {
+    falharClientes = true;
+    mensagemDaFalhaDosClientes = "Sem conexão. Tente de novo quando o sinal voltar.";
+    await montar(`/configuracoes/clientes?cliente=${encodeURIComponent(BTG.code)}`);
+    await esperar(() => expect(container.querySelector("[data-falta]")).not.toBeNull());
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(container.textContent).toMatch(/Sem conexão\.|Reconectando…/);
+  });
+});
+
+/**
+ * A nova tentativa da leitura dos clientes no relógio da espera (carregamento
+ * v2, junção das partes 10 e 13): "Tentando de novo…" só depois de 300 ms. A
+ * que falha de novo logo não pisca o botão nem muda o alerta, que o leitor de
+ * tela releria inteiro (antes, o `isFetching` cru ia direto ao botão).
+ */
+describe("Configurações › Clientes, a nova tentativa rápida", () => {
+  it.each([
+    ["na galeria", "/configuracoes/clientes"],
+    ["na página do cliente", `/configuracoes/clientes?cliente=${encodeURIComponent("BTG")}`],
+  ])("%s, a que falha de novo antes de 300 ms não muda o botão nem o alerta", async (_onde, endereco) => {
+    falharClientes = true;
+    await montar(endereco);
+    await esperar(() => expect(container.querySelector('[role="alert"]')).not.toBeNull());
+    const alerta = container.querySelector('[role="alert"]')!;
+    const antes = alerta.textContent;
+    const vistos: string[] = [];
+    const observador = new MutationObserver(() => vistos.push(alerta.textContent ?? ""));
+    observador.observe(alerta, { subtree: true, childList: true, characterData: true });
+    // A nova leitura fica presa até o teste a soltar: a tela desenha com ela a caminho, e ela falha de novo logo.
+    clientesPresos = [];
+    const presos = clientesPresos;
+    await tocar("Tentar de novo");
+    await esperar(() => expect(presos.length).toBe(1));
+    expect(botao("Tentar de novo")).toBeDefined();
+    await act(async () => presos.splice(0).forEach((soltar) => soltar()));
+    await esperar(() => expect(client.isFetching()).toBe(0));
+    observador.disconnect();
+    expect(vistos.filter((texto) => texto.includes("Tentando de novo"))).toEqual([]);
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(antes);
   });
 });

@@ -12,6 +12,10 @@ import { SepararMenosDialog, type DiferencaDaLinha } from "@/features/warehouse-
 import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
+import type { EstadoDaAcao } from "@/components/ui/botao-de-acao";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { CARREGANDO } from "@/lib/carregando/tempo";
+import { prazoEsgotado } from "@/lib/conexao";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { textoDoParaQuando } from "@/lib/order-queue";
 import { canDecideRequests, canOperateWarehouse } from "@/lib/permissions";
@@ -210,7 +214,8 @@ export default function PaginaPedidosSeparar() {
     .filter(Boolean)
     .join(" · ");
 
-  const [ocupadas, setOcupadas] = useState<ReadonlySet<string>>(new Set());
+  // As linhas com uma gravação em curso e a ação de cada uma: o botão tocado mostra a espera (carregamento v2, parte 13c).
+  const [ocupadas, setOcupadas] = useState<ReadonlyMap<string, Acao["tipo"]>>(new Map());
   const [diferenca, setDiferenca] = useState<DiferencaDaLinha | null>(null);
   const [outraCaixa, setOutraCaixa] = useState<OutraCaixaDaLinha | null>(null);
   const [divisao, setDivisao] = useState<DivisaoAberta | null>(null);
@@ -219,6 +224,9 @@ export default function PaginaPedidosSeparar() {
   const chaveDaConclusao = useRef<string | null>(null);
   // Concluído agora: a tela do pedido separado entra sem esperar a fila ler de novo.
   const [concluiuAgora, setConcluiuAgora] = useState(false);
+  // O fim da conclusão no botão do diálogo: o erro por 2 s, ou o "Conferir" do prazo sem resposta.
+  const [fimDaConclusao, setFimDaConclusao] = useState<"erro" | "sem-resposta" | null>(null);
+  const [conferindo, setConferindo] = useState(false);
   const separado = Boolean(pedido && pickTaskId && (pedido.stage !== "separar" || concluiuAgora));
   const pedidoId = pedido?.orderId ?? pedido?.key ?? null;
   const doPedidoSeparado = useVolumesDoPedido(separado ? pedidoId : null);
@@ -266,10 +274,10 @@ export default function PaginaPedidosSeparar() {
       if (acao.tipo === "dividir") return dividirLinha({ ...entrada, ...pedidoDaDivisao(acao.divisao) });
       return separarLinha(entrada);
     },
-    onMutate: (acao) => setOcupadas((atuais) => new Set(atuais).add(acao.linha.id)),
+    onMutate: (acao) => setOcupadas((atuais) => new Map(atuais).set(acao.linha.id, acao.tipo)),
     onSettled: (_resultado, _falha, acao) =>
       setOcupadas((atuais) => {
-        const proximas = new Set(atuais);
+        const proximas = new Map(atuais);
         proximas.delete(acao.linha.id);
         return proximas;
       }),
@@ -303,26 +311,64 @@ export default function PaginaPedidosSeparar() {
     onError: erro("Não foi possível fechar o volume"),
   });
 
+  /**
+   * O fim da separação. A fila do armazém é lida uma vez (a leitura leve no
+   * celular, carregamento v2, parte 10): pela conclusão, que relê; pelo
+   * "Conferir", que já leu (`jaLida`) e não lê de novo.
+   */
+  const concluido = async ({ jaLida = false }: { jaLida?: boolean } = {}) => {
+    toast({ title: "Separado. O pedido está pronto para entrega." });
+    setLacre(null);
+    setFimDaConclusao(null);
+    chaveDaConclusao.current = null;
+    // A pessoa fica no pedido separado: é dali que saem as etiquetas com o total e o romaneio.
+    setConcluiuAgora(true);
+    if (!jaLida) await queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
+  };
+
   const concluir = useMutation({
     mutationFn: async () => {
       if (!pickTaskId) throw new Error("Pedido sem separação criada.");
       chaveDaConclusao.current ??= crypto.randomUUID();
+      setFimDaConclusao(null);
       return concluirSeparacao({ pick_task_id: pickTaskId, seal_code: (lacre ?? "").trim(), idempotency_key: chaveDaConclusao.current });
     },
-    onSuccess: async () => {
-      toast({ title: "Separado. O pedido está pronto para entrega." });
-      setLacre(null);
-      chaveDaConclusao.current = null;
-      // A pessoa fica no pedido separado: é dali que saem as etiquetas com o total e o romaneio.
-      setConcluiuAgora(true);
-      await queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-    },
+    onSuccess: () => concluido(),
     onError: (falha: Error) => {
+      // Sem resposta no prazo, a conclusão pode ter valido: "Conferir" relê, e a chave fica a mesma.
+      if (prazoEsgotado(falha)) {
+        setFimDaConclusao("sem-resposta");
+        return;
+      }
+      setFimDaConclusao("erro");
       erro("Não foi possível concluir a separação")(falha);
       // Outra pessoa pode ter concluído por baixo: a fila lê de novo e a bancada mostra onde o pedido está.
       void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
     },
   });
+  // "Não concluído" fica 2 s no botão e volta a "Confirmar separação"; o motivo fica no toast.
+  useEffect(() => {
+    if (fimDaConclusao !== "erro") return undefined;
+    const volta = setTimeout(() => setFimDaConclusao((atual) => (atual === "erro" ? null : atual)), CARREGANDO.erroVisivelMs);
+    return () => clearTimeout(volta);
+  }, [fimDaConclusao]);
+  // Conferindo, o estado continua sem resposta: o diálogo mostra "Conferindo…", não a conclusão de novo.
+  const estadoDaConclusao: EstadoDaAcao = concluir.isPending ? "andamento" : (fimDaConclusao ?? "repouso");
+  /** O "Conferir" do prazo sem resposta: relê a fila e nunca reenvia. Concluído por lá, segue o sucesso. */
+  const conferirConclusao = async () => {
+    if (conferindo) return;
+    setConferindo(true);
+    try {
+      const lida = await queryClient.fetchQuery({ queryKey: ["warehouse-ops"], queryFn: () => fetchJson<WarehouseOpsResponse>("/api/warehouse/ops"), staleTime: 0 });
+      const agora = chave ? groupWarehouseOrders(lida).find((order) => order.key === chave) : undefined;
+      if (agora && agora.stage !== "separar") await concluido({ jaLida: true });
+      else setFimDaConclusao(null);
+    } catch (falha) {
+      erro("Não foi possível conferir a separação")(falha as Error);
+    } finally {
+      setConferindo(false);
+    }
+  };
 
   const estado: EstadoDaBancada = !chave
     ? "nao_encontrado"
@@ -364,6 +410,7 @@ export default function PaginaPedidosSeparar() {
         etiquetas={etiquetas}
         etiquetasHref={etiquetas.length ? labelsUrl({ boxes: etiquetas.map((etiqueta) => etiqueta.code), order: pedidoId }) : null}
         vazias={caixasVazias}
+        onTentar={doPedidoSeparado.tentar}
       />
     );
   }
@@ -377,6 +424,8 @@ export default function PaginaPedidosSeparar() {
     <>
       <PedidosSepararView
         estado={estado}
+        // A primeira leitura é a da fila: "Tentar de novo" a lê do zero (o react-query não recomeça a leitura presa).
+        onTentar={() => relerDoZero(queryClient, [["warehouse-ops"]])}
         numero={pedido?.orderNumber ?? ""}
         resumo={resumo}
         comecouEm={situacao?.separation_started_at}
@@ -429,7 +478,7 @@ export default function PaginaPedidosSeparar() {
       />
       <SepararMenosDialog
         diferenca={diferenca}
-        registrando={gravar.isPending}
+        registrando={Boolean(diferenca && ocupadas.get(diferenca.id) === "menos")}
         onMudar={setDiferenca}
         onFechar={() => setDiferenca(null)}
         onRegistrar={() => {
@@ -439,7 +488,7 @@ export default function PaginaPedidosSeparar() {
       />
       <OutraCaixaDialog
         linha={outraCaixa}
-        confirmando={gravar.isPending}
+        confirmando={Boolean(outraCaixa && ocupadas.get(outraCaixa.id) === "outra")}
         onMudar={setOutraCaixa}
         onFechar={() => setOutraCaixa(null)}
         onConfirmar={() => {
@@ -464,10 +513,15 @@ export default function PaginaPedidosSeparar() {
         volumes={volumes ? volumesAoConcluir(volumes) : null}
         caixas={caixasDoDialogo}
         lacre={lacre ?? ""}
-        confirmando={concluir.isPending}
+        estado={estadoDaConclusao}
+        conferindo={conferindo}
         onLacre={setLacre}
-        onFechar={() => setLacre(null)}
+        onFechar={() => {
+          setLacre(null);
+          setFimDaConclusao(null);
+        }}
         onConfirmar={() => concluir.mutate()}
+        onConferir={() => void conferirConclusao()}
       />
     </>
   );

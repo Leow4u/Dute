@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   type Movement,
   type MovementInput,
@@ -6,9 +6,15 @@ import {
   useCreateMovement,
   getListMovementsQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { nomeComTamanho } from "@workspace/dominio";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { Input } from "@/components/ui/input";
 import { ArrowDownRight, ArrowUpRight, Plus } from "lucide-react";
 import {
@@ -18,6 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
+  DialogCancelar,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
@@ -122,6 +129,7 @@ export function payloadDaMovimentacao(
  */
 export default function Movements({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAppUser();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("todos");
@@ -156,18 +164,33 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
     ...(page > 0 && cursors[page - 1] ? { cursor: cursors[page - 1] } : {}),
   };
 
-  const { data, isLoading } = useListMovements(listParams, {
+  // O tipo, a busca e a página leem no servidor: a lista anterior fica, a 50% e inert, até a nova chegar
+  // (carregamento v2, momento 7, caso 4); a releitura que falha não a apaga, e a troca que falha mostra o aviso.
+  const leitura = useListMovements(listParams, {
     query: {
       queryKey: getListMovementsQueryKey(listParams),
+      placeholderData: keepPreviousData,
     },
   });
+  const { data, isLoading, isPlaceholderData } = leitura;
+  const lista = useListaComFiltro(leitura);
+  const troca = useListaEmTroca(lista.trocando);
+  const idDaLinha = useId();
+  // A casa do estado da lista, sem empurrar a lista: sob o título; na aba Histórico do Estoque, logo acima dela,
+  // sem a hora (a linha do Estoque, sob o título, já diz uma), só com o que muda. A primeira leitura ainda é da
+  // tabela (parte 13).
+  const linhaDeEstado = (
+    <LinhaDeEstado id={idDaLinha} leitura={leitura} objeto="movimentações" primeiraNaLista semHora={embedded} />
+  );
 
   // Keep cursor stack in sync when server returns next_cursor (extra field).
+  // A página anterior que ainda está na tela (placeholderData) não é desta página: o cursor dela é o desta.
   useEffect(() => {
+    if (isPlaceholderData) return;
     const next = (data as { next_cursor?: string } | undefined)?.next_cursor;
     if (!next || page < cursors.length) return;
     setCursors((prev) => (prev[page] === next ? prev : [...prev.slice(0, page), next]));
-  }, [data, page, cursors]);
+  }, [data, isPlaceholderData, page, cursors]);
 
   const movements = data?.items ?? [];
   const total = data?.total || 0;
@@ -209,11 +232,26 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
         </StockFilterChip>
       </StockToolbar>
 
-      <StockTableCard>
+      {embedded ? linhaDeEstado : null}
+
+      <StockTableCard trocando={lista.trocando} pagina={page}>
+          {lista.falhou ? (
+            <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar as movimentações." className="rounded-none border-0" focoAoSair={idDaLinha} />
+          ) : isLoading ? (
+            // A primeira leitura fica no lugar da lista (a linha de estado só diz depois dela, `primeiraNaLista`): nada
+            // antes de 300 ms, depois a caixa e "Carregando movimentações…", com a demora e a saída (parte 13h).
+            <CarregandoNaRegiao
+              rotulo="Carregando movimentações…"
+              continuaARota
+              focoAoSair={idDaLinha}
+              onTentar={() => relerDoZero(queryClient, [["/api/movements"]])}
+              className="justify-center px-4 py-8"
+            />
+          ) : (
+          <div {...troca.props}>
+          <ConteudoEmTroca trocando={lista.trocando}>
           <ul className="divide-y divide-border md:hidden">
-            {isLoading ? (
-              <li className="px-4 py-8 text-center text-sm text-muted-foreground">Carregando movimentações...</li>
-            ) : movements.length === 0 ? (
+            {movements.length === 0 ? (
               <li className="px-4 py-8 text-center text-sm text-muted-foreground">Nenhuma movimentação encontrada.</li>
             ) : (
               movements.map((mov: Movement) => <MovementCard key={mov.id} movement={mov} />)
@@ -222,7 +260,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-border/70 text-xs uppercase tracking-wide text-foreground/50">
+                <tr className="border-b border-border/70 text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-semibold">Data</th>
                   <th className="px-3 py-2.5 font-semibold">Tipo</th>
                   <th className="px-3 py-2.5 font-semibold">Código</th>
@@ -235,13 +273,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={columnCount} className="px-4 py-8 text-center text-muted-foreground">
-                      Carregando movimentações...
-                    </td>
-                  </tr>
-                ) : data?.items?.length === 0 ? (
+                {data?.items?.length === 0 ? (
                   <tr>
                     <td colSpan={columnCount} className="px-4 py-8 text-center text-muted-foreground">
                       Nenhuma movimentação encontrada.
@@ -266,7 +298,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
                             {movementLabel(mov.tipo_mov)}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-3 py-3 font-mono text-xs font-semibold text-primary">
+                        <td className="whitespace-nowrap px-3 py-3 font-mono text-xs font-semibold text-primary-texto">
                           {mov.cod_sku}
                         </td>
                         <td className="max-w-[280px] truncate px-3 py-3 font-medium text-foreground" title={produto}>
@@ -304,10 +336,15 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
               </tbody>
             </table>
           </div>
+          </ConteudoEmTroca>
+          </div>
+          )}
 
           <StockTablePagination
             page={page}
             isLoading={isLoading}
+            ocupada={lista.trocando}
+            semContagem={lista.falhou}
             count={data?.items?.length || 0}
             total={total}
             limit={limit}
@@ -328,6 +365,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
     <StockPageShell
       title="Histórico de movimentos"
       actions={canOperateWarehouse(user?.publicMetadata.role) ? <MovementModal /> : undefined}
+      estado={linhaDeEstado}
     >
       {content}
     </StockPageShell>
@@ -464,6 +502,7 @@ export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; tr
   return (
     <Dialog
       open={open}
+      ocupado={createMovement.isPending}
       onOpenChange={(aberto) => {
         // Cada registro abre com a hora de agora, não a de quando a tela montou.
         if (aberto) setValue("data", agoraNoCampo(new Date()));
@@ -504,7 +543,7 @@ export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; tr
                     }}
                     defaultValue={field.value}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger id="tipo_mov" className="w-full">
                       <SelectValue placeholder="—" />
                     </SelectTrigger>
                     <SelectContent>
@@ -588,18 +627,15 @@ export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; tr
             </div>
           </div>
           <DialogFooter className="pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={createMovement.isPending}>
-              {createMovement.isPending
-                ? "Salvando..."
-                : "Registrar Movimentação"}
-            </Button>
+            {/* Registrando, o diálogo fica (parte 13a): o Cancelar espera ocupado, e o registrar é o BotaoDeAcao, com o
+                gerúndio aos 300 ms e o foco nele, nunca disabled (carregamento v2, parte 13h). */}
+            <DialogCancelar onClick={() => setOpen(false)} />
+            <BotaoDeAcao
+              type="submit"
+              estado={createMovement.isPending ? "andamento" : "repouso"}
+              rotulo="Registrar Movimentação"
+              andamento="Registrando…"
+            />
           </DialogFooter>
         </form>
       </DialogContent>

@@ -111,27 +111,30 @@ describe("identificação de produto novo", () => {
 });
 
 describe("o catálogo que ainda não chegou ou não veio (decisão 6 de 06/11/2026)", () => {
-  it("verificando: o spinner e o rótulo, como aviso de status", async () => {
+  it("verificando: a espera em bloco do carregamento v2, sem região viva solta (parte 13c)", async () => {
+    // Antes de 300 ms nada aparece; depois, a caixa e "Verificando o catálogo…", com o anúncio pelo Anunciador.
     const html = renderToStaticMarkup(<CatalogoVerificando />);
-    expect(textosDaTela(html)).toEqual(["Verificando o catálogo…"]);
-    expect(html).toContain('role="status"');
-    expect(html).toContain("data-spinner");
+    expect(html).toContain("data-carregando-na-regiao");
+    expect(html).not.toContain('role="status"');
+    expect(html).not.toContain("aria-live");
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
   it("não veio: a falha e a nova tentativa, sem oferecer cadastro novo", async () => {
-    const html = renderToStaticMarkup(<CatalogoIndisponivel tentando={false} onTentar={() => undefined} />);
+    const leitura = { error: new Error("HTTP 500"), refetch: async () => undefined as never };
+    const html = renderToStaticMarkup(<CatalogoIndisponivel leitura={leitura} />);
     expect(textosDaTela(html)).toEqual(["Não consegui carregar o catálogo.", "Tentar de novo"]);
     expect(html).toContain('role="alert"');
     expect(html).not.toContain("Cadastrar como novo");
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
-  it("tentando de novo: o botão gira e fica desligado", () => {
-    const html = renderToStaticMarkup(<CatalogoIndisponivel tentando onTentar={() => undefined} />);
-    expect(textosDaTela(html)).toEqual(["Não consegui carregar o catálogo.", "Tentando de novo…"]);
-    expect(html).toMatch(/<button[^>]*disabled=""/);
-    expect(html).toContain('aria-busy="true"');
+  it("a mensagem da tela que cadastra produto novo diz que o cadastro novo ficou bloqueado", () => {
+    const leitura = { error: new Error("HTTP 500"), refetch: async () => undefined as never };
+    const html = renderToStaticMarkup(
+      <CatalogoIndisponivel leitura={leitura} mensagem="Não consegui carregar o catálogo. O cadastro de produto novo foi bloqueado para evitar duplicidade." />,
+    );
+    expect(textosDaTela(html)[0]).toBe("Não consegui carregar o catálogo. O cadastro de produto novo foi bloqueado para evitar duplicidade.");
   });
 });
 

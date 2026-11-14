@@ -55,7 +55,7 @@ function initials(name: string) {
 function ContaMenu({ name, onSignOut }: { name: string; onSignOut: () => void }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center gap-3 rounded-md px-2 py-1.5 text-sm font-semibold text-v3-header-foreground outline-none transition-colors hover:bg-v3-header-foreground/10 focus-visible:ring-2 focus-visible:ring-ring">
+      <DropdownMenuTrigger className="flex items-center gap-3 rounded-md px-2 py-1.5 text-sm font-semibold text-v3-header-foreground focus-visible:outline-hidden transition-colors hover:bg-v3-header-foreground/10 focus-visible:ring-2 focus-visible:ring-foco">
         <span className="hidden max-w-48 truncate sm:inline">{name}</span>
         <span
           aria-hidden="true"
@@ -127,7 +127,7 @@ export function EntradaView({ decision, name, today, basePath, onSignOut, resumo
                 <li key={module.key}>
                   <Link
                     href={href}
-                    className="flex min-h-26 items-center gap-4 rounded-lg border border-border bg-card p-5 text-card-foreground outline-none transition-colors hover:border-foreground/30 focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex min-h-26 items-center gap-4 rounded-lg border border-border bg-card p-5 text-card-foreground focus-visible:outline-hidden transition-colors hover:border-foreground/30 focus-visible:ring-2 focus-visible:ring-foco"
                   >
                     <span className="flex size-13 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
                       <Icon className="size-6" aria-hidden="true" />

@@ -12,6 +12,7 @@ import {
   type FormularioDaDemanda,
 } from "@/lib/operacao/demanda-direta";
 import { clienteDaLeitura } from "@/lib/operacao/fila";
+import { leituraPendente } from "@/lib/carregando/leitura-pendente";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { ROTA_HOJE, hrefDaDemanda } from "@/lib/operacao/navegacao";
 import { formularioDaSolicitacao, problemaDoMotivo, solicitacaoDaBusca, solicitacaoDaOperacao, solicitacaoResolvida } from "@/lib/operacao/solicitacoes";
@@ -137,6 +138,7 @@ export default function PaginaDemandaNova() {
       busca={busca}
       onBusca={setBusca}
       resultados={buscarNoCatalogo(catalogo.itens ?? [], busca).filter((item) => !form.linhas.some((linha) => linha.lpuItemId === item.id))}
+      leituraDoCatalogo={leituraPendente(catalogo)}
       onAdicionar={(item) => {
         contador.current += 1;
         mudar({ ...form, linhas: [...form.linhas, { chave: `c${contador.current}`, lpuItemId: item.id, item: item.item, unidade: item.unidade ?? "", quantidade: "" }] });

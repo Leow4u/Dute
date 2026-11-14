@@ -8,7 +8,8 @@ import { itensDoInicioDoFinanceiro } from "@/lib/financeiro/inicio";
 import { ROTA_A_FATURAR, ROTA_A_RECEBER, ROTA_VENCIDOS } from "@/lib/financeiro/navegacao";
 import type { InicioDoFinanceiro } from "@/lib/financeiro/use-a-faturar";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { textosVisiveis } from "@/test/botoes";
+import { textosForaDaLista } from "@/test/textos";
 
 import { InicioDoFinanceiroView } from "./inicio-view";
 
@@ -80,7 +81,7 @@ function render(inicio: Partial<InicioDoFinanceiro> = {}, nome = "Carla Mendes")
 
 describe("Início do Financeiro", () => {
   it("data, saudação, quantas coisas esperam, o que precisa de você e os números, o mais urgente primeiro", () => {
-    expect(textosDaTela(render())).toEqual([
+    expect(textosVisiveis(render())).toEqual([
       "Sexta-feira, 23 de outubro",
       "Bom dia, Carla",
       "4 coisas",
@@ -159,14 +160,33 @@ describe("Início do Financeiro", () => {
   });
 
   it("carregando não diz que não há nada; erro diz o que não carregou", () => {
-    expect(textosDaTela(render({ itens: [], linhas: undefined, faturas: undefined, carregando: true }))).toEqual(["Sexta-feira, 23 de outubro", "Bom dia, Carla", "Precisa de você"]);
+    // Lendo, a lateral já tem a forma final: os rótulos e os blocos no lugar dos números, nunca o zero (parte 13g).
+    const lendo = render({ itens: [], linhas: undefined, faturas: undefined, carregando: true });
+    expect(textosVisiveis(lendo)).toEqual([
+      "Sexta-feira, 23 de outubro",
+      "Bom dia, Carla",
+      "Precisa de você",
+      "A faturar",
+      "Prontas para faturar",
+      "Aguardando autorização",
+      "Sem valor para faturar",
+      "Abrir a fila",
+      "A receber",
+      "A vencer",
+      "Vencidas",
+      "Para enviar",
+      "Abrir A receber",
+    ]);
+    expect(lendo).toContain('data-forma="contagem"');
+    expect(lendo).not.toContain("animate-pulse");
+    expect(textosVisiveis(lendo)).not.toContain("0");
     const erro = render({ itens: [], linhas: undefined, faturas: undefined, falhas: ["autorizações"] });
     expect(erro).toMatch(/<p role="alert"[^>]*>Não foi possível carregar: autorizações\.<\/p>/);
-    expect(textosDaTela(erro)).not.toContain("Prontas para faturar");
+    expect(textosVisiveis(erro)).not.toContain("Prontas para faturar");
   });
 
   it("nada parado: a frase diz, e os números continuam", () => {
-    const textos = textosDaTela(render({ itens: [], linhas: [], faturas: [] }));
+    const textos = textosVisiveis(render({ itens: [], linhas: [], faturas: [] }));
     expect(textos).toContain("Nada parado no Financeiro.");
     expect(textos).not.toContain("Precisa de você");
     expect(textos).toContain("Prontas para faturar");

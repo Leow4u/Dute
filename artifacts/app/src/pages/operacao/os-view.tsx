@@ -26,6 +26,9 @@ import {
 import type { TipoDaDemanda } from "@/lib/operacao/hoje";
 import { ROTA_HOJE, hrefDaDemanda, hrefDaOs } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
  * Operação › OS (docs/plataforma/fase-3-operacao.md, parte 3.7d;
@@ -328,10 +331,11 @@ function Revisao({ ficha }: { ficha: FichaDaOs }) {
 
 const FOTOS_A_MOSTRAR = 5;
 
-function Fotos({ ficha, urls, acao }: { ficha: FichaDaOs; urls: Readonly<Record<string, string>>; acao?: ReactNode }) {
+function Fotos({ ficha, urls, acao, envio }: { ficha: FichaDaOs; urls: Readonly<Record<string, string>>; acao?: ReactNode; envio?: ReactNode }) {
   const fotos = [...ficha.fotos].sort((a, b) => b.instante.localeCompare(a.instante));
   return (
     <Cartao titulo={`Fotos · ${fotos.length}`} acao={acao}>
+      {envio ? <div className="px-5 pt-4">{envio}</div> : null}
       {fotos.length ? (
         <ul className="grid grid-cols-3 gap-2 px-5 py-4 sm:grid-cols-6">
           {fotos.slice(0, FOTOS_A_MOSTRAR).map((foto) => {
@@ -449,7 +453,9 @@ export function OsView({
   acoes,
   painel,
   anexarFotos,
+  envioDasFotos,
   acoesDaRecusa,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDaFicha;
   numero: string;
@@ -464,8 +470,12 @@ export function OsView({
   painel?: ReactNode;
   /** Anexar fotos à OS, no cartão das fotos (parte 3.7e). */
   anexarFotos?: ReactNode;
+  /** As fotos que sobem, com a contagem (carregamento v2, parte 11), no topo do cartão das fotos. */
+  envioDasFotos?: ReactNode;
   /** As ações da coordenação na conclusão recusada do celular (pergunta 66); sem elas, o cartão não aparece. */
   acoesDaRecusa?: ReactNode;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   const voltar = (
     <Link href={ROTA_HOJE} className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-muted-foreground hover:text-foreground">
@@ -478,12 +488,8 @@ export function OsView({
       <section className="flex flex-col gap-6">
         {voltar}
         <h1 className="text-3xl font-bold tracking-tight text-foreground">OS {numero}</h1>
-        {estado === "carregando" ? <p className="text-sm text-muted-foreground">Carregando</p> : null}
-        {estado === "erro" ? (
-          <p role="alert" className="text-sm text-destructive">
-            Não foi possível carregar a OS.
-          </p>
-        ) : null}
+        {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a OS…" continuaARota onTentar={leitura.tentar} /> : null}
+        {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a OS." /> : null}
         {estado === "nao_encontrada" ? <p className="text-sm text-muted-foreground">OS {numero} não encontrada</p> : null}
       </section>
     );
@@ -492,6 +498,7 @@ export function OsView({
   return (
     <section className="flex flex-col gap-6">
       {voltar}
+      <FaixaAoVivo leitura={leitura} objeto="OS" />
       <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -539,7 +546,7 @@ export function OsView({
           <Locais ficha={ficha} />
           <Etapas ficha={ficha} />
           {ficha.tipo === "vistoria" ? null : <Itens ficha={ficha} />}
-          <Fotos ficha={ficha} urls={urls} acao={anexarFotos} />
+          <Fotos ficha={ficha} urls={urls} acao={anexarFotos} envio={envioDasFotos} />
         </div>
         <div className="flex min-w-0 flex-col gap-6">
           <Equipe ficha={ficha} />

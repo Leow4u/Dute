@@ -83,8 +83,11 @@ async function mostrar() {
   );
 }
 
+/** O botão pelo rótulo: o texto inteiro, ou a camada atual do BotaoDeAcao (o Emitir da confirmação). */
 function botao(texto: string) {
-  const achado = [...document.querySelectorAll("button")].find((item) => item.textContent?.trim() === texto);
+  const achado = [...document.querySelectorAll("button")].find(
+    (item) => item.textContent?.trim() === texto || item.querySelector(".botao-acao-camada[data-atual]")?.textContent?.trim() === texto,
+  );
   if (!achado) throw new Error(`Sem o botão ${texto}`);
   return achado;
 }
@@ -134,7 +137,7 @@ describe("o Fechamento do mês grava no cliente que mostra", () => {
     expect(leiturasDo("BTG Pactual").length).toBeGreaterThan(0);
 
     await act(async () => botao("Emitir e publicar para a cliente").click());
-    await esperar(() => [...document.querySelectorAll("button")].some((item) => item.textContent?.trim() === "Emitir"), "a confirmação");
+    await esperar(() => Boolean(document.querySelector('[role="alertdialog"]')), "a confirmação");
     await act(async () => botao("Emitir").click());
     await esperar(() => estado.chamadas.some((chamada) => chamada.caminho.endsWith("/emit")), "a emissão");
 

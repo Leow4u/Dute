@@ -3,6 +3,10 @@ import { alertasDoContrato, type TipoAlerta } from "@workspace/dominio";
 import { CalendarX, Clock, FileText, FolderOpen, Pencil, Plus, RefreshCw, Table2, TrendingUp, type LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
+import { NumeroLido } from "@/components/ui/numero-lido";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
 import { dataBr, type CadastroComercial, type Carga } from "@/lib/comercial/clientes";
 import {
   aditivosEmOrdem,
@@ -58,6 +62,10 @@ export type ContratosViewProps = {
   aditivos: Carga<Aditivo>;
   /** Uma gravação em andamento: as ações esperam. */
   ocupado: boolean;
+  /** A nova tentativa da leitura dos contratos (parte 13g). */
+  leitura?: NovaTentativa;
+  /** A nova tentativa das leituras do contrato aberto (as tabelas e os aditivos). */
+  releituras?: Partial<Record<"tabelas" | "aditivos", NovaTentativa>>;
   acoes: AcoesDosContratos;
   /** Telas do Comercial que já existem (barra de abas); o padrão é a do app. */
   telas?: readonly string[];
@@ -100,9 +108,16 @@ function Vazio({ children }: { children: ReactNode }) {
   return <p className="px-5 py-7 text-center text-sm font-bold text-muted-foreground">{children}</p>;
 }
 
-/** Carregando ou erro no lugar da lista: a tela não afirma vazio sem ter lido. */
-function SemLeitura({ carga }: { carga: "carregando" | "erro" }) {
-  return <Vazio>{carga === "erro" ? "Não foi possível carregar." : "Carregando..."}</Vazio>;
+/**
+ * Carregando ou erro no lugar da lista: a tela não afirma vazio sem ter lido
+ * (carregamento v2, parte 13g). Lendo, a caixa e "Carregando as tabelas…" aos
+ * 300 ms, com "Tentar de novo" aos 10 s; na falha, a frase e "Tentar de
+ * novo", que assina de novo a leitura ao vivo (o `onSnapshot` que falha não
+ * volta sozinho).
+ */
+function SemLeitura({ carga, objeto, leitura = SEM_NOVA_TENTATIVA }: { carga: "carregando" | "erro"; objeto: string; leitura?: NovaTentativa }) {
+  if (carga === "carregando") return <CarregandoNaRegiao rotulo={`Carregando ${objeto}…`} onTentar={leitura.tentar} className="px-5 py-7" />;
+  return <FalhaAoVivo leitura={leitura} mensagem={`Não foi possível carregar ${objeto}.`} className="justify-center px-5 py-7" semCartao />;
 }
 
 function Rotulo({ children }: { children: ReactNode }) {
@@ -128,11 +143,13 @@ const ROTULO_DO_FILTRO: Record<FiltroDaLista, string> = { vigentes: "Vigentes", 
 
 function Lista(props: ContratosViewProps) {
   const { estado, contratos, clientes, hoje, filtro, onFiltro, selecionado, onSelecionar, ocupado, acoes, somenteLeitura } = props;
+  const leitura = props.leitura ?? SEM_NOVA_TENTATIVA;
   const contagem = contarFiltros(contratos);
   const outro: FiltroDaLista = filtro === "vigentes" ? "encerrados" : "vigentes";
   let conteudo: ReactNode;
-  if (estado === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
-  else if (estado === "erro") conteudo = <Vazio>Não foi possível carregar os contratos.</Vazio>;
+  if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando os contratos…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
+  else if (estado === "erro")
+    conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar os contratos." className="px-5 py-7" semCartao estreito />;
   else {
     const itens = listaDeContratos(contratos, nomesDosClientes(clientes), filtro, hoje);
     conteudo = itens.length ? (
@@ -173,7 +190,9 @@ function Lista(props: ContratosViewProps) {
           <FileText className="size-4" />
         </span>
         <h2 className="text-sm font-extrabold uppercase tracking-wider">{ROTULO_DO_FILTRO[filtro]}</h2>
-        <Contador>{contagem[filtro]}</Contador>
+        <Contador>
+          <NumeroLido estado={estado}>{contagem[filtro]}</NumeroLido>
+        </Contador>
         {somenteLeitura ? null : (
           <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={acoes.novoContrato} disabled={ocupado}>
             <Plus aria-hidden="true" />
@@ -366,7 +385,19 @@ function Condicoes({ contrato, hoje }: { contrato: Contrato; hoje: string }) {
   );
 }
 
-function Tabelas({ tabelas, hoje, ocupado, onAdicionar }: { tabelas: Carga<TabelaDoContrato>; hoje: string; ocupado: boolean; onAdicionar?: () => void }) {
+function Tabelas({
+  tabelas,
+  leitura,
+  hoje,
+  ocupado,
+  onAdicionar,
+}: {
+  tabelas: Carga<TabelaDoContrato>;
+  leitura?: NovaTentativa;
+  hoje: string;
+  ocupado: boolean;
+  onAdicionar?: () => void;
+}) {
   return (
     <section aria-label="Tabelas de preço" className="overflow-hidden rounded-lg border border-border bg-card">
       <CabecalhoDoCartao
@@ -382,7 +413,7 @@ function Tabelas({ tabelas, hoje, ocupado, onAdicionar }: { tabelas: Carga<Tabel
         ) : null}
       </CabecalhoDoCartao>
       {!Array.isArray(tabelas) ? (
-        <SemLeitura carga={tabelas} />
+        <SemLeitura carga={tabelas} objeto="as tabelas" leitura={leitura} />
       ) : tabelas.length === 0 ? (
         <Vazio>Nenhuma tabela</Vazio>
       ) : (
@@ -426,7 +457,7 @@ function Tabelas({ tabelas, hoje, ocupado, onAdicionar }: { tabelas: Carga<Tabel
   );
 }
 
-function Aditivos({ aditivos }: { aditivos: Carga<Aditivo> }) {
+function Aditivos({ aditivos, leitura }: { aditivos: Carga<Aditivo>; leitura?: NovaTentativa }) {
   return (
     <section aria-label="Aditivos" className="min-w-0 flex-1 basis-80 overflow-hidden rounded-lg border border-border bg-card">
       <CabecalhoDoCartao
@@ -435,7 +466,7 @@ function Aditivos({ aditivos }: { aditivos: Carga<Aditivo> }) {
         contagem={Array.isArray(aditivos) ? aditivos.length : undefined}
       />
       {!Array.isArray(aditivos) ? (
-        <SemLeitura carga={aditivos} />
+        <SemLeitura carga={aditivos} objeto="os aditivos" leitura={leitura} />
       ) : aditivos.length === 0 ? (
         <Vazio>Nenhum aditivo</Vazio>
       ) : (
@@ -529,9 +560,9 @@ function Ficha(props: ContratosViewProps & { selecionado: Contrato }) {
       <Cabecalho contrato={contrato} cliente={cliente} aditivos={aditivos} hoje={hoje} ocupado={ocupado} acoes={acoes} somenteLeitura={somenteLeitura} />
       <Alertas contrato={contrato} hoje={hoje} />
       <Condicoes contrato={contrato} hoje={hoje} />
-      <Tabelas tabelas={tabelas} hoje={hoje} ocupado={ocupado} onAdicionar={somenteLeitura ? undefined : acoes.adicionarTabela} />
+      <Tabelas tabelas={tabelas} leitura={props.releituras?.tabelas} hoje={hoje} ocupado={ocupado} onAdicionar={somenteLeitura ? undefined : acoes.adicionarTabela} />
       <div className="flex flex-wrap items-start gap-5">
-        <Aditivos aditivos={aditivos} />
+        <Aditivos aditivos={aditivos} leitura={props.releituras?.aditivos} />
         <Documentos contrato={contrato} />
       </div>
     </div>
@@ -545,6 +576,7 @@ export function ContratosView(props: ContratosViewProps) {
       <header className="flex flex-wrap items-center gap-4">
         <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Contratos</h1>
       </header>
+      {estado === "pronto" && props.leitura ? <FaixaAoVivo leitura={props.leitura} /> : null}
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <Lista {...props} />
         {estado === "pronto" && selecionado ? <Ficha {...props} selecionado={selecionado} /> : null}

@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
+  DialogCancelar,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -45,6 +46,8 @@ import {
   type LocalResumo,
 } from "@/lib/comercial/clientes";
 import { sugerirCodigo } from "@/lib/comercial/codigo";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { useAnuncio } from "@/lib/carregando/anunciador";
 
 /**
  * Diálogos da tela de Clientes e prospects. Cada um só monta o formulário; a
@@ -53,7 +56,7 @@ import { sugerirCodigo } from "@/lib/comercial/codigo";
  */
 
 const CAMPO_SELECT =
-  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
+  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
 
 type BaseProps = {
   aberto: boolean;
@@ -80,9 +83,16 @@ function Erro({ erro }: { erro: string | null }) {
   );
 }
 
-function Aviso({ children }: { children: ReactNode }) {
+/**
+ * O aviso que aparece enquanto a pessoa preenche (o nome parecido, o CNPJ já
+ * cadastrado): fica escrito, sem região viva solta, e o Anunciador diz o
+ * `anuncio` quando ele aparece (carregamento v2, parte 13g).
+ */
+function Aviso({ anuncio, children }: { anuncio: string; children: ReactNode }) {
+  const anunciar = useAnuncio();
+  useEffect(() => anunciar(anuncio), [anuncio, anunciar]);
   return (
-    <p role="status" className="rounded-md border border-warning-soft-border bg-warning-soft px-3 py-2 text-sm font-semibold text-warning-soft-foreground">
+    <p className="rounded-md border border-warning-soft-border bg-warning-soft px-3 py-2 text-sm font-semibold text-warning-soft-foreground">
       {children}
     </p>
   );
@@ -101,15 +111,24 @@ function SelectUf({ id, value, onChange, disabled }: { id: string; value: string
   );
 }
 
-function Rodape({ ocupado, rotulo, onCancelar, desabilitado }: { ocupado: boolean; rotulo: string; onCancelar: () => void; desabilitado: boolean }) {
+function Rodape({
+  ocupado,
+  rotulo,
+  andamento,
+  onCancelar,
+  desabilitado,
+}: {
+  ocupado: boolean;
+  rotulo: string;
+  /** O gerúndio do confirmar: "Salvando o local…". */
+  andamento: string;
+  onCancelar: () => void;
+  desabilitado: boolean;
+}) {
   return (
     <DialogFooter className="gap-2">
-      <Button type="button" variant="outline" onClick={onCancelar} disabled={ocupado}>
-        Cancelar
-      </Button>
-      <Button type="submit" disabled={ocupado || desabilitado}>
-        {ocupado ? "Salvando..." : rotulo}
-      </Button>
+      <DialogCancelar onClick={onCancelar} />
+      <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} bloqueado={desabilitado} rotulo={rotulo} andamento={andamento} />
     </DialogFooter>
   );
 }
@@ -138,7 +157,7 @@ export function NovoProspectDialog({
   const valido = form.nome.trim().length >= 2 && Boolean(codigo) && !problema;
 
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <Dialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <DialogContent className="v3 max-w-lg">
         <form
           className="grid gap-4"
@@ -161,7 +180,7 @@ export function NovoProspectDialog({
             />
           </Campo>
           {parecidos.length ? (
-            <Aviso>
+            <Aviso anuncio="Nome parecido no cadastro">
               Nome parecido no cadastro:{" "}
               {parecidos
                 .map((cadastro) => `${cadastro.nome} (${cadastro.estagio === "prospect" ? "prospect" : "cliente"})`)
@@ -205,7 +224,7 @@ export function NovoProspectDialog({
           </div>
           {problema ? <Erro erro={problema} /> : null}
           <Erro erro={erro} />
-          <Rodape ocupado={ocupado} rotulo="Criar prospect" onCancelar={onCancelar} desabilitado={!valido} />
+          <Rodape ocupado={ocupado} rotulo="Criar prospect" andamento="Criando o prospect…" onCancelar={onCancelar} desabilitado={!valido} />
         </form>
       </DialogContent>
     </Dialog>
@@ -239,7 +258,7 @@ export function EditarCadastroDialog({
     setForm((atual) => ({ ...atual, [campo]: event.target.value }));
 
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <Dialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <DialogContent className="v3 max-w-lg">
         <form
           className="grid gap-4"
@@ -265,7 +284,7 @@ export function EditarCadastroDialog({
               </Campo>
             </>
           ) : (
-            <Aviso>
+            <Aviso anuncio={aviso.texto}>
               {aviso.texto}
               {aviso.link ? (
                 <>
@@ -287,7 +306,7 @@ export function EditarCadastroDialog({
             </Campo>
           </div>
           <Erro erro={erro} />
-          <Rodape ocupado={ocupado} rotulo="Salvar" onCancelar={onCancelar} desabilitado={!valido} />
+          <Rodape ocupado={ocupado} rotulo="Salvar" andamento="Salvando…" onCancelar={onCancelar} desabilitado={!valido} />
         </form>
       </DialogContent>
     </Dialog>
@@ -305,24 +324,16 @@ export function MarcarClienteDialog({
   onConfirmar,
 }: BaseProps & { cadastro: CadastroComercial | null; onConfirmar: () => void }) {
   return (
-    <AlertDialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <AlertDialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <AlertDialogContent className="v3">
         <AlertDialogHeader>
           <AlertDialogTitle>Marcar {cadastro?.nome ?? ""} como cliente?</AlertDialogTitle>
         </AlertDialogHeader>
         <Erro erro={erro} />
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={ocupado}>Cancelar</AlertDialogCancel>
-          <AlertDialogAction
-            disabled={ocupado}
-            onClick={(event) => {
-              // A página fecha o diálogo quando a callable responde.
-              event.preventDefault();
-              onConfirmar();
-            }}
-          >
-            {ocupado ? "Salvando..." : "Marcar como cliente"}
-          </AlertDialogAction>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          {/* A página fecha o diálogo quando a callable responde. */}
+          <AlertDialogAction estado={ocupado ? "andamento" : "repouso"} rotulo="Marcar como cliente" andamento="Marcando como cliente…" onClick={onConfirmar} />
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -348,7 +359,7 @@ export function LocalDialog({
     setForm((atual) => ({ ...atual, [campo]: event.target.value }));
 
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <Dialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <DialogContent className="v3 max-w-xl">
         <form
           className="grid gap-4"
@@ -396,7 +407,7 @@ export function LocalDialog({
             </Campo>
           </div>
           <Erro erro={erro} />
-          <Rodape ocupado={ocupado} rotulo="Salvar local" onCancelar={onCancelar} desabilitado={!valido} />
+          <Rodape ocupado={ocupado} rotulo="Salvar local" andamento="Salvando o local…" onCancelar={onCancelar} desabilitado={!valido} />
         </form>
       </DialogContent>
     </Dialog>
@@ -471,7 +482,7 @@ export function ContatoDialog({
     setForm((atual) => ({ ...atual, [campo]: event.target.value }));
 
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <Dialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <DialogContent className="v3 max-w-lg">
         <form
           className="grid gap-4"
@@ -520,7 +531,7 @@ export function ContatoDialog({
           </div>
           <AvisosDoContato form={form} desabilitado={ocupado} onMarcar={(modelo, marcado) => setForm((atual) => marcarAviso(atual, modelo, marcado))} modelos={modelos} />
           <Erro erro={erro} />
-          <Rodape ocupado={ocupado} rotulo="Salvar contato" onCancelar={onCancelar} desabilitado={!valido} />
+          <Rodape ocupado={ocupado} rotulo="Salvar contato" andamento="Salvando o contato…" onCancelar={onCancelar} desabilitado={!valido} />
         </form>
       </DialogContent>
     </Dialog>

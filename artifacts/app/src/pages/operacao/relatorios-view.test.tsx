@@ -6,6 +6,7 @@ import { RELATORIO_DO_ACERTO, resumoDoAcerto, sugestaoDoAcerto, tabelaDoAcerto }
 import { RELATORIOS_DA_OPERACAO, filtroInicial, osDoRelatorio, resumoDasOs, tabelaDaEquipe, tabelaPorPeriodo, type OsDoRelatorio } from "@/lib/operacao/relatorios";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import { RelatoriosView, hrefDoRelatorio, resumoDasOsEmTexto, type RelatoriosViewProps } from "./relatorios-view";
 
@@ -34,7 +35,7 @@ const OSS: OsDoRelatorio[] = [os("10050-01"), os("10050-02", { status: "cancelad
 const FILTRO = { ...filtroInicial("2026-10-23"), de: "2026-10-01" };
 const noop = () => undefined;
 
-function render(props: Partial<RelatoriosViewProps> = {}) {
+function tela(props: Partial<RelatoriosViewProps> = {}) {
   const base: RelatoriosViewProps = {
     relatorio: "periodo",
     filtro: FILTRO,
@@ -45,11 +46,15 @@ function render(props: Partial<RelatoriosViewProps> = {}) {
     tabela: tabelaPorPeriodo(OSS, "semana"),
     acoes: { mudarFiltro: noop, exportar: noop, imprimir: noop },
   };
-  return renderToStaticMarkup(
+  return (
     <Router ssrPath="/operacao/relatorios">
       <RelatoriosView {...base} {...props} />
-    </Router>,
+    </Router>
   );
+}
+
+function render(props: Partial<RelatoriosViewProps> = {}) {
+  return renderToStaticMarkup(tela(props));
 }
 
 describe("Relatórios da Operação", () => {
@@ -106,9 +111,16 @@ describe("Relatórios da Operação", () => {
 
   it("só o relatório vai para o PDF: os filtros, a lista e os botões ficam fora da impressão", () => {
     const html = render();
-    expect(html).toMatch(/<section aria-labelledby="titulo-do-relatorio" class="print-area/);
+    expect(html).toMatch(/<section aria-labelledby="titulo-do-relatorio" class="[^"]*\bprint-area\b/);
     expect(html).toMatch(/<header class="no-print/);
     expect(html).toMatch(/<nav aria-label="Relatórios da Operação" class="no-print/);
+  });
+
+  it("lendo e na falha, o relatório fica nas cores do tema: o papel claro da impressão é só do relatório lido (no escuro, o rótulo da espera e o Tentar de novo não somem)", () => {
+    for (const html of [render({ estado: "carregando", tabela: null }), render({ estado: "erro", tabela: null })]) {
+      expect(html).toMatch(/<section aria-labelledby="titulo-do-relatorio" class="[^"]*"/);
+      expect(html).not.toMatch(/<section aria-labelledby="titulo-do-relatorio" class="[^"]*\bprint-area\b/);
+    }
   });
 
   it("filtro errado diz o que corrigir e não exporta; carregando e erro também não", () => {
@@ -118,7 +130,11 @@ describe("Relatórios da Operação", () => {
       expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*?Excel<\/button>/);
       expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*?PDF<\/button>/);
     }
-    expect(render({ estado: "erro", tabela: null })).toContain("Não foi possível carregar.");
+    // A falha diz o que não carregou, com "Tentar de novo"; lendo, a região da espera e os blocos, sem o bloco rosado (parte 13g).
+    expect(textosDaTela(render({ estado: "erro", tabela: null }))).toEqual(expect.arrayContaining(["Não foi possível carregar o relatório.", "Tentar de novo"]));
+    const lendo = render({ estado: "carregando", tabela: null });
+    expect(lendo).toContain("data-carregando-na-regiao");
+    expect(lendo).not.toContain("animate-pulse");
   });
 
   it("sem OS no período, a tabela diz que não há", () => {
@@ -163,3 +179,10 @@ describe("o acerto da memória (parte 5.6)", () => {
   });
 });
 
+describe("Os Relatórios da Operação sem conexão (carregamento v2, parte 13j)", () => {
+  it("o aviso, a faixa com a hora do relatório e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(await estadosDaFalta((leitura, situacao) => tela({ estado: situacao, leitura }))).toEqual(
+      rotulosDaFalta({ mensagem: "Não foi possível carregar o relatório.", objeto: "relatório" }),
+    );
+  });
+});

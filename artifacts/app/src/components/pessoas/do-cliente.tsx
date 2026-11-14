@@ -2,7 +2,10 @@ import { UserPlus } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { BlocoSemConexao } from "@/components/ui/erro-na-leitura";
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { useAppUser } from "@/lib/auth";
 import { portalScreens, type CustomerRow } from "@/lib/customer-registry";
 import { normalizeProfileRole } from "@/lib/modules";
@@ -63,8 +66,10 @@ export function usePessoasDoCliente(row: CustomerRow | null): PessoasDoCliente {
           acoes={acoes}
           carregando={pessoas.carregando}
           erro={pessoas.erro}
+          falhaNaReleitura={pessoas.falhaNaReleitura}
+          semConexao={Boolean(pessoas.falta && pessoas.falta.lidaEm === null)}
           tentando={pessoas.tentando}
-          onTentar={() => void pessoas.refresh()}
+          onTentar={pessoas.refresh}
         />
       ) : null,
     dialogos: (
@@ -92,6 +97,8 @@ function ListaDoPortal({
   acoes,
   carregando,
   erro,
+  falhaNaReleitura = false,
+  semConexao = false,
   tentando,
   onTentar,
 }: {
@@ -104,41 +111,56 @@ function ListaDoPortal({
   acoes: AcoesDasPessoas;
   carregando: boolean;
   erro: boolean;
+  /** A releitura falhou com as pessoas na tela: elas ficam, e a falha em cima, sem falar. */
+  falhaNaReleitura?: boolean;
+  /** Sem rede e sem nada lido: o aviso da conexão no lugar da lista. */
+  semConexao?: boolean;
   tentando: boolean;
-  onTentar: () => void;
+  onTentar: () => Promise<void>;
 }) {
   const visiveis = [...ativos, ...pendentes, ...(verArquivados ? arquivados : [])];
+  // Antes de ler, o bloco no lugar do número, e sem leitura, "—": nunca "Pessoas · 0" (carregamento v2, parte 13e).
+  // O separador vai junto, fora da árvore: o leitor de tela ouve "Pessoas", e não "Pessoas ·".
+  const lida = !carregando && !erro;
   const titulo = ["Pessoas", String(ativos.length), pendentes.length ? pendingInvitesLabel(pendentes.length) : null].filter(Boolean).join(" · ");
   return (
     <div className="border-t border-border/60">
       <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 pt-3">
-        <h3 className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">{titulo}</h3>
+        <h3 className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+          {lida ? (
+            titulo
+          ) : (
+            <>
+              Pessoas
+              <span aria-hidden="true">
+                {" · "}
+                {erro ? "—" : <Esqueleto forma="contagem" />}
+              </span>
+            </>
+          )}
+        </h3>
         {arquivados.length && !carregando && !erro ? (
           <button
             type="button"
             aria-expanded={verArquivados}
             onClick={onVerArquivados}
-            className="rounded text-sm font-bold text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="rounded text-sm font-bold text-foreground underline underline-offset-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
           >
             {`Arquivados · ${arquivados.length}`}
           </button>
         ) : null}
       </div>
+      {falhaNaReleitura && !carregando && !erro ? (
+        <FalhaNaSecao mensagem="Não foi possível atualizar as pessoas." alerta={false} tentando={tentando} onTentar={onTentar} className="px-5 pt-2" />
+      ) : null}
       {carregando ? (
-        <p role="status" className="flex items-center gap-2.5 px-5 pb-4 pt-2 text-sm font-semibold text-muted-foreground">
-          <Spinner />
-          Carregando pessoas…
-        </p>
-      ) : erro ? (
-        <div className="flex flex-wrap items-center gap-3 px-5 pb-4 pt-2">
-          <p role="alert" className="text-sm font-semibold text-destructive">
-            Não foi possível ler as pessoas.
-          </p>
-          <Button type="button" variant="outline" size="sm" disabled={tentando} onClick={onTentar}>
-            {tentando ? <Spinner /> : null}
-            Tentar de novo
-          </Button>
+        <CarregandoNaRegiao rotulo="Carregando pessoas…" onTentar={() => void onTentar()} className="px-5 pb-4 pt-2" />
+      ) : semConexao ? (
+        <div className="px-5 pb-4 pt-2">
+          <BlocoSemConexao tentando={tentando} onTentar={onTentar} />
         </div>
+      ) : erro ? (
+        <FalhaNaSecao mensagem="Não foi possível ler as pessoas." tentando={tentando} onTentar={onTentar} className="px-5 pb-4 pt-2" />
       ) : visiveis.length ? (
         <div className="pb-1">
           <ListaDePessoas modo="cliente" rotulo={`Pessoas do portal de ${nome}`} pessoas={visiveis} acoes={acoes} />

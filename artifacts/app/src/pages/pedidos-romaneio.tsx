@@ -29,6 +29,8 @@ export default function PaginaPedidosRomaneio() {
     (_id, data) => ({ paraQuando: data.due_at as unknown }),
   );
   const esperandoSolicitacao = Boolean(solicitacaoId) && solicitacao.item === undefined && !solicitacao.erro;
+  // "Tentar de novo" (na demora, na desistência e na falha): assina de novo o que ainda não chegou, os volumes ou o prazo.
+  const tentar = () => Promise.all([leitura.tentar(), esperandoSolicitacao ? solicitacao.tentar() : undefined]);
 
   const estado: EstadoDoRomaneio =
     leitura.estado !== "pronto" ? leitura.estado : !pedido?.concluido ? "em_separacao" : esperandoSolicitacao ? "carregando" : "pronto";
@@ -53,6 +55,7 @@ export default function PaginaPedidosRomaneio() {
       voltar={pedido && pedidoId ? { href: hrefDaBancada(pedidoId), rotulo: pedido.numero || "Pedidos" } : null}
       avisos={solicitacao.erro ? ["Não foi possível carregar o prazo do pedido."] : []}
       onImprimir={() => window.print()}
+      onTentar={tentar}
     />
   );
 }

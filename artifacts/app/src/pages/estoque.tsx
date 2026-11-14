@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDown,
@@ -36,6 +36,8 @@ import {
 import { type ProductPhoto, uploadProductPhoto } from "@/features/warehouse-ops/shared";
 import { ProductPhotoStudio } from "@/features/warehouse-ops/product-photo-studio";
 import { ProductPhotoManager } from "@/features/warehouse-ops/product-photo-manager";
+import { ProgressoDasFotosDoProduto, useFotosDoProduto } from "@/features/warehouse-ops/fotos-enviando";
+import { Spinner } from "@/components/ui/spinner";
 import { GuardarDaAreaDialog } from "@/features/warehouse-ops/guardar-da-area";
 import { photoContextFromRecord } from "@/features/warehouse-ops/photo-context";
 import { useToast } from "@/hooks/use-toast";
@@ -55,6 +57,8 @@ import {
   type StockItem,
 } from "@/lib/stock-items";
 import { cn } from "@/lib/utils";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useEspera } from "@/lib/carregando/use-espera";
 import Movements, { MovementModal } from "./movements";
 import { DeleteSkuButton, SkuModal } from "./skus";
 import { areaDePassagem, regraDoModelo, rotuloDaEtiqueta } from "@workspace/dominio";
@@ -77,8 +81,13 @@ import {
 import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
 import { erroDaResposta } from "@/lib/erro-da-resposta";
-import { semConexaoNaLeitura } from "@/lib/conexao";
-import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { listaLida, useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { BarraDeEspera } from "@/components/ui/barra-de-espera";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { falhaDasLeituras } from "@/lib/carregando/falha-das-leituras";
+import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -117,6 +126,9 @@ const FILTERS: Array<{ value: StockFilter; label: string }> = [
       ] as const)
     : []),
 ];
+
+/** A linha de estado sob o título: o foco vai a ela quando o aviso no lugar da lista sai com ele. */
+const ID_DA_LINHA = "estoque-linha-de-estado";
 
 export default function Estoque() {
   const queryClient = useQueryClient();
@@ -170,15 +182,34 @@ export default function Estoque() {
     enabled: MEMORIA_LIBERADA,
     staleTime: 60_000,
   });
-  // Sem rede, a lista que já estava fica, com a hora da leitura; sem nada
-  // lido, o aviso. A falta de conexão não troca a lista pelo erro
-  // (decisão 2 do celular).
-  const semRede = semConexaoNaLeitura(skus, balances, products);
-  const relendo = skus.isFetching || balances.isFetching || products.isFetching;
-  const reler = () => {
-    void queryClient.invalidateQueries({ queryKey: ["estoque"] });
-    void queryClient.invalidateQueries({ queryKey: ["stock-balances", "estoque"] });
-  };
+  // A lista mostra o catálogo e os saldos (o endereço): só entra com os dois lidos, para nunca dizer "Sem endereço"
+  // antes de ler (carregamento v2, parte 13b; necessidade 3). As fotos esperam a primeira leitura, para nunca dizer
+  // "Sem foto" antes dela, mas a falha delas não tira a lista da tela: o aviso das fotos fica acima dela, e a lista
+  // não afirma "Sem foto" sem ler. A leitura que falhou sem nada lido fica na tela enquanto tenta de novo (as
+  // cópias): o aviso e o "Tentar de novo" não somem com o foco nele, e a falta de conexão não vira o erro genérico
+  // na nova tentativa (necessidade 2). Sem rede e sem nada lido, o "Sem conexão." ou o "Reconectando…" no lugar da
+  // lista; com a lista lida, quem diz é a linha de estado (decisão 2 do celular).
+  const catalogo = useLeituraComFalha(skus);
+  const saldos = useLeituraComFalha(balances);
+  const fotosDoCatalogo = useLeituraComFalha(products);
+  const leiturasComFalha = [catalogo, saldos, fotosDoCatalogo];
+  const falhaDaLista = falhaDasLeituras([
+    [skus, catalogo],
+    [balances, saldos],
+  ]);
+  const falhaDasFotos = falhaDaLista ? null : falhaDasLeituras([[products, fotosDoCatalogo]]);
+  const fotosLidas = fotosDoCatalogo.data !== undefined;
+  const aindaLendo = leiturasComFalha.some((leitura) => leitura.isLoading);
+  // A linha de estado sob o título e o Atualizar (carregamento v2, parte 7b;
+  // o Atualizar de 44 px no celular, decisão 9.4.5): a releitura automática
+  // não mostra nada; o Atualizar só mostra a espera quando a pessoa toca
+  // nele, e relê junto os dias parado e as caixas; a volta do app ao
+  // primeiro plano relê com a barra no topo da lista.
+  const leiturasDaLista = leiturasComFalha;
+  const atualizarLista = useAtualizarLista(leiturasDaLista, () => {
+    void queryClient.invalidateQueries({ queryKey: ["stock-age", customerCode] });
+    void queryClient.invalidateQueries({ queryKey: ["warehouse-boxes", customerCode, "estoque"] });
+  });
   const regra = regraDoModelo(activeCustomer.profile.template.key);
   const hoje = hojeEmSaoPaulo();
   const parados = useMemo(
@@ -208,6 +239,16 @@ export default function Estoque() {
     }
     return result;
   }, [items]);
+  // Parados e Sem giro saem dos dias parado: sem eles lidos, sem número (nunca "0" antes de ler; parte 13b).
+  const diasParadoLidos = stockAge.dataUpdatedAt > 0;
+  // As contagens saem do catálogo e dos saldos; "Sem foto", também das fotos (a falha delas não apaga as outras).
+  const listaNaTela = listaLida([catalogo, saldos]) && !aindaLendo;
+  const contagemDoFiltro = (filtro: StockFilter): number | null => {
+    if (!listaNaTela || (filtro === "all" && !counts.all)) return null;
+    if (filtro === "no-photo" && !fotosLidas) return null;
+    if ((filtro === "idle" || filtro === "no-turnover") && !diasParadoLidos) return null;
+    return counts[filtro];
+  };
   const visible = useMemo(
     () => items.filter((item) => matchesFilter(item, filter) && matchesSearch(item, search)),
     [filter, items, search],
@@ -216,14 +257,27 @@ export default function Estoque() {
   // A ficha só abre quando a pessoa escolhe um item; fechada, a lista usa a
   // largura toda. Clicar de novo na mesma linha (ou no X, ou Esc) recolhe.
   const panelItem = selected;
-  const toggleItem = (item: StockItem) =>
+  // A ficha com fotos subindo não fecha: fechar cancelaria o envio (parte 11 do carregamento v2).
+  // O ref trava na hora; o estado diz ao "Recolher ficha" que ele está travado.
+  const fichaOcupada = useRef(false);
+  const [fichaTravada, setFichaTravada] = useState(false);
+  const recolher = () => {
+    if (!fichaOcupada.current) setSelectedKey(null);
+  };
+  const toggleItem = (item: StockItem) => {
+    if (fichaOcupada.current) return;
     setSelectedKey((current) => (current === item.key ? null : item.key));
+  };
+  const aoOcupar = useCallback((ocupada: boolean) => {
+    fichaOcupada.current = ocupada;
+    setFichaTravada(ocupada);
+  }, []);
 
   useEffect(() => {
     if (!desktop || !selectedKey) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || document.querySelector('[role="dialog"][data-state="open"]')) return;
-      if (event.key === "Escape") setSelectedKey(null);
+      if (event.key === "Escape") recolher();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -233,6 +287,7 @@ export default function Estoque() {
     <div className="flex flex-col gap-4 pb-24">
       <PageHeader
         title={`Estoque · ${activeCustomer.name}`}
+        estado={<LinhaDeEstado id={ID_DA_LINHA} leitura={leiturasDaLista} objeto="estoque" pedidaPelaPessoa={atualizarLista.voltando} />}
         actions={
           <>
             {warehouseWriter ? (
@@ -256,6 +311,13 @@ export default function Estoque() {
             {/* Sem "Novo item": produto novo nasce no Receber ou na Contagem, com
                 o SKU gerado na sigla do cliente e a duplicidade conferida ali
                 (docs/multicliente-modelos-de-operacao.md, PR 2). */}
+            {tab === "items" ? (
+              <BotaoAtualizar
+                atualizando={atualizarLista.atualizando}
+                travado={leiturasDaLista.some((leitura) => leitura.isLoading)}
+                onAtualizar={atualizarLista.atualizar}
+              />
+            ) : null}
           </>
         }
       >
@@ -310,7 +372,8 @@ export default function Estoque() {
                     key={option.value}
                     selected={filter === option.value}
                     onClick={() => setFilter(option.value)}
-                    count={option.value !== "all" || counts.all ? counts[option.value] : null}
+                    // Nenhum "0" antes da primeira leitura (carregamento v2, momento 2).
+                    count={contagemDoFiltro(option.value)}
                   >
                     {option.label}
                   </FilterChip>
@@ -319,53 +382,51 @@ export default function Estoque() {
             </FilterPanel>
           </div>
 
-          {!skus.isLoading && semRede && semRede.lidaEm !== null ? (
-            <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={relendo} onTentar={reler} />
-          ) : null}
-
-          {skus.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando estoque...</p>
-          ) : semRede && semRede.lidaEm === null ? (
-            <BlocoSemConexao tentando={relendo} onTentar={reler} />
-          ) : skus.error && !semRede ? (
-            <p className="text-sm text-destructive">Não consegui carregar o estoque.</p>
-          ) : (
+          {/* A primeira leitura e a falta com a lista lida ficam na linha de estado, sob o título; a releitura que falha
+              com a lista lida também (carregamento v2, momento 7): só a leitura sem nada lido troca a lista pelo aviso. */}
+          {falhaDaLista ? (
+            // A falha da lista, com a falta de conexão no BlocoSemConexao: o "Tentando de novo…" só na nova tentativa que
+            // a pessoa pede, e a releitura automática (o intervalo de 2 min, a do estado da conexão) não mexe no aviso.
+            <FalhaNaLeitura leitura={falhaDaLista.leitura} erro={falhaDaLista.erro} mensagem="Não consegui carregar o estoque." focoAoSair={ID_DA_LINHA} />
+          ) : aindaLendo ? null : (
             <div
               className={cn(
                 "grid grid-cols-1 gap-4",
                 desktop && panelItem && "lg:grid-cols-[minmax(0,1fr)_440px]",
               )}
             >
-              <ItemList
-                items={visible}
-                selectedKey={panelItem?.key}
-                onSelect={toggleItem}
-              />
+              <div className="flex min-w-0 flex-col gap-3">
+                {falhaDasFotos ? (
+                  <FalhaNaLeitura leitura={falhaDasFotos.leitura} erro={falhaDasFotos.erro} mensagem="Não consegui carregar as fotos." focoAoSair={ID_DA_LINHA} />
+                ) : null}
+                {/* Sem as fotos lidas, "Sem foto" não tem resposta: o filtro dele não lista nada. */}
+                {filter === "no-photo" && !fotosLidas ? null : (
+                  <ItemList
+                    items={visible}
+                    selectedKey={panelItem?.key}
+                    onSelect={toggleItem}
+                    fotosLidas={fotosLidas}
+                    barraDoTopo={<BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} resultado="fim" />}
+                  />
+                )}
+              </div>
               {desktop && panelItem ? (
                 <section className="relative overflow-hidden rounded-lg border border-border bg-card lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedKey(null)}
-                    aria-label="Recolher ficha"
-                    title="Recolher (Esc)"
-                    className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                  <ItemCard key={panelItem.key} item={panelItem} caixas={caixasDoItem(panelItem)} rotuloDaCaixaParada={rotuloDaCaixaParada} />
+                  <BotaoRecolherFicha travado={fichaTravada} onRecolher={recolher} />
+                  <ItemCard key={panelItem.key} item={panelItem} caixas={caixasDoItem(panelItem)} rotuloDaCaixaParada={rotuloDaCaixaParada} onOcupar={aoOcupar} />
                 </section>
               ) : null}
             </div>
           )}
 
           {!desktop ? (
-            <Sheet open={Boolean(selected)} onOpenChange={(open) => !open && setSelectedKey(null)}>
+            <Sheet open={Boolean(selected)} onOpenChange={(open) => !open && recolher()}>
               <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto rounded-t-lg p-0">
                 <SheetHeader className="sr-only">
                   <SheetTitle>{selected?.name ?? "Item"}</SheetTitle>
                   <SheetDescription>Ficha do item</SheetDescription>
                 </SheetHeader>
-                {selected ? <ItemCard key={selected.key} item={selected} caixas={caixasDoItem(selected)} rotuloDaCaixaParada={rotuloDaCaixaParada} /> : null}
+                {selected ? <ItemCard key={selected.key} item={selected} caixas={caixasDoItem(selected)} rotuloDaCaixaParada={rotuloDaCaixaParada} onOcupar={aoOcupar} /> : null}
               </SheetContent>
             </Sheet>
           ) : null}
@@ -375,9 +436,13 @@ export default function Estoque() {
   );
 }
 
-function Thumb({ item, size = "md" }: { item: StockItem; size?: "md" | "lg" }) {
+function Thumb({ item, size = "md", fotosLidas = true }: { item: StockItem; size?: "md" | "lg"; fotosLidas?: boolean }) {
   const photo = item.photos[0];
   const box = size === "lg" ? "size-24 rounded-2xl" : "size-11 rounded-xl";
+  if (!photo && !fotosLidas) {
+    // As fotos não foram lidas (a leitura delas falhou): o lugar da foto, neutro, sem afirmar "Sem foto".
+    return <div className={cn("shrink-0 border border-border bg-muted", box)} aria-hidden="true" />;
+  }
   if (!photo) {
     return (
       <div
@@ -401,7 +466,7 @@ function Thumb({ item, size = "md" }: { item: StockItem; size?: "md" | "lg" }) {
   );
 }
 
-function StatusChips({ item }: { item: StockItem }) {
+function StatusChips({ item, fotosLidas = true }: { item: StockItem; fotosLidas?: boolean }) {
   return (
     <div className="flex flex-wrap gap-1">
       {item.reserved > 0 ? (
@@ -413,7 +478,7 @@ function StatusChips({ item }: { item: StockItem }) {
           {rotulo}
         </Chip>
       ))}
-      {item.photos.length === 0 ? <Chip tone="muted">Sem foto</Chip> : null}
+      {item.photos.length === 0 && fotosLidas ? <Chip tone="muted">Sem foto</Chip> : null}
     </div>
   );
 }
@@ -527,10 +592,16 @@ export function ItemList({
   items,
   selectedKey,
   onSelect,
+  barraDoTopo,
+  fotosLidas = true,
 }: {
   items: StockItem[];
   selectedKey?: string;
   onSelect: (item: StockItem) => void;
+  /** As fotos lidas: sem elas (a leitura falhou), a linha não diz "Sem foto". */
+  fotosLidas?: boolean;
+  /** A barra no topo da lista que relê na volta do app (carregamento v2, momento 7, caso 3). */
+  barraDoTopo?: ReactNode;
 }) {
   const [limit, setLimit] = useState(100);
   if (!items.length) {
@@ -543,7 +614,8 @@ export function ItemList({
   const shown = items.slice(0, limit);
   return (
     <div className="flex flex-col gap-2">
-      <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="relative overflow-hidden rounded-lg border border-border bg-card">
+        {barraDoTopo}
         <div className="hidden grid-cols-[minmax(0,1fr)_200px_64px_84px] gap-3 border-b border-border/70 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50 md:grid">
           <span>Item</span>
           <span>Endereço</span>
@@ -562,7 +634,7 @@ export function ItemList({
               )}
             >
               <div className="col-span-2 flex min-w-0 items-center gap-3 md:col-span-1">
-                <Thumb item={item} />
+                <Thumb item={item} fotosLidas={fotosLidas} />
                 <div className="min-w-0">
                   <p className="font-mono text-sm font-bold text-foreground">
                     {item.clientCode ?? item.skuCode}
@@ -579,7 +651,7 @@ export function ItemList({
                         <LocationTag id={item.locations[0].id} />
                       </span>
                     ) : null}
-                    <StatusChips item={item} />
+                    <StatusChips item={item} fotosLidas={fotosLidas} />
                   </div>
                 </div>
               </div>
@@ -631,7 +703,43 @@ function movementDate(value: unknown) {
   return Number.isNaN(date.getTime()) ? "" : dateFormatter.format(date);
 }
 
-function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caixas: CaixaParada[]; rotuloDaCaixaParada: string }) {
+/**
+ * O X da ficha. Com as fotos subindo, a ficha não recolhe (parte 11 do
+ * carregamento v2): o X fica aria-disabled e esmaecido, e o toque nele não
+ * faz nada. Nunca `disabled`: o foco que estava nele não cai no corpo.
+ */
+export function BotaoRecolherFicha({ travado, onRecolher }: { travado: boolean; onRecolher: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (!travado) onRecolher();
+      }}
+      aria-label="Recolher ficha"
+      aria-disabled={travado || undefined}
+      title="Recolher (Esc)"
+      className={cn(
+        "absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+        travado && "opacity-45 hover:bg-transparent hover:text-muted-foreground",
+      )}
+    >
+      <X className="h-4 w-4" />
+    </button>
+  );
+}
+
+export function ItemCard({
+  item,
+  caixas,
+  rotuloDaCaixaParada,
+  onOcupar,
+}: {
+  item: StockItem;
+  caixas: CaixaParada[];
+  rotuloDaCaixaParada: string;
+  /** As fotos sobem ou se registram: quem mostra a ficha não a fecha. */
+  onOcupar?: (ocupada: boolean) => void;
+}) {
   const { user } = useAppUser();
   // O item listado é do cliente ativo (a lista é filtrada por ele).
   const { code: customerCode } = useActiveCustomer();
@@ -668,14 +776,11 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
     enabled: Boolean(item.skuCode),
   });
 
+  // As fotos sobem compactadas, uma por vez e com a contagem (parte 11 do
+  // carregamento v2); as enviadas entram no cadastro numa chamada só, no fim.
   const addPhotos = useMutation({
-    mutationFn: async (files: File[]) => {
-      const uploaded = await Promise.all(
-        files.slice(0, 4).map((file) =>
-          uploadProductPhoto(file, item.clientCode ?? item.skuCode, customerCode),
-        ),
-      );
-      return fetchJson("/api/catalog/photos", {
+    mutationFn: async (uploaded: ProductPhoto[]) =>
+      fetchJson("/api/catalog/photos", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -685,8 +790,7 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
           photo_urls: uploaded.map((photo) => photo.fileUrl),
           photo_storage_paths: uploaded.map((photo) => photo.storagePath),
         }),
-      });
-    },
+      }),
     onSuccess: () => {
       toast({ title: "Foto adicionada. Todos já veem no cadastro." });
       void queryClient.invalidateQueries({ queryKey: ["estoque"] });
@@ -699,6 +803,26 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
         variant: "destructive",
       }),
   });
+  const fotos = useFotosDoProduto<ProductPhoto>({
+    enviarUma: (arquivo, aoProgredir, sinal) => uploadProductPhoto(arquivo, item.clientCode ?? item.skuCode, customerCode, aoProgredir, sinal),
+    aoConcluir: (enviadas) => addPhotos.mutate(enviadas),
+    aoFalhar: (error) =>
+      toast({ title: "Não consegui adicionar a foto", description: humanApiError(error, "Tente novamente em instantes."), variant: "destructive" }),
+  });
+  const fotosOcupadas = fotos.enviando || addPhotos.isPending;
+  useEffect(() => {
+    onOcupar?.(fotosOcupadas);
+  }, [fotosOcupadas, onOcupar]);
+  // "Salvando no cadastro…" entra aos 300 ms, como toda espera, e o leitor de tela ouve (não há role="status" solto).
+  const salvando = useEspera(addPhotos.isPending);
+  const anunciar = useAnuncio();
+  useEffect(() => {
+    if (!salvando.visivel) return undefined;
+    // O que acaba antes da vez do anúncio o tira da fila do Anunciador.
+    const retirar = anunciar("Salvando no cadastro");
+    return retirar;
+  }, [salvando.visivel, anunciar]);
+  useEffect(() => () => onOcupar?.(false), [onOcupar]);
 
   const photoContext = photoContextFromRecord(item.photoContext ?? item.sku);
   const photoCategory = String(item.photoContext?.category ?? item.photoContext?.categoria ?? item.sku.category ?? item.sku.categoria ?? "");
@@ -725,6 +849,9 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
   }
 
   const photo = item.photos[photoIndex] ?? item.photos[0];
+  // A leitura dos movimentos que falhou fica na tela enquanto tenta de novo.
+  const movimentos = useLeituraComFalha(movements);
+  const idDosMovimentos = `movimentos-${useId().replace(/:/g, "")}`;
   const rows = movements.data?.items ?? [];
 
   return (
@@ -776,31 +903,37 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
                 onChange={(event) => {
                   const files = Array.from(event.target.files ?? []);
                   event.target.value = "";
-                  if (files.length) addPhotos.mutate(files);
+                  if (files.length && !fotosOcupadas) fotos.escolher(files);
                 }}
               />
               <Button
                 type="button"
                 variant={item.photos.length ? "outline" : "default"}
                 size="sm"
-                className="mt-3"
-                disabled={addPhotos.isPending}
-                onClick={() => fileRef.current?.click()}
+                // Ocupado não é desabilitado: aria-disabled e a trava no clique; o foco fica no botão.
+                className={cn("mt-3", fotosOcupadas && "opacity-45")}
+                aria-disabled={fotosOcupadas || undefined}
+                onClick={() => {
+                  if (!fotosOcupadas) fileRef.current?.click();
+                }}
               >
                 <Camera className="size-4" />
-                {addPhotos.isPending
-                  ? "Enviando..."
-                  : item.photos.length
-                    ? "Mais fotos"
-                    : "Adicionar foto"}
+                {item.photos.length ? "Mais fotos" : "Adicionar foto"}
               </Button>
+              <ProgressoDasFotosDoProduto fotos={fotos} className="mt-3" />
+              {addPhotos.isPending && salvando.visivel ? (
+                <p className="mt-2 flex items-center gap-2 text-sm font-bold text-foreground">
+                  <Spinner />
+                  Salvando no cadastro…
+                </p>
+              ) : null}
               {item.photos.length ? <div className="mt-2 flex flex-wrap gap-2">
                 <ProductPhotoStudio key={`${customerCode}:${item.skuCode}`} photos={productPhotos}
                   customerCode={customerCode} productName={item.name} category={photoCategory} context={photoContext}
-                  disabled={addPhotos.isPending} onApprove={approvePhotos} />
+                  disabled={fotosOcupadas} onApprove={approvePhotos} />
                 <ProductPhotoManager key={`manager:${customerCode}:${item.skuCode}`} photos={productPhotos}
                   customerCode={customerCode} productName={item.name} category={photoCategory} context={photoContext}
-                  disabled={addPhotos.isPending} onApprove={approvePhotos}
+                  disabled={fotosOcupadas} onApprove={approvePhotos}
                   onManage={(change) => savePhotoChange("/api/catalog/photos/manage", change)} />
               </div> : null}
             </>
@@ -867,9 +1000,13 @@ function ItemCard({ item, caixas, rotuloDaCaixaParada }: { item: StockItem; caix
           </Section>
         ) : null}
 
-        <Section title="Últimos movimentos">
-          {movements.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando...</p>
+        <Section title="Últimos movimentos" id={idDosMovimentos}>
+          {/* A espera com a caixa e o rótulo aos 300 ms, e a falha com "Tentar de novo", nunca o vazio (parte 13b). */}
+          {movimentos.isLoading ? (
+            <CarregandoNaRegiao rotulo="Carregando movimentos…" />
+          ) : movimentos.isError && movimentos.data === undefined ? (
+            // A nova tentativa que dá certo tira o aviso: o foco vai ao título da seção, nunca ao body.
+            <FalhaNaLeitura leitura={movements} erro={movimentos.error} mensagem="Não consegui carregar os movimentos." focoAoSair={idDosMovimentos} />
           ) : rows.length ? (
             rows.map((row, index) => {
               const quantity = Number(row.qtde ?? 0);
@@ -1038,10 +1175,11 @@ function Stat({
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, id, children }: { title: string; id?: string; children: ReactNode }) {
   return (
     <section>
-      <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
+      {/* Com id, o título recebe o foco quando o aviso da seção sai com ele (tabIndex -1: não entra na ordem do Tab). */}
+      <h3 id={id} tabIndex={id ? -1 : undefined} className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
         {title}
       </h3>
       {children}

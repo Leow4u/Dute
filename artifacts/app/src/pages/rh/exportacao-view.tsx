@@ -1,7 +1,13 @@
 import type { FormEvent } from "react";
 import { Link } from "wouter";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { NumeroLido } from "@/components/ui/numero-lido";
+import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 import { Input } from "@/components/ui/input";
 import {
   ARQUIVOS_DA_EXPORTACAO,
@@ -45,6 +51,12 @@ export type PropsDaExportacao = {
   hoje: string;
   competencia: string;
   ocupado: boolean;
+  /** Qual ação grava: "gerar" ou "baixar:<id>:<arquivo>" (só o botão dela diz o gerúndio; parte 13g). */
+  emAndamento?: string | null;
+  /** A nova tentativa da leitura das versões (parte 13g). */
+  leitura?: NovaTentativa;
+  /** As versões já lidas não se atualizaram: elas ficam, e a frase fica escrita em cima, sem falar, com "Tentar de novo". */
+  falhaNaReleitura?: boolean;
   aviso: string | null;
   falha: string | null;
   acoes: AcoesDaExportacao;
@@ -54,7 +66,7 @@ function plural(n: number, um: string, varios: string): string {
   return `${n} ${n === 1 ? um : varios}`;
 }
 
-function Gerar({ hoje, competencia, ocupado, acoes }: Pick<PropsDaExportacao, "hoje" | "competencia" | "ocupado" | "acoes">) {
+function Gerar({ hoje, competencia, ocupado, emAndamento, acoes }: Pick<PropsDaExportacao, "hoje" | "competencia" | "ocupado" | "acoes"> & { emAndamento: string | null }) {
   function enviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
     acoes.gerar();
@@ -73,9 +85,13 @@ function Gerar({ hoje, competencia, ocupado, acoes }: Pick<PropsDaExportacao, "h
           required
         />
       </label>
-      <Button type="submit" disabled={ocupado || !competenciaValida(competencia, hoje)}>
-        Gerar exportação
-      </Button>
+      <BotaoDeAcao
+        type="submit"
+        estado={emAndamento === "gerar" ? "andamento" : "repouso"}
+        bloqueado={!competenciaValida(competencia, hoje) || (ocupado && emAndamento !== "gerar")}
+        rotulo="Gerar exportação"
+        andamento="Gerando a exportação…"
+      />
     </form>
   );
 }
@@ -91,7 +107,7 @@ function SemAdmissao({ pessoas }: { pessoas: readonly PessoaSemAdmissao[] }) {
       <ul aria-labelledby="sem-admissao" className="flex flex-wrap gap-x-4 gap-y-2">
         {pessoas.map((pessoa) => (
           <li key={pessoa.id}>
-            <Link href={hrefDaFicha(pessoa.id)} className="rounded text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Link href={hrefDaFicha(pessoa.id)} className="rounded text-sm font-bold underline underline-offset-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco">
               {pessoa.nome}
             </Link>
           </li>
@@ -101,7 +117,19 @@ function SemAdmissao({ pessoas }: { pessoas: readonly PessoaSemAdmissao[] }) {
   );
 }
 
-function Versao({ exportacao, primeira, ocupado, acoes }: { exportacao: ExportacaoNaLista; primeira: boolean; ocupado: boolean; acoes: AcoesDaExportacao }) {
+function Versao({
+  exportacao,
+  primeira,
+  ocupado,
+  emAndamento,
+  acoes,
+}: {
+  exportacao: ExportacaoNaLista;
+  primeira: boolean;
+  ocupado: boolean;
+  emAndamento: string | null;
+  acoes: AcoesDaExportacao;
+}) {
   const titulo = `${textoDaCompetencia(exportacao.competencia)} · versão ${exportacao.versao}`;
   const autoria = [`Gerada em ${dataDaGeracao(exportacao.gerada_em)}`, exportacao.gerada_por].filter(Boolean).join(" por ");
   return (
@@ -115,35 +143,59 @@ function Versao({ exportacao, primeira, ocupado, acoes }: { exportacao: Exportac
       </span>
       <span className="flex flex-wrap gap-2">
         {ARQUIVOS_DA_EXPORTACAO.map((arquivo) => (
-          <Button
+          <BotaoDeAcao
             key={arquivo}
-            type="button"
             variant="outline"
             size="sm"
-            aria-label={`${ROTULO_DO_ARQUIVO[arquivo]}, ${titulo}`}
+            objeto={titulo}
+            estado={emAndamento === `baixar:${exportacao.id}:${arquivo}` ? "andamento" : "repouso"}
+            bloqueado={ocupado && emAndamento !== `baixar:${exportacao.id}:${arquivo}`}
+            rotulo={ROTULO_DO_ARQUIVO[arquivo]}
+            andamento="Baixando…"
             onClick={() => acoes.baixar(exportacao.id, arquivo)}
-            disabled={ocupado}
-          >
-            {ROTULO_DO_ARQUIVO[arquivo]}
-          </Button>
+          />
         ))}
       </span>
     </li>
   );
 }
 
-export function ExportacaoView({ estado, exportacoes, grava, semAdmissao, hoje, competencia, ocupado, aviso, falha, acoes }: PropsDaExportacao) {
+export function ExportacaoView({
+  estado,
+  exportacoes,
+  grava,
+  semAdmissao,
+  hoje,
+  competencia,
+  ocupado,
+  aviso,
+  falha,
+  acoes,
+  emAndamento = null,
+  leitura = SEM_NOVA_TENTATIVA,
+  falhaNaReleitura = false,
+}: PropsDaExportacao) {
+  // O resultado da ação fica escrito; o Anunciador o diz uma vez, sem região viva solta.
+  useAnunciarAoMudar(aviso);
   let lista;
-  if (estado === "carregando") lista = <Vazio>Carregando...</Vazio>;
-  else if (estado === "erro") lista = <Vazio>Não foi possível carregar as exportações.</Vazio>;
+  if (estado === "carregando") lista = <CarregandoNaRegiao rotulo="Carregando as exportações…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
+  else if (estado === "erro")
+    lista = <FalhaNaSecao mensagem="Não foi possível carregar as exportações." tentando={leitura.tentando} onTentar={leitura.tentar} className="px-5 py-7" />;
   else if (!exportacoes.length) lista = <Vazio>Nenhuma exportação</Vazio>;
   else
     lista = (
       <ul>
         {exportacoes.map((exportacao, indice) => (
-          <Versao key={exportacao.id} exportacao={exportacao} primeira={indice === 0} ocupado={ocupado} acoes={acoes} />
+          <Versao key={exportacao.id} exportacao={exportacao} primeira={indice === 0} ocupado={ocupado} emAndamento={emAndamento} acoes={acoes} />
         ))}
       </ul>
+    );
+  if (estado === "pronto" && falhaNaReleitura)
+    lista = (
+      <>
+        <FalhaNaSecao mensagem="Não foi possível atualizar as exportações." alerta={false} tentando={leitura.tentando} onTentar={leitura.tentar} className="border-b border-border px-5 py-3" />
+        {lista}
+      </>
     );
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
@@ -157,12 +209,12 @@ export function ExportacaoView({ estado, exportacoes, grava, semAdmissao, hoje, 
               Gerar
             </h2>
           </div>
-          <Gerar hoje={hoje} competencia={competencia} ocupado={ocupado} acoes={acoes} />
+          <Gerar hoje={hoje} competencia={competencia} ocupado={ocupado} emAndamento={emAndamento} acoes={acoes} />
           <SemAdmissao pessoas={semAdmissao} />
         </section>
       ) : null}
       {aviso ? (
-        <p role="status" className="text-sm font-bold text-success-soft-foreground">
+        <p className="text-sm font-bold text-success-soft-foreground">
           {aviso}
         </p>
       ) : null}
@@ -176,7 +228,9 @@ export function ExportacaoView({ estado, exportacoes, grava, semAdmissao, hoje, 
           <h2 id="versoes" className="text-base font-extrabold">
             Versões
           </h2>
-          <Contador>{exportacoes.length}</Contador>
+          <Contador>
+            <NumeroLido estado={estado}>{exportacoes.length}</NumeroLido>
+          </Contador>
         </div>
         {lista}
       </section>

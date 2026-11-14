@@ -7,6 +7,7 @@ import type { ColaboradorDaLista, VeiculoDaLista } from "@/lib/operacao/cadastro
 import type { OsDaFila } from "@/lib/operacao/fila";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import { AgendaView } from "./agenda-view";
 
@@ -58,8 +59,8 @@ const AGENDA = agendaDaSemana({
   busca: "",
 });
 
-function render(extra: Partial<Parameters<typeof AgendaView>[0]> = {}) {
-  return renderToStaticMarkup(
+function tela(extra: Partial<Parameters<typeof AgendaView>[0]> = {}) {
+  return (
     <Router ssrPath="/operacao/agenda">
       <AgendaView
         estado="pronto"
@@ -75,8 +76,12 @@ function render(extra: Partial<Parameters<typeof AgendaView>[0]> = {}) {
         escala={null}
         {...extra}
       />
-    </Router>,
+    </Router>
   );
+}
+
+function render(extra: Partial<Parameters<typeof AgendaView>[0]> = {}) {
+  return renderToStaticMarkup(tela(extra));
 }
 
 describe("Agenda", () => {
@@ -167,7 +172,9 @@ describe("Agenda", () => {
   });
 
   it("carregando, erro e sem ninguém", () => {
-    expect(textosDaTela(render({ estado: "carregando" }))).toContain("Carregando");
+    // Lendo: nada escrito antes de 300 ms; a região da espera (a caixa e o gerúndio) guarda o lugar (parte 13g).
+    expect(textosDaTela(render({ estado: "carregando" }))).not.toContain("Carregando");
+    expect(render({ estado: "carregando" })).toContain("data-carregando-na-regiao");
     expect(textosDaTela(render({ estado: "erro" }))).toContain("Não foi possível carregar a agenda.");
     const vazia = { ...AGENDA, grupos: [], semEquipe: [], porDia: {} };
     expect(textosDaTela(render({ agenda: vazia }))).toContain("Nenhum colaborador ou veículo ativo");
@@ -193,5 +200,13 @@ describe("Agenda", () => {
 
   it("não tem problema de acessibilidade", async () => {
     expect(await violacoesDeAcessibilidade(render({ selecionada: "10045-01" }))).toEqual([]);
+  });
+});
+
+describe("Agenda sem conexão (carregamento v2, parte 13j)", () => {
+  it("o aviso, a faixa e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(await estadosDaFalta((leitura, situacao) => tela({ estado: situacao, leitura }))).toEqual(
+      rotulosDaFalta({ mensagem: "Não foi possível carregar a agenda." }),
+    );
   });
 });

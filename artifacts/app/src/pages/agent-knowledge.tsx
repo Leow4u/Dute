@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   collection,
   doc,
-  getDocs,
+  getDocFromServer,
   serverTimestamp,
   setDoc,
   where,
@@ -16,7 +16,6 @@ import {
   Download,
   FileCheck2,
   FileText,
-  Loader2,
   RefreshCw,
   ShieldCheck,
   UploadCloud,
@@ -24,10 +23,21 @@ import {
 
 import { AgentNotes } from "@/components/agent/agent-notes";
 import { AgentPlaybooks } from "@/components/agent/agent-playbooks";
+import { FantasmasDaLista, LeituraDaListaDoAgente } from "@/components/agent/leitura-do-agente";
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { lerDocsDoServidor } from "@/lib/cloud-api";
 import { useAppUser } from "@/lib/auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { AvisoDeEspera } from "@/components/ui/aviso-de-espera";
+import { BotaoDeAcao, type EstadoDaAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { Progresso } from "@/components/ui/progresso";
+import { CARREGANDO } from "@/lib/carregando/tempo";
+import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { desfechoDoErro } from "@/lib/carregando/use-acao-na-linha";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { comPrazoSemAvanco } from "@/lib/conexao";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Card,
@@ -261,13 +271,30 @@ function sortDocuments(items: KnowledgeDocument[]) {
 async function commitInBatches(
   operations: Array<(batch: ReturnType<typeof writeBatch>) => void>,
   size = 10,
+  /** A cada lote gravado: o prazo da gravação conta de cada avanço. */
+  aoGravarLote?: () => void,
 ) {
   if (!firestore) throw new Error("Firestore não configurado.");
   for (let index = 0; index < operations.length; index += size) {
     const batch = writeBatch(firestore);
     operations.slice(index, index + size).forEach((operation) => operation(batch));
     await batch.commit();
+    aoGravarLote?.();
   }
+}
+
+/** A gravação da vez: o id, quantos pedaços do arquivo e trechos do texto ela escreve, e o evento dela. */
+interface EnvioDoConhecimento {
+  id: string;
+  pedacos: number;
+  trechos: number;
+  evento: Parameters<typeof emitKnowledgeEvent>[0];
+  eventoSaiu: boolean;
+}
+
+/** O id do pedaço n (de 1 em diante) do conhecimento: o mesmo na gravação e no "Conferir". */
+function idDoPedaco(knowledgeId: string, numero: number): string {
+  return `${knowledgeId}_${String(numero).padStart(4, "0")}`;
 }
 
 async function emitKnowledgeEvent(input: {
@@ -297,6 +324,29 @@ async function emitKnowledgeEvent(input: {
   }).catch(() => undefined);
 }
 
+/**
+ * Um número do Conhecimento, pela leitura de que ele sai (carregamento v2,
+ * momento 2): antes de ler, o bloco no lugar do "0"; lido, o número; a
+ * leitura que falhou, "—" e, para o leitor de tela, "Não carregou". Os
+ * números dos documentos não esperam os arquivos fonte, nem o contrário.
+ */
+function Contador({ rotulo, leitura, valor }: { rotulo: string; leitura: { data: unknown; isError: boolean }; valor: number }) {
+  return (
+    <p data-contador={rotulo} className="text-2xl font-semibold">
+      {leitura.data !== undefined ? (
+        valor
+      ) : leitura.isError ? (
+        <>
+          <span aria-hidden="true">—</span>
+          <span className="sr-only">Não carregou</span>
+        </>
+      ) : (
+        <Esqueleto forma="contagem" className="mt-2" />
+      )}
+    </p>
+  );
+}
+
 export default function AgentKnowledge() {
   const { toast } = useToast();
   const { user } = useAppUser();
@@ -315,7 +365,8 @@ export default function AgentKnowledge() {
     queryKey: ["agent-knowledge-documents"],
     queryFn: async (): Promise<KnowledgeDocument[]> => {
       if (!firestore) return [];
-      const snapshot = await getDocs(collection(firestore, knowledgeCollection));
+      // Sem rede, o Firestore responde do cache: a base velha ou vazia viraria "Sem documentos na base".
+      const snapshot = await lerDocsDoServidor(collection(firestore, knowledgeCollection));
       return sortDocuments(
         snapshot.docs.map(
           (item) =>
@@ -332,7 +383,7 @@ export default function AgentKnowledge() {
     queryKey: ["agent-knowledge-files"],
     queryFn: async (): Promise<KnowledgeFile[]> => {
       if (!firestore) return [];
-      const snapshot = await getDocs(collection(firestore, fileCollection));
+      const snapshot = await lerDocsDoServidor(collection(firestore, fileCollection));
       return snapshot.docs.map(
         (item) =>
           ({
@@ -342,6 +393,9 @@ export default function AgentKnowledge() {
       );
     },
   });
+  // O Atualizar das listas (carregamento v2, momento 7): só gira quando a pessoa toca nele, acorda o Firestore que se
+  // deu por offline antes de reler (a leitura daqui é a do servidor, e o cache não vale) e, no fim, "Lista atualizada".
+  const atualizarLista = useAtualizarLista([documents, files]);
 
   const filesByKnowledge = useMemo(() => {
     return new Map(
@@ -363,142 +417,27 @@ export default function AgentKnowledge() {
     };
   }, [documents.data, files.data]);
 
+  // As etapas da gravação (o cadastro, o arquivo em pedaços e os trechos de
+  // texto), com o prazo de 70 s contado de cada lote gravado: a gravação
+  // direta no Firestore, sem rede, esperaria para sempre, e a lenta, mas
+  // andando, não desiste (carregamento v2, parte 11). Ficam no formulário
+  // desde o repouso. O id é o do conteúdo, então repetir regrava o mesmo
+  // documento.
+  const etapasDoEnvio = file && isTextLike(file) ? ["Cadastro", "Arquivo", "Trechos"] : ["Cadastro", "Arquivo"];
+  const [etapaDoEnvio, setEtapaDoEnvio] = useState(0);
+  const [fimDoEnvio, setFimDoEnvio] = useState<"erro" | "sem-resposta" | null>(null);
+  const [conferindoEnvio, setConferindoEnvio] = useState(false);
+  /** O que a gravação da vez escreve (para o "Conferir" saber o último pedaço) e o evento, que sai uma vez só. */
+  const envioDaVez = useRef<EnvioDoConhecimento | null>(null);
   const upload = useMutation({
-    mutationFn: async () => {
-      if (!firestore) throw new Error("Firestore não configurado.");
-      const db = firestore;
-      if (!file) throw new Error("Selecione um arquivo.");
-      if (file.size > maxUploadBytes) {
-        throw new Error("Arquivo acima do limite atual de 8 MB.");
-      }
-
-      const buffer = await file.arrayBuffer();
-      const hash = await sha256Hex(buffer);
-      const baseId = safeDocId(`${titleFromFile(file)}_${hash.slice(0, 16)}`);
-      const knowledgeId = baseId || `knowledge_${Date.now()}`;
-      const title = form.title.trim() || titleFromFile(file);
-      const base64 = arrayBufferToBase64(buffer);
-      const fileChunks = fileBase64Chunks(base64);
-      const nowIso = new Date().toISOString();
-      const readableText = isTextLike(file) ? await file.text() : "";
-      const chunks = readableText ? textChunks(readableText) : [];
-      const extractionStatus = readableText
-        ? "processed"
-        : "pending_processing";
-
-      await setDoc(
-        doc(firestore, knowledgeCollection, knowledgeId),
-        {
-          id: knowledgeId,
-          title,
-          document_type: form.document_type,
-          customer_code: form.customer_code.trim() || activeCustomerCode,
-          source_file_name: file.name,
-          summary:
-            form.notes.trim() ||
-            (readableText
-              ? readableText.slice(0, 700)
-              : "Arquivo anexado para processamento de conhecimento."),
-          status: "active",
-          sha256: hash,
-          chunk_count: chunks.length,
-          pages: null,
-          extraction_status: extractionStatus,
-          file_available: true,
-          file_storage_mode: "firestore_chunks",
-          download_file_id: knowledgeId,
-          content_type: file.type || "application/octet-stream",
-          size_bytes: file.size,
-          ingested_at: nowIso,
-          created_at: serverTimestamp(),
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      await setDoc(
-        doc(firestore, fileCollection, knowledgeId),
-        {
-          id: knowledgeId,
-          knowledge_id: knowledgeId,
-          file_name: file.name,
-          content_type: file.type || "application/octet-stream",
-          size_bytes: file.size,
-          sha256: hash,
-          chunk_count: fileChunks.length,
-          storage_mode: "firestore_chunks",
-          created_at: serverTimestamp(),
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      await commitInBatches(
-        fileChunks.map((chunk, index) => (batch) => {
-          batch.set(
-              doc(
-                db,
-                fileChunkCollection,
-                `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
-              ),
-            {
-              id: `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
-              knowledge_id: knowledgeId,
-              chunk_index: index,
-              data_base64: chunk,
-              created_at: serverTimestamp(),
-            },
-          );
-        }),
-      );
-
-      if (chunks.length) {
-        await commitInBatches(
-          chunks.map((chunk, index) => (batch) => {
-            batch.set(
-              doc(
-                db,
-                textChunkCollection,
-                `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
-              ),
-              {
-                id: `${knowledgeId}_${String(index + 1).padStart(4, "0")}`,
-                knowledge_id: knowledgeId,
-                chunk_index: index,
-                text: chunk,
-                source_file_name: file.name,
-                title,
-                customer_code: form.customer_code.trim() || activeCustomerCode,
-                document_type: form.document_type,
-                created_at: serverTimestamp(),
-              },
-            );
-          }),
-          50,
-        );
-      }
-
-      await emitKnowledgeEvent({
-        id: knowledgeId,
-        title,
-        customer_code: form.customer_code.trim() || activeCustomerCode,
-        file_name: file.name,
-        extraction_status: extractionStatus,
-      });
-    },
-    onSuccess: async () => {
-      setForm(initialForm);
-      setFile(null);
-      await queryClient.invalidateQueries({
-        queryKey: ["agent-knowledge-documents"],
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["agent-knowledge-files"],
-      });
-      await queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
-      toast({ title: "Conhecimento anexado ao Agent Dute" });
-    },
+    mutationFn: () => comPrazoSemAvanco((avancou) => gravarConhecimento(avancou), CARREGANDO.desisteMs),
+    onSuccess: () => anexado(),
     onError: (error) => {
+      if (desfechoDoErro(error) === "sem-resposta") {
+        setFimDoEnvio("sem-resposta");
+        return;
+      }
+      setFimDoEnvio("erro");
       toast({
         title: "Falha ao anexar conhecimento",
         description: error instanceof Error ? error.message : undefined,
@@ -506,6 +445,204 @@ export default function AgentKnowledge() {
       });
     },
   });
+  async function anexado() {
+    setFimDoEnvio(null);
+    setEtapaDoEnvio(0);
+    setForm(initialForm);
+    setFile(null);
+    await queryClient.invalidateQueries({
+      queryKey: ["agent-knowledge-documents"],
+    });
+    await queryClient.invalidateQueries({
+      queryKey: ["agent-knowledge-files"],
+    });
+    await queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
+    toast({ title: "Conhecimento anexado ao Agent Dute" });
+  }
+  useEffect(() => {
+    if (fimDoEnvio !== "erro") return undefined;
+    const volta = setTimeout(() => setFimDoEnvio((atual) => (atual === "erro" ? null : atual)), CARREGANDO.erroVisivelMs);
+    return () => clearTimeout(volta);
+  }, [fimDoEnvio]);
+  // Conferindo, o estado continua sem resposta: o botão diz "Conferindo…", e não a gravação de novo.
+  const estadoDoEnvio: EstadoDaAcao = upload.isPending ? "andamento" : (fimDoEnvio ?? "repouso");
+  const esperaDoEnvio = useEspera(upload.isPending);
+  /**
+   * O "Conferir" do prazo sem resposta: lê no servidor o cadastro, o arquivo,
+   * o último pedaço e o último trecho, e nunca regrava. A gravação é em
+   * ordem: com o último lá, está tudo lá, e segue o sucesso (com o evento, se
+   * a gravação por baixo ainda não o mandou). Pela metade, volta a "Anexar".
+   */
+  async function conferirEnvio() {
+    const vez = envioDaVez.current;
+    if (conferindoEnvio || !firestore || !vez) return;
+    setConferindoEnvio(true);
+    try {
+      const db = firestore;
+      const lidos = await Promise.all([
+        getDocFromServer(doc(db, knowledgeCollection, vez.id)),
+        getDocFromServer(doc(db, fileCollection, vez.id)),
+        ...(vez.pedacos ? [getDocFromServer(doc(db, fileChunkCollection, idDoPedaco(vez.id, vez.pedacos)))] : []),
+        ...(vez.trechos ? [getDocFromServer(doc(db, textChunkCollection, idDoPedaco(vez.id, vez.trechos)))] : []),
+      ]);
+      if (lidos.every((lido) => lido.exists())) {
+        await emitirUmaVez(vez);
+        await anexado();
+      } else {
+        setFimDoEnvio(null);
+      }
+    } catch (error) {
+      toast({ title: "Não consegui conferir o conhecimento", description: error instanceof Error ? error.message : undefined, variant: "destructive" });
+    } finally {
+      setConferindoEnvio(false);
+    }
+  }
+
+  /** O evento da gravação sai uma vez: pela gravação que terminou por baixo ou pelo "Conferir", o que vier antes. */
+  function emitirUmaVez(vez: EnvioDoConhecimento): Promise<void> {
+    if (vez.eventoSaiu) return Promise.resolve();
+    vez.eventoSaiu = true;
+    return emitKnowledgeEvent(vez.evento);
+  }
+
+  async function gravarConhecimento(avancou: () => void) {
+    if (!firestore) throw new Error("Firestore não configurado.");
+    const db = firestore;
+    if (!file) throw new Error("Selecione um arquivo.");
+    if (file.size > maxUploadBytes) {
+      throw new Error("Arquivo acima do limite atual de 8 MB.");
+    }
+    setFimDoEnvio(null);
+    setEtapaDoEnvio(1);
+
+    const buffer = await file.arrayBuffer();
+    const hash = await sha256Hex(buffer);
+    const baseId = safeDocId(`${titleFromFile(file)}_${hash.slice(0, 16)}`);
+    const knowledgeId = baseId || `knowledge_${Date.now()}`;
+    const title = form.title.trim() || titleFromFile(file);
+    const base64 = arrayBufferToBase64(buffer);
+    const fileChunks = fileBase64Chunks(base64);
+    const nowIso = new Date().toISOString();
+    const readableText = isTextLike(file) ? await file.text() : "";
+    const chunks = readableText ? textChunks(readableText) : [];
+    const extractionStatus = readableText
+      ? "processed"
+      : "pending_processing";
+    const vez: EnvioDoConhecimento = {
+      id: knowledgeId,
+      pedacos: fileChunks.length,
+      trechos: chunks.length,
+      evento: {
+        id: knowledgeId,
+        title,
+        customer_code: form.customer_code.trim() || activeCustomerCode,
+        file_name: file.name,
+        extraction_status: extractionStatus,
+      },
+      eventoSaiu: false,
+    };
+    envioDaVez.current = vez;
+
+    await setDoc(
+      doc(firestore, knowledgeCollection, knowledgeId),
+      {
+        id: knowledgeId,
+        title,
+        document_type: form.document_type,
+        customer_code: form.customer_code.trim() || activeCustomerCode,
+        source_file_name: file.name,
+        summary:
+          form.notes.trim() ||
+          (readableText
+            ? readableText.slice(0, 700)
+            : "Arquivo anexado para processamento de conhecimento."),
+        status: "active",
+        sha256: hash,
+        chunk_count: chunks.length,
+        pages: null,
+        extraction_status: extractionStatus,
+        file_available: true,
+        file_storage_mode: "firestore_chunks",
+        download_file_id: knowledgeId,
+        content_type: file.type || "application/octet-stream",
+        size_bytes: file.size,
+        ingested_at: nowIso,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    await setDoc(
+      doc(firestore, fileCollection, knowledgeId),
+      {
+        id: knowledgeId,
+        knowledge_id: knowledgeId,
+        file_name: file.name,
+        content_type: file.type || "application/octet-stream",
+        size_bytes: file.size,
+        sha256: hash,
+        chunk_count: fileChunks.length,
+        storage_mode: "firestore_chunks",
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      },
+      { merge: true },
+    );
+    avancou();
+
+    setEtapaDoEnvio(2);
+    await commitInBatches(
+      fileChunks.map((chunk, index) => (batch) => {
+        batch.set(
+            doc(
+              db,
+              fileChunkCollection,
+              idDoPedaco(knowledgeId, index + 1),
+            ),
+          {
+            id: idDoPedaco(knowledgeId, index + 1),
+            knowledge_id: knowledgeId,
+            chunk_index: index,
+            data_base64: chunk,
+            created_at: serverTimestamp(),
+          },
+        );
+      }),
+      10,
+      avancou,
+    );
+
+    if (chunks.length) {
+      setEtapaDoEnvio(3);
+      await commitInBatches(
+        chunks.map((chunk, index) => (batch) => {
+          batch.set(
+            doc(
+              db,
+              textChunkCollection,
+              idDoPedaco(knowledgeId, index + 1),
+            ),
+            {
+              id: idDoPedaco(knowledgeId, index + 1),
+              knowledge_id: knowledgeId,
+              chunk_index: index,
+              text: chunk,
+              source_file_name: file.name,
+              title,
+              customer_code: form.customer_code.trim() || activeCustomerCode,
+              document_type: form.document_type,
+              created_at: serverTimestamp(),
+            },
+          );
+        }),
+        50,
+        avancou,
+      );
+    }
+
+    await emitirUmaVez(vez);
+  }
 
   async function downloadFile(item: KnowledgeDocument) {
     if (!firestore) return;
@@ -522,7 +659,7 @@ export default function AgentKnowledge() {
 
     setDownloadingId(item.id);
     try {
-      const snapshot = await getDocs(
+      const snapshot = await lerDocsDoServidor(
         query(
           collection(firestore, fileChunkCollection),
           where("knowledge_id", "==", linkedFile.id),
@@ -559,7 +696,9 @@ export default function AgentKnowledge() {
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    upload.mutate();
+    if (conferindoEnvio) return;
+    if (estadoDoEnvio === "sem-resposta") void conferirEnvio();
+    else if (estadoDoEnvio !== "andamento" && file) upload.mutate();
   }
 
   return (
@@ -568,18 +707,16 @@ export default function AgentKnowledge() {
         title="Conhecimento"
         description="O que o Agent Dute sabe da operação: anotações, playbooks e documentos aprovados"
         actions={
-          <Button
-            type="button"
+          <BotaoDeAcao
             variant="outline"
-            onClick={() => {
-              documents.refetch();
-              files.refetch();
-            }}
-            disabled={documents.isFetching || files.isFetching}
-          >
-            <RefreshCw className={cn("h-4 w-4", (documents.isFetching || files.isFetching) && "animate-spin")} />
-            Atualizar
-          </Button>
+            // O Atualizar com 44 px (seção 7).
+            className="min-h-11"
+            estado={atualizarLista.atualizando ? "andamento" : "repouso"}
+            icone={<RefreshCw className="h-4 w-4" />}
+            rotulo="Atualizar"
+            andamento="Atualizando…"
+            onClick={atualizarLista.atualizar}
+          />
         }
       />
 
@@ -598,7 +735,7 @@ export default function AgentKnowledge() {
             <Database className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm text-muted-foreground">Documentos</p>
-              <p className="text-2xl font-semibold">{summary.total}</p>
+              <Contador rotulo="Documentos" leitura={documents} valor={summary.total} />
             </div>
           </CardContent>
         </Card>
@@ -607,7 +744,7 @@ export default function AgentKnowledge() {
             <ShieldCheck className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm text-muted-foreground">Consultáveis</p>
-              <p className="text-2xl font-semibold">{summary.consultable}</p>
+              <Contador rotulo="Consultáveis" leitura={documents} valor={summary.consultable} />
             </div>
           </CardContent>
         </Card>
@@ -616,7 +753,7 @@ export default function AgentKnowledge() {
             <FileText className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm text-muted-foreground">Trechos</p>
-              <p className="text-2xl font-semibold">{summary.chunks}</p>
+              <Contador rotulo="Trechos" leitura={documents} valor={summary.chunks} />
             </div>
           </CardContent>
         </Card>
@@ -625,7 +762,7 @@ export default function AgentKnowledge() {
             <FileCheck2 className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm text-muted-foreground">Arquivos fonte</p>
-              <p className="text-2xl font-semibold">{summary.files}</p>
+              <Contador rotulo="Arquivos fonte" leitura={files} valor={summary.files} />
             </div>
           </CardContent>
         </Card>
@@ -633,16 +770,13 @@ export default function AgentKnowledge() {
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-4">
-          {documents.isLoading ? (
-            <Card>
-              <CardContent className="flex min-h-[240px] items-center justify-center gap-3">
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                <span className="text-sm text-muted-foreground">
-                  Carregando base de conhecimento...
-                </span>
-              </CardContent>
-            </Card>
-          ) : documents.data?.length ? (
+          <LeituraDaListaDoAgente
+            leitura={documents}
+            rotulo="Carregando documentos…"
+            falha="Não foi possível carregar os documentos."
+            fantasmas={<FantasmasDaLista linhas={2} altura="h-60" className="lg:grid lg:grid-cols-2 lg:gap-4" />}
+          >
+          {documents.data?.length ? (
             <div className="grid gap-4 lg:grid-cols-2">
               {documents.data.map((item) => {
                 const linkedFile =
@@ -706,20 +840,17 @@ export default function AgentKnowledge() {
                         <span className="text-xs text-muted-foreground">
                           {formatDate(item.ingested_at ?? item.created_at)}
                         </span>
-                        <Button
-                          type="button"
+                        <BotaoDeAcao
                           variant="outline"
                           size="sm"
-                          disabled={!canDownload || downloadingId === item.id}
-                          onClick={() => downloadFile(item)}
-                        >
-                          {downloadingId === item.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Download className="h-4 w-4" />
-                          )}
-                          Baixar
-                        </Button>
+                          className="max-md:min-h-12"
+                          estado={downloadingId === item.id ? "andamento" : "repouso"}
+                          icone={<Download className="h-4 w-4" />}
+                          rotulo="Baixar"
+                          andamento="Baixando…"
+                          bloqueado={!canDownload}
+                          onClick={() => void downloadFile(item)}
+                        />
                       </div>
                     </CardContent>
                   </Card>
@@ -739,6 +870,7 @@ export default function AgentKnowledge() {
               </EmptyHeader>
             </Empty>
           )}
+          </LeituraDaListaDoAgente>
         </div>
 
         <Card className="h-fit">
@@ -849,18 +981,29 @@ export default function AgentKnowledge() {
                   O Agent Dute usa os trechos indexados desta coleção como contexto operacional.
                 </AlertDescription>
               </Alert>
-              <Button
+              <Progresso
+                forma="etapas"
+                titulo="Anexando ao Agent Dute"
+                itens={etapasDoEnvio.map((rotulo, indice) => ({
+                  rotulo,
+                  estado: indice + 1 < etapaDoEnvio ? "feito" : indice + 1 === etapaDoEnvio && upload.isPending ? "andamento" : "fila",
+                }))}
+              />
+              <div data-lugar-do-aviso="" className="grid min-h-9 items-center">
+                {upload.isPending && esperaDoEnvio.calmo ? <AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={esperaDoEnvio.decorridoMs} /> : null}
+                {estadoDoEnvio === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
+              </div>
+              <BotaoDeAcao
                 type="submit"
-                className="w-full"
-                disabled={!file || upload.isPending}
-              >
-                {upload.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <UploadCloud className="h-4 w-4" />
-                )}
-                Anexar ao Agent Dute
-              </Button>
+                className="min-h-11 w-full"
+                estado={conferindoEnvio ? "andamento" : estadoDoEnvio}
+                icone={<UploadCloud />}
+                rotulo="Anexar ao Agent Dute"
+                andamento={conferindoEnvio ? "Conferindo…" : "Anexando…"}
+                sucesso="Anexado"
+                erro="Não anexado"
+                bloqueado={estadoDoEnvio === "repouso" && !file}
+              />
             </form>
           </CardContent>
         </Card>

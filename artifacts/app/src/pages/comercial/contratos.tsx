@@ -20,7 +20,7 @@ import {
   type FiltroDaLista,
   type TabelaDoContrato,
 } from "@/lib/comercial/contratos";
-import { carga, useLeitura } from "@/lib/comercial/leitura";
+import { carga, novaTentativaDe, useLeitura } from "@/lib/comercial/leitura";
 import { ROTA_CONTRATOS, contratoDaBusca } from "@/lib/comercial/navegacao";
 import { payloadDaTabela } from "@/lib/comercial/tabela-do-contrato";
 
@@ -156,6 +156,7 @@ export default function ComercialContratosPage({ somenteLeitura = false, rotaBas
       <ContratosView
         somenteLeitura={somenteLeitura}
         estado={estado}
+        leitura={novaTentativaDe([contratos])}
         contratos={lista}
         clientes={clientes}
         hoje={hoje}
@@ -169,6 +170,7 @@ export default function ComercialContratosPage({ somenteLeitura = false, rotaBas
         onSelecionar={selecionar}
         tabelas={carga(tabelas)}
         aditivos={carga(aditivos)}
+        releituras={{ tabelas, aditivos }}
         ocupado={ocupado}
         acoes={{
           novoContrato: () => abrir({ tipo: "novo", chave: novaChave() }),

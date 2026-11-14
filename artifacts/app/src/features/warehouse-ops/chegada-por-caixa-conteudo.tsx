@@ -2,11 +2,14 @@ import { useEffect, useRef } from "react";
 import { ArrowLeft, Check, Package, Plus, Printer, Search } from "lucide-react";
 import { tamanhoDoProduto } from "@workspace/dominio";
 import { Badge } from "@/components/ui/badge";
+import { BotaoDeAcao, type EstadoDaAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import { cn } from "@/lib/utils";
 import {
   boxDraftToPayload,
@@ -162,6 +165,12 @@ export type FichaDaChegadaPorCaixaProps = {
   fechando: boolean;
   rascunho: RascunhoDoFechamento;
   ocupado: boolean;
+  /**
+   * A ação em curso ("iniciar", "quantidade", "remover-produto", "fechar",
+   * "reabrir", "remover", "concluir", "desmarcar:<linha>"): o botão dela
+   * mostra a espera, com o gerúndio e o foco nele (carregamento v2, parte 13c).
+   */
+  acao?: string | null;
   /** Quem só consulta (o suporte) vê as caixas e as linhas, sem as ações. */
   podeOperar: boolean;
   podeRegistrarDivergencia: boolean;
@@ -206,6 +215,11 @@ export type FichaDaChegadaPorCaixaProps = {
   onEtiquetas?: (codigos: string[]) => void;
 };
 
+/** O estado do botão da ação: em andamento só o tocado; os outros, em repouso (e ocupados, pelo `ocupado`). */
+function estadoDa(props: Pick<FichaDaChegadaPorCaixaProps, "acao">, acao: string): EstadoDaAcao {
+  return props.acao === acao ? "andamento" : "repouso";
+}
+
 export function FichaDaChegadaPorCaixaConteudo(
   props: FichaDaChegadaPorCaixaProps,
 ) {
@@ -235,6 +249,21 @@ export function FichaDaChegadaPorCaixaConteudo(
     if (etapaAnterior.current !== etapa) tituloRef.current?.focus();
     etapaAnterior.current = etapa;
   }, [etapa]);
+  // A entrada concluída tira as ações da ficha ("Concluir entrada" sai com o foco): o foco vai ao título, que passa a
+  // "Detalhes do recebimento", e nunca fica no body (carregamento v2, seção 7).
+  const operavaAntes = useRef(props.podeOperar);
+  useEffect(() => {
+    const perdeuOFoco = typeof document !== "undefined" && (document.activeElement === null || document.activeElement === document.body);
+    if (operavaAntes.current && !props.podeOperar && perdeuOFoco) tituloRef.current?.focus();
+    operavaAntes.current = props.podeOperar;
+  }, [props.podeOperar]);
+  // O que explica por que Revisar, Voltar e Concluir esperam é dito uma vez, quando aparece (antes, uma região viva).
+  const anunciar = useAnuncio();
+  const rascunhosPendentes = Boolean(props.rascunhosPendentes);
+  useEffect(() => {
+    if (rascunhosPendentes) return anunciar("Há quantidade não salva");
+    return undefined;
+  }, [anunciar, rascunhosPendentes]);
   return (
     <div className="@container flex min-w-0 flex-col gap-5">
       {props.onBack ? (
@@ -254,7 +283,7 @@ export function FichaDaChegadaPorCaixaConteudo(
           <h2
             ref={tituloRef}
             tabIndex={-1}
-            className="text-2xl font-extrabold tracking-tight outline-none sm:text-3xl"
+            className="rounded-md text-2xl font-extrabold tracking-tight sm:text-3xl focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
           >
             {titulo}
           </h2>
@@ -292,7 +321,7 @@ export function FichaDaChegadaPorCaixaConteudo(
                 className={cn(
                   "flex size-7 shrink-0 items-center justify-center rounded-full border",
                   etapa === index + 1 &&
-                    "border-primary bg-primary text-primary-foreground",
+                    "border-primary-fundo bg-primary text-primary-foreground",
                 )}
               >
                 {index + 1 < etapa ? (
@@ -314,17 +343,13 @@ export function FichaDaChegadaPorCaixaConteudo(
           {props.erro}
         </p>
       ) : null}
-      <p
-        role="status"
-        aria-live="polite"
-        className="text-sm text-muted-foreground"
-      >
-        {props.ocupado
-          ? "Salvando… Aguarde a confirmação."
-          : props.feedback || ""}
-      </p>
+      {/* O retorno da ação fica escrito, sem região viva: quem fala é o Anunciador, e a espera é a do botão tocado
+          (carregamento v2, parte 13c). */}
+      {props.feedback && !props.ocupado ? (
+        <p className="text-sm text-muted-foreground">{props.feedback}</p>
+      ) : null}
       {props.rascunhosPendentes ? (
-        <p role="status" className="text-sm text-warning-soft-foreground">
+        <p className="text-sm text-warning-soft-foreground">
           Há quantidade não salva. Salve ou descarte a alteração antes de
           revisar.
         </p>
@@ -422,6 +447,13 @@ function Conferencia(
       item.barcode,
     ].some((valor) => valor?.toLocaleLowerCase("pt-BR").includes(busca)),
   );
+  // O resultado da busca sem nada é dito uma vez, quando aparece (antes, uma região viva solta).
+  const anunciar = useAnuncio();
+  const nadaAchado = Boolean(busca) && filtrados.length === 0;
+  useEffect(() => {
+    if (nadaAchado) return anunciar("Nenhum produto da NF encontrado");
+    return undefined;
+  }, [anunciar, nadaAchado]);
   const produto = itens.find((item) => item.id === props.produtoSelecionado);
   const salvo = caixa?.lines.find(
     (linha) => linha.inbound_item_id === produto?.id,
@@ -452,15 +484,15 @@ function Conferencia(
             </p>
           ) : null}
         </div>
-        <Button
-          type="button"
+        <BotaoDeAcao
           variant="outline"
-          disabled={ocupado}
+          estado={estadoDa(props, "iniciar")}
+          icone={<Plus aria-hidden="true" />}
+          rotulo={props.caixas.length ? "Iniciar outra caixa" : "Iniciar caixa"}
+          andamento="Iniciando…"
+          bloqueado={ocupado && props.acao !== "iniciar"}
           onClick={props.onIniciar}
-        >
-          <Plus className="size-4" aria-hidden="true" />
-          {props.caixas.length ? "Iniciar outra caixa" : "Iniciar caixa"}
-        </Button>
+        />
       </div>
       {props.caixas.length > 1 ? <Caixas props={props} /> : null}
       {!caixa ? (
@@ -529,7 +561,7 @@ function Conferencia(
                           type="button"
                           disabled={ocupado || !item.id}
                           aria-pressed={item.id === produto?.id}
-                          className="w-full rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                          className="w-full rounded text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco disabled:opacity-50"
                           onClick={() => item.id && props.onProduto?.(item.id)}
                         >
                           <span className="block font-bold">
@@ -566,7 +598,7 @@ function Conferencia(
               </table>
             </div>
             {!filtrados.length ? (
-              <p role="status" className="py-6 text-sm text-muted-foreground">
+              <p className="py-6 text-sm text-muted-foreground">
                 Nenhum produto da NF encontrado.
               </p>
             ) : null}
@@ -638,12 +670,13 @@ function Conferencia(
                     )}{" "}
                     un.
                   </p>
-                  <Button
+                  <BotaoDeAcao
                     type="submit"
-                    disabled={ocupado || total == null || total === salvo}
-                  >
-                    {salvo == null ? "Adicionar à caixa" : "Salvar quantidade"}
-                  </Button>
+                    estado={estadoDa(props, "quantidade")}
+                    rotulo={salvo == null ? "Adicionar à caixa" : "Salvar quantidade"}
+                    andamento={salvo == null ? "Adicionando…" : "Salvando…"}
+                    bloqueado={props.acao !== "quantidade" && (ocupado || total == null || total === salvo)}
+                  />
                   {valor.trim() && total == null ? (
                     <p className="text-sm text-destructive">
                       Informe uma quantidade maior que zero, com até três casas
@@ -667,14 +700,14 @@ function Conferencia(
                   </Button>
                 ) : null}
                 {salvo != null ? (
-                  <Button
-                    type="button"
+                  <BotaoDeAcao
                     variant="ghost"
-                    disabled={ocupado}
+                    estado={estadoDa(props, "remover-produto")}
+                    rotulo="Remover produto da caixa"
+                    andamento="Removendo…"
+                    bloqueado={ocupado && props.acao !== "remover-produto"}
                     onClick={() => props.onRemoverProduto?.(produto.id!)}
-                  >
-                    Remover produto da caixa
-                  </Button>
+                  />
                 ) : null}
               </>
             ) : (
@@ -692,14 +725,14 @@ function Conferencia(
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
         <div className="flex flex-wrap gap-2">
           {caixa ? (
-            <Button
-              type="button"
+            <BotaoDeAcao
               variant="ghost"
-              disabled={ocupado}
+              estado={estadoDa(props, "remover")}
+              rotulo="Remover caixa"
+              andamento="Removendo…"
+              bloqueado={ocupado && props.acao !== "remover"}
               onClick={props.onRemover}
-            >
-              Remover caixa
-            </Button>
+            />
           ) : null}
           <Button
             type="button"
@@ -872,13 +905,13 @@ function Fechamento(
           <span className="text-sm text-muted-foreground">
             Próxima etapa: destino
           </span>
-          <Button
-            type="button"
-            disabled={props.ocupado || !medidas?.gross_weight_kg}
+          <BotaoDeAcao
+            estado={estadoDa(props, "fechar")}
+            rotulo="Fechar caixa"
+            andamento="Fechando…"
+            bloqueado={props.acao !== "fechar" && (props.ocupado || !medidas?.gross_weight_kg)}
             onClick={props.onFechar}
-          >
-            Fechar caixa
-          </Button>
+          />
         </div>
       </footer>
     </>
@@ -916,22 +949,22 @@ function Destino(
       />
       <footer className="flex flex-wrap justify-between gap-3 border-t border-border pt-4">
         <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
+          <BotaoDeAcao
             variant="outline"
-            disabled={props.ocupado}
+            estado={estadoDa(props, "reabrir")}
+            rotulo="Reabrir para ajustar"
+            andamento="Reabrindo…"
+            bloqueado={props.ocupado && props.acao !== "reabrir"}
             onClick={props.onReabrir}
-          >
-            Reabrir para ajustar
-          </Button>
-          <Button
-            type="button"
+          />
+          <BotaoDeAcao
             variant="ghost"
-            disabled={props.ocupado}
+            estado={estadoDa(props, "remover")}
+            rotulo="Remover caixa"
+            andamento="Removendo…"
+            bloqueado={props.ocupado && props.acao !== "remover"}
             onClick={props.onRemover}
-          >
-            Remover caixa
-          </Button>
+          />
         </div>
         <Button
           type="button"
@@ -1007,6 +1040,7 @@ function Revisao(props: FichaDaChegadaPorCaixaProps) {
                     item={item}
                     podeOperar={props.podeOperar}
                     ocupado={props.ocupado}
+                    acao={props.acao}
                     onMarcarFalta={props.onMarcarFalta}
                     onDesmarcarFalta={props.onDesmarcarFalta}
                   />
@@ -1101,17 +1135,17 @@ function Revisao(props: FichaDaChegadaPorCaixaProps) {
                 </Button>
               ) : null}
             </div>
-            <Button
-              type="button"
-              disabled={
-                props.ocupado ||
-                props.rascunhosPendentes ||
-                bloqueios.length > 0
+            <BotaoDeAcao
+              className="max-md:min-h-12"
+              estado={estadoDa(props, "concluir")}
+              rotulo="Concluir entrada"
+              andamento="Concluindo…"
+              bloqueado={
+                props.acao !== "concluir" &&
+                (props.ocupado || Boolean(props.rascunhosPendentes) || bloqueios.length > 0)
               }
               onClick={props.onConcluir}
-            >
-              Concluir entrada
-            </Button>
+            />
           </footer>
           <FaltaDaLinha
             linha={marcando}
@@ -1143,12 +1177,14 @@ function LinhaDaNfRow({
   item,
   podeOperar,
   ocupado,
+  acao,
   onMarcarFalta,
   onDesmarcarFalta,
 }: {
   item: WarehouseTaskItem;
   podeOperar: boolean;
   ocupado: boolean;
+  acao?: string | null;
   onMarcarFalta: (itemId: string) => void;
   onDesmarcarFalta: (itemId: string) => void;
 }) {
@@ -1157,10 +1193,13 @@ function LinhaDaNfRow({
   const linha = item.line_number ?? "";
   const semMarca =
     situacao.tipo === "faltam" || situacao.tipo === "marca_velha";
+  // Desmarcada a falta, "Desmarcar" sai com o foco: ele vai ao "Marcar falta" que entra no lugar, ou à linha
+  // (`SaiComOFoco`).
+  const idDaLinha = `linha-da-nf-${item.id ?? linha}`;
   return (
     <tr className="border-t border-border/60">
       <td className="px-2 py-2 align-middle">
-        <span className="block font-bold">
+        <span id={idDaLinha} tabIndex={-1} className="block font-bold">
           {item.line_number ? `${item.line_number} · ${nome}` : nome}
         </span>
         <span className="block text-muted-foreground">
@@ -1192,28 +1231,36 @@ function LinhaDaNfRow({
             </span>
           ) : null}
           {podeOperar && item.id && semMarca ? (
+            // Ocupado não é desabilitado: o foco pode chegar a ele quando a falta é desmarcada (aria-disabled e a trava).
             <Button
+              id={`marcar-falta-${item.id}`}
               type="button"
               size="sm"
               variant="secondary"
               aria-label={`Marcar falta na linha ${linha}`}
-              disabled={ocupado}
-              onClick={() => onMarcarFalta(item.id!)}
+              aria-disabled={ocupado || undefined}
+              className={cn(ocupado && "opacity-45 hover:bg-card active:bg-card")}
+              onClick={() => {
+                if (!ocupado) onMarcarFalta(item.id!);
+              }}
             >
               Marcar falta
             </Button>
           ) : null}
           {podeOperar && item.id && situacao.tipo === "falta_marcada" ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              aria-label={`Desmarcar a falta da linha ${linha}`}
-              disabled={ocupado}
-              onClick={() => onDesmarcarFalta(item.id!)}
-            >
-              Desmarcar
-            </Button>
+            // O nome é o rótulo que está na tela ("Desmarcar", "Desmarcando…"); a linha vem pela descrição.
+            <SaiComOFoco alvo={[`marcar-falta-${item.id}`, idDaLinha]}>
+              <BotaoDeAcao
+                size="sm"
+                variant="secondary"
+                aria-describedby={idDaLinha}
+                estado={acao === `desmarcar:${item.id}` ? "andamento" : "repouso"}
+                rotulo="Desmarcar"
+                andamento="Desmarcando…"
+                bloqueado={ocupado && acao !== `desmarcar:${item.id}`}
+                onClick={() => onDesmarcarFalta(item.id!)}
+              />
+            </SaiComOFoco>
           ) : null}
         </div>
       </td>

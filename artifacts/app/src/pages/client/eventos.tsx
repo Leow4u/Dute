@@ -5,6 +5,7 @@
  * envia é a pessoa. Nada aqui movimenta estoque.
  */
 import { useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { nomeComTamanho } from "@workspace/dominio";
 import {
@@ -31,12 +32,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { BlocoSemConexao, ErroNaLeitura, useTentandoNoRelogio } from "@/components/ui/erro-na-leitura";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { ehFaltaDeConexao } from "@/lib/conexao";
 import {
   eventDateLabel,
   eventPiecesValue,
@@ -50,12 +58,10 @@ import {
 } from "@/lib/client-events";
 
 import { groupInventoryProducts } from "./estoque";
-import { useArchiveClientEvent, useClientEvents, useSaveClientEvent } from "./events-api";
+import { clientEventsQueryKey, useArchiveClientEvent, useClientEvents, useSaveClientEvent } from "./events-api";
 import {
   ClientDataBoundary,
-  ClientModuleLoading,
   ClientModuleShell,
-  EmptyModuleState,
   formatMoney,
   formatNumber,
   getInventoryItems,
@@ -65,7 +71,12 @@ import {
 const PREVIEW_ITEMS = 6;
 
 export function ClienteEventos() {
-  const events = useClientEvents();
+  const leitura = useClientEvents();
+  // A nova tentativa sem dado fica na falha, com "Tentando de novo…" e o foco no botão (parte 13f).
+  const events = useLeituraComFalha(leitura);
+  // A nova tentativa no relógio: a que falha de novo antes de 300 ms não pisca o botão (parte 13f).
+  const tentandoOsEventos = useTentandoNoRelogio(leitura.isFetching && events.isError && !events.data);
+  const queryClient = useQueryClient();
   const archive = useArchiveClientEvent();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -74,18 +85,20 @@ export function ClienteEventos() {
   const [removing, setRemoving] = useState<ClientEvent | null>(null);
 
   function remove(event: ClientEvent) {
+    // Quem fecha a confirmação é o sucesso; na falha, ela fica, com o aviso (parte 13a).
     archive.mutate(event.id, {
-      onSuccess: () => toast({ title: "Evento excluído", description: event.name }),
+      onSuccess: () => {
+        setRemoving(null);
+        toast({ title: "Evento excluído", description: event.name });
+      },
       onError: (error) =>
         toast({ title: "Não foi possível excluir", description: error instanceof Error ? error.message : "", variant: "destructive" }),
-      onSettled: () => setRemoving(null),
     });
   }
 
   return (
-    <ClientDataBoundary>
+    <ClientDataBoundary titulo="Eventos">
       {(overview) => {
-        if (events.isLoading) return <ClientModuleLoading title="Carregando eventos" />;
         const products = groupInventoryProducts(getInventoryItems(overview));
         const list = sortEvents(events.data ?? []);
         return (
@@ -95,42 +108,65 @@ export function ClienteEventos() {
             description="Cada evento já tem a lista do que vai para o local. Na próxima edição, é só usar no pedido: a Dutelog leva, monta e traz de volta."
             icon={CalendarDays}
           >
-            {events.isError ? (
-              <EmptyModuleState
-                icon={AlertTriangle}
-                title="Não foi possível carregar os eventos"
-                description={events.error?.message || "Tente de novo em alguns instantes."}
+            {events.isLoading ? (
+              // O título fica; sob ele, a caixa e "Carregando eventos…" aos 300 ms (carregamento v2, parte 13f).
+              <CarregandoNaRegiao
+                rotulo="Carregando eventos…"
+                continuaARota
+                onTentar={() => void relerDoZero(queryClient, [clientEventsQueryKey])}
               />
+            ) : events.isError && !events.data ? (
+              ehFaltaDeConexao(events.error) ? (
+                <BlocoSemConexao tentando={leitura.isFetching} onTentar={() => void leitura.refetch()} />
+              ) : (
+                <ErroNaLeitura
+                  mensagem="Não foi possível carregar os eventos."
+                  tentando={tentandoOsEventos}
+                  onTentar={() => void leitura.refetch()}
+                />
+              )
             ) : (
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                {list.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    products={products}
-                    open={expanded[event.id] ?? false}
-                    onToggle={() => setExpanded((current) => ({ ...current, [event.id]: !current[event.id] }))}
-                    onEdit={() => setEditing(event)}
-                    onRemove={() => setRemoving(event)}
-                    onUse={() => navigate(`/portal/estoque?evento=${encodeURIComponent(event.id)}`)}
+              <>
+                {events.isError && !ehFaltaDeConexao(events.error) ? (
+                  // A releitura que falhou não apaga a lista lida: fica escrita em cima dela, sem falar (momento 7).
+                  <FalhaNaSecao
+                    mensagem="Não foi possível atualizar os eventos."
+                    alerta={false}
+                    tentando={leitura.isFetching}
+                    onTentar={() => leitura.refetch()}
+                    className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
                   />
-                ))}
-                <article className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-6 text-center">
-                  <CalendarDays className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
-                  <p className="font-medium">{list.length ? "Criar outro evento" : "Nenhum evento ainda"}</p>
-                  <p className="max-w-sm text-sm text-muted-foreground">
-                    Monte o pedido no Estoque com tudo o que vai para o local, preencha onde entregar e clique em Salvar como evento.
-                  </p>
-                  <Button type="button" variant="outline" size="sm" className="mt-1 cursor-pointer" onClick={() => navigate("/portal/estoque")}>
-                    Ir para o Estoque
-                  </Button>
-                </article>
-              </div>
+                ) : null}
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                  {list.map((event) => (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      products={products}
+                      open={expanded[event.id] ?? false}
+                      onToggle={() => setExpanded((current) => ({ ...current, [event.id]: !current[event.id] }))}
+                      onEdit={() => setEditing(event)}
+                      onRemove={() => setRemoving(event)}
+                      onUse={() => navigate(`/portal/estoque?evento=${encodeURIComponent(event.id)}`)}
+                    />
+                  ))}
+                  <article className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-6 text-center">
+                    <CalendarDays className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+                    <p className="font-medium">{list.length ? "Criar outro evento" : "Nenhum evento ainda"}</p>
+                    <p className="max-w-sm text-sm text-muted-foreground">
+                      Monte o pedido no Estoque com tudo o que vai para o local, preencha onde entregar e clique em Salvar como evento.
+                    </p>
+                    <Button type="button" variant="outline" size="sm" className="mt-1 cursor-pointer" onClick={() => navigate("/portal/estoque")}>
+                      Ir para o Estoque
+                    </Button>
+                  </article>
+                </div>
+              </>
             )}
 
             {editing ? <EventEditDialog event={editing} onClose={() => setEditing(null)} /> : null}
 
-            <AlertDialog open={Boolean(removing)} onOpenChange={(open) => (!open ? setRemoving(null) : null)}>
+            <AlertDialog open={Boolean(removing)} ocupado={archive.isPending} onOpenChange={(open) => (!open ? setRemoving(null) : null)}>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Excluir {removing?.name}?</AlertDialogTitle>
@@ -141,14 +177,13 @@ export function ClienteEventos() {
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
                   <AlertDialogAction
-                    disabled={archive.isPending}
-                    onClick={(click) => {
-                      click.preventDefault();
+                    estado={archive.isPending ? "andamento" : "repouso"}
+                    rotulo="Excluir"
+                    andamento="Excluindo…"
+                    onClick={() => {
                       if (removing) remove(removing);
                     }}
-                  >
-                    Excluir
-                  </AlertDialogAction>
+                  />
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -302,7 +337,7 @@ function EventCard({
 }
 
 /** Editar dados e quantidades. Item novo entra pelo Estoque (Salvar como evento). */
-function EventEditDialog({ event, onClose }: { event: ClientEvent; onClose: () => void }) {
+export function EventEditDialog({ event, onClose }: { event: ClientEvent; onClose: () => void }) {
   const save = useSaveClientEvent();
   const { toast } = useToast();
   const [form, setForm] = useState({
@@ -344,7 +379,9 @@ function EventEditDialog({ event, onClose }: { event: ClientEvent; onClose: () =
   }
 
   return (
-    <Dialog open onOpenChange={(open) => (!open ? onClose() : null)}>
+    // Só fecha depois do retorno: fechar no meio desmontava a janela, e o
+    // aviso do salvo (ou da falha) do mutate não chegava (parte 13a).
+    <Dialog open ocupado={save.isPending} onOpenChange={(open) => (!open ? onClose() : null)}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[640px]">
         <DialogHeader>
           <DialogTitle>Editar evento</DialogTitle>
@@ -439,12 +476,8 @@ function EventEditDialog({ event, onClose }: { event: ClientEvent; onClose: () =
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={!valid || save.isPending}>
-              {save.isPending ? "Salvando…" : "Salvar"}
-            </Button>
+            <DialogCancelar onClick={onClose} />
+            <BotaoDeAcao type="submit" estado={save.isPending ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando…" bloqueado={!save.isPending && !valid} />
           </DialogFooter>
         </form>
       </DialogContent>

@@ -1,7 +1,13 @@
 import { formatarReais } from "@workspace/dominio";
 import { ExternalLink } from "lucide-react";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { DialogCancelar } from "@/components/ui/dialog";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 import { dataBr } from "@/lib/comercial/clientes";
 import {
   ETAPA_DA_BAIXA_ROTULO,
@@ -45,6 +51,8 @@ export type AcoesDasEmissoes = {
 
 export type EmissoesViewProps = {
   estado: EstadoDasEmissoes;
+  /** As listas já lidas não se atualizaram: elas ficam, e a frase fica escrita em cima, sem falar, com "Tentar de novo". */
+  falhaNaReleitura?: boolean;
   emissoes: readonly EmissaoDoFinanceiro[];
   baixas: readonly BaixaDoFinanceiro[];
   /** A emissão com a desistência aberta para confirmar. */
@@ -52,10 +60,20 @@ export type EmissoesViewProps = {
   /** A baixa com a dispensa aberta para confirmar. */
   dispensando: string | null;
   ocupado: boolean;
+  /** A ação que grava, "<id>:<acao>" (a emissão ou a baixa, retomar, desistir, dispensar): só ela diz o gerúndio (parte 13g). */
+  emAndamento?: string | null;
+  /** A nova tentativa das leituras (parte 13g). */
+  leitura?: NovaTentativa;
   aviso: string | null;
   falha: string | null;
   acoes: AcoesDasEmissoes;
 };
+
+/** O botão da ação de uma linha: o gerúndio na que grava; as outras, travadas sem sumir (parte 13g). */
+function estadoDaAcao(props: EmissoesViewProps, intencao: string) {
+  const emAndamento = props.emAndamento ?? null;
+  return { estado: emAndamento === intencao ? ("andamento" as const) : ("repouso" as const), bloqueado: props.ocupado && emAndamento !== intencao };
+}
 
 const TOM_CRITICO = "border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground";
 const TOM_ANDAMENTO = "border-warning-soft-border bg-warning-soft text-warning-soft-foreground";
@@ -114,18 +132,33 @@ function Linha({ emissao, primeira, props }: { emissao: EmissaoDoFinanceiro; pri
         <div className="flex w-full flex-wrap justify-end gap-2">
           {confirmando ? (
             <>
-              <Button type="button" variant="destructive" size="sm" onClick={acoes.confirmarDesistencia} disabled={ocupado}>
-                Confirmar desistência
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={acoes.desistirDeDesistir} disabled={ocupado}>
+              <BotaoDeAcao
+                variant="destructive"
+                size="sm"
+                {...estadoDaAcao(props, `${emissao.id}:desistir`)}
+                rotulo="Confirmar desistência"
+                andamento="Desistindo…"
+                objeto={emissao.cliente}
+                focoAoSair
+                onClick={acoes.confirmarDesistencia}
+              />
+              <DialogCancelar size="sm" ocupado={ocupado} onClick={acoes.desistirDeDesistir}>
                 Voltar
-              </Button>
+              </DialogCancelar>
             </>
           ) : (
             acoesDaEmissao(emissao).map((acao) => (
-              <Button key={acao} type="button" variant="outline" size="sm" onClick={() => acoes.pedir(emissao.id, acao)} disabled={ocupado} aria-label={`${acao === "retomar" ? "Tentar de novo" : "Desistir"}, ${emissao.cliente}`}>
-                {acao === "retomar" ? "Tentar de novo" : "Desistir"}
-              </Button>
+              <BotaoDeAcao
+                key={acao}
+                variant="outline"
+                size="sm"
+                {...estadoDaAcao(props, `${emissao.id}:${acao}`)}
+                objeto={emissao.cliente}
+                focoAoSair
+                rotulo={acao === "retomar" ? "Tentar de novo" : "Desistir"}
+                andamento={acao === "retomar" ? "Retomando…" : "Desistindo…"}
+                onClick={() => acoes.pedir(emissao.id, acao)}
+              />
             ))
           )}
         </div>
@@ -158,18 +191,33 @@ function LinhaDaBaixa({ baixa, primeira, props }: { baixa: BaixaDoFinanceiro; pr
         <div className="flex w-full flex-wrap justify-end gap-2">
           {confirmando ? (
             <>
-              <Button type="button" variant="destructive" size="sm" onClick={acoes.confirmarDispensa} disabled={ocupado}>
-                Confirmar dispensa
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={acoes.desistirDeDispensar} disabled={ocupado}>
+              <BotaoDeAcao
+                variant="destructive"
+                size="sm"
+                {...estadoDaAcao(props, `${baixa.id}:dispensar`)}
+                rotulo="Confirmar dispensa"
+                andamento="Dispensando…"
+                objeto={titulo}
+                focoAoSair
+                onClick={acoes.confirmarDispensa}
+              />
+              <DialogCancelar size="sm" ocupado={ocupado} onClick={acoes.desistirDeDispensar}>
                 Voltar
-              </Button>
+              </DialogCancelar>
             </>
           ) : (
             acoesDaBaixa(baixa).map((acao) => (
-              <Button key={acao} type="button" variant="outline" size="sm" onClick={() => acoes.pedirNaBaixa(baixa.id, acao)} disabled={ocupado} aria-label={`${acao === "retomar" ? "Tentar de novo" : "Dispensar"}, ${titulo}`}>
-                {acao === "retomar" ? "Tentar de novo" : "Dispensar"}
-              </Button>
+              <BotaoDeAcao
+                key={acao}
+                variant="outline"
+                size="sm"
+                {...estadoDaAcao(props, `${baixa.id}:${acao}`)}
+                objeto={titulo}
+                focoAoSair
+                rotulo={acao === "retomar" ? "Tentar de novo" : "Dispensar"}
+                andamento={acao === "retomar" ? "Retomando…" : "Dispensando…"}
+                onClick={() => acoes.pedirNaBaixa(baixa.id, acao)}
+              />
             ))
           )}
         </div>
@@ -219,10 +267,15 @@ function Secao({ id, titulo, emissoes, props }: { id: string; titulo: string; em
 
 export function EmissoesView(props: EmissoesViewProps) {
   const { estado, emissoes, baixas, aviso, falha } = props;
+  const leitura = props.leitura ?? SEM_NOVA_TENTATIVA;
   const grupos = gruposDasEmissoes(emissoes);
+  // O resultado da ação fica escrito; o Anunciador o diz uma vez, sem região viva solta.
+  useAnunciarAoMudar(aviso);
+  const caixa = "rounded-lg border border-border bg-card px-5 py-7";
   let conteudo;
-  if (estado === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
-  else if (estado === "erro") conteudo = <Vazio>Não foi possível carregar as emissões.</Vazio>;
+  if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando as emissões…" continuaARota onTentar={leitura.tentar} className={caixa} />;
+  else if (estado === "erro")
+    conteudo = <FalhaNaSecao mensagem="Não foi possível carregar as emissões." tentando={leitura.tentando} onTentar={leitura.tentar} className={caixa} />;
   else if (!emissoes.length && !baixas.length) conteudo = <Vazio>Nenhuma emissão</Vazio>;
   else
     conteudo = (
@@ -239,7 +292,7 @@ export function EmissoesView(props: EmissoesViewProps) {
         <h1 className="mr-2 text-3xl font-extrabold tracking-tight">Emissões</h1>
       </header>
       {aviso ? (
-        <p role="status" className="text-sm font-bold text-success-soft-foreground">
+        <p className="text-sm font-bold text-success-soft-foreground">
           {aviso}
         </p>
       ) : null}
@@ -247,6 +300,15 @@ export function EmissoesView(props: EmissoesViewProps) {
         <p role="alert" className="text-sm font-bold text-destructive-soft-foreground">
           {falha}
         </p>
+      ) : null}
+      {estado === "pronto" && props.falhaNaReleitura ? (
+        <FalhaNaSecao
+          mensagem="Não foi possível atualizar as emissões."
+          alerta={false}
+          tentando={leitura.tentando}
+          onTentar={leitura.tentar}
+          className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+        />
       ) : null}
       {conteudo}
     </div>

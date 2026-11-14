@@ -92,7 +92,7 @@ export function IntegrationForm({ customers, onCreated, onCancel, onPendingChang
         </fieldset>
         <div className="max-w-xs space-y-2">
           <Label htmlFor="integration-expiry">Validade da chave</Label>
-          <select id="integration-expiry" value={input.expires_in_days} onChange={(e) => setInput({ ...input, expires_in_days: Number(e.target.value) })} className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-sm" aria-describedby="integration-expiry-hint">
+          <select id="integration-expiry" value={input.expires_in_days} onChange={(e) => setInput({ ...input, expires_in_days: Number(e.target.value) })} className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco md:text-sm" aria-describedby="integration-expiry-hint">
             {[7, 15, 30, 60, 90].map((days) => <option key={days} value={days}>{days} dias</option>)}
           </select>
           <p id="integration-expiry-hint" className="text-xs text-muted-foreground">Máximo de 90 dias.</p>

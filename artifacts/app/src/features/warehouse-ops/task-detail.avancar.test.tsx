@@ -1,0 +1,329 @@
+// @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, useState } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { CARREGANDO } from "@/lib/carregando/tempo";
+import {
+  lineConfirmationKey,
+  normalizeQueues,
+  type LineConfirmationMap,
+  type WarehouseTask,
+} from "@/lib/warehouse-ops/model";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { textosForaDaLista } from "@/test/textos";
+import { TaskDetailPanel } from "./task-detail";
+
+/**
+ * O "Avançar" da bancada no relógio da espera (carregamento v2, parte 13i;
+ * seção 3): é o `BotaoDeAcao`. O toque afunda o botão e o trava na hora, mas
+ * nada aparece antes de 300 ms; aos 300 ms, a caixa e "Avançando…", que
+ * ficam pelo menos 500 ms, até a bancada reler (parte 10); aos 10 s,
+ * "Demorando mais que o normal". Antes, a caixa e "Avançando…" entravam em
+ * 0 ms e saíam com a resposta. Dados sintéticos.
+ */
+
+const AVANCAR = "Avançar a tarefa";
+
+const SEPARACAO: WarehouseTask = {
+  id: "picking:pick_ord_1",
+  reference: "pick_ord_1",
+  title: "PED-0001",
+  customer: "BTG Pactual",
+  status: "in_progress",
+  can_advance: true,
+  items: [{ id: "pl_1", sku_code: "BTG-000101", product_name: "Polo feminina PP", quantity: 4, expected_quantity: 4, picked_quantity: 0, status: "planned" }],
+};
+
+const fila = normalizeQueues({ picking: { key: "picking", name: "picking", next_action: AVANCAR, tasks: [SEPARACAO] } }).find((item) => item.key === "picking")!;
+
+let avancar: (ligado: boolean) => void = () => undefined;
+const onAdvance = vi.fn();
+
+function Painel() {
+  const [avancando, setAvancando] = useState(false);
+  avancar = setAvancando;
+  const confirmacoes: LineConfirmationMap = { [lineConfirmationKey(SEPARACAO.id, "pl_1")]: "confirmed" };
+  return (
+    <TaskDetailPanel
+      entry={{ task: fila.tasks[0]!, queue: fila }}
+      alerts={[]}
+      lineConfirmations={confirmacoes}
+      onLineConfirmationChange={() => undefined}
+      onAdvance={onAdvance}
+      onOpenException={() => undefined}
+      advancingTaskId={avancando ? SEPARACAO.id : undefined}
+    />
+  );
+}
+
+let raiz: Root | null = null;
+let container: HTMLDivElement | null = null;
+
+async function passar(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
+
+/** O botão de avançar: pelo rótulo em repouso (o botão de ação) ou pelo texto que ele tem agora. */
+function botao(): HTMLButtonElement {
+  const achado = Array.from(container!.querySelectorAll("button")).find((item) =>
+    [AVANCAR, "Avançando…"].includes((item.querySelector('[data-camada="repouso"]')?.textContent ?? item.textContent ?? "").trim()),
+  );
+  if (!achado) throw new Error("sem o botão de avançar");
+  return achado;
+}
+
+/** O rótulo que está na tela: a camada atual do botão de ação, ou o texto do botão comum. */
+function rotuloAtual(alvo: HTMLButtonElement): string {
+  return (alvo.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? alvo.textContent ?? "").trim();
+}
+
+beforeEach(async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  onAdvance.mockReset();
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  raiz = createRoot(container);
+  await act(async () =>
+    raiz!.render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Painel />
+      </QueryClientProvider>,
+    ),
+  );
+});
+
+afterEach(() => {
+  act(() => raiz?.unmount());
+  container?.remove();
+  raiz = null;
+  container = null;
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+describe("o Avançar da bancada no relógio da espera", () => {
+  it("nada antes de 300 ms; a caixa e Avançando… aos 300 ms, por pelo menos 500 ms", async () => {
+    await act(async () => botao().click());
+    expect(onAdvance).toHaveBeenCalledTimes(1);
+    await act(async () => avancar(true));
+
+    // 0 ms: travado (aria-disabled, sem disabled) e afundado, mas ainda "Avançar a tarefa", sem a caixa.
+    const alvo = botao();
+    expect(alvo.getAttribute("aria-disabled")).toBe("true");
+    expect(alvo.hasAttribute("disabled")).toBe(false);
+    expect(rotuloAtual(alvo)).toBe(AVANCAR);
+    expect(alvo.querySelector("[data-spinner]")).toBeNull();
+    // O segundo toque não avança de novo.
+    await act(async () => alvo.click());
+    expect(onAdvance).toHaveBeenCalledTimes(1);
+
+    await passar(CARREGANDO.atrasoMs - 10);
+    expect(rotuloAtual(botao())).toBe(AVANCAR);
+    expect(botao().querySelector("[data-spinner]")).toBeNull();
+
+    await passar(10);
+    expect(rotuloAtual(botao())).toBe("Avançando…");
+    expect(botao().getAttribute("aria-busy")).toBe("true");
+    expect(botao().querySelector("[data-spinner]")).not.toBeNull();
+
+    // A bancada releu 50 ms depois: o "Avançando…" fica até completar 500 ms na tela.
+    await passar(50);
+    await act(async () => avancar(false));
+    expect(rotuloAtual(botao())).toBe("Avançando…");
+    await passar(CARREGANDO.minimoMs - 50 - 10);
+    expect(rotuloAtual(botao())).toBe("Avançando…");
+    await vi.waitFor(
+      async () => {
+        await passar(10);
+        expect(rotuloAtual(botao())).toBe(AVANCAR);
+      },
+      { timeout: 3_000 },
+    );
+    expect(botao().getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("a resposta antes de 300 ms não pisca nada", async () => {
+    await act(async () => botao().click());
+    await act(async () => avancar(true));
+    const vistos = new Set<string>([rotuloAtual(botao())]);
+    for (let feito = 0; feito < CARREGANDO.atrasoMs - 100; feito += 50) {
+      await passar(50);
+      vistos.add(rotuloAtual(botao()));
+    }
+    await act(async () => avancar(false));
+    for (let feito = 0; feito < CARREGANDO.minimoMs + CARREGANDO.atrasoMs; feito += 50) {
+      await passar(50);
+      vistos.add(rotuloAtual(botao()));
+    }
+    expect([...vistos]).toEqual([AVANCAR]);
+    expect(botao().querySelector("[data-spinner]")).toBeNull();
+  });
+
+  it("aos 10 s, Demorando mais que o normal, com o relógio; o axe não acusa nada", async () => {
+    await act(async () => botao().click());
+    await act(async () => avancar(true));
+    await passar(CARREGANDO.demoraMs - 10);
+    expect(container!.textContent).not.toContain("Demorando mais que o normal");
+    await passar(2_010);
+    expect(container!.textContent).toContain("Demorando mais que o normal");
+    expect(container!.textContent).toContain("0:12");
+    expect(rotuloAtual(botao())).toBe("Avançando…");
+    // Na escrita, sem "Tentar de novo": repetir duplicaria.
+    expect(container!.textContent).not.toContain("Tentar de novo");
+    const html = container!.innerHTML;
+    vi.useRealTimers();
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+});
+
+/**
+ * A revisão da parte 13i: o painel da bancada é um só, e a pessoa troca de
+ * tarefa nele. O "em andamento" que o Avançar segura pelo mínimo de 500 ms é
+ * da tarefa que avançou: a tarefa escolhida depois começa com o Avançar dela,
+ * solto. Antes, o Avançar da tarefa nova mostrava "Avançando…", travado, e
+ * engolia o toque. Dados sintéticos.
+ */
+describe("o Avançar quando a pessoa troca de tarefa", () => {
+  const tarefa = (n: number): WarehouseTask => ({ ...SEPARACAO, id: `picking:pick_ord_${n}`, reference: `pick_ord_${n}`, title: `PED-000${n}`, items: [{ ...SEPARACAO.items![0]!, id: `pl_${n}` }] });
+  const A = tarefa(1);
+  const B = tarefa(2);
+  const duas = normalizeQueues({ picking: { key: "picking", name: "picking", next_action: AVANCAR, tasks: [A, B] } }).find((item) => item.key === "picking")!;
+  let escolher: (id: string) => void = () => undefined;
+  let avancando: (id: string | undefined) => void = () => undefined;
+
+  function Bancada() {
+    const [escolhida, setEscolhida] = useState(A.id);
+    const [emAvanco, setEmAvanco] = useState<string | undefined>();
+    escolher = setEscolhida;
+    avancando = setEmAvanco;
+    return (
+      <TaskDetailPanel
+        entry={{ task: duas.tasks.find((item) => item.id === escolhida)!, queue: duas }}
+        alerts={[]}
+        lineConfirmations={{ [lineConfirmationKey(A.id, "pl_1")]: "confirmed", [lineConfirmationKey(B.id, "pl_2")]: "confirmed" }}
+        onLineConfirmationChange={() => undefined}
+        onAdvance={onAdvance}
+        onOpenException={() => undefined}
+        advancingTaskId={emAvanco}
+      />
+    );
+  }
+
+  beforeEach(async () => {
+    await act(async () =>
+      raiz!.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <Bancada />
+        </QueryClientProvider>,
+      ),
+    );
+  });
+
+  it("a tarefa escolhida durante o avanço da outra começa com o Avançar dela, solto", async () => {
+    await act(async () => botao().click());
+    act(() => avancando(A.id));
+    await passar(CARREGANDO.atrasoMs + 50);
+    expect(rotuloAtual(botao())).toBe("Avançando…");
+
+    act(() => escolher(B.id));
+    await passar(10);
+    expect(container!.textContent).toContain("PED-0002");
+    expect(rotuloAtual(botao())).toBe(AVANCAR);
+    expect(botao().getAttribute("aria-disabled")).toBeNull();
+    await act(async () => botao().click());
+    expect(onAdvance).toHaveBeenLastCalledWith(B.id, expect.anything(), undefined);
+  });
+
+  it("com o foco no Avançar, a troca de tarefa (a que avançou saiu da fila) deixa o foco no Avançar da seguinte, não no body", async () => {
+    botao().focus();
+    expect(document.activeElement).toBe(botao());
+    await act(async () => {
+      escolher(B.id);
+    });
+    expect(container!.textContent).toContain("PED-0002");
+    expect(document.activeElement).toBe(botao());
+  });
+});
+
+describe("o Avançar travado pela conferência", () => {
+  it("diz o motivo pelo aria-describedby: o aviso da conferência pendente", async () => {
+    await act(async () =>
+      raiz!.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <TaskDetailPanel
+            entry={{ task: fila.tasks[0]!, queue: fila }}
+            alerts={[]}
+            lineConfirmations={{}}
+            onLineConfirmationChange={() => undefined}
+            onAdvance={onAdvance}
+            onOpenException={() => undefined}
+          />
+        </QueryClientProvider>,
+      ),
+    );
+    const alvo = botao();
+    expect(alvo.getAttribute("aria-disabled")).toBe("true");
+    const descrito = alvo.getAttribute("aria-describedby");
+    expect(descrito, "aria-describedby").toBeTruthy();
+    const motivo = document.getElementById(descrito!);
+    expect(motivo?.textContent).toMatch(/Confirme/);
+  });
+});
+
+describe("o Avançar da guarda no celular, aos 10 s", () => {
+  it("o aviso da demora sai do rodapé preso (fica por cima do conteúdo, acima dele): os botões não sobem", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
+    const guarda: WarehouseTask = {
+      id: "putaway:put_1",
+      reference: "put_1",
+      title: "Guarda 0001",
+      customer: "BTG Pactual",
+      status: "planned",
+      quantity: 12,
+      source_location_id: "RECEBIMENTO",
+      can_advance: true,
+      items: [{ id: "pt_1", sku_code: "BTG-000201", quantity: 12 }],
+    };
+    const filaDaGuarda = normalizeQueues({ putaway: { key: "putaway", name: "Guarda", tasks: [guarda] } }).find((item) => item.key === "putaway")!;
+    await act(async () =>
+      raiz!.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <TaskDetailPanel
+            entry={{ task: filaDaGuarda.tasks[0]!, queue: filaDaGuarda }}
+            alerts={[]}
+            lineConfirmations={{}}
+            onLineConfirmationChange={() => undefined}
+            onAdvance={onAdvance}
+            onOpenException={() => undefined}
+            advancingTaskId={guarda.id}
+          />
+        </QueryClientProvider>,
+      ),
+    );
+    await passar(CARREGANDO.demoraMs + 10);
+    const aviso = container!.querySelector<HTMLElement>("[data-aviso-de-espera]");
+    expect(aviso, "o aviso da demora").not.toBeNull();
+    // O rodapé preso da guarda (sticky bottom-0, até o lg) é o pai: o aviso sai do fluxo dele até o lg.
+    expect(aviso!.parentElement!.className).toContain("sticky");
+    expect(aviso!.className).toContain("max-lg:absolute");
+    expect(aviso!.className).toContain("max-lg:bottom-full");
+  });
+});
+
+describe("os textos do Avançar", () => {
+  it("só rótulos e dados: as camadas do botão e o aviso da demora, com o relógio", async () => {
+    await act(async () => botao().click());
+    await act(async () => avancar(true));
+    await passar(CARREGANDO.demoraMs + 2_010);
+    const alvo = botao();
+    const aviso = container!.querySelector<HTMLElement>("[data-aviso-de-espera]")!;
+    expect(
+      textosForaDaLista(alvo.outerHTML + aviso.outerHTML, [AVANCAR, "Avançando…", "Conferir", "Demorando mais que o normal", /^\d+:\d{2}$/]),
+    ).toEqual([]);
+  });
+});

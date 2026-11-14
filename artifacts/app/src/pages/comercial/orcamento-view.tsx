@@ -23,6 +23,11 @@ import { formatarReais } from "@workspace/dominio";
 
 import { AcoesDepoisDoEnvio } from "@/components/comercial/acoes-depois-do-envio";
 import { Button } from "@/components/ui/button";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
+import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,7 +47,7 @@ import {
   type Parecidos,
 } from "@/lib/memoria/parecidos";
 import type { AcaoDepoisDoEnvio, AcoesDaEtapa } from "@/lib/comercial/depois-do-envio";
-import { ROTULO_DO_ENVIO } from "@/lib/comercial/envio";
+import { ANDAMENTO_DO_ENVIO, ROTULO_DO_ENVIO } from "@/lib/comercial/envio";
 import {
   CANAIS_DO_PEDIDO,
   DESCRICAO_MAXIMA,
@@ -141,8 +146,17 @@ export type MontarViewProps = {
   contatos: ContatoResumo[];
   locais: LocalResumo[];
   catalogo: ItemDaTabela[] | "carregando" | "erro";
+  /** A nova tentativa da leitura da tabela de preços do orçamento. */
+  leituraDoCatalogo?: NovaTentativa;
+  /** A leitura ao vivo do orçamento e da demanda: lida e sem conexão, a faixa com a hora (parte 13j). */
+  leitura?: NovaTentativa;
   /** Uma gravação em andamento: a tela fica travada até ela voltar. */
   ocupado: boolean;
+  /**
+   * Qual ação grava ("salvar", "enviar", "aprovar"…): o botão dela diz o
+   * gerúndio, e os outros ficam travados sem sumir (parte 13g).
+   */
+  emAndamento?: string | null;
   aviso: { tipo: "erro" | "info"; texto: string } | null;
   /** "10:12": o último salvamento nesta tela. */
   salvoEm: string | null;
@@ -180,7 +194,7 @@ export type MontarViewProps = {
 };
 
 const CAMPO_SELECT =
-  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25 disabled:cursor-not-allowed disabled:opacity-50";
+  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/25 disabled:cursor-not-allowed disabled:opacity-50";
 
 /** Valor do opção "Novo contato…" no "Para". */
 export const NOVO_CONTATO = "__novo_contato__";
@@ -290,21 +304,30 @@ function Bloco({ rotulo, children, className }: { rotulo: string; children: Reac
 
 function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
   const { dados, acoes, ocupado, handlers, totalCents } = props;
-  const rotulos: Record<string, { rotulo: string; icone: ReactNode; onClick: () => void }> = {
+  const emAndamento = props.emAndamento ?? null;
+  /** O estado do botão da ação: o gerúndio na que grava; as outras, travadas sem sumir. */
+  const daAcao = (acao: string) => ({
+    estado: emAndamento === acao ? ("andamento" as const) : ("repouso" as const),
+    bloqueado: ocupado && emAndamento !== acao,
+  });
+  const rotulos: Record<string, { rotulo: string; icone: ReactNode; onClick: () => void; andamento?: string }> = {
     salvar: {
       rotulo: "Salvar",
       icone: <Save aria-hidden="true" />,
       onClick: handlers.salvar,
+      andamento: "Salvando…",
     },
     duplicar: {
       rotulo: "Duplicar",
       icone: <Copy aria-hidden="true" />,
       onClick: handlers.duplicar,
+      andamento: "Duplicando…",
     },
     editar: {
       rotulo: "Editar",
       icone: <Pencil aria-hidden="true" />,
       onClick: handlers.editar,
+      andamento: "Voltando à montagem…",
     },
     devolver: {
       rotulo: "Devolver",
@@ -315,6 +338,7 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
       rotulo: "Aprovar e enviar",
       icone: <Send aria-hidden="true" />,
       onClick: handlers.aprovarEEnviar,
+      andamento: "Aprovando e enviando…",
     },
     descartar_rv: {
       rotulo: "Descartar RV",
@@ -374,9 +398,14 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
           )}
           <Pill className="h-9 rounded-lg px-3 text-sm">{`Data-base ${dados.dataBase ? dataBr(dados.dataBase) : "—"}`}</Pill>
           {props.acoes.editavel && props.podeAtualizarTabela ? (
-            <Button type="button" variant="outline" size="sm" disabled={ocupado} onClick={handlers.atualizarTabela}>
-              Atualizar tabela
-            </Button>
+            <BotaoDeAcao
+              variant="outline"
+              size="sm"
+              {...daAcao("atualizar_tabela")}
+              rotulo="Atualizar tabela"
+              andamento="Atualizando a tabela…"
+              onClick={handlers.atualizarTabela}
+            />
           ) : null}
         </div>
       </div>
@@ -410,12 +439,18 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
               {`Salvo às ${props.salvoEm}`}
             </span>
           ) : null}
-          {acoes.secundarias.map((acao) => (
-            <Button key={acao} type="button" variant="outline" onClick={rotulos[acao].onClick} disabled={ocupado}>
-              {rotulos[acao].icone}
-              {rotulos[acao].rotulo}
-            </Button>
-          ))}
+          {acoes.secundarias.map((acao) => {
+            const { rotulo, icone, onClick, andamento } = rotulos[acao];
+            // A que grava daqui tem o gerúndio; a que abre um diálogo (Devolver, Descartar RV) só abre.
+            return andamento ? (
+              <BotaoDeAcao key={acao} variant="outline" {...daAcao(acao)} icone={icone} rotulo={rotulo} andamento={andamento} onClick={onClick} />
+            ) : (
+              <Button key={acao} type="button" variant="outline" onClick={onClick} disabled={ocupado}>
+                {icone}
+                {rotulo}
+              </Button>
+            );
+          })}
           {/* O documento abre noutra aba: a montagem fica onde está. Com alteração não salva, salva antes: o documento lê o que está gravado. */}
           <Button asChild variant="outline">
             <a
@@ -441,28 +476,34 @@ function Cabecalho(props: MontarViewProps & { totalCents: number | null }) {
             ignorar={["descartar_rv"]}
           />
           {acoes.principal === "enviar" ? (
-            <Button type="button" onClick={handlers.enviar} disabled={ocupado}>
-              <Send aria-hidden="true" />
-              Enviar para aprovação
-            </Button>
+            <BotaoDeAcao
+              {...daAcao("enviar")}
+              icone={<Send aria-hidden="true" />}
+              rotulo="Enviar para aprovação"
+              andamento="Enviando para aprovação…"
+              onClick={handlers.enviar}
+            />
           ) : null}
           {acoes.principal === "enviar_dispensado" ? (
-            <Button type="button" onClick={handlers.enviarDispensado} disabled={ocupado}>
-              <Send aria-hidden="true" />
-              {ROTULO_DO_ENVIO.send}
-            </Button>
+            <BotaoDeAcao
+              {...daAcao("enviar_dispensado")}
+              icone={<Send aria-hidden="true" />}
+              rotulo={ROTULO_DO_ENVIO.send}
+              andamento={ANDAMENTO_DO_ENVIO.send}
+              onClick={handlers.enviarDispensado}
+            />
           ) : null}
           {acoes.principal === "aprovar" ? (
-            <Button type="button" onClick={handlers.aprovar} disabled={ocupado}>
-              <Check aria-hidden="true" />
-              Aprovar
-            </Button>
+            <BotaoDeAcao {...daAcao("aprovar")} icone={<Check aria-hidden="true" />} rotulo="Aprovar" andamento="Aprovando…" onClick={handlers.aprovar} />
           ) : null}
           {acoes.principal === "enviar_cliente" ? (
-            <Button type="button" onClick={handlers.enviarCliente} disabled={ocupado}>
-              <Send aria-hidden="true" />
-              {ROTULO_DO_ENVIO.send}
-            </Button>
+            <BotaoDeAcao
+              {...daAcao("enviar_cliente")}
+              icone={<Send aria-hidden="true" />}
+              rotulo={ROTULO_DO_ENVIO.send}
+              andamento={ANDAMENTO_DO_ENVIO.send}
+              onClick={handlers.enviarCliente}
+            />
           ) : null}
         </div>
       </div>
@@ -1187,6 +1228,11 @@ function Itens(props: MontarViewProps) {
             <Plus aria-hidden="true" />
             Ajuste
           </Button>
+          {/* A tabela que ainda não veio: a busca espera por ela, e a espera aparece aqui (parte 13g). */}
+          {catalogo === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a tabela…" onTentar={props.leituraDoCatalogo?.tentar} /> : null}
+          {catalogo === "erro" ? (
+            <FalhaAoVivo leitura={props.leituraDoCatalogo ?? SEM_NOVA_TENTATIVA} mensagem="Não foi possível carregar a tabela." />
+          ) : null}
         </div>
       ) : null}
     </section>
@@ -1527,9 +1573,12 @@ function OrcamentosParecidos(props: MontarViewProps & { parecidos: Parecidos }) 
 export function MontarView(props: MontarViewProps) {
   const totais = totaisDaTela(props);
   const { aviso, dados } = props;
+  // O aviso do recálculo fica escrito, sem região viva solta: o Anunciador o diz uma vez (o "Orçamento salvo" é do toast).
+  useAnunciarAoMudar(aviso?.tipo === "info" ? aviso.texto : null);
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <Cabecalho {...props} totalCents={totais.total} />
+      {props.leitura ? <FaixaAoVivo leitura={props.leitura} objeto="orçamento" /> : null}
       {props.desatualizado && props.sujo ? (
         <p
           role="alert"
@@ -1540,7 +1589,7 @@ export function MontarView(props: MontarViewProps) {
       ) : null}
       {aviso ? (
         <p
-          role={aviso.tipo === "erro" ? "alert" : "status"}
+          role={aviso.tipo === "erro" ? "alert" : undefined}
           className={cn(
             "rounded-md border px-4 py-3 text-sm font-semibold",
             aviso.tipo === "erro"
@@ -1574,20 +1623,30 @@ export function MontarView(props: MontarViewProps) {
   );
 }
 
-/** Carregando, não encontrado ou erro, no lugar da tela. */
-export function EstadoDoOrcamento({ estado }: { estado: "carregando" | "nao_encontrado" | "erro" }) {
-  const texto =
-    estado === "carregando"
-      ? "Carregando..."
-      : estado === "nao_encontrado"
-        ? "Orçamento não encontrado"
-        : "Não foi possível carregar o orçamento.";
+/**
+ * Carregando, não encontrado ou erro, no lugar da tela (carregamento v2,
+ * parte 13g): lendo, a caixa e "Carregando o orçamento…" aos 300 ms, que
+ * continua a espera da tela; na falha, o aviso com "Tentar de novo".
+ */
+export function EstadoDoOrcamento({
+  estado,
+  leitura = SEM_NOVA_TENTATIVA,
+}: {
+  estado: "carregando" | "nao_encontrado" | "erro";
+  /** A nova tentativa das leituras do orçamento. */
+  leitura?: NovaTentativa;
+}) {
+  const caixa = "rounded-lg border border-border bg-card px-5 py-7";
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <h1 className="text-3xl font-extrabold tracking-tight">Orçamento</h1>
-      <p className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-bold text-muted-foreground">
-        {texto}
-      </p>
+      {estado === "carregando" ? (
+        <CarregandoNaRegiao rotulo="Carregando o orçamento…" continuaARota onTentar={leitura.tentar} className={caixa} />
+      ) : estado === "erro" ? (
+        <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar o orçamento." className={caixa} />
+      ) : (
+        <p className={cn(caixa, "text-center text-sm font-bold text-muted-foreground")}>Orçamento não encontrado</p>
+      )}
     </div>
   );
 }

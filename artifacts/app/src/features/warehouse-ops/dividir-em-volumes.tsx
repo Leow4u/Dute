@@ -2,8 +2,9 @@ import { useEffect, useRef } from "react";
 import { Minus, Plus, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { textoDaCaixa } from "@/lib/warehouse-ops/caixas-da-separacao";
 import {
@@ -202,13 +203,20 @@ export function DividirEmVolumesConteudo({
         <Plus className="size-4" aria-hidden="true" />
         Mais um volume
       </Button>
+      {/* Gravando, o diálogo fica: o Voltar espera ocupado, e o confirmar é o BotaoDeAcao, com o gerúndio aos 300 ms
+          e o foco nele, nunca disabled (carregamento v2, parte 13h, como o Separar menos da 13c). */}
       <DialogFooter className="gap-2">
-        <Button type="button" variant="outline" className="min-h-11 lg:min-h-10" onClick={onVoltar}>
+        <DialogCancelar ocupado={Boolean(confirmando)} className="min-h-11 lg:min-h-10" onClick={onVoltar}>
           Voltar
-        </Button>
-        <Button type="button" className="min-h-11 lg:min-h-10" disabled={confirmando || !podeConfirmarADivisao(divisao)} onClick={onConfirmar}>
-          {textoDoBotaoDaDivisao(divisao.modo, divisao.partes.length, confirmando)}
-        </Button>
+        </DialogCancelar>
+        <BotaoDeAcao
+          className="min-h-11 lg:min-h-10"
+          estado={confirmando ? "andamento" : "repouso"}
+          rotulo={textoDoBotaoDaDivisao(divisao.modo, divisao.partes.length)}
+          andamento={textoDoBotaoDaDivisao(divisao.modo, divisao.partes.length, true)}
+          bloqueado={!confirmando && !podeConfirmarADivisao(divisao)}
+          onClick={onConfirmar}
+        />
       </DialogFooter>
     </div>
   );
@@ -229,7 +237,7 @@ export function DividirEmVolumesDialog({
   onConfirmar: () => void;
 }) {
   return (
-    <Dialog open={Boolean(divisao)} onOpenChange={(open) => (open ? undefined : onFechar())}>
+    <Dialog open={Boolean(divisao)} ocupado={Boolean(divisao && confirmando)} onOpenChange={(open) => (open ? undefined : onFechar())}>
       <DialogContent className="sm:max-w-2xl" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Dividir em volumes</DialogTitle>

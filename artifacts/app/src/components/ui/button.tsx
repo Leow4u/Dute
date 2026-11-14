@@ -11,12 +11,13 @@ import { cn } from "@/lib/utils";
  * 36 / 40 / 44, raio da escala, texto 14.
  */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold transition-colors duration-150 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
+        // carregando-na-cor: o indicador dentro do botão de cor tem o trilho a 0,35 e o piso do respiro a 0,8 (index.css).
         default:
-          "bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-pressed",
+          "carregando-na-cor bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-pressed",
         secondary:
           "border border-border bg-card text-foreground hover:bg-surface-hover active:bg-surface-pressed",
         outline:

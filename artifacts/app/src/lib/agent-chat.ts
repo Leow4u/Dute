@@ -133,32 +133,99 @@ export function settleStreamingMarkdown(text: string) {
 
 // ------------------------------------------------------------- consultas
 
-const TOOL_LABELS: Record<string, { done: string; running: string }> = {
-  resumo_estoque: { done: "Consultou o estoque", running: "Consultando o estoque" },
-  buscar_itens: { done: "Buscou itens no estoque", running: "Buscando itens no estoque" },
-  listar_pedidos: { done: "Consultou os pedidos", running: "Consultando os pedidos" },
-  ver_pedido: { done: "Abriu o pedido", running: "Abrindo o pedido" },
-  movimentacoes: { done: "Consultou as movimentações", running: "Consultando as movimentações" },
-  faturas: { done: "Consultou as faturas", running: "Consultando as faturas" },
-  documentos: { done: "Consultou os documentos", running: "Consultando os documentos" },
-  sugerir_rotina: { done: "Propôs uma rotina", running: "Montando a rotina" },
-  rascunho_pedido: { done: "Montou o pedido", running: "Montando o pedido" },
-  rascunho_envio: { done: "Montou o rascunho do aviso", running: "Montando o rascunho do aviso" },
-  sugerir_anotacao: { done: "Sugeriu uma anotação para a equipe aprovar", running: "Sugerindo uma anotação" },
-  consultar_playbook: { done: "Seguiu um playbook da coordenação", running: "Abrindo o playbook" },
-  conversas_anteriores: { done: "Procurou nas conversas anteriores", running: "Procurando nas conversas anteriores" },
-  fila_solicitacoes: { done: "Consultou a fila de solicitações", running: "Consultando a fila de solicitações" },
-  recebimentos: { done: "Consultou os recebimentos", running: "Consultando os recebimentos" },
-  tarefas_armazem: { done: "Consultou as tarefas do armazém", running: "Consultando as tarefas do armazém" },
-  enderecos: { done: "Consultou os endereços", running: "Consultando os endereços" },
-  eventos: { done: "Consultou o histórico", running: "Consultando o histórico" },
-  previa_faturamento: { done: "Calculou a prévia da fatura", running: "Calculando a prévia da fatura" },
+/**
+ * O que cada consulta do Agent Dute diz na trilha (carregamento v2, momento
+ * 9) e no "De onde tirei" da resposta (invariante 3: a IA mostra de onde
+ * tirou). As ferramentas são as do agente do WMS (functions/wms,
+ * AGENT_TOOL_NAMES) e as do núcleo (functions/core, FERRAMENTAS_DO_AGENTE).
+ *
+ * - `vez`: a linha da vez, no gerúndio e com a reticência de um caractere
+ *   ("Consultando o estoque…").
+ * - `feita`: a linha feita, o nome curto do que leu ("Estoque").
+ * - `objeto`: o que leu, com o artigo, para a trilha recolhida ("Leu o
+ *   estoque e o razão de movimentos").
+ * - `fonte`: o chip do "De onde tirei". Só o que é leitura tem fonte: o
+ *   rascunho, a rotina e a anotação são propostas do agente, não de onde ele
+ *   tirou a resposta.
+ */
+export type ConsultaNaTrilha = { vez: string; feita: string; objeto: string | null; fonte: string | null };
+
+function leitura(vez: string, feita: string, objeto: string): ConsultaNaTrilha {
+  return { vez, feita, objeto, fonte: feita };
+}
+
+function proposta(vez: string, feita: string): ConsultaNaTrilha {
+  return { vez, feita, objeto: null, fonte: null };
+}
+
+const CONSULTAS: Record<string, ConsultaNaTrilha> = {
+  // Armazenagem (WMS e núcleo).
+  resumo_estoque: leitura("Consultando o estoque…", "Estoque", "o estoque"),
+  buscar_itens: leitura("Buscando itens no estoque…", "Itens do estoque", "os itens do estoque"),
+  listar_pedidos: leitura("Consultando os pedidos…", "Pedidos", "os pedidos"),
+  ver_pedido: leitura("Abrindo o pedido…", "Pedido", "o pedido"),
+  movimentacoes: leitura("Consultando o razão de movimentos…", "Razão de movimentos", "o razão de movimentos"),
+  documentos: leitura("Consultando os documentos…", "Documentos", "os documentos"),
+  itens_parados: leitura("Consultando os itens parados…", "Itens parados", "os itens parados"),
+  recebimentos: leitura("Consultando as chegadas…", "Chegadas", "as chegadas"),
+  tarefas_armazem: leitura("Consultando as tarefas do armazém…", "Tarefas do armazém", "as tarefas do armazém"),
+  enderecos: leitura("Consultando os endereços…", "Endereços", "os endereços"),
+  fila_solicitacoes: leitura("Consultando a fila de solicitações…", "Fila de solicitações", "a fila de solicitações"),
+  eventos: leitura("Consultando o histórico…", "Histórico", "o histórico"),
+  previa_faturamento: leitura("Calculando a prévia da fatura…", "Prévia da fatura", "a prévia da fatura"),
+  // Financeiro.
+  faturas: leitura("Consultando as faturas…", "Faturas", "as faturas"),
+  a_receber: leitura("Consultando o a receber…", "A receber", "o a receber"),
+  // Operação.
+  demandas: leitura("Consultando as demandas…", "Demandas", "as demandas"),
+  ver_demanda: leitura("Abrindo a demanda…", "Demanda", "a demanda"),
+  agenda: leitura("Consultando a agenda…", "Agenda", "a agenda"),
+  ver_os: leitura("Abrindo a OS…", "OS", "a OS"),
+  tempo_dos_itens: leitura("Consultando o tempo dos itens…", "Tempo dos itens", "o tempo dos itens"),
+  // Comercial.
+  orcamentos: leitura("Consultando os orçamentos…", "Orçamentos", "os orçamentos"),
+  ver_orcamento: leitura("Abrindo o orçamento…", "Orçamento", "o orçamento"),
+  lpu: leitura("Consultando a tabela de preços…", "Tabela de preços", "a tabela de preços"),
+  orcamentos_parecidos: leitura("Procurando orçamentos parecidos…", "Orçamentos parecidos", "os orçamentos parecidos"),
+  // Comuns a todos.
+  conversas_anteriores: leitura("Procurando nas conversas anteriores…", "Conversas anteriores", "as conversas anteriores"),
+  consultar_playbook: leitura("Abrindo o playbook…", "Playbook da coordenação", "o playbook da coordenação"),
+  sugerir_anotacao: proposta("Sugerindo uma anotação…", "Anotação sugerida"),
+  sugerir_rotina: proposta("Montando a rotina…", "Rotina proposta"),
+  rascunho_pedido: proposta("Montando o pedido…", "Pedido montado"),
+  rascunho_envio: proposta("Montando o rascunho do aviso…", "Rascunho do aviso"),
 };
 
-export function toolLabel(name: string, running = false) {
-  const label = TOOL_LABELS[name];
-  if (!label) return running ? "Consultando os dados" : "Consultou os dados";
-  return running ? label.running : label.done;
+/** A consulta que a tela ainda não conhece: o servidor ganhou uma ferramenta nova. */
+const CONSULTA_DESCONHECIDA = leitura("Consultando os dados…", "Dados", "os dados");
+
+/** O que a consulta `nome` (o nome da ferramenta, como o stream manda) diz na trilha e nas fontes. */
+export function consultaDoAgente(nome: string): ConsultaNaTrilha {
+  return Object.hasOwn(CONSULTAS, nome) ? CONSULTAS[nome] : CONSULTA_DESCONHECIDA;
+}
+
+/** Os chips do "De onde tirei", na ordem das consultas e sem repetir. */
+export function fontesDaResposta(nomes: readonly string[] | null | undefined): string[] {
+  return [...new Set(uniqueTools(nomes).flatMap((nome) => consultaDoAgente(nome).fonte ?? []))];
+}
+
+/** "o estoque", "o estoque e os pedidos", "o estoque, os pedidos e as chegadas". */
+function emSerie(itens: readonly string[]): string {
+  if (itens.length <= 1) return itens[0] ?? "";
+  return `${itens.slice(0, -1).join(", ")} e ${itens[itens.length - 1]}`;
+}
+
+/**
+ * A trilha recolhida numa linha, quando o texto começa: "Leu o estoque e o
+ * razão de movimentos". Até três leituras pelo nome; daí em diante, as duas
+ * primeiras e "mais N fontes" (as mesmas dos chips de "De onde tirei"). Sem
+ * leitura (só propostas, ou nenhuma consulta), nulo: a trilha some.
+ */
+export function resumoDaTrilha(nomes: readonly string[] | null | undefined): string | null {
+  const objetos = [...new Set(uniqueTools(nomes).flatMap((nome) => consultaDoAgente(nome).objeto ?? []))];
+  if (!objetos.length) return null;
+  if (objetos.length <= 3) return `Leu ${emSerie(objetos)}`;
+  return `Leu ${objetos.slice(0, 2).join(", ")} e mais ${objetos.length - 2} fontes`;
 }
 
 /** Uma etiqueta por ferramenta, na ordem em que foram usadas. */

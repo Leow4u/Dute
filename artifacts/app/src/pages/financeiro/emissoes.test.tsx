@@ -102,6 +102,10 @@ vi.mock("@/lib/financeiro/api", () => ({
 import { useEmissoesDoFinanceiro, type LeituraDasEmissoes } from "@/lib/financeiro/use-emissoes";
 
 import FinanceiroEmissoes from "./emissoes";
+import { depoisDoToqueDuplo, rotuloDoBotao } from "@/test/botoes";
+
+/** Cada toque pula o intervalo do toque duplo do BotaoDeAcao: o repetido é outro pedido da pessoa. */
+const relogios: Array<() => void> = [];
 
 let raiz: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -118,6 +122,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  while (relogios.length > 0) relogios.pop()!();
   act(() => raiz?.unmount());
   container?.remove();
 });
@@ -140,10 +145,11 @@ async function montar() {
   await esperar();
 }
 
-/** Pelo nome acessível: o aria-label da linha ou o texto do botão. */
+/** Pelo nome acessível da linha ("Tentar de novo, Itaú Unibanco") ou pelo texto do botão ("Confirmar desistência"). */
 async function clicar(nome: string) {
-  const botao = [...container!.querySelectorAll("button")].find((item) => (item.getAttribute("aria-label") ?? item.textContent) === nome);
+  const botao = [...container!.querySelectorAll("button")].find((item) => item.getAttribute("aria-label") === nome || rotuloDoBotao(item) === nome);
   if (!botao) throw new Error(`Botão "${nome}" não encontrado.`);
+  relogios.push(depoisDoToqueDuplo());
   await act(async () => {
     botao.click();
   });
@@ -172,8 +178,9 @@ describe("as emissões com as callables", () => {
     });
     await esperar();
     expect(estado.chamadas).toEqual([]);
-    expect(lidas.at(-1)).toEqual({ emissoes: [], carregando: false, falhas: [] });
-    expect(lidas.at(-2)).toEqual({ emissoes: [], carregando: false, falhas: [] });
+    // Sem leitura, a nova tentativa não tem o que reler (parte 13g).
+    expect(lidas.at(-1)).toEqual({ emissoes: [], carregando: false, falhas: [], releitura: expect.objectContaining({ tentando: false }) });
+    expect(lidas.at(-2)).toEqual({ emissoes: [], carregando: false, falhas: [], releitura: expect.objectContaining({ tentando: false }) });
   });
 
   it("tentar de novo leva a edição vista; a falha mantém a chave e a lista é lida de novo", async () => {
@@ -188,7 +195,9 @@ describe("as emissões com as callables", () => {
 
     estado.falhar = false;
     await clicar("Tentar de novo, Itaú Unibanco");
-    expect(container!.querySelector('[role="status"]')?.textContent).toBe("Itaú Unibanco: emissão retomada");
+    // O aviso fica escrito, sem região viva solta (parte 13g).
+    expect(container!.textContent).toContain("Itaú Unibanco: emissão retomada");
+    expect(container!.querySelector('[role="status"]')).toBeNull();
     expect(container!.querySelector('[role="alert"]')).toBeNull();
     expect(acoes()).toEqual([
       { idempotency_key: "k-1", id: REJEITADA, acao: "retomar", expected_edicao: 4 },
@@ -199,6 +208,18 @@ describe("as emissões com as callables", () => {
     // Outra intenção, outra chave.
     await clicar("Tentar de novo, Banco Safra");
     expect(acoes().at(-1)).toEqual({ idempotency_key: "k-2", id: PARADA, acao: "retomar", expected_edicao: 7 });
+  });
+
+  it("a confirmação que sai com o foco nela, no fim da gravação, leva o foco ao título da seção, nunca ao body (revisão da parte 13g)", async () => {
+    await montar();
+    await clicar("Desistir, Banco Safra");
+    const confirmar = [...container!.querySelectorAll("button")].find((item) => rotuloDoBotao(item) === "Confirmar desistência")!;
+    confirmar.focus();
+    await clicar("Confirmar desistência");
+    await esperar();
+    expect(container!.textContent).not.toContain("Confirmar desistência");
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.tagName).toMatch(/^H[1-6]$/);
   });
 
   it("desistir só chama depois da confirmação; voltar fecha sem chamar", async () => {
@@ -218,7 +239,9 @@ describe("as emissões com as callables", () => {
     // A confirmação continua aberta para tentar de novo, com a mesma chave.
     estado.falhar = false;
     await clicar("Confirmar desistência");
-    expect(container!.querySelector('[role="status"]')?.textContent).toBe("Banco Safra: emissão desistida");
+    // O aviso fica escrito, sem região viva solta (parte 13g).
+    expect(container!.textContent).toContain("Banco Safra: emissão desistida");
+    expect(container!.querySelector('[role="status"]')).toBeNull();
     expect(container!.textContent).not.toContain("Confirmar desistência");
     expect(acoes()).toEqual([
       { idempotency_key: "k-1", id: PARADA, acao: "desistir", expected_edicao: 7 },
@@ -238,7 +261,9 @@ describe("as emissões com as callables", () => {
     expect(container!.querySelector('[role="alert"]')?.textContent).toContain("Falha interna");
     estado.falhar = false;
     await clicar("Confirmar dispensa");
-    expect(container!.querySelector('[role="status"]')?.textContent).toBe("Itaú Unibanco · NF 815: baixa dispensada");
+    // O aviso fica escrito, sem região viva solta (parte 13g).
+    expect(container!.textContent).toContain("Itaú Unibanco · NF 815: baixa dispensada");
+    expect(container!.querySelector('[role="status"]')).toBeNull();
     expect(acoes("actOnNfSettlement")).toEqual([
       { idempotency_key: "k-1", id: BAIXA, acao: "dispensar", expected_edicao: 9 },
       { idempotency_key: "k-1", id: BAIXA, acao: "dispensar", expected_edicao: 9 },

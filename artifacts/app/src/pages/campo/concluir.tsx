@@ -8,7 +8,7 @@ import { osDoCampoDaBusca } from "@/lib/campo/navegacao";
 import { registroDeFoto } from "@/lib/campo/os-no-campo";
 import { escolherFotos } from "@/lib/operacao/enviar-foto";
 import { fichaDaLeitura } from "@/lib/operacao/ficha-da-os";
-import { useDocumento } from "@/lib/operacao/leitura";
+import { novaTentativaDe, useDocumento } from "@/lib/operacao/leitura";
 import { useUrlsDasFotos } from "@/lib/operacao/use-urls-das-fotos";
 
 import { CampoConcluirView, type EstadoDaConclusao } from "./concluir-view";
@@ -31,6 +31,7 @@ export default function PaginaCampoConcluir() {
   return (
     <CampoConcluirView
       estado={estado}
+      leitura={novaTentativaDe([os])}
       numero={numero}
       ficha={ficha}
       uid={user?.uid ?? null}

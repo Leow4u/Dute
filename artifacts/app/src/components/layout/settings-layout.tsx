@@ -3,10 +3,10 @@ import { Link, useLocation } from "wouter";
 import { ChevronLeft, ChevronRight, WifiOff } from "lucide-react";
 
 import { AccountMenu } from "@/components/layout/account-menu";
-import { ITEM, ITEM_ATUAL, ITEM_OUTRO, MarcaDoAtual } from "@/components/layout/shell-do-modulo";
+import { ContadorOuEspera, ITEM, ITEM_ATUAL, ITEM_OUTRO, MarcaDoAtual } from "@/components/layout/shell-do-modulo";
 import { cn } from "@/lib/utils";
 import { useAppAuth, useAppUser } from "@/lib/auth";
-import { usePwaInstall } from "@/lib/pwa-install";
+import { useConexao } from "@/lib/carregando/estado-da-conexao";
 import { NaV3 } from "@/lib/na-v3";
 import {
   SETTINGS_GROUP_LABEL,
@@ -35,7 +35,7 @@ function BackLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-bold text-v3-header-foreground/75 outline-none transition-colors hover:bg-v3-header-foreground/10 hover:text-v3-header-foreground focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80"
+      className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-bold text-v3-header-foreground/75 focus-visible:outline-hidden transition-colors hover:bg-v3-header-foreground/10 hover:text-v3-header-foreground focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80"
     >
       <ChevronLeft className="h-4 w-4" aria-hidden="true" />
       {label}
@@ -90,7 +90,8 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { user } = useAppUser();
   const { signOut } = useAppAuth();
-  const { isOnline } = usePwaInstall();
+  // O aparelho sem rede há 3 s, pelo estado único da conexão; o Anunciador diz "Sem conexão" (momento 8).
+  const semConexao = useConexao() === "sem-conexao";
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const role = user?.publicMetadata.role;
   const sections = getSettingsSections(role);
@@ -110,7 +111,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
         aria-label="Configuração"
         className="v3 hidden min-h-0 w-62 shrink-0 flex-col bg-v3-header px-3.5 pb-4 pt-6 font-sans text-v3-header-foreground md:flex"
       >
-        <Link href="/" className="mb-4 block self-start rounded-md px-3 outline-none focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80">
+        <Link href="/" className="mb-4 block self-start rounded-md px-3 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80">
           <img src={`${basePath}/dutelog-logo-light.png`} alt="Dutelog Soluções Logísticas" className="h-8 w-auto" />
         </Link>
         <div className="px-1.5">
@@ -136,6 +137,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
                     {active ? <MarcaDoAtual /> : null}
                     <Icon className="size-5 shrink-0" aria-hidden="true" />
                     <span className="min-w-0 flex-1 truncate">{section.label}</span>
+                    <ContadorOuEspera atual={active} contador={undefined} />
                   </Link>
                 );
               })}
@@ -157,9 +159,8 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
             <AccountMenu basePath={basePath} compact cabecalho variante="v3" signOut={signOut} user={user} />
           </div>
         </header>
-        {!isOnline ? (
+        {semConexao ? (
           <div
-            role="status"
             className="flex shrink-0 items-center justify-center gap-2 border-b border-warning-soft-border bg-warning-soft/95 px-4 py-2 text-center text-xs font-medium text-warning-soft-foreground"
           >
             <WifiOff className="h-4 w-4 shrink-0" />

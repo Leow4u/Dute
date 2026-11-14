@@ -4,7 +4,12 @@ import { ChevronDown, WifiOff, type LucideIcon } from "lucide-react";
 
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { SeletorDeModulo } from "@/components/layout/seletor-de-modulo";
+import { Spinner } from "@/components/ui/spinner";
 import { ehTelaDoAgente } from "@/lib/agente/navegacao";
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { useRotaEsperando } from "@/lib/carregando/espera-da-rota";
+import { useConexao } from "@/lib/carregando/estado-da-conexao";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { isModuleGroup, isNavRouteActive, type AppModule } from "@/lib/modules";
 import { NaV3 } from "@/lib/na-v3";
 import type { ContadorDoItem } from "@/lib/resumo-do-modulo";
@@ -33,7 +38,6 @@ export type ShellDoModuloProps = {
   items: AppModule[];
   contadores?: Readonly<Record<string, ContadorDoItem>>;
   basePath: string;
-  online: boolean;
   conta: (compact: boolean) => ReactNode;
   /** Logo abaixo do seletor (na barra) e ao lado dele (no cabeçalho do celular): o cliente ativo do WMS. */
   abaixoDoSeletor?: (compact: boolean) => ReactNode;
@@ -44,7 +48,7 @@ export type ShellDoModuloProps = {
 
 // O item da barra preta, também na barra da Configuração (settings-layout.tsx).
 export const ITEM =
-  "relative flex h-12 w-full shrink-0 items-center gap-3 rounded-lg px-3.5 text-left text-base font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80";
+  "relative flex h-12 w-full shrink-0 items-center gap-3 rounded-lg px-3.5 text-left text-base font-semibold focus-visible:outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80";
 export const ITEM_ATUAL = "bg-v3-header-foreground/15 text-v3-header-foreground";
 export const ITEM_OUTRO = "text-v3-header-foreground/75 hover:bg-v3-header-foreground/10 hover:text-v3-header-foreground";
 
@@ -82,7 +86,7 @@ function GrupoDoMenu({
         {atualNoGrupo && !aberto ? <MarcaDoAtual /> : null}
         <Icone className="size-5 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate">{item.label}</span>
-        <Contador contador={contador} />
+        <ContadorOuEspera atual={atualNoGrupo && !aberto} contador={contador} />
         <ChevronDown className={cn("size-4 shrink-0 opacity-70 transition-transform", aberto ? "" : "-rotate-90")} aria-hidden="true" />
       </button>
       {aberto ? (
@@ -96,13 +100,14 @@ function GrupoDoMenu({
                   href={route.href ?? "/"}
                   aria-current={atual ? "page" : undefined}
                   className={cn(
-                    "relative flex h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
+                    "relative flex h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-semibold focus-visible:outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80",
                     atual ? ITEM_ATUAL : ITEM_OUTRO,
                   )}
                 >
                   {atual ? <span aria-hidden="true" className="absolute inset-y-2.5 left-0 w-0.75 rounded-full bg-v3-marca" /> : null}
                   <IconeDaTela className="size-4 shrink-0" aria-hidden="true" />
                   <span className="min-w-0 flex-1 truncate">{route.label}</span>
+                  <ContadorOuEspera atual={atual} contador={undefined} />
                 </Link>
               </li>
             );
@@ -113,7 +118,22 @@ function GrupoDoMenu({
   );
 }
 
+/**
+ * O item do menu da tela que ainda abre: passados 300 ms, a caixa de 16 px no
+ * lugar do contador, enquanto o arquivo da tela baixa (carregamento v2,
+ * momento 1). Em branco, com o trilho a 0,25 da barra preta. Decorativa: quem
+ * diz "Abrindo Pedidos…" é a `CarregandoTela`, com o anúncio.
+ */
+export function ContadorOuEspera({ atual, contador }: { atual: boolean; contador: ContadorDoItem | undefined }) {
+  const esperando = useRotaEsperando();
+  const espera = useEspera(atual && esperando);
+  if (atual && espera.visivel) return <Spinner tamanho={16} calmo={espera.calmo} data-espera-da-rota="" className="ml-auto shrink-0" />;
+  return <Contador contador={contador} />;
+}
+
 function Contador({ contador }: { contador: ContadorDoItem | undefined }) {
+  // Lendo, o bloco no lugar do número, no branco a 12% da barra preta (decorativo).
+  if (contador?.lendo) return <Esqueleto forma="contagem" data-contador-lendo="" className="ml-auto shrink-0" />;
   if (!contador || contador.n <= 0) return null;
   return (
     <span
@@ -127,6 +147,22 @@ function Contador({ contador }: { contador: ContadorDoItem | undefined }) {
   );
 }
 
+/**
+ * O aviso fixo do aparelho sem rede, no alto (carregamento v2, momento 8):
+ * pelo estado único da conexão, com a histerese, só depois de 3 s sem rede, e
+ * nunca com o aparelho conectado e o servidor sem resposta ("Reconectando…",
+ * que é da lista). Não é região viva: o Anunciador diz "Sem conexão" uma vez.
+ */
+function FaixaDoAparelhoSemRede() {
+  if (useConexao() !== "sem-conexao") return null;
+  return (
+    <p className="flex shrink-0 items-center justify-center gap-2 border-b border-warning-soft-border bg-warning-soft px-4 py-2 text-sm font-bold text-warning-soft-foreground">
+      <WifiOff className="size-4 shrink-0" aria-hidden="true" />
+      Sem conexão
+    </p>
+  );
+}
+
 export function ShellDoModulo({
   ambiente,
   atual,
@@ -134,7 +170,6 @@ export function ShellDoModulo({
   items,
   contadores,
   basePath,
-  online,
   conta,
   abaixoDoSeletor,
   conteudoV3 = true,
@@ -166,7 +201,7 @@ export function ShellDoModulo({
         aria-label={atual.label}
         className="v3 hidden min-h-0 w-62 shrink-0 flex-col bg-v3-header px-3.5 pb-4 pt-6 font-sans text-v3-header-foreground md:flex"
       >
-        <Link href="/" className="mb-5 block self-start rounded-md px-3 outline-none focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80">
+        <Link href="/" className="mb-5 block self-start rounded-md px-3 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-v3-header-foreground/80">
           <img src={`${basePath}/dutelog-logo-light.png`} alt="Dutelog Soluções Logísticas" className="h-8 w-auto" />
         </Link>
         <SeletorDeModulo atual={atual} opcoes={opcoes} variante="v3" />
@@ -197,7 +232,7 @@ export function ShellDoModulo({
                 {atualItem ? <MarcaDoAtual /> : null}
                 <Icone className="size-5 shrink-0" aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                <Contador contador={contadores?.[item.id]} />
+                <ContadorOuEspera atual={atualItem} contador={contadores?.[item.id]} />
               </Link>
             );
           })}
@@ -213,15 +248,7 @@ export function ShellDoModulo({
           </div>
           {abaixoDoSeletor ? <div className="flex h-11 items-center border-t border-v3-header-foreground/10 px-3">{abaixoDoSeletor(true)}</div> : null}
         </header>
-        {online ? null : (
-          <p
-            role="status"
-            className="flex shrink-0 items-center justify-center gap-2 border-b border-warning-soft-border bg-warning-soft px-4 py-2 text-sm font-bold text-warning-soft-foreground"
-          >
-            <WifiOff className="size-4 shrink-0" aria-hidden="true" />
-            Sem conexão
-          </p>
-        )}
+        <FaixaDoAparelhoSemRede />
         <main className="min-h-0 flex-1 overflow-auto overscroll-contain">
           {/* No WMS a tela ocupa a altura (o chat do Agent Dute, as filas); nos outros, o chat do agente também. */}
           <div className={cn("mx-auto w-full max-w-[1600px] p-4 md:p-8 lg:px-11 lg:py-9", (ambiente === "wms" || ehTelaDoAgente(location)) && "h-full")}>

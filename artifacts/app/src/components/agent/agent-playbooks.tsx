@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpenCheck, Check, Loader2, Pencil, Plus, X } from "lucide-react";
+import { BookOpenCheck, Check, Pencil, Plus, X } from "lucide-react";
 
-import { chaveNoAlvo } from "@/lib/agente/cliente";
+import { chaveNoAlvo, type AcaoDaRevisao } from "@/lib/agente/cliente";
 import { useClienteDoAgente } from "@/lib/agente/contexto";
+import { FantasmasDaLista, LeituraDaListaDoAgente } from "@/components/agent/leitura-do-agente";
+import { BotaoDeAcao, type EstadoDaAcao } from "@/components/ui/botao-de-acao";
 import { buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +18,7 @@ import {
   type Playbook,
   type PlaybookForm,
 } from "@/lib/agent-playbooks";
+import { useAcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,7 +29,7 @@ import { cn } from "@/lib/utils";
  */
 
 const field =
-  "w-full min-w-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15";
+  "w-full min-w-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm focus:outline-hidden focus:border-primary focus:ring-2 focus:ring-primary/15";
 
 function AudiencePill({ audience }: { audience: Playbook["audience"] }) {
   return (
@@ -57,6 +60,9 @@ function PlaybookDialog({ playbook, onClose }: { playbook: Playbook | null; onCl
     },
     onError: (error) => toast({ title: "Não foi possível salvar", description: error instanceof Error ? error.message : "", variant: "destructive" }),
   });
+  // O botão tocado diz que salva; o outro fica travado sem sair da ordem do foco.
+  const salvando = save.isPending ? save.variables : null;
+  const estadoDe = (approve: boolean): EstadoDaAcao => (salvando === approve ? "andamento" : "repouso");
   const id = playbook?.id ?? "new";
 
   return (
@@ -110,23 +116,22 @@ function PlaybookDialog({ playbook, onClose }: { playbook: Playbook | null; onCl
               Cancelar
             </button>
             {pending ? (
-              <button
-                type="button"
-                disabled={Boolean(problem) || save.isPending}
+              <BotaoDeAcao
+                variant="outline"
+                estado={estadoDe(false)}
+                rotulo="Salvar sem aprovar"
+                andamento="Salvando…"
+                bloqueado={Boolean(problem) || salvando === true}
                 onClick={() => save.mutate(false)}
-                className={buttonVariants({ variant: "outline" })}
-              >
-                Salvar sem aprovar
-              </button>
+              />
             ) : null}
-            <button
-              type="button"
-              disabled={Boolean(problem) || save.isPending}
+            <BotaoDeAcao
+              estado={estadoDe(pending)}
+              rotulo={pending ? "Salvar e aprovar" : playbook ? "Salvar" : "Salvar e publicar"}
+              andamento="Salvando…"
+              bloqueado={Boolean(problem) || salvando === !pending}
               onClick={() => save.mutate(pending)}
-              className={buttonVariants({})}
-            >
-              {save.isPending ? "Salvando…" : pending ? "Salvar e aprovar" : playbook ? "Salvar" : "Salvar e publicar"}
-            </button>
+            />
           </div>
         </DialogFooter>
       </DialogContent>
@@ -146,28 +151,49 @@ export function AgentPlaybooks() {
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: chaveNoAlvo(agente, playbooksKey) });
   const failed = (error: unknown) => toast({ title: "Não foi possível salvar", description: error instanceof Error ? error.message : "", variant: "destructive" });
-  const decide = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" | "archive" }) =>
-      agente.playbooks.decidir(id, action),
-    onSuccess: (_result, input) => {
-      toast({ title: input.action === "approve" ? "Playbook aprovado: o Agent Dute passa a seguir" : input.action === "reject" ? "Playbook recusado" : "Playbook arquivado" });
-      void refresh();
-    },
-    onError: failed,
-  });
-  const seed = useMutation({
-    mutationFn: () => agente.playbooks.carregar(),
-    onSuccess: (result) => {
-      toast({ title: result.created ? `${result.created} playbooks carregados para aprovar` : "Os playbooks iniciais já foram carregados antes" });
-      void refresh();
-    },
-    onError: failed,
-  });
+  // Cada playbook decide sozinho (carregamento v2, momento 4): aprovar um deixa os outros livres.
+  const decide = useAcaoNaLinha<string>();
+  const decidir = (id: string, action: AcaoDaRevisao) =>
+    void decide.executar(
+      id,
+      action,
+      () =>
+        agente.playbooks.decidir(id, action).then(
+          (resultado) => {
+            toast({ title: action === "approve" ? "Playbook aprovado: o Agent Dute passa a seguir" : action === "reject" ? "Playbook recusado" : "Playbook arquivado" });
+            return resultado;
+          },
+          (error: unknown) => {
+            failed(error);
+            throw error;
+          },
+        ),
+      { releitura: refresh },
+    );
+  const seed = useAcaoNaLinha<"iniciais">();
+  const carregarIniciais = () =>
+    void seed.executar(
+      "iniciais",
+      "carregar",
+      () =>
+        agente.playbooks.carregar().then(
+          (result) => {
+            toast({ title: result.created ? `${result.created} playbooks carregados para aprovar` : "Os playbooks iniciais já foram carregados antes" });
+            return result;
+          },
+          (error: unknown) => {
+            failed(error);
+            throw error;
+          },
+        ),
+      { releitura: refresh },
+    );
 
   const list = playbooks.data?.playbooks ?? [];
   const { pending, active } = groupPlaybooks(list);
   const open = editing && editing !== "new" ? (list.find((item) => item.id === editing) ?? null) : null;
-  const busy = decide.isPending || seed.isPending;
+  const estadoDa = (id: string, action: AcaoDaRevisao) => decide.estado(id, action);
+  const travadoNa = (id: string, action: AcaoDaRevisao) => decide.ocupada(id) && decide.estado(id, action) === "repouso";
 
   return (
     <section className="rounded-lg border border-border bg-card px-5 py-4">
@@ -190,25 +216,29 @@ export function AgentPlaybooks() {
         </button>
       </header>
 
-      {playbooks.isLoading ? (
-        <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</p>
-      ) : playbooks.isError ? (
-        <p className="mt-3 text-sm text-destructive">{playbooks.error instanceof Error ? playbooks.error.message : "Não foi possível carregar."}</p>
-      ) : (
+      <LeituraDaListaDoAgente
+        leitura={playbooks}
+        rotulo="Carregando playbooks…"
+        falha="Não foi possível carregar os playbooks."
+        fantasmas={<FantasmasDaLista altura="h-14" />}
+        className="mt-4"
+      >
         <>
           {list.length === 0 ? (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-agent-border bg-agent-soft px-4 py-3">
               <p className="min-w-0 flex-1 basis-[280px] text-sm">
                 Há 7 playbooks iniciais prontos para revisar: aprovar solicitação, receber, recebimento com divergência, separar e embalar, entregar, pedido pelo portal e aviso de envio. Eles entram como "para aprovar" e só valem depois de aprovados.
               </p>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => seed.mutate()}
-                className={cn("shrink-0", buttonVariants({ size: "sm" }))}
-              >
-                {seed.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Carregar os 7 iniciais
-              </button>
+              <BotaoDeAcao
+                size="sm"
+                className="shrink-0"
+                estado={seed.estado("iniciais", "carregar")}
+                rotulo="Carregar os 7 iniciais"
+                andamento="Carregando os iniciais…"
+                sucesso="Carregados"
+                erro="Não carregados"
+                onClick={carregarIniciais}
+              />
             </div>
           ) : null}
 
@@ -230,25 +260,35 @@ export function AgentPlaybooks() {
                     </span>
                   </button>
                   <div className="flex shrink-0 gap-2">
-                    <button type="button" onClick={() => setEditing(item.id)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                    <button type="button" onClick={() => setEditing(item.id)} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "max-md:min-h-12")}>
                       <Pencil className="h-3.5 w-3.5" /> Ver e editar
                     </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => decide.mutate({ id: item.id, action: "reject" })}
-                      className={buttonVariants({ variant: "outline", size: "sm" })}
-                    >
-                      <X className="h-3.5 w-3.5" /> Recusar
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => decide.mutate({ id: item.id, action: "approve" })}
-                      className={buttonVariants({ size: "sm" })}
-                    >
-                      <Check className="h-3.5 w-3.5" /> Aprovar
-                    </button>
+                    <BotaoDeAcao
+                      variant="outline"
+                      size="sm"
+                      // No celular, as ações da linha com 48 px (seção 7).
+                      className="max-md:min-h-12"
+                      estado={estadoDa(item.id, "reject")}
+                      icone={<X className="h-3.5 w-3.5" />}
+                      rotulo="Recusar"
+                      andamento="Recusando…"
+                      sucesso="Recusado"
+                      erro="Não recusado"
+                      bloqueado={travadoNa(item.id, "reject")}
+                      onClick={() => decidir(item.id, "reject")}
+                    />
+                    <BotaoDeAcao
+                      size="sm"
+                      className="max-md:min-h-12"
+                      estado={estadoDa(item.id, "approve")}
+                      icone={<Check className="h-3.5 w-3.5" />}
+                      rotulo="Aprovar"
+                      andamento="Aprovando…"
+                      sucesso="Aprovado"
+                      erro="Não aprovado"
+                      bloqueado={travadoNa(item.id, "approve")}
+                      onClick={() => decidir(item.id, "approve")}
+                    />
                   </div>
                 </li>
               ))}
@@ -277,9 +317,17 @@ export function AgentPlaybooks() {
                     <button type="button" onClick={() => setEditing(item.id)} className="hover:text-foreground">
                       Editar
                     </button>
-                    <button type="button" disabled={busy} onClick={() => decide.mutate({ id: item.id, action: "archive" })} className="hover:text-foreground">
-                      Arquivar
-                    </button>
+                    <BotaoDeAcao
+                      variant="ghost"
+                      size="sm"
+                      className="min-h-0 px-1 py-0 text-xs font-medium text-muted-foreground hover:text-foreground max-md:min-h-12"
+                      estado={estadoDa(item.id, "archive")}
+                      rotulo="Arquivar"
+                      andamento="Arquivando…"
+                      sucesso="Arquivado"
+                      erro="Não arquivado"
+                      onClick={() => decidir(item.id, "archive")}
+                    />
                   </div>
                 </li>
               ))}
@@ -288,7 +336,7 @@ export function AgentPlaybooks() {
             <p className="mt-1 text-sm text-muted-foreground">Nenhum playbook valendo ainda.</p>
           )}
         </>
-      )}
+      </LeituraDaListaDoAgente>
 
       {editing && (editing === "new" || open) ? <PlaybookDialog key={editing} playbook={open} onClose={() => setEditing(null)} /> : null}
     </section>

@@ -11,7 +11,41 @@ import { progressoDoPedido } from "@/lib/warehouse-ops/separacao";
 import { volumesDaSeparacao, type VolumeDaTarefa } from "@/lib/warehouse-ops/volumes-do-pedido";
 import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosDaTela } from "@/test/textos";
+import { textosDaTela as textosComAsCamadas } from "@/test/textos";
+
+/**
+ * As camadas escondidas do BotaoDeAcao nesta tela (carregamento v2, parte
+ * 13c): o gerúndio de cada ação e o "Conferir" entram na lista do teste, como
+ * todo texto. Uma camada com outro texto (um gerúndio errado) reprova.
+ */
+const CAMADAS_DA_BANCADA = ["Separando…", "Levando…", "Desfazendo…", "Fechando…", "Concluindo…", "Conferir"];
+
+/**
+ * O BotaoDeAcao empilha as camadas do botão: só a atual está na tela; as
+ * outras ficam fora da árvore até a vez delas. Os textos da tela são os da
+ * camada atual, e as outras precisam estar na lista das camadas (ou repetir o
+ * rótulo da atual, como o sucesso e o erro sem texto próprio).
+ */
+function textosDaTela(html: string): string[] {
+  const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+  const ocultas = [...dom.window.document.querySelectorAll(".botao-acao-camada:not([data-atual])")];
+  for (const camada of ocultas) {
+    const texto = camada.textContent?.trim() ?? "";
+    const atual = camada.closest("button")?.querySelector(".botao-acao-camada[data-atual]")?.textContent?.trim();
+    if (texto && !CAMADAS_DA_BANCADA.includes(texto) && texto !== atual) {
+      throw new Error(`Camada fora da lista da bancada: ${texto}`);
+    }
+    camada.remove();
+  }
+  const limpo = dom.window.document.body.innerHTML;
+  dom.window.close();
+  return textosComAsCamadas(limpo);
+}
+
+/** O rótulo do botão: o da camada atual do BotaoDeAcao, ou o texto dele. */
+function rotuloDo(botao: Element): string | null {
+  return botao.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? botao.textContent;
+}
 
 import { PedidosSepararView, acoesDoMenu, type EstadoDaBancada } from "./pedidos-separar-view";
 
@@ -78,8 +112,13 @@ function render(estado: EstadoDaBancada = "pronto", { itens = ITENS, ...props }:
 
 function botao(html: string, texto: string) {
   const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
-  const achado = [...dom.window.document.querySelectorAll("button")].find((candidato) => candidato.textContent === texto);
-  const resultado = achado ? { desligado: achado.hasAttribute("disabled"), classe: achado.className } : null;
+  // O BotaoDeAcao empilha as camadas: o rótulo é o da camada atual, e ocupado é aria-disabled (carregamento v2).
+  const achado = [...dom.window.document.querySelectorAll("button")].find(
+    (candidato) => (candidato.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? candidato.textContent) === texto,
+  );
+  const resultado = achado
+    ? { desligado: achado.hasAttribute("disabled") || achado.getAttribute("aria-disabled") === "true", classe: achado.className }
+    : null;
   dom.window.close();
   return resultado;
 }
@@ -146,7 +185,7 @@ describe("Pedidos › Separar, a bancada do pedido", () => {
   it("só a primeira linha por separar tem a ação principal; cada linha por separar tem o ⋯ com o nome dela", () => {
     const dom = new JSDOM(`<!doctype html><body>${render()}</body>`);
     const { document } = dom.window;
-    const separar = [...document.querySelectorAll("button")].filter((candidato) => candidato.textContent === "Separar");
+    const separar = [...document.querySelectorAll("button")].filter((candidato) => rotuloDo(candidato) === "Separar");
     expect(separar).toHaveLength(2);
     expect(separar[0].className).toContain("bg-primary");
     expect(separar[1].className).not.toContain("bg-primary");
@@ -187,10 +226,41 @@ describe("Pedidos › Separar, a bancada do pedido", () => {
     expect(render("pronto", { operador: false })).not.toContain("Mais ações de");
   });
 
-  it("a linha com a gravação em curso desliga os botões dela", () => {
+  it("a linha com a gravação em curso deixa os botões dela ocupados, não desabilitados", () => {
+    // Ocupado não é desabilitado (carregamento v2, parte 13c): aria-disabled, e o foco que estava no botão fica.
     const dom = new JSDOM(`<!doctype html><body>${render("pronto", { ocupadas: new Set(["pli_ord_1_04"]) })}</body>`);
-    const separar = [...dom.window.document.querySelectorAll("button")].filter((candidato) => candidato.textContent === "Separar");
-    expect(separar.map((candidato) => candidato.hasAttribute("disabled"))).toEqual([true, false]);
+    const separar = [...dom.window.document.querySelectorAll("button")].filter((candidato) => rotuloDo(candidato) === "Separar");
+    expect(separar.map((candidato) => candidato.getAttribute("aria-disabled") === "true")).toEqual([true, false]);
+    expect(separar.map((candidato) => candidato.hasAttribute("disabled"))).toEqual([false, false]);
+    dom.window.close();
+  });
+
+  it("no celular: as ações da linha com 48 px, o \"⋯\" que não encolhe, o Levar a caixa numa linha dele e o Desfazer alinhado ao lado da linha", () => {
+    // O BotaoDeAcao tem a largura do rótulo mais largo e não encolhe: lado a lado com o Levar a caixa e o Separar, o "⋯"
+    // encolhia a 18 px (parte 13c). A medida de verdade é a do navegador; aqui, as classes que a garantem.
+    const dom = new JSDOM(
+      `<!doctype html><body>${render("pronto", { onLevarACaixa: noop, caixasInteiras: new Map([["pli_ord_1_04", 1]]) })}</body>`,
+    );
+    const todos = [...dom.window.document.querySelectorAll("button")];
+    const porRotulo = (texto: string) => todos.filter((candidato) => rotuloDo(candidato) === texto);
+    const mais = todos.find((candidato) => candidato.getAttribute("aria-label")?.startsWith("Mais ações de Calça Social Masculino Preta · 42"))!;
+    expect(mais.className).toContain("shrink-0");
+    expect(mais.className).toContain("max-md:size-12");
+    expect(porRotulo("Levar a caixa")[0]!.className).toContain("max-sm:basis-full");
+    for (const rotulo of ["Levar a caixa", "Separar", "Desfazer"]) {
+      expect(porRotulo(rotulo)[0]!.className, rotulo).toContain("max-md:min-h-12");
+    }
+    expect(porRotulo("Desfazer")[0]!.className).toContain("justify-items-start");
+    expect(porRotulo("Desfazer")[0]!.className).toContain("sm:justify-items-end");
+    dom.window.close();
+  });
+
+  it("a linha que separa mostra a espera no botão tocado: o Separar fica em andamento, e o Levar a caixa espera", () => {
+    const dom = new JSDOM(`<!doctype html><body>${render("pronto", { ocupadas: new Map([["pli_ord_1_04", "separar"]]) })}</body>`);
+    const separar = [...dom.window.document.querySelectorAll("button")].filter((candidato) => rotuloDo(candidato) === "Separar");
+    expect(separar.map((candidato) => candidato.getAttribute("data-estado"))).toEqual(["andamento", "repouso"]);
+    expect(separar[0]!.getAttribute("aria-disabled")).toBe("true");
+    expect(separar[0]!.hasAttribute("disabled")).toBe(false);
     dom.window.close();
   });
 
@@ -211,13 +281,16 @@ describe("Pedidos › Separar, a bancada do pedido", () => {
 
   it("carregando, pedido não encontrado, erro e separação concluída: a mensagem no lugar da bancada", () => {
     for (const [estado, mensagem] of [
-      ["carregando", "Carregando"],
       ["nao_encontrado", "Pedido não encontrado"],
       ["erro", "Não foi possível carregar o pedido."],
       ["concluida", "Separação concluída"],
     ] as const) {
       expect(textosDaTela(render(estado))).toEqual(["PED-0001", mensagem]);
     }
+    // Carregando, a espera em bloco (carregamento v2, parte 13c): nada antes de 300 ms, sem o "Carregando" seco.
+    const carregando = render("carregando");
+    expect(textosDaTela(carregando)).toEqual(["PED-0001"]);
+    expect(carregando).toContain("data-carregando-na-regiao");
     expect(render("erro")).toContain('role="alert"');
     expect(textosDaTela(render("nao_encontrado", { numero: "" }))).toEqual(["Separar", "Pedido não encontrado"]);
   });
@@ -404,7 +477,10 @@ describe("Pedidos › Separar, os volumes", () => {
       ? {
           textos: textosDaTela(secao.outerHTML),
           etiquetas: [...secao.querySelectorAll("a")].map((link) => [link.getAttribute("aria-label"), link.getAttribute("href")]),
-          fechar: [...secao.querySelectorAll("button")].find((candidato) => candidato.textContent === "Fechar volume")?.hasAttribute("disabled") ?? null,
+          fechar: (() => {
+            const botao = [...secao.querySelectorAll("button")].find((candidato) => rotuloDo(candidato) === "Fechar volume");
+            return botao ? botao.hasAttribute("disabled") || botao.getAttribute("aria-disabled") === "true" : null;
+          })(),
         }
       : null;
     dom.window.close();
@@ -504,7 +580,7 @@ describe("Pedidos › Separar, os volumes", () => {
     const html = comVolumes({ caixasDaLinha, caixasInteiras: new Map([["pli_ord_1_04", 1]]) });
     const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
     const acoes = (nome: string) =>
-      [...([...dom.window.document.querySelectorAll("li")].find((item) => item.textContent?.includes(nome))?.querySelectorAll("button") ?? [])].map((candidato) => candidato.textContent || candidato.getAttribute("aria-label"));
+      [...([...dom.window.document.querySelectorAll("li")].find((item) => item.textContent?.includes(nome))?.querySelectorAll("button") ?? [])].map((candidato) => rotuloDo(candidato) || candidato.getAttribute("aria-label"));
     expect(acoes("Calça Social Masculino Preta · 42")).toEqual(["Levar a caixa", "Separar", "Mais ações de Calça Social Masculino Preta · 42"]);
     expect(acoes("Copo Café")).toEqual(["Separar", "Mais ações de Copo Café"]);
     dom.window.close();
@@ -588,7 +664,7 @@ describe("Pedidos › Separar, dividir em volumes", () => {
     const codigos = item?.querySelectorAll("p")[1];
     const resultado = {
       textos: textosDaTela(item?.outerHTML ?? ""),
-      botoes: [...(item?.querySelectorAll("button") ?? [])].map((botao) => botao.textContent || botao.getAttribute("aria-label")),
+      botoes: [...(item?.querySelectorAll("button") ?? [])].map((botao) => rotuloDo(botao) || botao.getAttribute("aria-label")),
       // A fileira logo embaixo dos códigos, no mesmo bloco do nome.
       embaixo: codigos?.nextElementSibling ? textosDaTela(codigos.nextElementSibling.outerHTML) : null,
     };
@@ -627,7 +703,7 @@ describe("Pedidos › Separar, dividir em volumes", () => {
 
   it("o botão da linha separada tem 44 px no celular e o tamanho pequeno no computador", () => {
     const dom = new JSDOM(`<!doctype html><body>${bancada(NA_SEPARADA, DA_TAREFA_NA_SEPARADA)}</body>`);
-    const classes = [...dom.window.document.querySelectorAll("button")].find((botao) => botao.textContent === "Dividir em volumes")?.className.split(/\s+/);
+    const classes = [...dom.window.document.querySelectorAll("button")].find((botao) => rotuloDo(botao) === "Dividir em volumes")?.className.split(/\s+/);
     dom.window.close();
     expect(classes).toEqual(expect.arrayContaining(["min-h-11", "lg:min-h-9"]));
     expect(classes).not.toContain("min-h-9");

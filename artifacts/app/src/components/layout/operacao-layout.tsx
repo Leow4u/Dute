@@ -11,7 +11,6 @@ import { useAppAuth, useAppUser } from "@/lib/auth";
 import { menuDoOperacao } from "@/lib/modules";
 import { useInicioDaOperacao } from "@/lib/operacao/use-inicio";
 import { useOperationProfile } from "@/lib/operation-profile";
-import { usePwaInstall } from "@/lib/pwa-install";
 import { contadoresDoMenu } from "@/lib/resumo-do-modulo";
 import { moduloAberto, opcoesDoSeletor } from "@/lib/seletor-de-modulo";
 import { rememberReturnPath } from "@/lib/settings-nav";
@@ -22,7 +21,6 @@ export default function OperacaoLayout({ children }: { children: ReactNode }) {
   const { user } = useAppUser();
   const { signOut } = useAppAuth();
   const { profile } = useOperationProfile();
-  const { isOnline } = usePwaInstall();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const role = user?.publicMetadata.role;
   const menu = menuDoOperacao(role);
@@ -43,9 +41,8 @@ export default function OperacaoLayout({ children }: { children: ReactNode }) {
       atual={moduloAberto(location) ?? { label: "Operação", icon: Truck }}
       opcoes={opcoesDoSeletor(role, profile, location)}
       items={menu}
-      contadores={contadoresDoMenu(inicio.itens, menu, "operacao-inicio")}
+      contadores={contadoresDoMenu(inicio.itens, menu, "operacao-inicio", inicio.carregando)}
       basePath={basePath}
-      online={isOnline}
       abaixoDoSeletor={
         ehTelaDoAgente(location)
           ? (compact) => <ActiveCustomerSwitcher variant={compact ? "v3-cabecalho" : "v3"} canManageCustomers={gerenciaClientes} />

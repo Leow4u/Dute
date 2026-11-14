@@ -66,9 +66,16 @@ function requestTime(value: unknown) {
 export function buildOrderQueue<R extends QueueRequest>({
   requests,
   ops,
+  segurar,
 }: {
   requests?: R[];
   ops?: WarehouseOpsResponse;
+  /**
+   * A solicitação já decidida que a tela ainda segura em "Para aprovar":
+   * a da linha com a ação ocupada (o "Aprovado" do botão fica 1 s e até a
+   * releitura chegar, carregamento v2). Quem a solta é a ação da linha.
+   */
+  segurar?: (id: string) => boolean;
 }): OrderQueue<R> {
   const orders = groupWarehouseOrders(ops);
   // Exceções primeiro: são as que travam o armazém.
@@ -78,7 +85,7 @@ export function buildOrderQueue<R extends QueueRequest>({
 
   return {
     approve: (requests ?? [])
-      .filter((request) => isAwaitingDecision(request.status))
+      .filter((request) => isAwaitingDecision(request.status) || segurar?.(request.id) === true)
       .sort(
         (left, right) =>
           priorityWeight(left.priority) - priorityWeight(right.priority) ||
@@ -162,8 +169,13 @@ export function ordersGroupEmpty(group: "approve" | "pick" | "deliver") {
  * A linha da ação principal da tela (v3, parte 4.7c): a primeira da fila, na
  * ordem aprovar (para quem decide), separar e entregar. As outras ações da
  * fila são secundárias. "approve:<id>", "pick:<pedido>" ou "deliver:<pedido>".
+ * Basta a chave de cada linha: a tela passa as que estão nela, também a que
+ * ainda sai sem o dado do pedido (carregamento v2, parte 6c).
  */
-export function chaveDaPrincipal<R extends QueueRequest>(queue: Pick<OrderQueue<R>, "approve" | "pick" | "deliver">, decider: boolean): string | null {
+export function chaveDaPrincipal(
+  queue: { approve: readonly Pick<QueueRequest, "id">[]; pick: readonly Pick<OrderGroup, "key">[]; deliver: readonly Pick<OrderGroup, "key">[] },
+  decider: boolean,
+): string | null {
   if (decider && queue.approve[0]) return `approve:${queue.approve[0].id}`;
   if (queue.pick[0]) return `pick:${queue.pick[0].key}`;
   if (queue.deliver[0]) return `deliver:${queue.deliver[0].key}`;

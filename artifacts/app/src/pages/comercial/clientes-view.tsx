@@ -2,7 +2,12 @@ import type { ReactNode } from "react";
 import { Link } from "wouter";
 import { Box, FileText, Pencil, Plus, Search, Target, UserCheck } from "lucide-react";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
+import { NumeroLido } from "@/components/ui/numero-lido";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
 import { Input } from "@/components/ui/input";
 import {
   SEGMENTOS,
@@ -73,6 +78,12 @@ export type ClientesViewProps = {
   responsavel: string | null;
   /** Uma gravação em andamento: as ações esperam. */
   ocupado: boolean;
+  /** Qual linha grava ("local:<id>", "contato:<id>"): o botão dela diz o gerúndio (parte 13g). */
+  emAndamento?: string | null;
+  /** A nova tentativa da leitura do cadastro (parte 13g). */
+  leitura?: NovaTentativa;
+  /** A nova tentativa das leituras da ficha (os locais, os contatos e os contratos). */
+  releituras?: Partial<Record<"locais" | "contatos" | "contratos", NovaTentativa>>;
   acoes: AcoesDaTela;
 };
 
@@ -128,14 +139,56 @@ function Vazio({ children }: { children: ReactNode }) {
   return <p className="px-5 py-7 text-center text-sm font-bold text-muted-foreground">{children}</p>;
 }
 
-/** Carregando ou erro no lugar da lista: a tela não afirma vazio sem ter lido. */
-function SemLeitura({ carga }: { carga: "carregando" | "erro" }) {
-  return <Vazio>{carga === "erro" ? "Não foi possível carregar." : "Carregando..."}</Vazio>;
+/**
+ * Carregando ou erro no lugar da lista: a tela não afirma vazio sem ter lido
+ * (carregamento v2, parte 13g). Lendo, a caixa e "Carregando os locais…" aos
+ * 300 ms, com "Tentar de novo" aos 10 s; na falha, a frase e "Tentar de
+ * novo", que assina de novo a leitura ao vivo (o `onSnapshot` que falha não
+ * volta sozinho).
+ */
+function SemLeitura({ carga, objeto, leitura = SEM_NOVA_TENTATIVA }: { carga: "carregando" | "erro"; objeto: string; leitura?: NovaTentativa }) {
+  if (carga === "carregando") return <CarregandoNaRegiao rotulo={`Carregando ${objeto}…`} onTentar={leitura.tentar} className="px-5 py-7" />;
+  return <FalhaAoVivo leitura={leitura} mensagem={`Não foi possível carregar ${objeto}.`} className="justify-center px-5 py-7" semCartao />;
+}
+
+/**
+ * A ação da linha que grava direto (Desativar, Reativar): o gerúndio na linha
+ * que grava, com a caixa no lugar do ícone; as outras linhas ficam travadas
+ * sem sumir (parte 13g).
+ */
+function AcaoQueGrava({
+  rotulo,
+  andamento,
+  objeto,
+  emAndamento,
+  ocupado,
+  onClick,
+}: {
+  rotulo: string;
+  andamento: string;
+  /** O local ou o contato da linha: entra no nome do botão e no anúncio da espera. */
+  objeto: string;
+  emAndamento: boolean;
+  ocupado: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <BotaoDeAcao
+      variant="ghost"
+      size="sm"
+      estado={emAndamento ? "andamento" : "repouso"}
+      bloqueado={ocupado && !emAndamento}
+      rotulo={rotulo}
+      andamento={andamento}
+      objeto={objeto}
+      onClick={onClick}
+    />
+  );
 }
 
 // --- Cabeçalho e lista -------------------------------------------------------------
 
-function Cabecalho({ cadastros, segmento, onSegmento, busca, onBusca, ocupado, acoes }: ClientesViewProps) {
+function Cabecalho({ estado, cadastros, segmento, onSegmento, busca, onBusca, ocupado, acoes }: ClientesViewProps) {
   const contagem = contarSegmentos(cadastros);
   return (
     <header className="flex flex-wrap items-center gap-4">
@@ -155,7 +208,9 @@ function Cabecalho({ cadastros, segmento, onSegmento, busca, onBusca, ocupado, a
             )}
           >
             {ROTULO_DO_SEGMENTO[item]}
-            <Contador>{contagem[item]}</Contador>
+            <Contador>
+              <NumeroLido estado={estado}>{contagem[item]}</NumeroLido>
+            </Contador>
           </button>
         ))}
       </div>
@@ -238,9 +293,11 @@ function CabecalhoDoGrupo({ children }: { children: ReactNode }) {
 
 function Lista(props: ClientesViewProps) {
   const { estado, cadastros, contratos, hoje, segmento, busca, selecionado, onSelecionar } = props;
+  const leitura = props.leitura ?? SEM_NOVA_TENTATIVA;
   let conteudo: ReactNode;
-  if (estado === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
-  else if (estado === "erro") conteudo = <Vazio>Não foi possível carregar o cadastro.</Vazio>;
+  if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando o cadastro…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
+  else if (estado === "erro")
+    conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar o cadastro." className="px-5 py-7" semCartao estreito />;
   else {
     const { clientes, prospects } = filtrarCadastros(cadastros, segmento, busca);
     const linha = (cadastro: CadastroComercial) => (
@@ -316,7 +373,19 @@ function BarraDaAba({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap items-center justify-end gap-2.5 px-5 pb-3 pt-4">{children}</div>;
 }
 
-function Locais({ locais, ocupado, acoes }: { locais: Carga<LocalResumo>; ocupado: boolean; acoes: AcoesDaTela }) {
+function Locais({
+  locais,
+  leitura,
+  ocupado,
+  emAndamento,
+  acoes,
+}: {
+  locais: Carga<LocalResumo>;
+  leitura?: NovaTentativa;
+  ocupado: boolean;
+  emAndamento: string | null;
+  acoes: AcoesDaTela;
+}) {
   return (
     <div>
       <BarraDaAba>
@@ -326,7 +395,7 @@ function Locais({ locais, ocupado, acoes }: { locais: Carga<LocalResumo>; ocupad
         </Button>
       </BarraDaAba>
       {!Array.isArray(locais) ? (
-        <SemLeitura carga={locais} />
+        <SemLeitura carga={locais} objeto="os locais" leitura={leitura} />
       ) : locais.length === 0 ? (
         <Vazio>Nenhum local</Vazio>
       ) : (
@@ -347,9 +416,14 @@ function Locais({ locais, ocupado, acoes }: { locais: Carga<LocalResumo>; ocupad
                   <AcaoDaLinha onClick={() => acoes.editarLocal(local)} disabled={ocupado}>
                     Editar
                   </AcaoDaLinha>
-                  <AcaoDaLinha onClick={() => acoes.alternarLocal(local)} disabled={ocupado}>
-                    {local.ativo ? "Desativar" : "Reativar"}
-                  </AcaoDaLinha>
+                  <AcaoQueGrava
+                    rotulo={local.ativo ? "Desativar" : "Reativar"}
+                    andamento={local.ativo ? "Desativando…" : "Reativando…"}
+                    objeto={local.nome}
+                    emAndamento={emAndamento === `local:${local.id}`}
+                    ocupado={ocupado}
+                    onClick={() => acoes.alternarLocal(local)}
+                  />
                 </span>
               </li>
             );
@@ -362,13 +436,17 @@ function Locais({ locais, ocupado, acoes }: { locais: Carga<LocalResumo>; ocupad
 
 function Contatos({
   contatos,
+  leitura,
   cadastro,
   ocupado,
+  emAndamento,
   acoes,
 }: {
   contatos: Carga<ContatoResumo>;
+  leitura?: NovaTentativa;
   cadastro: CadastroComercial;
   ocupado: boolean;
+  emAndamento: string | null;
   acoes: AcoesDaTela;
 }) {
   const grupos = Array.isArray(contatos) ? gruposDeContatos(contatos, cadastro) : [];
@@ -389,7 +467,7 @@ function Contatos({
         </Button>
       </BarraDaAba>
       {!Array.isArray(contatos) ? (
-        <SemLeitura carga={contatos} />
+        <SemLeitura carga={contatos} objeto="os contatos" leitura={leitura} />
       ) : contatos.length === 0 ? (
         <Vazio>Nenhum contato</Vazio>
       ) : (
@@ -422,9 +500,14 @@ function Contatos({
                       <AcaoDaLinha onClick={() => acoes.editarContato(pessoa)} disabled={ocupado}>
                         Editar
                       </AcaoDaLinha>
-                      <AcaoDaLinha onClick={() => acoes.alternarContato(pessoa)} disabled={ocupado}>
-                        {pessoa.ativo ? "Desativar" : "Reativar"}
-                      </AcaoDaLinha>
+                      <AcaoQueGrava
+                        rotulo={pessoa.ativo ? "Desativar" : "Reativar"}
+                        andamento={pessoa.ativo ? "Desativando…" : "Reativando…"}
+                        objeto={pessoa.nome}
+                        emAndamento={emAndamento === `contato:${pessoa.id}`}
+                        ocupado={ocupado}
+                        onClick={() => acoes.alternarContato(pessoa)}
+                      />
                     </div>
                   </div>
                 );
@@ -437,8 +520,8 @@ function Contatos({
   );
 }
 
-function Contratos({ contratos, hoje }: { contratos: Carga<ContratoResumo>; hoje: string }) {
-  if (!Array.isArray(contratos)) return <SemLeitura carga={contratos} />;
+function Contratos({ contratos, hoje, leitura }: { contratos: Carga<ContratoResumo>; hoje: string; leitura?: NovaTentativa }) {
+  if (!Array.isArray(contratos)) return <SemLeitura carga={contratos} objeto="os contratos" leitura={leitura} />;
   if (!contratos.length) return <Vazio>Nenhum contrato</Vazio>;
   return (
     <ul aria-label="Contratos do cliente">
@@ -561,11 +644,11 @@ function Ficha(props: ClientesViewProps & { selecionado: CadastroComercial }) {
 
       <div role="tabpanel" id="ficha-painel" aria-labelledby={`ficha-aba-${aba}`}>
         {aba === "dados" ? <Dados cadastro={cadastro} responsavel={responsavel} /> : null}
-        {aba === "locais" ? <Locais locais={locais} ocupado={ocupado} acoes={acoes} /> : null}
+        {aba === "locais" ? <Locais locais={locais} leitura={props.releituras?.locais} ocupado={ocupado} emAndamento={props.emAndamento ?? null} acoes={acoes} /> : null}
         {aba === "contatos" ? (
-          <Contatos contatos={contatos} cadastro={cadastro} ocupado={ocupado} acoes={acoes} />
+          <Contatos contatos={contatos} leitura={props.releituras?.contatos} cadastro={cadastro} ocupado={ocupado} emAndamento={props.emAndamento ?? null} acoes={acoes} />
         ) : null}
-        {aba === "contratos" ? <Contratos contratos={doCliente} hoje={hoje} /> : null}
+        {aba === "contratos" ? <Contratos contratos={doCliente} hoje={hoje} leitura={props.releituras?.contratos} /> : null}
       </div>
     </section>
   );
@@ -576,6 +659,7 @@ export function ClientesView(props: ClientesViewProps) {
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <Cabecalho {...props} />
+      {estado === "pronto" && props.leitura ? <FaixaAoVivo leitura={props.leitura} /> : null}
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
         <Lista {...props} />
         {estado === "pronto" && selecionado ? <Ficha {...props} selecionado={selecionado} /> : null}

@@ -9,7 +9,9 @@ export const queryClient = new QueryClient({
       // sem carregando, afirmava a lista vazia. Com "always", a leitura vai à
       // camada do Firestore, que responde "Sem conexão" na hora
       // (lib/conexao.ts; docs/plataforma/diagnostico-carregamento.md, seção 9,
-      // decisão 2 do celular). Na volta da rede, o refetchOnReconnect relê.
+      // decisão 2 do celular). Na volta da rede, o refetchOnReconnect relê; e,
+      // com o aparelho conectado e o servidor sem resposta, o estado da conexão
+      // relê sozinho (lib/carregando/estado-da-conexao.ts, ligado no main.tsx).
       networkMode: 'always',
     },
     mutations: {

@@ -7,6 +7,9 @@ import { documentoDoOrcamento, fonteDoDocumento } from "@/lib/comercial/document
 import { OrcamentoDocumento } from "@/components/comercial/orcamento-documento";
 
 import { DocumentoView, type DocumentoViewProps } from "./documento-view";
+import { semCamadasEscondidas } from "@/test/botoes";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 /**
  * O documento A4 do orçamento (docs/mockups/ComDocumento.dc.html), só a
@@ -74,7 +77,7 @@ function render(overrides: Partial<DocumentoViewProps> = {}) {
 
 /** Textos visíveis, na ordem (a marca d'água é aria-hidden e entra também). */
 function texts(html: string) {
-  return html
+  return semCamadasEscondidas(html)
     .replace(/<style>.*?<\/style>/g, "")
     .split(/<[^>]+>/)
     .map((text) => text.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/ /g, " ").trim())
@@ -199,15 +202,41 @@ describe("documento A4 do orçamento", () => {
   });
 
   it("carregando, não encontrado e erro, sem o papel nem a impressão", () => {
+    // Lendo: nada escrito antes de 300 ms (a caixa entra com o relógio); na falha, "Tentar de novo" (parte 13g).
     for (const [estado, mensagem] of [
-      ["carregando", "Carregando..."],
-      ["nao_encontrado", "Orçamento não encontrado"],
-      ["erro", "Não foi possível carregar o orçamento."],
+      ["carregando", []],
+      ["nao_encontrado", ["Orçamento não encontrado"]],
+      ["erro", ["Não foi possível carregar o orçamento.", "Tentar de novo"]],
     ] as const) {
       const html = render({ estado, documento: null });
-      expect(texts(html), estado).toEqual(["Orçamento", "Imprimir / Salvar PDF", mensagem]);
+      expect(texts(html), estado).toEqual(["Orçamento", "Imprimir / Salvar PDF", ...mensagem]);
+      if (estado === "carregando") expect(html).toContain("data-carregando-na-regiao");
       expect(html).not.toContain("print-area");
       expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*Imprimir/);
     }
+  });
+});
+
+describe("documento do orçamento: acessibilidade (revisão da parte 13g)", () => {
+  it("o axe não acusa nada no documento", async () => {
+    expect(await violacoesDeAcessibilidade(render())).toEqual([]);
+  });
+});
+
+describe("O documento do orçamento sem conexão (carregamento v2, parte 13j)", () => {
+  it("o aviso, a faixa (fora do papel) e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    expect(
+      await estadosDaFalta((leitura, situacao) => (
+        <Router ssrPath="/comercial/orcamento/documento">
+          <DocumentoView
+            estado={situacao}
+            documento={situacao === "pronto" ? documento(false) : null}
+            voltar={{ href: "/comercial/orcamento?numero=10045", rotulo: "Orçamento" }}
+            onImprimir={() => undefined}
+            leitura={leitura}
+          />
+        </Router>
+      )),
+    ).toEqual(rotulosDaFalta({ mensagem: "Não foi possível carregar o orçamento.", objeto: "orçamento" }));
   });
 });

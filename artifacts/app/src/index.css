@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Spline+Sans+Mono:wght@400;500;600;700&display=swap');
+/* As fontes (Manrope, Plus Jakarta Sans e Spline Sans Mono) vêm do index.html,
+   com preload e font-display: swap: um @import aqui seguraria a primeira
+   pintura até o Google responder (carregamento v2, parte 9). */
 
 @import 'tailwindcss' source(".");
 @import 'tw-animate-css';
@@ -6,12 +8,24 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* O celular, em pé ou deitado (carregamento v2, parte 13a): a tela estreita
+   ou a baixa. Nele, o rodapé do diálogo longo fica preso embaixo e o X e os
+   botões do rodapé têm 44 px (components/ui/dialog.tsx). Deitado, o celular
+   tem mais de 768 px de largura e menos de 500 de altura. */
+@custom-variant celular {
+  @media (width < 48rem), (height < 31.25rem) {
+    @slot;
+  }
+}
+
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
+  /* O anel do foco, cheio (parte 13h): ring-foco. */
+  --color-foco: hsl(var(--foco));
 
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
@@ -26,6 +40,17 @@
   --color-primary-border: var(--primary-border);
   --color-primary-hover: hsl(var(--primary-hover));
   --color-primary-pressed: hsl(var(--primary-pressed));
+  /* O primário como texto no cartão (o "Ver itens" da fila). */
+  --color-primary-texto: hsl(var(--primary-texto));
+  /* O fundo do primário (parte 13k): o bg-primary (também com opacidade, no
+     hover:bg-primary e no toque) lê o --primary-fundo, pelo namespace do fundo
+     do Tailwind, que vem antes do --color-*; o text-primary, a borda e o anel
+     seguem o --primary. No escuro, o branco do botão primário ia a 4,30:1. A
+     borda do fundo cheio (o Checkbox marcado, as etapas) é a border-primary-
+     fundo, pelo namespace da borda: com a do texto, ficava um aro mais claro
+     em volta do preenchimento (lib/carregando/trava.test.ts). */
+  --background-color-primary: hsl(var(--primary-fundo));
+  --border-color-primary-fundo: hsl(var(--primary-fundo));
 
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
@@ -41,6 +66,11 @@
 
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
+  /* O fundo do destrutivo, como o do primário (revisão da parte 13k): o toast
+     de erro é o bg-destructive com texto, e no escuro o --destructive, claro
+     para ser lido como texto, dava 3,30:1 com o texto dele. */
+  --background-color-destructive: hsl(var(--destructive-fundo));
+  --border-color-destructive-fundo: hsl(var(--destructive-fundo));
   --color-destructive-border: var(--destructive-border);
 
   --color-success: hsl(var(--success));
@@ -306,8 +336,10 @@
 
   --primary: 217 85% 55%;
   --primary-foreground: 0 0% 100%;
-  --primary-hover: 217 85% 49%;
-  --primary-pressed: 217 85% 43%;
+  /* O hover e o toque do botão, a partir do --primary-fundo (51%): 6 e 12
+     pontos mais fundos, como no claro (parte 13k). */
+  --primary-hover: 217 85% 45%;
+  --primary-pressed: 217 85% 39%;
   --primary-soft: 217 32% 14%;
   --primary-soft-hover: 217 32% 18%;
   --primary-soft-pressed: 217 32% 22%;
@@ -416,7 +448,45 @@
   --muted-foreground: 213 5% 39%; /* #5F6368 */
   --primary: 358 81% 51%; /* #E71C23: ação principal e alerta */
   --primary-hover: 353 100% 34%; /* #AD0015 */
+  /* O toque afunda no mesmo #AD0015 (especificação do carregamento, 4.1):
+     sem ele, o active:bg-primary-pressed do Button pintava o azul da raiz. */
+  --primary-pressed: 353 100% 34%;
   --ring: 358 81% 51%;
+}
+
+/* O anel do foco (WCAG 1.4.11 e 2.4.7; carregamento v2, parte 13h): o --ring
+   cheio, nunca a 40% (1,91:1 no claro da v3 e 1,65:1 no escuro). Tem 3:1 ou
+   mais no fundo, no cartão e no muted de cada tema, e o contorno das cores
+   forçadas vem do outline-hidden de quem o usa (lib/carregando/tokens.test.ts
+   e trava.test.ts). Relido onde o --ring muda: na raiz, na v3 e no .dark, que
+   também aparece dentro da página (a TV). */
+:root,
+.v3,
+.dark {
+  --foco: var(--ring);
+}
+
+/* O primário como texto no cartão (o "Ver itens" da fila): no claro, o
+   próprio --primary (4,58:1 no branco da v3); no escuro, o azul do botão
+   daria 4,4:1 no cartão, e o texto vai mais claro (6,3:1). O fundo do
+   primário (o bg-primary, parte 13k): no claro e na v3, o próprio --primary;
+   no escuro, o mesmo azul mais fundo, com 4,9:1 para o branco do botão (o
+   --primary dava 4,3:1). Um token só não servia aos dois (diagnóstico, seção
+   10.5, partes 13h e 13k). Relidos na v3, onde o --primary muda. O fundo do
+   destrutivo é igual: no claro, o próprio --destructive; no escuro, o mesmo
+   vermelho mais fundo, com 5,4:1 para o texto do toast de erro (o
+   --destructive, legível como texto, dava 3,3:1). */
+:root,
+:root:not(.dark) .v3 {
+  --primary-texto: var(--primary);
+  --primary-fundo: var(--primary);
+  --destructive-fundo: var(--destructive);
+}
+
+.dark {
+  --primary-texto: 217 85% 65%;
+  --primary-fundo: 217 85% 51%;
+  --destructive-fundo: 3 80% 44%;
 }
 
 /* Documento de impressão (fatura, relatório do portal) é papel: fica claro
@@ -527,6 +597,16 @@
   --auth-text: #f7f8f8;
   --auth-muted: #a3a8b0;
   --auth-accent: #3f8cff;
+  /* O fundo do botão principal: o acento mais fundo, para o branco ter 4,5:1
+     (no #3f8cff ele dava 3,3:1). Como texto e borda no cartão, fica o acento. */
+  --auth-accent-fundo: #1d6ae5;
+
+  /* As peças do carregamento leem a tinta e o aviso da espera nos tokens do
+     tema; a capa é sempre escura, e dentro dela eles são os dela (o texto e o
+     âmbar do escuro). Sem isso, no tema claro, "Conferindo seu convite…" e
+     "Reenviando…" saíam em #1F2A3D sobre o cartão, a 1,3:1. */
+  --carregando-cor: 180 7% 97%; /* o --auth-text */
+  --carregando-aviso: 40 90% 72%; /* #F8CD77 */
 
   background-color: var(--auth-canvas);
   color: var(--auth-text);
@@ -596,7 +676,8 @@
 }
 
 /* Hierarquia de raio: controles 8px, card 16px. Mesmo raio em ambos faz
-   o botao de 42px ler como pilula. */
+   o botao de 44px ler como pilula. Os controles têm o alvo de 44 px do
+   celular. */
 .auth-cover input,
 .auth-cover button[type="submit"] {
   border-radius: 8px;
@@ -606,7 +687,7 @@
   background-color: rgba(255, 255, 255, 0.03);
   border-color: var(--auth-line);
   color: var(--auth-text);
-  height: 42px;
+  height: 44px;
 }
 
 .auth-cover input::placeholder {
@@ -619,20 +700,23 @@
 
 .auth-cover input:focus-visible {
   border-color: var(--auth-accent);
-  outline: none;
+  /* O contorno transparente (o outline-hidden): nas cores forçadas, o sistema
+     o pinta, e o foco se vê; lá o halo some. */
+  outline: 2px solid transparent;
+  outline-offset: 2px;
   box-shadow: 0 0 0 3px rgba(63, 140, 255, 0.18);
 }
 
 .auth-cover button[type="submit"] {
-  background-color: var(--auth-accent);
+  background-color: var(--auth-accent-fundo);
   color: #fff;
-  height: 42px;
+  height: 44px;
   font-weight: 500;
   border: none;
 }
 
 .auth-cover button[type="submit"]:hover:not(:disabled) {
-  background-color: var(--auth-accent);
+  background-color: var(--auth-accent-fundo);
   opacity: 0.9;
 }
 
@@ -644,7 +728,7 @@
    as cores do tema claro do shadcn e destoa da capa escura. */
 .auth-cover button[type='button'].w-full {
   border-radius: 8px;
-  height: 42px;
+  height: 44px;
   background-color: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--auth-line);
   color: var(--auth-text);
@@ -654,6 +738,13 @@
 .auth-cover button[type='button'].w-full:hover {
   background-color: rgba(255, 255, 255, 0.07);
   border-color: var(--auth-line-strong);
+}
+
+/* O toque do BotaoDeAcao (o fundo que aparece de 0 a 300 ms) nos botões
+   escuros da capa: o do hover dela, e não o claro nem o azul da variante, sob
+   o texto claro. */
+.auth-cover button[type='button'].w-full [data-fundo="toque"] {
+  background-color: rgba(255, 255, 255, 0.07);
 }
 
 /* Selo do painel visual da capa. */
@@ -699,4 +790,1935 @@
 /* Barra inferior do celular: respeita a área do indicador de início (iOS). */
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* A altura da barra inferior do celular sem a área segura: os itens h-14 da
+   MobileTabBar (components/layout/mobile-tab-bar.tsx), que some a partir de
+   768 px. Abaixo disso, o toast fica logo acima dela (components/ui/toast.tsx,
+   decisão 9.4.5 de 06/11/2026). */
+:root {
+  --altura-da-barra-de-baixo: 3.5rem;
+}
+
+/* Com um diálogo aberto no celular, o toast vai para o topo: embaixo ele
+   cobriria o rodapé preso do diálogo, com o Voltar e a nova tentativa
+   (carregamento v2, parte 13a). Fecha no X dele, como sempre. */
+@media (width < 48rem), (height < 31.25rem) {
+  body:has([role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]) [data-avisos] {
+    top: calc(env(safe-area-inset-top) + 0.5rem);
+    bottom: auto;
+  }
+}
+
+/* ==========================================================================
+   Carregamento (carregamento v2, aprovado em 12/11/2026): os tokens e os
+   keyframes das peças de espera. O relógio é lib/carregando/tempo.ts (os
+   tempos do JS e daqui são os mesmos); a regra do sistema visual fica em
+   docs/sistema-visual.md, "Carregamento".
+
+   Tudo o que repete anda só por transform e opacity, no compositor: nada de
+   stroke-dash, background-position nem largura em laço
+   (lib/carregando/tokens.test.ts). As cores leem os tokens do app, então o
+   escuro (azul-marinho) vem dos de sempre; a v3 não define escuro.
+   ========================================================================== */
+
+/* As curvas e a contagem grande também viram utilidade (ease-carregando-*,
+   text-contagem e text-contagem-sm), sempre emitidas. */
+@theme static {
+  --ease-carregando-entrada: cubic-bezier(0.2, 0, 0, 1);
+  --ease-carregando-saida: cubic-bezier(0.4, 0, 1, 1);
+  --ease-carregando-padrao: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* O "3" de "3 de 4": 44 px no celular e 28 px no computador, peso 800. */
+  --text-contagem: 2.75rem;
+  --text-contagem--font-weight: 800;
+  --text-contagem--line-height: 1;
+  --text-contagem-sm: 1.75rem;
+  --text-contagem-sm--font-weight: 800;
+  --text-contagem-sm--line-height: 1;
+}
+
+@theme inline {
+  --color-carregando-cor: hsl(var(--carregando-cor));
+  --color-carregando-agente: hsl(var(--carregando-agente));
+  --color-carregando-marca: hsl(var(--carregando-marca));
+  --color-carregando-esqueleto: hsl(var(--carregando-esqueleto));
+  --color-carregando-esqueleto-preto: var(--carregando-esqueleto-preto);
+  --color-carregando-brilho: var(--carregando-brilho);
+  --color-carregando-aviso: hsl(var(--carregando-aviso));
+  --color-carregando-ok: hsl(var(--carregando-ok));
+  --color-carregando-erro: hsl(var(--carregando-erro));
+}
+
+:root {
+  /* Movimento. As curvas estão no @theme acima. */
+  --carregando-t-toque: 100ms; /* o botão afunda (escala 0,97) e trava o segundo toque */
+  --carregando-t-atraso: 300ms; /* antes disso nada aparece nem é anunciado */
+  --carregando-t-minimo: 500ms; /* o mínimo na tela do indicador sozinho e do "em andamento" da ação */
+  --carregando-t-entrada: 150ms; /* a entrada do indicador (opacidade e escala 0,8 a 1), do rótulo, dos fantasmas e dos avisos */
+  --carregando-t-saida: 180ms; /* a saída de qualquer indicador e da linha de estado */
+  --carregando-t-giro: 1200ms; /* uma volta do indicador, linear; todos no mesmo compasso (useCompasso) */
+  --carregando-t-giro-calmo: 2000ms; /* a volta depois do aviso de 10 s */
+  --carregando-t-varredura: 1400ms; /* o segmento de 32% das barras (a abertura, no index.html, repete o valor) */
+  --carregando-t-brilho: 2000ms; /* 1,6 s de varredura e 0,4 s de pausa, dois ciclos, 120 ms entre cartões */
+  /* O dado chegando: opacidade e subida, em cascata de até 6 linhas. */
+  --carregando-t-chegada: 150ms;
+  --carregando-passo: 30ms;
+  --carregando-subida: 4px;
+  /* A troca do rótulo do botão, em sequência e nunca sobreposta, com o deslize de 3 px. */
+  --carregando-t-troca-sai: 80ms;
+  --carregando-t-troca-entra: 150ms;
+  --carregando-t-sucesso: 520ms; /* a caixa fecha: o contorno, a onda verde e o check com a mola */
+  /* As partes do sucesso e do erro do botão de ação, sobrepostas nos 520 ms:
+     a cabeça completa o contorno, a onda (verde no sucesso, clara no erro)
+     nasce da caixa e cobre o botão, o check se desenha uma vez e o miolo da
+     caixa fecha com a mola no tempo que sobra. No erro, o tremor de 3 px
+     vem depois da onda. */
+  --carregando-t-contorno: 200ms;
+  --carregando-t-onda: 300ms;
+  --carregando-t-check: 200ms;
+  --carregando-t-miolo: calc(var(--carregando-t-sucesso) - var(--carregando-t-contorno) - var(--carregando-t-troca-sai));
+  --carregando-t-tremor: 240ms;
+  --carregando-mola: cubic-bezier(0.34, 1.56, 0.64, 1); /* o check e o miolo da caixa que fecha; abaixo, o linear() */
+  --carregando-t-sucesso-visivel: 1000ms; /* "Aprovado" na tela antes de a linha sair */
+  --carregando-t-erro-visivel: 2000ms; /* "Não aprovado" no botão antes de voltar a "Aprovar" */
+  --carregando-t-barra-completa: 220ms; /* a barra da linha completa por scaleX: verde no sucesso, crítico no erro */
+  /* A barra do topo do cartão que voltou a ler completa em tinta por scaleX e esmaece (momento 7, caso 3). */
+  --carregando-t-barra-fim: 200ms;
+  --carregando-t-barra-some: 150ms;
+  /* A linha deixa o grupo (opacidade e 6 px para cima) e as de baixo sobem por transform (FLIP). */
+  --carregando-t-sai-linha: 200ms;
+  --carregando-sai-linha-y: -6px;
+  --carregando-t-reflui: 240ms;
+  /* A linha que chega entra em 240 ms (no reduzido, só por opacidade) depois
+     que o cartão chegou: 60 ms antes do fim do refluxo, nunca fora dele. */
+  --carregando-t-chega-linha: 240ms;
+  --carregando-t-chega-espera: 180ms;
+  --carregando-t-destaque: 1000ms; /* o realce da linha que chegou ao grupo seguinte por uma ação nesta tela */
+  --carregando-t-conta: 160ms; /* a contagem que muda rola 8 px */
+  --carregando-conta-y: 8px;
+  --carregando-t-listras: 600ms; /* as listras a 45° andam 16 px para trás, linear */
+  --carregando-t-segmento: 200ms; /* o segmento da foto que sobe enche por scaleX a cada evento de bytes */
+  --carregando-t-fio: 300ms; /* o fio entre duas etapas enche quando a de antes termina */
+  --carregando-t-arcos: 1200ms; /* os arcos do Wi-Fi em "Reconectando…", 300 ms por arco; param aos 5 s */
+  --carregando-t-pulso: 2000ms; /* o respiro do movimento reduzido (0,5 Hz) */
+  --carregando-t-abertura-sai: 260ms; /* a abertura esmaece quando o perfil chega (o index.html repete o valor) */
+  --carregando-t-abertura-completa: 200ms; /* antes, o segmento completa o trilho, se ele já estava à vista */
+  --carregando-t-abertura-segmento-sai: 60ms; /* quando o trilho completa, o segmento que varria some */
+  --carregando-t-abertura-marca-sai: 200ms; /* a marca recua a 0,96 e sai, com a palavra, enquanto o preto abre */
+  --carregando-t-dedo: 700ms; /* a lista não se mexe se houve toque nela nesse intervalo */
+  --carregando-t-sem-rede: 3000ms; /* sem rede há esse tempo, o aviso é "Sem conexão" (a histerese) */
+  --carregando-t-aviso-minimo: 2000ms; /* cada aviso da conexão fica pelo menos isso antes de dar lugar a outro */
+  --carregando-t-releitura: 2000ms; /* a primeira releitura sozinha enquanto reconecta; dobra a cada vez */
+  --carregando-t-releitura-max: 30000ms; /* o teto da espera entre as releituras: 2, 4, 8, 16 e 30 s */
+
+  /* Forma: a caixa chanfrada do "D" da marca (viewBox 24), três cantos com
+     raio 2,5 e o de baixo à direita cortado a 45°. A máscara do contorno fica
+     parada e a cabeça gira dentro dela. Os traços dão 2,25 px em 16, 2,5 px
+     em 20 (com a de 24), 3 px em 24 e 4 px em 40. */
+  --carregando-mascara-16: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M6 3.5H18A2.5 2.5 0 0 1 20.5 6V14.5L14.5 20.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5Z%27 fill=%27none%27 stroke=%27black%27 stroke-width=%273.4%27/%3E%3C/svg%3E");
+  --carregando-mascara-24: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M6 3.5H18A2.5 2.5 0 0 1 20.5 6V14.5L14.5 20.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5Z%27 fill=%27none%27 stroke=%27black%27 stroke-width=%273%27/%3E%3C/svg%3E");
+  --carregando-mascara-40: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M6 3.5H18A2.5 2.5 0 0 1 20.5 6V14.5L14.5 20.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5Z%27 fill=%27none%27 stroke=%27black%27 stroke-width=%272.4%27/%3E%3C/svg%3E");
+  /* A cabeça: 40% da volta cheia, a cauda de 25% em degradê e o vão de 35%. */
+  --carregando-cabeca: conic-gradient(from 0turn, transparent 0 35%, currentColor 60% 100%);
+  /* A opacidade do contorno inteiro: 0,16 sobre a superfície, 0,25 na barra
+     preta e 0,35 no botão de cor, que a define para os filhos. */
+  --carregando-trilho: 0.16;
+  --carregando-trilho-sobre-preto: 0.25;
+  --carregando-trilho-na-cor: 0.35;
+  /* O vale do respiro do movimento reduzido: tinta a 0,6 (4,6:1 sobre
+     #F5F5F3) e branco a 0,8 sobre a cor (3,3:1 sobre o vermelho). */
+  --carregando-piso: 0.6;
+  --carregando-piso-na-cor: 0.8;
+  /* O violeta do Agent Dute no vale do respiro: 0,75 no claro (3,9:1 na caixa
+     dele) e 0,85 no escuro (3,2:1); o 0,6 da tinta ficaria abaixo de 3:1. */
+  --carregando-piso-agente: 0.75;
+  --carregando-barra-linha: 4px; /* na borda de baixo da linha em andamento */
+  --carregando-barra-topo: 3px; /* no topo do cartão que relê */
+  --carregando-chanfro: 4px; /* a ponta a 45° dos segmentos de progresso */
+
+  /* Cor: cada uma tem um papel fixo. Tinta na espera; o vermelho só na
+     abertura e na ação; verde só no confirmado; o crítico só no erro; o
+     âmbar escuro na demora e na falta de rede; o violeta só no Agent Dute.
+     O esqueleto é cinza neutro, nunca rosado. Os apelidos que leem os
+     tokens do app estão logo abaixo. */
+  --carregando-marca: 358 81% 51%; /* #E71C23, o mesmo da --v3-marca nos dois temas */
+  --carregando-esqueleto: 214 16% 87%; /* #D9DDE3: 1,36:1 no branco, como o da v3 */
+}
+
+/* Os apelidos de cor se releem onde o app troca os tokens que eles leem: na
+   raiz, no .v3 (a tinta #161616) e no .dark, que também aparece dentro da
+   página (a TV, sempre escura dentro do .v3). O var() de uma variável se
+   resolve no elemento que a declara e desce pronto: declarado só na raiz,
+   levaria a tinta clara para o escuro da TV. */
+:root,
+.v3,
+.dark {
+  --carregando-cor: var(--foreground); /* #1F2A3D; #161616 na v3; #F8FAFC no escuro */
+  --carregando-agente: var(--agent);
+  --carregando-brilho: hsl(var(--card) / 0.6); /* a faixa do esqueleto some sobre o cartão */
+  --carregando-aviso: var(--amber-soft-foreground); /* #8A4B00 sobre o --warning-soft; #F8CD77 no escuro */
+  --carregando-ok: var(--success);
+  --carregando-erro: var(--destructive); /* sobre o --destructive-soft */
+}
+
+/* A mola de rigidez 200 e amortecimento 0,6: pico de 9,5%, assenta em ~470 ms. */
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --carregando-mola: linear(0, 0.054 5%, 0.185 10%, 0.352 15%, 0.527 20%, 0.69 25%, 0.827 30%, 0.934 35%, 1.011 40%, 1.06 45%, 1.086 50%, 1.095 55%, 1.091 60%, 1.079 65%, 1.063 70%, 1.047 75%, 1.031 80%, 1.018 85%, 1.007 90%, 1);
+  }
+}
+
+.v3 {
+  --carregando-esqueleto-preto: hsl(var(--v3-header-foreground) / 0.12); /* os blocos na barra preta */
+}
+
+:root:not(.dark) .v3 {
+  --carregando-esqueleto: 51 10% 86%; /* #DFDED8 */
+}
+
+.dark {
+  --carregando-esqueleto: var(--muted); /* #1D2839 */
+  --carregando-piso-agente: 0.85;
+}
+
+/* No celular as barras engrossam. */
+@media (max-width: 767px) {
+  :root {
+    --carregando-barra-linha: 6px;
+    --carregando-barra-topo: 4px;
+  }
+}
+
+/* O indicador: a cabeça gira dentro da máscara parada; a caixa entra com
+   opacidade e escala. */
+@keyframes carregando-giro {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes carregando-entra {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+/* O movimento reduzido: o indicador para e respira até o piso. */
+@keyframes carregando-respira {
+  50% {
+    opacity: var(--carregando-piso, 0.6);
+  }
+}
+
+/* As barras: o segmento de 32% atravessa o trilho (312,5% da largura dele). */
+@keyframes carregando-varre {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(312.5%);
+  }
+}
+
+/* O esqueleto: uma faixa por cartão, inclinada a 20°, com a pausa no fim. A
+   faixa acende ao entrar e apaga antes da pausa: num bloco alto e estreito, a
+   ponta inclinada sobraria no canto, parada. */
+@keyframes carregando-brilho {
+  0% {
+    transform: translateX(-130%) skewX(-20deg);
+    opacity: 0;
+  }
+  15%,
+  65% {
+    opacity: 1;
+  }
+  80%,
+  100% {
+    transform: translateX(330%) skewX(-20deg);
+    opacity: 0;
+  }
+}
+
+/* As listras a 45° do segmento atual andam para trás. */
+@keyframes carregando-listras {
+  to {
+    transform: translateX(-16px);
+  }
+}
+
+/* Os arcos do Wi-Fi acendem um a um e, aos 5 s, ficam acesos. */
+@keyframes carregando-arco {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  20%,
+  45% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes carregando-aceso {
+  to {
+    opacity: 1;
+  }
+}
+
+/* Movimento reduzido: nada gira nem desliza, e a informação fica. Quem gira
+   para e respira (carregando-respira, em --carregando-t-pulso) com o piso de
+   contraste: --carregando-piso em tinta, --carregando-piso-na-cor no branco
+   sobre a cor. Aqui mudam os tokens das trocas: tudo só por opacidade e sem
+   mola. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --carregando-subida: 0px; /* o dado e a linha nova chegam só por opacidade */
+    --carregando-t-troca-sai: 0ms; /* as camadas do botão trocam de uma vez, sem passar pelo marrom */
+    --carregando-t-troca-entra: 0ms;
+    --carregando-t-sucesso: 0ms; /* a caixa fechada e o check aparecem prontos */
+    --carregando-t-contorno: 0ms;
+    --carregando-t-onda: 0ms; /* o fundo do sucesso e do erro entra de uma vez */
+    --carregando-t-check: 0ms;
+    --carregando-t-tremor: 0ms;
+    --carregando-t-barra-completa: 0ms; /* a barra completa de uma vez */
+    --carregando-t-barra-fim: 0ms; /* a barra do topo, já inteira, só esmaece */
+    --carregando-sai-linha-y: 0px; /* a linha que sai some só por opacidade */
+    --carregando-t-reflui: 0ms; /* as linhas de baixo pulam para o lugar */
+    --carregando-t-chega-espera: 0ms; /* nada anda até a linha nova: ela esmaece desde o começo */
+    --carregando-t-conta: 0ms; /* a contagem troca sem rolar */
+    --carregando-mola: var(--ease-carregando-entrada); /* sem mola */
+  }
+}
+
+/* O indicador (components/ui/spinner.tsx; seção 5.1 e momento 1): a caixa
+   chanfrada. O contorno é a máscara parada; dentro dela, o trilho mostra o
+   contorno inteiro em currentColor na opacidade do contexto, e a cabeça (o
+   cônico de 40% cheios e 25% de cauda, maior que a caixa para cobrir os
+   cantos ao girar) gira só por transform, no passo do --compasso. Fica na
+   camada components, para a utilidade da tela poder ajustar a margem ou a
+   cor. O traço é de 2,25 px em 16, 2,5 px em 20, 3 px em 24 e 4 px em 40. */
+@layer components {
+  .carregando-caixa {
+    --carregando-tamanho: 16px;
+    --carregando-mascara: var(--carregando-mascara-16);
+    position: relative;
+    display: inline-block;
+    flex: none;
+    vertical-align: middle;
+    inline-size: var(--carregando-tamanho);
+    block-size: var(--carregando-tamanho);
+    overflow: hidden; /* a cabeça que gira não aumenta a área de rolagem de quem a contém */
+    /* No alto contraste do Windows, o trilho e a cabeça ficam (sem o fundo
+       forçado) e o currentColor é a cor forçada de quem contém a caixa, como
+       no svg. O none sozinho levaria a tinta do tema para o fundo forçado, e a
+       caixa sumiria no preto; ele fica de reserva para quem não conhece o
+       preserve-parent-color. */
+    forced-color-adjust: none;
+    forced-color-adjust: preserve-parent-color;
+    -webkit-mask: var(--carregando-mascara) center / 100% 100% no-repeat;
+    mask: var(--carregando-mascara) center / 100% 100% no-repeat;
+    animation: carregando-entra var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
+  }
+
+  /* A caixa que continua uma espera já à vista (a leitura do portal que passa à
+     da tela, carregamento v2, parte 13f) não entra de novo: o indicador não
+     some e volta. No movimento reduzido, a caixa segue respirando. */
+  @media (prefers-reduced-motion: no-preference) {
+    .carregando-caixa[data-continua] {
+      animation: none;
+    }
+  }
+
+  .carregando-caixa[data-tamanho="20"] {
+    --carregando-tamanho: 20px;
+    --carregando-mascara: var(--carregando-mascara-24);
+  }
+
+  .carregando-caixa[data-tamanho="24"] {
+    --carregando-tamanho: 24px;
+    --carregando-mascara: var(--carregando-mascara-24);
+  }
+
+  .carregando-caixa[data-tamanho="40"] {
+    --carregando-tamanho: 40px;
+    --carregando-mascara: var(--carregando-mascara-40);
+  }
+
+  .carregando-caixa > .trilho {
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    opacity: var(--carregando-trilho);
+  }
+
+  .carregando-caixa > .cabeca {
+    position: absolute;
+    inset: -25%;
+    background: var(--carregando-cabeca);
+    animation: carregando-giro var(--carregando-t-giro) linear infinite;
+    animation-delay: var(--compasso, 0ms);
+    will-change: transform;
+  }
+
+  /* Depois do aviso de 10 s, a volta dura 2 s. */
+  .carregando-caixa[data-calmo] > .cabeca {
+    animation-duration: var(--carregando-t-giro-calmo);
+  }
+
+  /* O determinado: a cabeça não gira e o contorno fecha conforme o --p (de 0 a 1). */
+  .carregando-caixa[data-determinado] > .cabeca {
+    animation: none;
+    will-change: auto;
+    background: conic-gradient(currentColor calc(var(--p, 0) * 1turn), transparent 0);
+  }
+
+  /* Os contextos: a barra preta da v3 põe o trilho a 0,25; o botão de cor
+     (o primário, components/ui/button.tsx) põe 0,35 e o piso do respiro a
+     0,8 para os filhos. */
+  .carregando-sobre-preto,
+  .bg-v3-header {
+    --carregando-trilho: var(--carregando-trilho-sobre-preto);
+  }
+
+  .carregando-na-cor {
+    --carregando-trilho: var(--carregando-trilho-na-cor);
+    --carregando-piso: var(--carregando-piso-na-cor);
+  }
+
+  /* Movimento reduzido: a cabeça para no canto de cima à direita e a caixa
+     respira de 1 até o piso, em 2 s. */
+  @media (prefers-reduced-motion: reduce) {
+    .carregando-caixa {
+      animation: carregando-respira var(--carregando-t-pulso) ease-in-out infinite;
+    }
+
+    .carregando-caixa > .cabeca {
+      animation: none;
+      transform: rotate(0.125turn);
+      will-change: auto;
+    }
+
+    .carregando-caixa[data-determinado] > .cabeca {
+      transform: none;
+    }
+  }
+}
+
+/* Os arcos do Wi-Fi de "Reconectando…" (components/ui/arcos-do-wifi.tsx;
+   momento 8): em tinta, o ponto sempre aceso e cada arco acendendo um a um,
+   300 ms cada, em ciclo de 1,2 s (--carregando-t-arcos), quatro vezes; aos
+   4,8 s ficam acesos (carregando-aceso). Só opacidade. No movimento reduzido,
+   acesos e parados. */
+@layer components {
+  .carregando-arcos {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .carregando-arcos > .arco-1,
+  .carregando-arcos > .arco-2,
+  .carregando-arcos > .arco-3 {
+    opacity: 0.25;
+    animation:
+      carregando-arco var(--carregando-t-arcos) linear 4,
+      carregando-aceso 1ms linear calc(var(--carregando-t-arcos) * 4) forwards;
+  }
+
+  .carregando-arcos > .arco-2 {
+    animation-delay: calc(var(--carregando-t-arcos) / 4), calc(var(--carregando-t-arcos) * 4);
+  }
+
+  .carregando-arcos > .arco-3 {
+    animation-delay: calc(var(--carregando-t-arcos) / 2), calc(var(--carregando-t-arcos) * 4);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .carregando-arcos > .arco-1,
+    .carregando-arcos > .arco-2,
+    .carregando-arcos > .arco-3 {
+      animation: none;
+      opacity: 1;
+    }
+  }
+}
+
+/* A linha de estado das listas (components/ui/linha-de-estado.tsx; seção 5.3
+   e momentos 2, 7 e 8): 24 px reservados sob o título, e nada empurra a
+   lista. As camadas ficam na mesma célula da grade: a que sai (data-sai)
+   some em 80 ms subindo 3 px (em 180 ms, o --carregando-t-saida, quando é
+   uma espera que acaba: data-sai="espera"), e só então a nova entra em 150
+   ms, de 3 px abaixo; sem nada saindo, entra na hora. A primeira leitura e a
+   demora dela são uma camada só, com a mesma caixa, e só o texto troca
+   dentro dela ([data-textos]). No movimento reduzido, de uma vez (os
+   --carregando-t-troca-* vão a 0, e a --linha-sai-espera também). O forte é
+   a tinta (15/700), o calmo é o apoio (13/600), a pílula é o âmbar do aviso
+   (--carregando-aviso sobre o --warning-soft, 6,2:1; 10,7:1 no escuro). Cada
+   peça fica inteira (nowrap); o que não cabe na largura passa à linha de
+   baixo e a linha cresce, sem sair da tela (no celular estreito, a demora e
+   o "Tentando de novo…"). No celular, os vãos são os da prancha (6 px). O
+   "Tentar de novo" tem o toque estendido a 44 px pelo ::before (inset de
+   -10 px), sem mudar a altura da linha, e o foco visível na cor do texto; a
+   linha recebe o foco quando o "Tentar de novo" focado sai da tela. */
+@layer components {
+  .linha-de-estado,
+  [data-atualizar] {
+    --linha-sai-espera: var(--carregando-t-saida);
+  }
+
+  .linha-de-estado {
+    position: relative;
+    display: grid;
+    align-items: center;
+    min-block-size: 24px;
+    min-inline-size: 0;
+    border-radius: 4px;
+  }
+
+  .linha-de-estado:focus {
+    outline: none;
+  }
+
+  .linha-de-estado:focus-visible {
+    outline: 2px solid hsl(var(--foreground));
+    outline-offset: 2px;
+  }
+
+  .linha-de-estado [data-camada] {
+    grid-area: 1 / 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 4px;
+    min-inline-size: 0;
+    min-block-size: 24px;
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  /* O texto da primeira leitura, ao lado da caixa: ocupa o resto da linha e quebra dentro dela. */
+  .linha-de-estado [data-textos] {
+    display: grid;
+    flex: 1 1 0%;
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .linha-de-estado [data-sai],
+  [data-atualizar] [data-icones] > [data-sai] {
+    pointer-events: none;
+    animation: carregando-troca-sai var(--carregando-t-troca-sai) var(--ease-carregando-saida) both;
+  }
+
+  .linha-de-estado [data-sai="espera"],
+  [data-atualizar] [data-icones] > [data-sai="espera"] {
+    animation-duration: var(--linha-sai-espera);
+  }
+
+  .linha-de-estado [data-entra],
+  [data-atualizar] [data-icones] > [data-entra] {
+    animation: carregando-troca-entra var(--carregando-t-troca-entra) var(--ease-carregando-entrada) both;
+  }
+
+  .linha-de-estado [data-entra="depois"],
+  [data-atualizar] [data-icones] > [data-entra="depois"] {
+    animation-delay: var(--carregando-t-troca-sai);
+  }
+
+  .linha-de-estado [data-entra="depois-da-espera"],
+  [data-atualizar] [data-icones] > [data-entra="depois-da-espera"] {
+    animation-delay: var(--linha-sai-espera);
+  }
+
+  /* O ícone do Atualizar e a caixa, na mesma célula: um sai e só então o outro entra (momento 7, caso 1). */
+  [data-atualizar] [data-icones] {
+    display: grid;
+    place-items: center;
+  }
+
+  [data-atualizar] [data-icones] > [data-camada] {
+    grid-area: 1 / 1;
+    display: grid;
+    place-items: center;
+  }
+
+  .linha-de-estado-forte {
+    font-size: 15px;
+    line-height: 20px;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+  }
+
+  .linha-de-estado-calmo {
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .linha-de-estado-pilula {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    block-size: 24px;
+    padding-inline: 10px;
+    border: 1px solid hsl(var(--warning-soft-border));
+    border-radius: 9999px;
+    background-color: hsl(var(--warning-soft));
+    color: hsl(var(--carregando-aviso));
+    font-size: 13px;
+    line-height: 1;
+    font-weight: 700;
+  }
+
+  .linha-de-estado-tentar {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    block-size: 24px;
+    border-radius: 4px;
+    color: hsl(var(--foreground));
+    font-size: 13px;
+    line-height: 1;
+    font-weight: 800;
+    text-decoration: underline;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+
+  .linha-de-estado-tentar[data-tom="aviso"] {
+    color: hsl(var(--carregando-aviso));
+  }
+
+  /* O toque de 44 px: 24 da linha e 10 para cima e para baixo. */
+  .linha-de-estado-tentar::before {
+    content: "";
+    position: absolute;
+    inset: -10px;
+  }
+
+  .linha-de-estado-tentar[aria-disabled="true"] {
+    text-decoration: none;
+    cursor: default;
+  }
+
+  .linha-de-estado-tentar:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+
+  /* No celular, os vãos da prancha: 6 px entre as peças e, em "Reconectando…", os arcos com 2 px a mais e o
+     "Tentar de novo" com 6. */
+  @media (max-width: 639px) {
+    .linha-de-estado [data-camada] {
+      column-gap: 6px;
+    }
+
+    .linha-de-estado[data-estado="reconectando"] [data-arcos] {
+      margin-inline-end: 2px;
+    }
+
+    .linha-de-estado[data-estado="reconectando"] .linha-de-estado-tentar {
+      margin-inline-start: 6px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .linha-de-estado,
+    [data-atualizar] {
+      --linha-sai-espera: 0ms;
+    }
+  }
+}
+
+/* O esqueleto (components/ui/esqueleto.tsx e o Skeleton; seção 5.2 e momento
+   2): blocos em cinza neutro, nunca o rosado do bg-primary/10, com a anatomia
+   da linha real. São decorativos: o componente os põe sempre aria-hidden. A
+   cor é o --carregando-esqueleto (o #DFDED8 da v3, o #D9DDE3 fora dela e o
+   --muted no escuro) e, na barra preta, o branco a 12%. O brilho é do cartão
+   (.carregando-com-brilho): uma faixa só, na cor do cartão a 60%, inclinada a
+   20°, que anda por transform, faz dois ciclos e para; o --ordem dá os 120
+   ms entre um cartão e outro. Parada, a faixa não aparece. No movimento
+   reduzido, nenhum brilho. Fica na camada components, para a utilidade de
+   quem usa dar o tamanho, a largura e o raio. */
+@layer components {
+  .carregando-esqueleto {
+    display: block;
+    background-color: hsl(var(--carregando-esqueleto));
+    border-radius: 6px;
+  }
+
+  /* O título; o apoio é a mesma linha com 10 px (h-2.5). */
+  .carregando-esqueleto[data-forma="texto"] {
+    block-size: 14px;
+  }
+
+  /* A caixa do ícone da linha (QueueRow). */
+  .carregando-esqueleto[data-forma="icone"] {
+    flex: none;
+    inline-size: 44px;
+    block-size: 44px;
+    border-radius: 12px;
+  }
+
+  /* O botão-fantasma, na largura do rótulo que ele guarda. */
+  .carregando-esqueleto[data-forma="botao"] {
+    flex: none;
+    block-size: 40px;
+    border-radius: 10px;
+  }
+
+  /* O número que ainda não chegou: "Em aberto · ▪". */
+  .carregando-esqueleto[data-forma="contagem"] {
+    display: inline-block;
+    flex: none;
+    inline-size: 16px;
+    block-size: 12px;
+    border-radius: 4px;
+    vertical-align: middle;
+  }
+
+  .carregando-sobre-preto .carregando-esqueleto,
+  .bg-v3-header .carregando-esqueleto {
+    background-color: var(--carregando-esqueleto-preto);
+  }
+
+  /* O bloco no controle selecionado, de fundo em tinta ("Em aberto · ▪" no segmentado): a cor do texto dele a 35%. */
+  [aria-pressed="true"] .carregando-esqueleto {
+    background-color: hsl(var(--background) / 0.35);
+  }
+
+  .carregando-com-brilho {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .carregando-com-brilho::after {
+    content: "";
+    position: absolute;
+    top: -20%;
+    bottom: -20%;
+    left: 0;
+    width: 34%;
+    pointer-events: none;
+    z-index: 2;
+    background: linear-gradient(90deg, transparent, var(--carregando-brilho) 50%, transparent);
+    transform: translateX(-130%) skewX(-20deg);
+    opacity: 0;
+    animation: carregando-brilho var(--carregando-t-brilho) var(--ease-carregando-padrao) 2;
+    animation-delay: calc(var(--ordem, 0) * 120ms);
+  }
+
+  /* Na tabela, o brilho é o do corpo das linhas-fantasma (o tbody, um por cartão): o recorte não vale ali, e a faixa
+     fica na altura dele, sem passar pelos títulos das colunas. */
+  tbody.carregando-com-brilho::after {
+    top: 0;
+    bottom: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .carregando-com-brilho::after {
+      animation: none;
+      opacity: 0;
+    }
+  }
+}
+
+
+/* O botão de ação (components/ui/botao-de-acao.tsx; seção 5.4 e momento 3):
+   repouso, em andamento, sucesso, erro e sem resposta, com a largura do
+   rótulo mais largo. As cinco camadas ficam empilhadas na mesma célula da
+   grade; só a atual (data-atual) fica visível, herdando a visibility do
+   botão, e as outras ficam com visibility hidden. A troca é em sequência e
+   nunca sobreposta: quem sai (data-sai) some em 80 ms subindo 3 px, e só
+   então quem entra aparece em 150 ms, de 3 px abaixo. No sucesso que vem do
+   em andamento, a cabeça completa o contorno antes (--botao-acao-espera).
+   Os fundos (data-fundo) ficam atrás do texto, num recorte (data-recorte)
+   do tamanho da caixa de borda do botão: o toque (o #AD0015 do primário), a
+   onda que nasce da caixa e cobre o botão (verde no sucesso, clara no erro,
+   só por scale) e a borda do erro e do Conferir. Quando o fundo do fim já
+   cobre, o próprio botão fica sem fundo e sem borda (data-cobre; as classes
+   vêm do componente, porque as da variante são utilidades e venceriam
+   daqui), para o vermelho não vazar no raio nem a borda da variante ficar
+   dobrada. Tudo o
+   que anima é transform e opacity; o check se desenha uma vez, numa
+   transição de 200 ms do stroke-dashoffset, nunca em laço. */
+@keyframes carregando-afunda {
+  to {
+    transform: scale(0.97);
+  }
+}
+
+@keyframes carregando-solta {
+  from {
+    transform: scale(0.97);
+  }
+}
+
+/* O começo explícito: a camada que sai está escondida por baixo (opacity 0),
+   e o keyframe sem o from partiria de lá. */
+@keyframes carregando-troca-sai {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes carregando-troca-entra {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@keyframes carregando-onda {
+  from {
+    transform: scale(0);
+  }
+}
+
+/* A onda que sai volta para a caixa, sem esmaecer: o verde nunca passa por
+   cima do vermelho a meia opacidade (o marrom). */
+@keyframes carregando-onda-volta {
+  from {
+    transform: none;
+  }
+  to {
+    transform: scale(0);
+  }
+}
+
+@keyframes carregando-aparece {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes carregando-some {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes carregando-miolo {
+  from {
+    transform: scale(0.6);
+  }
+}
+
+@keyframes carregando-marca {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+@keyframes carregando-tremor {
+  25% {
+    transform: translateX(-3px);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+}
+
+@layer components {
+  .botao-acao {
+    --botao-acao-espera: 0ms;
+    --botao-acao-borda: 0px;
+  }
+
+  /* As variantes com borda (secundário, contorno e destrutivo). */
+  .botao-acao[data-borda] {
+    --botao-acao-borda: 1px;
+  }
+
+  /* No sucesso que vem do em andamento, a cabeça completa o contorno antes da troca. */
+  .botao-acao[data-camada="sucesso"][data-de="andamento"] {
+    --botao-acao-espera: var(--carregando-t-contorno);
+  }
+
+  .botao-acao-camada {
+    grid-area: 1 / 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    visibility: hidden;
+    opacity: 0;
+  }
+
+  /* inherit, nunca visible: dentro de uma linha escondida, a camada some junto. */
+  .botao-acao-camada[data-atual] {
+    visibility: inherit;
+    opacity: 1;
+  }
+
+  .botao-acao[data-de] > .botao-acao-camada[data-atual] {
+    animation: carregando-troca-entra var(--carregando-t-troca-entra) var(--ease-carregando-entrada) calc(var(--botao-acao-espera) + var(--carregando-t-troca-sai)) both;
+  }
+
+  /* Quem sai fica visível até o fim da saída, e só então sai da tela. */
+  .botao-acao > .botao-acao-camada[data-sai] {
+    animation: carregando-troca-sai var(--carregando-t-troca-sai) var(--ease-carregando-saida) var(--botao-acao-espera) both;
+    transition: visibility 0s linear calc(var(--botao-acao-espera) + var(--carregando-t-troca-sai));
+  }
+
+  .botao-acao-camada[data-camada="sucesso"] {
+    color: hsl(var(--success-foreground));
+  }
+
+  .botao-acao-camada[data-camada="erro"] {
+    color: hsl(var(--carregando-erro));
+  }
+
+  .botao-acao-camada[data-camada="sem-resposta"] {
+    color: hsl(var(--foreground));
+  }
+
+  /* Fora do botão de cor (.carregando-na-cor, o primário), a espera fica em
+     tinta, como na prancha do secundário: o crítico do Recusar é só do erro, e
+     a 0,6 do respiro ele ficaria abaixo de 3:1 no escuro. */
+  .botao-acao:not(.carregando-na-cor) > .botao-acao-camada[data-camada="andamento"] {
+    color: hsl(var(--carregando-cor));
+  }
+
+  /* O lugar do ícone: o mesmo tamanho com ou sem o indicador dentro. */
+  .botao-acao-icone {
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+
+  .botao-acao-icone > * {
+    grid-area: 1 / 1;
+  }
+
+  /* O contorno inteiro, por cima do indicador, quando a cabeça o completa no sucesso. */
+  .botao-acao-contorno {
+    fill: none;
+    stroke: currentColor;
+    opacity: 0;
+  }
+
+  .botao-acao[data-camada="sucesso"][data-de="andamento"] > .botao-acao-camada[data-sai] .botao-acao-contorno {
+    opacity: 1;
+    animation: carregando-aparece var(--carregando-t-contorno) linear both;
+  }
+
+  /* A caixa fechada do sucesso (contorno, miolo e o check vazado na cor do
+     fundo) e a caixa com o "!" do erro, paradas; só o miolo, o "!" e o check
+     entram, uma vez. */
+  .botao-acao-caixa {
+    overflow: visible;
+  }
+
+  .botao-acao-caixa > [data-parte="contorno"] {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 3;
+  }
+
+  .botao-acao-caixa > [data-parte="miolo"] {
+    fill: currentColor;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .botao-acao-caixa > [data-parte="check"] {
+    fill: none;
+    stroke: hsl(var(--carregando-ok));
+    stroke-width: 2.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+
+  .botao-acao-caixa > [data-parte="marca"] {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 3;
+    stroke-linecap: round;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .botao-acao-camada[data-atual] [data-parte="check"],
+  .botao-acao-camada[data-sai] [data-parte="check"] {
+    stroke-dashoffset: 0;
+  }
+
+  .botao-acao[data-de] > .botao-acao-camada[data-atual] [data-parte="miolo"] {
+    animation: carregando-miolo var(--carregando-t-miolo) var(--carregando-mola) calc(var(--botao-acao-espera) + var(--carregando-t-troca-sai)) both;
+  }
+
+  .botao-acao[data-de] > .botao-acao-camada[data-atual] [data-parte="check"] {
+    transition: stroke-dashoffset var(--carregando-t-check) var(--ease-carregando-entrada) calc(var(--botao-acao-espera) + var(--carregando-t-troca-sai));
+  }
+
+  .botao-acao[data-de] > .botao-acao-camada[data-atual] [data-parte="marca"] {
+    animation: carregando-marca var(--carregando-t-miolo) var(--carregando-mola) calc(var(--botao-acao-espera) + var(--carregando-t-troca-sai)) both;
+  }
+
+  /* O recorte dos fundos: a caixa de borda do botão, com o raio dele, atrás
+     do texto. */
+  .botao-acao > [data-recorte] {
+    position: absolute;
+    inset: calc(-1 * var(--botao-acao-borda));
+    z-index: -1;
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  .botao-acao [data-fundo] {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0;
+  }
+
+  /* O toque fica dentro da borda da variante. */
+  .botao-acao [data-fundo="toque"] {
+    inset: var(--botao-acao-borda);
+    transition: opacity var(--carregando-t-toque) var(--ease-carregando-entrada);
+  }
+
+  .botao-acao[data-afundado][data-camada="repouso"] [data-fundo="toque"],
+  .botao-acao[data-camada="repouso"]:active:not([aria-disabled="true"]) [data-fundo="toque"] {
+    opacity: 1;
+  }
+
+  /* A onda: um círculo do triplo da largura, com o centro na caixa
+     (--botao-acao-onda-x, medido pelo componente), que cresce só por scale. */
+  .botao-acao [data-fundo="onda"] {
+    inset: auto;
+    left: var(--botao-acao-onda-x, 50%);
+    top: 50%;
+    inline-size: 300%;
+    aspect-ratio: 1;
+    margin: -150% 0 0 -150%;
+    border-radius: 50%;
+    transform: scale(0);
+  }
+
+  .botao-acao [data-fundo="onda"][data-cor="ok"] {
+    background-color: hsl(var(--carregando-ok));
+  }
+
+  .botao-acao [data-fundo="onda"][data-cor="erro"] {
+    background-color: hsl(var(--destructive-soft));
+  }
+
+  .botao-acao [data-fundo="onda"][data-cor] {
+    opacity: 1;
+    transform: none;
+  }
+
+  .botao-acao[data-de] [data-fundo="onda"][data-cor] {
+    animation: carregando-onda var(--carregando-t-onda) var(--ease-carregando-entrada) var(--botao-acao-espera) both;
+  }
+
+  .botao-acao [data-fundo="borda"] {
+    border: 1px solid transparent;
+  }
+
+  .botao-acao [data-fundo="borda"][data-cor="erro"] {
+    border-color: hsl(var(--destructive-soft-border));
+  }
+
+  .botao-acao [data-fundo="borda"][data-cor="conferir"] {
+    background-color: hsl(var(--card));
+    border-color: hsl(var(--border));
+  }
+
+  .botao-acao:hover:not([aria-disabled="true"]) [data-fundo="borda"][data-cor="conferir"] {
+    background-color: hsl(var(--primary-soft-hover));
+  }
+
+  .botao-acao [data-fundo="borda"][data-cor] {
+    opacity: 1;
+  }
+
+  .botao-acao[data-de] [data-fundo="borda"][data-cor] {
+    animation: carregando-aparece var(--carregando-t-troca-entra) var(--ease-carregando-entrada) var(--botao-acao-espera) both;
+  }
+
+  /* Saindo do fim, a onda volta para a caixa e a borda esmaece por cima do
+     repouso (o componente devolve o fundo da variante de uma vez). */
+  .botao-acao [data-fundo][data-sai] {
+    opacity: 0;
+    transform: none;
+  }
+
+  .botao-acao [data-fundo="onda"][data-sai] {
+    opacity: 1;
+    transform: scale(0);
+  }
+
+  .botao-acao[data-de] [data-fundo="onda"][data-sai] {
+    animation: carregando-onda-volta var(--carregando-t-troca-entra) var(--ease-carregando-saida) both;
+  }
+
+  .botao-acao[data-de] [data-fundo="borda"][data-sai] {
+    animation: carregando-some var(--carregando-t-troca-entra) var(--ease-carregando-saida) both;
+  }
+
+  /* O botão: solta quando o indicador entra, treme depois da onda do erro e
+     afunda no toque (por último, para valer também sobre o tremor). */
+  .botao-acao[data-de][data-camada="andamento"] {
+    animation: carregando-solta var(--carregando-t-toque) var(--ease-carregando-entrada) both;
+  }
+
+  .botao-acao[data-de][data-camada="erro"] {
+    animation: carregando-tremor var(--carregando-t-tremor) var(--ease-carregando-padrao) var(--carregando-t-onda) both;
+  }
+
+  .botao-acao[data-afundado][data-camada],
+  .botao-acao:active:not([aria-disabled="true"]) {
+    animation: carregando-afunda var(--carregando-t-toque) var(--ease-carregando-entrada) both;
+  }
+
+  /* O travado com o foco do teclado (revisão da parte 13i): o 0,45 do botão
+     inteiro apagava também o anel do foco, a 2,12:1 no claro e 1,81:1 no
+     escuro. Com o foco, o botão volta a 1 (focus-visible:opacity-100, no
+     componente) e o véu do cartão a 0,55, dentro da borda, faz o mesmo 0,45 à
+     vista; o anel, por fora, fica inteiro. No alto contraste, sem o véu. */
+  .botao-acao[data-esmaecido]:focus-visible::after {
+    content: "";
+    position: absolute;
+    inset: calc(-1 * var(--botao-acao-borda));
+    border-radius: inherit;
+    background-color: hsl(var(--card) / 0.55);
+    pointer-events: none;
+  }
+
+  @media (forced-colors: active) {
+    .botao-acao[data-esmaecido]:focus-visible::after {
+      display: none;
+    }
+  }
+
+  /* Movimento reduzido: sem afundar, sem soltar e sem tremor. A troca, a onda
+     e o check ficam com os tempos zerados no :root (de uma vez, sem esmaecer
+     nem passar pelo marrom entre o vermelho e o verde). */
+  @media (prefers-reduced-motion: reduce) {
+    .botao-acao[data-de][data-camada],
+    .botao-acao[data-afundado][data-camada],
+    .botao-acao:active:not([aria-disabled="true"]) {
+      animation: none;
+    }
+  }
+}
+
+/* A lista na primeira leitura (components/ui/queue-list.tsx, QueueGroup com
+   carregando; momento 2 e a decisão P3 de 12/11/2026): desde 0 ms as
+   linhas-fantasma estão no cartão, invisíveis, guardando a altura da contagem
+   lembrada; aos 300 ms (data-visivel) entram por opacidade em 150 ms, e o
+   cartão com brilho começa ali. Na chegada, as linhas reais tomam o lugar
+   delas por opacidade em 150 ms, subindo 4 px, em cascata de 30 ms em até
+   seis linhas (data-chegada na lista; o --chegada-desde é a posição da
+   primeira linha do grupo na tela, e da sétima em diante entram com a
+   sexta), por cima dos fantasmas, que esmaecem em 150 ms (data-saindo); o
+   vazio do grupo chega como a primeira linha dele. A chegada acaba quando
+   as animações dela terminam (lib/carregando/use-chegada.ts), não num
+   relógio que corre antes da pintura. No reduzido, a subida vai a 0 e só a
+   opacidade troca, sem brilho. Vem antes da lista sem saltos: a linha que
+   sai ou chega depois manda na animação dela. */
+@layer components {
+  [data-fantasmas]:not([data-visivel]) {
+    opacity: 0;
+  }
+
+  [data-fantasmas][data-visivel] {
+    animation: carregando-aparece var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
+  }
+
+  /* Na chegada, as linhas-fantasma que estavam na tela ficam por baixo das
+     reais, fora do fluxo e recortadas no cartão, e esmaecem enquanto elas
+     entram, junto com a primeira linha do grupo na cascata (o mesmo
+     --chegada-desde): o cartão nunca fica vazio entre os dois. */
+  [data-fantasmas][data-visivel][data-saindo] {
+    pointer-events: none;
+    animation: carregando-some var(--carregando-t-chegada) var(--ease-carregando-saida) both;
+    animation-delay: calc(min(var(--chegada-desde, 0), 5) * var(--carregando-passo));
+  }
+
+  [data-chegada] > *,
+  [data-chegada-vazio] {
+    animation: carregando-chega-linha var(--carregando-t-chegada) var(--ease-carregando-entrada) both;
+    animation-delay: calc(min(var(--chegada-desde, 0) + var(--chegada-i, 5), 5) * var(--carregando-passo));
+  }
+
+  [data-chegada] > :nth-child(1),
+  [data-chegada-vazio] {
+    --chegada-i: 0;
+  }
+
+  [data-chegada] > :nth-child(2) {
+    --chegada-i: 1;
+  }
+
+  [data-chegada] > :nth-child(3) {
+    --chegada-i: 2;
+  }
+
+  [data-chegada] > :nth-child(4) {
+    --chegada-i: 3;
+  }
+
+  [data-chegada] > :nth-child(5) {
+    --chegada-i: 4;
+  }
+}
+
+/* A lista sem saltos (lib/carregando/use-lista-sem-saltos.ts e
+   palco-sem-saltos.ts; momento 4): a linha que sai esmaece em 200 ms, com 6
+   px para cima, e fica sem toque; as de baixo, o cartão, os títulos e os
+   grupos seguintes sobem por FLIP em 240 ms (o palco anima o translate de
+   cada peça, que soma com o transform destes keyframes, no tempo e na curva
+   de --carregando-t-reflui e --ease-carregando-padrao, os mesmos de
+   CARREGANDO.refluiMs e CURVA_DO_REFLUXO). A que chega espera o cartão
+   chegar e entra em 240 ms, com a subida de 4 px; só a que veio de uma
+   ação nesta tela tem o realce verde suave (data-realce), que fica 1 s e
+   apaga no fim. A contagem que muda (3 → 2) rola 8 px em 160 ms: o número
+   velho sobe e sai, o novo sobe e entra (components/ui/queue-list.tsx). No
+   reduzido, só opacidade: a linha some sem deslocamento, o resto pula para
+   o lugar (o palco não faz FLIP), a que chega esmaece desde o começo, o
+   realce entra e sai por opacidade e a contagem troca. */
+@keyframes carregando-sai-linha {
+  to {
+    opacity: 0;
+    transform: translateY(var(--carregando-sai-linha-y));
+  }
+}
+
+@keyframes carregando-chega-linha {
+  from {
+    opacity: 0;
+    transform: translateY(var(--carregando-subida));
+  }
+}
+
+@keyframes carregando-realce {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes carregando-conta-sai {
+  to {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--carregando-conta-y)));
+  }
+}
+
+@keyframes carregando-conta-entra {
+  from {
+    opacity: 0;
+    transform: translateY(var(--carregando-conta-y));
+  }
+}
+
+@layer components {
+  [data-na-lista="saindo"] {
+    pointer-events: none;
+    animation: carregando-sai-linha var(--carregando-t-sai-linha) var(--ease-carregando-saida) both;
+  }
+
+  [data-na-lista="chegando"] {
+    position: relative;
+    isolation: isolate;
+    /* backwards: invisível enquanto o cartão chega; depois de entrar, o transform volta a ser da linha (o FLIP). */
+    animation: carregando-chega-linha var(--carregando-t-chega-linha) var(--ease-carregando-entrada) var(--carregando-t-chega-espera) backwards;
+  }
+
+  [data-na-lista="chegando"][data-realce]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-color: hsl(var(--success-soft));
+    animation: carregando-realce var(--carregando-t-destaque) var(--ease-carregando-padrao) var(--carregando-t-chega-espera) both;
+  }
+
+  /* Os controles que a espera travou (LinhaDaFila, a linha que já saiu dos
+     dados e espera o dedo): aria-disabled a 0,45, como o travado do
+     BotaoDeAcao, e sem hover nem toque. O toque cai na linha e continua
+     contando para o dedo; a trava do teclado está no código. */
+  [data-na-lista] [data-trava-da-espera] {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+
+  /* O cartão de uma fila sem saltos (QueueGroup com semSaltos), como na
+     prancha aprovada: três pedaços atrás das linhas, para o palco encolher e
+     esticar o cartão só por transform. O topo e a base, com os cantos (os
+     raios vêm das classes do cartão), andam; o meio anda e estica por scaleY
+     a partir do alto, 1 px por baixo de cada tampa. O cartão não recorta as
+     linhas na altura: a que sobe de onde estava fica inteira, dentro da
+     moldura que anda junto. A primeira e a última linha recortam o próprio
+     fundo nos cantos (o raio da lista), e a lista recorta só na largura.
+     Como no cartão de sempre, as linhas ficam dentro da borda (1 px) e têm
+     o fundo do cartão: quem mede o contraste (o axe no navegador) lê o
+     branco do cartão, e não o fundo da página. A que sai fica sem ele: ao
+     subir 6 px, não cobre a linha de cima. */
+  .fila-cartao {
+    --fila-tampa: 1rem;
+    position: relative;
+    isolation: isolate;
+    padding: 1px;
+  }
+
+  .fila-cartao [data-chave]:not([data-na-lista="saindo"]) {
+    background-color: hsl(var(--card));
+  }
+
+  .fila-cartao > [data-moldura] {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .fila-cartao > [data-moldura="topo"] {
+    top: 0;
+    block-size: var(--fila-tampa);
+  }
+
+  /* O fundo do meio é o do cartão, pintado como imagem: com a cor de fundo,
+     o Chromium trata o pedaço esticado como camada opaca e deixa um fio
+     escuro de 1 px na borda durante o scaleY. */
+  .fila-cartao > [data-moldura="meio"] {
+    top: calc(var(--fila-tampa) - 1px);
+    bottom: calc(var(--fila-tampa) - 1px);
+    transform-origin: 50% 0;
+    background-image: linear-gradient(hsl(var(--card)), hsl(var(--card)));
+  }
+
+  .fila-cartao > [data-moldura="base"] {
+    bottom: 0;
+    block-size: var(--fila-tampa);
+  }
+
+  .fila-cartao [data-chave]:first-child {
+    border-top-left-radius: inherit;
+    border-top-right-radius: inherit;
+    overflow: clip;
+  }
+
+  .fila-cartao [data-chave]:last-child {
+    border-bottom-left-radius: inherit;
+    border-bottom-right-radius: inherit;
+    overflow: clip;
+  }
+
+  .carregando-conta {
+    display: inline-grid;
+  }
+
+  .carregando-conta > * {
+    grid-area: 1 / 1;
+  }
+
+  .carregando-conta > [data-conta="sai"] {
+    animation: carregando-conta-sai var(--carregando-t-conta) var(--ease-carregando-saida) both;
+  }
+
+  .carregando-conta > [data-conta="entra"] {
+    animation: carregando-conta-entra var(--carregando-t-conta) var(--ease-carregando-entrada) both;
+  }
+}
+
+/* A barra de espera (components/ui/barra-de-espera.tsx; seção 5.5 e momento
+   4): na borda de baixo da linha em andamento (4 px; 6 px no celular) ou no
+   topo do cartão que relê (3 px; 4 px no celular). Entra em 150 ms, de 25%
+   da altura; um segmento de 32% em tinta varre o trilho de tinta a 8%, só
+   por transform (carregando-varre); aos 5 s o componente a marca parada
+   (data-estado="parada") e ela fica inteira a 0,6. No sucesso completa em
+   verde e no erro em crítico, por scaleX em 220 ms; a determinada enche por
+   scaleX(--p), que muda por evento. Quem a contém é position: relative. */
+@keyframes carregando-barra-entra {
+  from {
+    opacity: 0;
+    transform: scaleY(0.25);
+  }
+}
+
+@keyframes carregando-barra-completa {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes carregando-barra-fim {
+  from {
+    transform: scaleX(0.3);
+  }
+}
+
+@keyframes carregando-barra-fim-parada {
+  from {
+    opacity: 0.6;
+  }
+}
+
+@layer components {
+  .carregando-barra {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    display: block;
+    overflow: hidden;
+    pointer-events: none;
+    color: hsl(var(--carregando-cor));
+    /* No alto contraste, como o indicador: a barra fica na cor forçada de quem
+       a contém (a cor herdada, no fim do bloco). */
+    forced-color-adjust: none;
+    forced-color-adjust: preserve-parent-color;
+    animation: carregando-barra-entra var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
+  }
+
+  .carregando-barra[data-lugar="linha"] {
+    bottom: 0;
+    block-size: var(--carregando-barra-linha);
+    transform-origin: 50% 100%;
+  }
+
+  .carregando-barra[data-lugar="topo"] {
+    top: 0;
+    block-size: var(--carregando-barra-topo);
+    transform-origin: 50% 0;
+  }
+
+  .carregando-barra > [data-parte] {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    background-color: currentColor;
+  }
+
+  .carregando-barra > [data-parte="trilho"] {
+    right: 0;
+    opacity: 0.08;
+  }
+
+  .carregando-barra > [data-parte="segmento"] {
+    inline-size: 32%;
+    animation: carregando-varre var(--carregando-t-varredura) var(--ease-carregando-padrao) infinite;
+  }
+
+  .carregando-barra > [data-parte="cheio"] {
+    right: 0;
+    transform: scaleX(0);
+    transform-origin: 0 50%;
+  }
+
+  .carregando-barra[data-estado="parada"] > [data-parte="cheio"] {
+    transform: none;
+    opacity: 0.6;
+  }
+
+  .carregando-barra[data-estado="progresso"] > [data-parte="cheio"] {
+    transform: scaleX(var(--p, 0));
+    transition: transform var(--carregando-t-entrada) var(--ease-carregando-padrao);
+  }
+
+  .carregando-barra[data-estado="ok"] > [data-parte="cheio"] {
+    background-color: hsl(var(--carregando-ok));
+  }
+
+  .carregando-barra[data-estado="erro"] > [data-parte="cheio"] {
+    background-color: hsl(var(--carregando-erro));
+  }
+
+  .carregando-barra[data-estado="ok"] > [data-parte="cheio"],
+  .carregando-barra[data-estado="erro"] > [data-parte="cheio"] {
+    transform: none;
+    opacity: 1;
+    animation: carregando-barra-completa var(--carregando-t-barra-completa) var(--ease-carregando-padrao) both;
+  }
+
+  /* O fim da releitura do cartão (momento 7, caso 3): o cheio completa em
+     tinta por scaleX em 200 ms, do segmento que varria (de 0,3) ou da barra
+     parada (de 0,6 de opacidade), e então a barra esmaece em 150 ms e sai. */
+  .carregando-barra[data-estado="fim"] {
+    animation: carregando-some var(--carregando-t-barra-some) var(--ease-carregando-saida) var(--carregando-t-barra-fim) both;
+  }
+
+  .carregando-barra[data-estado="fim"] > [data-parte="cheio"] {
+    transform: none;
+    opacity: 1;
+    animation: carregando-barra-fim var(--carregando-t-barra-fim) var(--ease-carregando-padrao) both;
+  }
+
+  .carregando-barra[data-estado="fim"][data-de="parada"] > [data-parte="cheio"] {
+    animation-name: carregando-barra-fim-parada;
+  }
+
+  /* Movimento reduzido: entra só por opacidade, não varre e fica parada e
+     inteira a 0,6 desde o começo; o verde e o crítico entram de uma vez (o
+     --carregando-t-barra-completa vai a 0 no :root). */
+  @media (prefers-reduced-motion: reduce) {
+    .carregando-barra {
+      animation-name: carregando-aparece;
+    }
+
+    .carregando-barra > [data-parte="segmento"] {
+      display: none;
+    }
+
+    .carregando-barra[data-estado="andamento"] > [data-parte="cheio"] {
+      transform: none;
+      opacity: 0.6;
+    }
+
+    .carregando-barra[data-estado="progresso"] > [data-parte="cheio"] {
+      transition: none;
+    }
+  }
+
+  /* No alto contraste do Windows, a cor declarada acima faria o
+     preserve-parent-color valer como none: a tinta do tema ficaria sobre o
+     fundo forçado e sumiria no preto. Herdada, ela é a cor forçada de quem
+     contém a barra, como no indicador. */
+  @media (forced-colors: active) {
+    .carregando-barra {
+      color: inherit;
+    }
+  }
+}
+
+/* A lista que troca de filtro, mês ou cliente (lib/carregando/use-lista-em-troca.tsx;
+   momento 7, caso 4): enquanto a nova não chega, a anterior fica a 50%, em
+   150 ms. Esmaece tudo dentro do contêiner menos o caminho até a barra do
+   topo do cartão ([data-barra-da-lista], sempre na árvore), que fica inteira:
+   em cada nível do caminho, só os irmãos dele. Na chegada, a lista nova volta
+   a 1 da opacidade em que a anterior estava (uma transição, que parte do valor
+   de agora: da troca rápida, que nem chegou a 0,5, ela volta sem piscar; nunca
+   passa por 0, e o cartão nunca fica vazio), subindo 4 px (só opacidade no
+   reduzido, pelo --carregando-subida), em 150 ms. Só opacity e transform. */
+@layer components {
+  :is([data-lista-em-troca][data-trocando], [data-lista-em-troca][data-trocando] :has([data-barra-da-lista]))
+    > :not([data-barra-da-lista], :has([data-barra-da-lista])) {
+    opacity: 0.5;
+    transition: opacity var(--carregando-t-entrada) var(--ease-carregando-entrada);
+  }
+
+  :is([data-lista-em-troca][data-chegou], [data-lista-em-troca][data-chegou] :has([data-barra-da-lista]))
+    > :not([data-barra-da-lista], :has([data-barra-da-lista])) {
+    transition: opacity var(--carregando-t-chegada) var(--ease-carregando-entrada);
+  }
+
+  [data-lista-em-troca][data-chegou] {
+    animation: carregando-chega-troca var(--carregando-t-chegada) var(--ease-carregando-entrada) both;
+  }
+}
+
+/* A subida da lista que chega na troca: só o transform; a opacidade volta pela
+   transição acima, de onde a lista anterior estava. */
+@keyframes carregando-chega-troca {
+  from {
+    transform: translateY(var(--carregando-subida));
+  }
+}
+
+/* O progresso das operações longas (components/ui/progresso.tsx; seção 5.5
+   e momento 6). A contagem: um segmento de 8 px por item, com a ponta
+   chanfrada a 45°; o feito em tinta, o atual enchendo por scaleX (o --f, a
+   fração dos bytes, muda por evento, numa transição de 200 ms, e nunca
+   volta) com as listras a 45° andando 16 px para trás só nele, até os 5 s
+   (data-parado); o da fila só no trilho; o que falhou em crítico. As
+   miniaturas: a que sobe com o véu preto a 45% e a caixa branca
+   determinada; a da fila com o véu claro e o contorno tracejado; a que falhou
+   com o véu e a caixa com o "!". As etapas: marcadores de 28 px na caixa
+   chanfrada, unidos pelo fio de 2 px que enche em 300 ms quando a de antes
+   termina; o check da feita entra com a mola. Tudo o que anda é transform e
+   opacity. */
+@layer components {
+  .carregando-segmentos {
+    display: grid;
+    grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr));
+    gap: 4px;
+    color: hsl(var(--carregando-cor));
+    /* No alto contraste do Windows, os segmentos ficam na cor forçada de quem os contém, como a barra. */
+    forced-color-adjust: none;
+    forced-color-adjust: preserve-parent-color;
+  }
+
+  .carregando-segmentos > [data-segmento] {
+    position: relative;
+    block-size: 8px;
+    overflow: hidden;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--carregando-chanfro)), calc(100% - var(--carregando-chanfro)) 100%, 0 100%);
+  }
+
+  .carregando-segmentos > [data-segmento] > [data-parte] {
+    position: absolute;
+    inset: 0;
+    background-color: currentColor;
+  }
+
+  .carregando-segmentos > [data-segmento] > [data-parte="trilho"] {
+    opacity: 0.08;
+  }
+
+  .carregando-segmentos > [data-segmento] > [data-parte="enche"] {
+    transform: scaleX(var(--f, 0));
+    transform-origin: 0 50%;
+    transition: transform var(--carregando-t-segmento) var(--ease-carregando-padrao);
+  }
+
+  .carregando-segmentos > [data-segmento][data-estado="feito"] > [data-parte="enche"],
+  .carregando-segmentos > [data-segmento][data-estado="erro"] > [data-parte="enche"] {
+    transform: none;
+  }
+
+  .carregando-segmentos > [data-segmento][data-estado="erro"] > [data-parte="enche"] {
+    background-color: hsl(var(--carregando-erro));
+  }
+
+  /* As listras: na cor do cartão a 35%, claras sobre a tinta no claro e
+     escuras sobre a tinta clara no escuro. */
+  .carregando-segmentos > [data-segmento] > [data-parte="listras"] {
+    inset-inline-end: auto;
+    inline-size: calc(100% + 16px);
+    background: repeating-linear-gradient(45deg, hsl(var(--card) / 0.35) 0 5.657px, transparent 5.657px 11.314px);
+    animation: carregando-listras var(--carregando-t-listras) linear infinite;
+  }
+
+  .carregando-segmentos[data-parado] > [data-segmento] > [data-parte="listras"] {
+    animation: none;
+  }
+
+  .carregando-miniaturas {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .carregando-miniatura {
+    position: relative;
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    background-color: hsl(var(--muted));
+  }
+
+  .carregando-miniatura > * {
+    grid-area: 1 / 1;
+  }
+
+  .carregando-miniatura > img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .carregando-miniatura > [data-veu] {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    transition: opacity var(--carregando-t-entrada) var(--ease-carregando-entrada);
+  }
+
+  .carregando-miniatura > [data-veu="escuro"] {
+    background-color: hsl(0 0% 0% / 0.45);
+    color: hsl(0 0% 100%);
+  }
+
+  .carregando-miniatura > [data-veu="fila"] {
+    border: 2px dashed hsl(var(--muted-foreground));
+    border-radius: inherit;
+    background-color: hsl(var(--card) / 0.55);
+  }
+
+  .carregando-miniatura > [data-selo] {
+    position: absolute;
+    inset-block-start: 6px;
+    inset-inline-end: 6px;
+    display: grid;
+    place-items: center;
+    inline-size: 24px;
+    block-size: 24px;
+    border-radius: var(--radius-md);
+  }
+
+  .carregando-miniatura > [data-selo="feito"] {
+    background-color: hsl(var(--carregando-ok));
+    color: hsl(var(--success-foreground));
+    animation: carregando-marca var(--carregando-t-sucesso) var(--carregando-mola) both;
+  }
+
+  .carregando-miniatura > [data-selo="fila"] {
+    border: 1px solid hsl(var(--border));
+    background-color: hsl(var(--card));
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* A caixa fechada do fim ("4 fotos enviadas") e o marcador da etapa feita:
+     a caixa cheia na cor do texto, com o check vazado na cor do cartão; o
+     miolo e o check entram uma vez, com a mola. */
+  .carregando-caixa-cheia {
+    flex: none;
+    overflow: visible;
+  }
+
+  .carregando-caixa-cheia > [data-parte="miolo"] {
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: carregando-miolo var(--carregando-t-sucesso) var(--carregando-mola) both;
+  }
+
+  .carregando-caixa-cheia > [data-parte="check"] {
+    fill: none;
+    stroke: hsl(var(--card));
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: carregando-marca var(--carregando-t-sucesso) var(--carregando-mola) both;
+  }
+
+  .carregando-caixa-cheia[data-vazia] > [data-parte="miolo"] {
+    fill: none;
+    stroke-width: 2;
+    opacity: 0.3;
+    animation: none;
+  }
+
+  .carregando-etapas {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .carregando-marcador {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: 28px;
+    block-size: 28px;
+    flex: none;
+  }
+
+  .carregando-marcador > * {
+    grid-area: 1 / 1;
+  }
+
+  .carregando-fio {
+    position: relative;
+    flex: 1 1 auto;
+    min-inline-size: 24px;
+    block-size: 2px;
+    overflow: hidden;
+    color: hsl(var(--carregando-cor));
+    forced-color-adjust: none;
+    forced-color-adjust: preserve-parent-color;
+  }
+
+  .carregando-fio > i {
+    position: absolute;
+    inset: 0;
+    background-color: currentColor;
+  }
+
+  .carregando-fio > i[data-parte="trilho"] {
+    opacity: 0.12;
+  }
+
+  .carregando-fio > i[data-parte="enche"] {
+    transform: scaleX(0);
+    transform-origin: 0 50%;
+    transition: transform var(--carregando-t-fio) var(--ease-carregando-padrao);
+  }
+
+  .carregando-fio[data-cheio] > i[data-parte="enche"] {
+    transform: none;
+  }
+
+  /* Movimento reduzido: sem listras e sem mola; o enchimento continua, porque
+     é informação, mas de uma vez, e o fio e os selos trocam sem deslizar. */
+  @media (prefers-reduced-motion: reduce) {
+    .carregando-segmentos > [data-segmento] > [data-parte="listras"] {
+      display: none;
+    }
+
+    .carregando-segmentos > [data-segmento] > [data-parte="enche"],
+    .carregando-fio > i[data-parte="enche"] {
+      transition: none;
+    }
+
+    .carregando-miniatura > [data-selo="feito"],
+    .carregando-caixa-cheia > [data-parte="miolo"],
+    .carregando-caixa-cheia > [data-parte="check"] {
+      animation-name: carregando-aparece;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .carregando-segmentos,
+    .carregando-fio {
+      color: inherit;
+    }
+
+    .carregando-segmentos > [data-segmento] > [data-parte="listras"] {
+      display: none;
+    }
+  }
+}
+
+/* O que a revisão da parte 11 pediu ao progresso e ao aviso. O segmento da
+   foto que sobe sem os bytes medidos (a de até 256 KB vai numa requisição só,
+   sem evento no meio) não fica com cara de fila: o trilho mais forte e as
+   listras na tinta, que ficam à vista paradas depois dos 5 s. As etapas que
+   não cabem lado a lado numa caixa estreita (três, no formulário do Agent
+   Dute; duas, no celular) põem o rótulo sob o marcador. A pílula da demora quebra entre os
+   pedaços, com o "·" antes de cada um; o do começo da linha fica fora da
+   caixa e some, e nunca sobra um "·" no fim da linha. */
+@layer components {
+  .carregando-segmentos > [data-segmento][data-estado="andamento"]:not([data-medido]) > [data-parte="trilho"] {
+    opacity: 0.18;
+  }
+
+  .carregando-segmentos > [data-segmento][data-estado="andamento"]:not([data-medido]) > [data-parte="listras"] {
+    background: repeating-linear-gradient(45deg, currentColor 0 5.657px, transparent 5.657px 11.314px);
+    opacity: 0.22;
+  }
+
+  .carregando-etapas-caixa {
+    container-type: inline-size;
+  }
+
+  /* Duas etapas também não cabem no celular ("Separação" e "Embalagem" pedem
+     cerca de 300 px, e a caixa tem 276 a 360 px de largura). */
+  @container (max-width: 21rem) {
+    .carregando-etapas:not([data-n="1"]) {
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .carregando-etapas:not([data-n="1"]) > [data-etapa] {
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .carregando-etapas:not([data-n="1"]) > .carregando-fio {
+      min-inline-size: 12px;
+      margin-block-start: 13px;
+    }
+  }
+
+  @container (max-width: 26rem) {
+    .carregando-etapas:not([data-n="1"], [data-n="2"]) {
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .carregando-etapas:not([data-n="1"], [data-n="2"]) > [data-etapa] {
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .carregando-etapas:not([data-n="1"], [data-n="2"]) > .carregando-fio {
+      min-inline-size: 12px;
+      margin-block-start: 13px;
+    }
+  }
+
+  .carregando-aviso-itens {
+    display: block;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  .carregando-aviso-itens > span {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    margin-inline-start: -1em;
+  }
+
+  .carregando-aviso-itens > span > span {
+    white-space: nowrap;
+  }
+
+  .carregando-aviso-itens > span > span::before {
+    content: "·" / "";
+    display: inline-block;
+    inline-size: 1em;
+    text-align: center;
+    font-weight: 700;
+  }
+}
+
+/* A trilha do Agent Dute (components/agent/trilha-do-agente.tsx; momento 9):
+   a caixa violeta da vez, o check das consultas feitas e o aviso de 10 s. A
+   linha nova entra em 150 ms (opacidade e 4 px) e o check com a mola, só nos
+   primeiros 5 s (data-movimento): depois, a trilha para de animar e a caixa
+   da vez continua. O aviso de 10 s entra uma vez. No movimento reduzido, a caixa respira até o piso do
+   violeta, a linha entra só por opacidade (a subida é 0) e o check aparece
+   pronto (o tempo do sucesso é 0). */
+@layer components {
+  .trilha-do-agente {
+    --carregando-piso: var(--carregando-piso-agente);
+  }
+
+  .trilha-do-agente[data-movimento] .trilha-do-agente-passo {
+    animation: carregando-chega-linha var(--carregando-t-chegada) var(--ease-carregando-entrada) both;
+  }
+
+  /* O aviso de 10 s entra uma vez, como os outros avisos (um tiro, não laço). */
+  .trilha-do-agente-aviso {
+    animation: carregando-chega-linha var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
+  }
+
+  /* Quando o texto começa, a trilha recolhida entra no lugar da aberta, e na
+     chegada da resposta as fontes e o Copiar entram no lugar guardado para
+     eles: um tiro de 150 ms (opacidade e 4 px; no reduzido, só opacidade). */
+  .trilha-do-agente-recolhe,
+  .agente-chega {
+    animation: carregando-chega-linha var(--carregando-t-entrada) var(--ease-carregando-entrada) both;
+  }
+
+  .trilha-do-agente[data-movimento] [data-passo="feita"] [data-check] {
+    animation: carregando-marca var(--carregando-t-sucesso) var(--carregando-mola) both;
+  }
 }

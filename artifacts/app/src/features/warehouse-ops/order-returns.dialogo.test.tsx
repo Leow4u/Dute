@@ -38,7 +38,7 @@ afterEach(async () => {
   container = null;
 });
 
-async function abrir() {
+async function abrir(aberto: Partial<NonNullable<Parameters<typeof RetornosView>[0]["aberto"]>> = {}, extra: Partial<Parameters<typeof RetornosView>[0]["acoes"]> = {}) {
   container = document.createElement("div");
   document.body.appendChild(container);
   raiz = createRoot(container);
@@ -46,8 +46,8 @@ async function abrir() {
     raiz!.render(
       <RetornosView
         retornos={[RETORNO]}
-        aberto={{ retorno: RETORNO, linhas: LINHAS, notas: "", problema: null, erro: null, enviando: false }}
-        acoes={acoes}
+        aberto={{ retorno: RETORNO, linhas: LINHAS, notas: "", problema: null, erro: null, enviando: false, ...aberto }}
+        acoes={{ ...acoes, ...extra }}
       />,
     );
   });
@@ -71,6 +71,8 @@ describe("o que voltou do pedido", () => {
       "Observação",
       "Voltar",
       "Receber",
+      "Recebendo…",
+      "Conferir",
       "Fechar",
     ]);
     expect(dialogo.textContent).not.toContain("· U");
@@ -78,6 +80,28 @@ describe("o que voltou do pedido", () => {
 
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     const dialogo = await abrir();
+    expect(await violacoesDeAcessibilidade(dialogo.outerHTML)).toEqual([]);
+  });
+});
+
+/**
+ * As linhas do pedido que esperam e as que não vieram (carregamento v2, parte
+ * 13c; diagnóstico, 4.5). Antes, as linhas que falhavam ficavam em
+ * "Carregando..." para sempre, com o "Receber" travado.
+ */
+describe("as linhas do retorno que esperam e as que não vieram", () => {
+  it("chegando: a espera em bloco, sem o \"Carregando...\" seco", async () => {
+    const dialogo = await abrir({ linhas: null });
+    expect(dialogo.textContent).not.toContain("Carregando...");
+    expect(dialogo.querySelector("[data-carregando-na-regiao]")).not.toBeNull();
+  });
+
+  it("não vieram: o aviso com Tentar de novo, nunca a espera para sempre", async () => {
+    const dialogo = await abrir({ linhas: null, linhasFalharam: true }, { tentarLinhas: async () => undefined });
+    expect(dialogo.textContent).toContain("Não consegui carregar os itens do pedido.");
+    expect(dialogo.querySelector('[role="alert"]')).not.toBeNull();
+    expect([...dialogo.querySelectorAll("button")].some((botao) => botao.textContent?.includes("Tentar de novo"))).toBe(true);
+    expect(dialogo.querySelector("[data-carregando-na-regiao]")).toBeNull();
     expect(await violacoesDeAcessibilidade(dialogo.outerHTML)).toEqual([]);
   });
 });

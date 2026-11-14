@@ -1,7 +1,7 @@
 /** Receber: ficha da chegada, chegada avulsa e conferência física. */
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { problemaDoNome, tamanhoDoCodigo } from "@workspace/dominio";
 import {
   AlertCircle,
@@ -18,7 +18,6 @@ import {
   PackageOpen,
   PackageSearch,
   PlayCircle,
-  RefreshCw,
   Route,
   Sparkles,
   Trash2,
@@ -27,6 +26,14 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { DialogCancelar } from "@/components/ui/dialog";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { avisoDoErroDaEscrita, useTentativaDaEscrita } from "@/lib/carregando/tentativa-da-escrita";
+import { desfechoDoErro } from "@/lib/carregando/use-acao-na-linha";
 import {
   Card,
   CardContent,
@@ -94,6 +101,7 @@ import { useActiveCustomer } from "@/lib/active-customer-context";
 import { RECEBIMENTO_POR_CAIXA_LIBERADO } from "@/lib/liberacao";
 import { modoDaChegadaAvulsa } from "@/lib/wms/caixas-do-recebimento";
 import { ProductPhotoStudio } from "./product-photo-studio";
+import { FOTOS_POR_PRODUTO, ProgressoDasFotosDoProduto, useFotosDoProduto } from "./fotos-enviando";
 import { photoContextFromRecord, type PhotoContext } from "./photo-context";
 import {
   barcodeKey,
@@ -105,6 +113,7 @@ import {
   campoDoProblemaDoNome,
   CatalogoIndisponivel,
   CatalogoVerificando,
+  useFalhaDoCatalogo,
   NewProductNotice,
   ProductIdentityCard,
   seguirSugestao,
@@ -144,7 +153,6 @@ export type ReceiptDraftLine = {
   size: string;
   color: string;
   photos: ProductPhoto[];
-  photoUploading: boolean;
   quantity: string;
   unitCost: string;
   location: string;
@@ -178,7 +186,6 @@ export const emptyReceiptLine = (): ReceiptDraftLine => ({
   size: "",
   color: "",
   photos: [],
-  photoUploading: false,
   quantity: "1",
   unitCost: "",
   location: "RECEBIMENTO",
@@ -265,38 +272,73 @@ export function receiptIdFromTask(task: WarehouseTask) {
   return task.reference || task.id.replace(/^receiving:/, "");
 }
 
+/**
+ * O vínculo da chegada com o aviso do cliente. Vinculando, as opções ficam
+ * ocupadas, não desabilitadas (`aria-disabled`, com a trava aqui): o foco fica
+ * na tocada (carregamento v2, parte 13c). Aos 300 ms (e por pelo menos 500
+ * ms), a tocada mostra a caixa no lugar da marca e diz "Vinculando…", que entra
+ * no nome dela, e o Anunciador diz "Vinculando o aviso"; o vínculo rápido não
+ * pisca nada.
+ */
 function NoticeLink({
   choice,
   disabled,
+  vinculando,
   onSelect,
 }: {
   choice: NoticeLinkChoice;
   disabled?: boolean;
+  /** O aviso que está sendo vinculado ("" para nenhum); `undefined` fora do vínculo. */
+  vinculando?: string;
   onSelect?: (requestId: string | null) => void;
 }) {
+  const ocupado = Boolean(disabled) || vinculando !== undefined;
+  const espera = useEspera(vinculando !== undefined, { segurarMinimo: true });
+  // A opção tocada fica a mesma enquanto a caixa segura o mínimo, depois da resposta.
+  const tocadaNaTela = useRef<string | undefined>(undefined);
+  if (vinculando !== undefined) tocadaNaTela.current = vinculando;
+  const anunciar = useAnuncio();
+  useEffect(() => {
+    if (vinculando !== undefined && espera.visivel) return anunciar("Vinculando o aviso");
+    return undefined;
+  }, [anunciar, espera.visivel, vinculando]);
   return (
     <div className="space-y-2">
       <div className="text-sm font-semibold text-foreground">Aviso do cliente</div>
-      <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="overflow-hidden rounded-lg border border-border bg-card" aria-busy={vinculando !== undefined || undefined}>
         {choice.options.map((option) => {
           const selected = choice.selectedId === option.id;
+          const tocada = vinculando !== undefined && vinculando === (option.id || "");
+          const esperando = espera.visivel && tocadaNaTela.current === (option.id || "");
           return (
             <button
               key={option.id || "none"}
               type="button"
-              disabled={disabled || !choice.editable || !onSelect}
+              disabled={!choice.editable || !onSelect}
+              aria-disabled={ocupado || undefined}
               className={cn(
                 "flex w-full items-center gap-3 border-t border-border/60 px-3 py-2.5 text-left first:border-t-0",
                 selected && "bg-primary/10",
+                ocupado && !tocada && "opacity-45",
               )}
-              onClick={() => onSelect?.(option.id || null)}
+              onClick={() => {
+                if (!ocupado) onSelect?.(option.id || null);
+              }}
             >
-              <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border-2", selected ? "border-primary" : "border-input")}>
-                {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
-              </span>
+              {esperando ? (
+                <Spinner className="shrink-0 text-foreground" />
+              ) : (
+                <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border-2", selected ? "border-primary" : "border-input")}>
+                  {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
+                </span>
+              )}
               <span className="min-w-0">
                 <span className="block text-sm font-semibold">{option.title}</span>
-                {option.detail ? <span className="block text-sm text-muted-foreground">{option.detail}</span> : null}
+                {esperando ? (
+                  <span className="block text-sm font-bold text-foreground">Vinculando…</span>
+                ) : option.detail ? (
+                  <span className="block text-sm text-muted-foreground">{option.detail}</span>
+                ) : null}
               </span>
             </button>
           );
@@ -313,6 +355,7 @@ export function ReceivingTaskDetailCard({
   registeringExceptionId,
   noticeChoice,
   linking = false,
+  linkingId,
   onAdvance,
   onOpenException,
   onLinkNotice,
@@ -323,6 +366,8 @@ export function ReceivingTaskDetailCard({
   registeringExceptionId?: string;
   noticeChoice?: NoticeLinkChoice | null;
   linking?: boolean;
+  /** O aviso que está sendo vinculado ("" para nenhum), com o vínculo em andamento. */
+  linkingId?: string;
   onAdvance: (id: string, note?: string) => void;
   onOpenException: (task: WarehouseTask, suggestedNote?: string) => void;
   onLinkNotice?: (requestId: string | null) => void;
@@ -330,6 +375,8 @@ export function ReceivingTaskDetailCard({
   const { toast } = useToast();
   // A justificativa é da chegada aberta: quem renderiza troca a `key` com a tarefa.
   const [justificativa, setJustificativa] = useState("");
+  // Salvando a conferência, a entrada espera: concluir no meio levaria a contagem de antes (o diagnóstico, 4.5).
+  const salvandoConferencia = useIsMutating({ mutationKey: chaveDaConferencia(entry?.task.id ?? "") }) > 0;
   if (!entry) {
     return (
       <Empty className="min-h-[520px] rounded-lg border border-dashed border-border bg-card">
@@ -383,41 +430,35 @@ export function ReceivingTaskDetailCard({
             <CardTitle className="mt-3 text-xl">{getTaskTitle(task)}</CardTitle>
           </div>
           <div className="flex flex-wrap gap-2">
+            {/* Ocupado não é desabilitado: o BotaoDeAcao, com o gerúndio aos 300 ms e o foco no botão (carregamento v2,
+                parte 13c). Concluindo, até a bancada reler; salvando a conferência, a entrada espera. */}
             {canRegister ? (
-              <Button
-                type="button"
+              <BotaoDeAcao
                 variant="outline"
+                estado={registeringExceptionId === task.id ? "andamento" : "repouso"}
+                icone={<MessageSquareWarning aria-hidden="true" />}
+                rotulo="Divergência"
+                andamento="Registrando…"
                 onClick={() => onOpenException(task)}
-                disabled={registeringExceptionId === task.id}
-              >
-                {registeringExceptionId === task.id ? (
-                  <RefreshCw data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <MessageSquareWarning data-icon="inline-start" />
-                )}
-                Divergência
-              </Button>
+              />
             ) : null}
             {canAdvance ? (
-              <Button
-                type="button"
+              <BotaoDeAcao
+                className="max-md:min-h-12"
+                estado={advancingTaskId === task.id ? "andamento" : "repouso"}
+                icone={<CheckCircle2 aria-hidden="true" />}
+                rotulo="Concluir entrada"
+                andamento="Concluindo…"
+                bloqueado={advancingTaskId !== task.id && salvandoConferencia}
                 onClick={concluir}
-                disabled={advancingTaskId === task.id}
-              >
-                {advancingTaskId === task.id ? (
-                  <RefreshCw data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <CheckCircle2 data-icon="inline-start" />
-                )}
-                Concluir entrada
-              </Button>
+              />
             ) : null}
           </div>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-5 p-5">
         {noticeChoice ? (
-          <NoticeLink choice={noticeChoice} disabled={linking} onSelect={onLinkNotice} />
+          <NoticeLink choice={noticeChoice} disabled={linking && linkingId === undefined} vinculando={linking ? linkingId : undefined} onSelect={onLinkNotice} />
         ) : null}
         <div className="grid grid-cols-2 gap-3">
           <DetailField icon={Hash} label="Referência" value={task.reference || task.id} />
@@ -446,7 +487,7 @@ export function ReceivingTaskDetailCard({
           </Alert>
         ) : null}
 
-        <ReceivingConferenceSection task={task} />
+        <ReceivingConferenceSection task={task} concluindo={advancingTaskId === task.id} />
 
         {pedeJustificativa && canAdvance ? (
           <div className="flex flex-col gap-2">
@@ -520,7 +561,37 @@ export function UnplannedReceiptDialog({
   if (session.current.customerCode !== customerCode) session.current = { customerCode, revision: session.current.revision + 1 };
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  // As fotos sobem uma linha por vez (parte 11 do carregamento v2): a linha
+  // e o rascunho de quem escolheu. O resultado de um rascunho que já saiu
+  // (outro cliente, a chegada criada) não entra em nenhuma linha.
+  const linhasAtuais = useRef(lines);
+  linhasAtuais.current = lines;
+  const alvoDasFotos = useRef<{ index: number; session: typeof session.current } | null>(null);
+  const fotos = useFotosDoProduto<ProductPhoto>({
+    enviarUma: (arquivo, aoProgredir, sinal) => {
+      const alvo = alvoDasFotos.current;
+      const linha = alvo ? linhasAtuais.current[alvo.index] : undefined;
+      const clientItemCode = linha?.clientCode.trim() || linha?.sku.trim() || `rascunho-${(alvo?.index ?? 0) + 1}`;
+      return uploadProductPhoto(arquivo, clientItemCode, customerCode, aoProgredir, sinal);
+    },
+    aoConcluir: (enviadas) => {
+      const alvo = alvoDasFotos.current;
+      if (!alvo || !mounted.current || session.current !== alvo.session) return;
+      setLines((current) =>
+        current.map((currentLine, lineIndex) =>
+          lineIndex === alvo.index ? { ...currentLine, photos: [...currentLine.photos, ...enviadas].slice(0, FOTOS_POR_PRODUTO) } : currentLine,
+        ),
+      );
+    },
+    aoFalhar: (error) => {
+      if (!mounted.current) return;
+      toast({ title: "Não consegui anexar a foto", description: getErrorMessage(error), variant: "destructive" });
+    },
+  });
+  const fotosSubindoNa = (index: number) => fotos.enviando && alvoDasFotos.current?.index === index;
   function clearDraft() {
+    fotos.limpar();
+    alvoDasFotos.current = null;
     setSupplier("");
     setInvoiceNumber("");
     setNotes("");
@@ -558,8 +629,17 @@ export function UnplannedReceiptDialog({
   // Antes de o catálogo chegar (ou quando ele não vem), a tela não diz que o
   // produto não existe nem oferece o cadastro novo
   // (docs/plataforma/diagnostico-carregamento.md, decisão 6 de 06/11/2026).
-  const estadoDoCatalogo: "lendo" | "falhou" | "pronto" =
-    lookupQuery.data !== undefined ? "pronto" : lookupQuery.isError ? "falhou" : "lendo";
+  // A falha fica na tela enquanto tenta de novo (o react-query zera o erro na nova tentativa sem dado): o aviso com o
+  // foco nele não vira "Verificando o catálogo…" no meio da tentativa (carregamento v2, parte 13c).
+  const catalogoNaTela = useLeituraComFalha(lookupQuery);
+  const catalogoLido = lookupQuery.data !== undefined;
+  const linhaAberta = lines[activeLineIndex];
+  // "Verificando o catálogo…" que apareceu na linha aberta fica o mínimo de 500 ms antes de a falha tomar o lugar.
+  const catalogoFalhou = useFalhaDoCatalogo(
+    !catalogoLido && catalogoNaTela.isError,
+    !catalogoLido && Boolean(linhaAberta && (linhaAberta.clientCode.trim() || linhaAberta.sku.trim())),
+  );
+  const estadoDoCatalogo: "lendo" | "falhou" | "pronto" = catalogoLido ? "pronto" : catalogoFalhou ? "falhou" : "lendo";
 
   function updateLine(index: number, patch: Partial<ReceiptDraftLine>) {
     setLines((current) =>
@@ -581,6 +661,14 @@ export function UnplannedReceiptDialog({
   }
 
   function removeLine(index: number) {
+    // As fotos não enviadas da linha saem com ela; as das linhas de baixo acompanham a linha.
+    const alvo = alvoDasFotos.current;
+    if (alvo?.index === index) {
+      fotos.limpar();
+      alvoDasFotos.current = null;
+    } else if (alvo && alvo.index > index) {
+      alvoDasFotos.current = { ...alvo, index: alvo.index - 1 };
+    }
     setActiveLineIndex((current) =>
       current > index ? current - 1 : Math.min(current, Math.max(0, lines.length - 2)),
     );
@@ -591,39 +679,15 @@ export function UnplannedReceiptDialog({
     );
   }
 
-  async function addPhotos(index: number, files: FileList | null) {
-    const selected = Array.from(files ?? []).slice(0, 4);
-    if (!selected.length) return;
-    const line = lines[index];
-    const clientItemCode =
-      line?.clientCode.trim() || line?.sku.trim() || `rascunho-${index + 1}`;
-    const photoSession = session.current;
-    updateLine(index, { photoUploading: true });
-    try {
-      const uploaded = await Promise.all(
-        selected.map((file) => uploadProductPhoto(file, clientItemCode, customerCode)),
-      );
-      if (!mounted.current || session.current !== photoSession) return;
-      setLines((current) =>
-        current.map((currentLine, lineIndex) =>
-          lineIndex === index
-            ? {
-                ...currentLine,
-                photos: [...currentLine.photos, ...uploaded].slice(0, 8),
-                photoUploading: false,
-              }
-            : currentLine,
-        ),
-      );
-    } catch (error) {
-      if (!mounted.current || session.current !== photoSession) return;
-      updateLine(index, { photoUploading: false });
-      toast({
-        title: "Não consegui anexar a foto",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
-    }
+  function addPhotos(index: number, files: FileList | null) {
+    const selected = Array.from(files ?? []);
+    if (!selected.length || fotos.enviando) return;
+    const mesmaLinha = alvoDasFotos.current?.index === index && alvoDasFotos.current.session === session.current;
+    // As não enviadas de outra linha saem: o "Tentar de novo" delas levaria a foto para a linha errada.
+    if (!mesmaLinha) fotos.limpar();
+    alvoDasFotos.current = { index, session: session.current };
+    const pendentes = mesmaLinha ? fotos.itens.filter((item) => item.estado === "erro").length : 0;
+    fotos.escolher(selected, FOTOS_POR_PRODUTO - (lines[index]?.photos.length ?? 0) - pendentes);
   }
 
   // Duas linhas do mesmo produto, mesmo que por códigos diferentes (o do
@@ -674,7 +738,7 @@ export function UnplannedReceiptDialog({
               !Number.isFinite(Number(line.unitCost)) ||
               Number(line.unitCost) <= 0 ||
               line.photos.length === 0 ||
-              line.photoUploading)) ||
+              fotosSubindoNa(lines.indexOf(line)))) ||
           (!existing && !line.createNew) ||
           (existing && line.createNew) ||
           Boolean(problemaDoNomeDaLinha(line, existing))
@@ -723,16 +787,20 @@ export function UnplannedReceiptDialog({
       intent.current = { signature: draftSignature, payload: { ...draft, received_at: new Date().toISOString(), idempotency_key: crypto.randomUUID() } };
     }
     const submittedSession = session.current;
+    const submittedIntent = intent.current!;
     sending.current = true;
     setSubmitting(true);
     setSubmitError("");
     try {
-      await onCreate(intent.current!.payload);
+      await onCreate(submittedIntent.payload);
       if (mounted.current && session.current === submittedSession) {
         clearDraft();
         onOpenChange(false);
       }
     } catch (error) {
+      // A recusa do servidor encerra a intenção (nada foi gravado): o próximo envio revalida e leva chave nova. O
+      // resultado incerto a guarda, e a repetição manda o mesmo pedido (carregamento v2, parte 13k).
+      if (desfechoDoErro(error) === "recusado" && intent.current === submittedIntent) intent.current = null;
       if (mounted.current && session.current === submittedSession) setSubmitError(getErrorMessage(error));
     } finally {
       if (mounted.current && session.current === submittedSession) {
@@ -780,7 +848,7 @@ export function UnplannedReceiptDialog({
           Number(line.unitCost) <= 0 ||
           line.photos.length === 0),
       problemaDoNome: problemaDoNomeDaLinha(line, existing),
-      photoUploading: line.photoUploading,
+      photoUploading: fotosSubindoNa(index),
     };
   });
   const canSubmit =
@@ -812,7 +880,7 @@ export function UnplannedReceiptDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!sending.current && !isPending) onOpenChange(next); }}>
+    <Dialog open={open} ocupado={busy || fotos.enviando} onOpenChange={(next) => { if (!sending.current) onOpenChange(next); }}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl" aria-describedby={undefined}>
         <DialogHeader className="flex-row flex-wrap items-center gap-2 space-y-0">
           <DialogTitle>Registrar chegada avulsa · {activeCustomer.name}</DialogTitle>
@@ -883,7 +951,7 @@ export function UnplannedReceiptDialog({
                       aria-controls="receipt-product-editor"
                       onClick={() => setActiveLineIndex(index)}
                       className={cn(
-                        "w-full rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        "w-full rounded-lg border p-4 text-left transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
                         activeLineIndex === index ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-muted",
                       )}
                     >
@@ -972,7 +1040,7 @@ export function UnplannedReceiptDialog({
                           size="icon"
                           className="size-9"
                           aria-label={`Excluir linha ${index + 1}`}
-                          disabled={isPending || lines.some((item) => item.photoUploading)}
+                          disabled={isPending || fotos.enviando}
                           onClick={() => removeLine(index)}
                         >
                           <Trash2 className="size-4" />
@@ -996,6 +1064,7 @@ export function UnplannedReceiptDialog({
                               });
                             }}
                             placeholder="Cód. cliente, SKU ou barras"
+                            id={`chegada-codigo-${index}`}
                             aria-label={`Código do produto da linha ${index + 1}`}
                           />
                         </label>
@@ -1069,7 +1138,12 @@ export function UnplannedReceiptDialog({
                         </div>
                       ) : mustCreate && estadoDoCatalogo === "falhou" ? (
                         <div className="mt-3">
-                          <CatalogoIndisponivel tentando={lookupQuery.isFetching} onTentar={() => void lookupQuery.refetch()} />
+                          <CatalogoIndisponivel
+                            leitura={lookupQuery}
+                            erro={catalogoNaTela.error}
+                            mensagem="Não consegui carregar o catálogo. O cadastro de produto novo foi bloqueado para evitar duplicidade."
+                            focoAoSair={`chegada-codigo-${index}`}
+                          />
                         </div>
                       ) : mustCreate ? (
                         <div className="mt-3">
@@ -1159,15 +1233,11 @@ export function UnplannedReceiptDialog({
                               htmlFor={`receipt-photo-${index}`}
                               className={cn(
                                 "inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted",
-                                line.photoUploading && "pointer-events-none opacity-60",
+                                fotos.enviando && "pointer-events-none opacity-60",
                               )}
                             >
-                              {line.photoUploading ? (
-                                <RefreshCw className="size-4 animate-spin" />
-                              ) : (
-                                <Camera className="size-4" />
-                              )}
-                              {line.photoUploading ? "Enviando..." : "Fotografar ou anexar"}
+                              <Camera className="size-4" />
+                              Fotografar ou anexar
                             </label>
                             <input
                               id={`receipt-photo-${index}`}
@@ -1175,9 +1245,14 @@ export function UnplannedReceiptDialog({
                               accept="image/*"
                               capture="environment"
                               multiple
+                              // Ocupado não é desabilitado: com disabled, o foco que estava aqui caía no corpo.
+                              aria-disabled={fotos.enviando || undefined}
                               className="sr-only"
+                              onClick={(event) => {
+                                if (fotos.enviando) event.preventDefault();
+                              }}
                               onChange={(event) => {
-                                void addPhotos(index, event.target.files);
+                                addPhotos(index, event.target.files);
                                 event.currentTarget.value = "";
                               }}
                             />
@@ -1185,6 +1260,8 @@ export function UnplannedReceiptDialog({
                               {line.photos.length}/8 foto(s)
                             </span>
                           </div>
+                          {/* O progresso fica acima das fotos da linha, como na Contagem: no fim, elas entram embaixo dele, e ele não sai do lugar. */}
+                          {alvoDasFotos.current?.index === index ? <ProgressoDasFotosDoProduto fotos={fotos} /> : null}
                           {line.photos.length ? (
                             <div className="flex flex-wrap gap-2">
                               {line.photos.map((photo, photoIndex) => (
@@ -1215,7 +1292,7 @@ export function UnplannedReceiptDialog({
                               ))}
                             </div>
                           ) : null}
-                          {line.photos.length ? <ProductPhotoStudio key={`${customerCode}:${index}:${line.clientCode}`} photos={line.photos} customerCode={customerCode} productName={line.product} category={line.category} context={{ ...line.photoContext, description: line.product, size: line.size || line.photoContext?.size, color: line.color || line.photoContext?.color, brand: line.brand || line.photoContext?.brand }} disabled={isPending || line.photoUploading}
+                          {line.photos.length ? <ProductPhotoStudio key={`${customerCode}:${index}:${line.clientCode}`} photos={line.photos} customerCode={customerCode} productName={line.product} category={line.category} context={{ ...line.photoContext, description: line.product, size: line.size || line.photoContext?.size, color: line.color || line.photoContext?.color, brand: line.brand || line.photoContext?.brand }} disabled={isPending || fotosSubindoNa(index)}
                             onApprove={(generated, primaryUrl) => setLines((current) => current.map((entry, entryIndex) => {
                               if (entryIndex !== index) return entry;
                               const merged = [...entry.photos, ...generated];
@@ -1235,7 +1312,7 @@ export function UnplannedReceiptDialog({
             <Textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              placeholder="Volumes, contato, avaria aparente, falta de NF..."
+              placeholder="Volumes, contato, avaria aparente, falta de NF…"
             />
           </div>
 
@@ -1279,25 +1356,21 @@ export function UnplannedReceiptDialog({
             </Alert>
           ) : null}
           {submitError ? <Alert variant="destructive"><AlertTitle>Não consegui criar a conferência</AlertTitle><AlertDescription>{submitError}</AlertDescription></Alert> : null}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={busy}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={busy || (!retryingIntent && (!canSubmit || (duplicates.length > 0 && !duplicateConfirmed)))}>
-              {busy ? (
-                <RefreshCw data-icon="inline-start" className="animate-spin" />
-              ) : (
-                <PackageOpen data-icon="inline-start" />
-              )}
-              {retryingIntent ? "Tentar novamente" : "Criar conferência"}
-            </Button>
-          </DialogFooter>
           </fieldset>
+          {/* O rodapé fica fora do fieldset que desliga o formulário durante o envio: o Cancelar e o "Criar conferência"
+              ficam ocupados, não desabilitados, e o foco fica no botão tocado (carregamento v2, parte 13c; o que a 13a
+              deixou aberto). As fotos que sobem e o envio seguram o diálogo. */}
+          <DialogFooter>
+            <DialogCancelar onClick={() => onOpenChange(false)} />
+            <BotaoDeAcao
+              type="submit"
+              estado={busy ? "andamento" : "repouso"}
+              icone={<PackageOpen aria-hidden="true" />}
+              rotulo={retryingIntent ? "Tentar de novo" : "Criar conferência"}
+              andamento="Criando…"
+              bloqueado={!busy && (fotos.enviando || (!retryingIntent && (!canSubmit || (duplicates.length > 0 && !duplicateConfirmed))))}
+            />
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
@@ -1381,52 +1454,55 @@ function LinhaConferida({
   );
 }
 
+/** As linhas da conferência como a ficha as traz: o físico só da linha já conferida, e sem a observação nem o código. */
+function linhasDaConferencia(items: NonNullable<WarehouseTask["items"]>) {
+  return items.map((item) => ({
+    id: item.id || "",
+    receivedQty:
+      typeof item.received_qty === "number" &&
+      ["ok", "short", "over", "divergent"].includes(normalizeStatus(item.conference_status))
+        ? String(item.received_qty)
+        : "",
+    location: item.location || "RECEBIMENTO",
+    unitCost: typeof item.unit_cost === "number" && item.unit_cost > 0 ? String(item.unit_cost) : "",
+    notes: "",
+    code: "",
+  }));
+}
+
+/** A chave da gravação da conferência da chegada: a ficha espera por ela para concluir a entrada. */
+export function chaveDaConferencia(taskId: string) {
+  return ["salvar-conferencia", taskId] as const;
+}
+
 export function ReceivingConferenceSection({
   task,
+  concluindo = false,
 }: {
   task: WarehouseTask;
+  /** A entrada está sendo concluída: a conferência espera. */
+  concluindo?: boolean;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [lines, setLines] = useState(() =>
-    (task.items ?? []).map((item) => ({
-      id: item.id || "",
-      receivedQty:
-        typeof item.received_qty === "number" &&
-        ["ok", "short", "over", "divergent"].includes(
-          normalizeStatus(item.conference_status),
-        )
-          ? String(item.received_qty)
-          : "",
-      location: item.location || "RECEBIMENTO",
-      unitCost:
-        typeof item.unit_cost === "number" && item.unit_cost > 0
-          ? String(item.unit_cost)
-          : "",
-      notes: "",
-      code: "",
-    })),
-  );
+  const [lines, setLines] = useState(() => linhasDaConferencia(task.items ?? []));
+  // A releitura da ficha (o intervalo de 60 s do Receber, a volta da rede, o Atualizar) traz as linhas do servidor, mas
+  // não apaga o que só a pessoa tem: a observação e o código da etiqueta não voltam na ficha. Sem isso, a conferência
+  // que valeu sem resposta, relida, virava outro pedido (chave nova) e gravava de novo (carregamento v2, parte 13k).
+  // Outra chegada recomeça as linhas.
+  const chegadaDasLinhas = useRef(task.id);
   useEffect(() => {
-    setLines(
-      (task.items ?? []).map((item) => ({
-        id: item.id || "",
-        receivedQty:
-          typeof item.received_qty === "number" &&
-          ["ok", "short", "over", "divergent"].includes(
-            normalizeStatus(item.conference_status),
-          )
-            ? String(item.received_qty)
-            : "",
-        location: item.location || "RECEBIMENTO",
-        unitCost:
-          typeof item.unit_cost === "number" && item.unit_cost > 0
-            ? String(item.unit_cost)
-            : "",
-        notes: "",
-        code: "",
-      })),
-    );
+    const mesmaChegada = chegadaDasLinhas.current === task.id;
+    chegadaDasLinhas.current = task.id;
+    setLines((atuais) => {
+      const daFicha = linhasDaConferencia(task.items ?? []);
+      if (!mesmaChegada) return daFicha;
+      const digitadas = new Map(atuais.filter((linha) => linha.id).map((linha) => [linha.id, linha]));
+      return daFicha.map((linha) => {
+        const antes = digitadas.get(linha.id);
+        return antes ? { ...linha, notes: antes.notes, code: antes.code } : linha;
+      });
+    });
   }, [task.id, task.items]);
 
   const conferenceRows = (task.items ?? []).map((item, index) => {
@@ -1499,26 +1575,41 @@ export function ReceivingConferenceSection({
     );
   }
 
+  // A conferência com uma chave nova a cada toque gravava de novo, na repetição depois de um resultado incerto, as
+  // quantidades e o evento (a chegada já em conferência aceita outra). A tentativa é a chegada e as linhas que vão ao
+  // servidor, normalizadas (o custo 12,50 relido como 12,5 é o mesmo pedido); o corpo é o da primeira, com o status que
+  // a tela viu, e o servidor devolve o recibo dela, mesmo com a ficha relida (carregamento v2, parte 13k). Depois do
+  // resultado incerto, o botão diz "Tentar de novo" enquanto o pedido é o mesmo.
+  const tentativaDaConferencia = useTentativaDaEscrita();
+  const linhasParaGravar = lines
+    .filter((line) => line.id)
+    .map((line) => ({
+      inbound_item_id: line.id,
+      received_qty: Number(line.receivedQty),
+      location_id: line.location,
+      unit_cost: line.unitCost.trim() ? Number(line.unitCost) : undefined,
+      notes: line.notes || undefined,
+      client_item_code: line.code.trim() || undefined,
+    }));
+  const pedidoDaConferencia = { receiptId: receiptIdFromTask(task), lines: linhasParaGravar };
   const saveConference = useMutation<unknown, Error>({
-    mutationFn: () =>
-      fetchJson(`/api/warehouse/receipts/${encodeURIComponent(receiptIdFromTask(task))}/conference`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+    mutationKey: chaveDaConferencia(task.id),
+    mutationFn: () => {
+      const { receiptId } = pedidoDaConferencia;
+      return tentativaDaConferencia.enviar(
+        pedidoDaConferencia,
+        () => ({
           expected_status: normalizeStatus(task.status),
-          idempotency_key: crypto.randomUUID(),
-          lines: lines
-            .filter((line) => line.id)
-            .map((line) => ({
-              inbound_item_id: line.id,
-              received_qty: Number(line.receivedQty),
-              location_id: line.location,
-              unit_cost: line.unitCost.trim() ? Number(line.unitCost) : undefined,
-              notes: line.notes || undefined,
-              client_item_code: line.code.trim() || undefined,
-            })),
+          lines: linhasParaGravar,
         }),
-      }),
+        (corpo) =>
+          fetchJson(`/api/warehouse/receipts/${encodeURIComponent(receiptId)}/conference`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(corpo),
+          }),
+      );
+    },
     onSuccess: () => {
       toast({
         title: "Conferência salva",
@@ -1526,15 +1617,13 @@ export function ReceivingConferenceSection({
           ? "Divergência registrada. Revise antes de concluir a entrada."
           : "Agora a entrada pode ser concluída para atualizar o estoque.",
       });
-      void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
       void queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
+      // A gravação só acaba quando a bancada relê: até lá, "Concluir entrada" espera, porque a chegada na ficha ainda
+      // é a de antes (sem a divergência que pede a justificativa).
+      return queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
     },
     onError: (error) => {
-      toast({
-        title: "Não foi possível salvar a conferência",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast({ ...avisoDoErroDaEscrita(error, "Não foi possível salvar a conferência"), description: getErrorMessage(error) });
     },
   });
 
@@ -1560,19 +1649,16 @@ export function ReceivingConferenceSection({
             "created" e "checking") e por quem opera o armazém. */}
         {editavel ? (
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
+            <BotaoDeAcao
               size="sm"
+              estado={saveConference.isPending ? "andamento" : "repouso"}
+              icone={<ClipboardCheck aria-hidden="true" />}
+              className="max-md:min-h-11"
+              rotulo={tentativaDaConferencia.repete(pedidoDaConferencia) ? "Tentar de novo" : "Salvar conferência"}
+              andamento="Salvando…"
+              bloqueado={!saveConference.isPending && (hasInvalidLine || concluindo)}
               onClick={() => saveConference.mutate()}
-              disabled={saveConference.isPending || hasInvalidLine}
-            >
-              {saveConference.isPending ? (
-                <RefreshCw data-icon="inline-start" className="animate-spin" />
-              ) : (
-                <ClipboardCheck data-icon="inline-start" />
-              )}
-              Salvar conferência
-            </Button>
+            />
           </div>
         ) : null}
       </div>
@@ -1710,7 +1796,7 @@ export function ReceivingConferenceSection({
                 value={line?.notes ?? ""}
                 onChange={(event) => setLine(index, { notes: event.target.value })}
                 className="mt-3 min-h-16"
-                placeholder="Observação da conferência, avaria, falta ou sobra..."
+                placeholder="Observação da conferência, avaria, falta ou sobra…"
               />
             </div>
           );

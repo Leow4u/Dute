@@ -125,6 +125,7 @@ describe("Pedidos › Romaneio: o tamanho que mora só no campo Tamanho", () => 
   it("enquanto o cadastro não chega, o romaneio espera: não sai sem o tamanho", () => {
     const html = pagina(new QueryClient());
     expect(produtosDaFolha(html)).toEqual([]);
-    expect(html).toContain("Carregando");
+    // A espera do carregamento v2: a região está na tela desde 0 ms, e o rótulo ("Carregando o pedido…") entra aos 300 ms.
+    expect(html).toContain("data-carregando-na-regiao");
   });
 });

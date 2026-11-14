@@ -62,6 +62,10 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Progress } from "@/components/ui/progress";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -305,7 +309,7 @@ function WmsModuleSnapshot({
           {activeTask && activeQueue ? (
             <button
               type="button"
-              className="mt-2 flex w-full min-w-0 items-center justify-between gap-3 text-left text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+              className="mt-2 flex w-full min-w-0 items-center justify-between gap-3 text-left text-sm font-semibold text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
               onClick={() => onSelectTask(activeTask.id)}
             >
               <span className="truncate">
@@ -338,13 +342,14 @@ function WmsModuleEmptyState({ module }: { module: WarehouseOpsModule }) {
   );
 }
 
-function WarehouseOpsLoading() {
+/**
+ * A bancada na primeira leitura: os blocos com a forma dela, sob o título real
+ * e a linha de estado, que diz "Carregando tarefas…" aos 300 ms e é quem a
+ * região ocupada aponta (carregamento v2, parte 13c).
+ */
+function WarehouseOpsLoading({ estado }: { estado: string }) {
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <Skeleton className="h-11 w-72 rounded-lg" />
-        <Skeleton className="h-4 w-full max-w-[560px]" />
-      </div>
+    <div className="flex flex-col gap-6" aria-busy="true" aria-describedby={estado}>
       <Skeleton className="h-20 rounded-lg" />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {[1, 2, 3, 4, 5].map((item) => (
@@ -534,8 +539,8 @@ function PhysicalFlowMap({
                 <button
                   type="button"
                   className={cn(
-                    "soft-panel flex h-full min-h-[178px] w-full min-w-0 flex-col rounded-lg p-4 text-left outline-none transition-[border-color,box-shadow,background-color]",
-                    "focus-visible:ring-2 focus-visible:ring-ring/30",
+                    "soft-panel flex h-full min-h-[178px] w-full min-w-0 flex-col rounded-lg p-4 text-left transition-[border-color,box-shadow,background-color]",
+                    "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
                     activeTask && "cursor-pointer hover:border-primary/30",
                     isSelected &&
                       "border-primary/35 bg-primary/5",
@@ -633,8 +638,8 @@ function TaskListItem({
       role="button"
       tabIndex={0}
       className={cn(
-        "soft-panel flex min-w-0 cursor-pointer flex-col gap-3 rounded-lg p-4 outline-none transition-[border-color,box-shadow,background-color]",
-        "focus-visible:ring-2 focus-visible:ring-ring/30",
+        "soft-panel flex min-w-0 cursor-pointer flex-col gap-3 rounded-lg p-4 transition-[border-color,box-shadow,background-color]",
+        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
         isSelected && "border-primary/35 bg-primary/5",
         task.blocked_reason && "border-destructive/20 bg-destructive/5",
       )}
@@ -876,7 +881,7 @@ function BlockedTasksPanel({
                 type="button"
                 className={cn(
                   "min-w-0 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-left transition-[border-color,box-shadow,background-color]",
-                  "hover:border-destructive/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+                  "hover:border-destructive/35 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
                   selectedTaskId === task.id && "bg-destructive/10",
                 )}
                 onClick={() => onSelectTask(task.id)}
@@ -1003,6 +1008,9 @@ function AgentAlertsPanel({
   );
 }
 
+/** A linha de estado da bancada, que recebe o foco quando o aviso da falha sai com ele. */
+const ID_DA_LINHA_DA_BANCADA = "linha-de-estado-da-bancada";
+
 type WarehouseOpsProps = {
   initialModule?: WarehouseOpsModuleKey;
 };
@@ -1029,6 +1037,11 @@ export default function WarehouseOps({
     refetchOnWindowFocus: false,
     enabled: activeModuleKey !== "inventory",
   });
+  // A bancada que falhou sem nada lido mostra a falha com "Tentar de novo", que fica enquanto tenta; o Atualizar é o
+  // das listas, que só mostra a espera quando a pessoa toca nele: a releitura de 60 s não o gira nem o desliga
+  // (carregamento v2, parte 13c).
+  const opsNaTela = useLeituraComFalha(ops);
+  const atualizarBancada = useAtualizarLista([opsNaTela]);
 
   const queues = useMemo(
     () => normalizeQueues(ops.data?.queues),
@@ -1111,51 +1124,45 @@ export default function WarehouseOps({
 
   const pageTitle = initialModule === "receiving" ? "Receber" : activeModule.label;
 
-  if (ops.isLoading) return <WarehouseOpsLoading />;
+  // O título e a linha de estado ficam desde o começo: "Carregando tarefas…" na primeira leitura, "Atualizado às" e a
+  // releitura que falha com a bancada lida ("Não consegui atualizar · lista de 10:42"), que nunca apaga a bancada
+  // (carregamento v2, parte 13c; momentos 2 e 7). Quando o aviso da falha sai com o foco nele, o foco vai à linha.
+  const cabecalho = (
+    <PageHeader
+      title={pageTitle}
+      estado={<LinhaDeEstado id={ID_DA_LINHA_DA_BANCADA} leitura={[opsNaTela]} objeto="tarefas" />}
+      actions={
+        <>
+          {blockedEntries.length > 0 ? (
+            <Badge variant="destructive">{formatNumber(blockedEntries.length)} bloqueio(s)</Badge>
+          ) : null}
+          <BotaoAtualizar atualizando={atualizarBancada.atualizando} travado={!ops.data} onAtualizar={atualizarBancada.atualizar} />
+        </>
+      }
+    />
+  );
 
-  if (ops.error || !ops.data) {
+  if (!ops.data && opsNaTela.isError) {
     return (
       <div className="flex flex-col gap-6">
-        <PageHeader title={pageTitle} />
+        {cabecalho}
+        <FalhaNaLeitura leitura={ops} erro={opsNaTela.error} mensagem="Não consegui carregar a bancada WMS." focoAoSair={ID_DA_LINHA_DA_BANCADA} />
+      </div>
+    );
+  }
 
-        <Alert variant="destructive" className="bg-destructive/10">
-          <AlertCircle className="size-4" />
-          <AlertTitle>Não foi possível carregar a bancada WMS</AlertTitle>
-          <AlertDescription>
-            <div className="flex flex-col gap-4">
-              <p>{getErrorMessage(ops.error)}</p>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-fit"
-                onClick={() => ops.refetch()}
-              >
-                <RefreshCw data-icon="inline-start" />
-                Tentar novamente
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
+  if (!ops.data) {
+    return (
+      <div className="flex flex-col gap-6">
+        {cabecalho}
+        <WarehouseOpsLoading estado={ID_DA_LINHA_DA_BANCADA} />
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title={pageTitle}
-        actions={
-          <>
-            {blockedEntries.length > 0 ? (
-              <Badge variant="destructive">{formatNumber(blockedEntries.length)} bloqueio(s)</Badge>
-            ) : null}
-            <Button type="button" variant="outline" onClick={() => ops.refetch()} disabled={ops.isFetching}>
-              <RefreshCw data-icon="inline-start" className={cn(ops.isFetching && "animate-spin")} />
-              Atualizar
-            </Button>
-          </>
-        }
-      />
+      {cabecalho}
 
       {activeModule.key === "returns" ? (
         <ReturnWorkspace />

@@ -14,9 +14,9 @@ export default function Home() {
   const seesWarehouse = canAccessModule(role, WMS_ROLES);
   const dashboard = useGetDashboard();
   const inbox = useInicioDoWms(role);
-  // Sem o painel (carregando ou com falha), o total fica sem valor, e a linha
-  // mostra "—" no lugar de um zero (docs/plataforma/diagnostico-carregamento.md,
-  // decisão 6 de 06/11/2026).
+  // Sem o painel, o total fica sem valor: lendo, a linha mostra o bloco do
+  // esqueleto; com a falha, "—"; nunca um zero (docs/plataforma/
+  // diagnostico-carregamento.md, decisão 6 de 06/11/2026; parte 13e).
   const skus = dashboard.data === undefined ? null : Number((dashboard.data as { total_skus?: number }).total_skus ?? 0);
 
   return (
@@ -27,8 +27,11 @@ export default function Home() {
         itens: itensDoInicioDoWms(inbox.items),
         carregando: inbox.carregando,
         falhas: inbox.falhas,
-        hoje: seesWarehouse ? { ...inbox.summary, skus } : null,
+        hoje: seesWarehouse
+          ? { ...inbox.summary, skus, skusLendo: dashboard.data === undefined && !dashboard.isError, lido: inbox.armazemLido }
+          : null,
         semConexao: inbox.semConexao ? { ...inbox.semConexao, tentando: inbox.relendo, onTentar: inbox.reler } : null,
+        tentarFalhas: { tentando: inbox.relendo, onTentar: inbox.reler, alerta: !inbox.falhaSoNaReleitura },
       }}
     />
   );

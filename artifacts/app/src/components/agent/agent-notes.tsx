@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Loader2, NotebookPen, Plus, X } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, NotebookPen, Plus, X } from "lucide-react";
 
 import { origemDaNota } from "@/lib/agente/anotacoes";
-import { CHAVE_DAS_ANOTACOES, chaveNoAlvo, type ClienteDoAgente, type NotaDoAgente } from "@/lib/agente/cliente";
+import { CHAVE_DAS_ANOTACOES, chaveNoAlvo, type AcaoDaRevisao, type ClienteDoAgente, type NotaDoAgente } from "@/lib/agente/cliente";
 import { useClienteDoAgente } from "@/lib/agente/contexto";
-import { buttonVariants } from "@/components/ui/button";
+import { LeituraDaListaDoAgente } from "@/components/agent/leitura-do-agente";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { useToast } from "@/hooks/use-toast";
+import { useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,22 +30,35 @@ export function NewNote({ escrever }: { escrever: NonNullable<ClienteDoAgente["a
   const agente = useClienteDoAgente();
   const [text, setText] = useState("");
   const [visibility, setVisibility] = useState<Note["visibility"]>("equipe");
-  const save = useMutation({
-    mutationFn: () => escrever({ text: text.trim(), visibility }),
-    onSuccess: () => {
-      toast({ title: "Anotação salva: o Agent Dute passa a considerar" });
-      setText("");
-      void queryClient.invalidateQueries({ queryKey: chaveNoAlvo(agente, CHAVE_DAS_ANOTACOES) });
-    },
-    onError: (error) => toast({ title: "Não foi possível salvar", description: error instanceof Error ? error.message : "", variant: "destructive" }),
-  });
+  // A anotação nova é uma linha só: "Salvar" no relógio do carregamento v2 (Salvando…, Salva, Não salva).
+  const save = useAcaoNaLinha<"nova">();
   const short = text.trim().length < MENOR_NOTA;
+  const salvar = () => {
+    const nota = { text: text.trim(), visibility };
+    void save.executar(
+      "nova",
+      "salvar",
+      () =>
+        escrever(nota).then(
+          (resultado) => {
+            toast({ title: "Anotação salva: o Agent Dute passa a considerar" });
+            setText("");
+            return resultado;
+          },
+          (error: unknown) => {
+            toast({ title: "Não foi possível salvar", description: error instanceof Error ? error.message : "", variant: "destructive" });
+            throw error;
+          },
+        ),
+      { releitura: () => queryClient.invalidateQueries({ queryKey: chaveNoAlvo(agente, CHAVE_DAS_ANOTACOES) }) },
+    );
+  };
   return (
     <form
       className="mt-4 rounded-xl border border-border/70 p-3"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!short && !save.isPending) save.mutate();
+        if (!short && !save.ocupada("nova")) salvar();
       }}
     >
       <label htmlFor="agent-new-note" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -55,7 +70,7 @@ export function NewNote({ escrever }: { escrever: NonNullable<ClienteDoAgente["a
         onChange={(event) => setText(event.target.value)}
         maxLength={300}
         rows={2}
-        className="mt-2 w-full resize-none rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/40"
+        className="mt-2 w-full resize-none rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm focus-visible:outline-hidden focus-visible:border-primary"
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex rounded-lg border border-border bg-card p-0.5 text-xs" role="group" aria-label="Quem o agente considera">
@@ -71,9 +86,17 @@ export function NewNote({ escrever }: { escrever: NonNullable<ClienteDoAgente["a
             </button>
           ))}
         </div>
-        <button type="submit" disabled={short || save.isPending} className={buttonVariants({ size: "sm" })}>
-          <Plus className="h-3.5 w-3.5" /> Salvar
-        </button>
+        <BotaoDeAcao
+          type="submit"
+          size="sm"
+          estado={save.estado("nova", "salvar")}
+          icone={<Plus className="h-3.5 w-3.5" />}
+          rotulo="Salvar"
+          andamento="Salvando…"
+          sucesso="Salva"
+          erro="Não salva"
+          bloqueado={short && !save.ocupada("nova")}
+        />
       </div>
     </form>
   );
@@ -88,15 +111,25 @@ export function AgentNotes() {
     queryKey: notesQueryKey,
     queryFn: () => agente.anotacoes.listar(),
   });
-  const decide = useMutation({
-    mutationFn: ({ id, action, text, visibility }: { id: string; action: "approve" | "reject" | "archive"; text?: string; visibility?: Note["visibility"] }) =>
-      agente.anotacoes.decidir(id, action, { text, visibility }),
-    onSuccess: (_result, input) => {
-      toast({ title: input.action === "approve" ? "Anotação aprovada: o Agent Dute passa a considerar" : input.action === "reject" ? "Anotação recusada" : "Anotação arquivada" });
-      void queryClient.invalidateQueries({ queryKey: notesQueryKey });
-    },
-    onError: (error) => toast({ title: "Não foi possível salvar", description: error instanceof Error ? error.message : "", variant: "destructive" }),
-  });
+  // A decisão é por anotação (carregamento v2, momento 4): aprovar uma deixa as outras livres.
+  const decide = useAcaoNaLinha<string>();
+  const decidir = ({ id, action, text, visibility }: { id: string; action: AcaoDaRevisao; text?: string; visibility?: Note["visibility"] }) =>
+    void decide.executar(
+      id,
+      action,
+      () =>
+        agente.anotacoes.decidir(id, action, { text, visibility }).then(
+          (resultado) => {
+            toast({ title: action === "approve" ? "Anotação aprovada: o Agent Dute passa a considerar" : action === "reject" ? "Anotação recusada" : "Anotação arquivada" });
+            return resultado;
+          },
+          (error: unknown) => {
+            toast({ title: "Não foi possível salvar", description: error instanceof Error ? error.message : "", variant: "destructive" });
+            throw error;
+          },
+        ),
+      { releitura: () => queryClient.invalidateQueries({ queryKey: notesQueryKey }) },
+    );
 
   const list = notes.data?.notes ?? [];
   const pending = list.filter((note) => note.status === "pending");
@@ -116,11 +149,7 @@ export function AgentNotes() {
 
       {agente.anotacoes.escrever ? <NewNote escrever={agente.anotacoes.escrever} /> : null}
 
-      {notes.isLoading ? (
-        <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</p>
-      ) : notes.isError ? (
-        <p className="mt-3 text-sm text-destructive">{notes.error instanceof Error ? notes.error.message : "Não foi possível carregar."}</p>
-      ) : (
+      <LeituraDaListaDoAgente leitura={notes} rotulo="Carregando anotações…" falha="Não foi possível carregar as anotações." className="mt-4">
         <>
           <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Para aprovar{pending.length ? ` · ${pending.length}` : ""}
@@ -128,7 +157,7 @@ export function AgentNotes() {
           {pending.length ? (
             <ul className="mt-2 flex flex-col gap-2">
               {pending.map((note) => (
-                <PendingNote key={note.id} note={note} busy={decide.isPending} onDecide={(input) => decide.mutate({ id: note.id, ...input })} />
+                <PendingNote key={note.id} note={note} acoes={decide} onDecide={(input) => decidir({ id: note.id, ...input })} />
               ))}
             </ul>
           ) : (
@@ -148,14 +177,17 @@ export function AgentNotes() {
                       {note.visibility === "equipe" ? "só equipe" : "cliente e equipe"}
                     </span>
                   </span>
-                  <button
-                    type="button"
-                    disabled={decide.isPending}
-                    className="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground"
-                    onClick={() => decide.mutate({ id: note.id, action: "archive" })}
-                  >
-                    Arquivar
-                  </button>
+                  <BotaoDeAcao
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground max-md:min-h-12"
+                    estado={decide.estado(note.id, "archive")}
+                    rotulo="Arquivar"
+                    andamento="Arquivando…"
+                    sucesso="Arquivada"
+                    erro="Não arquivada"
+                    onClick={() => decidir({ id: note.id, action: "archive" })}
+                  />
                 </li>
               ))}
             </ul>
@@ -163,20 +195,23 @@ export function AgentNotes() {
             <p className="mt-1 text-sm text-muted-foreground">Nenhuma anotação valendo ainda.</p>
           )}
         </>
-      )}
+      </LeituraDaListaDoAgente>
     </section>
   );
 }
 
 function PendingNote({
   note,
-  busy,
+  acoes,
   onDecide,
 }: {
   note: Note;
-  busy: boolean;
+  acoes: Pick<AcaoNaLinha<string>, "estado" | "ocupada">;
   onDecide: (input: { action: "approve" | "reject"; text?: string; visibility?: Note["visibility"] }) => void;
 }) {
+  const ocupada = acoes.ocupada(note.id);
+  const recusar = acoes.estado(note.id, "reject");
+  const aprovar = acoes.estado(note.id, "approve");
   const [text, setText] = useState(note.text);
   const [visibility, setVisibility] = useState(note.visibility);
   return (
@@ -187,7 +222,7 @@ function PendingNote({
         maxLength={300}
         rows={2}
         aria-label="Texto da anotação"
-        className="w-full resize-none rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/40"
+        className="w-full resize-none rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm focus-visible:outline-hidden focus-visible:border-primary"
       />
       <p className="mt-1 text-xs text-muted-foreground">
         {[origemDaNota(note), note.reason ? `“${note.reason}”` : ""].filter(Boolean).join(" · ")}
@@ -207,22 +242,32 @@ function PendingNote({
           ))}
         </div>
         <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={busy}
+          <BotaoDeAcao
+            variant="outline"
+            size="sm"
+            // No celular, as ações da linha com 48 px (seção 7).
+            className="max-md:min-h-12"
+            estado={recusar}
+            icone={<X className="h-3.5 w-3.5" />}
+            rotulo="Recusar"
+            andamento="Recusando…"
+            sucesso="Recusada"
+            erro="Não recusada"
+            bloqueado={ocupada && recusar === "repouso"}
             onClick={() => onDecide({ action: "reject" })}
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            <X className="h-3.5 w-3.5" /> Recusar
-          </button>
-          <button
-            type="button"
-            disabled={busy || text.trim().length < 8}
+          />
+          <BotaoDeAcao
+            size="sm"
+            className="max-md:min-h-12"
+            estado={aprovar}
+            icone={<Check className="h-3.5 w-3.5" />}
+            rotulo="Aprovar"
+            andamento="Aprovando…"
+            sucesso="Aprovada"
+            erro="Não aprovada"
+            bloqueado={(ocupada && aprovar === "repouso") || (!ocupada && text.trim().length < MENOR_NOTA)}
             onClick={() => onDecide({ action: "approve", text: text.trim() !== note.text ? text.trim() : undefined, visibility })}
-            className={buttonVariants({ size: "sm" })}
-          >
-            <Check className="h-3.5 w-3.5" /> Aprovar
-          </button>
+          />
         </div>
       </div>
     </li>

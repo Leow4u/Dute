@@ -2,9 +2,14 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Settings2 } from "lucide-react";
 
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { useToast } from "@/hooks/use-toast";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import {
   dashboardKey,
@@ -71,16 +76,18 @@ function CostSettingsDialog({ settings, onClose }: { settings: SystemDashboard["
         method: "POST",
         body: JSON.stringify({ input_per_million: parse(input), output_per_million: parse(output), monthly_budget: parse(budget) || null }),
       }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: dashboardKey });
+    // O que gravou fecha o diálogo na hora; a releitura do painel segue por
+    // trás, sem segurar o diálogo.
+    onSuccess: () => {
       toast({ title: "Preços e orçamento salvos" });
       onClose();
+      void queryClient.invalidateQueries({ queryKey: dashboardKey });
     },
     onError: (error: Error) => toast({ title: "Não consegui salvar", description: error.message, variant: "destructive" }),
   });
   const invalid = [input, output, budget].some((value) => value.trim() !== "" && (!Number.isFinite(parse(value)) || parse(value) < 0));
   return (
-    <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
+    <Dialog open ocupado={save.isPending} onOpenChange={(open) => (!open ? onClose() : undefined)}>
       <DialogContent className="max-w-lg bg-card">
         <DialogHeader>
           <DialogTitle>Preços e orçamento do Agent Dute</DialogTitle>
@@ -104,17 +111,8 @@ function CostSettingsDialog({ settings, onClose }: { settings: SystemDashboard["
           </label>
         </div>
         <DialogFooter className="gap-2">
-          <button type="button" onClick={onClose} className="rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
-            Cancelar
-          </button>
-          <button
-            type="button"
-            disabled={invalid || save.isPending}
-            onClick={() => save.mutate()}
-            className="rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background hover:bg-foreground/85 disabled:opacity-50"
-          >
-            {save.isPending ? "Salvando…" : "Salvar"}
-          </button>
+          <DialogCancelar className="rounded-xl" onClick={onClose} />
+          <BotaoDeAcao tinta className="rounded-xl" estado={save.isPending ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando…" bloqueado={!save.isPending && invalid} onClick={() => save.mutate()} />
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -122,22 +120,38 @@ function CostSettingsDialog({ settings, onClose }: { settings: SystemDashboard["
 }
 
 export function OwnerDashboard() {
+  const queryClient = useQueryClient();
   const [editingCosts, setEditingCosts] = useState(false);
-  const dashboard = useQuery<SystemDashboard, Error>({
+  const leitura = useQuery<SystemDashboard, Error>({
     queryKey: dashboardKey,
     queryFn: () => fetchJson<SystemDashboard>("/api/system/dashboard"),
     refetchInterval: 60_000,
   });
+  // A nova tentativa sem dado não volta a "Carregando o painel…": a falha fica, com "Tentando de novo…".
+  const dashboard = useLeituraComFalha(leitura);
 
   // Sem rede, o painel que já estava fica, com a hora da leitura; sem nada
   // lido, o aviso (decisão 2 do celular).
   const semRede = semConexaoNaLeitura(dashboard);
-  const reler = () => void dashboard.refetch();
+  const reler = () => leitura.refetch();
 
-  if (dashboard.isLoading) return <p className="text-sm text-muted-foreground">Carregando o painel…</p>;
-  if (semRede && semRede.lidaEm === null) return <BlocoSemConexao tentando={dashboard.isFetching} onTentar={reler} />;
-  if (!dashboard.data || (dashboard.isError && !semRede)) {
-    return <p className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-4 text-sm text-destructive-soft-foreground">Não consegui carregar o painel: {dashboard.error?.message}</p>;
+  if (dashboard.isLoading) {
+    return (
+      <div className="rounded-lg border border-border bg-card px-5 py-4">
+        <CarregandoNaRegiao rotulo="Carregando o painel…" onTentar={() => void relerDoZero(queryClient, [dashboardKey])} />
+      </div>
+    );
+  }
+  if (semRede && semRede.lidaEm === null) return <BlocoSemConexao tentando={dashboard.isFetching} onTentar={() => void reler()} />;
+  // Erro nunca vira vazio: sem nada lido, a falha com "Tentar de novo"; com o painel lido, ele fica (abaixo).
+  if (!dashboard.data) {
+    return (
+      <ErroNaLeitura
+        mensagem={`Não consegui carregar o painel: ${dashboard.error?.message ?? "o servidor não respondeu."}`}
+        tentando={dashboard.isFetching}
+        onTentar={() => void reler()}
+      />
+    );
   }
   const data = dashboard.data;
   const { usage, routines } = data;
@@ -147,7 +161,17 @@ export function OwnerDashboard() {
   return (
     <div className="space-y-4">
       {semRede && semRede.lidaEm !== null ? (
-        <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={dashboard.isFetching} onTentar={reler} />
+        <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={dashboard.isFetching} onTentar={() => void reler()} />
+      ) : dashboard.isError ? (
+        // A releitura que falhou não apaga o painel lido (necessidade 8): ele fica, e a falha em cima, escrita e sem
+        // falar: quem relê a cada minuto é o intervalo, e a releitura automática não fala (momento 7).
+        <FalhaNaSecao
+          mensagem={`Não consegui atualizar o painel: ${dashboard.error?.message ?? "o servidor não respondeu."}`}
+          alerta={false}
+          tentando={dashboard.isFetching}
+          onTentar={reler}
+          className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+        />
       ) : null}
       {usage.month.over_budget ? (
         <p className="flex items-start gap-2 rounded-md border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm text-warning-soft-foreground" role="alert">

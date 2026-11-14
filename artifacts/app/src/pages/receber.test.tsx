@@ -36,6 +36,12 @@ describe("Receber na v3", () => {
     expect(telaDoWmsNaV3("/wms/receber")).toBe(true);
   });
 
+  it("os grupos são os de sempre: o cartão sem saltos de Pedidos (carregamento v2, parte 6c) não entra aqui sem querer", () => {
+    expect(TELA).toContain("<QueueGroup");
+    expect(TELA).not.toContain("semSaltos");
+    expect(TELA).not.toContain("useListaSemSaltos");
+  });
+
   it("sem legenda: sem a dica dos grupos, o vazio diz o dado e o rótulo do aviso não é vermelho", () => {
     expect(TELA).not.toMatch(/\bhint=/);
     expect(TELA).toContain('empty="Nenhuma chegada para conferir."');
@@ -46,12 +52,12 @@ describe("Receber na v3", () => {
   it("uma ação principal: a da primeira tarefa; a chegada avulsa é secundária", () => {
     expect(TELA).toContain("const principal = tarefaPrincipal(board);");
     expect(TELA).toMatch(/principal === entry\.task\.id \? "default" : "outline"/);
-    expect(TELA).toMatch(/<Button type="button" variant="outline" onClick=\{\(\) => setUnplannedOpen\(true\)\}>/);
+    expect(TELA).toMatch(/<Button\s+type="button"\s+variant="outline"[\s\S]{0,400}?setUnplannedOpen\(true\)/);
   });
 
 
   it("a chegada por caixa recebida fica em Recebidas, por guardar, com as caixas guardadas, até a última guarda", () => {
-    expect(TELA).toContain('<QueueGroup title="Recebidas, por guardar" count={board.guardando.length} empty={null}>');
+    expect(TELA).toContain('<QueueGroup title="Recebidas, por guardar" count={lendo ? null : board.guardando.length} empty={null} carregando={fantasmas("guardando", 1)} cascata={paraConferir}>');
     expect(TELA).toContain("{caixasGuardadas(entry.task)}");
     expect(TELA).toContain("meta={guardandoRowMeta(entry.task)}");
     expect(TELA).toContain("board.check.length + board.guardando.length + board.store.length");
@@ -61,8 +67,8 @@ describe("Receber na v3", () => {
   });
 
   it("Recebidos em dois grupos, Chegadas e Guardas, cada um com o vazio dizendo o dado (06/11/2026)", () => {
-    expect(TELA).toContain('<QueueGroup title="Chegadas" count={board.chegadas.length} empty="Nenhuma chegada recebida.">');
-    expect(TELA).toContain('<QueueGroup title="Guardas" count={board.guardas.length} empty="Nenhuma guarda concluída.">');
+    expect(TELA).toContain('<QueueGroup title="Chegadas" count={lendo ? null : board.chegadas.length} empty="Nenhuma chegada recebida." barraDoTopo={barraDoTopo} carregando={fantasmas("chegadas", 0)}>');
+    expect(TELA).toContain('<QueueGroup title="Guardas" count={lendo ? null : board.guardas.length} empty="Nenhuma guarda concluída." carregando={fantasmas("guardas", 1)} cascata={board.chegadas.length}>');
     expect(TELA).toContain("rowDone(entry, receivingRowMeta(entry.task))");
     expect(TELA).toContain("rowDone(entry, putawayRowMeta(entry.task))");
     expect(TELA).not.toContain("board.done");
@@ -148,7 +154,8 @@ describe("o Receber para quem só consulta (o suporte)", () => {
 
   it("a ficha mostra a chegada sem Concluir entrada, Divergência, Salvar conferência nem a justificativa", () => {
     // As ações são botões; "Divergências" e "Divergência física detectada" são dados da conferência.
-    const acoes = ["Concluir entrada</button>", "Divergência</button>", "Salvar conferência</button>", "Justificativa da divergência</label>"];
+    // O BotaoDeAcao (carregamento v2, parte 13c) põe o rótulo na camada atual: o fim da camada, não o do botão.
+    const acoes = ["Concluir entrada</span>", "Divergência</span>", "Salvar conferência</span>", "Justificativa da divergência</label>"];
     const operador = fichaDaChegada(chegada);
     for (const acao of acoes) expect(operador).toContain(acao);
     const consulta = fichaDaChegada(chegada, true);
@@ -158,7 +165,7 @@ describe("o Receber para quem só consulta (o suporte)", () => {
 
   it("a tela esconde a chegada avulsa, troca a ação da linha por Ver e não liga o aviso", () => {
     expect(TELA).toContain("const operador = canOperateWarehouse(user?.publicMetadata.role);");
-    expect(TELA).toMatch(/\{operador \? \(\s*<Button type="button" variant="outline" onClick=\{\(\) => setUnplannedOpen\(true\)\}>/);
+    expect(TELA).toMatch(/\{operador \? \(\s*<Button\s+type="button"\s+variant="outline"[\s\S]{0,400}?setUnplannedOpen\(true\)/);
     expect(TELA).toContain('{operador ? label : "Ver"}');
     expect(TELA).toContain("entry={operador && !isCancelledReceipt(selected.task) ? selected : somenteConsulta(selected)}");
     expect(TELA).toContain("operador && noticeChoice?.editable");
@@ -244,12 +251,26 @@ describe("histórico de cancelamento", () => {
 /** Sem rede (docs/plataforma/diagnostico-carregamento.md, decisão 2 do celular, de 06/11/2026). */
 describe("Receber sem conexão", () => {
   it("a lista lida fica com a hora; sem nada lido, o aviso; a falta de conexão não troca a lista pelo erro", () => {
-    expect(TELA).toContain("const semRede = semConexaoNaLeitura(ops, requests);");
-    expect(TELA).toMatch(/!fichaLarga && !ops\.isLoading && semRede && semRede\.lidaEm !== null \? \(\s*<FaixaSemConexao lidaEm=\{semRede\.lidaEm\}/);
-    // O aviso vem depois do carregando e antes do erro e das filas.
-    const aviso = TELA.indexOf(") : semRede && semRede.lidaEm === null ? (");
-    expect(aviso).toBeGreaterThan(TELA.indexOf("Carregando chegadas..."));
-    expect(aviso).toBeLessThan(TELA.indexOf("Não consegui carregar as chegadas."));
-    expect(TELA).toContain(") : ops.error && !semRede ? (");
+    expect(TELA).toContain("const semRede = semConexaoNaLeitura(ops, requestsNaTela);");
+    // A lista lida, com a falta: a hora dela fica na linha de estado sob o título (parte 7b), não na faixa que empurra a lista.
+    // A troca de cliente também é pedida pela pessoa: passados 5 s, "Atualizando…" (parte 10).
+    expect(TELA).toContain('estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando || trocandoDeCliente} resumo={resumo} />}');
+    // A falha fica na tela durante a releitura automática (a junção das partes 9, 11 e 12).
+    expect(TELA).toContain("const leiturasDaLista = [opsNaTela, requestsNaTela];");
+    expect(TELA).not.toContain("FaixaSemConexao");
+    expect(TELA).not.toContain("Carregando chegadas...");
+    // Na primeira leitura, a lista com a forma final, com as linhas-fantasma (parte 8); depois, o aviso, antes do erro
+    // e das filas.
+    // Só a primeira leitura da tela, e a falha das filas não espera os avisos.
+    // Com a lista dos clientes que falhou, a falha do cliente ativo, e não a espera (a junção das partes 10 e 13).
+    expect(TELA).toContain("const lendo = !clienteFalhou && !listaJaLida && !opsNaTela.isError && (opsNaTela.isLoading || requestsNaTela.isLoading);");
+    expect(TELA).toContain(": !lendo && semRede && semRede.lidaEm === null ? (");
+    expect(TELA.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(TELA.indexOf("<FalhaDasChegadas focoAoSair={idDaLinha}"));
+    // Só a leitura sem nada lido troca a lista pelo aviso: a releitura que falha fica na linha de estado (parte 10).
+    // Os avisos do cliente que não vieram (a troca que falhou) também (a revisão da parte 10), e a falha fica na
+    // tela durante a releitura automática (a junção das partes 9, 11 e 12).
+    expect(TELA).toContain("const falhaNaTela = !lendo && !semRede && ((Boolean(opsNaTela.error) && !opsNaTela.data) || avisos.falhou);");
+    expect(TELA).toContain(") : falhaNaTela ? (");
+    expect(TELA).toContain("Não consegui carregar as chegadas.");
   });
 });

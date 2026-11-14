@@ -5,7 +5,7 @@ import { useSearch } from "wouter";
 import { colaboradorDaLeitura, veiculoDaLeitura } from "@/lib/operacao/cadastro";
 import { clienteDaLeitura, comDemanda, demandaDaFila, hojeIso, nomesPorCodigo, osDaLeitura } from "@/lib/operacao/fila";
 import { SEM_FILTRO, demandaDoHoje, opcoesDosFiltros, quadroDoHoje, resumoDoHoje, type FiltrosDoHoje } from "@/lib/operacao/hoje";
-import { useLeitura } from "@/lib/operacao/leitura";
+import { novaTentativaDe, useLeitura } from "@/lib/operacao/leitura";
 import { osDaBusca } from "@/lib/operacao/navegacao";
 import { solicitacaoDaOperacao } from "@/lib/operacao/solicitacoes";
 
@@ -70,6 +70,7 @@ export default function PaginaHoje() {
   return (
     <HojeView
       estado={estadoDe([ordens, pessoas, veiculos, demandas, clientes, solicitacoes])}
+      leitura={novaTentativaDe([ordens, pessoas, veiculos, demandas, clientes, solicitacoes])}
       resumo={resumoDoHoje(agora, quadro)}
       quadro={quadro}
       filtros={filtros}

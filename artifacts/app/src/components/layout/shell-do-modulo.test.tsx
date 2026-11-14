@@ -3,9 +3,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
+import { ProvedorDaConexao, type EstadoDaConexao } from "@/lib/carregando/estado-da-conexao";
 import { getNavigationForProfileRole, menuDoComercial, menuDoOperacao } from "@/lib/modules";
 import { opcoesDoSeletor, type Liberacoes } from "@/lib/seletor-de-modulo";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { conexaoEm } from "@/test/conexao";
 import { textosForaDaLista } from "@/test/textos";
 
 import { ShellDoModulo, type ContadorDoItem } from "./shell-do-modulo";
@@ -13,22 +15,28 @@ import { ShellDoModulo, type ContadorDoItem } from "./shell-do-modulo";
 // O CI roda o vitest sem VITE_FIREBASE_PROJECT_ID: as liberações vão explícitas.
 const TUDO: Liberacoes = { comercial: true, plataforma: true, operacao: true };
 
-function comercial(path: string, opcoes = opcoesDoSeletor("owner", null, path, TUDO), contadores?: Record<string, ContadorDoItem>, online = true) {
+function comercial(
+  path: string,
+  opcoes = opcoesDoSeletor("owner", null, path, TUDO),
+  contadores?: Record<string, ContadorDoItem>,
+  conexao: EstadoDaConexao = "conectado",
+) {
   return renderToStaticMarkup(
-    <Router ssrPath={path}>
-      <ShellDoModulo
-        ambiente="comercial"
-        atual={{ label: "Comercial", icon: Briefcase }}
-        opcoes={opcoes}
-        items={menuDoComercial("owner", true)}
-        contadores={contadores}
-        basePath=""
-        online={online}
-        conta={() => <button type="button">Minha conta</button>}
-      >
-        <h1>Fila</h1>
-      </ShellDoModulo>
-    </Router>,
+    <ProvedorDaConexao value={conexaoEm(conexao)}>
+      <Router ssrPath={path}>
+        <ShellDoModulo
+          ambiente="comercial"
+          atual={{ label: "Comercial", icon: Briefcase }}
+          opcoes={opcoes}
+          items={menuDoComercial("owner", true)}
+          contadores={contadores}
+          basePath=""
+          conta={() => <button type="button">Minha conta</button>}
+        >
+          <h1>Fila</h1>
+        </ShellDoModulo>
+      </Router>
+    </ProvedorDaConexao>,
   );
 }
 
@@ -41,7 +49,6 @@ function operacao(path: string) {
         opcoes={opcoesDoSeletor("interno", null, path, TUDO)}
         items={menuDoOperacao("interno", true)}
         basePath=""
-        online
         conta={() => <button type="button">Minha conta</button>}
       >
         <h1>Início</h1>
@@ -60,7 +67,6 @@ function wms(path: string, conteudoV3 = false, contadores?: Record<string, Conta
         items={getNavigationForProfileRole("admin", null, true, false)}
         contadores={contadores}
         basePath=""
-        online
         conteudoV3={conteudoV3}
         abaixoDoSeletor={(compact) => <button type="button">{compact ? "BTG" : "Cliente ativo BTG"}</button>}
         conta={() => <button type="button">Minha conta</button>}
@@ -138,9 +144,14 @@ describe("shell v3 do módulo", () => {
     expect(barra).toMatch(/<button[^>]*aria-expanded="false"[^>]*>.*<span>Mais<\/span><\/button>/);
   });
 
-  it("sem conexão, uma linha de status e mais nada", () => {
-    const html = comercial("/comercial", undefined, undefined, false);
-    expect(html).toMatch(/<p role="status"[^>]*>.*Sem conexão<\/p>/);
+  it("sem conexão (o aparelho sem rede há 3 s, pelo estado único), a faixa no alto, sem região viva: o Anunciador diz", () => {
+    const html = comercial("/comercial", undefined, undefined, "sem-conexao");
+    expect(html).toMatch(/<p class="[^"]*bg-warning-soft[^"]*">.*Sem conexão<\/p>/);
+    expect(html).not.toMatch(/role="status"|role="alert"|aria-live/);
+  });
+
+  it("com o aparelho conectado e o servidor sem resposta, e na piscada de menos de 3 s, nada no alto: Reconectando é da lista", () => {
+    for (const estado of ["conectado", "reconectando"] as const) expect(comercial("/comercial", undefined, undefined, estado), estado).not.toContain("Sem conexão");
   });
 
   it("a Operação usa o mesmo shell, com as telas dela", () => {
@@ -167,7 +178,6 @@ describe("shell v3 do módulo", () => {
           opcoes={opcoesDoSeletor("comercial", null, "/comercial/agente", TUDO)}
           items={menuDoComercial("comercial", true, true)}
           basePath=""
-          online
           abaixoDoSeletor={(compact) => <button type="button">{compact ? "BTG" : "Cliente ativo BTG"}</button>}
           conta={() => <button type="button">Minha conta</button>}
         >

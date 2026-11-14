@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ColaboradorDaLista, VeiculoDaLista } from "@/lib/operacao/cadastro";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import {
   ColaboradoresView,
@@ -314,5 +315,15 @@ describe("tela de veículos", () => {
 
   it("a ficha não tem problema de acessibilidade", async () => {
     expect(await violacoesDeAcessibilidade(veiculos([CAMINHAO], fichaDoVeiculo(CAMINHAO), CAMINHAO))).toEqual([]);
+  });
+});
+
+describe("O cadastro sem conexão (carregamento v2, parte 13j)", () => {
+  const lista = { busca: "", onBusca: noop, ficha: null, editando: null, onFicha: noop, onNovo: noop, onAbrir: noop, onFechar: noop, onSalvar: noop, onAtivo: noop, ocupado: false, erro: null };
+
+  it("colaboradores e veículos: o aviso, a faixa e a falha do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    const esperado = rotulosDaFalta({ mensagem: "Não foi possível carregar o cadastro." });
+    expect(await estadosDaFalta((leitura, situacao) => <ColaboradoresView estado={situacao} itens={situacao === "pronto" ? [ANA, BRUNO] : []} leitura={leitura} {...lista} />)).toEqual(esperado);
+    expect(await estadosDaFalta((leitura, situacao) => <VeiculosView estado={situacao} itens={situacao === "pronto" ? [VAN, CAMINHAO] : []} leitura={leitura} {...lista} />)).toEqual(esperado);
   });
 });

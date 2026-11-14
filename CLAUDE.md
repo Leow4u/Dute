@@ -267,6 +267,28 @@ documentação de produto e operação está em `docs/`.
   `axe` (`src/test/acessibilidade.ts`, WCAG 2.1 A e AA). O "Precisa de você"
   de cada Início é a única regra de contagem: a entrada e o menu contam por
   ela (`lib/resumo-do-modulo.ts`).
+- **Carregamento v2 (aprovado em 12/11/2026; as 13 partes no PR 610):** a
+  espera tem forma e lugar, pelo relógio de `lib/carregando/tempo.ts` (300 ms
+  para aparecer, 500 ms de mínimo, 10 s de demora, 70 s de desistência; o
+  `useEspera` conta o marco que o tique alcançou). O indicador é a caixa
+  chanfrada do `Spinner`, em tinta; o esqueleto é neutro (`Esqueleto`); a ação
+  com espera usa o `BotaoDeAcao` (na linha, o `useAcaoNaLinha`), nunca só o
+  `disabled` a 50%; o diálogo que grava não fecha no meio (parte 13a). As
+  listas têm a `LinhaDeEstado` sob o título e a forma final na primeira
+  leitura; a região que lê é a `CarregandoNaRegiao` e a tela que abre, a
+  `CarregandoTela`; a falha nunca vira vazio, nem o "Nenhum…" antes de ler
+  (a `LeituraPendenteNaRegiao` nos formulários). A conexão tem um estado só
+  ("Reconectando…" e "Sem conexão", com histerese) e uma região viva da
+  espera, o `Anunciador` (o `useAnuncio` devolve o retirar; o resultado da
+  ação sai pelo toast e, antes do app, fala a região da abertura). A trava
+  `lib/carregando/trava.test.ts` reprova `animate-spin` fora do `Spinner`,
+  `animate-pulse` fora do `Esqueleto` e do `Skeleton`, "..." de três pontos,
+  o anel de foco fora do `ring-foco` e o foco sem sinal (o `outline-none`).
+  Teste de espera nunca usa tempo fixo de relógio real (espera o estado
+  chegar, ou relógio falso): o CI caiu assim duas vezes.
+  Regra em `docs/sistema-visual.md`, "Carregamento"; decisões, o registro de
+  cada parte e o que espera o Leonardo em
+  `docs/plataforma/diagnostico-carregamento.md`, seção 10.
 - **Operação e campo nunca veem valores.** Preço só para `owner`, `admin`,
   `financeiro` e `comercial`; o cliente vê os das próprias OS e faturas.
 

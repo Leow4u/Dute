@@ -5,12 +5,17 @@ import { ArrowLeft, FilePlus, FileText, MapPin, Plus, Search, Send, User } from 
 import { formatarReais } from "@workspace/dominio";
 
 import { AcoesDepoisDoEnvio } from "@/components/comercial/acoes-depois-do-envio";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
+import { NumeroLido } from "@/components/ui/numero-lido";
 import { dataBr, type ContratoResumo } from "@/lib/comercial/clientes";
 import { ROTULO_DA_ACAO, type AcaoDepoisDoEnvio, type AcoesDaEtapa } from "@/lib/comercial/depois-do-envio";
 import { hrefDoDocumento } from "@/lib/comercial/documento";
-import { ROTULO_DO_ENVIO, type AcaoDeEnvio } from "@/lib/comercial/envio";
+import { ANDAMENTO_DO_ENVIO, ROTULO_DO_ENVIO, type AcaoDeEnvio } from "@/lib/comercial/envio";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
 import {
   ETAPA_ROTULO,
   SEGMENTOS_DA_FILA,
@@ -60,6 +65,8 @@ export type ContextoDaFila = {
 
 export type FilaViewProps = {
   estado: "carregando" | "erro" | "pronto";
+  /** A nova tentativa das leituras da fila (parte 13g). */
+  leitura?: NovaTentativa;
   itens: ItemDaFila[];
   agora: Date;
   segmento: SegmentoDaFila;
@@ -143,10 +150,11 @@ export function MarcaDaOrigem({ origem, rotulo }: { origem: OrigemLinha; rotulo:
   );
 }
 
+/** O cartão do vazio, da espera e da falha no lugar da lista. */
+const CAIXA = "rounded-lg border border-border bg-card px-5 py-7";
+
 function Vazio({ children }: { children: ReactNode }) {
-  return (
-    <div className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-bold text-muted-foreground">{children}</div>
-  );
+  return <div className={cn(CAIXA, "text-center text-sm font-bold text-muted-foreground")}>{children}</div>;
 }
 
 function totalEmReais(item: ItemDaFila): string {
@@ -200,7 +208,7 @@ function Cabecalho({ busca, onBusca, onNovo, onOrcarExecucao }: FilaViewProps) {
   );
 }
 
-function Segmentos({ itens, segmento, onSegmento }: FilaViewProps) {
+function Segmentos({ estado, itens, segmento, onSegmento }: FilaViewProps) {
   const contagem = contarSegmentos(itens);
   return (
     <div role="group" aria-label="Etapa" className="flex flex-wrap items-center gap-2">
@@ -219,7 +227,9 @@ function Segmentos({ itens, segmento, onSegmento }: FilaViewProps) {
           >
             {item === "todas" ? null : <Ponto etapa={item} anel={ativo} />}
             {SEGMENTO_ROTULO[item]}
-            <Contador invertido={ativo}>{contagem[item]}</Contador>
+            <Contador invertido={ativo}>
+              <NumeroLido estado={estado}>{contagem[item]}</NumeroLido>
+            </Contador>
           </button>
         );
       })}
@@ -294,9 +304,12 @@ export function LinhaDaFila({
 
 function Lista(props: FilaViewProps) {
   const { estado, itens, segmento, busca, selecionado, agora, contexto, onSelecionar, onAbrir, fichaAberta } = props;
+  const leitura = props.leitura ?? SEM_NOVA_TENTATIVA;
   let conteudo: ReactNode;
-  if (estado === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
-  else if (estado === "erro") conteudo = <Vazio>Não foi possível carregar os orçamentos.</Vazio>;
+  if (estado === "carregando")
+    conteudo = <CarregandoNaRegiao rotulo="Carregando os orçamentos…" continuaARota onTentar={leitura.tentar} className={CAIXA} />;
+  else if (estado === "erro")
+    conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar os orçamentos." className={CAIXA} />;
   else {
     const grupos = filtrarFila(itens, segmento, busca);
     conteudo = grupos.length ? (
@@ -452,10 +465,15 @@ function Ficha(props: FilaViewProps & { selecionado: ItemDaFila }) {
       </Secao>
       <div className="flex flex-wrap gap-2 px-5 pb-5 pt-4">
         {envio.acao ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => envio.onEnviar(item, envio.acao!)} disabled={envio.ocupado}>
-            <Send aria-hidden="true" />
-            {ROTULO_DO_ENVIO[envio.acao]}
-          </Button>
+          <BotaoDeAcao
+            variant="outline"
+            size="sm"
+            estado={envio.ocupado ? "andamento" : "repouso"}
+            icone={<Send aria-hidden="true" />}
+            rotulo={ROTULO_DO_ENVIO[envio.acao]}
+            andamento={ANDAMENTO_DO_ENVIO[envio.acao]}
+            onClick={() => envio.onEnviar(item, envio.acao!)}
+          />
         ) : null}
         <AcoesDepoisDoEnvio acoes={depois.acoes} onAcao={depois.onAcao} ocupado={depois.ocupado} tamanho="sm" />
         {item.semOrcamento ? null : (
@@ -491,6 +509,7 @@ export function FilaView(props: FilaViewProps) {
     <div className="v3 flex flex-col gap-5 text-foreground">
       <Cabecalho {...props} />
       <Segmentos {...props} />
+      {estado === "pronto" && props.leitura ? <FaixaAoVivo leitura={props.leitura} /> : null}
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
         <Lista {...props} />
         {estado === "pronto" && selecionado ? <Ficha {...props} selecionado={selecionado} /> : null}

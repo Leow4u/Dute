@@ -7,6 +7,7 @@ import { acoesDepoisDoEnvio, type ItemParaAcoes } from "@/lib/comercial/depois-d
 import { acoesDoOrcamento, adicionarDaTabela, catalogoDaTabela, formDoOrcamento, type FormOrcamento } from "@/lib/comercial/montar";
 import { vistoriaDaDemanda } from "@/lib/comercial/vistoria-da-operacao";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import {
   EstadoDoOrcamento,
@@ -17,6 +18,7 @@ import {
   type DadosDoOrcamento,
   type MontarViewProps,
 } from "./orcamento-view";
+import { acoesPrincipais, semCamadasEscondidas, travadoNoHtml } from "@/test/botoes";
 
 /**
  * Montar orçamento (docs/mockups/ComOrcamento.dc.html), só a apresentação: sem
@@ -147,7 +149,7 @@ function render(overrides: Partial<MontarViewProps> = {}) {
 
 /** Textos visíveis, na ordem: o que a pessoa lê na tela. */
 function texts(html: string) {
-  return html
+  return semCamadasEscondidas(html)
     .replace(/<span class="sr-only">[^<]*<\/span>/g, "")
     .split(/<[^>]+>/)
     .map((text) => text.replace(/&amp;/g, "&").replace(/ /g, " ").trim())
@@ -267,7 +269,7 @@ describe("montar orçamento", () => {
     const html = render();
     expect(html).toMatch(/^<div class="v3 /);
     expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
-    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>.*?Enviar para aprovação<\/button>/);
+    expect(acoesPrincipais(html)).toEqual(["Enviar para aprovação"]);
   });
 
   it("a grade: busca de item da tabela pelo teclado e a quantidade de cada linha com id para o foco", () => {
@@ -368,7 +370,7 @@ describe("montar orçamento", () => {
       "Pedido do cliente",
     ]);
     expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
-    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>.*?Enviar ao cliente<\/button>/);
+    expect(acoesPrincipais(html)).toEqual(["Enviar ao cliente"]);
   });
 
   it("o documento abre noutra aba: a prévia até o envio; o PDF da RV enviada depois", () => {
@@ -413,8 +415,8 @@ describe("montar orçamento", () => {
       podeAtualizarTabela: true,
       acoes: acoesDoOrcamento({ status: "para_aprovar", role: "owner", uid: "u-leo", autorUid: "u-gui" }),
     })).not.toContain("Atualizar tabela");
-    expect(render({ dados: semTabela, podeAtualizarTabela: true, ocupado: true }))
-      .toMatch(/<button[^>]*disabled=""[^>]*>(?:<svg[\s\S]*?<\/svg>)?Atualizar tabela<\/button>/);
+    // Gravando outra coisa: o Atualizar tabela é o BotaoDeAcao, travado por aria-disabled, nunca disabled (parte 13g).
+    expect(travadoNoHtml(render({ dados: semTabela, podeAtualizarTabela: true, ocupado: true }), "Atualizar tabela")).toBe(true);
   });
 
   it("item cadastrado na tabela herda código e preço sem pedir motivo", () => {
@@ -526,9 +528,10 @@ describe("montar orçamento", () => {
           </Router>,
         ),
       );
-    expect(estado("carregando")).toEqual(["Orçamento", "Carregando..."]);
+    // Lendo: nada escrito antes de 300 ms (a caixa entra com o relógio); na falha, "Tentar de novo" (parte 13g).
+    expect(estado("carregando")).toEqual(["Orçamento"]);
     expect(estado("nao_encontrado")).toEqual(["Orçamento", "Orçamento não encontrado"]);
-    expect(estado("erro")).toEqual(["Orçamento", "Não foi possível carregar o orçamento."]);
+    expect(estado("erro")).toEqual(["Orçamento", "Não foi possível carregar o orçamento.", "Tentar de novo"]);
   });
 });
 
@@ -594,7 +597,7 @@ describe("montar orçamento depois do envio (parte 12b)", () => {
     expect(lista).toContain("Enviar ao cliente");
     expect(lista).not.toContain("Enviar para aprovação");
     expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
-    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>(?:<svg[^>]*>.*?<\/svg>)?Enviar ao cliente<\/button>/);
+    expect(acoesPrincipais(html)).toEqual(["Enviar ao cliente"]);
   });
 
   it("sem a dispensa do servidor, a RV de execução passa pela aprovação e não mostra a marca", () => {
@@ -799,5 +802,48 @@ describe("os orçamentos parecidos na montagem (parte 5.3c)", () => {
 
   it("ocupado, não oferece usar", () => {
     expect(texts(render({ parecidos: PARECIDOS, ocupado: true }))).not.toContain("Usar as quantidades");
+  });
+});
+
+describe("Orçamento: a tabela que não veio tem saída (revisão da parte 13g)", () => {
+  it("a falha da tabela diz o que não carregou com Tentar de novo", () => {
+    expect(render({ catalogo: "erro", leituraDoCatalogo: { tentando: false, tentar: () => undefined } })).toMatch(/<p role="alert"[^>]*>Não foi possível carregar a tabela\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
+  });
+
+  it("o aviso do recálculo fica escrito sem região viva solta; o erro continua alerta", () => {
+    const info = render({ aviso: { tipo: "info", texto: "Os preços foram recalculados pela tabela vigente." } });
+    expect(info).toContain("Os preços foram recalculados pela tabela vigente.");
+    expect(info).not.toMatch(/role="status"/);
+    expect(render({ aviso: { tipo: "erro", texto: "Falta o contato." } })).toMatch(/<p role="alert"[^>]*>Falta o contato\.<\/p>/);
+  });
+});
+
+describe("O orçamento sem conexão (carregamento v2, parte 13j)", () => {
+  it("a montagem lida, a falha sem nada lido e a do servidor põem só os rótulos da falta, sem legenda; axe", async () => {
+    const esperado = rotulosDaFalta({ mensagem: "Não foi possível carregar o orçamento.", objeto: "orçamento" });
+    // Sem o orçamento lido, a tela é a do aviso, com o título dela.
+    for (const nome of ["sem nada lido, sem conexão", "sem nada lido, reconectando", "erro do servidor"] as const) esperado[nome].novos.unshift("Orçamento");
+    expect(
+      await estadosDaFalta((leitura, situacao) =>
+        situacao === "erro" ? (
+          <EstadoDoOrcamento estado="erro" leitura={leitura} />
+        ) : (
+          <Router ssrPath="/comercial/orcamento">
+            <MontarView {...props({ leitura })} />
+          </Router>
+        ),
+      ),
+    ).toEqual(esperado);
+  });
+
+  it("a tabela que não veio: o aviso da conexão ou a falha do servidor no lugar da busca; a lida não põe faixa", async () => {
+    const esperado = rotulosDaFalta({ mensagem: "Não foi possível carregar a tabela." });
+    expect(
+      await estadosDaFalta((leitura, situacao) => (
+        <Router ssrPath="/comercial/orcamento">
+          <MontarView {...props({ catalogo: situacao === "erro" ? "erro" : CATALOGO, leituraDoCatalogo: leitura })} />
+        </Router>
+      )),
+    ).toEqual({ ...esperado, "lida, sem conexão": { novos: [], axe: [] }, "lida, reconectando": { novos: [], axe: [] } });
   });
 });

@@ -96,7 +96,11 @@ function lido(html: string) {
     menos17: desligado("Menos um no volume 17"),
     mais17: desligado("Mais um no volume 17"),
     maisUm: porTexto("Mais um volume")?.hasAttribute("disabled") ?? null,
-    confirmar: [...document.querySelectorAll("button")].at(-1)?.hasAttribute("disabled") ?? null,
+    // O confirmar é o BotaoDeAcao (carregamento v2, parte 13h): travado é aria-disabled, nunca disabled.
+    confirmar: (() => {
+      const botao = [...document.querySelectorAll("button")].at(-1);
+      return botao ? botao.hasAttribute("disabled") || botao.getAttribute("aria-disabled") === "true" : null;
+    })(),
   };
   dom.window.close();
   return resultado;
@@ -117,6 +121,8 @@ describe("Dividir em volumes", () => {
       "Mais um volume",
       "Voltar",
       "Separar em 2 volumes",
+      "Separando…",
+      "Conferir",
     ]);
     expect(lido(render(PRONTA))).toEqual({
       valores: [
@@ -151,6 +157,8 @@ describe("Dividir em volumes", () => {
       "Mais um volume",
       "Voltar",
       "Separar em 3 volumes",
+      "Separando…",
+      "Conferir",
     ]);
     const campos = lido(render(COM_ITENS));
     expect(campos.lixeiras).toEqual(["Tirar o volume 17"]);
@@ -163,23 +171,45 @@ describe("Dividir em volumes", () => {
     ]);
   });
 
-  it("na linha já separada, o botão diz Dividir em N volumes; gravando, Separando ou Dividindo, desligado", () => {
-    expect(textosDaTela(render(NA_SEPARADA)).at(-1)).toBe("Dividir em 2 volumes");
-    expect(textosDaTela(render(NA_SEPARADA, true)).at(-1)).toBe("Dividindo...");
-    expect(textosDaTela(render(PRONTA, true)).at(-1)).toBe("Separando...");
-    expect(lido(render(PRONTA, true)).confirmar).toBe(true);
+  it("na linha já separada, o botão diz Dividir em N volumes; gravando, Separando… ou Dividindo…, ocupado e nunca disabled", () => {
+    const atual = (html: string) => {
+      const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+      const botao = [...dom.window.document.querySelectorAll("button")].at(-1);
+      const texto = botao?.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? botao?.textContent;
+      dom.window.close();
+      return texto;
+    };
+    expect(atual(render(NA_SEPARADA))).toBe("Dividir em 2 volumes");
+    // O gerúndio, com a reticência única, entra aos 300 ms (o BotaoDeAcao); antes, o botão tocado fica o mesmo, afundado.
+    expect(textosDaTela(render(NA_SEPARADA, true))).toContain("Dividindo…");
+    expect(textosDaTela(render(PRONTA, true))).toContain("Separando…");
+    expect(textosDaTela(render(PRONTA, true)).join(" ")).not.toContain("...");
+    const html = render(PRONTA, true);
+    expect(html).toMatch(/<button[^>]*data-estado="andamento"[^>]*aria-disabled="true"/);
+    expect(html).not.toMatch(/<button[^>]*\sdisabled=""[^>]*data-estado="andamento"/);
+    expect(lido(html).confirmar).toBe(true);
   });
 
-  it("gravando, nada se edita: a tela mostra o que foi mandado, e só Voltar fica ligado", () => {
+  it("gravando, nada se edita: a tela mostra o que foi mandado, e o Voltar e o confirmar esperam ocupados", () => {
+    const nome = (campo: Element) =>
+      campo.getAttribute("aria-label") ?? campo.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? campo.textContent;
     const ligados = (html: string) => {
       const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
       const nomes = [...dom.window.document.querySelectorAll("button, input")]
-        .filter((campo) => !campo.hasAttribute("disabled"))
-        .map((campo) => campo.getAttribute("aria-label") ?? campo.textContent);
+        .filter((campo) => !campo.hasAttribute("disabled") && campo.getAttribute("aria-disabled") !== "true")
+        .map(nome);
       dom.window.close();
       return nomes;
     };
-    expect(ligados(render(COM_ITENS, true))).toEqual(["Voltar"]);
+    const ocupados = (html: string) => {
+      const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+      // Ocupado não é desabilitado (carregamento v2, seção 7): aria-disabled, e o foco fica no botão tocado.
+      const nomes = [...dom.window.document.querySelectorAll("button[aria-disabled='true']:not([disabled])")].map(nome);
+      dom.window.close();
+      return nomes;
+    };
+    expect(ligados(render(COM_ITENS, true))).toEqual([]);
+    expect(ocupados(render(COM_ITENS, true))).toEqual(["Voltar", "Separar em 3 volumes"]);
     // Sem gravar, os passos, os campos, a lixeira e Mais um volume ficam ligados.
     expect(ligados(render(COM_ITENS))).toContain("Tirar o volume 17");
     expect(ligados(render(COM_ITENS))).toContain("Mais um volume");
@@ -273,6 +303,8 @@ describe("Dividir em volumes", () => {
       "Mais um volume",
       "Voltar",
       "Dividir em 2 volumes",
+      "Dividindo…",
+      "Conferir",
     ]);
     const cores = (html: string) => {
       const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
@@ -298,6 +330,8 @@ describe("Dividir em volumes", () => {
       "Mais um volume",
       "Voltar",
       "Dividir em 2 volumes",
+      "Dividindo…",
+      "Conferir",
     ]);
     expect(lido(render(DEPOIS_DE_DIVIDIR)).valores).toEqual([
       ["Separado no volume 17", "21"],

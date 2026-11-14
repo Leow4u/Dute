@@ -2,8 +2,11 @@ import { execSync } from "child_process";
 import path from "path";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+
+import { folhasDepoisDaAbertura } from "./src/lib/abertura-no-build";
+import { pluginDoMapaDasTelas } from "./src/lib/telas-no-aparelho-no-build";
 
 const rawPort = process.env.PORT ?? "5173";
 
@@ -34,19 +37,43 @@ function gitBuildCommit() {
   }
 }
 
+/**
+ * No build, a folha do app sai do <head> e vai para logo antes do #root: a
+ * abertura (index.html) pinta sem esperar por ela (src/lib/abertura-no-build.ts).
+ */
+function folhaDepoisDaAbertura(): Plugin {
+  return {
+    name: "dute-folha-depois-da-abertura",
+    apply: "build",
+    transformIndexHtml: { order: "post", handler: folhasDepoisDaAbertura },
+  };
+}
+
+const buildCommit = gitBuildCommit();
+
 export default defineConfig({
   base: basePath,
   define: {
-    __BUILD_COMMIT__: JSON.stringify(gitBuildCommit()),
+    __BUILD_COMMIT__: JSON.stringify(buildCommit),
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
   envDir: path.resolve(import.meta.dirname, "..", ".."),
   plugins: [
     react(),
     tailwindcss({ optimize: false }),
+    folhaDepoisDaAbertura(),
+    // Os arquivos de cada tela, para a equipe guardá-las no aparelho sem
+    // importá-las (src/lib/telas-no-aparelho.ts). Fica fora do precache.
+    pluginDoMapaDasTelas({
+      src: path.resolve(import.meta.dirname, "src"),
+      versao: buildCommit || "desconhecida",
+      nome: "telas-no-aparelho.json",
+    }),
     VitePWA({
       registerType: "autoUpdate",
-      injectRegister: "auto",
+      // Com defer, o registro do service worker não para a leitura do HTML: a
+      // abertura pinta antes (carregamento v2, parte 9).
+      injectRegister: "script-defer",
       includeAssets: [
         "dutelog-mark-32.png",
         "dutelog-mark-64.png",
@@ -62,8 +89,10 @@ export default defineConfig({
         start_url: "/",
         scope: "/",
         display: "standalone",
-        background_color: "#FAFAF8",
-        theme_color: "#FAFAF8",
+        // O preto da abertura (index.html): a abertura do Android emenda
+        // nela sem clarão (carregamento v2, decisão P4 de 12/11/2026).
+        background_color: "#161616",
+        theme_color: "#161616",
         categories: ["business", "productivity"],
         icons: [
           {
@@ -103,12 +132,34 @@ export default defineConfig({
           {
             // Nomes com hash são imutáveis: CacheFirst dá offline para
             // qualquer rota já visitada, sem baixar o que nunca foi aberto.
+            // Para a equipe, as telas que ela abre entram aqui logo depois
+            // de entrar (lib/telas-no-aparelho.ts): cabem as de uma versão
+            // inteira, com folga para a anterior sair aos poucos.
             urlPattern: ({ url, sameOrigin }) =>
               Boolean(sameOrigin) && url.pathname.startsWith("/assets/"),
             handler: "CacheFirst",
             options: {
               cacheName: "dute-route-chunks",
-              expiration: { maxEntries: 150, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // As fontes do Google (index.html, por preload) ficam no
+            // aparelho: sem sinal, as telas abrem com a Manrope.
+            urlPattern: ({ url }) => url.origin === "https://fonts.googleapis.com",
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "dute-fontes-folhas",
+              expiration: { maxEntries: 4 },
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.origin === "https://fonts.gstatic.com",
+            handler: "CacheFirst",
+            options: {
+              cacheName: "dute-fontes",
+              expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 365 },
               cacheableResponse: { statuses: [0, 200] },
             },
           },

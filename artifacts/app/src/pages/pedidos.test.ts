@@ -40,7 +40,8 @@ describe("Pedidos na v3", () => {
     expect(FONTE).toContain("decider && pedidoCancelavel(order) ? (");
     expect(FONTE.match(/menu=\{menuDo\(order\)\}/g)).toHaveLength(2);
     expect(FONTE).toContain("aria-label={`Mais ações do pedido ${order.orderNumber}`}");
-    expect(FONTE).toMatch(/disabled=\{!motivoValido\(cancelReason\) \|\| busy\}/);
+    // O Cancelar pedido é o BotaoDeAcao: travado sem motivo, e nunca disabled no meio da ação (parte 13a).
+    expect(FONTE).toMatch(/bloqueado=\{!cancelar\.isPending && \(!motivoValido\(cancelReason\) \|\| busy\)\}/);
   });
 
   it("Separar abre a bancada do pedido, e Continuar depois da primeira linha; a fila não conclui mais a separação (separação com caixas, parte 2)", () => {
@@ -67,10 +68,14 @@ describe("Pedidos na v3", () => {
   });
 
   it("a leitura que falhou vira o erro com Tentar de novo, não o vazio das filas (decisão 6 de 06/11/2026)", () => {
-    expect(FONTE).toContain("const semLeitura = (ops.isError && !ops.data) || (decider && requests.isError && !requests.data);");
+    // A falha fica na tela durante a releitura automática (a junção das partes 9, 11 e 12): a conta usa a leitura que a segura.
+    expect(FONTE).toContain("const opsNaTela = useFalhaNaReleituraAutomatica(ops);");
+    expect(FONTE).toContain("const requestsNaTela = useFalhaNaReleituraAutomatica(requests);");
+    expect(FONTE).toContain("const semLeitura = (opsNaTela.isError && !ops.data) || (decider && requestsNaTela.isError && !requests.data);");
     // O erro vem antes das filas e de "Entregues": sem leitura, nenhum "Nenhum pedido para…".
-    const erro = FONTE.indexOf(") : semLeitura ? (");
-    expect(erro).toBeGreaterThan(FONTE.indexOf("Carregando pedidos..."));
+    const erro = FONTE.indexOf(") : !lendo && semLeitura ? (");
+    expect(erro).toBeGreaterThan(FONTE.indexOf("<BlocoSemConexao tentando={relendo}"));
+    expect(FONTE.indexOf("<BlocoSemConexao tentando={relendo}")).toBeGreaterThan(-1);
     expect(erro).toBeLessThan(FONTE.indexOf(') : view === "delivered" ? ('));
     expect(FONTE).toContain("const relendo = ops.isFetching || requests.isFetching;");
     expect(FONTE).toMatch(/<ErroNaLeitura\s+mensagem="Não consegui carregar os pedidos\."\s+tentando=\{relendo\}\s+onTentar=\{refreshAll\}/);
@@ -79,15 +84,27 @@ describe("Pedidos na v3", () => {
   it("sem rede, a lista lida fica com a hora, e sem nada lido vem o aviso, nunca o vazio (decisão 2 do celular)", () => {
     // Quem não decide não lê as solicitações: só o armazém entra na conta.
     expect(FONTE).toContain("const semRede = semConexaoNaLeitura(ops, ...(decider ? [requests] : []));");
-    const aviso = FONTE.indexOf(") : semRede && semRede.lidaEm === null ? (");
-    expect(aviso).toBeGreaterThan(FONTE.indexOf("Carregando pedidos..."));
-    expect(aviso).toBeLessThan(FONTE.indexOf(") : semLeitura ? ("));
-    expect(FONTE).toMatch(/<BlocoSemConexao tentando=\{relendo\} onTentar=\{refreshAll\} \/>/);
-    expect(FONTE).toMatch(/!loading && semRede && semRede\.lidaEm !== null \? \(\s*<FaixaSemConexao lidaEm=\{semRede\.lidaEm\} tentando=\{relendo\} onTentar=\{refreshAll\} \/>/);
+    expect(FONTE).toContain("const leiturasDaLista = decider ? [opsNaTela, requestsNaTela] : [opsNaTela];");
+    // Na primeira leitura, a lista com a forma final, com as linhas-fantasma (parte 8); depois, o aviso, antes do erro
+    // e das filas.
+    // A leitura que falhou sem dado não espera a outra: o aviso entra na hora.
+    expect(FONTE).toContain("const lendo = loading && !semLeitura;");
+    expect(FONTE).toContain("{!lendo && semRede && semRede.lidaEm === null ? (");
+    expect(FONTE.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(FONTE.indexOf(") : !lendo && semLeitura ? ("));
+    // A nova tentativa leva o foco à linha de estado quando o aviso sai.
+    expect(FONTE).toMatch(/<BlocoSemConexao tentando=\{relendo\} onTentar=\{refreshAll\} focoAoSair=\{idDaLinha\} \/>/);
+    expect(FONTE).toMatch(/<ErroNaLeitura\s+mensagem="Não consegui carregar os pedidos\."\s+tentando=\{relendo\}\s+onTentar=\{refreshAll\}\s+focoAoSair=\{idDaLinha\}/);
+    // A lista lida, com a falta: a hora dela fica na linha de estado sob o título (parte 7b), não na faixa que empurra a lista.
+    expect(FONTE).toContain('estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="pedidos" pedidaPelaPessoa={atualizarLista.voltando} resumo={resumo} />}');
+    expect(FONTE).not.toContain("FaixaSemConexao");
+    expect(FONTE).not.toContain("Carregando pedidos...");
   });
 
-  it("só a primeira linha da fila tem a ação principal", () => {
-    expect(FONTE).toContain("const principal = chaveDaPrincipal(queue, decider);");
+  it("só a primeira linha da fila tem a ação principal: a primeira na tela, que a nova primeira herda quando ela sai", () => {
+    expect(FONTE).toContain("const principal = chaveDaPrincipal(naTela, decider);");
+    expect(FONTE).toContain("approve: paraAprovar.chaves.map((id) => ({ id })),");
+    expect(FONTE).toContain("pick: paraSeparar.chaves.map((key) => ({ key })),");
+    expect(FONTE).toContain("deliver: paraEntregar.chaves.map((key) => ({ key })),");
     for (const chave of ["approve:${request.id}", "pick:${order.key}", "deliver:${order.key}"]) {
       expect(FONTE).toContain(`variant={variante(\`${chave}\`)}`);
     }

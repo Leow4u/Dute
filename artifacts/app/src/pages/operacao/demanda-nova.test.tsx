@@ -26,6 +26,10 @@ vi.mock("@/lib/operacao/api", async (original) => ({
 }));
 
 vi.mock("@/lib/operacao/leitura", () => ({
+  // A nova tentativa das leituras ao vivo (carregamento v2, parte 13g): sem efeito aqui.
+  novaTentativaDe: () => ({ tentando: false, tentar: () => undefined }),
+  juntarTentativas: () => ({ tentando: false, tentar: () => undefined }),
+  SEM_NOVA_TENTATIVA: { tentando: false, tentar: () => undefined },
   useDocumento: (chave: string | null, _referencia: unknown, mapear: (id: string, dados: Record<string, unknown>) => unknown) => ({
     item: chave ? mapear(SOLICITACAO, estado.solicitacao) : undefined,
     erro: false,
@@ -39,6 +43,7 @@ vi.mock("@/lib/operacao/leitura", () => ({
 vi.mock("@/lib/operacao/use-urls-das-fotos", () => ({ useUrlsDasFotos: () => ({}) }));
 
 import PaginaDemandaNova from "./demanda-nova";
+import { rotuloDoBotao } from "@/test/botoes";
 
 function solicitacao(extra: Record<string, unknown> = {}) {
   return {
@@ -75,7 +80,7 @@ async function digitar(id: string, valor: string) {
 }
 
 async function clicar(texto: string) {
-  const botao = [...container!.querySelectorAll("button")].find((item) => item.textContent?.trim() === texto);
+  const botao = [...container!.querySelectorAll("button")].find((item) => rotuloDoBotao(item) === texto);
   if (!botao) throw new Error(`Sem o botão ${texto}`);
   await act(async () => botao.click());
 }

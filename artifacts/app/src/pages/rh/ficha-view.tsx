@@ -1,6 +1,13 @@
 import type { FormEvent, ReactNode } from "react";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { DialogCancelar } from "@/components/ui/dialog";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { Spinner } from "@/components/ui/spinner";
+import { useEspera } from "@/lib/carregando/use-espera";
+import type { NovaTentativa } from "@/lib/operacao/leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { dataBr } from "@/lib/comercial/clientes";
@@ -67,6 +74,8 @@ export type FichaViewProps = {
   estado: EstadoDaFicha;
   ficha: FichaDoRh | undefined;
   erro: string | null;
+  /** A ficha já lida não se atualizou: ela fica, e a frase fica escrita em cima, sem falar, com "Tentar de novo". */
+  falhaNaReleitura?: boolean;
   /** Quem grava no RH (só o rh): vê as ações de incluir, alterar, arquivar, anexar e gravar as datas do vínculo. */
   grava: boolean;
   formulario: FormularioDoRegistro | null;
@@ -75,6 +84,13 @@ export type FichaViewProps = {
   /** O registro com o arquivamento por confirmar. */
   arquivando: string | null;
   ocupado: boolean;
+  /**
+   * Qual ação grava ("salvar", "vinculo", "arquivar:<id>", "anexar:<id>"): só
+   * o botão dela diz o gerúndio, e os outros ficam travados (parte 13g).
+   */
+  emAndamento?: string | null;
+  /** A nova tentativa da leitura da ficha (parte 13g); sem ela, a falha não tem o que reler (a pessoa não existe). */
+  leitura?: NovaTentativa;
   /** A mensagem do servidor da última ação que falhou. */
   falha: string | null;
   acoes: AcoesDaFicha;
@@ -88,7 +104,7 @@ const TOM_DO_RESULTADO: Record<ResultadoDoExame, string> = { apto: TOM_OK, apto_
 
 const ROTULO_DE_CAMPO = "block text-xs font-bold text-muted-foreground";
 const CAMPO_SELECT =
-  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
+  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:border-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50";
 
 /** "Vence em 9 dias", "Venceu há 22 dias": o prazo do registro dentro da janela do Início. */
 function prazoNaFicha(dias: number): string {
@@ -114,23 +130,32 @@ function Campo({ id, rotulo, children }: { id: string; rotulo: string; children:
 
 function AcoesDoRegistro({ registro, props }: { registro: RegistroDoRh; props: FichaViewProps }) {
   const { grava, arquivando, ocupado, formulario, vinculo, acoes } = props;
+  const emAndamento = props.emAndamento ?? null;
   const editavel = grava && registro.situacao !== "arquivado";
+  const anexando = emAndamento === `anexar:${registro.id}`;
   // Com um formulário aberto, as gravações das linhas esperam: a edição que ele leva não muda por baixo dele.
   const travado = ocupado || formulario !== null || vinculo !== null;
   if (arquivando === registro.id) {
     return (
       <div className="col-span-2 flex flex-wrap gap-2">
-        <Button type="button" variant="destructive" size="sm" onClick={acoes.confirmarArquivamento} disabled={ocupado}>
-          Confirmar arquivamento
-        </Button>
-        <Button type="button" variant="outline" size="sm" onClick={acoes.desistir} disabled={ocupado}>
+        <BotaoDeAcao
+          variant="destructive"
+          size="sm"
+          estado={emAndamento === `arquivar:${registro.id}` ? "andamento" : "repouso"}
+          bloqueado={ocupado && emAndamento !== `arquivar:${registro.id}`}
+          rotulo="Confirmar arquivamento"
+          andamento="Arquivando…"
+          objeto={nomeDoRegistro(registro)}
+          focoAoSair
+          onClick={acoes.confirmarArquivamento}
+        />
+        <DialogCancelar size="sm" ocupado={ocupado} onClick={acoes.desistir}>
           Voltar
-        </Button>
+        </DialogCancelar>
       </div>
     );
   }
   if (!registro.arquivo && !editavel) return null;
-  const entrada = `arquivo-${registro.id}`;
   return (
     <div className="col-span-2 flex flex-wrap gap-2">
       {registro.arquivo ? (
@@ -143,33 +168,65 @@ function AcoesDoRegistro({ registro, props }: { registro: RegistroDoRh; props: F
           <Button type="button" variant="ghost" size="sm" onClick={() => acoes.alterar(registro)} disabled={travado}>
             Alterar
           </Button>
-          <label
-            htmlFor={entrada}
-            className={cn(
-              "inline-flex h-8 cursor-pointer items-center rounded-md px-3 text-sm font-medium hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring",
-              travado && "pointer-events-none opacity-50",
-            )}
-          >
-            {registro.arquivo ? "Trocar arquivo" : "Anexar arquivo"}
-            <input
-              id={entrada}
-              type="file"
-              accept={TIPOS_DE_ARQUIVO.join(",")}
-              className="sr-only"
-              disabled={travado}
-              onChange={(evento) => {
-                const arquivo = evento.target.files?.[0];
-                evento.target.value = "";
-                if (arquivo) acoes.anexar(registro, arquivo);
-              }}
-            />
-          </label>
+          <AnexarArquivo registro={registro} anexando={anexando} travado={travado} acoes={acoes} />
           <Button type="button" variant="ghost" size="sm" onClick={() => acoes.pedirArquivamento(registro.id)} disabled={travado}>
             Arquivar
           </Button>
         </>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Anexar ou trocar o arquivo do registro: o seletor de arquivo é o controle da
+ * própria ação. Enquanto o arquivo sobe, ele nunca fica `disabled` (o foco de
+ * quem escolheu pelo teclado cairia no `body`): `aria-disabled`, com a trava
+ * no código, e `aria-busy` quando a espera aparece. A caixa e "Enviando o
+ * arquivo…" seguem o relógio da espera: só aos 300 ms, e pelo menos 500 ms
+ * (o envio rápido não pisca).
+ */
+function AnexarArquivo({ registro, anexando, travado, acoes }: { registro: RegistroDoRh; anexando: boolean; travado: boolean; acoes: AcoesDaFicha }) {
+  const espera = useEspera(anexando, { segurarMinimo: true });
+  const entrada = `arquivo-${registro.id}`;
+  return (
+    <label
+      htmlFor={entrada}
+      className={cn(
+        "inline-flex h-8 cursor-pointer items-center rounded-md px-3 text-sm font-medium hover:bg-surface-hover focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco",
+        travado && "pointer-events-none",
+        travado && !anexando && !espera.visivel && "opacity-50",
+      )}
+    >
+      {espera.visivel ? (
+        // O arquivo que sobe: a caixa e o gerúndio no lugar do rótulo (parte 13g); a espera tem forma, nunca só 50%.
+        <span className="inline-flex items-center gap-2">
+          <Spinner calmo={espera.calmo} />
+          Enviando o arquivo…
+        </span>
+      ) : registro.arquivo ? (
+        "Trocar arquivo"
+      ) : (
+        "Anexar arquivo"
+      )}
+      <input
+        id={entrada}
+        type="file"
+        accept={TIPOS_DE_ARQUIVO.join(",")}
+        className="sr-only"
+        aria-disabled={travado || undefined}
+        aria-busy={espera.visivel || undefined}
+        onClick={(evento) => {
+          // Travado, o seletor não abre (pelo teclado ou pelo toque): a trava é no código, não o `disabled`.
+          if (travado) evento.preventDefault();
+        }}
+        onChange={(evento) => {
+          const arquivo = evento.target.files?.[0];
+          evento.target.value = "";
+          if (arquivo && !travado) acoes.anexar(registro, arquivo);
+        }}
+      />
+    </label>
   );
 }
 
@@ -295,12 +352,8 @@ function Formulario({ formulario, ocupado, acoes }: { formulario: FormularioDoRe
         </Campo>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={ocupado}>
-          Salvar
-        </Button>
-        <Button type="button" variant="outline" onClick={acoes.fechar} disabled={ocupado}>
-          Cancelar
-        </Button>
+        <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando…" focoAoSair />
+        <DialogCancelar ocupado={ocupado} onClick={acoes.fechar} />
       </div>
     </form>
   );
@@ -335,25 +388,30 @@ function FormularioDasDatas({ vinculo, ocupado, acoes }: { vinculo: FormularioDo
         />
       </Campo>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={ocupado}>
-          Salvar
-        </Button>
-        <Button type="button" variant="outline" onClick={acoes.fecharVinculo} disabled={ocupado}>
-          Cancelar
-        </Button>
+        <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando as datas…" focoAoSair />
+        <DialogCancelar ocupado={ocupado} onClick={acoes.fecharVinculo} />
       </div>
     </form>
   );
 }
 
 export function FichaView(props: FichaViewProps) {
-  const { estado, ficha, erro, grava, formulario, vinculo, ocupado, falha, acoes } = props;
+  const { estado, ficha, erro, grava, formulario, vinculo, ocupado, falha, acoes, leitura } = props;
   if (estado !== "pronto" || !ficha) {
+    const mensagem = erro ?? "Não foi possível carregar a ficha.";
     return (
       <div className="v3 flex flex-col gap-5 text-foreground">
         <h1 className="text-3xl font-extrabold tracking-tight">Ficha</h1>
         <section aria-label="Ficha" className="rounded-lg border border-border bg-card">
-          <Vazio>{estado === "erro" ? (erro ?? "Não foi possível carregar a ficha.") : "Carregando..."}</Vazio>
+          {estado !== "erro" ? (
+            <CarregandoNaRegiao rotulo="Carregando a ficha…" continuaARota onTentar={leitura?.tentar} className="px-5 py-7" />
+          ) : leitura ? (
+            <FalhaNaSecao mensagem={mensagem} tentando={leitura.tentando} onTentar={leitura.tentar} className="px-5 py-7" />
+          ) : (
+            <p role="alert" className="px-5 py-7 text-center text-sm font-bold text-destructive">
+              {mensagem}
+            </p>
+          )}
         </section>
       </div>
     );
@@ -383,6 +441,15 @@ export function FichaView(props: FichaViewProps) {
         </p>
         {datas.length ? <p className="w-full text-sm font-bold">{datas.join(" · ")}</p> : null}
       </header>
+      {props.falhaNaReleitura && leitura ? (
+        <FalhaNaSecao
+          mensagem="Não foi possível atualizar a ficha."
+          alerta={false}
+          tentando={leitura.tentando}
+          onTentar={leitura.tentar}
+          className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+        />
+      ) : null}
       {falha ? (
         <p role="alert" className="text-sm font-bold text-destructive-soft-foreground">
           {falha}

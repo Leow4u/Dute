@@ -3,7 +3,7 @@ import { collection } from "firebase/firestore";
 
 import { clienteDaLeitura, comDemanda, demandaDaFila, hojeIso, nomesPorCodigo, osDaLeitura } from "@/lib/operacao/fila";
 import { SEM_FILTRO_DE_DEMANDAS, clientesDasDemandas, demandaDaOperacao, linhasDeDemandas, type FiltrosDeDemandas } from "@/lib/operacao/demandas";
-import { useLeitura } from "@/lib/operacao/leitura";
+import { novaTentativaDe, useLeitura } from "@/lib/operacao/leitura";
 
 import { DemandasView, type EstadoDasDemandas } from "./demandas-view";
 
@@ -42,6 +42,7 @@ export default function PaginaDemandas() {
   return (
     <DemandasView
       estado={estadoDe([demandas, ordens, clientes])}
+      leitura={novaTentativaDe([demandas, ordens, clientes])}
       resumo={resumoDasDemandas(agora, linhas.length)}
       linhas={linhas}
       filtros={filtros}

@@ -9,6 +9,9 @@ import { Input } from "@/components/ui/input";
 import { resumoDoDiaEmPartes, type Agenda, type DiaDaAgenda, type GrupoDaAgenda, type OsNaAgenda, type ParteDoResumo } from "@/lib/operacao/agenda";
 import { ROTA_NOVA_DEMANDA, hrefDaDemanda, hrefDaFichaDaOs } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
  * Operação › Agenda (docs/plataforma/fase-3-operacao.md, parte 3.6b;
@@ -170,7 +173,7 @@ function Bloco({ os, selecionada, onSelecionar }: { os: OsNaAgenda; selecionada:
       aria-pressed={ativa}
       onClick={() => onSelecionar(ativa ? null : os.numero)}
       className={cn(
-        "flex w-full min-w-0 flex-col items-start rounded-md border border-l-4 px-2 py-1 text-left transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+        "flex w-full min-w-0 flex-col items-start rounded-md border border-l-4 px-2 py-1 text-left transition-opacity focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
         COR_DO_STATUS[os.status],
         ativa ? "ring-2 ring-foreground" : selecionada ? "opacity-60" : null,
       )}
@@ -206,7 +209,7 @@ function Grupo({
             type="button"
             aria-expanded={aberto}
             onClick={() => setAberto(!aberto)}
-            className="sticky left-0 flex h-9 items-center gap-2 px-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40"
+            className="sticky left-0 flex h-9 items-center gap-2 px-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foco"
           >
             <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform", aberto ? null : "-rotate-90")} />
             {grupo.titulo}
@@ -265,6 +268,7 @@ export function AgendaView({
   onEscalar,
   erro,
   escala,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDaAgenda;
   agenda: Agenda;
@@ -278,6 +282,8 @@ export function AgendaView({
   onEscalar: (numero: string) => void;
   erro: string | null;
   escala: EscalaAberta | null;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   const idDaSemana = useId();
   const os = selecionada ? (agenda.ordens[selecionada] ?? null) : null;
@@ -300,12 +306,9 @@ export function AgendaView({
         </div>
       </header>
 
-      {estado === "carregando" ? <p className="text-sm text-muted-foreground">Carregando</p> : null}
-      {estado === "erro" ? (
-        <p role="alert" className="text-sm text-destructive">
-          Não foi possível carregar a agenda.
-        </p>
-      ) : null}
+      {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a agenda…" continuaARota onTentar={leitura.tentar} /> : null}
+      {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a agenda." /> : null}
+      {estado === "pronto" ? <FaixaAoVivo leitura={leitura} /> : null}
       {erro && !escala ? (
         <p role="alert" className="text-sm text-destructive">
           {erro}

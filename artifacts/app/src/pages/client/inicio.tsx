@@ -4,6 +4,8 @@ import { Link, useLocation } from "wouter";
 import { ArrowUp, Box, CalendarClock, ChevronRight, PackagePlus, Sparkles, type LucideIcon } from "lucide-react";
 
 import { fetchChatJson } from "@/components/agent/chat";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { agentAskHref, type ConversationSummary } from "@/lib/agent-chat";
 import { isUnreadRoutine } from "@/lib/agent-routines";
 import { useAppUser } from "@/lib/auth";
@@ -299,12 +301,26 @@ function OrderCard({ order }: { order: OrderView }) {
 
 /** Resposta nova de rotina do Agent Dute (ainda não aberta neste navegador). */
 function RoutineNews() {
-  const conversations = useQuery<{ conversations: ConversationSummary[] }, Error>({
+  const leitura = useQuery<{ conversations: ConversationSummary[] }, Error>({
     queryKey: ["agent-dute-conversations"],
     queryFn: () => fetchChatJson<{ conversations: ConversationSummary[] }>("/api/agent-dute/conversations"),
     staleTime: 60_000,
   });
-  const unread = (conversations.data?.conversations ?? []).filter((item) => isUnreadRoutine(item)).slice(0, 2);
+  // A nova tentativa sem dado fica na falha, com "Tentando de novo…" e o foco no botão (parte 13f).
+  const conversations = useLeituraComFalha(leitura);
+  // A falha não some (necessidade 2): sem as conversas, a pessoa não sabe que há rotina para ver.
+  if (conversations.isError && !leitura.data) {
+    return (
+      <FalhaNaSecao
+        mensagem="Não foi possível carregar as rotinas do Agent Dute."
+        tentando={leitura.isFetching}
+        onTentar={() => leitura.refetch()}
+        className="rounded-md border border-destructive-soft-border bg-destructive-soft px-4 py-2.5"
+      />
+    );
+  }
+  const unread = (leitura.data?.conversations ?? []).filter((item) => isUnreadRoutine(item)).slice(0, 2);
+  // Lendo, nada: o aviso das rotinas só existe quando há rotina nova, e nada aqui afirma que não há.
   if (!unread.length) return null;
   return (
     <ul className="flex flex-col gap-2">
@@ -335,7 +351,7 @@ function AskAgent() {
   };
   return (
     <form
-      className="flex items-center gap-3 rounded-lg border border-agent-border bg-gradient-to-r from-info-soft to-agent-soft px-4 py-2.5 focus-within:border-primary/50"
+      className="flex items-center gap-3 rounded-lg border border-agent-border bg-gradient-to-r from-info-soft to-agent-soft px-4 py-2.5 focus-within:border-primary"
       onSubmit={(event) => {
         event.preventDefault();
         ask();
@@ -350,7 +366,7 @@ function AskAgent() {
         aria-label="Pergunte ao Agent Dute"
         data-agent-input
         placeholder='Pergunte ao Agent Dute: "o que saiu esta semana?", "onde está meu pedido?"…'
-        className="min-w-0 flex-1 bg-transparent py-1 text-base outline-none placeholder:text-muted-foreground"
+        className="min-w-0 flex-1 bg-transparent py-1 text-base focus-visible:outline-hidden placeholder:text-muted-foreground"
       />
       {question.trim() ? (
         <button

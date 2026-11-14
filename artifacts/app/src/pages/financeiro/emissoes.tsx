@@ -7,6 +7,7 @@ import { tituloDaBaixa, type AcaoNaBaixa, type BaixaDoFinanceiro } from "@/lib/f
 import type { AcaoDaEmissao, EmissaoDoFinanceiro } from "@/lib/financeiro/emissoes";
 import { CHAVE_DAS_BAIXAS, useBaixasDoFinanceiro } from "@/lib/financeiro/use-baixas";
 import { CHAVE_DAS_EMISSOES, useEmissoesDoFinanceiro } from "@/lib/financeiro/use-emissoes";
+import { juntarTentativas } from "@/lib/operacao/leitura";
 
 import { EmissoesView, type EstadoDasEmissoes } from "./emissoes-view";
 
@@ -30,6 +31,8 @@ export default function FinanceiroEmissoes() {
   const [desistindo, setDesistindo] = useState<string | null>(null);
   const [dispensando, setDispensando] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // A ação que grava, "<id>:<acao>": só o botão dela diz o gerúndio (parte 13g). A chave segue a da intenção.
+  const [emAndamento, setEmAndamento] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
 
@@ -41,6 +44,7 @@ export default function FinanceiroEmissoes() {
 
   async function gravar(intencao: string, chamar: (chave: string) => Promise<unknown>, deuCerto: string) {
     setOcupado(true);
+    setEmAndamento(intencao.split(":").slice(0, 2).join(":"));
     setAviso(null);
     setFalha(null);
     try {
@@ -55,6 +59,7 @@ export default function FinanceiroEmissoes() {
       // Lê de novo também depois da falha: se o item mudou, a tela mostra a edição que vale.
       await Promise.all([queryClient.invalidateQueries({ queryKey: CHAVE_DAS_EMISSOES }), queryClient.invalidateQueries({ queryKey: CHAVE_DAS_BAIXAS })]);
       setOcupado(false);
+      setEmAndamento(null);
     }
   }
 
@@ -78,7 +83,9 @@ export default function FinanceiroEmissoes() {
   const baixaDaLista = (id: string) => leituraDasBaixas.baixas?.find((item) => item.id === id);
 
   const falhas = [...leitura.falhas, ...leituraDasBaixas.falhas];
-  const estado: EstadoDasEmissoes = falhas.length ? "erro" : leitura.emissoes && leituraDasBaixas.baixas ? "pronto" : "carregando";
+  // As listas lidas ficam na tela quando a releitura (a do minuto, a de depois de cada ação) falha.
+  const lidas = Boolean(leitura.emissoes && leituraDasBaixas.baixas);
+  const estado: EstadoDasEmissoes = lidas ? "pronto" : falhas.length ? "erro" : "carregando";
   return (
     <EmissoesView
       estado={estado}
@@ -87,6 +94,9 @@ export default function FinanceiroEmissoes() {
       desistindo={desistindo}
       dispensando={dispensando}
       ocupado={ocupado}
+      emAndamento={emAndamento}
+      leitura={juntarTentativas(leitura.releitura, leituraDasBaixas.releitura)}
+      falhaNaReleitura={lidas && falhas.length > 0}
       aviso={aviso}
       falha={falha}
       acoes={{

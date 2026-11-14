@@ -6,6 +6,7 @@ import { SeloDoTipo, type OpcaoDeFiltro } from "@/components/operacao/partes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LeituraPendenteNaRegiao } from "@/components/ui/leitura-pendente";
 import { Segmented } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -19,9 +20,13 @@ import {
   type LinhaDoPedido,
 } from "@/lib/operacao/demanda-direta";
 import { TIPOS_DA_DEMANDA, TIPO_ROTULO, prazoDaDemanda, type TipoDaDemanda } from "@/lib/operacao/hoje";
+import type { LeituraPendente } from "@/lib/carregando/leitura-pendente";
 import { ROTA_HOJE, hrefDaDemanda } from "@/lib/operacao/navegacao";
 import { pedidoEmTexto, type SolicitacaoDaOperacao } from "@/lib/operacao/solicitacoes";
 import { cn } from "@/lib/utils";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { DialogCancelar } from "@/components/ui/dialog";
+import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
 
 /**
  * Operação › Nova demanda direta (docs/plataforma/fase-3-operacao.md, parte
@@ -113,6 +118,8 @@ function LinhaDoItem({
 
 function PainelDoPortal({ painel }: { painel: PainelDaSolicitacao }) {
   const { solicitacao, recusa } = painel;
+  // A solicitação resolvida aqui (Recusada): o Anunciador diz, sem região viva solta.
+  useAnunciarAoMudar(painel.resolvida);
   const linhas: Array<[string, ReactNode]> = [
     ["Cliente", solicitacao.cliente],
     ["Contato", [solicitacao.contato.nome, solicitacao.contato.email].filter(Boolean).join(" · ") || "—"],
@@ -156,7 +163,7 @@ function PainelDoPortal({ painel }: { painel: PainelDaSolicitacao }) {
         ) : null}
       </dl>
       {painel.resolvida ? (
-        <p role="status" className="text-sm font-semibold text-foreground">
+        <p className="text-sm font-semibold text-foreground">
           {solicitacao.demanda ? <Link href={hrefDaDemanda(solicitacao.demanda)} className="underline underline-offset-4">{painel.resolvida}</Link> : painel.resolvida}
         </p>
       ) : recusa.aberta ? (
@@ -181,12 +188,16 @@ function PainelDoPortal({ painel }: { painel: PainelDaSolicitacao }) {
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="destructive" disabled={recusa.ocupado} onClick={painel.onConfirmarRecusa}>
-              Recusar solicitação
-            </Button>
-            <Button type="button" variant="ghost" onClick={painel.onVoltar}>
+            <BotaoDeAcao
+              variant="destructive"
+              estado={recusa.ocupado ? "andamento" : "repouso"}
+              rotulo="Recusar solicitação"
+              andamento="Recusando a solicitação…"
+              onClick={painel.onConfirmarRecusa}
+            />
+            <DialogCancelar variant="ghost" ocupado={recusa.ocupado} onClick={painel.onVoltar}>
               Voltar
-            </Button>
+            </DialogCancelar>
           </div>
         </div>
       ) : (
@@ -257,9 +268,7 @@ function Resumo({
           ))}
         </ul>
       ) : null}
-      <Button type="submit" form="nova-demanda" disabled={ocupado} className="w-full">
-        Abrir demanda
-      </Button>
+      <BotaoDeAcao type="submit" form="nova-demanda" estado={ocupado ? "andamento" : "repouso"} rotulo="Abrir demanda" andamento="Abrindo a demanda…" className="w-full" />
       <Button asChild variant="ghost" className="w-full">
         <Link href={ROTA_HOJE}>Cancelar</Link>
       </Button>
@@ -276,6 +285,7 @@ export function DemandaNovaView({
   busca,
   onBusca,
   resultados,
+  leituraDoCatalogo,
   onAdicionar,
   onAvulso,
   corrigindo,
@@ -295,6 +305,8 @@ export function DemandaNovaView({
   busca: string;
   onBusca: (busca: string) => void;
   resultados: readonly ItemDoCatalogo[];
+  /** O catálogo ainda lendo, ou a leitura que falhou: a busca mostra a espera ou a falha, nunca "Nenhum item do catálogo". */
+  leituraDoCatalogo?: LeituraPendente;
   onAdicionar: (item: ItemDoCatalogo) => void;
   onAvulso: () => void;
   /** O seletor do tipo aberto ("Corrigir"). */
@@ -448,7 +460,7 @@ export function DemandaNovaView({
               <label className="relative block flex-1">
                 <span className="sr-only">Buscar no catálogo</span>
                 <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input type="search" value={busca} placeholder="Buscar no catálogo" className="pl-9" onChange={(event) => onBusca(event.target.value)} />
+                <Input id="demanda-busca" type="search" value={busca} placeholder="Buscar no catálogo" className="pl-9" onChange={(event) => onBusca(event.target.value)} />
               </label>
               <Button type="button" variant="outline" onClick={onAvulso}>
                 <Plus aria-hidden="true" className="size-4" />
@@ -456,7 +468,17 @@ export function DemandaNovaView({
               </Button>
             </div>
             {busca.trim() ? (
-              resultados.length ? (
+              leituraDoCatalogo && !resultados.length ? (
+                // Lendo, ou a leitura que falhou: a espera ou a falha, nunca "Nenhum item do catálogo" (carregamento v2, parte 13i).
+                // O foco que estava na espera ou na falha volta à busca quando o catálogo chega, e não ao título da página.
+                <LeituraPendenteNaRegiao
+                  leitura={leituraDoCatalogo}
+                  carregando="Carregando o catálogo…"
+                  falha="Não foi possível carregar o catálogo."
+                  className="py-2"
+                  focoAoSair="demanda-busca"
+                />
+              ) : resultados.length ? (
                 <ul aria-label="Itens do catálogo" className="flex flex-col divide-y divide-border rounded-lg border border-border">
                   {resultados.map((item) => (
                     <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2">

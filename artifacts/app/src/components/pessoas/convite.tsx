@@ -3,13 +3,12 @@ import { Send } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Pilula } from "@/components/clientes/partes";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
 import { assignableRoles, roleLabel } from "@/lib/access";
 import type { ProfileRole } from "@/lib/modules";
@@ -146,7 +145,7 @@ function FormularioDoConvite({ pedido, onFechar, clientes, actorRole, onCriado }
     : "Convidar para a equipe";
 
   return (
-    <DialogContent aria-describedby={undefined} className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
+    <DialogContent aria-describedby={undefined} className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]" ocupado={createInvite.isPending}>
       <DialogHeader>
         <DialogTitle className="text-xl font-extrabold tracking-tight">{titulo}</DialogTitle>
       </DialogHeader>
@@ -234,13 +233,16 @@ function FormularioDoConvite({ pedido, onFechar, clientes, actorRole, onCriado }
         )}
       </form>
       <DialogFooter className="gap-2">
-        <Button type="button" variant="ghost" disabled={createInvite.isPending} onClick={onFechar}>
-          Cancelar
-        </Button>
-        <Button type="submit" form="invite-form" disabled={createInvite.isPending || faltaCliente || !role} aria-busy={createInvite.isPending || undefined}>
-          {createInvite.isPending ? <Spinner /> : <Send aria-hidden="true" />}
-          {createInvite.isPending ? "Enviando…" : "Enviar convite"}
-        </Button>
+        <DialogCancelar variant="ghost" onClick={onFechar} />
+        <BotaoDeAcao
+          type="submit"
+          form="invite-form"
+          estado={createInvite.isPending ? "andamento" : "repouso"}
+          icone={<Send aria-hidden="true" />}
+          rotulo="Enviar convite"
+          andamento="Enviando…"
+          bloqueado={!createInvite.isPending && (faltaCliente || !role)}
+        />
       </DialogFooter>
     </DialogContent>
   );

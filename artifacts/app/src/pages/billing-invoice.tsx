@@ -1,13 +1,19 @@
+import { useId } from "react";
 import { getGetBillingPeriodQueryKey, useGetBillingPeriod } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
 
 import { InvoiceDocument } from "@/components/billing/invoice-document";
+import { FalhaDoClienteAtivo } from "@/components/layout/falha-do-cliente-ativo";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { CABECALHO_DO_CLIENTE } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { currentCompetencia } from "@/lib/billing-format";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { buildInvoiceView } from "@/lib/invoice-view";
-import { humanApiError } from "@/lib/permissions";
 
 function competenciaFromUrl() {
   if (typeof window === "undefined") return currentCompetencia();
@@ -22,11 +28,25 @@ function competenciaFromUrl() {
 export default function BillingInvoice() {
   const competencia = competenciaFromUrl();
   // A fatura do cliente ativo, como no Fechamento do mês (pages/billing.tsx).
-  const { code: cliente, isLoading: carregandoCliente } = useActiveCustomer();
-  const { data, isLoading, error } = useGetBillingPeriod(competencia, {
-    query: { queryKey: [...getGetBillingPeriodQueryKey(competencia), cliente], enabled: !carregandoCliente },
+  const { code: cliente, isLoading: carregandoCliente, falhou: clienteFalhou, tentar: lerOsClientes } = useActiveCustomer();
+  // Sem o cliente ativo confirmado (lendo, ou a lista dos clientes que falhou), nada do cliente padrão é lido.
+  const semCliente = carregandoCliente || clienteFalhou;
+  const chave = [...getGetBillingPeriodQueryKey(competencia), cliente];
+  const leitura = useGetBillingPeriod(competencia, {
+    query: { queryKey: chave, enabled: !semCliente },
     request: { headers: { [CABECALHO_DO_CLIENTE]: cliente } },
   });
+  const qc = useQueryClient();
+  // "Tentar de novo" da demora (10 s): a leitura presa é cancelada e lida de novo (`relerDoZero`: o react-query não
+  // recomeça a leitura sem dado). Com o cliente ativo ainda lendo, quem lê de novo é a lista dos clientes, nunca a
+  // fatura do cliente padrão.
+  const tentarDeNovo = () => (carregandoCliente ? lerOsClientes() : relerDoZero(qc, [chave]));
+  // A falha fica na tela enquanto a pessoa tenta de novo (o react-query a voltaria a "carregando"), e só a leitura
+  // sem nada lido a mostra: a releitura que falha com a fatura na tela não a apaga (carregamento v2, parte 13d).
+  const comFalha = useLeituraComFalha(leitura);
+  // Enquanto o cliente ativo lê, o `code` ainda é o do cliente padrão: a fatura dele nunca entra na tela.
+  const data = semCliente ? undefined : leitura.data;
+  const idDaVolta = useId();
   const period = data as unknown as
     | { status?: string; emitido_em?: string | null }
     | undefined;
@@ -34,18 +54,21 @@ export default function BillingInvoice() {
   return (
     <div className="space-y-4">
       <Link
+        id={idDaVolta}
         href={`/faturamento?competencia=${competencia}`}
         className="no-print inline-flex items-center gap-2 text-sm text-primary"
       >
         <ArrowLeft className="h-4 w-4" />
         Fechamento do mês
       </Link>
-      {error ? (
-        <p className="text-sm text-destructive">
-          {humanApiError(error, "Não consegui carregar a fatura.")}
-        </p>
-      ) : isLoading || !data ? (
-        <p className="text-sm text-muted-foreground">Carregando fatura...</p>
+      {clienteFalhou ? (
+        // A lista dos clientes que falhou: a falha do cliente ativo, e "Tentar de novo" lê a lista dos clientes.
+        <FalhaDoClienteAtivo className="no-print" focoAoSair={idDaVolta} />
+      ) : comFalha.isError && data === undefined ? (
+        <FalhaNaLeitura leitura={leitura} erro={comFalha.error} mensagem="Não consegui carregar a fatura." className="no-print" focoAoSair={idDaVolta} />
+      ) : !data ? (
+        // A espera em bloco: nada antes de 300 ms, depois a caixa e "Carregando a fatura…", com o anúncio.
+        <CarregandoNaRegiao rotulo="Carregando a fatura…" className="no-print" continuaARota onTentar={tentarDeNovo} focoAoSair={idDaVolta} />
       ) : (
         <InvoiceDocument
           competencia={competencia}

@@ -1,5 +1,8 @@
-import { Timestamp, collection, doc, getDoc, getDocs, query, where, type QuerySnapshot } from "firebase/firestore";
+import { Timestamp, collection, doc, query, where, type QuerySnapshot } from "firebase/firestore";
 
+// Sem rede, o getDocs direto responde com o cache, vazio na primeira visita, e o Início dizia que não havia nada a
+// fazer. Pelo lib/cloud-api.ts, a leitura que só achou o cache é a falta de conexão (carregamento v2, parte 13i).
+import { lerDocDoServidor as getDoc, lerDocsDoServidor as getDocs } from "../cloud-api";
 import { firestore } from "../firebase";
 import {
   ETAPAS_COM_PRAZO_DE_PERDA,
@@ -11,6 +14,7 @@ import {
 import { ETAPAS_COM_ADITIVO_A_FAZER, aditivoAFazer, aditivoPedido, type AditivoAFazer } from "./aditivos-da-operacao";
 import { ETAPAS_COM_VISTORIA_A_USAR, vistoriaAUsar, vistoriaDaDemanda, type VistoriaAUsar } from "./vistoria-da-operacao";
 import { cadastroDoDocumento, hojeLocal, type CadastroComercial } from "./clientes";
+import { itemDoCatalogoDoDocumento, type ItemDoCatalogoDoc } from "./montar";
 import { alertasParaOInicio, contratoDoRegistro, nomesDosClientes, type AlertaDoInicio, type Contrato } from "./contratos";
 import { orcamentosParaOInicio, type OrcamentoParaAprovarNoInicio } from "./aprovar";
 import {
@@ -234,4 +238,15 @@ export async function lerVistoriasAUsar(): Promise<VistoriaAUsar[]> {
     .map((row, indice) => vistoriaAUsar(row.id, row.data(), quotes[indice].exists() ? quotes[indice].data() : null))
     .filter((vistoria): vistoria is VistoriaAUsar => vistoria !== null)
     .sort((a, b) => a.enviadaEm.localeCompare(b.enviadaEm));
+}
+
+/**
+ * Os itens do catálogo (`lpu_items`), lidos uma vez quando a linha da medição
+ * vai ser montada. Pelo servidor: sem rede, a leitura só do cache é a falta de
+ * conexão, e não o catálogo vazio (parte 13i).
+ */
+export async function lerItensDoCatalogo(): Promise<Map<string, ItemDoCatalogoDoc>> {
+  if (!firestore) throw new Error("Firebase não configurado.");
+  const snapshot = await getDocs(collection(firestore, "lpu_items"));
+  return new Map(snapshot.docs.map((row) => [row.id, itemDoCatalogoDoDocumento(row.data())]));
 }

@@ -1,4 +1,5 @@
 import { CAMPO_SELECT, TelaDeRelatorios, dataBr, type NumeroDoResumo } from "@/components/relatorios/tela-de-relatorios";
+import type { NovaTentativa } from "@/lib/operacao/leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RELATORIO_DO_ACERTO, ROTULO_DO_ACERTO } from "@/lib/memoria/acerto";
@@ -40,6 +41,8 @@ export type RelatoriosViewProps = {
   filtro: FiltroDoRelatorio;
   clientes: ReadonlyArray<{ code: string; nome: string }>;
   estado: "carregando" | "erro" | "pronto";
+  /** A nova tentativa das leituras (parte 13g). */
+  leitura?: NovaTentativa;
   /** O que falta no filtro, ou null. */
   problema: string | null;
   resumo: ResumoDoRelatorio | null;
@@ -101,7 +104,7 @@ function Filtros({ relatorio, filtro, clientes, acoes }: Pick<RelatoriosViewProp
   );
 }
 
-export function RelatoriosView({ relatorio, relatorios = RELATORIOS_DA_OPERACAO, filtro, clientes, estado, problema, resumo, tabela, acoes }: RelatoriosViewProps) {
+export function RelatoriosView({ relatorio, relatorios = RELATORIOS_DA_OPERACAO, filtro, clientes, estado, leitura, problema, resumo, tabela, acoes }: RelatoriosViewProps) {
   const cliente = filtro.cliente ? (clientes.find((item) => item.code === filtro.cliente)?.nome ?? filtro.cliente) : null;
   return (
     <TelaDeRelatorios
@@ -112,6 +115,7 @@ export function RelatoriosView({ relatorio, relatorios = RELATORIOS_DA_OPERACAO,
       subtitulo={[`${dataBr(filtro.de)} a ${dataBr(filtro.ate)}`, cliente].filter(Boolean).join(" · ")}
       filtros={<Filtros relatorio={relatorio} filtro={filtro} clientes={clientes} acoes={acoes} />}
       estado={estado}
+      leitura={leitura}
       problema={problema}
       resumo={resumo}
       tabela={tabela}

@@ -80,6 +80,7 @@ vi.mock("@/lib/rh/api", () => ({
 }));
 
 import RhFicha from "./ficha";
+import { depoisDoToqueDuplo, rotuloDoBotao } from "@/test/botoes";
 
 let raiz: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -121,7 +122,7 @@ async function montar() {
 }
 
 function botao(rotulo: string): HTMLButtonElement {
-  const achado = [...container!.querySelectorAll("button")].find((item) => item.textContent === rotulo);
+  const achado = [...container!.querySelectorAll("button")].find((item) => rotuloDoBotao(item) === rotulo);
   if (!achado) throw new Error(`Botão "${rotulo}" não encontrado.`);
   return achado;
 }
@@ -145,7 +146,10 @@ describe("a ficha do RH com as callables", () => {
 
     // A confirmação continua aberta para tentar de novo, agora com a ficha lida de novo.
     estado.falhar = false;
+    // O Confirmar é o BotaoDeAcao, que ignora o segundo toque dentro de 1 s (parte 13g): a nova tentativa vem depois.
+    const voltarORelogio = depoisDoToqueDuplo();
     await clicar("Confirmar arquivamento");
+    voltarORelogio();
     const arquivamentos = estado.chamadas.filter((chamada) => chamada.nome === "archiveRhRecord").map((chamada) => chamada.dados.expected_edicao);
     expect(arquivamentos).toEqual([1, 2]);
   });
@@ -154,7 +158,19 @@ describe("a ficha do RH com as callables", () => {
     await montar();
     await clicar("Alterar");
     expect(botao("Arquivar").disabled).toBe(true);
-    expect(container!.querySelector<HTMLInputElement>('input[type="file"]')?.disabled).toBe(true);
+    // O seletor de arquivo é travado no código, nunca `disabled` (o foco de quem o usa pelo teclado não cai no body).
+    const seletor = container!.querySelector<HTMLInputElement>('input[type="file"]')!;
+    expect(seletor.disabled).toBe(false);
+    expect(seletor.getAttribute("aria-disabled")).toBe("true");
+    const abrir = new MouseEvent("click", { bubbles: true, cancelable: true });
+    seletor.dispatchEvent(abrir);
+    expect(abrir.defaultPrevented).toBe(true);
+    const antes = estado.chamadas.length;
+    Object.defineProperty(seletor, "files", { configurable: true, value: [new File(["x"], "rg.pdf", { type: "application/pdf" })] });
+    await act(async () => {
+      seletor.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(estado.chamadas.length).toBe(antes);
     expect([...container!.querySelectorAll("button")].filter((item) => item.textContent === "Alterar").every((item) => item.disabled)).toBe(true);
     expect(container!.querySelector<HTMLInputElement>("#registro-data")?.min).toBe("1900-01-01");
     expect(container!.querySelector<HTMLInputElement>("#registro-vencimento")?.max).toBe("2100-12-31");

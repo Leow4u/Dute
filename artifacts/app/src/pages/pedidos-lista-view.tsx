@@ -2,6 +2,8 @@ import { ArrowLeft, Printer } from "lucide-react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { PageHeader } from "@/components/ui/page-header";
 import { ListaDeSeparacaoDocumento } from "@/features/warehouse-ops/lista-de-separacao-documento";
 import type { FolhaDaLista } from "@/lib/warehouse-ops/lista-de-separacao";
@@ -20,16 +22,19 @@ export function PedidosListaView({
   folha,
   avisos = [],
   onImprimir,
+  onTentar,
 }: {
   estado: EstadoDaLista;
   folha: FolhaDaLista | null;
   /** A leitura que falhou (as posições, as caixas, o destino): a folha sai sem esse dado, e a tela diz qual. */
   avisos?: readonly string[];
   onImprimir: () => void;
+  /** Lê de novo o que ainda não chegou: "Tentar de novo" na demora, na desistência e na falha. */
+  onTentar?: () => Promise<unknown>;
 }) {
   const mensagem =
     estado === "carregando"
-      ? "Carregando"
+      ? "Carregando o pedido…"
       : estado === "erro"
         ? "Não foi possível carregar o pedido."
         : estado === "nao_encontrado" || !folha
@@ -52,7 +57,14 @@ export function PedidosListaView({
           }
         />
       </div>
-      {mensagem ? (
+{/* A primeira leitura é a espera em bloco do carregamento v2 (parte 13c): nada antes de 300 ms, a caixa e o rótulo,
+          com o anúncio pelo Anunciador, no lugar do "Carregando" seco. Ela continua a espera da rota, como o romaneio, e
+          tem a saída: "Tentar de novo" aos 10 s e a desistência aos 70 s; a falha também tenta de novo. */}
+      {estado === "carregando" ? (
+        <CarregandoNaRegiao rotulo="Carregando o pedido…" continuaARota onTentar={onTentar} className="no-print rounded-lg border border-border bg-card px-5 py-6" />
+      ) : estado === "erro" && onTentar ? (
+        <FalhaNaLeitura leitura={{ error: null, refetch: onTentar }} mensagem="Não foi possível carregar o pedido." className="no-print" />
+      ) : mensagem ? (
         <p role={estado === "erro" ? "alert" : undefined} className="no-print rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
           {mensagem}
         </p>

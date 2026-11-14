@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { doc, getDoc, onSnapshot, type DocumentData, type Firestore, type Query } from "firebase/firestore";
+import { doc, getDoc, type DocumentData, type DocumentSnapshot } from "firebase/firestore";
 
 import { useAppUser } from "../auth";
 import { firestore } from "../firebase";
+import { useEscutaAoVivo, useLeitura, type LeituraAoVivo } from "../operacao/leitura";
+
+export { SEM_NOVA_TENTATIVA, novaTentativaDe, type FaltaAoVivo, type FaltaDaLeitura, type NovaTentativa } from "../operacao/leitura";
 import type { Carga } from "./clientes";
 
 /**
@@ -10,39 +13,15 @@ import type { Carga } from "./clientes";
  * montagem do orçamento): coleção (ou consulta) e documento ao vivo, para a
  * tela ver o que a callable gravou sem recarregar,
  * e o nome de quem fez cada passo. As regras abrem a leitura a owner, admin e
- * comercial; a escrita é só das callables (lib/comercial/api.ts).
+ * comercial; a escrita é só das callables (lib/comercial/api.ts). A escuta é
+ * a mesma da Operação (`useEscutaAoVivo`; parte 13j), com a falta e a nova
+ * tentativa.
  */
 
 export type Leitura<T> = { itens: T[] | null; erro: boolean };
 
 /** Coleção (ou consulta) ao vivo. Chave null: nada a ler ainda. */
-export function useLeitura<T>(
-  chave: string | null,
-  consulta: (db: Firestore) => Query<DocumentData>,
-  mapear: (id: string, data: DocumentData) => T | null,
-): Leitura<T> {
-  const [estado, setEstado] = useState<Leitura<T> & { chave: string | null }>({ chave: null, itens: null, erro: false });
-  useEffect(() => {
-    if (!chave) return undefined;
-    if (!firestore) {
-      setEstado({ chave, itens: null, erro: true });
-      return undefined;
-    }
-    return onSnapshot(
-      consulta(firestore),
-      (snapshot) =>
-        setEstado({
-          chave,
-          itens: snapshot.docs.map((row) => mapear(row.id, row.data())).filter((item): item is T => item !== null),
-          erro: false,
-        }),
-      () => setEstado({ chave, itens: null, erro: true }),
-    );
-    // A consulta e o mapeamento dependem só da chave.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chave]);
-  return estado.chave === chave ? estado : { itens: null, erro: false };
-}
+export { useLeitura };
 
 /** A leitura como a tela mostra: erro e carregando nunca viram lista vazia. */
 export function carga<T>(leitura: Leitura<T>): Carga<T> {
@@ -56,25 +35,11 @@ export type LeituraDoDocumento = {
 };
 
 /** Um documento ao vivo ("demands/10045"). Caminho null: nada a ler. */
-export function useDocumento(caminho: string | null): LeituraDoDocumento {
-  const [estado, setEstado] = useState<LeituraDoDocumento & { caminho: string | null }>({
-    caminho: null,
-    dados: undefined,
-    erro: false,
-  });
-  useEffect(() => {
-    if (!caminho) return undefined;
-    if (!firestore) {
-      setEstado({ caminho, dados: undefined, erro: true });
-      return undefined;
-    }
-    return onSnapshot(
-      doc(firestore, caminho),
-      (snapshot) => setEstado({ caminho, dados: snapshot.exists() ? snapshot.data() : null, erro: false }),
-      () => setEstado({ caminho, dados: undefined, erro: true }),
-    );
-  }, [caminho]);
-  return estado.caminho === caminho ? estado : { dados: undefined, erro: false };
+export function useDocumento(caminho: string | null): LeituraDoDocumento & LeituraAoVivo {
+  const leitura = useEscutaAoVivo(caminho, (db) => doc(db, caminho ?? "-"), (snapshot: DocumentSnapshot<DocumentData>) =>
+    snapshot.exists() ? snapshot.data() : null,
+  );
+  return { dados: leitura.valor, erro: leitura.erro, tentando: leitura.tentando, tentar: leitura.tentar, falta: leitura.falta, lidaEm: leitura.lidaEm };
 }
 
 /**

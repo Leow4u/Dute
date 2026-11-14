@@ -6,14 +6,16 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { LayoutGrid, PackageOpen, Printer, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BlocoSemConexao, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/page-header";
@@ -25,7 +27,9 @@ import { ShelfVolumeSummary } from "@/features/warehouse-ops/shelf-volume-summar
 import { useIsDesktop } from "@/hooks/use-desktop";
 import { cn } from "@/lib/utils";
 import { useActiveCustomer } from "@/lib/active-customer-context";
-import { ehSemConexao, semConexaoNaLeitura } from "@/lib/conexao";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { falhaDasLeituras } from "@/lib/carregando/falha-das-leituras";
+import { ehFaltaDeConexao } from "@/lib/conexao";
 import { openingInventoryNotice } from "@/lib/opening-inventory";
 import { boxVolumeM3, formatVolumeM3 } from "@/lib/warehouse-volume";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
@@ -51,11 +55,13 @@ import {
   textoDaSaida,
   zonesOf,
 } from "@/lib/warehouse-map";
-import { type AnyRecord, fetchJson, formatNumber, getErrorMessage } from "@/lib/warehouse-ops/model";
+import { type AnyRecord, fetchJson, formatNumber } from "@/lib/warehouse-ops/model";
 import { type WarehousePosition, REFERENCE_BOX, formatKilos, formatMeters } from "@/lib/warehouse-positions";
 
 type PositionsResponse = { items?: WarehousePosition[] };
 const ALL = "__all__";
+/** A linha de estado sob o título: o foco vai a ela quando o aviso no lugar do mapa sai com ele. */
+const ID_DA_LINHA = "mapa-linha-de-estado";
 const NO_CUSTOMER = "__none__";
 
 const STATE_CLASS: Record<ShelfState, string> = {
@@ -82,7 +88,6 @@ export default function WarehouseMapPage() {
   const [, navigate] = useLocation();
   const desktop = useIsDesktop();
   const { code: activeCustomerCode, active: activeCustomer } = useActiveCustomer();
-  const queryClient = useQueryClient();
   const [zone, setZone] = useState<ZoneFilter>("all");
   const [aisle, setAisle] = useState<string>(ALL);
   const [search, setSearch] = useState("");
@@ -112,7 +117,8 @@ export default function WarehouseMapPage() {
     staleTime: 120_000,
     queryFn: () => fetchJson<{ items: AnyRecord[] }>("/api/skus?limit=2000"),
   });
-  const sessionQuery = useOpeningInventorySession();
+  // A situação do inventário que falhou fica na tela enquanto tenta de novo: o "Tentar de novo" não some com o foco nele.
+  const sessionQuery = useLeituraComFalha(useOpeningInventorySession());
   const openingNotice = openingInventoryNotice(sessionQuery.data);
   const showSessionStatus = zone === "all" || zone === activeCustomerCode;
   const showOpeningNotice = Boolean(openingNotice) && showSessionStatus && !sessionQuery.isError;
@@ -145,37 +151,60 @@ export default function WarehouseMapPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [desktop, selectedCode]);
 
-  const loading = positionsQuery.isLoading || boxesQuery.isLoading;
-  // Sem rede, o mapa que já estava fica, com a hora da leitura; sem nada
-  // lido, o aviso, e não "Nenhuma posição cadastrada" (decisão 2 do celular).
-  const semRede = semConexaoNaLeitura(positionsQuery, boxesQuery);
-  const semNadaLido = semRede !== null && semRede.lidaEm === null;
-  const error = semRede ? null : positionsQuery.error ?? boxesQuery.error;
-  const empty = !loading && !error && !semNadaLido && shelves.length === 0;
-  const relendo = positionsQuery.isFetching || boxesQuery.isFetching;
-  const reler = () => {
-    void queryClient.invalidateQueries({ queryKey: ["warehouse-positions", "all-pages"] });
-    void queryClient.invalidateQueries({ queryKey: ["warehouse-boxes", "all", "all-pages"] });
-    void queryClient.invalidateQueries({ queryKey: ["stock-balances", "estoque"] });
-  };
+  // O mapa são as posições e as caixas: só entra com as duas lidas, e nunca diz "Nenhuma posição cadastrada" antes de
+  // ler (carregamento v2, parte 13b). Os saldos (o saldo sem caixa registrada, da guarda por linha) esperam a primeira
+  // leitura, para a prateleira não parecer vazia antes dela, mas a falha deles não tira o mapa da tela; o catálogo
+  // (os nomes na busca e no painel) nem espera: o mapa entra sem ele. A leitura que falhou sem nada lido fica na tela
+  // enquanto tenta de novo (as cópias): o aviso e o "Tentar de novo" não somem com o foco nele, e a falta de conexão
+  // não vira o erro genérico na nova tentativa. Sem rede e sem nada lido, o "Sem conexão." ou o "Reconectando…" no
+  // lugar do mapa; com o mapa lido, quem diz é a linha de estado (decisão 2 do celular).
+  const posicoes = useLeituraComFalha(positionsQuery);
+  const caixas = useLeituraComFalha(boxesQuery);
+  const saldos = useLeituraComFalha(balancesQuery);
+  const catalogo = useLeituraComFalha(skusQuery);
+  const leiturasDoMapa = [posicoes, caixas, saldos];
+  const loading = leiturasDoMapa.some((leitura) => leitura.isLoading);
+  const falhaDoMapa = falhaDasLeituras([
+    [positionsQuery, posicoes],
+    [boxesQuery, caixas],
+  ]);
+  const falhou = falhaDoMapa !== null;
+  // Os saldos e o catálogo que falharam sem nada lido: o aviso fica acima do mapa, que continua na tela.
+  const falhaDoApoio = falhou ? null : falhaDasLeituras([
+    [balancesQuery, saldos],
+    [skusQuery, catalogo],
+  ]);
+  const saldosFalharam = saldos.isError && saldos.data === undefined;
+  const catalogoFalhou = catalogo.isError && catalogo.data === undefined;
+  const mensagemDoApoio =
+    saldosFalharam && catalogoFalhou
+      ? "Não consegui carregar os saldos e o catálogo."
+      : saldosFalharam
+        ? "Não consegui carregar os saldos das prateleiras."
+        : "Não consegui carregar o catálogo.";
+  const empty = !loading && !falhou && shelves.length === 0;
   const searching = search.trim().length > 0;
 
-  const panel = selected ? (
-    <ShelfPanel
-      key={selected.code}
-      shelf={selected}
-      lines={sessionLines}
-      skuIndex={skuIndex}
-      onClose={() => setSelectedCode(null)}
-      onLabels={(url) => navigate(url)}
-    />
-  ) : null;
+  // Ao lado da lista, o painel tem o "Fechar" dele; no painel de baixo (Sheet), o X de 44 px é o do Sheet.
+  const painel = (noSheet: boolean) =>
+    selected ? (
+      <ShelfPanel
+        key={selected.code}
+        shelf={selected}
+        lines={sessionLines}
+        skuIndex={skuIndex}
+        onClose={noSheet ? undefined : () => setSelectedCode(null)}
+        onLabels={(url) => navigate(url)}
+      />
+    ) : null;
+  const panel = painel(false);
 
   return (
     <div className="flex flex-col gap-6 pb-24">
       <PageHeader
         title="Mapa do armazém"
         description="Prateleiras, ocupação registrada e caixas por zona de cliente."
+        estado={<LinhaDeEstado id={ID_DA_LINHA} leitura={leiturasDoMapa} objeto="prateleiras" />}
         actions={
           <>
             <Button
@@ -197,33 +226,29 @@ export default function WarehouseMapPage() {
         }
       />
 
-      {!loading && semRede ? (
-        semRede.lidaEm === null ? (
-          <BlocoSemConexao tentando={relendo} onTentar={reler} />
-        ) : (
-          <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={relendo} onTentar={reler} />
-        )
+      {/* Com o mapa lido, a falta de conexão fica na linha de estado, sob o título, e nada empurra o mapa (parte 13b). A
+          falha, com a falta de conexão no BlocoSemConexao: "Tentando de novo…" só na nova tentativa que a pessoa pede. */}
+      {falhaDoMapa ? (
+        <FalhaNaLeitura leitura={falhaDoMapa.leitura} erro={falhaDoMapa.erro} mensagem="Não consegui carregar o mapa." focoAoSair={ID_DA_LINHA} />
       ) : null}
 
-      {error ? (
-        <Alert variant="destructive">
-          <AlertTitle>Não foi possível carregar o mapa</AlertTitle>
-          <AlertDescription>{getErrorMessage(error)}</AlertDescription>
-        </Alert>
+      {!loading && falhaDoApoio ? (
+        <FalhaNaLeitura leitura={falhaDoApoio.leitura} erro={falhaDoApoio.erro} mensagem={mensagemDoApoio} focoAoSair={ID_DA_LINHA} />
       ) : null}
 
-      {showSessionStatus && sessionQuery.isError && !ehSemConexao(sessionQuery.error) ? (
-        <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
-          <AlertTitle>Situação do inventário indisponível</AlertTitle>
-          <AlertDescription className="space-y-2">
-            <p>Não foi possível confirmar se o inventário de abertura de {activeCustomer.name} está concluído.</p>
-            <Button type="button" variant="outline" disabled={sessionQuery.isFetching} onClick={() => sessionQuery.refetch()}>
-              Tentar novamente
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : showSessionStatus && sessionQuery.isLoading ? (
-        <p role="status" className="text-sm text-muted-foreground">Verificando inventário de {activeCustomer.name}…</p>
+      {showSessionStatus && sessionQuery.isError && !ehFaltaDeConexao(sessionQuery.error) ? (
+        // A situação do inventário que falhou: o aviso da falha, com "Tentar de novo" (só a nova tentativa da pessoa muda
+        // o botão), e o foco vai à linha de estado quando ele sai (parte 13b).
+        <FalhaNaLeitura
+          leitura={sessionQuery}
+          erro={sessionQuery.error}
+          mensagem={`Não consegui confirmar o inventário de abertura de ${activeCustomer.name}.`}
+          focoAoSair={ID_DA_LINHA}
+        />
+      ) : showSessionStatus && sessionQuery.isLoading && !loading ? (
+        // A espera com a caixa aos 300 ms e o anúncio, sem região viva solta (parte 13b). Enquanto o mapa ainda lê, quem
+        // diz a espera é a linha de estado: uma caixa só na tela.
+        <CarregandoNaRegiao rotulo={`Verificando inventário de ${activeCustomer.name}…`} />
       ) : null}
 
       {showOpeningNotice ? (
@@ -248,7 +273,7 @@ export default function WarehouseMapPage() {
         </Alert>
       ) : null}
 
-      {!loading && !error && shelves.length > 0 ? (
+      {!loading && !falhou && shelves.length > 0 ? (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Tile
@@ -341,7 +366,10 @@ export default function WarehouseMapPage() {
                   {formatNumber(summary.boxes)} caixa(s) · {Math.round(summary.fill * 100)}% da frente
                 </Badge>
               </div>
-              {groups.length === 0 ? (
+              {groups.length === 0 && searching && catalogo.data === undefined ? (
+                // A busca por nome espera o catálogo: sem ele, "Nenhuma prateleira tem o que você buscou." seria afirmar sem ler.
+                <div className="px-4 py-10">{catalogo.isLoading ? <CarregandoNaRegiao rotulo="Carregando o catálogo…" /> : null}</div>
+              ) : groups.length === 0 ? (
                 <div className="px-4 py-10 text-center text-sm text-muted-foreground">
                   {searching ? "Nenhuma prateleira tem o que você buscou." : "Nenhuma prateleira nesta zona ou rua."}
                 </div>
@@ -380,7 +408,7 @@ export default function WarehouseMapPage() {
                   <SheetTitle>{selected?.code ?? "Prateleira"}</SheetTitle>
                   <SheetDescription>Caixas e ocupação da prateleira</SheetDescription>
                 </SheetHeader>
-                {panel}
+                {painel(true)}
               </SheetContent>
             </Sheet>
           ) : null}
@@ -579,7 +607,7 @@ export function SaidasDaPrateleira({ shelf }: { shelf: Pick<Shelf, "saidas"> }) 
   );
 }
 
-function ShelfPanel({
+export function ShelfPanel({
   shelf,
   lines,
   skuIndex,
@@ -589,7 +617,8 @@ function ShelfPanel({
   shelf: Shelf;
   lines: BoxContentSource[];
   skuIndex: SkuIndex;
-  onClose: () => void;
+  /** O "Fechar" do painel ao lado da lista; no Sheet, sem ele (o X do Sheet fecha). */
+  onClose?: () => void;
   onLabels: (url: string) => void;
 }) {
   const { position } = shelf;
@@ -599,7 +628,8 @@ function ShelfPanel({
   const reserved = shelf.volumeBoxes.filter((box) => box.status === "committing");
   return (
     <section className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
-      <div className="flex items-start justify-between gap-3">
+      {/* No Sheet, o cabeçalho deixa o canto para o X de 44 px dele. */}
+      <div className={cn("flex items-start justify-between gap-3", !onClose && "pr-10")}>
         <div className="min-w-0">
           <h2 className="text-xl font-semibold text-foreground">{shelf.code}</h2>
           <p className="text-xs text-muted-foreground">
@@ -609,9 +639,11 @@ function ShelfPanel({
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className={cn(STATE_CLASS[shelf.state], "max-w-40 whitespace-normal border text-center")}>{SHELF_STATE_LABELS[shelf.state]}</Badge>
-          <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Fechar">
-            <X className="size-4" />
-          </Button>
+          {onClose ? (
+            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Fechar">
+              <X className="size-4" />
+            </Button>
+          ) : null}
         </div>
       </div>
       <ShelfVolumeSummary title="Volume da prateleira" position={position} boxes={shelf.volumeBoxes} unconfirmed={shelf.boxes.length === 0} />

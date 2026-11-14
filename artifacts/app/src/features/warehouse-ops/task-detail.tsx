@@ -1,6 +1,6 @@
 /** Task detail panel and physical-flow section helpers. */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { nomeComTamanho } from "@workspace/dominio";
 import {
@@ -21,7 +21,6 @@ import {
   PackageOpen,
   PackageSearch,
   PlayCircle,
-  RefreshCw,
   Route,
   ShieldAlert,
   Sparkles,
@@ -32,7 +31,10 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { AvisoDeEspera } from "@/components/ui/aviso-de-espera";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import {
   Card,
   CardContent,
@@ -58,6 +60,7 @@ import {
   guardQueryDestination,
   type GuardPosition,
 } from "@/lib/warehouse-positions";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { cn } from "@/lib/utils";
 import {
   type AdvanceOperationPayload,
@@ -168,7 +171,7 @@ function LineResolutionControls({
             aria-pressed={isActive}
             className={cn(
               "flex min-h-9 items-center justify-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-[background-color,border-color,color,box-shadow]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+              "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
               isActive
                 ? `${copy.className}`
                 : "border-border bg-card text-muted-foreground hover:bg-card",
@@ -350,21 +353,17 @@ function PhysicalLineChecklist({
           </div>
         </div>
         {hasIssue ? (
-          <Button
-            type="button"
+          <BotaoDeAcao
             size="sm"
             variant="outline"
             className="w-full shrink-0 sm:w-auto"
+            estado={isRegistering ? "andamento" : "repouso"}
+            icone={<MessageSquareWarning aria-hidden="true" />}
+            rotulo="Enviar evidência"
+            andamento="Enviando…"
+            bloqueado={!isRegistering && !canRegister}
             onClick={() => onOpenException(task, issueNote)}
-            disabled={!canRegister || isRegistering}
-          >
-            {isRegistering ? (
-              <RefreshCw data-icon="inline-start" className="animate-spin" />
-            ) : (
-              <MessageSquareWarning data-icon="inline-start" />
-            )}
-            Enviar evidência
-          </Button>
+          />
         ) : null}
       </div>
 
@@ -515,7 +514,8 @@ export function PutawayDetailSection({
         />
       </div>
       {positionsStatus === "loading" ? (
-        <p className="text-sm text-muted-foreground">Carregando posições.</p>
+        // A caixa e o rótulo aos 300 ms, com o anúncio, no lugar do texto seco (carregamento v2, parte 13b).
+        <CarregandoNaRegiao rotulo="Carregando posições…" />
       ) : null}
       {positionsStatus === "error" ? (
         <p className="text-sm text-destructive">Não consegui consultar as posições.</p>
@@ -717,21 +717,17 @@ function PickingDetailSection({
       </div>
 
       {hasPhysicalIssue(counts) ? (
-        <Button
-          type="button"
+        <BotaoDeAcao
           size="sm"
           variant="outline"
           className="mt-4 w-full"
+          estado={isRegistering ? "andamento" : "repouso"}
+          icone={<MessageSquareWarning aria-hidden="true" />}
+          rotulo="Registrar falta/avaria da separação"
+          andamento="Registrando…"
+          bloqueado={!isRegistering && !canRegister}
           onClick={() => onOpenException(task, issueNote)}
-          disabled={!canRegister || isRegistering}
-        >
-          {isRegistering ? (
-            <RefreshCw data-icon="inline-start" className="animate-spin" />
-          ) : (
-            <MessageSquareWarning data-icon="inline-start" />
-          )}
-          Registrar falta/avaria da separação
-        </Button>
+        />
       ) : (
         <Alert className="mt-4 border-primary/20 bg-primary/10">
           <CheckCircle2 className="size-4" />
@@ -829,21 +825,17 @@ function PackingDetailSection({
             </p>
           </div>
         </div>
-        <Button
-          type="button"
+        <BotaoDeAcao
           size="sm"
           variant={hasDivergence ? "default" : "outline"}
           className="w-full shrink-0 sm:w-auto"
+          estado={isRegistering ? "andamento" : "repouso"}
+          icone={<MessageSquareWarning aria-hidden="true" />}
+          rotulo="Registrar falta/avaria"
+          andamento="Registrando…"
+          bloqueado={!isRegistering && !canRegister}
           onClick={() => onOpenException(task, issueNote)}
-          disabled={!canRegister || isRegistering}
-        >
-          {isRegistering ? (
-            <RefreshCw data-icon="inline-start" className="animate-spin" />
-          ) : (
-            <MessageSquareWarning data-icon="inline-start" />
-          )}
-          {isRegistering ? "Registrando" : "Registrar falta/avaria"}
-        </Button>
+        />
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-4">
@@ -1199,21 +1191,17 @@ function ExpeditionReadinessSection({
       )}
 
       {hasPhysicalIssue(counts) ? (
-        <Button
-          type="button"
+        <BotaoDeAcao
           size="sm"
           variant="outline"
           className="mt-4 w-full"
+          estado={isRegistering ? "andamento" : "repouso"}
+          icone={<MessageSquareWarning aria-hidden="true" />}
+          rotulo="Enviar evidência de saída"
+          andamento="Enviando…"
+          bloqueado={!isRegistering && !canRegister}
           onClick={() => onOpenException(task, issueNote)}
-          disabled={!canRegister || isRegistering}
-        >
-          {isRegistering ? (
-            <RefreshCw data-icon="inline-start" className="animate-spin" />
-          ) : (
-            <MessageSquareWarning data-icon="inline-start" />
-          )}
-          Enviar evidência de saída
-        </Button>
+        />
       ) : null}
 
       <div className="mt-4 flex flex-col gap-2">
@@ -1594,6 +1582,13 @@ export function TaskDetailPanel({
     );
   }, [positionsQuery.data]);
 
+  // O Avançar no relógio da espera (carregamento v2, parte 13i): o botão é o BotaoDeAcao, e aos 10 s o aviso da demora.
+  const esperaDoAvanco = useEspera(Boolean(activeTask && advancingTaskId === activeTask.id));
+  // O Avançar é de uma tarefa (a chave dele): trocada a tarefa, o foco que estava nele fica no da seguinte.
+  const avancarRef = useRef<HTMLButtonElement | null>(null);
+  // O motivo que trava o Avançar, que ele aponta (aria-describedby): o aviso da conferência ou dos dados pendentes.
+  const idDoMotivo = useId();
+
   if (!entry) {
     return (
       <Card className="min-w-0 xl:sticky xl:top-6">
@@ -1667,7 +1662,7 @@ export function TaskDetailPanel({
   const putawayBlockReason = !isPutaway
     ? ""
     : positionsQuery.isLoading
-      ? "Carregando posições."
+      ? "Carregando posições…"
       : positionsQuery.isError
         ? "Não consegui consultar as posições."
         : guardDestination && "problem" in guardDestination
@@ -1704,6 +1699,10 @@ export function TaskDetailPanel({
                 ? problemaDaJustificativaDoRecebimento(receivingAdvanceNote) ?? ""
                 : "";
   const canSubmitAdvance = advanceGate.canAdvance && !operationBlockReason;
+  // O motivo do Avançar travado, na tela: o aviso da conferência ou dos dados (fora da guarda), ou a linha da guarda.
+  const motivoDaGuardaNaTela = isPutaway && canAdvance && !canSubmitAdvance && Boolean(operationBlockReason) && !positionsQuery.isLoading;
+  const motivoNaTela =
+    !canSubmitAdvance && (isPutaway ? motivoDaGuardaNaTela : canAdvance && Boolean(advanceGate.blockedReason || operationBlockReason));
   const advanceNote = requiresReceivingJustification
     ? receivingAdvanceNote.trim()
     : undefined;
@@ -1840,7 +1839,7 @@ export function TaskDetailPanel({
           <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
             <AlertTriangle className="size-4" />
             <AlertTitle>Conferência física pendente</AlertTitle>
-            <AlertDescription>{advanceGate.blockedReason}</AlertDescription>
+            <AlertDescription id={idDoMotivo}>{advanceGate.blockedReason}</AlertDescription>
           </Alert>
         ) : null}
 
@@ -1848,7 +1847,7 @@ export function TaskDetailPanel({
           <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
             <AlertTriangle className="size-4" />
             <AlertTitle>Dados operacionais pendentes</AlertTitle>
-            <AlertDescription>{operationBlockReason}</AlertDescription>
+            <AlertDescription id={idDoMotivo}>{operationBlockReason}</AlertDescription>
           </Alert>
         ) : null}
 
@@ -1951,46 +1950,65 @@ export function TaskDetailPanel({
         {canAdvance || showGenericExceptionAction || !hasVisibleAction ? (
           <div
             className={cn(
-              "flex flex-col gap-3 sm:flex-row",
+              "flex flex-col gap-3 sm:flex-row sm:flex-wrap",
               isPutaway &&
                 "order-last sticky bottom-0 z-10 -mx-6 border-t border-border bg-card px-6 py-3 sm:flex-col lg:order-first lg:static lg:z-auto lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0",
             )}
           >
             {canAdvance ? (
-              <Button
-                type="button"
+              // O BotaoDeAcao, no relógio da espera (carregamento v2, seção 3; parte 13i): o toque afunda e trava na
+              // hora, mas a caixa e "Avançando…" só entram aos 300 ms e ficam pelo menos 500 ms, até a bancada reler
+              // (parte 10). Ocupado ou travado pelo que falta conferir, nunca `disabled`: o foco fica no botão.
+              // O botão é da tarefa (`key`): o "em andamento" que ele segura pelo mínimo de 500 ms não passa à tarefa
+              // escolhida durante o avanço, que começa com o Avançar dela, solto (revisão da parte 13i). Travado pelo
+              // que falta, ele aponta o motivo; com o foco, a troca de tarefa o deixa no Avançar da seguinte.
+              <BotaoDeAcao
+                key={task.id}
+                ref={avancarRef}
                 size={isPutaway ? "lg" : "default"}
                 className="w-full sm:flex-1"
+                estado={advancingTaskId === task.id ? "andamento" : "repouso"}
+                icone={<PlayCircle aria-hidden="true" />}
+                rotulo={advanceGate.label}
+                andamento="Avançando…"
+                bloqueado={advancingTaskId !== task.id && !canSubmitAdvance}
+                aria-describedby={advancingTaskId !== task.id && motivoNaTela ? idDoMotivo : undefined}
+                focoAoSair={() => avancarRef.current}
                 onClick={() => onAdvance(task.id, operationForAdvance, advanceNote)}
-                disabled={advancingTaskId === task.id || !canSubmitAdvance}
-              >
-                {advancingTaskId === task.id ? (
-                  <RefreshCw data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <PlayCircle data-icon="inline-start" />
-                )}
-                {advancingTaskId === task.id ? "Avançando" : advanceGate.label}
-              </Button>
+              />
             ) : null}
-            {isPutaway && canAdvance && !canSubmitAdvance && operationBlockReason ? (
-              <p className="text-sm font-semibold text-warning-soft-foreground sm:basis-full">{operationBlockReason}</p>
+            {/* Lendo as posições, quem diz a espera é a caixa da região ("Carregando posições…" aos 300 ms): o motivo
+                do bloqueio não repete o texto seco desde 0 ms (parte 13b). O avanço continua travado até ler. */}
+            {motivoDaGuardaNaTela ? (
+              <p id={idDoMotivo} className="text-sm font-semibold text-warning-soft-foreground sm:basis-full">{operationBlockReason}</p>
             ) : null}
             {showGenericExceptionAction ? (
-              <Button
-                type="button"
+              // Registrando a exceção, o botão da tarefa é o BotaoDeAcao: ocupado sem disabled (carregamento v2, parte 13b).
+              <BotaoDeAcao
                 variant="outline"
                 size={isPutaway ? "lg" : "default"}
                 className="w-full sm:flex-1"
+                estado={registeringExceptionId === task.id ? "andamento" : "repouso"}
+                icone={<MessageSquareWarning aria-hidden="true" />}
+                rotulo="Registrar exceção"
+                andamento="Registrando…"
                 onClick={() => onOpenException(task)}
-                disabled={registeringExceptionId === task.id}
-              >
-                {registeringExceptionId === task.id ? (
-                  <RefreshCw data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <MessageSquareWarning data-icon="inline-start" />
+              />
+            ) : null}
+            {/* Aos 10 s, a demora com o relógio, embaixo dos botões, que não saem do lugar; na escrita, sem "Tentar de
+                novo" (repetir duplicaria). No rodapé preso da guarda (até o lg), o aviso crescia o rodapé para cima e
+                os botões subiam 48 px sob o dedo: ali ele sai do fluxo e fica por cima do conteúdo, logo acima do
+                rodapé (revisão da parte 13i). */}
+            {canAdvance && advancingTaskId === task.id && esperaDoAvanco.calmo ? (
+              <AvisoDeEspera
+                fase="demorando"
+                tipo="escrita"
+                desdeMs={esperaDoAvanco.decorridoMs}
+                className={cn(
+                  "sm:basis-full",
+                  isPutaway && "max-lg:absolute max-lg:inset-x-0 max-lg:bottom-full max-lg:border-t max-lg:border-border max-lg:bg-card max-lg:px-6 max-lg:py-2",
                 )}
-                Registrar exceção
-              </Button>
+              />
             ) : null}
             {!hasVisibleAction ? (
               <div className="w-full rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">

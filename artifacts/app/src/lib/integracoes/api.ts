@@ -1,3 +1,4 @@
+import { faltaDeAgora } from "../conexao";
 import { firebaseAuth } from "../firebase";
 import { EMULADORES, EMULADORES_LIGADOS } from "../emuladores";
 import type { CreatedIntegration, IntegrationInput, IntegrationRow, PersonalKeyInput, PersonalKeyRow, PersonalKeyCapabilities } from "./model";
@@ -23,9 +24,14 @@ async function request<T>(path: string, method = "GET", body?: IntegrationInput 
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
   } catch {
-    throw new Error(method === "POST"
-      ? "Não foi possível confirmar a criação. Confira a lista antes de tentar novamente; se a chave foi criada, revogue-a e crie outra."
-      : "Não foi possível conectar à API. Tente novamente.");
+    if (method === "POST") {
+      throw new Error("Não foi possível confirmar a criação. Confira a lista antes de tentar novamente; se a chave foi criada, revogue-a e crie outra.");
+    }
+    // A leitura que não alcançou a API é falta de conexão ("Sem conexão" com o aparelho sem rede, "Sem resposta do
+    // servidor." com ele conectado), como as do resto do app: a tela diz qual, e o app relê sozinho quando a rede
+    // volta (carregamento v2, parte 7a).
+    if (method === "GET") throw faltaDeAgora();
+    throw new Error("Não foi possível conectar à API. Tente novamente.");
   }
   const result = await response.json().catch(() => null);
   if (!response.ok) throw new Error(result?.error?.message || "Não foi possível concluir a operação.");

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, query, where } from "firebase/firestore";
 import { useLocation, useSearch } from "wouter";
 
 import { useToast } from "@/hooks/use-toast";
@@ -8,7 +8,7 @@ import { cadastroDoDocumento, hojeLocal } from "@/lib/comercial/clientes";
 import { contratoDoRegistro, nomeDoCliente, nomesDosClientes } from "@/lib/comercial/contratos";
 import { baixarCsv, csvDoDiario, exportarDiarioDeBordo, nomeDoArquivoDoDiario } from "@/lib/comercial/diario";
 import { chaveDaIntencao, type TentativaDeChamada } from "@/lib/comercial/envio";
-import { carga, useLeitura } from "@/lib/comercial/leitura";
+import { carga, novaTentativaDe, useLeitura } from "@/lib/comercial/leitura";
 import {
   classificarErroDaMedicao,
   competenciaAtual,
@@ -30,7 +30,8 @@ import {
   type FormLinha,
   type Medicao,
 } from "@/lib/comercial/medicoes";
-import { itemDoCatalogoDoDocumento, type ItemDoCatalogoDoc } from "@/lib/comercial/montar";
+import { lerItensDoCatalogo } from "@/lib/comercial/inicio";
+import type { ItemDoCatalogoDoc } from "@/lib/comercial/montar";
 import { hrefDaMedicao, medicaoDaBusca } from "@/lib/comercial/navegacao";
 import { firestore } from "@/lib/firebase";
 
@@ -68,9 +69,9 @@ function useItensDoCatalogo(ativo: boolean): Map<string, ItemDoCatalogoDoc> | "c
       return undefined;
     }
     let vivo = true;
-    getDocs(collection(firestore, "lpu_items"))
-      .then((snapshot) => {
-        if (vivo) setEstado(new Map(snapshot.docs.map((row) => [row.id, itemDoCatalogoDoDocumento(row.data())])));
+    lerItensDoCatalogo()
+      .then((itens) => {
+        if (vivo) setEstado(itens);
       })
       .catch(() => {
         if (vivo) setEstado("erro");
@@ -91,6 +92,8 @@ export default function ComercialMedicoesPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // Qual ação grava direto da tela (abrir, enviar, reabrir, aplicar a tarifa de uma linha): o botão dela diz o gerúndio.
+  const [emAndamento, setEmAndamento] = useState<string | null>(null);
   const tentativa = useRef<TentativaDeChamada | null>(null);
 
   const contratosLidos = useLeitura("contracts", (db) => collection(db, "contracts"), contratoDoRegistro);
@@ -145,10 +148,12 @@ export default function ComercialMedicoesPage() {
     nome: "saveMedicao" | "advanceMedicao",
     montar: (chave: string) => Record<string, unknown>,
     sucesso: (resultado: Record<string, unknown>) => string,
+    acao: string | null = null,
   ) {
     const assinatura = `${nome}:${JSON.stringify(montar(""))}`;
     tentativa.current = chaveDaIntencao(tentativa.current, assinatura, novaChave);
     setOcupado(true);
+    setEmAndamento(acao);
     setErro(null);
     try {
       const resultado = await chamarComercial(nome, montar(tentativa.current.chave));
@@ -169,14 +174,26 @@ export default function ComercialMedicoesPage() {
       }
     } finally {
       setOcupado(false);
+      setEmAndamento(null);
     }
   }
 
-  const avancar = (base: Medicao, acao: AcaoDeAvanco, extra: { link?: string; em?: string; nota?: string } = {}, sucesso: string) =>
-    gravar("advanceMedicao", (chave) => payloadAvancar(base, acao, chave, extra), (resultado) => {
-      const pendentes = Array.isArray(resultado.demandas_pendentes) ? resultado.demandas_pendentes.length : 0;
-      return acao === "approve" && pendentes > 0 ? `${sucesso} (${pendentes} ${pendentes === 1 ? "demanda pendente" : "demandas pendentes"})` : sucesso;
-    });
+  const avancar = (
+    base: Medicao,
+    acao: AcaoDeAvanco,
+    extra: { link?: string; em?: string; nota?: string } = {},
+    sucesso: string,
+    naTela: string | null = null,
+  ) =>
+    gravar(
+      "advanceMedicao",
+      (chave) => payloadAvancar(base, acao, chave, extra),
+      (resultado) => {
+        const pendentes = Array.isArray(resultado.demandas_pendentes) ? resultado.demandas_pendentes.length : 0;
+        return acao === "approve" && pendentes > 0 ? `${sucesso} (${pendentes} ${pendentes === 1 ? "demanda pendente" : "demandas pendentes"})` : sucesso;
+      },
+      naTela,
+    );
 
   const abrirDialogo = (proximo: Dialogo) => {
     setErro(null);
@@ -209,16 +226,19 @@ export default function ComercialMedicoesPage() {
         medicao={medicao}
         tabelas={carga(tabelas)}
         ocupado={ocupado}
+        emAndamento={emAndamento}
+        leitura={novaTentativaDe([contratosLidos])}
+        leituraDaMedicao={medicoes}
         aviso={aviso}
         acoes={{
           abrir: () => {
             if (!contratoId) return;
-            void gravar("saveMedicao", (chave) => payloadCriar(contratoId, competencia, chave), () => "Medição aberta");
+            void gravar("saveMedicao", (chave) => payloadCriar(contratoId, competencia, chave), () => "Medição aberta", "abrir");
           },
-          enviar: () => viva && void avancar(viva, "send", {}, "Medição enviada ao cliente"),
+          enviar: () => viva && void avancar(viva, "send", {}, "Medição enviada ao cliente", "enviar"),
           aprovar: () => viva && abrirDialogo({ tipo: "aprovar", base: viva }),
           contestar: () => viva && abrirDialogo({ tipo: "contestar", base: viva }),
-          reabrir: () => viva && void avancar(viva, "reopen", {}, "Medição reaberta"),
+          reabrir: () => viva && void avancar(viva, "reopen", {}, "Medição reaberta", "reabrir"),
           exportar: () => {
             if (!viva) return;
             baixarCsv(nomeDoArquivoDoDiario(cliente, viva.competencia), csvDoDiario(exportarDiarioDeBordo(viva)));
@@ -232,7 +252,7 @@ export default function ComercialMedicoesPage() {
             const linha = viva?.linhas.find((candidata) => candidata.id === linhaId);
             if (!viva || !linha) return;
             const base = viva;
-            void gravar("saveMedicao", (chave) => payloadAplicarTarifa(base, linha, lpuItemId, chave), () => "Tarifa aplicada");
+            void gravar("saveMedicao", (chave) => payloadAplicarTarifa(base, linha, lpuItemId, chave), () => "Tarifa aplicada", `aplicar:${linhaId}`);
           },
           anexar: (linhaId) => viva && abrirDialogo({ tipo: "anexo", base: viva, linhaId }),
         }}

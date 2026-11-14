@@ -2,6 +2,8 @@ import { useId } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { DialogCancelar } from "@/components/ui/dialog";
 
 /**
  * Cancelar a vistoria (pergunta 58, canvas de 26/10/2026, item 1): a
@@ -50,12 +52,10 @@ export function CancelarVistoriaView({
         </p>
       ) : null}
       <div className="flex flex-wrap justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onVoltar} disabled={ocupado}>
+        <DialogCancelar variant="ghost" ocupado={ocupado} onClick={onVoltar}>
           Voltar
-        </Button>
-        <Button type="button" onClick={onCancelar} disabled={ocupado}>
-          Cancelar vistoria
-        </Button>
+        </DialogCancelar>
+        <BotaoDeAcao estado={ocupado ? "andamento" : "repouso"} rotulo="Cancelar vistoria" andamento="Cancelando a vistoria…" onClick={onCancelar} />
       </div>
     </section>
   );

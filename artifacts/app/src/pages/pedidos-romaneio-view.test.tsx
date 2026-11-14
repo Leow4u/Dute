@@ -174,7 +174,6 @@ describe("Pedidos › Romaneio", () => {
 
   it("carregando, não encontrado, erro e pedido em separação: a mensagem no lugar da folha, e Imprimir desligado", () => {
     for (const [estado, mensagem] of [
-      ["carregando", "Carregando"],
       ["nao_encontrado", "Pedido não encontrado"],
       ["erro", "Não foi possível carregar o pedido."],
       ["em_separacao", "Pedido em separação"],
@@ -198,5 +197,15 @@ describe("Pedidos › Romaneio", () => {
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(render("pronto", FOLHA))).toEqual([]);
     expect(await violacoesDeAcessibilidade(render("em_separacao", null))).toEqual([]);
+  });
+});
+
+describe("o romaneio carregando (carregamento v2, parte 13c)", () => {
+  it("a espera em bloco no lugar da folha, sem o \"Carregando\" seco, e Imprimir desligado", async () => {
+    const html = render("carregando", null);
+    expect(textosDaTela(html)).toEqual(["Pedidos", "Romaneio", "Imprimir"]);
+    expect(html).toContain("data-carregando-na-regiao");
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>.*Imprimir<\/button>/s);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });

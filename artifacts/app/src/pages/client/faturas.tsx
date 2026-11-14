@@ -4,6 +4,8 @@ import { Link } from "wouter";
 
 import { NfsDosServicos } from "@/components/portal/nfs-dos-servicos";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { PageHeader } from "@/components/ui/page-header";
 import { Segmented } from "@/components/ui/segmented";
 import { agentAskHref } from "@/lib/agent-chat";
@@ -45,10 +47,15 @@ export function ClienteFaturas() {
   const { user } = useAppUser();
   const { profile } = useOperationProfile();
   const comFaturas = profile ? leiturasDoPortal(profile.modules).faturas : false;
-  const { nfs } = useNfsDoCliente(user?.publicMetadata.customer_code, comFaturas);
+  const codigo = user?.publicMetadata.customer_code?.trim() || null;
+  const leituraDasNfs = useNfsDoCliente(codigo, comFaturas);
+  const { nfs } = leituraDasNfs;
+  // As NFs que ainda não chegaram (carregamento v2, parte 13f): nunca "Nenhuma fatura fechada" antes de lê-las.
+  const lendoNfs = comFaturas && Boolean(codigo) && nfs === null && !leituraDasNfs.erro;
+  const nfsLidas = !comFaturas || !codigo || nfs !== null;
   const hoje = hojeIso(new Date());
   return (
-    <ClientDataBoundary>
+    <ClientDataBoundary titulo="Faturas" largura="max-w-6xl">
       {(overview) => {
         const invoices = closedInvoices(getInvoiceHistory(overview));
         const deliveries = deliveriesByMonth((overview.order_tracking ?? getOrders(overview)) as Record<string, unknown>[]);
@@ -83,9 +90,19 @@ export function ClienteFaturas() {
               />
 
               <NfsDosServicos nfs={nfs ?? []} hoje={hoje} />
+              {leituraDasNfs.erro ? (
+                // A falha das NFs nunca vira o vazio (necessidade 2): dita, com a nova tentativa.
+                <FalhaAoVivo
+                  leitura={leituraDasNfs}
+                  mensagem="Não foi possível carregar as NFs dos serviços."
+                  className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+                />
+              ) : lendoNfs ? (
+                <CarregandoNaRegiao rotulo="Carregando as NFs dos serviços…" continuaARota onTentar={leituraDasNfs.tentar} className="px-1" />
+              ) : null}
 
               {!latest ? (
-                semNadaParaCobrar(insights, nfs?.length ?? 0) ? (
+                nfsLidas && semNadaParaCobrar(insights, nfs?.length ?? 0) ? (
                   <p className="rounded-lg border border-dashed border-border bg-card px-5 py-8 text-sm text-muted-foreground">
                     Nenhuma fatura fechada ainda. Quando a Dutelog emitir a fatura do mês, ela aparece aqui com o detalhamento.
                   </p>

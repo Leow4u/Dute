@@ -23,6 +23,9 @@ import type { NovoRegistro, RegistroNaFila } from "@/lib/campo/fila";
 import { ROTA_CAMPO, hrefDaOsNoCampo } from "@/lib/campo/navegacao";
 import { horaDe, type EtapaDaOs, type FichaDaOs } from "@/lib/operacao/ficha-da-os";
 import { cn } from "@/lib/utils";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
  * Campo › Concluir OS (parte 3.9b; docs/mockups/Campo2Concluir.dc.html): os
@@ -69,6 +72,7 @@ export function CampoConcluirView({
   agora,
   onConcluir,
   onFotos,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDaConclusao;
   numero: string;
@@ -80,6 +84,8 @@ export function CampoConcluirView({
   agora: () => Date;
   onConcluir: (novo: NovoRegistro) => void;
   onFotos: (arquivos: File[], extra: { etapa: EtapaDaOs }) => void;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   const id = useId();
   const [aceite, setAceite] = useState<AceiteNoCampo>("assinatura");
@@ -111,24 +117,23 @@ export function CampoConcluirView({
       <div className="flex flex-col gap-4">
         {voltar}
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Concluir OS {numero}</h1>
-        {estado === "carregando" ? <p className="text-sm text-muted-foreground">Carregando</p> : null}
-        {estado === "erro" ? (
-          <p role="alert" className="text-sm text-destructive">
-            Não foi possível carregar a OS.
-          </p>
-        ) : null}
+        {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a OS…" continuaARota onTentar={leitura.tentar} /> : null}
+        {estado === "erro" ? <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a OS." /> : null}
         {estado === "nao_encontrada" ? <p className="text-sm text-muted-foreground">OS {numero} não encontrada</p> : null}
       </div>
     );
   }
 
   const cabecalho = (
-    <header className="flex flex-col gap-1">
-      <h1 className="text-2xl font-bold tracking-tight text-foreground">Concluir OS {ficha.numero}</h1>
-      <p className="text-sm text-muted-foreground">
-        {ficha.clienteNome ?? ficha.customerCode} · Demanda {ficha.demanda}
-      </p>
-    </header>
+    <>
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Concluir OS {ficha.numero}</h1>
+        <p className="text-sm text-muted-foreground">
+          {ficha.clienteNome ?? ficha.customerCode} · Demanda {ficha.demanda}
+        </p>
+      </header>
+      <FaixaAoVivo leitura={leitura} objeto="OS" />
+    </>
   );
 
   if (enviada || ficha.status === "em_revisao" || ficha.status === "revisada") {
@@ -270,7 +275,7 @@ export function CampoConcluirView({
             </li>
           ))}
           <li>
-            <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-input bg-card text-xs font-semibold text-foreground focus-within:ring-2 focus-within:ring-ring/40">
+            <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-input bg-card text-xs font-semibold text-foreground focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco">
               <Camera aria-hidden="true" className="size-5 text-primary" />
               Tirar foto
               <input

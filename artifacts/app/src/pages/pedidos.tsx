@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { collection, doc, query, where } from "firebase/firestore";
 import {
@@ -6,17 +6,19 @@ import {
   Check,
   ChevronRight,
   ClipboardCheck,
+  Clock3,
   MoreHorizontal,
   Package,
   Printer,
-  RefreshCw,
   Truck,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "wouter";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeVariants } from "@/components/ui/badge";
+import { BarraDeEspera } from "@/components/ui/barra-de-espera";
+import { BotaoDeAcao, CaixaDeAlerta, type EstadoDaAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -24,11 +26,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { AvisoDeEspera } from "@/components/ui/aviso-de-espera";
+import { Progresso, type ItemDoProgresso } from "@/components/ui/progresso";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { PageHeader } from "@/components/ui/page-header";
-import { QueueGroup, QueueRow, type QueueTone } from "@/components/ui/queue-list";
+import { LinhaDaFila, QueueGroup, QueueRow, type CarregandoDoGrupo, type QueueTone } from "@/components/ui/queue-list";
 import { Segmented } from "@/components/ui/segmented";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Sheet,
   SheetContent,
@@ -50,6 +56,7 @@ import { ExceptionDialog, useWarehouseTaskActions } from "@/features/warehouse-o
 import { TaskDetailPanel } from "@/features/warehouse-ops/task-detail";
 import {
   Dialog,
+  DialogCancelar,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -61,18 +68,31 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useContagemLembrada, type ContagensDaLista } from "@/lib/carregando/contagem-lembrada";
+import { resumoDaLista } from "@/lib/carregando/resumo-da-lista";
+import { CARREGANDO, relogioDaEspera } from "@/lib/carregando/tempo";
+import { desfechoDoErro, useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { useFalhaNaReleituraAutomatica } from "@/lib/carregando/use-leitura-com-falha";
+import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { usePalcoSemSaltos } from "@/lib/carregando/palco-sem-saltos";
+import { useListaSemSaltos } from "@/lib/carregando/use-lista-sem-saltos";
 import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { chamarOperacao, novaChave } from "@/lib/operacao/api";
 import { hojeIso } from "@/lib/operacao/fila";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import {
   buildOrderQueue,
   chaveDaPrincipal,
+  isAwaitingDecision,
   linhaDoParaQuando,
   ordersGroupEmpty,
   paraQuandoDoPedido,
 } from "@/lib/order-queue";
 import { useItemPhotos } from "@/lib/use-item-photos";
+import { Esqueleto } from "@/components/ui/esqueleto";
 import { labelsUrl } from "@/lib/warehouse-labels";
 import { etiquetasParaTrocar, textoDeEtiquetasParaTrocar } from "@/lib/warehouse-ops/caixas-da-separacao";
 import { hrefDaListaDeSeparacao, resumoDoGrupo } from "@/lib/warehouse-ops/lista-de-separacao";
@@ -103,7 +123,7 @@ import {
   type EntregaDoPedido,
   type FormularioDaEntrega,
 } from "@/lib/warehouse-ops/entrega";
-import type { OrderGroup } from "@/lib/warehouse-ops/orders";
+import { groupWarehouseOrders, queueTasks, type OrderGroup } from "@/lib/warehouse-ops/orders";
 import {
   buildBalanceValidation,
   formatRequestAge,
@@ -114,6 +134,26 @@ import {
 } from "./customer-requests";
 
 const numberFormatter = new Intl.NumberFormat("pt-BR");
+
+/**
+ * As etapas da entrega pela Dutelog (carregamento v2, parte 11 e momento 6):
+ * o pedido em "Para entregar" sai (quem levou e a placa) e é entregue, em
+ * duas chamadas. A etapa anda com a resposta de cada uma. Ficam no diálogo
+ * desde o repouso, pendentes, para nada entrar empurrando o botão tocado.
+ */
+export const ETAPAS_DA_ENTREGA = ["Saída", "Entrega"] as const;
+
+/**
+ * Onde as etapas da entrega estão, pela etapa da vez (1 ou 2; 0 em repouso):
+ * as de antes feitas, a da vez andando enquanto a chamada dela espera (sem
+ * resposta, e conferindo, ela fica pendente), as de depois pendentes.
+ */
+export function etapasDaEntrega(etapa: number, andando = true): ItemDoProgresso[] {
+  return ETAPAS_DA_ENTREGA.map((rotulo, indice) => ({
+    rotulo,
+    estado: indice + 1 < etapa ? "feito" : indice + 1 === etapa && andando ? "andamento" : "fila",
+  }));
+}
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
@@ -182,6 +222,35 @@ type DialogState =
   | { kind: "cancel"; order: OrderGroup; orderId: string }
   | null;
 
+/** As duas ações de "Para aprovar": cada linha tem o próprio estado (carregamento v2, momento 4). */
+type AcaoDaSolicitacao = "aprovar" | "recusar";
+
+const ROTA_DA_ACAO: Record<AcaoDaSolicitacao, "approve" | "reject"> = { aprovar: "approve", recusar: "reject" };
+
+/**
+ * O título no meio da frase ("Aprovando pedido 1042…"): a primeira palavra
+ * comum perde a maiúscula; a sigla e o número (PED-0043) ficam como estão.
+ */
+export function noMeioDaFrase(titulo: string): string {
+  return /^\p{Lu}\p{Ll}/u.test(titulo) ? titulo.charAt(0).toLocaleLowerCase("pt-BR") + titulo.slice(1) : titulo;
+}
+
+/**
+ * O Recusar do diálogo fica travado sem o motivo (de 3 letras) no repouso e
+ * também no "Não recusado", quando o botão volta a responder; e pela outra
+ * ação da linha. Em andamento e no sucesso o botão já se trava, e o
+ * "Conferir" (sem resposta) só relê, sem o motivo.
+ */
+function recusaTravada(estado: EstadoDaAcao, ocupada: boolean, motivo: string): boolean {
+  if (estado === "repouso") return ocupada || motivo.trim().length < 3;
+  return estado === "erro" && motivo.trim().length < 3;
+}
+
+/** O anúncio do leitor de tela tem até seis palavras. */
+function seisPalavras(texto: string): string {
+  return texto.split(/\s+/).filter(Boolean).slice(0, 6).join(" ");
+}
+
 /** Os pedidos de saída que ainda não saíram: a entrega de cada um (parte 4.5c). */
 const PEDIDOS_EM_ABERTO = ["PENDENTE", "SEPARACAO", "EM_EXPEDICAO"];
 
@@ -191,7 +260,7 @@ export default function Pedidos() {
   // O suporte consulta: sem separar, entregar, tratar nem definir a entrega.
   const operador = canOperateWarehouse(user?.publicMetadata.role);
   const openingSession = useOpeningInventorySession();
-  const { active: cliente } = useActiveCustomer();
+  const { active: cliente, isLoading: clienteCarregando, falhou: clienteFalhou, codeProvavel } = useActiveCustomer();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [view, setView] = useState<"open" | "delivered">("open");
@@ -211,11 +280,22 @@ export default function Pedidos() {
   // Cancelar pedido (pergunta 59): a coordenação, com o motivo.
   const [cancelReason, setCancelReason] = useState("");
   const chaveDoCancelamento = useRef<string | null>(null);
+  // A linha que abriu o diálogo (a recusa, a entrega, o Entregue, o cancelamento) e o controle que estava com o foco:
+  // o diálogo que fecha devolve o foco a ela ou, se ela saiu, à seguinte, e nunca ao corpo.
+  const linhaDoDialogo = useRef<{ chave: string; abridor: Element | null } | null>(null);
+  const lembrarDaLinha = (chave: string) => {
+    linhaDoDialogo.current = { chave, abridor: typeof document === "undefined" ? null : document.activeElement };
+  };
+  // A leitura ao vivo das entregas que falha não se refaz sozinha: "Tentar de novo", na linha, assina de novo, e a
+  // falha fica até a nova responder (`useLeitura`; carregamento v2, partes 13c e 13g). Quando ela chega, o foco vai à
+  // entrega da linha.
+  const [tentandoEntregas, setTentandoEntregas] = useState(false);
   const entregas = useLeitura(
     OPERACAO_LIBERADO ? "orders:em_aberto" : null,
     (db) => query(collection(db, "orders"), where("status", "in", PEDIDOS_EM_ABERTO)),
     (id, data) => ({ id, entrega: entregaDoPedido(data) }),
   );
+  const entregasFalharam = entregas.erro;
   const entregaPorPedido = useMemo(() => new Map((entregas.itens ?? []).map((item) => [item.id, item.entrega])), [entregas.itens]);
   const entregaDe = (order: OrderGroup): EntregaDoPedido | null => (order.orderId ? entregaPorPedido.get(order.orderId) ?? null : null);
 
@@ -241,10 +321,60 @@ export default function Pedidos() {
     retry: 1,
   });
 
+  // Aprovar e recusar por linha (carregamento v2, momento 4): aprovar a 1042
+  // deixa as outras livres, e a linha decidida fica na fila enquanto o botão
+  // diz "Aprovado" (1 s e até a releitura chegar).
+  const linhas = useAcaoNaLinha<string>();
+  // O toast do sucesso sai uma vez por decisão, venha da resposta ou do "Conferir".
+  const avisadas = useRef(new Set<string>());
+  // As solicitações aprovadas nesta tela: o pedido delas chega a "Para separar" com o realce.
+  const aprovadasAqui = useRef(new Set<string>());
   const queue = useMemo(
-    () => buildOrderQueue({ requests: requests.data?.items, ops: ops.data }),
-    [ops.data, requests.data?.items],
+    () => buildOrderQueue({ requests: requests.data?.items, ops: ops.data, segurar: linhas.ocupada }),
+    [ops.data, requests.data?.items, linhas],
   );
+  // A falha sem nada lido fica na tela durante a releitura automática (o intervalo de 60 s): o aviso, o "Tentar de
+  // novo" e o foco nele. Só a nova tentativa que a pessoa pede volta às linhas-fantasma.
+  const opsNaTela = useFalhaNaReleituraAutomatica(ops);
+  const requestsNaTela = useFalhaNaReleituraAutomatica(requests);
+  const loading = opsNaTela.isLoading || (decider && requestsNaTela.isLoading);
+  // A linha decidida sai sem salto (carregamento v2, momento 4): depois do
+  // "Aprovado", esmaece e as de baixo sobem; sob o dedo, espera até 3 s. O
+  // pedido só entra em "Para separar" quando a linha dele deixou "Para
+  // aprovar": nunca nos dois grupos ao mesmo tempo. O palco da tela leva
+  // junto o cartão, os títulos e os grupos de baixo, e a saída e a chegada
+  // refluem de uma vez. Só o pedido aprovado nesta tela chega com o realce; o
+  // que chega pela releitura ou pelo tempo real, sem sinal (momento 7).
+  // A primeira leitura com dado entra de uma vez, também a que vem depois de
+  // uma falha ou sem rede: ela não chega, aparece.
+  const palco = usePalcoSemSaltos();
+  const lida = Boolean(ops.data) && (!decider || Boolean(requests.data));
+  // A linha que sai é desenhada com o dado que ainda houver; sem ele, fica a última imagem dela.
+  const solicitacoes = useMemo(() => new Map((requests.data?.items ?? []).map((request) => [request.id, request])), [requests.data?.items]);
+  const pedidos = useMemo(
+    () => new Map([...queue.pick, ...queue.deliver, ...queue.delivered].map((order) => [order.key, order])),
+    [queue.pick, queue.deliver, queue.delivered],
+  );
+  const chavesParaAprovar = useMemo(() => (decider ? queue.approve.map((request) => request.id) : []), [decider, queue.approve]);
+  const paraAprovar = useListaSemSaltos(chavesParaAprovar, { pronta: lida, palco });
+  const naFilaDeAprovar = useMemo(() => new Set(paraAprovar.chaves), [paraAprovar.chaves]);
+  const chavesParaSeparar = useMemo(
+    () => queue.pick.filter((order) => !order.requestId || !naFilaDeAprovar.has(order.requestId)).map((order) => order.key),
+    [queue.pick, naFilaDeAprovar],
+  );
+  const aprovadoAqui = (key: string) => {
+    const requestId = pedidos.get(key)?.requestId;
+    return Boolean(requestId && aprovadasAqui.current.has(requestId));
+  };
+  const paraSeparar = useListaSemSaltos(chavesParaSeparar, { pronta: lida, palco, realcar: aprovadoAqui });
+  // Do mesmo jeito, o pedido separado só entra em "Para entregar" quando a linha dele deixou "Para separar";
+  // e o entregue (ou o que a releitura tirou) sai dela sem salto.
+  const naFilaDeSeparar = useMemo(() => new Set(paraSeparar.chaves), [paraSeparar.chaves]);
+  const chavesParaEntregar = useMemo(
+    () => queue.deliver.filter((order) => !naFilaDeSeparar.has(order.key)).map((order) => order.key),
+    [queue.deliver, naFilaDeSeparar],
+  );
+  const paraEntregar = useListaSemSaltos(chavesParaEntregar, { pronta: lida, palco });
   const entries = useMemo(() => queueEntries(normalizeQueues(ops.data?.queues)), [ops.data?.queues]);
   const actions = useWarehouseTaskActions({
     findEntry: (taskId) => entries.find((entry) => entry.task.id === taskId),
@@ -258,56 +388,84 @@ export default function Pedidos() {
     ? entries.find((entry) => entry.task.id === treatingTask.id)
     : undefined;
 
+  const releitura = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] }),
+      queryClient.invalidateQueries({ queryKey: ["customer-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["stock-balances"] }),
+    ]);
   const refreshAll = () => {
-    void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-    void queryClient.invalidateQueries({ queryKey: ["customer-requests"] });
-    void queryClient.invalidateQueries({ queryKey: ["stock-balances"] });
+    void releitura();
   };
+  /**
+   * Fecha o diálogo da ação que terminou, e só ele. Com a ação por linha, a
+   * recusa de uma solicitação pode abrir o diálogo dela enquanto a entrega
+   * ou o cancelamento ainda grava, e o fim deles não a fecha.
+   */
+  const fecharDialogo = (kind: NonNullable<DialogState>["kind"]) =>
+    setDialog((atual) => (atual?.kind === kind ? null : atual));
 
-  const onError = (error: Error) =>
+  const onError = (error: unknown) =>
     toast({
       title: "Não consegui atualizar o pedido",
       description: humanApiError(error, "Tente novamente em instantes."),
       variant: "destructive",
     });
 
-  const decide = useMutation({
-    mutationFn: ({
-      request,
-      action,
-      reason,
-    }: {
-      request: CustomerRequest;
-      action: "approve" | "reject";
-      reason?: string;
-    }) => {
-      const expected = String(request.status || "open").toLowerCase();
-      return fetchJson(
-        `/api/customer-requests/${encodeURIComponent(request.id)}/${action}`,
-        {
+  /** O retorno da decisão que valeu: o toast, uma vez, e a recusa fecha o diálogo dela. */
+  const decisaoValeu = (request: CustomerRequest, acao: AcaoDaSolicitacao) => {
+    const marca = `${request.id}:${acao}`;
+    if (avisadas.current.has(marca)) return;
+    avisadas.current.add(marca);
+    if (acao === "aprovar") {
+      aprovadasAqui.current.add(request.id);
+      toast({ title: `${requestTitle(request)} aprovado` });
+      return;
+    }
+    toast({ title: "Solicitação recusada." });
+    setDialog((atual) => (atual?.kind === "reject" && atual.request.id === request.id ? null : atual));
+  };
+
+  /** O "Conferir" dos 70 s: relê a solicitação e nunca reenvia. */
+  const conferirDecisao = async (request: CustomerRequest, acao: AcaoDaSolicitacao) => {
+    const atual = await fetchJson<CustomerRequest>(`/api/customer-requests/${encodeURIComponent(request.id)}`);
+    const status = String(atual.status ?? "").toLowerCase();
+    const valeu = acao === "aprovar" ? status === "approved" || status === "closed" : status === "rejected";
+    if (valeu) decisaoValeu(request, acao);
+    // Decidida por outra pessoa: a lista se atualiza, e a linha sai.
+    else if (!isAwaitingDecision(atual.status)) refreshAll();
+    return valeu;
+  };
+
+  /**
+   * Aprovar ou recusar pela callable de sempre, com a chave de idempotência
+   * da tentativa que a linha dá: a mesma depois do "Conferir" e quando o
+   * resultado ficou incerto. A linha ocupada não chama de novo.
+   */
+  const decidir = (request: CustomerRequest, acao: AcaoDaSolicitacao, reason?: string) => {
+    const expected = String(request.status || "open").toLowerCase();
+    void linhas.executar(
+      request.id,
+      acao,
+      (chave) =>
+        fetchJson(`/api/customer-requests/${encodeURIComponent(request.id)}/${ROTA_DA_ACAO[acao]}`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            expected_status: expected,
-            reason,
-            idempotency_key: `${request.id}:${action}:${expected}`,
-          }),
-        },
-      );
-    },
-    onSuccess: (_result, variables) => {
-      toast({
-        title:
-          variables.action === "approve"
-            ? "Aprovado. O pedido foi para separação."
-            : "Solicitação recusada.",
-      });
-      setDialog(null);
-      setRejectReason("");
-      refreshAll();
-    },
-    onError,
-  });
+          body: JSON.stringify({ expected_status: expected, reason, idempotency_key: chave }),
+        }).then(
+          (resultado) => {
+            decisaoValeu(request, acao);
+            return resultado;
+          },
+          (erro: unknown) => {
+            // Sem resposta, a linha fica com o "Conferir"; o resto, o toast também diz.
+            if (desfechoDoErro(erro) !== "sem-resposta") onError(erro);
+            throw erro;
+          },
+        ),
+      { conferir: () => conferirDecisao(request, acao), releitura },
+    );
+  };
 
   // Mesmas chamadas da antiga tela "Separar e enviar": cada etapa do WMS
   // continua gravada no backend; a tela só encadeia.
@@ -340,7 +498,7 @@ export default function Pedidos() {
     },
     onSuccess: (aberta) => {
       chaveDaEntrega.current = null;
-      setDialog(null);
+      fecharDialogo("entrega");
       toast({ title: aberta ? `Demanda ${aberta.numero} aberta na Operação` : "Entrega salva" });
       refreshAll();
     },
@@ -359,7 +517,7 @@ export default function Pedidos() {
     onSuccess: () => {
       chaveDoCancelamento.current = null;
       toast({ title: "Pedido cancelado" });
-      setDialog(null);
+      fecharDialogo("cancel");
       setCancelReason("");
       refreshAll();
     },
@@ -370,6 +528,7 @@ export default function Pedidos() {
     if (!order.orderId) return;
     chaveDoCancelamento.current = null;
     setCancelReason("");
+    lembrarDaLinha(order.key);
     setDialog({ kind: "cancel", order, orderId: order.orderId });
   };
   // O "⋯" do pedido ainda no armazém, só para quem decide (owner, admin e interno).
@@ -384,14 +543,35 @@ export default function Pedidos() {
     setEntregaForm(formularioDaEntrega(entregaDe(order), hojeIso()));
     setEntregaTentou(false);
     setEntregaErro(null);
+    lembrarDaLinha(order.key);
     setDialog({ kind: "entrega", order, orderId: order.orderId });
   };
 
+  // A entrega anda em etapas (a saída e a entrega), e o fim fica no botão:
+  // o erro por 2 s, ou o "Conferir" do prazo sem resposta, que relê a fila.
+  // O fim é do pedido daquele diálogo: abrir a entrega de outro começa do zero.
+  const [etapaDaEntrega, setEtapaDaEntrega] = useState(0);
+  const [fimDaEntrega, setFimDaEntrega] = useState<"erro" | "sem-resposta" | null>(null);
+  const [conferindoEntrega, setConferindoEntrega] = useState(false);
+  const zerarEntrega = () => {
+    setFimDaEntrega(null);
+    setEtapaDaEntrega(0);
+  };
+  const entregou = () => {
+    toast({ title: "Entrega confirmada. Estoque baixado." });
+    setFimDaEntrega(null);
+    setEtapaDaEntrega(0);
+    fecharDialogo("deliver");
+    setReceivedBy("");
+    refreshAll();
+  };
   const deliver = useMutation({
     mutationFn: async ({ order }: { order: OrderGroup }) => {
       const shipUid = String(order.ship?.id ?? "");
       if (!shipUid) throw new Error("Pedido sem expedição criada.");
+      setFimDaEntrega(null);
       if (order.stage === "enviar") {
+        setEtapaDaEntrega(1);
         remember("motorista", driver.trim());
         remember("placa", plate.trim());
         await advance(shipUid, "ready_to_dispatch", {
@@ -400,73 +580,235 @@ export default function Pedidos() {
           vehicle_plate: plate.trim(),
         });
       }
+      setEtapaDaEntrega(2);
       await advance(shipUid, "dispatched", {
         proof_reference: receivedBy.trim() || "Entrega própria Dutelog",
         delivery_notes: "Recebido pelo cliente.",
       });
     },
-    onSuccess: () => {
-      toast({ title: "Entrega confirmada. Estoque baixado." });
-      setDialog(null);
-      setReceivedBy("");
-      refreshAll();
+    onSuccess: entregou,
+    onError: (error) => {
+      // Sem resposta no prazo, a etapa pode ter valido: "Conferir" relê, e a chave de cada etapa é a mesma.
+      if (desfechoDoErro(error) === "sem-resposta") {
+        setFimDaEntrega("sem-resposta");
+        return;
+      }
+      setFimDaEntrega("erro");
+      onError(error);
     },
-    onError,
   });
+  useEffect(() => {
+    if (fimDaEntrega !== "erro") return undefined;
+    const volta = setTimeout(() => setFimDaEntrega((atual) => (atual === "erro" ? null : atual)), CARREGANDO.erroVisivelMs);
+    return () => clearTimeout(volta);
+  }, [fimDaEntrega]);
+  // Conferindo, o estado continua sem resposta: o botão diz "Conferindo…", e não a entrega de novo.
+  const estadoDaEntrega: EstadoDaAcao = deliver.isPending ? "andamento" : (fimDaEntrega ?? "repouso");
+  const entregaOcupada = estadoDaEntrega === "andamento" || conferindoEntrega;
+  const esperaDaEntrega = useEspera(deliver.isPending);
+  /**
+   * O "Conferir" do prazo sem resposta: relê a fila e nunca reenvia. Entregue
+   * por lá, segue o sucesso. Cancelado por outra pessoa enquanto esperava, o
+   * diálogo fecha e diz que a entrega não valeu. No resto (ainda para
+   * entregar, ou fora da fila), volta a "Confirmar entrega": a nova tentativa
+   * leva a mesma chave de cada etapa, e a que já valeu devolve o recibo.
+   */
+  const conferirEntrega = async (order: OrderGroup) => {
+    if (conferindoEntrega) return;
+    setConferindoEntrega(true);
+    try {
+      const lida = await queryClient.fetchQuery({ queryKey: ["warehouse-ops"], queryFn: () => fetchJson<WarehouseOpsResponse>("/api/warehouse/ops"), staleTime: 0 });
+      const saida = queueTasks(lida, "expedition").find((tarefa) => String(tarefa.id) === String(order.ship?.id ?? ""));
+      const status = String(saida?.status ?? "");
+      if (status === "delivered") {
+        entregou();
+      } else if (status === "cancelled" || status === "canceled") {
+        zerarEntrega();
+        fecharDialogo("deliver");
+        toast({ title: "Entrega não confirmada", description: "O pedido foi cancelado.", variant: "destructive" });
+        refreshAll();
+      } else {
+        setFimDaEntrega(null);
+      }
+    } catch (error) {
+      onError(error);
+    } finally {
+      setConferindoEntrega(false);
+    }
+  };
 
-  const busy = decide.isPending || deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
+  /**
+   * Fecha o diálogo. A entrega que ficou sem resposta não passa para o pedido
+   * seguinte: o fim dela sai, e a fila relê para a linha dizer onde o pedido
+   * está.
+   */
+  const fecharEntregaOuDialogo = () => {
+    if (dialog?.kind === "deliver") {
+      if (fimDaEntrega === "sem-resposta") refreshAll();
+      zerarEntrega();
+    }
+    setDialog(null);
+  };
+
+  // Aprovar e recusar ficam de fora: cada linha de "Para aprovar" tem o próprio estado.
+  const busy = deliver.isPending || salvarEntrega.isPending || cancelar.isPending;
+  /** A ação do diálogo aberto que ainda grava: nada fecha o diálogo até ela acabar (parte 13a). */
+  const dialogoOcupado =
+    (dialog?.kind === "deliver" && entregaOcupada) ||
+    (dialog?.kind === "cancel" && cancelar.isPending) ||
+    (dialog?.kind === "entrega" && salvarEntrega.isPending) ||
+    (dialog?.kind === "reject" && linhas.estado(dialog.request.id, "recusar") === "andamento");
+  /**
+   * O diálogo devolve o foco à linha que o abriu (2.4.3), no lugar do corpo
+   * da página, onde o Radix o poria sem DialogTrigger. Com a linha ainda na
+   * fila, ao controle que o abriu ou à ação dela; quando a releitura a tirar
+   * depois, a fila leva o foco à seguinte. Se ela já saiu (entregue,
+   * cancelado), à ação da seguinte ou ao título do grupo de onde ela saiu por
+   * último: o pedido que passou de "Para separar" a "Para entregar" volta em
+   * "Para entregar".
+   */
+  const devolverFocoDoDialogo = (evento: Event) => {
+    const aberto = linhaDoDialogo.current;
+    linhaDoDialogo.current = null;
+    if (!aberto) return;
+    const filas = [paraAprovar, paraSeparar, paraEntregar];
+    const ultimaSaida = filas
+      .map((fila) => fila.saida(aberto.chave))
+      .reduce<{ foco: HTMLElement | null; em: number } | null>((ultima, saida) => (saida && (!ultima || saida.em > ultima.em) ? saida : ultima), null);
+    const destino = filas.map((fila) => fila.focoNaLinha(aberto.chave, aberto.abridor)).find(Boolean) ?? ultimaSaida?.foco;
+    if (!destino) return;
+    evento.preventDefault();
+    destino.focus();
+  };
+  // O diálogo que sai (200 ms) mostra o que mostrava, com a mesma largura: o
+  // fim não esvazia o cartão nem tira o botão que tem o foco (que cairia no
+  // body até o diálogo sair). O seguinte que abre toma o lugar.
+  const [dialogoNaTela, setDialogoNaTela] = useState<DialogState>(null);
+  if (dialog !== null && dialog !== dialogoNaTela) setDialogoNaTela(dialog);
+  const dialogoVisivel = dialog ?? dialogoNaTela;
   // A tabela do cancelamento pede um diálogo mais largo.
-  const larguraDoDialogo = cn("sm:max-w-[440px]", dialog?.kind === "cancel" && "sm:max-w-[560px]");
+  const larguraDoDialogo = cn("sm:max-w-[440px]", dialogoVisivel?.kind === "cancel" && "sm:max-w-[560px]");
 
   /** A entrega do pedido na linha e a ação de definir (ou abrir na Operação), com a Operação liberada. */
   const daEntrega = (order: OrderGroup) => {
     if (!OPERACAO_LIBERADO || !order.orderId) return {};
+    // Antes de ler as entregas, a linha não oferece "Entrega" (o formulário abriria vazio sobre a entrega que já
+    // existe); a leitura que falhou diz, e não some (carregamento v2, parte 13c; o diagnóstico, 4.3).
+    if (entregas.itens === null) {
+      if (!entregasFalharam) return {};
+      return {
+        detail: "Não consegui carregar a entrega.",
+        secondary: operador ? (
+          <SaiComOFoco alvo={`entrega-${order.key}`}>
+            <BotaoDeAcao
+              variant="outline"
+              estado={tentandoEntregas ? "andamento" : "repouso"}
+              rotulo="Tentar de novo"
+              andamento="Tentando de novo…"
+              onClick={() => {
+                setTentandoEntregas(true);
+                void entregas.tentar().finally(() => setTentandoEntregas(false));
+              }}
+            />
+          </SaiComOFoco>
+        ) : undefined,
+      };
+    }
     const entrega = entregaDe(order);
     const resumo = entrega ? [resumoDaEntrega(entrega), naOperacao(entrega)].filter(Boolean).join(" · ") : null;
     return {
       detail: resumo,
       secondary: operador ? (
-        <Button type="button" variant="outline" disabled={busy} onClick={() => abrirEntrega(order)}>
+        <Button id={`entrega-${order.key}`} type="button" variant="outline" disabled={busy} onClick={() => abrirEntrega(order)}>
           {faltaAbrirNaOperacao(entrega) ? "Abrir na Operação" : entrega ? "Alterar entrega" : "Entrega"}
         </Button>
       ) : undefined,
     };
   };
-  // Na v3, só a primeira linha da fila tem a ação principal; as outras são secundárias.
-  const principal = chaveDaPrincipal(queue, decider);
+  // Na v3, só a primeira linha da fila tem a ação principal; as outras são
+  // secundárias. É a primeira na tela: quando ela sai, a nova primeira herda.
+  const naTela = {
+    approve: paraAprovar.chaves.map((id) => ({ id })),
+    pick: paraSeparar.chaves.map((key) => ({ key })),
+    deliver: paraEntregar.chaves.map((key) => ({ key })),
+  };
+  const principal = chaveDaPrincipal(naTela, decider);
   const variante = (chave: string) => (principal === chave ? "default" : "outline");
   const openCount =
-    (decider ? queue.approve.length : 0) + queue.pick.length + queue.deliver.length;
-  const loading = ops.isLoading || (decider && requests.isLoading);
+    (decider ? paraAprovar.chaves.length : 0) + paraSeparar.chaves.length + paraEntregar.chaves.length;
   // A leitura falhou sem nada para mostrar: a tela diz isso, em vez de
   // "Nenhum pedido para…" (docs/plataforma/diagnostico-carregamento.md,
   // decisão 6 de 06/11/2026). Com a lista já lida, a falha de uma atualização
   // não a apaga.
-  const semLeitura = (ops.isError && !ops.data) || (decider && requests.isError && !requests.data);
+  const semLeitura = (opsNaTela.isError && !ops.data) || (decider && requestsNaTela.isError && !requests.data);
   // Sem rede, a lista que já estava fica, com a hora da leitura; sem nada
   // lido, o aviso (decisão 2 do celular).
   const semRede = semConexaoNaLeitura(ops, ...(decider ? [requests] : []));
   const relendo = ops.isFetching || requests.isFetching;
+  // A linha de estado sob o título e o Atualizar (carregamento v2, parte 7b):
+  // a releitura automática de 60 s não mostra nada; o Atualizar só mostra a
+  // espera quando a pessoa toca nele; a volta do app ao primeiro plano relê
+  // com a barra no topo do primeiro cartão. Os saldos da validação relêem
+  // junto do toque.
+  const leiturasDaLista = decider ? [opsNaTela, requestsNaTela] : [opsNaTela];
+  const atualizarLista = useAtualizarLista(leiturasDaLista, () => void queryClient.invalidateQueries({ queryKey: ["stock-balances"] }));
+  const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} resultado="fim" />;
+
+  // A lista com a forma final na primeira leitura (carregamento v2, momento 2, decisão P3): os títulos reais
+  // desde 0 ms, com o bloco no lugar do número; as linhas-fantasma na altura da última contagem lida deste
+  // cliente; o contêiner aria-busy, descrito pela linha de estado. Na chegada, as linhas reais entram em
+  // cascata, e o Anunciador diz o resumo (só se disse "Carregando pedidos").
+  // A leitura que falhou sem dado não espera a outra: o aviso entra no lugar da lista na hora.
+  const lendo = loading && !semLeitura;
+  const idDaLinha = useId();
+  // A contagem lembrada é do cliente que a tela vai operar: na abertura, antes de a lista dos clientes chegar, o
+  // escolhido neste aparelho. Só grava com o cliente confirmado (nem lendo, nem com a lista dos clientes que falhou),
+  // e só os grupos que quem vê tem: "Para aprovar" fica com a contagem de quem decide.
+  const contagensLidas: ContagensDaLista | null =
+    lida && !clienteCarregando && !clienteFalhou
+      ? {
+          ...(decider ? { aprovar: chavesParaAprovar.length } : {}),
+          separar: chavesParaSeparar.length,
+          entregar: chavesParaEntregar.length,
+          entregues: queue.delivered.length,
+        }
+      : null;
+  const contagem = useContagemLembrada("pedidos", codeProvavel ?? cliente.code, contagensLidas);
+  const fantasmas = (grupo: string, acoes: 0 | 1 | 2, ordem: number, forma: Pick<CarregandoDoGrupo, "atalho" | "acoesAbaixo"> = {}) =>
+    lendo ? { linhas: contagem.linhas(grupo), acoes, ordem, ...forma } : undefined;
+  const resumo =
+    view === "delivered"
+      ? resumoDaLista([{ quantos: queue.delivered.length, um: "entregue", varios: "entregues" }], "Nenhuma entrega recente")
+      : resumoDaLista(
+          [
+            ...(decider ? [{ quantos: chavesParaAprovar.length, um: "para aprovar" }] : []),
+            { quantos: chavesParaSeparar.length, um: "para separar" },
+            { quantos: chavesParaEntregar.length, um: "para entregar" },
+          ],
+          "Nenhum pedido em aberto",
+        );
+  const naCascata = { separar: decider ? paraAprovar.chaves.length : 0, entregar: (decider ? paraAprovar.chaves.length : 0) + paraSeparar.chaves.length };
+  const listaOcupada = lendo ? { "aria-busy": true, "aria-describedby": idDaLinha } : {};
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 pb-24">
+    <div ref={palco.ref} className="mx-auto flex max-w-5xl flex-col gap-6 pb-24">
       <PageHeader
         title="Pedidos"
+        estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="pedidos" pedidaPelaPessoa={atualizarLista.voltando} resumo={resumo} />}
         actions={
           <>
             <Segmented<"open" | "delivered">
               value={view}
               onChange={setView}
               aria-label="Pedidos em aberto ou entregues"
+              cheioNoCelular
               options={[
-                { value: "open", label: `Em aberto${openCount ? ` · ${openCount}` : ""}` },
+                // Lendo, o bloco; sem nada lido (a falha, a falta de conexão), o "—": nunca o rótulo só, como se não houvesse pedido.
+                { value: "open", label: "Em aberto", count: lendo ? null : semLeitura || (semRede && semRede.lidaEm === null) ? "falhou" : openCount },
                 { value: "delivered", label: "Entregues" },
               ]}
             />
-            <Button type="button" variant="outline" size="icon" onClick={refreshAll} disabled={ops.isFetching}>
-              <RefreshCw className={cn("size-4", ops.isFetching && "animate-spin")} />
-              <span className="sr-only">Atualizar</span>
-            </Button>
+            <BotaoAtualizar atualizando={atualizarLista.atualizando} travado={loading} onAtualizar={atualizarLista.atualizar} />
           </>
         }
       />
@@ -480,26 +822,25 @@ export default function Pedidos() {
         }
       />
 
-      {!loading && semRede && semRede.lidaEm !== null ? (
-        <FaixaSemConexao lidaEm={semRede.lidaEm} tentando={relendo} onTentar={refreshAll} />
-      ) : null}
-
-      {loading ? (
-        <p className="text-sm text-muted-foreground">Carregando pedidos...</p>
-      ) : semRede && semRede.lidaEm === null ? (
-        <BlocoSemConexao tentando={relendo} onTentar={refreshAll} />
-      ) : semLeitura ? (
+      {/* A falta com a lista lida fica na linha de estado, sob o título; a primeira leitura, também, com a lista
+          na forma final, com as linhas-fantasma. */}
+      {!lendo && semRede && semRede.lidaEm === null ? (
+        <BlocoSemConexao tentando={relendo} onTentar={refreshAll} focoAoSair={idDaLinha} />
+      ) : !lendo && semLeitura ? (
         <ErroNaLeitura
           mensagem="Não consegui carregar os pedidos."
           tentando={relendo}
           onTentar={refreshAll}
+          focoAoSair={idDaLinha}
         />
       ) : view === "delivered" ? (
-        <>
+        <div className="flex flex-col gap-6" {...listaOcupada}>
           <QueueGroup
             title="Entregues"
-            count={queue.delivered.length}
+            count={lendo ? null : queue.delivered.length}
             empty="Nenhuma entrega recente."
+            barraDoTopo={barraDoTopo}
+            carregando={fantasmas("entregues", 0, 0)}
           >
             {queue.delivered.map((order) => (
               <OrderRow key={order.key} order={order} icon={Check} tone="done" />
@@ -508,80 +849,53 @@ export default function Pedidos() {
           <Link href="/orders" className="px-1 text-sm text-primary hover:underline">
             Ver histórico completo de pedidos
           </Link>
-        </>
+        </div>
       ) : (
-        <>
+        <div className="flex flex-col gap-6" {...listaOcupada}>
           {decider ? (
             <QueueGroup
               title="Para aprovar"
-              count={queue.approve.length}
+              count={lendo ? null : paraAprovar.chaves.length}
+              carregando={fantasmas("aprovar", 2, 0)}
+              rolarContagem
+              contagemNaArvore={paraAprovar.quantasFicam}
+              semSaltos
+              listaRef={paraAprovar.ref}
+              tituloRef={paraAprovar.titulo}
+              barraDoTopo={barraDoTopo}
               empty={
                 <>
                   {ordersGroupEmpty("approve")}{" "}
-                  <Link href="/solicitacoes" className="font-semibold text-primary hover:underline">
+                  <Link href="/solicitacoes" className="font-semibold text-primary-texto hover:underline">
                     Ver solicitações
                   </Link>
                 </>
               }
             >
-              {queue.approve.map((request) => {
-                const validation = buildBalanceValidation(
-                  request,
-                  balances.data?.items,
-                  balances.isLoading,
-                  Boolean(balances.error),
-                );
+              {paraAprovar.chaves.map((id) => {
+                const request = solicitacoes.get(id);
                 return (
-                  <QueueRow
-                    key={request.id}
-                    icon={ClipboardCheck}
-                    tone="approve"
-                    title={requestTitle(request)}
-                    meta={requestSummary(request)}
-                    detail={linhaDoParaQuando(request.due_at)}
-                    age={formatRequestAge(request.created_at)}
-                    note={
-                      validation.canApprove ? undefined : (
-                        <>
-                          <AlertTriangle className="size-3.5" />
-                          {validation.detail}
-                        </>
-                      )
-                    }
-                    actions={
-                      validation.canApprove ? (
-                        <>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="text-destructive hover:text-destructive"
-                            disabled={busy}
-                            onClick={() => {
-                              setRejectReason("");
-                              setDialog({ kind: "reject", request });
-                            }}
-                          >
-                            Recusar
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={variante(`approve:${request.id}`)}
-                            disabled={busy}
-                            onClick={() => decide.mutate({ request, action: "approve" })}
-                          >
-                            <Check className="size-4" />
-                            Aprovar
-                          </Button>
-                        </>
-                      ) : (
-                        <Button asChild variant="outline">
-                          <Link href={`/solicitacoes?id=${encodeURIComponent(request.id)}`}>
-                            Ver itens
-                          </Link>
-                        </Button>
-                      )
-                    }
-                  />
+                  <LinhaDaFila key={id} lista={paraAprovar} chave={id}>
+                    {request ? (
+                      <LinhaParaAprovar
+                        request={request}
+                        validation={buildBalanceValidation(request, balances.data?.items, balances.isLoading, Boolean(balances.error))}
+                        linhas={linhas}
+                        variant={variante(`approve:${request.id}`)}
+                        onAprovar={() => decidir(request, "aprovar")}
+                        onRecusar={() => {
+                          // Sem resposta, o Recusar é o "Conferir": relê, sem abrir o diálogo.
+                          if (linhas.estado(request.id, "recusar") === "sem-resposta") {
+                            decidir(request, "recusar");
+                            return;
+                          }
+                          setRejectReason("");
+                          lembrarDaLinha(request.id);
+                          setDialog({ kind: "reject", request });
+                        }}
+                      />
+                    ) : null}
+                  </LinhaDaFila>
                 );
               })}
             </QueueGroup>
@@ -589,83 +903,121 @@ export default function Pedidos() {
 
           <QueueGroup
             title="Para separar"
-            count={queue.pick.length}
+            count={lendo ? null : paraSeparar.chaves.length}
+            carregando={fantasmas("separar", operador ? 1 : 0, decider ? 1 : 0, { acoesAbaixo: true })}
+            cascata={naCascata.separar}
+            rolarContagem
+            contagemNaArvore={paraSeparar.quantasFicam}
+            semSaltos
+            listaRef={paraSeparar.ref}
+            tituloRef={paraSeparar.titulo}
+            barraDoTopo={decider ? undefined : barraDoTopo}
             empty={ordersGroupEmpty("pick")}
           >
-            {queue.pick.map((order) => (
-              <OrderRow
-                key={order.key}
-                order={order}
-                icon={Package}
-                tone="pick"
-                paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
-                lerParaQuando={!decider}
-                // O pedido por separar abre com os itens; o que já está em separação, fechado (a bancada mostra).
-                defaultOpen={!separacaoComecou(order.pick, order.pick?.items ?? [])}
-                listaHref={hrefDaListaDeSeparacao(order.key)}
-                onTreat={operador ? () => setTreating(order) : undefined}
-                {...daEntrega(order)}
-                menu={menuDo(order)}
-                // "Separar" abre a bancada do pedido; com a separação começada, "Continuar" (parte 2).
-                action={
-                  operador ? (
-                    <Button asChild variant={variante(`pick:${order.key}`)}>
-                      <Link href={hrefDaBancada(order.key)}>{separacaoComecou(order.pick, order.pick?.items ?? []) ? "Continuar" : "Separar"}</Link>
-                    </Button>
-                  ) : undefined
-                }
-              />
-            ))}
+            {paraSeparar.chaves.map((key) => {
+              const order = pedidos.get(key);
+              return (
+                <LinhaDaFila key={key} lista={paraSeparar} chave={key}>
+                  {order ? (
+                    <OrderRow
+                      order={order}
+                      icon={Package}
+                      tone="pick"
+                      paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
+                      lerParaQuando={!decider}
+                      // O pedido por separar abre com os itens; o que já está em separação, fechado (a bancada mostra).
+                      defaultOpen={!separacaoComecou(order.pick, order.pick?.items ?? [])}
+                      listaHref={hrefDaListaDeSeparacao(order.key)}
+                      onTreat={operador ? () => setTreating(order) : undefined}
+                      {...daEntrega(order)}
+                      menu={menuDo(order)}
+                      // "Separar" abre a bancada do pedido; com a separação começada, "Continuar" (parte 2).
+                      action={
+                        operador ? (
+                          <Button asChild variant={variante(`pick:${order.key}`)} data-foco-da-linha="">
+                            <Link href={hrefDaBancada(order.key)}>{separacaoComecou(order.pick, order.pick?.items ?? []) ? "Continuar" : "Separar"}</Link>
+                          </Button>
+                        ) : undefined
+                      }
+                    />
+                  ) : null}
+                </LinhaDaFila>
+              );
+            })}
           </QueueGroup>
 
           <QueueGroup
             title="Para entregar"
-            count={queue.deliver.length}
+            count={lendo ? null : paraEntregar.chaves.length}
+            carregando={fantasmas("entregar", operador ? 1 : 0, decider ? 2 : 1, { atalho: true, acoesAbaixo: true })}
+            cascata={naCascata.entregar}
+            rolarContagem
+            contagemNaArvore={paraEntregar.quantasFicam}
+            semSaltos
+            listaRef={paraEntregar.ref}
+            tituloRef={paraEntregar.titulo}
             empty={ordersGroupEmpty("deliver")}
           >
-            {queue.deliver.map((order) => (
-              <OrderRow
-                key={order.key}
-                order={order}
-                icon={Truck}
-                tone="deliver"
-                paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
-                lerParaQuando={!decider}
-                onTreat={operador ? () => setTreating(order) : undefined}
-                {...(order.stage === "enviar" ? daEntrega(order) : {})}
-                volumes={volumesDoPedidoNaFila(order)}
-                menu={menuDo(order)}
-                action={
-                  operador ? (
-                    <Button
-                      type="button"
-                      variant={variante(`deliver:${order.key}`)}
-                      disabled={busy}
-                      onClick={() => {
-                        setReceivedBy("");
-                        // Na retirada pelo cliente, quem leva e a placa vêm da entrega do pedido.
-                        const saida = saidaPelaEntrega(entregaDe(order));
-                        if (saida) {
-                          setDriver(saida.motorista);
-                          setPlate(saida.placa);
-                        }
-                        setDialog({ kind: "deliver", order });
-                      }}
-                    >
-                      <Check className="size-4" />
-                      Entregue
-                    </Button>
-                  ) : undefined
-                }
-              />
-            ))}
+            {paraEntregar.chaves.map((key) => {
+              const order = pedidos.get(key);
+              return (
+                <LinhaDaFila key={key} lista={paraEntregar} chave={key}>
+                  {order ? (
+                    <OrderRow
+                      order={order}
+                      icon={Truck}
+                      tone="deliver"
+                      paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
+                      lerParaQuando={!decider}
+                      onTreat={operador ? () => setTreating(order) : undefined}
+                      {...(order.stage === "enviar" ? daEntrega(order) : {})}
+                      volumes={volumesDoPedidoNaFila(order)}
+                      menu={menuDo(order)}
+                      action={
+                        operador ? (
+                          <Button
+                            type="button"
+                            variant={variante(`deliver:${order.key}`)}
+                            disabled={busy}
+                            data-foco-da-linha=""
+                            onClick={() => {
+                              setReceivedBy("");
+                              // Na retirada pelo cliente, quem leva e a placa vêm da entrega do pedido.
+                              const saida = saidaPelaEntrega(entregaDe(order));
+                              if (saida) {
+                                setDriver(saida.motorista);
+                                setPlate(saida.placa);
+                              }
+                              lembrarDaLinha(order.key);
+                              zerarEntrega();
+                              setDialog({ kind: "deliver", order });
+                            }}
+                          >
+                            <Check className="size-4" />
+                            Entregue
+                          </Button>
+                        ) : undefined
+                      }
+                    />
+                  ) : null}
+                </LinhaDaFila>
+              );
+            })}
           </QueueGroup>
-        </>
+        </div>
       )}
 
-      <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className={larguraDoDialogo} aria-describedby={undefined}>
-          {dialog?.kind === "reject" ? (
+      <Dialog
+        open={dialog !== null}
+        // A ação que grava segura o diálogo: a entrega que anda (ou confere), o
+        // cancelamento, a entrega que salva e a recusa em andamento.
+        ocupado={dialogoOcupado}
+        onOpenChange={(open) => {
+          if (!open) fecharEntregaOuDialogo();
+        }}
+      >
+        <DialogContent className={larguraDoDialogo} aria-describedby={undefined} onCloseAutoFocus={devolverFocoDoDialogo}>
+          {dialogoVisivel?.kind === "reject" ? (
             <>
               <DialogHeader>
                 <DialogTitle>Recusar solicitação</DialogTitle>
@@ -680,32 +1032,30 @@ export default function Pedidos() {
                 />
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  Voltar
-                </Button>
-                <Button
-                  type="button"
+                <DialogCancelar onClick={() => setDialog(null)}>Voltar</DialogCancelar>
+                <BotaoDeAcao
                   variant="destructive"
-                  disabled={rejectReason.trim().length < 3 || busy}
-                  onClick={() =>
-                    decide.mutate({
-                      request: dialog.request,
-                      action: "reject",
-                      reason: rejectReason.trim(),
-                    })
-                  }
-                >
-                  Recusar
-                </Button>
+                  estado={linhas.estado(dialogoVisivel.request.id, "recusar")}
+                  rotulo="Recusar"
+                  andamento="Recusando…"
+                  sucesso="Recusado"
+                  erro="Não recusado"
+                  bloqueado={recusaTravada(
+                    linhas.estado(dialogoVisivel.request.id, "recusar"),
+                    linhas.ocupada(dialogoVisivel.request.id),
+                    rejectReason,
+                  )}
+                  onClick={() => decidir(dialogoVisivel.request, "recusar", rejectReason.trim())}
+                />
               </DialogFooter>
             </>
-          ) : dialog?.kind === "deliver" ? (
+          ) : dialogoVisivel?.kind === "deliver" ? (
             <>
               <DialogHeader>
-                <DialogTitle>{dialog.order.orderNumber}: entregue</DialogTitle>
+                <DialogTitle>{dialogoVisivel.order.orderNumber}: entregue</DialogTitle>
               </DialogHeader>
               <div className="grid gap-3">
-                {dialog.order.stage === "enviar" ? (
+                {dialogoVisivel.order.stage === "enviar" ? (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-2">
                       <Label htmlFor="motorista">Quem levou</Label>
@@ -734,56 +1084,74 @@ export default function Pedidos() {
                   />
                 </div>
               </div>
+              {dialogoVisivel.order.stage === "enviar" ? (
+                <Progresso
+                  forma="etapas"
+                  titulo="Confirmando a entrega"
+                  itens={etapasDaEntrega(etapaDaEntrega, deliver.isPending)}
+                />
+              ) : null}
+              <div data-lugar-do-aviso="" className="grid min-h-9 items-center">
+                {deliver.isPending && esperaDaEntrega.calmo ? (
+                  <AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={esperaDaEntrega.decorridoMs} />
+                ) : null}
+                {estadoDaEntrega === "sem-resposta" ? <AvisoDeEspera fase="sem-resposta" tipo="escrita" /> : null}
+              </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
+                <DialogCancelar className="min-h-11" onClick={fecharEntregaOuDialogo}>
                   Voltar
-                </Button>
-                <Button
-                  type="button"
-                  disabled={
-                    busy ||
-                    (dialog.order.stage === "enviar" && (!driver.trim() || !plate.trim()))
+                </DialogCancelar>
+                <BotaoDeAcao
+                  className="min-h-11"
+                  estado={conferindoEntrega ? "andamento" : estadoDaEntrega}
+                  rotulo="Confirmar entrega"
+                  andamento={conferindoEntrega ? "Conferindo…" : "Confirmando…"}
+                  sucesso="Entregue"
+                  erro="Não confirmada"
+                  bloqueado={
+                    estadoDaEntrega === "repouso" &&
+                    (busy || (dialogoVisivel.order.stage === "enviar" && (!driver.trim() || !plate.trim())))
                   }
-                  onClick={() => deliver.mutate({ order: dialog.order })}
-                >
-                  {deliver.isPending ? "Registrando..." : "Confirmar entrega"}
-                </Button>
+                  onClick={() => {
+                    if (conferindoEntrega) return;
+                    if (estadoDaEntrega === "sem-resposta") void conferirEntrega(dialogoVisivel.order);
+                    else deliver.mutate({ order: dialogoVisivel.order });
+                  }}
+                />
               </DialogFooter>
             </>
-          ) : dialog?.kind === "cancel" ? (
+          ) : dialogoVisivel?.kind === "cancel" ? (
             <>
               <DialogHeader>
-                <DialogTitle>Cancelar pedido {dialog.order.orderNumber}</DialogTitle>
+                <DialogTitle>Cancelar pedido {dialogoVisivel.order.orderNumber}</DialogTitle>
                 <p className="text-sm font-medium text-muted-foreground">
-                  {[cliente.name, orderMeta(dialog.order)].filter(Boolean).join(" · ")}
+                  {[cliente.name, orderMeta(dialogoVisivel.order)].filter(Boolean).join(" · ")}
                 </p>
               </DialogHeader>
               <CancelarPedidoView
                 motivo={cancelReason}
-                voltas={voltasDoPedido(dialog.order)}
+                voltas={voltasDoPedido(dialogoVisivel.order)}
                 onMotivo={(motivo) => {
                   setCancelReason(motivo);
                   chaveDoCancelamento.current = null;
                 }}
               />
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  Voltar
-                </Button>
-                <Button
-                  type="button"
+                <DialogCancelar onClick={() => setDialog(null)}>Voltar</DialogCancelar>
+                <BotaoDeAcao
                   variant="destructive"
-                  disabled={!motivoValido(cancelReason) || busy}
-                  onClick={() => cancelar.mutate({ orderId: dialog.orderId, reason: cancelReason.trim() })}
-                >
-                  {cancelar.isPending ? "Cancelando..." : "Cancelar pedido"}
-                </Button>
+                  estado={cancelar.isPending ? "andamento" : "repouso"}
+                  rotulo="Cancelar pedido"
+                  andamento="Cancelando…"
+                  bloqueado={!cancelar.isPending && (!motivoValido(cancelReason) || busy)}
+                  onClick={() => cancelar.mutate({ orderId: dialogoVisivel.orderId, reason: cancelReason.trim() })}
+                />
               </DialogFooter>
             </>
-          ) : dialog?.kind === "entrega" && entregaForm ? (
+          ) : dialogoVisivel?.kind === "entrega" && entregaForm ? (
             <>
               <DialogHeader>
-                <DialogTitle>{dialog.order.orderNumber}: entrega</DialogTitle>
+                <DialogTitle>{dialogoVisivel.order.orderNumber}: entrega</DialogTitle>
               </DialogHeader>
               <form
                 id="entrega-do-pedido"
@@ -793,7 +1161,7 @@ export default function Pedidos() {
                   setEntregaTentou(true);
                   if (Object.keys(problemasDaEntrega(entregaForm, new Date())).length) return;
                   setEntregaErro(null);
-                  salvarEntrega.mutate({ orderId: dialog.orderId, form: entregaForm });
+                  salvarEntrega.mutate({ orderId: dialogoVisivel.orderId, form: entregaForm });
                 }}
               >
                 <FormularioDaEntregaView
@@ -812,12 +1180,15 @@ export default function Pedidos() {
                 </p>
               ) : null}
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  Voltar
-                </Button>
-                <Button type="submit" form="entrega-do-pedido" disabled={busy}>
-                  {salvarEntrega.isPending ? "Salvando..." : entregaForm.modo === "dutelog" ? "Salvar e abrir na Operação" : "Salvar entrega"}
-                </Button>
+                <DialogCancelar onClick={() => setDialog(null)}>Voltar</DialogCancelar>
+                <BotaoDeAcao
+                  type="submit"
+                  form="entrega-do-pedido"
+                  estado={salvarEntrega.isPending ? "andamento" : "repouso"}
+                  rotulo={entregaForm.modo === "dutelog" ? "Salvar e abrir na Operação" : "Salvar entrega"}
+                  andamento="Salvando…"
+                  bloqueado={!salvarEntrega.isPending && busy}
+                />
               </DialogFooter>
             </>
           ) : null}
@@ -856,6 +1227,186 @@ export default function Pedidos() {
         onNoteChange={actions.exception.setNote}
         onSubmit={(event) => actions.exception.submit(event, treatingEntry)}
       />
+    </div>
+  );
+}
+
+const SELO = cn(badgeVariants({ variant: "outline" }), "gap-1");
+
+/**
+ * A linha de "Para aprovar" com a ação por linha (carregamento v2, momento 4;
+ * a prancha aprovada em 12/11/2026). O Aprovar vai a "Aprovando…", com a
+ * barra na borda de baixo, e o Recusar da linha fica aria-disabled; as outras
+ * linhas seguem livres. Aos 3 s o apoio diz o objeto ("Aprovando pedido
+ * 1042…"); aos 10 s, a demora com o relógio, sem "Tentar de novo" (repetir
+ * duplicaria); aos 70 s, o selo "Sem confirmação" e o "Conferir", que relê. O
+ * erro fica na linha, com o selo e o motivo, até a próxima ação.
+ */
+function LinhaParaAprovar({
+  request,
+  validation,
+  linhas,
+  variant,
+  onAprovar,
+  onRecusar,
+}: {
+  request: CustomerRequest;
+  validation: ReturnType<typeof buildBalanceValidation>;
+  linhas: AcaoNaLinha<string>;
+  variant: "default" | "outline";
+  onAprovar: () => void;
+  onRecusar: () => void;
+}) {
+  const aprovar = linhas.estado(request.id, "aprovar");
+  const recusar = linhas.estado(request.id, "recusar");
+  const ocupada = linhas.ocupada(request.id);
+  const motivo = linhas.motivo(request.id);
+  const andando: AcaoDaSolicitacao | null = aprovar === "andamento" ? "aprovar" : recusar === "andamento" ? "recusar" : null;
+  const semResposta = aprovar === "sem-resposta" || recusar === "sem-resposta";
+  const espera = useEspera(andando !== null);
+  const titulo = requestTitle(request);
+  const emAndamento = andando ? `${andando === "aprovar" ? "Aprovando" : "Recusando"} ${noMeioDaFrase(titulo)}` : null;
+
+  // O leitor de tela ouve a entrada na espera (aos 300 ms), a demora e a
+  // desistência, pelo Anunciador da tela; o resultado, o toast diz. A espera
+  // que acaba antes da vez do anúncio dela o tira da fila: ninguém ouve
+  // "Aprovando pedido 1042" depois do "Aprovado".
+  const anunciar = useAnuncio();
+  const marco = andando && espera.visivel ? (espera.fase === "demorando" ? "demorando" : "espera") : semResposta ? "sem-resposta" : null;
+  const anuncioDaEspera = emAndamento ? seisPalavras(emAndamento) : null;
+  useEffect(() => {
+    if (marco === "espera" && anuncioDaEspera) return anunciar(anuncioDaEspera);
+    if (marco === "demorando") return anunciar("Demorando mais que o normal");
+    if (marco === "sem-resposta") return anunciar("Sem confirmação do servidor");
+    return undefined;
+  }, [marco, anuncioDaEspera, anunciar]);
+
+  // No lugar do meta da linha: aos 3 s o objeto ("Aprovando pedido 1042…"); aos 10 s, a demora com o relógio;
+  // depois do erro, o motivo, até a próxima ação.
+  const apoioEmAndamento = emAndamento && espera.fase === "com-objeto" ? `${emAndamento}…` : undefined;
+  const aviso =
+    andando && espera.fase === "demorando" ? (
+      // Em linha, para quebrar como texto no celular.
+      <span className="font-bold text-amber-soft-foreground">
+        <Clock3 className="mr-1.5 inline size-3.5 align-middle" aria-hidden="true" />
+        <span>Demorando mais que o normal</span>
+        {" · "}
+        <span className="tabular-nums">{relogioDaEspera(espera.decorridoMs)}</span>
+      </span>
+    ) : motivo && !apoioEmAndamento ? (
+      <span className="font-bold text-destructive">{humanApiError(motivo.erro, "Tente novamente em instantes.")}</span>
+    ) : undefined;
+
+  const selo = semResposta ? (
+    <span className={cn(SELO, "border-warning-soft-border bg-warning-soft text-amber-soft-foreground")}>
+      <Clock3 className="size-3.5" aria-hidden="true" />
+      Sem confirmação
+    </span>
+  ) : motivo ? (
+    <span className={cn(SELO, "border-destructive-soft-border bg-destructive-soft text-destructive-soft-foreground")}>
+      <CaixaDeAlerta className="size-3.5" />
+      {motivo.acao === "aprovar" ? "Não aprovado" : "Não recusado"}
+    </span>
+  ) : undefined;
+
+  const resultado = aprovar === "sucesso" || recusar === "sucesso" ? "ok" : aprovar === "erro" || recusar === "erro" ? "erro" : undefined;
+  // Enquanto os saldos são lidos, a linha fica neutra (carregamento v2, parte 13i): o Aprovar e o Recusar no lugar,
+  // travados, e o apoio diz "Conferindo saldo…" em tinta, só aos 300 ms. O ícone de alerta e o âmbar são da falta de
+  // saldo, da demora e da falta de rede, nunca da espera.
+  const conferindoSaldo = validation.status === "checking" && !ocupada;
+  // A espera que apareceu fica pelo menos 500 ms (seção 3), com os botões travados junto: o saldo que chega logo depois
+  // dos 300 ms não pisca o apoio nem a lista. Antes de 300 ms, a trava vale, mas o botão não esmaece.
+  const esperaDoSaldo = useEspera(conferindoSaldo, { segurarMinimo: true });
+  const esperandoSaldo = !ocupada && (conferindoSaldo || esperaDoSaldo.visivel);
+  const resumo = requestSummary(request);
+  const idade = formatRequestAge(request.created_at);
+  // No lugar do resumo, sem mudar a altura da linha: o resumo continua ocupando o lugar, escondido, e a espera fica por
+  // cima, numa linha de 20 px. Trocar um pelo outro tirava 19 px de cada linha no celular e a devolvia na chegada.
+  const apoioDoSaldo =
+    esperandoSaldo && esperaDoSaldo.visivel ? (
+      <span className="grid">
+        <span aria-hidden="true" className="invisible col-start-1 row-start-1">
+          {resumo}
+          {idade ? <span> · {idade}</span> : null}
+        </span>
+        <span className="col-start-1 row-start-1 flex h-5 items-center gap-1.5 self-start font-bold text-foreground">
+          <Spinner calmo={esperaDoSaldo.calmo} />
+          Conferindo saldo…
+        </span>
+      </span>
+    ) : undefined;
+  // A linha ocupada mantém os botões, mesmo que a releitura mude a validação do saldo.
+  const comAcoes = validation.canApprove || ocupada || esperandoSaldo;
+  // Com o foco no botão travado pelo saldo, o saldo que chega com falta tira os botões: o foco vai ao "Ver itens" que
+  // entra no lugar deles, nunca ao body (WCAG 2.4.3).
+  const daLinha = useRef<HTMLDivElement>(null);
+  const focoAoSairDoSaldo = esperandoSaldo ? () => daLinha.current?.querySelector<HTMLElement>("[data-ver-itens]") : undefined;
+
+  return (
+    <div ref={daLinha} className="relative">
+      <QueueRow
+        icon={ClipboardCheck}
+        tone="approve"
+        title={titulo}
+        badge={selo}
+        meta={resumo}
+        apoio={apoioDoSaldo}
+        ocupada={andando !== null}
+        apoioEmAndamento={apoioEmAndamento}
+        aviso={aviso}
+        detail={linhaDoParaQuando(request.due_at)}
+        age={idade}
+        note={
+          comAcoes ? undefined : (
+            <>
+              <AlertTriangle className="size-3.5" />
+              {validation.detail}
+            </>
+          )
+        }
+        actions={
+          comAcoes ? (
+            <>
+              {/* No celular, 48 px, com os 8 px da fila entre os dois (carregamento v2, seção 7 e momento 3; parte 13i). */}
+              <BotaoDeAcao
+                variant="outline"
+                className="text-destructive hover:text-destructive max-md:min-h-12"
+                estado={recusar}
+                rotulo="Recusar"
+                andamento="Recusando…"
+                sucesso="Recusado"
+                erro="Não recusado"
+                bloqueado={(ocupada && recusar === "repouso") || esperandoSaldo}
+                esmaecido={!esperandoSaldo || esperaDoSaldo.visivel}
+                focoAoSair={focoAoSairDoSaldo}
+                onClick={onRecusar}
+              />
+              <BotaoDeAcao
+                variant={variant}
+                className="max-md:min-h-12"
+                data-foco-da-linha=""
+                estado={aprovar}
+                icone={<Check className="size-4" />}
+                rotulo="Aprovar"
+                andamento="Aprovando…"
+                sucesso="Aprovado"
+                erro="Não aprovado"
+                bloqueado={(ocupada && aprovar === "repouso") || esperandoSaldo}
+                esmaecido={!esperandoSaldo || esperaDoSaldo.visivel}
+                focoAoSair={focoAoSairDoSaldo}
+                onClick={onAprovar}
+              />
+            </>
+          ) : (
+            <Button asChild variant="outline">
+              <Link href={`/solicitacoes?id=${encodeURIComponent(request.id)}`} data-ver-itens="">
+                Ver itens
+              </Link>
+            </Button>
+          )
+        }
+      />
+      <BarraDeEspera lugar="linha" ativa={andando !== null} resultado={resultado} />
     </div>
   );
 }
@@ -977,7 +1528,7 @@ export function OrderRow({
         // (docs/mockups/WmsSepararListaCelular.dc.html).
         aoLadoDoToggle={
           volumes ? (
-            <Link href={volumes.verHref} className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+            <Link href={volumes.verHref} className="inline-flex items-center gap-1 text-xs font-medium text-primary-texto">
               <ChevronRight className="size-3.5" aria-hidden="true" />
               Ver volumes
             </Link>
@@ -1116,6 +1667,9 @@ export function ItemList({ items, cliente }: { items: NonNullable<WarehouseTask[
                       loading="lazy"
                       className="size-11 shrink-0 rounded-lg bg-muted object-cover"
                     />
+                  ) : photoFor.lendo ? (
+                    // As fotos ainda chegam: o lugar fica neutro, sem afirmar "sem foto" (carregamento v2, parte 13c).
+                    <Esqueleto forma="icone" className="size-11 shrink-0" />
                   ) : (
                     <span className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground">
                       <Package className="size-4" aria-hidden="true" />

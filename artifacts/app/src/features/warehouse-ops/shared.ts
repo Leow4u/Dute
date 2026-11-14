@@ -1,6 +1,7 @@
 /** Shared catalog/photo helpers for warehouse-ops features. */
 
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { getDownloadURL, ref } from "firebase/storage";
+import { compactarFoto, enviarComProgresso } from "@/lib/envio-de-fotos";
 import { firebaseStorage } from "@/lib/firebase";
 import {
   type AnyRecord,
@@ -58,19 +59,27 @@ export type OperationalException = {
 /**
  * Autoriza o caminho via Function e envia o arquivo com o SDK autenticado.
  * Evita PUT com signed URL no browser (CORS / assinatura de headers).
+ *
+ * Foto de produto do cliente informado (o cliente ativo da tela que chama).
+ * Antes de pedir o destino, a foto do celular é compactada para 2000 px no
+ * lado maior (decisão 4 do celular, de 06/11/2026), e o destino já leva o
+ * nome, o tipo e o tamanho da compactada. O envio conta os bytes
+ * (`aoProgredir`, de 0 a 1, por evento) e para com o `sinal`.
  */
-/** Foto de produto do cliente informado (o cliente ativo da tela que chama). */
 export async function uploadProductPhoto(
-  file: File,
+  original: File,
   clientItemCode: string,
   customerCode: string,
+  aoProgredir?: (fracao: number) => void,
+  sinal?: AbortSignal,
 ) {
   if (!firebaseStorage) {
     throw new Error("Firebase Storage não está configurado neste ambiente.");
   }
-  if (!file.size) {
+  if (!original.size) {
     throw new Error("Arquivo de foto vazio.");
   }
+  const file = await compactarFoto(original);
 
   const contentType = file.type || "image/jpeg";
   if (!contentType.startsWith("image/")) {
@@ -104,9 +113,10 @@ export async function uploadProductPhoto(
   // via getDownloadURL após o upload.
   let fileUrl: string;
   try {
-    await uploadBytes(objectRef, file, { contentType });
+    await enviarComProgresso(objectRef, file, { contentType }, aoProgredir, sinal);
     fileUrl = await getDownloadURL(objectRef);
   } catch (error) {
+    if (sinal?.aborted) throw error;
     const storageError = error as {
       status?: number;
       customData?: { serverResponse?: string | null };

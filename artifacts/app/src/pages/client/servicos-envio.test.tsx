@@ -46,7 +46,11 @@ import { ClienteServicos } from "./servicos";
 let raiz: Root | null = null;
 let container: HTMLDivElement | null = null;
 
-const botao = (texto: string) => [...document.querySelectorAll("button")].find((item) => item.textContent?.trim() === texto) ?? null;
+/** O botão pelo rótulo; o botão de ação (o Enviar solicitação), pela camada que está na tela. */
+const botao = (texto: string) =>
+  [...document.querySelectorAll("button")].find(
+    (item) => item.textContent?.trim() === texto || item.querySelector(".botao-acao-camada[data-atual]")?.textContent?.trim() === texto,
+  ) ?? null;
 
 async function escrever(seletor: string, valor: string) {
   const campo = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(seletor);
@@ -60,6 +64,8 @@ async function escrever(seletor: string, valor: string) {
 
 async function enviar() {
   const antes = estado.envios.length;
+  // O Enviar solicitação é o botão de ação (parte 13f): o segundo toque dentro de 1 s é barrado (toque único).
+  if (antes > 0) await act(async () => new Promise((pronto) => setTimeout(pronto, 1_050)));
   await act(async () => botao("Enviar solicitação")!.click());
   if (estado.envios.length === antes) throw new Error("A solicitação não saiu");
   return estado.envios.at(-1)!;
