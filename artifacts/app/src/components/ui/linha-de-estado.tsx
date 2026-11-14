@@ -56,9 +56,9 @@ export interface LinhaDeEstadoProps {
    */
   resumo?: string;
   /**
-   * A primeira leitura a tela ainda mostra no lugar da lista ("Carregando...",
-   * nas telas que a parte 13 migra): a linha fica vazia até a lista chegar, e
-   * não fala.
+   * A espera da primeira leitura fica no lugar da lista (a `CarregandoNaRegiao`
+   * das Movimentações e das Exceções): a linha fica vazia e calada até a lista
+   * chegar.
    */
   primeiraNaLista?: boolean;
   /**

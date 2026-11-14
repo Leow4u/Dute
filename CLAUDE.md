@@ -276,13 +276,16 @@ documentação de produto e operação está em `docs/`.
   `disabled` a 50%; o diálogo que grava não fecha no meio (parte 13a). As
   listas têm a `LinhaDeEstado` sob o título e a forma final na primeira
   leitura; a região que lê é a `CarregandoNaRegiao` e a tela que abre, a
-  `CarregandoTela`; a falha nunca vira vazio. A conexão tem um estado só
-  ("Reconectando…" e "Sem conexão", com histerese) e uma região viva só, o
-  `Anunciador` (o `useAnuncio` devolve o retirar). A trava
+  `CarregandoTela`; a falha nunca vira vazio, nem o "Nenhum…" antes de ler
+  (a `LeituraPendenteNaRegiao` nos formulários). A conexão tem um estado só
+  ("Reconectando…" e "Sem conexão", com histerese) e uma região viva da
+  espera, o `Anunciador` (o `useAnuncio` devolve o retirar; o resultado da
+  ação sai pelo toast e, antes do app, fala a região da abertura). A trava
   `lib/carregando/trava.test.ts` reprova `animate-spin` fora do `Spinner`,
-  `animate-pulse` fora do `Esqueleto`, "..." de três pontos e o anel de foco
-  sem o `ring-foco`. Teste de espera nunca usa tempo fixo de relógio real
-  (espera o estado chegar, ou relógio falso): o CI caiu assim duas vezes.
+  `animate-pulse` fora do `Esqueleto` e do `Skeleton`, "..." de três pontos,
+  o anel de foco fora do `ring-foco` e o foco sem sinal (o `outline-none`).
+  Teste de espera nunca usa tempo fixo de relógio real (espera o estado
+  chegar, ou relógio falso): o CI caiu assim duas vezes.
   Regra em `docs/sistema-visual.md`, "Carregamento"; decisões, o registro de
   cada parte e o que espera o Leonardo em
   `docs/plataforma/diagnostico-carregamento.md`, seção 10.
